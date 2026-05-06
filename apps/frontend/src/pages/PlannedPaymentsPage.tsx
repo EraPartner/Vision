@@ -158,11 +158,10 @@ export default function PlannedPaymentsPage() {
       defaultWidth: 180,
       render: (row: TableRow) => (
         <div className="flex flex-col gap-0.5">
-          <span className={`font-medium ${!row.is_active ? "text-muted-foreground line-through" :
+          <div className={`font-medium flex items-center gap-2 ${!row.is_active ? "text-muted-foreground line-through" :
             row.is_executed ? "text-muted-foreground line-through" :
               "text-foreground"
             }`}>
-            <div className="flex items-center gap-2">
               <span>{row.name}</span>
               {row.is_loan && (
                 <Badge variant="secondary" className="text-[10px] uppercase tracking-wide">{t('plannedPage.loanBadge')}</Badge>
@@ -176,8 +175,7 @@ export default function PlannedPaymentsPage() {
                   </svg>
                 </a>
               )}
-            </div>
-          </span>
+          </div>
           {row.recipient && (
             <span className="text-xs text-muted-foreground">→ {row.recipient}</span>
           )}

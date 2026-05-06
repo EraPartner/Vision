@@ -132,8 +132,8 @@ export function AddInvestmentFromMarketDialog({ quote, existingInvestment }: Pro
     e.preventDefault();
     if (!existingInvestment) return;
     
-    const amount = parseDecimal(transactionForm.amount || computedAmount);
-    if (!amount || isNaN(amount)) {
+    const amount = parseDecimal(transactionForm.amount || computedAmount, NaN);
+    if (!Number.isFinite(amount) || amount <= 0) {
       toast.error(t('addPortTxn.error.amountRequired'));
       return; 
     }

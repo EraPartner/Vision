@@ -7,7 +7,12 @@
  */
 
 import { query, withTransaction } from '../database/connection.js';
-import { computeOwedSummary } from '../services/calculations/splits.js';
+import {
+  computeOwedSummary,
+  validateSplitAllocation,
+  validateBatchSplitAllocation,
+  roundToCents as roundToCentsCalc,
+} from '../services/calculations/splits.js';
 import { toDecimal, subtract, toNumber, roundToCents } from '../lib/money.js';
 import { NotFoundError, ValidationError } from '../middleware/errorHandler.js';
 
@@ -84,6 +89,91 @@ export const splitRepository = {
     `;
     const result = await query(sql, [transaction_id, recipientIds, amounts, notes]);
     return result.rows;
+  },
+
+  /**
+   * Atomically validate and create a single split.
+   * Locks the transaction row with SELECT FOR UPDATE to prevent
+   * concurrent over-allocation between check and insert.
+   */
+  async createSplitAtomic({ transaction_id, recipient_id, amount, note }) {
+    return withTransaction(async (client) => {
+      const lockResult = await client.query(
+        `SELECT ABS(t.amount) AS transaction_total,
+                COALESCE(SUM(ts.amount), 0) AS current_split_total
+           FROM transactions t
+           LEFT JOIN transaction_splits ts ON ts.transaction_id = t.id
+          WHERE t.id = $1
+          GROUP BY t.id, t.amount
+          FOR UPDATE OF t`,
+        [transaction_id]
+      );
+      if (lockResult.rows.length === 0) throw new NotFoundError('Transaction not found');
+      const totals = {
+        transaction_total: toNumber(toDecimal(lockResult.rows[0].transaction_total)),
+        current_split_total: toNumber(toDecimal(lockResult.rows[0].current_split_total)),
+      };
+      const check = validateSplitAllocation({
+        newSplitAmount: Number(amount),
+        transactionTotal: totals.transaction_total,
+        currentSplitTotal: totals.current_split_total,
+      });
+      if (!check.ok) throw new ValidationError(check.error);
+      const result = await client.query(
+        `INSERT INTO transaction_splits (transaction_id, recipient_id, amount, note)
+         VALUES ($1, $2, $3, $4) RETURNING *`,
+        [transaction_id, recipient_id, amount, note || null]
+      );
+      return result.rows[0];
+    });
+  },
+
+  /**
+   * Atomically validate and create multiple splits.
+   * Locks the transaction row with SELECT FOR UPDATE to prevent
+   * concurrent over-allocation between check and batch insert.
+   */
+  async createSplitsBatchAtomic({ transaction_id, splits }) {
+    if (!Array.isArray(splits) || splits.length === 0) return [];
+    return withTransaction(async (client) => {
+      const lockResult = await client.query(
+        `SELECT ABS(t.amount) AS transaction_total,
+                COALESCE(SUM(ts.amount), 0) AS current_split_total
+           FROM transactions t
+           LEFT JOIN transaction_splits ts ON ts.transaction_id = t.id
+          WHERE t.id = $1
+          GROUP BY t.id, t.amount
+          FOR UPDATE OF t`,
+        [transaction_id]
+      );
+      if (lockResult.rows.length === 0) throw new NotFoundError('Transaction not found');
+      const totals = {
+        transaction_total: toNumber(toDecimal(lockResult.rows[0].transaction_total)),
+        current_split_total: toNumber(toDecimal(lockResult.rows[0].current_split_total)),
+      };
+      const preparedSplits = splits.map((s) => ({
+        recipient_id: s.recipient_id,
+        amount: roundToCentsCalc(Number(s.amount)),
+        note: s.note || null,
+      }));
+      const check = validateBatchSplitAllocation({
+        splits: preparedSplits,
+        transactionTotal: totals.transaction_total,
+        currentSplitTotal: totals.current_split_total,
+      });
+      if (!check.ok) throw new ValidationError(check.error);
+      const recipientIds = preparedSplits.map((s) => s.recipient_id);
+      const amounts = preparedSplits.map((s) => s.amount);
+      const notes = preparedSplits.map((s) => s.note);
+      const result = await client.query(
+        `INSERT INTO transaction_splits (transaction_id, recipient_id, amount, note)
+         SELECT $1, s.recipient_id, s.amount, s.note
+         FROM UNNEST($2::int[], $3::numeric[], $4::text[]) AS s(recipient_id, amount, note)
+         RETURNING *`,
+        [transaction_id, recipientIds, amounts, notes]
+      );
+      return result.rows;
+    });
   },
 
   /**

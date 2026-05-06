@@ -464,7 +464,7 @@ async function getOrCreateRecipient(name, accountNumber, address, bankName) {
   }
 
   if (address) {
-    await query(`UPDATE recipients SET notes = $1 WHERE id = $2`, [address, newId])
+    await query(`UPDATE recipients SET notes = $1 WHERE id = $2 AND (notes IS NULL OR notes = '')`, [address, newId])
       .catch((err) => {
         logger.warn('Recipient notes update failed', {
           recipientId: newId, error: err.message,

@@ -184,47 +184,29 @@ async function buildInvestmentSummary(inv, txns, targetCurrency) {
   const gainLossPercent = totalBuyCost > 0 ? (gainLoss / totalBuyCost) * 100 : 0;
 
   const invCurrency = (inv.currency || 'EUR').toUpperCase();
-  const convert = invCurrency === targetCurrency
-    ? (v) => Promise.resolve(v)
-    : (v) => convertToCurrency(v, invCurrency, targetCurrency);
+  // Resolve multiplier with a single rate lookup; multiply synchronously for all 17 fields.
+  const multiplier = invCurrency === targetCurrency
+    ? 1
+    : await convertToCurrency(1, invCurrency, targetCurrency);
+  const conv = (v) => v * multiplier;
 
-  const [
-    convertedCurrentValue,
-    convertedTotalInvested,
-    convertedTotalBuyCost,
-    convertedTotalSellProceeds,
-    convertedTotalFees,
-    convertedTotalTaxes,
-    convertedTotalDividends,
-    convertedTotalIncome,
-    convertedRealizedGain,
-    convertedUnrealizedGain,
-    convertedTotalGain,
-    convertedGainLoss,
-    convertedAccruedInterest,
-    convertedProjectedInterest,
-    convertedTotalAppreciation,
-    convertedAvgCostBasis,
-    convertedCurrentPrice,
-  ] = await Promise.all([
-    convert(currentValue),
-    convert(Math.abs(totalInvested)),
-    convert(totalBuyCost),
-    convert(totalSellProceeds),
-    convert(totalFees),
-    convert(totalTaxes),
-    convert(totalDividends),
-    convert(totalIncome),
-    convert(realizedGain),
-    convert(unrealizedGain),
-    convert(totalGain),
-    convert(gainLoss),
-    convert(accruedInterest),
-    convert(projectedInterest),
-    convert(totalAppreciation),
-    convert(avgCostBasis),
-    convert(Number(inv.current_price) || 0),
-  ]);
+  const convertedCurrentValue = conv(currentValue);
+  const convertedTotalInvested = conv(Math.abs(totalInvested));
+  const convertedTotalBuyCost = conv(totalBuyCost);
+  const convertedTotalSellProceeds = conv(totalSellProceeds);
+  const convertedTotalFees = conv(totalFees);
+  const convertedTotalTaxes = conv(totalTaxes);
+  const convertedTotalDividends = conv(totalDividends);
+  const convertedTotalIncome = conv(totalIncome);
+  const convertedRealizedGain = conv(realizedGain);
+  const convertedUnrealizedGain = conv(unrealizedGain);
+  const convertedTotalGain = conv(totalGain);
+  const convertedGainLoss = conv(gainLoss);
+  const convertedAccruedInterest = conv(accruedInterest);
+  const convertedProjectedInterest = conv(projectedInterest);
+  const convertedTotalAppreciation = conv(totalAppreciation);
+  const convertedAvgCostBasis = conv(avgCostBasis);
+  const convertedCurrentPrice = conv(Number(inv.current_price) || 0);
 
   return {
     // Identity passthrough — base investment fields the frontend already uses

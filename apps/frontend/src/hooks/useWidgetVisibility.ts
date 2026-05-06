@@ -11,21 +11,30 @@ export interface WidgetDefinition {
 export type WidgetVisibilityMap = Record<string, Record<string, boolean>>;
 // e.g. { dashboard: { statCards: true, bankBalances: false }, statistics: { ... } }
 let cachedVisibility: WidgetVisibilityMap | null = null;
+let pendingLoad: Promise<WidgetVisibilityMap> | null = null;
 const listeners = new Set<(v: WidgetVisibilityMap) => void>();
 function notify(v: WidgetVisibilityMap) {
     cachedVisibility = v;
     listeners.forEach((fn) => fn(v));
 }
 async function loadFromBackend(): Promise<WidgetVisibilityMap> {
-    try {
-        const result = await apiClient.getSetting(SETTINGS_KEY);
-        if (result?.value && typeof result.value === 'object') {
-            return result.value as WidgetVisibilityMap;
+    if (pendingLoad) return pendingLoad;
+    pendingLoad = (async () => {
+        try {
+            const result = await apiClient.getSetting(SETTINGS_KEY);
+            if (result?.value && typeof result.value === 'object') {
+                return result.value as WidgetVisibilityMap;
+            }
+        } catch {
+            // not found or backend unreachable
         }
-    } catch {
-        // not found or backend unreachable
+        return {};
+    })();
+    try {
+        return await pendingLoad;
+    } finally {
+        pendingLoad = null;
     }
-    return {};
 }
 function saveToBackend(v: WidgetVisibilityMap) {
     apiClient.saveSetting(SETTINGS_KEY, v).catch((err) => {

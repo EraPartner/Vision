@@ -59,7 +59,7 @@ export function WatchlistChartDialog({ item, open, onOpenChange }: WatchlistChar
       if (!item?.symbol) return null;
       try {
         const res = await fetch(
-          `${API_BASE_URL}/api/market/chart?symbol=${item.symbol}&range=${selectedRange.range}&interval=${selectedRange.interval}`
+          `${API_BASE_URL}/api/market/chart?symbol=${encodeURIComponent(item.symbol)}&range=${selectedRange.range}&interval=${selectedRange.interval}`
         );
         if (!res.ok) return null;
         return (await res.json()) as { symbol: string; currency: string; points: ChartPoint[] };
@@ -77,7 +77,7 @@ export function WatchlistChartDialog({ item, open, onOpenChange }: WatchlistChar
     queryFn: async () => {
       if (!item?.symbol) return null;
       try {
-        const res = await fetch(`${API_BASE_URL}/api/market/quote?symbols=${item.symbol}`);
+        const res = await fetch(`${API_BASE_URL}/api/market/quote?symbols=${encodeURIComponent(item.symbol)}`);
         if (!res.ok) return null;
         const data = await res.json();
         return data.quotes?.[0] || null;

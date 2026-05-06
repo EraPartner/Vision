@@ -56,8 +56,10 @@ export function UpcomingPaymentsNotification() {
     setDismissedLoaded(true);
   }, []);
 
+  const queryDate = toYmd(new Date());
+
   const { data: upcoming } = useQuery({
-    queryKey: ["upcomingPlannedPayments"],
+    queryKey: ["upcomingPlannedPayments", queryDate],
     queryFn: async () => {
       const today = new Date();
       const nextWeek = new Date();

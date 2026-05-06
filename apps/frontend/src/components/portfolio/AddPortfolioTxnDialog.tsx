@@ -19,7 +19,7 @@ import { parseLocalDateFromYmd, toYmd } from '@/components/shared/dateUtils';
 
 function parsePositive(value: string): number | undefined {
   if (!value.trim()) return undefined;
-  const n = Number(value);
+  const n = parseDecimal(value, NaN);
   if (!Number.isFinite(n) || n <= 0) return undefined;
   return n;
 }

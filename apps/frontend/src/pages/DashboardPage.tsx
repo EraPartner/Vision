@@ -516,7 +516,7 @@ export default function DashboardPage() {
                         />
                     </CardHeader>
                     <CardContent>
-                        <CategoryPieChart data={categoryData} embedded />
+                        <CategoryPieChart data={categoryData} embedded formatValue={(v) => String(v)} />
                     </CardContent>
                 </Card>
                 )}

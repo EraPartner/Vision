@@ -115,13 +115,20 @@ export async function computeDailySnapshots(targetCurrency = 'EUR') {
     activeFrom: String(row.active_from).split('T')[0],
   }));
 
-  // { investmentId: { day: price } }
+  // { investmentId: { day: price } }  +  sorted day arrays for binary-search forward-fill
   const priceHistoryByInvestment = {};
+  const priceHistorySortedDays = {};
   for (const row of priceHistoryResult.rows) {
     const invId = Number(row.investment_id);
-    if (!priceHistoryByInvestment[invId]) priceHistoryByInvestment[invId] = {};
+    if (!priceHistoryByInvestment[invId]) {
+      priceHistoryByInvestment[invId] = {};
+      priceHistorySortedDays[invId] = [];
+    }
     priceHistoryByInvestment[invId][row.day] = Number(row.close_price) || 0;
+    priceHistorySortedDays[invId].push(row.day);
   }
+  // Rows arrive ORDER BY investment_id, price_date — already sorted per investment.
+  // No extra sort needed.
 
   const inflationByMonth = new Map(
     inflationResult.rows.map(row => [row.month, Number(row.monthly_rate) || 0])
@@ -162,12 +169,25 @@ export async function computeDailySnapshots(targetCurrency = 'EUR') {
   }
 
   function resolvePrice(inv, day, lastKnownPrice) {
-    const histPrices = priceHistoryByInvestment[inv.id] || {};
+    const histPrices = priceHistoryByInvestment[inv.id];
+    if (!histPrices) {
+      return lastKnownPrice[inv.id] > 0 ? lastKnownPrice[inv.id] : inv.currentPrice;
+    }
     if (histPrices[day]) return histPrices[day];
 
+    // Binary search for the latest price day <= `day`
+    const days = priceHistorySortedDays[inv.id];
+    let lo = 0;
+    let hi = days.length - 1;
     let bestDay = '';
-    for (const pDay of Object.keys(histPrices)) {
-      if (pDay <= day && pDay > bestDay) bestDay = pDay;
+    while (lo <= hi) {
+      const mid = (lo + hi) >>> 1;
+      if (days[mid] <= day) {
+        bestDay = days[mid];
+        lo = mid + 1;
+      } else {
+        hi = mid - 1;
+      }
     }
     if (bestDay) return histPrices[bestDay];
     if (lastKnownPrice[inv.id] > 0) return lastKnownPrice[inv.id];
@@ -340,7 +360,7 @@ export async function computeAndStoreSnapshots(targetCurrency = 'EUR') {
           stocks_etfs_invested, crypto_invested, metals_invested,
           computed_at
         ) VALUES ${values.join(', ')}
-        ON CONFLICT (snapshot_date) DO UPDATE SET
+        ON CONFLICT (snapshot_date, currency) DO UPDATE SET
           invested                = EXCLUDED.invested,
           value                   = EXCLUDED.value,
           stocks_etfs_value       = EXCLUDED.stocks_etfs_value,

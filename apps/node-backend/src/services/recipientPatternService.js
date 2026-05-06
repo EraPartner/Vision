@@ -241,27 +241,52 @@ export function suggestPatternFromNames(names) {
  * @param {{ pattern: string, pattern_kind: string, case_sensitive: boolean }} patternRow
  * @returns {Promise<{ matchCount: number, recipientIds: number[] }>}
  */
+function buildSqlRegexPattern({ pattern, pattern_kind }) {
+  switch (pattern_kind) {
+    case 'literal_prefix': {
+      const escaped = pattern.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+      return `^${escaped}`;
+    }
+    case 'glob': {
+      const translated = pattern
+        .replace(/[.+^${}()|[\]\\]/g, '\\$&')
+        .replace(/\*/g, '.*')
+        .replace(/\?/g, '.');
+      return `^${translated}$`;
+    }
+    case 'regex':
+    default:
+      return pattern;
+  }
+}
+
 export async function previewPatternMatches(patternRow) {
   const validation = validatePattern(patternRow);
   if (!validation.valid) {
     throw new Error(validation.error);
   }
 
-  const { rows: recipients } = await query(
-    `SELECT id, name FROM recipients WHERE is_active = true`,
-  );
-
-  let re;
+  // Validate pattern compiles before hitting the DB.
   try {
-    re = compilePattern({ id: 0, updated_at: '0', ...patternRow });
+    compilePattern({ id: 0, updated_at: '0', ...patternRow });
   } catch (err) {
     throw new Error(`Pattern compilation failed: ${err.message}`, { cause: err });
   }
 
-  const matching = recipients.filter((r) => re.test(r.name.toUpperCase()));
+  // Push regex matching into Postgres (POSIX ERE via ~ / ~*) rather than
+  // fetching all recipients and filtering in JS. JS always tests against
+  // UPPER(name), so mirror that in SQL.
+  const sqlPattern = buildSqlRegexPattern(patternRow);
+  const op = patternRow.case_sensitive ? '~' : '~*';
+
+  const { rows } = await query(
+    `SELECT id FROM recipients WHERE is_active = true AND UPPER(name) ${op} $1`,
+    [sqlPattern],
+  );
+
   return {
-    matchCount: matching.length,
-    recipientIds: matching.map((r) => r.id),
+    matchCount: rows.length,
+    recipientIds: rows.map((r) => r.id),
   };
 }
 

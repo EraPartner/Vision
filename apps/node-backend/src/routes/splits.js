@@ -7,10 +7,6 @@ import { Router } from 'express';
 import splitRepository from '../repositories/splitRepository.js';
 import { validateIdParam } from '../middleware/validation.js';
 import { NotFoundError, ValidationError } from '../middleware/errorHandler.js';
-import {
-  validateSplitAllocation,
-  validateBatchSplitAllocation,
-} from '../services/calculations/splits.js';
 import { escapeCsvValue } from '../lib/csv.js';
 
 const router = Router();
@@ -43,12 +39,6 @@ function buildOwedExportCsv(rows) {
 function buildOwedExportFilename(recipientId) {
   const timestamp = new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19);
   return `owed_transactions_recipient_${recipientId}_${timestamp}.csv`;
-}
-
-async function getTransactionSplitTotalsOrThrow(transactionId) {
-  const totals = await splitRepository.getTransactionSplitTotals(transactionId);
-  if (!totals) throw new NotFoundError('Transaction not found');
-  return totals;
 }
 
 function normalizeBatchSplitInputs(splits) {
@@ -101,15 +91,7 @@ router.post('/', async (req, res) => {
     throw new ValidationError('Missing required fields: transaction_id, recipient_id, amount');
   }
 
-  const totals = await getTransactionSplitTotalsOrThrow(transaction_id);
-  const allocationCheck = validateSplitAllocation({
-    newSplitAmount: Number(amount),
-    transactionTotal: totals.transaction_total,
-    currentSplitTotal: totals.current_split_total,
-  });
-  if (!allocationCheck.ok) throw new ValidationError(allocationCheck.error);
-
-  const split = await splitRepository.createSplit({ transaction_id, recipient_id, amount, note });
+  const split = await splitRepository.createSplitAtomic({ transaction_id, recipient_id, amount, note });
   await splitRepository.writeAudit({
     split_id: split.id,
     action: 'create',
@@ -126,16 +108,8 @@ router.post('/batch', async (req, res) => {
     throw new ValidationError('Missing required fields: transaction_id, splits[]');
   }
 
-  const totals = await getTransactionSplitTotalsOrThrow(transaction_id);
   const preparedSplits = normalizeBatchSplitInputs(splits);
-  const batchCheck = validateBatchSplitAllocation({
-    splits: preparedSplits,
-    transactionTotal: totals.transaction_total,
-    currentSplitTotal: totals.current_split_total,
-  });
-  if (!batchCheck.ok) throw new ValidationError(batchCheck.error);
-
-  const created = await splitRepository.createSplitsBatch({
+  const created = await splitRepository.createSplitsBatchAtomic({
     transaction_id,
     splits: preparedSplits,
   });

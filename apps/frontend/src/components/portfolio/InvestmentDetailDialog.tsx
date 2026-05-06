@@ -430,11 +430,11 @@ export function InvestmentDetailDialog({
                           </span>
                         </div>
                         
-                        {txn.units && (
+                        {txn.units != null && (
                           <p className="text-xs text-muted-foreground mt-1">
                             {t('invDetail.unitsAt', {
                               units: fmtNum(txn.units, 4),
-                              price: fmt(txn.price_per_unit || (txn.amount / txn.units), investment.currency, 2),
+                              price: fmt(txn.price_per_unit || (txn.units !== 0 ? txn.amount / txn.units : 0), investment.currency, 2),
                             })}
                           </p>
                         )}

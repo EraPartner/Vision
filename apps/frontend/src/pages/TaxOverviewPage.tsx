@@ -67,9 +67,9 @@ export default function TaxOverviewPage() {
     }).format(val);
   }
 
-  const totalIncome = stats?.totalIncome ?? 0;
-  const monthlyData = stats?.monthlyData;
-  const yearlyData = stats?.yearlyComparison;
+  const totalIncome = stats.data?.totalIncome ?? 0;
+  const monthlyData = stats.data?.monthlyData;
+  const yearlyData = stats.data?.yearlyComparison;
 
   const portfolioTaxesForYear = useMemo(() => {
     const year = profile.taxYear;
@@ -473,29 +473,29 @@ export default function TaxOverviewPage() {
                   </div>
                   <Separator />
                   <div className="flex items-center justify-between text-sm">
-                    <span className="text-muted-foreground">Federal PIT after reductions</span>
+                    <span className="text-muted-foreground">{t('tax.pit.row.federalAfter')}</span>
                     <span className="font-semibold tabular-nums text-destructive">
                       {fmt(calculation.federalPITAfterReductions)}
                     </span>
                   </div>
                   <div className="flex items-center justify-between text-sm">
-                    <span className="text-muted-foreground">Communal surcharge</span>
+                    <span className="text-muted-foreground">{t('tax.pit.row.communalSurcharge')}</span>
                     <span className="font-semibold tabular-nums text-destructive">{fmt(calculation.communalSurcharge)}</span>
                   </div>
                   <div className="flex items-center justify-between text-sm">
-                    <span className="text-muted-foreground">Employee social security</span>
+                    <span className="text-muted-foreground">{t('tax.pit.row.employeeSS')}</span>
                     <span className="font-semibold tabular-nums text-destructive">
                       {fmt(calculation.employeeSocialSecurity)}
                     </span>
                   </div>
                   <div className="flex items-center justify-between text-sm">
-                    <span className="text-muted-foreground">Special social security</span>
+                    <span className="text-muted-foreground">{t('tax.pit.row.specialSS')}</span>
                     <span className="font-semibold tabular-nums text-destructive">
                       {fmt(calculation.specialSocialSecurityContribution)}
                     </span>
                   </div>
                   <div className="flex items-center justify-between text-sm">
-                    <span className="text-muted-foreground">Total burden (PIT + SS)</span>
+                    <span className="text-muted-foreground">{t('tax.pit.row.totalBurden')}</span>
                     <span className="font-bold tabular-nums text-primary">{fmt(calculation.totalTaxBurden)}</span>
                   </div>
                   </CardContent>
@@ -548,18 +548,13 @@ export default function TaxOverviewPage() {
                 </CardHeader>
               <CardContent className="space-y-2 text-sm">
                 <p className="text-muted-foreground">
-                  <span className="font-semibold text-foreground">Automatic:</span> Bracket math, social security
-                  (employee + estimated special contribution), federal PIT, communal surcharge, personal-exemption
-                  effect based on dependents, monthly reserve guidance.
+                  <span className="font-semibold text-foreground">{t('tax.automation.automatic')}:</span> {t('tax.automation.automaticDesc')}
                 </p>
                 <p className="text-muted-foreground">
-                  <span className="font-semibold text-foreground">Manual input needed:</span> Your gross income,
-                  exemption situation, professional expense method, and municipality surcharge.
+                  <span className="font-semibold text-foreground">{t('tax.automation.manualLabel')}:</span> {t('tax.automation.manualDesc')}
                 </p>
                 <p className="text-muted-foreground">
-                  <span className="font-semibold text-foreground">Investment taxes:</span> Annual portfolio taxes are
-                  now included in this overview as a single total. For details per investment and tax type, use the
-                  portfolio tax page.
+                  <span className="font-semibold text-foreground">{t('tax.automation.investmentLabel')}:</span> {t('tax.automation.investmentDesc')}
                 </p>
               </CardContent>
             </Card>

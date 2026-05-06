@@ -44,7 +44,7 @@ export function AppSettingsProvider({ children }: { children: ReactNode }) {
     const isLoading = useSettingsStore((s) => s.isAppSettingsLoading);
 
     const saveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-    const isFirstRender = useRef(true);
+    const hasHydrated = useRef(false);
 
     // Hydrate store from preloaded data
     useEffect(() => {
@@ -53,14 +53,12 @@ export function AppSettingsProvider({ children }: { children: ReactNode }) {
             ? { ...DEFAULT_APP_SETTINGS, ...preloaded }
             : DEFAULT_APP_SETTINGS;
         _hydrateAppSettings(merged, false);
+        hasHydrated.current = true;
     }, [preloaded, preloadLoading, _hydrateAppSettings]);
 
-    // Debounced persist to API when settings change (skip initial render)
+    // Debounced persist to API when settings change (only after hydration)
     useEffect(() => {
-        if (isFirstRender.current) {
-            isFirstRender.current = false;
-            return;
-        }
+        if (!hasHydrated.current) return;
         if (isLoading) return;
 
         if (saveTimerRef.current) clearTimeout(saveTimerRef.current);

@@ -77,7 +77,7 @@ async function probeYahoo() {
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), PROBE_TIMEOUT_MS);
   try {
-    await yf.quote('AAPL', { fields: ['regularMarketPrice'] });
+    await yf.quote('AAPL', { fields: ['regularMarketPrice'] }, { signal: controller.signal });
   } finally {
     clearTimeout(timeout);
   }

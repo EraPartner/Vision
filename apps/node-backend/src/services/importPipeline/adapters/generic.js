@@ -4,7 +4,7 @@
  */
 
 import { logger } from '../../../config/logger.js';
-import { parseCsvFile, buildRawRowString } from './_shared.js';
+import { parseCsvFile, buildRawRowString, parseAmountField } from './_shared.js';
 
 const NAME = 'generic';
 const BANK_LABEL = 'Generic';
@@ -21,42 +21,6 @@ function parseDate(dateStr, fmt) {
   return new Date(dateStr);
 }
 
-function parseAmountField(raw) {
-  let s = String(raw || '').trim();
-  if (!s) return NaN;
-  s = s.replace(/\s/g, '');
-  s = s.replace(/[$€£¥]/g, '');
-  let negative = false;
-  if (s.startsWith('(') && s.endsWith(')')) {
-    negative = true;
-    s = s.slice(1, -1);
-  }
-  if (s.startsWith('-')) {
-    negative = !negative;
-    s = s.slice(1);
-  } else if (s.startsWith('+')) {
-    s = s.slice(1);
-  }
-  const lastComma = s.lastIndexOf(',');
-  const lastDot = s.lastIndexOf('.');
-  if (lastComma >= 0 && lastDot >= 0) {
-    if (lastComma > lastDot) {
-      s = s.replace(/\./g, '').replace(',', '.');
-    } else {
-      s = s.replace(/,/g, '');
-    }
-  } else if (lastComma >= 0) {
-    const tail = s.length - lastComma - 1;
-    if (tail === 3 && s.indexOf(',') !== lastComma) {
-      s = s.replace(/,/g, '');
-    } else {
-      s = s.replace(',', '.');
-    }
-  }
-  const n = parseFloat(s);
-  if (isNaN(n)) return NaN;
-  return negative ? -n : n;
-}
 
 function buildBankAccount(config) {
   const bankName = config.bank_name || 'CUSTOM';
@@ -83,7 +47,7 @@ function rowToTransaction(row, config) {
 
   let balance = null;
   if (colMap.balance) {
-    const bv = parseFloat(String(row[colMap.balance] || ''));
+    const bv = parseAmountField(row[colMap.balance]);
     if (!isNaN(bv)) balance = bv;
   }
 

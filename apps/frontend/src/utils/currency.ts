@@ -186,14 +186,15 @@ export function formatAmountWithSymbol(
   currencyCode: string = 'EUR'
 ): string {
   const symbol = getCurrencySymbol(currencyCode);
+  const sign = amount < 0 ? '-' : '';
   const formattedAmount = Math.abs(amount).toFixed(2);
-  
+
   // For currencies that typically show symbol after the amount
   const symbolAfter = ['SEK', 'NOK', 'DKK', 'PLN', 'CZK', 'HUF'];
-  
+
   if (symbolAfter.includes(currencyCode.toUpperCase())) {
-    return `${formattedAmount} ${symbol}`;
+    return `${sign}${formattedAmount} ${symbol}`;
   }
-  
-  return `${symbol}${formattedAmount}`;
+
+  return `${sign}${symbol}${formattedAmount}`;
 }

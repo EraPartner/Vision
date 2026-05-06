@@ -127,11 +127,10 @@ export const getRecipientInsights = {
       limit: 50_000,
       offset: 0,
       active: true,
+      ...(recipientId != null ? { recipientId } : {}),
     });
 
-    const rows = recipientId != null
-      ? allRows.filter((r) => r.recipient_id === recipientId)
-      : allRows;
+    const rows = allRows;
 
     const byRecipient = new Map();
     for (const row of rows) {

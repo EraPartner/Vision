@@ -8,6 +8,7 @@ import { plannedTransactionRepository } from '../../../repositories/plannedTrans
 import { infoRepository } from '../../../repositories/infoRepository.js';
 import settings from '../../../config/config.js';
 import { toDecimal, roundToCents } from '../../../lib/money.js';
+import { calculateNextDate } from '../../calculations/recurrence.js';
 import {
   parseEnum,
   parsePositiveInt,
@@ -291,6 +292,32 @@ export const getProjectedBalance = {
         isRecurring: Boolean(row.is_recurring),
       };
     });
+
+    // Expand recurring transactions: the DB row holds only the next stored
+    // occurrence. Generate all subsequent firings within the horizon window.
+    for (const row of items) {
+      if (!row.is_recurring || !row.recurrence_pattern) continue;
+      const baseIso = toIsoDate(row.planned_date);
+      if (!baseIso) continue;
+      let curDate = new Date(`${baseIso}T00:00:00.000Z`);
+      for (let guard = 0; guard < 500; guard++) {
+        const nextDate = calculateNextDate(curDate, row.recurrence_pattern);
+        if (!nextDate) break;
+        const nextStr = nextDate.toISOString().slice(0, 10);
+        if (nextStr > endStr) break;
+        const amount = toDecimal(row.amount ?? 0);
+        plannedNet = plannedNet.plus(amount);
+        plannedRows.push({
+          date: nextStr,
+          amount: roundToCents(amount).toNumber(),
+          recipient: row.recipient_name || null,
+          category: row.category_name || null,
+          memo: row.memo || '',
+          isRecurring: true,
+        });
+        curDate = nextDate;
+      }
+    }
 
     plannedRows.sort((a, b) => {
       if (!a.date) return 1;

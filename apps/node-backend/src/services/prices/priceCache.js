@@ -215,10 +215,10 @@ export async function saveHistoricalPointsToDatabase(investmentId, points, sourc
     await query(upsertSql, upsertArgs);
   } catch (error) {
     if (error?.code === '42P01') return;
-    if (error?.code === '23503' && error?.constraint === 'fk_asset_price_history_investment') {
-      await _dropForeignKey();
-      await query(upsertSql, upsertArgs);
-      return;
+    if (error?.code === '23503') {
+      throw Object.assign(error, {
+        context: 'priceCache upsert: orphan investment_id — resolve via investigation of FK violation, never auto-drop',
+      });
     }
     throw error;
   }

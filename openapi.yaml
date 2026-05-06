@@ -745,6 +745,181 @@ components:
           type: string
         value: {}
 
+    # ─── Splits ──────────────────────────────────────────────────────────────
+    Split:
+      type: object
+      required: [id, transaction_id, description, total_amount, currency, created_at]
+      properties:
+        id:
+          type: integer
+        transaction_id:
+          type: integer
+        description:
+          type: string
+        total_amount:
+          type: number
+        currency:
+          type: string
+        shares:
+          type: array
+          items:
+            type: object
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+
+    SplitOwed:
+      type: object
+      required: [recipient_id, recipient_name, total_owed, currency]
+      properties:
+        recipient_id:
+          type: integer
+        recipient_name:
+          type: string
+        total_owed:
+          type: number
+        currency:
+          type: string
+
+    # ─── Attachments ─────────────────────────────────────────────────────────
+    Attachment:
+      type: object
+      required: [id, transaction_id, filename, mime_type, size, created_at]
+      properties:
+        id:
+          type: integer
+        transaction_id:
+          type: integer
+        filename:
+          type: string
+        mime_type:
+          type: string
+        size:
+          type: integer
+        created_at:
+          type: string
+          format: date-time
+
+    # ─── Watchlist ────────────────────────────────────────────────────────────
+    WatchlistItem:
+      type: object
+      required: [id, symbol, name, currency, created_at]
+      properties:
+        id:
+          type: integer
+        symbol:
+          type: string
+        name:
+          type: string
+        currency:
+          type: string
+        current_price:
+          type: number
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+
+    # ─── AI ──────────────────────────────────────────────────────────────────
+    AiConversation:
+      type: object
+      required: [id, title, created_at, updated_at]
+      properties:
+        id:
+          type: string
+        title:
+          type: string
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+
+    AiMessage:
+      type: object
+      required: [role, content]
+      properties:
+        role:
+          type: string
+          enum: [user, assistant, system]
+        content:
+          type: string
+
+    # ─── Import ───────────────────────────────────────────────────────────────
+    ImportBatch:
+      type: object
+      required: [id, bank, row_count, status, created_at]
+      properties:
+        id:
+          type: string
+        bank:
+          type: string
+        row_count:
+          type: integer
+        status:
+          type: string
+          enum: [pending, committed, failed]
+        created_at:
+          type: string
+          format: date-time
+
+    # ─── Recipient sub-resources ──────────────────────────────────────────────
+    RecipientPattern:
+      type: object
+      required: [id, pattern, created_at]
+      properties:
+        id:
+          type: integer
+        pattern:
+          type: string
+        is_regex:
+          type: boolean
+        created_at:
+          type: string
+          format: date-time
+
+    RecipientBankAccount:
+      type: object
+      required: [id, recipient_id, iban, is_primary]
+      properties:
+        id:
+          type: integer
+        recipient_id:
+          type: integer
+        iban:
+          type: string
+        bic:
+          type: string
+        bank_name:
+          type: string
+        is_primary:
+          type: boolean
+        created_at:
+          type: string
+          format: date-time
+
+    # ─── Market ───────────────────────────────────────────────────────────────
+    MarketSearchResult:
+      type: object
+      required: [symbol, name, exchange, currency]
+      properties:
+        symbol:
+          type: string
+        name:
+          type: string
+        exchange:
+          type: string
+        currency:
+          type: string
+        type:
+          type: string
+
 # ─── Paths ───────────────────────────────────────────────────────────────────
 paths:
 
@@ -1214,6 +1389,17 @@ paths:
                     properties:
                       data:
                         $ref: "#/components/schemas/Setting"
+    delete:
+      summary: Delete setting
+      operationId: deleteSetting
+      tags: [Settings]
+      responses:
+        "200":
+          description: Deleted
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Envelope"
 
   /api/investments:
     get:
@@ -1279,3 +1465,2928 @@ paths:
                         type: array
                         items:
                           $ref: "#/components/schemas/SavedChart"
+    post:
+      summary: Create saved chart
+      operationId: createSavedChart
+      tags: [Charts]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [name, chart_type, config]
+              properties:
+                name:
+                  type: string
+                chart_type:
+                  type: string
+                config:
+                  type: object
+      responses:
+        "201":
+          description: Created chart
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/Envelope"
+                  - type: object
+                    properties:
+                      data:
+                        $ref: "#/components/schemas/SavedChart"
+
+  /api/saved-charts/{id}:
+    parameters:
+      - in: path
+        name: id
+        required: true
+        schema:
+          type: integer
+    patch:
+      summary: Update saved chart
+      operationId: updateSavedChart
+      tags: [Charts]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                name:
+                  type: string
+                chart_type:
+                  type: string
+                  enum: [line, bar, area]
+                category_ids:
+                  type: array
+                  items:
+                    type: integer
+      responses:
+        "200":
+          description: Updated chart
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/Envelope"
+                  - type: object
+                    properties:
+                      data:
+                        $ref: "#/components/schemas/SavedChart"
+    delete:
+      summary: Delete saved chart
+      operationId: deleteSavedChart
+      tags: [Charts]
+      responses:
+        "200":
+          description: Deleted
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Envelope"
+
+  # ─── Transactions extra ──────────────────────────────────────────────────────
+  /api/transactions/export/csv:
+    get:
+      summary: Export transactions as CSV (streaming)
+      operationId: exportTransactionsCsv
+      tags: [Transactions]
+      parameters:
+        - in: query
+          name: start_date
+          schema:
+            type: string
+            format: date
+        - in: query
+          name: end_date
+          schema:
+            type: string
+            format: date
+        - in: query
+          name: bank_account
+          schema:
+            type: string
+        - in: query
+          name: include_balance
+          schema:
+            type: boolean
+      responses:
+        "200":
+          description: CSV stream
+          content:
+            text/csv:
+              schema:
+                type: string
+
+  /api/transactions/export/json:
+    get:
+      summary: Export transactions as NDJSON (streaming)
+      operationId: exportTransactionsJson
+      tags: [Transactions]
+      parameters:
+        - in: query
+          name: start_date
+          schema:
+            type: string
+            format: date
+        - in: query
+          name: end_date
+          schema:
+            type: string
+            format: date
+        - in: query
+          name: bank_account
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Newline-delimited JSON stream
+          content:
+            application/x-ndjson:
+              schema:
+                type: string
+
+  # ─── Categories extra ────────────────────────────────────────────────────────
+  /api/categories/assign:
+    post:
+      summary: Bulk assign category to transactions
+      operationId: bulkAssignCategory
+      tags: [Categories]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [category_id, transaction_ids]
+              properties:
+                category_id:
+                  type: integer
+                transaction_ids:
+                  type: array
+                  items:
+                    type: integer
+      responses:
+        "200":
+          description: Assignment result
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Envelope"
+
+  /api/categories/{id}/assign:
+    parameters:
+      - in: path
+        name: id
+        required: true
+        schema:
+          type: integer
+    post:
+      summary: Assign category to transactions
+      operationId: assignCategory
+      tags: [Categories]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [transaction_ids]
+              properties:
+                transaction_ids:
+                  type: array
+                  items:
+                    type: integer
+      responses:
+        "200":
+          description: Assignment result
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Envelope"
+
+  # ─── Recipients extra ────────────────────────────────────────────────────────
+  /api/recipients/clusters:
+    get:
+      summary: List recipient name clusters
+      operationId: getRecipientClusters
+      tags: [Recipients]
+      responses:
+        "200":
+          description: Cluster list
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Envelope"
+
+  /api/recipients/{id}/merge:
+    parameters:
+      - in: path
+        name: id
+        required: true
+        schema:
+          type: integer
+    post:
+      summary: Merge recipient into another
+      operationId: mergeRecipient
+      tags: [Recipients]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [target_id]
+              properties:
+                target_id:
+                  type: integer
+      responses:
+        "200":
+          description: Merged
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Envelope"
+
+  /api/recipients/{id}/unmerge:
+    parameters:
+      - in: path
+        name: id
+        required: true
+        schema:
+          type: integer
+    post:
+      summary: Unmerge recipient
+      operationId: unmergeRecipient
+      tags: [Recipients]
+      responses:
+        "200":
+          description: Unmerged
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Envelope"
+
+  /api/recipients/{id}/aliases:
+    parameters:
+      - in: path
+        name: id
+        required: true
+        schema:
+          type: integer
+    get:
+      summary: List recipient aliases (merged-in names)
+      operationId: getRecipientAliases
+      tags: [Recipients]
+      responses:
+        "200":
+          description: Alias list
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Envelope"
+
+  /api/recipients/{id}/patterns:
+    parameters:
+      - in: path
+        name: id
+        required: true
+        schema:
+          type: integer
+    get:
+      summary: List auto-assign patterns for recipient
+      operationId: getRecipientPatterns
+      tags: [Recipients]
+      responses:
+        "200":
+          description: Pattern list
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/Envelope"
+                  - type: object
+                    properties:
+                      data:
+                        type: array
+                        items:
+                          $ref: "#/components/schemas/RecipientPattern"
+    post:
+      summary: Create auto-assign pattern
+      operationId: createRecipientPattern
+      tags: [Recipients]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [pattern]
+              properties:
+                pattern:
+                  type: string
+                is_regex:
+                  type: boolean
+      responses:
+        "201":
+          description: Created pattern
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/Envelope"
+                  - type: object
+                    properties:
+                      data:
+                        $ref: "#/components/schemas/RecipientPattern"
+
+  /api/recipients/{id}/patterns/preview:
+    parameters:
+      - in: path
+        name: id
+        required: true
+        schema:
+          type: integer
+    post:
+      summary: Preview pattern match count
+      operationId: previewRecipientPattern
+      tags: [Recipients]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [pattern]
+              properties:
+                pattern:
+                  type: string
+                is_regex:
+                  type: boolean
+      responses:
+        "200":
+          description: Match count preview
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Envelope"
+
+  /api/recipients/{id}/patterns/{patternId}:
+    parameters:
+      - in: path
+        name: id
+        required: true
+        schema:
+          type: integer
+      - in: path
+        name: patternId
+        required: true
+        schema:
+          type: integer
+    patch:
+      summary: Update pattern
+      operationId: updateRecipientPattern
+      tags: [Recipients]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                pattern:
+                  type: string
+                is_regex:
+                  type: boolean
+      responses:
+        "200":
+          description: Updated pattern
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Envelope"
+    delete:
+      summary: Delete pattern
+      operationId: deleteRecipientPattern
+      tags: [Recipients]
+      responses:
+        "200":
+          description: Deleted
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Envelope"
+
+  /api/recipients/{id}/bank-accounts:
+    parameters:
+      - in: path
+        name: id
+        required: true
+        schema:
+          type: integer
+    get:
+      summary: List bank accounts for recipient
+      operationId: getRecipientBankAccounts
+      tags: [Recipients]
+      responses:
+        "200":
+          description: Bank account list
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/Envelope"
+                  - type: object
+                    properties:
+                      data:
+                        type: array
+                        items:
+                          $ref: "#/components/schemas/RecipientBankAccount"
+    post:
+      summary: Add bank account to recipient
+      operationId: createRecipientBankAccount
+      tags: [Recipients]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [iban]
+              properties:
+                iban:
+                  type: string
+                bic:
+                  type: string
+                bank_name:
+                  type: string
+                is_primary:
+                  type: boolean
+      responses:
+        "201":
+          description: Created bank account
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/Envelope"
+                  - type: object
+                    properties:
+                      data:
+                        $ref: "#/components/schemas/RecipientBankAccount"
+
+  /api/recipients/{id}/bank-accounts/{accountId}:
+    parameters:
+      - in: path
+        name: id
+        required: true
+        schema:
+          type: integer
+      - in: path
+        name: accountId
+        required: true
+        schema:
+          type: integer
+    patch:
+      summary: Update bank account
+      operationId: updateRecipientBankAccount
+      tags: [Recipients]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                iban:
+                  type: string
+                bic:
+                  type: string
+                bank_name:
+                  type: string
+      responses:
+        "200":
+          description: Updated bank account
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Envelope"
+    delete:
+      summary: Delete bank account
+      operationId: deleteRecipientBankAccount
+      tags: [Recipients]
+      responses:
+        "200":
+          description: Deleted
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Envelope"
+
+  /api/recipients/{id}/bank-accounts/{accountId}/set-primary:
+    parameters:
+      - in: path
+        name: id
+        required: true
+        schema:
+          type: integer
+      - in: path
+        name: accountId
+        required: true
+        schema:
+          type: integer
+    post:
+      summary: Set bank account as primary
+      operationId: setRecipientBankAccountPrimary
+      tags: [Recipients]
+      responses:
+        "200":
+          description: Updated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Envelope"
+
+  # ─── Planned Transactions ────────────────────────────────────────────────────
+  /api/planned-transactions:
+    get:
+      summary: List planned transactions
+      operationId: getPlannedTransactions
+      tags: [PlannedTransactions]
+      parameters:
+        - in: query
+          name: limit
+          schema:
+            type: integer
+        - in: query
+          name: offset
+          schema:
+            type: integer
+        - in: query
+          name: bank_account
+          schema:
+            type: string
+        - in: query
+          name: is_recurring
+          schema:
+            type: boolean
+        - in: query
+          name: is_executed
+          schema:
+            type: boolean
+      responses:
+        "200":
+          description: Planned transaction list
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/Envelope"
+                  - type: object
+                    properties:
+                      data:
+                        $ref: "#/components/schemas/PlannedTransactionList"
+    post:
+      summary: Create planned transaction
+      operationId: createPlannedTransaction
+      tags: [PlannedTransactions]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/PlannedTransactionCreate"
+      responses:
+        "201":
+          description: Created
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/Envelope"
+                  - type: object
+                    properties:
+                      data:
+                        $ref: "#/components/schemas/PlannedTransaction"
+
+  /api/planned-transactions/due-soon:
+    get:
+      summary: List planned transactions due within 7 days
+      operationId: getPlannedTransactionsDueSoon
+      tags: [PlannedTransactions]
+      responses:
+        "200":
+          description: Due-soon list
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/Envelope"
+                  - type: object
+                    properties:
+                      data:
+                        type: array
+                        items:
+                          $ref: "#/components/schemas/PlannedTransaction"
+
+  /api/planned-transactions/{id}:
+    parameters:
+      - in: path
+        name: id
+        required: true
+        schema:
+          type: integer
+    get:
+      summary: Get planned transaction
+      operationId: getPlannedTransaction
+      tags: [PlannedTransactions]
+      responses:
+        "200":
+          description: Single planned transaction
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/Envelope"
+                  - type: object
+                    properties:
+                      data:
+                        $ref: "#/components/schemas/PlannedTransaction"
+    patch:
+      summary: Update planned transaction
+      operationId: updatePlannedTransaction
+      tags: [PlannedTransactions]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                planned_date:
+                  type: string
+                  format: date
+                bank_account:
+                  type: string
+                recipient_id:
+                  type: integer
+                memo:
+                  type: string
+                amount:
+                  type: number
+                currency:
+                  type: string
+                category_id:
+                  type: integer
+                comment:
+                  type: string
+                url:
+                  type: string
+                is_recurring:
+                  type: boolean
+                recurrence_pattern:
+                  type: string
+                is_active:
+                  type: boolean
+      responses:
+        "200":
+          description: Updated
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/Envelope"
+                  - type: object
+                    properties:
+                      data:
+                        $ref: "#/components/schemas/PlannedTransaction"
+    delete:
+      summary: Delete planned transaction
+      operationId: deletePlannedTransaction
+      tags: [PlannedTransactions]
+      responses:
+        "200":
+          description: Deleted
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Envelope"
+
+  /api/planned-transactions/{id}/execute:
+    parameters:
+      - in: path
+        name: id
+        required: true
+        schema:
+          type: integer
+    post:
+      summary: Execute planned transaction (creates real transaction)
+      operationId: executePlannedTransaction
+      tags: [PlannedTransactions]
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                execution_date:
+                  type: string
+                  format: date
+      responses:
+        "201":
+          description: Executed — real transaction created
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/Envelope"
+                  - type: object
+                    properties:
+                      data:
+                        $ref: "#/components/schemas/Transaction"
+
+  # ─── Info ─────────────────────────────────────────────────────────────────────
+  /api/info:
+    get:
+      summary: Global statistics overview
+      operationId: getInfoStats
+      tags: [Info]
+      responses:
+        "200":
+          description: Statistics summary
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Envelope"
+
+  /api/info/banks:
+    get:
+      summary: List distinct bank accounts
+      operationId: getInfoBanks
+      tags: [Info]
+      responses:
+        "200":
+          description: Bank list
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Envelope"
+
+  /api/info/supported-adapters:
+    get:
+      summary: List supported CSV import adapters
+      operationId: getSupportedAdapters
+      tags: [Info]
+      responses:
+        "200":
+          description: Adapter list
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Envelope"
+
+  /api/info/transaction-count:
+    get:
+      summary: Get transaction count
+      operationId: getTransactionCount
+      tags: [Info]
+      parameters:
+        - in: query
+          name: bank_account
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Count
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Envelope"
+
+  /api/info/transaction-summary:
+    get:
+      summary: Get transaction amount summary (income/expenses)
+      operationId: getTransactionSummary
+      tags: [Info]
+      parameters:
+        - in: query
+          name: start_date
+          schema:
+            type: string
+            format: date
+        - in: query
+          name: end_date
+          schema:
+            type: string
+            format: date
+        - in: query
+          name: currency
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Income/expense totals
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Envelope"
+
+  /api/info/planned-expenses-next-month:
+    get:
+      summary: Get planned expenses due next month
+      operationId: getPlannedExpensesNextMonth
+      tags: [Info]
+      responses:
+        "200":
+          description: Planned expense total
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Envelope"
+
+  /api/info/recurring-patterns:
+    get:
+      summary: Detect recurring transaction patterns
+      operationId: getRecurringPatterns
+      tags: [Info]
+      responses:
+        "200":
+          description: Detected recurring patterns
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Envelope"
+
+  /api/info/exchange-rates:
+    get:
+      summary: Get cached FX exchange rates
+      operationId: getExchangeRates
+      tags: [Info]
+      parameters:
+        - in: query
+          name: base
+          schema:
+            type: string
+        - in: query
+          name: month
+          schema:
+            type: string
+            description: "YYYY-MM"
+      responses:
+        "200":
+          description: Exchange rate map
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Envelope"
+
+  /api/info/exchange-rates/refresh:
+    post:
+      summary: Force-refresh FX exchange rates from provider
+      operationId: refreshExchangeRates
+      tags: [Info]
+      responses:
+        "200":
+          description: Refreshed
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Envelope"
+
+  /api/info/inflation-rates:
+    get:
+      summary: Get Belgian inflation rates
+      operationId: getInflationRates
+      tags: [Info]
+      parameters:
+        - in: query
+          name: year
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Inflation rate list
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Envelope"
+
+  /api/info/inflation-rates/refresh:
+    post:
+      summary: Force-refresh Belgian inflation rates
+      operationId: refreshInflationRates
+      tags: [Info]
+      responses:
+        "200":
+          description: Refreshed
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Envelope"
+
+  /api/info/portfolio-performance:
+    get:
+      summary: Get portfolio performance snapshots
+      operationId: getPortfolioPerformance
+      tags: [Info]
+      parameters:
+        - in: query
+          name: currency
+          schema:
+            type: string
+        - in: query
+          name: start_date
+          schema:
+            type: string
+            format: date
+        - in: query
+          name: end_date
+          schema:
+            type: string
+            format: date
+        - in: query
+          name: investment_id
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Performance snapshots
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Envelope"
+
+  /api/info/portfolio-summary:
+    get:
+      summary: Get portfolio summary per investment
+      operationId: getPortfolioSummary
+      tags: [Info]
+      parameters:
+        - in: query
+          name: currency
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Per-investment summary
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Envelope"
+
+  /api/info/refresh-views:
+    post:
+      summary: Refresh database materialized views
+      operationId: refreshViews
+      tags: [Info]
+      responses:
+        "200":
+          description: Views refreshed
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Envelope"
+
+  # ─── Aggregations ────────────────────────────────────────────────────────────
+  /api/aggregations/monthly-summary:
+    get:
+      summary: Monthly income/expense summary
+      operationId: getMonthlySummary
+      tags: [Aggregations]
+      parameters:
+        - in: query
+          name: start_date
+          schema:
+            type: string
+            format: date
+        - in: query
+          name: end_date
+          schema:
+            type: string
+            format: date
+        - in: query
+          name: currency
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Monthly totals
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Envelope"
+
+  /api/aggregations/category-breakdown:
+    get:
+      summary: Spending by category
+      operationId: getCategoryBreakdown
+      tags: [Aggregations]
+      parameters:
+        - in: query
+          name: start_date
+          schema:
+            type: string
+            format: date
+        - in: query
+          name: end_date
+          schema:
+            type: string
+            format: date
+        - in: query
+          name: currency
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Category totals
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Envelope"
+
+  /api/aggregations/recipient-insights:
+    get:
+      summary: Spending insights by recipient
+      operationId: getRecipientInsights
+      tags: [Aggregations]
+      parameters:
+        - in: query
+          name: start_date
+          schema:
+            type: string
+            format: date
+        - in: query
+          name: end_date
+          schema:
+            type: string
+            format: date
+        - in: query
+          name: currency
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Recipient spending data
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Envelope"
+
+  /api/aggregations/cashflow-comparison:
+    get:
+      summary: Cashflow period-over-period comparison
+      operationId: getCashflowComparison
+      tags: [Aggregations]
+      parameters:
+        - in: query
+          name: currency
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Comparison data
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Envelope"
+
+  /api/aggregations/average-vs-current:
+    get:
+      summary: Current month vs historical average
+      operationId: getAverageVsCurrent
+      tags: [Aggregations]
+      parameters:
+        - in: query
+          name: currency
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Average vs current data
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Envelope"
+
+  /api/aggregations/bank-balances:
+    get:
+      summary: Current balance per bank account
+      operationId: getBankBalances
+      tags: [Aggregations]
+      responses:
+        "200":
+          description: Bank balance list
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Envelope"
+
+  /api/aggregations/cashflow-forecast:
+    get:
+      summary: Monte-Carlo cashflow forecast
+      operationId: getCashflowForecast
+      tags: [Aggregations]
+      parameters:
+        - in: query
+          name: months
+          schema:
+            type: integer
+        - in: query
+          name: currency
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Forecast data
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Envelope"
+
+  /api/aggregations/cashflow-forecast-methods:
+    get:
+      summary: List available cashflow forecast methods
+      operationId: getCashflowForecastMethods
+      tags: [Aggregations]
+      responses:
+        "200":
+          description: Method list
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Envelope"
+
+  /api/aggregations/cashflow-forecast-rolling:
+    get:
+      summary: Rolling-window cashflow forecast
+      operationId: getCashflowForecastRolling
+      tags: [Aggregations]
+      parameters:
+        - in: query
+          name: months
+          schema:
+            type: integer
+        - in: query
+          name: currency
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Rolling forecast
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Envelope"
+
+  /api/aggregations/cashflow-forecast-accuracy:
+    get:
+      summary: Forecast accuracy metrics vs actuals
+      operationId: getCashflowForecastAccuracy
+      tags: [Aggregations]
+      responses:
+        "200":
+          description: Accuracy metrics
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Envelope"
+
+  /api/aggregations/sankey:
+    get:
+      summary: Sankey flow data (income → category → recipient)
+      operationId: getSankey
+      tags: [Aggregations]
+      parameters:
+        - in: query
+          name: start_date
+          schema:
+            type: string
+            format: date
+        - in: query
+          name: end_date
+          schema:
+            type: string
+            format: date
+        - in: query
+          name: currency
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Sankey nodes and links
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Envelope"
+
+  /api/aggregations/category-pivot:
+    get:
+      summary: Category spending pivot (months × categories)
+      operationId: getCategoryPivot
+      tags: [Aggregations]
+      parameters:
+        - in: query
+          name: start_date
+          schema:
+            type: string
+            format: date
+        - in: query
+          name: end_date
+          schema:
+            type: string
+            format: date
+        - in: query
+          name: currency
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Pivot table data
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Envelope"
+
+  /api/aggregations/recipient-by-year:
+    get:
+      summary: Recipient spending grouped by year
+      operationId: getRecipientByYear
+      tags: [Aggregations]
+      parameters:
+        - in: query
+          name: recipient_id
+          schema:
+            type: integer
+        - in: query
+          name: currency
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Yearly recipient totals
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Envelope"
+
+  /api/aggregations/recipient-pivot:
+    get:
+      summary: Top-recipient spending pivot (months × recipients)
+      operationId: getRecipientPivot
+      tags: [Aggregations]
+      parameters:
+        - in: query
+          name: start_date
+          schema:
+            type: string
+            format: date
+        - in: query
+          name: end_date
+          schema:
+            type: string
+            format: date
+        - in: query
+          name: currency
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Pivot table data
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Envelope"
+
+  # ─── Investments extra ───────────────────────────────────────────────────────
+  /api/investments/providers:
+    get:
+      summary: List supported price providers
+      operationId: listInvestmentProviders
+      tags: [Portfolio]
+      responses:
+        "200":
+          description: Provider list
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Envelope"
+
+  /api/investments/refresh-prices:
+    post:
+      summary: Refresh current prices for all investments
+      operationId: refreshInvestmentPrices
+      tags: [Portfolio]
+      responses:
+        "200":
+          description: Refresh result
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Envelope"
+
+  /api/investments/transactions:
+    get:
+      summary: List portfolio transactions across all investments
+      operationId: getBulkPortfolioTransactions
+      tags: [Portfolio]
+      parameters:
+        - in: query
+          name: investment_id
+          schema:
+            type: integer
+        - in: query
+          name: limit
+          schema:
+            type: integer
+        - in: query
+          name: offset
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Bulk transaction list
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/Envelope"
+                  - type: object
+                    properties:
+                      data:
+                        $ref: "#/components/schemas/PortfolioTransactionList"
+
+  /api/investments/transactions/{txnId}:
+    parameters:
+      - in: path
+        name: txnId
+        required: true
+        schema:
+          type: integer
+    patch:
+      summary: Update portfolio transaction
+      operationId: updatePortfolioTransaction
+      tags: [Portfolio]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                type:
+                  $ref: "#/components/schemas/PortfolioTxnType"
+                date:
+                  type: string
+                  format: date
+                amount:
+                  type: number
+                units:
+                  type: number
+                price_per_unit:
+                  type: number
+                fees:
+                  type: number
+                taxes:
+                  type: number
+                note:
+                  type: string
+      responses:
+        "200":
+          description: Updated transaction
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/Envelope"
+                  - type: object
+                    properties:
+                      data:
+                        $ref: "#/components/schemas/PortfolioTransaction"
+    delete:
+      summary: Delete portfolio transaction
+      operationId: deletePortfolioTransaction
+      tags: [Portfolio]
+      responses:
+        "200":
+          description: Deleted
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Envelope"
+
+  /api/investments/{id}:
+    parameters:
+      - in: path
+        name: id
+        required: true
+        schema:
+          type: integer
+    get:
+      summary: Get investment
+      operationId: getInvestment
+      tags: [Portfolio]
+      responses:
+        "200":
+          description: Single investment
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/Envelope"
+                  - type: object
+                    properties:
+                      data:
+                        $ref: "#/components/schemas/Investment"
+    patch:
+      summary: Update investment
+      operationId: updateInvestment
+      tags: [Portfolio]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                name:
+                  type: string
+                symbol:
+                  type: string
+                asset_class:
+                  $ref: "#/components/schemas/AssetClass"
+                currency:
+                  type: string
+                is_active:
+                  type: boolean
+      responses:
+        "200":
+          description: Updated investment
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/Envelope"
+                  - type: object
+                    properties:
+                      data:
+                        $ref: "#/components/schemas/Investment"
+    delete:
+      summary: Delete investment
+      operationId: deleteInvestment
+      tags: [Portfolio]
+      responses:
+        "200":
+          description: Deleted
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Envelope"
+
+  /api/investments/{id}/price-history:
+    parameters:
+      - in: path
+        name: id
+        required: true
+        schema:
+          type: integer
+    get:
+      summary: Get price history for investment
+      operationId: getInvestmentPriceHistory
+      tags: [Portfolio]
+      parameters:
+        - in: query
+          name: start_date
+          schema:
+            type: string
+            format: date
+        - in: query
+          name: end_date
+          schema:
+            type: string
+            format: date
+      responses:
+        "200":
+          description: Price history
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Envelope"
+
+  /api/investments/{id}/transactions:
+    parameters:
+      - in: path
+        name: id
+        required: true
+        schema:
+          type: integer
+    get:
+      summary: List transactions for investment
+      operationId: getInvestmentTransactions
+      tags: [Portfolio]
+      parameters:
+        - in: query
+          name: limit
+          schema:
+            type: integer
+        - in: query
+          name: offset
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Transaction list
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/Envelope"
+                  - type: object
+                    properties:
+                      data:
+                        $ref: "#/components/schemas/PortfolioTransactionList"
+    post:
+      summary: Create transaction for investment
+      operationId: createInvestmentTransaction
+      tags: [Portfolio]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [type, date, amount, currency]
+              properties:
+                type:
+                  $ref: "#/components/schemas/PortfolioTxnType"
+                date:
+                  type: string
+                  format: date
+                amount:
+                  type: number
+                units:
+                  type: number
+                price_per_unit:
+                  type: number
+                fees:
+                  type: number
+                taxes:
+                  type: number
+                currency:
+                  type: string
+                note:
+                  type: string
+                is_recurring:
+                  type: boolean
+                recurrence_interval:
+                  $ref: "#/components/schemas/RecurrenceInterval"
+                recurrence_end_date:
+                  type: string
+                  format: date
+      responses:
+        "201":
+          description: Created transaction
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/Envelope"
+                  - type: object
+                    properties:
+                      data:
+                        $ref: "#/components/schemas/PortfolioTransaction"
+
+  /api/investments/{id}/summary:
+    parameters:
+      - in: path
+        name: id
+        required: true
+        schema:
+          type: integer
+    get:
+      summary: Get investment summary (current value, P&L, units)
+      operationId: getInvestmentSummary
+      tags: [Portfolio]
+      parameters:
+        - in: query
+          name: currency
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Investment summary
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Envelope"
+
+  # ─── Market Lookup ───────────────────────────────────────────────────────────
+  /api/market/search:
+    get:
+      summary: Search for market symbols
+      operationId: marketSearch
+      tags: [Market]
+      parameters:
+        - in: query
+          name: q
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Symbol search results
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/Envelope"
+                  - type: object
+                    properties:
+                      data:
+                        type: array
+                        items:
+                          $ref: "#/components/schemas/MarketSearchResult"
+
+  /api/market/quote:
+    get:
+      summary: Get real-time quote for symbol
+      operationId: marketQuote
+      tags: [Market]
+      parameters:
+        - in: query
+          name: symbol
+          required: true
+          schema:
+            type: string
+        - in: query
+          name: currency
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Quote data
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Envelope"
+
+  /api/market/chart:
+    get:
+      summary: Get historical chart data for symbol
+      operationId: marketChart
+      tags: [Market]
+      parameters:
+        - in: query
+          name: symbol
+          required: true
+          schema:
+            type: string
+        - in: query
+          name: period
+          schema:
+            type: string
+        - in: query
+          name: interval
+          schema:
+            type: string
+      responses:
+        "200":
+          description: OHLC chart data
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Envelope"
+
+  /api/market/news:
+    get:
+      summary: Get news for symbol
+      operationId: marketNews
+      tags: [Market]
+      parameters:
+        - in: query
+          name: symbol
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: News items
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Envelope"
+
+  # ─── Watchlist ────────────────────────────────────────────────────────────────
+  /api/watchlist:
+    get:
+      summary: List watchlist items
+      operationId: getWatchlist
+      tags: [Watchlist]
+      responses:
+        "200":
+          description: Watchlist
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/Envelope"
+                  - type: object
+                    properties:
+                      data:
+                        type: array
+                        items:
+                          $ref: "#/components/schemas/WatchlistItem"
+    post:
+      summary: Add symbol to watchlist
+      operationId: addToWatchlist
+      tags: [Watchlist]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [symbol]
+              properties:
+                symbol:
+                  type: string
+                name:
+                  type: string
+                currency:
+                  type: string
+      responses:
+        "201":
+          description: Added item
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/Envelope"
+                  - type: object
+                    properties:
+                      data:
+                        $ref: "#/components/schemas/WatchlistItem"
+
+  /api/watchlist/{id}:
+    parameters:
+      - in: path
+        name: id
+        required: true
+        schema:
+          type: integer
+    get:
+      summary: Get watchlist item
+      operationId: getWatchlistItem
+      tags: [Watchlist]
+      responses:
+        "200":
+          description: Watchlist item with current price
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/Envelope"
+                  - type: object
+                    properties:
+                      data:
+                        $ref: "#/components/schemas/WatchlistItem"
+    patch:
+      summary: Update watchlist item
+      operationId: updateWatchlistItem
+      tags: [Watchlist]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                name:
+                  type: string
+      responses:
+        "200":
+          description: Updated item
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Envelope"
+    delete:
+      summary: Remove from watchlist
+      operationId: deleteWatchlistItem
+      tags: [Watchlist]
+      responses:
+        "200":
+          description: Removed
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Envelope"
+
+  # ─── Splits ───────────────────────────────────────────────────────────────────
+  /api/splits/owed:
+    get:
+      summary: List split amounts owed per recipient
+      operationId: getSplitsOwed
+      tags: [Splits]
+      responses:
+        "200":
+          description: Owed summary per recipient
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/Envelope"
+                  - type: object
+                    properties:
+                      data:
+                        type: array
+                        items:
+                          $ref: "#/components/schemas/SplitOwed"
+
+  /api/splits/owed/{id}:
+    parameters:
+      - in: path
+        name: id
+        required: true
+        schema:
+          type: integer
+    get:
+      summary: Get owed detail for recipient
+      operationId: getSplitOwedByRecipient
+      tags: [Splits]
+      responses:
+        "200":
+          description: Owed detail
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Envelope"
+
+  /api/splits/owed/{id}/export/csv:
+    parameters:
+      - in: path
+        name: id
+        required: true
+        schema:
+          type: integer
+    get:
+      summary: Export owed splits as CSV
+      operationId: exportSplitsOwedCsv
+      tags: [Splits]
+      responses:
+        "200":
+          description: CSV file
+          content:
+            text/csv:
+              schema:
+                type: string
+
+  /api/splits/transaction/{id}:
+    parameters:
+      - in: path
+        name: id
+        required: true
+        schema:
+          type: integer
+    get:
+      summary: Get splits for a transaction
+      operationId: getSplitsByTransaction
+      tags: [Splits]
+      responses:
+        "200":
+          description: Split list
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/Envelope"
+                  - type: object
+                    properties:
+                      data:
+                        type: array
+                        items:
+                          $ref: "#/components/schemas/Split"
+
+  /api/splits:
+    post:
+      summary: Create a split
+      operationId: createSplit
+      tags: [Splits]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [transaction_id, description, shares]
+              properties:
+                transaction_id:
+                  type: integer
+                description:
+                  type: string
+                shares:
+                  type: array
+                  items:
+                    type: object
+                    required: [recipient_id, amount]
+                    properties:
+                      recipient_id:
+                        type: integer
+                      amount:
+                        type: number
+      responses:
+        "201":
+          description: Created split
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/Envelope"
+                  - type: object
+                    properties:
+                      data:
+                        $ref: "#/components/schemas/Split"
+
+  /api/splits/batch:
+    post:
+      summary: Create multiple splits in one request
+      operationId: createSplitBatch
+      tags: [Splits]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [splits]
+              properties:
+                splits:
+                  type: array
+                  items:
+                    type: object
+      responses:
+        "201":
+          description: Created splits
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Envelope"
+
+  /api/splits/{id}:
+    parameters:
+      - in: path
+        name: id
+        required: true
+        schema:
+          type: integer
+    delete:
+      summary: Delete split
+      operationId: deleteSplit
+      tags: [Splits]
+      responses:
+        "200":
+          description: Deleted
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Envelope"
+
+  /api/splits/{id}/pay:
+    parameters:
+      - in: path
+        name: id
+        required: true
+        schema:
+          type: integer
+    post:
+      summary: Record a payment against a split share
+      operationId: paySplit
+      tags: [Splits]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [amount]
+              properties:
+                amount:
+                  type: number
+                payment_date:
+                  type: string
+                  format: date
+      responses:
+        "201":
+          description: Payment recorded
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Envelope"
+
+  /api/splits/{id}/payments:
+    parameters:
+      - in: path
+        name: id
+        required: true
+        schema:
+          type: integer
+    get:
+      summary: List payments for a split
+      operationId: getSplitPayments
+      tags: [Splits]
+      responses:
+        "200":
+          description: Payment list
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Envelope"
+
+  /api/splits/{id}/settle:
+    parameters:
+      - in: path
+        name: id
+        required: true
+        schema:
+          type: integer
+    post:
+      summary: Mark split as fully settled
+      operationId: settleSplit
+      tags: [Splits]
+      responses:
+        "200":
+          description: Settled
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Envelope"
+
+  /api/splits/owed/{id}/settle-all:
+    parameters:
+      - in: path
+        name: id
+        required: true
+        schema:
+          type: integer
+    post:
+      summary: Settle all open splits for a recipient
+      operationId: settleAllSplitsForRecipient
+      tags: [Splits]
+      responses:
+        "200":
+          description: All settled
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Envelope"
+
+  # ─── Attachments ─────────────────────────────────────────────────────────────
+  /api/attachments:
+    post:
+      summary: Upload attachment for a transaction
+      operationId: uploadAttachment
+      tags: [Attachments]
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              required: [file, transaction_id]
+              properties:
+                file:
+                  type: string
+                  format: binary
+                transaction_id:
+                  type: integer
+      responses:
+        "201":
+          description: Uploaded attachment
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/Envelope"
+                  - type: object
+                    properties:
+                      data:
+                        $ref: "#/components/schemas/Attachment"
+
+  /api/attachments/transaction/{id}:
+    parameters:
+      - in: path
+        name: id
+        required: true
+        schema:
+          type: integer
+    get:
+      summary: List attachments for a transaction
+      operationId: getTransactionAttachments
+      tags: [Attachments]
+      responses:
+        "200":
+          description: Attachment list
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/Envelope"
+                  - type: object
+                    properties:
+                      data:
+                        type: array
+                        items:
+                          $ref: "#/components/schemas/Attachment"
+
+  /api/attachments/{id}/download:
+    parameters:
+      - in: path
+        name: id
+        required: true
+        schema:
+          type: integer
+    get:
+      summary: Download attachment file
+      operationId: downloadAttachment
+      tags: [Attachments]
+      responses:
+        "200":
+          description: File binary
+          content:
+            application/octet-stream:
+              schema:
+                type: string
+                format: binary
+
+  /api/attachments/{id}:
+    parameters:
+      - in: path
+        name: id
+        required: true
+        schema:
+          type: integer
+    delete:
+      summary: Delete attachment
+      operationId: deleteAttachment
+      tags: [Attachments]
+      responses:
+        "200":
+          description: Deleted
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Envelope"
+
+  # ─── Reports ─────────────────────────────────────────────────────────────────
+  /api/reports/financial:
+    post:
+      summary: Generate financial report PDF
+      operationId: generateFinancialReport
+      tags: [Reports]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                start_date:
+                  type: string
+                  format: date
+                end_date:
+                  type: string
+                  format: date
+                currency:
+                  type: string
+      responses:
+        "200":
+          description: Report PDF or data
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Envelope"
+
+  /api/reports/portfolio:
+    post:
+      summary: Generate portfolio report
+      operationId: generatePortfolioReport
+      tags: [Reports]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                currency:
+                  type: string
+      responses:
+        "200":
+          description: Portfolio report
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Envelope"
+
+  /api/reports/tax:
+    post:
+      summary: Generate Belgian tax report
+      operationId: generateTaxReport
+      tags: [Reports]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                year:
+                  type: integer
+                currency:
+                  type: string
+      responses:
+        "200":
+          description: Tax report
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Envelope"
+
+  # ─── AI ──────────────────────────────────────────────────────────────────────
+  /api/ai/status:
+    get:
+      summary: Get AI chat service status
+      operationId: getAiStatus
+      tags: [AI]
+      responses:
+        "200":
+          description: Status
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Envelope"
+
+  /api/ai/models:
+    get:
+      summary: List available AI models
+      operationId: getAiModels
+      tags: [AI]
+      responses:
+        "200":
+          description: Model list
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Envelope"
+
+  /api/ai/conversations:
+    get:
+      summary: List AI conversations
+      operationId: getAiConversations
+      tags: [AI]
+      responses:
+        "200":
+          description: Conversation list
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/Envelope"
+                  - type: object
+                    properties:
+                      data:
+                        type: array
+                        items:
+                          $ref: "#/components/schemas/AiConversation"
+    post:
+      summary: Create AI conversation
+      operationId: createAiConversation
+      tags: [AI]
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                title:
+                  type: string
+      responses:
+        "201":
+          description: Created conversation
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/Envelope"
+                  - type: object
+                    properties:
+                      data:
+                        $ref: "#/components/schemas/AiConversation"
+
+  /api/ai/conversations/{id}:
+    parameters:
+      - in: path
+        name: id
+        required: true
+        schema:
+          type: string
+    get:
+      summary: Get conversation with message history
+      operationId: getAiConversation
+      tags: [AI]
+      responses:
+        "200":
+          description: Conversation with messages
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Envelope"
+    patch:
+      summary: Update conversation title
+      operationId: updateAiConversation
+      tags: [AI]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [title]
+              properties:
+                title:
+                  type: string
+      responses:
+        "200":
+          description: Updated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Envelope"
+    delete:
+      summary: Delete conversation
+      operationId: deleteAiConversation
+      tags: [AI]
+      responses:
+        "200":
+          description: Deleted
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Envelope"
+
+  /api/ai/chat:
+    post:
+      summary: Send message and get AI response
+      operationId: aiChat
+      tags: [AI]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [message]
+              properties:
+                message:
+                  type: string
+                conversation_id:
+                  type: string
+      responses:
+        "200":
+          description: AI response
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/Envelope"
+                  - type: object
+                    properties:
+                      data:
+                        $ref: "#/components/schemas/AiMessage"
+
+  /api/ai/chat/stream:
+    post:
+      summary: Send message and stream AI response (SSE)
+      operationId: aiChatStream
+      tags: [AI]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [message]
+              properties:
+                message:
+                  type: string
+                conversation_id:
+                  type: string
+      responses:
+        "200":
+          description: Server-sent event stream
+          content:
+            text/event-stream:
+              schema:
+                type: string
+
+  # ─── Import ───────────────────────────────────────────────────────────────────
+  /api/import/csv:
+    post:
+      summary: Import transactions from bank CSV
+      operationId: importCsv
+      tags: [Import]
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              required: [file, bank]
+              properties:
+                file:
+                  type: string
+                  format: binary
+                bank:
+                  type: string
+      responses:
+        "200":
+          description: Import batch created
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/Envelope"
+                  - type: object
+                    properties:
+                      data:
+                        $ref: "#/components/schemas/ImportBatch"
+
+  /api/import/csv/custom:
+    post:
+      summary: Import CSV with custom column mapping
+      operationId: importCsvCustom
+      tags: [Import]
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              required: [file]
+              properties:
+                file:
+                  type: string
+                  format: binary
+                mapping:
+                  type: string
+                  description: JSON column mapping
+      responses:
+        "200":
+          description: Import batch created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Envelope"
+
+  /api/import/csv/stream:
+    post:
+      summary: Stream-import large CSV file
+      operationId: importCsvStream
+      tags: [Import]
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              required: [file, bank]
+              properties:
+                file:
+                  type: string
+                  format: binary
+                bank:
+                  type: string
+      responses:
+        "200":
+          description: Import batch created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Envelope"
+
+  /api/import/supported-banks:
+    get:
+      summary: List supported bank CSV adapters
+      operationId: importSupportedBanks
+      tags: [Import]
+      responses:
+        "200":
+          description: Supported bank list
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Envelope"
+
+  /api/import/recipients:
+    post:
+      summary: Bulk-import recipients from CSV
+      operationId: importRecipients
+      tags: [Import]
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              required: [file]
+              properties:
+                file:
+                  type: string
+                  format: binary
+      responses:
+        "200":
+          description: Import result
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Envelope"
+
+  /api/import/categories:
+    post:
+      summary: Bulk-import categories from CSV
+      operationId: importCategories
+      tags: [Import]
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              required: [file]
+              properties:
+                file:
+                  type: string
+                  format: binary
+      responses:
+        "200":
+          description: Import result
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Envelope"
+
+  /api/import/batches:
+    get:
+      summary: List import batches
+      operationId: getImportBatches
+      tags: [Import]
+      responses:
+        "200":
+          description: Batch list
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/Envelope"
+                  - type: object
+                    properties:
+                      data:
+                        type: array
+                        items:
+                          $ref: "#/components/schemas/ImportBatch"
+
+  /api/import/batches/{id}:
+    parameters:
+      - in: path
+        name: id
+        required: true
+        schema:
+          type: string
+    get:
+      summary: Get import batch
+      operationId: getImportBatch
+      tags: [Import]
+      responses:
+        "200":
+          description: Batch detail
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/Envelope"
+                  - type: object
+                    properties:
+                      data:
+                        $ref: "#/components/schemas/ImportBatch"
+    delete:
+      summary: Delete import batch
+      operationId: deleteImportBatch
+      tags: [Import]
+      responses:
+        "200":
+          description: Deleted
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Envelope"
+
+  /api/import/batches/{id}/preview:
+    parameters:
+      - in: path
+        name: id
+        required: true
+        schema:
+          type: string
+    get:
+      summary: Preview import batch rows before commit
+      operationId: previewImportBatch
+      tags: [Import]
+      parameters:
+        - in: query
+          name: limit
+          schema:
+            type: integer
+        - in: query
+          name: offset
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Row preview with staged data
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Envelope"
+
+  /api/import/batches/{id}/rows/{rowId}/override:
+    parameters:
+      - in: path
+        name: id
+        required: true
+        schema:
+          type: string
+      - in: path
+        name: rowId
+        required: true
+        schema:
+          type: string
+    post:
+      summary: Override transaction data for a staged row
+      operationId: overrideImportRow
+      tags: [Import]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+      responses:
+        "200":
+          description: Row updated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Envelope"
+
+  /api/import/batches/{id}/rows/{rowId}/category-override:
+    parameters:
+      - in: path
+        name: id
+        required: true
+        schema:
+          type: string
+      - in: path
+        name: rowId
+        required: true
+        schema:
+          type: string
+    post:
+      summary: Override category for a staged row
+      operationId: overrideImportRowCategory
+      tags: [Import]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [category_id]
+              properties:
+                category_id:
+                  type: integer
+      responses:
+        "200":
+          description: Category overridden
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Envelope"
+
+  /api/import/batches/{id}/commit:
+    parameters:
+      - in: path
+        name: id
+        required: true
+        schema:
+          type: string
+    post:
+      summary: Commit import batch — writes transactions to DB
+      operationId: commitImportBatch
+      tags: [Import]
+      responses:
+        "200":
+          description: Commit result with counts
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Envelope"
+
+  # ─── Admin ────────────────────────────────────────────────────────────────────
+  /api/admin:
+    get:
+      summary: Admin overview / health
+      operationId: adminOverview
+      tags: [Admin]
+      responses:
+        "200":
+          description: Admin info
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Envelope"
+
+  /api/admin/database/init:
+    post:
+      summary: Initialise database schema (run migrations)
+      operationId: adminDatabaseInit
+      tags: [Admin]
+      responses:
+        "200":
+          description: Init result
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Envelope"
+
+  /api/admin/database/reset:
+    post:
+      summary: Reset database (destructive — drops all data)
+      operationId: adminDatabaseReset
+      tags: [Admin]
+      responses:
+        "200":
+          description: Reset result
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Envelope"
+
+  /api/admin/database/stats:
+    get:
+      summary: Database size and table row counts
+      operationId: adminDatabaseStats
+      tags: [Admin]
+      responses:
+        "200":
+          description: DB stats
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Envelope"
+
+  /api/admin/database/vacuum:
+    post:
+      summary: Run VACUUM ANALYZE on database
+      operationId: adminDatabaseVacuum
+      tags: [Admin]
+      responses:
+        "200":
+          description: Vacuum result
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Envelope"
+
+  /api/admin/update/check:
+    get:
+      summary: Check for application updates
+      operationId: adminUpdateCheck
+      tags: [Admin]
+      responses:
+        "200":
+          description: Update check result
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Envelope"
+
+  /api/admin/update/apply:
+    post:
+      summary: Apply pending update
+      operationId: adminUpdateApply
+      tags: [Admin]
+      responses:
+        "200":
+          description: Update applied
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Envelope"
+
+  /api/admin/update/apply-and-restart:
+    post:
+      summary: Apply update and restart app
+      operationId: adminUpdateApplyAndRestart
+      tags: [Admin]
+      responses:
+        "200":
+          description: Update applied and restart initiated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Envelope"
+
+  /api/admin/investments/kinesis/sanitize-history:
+    post:
+      summary: Sanitize Kinesis price history data
+      operationId: adminKinesisSanitize
+      tags: [Admin]
+      responses:
+        "200":
+          description: Sanitize result
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Envelope"
+
+  /api/admin/providers/health:
+    get:
+      summary: Check all price-provider health
+      operationId: adminProvidersHealth
+      tags: [Admin]
+      responses:
+        "200":
+          description: Provider health map
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Envelope"
+
+  /api/admin/providers/{provider}/probe:
+    parameters:
+      - in: path
+        name: provider
+        required: true
+        schema:
+          type: string
+    post:
+      summary: Probe specific price provider
+      operationId: adminProviderProbe
+      tags: [Admin]
+      responses:
+        "200":
+          description: Probe result
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Envelope"
+
+  /api/admin/metrics/requests:
+    get:
+      summary: Get request metrics (rate, errors, latencies)
+      operationId: adminMetricsRequests
+      tags: [Admin]
+      responses:
+        "200":
+          description: Request metrics
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Envelope"
+
+  /api/admin/endpoints:
+    get:
+      summary: List all registered API endpoints
+      operationId: adminListEndpoints
+      tags: [Admin]
+      responses:
+        "200":
+          description: Endpoint list
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Envelope"
+
+  /api/admin/endpoint-liveness:
+    get:
+      summary: Liveness probe for each endpoint
+      operationId: adminEndpointLiveness
+      tags: [Admin]
+      responses:
+        "200":
+          description: Liveness results
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Envelope"

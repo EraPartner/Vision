@@ -17,7 +17,7 @@ import { scaleLinear, scaleTime } from "@visx/scale";
 import { AreaClosed, AreaStack, Line, LinePath } from "@visx/shape";
 import { bisector, extent, max, min } from "d3-array";
 import { motion, useReducedMotion } from "framer-motion";
-import { useCallback, useMemo, useState } from "react";
+import { useCallback, useMemo, useRef, useState } from "react";
 
 import { BottomAxis, LeftAxis, RightAxis } from "./ChartAxis";
 import { ChartTooltip, type ChartTooltipDatum } from "./ChartTooltip";
@@ -112,7 +112,14 @@ function AreaChartInner<Datum>({
     const innerWidth = Math.max(0, width - margin.left - margin.right);
     const innerHeight = Math.max(0, height - margin.top - margin.bottom);
 
-    const xValues = useMemo(() => data.map((d) => xAccessor(d)), [data, xAccessor]);
+    // Prevent inline xAccessor props from invalidating memoized derivations every render.
+    // The ref always tracks the latest accessor; the stable wrapper never changes identity.
+    const xAccessorRef = useRef(xAccessor);
+    xAccessorRef.current = xAccessor;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    const stableXAccessor = useCallback((d: Datum) => xAccessorRef.current(d), []);
+
+    const xValues = useMemo(() => data.map((d) => stableXAccessor(d)), [data, stableXAccessor]);
 
     const xScale = useMemo(() => {
         if (xIsDate) {
@@ -171,8 +178,8 @@ function AreaChartInner<Datum>({
     }, [data, innerHeight, referenceLines, series, stacked, yDomain]);
 
     const bisect = useMemo(
-        () => bisector<Datum, Date | number>((d) => xAccessor(d) as Date).center,
-        [xAccessor],
+        () => bisector<Datum, Date | number>((d) => stableXAccessor(d) as Date).center,
+        [stableXAccessor],
     );
 
     const [hoverIndex, setHoverIndex] = useState<number | null>(null);

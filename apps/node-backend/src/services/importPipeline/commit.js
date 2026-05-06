@@ -92,6 +92,9 @@ export async function commitBatch({ batchId, onProgress }) {
           continue;
         }
 
+        // SAVEPOINT per row: if insert fails the txn stays usable for remaining rows.
+        const sp = `sp_row_${row.id}`;
+        await client.query(`SAVEPOINT ${sp}`);
         try {
           // When overridden, clear matched_pattern_id — the link is now manual.
           const effectivePatternId = row.user_override_recipient_id ? null : (row.matched_pattern_id ?? null);
@@ -126,7 +129,9 @@ export async function commitBatch({ batchId, onProgress }) {
             `UPDATE import_staging_rows SET status = 'committed' WHERE id = $1`,
             [row.id]
           );
+          await client.query(`RELEASE SAVEPOINT ${sp}`);
         } catch (err) {
+          await client.query(`ROLLBACK TO SAVEPOINT ${sp}`);
           errors++;
           await client.query(
             `UPDATE import_staging_rows SET status = 'error', error_message = $2 WHERE id = $1`,

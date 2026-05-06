@@ -94,7 +94,11 @@ function detectAmountChanges(transactions) {
 
   // Calculate baseline (median of all amounts)
   const amounts = sorted.map((t) => toDecimal(t.amount).abs().toNumber());
-  const medianAmount = [...amounts].sort((a, b) => a - b)[Math.floor(amounts.length / 2)];
+  const _sortedAmounts = [...amounts].sort((a, b) => a - b);
+  const _mid = Math.floor(_sortedAmounts.length / 2);
+  const medianAmount = _sortedAmounts.length % 2 === 0
+    ? (_sortedAmounts[_mid - 1] + _sortedAmounts[_mid]) / 2
+    : _sortedAmounts[_mid];
   if (!Number.isFinite(medianAmount) || medianAmount === 0) {
     return [];
   }

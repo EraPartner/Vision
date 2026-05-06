@@ -54,6 +54,7 @@ const DEFAULT_VISIBLE_METHOD_IDS: readonly string[] = [
 ];
 
 const BORDER_COLOR = "hsl(var(--border))";
+const EMPTY_IDS: number[] = [];
 
 function methodToggleStyle(color: string, active: boolean) {
     return {
@@ -74,8 +75,8 @@ export interface CashFlowForecastChartProps {
 }
 
 export function CashFlowForecastChart({
-    excludedCategoryIds = [],
-    excludedRecipientIds = [],
+    excludedCategoryIds = EMPTY_IDS,
+    excludedRecipientIds = EMPTY_IDS,
     currency = "EUR",
     embedded = false,
 }: CashFlowForecastChartProps) {

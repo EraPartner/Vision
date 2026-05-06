@@ -25,6 +25,24 @@ import {
 const SPIKE_RATIO_THRESHOLD = 3; // 3× single-day jump = spike
 const HISTORY_DAY_MS = 24 * 60 * 60 * 1000;
 const HOURLY_LOOKBACK_DAYS = 7;
+const BACKFILL_CONCURRENCY = 4;
+
+// ─── Concurrency Helper ──────────────────────────────────────────────────────
+
+/**
+ * Process items with at most `limit` concurrent async tasks.
+ * Work-queue pattern: workers pull from a shared queue until it empties.
+ */
+async function forEachConcurrent(items, limit, fn) {
+  const queue = [...items];
+  async function worker() {
+    let item;
+    while ((item = queue.shift()) !== undefined) {
+      await fn(item);
+    }
+  }
+  await Promise.all(Array.from({ length: Math.min(limit, items.length) }, worker));
+}
 
 // ─── Pure Functions ─────────────────────────────────────────────────────────
 
@@ -372,18 +390,22 @@ export async function backfillHistoricalAssetQuotes() {
   let withHistory = 0;
   let failed = 0;
 
-  for (const [invId, { investment, holdingWindows }] of investmentWindows) {
-    try {
-      const result = await backfillInvestmentQuotes(investment, holdingWindows);
-      if (result.hasHistory) withHistory += 1;
-    } catch (error) {
-      failed += 1;
-      logger.warn('Historical quote backfill failed for investment', {
-        investmentId: invId,
-        error: error?.message,
-      });
+  await forEachConcurrent(
+    [...investmentWindows.entries()],
+    BACKFILL_CONCURRENCY,
+    async ([invId, { investment, holdingWindows }]) => {
+      try {
+        const result = await backfillInvestmentQuotes(investment, holdingWindows);
+        if (result.hasHistory) withHistory += 1;
+      } catch (error) {
+        failed += 1;
+        logger.warn('Historical quote backfill failed for investment', {
+          investmentId: invId,
+          error: error?.message,
+        });
+      }
     }
-  }
+  );
 
   // Cleanup stale quotes outside holding windows
   try {
@@ -417,39 +439,42 @@ export async function refreshActiveHoldingQuotes() {
   let refreshed = 0;
   let failed = 0;
 
-  for (const [invId, { investment, holdingWindows }] of investmentWindows) {
-    // Only refresh open windows (toDate === null)
-    const openWindows = holdingWindows.filter((w) => w.toDate === null);
-    if (openWindows.length === 0) continue;
+  await forEachConcurrent(
+    [...investmentWindows.entries()],
+    BACKFILL_CONCURRENCY,
+    async ([invId, { investment, holdingWindows }]) => {
+      const openWindows = holdingWindows.filter((w) => w.toDate === null);
+      if (openWindows.length === 0) return;
 
-    try {
-      const lookbackMs = Date.now() - HOURLY_LOOKBACK_DAYS * HISTORY_DAY_MS;
-      for (const window of openWindows) {
-        const fromMs = Math.max(
-          Date.parse(`${window.fromDate}T00:00:00.000Z`),
-          lookbackMs
-        );
+      try {
+        const lookbackMs = Date.now() - HOURLY_LOOKBACK_DAYS * HISTORY_DAY_MS;
+        for (const window of openWindows) {
+          const fromMs = Math.max(
+            Date.parse(`${window.fromDate}T00:00:00.000Z`),
+            lookbackMs
+          );
 
-        const rawPoints = await fetchHistoricalPrices(investment, {
-          fromMs,
-          toMs: Date.now(),
-        });
+          const rawPoints = await fetchHistoricalPrices(investment, {
+            fromMs,
+            toMs: Date.now(),
+          });
 
-        if (rawPoints.length > 0) {
-          const cleanPoints = sanitizeIsolatedSpikes(rawPoints);
-          const provider = investment.price_provider || 'provider';
-          await saveHistoricalPointsToDatabase(investment.id, cleanPoints, provider);
+          if (rawPoints.length > 0) {
+            const cleanPoints = sanitizeIsolatedSpikes(rawPoints);
+            const provider = investment.price_provider || 'provider';
+            await saveHistoricalPointsToDatabase(investment.id, cleanPoints, provider);
+          }
         }
+        refreshed += 1;
+      } catch (error) {
+        failed += 1;
+        logger.warn('Periodic quote refresh failed for investment', {
+          investmentId: invId,
+          error: error?.message,
+        });
       }
-      refreshed += 1;
-    } catch (error) {
-      failed += 1;
-      logger.warn('Periodic quote refresh failed for investment', {
-        investmentId: invId,
-        error: error?.message,
-      });
     }
-  }
+  );
 
   logger.info('Periodic active quote refresh complete', { refreshed, failed });
   return { refreshed, failed };

@@ -7,15 +7,17 @@ import { formatCurrency, numberFormatToLocale } from "@/utils/currency";
 interface CategoryPieChartProps {
     readonly data: Array<{ name: string; value: number }>;
     readonly embedded?: boolean;
+    readonly formatValue?: (v: number) => string;
 }
 
-export function CategoryPieChart({ data, embedded = false }: CategoryPieChartProps) {
+export function CategoryPieChart({ data, embedded = false, formatValue }: CategoryPieChartProps) {
     const { t } = useLanguage();
     const { appSettings } = useAppSettings();
     const locale = numberFormatToLocale(appSettings.numberFormat);
     const defaultCurrency = appSettings.defaultCurrency || "EUR";
 
     const coloredData = data.map((d, i) => ({ ...d, color: getChartColor(i) }));
+    const tooltipFmt = formatValue ?? ((v: number) => formatCurrency(v, defaultCurrency, locale));
 
     const chartContent = (
         <div className="flex h-72 flex-col gap-2">
@@ -24,7 +26,7 @@ export function CategoryPieChart({ data, embedded = false }: CategoryPieChartPro
                 height={232}
                 innerRadiusRatio={0.6}
                 padAngle={0.025}
-                tooltipValueFormat={(v) => formatCurrency(v, defaultCurrency, locale)}
+                tooltipValueFormat={tooltipFmt}
             />
             <ChartLegend
                 items={coloredData.map((d) => ({ label: d.name, color: d.color }))}

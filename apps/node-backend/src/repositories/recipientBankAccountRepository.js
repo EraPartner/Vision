@@ -6,7 +6,7 @@
  * Provides CRUD operations for managing bank accounts linked to recipients.
  */
 
-import { query } from '../database/connection.js';
+import { query, withTransaction } from '../database/connection.js';
 
 export const recipientBankAccountRepository = {
   async getById(id) {
@@ -139,20 +139,19 @@ export const recipientBankAccountRepository = {
   },
 
   async setPrimary(bankAccountId, recipientId) {
-    // Unset any existing primary
-    await query(
-      `UPDATE recipient_bank_accounts SET is_primary = false, updated_at = NOW()
-       WHERE recipient_id = $1 AND is_primary = true`,
-      [recipientId]
-    );
-
-    // Set the new primary
-    const result = await query(
-      `UPDATE recipient_bank_accounts SET is_primary = true, updated_at = NOW()
-       WHERE id = $1 AND recipient_id = $2 RETURNING *`,
-      [bankAccountId, recipientId]
-    );
-    return result.rowCount > 0;
+    return withTransaction(async (client) => {
+      await client.query(
+        `UPDATE recipient_bank_accounts SET is_primary = false, updated_at = NOW()
+         WHERE recipient_id = $1 AND is_primary = true`,
+        [recipientId]
+      );
+      const result = await client.query(
+        `UPDATE recipient_bank_accounts SET is_primary = true, updated_at = NOW()
+         WHERE id = $1 AND recipient_id = $2 RETURNING *`,
+        [bankAccountId, recipientId]
+      );
+      return result.rowCount > 0;
+    });
   },
 };
 

@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
+import { parseDecimal } from '@/lib/decimal';
 import { useLanguage } from '@/contexts/LanguageContext';
 import { useBelgianTaxProfile } from '@/contexts/BelgianTaxProfileContext';
 import { useAppSettings } from '@/contexts/AppSettingsContext';
@@ -43,11 +44,7 @@ export function PortfolioTaxAdjustmentsDialog({ investments }: Props) {
     setDraft(next);
   }, [open, sorted, getAdjustment, profile.taxYear]);
 
-  const parseNumber = (v?: string) => {
-    const normalized = (v ?? '').replace(',', '.').trim();
-    const n = Number.parseFloat(normalized);
-    return Number.isFinite(n) ? n : 0;
-  };
+  const parseNumber = (v?: string) => parseDecimal(v, 0);
 
   const draftTotals = useMemo(() => {
     return sorted.reduce(

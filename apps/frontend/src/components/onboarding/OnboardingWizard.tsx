@@ -188,7 +188,7 @@ export function OnboardingWizard({ open, onComplete, onOpenSettings }: Onboardin
         setCreatingCategories(true);
         try {
             const results = await Promise.allSettled(
-                selectedCategories.map((idx) => {
+                Array.from(selectedCategories).map((idx) => {
                     const cat = SUGGESTED_CATEGORIES[idx];
                     return apiClient.createCategory({ general: cat.general, detail: cat.detail });
                 })

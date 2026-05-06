@@ -4,13 +4,13 @@
 
 import { cleanRecipientName, normalizeToUppercase } from '../../textNormalization.js';
 import { logger } from '../../../config/logger.js';
-import { parseCsvFile, buildOptionalComment, buildRawRowString } from './_shared.js';
+import { parseCsvFile, buildOptionalComment, buildRawRowString, parseAmountField } from './_shared.js';
 
 const NAME = 'wise';
 const BANK_LABEL = 'Wise';
 
 function resolveAmount(amountStr, direction) {
-  const parsed = parseFloat(amountStr);
+  const parsed = parseAmountField(amountStr);
   if (isNaN(parsed)) return null;
   if (direction === 'OUT') return -Math.abs(parsed);
   if (direction === 'IN') return Math.abs(parsed);

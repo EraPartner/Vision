@@ -33,6 +33,47 @@ export function parseCommaDecimal(value) {
   return parseFloat(String(value).replace(/\s/g, '').replace(',', '.'));
 }
 
+/**
+ * Robust amount parser that handles both EU (1.234,56) and US (1,234.56)
+ * formats, currency symbols, parenthetical negatives, and leading sign.
+ */
+export function parseAmountField(raw) {
+  let s = String(raw || '').trim();
+  if (!s) return NaN;
+  s = s.replace(/\s/g, '');
+  s = s.replace(/[$€£¥]/g, '');
+  let negative = false;
+  if (s.startsWith('(') && s.endsWith(')')) {
+    negative = true;
+    s = s.slice(1, -1);
+  }
+  if (s.startsWith('-')) {
+    negative = !negative;
+    s = s.slice(1);
+  } else if (s.startsWith('+')) {
+    s = s.slice(1);
+  }
+  const lastComma = s.lastIndexOf(',');
+  const lastDot = s.lastIndexOf('.');
+  if (lastComma >= 0 && lastDot >= 0) {
+    if (lastComma > lastDot) {
+      s = s.replace(/\./g, '').replace(',', '.');
+    } else {
+      s = s.replace(/,/g, '');
+    }
+  } else if (lastComma >= 0) {
+    const tail = s.length - lastComma - 1;
+    if (tail === 3 && s.indexOf(',') !== lastComma) {
+      s = s.replace(/,/g, '');
+    } else {
+      s = s.replace(',', '.');
+    }
+  }
+  const n = parseFloat(s);
+  if (isNaN(n)) return NaN;
+  return negative ? -n : n;
+}
+
 export function splitCsvLines(content) {
   return String(content).split(/\r\n|\r|\n/);
 }

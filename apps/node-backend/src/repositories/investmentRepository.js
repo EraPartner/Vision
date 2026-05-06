@@ -2,7 +2,7 @@
  * Investment Repository - data access for investments table.
  */
 
-import { query } from '../database/connection.js';
+import { query, withTransaction } from '../database/connection.js';
 
 let _hasInvestmentInheritanceSchema;
 let _hasMetalsInheritanceTable;
@@ -169,10 +169,12 @@ async function updateThroughInheritanceTables(id, fields, getByIdFn) {
     const baseUpdate = buildUpdateSql('investments_base', id, fields, BASE_ALLOWED_FIELDS);
     const childUpdate = buildUpdateSql(childTable, id, fields, childAllowed);
 
-    if (baseUpdate) await query(baseUpdate.sql, baseUpdate.params);
-    if (childUpdate) await query(childUpdate.sql, childUpdate.params);
-
     if (!baseUpdate && !childUpdate) return existing;
+
+    await withTransaction(async (client) => {
+      if (baseUpdate) await client.query(baseUpdate.sql, baseUpdate.params);
+      if (childUpdate) await client.query(childUpdate.sql, childUpdate.params);
+    });
     return getByIdFn(id);
   } catch (err) {
     if (!isMissingInheritanceRelationError(err)) throw err;
