@@ -193,6 +193,7 @@ jobs:
     timeout-minutes: 15
     permissions:
       contents: read
+      pull-requests: write
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v4
 
@@ -216,6 +217,13 @@ jobs:
 
       - name: Run frontend tests with coverage
         run: bun run test:coverage
+
+      - name: Report coverage on PR
+        if: always()
+        uses: davelosert/vitest-coverage-report-action@3c50566c523e04813df28de8f7c48dd97d663f1c # v2
+        with:
+          json-summary-path: apps/frontend/coverage/coverage-summary.json
+          json-final-path: apps/frontend/coverage/coverage-final.json
 
   test-backend:
     name: Test (Backend)
