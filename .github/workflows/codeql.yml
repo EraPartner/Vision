@@ -12,7 +12,7 @@ on:
       - "docs/**"
       - "*.md"
   schedule:
-    - cron: "0 3 * * 1"  # weekly, Monday 03:00 UTC
+    - cron: "0 3 * * 1"  # weekly, Monday 03:00 UTC — full scan even without code changes
 
 # Deny all permissions by default; each job opts in to only what it needs.
 permissions: {}
