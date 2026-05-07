@@ -5,7 +5,22 @@
 
 version: 2
 updates:
-  - package-ecosystem: "bun" # See documentation for possible values
-    directory: "/" # Location of package manifests
+  - package-ecosystem: "bun"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+
+  - package-ecosystem: "pip"
+    directory: "/config"
+    schedule:
+      interval: "weekly"
+
+  - package-ecosystem: "github-actions"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+
+  - package-ecosystem: "docker"
+    directory: "/"
     schedule:
       interval: "weekly"
