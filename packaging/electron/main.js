@@ -186,6 +186,9 @@ function registerSecurityHeaders() {
       },
     });
   });
+  session.defaultSession.setPermissionRequestHandler((_webContents, _permission, callback) => {
+    callback(false);
+  });
 }
 
 // Resolved at launch — see findFreePort() below

@@ -38,6 +38,59 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
   # ─────────────────────────────────────────────────────────────────────────────
+  # Deps audit — bun audit fails on HIGH or CRITICAL vulnerabilities
+  # ─────────────────────────────────────────────────────────────────────────────
+  deps-audit:
+    name: Deps Audit
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
+
+      - name: Install dependencies
+        run: bun install --frozen-lockfile
+
+      - name: Audit dependencies
+        run: bun audit --audit-level=high
+
+  # ─────────────────────────────────────────────────────────────────────────────
+  # Trivy — container image CVE scan (HIGH/CRITICAL)
+  # ─────────────────────────────────────────────────────────────────────────────
+  trivy-scan:
+    name: Trivy Scan
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Build Docker image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          load: true
+          tags: vision:ci
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: Run Trivy vulnerability scan
+        uses: aquasecurity/trivy-action@master
+        with:
+          image-ref: vision:ci
+          format: table
+          severity: HIGH,CRITICAL
+          exit-code: '1'
+
+  # ─────────────────────────────────────────────────────────────────────────────
   # Lint — frontend ESLint + backend ESLint
   # ─────────────────────────────────────────────────────────────────────────────
   lint:
