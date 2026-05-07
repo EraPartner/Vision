@@ -60,6 +60,18 @@ jobs:
       - name: Install dependencies
         run: bun install --frozen-lockfile
 
+      - name: Check named volumes match between compose files
+        run: |
+          ROOT_VOLS=$(awk '/^volumes:/{found=1; next} found && /^  [a-zA-Z]/{gsub(/:$/, "", $1); print $1}' docker-compose.yml | sort)
+          ELECTRON_VOLS=$(awk '/^volumes:/{found=1; next} found && /^  [a-zA-Z]/{gsub(/:$/, "", $1); print $1}' packaging/electron/resources/docker-compose.yml | sort)
+          echo "Root volumes    : $ROOT_VOLS"
+          echo "Electron volumes: $ELECTRON_VOLS"
+          if [ "$ROOT_VOLS" != "$ELECTRON_VOLS" ]; then
+            echo "ERROR: Named volumes out of sync — add missing volumes to packaging/electron/resources/docker-compose.yml before releasing"
+            exit 1
+          fi
+          echo "Compose volume sync OK."
+
       - name: Check version tag matches package.json
         run: |
           TAG="${{ github.event.inputs.tag || github.ref_name }}"

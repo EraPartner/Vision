@@ -4,10 +4,10 @@ type: guide
 status: active
 date: 2026-04-28
 updated: 2026-05-07
-tags: [guide, cicd, github-actions, testing, linting, docker, release, packaging, automation, april-2026, may-2026, security, secrets-scan, deps-audit, trivy-scan]
-description: GitHub Actions CI/CD pipelines including continuous integration checks, supply chain security scanning (secrets, dependencies, container images), and release automation with checksums
-aliases: [github-actions, ci-cd, pipelines, release-workflow, testing-automation, security-scanning]
-related_code: [".github/workflows/ci.yml", ".github/workflows/release.yml", ".gitleaks.toml", ".githooks/pre-commit", "packaging/electron/main.js", "packaging/electron/assets/error.html"]
+tags: [guide, cicd, github-actions, testing, linting, docker, release, packaging, automation, april-2026, may-2026, security, secrets-scan, deps-audit, trivy-scan, quality-gate, verify-compose-sync, ci-complete, live-api-contracts, branch-protection]
+description: GitHub Actions CI/CD pipelines including continuous integration checks, supply chain security scanning (secrets, dependencies, container images), quality gates, Docker Compose sync verification, and release automation with checksums
+aliases: [github-actions, ci-cd, pipelines, release-workflow, testing-automation, security-scanning, quality-gates, branch-protection]
+related_code: [".github/workflows/ci.yml", ".github/workflows/release.yml", ".gitleaks.toml", ".githooks/pre-commit", "packaging/electron/main.js", "packaging/electron/assets/error.html", "packaging/electron/resources/docker-compose.yml", "docker-compose.yml"]
 ---
 
 # CI/CD Pipelines
@@ -167,7 +167,38 @@ HIGH: CVE-2024-XXXXX (openssl)
 
 ---
 
-#### 1. **lint** — Code Quality
+#### 3. **verify-compose-sync** — Docker Compose Sync Check
+
+Verifies that named volumes in `docker-compose.yml` match those in `packaging/electron/resources/docker-compose.yml` (the embedded Electron compose file).
+
+```yaml
+verify-compose-sync:
+  name: Verify Compose Volume Sync
+  runs-on: ubuntu-24.04
+  timeout-minutes: 5
+  steps:
+    - uses: actions/checkout@v4
+    - name: Check named volumes match between compose files
+      run: |
+        ROOT_VOLS=$(awk '/^volumes:/{found=1; next} found && /^  [a-zA-Z]/{gsub(/:$/, "", $1); print $1}' docker-compose.yml | sort)
+        ELECTRON_VOLS=$(awk '/^volumes:/{found=1; next} found && /^  [a-zA-Z]/{gsub(/:$/, "", $1); print $1}' packaging/electron/resources/docker-compose.yml | sort)
+        if [ "$ROOT_VOLS" != "$ELECTRON_VOLS" ]; then
+          echo "ERROR: Named volumes out of sync"
+          exit 1
+        fi
+```
+
+**Why it's critical:**
+
+Named volumes in Docker Compose define persistent data storage. If a volume is added to the root `docker-compose.yml` but omitted from the embedded Electron compose, the packaged app will not share that volume — data stored in the root deployment won't be accessible in the desktop app, or vice versa. This caused the **v1.0.2 bug** where attachments were wiped on update.
+
+**Policy:** Blocks quality gate if volumes diverge; must add all new named volumes to both compose files before merging.
+
+**Related:** [[docs/adr/046-named-volumes-attachment-wipe-bug|ADR-046]] (v1.0.2 attachments bug analysis + fix)
+
+---
+
+#### 4. **lint** — Code Quality
 
 Runs ESLint on frontend and backend source code.
 
@@ -290,7 +321,38 @@ docker-verify:
 
 **Failure:** Indicates a runtime issue; must be resolved before merging.
 
-#### 6. **test-e2e-visual** — Visual Regression (Main Pushes Only)
+#### 6. **test-live-api-contracts** — Live API Contract Tests
+
+Validates that MSW (Mock Service Worker) fixture schemas match actual backend responses. Catches divergence between frontend test stubs and production API contracts.
+
+```yaml
+test-live-api-contracts:
+  name: Test (Live API Contracts)
+  needs: [build-image]
+  if: ${{ !github.event.pull_request.draft }}
+  steps:
+    - uses: actions/checkout@v4
+    - name: Download image artifact
+      uses: actions/download-artifact@v4
+    - name: Load Docker image
+      run: docker load < /tmp/vision-ci.tar
+    - name: Start services with Docker Compose
+      run: docker compose -f docker-compose.yml up -d
+    - name: Run live API contract tests
+      run: cd apps/frontend && bun run vitest run src/test/live-contracts/live-contracts.test.ts
+```
+
+**What it tests:**
+- Frontend MSW fixtures against real backend responses
+- All API endpoint contracts (GET, POST, PUT, DELETE)
+- Response shape, status codes, and error handling
+- Identifies when backend contracts change without updating test stubs
+
+**Policy:** Blocks merge if fixtures diverge from reality. Runs only on non-draft PRs to avoid CI spam.
+
+**Failure:** Indicates API contract mismatch; either update backend or update frontend fixtures accordingly.
+
+#### 7. **test-e2e-visual** — Visual Regression (Main Pushes Only)
 
 Captures and compares full-page screenshots of critical pages. Runs **only on push to main**, never on PRs.
 
@@ -324,7 +386,7 @@ test-e2e-visual:
 - Tagged with `continue-on-error: true` to allow the merge while still capturing visual artifacts for human review
 - Snapshots are automatically updated on main pushes, establishing the visual baseline for subsequent PR comparisons
 
-#### 7. **security-scan** — Vulnerability Scanning
+#### 8. **security-scan** — Vulnerability Scanning
 
 Uses Trivy to scan the codebase and dependencies for known vulnerabilities.
 
@@ -356,6 +418,82 @@ security-scan:
 
 ---
 
+#### 9. **quality-gate** — Pre-Docker Quality Checkpoint
+
+Aggregates all pre-Docker quality checks to prevent wasting expensive Docker build cycles on broken commits.
+
+```yaml
+quality-gate:
+  needs:
+    - secrets-scan
+    - deps-audit
+    - pip-audit
+    - lint
+    - typecheck
+    - build-frontend
+    - test-frontend
+    - test-backend
+    - verify-compose-sync
+  if: always()
+  steps:
+    - name: Check all gates passed
+      run: |
+        results='${{ toJson(needs.*.result) }}'
+        if echo "$results" | grep -qE '"(failure|cancelled)"'; then
+          echo "Quality gate failed"
+          exit 1
+        fi
+```
+
+**Checks:**
+- All nine prerequisite jobs must pass
+- Runs regardless of individual failures (`if: always()`) but fails if any needed job failed
+- Blocks expensive Docker image build until quality gates are green
+
+**Failure:** Indicates an error in earlier stage; must be fixed in that stage before Docker build runs.
+
+**Design:** Gating expensive Docker build after cheap linting/testing prevents CI resource waste on broken code.
+
+#### 10. **ci-complete** — Docker-Tier Aggregation
+
+Final aggregation gate that combines all Docker-intensive CI stages (image scanning, container health, live API contracts). This job should be set as the **single required status check** in GitHub branch protection settings.
+
+```yaml
+ci-complete:
+  name: CI Complete
+  needs: [trivy-scan, docker-verify, test-live-api-contracts]
+  if: always()
+  steps:
+    - name: Check Docker-tier stages passed
+      run: |
+        results='${{ toJson(needs.*.result) }}'
+        if echo "$results" | grep -qE '"(failure|cancelled)"'; then
+          echo "CI failed in Docker tier"
+          exit 1
+        fi
+```
+
+**Why separate from quality-gate?**
+- Quality-gate runs early, gates expensive Docker build, saves CI time
+- ci-complete runs after Docker build, aggregates all Docker results
+- Branch protection should require only ci-complete, not individual job names
+- If ci-complete passes, entire CI pipeline succeeded
+
+**What it aggregates:**
+1. **trivy-scan** — Container image CVE report
+2. **docker-verify** — Image builds + backend health check
+3. **test-live-api-contracts** — API contracts validated against live backend
+
+**Setting as required check:**
+1. Go to GitHub repository → Settings → Branches
+2. Under "Branch protection rules", edit rule for "main"
+3. Set "ci-complete" as the single required status check
+4. Remove individual job names if previously set (ci-complete is the sufficient check)
+
+**Failure:** Indicates failure in Docker-tier scanning or container health; must be fixed before merging.
+
+---
+
 ## Release Workflow (release.yml)
 
 The release workflow publishes new versions of Vision to Docker Container Registry (GHCR) and GitHub Releases (Electron packages).
@@ -383,27 +521,32 @@ verify:
   runs-on: ubuntu-latest
   steps:
     - uses: actions/checkout@v4
-    - name: Verify version tag
+    - name: Check named volumes match between compose files
       run: |
-        VERSION_TAG=${GITHUB_REF#refs/tags/v}
-        PKG_VERSION=$(jq -r '.version' packaging/electron/package.json)
-        if [[ "$VERSION_TAG" != "$PKG_VERSION" ]]; then
-          echo "Tag mismatch: $VERSION_TAG vs $PKG_VERSION"
+        ROOT_VOLS=$(awk '/^volumes:/{found=1; next} found && /^  [a-zA-Z]/{gsub(/:$/, "", $1); print $1}' docker-compose.yml | sort)
+        ELECTRON_VOLS=$(awk '/^volumes:/{found=1; next} found && /^  [a-zA-Z]/{gsub(/:$/, "", $1); print $1}' packaging/electron/resources/docker-compose.yml | sort)
+        if [ "$ROOT_VOLS" != "$ELECTRON_VOLS" ]; then
+          echo "ERROR: Named volumes out of sync"
           exit 1
         fi
-    - name: Lint
-      run: bun run lint
-    - name: Type check
-      run: bun run typecheck
-    - name: Test
-      run: bun run test
+    - name: Check version tag matches package.json
+      run: |
+        TAG="${{ github.event.inputs.tag || github.ref_name }}"
+        TAG_VERSION="${TAG#v}"
+        ROOT_VERSION=$(node -p "require('./package.json').version")
+        PKG_VERSION=$(node -p "require('./packaging/electron/package.json').version")
+        if [ "$TAG_VERSION" != "$ROOT_VERSION" ] || [ "$TAG_VERSION" != "$PKG_VERSION" ]; then
+          echo "ERROR: Version mismatch"
+          exit 1
+        fi
+    - name: Audit JS dependencies
+      run: bun audit --audit-level=high
 ```
 
 **Checks:**
-1. **Version alignment:** Tag (e.g., `v1.2.3`) must match `packaging/electron/package.json`
-2. **Lint:** No style violations
-3. **Type check:** All TypeScript types valid
-4. **Test:** All unit tests pass (frontend + backend)
+1. **Compose volumes sync:** Named volumes in `docker-compose.yml` must match `packaging/electron/resources/docker-compose.yml`
+2. **Version alignment:** Tag (e.g., `v1.2.3`) must match both `package.json` and `packaging/electron/package.json`
+3. **Dependency audit:** No HIGH or CRITICAL vulnerabilities in release
 
 **Failure:** Release is blocked; must fix code and re-tag.
 

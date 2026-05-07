@@ -417,20 +417,35 @@ On failure at any step: error toast shown, user can manually restore from `pre-u
 - Manual "Check for Updates" button
 - Displays latest available version if newer
 
-#### CI/CD Integration (April 2026)
+#### CI/CD Integration (April–May 2026)
 
-**release.yml:**
-- `verify` job (version tag check, lint, tests) blocks all others
+**release.yml** (May 2026):
+- `verify` job checks:
+  - Named volumes in `docker-compose.yml` match `packaging/electron/resources/docker-compose.yml`
+  - Version tag matches both package.json files
+  - JS dependencies audit passes
+  - Blocks all other jobs until checks pass
+
 - `docker` job pushes image with version tag to GHCR
 - `package-mac` job generates `.sha256` checksum alongside ZIP
 - Both artifacts uploaded to GitHub release
 
-**ci.yml:**
-- Lint, typecheck, unit tests
-- `docker-verify` job: build image, start compose, poll health on port 3002
-- `security-scan` job: Trivy scan with SARIF upload to GitHub Security
+**ci.yml** (May 2026):
+- Early stage:
+  - `secrets-scan`, `deps-audit`, `pip-audit`, `lint`, `typecheck`, `build-frontend`, `test-frontend`, `test-backend`
+  - `verify-compose-sync` — compares named volumes between root and embedded compose files
+  - `quality-gate` — aggregates all early checks, gates expensive Docker build
 
-Detailed workflow definitions in [[docs/features/application-updates|Application Updates Feature]].
+- Docker stage (after quality-gate passes):
+  - `build-image` — builds Docker image once, reused by downstream jobs
+  - `trivy-scan` — scans image for OS/system CVEs
+  - `docker-verify` — container health check (build image, start compose, poll health on port 3002)
+  - `test-live-api-contracts` — validates MSW fixtures against real backend responses
+  - `ci-complete` — final aggregation gate (set as required status check in branch protection)
+
+**Security focus:** Compose sync verification prevents the v1.0.2 data-loss bug where omitted volumes caused attachments to vanish on update.
+
+Detailed workflow definitions in [[docs/features/application-updates|Application Updates Feature]] and [[docs/guides/cicd-pipelines|CI/CD Pipelines Guide]].
 
 ---
 
