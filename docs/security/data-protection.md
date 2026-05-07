@@ -20,7 +20,7 @@ Vision is a desktop-first financial application handling sensitive financial dat
 
 ## Content Security Policy (CSP)
 
-### Backend Configuration
+### Backend Configuration (Main App)
 
 The Express server sets CSP headers in `main.js`:
 
@@ -45,7 +45,7 @@ app.use((req, res, next) => {
 |-----------|-------|-----------|
 | `default-src` | `'self'` | Only load resources from same origin |
 | `script-src` | `'self'` | No inline scripts, no external scripts |
-| `style-src` | `'self' 'unsafe-inline'` | Tailwind requires inline styles |
+| `style-src` | `'self' 'unsafe-inline'` | Tailwind requires inline styles (only in main app) |
 | `img-src` | `'self' https:` | Allow remote HTTPS images (news thumbnails) |
 | `connect-src` | `'self' http://localhost:*` | Only connect to local backend |
 | `frame-ancestors` | `'none'` | Prevent clickjacking |
@@ -53,6 +53,29 @@ app.use((req, res, next) => {
 ### News Image Exception
 
 Market lookup news cards display remote HTTPS thumbnails. The CSP `img-src 'self' https:` allows this while restricting other resource types.
+
+### Error Recovery Page CSP (Strict)
+
+The error recovery page (`packaging/electron/assets/error.html`, 2026-05-07) uses **strict CSP without unsafe-inline**:
+
+```html
+<meta http-equiv="Content-Security-Policy" 
+      content="default-src 'self'; style-src 'self'; script-src 'self'" />
+<link rel="stylesheet" href="error.css" />
+<script src="error.js"></script>
+```
+
+**Why strict CSP on error page:**
+- Error recovery is a sensitive operation (showing database connection failures, offering restore options)
+- No dynamic inline styles or scripts required
+- Inline styles could be exploited for CSS exfiltration (background-image URLs to log CSS-injected values)
+- Inline scripts could be exploited for script injection if path parameters were unsanitized (though they aren't)
+- Error page assets are static, bundled with app, and trusted
+
+**Files:** 
+- `packaging/electron/assets/error.html` — Meta tag with strict CSP
+- `packaging/electron/assets/error.css` — Extracted styles (no `<style>` tag)
+- `packaging/electron/assets/error.js` — Extracted logic (no `<script>` tag)
 
 ---
 
@@ -267,7 +290,14 @@ webPreferences: {
 
 Limited IPC channel exposure through preload scripts. Only validated functions are exposed to the renderer.
 
-### Window & Navigation Hardening (2026-05-05 Bug Hunt)
+### Renderer Process Capabilities Lockdown (2026-05-05 Bug Hunt, Enhanced 2026-05-07)
+
+**Permission Request Denial**
+- All permission requests from renderer process are denied at the session level
+- Implementation: `session.defaultSession.setPermissionRequestHandler((_webContents, _permission, callback) => { callback(false); })`
+- Denied permissions: `camera`, `microphone`, `geolocation`, `notifications`, `clipboard-read`, `clipboard-write`, custom IPC permissions
+- Impact: Renderer cannot escalate to system resources; even if compromised (XSS), attacker cannot access camera, location, or clipboard without explicit main-process IPC bridge
+- **Future Features:** If a feature requires a system permission, implement via explicit `ipcMain.on()` handler with user confirmation dialog in main process (native OS dialog, not web)
 
 **setWindowOpenHandler Denial**
 - Prevents renderer-initiated `window.open()` from spawning new windows
@@ -431,9 +461,11 @@ Homebrew installation script now prevents pipe-to-bash vulnerabilities:
 
 ## Related
 
+- [[docs/adr/050-ci-supply-chain-security-tooling|ADR-050: CI Supply Chain Security Tooling]] — Secrets scanning, dependency audit, container image scanning, Electron permission handler, error-page strict CSP
 - [[docs/adr/049-phase-6-7-bug-hunt-recovery-hardening|ADR-049: Phase 6.1–7 Bug Hunt Recovery Hardening]] — Database schema fixes, Electron backup/restore safety
 - [[docs/adr/040-backup-format-v2-aead-encryption|ADR-040: Backup Format v2 AEAD Encryption]] — Backup encryption scheme (v1 legacy, v2 current)
-- [[docs/adr/042-codeql-dependabot-remediation-2026-04]] — CORS fix, rate limiters, input validation improvements
+- [[docs/adr/042-codeql-dependabot-remediation-2026-04|ADR-042: CodeQL + Dependabot Remediation]] — CORS fix, rate limiters, input validation improvements
+- [[docs/guides/cicd-pipelines|CI/CD Pipelines Guide]] — Security job documentation and setup
 - [[docs/security/index]] — Security documentation index
 - [[docs/security/input-validation]] — Input validation details
 - [[docs/security/rate-limiting]] — Rate limiting details

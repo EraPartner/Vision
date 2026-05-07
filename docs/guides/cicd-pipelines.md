@@ -3,11 +3,11 @@ title: CI/CD Pipelines
 type: guide
 status: active
 date: 2026-04-28
-updated: 2026-05-02
-tags: [guide, cicd, github-actions, testing, linting, docker, release, packaging, automation, april-2026, may-2026]
-description: GitHub Actions CI/CD pipelines including continuous integration checks and release automation with checksums
-aliases: [github-actions, ci-cd, pipelines, release-workflow, testing-automation]
-related_code: [".github/workflows/ci.yml", ".github/workflows/release.yml"]
+updated: 2026-05-07
+tags: [guide, cicd, github-actions, testing, linting, docker, release, packaging, automation, april-2026, may-2026, security, secrets-scan, deps-audit, trivy-scan]
+description: GitHub Actions CI/CD pipelines including continuous integration checks, supply chain security scanning (secrets, dependencies, container images), and release automation with checksums
+aliases: [github-actions, ci-cd, pipelines, release-workflow, testing-automation, security-scanning]
+related_code: [".github/workflows/ci.yml", ".github/workflows/release.yml", ".gitleaks.toml", ".githooks/pre-commit", "packaging/electron/main.js", "packaging/electron/assets/error.html"]
 ---
 
 # CI/CD Pipelines
@@ -21,7 +21,7 @@ Vision uses **GitHub Actions** for continuous integration and release automation
 
 ## Continuous Integration (ci.yml)
 
-The CI workflow runs on every push to `main` and `develop` branches. It validates code quality, types, tests, and deployment readiness.
+The CI workflow runs on every push to `main` and PR. It validates code quality, types, tests, and deployment readiness. Security tooling (secrets scan, dependency audit, container scanning) runs first and blocks merge on critical findings.
 
 ### Workflow Definition
 
@@ -29,10 +29,143 @@ The CI workflow runs on every push to `main` and `develop` branches. It validate
 ```yaml
 on:
   push:
-    branches: [main, develop]
+    branches: [main]
+    paths-ignore:
+      - "docs/**"
+      - "*.md"
+  pull_request:
+    branches: [main]
+    paths-ignore:
+      - "docs/**"
+      - "*.md"
 ```
 
+**Permissions:** Minimal per-job basis; most jobs run with `contents: read` only.
+
 ### Jobs
+
+#### 0. **secrets-scan** — Prevent Credential Leaks
+
+Scans git history for hardcoded secrets, API keys, passphrases before they reach CI.
+
+```yaml
+secrets-scan:
+  runs-on: ubuntu-latest
+  permissions:
+    contents: read
+  steps:
+    - uses: actions/checkout@v4
+      with:
+        fetch-depth: 0  # Full history scan on PR
+    - uses: gitleaks/gitleaks-action@v2
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+```
+
+**What it detects:**
+- AWS credentials, GitHub tokens, private keys
+- API keys (Stripe, AWS, custom services)
+- Database connection strings
+- Slack webhooks, Discord tokens
+- Any pattern matching known secret formats
+
+**Config:** `.gitleaks.toml` allowlists documentation placeholders and Obsidian plugin artifacts
+
+**Policy:** Blocks merge if secrets found; must rewrite history or rotate exposed credentials immediately
+
+**Related:** [[docs/adr/050-ci-supply-chain-security-tooling|ADR-050 CI Security Tooling]]
+
+---
+
+#### 1. **deps-audit** — Dependency Vulnerability Check
+
+Audits npm/bun packages for HIGH and CRITICAL severity vulnerabilities.
+
+```yaml
+deps-audit:
+  runs-on: ubuntu-latest
+  permissions:
+    contents: read
+  steps:
+    - uses: actions/checkout@v4
+    - name: Setup Bun
+      uses: oven-sh/setup-bun@v2
+    - run: bun install --frozen-lockfile
+    - run: bun audit --audit-level=high
+```
+
+**What it checks:**
+- npm packages in `package.json` and `bun.lock`
+- Backend packages in Bun lockfile
+- Frontend packages via npm
+- Only HIGH and CRITICAL severity (MEDIUM/LOW ignored)
+
+**Policy:** Blocks merge if vulnerability found
+
+**Dependency Overrides:**
+- `basic-ftp: 5.3.1` — HIGH CVE (race condition)
+- `ip-address: ^10.1.1` — CRITICAL CVE
+- `postcss: >=8.5.10` — HIGH parsing vulnerability
+
+**Mitigation Strategy:** When audit finds a vulnerability:
+1. Check if override exists in root `package.json`
+2. If not, upgrade or find alternative package
+3. Add override to `package.json` `overrides` and `resolutions` fields
+4. Run `bun install` to regenerate lockfiles
+
+**Related:** [[docs/adr/050-ci-supply-chain-security-tooling|ADR-050 CI Security Tooling]]
+
+---
+
+#### 2. **trivy-scan** — Container Image CVE Scan
+
+Scans the Docker image for operating system and system library vulnerabilities.
+
+```yaml
+trivy-scan:
+  runs-on: ubuntu-latest
+  permissions:
+    contents: read
+  steps:
+    - uses: actions/checkout@v4
+    - uses: docker/setup-buildx-action@v3
+    - uses: docker/build-push-action@v6
+      with:
+        context: .
+        load: true
+        tags: vision:ci
+        cache-from: type=gha
+        cache-to: type=gha,mode=max
+    - uses: aquasecurity/trivy-action@master
+      with:
+        image-ref: vision:ci
+        format: table
+        severity: HIGH,CRITICAL
+        exit-code: '1'
+```
+
+**What it scans:**
+- Base image OS packages (Ubuntu)
+- System libraries (glibc, curl, ssl)
+- Layered packages from Dockerfile
+- Reports HIGH and CRITICAL severity only
+
+**Policy:**
+- Scans actual release image (same as pushed to GHCR)
+- Blocks merge if vulnerabilities found
+- Requires base-image upgrade or package patch before shipping
+
+**Example failure reason:**
+```
+HIGH: CVE-2024-XXXXX (openssl)
+  Fix available: Install openssl 3.2.1+
+```
+
+**Mitigation:** Update `FROM ubuntu:X.Y` in Dockerfile or add package update step
+
+**Related:** [[docs/adr/039-docker-container-hardening|ADR-039 Container Hardening]], [[docs/adr/050-ci-supply-chain-security-tooling|ADR-050 CI Security Tooling]]
+
+---
 
 #### 1. **lint** — Code Quality
 

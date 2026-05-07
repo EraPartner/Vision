@@ -29,11 +29,11 @@ jobs:
     permissions:
       contents: read
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
         with:
           fetch-depth: 0
 
-      - uses: gitleaks/gitleaks-action@v2
+      - uses: gitleaks/gitleaks-action@ff98106e4c7b2bc287b24eaf42907196329070c7 # v2
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
@@ -41,54 +41,49 @@ jobs:
   # Deps audit — bun audit fails on HIGH or CRITICAL vulnerabilities
   # ─────────────────────────────────────────────────────────────────────────────
   deps-audit:
-    name: Deps Audit
+    name: Deps Audit (JS)
     runs-on: ubuntu-latest
     permissions:
       contents: read
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
 
       - name: Setup Bun
-        uses: oven-sh/setup-bun@v2
+        uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2
         with:
           bun-version: latest
+
+      - name: Cache bun dependencies
+        uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
+        with:
+          path: ~/.bun/install/cache
+          key: ${{ runner.os }}-bun-${{ hashFiles('bun.lock') }}
+          restore-keys: ${{ runner.os }}-bun-
 
       - name: Install dependencies
         run: bun install --frozen-lockfile
 
-      - name: Audit dependencies
+      - name: Audit JS dependencies
         run: bun audit --audit-level=high
 
   # ─────────────────────────────────────────────────────────────────────────────
-  # Trivy — container image CVE scan (HIGH/CRITICAL)
+  # Python deps audit — pip-audit on config/requirements.txt
   # ─────────────────────────────────────────────────────────────────────────────
-  trivy-scan:
-    name: Trivy Scan
+  pip-audit:
+    name: Deps Audit (Python)
     runs-on: ubuntu-latest
     permissions:
       contents: read
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
 
-      - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v3
-
-      - name: Build Docker image
-        uses: docker/build-push-action@v6
+      - name: Setup Python
+        uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5
         with:
-          context: .
-          load: true
-          tags: vision:ci
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
+          python-version: '3.12'
 
-      - name: Run Trivy vulnerability scan
-        uses: aquasecurity/trivy-action@master
-        with:
-          image-ref: vision:ci
-          format: table
-          severity: HIGH,CRITICAL
-          exit-code: '1'
+      - name: Audit Python dependencies
+        run: pip install pip-audit && pip-audit -r config/requirements.txt
 
   # ─────────────────────────────────────────────────────────────────────────────
   # Lint — frontend ESLint + backend ESLint
@@ -99,12 +94,19 @@ jobs:
     permissions:
       contents: read
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
 
       - name: Setup Bun
-        uses: oven-sh/setup-bun@v2
+        uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2
         with:
           bun-version: latest
+
+      - name: Cache bun dependencies
+        uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
+        with:
+          path: ~/.bun/install/cache
+          key: ${{ runner.os }}-bun-${{ hashFiles('bun.lock') }}
+          restore-keys: ${{ runner.os }}-bun-
 
       - name: Install dependencies
         run: bun install --frozen-lockfile
@@ -124,12 +126,19 @@ jobs:
     permissions:
       contents: read
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
 
       - name: Setup Bun
-        uses: oven-sh/setup-bun@v2
+        uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2
         with:
           bun-version: latest
+
+      - name: Cache bun dependencies
+        uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
+        with:
+          path: ~/.bun/install/cache
+          key: ${{ runner.os }}-bun-${{ hashFiles('bun.lock') }}
+          restore-keys: ${{ runner.os }}-bun-
 
       - name: Install dependencies
         run: bun install --frozen-lockfile
@@ -141,7 +150,36 @@ jobs:
         run: cd apps/frontend && bunx tsc --noEmit
 
   # ─────────────────────────────────────────────────────────────────────────────
-  # Test — frontend (Vitest) + backend (Bun test)
+  # Build — verify the frontend production bundle compiles
+  # ─────────────────────────────────────────────────────────────────────────────
+  build-frontend:
+    name: Build (Frontend)
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2
+        with:
+          bun-version: latest
+
+      - name: Cache bun dependencies
+        uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
+        with:
+          path: ~/.bun/install/cache
+          key: ${{ runner.os }}-bun-${{ hashFiles('bun.lock') }}
+          restore-keys: ${{ runner.os }}-bun-
+
+      - name: Install dependencies
+        run: bun install --frozen-lockfile
+
+      - name: Build frontend
+        run: CI=1 bun run build
+
+  # ─────────────────────────────────────────────────────────────────────────────
+  # Test — frontend (Vitest + coverage gate) + backend (Bun test)
   # ─────────────────────────────────────────────────────────────────────────────
   test-frontend:
     name: Test (Frontend)
@@ -149,12 +187,19 @@ jobs:
     permissions:
       contents: read
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
 
       - name: Setup Bun
-        uses: oven-sh/setup-bun@v2
+        uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2
         with:
           bun-version: latest
+
+      - name: Cache bun dependencies
+        uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
+        with:
+          path: ~/.bun/install/cache
+          key: ${{ runner.os }}-bun-${{ hashFiles('bun.lock') }}
+          restore-keys: ${{ runner.os }}-bun-
 
       - name: Install dependencies
         run: bun install --frozen-lockfile
@@ -162,8 +207,8 @@ jobs:
       - name: Generate locales
         run: CI=1 bun run generate-locales
 
-      - name: Run frontend tests
-        run: bun run test:frontend
+      - name: Run frontend tests with coverage
+        run: bun run test:coverage
 
   test-backend:
     name: Test (Backend)
@@ -171,12 +216,19 @@ jobs:
     permissions:
       contents: read
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
 
       - name: Setup Bun
-        uses: oven-sh/setup-bun@v2
+        uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2
         with:
           bun-version: latest
+
+      - name: Cache bun dependencies
+        uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
+        with:
+          path: ~/.bun/install/cache
+          key: ${{ runner.os }}-bun-${{ hashFiles('bun.lock') }}
+          restore-keys: ${{ runner.os }}-bun-
 
       - name: Install dependencies
         run: bun install --frozen-lockfile
@@ -188,27 +240,114 @@ jobs:
         run: bun run test
 
   # ─────────────────────────────────────────────────────────────────────────────
-  # Docker verify — build image, spin up compose, hit /health
+  # Quality Gate — all quality checks must pass before Docker builds run.
+  # Prevents wasting expensive Docker build time on broken commits.
+  # ─────────────────────────────────────────────────────────────────────────────
+  quality-gate:
+    name: Quality Gate
+    runs-on: ubuntu-latest
+    needs:
+      - secrets-scan
+      - deps-audit
+      - pip-audit
+      - lint
+      - typecheck
+      - build-frontend
+      - test-frontend
+      - test-backend
+    if: always()
+    steps:
+      - name: Check all gates passed
+        run: |
+          results='${{ toJson(needs.*.result) }}'
+          if echo "$results" | grep -qE '"(failure|cancelled)"'; then
+            echo "Quality gate failed. Job results: $results"
+            exit 1
+          fi
+          echo "All quality gates passed."
+
+  # ─────────────────────────────────────────────────────────────────────────────
+  # Build Docker image once — reused by trivy-scan, docker-verify, live-contracts.
+  # Only runs after all quality gates pass.
+  # ─────────────────────────────────────────────────────────────────────────────
+  build-image:
+    name: Build Docker Image
+    runs-on: ubuntu-latest
+    needs: [quality-gate]
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@8d2750c68a42422c14e847fe6c8ac0403b4cbd6f # v3
+
+      - name: Build Docker image
+        uses: docker/build-push-action@10e90e3645eae34f1e60eeb005ba3a3d33f178e8 # v6
+        with:
+          context: .
+          load: false
+          outputs: type=docker,dest=/tmp/vision-ci.tar
+          tags: vision:ci
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: Upload image artifact
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: docker-image
+          path: /tmp/vision-ci.tar
+          retention-days: 1
+
+  # ─────────────────────────────────────────────────────────────────────────────
+  # Trivy — container image CVE scan (HIGH/CRITICAL)
+  # ─────────────────────────────────────────────────────────────────────────────
+  trivy-scan:
+    name: Trivy Scan
+    runs-on: ubuntu-latest
+    needs: [build-image]
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+
+      - name: Download image artifact
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
+        with:
+          name: docker-image
+          path: /tmp
+
+      - name: Load Docker image
+        run: docker load < /tmp/vision-ci.tar
+
+      - name: Run Trivy vulnerability scan
+        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
+        with:
+          image-ref: vision:ci
+          format: table
+          severity: HIGH,CRITICAL
+          exit-code: '1'
+
+  # ─────────────────────────────────────────────────────────────────────────────
+  # Docker verify — spin up compose, hit /health
   # ─────────────────────────────────────────────────────────────────────────────
   docker-verify:
     name: Docker Verify
     runs-on: ubuntu-latest
+    needs: [build-image]
     permissions:
       contents: read
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
 
-      - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v3
-
-      - name: Build Docker image
-        uses: docker/build-push-action@v6
+      - name: Download image artifact
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
         with:
-          context: .
-          load: true
-          tags: vision:ci
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
+          name: docker-image
+          path: /tmp
+
+      - name: Load Docker image
+        run: docker load < /tmp/vision-ci.tar
 
       - name: Create stub .env for Docker Compose
         run: |
@@ -216,9 +355,6 @@ jobs:
 
       - name: Start services with Docker Compose
         run: |
-          # Override image tag so compose uses the locally built image.
-          # Compose auto-loads variables from the .env file written above,
-          # so we deliberately do not duplicate them in an env: block here.
           export VISION_IMAGE=vision:ci
           docker compose -f docker-compose.yml up -d
 
@@ -250,23 +386,21 @@ jobs:
   test-live-api-contracts:
     name: Test (Live API Contracts)
     runs-on: ubuntu-latest
+    needs: [build-image]
     if: ${{ !github.event.pull_request.draft }}
     permissions:
       contents: read
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
 
-      - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v3
-
-      - name: Build Docker image
-        uses: docker/build-push-action@v6
+      - name: Download image artifact
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
         with:
-          context: .
-          load: true
-          tags: vision:ci
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
+          name: docker-image
+          path: /tmp
+
+      - name: Load Docker image
+        run: docker load < /tmp/vision-ci.tar
 
       - name: Create stub .env for Docker Compose
         run: |
@@ -294,9 +428,16 @@ jobs:
           exit 1
 
       - name: Setup Bun
-        uses: oven-sh/setup-bun@v2
+        uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2
         with:
           bun-version: latest
+
+      - name: Cache bun dependencies
+        uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
+        with:
+          path: ~/.bun/install/cache
+          key: ${{ runner.os }}-bun-${{ hashFiles('bun.lock') }}
+          restore-keys: ${{ runner.os }}-bun-
 
       - name: Install dependencies
         run: bun install --frozen-lockfile
@@ -312,4 +453,3 @@ jobs:
       - name: Tear down
         if: always()
         run: docker compose down -v
-

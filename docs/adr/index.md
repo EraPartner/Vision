@@ -3,10 +3,10 @@ title: Architecture Decision Records Index
 type: adr-index
 status: active
 date: 2026-04-23
-updated: 2026-05-05
-last_modified: 2026-05-05
-tags: [adr, index, architecture, decisions, phase-1, phase-4, phase-5, phase-6, phase-7, security, dependency-slim-down, container-hardening, docker, backup, encryption, aead, aes-256-gcm, codeql, dependabot, rate-limiting, tailwind-v4, css-architecture, dependencies, ai, streaming, useSyncExternalStore, bug-hunt, recovery-hardening, updated-at-constraints, concurrent-backup]
-description: Architecture Decision Records documenting significant technical choices and their rationale. May 2026: Phase 6.1–7 bug hunt recovery hardening (ADR-049), AI Chat module-level stream store (ADR-048), Tailwind CSS v4 migration (ADR-047).
+updated: 2026-05-07
+last_modified: 2026-05-07
+tags: [adr, index, architecture, decisions, phase-1, phase-4, phase-5, phase-6, phase-7, security, dependency-slim-down, container-hardening, docker, backup, encryption, aead, aes-256-gcm, codeql, dependabot, rate-limiting, tailwind-v4, css-architecture, dependencies, ai, streaming, useSyncExternalStore, bug-hunt, recovery-hardening, updated-at-constraints, concurrent-backup, ci-cd, secrets-scanning, supply-chain-security, gitleaks, deps-audit, trivy-scan]
+description: Architecture Decision Records documenting significant technical choices and their rationale. May 2026: CI supply chain security tooling (ADR-050), Phase 6.1–7 bug hunt recovery hardening (ADR-049), AI Chat module-level stream store (ADR-048), Tailwind CSS v4 migration (ADR-047).
 aliases: [ADRs, decisions, architecture decisions]
 ---
 
@@ -44,6 +44,10 @@ See [[docs/adr/template\|the ADR template]] for the format to use when creating 
 > - Recording a decision that affects multiple parts of the system
 
 ## Recent Decisions
+
+### 2026-05-07: CI Supply Chain Security Tooling
+
+[[docs/adr/050-ci-supply-chain-security-tooling|ADR-050]] — Four-layer supply chain hardening via CI automation: (1) **Secrets scan** — gitleaks in CI (`secrets-scan` job, full history on every push/PR) + pre-commit hook (local dev, staged changes only), blocks merge if credentials/tokens/keys found; (2) **Dependency audit** — `bun audit --audit-level=high` fails on HIGH/CRITICAL vulns, dependency overrides for basic-ftp/ip-address/postcss pinned to safe versions; (3) **Container scan** — Trivy scans Docker image for OS package CVEs, blocks merge if HIGH/CRITICAL found; (4) **Electron hardening** — `session.defaultSession.setPermissionRequestHandler` denies all renderer permission requests (camera, mic, geolocation, clipboard), strict CSP on error.html (no unsafe-inline). Consequences: secrets never reach CI, transitive dependency exploits blocked, container images patched, renderer cannot escalate to system resources even if XSSed. Friction: developer pre-commit hook setup, CI latency +2-3 min, gitleaks false-positive maintenance.
 
 ### 2026-05-05: Phase 6.1–7 Bug Hunt Recovery Hardening
 

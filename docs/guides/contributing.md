@@ -31,6 +31,19 @@ git remote add upstream https://github.com/original/Vision.git
 
 Follow the [[docs/guides/setup|Setup Guide]] to configure your local development environment.
 
+**Install pre-commit hooks:**
+```bash
+# Configure git to use hooks from .githooks directory
+git config core.hooksPath .githooks
+
+# Install gitleaks (required for secrets scanning)
+brew install gitleaks
+```
+
+The `.githooks/pre-commit` script runs before every `git commit`, scanning staged changes for hardcoded secrets (API keys, credentials, passphrases). If gitleaks is not installed, the hook gracefully skips with a warning; the CI `secrets-scan` job will catch any leaks during PR review.
+
+See [[docs/adr/050-ci-supply-chain-security-tooling|ADR-050]] for details.
+
 ### 3. Create a Feature Branch
 
 ```bash
