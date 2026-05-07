@@ -165,12 +165,12 @@ describe("TransactionInfoDialog", () => {
 
         await screen.findByRole("dialog");
 
-        const editButtons = screen.getAllByRole("button", { name: /^edit$/i });
+        const editButtons = await screen.findAllByRole("button", { name: /^edit$/i });
         await user.click(editButtons[1]); // memo
         expect(screen.getByRole("textbox")).toBeInTheDocument();
 
         // common.cancel = "Cancel"
-        await user.click(screen.getByRole("button", { name: /^cancel$/i }));
+        await user.click(await screen.findByRole("button", { name: /^cancel$/i }));
 
         expect(screen.queryByRole("textbox")).not.toBeInTheDocument();
     });
@@ -197,7 +197,7 @@ describe("TransactionInfoDialog", () => {
 
         await screen.findByRole("dialog");
 
-        const editButtons = screen.getAllByRole("button", { name: /^edit$/i });
+        const editButtons = await screen.findAllByRole("button", { name: /^edit$/i });
         await user.click(editButtons[1]); // memo
 
         const input = screen.getByRole("textbox");
@@ -205,7 +205,7 @@ describe("TransactionInfoDialog", () => {
         await user.type(input, "New memo");
 
         // common.save = "Save"
-        await user.click(screen.getByRole("button", { name: /^save$/i }));
+        await user.click(await screen.findByRole("button", { name: /^save$/i }));
 
         await waitFor(() => expect(patchCalled).toBe(true));
         await waitFor(() =>

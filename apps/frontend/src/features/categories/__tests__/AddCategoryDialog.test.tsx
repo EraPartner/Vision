@@ -131,7 +131,7 @@ describe("AddCategoryDialog (edit mode)", () => {
             />,
         );
         await screen.findByRole("dialog");
-        await user.click(screen.getByRole("button", { name: /^save$/i }));
+        await user.click(await screen.findByRole("button", { name: /^save$/i }));
         await waitFor(() =>
             expect(onSave).toHaveBeenCalledWith({
                 general: "FOOD",
