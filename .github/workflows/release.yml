@@ -2,7 +2,7 @@ name: Release
 
 # Triggered when a version tag is pushed, e.g. v1.2.3
 # Workflow:
-#   0. Verify: version tag matches packaging/electron/package.json + run lint/tests
+#   0. Verify: version tag matches packaging/electron/package.json + full quality gate
 #   1. Build & push multi-arch Docker image to GHCR (linux/amd64 + linux/arm64)
 #   2. Build mac .app + .dmg via electron-builder (arm64 — Apple Silicon only)
 #   3. Create a GitHub Release with all artifacts + SHA256 checksums
@@ -32,12 +32,12 @@ concurrency:
 
 jobs:
   # ─────────────────────────────────────────────────────────────────────────────
-  # 0. Verify: version tag == package.json version + lint + tests
+  # 0. Verify: version tag == package.json version + full quality gate
   # ─────────────────────────────────────────────────────────────────────────────
   verify:
     name: Verify Release
-    runs-on: ubuntu-latest
-    timeout-minutes: 20
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
     permissions:
       contents: read
     steps:
@@ -60,7 +60,7 @@ jobs:
 
       - name: Check version tag matches package.json
         run: |
-          TAG="${{ github.ref_name }}"
+          TAG="${{ github.event.inputs.tag || github.ref_name }}"
           TAG_VERSION="${TAG#v}"
           ROOT_VERSION=$(node -p "require('./package.json').version")
           PKG_VERSION=$(node -p "require('./packaging/electron/package.json').version")
@@ -81,6 +81,17 @@ jobs:
           fi
           echo "Version check passed."
 
+      - name: Audit JS dependencies
+        run: bun audit --audit-level=high
+
+      - name: Setup Python (for pip-audit)
+        uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5
+        with:
+          python-version: '3.12'
+
+      - name: Audit Python dependencies
+        run: pip install pip-audit && pip-audit -r config/requirements.txt
+
       - name: Lint frontend
         run: bun run lint
 
@@ -89,6 +100,15 @@ jobs:
 
       - name: Generate locales
         run: CI=1 bun run generate-locales
+
+      - name: Type-check frontend
+        run: cd apps/frontend && bunx tsc --noEmit
+
+      - name: Build frontend
+        run: CI=1 bun run build
+
+      - name: Install electron workspace dependencies (required for backend tests)
+        run: npm install --prefix packaging/electron --ignore-scripts
 
       - name: Run backend tests
         run: bun run test
@@ -102,7 +122,7 @@ jobs:
   docker:
     name: Build & Push Docker Image
     needs: [verify]
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 45
     permissions:
       contents: read
@@ -170,7 +190,7 @@ jobs:
   package-mac:
     name: Build mac .app + DMG
     needs: [verify]
-    runs-on: macos-26
+    runs-on: macos-15
     timeout-minutes: 30
     permissions:
       contents: read
@@ -212,7 +232,7 @@ jobs:
       - name: Stage release artifacts
         run: |
           set -euo pipefail
-          TAG="${{ github.ref_name }}"
+          TAG="${{ github.event.inputs.tag || github.ref_name }}"
           VER="${TAG#v}"
           OUT="$GITHUB_WORKSPACE/dist/release"
           mkdir -p "$OUT"
@@ -250,7 +270,7 @@ jobs:
   release:
     name: Create GitHub Release
     needs: [docker, package-mac]
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 10
     permissions:
       contents: write  # required to create releases and upload assets
@@ -274,7 +294,8 @@ jobs:
       - name: Create GitHub Release
         uses: softprops/action-gh-release@3bb12739c298aeb8a4eeaf626c5b8d85266b0e65 # v2
         with:
-          name: "Vision ${{ github.ref_name }}"
+          tag_name: ${{ github.event.inputs.tag || github.ref_name }}
+          name: "Vision ${{ github.event.inputs.tag || github.ref_name }}"
           draft: false
           prerelease: false
           generate_release_notes: true
