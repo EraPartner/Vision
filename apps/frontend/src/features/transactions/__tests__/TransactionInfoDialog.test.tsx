@@ -136,7 +136,7 @@ describe("TransactionInfoDialog", () => {
 
         await screen.findByRole("dialog");
         // common.edit = "Edit" — title attribute provides accessible name for icon buttons
-        const editButtons = screen.getAllByRole("button", { name: /^edit$/i });
+        const editButtons = await screen.findAllByRole("button", { name: /^edit$/i });
         expect(editButtons.length).toBeGreaterThan(0);
     });
 
@@ -150,7 +150,7 @@ describe("TransactionInfoDialog", () => {
         await screen.findByRole("dialog");
 
         // Edit buttons in DOM order: date (index 0), memo (index 1), amount, currency, bank, balance, comment
-        const editButtons = screen.getAllByRole("button", { name: /^edit$/i });
+        const editButtons = await screen.findAllByRole("button", { name: /^edit$/i });
         await user.click(editButtons[1]); // memo field uses editType="text"
 
         expect(screen.getByRole("textbox")).toBeInTheDocument();
@@ -267,7 +267,7 @@ describe("TransactionInfoDialog", () => {
             <TransactionInfoDialog infoTransaction={TX} onClose={vi.fn()} onApplyLocal={vi.fn()} />,
         );
         await screen.findByRole("dialog");
-        const buttons = screen.getAllByRole("button");
+        const buttons = await screen.findAllByRole("button");
         expect(buttons.length).toBeGreaterThan(0);
     });
 
@@ -294,11 +294,11 @@ describe("TransactionInfoDialog", () => {
 
         await screen.findByRole("dialog");
 
-        const editButtons = screen.getAllByRole("button", { name: /^edit$/i });
+        const editButtons = await screen.findAllByRole("button", { name: /^edit$/i });
         await user.click(editButtons[1]); // memo
 
         await user.type(screen.getByRole("textbox"), " (changed)");
-        await user.click(screen.getByRole("button", { name: /^cancel$/i }));
+        await user.click(await screen.findByRole("button", { name: /^cancel$/i }));
 
         await new Promise((r) => setTimeout(r, 100));
         expect(patchCalled).toBe(false);
