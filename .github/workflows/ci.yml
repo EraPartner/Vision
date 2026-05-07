@@ -26,6 +26,7 @@ jobs:
   secrets-scan:
     name: Secrets Scan
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     permissions:
       contents: read
     steps:
@@ -43,6 +44,7 @@ jobs:
   deps-audit:
     name: Deps Audit (JS)
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     permissions:
       contents: read
     steps:
@@ -72,6 +74,7 @@ jobs:
   pip-audit:
     name: Deps Audit (Python)
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     permissions:
       contents: read
     steps:
@@ -91,6 +94,7 @@ jobs:
   lint:
     name: Lint
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     permissions:
       contents: read
     steps:
@@ -123,6 +127,7 @@ jobs:
   typecheck:
     name: Type Check
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     permissions:
       contents: read
     steps:
@@ -155,6 +160,7 @@ jobs:
   build-frontend:
     name: Build (Frontend)
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     permissions:
       contents: read
     steps:
@@ -184,6 +190,7 @@ jobs:
   test-frontend:
     name: Test (Frontend)
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     permissions:
       contents: read
     steps:
@@ -213,6 +220,7 @@ jobs:
   test-backend:
     name: Test (Backend)
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     permissions:
       contents: read
     steps:
@@ -246,6 +254,7 @@ jobs:
   quality-gate:
     name: Quality Gate
     runs-on: ubuntu-latest
+    timeout-minutes: 5
     needs:
       - secrets-scan
       - deps-audit
@@ -273,6 +282,7 @@ jobs:
   build-image:
     name: Build Docker Image
     runs-on: ubuntu-latest
+    timeout-minutes: 30
     needs: [quality-gate]
     permissions:
       contents: read
@@ -305,6 +315,7 @@ jobs:
   trivy-scan:
     name: Trivy Scan
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     needs: [build-image]
     permissions:
       contents: read
@@ -334,6 +345,7 @@ jobs:
   docker-verify:
     name: Docker Verify
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     needs: [build-image]
     permissions:
       contents: read
@@ -386,6 +398,7 @@ jobs:
   test-live-api-contracts:
     name: Test (Live API Contracts)
     runs-on: ubuntu-latest
+    timeout-minutes: 20
     needs: [build-image]
     if: ${{ !github.event.pull_request.draft }}
     permissions:
