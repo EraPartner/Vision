@@ -12,13 +12,13 @@
   "dependencies": {
     "archiver": "^7.0.1",
     "archiver-utils": "^5.0.2",
-    "compress-commons": "^6.0.2",
+    "compress-commons": "^7.0.0",
     "readable-stream": "^4.5.2",
     "yauzl": "^3.3.0",
-    "zip-stream": "^6.0.1"
+    "zip-stream": "^7.0.2"
   },
   "devDependencies": {
-    "electron": "^41.0.0",
+    "electron": "^42.0.0",
     "electron-builder": "^26.0.0"
   },
   "build": {
