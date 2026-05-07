@@ -4,8 +4,8 @@ name: Release
 # Workflow:
 #   0. Verify: version tag matches packaging/electron/package.json + run lint/tests
 #   1. Build & push multi-arch Docker image to GHCR (linux/amd64 + linux/arm64)
-#   2. Build source launcher ZIP for source-based production startup
-#   3. Publish a GitHub Release with all artifacts + SHA256 checksums
+#   2. Build mac .app + .dmg via electron-builder (arm64 — Apple Silicon only)
+#   3. Create a GitHub Release with all artifacts + SHA256 checksums
 
 on:
   push:
@@ -37,15 +37,23 @@ jobs:
   verify:
     name: Verify Release
     runs-on: ubuntu-latest
+    timeout-minutes: 20
     permissions:
       contents: read
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
 
       - name: Setup Bun
-        uses: oven-sh/setup-bun@v2
+        uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2
         with:
           bun-version: latest
+
+      - name: Cache bun dependencies
+        uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
+        with:
+          path: ~/.bun/install/cache
+          key: ${{ runner.os }}-bun-${{ hashFiles('bun.lock') }}
+          restore-keys: ${{ runner.os }}-bun-
 
       - name: Install dependencies
         run: bun install --frozen-lockfile
@@ -53,7 +61,6 @@ jobs:
       - name: Check version tag matches package.json
         run: |
           TAG="${{ github.ref_name }}"
-          # Trim leading 'v' from tag
           TAG_VERSION="${TAG#v}"
           ROOT_VERSION=$(node -p "require('./package.json').version")
           PKG_VERSION=$(node -p "require('./packaging/electron/package.json').version")
@@ -62,17 +69,14 @@ jobs:
           echo "Electron package.json    : $PKG_VERSION"
           if [ "$TAG_VERSION" != "$ROOT_VERSION" ]; then
             echo "ERROR: git tag ($TAG_VERSION) does not match root package.json version ($ROOT_VERSION)"
-            echo "Update root package.json before tagging."
             exit 1
           fi
           if [ "$TAG_VERSION" != "$PKG_VERSION" ]; then
             echo "ERROR: git tag ($TAG_VERSION) does not match packaging/electron/package.json version ($PKG_VERSION)"
-            echo "Update packaging/electron/package.json before tagging."
             exit 1
           fi
           if [ "$ROOT_VERSION" != "$PKG_VERSION" ]; then
             echo "ERROR: root package.json ($ROOT_VERSION) and packaging/electron/package.json ($PKG_VERSION) are out of sync"
-            echo "Both files must have the same version."
             exit 1
           fi
           echo "Version check passed."
@@ -86,11 +90,11 @@ jobs:
       - name: Generate locales
         run: CI=1 bun run generate-locales
 
-      - name: Test backend
+      - name: Run backend tests
         run: bun run test
 
-      - name: Test frontend
-        run: bun run test:frontend
+      - name: Run frontend tests with coverage
+        run: bun run test:coverage
 
   # ─────────────────────────────────────────────────────────────────────────────
   # 1. Build & push Docker image to GHCR
@@ -99,6 +103,7 @@ jobs:
     name: Build & Push Docker Image
     needs: [verify]
     runs-on: ubuntu-latest
+    timeout-minutes: 45
     permissions:
       contents: read
       packages: write  # required to push to GHCR with GITHUB_TOKEN
@@ -107,17 +112,16 @@ jobs:
       image_tag: ${{ steps.meta.outputs.version }}
 
     steps:
-      - name: Checkout
-        uses: actions/checkout@v4
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
 
       - name: Set up QEMU (for cross-platform builds)
-        uses: docker/setup-qemu-action@v3
+        uses: docker/setup-qemu-action@c7c53464625b32c7a7e944ae62b3e17d2b600130 # v3
 
       - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v3
+        uses: docker/setup-buildx-action@8d2750c68a42422c14e847fe6c8ac0403b4cbd6f # v3
 
       - name: Log in to GHCR
-        uses: docker/login-action@v3
+        uses: docker/login-action@c94ce9fb468520275223c153574b00df6fe4bcc9 # v3
         with:
           registry: ${{ env.REGISTRY }}
           username: ${{ github.actor }}
@@ -125,17 +129,16 @@ jobs:
 
       - name: Extract Docker metadata (tags & labels)
         id: meta
-        uses: docker/metadata-action@v5
+        uses: docker/metadata-action@c299e40c65443455700f0fdfc63efafe5b349051 # v5
         with:
           images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
           tags: |
-            # e.g. v1.2.3 → 1.2.3 + latest
             type=semver,pattern={{version}}
             type=semver,pattern={{major}}.{{minor}}
             type=raw,value=latest,enable={{is_default_branch}}
 
       - name: Build and push
-        uses: docker/build-push-action@v6
+        uses: docker/build-push-action@10e90e3645eae34f1e60eeb005ba3a3d33f178e8 # v6
         with:
           context: .
           platforms: linux/amd64,linux/arm64
@@ -152,10 +155,11 @@ jobs:
           echo "tags=${{ steps.meta.outputs.tags }}" >> dist/docker-image-tag.txt
 
       - name: Upload docker metadata artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
           name: dockerbuild
           path: dist/docker-image-tag.txt
+          retention-days: 1
 
   # ─────────────────────────────────────────────────────────────────────────────
   # 2. Build mac .app + .dmg via electron-builder (arm64 — Apple Silicon only)
@@ -167,19 +171,26 @@ jobs:
     name: Build mac .app + DMG
     needs: [verify]
     runs-on: macos-26
+    timeout-minutes: 30
     permissions:
       contents: read
     steps:
-      - name: Checkout
-        uses: actions/checkout@v4
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
 
       - name: Setup Bun
-        uses: oven-sh/setup-bun@v2
+        uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2
         with:
           bun-version: latest
 
+      - name: Cache bun dependencies
+        uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
+        with:
+          path: ~/.bun/install/cache
+          key: ${{ runner.os }}-bun-${{ hashFiles('bun.lock') }}
+          restore-keys: ${{ runner.os }}-bun-
+
       - name: Setup Node (for electron-builder native deps)
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
         with:
           node-version: 20
 
@@ -191,17 +202,11 @@ jobs:
 
       - name: Install electron deps and build .app + DMG
         env:
-          # No Apple Developer cert — fall back to ad-hoc signing.
           CSC_IDENTITY_AUTO_DISCOVERY: "false"
         run: |
           set -euo pipefail
           cd packaging/electron
           npm install
-          # electron-builder reads `mac.identity: null` from package.json and
-          # falls back to ad-hoc signing because CSC_IDENTITY_AUTO_DISCOVERY=false.
-          # `--publish never` stops electron-builder from trying to upload to
-          # GitHub itself; the release job at the end of this workflow handles
-          # asset upload via softprops/action-gh-release.
           npx electron-builder --mac --arm64 --publish never
 
       - name: Stage release artifacts
@@ -211,18 +216,11 @@ jobs:
           VER="${TAG#v}"
           OUT="$GITHUB_WORKSPACE/dist/release"
           mkdir -p "$OUT"
-
-          # electron-builder emits files into packaging/electron/dist/. Filenames
-          # use `productName` ("Vision") + version. We rename to predictable
-          # names that match the README and setup script.
           DMG_SRC=$(ls packaging/electron/dist/*.dmg | head -1)
           ZIP_SRC=$(ls packaging/electron/dist/*-arm64-mac.zip 2>/dev/null | head -1 \
                     || ls packaging/electron/dist/*-mac.zip | head -1)
           cp "$DMG_SRC" "$OUT/Vision-${VER}-arm64.dmg"
           cp "$ZIP_SRC" "$OUT/Vision-${VER}-arm64-mac.zip"
-
-          # Inject the version tag into the setup script and README, then
-          # ship them alongside the binaries.
           sed "s/__VERSION__/${VER}/g" packaging/release/vision-setup.command \
             > "$OUT/vision-setup.command"
           chmod +x "$OUT/vision-setup.command"
@@ -240,10 +238,11 @@ jobs:
           done
 
       - name: Upload mac release artifacts
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
           name: vision-mac-release
           path: dist/release/
+          retention-days: 1
 
   # ─────────────────────────────────────────────────────────────────────────────
   # 3. Create GitHub Release and attach artifacts
@@ -252,18 +251,19 @@ jobs:
     name: Create GitHub Release
     needs: [docker, package-mac]
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     permissions:
       contents: write  # required to create releases and upload assets
       packages: read
     steps:
       - name: Download mac release artifacts
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
         with:
           name: vision-mac-release
           path: dist/mac
 
       - name: Download docker metadata artifact
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
         with:
           name: dockerbuild
           path: dist/dockerbuild
@@ -272,7 +272,7 @@ jobs:
         run: find dist/ -type f | sort
 
       - name: Create GitHub Release
-        uses: softprops/action-gh-release@v2
+        uses: softprops/action-gh-release@3bb12739c298aeb8a4eeaf626c5b8d85266b0e65 # v2
         with:
           name: "Vision ${{ github.ref_name }}"
           draft: false
