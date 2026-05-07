@@ -5,8 +5,8 @@ status: active
 date: 2026-04-23
 updated: 2026-05-07
 last_modified: 2026-05-07
-tags: [adr, index, architecture, decisions, phase-1, phase-4, phase-5, phase-6, phase-7, security, dependency-slim-down, container-hardening, docker, backup, encryption, aead, aes-256-gcm, codeql, dependabot, rate-limiting, tailwind-v4, css-architecture, dependencies, ai, streaming, useSyncExternalStore, bug-hunt, recovery-hardening, updated-at-constraints, concurrent-backup, ci-cd, secrets-scanning, supply-chain-security, gitleaks, deps-audit, trivy-scan]
-description: Architecture Decision Records documenting significant technical choices and their rationale. May 2026: CI supply chain security tooling (ADR-050), Phase 6.1–7 bug hunt recovery hardening (ADR-049), AI Chat module-level stream store (ADR-048), Tailwind CSS v4 migration (ADR-047).
+tags: [adr, index, architecture, decisions, phase-1, phase-4, phase-5, phase-6, phase-7, security, dependency-slim-down, container-hardening, docker, backup, encryption, aead, aes-256-gcm, codeql, dependabot, rate-limiting, tailwind-v4, css-architecture, dependencies, ai, streaming, useSyncExternalStore, bug-hunt, recovery-hardening, updated-at-constraints, concurrent-backup, ci-cd, secrets-scanning, supply-chain-security, gitleaks, deps-audit, trivy-scan, docker-compose-sync, named-volumes, data-loss]
+description: Architecture Decision Records documenting significant technical choices and their rationale. May 2026: Docker Compose volume sync policy (ADR-051), CI supply chain security tooling (ADR-050), Phase 6.1–7 bug hunt recovery hardening (ADR-049), AI Chat module-level stream store (ADR-048), Tailwind CSS v4 migration (ADR-047).
 aliases: [ADRs, decisions, architecture decisions]
 ---
 
@@ -44,6 +44,10 @@ See [[docs/adr/template\|the ADR template]] for the format to use when creating 
 > - Recording a decision that affects multiple parts of the system
 
 ## Recent Decisions
+
+### 2026-05-07: Docker Compose Named Volumes Sync Policy
+
+[[docs/adr/051-docker-compose-sync-named-volumes|ADR-051]] — Enforce strict synchronization of named volumes between root `docker-compose.yml` and embedded `packaging/electron/resources/docker-compose.yml` via CI gates. Automated `verify-compose-sync` job in ci.yml runs on every push/PR, extracting and comparing named volumes from both files; fails if divergence detected. Same check added to release.yml `verify` job before any packaging. Prevents v1.0.2 data-loss bug where missing attachment volume in embedded Electron compose caused attachments to vanish on updates. Consequences: new named volumes blocked from merging until both files are synced, release safety guaranteed, developer awareness via CI failure message.
 
 ### 2026-05-07: CI Supply Chain Security Tooling
 

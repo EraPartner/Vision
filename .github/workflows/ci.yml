@@ -257,6 +257,32 @@ jobs:
         run: bun run test
 
   # ─────────────────────────────────────────────────────────────────────────────
+  # Compose sync — named volumes in docker-compose.yml must match the embedded
+  # packaging/electron/resources/docker-compose.yml. Divergence caused the
+  # v1.0.2 data-wipe bug; catch it early in CI, not just at release time.
+  # ─────────────────────────────────────────────────────────────────────────────
+  verify-compose-sync:
+    name: Verify Compose Volume Sync
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v4
+
+      - name: Check named volumes match between compose files
+        run: |
+          ROOT_VOLS=$(awk '/^volumes:/{found=1; next} found && /^  [a-zA-Z]/{gsub(/:$/, "", $1); print $1}' docker-compose.yml | sort)
+          ELECTRON_VOLS=$(awk '/^volumes:/{found=1; next} found && /^  [a-zA-Z]/{gsub(/:$/, "", $1); print $1}' packaging/electron/resources/docker-compose.yml | sort)
+          echo "Root volumes    : $ROOT_VOLS"
+          echo "Electron volumes: $ELECTRON_VOLS"
+          if [ "$ROOT_VOLS" != "$ELECTRON_VOLS" ]; then
+            echo "ERROR: Named volumes out of sync — add missing volumes to packaging/electron/resources/docker-compose.yml"
+            exit 1
+          fi
+          echo "Compose volume sync OK."
+
+  # ─────────────────────────────────────────────────────────────────────────────
   # Quality Gate — all quality checks must pass before Docker builds run.
   # Prevents wasting expensive Docker build time on broken commits.
   # ─────────────────────────────────────────────────────────────────────────────
@@ -273,6 +299,7 @@ jobs:
       - build-frontend
       - test-frontend
       - test-backend
+      - verify-compose-sync
     if: always()
     steps:
       - name: Check all gates passed
@@ -475,3 +502,24 @@ jobs:
       - name: Tear down
         if: always()
         run: docker compose down -v
+
+  # ─────────────────────────────────────────────────────────────────────────────
+  # CI Complete — aggregates the Docker-tier results so branch protection has a
+  # single required-status-check that covers the full pipeline.
+  # Set "CI Complete" as the required check in branch protection settings.
+  # ─────────────────────────────────────────────────────────────────────────────
+  ci-complete:
+    name: CI Complete
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    needs: [trivy-scan, docker-verify, test-live-api-contracts]
+    if: always()
+    steps:
+      - name: Check Docker-tier stages passed
+        run: |
+          results='${{ toJson(needs.*.result) }}'
+          if echo "$results" | grep -qE '"(failure|cancelled)"'; then
+            echo "CI failed in Docker tier. Job results: $results"
+            exit 1
+          fi
+          echo "All CI stages complete."
