@@ -188,7 +188,7 @@ jobs:
           echo "tags=${{ steps.meta.outputs.tags }}" >> dist/docker-image-tag.txt
 
       - name: Upload docker metadata artifact
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: dockerbuild
           path: dist/docker-image-tag.txt
@@ -273,7 +273,7 @@ jobs:
           done
 
       - name: Upload mac release artifacts
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: vision-mac-release
           path: dist/release/
