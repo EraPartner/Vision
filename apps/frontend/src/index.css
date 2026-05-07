@@ -1,10 +1,4 @@
-/* Self-hosted fonts — latin subset, fixed weights only */
-@import "@fontsource/fraunces/latin-400.css";
-@import "@fontsource/fraunces/latin-600.css";
-@import "@fontsource/fraunces/latin-700.css";
-@import "@fontsource/inter/latin-400.css";
-@import "@fontsource/inter/latin-500.css";
-@import "@fontsource/inter/latin-600.css";
+/* Self-hosted fonts — imported from src/main.tsx so Vite bundles binaries. */
 
 /* Design tokens: palette, materials, motion, typography */
 @import "./styles/tokens.css";
