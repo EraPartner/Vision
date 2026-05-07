@@ -1,0 +1,21 @@
+title = "Vision gitleaks configuration"
+
+[extend]
+useDefault = true
+
+[allowlist]
+description = "Project-level allowlists"
+
+# Obsidian plugin binaries and auto-generated plugin data (local-only keys,
+# certificates, and minified third-party JS — none are project secrets).
+paths = [
+    '''^\.obsidian/''',
+    '''^opencode\.json$''',
+]
+
+# Documentation examples that use placeholder tokens.
+regexTarget = "match"
+regexes = [
+    '''YOUR_TOKEN''',
+    '''replace-with-''',
+]
