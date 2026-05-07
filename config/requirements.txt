@@ -1,5 +1,5 @@
 alembic>=1.18.4
 dotenv>=0.9.9
-psycopg2>=2.9.11
+psycopg2>=2.9.12
 sqlalchemy>=2.0.48
 sqlalchemy-utils>=0.42.1
