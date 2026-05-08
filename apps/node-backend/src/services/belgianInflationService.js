@@ -435,21 +435,33 @@ async function loadFromDatabase(startMonth, endMonth) {
     .filter((row) => row.month);
 }
 
+// Postgres caps each query at 65535 bind parameters. With 3 params per row
+// (month_date, monthly_rate, source), 1000 rows per chunk leaves headroom.
+const INFLATION_INSERT_CHUNK = 1000;
+
 async function saveToDatabase(rates, source = 'statbel') {
   if (!Array.isArray(rates) || rates.length === 0) return;
 
   await withTransaction(async (client) => {
-    for (const rate of rates) {
+    for (let i = 0; i < rates.length; i += INFLATION_INSERT_CHUNK) {
+      const chunk = rates.slice(i, i + INFLATION_INSERT_CHUNK);
+      const params = [];
+      const valueRows = chunk.map((rate, idx) => {
+        const offset = idx * 3;
+        params.push(`${rate.month}-01`, rate.monthly_rate, source);
+        return `($${offset + 1}::date, $${offset + 2}, $${offset + 3})`;
+      });
+
       await client.query(
         `INSERT INTO belgian_inflation_rates (month_date, monthly_rate, source)
-         VALUES ($1::date, $2, $3)
+         VALUES ${valueRows.join(', ')}
          ON CONFLICT (month_date)
          DO UPDATE SET
             monthly_rate = EXCLUDED.monthly_rate,
             source = EXCLUDED.source,
             fetched_at = NOW(),
             updated_at = NOW()`,
-        [`${rate.month}-01`, rate.monthly_rate, source]
+        params
       );
     }
   });
