@@ -420,7 +420,7 @@ router.post(
       params.push(sanitized.recipient_id);
     }
     if ('is_active' in sanitized) {
-      setClauses.push(`is_active = $${p++}`);
+      setClauses.push(`is_active = $${p}`);
       params.push(sanitized.is_active);
     }
     setClauses.push('updated_at = NOW()');
