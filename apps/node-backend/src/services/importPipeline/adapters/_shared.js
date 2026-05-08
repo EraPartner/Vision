@@ -74,11 +74,13 @@ export function parseAmountField(raw) {
   return negative ? -n : n;
 }
 
+const UTF8_BOM_RE = /^\uFEFF/;
+
 export function splitCsvLines(content) {
-  // Strip the UTF-8 BOM that Excel and several Windows tools prepend when
-  // exporting CSVs. Without this, the first header byte is "﻿…", which
-  // breaks every column-name lookup downstream.
-  return String(content).replace(/^﻿/, '').split(/\r\n|\r|\n/);
+  // Strip the UTF-8 BOM (U+FEFF) that Excel and several Windows tools
+  // prepend to exported CSVs. Without this, the first header byte leaks
+  // into the first field and breaks every column-name lookup downstream.
+  return String(content).replace(UTF8_BOM_RE, '').split(/\r\n|\r|\n/);
 }
 
 export function buildOptionalComment(commentParts) {
