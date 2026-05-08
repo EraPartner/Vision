@@ -75,7 +75,10 @@ export function parseAmountField(raw) {
 }
 
 export function splitCsvLines(content) {
-  return String(content).split(/\r\n|\r|\n/);
+  // Strip the UTF-8 BOM that Excel and several Windows tools prepend when
+  // exporting CSVs. Without this, the first header byte is "﻿…", which
+  // breaks every column-name lookup downstream.
+  return String(content).replace(/^﻿/, '').split(/\r\n|\r|\n/);
 }
 
 export function buildOptionalComment(commentParts) {
