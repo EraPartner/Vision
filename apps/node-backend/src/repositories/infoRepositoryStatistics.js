@@ -17,7 +17,7 @@ export const statisticsRepository = {
     // ── Fast path: materialized views ──
     if (await mvAvailable('mv_category_totals')) {
       const countResult = await query('SELECT count(*) FROM transactions WHERE is_active = true');
-      const catResult = await query('SELECT * FROM mv_category_totals ORDER BY count DESC');
+      const catResult = await query('SELECT * FROM mv_category_totals ORDER BY count DESC LIMIT 500');
 
       const convertedRows = await convertRowsToEur(
         mapRowsForAmountConversion(catResult.rows, 'total', true),
@@ -88,7 +88,7 @@ export const statisticsRepository = {
 
   async getCategoryBreakdown(targetCurrency = 'EUR') {
     if (await mvAvailable('mv_category_totals')) {
-      const catResult = await query('SELECT * FROM mv_category_totals ORDER BY count DESC');
+      const catResult = await query('SELECT * FROM mv_category_totals ORDER BY count DESC LIMIT 500');
       const convertedRows = await convertRowsToEur(
         mapRowsForAmountConversion(catResult.rows, 'total', true),
         targetCurrency

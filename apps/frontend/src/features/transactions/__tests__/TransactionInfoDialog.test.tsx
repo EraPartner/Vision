@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import { describe, expect, it, vi, beforeEach } from "vitest";
-import { screen, waitFor } from "@testing-library/react";
+import { fireEvent, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { http } from "msw";
 import { renderWithApp } from "@/test/renderWithApp";
@@ -272,6 +272,49 @@ describe("TransactionInfoDialog", () => {
     });
 
     // ─── F3: Field validation ──────────────────────────────────────────────
+
+    it("amount edit submits parsed value via parseLocaleNumber (US-format smoke test)", async () => {
+        // Note: EU-comma parsing is unit-tested in src/utils/currency.test.ts.
+        // jsdom's type=number input rejects locale-comma values via fireEvent,
+        // so we cannot simulate "1,50" keystrokes here without changing the
+        // input type. This component test verifies the save path wires
+        // parseLocaleNumber into the amount edit flow correctly.
+        const user = userEvent.setup();
+        const onApplyLocal = vi.fn();
+        let receivedAmount: number | undefined;
+
+        server.use(
+            http.patch(`${API_BASE}/api/transactions/42`, async ({ request }) => {
+                const body = (await request.json()) as { amount?: number };
+                receivedAmount = body.amount;
+                return ok({ id: 42, memo: "x", amount: body.amount ?? 0, currency: "EUR", is_active: true });
+            }),
+        );
+
+        renderWithApp(
+            <TransactionInfoDialog
+                infoTransaction={TX}
+                onClose={vi.fn()}
+                onApplyLocal={onApplyLocal}
+            />,
+        );
+
+        await screen.findByRole("dialog");
+
+        const editButtons = await screen.findAllByRole("button", { name: /^edit$/i });
+        // index order: date(0), memo(1), amount(2), currency(3), bank(4), balance(5), comment(6)
+        await user.click(editButtons[2]);
+
+        const input = screen.getByRole("spinbutton") as HTMLInputElement;
+        fireEvent.change(input, { target: { value: "42.5" } });
+
+        await user.click(await screen.findByRole("button", { name: /^save$/i }));
+
+        await waitFor(() => expect(receivedAmount).toBe(42.5));
+        await waitFor(() =>
+            expect(onApplyLocal).toHaveBeenCalledWith(42, "amount", 42.5),
+        );
+    });
 
     it("starting edit then Cancel does NOT call PATCH (no submission)", async () => {
         const user = userEvent.setup();

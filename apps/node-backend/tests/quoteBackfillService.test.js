@@ -524,6 +524,35 @@ describe('Quote Backfill Service', () => {
       expect(callArgs[2][0]).toMatch(/^\d{4}-\d{2}-\d{2}$/);
     });
 
+    it('uses UTC for the open-window today sentinel (not the server local time)', async () => {
+      // Pin "now" to a moment where UTC and a non-UTC zone disagree on the
+      // calendar day: 2025-06-15T23:30:00Z is still 2025-06-15 in UTC but
+      // 2025-06-16 in any positive-offset zone. The sentinel must follow
+      // the column's UTC storage, not the server's local clock.
+      vi.useFakeTimers();
+      vi.setSystemTime(new Date('2025-06-15T23:30:00Z'));
+
+      try {
+        query.mockResolvedValueOnce({ rowCount: 0 });
+
+        const investmentWindows = new Map([
+          [1, {
+            investment: { id: 1 },
+            holdingWindows: [
+              { fromDate: '2025-01-01', toDate: null },
+            ],
+          }],
+        ]);
+
+        await cleanupStaleQuotes(investmentWindows);
+
+        const callArgs = query.mock.calls[0][1];
+        expect(callArgs[2]).toEqual(['2025-06-15']);
+      } finally {
+        vi.useRealTimers();
+      }
+    });
+
     it('skips investments with no holding windows', async () => {
       const investmentWindows = new Map([
         [1, {

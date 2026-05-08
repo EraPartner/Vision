@@ -6,7 +6,7 @@ import { Info, Pencil, Check, X } from "lucide-react";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { useAppSettings } from "@/contexts/AppSettingsContext";
 import { useUpdateTransaction } from "@/hooks/useTransactions";
-import { formatCurrency, numberFormatToLocale } from "@/utils/currency";
+import { formatCurrency, numberFormatToLocale, parseLocaleNumber } from "@/utils/currency";
 import { formatDateStringWithAppSettings, parseLocalDateFromYmd, toYmd } from "@/components/shared/dateUtils";
 import { DatePicker } from "@/components/shared/DatePicker";
 import { AttachmentPanel } from "@/components/shared/AttachmentPanel";
@@ -49,7 +49,7 @@ export function TransactionInfoDialog({
         let localValue: string | number | undefined = trimmed;
 
         if (editingInfoField === 'amount') {
-            const parsed = Number(trimmed);
+            const parsed = parseLocaleNumber(trimmed);
             if (Number.isNaN(parsed)) return;
             payload.amount = parsed;
             localValue = parsed;
@@ -58,7 +58,7 @@ export function TransactionInfoDialog({
                 payload.balance = undefined;
                 localValue = undefined;
             } else {
-                const parsed = Number(trimmed);
+                const parsed = parseLocaleNumber(trimmed);
                 if (Number.isNaN(parsed)) return;
                 payload.balance = parsed;
                 localValue = parsed;

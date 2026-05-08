@@ -296,6 +296,13 @@ export function mergeForView(
     return { rows, series };
 }
 
+/**
+ * `YYYY-MM-DD` validator. The forecast API is trusted, but a malformed
+ * row would otherwise propagate as `new Date('Invalid…T00:00:00Z')` →
+ * `Invalid Date`, which silently corrupts the chart x-axis.
+ */
+const ISO_DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
+
 export function mergeForViewRolling(
     data: CashflowForecastRollingData,
     view: "cumulative" | "daily",
@@ -304,7 +311,7 @@ export function mergeForViewRolling(
 ): { rows: MergedDayDate[]; series: LineSeries<MergedDayDate>[] } {
     const cumulativeByDate = new Map(data.actual.map((p) => [p.date, p.cumulative]));
     const actualByDate = new Map(data.actual.map((p) => [p.date, p.net]));
-    const allDates = data.actual.map((p) => p.date);
+    const allDates = data.actual.map((p) => p.date).filter((d) => ISO_DATE_RE.test(d));
 
     const lastActualCum =
         data.actual.filter((p) => p.cumulative !== null).at(-1)?.cumulative ?? 0;

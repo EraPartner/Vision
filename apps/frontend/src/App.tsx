@@ -15,6 +15,7 @@ import { lazy, Suspense, useEffect } from "react";
 import { Loader2 } from "lucide-react";
 import { ErrorBoundary } from "@/components/shared/ErrorBoundary";
 import { ScrollToTop } from "@/components/shared/ScrollToTop";
+import { RequireAdmin } from "@/components/auth/RequireAdmin";
 import TaxOverviewPage from "@/pages/TaxOverviewPage.tsx";
 import PortfolioTaxPage from "@/pages/portfolio/tax/PortfolioTaxPage";
 
@@ -126,10 +127,10 @@ const App = () => {
                                                     <Route path="/import/:batchId/review" element={<ImportReviewPage />} />
                                                     <Route path="/owes" element={<OwesPage />} />
                                                     <Route path="/tax" element={<TaxOverviewPage />} />
-                                                    <Route path="/admin" element={<AdminOverviewPage />} />
-                                    <Route path="/admin/db" element={<DbMaintenancePage />} />
-                                    <Route path="/admin/providers" element={<ProviderHealthPage />} />
-                                    <Route path="/admin/endpoints" element={<EndpointLivenessPage />} />
+                                                    <Route path="/admin" element={<RequireAdmin><AdminOverviewPage /></RequireAdmin>} />
+                                                    <Route path="/admin/db" element={<RequireAdmin><DbMaintenancePage /></RequireAdmin>} />
+                                                    <Route path="/admin/providers" element={<RequireAdmin><ProviderHealthPage /></RequireAdmin>} />
+                                                    <Route path="/admin/endpoints" element={<RequireAdmin><EndpointLivenessPage /></RequireAdmin>} />
                                                     {/* Portfolio */}
                                                     <Route path="/portfolio" element={<PortfolioOverviewPage />} />
                                                     <Route path="/portfolio/market" element={<MarketLookupPage />} />

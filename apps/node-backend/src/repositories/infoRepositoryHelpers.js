@@ -9,21 +9,54 @@ import { toDecimal, toNumber } from '../lib/money.js';
 
 // ── Materialized-view cache ────────────────────────────────────────────────
 // Keyed by view name; cleared via clearMvCache() after bulk import.
+// Stores entries as { value: boolean, expires: number | null } so that a
+// negative result (view missing or empty) does not force a DB round-trip on
+// every request — without it, a fresh DB or a missing MV produces N hits
+// per second under load. Positive entries never expire (the view existing
+// is a stable schema fact); negative entries expire after a short TTL so
+// that a freshly created view is picked up quickly.
 const mvCache = new Map();
+const MV_NEGATIVE_CACHE_TTL_MS = 60_000;
+
+// Allowlist of materialized-view names that may be passed to mvAvailable.
+// The function builds raw SQL with the name interpolated, which is safe
+// today because every caller passes a literal — but pinning the set here
+// keeps it that way and makes a future caller adding a user-controlled
+// name fail loudly instead of opening an injection vector.
+const ALLOWED_MV_NAMES = new Set([
+  'mv_category_totals',
+  'mv_monthly_summary',
+]);
 
 /**
  * Check if a materialized view exists and has rows.
- * Result cached in-process after first successful check.
- * Returns false if the view doesn't exist (e.g. before schema init).
+ * Positive results cached in-process indefinitely; negative results cached
+ * for {@link MV_NEGATIVE_CACHE_TTL_MS} so we recover quickly after MV creation.
+ *
+ * @throws {Error} if {@code viewName} is not in the allowlist.
  */
 export async function mvAvailable(viewName) {
-  if (mvCache.has(viewName)) return mvCache.get(viewName);
+  if (!ALLOWED_MV_NAMES.has(viewName)) {
+    throw new Error(`mvAvailable: unknown materialized view "${viewName}"`);
+  }
+  const cached = mvCache.get(viewName);
+  if (cached !== undefined) {
+    if (cached.expires === null || cached.expires > Date.now()) {
+      return cached.value;
+    }
+    mvCache.delete(viewName);
+  }
   try {
     const r = await query(`SELECT 1 FROM ${viewName} LIMIT 1`);
     const available = r.rows.length > 0;
-    if (available) mvCache.set(viewName, true);
+    if (available) {
+      mvCache.set(viewName, { value: true, expires: null });
+    } else {
+      mvCache.set(viewName, { value: false, expires: Date.now() + MV_NEGATIVE_CACHE_TTL_MS });
+    }
     return available;
   } catch {
+    mvCache.set(viewName, { value: false, expires: Date.now() + MV_NEGATIVE_CACHE_TTL_MS });
     return false;
   }
 }

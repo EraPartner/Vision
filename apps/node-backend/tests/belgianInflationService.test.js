@@ -258,6 +258,44 @@ describe('belgianInflationService', () => {
     expect(dbOnlyResult.rates).toEqual([]);
   });
 
+  it('saves all fetched rates with a single batched INSERT (no N+1)', async () => {
+    // 5 empty pre-checks during the refresh path (db loads + filter checks),
+    // then BEGIN, then exactly ONE INSERT for all rates, then COMMIT.
+    query
+      .mockResolvedValueOnce({ rows: [] })
+      .mockResolvedValueOnce({ rows: [] })
+      .mockResolvedValueOnce({ rows: [] })
+      .mockResolvedValueOnce({ rows: [] })
+      .mockResolvedValueOnce({ rows: [] });
+
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: true,
+      json: async () => ({
+        data: [
+          { year: 2024, month: 1, value: '0.30' },
+          { year: 2024, month: 2, value: '0.20' },
+          { year: 2024, month: 3, value: '0.10' },
+        ],
+      }),
+    });
+    vi.stubGlobal('fetch', fetchMock);
+
+    await getInflationRates({ forceRefresh: true });
+
+    const insertCalls = query.mock.calls.filter(([sql]) =>
+      typeof sql === 'string' && sql.includes('INSERT INTO belgian_inflation_rates')
+    );
+    expect(insertCalls).toHaveLength(1);
+
+    const [sql, params] = insertCalls[0];
+    // Three rows × three params per row = 9 params bound to the single query.
+    expect(params).toHaveLength(9);
+    // VALUES list contains three placeholder groups.
+    expect(sql.match(/\$\d+::date/g)).toHaveLength(3);
+
+    vi.unstubAllGlobals();
+  });
+
   it('warmInflationCache returns DB quickly when available and refreshes in background', async () => {
     query
       .mockResolvedValueOnce({
