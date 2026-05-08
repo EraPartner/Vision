@@ -256,6 +256,21 @@ describe('streamingImportService', () => {
     expect(result).toEqual({ total_processed: 1, imported: 0, duplicates: 0, errors: 1 });
   });
 
+  it('should mark the row as error when raw reference creation fails', async () => {
+    // Regression: rawReferenceRepo.create() used to be fire-and-forget, so
+    // a failed audit link silently produced an orphan transaction with no
+    // raw_reference. The error has to surface to the import counters.
+    createAdapter.mockReturnValue(() => [makeTx({ rawData: 'orphan-row' })]);
+    revolutRawRepo.create.mockResolvedValue({ id: 555 });
+    rawReferenceRepo.create.mockRejectedValueOnce(new Error('reference table locked'));
+
+    const result = await importCSVStreaming('/tmp/in.csv', 'revolut');
+
+    expect(result.total_processed).toBe(1);
+    expect(result.errors).toBe(1);
+    expect(result.imported).toBe(0);
+  });
+
   it('should fail early when line counting stream emits an error', async () => {
     mockCreateReadStream.mockImplementationOnce(() => {
       const handlers = {};

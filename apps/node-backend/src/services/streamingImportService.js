@@ -185,13 +185,21 @@ async function processRow(txData, bankType) {
       );
 
       if (rawTxn && txResult.rows[0]) {
-        rawReferenceRepo.create({
-          transactionId: txResult.rows[0].id,
-          rawSourceType: bankType,
-          rawSourceId: rawTxn.id,
-        }).catch((err) => {
-          logger.warn('Raw reference creation failed', { txId: txResult.rows[0].id, error: err.message });
-        });
+        // Await the audit link so a failure is observable in the caller's
+        // result counts. Without await, the transaction row was already
+        // inserted and the link error vanished into a fire-and-forget log,
+        // leaving an orphan tx with no raw_reference and no surfaced
+        // failure to the import progress UI.
+        try {
+          await rawReferenceRepo.create({
+            transactionId: txResult.rows[0].id,
+            rawSourceType: bankType,
+            rawSourceId: rawTxn.id,
+          });
+        } catch (err) {
+          logger.error('Raw reference creation failed', { txId: txResult.rows[0].id, error: err.message });
+          throw err;
+        }
       }
 
       return 'imported';
