@@ -3,8 +3,9 @@ title: AI Agent Codebase Navigation Map
 type: reference
 status: active
 date: 2026-04-24
-tags: [ai-agent, navigation, codebase-map, developer-tool, phase-1, phase-c, phase-e]
-description: Navigation map for AI agents and developers to quickly find code by feature, layer, or task. Updated for Phase C import pipeline consolidation and Phase E component decomposition.
+updated: 2026-05-08
+tags: [ai-agent, navigation, codebase-map, developer-tool, phase-1, phase-c, phase-e, bulk-actions]
+description: Navigation map for AI agents and developers to quickly find code by feature, layer, or task. Updated for Phase C import pipeline consolidation, Phase E component decomposition, and bulk transaction actions.
 aliases: [agent navigation, codebase map, file map, navigation guide]
 ---
 
@@ -29,6 +30,19 @@ aliases: [agent navigation, codebase map, file map, navigation guide]
 | Backend Repository | [[apps/node-backend/src/repositories/transactionRepository.js]] |
 | API Doc | [[docs/api/transactions]] |
 | Feature Doc | [[docs/features/transactions]] |
+
+### Bulk Actions
+
+| Layer | Files |
+|-------|-------|
+| Frontend Toolbar | [[apps/frontend/src/features/transactions/components/bulk/BulkActionsBar.tsx]] |
+| Action Dialogs | [[apps/frontend/src/features/transactions/components/bulk/BulkRecategorizeDialog.tsx]], [[apps/frontend/src/features/transactions/components/bulk/BulkRecipientDialog.tsx]], [[apps/frontend/src/features/transactions/components/bulk/BulkExportDialog.tsx]], [[apps/frontend/src/features/transactions/components/bulk/BulkTagDialog.tsx]] |
+| Hook | `useBulkDeleteTransactions`, `useBulkUpdateTransactions`, `useBulkExportTransactions` in [[apps/frontend/src/hooks/useTransactions.ts]] |
+| API Client | `bulkDeleteTransactions()`, `bulkUpdateTransactions()`, `bulkExportTransactions()` in [[apps/frontend/src/lib/api/transactions.ts]] |
+| Backend Service | [[apps/node-backend/src/services/bulkSelection.js]] (id/filter resolver), [[apps/node-backend/src/services/transactionExport.js]] (streaming export) |
+| Backend Route | [[apps/node-backend/src/routes/transactions.js]] (`/bulk-delete`, `/bulk-update`, `/bulk-export`) |
+| API Doc | [[docs/api/transactions#post-apitransactionsbulk-delete|Bulk Delete]], [[docs/api/transactions#post-apitransactionsbulk-update|Bulk Update]], [[docs/api/transactions#post-apitransactionsbulk-export|Bulk Export]] |
+| Feature Doc | [[docs/features/bulk-actions]] |
 
 ### Categories
 

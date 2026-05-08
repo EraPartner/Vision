@@ -108,10 +108,11 @@ User types slug → slugify → POST /api/tags (upsert)
 ## Bulk-Tag Flow
 
 1. User selects rows via checkbox column.
-2. Toolbar appears with two `TagFilterCombobox` pickers (Add / Remove).
-3. User clicks "Apply Tags" → `POST /api/transactions/bulk-tag` with `transaction_ids`, `add_slugs`, `remove_slugs`.
-4. Single DB transaction: resolves slugs → IDs, inserts junctions (ON CONFLICT DO NOTHING), deletes removals.
-5. TanStack Query invalidates transactions list on success.
+2. Toolbar shows the count and an `Actions ▾` dropdown — see [[docs/features/bulk-actions|Bulk Actions]].
+3. Picking "Apply tags…" opens a dialog with two `TagFilterCombobox` pickers (Add / Remove).
+4. Clicking Apply → `POST /api/transactions/bulk-tag` with `transaction_ids`, `add_slugs`, `remove_slugs`.
+5. Single DB transaction: resolves slugs → IDs, inserts junctions (ON CONFLICT DO NOTHING), deletes removals.
+6. TanStack Query invalidates transactions list on success.
 
 ## Planned Transaction Inheritance
 
@@ -151,3 +152,4 @@ See [[docs/testing/test-inventory#backend-test-suite-completion--transaction-tag
 - [[docs/adr/052-transaction-tags-orthogonal-dimension|ADR-052]]
 - [[docs/features/transactions|Transactions]]
 - [[docs/features/categories|Categories]]
+- [[docs/features/bulk-actions|Bulk Actions]] — broader bulk operations on transactions

@@ -1,10 +1,15 @@
 import type {
+    BulkDeleteResult,
+    BulkExportRequest,
+    BulkSelectionRequest,
+    BulkUpdateRequest,
+    BulkUpdateResult,
     Transaction,
     TransactionCreate,
     TransactionsListResponse,
     TransactionUpdate,
 } from '@/types/api';
-import { apiRequest } from '@/lib/api/client';
+import { API_BASE_URL, apiRequest } from '@/lib/api/client';
 import { requestWithQuery } from '@/lib/api/helpers';
 
 export async function getTransactions(params?: {
@@ -62,4 +67,38 @@ export function updateTransaction(id: number, transaction: TransactionUpdate): P
 
 export async function deleteTransaction(id: number): Promise<void> {
     await apiRequest<void>(`/api/transactions/${id}`, { method: 'DELETE' });
+}
+
+export function bulkDeleteTransactions(request: BulkSelectionRequest): Promise<BulkDeleteResult> {
+    return apiRequest<BulkDeleteResult>('/api/transactions/bulk-delete', {
+        method: 'POST',
+        body: JSON.stringify(request),
+    });
+}
+
+export function bulkUpdateTransactions(request: BulkUpdateRequest): Promise<BulkUpdateResult> {
+    return apiRequest<BulkUpdateResult>('/api/transactions/bulk-update', {
+        method: 'POST',
+        body: JSON.stringify(request),
+    });
+}
+
+/**
+ * Streams a bulk export to the browser as a `Blob`. Bypasses `apiRequest` because
+ * the response is a binary/text stream rather than the standard JSON envelope.
+ */
+export async function bulkExportTransactions(request: BulkExportRequest): Promise<Blob> {
+    const response = await fetch(`${API_BASE_URL}/api/transactions/bulk-export`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(request),
+    });
+
+    if (!response.ok) {
+        const errBody = await response.json().catch(() => null);
+        const message = errBody?.error?.message ?? `Export failed (HTTP ${response.status})`;
+        throw new Error(message);
+    }
+
+    return response.blob();
 }

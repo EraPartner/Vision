@@ -40,6 +40,9 @@ export const apiClient = {
     createTransaction: txn.createTransaction,
     updateTransaction: txn.updateTransaction,
     deleteTransaction: txn.deleteTransaction,
+    bulkDeleteTransactions: txn.bulkDeleteTransactions,
+    bulkUpdateTransactions: txn.bulkUpdateTransactions,
+    bulkExportTransactions: txn.bulkExportTransactions,
 
     // Categories
     getCategories: cat.getCategories,
@@ -207,7 +210,26 @@ export const apiClient = {
 };
 
 // Type re-exports for call sites that import from '@/lib/api'
-export type { Transaction, Category, Recipient, PlannedTransaction, Investment, PortfolioTransaction, Tag, TagCreate, TagUpdate, BulkTagRequest, BulkTagResult } from '@/types/api';
+export type {
+    Transaction,
+    Category,
+    Recipient,
+    PlannedTransaction,
+    Investment,
+    PortfolioTransaction,
+    Tag,
+    TagCreate,
+    TagUpdate,
+    BulkTagRequest,
+    BulkTagResult,
+    BulkSelectionRequest,
+    BulkTransactionFilter,
+    BulkUpdateFields,
+    BulkUpdateRequest,
+    BulkExportRequest,
+    BulkDeleteResult,
+    BulkUpdateResult,
+} from '@/types/api';
 export type {
     ChatMessage,
     ChatRole,

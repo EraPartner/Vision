@@ -21,8 +21,14 @@ import {
   ConflictError,
 } from '../middleware/errorHandler.js';
 import { toDecimal, toNumber } from '../lib/money.js';
-import { escapeCsvValue } from '../lib/csv.js';
 import { buildTransactionWhere, validateInt4Ids } from '../services/filterBuilder.js';
+import {
+  EXPORT_MAX_LIST_SIZE,
+  streamCsvExport,
+  streamNdjsonExport,
+  buildIdListWhere,
+} from '../services/transactionExport.js';
+import { resolveBulkSelection } from '../services/bulkSelection.js';
 
 const router = Router();
 
@@ -73,31 +79,6 @@ function parseTransactionListQuery(query) {
   };
 }
 
-function buildTransactionCsvRow(row, { includeBalance = false } = {}) {
-  const cols = [
-    row.date, row.bank_account, row.recipient_name, row.memo,
-    row.amount, row.currency, row.balance, row.category_name, row.comment,
-    Array.isArray(row.tags) ? row.tags.join(';') : '',
-  ];
-  if (includeBalance) cols.push(row.running_balance);
-  return cols.map(escapeCsvValue).join(',');
-}
-
-const EXPORT_CHUNK_SIZE = 1000;
-const EXPORT_MAX_LIST_SIZE = 50;
-
-function buildExportTimestamp() {
-  return new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19);
-}
-
-function buildTransactionExportFilename() {
-  return `transactions_export_${buildExportTimestamp()}.csv`;
-}
-
-function buildTransactionExportJsonFilename() {
-  return `transactions_export_${buildExportTimestamp()}.ndjson`;
-}
-
 /**
  * Build WHERE clause + params for the transactions export endpoints.
  *
@@ -139,44 +120,6 @@ function buildExportFilters(query) {
   });
 
   return { whereSql: sql, params, nextParamIdx };
-}
-
-const EXPORT_JOINS_SQL = `
-    FROM transactions t
-    LEFT JOIN recipients r ON t.recipient_id = r.id
-    LEFT JOIN recipients pr ON r.primary_recipient_id = pr.id
-    LEFT JOIN categories c ON t.category_id = c.id
-    LEFT JOIN categories rc ON r.default_category_id = rc.id
-    LEFT JOIN categories pc ON pr.default_category_id = pc.id`;
-
-function buildExportProbeSql(whereSql) {
-  return `SELECT 1 ${EXPORT_JOINS_SQL} WHERE ${whereSql} LIMIT 1`;
-}
-
-function buildExportChunkSql(whereSql, limitParamIdx, offsetParamIdx) {
-  return `
-    SELECT t.id, t.date, t.bank_account,
-           COALESCE(pr.name, r.name) AS recipient_name, t.memo,
-           t.amount, t.currency, t.balance,
-           CASE
-             WHEN c.id IS NOT NULL THEN c.general || ':' || c.detail
-             WHEN pc.id IS NOT NULL THEN pc.general || ':' || pc.detail
-             WHEN rc.id IS NOT NULL THEN rc.general || ':' || rc.detail
-             ELSE ''
-           END AS category_name,
-           t.comment,
-           COALESCE(
-             (SELECT array_agg(tg.slug ORDER BY tg.slug)
-              FROM transaction_tags tt
-              JOIN tags tg ON tg.id = tt.tag_id
-              WHERE tt.transaction_id = t.id AND tg.is_active = true),
-             '{}'::text[]
-           ) AS tags
-    ${EXPORT_JOINS_SQL}
-    WHERE ${whereSql}
-    ORDER BY t.date ASC, t.id ASC
-    LIMIT $${limitParamIdx} OFFSET $${offsetParamIdx}
-  `;
 }
 
 function normalizeTransactionPatchFields(body) {
@@ -271,47 +214,7 @@ router.get(
   async (req, res) => {
     const includeBalance = req.query.include_balance === 'true';
     const { whereSql, params, nextParamIdx } = buildExportFilters(req.query);
-
-    const probe = await dbQuery(buildExportProbeSql(whereSql), params);
-    if (probe.rows.length === 0) {
-      throw new NotFoundError('No transactions found matching filters');
-    }
-
-    res.setHeader('Content-Type', 'text/csv');
-    res.setHeader('Content-Disposition', `attachment; filename=${buildTransactionExportFilename()}`);
-
-    const header = includeBalance
-      ? 'Date,Bank Account,Recipient,Memo,Amount,Currency,Balance,Category,Comment,Tags,Running Balance'
-      : 'Date,Bank Account,Recipient,Memo,Amount,Currency,Balance,Category,Comment,Tags';
-    res.write(`${header}\n`);
-
-    const chunkSql = buildExportChunkSql(whereSql, nextParamIdx, nextParamIdx + 1);
-    let chunkOffset = 0;
-    let runningBalance = 0;
-    try {
-      while (true) {
-        const chunk = await dbQuery(chunkSql, [...params, EXPORT_CHUNK_SIZE, chunkOffset]);
-        if (chunk.rows.length === 0) break;
-        const lines = chunk.rows.map((row) => {
-          if (includeBalance) {
-            runningBalance = toDecimal(runningBalance).plus(toDecimal(row.amount ?? 0)).toNumber();
-            return buildTransactionCsvRow({ ...row, running_balance: runningBalance }, { includeBalance });
-          }
-          return buildTransactionCsvRow(row);
-        });
-        res.write(`${lines.join('\n')}\n`);
-        if (chunk.rows.length < EXPORT_CHUNK_SIZE) break;
-        chunkOffset += EXPORT_CHUNK_SIZE;
-      }
-      res.end();
-    } catch (err) {
-      if (res.headersSent) {
-        logger.error('CSV export failed mid-stream', { error: err.message });
-        res.end();
-        return;
-      }
-      throw err;
-    }
+    await streamCsvExport(res, { whereSql, params, nextParamIdx, includeBalance });
   },
 );
 
@@ -322,49 +225,7 @@ router.get(
   rateLimiter({ windowMs: 60_000, maxRequests: 30, keyPrefix: 'transactions-export-json' }),
   async (req, res) => {
     const { whereSql, params, nextParamIdx } = buildExportFilters(req.query);
-
-    const probe = await dbQuery(buildExportProbeSql(whereSql), params);
-    if (probe.rows.length === 0) {
-      throw new NotFoundError('No transactions found matching filters');
-    }
-
-    res.setHeader('Content-Type', 'application/x-ndjson');
-    res.setHeader('Content-Disposition', `attachment; filename=${buildTransactionExportJsonFilename()}`);
-
-    const chunkSql = buildExportChunkSql(whereSql, nextParamIdx, nextParamIdx + 1);
-    let chunkOffset = 0;
-    try {
-      while (true) {
-        const chunk = await dbQuery(chunkSql, [...params, EXPORT_CHUNK_SIZE, chunkOffset]);
-        if (chunk.rows.length === 0) break;
-        for (const row of chunk.rows) {
-          res.write(JSON.stringify({
-            id: row.id,
-            date: row.date,
-            bank_account: row.bank_account,
-            recipient: row.recipient_name ?? null,
-            memo: row.memo ?? null,
-            amount: row.amount,
-            currency: row.currency ?? null,
-            balance: row.balance ?? null,
-            category: row.category_name || null,
-            comment: row.comment ?? null,
-            tags: Array.isArray(row.tags) ? row.tags : [],
-          }));
-          res.write('\n');
-        }
-        if (chunk.rows.length < EXPORT_CHUNK_SIZE) break;
-        chunkOffset += EXPORT_CHUNK_SIZE;
-      }
-      res.end();
-    } catch (err) {
-      if (res.headersSent) {
-        logger.error('JSON export failed mid-stream', { error: err.message });
-        res.end();
-        return;
-      }
-      throw err;
-    }
+    await streamNdjsonExport(res, { whereSql, params, nextParamIdx });
   },
 );
 
@@ -459,6 +320,149 @@ router.post(
 
     scheduleRefresh();
     res.ok(result);
+  },
+);
+
+// POST /api/transactions/bulk-delete
+// Hard-deletes a set of transactions selected by `ids` or `filter`.
+// CASCADE on transaction_tags / transaction_splits / attachments handles
+// dependent rows; raw_transactions and import_batches use SET NULL.
+router.post(
+  '/bulk-delete',
+  rateLimiter({ windowMs: 60_000, maxRequests: 30, keyPrefix: 'transactions-bulk-delete' }),
+  async (req, res) => {
+    const { ids, filter } = req.body ?? {};
+    const txIds = await resolveBulkSelection({ ids, filter });
+
+    const deleted = await withTransaction(async (client) => {
+      const r = await client.query(
+        `DELETE FROM transactions WHERE id = ANY($1::int[]) RETURNING id`,
+        [txIds],
+      );
+      return r.rows.length;
+    });
+
+    if (deleted > 0) scheduleRefresh();
+    res.ok({ deleted });
+  },
+);
+
+// POST /api/transactions/bulk-update
+// Applies a single shared update (category, recipient, is_active) to a set of
+// transactions selected by `ids` or `filter`. FK targets are validated up front
+// so the entire batch fails atomically on the first invalid reference.
+router.post(
+  '/bulk-update',
+  rateLimiter({ windowMs: 60_000, maxRequests: 30, keyPrefix: 'transactions-bulk-update' }),
+  async (req, res) => {
+    const { ids, filter, fields } = req.body ?? {};
+
+    if (!fields || typeof fields !== 'object') {
+      throw new ValidationError('`fields` must be an object with at least one updatable property');
+    }
+
+    const sanitized = {};
+    if ('category_id' in fields) {
+      const v = fields.category_id;
+      if (v !== null && (!Number.isInteger(v) || v <= 0)) {
+        throw new ValidationError('`fields.category_id` must be a positive integer or null');
+      }
+      sanitized.category_id = v;
+    }
+    if ('recipient_id' in fields) {
+      const v = fields.recipient_id;
+      if (!Number.isInteger(v) || v <= 0) {
+        throw new ValidationError('`fields.recipient_id` must be a positive integer');
+      }
+      sanitized.recipient_id = v;
+    }
+    if ('is_active' in fields) {
+      if (typeof fields.is_active !== 'boolean') {
+        throw new ValidationError('`fields.is_active` must be a boolean');
+      }
+      sanitized.is_active = fields.is_active;
+    }
+
+    if (Object.keys(sanitized).length === 0) {
+      throw new ValidationError('`fields` must contain at least one of: category_id, recipient_id, is_active');
+    }
+
+    if (sanitized.category_id != null) {
+      const r = await dbQuery(
+        'SELECT id FROM categories WHERE id = $1 AND is_active = true',
+        [sanitized.category_id],
+      );
+      if (r.rows.length === 0) {
+        throw new ValidationError(`Category ${sanitized.category_id} does not exist or is inactive`);
+      }
+    }
+    if (sanitized.recipient_id != null) {
+      const r = await dbQuery(
+        'SELECT id FROM recipients WHERE id = $1 AND is_active = true',
+        [sanitized.recipient_id],
+      );
+      if (r.rows.length === 0) {
+        throw new ValidationError(`Recipient ${sanitized.recipient_id} does not exist or is inactive`);
+      }
+    }
+
+    const txIds = await resolveBulkSelection({ ids, filter });
+
+    const setClauses = [];
+    const params = [txIds];
+    let p = 2;
+    if ('category_id' in sanitized) {
+      setClauses.push(`category_id = $${p++}`);
+      params.push(sanitized.category_id);
+    }
+    if ('recipient_id' in sanitized) {
+      setClauses.push(`recipient_id = $${p++}`);
+      params.push(sanitized.recipient_id);
+    }
+    if ('is_active' in sanitized) {
+      setClauses.push(`is_active = $${p++}`);
+      params.push(sanitized.is_active);
+    }
+    setClauses.push('updated_at = NOW()');
+
+    const updated = await withTransaction(async (client) => {
+      const r = await client.query(
+        `UPDATE transactions SET ${setClauses.join(', ')} WHERE id = ANY($1::int[]) RETURNING id`,
+        params,
+      );
+      return r.rows.length;
+    });
+
+    if (updated > 0) scheduleRefresh();
+    res.ok({ updated });
+  },
+);
+
+// POST /api/transactions/bulk-export
+// Streams CSV / NDJSON for a set of transactions selected by `ids` or `filter`.
+// Reuses the same chunked streaming pipeline as the GET export endpoints.
+router.post(
+  '/bulk-export',
+  rateLimiter({ windowMs: 60_000, maxRequests: 30, keyPrefix: 'transactions-bulk-export' }),
+  async (req, res) => {
+    const { ids, filter, format = 'csv', include_balance = false } = req.body ?? {};
+    if (format !== 'csv' && format !== 'json') {
+      throw new ValidationError("`format` must be 'csv' or 'json'");
+    }
+
+    const txIds = await resolveBulkSelection({ ids, filter });
+    const { whereSql, params, nextParamIdx } = buildIdListWhere(txIds);
+
+    if (format === 'csv') {
+      await streamCsvExport(res, {
+        whereSql,
+        params,
+        nextParamIdx,
+        includeBalance: include_balance === true,
+      });
+    } else {
+      await streamNdjsonExport(res, { whereSql, params, nextParamIdx });
+    }
   },
 );
 

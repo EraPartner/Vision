@@ -14,7 +14,7 @@ aliases: [api matrix, endpoint matrix, all endpoints, api overview, endpoint lis
 # API Endpoint Matrix
 
 > [!abstract] Overview
-> All 155 API endpoints across 21 route files (updated 2026-05-08 — Tags feature adds `GET/POST /api/tags`, `PATCH/DELETE /api/tags/:id`, `POST /api/transactions/bulk-tag`, and `tags` query param on `GET /api/transactions` and both export endpoints; prior: 2026-04-29 — Phase 14 adds portfolio-summary realtime totals endpoint; Phase 13 adds `category_ids` and `transaction_type` query params to `GET /api/transactions` for pivot table drillthrough; unifies export endpoint filters with `GET /api/transactions` by delegating to shared `buildTransactionWhere`, enabling `transaction_id`, `recipient_id`, `recipient_name`, `search`, and `transaction_type` on export endpoints; adds `bank_accounts` and `category_ids` multi-select params to both list and export for flexible filtering via UI pickers; Phase 7 adds filter exclusions (`excludedCategoryIds`, `excludedRecipientIds`) to report endpoints with filter impact comparison view; adds `GET /api/recipients/clusters` for merge candidate identification; Phase E adds cache-aware forecast endpoint with 6-hour TTL materialized cache; Phase D adds persisted accuracy metrics endpoint; Phase 9 — aggregation shadow cutover complete; Phase F adds 4 admin endpoints for provider health, endpoint liveness, and metrics; Phase 10 adds multi-method cash flow forecast endpoint; Phase C adds dashboard frontend visualization for Phase 10 forecast; Phase 5 slim-down removes legacy GET `/api/reports/financial` endpoint; bank reconciliation removed). Use this as a quick reference to find any endpoint.
+> All 158 API endpoints across 21 route files (updated 2026-05-08 — Bulk Actions feature adds `POST /api/transactions/bulk-delete`, `POST /api/transactions/bulk-update`, and `POST /api/transactions/bulk-export`; Tags feature adds `GET/POST /api/tags`, `PATCH/DELETE /api/tags/:id`, `POST /api/transactions/bulk-tag`, and `tags` query param on `GET /api/transactions` and both export endpoints; prior: 2026-04-29 — Phase 14 adds portfolio-summary realtime totals endpoint; Phase 13 adds `category_ids` and `transaction_type` query params to `GET /api/transactions` for pivot table drillthrough; unifies export endpoint filters with `GET /api/transactions` by delegating to shared `buildTransactionWhere`, enabling `transaction_id`, `recipient_id`, `recipient_name`, `search`, and `transaction_type` on export endpoints; adds `bank_accounts` and `category_ids` multi-select params to both list and export for flexible filtering via UI pickers; Phase 7 adds filter exclusions (`excludedCategoryIds`, `excludedRecipientIds`) to report endpoints with filter impact comparison view; adds `GET /api/recipients/clusters` for merge candidate identification; Phase E adds cache-aware forecast endpoint with 6-hour TTL materialized cache; Phase D adds persisted accuracy metrics endpoint; Phase 9 — aggregation shadow cutover complete; Phase F adds 4 admin endpoints for provider health, endpoint liveness, and metrics; Phase 10 adds multi-method cash flow forecast endpoint; Phase C adds dashboard frontend visualization for Phase 10 forecast; Phase 5 slim-down removes legacy GET `/api/reports/financial` endpoint; bank reconciliation removed). Use this as a quick reference to find any endpoint.
 > 
 > **Note:** As of Phase 2.4, `openapi.yaml` is the authoritative API specification. This matrix provides a quick lookup; see the OpenAPI spec for formal schemas and examples.
 >
@@ -28,7 +28,7 @@ aliases: [api matrix, endpoint matrix, all endpoints, api overview, endpoint lis
 >
 > **2026-04-29 Security Update:** CodeQL + Dependabot remediation (ADR-042): `attachmentRateLimiter` (60 req/min) added to all attachment endpoints; `spaRateLimiter` (600 req/min) added to SPA fallback route. See [[docs/adr/042-codeql-dependabot-remediation-2026-04|ADR-042]] for full details.
 
-## Transactions (7 endpoints)
+## Transactions (11 endpoints)
 
 | Method | Path | Description | Rate Limit | Doc |
 |--------|------|-------------|------------|-----|
@@ -40,6 +40,9 @@ aliases: [api matrix, endpoint matrix, all endpoints, api overview, endpoint lis
 | PATCH | `/api/transactions/:id` | Update | 30 req/min | [[docs/api/transactions\|Transactions]] |
 | DELETE | `/api/transactions/:id` | Hard delete | — | [[docs/api/transactions\|Transactions]] |
 | POST | `/api/transactions/bulk-tag` | Atomically add/remove tags on 1–500 transactions | 30 req/min | [[docs/features/tags\|Tags]] |
+| POST | `/api/transactions/bulk-delete` | Hard-delete by `ids` (≤500) or `filter` (≤5000 matches) | 30 req/min | [[docs/features/bulk-actions\|Bulk Actions]] |
+| POST | `/api/transactions/bulk-update` | Apply category/recipient/active update to a selection | 30 req/min | [[docs/features/bulk-actions\|Bulk Actions]] |
+| POST | `/api/transactions/bulk-export` | Stream CSV/NDJSON for an ids- or filter-resolved selection | 30 req/min | [[docs/features/bulk-actions\|Bulk Actions]] |
 | GET | `/api/tags` | List tags; `?is_active=true\|false` | — | [[docs/features/tags\|Tags]] |
 | POST | `/api/tags` | Find-or-create tag by slug (upsert) | — | [[docs/features/tags\|Tags]] |
 | PATCH | `/api/tags/:id` | Update tag color or is_active | — | [[docs/features/tags\|Tags]] |
