@@ -238,8 +238,9 @@ describe("TransactionInfoDialog", () => {
         );
 
         await screen.findByRole("dialog");
-        // txPage.attachments = "Attachments"
-        expect(await screen.findByText(/attachments/i)).toBeInTheDocument();
+        // Match the section header exactly — `/attachments/i` would also catch
+        // "No attachments yet" and trip the multiple-match guard.
+        expect(await screen.findByText(/^attachments$/i)).toBeInTheDocument();
     });
 
     it("shows no-attachments message when attachment list is empty", async () => {
