@@ -15,6 +15,7 @@
 
 import { logger } from '../config/logger.js';
 import { query } from '../database/connection.js';
+import { getDayKeyUtc } from '../repositories/infoRepositoryHelpers.js';
 import {
   fetchHistoricalPrices,
   saveHistoricalPointsToDatabase,
@@ -538,10 +539,12 @@ export async function cleanupStaleQuotes(investmentWindows) {
     if (holdingWindows.length === 0) continue;
 
     const fromDates = holdingWindows.map((w) => w.fromDate);
-    const today = new Date();
-    const todayLocal = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`;
+    // asset_price_history.price_date is stored in UTC; the open-window
+    // sentinel must be UTC-today as well, otherwise a server in a non-UTC
+    // timezone deletes valid quotes around midnight.
+    const todayUtc = getDayKeyUtc(new Date());
     const toDates = holdingWindows.map((w) =>
-      w.toDate !== null ? w.toDate : todayLocal
+      w.toDate !== null ? w.toDate : todayUtc
     );
 
     try {
