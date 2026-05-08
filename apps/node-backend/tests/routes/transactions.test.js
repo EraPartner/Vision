@@ -382,7 +382,7 @@ describe('Transaction Routes', () => {
       const written = res.write.mock.calls.map(([chunk]) => chunk).join('');
       const obj = JSON.parse(written.trim().split('\n')[0]);
       expect(Object.keys(obj).sort()).toEqual(
-        ['amount', 'balance', 'bank_account', 'category', 'comment', 'currency', 'date', 'id', 'memo', 'recipient'].sort()
+        ['amount', 'balance', 'bank_account', 'category', 'comment', 'currency', 'date', 'id', 'memo', 'recipient', 'tags'].sort()
       );
     });
   });

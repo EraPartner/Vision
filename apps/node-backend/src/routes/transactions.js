@@ -5,7 +5,7 @@
  */
 
 import { Router } from 'express';
-import { query as dbQuery } from '../database/connection.js';
+import { query as dbQuery, withTransaction } from '../database/connection.js';
 // eslint-disable-next-line vision-local/no-repo-direct-from-route
 import transactionRepository from '../repositories/transactionRepository.js';
 import { isManualDuplicate, recordManualRawTransaction } from '../services/deduplication.js';
@@ -22,7 +22,7 @@ import {
 } from '../middleware/errorHandler.js';
 import { toDecimal, toNumber } from '../lib/money.js';
 import { escapeCsvValue } from '../lib/csv.js';
-import { buildTransactionWhere } from '../services/filterBuilder.js';
+import { buildTransactionWhere, validateInt4Ids } from '../services/filterBuilder.js';
 
 const router = Router();
 
@@ -40,10 +40,15 @@ function parseTransactionListQuery(query) {
     sort_by, sort_dir,
     include_balance,
     transaction_type,
+    tags,
   } = query;
 
   const parsedCategoryIds = category_ids
     ? String(category_ids).split(',').map((id) => parseInt(id, 10)).filter((id) => Number.isFinite(id) && id > 0)
+    : null;
+
+  const parsedTagSlugs = tags
+    ? String(tags).split(',').map((s) => s.trim().toLowerCase()).filter(Boolean)
     : null;
 
   return {
@@ -64,6 +69,7 @@ function parseTransactionListQuery(query) {
     sortDir: sort_dir === 'asc' || sort_dir === 'desc' ? sort_dir : null,
     includeBalance: include_balance === 'true',
     transactionType: transaction_type === 'income' || transaction_type === 'expense' ? transaction_type : null,
+    tagSlugs: parsedTagSlugs?.length ? parsedTagSlugs : null,
   };
 }
 
@@ -71,6 +77,7 @@ function buildTransactionCsvRow(row, { includeBalance = false } = {}) {
   const cols = [
     row.date, row.bank_account, row.recipient_name, row.memo,
     row.amount, row.currency, row.balance, row.category_name, row.comment,
+    Array.isArray(row.tags) ? row.tags.join(';') : '',
   ];
   if (includeBalance) cols.push(row.running_balance);
   return cols.map(escapeCsvValue).join(',');
@@ -128,6 +135,7 @@ function buildExportFilters(query) {
     search: opts.search,
     active: opts.active,
     transactionType: opts.transactionType,
+    tagSlugs: opts.tagSlugs,
   });
 
   return { whereSql: sql, params, nextParamIdx };
@@ -156,7 +164,14 @@ function buildExportChunkSql(whereSql, limitParamIdx, offsetParamIdx) {
              WHEN rc.id IS NOT NULL THEN rc.general || ':' || rc.detail
              ELSE ''
            END AS category_name,
-           t.comment
+           t.comment,
+           COALESCE(
+             (SELECT array_agg(tg.slug ORDER BY tg.slug)
+              FROM transaction_tags tt
+              JOIN tags tg ON tg.id = tt.tag_id
+              WHERE tt.transaction_id = t.id AND tg.is_active = true),
+             '{}'::text[]
+           ) AS tags
     ${EXPORT_JOINS_SQL}
     WHERE ${whereSql}
     ORDER BY t.date ASC, t.id ASC
@@ -266,8 +281,8 @@ router.get(
     res.setHeader('Content-Disposition', `attachment; filename=${buildTransactionExportFilename()}`);
 
     const header = includeBalance
-      ? 'Date,Bank Account,Recipient,Memo,Amount,Currency,Balance,Category,Comment,Running Balance'
-      : 'Date,Bank Account,Recipient,Memo,Amount,Currency,Balance,Category,Comment';
+      ? 'Date,Bank Account,Recipient,Memo,Amount,Currency,Balance,Category,Comment,Tags,Running Balance'
+      : 'Date,Bank Account,Recipient,Memo,Amount,Currency,Balance,Category,Comment,Tags';
     res.write(`${header}\n`);
 
     const chunkSql = buildExportChunkSql(whereSql, nextParamIdx, nextParamIdx + 1);
@@ -334,6 +349,7 @@ router.get(
             balance: row.balance ?? null,
             category: row.category_name || null,
             comment: row.comment ?? null,
+            tags: Array.isArray(row.tags) ? row.tags : [],
           }));
           res.write('\n');
         }
@@ -352,6 +368,100 @@ router.get(
   },
 );
 
+// POST /api/transactions/bulk-tag
+router.post(
+  '/bulk-tag',
+  rateLimiter({ windowMs: 60_000, maxRequests: 30, keyPrefix: 'transactions-bulk-tag' }),
+  async (req, res) => {
+    const { transaction_ids, add_slugs = [], remove_slugs = [] } = req.body;
+
+    if (!Array.isArray(transaction_ids) || transaction_ids.length === 0 || transaction_ids.length > 500) {
+      throw new ValidationError('transaction_ids must be a non-empty array of up to 500 IDs');
+    }
+    if (!Array.isArray(add_slugs) || add_slugs.length > 50) {
+      throw new ValidationError('add_slugs must be an array of up to 50 slugs');
+    }
+    if (!Array.isArray(remove_slugs) || remove_slugs.length > 50) {
+      throw new ValidationError('remove_slugs must be an array of up to 50 slugs');
+    }
+    if (add_slugs.length === 0 && remove_slugs.length === 0) {
+      throw new ValidationError('At least one of add_slugs or remove_slugs must be non-empty');
+    }
+
+    const txIds = validateInt4Ids(transaction_ids.map(Number));
+    if (txIds.length === 0) {
+      throw new ValidationError('transaction_ids contains no valid IDs');
+    }
+
+    const addTagIds = [];
+    const removeTagIds = [];
+    const allUnknown = [];
+
+    if (add_slugs.length > 0) {
+      const r = await dbQuery(
+        'SELECT id, slug FROM tags WHERE slug = ANY($1::text[]) AND is_active = true',
+        [add_slugs],
+      );
+      const found = new Map(r.rows.map((row) => [row.slug, row.id]));
+      for (const s of add_slugs) {
+        if (!found.has(s)) allUnknown.push(s);
+        else addTagIds.push(found.get(s));
+      }
+    }
+
+    if (remove_slugs.length > 0) {
+      const r = await dbQuery(
+        'SELECT id, slug FROM tags WHERE slug = ANY($1::text[])',
+        [remove_slugs],
+      );
+      const found = new Map(r.rows.map((row) => [row.slug, row.id]));
+      for (const s of remove_slugs) {
+        if (!found.has(s)) allUnknown.push(s);
+        else removeTagIds.push(found.get(s));
+      }
+    }
+
+    if (allUnknown.length > 0) {
+      throw new ValidationError(`Unknown or inactive tags: ${allUnknown.join(', ')}`);
+    }
+
+    const result = await withTransaction(async (client) => {
+      let added = 0;
+      let removed = 0;
+      const affectedTxIds = new Set();
+
+      for (const tagId of addTagIds) {
+        const r = await client.query(
+          `INSERT INTO transaction_tags (transaction_id, tag_id)
+           SELECT t_id, $2
+           FROM unnest($1::int[]) AS t(t_id)
+           ON CONFLICT DO NOTHING
+           RETURNING transaction_id`,
+          [txIds, tagId],
+        );
+        added += r.rows.length;
+        r.rows.forEach((row) => affectedTxIds.add(row.transaction_id));
+      }
+
+      for (const tagId of removeTagIds) {
+        const r = await client.query(
+          `DELETE FROM transaction_tags
+           WHERE transaction_id = ANY($1::int[]) AND tag_id = $2
+           RETURNING transaction_id`,
+          [txIds, tagId],
+        );
+        removed += r.rows.length;
+        r.rows.forEach((row) => affectedTxIds.add(row.transaction_id));
+      }
+
+      return { added, removed, transactions_affected: affectedTxIds.size };
+    });
+
+    scheduleRefresh();
+    res.ok(result);
+  },
+);
+
 // GET /api/transactions/:id
 router.get('/:id', validateIdParam, async (req, res) => {
   const transaction = await transactionRepository.getById(parseInt(req.params.id, 10));
@@ -367,6 +477,9 @@ router.post('/', async (req, res) => {
   const txDate = data.transaction_date || data.date;
   if (!txDate || !data.bank_account || !data.recipient_id || data.amount == null) {
     throw new ValidationError('Missing required fields: date, bank_account, recipient_id, amount');
+  }
+  if (data.tags !== undefined && !Array.isArray(data.tags)) {
+    throw new ValidationError('tags must be an array of strings');
   }
 
   const dupCheck = await isManualDuplicate({
@@ -393,6 +506,7 @@ router.post('/', async (req, res) => {
     balance: data.balance,
     category_id: data.category_id,
     comment: data.comment,
+    tags: Array.isArray(data.tags) ? data.tags : null,
   });
 
   await recordManualRawTransaction({
@@ -420,6 +534,10 @@ router.patch(
   async (req, res) => {
     const id = parseRouteId(req);
     const fields = normalizeTransactionPatchFields(req.body);
+
+    if (fields.tags !== undefined && !Array.isArray(fields.tags)) {
+      throw new ValidationError('tags must be an array of strings');
+    }
 
     // Independent — touch disjoint fields, run in parallel.
     await Promise.all([
@@ -471,6 +589,7 @@ function formatTransaction(row) {
     category_id: row.effective_category_id ?? row.category_id,
     category_name: row.category_name || null,
     comment: row.comment,
+    tags: row.tags ?? [],
     is_active: row.is_active,
     created_at: row.created_at,
     updated_at: row.updated_at,

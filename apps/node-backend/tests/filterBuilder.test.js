@@ -288,3 +288,65 @@ describe('buildTransactionWhere — categoryIds (plural IN clause)', () => {
     expect(nextParamIdx).toBe(5);
   });
 });
+
+describe('buildTransactionWhere — tagSlugs', () => {
+  it('emits EXISTS subquery for a single tag slug', () => {
+    const { sql, params } = buildTransactionWhere({ tagSlugs: ['rome-2020'], active: false });
+    expect(sql).toContain('EXISTS');
+    expect(sql).toContain('transaction_tags');
+    expect(sql).toContain('ANY($1::text[])');
+    expect(params).toEqual([['rome-2020']]);
+  });
+
+  it('passes multiple slugs as a single array param (OR semantics)', () => {
+    const { sql, params } = buildTransactionWhere({ tagSlugs: ['rome-2020', 'lisbon-2024'], active: false });
+    expect(sql).toContain('ANY($1::text[])');
+    expect(params).toHaveLength(1);
+    expect(params[0]).toEqual(['rome-2020', 'lisbon-2024']);
+  });
+
+  it('filters only active tags (is_active = true)', () => {
+    const { sql } = buildTransactionWhere({ tagSlugs: ['rome-2020'], active: false });
+    expect(sql).toContain('is_active = true');
+  });
+
+  it('joins on tag_id so inactive tags are excluded from match', () => {
+    const { sql } = buildTransactionWhere({ tagSlugs: ['rome-2020'], active: false });
+    expect(sql).toContain('tg.id = tt.tag_id');
+  });
+
+  it('produces no clause when tagSlugs is empty', () => {
+    const { sql, params } = buildTransactionWhere({ tagSlugs: [], active: false });
+    expect(sql).not.toContain('transaction_tags');
+    expect(params).toHaveLength(0);
+  });
+
+  it('produces no clause when tagSlugs is null', () => {
+    const { sql } = buildTransactionWhere({ tagSlugs: null, active: false });
+    expect(sql).not.toContain('transaction_tags');
+  });
+
+  it('strips blank/whitespace-only slug entries', () => {
+    const { sql, params } = buildTransactionWhere({ tagSlugs: ['rome-2020', '  ', ''], active: false });
+    expect(params[0]).toEqual(['rome-2020']);
+  });
+
+  it('produces no clause when all slugs are blank after trim', () => {
+    const { sql, params } = buildTransactionWhere({ tagSlugs: ['  ', ''], active: false });
+    expect(sql).not.toContain('EXISTS');
+    expect(params).toHaveLength(0);
+  });
+
+  it('caps at MAX_LIST_SIZE (50) entries', () => {
+    const manySlugs = Array.from({ length: 60 }, (_, i) => `tag-${i}`);
+    const { params } = buildTransactionWhere({ tagSlugs: manySlugs, active: false });
+    expect(params[0]).toHaveLength(50);
+  });
+
+  it('respects startParamIdx offset', () => {
+    const { sql, params, nextParamIdx } = buildTransactionWhere({ tagSlugs: ['rome-2020'], active: false, startParamIdx: 5 });
+    expect(sql).toContain('ANY($5::text[])');
+    expect(params).toEqual([['rome-2020']]);
+    expect(nextParamIdx).toBe(6);
+  });
+});

@@ -77,6 +77,23 @@ async function insertLoanScheduleBatch(client, plannedTransactionId, scheduleEnt
   );
 }
 
+async function setPlannedTransactionTags(client, plannedTransactionId, slugs) {
+  await client.query('DELETE FROM planned_transaction_tags WHERE planned_transaction_id = $1', [plannedTransactionId]);
+  if (!slugs || slugs.length === 0) return;
+  const resolved = await client.query(
+    'SELECT id FROM tags WHERE slug = ANY($1::text[]) AND is_active = true',
+    [slugs],
+  );
+  if (resolved.rows.length === 0) return;
+  const tagIds = resolved.rows.map((r) => r.id);
+  await client.query(
+    `INSERT INTO planned_transaction_tags (planned_transaction_id, tag_id)
+     SELECT $1, unnest($2::int[])
+     ON CONFLICT DO NOTHING`,
+    [plannedTransactionId, tagIds],
+  );
+}
+
 export const plannedTransactionRepository = {
   async getAll({
     limit = 50, offset = 0, startDate = null, endDate = null,
@@ -174,6 +191,25 @@ export const plannedTransactionRepository = {
       }
     }
 
+    const tagsByPlannedTransactionId = new Map();
+    if (plannedTransactionIds.length > 0) {
+      const tagResult = await query(
+        `SELECT ptt.planned_transaction_id, tg.id, tg.slug, tg.color, tg.is_active
+         FROM planned_transaction_tags ptt
+         JOIN tags tg ON tg.id = ptt.tag_id
+         WHERE ptt.planned_transaction_id = ANY($1::int[])
+         ORDER BY ptt.planned_transaction_id ASC, tg.slug ASC`,
+        [plannedTransactionIds],
+      );
+      for (const tagRow of tagResult.rows) {
+        if (!tagsByPlannedTransactionId.has(tagRow.planned_transaction_id)) {
+          tagsByPlannedTransactionId.set(tagRow.planned_transaction_id, []);
+        }
+        const { planned_transaction_id, ...tag } = tagRow;
+        tagsByPlannedTransactionId.get(planned_transaction_id).push(tag);
+      }
+    }
+
     for (const row of rows) {
       const executions = executionsByPlannedTransactionId.get(row.id) || [];
       row.executions = executions;
@@ -182,6 +218,7 @@ export const plannedTransactionRepository = {
       row.loan_schedule = row.is_loan
         ? (schedulesByPlannedTransactionId.get(row.id) || [])
         : [];
+      row.tags = tagsByPlannedTransactionId.get(row.id) || [];
     }
 
     return { items: rows, total };
@@ -227,6 +264,16 @@ export const plannedTransactionRepository = {
       row.loan_schedule = [];
     }
 
+    const tagResult = await query(
+      `SELECT tg.id, tg.slug, tg.color, tg.is_active
+       FROM planned_transaction_tags ptt
+       JOIN tags tg ON tg.id = ptt.tag_id
+       WHERE ptt.planned_transaction_id = $1
+       ORDER BY tg.slug ASC`,
+      [id],
+    );
+    row.tags = tagResult.rows;
+
     return row;
   },
 
@@ -253,6 +300,7 @@ export const plannedTransactionRepository = {
     loan_regular_payment_amount,
     loan_first_payment_date,
     loan_schedule,
+    tags = null,
   }) {
     const sql = `
       INSERT INTO planned_transactions (
@@ -304,14 +352,19 @@ export const plannedTransactionRepository = {
         await insertLoanScheduleBatch(client, newId, loan_schedule);
       }
 
+      if (Array.isArray(tags) && tags.length > 0) {
+        await setPlannedTransactionTags(client, newId, tags);
+      }
+
       return newId;
     });
     return this.getById(plannedId);
   },
 
   async update(id, fields) {
+    const { tags, ...txFields } = fields;
     // Sanitize field names to prevent SQL injection via column names
-    const sanitized = sanitizeUpdateFields('planned_transactions', fields);
+    const sanitized = sanitizeUpdateFields('planned_transactions', txFields);
     const setClauses = [];
     const params = [];
     let paramIdx = 1;
@@ -320,6 +373,27 @@ export const plannedTransactionRepository = {
       if (value === undefined) continue;
       setClauses.push(`"${key}" = $${paramIdx++}`);
       params.push(value);
+    }
+
+    if (tags !== undefined) {
+      const found = await withTransaction(async (client) => {
+        if (setClauses.length > 0) {
+          setClauses.push('updated_at = NOW()');
+          params.push(id);
+          const r = await client.query(
+            `UPDATE planned_transactions SET ${setClauses.join(', ')} WHERE id = $${paramIdx} RETURNING id`,
+            params,
+          );
+          if (r.rowCount === 0) return false;
+        } else {
+          const r = await client.query('SELECT id FROM planned_transactions WHERE id = $1', [id]);
+          if (r.rowCount === 0) return false;
+        }
+        await setPlannedTransactionTags(client, id, tags);
+        return true;
+      });
+      if (!found) return null;
+      return this.getById(id);
     }
 
     if (setClauses.length === 0) return this.getById(id);
@@ -370,6 +444,16 @@ export const plannedTransactionRepository = {
     } else {
       row.loan_schedule = [];
     }
+
+    const tagResult = await query(
+      `SELECT tg.id, tg.slug, tg.color, tg.is_active
+       FROM planned_transaction_tags ptt
+       JOIN tags tg ON tg.id = ptt.tag_id
+       WHERE ptt.planned_transaction_id = $1
+       ORDER BY tg.slug ASC`,
+      [id],
+    );
+    row.tags = tagResult.rows;
 
     return row;
   },
@@ -467,7 +551,7 @@ export const plannedTransactionRepository = {
    * @param {object} updateFields - sanitized fields for planned_transactions update
    * @returns {Promise<{ duplicate: boolean }>}
    */
-  async executeAndAdvance(plannedTransactionId, executedTransactionId, executionDate, updateFields = {}) {
+  async executeAndAdvance(plannedTransactionId, executedTransactionId, executionDate, updateFields = {}, tagIdsToInherit = null) {
     return withTransaction(async (client) => {
       // ON CONFLICT DO NOTHING → idempotent retry of the same execute call
       // (unique_violation on (planned_transaction_id, executed_transaction_id)).
@@ -500,6 +584,15 @@ export const plannedTransactionRepository = {
         await client.query(
           `UPDATE planned_transactions SET ${setClauses.join(', ')} WHERE id = $${paramIdx}`,
           params
+        );
+      }
+
+      if (Array.isArray(tagIdsToInherit) && tagIdsToInherit.length > 0) {
+        await client.query(
+          `INSERT INTO transaction_tags (transaction_id, tag_id)
+           SELECT $1, unnest($2::int[])
+           ON CONFLICT DO NOTHING`,
+          [executedTransactionId, tagIdsToInherit],
         );
       }
 

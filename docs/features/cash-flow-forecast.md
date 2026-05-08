@@ -3,8 +3,8 @@ title: Cash Flow Forecast
 type: feature
 status: active
 date: 2026-04-25
-updated: 2026-04-28
-last_modified: 2026-04-28
+updated: 2026-05-08
+last_modified: 2026-05-08
 tags: [feature, cash-flow, forecast, planning, aggregations, phase-6, phase-10, phase-c, phase-d, phase-e, phase-g, planned-transactions, statistical-forecasting, ensemble-methods, frontend-visualization, multi-method-forecast, diagnostics-sheet, accuracy-persistence, materialized-cache, nightly-job, category-breakdown, fallback-resilience]
 aliases: [cashflow-forecast, forward-projections, cash-flow-planning, income-expense-forecast, budget-projection, multi-method-forecast, ensemble-forecast, category-breakdown]
 description: Project income and expenses forward based on planned transactions (Phase 6) or using 8 statistical methods including 7 base methods + inverse-MSE ensemble (Phase 10, F). Phase C adds frontend dashboard visualization with controls, MC confidence bands, and diagnostics panel. Phase E adds nightly cache materialization. Phase G adds per-category breakdown with hierarchical reconciliation.
@@ -935,6 +935,18 @@ The rolling forecast now supports walk-forward backtesting and diagnostics via o
 - Runs rolling walk-forward backtest across default 8 windows
 - Returns `ForecastDiagnostics`-compatible payload with `window_end` mapped to `month` field for UI consistency
 - Shares same `ForecastDiagnostics` interface as month-mode backtest for unified diagnostics sheet
+
+### Date Validation (Bug-Hunt Sweep 2026-05-08)
+
+**Issue:** Rolling forecast view builds chart x-axis from actual and forecast dates. Malformed dates (e.g., from a truncated API response or data corruption) were passed to `new Date('Invalid…T00:00:00Z')`, silently producing `Invalid Date` objects and corrupting the chart rendering.
+
+**Fix:** `mergeForViewRolling()` in `apps/frontend/src/utils/forecastMerge.ts` now filters `data.actual` dates with strict ISO format regex `^\d{4}-\d{2}-\d{2}$` before building rows. Invalid dates are silently dropped from the chart data. The filter runs at the merge boundary; invalid dates in the upstream API response are never exposed to the chart component.
+
+**Code:**
+```typescript
+const ISO_DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
+const allDates = data.actual.map((p) => p.date).filter((d) => ISO_DATE_RE.test(d));
+```
 
 **Route Update:** `GET /api/aggregations/cashflow-forecast-rolling` now accepts `include_backtest` query param
 - Default: `false` (omitted, no backtest; main rolling chart query excludes expensive backtest computation)

@@ -64,6 +64,21 @@ Categories can be inherited from recipients if not explicitly set.
 
 ---
 
+### Tags
+
+Transactions can be tagged with freeform labels (e.g., `rome-2020`, `home-renovation`) to enable cross-cutting groupings that span categories. Tags are a second, orthogonal classification dimension — a single transaction can have both a category and multiple tags simultaneously.
+
+Key capabilities:
+- Create tags on first use with auto-slug normalisation
+- Attach tags to individual transactions via the info dialog
+- Bulk-tag multiple transactions via checkbox selection + toolbar
+- Filter the transaction list by one or more tags
+- Soft-delete tags; historical tags are preserved
+
+See [[docs/features/tags]] for the complete tagging feature spec.
+
+---
+
 ### Recipient Association
 
 Every transaction is linked to a recipient (payee/payer). Recipients can have:
@@ -236,6 +251,7 @@ Heavy operations (export, batch updates) are rate-limited to protect database pe
 ## Related Documentation
 
 - [[docs/api/transactions]] - Transaction API Reference
+- [[docs/features/tags]] - Transaction Tags Feature
 - [[docs/api/categories]] - Categories API
 - [[docs/api/recipients]] - Recipients API
 - [[docs/features/import]] - CSV Import Feature

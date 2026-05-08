@@ -17,6 +17,7 @@ export interface UseTransactionListDataOptions {
     startDateFilter?: string;
     endDateFilter?: string;
     transactionTypeFilter?: 'income' | 'expense';
+    tagsFilter?: string[];
 }
 
 export interface UseTransactionListDataResult {
@@ -46,6 +47,7 @@ export function useTransactionListData({
     startDateFilter,
     endDateFilter,
     transactionTypeFilter,
+    tagsFilter,
 }: UseTransactionListDataOptions): UseTransactionListDataResult {
     const [sortKey, setSortKey] = useState<string | null>(null);
     const [sortDir, setSortDir] = useState<SortDir>(null);
@@ -79,6 +81,7 @@ export function useTransactionListData({
                 startDateFilter,
                 endDateFilter,
                 transactionTypeFilter,
+                tagsFilter,
                 sortKey,
                 sortDir,
                 pageSize,
@@ -96,6 +99,7 @@ export function useTransactionListData({
             start_date: startDateFilter,
             end_date: endDateFilter,
             transaction_type: transactionTypeFilter,
+            tags: tagsFilter?.length ? tagsFilter.join(',') : undefined,
             sort_by: sortKey || undefined,
             sort_dir: sortDir || undefined,
         }),
@@ -129,6 +133,7 @@ export function useTransactionListData({
                 start_date: startDateFilter,
                 end_date: endDateFilter,
                 transaction_type: transactionTypeFilter,
+                tags: tagsFilter?.length ? tagsFilter.join(',') : undefined,
                 sort_by: sortKey || undefined,
                 sort_dir: sortDir || undefined,
             });
@@ -152,7 +157,7 @@ export function useTransactionListData({
             }
             loadingRef.current = false;
         }
-    }, [showAll, search, transactionIdFilter, recipientIdFilter, categoryIdFilter, categoryIdsFilter, startDateFilter, endDateFilter, transactionTypeFilter, sortKey, sortDir, pageSize]);
+    }, [showAll, search, transactionIdFilter, recipientIdFilter, categoryIdFilter, categoryIdsFilter, startDateFilter, endDateFilter, transactionTypeFilter, tagsFilter, sortKey, sortDir, pageSize]);
 
     const handleSortChange = useCallback((key: string | null, dir: SortDir) => {
         setSortKey(key);

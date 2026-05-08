@@ -1,0 +1,212 @@
+import { useState, useRef, useCallback } from 'react';
+import { X, Plus, Tag as TagIcon } from 'lucide-react';
+import { cn } from '@/lib/utils';
+import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from '@/components/ui/command';
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
+import { Badge } from '@/components/ui/badge';
+import { useTags, useCreateTag } from '@/hooks/useTags';
+import { useLanguage } from '@/contexts/LanguageContext';
+import { slugify } from '@/lib/slugify';
+import type { Tag } from '@/types/api';
+
+const PALETTE: string[] = [
+    'hsl(158, 62%, 38%)',
+    'hsl(38, 62%, 54%)',
+    'hsl(204, 68%, 48%)',
+    'hsl(268, 52%, 58%)',
+    'hsl(14, 76%, 54%)',
+    'hsl(182, 48%, 40%)',
+    'hsl(340, 58%, 54%)',
+    'hsl(48, 72%, 48%)',
+];
+
+function nextPaletteColor(existingCount: number): string {
+    return PALETTE[existingCount % PALETTE.length];
+}
+
+export interface TagChipProps {
+    tag: Tag;
+    onRemove?: (slug: string) => void;
+    inactive?: boolean;
+}
+
+export function TagChip({ tag, onRemove, inactive }: TagChipProps) {
+    const style = tag.color ? { backgroundColor: tag.color + '22', borderColor: tag.color, color: tag.color } : {};
+    return (
+        <Badge
+            variant="outline"
+            className={cn('gap-1 text-xs py-0.5 px-2 font-normal', inactive && 'opacity-40')}
+            style={style}
+        >
+            {tag.slug}
+            {onRemove && (
+                <button
+                    type="button"
+                    onClick={(e) => { e.stopPropagation(); onRemove(tag.slug); }}
+                    className="ml-0.5 hover:opacity-70 focus:outline-none"
+                    aria-label={`Remove tag ${tag.slug}`}
+                >
+                    <X className="h-3 w-3" />
+                </button>
+            )}
+        </Badge>
+    );
+}
+
+interface TagInputProps {
+    value: string[];
+    onChange: (slugs: string[]) => void;
+    disabled?: boolean;
+    className?: string;
+    maxTags?: number;
+}
+
+export function TagInput({ value, onChange, disabled, className, maxTags = 20 }: TagInputProps) {
+    const { t } = useLanguage();
+    const [open, setOpen] = useState(false);
+    const [inputValue, setInputValue] = useState('');
+    const [pendingColor, setPendingColor] = useState<string>(PALETTE[0]);
+    const inputRef = useRef<HTMLInputElement>(null);
+
+    const { data: tagListData } = useTags({ is_active: true });
+    const allActiveTags = tagListData?.items ?? [];
+
+    const createTag = useCreateTag();
+
+    const selectedSet = new Set(value);
+    const liveSlug = slugify(inputValue);
+
+    const suggestions = allActiveTags.filter((t) =>
+        !selectedSet.has(t.slug) &&
+        (inputValue === '' || t.slug.includes(liveSlug)),
+    );
+    const exactMatch = allActiveTags.find((t) => t.slug === liveSlug);
+    const canCreate = liveSlug.length > 0 && !exactMatch && value.length < maxTags;
+
+    const addSlug = useCallback((slug: string) => {
+        if (!slug || selectedSet.has(slug) || value.length >= maxTags) return;
+        onChange([...value, slug]);
+    }, [value, onChange, selectedSet, maxTags]);
+
+    const removeSlug = useCallback((slug: string) => {
+        onChange(value.filter((s) => s !== slug));
+    }, [value, onChange]);
+
+    async function handleCreate() {
+        if (!canCreate) return;
+        const slug = liveSlug;
+        try {
+            await createTag.mutateAsync({ slug, color: pendingColor });
+        } catch {
+            // tag may already exist (race); addSlug proceeds regardless
+        }
+        addSlug(slug);
+        setInputValue('');
+        setPendingColor(nextPaletteColor(allActiveTags.length));
+    }
+
+    function handleKeyDown(e: React.KeyboardEvent<HTMLInputElement>) {
+        if ((e.key === 'Enter' || e.key === ',') && liveSlug) {
+            e.preventDefault();
+            if (exactMatch) {
+                addSlug(exactMatch.slug);
+                setInputValue('');
+            } else if (canCreate) {
+                handleCreate();
+            }
+        }
+        if (e.key === 'Backspace' && inputValue === '' && value.length > 0) {
+            removeSlug(value[value.length - 1]);
+        }
+    }
+
+    const selectedTags = value
+        .map((slug) => allActiveTags.find((t) => t.slug === slug) ?? { id: -1, slug, color: null, is_active: true, created_at: '', updated_at: '' })
+        .filter(Boolean) as Tag[];
+
+    return (
+        <Popover open={open} onOpenChange={setOpen}>
+            <PopoverTrigger asChild>
+                <div
+                    role="combobox"
+                    aria-expanded={open}
+                    className={cn(
+                        'flex flex-wrap gap-1 items-center min-h-9 px-3 py-1.5 rounded-md border border-input bg-background text-sm cursor-text',
+                        disabled && 'opacity-50 pointer-events-none',
+                        className,
+                    )}
+                    onClick={() => { setOpen(true); setTimeout(() => inputRef.current?.focus(), 0); }}
+                >
+                    {selectedTags.map((tag) => (
+                        <TagChip key={tag.slug} tag={tag} onRemove={disabled ? undefined : removeSlug} />
+                    ))}
+                    {!disabled && value.length < maxTags && (
+                        <TagIcon className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
+                    )}
+                </div>
+            </PopoverTrigger>
+            <PopoverContent className="w-72 p-0 bg-popover border border-border shadow-lg z-50" align="start">
+                <Command shouldFilter={false}>
+                    <CommandInput
+                        ref={inputRef}
+                        placeholder={t('tags.searchPlaceholder')}
+                        value={inputValue}
+                        onValueChange={setInputValue}
+                        onKeyDown={handleKeyDown}
+                    />
+                    {liveSlug && liveSlug !== inputValue.trim() && (
+                        <p className="px-3 py-1 text-xs text-muted-foreground">
+                            {t('tags.slugifyHint').replace('{{slug}}', liveSlug)}
+                        </p>
+                    )}
+                    <CommandList>
+                        {suggestions.length === 0 && !canCreate && (
+                            <CommandEmpty>{t('tags.empty')}</CommandEmpty>
+                        )}
+                        {suggestions.length > 0 && (
+                            <CommandGroup>
+                                {suggestions.map((tag) => (
+                                    <CommandItem
+                                        key={tag.slug}
+                                        value={tag.slug}
+                                        onSelect={() => { addSlug(tag.slug); setInputValue(''); }}
+                                        className={cn(!tag.is_active && 'opacity-40')}
+                                    >
+                                        <TagChip tag={tag} inactive={!tag.is_active} />
+                                    </CommandItem>
+                                ))}
+                            </CommandGroup>
+                        )}
+                        {canCreate && (
+                            <CommandGroup>
+                                <CommandItem value={`__create__${liveSlug}`} onSelect={handleCreate}>
+                                    <div className="flex items-center gap-2 w-full">
+                                        <Plus className="h-3.5 w-3.5 shrink-0" />
+                                        <span className="flex-1 text-sm">
+                                            {t('tags.create').replace("'{{slug}}'", `'${liveSlug}'`)}
+                                        </span>
+                                        <div className="flex gap-1">
+                                            {PALETTE.map((color) => (
+                                                <button
+                                                    key={color}
+                                                    type="button"
+                                                    className={cn(
+                                                        'h-4 w-4 rounded-full border-2 shrink-0',
+                                                        pendingColor === color ? 'border-foreground' : 'border-transparent',
+                                                    )}
+                                                    style={{ backgroundColor: color }}
+                                                    onClick={(e) => { e.stopPropagation(); setPendingColor(color); }}
+                                                    aria-label={color}
+                                                />
+                                            ))}
+                                        </div>
+                                    </div>
+                                </CommandItem>
+                            </CommandGroup>
+                        )}
+                    </CommandList>
+                </Command>
+            </PopoverContent>
+        </Popover>
+    );
+}

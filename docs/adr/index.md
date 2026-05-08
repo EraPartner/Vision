@@ -3,10 +3,10 @@ title: Architecture Decision Records Index
 type: adr-index
 status: active
 date: 2026-04-23
-updated: 2026-05-07
-last_modified: 2026-05-07
-tags: [adr, index, architecture, decisions, phase-1, phase-4, phase-5, phase-6, phase-7, security, dependency-slim-down, container-hardening, docker, backup, encryption, aead, aes-256-gcm, codeql, dependabot, rate-limiting, tailwind-v4, css-architecture, dependencies, ai, streaming, useSyncExternalStore, bug-hunt, recovery-hardening, updated-at-constraints, concurrent-backup, ci-cd, secrets-scanning, supply-chain-security, gitleaks, deps-audit, trivy-scan, docker-compose-sync, named-volumes, data-loss]
-description: Architecture Decision Records documenting significant technical choices and their rationale. May 2026: Docker Compose volume sync policy (ADR-051), CI supply chain security tooling (ADR-050), Phase 6.1–7 bug hunt recovery hardening (ADR-049), AI Chat module-level stream store (ADR-048), Tailwind CSS v4 migration (ADR-047).
+updated: 2026-05-08
+last_modified: 2026-05-08
+tags: [adr, index, architecture, decisions, phase-1, phase-4, phase-5, phase-6, phase-7, security, dependency-slim-down, container-hardening, docker, backup, encryption, aead, aes-256-gcm, codeql, dependabot, rate-limiting, tailwind-v4, css-architecture, dependencies, ai, streaming, useSyncExternalStore, bug-hunt, recovery-hardening, updated-at-constraints, concurrent-backup, ci-cd, secrets-scanning, supply-chain-security, gitleaks, deps-audit, trivy-scan, docker-compose-sync, named-volumes, data-loss, tags, tagging, transaction-tags, orthogonal-dimension]
+description: Architecture Decision Records documenting significant technical choices and their rationale. May 2026: Transaction Tags as orthogonal dimension (ADR-052), Docker Compose volume sync policy (ADR-051), CI supply chain security tooling (ADR-050), Phase 6.1–7 bug hunt recovery hardening (ADR-049), AI Chat module-level stream store (ADR-048), Tailwind CSS v4 migration (ADR-047).
 aliases: [ADRs, decisions, architecture decisions]
 ---
 
@@ -44,6 +44,10 @@ See [[docs/adr/template\|the ADR template]] for the format to use when creating 
 > - Recording a decision that affects multiple parts of the system
 
 ## Recent Decisions
+
+### 2026-05-08: Transaction Tags as Orthogonal Dimension
+
+[[docs/adr/052-transaction-tags-orthogonal-dimension|ADR-052]] — Add freeform tagging system to transactions and planned transactions as a second, orthogonal classification dimension alongside categories. Solves the problem of cross-cutting groupings (trips, projects, events) without restructuring the category hierarchy. Three tables: `tags` (global registry with unique slugs), `transaction_tags`, `planned_transaction_tags` (junctions with CASCADE). Soft-delete via `is_active = false` + atomic reactivation preserves junction history. Slug normalisation: lowercase, trim, collapse whitespace to `-`, strip non-alphanum. Read path uses batched second query (`WHERE transaction_id = ANY($1)`). Filter semantics: OR (transaction matches if it has *any* selected tags). Bulk-tag endpoint `/api/transactions/bulk-tag` operates in single DB transaction (all-or-nothing). Planned transaction tags inherited by executed copies inside same `withTransaction` block. Consequences: users can group transactions across categories without modifying hierarchy, tags auto-create on first use, soft-delete + reactivation preserves history, bulk-tag toolbar enables batch operations. Trade-offs: slug immutability (renames require new tag + bulk migration), Unicode dropped in v1, two-query read adds latency proportional to batch size.
 
 ### 2026-05-07: Docker Compose Named Volumes Sync Policy
 

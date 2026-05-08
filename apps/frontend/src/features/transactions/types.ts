@@ -1,3 +1,5 @@
+import type { Tag } from '@/types/api';
+
 export type TableTransaction = {
     id: number;
     date: string;
@@ -12,6 +14,7 @@ export type TableTransaction = {
     balance?: number;
     comment?: string;
     is_active: boolean;
+    tags?: Tag[];
 };
 
 export interface RawApiTransaction {
@@ -28,6 +31,7 @@ export interface RawApiTransaction {
     balance?: number | null;
     comment?: string | null;
     is_active?: boolean;
+    tags?: Tag[];
     [key: string]: unknown;
 }
 

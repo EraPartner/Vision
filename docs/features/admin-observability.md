@@ -3,8 +3,8 @@ title: Admin Observability Dashboard
 type: feature
 status: active
 date: 2026-04-25
-updated: 2026-04-24
-tags: [feature, admin, observability, provider-health, endpoint-liveness, shadow-divergences, aggregation, migration, phase-f, phase-9-complete, rate-limiting]
+updated: 2026-05-08
+tags: [feature, admin, observability, provider-health, endpoint-liveness, shadow-divergences, aggregation, migration, phase-f, phase-9-complete, rate-limiting, admin-guard, route-gating]
 description: Unified admin hub — DB maintenance, provider health, endpoint liveness, and feature flag controls — gated via Settings toggle.
 aliases: [admin dashboard, system observability, admin monitoring, admin hub]
 related_code:
@@ -35,7 +35,15 @@ The admin section provides operational visibility through four focused pages, ac
 
 ## Enabling Admin Mode
 
-Settings → App tab → Developer section → "Admin Mode" toggle. Persisted via `AppSettings` Zustand store (same persistence channel as all other app settings). Routes remain URL-accessible regardless of toggle state — the toggle only shows/hides the sidebar group.
+Settings → App tab → Developer section → "Admin Mode" toggle. Persisted via `AppSettings` Zustand store (same persistence channel as all other app settings).
+
+### Frontend Route Gating (2026-05-08)
+
+All `/admin/*` routes are now wrapped with the `RequireAdmin` guard component ([[apps/frontend/src/components/auth/RequireAdmin.tsx]]). The guard reads `appSettings.adminMode` from the settings store:
+- If `adminMode === true`: children are rendered
+- If `adminMode === false`: user is redirected to `/` (dashboard)
+
+**Note:** The backend `adminAuth.js` middleware is the actual security boundary — it rejects `/api/admin/*` requests without valid admin credentials. The frontend guard exists purely for UX: without it, deep-linking to `/admin` renders an empty page with cascading API failures. With it, users are redirected gracefully until they enable Admin Mode in settings.
 
 > [!note] Shadow Divergences (Phase F → Removed Phase 9)
 > The Shadow Divergences page (`/admin/shadow-divergences`) was used to track aggregation endpoint parity during the Phase 2→9 migration. It has been removed as of Phase 9, along with the underlying `agg_shadow_divergences` table (dropped via migration 0009). All validation criteria were met and aggregation parity confirmed.

@@ -2,10 +2,10 @@
 title: Backend Architecture
 type: architecture
 status: active
-description: Node.js backend architecture and diagrams. Phase 3: infoRepository split into 7 domain-specific sub-modules. Phase 9: Decimal.js enforcement on all monetary paths. Phase E: Forecast cache materialization with 6-hour TTL and nightly job. Startup sequence fixed to order FX cache warmup before snapshots (2026-04-25); backend now owns DB readiness polling (2026-04-27); offline-aware startup that skips external fetches when network unavailable (2026-05-03).
+description: Node.js backend architecture and diagrams. Phase 3: infoRepository split into 7 domain-specific sub-modules. Phase 9: Decimal.js enforcement on all monetary paths. Phase E: Forecast cache materialization with 6-hour TTL and nightly job. May 2026: Transaction tags as orthogonal dimension (ADR-052) with global slug registry and bulk-tag endpoint. Startup sequence fixed to order FX cache warmup before snapshots (2026-04-25); backend now owns DB readiness polling (2026-04-27); offline-aware startup that skips external fetches when network unavailable (2026-05-03).
 date: 2026-04-23
-last_modified: 2026-05-03
-tags: [architecture, backend, uml, plantuml, phase-3, phase-6, phase-9, phase-e, decimal, money, precision, caching, materialization, nightly-job, startup, dependency-ordering, db-polling, graceful-shutdown, signal-handling, offline-resilience, network-reachability]
+last_modified: 2026-05-08
+tags: [architecture, backend, uml, plantuml, phase-3, phase-6, phase-9, phase-e, decimal, money, precision, caching, materialization, nightly-job, startup, dependency-ordering, db-polling, graceful-shutdown, signal-handling, offline-resilience, network-reachability, tags, tagging, orthogonal-dimension]
 aliases: [backend architecture, node architecture, server design]
 ---
 
@@ -264,6 +264,18 @@ Investment "1" *-- "*" PortfolioTransaction
 ```
 
 Source diagram: [[docs/diagrams/backend-api-layer.puml]]
+
+### Tags (May 2026)
+
+Transactions and planned transactions support orthogonal freeform tagging via a second classification dimension (see [[docs/adr/052-transaction-tags-orthogonal-dimension|ADR-052]]). Three new entities:
+
+| Entity | Purpose |
+|--------|---------|
+| `Tag` | Global tag registry: `id`, `slug` (unique), `color`, `is_active`, timestamps |
+| `TransactionTag` | Junction: `(transaction_id, tag_id)` composite PK, CASCADE on delete |
+| `PlannedTransactionTag` | Junction for planned transactions, same structure |
+
+Slugs are globally unique (not partial-on-active) so junction rows survive soft-delete and reactivation. Read path uses batched second query after main transaction fetch. Filter semantics: OR (transaction matches if it has *any* selected tags). Bulk-tag endpoint operates in single DB transaction for all-or-nothing atomicity. Planned transaction tags are inherited by executed copies inside the same transaction block.
 
 ## Repository Layer
 

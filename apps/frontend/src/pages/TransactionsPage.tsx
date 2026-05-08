@@ -7,7 +7,7 @@ import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { PageHeader } from "@/components/shared/PageHeader";
 import { PageError } from "@/components/shared/PageError";
-import { useUpdateTransaction, useDeleteTransaction } from "@/hooks/useTransactions";
+import { useUpdateTransaction, useDeleteTransaction, useBulkTagTransactions } from "@/hooks/useTransactions";
 import { useConfirmDialog } from "@/hooks/useConfirmDialog";
 import { useTransactionListData } from "@/features/transactions/hooks/useTransactionListData";
 import { FilterBanner } from "@/features/transactions/components/FilterBanner";
@@ -38,6 +38,8 @@ export default function TransactionsPage() {
     const categoryIdsFilter = categoryIdsRaw
         ? categoryIdsRaw.split(',').map(Number).filter((n) => Number.isFinite(n) && n > 0)
         : undefined;
+    const tagsRaw = searchParams.get('tags');
+    const tagsFilter = tagsRaw ? tagsRaw.split(',').filter(Boolean) : undefined;
 
     const {
         allItems,
@@ -64,10 +66,12 @@ export default function TransactionsPage() {
         startDateFilter,
         endDateFilter,
         transactionTypeFilter,
+        tagsFilter,
     });
 
     const updateMutation = useUpdateTransaction();
     const deleteMutation = useDeleteTransaction();
+    const bulkTagMutation = useBulkTagTransactions();
     const { confirm, ConfirmDialog } = useConfirmDialog();
 
     const applyTransactionLocalPatch = useCallback((transactionId: number, patch: Record<string, unknown>) => {
@@ -264,6 +268,7 @@ export default function TransactionsPage() {
         balance: tx.balance ?? undefined,
         comment: tx.comment || '',
         is_active: tx.is_active ?? true,
+        tags: tx.tags ?? [],
     }));
 
     return (
@@ -285,7 +290,15 @@ export default function TransactionsPage() {
                     transactionTypeFilter={transactionTypeFilter}
                     searchFilter={search || undefined}
                     filterLabel={filterLabel}
+                    tagsFilter={tagsFilter}
                     onClear={() => setSearchParams({})}
+                    onClearTags={() => {
+                        setSearchParams((prev) => {
+                            const next = new URLSearchParams(prev);
+                            next.delete('tags');
+                            return next;
+                        });
+                    }}
                 />
 
                 <TransactionsTable
@@ -312,6 +325,9 @@ export default function TransactionsPage() {
                     actions={<TableActions showAll={showAll} onToggleShowAll={() => setShowAll(!showAll)} />}
                     updatePending={updateMutation.isPending}
                     deletePending={deleteMutation.isPending}
+                    onBulkTag={(ids, addSlugs, removeSlugs) => {
+                        bulkTagMutation.mutate({ transaction_ids: ids, add_slugs: addSlugs, remove_slugs: removeSlugs });
+                    }}
                 />
             </div>
             <ConfirmDialog />

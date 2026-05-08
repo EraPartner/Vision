@@ -1,12 +1,16 @@
+import { useState } from "react";
 import { Link } from "react-router-dom";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { Checkbox } from "@/components/ui/checkbox";
 import { VirtualDataTable } from "@/components/shared/VirtualDataTable";
 import { CategoryCombobox } from "@/components/shared/CategoryCombobox";
 import { RecipientCombobox } from "@/components/shared/RecipientCombobox";
 import { SplitTransactionDialog } from "@/components/splits/SplitTransactionDialog";
+import { TagChip } from "@/components/shared/TagInput";
+import { TagFilterCombobox } from "@/components/shared/TagFilterCombobox";
 import { EmptyState } from "@/components/shared/EmptyState";
-import { Import, Info, ToggleLeft, ToggleRight, Trash2 } from "lucide-react";
+import { Import, Info, Tag, ToggleLeft, ToggleRight, Trash2 } from "lucide-react";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { useAppSettings } from "@/contexts/AppSettingsContext";
 import { formatCurrency, numberFormatToLocale } from "@/utils/currency";
@@ -38,6 +42,7 @@ interface TransactionsTableProps {
     actions: React.ReactNode;
     updatePending: boolean;
     deletePending: boolean;
+    onBulkTag?: (ids: number[], addSlugs: string[], removeSlugs: string[]) => void;
 }
 
 export function TransactionsTable({
@@ -64,12 +69,68 @@ export function TransactionsTable({
     actions,
     updatePending,
     deletePending,
+    onBulkTag,
 }: TransactionsTableProps) {
     const { t } = useLanguage();
     const { appSettings } = useAppSettings();
     const locale = numberFormatToLocale(appSettings.numberFormat);
 
+    const [selectedIds, setSelectedIds] = useState<Set<number>>(new Set());
+    const [bulkAddSlugs, setBulkAddSlugs] = useState<string[]>([]);
+    const [bulkRemoveSlugs, setBulkRemoveSlugs] = useState<string[]>([]);
+
+    function toggleSelect(id: number) {
+        setSelectedIds((prev) => {
+            const next = new Set(prev);
+            if (next.has(id)) next.delete(id);
+            else next.add(id);
+            return next;
+        });
+    }
+
+    function toggleSelectAll() {
+        if (selectedIds.size === transactions.length) {
+            setSelectedIds(new Set());
+        } else {
+            setSelectedIds(new Set(transactions.map((t) => t.id)));
+        }
+    }
+
+    function handleBulkApply() {
+        if (!onBulkTag || selectedIds.size === 0) return;
+        onBulkTag(Array.from(selectedIds), bulkAddSlugs, bulkRemoveSlugs);
+        setSelectedIds(new Set());
+        setBulkAddSlugs([]);
+        setBulkRemoveSlugs([]);
+    }
+
+    const allSelected = transactions.length > 0 && selectedIds.size === transactions.length;
+    const someSelected = selectedIds.size > 0 && !allSelected;
+
     const columns = [
+        {
+            key: "select",
+            header: (
+                <Checkbox
+                    checked={allSelected ? true : someSelected ? 'indeterminate' : false}
+                    onCheckedChange={toggleSelectAll}
+                    aria-label="Select all"
+                />
+            ),
+            editable: false,
+            sortable: false,
+            filterable: false,
+            defaultWidth: 40,
+            minWidth: 36,
+            render: (row: TableTransaction) => (
+                <Checkbox
+                    checked={selectedIds.has(row.id)}
+                    onCheckedChange={() => toggleSelect(row.id)}
+                    onClick={(e) => e.stopPropagation()}
+                    aria-label={`Select transaction ${row.id}`}
+                />
+            ),
+        },
         {
             key: "date",
             header: t('txPage.col.date'),
@@ -128,6 +189,31 @@ export function TransactionsTable({
                 }
                 return (
                     <span className={row.is_active ? 'text-foreground' : 'text-muted-foreground line-through'}>{row.recipient}</span>
+                );
+            },
+        },
+        {
+            key: "tags",
+            header: t('txPage.col.tags'),
+            editable: false,
+            sortable: false,
+            filterable: false,
+            defaultWidth: 160,
+            minWidth: 120,
+            render: (row: TableTransaction) => {
+                const tags = row.tags ?? [];
+                if (tags.length === 0) return null;
+                return (
+                    <div className="flex flex-wrap gap-1">
+                        {tags.slice(0, 3).map((tag) => (
+                            <TagChip key={tag.slug} tag={tag} />
+                        ))}
+                        {tags.length > 3 && (
+                            <Badge variant="outline" className="text-xs py-0 px-1.5 h-5 text-muted-foreground">
+                                +{tags.length - 3}
+                            </Badge>
+                        )}
+                    </div>
                 );
             },
         },
@@ -213,6 +299,36 @@ export function TransactionsTable({
         },
     ];
 
+    const bulkToolbar = selectedIds.size > 0 && onBulkTag ? (
+        <div className="flex items-center gap-2 flex-wrap">
+            <span className="text-sm font-medium">
+                {t('txPage.bulk.tagSelected').replace('{n}', String(selectedIds.size))}
+            </span>
+            <TagFilterCombobox
+                value={bulkAddSlugs}
+                onChange={setBulkAddSlugs}
+                className="w-40 h-7 text-xs"
+            />
+            <TagFilterCombobox
+                value={bulkRemoveSlugs}
+                onChange={setBulkRemoveSlugs}
+                className="w-40 h-7 text-xs"
+            />
+            <Button size="sm" className="h-7 text-xs" onClick={handleBulkApply}>
+                <Tag className="h-3 w-3 mr-1" />
+                {t('txPage.bulk.apply')}
+            </Button>
+            <Button
+                size="sm"
+                variant="ghost"
+                className="h-7 text-xs"
+                onClick={() => { setSelectedIds(new Set()); setBulkAddSlugs([]); setBulkRemoveSlugs([]); }}
+            >
+                {t('common.clear')}
+            </Button>
+        </div>
+    ) : null;
+
     return (
         <VirtualDataTable
             title={t('txPage.tableTitle')}
@@ -242,7 +358,7 @@ export function TransactionsTable({
             onSortChange={onSortChange}
             sortKeyProp={sortKey}
             sortDirProp={sortDir}
-            actions={actions}
+            actions={<>{bulkToolbar}{actions}</>}
             maxHeight={700}
             cancelEditingRef={cancelEditingRef}
             onEditingChange={onEditingChange}

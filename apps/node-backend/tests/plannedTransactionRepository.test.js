@@ -95,11 +95,12 @@ describe('plannedTransactionRepository.getAll', () => {
             remaining_principal: '910.00',
           },
         ],
-      });
+      })
+      .mockResolvedValueOnce({ rows: [] });
 
     const result = await plannedTransactionRepository.getAll({ limit: 10, offset: 0 });
 
-    expect(query).toHaveBeenCalledTimes(3);
+    expect(query).toHaveBeenCalledTimes(4);
     expect(result.total).toBe(2);
     expect(result.items).toHaveLength(2);
     expect(result.items[0]).toEqual(
@@ -155,11 +156,12 @@ describe('plannedTransactionRepository.getById', () => {
             remaining_principal: '920.00',
           },
         ],
-      });
+      })
+      .mockResolvedValueOnce({ rows: [] });
 
     const result = await plannedTransactionRepository.getById(12);
 
-    expect(query).toHaveBeenCalledTimes(3);
+    expect(query).toHaveBeenCalledTimes(4);
     expect(result.execution_count).toBe(1);
     expect(result.executed_transaction_id).toBe(77);
     expect(result.loan_schedule).toHaveLength(1);
@@ -200,7 +202,8 @@ describe('plannedTransactionRepository.create', () => {
             remaining_principal: '920.00',
           },
         ],
-      });
+      })
+      .mockResolvedValueOnce({ rows: [] });
 
     const result = await plannedTransactionRepository.create({
       planned_date: '2026-05-01',
@@ -317,6 +320,7 @@ describe('plannedTransactionRepository.create', () => {
       .mockResolvedValueOnce({
         rows: [{ id: 52, is_loan: false, recipient_name: 'Employer', category_name: 'INCOME:SALARY' }],
       })
+      .mockResolvedValueOnce({ rows: [] })
       .mockResolvedValueOnce({ rows: [] });
 
     const result = await plannedTransactionRepository.create({
@@ -359,12 +363,13 @@ describe('plannedTransactionRepository.update', () => {
       .mockResolvedValueOnce({
         rows: [{ id: 33, is_loan: false, recipient_name: 'Shop', category_name: 'FOOD:GROCERIES' }],
       })
+      .mockResolvedValueOnce({ rows: [] })
       .mockResolvedValueOnce({ rows: [] });
 
     const result = await plannedTransactionRepository.update(33, { unsafe_field: undefined });
 
     expect(result).toEqual(expect.objectContaining({ id: 33, execution_count: 0, loan_schedule: [] }));
-    expect(query).toHaveBeenCalledTimes(2);
+    expect(query).toHaveBeenCalledTimes(3);
     expect(query).toHaveBeenNthCalledWith(1, expect.stringContaining('WHERE pt.id = $1'), [33]);
   });
 
@@ -401,11 +406,12 @@ describe('plannedTransactionRepository.update', () => {
             remaining_principal: '4800.00',
           },
         ],
-      });
+      })
+      .mockResolvedValueOnce({ rows: [] });
 
     const result = await plannedTransactionRepository.update(70, { memo: 'updated memo' });
 
-    expect(query).toHaveBeenCalledTimes(3);
+    expect(query).toHaveBeenCalledTimes(4);
     expect(query).toHaveBeenNthCalledWith(
       1,
       expect.stringContaining('WITH updated AS'),
@@ -528,6 +534,108 @@ describe('plannedTransactionRepository.small mutations', () => {
       [13]
     );
     expect(clientQuery).toHaveBeenNthCalledWith(3, 'ROLLBACK');
+    expect(release).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe('plannedTransactionRepository.executeAndAdvance', () => {
+  beforeEach(() => vi.clearAllMocks());
+
+  it('returns { duplicate: false } and commits on fresh execution', async () => {
+    const clientQuery = vi.fn()
+      .mockResolvedValueOnce({}) // BEGIN
+      .mockResolvedValueOnce({ rowCount: 1, rows: [{ id: 99 }] }) // INSERT executions
+      .mockResolvedValueOnce({}); // COMMIT
+    const release = vi.fn();
+    getClient.mockResolvedValue({ query: clientQuery, release });
+
+    const result = await plannedTransactionRepository.executeAndAdvance(1, 10, '2025-01-15');
+
+    expect(result).toEqual({ duplicate: false });
+    expect(clientQuery).toHaveBeenCalledWith('COMMIT');
+    expect(release).toHaveBeenCalledTimes(1);
+  });
+
+  it('returns { duplicate: true } without further queries when execution already exists', async () => {
+    const clientQuery = vi.fn()
+      .mockResolvedValueOnce({}) // BEGIN
+      .mockResolvedValueOnce({ rowCount: 0, rows: [] }) // INSERT ON CONFLICT DO NOTHING → 0 rows
+      .mockResolvedValueOnce({}); // COMMIT
+    const release = vi.fn();
+    getClient.mockResolvedValue({ query: clientQuery, release });
+
+    const result = await plannedTransactionRepository.executeAndAdvance(1, 10, '2025-01-15');
+
+    expect(result).toEqual({ duplicate: true });
+    // Only BEGIN + INSERT + COMMIT — no UPDATE or tag INSERT
+    expect(clientQuery).toHaveBeenCalledTimes(3);
+  });
+
+  it('inherits tags into transaction_tags with ON CONFLICT DO NOTHING', async () => {
+    const clientQuery = vi.fn()
+      .mockResolvedValueOnce({}) // BEGIN
+      .mockResolvedValueOnce({ rowCount: 1, rows: [{ id: 99 }] }) // INSERT executions
+      .mockResolvedValueOnce({}) // INSERT transaction_tags
+      .mockResolvedValueOnce({}); // COMMIT
+    const release = vi.fn();
+    getClient.mockResolvedValue({ query: clientQuery, release });
+
+    await plannedTransactionRepository.executeAndAdvance(1, 10, '2025-01-15', {}, [7, 8]);
+
+    const tagInsertCall = clientQuery.mock.calls.find(([sql]) =>
+      typeof sql === 'string' && sql.includes('transaction_tags')
+    );
+    expect(tagInsertCall).toBeDefined();
+    expect(tagInsertCall[0]).toContain('ON CONFLICT DO NOTHING');
+    expect(tagInsertCall[1]).toEqual([10, [7, 8]]);
+  });
+
+  it('skips tag INSERT when tagIdsToInherit is null', async () => {
+    const clientQuery = vi.fn()
+      .mockResolvedValueOnce({}) // BEGIN
+      .mockResolvedValueOnce({ rowCount: 1, rows: [{ id: 99 }] }) // INSERT executions
+      .mockResolvedValueOnce({}); // COMMIT
+    const release = vi.fn();
+    getClient.mockResolvedValue({ query: clientQuery, release });
+
+    await plannedTransactionRepository.executeAndAdvance(1, 10, '2025-01-15', {}, null);
+
+    const tagInsertCall = clientQuery.mock.calls.find(([sql]) =>
+      typeof sql === 'string' && sql.includes('transaction_tags')
+    );
+    expect(tagInsertCall).toBeUndefined();
+  });
+
+  it('skips tag INSERT when tagIdsToInherit is empty array', async () => {
+    const clientQuery = vi.fn()
+      .mockResolvedValueOnce({}) // BEGIN
+      .mockResolvedValueOnce({ rowCount: 1, rows: [{ id: 99 }] }) // INSERT executions
+      .mockResolvedValueOnce({}); // COMMIT
+    const release = vi.fn();
+    getClient.mockResolvedValue({ query: clientQuery, release });
+
+    await plannedTransactionRepository.executeAndAdvance(1, 10, '2025-01-15', {}, []);
+
+    const tagInsertCall = clientQuery.mock.calls.find(([sql]) =>
+      typeof sql === 'string' && sql.includes('transaction_tags')
+    );
+    expect(tagInsertCall).toBeUndefined();
+  });
+
+  it('rolls back and rethrows when query fails', async () => {
+    const clientQuery = vi.fn()
+      .mockResolvedValueOnce({}) // BEGIN
+      .mockRejectedValueOnce(new Error('db failure')) // INSERT executions fails
+      .mockResolvedValueOnce({}); // ROLLBACK
+    const release = vi.fn();
+    getClient.mockResolvedValue({ query: clientQuery, release });
+
+    await expect(
+      plannedTransactionRepository.executeAndAdvance(1, 10, '2025-01-15')
+    ).rejects.toThrow('db failure');
+
+    const rollbackCall = clientQuery.mock.calls.find(([sql]) => sql === 'ROLLBACK');
+    expect(rollbackCall).toBeDefined();
     expect(release).toHaveBeenCalledTimes(1);
   });
 });

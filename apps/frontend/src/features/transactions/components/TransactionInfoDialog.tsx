@@ -10,6 +10,7 @@ import { formatCurrency, numberFormatToLocale, parseLocaleNumber } from "@/utils
 import { formatDateStringWithAppSettings, parseLocalDateFromYmd, toYmd } from "@/components/shared/dateUtils";
 import { DatePicker } from "@/components/shared/DatePicker";
 import { AttachmentPanel } from "@/components/shared/AttachmentPanel";
+import { TagInput } from "@/components/shared/TagInput";
 import type { TransactionUpdate } from "@/types/api";
 import type { TableTransaction, InfoEditableField } from "../types";
 
@@ -242,6 +243,17 @@ export function TransactionInfoDialog({
                                     </div>
                                 ) : null
                             ))}
+                            <div className="py-2.5">
+                                <span className="text-sm text-muted-foreground">{t('txPage.field.tags')}</span>
+                                <TagInput
+                                    value={txn.tags?.map((tag) => tag.slug) ?? []}
+                                    onChange={async (slugs) => {
+                                        await updateMutation.mutateAsync({ id: txn.id, data: { tags: slugs } });
+                                    }}
+                                    disabled={updateMutation.isPending}
+                                    className="mt-1.5"
+                                />
+                            </div>
                             <div className="pt-3">
                                 <AttachmentPanel transactionId={txn.id} />
                             </div>

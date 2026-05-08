@@ -204,6 +204,89 @@ components:
               items:
                 $ref: "#/components/schemas/Link"
 
+    # ─── Tags ───────────────────────────────────────────────────────────────
+    Tag:
+      type: object
+      required: [id, slug, is_active, created_at, updated_at]
+      properties:
+        id:
+          type: integer
+        slug:
+          type: string
+        color:
+          type: string
+          nullable: true
+        is_active:
+          type: boolean
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+
+    TagList:
+      allOf:
+        - $ref: "#/components/schemas/PaginationMeta"
+        - type: object
+          required: [items]
+          properties:
+            items:
+              type: array
+              items:
+                $ref: "#/components/schemas/Tag"
+
+    TagCreate:
+      type: object
+      required: [slug]
+      properties:
+        slug:
+          type: string
+        color:
+          type: string
+          nullable: true
+
+    TagUpdate:
+      type: object
+      properties:
+        color:
+          type: string
+          nullable: true
+        is_active:
+          type: boolean
+
+    BulkTagRequest:
+      type: object
+      required: [transaction_ids]
+      properties:
+        transaction_ids:
+          type: array
+          items:
+            type: integer
+          minItems: 1
+          maxItems: 500
+        add_slugs:
+          type: array
+          items:
+            type: string
+          maxItems: 50
+        remove_slugs:
+          type: array
+          items:
+            type: string
+          maxItems: 50
+
+    BulkTagResult:
+      type: object
+      required: [added, removed, transactions_affected]
+      properties:
+        added:
+          type: integer
+        removed:
+          type: integer
+        transactions_affected:
+          type: integer
+
     # ─── Transactions ────────────────────────────────────────────────────────
     Transaction:
       type: object
@@ -241,6 +324,11 @@ components:
           description: "Format: GENERAL:DETAIL"
         comment:
           type: string
+        tags:
+          type: array
+          items:
+            $ref: "#/components/schemas/Tag"
+          description: Tags attached to this transaction
         created_at:
           type: string
           format: date-time
@@ -275,6 +363,11 @@ components:
           type: integer
         comment:
           type: string
+        tags:
+          type: array
+          items:
+            type: string
+          description: Tag slugs to assign (replaces existing tags)
 
     TransactionUpdate:
       type: object
@@ -304,6 +397,11 @@ components:
           type: string
         is_active:
           type: boolean
+        tags:
+          type: array
+          items:
+            type: string
+          description: Tag slugs to assign (replaces existing tags when present)
 
     TransactionList:
       allOf:
@@ -436,6 +534,11 @@ components:
           type: array
           items:
             $ref: "#/components/schemas/PlannedTransactionExecution"
+        tags:
+          type: array
+          items:
+            $ref: "#/components/schemas/Tag"
+          description: Tags attached to this planned transaction
         is_active:
           type: boolean
         created_at:
@@ -491,6 +594,11 @@ components:
           format: date
         loan_payment_day:
           type: integer
+        tags:
+          type: array
+          items:
+            type: string
+          description: Tag slugs to assign
 
     PlannedTransactionList:
       allOf:
@@ -923,6 +1031,101 @@ components:
 # ─── Paths ───────────────────────────────────────────────────────────────────
 paths:
 
+  # ─── Tags ───────────────────────────────────────────────────────────────────
+
+  /api/tags:
+    get:
+      summary: List tags
+      operationId: getTags
+      tags: [Tags]
+      parameters:
+        - in: query
+          name: is_active
+          schema:
+            type: boolean
+          description: Filter by active status (omit for all)
+      responses:
+        "200":
+          description: Tag list
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/Envelope"
+                  - type: object
+                    properties:
+                      data:
+                        $ref: "#/components/schemas/TagList"
+    post:
+      summary: Create or reactivate tag
+      operationId: createTag
+      tags: [Tags]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/TagCreate"
+      responses:
+        "201":
+          description: Created or reactivated tag
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/Envelope"
+                  - type: object
+                    properties:
+                      data:
+                        $ref: "#/components/schemas/Tag"
+
+  /api/tags/{id}:
+    parameters:
+      - in: path
+        name: id
+        required: true
+        schema:
+          type: integer
+    patch:
+      summary: Update tag color or active status
+      operationId: updateTag
+      tags: [Tags]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/TagUpdate"
+      responses:
+        "200":
+          description: Updated tag
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/Envelope"
+                  - type: object
+                    properties:
+                      data:
+                        $ref: "#/components/schemas/Tag"
+        "404":
+          description: Tag not found
+    delete:
+      summary: Soft-delete tag (sets is_active=false)
+      operationId: deleteTag
+      tags: [Tags]
+      responses:
+        "200":
+          description: Deleted tag
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Envelope"
+        "404":
+          description: Tag not found
+
+  # ─── Transactions ────────────────────────────────────────────────────────────
+
   /api/transactions:
     get:
       summary: List transactions
@@ -974,6 +1177,11 @@ paths:
           schema:
             type: string
             enum: [asc, desc]
+        - in: query
+          name: tags
+          schema:
+            type: string
+          description: Comma-separated tag slugs — OR filter
       responses:
         "200":
           description: Paginated transaction list
@@ -1548,6 +1756,34 @@ paths:
                 $ref: "#/components/schemas/Envelope"
 
   # ─── Transactions extra ──────────────────────────────────────────────────────
+  /api/transactions/bulk-tag:
+    post:
+      summary: Bulk add/remove tags across multiple transactions
+      operationId: bulkTagTransactions
+      tags: [Transactions]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/BulkTagRequest"
+      responses:
+        "200":
+          description: Bulk tag result
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/Envelope"
+                  - type: object
+                    properties:
+                      data:
+                        $ref: "#/components/schemas/BulkTagResult"
+        "400":
+          description: Unknown tags or invalid input
+        "429":
+          description: Rate limit exceeded
+
   /api/transactions/export/csv:
     get:
       summary: Export transactions as CSV (streaming)
@@ -1572,6 +1808,11 @@ paths:
           name: include_balance
           schema:
             type: boolean
+        - in: query
+          name: tags
+          schema:
+            type: string
+          description: Comma-separated tag slugs — OR filter
       responses:
         "200":
           description: CSV stream
@@ -1600,6 +1841,11 @@ paths:
           name: bank_account
           schema:
             type: string
+        - in: query
+          name: tags
+          schema:
+            type: string
+          description: Comma-separated tag slugs — OR filter
       responses:
         "200":
           description: Newline-delimited JSON stream

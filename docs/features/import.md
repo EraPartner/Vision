@@ -3,8 +3,8 @@ title: Feature - CSV Import, Export, Attachments & Deduplication
 type: feature
 status: active
 date: 2026-04-24
-updated: 2026-05-02
-last_modified: 2026-05-02
+updated: 2026-05-08
+last_modified: 2026-05-08
 tags: [feature, import, export, csv, json, deduplication, phase-5a, attachments, phase-c, phase-e, phase-1, phase-12, phase-13, performance, concurrency, import-pipeline, component-split, error-handling, recipient-clusters, multi-select, export-filters, adr-046, category-review]
 aliases: [csv-import, bank-import, bank-statement, deduplication, data-import, streaming-import]
 description: Import transactions from bank CSV files with automatic deduplication, fuzzy/pattern recipient matching, and (ADR-046) per-row category review with optional persist-as-recipient-default.
@@ -176,8 +176,9 @@ Each phase is idempotent at its boundary. On error, the batch is marked `failed`
 - Emit progress events: `{ phase: 'matching', current, total }`
 
 #### 4. **Commit** (`commitBatch`)
-- Insert canonical transactions
-- Insert raw references (link transaction to raw bank data)
+- Insert canonical transactions with per-row SAVEPOINT protection (if insert fails, transaction stays usable for remaining rows)
+- **Defence-in-depth (2026-05-08):** Non-integer `row.id` before SAVEPOINT now increments `errors` counter and skips insertion
+- Insert raw references (link transaction to raw bank data); errors captured and logged per row
 - Return final counts: `{ imported, duplicates, errors }`
 - Emit progress events: `{ phase: 'committing', current, total, imported, duplicates, errors }`
 
@@ -258,6 +259,7 @@ Field-based deduplication for transactions. Uses SHA-256 hash of `date|amount|re
 
 ### 2. Parsing & Normalization
 - CSV parsed with configurable separator
+- **UTF-8 BOM stripping (Bug-Hunt Sweep 2026-05-08):** `splitCsvLines()` in [[apps/node-backend/src/services/importPipeline/adapters/_shared.js]] strips the UTF-8 BOM character (U+FEFF) that Excel and Windows tools prepend to CSV exports. Without stripping, the first header field becomes `﻿field_name` (invalid key), breaking the column mapping. Implementation: Regex `^﻿` applied before line split.
 - Date formats converted to YYYY-MM-DD
 - Amounts normalized (handle different decimal separators)
 - Text normalized (trimming, encoding)

@@ -56,6 +56,7 @@ export function validateInt4Ids(ids) {
  * @param {string|null} [opts.search]       multi-column substring
  * @param {boolean}     [opts.active=true]  require t.is_active = true
  * @param {'income'|'expense'|null} [opts.transactionType] filter by amount sign
+ * @param {string[]|null} [opts.tagSlugs]   OR-match: row must have at least one of these active tags
  * @param {number}      [opts.startParamIdx=1] first $-index to allocate
  */
 export function buildTransactionWhere(opts = {}) {
@@ -73,6 +74,7 @@ export function buildTransactionWhere(opts = {}) {
     search = null,
     active = true,
     transactionType = null,
+    tagSlugs = null,
     startParamIdx = 1,
   } = opts;
 
@@ -166,6 +168,19 @@ export function buildTransactionWhere(opts = {}) {
     )`);
     p++;
     params.push(`%${search}%`);
+  }
+  if (Array.isArray(tagSlugs) && tagSlugs.length > 0) {
+    const safe = tagSlugs.slice(0, MAX_LIST_SIZE).map((s) => String(s).trim()).filter(Boolean);
+    if (safe.length > 0) {
+      clauses.push(`EXISTS (
+        SELECT 1 FROM transaction_tags tt
+        JOIN tags tg ON tg.id = tt.tag_id
+        WHERE tt.transaction_id = t.id
+          AND tg.slug = ANY($${p++}::text[])
+          AND tg.is_active = true
+      )`);
+      params.push(safe);
+    }
   }
 
   return {

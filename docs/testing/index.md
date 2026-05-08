@@ -3,10 +3,10 @@ title: Testing Documentation Index
 type: testing-index
 status: active
 date: 2026-04-30
-updated: 2026-05-02
-last-updated: 2026-05-02
-modified: 2026-05-02
-last_updated_timestamp: 2026-05-02T00:00:00Z
+updated: 2026-05-08
+last-updated: 2026-05-08
+modified: 2026-05-08
+last_updated_timestamp: 2026-05-08T00:00:00Z
 added_phase_f1_backend_drift_detection: 2026-05-02
 added_phase_f2_stale_refetch: 2026-05-02
 added_phase_f3_dialog_completeness: 2026-05-02
@@ -18,6 +18,7 @@ added_api_client_unit_tests: 2026-05-01
 added_dialog_422_validation_tests: 2026-05-03
 added_onboarding_notification_dialog_tests: 2026-05-01
 added_edge_coverage_sweep_e16: 2026-05-02
+added_transaction_tags_test_completion: 2026-05-08
 tags:
   - testing
   - index

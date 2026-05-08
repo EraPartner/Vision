@@ -178,6 +178,7 @@ router.get('/', async (req, res) => {
 router.post('/', async (req, res) => {
   const data = { ...req.body };
   if (!data.bank_account) throw new ValidationError('Missing required field: bank_account');
+  if (data.tags !== undefined && !Array.isArray(data.tags)) throw new ValidationError('tags must be an array of strings');
 
   if (!data.is_loan && (!data.planned_date || data.amount == null)) {
     throw new ValidationError('Missing required fields: planned_date, amount');
@@ -239,6 +240,7 @@ router.patch(
     if (!existing) throw new NotFoundError(`Planned transaction ${id} not found`);
 
     const fields = withoutPatchOnlyReadOnlyFields(req.body);
+    if (fields.tags !== undefined && !Array.isArray(fields.tags)) throw new ValidationError('tags must be an array of strings');
     await Promise.all([
       resolveRecipientIdFromName(fields),
       resolveCategoryIdFromName(fields),
@@ -286,11 +288,13 @@ router.post('/:id/execute', validateIdParam, async (req, res) => {
     }
   }
 
+  const tagIdsToInherit = (existing.tags || []).map((t) => t.id);
   const { duplicate } = await plannedTransactionRepository.executeAndAdvance(
     id,
     executed_transaction_id,
     execDate,
-    updateFields
+    updateFields,
+    tagIdsToInherit,
   );
 
   const current = await plannedTransactionRepository.getById(id);
@@ -350,6 +354,7 @@ function formatPlannedTransaction(row) {
       execution_date: e.execution_date,
       created_at: e.created_at,
     })),
+    tags: row.tags ?? [],
     is_active: row.is_active,
     created_at: row.created_at,
     updated_at: row.updated_at,

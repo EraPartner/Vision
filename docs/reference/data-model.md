@@ -3,8 +3,9 @@ title: Data Model Reference
 type: reference
 status: active
 date: 2026-04-24
-tags: [reference, data-model, entities, database, schema, phase-5a, phase-0, phase-1]
-description: Complete reference for all data entities in Vision — core, portfolio, planning, supporting, and aggregation entities. Includes exchange_rate_cache (Phase 0), aggregation tables (Phase 1), and attachment entity (Phase 5A).
+updated: 2026-05-08
+tags: [reference, data-model, entities, database, schema, phase-5a, phase-0, phase-1, may-2026, tags, tagging, orthogonal-dimension]
+description: Complete reference for all data entities in Vision — core, portfolio, planning, supporting, and aggregation entities. Includes exchange_rate_cache (Phase 0), aggregation tables (Phase 1), attachment entity (Phase 5A), and transaction tags (May 2026).
 aliases: [data model, entities, domain model, schema entities]
 related_code: ["apps/node-backend/src/repositories/", "alembic/versions/"]
 ---
@@ -76,6 +77,55 @@ related_code: ["apps/node-backend/src/repositories/", "alembic/versions/"]
 **Constraint:** UNIQUE(general, detail)
 
 **Related:** [[docs/api/categories|Categories API]], [[docs/features/transactions#categories|Categories Feature]]
+
+---
+
+### Tag (May 2026)
+
+**Purpose:** Freeform labels for transactions and planned transactions as an orthogonal classification dimension.
+
+| Field | Type | Constraints | Description |
+|-------|------|-------------|-------------|
+| `id` | SERIAL | PK | Unique identifier |
+| `slug` | VARCHAR(255) | UNIQUE, NOT NULL | URL-safe identifier (lowercase, hyphens) |
+| `color` | VARCHAR(7) | DEFAULT '#4f46e5' | Hex color code for UI chips |
+| `is_active` | BOOLEAN | DEFAULT true | Soft delete; reactivation preserves history |
+| `created_at` | TIMESTAMPTZ | DEFAULT NOW() | Creation timestamp |
+| `updated_at` | TIMESTAMPTZ | DEFAULT NOW() | Last modification timestamp |
+
+**Related:** [[docs/features/tags|Tags Feature]], [[docs/adr/052-transaction-tags-orthogonal-dimension|ADR-052]]
+
+---
+
+### TransactionTag (May 2026)
+
+**Purpose:** Many-to-many junction for associating tags with transactions.
+
+| Field | Type | Constraints | Description |
+|-------|------|-------------|-------------|
+| `transaction_id` | INTEGER | PK, FK → transactions | Transaction being tagged |
+| `tag_id` | INTEGER | PK, FK → tags | Tag applied to transaction |
+
+**Constraint:** PRIMARY KEY(transaction_id, tag_id), ON DELETE CASCADE
+
+**Related:** [[docs/features/tags|Tags Feature]]
+
+---
+
+### PlannedTransactionTag (May 2026)
+
+**Purpose:** Many-to-many junction for associating tags with planned transactions.
+
+| Field | Type | Constraints | Description |
+|-------|------|-------------|-------------|
+| `planned_transaction_id` | INTEGER | PK, FK → planned_transactions | Planned transaction being tagged |
+| `tag_id` | INTEGER | PK, FK → tags | Tag applied to planned transaction |
+
+**Constraint:** PRIMARY KEY(planned_transaction_id, tag_id), ON DELETE CASCADE
+
+**Note:** Tags are inherited by executed copies of a planned transaction via `executeAndAdvance` operation.
+
+**Related:** [[docs/features/tags|Tags Feature]]
 
 ---
 

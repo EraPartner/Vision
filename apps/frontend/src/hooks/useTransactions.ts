@@ -1,6 +1,6 @@
 import {useMutation, useQuery, useQueryClient} from '@tanstack/react-query';
 import {apiClient} from '@/lib/api';
-import type {TransactionCreate, TransactionUpdate} from '@/types/api';
+import type {BulkTagRequest, TransactionCreate, TransactionUpdate} from '@/types/api';
 import {toast} from 'sonner';
 import {useLanguage} from '@/contexts/LanguageContext';
 
@@ -87,6 +87,24 @@ export function useDeleteTransaction() {
         },
         onError: (error: Error) => {
             toast.error(t('transactions.deleteFailedTitle'), { description: error.message });
+        },
+    });
+}
+
+export function useBulkTagTransactions() {
+    const queryClient = useQueryClient();
+    const { t } = useLanguage();
+
+    return useMutation({
+        mutationFn: (request: BulkTagRequest) => apiClient.bulkTagTransactions(request),
+        onSuccess: () => {
+            queryClient.invalidateQueries({queryKey: ['transactions']});
+            queryClient.invalidateQueries({queryKey: ['transactions-virtual']});
+            queryClient.invalidateQueries({queryKey: ['tags']});
+            toast.success(t('tags.bulkApplied'));
+        },
+        onError: (error: Error) => {
+            toast.error(t('tags.bulkFailed'), { description: error.message });
         },
     });
 }

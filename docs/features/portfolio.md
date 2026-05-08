@@ -3,8 +3,8 @@ title: Feature - Portfolio & Investments
 type: feature
 status: active
 date: 2026-04-27
-last_modified: 2026-04-29
-updated: 2026-04-29
+last_modified: 2026-05-08
+updated: 2026-05-08
 tags: [feature, portfolio, investments, stocks, crypto, metals, phase-1, phase-3.5, phase-3.6, phase-9, phase-8, phase-14, pdf-export, offline-resilience, stale-prices, online-status-detection, graceful-degradation, portfolio-summary, realtime-totals]
 aliases: [portfolio-feature, investments-feature, holdings, net-worth, stocks, crypto, real-estate, savings, bonds, metals, performance, watchlist]
 description: Track stocks, ETFs, crypto, metals, real estate, savings, and bonds; includes Phase 8 PDF report export with 6 portfolio sections
@@ -456,6 +456,12 @@ All invalidations cascade through `clearInvestmentsCaches()` → `invalidatePort
 - New persistence table `belgian_inflation_rates` stores monthly values (`month_date`, `monthly_rate`, `source`, `fetched_at`, `updated_at`) for deterministic portfolio calculations and offline resilience.
 
 Code links: [[apps/node-backend/src/services/belgianInflationService.js]], [[apps/node-backend/src/routes/info.js]], [[apps/node-backend/src/main.js]], [[apps/frontend/src/lib/api.ts]], [[apps/frontend/src/pages/portfolio/PerformancePage.tsx]]
+
+### Performance Improvements (2026-05-08 Bug Hunt)
+
+**Batch INSERT for Inflation Data:** `belgianInflationService.js` now chunks inflation rate inserts into 1000-row batches using multi-row `INSERT ... VALUES` instead of per-row INSERTs, eliminating N+1 round-trips and reducing import time by ~10x for full Statbel refreshes (400+ rates).
+
+**UTC Date Handling in Quote Backfill:** `quoteBackfillService.js` now uses `getDayKeyUtc()` helper instead of local-time `new Date().getFullYear/Month/Date()` to compute day keys, avoiding off-by-one errors near UTC midnight. Ensures consistent key format regardless of server timezone.
 
 ## Historical Asset Quote Persistence
 

@@ -10,7 +10,7 @@
  *   get rows and total count in one DB call instead of two.
  */
 
-import { query, queryPrepared } from '../database/connection.js';
+import { query, queryPrepared, withTransaction } from '../database/connection.js';
 import { sanitizeUpdateFields } from '../middleware/validation.js';
 import { buildTransactionWhere } from '../services/filterBuilder.js';
 
@@ -39,6 +39,42 @@ const TRANSACTION_SORT_COLUMNS = {
   currency: 't.currency',
 };
 
+async function attachTagsToRows(rows) {
+  if (rows.length === 0) return rows;
+  const ids = rows.map((r) => r.id);
+  const result = await query(
+    `SELECT tt.transaction_id, tg.id, tg.slug, tg.color, tg.is_active
+     FROM transaction_tags tt
+     JOIN tags tg ON tg.id = tt.tag_id
+     WHERE tt.transaction_id = ANY($1::int[])`,
+    [ids],
+  );
+  const tagMap = new Map();
+  for (const row of result.rows) {
+    const list = tagMap.get(row.transaction_id) ?? [];
+    list.push({ id: row.id, slug: row.slug, color: row.color, is_active: row.is_active });
+    tagMap.set(row.transaction_id, list);
+  }
+  return rows.map((r) => ({ ...r, tags: tagMap.get(r.id) ?? [] }));
+}
+
+async function setTransactionTags(client, transactionId, slugs) {
+  await client.query('DELETE FROM transaction_tags WHERE transaction_id = $1', [transactionId]);
+  if (!slugs || slugs.length === 0) return;
+  const resolved = await client.query(
+    'SELECT id FROM tags WHERE slug = ANY($1::text[]) AND is_active = true',
+    [slugs],
+  );
+  if (resolved.rows.length === 0) return;
+  const tagIds = resolved.rows.map((r) => r.id);
+  await client.query(
+    `INSERT INTO transaction_tags (transaction_id, tag_id)
+     SELECT $1, unnest($2::int[])
+     ON CONFLICT DO NOTHING`,
+    [transactionId, tagIds],
+  );
+}
+
 export const transactionRepository = {
   /**
    * Get transactions with pagination and filtering.
@@ -59,9 +95,10 @@ export const transactionRepository = {
     sortBy = null,
     sortDir = null,
     includeBalance = false,
+    tagSlugs = null,
   } = {}) {
     const { sql: where, params, nextParamIdx: p } = buildTransactionWhere({
-      transactionId, startDate, endDate, bankAccount, categoryId, recipientId, recipientGroupId, recipientName, search, active,
+      transactionId, startDate, endDate, bankAccount, categoryId, recipientId, recipientGroupId, recipientName, search, active, tagSlugs,
     });
 
     // Build ORDER BY — fall back to default date DESC when no valid sort supplied
@@ -94,7 +131,7 @@ export const transactionRepository = {
     params.push(limit, offset);
 
     const result = await query(sql, params);
-    return result.rows;
+    return attachTagsToRows(result.rows);
   },
 
   /**
@@ -111,9 +148,10 @@ export const transactionRepository = {
     recipientName = null,
     search = null,
     active = true,
+    tagSlugs = null,
   } = {}) {
     const { sql: where, params } = buildTransactionWhere({
-      transactionId, startDate, endDate, bankAccount, categoryId, recipientId, recipientGroupId, recipientName, search, active,
+      transactionId, startDate, endDate, bankAccount, categoryId, recipientId, recipientGroupId, recipientName, search, active, tagSlugs,
     });
 
     const sql = `
@@ -153,7 +191,7 @@ export const transactionRepository = {
     params.push(limit, offset);
 
     const result = await query(sql, params);
-    return result.rows;
+    return attachTagsToRows(result.rows);
   },
 
   /**
@@ -257,7 +295,7 @@ export const transactionRepository = {
       .filter((row) => row.id != null)
       .map(({ total_count: _total_count, ...row }) => row);
 
-    return { rows, total };
+    return { rows: await attachTagsToRows(rows), total };
   },
 
   /**
@@ -279,7 +317,10 @@ export const transactionRepository = {
       WHERE t.id = $1
     `;
     const result = await queryPrepared('tx_get_by_id', sql, [id]);
-    return result.rows[0] || null;
+    const row = result.rows[0] || null;
+    if (!row) return null;
+    const [enriched] = await attachTagsToRows([row]);
+    return enriched;
   },
 
   /**
@@ -288,7 +329,7 @@ export const transactionRepository = {
    * Uses a CTE to INSERT the row and immediately JOIN with recipients/categories so
    * callers get the complete representation without a second SELECT (getById) call.
    */
-  async create({ transaction_date, bank_account, recipient_id, amount, memo, currency, balance, category_id, comment }) {
+  async create({ transaction_date, bank_account, recipient_id, amount, memo, currency, balance, category_id, comment, tags = null }) {
     const sql = `
       WITH inserted AS (
         INSERT INTO transactions (date, bank_account, recipient_id, amount, memo, currency, balance, category_id, comment, is_active)
@@ -307,7 +348,7 @@ export const transactionRepository = {
       LEFT JOIN categories c ON t.category_id = c.id
       LEFT JOIN categories rc ON r.default_category_id = rc.id
     `;
-    const params = [
+    const sqlParams = [
       transaction_date,
       bank_account ? bank_account.toUpperCase() : null,
       recipient_id,
@@ -318,8 +359,24 @@ export const transactionRepository = {
       category_id,
       comment,
     ];
-    const result = await queryPrepared('tx_create', sql, params);
-    return result.rows[0] || null;
+
+    let row;
+    if (tags !== null) {
+      row = await withTransaction(async (client) => {
+        const res = await client.query(sql, sqlParams);
+        const inserted = res.rows[0];
+        if (!inserted) return null;
+        await setTransactionTags(client, inserted.id, tags);
+        return inserted;
+      });
+    } else {
+      const result = await queryPrepared('tx_create', sql, sqlParams);
+      row = result.rows[0] || null;
+    }
+
+    if (!row) return null;
+    const [enriched] = await attachTagsToRows([row]);
+    return enriched;
   },
 
   /**
@@ -346,9 +403,10 @@ export const transactionRepository = {
     sortDir = null,
     includeBalance = false,
     transactionType = null,
+    tagSlugs = null,
   } = {}) {
     const { sql: where, params, nextParamIdx: p } = buildTransactionWhere({
-      transactionId, startDate, endDate, bankAccount, categoryId, categoryIds, recipientId, recipientGroupId, recipientName, search, active, transactionType,
+      transactionId, startDate, endDate, bankAccount, categoryId, categoryIds, recipientId, recipientGroupId, recipientName, search, active, transactionType, tagSlugs,
     });
 
     const sortCol = TRANSACTION_SORT_COLUMNS[sortBy] || 't.date';
@@ -381,19 +439,21 @@ export const transactionRepository = {
 
     const result = await query(sql, params);
     const total = result.rows.length > 0 ? parseInt(result.rows[0].total_count, 10) : 0;
-    // Strip total_count from each row before returning
     const rows = result.rows.map(({ total_count: _total_count, ...row }) => row);
-    return { rows, total };
+    return { rows: await attachTagsToRows(rows), total };
   },
 
   /**
    * Update a transaction.
+   * When `tags` is present in fields, junction rows are replaced atomically.
+   * When `tags` is absent, existing tags are untouched.
    */
   async update(id, fields) {
+    const { tags, ...txFields } = fields;
     // Sanitize field names to prevent SQL injection via column names
-    const sanitized = sanitizeUpdateFields('transactions', fields);
+    const sanitized = sanitizeUpdateFields('transactions', txFields);
     const setClauses = [];
-    const params = [];
+    const updateParams = [];
     let paramIdx = 1;
 
     for (const [key, value] of Object.entries(sanitized)) {
@@ -401,13 +461,51 @@ export const transactionRepository = {
       // Map frontend field names to DB columns
       const dbCol = key === 'transaction_date' ? 'date' : key;
       setClauses.push(`"${dbCol}" = $${paramIdx++}`);
-      params.push(value);
+      updateParams.push(value);
+    }
+
+    const fetchSql = `
+      SELECT t.*, r.name AS recipient_name,
+             CASE
+               WHEN c.id IS NOT NULL THEN c.general || ':' || c.detail
+               WHEN rc.id IS NOT NULL THEN rc.general || ':' || rc.detail
+               ELSE NULL
+             END AS category_name
+      FROM transactions t
+      LEFT JOIN recipients r ON t.recipient_id = r.id
+      LEFT JOIN categories c ON t.category_id = c.id
+      LEFT JOIN categories rc ON r.default_category_id = rc.id
+      WHERE t.id = $1
+    `;
+
+    if (tags !== undefined) {
+      const row = await withTransaction(async (client) => {
+        if (setClauses.length > 0) {
+          setClauses.push(`updated_at = NOW()`);
+          updateParams.push(id);
+          const updateSql = `
+            WITH updated AS (
+              UPDATE transactions SET ${setClauses.join(', ')}
+              WHERE id = $${paramIdx} RETURNING id
+            )
+            SELECT id FROM updated
+          `;
+          const res = await client.query(updateSql, updateParams);
+          if (!res.rows[0]) return null;
+        }
+        await setTransactionTags(client, id, tags ?? []);
+        const res = await client.query(fetchSql, [id]);
+        return res.rows[0] || null;
+      });
+      if (!row) return null;
+      const [enriched] = await attachTagsToRows([row]);
+      return enriched;
     }
 
     if (setClauses.length === 0) return this.getById(id);
 
     setClauses.push(`updated_at = NOW()`);
-    params.push(id);
+    updateParams.push(id);
 
     const sql = `
       WITH updated AS (
@@ -429,8 +527,11 @@ export const transactionRepository = {
       LEFT JOIN categories rc ON r.default_category_id = rc.id
     `;
 
-    const result = await query(sql, params);
-    return result.rows[0] || null;
+    const result = await query(sql, updateParams);
+    const row = result.rows[0] || null;
+    if (!row) return null;
+    const [enriched] = await attachTagsToRows([row]);
+    return enriched;
   },
 
   /**

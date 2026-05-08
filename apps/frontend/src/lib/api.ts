@@ -29,6 +29,7 @@ import * as charts from '@/lib/api/charts';
 import * as market from '@/lib/api/market';
 import * as agg from '@/lib/api/aggregations';
 import * as ai from '@/lib/api/ai';
+import * as tags from '@/lib/api/tags';
 
 export const apiClient = {
     cancelAll: cancelAllRequests,
@@ -186,6 +187,13 @@ export const apiClient = {
     getAggregationAverageVsCurrent: agg.getAggregationAverageVsCurrent,
     getAggregationBankBalances: agg.getAggregationBankBalances,
 
+    // Tags
+    getTags: tags.getTags,
+    createTag: tags.createTag,
+    updateTag: tags.updateTag,
+    deleteTag: tags.deleteTag,
+    bulkTagTransactions: tags.bulkTagTransactions,
+
     // AI chat
     getOllamaStatus: ai.getOllamaStatus,
     getOllamaModels: ai.getOllamaModels,
@@ -199,7 +207,7 @@ export const apiClient = {
 };
 
 // Type re-exports for call sites that import from '@/lib/api'
-export type { Transaction, Category, Recipient, PlannedTransaction, Investment, PortfolioTransaction } from '@/types/api';
+export type { Transaction, Category, Recipient, PlannedTransaction, Investment, PortfolioTransaction, Tag, TagCreate, TagUpdate, BulkTagRequest, BulkTagResult } from '@/types/api';
 export type {
     ChatMessage,
     ChatRole,

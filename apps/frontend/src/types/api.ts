@@ -99,6 +99,7 @@ export interface Transaction {
     category_id?: number;
     category_name?: string; // Category name in 'General:Detail' format (e.g., 'FOOD:GROCERIES')
     comment?: string;
+    tags?: Tag[];
     created_at: string;
     updated_at?: string;
     links: Link[];
@@ -122,6 +123,7 @@ export interface TransactionCreate {
     balance?: number;
     category_id?: number;
     comment?: string;
+    tags?: string[];
 }
 
 export interface TransactionUpdate {
@@ -137,6 +139,7 @@ export interface TransactionUpdate {
     category_name?: string;
     comment?: string;
     is_active?: boolean;
+    tags?: string[];
 }
 
 // ==================== Planned Transaction Types ====================
@@ -191,6 +194,7 @@ export interface PlannedTransaction {
     executed_transaction_id?: number;
     execution_count: number;
     executions?: PlannedTransactionExecution[];
+    tags?: Tag[];
     is_active: boolean;
     created_at: string;
     updated_at?: string;
@@ -224,6 +228,7 @@ export interface PlannedTransactionCreate {
     loan_term_months?: number;
     loan_start_date?: string;
     loan_payment_day?: number;
+    tags?: string[];
 }
 
 export interface PlannedTransactionUpdate {
@@ -249,6 +254,7 @@ export interface PlannedTransactionUpdate {
     loan_payment_day?: number | null;
     is_executed?: boolean;
     is_active?: boolean;
+    tags?: string[];
 }
 
 export interface PlannedTransactionExecuteRequest {
@@ -395,6 +401,46 @@ export interface PortfolioTransactionCreate {
     is_recurring?: boolean;
     recurrence_interval?: RecurrenceInterval;
     recurrence_end_date?: string;
+}
+
+// ==================== Tag Types ====================
+
+export interface Tag {
+    id: number;
+    slug: string;
+    color: string | null;
+    is_active: boolean;
+    created_at: string;
+    updated_at: string;
+}
+
+export interface TagListResponse {
+    items: Tag[];
+    total: number;
+    limit: number;
+    offset: number;
+}
+
+export interface TagCreate {
+    slug: string;
+    color?: string;
+}
+
+export interface TagUpdate {
+    color?: string;
+    is_active?: boolean;
+}
+
+export interface BulkTagRequest {
+    transaction_ids: number[];
+    add_slugs?: string[];
+    remove_slugs?: string[];
+}
+
+export interface BulkTagResult {
+    added: number;
+    removed: number;
+    transactions_affected: number;
 }
 
 // ==================== Other Types ====================

@@ -129,6 +129,7 @@ Key behaviors:
 
 - [[docs/features/recipients|Recipients]] — Recipient default categories
 - [[docs/features/transactions|Transactions]] — Transaction categorization
+- [[docs/features/tags|Tags]] — Orthogonal freeform tagging (cross-cutting groupings)
 - [[docs/features/statistics|Statistics]] — Category-based spending reports
 - [[docs/features/import|CSV Import]] — Category assignment during import review (ADR-046)
 

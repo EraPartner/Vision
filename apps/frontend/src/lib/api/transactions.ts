@@ -27,6 +27,7 @@ export async function getTransactions(params?: {
     sort_by?: string;
     sort_dir?: 'asc' | 'desc';
     transaction_type?: 'income' | 'expense';
+    tags?: string;
 }): Promise<TransactionsListResponse> {
     const res = await requestWithQuery<TransactionsListResponse>('/api/transactions', params);
     return {

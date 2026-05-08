@@ -3,8 +3,9 @@ title: Architecture Diagrams
 type: architecture-index
 status: active
 date: 2026-04-27
-tags: [architecture, index, uml, plantuml, diagrams, phase-1, phase-2, phase-3, phase-e, frontend, api-client, openapi, domain-split, repository-split, statistics-refactoring, component-decomposition, refactoring, bug-fixes, csv, formula-injection, parallelization, deployment, container-hardening, backup, restore, bundle, electron]
-description: Index of all UML diagrams for the Vision project - backend, frontend, system, and sequence diagrams; includes Phase 1+2 backup bundle format and IPC handlers, Phase 2 API client domain split, OpenAPI architecture, April 2026 Statistics page refactoring, Phase E component decomposition, April 25 CSV security & parallelization improvements, and container hardening
+updated: 2026-05-08
+tags: [architecture, index, uml, plantuml, diagrams, phase-1, phase-2, phase-3, phase-e, frontend, api-client, openapi, domain-split, repository-split, statistics-refactoring, component-decomposition, refactoring, bug-fixes, csv, formula-injection, parallelization, deployment, container-hardening, backup, restore, bundle, electron, tags, tagging, orthogonal-dimension, may-2026]
+description: Index of all UML diagrams for the Vision project - backend, frontend, system, and sequence diagrams; includes Phase 1+2 backup bundle format and IPC handlers, Phase 2 API client domain split, OpenAPI architecture, April 2026 Statistics page refactoring, Phase E component decomposition, April 25 CSV security & parallelization improvements, container hardening, and May 2026 transaction tags orthogonal dimension
 aliases: [architecture, diagrams, UML, system design, backup architecture, electron IPC]
 ---
 
@@ -29,7 +30,7 @@ Located in `docs/diagrams/`:
 
 | Diagram | Description | File |
 |---------|-------------|------|
-| Domain Model | Core entities (Transaction, Recipient, Category, etc.) | `backend-domain-model.puml` |
+| Domain Model | Core entities (Transaction, Recipient, Category, Tag, etc.) with relationships | `backend-domain-model.puml` |
 | Repository Layer | Data access repositories | `backend-repository-layer.puml` |
 | Service Layer | Business logic services | `backend-service-layer.puml` |
 | API Layer | Express routes and middleware | `backend-api-layer.puml` |

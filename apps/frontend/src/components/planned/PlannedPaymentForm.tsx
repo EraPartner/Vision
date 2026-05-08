@@ -13,6 +13,7 @@ import { useAppSettings } from "@/contexts/AppSettingsContext";
 import { RecipientCombobox } from "@/components/shared/RecipientCombobox";
 import { CategoryCombobox } from "@/components/shared/CategoryCombobox";
 import { DatePicker } from "@/components/shared/DatePicker";
+import { TagInput } from "@/components/shared/TagInput";
 import { parseLocalDateFromYmd, toYmd } from "@/components/shared/dateUtils";
 
 type Frequency = PlannedPayment["frequency"];
@@ -46,6 +47,7 @@ export default function PlannedPaymentForm({ open, onOpenChange, onSubmit, initi
   const [recipientId, setRecipientId] = useState<number | undefined>(initial?.recipient_id);
   const [categoryId, setCategoryId] = useState<number | undefined>(initial?.category_id);
   const [bankAccount, setBankAccount] = useState(initial?.bank_account ?? "");
+  const [tags, setTags] = useState<string[]>(initial?.tags ?? []);
   const [notes, setNotes] = useState(initial?.notes ?? "");
   const [url, setUrl] = useState(initial?.url ?? "");
   const [portalContainer, setPortalContainer] = useState<HTMLDivElement | null>(null);
@@ -98,6 +100,7 @@ export default function PlannedPaymentForm({ open, onOpenChange, onSubmit, initi
       recipient_id: recipientId || undefined,
       category_id: categoryId,
       bank_account: bankAccount || undefined,
+      tags: tags.length > 0 ? tags : undefined,
       notes: notes || undefined,
       ...(!isLoan && isRecurring && {
         frequency,
@@ -187,6 +190,12 @@ export default function PlannedPaymentForm({ open, onOpenChange, onSubmit, initi
                 disabled={loading}
                 portalContainer={portalContainer}
               />
+            </div>
+
+            {/* Tags */}
+            <div className="grid gap-1.5">
+              <Label>{t('txPage.field.tags')}</Label>
+              <TagInput value={tags} onChange={setTags} />
             </div>
 
             {/* Bank account */}

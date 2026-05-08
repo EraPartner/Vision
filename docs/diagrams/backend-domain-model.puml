@@ -108,6 +108,25 @@ package "Core Entities" {
     +created_at: timestamptz
     +updated_at: timestamptz
   }
+
+  class Tag {
+    +id: integer
+    +slug: varchar(255) <<UNIQUE>>
+    +color: varchar(7)
+    +is_active: boolean
+    +created_at: timestamptz
+    +updated_at: timestamptz
+  }
+
+  class TransactionTag {
+    +transaction_id: integer <<FK, PK>>
+    +tag_id: integer <<FK, PK>>
+  }
+
+  class PlannedTransactionTag {
+    +planned_transaction_id: integer <<FK, PK>>
+    +tag_id: integer <<FK, PK>>
+  }
 }
 
 package "Split Entities" {
@@ -235,6 +254,13 @@ PlannedTransaction "*" --> "1" Category : belongs to
 Category "1" <-- "*" Recipient : default_category
 
 Transaction "1" --> "0..1" RecipientBankAccount : uses
+
+Transaction "*" o-- "*" Tag : has (via TransactionTag)
+PlannedTransaction "*" o-- "*" Tag : has (via PlannedTransactionTag)
+TransactionTag "1" --> "1" Transaction : for
+TransactionTag "1" --> "1" Tag : is
+PlannedTransactionTag "1" --> "1" PlannedTransaction : for
+PlannedTransactionTag "1" --> "1" Tag : is
 
 PlannedTransaction "1" --> "0..1" Recipient : for
 PlannedTransaction "1" --> "0..1" Category : for

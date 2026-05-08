@@ -45,6 +45,7 @@ export interface PlannedPayment {
   executed_transaction_id?: number;
   execution_count?: number;
   executions?: PlannedTransactionExecution[];
+  tags?: string[];
   is_active: boolean;
   created_at: string;
 }
@@ -107,6 +108,7 @@ function mapFromAPI(pt: PlannedTransaction): PlannedPayment {
     category_id: pt.category_id,
     bank_account: pt.bank_account,
     notes: pt.comment,
+    tags: pt.tags?.map((tag) => tag.slug) ?? [],
     is_active: pt.is_active,
     is_executed: pt.is_executed,
     last_executed_date: pt.last_executed_date,
@@ -153,6 +155,7 @@ function mapToCreateAPI(payment: Omit<PlannedPayment, "id" | "created_at">): Pla
     loan_term_months: payment.loan_term_months,
     loan_start_date: payment.loan_start_date,
     loan_payment_day: payment.loan_payment_day,
+    tags: payment.tags,
   };
 }
 
@@ -178,6 +181,7 @@ function mapToUpdateAPI(updates: Partial<PlannedPayment>): PlannedTransactionUpd
   if (updates.loan_start_date !== undefined) result.loan_start_date = updates.loan_start_date;
   if (updates.loan_payment_day !== undefined) result.loan_payment_day = updates.loan_payment_day;
   if (updates.is_active !== undefined) result.is_active = updates.is_active;
+  if (updates.tags !== undefined) result.tags = updates.tags;
 
   // Handle recurrence_pattern
   if (updates.frequency !== undefined || updates.custom_interval_days !== undefined) {
