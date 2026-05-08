@@ -4,6 +4,7 @@ import {
   formatCurrency,
   formatCurrencyCompact,
   getCurrencyFormatDefaults,
+  parseLocaleNumber,
 } from "./currency";
 
 describe("currency format defaults", () => {
@@ -93,5 +94,58 @@ describe("formatCurrencyCompact", () => {
   test("works with GBP locale en-US", () => {
     const result = formatCurrencyCompact(1_000_000, "GBP", "en-US", 2);
     expect(result.isCompact).toBe(true);
+  });
+});
+
+describe("parseLocaleNumber", () => {
+  test("returns the input unchanged when given a number", () => {
+    expect(parseLocaleNumber(42.5)).toBe(42.5);
+    expect(parseLocaleNumber(-7)).toBe(-7);
+    expect(parseLocaleNumber(0)).toBe(0);
+  });
+
+  test("parses plain US-format decimals", () => {
+    expect(parseLocaleNumber("42.50")).toBe(42.5);
+    expect(parseLocaleNumber("0.01")).toBe(0.01);
+  });
+
+  test("parses EU-format comma decimal (1,50 → 1.5)", () => {
+    expect(parseLocaleNumber("1,50")).toBe(1.5);
+    expect(parseLocaleNumber("0,99")).toBe(0.99);
+  });
+
+  test("parses US thousands+decimal (1,500.25 → 1500.25)", () => {
+    expect(parseLocaleNumber("1,500.25")).toBe(1500.25);
+    expect(parseLocaleNumber("12,345.67")).toBe(12345.67);
+  });
+
+  test("parses EU thousands+decimal (1.234,56 → 1234.56)", () => {
+    expect(parseLocaleNumber("1.234,56")).toBe(1234.56);
+    expect(parseLocaleNumber("12.345,67")).toBe(12345.67);
+  });
+
+  test("treats double-comma + 3-digit tail as US thousands separator (12,345,500 → 12345500)", () => {
+    expect(parseLocaleNumber("12,345,500")).toBe(12345500);
+  });
+
+  test("strips currency symbols and whitespace", () => {
+    expect(parseLocaleNumber("$ 42.50 ")).toBe(42.5);
+    expect(parseLocaleNumber("€1,50")).toBe(1.5);
+  });
+
+  test("parses parenthesised negatives", () => {
+    expect(parseLocaleNumber("(42.50)")).toBe(-42.5);
+  });
+
+  test("parses leading-sign values", () => {
+    expect(parseLocaleNumber("-42.50")).toBe(-42.5);
+    expect(parseLocaleNumber("+42.50")).toBe(42.5);
+  });
+
+  test("returns NaN for non-numeric input", () => {
+    expect(Number.isNaN(parseLocaleNumber(""))).toBe(true);
+    expect(Number.isNaN(parseLocaleNumber("abc"))).toBe(true);
+    expect(Number.isNaN(parseLocaleNumber(null))).toBe(true);
+    expect(Number.isNaN(parseLocaleNumber(undefined))).toBe(true);
   });
 });
