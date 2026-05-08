@@ -155,6 +155,11 @@ export const defaultHandlers = [
     http.get(`${API_BASE}/api/recipients`, () =>
         ok({ items: [], total: 0, limit: 200, offset: 0, links: [] }),
     ),
+    // Tags API — used by TagPicker inside dialogs/forms across the app.
+    // Returning an empty list keeps async fetches from leaking past test
+    // teardown and avoids "intercepted a request without a matching request
+    // handler" warnings flooding the test output.
+    http.get(`${API_BASE}/api/tags`, () => ok([])),
     http.get(`${API_BASE}/api/transactions`, () =>
         ok({ items: [], total: 0, limit: 50, offset: 0, links: [] }),
     ),
