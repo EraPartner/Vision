@@ -3,11 +3,11 @@ title: Transactions
 type: feature
 status: active
 date: 2026-04-16
-updated: 2026-04-28
-tags: [feature, transactions, finance, phase-q, recipient-groups]
+updated: 2026-05-08
+tags: [feature, transactions, finance, phase-q, recipient-groups, bulk-actions]
 aliases: [transactions-feature, income, expenses, financial-records, money-tracking]
-description: Core transaction management - income, expenses, and tracking financial activities. Phase Q adds recipient-group filtering for linked-recipient transaction discovery.
-related_code: ["apps/node-backend/src/routes/transactions.js", "apps/node-backend/src/repositories/transactionRepository.js", "apps/node-backend/src/services/filterBuilder.js", "apps/frontend/src/features/transactions/", "apps/frontend/src/pages/TransactionsPage.tsx"]
+description: Core transaction management - income, expenses, and tracking financial activities. Phase Q adds recipient-group filtering for linked-recipient transaction discovery. Bulk operations enable atomic multi-row delete, recategorize, reassign, activate/deactivate, export, and tag.
+related_code: ["apps/node-backend/src/routes/transactions.js", "apps/node-backend/src/repositories/transactionRepository.js", "apps/node-backend/src/services/filterBuilder.js", "apps/node-backend/src/services/bulkSelection.js", "apps/frontend/src/features/transactions/", "apps/frontend/src/pages/TransactionsPage.tsx"]
 ---
 
 # Transactions
@@ -248,9 +248,24 @@ Heavy operations (export, batch updates) are rate-limited to protect database pe
 
 ---
 
+## Bulk Operations
+
+Transactions support multi-row selection and bulk operations for efficiency:
+- **Bulk delete** — Permanently delete many rows at once
+- **Bulk recategorize** — Apply a new category to many rows
+- **Bulk reassign recipient** — Change payee/payer for many rows
+- **Bulk activate/deactivate** — Toggle `is_active` status across a selection
+- **Bulk export** — Stream selected transactions as CSV or NDJSON
+- **Bulk tag** — Apply or remove tags from many rows simultaneously
+
+See [[docs/features/bulk-actions]] for full details on selection modes (IDs vs. filter), UI patterns, and atomic guarantees.
+
+---
+
 ## Related Documentation
 
 - [[docs/api/transactions]] - Transaction API Reference
+- [[docs/features/bulk-actions]] - Bulk Transaction Operations
 - [[docs/features/tags]] - Transaction Tags Feature
 - [[docs/api/categories]] - Categories API
 - [[docs/api/recipients]] - Recipients API

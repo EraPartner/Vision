@@ -1,0 +1,79 @@
+import { useState } from "react";
+import { Button } from "@/components/ui/button";
+import {
+    Dialog,
+    DialogContent,
+    DialogDescription,
+    DialogFooter,
+    DialogHeader,
+    DialogTitle,
+} from "@/components/ui/dialog";
+import { TagFilterCombobox } from "@/components/shared/TagFilterCombobox";
+import { useLanguage } from "@/contexts/LanguageContext";
+
+interface BulkTagDialogProps {
+    open: boolean;
+    selectedCount: number;
+    onOpenChange: (open: boolean) => void;
+    onApply: (addSlugs: string[], removeSlugs: string[]) => void;
+    pending?: boolean;
+}
+
+export function BulkTagDialog({
+    open,
+    selectedCount,
+    onOpenChange,
+    onApply,
+    pending,
+}: BulkTagDialogProps) {
+    const { t } = useLanguage();
+    const [addSlugs, setAddSlugs] = useState<string[]>([]);
+    const [removeSlugs, setRemoveSlugs] = useState<string[]>([]);
+
+    function reset() {
+        setAddSlugs([]);
+        setRemoveSlugs([]);
+    }
+
+    function handleApply() {
+        if (addSlugs.length === 0 && removeSlugs.length === 0) return;
+        onApply(addSlugs, removeSlugs);
+        reset();
+    }
+
+    return (
+        <Dialog open={open} onOpenChange={(v) => { if (!v) reset(); onOpenChange(v); }}>
+            <DialogContent>
+                <DialogHeader>
+                    <DialogTitle>{t('txPage.bulk.tagTitle', { n: selectedCount })}</DialogTitle>
+                    <DialogDescription>{t('txPage.bulk.tagDesc')}</DialogDescription>
+                </DialogHeader>
+                <div className="py-2 space-y-3">
+                    <div className="space-y-1">
+                        <label className="text-xs font-medium text-muted-foreground">
+                            {t('txPage.bulk.tagAdd')}
+                        </label>
+                        <TagFilterCombobox value={addSlugs} onChange={setAddSlugs} className="w-full" />
+                    </div>
+                    <div className="space-y-1">
+                        <label className="text-xs font-medium text-muted-foreground">
+                            {t('txPage.bulk.tagRemove')}
+                        </label>
+                        <TagFilterCombobox value={removeSlugs} onChange={setRemoveSlugs} className="w-full" />
+                    </div>
+                </div>
+                <DialogFooter className="gap-2">
+                    <Button variant="ghost" onClick={() => onOpenChange(false)} disabled={pending}>
+                        {t('common.cancel')}
+                    </Button>
+                    <Button
+                        onClick={handleApply}
+                        disabled={pending || (addSlugs.length === 0 && removeSlugs.length === 0)}
+                    >
+                        {pending ? t('common.applying') : t('common.apply')}
+                    </Button>
+                </DialogFooter>
+            </DialogContent>
+        </Dialog>
+    );
+}

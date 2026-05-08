@@ -1,4 +1,4 @@
-import { useState, useCallback } from "react";
+import { useState, useCallback, useEffect, useMemo } from "react";
 import { useSearchParams } from "react-router-dom";
 import { Receipt } from "lucide-react";
 import { useLanguage } from "@/contexts/LanguageContext";
@@ -7,14 +7,16 @@ import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { PageHeader } from "@/components/shared/PageHeader";
 import { PageError } from "@/components/shared/PageError";
-import { useUpdateTransaction, useDeleteTransaction, useBulkTagTransactions } from "@/hooks/useTransactions";
+import { useUpdateTransaction, useDeleteTransaction } from "@/hooks/useTransactions";
 import { useConfirmDialog } from "@/hooks/useConfirmDialog";
 import { useTransactionListData } from "@/features/transactions/hooks/useTransactionListData";
 import { FilterBanner } from "@/features/transactions/components/FilterBanner";
 import { TableActions } from "@/features/transactions/components/TableActions";
 import { TransactionsTable } from "@/features/transactions/components/TransactionsTable";
 import { TransactionInfoDialog } from "@/features/transactions/components/TransactionInfoDialog";
+import { BulkActionsBar, type BulkSelectionMode } from "@/features/transactions/components/bulk/BulkActionsBar";
 import type { TableTransaction, InfoEditableField } from "@/features/transactions/types";
+import type { BulkTransactionFilter } from "@/types/api";
 
 export default function TransactionsPage() {
     const { t } = useLanguage();
@@ -71,8 +73,42 @@ export default function TransactionsPage() {
 
     const updateMutation = useUpdateTransaction();
     const deleteMutation = useDeleteTransaction();
-    const bulkTagMutation = useBulkTagTransactions();
     const { confirm, ConfirmDialog } = useConfirmDialog();
+
+    const [selectedIds, setSelectedIds] = useState<Set<number>>(new Set());
+    const [selectionMode, setSelectionMode] = useState<BulkSelectionMode>('ids');
+
+    const currentFilter = useMemo<BulkTransactionFilter>(() => ({
+        transaction_id: transactionIdFilter,
+        recipient_id: recipientIdFilter,
+        category_id: categoryIdFilter,
+        category_ids: categoryIdsFilter,
+        start_date: startDateFilter,
+        end_date: endDateFilter,
+        transaction_type: transactionTypeFilter,
+        tags: tagsFilter,
+        search: search || undefined,
+        active: !showAll,
+    }), [
+        transactionIdFilter,
+        recipientIdFilter,
+        categoryIdFilter,
+        categoryIdsFilter,
+        startDateFilter,
+        endDateFilter,
+        transactionTypeFilter,
+        tagsFilter,
+        search,
+        showAll,
+    ]);
+
+    useEffect(() => {
+        // Clear selection whenever the filter set changes — stale ids could no
+        // longer be in the visible list and "select all matching" would refer to
+        // a different cohort.
+        setSelectedIds(new Set());
+        setSelectionMode('ids');
+    }, [currentFilter]);
 
     const applyTransactionLocalPatch = useCallback((transactionId: number, patch: Record<string, unknown>) => {
         setAllItems(prev => prev.map((item) => {
@@ -322,12 +358,24 @@ export default function TransactionsPage() {
                     onSelectRecipient={handleSelectRecipient}
                     cancelEditingRef={cancelTableEditingRef}
                     onEditingChange={setEditing}
-                    actions={<TableActions showAll={showAll} onToggleShowAll={() => setShowAll(!showAll)} />}
+                    selectedIds={selectedIds}
+                    onSelectionChange={setSelectedIds}
+                    actions={(
+                        <>
+                            <BulkActionsBar
+                                selectedIds={selectedIds}
+                                selectionMode={selectionMode}
+                                totalMatching={totalItems}
+                                visibleItemCount={allItems.length}
+                                filter={currentFilter}
+                                onClearSelection={() => { setSelectedIds(new Set()); setSelectionMode('ids'); }}
+                                onPromoteToFilterMode={() => setSelectionMode('filter')}
+                            />
+                            <TableActions showAll={showAll} onToggleShowAll={() => setShowAll(!showAll)} />
+                        </>
+                    )}
                     updatePending={updateMutation.isPending}
                     deletePending={deleteMutation.isPending}
-                    onBulkTag={(ids, addSlugs, removeSlugs) => {
-                        bulkTagMutation.mutate({ transaction_ids: ids, add_slugs: addSlugs, remove_slugs: removeSlugs });
-                    }}
                 />
             </div>
             <ConfirmDialog />

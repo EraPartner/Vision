@@ -1,6 +1,13 @@
 import {useMutation, useQuery, useQueryClient} from '@tanstack/react-query';
 import {apiClient} from '@/lib/api';
-import type {BulkTagRequest, TransactionCreate, TransactionUpdate} from '@/types/api';
+import type {
+    BulkExportRequest,
+    BulkSelectionRequest,
+    BulkTagRequest,
+    BulkUpdateRequest,
+    TransactionCreate,
+    TransactionUpdate,
+} from '@/types/api';
 import {toast} from 'sonner';
 import {useLanguage} from '@/contexts/LanguageContext';
 
@@ -107,4 +114,74 @@ export function useBulkTagTransactions() {
             toast.error(t('tags.bulkFailed'), { description: error.message });
         },
     });
+}
+
+function invalidateTransactionViews(queryClient: ReturnType<typeof useQueryClient>) {
+    queryClient.invalidateQueries({ queryKey: ['transactions'] });
+    queryClient.invalidateQueries({ queryKey: ['transactions-virtual'] });
+    queryClient.invalidateQueries({ queryKey: ['monthlySummary'] });
+    queryClient.invalidateQueries({ queryKey: ['stats'] });
+}
+
+export function useBulkDeleteTransactions() {
+    const queryClient = useQueryClient();
+    const { t } = useLanguage();
+
+    return useMutation({
+        mutationFn: (request: BulkSelectionRequest) => apiClient.bulkDeleteTransactions(request),
+        onSuccess: (result) => {
+            invalidateTransactionViews(queryClient);
+            toast.success(t('txPage.bulk.deleted', { n: result.deleted }));
+        },
+        onError: (error: Error) => {
+            toast.error(t('txPage.bulk.failed'), { description: error.message });
+        },
+    });
+}
+
+export function useBulkUpdateTransactions() {
+    const queryClient = useQueryClient();
+    const { t } = useLanguage();
+
+    return useMutation({
+        mutationFn: (request: BulkUpdateRequest) => apiClient.bulkUpdateTransactions(request),
+        onSuccess: (result) => {
+            invalidateTransactionViews(queryClient);
+            queryClient.invalidateQueries({ queryKey: ['categories'] });
+            queryClient.invalidateQueries({ queryKey: ['recipients'] });
+            toast.success(t('txPage.bulk.updated', { n: result.updated }));
+        },
+        onError: (error: Error) => {
+            toast.error(t('txPage.bulk.failed'), { description: error.message });
+        },
+    });
+}
+
+export function useBulkExportTransactions() {
+    const { t } = useLanguage();
+
+    return useMutation({
+        mutationFn: (request: BulkExportRequest) => apiClient.bulkExportTransactions(request),
+        onSuccess: (blob, request) => {
+            const ext = request.format === 'csv' ? 'csv' : 'ndjson';
+            const stamp = new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19);
+            const filename = `transactions_export_${stamp}.${ext}`;
+            triggerBlobDownload(blob, filename);
+            toast.success(t('txPage.bulk.exported'));
+        },
+        onError: (error: Error) => {
+            toast.error(t('txPage.bulk.failed'), { description: error.message });
+        },
+    });
+}
+
+function triggerBlobDownload(blob: Blob, filename: string): void {
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = filename;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    URL.revokeObjectURL(url);
 }

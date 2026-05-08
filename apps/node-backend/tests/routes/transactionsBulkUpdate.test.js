@@ -1,0 +1,243 @@
+/**
+ * POST /bulk-update — field validation, FK pre-checks, single transaction.
+ */
+import { describe, it, expect, vi, beforeEach } from 'vitest';
+
+const routeHandlers = {};
+const mockRouter = {
+  get: vi.fn((path, ...handlers) => { routeHandlers[`get:${path}`] = handlers[handlers.length - 1]; }),
+  post: vi.fn((path, ...handlers) => { routeHandlers[`post:${path}`] = handlers[handlers.length - 1]; }),
+  patch: vi.fn((path, ...handlers) => { routeHandlers[`patch:${path}`] = handlers[handlers.length - 1]; }),
+  delete: vi.fn((path, ...handlers) => { routeHandlers[`delete:${path}`] = handlers[handlers.length - 1]; }),
+  use: vi.fn(),
+};
+
+vi.mock('express', () => ({
+  default: { Router: () => mockRouter },
+  Router: () => mockRouter,
+}));
+
+vi.mock('../../src/repositories/transactionRepository.js', () => ({
+  default: {
+    getAllWithCount: vi.fn(),
+    getUncategorisedWithCount: vi.fn(),
+    getById: vi.fn(),
+    create: vi.fn(),
+    update: vi.fn(),
+    hardDelete: vi.fn(),
+  },
+}));
+
+vi.mock('../../src/services/deduplication.js', () => ({
+  isManualDuplicate: vi.fn(async () => ({ isDuplicate: false })),
+  recordManualRawTransaction: vi.fn(async () => undefined),
+}));
+
+vi.mock('../../src/config/logger.js', () => ({
+  logger: { info: vi.fn(), error: vi.fn(), warn: vi.fn(), debug: vi.fn() },
+}));
+
+vi.mock('../../src/services/materializedViewService.js', () => ({
+  scheduleRefresh: vi.fn(),
+}));
+
+vi.mock('../../src/services/currency/currencyConversionService.js', () => ({
+  convertRowsToEur: vi.fn(async (rows) => rows),
+}));
+
+vi.mock('../../src/database/connection.js', () => {
+  const getClient = vi.fn();
+  return {
+    query: vi.fn(),
+    getClient,
+    withTransaction: vi.fn(async (fn) => {
+      const client = await getClient();
+      try {
+        await client.query('BEGIN');
+        const result = await fn(client);
+        await client.query('COMMIT');
+        return result;
+      } catch (err) {
+        try { await client.query('ROLLBACK'); } catch {}
+        throw err;
+      } finally {
+        client.release();
+      }
+    }),
+  };
+});
+
+await import('../../src/routes/transactions.js');
+
+import { getClient, query as dbQuery } from '../../src/database/connection.js';
+import { scheduleRefresh } from '../../src/services/materializedViewService.js';
+
+const handler = routeHandlers['post:/bulk-update'];
+
+function mockResponse() {
+  const res = { json: vi.fn(), status: vi.fn(), headersSent: false };
+  res.status.mockReturnValue(res);
+  res.ok = (data) => res.json({ ok: true, data });
+  return res;
+}
+
+async function callHandler(req, res) {
+  try {
+    await handler(req, res);
+  } catch (err) {
+    const status = err.status ?? 500;
+    res.status(status).json({ ok: false, error: { code: err.code ?? 'INTERNAL_SERVER_ERROR', message: err.message } });
+  }
+}
+
+describe('POST /bulk-update — field validation', () => {
+  beforeEach(() => vi.clearAllMocks());
+
+  it('rejects when fields object is missing', async () => {
+    const res = mockResponse();
+    await callHandler({ body: { ids: [1] } }, res);
+    expect(res.status).toHaveBeenCalledWith(400);
+  });
+
+  it('rejects when no recognized field is set', async () => {
+    const res = mockResponse();
+    await callHandler({ body: { ids: [1], fields: { foo: 1 } } }, res);
+    expect(res.status).toHaveBeenCalledWith(400);
+    expect(res.json.mock.calls[0][0].error.message).toMatch(/at least one/i);
+  });
+
+  it('rejects non-integer category_id', async () => {
+    const res = mockResponse();
+    await callHandler({ body: { ids: [1], fields: { category_id: 'abc' } } }, res);
+    expect(res.status).toHaveBeenCalledWith(400);
+  });
+
+  it('accepts category_id = null (uncategorize)', async () => {
+    const clientQuery = vi.fn()
+      .mockResolvedValueOnce({})
+      .mockResolvedValueOnce({ rows: [{ id: 1 }] })
+      .mockResolvedValueOnce({});
+    const release = vi.fn();
+    getClient.mockResolvedValue({ query: clientQuery, release });
+
+    const res = mockResponse();
+    await callHandler({ body: { ids: [1], fields: { category_id: null } } }, res);
+
+    expect(res.json.mock.calls[0][0].data.updated).toBe(1);
+    const updateCall = clientQuery.mock.calls.find(([sql]) => sql.includes('UPDATE transactions'));
+    expect(updateCall[0]).toMatch(/category_id = \$2/);
+    expect(updateCall[1]).toEqual([[1], null]);
+  });
+
+  it('rejects null recipient_id (column is NOT NULL)', async () => {
+    const res = mockResponse();
+    await callHandler({ body: { ids: [1], fields: { recipient_id: null } } }, res);
+    expect(res.status).toHaveBeenCalledWith(400);
+  });
+
+  it('rejects non-boolean is_active', async () => {
+    const res = mockResponse();
+    await callHandler({ body: { ids: [1], fields: { is_active: 'true' } } }, res);
+    expect(res.status).toHaveBeenCalledWith(400);
+  });
+});
+
+describe('POST /bulk-update — FK pre-checks', () => {
+  beforeEach(() => vi.clearAllMocks());
+
+  it('returns 400 when category does not exist', async () => {
+    dbQuery.mockResolvedValueOnce({ rows: [] }); // category lookup
+    const res = mockResponse();
+    await callHandler({ body: { ids: [1], fields: { category_id: 999 } } }, res);
+    expect(res.status).toHaveBeenCalledWith(400);
+    expect(getClient).not.toHaveBeenCalled();
+  });
+
+  it('returns 400 when recipient does not exist', async () => {
+    dbQuery.mockResolvedValueOnce({ rows: [] }); // recipient lookup
+    const res = mockResponse();
+    await callHandler({ body: { ids: [1], fields: { recipient_id: 999 } } }, res);
+    expect(res.status).toHaveBeenCalledWith(400);
+    expect(getClient).not.toHaveBeenCalled();
+  });
+});
+
+describe('POST /bulk-update — success paths', () => {
+  beforeEach(() => vi.clearAllMocks());
+
+  it('updates a single field and schedules a refresh', async () => {
+    dbQuery.mockResolvedValueOnce({ rows: [{ id: 7 }] }); // category exists
+    const clientQuery = vi.fn()
+      .mockResolvedValueOnce({})
+      .mockResolvedValueOnce({ rows: [{ id: 1 }, { id: 2 }] })
+      .mockResolvedValueOnce({});
+    const release = vi.fn();
+    getClient.mockResolvedValue({ query: clientQuery, release });
+
+    const res = mockResponse();
+    await callHandler({ body: { ids: [1, 2], fields: { category_id: 7 } } }, res);
+
+    expect(res.json.mock.calls[0][0].data.updated).toBe(2);
+    expect(scheduleRefresh).toHaveBeenCalledTimes(1);
+  });
+
+  it('updates multiple fields in one statement', async () => {
+    dbQuery
+      .mockResolvedValueOnce({ rows: [{ id: 7 }] }) // category exists
+      .mockResolvedValueOnce({ rows: [{ id: 99 }] }); // recipient exists
+    const clientQuery = vi.fn()
+      .mockResolvedValueOnce({})
+      .mockResolvedValueOnce({ rows: [{ id: 5 }] })
+      .mockResolvedValueOnce({});
+    const release = vi.fn();
+    getClient.mockResolvedValue({ query: clientQuery, release });
+
+    const res = mockResponse();
+    await callHandler({
+      body: {
+        ids: [5],
+        fields: { category_id: 7, recipient_id: 99, is_active: false },
+      },
+    }, res);
+
+    expect(res.json.mock.calls[0][0].data.updated).toBe(1);
+    const updateCall = clientQuery.mock.calls.find(([sql]) => sql.includes('UPDATE transactions'));
+    expect(updateCall[0]).toMatch(/category_id = \$2.*recipient_id = \$3.*is_active = \$4.*updated_at = NOW\(\)/s);
+    expect(updateCall[1]).toEqual([[5], 7, 99, false]);
+  });
+
+  it('does not schedule a refresh when nothing was updated', async () => {
+    const clientQuery = vi.fn()
+      .mockResolvedValueOnce({})
+      .mockResolvedValueOnce({ rows: [] })
+      .mockResolvedValueOnce({});
+    const release = vi.fn();
+    getClient.mockResolvedValue({ query: clientQuery, release });
+
+    const res = mockResponse();
+    await callHandler({ body: { ids: [12345], fields: { is_active: true } } }, res);
+
+    expect(res.json.mock.calls[0][0].data.updated).toBe(0);
+    expect(scheduleRefresh).not.toHaveBeenCalled();
+  });
+});
+
+describe('POST /bulk-update — atomicity', () => {
+  beforeEach(() => vi.clearAllMocks());
+
+  it('rolls back and skips refresh when UPDATE fails', async () => {
+    const clientQuery = vi.fn()
+      .mockResolvedValueOnce({})
+      .mockRejectedValueOnce(new Error('db down'))
+      .mockResolvedValueOnce({});
+    const release = vi.fn();
+    getClient.mockResolvedValue({ query: clientQuery, release });
+
+    const res = mockResponse();
+    await callHandler({ body: { ids: [1], fields: { is_active: false } } }, res);
+
+    expect(scheduleRefresh).not.toHaveBeenCalled();
+    expect(res.status).toHaveBeenCalledWith(500);
+    expect(release).toHaveBeenCalledTimes(1);
+  });
+});

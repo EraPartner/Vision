@@ -3,9 +3,9 @@ title: Common Tasks Quick Reference
 type: map-of-content
 status: active
 date: 2026-04-22
-updated: 2026-05-02
-tags: [moc, tasks, quick-reference, navigation, how-to, phase-2, openapi, deployment, cicd, updates, april-2026, testing, e2e-testing, mutation-testing]
-description: Task-oriented navigation — find the right docs for what you want to do; includes Phase 2 OpenAPI and type generation; April 2026 adds deployment and update tasks
+updated: 2026-05-08
+tags: [moc, tasks, quick-reference, navigation, how-to, phase-2, openapi, deployment, cicd, updates, april-2026, testing, e2e-testing, mutation-testing, bulk-actions]
+description: Task-oriented navigation — find the right docs for what you want to do; includes Phase 2 OpenAPI and type generation; April 2026 adds deployment and update tasks; May 2026 bulk transaction operations
 aliases: [common tasks, quick reference, i want to, task navigation, cheat sheet]
 ---
 
@@ -71,6 +71,9 @@ aliases: [common tasks, quick reference, i want to, task navigation, cheat sheet
 | I want to... | Start here | Also check |
 |-------------|------------|------------|
 | Import bank statements | [[docs/features/import\|Import Feature]] | [[docs/integrations/bank-adapters\|Bank Adapters]] |
+| Delete many transactions at once | [[docs/features/bulk-actions\|Bulk Actions]] | [[docs/api/transactions#post-apitransactionsbulk-delete\|Bulk Delete API]] |
+| Recategorize or reassign many transactions | [[docs/features/bulk-actions\|Bulk Actions]] | [[docs/api/transactions#post-apitransactionsbulk-update\|Bulk Update API]] |
+| Export a filtered transaction set | [[docs/features/bulk-actions\|Bulk Actions]] | [[docs/api/transactions#post-apitransactionsbulk-export\|Bulk Export API]] |
 | Split a transaction | [[docs/api/splits\|Splits API]] | [[docs/features/views\|Owes Page]] |
 | Create a planned payment | [[docs/features/plannedTransactions\|Planned Transactions]] | [[docs/api/plannedTransactions\|Planned Transactions API]] |
 | Detect recurring payments | [[docs/features/plannedTransactions\|Recurring Detection]] | [[docs/diagrams/recurring-detection-flow.puml\|Recurring Detection Flow]] |

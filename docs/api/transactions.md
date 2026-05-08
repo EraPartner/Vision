@@ -3,14 +3,14 @@ title: API - Transactions
 type: endpoint
 method: GET, POST, PATCH, DELETE
 path: /api/transactions
-description: CRUD operations for financial transactions, including CSV and NDJSON export
+description: CRUD operations for financial transactions, including CSV and NDJSON export, bulk operations
 date: 2026-04-24
-updated: 2026-04-28
-last_modified: 2026-04-28
-tags: [api, transactions, finance, phase-5a, phase-9, phase-13, phase-q, decimal, money, export, drillthrough, filters, recipient-groups]
+updated: 2026-05-08
+last_modified: 2026-05-08
+tags: [api, transactions, finance, phase-5a, phase-9, phase-13, phase-q, decimal, money, export, drillthrough, filters, recipient-groups, bulk-actions]
 status: active
 aliases: [transactions-api, transaction-crud, financial-records, income, expenses]
-related_code: [[apps/node-backend/src/routes/transactions.js]], [[apps/node-backend/src/repositories/transactionRepository.js]], [[apps/node-backend/src/services/currencyConversionService.js]]
+related_code: [[apps/node-backend/src/routes/transactions.js]], [[apps/node-backend/src/repositories/transactionRepository.js]], [[apps/node-backend/src/services/currencyConversionService.js]], [[apps/node-backend/src/services/bulkSelection.js]], [[apps/node-backend/src/services/transactionExport.js]]
 ---
 
 # Transactions API
@@ -284,6 +284,151 @@ Permanently delete a transaction (hard delete).
   "links": []
 }
 ```
+
+### POST /api/transactions/bulk-delete
+
+Permanently delete a set of transactions selected by explicit IDs or by filter criteria.
+
+**Request Body:**
+```json
+{
+  "ids": [123, 124, 125]
+}
+```
+
+or
+
+```json
+{
+  "filter": {
+    "start_date": "2026-01-01",
+    "end_date": "2026-01-31",
+    "category_id": 5
+  }
+}
+```
+
+**Request Parameters:**
+- `ids` (optional): Array of transaction IDs to delete. Max 500 entries. Ignored if `filter` is provided.
+- `filter` (optional): Transaction filter object. Matched row count capped at 5000. See [[#GET /api/transactions]] for filter fields.
+
+**Response:**
+```json
+{
+  "deleted": 42
+}
+```
+
+**Rate Limited:** 30 requests per minute
+
+Implementation note:
+- Resolves `ids | filter` via `[[apps/node-backend/src/services/bulkSelection.js]]` with caps enforced up front.
+- Runs inside a `withTransaction()` to guarantee atomicity; `scheduleRefresh()` signals materialized-view refresh on success.
+- Invalid IDs are stripped before SQL execution; all remaining rows are deleted in a single `DELETE` statement.
+
+### POST /api/transactions/bulk-update
+
+Atomically update a set of transactions with new category, recipient, or active status.
+
+**Request Body:**
+```json
+{
+  "ids": [123, 124, 125],
+  "fields": {
+    "category_id": 6,
+    "recipient_id": 10,
+    "is_active": false
+  }
+}
+```
+
+or
+
+```json
+{
+  "filter": {
+    "start_date": "2026-01-01",
+    "recipient_name": "Supermarket"
+  },
+  "fields": {
+    "category_id": 5
+  }
+}
+```
+
+**Request Parameters:**
+- `ids` (optional): Array of transaction IDs to update. Max 500 entries. Ignored if `filter` is provided.
+- `filter` (optional): Transaction filter object. Matched row count capped at 5000. See [[#GET /api/transactions]] for filter fields.
+- `fields`: Object with one or more of:
+  - `category_id` (integer): New category ID
+  - `recipient_id` (integer): New recipient ID
+  - `is_active` (boolean): Activate or deactivate
+
+**Validation:**
+- FK targets (`category_id`, `recipient_id`) are validated up front; the entire batch fails if any reference is invalid.
+- At least one field must be provided; request with empty `fields` object returns 400.
+
+**Response:**
+```json
+{
+  "updated": 42
+}
+```
+
+**Rate Limited:** 30 requests per minute
+
+Implementation note:
+- Resolves `ids | filter` via `[[apps/node-backend/src/services/bulkSelection.js]]`.
+- `category_id` and `recipient_id` are validated against the database in parallel before any `UPDATE` executes.
+- Runs inside a `withTransaction()` to guarantee atomicity; `scheduleRefresh()` signals materialized-view refresh on success.
+
+### POST /api/transactions/bulk-export
+
+Stream transactions as CSV or NDJSON using selection by IDs or filter.
+
+**Request Body:**
+```json
+{
+  "ids": [123, 124, 125],
+  "format": "csv",
+  "include_balance": true
+}
+```
+
+or
+
+```json
+{
+  "filter": {
+    "start_date": "2026-01-01",
+    "end_date": "2026-01-31",
+    "category_id": 5
+  },
+  "format": "json"
+}
+```
+
+**Request Parameters:**
+- `ids` (optional): Array of transaction IDs to export. Max 500 entries. Ignored if `filter` is provided.
+- `filter` (optional): Transaction filter object. Matched row count capped at 5000. See [[#GET /api/transactions]] for filter fields.
+- `format` (required): `"csv"` or `"json"` (NDJSON).
+- `include_balance` (optional, CSV only): If `true`, adds a "Running Balance" column. Ignored for JSON.
+
+**Response:** Streamed file download
+- **CSV**: `text/csv; charset=utf-8` with headers
+- **NDJSON**: `application/x-ndjson` with one JSON object per line
+
+**Filename Pattern:**
+- CSV: `transactions_<label>_<YYYY-MM-DD>.csv`
+- JSON: `transactions_<label>_<YYYY-MM-DD>.ndjson`
+
+**Rate Limited:** 30 requests per minute
+
+Implementation note:
+- Resolves `ids | filter` via `[[apps/node-backend/src/services/bulkSelection.js]]`.
+- CSV/NDJSON streaming and balance computation delegate to `[[apps/node-backend/src/services/transactionExport.js]]` (shared with GET export endpoints).
+- CSV escape, formula-neutralization, and filename generation reuse the same helpers as `GET /api/transactions/export/csv`.
+- Streaming behavior, chunk size (1000 rows), and error handling are identical to GET export endpoints.
 
 ## Examples
 

@@ -443,6 +443,50 @@ export interface BulkTagResult {
     transactions_affected: number;
 }
 
+// ==================== Bulk Action Types ====================
+
+export interface BulkTransactionFilter {
+    transaction_id?: number;
+    start_date?: string;
+    end_date?: string;
+    bank_account?: string;
+    bank_accounts?: string[];
+    category_id?: number;
+    category_ids?: number[];
+    recipient_id?: number;
+    recipient_group_id?: number;
+    recipient_name?: string;
+    search?: string;
+    active?: boolean;
+    transaction_type?: 'income' | 'expense';
+    tags?: string[];
+}
+
+export type BulkSelectionRequest =
+    | { ids: number[]; filter?: never }
+    | { filter: BulkTransactionFilter; ids?: never };
+
+export interface BulkUpdateFields {
+    category_id?: number | null;
+    recipient_id?: number;
+    is_active?: boolean;
+}
+
+export type BulkUpdateRequest = BulkSelectionRequest & { fields: BulkUpdateFields };
+
+export type BulkExportRequest = BulkSelectionRequest & {
+    format: 'csv' | 'json';
+    include_balance?: boolean;
+};
+
+export interface BulkDeleteResult {
+    deleted: number;
+}
+
+export interface BulkUpdateResult {
+    updated: number;
+}
+
 // ==================== Other Types ====================
 
 export interface CategoryStats {
