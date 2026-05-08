@@ -128,6 +128,12 @@ describe("parseLocaleNumber", () => {
     expect(parseLocaleNumber("12,345,500")).toBe(12345500);
   });
 
+  test("treats single-comma + 3-digit tail as US thousands separator (1,000 → 1000)", () => {
+    expect(parseLocaleNumber("1,000")).toBe(1000);
+    expect(parseLocaleNumber("5,000")).toBe(5000);
+    expect(parseLocaleNumber("999,000")).toBe(999000);
+  });
+
   test("strips currency symbols and whitespace", () => {
     expect(parseLocaleNumber("$ 42.50 ")).toBe(42.5);
     expect(parseLocaleNumber("€1,50")).toBe(1.5);

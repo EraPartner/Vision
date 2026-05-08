@@ -45,7 +45,7 @@ export function parseLocaleNumber(input: string | number | null | undefined): nu
     else s = s.replace(/,/g, '');
   } else if (lastComma >= 0) {
     const tail = s.length - lastComma - 1;
-    if (tail === 3 && s.indexOf(',') !== lastComma) s = s.replace(/,/g, '');
+    if (tail === 3) s = s.replace(/,/g, '');
     else s = s.replace(',', '.');
   }
   const n = parseFloat(s);

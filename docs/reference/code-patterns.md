@@ -3,10 +3,10 @@ title: Code Patterns Reference
 type: reference
 status: active
 date: 2026-04-26
-updated: 2026-05-06
-tags: [reference, patterns, conventions, code-style, backend, frontend, phase-0, phase-1, phase-2, phase-3, phase-4, phase-5, phase-6, phase-9, phase-12, phase-14, phase-q, phase-c, phase-d, motion, liquid-glass, design-system, decimal, money, timezone, openapi, domain-split, import, import-pipeline, concurrency, batching, decimal-enforcement, zustand, slice-selection, typescript, error-handling, type-safety, csv, formula-injection, cwe-1236, csv-record-splitter, csv-parsing, multi-line-fields, date-utilities, immutability, aggregation-optimization, recipient-groups, portfolio-totals, query-parameter-filtering, buildquery, bug-hunt-2026-05-05, bug-hunt-2026-05-06, react-keys, stable-keys, mount-guard, memory-leak-prevention]
-description: Standard code patterns used throughout the Vision project — repositories, routes, hooks, API client, Express setup, error handling, type safety, filter builders, aggregation envelopes, aggregation refresh, trigger-maintained tables, golden fixtures, database fixtures, pure calculation services, atomic multi-step transactions, streaming CSV exports with formula injection prevention, import batch concurrency, motion consumers, surface shells, gradient icon tiles, money utilities, decimal utilities, shared date utilities with input validation and locale support, timezone boundary handling, TypeScript type annotations, type-safe error handling, domain-split API client, Zustand store with useShallow slice selection, immutable PATCH field sanitization, aggregation query optimization with Map-based single-pass accumulation, recipient group resolution via scalar subqueries (Phase Q), portfolio totals single-source-of-truth pattern (Phase 14). May 2026 bug hunt adds React key generation pattern (use UUID instead of index) and mount guard pattern (prevent setState after unmount).
-aliases: [code patterns, coding patterns, conventions, patterns, how to write code, repository pattern, route pattern, hook pattern, error handling, type-safe error handling, type annotations, filter builder, golden fixture, aggregation envelope, calculation services, import concurrency, motion pattern, surface shell pattern, gradient icon pattern, money pattern, decimal pattern, timezone pattern, domain split, openapi, typescript types, csv export, safe csv, formula injection, cwe-1236, date utilities, immutability, aggregation optimization, Map pattern, recipient group filter, recipientGroupId, portfolio totals, single source of truth]
+updated: 2026-05-08
+tags: [reference, patterns, conventions, code-style, backend, frontend, phase-0, phase-1, phase-2, phase-3, phase-4, phase-5, phase-6, phase-9, phase-12, phase-14, phase-q, phase-c, phase-d, motion, liquid-glass, design-system, decimal, money, timezone, openapi, domain-split, import, import-pipeline, concurrency, batching, decimal-enforcement, zustand, slice-selection, typescript, error-handling, type-safety, csv, formula-injection, cwe-1236, csv-record-splitter, csv-parsing, multi-line-fields, date-utilities, immutability, aggregation-optimization, recipient-groups, portfolio-totals, query-parameter-filtering, buildquery, bug-hunt-2026-05-05, bug-hunt-2026-05-06, bug-hunt-2026-05-08, react-keys, stable-keys, mount-guard, memory-leak-prevention, parseLocaleNumber, number-parsing, locale-number]
+description: Standard code patterns used throughout the Vision project — repositories, routes, hooks, API client, Express setup, error handling, type safety, filter builders, aggregation envelopes, aggregation refresh, trigger-maintained tables, golden fixtures, database fixtures, pure calculation services, atomic multi-step transactions, streaming CSV exports with formula injection prevention, import batch concurrency, motion consumers, surface shells, gradient icon tiles, money utilities, decimal utilities, shared date utilities with input validation and locale support, timezone boundary handling, TypeScript type annotations, type-safe error handling, domain-split API client, Zustand store with useShallow slice selection, immutable PATCH field sanitization, aggregation query optimization with Map-based single-pass accumulation, recipient group resolution via scalar subqueries (Phase Q), portfolio totals single-source-of-truth pattern (Phase 14). May 2026 bug hunt adds React key generation pattern (use UUID instead of index), mount guard pattern (prevent setState after unmount), and documents parseLocaleNumber heuristic with single-comma thousands separator fix.
+aliases: [code patterns, coding patterns, conventions, patterns, how to write code, repository pattern, route pattern, hook pattern, error handling, type-safe error handling, type annotations, filter builder, golden fixture, aggregation envelope, calculation services, import concurrency, motion pattern, surface shell pattern, gradient icon pattern, money pattern, decimal pattern, timezone pattern, domain split, openapi, typescript types, csv export, safe csv, formula injection, cwe-1236, date utilities, immutability, aggregation optimization, Map pattern, recipient group filter, recipientGroupId, portfolio totals, single source of truth, parseLocaleNumber, number parsing, locale-aware number parsing, thousands separator, decimal separator]
 ---
 
 # Code Patterns Reference
@@ -1539,6 +1539,115 @@ const outstanding = await query(
 
 ---
 
+## Materialized View Availability & Caching Pattern (Bug-Hunt 2026-05-08)
+
+**Source:** [[apps/node-backend/src/repositories/infoRepositoryHelpers.js|infoRepositoryHelpers.js]]
+
+When querying PostgreSQL materialized views that may not exist or may be empty (e.g., after schema creation or migrations), use the `mvAvailable(viewName)` helper with allowlist validation and negative caching.
+
+### Problem
+
+Without caching, checking view existence on every request produces N+1 round-trips under load. Schema migrations may create views asynchronously, and fresh deployments need time to build the first view. Without negative caching, missing views trigger repeated DB queries.
+
+### Solution
+
+```js
+import { mvAvailable } from '../repositories/infoRepositoryHelpers.js';
+
+// Always use the helper, never raw SELECT without it
+const isCategoryTotalsAvailable = await mvAvailable('mv_category_totals');
+
+if (isCategoryTotalsAvailable) {
+  const result = await query('SELECT * FROM mv_category_totals ORDER BY count DESC LIMIT 500');
+  // Process result
+} else {
+  // Fallback: compute inline or return empty set
+  return { data: [] };
+}
+```
+
+### Key Features
+
+1. **Allowlist validation:** View names are pinned in `ALLOWED_MV_NAMES` set (e.g., `'mv_category_totals'`, `'mv_monthly_summary'`) to prevent SQL injection if names ever come from user input.
+
+2. **Positive caching (indefinite):** If a view exists and has rows, the result is cached in-process forever. View existence is a stable schema fact.
+
+3. **Negative caching (60s TTL):** If a view is missing or empty, the result is cached for 60 seconds. This avoids DB round-trips for missing views on every request, but recovers quickly when a view is created.
+
+4. **Cache clearing:** After bulk imports or migrations that recreate views, call `clearMvCache()` to force fresh checks:
+   ```js
+   import { clearMvCache } from '../repositories/infoRepositoryHelpers.js';
+   
+   await bulkImportTransactions(rows);
+   await refreshAggregations();
+   clearMvCache();  // Views now exist; next mvAvailable() call hits DB
+   ```
+
+### When to Use
+
+- **Route handlers** that read from views and need fallback paths (e.g., `/api/statistics`)
+- **Initialization code** that populates views asynchronously
+- **Multi-tenant scenarios** where view existence varies by tenant
+
+### When NOT Needed
+
+- **Trigger-maintained aggregation tables** (`agg_recipient_totals`, `agg_split_outstanding`) — these are always present and maintained by triggers; query directly
+- **Hard schema constraints** — if a view is guaranteed to exist (e.g., created at migration time), skip the check
+
+---
+
+## Query Result Bounding (Bug-Hunt 2026-05-08)
+
+**Pattern:** Always add `LIMIT` clause to queries that enumerate unbounded result sets.
+
+### Problem
+
+Queries without `LIMIT` can return unbounded result sets when table size grows unexpectedly. This causes:
+- Memory spikes from large result sets in Node.js
+- Slow response times for front-end pagination or dropdowns
+- Denial-of-service risk from users with large datasets
+
+### Solution
+
+```js
+// ❌ WRONG: No limit; can return 10,000+ rows if table grows
+const stats = await query('SELECT * FROM transactions ORDER BY date DESC');
+
+// ✓ CORRECT: Explicit LIMIT prevents runaway result sets
+const stats = await query('SELECT * FROM transactions ORDER BY date DESC LIMIT 500');
+
+// ✓ CORRECT: Even for aggregations, bound the output
+const catStats = await query(
+  'SELECT category_id, count, total FROM mv_category_totals ORDER BY count DESC LIMIT 500'
+);
+```
+
+### Guidelines
+
+| Query Type | Recommended LIMIT |
+|------------|------------------|
+| Enumerate all items (UI list) | 50–500 (depends on UI viewport) |
+| Top-N aggregations | 500 (rarely need more) |
+| Full-table scan (e.g., export) | Use pagination or streaming (not LIMIT) |
+| Single-row lookups (WHERE id = ...) | No LIMIT needed (indexed) |
+
+### Fallback Path
+
+When applying `LIMIT` to a query for the first time, add a fallback for backwards compatibility:
+
+```js
+// Statistics may not have aggregated yet on fresh deployment
+if (!isCategoryTotalsAvailable) {
+  // Compute or return empty
+  return { categories: [], total: 0 };
+}
+
+// MV exists; safe to query with LIMIT
+const result = await query('SELECT ... FROM mv_category_totals LIMIT 500');
+```
+
+---
+
 ## Safe CSV Export Pattern (Phase 5+)
 
 **Source:** [[apps/node-backend/src/lib/csv.js|csv.js]] — Shared utility with formula injection guard
@@ -2445,6 +2554,96 @@ const slice = useAppStore(
 **Migration Path:** Alembic migration `0011_drop_feature_flags` drops the table while preserving the creation migration (`0002_feature_flags.py`) in the history for audit/compliance purposes.
 
 **For New Features:** If you need to control feature availability, use environment variables or configuration instead of database-backed toggles. See [[docs/adr/035-remove-feature-flags|ADR-035]] for rationale.
+
+---
+
+## Number Parsing Pattern: parseLocaleNumber
+
+**Source:** `[[apps/frontend/src/utils/currency.ts]]`
+
+`parseLocaleNumber` intelligently parses user-entered numeric strings that may use either comma-as-decimal (EU format) or period-as-decimal (US format), plus handles currency symbols, whitespace, and negative numbers. Returns `NaN` for unparseable input.
+
+### Heuristic Rules
+
+The function disambiguates locale formats by examining the position of commas and dots:
+
+1. **Both comma and dot present:** rightmost wins as decimal separator
+   - `"1,234.56"` → `1234.56` (dot is rightmost → decimal)
+   - `"1.234,56"` → `1234.56` (comma is rightmost → decimal)
+
+2. **Only comma, non-3-digit tail:** comma is decimal
+   - `"1,5"` → `1.5` (2 digits after comma → EU format)
+   - `"1,99"` → `1.99` (2 digits after comma → EU format)
+
+3. **Only comma, exactly 3-digit tail:** comma is thousands separator (US format)
+   - `"1,000"` → `1000` (3 digits after comma → US thousands)
+   - `"5,000"` → `5000`
+   - `"999,000"` → `999000`
+   - `"12,345,500"` → `12345500` (multiple commas with 3-digit tail → all commas are thousands)
+
+4. **No comma or dot:** direct parse
+   - `"42"` → `42`
+
+### Pre-Processing
+
+Before heuristic evaluation:
+- Strip leading/trailing whitespace
+- Remove internal whitespace
+- Strip currency symbols (`$`, `€`, `£`, `¥`)
+- Handle negative indicators: prefix `-` or parentheses `(value)` = negative
+- A leading `+` is stripped but does not flip sign
+
+### API
+
+```typescript
+parseLocaleNumber(input: string | number | null | undefined): number
+```
+
+**Returns:** Parsed number or `NaN` if unparseable.
+
+### Examples
+
+```typescript
+// US formats
+parseLocaleNumber("1,234.56")      // → 1234.56
+parseLocaleNumber("1,000")         // → 1000 (single-comma thousands)
+parseLocaleNumber("12,345,500")    // → 12345500
+
+// EU formats
+parseLocaleNumber("1.234,56")      // → 1234.56
+parseLocaleNumber("1,50")          // → 1.5
+
+// With currency symbols and whitespace
+parseLocaleNumber("$ 1,234.56 ")   // → 1234.56
+parseLocaleNumber("€1,50")         // → 1.5
+
+// Negatives
+parseLocaleNumber("-42.50")        // → -42.5
+parseLocaleNumber("(42.50)")       // → -42.5
+
+// Invalid
+parseLocaleNumber("")              // → NaN
+parseLocaleNumber("abc")           // → NaN
+parseLocaleNumber(null)            // → NaN
+parseLocaleNumber(undefined)       // → NaN
+
+// Numbers pass through unchanged
+parseLocaleNumber(42.5)            // → 42.5
+parseLocaleNumber(-7)              // → -7
+parseLocaleNumber(0)               // → 0
+```
+
+### Bug Fix (2026-05-08)
+
+**Issue:** Single-comma values with exactly 3 digits after the comma (e.g., `"1,000"`) were incorrectly treated as decimal instead of thousands separator, returning `1` instead of `1000`.
+
+**Root Cause:** The condition was `if (tail === 3 && s.indexOf(',') !== lastComma)` — the second clause excluded single-comma cases by requiring at least two commas.
+
+**Fix:** Simplified to `if (tail === 3)` — any comma with exactly 3 digits after it is now treated as a US thousands separator, regardless of whether there are other commas. Test coverage added: `parseLocaleNumber("1,000")`, `parseLocaleNumber("5,000")`, `parseLocaleNumber("999,000")`.
+
+### Usage Sites
+
+Primary usage: transaction amount input dialogs and CSV import amount parsing where users may be in any locale.
 
 ---
 

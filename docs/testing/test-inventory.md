@@ -3,10 +3,10 @@ title: Test Inventory
 type: testing
 status: active
 date: 2026-04-30
-last_modified: 2026-05-05
-updated: 2026-05-05
-last-updated: 2026-05-05
-last_updated_timestamp: 2026-05-05T00:00:00Z
+last_modified: 2026-05-08
+updated: 2026-05-08
+last-updated: 2026-05-08
+last_updated_timestamp: 2026-05-08T00:00:00Z
 added_portfolio_math_tests: 2026-05-05
 added_import_pipeline_tests: 2026-05-05
 added_dashboard_error_state_tests: 2026-05-02
@@ -22,6 +22,7 @@ added_phase_f1_backend_drift_detection: 2026-05-02
 added_phase_f4_playwright_parity: 2026-05-02
 added_phase_f5_property_chaos: 2026-05-02
 added_phase_f6_mutation_testing: 2026-05-02
+added_parselocale_number_single_comma_fix: 2026-05-08
 tags:
   - testing
   - inventory
@@ -129,7 +130,7 @@ Five new hook unit test files added to `apps/frontend/src/hooks/__tests__/` and 
 | `apps/frontend/src/components/forms/addTransactionForm.test.ts` | Unit test | Transaction form validation logic (Zod schema) |
 | `apps/frontend/src/components/shared/dateUtils.test.ts` | Unit test | Date formatting utilities with various app settings |
 | `apps/frontend/src/components/tax/__tests__/SuggestedDeductionsCard.test.tsx` | Component test | SuggestedDeductionsCard rendering and interactions |
-| `apps/frontend/src/utils/currency.test.ts` | Unit test | Currency formatting utilities |
+| `apps/frontend/src/utils/currency.test.ts` | Unit test | Currency formatting utilities (`formatCurrency`, `formatCurrencyCompact`, `parseLocaleNumber`). NEW (2026-05-08): Added unit test for single-comma + 3-digit tail as US thousands separator (e.g., "1,000" → 1000) |
 
 ### Context Unit Tests (2026-05-03)
 

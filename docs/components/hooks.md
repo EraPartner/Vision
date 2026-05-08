@@ -3,10 +3,10 @@ title: Custom Hooks
 type: component
 status: active
 date: 2026-04-23
-updated: 2026-05-06
-last_modified: 2026-05-06
-tags: [components, hooks, react-query, zustand, form-state, data-table, phase-4, phase-13, phase-c, phase-d, i18n, notifications, export-filters, bug-hunt-2026-05-05, bug-hunt-2026-05-06, mount-guard, query-key-fix, prefetch, memoization, useCallback]
-description: Custom React hooks for data fetching and state management. Includes toast notifications for mutations via i18n keys. Phase 13 adds useBankAccounts hook for export filtering. May 2026 bug hunt adds mount guard to usePlannedPayments and fixes queryKey mismatch in usePortfolioPrefetch.
+updated: 2026-05-08
+last_modified: 2026-05-08
+tags: [components, hooks, react-query, zustand, form-state, data-table, phase-4, phase-13, phase-c, phase-d, i18n, notifications, export-filters, bug-hunt-2026-05-05, bug-hunt-2026-05-06, bug-hunt-2026-05-08, mount-guard, query-key-fix, prefetch, memoization, useCallback, parseLocaleNumber, currency-utilities]
+description: Custom React hooks for data fetching and state management. Includes toast notifications for mutations via i18n keys. Phase 13 adds useBankAccounts hook for export filtering. May 2026 bug hunt adds mount guard to usePlannedPayments, fixes queryKey mismatch in usePortfolioPrefetch, and documents parseLocaleNumber utility for locale-aware number parsing.
 related_code: ["apps/frontend/src/hooks"]
 ---
 
@@ -573,7 +573,9 @@ Currency formatting and parsing utilities.
 | `formatCurrency(amount, currency?, locale?)` | Formats a number as currency string using `Intl.NumberFormat` |
 | `getCurrencyFormatDefaults(currency)` | Returns default formatting options (decimals, symbol) for a currency |
 | `numberFormatToLocale(appSettings)` | Derives the locale string from app settings for number formatting |
-| `parseCurrency(input, currency?)` | Parses a currency-formatted string back to a number |
+| `parseLocaleNumber(input)` | Intelligently parses locale-aware numeric strings (comma or period decimal/thousands) back to a number (see [[docs/reference/code-patterns#Number Parsing Pattern|code-patterns]]) |
+| `getCurrencySymbol(currencyCode)` | Returns currency symbol for ISO currency code |
+| `formatAmountWithSymbol(amount, currencyCode?)` | Simple currency formatting with symbol |
 
 ---
 
