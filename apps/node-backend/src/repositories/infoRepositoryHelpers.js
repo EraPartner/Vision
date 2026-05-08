@@ -18,12 +18,27 @@ import { toDecimal, toNumber } from '../lib/money.js';
 const mvCache = new Map();
 const MV_NEGATIVE_CACHE_TTL_MS = 60_000;
 
+// Allowlist of materialized-view names that may be passed to mvAvailable.
+// The function builds raw SQL with the name interpolated, which is safe
+// today because every caller passes a literal — but pinning the set here
+// keeps it that way and makes a future caller adding a user-controlled
+// name fail loudly instead of opening an injection vector.
+const ALLOWED_MV_NAMES = new Set([
+  'mv_category_totals',
+  'mv_monthly_summary',
+]);
+
 /**
  * Check if a materialized view exists and has rows.
  * Positive results cached in-process indefinitely; negative results cached
  * for {@link MV_NEGATIVE_CACHE_TTL_MS} so we recover quickly after MV creation.
+ *
+ * @throws {Error} if {@code viewName} is not in the allowlist.
  */
 export async function mvAvailable(viewName) {
+  if (!ALLOWED_MV_NAMES.has(viewName)) {
+    throw new Error(`mvAvailable: unknown materialized view "${viewName}"`);
+  }
   const cached = mvCache.get(viewName);
   if (cached !== undefined) {
     if (cached.expires === null || cached.expires > Date.now()) {

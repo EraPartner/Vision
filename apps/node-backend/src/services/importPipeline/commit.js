@@ -93,6 +93,15 @@ export async function commitBatch({ batchId, onProgress }) {
         }
 
         // SAVEPOINT per row: if insert fails the txn stays usable for remaining rows.
+        // import_staging_rows.id is BIGSERIAL (verified migration 0001), so
+        // the value is always a Postgres integer at this point. The assert
+        // is defence-in-depth: if a future schema change ever loosened that,
+        // this would fail loudly instead of opening an SQL-injection vector
+        // through the interpolated savepoint identifier.
+        if (!Number.isInteger(row.id)) {
+          errors++;
+          continue;
+        }
         const sp = `sp_row_${row.id}`;
         await client.query(`SAVEPOINT ${sp}`);
         try {

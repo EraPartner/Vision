@@ -201,4 +201,17 @@ describe('commitBatch', () => {
     })
     expect(await commitBatch({ batchId: 3 })).toEqual({ imported: 0, duplicates: 0, errors: 1 })
   })
+
+  it('rejects a non-integer staging row.id before issuing SAVEPOINT', async () => {
+    // Defence-in-depth: import_staging_rows.id is BIGSERIAL today, but if a
+    // future schema change ever loosened that to a string, the savepoint
+    // identifier interpolation would become an injection vector. The assert
+    // makes that fail loudly rather than silently injecting.
+    setupCommit({ ...matchedRow, id: "1; DROP TABLE x" })
+    expect(await commitBatch({ batchId: 4 })).toEqual({ imported: 0, duplicates: 0, errors: 1 })
+    const savepointCalls = mockClient.query.mock.calls.filter(
+      ([sql]) => typeof sql === 'string' && sql.startsWith('SAVEPOINT'),
+    )
+    expect(savepointCalls).toHaveLength(0)
+  })
 })
