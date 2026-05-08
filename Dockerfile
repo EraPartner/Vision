@@ -42,6 +42,7 @@ RUN apk upgrade --no-cache && \
     apk add --no-cache python3 py3-pip chromium && \
     python3 -m venv /venv && \
     . /venv/bin/activate && \
+    pip install --no-cache-dir --upgrade pip && \
     pip install --no-cache-dir alembic psycopg2-binary python-dotenv sqlalchemy-utils
 
 # Copy and make entrypoint executable
