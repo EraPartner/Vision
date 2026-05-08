@@ -95,6 +95,20 @@ describe("mergeForViewRolling", () => {
         expect(futureRow.monte_carlo_parametric__pHi).toBe(48);
     });
 
+    test("malformed dates are filtered out instead of producing Invalid Date rows", () => {
+        const data = buildData(3, 3);
+        // Inject a row with a garbage date string. Without the validator,
+        // `new Date('not-a-date T00:00:00Z')` produces Invalid Date and
+        // poisons the chart x-axis.
+        data.actual.push({ date: "not-a-date", net: null, cumulative: null });
+
+        const visible = new Set(["simple_avg"]);
+        const { rows } = mergeForViewRolling(data, "daily", visible, "Actual");
+
+        expect(rows.every((r) => !Number.isNaN(r.t.getTime()))).toBe(true);
+        expect(rows.find((r) => r.date === "not-a-date")).toBeUndefined();
+    });
+
     test("hidden methods omitted from rows", () => {
         const data = buildData(3, 3);
         const visible = new Set<string>(); // none visible
