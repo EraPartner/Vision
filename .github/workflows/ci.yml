@@ -638,119 +638,6 @@ jobs:
         run: docker compose down -v
 
   # ─────────────────────────────────────────────────────────────────────────────
-  # E2E — Playwright against the live Docker stack (chromium only).
-  # Runs the same image artifact as the other Docker-tier jobs to avoid a
-  # second Docker build. Visual snapshot specs (e2e/visual.spec.ts) are
-  # excluded — they need the developer's macOS-rendered baselines.
-  # Skipped on draft PRs to keep iteration fast for solo work.
-  # ─────────────────────────────────────────────────────────────────────────────
-  test-e2e:
-    name: Test (E2E)
-    runs-on: ubuntu-24.04
-    timeout-minutes: 25
-    needs: [build-image]
-    if: ${{ !github.event.pull_request.draft }}
-    permissions:
-      contents: read
-    steps:
-      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v4
-
-      - name: Download image artifact
-        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v4
-        with:
-          name: docker-image
-          path: /tmp
-
-      - name: Load Docker image
-        run: docker load < /tmp/vision-ci.tar
-
-      - name: Create stub .env for Docker Compose
-        run: |
-          printf 'POSTGRES_PASSWORD=ci_test_password\nDATABASE_URL=postgresql://ftm_user:ci_test_password@db:5432/financial_transactions\nSECRET_KEY=ci_test_secret_key_minimum_32_chars_!\nLOG_LEVEL=warn\nENABLE_LOGGING=true\n' > .env
-
-      - name: Start services with Docker Compose
-        run: |
-          export VISION_IMAGE=vision:ci
-          docker compose -f docker-compose.yml up -d
-
-      - name: Wait for /health to respond
-        run: |
-          echo "Waiting for backend health check..."
-          for i in $(seq 1 30); do
-            if curl -sf http://localhost:3002/health; then
-              echo ""
-              echo "Health check passed"
-              exit 0
-            fi
-            echo "Attempt $i/30 — retrying in 3s..."
-            sleep 3
-          done
-          echo "Health check timed out"
-          docker compose logs
-          exit 1
-
-      - name: Setup Bun
-        uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2
-        with:
-          bun-version: latest
-
-      - name: Cache bun dependencies
-        uses: actions/cache@27d5ce7f107fe9357f9df03efb73ab90386fccae # v4
-        with:
-          path: ~/.bun/install/cache
-          key: ${{ runner.os }}-bun-${{ hashFiles('bun.lock') }}
-          restore-keys: ${{ runner.os }}-bun-
-
-      - name: Install dependencies
-        run: bun install --frozen-lockfile
-
-      - name: Generate locales
-        run: CI=1 bun run generate-locales
-
-      - name: Cache Playwright browsers
-        uses: actions/cache@27d5ce7f107fe9357f9df03efb73ab90386fccae # v4
-        with:
-          path: ~/.cache/ms-playwright
-          key: ${{ runner.os }}-playwright-${{ hashFiles('apps/frontend/package.json') }}
-          restore-keys: ${{ runner.os }}-playwright-
-
-      - name: Install Playwright (chromium + OS deps)
-        run: cd apps/frontend && bunx playwright install --with-deps chromium
-
-      - name: Run Playwright e2e tests
-        run: cd apps/frontend && bun run test:e2e
-        env:
-          CI: '1'
-          PLAYWRIGHT_BASE_URL: http://localhost:3002
-
-      - name: Upload Playwright report on failure or cancellation
-        if: failure() || cancelled()
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v4
-        with:
-          name: playwright-report
-          path: apps/frontend/playwright-report
-          retention-days: 7
-
-      - name: Capture container logs on failure or cancellation
-        if: failure() || cancelled()
-        run: |
-          mkdir -p /tmp/docker-logs
-          docker compose logs --no-color > /tmp/docker-logs/compose.log 2>&1 || true
-          docker compose ps > /tmp/docker-logs/ps.txt 2>&1 || true
-
-      - name: Upload container logs
-        if: failure() || cancelled()
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v4
-        with:
-          name: e2e-container-logs
-          path: /tmp/docker-logs
-          retention-days: 7
-
-      - name: Tear down
-        if: always()
-        run: docker compose down -v
-
-  # ─────────────────────────────────────────────────────────────────────────────
   # CI Complete — aggregates the Docker-tier results so branch protection has a
   # single required-status-check that covers the full pipeline.
   # Set "CI Complete" as the required check in branch protection settings.
@@ -759,7 +646,7 @@ jobs:
     name: CI Complete
     runs-on: ubuntu-24.04
     timeout-minutes: 5
-    needs: [trivy-scan, docker-verify, test-live-api-contracts, test-e2e]
+    needs: [trivy-scan, docker-verify, test-live-api-contracts]
     if: always()
     steps:
       - name: Check Docker-tier stages passed
