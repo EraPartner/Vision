@@ -201,6 +201,13 @@ describe('Currency Conversion Service', () => {
   });
 
   it('should use nearest historical DB rate when exact date is missing', async () => {
+    // Block ECB 90d fetch so getRateToEurForDate falls through to the DB nearest lookup deterministically.
+    global.fetch = vi.fn().mockResolvedValue({
+      ok: false,
+      status: 503,
+      text: async () => '',
+    });
+
     query
       // getRates() initial load
       .mockResolvedValueOnce({ rows: [{ currency_code: 'USD', rate_to_eur: 0.9 }, { currency_code: 'EUR', rate_to_eur: 1.0 }] })
@@ -254,6 +261,13 @@ describe('Currency Conversion Service', () => {
   });
 
   it('should backfill only missing portfolio date-currency rates', async () => {
+    // Block ECB 90d fetch so backfill falls through to the DB nearest lookup deterministically.
+    global.fetch = vi.fn().mockResolvedValue({
+      ok: false,
+      status: 503,
+      text: async () => '',
+    });
+
     query
       // missing pairs scan
       .mockResolvedValueOnce({ rows: [{ currency_code: 'USD', rate_date: '2024-01-01' }] })
