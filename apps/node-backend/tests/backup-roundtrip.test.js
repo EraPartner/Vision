@@ -28,6 +28,18 @@ const {
     BUNDLE_VERSION,
 } = require(join(REPO_ROOT, 'packaging/electron/backup/bundle.js'));
 
+// archiver v7 (CJS factory) → v8 (ESM classes) compat shim, mirroring bundle.js.
+function loadArchiver() {
+    const pkg = require('archiver');
+    if (typeof pkg === 'function') return pkg;
+    return (format, opts) => {
+        if (format === 'zip') return new pkg.ZipArchive(opts);
+        if (format === 'tar') return new pkg.TarArchive(opts);
+        if (format === 'json') return new pkg.JsonArchive(opts);
+        throw new Error(`Unsupported archiver format: ${format}`);
+    };
+}
+
 // ---------------------------------------------------------------------------
 // Shared temp root — cleaned up after all tests
 // ---------------------------------------------------------------------------
@@ -323,7 +335,7 @@ describe('openBundle error conditions', () => {
 
     it('throws on a zip missing db.sql', async () => {
         // Build a zip with only metadata.json (no db.sql)
-        const archiver = require('archiver');
+        const archiver = loadArchiver();
         const { createWriteStream } = require('node:fs');
 
         const noDbPath = join(TEST_TMP, 'no_db.visionbak');
@@ -341,7 +353,7 @@ describe('openBundle error conditions', () => {
     });
 
     it('throws on a zip missing metadata.json', async () => {
-        const archiver = require('archiver');
+        const archiver = loadArchiver();
         const { createWriteStream } = require('node:fs');
 
         const noMetaPath = join(TEST_TMP, 'no_meta.visionbak');
