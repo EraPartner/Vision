@@ -60,7 +60,7 @@ export function DatePicker({
           selected={value}
           onSelect={onChange}
           weekStartsOn={weekStartsOn}
-          initialFocus
+          autoFocus
           className="p-3 pointer-events-auto"
         />
         {allowClear && value && (

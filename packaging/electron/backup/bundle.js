@@ -17,7 +17,10 @@
  * .sql.enc format so that runRestore can share the decryption path.
  */
 
-const archiver = require('archiver');
+// archiver v8+ ships as ESM; require() returns a namespace where the factory
+// is on .default. Fall back to the module itself for v7 (CJS).
+const archiverPkg = require('archiver');
+const archiver = archiverPkg.default ?? archiverPkg;
 const yauzl = require('yauzl');
 const crypto = require('crypto');
 const fs = require('fs');
