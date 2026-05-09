@@ -62,7 +62,7 @@ Startup flow runs automatically via `docker-entrypoint.sh`:
 3. Starts the backend application
 4. After backend start, non-blocking startup tasks run in background (cache warming, price provider refresh, Kinesis history sanitization)
 
-**Note:** As of 2026-04-29, `docker-compose.dev.yml` no longer declares `vision_postgres_data_dev` as `external: true`. The volume is now auto-created by Docker Compose on first run — no manual setup needed. This fixes the "external volume not found" error on clean checkouts.
+**Note:** As of 2026-05-09, `docker-compose.dev.yml` no longer declares a separate `vision_postgres_data_dev` volume. Dev shares the `postgres_data` volume with packaged Vision.app so dev work and the deployed app operate on the same database. The Electron `ensureEnv` helper mirrors `POSTGRES_PASSWORD` between the repo `.env` and `~/Library/Application Support/Vision/embedded_compose/.env`, so both stacks always agree on credentials.
 
 **Database schema:** As of Phase 1 (2026-04-21), Alembic is the single source of schema DDL ([[docs/adr/027-alembic-single-source-of-schema|ADR-027]]). The legacy `schemaInit.js` has been deleted. Fresh databases are bootstrapped by running `alembic/versions/0001_initial_database_schema.py`, which creates all 27 tables, enums, indexes, and triggers in a single baseline migration.
 

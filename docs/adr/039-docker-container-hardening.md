@@ -59,7 +59,7 @@ Trust boundary: host loopback only (`127.0.0.1:3002`) → docker-proxy → harde
 
 ### Neutral
 - `db` (postgres) service is intentionally **not** hardened in this ADR. The official `postgres:18-alpine` image already runs as the `postgres` user, and aggressive hardening of the data-tier service risks data integrity issues with on-disk migrations. Revisit when moving to managed Postgres for prod.
-- The dev compose override (`docker-compose.dev.yml`) only swaps the postgres data volume for `vision_postgres_data_dev`; all hardening on the `app` service inherits unchanged.
+- The dev compose override (`docker-compose.dev.yml`) only swaps the `app` service to a local build context; the postgres data volume (`postgres_data`) is shared with packaged Vision.app. All hardening on the `app` service inherits unchanged.
 
 ## Verification
 
