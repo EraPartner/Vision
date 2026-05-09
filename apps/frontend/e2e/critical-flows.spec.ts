@@ -14,7 +14,7 @@ test.describe("Page load smoke (catches backend ↔ frontend drift)", () => {
         const errors: string[] = [];
         page.on("pageerror", (e) => errors.push(e.message));
         await page.goto("/");
-        await expect(page.getByRole("heading", { name: /dashboard/i })).toBeVisible();
+        await expect(page.getByRole("heading", { level: 1, name: /^(dashboard|good (morning|afternoon|evening))/i })).toBeVisible();
         expect(errors).toHaveLength(0);
     });
 
@@ -22,7 +22,7 @@ test.describe("Page load smoke (catches backend ↔ frontend drift)", () => {
         const errors: string[] = [];
         page.on("pageerror", (e) => errors.push(e.message));
         await page.goto("/transactions");
-        await expect(page.getByRole("heading", { name: /^transactions$/i })).toBeVisible();
+        await expect(page.getByRole("heading", { level: 1, name: /^transactions$/i })).toBeVisible();
         expect(errors).toHaveLength(0);
     });
 
@@ -30,7 +30,7 @@ test.describe("Page load smoke (catches backend ↔ frontend drift)", () => {
         const errors: string[] = [];
         page.on("pageerror", (e) => errors.push(e.message));
         await page.goto("/categories");
-        await expect(page.getByRole("heading", { name: /categories/i })).toBeVisible();
+        await expect(page.getByRole("heading", { level: 1, name: /categories/i })).toBeVisible();
         expect(errors).toHaveLength(0);
     });
 
@@ -38,7 +38,7 @@ test.describe("Page load smoke (catches backend ↔ frontend drift)", () => {
         const errors: string[] = [];
         page.on("pageerror", (e) => errors.push(e.message));
         await page.goto("/recipients");
-        await expect(page.getByRole("heading", { name: /recipients/i })).toBeVisible();
+        await expect(page.getByRole("heading", { level: 1, name: /recipients/i })).toBeVisible();
         expect(errors).toHaveLength(0);
     });
 
@@ -46,7 +46,7 @@ test.describe("Page load smoke (catches backend ↔ frontend drift)", () => {
         const errors: string[] = [];
         page.on("pageerror", (e) => errors.push(e.message));
         await page.goto("/statistics");
-        await expect(page.getByRole("heading", { name: /statistics|analytics/i })).toBeVisible();
+        await expect(page.getByRole("heading", { level: 1, name: /statistics|analytics/i })).toBeVisible();
         expect(errors).toHaveLength(0);
     });
 
@@ -54,7 +54,7 @@ test.describe("Page load smoke (catches backend ↔ frontend drift)", () => {
         const errors: string[] = [];
         page.on("pageerror", (e) => errors.push(e.message));
         await page.goto("/owes");
-        await expect(page.getByRole("heading", { name: /who owes/i })).toBeVisible();
+        await expect(page.getByRole("heading", { level: 1, name: /who owes/i })).toBeVisible();
         expect(errors).toHaveLength(0);
     });
 
@@ -62,7 +62,7 @@ test.describe("Page load smoke (catches backend ↔ frontend drift)", () => {
         const errors: string[] = [];
         page.on("pageerror", (e) => errors.push(e.message));
         await page.goto("/tax");
-        await expect(page.getByRole("heading", { name: /tax overview/i })).toBeVisible();
+        await expect(page.getByRole("heading", { level: 1, name: /tax overview/i })).toBeVisible();
         expect(errors).toHaveLength(0);
     });
 
@@ -70,7 +70,7 @@ test.describe("Page load smoke (catches backend ↔ frontend drift)", () => {
         const errors: string[] = [];
         page.on("pageerror", (e) => errors.push(e.message));
         await page.goto("/portfolio");
-        await expect(page.getByRole("heading", { name: /portfolio overview/i })).toBeVisible();
+        await expect(page.getByRole("heading", { level: 1, name: /portfolio overview/i })).toBeVisible();
         expect(errors).toHaveLength(0);
     });
 
@@ -87,7 +87,7 @@ test.describe("Page load smoke (catches backend ↔ frontend drift)", () => {
         const errors: string[] = [];
         page.on("pageerror", (e) => errors.push(e.message));
         await page.goto("/portfolio/watchlist");
-        await expect(page.getByRole("heading", { name: /watchlist/i })).toBeVisible();
+        await expect(page.getByRole("heading", { level: 1, name: /watchlist/i })).toBeVisible();
         expect(errors).toHaveLength(0);
     });
 
@@ -95,7 +95,7 @@ test.describe("Page load smoke (catches backend ↔ frontend drift)", () => {
         const errors: string[] = [];
         page.on("pageerror", (e) => errors.push(e.message));
         await page.goto("/portfolio/exchange-rates");
-        await expect(page.getByRole("heading", { name: /exchange rates/i })).toBeVisible();
+        await expect(page.getByRole("heading", { level: 1, name: /exchange rates/i })).toBeVisible();
         expect(errors).toHaveLength(0);
     });
 
@@ -111,7 +111,7 @@ test.describe("Page load smoke (catches backend ↔ frontend drift)", () => {
         const errors: string[] = [];
         page.on("pageerror", (e) => errors.push(e.message));
         await page.goto("/admin");
-        await expect(page.getByRole("heading", { name: /admin overview/i })).toBeVisible();
+        await expect(page.getByRole("heading", { level: 1, name: /admin overview/i })).toBeVisible();
         expect(errors).toHaveLength(0);
     });
 });
@@ -119,7 +119,7 @@ test.describe("Page load smoke (catches backend ↔ frontend drift)", () => {
 test.describe("Mutation roundtrip (catches contract drift on writes)", () => {
     test("Create category → list refetches and shows new item", async ({ page }) => {
         await page.goto("/categories");
-        await expect(page.getByRole("heading", { name: /categories/i })).toBeVisible();
+        await expect(page.getByRole("heading", { level: 1, name: /categories/i })).toBeVisible();
 
         const unique = `TEST_E2E_${Date.now()}`;
         await page.getByRole("button", { name: /add category/i }).first().click();
@@ -134,7 +134,7 @@ test.describe("Mutation roundtrip (catches contract drift on writes)", () => {
 
     test("Create recipient → list refetches and shows new item", async ({ page }) => {
         await page.goto("/recipients");
-        await expect(page.getByRole("heading", { name: /recipients/i })).toBeVisible();
+        await expect(page.getByRole("heading", { level: 1, name: /recipients/i })).toBeVisible();
 
         const unique = `Test_E2E_${Date.now()}`;
         await page.getByRole("button", { name: /add recipient/i }).first().click();

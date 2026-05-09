@@ -32,6 +32,7 @@ export interface StackedBarChartProps<Datum> {
     readonly tooltipTitle?: (datum: Datum) => string;
     readonly tooltipValueFormat?: (value: number, seriesKey: string) => string;
     readonly margin?: { top: number; right: number; bottom: number; left: number };
+    readonly ariaLabel?: string;
 }
 
 const DEFAULT_MARGIN = { top: 16, right: 16, bottom: 36, left: 48 };
@@ -62,6 +63,7 @@ function Inner<Datum>({
     margin = DEFAULT_MARGIN,
     width,
     height,
+    ariaLabel,
 }: StackedBarChartProps<Datum> & { width: number; height: number }) {
     const reduce = useReducedMotion();
 
@@ -144,7 +146,7 @@ function Inner<Datum>({
 
     return (
         <div style={{ position: "relative", width, height }}>
-            <svg width={width} height={height} role="img">
+            <svg width={width} height={height} role="img" aria-label={ariaLabel ?? "Stacked bar chart"}>
                 <Group left={margin.left} top={margin.top}>
                     {valueScale.ticks(5).map((tick) => (
                         <line

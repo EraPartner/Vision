@@ -23,7 +23,7 @@ test.describe("Phase F4 — CRUD lifecycle parity (real browser)", () => {
         page.on("pageerror", (e) => errors.push(e.message));
 
         await page.goto("/categories");
-        await expect(page.getByRole("heading", { name: /categories/i })).toBeVisible();
+        await expect(page.getByRole("heading", { level: 1, name: /categories/i })).toBeVisible();
 
         const unique = `F4_${Date.now()}`;
         const renamed = `${unique}_R`;
@@ -51,7 +51,7 @@ test.describe("Phase F4 — CRUD lifecycle parity (real browser)", () => {
         page.on("pageerror", (e) => errors.push(e.message));
 
         await page.goto("/recipients");
-        await expect(page.getByRole("heading", { name: /recipients/i })).toBeVisible();
+        await expect(page.getByRole("heading", { level: 1, name: /recipients/i })).toBeVisible();
 
         const unique = `F4Rcpt_${Date.now()}`;
 
@@ -65,7 +65,7 @@ test.describe("Phase F4 — CRUD lifecycle parity (real browser)", () => {
 
         // Reload to confirm persistence and no runtime errors after refetch
         await page.reload();
-        await expect(page.getByRole("heading", { name: /recipients/i })).toBeVisible();
+        await expect(page.getByRole("heading", { level: 1, name: /recipients/i })).toBeVisible();
         await expect(page.getByText(unique).first()).toBeVisible({ timeout: 8000 });
 
         expect(errors).toHaveLength(0);
@@ -76,7 +76,7 @@ test.describe("Phase F4 — CRUD lifecycle parity (real browser)", () => {
         page.on("pageerror", (e) => errors.push(e.message));
 
         await page.goto("/planned");
-        await expect(page.getByRole("heading", { name: /planned payments/i })).toBeVisible();
+        await expect(page.getByRole("heading", { level: 1, name: /planned payments/i })).toBeVisible();
 
         const unique = `F4Pln_${Date.now()}`;
 
@@ -96,7 +96,7 @@ test.describe("Phase F4 — CRUD lifecycle parity (real browser)", () => {
 test.describe("Phase F4 — Mutation invalidation parity", () => {
     test("After creating a recipient, navigating away and back still shows it", async ({ page }) => {
         await page.goto("/recipients");
-        await expect(page.getByRole("heading", { name: /recipients/i })).toBeVisible();
+        await expect(page.getByRole("heading", { level: 1, name: /recipients/i })).toBeVisible();
 
         const unique = `F4Nav_${Date.now()}`;
 
@@ -109,7 +109,7 @@ test.describe("Phase F4 — Mutation invalidation parity", () => {
 
         // Navigate away then back
         await page.goto("/categories");
-        await expect(page.getByRole("heading", { name: /categories/i })).toBeVisible();
+        await expect(page.getByRole("heading", { level: 1, name: /categories/i })).toBeVisible();
         await page.goto("/recipients");
         await expect(page.getByText(unique).first()).toBeVisible({ timeout: 8000 });
     });

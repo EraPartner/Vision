@@ -19,6 +19,7 @@ export interface DonutChartProps {
     readonly padAngle?: number;
     readonly center?: ReactNode;
     readonly tooltipValueFormat?: (value: number) => string;
+    readonly ariaLabel?: string;
 }
 
 export function DonutChart(props: DonutChartProps) {
@@ -42,6 +43,7 @@ function Inner({
     tooltipValueFormat,
     width,
     height,
+    ariaLabel,
 }: DonutChartProps & { width: number; height: number }) {
     const reduce = useReducedMotion();
     const outer = Math.min(width, height) / 2 - 8;
@@ -54,7 +56,7 @@ function Inner({
 
     return (
         <div style={{ position: "relative", width, height }}>
-            <svg width={width} height={height} role="img">
+            <svg width={width} height={height} role="img" aria-label={ariaLabel ?? "Donut chart"}>
                 <Group top={cy} left={cx}>
                     <Pie
                         data={data as PieDatum[]}

@@ -723,12 +723,27 @@ jobs:
           CI: '1'
           PLAYWRIGHT_BASE_URL: http://localhost:3002
 
-      - name: Upload Playwright report on failure
-        if: failure()
+      - name: Upload Playwright report on failure or cancellation
+        if: failure() || cancelled()
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v4
         with:
           name: playwright-report
           path: apps/frontend/playwright-report
+          retention-days: 7
+
+      - name: Capture container logs on failure or cancellation
+        if: failure() || cancelled()
+        run: |
+          mkdir -p /tmp/docker-logs
+          docker compose logs --no-color > /tmp/docker-logs/compose.log 2>&1 || true
+          docker compose ps > /tmp/docker-logs/ps.txt 2>&1 || true
+
+      - name: Upload container logs
+        if: failure() || cancelled()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v4
+        with:
+          name: e2e-container-logs
+          path: /tmp/docker-logs
           retention-days: 7
 
       - name: Tear down

@@ -401,6 +401,8 @@ export function DataTable<T extends Record<string, unknown>>({
                                                     >
                                                         <PopoverTrigger asChild>
                                                             <button
+                                                                type="button"
+                                                                aria-label={`Filter ${col.header}`}
                                                                 className={`p-0.5 rounded transition-colors ${hasFilter
                                                                         ? "text-primary"
                                                                         : "text-muted-foreground/40 opacity-0 group-hover:opacity-100 hover:text-foreground"

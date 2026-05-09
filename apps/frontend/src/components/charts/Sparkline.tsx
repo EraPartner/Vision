@@ -17,6 +17,7 @@ export interface SparklineProps {
     readonly color?: string;
     readonly strokeWidth?: number;
     readonly fillArea?: boolean;
+    readonly ariaLabel?: string;
 }
 
 export function Sparkline(props: SparklineProps) {
@@ -39,6 +40,7 @@ function Inner({
     fillArea = false,
     width,
     height,
+    ariaLabel,
 }: SparklineProps & { width: number; height: number }) {
     const reduce = useReducedMotion();
 
@@ -58,7 +60,7 @@ function Inner({
     }, [data, height]);
 
     return (
-        <svg width={width} height={height} role="img">
+        <svg width={width} height={height} role="img" aria-label={ariaLabel ?? "Sparkline"}>
             {fillArea ? (
                 <motion.g
                     initial={reduce ? { opacity: 1 } : { opacity: 0 }}

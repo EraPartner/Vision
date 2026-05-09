@@ -48,6 +48,7 @@ export interface BarChartProps<Datum> {
     readonly colorForIndex?: (index: number, datum: Datum) => string;
     readonly margin?: { top: number; right: number; bottom: number; left: number };
     readonly yDomain?: readonly [number, number];
+    readonly ariaLabel?: string;
 }
 
 const DEFAULT_MARGIN_V = { top: 16, right: 16, bottom: 36, left: 90 };
@@ -102,6 +103,7 @@ function Inner<Datum>({
     valueTickFormat,
     tooltipTitle,
     tooltipValueFormat,
+    ariaLabel,
     colorForIndex,
     margin,
     yDomain,
@@ -203,7 +205,7 @@ function Inner<Datum>({
 
     return (
         <div style={{ position: "relative", width, height }}>
-            <svg width={width} height={height} role="img">
+            <svg width={width} height={height} role="img" aria-label={ariaLabel ?? "Bar chart"}>
                 <Group left={effMargin.left} top={effMargin.top}>
                     {valueScale.ticks(5).map((tick) =>
                         layout === "vertical" ? (

@@ -24,6 +24,7 @@ export interface PieChartProps {
     readonly showLabels?: boolean;
     readonly labelFormat?: (datum: PieDatum, percent: number) => string;
     readonly tooltipValueFormat?: (value: number) => string;
+    readonly ariaLabel?: string;
 }
 
 export function PieChart(props: PieChartProps) {
@@ -47,6 +48,7 @@ function Inner({
     tooltipValueFormat,
     width,
     height,
+    ariaLabel,
 }: PieChartProps & { width: number; height: number }) {
     const reduce = useReducedMotion();
     const radius = Math.min(width, height) / 2 - 8;
@@ -60,7 +62,7 @@ function Inner({
 
     return (
         <div style={{ position: "relative", width, height }}>
-            <svg width={width} height={height} role="img">
+            <svg width={width} height={height} role="img" aria-label={ariaLabel ?? "Pie chart"}>
                 <Group top={centerY} left={centerX}>
                     <Pie
                         data={data as PieDatum[]}

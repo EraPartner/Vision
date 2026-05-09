@@ -48,6 +48,7 @@ export interface LineChartProps<Datum> {
     readonly tooltipValueFormat?: (value: number, seriesKey: string) => string;
     readonly margin?: { top: number; right: number; bottom: number; left: number };
     readonly yDomain?: readonly [number, number];
+    readonly ariaLabel?: string;
 }
 
 const DEFAULT_MARGIN = { top: 16, right: 24, bottom: 28, left: 90 };
@@ -81,6 +82,7 @@ function Inner<Datum>({
     yDomain,
     width,
     height,
+    ariaLabel,
 }: LineChartProps<Datum> & { width: number; height: number }) {
     const reduce = useReducedMotion();
 
@@ -174,7 +176,7 @@ function Inner<Datum>({
 
     return (
         <div style={{ position: "relative", width, height }}>
-            <svg width={width} height={height} role="img">
+            <svg width={width} height={height} role="img" aria-label={ariaLabel ?? "Line chart"}>
                 <Group left={margin.left} top={margin.top}>
                     {yScale.ticks(numYTicks).map((tick) => (
                         <line

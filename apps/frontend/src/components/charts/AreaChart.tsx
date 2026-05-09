@@ -59,6 +59,7 @@ export interface AreaChartProps<Datum> {
     readonly tooltipValueFormat?: (value: number, seriesKey: string) => string;
     readonly margin?: { top: number; right: number; bottom: number; left: number };
     readonly width?: number;
+    readonly ariaLabel?: string;
 }
 
 const DEFAULT_MARGIN = { top: 16, right: 24, bottom: 28, left: 90 };
@@ -106,6 +107,7 @@ function AreaChartInner<Datum>({
     margin = DEFAULT_MARGIN,
     width,
     height,
+    ariaLabel,
 }: InnerProps<Datum>) {
     const reduce = useReducedMotion();
 
@@ -222,7 +224,7 @@ function AreaChartInner<Datum>({
 
     return (
         <div style={{ position: "relative", width, height }}>
-            <svg width={width} height={height} role="img">
+            <svg width={width} height={height} role="img" aria-label={ariaLabel ?? "Area chart"}>
                 <Group left={margin.left} top={margin.top}>
                     {series.map((s, i) => {
                         const color = s.color ?? getChartColor(i);

@@ -191,6 +191,7 @@ export function AppSidebar() {
                   <NavLink
                     to="/ai-chat"
                     className={isActiveRoute("/ai-chat", location.pathname) ? "accent-rail" : ""}
+                    aria-label={t('nav.aiChat')}
                   >
                     <Sparkles className={`h-4 w-4 transition-colors duration-[var(--duration-normal)] ${isActiveRoute("/ai-chat", location.pathname) ? "text-primary" : ""}`} />
                     <span className={isActiveRoute("/ai-chat", location.pathname) ? "font-semibold tracking-tight" : "tracking-tight"}>
@@ -248,6 +249,7 @@ export function AppSidebar() {
                           to={item.url}
                           onMouseEnter={() => handleNavHover(item.url)}
                           className={isActive ? "accent-rail" : ""}
+                          aria-label={item.title}
                         >
                           <item.icon className={`h-4 w-4 transition-colors duration-[var(--duration-normal)] ${isActive ? "text-primary" : ""}`} />
                           <span className={isActive ? "font-semibold tracking-tight" : "tracking-tight"}>{item.title}</span>
@@ -276,6 +278,7 @@ export function AppSidebar() {
                         <NavLink
                           to={item.url}
                           className={isActive ? "accent-rail" : ""}
+                          aria-label={item.title}
                         >
                           <item.icon className={`h-4 w-4 transition-colors duration-[var(--duration-normal)] ${isActive ? "text-primary" : ""}`} />
                           <span className={isActive ? "font-semibold tracking-tight" : "tracking-tight"}>{item.title}</span>
