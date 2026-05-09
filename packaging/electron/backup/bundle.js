@@ -17,10 +17,18 @@
  * .sql.enc format so that runRestore can share the decryption path.
  */
 
-// archiver v8+ ships as ESM; require() returns a namespace where the factory
-// is on .default. Fall back to the module itself for v7 (CJS).
+// archiver v7 exposes a CJS factory: archiver('zip', opts).
+// archiver v8+ is ESM with named class exports: new ZipArchive(opts).
+// This shim keeps the call site (`archiver('zip', opts)`) stable across both.
 const archiverPkg = require('archiver');
-const archiver = archiverPkg.default ?? archiverPkg;
+const archiver = typeof archiverPkg === 'function'
+  ? archiverPkg
+  : (format, opts) => {
+      if (format === 'zip') return new archiverPkg.ZipArchive(opts);
+      if (format === 'tar') return new archiverPkg.TarArchive(opts);
+      if (format === 'json') return new archiverPkg.JsonArchive(opts);
+      throw new Error(`Unsupported archiver format: ${format}`);
+    };
 const yauzl = require('yauzl');
 const crypto = require('crypto');
 const fs = require('fs');
