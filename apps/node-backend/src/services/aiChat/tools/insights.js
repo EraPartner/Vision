@@ -78,8 +78,11 @@ export const getSpendingPace = {
     const mult = period === 'yearly' ? 12 : 1;
 
     const result = await infoRepository.getAverageVsCurrentSpending('EUR');
+    /** @type {any} */
     const p6 = result.past_6_months ?? {};
+    /** @type {any} */
     const cm = result.current_month ?? {};
+    /** @type {any} */
     const cmp = result.comparison ?? {};
 
     return {

@@ -78,7 +78,9 @@ async function probeYahoo() {
     // yahoo-finance2 may not wire AbortSignal in all published versions;
     // race against a rejection promise to guarantee the timeout fires.
     await Promise.race([
-      yf.quote('AAPL', { fields: ['regularMarketPrice'] }, { signal: controller.signal }),
+      // The third-arg `{ signal }` is supported at runtime but missing from
+      // the published .d.ts overloads; cast through any to keep the wiring.
+      /** @type {any} */ (yf.quote)('AAPL', { fields: ['regularMarketPrice'] }, { signal: controller.signal }),
       new Promise((_, reject) =>
         controller.signal.addEventListener('abort', () => reject(new Error('Yahoo probe timed out')))
       ),

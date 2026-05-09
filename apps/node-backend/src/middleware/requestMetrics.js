@@ -84,7 +84,9 @@ function normalizeRoute(req) {
 
 /**
  * Express middleware — record timing and status after response finishes.
- * @type {import('express').RequestHandler}
+ * @param {import('express').Request} req
+ * @param {import('express').Response} res
+ * @param {import('express').NextFunction} next
  */
 export function requestMetrics(req, res, next) {
   const startMs = Date.now();

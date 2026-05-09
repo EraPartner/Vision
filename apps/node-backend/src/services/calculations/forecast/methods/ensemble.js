@@ -45,7 +45,7 @@ export function computeWeights(accuracyRows, methodIds) {
  *
  * @param {{
  *   forecastDates: string[],
- *   methodOutputs: Array<{ id: string, series: Array<{ date: string, value: number }> }>,
+ *   methodOutputs: Array<{ id: string, series: Array<{ date: string, value: number }>, error?: any }>,
  *   weights: Map<string, number>
  * }} args
  * @returns {Array<{ date: string, value: number }>}

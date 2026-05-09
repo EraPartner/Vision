@@ -99,7 +99,7 @@ export function buildListWhereClause({ investmentId = null, type = null } = {}) 
 }
 
 export function makeValidationError(message) {
-  const err = new Error(message);
+  const err = /** @type {Error & { code?: string }} */ (new Error(message));
   err.code = 'VALIDATION_ERROR';
   return err;
 }
@@ -153,6 +153,10 @@ function normalizeBuySellMath({ amount, units, pricePerUnit }) {
   };
 }
 
+/**
+ * @param {any} payload
+ * @param {{ assetClass?: string }} [options]
+ */
 export function normalizeTransactionPayload(payload, { assetClass } = {}) {
   const type = payload.type;
   const amount = parseOptionalNumber(payload.amount, 'amount');
@@ -234,6 +238,11 @@ export function normalizeTransactionPayload(payload, { assetClass } = {}) {
   };
 }
 
+/**
+ * @param {any} investmentId
+ * @param {any} date
+ * @param {{ excludeTransactionId?: number }} [options]
+ */
 async function getNetUnitsOnOrBeforeDate(investmentId, date, { excludeTransactionId } = {}) {
   if (!investmentId || !date) return 0;
 
@@ -261,6 +270,9 @@ async function getNetUnitsOnOrBeforeDate(investmentId, date, { excludeTransactio
   return toNumber(toDecimal(result.rows[0]?.net_units ?? 0));
 }
 
+/**
+ * @param {{ investmentId: any, assetClass: any, type: any, date: any, units: any, excludeTransactionId?: any }} params
+ */
 export async function validateSellUnitsAvailability({
   investmentId,
   assetClass,

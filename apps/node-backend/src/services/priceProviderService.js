@@ -210,6 +210,13 @@ function _fallbackHistoricalPoints(cachedDbPoints, fromMs, toMs) {
   return _filterHistoricalPoints(cachedDbPoints, fromMs, toMs);
 }
 
+/**
+ * @param {number} investmentId
+ * @param {Array<{ timestampMs: number, price: number }>} points
+ * @param {string} source
+ * @param {Array<{ timestampMs: number, price: number }>} cachedDbPoints
+ * @param {{ fromMs?: number, toMs?: number }} [range]
+ */
 async function _persistAndResolve(investmentId, points, source, cachedDbPoints, { fromMs, toMs } = {}) {
   const { saveHistoricalPointsToDatabase } = await import('./prices/priceCache.js');
   // Only persist points within the requested range — providers (Yahoo, Binance, Kinesis)
@@ -224,6 +231,10 @@ async function _persistAndResolve(investmentId, points, source, cachedDbPoints, 
   return _filterHistoricalPoints(resolved, fromMs, toMs);
 }
 
+/**
+ * @param {{ id: number, price_provider?: string, price_provider_id?: string|null, asset_class?: string, currency?: string, symbol?: string }} investment
+ * @param {{ fromMs?: number, toMs?: number, dbOnly?: boolean|string|number }} [opts]
+ */
 export async function fetchHistoricalPrices(investment, { fromMs, toMs, dbOnly = false } = {}) {
   if (!investment) return [];
   const provider = investment.price_provider || 'manual';

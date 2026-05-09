@@ -347,7 +347,12 @@ export const PROVIDERS = {
       if (!symbol) return;
 
       try {
-        const quote = await yahooFinance.quote(symbol);
+        // yahoo-finance2 overloads `.quote(string)` to return Quote, but its
+        // typings collapse to QuoteResponseArray; cast to a structural shape
+        // to access fields without losing runtime safety.
+        const quote = /** @type {{ regularMarketPrice?: number, regularMarketPreviousClose?: number, currency?: string }} */ (
+          await yahooFinance.quote(symbol)
+        );
         const livePrice = toNumber(quote?.regularMarketPrice);
         const previousClose = toNumber(quote?.regularMarketPreviousClose);
 

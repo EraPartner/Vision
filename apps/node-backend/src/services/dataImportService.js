@@ -44,7 +44,7 @@ async function safeReadCsv(filePath, encoding) {
     throw new Error('Refusing to read CSV with unsafe filename');
   }
   const safeEncoding = ALLOWED_ENCODINGS.has(String(encoding).toLowerCase()) ? encoding : 'utf-8';
-  return fs.promises.readFile(path.join(os.tmpdir(), basename), safeEncoding);
+  return fs.promises.readFile(path.join(os.tmpdir(), basename), /** @type {BufferEncoding} */ (safeEncoding));
 }
 
 // ─── Recipients ───────────────────────────────────────────────────────────────
@@ -53,10 +53,10 @@ async function safeReadCsv(filePath, encoding) {
  * Import recipients from a CSV file.
  *
  * @param {string} filePath  - Path to the temporary CSV file
- * @param {Object} options
- * @param {string} options.separator - Column delimiter (default: ',')
- * @param {string} options.encoding  - File encoding (default: 'utf-8')
- * @returns {Promise<{total_processed, imported, skipped, errors}>}
+ * @param {Object} [options]
+ * @param {string} [options.separator] - Column delimiter (default: ',')
+ * @param {string} [options.encoding]  - File encoding (default: 'utf-8')
+ * @returns {Promise<{total_processed: number, imported: number, skipped: number, errors: number, bank_account_errors?: number}>}
  */
 export async function importRecipientsCSV(filePath, { separator = ',', encoding = 'utf-8' } = {}) {
     const content = await safeReadCsv(filePath, encoding);
@@ -155,10 +155,10 @@ export async function importRecipientsCSV(filePath, { separator = ',', encoding 
  * Import categories from a CSV file.
  *
  * @param {string} filePath  - Path to the temporary CSV file
- * @param {Object} options
- * @param {string} options.separator - Column delimiter (default: ',')
- * @param {string} options.encoding  - File encoding (default: 'utf-8')
- * @returns {Promise<{total_processed, imported, skipped, errors}>}
+ * @param {Object} [options]
+ * @param {string} [options.separator] - Column delimiter (default: ',')
+ * @param {string} [options.encoding]  - File encoding (default: 'utf-8')
+ * @returns {Promise<{total_processed: number, imported: number, skipped: number, errors: number}>}
  */
 export async function importCategoriesCSV(filePath, { separator = ',', encoding = 'utf-8' } = {}) {
     const content = await safeReadCsv(filePath, encoding);

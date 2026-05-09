@@ -475,6 +475,9 @@ function filterRates(rates, startMonth, endMonth) {
   });
 }
 
+/**
+ * @param {{ startMonth?: any, endMonth?: any, forceRefresh?: boolean, dbOnly?: boolean, scheduleBackgroundRefresh?: boolean }} [options]
+ */
 export async function getInflationRates({
   startMonth,
   endMonth,

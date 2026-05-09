@@ -113,7 +113,7 @@ const CHILD_ALLOWED_FIELDS_BY_ASSET_CLASS = {
 };
 
 function makeValidationError(message) {
-  const err = new Error(message);
+  const err = /** @type {Error & { code?: string }} */ (new Error(message));
   err.code = 'VALIDATION_ERROR';
   return err;
 }

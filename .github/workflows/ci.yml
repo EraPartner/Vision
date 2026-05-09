@@ -161,13 +161,11 @@ jobs:
         run: cd apps/frontend && bunx tsc --noEmit
 
   # ─────────────────────────────────────────────────────────────────────────────
-  # Backend checkJs — advisory tsc --checkJs over JSDoc-typed JS files.
-  # Not gating: backend has pre-existing JSDoc gaps. Output is shown so the
-  # error count visibly trends down as JSDoc is tightened over time.
-  # Flip continue-on-error to false once the backlog is clean.
+  # Backend checkJs — tsc --checkJs over JSDoc-typed JS files.
+  # Required gate: catches JSDoc rot in the backend before it reaches main.
   # ─────────────────────────────────────────────────────────────────────────────
   typecheck-backend:
-    name: Type Check (Backend, advisory)
+    name: Type Check (Backend)
     runs-on: ubuntu-24.04
     timeout-minutes: 10
     permissions:
@@ -190,8 +188,7 @@ jobs:
       - name: Install dependencies
         run: bun install --frozen-lockfile
 
-      - name: Type-check backend (JSDoc, advisory)
-        continue-on-error: true
+      - name: Type-check backend (JSDoc)
         run: cd apps/node-backend && bunx tsc -p tsconfig.check.json
 
   # ─────────────────────────────────────────────────────────────────────────────

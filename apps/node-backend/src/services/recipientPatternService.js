@@ -111,7 +111,7 @@ function hasRedosRisk(pattern) {
  * Validate a pattern string server-side before saving.
  * Rejects: empty, too long, ReDoS-risky (regex kind), or patterns that fail to compile.
  *
- * @param {{ pattern: string, pattern_kind: string, case_sensitive: boolean }} row
+ * @param {{ pattern: string, pattern_kind: string, case_sensitive?: boolean }} row
  * @returns {{ valid: boolean, error?: string }}
  */
 export function validatePattern(row) {
@@ -125,7 +125,7 @@ export function validatePattern(row) {
     return { valid: false, error: 'Regex pattern contains nested quantifiers or quantified alternation that could cause catastrophic backtracking' };
   }
   try {
-    compilePattern({ id: 0, updated_at: '0', ...row });
+    compilePattern({ id: 0, updated_at: '0', case_sensitive: false, ...row });
     return { valid: true };
   } catch (err) {
     return { valid: false, error: `Invalid pattern: ${err.message}` };
@@ -232,14 +232,8 @@ export function suggestPatternFromNames(names) {
 }
 
 /**
- * Preview how many recipients in the DB have a normalized_name or name
- * that the given pattern would match.
- *
- * Used to warn the user when a new pattern would collide with recipients
- * outside the intended merge set.
- *
- * @param {{ pattern: string, pattern_kind: string, case_sensitive: boolean }} patternRow
- * @returns {Promise<{ matchCount: number, recipientIds: number[] }>}
+ * @param {{ pattern: string, pattern_kind: string }} row
+ * @returns {string}
  */
 function buildSqlRegexPattern({ pattern, pattern_kind }) {
   switch (pattern_kind) {
@@ -260,6 +254,16 @@ function buildSqlRegexPattern({ pattern, pattern_kind }) {
   }
 }
 
+/**
+ * Preview how many recipients in the DB have a normalized_name or name
+ * that the given pattern would match.
+ *
+ * Used to warn the user when a new pattern would collide with recipients
+ * outside the intended merge set.
+ *
+ * @param {{ pattern: string, pattern_kind: string, case_sensitive: boolean }} patternRow
+ * @returns {Promise<{ matchCount: number, recipientIds: number[] }>}
+ */
 export async function previewPatternMatches(patternRow) {
   const validation = validatePattern(patternRow);
   if (!validation.valid) {

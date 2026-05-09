@@ -27,6 +27,10 @@ const MAX_TOOL_ITERATIONS = 6;
 const DEFAULT_CONVERSATION_TITLE = 'New conversation';
 
 export class AiChatServiceError extends Error {
+  /**
+   * @param {string} message
+   * @param {{ code?: string, status?: number, cause?: unknown }} [options]
+   */
   constructor(message, { code, status, cause } = {}) {
     super(message);
     this.name = 'AiChatServiceError';
@@ -102,16 +106,18 @@ async function ensureConversation({ conversationId, model, firstUserMessage }) {
 /**
  * Run a single chat turn.
  *
- * @param {object} args
- * @param {string} [args.conversationId] - existing conversation UUID, or null to create a new one
- * @param {string} args.message          - the new user message text
- * @param {string} [args.model]          - override the model (else conversation/default)
+ * @param {object} [args]
+ * @param {string|null} [args.conversationId] - existing conversation UUID, or null to create a new one
+ * @param {string} [args.message]          - the new user message text
+ * @param {string|null} [args.model]          - override the model (else conversation/default)
+ * @param {boolean} [args.useTools=true]
  * @param {AbortSignal} [args.signal]    - propagate cancellation
  * @param {boolean} [args.streaming=false] - when true, use `ollamaClient.chatStream`
  *   and emit per-chunk `token` events via `onEvent`.
  * @param {(event: {type: string, data: any}) => void | Promise<void>} [args.onEvent]
  *   Optional hook called for each persisted message, tool call/result,
  *   and (in streaming mode) each content delta. May be async — awaited at each call site.
+ * @param {any} [args.ollamaClient]
  *
  * @returns {Promise<{
  *   conversation: object,
@@ -176,6 +182,9 @@ export async function runChatTurn({
   }
 }
 
+/**
+ * @param {{ conversationId: any, message: any, model: any, useTools: any, signal: any, streaming: any, onEvent: any, ollamaClient: any }} args
+ */
 async function runChatTurnInner({
   conversationId,
   message,

@@ -41,8 +41,8 @@ export async function computeDailySnapshots(targetCurrency = 'EUR') {
     return [];
   }
 
-  const firstDateYmd = firstDataDate instanceof Date
-    ? firstDataDate.toISOString().split('T')[0]
+  const firstDateYmd = /** @type {unknown} */ (firstDataDate) instanceof Date
+    ? /** @type {Date} */ (firstDataDate).toISOString().split('T')[0]
     : String(firstDataDate).split('T')[0];
 
   const [

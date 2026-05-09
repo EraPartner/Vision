@@ -34,7 +34,7 @@ export { createBatch, stageBatch, validateBatch, matchBatch, commitBatch };
  * Decides whether the batch needs user review or can be auto-committed.
  *
  * @param {{ batchId: number, filePath: string, adapterName: string, customConfig?: object, filename?: string, sizeBytes?: number, onProgress?: Function }} args
- * @returns {Promise<{ batchId: number, rowsTotal: number, requiresReview: boolean, matchSourceCounts: object }>}
+ * @returns {Promise<{ batchId: number, rowsTotal: number, requiresReview: boolean, matchSourceCounts: object, validateErrors: number }>}
  */
 export async function prepareImport({ batchId, filePath, adapterName, customConfig, filename: _filename, sizeBytes: _sizeBytes, onProgress }) {
   const { rowsTotal } = await stageBatch({ batchId, filePath, adapterName, customConfig, onProgress });
@@ -101,7 +101,7 @@ export async function commitImport({ batchId, onProgress }) {
  * for the frontend to present the ImportReviewPage.
  *
  * @param {{ filePath: string, adapterName: string, customConfig?: object, filename?: string, sizeBytes?: number, onProgress?: Function }} args
- * @returns {Promise<{ batchId: number, total: number, requiresReview: boolean, imported?: number, duplicates?: number, errors?: number }>}
+ * @returns {Promise<{ batchId: number, total: number, requiresReview: boolean, imported?: number, duplicates?: number, errors?: number, matchSourceCounts?: object }>}
  */
 export async function runImportPipeline({ filePath, adapterName, customConfig, filename, sizeBytes, onProgress }) {
   const batchId = await createBatch({ adapterName, filename, sizeBytes, customConfig });

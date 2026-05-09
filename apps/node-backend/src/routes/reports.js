@@ -38,7 +38,7 @@ const themeSchema = z.object({
   chart7:   hslToken.optional(),
   chart8:   hslToken.optional(),
   mode:     z.enum(['light', 'dark']).default('light'),
-}).default({});
+}).default(/** @type {any} */ ({}));
 
 const periodSchema = z.discriminatedUnion('kind', [
   z.object({ kind: z.literal('ytd') }),

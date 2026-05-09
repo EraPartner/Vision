@@ -13,7 +13,9 @@
  * Express middleware. Idempotent — safe to mount more than once, but typical
  * usage is a single mount right before routers.
  *
- * @type {import('express').RequestHandler}
+ * @param {import('express').Request} req
+ * @param {import('express').Response} res
+ * @param {import('express').NextFunction} next
  */
 export function wrapResponse(req, res, next) {
   /**

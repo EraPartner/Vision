@@ -100,6 +100,18 @@ function buildNdjsonRow(row) {
 /**
  * Build a probe + iterate-in-chunks pipeline that streams export rows to `res`.
  * Returns `{ rowCount }` when the stream completes cleanly.
+ *
+ * @param {import('express').Response} res
+ * @param {{
+ *   whereSql: string,
+ *   params: any[],
+ *   nextParamIdx: number,
+ *   contentType: string,
+ *   filename: string,
+ *   writeHeader?: (res: import('express').Response) => void,
+ *   formatRow: (row: any, rowIndex: number) => string,
+ *   label: string,
+ * }} opts
  */
 async function streamExport(res, { whereSql, params, nextParamIdx, contentType, filename, writeHeader, formatRow, label }) {
   const probe = await dbQuery(buildExportProbeSql(whereSql), params);

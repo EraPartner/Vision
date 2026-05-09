@@ -15,6 +15,10 @@ import { logger } from '../../config/logger.js';
 import settings from '../../config/config.js';
 
 export class OllamaError extends Error {
+  /**
+   * @param {string} message
+   * @param {{ status?: number|null, cause?: unknown, code?: string|null }} [options]
+   */
   constructor(message, { status, cause, code } = {}) {
     super(message);
     this.name = 'OllamaError';
@@ -73,6 +77,10 @@ export function createOllamaClient({
 
   const url = (path) => `${baseUrl}${path}`;
 
+  /**
+   * @param {string} path
+   * @param {{ method?: string, body?: any, signal?: AbortSignal, timeoutMs?: number }} [options]
+   */
   async function request(path, { method = 'GET', body, signal, timeoutMs = requestTimeoutMs } = {}) {
     const { signal: composedSignal, cancel, isTimeout } = withTimeout(signal, timeoutMs);
     try {
@@ -128,6 +136,9 @@ export function createOllamaClient({
     }
   }
 
+  /**
+   * @param {{ signal?: AbortSignal }} [options]
+   */
   async function listModels({ signal } = {}) {
     const data = await request('/api/tags', { signal, timeoutMs: healthTimeoutMs });
     const raw = Array.isArray(data?.models) ? data.models : [];
@@ -141,6 +152,9 @@ export function createOllamaClient({
     }));
   }
 
+  /**
+   * @param {{ model?: string, messages: any[], tools?: any[], options?: any, signal?: AbortSignal }} params
+   */
   async function chat({
     model = settings.ollama.defaultModel,
     messages,
@@ -152,6 +166,7 @@ export function createOllamaClient({
       throw new OllamaError('chat requires a non-empty messages array', { code: 'INVALID_INPUT' });
     }
 
+    /** @type {Record<string, any>} */
     const body = {
       model,
       messages,
@@ -160,11 +175,11 @@ export function createOllamaClient({
     if (tools && tools.length > 0) body.tools = tools;
     if (options) body.options = options;
 
-    const data = await request('/api/chat', {
+    const data = /** @type {any} */ (await request('/api/chat', {
       method: 'POST',
       body,
       signal,
-    });
+    }));
 
     const message = data?.message || {};
     return {
@@ -181,6 +196,9 @@ export function createOllamaClient({
     };
   }
 
+  /**
+   * @param {{ model?: string, messages?: any[], tools?: any[], options?: any, signal?: AbortSignal, onToken?: (chunk: string) => void|Promise<void> }} [params]
+   */
   async function chatStream({
     model = settings.ollama.defaultModel,
     messages,
@@ -195,6 +213,7 @@ export function createOllamaClient({
       });
     }
 
+    /** @type {Record<string, any>} */
     const body = {
       model,
       messages,

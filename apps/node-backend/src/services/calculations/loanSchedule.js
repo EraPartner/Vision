@@ -66,7 +66,9 @@ export function validateLoanConfig(config) {
 export function generateLoanRepaymentSchedule(config) {
   const { errors, normalized } = validateLoanConfig(config);
   if (errors.length > 0) {
-    const err = new Error(`Invalid loan configuration: ${errors.join(', ')}`);
+    const err = /** @type {Error & { statusCode?: number }} */ (
+      new Error(`Invalid loan configuration: ${errors.join(', ')}`)
+    );
     err.statusCode = 400;
     throw err;
   }
@@ -96,7 +98,9 @@ export function generateLoanRepaymentSchedule(config) {
   } else if (loanType === 'interest_only') {
     regularPayment = principal * monthlyRate;
   } else {
-    const err = new Error(`Unsupported loan_type '${loanType}'. Use amortizing, fixed_principal, or interest_only.`);
+    const err = /** @type {Error & { statusCode?: number }} */ (
+      new Error(`Unsupported loan_type '${loanType}'. Use amortizing, fixed_principal, or interest_only.`)
+    );
     err.statusCode = 400;
     throw err;
   }

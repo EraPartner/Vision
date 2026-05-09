@@ -285,7 +285,7 @@ export function svgGenericGroupedBarChart(groups, seriesDefs) {
  * `labels` is a parallel array of x-axis labels (same length as values).
  *
  * @param {{ label: string; color: string; values: number[] }[]} series
- * @param {{ labels: string[]; height?: number }} opts
+ * @param {{ labels?: string[]; height?: number }} [opts]
  * @returns {string}
  */
 export function svgLineChart(series, { labels = [], height = 160 } = {}) {

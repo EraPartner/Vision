@@ -20,10 +20,10 @@ setInterval(() => {
 
 /**
  * Rate limiter middleware factory.
- * @param {object} options
- * @param {number} options.windowMs - Time window in milliseconds (default: 60000)
- * @param {number} options.maxRequests - Max requests per window (default: 100)
- * @param {string} options.keyPrefix - Prefix for rate limit key (default: 'global')
+ * @param {object} [options]
+ * @param {number} [options.windowMs] - Time window in milliseconds (default: 60000)
+ * @param {number} [options.maxRequests] - Max requests per window (default: 100)
+ * @param {string} [options.keyPrefix] - Prefix for rate limit key (default: 'global')
  */
 export function rateLimiter({ windowMs = 60_000, maxRequests = 100, keyPrefix = 'global' } = {}) {
   return (req, res, next) => {

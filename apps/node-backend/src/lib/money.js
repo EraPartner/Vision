@@ -16,7 +16,12 @@ export function toDecimal(v) {
  * @returns {Decimal}
  */
 export function addAll(values) {
-  return values.reduce((acc, v) => acc.plus(toDecimal(v)), new Decimal(0));
+  /** @type {Decimal} */
+  let acc = new Decimal(0);
+  for (const v of values) {
+    acc = acc.plus(toDecimal(v));
+  }
+  return acc;
 }
 
 /**

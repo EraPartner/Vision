@@ -50,7 +50,6 @@ function defaultOllamaUrl() {
     : 'http://127.0.0.1:11434';
 }
 
-/** @type {import('./types').Settings} */
 const settings = deepFreeze({
   debug: env.DEBUG,
 

@@ -82,6 +82,7 @@ export const FALLBACK_RATES = {
 };
 
 // Live fallback — refreshed to latest fetched rates so cache-miss + DB-miss still gets fresh data.
+/** @type {Record<string, number>} */
 let liveFallbackRates = FALLBACK_RATES;
 
 // ─── Cache helpers ────────────────────────────────────────────────────────────
@@ -144,6 +145,7 @@ export async function warmCache() {
     }
 
     // Supplementary first, then ECB overwrites any overlaps
+    /** @type {Record<string, number>} */
     const mergedRates = {
       ...(erarRates ?? {}),
       ...(ecbRates  ?? {}),
@@ -176,9 +178,10 @@ export async function convertToEur(amount, fromCurrency) {
  * Rows must have `amount` and `currency` fields.
  * Returns rows with an `amount_eur` field containing the converted amount.
  *
- * @param {Array<{amount:number|string,currency:string}>} rows
+ * @param {Array<Record<string, any>>} rows
  * @param {string} [targetCurrency='EUR']
  * @param {{ useHistoricalRatesByDate?: boolean, dateField?: string|null }} [options]
+ * @returns {Promise<Array<Record<string, any>>>}
  */
 export async function convertRowsToEur(rows, targetCurrency = 'EUR', options = {}) {
   if (!rows || rows.length === 0) return [];

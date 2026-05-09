@@ -9,6 +9,10 @@
 import fs from 'fs';
 import { parse } from 'csv-parse/sync';
 
+/**
+ * @param {string} filePath
+ * @param {BufferEncoding} [encoding]
+ */
 export async function readFileAsync(filePath, encoding = 'utf-8') {
   return fs.promises.readFile(filePath, encoding);
 }
@@ -87,6 +91,11 @@ export function buildOptionalComment(commentParts) {
   return commentParts.length ? commentParts.join(' | ') : null;
 }
 
+/**
+ * @param {string} filePath
+ * @param {object} options
+ * @param {BufferEncoding} [encoding]
+ */
 export async function parseCsvFile(filePath, options, encoding = 'utf-8') {
   const content = await fs.promises.readFile(filePath, encoding);
   return parse(content, options);

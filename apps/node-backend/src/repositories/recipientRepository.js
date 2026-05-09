@@ -202,6 +202,10 @@ export const recipientRepository = {
     return { recipient: full, created };
   },
 
+  /**
+   * @param {any} id
+   * @param {{ name?: any, default_category_id?: any, notes?: any, is_active?: any }} fields
+   */
   async update(id, { name, default_category_id, notes, is_active }) {
     const setClauses = [];
     const params = [];

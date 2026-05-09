@@ -39,8 +39,8 @@ function upstreamError(message, cause) {
 function rangeToDate(range) {
   const now = new Date();
   switch (range) {
-    case '1d': return new Date(now - 1 * 24 * 60 * 60 * 1000);
-    case '5d': return new Date(now - 5 * 24 * 60 * 60 * 1000);
+    case '1d': return new Date(now.getTime() - 1 * 24 * 60 * 60 * 1000);
+    case '5d': return new Date(now.getTime() - 5 * 24 * 60 * 60 * 1000);
     case '1mo': return new Date(now.getFullYear(), now.getMonth() - 1, now.getDate());
     case '3mo': return new Date(now.getFullYear(), now.getMonth() - 3, now.getDate());
     case '6mo': return new Date(now.getFullYear(), now.getMonth() - 6, now.getDate());
@@ -102,11 +102,14 @@ router.get('/quote', async (req, res) => {
 
         if (quote.status === 'rejected') return null;
 
-        const q = quote.value;
-        const s = summary.status === 'fulfilled' ? summary.value : null;
+        const q = /** @type {any} */ (quote.value);
+        const s = /** @type {any} */ (summary.status === 'fulfilled' ? summary.value : null);
 
+        /** @type {any} */
         const sd = s?.summaryDetail || {};
+        /** @type {any} */
         const ks = s?.defaultKeyStatistics || {};
+        /** @type {any} */
         const pr = s?.price || {};
 
         const marketCap = sd.marketCap ?? pr.marketCap ?? q.marketCap;
@@ -174,7 +177,8 @@ router.get('/quote', async (req, res) => {
   }
 
   const mapped = quoteResults
-    .filter((r) => r.status === 'fulfilled' && r.value !== null)
+    .filter(/** @type {(r: PromiseSettledResult<any>) => r is PromiseFulfilledResult<any>} */
+      (r) => r.status === 'fulfilled' && r.value !== null)
     .map((r) => r.value);
 
   res.ok({ quotes: mapped });

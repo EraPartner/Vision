@@ -21,7 +21,7 @@ import { addAll, toNumber, toDecimal, roundToCents as roundToCentsDecimal } from
 
 /**
  * Round to cents using Decimal-backed banker's rounding.
- * @param {number|string} value
+ * @param {number|string|import('decimal.js').default} value
  * @returns {number}
  */
 export function roundToCents(value) {

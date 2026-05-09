@@ -15,7 +15,7 @@ export const plannedRepository = {
     const now = new Date();
     const nextMonth = new Date(now.getFullYear(), now.getMonth() + 1, 1);
     const monthAfter = new Date(now.getFullYear(), now.getMonth() + 2, 1);
-    const lastDay = new Date(monthAfter - 1);
+    const lastDay = new Date(monthAfter.getTime() - 1);
 
     const sql = `
       SELECT pt.*, r.name AS recipient_name,

@@ -60,6 +60,10 @@ export function normalizeHistoryPoints(points) {
     .map(([, point]) => point);
 }
 
+/**
+ * @param {Array<{ timestampMs: number, price: number }>} points
+ * @param {{ fromMs?: number, toMs?: number }} [range]
+ */
 export function filterPointsByRange(points, { fromMs, toMs } = {}) {
   const from = Number.isFinite(Number(fromMs)) ? Number(fromMs) : undefined;
   const to = Number.isFinite(Number(toMs)) ? Number(toMs) : undefined;
@@ -71,6 +75,10 @@ export function filterPointsByRange(points, { fromMs, toMs } = {}) {
   });
 }
 
+/**
+ * @param {Array<{ timestampMs: number, price: number }>} points
+ * @param {{ fromMs?: number, toMs?: number }} [range]
+ */
 export function needsHistoryRefresh(points, { fromMs, toMs } = {}) {
   const normalized = normalizeHistoryPoints(points);
   if (normalized.length === 0) return true;
@@ -135,6 +143,10 @@ if (typeof _sweepInterval.unref === 'function') _sweepInterval.unref();
 
 // ─── DB persistence ───────────────────────────────────────────────────────────
 
+/**
+ * @param {number} investmentId
+ * @param {{ fromMs?: number, toMs?: number }} [range]
+ */
 export async function loadHistoricalPointsFromDatabase(investmentId, { fromMs, toMs } = {}) {
   if (!Number.isFinite(Number(investmentId))) return [];
   const fromDate = Number.isFinite(Number(fromMs)) ? toDateOnly(Number(fromMs)) : null;

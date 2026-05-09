@@ -26,6 +26,9 @@ const INCOME_NODE_ID = '__income__';
 const SAVINGS_NODE_ID = '__savings__';
 const TOP_N = 12;
 
+/**
+ * @param {{ targetCurrency?: string, year?: number, excludedCategoryIds?: any[], excludedRecipientIds?: any[] }} [opts]
+ */
 export async function computeSankeyFlow({
   targetCurrency = 'EUR',
   year,
@@ -36,6 +39,7 @@ export async function computeSankeyFlow({
   const yearStart = `${targetYear}-01-01`;
   const yearEnd = `${targetYear}-12-31`;
 
+  /** @type {any[]} */
   const params = [yearStart, yearEnd];
   const clauses = [];
 
@@ -84,7 +88,7 @@ export async function computeSankeyFlow({
   const spendingByCategory = new Map();
 
   for (const row of rows) {
-    const eur = parseFloat(row.amount_eur ?? row.amount);
+    const eur = parseFloat(String(row.amount_eur ?? row.amount));
     if (row.is_income) {
       totalIncome += eur;
     } else {

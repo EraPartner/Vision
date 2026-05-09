@@ -7,11 +7,17 @@
  * freshness and by the shadow-mode diff in Phase 8 to correlate divergences.
  */
 
+/**
+ * @param {any} data
+ * @param {{ source?: string, computedAt?: string|Date }} [options]
+ */
 export function buildEnvelope(data, { source = 'live', computedAt } = {}) {
   return {
     data,
     meta: {
-      computedAt: computedAt ?? new Date().toISOString(),
+      computedAt: computedAt instanceof Date
+        ? computedAt.toISOString()
+        : (computedAt ?? new Date().toISOString()),
       source,
     },
   };

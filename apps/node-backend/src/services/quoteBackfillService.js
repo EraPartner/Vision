@@ -378,7 +378,7 @@ async function backfillInvestmentQuotes(investment, holdingWindows) {
  * Full backfill: fetch and store quotes for ALL investments with holding windows.
  * Runs on startup. Also cleans up stale quotes outside holding windows.
  *
- * @returns {Promise<{ processed: number, withHistory: number, failed: number, spikesCorrected: number }>}
+ * @returns {Promise<{ processed: number, withHistory: number, failed: number }>}
  */
 export async function backfillHistoricalAssetQuotes() {
   const investmentWindows = await getInvestmentsWithHoldingWindows();

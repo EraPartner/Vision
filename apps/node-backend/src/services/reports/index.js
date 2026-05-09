@@ -338,7 +338,7 @@ function buildFooterTemplate(theme) {
 /**
  * Build the cover page HTML for any report type.
  *
- * @param {{ type: string; currency: string; period: Period; generatedAt: string; excludedCategoryIds?: number[]; excludedRecipientIds?: number[] }} opts
+ * @param {{ type: string; currency: string; period: Period; generatedAt: string; excludedCategoryIds?: number[]; excludedRecipientIds?: number[]; pricesAsOf?: string|null }} opts
  */
 function buildCoverHtml({ type, currency, period, generatedAt, excludedCategoryIds = [], excludedRecipientIds = [], pricesAsOf = null }) {
   const title = REPORT_TITLES[type] ?? 'Report';

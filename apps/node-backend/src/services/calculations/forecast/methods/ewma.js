@@ -37,11 +37,12 @@ export function forecast({ history, forecastDates, alpha = DEFAULT_ALPHA }) {
 
   const levels = new Map();
   for (const [d, byMonth] of series) {
+    /** @type {number|null} */
     let level = null;
     for (const mk of monthOrder) {
       const x = byMonth.get(mk);
       if (x === undefined) continue;
-      level = level === null ? x : alpha * x + (1 - alpha) * level;
+      level = level === null ? x : alpha * x + (1 - alpha) * /** @type {number} */ (level);
     }
     levels.set(d, level ?? 0);
   }

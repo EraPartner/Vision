@@ -49,9 +49,9 @@ export async function getAllByInvestmentIds({
 
   if (normalizedIds.length === 0) return [];
 
-  const safePerInvestmentLimit = Math.max(1, Math.min(Number.parseInt(perInvestmentLimit, 10) || 1000, 5000));
-  const safeOffset = Math.max(0, Number.parseInt(offset, 10) || 0);
-  const safeLimit = limit == null ? null : Math.max(1, Math.min(Number.parseInt(limit, 10) || normalizedIds.length * safePerInvestmentLimit, 200000));
+  const safePerInvestmentLimit = Math.max(1, Math.min(Number.parseInt(String(perInvestmentLimit), 10) || 1000, 5000));
+  const safeOffset = Math.max(0, Number.parseInt(String(offset), 10) || 0);
+  const safeLimit = limit == null ? null : Math.max(1, Math.min(Number.parseInt(String(limit), 10) || normalizedIds.length * safePerInvestmentLimit, 200000));
 
   let sql = `
     WITH ranked AS (

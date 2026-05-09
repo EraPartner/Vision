@@ -15,7 +15,9 @@ import { randomUUID } from 'node:crypto';
 const SAFE_REQUEST_ID = /^[A-Za-z0-9._-]{8,128}$/;
 
 /**
- * @type {import('express').RequestHandler}
+ * @param {import('express').Request} req
+ * @param {import('express').Response} res
+ * @param {import('express').NextFunction} next
  */
 export function requestId(req, res, next) {
   const incoming = req.get('x-request-id');

@@ -373,7 +373,7 @@ export function computeMetrics(snapshots) {
 
   const firstDate = new Date(first.snapshot_date);
   const lastDate = new Date(last.snapshot_date);
-  const days = Math.max(1, Math.round((lastDate - firstDate) / (1000 * 60 * 60 * 24)));
+  const days = Math.max(1, Math.round((lastDate.getTime() - firstDate.getTime()) / (1000 * 60 * 60 * 24)));
 
   const totalInvested = toNumber(toDecimal(last.invested));
   const currentValue = toNumber(toDecimal(last.value));
@@ -420,17 +420,19 @@ export function computeHeatmap(snapshots) {
   }
 
   // Group by month — take last snapshot of each month
+  /** @type {Map<string, { snapshot_date: string|Date, value: string|number, invested: string|number }>} */
   const byMonth = new Map();
   for (const s of snapshots) {
     const date = typeof s.snapshot_date === 'string'
       ? s.snapshot_date
-      : s.snapshot_date.toISOString().slice(0, 10);
+      : /** @type {Date} */ (s.snapshot_date).toISOString().slice(0, 10);
     const month = date.slice(0, 7);
     byMonth.set(month, s);
   }
 
   const monthKeys = [...byMonth.keys()].sort();
   const years = [...new Set(monthKeys.map(k => parseInt(k.slice(0, 4))))].sort();
+  /** @type {Record<number, (number|null)[]>} */
   const data = {};
   const monthlyReturns = [];
 

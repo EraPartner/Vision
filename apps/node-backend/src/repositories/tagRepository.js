@@ -58,7 +58,7 @@ export const tagRepository = {
    *
    * @param {string} slug  Already normalized by caller
    * @param {string|null} color
-   * @returns {{ tag: object, reactivated: boolean }}
+   * @returns {Promise<{ tag: object, reactivated: boolean }>}
    */
   async findOrCreateBySlug(slug, color = null) {
     const result = await query(

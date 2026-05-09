@@ -134,7 +134,7 @@ export async function computeCashflowForecast({ months = 3 } = {}) {
 
   // Build month buckets
   const monthKeys = buildMonthKeys(today, safeMonths);
-  /** @type {Map<string, { income: number, expenses: number, net: number, items: object[] }>} */
+  /** @type {Map<string, { month: string, income: number, expenses: number, net: number, items: any[] }>} */
   const buckets = new Map(
     monthKeys.map((k) => [k, { month: k, income: 0, expenses: 0, net: 0, items: [] }])
   );
