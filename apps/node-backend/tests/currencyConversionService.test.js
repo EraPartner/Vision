@@ -318,6 +318,13 @@ describe('Currency Conversion Service', () => {
 
   // ── warmCache ─────────────────────────────────────────────
   it('should warm cache without throwing', async () => {
+    // Mock both upstream fetches so the test never reaches real ECB / open.er-api
+    // endpoints. The unmocked variant flaked under CI coverage instrumentation
+    // (845ms locally → >5s in CI when network was slow/blocked).
+    global.fetch = vi.fn()
+      .mockResolvedValueOnce({ ok: false, status: 503, text: async () => '' })
+      .mockResolvedValueOnce({ ok: false, status: 500, json: async () => ({}) });
+
     await expect(warmCache()).resolves.not.toThrow();
   });
 
