@@ -3,8 +3,8 @@ title: Code Patterns Reference
 type: reference
 status: active
 date: 2026-04-26
-updated: 2026-05-08
-tags: [reference, patterns, conventions, code-style, backend, frontend, phase-0, phase-1, phase-2, phase-3, phase-4, phase-5, phase-6, phase-9, phase-12, phase-14, phase-q, phase-c, phase-d, motion, liquid-glass, design-system, decimal, money, timezone, openapi, domain-split, import, import-pipeline, concurrency, batching, decimal-enforcement, zustand, slice-selection, typescript, error-handling, type-safety, csv, formula-injection, cwe-1236, csv-record-splitter, csv-parsing, multi-line-fields, date-utilities, immutability, aggregation-optimization, recipient-groups, portfolio-totals, query-parameter-filtering, buildquery, bug-hunt-2026-05-05, bug-hunt-2026-05-06, bug-hunt-2026-05-08, react-keys, stable-keys, mount-guard, memory-leak-prevention, parseLocaleNumber, number-parsing, locale-number]
+updated: 2026-05-11
+tags: [reference, patterns, conventions, code-style, backend, frontend, phase-0, phase-1, phase-2, phase-3, phase-4, phase-5, phase-6, phase-9, phase-12, phase-14, phase-q, phase-c, phase-d, motion, liquid-glass, design-system, decimal, money, timezone, openapi, domain-split, import, import-pipeline, concurrency, batching, decimal-enforcement, zustand, slice-selection, typescript, error-handling, type-safety, csv, formula-injection, cwe-1236, csv-record-splitter, csv-parsing, multi-line-fields, date-utilities, immutability, aggregation-optimization, recipient-groups, portfolio-totals, query-parameter-filtering, buildquery, bug-hunt-2026-05-05, bug-hunt-2026-05-06, bug-hunt-2026-05-08, react-keys, stable-keys, mount-guard, memory-leak-prevention, parseLocaleNumber, number-parsing, locale-number, settings-backed-hook, portfolio-tax-classifications, audit-2026-05-11]
 description: Standard code patterns used throughout the Vision project — repositories, routes, hooks, API client, Express setup, error handling, type safety, filter builders, aggregation envelopes, aggregation refresh, trigger-maintained tables, golden fixtures, database fixtures, pure calculation services, atomic multi-step transactions, streaming CSV exports with formula injection prevention, import batch concurrency, motion consumers, surface shells, gradient icon tiles, money utilities, decimal utilities, shared date utilities with input validation and locale support, timezone boundary handling, TypeScript type annotations, type-safe error handling, domain-split API client, Zustand store with useShallow slice selection, immutable PATCH field sanitization, aggregation query optimization with Map-based single-pass accumulation, recipient group resolution via scalar subqueries (Phase Q), portfolio totals single-source-of-truth pattern (Phase 14). May 2026 bug hunt adds React key generation pattern (use UUID instead of index), mount guard pattern (prevent setState after unmount), and documents parseLocaleNumber heuristic with single-comma thousands separator fix.
 aliases: [code patterns, coding patterns, conventions, patterns, how to write code, repository pattern, route pattern, hook pattern, error handling, type-safe error handling, type annotations, filter builder, golden fixture, aggregation envelope, calculation services, import concurrency, motion pattern, surface shell pattern, gradient icon pattern, money pattern, decimal pattern, timezone pattern, domain split, openapi, typescript types, csv export, safe csv, formula injection, cwe-1236, date utilities, immutability, aggregation optimization, Map pattern, recipient group filter, recipientGroupId, portfolio totals, single source of truth, parseLocaleNumber, number parsing, locale-aware number parsing, thousands separator, decimal separator]
 ---
@@ -2823,6 +2823,90 @@ function PerformancePage() {
 - [[docs/api/portfolio-summary|Portfolio Summary API]]
 - [[docs/adr/044-portfolio-summary-single-source-of-truth|ADR-044]]
 - [[apps/node-backend/src/services/portfolio/portfolioSummaryService.js|Service Implementation]]
+
+---
+
+## Settings-Backed Hook Pattern: usePortfolioTaxClassifications (May 2026)
+
+**Purpose:** Persist per-investment tax metadata (ETF structure, Reynders routing) to the Settings API with in-memory cache and transparent hydration.
+
+**Source:** `[[apps/frontend/src/hooks/usePortfolioTaxClassifications.ts]]`
+
+```typescript
+// Hook definition
+interface TaxClassification {
+  investmentId: number;
+  etfStructure?: 'accumulating' | 'distributing';
+  subjectToReynders?: boolean;
+}
+
+export function usePortfolioTaxClassifications() {
+  // Derive classifications from SettingsPreloadContext or Settings API
+  const classifications = useQueryData(settingsKey) as Record<number, TaxClassification>;
+
+  const setClassification = (investmentId: number, classification: TaxClassification) => {
+    // Merge into existing map; client-side optimistic update
+    const updated = { ...classifications, [investmentId]: classification };
+    setQueryData(updated);
+  };
+
+  const saveToSettings = () => {
+    // Persist to backend settings API
+    return apiClient.saveSetting(settingsKey, classifications);
+  };
+
+  return { classifications, setClassification, saveToSettings };
+}
+
+// Consumer
+function PortfolioTaxPage() {
+  const { classifications, setClassification, saveToSettings } = usePortfolioTaxClassifications();
+
+  const onEtfStructureChange = (investmentId: number, structure: 'accumulating' | 'distributing') => {
+    setClassification(investmentId, {
+      investmentId,
+      etfStructure: structure,
+      subjectToReynders: classifications[investmentId]?.subjectToReynders,
+    });
+  };
+
+  const handleSave = async () => {
+    await saveToSettings();
+    toast.success('Tax classifications saved');
+  };
+
+  return (
+    <PortfolioTaxAdjustmentsDialog
+      classifications={classifications}
+      onEtfStructureChange={onEtfStructureChange}
+      onReyndersChange={(id, value) => setClassification(id, { investmentId: id, subjectToReynders: value })}
+      onSave={handleSave}
+    />
+  );
+}
+```
+
+### Key Patterns
+
+| Pattern | Rationale |
+|---------|-----------|
+| **Settings JSONB keying** | Store all classifications under a single `portfolio_tax_classifications_v1` key; map by investmentId internally |
+| **Optimistic updates** | `setClassification()` updates local state immediately; `saveToSettings()` persists asynchronously |
+| **Transparent hydration** | `SettingsPreloadContext` provides initial data; hook reads from context during mount to avoid loading states |
+| **Per-investment overrides** | Only store non-default values (e.g., omit `etfStructure` if default accumulating is intended) |
+| **No API endpoint** | Use generic `apiClient.saveSetting()` method; no dedicated PATCH /api/portfolio-tax/classifications endpoint |
+
+### When to Use
+
+- **Per-item metadata that is user-configured, not computed** (user-selected ETF type, investment-specific tax routing)
+- **Metadata that spans multiple investments or time periods** (portfolio-level preferences)
+- **Data that should persist across sessions but isn't business-critical** (settings, preferences, overrides)
+
+### When NOT to Use
+
+- **Investment data itself** (allocation, cost basis, holdings) — store in investment records
+- **Transactional data** (taxes, fees, gains) — compute server-side, store in transaction records
+- **Highly mutable state** (portfolio valuation, real-time prices) — use React Query or signals
 
 ---
 

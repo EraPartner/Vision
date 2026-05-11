@@ -123,4 +123,28 @@ export interface InvestmentSummary {
   
   transactions: PortfolioTransaction[];
   description?: string;
+
+  // ── Belgian tax classification (optional overrides used by the PortfolioTaxPage) ──
+  /**
+   * ETF accumulation/distribution flag — drives the TOB rate on `buy` legs.
+   * `accumulating` → 1.32% (cap €4,000); `distributing` → 0.12% (cap €1,300).
+   * When unset, the calc defaults to `accumulating` (more common in BE retail).
+   */
+  etfStructure?: 'accumulating' | 'distributing';
+  /**
+   * Explicit override for whether realised gains are subject to Reynders tax (30% on
+   * the bond-attributable portion). When unset, the calc falls back to `assetClass === 'bond'`
+   * — this default treats the `bond` asset class as a bond-fund proxy. Set explicitly:
+   *   true  → bond fund / >10% bond mixed fund (apply Reynders to the interest portion)
+   *   false → direct sovereign / corporate bond (no Reynders; from IY 2026 the gain is
+   *           subject to the 10% CGT, before that exempt under normal management)
+   */
+  subjectToReynders?: boolean;
+  /**
+   * Share of the realised gain attributable to interest (Reynders base). Range [0, 1].
+   * Default 1.0 — treats the full gain as interest, matching pure accumulating bond
+   * funds. For mixed funds the user can lower this fraction; the remainder (1 - share)
+   * is taxed under the 10% CGT regime from IY 2026 onwards.
+   */
+  reyndersInterestPortion?: number;
 }

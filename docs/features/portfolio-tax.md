@@ -2,9 +2,9 @@
 title: Portfolio Tax Feature
 type: feature
 status: active
-date: 2026-04-27
-tags: [feature, portfolio, tax, belgian, frontend, investments]
-description: Portfolio-level tax tracking with recorded taxes, manual adjustments, per-investment breakdowns, and Belgian tax rule integration
+date: 2026-05-11
+tags: [feature, portfolio, tax, belgian, frontend, investments, audit-2026-05-11, etf-structure, reynders-override, tax-classifications]
+description: Portfolio-level tax tracking with recorded taxes, manual adjustments, per-investment breakdowns, and Belgian tax rule integration. May 2026: Added per-investment ETF structure (accumulating/distributing) and Reynders routing override metadata.
 aliases: [portfolio taxation, investment tax, capital gains tax, TOB]
 related_code:
   - apps/frontend/src/pages/portfolio/tax/PortfolioTaxPage.tsx
@@ -71,6 +71,18 @@ Uses `useWidgetVisibility` with 7 configurable widgets:
 5. **Total with PIT**: Portfolio taxes + Personal Income Tax from Belgian profile
 6. **Manual Adjustments**: Total manually entered adjustments
 
+## Tax Classification Metadata (May 2026 Audit)
+
+Per-investment tax classification metadata is now persisted via `usePortfolioTaxClassifications` hook:
+
+| Field | Type | Purpose |
+|-------|------|---------|
+| `etfStructure` | `'accumulating' \| 'distributing'` | Determines TOB rate (1.32% for accumulating, 0.12% for distributing). Default: `'accumulating'` (May 2026: flipped from distributing to match 80%+ retail market). |
+| `subjectToReynders` | `boolean \| undefined` | Explicit override. `true` → bond / mixed-bond fund (Reynders applies). `false` → direct bond (exempt pre-2026; subject to 10% CGT from IY 2026 onwards). `undefined` → fall back to assetClass-based default. |
+| `reyndersInterestPortion` | `number \| undefined` | Share of realised gain attributable to interest (0–1), taxed at 30% under Reynders. Default 1.0 (pure accumulating bond fund). Remainder routes to 10% CGT from IY 2026 onwards. Stored only when ≠ 1.0 to keep persisted state tidy. |
+
+Storage: Settings API key `portfolio_tax_classifications_v1` (JSONB).
+
 ## Manual Tax Adjustments
 
 ### Hook: usePortfolioTaxAdjustments
@@ -121,6 +133,34 @@ Shows the year-aware dividend WHT picture (using the active year's `dividendExem
 Plus:
 - Total TOB recorded from buy-transaction taxes (currency-converted).
 
+### Capital Gains Estimation (Arizona Reform / CGT)
+
+The portfolio tax page estimates two types of modern capital gains taxation:
+
+1. **Reynders tax (30%)** — Applied to the *interest-attributable* portion of gains on bond and mixed-bond funds. Resolution order: explicit `subjectToReynders` override, else `assetClass === 'bond'` falls back to true (bond-fund proxy). The interest share is configured per-investment via `reyndersInterestPortion` (range 0–1, default 1.0). For IY 2026+, the *non-interest remainder* (1 − portion) is taxed at 10% under the Arizona CGT — see point 2.
+
+2. **Arizona CGT (10%)** — Applied to:
+   - Equity and equity-ETF realised gains,
+   - Reynders non-interest remainder (post-2026 split, per EY guidance),
+   - **Direct bonds** when held in IY 2026+ (pre-2026 they remain exempt under normal-management private estate).
+   
+   Annual exemptions: €10,000 (single) / €20,000 (married).
+
+> [!warning] CGT Modeling Limitations
+> The 10% capital-gains tax (Arizona reform, effective **1 January 2026**) is estimated here using simplified assumptions. Broker-level withholding only starts 1 June 2026, but the taxable event covers the full year. The calculator does **not** model: (a) the 31 Dec 2025 step-up basis that shields historical gains (the page uses the existing `realizedGain`, which assumes original cost basis), (b) the 5-year +€1k/year carryforward of unused exemption (cumulative cap €5k single / €10k married), (c) the 33% rate on gains outside normal-management private estate. For detailed information on these limitations, see [[docs/features/belgian-tax#limitations-not-modeled|Belgian Tax Limitations]].
+
+### TOB (Stock Exchange Tax) caps
+
+TOB is rate-banded with statutory per-transaction caps:
+
+| Rate | Instrument | Cap per tx |
+|------|------------|-----------|
+| 0.12% | Bonds, distributing funds | €1,300 |
+| 0.35% | Shares / other equities | €1,600 |
+| 1.32% | Accumulating funds | €4,000 |
+
+The cap is a function of the rate, not the instrument. A €1M share buy at 0.35% caps at **€1,600**, not €3,500.
+
 ## Tax Breakdown Categories
 
 ### Tax Types
@@ -167,3 +207,5 @@ The page relies on `usePortfolio()` for investment summaries rather than a dedic
 - [[docs/features/belgian-tax|Belgian Tax]] — Budget-side tax tracking (personal income tax)
 - [[docs/features/portfolio|Portfolio]] — Investment management and tracking
 - [[docs/features/exchange-rates|Exchange Rates]] — Currency conversion for multi-currency investments
+- [[docs/adr/056-belgian-tax-audit-fixes-ay2026|ADR-056]] — Comprehensive audit fixes (ETF TOB defaults, Reynders routing, property tax, regional autonomy)
+- [[docs/adr/057-belgian-tax-audit-followup-pwc-may-2026|ADR-057]] — Follow-up audit: TOB shares cap fix, CGT date docs, direct-bond CGT routing, Reynders interest-portion split, year-aware suggestions, per-residence centimes override

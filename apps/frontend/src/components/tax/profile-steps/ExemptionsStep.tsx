@@ -22,7 +22,11 @@ export function ExemptionsStep({ profile, updateProfile }: StepProps) {
                 <p className="text-xs text-muted-foreground">{t('tax.profile.dependents.children.desc')}</p>
                 <Select
                     value={String(profile.dependentChildren)}
-                    onValueChange={(v) => updateProfile({ dependentChildren: parseInt(v) })}
+                    onValueChange={(v) => {
+                        const next = parseInt(v);
+                        const disabled = Math.min(profile.dependentChildrenDisabled ?? 0, next);
+                        updateProfile({ dependentChildren: next, dependentChildrenDisabled: disabled });
+                    }}
                 >
                     <SelectTrigger id="dep-children">
                         <SelectValue />
@@ -37,6 +41,30 @@ export function ExemptionsStep({ profile, updateProfile }: StepProps) {
                 </Select>
             </div>
 
+            {profile.dependentChildren > 0 && (
+                <div className="space-y-2 pl-3 border-l-2 border-border">
+                    <Label htmlFor="dep-children-disabled" className="text-sm font-medium">
+                        {t('tax.profile.field.childrenDisabled')} <Badge variant="outline" className="text-[10px] ml-1">{t('common.optional')}</Badge>
+                    </Label>
+                    <p className="text-xs text-muted-foreground">{t('tax.profile.field.childrenDisabled.desc')}</p>
+                    <Select
+                        value={String(profile.dependentChildrenDisabled ?? 0)}
+                        onValueChange={(v) => updateProfile({ dependentChildrenDisabled: parseInt(v) })}
+                    >
+                        <SelectTrigger id="dep-children-disabled">
+                            <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                            {Array.from({ length: profile.dependentChildren + 1 }, (_, n) => (
+                                <SelectItem key={n} value={String(n)}>
+                                    {n === 0 ? t('common.none') : String(n)}
+                                </SelectItem>
+                            ))}
+                        </SelectContent>
+                    </Select>
+                </div>
+            )}
+
             <div className="space-y-2">
                 <Label htmlFor="dep-other" className="text-sm font-medium">
                     {t('tax.profile.field.others')} <Badge variant="outline" className="text-[10px] ml-1">{t('common.optional')}</Badge>
@@ -44,7 +72,11 @@ export function ExemptionsStep({ profile, updateProfile }: StepProps) {
                 <p className="text-xs text-muted-foreground">{t('tax.profile.dependents.others.desc')}</p>
                 <Select
                     value={String(profile.dependentOtherPersons)}
-                    onValueChange={(v) => updateProfile({ dependentOtherPersons: parseInt(v) })}
+                    onValueChange={(v) => {
+                        const next = parseInt(v);
+                        const disabled = Math.min(profile.dependentOtherPersonsDisabled ?? 0, next);
+                        updateProfile({ dependentOtherPersons: next, dependentOtherPersonsDisabled: disabled });
+                    }}
                 >
                     <SelectTrigger id="dep-other">
                         <SelectValue />
@@ -58,6 +90,30 @@ export function ExemptionsStep({ profile, updateProfile }: StepProps) {
                     </SelectContent>
                 </Select>
             </div>
+
+            {profile.dependentOtherPersons > 0 && (
+                <div className="space-y-2 pl-3 border-l-2 border-border">
+                    <Label htmlFor="dep-other-disabled" className="text-sm font-medium">
+                        {t('tax.profile.field.othersDisabled')} <Badge variant="outline" className="text-[10px] ml-1">{t('common.optional')}</Badge>
+                    </Label>
+                    <p className="text-xs text-muted-foreground">{t('tax.profile.field.othersDisabled.desc')}</p>
+                    <Select
+                        value={String(profile.dependentOtherPersonsDisabled ?? 0)}
+                        onValueChange={(v) => updateProfile({ dependentOtherPersonsDisabled: parseInt(v) })}
+                    >
+                        <SelectTrigger id="dep-other-disabled">
+                            <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                            {Array.from({ length: profile.dependentOtherPersons + 1 }, (_, n) => (
+                                <SelectItem key={n} value={String(n)}>
+                                    {n === 0 ? t('common.none') : String(n)}
+                                </SelectItem>
+                            ))}
+                        </SelectContent>
+                    </Select>
+                </div>
+            )}
 
             <Separator />
 

@@ -21,6 +21,15 @@ export type ProfessionalExpenseMethod = 'lump_sum' | 'actual';
 export type PensionScheme = '1050' | '1350';
 
 /**
+ * Filing status for income-splitting purposes.
+ *  - `single`: single, divorced, widowed without surviving-spouse joint return, or legal cohabitant
+ *    (cohabitants are taxed as singles by default unless they opt in).
+ *  - `married_joint`: married or legal cohabitants opting for joint return. Triggers marital
+ *    quotient modeling when one spouse has materially lower professional income than the other.
+ */
+export type FilingStatus = 'single' | 'married_joint';
+
+/**
  * Regional own-home credit regime. Determined by the mortgage's region and origination year.
  *  - `flemish_woonbonus`: Flemish "geïntegreerde woonbonus", available for primary-residence
  *    mortgages signed before 2020-01-01 in the Flemish Region.
@@ -45,13 +54,38 @@ export interface BelgianTaxProfile {
     dependentChildren: number;
     /** Number of dependent children under 3 (extra exemption increase) */
     dependentChildrenUnder3?: number;
+    /**
+     * Number of dependent children with a recognised disability (CIR-92 art. 132 4°).
+     * Per PwC: each handicapped child counts as TWO children on the dependent-children
+     * scale. This count is the *subset* of `dependentChildren` who are disabled — it
+     * adjusts the effective count used for the supplement lookup, not the head count.
+     */
+    dependentChildrenDisabled?: number;
     dependentOtherPersons: number;
+    /**
+     * Number of OTHER dependents (parents, grandparents, etc.) with a recognised
+     * disability. Same "counts as two" rule applies (CIR-92 art. 136).
+     */
+    dependentOtherPersonsDisabled?: number;
     isDisabled: boolean;
     isSpouseDisabled: boolean;
     /** Single-parent flag — triggers the "isolated parent with dependents" supplement */
     isIsolatedParent?: boolean;
     cadastralIncome: number;
-    additionalResidences?: { label?: string; cadastralIncome: number; region?: BelgianRegion; isOwnHome?: boolean }[];
+    /**
+     * Optional override for the communal + provincial centimes additionnels applied to the
+     * main residence. When omitted, the regional median from the year table is used.
+     * Example: 1400 → +1400% centimes on top of the regional base rate.
+     */
+    cadastralCentimesOverride?: number;
+    additionalResidences?: {
+        label?: string;
+        cadastralIncome: number;
+        region?: BelgianRegion;
+        isOwnHome?: boolean;
+        /** Per-residence centimes override; same semantics as `cadastralCentimesOverride`. */
+        centimesOverride?: number;
+    }[];
     otherTaxableIncome: number;
     alimonyPaid: number;
     personalPensionContributions: number;
@@ -80,6 +114,22 @@ export interface BelgianTaxProfile {
     medicalExpenses: number;
     domesticHelpCosts?: number;
     domesticHelpEligible?: boolean;
+    /**
+     * Service vouchers (dienstencheques / titres-services) purchased in the year. Regional schemes:
+     *  - Flanders: tax reduction abolished from 1 Jan 2025 (rate = 0).
+     *  - Wallonia: fixed €0.90 per voucher on the first 150 vouchers.
+     *  - Brussels: 15% reduction per voucher on the first 172 vouchers — still in force.
+     */
+    serviceVoucherCount?: number;
+    serviceVoucherEligible?: boolean;
+    /** Filing status — determines whether marital quotient modeling activates. */
+    filingStatus?: FilingStatus;
+    /**
+     * Spouse's professional income (EUR). Only used when `filingStatus === 'married_joint'`.
+     * Marital quotient transfers 30% of the higher-earner's professional income to the spouse
+     * (capped per `maritalQuotientCap`) when the spouse's own professional income is below the cap.
+     */
+    spouseProfessionalIncome?: number;
     /** Total dividend income tracked for the year (used to model dividend WHT reclaim) */
     annualDividendIncome?: number;
     /** Savings deposit interest tracked (livret/spaarboekje) for the year */
@@ -145,6 +195,15 @@ export interface BelgianTaxCalculation {
     dividendWhtReclaim: number;
     /** Estimated savings deposit interest non-recoverable tax (15% above exemption). */
     savingsInterestTax: number;
+    /**
+     * Income transferred to the non-earning / lower-earning spouse under the marital quotient.
+     * 0 when filing status is single or when both spouses earn comparably.
+     */
+    maritalQuotientTransfer: number;
+    /** Estimated tax reduction attributable to the marital quotient (informational). */
+    maritalQuotientBenefit: number;
+    /** Estimated service-voucher regional credit (after marital quotient). */
+    serviceVoucherCredit: number;
     breakdown: {
         label: string;
         amount: number;

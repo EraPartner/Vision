@@ -20,8 +20,14 @@ export function computeEmployeeSocialSecurity(profile: BelgianTaxProfile, table:
 /**
  * Special social security contribution ("CSSS" / "bijzondere bijdrage voor de sociale zekerheid").
  *
- * Step function on **net taxable income** (single-filer table; couple-table approximation).
- * Returns 0 for income types that are not subject to it (self-employed, retired without salary).
+ * Step function on **net taxable professional income**. Two annual tables apply since the
+ * 1 April 2022 reform:
+ *  - `csssTable` for single filers (`gemeenschappelijke aanslag = nee`), cap €731.28.
+ *  - `csssTableJoint` for married / legal-cohabiting joint filers (`gemeenschappelijke
+ *    aanslag = ja`). Same floor as single, flatter middle tier, same household max €731.28.
+ *
+ * The joint table is used when `profile.filingStatus === 'married_joint'`. Returns 0 for
+ * income types that are not subject to CSSS (self-employed, retired without salary).
  */
 export function computeSpecialSocialSecurityContribution(
     profile: BelgianTaxProfile,
@@ -32,7 +38,10 @@ export function computeSpecialSocialSecurityContribution(
     if (!subject) return 0;
     if (netTaxableIncome <= 0) return 0;
 
-    for (const tier of table.csssTable) {
+    const tiers =
+        profile.filingStatus === 'married_joint' ? table.csssTableJoint : table.csssTable;
+
+    for (const tier of tiers) {
         // Tier bounds are [from, to] inclusive on the lower bound, exclusive on the upper.
         // Earlier code used `<= tier.from`, which skipped income equal to a tier boundary.
         if (netTaxableIncome < tier.from) continue;

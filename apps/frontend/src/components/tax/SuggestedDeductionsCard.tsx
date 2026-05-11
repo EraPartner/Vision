@@ -1,7 +1,7 @@
 import React, { useMemo } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { useBelgianTaxProfile, PENSION_SAVINGS_CAP_STANDARD, PENSION_SAVINGS_CAP_ALTERNATIVE, LIFE_INSURANCE_CAP, CHILDCARE_DAILY_CAP_2025 } from '@/contexts/BelgianTaxProfileContext';
+import { useBelgianTaxProfile, getTaxTable } from '@/contexts/BelgianTaxProfileContext';
 import { useLanguage } from '@/contexts/LanguageContext';
 import { useAppSettings } from '@/contexts/AppSettingsContext';
 import { numberFormatToLocale } from '@/utils/currency';
@@ -24,10 +24,25 @@ export function SuggestedDeductionsCard() {
 
     const suggestions = useMemo(() => {
         const items: Array<{ id: string; title: string; desc: string; estimate?: number; note?: string }> = [];
+        // All rates / caps resolved from the year-aware tax table so suggestions stay
+        // accurate when historical (or future) tax years are selected.
+        const table = getTaxTable(profile.taxYear);
+        const donationRate = table.charitableDonationRate;
+        const childcareRate = table.childcareRate;
+        const childcareDailyCap = table.childcareDailyCap;
+        const lifeInsuranceRate = table.lifeInsuranceRate;
+        const lifeInsuranceCap = table.lifeInsuranceCap;
+        const groupInsuranceRate = table.groupInsuranceRate;
+        const domesticHelpRate = table.domesticHelpRate;
+        const alimonyFraction = table.alimonyDeductibleFraction;
 
         // Pension savings
-        const pensionCeiling = profile.pensionScheme === '1350' ? PENSION_SAVINGS_CAP_ALTERNATIVE : PENSION_SAVINGS_CAP_STANDARD;
-        const pensionRate = profile.pensionScheme === '1350' ? 0.25 : 0.30;
+        const pensionCeiling = profile.pensionScheme === '1350'
+            ? table.pensionSavingsCapAlternative
+            : table.pensionSavingsCapStandard;
+        const pensionRate = profile.pensionScheme === '1350'
+            ? table.pensionSavingsRateAlternative
+            : table.pensionSavingsRateStandard;
         const pensionMaxCredit = pensionCeiling * pensionRate;
         if (profile.pensionEligible && !(profile.personalPensionContributions > 0)) {
             items.push({ id: 'pension.no_amount', title: 'Pension savings', desc: t('tax.suggestions.pension.noAmount'), estimate: pensionMaxCredit });
@@ -40,9 +55,9 @@ export function SuggestedDeductionsCard() {
 
         // Life insurance
         if (profile.lifeInsuranceEligible && !(profile.lifeInsurancePremiums > 0)) {
-            items.push({ id: 'life.no_amount', title: 'Life insurance', desc: t('tax.suggestions.life.noAmount'), estimate: LIFE_INSURANCE_CAP * 0.30 });
+            items.push({ id: 'life.no_amount', title: 'Life insurance', desc: t('tax.suggestions.life.noAmount'), estimate: lifeInsuranceCap * lifeInsuranceRate });
         } else if (!profile.lifeInsuranceEligible && profile.lifeInsurancePremiums > 0) {
-            const est = Math.min(profile.lifeInsurancePremiums, LIFE_INSURANCE_CAP) * 0.30;
+            const est = Math.min(profile.lifeInsurancePremiums, lifeInsuranceCap) * lifeInsuranceRate;
             items.push({ id: 'life.not_marked', title: 'Life insurance', desc: t('tax.suggestions.life.notMarked'), estimate: est });
         }
 
@@ -50,7 +65,7 @@ export function SuggestedDeductionsCard() {
         if (profile.employeeGroupInsuranceEligible && !(profile.employeeGroupInsuranceContributions > 0)) {
             items.push({ id: 'group.no_amount', title: 'Employee group insurance', desc: t('tax.suggestions.group.noAmount'), estimate: 0 });
         } else if (!profile.employeeGroupInsuranceEligible && profile.employeeGroupInsuranceContributions > 0) {
-            items.push({ id: 'group.not_marked', title: 'Employee group insurance', desc: t('tax.suggestions.group.notMarked'), estimate: profile.employeeGroupInsuranceContributions * 0.30 });
+            items.push({ id: 'group.not_marked', title: 'Employee group insurance', desc: t('tax.suggestions.group.notMarked'), estimate: profile.employeeGroupInsuranceContributions * groupInsuranceRate });
         } else if (!profile.employeeGroupInsuranceEligible && profile.employmentType === 'employee' && !(profile.employeeGroupInsuranceContributions > 0)) {
             items.push({ id: 'group.suggest', title: 'Employee group insurance', desc: t('tax.suggestions.group.suggest'), estimate: 0 });
         }
@@ -59,21 +74,21 @@ export function SuggestedDeductionsCard() {
         if (profile.charitableDonationsEligible && !(profile.charitableDonations > 0)) {
             items.push({ id: 'donations.no_amount', title: 'Charitable donations', desc: t('tax.suggestions.donations.noAmount'), note: t('tax.suggestions.donations.note') });
         } else if (!profile.charitableDonationsEligible && profile.charitableDonations > 0) {
-            const est = 0.45 * profile.charitableDonations;
+            const est = donationRate * profile.charitableDonations;
             items.push({ id: 'donations.not_marked', title: 'Charitable donations', desc: t('tax.suggestions.donations.notMarked'), estimate: est });
         }
 
         // Childcare
-        const childcareCap = (profile.childcareEligibleDays || 0) * CHILDCARE_DAILY_CAP_2025;
+        const childcareCap = (profile.childcareEligibleDays || 0) * childcareDailyCap;
         if (profile.childcareEligible && !(profile.childcareCosts > 0)) {
             items.push({ id: 'childcare.no_amount', title: 'Childcare costs', desc: t('tax.suggestions.childcare.noAmount'), estimate: 0 });
         } else if (!profile.childcareEligible && profile.childcareCosts > 0) {
-            const est = 0.45 * Math.min(profile.childcareCosts, childcareCap);
+            const est = childcareRate * Math.min(profile.childcareCosts, childcareCap);
             items.push({ id: 'childcare.not_marked', title: 'Childcare costs', desc: t('tax.suggestions.childcare.notMarked'), estimate: est });
         } else if (!profile.childcareEligible && profile.dependentChildren > 0 && profile.childcareEligibleDays === 0) {
             // soft suggestion — show example using 120 days
             const exampleDays = 120;
-            const exampleEst = 0.45 * (exampleDays * CHILDCARE_DAILY_CAP_2025);
+            const exampleEst = childcareRate * (exampleDays * childcareDailyCap);
             items.push({ id: 'childcare.suggest', title: 'Childcare costs', desc: t('tax.suggestions.childcare.suggest', { days: exampleDays }), estimate: exampleEst });
         }
 
@@ -81,13 +96,13 @@ export function SuggestedDeductionsCard() {
         if (profile.domesticHelpEligible && !(profile.domesticHelpCosts > 0)) {
             items.push({ id: 'domestic.no_amount', title: 'Domestic help', desc: t('tax.suggestions.domestic.noAmount'), estimate: 0 });
         } else if (!profile.domesticHelpEligible && profile.domesticHelpCosts > 0) {
-            const est = 0.30 * profile.domesticHelpCosts;
+            const est = domesticHelpRate * profile.domesticHelpCosts;
             items.push({ id: 'domestic.not_marked', title: 'Domestic help', desc: t('tax.suggestions.domestic.notMarked'), estimate: est });
         }
 
         // Alimony (deduction) — estimate tax saving using marginal rate
         if (profile.alimonyPaid > 0) {
-            const deduction = 0.80 * profile.alimonyPaid;
+            const deduction = alimonyFraction * profile.alimonyPaid;
             const marginal = Math.max(0, Math.min(calculation.marginalRate, 100)) / 100;
             const estSaving = deduction * marginal;
             items.push({ id: 'alimony.applied', title: 'Alimony paid', desc: t('tax.suggestions.alimony.applied'), estimate: estSaving });

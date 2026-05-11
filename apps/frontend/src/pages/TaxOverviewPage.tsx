@@ -27,7 +27,6 @@ import {
 import { BarChart, type BarSeries } from "@/components/charts";
 import { useStatistics } from "@/hooks/useStatistics";
 import { isApproximatedTaxYear } from "@/lib/belgianTax";
-import { CustomCategoryChart } from "@/components/statistics/CustomCategoryChart";
 import { usePortfolio } from "@/hooks/usePortfolio";
 import { TaxProfileDialog } from "@/components/tax/TaxProfileDialog";
 import SuggestedDeductionsCard from "@/components/tax/SuggestedDeductionsCard";
@@ -44,7 +43,6 @@ function getBudgetTaxWidgets(t: (key: string) => string): WidgetDefinition[] {
     { id: "pitBreakdown", label: t("tax.widget.pitBreakdown"), defaultVisible: true },
     { id: "taxRules", label: t("tax.widget.belgianRulesTitle"), defaultVisible: true },
     { id: "yearlyOverview", label: t("tax.widget.yearlyOverview"), defaultVisible: true },
-    { id: "yearlyTaxPayments", label: t("tax.widget.yearlyTaxPayments"), defaultVisible: true },
   ];
 }
 
@@ -667,22 +665,6 @@ export default function TaxOverviewPage() {
                 </CardContent>
               </Card>
             )}
-            {/* Tax payments selector chart - let users pick categories/recipients that correspond to taxes */}
-            {isVisible("yearlyTaxPayments") && stats.data && (
-              <div className="lg:col-span-2">
-                <CustomCategoryChart
-                  data={stats.getGraphData("yearlyTaxPayments") ?? stats.data}
-                  graphKey="yearlyTaxPayments"
-                  isFiltered={stats.graphExclusions["yearlyTaxPayments"] ?? true}
-                  onToggle={stats.toggleGraphExclusion}
-                  exclusionsApply={stats.exclusionsApply}
-                  hideSaveControls={true}
-                  persistSelection={true}
-                  headerTooltip={t('tax.widget.yearlyTaxPayments')}
-                />
-              </div>
-            )}
-
             <Card className="border-border/70">
                 <CardHeader>
                 <CardTitle className="text-base">{t('tax.automation.title')}</CardTitle>

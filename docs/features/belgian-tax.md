@@ -3,8 +3,8 @@ title: Feature - Belgian Tax
 type: feature
 status: active
 date: 2026-05-11
-tags: [feature, tax, belgian, cadastral-income, deductions, phase-8, pdf-export, regional-own-home-credit, exemption-brackets, taxable-income-sources]
-description: Belgian tax profile management with PIT calculator using exemption-bracket method (CIR-92 art. 134 §3), regional own-home credits (Flemish woonbonus, Walloon chèque habitat), taxable income source filtering, cadastral income tracking, deduction management, and PDF tax report export
+tags: [feature, tax, belgian, cadastral-income, deductions, phase-8, pdf-export, regional-own-home-credit, exemption-brackets, taxable-income-sources, audit-2026-05-11, disabled-dependents, regional-autonomy-factor, property-tax-centimes, etf-tob, reynders-routing]
+description: Belgian tax profile management with PIT calculator using exemption-bracket method (CIR-92 art. 134 §3), regional own-home credits (Flemish woonbonus, Walloon chèque habitat), taxable income source filtering, cadastral income tracking, deduction management, PDF tax report export, and May 2026 PwC audit fixes (disabled-dependent doubling, child-under-3 forfeiture, regional autonomy factor, property-tax centimes calibration)
 aliases: [belgian-tax, tax-feature, cadastral, deductions, belgium]
 related_code:
   - apps/frontend/src/pages/TaxOverviewPage.tsx
@@ -48,11 +48,14 @@ The React provider [[apps/frontend/src/contexts/BelgianTaxProfileContext]] only 
 
 The reference tables (`getTaxTable(year)`) are populated from:
 
-- PwC *Worldwide Tax Summaries — Belgium — Individual* (cross-checked Feb 2026).
+- PwC *Worldwide Tax Summaries — Belgium — Individual* (cross-checked Feb 2026; AY 2026 audit completed May 2026).
 - FOD Financiën / SPF Finances published indexed amounts (Moniteur belge / Belgisch Staatsblad).
 - Federal personenbelasting / impôt des personnes physiques indexation tables.
+- Internal sample calculations validating exemption-bracket valuation, regional autonomy factors, and property-tax centimes.
 
 `SUPPORTED_TAX_YEARS` (sorted numerically) lists the years with a complete table; `LATEST_TAX_YEAR` is the default.
+
+**Exemption-bracket table (May 2026 audit):** IY 2025 boundaries confirmed as 25% (€0–€11,460), 30% (€11,460–€16,320), 40% (€16,320–€27,190), 45% (€27,190–€49,840), 50% (€49,840+). IY 2024 indexed back from IY 2025 by 3.15%; IY 2026 inherits IY 2025 (no forward guidance published).
 
 **Tax table fallback:** The `getTaxTable(year)` function uses a nearest-year fallback:
 - Years on or after the latest supported year → use LATEST table.
@@ -74,8 +77,11 @@ New years are added by appending a `BelgianTaxYearTable` entry — no calculator
 | Other taxable income | Rental, additional freelance, etc. |
 | Region | Flanders / Wallonia / Brussels |
 | Communal surcharge % | Local surcharge on federal PIT |
-| Dependent children | Total + sub-count for under-3 supplement |
+| Dependent children | Total count |
+| Dependent children (disabled) | Sub-count of disabled children — each counts as TWO per CIR-92 art. 132 4° (optional, clamped to total children) |
 | Other dependents | Other persons ten laste / à charge |
+| Other dependents (disabled) | Sub-count of disabled other dependents — each counts as TWO per CIR-92 art. 136 (optional, clamped to total) |
+| Dependents under 3 | Sub-count of children under 3 (forfeited if childcare reduction claimed per CIR-92 art. 132bis) |
 | Disability flags | Self / spouse — each adds €1,980 to personal exemption |
 | Single-parent flag | `isIsolatedParent` adds the single-parent supplement |
 | Cadastral income + additional residences | For property tax estimate |
@@ -124,16 +130,21 @@ Investments of type `real_estate` include Belgian-specific fields:
 2. Employee social security: 13.07% (employee) / 11.07% (civil servant), salary only.
 3. Professional expenses: lump-sum forfait (employee/director) or actual.
 4. Deductions from taxable basis: alimony 80%, union dues, medical expenses.
-5. Personal exemption (`quotité du revenu exempté`): basic + dependents + under-3 + other dependents + disability + single-parent supplements; applied at the **lowest brackets first** via a dedicated exemption-bracket rate table (CIR-92 art. 134 §3). The exemption amount is taxed from bracket 1 upward using reduced rates (25% on bracket-1 portion, 30% on bracket-2 overflow, then main rates above), and the result is subtracted from gross PIT and reported as `personalExemptionBenefit`.
+5. Personal exemption (`quotité du revenu exempté`): basic + dependents (with disabled count doubling per CIR-92 art. 132 4° / 136) + under-3 (forfeited if childcare claimed per CIR-92 art. 132bis) + other dependents + disability + single-parent supplements; applied at the **lowest brackets first** via a dedicated exemption-bracket rate table (CIR-92 art. 134 §3). The exemption amount is taxed from bracket 1 upward using reduced rates (25% on bracket-1 portion, 30% on bracket-2 overflow, then main rates above), and the result is subtracted from gross PIT and reported as `personalExemptionBenefit`. Disabled dependents count as TWO heads each; `dependentChildrenDisabled` and `dependentOtherPersonsDisabled` are clamped to their respective head counts.
 6. Regional own-home credit (optional): Applies to mortgages on the taxpayer's primary residence.
-   - **Flemish `geïntegreerde woonbonus` (pre-2020 loans)**: Credit = min(interest + capital repaid, base cap + first-10-year supplement + 3+-children supplement) × 40%.
+   - **Flemish woonbonus (pre-2020 loans)** — two sub-regimes by origination year:
+     - *Pre-2016 "ordinary" woonbonus*: base cap €2,280 (IY 2025).
+     - *2016-2019 "geïntegreerde" woonbonus*: base cap €1,520 (IY 2025; the 2016 reform merged the ordinary and housing credits into a single, reduced-cap scheme).
+     - Both share the same +€760 first-10-year supplement, +€80 3+-children supplement, and 40% rate.
+     - Credit = min(interest + capital repaid, base cap + supplements) × 40%.
    - **Walloon `chèque habitat` (post-2016 loans, first 10 years)**: Credit = base annual amount + (dependent children × €125/child). [Note: Actual scheme has income-based phaseouts and years 11–20 tail; simplified here.]
    - **Brussels & post-2020 Flanders**: Not modeled (regime = 'none', credit = 0).
 7. Tax credits ("réductions d'impôt"): pension savings (€1,050 @30% or €1,350 @25%), life insurance (€2,530 @30%), employee group insurance (30%), donations (45%, ≥€40), childcare (45%, €16.90/day cap), domestic help (30%, €8,290 wage cap). All require an explicit eligibility flag in the profile. Tax credits are clamped so the total cannot reduce federal PIT below zero.
-8. Communal surcharge applied to federal PIT after credits.
-9. Special social security contribution: CSSS is a step function of net taxable income (€0 below €18,592 → flat tiers → cap €731.28).
-10. Property tax (informational, not part of PIT): `nominalCI × indexationCoefficient × regionalBaseRate × (1 + centimes/100)`, summed across main + additional residences.
-11. Investment side calc:
+8. **Regional autonomy factor** (May 2026 audit): Multiply federal PIT after credits by region-specific factor (Flanders: 0.9951, Wallonia: 0.9951, Brussels: 0.9945) to reflect region's own tax adjustments before communal surcharge.
+9. Communal surcharge applied to federal PIT after regional autonomy factor.
+10. Special social security contribution: CSSS is a step function of net taxable income (€0 below €18,592 → flat tiers → cap €731.28).
+11. Property tax (informational, not part of PIT): `nominalCI × indexationCoefficient × regionalBaseRate × (1 + centimes/100)`, summed across main + additional residences. **May 2026 audit:** centimes reductions calibrated to Belgium-wide commune medians (Flanders 1450→1100, Wallonia 4000→3300, Brussels 4500→4200) to align estimates with typical 20–50%-of-indexed-CI range.
+12. Investment side calc:
     - `dividendWhtReclaim = min(recordedWHT, min(grossDividendBase, exemption) × WHT_rate)` — Belgian dividend withholding is taken at source; reclaim is capped by both the recorded WHT and the exemption. Gross base = dividend amount + recorded WHT, which handles both net and gross recording conventions. The €859 (IY 2025) exemption applies to the gross base and is reclaimed via the tax return.
     - `savingsInterestTax = max(savingsInterest − €1,050, 0) × 15%` — Reynders / savings deposit excess.
 
@@ -231,14 +242,15 @@ The tax overview page includes a `SuggestedDeductionsCard` component that sugges
 
 ## Limitations / not modeled
 
-- Marital quotient and married/cohabiting joint-filing income split.
 - Brussels stamp-duty rebate (one-time, not annual).
 - Flemish post-2020 mortgages (no successor regime — capital owners only).
 - Regional own-home credit income-based phaseouts and year-11–20 decreasing tail (Walloon chèque habitat especially).
-- Reynders tax on accumulating bond fund redemptions (article 19bis).
 - Foreign tax credit on foreign dividends (DBI-RDT regime).
-- Speculative capital gains (article 90, 1°) — and the new 10% solidarity contribution that takes effect for income year 2026 onward.
+- Speculative capital gains (article 90, 1°).
 - Securities account tax (TACR) for accounts ≥ €1M — values exposed in `BelgianTaxYearTable.securitiesAccountTaxRate` for future UI use.
+- "Truly isolated" low-income single-parent additional supplement and its refundable-credit conversion: only the base €1,980 isolated-parent supplement is applied; the income-tested extra is not modeled.
+- Reynders on mixed funds (post-ADR-057): the interest-attributable share is now configurable per investment via `reyndersInterestPortion` (range 0–1, default 1.0). For pure accumulating bond funds the default 100% portion matches reality; mixed funds need a manual lower value. The non-interest remainder routes to the 10% CGT pool from IY 2026 onwards.
+- Arizona capital gains tax (IY 2026): the rate (10%) and exemption (€10,000 single / €20,000 married) are modeled. The tax applies to gains realized from **1 January 2026** (broker withholding starts 1 June 2026 but the full year is in scope). **Not** modeled: (a) the **31 Dec 2025 step-up basis** that shields pre-2026 historical gains — the calculator uses `realizedGain` against the original cost basis; (b) the **5-year +€1k/year carryforward** of unused exemption (cumulative cap €5k single / €10k married, so the annual exemption can grow to €15k / €30k after five unused years); (c) the **33% rate** on gains realized outside normal-management private estate; (d) direct-bond capital gains pre-2026 (correctly exempt under normal management — only the IY 2026+ inclusion is modeled, see ADR-057).
 
 ---
 
@@ -261,6 +273,8 @@ See [[docs/api/reports#post-apireportstax|Reports API: Tax Endpoint]] for reques
 - [[docs/adr/053-belgian-pit-exemption-bracket-correction|ADR-053]] — Exemption-bracket calculation correction (May 2026)
 - [[docs/adr/054-belgian-regional-own-home-credits|ADR-054]] — Regional own-home credits implementation (May 2026)
 - [[docs/adr/055-belgian-tax-income-source-filtering|ADR-055]] — Taxable income source filtering (May 2026)
+- [[docs/adr/056-belgian-tax-audit-fixes-ay2026|ADR-056]] — Comprehensive audit fixes (disabled-dependent doubling, child-under-3 forfeiture, regional autonomy factor, property-tax centimes, ETF TOB defaults, Reynders routing) (May 2026)
+- [[docs/adr/057-belgian-tax-audit-followup-pwc-may-2026|ADR-057]] — Follow-up audit (TOB shares cap €4,000 → €1,600, CGT effective date 1 Jan 2026, direct-bond CGT routing, Reynders interest-portion split, year-aware `SuggestedDeductionsCard`, per-residence centimes override) (May 2026)
 - [[docs/features/portfolio#belgian-tax-features]] — Tax fields in portfolio
 - [[docs/features/portfolio#belgian-inflation-data-flow]] — Inflation data flow
 - [[docs/features/pdf-report-export|PDF Report Export]] — Tax report generation with Phase 8 completion
