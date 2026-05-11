@@ -33,7 +33,9 @@ export function computeSpecialSocialSecurityContribution(
     if (netTaxableIncome <= 0) return 0;
 
     for (const tier of table.csssTable) {
-        if (netTaxableIncome <= tier.from) continue;
+        // Tier bounds are [from, to] inclusive on the lower bound, exclusive on the upper.
+        // Earlier code used `<= tier.from`, which skipped income equal to a tier boundary.
+        if (netTaxableIncome < tier.from) continue;
         if (netTaxableIncome > tier.to) continue;
 
         const flat = tier.flat ?? 0;

@@ -98,6 +98,10 @@ const defaultProfile: BelgianTaxProfile = {
     lifeInsurancePremiums: 0,
     lifeInsuranceEligible: false,
     mortgageInterestPaid: 0,
+    mortgageCapitalRepaid: 0,
+    mortgageStartYear: undefined,
+    mortgageRegion: undefined,
+    mortgageIsPrimaryResidence: false,
     charitableDonations: 0,
     charitableDonationsEligible: false,
     childcareCosts: 0,
@@ -111,6 +115,7 @@ const defaultProfile: BelgianTaxProfile = {
     domesticHelpEligible: false,
     annualDividendIncome: 0,
     annualSavingsInterest: 0,
+    taxIncomeCategoryIds: [],
     taxYear: LATEST_TAX_YEAR,
 };
 

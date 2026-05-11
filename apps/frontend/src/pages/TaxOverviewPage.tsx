@@ -22,9 +22,11 @@ import {
   CircleHelp,
   BadgePercent,
   Loader2,
+  ListChecks,
 } from "lucide-react";
 import { BarChart, type BarSeries } from "@/components/charts";
 import { useStatistics } from "@/hooks/useStatistics";
+import { isApproximatedTaxYear } from "@/lib/belgianTax";
 import { CustomCategoryChart } from "@/components/statistics/CustomCategoryChart";
 import { usePortfolio } from "@/hooks/usePortfolio";
 import { TaxProfileDialog } from "@/components/tax/TaxProfileDialog";
@@ -70,6 +72,42 @@ export default function TaxOverviewPage() {
   const totalIncome = stats.data?.totalIncome ?? 0;
   const monthlyData = stats.data?.monthlyData;
   const yearlyData = stats.data?.yearlyComparison;
+  const categoryPivot = stats.data?.categoryPivot;
+
+  // Categories the user has flagged as taxable income (the "salary-like" filter).
+  // Without this, the graphs would treat every positive transaction as PIT-able income.
+  const taxIncomeCategoryIds = useMemo(
+    () => new Set(profile.taxIncomeCategoryIds ?? []),
+    [profile.taxIncomeCategoryIds],
+  );
+  const hasIncomeSources = taxIncomeCategoryIds.size > 0;
+
+  /**
+   * Per-period taxable income map ("YYYY-MM" → EUR), summed only over categories the user
+   * marked as taxable income. Same source of truth as the green bars and the orange reserve.
+   */
+  const taxableIncomeByMonth = useMemo(() => {
+    const result = new Map<string, number>();
+    if (!hasIncomeSources || !categoryPivot) return result;
+    for (const cat of categoryPivot) {
+      if (cat.categoryId == null || !taxIncomeCategoryIds.has(cat.categoryId)) continue;
+      for (const [period, amount] of Object.entries(cat.incomeMonths)) {
+        result.set(period, (result.get(period) ?? 0) + amount);
+      }
+    }
+    return result;
+  }, [categoryPivot, hasIncomeSources, taxIncomeCategoryIds]);
+
+  /** Per-year taxable income, summed from the monthly map. */
+  const taxableIncomeByYear = useMemo(() => {
+    const result = new Map<number, number>();
+    for (const [period, amount] of taxableIncomeByMonth) {
+      const year = Number.parseInt(period.slice(0, 4), 10);
+      if (Number.isNaN(year)) continue;
+      result.set(year, (result.get(year) ?? 0) + amount);
+    }
+    return result;
+  }, [taxableIncomeByMonth]);
 
   const portfolioTaxesForYear = useMemo(() => {
     const year = profile.taxYear;
@@ -94,45 +132,89 @@ export default function TaxOverviewPage() {
   // include estimated property tax in an alternate total (informational)
   const totalTaxIncludingPropertyEstimate = totalTaxIncludingPortfolio + calculation.propertyTaxEstimate;
 
-  // Re-run the bracket calculation per year/month with the observed income to respect progressive
-  // brackets — linear scaling of `totalPIT` is wrong because each bracket has a different rate.
-  const pitForGross = useCallback((gross: number): number => {
+  /**
+   * Run PIT for a given gross + tax year. Uses each year's own bracket table when available
+   * (nearest-year fallback for historical years before EARLIEST_TAX_YEAR). Linear scaling of
+   * a single year's PIT is wrong because each bracket has a different rate.
+   */
+  const pitForGross = useCallback((gross: number, year: number): number => {
     if (gross <= 0) return 0;
-    return computeBelgianPIT({ ...profile, grossAnnualIncome: gross }).totalPIT;
+    return computeBelgianPIT({ ...profile, grossAnnualIncome: gross, taxYear: year }).totalPIT;
   }, [profile]);
 
+  /**
+   * Yearly chart series. Uses transaction-derived taxable income (filtered by the user's
+   * selected categories) when available; falls back to total income otherwise (rare,
+   * triggers the empty-state CTA on the chart below).
+   */
   const yearlyIncome = useMemo(
     () =>
       (yearlyData ?? [])
         .map((y) => {
-          const estimatedPIT = pitForGross(y.totalIncome);
+          const incomeForYear = hasIncomeSources
+            ? (taxableIncomeByYear.get(y.year) ?? 0)
+            : y.totalIncome;
+          const estimatedPIT = pitForGross(incomeForYear, y.year);
           return {
             year: y.year.toString(),
-            income: y.totalIncome,
+            income: incomeForYear,
             estimatedTax: estimatedPIT,
-            netAfterTax: y.totalIncome - estimatedPIT,
+            netAfterTax: Math.max(incomeForYear - estimatedPIT, 0),
+            isApproximated: isApproximatedTaxYear(y.year),
           };
         })
         .filter((y) => y.income > 0),
-    [yearlyData, pitForGross]
+    [yearlyData, pitForGross, hasIncomeSources, taxableIncomeByYear]
   );
 
-  const monthlyIncomeTax = useMemo(
-    () =>
-      (monthlyData ?? [])
-        .filter((m) => m.income > 0)
-        .slice(-12)
-        .map((m) => {
-          const annualizedIncome = m.income * 12;
-          const monthlyPIT = pitForGross(annualizedIncome) / 12;
-          return {
-            period: m.period,
-            income: m.income,
-            estimatedTax: monthlyPIT,
-          };
-        }),
-    [monthlyData, pitForGross]
-  );
+  /**
+   * Format a "YYYY-MM" period as a compact month tick. Year is shown only when it changes
+   * (every January) and on the first tick so the starting year is unambiguous.
+   */
+  const formatMonthTick = useCallback((period: string, firstPeriod: string): string => {
+    const [yearStr, monthStr] = period.split('-');
+    const year = Number.parseInt(yearStr, 10);
+    const month = Number.parseInt(monthStr, 10);
+    if (Number.isNaN(year) || Number.isNaN(month)) return period;
+    const monthName = new Intl.DateTimeFormat(locale, { month: 'short' }).format(
+      new Date(year, month - 1, 1),
+    );
+    const showYear = month === 1 || period === firstPeriod;
+    return showYear ? `${monthName} ’${String(year).slice(-2)}` : monthName;
+  }, [locale]);
+
+  /**
+   * Monthly reserve series. Computes annual PIT once on the trailing-12-month taxable income,
+   * then prorates per month by each month's share of that total. This is consistent — the sum
+   * of monthly reserves equals the annual PIT — unlike the old per-month annualization which
+   * implicitly assumed each month's income was the year's average.
+   */
+  const monthlyIncomeTax = useMemo(() => {
+    if (!monthlyData?.length) return [];
+
+    const last12 = monthlyData
+      .filter((m) => (hasIncomeSources ? taxableIncomeByMonth.has(m.period) : m.income > 0))
+      .slice(-12)
+      .map((m) => ({
+        period: m.period,
+        income: hasIncomeSources ? (taxableIncomeByMonth.get(m.period) ?? 0) : m.income,
+      }))
+      .filter((m) => m.income > 0);
+
+    const yearlyTaxable = last12.reduce((sum, m) => sum + m.income, 0);
+    if (yearlyTaxable <= 0) return [];
+
+    // Pick the most recent month's year for the bracket table (most representative for
+    // a rolling-12 reserve estimate).
+    const latestYear = Number.parseInt(last12[last12.length - 1].period.slice(0, 4), 10);
+    const annualPIT = pitForGross(yearlyTaxable, latestYear);
+
+    return last12.map((m) => ({
+      period: m.period,
+      income: m.income,
+      estimatedTax: annualPIT * (m.income / yearlyTaxable),
+    }));
+  }, [monthlyData, pitForGross, hasIncomeSources, taxableIncomeByMonth]);
 
   const cards = [
     {
@@ -407,24 +489,50 @@ export default function TaxOverviewPage() {
             </div>
 
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-              {isVisible("incomeBreakdown") && monthlyIncomeTax.length > 0 && (
+              {isVisible("incomeBreakdown") && (
                 <Card>
                     <CardHeader>
                     <CardTitle>{t('tax.incomeBreakdown.title')}</CardTitle>
                     <CardDescription>{t('tax.incomeBreakdown.description')}</CardDescription>
                   </CardHeader>
                   <CardContent>
-                    <BarChart
-                      data={monthlyIncomeTax}
-                      categoryAccessor={(d) => d.period}
-                      height={280}
-                      valueTickFormat={(v) => fmt(v)}
-                      tooltipValueFormat={(v) => fmt(v)}
-                      series={[
-                        { key: "income", label: t('tax.chart.income'), accessor: (d) => d.income, color: "hsl(var(--primary))" },
-                        { key: "estimatedTax", label: t('tax.chart.pitReserve'), accessor: (d) => d.estimatedTax, color: "hsl(var(--chart-5))" },
-                      ] as BarSeries<typeof monthlyIncomeTax[number]>[]}
-                    />
+                    {!hasIncomeSources ? (
+                      <div className="flex flex-col items-center justify-center text-center py-10 px-4">
+                        <ListChecks className="h-10 w-10 text-muted-foreground/40 mb-3" />
+                        <h4 className="text-sm font-semibold text-foreground mb-1">
+                          {t('tax.incomeBreakdown.emptyTitle')}
+                        </h4>
+                        <p className="text-xs text-muted-foreground max-w-xs mb-4">
+                          {t('tax.incomeBreakdown.emptyDesc')}
+                        </p>
+                        <TaxProfileDialog
+                          initialStep="incomeSources"
+                          trigger={
+                            <Button size="sm" variant="outline" className="gap-2">
+                              <ListChecks className="h-4 w-4" />
+                              {t('tax.incomeBreakdown.emptyCta')}
+                            </Button>
+                          }
+                        />
+                      </div>
+                    ) : monthlyIncomeTax.length === 0 ? (
+                      <p className="text-xs text-muted-foreground text-center py-10">
+                        {t('tax.incomeBreakdown.noData')}
+                      </p>
+                    ) : (
+                      <BarChart
+                        data={monthlyIncomeTax}
+                        categoryAccessor={(d) => d.period}
+                        categoryTickFormat={(label) => formatMonthTick(label, monthlyIncomeTax[0]?.period ?? label)}
+                        height={280}
+                        valueTickFormat={(v) => fmt(v)}
+                        tooltipValueFormat={(v) => fmt(v)}
+                        series={[
+                          { key: "income", label: t('tax.chart.income'), accessor: (d) => d.income, color: "hsl(var(--primary))" },
+                          { key: "estimatedTax", label: t('tax.chart.pitReserve'), accessor: (d) => d.estimatedTax, color: "hsl(var(--chart-5))" },
+                        ] as BarSeries<typeof monthlyIncomeTax[number]>[]}
+                      />
+                    )}
                   </CardContent>
                 </Card>
               )}
@@ -505,24 +613,57 @@ export default function TaxOverviewPage() {
               </div>
             </div>
 
-            {isVisible("yearlyOverview") && yearlyIncome.length > 0 && (
+            {isVisible("yearlyOverview") && (
               <Card>
                 <CardHeader>
                    <CardTitle>{t('tax.yearly.title')}</CardTitle>
                    <CardDescription>{t('tax.yearly.description')}</CardDescription>
                 </CardHeader>
                 <CardContent>
-                  <BarChart
-                    data={yearlyIncome}
-                    categoryAccessor={(d) => d.year}
-                    height={300}
-                    valueTickFormat={(v) => fmt(v)}
-                    tooltipValueFormat={(v) => fmt(v)}
-                    series={[
-                      { key: "netAfterTax", label: t('tax.chart.netAfterTax'), accessor: (d) => d.netAfterTax, color: "hsl(var(--primary))" },
-                      { key: "estimatedTax", label: t('tax.chart.pit'), accessor: (d) => d.estimatedTax, color: "hsl(var(--chart-5))" },
-                    ] as BarSeries<typeof yearlyIncome[number]>[]}
-                  />
+                  {!hasIncomeSources ? (
+                    <div className="flex flex-col items-center justify-center text-center py-10 px-4">
+                      <ListChecks className="h-10 w-10 text-muted-foreground/40 mb-3" />
+                      <h4 className="text-sm font-semibold text-foreground mb-1">
+                        {t('tax.incomeBreakdown.emptyTitle')}
+                      </h4>
+                      <p className="text-xs text-muted-foreground max-w-xs mb-4">
+                        {t('tax.incomeBreakdown.emptyDesc')}
+                      </p>
+                      <TaxProfileDialog
+                        initialStep="incomeSources"
+                        trigger={
+                          <Button size="sm" variant="outline" className="gap-2">
+                            <ListChecks className="h-4 w-4" />
+                            {t('tax.incomeBreakdown.emptyCta')}
+                          </Button>
+                        }
+                      />
+                    </div>
+                  ) : yearlyIncome.length === 0 ? (
+                    <p className="text-xs text-muted-foreground text-center py-10">
+                      {t('tax.incomeBreakdown.noData')}
+                    </p>
+                  ) : (
+                    <>
+                      <BarChart
+                        data={yearlyIncome}
+                        categoryAccessor={(d) => d.year}
+                        height={300}
+                        valueTickFormat={(v) => fmt(v)}
+                        tooltipValueFormat={(v) => fmt(v)}
+                        series={[
+                          { key: "netAfterTax", label: t('tax.chart.netAfterTax'), accessor: (d) => d.netAfterTax, color: "hsl(var(--primary))" },
+                          { key: "estimatedTax", label: t('tax.chart.pit'), accessor: (d) => d.estimatedTax, color: "hsl(var(--chart-5))" },
+                        ] as BarSeries<typeof yearlyIncome[number]>[]}
+                      />
+                      {yearlyIncome.some((y) => y.isApproximated) && (
+                        <p className="text-[11px] text-muted-foreground mt-2 flex items-start gap-1.5">
+                          <Info className="h-3 w-3 mt-0.5 shrink-0" />
+                          {t('tax.yearly.approximatedNote')}
+                        </p>
+                      )}
+                    </>
+                  )}
                 </CardContent>
               </Card>
             )}

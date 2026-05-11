@@ -20,24 +20,26 @@ import {
 } from '@/components/ui/sheet';
 import { Button } from '@/components/ui/button';
 import { Separator } from '@/components/ui/separator';
-import { Settings, ChevronRight, ChevronLeft, Check, User, Landmark, MapPin, Users } from 'lucide-react';
+import { Settings, ChevronRight, ChevronLeft, Check, User, Landmark, MapPin, Users, ListChecks } from 'lucide-react';
 import { useLanguage } from '@/contexts/LanguageContext';
 import { cn } from '@/lib/utils';
 import { useBelgianTaxProfile } from '@/contexts/BelgianTaxProfileContext';
 import {
     EmploymentStep,
     IncomeStep,
+    IncomeSourcesStep,
     ExemptionsStep,
     RegionStep,
 } from './profile-steps';
 
 // eslint-disable-next-line react-refresh/only-export-components
-export const STEPS = ['employment', 'income', 'exemptions', 'region'] as const;
+export const STEPS = ['employment', 'income', 'incomeSources', 'exemptions', 'region'] as const;
 export type Step = (typeof STEPS)[number];
 
 const STEP_ICONS: Record<Step, ElementType> = {
     employment: User,
     income: Landmark,
+    incomeSources: ListChecks,
     exemptions: Users,
     region: MapPin,
 };
@@ -129,6 +131,9 @@ export function TaxProfileDialog({ trigger, initialStep }: TaxProfileDialogProps
                     )}
                     {step === 'income' && (
                         <IncomeStep profile={profile} updateProfile={updateProfile} />
+                    )}
+                    {step === 'incomeSources' && (
+                        <IncomeSourcesStep profile={profile} updateProfile={updateProfile} />
                     )}
                     {step === 'exemptions' && (
                         <ExemptionsStep profile={profile} updateProfile={updateProfile} />

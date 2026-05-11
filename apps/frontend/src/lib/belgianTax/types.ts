@@ -20,6 +20,20 @@ export type BelgianRegion = 'flanders' | 'wallonia' | 'brussels';
 export type ProfessionalExpenseMethod = 'lump_sum' | 'actual';
 export type PensionScheme = '1050' | '1350';
 
+/**
+ * Regional own-home credit regime. Determined by the mortgage's region and origination year.
+ *  - `flemish_woonbonus`: Flemish "geïntegreerde woonbonus", available for primary-residence
+ *    mortgages signed before 2020-01-01 in the Flemish Region.
+ *  - `walloon_cheque_habitat`: Walloon "chèque habitat", available for primary-residence
+ *    mortgages signed on/after 2016-01-01 in the Walloon Region. Simplified flat estimate.
+ *  - `none`: No annual credit modeled (Brussels post-2017 has only one-time stamp-duty rebate;
+ *    pre-existing Brussels and post-2020 Flemish regimes are not modeled).
+ */
+export type MortgageCreditRegime =
+    | 'flemish_woonbonus'
+    | 'walloon_cheque_habitat'
+    | 'none';
+
 export interface BelgianTaxProfile {
     profileConfigured: boolean;
     employmentType: EmploymentType;
@@ -45,7 +59,16 @@ export interface BelgianTaxProfile {
     pensionEligible?: boolean;
     lifeInsurancePremiums: number;
     lifeInsuranceEligible?: boolean;
+    /** Annual mortgage interest paid for primary residence (EUR). */
     mortgageInterestPaid: number;
+    /** Annual capital repayment on the same mortgage (EUR). Used by Flemish woonbonus alongside interest. */
+    mortgageCapitalRepaid?: number;
+    /** Year the mortgage contract was signed. Determines applicable regime. */
+    mortgageStartYear?: number;
+    /** Region where the mortgage was signed. Defaults to profile region when not set. */
+    mortgageRegion?: BelgianRegion;
+    /** True if the financed property is the taxpayer's primary residence. */
+    mortgageIsPrimaryResidence?: boolean;
     charitableDonations: number;
     charitableDonationsEligible?: boolean;
     childcareCosts: number;
@@ -61,6 +84,12 @@ export interface BelgianTaxProfile {
     annualDividendIncome?: number;
     /** Savings deposit interest tracked (livret/spaarboekje) for the year */
     annualSavingsInterest?: number;
+    /**
+     * Category IDs the user has flagged as "salary-like" taxable income. Used by the
+     * Tax Overview graphs to filter `monthlyData.income` (which is otherwise just every
+     * positive-amount transaction) down to genuinely taxable inflows.
+     */
+    taxIncomeCategoryIds?: number[];
     taxYear: number;
 }
 
@@ -86,9 +115,20 @@ export interface BelgianTaxCalculation {
     federalPITBracket2: number;
     federalPITBracket3: number;
     federalPITBracket4: number;
+    /** Federal PIT before any reduction (exemption, credits). Was `federalPITTotal` pre-IY2026 fix. */
+    federalPITBeforeExemption: number;
+    /**
+     * @deprecated Old field name kept for back-compat with persisted views and tests.
+     * Equals `federalPITBeforeExemption`. New code should use `federalPITBeforeExemption`.
+     */
     federalPITTotal: number;
     personalExemptionBenefit: number;
     federalTaxCredits: number;
+    /** Regime applied for own-home credit, if any. */
+    ownHomeCreditRegime: MortgageCreditRegime;
+    /** Estimated regional own-home tax credit (Flemish woonbonus / Walloon chèque habitat). */
+    ownHomeCredit: number;
+    /** Sum of reductions actually applied to PIT (clamped — never exceeds gross PIT). */
     taxReductions: number;
     federalPITAfterReductions: number;
     communalSurcharge: number;

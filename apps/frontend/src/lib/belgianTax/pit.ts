@@ -4,10 +4,13 @@
  * Implements:
  *  - Federal progressive brackets (year-aware)
  *  - Personal exemption ("quotité du revenu exempté") applied at the lowest brackets first
+ *    via a dedicated exemption-bracket table (CIR-92 art. 134 §3).
  *  - Professional expense deduction (lump-sum or actual)
  *  - Deductions: alimony (80%), union dues, medical
  *  - Tax credits ("réductions d'impôt"): pension savings, life insurance, group insurance,
  *    charitable donations, childcare, domestic personnel, all with statutory caps
+ *  - Regional own-home credit (Flemish woonbonus pre-2020 / Walloon chèque habitat post-2016).
+ *    Brussels and post-2020 Flemish regimes are not modeled.
  *  - Communal surcharge applied to federal PIT after credits
  *  - Employee social security + special social security contribution
  *  - Property tax estimate (separate, informational)
@@ -15,15 +18,21 @@
  *
  * Limitations / not modeled:
  *  - Marital quotient / married joint filing income split
- *  - Regional own-home credits (Flemish "geïntegreerde woonbonus", etc.)
+ *  - Brussels post-2017 stamp-duty rebate (one-time, not annual)
+ *  - Flemish post-2020 mortgages (no successor regime — capital owners only)
  *  - Securities account tax (TACR) — values exposed via constants for UI use
  *  - Reynders tax on accumulating bond fund redemptions
  *  - Foreign tax credit (DBI-RDT) on foreign dividends
  *  - Speculative capital gains regime
  */
 
-import type { BelgianTaxProfile, BelgianTaxCalculation, BracketTax } from './types';
-import { getTaxTable, type BelgianTaxYearTable } from './constants';
+import type {
+    BelgianTaxProfile,
+    BelgianTaxCalculation,
+    BracketTax,
+    MortgageCreditRegime,
+} from './types';
+import { getTaxTable, type BelgianTaxYearTable, type ExemptionBracket } from './constants';
 import { computeEmployeeSocialSecurity, computeSpecialSocialSecurityContribution } from './socialSecurity';
 import { computePropertyTaxEstimate } from './propertyTax';
 
@@ -45,6 +54,24 @@ function computeProgressiveTax(value: number, brackets: BelgianTaxYearTable['bra
     }
     result.total = result.b1 + result.b2 + result.b3 + result.b4;
     return result;
+}
+
+/**
+ * Tax on the personal exemption itself, computed from the lowest bracket upward
+ * using the exemption-bracket rate table. This figure is subtracted from gross PIT.
+ *
+ * Per PwC's IY2025 sample calculation: 25% on the bracket-1 portion, 30% on the
+ * bracket-2 overflow, then main rates above. See CIR-92 art. 134 §3.
+ */
+function computeExemptionBenefit(exemptionAmount: number, brackets: ReadonlyArray<ExemptionBracket>): number {
+    if (exemptionAmount <= 0) return 0;
+    let total = 0;
+    for (const b of brackets) {
+        if (exemptionAmount <= b.from) break;
+        const upper = Math.min(exemptionAmount, b.to);
+        total += (upper - b.from) * b.rate;
+    }
+    return total;
 }
 
 function computeProfessionalExpenses(profile: BelgianTaxProfile, table: BelgianTaxYearTable): number {
@@ -97,6 +124,64 @@ function computePersonalExemption(profile: BelgianTaxProfile, table: BelgianTaxY
     );
 }
 
+/**
+ * Resolve the regional own-home credit regime applicable to the user's mortgage.
+ * Returns 'none' when the mortgage doesn't fit a modeled regime.
+ */
+function resolveMortgageRegime(profile: BelgianTaxProfile): MortgageCreditRegime {
+    if (!profile.mortgageIsPrimaryResidence) return 'none';
+    if (!profile.mortgageInterestPaid && !profile.mortgageCapitalRepaid) return 'none';
+    const region = profile.mortgageRegion ?? profile.region;
+    const startYear = profile.mortgageStartYear ?? 0;
+    if (region === 'flanders' && startYear > 0 && startYear < 2020) return 'flemish_woonbonus';
+    if (region === 'wallonia' && startYear >= 2016) return 'walloon_cheque_habitat';
+    return 'none';
+}
+
+/**
+ * Compute the regional own-home tax credit.
+ *
+ * Flemish woonbonus (pre-2020, primary residence):
+ *   credit = min(interest + capital, base_cap [+ first-10y supplement] [+ 3+ children supplement]) × 40%
+ *
+ * Walloon chèque habitat (post-2016, primary residence, first 10 loan years):
+ *   credit = base [+ €125 × dependent children]
+ *   (Simplified — actual scheme has income-based phaseout and decreasing tail in years 11–20.)
+ *
+ * All other cases (Brussels, post-2020 Flemish, secondary residences): 0.
+ */
+function computeOwnHomeCredit(
+    profile: BelgianTaxProfile,
+    table: BelgianTaxYearTable,
+    regime: MortgageCreditRegime,
+): number {
+    if (regime === 'none') return 0;
+    const interest = Math.max(profile.mortgageInterestPaid || 0, 0);
+    const capital = Math.max(profile.mortgageCapitalRepaid || 0, 0);
+
+    if (regime === 'flemish_woonbonus') {
+        const startYear = profile.mortgageStartYear ?? 0;
+        const loanAge = Math.max(0, table.year - startYear);
+        let cap = table.flemishWoonbonusBaseCap;
+        if (loanAge < 10) cap += table.flemishWoonbonusExtraFirst10y;
+        if ((profile.dependentChildren || 0) >= 3) cap += table.flemishWoonbonusExtraChildren;
+        const eligibleExpenses = Math.min(interest + capital, cap);
+        return eligibleExpenses * table.flemishWoonbonusRate;
+    }
+
+    if (regime === 'walloon_cheque_habitat') {
+        const startYear = profile.mortgageStartYear ?? 0;
+        const loanAge = Math.max(0, table.year - startYear);
+        // First 10 years only in our simplified model.
+        if (loanAge >= 10) return 0;
+        const childSupplement =
+            Math.max(profile.dependentChildren || 0, 0) * table.walloonChequeHabitatChildSupplement;
+        return table.walloonChequeHabitatBase + childSupplement;
+    }
+
+    return 0;
+}
+
 function clampAtZero(n: number): number {
     return n > 0 ? n : 0;
 }
@@ -127,16 +212,18 @@ export function computeBelgianPIT(profile: BelgianTaxProfile): BelgianTaxCalcula
 
     const taxableIncome = clampAtZero(netAfterSS - profExpenses - otherDeductions);
 
-    // 5. Personal exemption (quotité du revenu exempté), applied at the lowest brackets.
-    const personalExemptionTotal = computePersonalExemption(profile, table);
-
+    // 5. Federal PIT on full taxable income (progressive brackets).
     const pitBeforeExemption = computeProgressiveTax(taxableIncome, table.brackets);
-    const taxableAfterExemption = clampAtZero(taxableIncome - personalExemptionTotal);
-    const pitAfterExemption = computeProgressiveTax(taxableAfterExemption, table.brackets);
 
-    const personalExemptionBenefit = clampAtZero(pitBeforeExemption.total - pitAfterExemption.total);
+    // 6. Personal exemption (quotité du revenu exempté) applied at the LOWEST brackets first
+    //    via the dedicated exemption-bracket table (CIR-92 art. 134 §3).
+    const personalExemptionTotal = computePersonalExemption(profile, table);
+    const exemptionAmount = Math.min(personalExemptionTotal, taxableIncome);
+    const personalExemptionBenefit = computeExemptionBenefit(exemptionAmount, table.exemptionBrackets);
 
-    // 6. Federal tax credits (réductions d'impôt). PwC rates and caps.
+    const pitAfterExemption = clampAtZero(pitBeforeExemption.total - personalExemptionBenefit);
+
+    // 7. Federal tax credits (réductions d'impôt). PwC rates and caps.
     const pensionCap =
         profile.pensionScheme === '1350' ? table.pensionSavingsCapAlternative : table.pensionSavingsCapStandard;
     const pensionRate =
@@ -168,28 +255,33 @@ export function computeBelgianPIT(profile: BelgianTaxProfile): BelgianTaxCalcula
         ? Math.min(profile.domesticHelpCosts || 0, table.domesticHelpCap) * table.domesticHelpRate
         : 0;
 
+    // Regional own-home credit (Flemish woonbonus / Walloon chèque habitat).
+    const ownHomeCreditRegime = resolveMortgageRegime(profile);
+    const ownHomeCredit = computeOwnHomeCredit(profile, table, ownHomeCreditRegime);
+
     const totalTaxCredits =
         pensionCredit +
         lifeInsuranceCredit +
         groupInsuranceCredit +
         donationCredit +
         childcareCredit +
-        domesticHelpCredit;
+        domesticHelpCredit +
+        ownHomeCredit;
 
-    // 7. Federal PIT after credits (cannot go below zero).
-    const federalPITBeforeCredits = pitBeforeExemption.total;
-    const federalPITAfterReductions = clampAtZero(pitAfterExemption.total - totalTaxCredits);
+    // 8. Federal PIT after credits (cannot go below zero).
+    const appliedTaxCredits = Math.min(totalTaxCredits, pitAfterExemption);
+    const federalPITAfterReductions = pitAfterExemption - appliedTaxCredits;
 
-    // 8. Communal surcharge applied to federal PIT after reductions.
+    // 9. Communal surcharge applied to federal PIT after reductions.
     const communalSurcharge = federalPITAfterReductions * (profile.communalSurchargePercent / 100);
 
-    // 9. Special social security contribution (function of net taxable income).
+    // 10. Special social security contribution (function of net taxable income).
     const specialSS = computeSpecialSocialSecurityContribution(profile, taxableIncome, table);
 
-    // 10. Property tax (informational, not part of PIT).
+    // 11. Property tax (informational, not part of PIT).
     const propertyTaxEstimate = computePropertyTaxEstimate(profile, table);
 
-    // 11. Investment income side calc.
+    // 12. Investment income side calc.
     const dividendIncome = Math.max(profile.annualDividendIncome || 0, 0);
     const dividendWhtReclaim =
         Math.min(dividendIncome, table.dividendExemption) * table.dividendWHTRate;
@@ -198,7 +290,7 @@ export function computeBelgianPIT(profile: BelgianTaxProfile): BelgianTaxCalcula
     const savingsInterestTax =
         Math.max(savingsInterest - table.savingsInterestExemption, 0) * table.savingsInterestExcessRate;
 
-    // 12. Aggregate totals — distinct meanings, no double-counting.
+    // 13. Aggregate totals — distinct meanings, no double-counting.
     const totalPIT = federalPITAfterReductions + communalSurcharge;
     const totalTaxBurden = totalPIT + employeeSS + specialSS + propertyTaxEstimate;
     const effectiveRate = gross > 0 ? (totalTaxBurden / gross) * 100 : 0;
@@ -210,6 +302,8 @@ export function computeBelgianPIT(profile: BelgianTaxProfile): BelgianTaxCalcula
 
     const netTakeHome = gross - totalTaxBurden;
     const monthlyTaxReserve = totalPIT / 12;
+
+    const federalPITBeforeExemption = pitBeforeExemption.total;
 
     const breakdown = [
         { label: 'Gross Income', amount: gross },
@@ -235,8 +329,11 @@ export function computeBelgianPIT(profile: BelgianTaxProfile): BelgianTaxCalcula
         ...(personalExemptionBenefit > 0
             ? [{ label: 'Personal exemption benefit', amount: -personalExemptionBenefit }]
             : []),
-        ...(totalTaxCredits > 0 ? [{ label: 'Tax Credits (reductions)', amount: -totalTaxCredits }] : []),
-        { label: 'Federal PIT (before credits)', amount: -federalPITBeforeCredits },
+        ...(ownHomeCredit > 0
+            ? [{ label: 'Own-home credit', amount: -ownHomeCredit }]
+            : []),
+        ...(appliedTaxCredits > 0 ? [{ label: 'Tax Credits (reductions)', amount: -appliedTaxCredits }] : []),
+        { label: 'Federal PIT (before credits)', amount: -federalPITBeforeExemption },
         { label: 'Federal PIT (after credits)', amount: -federalPITAfterReductions },
         { label: `Communal Surcharge (${profile.communalSurchargePercent}%)`, amount: -communalSurcharge, rate: profile.communalSurchargePercent },
         ...(specialSS > 0 ? [{ label: 'Special Social Security Contribution', amount: -specialSS }] : []),
@@ -255,7 +352,7 @@ export function computeBelgianPIT(profile: BelgianTaxProfile): BelgianTaxCalcula
             alimonyPaid: cappedAlimony,
             personalPensionContributions: 0,
             lifeInsurancePremiums: 0,
-            mortgageInterestPaid: 0,
+            mortgageInterestPaid: Math.max(profile.mortgageInterestPaid || 0, 0),
             charitableDonations: 0,
             childcareCosts: 0,
             unionDues: cappedUnion,
@@ -266,10 +363,13 @@ export function computeBelgianPIT(profile: BelgianTaxProfile): BelgianTaxCalcula
         federalPITBracket2: pitBeforeExemption.b2,
         federalPITBracket3: pitBeforeExemption.b3,
         federalPITBracket4: pitBeforeExemption.b4,
-        federalPITTotal: federalPITBeforeCredits,
+        federalPITBeforeExemption,
+        federalPITTotal: federalPITBeforeExemption,
         personalExemptionBenefit,
-        federalTaxCredits: totalTaxCredits,
-        taxReductions: personalExemptionBenefit + totalTaxCredits,
+        federalTaxCredits: appliedTaxCredits,
+        ownHomeCreditRegime,
+        ownHomeCredit,
+        taxReductions: personalExemptionBenefit + appliedTaxCredits,
         federalPITAfterReductions,
         communalSurcharge,
         totalPIT,

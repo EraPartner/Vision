@@ -91,11 +91,15 @@ describe("TaxProfileDialog", () => {
         await user.click(screen.getByRole("button", { name: /next/i }));
         expect(await screen.findByText("Income details")).toBeInTheDocument();
 
-        // Step 2 → 3
+        // Step 2 → 3 (income sources)
+        await user.click(screen.getByRole("button", { name: /next/i }));
+        expect(await screen.findByText("Taxable income sources")).toBeInTheDocument();
+
+        // Step 3 → 4
         await user.click(screen.getByRole("button", { name: /next/i }));
         expect(await screen.findByText("Exemptions & dependents")).toBeInTheDocument();
 
-        // Step 3 → 4
+        // Step 4 → 5
         await user.click(screen.getByRole("button", { name: /next/i }));
         expect(await screen.findByText("Region & communal surcharge")).toBeInTheDocument();
     });
@@ -110,6 +114,8 @@ describe("TaxProfileDialog", () => {
         await screen.findByText("Employment type");
         await user.click(screen.getByRole("button", { name: /next/i }));
         await screen.findByText("Income details");
+        await user.click(screen.getByRole("button", { name: /next/i }));
+        await screen.findByText("Taxable income sources");
         await user.click(screen.getByRole("button", { name: /next/i }));
         await screen.findByText("Exemptions & dependents");
         await user.click(screen.getByRole("button", { name: /next/i }));
@@ -130,6 +136,8 @@ describe("TaxProfileDialog", () => {
         await screen.findByText("Employment type");
         await user.click(screen.getByRole("button", { name: /next/i }));
         await screen.findByText("Income details");
+        await user.click(screen.getByRole("button", { name: /next/i }));
+        await screen.findByText("Taxable income sources");
         await user.click(screen.getByRole("button", { name: /next/i }));
         await screen.findByText("Exemptions & dependents");
         await user.click(screen.getByRole("button", { name: /next/i }));

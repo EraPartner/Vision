@@ -38,11 +38,46 @@ export interface RegionPropertyTaxParams {
     centimes: number;
 }
 
+/**
+ * Special "exemption bracket" rates used to compute the personal-exemption benefit
+ * (CIR-92 art. 134 §3). The exempt amount is taxed from bracket 1 upward using these
+ * rates, and the result is subtracted from gross PIT.
+ *
+ * Per PwC's worked example for IY2025, the exemption uses 25% for the portion sitting
+ * in bracket 1, and a reduced 30% for the overflow into bracket 2 (instead of the main
+ * 40% rate). Higher overflow into brackets 3/4 follows the main bracket rates.
+ */
+export interface ExemptionBracket {
+    from: number;
+    to: number;
+    rate: number;
+}
+
 export interface BelgianTaxYearTable {
     year: number;
 
     // ── Federal personal income tax brackets ────────────────────────────────
     brackets: ReadonlyArray<{ from: number; to: number; rate: number }>;
+
+    /**
+     * Bracket rates used to value the personal exemption ("quotité exemptée").
+     * Bottom-up application. See ExemptionBracket doc and PwC sample calculation.
+     */
+    exemptionBrackets: ReadonlyArray<ExemptionBracket>;
+
+    // ── Own-home regional credit ────────────────────────────────────────────
+    /** Flemish "geïntegreerde woonbonus" base cap (interest + capital, indexed) */
+    flemishWoonbonusBaseCap: number;
+    /** Flemish woonbonus rate (40%) */
+    flemishWoonbonusRate: number;
+    /** Flemish woonbonus extra for first 10 years */
+    flemishWoonbonusExtraFirst10y: number;
+    /** Flemish woonbonus extra when 3+ dependent children at loan start */
+    flemishWoonbonusExtraChildren: number;
+    /** Walloon "chèque habitat" base annual amount (first 10 loan-years) */
+    walloonChequeHabitatBase: number;
+    /** Walloon chèque habitat per-dependent-child supplement */
+    walloonChequeHabitatChildSupplement: number;
 
     // ── Personal exemptions (quotité du revenu exempté) ─────────────────────
     basicPersonalExemption: number;
@@ -129,6 +164,20 @@ const TABLE_2024: BelgianTaxYearTable = {
         { from: 27_920, to: 48_320, rate: 0.45 },
         { from: 48_320, to: Infinity, rate: 0.50 },
     ],
+    exemptionBrackets: [
+        // PwC sample IY2024: 25% on bracket-1 portion, reduced 30% on bracket-2 overflow.
+        // Above bracket 2 the main rates apply.
+        { from: 0, to: 15_820, rate: 0.25 },
+        { from: 15_820, to: 27_920, rate: 0.30 },
+        { from: 27_920, to: 48_320, rate: 0.45 },
+        { from: 48_320, to: Infinity, rate: 0.50 },
+    ],
+    flemishWoonbonusBaseCap: 2_280,
+    flemishWoonbonusRate: 0.40,
+    flemishWoonbonusExtraFirst10y: 760,
+    flemishWoonbonusExtraChildren: 80,
+    walloonChequeHabitatBase: 1_520,
+    walloonChequeHabitatChildSupplement: 125,
     basicPersonalExemption: 10_570,
     dependentChildExemptionIncreases: [0, 1_920, 4_950, 11_090, 17_940],
     extraChildExemptionFromFifth: 6_850,
@@ -203,6 +252,20 @@ const TABLE_2025: BelgianTaxYearTable = {
         { from: 28_800, to: 49_840, rate: 0.45 },
         { from: 49_840, to: Infinity, rate: 0.50 },
     ],
+    exemptionBrackets: [
+        // PwC sample IY2025: 25% on bracket-1 portion, reduced 30% on bracket-2 overflow
+        // (CIR-92 art. 134 §3). Brackets 3/4 use main rates.
+        { from: 0, to: 16_320, rate: 0.25 },
+        { from: 16_320, to: 28_800, rate: 0.30 },
+        { from: 28_800, to: 49_840, rate: 0.45 },
+        { from: 49_840, to: Infinity, rate: 0.50 },
+    ],
+    flemishWoonbonusBaseCap: 2_280,
+    flemishWoonbonusRate: 0.40,
+    flemishWoonbonusExtraFirst10y: 760,
+    flemishWoonbonusExtraChildren: 80,
+    walloonChequeHabitatBase: 1_520,
+    walloonChequeHabitatChildSupplement: 125,
     basicPersonalExemption: 10_910,
     dependentChildExemptionIncreases: [0, 1_980, 5_110, 11_440, 18_510],
     extraChildExemptionFromFifth: 7_070,
@@ -270,11 +333,27 @@ const TABLES: Record<number, BelgianTaxYearTable> = {
     2025: TABLE_2025,
 };
 
-export const SUPPORTED_TAX_YEARS = Object.keys(TABLES).map(Number).sort();
+export const SUPPORTED_TAX_YEARS = Object.keys(TABLES).map(Number).sort((a, b) => a - b);
 export const LATEST_TAX_YEAR = Math.max(...SUPPORTED_TAX_YEARS);
+export const EARLIEST_TAX_YEAR = Math.min(...SUPPORTED_TAX_YEARS);
 
+/**
+ * Resolve the tax table for a given income year.
+ *
+ * Exact match when available. Otherwise: years before EARLIEST_TAX_YEAR fall back to the
+ * earliest table (e.g. 2016 income → 2024 rates), years after LATEST_TAX_YEAR fall back
+ * to the latest table. Callers showing historical years should display a note that
+ * pre-EARLIEST values are approximated.
+ */
 export function getTaxTable(year: number): BelgianTaxYearTable {
-    return TABLES[year] ?? TABLES[LATEST_TAX_YEAR];
+    if (TABLES[year]) return TABLES[year];
+    if (year < EARLIEST_TAX_YEAR) return TABLES[EARLIEST_TAX_YEAR];
+    return TABLES[LATEST_TAX_YEAR];
+}
+
+/** True when the table for `year` is an approximation (no exact match in TABLES). */
+export function isApproximatedTaxYear(year: number): boolean {
+    return !TABLES[year];
 }
 
 // ──────────────────────────────────────────────────────────────────────────────

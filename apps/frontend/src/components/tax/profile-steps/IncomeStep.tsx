@@ -7,6 +7,7 @@ import { Badge } from '@/components/ui/badge';
 import { Separator } from '@/components/ui/separator';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
+import { Switch } from '@/components/ui/switch';
 import { useLanguage } from '@/contexts/LanguageContext';
 import { cn } from '@/lib/utils';
 import type {
@@ -176,6 +177,118 @@ export function IncomeStep({ profile, updateProfile }: StepProps) {
                     }}>{t('tax.profile.addResidence') || 'Add residence'}</Button>
                     <Button size="sm" variant="ghost" onClick={() => updateProfile({ additionalResidences: [] })}>{t('common.reset')}</Button>
                 </div>
+            </div>
+
+            <Separator />
+
+            <div className="space-y-3">
+                <div>
+                    <p className="text-sm font-semibold text-foreground mb-1">{t('tax.profile.section.ownHome.title')}</p>
+                    <p className="text-xs text-muted-foreground mb-3">{t('tax.profile.section.ownHome.desc')}</p>
+                </div>
+
+                <div className="flex items-center justify-between p-3 rounded-lg border border-border">
+                    <div className="flex-1">
+                        <Label htmlFor="own-home-primary" className="text-sm font-medium cursor-pointer">
+                            {t('tax.profile.field.mortgageIsPrimaryResidence')}
+                        </Label>
+                        <p className="text-xs text-muted-foreground mt-0.5">
+                            {t('tax.profile.field.mortgageIsPrimaryResidence.desc')}
+                        </p>
+                    </div>
+                    <Switch
+                        id="own-home-primary"
+                        checked={!!profile.mortgageIsPrimaryResidence}
+                        onCheckedChange={(v) => updateProfile({ mortgageIsPrimaryResidence: v })}
+                    />
+                </div>
+
+                {profile.mortgageIsPrimaryResidence && (
+                    <div className="space-y-3 pl-1">
+                        <div className="grid grid-cols-2 gap-3">
+                            <div>
+                                <Label htmlFor="mortgage-year" className="text-xs">
+                                    {t('tax.profile.field.mortgageStartYear')}
+                                </Label>
+                                <Input
+                                    id="mortgage-year"
+                                    type="number"
+                                    min={1990}
+                                    max={new Date().getFullYear()}
+                                    step={1}
+                                    value={profile.mortgageStartYear || ''}
+                                    onChange={(e) =>
+                                        updateProfile({
+                                            mortgageStartYear: e.target.value
+                                                ? parseInt(e.target.value, 10)
+                                                : undefined,
+                                        })
+                                    }
+                                    placeholder={t('tax.profile.placeholder.mortgageStartYear')}
+                                />
+                            </div>
+                            <div>
+                                <Label htmlFor="mortgage-region" className="text-xs">
+                                    {t('tax.profile.field.mortgageRegion')}
+                                </Label>
+                                <Select
+                                    value={profile.mortgageRegion ?? profile.region}
+                                    onValueChange={(v) =>
+                                        updateProfile({ mortgageRegion: v as BelgianRegion })
+                                    }
+                                >
+                                    <SelectTrigger id="mortgage-region" className="w-full">
+                                        <SelectValue />
+                                    </SelectTrigger>
+                                    <SelectContent>
+                                        <SelectItem value="flanders">Flanders</SelectItem>
+                                        <SelectItem value="wallonia">Wallonia</SelectItem>
+                                        <SelectItem value="brussels">Brussels</SelectItem>
+                                    </SelectContent>
+                                </Select>
+                            </div>
+                        </div>
+
+                        <div className="grid grid-cols-2 gap-3">
+                            <div>
+                                <Label htmlFor="mortgage-interest" className="text-xs">
+                                    {t('tax.profile.field.mortgageInterestPaid')}
+                                </Label>
+                                <Input
+                                    id="mortgage-interest"
+                                    type="number"
+                                    min={0}
+                                    step={10}
+                                    value={profile.mortgageInterestPaid || ''}
+                                    onChange={(e) =>
+                                        updateProfile({ mortgageInterestPaid: parseDecimal(e.target.value) })
+                                    }
+                                    placeholder={t('tax.profile.placeholder.mortgageInterestPaid')}
+                                />
+                            </div>
+                            <div>
+                                <Label htmlFor="mortgage-capital" className="text-xs">
+                                    {t('tax.profile.field.mortgageCapitalRepaid')}
+                                </Label>
+                                <Input
+                                    id="mortgage-capital"
+                                    type="number"
+                                    min={0}
+                                    step={10}
+                                    value={profile.mortgageCapitalRepaid || ''}
+                                    onChange={(e) =>
+                                        updateProfile({ mortgageCapitalRepaid: parseDecimal(e.target.value) })
+                                    }
+                                    placeholder={t('tax.profile.placeholder.mortgageCapitalRepaid')}
+                                />
+                            </div>
+                        </div>
+
+                        <p className="text-[11px] text-muted-foreground">
+                            {t('tax.profile.section.ownHome.note')}
+                        </p>
+                    </div>
+                )}
             </div>
 
             <Separator />

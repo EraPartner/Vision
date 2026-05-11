@@ -142,11 +142,6 @@ export function ExemptionsStep({ profile, updateProfile }: StepProps) {
                 </div>
 
                 <div>
-                    <Label htmlFor="mortgage">{t('tax.profile.field.mortgageInterestPaid')}</Label>
-                    <Input id="mortgage" type="number" min={0} step={10} value={profile.mortgageInterestPaid || ''} onChange={(e) => updateProfile({ mortgageInterestPaid: parseDecimal(e.target.value) })} placeholder={t('tax.profile.placeholder.mortgageInterestPaid')} />
-                </div>
-
-                <div>
                     <Label htmlFor="union">{t('tax.profile.field.unionDues')}</Label>
                     <Input id="union" type="number" min={0} step={10} value={profile.unionDues || ''} onChange={(e) => updateProfile({ unionDues: parseDecimal(e.target.value) })} placeholder={t('tax.profile.placeholder.unionDues')} />
                 </div>

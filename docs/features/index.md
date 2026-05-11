@@ -3,9 +3,9 @@ title: Features Documentation Index
 type: features-index
 status: active
 date: 2026-04-24
-updated: 2026-05-08
-tags: [features, index, documentation, phase-5a, phase-6, phase-7, phase-10, phase-c, phase-d, phase-e, phase-f, phase-9, statistics-refactoring, cash-flow-forecast, cost-basis, database-maintenance, sankey-flow, rolling-averages, pdf-report, admin-observability, multi-method-forecast, frontend-visualization, accuracy-persistence, materialized-cache, ensemble-methods, nightly-job, bug-hunt-2026-05-05, bug-hunt-2026-05-06, phase-c-bug-fixes, accessibility, csv-parsing, memory-safety, debounce, useCallback, bulk-actions]
-description: Feature documentation for all major capabilities of the Vision application. Phase 6 complete with cash flow forecast, cost basis methods. Phase 7 adds database maintenance UI, Sankey flow visualization, rolling average overlays, and PDF report export. Phase 10 adds multi-method statistical cash flow forecast with 7 methods. Phase C adds dashboard frontend visualization. Phase D adds persisted accuracy metrics and historical trend analysis. Phase E adds nightly cache materialization for performance. Phase F adds inverse-MSE ensemble method (8th method). Phase 9 completes aggregation shadow cutover. April 2026 extends Saved Charts with recipients, variants, time buckets, and date ranges; introduces Custom Charts tab in Statistics. May 2026 bulk transaction actions enable multi-row operations (delete, recategorize, reassign, activate/deactivate, export, tag); bug hunt completes comprehensive correctness hardening across frontend, backend, and Electron: mount guards, React key stability, decimal arithmetic, date/timezone safety, queryKey fixes, pagination guards, Electron hardening (window/navigation/backup restrictions), and release workflow version sync.
+updated: 2026-05-11
+tags: [features, index, documentation, phase-5a, phase-6, phase-7, phase-10, phase-c, phase-d, phase-e, phase-f, phase-9, statistics-refactoring, cash-flow-forecast, cost-basis, database-maintenance, sankey-flow, rolling-averages, pdf-report, admin-observability, multi-method-forecast, frontend-visualization, accuracy-persistence, materialized-cache, ensemble-methods, nightly-job, bug-hunt-2026-05-05, bug-hunt-2026-05-06, phase-c-bug-fixes, accessibility, csv-parsing, memory-safety, debounce, useCallback, bulk-actions, belgian-tax-correctness, exemption-brackets, own-home-credits, taxable-income-sources]
+description: Feature documentation for all major capabilities of the Vision application. Phase 6 complete with cash flow forecast, cost basis methods. Phase 7 adds database maintenance UI, Sankey flow visualization, rolling average overlays, and PDF report export. Phase 10 adds multi-method statistical cash flow forecast with 7 methods. Phase C adds dashboard frontend visualization. Phase D adds persisted accuracy metrics and historical trend analysis. Phase E adds nightly cache materialization for performance. Phase F adds inverse-MSE ensemble method (8th method). Phase 9 completes aggregation shadow cutover. April 2026 extends Saved Charts with recipients, variants, time buckets, and date ranges; introduces Custom Charts tab in Statistics. May 2026 bulk transaction actions enable multi-row operations (delete, recategorize, reassign, activate/deactivate, export, tag); bug hunt completes comprehensive correctness hardening. May 11 2026: Belgian Tax correctness fixes — personal exemption now applied at lowest brackets via exemption-bracket table (CIR-92 art. 134 §3); regional own-home credits (Flemish woonbonus, Walloon chèque habitat); taxable income source filtering for graph visualization.
 aliases: [features, capabilities]
 ---
 
@@ -131,6 +131,33 @@ See [[docs/reference/code-patterns|Code Patterns]], [[docs/components/shared-com
 - **Concurrency serialization** — Releases for same ref do not cancel in-progress uploads
 
 See [[docs/security/data-protection|Data Protection]], [[docs/components/hooks|Custom Hooks]], [[docs/components/shared-components|Shared Components]], [[docs/reference/code-patterns|Code Patterns]] for detailed fixes and patterns.
+
+## May 2026 Belgian Tax Correctness: Exemption Brackets, Own-Home Credits, Income Source Filtering
+
+**Major tax calculation overhaul (2026-05-11)** correcting PIT methodology and adding regional credits:
+
+### Exemption Bracket Correction (ADR-053)
+- **Personal exemption** now applied at lowest brackets first using dedicated exemption-bracket rate table (CIR-92 art. 134 §3)
+- Exemption taxed at 25% on bracket-1 portion, 30% on bracket-2 overflow (reduced from 40%), main rates above
+- Validated against PwC Worldwide Tax Summaries Belgium IY 2025 sample calculation
+- Field rename: `federalPITTotal` → `federalPITBeforeExemption` (back-compat alias maintained)
+
+### Regional Own-Home Credits (ADR-054)
+- **Flemish `geïntegreerde woonbonus`** (pre-2020 loans): Credit = min(interest + capital, base cap + supplements) × 40%
+- **Walloon `chèque habitat`** (post-2016, first 10 years): Base amount + €125/dependent child
+- New mortgage tracking fields: interest, capital, region, start year, primary residence
+- New output: `ownHomeCreditRegime` and `ownHomeCredit` in tax calculation result
+- Note: Brussels and post-2020 Flanders regimes not modeled; income-based phaseouts simplified
+
+### Taxable Income Source Filtering (ADR-055)
+- **Multi-select category picker** added to Tax Profile (new step 3 of 5)
+- Tax Overview graphs filter to selected income sources only
+- Monthly chart: prorates annual PIT by each month's share of trailing-12-month taxable income
+- Yearly chart: threads year-aware bracket tables for accurate multi-year visualization
+- Empty-state CTA when no income sources configured
+- Approximate-year note for years before earliest supported tax year
+
+See [[docs/features/belgian-tax|Belgian Tax Feature]] for complete documentation. See ADRs [[docs/adr/053-belgian-pit-exemption-bracket-correction|053]], [[docs/adr/054-belgian-regional-own-home-credits|054]], [[docs/adr/055-belgian-tax-income-source-filtering|055]] for technical details.
 
 ## Related Documentation
 

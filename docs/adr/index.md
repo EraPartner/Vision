@@ -3,10 +3,10 @@ title: Architecture Decision Records Index
 type: adr-index
 status: active
 date: 2026-04-23
-updated: 2026-05-08
-last_modified: 2026-05-08
-tags: [adr, index, architecture, decisions, phase-1, phase-4, phase-5, phase-6, phase-7, security, dependency-slim-down, container-hardening, docker, backup, encryption, aead, aes-256-gcm, codeql, dependabot, rate-limiting, tailwind-v4, css-architecture, dependencies, ai, streaming, useSyncExternalStore, bug-hunt, recovery-hardening, updated-at-constraints, concurrent-backup, ci-cd, secrets-scanning, supply-chain-security, gitleaks, deps-audit, trivy-scan, docker-compose-sync, named-volumes, data-loss, tags, tagging, transaction-tags, orthogonal-dimension]
-description: Architecture Decision Records documenting significant technical choices and their rationale. May 2026: Transaction Tags as orthogonal dimension (ADR-052), Docker Compose volume sync policy (ADR-051), CI supply chain security tooling (ADR-050), Phase 6.1–7 bug hunt recovery hardening (ADR-049), AI Chat module-level stream store (ADR-048), Tailwind CSS v4 migration (ADR-047).
+updated: 2026-05-11
+last_modified: 2026-05-11
+tags: [adr, index, architecture, decisions, phase-1, phase-4, phase-5, phase-6, phase-7, security, dependency-slim-down, container-hardening, docker, backup, encryption, aead, aes-256-gcm, codeql, dependabot, rate-limiting, tailwind-v4, css-architecture, dependencies, ai, streaming, useSyncExternalStore, bug-hunt, recovery-hardening, updated-at-constraints, concurrent-backup, ci-cd, secrets-scanning, supply-chain-security, gitleaks, deps-audit, trivy-scan, docker-compose-sync, named-volumes, data-loss, tags, tagging, transaction-tags, orthogonal-dimension, belgian-tax, exemption-brackets, own-home-credits, taxable-income-sources]
+description: Architecture Decision Records documenting significant technical choices and their rationale. May 2026: Belgian Tax exemption-bracket correction (ADR-053), regional own-home credits (ADR-054), taxable income source filtering (ADR-055); prior: Transaction Tags as orthogonal dimension (ADR-052), Docker Compose volume sync policy (ADR-051), CI supply chain security tooling (ADR-050), Phase 6.1–7 bug hunt recovery hardening (ADR-049), AI Chat module-level stream store (ADR-048), Tailwind CSS v4 migration (ADR-047).
 aliases: [ADRs, decisions, architecture decisions]
 ---
 
