@@ -295,7 +295,7 @@ export const getTransactionsInRange = {
 /**
  * Aggregate expense rows by month and category, then keep top N per month.
  *
- * @param {Array<{ date: Date|string, amount: unknown, category_name?: string }>} rows
+ * @param {Array<{ date: Date|string, amount: number|string|null, category_name?: string }>} rows
  * @param {{ topN: number }} options
  * @returns {Array<{ month: string, category: string, total: number, count: number }>}
  */
