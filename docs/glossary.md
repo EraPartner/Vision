@@ -68,6 +68,9 @@ aliases: [glossary, terms, terminology, dictionary, vocabulary, disambiguation]
 | **Municipality Tax** | Local tax rate based on residence | [[docs/features/portfolio\|Portfolio]] |
 | **HICP** | Harmonised Index of Consumer Prices (Eurostat inflation) | [[docs/features/portfolio\|Portfolio]] |
 | **Statbel** | Belgian statistics office (primary inflation source) | [[docs/features/portfolio\|Portfolio]] |
+| **Historical Year Viewer** | Transient year switcher allowing review of past tax profiles without modifying live profile | [[docs/features/belgian-tax#historical-year-viewer-adr-058\|Belgian Tax Historical Year Viewer]] |
+| **Tax Year Snapshot** | Frozen copy of a BelgianTaxProfile for a specific income year, stored in `belgian_tax_profile_snapshots_v1` | [[docs/features/belgian-tax#historical-year-viewer-adr-058\|Historical Year Viewer]] |
+| **Live Profile vs Snapshot** | Live profile = current active profile; snapshot = archived profile from a past year; snapshot takes precedence when viewing historical years | [[docs/features/belgian-tax#historical-year-viewer-adr-058\|Historical Year Viewer]] |
 
 ## Search Tips
 

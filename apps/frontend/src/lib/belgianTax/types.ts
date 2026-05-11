@@ -143,6 +143,18 @@ export interface BelgianTaxProfile {
     taxYear: number;
 }
 
+/**
+ * Map of income year → frozen `BelgianTaxProfile` snapshot for that year. Used by the
+ * historical year viewer so past years can be rendered with the inputs the user actually
+ * had at the time, while the engine still recomputes the calculation live.
+ *
+ * Snapshots are created automatically when the active profile's `taxYear` advances; the
+ * outgoing year's profile is archived under its own year key before the new value is saved.
+ * Users can also seed a snapshot retroactively for years that show up in the year list
+ * solely because of transaction data.
+ */
+export type BelgianTaxProfileSnapshots = Record<number, BelgianTaxProfile>;
+
 export interface BracketTax {
     b1: number;
     b2: number;

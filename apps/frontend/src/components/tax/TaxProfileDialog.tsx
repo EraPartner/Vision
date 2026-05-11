@@ -9,7 +9,7 @@
  *   4. Region & surcharge
  */
 // @refresh reset
-import { useState, type ElementType, type ReactNode } from 'react';
+import { useCallback, useState, type ElementType, type ReactNode } from 'react';
 import {
     Sheet,
     SheetContent,
@@ -20,10 +20,11 @@ import {
 } from '@/components/ui/sheet';
 import { Button } from '@/components/ui/button';
 import { Separator } from '@/components/ui/separator';
-import { Settings, ChevronRight, ChevronLeft, Check, User, Landmark, MapPin, Users, ListChecks } from 'lucide-react';
+import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
+import { Settings, ChevronRight, ChevronLeft, Check, User, Landmark, MapPin, Users, ListChecks, History } from 'lucide-react';
 import { useLanguage } from '@/contexts/LanguageContext';
 import { cn } from '@/lib/utils';
-import { useBelgianTaxProfile } from '@/contexts/BelgianTaxProfileContext';
+import { useBelgianTaxProfile, type BelgianTaxProfile } from '@/contexts/BelgianTaxProfileContext';
 import {
     EmploymentStep,
     IncomeStep,
@@ -48,13 +49,45 @@ interface TaxProfileDialogProps {
     trigger?: ReactNode;
     /** Optional initial step to open the dialog on (useful for CTAs linking directly to a step) */
     initialStep?: Step;
+    /**
+     * Income year this dialog should edit. Defaults to the live profile's `taxYear`.
+     * When supplied and a snapshot exists for that year, the dialog reads/writes the
+     * snapshot (historical-edit mode) and renders a warning banner.
+     */
+    targetYear?: number;
 }
 
-export function TaxProfileDialog({ trigger, initialStep }: TaxProfileDialogProps) {
-    const { profile, updateProfile } = useBelgianTaxProfile();
+export function TaxProfileDialog({ trigger, initialStep, targetYear }: TaxProfileDialogProps) {
+    const {
+        profile: liveProfile,
+        updateProfile: updateLiveProfile,
+        snapshots,
+        updateSnapshot,
+    } = useBelgianTaxProfile();
     const [open, setOpen] = useState(false);
     const [step, setStep] = useState<Step>('employment');
     const { t } = useLanguage();
+
+    const liveYear = liveProfile.taxYear;
+    const effectiveTargetYear = targetYear ?? liveYear;
+    const editingHistorical = effectiveTargetYear !== liveYear && !!snapshots[effectiveTargetYear];
+    const profile: BelgianTaxProfile = editingHistorical
+        ? snapshots[effectiveTargetYear]
+        : liveProfile;
+
+    const updateProfile = useCallback(
+        (updates: Partial<BelgianTaxProfile>) => {
+            if (editingHistorical) {
+                // Strip `taxYear` from patches so the snapshot key/year remains pinned.
+                // eslint-disable-next-line @typescript-eslint/no-unused-vars
+                const { taxYear, ...rest } = updates;
+                updateSnapshot(effectiveTargetYear, rest);
+                return;
+            }
+            updateLiveProfile(updates);
+        },
+        [editingHistorical, effectiveTargetYear, updateSnapshot, updateLiveProfile],
+    );
 
     const stepIdx = STEPS.indexOf(step);
     const isFirst = stepIdx === 0;
@@ -63,6 +96,8 @@ export function TaxProfileDialog({ trigger, initialStep }: TaxProfileDialogProps
     function next() {
         if (!isLast) setStep(STEPS[stepIdx + 1]);
         else {
+            // For historical edits, the snapshot is already "configured" by definition —
+            // setting `profileConfigured` again is a no-op patch, which is fine.
             updateProfile({ profileConfigured: true });
             setOpen(false);
         }
@@ -123,6 +158,16 @@ export function TaxProfileDialog({ trigger, initialStep }: TaxProfileDialogProps
                         );
                     })}
                 </div>
+
+                {editingHistorical && (
+                    <Alert className="mb-4 border-amber-500/40 bg-amber-500/5">
+                        <History className="h-4 w-4 text-amber-600" />
+                        <AlertTitle>{t('tax.historical.editWarning.title')}</AlertTitle>
+                        <AlertDescription>
+                            {t('tax.historical.editWarning.desc', { year: String(effectiveTargetYear) })}
+                        </AlertDescription>
+                    </Alert>
+                )}
 
                 {/* Step content */}
                 <div className="space-y-5 min-h-[340px]">

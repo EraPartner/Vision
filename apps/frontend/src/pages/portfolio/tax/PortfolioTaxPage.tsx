@@ -16,6 +16,8 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { TaxProfileDialog } from "@/components/tax/TaxProfileDialog";
+import { TaxYearSwitcher } from "@/components/tax/TaxYearSwitcher";
+import { HistoricalYearBanner } from "@/components/tax/HistoricalYearBanner";
 import { PortfolioTaxAdjustmentsDialog } from "@/components/portfolio/PortfolioTaxAdjustmentsDialog";
 import { WidgetVisibilityDialog } from "@/components/shared/WidgetVisibilityDialog";
 import { useWidgetVisibility, type WidgetDefinition } from "@/hooks/useWidgetVisibility";
@@ -54,7 +56,18 @@ function yearOf(date?: string): number | null {
 export default function PortfolioTaxPage() {
   const { t } = useLanguage();
   const { appSettings } = useAppSettings();
-  const { profile, calculation } = useBelgianTaxProfile();
+  const {
+    profile: liveProfile,
+    viewedYear,
+    setViewedYear,
+    isViewingHistorical,
+    snapshotExistsForYear,
+    profileForYear,
+    calculationForYear,
+    createSnapshotFromLive,
+  } = useBelgianTaxProfile();
+  const profile = profileForYear(viewedYear);
+  const calculation = calculationForYear(viewedYear);
   const { summaries: rawSummaries } = usePortfolio();
   const { getAdjustment } = usePortfolioTaxAdjustments();
   const { getClassification } = usePortfolioTaxClassifications();
@@ -69,7 +82,7 @@ export default function PortfolioTaxPage() {
   );
   const locale = numberFormatToLocale(appSettings.numberFormat);
   const targetCurrency = appSettings.defaultCurrency || "EUR";
-  const txYear = profile.taxYear;
+  const txYear = viewedYear;
 
   const { convertToTarget } = useCurrencyConverter(targetCurrency);
 
@@ -422,7 +435,7 @@ export default function PortfolioTaxPage() {
   ]);
 
   const isEmpty = summaries.length === 0;
-  const hasProfile = profile.profileConfigured || profile.grossAnnualIncome > 0;
+  const hasProfile = liveProfile.profileConfigured || liveProfile.grossAnnualIncome > 0;
 
   const cards = [
     {
@@ -478,6 +491,7 @@ export default function PortfolioTaxPage() {
         actions={(
           <>
             <TaxProfileDialog
+              targetYear={viewedYear}
               trigger={
                 <Button variant="default" size="sm" className="gap-2">
                   <Calculator className="h-4 w-4" />
@@ -498,10 +512,24 @@ export default function PortfolioTaxPage() {
       />
 
       <div className="flex items-center gap-2 -mt-2 text-xs text-muted-foreground flex-wrap">
-        <Badge variant="secondary">Tax year {txYear}</Badge>
+        <TaxYearSwitcher />
         <Badge variant="outline">{t("tax.taxes")}: {fmt(totalTaxes)}</Badge>
         <Badge variant="outline">{t("tax.fees")}: {fmt(totalFees)}</Badge>
       </div>
+
+      {isViewingHistorical && (
+        <HistoricalYearBanner
+          mode={snapshotExistsForYear(viewedYear) ? 'snapshot' : 'estimate'}
+          viewedYear={viewedYear}
+          currentYear={liveProfile.taxYear}
+          onReturnToCurrent={() => setViewedYear(liveProfile.taxYear)}
+          onCreateSnapshot={
+            snapshotExistsForYear(viewedYear)
+              ? undefined
+              : () => createSnapshotFromLive(viewedYear)
+          }
+        />
+      )}
 
       {!isEmpty && (
         <Card className="border-primary/20 bg-primary/5">

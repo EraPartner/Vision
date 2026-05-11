@@ -1,10 +1,19 @@
 /**
  * BelgianTaxProfileContext
  *
- * Stores and persists the user's Belgian tax profile and exposes the derived PIT calculation.
+ * Stores and persists the user's Belgian tax profile + frozen per-year snapshots and exposes
+ * the derived PIT calculation.
  *
  * Pure tax logic lives in `@/lib/belgianTax`. This file only owns React state, persistence,
  * and the context wiring.
+ *
+ * Two distinct year concepts coexist here:
+ *  - `profile.taxYear` — the income year the user's *editable, active* profile belongs to.
+ *    Advances at most once per income year; on advance, the outgoing profile is archived to
+ *    `snapshots[oldYear]` automatically.
+ *  - `viewedYear` — the income year the UI is currently displaying. Transient, never
+ *    persisted. May point at a past snapshot (read-only by default, see warning banner) or
+ *    at a year with only transaction data and no saved snapshot.
  */
 import {
     createContext,
@@ -23,12 +32,14 @@ import {
     computeBelgianPIT,
     LATEST_TAX_YEAR,
     type BelgianTaxProfile,
+    type BelgianTaxProfileSnapshots,
     type BelgianTaxCalculation,
 } from '@/lib/belgianTax';
 
 // Re-export the public surface so consumers can keep importing from this path.
 export type {
     BelgianTaxProfile,
+    BelgianTaxProfileSnapshots,
     BelgianTaxCalculation,
     EmploymentType,
     BelgianRegion,
@@ -64,14 +75,42 @@ export {
 /* eslint-enable react-refresh/only-export-components */
 
 interface BelgianTaxProfileContextType {
+    /** Editable live profile. Always represents the active income year. */
     profile: BelgianTaxProfile;
     updateProfile: (updates: Partial<BelgianTaxProfile>) => void;
     resetProfile: () => void;
+    /** PIT calculation for the live profile (i.e. the active year). */
     calculation: BelgianTaxCalculation;
     isLoading: boolean;
+    /** Frozen per-year profile snapshots, keyed by income year. */
+    snapshots: BelgianTaxProfileSnapshots;
+    /** The income year currently being displayed by the UI. Defaults to `profile.taxYear`. */
+    viewedYear: number;
+    setViewedYear: (year: number) => void;
+    /** True when `viewedYear` is not the live profile's year. */
+    isViewingHistorical: boolean;
+    /** Returns the snapshot for a year, or `null` if none exists. */
+    snapshotExistsForYear: (year: number) => boolean;
+    /**
+     * Resolve the profile to use for a given income year:
+     *  - `year === profile.taxYear` → returns the live profile.
+     *  - snapshot exists → returns the snapshot.
+     *  - otherwise → returns the live profile with `taxYear` overridden (estimate mode).
+     */
+    profileForYear: (year: number) => BelgianTaxProfile;
+    /** Compute the PIT calculation for a given year using `profileForYear`. */
+    calculationForYear: (year: number) => BelgianTaxCalculation;
+    /**
+     * Seed a snapshot for a year by cloning the current live profile (with `taxYear`
+     * overridden). No-op if a snapshot already exists for that year.
+     */
+    createSnapshotFromLive: (year: number) => void;
+    /** Patch a snapshot in place. Used by the dialog's historical-edit mode. */
+    updateSnapshot: (year: number, updates: Partial<BelgianTaxProfile>) => void;
 }
 
-const SETTINGS_KEY = 'belgian_tax_profile';
+const PROFILE_SETTINGS_KEY = 'belgian_tax_profile';
+const SNAPSHOTS_SETTINGS_KEY = 'belgian_tax_profile_snapshots_v1';
 const PERSIST_DEBOUNCE_MS = 500;
 
 const defaultProfile: BelgianTaxProfile = {
@@ -141,50 +180,171 @@ function hasMeaningfulData(profile: BelgianTaxProfile): boolean {
 
 export function BelgianTaxProfileProvider({ children }: { children: ReactNode }) {
     const [profile, setProfile] = useState<BelgianTaxProfile>(defaultProfile);
+    const [snapshots, setSnapshots] = useState<BelgianTaxProfileSnapshots>({});
+    const [viewedYear, setViewedYearState] = useState<number>(defaultProfile.taxYear);
     const [isLoading, setIsLoading] = useState(true);
-    const saveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-    const isFirstRender = useRef(true);
+    const profileSaveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+    const snapshotsSaveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+    const isFirstProfileRender = useRef(true);
+    const isFirstSnapshotsRender = useRef(true);
+    const hasInitializedViewedYear = useRef(false);
 
-    const { value: preloaded, isLoading: preloadLoading } = usePreloadedSetting<BelgianTaxProfile>(SETTINGS_KEY);
+    const { value: preloadedProfile, isLoading: preloadProfileLoading } =
+        usePreloadedSetting<BelgianTaxProfile>(PROFILE_SETTINGS_KEY);
+    const { value: preloadedSnapshots, isLoading: preloadSnapshotsLoading } =
+        usePreloadedSetting<BelgianTaxProfileSnapshots>(SNAPSHOTS_SETTINGS_KEY);
 
     useEffect(() => {
-        if (preloadLoading) return;
-        if (preloaded) {
-            const merged: BelgianTaxProfile = { ...defaultProfile, ...preloaded };
-            setProfile({ ...merged, profileConfigured: hasMeaningfulData(merged) });
+        if (preloadProfileLoading || preloadSnapshotsLoading) return;
+        let mergedProfile: BelgianTaxProfile = defaultProfile;
+        if (preloadedProfile) {
+            mergedProfile = { ...defaultProfile, ...preloadedProfile };
+            mergedProfile = { ...mergedProfile, profileConfigured: hasMeaningfulData(mergedProfile) };
+            setProfile(mergedProfile);
+        }
+        if (preloadedSnapshots) {
+            setSnapshots(preloadedSnapshots);
+        }
+        if (!hasInitializedViewedYear.current) {
+            setViewedYearState(mergedProfile.taxYear);
+            hasInitializedViewedYear.current = true;
         }
         setIsLoading(false);
-    }, [preloaded, preloadLoading]);
+    }, [preloadedProfile, preloadProfileLoading, preloadedSnapshots, preloadSnapshotsLoading]);
 
     useEffect(() => {
-        if (isFirstRender.current) {
-            isFirstRender.current = false;
+        if (isFirstProfileRender.current) {
+            isFirstProfileRender.current = false;
             return;
         }
         if (isLoading) return;
-        if (saveTimerRef.current) clearTimeout(saveTimerRef.current);
-        saveTimerRef.current = setTimeout(() => {
-            apiClient.saveSetting(SETTINGS_KEY, profile).catch((err) => {
+        if (profileSaveTimerRef.current) clearTimeout(profileSaveTimerRef.current);
+        profileSaveTimerRef.current = setTimeout(() => {
+            apiClient.saveSetting(PROFILE_SETTINGS_KEY, profile).catch((err) => {
                 logger.error('Failed to save Belgian tax profile:', err);
             });
         }, PERSIST_DEBOUNCE_MS);
         return () => {
-            if (saveTimerRef.current) clearTimeout(saveTimerRef.current);
+            if (profileSaveTimerRef.current) clearTimeout(profileSaveTimerRef.current);
         };
     }, [profile, isLoading]);
 
+    useEffect(() => {
+        if (isFirstSnapshotsRender.current) {
+            isFirstSnapshotsRender.current = false;
+            return;
+        }
+        if (isLoading) return;
+        if (snapshotsSaveTimerRef.current) clearTimeout(snapshotsSaveTimerRef.current);
+        snapshotsSaveTimerRef.current = setTimeout(() => {
+            apiClient.saveSetting(SNAPSHOTS_SETTINGS_KEY, snapshots).catch((err) => {
+                logger.error('Failed to save Belgian tax profile snapshots:', err);
+            });
+        }, PERSIST_DEBOUNCE_MS);
+        return () => {
+            if (snapshotsSaveTimerRef.current) clearTimeout(snapshotsSaveTimerRef.current);
+        };
+    }, [snapshots, isLoading]);
+
     const updateProfile = useCallback((updates: Partial<BelgianTaxProfile>) => {
-        setProfile((prev) => ({ ...prev, ...updates }));
+        setProfile((prev) => {
+            const next = { ...prev, ...updates };
+            const nextYear = next.taxYear;
+            const prevYear = prev.taxYear;
+            // Auto-rollover: when the active income year advances, archive the outgoing
+            // profile as a snapshot under its own year key (without the new updates).
+            if (typeof nextYear === 'number' && typeof prevYear === 'number' && nextYear > prevYear) {
+                setSnapshots((prevSnapshots) => {
+                    if (prevSnapshots[prevYear]) return prevSnapshots;
+                    return { ...prevSnapshots, [prevYear]: { ...prev } };
+                });
+            }
+            return next;
+        });
     }, []);
 
     const resetProfile = useCallback(() => {
         setProfile(defaultProfile);
     }, []);
 
+    const setViewedYear = useCallback((year: number) => {
+        setViewedYearState(year);
+    }, []);
+
+    const snapshotExistsForYear = useCallback(
+        (year: number) => Object.prototype.hasOwnProperty.call(snapshots, year),
+        [snapshots],
+    );
+
+    const profileForYear = useCallback(
+        (year: number): BelgianTaxProfile => {
+            if (year === profile.taxYear) return profile;
+            const snapshot = snapshots[year];
+            if (snapshot) return snapshot;
+            return { ...profile, taxYear: year };
+        },
+        [profile, snapshots],
+    );
+
+    const calculationForYear = useCallback(
+        (year: number): BelgianTaxCalculation => computeBelgianPIT(profileForYear(year)),
+        [profileForYear],
+    );
+
+    const createSnapshotFromLive = useCallback(
+        (year: number) => {
+            setSnapshots((prev) => {
+                if (prev[year]) return prev;
+                return { ...prev, [year]: { ...profile, taxYear: year } };
+            });
+        },
+        [profile],
+    );
+
+    const updateSnapshot = useCallback((year: number, updates: Partial<BelgianTaxProfile>) => {
+        setSnapshots((prev) => {
+            const existing = prev[year];
+            if (!existing) return prev;
+            return { ...prev, [year]: { ...existing, ...updates, taxYear: year } };
+        });
+    }, []);
+
     const calculation = useMemo(() => computeBelgianPIT(profile), [profile]);
+    const isViewingHistorical = viewedYear !== profile.taxYear;
+
     const contextValue = useMemo(
-        () => ({ profile, updateProfile, resetProfile, calculation, isLoading }),
-        [profile, updateProfile, resetProfile, calculation, isLoading],
+        () => ({
+            profile,
+            updateProfile,
+            resetProfile,
+            calculation,
+            isLoading,
+            snapshots,
+            viewedYear,
+            setViewedYear,
+            isViewingHistorical,
+            snapshotExistsForYear,
+            profileForYear,
+            calculationForYear,
+            createSnapshotFromLive,
+            updateSnapshot,
+        }),
+        [
+            profile,
+            updateProfile,
+            resetProfile,
+            calculation,
+            isLoading,
+            snapshots,
+            viewedYear,
+            setViewedYear,
+            isViewingHistorical,
+            snapshotExistsForYear,
+            profileForYear,
+            calculationForYear,
+            createSnapshotFromLive,
+            updateSnapshot,
+        ],
     );
 
     return (

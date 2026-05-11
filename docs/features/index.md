@@ -4,7 +4,8 @@ type: features-index
 status: active
 date: 2026-04-24
 updated: 2026-05-11
-tags: [features, index, documentation, phase-5a, phase-6, phase-7, phase-10, phase-c, phase-d, phase-e, phase-f, phase-9, statistics-refactoring, cash-flow-forecast, cost-basis, database-maintenance, sankey-flow, rolling-averages, pdf-report, admin-observability, multi-method-forecast, frontend-visualization, accuracy-persistence, materialized-cache, ensemble-methods, nightly-job, bug-hunt-2026-05-05, bug-hunt-2026-05-06, phase-c-bug-fixes, accessibility, csv-parsing, memory-safety, debounce, useCallback, bulk-actions, belgian-tax-correctness, exemption-brackets, own-home-credits, taxable-income-sources]
+revised: 2026-05-11
+tags: [features, index, documentation, phase-5a, phase-6, phase-7, phase-10, phase-c, phase-d, phase-e, phase-f, phase-9, statistics-refactoring, cash-flow-forecast, cost-basis, database-maintenance, sankey-flow, rolling-averages, pdf-report, admin-observability, multi-method-forecast, frontend-visualization, accuracy-persistence, materialized-cache, ensemble-methods, nightly-job, bug-hunt-2026-05-05, bug-hunt-2026-05-06, phase-c-bug-fixes, accessibility, csv-parsing, memory-safety, debounce, useCallback, bulk-actions, belgian-tax-correctness, exemption-brackets, own-home-credits, taxable-income-sources, historical-tax-year-viewer]
 description: Feature documentation for all major capabilities of the Vision application. Phase 6 complete with cash flow forecast, cost basis methods. Phase 7 adds database maintenance UI, Sankey flow visualization, rolling average overlays, and PDF report export. Phase 10 adds multi-method statistical cash flow forecast with 7 methods. Phase C adds dashboard frontend visualization. Phase D adds persisted accuracy metrics and historical trend analysis. Phase E adds nightly cache materialization for performance. Phase F adds inverse-MSE ensemble method (8th method). Phase 9 completes aggregation shadow cutover. April 2026 extends Saved Charts with recipients, variants, time buckets, and date ranges; introduces Custom Charts tab in Statistics. May 2026 bulk transaction actions enable multi-row operations (delete, recategorize, reassign, activate/deactivate, export, tag); bug hunt completes comprehensive correctness hardening. May 11 2026: Belgian Tax correctness fixes — personal exemption now applied at lowest brackets via exemption-bracket table (CIR-92 art. 134 §3); regional own-home credits (Flemish woonbonus, Walloon chèque habitat); taxable income source filtering for graph visualization.
 aliases: [features, capabilities]
 ---
@@ -158,6 +159,20 @@ See [[docs/security/data-protection|Data Protection]], [[docs/components/hooks|C
 - Approximate-year note for years before earliest supported tax year
 
 See [[docs/features/belgian-tax|Belgian Tax Feature]] for complete documentation. See ADRs [[docs/adr/053-belgian-pit-exemption-bracket-correction|053]], [[docs/adr/054-belgian-regional-own-home-credits|054]], [[docs/adr/055-belgian-tax-income-source-filtering|055]] for technical details.
+
+## May 2026 Historical Tax Year Viewer (ADR-058)
+
+**Transient year switcher across tax pages (2026-05-11):**
+- New `TaxYearSwitcher` component on `/tax` and `/portfolio/tax` pages showing available years with snapshot/transaction status
+- `HistoricalYearBanner` displays when viewing a past year; exposes snapshot vs estimate modes
+- `BelgianTaxProfileContext` extended with `viewedYear` (transient), `snapshots` (persisted JSONB), and helper methods (`profileForYear`, `calculationForYear`, `snapshotExistsForYear`, `isViewingHistorical`)
+- Auto-rollover: live profile's previous year is snapshotted when `taxYear` advances (only if no snapshot exists)
+- `useAvailableTaxYears` returns sorted list of years: current year, years with snapshots, years with portfolio tax/fee transactions, years with taxable income categories
+- Both tax pages keep `liveProfile` for empty-state guards; aliasing ensures historical viewing never re-triggers setup
+- Monthly/yearly charts resolve base profile via `profileForYear(y.year)` for historical accuracy
+- New setting key: `belgian_tax_profile_snapshots_v1` (generic Settings API; no schema migration)
+
+See [[docs/features/belgian-tax#historical-year-viewer-adr-058|Belgian Tax Historical Year Viewer]] and [[docs/adr/058-belgian-tax-historical-year-snapshots|ADR-058]] for technical details.
 
 ## Related Documentation
 

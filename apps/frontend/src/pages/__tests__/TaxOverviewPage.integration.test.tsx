@@ -5,7 +5,7 @@ import userEvent from "@testing-library/user-event";
 import { http } from "msw";
 import { renderWithApp } from "@/test/renderWithApp";
 import { server } from "@/test/msw/server";
-import { err } from "@/test/msw/handlers";
+import { err, ok } from "@/test/msw/handlers";
 import TaxOverviewPage from "@/pages/TaxOverviewPage";
 
 const API_BASE = "http://localhost:3002";
@@ -188,6 +188,51 @@ describe("TaxOverviewPage (integration)", () => {
         ).toBeInTheDocument();
         expect(await screen.findByText(/no tax profile yet/i)).toBeInTheDocument();
         consoleSpy.mockRestore();
+    });
+
+    // ─── Historical year viewer ────────────────────────────────────────────
+
+    it("renders the tax year switcher trigger", async () => {
+        renderWithApp(<TaxOverviewPage />);
+        // Default live profile = LATEST_TAX_YEAR. The switcher's trigger has the aria-label
+        // "Switch tax year" from `tax.yearSwitcher.trigger`.
+        expect(
+            await screen.findByRole("button", { name: /switch tax year/i }),
+        ).toBeInTheDocument();
+    });
+
+    it("opens the year dropdown and lists the active year as current", async () => {
+        const user = userEvent.setup();
+        renderWithApp(<TaxOverviewPage />);
+        await user.click(await screen.findByRole("button", { name: /switch tax year/i }));
+        // "Current" badge appears on the live year row
+        expect(await screen.findByText(/^Current$/)).toBeInTheDocument();
+    });
+
+    it("shows the historical banner with snapshot mode when a snapshot exists", async () => {
+        server.use(
+            http.get(`${API_BASE}/api/settings`, () =>
+                ok({
+                    belgian_tax_profile: { taxYear: 2026, grossAnnualIncome: 50000, profileConfigured: true },
+                    belgian_tax_profile_snapshots_v1: {
+                        2024: {
+                            taxYear: 2024,
+                            grossAnnualIncome: 40000,
+                            region: "wallonia",
+                            employmentType: "employee",
+                            profileConfigured: true,
+                        },
+                    },
+                }),
+            ),
+        );
+        const user = userEvent.setup();
+        renderWithApp(<TaxOverviewPage />);
+        await user.click(await screen.findByRole("button", { name: /switch tax year/i }));
+        await user.click(await screen.findByRole("menuitem", { name: /2024/i }));
+        expect(
+            await screen.findByText(/viewing saved profile for 2024/i),
+        ).toBeInTheDocument();
     });
 
     // ─── Edge cases ────────────────────────────────────────────────────────

@@ -254,6 +254,56 @@ The tax overview page includes a `SuggestedDeductionsCard` component that sugges
 
 ---
 
+## Historical Year Viewer (ADR-058)
+
+The Belgian Tax Overview and Portfolio Tax pages share a year switcher that lets the user view past income years without disturbing the live profile.
+
+### Storage
+
+- `belgian_tax_profile` — live, active profile (always represents the user's current income year).
+- `belgian_tax_profile_snapshots_v1` — JSONB `Record<incomeYear, BelgianTaxProfile>` of frozen snapshots. Created automatically when the live profile's `taxYear` advances; can also be seeded retroactively for years that show up in the year list only because of transaction data.
+
+### Provider surface (`BelgianTaxProfileContext`)
+
+| Member | Purpose |
+|---|---|
+| `viewedYear` / `setViewedYear` | Transient UI year. Defaults to the live profile's `taxYear`; never persisted. |
+| `snapshots` | Loaded from preload. |
+| `profileForYear(y)` | Returns snapshot when present, else live profile with `taxYear` overridden (estimate mode). |
+| `calculationForYear(y)` | `computeBelgianPIT(profileForYear(y))` — live recompute. |
+| `snapshotExistsForYear(y)` | Boolean. |
+| `createSnapshotFromLive(y)` | Seeds `snapshots[y]` from the live profile (no-op if one already exists). |
+| `updateSnapshot(y, updates)` | Patches a snapshot; strips `taxYear` from patches so the year stays pinned. |
+| `isViewingHistorical` | `viewedYear !== profile.taxYear`. |
+
+### Year list (`useAvailableTaxYears`)
+
+Sorted descending union of:
+- the live year (always flagged `isCurrent`),
+- snapshot years (`hasSnapshot: true`),
+- years with portfolio transactions carrying `taxes`/`fees` (or `type === 'tax' | 'fee'`),
+- years with transactions in user-configured taxable-income categories.
+
+Each entry exposes `{ year, isCurrent, hasSnapshot, hasTransactions }` for the switcher chips.
+
+### UI surfaces
+
+- `TaxYearSwitcher` — dropdown trigger replacing the static "Tax year" badge on both `/tax` and `/portfolio/tax`. Each item shows a chip: **Current**, **Saved**, or **Data only**. A footer action "Create profile for {year}" appears when the viewed year is historical and has no snapshot yet.
+- `HistoricalYearBanner` — shown above the page body when `isViewingHistorical`. Two modes: `snapshot` (reconstructed from the saved profile) and `estimate` (live profile applied to that year's tax tables); the estimate mode exposes a primary CTA to seed the snapshot.
+- `TaxProfileDialog` accepts an optional `targetYear` prop. When that year has a snapshot, the dialog reads/writes the snapshot and renders an amber warning banner; the snapshot's `taxYear` is locked.
+
+### Page integration notes
+
+- The yearly chart's `pitForGross` resolves each bar's base profile via `profileForYear(y.year)` so historical bars use the snapshot's inputs when available.
+- The monthly tax-reserve chart is scoped to months *within* the viewed year when historical; otherwise it keeps the trailing-12-month behavior.
+- Both pages keep a `liveProfile` alias for the empty-state / "is the user set up at all" guard so historical viewing never re-triggers the setup wizard.
+
+### Known limits
+
+- **Engine drift.** Past displayed numbers reflect today's `computeBelgianPIT`; engine bug fixes propagate retroactively (by design — no calc snapshot).
+- **Exchange rates.** Multi-currency conversion still uses today's rates, not point-in-time rates. Out of scope for ADR-058.
+- **Soft lock.** Past snapshots remain editable behind a warning banner rather than being hard-frozen.
+
 ## PDF Report Export
 
 Tax data including Belgian tax profile and Personal Income Tax calculations can be exported as a comprehensive PDF report via the [[docs/features/pdf-report-export|PDF Report Export]] feature. The tax report (Phase 8, April 2026) includes:
@@ -275,6 +325,7 @@ See [[docs/api/reports#post-apireportstax|Reports API: Tax Endpoint]] for reques
 - [[docs/adr/055-belgian-tax-income-source-filtering|ADR-055]] — Taxable income source filtering (May 2026)
 - [[docs/adr/056-belgian-tax-audit-fixes-ay2026|ADR-056]] — Comprehensive audit fixes (disabled-dependent doubling, child-under-3 forfeiture, regional autonomy factor, property-tax centimes, ETF TOB defaults, Reynders routing) (May 2026)
 - [[docs/adr/057-belgian-tax-audit-followup-pwc-may-2026|ADR-057]] — Follow-up audit (TOB shares cap €4,000 → €1,600, CGT effective date 1 Jan 2026, direct-bond CGT routing, Reynders interest-portion split, year-aware `SuggestedDeductionsCard`, per-residence centimes override) (May 2026)
+- [[docs/adr/058-belgian-tax-historical-year-snapshots|ADR-058]] — Historical year viewer with frozen per-year profile snapshots, shared switcher across `/tax` and `/portfolio/tax`, soft-lock past-edit mode (May 2026)
 - [[docs/features/portfolio#belgian-tax-features]] — Tax fields in portfolio
 - [[docs/features/portfolio#belgian-inflation-data-flow]] — Inflation data flow
 - [[docs/features/pdf-report-export|PDF Report Export]] — Tax report generation with Phase 8 completion

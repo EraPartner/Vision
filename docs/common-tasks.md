@@ -57,7 +57,7 @@ aliases: [common tasks, quick reference, i want to, task navigation, cheat sheet
 | Check rate limits | [[docs/reference/error-codes\|Error Codes]] | [[docs/security/rate-limiting\|Rate Limiting]] |
 | Understand API authentication | [[docs/api/index\|API Index]] | [[docs/security/index\|Security]] |
 
-## Portfolio Tasks
+## Portfolio & Tax Tasks
 
 | I want to... | Start here | Also check |
 |-------------|------------|------------|
@@ -65,6 +65,8 @@ aliases: [common tasks, quick reference, i want to, task navigation, cheat sheet
 | Check portfolio performance | [[docs/features/portfolio\|Portfolio Performance]] | [[docs/reference/react-query-keys\|React Query Keys]] |
 | Understand inflation adjustment | [[docs/features/portfolio\|Portfolio]] | [[docs/api/info\|Info API]] |
 | Update investment prices | [[docs/integrations/price-providers\|Price Providers]] | [[docs/api/investments\|Investments API]] |
+| View a past tax year without changing my live profile | [[docs/features/belgian-tax#historical-year-viewer-adr-058\|Belgian Tax Historical Year Viewer]] | [[docs/adr/058-belgian-tax-historical-year-snapshots\|ADR-058]], [[docs/features/portfolio-tax\|Portfolio Tax]] |
+| Create a profile snapshot for a historical year | [[docs/features/belgian-tax#historical-year-viewer-adr-058\|Historical Year Viewer]] | [[docs/components/tax/TaxYearSwitcher.tsx\|TaxYearSwitcher]] |
 
 ## Transaction Tasks
 

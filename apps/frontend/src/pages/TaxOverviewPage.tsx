@@ -3,6 +3,8 @@ import { useLanguage } from "@/contexts/LanguageContext";
 import { useAppSettings } from "@/contexts/AppSettingsContext";
 import { useBelgianTaxProfile } from "@/contexts/BelgianTaxProfileContext";
 import { computeBelgianPIT } from "@/lib/belgianTax";
+import { TaxYearSwitcher } from "@/components/tax/TaxYearSwitcher";
+import { HistoricalYearBanner } from "@/components/tax/HistoricalYearBanner";
 import { useCurrencyConverter } from "@/hooks/useCurrencyConverter";
 import { numberFormatToLocale } from "@/utils/currency";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -49,7 +51,21 @@ function getBudgetTaxWidgets(t: (key: string) => string): WidgetDefinition[] {
 export default function TaxOverviewPage() {
   const { t } = useLanguage();
   const { appSettings } = useAppSettings();
-  const { profile, calculation, isLoading: isProfileLoading } = useBelgianTaxProfile();
+  const {
+    profile: liveProfile,
+    isLoading: isProfileLoading,
+    viewedYear,
+    setViewedYear,
+    isViewingHistorical,
+    snapshotExistsForYear,
+    profileForYear,
+    calculationForYear,
+    createSnapshotFromLive,
+  } = useBelgianTaxProfile();
+  // `profile`/`calculation` reflect the year currently being viewed (live or snapshot/estimate).
+  // We keep `liveProfile` separately for the empty-state check and the editable dialog target.
+  const profile = profileForYear(viewedYear);
+  const calculation = calculationForYear(viewedYear);
   const stats = useStatistics();
   const { summaries } = usePortfolio();
   const { convertToTarget } = useCurrencyConverter(appSettings.defaultCurrency || "EUR");
@@ -108,7 +124,7 @@ export default function TaxOverviewPage() {
   }, [taxableIncomeByMonth]);
 
   const portfolioTaxesForYear = useMemo(() => {
-    const year = profile.taxYear;
+    const year = viewedYear;
     return summaries.reduce((sum, inv) => {
       const yearlyInvestmentTaxes = inv.transactions.reduce((txnSum: number, txn: { date?: string; type?: string; amount?: number; taxes?: number; currency?: string }) => {
         const date = txn.date;
@@ -124,21 +140,23 @@ export default function TaxOverviewPage() {
 
       return sum + yearlyInvestmentTaxes;
     }, 0);
-  }, [summaries, profile.taxYear, convertToTarget]);
+  }, [summaries, viewedYear, convertToTarget]);
 
   const totalTaxIncludingPortfolio = calculation.totalPIT + portfolioTaxesForYear;
   // include estimated property tax in an alternate total (informational)
   const totalTaxIncludingPropertyEstimate = totalTaxIncludingPortfolio + calculation.propertyTaxEstimate;
 
   /**
-   * Run PIT for a given gross + tax year. Uses each year's own bracket table when available
-   * (nearest-year fallback for historical years before EARLIEST_TAX_YEAR). Linear scaling of
-   * a single year's PIT is wrong because each bracket has a different rate.
+   * Run PIT for a given gross + tax year. Picks each year's snapshot profile when one exists
+   * (so the historical bars reflect the inputs the user actually had at the time); otherwise
+   * falls back to the live profile applied to that year's tax tables. Each year's own bracket
+   * table is used via the year-aware `getTaxTable` fallback inside `computeBelgianPIT`.
    */
   const pitForGross = useCallback((gross: number, year: number): number => {
     if (gross <= 0) return 0;
-    return computeBelgianPIT({ ...profile, grossAnnualIncome: gross, taxYear: year }).totalPIT;
-  }, [profile]);
+    const baseProfile = profileForYear(year);
+    return computeBelgianPIT({ ...baseProfile, grossAnnualIncome: gross, taxYear: year }).totalPIT;
+  }, [profileForYear]);
 
   /**
    * Yearly chart series. Uses transaction-derived taxable income (filtered by the user's
@@ -182,37 +200,46 @@ export default function TaxOverviewPage() {
   }, [locale]);
 
   /**
-   * Monthly reserve series. Computes annual PIT once on the trailing-12-month taxable income,
-   * then prorates per month by each month's share of that total. This is consistent — the sum
-   * of monthly reserves equals the annual PIT — unlike the old per-month annualization which
-   * implicitly assumed each month's income was the year's average.
+   * Monthly reserve series.
+   *  - Live mode: trailing 12 months of taxable income; annual PIT computed once on that total
+   *    and prorated per month by income share. Sum of monthly reserves equals annual PIT.
+   *  - Historical mode: only months *within* the viewed year. Same proration approach against
+   *    that year's total. Keeps the chart semantically aligned with the rest of the historical
+   *    surface.
    */
   const monthlyIncomeTax = useMemo(() => {
     if (!monthlyData?.length) return [];
 
-    const last12 = monthlyData
+    const filtered = monthlyData
       .filter((m) => (hasIncomeSources ? taxableIncomeByMonth.has(m.period) : m.income > 0))
-      .slice(-12)
+      .filter((m) => {
+        if (!isViewingHistorical) return true;
+        const monthYear = Number.parseInt(m.period.slice(0, 4), 10);
+        return monthYear === viewedYear;
+      });
+
+    const windowed = isViewingHistorical ? filtered : filtered.slice(-12);
+    const series = windowed
       .map((m) => ({
         period: m.period,
         income: hasIncomeSources ? (taxableIncomeByMonth.get(m.period) ?? 0) : m.income,
       }))
       .filter((m) => m.income > 0);
 
-    const yearlyTaxable = last12.reduce((sum, m) => sum + m.income, 0);
+    const yearlyTaxable = series.reduce((sum, m) => sum + m.income, 0);
     if (yearlyTaxable <= 0) return [];
 
-    // Pick the most recent month's year for the bracket table (most representative for
-    // a rolling-12 reserve estimate).
-    const latestYear = Number.parseInt(last12[last12.length - 1].period.slice(0, 4), 10);
-    const annualPIT = pitForGross(yearlyTaxable, latestYear);
+    const referenceYear = isViewingHistorical
+      ? viewedYear
+      : Number.parseInt(series[series.length - 1].period.slice(0, 4), 10);
+    const annualPIT = pitForGross(yearlyTaxable, referenceYear);
 
-    return last12.map((m) => ({
+    return series.map((m) => ({
       period: m.period,
       income: m.income,
       estimatedTax: annualPIT * (m.income / yearlyTaxable),
     }));
-  }, [monthlyData, pitForGross, hasIncomeSources, taxableIncomeByMonth]);
+  }, [monthlyData, pitForGross, hasIncomeSources, taxableIncomeByMonth, isViewingHistorical, viewedYear]);
 
   const cards = [
     {
@@ -244,7 +271,7 @@ export default function TaxOverviewPage() {
       cls: "text-primary",
     },
     {
-      title: t("tax.card.portfolioTaxesYear", { year: String(profile.taxYear) }),
+      title: t("tax.card.portfolioTaxesYear", { year: String(viewedYear) }),
       value: fmt(portfolioTaxesForYear),
       icon: Landmark,
       desc: t("tax.card.portfolioTaxesYear.desc"),
@@ -258,7 +285,7 @@ export default function TaxOverviewPage() {
       cls: "text-primary",
     },
     {
-      title: t("tax.card.totalWithPropertyEstimate", { year: String(profile.taxYear) }),
+      title: t("tax.card.totalWithPropertyEstimate", { year: String(viewedYear) }),
       value: fmt(totalTaxIncludingPropertyEstimate),
       icon: Landmark,
       desc: t("tax.card.totalWithPropertyEstimate.desc"),
@@ -279,7 +306,7 @@ export default function TaxOverviewPage() {
     { label: t("tax.pit.row.communalSurcharge",), value: calculation.communalSurcharge, type: "tax" as const },
     { label: t("tax.pit.row.specialSS"), value: calculation.specialSocialSecurityContribution, type: "tax" as const },
     { label: t("tax.pit.row.totalPIT"), value: calculation.totalPIT, type: "grand" as const },
-    { label: t("tax.pit.row.portfolioTaxesYear", { year: String(profile.taxYear) }), value: portfolioTaxesForYear, type: "tax" as const },
+    { label: t("tax.pit.row.portfolioTaxesYear", { year: String(viewedYear) }), value: portfolioTaxesForYear, type: "tax" as const },
     { label: t("tax.pit.row.totalTaxInclPortfolio"), value: totalTaxIncludingPortfolio, type: "grand" as const },
     // Property tax estimate is informational and shown separately
     { label: t('tax.pit.row.propertyTaxEstimate'), value: calculation.propertyTaxEstimate, type: 'tax' as const },
@@ -306,12 +333,12 @@ export default function TaxOverviewPage() {
   ];
 
   const hasProfile =
-    profile.profileConfigured ||
-    profile.grossAnnualIncome > 0 ||
-    profile.otherTaxableIncome > 0 ||
-    profile.cadastralIncome > 0 ||
-    profile.dependentChildren > 0 ||
-    profile.dependentOtherPersons > 0;
+    liveProfile.profileConfigured ||
+    liveProfile.grossAnnualIncome > 0 ||
+    liveProfile.otherTaxableIncome > 0 ||
+    liveProfile.cadastralIncome > 0 ||
+    liveProfile.dependentChildren > 0 ||
+    liveProfile.dependentOtherPersons > 0;
   const hasStatsData = totalIncome > 0 || (monthlyData ?? []).some((m) => m.income > 0);
   const isEmpty = !isProfileLoading && !hasProfile && !hasStatsData;
 
@@ -326,6 +353,7 @@ export default function TaxOverviewPage() {
             <>
               <ExportDialog defaultType="tax" />
               <TaxProfileDialog
+                targetYear={viewedYear}
                 trigger={
                   <Button variant="default" size="sm" className="gap-2">
                     <SlidersHorizontal className="h-4 w-4" />
@@ -344,11 +372,25 @@ export default function TaxOverviewPage() {
           )}
         />
         <div className="flex items-center gap-2 -mt-2 text-xs text-muted-foreground flex-wrap">
-          <Badge variant="secondary">Tax year {profile.taxYear}</Badge>
+          <TaxYearSwitcher />
           <Badge variant="outline">Region: {profile.region}</Badge>
           <Badge variant="outline">Marginal rate: {calculation.marginalRate.toFixed(0)}%</Badge>
           <Badge variant="outline">Effective burden: {calculation.effectiveRate.toFixed(1)}%</Badge>
         </div>
+
+        {isViewingHistorical && (
+          <HistoricalYearBanner
+            mode={snapshotExistsForYear(viewedYear) ? 'snapshot' : 'estimate'}
+            viewedYear={viewedYear}
+            currentYear={liveProfile.taxYear}
+            onReturnToCurrent={() => setViewedYear(liveProfile.taxYear)}
+            onCreateSnapshot={
+              snapshotExistsForYear(viewedYear)
+                ? undefined
+                : () => createSnapshotFromLive(viewedYear)
+            }
+          />
+        )}
 
         <Card className="border-primary/20 bg-primary/5">
                     <CardContent className="flex items-start gap-3 py-4">
@@ -505,6 +547,7 @@ export default function TaxOverviewPage() {
                         </p>
                         <TaxProfileDialog
                           initialStep="incomeSources"
+                          targetYear={viewedYear}
                           trigger={
                             <Button size="sm" variant="outline" className="gap-2">
                               <ListChecks className="h-4 w-4" />
@@ -629,6 +672,7 @@ export default function TaxOverviewPage() {
                       </p>
                       <TaxProfileDialog
                         initialStep="incomeSources"
+                        targetYear={viewedYear}
                         trigger={
                           <Button size="sm" variant="outline" className="gap-2">
                             <ListChecks className="h-4 w-4" />

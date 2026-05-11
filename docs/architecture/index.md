@@ -3,7 +3,7 @@ title: Architecture Diagrams
 type: architecture-index
 status: active
 date: 2026-04-27
-updated: 2026-05-08
+updated: 2026-05-11
 tags: [architecture, index, uml, plantuml, diagrams, phase-1, phase-2, phase-3, phase-e, frontend, api-client, openapi, domain-split, repository-split, statistics-refactoring, component-decomposition, refactoring, bug-fixes, csv, formula-injection, parallelization, deployment, container-hardening, backup, restore, bundle, electron, tags, tagging, orthogonal-dimension, may-2026]
 description: Index of all UML diagrams for the Vision project - backend, frontend, system, and sequence diagrams; includes Phase 1+2 backup bundle format and IPC handlers, Phase 2 API client domain split, OpenAPI architecture, April 2026 Statistics page refactoring, Phase E component decomposition, April 25 CSV security & parallelization improvements, container hardening, and May 2026 transaction tags orthogonal dimension
 aliases: [architecture, diagrams, UML, system design, backup architecture, electron IPC]
@@ -290,6 +290,16 @@ Documentation:
 - [[docs/architecture/frontend-architecture#css-architecture-tailwind-v4-may-2026|Frontend Architecture — CSS Architecture]]
 - [[docs/reference/code-patterns#motion-consumer-pattern-phase-9|Motion Consumer Pattern]]
 - [[docs/reference/code-patterns#surface-shell-pattern-phase-9|Surface Shell Pattern]]
+
+## May 2026 Recent Decisions (ADRs 053–058)
+
+**Belgian Tax Correctness & Historical Viewing:**
+- [[docs/adr/053-belgian-pit-exemption-bracket-correction|ADR-053]] — Exemption-bracket calculation correction
+- [[docs/adr/054-belgian-regional-own-home-credits|ADR-054]] — Regional own-home credits (Flemish woonbonus, Walloon chèque habitat)
+- [[docs/adr/055-belgian-tax-income-source-filtering|ADR-055]] — Taxable income source filtering for graph visualization
+- [[docs/adr/056-belgian-tax-audit-fixes-ay2026|ADR-056]] — Comprehensive audit fixes (disabled-dependent doubling, child-under-3 forfeiture, regional autonomy factor, property-tax centimes)
+- [[docs/adr/057-belgian-tax-audit-followup-pwc-may-2026|ADR-057]] — Follow-up audit (TOB shares cap, CGT effective date, direct-bond CGT routing, Reynders interest-portion split, year-aware suggestions, per-residence centimes override)
+- [[docs/adr/058-belgian-tax-historical-year-snapshots|ADR-058]] — Historical year viewer with frozen per-year profile snapshots, shared year switcher across `/tax` and `/portfolio/tax` pages, soft-lock editing mode
 
 ## Technology Stack
 

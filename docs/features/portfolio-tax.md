@@ -209,3 +209,4 @@ The page relies on `usePortfolio()` for investment summaries rather than a dedic
 - [[docs/features/exchange-rates|Exchange Rates]] — Currency conversion for multi-currency investments
 - [[docs/adr/056-belgian-tax-audit-fixes-ay2026|ADR-056]] — Comprehensive audit fixes (ETF TOB defaults, Reynders routing, property tax, regional autonomy)
 - [[docs/adr/057-belgian-tax-audit-followup-pwc-may-2026|ADR-057]] — Follow-up audit: TOB shares cap fix, CGT date docs, direct-bond CGT routing, Reynders interest-portion split, year-aware suggestions, per-residence centimes override
+- [[docs/adr/058-belgian-tax-historical-year-snapshots|ADR-058]] — Historical year viewer shared with `/tax`; `TaxYearSwitcher` + `HistoricalYearBanner` drive a transient `viewedYear` state. Existing per-year `portfolio_tax_adjustments_v1` and `portfolio_tax_classifications_v1` storage keys are reused unchanged.
