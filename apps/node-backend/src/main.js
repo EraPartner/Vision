@@ -17,135 +17,17 @@ import { runMigrations } from './database/migrate.js';
 import {
   createMaterializedViews,
   ensureMaterializedViewIndexes,
-  refreshMaterializedViews,
 } from './services/materializedViewService.js';
-import {
-  warmCache as warmExchangeRateCache,
-  clearMemoryCache as clearExchangeRateCache,
-  backfillPortfolioHistoricalRates,
-} from './services/currency/currencyConversionService.js';
-import {
-  warmInflationCache,
-  clearInflationMemoryCache,
-} from './services/belgianInflationService.js';
-import investmentRepository from './repositories/investmentRepository.js';
-import {
-  fetchLivePricesDetailed,
-  sanitizePersistedKinesisHistory,
-} from './services/priceProviderService.js';
-import { getKinesisAssetConfig } from './config/kinesisConfig.js';
-import { computeAndStoreSnapshots } from './services/portfolioPerformanceSnapshotService.js';
-import {
-  backfillHistoricalAssetQuotes,
-  refreshActiveHoldingQuotes,
-} from './services/quoteBackfillService.js';
-import { warmInfoCaches } from './routes/info.js';
 import { createErrorHandler, NotFoundError } from './middleware/errorHandler.js';
 import { createAdminAuthMiddleware } from './middleware/adminAuth.js';
 import { closeBrowser as closePuppeteerBrowser } from './services/reports/puppeteerRenderer.js';
 import { wrapResponse } from './middleware/envelope.js';
 import { requestId } from './middleware/requestId.js';
 import { requestMetrics } from './middleware/requestMetrics.js';
-import { refreshCashflowForecastMc } from './jobs/refreshCashflowForecastMc.js';
 import { cancelPendingAggregationRefresh } from './services/aggregationRefresh.js';
-import { isInternetReachable } from './lib/network.js';
-
-function hasLivePriceRefreshConfig(investment) {
-  const provider = investment?.price_provider;
-  if (!provider || provider === 'manual') return false;
-
-  if (provider === 'custom') {
-    return Boolean(
-      investment?.price_provider_latest_url
-      || investment?.price_provider_url
-      || investment?.price_provider_history_url
-    );
-  }
-
-  if (provider === 'yahoo') {
-    return Boolean(investment?.price_provider_id || investment?.symbol);
-  }
-
-  if (provider === 'kinesis') {
-    if (investment?.price_provider_id) return true;
-    const assetName = (investment?.name || investment?.symbol || '').toLowerCase().trim();
-    return Boolean(assetName && getKinesisAssetConfig(assetName));
-  }
-
-  return Boolean(investment?.price_provider_id);
-}
-
-function isValidStoredPrice(value) {
-  const number = Number(value);
-  return Number.isFinite(number) && number > 0;
-}
+import { runWarmupTasks } from './startup/warmup.js';
 
 const adminAuthMiddleware = createAdminAuthMiddleware(() => settings.admin.authToken);
-
-async function persistRefreshedPrices(prices) {
-  const updateResults = await Promise.all(
-    Object.entries(prices).map(async ([investmentId, priceData]) => {
-      const { price, source } = priceData || {};
-      if (price == null || Number.isNaN(price) || source === 'cached') return 0;
-
-      await investmentRepository.updatePrice(parseInt(investmentId, 10), {
-        current_price: price,
-        price_updated_at: new Date().toISOString(),
-      });
-      return 1;
-    })
-  );
-
-  // eslint-disable-next-line vision-local-money/no-raw-money-arithmetic
-  return updateResults.reduce((sum, count) => sum + count, 0);
-}
-
-async function refreshInvestmentPricesOnStartup() {
-  const allInvestments = await investmentRepository.getAll({ limit: 1000, active: true });
-  const toRefresh = allInvestments.filter(hasLivePriceRefreshConfig);
-
-  if (toRefresh.length === 0) {
-    logger.info('No startup investment price refresh needed');
-    return;
-  }
-
-  const cachedPricesByInvestmentId = Object.fromEntries(
-    toRefresh.map(i => [i.id, Number(i.current_price)])
-  );
-
-  const deferredKinesisRefresh = [];
-  const immediateRefresh = [];
-
-  for (const investment of toRefresh) {
-    if (investment.price_provider === 'kinesis' && isValidStoredPrice(cachedPricesByInvestmentId[investment.id])) {
-      deferredKinesisRefresh.push(investment);
-      continue;
-    }
-    immediateRefresh.push(investment);
-  }
-
-  if (immediateRefresh.length > 0) {
-    const prices = await fetchLivePricesDetailed(immediateRefresh, { cachedPricesByInvestmentId });
-    const updated = await persistRefreshedPrices(prices);
-    logger.info(`Startup immediate investment price refresh completed: ${updated}/${immediateRefresh.length}`);
-  } else {
-    logger.info('Startup immediate investment price refresh skipped: all configured investments have usable stored prices');
-  }
-
-  if (deferredKinesisRefresh.length > 0) {
-    logger.info(`Startup deferred Kinesis price refresh scheduled for ${deferredKinesisRefresh.length} investment(s)`);
-    setTimeout(() => {
-      fetchLivePricesDetailed(deferredKinesisRefresh)
-        .then(prices => persistRefreshedPrices(prices))
-        .then((updated) => {
-          logger.info(`Startup deferred Kinesis price refresh completed: ${updated}/${deferredKinesisRefresh.length}`);
-        })
-        .catch((err) => {
-          logger.error('Startup deferred Kinesis price refresh failed', { error: err.message });
-        });
-    }, 0);
-  }
-}
 
 // Import route modules
 import transactionsRouter from './routes/transactions.js';
@@ -538,130 +420,11 @@ async function start() {
         environment: settings.server.environment,
         version: settings.api.version,
       });
-      // Refresh materialized views off the boot critical path. Stale data
-      // is acceptable for the first few seconds; /health/detailed reflects
-      // readiness via warmupStatus.materializedViews.
-      refreshMaterializedViews()
-        .then(() => { warmupStatus.materializedViews = true; })
-        .catch((err) => {
-          warmupStatus.materializedViews = true;
-          logger.error('Failed to refresh materialized views on startup', { error: err.message });
-        });
 
-      // Probe internet reachability once. When offline, skip outbound fetches
-      // (ECB rates, Yahoo quotes, historical backfills) — they would each burn
-      // 5–15s on per-call timeouts before falling back to cached/DB data,
-      // delaying readiness and flooding logs with warnings.
-      const online = await isInternetReachable();
-      if (!online) {
-        logger.warn('No internet connectivity detected — skipping external data refresh on startup; using cached/DB data only');
-      }
-
-      // Warm exchange rate cache AFTER server is accepting connections.
-      // This avoids blocking startup while waiting for external API calls.
-      // Captured as a promise so dependent tasks (info caches) can wait for it.
-      const exchangeRateWarmPromise = (online
-        ? warmExchangeRateCache()
-        : Promise.resolve())
-        .then(() => { warmupStatus.exchangeRates = true; })
-        .catch((err) => {
-          warmupStatus.exchangeRates = true;
-          logger.error('Failed to warm exchange rate cache on startup', { error: err.message });
-        });
-
-      warmInflationCache()
-        .then(() => { warmupStatus.inflation = true; })
-        .catch((err) => {
-          warmupStatus.inflation = true;
-          logger.error('Failed to warm Belgian inflation cache on startup', { error: err.message });
-        });
-
-      // Run backfill concurrently but capture promise so snapshots can wait.
-      // Skip when offline — backfill would issue ECB historical fetches per
-      // missing date and stall on timeouts.
-      const fxBackfillPromise = (online
-        ? backfillPortfolioHistoricalRates()
-        : Promise.resolve()
-      ).catch((err) => {
-        logger.error('Failed to backfill portfolio historical exchange rates on startup', { error: err.message });
-      });
-
-      if (online) {
-        backfillHistoricalAssetQuotes().catch((err) => {
-          logger.error('Failed to backfill historical asset quotes on startup', { error: err.message });
-        });
-      } else {
-        logger.info('Skipping historical asset quote backfill on startup — offline');
-      }
-
-      sanitizePersistedKinesisHistory().catch((err) => {
-        logger.error('Failed to sanitize persisted Kinesis history on startup', { error: err.message });
-      });
-
-      // Wait for exchange rates and FX backfill before computing snapshots/info
-      // caches — both depend on exchange_rates rows being present in the DB.
-      Promise.all([exchangeRateWarmPromise, fxBackfillPromise])
-        .then(() => computeAndStoreSnapshots())
-        .then(() => {
-          warmupStatus.portfolioSnapshots = true;
-          return warmInfoCaches()
-            .then(() => { warmupStatus.infoCaches = true; })
-            .catch((err) => {
-              warmupStatus.infoCaches = true;
-              logger.error('Failed to warm info caches on startup', { error: err.message });
-            });
-        })
-        .catch((err) => {
-          warmupStatus.portfolioSnapshots = true;
-          warmupStatus.infoCaches = true;
-          logger.error('Failed to compute portfolio performance snapshots on startup', { error: err.message });
-        });
-
-      if (online) {
-        refreshInvestmentPricesOnStartup().catch((err) => {
-          logger.error('Failed to refresh investment prices on startup', { error: err.message });
-        });
-      } else {
-        logger.info('Skipping startup investment price refresh — offline');
-      }
-
-      // Schedule automatic exchange rate refresh every 12 hours so rates stay
-      // current even when no currency conversions are triggered by user activity
-      exchangeRateRefreshInterval = setInterval(async () => {
-        if (!(await isInternetReachable({ force: true }))) {
-          logger.debug('Skipping scheduled exchange rate refresh — offline');
-          return;
-        }
-        logger.info('Running scheduled exchange rate refresh...');
-        clearExchangeRateCache();
-        await warmExchangeRateCache().catch((err) => {
-          logger.error('Scheduled exchange rate refresh failed', { error: err.message });
-        });
-
-        clearInflationMemoryCache();
-        await warmInflationCache().catch((err) => {
-          logger.error('Scheduled Belgian inflation refresh failed', { error: err.message });
-        });
-      }, 12 * 60 * 60 * 1000); // every 12 hours
-
-      // Schedule hourly quote refresh for currently-held investments
-      quotesRefreshInterval = setInterval(async () => {
-        if (!(await isInternetReachable({ force: true }))) {
-          logger.debug('Skipping periodic quote refresh — offline');
-          return;
-        }
-        refreshActiveHoldingQuotes().catch((err) => {
-          logger.error('Periodic quote refresh failed', { error: err.message });
-        });
-      }, 60 * 60 * 1000); // every hour
-
-      // Nightly cashflow forecast MC cache pre-warm (runs 24h after startup,
-      // then every 24h so daytime requests hit cache instead of re-running MC).
-      cashflowForecastRefreshInterval = setInterval(() => {
-        refreshCashflowForecastMc().catch((err) => {
-          logger.error('Nightly cashflow forecast MC refresh failed', { error: err.message });
-        });
-      }, 24 * 60 * 60 * 1000); // every 24 hours
+      const intervals = await runWarmupTasks({ warmupStatus });
+      exchangeRateRefreshInterval = intervals.exchangeRateRefreshInterval;
+      quotesRefreshInterval = intervals.quotesRefreshInterval;
+      cashflowForecastRefreshInterval = intervals.cashflowForecastRefreshInterval;
     });
   } catch (err) {
     logger.error('Failed to start application', { error: err.message });

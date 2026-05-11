@@ -76,6 +76,97 @@ export async function getBatch(id) {
 }
 
 /**
+ * Fetch staging rows for review preview. Joins recipient, default category,
+ * override category, and matched pattern. Returns one row per staging row;
+ * caller groups by effective recipient.
+ *
+ * @param {number} batchId
+ * @returns {Promise<object[]>}
+ */
+export async function getPreviewRows(batchId) {
+    const { rows } = await query(
+        `SELECT
+            isr.id,
+            isr.row_index,
+            isr.recipient_raw,
+            isr.amount,
+            isr.currency,
+            isr.tx_date,
+            isr.memo,
+            isr.match_source,
+            isr.match_similarity,
+            isr.matched_pattern_id,
+            isr.resolved_recipient_id,
+            isr.user_override_recipient_id,
+            isr.override_category_id,
+            COALESCE(isr.user_override_recipient_id, isr.resolved_recipient_id) AS effective_recipient_id,
+            r.name AS recipient_name,
+            r.default_category_id AS recipient_default_category_id,
+            rdc.general AS recipient_default_category_general,
+            rdc.detail AS recipient_default_category_detail,
+            oc.general AS override_category_general,
+            oc.detail AS override_category_detail,
+            rmp.pattern AS matched_pattern_text,
+            rmp.pattern_kind AS matched_pattern_kind
+           FROM import_staging_rows isr
+           LEFT JOIN recipients r
+             ON r.id = COALESCE(isr.user_override_recipient_id, isr.resolved_recipient_id)
+           LEFT JOIN categories rdc ON rdc.id = r.default_category_id
+           LEFT JOIN categories oc ON oc.id = isr.override_category_id
+           LEFT JOIN recipient_match_patterns rmp ON rmp.id = isr.matched_pattern_id
+          WHERE isr.batch_id = $1
+            AND isr.status = 'matched'
+          ORDER BY isr.row_index ASC`,
+        [batchId]
+    );
+    return rows;
+}
+
+/**
+ * Set (or clear) user_override_recipient_id on a single matched staging row.
+ *
+ * @param {{ batchId: number, rowId: number, recipientId: number|null }} args
+ * @returns {Promise<number>} rowCount (0 if row not found / not in matched status)
+ */
+export async function overrideRecipient({ batchId, rowId, recipientId }) {
+    const { rowCount } = await query(
+        `UPDATE import_staging_rows
+            SET user_override_recipient_id = $3
+          WHERE id = $1 AND batch_id = $2 AND status = 'matched'`,
+        [rowId, batchId, recipientId]
+    );
+    return rowCount ?? 0;
+}
+
+/**
+ * Set (or clear) override_category_id on a single matched staging row.
+ *
+ * @param {{ batchId: number, rowId: number, categoryId: number|null }} args
+ * @returns {Promise<number>} rowCount (0 if row not found / not in matched status)
+ */
+export async function overrideCategory({ batchId, rowId, categoryId }) {
+    const { rowCount } = await query(
+        `UPDATE import_staging_rows
+            SET override_category_id = $3
+          WHERE id = $1 AND batch_id = $2 AND status = 'matched'`,
+        [rowId, batchId, categoryId]
+    );
+    return rowCount ?? 0;
+}
+
+/**
+ * @param {number} categoryId
+ * @returns {Promise<boolean>}
+ */
+export async function categoryExists(categoryId) {
+    const { rows } = await query(
+        `SELECT id FROM categories WHERE id = $1 LIMIT 1`,
+        [categoryId]
+    );
+    return rows.length > 0;
+}
+
+/**
  * Rollback: delete all transactions created by this batch, then mark the
  * batch as 'aborted'. Runs in a single transaction so a partial failure
  * leaves the DB in a consistent state.

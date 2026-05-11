@@ -22,7 +22,7 @@ const poolMax = Math.max(settings.database.poolSize, settings.database.maxOverfl
 const pool = new pg.Pool({
   connectionString: settings.database.url,
   max: poolMax,
-  idleTimeoutMillis: 30_000,      // close idle connections after 30s
+  idleTimeoutMillis: 60_000,      // close idle connections after 60s
   connectionTimeoutMillis: 5_000,  // fail fast if can't connect in 5s
   statement_timeout: 30_000,       // kill queries running > 30s
 });

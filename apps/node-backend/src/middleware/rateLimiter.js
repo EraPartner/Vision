@@ -4,6 +4,9 @@
  */
 
 import { RateLimitedError } from './errorHandler.js';
+import { getSettings } from '../config/config.js';
+
+const settings = getSettings();
 
 const requestCounts = new Map();
 
@@ -27,6 +30,11 @@ setInterval(() => {
  */
 export function rateLimiter({ windowMs = 60_000, maxRequests = 100, keyPrefix = 'global' } = {}) {
   return (req, res, next) => {
+    // Dev bypass: skip throttling entirely so hot-reload doesn't trip limits.
+    if (settings.isDevelopment()) {
+      return next();
+    }
+
     const remoteAddr = req.socket?.remoteAddress || req.connection?.remoteAddress || '';
     const isLoopback = remoteAddr === '127.0.0.1' || remoteAddr === '::1' || remoteAddr === '::ffff:127.0.0.1';
     const forwarded = isLoopback ? (req.headers['x-forwarded-for'] ?? '').split(',')[0].trim() : '';

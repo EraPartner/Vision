@@ -238,9 +238,16 @@ describe("TransactionInfoDialog", () => {
         );
 
         await screen.findByRole("dialog");
+        // Wait for the attachments query to settle so we don't race the loading
+        // spinner. The mocked GET resolves synchronously but React Query still
+        // flushes through a microtask cycle, which under CI load was racing the
+        // exact-match assertion below.
+        await waitFor(() =>
+            expect(screen.queryByText(/^loading\.\.\.$/i)).not.toBeInTheDocument(),
+        );
         // Match the section header exactly — `/attachments/i` would also catch
         // "No attachments yet" and trip the multiple-match guard.
-        expect(await screen.findByText(/^attachments$/i)).toBeInTheDocument();
+        expect(await screen.findByText(/^attachments$/i, undefined, { timeout: 3000 })).toBeInTheDocument();
     });
 
     it("shows no-attachments message when attachment list is empty", async () => {

@@ -293,6 +293,48 @@ export const getTransactionsInRange = {
 };
 
 /**
+ * Aggregate expense rows by month and category, then keep top N per month.
+ *
+ * @param {Array<{ date: Date|string, amount: unknown, category_name?: string }>} rows
+ * @param {{ topN: number }} options
+ * @returns {Array<{ month: string, category: string, total: number, count: number }>}
+ */
+function aggregateByMonthCategory(rows, { topN }) {
+  const byMonth = new Map();
+  for (const row of rows) {
+    const amount = toDecimal(row.amount);
+    if (amount.gte(0)) continue;
+
+    const d = row.date instanceof Date ? row.date : new Date(row.date);
+    const month = `${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, '0')}`;
+    const category = categoryLabel(row);
+
+    const monthMap = byMonth.get(month) || new Map();
+    const entry = monthMap.get(category) || { total: toDecimal(0), count: 0 };
+    entry.total = entry.total.plus(amount.abs());
+    entry.count += 1;
+    monthMap.set(category, entry);
+    byMonth.set(month, monthMap);
+  }
+
+  const result = [];
+  const sortedMonths = [...byMonth.entries()].sort((a, b) => a[0].localeCompare(b[0]));
+  for (const [month, categoryMap] of sortedMonths) {
+    const topCategories = Array.from(categoryMap.entries())
+      .map(([category, e]) => ({
+        month,
+        category,
+        total: roundToCents(e.total).toNumber(),
+        count: e.count,
+      }))
+      .sort((a, b) => b.total - a.total)
+      .slice(0, topN);
+    result.push(...topCategories);
+  }
+  return result;
+}
+
+/**
  * Top spending categories broken down by month.
  */
 export const getMonthlyCategoryBreakdown = {
@@ -314,37 +356,7 @@ export const getMonthlyCategoryBreakdown = {
     const topN = parsePositiveInt(args.topN, 'topN', { min: 1, max: 20, defaultValue: 5 });
 
     const rows = await fetchTransactionsInRange({ from, to });
-
-    const byMonthCategory = new Map();
-    for (const row of rows) {
-      const amount = toDecimal(row.amount);
-      if (amount.gte(0)) continue;
-
-      const d = row.date instanceof Date ? row.date : new Date(row.date);
-      const month = `${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, '0')}`;
-      const category = categoryLabel(row);
-
-      const monthMap = byMonthCategory.get(month) || new Map();
-      const entry = monthMap.get(category) || { total: toDecimal(0), count: 0 };
-      entry.total = entry.total.plus(amount.abs());
-      entry.count += 1;
-      monthMap.set(category, entry);
-      byMonthCategory.set(month, monthMap);
-    }
-
-    const result = [];
-    for (const [month, categoryMap] of [...byMonthCategory.entries()].sort((a, b) => a[0].localeCompare(b[0]))) {
-      const topCategories = Array.from(categoryMap.entries())
-        .map(([category, e]) => ({
-          month,
-          category,
-          total: roundToCents(e.total).toNumber(),
-          count: e.count,
-        }))
-        .sort((a, b) => b.total - a.total)
-        .slice(0, topN);
-      result.push(...topCategories);
-    }
+    const result = aggregateByMonthCategory(rows, { topN });
 
     return {
       ok: true,

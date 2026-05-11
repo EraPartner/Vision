@@ -15,9 +15,16 @@ import { runImportPipeline, commitImport } from '../services/importPipeline/inde
 import { ValidationError, NotFoundError } from '../middleware/errorHandler.js';
 import { createSseWriter } from '../lib/sse.js';
 // eslint-disable-next-line vision-local/no-repo-direct-from-route
-import { listBatches, getBatch, rollbackBatch } from '../repositories/importBatchRepository.js';
+import {
+  listBatches,
+  getBatch,
+  rollbackBatch,
+  getPreviewRows,
+  overrideRecipient,
+  overrideCategory,
+  categoryExists,
+} from '../repositories/importBatchRepository.js';
 import { refreshAggregations } from '../services/aggregationRefresh.js';
-import { query } from '../database/connection.js';
 
 const router = Router();
 
@@ -390,41 +397,7 @@ router.get('/batches/:id/preview', async (req, res) => {
   const batch = await getBatch(batchId);
   if (!batch) throw new NotFoundError(`Import batch ${batchId} not found`);
 
-  const { rows } = await query(
-    `SELECT
-        isr.id,
-        isr.row_index,
-        isr.recipient_raw,
-        isr.amount,
-        isr.currency,
-        isr.tx_date,
-        isr.memo,
-        isr.match_source,
-        isr.match_similarity,
-        isr.matched_pattern_id,
-        isr.resolved_recipient_id,
-        isr.user_override_recipient_id,
-        isr.override_category_id,
-        COALESCE(isr.user_override_recipient_id, isr.resolved_recipient_id) AS effective_recipient_id,
-        r.name AS recipient_name,
-        r.default_category_id AS recipient_default_category_id,
-        rdc.general AS recipient_default_category_general,
-        rdc.detail AS recipient_default_category_detail,
-        oc.general AS override_category_general,
-        oc.detail AS override_category_detail,
-        rmp.pattern AS matched_pattern_text,
-        rmp.pattern_kind AS matched_pattern_kind
-       FROM import_staging_rows isr
-       LEFT JOIN recipients r
-         ON r.id = COALESCE(isr.user_override_recipient_id, isr.resolved_recipient_id)
-       LEFT JOIN categories rdc ON rdc.id = r.default_category_id
-       LEFT JOIN categories oc ON oc.id = isr.override_category_id
-       LEFT JOIN recipient_match_patterns rmp ON rmp.id = isr.matched_pattern_id
-      WHERE isr.batch_id = $1
-        AND isr.status = 'matched'
-      ORDER BY isr.row_index ASC`,
-    [batchId]
-  );
+  const rows = await getPreviewRows(batchId);
 
   const formatCategoryLabel = (general, detail) => {
     if (!general && !detail) return null;
@@ -508,12 +481,11 @@ router.post('/batches/:id/rows/:rowId/override', async (req, res) => {
 
   const effectiveRecipientId = recipient_id != null ? Number(recipient_id) : null;
 
-  const { rowCount } = await query(
-    `UPDATE import_staging_rows
-        SET user_override_recipient_id = $3
-      WHERE id = $1 AND batch_id = $2 AND status = 'matched'`,
-    [rowId, batchId, effectiveRecipientId]
-  );
+  const rowCount = await overrideRecipient({
+    batchId,
+    rowId,
+    recipientId: effectiveRecipientId,
+  });
 
   if (rowCount === 0) {
     throw new NotFoundError(`Row ${rowId} not found in batch ${batchId} or not in matched status`);
@@ -540,22 +512,15 @@ router.post('/batches/:id/rows/:rowId/category-override', async (req, res) => {
 
   const effectiveCategoryId = category_id != null ? Number(category_id) : null;
 
-  if (effectiveCategoryId !== null) {
-    const { rows: catRows } = await query(
-      `SELECT id FROM categories WHERE id = $1 LIMIT 1`,
-      [effectiveCategoryId]
-    );
-    if (catRows.length === 0) {
-      throw new ValidationError(`Category ${effectiveCategoryId} not found`);
-    }
+  if (effectiveCategoryId !== null && !(await categoryExists(effectiveCategoryId))) {
+    throw new ValidationError(`Category ${effectiveCategoryId} not found`);
   }
 
-  const { rowCount } = await query(
-    `UPDATE import_staging_rows
-        SET override_category_id = $3
-      WHERE id = $1 AND batch_id = $2 AND status = 'matched'`,
-    [rowId, batchId, effectiveCategoryId]
-  );
+  const rowCount = await overrideCategory({
+    batchId,
+    rowId,
+    categoryId: effectiveCategoryId,
+  });
 
   if (rowCount === 0) {
     throw new NotFoundError(`Row ${rowId} not found in batch ${batchId} or not in matched status`);
