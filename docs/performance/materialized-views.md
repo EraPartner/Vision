@@ -3,10 +3,11 @@ title: Materialized Views & Aggregation Strategy
 type: performance
 status: active
 date: 2026-04-25
-tags: [performance, database, materialized-views, aggregations, optimization, phase-1]
-description: PostgreSQL materialized views and trigger-maintained tables for pre-computing dashboard aggregations. Phase 1 aggregation refactor.
+updated: 2026-05-12
+tags: [performance, database, materialized-views, aggregations, optimization, phase-1, migration-0035]
+description: PostgreSQL materialized views and trigger-maintained tables for pre-computing dashboard aggregations. Phase 1 aggregation refactor, consolidated in migration 0035.
 aliases: [materialized views, pre-computed queries, dashboard optimization, aggregation tables, trigger-maintained tables]
-related_code: ["apps/node-backend/src/services/aggregationRefresh.js", "apps/node-backend/src/services/materializedViewService.js", "alembic/versions/0026_finance_aggregations.py"]
+related_code: ["apps/node-backend/src/services/aggregationRefresh.js", "apps/node-backend/src/services/materializedViewService.js", "alembic/versions/0035_add_recipient_aggregations.py"]
 ---
 
 # Materialized Views & Aggregation Strategy
@@ -347,4 +348,6 @@ date_trunc('month', t.date)
 - [[docs/performance/index]] — Performance Documentation Index
 - [[docs/reference/database-triggers|Database Triggers]] — All trigger definitions
 - [[apps/node-backend/src/services/aggregationRefresh.js|aggregationRefresh.js]] — Orchestrator source
-- [[alembic/versions/0026_finance_aggregations.py|Migration 0026]] — Aggregation layer schema
+- **Migrations:**
+  - [[alembic/legacy_versions/0026_finance_aggregations.py|0026_finance_aggregations.py]] (legacy, archived)
+  - [[alembic/versions/0035_add_recipient_aggregations.py|0035_add_recipient_aggregations.py]] (current baseline)

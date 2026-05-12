@@ -3,9 +3,9 @@ title: Data Model Reference
 type: reference
 status: active
 date: 2026-04-24
-updated: 2026-05-08
-tags: [reference, data-model, entities, database, schema, phase-5a, phase-0, phase-1, may-2026, tags, tagging, orthogonal-dimension]
-description: Complete reference for all data entities in Vision — core, portfolio, planning, supporting, and aggregation entities. Includes exchange_rate_cache (Phase 0), aggregation tables (Phase 1), attachment entity (Phase 5A), and transaction tags (May 2026).
+updated: 2026-05-12
+tags: [reference, data-model, entities, database, schema, phase-5a, phase-0, phase-1, may-2026, tags, tagging, orthogonal-dimension, aggregations, migration-0035]
+description: Complete reference for all data entities in Vision — core, portfolio, planning, supporting, and aggregation entities. Includes exchange_rate_cache (Phase 0), aggregation tables (Phase 1, consolidated in 0035), attachment entity (Phase 5A), and transaction tags (May 2026).
 aliases: [data model, entities, domain model, schema entities]
 related_code: ["apps/node-backend/src/repositories/", "alembic/versions/"]
 ---
@@ -416,9 +416,11 @@ related_code: ["apps/node-backend/src/repositories/", "alembic/versions/"]
 ## Aggregation Entities (Phase 1)
 
 > [!info] Aggregation Layer
-> These entities are introduced in Alembic migration 0026 as part of the Phase 1 aggregation refactor. They serve as the caching tier for dashboard and analytics endpoints, using two strategies:
+> These entities are introduced in Alembic migrations 0026 (legacy, archived) and **0035** (consolidated baseline) as part of the Phase 1 aggregation refactor. They serve as the caching tier for dashboard and analytics endpoints, using two strategies:
 > - **Materialized Views** (computed on demand, refreshed after mutations)
 > - **Trigger-maintained Tables** (updated automatically via row-level triggers)
+>
+> Migration 0035 (`add_recipient_aggregations`) restores `mv_recipient_monthly` and `agg_recipient_totals`, which were originally in 0026 but never folded into the consolidated baseline. Without 0035, post-import aggregation refreshes and recipient queries fail.
 >
 > See [[docs/adr/010-phase1-aggregation-strategy|ADR-010]] for the design rationale.
 

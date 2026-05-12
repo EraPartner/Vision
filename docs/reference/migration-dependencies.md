@@ -3,8 +3,9 @@ title: Migration Dependency Graph
 type: reference
 status: active
 date: 2026-03-31
-tags: [reference, database, migrations, dependencies, alembic]
-description: Migration dependency chain and grouping for the Vision database schema
+updated: 2026-05-12
+tags: [reference, database, migrations, dependencies, alembic, migration-0035, aggregations]
+description: Migration dependency chain and grouping for the Vision database schema. Latest (0035): add_recipient_aggregations consolidates Phase 1 aggregation artifacts.
 aliases: [migration dependencies, migration chain, migration groups, alembic chain]
 ---
 
@@ -40,6 +41,7 @@ aliases: [migration dependencies, migration chain, migration groups, alembic cha
                                                                                                                           └── 0022 (add_kinesis_enum)
                                                                                                                                 └── 0023 (portfolio_performance_snapshots)
                                                                                                                                       └── 0024 (per_class_invested_columns)
+                                                                                                                                            └── 0035 (add_recipient_aggregations)
 ```
 
 ## Migration Groups
@@ -91,6 +93,13 @@ Adds daily portfolio performance caching.
 |---|-----------|------------|
 | 0023 | `portfolio_performance_snapshots` | Creates portfolio_performance_snapshots table |
 | 0024 | `per_class_invested_columns` | Adds per-class invested columns to snapshots |
+
+### Group 5: Aggregation Consolidation (0035)
+Restores recipient aggregation artifacts that were referenced by code but missing from baseline.
+
+| # | Migration | Key Changes |
+|---|-----------|------------|
+| 0035 | `add_recipient_aggregations` | Creates `mv_recipient_monthly` (materialized view), `agg_recipient_totals` (trigger-maintained table), supporting functions and indexes. Backfills from existing transactions. |
 
 ### Infrastructure
 | Migration | Purpose |

@@ -1459,7 +1459,7 @@ await aggregationService.scheduleAggregationRefresh();
 
 ## Trigger-Maintained Aggregation Tables
 
-**Source:** [[alembic/versions/0026_finance_aggregations.py|Migration 0026]]
+**Source:** [[alembic/versions/0035_add_recipient_aggregations.py|Migration 0035]] (consolidated baseline; originally introduced in legacy 0026)
 
 Two tables kept in sync via row-level PostgreSQL triggers. Never require refresh from application code.
 

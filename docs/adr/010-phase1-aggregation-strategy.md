@@ -3,8 +3,9 @@ title: ADR-010 - Phase 1 Aggregation Strategy
 type: adr
 status: Accepted
 date: 2026-04-16
-tags: [adr, architecture, performance, database, aggregations, phase-1, refactor]
-description: Postgres-backed aggregations (MVs + trigger-maintained tables) as the caching tier instead of Redis or in-process caches
+updated: 2026-05-12
+tags: [adr, architecture, performance, database, aggregations, phase-1, refactor, migration-0035]
+description: Postgres-backed aggregations (MVs + trigger-maintained tables) as the caching tier. Consolidated in migration 0035 (2026-05-12).
 aliases: [adr-010, aggregation-strategy, aggregation-layer]
 ---
 
@@ -141,9 +142,10 @@ If the strategy fails (e.g., refresh becomes a bottleneck), rollback is:
 ## Migration
 
 ### Phase 1 (current)
-- Alembic migration 0026 adds: `pg_trgm` index on `recipients.normalized_name`, `mv_recipient_monthly`, `agg_recipient_totals`, `agg_split_outstanding`, all supporting triggers and functions
-- `aggregationRefresh.js` service created; not yet wired into route handlers
-- Tests added: module surface assertions + migration artifact smoke tests
+- **Alembic migration 0026 (legacy, archived):** Introduced aggregation design and infrastructure in `alembic/legacy_versions/`
+- **Alembic migration 0035 (2026-05-12, consolidated baseline):** Restores `mv_recipient_monthly` and `agg_recipient_totals` with all supporting triggers and functions, indexes, and backfill from existing transactions. These artifacts were originally in 0026 but never folded into the main migration chain; 0035 consolidates them into the canonical baseline.
+- `aggregationRefresh.js` service created and wired into post-import pipeline; handles both materialized view refreshes and trigger-maintained table syncs
+- Tests added: module surface assertions + migration artifact smoke tests, golden-fixture harness for Phase 2+ calc modules
 
 ### Phase 2
 - `monthly.js`, `category.js`, `recipient.js`, `cashflow.js` calc modules replace inline infoRepository logic
@@ -165,6 +167,9 @@ If the strategy fails (e.g., refresh becomes a bottleneck), rollback is:
 - [[docs/adr/009-timezone-policy|ADR-009: Timezone Policy]] — aggregates bucket in configured `APP_TIMEZONE`
 - [[docs/adr/008-performance-page-server-computed-response|ADR-008: Performance Page Server-Computed Response]] — precursor to this decision
 - [[docs/performance/materialized-views|Materialized Views]] — full technical reference
-- [[docs/reference/data-model|Data Model Reference]] — entity definitions
-- Alembic migration: [[alembic/versions/0026_finance_aggregations.py|0026_finance_aggregations.py]]
+- [[docs/reference/data-model|Data Model Reference]] — entity definitions (aggregation entities section)
+- [[docs/reference/migration-dependencies|Migration Dependency Graph]] — includes 0035 in Group 5
+- Alembic migrations: 
+  - [[alembic/legacy_versions/0026_finance_aggregations.py|0026_finance_aggregations.py]] (legacy, archived)
+  - [[alembic/versions/0035_add_recipient_aggregations.py|0035_add_recipient_aggregations.py]] (current baseline)
 - Orchestrator service: [[apps/node-backend/src/services/aggregationRefresh.js|aggregationRefresh.js]]
