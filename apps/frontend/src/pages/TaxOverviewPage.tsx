@@ -5,6 +5,10 @@ import { useBelgianTaxProfile } from "@/contexts/BelgianTaxProfileContext";
 import { computeBelgianPIT } from "@/lib/belgianTax";
 import { TaxYearSwitcher } from "@/components/tax/TaxYearSwitcher";
 import { HistoricalYearBanner } from "@/components/tax/HistoricalYearBanner";
+import { YearActionsMenu } from "@/components/tax/YearActionsMenu";
+import { MultiYearTrendStrip } from "@/components/tax/MultiYearTrendStrip";
+import { YearComparisonCard } from "@/components/tax/YearComparisonCard";
+import { resolveHistoricalBannerMode } from "@/components/tax/historicalBannerMode";
 import { useCurrencyConverter } from "@/hooks/useCurrencyConverter";
 import { numberFormatToLocale } from "@/utils/currency";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -41,6 +45,8 @@ import { ExportDialog } from "@/components/reports/ExportDialog";
 function getBudgetTaxWidgets(t: (key: string) => string): WidgetDefinition[] {
   return [
     { id: "summaryCards", label: t("tax.widget.summaryCards"), defaultVisible: true },
+    { id: "trendStrip", label: t("tax.widget.trendStrip"), defaultVisible: true },
+    { id: "yearComparison", label: t("tax.widget.yearComparison"), defaultVisible: true },
     { id: "incomeBreakdown", label: t("tax.widget.incomeBreakdown"), defaultVisible: true },
     { id: "pitBreakdown", label: t("tax.widget.pitBreakdown"), defaultVisible: true },
     { id: "taxRules", label: t("tax.widget.belgianRulesTitle"), defaultVisible: true },
@@ -59,13 +65,18 @@ export default function TaxOverviewPage() {
     isViewingHistorical,
     snapshotExistsForYear,
     profileForYear,
-    calculationForYear,
+    displayCalculationForYear,
     createSnapshotFromLive,
+    isYearFiled,
+    getFrozenCalculation,
+    metaForYear,
   } = useBelgianTaxProfile();
   // `profile`/`calculation` reflect the year currently being viewed (live or snapshot/estimate).
   // We keep `liveProfile` separately for the empty-state check and the editable dialog target.
   const profile = profileForYear(viewedYear);
-  const calculation = calculationForYear(viewedYear);
+  // Use the display calc — falls back to the frozen "as-filed" value when present so
+  // engine drift doesn't retroactively change filed numbers (ADR-059).
+  const calculation = displayCalculationForYear(viewedYear);
   const stats = useStatistics();
   const { summaries } = usePortfolio();
   const { convertToTarget } = useCurrencyConverter(appSettings.defaultCurrency || "EUR");
@@ -154,9 +165,17 @@ export default function TaxOverviewPage() {
    */
   const pitForGross = useCallback((gross: number, year: number): number => {
     if (gross <= 0) return 0;
+    // For years whose calculation is frozen, scale the frozen PIT proportionally to the
+    // bar's gross relative to the frozen gross — this keeps historical filed numbers in the
+    // chart aligned with the "as-filed" calc instead of falling back to a live recompute.
+    const frozen = getFrozenCalculation(year);
+    if (frozen && frozen.grossIncome > 0) {
+      const ratio = gross / frozen.grossIncome;
+      return frozen.totalPIT * ratio;
+    }
     const baseProfile = profileForYear(year);
     return computeBelgianPIT({ ...baseProfile, grossAnnualIncome: gross, taxYear: year }).totalPIT;
-  }, [profileForYear]);
+  }, [profileForYear, getFrozenCalculation]);
 
   /**
    * Yearly chart series. Uses transaction-derived taxable income (filtered by the user's
@@ -373,24 +392,36 @@ export default function TaxOverviewPage() {
         />
         <div className="flex items-center gap-2 -mt-2 text-xs text-muted-foreground flex-wrap">
           <TaxYearSwitcher />
+          <YearActionsMenu year={viewedYear} />
           <Badge variant="outline">Region: {profile.region}</Badge>
           <Badge variant="outline">Marginal rate: {calculation.marginalRate.toFixed(0)}%</Badge>
           <Badge variant="outline">Effective burden: {calculation.effectiveRate.toFixed(1)}%</Badge>
         </div>
 
-        {isViewingHistorical && (
-          <HistoricalYearBanner
-            mode={snapshotExistsForYear(viewedYear) ? 'snapshot' : 'estimate'}
-            viewedYear={viewedYear}
-            currentYear={liveProfile.taxYear}
-            onReturnToCurrent={() => setViewedYear(liveProfile.taxYear)}
-            onCreateSnapshot={
-              snapshotExistsForYear(viewedYear)
-                ? undefined
-                : () => createSnapshotFromLive(viewedYear)
-            }
-          />
-        )}
+        {isViewingHistorical && (() => {
+          const banner = resolveHistoricalBannerMode({
+            isFiled: isYearFiled(viewedYear),
+            hasFrozenCalculation: getFrozenCalculation(viewedYear) != null,
+            hasSnapshot: snapshotExistsForYear(viewedYear),
+            filingReference: metaForYear(viewedYear)?.filing?.reference,
+          });
+          return (
+            <HistoricalYearBanner
+              mode={banner.mode}
+              viewedYear={viewedYear}
+              currentYear={liveProfile.taxYear}
+              onReturnToCurrent={() => setViewedYear(liveProfile.taxYear)}
+              onCreateSnapshot={
+                banner.mode === 'estimate'
+                  ? () => createSnapshotFromLive(viewedYear)
+                  : undefined
+              }
+              filingReference={banner.filingReference}
+            />
+          );
+        })()}
+
+        {isVisible("trendStrip") && <MultiYearTrendStrip />}
 
         <Card className="border-primary/20 bg-primary/5">
                     <CardContent className="flex items-start gap-3 py-4">
@@ -653,6 +684,8 @@ export default function TaxOverviewPage() {
                 <SuggestedDeductionsCard />
               </div>
             </div>
+
+            {isVisible("yearComparison") && <YearComparisonCard />}
 
             {isVisible("yearlyOverview") && (
               <Card>

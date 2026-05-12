@@ -18,6 +18,8 @@ import { Button } from "@/components/ui/button";
 import { TaxProfileDialog } from "@/components/tax/TaxProfileDialog";
 import { TaxYearSwitcher } from "@/components/tax/TaxYearSwitcher";
 import { HistoricalYearBanner } from "@/components/tax/HistoricalYearBanner";
+import { YearActionsMenu } from "@/components/tax/YearActionsMenu";
+import { resolveHistoricalBannerMode } from "@/components/tax/historicalBannerMode";
 import { PortfolioTaxAdjustmentsDialog } from "@/components/portfolio/PortfolioTaxAdjustmentsDialog";
 import { WidgetVisibilityDialog } from "@/components/shared/WidgetVisibilityDialog";
 import { useWidgetVisibility, type WidgetDefinition } from "@/hooks/useWidgetVisibility";
@@ -63,11 +65,14 @@ export default function PortfolioTaxPage() {
     isViewingHistorical,
     snapshotExistsForYear,
     profileForYear,
-    calculationForYear,
+    displayCalculationForYear,
     createSnapshotFromLive,
+    isYearFiled,
+    getFrozenCalculation,
+    metaForYear,
   } = useBelgianTaxProfile();
   const profile = profileForYear(viewedYear);
-  const calculation = calculationForYear(viewedYear);
+  const calculation = displayCalculationForYear(viewedYear);
   const { summaries: rawSummaries } = usePortfolio();
   const { getAdjustment } = usePortfolioTaxAdjustments();
   const { getClassification } = usePortfolioTaxClassifications();
@@ -513,23 +518,33 @@ export default function PortfolioTaxPage() {
 
       <div className="flex items-center gap-2 -mt-2 text-xs text-muted-foreground flex-wrap">
         <TaxYearSwitcher />
+        <YearActionsMenu year={viewedYear} />
         <Badge variant="outline">{t("tax.taxes")}: {fmt(totalTaxes)}</Badge>
         <Badge variant="outline">{t("tax.fees")}: {fmt(totalFees)}</Badge>
       </div>
 
-      {isViewingHistorical && (
-        <HistoricalYearBanner
-          mode={snapshotExistsForYear(viewedYear) ? 'snapshot' : 'estimate'}
-          viewedYear={viewedYear}
-          currentYear={liveProfile.taxYear}
-          onReturnToCurrent={() => setViewedYear(liveProfile.taxYear)}
-          onCreateSnapshot={
-            snapshotExistsForYear(viewedYear)
-              ? undefined
-              : () => createSnapshotFromLive(viewedYear)
-          }
-        />
-      )}
+      {isViewingHistorical && (() => {
+        const banner = resolveHistoricalBannerMode({
+          isFiled: isYearFiled(viewedYear),
+          hasFrozenCalculation: getFrozenCalculation(viewedYear) != null,
+          hasSnapshot: snapshotExistsForYear(viewedYear),
+          filingReference: metaForYear(viewedYear)?.filing?.reference,
+        });
+        return (
+          <HistoricalYearBanner
+            mode={banner.mode}
+            viewedYear={viewedYear}
+            currentYear={liveProfile.taxYear}
+            onReturnToCurrent={() => setViewedYear(liveProfile.taxYear)}
+            onCreateSnapshot={
+              banner.mode === 'estimate'
+                ? () => createSnapshotFromLive(viewedYear)
+                : undefined
+            }
+            filingReference={banner.filingReference}
+          />
+        );
+      })()}
 
       {!isEmpty && (
         <Card className="border-primary/20 bg-primary/5">

@@ -33,14 +33,23 @@ import {
     LATEST_TAX_YEAR,
     type BelgianTaxProfile,
     type BelgianTaxProfileSnapshots,
+    type BelgianTaxProfileSnapshotMeta,
+    type BelgianTaxProfileSnapshotMetas,
     type BelgianTaxCalculation,
+    type SnapshotAuditEntry,
+    type SnapshotAuditEntryKind,
 } from '@/lib/belgianTax';
 
 // Re-export the public surface so consumers can keep importing from this path.
 export type {
     BelgianTaxProfile,
     BelgianTaxProfileSnapshots,
+    BelgianTaxProfileSnapshotMeta,
+    BelgianTaxProfileSnapshotMetas,
     BelgianTaxCalculation,
+    SnapshotAuditEntry,
+    SnapshotAuditEntryKind,
+    FilingRecord,
     EmploymentType,
     BelgianRegion,
     ProfessionalExpenseMethod,
@@ -84,6 +93,8 @@ interface BelgianTaxProfileContextType {
     isLoading: boolean;
     /** Frozen per-year profile snapshots, keyed by income year. */
     snapshots: BelgianTaxProfileSnapshots;
+    /** Per-year meta (filing status, frozen calc, audit history). Sparse — only present for years touched by file/freeze/edit. */
+    snapshotMetas: BelgianTaxProfileSnapshotMetas;
     /** The income year currently being displayed by the UI. Defaults to `profile.taxYear`. */
     viewedYear: number;
     setViewedYear: (year: number) => void;
@@ -98,20 +109,51 @@ interface BelgianTaxProfileContextType {
      *  - otherwise → returns the live profile with `taxYear` overridden (estimate mode).
      */
     profileForYear: (year: number) => BelgianTaxProfile;
-    /** Compute the PIT calculation for a given year using `profileForYear`. */
+    /** Live-recompute the PIT calculation for a given year using `profileForYear`. */
     calculationForYear: (year: number) => BelgianTaxCalculation;
     /**
+     * Calculation to display for a given year: returns the frozen "as-filed" calc when one
+     * exists, otherwise falls back to `calculationForYear`. Use this on read sites that
+     * should respect engine-drift protection (charts, summary cards, comparison views).
+     */
+    displayCalculationForYear: (year: number) => BelgianTaxCalculation;
+    /**
      * Seed a snapshot for a year by cloning the current live profile (with `taxYear`
-     * overridden). No-op if a snapshot already exists for that year.
+     * overridden). No-op if a snapshot already exists for that year. Appends a `'created'`
+     * entry to the meta history.
      */
     createSnapshotFromLive: (year: number) => void;
-    /** Patch a snapshot in place. Used by the dialog's historical-edit mode. */
+    /** Patch a snapshot in place. Used by the dialog's historical-edit mode. Appends `'patched'`. */
     updateSnapshot: (year: number, updates: Partial<BelgianTaxProfile>) => void;
+    /** Returns the meta for a year, or `null` if none exists. */
+    metaForYear: (year: number) => BelgianTaxProfileSnapshotMeta | null;
+    /** True if the year has a non-null `filing` meta record. */
+    isYearFiled: (year: number) => boolean;
+    /** Frozen "as-filed" calc, if one exists for the year. */
+    getFrozenCalculation: (year: number) => BelgianTaxCalculation | null;
+    /** Append-only audit log entries for a year, newest last. */
+    getSnapshotHistory: (year: number) => SnapshotAuditEntry[];
+    /**
+     * Freeze the year's current live-recomputed calculation into `meta.frozenCalculation`.
+     * Idempotent — overwrites any prior freeze. Appends `'frozen'`.
+     */
+    freezeCalculation: (year: number) => void;
+    /** Clear `meta.frozenCalculation`. Appends `'unfrozen'`. No-op if not frozen. */
+    unfreezeCalculation: (year: number) => void;
+    /**
+     * Mark a year as filed. Also freezes the calculation (engine-drift protection) if one
+     * isn't already frozen. Appends `'filed'`.
+     */
+    markYearAsFiled: (year: number, reference?: string) => void;
+    /** Clear the filing record. Does *not* unfreeze the calculation. Appends `'unfiled'`. */
+    unmarkYearAsFiled: (year: number) => void;
 }
 
 const PROFILE_SETTINGS_KEY = 'belgian_tax_profile';
 const SNAPSHOTS_SETTINGS_KEY = 'belgian_tax_profile_snapshots_v1';
+const SNAPSHOT_METAS_SETTINGS_KEY = 'belgian_tax_profile_snapshot_meta_v1';
 const PERSIST_DEBOUNCE_MS = 500;
+const MAX_HISTORY_ENTRIES_PER_YEAR = 200;
 
 const defaultProfile: BelgianTaxProfile = {
     profileConfigured: false,
@@ -181,21 +223,26 @@ function hasMeaningfulData(profile: BelgianTaxProfile): boolean {
 export function BelgianTaxProfileProvider({ children }: { children: ReactNode }) {
     const [profile, setProfile] = useState<BelgianTaxProfile>(defaultProfile);
     const [snapshots, setSnapshots] = useState<BelgianTaxProfileSnapshots>({});
+    const [snapshotMetas, setSnapshotMetas] = useState<BelgianTaxProfileSnapshotMetas>({});
     const [viewedYear, setViewedYearState] = useState<number>(defaultProfile.taxYear);
     const [isLoading, setIsLoading] = useState(true);
     const profileSaveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
     const snapshotsSaveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+    const metasSaveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
     const isFirstProfileRender = useRef(true);
     const isFirstSnapshotsRender = useRef(true);
+    const isFirstMetasRender = useRef(true);
     const hasInitializedViewedYear = useRef(false);
 
     const { value: preloadedProfile, isLoading: preloadProfileLoading } =
         usePreloadedSetting<BelgianTaxProfile>(PROFILE_SETTINGS_KEY);
     const { value: preloadedSnapshots, isLoading: preloadSnapshotsLoading } =
         usePreloadedSetting<BelgianTaxProfileSnapshots>(SNAPSHOTS_SETTINGS_KEY);
+    const { value: preloadedMetas, isLoading: preloadMetasLoading } =
+        usePreloadedSetting<BelgianTaxProfileSnapshotMetas>(SNAPSHOT_METAS_SETTINGS_KEY);
 
     useEffect(() => {
-        if (preloadProfileLoading || preloadSnapshotsLoading) return;
+        if (preloadProfileLoading || preloadSnapshotsLoading || preloadMetasLoading) return;
         let mergedProfile: BelgianTaxProfile = defaultProfile;
         if (preloadedProfile) {
             mergedProfile = { ...defaultProfile, ...preloadedProfile };
@@ -205,12 +252,22 @@ export function BelgianTaxProfileProvider({ children }: { children: ReactNode })
         if (preloadedSnapshots) {
             setSnapshots(preloadedSnapshots);
         }
+        if (preloadedMetas) {
+            setSnapshotMetas(preloadedMetas);
+        }
         if (!hasInitializedViewedYear.current) {
             setViewedYearState(mergedProfile.taxYear);
             hasInitializedViewedYear.current = true;
         }
         setIsLoading(false);
-    }, [preloadedProfile, preloadProfileLoading, preloadedSnapshots, preloadSnapshotsLoading]);
+    }, [
+        preloadedProfile,
+        preloadProfileLoading,
+        preloadedSnapshots,
+        preloadSnapshotsLoading,
+        preloadedMetas,
+        preloadMetasLoading,
+    ]);
 
     useEffect(() => {
         if (isFirstProfileRender.current) {
@@ -246,22 +303,84 @@ export function BelgianTaxProfileProvider({ children }: { children: ReactNode })
         };
     }, [snapshots, isLoading]);
 
-    const updateProfile = useCallback((updates: Partial<BelgianTaxProfile>) => {
-        setProfile((prev) => {
-            const next = { ...prev, ...updates };
-            const nextYear = next.taxYear;
-            const prevYear = prev.taxYear;
-            // Auto-rollover: when the active income year advances, archive the outgoing
-            // profile as a snapshot under its own year key (without the new updates).
-            if (typeof nextYear === 'number' && typeof prevYear === 'number' && nextYear > prevYear) {
-                setSnapshots((prevSnapshots) => {
-                    if (prevSnapshots[prevYear]) return prevSnapshots;
-                    return { ...prevSnapshots, [prevYear]: { ...prev } };
-                });
+    useEffect(() => {
+        if (isFirstMetasRender.current) {
+            isFirstMetasRender.current = false;
+            return;
+        }
+        if (isLoading) return;
+        if (metasSaveTimerRef.current) clearTimeout(metasSaveTimerRef.current);
+        metasSaveTimerRef.current = setTimeout(() => {
+            apiClient.saveSetting(SNAPSHOT_METAS_SETTINGS_KEY, snapshotMetas).catch((err) => {
+                logger.error('Failed to save Belgian tax profile snapshot meta:', err);
+            });
+        }, PERSIST_DEBOUNCE_MS);
+        return () => {
+            if (metasSaveTimerRef.current) clearTimeout(metasSaveTimerRef.current);
+        };
+    }, [snapshotMetas, isLoading]);
+
+    /**
+     * Append a history entry to a year's meta, creating the meta if absent. Trims to
+     * `MAX_HISTORY_ENTRIES_PER_YEAR` from the head — old entries fall off so the JSONB
+     * blob stays bounded even in pathological cases.
+     */
+    const appendHistory = useCallback(
+        (year: number, kind: SnapshotAuditEntryKind, extras?: Omit<SnapshotAuditEntry, 'at' | 'kind'>) => {
+            setSnapshotMetas((prev) => {
+                const existing = prev[year];
+                const entry: SnapshotAuditEntry = {
+                    at: new Date().toISOString(),
+                    kind,
+                    ...extras,
+                };
+                const prevHistory = existing?.history ?? [];
+                const nextHistory = [...prevHistory, entry];
+                const trimmed =
+                    nextHistory.length > MAX_HISTORY_ENTRIES_PER_YEAR
+                        ? nextHistory.slice(nextHistory.length - MAX_HISTORY_ENTRIES_PER_YEAR)
+                        : nextHistory;
+                return {
+                    ...prev,
+                    [year]: { ...(existing ?? {}), history: trimmed },
+                };
+            });
+        },
+        [],
+    );
+
+    const updateProfile = useCallback(
+        (updates: Partial<BelgianTaxProfile>) => {
+            const prevYear = profile.taxYear;
+            const nextYear = updates.taxYear ?? prevYear;
+            const willArchive =
+                typeof nextYear === 'number' &&
+                typeof prevYear === 'number' &&
+                nextYear > prevYear &&
+                !snapshots[prevYear];
+
+            setProfile((prev) => {
+                const next = { ...prev, ...updates };
+                const innerPrevYear = prev.taxYear;
+                const innerNextYear = next.taxYear;
+                if (
+                    typeof innerNextYear === 'number' &&
+                    typeof innerPrevYear === 'number' &&
+                    innerNextYear > innerPrevYear
+                ) {
+                    setSnapshots((prevSnapshots) => {
+                        if (prevSnapshots[innerPrevYear]) return prevSnapshots;
+                        return { ...prevSnapshots, [innerPrevYear]: { ...prev } };
+                    });
+                }
+                return next;
+            });
+            if (willArchive) {
+                appendHistory(prevYear, 'created');
             }
-            return next;
-        });
-    }, []);
+        },
+        [profile.taxYear, snapshots, appendHistory],
+    );
 
     const resetProfile = useCallback(() => {
         setProfile(defaultProfile);
@@ -293,24 +412,134 @@ export function BelgianTaxProfileProvider({ children }: { children: ReactNode })
 
     const createSnapshotFromLive = useCallback(
         (year: number) => {
+            if (snapshots[year]) return;
             setSnapshots((prev) => {
                 if (prev[year]) return prev;
                 return { ...prev, [year]: { ...profile, taxYear: year } };
             });
+            appendHistory(year, 'created');
         },
-        [profile],
+        [profile, snapshots, appendHistory],
     );
 
-    const updateSnapshot = useCallback((year: number, updates: Partial<BelgianTaxProfile>) => {
-        setSnapshots((prev) => {
-            const existing = prev[year];
-            if (!existing) return prev;
-            return { ...prev, [year]: { ...existing, ...updates, taxYear: year } };
-        });
-    }, []);
+    const updateSnapshot = useCallback(
+        (year: number, updates: Partial<BelgianTaxProfile>) => {
+            if (!snapshots[year]) return;
+            setSnapshots((prev) => {
+                const existing = prev[year];
+                if (!existing) return prev;
+                return { ...prev, [year]: { ...existing, ...updates, taxYear: year } };
+            });
+            // Strip `taxYear` from the recorded diff — it's coerced server-side and not meaningful.
+            const { taxYear: _ignored, ...rest } = updates;
+            void _ignored;
+            if (Object.keys(rest).length > 0) {
+                appendHistory(year, 'patched', { changes: rest });
+            }
+        },
+        [snapshots, appendHistory],
+    );
+
+    const metaForYear = useCallback(
+        (year: number): BelgianTaxProfileSnapshotMeta | null => snapshotMetas[year] ?? null,
+        [snapshotMetas],
+    );
+
+    const isYearFiled = useCallback(
+        (year: number): boolean => !!snapshotMetas[year]?.filing,
+        [snapshotMetas],
+    );
+
+    const getFrozenCalculation = useCallback(
+        (year: number): BelgianTaxCalculation | null =>
+            snapshotMetas[year]?.frozenCalculation ?? null,
+        [snapshotMetas],
+    );
+
+    const getSnapshotHistory = useCallback(
+        (year: number): SnapshotAuditEntry[] => snapshotMetas[year]?.history ?? [],
+        [snapshotMetas],
+    );
+
+    const freezeCalculation = useCallback(
+        (year: number) => {
+            const frozen = computeBelgianPIT(profileForYear(year));
+            setSnapshotMetas((prev) => {
+                const existing = prev[year];
+                return { ...prev, [year]: { ...(existing ?? {}), frozenCalculation: frozen } };
+            });
+            appendHistory(year, 'frozen');
+        },
+        [profileForYear, appendHistory],
+    );
+
+    const unfreezeCalculation = useCallback(
+        (year: number) => {
+            if (!snapshotMetas[year]?.frozenCalculation) return;
+            setSnapshotMetas((prev) => {
+                const existing = prev[year];
+                if (!existing?.frozenCalculation) return prev;
+                const { frozenCalculation: _drop, ...rest } = existing;
+                void _drop;
+                return { ...prev, [year]: rest };
+            });
+            appendHistory(year, 'unfrozen');
+        },
+        [snapshotMetas, appendHistory],
+    );
+
+    const markYearAsFiled = useCallback(
+        (year: number, reference?: string) => {
+            const frozen = computeBelgianPIT(profileForYear(year));
+            setSnapshotMetas((prev) => {
+                const existing = prev[year];
+                const filing = {
+                    filedAt: new Date().toISOString(),
+                    ...(reference ? { reference } : {}),
+                };
+                // Filing implies freezing — preserve any pre-existing frozen calc instead of
+                // overwriting it. This way if a user froze deliberately *then* filed, their
+                // chosen freeze point is what stays "as filed".
+                return {
+                    ...prev,
+                    [year]: {
+                        ...(existing ?? {}),
+                        filing,
+                        frozenCalculation: existing?.frozenCalculation ?? frozen,
+                    },
+                };
+            });
+            appendHistory(year, 'filed', reference ? { reference } : undefined);
+        },
+        [profileForYear, appendHistory],
+    );
+
+    const unmarkYearAsFiled = useCallback(
+        (year: number) => {
+            if (!snapshotMetas[year]?.filing) return;
+            setSnapshotMetas((prev) => {
+                const existing = prev[year];
+                if (!existing?.filing) return prev;
+                const { filing: _drop, ...rest } = existing;
+                void _drop;
+                return { ...prev, [year]: rest };
+            });
+            appendHistory(year, 'unfiled');
+        },
+        [snapshotMetas, appendHistory],
+    );
 
     const calculation = useMemo(() => computeBelgianPIT(profile), [profile]);
     const isViewingHistorical = viewedYear !== profile.taxYear;
+
+    const displayCalculationForYear = useCallback(
+        (year: number): BelgianTaxCalculation => {
+            const frozen = snapshotMetas[year]?.frozenCalculation;
+            if (frozen) return frozen;
+            return computeBelgianPIT(profileForYear(year));
+        },
+        [snapshotMetas, profileForYear],
+    );
 
     const contextValue = useMemo(
         () => ({
@@ -320,14 +549,24 @@ export function BelgianTaxProfileProvider({ children }: { children: ReactNode })
             calculation,
             isLoading,
             snapshots,
+            snapshotMetas,
             viewedYear,
             setViewedYear,
             isViewingHistorical,
             snapshotExistsForYear,
             profileForYear,
             calculationForYear,
+            displayCalculationForYear,
             createSnapshotFromLive,
             updateSnapshot,
+            metaForYear,
+            isYearFiled,
+            getFrozenCalculation,
+            getSnapshotHistory,
+            freezeCalculation,
+            unfreezeCalculation,
+            markYearAsFiled,
+            unmarkYearAsFiled,
         }),
         [
             profile,
@@ -336,14 +575,24 @@ export function BelgianTaxProfileProvider({ children }: { children: ReactNode })
             calculation,
             isLoading,
             snapshots,
+            snapshotMetas,
             viewedYear,
             setViewedYear,
             isViewingHistorical,
             snapshotExistsForYear,
             profileForYear,
             calculationForYear,
+            displayCalculationForYear,
             createSnapshotFromLive,
             updateSnapshot,
+            metaForYear,
+            isYearFiled,
+            getFrozenCalculation,
+            getSnapshotHistory,
+            freezeCalculation,
+            unfreezeCalculation,
+            markYearAsFiled,
+            unmarkYearAsFiled,
         ],
     );
 

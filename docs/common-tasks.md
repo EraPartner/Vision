@@ -3,9 +3,9 @@ title: Common Tasks Quick Reference
 type: map-of-content
 status: active
 date: 2026-04-22
-updated: 2026-05-08
-tags: [moc, tasks, quick-reference, navigation, how-to, phase-2, openapi, deployment, cicd, updates, april-2026, testing, e2e-testing, mutation-testing, bulk-actions]
-description: Task-oriented navigation — find the right docs for what you want to do; includes Phase 2 OpenAPI and type generation; April 2026 adds deployment and update tasks; May 2026 bulk transaction operations
+updated: 2026-05-12
+tags: [moc, tasks, quick-reference, navigation, how-to, phase-2, openapi, deployment, cicd, updates, april-2026, testing, e2e-testing, mutation-testing, bulk-actions, belgian-tax, adr-059, freeze-display-pattern]
+description: Task-oriented navigation — find the right docs for what you want to do; includes Phase 2 OpenAPI and type generation; April 2026 adds deployment and update tasks; May 2026 bulk transaction operations; May 12 2026 adds Belgian Tax historical year extensions (ADR-059) tasks
 aliases: [common tasks, quick reference, i want to, task navigation, cheat sheet]
 ---
 
@@ -67,6 +67,10 @@ aliases: [common tasks, quick reference, i want to, task navigation, cheat sheet
 | Update investment prices | [[docs/integrations/price-providers\|Price Providers]] | [[docs/api/investments\|Investments API]] |
 | View a past tax year without changing my live profile | [[docs/features/belgian-tax#historical-year-viewer-adr-058\|Belgian Tax Historical Year Viewer]] | [[docs/adr/058-belgian-tax-historical-year-snapshots\|ADR-058]], [[docs/features/portfolio-tax\|Portfolio Tax]] |
 | Create a profile snapshot for a historical year | [[docs/features/belgian-tax#historical-year-viewer-adr-058\|Historical Year Viewer]] | [[docs/components/tax/TaxYearSwitcher.tsx\|TaxYearSwitcher]] |
+| Freeze a tax year calculation to prevent engine drift | [[docs/features/belgian-tax#historical-year-extensions-adr-059\|Historical Year Extensions (ADR-059)]] | [[docs/adr/059-belgian-tax-historical-year-extensions\|ADR-059]], YearActionsMenu component |
+| Mark a tax year as filed with a reference number | [[docs/features/belgian-tax#historical-year-extensions-adr-059\|Historical Year Extensions (ADR-059)]] | [[docs/adr/059-belgian-tax-historical-year-extensions\|ADR-059]], MarkAsFiledDialog component |
+| Export a tax year as CSV for backup | [[docs/features/belgian-tax#historical-year-extensions-adr-059\|Historical Year Extensions (ADR-059)]] | [[docs/adr/059-belgian-tax-historical-year-extensions\|ADR-059]], exportTaxYearCsv module |
+| View amendment history for a tax year | [[docs/features/belgian-tax#historical-year-extensions-adr-059\|Historical Year Extensions (ADR-059)]] | [[docs/adr/059-belgian-tax-historical-year-extensions\|ADR-059]], SnapshotHistoryDialog component |
 
 ## Transaction Tasks
 

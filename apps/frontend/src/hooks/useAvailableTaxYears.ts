@@ -22,6 +22,10 @@ export interface AvailableTaxYear {
     isCurrent: boolean;
     hasSnapshot: boolean;
     hasTransactions: boolean;
+    /** True when the year has a `filing` meta record (ADR-059). */
+    isFiled: boolean;
+    /** True when the year has a `frozenCalculation` (ADR-059). */
+    hasFrozenCalculation: boolean;
 }
 
 function yearFromIsoDate(date: string | undefined | null): number | null {
@@ -37,7 +41,7 @@ function yearFromMonthKey(period: string | undefined | null): number | null {
 }
 
 export function useAvailableTaxYears(): AvailableTaxYear[] {
-    const { profile, snapshots } = useBelgianTaxProfile();
+    const { profile, snapshots, snapshotMetas } = useBelgianTaxProfile();
     const { summaries } = usePortfolio();
     const stats = useStatistics();
 
@@ -81,19 +85,30 @@ export function useAvailableTaxYears(): AvailableTaxYear[] {
     return useMemo(() => {
         const currentYear = profile.taxYear;
         const snapshotYears = Object.keys(snapshots).map((k) => Number(k)).filter(Number.isFinite);
+        const metaYears = Object.keys(snapshotMetas).map((k) => Number(k)).filter(Number.isFinite);
         const transactionYears = new Set<number>([
             ...portfolioTaxFeeYears,
             ...taxableIncomeYears,
         ]);
-        const allYears = new Set<number>([currentYear, ...snapshotYears, ...transactionYears]);
+        const allYears = new Set<number>([
+            currentYear,
+            ...snapshotYears,
+            ...metaYears,
+            ...transactionYears,
+        ]);
 
         return Array.from(allYears)
             .sort((a, b) => b - a)
-            .map((year) => ({
-                year,
-                isCurrent: year === currentYear,
-                hasSnapshot: Object.prototype.hasOwnProperty.call(snapshots, year),
-                hasTransactions: transactionYears.has(year),
-            }));
-    }, [profile.taxYear, snapshots, portfolioTaxFeeYears, taxableIncomeYears]);
+            .map((year) => {
+                const meta = snapshotMetas[year];
+                return {
+                    year,
+                    isCurrent: year === currentYear,
+                    hasSnapshot: Object.prototype.hasOwnProperty.call(snapshots, year),
+                    hasTransactions: transactionYears.has(year),
+                    isFiled: !!meta?.filing,
+                    hasFrozenCalculation: !!meta?.frozenCalculation,
+                };
+            });
+    }, [profile.taxYear, snapshots, snapshotMetas, portfolioTaxFeeYears, taxableIncomeYears]);
 }

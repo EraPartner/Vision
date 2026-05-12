@@ -3,10 +3,10 @@ title: Code Patterns Reference
 type: reference
 status: active
 date: 2026-04-26
-updated: 2026-05-11
-tags: [reference, patterns, conventions, code-style, backend, frontend, phase-0, phase-1, phase-2, phase-3, phase-4, phase-5, phase-6, phase-9, phase-12, phase-14, phase-q, phase-c, phase-d, motion, liquid-glass, design-system, decimal, money, timezone, openapi, domain-split, import, import-pipeline, concurrency, batching, decimal-enforcement, zustand, slice-selection, typescript, error-handling, type-safety, csv, formula-injection, cwe-1236, csv-record-splitter, csv-parsing, multi-line-fields, date-utilities, immutability, aggregation-optimization, recipient-groups, portfolio-totals, query-parameter-filtering, buildquery, bug-hunt-2026-05-05, bug-hunt-2026-05-06, bug-hunt-2026-05-08, react-keys, stable-keys, mount-guard, memory-leak-prevention, parseLocaleNumber, number-parsing, locale-number, settings-backed-hook, portfolio-tax-classifications, audit-2026-05-11]
-description: Standard code patterns used throughout the Vision project — repositories, routes, hooks, API client, Express setup, error handling, type safety, filter builders, aggregation envelopes, aggregation refresh, trigger-maintained tables, golden fixtures, database fixtures, pure calculation services, atomic multi-step transactions, streaming CSV exports with formula injection prevention, import batch concurrency, motion consumers, surface shells, gradient icon tiles, money utilities, decimal utilities, shared date utilities with input validation and locale support, timezone boundary handling, TypeScript type annotations, type-safe error handling, domain-split API client, Zustand store with useShallow slice selection, immutable PATCH field sanitization, aggregation query optimization with Map-based single-pass accumulation, recipient group resolution via scalar subqueries (Phase Q), portfolio totals single-source-of-truth pattern (Phase 14). May 2026 bug hunt adds React key generation pattern (use UUID instead of index), mount guard pattern (prevent setState after unmount), and documents parseLocaleNumber heuristic with single-comma thousands separator fix.
-aliases: [code patterns, coding patterns, conventions, patterns, how to write code, repository pattern, route pattern, hook pattern, error handling, type-safe error handling, type annotations, filter builder, golden fixture, aggregation envelope, calculation services, import concurrency, motion pattern, surface shell pattern, gradient icon pattern, money pattern, decimal pattern, timezone pattern, domain split, openapi, typescript types, csv export, safe csv, formula injection, cwe-1236, date utilities, immutability, aggregation optimization, Map pattern, recipient group filter, recipientGroupId, portfolio totals, single source of truth, parseLocaleNumber, number parsing, locale-aware number parsing, thousands separator, decimal separator]
+updated: 2026-05-12
+tags: [reference, patterns, conventions, code-style, backend, frontend, phase-0, phase-1, phase-2, phase-3, phase-4, phase-5, phase-6, phase-9, phase-12, phase-14, phase-q, phase-c, phase-d, motion, liquid-glass, design-system, decimal, money, timezone, openapi, domain-split, import, import-pipeline, concurrency, batching, decimal-enforcement, zustand, slice-selection, typescript, error-handling, type-safety, csv, formula-injection, cwe-1236, csv-record-splitter, csv-parsing, multi-line-fields, date-utilities, immutability, aggregation-optimization, recipient-groups, portfolio-totals, query-parameter-filtering, buildquery, bug-hunt-2026-05-05, bug-hunt-2026-05-06, bug-hunt-2026-05-08, react-keys, stable-keys, mount-guard, memory-leak-prevention, parseLocaleNumber, number-parsing, locale-number, settings-backed-hook, portfolio-tax-classifications, audit-2026-05-11, belgian-tax, freeze-display-pattern, adr-059]
+description: Standard code patterns used throughout the Vision project — repositories, routes, hooks, API client, Express setup, error handling, type safety, filter builders, aggregation envelopes, aggregation refresh, trigger-maintained tables, golden fixtures, database fixtures, pure calculation services, atomic multi-step transactions, streaming CSV exports with formula injection prevention, import batch concurrency, motion consumers, surface shells, gradient icon tiles, money utilities, decimal utilities, shared date utilities with input validation and locale support, timezone boundary handling, TypeScript type annotations, type-safe error handling, domain-split API client, Zustand store with useShallow slice selection, immutable PATCH field sanitization, aggregation query optimization with Map-based single-pass accumulation, recipient group resolution via scalar subqueries (Phase Q), portfolio totals single-source-of-truth pattern (Phase 14), Belgian Tax freeze/display pattern for engine-drift protection (ADR-059, May 2026). May 2026 bug hunt adds React key generation pattern (use UUID instead of index), mount guard pattern (prevent setState after unmount), and documents parseLocaleNumber heuristic with single-comma thousands separator fix.
+aliases: [code patterns, coding patterns, conventions, patterns, how to write code, repository pattern, route pattern, hook pattern, error handling, type-safe error handling, type annotations, filter builder, golden fixture, aggregation envelope, calculation services, import concurrency, motion pattern, surface shell pattern, gradient icon pattern, money pattern, decimal pattern, timezone pattern, domain split, openapi, typescript types, csv export, safe csv, formula injection, cwe-1236, date utilities, immutability, aggregation optimization, Map pattern, recipient group filter, recipientGroupId, portfolio totals, single source of truth, parseLocaleNumber, number parsing, locale-aware number parsing, thousands separator, decimal separator, belgian-tax-pattern, freeze-display-pattern, as-filed-calculation, engine-drift-protection]
 ---
 
 # Code Patterns Reference
@@ -3079,6 +3079,119 @@ useEffect(() => {
 - **useEffect with AbortController** — Abort signal prevents post-unmount updates
 - **Synchronous effects only** — No async work = no race condition
 - **Modal/Dialog components** — These typically unmount with parent, not selectively
+
+---
+
+## Belgian Tax Freeze/Display Pattern (ADR-059, Phase 11, May 2026)
+
+**Source:** [[apps/frontend/src/contexts/BelgianTaxProfileContext.tsx|BelgianTaxProfileContext]], [[apps/frontend/src/lib/belgianTax/types.ts|belgianTax/types.ts]]
+
+When displaying calculated tax information (PIT, effective rates, etc.) for historical years, use `displayCalculationForYear(year)` instead of always recomputing from the live profile. This pattern solves engine-drift: a bug fix to `computeBelgianPIT` should not retroactively change filed years.
+
+### Pattern
+
+```typescript
+// In a read site (page, component, hook):
+const { displayCalculationForYear, isYearFiled } = useBelgianTaxProfileContext();
+
+// For the viewed year, use the display getter (not live recompute)
+const calculation = displayCalculationForYear(viewedYear);
+
+// isYearFiled tells you if the year is locked behind explicit amend confirmation
+const canEditFreely = !isYearFiled(viewedYear);
+```
+
+### How it Works
+
+1. **Frozen calculation preference** — If a year has a frozen calculation (captured when marked filed or explicitly frozen), `displayCalculationForYear` returns it verbatim (no recompute).
+2. **Live fallback** — If no frozen calculation exists, `displayCalculationForYear` computes fresh via `computeBelgianPIT(profileForYear(year))`.
+3. **Freezing** — Call `freezeCalculation(year)` to capture the current calculation and prevent engine drift for that year.
+4. **Filing** — Call `markYearAsFiled(year, reference?)` to freeze + record filing metadata. Unfiling preserves the frozen calc.
+
+### Behavioral rules
+
+| Scenario | Result | Why |
+|----------|--------|-----|
+| User marks year filed | Frozen calc captured (if not already frozen); filing metadata recorded | Engine changes won't alter filed numbers |
+| User unfiling (clerical correction) | Frozen calc preserved; filing record removed | User may still want the frozen calc for reference |
+| User explicitly freezes a year | Frozen calc captured before marking filed | Deliberate freeze point wins if filed afterward |
+| Viewing a filed year on read sites | `displayCalculationForYear` returns frozen calc verbatim | Filed numbers are byte-stable across sessions |
+| Editing a filed year | `TaxProfileDialog` gates behind "Amend this filed year" confirmation | Deliberate escape hatch, not hard-lock |
+
+### Read-site example
+
+```typescript
+// Tax Overview page — yearly chart
+function YearlyChart({ viewedYear }) {
+  const { displayCalculationForYear, profileForYear, calculationForYear } = useBelgianTaxProfileContext();
+  
+  const calculation = displayCalculationForYear(viewedYear);
+  const profile = profileForYear(viewedYear);
+  
+  return (
+    <div>
+      <h2>PIT for {viewedYear}: {calculation.totalPIT}</h2>
+      <p>Gross: {profile.grossIncome}</p>
+      {/* Chart bars use displayCalculationForYear so filed years stay aligned */}
+    </div>
+  );
+}
+```
+
+### Mutator example
+
+```typescript
+// Year Actions Menu — freeze button clicked
+async function handleFreezeYear(year) {
+  const { freezeCalculation } = useBelgianTaxProfileContext();
+  
+  try {
+    await freezeCalculation(year);
+    showToast('Year calculation frozen. Engine changes will not affect this year.');
+  } catch (err) {
+    showError('Failed to freeze year calculation');
+  }
+}
+```
+
+### Context surface
+
+| Member | Purpose |
+|---|---|
+| `snapshotMetas` | Sparse per-year meta map (`Record<incomeYear, BelgianTaxProfileSnapshotMeta>`). |
+| `displayCalculationForYear(year)` | Returns frozen calc if present, else live recompute. Use this on all read sites. |
+| `getFrozenCalculation(year)` | Returns frozen calc or `null`. |
+| `isYearFiled(year)` | Boolean — true iff filing metadata exists. |
+| `freezeCalculation(year)` | Capture and persist frozen calc for the year. |
+| `unfreezeCalculation(year)` | Clear frozen calc (filed metadata preserved). |
+| `markYearAsFiled(year, reference?)` | Freeze (if not already frozen) + record filing metadata. |
+| `unmarkYearAsFiled(year)` | Clear filing metadata (frozen calc preserved). |
+| `getSnapshotHistory(year)` | Audit log entries (append-only, capped at 200 per year). |
+
+### Storage
+
+Persisted in Settings API under key `belgian_tax_profile_snapshot_meta_v1`:
+
+```typescript
+type BelgianTaxProfileSnapshotMeta = {
+  frozenCalculation?: BelgianTaxCalculation;  // "as-filed" calc, byte-stable
+  filing?: { filedAt: string; reference?: string }; // present iff year is filed
+  history?: SnapshotAuditEntry[];             // append-only, diff-only entries, trimmed at 200
+};
+```
+
+### When to Use
+
+- **All read sites** (pages, component displays) — Use `displayCalculationForYear` to respect frozen calcs.
+- **Audit/comparison surfaces** — Use `getSnapshotHistory`, `isYearFiled` to show user-facing metadata.
+- **Before persisting edits** — If year is filed, show "Amend this filed year" confirmation (gated in `TaxProfileDialog`).
+- **Export / reporting** — Use `displayCalculationForYear` so exports contain filed numbers verbatim.
+
+### When NOT Necessary
+
+- **Live editing flow** — While user is actively editing, `profileForYear` and `calculationForYear` work fine (no persistence yet).
+- **Profile mutations** — `updateSnapshot`, `markYearAsFiled` handle append-only audit logging internally.
+- **Components that don't display calculations** — e.g., `TaxYearSwitcher` only needs `viewedYear` state, not frozen calcs.
 
 ---
 

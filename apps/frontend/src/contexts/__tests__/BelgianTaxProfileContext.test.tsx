@@ -220,4 +220,146 @@ describe("BelgianTaxProfileContext", () => {
             expect(calcLive.grossIncome).toBe(60000);
         });
     });
+
+    describe("snapshot meta: freeze / file / audit history", () => {
+        it("appends a 'created' history entry when a snapshot is seeded", async () => {
+            const { result } = renderHook(() => useBelgianTaxProfile(), { wrapper: makeWrapper() });
+            await waitFor(() => expect(result.current.isLoading).toBe(false));
+            act(() => result.current.createSnapshotFromLive(2023));
+            const history = result.current.getSnapshotHistory(2023);
+            expect(history).toHaveLength(1);
+            expect(history[0].kind).toBe("created");
+            expect(typeof history[0].at).toBe("string");
+        });
+
+        it("appends a 'created' entry on auto-rollover", async () => {
+            const { result } = renderHook(() => useBelgianTaxProfile(), { wrapper: makeWrapper() });
+            await waitFor(() => expect(result.current.isLoading).toBe(false));
+            const startYear = result.current.profile.taxYear;
+            act(() => result.current.updateProfile({ grossAnnualIncome: 50000 }));
+            act(() => result.current.updateProfile({ taxYear: startYear + 1 }));
+            const history = result.current.getSnapshotHistory(startYear);
+            expect(history).toHaveLength(1);
+            expect(history[0].kind).toBe("created");
+        });
+
+        it("appends a 'patched' entry with the diff when a snapshot is updated", async () => {
+            const { result } = renderHook(() => useBelgianTaxProfile(), { wrapper: makeWrapper() });
+            await waitFor(() => expect(result.current.isLoading).toBe(false));
+            act(() => result.current.createSnapshotFromLive(2023));
+            act(() => result.current.updateSnapshot(2023, { grossAnnualIncome: 55555, region: "brussels" }));
+            const history = result.current.getSnapshotHistory(2023);
+            expect(history).toHaveLength(2);
+            expect(history[1].kind).toBe("patched");
+            expect(history[1].changes).toEqual({ grossAnnualIncome: 55555, region: "brussels" });
+        });
+
+        it("does not append a 'patched' entry for a year with no snapshot", async () => {
+            const { result } = renderHook(() => useBelgianTaxProfile(), { wrapper: makeWrapper() });
+            await waitFor(() => expect(result.current.isLoading).toBe(false));
+            act(() => result.current.updateSnapshot(2019, { grossAnnualIncome: 1234 }));
+            expect(result.current.getSnapshotHistory(2019)).toEqual([]);
+        });
+
+        it("does not record a 'patched' entry when the only diff field is taxYear", async () => {
+            const { result } = renderHook(() => useBelgianTaxProfile(), { wrapper: makeWrapper() });
+            await waitFor(() => expect(result.current.isLoading).toBe(false));
+            act(() => result.current.createSnapshotFromLive(2023));
+            act(() => result.current.updateSnapshot(2023, { taxYear: 2099 }));
+            // Only the 'created' entry — the taxYear-only patch is coerced and skipped.
+            expect(result.current.getSnapshotHistory(2023)).toHaveLength(1);
+        });
+
+        it("freezeCalculation captures the current calc and appends 'frozen'", async () => {
+            const { result } = renderHook(() => useBelgianTaxProfile(), { wrapper: makeWrapper() });
+            await waitFor(() => expect(result.current.isLoading).toBe(false));
+            act(() => result.current.updateProfile({ grossAnnualIncome: 60000 }));
+            act(() => result.current.createSnapshotFromLive(2023));
+            act(() => result.current.updateSnapshot(2023, { grossAnnualIncome: 40000 }));
+            act(() => result.current.freezeCalculation(2023));
+            const frozen = result.current.getFrozenCalculation(2023);
+            expect(frozen).not.toBeNull();
+            expect(frozen!.grossIncome).toBe(40000);
+            const lastEntry = result.current.getSnapshotHistory(2023).at(-1)!;
+            expect(lastEntry.kind).toBe("frozen");
+        });
+
+        it("displayCalculationForYear returns the frozen calc when one exists", async () => {
+            const { result } = renderHook(() => useBelgianTaxProfile(), { wrapper: makeWrapper() });
+            await waitFor(() => expect(result.current.isLoading).toBe(false));
+            act(() => result.current.updateProfile({ grossAnnualIncome: 60000 }));
+            act(() => result.current.createSnapshotFromLive(2023));
+            act(() => result.current.updateSnapshot(2023, { grossAnnualIncome: 40000 }));
+            act(() => result.current.freezeCalculation(2023));
+            // Mutate the snapshot AFTER freezing — display calc should keep the frozen value,
+            // live calc should reflect the new input. This is the engine-drift protection.
+            act(() => result.current.updateSnapshot(2023, { grossAnnualIncome: 70000 }));
+            expect(result.current.displayCalculationForYear(2023).grossIncome).toBe(40000);
+            expect(result.current.calculationForYear(2023).grossIncome).toBe(70000);
+        });
+
+        it("unfreezeCalculation clears the frozen calc and falls back to live", async () => {
+            const { result } = renderHook(() => useBelgianTaxProfile(), { wrapper: makeWrapper() });
+            await waitFor(() => expect(result.current.isLoading).toBe(false));
+            act(() => result.current.updateProfile({ grossAnnualIncome: 60000 }));
+            act(() => result.current.createSnapshotFromLive(2023));
+            act(() => result.current.freezeCalculation(2023));
+            expect(result.current.getFrozenCalculation(2023)).not.toBeNull();
+            act(() => result.current.unfreezeCalculation(2023));
+            expect(result.current.getFrozenCalculation(2023)).toBeNull();
+            const lastEntry = result.current.getSnapshotHistory(2023).at(-1)!;
+            expect(lastEntry.kind).toBe("unfrozen");
+        });
+
+        it("markYearAsFiled sets filing, freezes calc, and appends 'filed'", async () => {
+            const { result } = renderHook(() => useBelgianTaxProfile(), { wrapper: makeWrapper() });
+            await waitFor(() => expect(result.current.isLoading).toBe(false));
+            act(() => result.current.updateProfile({ grossAnnualIncome: 60000 }));
+            act(() => result.current.createSnapshotFromLive(2023));
+            act(() => result.current.markYearAsFiled(2023, "Tax-on-Web 2024-XYZ"));
+            expect(result.current.isYearFiled(2023)).toBe(true);
+            const meta = result.current.metaForYear(2023);
+            expect(meta?.filing?.reference).toBe("Tax-on-Web 2024-XYZ");
+            expect(meta?.frozenCalculation).toBeDefined();
+            const lastEntry = result.current.getSnapshotHistory(2023).at(-1)!;
+            expect(lastEntry.kind).toBe("filed");
+            expect(lastEntry.reference).toBe("Tax-on-Web 2024-XYZ");
+        });
+
+        it("markYearAsFiled preserves an existing frozen calculation", async () => {
+            const { result } = renderHook(() => useBelgianTaxProfile(), { wrapper: makeWrapper() });
+            await waitFor(() => expect(result.current.isLoading).toBe(false));
+            act(() => result.current.updateProfile({ grossAnnualIncome: 60000 }));
+            act(() => result.current.createSnapshotFromLive(2023));
+            // Freeze with one income value, then change the snapshot, then file.
+            act(() => result.current.freezeCalculation(2023));
+            const frozenAtFreeze = result.current.getFrozenCalculation(2023)!.grossIncome;
+            act(() => result.current.updateSnapshot(2023, { grossAnnualIncome: 99999 }));
+            act(() => result.current.markYearAsFiled(2023));
+            expect(result.current.getFrozenCalculation(2023)!.grossIncome).toBe(frozenAtFreeze);
+        });
+
+        it("unmarkYearAsFiled clears filing but keeps frozen calc", async () => {
+            const { result } = renderHook(() => useBelgianTaxProfile(), { wrapper: makeWrapper() });
+            await waitFor(() => expect(result.current.isLoading).toBe(false));
+            act(() => result.current.createSnapshotFromLive(2023));
+            act(() => result.current.markYearAsFiled(2023));
+            expect(result.current.isYearFiled(2023)).toBe(true);
+            act(() => result.current.unmarkYearAsFiled(2023));
+            expect(result.current.isYearFiled(2023)).toBe(false);
+            expect(result.current.getFrozenCalculation(2023)).not.toBeNull();
+            const lastEntry = result.current.getSnapshotHistory(2023).at(-1)!;
+            expect(lastEntry.kind).toBe("unfiled");
+        });
+
+        it("freeze on a year without a snapshot still records meta and history", async () => {
+            const { result } = renderHook(() => useBelgianTaxProfile(), { wrapper: makeWrapper() });
+            await waitFor(() => expect(result.current.isLoading).toBe(false));
+            // No snapshot for 2022 — should freeze the estimate calc.
+            act(() => result.current.updateProfile({ grossAnnualIncome: 55000 }));
+            act(() => result.current.freezeCalculation(2022));
+            expect(result.current.getFrozenCalculation(2022)).not.toBeNull();
+            expect(result.current.getFrozenCalculation(2022)!.grossIncome).toBe(55000);
+        });
+    });
 });

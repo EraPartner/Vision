@@ -24,15 +24,27 @@ const mockedStats = vi.mocked(useStatistics);
 function setMocks({
     taxYear = 2026,
     snapshotYears = [] as number[],
+    filedYears = [] as number[],
+    frozenYears = [] as number[],
+    metaOnlyYears = [] as number[],
     taxIncomeCategoryIds = [] as number[],
     portfolioTxns = [] as Array<{ date: string; taxes?: number; fees?: number; type?: string }>,
     pivot = [] as Array<{ categoryId: number | null; incomeMonths: Record<string, number> }>,
 } = {}) {
     const snapshots: Record<number, unknown> = {};
     for (const y of snapshotYears) snapshots[y] = { taxYear: y };
+    const snapshotMetas: Record<number, { filing?: object; frozenCalculation?: object }> = {};
+    for (const y of filedYears) snapshotMetas[y] = { filing: { filedAt: "2024-01-01T00:00:00Z" } };
+    for (const y of frozenYears) {
+        snapshotMetas[y] = { ...(snapshotMetas[y] ?? {}), frozenCalculation: {} };
+    }
+    for (const y of metaOnlyYears) {
+        snapshotMetas[y] = { ...(snapshotMetas[y] ?? {}) };
+    }
     mockedProfileCtx.mockReturnValue({
         profile: { taxYear, taxIncomeCategoryIds },
         snapshots,
+        snapshotMetas,
     } as unknown as ReturnType<typeof useBelgianTaxProfile>);
     mockedPortfolio.mockReturnValue({
         summaries: [{ transactions: portfolioTxns }],
@@ -51,7 +63,14 @@ describe("useAvailableTaxYears", () => {
         setMocks({ taxYear: 2026 });
         const { result } = renderHook(() => useAvailableTaxYears());
         expect(result.current).toEqual([
-            { year: 2026, isCurrent: true, hasSnapshot: false, hasTransactions: false },
+            {
+                year: 2026,
+                isCurrent: true,
+                hasSnapshot: false,
+                hasTransactions: false,
+                isFiled: false,
+                hasFrozenCalculation: false,
+            },
         ]);
     });
 
@@ -135,7 +154,31 @@ describe("useAvailableTaxYears", () => {
             isCurrent: false,
             hasSnapshot: true,
             hasTransactions: true,
+            isFiled: false,
+            hasFrozenCalculation: false,
         });
+    });
+
+    it("flags filed and frozen years from meta", () => {
+        setMocks({
+            taxYear: 2026,
+            snapshotYears: [2024, 2023],
+            filedYears: [2024],
+            frozenYears: [2024, 2023],
+        });
+        const { result } = renderHook(() => useAvailableTaxYears());
+        const y2024 = result.current.find((y) => y.year === 2024);
+        const y2023 = result.current.find((y) => y.year === 2023);
+        expect(y2024?.isFiled).toBe(true);
+        expect(y2024?.hasFrozenCalculation).toBe(true);
+        expect(y2023?.isFiled).toBe(false);
+        expect(y2023?.hasFrozenCalculation).toBe(true);
+    });
+
+    it("includes years that have meta but no snapshot (rare migration edge)", () => {
+        setMocks({ taxYear: 2026, metaOnlyYears: [2019] });
+        const { result } = renderHook(() => useAvailableTaxYears());
+        expect(result.current.map((y) => y.year)).toEqual([2026, 2019]);
     });
 
     it("tolerates missing date / malformed period strings", () => {

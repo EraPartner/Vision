@@ -21,7 +21,7 @@ import {
 import { Button } from '@/components/ui/button';
 import { Separator } from '@/components/ui/separator';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
-import { Settings, ChevronRight, ChevronLeft, Check, User, Landmark, MapPin, Users, ListChecks, History } from 'lucide-react';
+import { Settings, ChevronRight, ChevronLeft, Check, User, Landmark, MapPin, Users, ListChecks, History, Lock } from 'lucide-react';
 import { useLanguage } from '@/contexts/LanguageContext';
 import { cn } from '@/lib/utils';
 import { useBelgianTaxProfile, type BelgianTaxProfile } from '@/contexts/BelgianTaxProfileContext';
@@ -63,20 +63,26 @@ export function TaxProfileDialog({ trigger, initialStep, targetYear }: TaxProfil
         updateProfile: updateLiveProfile,
         snapshots,
         updateSnapshot,
+        isYearFiled,
+        unmarkYearAsFiled,
     } = useBelgianTaxProfile();
     const [open, setOpen] = useState(false);
     const [step, setStep] = useState<Step>('employment');
+    const [filedOverride, setFiledOverride] = useState(false);
     const { t } = useLanguage();
 
     const liveYear = liveProfile.taxYear;
     const effectiveTargetYear = targetYear ?? liveYear;
     const editingHistorical = effectiveTargetYear !== liveYear && !!snapshots[effectiveTargetYear];
+    const isFiled = editingHistorical && isYearFiled(effectiveTargetYear);
+    const isLockedByFiling = isFiled && !filedOverride;
     const profile: BelgianTaxProfile = editingHistorical
         ? snapshots[effectiveTargetYear]
         : liveProfile;
 
     const updateProfile = useCallback(
         (updates: Partial<BelgianTaxProfile>) => {
+            if (isLockedByFiling) return;
             if (editingHistorical) {
                 // Strip `taxYear` from patches so the snapshot key/year remains pinned.
                 // eslint-disable-next-line @typescript-eslint/no-unused-vars
@@ -86,7 +92,7 @@ export function TaxProfileDialog({ trigger, initialStep, targetYear }: TaxProfil
             }
             updateLiveProfile(updates);
         },
-        [editingHistorical, effectiveTargetYear, updateSnapshot, updateLiveProfile],
+        [isLockedByFiling, editingHistorical, effectiveTargetYear, updateSnapshot, updateLiveProfile],
     );
 
     const stepIdx = STEPS.indexOf(step);
@@ -108,7 +114,10 @@ export function TaxProfileDialog({ trigger, initialStep, targetYear }: TaxProfil
 
     function handleOpenChange(o: boolean) {
         setOpen(o);
-        if (o) setStep(initialStep ?? 'employment');
+        if (o) {
+            setStep(initialStep ?? 'employment');
+            setFiledOverride(false);
+        }
     }
 
     return (
@@ -159,12 +168,48 @@ export function TaxProfileDialog({ trigger, initialStep, targetYear }: TaxProfil
                     })}
                 </div>
 
-                {editingHistorical && (
+                {editingHistorical && !isFiled && (
                     <Alert className="mb-4 border-amber-500/40 bg-amber-500/5">
                         <History className="h-4 w-4 text-amber-600" />
                         <AlertTitle>{t('tax.historical.editWarning.title')}</AlertTitle>
                         <AlertDescription>
                             {t('tax.historical.editWarning.desc', { year: String(effectiveTargetYear) })}
+                        </AlertDescription>
+                    </Alert>
+                )}
+
+                {isFiled && (
+                    <Alert className="mb-4 border-amber-500/60 bg-amber-500/10">
+                        <Lock className="h-4 w-4 text-amber-700" />
+                        <AlertTitle>{t('tax.historical.filedLock.title')}</AlertTitle>
+                        <AlertDescription className="flex flex-col gap-3">
+                            <span className="text-xs text-muted-foreground">
+                                {t('tax.historical.filedLock.desc', { year: String(effectiveTargetYear) })}
+                            </span>
+                            <div className="flex flex-wrap gap-2">
+                                {!filedOverride ? (
+                                    <Button
+                                        size="sm"
+                                        variant="outline"
+                                        onClick={() => setFiledOverride(true)}
+                                        className="gap-1"
+                                    >
+                                        <Lock className="h-3 w-3" />
+                                        {t('tax.historical.filedLock.amendCta')}
+                                    </Button>
+                                ) : (
+                                    <span className="text-xs font-medium text-amber-700">
+                                        {t('tax.historical.filedLock.amendActive')}
+                                    </span>
+                                )}
+                                <Button
+                                    size="sm"
+                                    variant="ghost"
+                                    onClick={() => unmarkYearAsFiled(effectiveTargetYear)}
+                                >
+                                    {t('tax.historical.filedLock.unfileCta')}
+                                </Button>
+                            </div>
                         </AlertDescription>
                     </Alert>
                 )}

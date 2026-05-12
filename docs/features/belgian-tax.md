@@ -300,9 +300,62 @@ Each entry exposes `{ year, isCurrent, hasSnapshot, hasTransactions }` for the s
 
 ### Known limits
 
-- **Engine drift.** Past displayed numbers reflect today's `computeBelgianPIT`; engine bug fixes propagate retroactively (by design — no calc snapshot).
-- **Exchange rates.** Multi-currency conversion still uses today's rates, not point-in-time rates. Out of scope for ADR-058.
-- **Soft lock.** Past snapshots remain editable behind a warning banner rather than being hard-frozen.
+- **Engine drift.** When no calculation is frozen for a year (see ADR-059), past displayed numbers reflect today's `computeBelgianPIT` — engine bug fixes propagate retroactively. Freezing or filing a year captures the calculation verbatim and blocks drift for that year.
+- **Exchange rates.** Multi-currency conversion still uses today's rates, not point-in-time rates. Out of scope for ADR-058 and ADR-059.
+- **Soft lock.** Past snapshots remain editable behind a warning banner; filing upgrades the warning to an explicit "Amend this filed year" confirmation (ADR-059) but does not hard-freeze.
+
+## Historical Year Extensions (ADR-059)
+
+Layered on top of ADR-058. Adds engine-drift protection, a filed soft-lock, an audit log, multi-year comparison, a trend strip, and a CSV export.
+
+### Storage
+
+- `belgian_tax_profile_snapshot_meta_v1` — JSONB sparse `Record<incomeYear, BelgianTaxProfileSnapshotMeta>` sidecar. Meta entries are created lazily on first freeze / file / amendment; years without meta behave exactly as in ADR-058.
+
+```ts
+type BelgianTaxProfileSnapshotMeta = {
+    frozenCalculation?: BelgianTaxCalculation;       // "as-filed" calc, byte-stable
+    filing?: { filedAt: string; reference?: string }; // present iff year is filed
+    history?: SnapshotAuditEntry[];                  // append-only, bounded
+};
+```
+
+### Provider surface additions (`BelgianTaxProfileContext`)
+
+| Member | Purpose |
+|---|---|
+| `snapshotMetas` | Sparse per-year meta map. |
+| `metaForYear(y)` | Returns the meta entry or `null`. |
+| `isYearFiled(y)` | Boolean — true iff `meta.filing` is set. |
+| `getFrozenCalculation(y)` | Returns `meta.frozenCalculation` or `null`. |
+| `displayCalculationForYear(y)` | Frozen calc when present, else `calculationForYear(y)`. Use this on read sites. |
+| `getSnapshotHistory(y)` | Audit log entries (newest last). |
+| `freezeCalculation(y)` / `unfreezeCalculation(y)` | Capture / clear the as-filed calc. |
+| `markYearAsFiled(y, ref?)` / `unmarkYearAsFiled(y)` | Toggle the filing record. Filing implies freezing (preserves an existing frozen calc); unfiling preserves the frozen calc. |
+
+`createSnapshotFromLive` and `updateSnapshot` now also append `'created'` / `'patched'` entries to the meta history. Patches store only the diff (capped at 200 entries per year).
+
+### UI surfaces
+
+- **`MultiYearTrendStrip`** — compact clickable year tiles in the page header showing PIT, effective rate, and a normalized bar. Clicking switches `viewedYear`.
+- **`YearComparisonCard`** — side-by-side delta table comparing the viewed year against another year (picker; defaults to the immediately preceding tracked year). Surfaces gross income, total PIT, effective rate, net take-home.
+- **`YearActionsMenu`** — dropdown next to `TaxYearSwitcher` with freeze/unfreeze, mark/unmark filed, view history, export year as CSV.
+- **`MarkAsFiledDialog`** — collects an optional free-text filing reference (Tax-on-Web id, paper return code) before marking a year as filed.
+- **`SnapshotHistoryDialog`** — read-only chronological list of audit entries with kind badge, timestamp, one-line patch summary, and the filing reference where applicable.
+- **`HistoricalYearBanner`** extended with `filed` and `frozen` modes; priority order centralized in `resolveHistoricalBannerMode` and shared between `/tax` and `/portfolio/tax`.
+- **`TaxProfileDialog`** upgrades the amber warning to an explicit "Amend this filed year" confirmation when editing a filed year; updates are blocked until the user opts in.
+
+### CSV export
+
+`exportTaxYearCsv` (in `apps/frontend/src/lib/tax/exportTaxYearCsv.ts`) is a pure module that serialises a year's profile + calculation into a three-section CSV (metadata header, profile inputs, calculation breakdown). Values flow through `displayCalculationForYear` so filed/frozen years export their frozen numbers verbatim. Triggered from `YearActionsMenu` via the shared `downloadBlob` helper — no backend involvement.
+
+### Behavioral rules
+
+- **Filing implies freezing.** Marking a year filed captures the calculation if it isn't already frozen.
+- **Pre-existing freezes win.** If a user deliberately froze a calc and *then* filed, the deliberate freeze point is preserved.
+- **Unfiling does *not* unfreeze.** Unfiling is a clerical correction; the frozen calc is kept for the user's reference.
+- **Banner priority.** `filed > frozen > snapshot > estimate`.
+- **PIT-for-gross scaling.** The yearly chart's `pitForGross(gross, year)` helper scales the frozen PIT proportionally to the bar's gross income when a frozen calc exists, so historical filed bars stay aligned with the as-filed total.
 
 ## PDF Report Export
 
@@ -326,6 +379,7 @@ See [[docs/api/reports#post-apireportstax|Reports API: Tax Endpoint]] for reques
 - [[docs/adr/056-belgian-tax-audit-fixes-ay2026|ADR-056]] — Comprehensive audit fixes (disabled-dependent doubling, child-under-3 forfeiture, regional autonomy factor, property-tax centimes, ETF TOB defaults, Reynders routing) (May 2026)
 - [[docs/adr/057-belgian-tax-audit-followup-pwc-may-2026|ADR-057]] — Follow-up audit (TOB shares cap €4,000 → €1,600, CGT effective date 1 Jan 2026, direct-bond CGT routing, Reynders interest-portion split, year-aware `SuggestedDeductionsCard`, per-residence centimes override) (May 2026)
 - [[docs/adr/058-belgian-tax-historical-year-snapshots|ADR-058]] — Historical year viewer with frozen per-year profile snapshots, shared switcher across `/tax` and `/portfolio/tax`, soft-lock past-edit mode (May 2026)
+- [[docs/adr/059-belgian-tax-historical-year-extensions|ADR-059]] — As-filed frozen calculations, filed soft-lock, snapshot audit log, year-over-year comparison, multi-year trend strip, single-year CSV export (May 2026)
 - [[docs/features/portfolio#belgian-tax-features]] — Tax fields in portfolio
 - [[docs/features/portfolio#belgian-inflation-data-flow]] — Inflation data flow
 - [[docs/features/pdf-report-export|PDF Report Export]] — Tax report generation with Phase 8 completion

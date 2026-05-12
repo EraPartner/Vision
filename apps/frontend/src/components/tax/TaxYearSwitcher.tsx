@@ -11,7 +11,7 @@
  *    surfaces a "Create historical profile for {year}" footer action that seeds a snapshot
  *    from the live profile so the user can then edit it via the profile dialog.
  */
-import { ChevronDown, History, Plus, Sparkles, Wallet } from 'lucide-react';
+import { ChevronDown, History, Lock, Plus, Snowflake, Sparkles, Wallet } from 'lucide-react';
 import { useLanguage } from '@/contexts/LanguageContext';
 import { useBelgianTaxProfile } from '@/contexts/BelgianTaxProfileContext';
 import { useAvailableTaxYears } from '@/hooks/useAvailableTaxYears';
@@ -76,7 +76,21 @@ export function TaxYearSwitcher({ className }: TaxYearSwitcherProps) {
                                 isActive && 'bg-accent/60',
                             )}
                         >
-                            <span className="font-medium tabular-nums">{entry.year}</span>
+                            <span className="flex items-center gap-1.5">
+                                <span className="font-medium tabular-nums">{entry.year}</span>
+                                {entry.isFiled && (
+                                    <Lock
+                                        className="h-3 w-3 text-amber-600"
+                                        aria-label={t('tax.yearSwitcher.filedAria')}
+                                    />
+                                )}
+                                {!entry.isFiled && entry.hasFrozenCalculation && (
+                                    <Snowflake
+                                        className="h-3 w-3 text-sky-600"
+                                        aria-label={t('tax.yearSwitcher.frozenAria')}
+                                    />
+                                )}
+                            </span>
                             <span className="flex items-center gap-1">
                                 {entry.isCurrent && (
                                     <Badge variant="default" className="h-4 px-1.5 text-[10px]">
@@ -84,20 +98,41 @@ export function TaxYearSwitcher({ className }: TaxYearSwitcherProps) {
                                         {t('tax.yearSwitcher.currentBadge')}
                                     </Badge>
                                 )}
-                                {!entry.isCurrent && entry.hasSnapshot && (
-                                    <Badge variant="secondary" className="h-4 px-1.5 text-[10px]">
-                                        {t('tax.yearSwitcher.snapshotBadge')}
-                                    </Badge>
-                                )}
-                                {!entry.isCurrent && !entry.hasSnapshot && entry.hasTransactions && (
+                                {!entry.isCurrent && entry.isFiled && (
                                     <Badge
                                         variant="outline"
-                                        className="h-4 px-1.5 text-[10px] text-muted-foreground"
+                                        className="h-4 px-1.5 text-[10px] border-amber-500/40 text-amber-700"
                                     >
-                                        <Wallet className="mr-0.5 h-2.5 w-2.5" />
-                                        {t('tax.yearSwitcher.transactionsBadge')}
+                                        {t('tax.yearSwitcher.filedBadge')}
                                     </Badge>
                                 )}
+                                {!entry.isCurrent && !entry.isFiled && entry.hasFrozenCalculation && (
+                                    <Badge
+                                        variant="outline"
+                                        className="h-4 px-1.5 text-[10px] border-sky-500/40 text-sky-700"
+                                    >
+                                        {t('tax.yearSwitcher.frozenBadge')}
+                                    </Badge>
+                                )}
+                                {!entry.isCurrent &&
+                                    !entry.isFiled &&
+                                    !entry.hasFrozenCalculation &&
+                                    entry.hasSnapshot && (
+                                        <Badge variant="secondary" className="h-4 px-1.5 text-[10px]">
+                                            {t('tax.yearSwitcher.snapshotBadge')}
+                                        </Badge>
+                                    )}
+                                {!entry.isCurrent &&
+                                    !entry.hasSnapshot &&
+                                    entry.hasTransactions && (
+                                        <Badge
+                                            variant="outline"
+                                            className="h-4 px-1.5 text-[10px] text-muted-foreground"
+                                        >
+                                            <Wallet className="mr-0.5 h-2.5 w-2.5" />
+                                            {t('tax.yearSwitcher.transactionsBadge')}
+                                        </Badge>
+                                    )}
                             </span>
                         </DropdownMenuItem>
                     );

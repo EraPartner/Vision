@@ -155,6 +155,70 @@ export interface BelgianTaxProfile {
  */
 export type BelgianTaxProfileSnapshots = Record<number, BelgianTaxProfile>;
 
+/**
+ * Per-year filing record. Year is considered "filed" iff this is set. Filing also
+ * freezes the calculation (engine drift protection): the calculation captured at file
+ * time is preserved verbatim in `BelgianTaxProfileSnapshotMeta.frozenCalculation`.
+ */
+export interface FilingRecord {
+    /** ISO timestamp the year was marked as filed. */
+    filedAt: string;
+    /** Free-text reference — Tax-on-Web confirmation number, paper return code, etc. */
+    reference?: string;
+}
+
+/** Discriminator for `SnapshotAuditEntry`. */
+export type SnapshotAuditEntryKind =
+    | 'created'
+    | 'patched'
+    | 'filed'
+    | 'unfiled'
+    | 'frozen'
+    | 'unfrozen';
+
+/**
+ * Audit log entry capturing a single amendment to a year's snapshot or meta. Append-only.
+ * Stored on `BelgianTaxProfileSnapshotMeta.history` and surfaced via the snapshot
+ * history dialog.
+ */
+export interface SnapshotAuditEntry {
+    /** ISO timestamp of the change. */
+    at: string;
+    kind: SnapshotAuditEntryKind;
+    /**
+     * Patch applied to the profile, populated only for `'created'` and `'patched'` entries.
+     * Stored as the partial diff rather than full state so the log stays compact.
+     */
+    changes?: Partial<BelgianTaxProfile>;
+    /** Optional free-text reference — currently used for `'filed'` entries. */
+    reference?: string;
+}
+
+/**
+ * Sidecar metadata for a year's snapshot — filing status, frozen "as-filed" calculation,
+ * and audit log. Stored under a separate setting (`belgian_tax_profile_snapshot_meta_v1`)
+ * so the snapshot profile shape stays untouched and can be migrated independently.
+ *
+ * Meta is created lazily: the first call to freeze / file / append history for a year
+ * inserts a meta entry. Years without meta are treated as un-filed, live-computed, and
+ * with empty history (unchanged behavior pre-ADR-059).
+ */
+export interface BelgianTaxProfileSnapshotMeta {
+    /**
+     * Calculation captured verbatim at freeze / file time. When present, surfaces should
+     * display this rather than the live-recomputed value so engine fixes don't
+     * retroactively change "as-filed" numbers.
+     */
+    frozenCalculation?: BelgianTaxCalculation;
+    /** Filing record. Year is considered filed iff this is set. */
+    filing?: FilingRecord;
+    /** Append-only audit log of amendments to the snapshot or meta. */
+    history?: SnapshotAuditEntry[];
+}
+
+/** Map of income year → `BelgianTaxProfileSnapshotMeta`. */
+export type BelgianTaxProfileSnapshotMetas = Record<number, BelgianTaxProfileSnapshotMeta>;
+
 export interface BracketTax {
     b1: number;
     b2: number;
