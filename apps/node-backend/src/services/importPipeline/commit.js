@@ -93,16 +93,17 @@ export async function commitBatch({ batchId, onProgress }) {
         }
 
         // SAVEPOINT per row: if insert fails the txn stays usable for remaining rows.
-        // import_staging_rows.id is BIGSERIAL (verified migration 0001), so
-        // the value is always a Postgres integer at this point. The assert
-        // is defence-in-depth: if a future schema change ever loosened that,
-        // this would fail loudly instead of opening an SQL-injection vector
-        // through the interpolated savepoint identifier.
-        if (!Number.isInteger(row.id)) {
+        // import_staging_rows.id is BIGSERIAL — the pg driver returns BIGINT
+        // values as strings to preserve int64 precision, so the value here is
+        // a string of digits (or, defensively, a JS integer). Validate against
+        // a digits-only regex to keep the interpolated savepoint identifier
+        // safe from injection without falsely rejecting string-form bigints.
+        const idStr = String(row.id);
+        if (!/^\d+$/.test(idStr)) {
           errors++;
           continue;
         }
-        const sp = `sp_row_${row.id}`;
+        const sp = `sp_row_${idStr}`;
         await client.query(`SAVEPOINT ${sp}`);
         try {
           // When overridden, clear matched_pattern_id — the link is now manual.
