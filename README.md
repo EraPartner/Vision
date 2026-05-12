@@ -239,6 +239,8 @@ bun run generate:types       # regenerate TypeScript types from openapi.yaml
 | Belfius | `belfius.js` |
 | Revolut | `revolut.js` |
 | KBC | `kbc.js` |
+| ING | `ing.js` |
+| BNP Paribas Fortis | `bnp.js` |
 | SABB | `sabb.js` |
 | Wise | `wise.js` |
 | Vision backup | `vision.js` |

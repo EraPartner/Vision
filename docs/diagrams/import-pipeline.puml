@@ -105,6 +105,7 @@ end note
 note right of BankAdapters
   Supported Banks:
   - Belfius, Revolut, KBC
+  - ING, BNP Paribas Fortis
   - SABB, Wise, Vision
   - Custom: User-defined column mapping
 end note

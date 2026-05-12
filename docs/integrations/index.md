@@ -3,6 +3,7 @@ title: Integrations Documentation Index
 type: integrations-index
 status: active
 date: 2026-03-31
+updated: 2026-05-12
 tags: [integrations, index, external-services]
 description: Documentation for external service integrations including bank adapters, price providers, and currency conversion
 aliases: [integrations, external services, third-party]
@@ -25,7 +26,7 @@ SORT title ASC
 ## Categories
 
 ### Banking
-- [[docs/integrations/bank-adapters\|Bank Adapters]] - Bank API integrations (Belfius, Revolut, KBC, SABB, Wise, Vision)
+- [[docs/integrations/bank-adapters\|Bank Adapters]] - Bank API integrations (Belfius, Revolut, ING, KBC, BNP Paribas Fortis, SABB, Wise, Vision)
 
 ### Market Data
 - [[docs/integrations/price-providers\|Price Providers]] - Stock/crypto/metals price feeds (Binance, Yahoo Finance, Kinesis, Custom JSON)

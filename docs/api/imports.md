@@ -5,8 +5,8 @@ method: POST, GET
 path: /api/import
 description: CSV import for transactions, recipients, and categories
 date: 2026-04-26
-updated: 2026-04-26
-tags: [api, import, csv, bank]
+updated: 2026-05-12
+tags: [api, import, csv, bank, ing, bnp]
 status: active
 aliases: [imports-api, csv-import, bank-import, bank-statement, deduplication]
 related_code: ["apps/node-backend/src/routes/importRoutes.js", "apps/node-backend/src/services/importPipeline/index.js", "apps/node-backend/src/lib/sse.js", "apps/node-backend/src/repositories/importBatchRepository.js"]
@@ -36,7 +36,9 @@ Import transactions from a CSV file using a predefined bank adapter.
 **Supported Banks:**
 - belfius
 - revolut
+- ing
 - kbc
+- bnp
 - sabb
 - wise
 - vision

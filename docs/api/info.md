@@ -3,9 +3,9 @@ title: Info & Analytics API
 type: endpoint
 status: active
 date: 2026-04-25
-updated: 2026-04-25
-tags: [api, analytics, statistics, dashboard, phase-g-deprecation]
-description: API endpoints for statistics, analytics, and dashboard data. Phase G removed 6 overlapping endpoints; see aggregations API for their replacements.
+updated: 2026-05-12
+tags: [api, analytics, statistics, dashboard, phase-g-deprecation, ing, bnp, supported-adapters]
+description: API endpoints for statistics, analytics, and dashboard data. Phase G removed 6 overlapping endpoints; see aggregations API for their replacements. May 2026: Added ING and BNP Paribas Fortis adapters (8 total banks supported).
 aliases: [info-api, analytics-api, statistics-api, dashboard-api]
 related_code: ["apps/node-backend/src/routes/info.js", "apps/node-backend/src/repositories/infoRepository.js", "apps/node-backend/src/repositories/infoRepositoryHelpers.js", "apps/node-backend/src/repositories/infoRepositoryStatistics.js", "apps/node-backend/src/repositories/infoRepositoryMonthly.js", "apps/node-backend/src/repositories/infoRepositoryBanks.js", "apps/node-backend/src/repositories/infoRepositoryNetWorth.js", "apps/node-backend/src/repositories/infoRepositoryPlanned.js", "apps/node-backend/src/repositories/infoRepositoryRecipients.js", "apps/node-backend/src/services/currencyConversionService.js", "apps/node-backend/src/services/portfolioPerformanceSnapshotService.js", "apps/node-backend/src/utils/downsample.js"]
 ---
@@ -85,14 +85,16 @@ List all supported bank adapters.
 ```json
 {
   "adapters": [
-    { "key": "kbc", "name": "KBC", "adapter_class": "KBCAdapter" },
     { "key": "belfius", "name": "Belfius", "adapter_class": "BelfiusAdapter" },
     { "key": "revolut", "name": "Revolut", "adapter_class": "RevolutAdapter" },
-    { "key": "vision", "name": "Vision", "adapter_class": "VisionAdapter" },
+    { "key": "ing", "name": "ING", "adapter_class": "INGAdapter" },
+    { "key": "kbc", "name": "KBC", "adapter_class": "KBCAdapter" },
+    { "key": "bnp", "name": "BNP Paribas Fortis", "adapter_class": "BNPAdapter" },
     { "key": "sabb", "name": "SABB", "adapter_class": "SABBAdapter" },
-    { "key": "wise", "name": "Wise", "adapter_class": "WiseAdapter" }
+    { "key": "wise", "name": "Wise", "adapter_class": "WiseAdapter" },
+    { "key": "vision", "name": "Vision", "adapter_class": "VisionAdapter" }
   ],
-  "total_count": 6
+  "total_count": 8
 }
 ```
 

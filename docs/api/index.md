@@ -3,9 +3,9 @@ title: API Documentation Index
 type: api-index
 status: active
 date: 2026-04-24
-updated: 2026-04-25
-tags: [api, index, rest, endpoints, openapi, phase-5a, attachments, phase-2, phase-9, phase-f, admin, observability]
-description: Complete REST API documentation for the Vision backend; authoritative spec in openapi.yaml (Phase 2.4); JSON export and attachments added in Phase 5A; Phase F adds 4 admin endpoints for provider health, endpoint liveness, and metrics; Phase 9 aggregation shadow cutover complete
+updated: 2026-05-12
+tags: [api, index, rest, endpoints, openapi, phase-5a, attachments, phase-2, phase-9, phase-f, admin, observability, ing, bnp, supported-adapters]
+description: Complete REST API documentation for the Vision backend; authoritative spec in openapi.yaml (Phase 2.4); JSON export and attachments added in Phase 5A; Phase F adds 4 admin endpoints for provider health, endpoint liveness, and metrics; Phase 9 aggregation shadow cutover complete; May 12 2026: ING and BNP Paribas Fortis adapters added (8 total banks supported)
 aliases: [API, endpoints, REST]
 ---
 
@@ -71,7 +71,7 @@ SORT path ASC
 > - `FOOD:GROCERIES`, `TRANSPORT:GAS`, `UTILITIES:ELECTRICITY`
 
 > [!info] Bank Adapters
-> Supported banks for import: Belfius, Revolut, KBC, SABB, Wise, Vision (internal format), Custom (configurable)
+> Supported banks for import: Belfius, Revolut, ING, KBC, BNP Paribas Fortis, SABB, Wise, Vision (internal format), Custom (configurable)
 
 ## Rate Limiting
 

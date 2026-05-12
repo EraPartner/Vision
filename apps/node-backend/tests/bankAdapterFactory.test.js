@@ -42,11 +42,17 @@ describe('BankAdapterFactory', () => {
     expect(typeof parser).toBe('function');
   });
 
+  it('creates bnp adapter', async () => {
+    const parser = createAdapter('bnp');
+    expect(typeof parser).toBe('function');
+  });
+
   it('is case-insensitive', async () => {
     expect(() => createAdapter('BELFIUS')).not.toThrow();
     expect(() => createAdapter('Revolut')).not.toThrow();
     expect(() => createAdapter('KBC')).not.toThrow();
     expect(() => createAdapter('ING')).not.toThrow();
+    expect(() => createAdapter('BNP')).not.toThrow();
   });
 
   it('throws for unsupported bank', async () => {
@@ -131,6 +137,52 @@ describe('BankAdapterFactory', () => {
     });
   });
 
+  describe('BNP adapter', () => {
+    const BNP_HEADER = 'Volgnummer;Uitvoeringsdatum;Valutadatum;Bedrag;Valuta rekening;Rekeningnummer;Type verrichting;Tegenpartij;Naam van de tegenpartij;Mededeling;Details;Status;Reden van weigering';
+
+    it('parses BNP CSV with comma decimals', async () => {
+      const csv = [
+        BNP_HEADER,
+        '2024000001;15/01/2024;15/01/2024;-50,00;EUR;BE12345678901234;Aankoop met kaart;BE98765432109876;Supermarkt AH;Boodschappen;Detail line;Uitgevoerd;',
+        '2024000002;16/01/2024;16/01/2024;2000,00;EUR;BE12345678901234;Overschrijving;;;Salaris januari;;Uitgevoerd;',
+      ].join('\n');
+      tmpPath = writeTempCSV(csv);
+      const parser = createAdapter('bnp');
+      const txns = await parser(tmpPath);
+      expect(txns).toHaveLength(2);
+      expect(txns[0].amount).toBe(-50);
+      expect(txns[0].recipient).toBe('SUPERMARKT AH');
+      expect(txns[0].memo).toBe('AANKOOP MET KAART');
+      expect(txns[0].currency).toBe('EUR');
+      expect(txns[0].recipientAccount).toBe('BE98765432109876');
+      expect(txns[0].bankAccount).toBe('BE12345678901234');
+      expect(txns[1].amount).toBe(2000);
+      expect(txns[1].recipientAccount).toBeNull();
+    });
+
+    it('parses BNP CSV with dot decimals', async () => {
+      const csv = [
+        BNP_HEADER,
+        '2024000003;17/01/2024;17/01/2024;-12.34;EUR;BE12345678901234;Aankoop met kaart;BE98765432109876;Bakkerij;;;Uitgevoerd;',
+      ].join('\n');
+      tmpPath = writeTempCSV(csv);
+      const parser = createAdapter('bnp');
+      const txns = await parser(tmpPath);
+      expect(txns).toHaveLength(1);
+      expect(txns[0].amount).toBeCloseTo(-12.34, 2);
+      expect(txns[0].recipient).toBe('BAKKERIJ');
+    });
+
+    it('detects BNP header correctly', () => {
+      expect(detectBank(BNP_HEADER + '\n')).toBe('bnp');
+    });
+
+    it('does not detect BNP for ING header', () => {
+      const sample = 'Rekeningnummer;Naam van de rekening;Rekening tegenpartij;Omzetnummer;Boekingsdatum;Valutadatum;Bedrag;Munteenheid;Omschrijving;Detail van de omzet;Bericht\n';
+      expect(detectBank(sample)).not.toBe('bnp');
+    });
+  });
+
   describe('getSupportedBanks', () => {
     it('returns supported banks', async () => {
       const banks = getSupportedBanks();
@@ -138,6 +190,7 @@ describe('BankAdapterFactory', () => {
       expect(banks).toContain('revolut');
       expect(banks).toContain('kbc');
       expect(banks).toContain('ing');
+      expect(banks).toContain('bnp');
     });
   });
 });

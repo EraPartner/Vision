@@ -3,10 +3,10 @@ title: Integration - Bank Adapters
 type: integration
 description: Bank API integrations for CSV imports
 date: 2026-04-25
-updated: 2026-04-25
-tags: [integration, bank, csv, import]
+updated: 2026-05-12
+tags: [integration, bank, csv, import, ing, bnp]
 status: active
-related_code: [[apps/node-backend/src/services/bankAdapters.js]]
+related_code: [[apps/node-backend/src/services/importPipeline/adapters/index.js]]
 ---
 
 # Integration: Bank Adapters
@@ -50,6 +50,14 @@ Each bank adapter:
 - **Date Format**: DD/MM/YYYY
 - **Separator**: ;
 - **Features**: Belgian structured communications (OCR)
+
+### BNP Paribas Fortis
+- **Fields**: sequence_number, execution_date, amount, transaction_type, counterparty_iban, counterparty_name, memo, details, status
+- **Date Format**: DD/MM/YYYY
+- **Separator**: ;
+- **Columns**: Volgnummer, Uitvoeringsdatum, Valutadatum, Bedrag, Valuta rekening, Rekeningnummer, Type verrichting, Tegenpartij, Naam van de tegenpartij, Mededeling, Details, Status, Reden van weigering
+- **Detection**: Header contains `Volgnummer` + `Uitvoeringsdatum` + `Valuta rekening`
+- **Features**: Dutch-language export; supports comma and dot decimal formats (via `parseAmountField`); counterparty IBAN parsing
 
 ### SABB
 - **Fields**: transaction_date, posting_date, description, amount

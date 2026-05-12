@@ -657,4 +657,4 @@ Vision is a comprehensive **financial transaction management application** suppo
 > - `FOOD:GROCERIES`, `TRANSPORT:GAS`, `UTILITIES:ELECTRICITY`
 
 > [!info] Bank Adapters
-> Supported banks for import: Belfius, Revolut, KBC, SABB, Wise, Vision (internal format), Custom (configurable)
+> Supported banks for import: Belfius, Revolut, ING, KBC, BNP Paribas Fortis, SABB, Wise, Vision (internal format), Custom (configurable)

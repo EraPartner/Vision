@@ -5,7 +5,7 @@ status: active
 date: 2026-04-24
 updated: 2026-05-12
 last_modified: 2026-05-12
-tags: [feature, import, export, csv, json, deduplication, phase-5a, attachments, phase-c, phase-e, phase-1, phase-12, phase-13, performance, concurrency, import-pipeline, component-split, error-handling, recipient-clusters, multi-select, export-filters, adr-046, category-review, bigserial-fix, staging-rows]
+tags: [feature, import, export, csv, json, deduplication, phase-5a, attachments, phase-c, phase-e, phase-1, phase-12, phase-13, performance, concurrency, import-pipeline, component-split, error-handling, recipient-clusters, multi-select, export-filters, adr-046, category-review, bigserial-fix, staging-rows, ing, bnp]
 aliases: [csv-import, bank-import, bank-statement, deduplication, data-import, streaming-import]
 description: Import transactions from bank CSV files with automatic deduplication, fuzzy/pattern recipient matching, per-row category review (ADR-046), and May 2026 BIGSERIAL fix for staging row ID validation.
 related_code: ["apps/node-backend/src/services/importPipeline/index.js", "apps/node-backend/src/services/importPipeline/stage.js", "apps/node-backend/src/services/importPipeline/validate.js", "apps/node-backend/src/services/importPipeline/match.js", "apps/node-backend/src/services/importPipeline/commit.js", "apps/node-backend/src/services/dataImportService.js", "apps/node-backend/src/services/deduplication.js", "apps/node-backend/src/services/textNormalization.js", "apps/node-backend/src/routes/importRoutes.js", "apps/node-backend/src/lib/sse.js", "apps/node-backend/src/repositories/importBatchRepository.js", "apps/frontend/src/features/imports/TransactionImportCard.tsx", "apps/frontend/src/features/imports/RecipientsImportCard.tsx", "apps/frontend/src/features/imports/CategoriesImportCard.tsx", "apps/frontend/src/features/imports/ExportCard.tsx", "apps/frontend/src/features/imports/SupportedBanksCard.tsx", "apps/frontend/src/features/imports/useAdapters.ts", "apps/frontend/src/pages/ImportPage.tsx", "apps/frontend/src/pages/ImportReviewPage.tsx"]
@@ -117,15 +117,20 @@ Analyzes active primary recipients and identifies clusters with:
 ## Supported Banks
 
 ### Pre-configured Bank Adapters
-| Bank | Format | Fields |
-|------|--------|--------|
-| Belfius | Belgian bank format | Date, amount, recipient, balance |
-| Revolut | Multi-currency | Type, state, amount, currency |
-| KBC | Belgian corporate | Counterparty, structured communication |
-| SABB | Belgian bank | Posting date, description |
-| Wise | Multi-currency transfers | Transfer ID, exchange rate |
-| Vision | Internal format | Standard transaction fields |
-| Custom | User-defined | Configurable column mapping |
+
+**9 Supported Banks (May 2026):**
+
+| Bank | Format | Columns | Detection |
+|------|--------|---------|-----------|
+| Belfius | Belgian format, semicolon-delimited | Date, amount, recipient, balance | `Rekeningnummer` + `Boekingsdatum` |
+| Revolut | Multi-currency, ISO 8601 dates | Completed date, amount, fee, currency | `Completed Date` + `Currency` |
+| ING | Dutch-language export, semicolon-delimited | Booking date, counterparty IBAN, description | `Omzetnummer` + `Detail van de omzet` |
+| KBC | Belgian corporate, semicolon-delimited | Counterparty, structured communication | `Rekeningnummer` + `Datum` |
+| BNP Paribas Fortis | Dutch-language export, semicolon-delimited | Sequence, execution date, transaction type, counterparty | `Volgnummer` + `Uitvoeringsdatum` + `Valuta rekening` |
+| SABB | Belgian bank format, semicolon-delimited | Posting date, description, amount | `Rekeningnummer` + `Datum` |
+| Wise | Multi-currency transfers, ISO 8601 | Finished date, exchange rate, fee | `Finished On` + `Currency` |
+| Vision | Internal format | Standard transaction fields | Explicit selection |
+| Custom | User-defined via mapper | Configurable column mapping | Manual column picker |
 
 ## Import Service Architecture (Phase C Refactor)
 

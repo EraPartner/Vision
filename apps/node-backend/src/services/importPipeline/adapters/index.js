@@ -9,13 +9,14 @@
 import belfius from './belfius.js';
 import revolut from './revolut.js';
 import ing from './ing.js';
+import bnp from './bnp.js';
 import kbc from './kbc.js';
 import vision from './vision.js';
 import sabb from './sabb.js';
 import wise from './wise.js';
 import generic from './generic.js';
 
-const ADAPTERS = [belfius, revolut, ing, kbc, vision, sabb, wise, generic];
+const ADAPTERS = [belfius, revolut, ing, bnp, kbc, vision, sabb, wise, generic];
 
 const REGISTRY = new Map(ADAPTERS.map((adapter) => [adapter.name, adapter]));
 

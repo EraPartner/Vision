@@ -85,6 +85,7 @@ end note
 
 note over Adapter
   Supported: Belfius, Revolut, KBC
+  ING, BNP Paribas Fortis
   SABB, Wise, Vision
   Custom: User-defined column mapping (no raw table)
   Manual: Deduplication via manual_raw_transactions
