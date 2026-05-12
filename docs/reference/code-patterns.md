@@ -4,8 +4,8 @@ type: reference
 status: active
 date: 2026-04-26
 updated: 2026-05-12
-tags: [reference, patterns, conventions, code-style, backend, frontend, phase-0, phase-1, phase-2, phase-3, phase-4, phase-5, phase-6, phase-9, phase-12, phase-14, phase-q, phase-c, phase-d, motion, liquid-glass, design-system, decimal, money, timezone, openapi, domain-split, import, import-pipeline, concurrency, batching, decimal-enforcement, zustand, slice-selection, typescript, error-handling, type-safety, csv, formula-injection, cwe-1236, csv-record-splitter, csv-parsing, multi-line-fields, date-utilities, immutability, aggregation-optimization, recipient-groups, portfolio-totals, query-parameter-filtering, buildquery, bug-hunt-2026-05-05, bug-hunt-2026-05-06, bug-hunt-2026-05-08, react-keys, stable-keys, mount-guard, memory-leak-prevention, parseLocaleNumber, number-parsing, locale-number, settings-backed-hook, portfolio-tax-classifications, audit-2026-05-11, belgian-tax, freeze-display-pattern, adr-059]
-description: Standard code patterns used throughout the Vision project — repositories, routes, hooks, API client, Express setup, error handling, type safety, filter builders, aggregation envelopes, aggregation refresh, trigger-maintained tables, golden fixtures, database fixtures, pure calculation services, atomic multi-step transactions, streaming CSV exports with formula injection prevention, import batch concurrency, motion consumers, surface shells, gradient icon tiles, money utilities, decimal utilities, shared date utilities with input validation and locale support, timezone boundary handling, TypeScript type annotations, type-safe error handling, domain-split API client, Zustand store with useShallow slice selection, immutable PATCH field sanitization, aggregation query optimization with Map-based single-pass accumulation, recipient group resolution via scalar subqueries (Phase Q), portfolio totals single-source-of-truth pattern (Phase 14), Belgian Tax freeze/display pattern for engine-drift protection (ADR-059, May 2026). May 2026 bug hunt adds React key generation pattern (use UUID instead of index), mount guard pattern (prevent setState after unmount), and documents parseLocaleNumber heuristic with single-comma thousands separator fix.
+tags: [reference, patterns, conventions, code-style, backend, frontend, phase-0, phase-1, phase-2, phase-3, phase-4, phase-5, phase-6, phase-9, phase-12, phase-14, phase-q, phase-c, phase-d, motion, liquid-glass, design-system, decimal, money, timezone, openapi, domain-split, import, import-pipeline, concurrency, batching, decimal-enforcement, zustand, slice-selection, typescript, error-handling, type-safety, csv, formula-injection, cwe-1236, csv-record-splitter, csv-parsing, multi-line-fields, date-utilities, immutability, aggregation-optimization, recipient-groups, portfolio-totals, query-parameter-filtering, buildquery, bug-hunt-2026-05-05, bug-hunt-2026-05-06, bug-hunt-2026-05-08, react-keys, stable-keys, mount-guard, memory-leak-prevention, parseLocaleNumber, number-parsing, locale-number, settings-backed-hook, portfolio-tax-classifications, audit-2026-05-11, belgian-tax, freeze-display-pattern, adr-059, dev-observability, devtools, api-inspector, observability]
+description: Standard code patterns used throughout the Vision project — repositories, routes, hooks, API client, Express setup, error handling, type safety, filter builders, aggregation envelopes, aggregation refresh, trigger-maintained tables, golden fixtures, database fixtures, pure calculation services, atomic multi-step transactions, streaming CSV exports with formula injection prevention, import batch concurrency, motion consumers, surface shells, gradient icon tiles, money utilities, decimal utilities, shared date utilities with input validation and locale support, timezone boundary handling, TypeScript type annotations, type-safe error handling, domain-split API client, Zustand store with useShallow slice selection, immutable PATCH field sanitization, aggregation query optimization with Map-based single-pass accumulation, recipient group resolution via scalar subqueries (Phase Q), portfolio totals single-source-of-truth pattern (Phase 14), Belgian Tax freeze/display pattern for engine-drift protection (ADR-059, May 2026), dev-only observability integration pattern (May 2026 devtools: module-level pub-sub event bus with zero-cost tree-shaking in production). May 2026 bug hunt adds React key generation pattern (use UUID instead of index), mount guard pattern (prevent setState after unmount), and documents parseLocaleNumber heuristic with single-comma thousands separator fix.
 aliases: [code patterns, coding patterns, conventions, patterns, how to write code, repository pattern, route pattern, hook pattern, error handling, type-safe error handling, type annotations, filter builder, golden fixture, aggregation envelope, calculation services, import concurrency, motion pattern, surface shell pattern, gradient icon pattern, money pattern, decimal pattern, timezone pattern, domain split, openapi, typescript types, csv export, safe csv, formula injection, cwe-1236, date utilities, immutability, aggregation optimization, Map pattern, recipient group filter, recipientGroupId, portfolio totals, single source of truth, parseLocaleNumber, number parsing, locale-aware number parsing, thousands separator, decimal separator, belgian-tax-pattern, freeze-display-pattern, as-filed-calculation, engine-drift-protection]
 ---
 
@@ -3192,6 +3192,106 @@ type BelgianTaxProfileSnapshotMeta = {
 - **Live editing flow** — While user is actively editing, `profileForYear` and `calculationForYear` work fine (no persistence yet).
 - **Profile mutations** — `updateSnapshot`, `markYearAsFiled` handle append-only audit logging internally.
 - **Components that don't display calculations** — e.g., `TaxYearSwitcher` only needs `viewedYear` state, not frozen calcs.
+
+---
+
+## Devtools Integration Pattern (Dev-Only Observability, May 2026)
+
+**Source:**
+- [[apps/frontend/src/lib/devtools/apiEventBus.ts|apiEventBus.ts]] — Event bus
+- [[apps/frontend/src/lib/devtools/apiRequestLog.ts|apiRequestLog.ts]] — Request log hook
+- [[apps/frontend/src/lib/devtools/queryMetrics.ts|queryMetrics.ts]] — Metrics hook
+- [[apps/frontend/src/lib/api/client.ts|client.ts]] — API client integration
+- [[apps/frontend/src/components/devtools/|devtools components]] — UI layer
+
+All API requests automatically participate in dev-only observability via the `apiRequest()` chokepoint, which:
+
+1. **Mints requestId** (UUID) before each attempt and sets `X-Request-Id` header
+2. **Emits ApiRequestEvent** with lifecycle phases:
+   - `phase: 'start'` — Request initiated
+   - `phase: 'success'` — Response received with status and durationMs
+   - `phase: 'error'` — Error occurred with errorCode and errorMessage
+3. **No changes to domain hooks** — All 38 hooks (`useTransactions`, `usePortfolio`, etc.) participate automatically
+
+### Pattern: Adding Observable Operations
+
+Ensure any new API operations flow through `apiRequest()` via the [[docs/reference/frontend-api-client|API client pattern]]:
+
+```typescript
+// Good: Uses apiRequest() chokepoint
+import { apiRequest } from '@/lib/api/client';
+
+export async function getTransactions(params) {
+  return apiRequest('/api/transactions', 'GET', null, { query: params });
+}
+
+// Then in a hook:
+const { data } = useQuery({
+  queryKey: ['transactions'],
+  queryFn: () => getTransactions({ limit: 50 })
+});
+// Observability: automatically tracked in inspector
+```
+
+### Pattern: Zero-Cost Dev-Only Activation
+
+DevtoolsRoot mounts only in dev builds:
+
+```tsx
+// In App.tsx
+{import.meta.env.DEV && (
+  <Suspense fallback={null}>
+    <DevtoolsRoot />
+  </Suspense>
+)}
+```
+
+- `import.meta.env.DEV` is **statically replaced by Vite** (evaluated at build time)
+- Production build: Entire devtools chunk tree-shaken (zero bytes added)
+- Verified: `grep -r "devtools" dist/` returns no matches
+
+### Pattern: Querying Request Log
+
+Use `useApiRequestLog()` in components to subscribe to request history:
+
+```typescript
+const requests = useApiRequestLog(); // Returns ApiRequest[] (max 200)
+
+// Filter in-flight requests
+const inFlight = requests.filter(r => r.phase === 'start');
+
+// Get error count
+const errorCount = requests.filter(r => r.phase === 'error').length;
+```
+
+### Pattern: Querying Metrics
+
+Use `useQueryMetrics()` to access aggregated statistics:
+
+```typescript
+const metrics = useQueryMetrics();
+// Returns:
+// {
+//   totalRequests: number;
+//   errorRate: number; // 0-100
+//   slowRequests: ApiRequest[];
+//   topEndpoints: { endpoint: string; count: number; p50: number; p95: number }[];
+//   cacheHitRatio: number; // 0-100
+//   mutationSuccessRate: number; // 0-100
+// }
+```
+
+### When to Use
+
+- **Development** — Dev server with inspector open for real-time request visibility
+- **Debugging** — Identify slow requests, error patterns, cache efficiency
+- **Performance profiling** — Compare p50/p95 latencies across endpoints
+- **Integration testing** — Verify request counts and cache behavior
+
+### When NOT to Use
+
+- **Production builds** — Inspector code is tree-shaken; no overhead
+- **User-facing observability** — Use [[docs/features/admin-observability|Admin Observability API]] instead (backend-provided system health)
 
 ---
 

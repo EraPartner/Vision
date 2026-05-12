@@ -3,9 +3,9 @@ title: Features Documentation Index
 type: features-index
 status: active
 date: 2026-04-24
-updated: 2026-05-11
-revised: 2026-05-11
-tags: [features, index, documentation, phase-5a, phase-6, phase-7, phase-10, phase-c, phase-d, phase-e, phase-f, phase-9, statistics-refactoring, cash-flow-forecast, cost-basis, database-maintenance, sankey-flow, rolling-averages, pdf-report, admin-observability, multi-method-forecast, frontend-visualization, accuracy-persistence, materialized-cache, ensemble-methods, nightly-job, bug-hunt-2026-05-05, bug-hunt-2026-05-06, phase-c-bug-fixes, accessibility, csv-parsing, memory-safety, debounce, useCallback, bulk-actions, belgian-tax-correctness, exemption-brackets, own-home-credits, taxable-income-sources, historical-tax-year-viewer]
+updated: 2026-05-12
+revised: 2026-05-12
+tags: [features, index, documentation, phase-5a, phase-6, phase-7, phase-10, phase-c, phase-d, phase-e, phase-f, phase-9, statistics-refactoring, cash-flow-forecast, cost-basis, database-maintenance, sankey-flow, rolling-averages, pdf-report, admin-observability, dev-observability, multi-method-forecast, frontend-visualization, accuracy-persistence, materialized-cache, ensemble-methods, nightly-job, bug-hunt-2026-05-05, bug-hunt-2026-05-06, phase-c-bug-fixes, accessibility, csv-parsing, memory-safety, debounce, useCallback, bulk-actions, belgian-tax-correctness, exemption-brackets, own-home-credits, taxable-income-sources, historical-tax-year-viewer]
 description: Feature documentation for all major capabilities of the Vision application. Phase 6 complete with cash flow forecast, cost basis methods. Phase 7 adds database maintenance UI, Sankey flow visualization, rolling average overlays, and PDF report export. Phase 10 adds multi-method statistical cash flow forecast with 7 methods. Phase C adds dashboard frontend visualization. Phase D adds persisted accuracy metrics and historical trend analysis. Phase E adds nightly cache materialization for performance. Phase F adds inverse-MSE ensemble method (8th method). Phase 9 completes aggregation shadow cutover. April 2026 extends Saved Charts with recipients, variants, time buckets, and date ranges; introduces Custom Charts tab in Statistics. May 2026 bulk transaction actions enable multi-row operations (delete, recategorize, reassign, activate/deactivate, export, tag); bug hunt completes comprehensive correctness hardening. May 11 2026: Belgian Tax correctness fixes — personal exemption now applied at lowest brackets via exemption-bracket table (CIR-92 art. 134 §3); regional own-home credits (Flemish woonbonus, Walloon chèque habitat); taxable income source filtering for graph visualization.
 aliases: [features, capabilities]
 ---
@@ -73,6 +73,7 @@ SORT title ASC
 ### Administration & Maintenance (Phase 7, Phase F, Phase 9)
 - [[docs/features/database-maintenance\|Database Maintenance]] - Table statistics monitoring and VACUUM operations
 - [[docs/features/admin-observability\|Admin Observability]] - System health dashboards; shadow divergence monitoring removed in Phase 9, feature flags removed in Phase 9
+- [[docs/features/dev-observability\|Dev-Only Observability]] - Real-time API request tracking, query metrics, and interactive inspector panel (dev builds only)
 
 ### AI & Natural Language
 - [[docs/features/ai-chat\|AI Chat]] - Local AI chat for natural-language financial queries with tool-calling (Ollama-powered)

@@ -11,7 +11,7 @@ import { ThemeProvider } from "@/contexts/ThemeContext";
 import { LanguageProvider, type Language } from "@/contexts/LanguageContext";
 import { configureCurrencyFormatDefaults, numberFormatToLocale } from "@/utils/currency";
 
-import { lazy, Suspense, useEffect } from "react";
+import { lazy, Suspense, useEffect, type ComponentType } from "react";
 import { Loader2 } from "lucide-react";
 import { ErrorBoundary } from "@/components/shared/ErrorBoundary";
 import { ScrollToTop } from "@/components/shared/ScrollToTop";
@@ -46,6 +46,15 @@ const ProviderHealthPage = lazy(() => import("./pages/admin/ProviderHealthPage")
 const EndpointLivenessPage = lazy(() => import("./pages/admin/EndpointLivenessPage"));
 const AIChatPage = lazy(() => import("./pages/AIChatPage"));
 const NotFound = lazy(() => import("./pages/NotFound"));
+
+// Dev-only devtools — tree-shaken from production builds
+const DevtoolsRoot: ComponentType | null = import.meta.env.DEV
+    ? lazy(() =>
+          import("@/components/devtools/DevtoolsRoot").then((m) => ({
+              default: m.DevtoolsRoot,
+          })),
+      )
+    : null;
 
 const queryClient = new QueryClient({
     defaultOptions: {
@@ -97,6 +106,11 @@ function LanguageBridge({ children }: { children: React.ReactNode }) {
 const App = () => {
     return (
         <QueryClientProvider client={queryClient}>
+            {DevtoolsRoot && (
+                <Suspense fallback={null}>
+                    <DevtoolsRoot />
+                </Suspense>
+            )}
             <SettingsPreloadProvider>
                 <ThemeProvider>
                     <SettingsProvider>

@@ -5,7 +5,7 @@ status: active
 date: 2026-04-27
 updated: 2026-05-12
 last_modified: 2026-05-12
-tags: [knowledge-base, index, project, overview, phase-8, phase-5a, phase-6, phase-7, phase-4, phase-3, phase-9, phase-13, aead, backup-v2, security-hardening, offline-resilience, export-filters, multi-select, bug-hunt-2026-04-29, bug-hunt-2026-05-05, startup-optimization, network-reachability, tailwind-v4, dependencies, css-architecture, mount-guard, react-keys, decimal-safety, date-safety, electron-hardening, belgian-tax, as-filed-snapshots, audit-log, comparison, trend-strip]
+tags: [knowledge-base, index, project, overview, phase-8, phase-5a, phase-6, phase-7, phase-4, phase-3, phase-9, phase-13, aead, backup-v2, security-hardening, offline-resilience, export-filters, multi-select, bug-hunt-2026-04-29, bug-hunt-2026-05-05, startup-optimization, network-reachability, tailwind-v4, dependencies, css-architecture, mount-guard, react-keys, decimal-safety, date-safety, electron-hardening, belgian-tax, as-filed-snapshots, audit-log, comparison, trend-strip, dev-observability, devtools, api-inspector]
 description: Main entry point to the Vision project documentation - financial transaction management application. May 12 2026 (ADR-059): Belgian Tax historical year extensions — frozen "as-filed" calculations, filed soft-lock, snapshot audit log, year-over-year comparison, multi-year trend strip, CSV export. Phase 9 complete with aggregation shadow cutover; all aggregations now served via `/api/aggregations/*`. Phase 8 complete with portfolio and tax PDF report export (6 + 7 sections). Phase 13 (2026-04-28): Multi-select export filters with CategoryMultiCombobox and BankAccountMultiCombobox components; pivot table drillthrough to filtered transaction lists. Bug-hunt (2026-04-29): Trivy exit-code hardening, release workflow concurrency + setup-bun action, docker-compose volume fix, graceful shutdown timer cleanup (3 intervals + debounce), import cleanup logging, watchlist dialog API client, install.sh interactive checksum gate. May 3 2026: Tailwind CSS v4 migration (3.4.19 → 4.2.4) with unified postcss plugin, sonner 2.0.7, recharts 3.8.1. May 3 2026: Offline-aware startup optimization — backend detects network unavailability early and skips 5-15s external data fetches, reducing readiness time ~15s when offline. **May 5 2026 Bug Hunt:** Comprehensive correctness hardening — frontend mount guards (usePlannedPayments), stable React keys (SplitTransactionDialog, TaxProfileDialog), queryKey fixes (usePortfolioPrefetch), UTC-safe date parsing (dateUtils), pagination stale-response guards (RecipientsPage), decimal arithmetic correctness, backend robustness (recipientPatternService, recurringDetectionService, belgianInflationService), Electron hardening (window/navigation/backup restrictions), and release workflow version sync (3-way check: git tag + root package.json + electron/package.json).
 aliases: [KB, docs, documentation, knowledge base, home]
 ---
@@ -157,6 +157,39 @@ WHERE date AND date >= date(today) - dur(7 days)
 SORT date DESC
 LIMIT 10
 ```
+
+### 2026-05-12 Dev-Only Observability Layer: Real-Time API Tracking & Inspector Panel
+
+**New feature (dev builds only):** Comprehensive observability layer with zero-cost operation in production. Provides real-time API request tracking, TanStack Query metrics, and interactive inspector panel accessible via `Cmd+Shift+A`.
+
+**Architecture:**
+- **Event bus** (`apiEventBus.ts`) — Module-level pub-sub with `ApiRequestEvent` lifecycle events (start, success, error)
+- **Request log** (`apiRequestLog.ts`) — Ring buffer (200-entry capacity) with `useApiRequestLog()` hook
+- **Query metrics** (`queryMetrics.ts`) — Aggregates requests + TanStack Query stats; exposes `useQueryMetrics()`
+- **Inspector hotkey** (`devtoolsHotkey.ts`) — Global `Cmd+Shift+A` / `Ctrl+Shift+A` keyboard shortcut
+- **UI components** — `DevtoolsRoot`, `ApiInspector`, `RequestList`, `RequestDetail`, `MetricsPanel`, `InspectorToggle`
+- **Integration** — `apiRequest()` chokepoint emits all events; all 38 domain hooks participate automatically
+
+**Dev-Only Activation:**
+- `import.meta.env.DEV` guard in `App.tsx` with `React.lazy()` + `Suspense`
+- Entire devtools chunk tree-shaken in production (verified: zero devtools references in dist/)
+- Zero-cost operation when inspector closed (no subscribers to event bus)
+
+**Features:**
+- Virtualized request list with filter input and status/duration columns
+- Detailed request pane showing endpoint, method, status, duration, error context
+- Metrics panel with stat cards (total requests, error rate, cache hit ratio, mutation success)
+- Top endpoints table with p50/p95 latencies
+- Slow requests (>1s) tracking
+- React Query DevTools integration (bottom-left)
+- In-flight request counter on toggle button with amber pulse animation
+
+**Documentation:**
+- [[docs/features/dev-observability|Dev-Only Observability Feature]] — Architecture, design decisions, troubleshooting
+- [[docs/components/devtools|Devtools Components]] — Component API reference
+- [[docs/reference/code-patterns#devtools-integration-pattern|Code Patterns — Devtools Integration]]
+
+See [[docs/lib/api/client.ts|API Client]], [[apps/frontend/src/App.tsx|App Root]]
 
 ### 2026-05-06 Phase C/D Bug Fixes — Accessibility, CSV Parsing, Memory Safety
 

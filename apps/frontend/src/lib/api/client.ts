@@ -18,6 +18,7 @@ import {
 
 import { env } from '@/lib/env';
 import logger from '@/lib/logger';
+import { apiEventBus } from '@/lib/devtools/apiEventBus';
 
 export const API_BASE_URL = env.VITE_API_URL || 'http://localhost:3002';
 
@@ -256,8 +257,10 @@ export async function apiRequest<T>(
     options: RequestInit = {},
     retries: number = MAX_RETRIES,
 ): Promise<T> {
+    const requestId = generateRequestId();
     const headers: HeadersInit = {
         'Content-Type': 'application/json',
+        'X-Request-Id': requestId,
         ...options.headers,
     };
 
@@ -272,6 +275,9 @@ export async function apiRequest<T>(
             await backoffDelay(attempt - 1);
         }
 
+        const startedAt = performance.now();
+        apiEventBus.emit({ id: requestId, method, endpoint, startedAt, attempt, phase: 'start' });
+
         try {
             const response = await rawFetch(url, { ...options, headers });
 
@@ -281,16 +287,41 @@ export async function apiRequest<T>(
             }
 
             if (!response.ok) {
-                throw await parseEnvelopeError(response, 'Request failed');
+                const apiErr = await parseEnvelopeError(response, 'Request failed');
+                const durationMs = performance.now() - startedAt;
+                apiEventBus.emit({
+                    id: requestId, method, endpoint, startedAt, attempt,
+                    phase: 'error', durationMs, status: response.status,
+                    errorCode: apiErr.code, errorMessage: apiErr.message,
+                });
+                logger.debug(`api:request ${method} ${endpoint}`, { requestId, durationMs, status: response.status, error: apiErr.code });
+                throw apiErr;
             }
 
             if (response.status === 204) {
+                const durationMs = performance.now() - startedAt;
+                apiEventBus.emit({ id: requestId, method, endpoint, startedAt, attempt, phase: 'success', durationMs, status: 204 });
+                logger.debug(`api:request ${method} ${endpoint}`, { requestId, durationMs, status: 204 });
                 return undefined as unknown as T;
             }
 
             const body = await response.json();
-            return unwrapEnvelope<T>(body);
+            const result = unwrapEnvelope<T>(body);
+            const durationMs = performance.now() - startedAt;
+            apiEventBus.emit({ id: requestId, method, endpoint, startedAt, attempt, phase: 'success', durationMs, status: response.status });
+            logger.debug(`api:request ${method} ${endpoint}`, { requestId, durationMs, status: response.status });
+            return result;
         } catch (err: unknown) {
+            if (!(err instanceof ApiClientError)) {
+                // Network/timeout errors not yet emitted
+                const durationMs = performance.now() - startedAt;
+                apiEventBus.emit({
+                    id: requestId, method, endpoint, startedAt, attempt,
+                    phase: 'error', durationMs,
+                    errorMessage: err instanceof Error ? err.message : 'Network error',
+                });
+                logger.debug(`api:request ${method} ${endpoint}`, { requestId, durationMs, error: String(err) });
+            }
             lastError = err as Error;
             const nonRetryable =
                 err instanceof ApiClientError &&
