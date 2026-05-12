@@ -19,9 +19,10 @@
  *   minus all DROP TABLE ... across all upgrade() blocks
  *   minus Alembic internals (alembic_version)
  *
- * Last verified against: 0021_split_audit
+ * Last verified against: 0035_add_recipient_aggregations
  */
 export const BACKUP_COVERED_TABLES = Object.freeze([
+  'agg_recipient_totals',
   'agg_split_outstanding',
   'ai_conversations',
   'ai_messages',
