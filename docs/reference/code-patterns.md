@@ -3,8 +3,8 @@ title: Code Patterns Reference
 type: reference
 status: active
 date: 2026-04-26
-updated: 2026-05-12
-tags: [reference, patterns, conventions, code-style, backend, frontend, phase-0, phase-1, phase-2, phase-3, phase-4, phase-5, phase-6, phase-9, phase-12, phase-14, phase-q, phase-c, phase-d, motion, liquid-glass, design-system, decimal, money, timezone, openapi, domain-split, import, import-pipeline, concurrency, batching, decimal-enforcement, zustand, slice-selection, typescript, error-handling, type-safety, csv, formula-injection, cwe-1236, csv-record-splitter, csv-parsing, multi-line-fields, date-utilities, immutability, aggregation-optimization, recipient-groups, portfolio-totals, query-parameter-filtering, buildquery, bug-hunt-2026-05-05, bug-hunt-2026-05-06, bug-hunt-2026-05-08, react-keys, stable-keys, mount-guard, memory-leak-prevention, parseLocaleNumber, number-parsing, locale-number, settings-backed-hook, portfolio-tax-classifications, audit-2026-05-11, belgian-tax, freeze-display-pattern, adr-059, dev-observability, devtools, api-inspector, observability]
+updated: 2026-05-13
+tags: [reference, patterns, conventions, code-style, backend, frontend, phase-0, phase-1, phase-2, phase-3, phase-4, phase-5, phase-6, phase-9, phase-12, phase-14, phase-q, phase-c, phase-d, motion, liquid-glass, design-system, decimal, money, timezone, openapi, domain-split, import, import-pipeline, concurrency, batching, decimal-enforcement, zustand, slice-selection, typescript, error-handling, type-safety, csv, formula-injection, cwe-1236, csv-record-splitter, csv-parsing, multi-line-fields, date-utilities, immutability, aggregation-optimization, recipient-groups, portfolio-totals, query-parameter-filtering, buildquery, bug-hunt-2026-05-05, bug-hunt-2026-05-06, bug-hunt-2026-05-08, react-keys, stable-keys, mount-guard, memory-leak-prevention, parseLocaleNumber, number-parsing, locale-number, settings-backed-hook, portfolio-tax-classifications, audit-2026-05-11, belgian-tax, freeze-display-pattern, adr-059, dev-observability, devtools, api-inspector, observability, postgres-locking, for-update-group-by]
 description: Standard code patterns used throughout the Vision project — repositories, routes, hooks, API client, Express setup, error handling, type safety, filter builders, aggregation envelopes, aggregation refresh, trigger-maintained tables, golden fixtures, database fixtures, pure calculation services, atomic multi-step transactions, streaming CSV exports with formula injection prevention, import batch concurrency, motion consumers, surface shells, gradient icon tiles, money utilities, decimal utilities, shared date utilities with input validation and locale support, timezone boundary handling, TypeScript type annotations, type-safe error handling, domain-split API client, Zustand store with useShallow slice selection, immutable PATCH field sanitization, aggregation query optimization with Map-based single-pass accumulation, recipient group resolution via scalar subqueries (Phase Q), portfolio totals single-source-of-truth pattern (Phase 14), Belgian Tax freeze/display pattern for engine-drift protection (ADR-059, May 2026), dev-only observability integration pattern (May 2026 devtools: module-level pub-sub event bus with zero-cost tree-shaking in production). May 2026 bug hunt adds React key generation pattern (use UUID instead of index), mount guard pattern (prevent setState after unmount), and documents parseLocaleNumber heuristic with single-comma thousands separator fix.
 aliases: [code patterns, coding patterns, conventions, patterns, how to write code, repository pattern, route pattern, hook pattern, error handling, type-safe error handling, type annotations, filter builder, golden fixture, aggregation envelope, calculation services, import concurrency, motion pattern, surface shell pattern, gradient icon pattern, money pattern, decimal pattern, timezone pattern, domain split, openapi, typescript types, csv export, safe csv, formula injection, cwe-1236, date utilities, immutability, aggregation optimization, Map pattern, recipient group filter, recipientGroupId, portfolio totals, single source of truth, parseLocaleNumber, number parsing, locale-aware number parsing, thousands separator, decimal separator, belgian-tax-pattern, freeze-display-pattern, as-filed-calculation, engine-drift-protection]
 ---
@@ -2328,6 +2328,41 @@ export async function complexMultiStepOperation(primaryId, aliasIds) {
 - Simple single-statement operations (repositories handle implicit tx)
 - Pure calculation services (no DB access)
 - Streaming or large-batch operations (explicit chunking may be more efficient)
+
+### PostgreSQL Limitation: FOR UPDATE with GROUP BY
+
+**Problem:** PostgreSQL does not allow combining `SELECT ... GROUP BY ... FOR UPDATE OF table_name` in a single query. Attempting this raises: `ERROR: FOR UPDATE is not allowed with GROUP BY`.
+
+**Solution:** Split into two separate queries within the same transaction:
+
+```javascript
+// WRONG: PostgreSQL rejects this
+const result = await client.query(`
+  SELECT id FROM transactions WHERE id = $1
+  GROUP BY id, amount
+  FOR UPDATE OF t
+`, [transactionId]);
+
+// CORRECT: Separate the lock from the aggregate
+const lockResult = await client.query(
+  `SELECT id FROM transactions WHERE id = $1 FOR UPDATE`,
+  [transactionId]
+);
+if (lockResult.rows.length === 0) throw new NotFoundError('Transaction not found');
+
+const aggregateResult = await client.query(`
+  SELECT ABS(t.amount) AS transaction_total,
+         COALESCE(SUM(ts.amount), 0) AS current_split_total
+    FROM transactions t
+    LEFT JOIN transaction_splits ts ON ts.transaction_id = t.id
+   WHERE t.id = $1
+   GROUP BY t.id, t.amount
+`, [transactionId]);
+```
+
+Both queries execute within the same transaction, so atomicity is preserved: the lock acquired on the first query holds until `COMMIT`.
+
+**Used in:** [[apps/node-backend/src/repositories/splitRepository.js]] for `createSplitAtomic()` and `createSplitsBatchAtomic()` — lock the transaction row, then aggregate its splits in a separate query to validate allocation before insert.
 
 ---
 
