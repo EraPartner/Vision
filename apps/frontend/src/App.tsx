@@ -47,8 +47,11 @@ const EndpointLivenessPage = lazy(() => import("./pages/admin/EndpointLivenessPa
 const AIChatPage = lazy(() => import("./pages/AIChatPage"));
 const NotFound = lazy(() => import("./pages/NotFound"));
 
-// Dev-only devtools — tree-shaken from production builds
-const DevtoolsRoot: ComponentType | null = import.meta.env.DEV
+// Dev-only devtools — tree-shaken from production builds.
+// Enabled by: local Vite dev server (import.meta.env.DEV) OR Docker dev build
+// (VITE_DEVTOOLS=true injected via docker-compose.dev.yml build arg).
+const isDevtoolsEnabled = import.meta.env.DEV || import.meta.env.VITE_DEVTOOLS === 'true';
+const DevtoolsRoot: ComponentType | null = isDevtoolsEnabled
     ? lazy(() =>
           import("@/components/devtools/DevtoolsRoot").then((m) => ({
               default: m.DevtoolsRoot,

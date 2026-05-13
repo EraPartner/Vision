@@ -23,6 +23,11 @@ RUN bun install --frozen-lockfile
 # Copy frontend source and build
 COPY apps/frontend/ ./apps/frontend/
 RUN node scripts/generate-locales.js
+# VITE_DEVTOOLS=true enables the dev-only observability panel in the built bundle.
+# Set via docker-compose.dev.yml build args; omitted in production so the panel
+# is tree-shaken by Vite's dead-code elimination.
+ARG VITE_DEVTOOLS=false
+ENV VITE_DEVTOOLS=${VITE_DEVTOOLS}
 RUN bun run --filter vision-frontend build
 
 # ============================================================
