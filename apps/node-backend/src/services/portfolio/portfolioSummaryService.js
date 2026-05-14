@@ -67,10 +67,23 @@ export async function getPortfolioSummary(targetCurrency = 'EUR') {
     txnsByInvestment.get(id).push(txn);
   }
 
-  const summaries = await Promise.all(
-    investmentsResult.rows.map((inv) =>
-      buildInvestmentSummary(inv, txnsByInvestment.get(Number(inv.id)) ?? [], target)
-    )
+  // Resolve the FX multiplier once per *distinct* investment currency rather
+  // than once per investment — buildInvestmentSummary then runs synchronously.
+  const distinctCurrencies = [
+    ...new Set(investmentsResult.rows.map((inv) => (inv.currency || 'EUR').toUpperCase())),
+  ];
+  const multiplierByCurrency = new Map();
+  await Promise.all(
+    distinctCurrencies.map(async (cur) => {
+      multiplierByCurrency.set(
+        cur,
+        cur === target ? 1 : await convertToCurrency(1, cur, target)
+      );
+    })
+  );
+
+  const summaries = investmentsResult.rows.map((inv) =>
+    buildInvestmentSummary(inv, txnsByInvestment.get(Number(inv.id)) ?? [], target, multiplierByCurrency)
   );
 
   const totals = aggregateTotals(summaries);
@@ -90,8 +103,9 @@ export async function getPortfolioSummary(targetCurrency = 'EUR') {
  * @param {object} inv  raw investment row
  * @param {Array}  txns transaction rows for this investment
  * @param {string} targetCurrency
+ * @param {Map<string, number>} multiplierByCurrency  FX multiplier per investment currency
  */
-async function buildInvestmentSummary(inv, txns, targetCurrency) {
+function buildInvestmentSummary(inv, txns, targetCurrency, multiplierByCurrency) {
   const isUnitBased = UNIT_BASED_CLASSES.has(inv.asset_class);
   const isFixedIncome = FIXED_INCOME_CLASSES.has(inv.asset_class);
   const isRealEstate = inv.asset_class === REAL_ESTATE_CLASS;
@@ -184,10 +198,8 @@ async function buildInvestmentSummary(inv, txns, targetCurrency) {
   const gainLossPercent = totalBuyCost > 0 ? (gainLoss / totalBuyCost) * 100 : 0;
 
   const invCurrency = (inv.currency || 'EUR').toUpperCase();
-  // Resolve multiplier with a single rate lookup; multiply synchronously for all 17 fields.
-  const multiplier = invCurrency === targetCurrency
-    ? 1
-    : await convertToCurrency(1, invCurrency, targetCurrency);
+  // Multiplier was resolved once per distinct currency by the caller.
+  const multiplier = multiplierByCurrency.get(invCurrency) ?? 1;
   const conv = (v) => v * multiplier;
 
   const convertedCurrentValue = conv(currentValue);
