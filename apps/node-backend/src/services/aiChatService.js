@@ -224,6 +224,10 @@ async function runChatTurnInner({
   let iterations = 0;
   let lastUsage = { evalCount: null, promptEvalCount: null, totalDurationMs: null };
 
+  // Request-scoped cache shared across every tool call in this chat turn so
+  // tools that fetch the same heavy investment/transaction sets reuse one query.
+  const toolCache = new Map();
+
   while (iterations < MAX_TOOL_ITERATIONS) {
     iterations += 1;
     const iterStart = Date.now();
@@ -318,7 +322,7 @@ async function runChatTurnInner({
       }
 
       await onEvent?.({ type: 'tool_call', data: { name, args } });
-      const result = await dispatchTool(name, args, { conversationId: conversation.id });
+      const result = await dispatchTool(name, args, { conversationId: conversation.id, cache: toolCache });
       const toolRow = await aiChatRepository.appendMessage({
         conversationId: conversation.id,
         role: 'tool',

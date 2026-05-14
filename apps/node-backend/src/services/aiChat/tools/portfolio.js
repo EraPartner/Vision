@@ -5,10 +5,9 @@
  * portfolioTransactionRepository. No new SQL paths.
  */
 
-import { investmentRepository } from '../../../repositories/investmentRepository.js';
-import { portfolioTransactionRepository } from '../../../repositories/portfolioTransactionRepository.js';
 import settings from '../../../config/config.js';
 import { toDecimal, roundToCents } from '../../../lib/money.js';
+import { loadActiveInvestments, loadTransactionsForInvestments } from './_portfolioFetch.js';
 import {
   parseEnum,
   parsePositiveInt,
@@ -52,23 +51,13 @@ export const getPortfolioHoldings = {
       },
     },
   },
-  async run(args, { maxRows = settings.aiChat.maxToolRows } = {}) {
+  async run(args, { maxRows = settings.aiChat.maxToolRows, cache } = {}) {
     const assetClass = parseEnum(args.assetClass, 'assetClass', ASSET_CLASSES, { defaultValue: null });
 
-    const investments = await investmentRepository.getAll({
-      limit: 10_000,
-      offset: 0,
-      active: true,
-      assetClass,
-    });
+    const investments = await loadActiveInvestments(cache, assetClass);
 
     const ids = investments.map((inv) => inv.id);
-    const txns = ids.length > 0
-      ? await portfolioTransactionRepository.getAllByInvestmentIds({
-        investmentIds: ids,
-        perInvestmentLimit: 5000,
-      })
-      : [];
+    const txns = await loadTransactionsForInvestments(cache, assetClass, ids);
 
     const txnsByInvestment = new Map();
     for (const t of txns) {
@@ -133,26 +122,16 @@ export const getReturnsForRange = {
     },
     required: ['from', 'to'],
   },
-  async run(args, { maxRows = settings.aiChat.maxToolRows } = {}) {
+  async run(args, { maxRows = settings.aiChat.maxToolRows, cache } = {}) {
     const from = requireDate(args.from, 'from');
     const to = requireDate(args.to, 'to');
     assertDateOrder(from, to);
     const assetClass = parseEnum(args.assetClass, 'assetClass', ASSET_CLASSES, { defaultValue: null });
 
-    const investments = await investmentRepository.getAll({
-      limit: 10_000,
-      offset: 0,
-      active: true,
-      assetClass,
-    });
+    const investments = await loadActiveInvestments(cache, assetClass);
 
     const ids = investments.map((inv) => inv.id);
-    const txns = ids.length > 0
-      ? await portfolioTransactionRepository.getAllByInvestmentIds({
-        investmentIds: ids,
-        perInvestmentLimit: 5000,
-      })
-      : [];
+    const txns = await loadTransactionsForInvestments(cache, assetClass, ids);
 
     const fromMs = new Date(from).getTime();
     const toMs = new Date(to).getTime();
@@ -237,25 +216,15 @@ export const getDividendIncome = {
     },
     required: ['from', 'to'],
   },
-  async run(args, { maxRows = settings.aiChat.maxToolRows } = {}) {
+  async run(args, { maxRows = settings.aiChat.maxToolRows, cache } = {}) {
     const from = requireDate(args.from, 'from');
     const to = requireDate(args.to, 'to');
     assertDateOrder(from, to);
 
-    const investments = await investmentRepository.getAll({
-      limit: 10_000,
-      offset: 0,
-      active: true,
-    });
+    const investments = await loadActiveInvestments(cache);
 
     const ids = investments.map((inv) => inv.id);
-    const txns = ids.length > 0
-      ? await portfolioTransactionRepository.getAllByInvestmentIds({
-        investmentIds: ids,
-        type: 'dividend',
-        perInvestmentLimit: 5000,
-      })
-      : [];
+    const txns = await loadTransactionsForInvestments(cache, null, ids, { type: 'dividend' });
 
     const fromMs = new Date(from).getTime();
     const toMs = new Date(to).getTime();
@@ -320,20 +289,11 @@ export const getAssetAllocation = {
     type: 'object',
     properties: {},
   },
-  async run(_args, { maxRows = settings.aiChat.maxToolRows } = {}) {
-    const investments = await investmentRepository.getAll({
-      limit: 10_000,
-      offset: 0,
-      active: true,
-    });
+  async run(_args, { maxRows = settings.aiChat.maxToolRows, cache } = {}) {
+    const investments = await loadActiveInvestments(cache);
 
     const ids = investments.map((inv) => inv.id);
-    const txns = ids.length > 0
-      ? await portfolioTransactionRepository.getAllByInvestmentIds({
-        investmentIds: ids,
-        perInvestmentLimit: 5000,
-      })
-      : [];
+    const txns = await loadTransactionsForInvestments(cache, null, ids);
 
     const txnsByInvestment = new Map();
     for (const t of txns) {
@@ -399,23 +359,13 @@ export const getUnrealizedGains = {
       assetClass: { type: 'string', enum: ASSET_CLASSES, description: 'Optional filter by asset class.' },
     },
   },
-  async run(args, { maxRows = settings.aiChat.maxToolRows } = {}) {
+  async run(args, { maxRows = settings.aiChat.maxToolRows, cache } = {}) {
     const assetClass = parseEnum(args.assetClass, 'assetClass', ASSET_CLASSES, { defaultValue: null });
 
-    const investments = await investmentRepository.getAll({
-      limit: 10_000,
-      offset: 0,
-      active: true,
-      assetClass,
-    });
+    const investments = await loadActiveInvestments(cache, assetClass);
 
     const ids = investments.map((inv) => inv.id);
-    const txns = ids.length > 0
-      ? await portfolioTransactionRepository.getAllByInvestmentIds({
-        investmentIds: ids,
-        perInvestmentLimit: 5000,
-      })
-      : [];
+    const txns = await loadTransactionsForInvestments(cache, assetClass, ids);
 
     const txnsByInvestment = new Map();
     for (const t of txns) {
@@ -490,27 +440,17 @@ export const getBestWorstPerformers = {
     },
     required: ['from', 'to'],
   },
-  async run(args, { maxRows = settings.aiChat.maxToolRows } = {}) {
+  async run(args, { maxRows = settings.aiChat.maxToolRows, cache } = {}) {
     const from = requireDate(args.from, 'from');
     const to = requireDate(args.to, 'to');
     assertDateOrder(from, to);
     const topN = parsePositiveInt(args.topN, 'topN', { min: 1, max: 20, defaultValue: 5 });
     const assetClass = parseEnum(args.assetClass, 'assetClass', ASSET_CLASSES, { defaultValue: null });
 
-    const investments = await investmentRepository.getAll({
-      limit: 10_000,
-      offset: 0,
-      active: true,
-      assetClass,
-    });
+    const investments = await loadActiveInvestments(cache, assetClass);
 
     const ids = investments.map((inv) => inv.id);
-    const txns = ids.length > 0
-      ? await portfolioTransactionRepository.getAllByInvestmentIds({
-        investmentIds: ids,
-        perInvestmentLimit: 5000,
-      })
-      : [];
+    const txns = await loadTransactionsForInvestments(cache, assetClass, ids);
 
     const fromMs = new Date(from).getTime();
     const toMs = new Date(to).getTime();
