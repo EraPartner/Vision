@@ -9,6 +9,11 @@ import { computeMetrics, computeHeatmap } from '../../services/portfolioPerforma
 import { getPortfolioSummary } from '../../services/portfolio/portfolioSummaryService.js';
 import { downsampleLTTB } from '../../utils/downsample.js';
 import { toDecimal, toNumber } from '../../lib/money.js';
+import {
+  portfolioSummaryCache,
+  PORTFOLIO_SUMMARY_CACHE_TTL_MS,
+  resolveCacheWithInflight,
+} from './_cache.js';
 
 const DOWNSAMPLE_THRESHOLD = 400;
 
@@ -71,7 +76,15 @@ export async function buildPortfolioPerformancePayload(targetCurrency, startDate
   // performance headline cards always reconcile with the dashboard. The
   // historical-only fields (annualizedReturn, realReturnPct, cumulativeInflation)
   // still come from the snapshot timeseries since they need a date span.
-  const liveSummary = await getPortfolioSummary(targetCurrency);
+  //
+  // Routed through the shared portfolioSummaryCache (the same one the
+  // /portfolio-summary route uses) so multiple performance period variants
+  // and the dashboard all reuse one computation instead of recomputing the
+  // full summary per request.
+  const liveSummary = await resolveCacheWithInflight(portfolioSummaryCache, targetCurrency, {
+    ttlMs: PORTFOLIO_SUMMARY_CACHE_TTL_MS,
+    loader: () => getPortfolioSummary(targetCurrency),
+  });
   const t = liveSummary.totals;
   const metrics = snapshotMetrics
     ? {
