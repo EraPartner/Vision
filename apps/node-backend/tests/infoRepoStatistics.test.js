@@ -41,7 +41,6 @@ describe('statisticsRepository.getStatistics', () => {
     mvAvailable.mockResolvedValueOnce(false);
     query
       .mockResolvedValueOnce({ rows: [{ count: '10' }] })
-      .mockResolvedValueOnce({ rows: [{ amount: '100', currency: 'EUR', date: '2025-04-01' }] })
       .mockResolvedValueOnce({
         rows: [
           { category_id: 1, name: 'Food', amount: '-50', currency: 'EUR', date: '2025-04-01' },
@@ -49,17 +48,16 @@ describe('statisticsRepository.getStatistics', () => {
           { category_id: -1, name: 'UNCATEGORISED', amount: '-10', currency: 'EUR', date: '2025-04-03' },
         ],
       });
-    convertRowsToEur
-      .mockResolvedValueOnce([{ amount_eur: 100 }])
-      .mockResolvedValueOnce([
-        { category_id: 1, name: 'Food', amount_eur: -50 },
-        { category_id: 1, name: 'Food', amount_eur: -30 },
-        { category_id: -1, name: 'UNCATEGORISED', amount_eur: -10 },
-      ]);
+    convertRowsToEur.mockResolvedValueOnce([
+      { category_id: 1, name: 'Food', amount_eur: -50 },
+      { category_id: 1, name: 'Food', amount_eur: -30 },
+      { category_id: -1, name: 'UNCATEGORISED', amount_eur: -10 },
+    ]);
 
     const r = await statisticsRepository.getStatistics();
     expect(r.total_transactions).toBe(10);
-    expect(r.total_amount).toBe(100);
+    // total_amount is derived from the same converted category rows: -50 + -30 + -10
+    expect(r.total_amount).toBe(-90);
     const food = r.categories.find((c) => c.id === 1);
     expect(food).toMatchObject({ id: 1, name: 'Food', count: 2, total: -80 });
     const uncat = r.categories.find((c) => c.id === null);

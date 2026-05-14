@@ -35,19 +35,10 @@ export const statisticsRepository = {
     }
 
     // ── Fallback: live query ──
+    // The category query below already selects every active transaction's
+    // amount/currency/date, so the grand total is derived from the same
+    // converted rows instead of issuing a second identical full-table scan.
     const countResult = await query('SELECT count(*) FROM transactions WHERE is_active = true');
-
-    const txResult = await query(`
-      SELECT t.amount, t.currency, t.date
-      FROM transactions t
-      WHERE t.is_active = true
-    `);
-
-    const txConverted = await convertRowsToEur(
-      mapRowsForAmountConversion(txResult.rows, 'amount', false),
-      targetCurrency
-    );
-    const totalEur = txConverted.reduce((s, r) => s + r.amount_eur, 0);
 
     const categoryAmountResult = await query(`
       SELECT COALESCE(c.id, -1) AS category_id,
@@ -65,6 +56,8 @@ export const statisticsRepository = {
       mapRowsForAmountConversion(categoryAmountResult.rows, 'amount', false),
       targetCurrency
     );
+
+    const totalEur = catConverted.reduce((s, r) => s + r.amount_eur, 0);
 
     const catMap = {};
     for (const row of catConverted) {
