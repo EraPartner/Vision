@@ -1,5 +1,6 @@
+import { useMemo } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { useSettings } from '@/contexts/SettingsContext';
+import { useAppSettings } from '@/contexts/AppSettingsContext';
 import { getAggregationRecipientPivot, type RecipientPivotItem } from '@/lib/api/aggregations';
 import type { SavedChart } from '@/lib/api/types';
 
@@ -33,8 +34,8 @@ function buildRecipientPeriodData(
 }
 
 export function useRecipientPivot(chart: SavedChart | null | undefined) {
-    const { settings } = useSettings();
-    const targetCurrency = settings?.currency ?? 'EUR';
+    const { appSettings } = useAppSettings();
+    const targetCurrency = appSettings.defaultCurrency || 'EUR';
 
     const enabled = !!(chart && chart.recipient_ids.length > 0);
 
@@ -58,12 +59,15 @@ export function useRecipientPivot(chart: SavedChart | null | undefined) {
         staleTime: 60_000,
     });
 
-    const rawPivot = query.data?.data?.recipientPivot ?? {};
-    const recipientData = buildRecipientPeriodData(rawPivot);
+    const rawPivot = query.data?.data?.recipientPivot;
+    const recipientIds = chart?.recipient_ids;
 
-    // Filter to only the recipient IDs selected in the chart
-    const selected = new Set(chart?.recipient_ids ?? []);
-    const filtered = recipientData.filter((r) => selected.has(r.recipientId));
+    const filtered = useMemo(() => {
+        const recipientData = buildRecipientPeriodData(rawPivot ?? {});
+        // Filter to only the recipient IDs selected in the chart
+        const selected = new Set(recipientIds ?? []);
+        return recipientData.filter((r) => selected.has(r.recipientId));
+    }, [rawPivot, recipientIds]);
 
     return { ...query, recipientData: filtered };
 }

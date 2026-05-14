@@ -60,6 +60,7 @@ export function useWidgetVisibility(pageKey: string, widgets: WidgetDefinition[]
         }
         return () => {
             listeners.delete(listener);
+            if (saveTimerRef.current) clearTimeout(saveTimerRef.current);
         };
     }, []);
     const pageVisibility = useMemo(() => visibility[pageKey] || {}, [visibility, pageKey]);

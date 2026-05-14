@@ -216,7 +216,9 @@ export async function rawFetch(
     let timedOut = false;
     const abortHandler = () => controller.abort();
     if (options.signal) {
-        options.signal.addEventListener('abort', abortHandler);
+        // Honor a signal that is already aborted before the listener is wired.
+        if (options.signal.aborted) controller.abort();
+        else options.signal.addEventListener('abort', abortHandler);
     }
 
     const timeoutId = setTimeout(() => { timedOut = true; controller.abort(); }, timeoutMs);
@@ -283,6 +285,8 @@ export async function apiRequest<T>(
 
             if (RETRYABLE_STATUS_CODES.has(response.status) && isIdempotent && attempt < retries) {
                 lastError = new Error(`Server returned ${response.status}`);
+                // Release the unconsumed body stream before retrying (fire-and-forget).
+                void response.body?.cancel().catch(() => {});
                 continue;
             }
 

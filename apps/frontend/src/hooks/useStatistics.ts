@@ -212,6 +212,8 @@ export function useStatistics() {
       const res = await apiClient.getCategories({ limit: 500 });
       return res.items;
     },
+    // Only needed to resolve hidden-category IDs; skip the fetch otherwise.
+    enabled: settings.excludeHiddenCategories,
     staleTime: 60_000,
   });
 

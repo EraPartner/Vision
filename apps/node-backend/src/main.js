@@ -411,7 +411,7 @@ async function start() {
 
     // Start Express server immediately after DB is ready
     const endListen = bootMark('app_listen');
-    app.listen(PORT, HOST, async () => {
+    const server = app.listen(PORT, HOST, async () => {
       endListen();
       bootSummary('backend_total');
       logger.info(`Financial Transaction Manager API (Node.js) started`, {
@@ -421,10 +421,19 @@ async function start() {
         version: settings.api.version,
       });
 
-      const intervals = await runWarmupTasks({ warmupStatus });
-      exchangeRateRefreshInterval = intervals.exchangeRateRefreshInterval;
-      quotesRefreshInterval = intervals.quotesRefreshInterval;
-      cashflowForecastRefreshInterval = intervals.cashflowForecastRefreshInterval;
+      try {
+        const intervals = await runWarmupTasks({ warmupStatus });
+        exchangeRateRefreshInterval = intervals.exchangeRateRefreshInterval;
+        quotesRefreshInterval = intervals.quotesRefreshInterval;
+        cashflowForecastRefreshInterval = intervals.cashflowForecastRefreshInterval;
+      } catch (err) {
+        logger.error('Warmup tasks failed', { error: err.message });
+      }
+    });
+
+    server.on('error', (err) => {
+      logger.error('HTTP server error', { error: err.message });
+      process.exit(1);
     });
   } catch (err) {
     logger.error('Failed to start application', { error: err.message });

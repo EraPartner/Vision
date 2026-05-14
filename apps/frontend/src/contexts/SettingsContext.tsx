@@ -40,7 +40,10 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
     const isLoading = useSettingsStore((s) => s.isDashboardSettingsLoading);
 
     const saveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-    const isFirstRender = useRef(true);
+    const hasHydrated = useRef(false);
+    // Skip the first persist-effect run: hydration fires before persist in the
+    // same render, so the value came from the server and doesn't need saving back.
+    const isFirstPersistRun = useRef(true);
 
     // Hydrate store from preloaded data (with localStorage migration fallback)
     useEffect(() => {
@@ -68,14 +71,13 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
                 _hydrateDashboardSettings(DEFAULT_DASHBOARD_SETTINGS, false);
             }
         }
+        hasHydrated.current = true;
     }, [preloaded, preloadLoading, _hydrateDashboardSettings]);
 
-    // Debounced persist to API when settings change (skip initial render)
+    // Debounced persist to API when settings change (only after hydration)
     useEffect(() => {
-        if (isFirstRender.current) {
-            isFirstRender.current = false;
-            return;
-        }
+        if (!hasHydrated.current) return;
+        if (isFirstPersistRun.current) { isFirstPersistRun.current = false; return; }
         if (isLoading) return;
 
         if (saveTimerRef.current) clearTimeout(saveTimerRef.current);
