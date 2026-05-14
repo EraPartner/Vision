@@ -38,7 +38,7 @@ export function useCountUp(target: number, duration = 600): number {
         rafRef.current = requestAnimationFrame(tick);
 
         return () => {
-            if (rafRef.current) cancelAnimationFrame(rafRef.current);
+            if (rafRef.current != null) cancelAnimationFrame(rafRef.current);
         };
     }, [target, duration]);
 

@@ -184,6 +184,12 @@ async function processRow(txData, bankType) {
         [dateStr, txData.bankAccount, recipientId, txData.amount, txData.memo || '', txData.currency || null, txData.balance, txData.comment]
       );
 
+      // The transaction INSERT uses ON CONFLICT DO NOTHING. If no row came
+      // back the transaction already existed (a duplicate reached via a
+      // different raw source), so it must be counted as a duplicate rather
+      // than reported as imported.
+      if (!txResult.rows[0]) return 'duplicate';
+
       if (rawTxn && txResult.rows[0]) {
         // Await the audit link so a failure is observable in the caller's
         // result counts. Without await, the transaction row was already

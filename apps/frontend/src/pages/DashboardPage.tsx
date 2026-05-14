@@ -297,7 +297,7 @@ export default function DashboardPage() {
             : allTransactions;
     }, [graphExclusions, exclusionsApply, recentFilteredTransactions, allTransactions]);
 
-    const recentTransactions = recentTransactionsSource.slice(0, 5).map((txn) => ({
+    const recentTransactions = useMemo(() => recentTransactionsSource.slice(0, 5).map((txn) => ({
         id: txn.id,
         date: txn.transaction_date || null,
         description: txn.memo || t('txPage.field.description'),
@@ -306,9 +306,9 @@ export default function DashboardPage() {
         category: txn.category_name || t('txPage.field.uncategorized'),
         recipient: txn.recipient_name || t('txPage.field.unknown'),
         bank: txn.bank_account
-    }));
+    })), [recentTransactionsSource, t, appSettings.defaultCurrency]);
 
-    const columns = [
+    const columns = useMemo(() => [
         {
             key: "date",
             header: t('txPage.col.date'),
@@ -343,7 +343,7 @@ export default function DashboardPage() {
                 </span>
             ),
         },
-    ];
+    ], [t, appSettings.dateFormat, locale]);
 
     if (statsLoading || transactionsLoading || monthlyLoading || recentTransactionsLoading) {
         return (
