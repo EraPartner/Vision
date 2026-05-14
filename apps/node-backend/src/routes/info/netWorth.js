@@ -45,8 +45,15 @@ router.get(
     const offset = Number.isFinite(offsetRaw) && offsetRaw >= 0 ? offsetRaw : 0;
 
     const allSnapshots = Array.isArray(data?.snapshots) ? data.snapshots : [];
-    const reversed = allSnapshots.slice().reverse();
-    const page = reversed.slice(offset, offset + limit);
+    // Page newest-first by indexing from the end — avoids copying and
+    // reversing the entire snapshot array on every paginated request.
+    const len = allSnapshots.length;
+    const pageStart = Math.min(offset, len);
+    const pageEnd = Math.min(offset + limit, len);
+    const page = [];
+    for (let i = pageStart; i < pageEnd; i++) {
+      page.push(allSnapshots[len - 1 - i]);
+    }
 
     res.ok(
       { ...data, snapshots: page, snapshotsTotal: allSnapshots.length },
