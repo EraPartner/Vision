@@ -1,3 +1,4 @@
+import { useMemo } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { DonutChart, ChartLegend, getChartColor } from "@/components/charts";
 import { useLanguage } from "@/contexts/LanguageContext";
@@ -16,8 +17,18 @@ export function CategoryPieChart({ data, embedded = false, formatValue }: Catego
     const locale = numberFormatToLocale(appSettings.numberFormat);
     const defaultCurrency = appSettings.defaultCurrency || "EUR";
 
-    const coloredData = data.map((d, i) => ({ ...d, color: getChartColor(i) }));
-    const tooltipFmt = formatValue ?? ((v: number) => formatCurrency(v, defaultCurrency, locale));
+    const coloredData = useMemo(
+        () => data.map((d, i) => ({ ...d, color: getChartColor(i) })),
+        [data],
+    );
+    const tooltipFmt = useMemo(
+        () => formatValue ?? ((v: number) => formatCurrency(v, defaultCurrency, locale)),
+        [formatValue, defaultCurrency, locale],
+    );
+    const legendItems = useMemo(
+        () => coloredData.map((d) => ({ label: d.name, color: d.color })),
+        [coloredData],
+    );
 
     const chartContent = (
         <div className="flex h-72 flex-col gap-2">
