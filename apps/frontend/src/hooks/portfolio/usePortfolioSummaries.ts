@@ -12,6 +12,7 @@ import {
   calculateProjectedAnnualInterest,
 } from './usePortfolioCalculations';
 import { isUnitBased, isFixedIncome, isRealEstate } from '@/utils/assetClass';
+import { toDecimal, addAll, divide, toNumber, Decimal } from '@/lib/money';
 
 function buildSummary(
   inv: Investment,
@@ -21,133 +22,144 @@ function buildSummary(
   const fixedIncome = isFixedIncome(inv.asset_class as AssetClass);
   const realEstate = isRealEstate(inv.asset_class as AssetClass);
 
-  let feeTxnAmount = 0;
-  let taxTxnAmount = 0;
-  let feesFieldAmount = 0;
-  let taxesFieldAmount = 0;
-  let totalDividends = 0;
-  let totalInterestPaid = 0;
-  let totalRent = 0;
-  let totalAppreciation = 0;
-  let totalBuyAmount = 0;
-  let totalBuyOrGiftAmount = 0;
-  let totalSellAmount = 0;
+  // Running sums are kept as Decimal — float drift on money paths compounds
+  // across many transactions before the values reach the UI.
+  let feeTxnAmount = new Decimal(0);
+  let taxTxnAmount = new Decimal(0);
+  let feesFieldAmount = new Decimal(0);
+  let taxesFieldAmount = new Decimal(0);
+  let totalDividends = new Decimal(0);
+  let totalInterestPaid = new Decimal(0);
+  let totalRent = new Decimal(0);
+  let totalAppreciation = new Decimal(0);
+  let totalBuyAmount = new Decimal(0);
+  let totalBuyOrGiftAmount = new Decimal(0);
+  let totalSellAmount = new Decimal(0);
 
   for (const txn of txns) {
-    const amount = Number(txn.amount) || 0;
-    feesFieldAmount += Number(txn.fees) || 0;
-    taxesFieldAmount += Number(txn.taxes) || 0;
+    const amount = toDecimal(txn.amount);
+    feesFieldAmount = feesFieldAmount.plus(toDecimal(txn.fees));
+    taxesFieldAmount = taxesFieldAmount.plus(toDecimal(txn.taxes));
 
     switch (txn.type) {
       case 'buy':
-        totalBuyAmount += amount;
-        totalBuyOrGiftAmount += amount;
+        totalBuyAmount = totalBuyAmount.plus(amount);
+        totalBuyOrGiftAmount = totalBuyOrGiftAmount.plus(amount);
         break;
       case 'gift':
-        totalBuyOrGiftAmount += amount;
+        totalBuyOrGiftAmount = totalBuyOrGiftAmount.plus(amount);
         break;
       case 'sell':
-        totalSellAmount += amount;
+        totalSellAmount = totalSellAmount.plus(amount);
         break;
       case 'fee':
-        feeTxnAmount += amount;
+        feeTxnAmount = feeTxnAmount.plus(amount);
         break;
       case 'tax':
-        taxTxnAmount += amount;
+        taxTxnAmount = taxTxnAmount.plus(amount);
         break;
       case 'dividend':
-        totalDividends += amount;
+        totalDividends = totalDividends.plus(amount);
         break;
       case 'interest':
-        totalInterestPaid += amount;
+        totalInterestPaid = totalInterestPaid.plus(amount);
         break;
       case 'rent_income':
-        totalRent += amount;
+        totalRent = totalRent.plus(amount);
         break;
       case 'appreciation':
-        totalAppreciation += amount;
+        totalAppreciation = totalAppreciation.plus(amount);
         break;
     }
   }
 
-  const totalFees = feeTxnAmount + feesFieldAmount;
-  const totalTaxes = taxTxnAmount + taxesFieldAmount;
+  const totalFees = feeTxnAmount.plus(feesFieldAmount);
+  const totalTaxes = taxTxnAmount.plus(taxesFieldAmount);
 
-  let totalUnits = 0;
-  let avgCostBasis = 0;
-  let realizedGain = 0;
-  let unrealizedGain = 0;
-  let currentValue: number;
-  let totalInvested: number;
-  let totalBuyCost = 0;
-  let totalSellProceeds = 0;
-  let accruedInterest = 0;
-  let projectedAnnualInterest = 0;
+  let totalUnits = new Decimal(0);
+  let avgCostBasis = new Decimal(0);
+  let realizedGain = new Decimal(0);
+  let unrealizedGain = new Decimal(0);
+  let currentValue: Decimal;
+  let totalInvested: Decimal;
+  let totalBuyCost = new Decimal(0);
+  let totalSellProceeds = new Decimal(0);
+  let accruedInterest = new Decimal(0);
+  let projectedAnnualInterest = new Decimal(0);
 
   if (unitBased) {
     const cb = calculateCostBasis(txns);
-    totalUnits = cb.totalUnits;
-    avgCostBasis = cb.avgCostBasis;
-    realizedGain = cb.realizedGain;
-    totalBuyCost = cb.totalBuyCost;
-    totalSellProceeds = cb.totalSellProceeds;
-    totalInvested = cb.totalCost;
+    totalUnits = toDecimal(cb.totalUnits);
+    avgCostBasis = toDecimal(cb.avgCostBasis);
+    realizedGain = toDecimal(cb.realizedGain);
+    totalBuyCost = toDecimal(cb.totalBuyCost);
+    totalSellProceeds = toDecimal(cb.totalSellProceeds);
+    totalInvested = toDecimal(cb.totalCost);
 
-    const currentPrice = Number(inv.current_price) || 0;
-    currentValue = totalUnits * currentPrice;
-    unrealizedGain = totalUnits > 0 ? (currentPrice - avgCostBasis) * totalUnits : 0;
+    const currentPrice = toDecimal(inv.current_price);
+    currentValue = totalUnits.times(currentPrice);
+    unrealizedGain = totalUnits.gt(0)
+      ? currentPrice.minus(avgCostBasis).times(totalUnits)
+      : new Decimal(0);
   } else if (fixedIncome) {
-    totalInvested = totalBuyOrGiftAmount - totalSellAmount;
+    totalInvested = totalBuyOrGiftAmount.minus(totalSellAmount);
     totalBuyCost = totalBuyOrGiftAmount;
     totalSellProceeds = totalSellAmount;
 
     const interestRate = Number(inv.interest_rate) || 0;
-    accruedInterest = calculateAccruedInterest(txns, totalInvested, interestRate);
-    projectedAnnualInterest = calculateProjectedAnnualInterest(totalInvested, interestRate);
+    accruedInterest = toDecimal(
+      calculateAccruedInterest(txns, toNumber(totalInvested), interestRate)
+    );
+    projectedAnnualInterest = toDecimal(
+      calculateProjectedAnnualInterest(toNumber(totalInvested), interestRate)
+    );
 
-    currentValue = totalInvested + accruedInterest;
+    currentValue = totalInvested.plus(accruedInterest);
     realizedGain = totalInterestPaid;
     unrealizedGain = accruedInterest;
   } else if (realEstate) {
-    totalInvested = totalBuyAmount - totalSellAmount;
+    totalInvested = totalBuyAmount.minus(totalSellAmount);
     totalBuyCost = totalBuyAmount;
     totalSellProceeds = totalSellAmount;
-    currentValue = totalInvested + totalAppreciation;
+    currentValue = totalInvested.plus(totalAppreciation);
     unrealizedGain = totalAppreciation;
-    realizedGain = totalRent - totalFees - totalTaxes;
+    realizedGain = totalRent.minus(totalFees).minus(totalTaxes);
   } else {
-    totalInvested = totalBuyAmount - totalSellAmount;
+    totalInvested = totalBuyAmount.minus(totalSellAmount);
+    // totalBuyCost stays at its initial 0 — this branch has no buy-cost basis.
     currentValue = totalInvested;
   }
 
-  const totalIncome = totalDividends + totalInterestPaid + totalRent;
-  const totalGain = realizedGain + unrealizedGain;
-  const gainLoss = totalGain + totalIncome - totalFees - totalTaxes;
-  const gainLossPercent = totalBuyCost > 0 ? (gainLoss / totalBuyCost) * 100 : 0;
+  const totalIncome = totalDividends.plus(totalInterestPaid).plus(totalRent);
+  const totalGain = realizedGain.plus(unrealizedGain);
+  const gainLoss = totalGain.plus(totalIncome).minus(totalFees).minus(totalTaxes);
+  const gainLossPercent = totalBuyCost.gt(0)
+    ? divide(gainLoss, totalBuyCost).times(100)
+    : new Decimal(0);
 
   return {
     ...inv,
     assetClass: inv.asset_class,
-    totalUnits,
-    totalInvested: Math.abs(totalInvested),
-    totalFees,
-    totalTaxes,
-    totalDividends,
-    totalIncome,
-    currentValue,
+    totalUnits: toNumber(totalUnits),
+    totalInvested: toNumber(totalInvested.abs()),
+    totalFees: toNumber(totalFees),
+    totalTaxes: toNumber(totalTaxes),
+    totalDividends: toNumber(totalDividends),
+    totalIncome: toNumber(totalIncome),
+    currentValue: toNumber(currentValue),
     currentPrice: Number(inv.current_price) || undefined,
     interestRate: Number(inv.interest_rate) || undefined,
-    avgCostBasis,
-    realizedGain,
-    unrealizedGain,
-    totalGain,
-    gainLoss,
-    gainLossPercent,
-    accruedInterest,
-    projectedAnnualInterest,
-    totalAppreciation,
-    totalBuyCost,
-    totalSellProceeds,
+    avgCostBasis: toNumber(avgCostBasis),
+    realizedGain: toNumber(realizedGain),
+    unrealizedGain: toNumber(unrealizedGain),
+    totalGain: toNumber(totalGain),
+    gainLoss: toNumber(gainLoss),
+    gainLossPercent: toNumber(gainLossPercent),
+    accruedInterest: toNumber(accruedInterest),
+    projectedAnnualInterest: toNumber(projectedAnnualInterest),
+    totalAppreciation: toNumber(totalAppreciation),
+    totalBuyCost: toNumber(totalBuyCost),
+    totalSellProceeds: toNumber(totalSellProceeds),
     transactions: txns,
   } as InvestmentSummary;
 }
@@ -156,6 +168,10 @@ interface UsePortfolioSummariesInput {
   investments: Investment[];
   transactions: PortfolioTransaction[];
 }
+
+// Stable empty result so a single-class lookup with no matches keeps its
+// identity across renders.
+const EMPTY_SUMMARIES: InvestmentSummary[] = [];
 
 export function usePortfolioSummaries({
   investments,
@@ -175,30 +191,36 @@ export function usePortfolioSummaries({
   }, [investments, transactions]);
 
   const totals = useMemo(
-    () =>
-      summaries.reduce(
-        (acc, item) => ({
-          totalPortfolioValue: acc.totalPortfolioValue + item.currentValue,
-          totalGainLoss: acc.totalGainLoss + item.gainLoss,
-          totalRealizedGain: acc.totalRealizedGain + item.realizedGain,
-          totalUnrealizedGain: acc.totalUnrealizedGain + item.unrealizedGain,
-        }),
-        {
-          totalPortfolioValue: 0,
-          totalGainLoss: 0,
-          totalRealizedGain: 0,
-          totalUnrealizedGain: 0,
-        }
-      ),
+    () => ({
+      totalPortfolioValue: toNumber(addAll(summaries.map((s) => s.currentValue))),
+      totalGainLoss: toNumber(addAll(summaries.map((s) => s.gainLoss))),
+      totalRealizedGain: toNumber(addAll(summaries.map((s) => s.realizedGain))),
+      totalUnrealizedGain: toNumber(addAll(summaries.map((s) => s.unrealizedGain))),
+    }),
     [summaries]
   );
 
+  // Pre-group once per summaries change. A single-class lookup then returns the
+  // grouped array directly with a stable identity — previously every render
+  // produced a fresh `.filter()` result, so the Stocks/Crypto/Metals pages
+  // re-rendered even when nothing changed.
+  const groupedByClass = useMemo(() => {
+    const map = new Map<AssetClass, InvestmentSummary[]>();
+    for (const s of summaries) {
+      const cls = s.assetClass as AssetClass;
+      const list = map.get(cls);
+      if (list) list.push(s);
+      else map.set(cls, [s]);
+    }
+    return map;
+  }, [summaries]);
+
   const byAssetClass = useCallback(
-    (cls: AssetClass | AssetClass[]) => {
-      const classes = Array.isArray(cls) ? cls : [cls];
-      return summaries.filter((s) => classes.includes(s.assetClass));
+    (cls: AssetClass | AssetClass[]): InvestmentSummary[] => {
+      if (!Array.isArray(cls)) return groupedByClass.get(cls) ?? EMPTY_SUMMARIES;
+      return cls.flatMap((c) => groupedByClass.get(c) ?? []);
     },
-    [summaries]
+    [groupedByClass]
   );
 
   return { summaries, totals, byAssetClass };

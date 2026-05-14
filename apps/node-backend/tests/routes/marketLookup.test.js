@@ -366,20 +366,31 @@ describe('Market Lookup Routes', () => {
       expect(res.json).toHaveBeenCalled();
     });
 
-    it('throws AppError (502) when news query parsing fails unexpectedly', async () => {
-      const req = { query: { symbols: 123 } };
+    it('coerces a repeated (array) symbols param instead of throwing', async () => {
+      // Express parses `?symbols=AAPL&symbols=MSFT` as an array — the route
+      // now joins it to a string rather than letting `.split` throw a 502.
+      mockYahooSearch.mockResolvedValue({ news: [] });
+      const req = { query: { symbols: ['AAPL', 'MSFT'] } };
       const res = mockResponse();
 
-      await expect(routeHandlers['get:/news'](req, res)).rejects.toBeInstanceOf(AppError);
+      await routeHandlers['get:/news'](req, res);
+
+      expect(res.json).toHaveBeenCalled();
+      expect(mockYahooSearch).toHaveBeenCalledWith('AAPL', expect.anything());
+      expect(mockYahooSearch).toHaveBeenCalledWith('MSFT', expect.anything());
     });
   });
 
   describe('GET /quote additional branches', () => {
-    it('throws AppError (502) on unexpected quote route failure', async () => {
-      const req = { query: { symbols: 123 } };
+    it('coerces a repeated (array) symbols param instead of throwing', async () => {
+      mockYahooQuote.mockResolvedValue({ symbol: 'AAPL', regularMarketPrice: 1 });
+      mockYahooQuoteSummary.mockResolvedValue({});
+      const req = { query: { symbols: ['AAPL', 'MSFT'] } };
       const res = mockResponse();
 
-      await expect(routeHandlers['get:/quote'](req, res)).rejects.toBeInstanceOf(AppError);
+      await routeHandlers['get:/quote'](req, res);
+
+      expect(res.json).toHaveBeenCalled();
     });
 
     it('uses summary fallback buckets and quote defaults', async () => {

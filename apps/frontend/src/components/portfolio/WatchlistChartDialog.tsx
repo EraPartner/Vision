@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { parseDecimal } from "@/lib/decimal";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import {
@@ -52,6 +52,15 @@ export function WatchlistChartDialog({ item, open, onOpenChange }: WatchlistChar
   const [editingPrice, setEditingPrice] = useState(false);
   const [newTargetPrice, setNewTargetPrice] = useState("");
   const queryClient = useQueryClient();
+
+  // This dialog is persistent — it stays mounted and is reused for each item.
+  // Reset the per-item view state when the item changes so range selection,
+  // edit mode, and the draft target price don't leak across watchlist items.
+  useEffect(() => {
+    setSelectedRange(RANGES[0]);
+    setEditingPrice(false);
+    setNewTargetPrice("");
+  }, [item?.id]);
 
   const { data: chartData, isLoading: isChartLoading } = useQuery({
     queryKey: ["watchlist-chart", item?.symbol, selectedRange.range],

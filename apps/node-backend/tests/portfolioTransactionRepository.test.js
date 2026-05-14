@@ -19,7 +19,6 @@ describe('portfolioTransactionRepository.create', () => {
       .mockResolvedValueOnce({ rows: [{ asset_class: 'stock' }] })
       .mockResolvedValueOnce({ rows: [{ portfolio_transactions_base: null }] })
       .mockRejectedValueOnce({ message: 'cannot insert into view "portfolio_transactions"', code: '55000' })
-      .mockResolvedValueOnce({ rows: [{ setval: 12 }] })
       .mockResolvedValueOnce({ rows: [{ id: 11 }] })
       .mockResolvedValueOnce({ rows: [{ id: 11, investment_id: 1, type: 'buy' }] });
 
@@ -41,24 +40,21 @@ describe('portfolioTransactionRepository.create', () => {
          RETURNING *`,
       [1, 'buy', '2026-03-24', 1000, 3, 333.33, 0, 0, 'EUR', null, false, null, null, null]
     );
+    // No unconditional pre-resync — the child INSERT runs straight after the
+    // view INSERT fails.
     expect(query).toHaveBeenNthCalledWith(
       4,
-      "SELECT setval(pg_get_serial_sequence('portfolio_transactions_base', 'id'), COALESCE((SELECT MAX(id) FROM portfolio_transactions_base), 0) + 1, false)"
-    );
-    expect(query).toHaveBeenNthCalledWith(
-      5,
       'INSERT INTO stock_transactions (investment_id, type, date, amount, fees, taxes, currency, note, is_recurring, recurrence_interval, recurrence_end_date, fx_rate_to_eur, units, price_per_unit) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14) RETURNING id',
       [1, 'buy', '2026-03-24', 1000, 0, 0, 'EUR', null, false, null, null, null, 3, 333.33]
     );
-    expect(query).toHaveBeenNthCalledWith(6, 'SELECT * FROM portfolio_transactions WHERE id = $1', [11]);
+    expect(query).toHaveBeenNthCalledWith(5, 'SELECT * FROM portfolio_transactions WHERE id = $1', [11]);
     expect(result).toEqual({ id: 11, investment_id: 1, type: 'buy' });
   });
 
-  it('retries insert once after duplicate id even after pre-resync', async () => {
+  it('retries insert once after a duplicate-id collision', async () => {
     query
       .mockResolvedValueOnce({ rows: [{ asset_class: 'stock' }] })
       .mockResolvedValueOnce({ rows: [{ portfolio_transactions_base: 'portfolio_transactions_base' }] })
-      .mockResolvedValueOnce({ rows: [{ setval: 20 }] })
       .mockRejectedValueOnce({
         code: '23505',
         constraint: 'stock_transactions_pkey',
@@ -79,25 +75,24 @@ describe('portfolioTransactionRepository.create', () => {
       currency: 'EUR',
     });
 
+    // First child INSERT collides on a duplicate id...
     expect(query).toHaveBeenNthCalledWith(
       3,
-      "SELECT setval(pg_get_serial_sequence('portfolio_transactions_base', 'id'), COALESCE((SELECT MAX(id) FROM portfolio_transactions_base), 0) + 1, false)"
+      'INSERT INTO stock_transactions (investment_id, type, date, amount, fees, taxes, currency, note, is_recurring, recurrence_interval, recurrence_end_date, fx_rate_to_eur, units, price_per_unit) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14) RETURNING id',
+      [1, 'buy', '2026-03-24', 1000, 0, 0, 'EUR', null, false, null, null, null, 3, 333.33]
     );
+    // ...which triggers a resync only in the catch path...
     expect(query).toHaveBeenNthCalledWith(
       4,
-      'INSERT INTO stock_transactions (investment_id, type, date, amount, fees, taxes, currency, note, is_recurring, recurrence_interval, recurrence_end_date, fx_rate_to_eur, units, price_per_unit) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14) RETURNING id',
-      [1, 'buy', '2026-03-24', 1000, 0, 0, 'EUR', null, false, null, null, null, 3, 333.33]
-    );
-    expect(query).toHaveBeenNthCalledWith(
-      5,
       "SELECT setval(pg_get_serial_sequence('portfolio_transactions_base', 'id'), COALESCE((SELECT MAX(id) FROM portfolio_transactions_base), 0) + 1, false)"
     );
+    // ...then the insert is retried once.
     expect(query).toHaveBeenNthCalledWith(
-      6,
+      5,
       'INSERT INTO stock_transactions (investment_id, type, date, amount, fees, taxes, currency, note, is_recurring, recurrence_interval, recurrence_end_date, fx_rate_to_eur, units, price_per_unit) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14) RETURNING id',
       [1, 'buy', '2026-03-24', 1000, 0, 0, 'EUR', null, false, null, null, null, 3, 333.33]
     );
-    expect(query).toHaveBeenNthCalledWith(7, 'SELECT * FROM portfolio_transactions WHERE id = $1', [21]);
+    expect(query).toHaveBeenNthCalledWith(6, 'SELECT * FROM portfolio_transactions WHERE id = $1', [21]);
     expect(result).toEqual({ id: 21, investment_id: 1, type: 'buy' });
   });
 
@@ -105,7 +100,6 @@ describe('portfolioTransactionRepository.create', () => {
     query
       .mockResolvedValueOnce({ rows: [{ asset_class: 'stock' }] })
       .mockResolvedValueOnce({ rows: [{ portfolio_transactions_base: 'portfolio_transactions_base' }] })
-      .mockResolvedValueOnce({ rows: [{ setval: 30 }] })
       .mockResolvedValueOnce({ rows: [{ id: 30 }] })
       .mockResolvedValueOnce({ rows: [{ id: 30, amount: '1000.0000', units: '5.00000000', price_per_unit: '200.000000' }] });
 
@@ -119,7 +113,7 @@ describe('portfolioTransactionRepository.create', () => {
     });
 
     expect(query).toHaveBeenNthCalledWith(
-      4,
+      3,
       'INSERT INTO stock_transactions (investment_id, type, date, amount, fees, taxes, currency, note, is_recurring, recurrence_interval, recurrence_end_date, fx_rate_to_eur, units, price_per_unit) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14) RETURNING id',
       [1, 'buy', '2026-03-24', 1000, 0, 0, 'EUR', null, false, null, null, null, 5, 200]
     );
@@ -145,7 +139,6 @@ describe('portfolioTransactionRepository.create', () => {
     query
       .mockResolvedValueOnce({ rows: [{ asset_class: 'stock' }] })
       .mockResolvedValueOnce({ rows: [{ portfolio_transactions_base: 'portfolio_transactions_base' }] })
-      .mockResolvedValueOnce({ rows: [{ setval: 40 }] })
       .mockResolvedValueOnce({ rows: [{ id: 40 }] })
       .mockResolvedValueOnce({ rows: [{ id: 40, type: 'gift', amount: '0.0000', units: '2.00000000' }] });
 
@@ -158,7 +151,7 @@ describe('portfolioTransactionRepository.create', () => {
     });
 
     expect(query).toHaveBeenNthCalledWith(
-      4,
+      3,
       'INSERT INTO stock_transactions (investment_id, type, date, amount, fees, taxes, currency, note, is_recurring, recurrence_interval, recurrence_end_date, fx_rate_to_eur, units, price_per_unit) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14) RETURNING id',
       [1, 'gift', '2026-03-24', 0, 0, 0, 'EUR', null, false, null, null, null, 2, null]
     );
@@ -169,7 +162,6 @@ describe('portfolioTransactionRepository.create', () => {
     query
       .mockResolvedValueOnce({ rows: [{ asset_class: 'metals' }] })
       .mockResolvedValueOnce({ rows: [{ portfolio_transactions_base: 'portfolio_transactions_base' }] })
-      .mockResolvedValueOnce({ rows: [{ setval: 60 }] })
       .mockResolvedValueOnce({ rows: [{ id: 60 }] })
       .mockResolvedValueOnce({ rows: [{ id: 60, investment_id: 1, type: 'buy' }] });
 
@@ -184,7 +176,7 @@ describe('portfolioTransactionRepository.create', () => {
     });
 
     expect(query).toHaveBeenNthCalledWith(
-      4,
+      3,
       'INSERT INTO metals_transactions (investment_id, type, date, amount, fees, taxes, currency, note, is_recurring, recurrence_interval, recurrence_end_date, fx_rate_to_eur, units, price_per_unit) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14) RETURNING id',
       [1, 'buy', '2026-03-24', 1000, 0, 0, 'EUR', null, false, null, null, null, 2, 500]
     );

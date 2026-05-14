@@ -103,12 +103,15 @@ export function filterMonthsByPeriod(months, period) {
     }
 
     case 'custom': {
-      const from = new Date(period.from);
-      const to = new Date(period.to);
+      // Compare on YYYY-MM keys. Parsing the ISO bounds with `new Date()`
+      // yields UTC midnight while `new Date(m.year, m.month-1, 1)` is local
+      // midnight — at a month boundary the two could disagree by a day and
+      // drop or add an edge month.
+      const fromYm = String(period.from).slice(0, 7);
+      const toYm = String(period.to).slice(0, 7);
       return months.filter(m => {
-        const mStart = new Date(m.year, m.month - 1, 1);
-        const mEnd = new Date(m.year, m.month, 0);
-        return mEnd >= from && mStart <= to;
+        const mYm = `${m.year}-${String(m.month).padStart(2, '0')}`;
+        return mYm >= fromYm && mYm <= toYm;
       });
     }
 

@@ -264,6 +264,10 @@ function buildSqlRegexPattern({ pattern, pattern_kind }) {
  * @param {{ pattern: string, pattern_kind: string, case_sensitive: boolean }} patternRow
  * @returns {Promise<{ matchCount: number, recipientIds: number[] }>}
  */
+// Cap the regex-preview scan: it pulls recipient rows into memory and filters
+// in JS, so an unbounded SELECT could load the whole table for one preview.
+const PREVIEW_REGEX_SCAN_CAP = 10_000;
+
 export async function previewPatternMatches(patternRow) {
   const validation = validatePattern(patternRow);
   if (!validation.valid) {
@@ -283,11 +287,13 @@ export async function previewPatternMatches(patternRow) {
   if (patternRow.pattern_kind === 'regex') {
     const re = compilePattern({ id: 0, updated_at: '0', ...patternRow });
     const { rows } = await query(
-      `SELECT id, name FROM recipients WHERE is_active = true`,
-      [],
+      `SELECT id, name FROM recipients WHERE is_active = true ORDER BY id LIMIT $1`,
+      [PREVIEW_REGEX_SCAN_CAP + 1],
     );
-    const matched = rows.filter((r) => re.test(String(r.name ?? '').toUpperCase()));
-    return { matchCount: matched.length, recipientIds: matched.map((r) => r.id) };
+    const truncated = rows.length > PREVIEW_REGEX_SCAN_CAP;
+    const scanned = truncated ? rows.slice(0, PREVIEW_REGEX_SCAN_CAP) : rows;
+    const matched = scanned.filter((r) => re.test(String(r.name ?? '').toUpperCase()));
+    return { matchCount: matched.length, recipientIds: matched.map((r) => r.id), truncated };
   }
 
   const sqlPattern = buildSqlRegexPattern(patternRow);

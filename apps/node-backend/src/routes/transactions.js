@@ -483,6 +483,12 @@ router.post('/', async (req, res) => {
   if (!txDate || !data.bank_account || !data.recipient_id || data.amount == null) {
     throw new ValidationError('Missing required fields: date, bank_account, recipient_id, amount');
   }
+  // Validate recipient_id is a positive integer up front — a non-integer here
+  // otherwise reached the DB as an FK type error and surfaced as a 500.
+  const recipientIdNum = Number(data.recipient_id);
+  if (!Number.isInteger(recipientIdNum) || recipientIdNum <= 0) {
+    throw new ValidationError('recipient_id must be a positive integer');
+  }
   if (data.tags !== undefined && !Array.isArray(data.tags)) {
     throw new ValidationError('tags must be an array of strings');
   }

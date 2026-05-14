@@ -10,6 +10,30 @@ const settings = getSettings();
 
 const requestCounts = new Map();
 
+/**
+ * Whether `X-Forwarded-For` from this peer can be trusted to identify the
+ * real client. Loopback alone is too narrow: in the packaged Docker stack the
+ * backend sits behind the bridge gateway, so the peer address is a private
+ * (RFC1918) / link-local address. Trusting those lets each client keep its
+ * own rate-limit bucket instead of all sharing the gateway's.
+ *
+ * @param {string} addr
+ * @returns {boolean}
+ */
+function isTrustedProxyAddr(addr) {
+  if (!addr) return false;
+  const a = addr.replace(/^::ffff:/i, '');
+  if (a === '127.0.0.1' || a === '::1') return true;
+  return (
+    /^10\./.test(a) ||
+    /^192\.168\./.test(a) ||
+    /^172\.(1[6-9]|2\d|3[01])\./.test(a) ||
+    /^169\.254\./.test(a) ||  // IPv4 link-local
+    /^fd/i.test(a) ||         // IPv6 unique-local
+    /^fe80:/i.test(a)         // IPv6 link-local
+  );
+}
+
 // Clean up old entries every 60 seconds.
 // .unref() so the timer does not keep test/CLI processes alive.
 setInterval(() => {
@@ -36,8 +60,9 @@ export function rateLimiter({ windowMs = 60_000, maxRequests = 100, keyPrefix = 
     }
 
     const remoteAddr = req.socket?.remoteAddress || req.connection?.remoteAddress || '';
-    const isLoopback = remoteAddr === '127.0.0.1' || remoteAddr === '::1' || remoteAddr === '::ffff:127.0.0.1';
-    const forwarded = isLoopback ? (req.headers['x-forwarded-for'] ?? '').split(',')[0].trim() : '';
+    const forwarded = isTrustedProxyAddr(remoteAddr)
+      ? (req.headers?.['x-forwarded-for'] ?? '').split(',')[0].trim()
+      : '';
     const ip = forwarded || remoteAddr || 'unknown';
     const key = `${keyPrefix}:${ip}`;
     const now = Date.now();

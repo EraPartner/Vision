@@ -3,9 +3,9 @@ title: Feature - CSV Import, Export, Attachments & Deduplication
 type: feature
 status: active
 date: 2026-04-24
-updated: 2026-05-12
-last_modified: 2026-05-12
-tags: [feature, import, export, csv, json, deduplication, phase-5a, attachments, phase-c, phase-e, phase-1, phase-12, phase-13, performance, concurrency, import-pipeline, component-split, error-handling, recipient-clusters, multi-select, export-filters, adr-046, category-review, bigserial-fix, staging-rows, ing, bnp]
+updated: 2026-05-14
+last_modified: 2026-05-14
+tags: [feature, import, export, csv, json, deduplication, phase-5a, attachments, phase-c, phase-e, phase-1, phase-12, phase-13, performance, concurrency, import-pipeline, component-split, error-handling, recipient-clusters, multi-select, export-filters, adr-046, category-review, bigserial-fix, staging-rows, tx-hash-dedup, race-safe-dedup, decimal-precision, ing, bnp]
 aliases: [csv-import, bank-import, bank-statement, deduplication, data-import, streaming-import]
 description: Import transactions from bank CSV files with automatic deduplication, fuzzy/pattern recipient matching, per-row category review (ADR-046), and May 2026 BIGSERIAL fix for staging row ID validation.
 related_code: ["apps/node-backend/src/services/importPipeline/index.js", "apps/node-backend/src/services/importPipeline/stage.js", "apps/node-backend/src/services/importPipeline/validate.js", "apps/node-backend/src/services/importPipeline/match.js", "apps/node-backend/src/services/importPipeline/commit.js", "apps/node-backend/src/services/dataImportService.js", "apps/node-backend/src/services/deduplication.js", "apps/node-backend/src/services/textNormalization.js", "apps/node-backend/src/routes/importRoutes.js", "apps/node-backend/src/lib/sse.js", "apps/node-backend/src/repositories/importBatchRepository.js", "apps/frontend/src/features/imports/TransactionImportCard.tsx", "apps/frontend/src/features/imports/RecipientsImportCard.tsx", "apps/frontend/src/features/imports/CategoriesImportCard.tsx", "apps/frontend/src/features/imports/ExportCard.tsx", "apps/frontend/src/features/imports/SupportedBanksCard.tsx", "apps/frontend/src/features/imports/useAdapters.ts", "apps/frontend/src/pages/ImportPage.tsx", "apps/frontend/src/pages/ImportReviewPage.tsx"]
@@ -183,6 +183,7 @@ Each phase is idempotent at its boundary. On error, the batch is marked `failed`
 #### 4. **Commit** (`commitBatch`)
 - Insert canonical transactions with per-row SAVEPOINT protection (if insert fails, transaction stays usable for remaining rows)
 - **BIGSERIAL Validation (2026-05-12):** [[apps/node-backend/src/services/importPipeline/commit.js]] (lines 101–105) validates staging row IDs via regex `/^\d+$/` instead of `Number.isInteger()`. Root cause: `import_staging_rows.id` is BIGSERIAL; the `pg` driver returns BIGINT values as strings to preserve int64 precision. The old `Number.isInteger("123")` check failed silently, counting all rows as errors before any INSERT. New regex accepts string-form bigints and is injection-safe for SAVEPOINT identifiers.
+- **Transaction Hash Deduplication (2026-05-14):** Transaction INSERT statements now include a `tx_hash` column and use `ON CONFLICT (tx_hash) WHERE tx_hash IS NOT NULL DO NOTHING RETURNING id` for race-safe deduplication. The `tx_hash` is computed from `date|amount|recipient|memo|bank_account` and stored in the canonical `transactions` table (via migration [[alembic/versions/0036_add_transactions_tx_hash.py]]). Intra-batch deduplication tracks committed hashes in a Set; a second row with an identical `tx_hash` in the same batch is marked `duplicate`.
 - Insert raw references (link transaction to raw bank data); errors captured and logged per row
 - Return final counts: `{ imported, duplicates, errors }`
 - Emit progress events: `{ phase: 'committing', current, total, imported, duplicates, errors }`
@@ -296,8 +297,26 @@ Duplicate detection checks:
 
 ## Deduplication Strategies
 
-### SHA-256 Hash
-Each raw transaction gets a unique hash stored in its respective bank-specific table:
+### Transaction Hash (Canonical Table, May 2026)
+
+As of 2026-05-14, all transactions are deduplicated via a `tx_hash` column in the canonical `transactions` table:
+
+```sql
+ALTER TABLE transactions ADD COLUMN tx_hash TEXT;
+CREATE UNIQUE INDEX uniq_transactions_tx_hash 
+  ON transactions (tx_hash) WHERE tx_hash IS NOT NULL;
+```
+
+**Hash computation:** SHA-256 of `date|amount|recipient|memo|bank_account` (same as legacy bank-specific dedup).
+
+**Conflict handling:**
+- `INSERT ... ON CONFLICT (tx_hash) WHERE tx_hash IS NOT NULL DO NOTHING RETURNING id` (race-safe)
+- If insert fails with UNIQUE violation, the existing transaction's `id` is returned (idempotent)
+- Enables safe concurrent imports without cross-import duplicate checking
+
+### Bank-Specific Raw Table Hashes (Legacy, Still Maintained)
+
+Each bank-specific raw transaction table also stores a `deduplication_hash` for audit trail and bank-specific duplicate detection:
 - `belfius_raw_transactions.deduplication_hash`
 - `revolut_raw_transactions.deduplication_hash`
 - `kbc_raw_transactions.deduplication_hash`

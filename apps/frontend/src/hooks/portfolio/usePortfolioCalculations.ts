@@ -5,6 +5,7 @@
 
 import type { PortfolioTransaction } from '@/types/api';
 import { parseYmd, daysBetween, todayLocal } from '@/lib/timezone';
+import { toDecimal, toNumber, Decimal } from '@/lib/money';
 
 export interface CostBasisResult {
   totalUnits: number;
@@ -22,45 +23,51 @@ export interface CostBasisResult {
 export function calculateCostBasis(txns: PortfolioTransaction[]): CostBasisResult {
   const sorted = [...txns].sort((a, b) => a.date.localeCompare(b.date));
 
-  let totalUnits = 0;
-  let totalCost = 0;
-  let realizedGain = 0;
-  let totalBuyCost = 0;
-  let totalSellProceeds = 0;
+  const ZERO = new Decimal(0);
+  let totalUnits = ZERO;
+  let totalCost = ZERO;
+  let realizedGain = ZERO;
+  let totalBuyCost = ZERO;
+  let totalSellProceeds = ZERO;
 
   for (const txn of sorted) {
-    const units = Number(txn.units) || 0;
-    const amount = Number(txn.amount) || 0;
-    const fees = Number(txn.fees) || 0;
-    const taxes = Number(txn.taxes) || 0;
+    const units = toDecimal(txn.units);
+    const amount = toDecimal(txn.amount);
+    const fees = toDecimal(txn.fees);
+    const taxes = toDecimal(txn.taxes);
 
     if (txn.type === 'buy' || txn.type === 'gift') {
-      const buyCost = amount + fees + taxes;
-      totalUnits += units;
-      totalCost += buyCost;
-      totalBuyCost += buyCost;
+      const buyCost = amount.plus(fees).plus(taxes);
+      totalUnits = totalUnits.plus(units);
+      totalCost = totalCost.plus(buyCost);
+      totalBuyCost = totalBuyCost.plus(buyCost);
     } else if (txn.type === 'sell') {
-      if (totalUnits > 0 && units > 0) {
-        const sellUnits = Math.min(units, totalUnits);
-        const sellRatio = sellUnits / units;
-        const avgCost = totalCost / totalUnits;
-        const costOfSoldUnits = avgCost * sellUnits;
-        const netProceeds = (amount - fees - taxes) * sellRatio;
-        realizedGain += netProceeds - costOfSoldUnits;
-        totalUnits -= sellUnits;
-        totalCost -= costOfSoldUnits;
-        totalSellProceeds += amount;
+      if (totalUnits.gt(0) && units.gt(0)) {
+        const sellUnits = Decimal.min(units, totalUnits);
+        const sellRatio = sellUnits.div(units);
+        const avgCost = totalCost.div(totalUnits);
+        const costOfSoldUnits = avgCost.times(sellUnits);
+        const netProceeds = amount.minus(fees).minus(taxes).times(sellRatio);
+        realizedGain = realizedGain.plus(netProceeds.minus(costOfSoldUnits));
+        totalUnits = totalUnits.minus(sellUnits);
+        totalCost = totalCost.minus(costOfSoldUnits);
+        // Scale proceeds by sellRatio so it stays consistent with the
+        // realized-gain calculation above (was: full `amount`).
+        totalSellProceeds = totalSellProceeds.plus(amount.times(sellRatio));
       }
     }
   }
 
+  const finalUnits = Decimal.max(0, totalUnits);
+  const finalCost = Decimal.max(0, totalCost);
+
   return {
-    totalUnits: Math.max(0, totalUnits),
-    totalCost: Math.max(0, totalCost),
-    avgCostBasis: totalUnits > 0 ? totalCost / totalUnits : 0,
-    realizedGain,
-    totalBuyCost,
-    totalSellProceeds,
+    totalUnits: toNumber(finalUnits),
+    totalCost: toNumber(finalCost),
+    avgCostBasis: finalUnits.gt(0) ? toNumber(finalCost.div(finalUnits)) : 0,
+    realizedGain: toNumber(realizedGain),
+    totalBuyCost: toNumber(totalBuyCost),
+    totalSellProceeds: toNumber(totalSellProceeds),
   };
 }
 
@@ -86,7 +93,11 @@ export function calculateAccruedInterest(
 
   const daysSince = Math.max(0, daysBetween(parseYmd(startDate), todayLocal()));
 
-  return principal * (interestRate / 100 / 365) * daysSince;
+  return toNumber(
+    toDecimal(principal)
+      .times(toDecimal(interestRate).div(100).div(365))
+      .times(daysSince)
+  );
 }
 
 /**
@@ -97,5 +108,5 @@ export function calculateProjectedAnnualInterest(
   interestRate: number
 ): number {
   if (!interestRate || principal <= 0) return 0;
-  return principal * (interestRate / 100);
+  return toNumber(toDecimal(principal).times(toDecimal(interestRate).div(100)));
 }

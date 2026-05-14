@@ -183,10 +183,18 @@ export const netWorthRepository = {
     end.setUTCHours(0, 0, 0, 0);
 
     const snapshots = [];
+    // Forward-fill the last known investments value: portfolio snapshots are
+    // not guaranteed to exist for every calendar day, and a missing day must
+    // carry the prior value forward rather than collapse net worth to
+    // liquid-only.
+    let lastInvestments = 0;
     for (let day = new Date(start); day <= end; day = addDaysUtc(day)) {
       const dayKey = getDayKeyUtc(day);
       const liquid = roundToCents(liquidByDay[dayKey] || 0);
-      const investments = roundToCents(investmentsByDay[dayKey] || 0);
+      if (Object.prototype.hasOwnProperty.call(investmentsByDay, dayKey)) {
+        lastInvestments = investmentsByDay[dayKey];
+      }
+      const investments = roundToCents(lastInvestments);
       snapshots.push({
         date: dayKey,
         liquid,

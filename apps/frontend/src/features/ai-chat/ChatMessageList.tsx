@@ -49,11 +49,19 @@ export function ChatMessageList({
         return [...messages, ...extras];
     }, [messages, streamingUserMessage, streamingToolMessages]);
 
+    // A streaming tool message grows its content in place without changing
+    // `combined.length`, so length alone isn't enough to keep the view pinned.
+    // Track the total streaming-tool content size as well.
+    const streamingToolContentLength = streamingToolMessages.reduce(
+        (sum, m) => sum + (m.content?.length ?? 0),
+        0,
+    );
+
     useEffect(() => {
         const el = scrollRef.current;
         if (!el) return;
         el.scrollTop = el.scrollHeight;
-    }, [combined.length, assistantDraft, isStreaming]);
+    }, [combined.length, assistantDraft, isStreaming, streamingToolContentLength]);
 
     const { t } = useLanguage();
     const showDraft = isStreaming && assistantDraft.length > 0;

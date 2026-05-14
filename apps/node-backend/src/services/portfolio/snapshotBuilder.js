@@ -10,6 +10,7 @@
 import { query, withTransaction } from '../../database/connection.js';
 import { logger } from '../../config/logger.js';
 import { sanitizeSnapshotSpikes } from '../../utils/portfolioMath.js';
+import { toDecimal, roundMoney } from '../../lib/money.js';
 
 /** @returns {Promise<string|null>} ISO date string or null */
 export async function getFirstDataDate() {
@@ -158,17 +159,20 @@ export async function computeDailySnapshots(targetCurrency = 'EUR') {
 
   // --- Day walk helpers ---
 
+  /**
+   * @param {number|string|import('decimal.js').default} amount
+   * @returns {import('decimal.js').default} converted amount as Decimal
+   */
   function convertAmount(amount, fromCurrency, fxRateToEur) {
     const from = (fromCurrency || 'EUR').toUpperCase();
     const to = targetCurrency.toUpperCase();
-    if (from === to) return amount;
+    const amt = toDecimal(amount);
+    if (from === to) return amt;
     const rateTo = fxRates[to] || 1;
     if (fxRateToEur !== undefined && Number.isFinite(fxRateToEur) && fxRateToEur > 0) {
-      // eslint-disable-next-line vision-local-money/no-raw-money-arithmetic
-      return (amount * fxRateToEur) / rateTo;
+      return amt.times(fxRateToEur).div(rateTo);
     }
-    // eslint-disable-next-line vision-local-money/no-raw-money-arithmetic
-    return (amount * (fxRates[from] || 1)) / rateTo;
+    return amt.times(fxRates[from] || 1).div(rateTo);
   }
 
   function resolvePrice(inv, day, lastKnownPrice) {
@@ -207,11 +211,13 @@ export async function computeDailySnapshots(targetCurrency = 'EUR') {
   }
 
   const unitsByInvestment = {};
-  let cumulativeInvested = 0;
-  let stocksEtfsInvested = 0;
-  let cryptoInvested = 0;
-  let metalsInvested = 0;
-  let cumulativeInflation = 1;
+  // Money accumulators stay Decimal — float drift compounds across a multi-year
+  // day walk and is persisted into portfolio_performance_snapshots.
+  let cumulativeInvested = toDecimal(0);
+  let stocksEtfsInvested = toDecimal(0);
+  let cryptoInvested = toDecimal(0);
+  let metalsInvested = toDecimal(0);
+  let cumulativeInflation = toDecimal(1);
   let lastInflationMonth = '';
   const lastKnownPrice = {};
   const snapshots = [];
@@ -223,17 +229,17 @@ export async function computeDailySnapshots(targetCurrency = 'EUR') {
       const inv = investmentsById.get(tx.investmentId);
 
       if (tx.type === 'buy' || tx.type === 'gift') {
-        cumulativeInvested += converted;
-        if (inv?.assetClass === 'stock' || inv?.assetClass === 'etf') stocksEtfsInvested += converted;
-        else if (inv?.assetClass === 'crypto') cryptoInvested += converted;
-        else if (inv?.assetClass === 'metals') metalsInvested += converted;
+        cumulativeInvested = cumulativeInvested.plus(converted);
+        if (inv?.assetClass === 'stock' || inv?.assetClass === 'etf') stocksEtfsInvested = stocksEtfsInvested.plus(converted);
+        else if (inv?.assetClass === 'crypto') cryptoInvested = cryptoInvested.plus(converted);
+        else if (inv?.assetClass === 'metals') metalsInvested = metalsInvested.plus(converted);
         unitsByInvestment[tx.investmentId] = (unitsByInvestment[tx.investmentId] || 0) + tx.units;
         if (tx.units > 0 && tx.amount > 0) lastKnownPrice[tx.investmentId] = tx.amount / tx.units;
       } else if (tx.type === 'sell') {
-        cumulativeInvested -= converted;
-        if (inv?.assetClass === 'stock' || inv?.assetClass === 'etf') stocksEtfsInvested -= converted;
-        else if (inv?.assetClass === 'crypto') cryptoInvested -= converted;
-        else if (inv?.assetClass === 'metals') metalsInvested -= converted;
+        cumulativeInvested = cumulativeInvested.minus(converted);
+        if (inv?.assetClass === 'stock' || inv?.assetClass === 'etf') stocksEtfsInvested = stocksEtfsInvested.minus(converted);
+        else if (inv?.assetClass === 'crypto') cryptoInvested = cryptoInvested.minus(converted);
+        else if (inv?.assetClass === 'metals') metalsInvested = metalsInvested.minus(converted);
         unitsByInvestment[tx.investmentId] = (unitsByInvestment[tx.investmentId] || 0) - tx.units;
         if (tx.units > 0 && tx.amount > 0) lastKnownPrice[tx.investmentId] = tx.amount / tx.units;
       }
@@ -241,10 +247,10 @@ export async function computeDailySnapshots(targetCurrency = 'EUR') {
     }
 
     // Compute portfolio value
-    let totalValue = 0;
-    let stocksEtfsValue = 0;
-    let cryptoValue = 0;
-    let metalsValue = 0;
+    let totalValue = toDecimal(0);
+    let stocksEtfsValue = toDecimal(0);
+    let cryptoValue = toDecimal(0);
+    let metalsValue = toDecimal(0);
 
     for (const inv of investmentsById.values()) {
       const units = unitsByInvestment[inv.id] || 0;
@@ -258,43 +264,42 @@ export async function computeDailySnapshots(targetCurrency = 'EUR') {
         lastKnownPrice[inv.id] = priceHistoryByInvestment[inv.id][day];
       }
 
-      // eslint-disable-next-line vision-local-money/no-raw-money-arithmetic
-      const invValue = convertAmount(units * price, inv.currency);
-      totalValue += invValue;
-      if (inv.assetClass === 'stock' || inv.assetClass === 'etf') stocksEtfsValue += invValue;
-      else if (inv.assetClass === 'crypto') cryptoValue += invValue;
-      else if (inv.assetClass === 'metals') metalsValue += invValue;
+      const invValue = convertAmount(toDecimal(units).times(price), inv.currency);
+      totalValue = totalValue.plus(invValue);
+      if (inv.assetClass === 'stock' || inv.assetClass === 'etf') stocksEtfsValue = stocksEtfsValue.plus(invValue);
+      else if (inv.assetClass === 'crypto') cryptoValue = cryptoValue.plus(invValue);
+      else if (inv.assetClass === 'metals') metalsValue = metalsValue.plus(invValue);
     }
 
     // Fixed-income: use current_price from active_from onward
-    let fixedIncomeValue = 0;
+    let fixedIncomeValue = toDecimal(0);
     for (const inv of fixedIncomeInvestments) {
       if (day < inv.activeFrom || inv.currentPrice <= 0) continue;
-      fixedIncomeValue += convertAmount(inv.currentPrice, inv.currency);
+      fixedIncomeValue = fixedIncomeValue.plus(convertAmount(inv.currentPrice, inv.currency));
     }
-    totalValue += fixedIncomeValue;
+    totalValue = totalValue.plus(fixedIncomeValue);
 
     // Inflation compounding (once per calendar month)
     const monthKey = day.slice(0, 7);
     if (monthKey !== lastInflationMonth) {
-      cumulativeInflation *= (1 + (inflationByMonth.get(monthKey) ?? 0));
+      cumulativeInflation = cumulativeInflation.times(toDecimal(1).plus(inflationByMonth.get(monthKey) ?? 0));
       lastInflationMonth = monthKey;
     }
 
     snapshots.push({
       snapshot_date: day,
-      invested: cumulativeInvested || 0,
-      value: totalValue || 0,
-      stocks_etfs_value: stocksEtfsValue || 0,
-      crypto_value: cryptoValue || 0,
-      metals_value: metalsValue || 0,
-      cash_value: fixedIncomeValue || 0,
-      stocks_etfs_invested: stocksEtfsInvested || 0,
-      crypto_invested: cryptoInvested || 0,
-      metals_invested: metalsInvested || 0,
-      cumulative_inflation: Math.round((cumulativeInflation - 1) * 10000) / 100,
-      inflation_adjusted_value: cumulativeInflation > 0
-        ? totalValue / cumulativeInflation : totalValue,
+      invested: roundMoney(cumulativeInvested),
+      value: roundMoney(totalValue),
+      stocks_etfs_value: roundMoney(stocksEtfsValue),
+      crypto_value: roundMoney(cryptoValue),
+      metals_value: roundMoney(metalsValue),
+      cash_value: roundMoney(fixedIncomeValue),
+      stocks_etfs_invested: roundMoney(stocksEtfsInvested),
+      crypto_invested: roundMoney(cryptoInvested),
+      metals_invested: roundMoney(metalsInvested),
+      cumulative_inflation: roundMoney(cumulativeInflation.minus(1).times(100), 2),
+      inflation_adjusted_value: cumulativeInflation.gt(0)
+        ? roundMoney(totalValue.div(cumulativeInflation)) : roundMoney(totalValue),
     });
   }
 

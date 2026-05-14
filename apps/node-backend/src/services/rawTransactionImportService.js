@@ -28,6 +28,7 @@ import {
   normalizeForMatching,
   findBestRecipientMatch,
 } from './calculations/normalization.js';
+import { toDecimal } from '../lib/money.js';
 
 const RAW_IMPORT_BATCH_SIZE = 20;
 
@@ -85,7 +86,12 @@ function parseDecimal(value) {
     v = v.replace(',', '.');
   }
   v = v.replace(/\s/g, '');
-  const n = parseFloat(v);
+  let n;
+  try {
+    n = toDecimal(v).toNumber();
+  } catch {
+    return 0;
+  }
   if (isNaN(n)) return 0;
   return negative ? -n : n;
 }
@@ -357,11 +363,22 @@ async function processRawImportRow(txData, bankType) {
   );
 
   const dateStr = txData.date.toISOString().split('T')[0];
+  // ON CONFLICT on the partial unique index over tx_hash closes the
+  // check-then-insert race: the `isRawDuplicate` / `isDuplicateByFields` probe
+  // above and this INSERT are not atomic, so a concurrent import (or a
+  // re-submitted file) could otherwise slip a duplicate past the check.
   const txResult = await query(
-    `INSERT INTO transactions (date, bank_account, recipient_id, amount, memo, currency, balance, comment, is_active)
-     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, true) RETURNING id`,
-    [dateStr, txData.bankAccount, recipientId, txData.amount, txData.memo || '', txData.currency || null, txData.balance, txData.comment]
+    `INSERT INTO transactions (date, bank_account, recipient_id, amount, memo, currency, balance, comment, tx_hash, is_active)
+     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, true)
+     ON CONFLICT (tx_hash) WHERE tx_hash IS NOT NULL DO NOTHING
+     RETURNING id`,
+    [dateStr, txData.bankAccount, recipientId, txData.amount, txData.memo || '', txData.currency || null, txData.balance, txData.comment, dedupHash]
   );
+
+  if (!txResult.rows[0]) {
+    // tx_hash already present — lost the race / re-submitted row.
+    return 'duplicate';
+  }
 
   if (rawTxn && txResult.rows[0]) {
     try {

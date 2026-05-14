@@ -6,6 +6,7 @@ import { Router } from 'express';
 // eslint-disable-next-line vision-local/no-repo-direct-from-route
 import { watchlistRepository } from '../repositories/watchlistRepository.js';
 import { NotFoundError, ValidationError } from '../middleware/errorHandler.js';
+import { validateIdParam } from '../middleware/validation.js';
 
 const router = Router();
 
@@ -35,7 +36,7 @@ router.get('/', async (req, res) => {
   });
 });
 
-router.get('/:id', async (req, res) => {
+router.get('/:id', validateIdParam, async (req, res) => {
   const item = await watchlistRepository.getById(parseInt(req.params.id, 10));
   if (!item) throw new NotFoundError('Watchlist item not found');
   res.ok(item);
@@ -53,14 +54,14 @@ router.post('/', async (req, res) => {
   res.ok(item);
 });
 
-router.patch('/:id', async (req, res) => {
+router.patch('/:id', validateIdParam, async (req, res) => {
   const id = parseInt(req.params.id, 10);
   const item = await watchlistRepository.update(id, req.body);
   if (!item) throw new NotFoundError('Watchlist item not found');
   res.ok(item);
 });
 
-router.delete('/:id', async (req, res) => {
+router.delete('/:id', validateIdParam, async (req, res) => {
   const deleted = await watchlistRepository.delete(parseInt(req.params.id, 10));
   if (!deleted) throw new NotFoundError('Watchlist item not found');
   res.status(204).send();

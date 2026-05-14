@@ -74,6 +74,11 @@ function getSortValue(val: unknown): string | number {
     return String(val).toLowerCase();
 }
 
+function getRowKey<T extends Record<string, unknown>>(row: T, fallbackIndex: number): string | number {
+    const candidate = row.id;
+    return (typeof candidate === "string" || typeof candidate === "number") ? candidate : fallbackIndex;
+}
+
 export function VirtualDataTable<T extends Record<string, unknown>>({
     title,
     subtitle,
@@ -176,6 +181,24 @@ export function VirtualDataTable<T extends Record<string, unknown>>({
         });
         return widths;
     });
+
+    // Re-seed defaultWidth for any column not yet tracked — the useState
+    // initialiser only runs once, so a locale change (new column objects) or
+    // an added column would otherwise never pick up its default width.
+    // Existing (possibly user-resized) widths are left untouched.
+    useEffect(() => {
+        setColumnWidths((prev) => {
+            let changed = false;
+            const next = { ...prev };
+            for (const col of columns) {
+                if (col.defaultWidth && next[col.key] === undefined) {
+                    next[col.key] = col.defaultWidth;
+                    changed = true;
+                }
+            }
+            return changed ? next : prev;
+        });
+    }, [columns]);
 
     const resizingRef = useRef<{ key: string; startX: number; startWidth: number } | null>(null);
 
@@ -322,9 +345,11 @@ export function VirtualDataTable<T extends Record<string, unknown>>({
         onLoadMore();
     }, [onLoadMore, hasMore, isFetchingMore, loadMoreOffset, rowHeight, processedRows.length]);
 
-    useEffect(() => {
-        loadRequestedForLengthRef.current = null;
-    }, [processedRows.length]);
+    // No reset effect for loadRequestedForLengthRef: the equality guard in
+    // maybeLoadMore already self-heals — once processedRows.length advances
+    // past the requested length the comparison fails and exactly one new load
+    // is allowed. A separate reset-to-null effect raced maybeLoadMore and
+    // could re-fire onLoadMore for an already-requested page.
 
     // Infinite scroll: trigger load checks from actual scroll events only.
     useEffect(() => {
@@ -555,7 +580,12 @@ export function VirtualDataTable<T extends Record<string, unknown>>({
 
                                 return (
                                     <div
-                                        key={virtualRow.key}
+                                        // Key by the row's stable id, not the
+                                        // virtualizer's index-based key — on a
+                                        // sort/filter reorder an index key would
+                                        // re-attach in-progress inline edits and
+                                        // row transitions to the wrong row.
+                                        key={getRowKey(row, sourceIndex)}
                                         data-index={virtualRow.index}
                                         ref={virtualizer.measureElement}
                                         className={`flex items-center border-b border-border transition-colors hover:bg-muted/50 ${isEditing ? "bg-primary/5" : ""} ${onRowDoubleClick ? "cursor-pointer" : ""}`}

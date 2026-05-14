@@ -289,6 +289,15 @@ describe('InfoRepository', () => {
             ]
           };
         }
+        if (callIdx === 3) {
+          // Current/previous month keys derived in-DB.
+          return {
+            rows: [{
+              current_period: new Date().toISOString().substring(0, 7),
+              prev_period: (() => { const d = new Date(); d.setMonth(d.getMonth() - 1); return d.toISOString().substring(0, 7); })(),
+            }],
+          };
+        }
         return { rows: [] };
       });
 
@@ -310,7 +319,11 @@ describe('InfoRepository', () => {
     });
 
     it('should return empty arrays when no transactions', async () => {
-      query.mockResolvedValue({ rows: [] });
+      query.mockImplementation(async (sql) =>
+        sql.includes("TO_CHAR(CURRENT_DATE")
+          ? { rows: [{ current_period: '2026-01', prev_period: '2025-12' }] }
+          : { rows: [] }
+      );
 
       const result = await infoRepository.getRecipientInsights();
 
@@ -327,6 +340,12 @@ describe('InfoRepository', () => {
           rows: [
             { recipient_id: 1, recipient_name: 'Shop', period: new Date().toISOString().substring(0, 7), currency: 'EUR', abs_amount: '50' },
           ]
+        };
+        if (callIdx === 3) return {
+          rows: [{
+            current_period: new Date().toISOString().substring(0, 7),
+            prev_period: (() => { const d = new Date(); d.setMonth(d.getMonth() - 1); return d.toISOString().substring(0, 7); })(),
+          }],
         };
         return { rows: [] };
       });

@@ -6,7 +6,6 @@ import { query } from '../database/connection.js';
 import { convertRowsToEur } from '../services/currency/currencyConversionService.js';
 import {
   roundToCents,
-  formatDateToYm,
   mapRowsForAmountConversion,
 } from './infoRepositoryHelpers.js';
 
@@ -93,10 +92,16 @@ export const recipientInsightsRepository = {
       targetCurrency
     );
 
-    const currentPeriod = formatDateToYm(new Date());
-    const prevDate = new Date();
-    prevDate.setMonth(prevDate.getMonth() - 1);
-    const prevPeriod = formatDateToYm(prevDate);
+    // Derive the current / previous month keys in the database so they match
+    // the `TO_CHAR(t.date, 'YYYY-MM')` buckets and the `CURRENT_DATE` window
+    // above. Computing them from a server-local `new Date()` could pick a
+    // different month near a month boundary, yielding an empty MoM result.
+    const periodResult = await query(`
+      SELECT TO_CHAR(CURRENT_DATE, 'YYYY-MM') AS current_period,
+             TO_CHAR(CURRENT_DATE - INTERVAL '1 month', 'YYYY-MM') AS prev_period
+    `);
+    const currentPeriod = periodResult.rows[0].current_period;
+    const prevPeriod = periodResult.rows[0].prev_period;
 
     const momAgg = {};
     for (const row of momConverted) {

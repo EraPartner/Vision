@@ -32,13 +32,25 @@ export function downsampleLTTB<T>(
 
     let avgX = 0;
     let avgY = 0;
-    const avgCount = Math.max(1, nextBucketEnd - nextBucketStart);
+    // Count actual iterations rather than deriving the count from the bucket
+    // bounds: nextBucketStart can run past `len` on the tail bucket while
+    // nextBucketEnd is clamped, so a bound-derived count over-counts and the
+    // averaged apex point collapses toward (0,0), distorting the last bucket.
+    let avgCount = 0;
     for (let j = nextBucketStart; j < nextBucketEnd && j < len; j++) {
       avgX += getX(data[j], j);
       avgY += getY(data[j]);
+      avgCount++;
     }
-    avgX /= avgCount;
-    avgY /= avgCount;
+    if (avgCount > 0) {
+      avgX /= avgCount;
+      avgY /= avgCount;
+    } else {
+      // Tail bucket with no "next" points — anchor the apex on the final
+      // data point so the triangle-area test stays meaningful.
+      avgX = getX(data[len - 1], len - 1);
+      avgY = getY(data[len - 1]);
+    }
 
     const prevX = getX(data[prevSelectedIndex], prevSelectedIndex);
     const prevY = getY(data[prevSelectedIndex]);

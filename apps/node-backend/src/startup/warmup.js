@@ -39,6 +39,30 @@ const TWELVE_HOURS_MS = 12 * 60 * 60 * 1000;
 const ONE_HOUR_MS = 60 * 60 * 1000;
 const ONE_DAY_MS = 24 * 60 * 60 * 1000;
 
+/**
+ * Wrap a scheduled async task so a slow run can't overlap the next interval
+ * tick — if the previous invocation is still running, this one is skipped.
+ *
+ * @param {string} name  label used in the skip log line
+ * @param {() => Promise<void>} fn
+ * @returns {() => Promise<void>}
+ */
+function withInFlightGuard(name, fn) {
+  let running = false;
+  return async () => {
+    if (running) {
+      logger.debug(`Skipping scheduled "${name}" — previous run still in progress`);
+      return;
+    }
+    running = true;
+    try {
+      await fn();
+    } finally {
+      running = false;
+    }
+  };
+}
+
 function hasLivePriceRefreshConfig(investment) {
   const provider = investment?.price_provider;
   if (!provider || provider === 'manual') return false;
@@ -222,38 +246,47 @@ export async function runWarmupTasks({ warmupStatus }) {
     logger.info('Skipping startup investment price refresh — offline');
   }
 
-  const exchangeRateRefreshInterval = setInterval(async () => {
-    if (!(await isInternetReachable({ force: true }))) {
-      logger.debug('Skipping scheduled exchange rate refresh — offline');
-      return;
-    }
-    logger.info('Running scheduled exchange rate refresh...');
-    clearExchangeRateCache();
-    await warmExchangeRateCache().catch((err) => {
-      logger.error('Scheduled exchange rate refresh failed', { error: err.message });
-    });
+  const exchangeRateRefreshInterval = setInterval(
+    withInFlightGuard('exchange rate refresh', async () => {
+      if (!(await isInternetReachable({ force: true }))) {
+        logger.debug('Skipping scheduled exchange rate refresh — offline');
+        return;
+      }
+      logger.info('Running scheduled exchange rate refresh...');
+      clearExchangeRateCache();
+      await warmExchangeRateCache().catch((err) => {
+        logger.error('Scheduled exchange rate refresh failed', { error: err.message });
+      });
 
-    clearInflationMemoryCache();
-    await warmInflationCache().catch((err) => {
-      logger.error('Scheduled Belgian inflation refresh failed', { error: err.message });
-    });
-  }, TWELVE_HOURS_MS);
+      clearInflationMemoryCache();
+      await warmInflationCache().catch((err) => {
+        logger.error('Scheduled Belgian inflation refresh failed', { error: err.message });
+      });
+    }),
+    TWELVE_HOURS_MS,
+  );
 
-  const quotesRefreshInterval = setInterval(async () => {
-    if (!(await isInternetReachable({ force: true }))) {
-      logger.debug('Skipping periodic quote refresh — offline');
-      return;
-    }
-    refreshActiveHoldingQuotes().catch((err) => {
-      logger.error('Periodic quote refresh failed', { error: err.message });
-    });
-  }, ONE_HOUR_MS);
+  const quotesRefreshInterval = setInterval(
+    withInFlightGuard('quote refresh', async () => {
+      if (!(await isInternetReachable({ force: true }))) {
+        logger.debug('Skipping periodic quote refresh — offline');
+        return;
+      }
+      await refreshActiveHoldingQuotes().catch((err) => {
+        logger.error('Periodic quote refresh failed', { error: err.message });
+      });
+    }),
+    ONE_HOUR_MS,
+  );
 
-  const cashflowForecastRefreshInterval = setInterval(() => {
-    refreshCashflowForecastMc().catch((err) => {
-      logger.error('Nightly cashflow forecast MC refresh failed', { error: err.message });
-    });
-  }, ONE_DAY_MS);
+  const cashflowForecastRefreshInterval = setInterval(
+    withInFlightGuard('cashflow forecast MC refresh', async () => {
+      await refreshCashflowForecastMc().catch((err) => {
+        logger.error('Nightly cashflow forecast MC refresh failed', { error: err.message });
+      });
+    }),
+    ONE_DAY_MS,
+  );
 
   return {
     exchangeRateRefreshInterval,

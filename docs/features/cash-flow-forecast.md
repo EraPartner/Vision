@@ -3,8 +3,8 @@ title: Cash Flow Forecast
 type: feature
 status: active
 date: 2026-04-25
-updated: 2026-05-08
-last_modified: 2026-05-08
+updated: 2026-05-14
+last_modified: 2026-05-14
 tags: [feature, cash-flow, forecast, planning, aggregations, phase-6, phase-10, phase-c, phase-d, phase-e, phase-g, planned-transactions, statistical-forecasting, ensemble-methods, frontend-visualization, multi-method-forecast, diagnostics-sheet, accuracy-persistence, materialized-cache, nightly-job, category-breakdown, fallback-resilience]
 aliases: [cashflow-forecast, forward-projections, cash-flow-planning, income-expense-forecast, budget-projection, multi-method-forecast, ensemble-forecast, category-breakdown]
 description: Project income and expenses forward based on planned transactions (Phase 6) or using 8 statistical methods including 7 base methods + inverse-MSE ensemble (Phase 10, F). Phase C adds frontend dashboard visualization with controls, MC confidence bands, and diagnostics panel. Phase E adds nightly cache materialization. Phase G adds per-category breakdown with hierarchical reconciliation.
@@ -128,6 +128,17 @@ Each Monte Carlo method uses a seeded PRNG (`fnv1a_hash(userId | yyyymm | filter
 - Same user, same month, same filters → identical samples across requests
 - Enables caching and ensemble combination in Phase D
 - `filterHash` includes currency, excluded categories, excluded recipients, and `include_planned` flag
+
+### Decimal Precision & Accumulation (May 2026 Audit)
+
+All cash flow forecast calculations now route through Decimal.js to eliminate IEEE 754 floating-point drift in running balance aggregation:
+
+**Implementation:**
+- `cashflowForecast.js`: All date bucketing via APP_TIMEZONE helpers; cumulative net flows accumulated via Decimal `addAll()`
+- `calculations/aggregation/cashflowForecast.js`: Running-balance stream maintained as Decimal throughout; `divide()` used for per-day allocation when splitting multi-day transactions
+- Frontend `forecastMerge.ts`: Reuses `buildBandMaps()` and `buildSeries()` helpers to avoid redundant accumulation passes
+
+**Benefit:** Forecasts with many categories or long histories no longer accumulate ±0.01 rounding errors. Cumulative balance matches database NUMERIC precision exactly.
 
 ## Endpoints
 

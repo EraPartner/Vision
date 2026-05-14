@@ -6,7 +6,8 @@
 import fs from 'fs';
 import { cleanRecipientName, normalizeToUppercase } from '../../textNormalization.js';
 import { logger } from '../../../config/logger.js';
-import { parseDayMonthYear, parseCommaDecimal, buildOptionalComment, splitCsvLines } from './_shared.js';
+import { parseDayMonthYear, parseCommaDecimal, parseDecimalSafe, buildOptionalComment, splitCsvLines } from './_shared.js';
+import { toDecimal, roundMoney } from '../../../lib/money.js';
 
 const NAME = 'belfius';
 const BANK_LABEL = 'Belfius';
@@ -19,21 +20,23 @@ function parseLastBalance(line) {
   const parts = line.split(';');
   if (parts.length < 2) return null;
   const balStr = parts[1].replace(' EUR', '').replace(',', '.').trim();
-  const val = parseFloat(balStr);
+  const val = parseDecimalSafe(balStr);
   return isNaN(val) ? null : val;
 }
 
 function applyRunningBalances(transactions, lastBalance) {
   if (lastBalance === null || transactions.length === 0) return;
-  let bal = lastBalance;
+  // Accumulate as Decimal — rounding the float `bal` every row let drift
+  // compound backwards across the whole statement.
+  let bal = toDecimal(lastBalance);
   const isDescending = transactions[0].date >= transactions[transactions.length - 1].date;
   const indices = isDescending
     ? Array.from({ length: transactions.length }, (_, i) => i)
     : Array.from({ length: transactions.length }, (_, i) => transactions.length - 1 - i);
 
   for (const i of indices) {
-    transactions[i].balance = Math.round(bal * 100) / 100;
-    bal -= transactions[i].amount;
+    transactions[i].balance = roundMoney(bal);
+    bal = bal.minus(toDecimal(transactions[i].amount));
   }
 }
 

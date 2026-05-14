@@ -27,6 +27,8 @@ describe('recipientInsightsRepository.getRecipientInsights', () => {
     });
     // Second call: month-over-month raw query.
     query.mockResolvedValueOnce({ rows: [] });
+    // Third call: current/previous month keys derived in-DB.
+    query.mockResolvedValueOnce({ rows: [{ current_period: '2025-04', prev_period: '2025-03' }] });
 
     convertRowsToEur
       .mockResolvedValueOnce([
@@ -59,11 +61,9 @@ describe('recipientInsightsRepository.getRecipientInsights', () => {
   });
 
   it('emits month-over-month entries for recipients with both periods', async () => {
-    vi.useFakeTimers();
-    vi.setSystemTime(new Date('2025-04-15T12:00:00Z'));
-
     query.mockResolvedValueOnce({ rows: [] });
     query.mockResolvedValueOnce({ rows: [] });
+    query.mockResolvedValueOnce({ rows: [{ current_period: '2025-04', prev_period: '2025-03' }] });
 
     convertRowsToEur
       .mockResolvedValueOnce([])
@@ -87,11 +87,9 @@ describe('recipientInsightsRepository.getRecipientInsights', () => {
   });
 
   it('caps month-over-month list to top-10 by current spend', async () => {
-    vi.useFakeTimers();
-    vi.setSystemTime(new Date('2025-04-15T12:00:00Z'));
-
     query.mockResolvedValueOnce({ rows: [] });
     query.mockResolvedValueOnce({ rows: [] });
+    query.mockResolvedValueOnce({ rows: [{ current_period: '2025-04', prev_period: '2025-03' }] });
 
     convertRowsToEur
       .mockResolvedValueOnce([])

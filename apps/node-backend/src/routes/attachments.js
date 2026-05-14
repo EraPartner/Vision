@@ -21,6 +21,7 @@ import {
 import { validateIdParam } from '../middleware/validation.js';
 import { NotFoundError, ValidationError } from '../middleware/errorHandler.js';
 import { query } from '../database/connection.js';
+import { logger } from '../config/logger.js';
 
 const router = Router();
 
@@ -97,7 +98,7 @@ router.get('/transaction/:id', validateIdParam, async (req, res) => {
  * Stream the file to the client. Envelope (ADR-026) does not apply here —
  * the response is the raw file bytes with Content-Disposition: inline.
  */
-router.get('/:id/download', validateIdParam, async (req, res) => {
+router.get('/:id/download', validateIdParam, async (req, res, next) => {
   const attachment = await attachmentRepository.findById(parseInt(req.params.id, 10));
   if (!attachment) throw new NotFoundError('Attachment not found');
 
@@ -109,7 +110,20 @@ router.get('/:id/download', validateIdParam, async (req, res) => {
     'Content-Disposition',
     `inline; filename="${asciiFallback}"; filename*=UTF-8''${utf8Encoded}`,
   );
-  res.sendFile(absPath);
+  // Pass a callback so a file that's missing on disk (DB row exists, bytes
+  // gone) becomes a clean 404 instead of a raw ENOENT 500.
+  res.sendFile(absPath, (err) => {
+    if (!err) return;
+    if (res.headersSent) {
+      res.end();
+      return;
+    }
+    if (err.code === 'ENOENT' || err.status === 404) {
+      next(new NotFoundError('Attachment file not found'));
+    } else {
+      next(err);
+    }
+  });
 });
 
 // ── Delete ─────────────────────────────────────────────────────────────────────
@@ -124,7 +138,18 @@ router.delete('/:id', validateIdParam, async (req, res) => {
   // Delete DB row first — if that fails the file is still present and recoverable.
   // Deleting the file first risks orphaning it if the DB delete subsequently fails.
   await attachmentRepository.deleteById(attachment.id);
-  await removeAttachmentFile(attachment.stored_path);
+  // The row is already gone; a file-removal failure must not 500 the request
+  // (retrying can't help — there's no row left to retry from). Log the orphan
+  // for out-of-band cleanup and still report success to the caller.
+  try {
+    await removeAttachmentFile(attachment.stored_path);
+  } catch (err) {
+    logger.warn('Attachment file removal failed; file orphaned on disk', {
+      attachmentId: attachment.id,
+      storedPath: attachment.stored_path,
+      error: err?.message,
+    });
+  }
 
   res.ok({ deleted: true });
 });

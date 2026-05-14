@@ -17,8 +17,10 @@ describe('neutralizeCsvFormula', () => {
     expect(neutralizeCsvFormula('\r=cmd')).toBe("'\r=cmd");
   });
 
-  it('prefixes raw \\t-only payload (Excel treats leading \\t as bypass)', () => {
-    expect(neutralizeCsvFormula('\tfoo')).toBe('\tfoo');
+  it('prefixes raw \\t-prefixed payload (Excel treats leading \\t as bypass)', () => {
+    // A leading tab is itself a dangerous prefix — it must be neutralised, not
+    // trimmed away before the check.
+    expect(neutralizeCsvFormula('\tfoo')).toBe("'\tfoo");
   });
 
   it('leaves benign strings untouched', () => {

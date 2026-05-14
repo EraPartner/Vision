@@ -4,7 +4,7 @@
 
 import { cleanRecipientName, normalizeToUppercase } from '../../textNormalization.js';
 import { logger } from '../../../config/logger.js';
-import { parseCsvFile, buildOptionalComment } from './_shared.js';
+import { parseCsvFile, buildOptionalComment, parseDecimalSafe } from './_shared.js';
 
 const NAME = 'revolut';
 const BANK_LABEL = 'Revolut';
@@ -57,11 +57,11 @@ function parseRow(parts) {
   const date = parseRevolutDate(completedDateStr);
   if (!date) return null;
 
-  const amount = parseFloat(amountStr);
+  const amount = parseDecimalSafe(amountStr);
   if (isNaN(amount)) return null;
 
-  const fee = parseFloat(feeStr) || 0;
-  const balance = balanceStr ? parseFloat(balanceStr) : null;
+  const fee = parseDecimalSafe(feeStr) || 0;
+  const balance = balanceStr ? parseDecimalSafe(balanceStr) : null;
 
   const cleanedDescription = normalizeToUppercase(cleanRecipientName(description));
   const memo = normalizeToUppercase(`${transactionType} - ${product}`);

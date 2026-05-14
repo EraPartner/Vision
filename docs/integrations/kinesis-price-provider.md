@@ -3,10 +3,10 @@ title: Integration - Kinesis Price Provider
 type: integration
 status: active
 date: 2026-04-25
-last_modified: 2026-04-26
-tags: [integration, kinesis, price-provider, metals, commodities, eur-to-usd-mapping, data-sanitization]
-description: Kinesis market data provider for metals and commodity price feeds with EUR-to-USD symbol remapping and misconfiguration detection
-aliases: [kinesis, kinesis price provider, metals prices, commodity data]
+last_modified: 2026-05-14
+tags: [integration, kinesis, price-provider, metals, commodities, eur-to-usd-mapping, data-sanitization, currency-conversion, historical-fx]
+description: Kinesis market data provider for metals and commodity price feeds with EUR-to-USD symbol remapping, currency conversion, and misconfiguration detection
+aliases: [kinesis, kinesis price provider, metals prices, commodity data, kinesis eur conversion]
 related_code: ["apps/node-backend/src/services/priceProviderService.js", "apps/node-backend/src/services/prices/priceProviderRegistry.js", "apps/node-backend/src/config/kinesisConfig.js", "apps/node-backend/src/routes/admin.js", "apps/node-backend/tests/priceProviderRegistry.test.js"]
 ---
 
@@ -63,6 +63,24 @@ The Kinesis API only provides USD-denominated symbols. When an investment has a 
 **Implementation:** Defined as `KINESIS_EUR_TO_USD` constant in `resolveKinesisConfig()` ([[apps/node-backend/src/services/prices/priceProviderRegistry.js#L61-L69]]). The symbol lookup happens before any asset config fallback, ensuring EUR variants are always normalized to their USD counterparts.
 
 **Misconfiguration Detection (Added 2026-04-25):** When a `price_provider_id` ends with `_EUR` but is not found in the `KINESIS_EUR_TO_USD` mapping, the system logs a `WARN`-level message: `Kinesis: unmapped EUR symbol "{providerId}" — add it to KINESIS_EUR_TO_USD or the API call will fail`. This early warning prevents silent API failures for newly added EUR-denominated assets.
+
+### Currency Conversion (May 2026)
+
+When an investment has a EUR-denominated symbol (e.g., `KAU_EUR`) remapped to USD (`KAU_USD`), Vision now converts the fetched USD price back to the investment's currency:
+
+**Live Price Path:**
+- `PROVIDERS.kinesis` in `priceProviderRegistry.js` returns `needsUsdToEur` flag if the symbol was remapped
+- When `needsUsdToEur=true` and investment currency ≠ USD, live USD price is converted to investment currency using current FX rate
+- Returns `{ price, currency: <investment currency>, source }`
+
+**Historical Series Path:**
+- `fetchHistoricalPrices()` in `priceProviderService.js` converts fetched USD points to investment currency via `convertRowsToEur(..., { useHistoricalRatesByDate: true })`
+- Each point is converted at its own historical FX rate (bulk-loaded from `currency_rates` in a single query)
+- No per-date DB round-trips; efficient single-query rate-index load
+- Persists currency-native prices to `asset_price_history`
+
+**Result:**
+EUR-denominated Kinesis investments now store prices in their native currency (EUR) instead of silently storing USD. Both live-price and historical-series consumers receive currency-native values.
 
 ---
 

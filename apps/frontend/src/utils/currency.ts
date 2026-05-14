@@ -191,7 +191,13 @@ export function formatAmountWithSymbol(
 ): string {
   const symbol = getCurrencySymbol(currencyCode);
   const sign = amount < 0 ? '-' : '';
-  const formattedAmount = Math.abs(amount).toFixed(2);
+  // Honour the user's decimal-places + number-format settings rather than a
+  // hardcoded `.toFixed(2)` (which also dropped locale digit grouping).
+  const fractionDigits = currencyFormatDefaults.fractionDigits;
+  const formattedAmount = new Intl.NumberFormat(currencyFormatDefaults.locale, {
+    minimumFractionDigits: fractionDigits,
+    maximumFractionDigits: fractionDigits,
+  }).format(Math.abs(amount));
 
   // For currencies that typically show symbol after the amount
   const symbolAfter = ['SEK', 'NOK', 'DKK', 'PLN', 'CZK', 'HUF'];

@@ -9,6 +9,21 @@ import { AppError, ValidationError } from '../middleware/errorHandler.js';
 
 const router = Router();
 
+/**
+ * Coerce a query-string param to a single trimmed string. Express parses a
+ * repeated key (`?symbols=A&symbols=B`) as an array — calling `.split` on it
+ * throws a TypeError that surfaced as an opaque 502. Joining arrays keeps the
+ * repeated-key form working and guarantees a string for callers.
+ *
+ * @param {unknown} value
+ * @returns {string}
+ */
+function coerceQueryString(value) {
+  if (Array.isArray(value)) return value.map((v) => String(v)).join(',');
+  if (value == null) return '';
+  return String(value);
+}
+
 function normalizeThumbnailUrl(url) {
   if (!url || typeof url !== 'string') return null;
   const trimmed = url.trim();
@@ -78,7 +93,7 @@ router.get('/search', async (req, res) => {
 
 // GET /api/market/quote?symbols=AAPL,MSFT
 router.get('/quote', async (req, res) => {
-  const { symbols } = req.query;
+  const symbols = coerceQueryString(req.query.symbols);
   if (!symbols) throw new ValidationError('symbols parameter required');
 
   let quoteResults;
@@ -186,7 +201,10 @@ router.get('/quote', async (req, res) => {
 
 // GET /api/market/chart?symbol=AAPL&range=1mo&interval=1d
 router.get('/chart', async (req, res) => {
-  const { symbol, range = '1mo', interval = '1d' } = req.query;
+  const symbol = coerceQueryString(req.query.symbol);
+  // `range`/`interval` are passed through to yahoo-finance2, which validates
+  // them against its own literal-union types — leave them loosely typed.
+  const { range = '1mo', interval = '1d' } = req.query;
   if (!symbol) throw new ValidationError('symbol parameter required');
 
   let result;
@@ -221,7 +239,8 @@ router.get('/chart', async (req, res) => {
 
 // GET /api/market/news?symbols=AAPL,MSFT&count=20
 router.get('/news', async (req, res) => {
-  const { symbols, count = '20' } = req.query;
+  const symbols = coerceQueryString(req.query.symbols);
+  const count = coerceQueryString(req.query.count) || '20';
   const querySymbols = symbols || 'SPY,QQQ,DIA';
   const newsCount = Math.min(parseInt(count, 10) || 20, 50);
 

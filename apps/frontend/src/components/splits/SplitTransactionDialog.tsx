@@ -11,6 +11,7 @@ import { Split, Plus, Trash2, Users } from "lucide-react";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { formatCurrency } from "@/utils/currency";
 import { parseDecimal } from "@/lib/decimal";
+import { toDecimal, addAll, multiply, roundMoney } from "@/lib/money";
 
 interface SplitEntry {
     uid: string;
@@ -49,25 +50,30 @@ export function SplitTransactionDialog({ transactionId, transactionAmount, trans
     const validEntries = entries.filter(e => e.recipient_id != null);
     const totalPeople = validEntries.length + 1; // +1 for "me"
 
-    const equalShare = totalPeople > 1 ? Math.round((absAmount / totalPeople) * 100) / 100 : 0;
+    // Money math runs through Decimal and rounds to cents on emit so the
+    // "exceeds total" gate compares exact cent values — a float `reduce`
+    // could drift an exact split just past `absAmount` and mis-gate it.
+    const equalShare = totalPeople > 1 ? roundMoney(toDecimal(absAmount).div(totalPeople)) : 0;
 
-    const customTotal = validEntries.reduce((s, e) => s + parseDecimal(e.amount), 0);
+    const customTotal = roundMoney(addAll(validEntries.map((e) => parseDecimal(e.amount))));
     const existingSplits = existingSplitsData?.items ?? [];
-    const existingSplitTotal = existingSplits.reduce((sum, split) => sum + (split.amount || 0), 0);
+    const existingSplitTotal = roundMoney(addAll(existingSplits.map((split) => split.amount || 0)));
     const existingRecipientNames = existingSplits
         .map((split) => split.recipient_name)
         .filter(Boolean)
         .join(', ');
-    const newSplitTotal = splitType === "equal" ? equalShare * validEntries.length : customTotal;
+    const newSplitTotal = splitType === "equal"
+        ? roundMoney(multiply(equalShare, validEntries.length))
+        : customTotal;
     const hasNonPositiveSplitAmount = splitType === "equal"
         ? validEntries.length > 0 && equalShare <= 0
         : validEntries.some((entry) => {
             if (!entry.recipient_id) return false;
             return parseDecimal(entry.amount) <= 0;
         });
-    const totalAfterSubmit = existingSplitTotal + newSplitTotal;
-    const remainingSplitCapacity = Math.max(absAmount - existingSplitTotal, 0);
-    const hasExceededTransactionTotal = totalAfterSubmit > absAmount + 0.000001;
+    const totalAfterSubmit = roundMoney(toDecimal(existingSplitTotal).plus(newSplitTotal));
+    const remainingSplitCapacity = Math.max(roundMoney(toDecimal(absAmount).minus(existingSplitTotal)), 0);
+    const hasExceededTransactionTotal = toDecimal(totalAfterSubmit).gt(roundMoney(absAmount));
 
     const handleSubmit = () => {
         const splits = validEntries.map(e => ({

@@ -7,7 +7,44 @@
  */
 
 import { toDecimal, toNumber, roundToCents } from '../lib/money.js';
+import { appDateStringToUtc, toAppDateString } from '../lib/timezone.js';
 import Decimal from 'decimal.js';
+
+const MS_PER_DAY = 1000 * 60 * 60 * 24;
+
+/**
+ * Normalise a date-ish value to a `YYYY-MM-DD` string. Accepts a plain
+ * date string (snapshot/txn rows) or a JS `Date` — the `pg` driver returns
+ * `DATE` columns as a Date at local midnight, so the local getters recover
+ * the exact calendar day.
+ *
+ * @param {string|Date} value
+ * @returns {string}
+ */
+function toYmd(value) {
+  if (value instanceof Date) {
+    const y = value.getFullYear();
+    const m = String(value.getMonth() + 1).padStart(2, '0');
+    const d = String(value.getDate()).padStart(2, '0');
+    return `${y}-${m}-${d}`;
+  }
+  return String(value).slice(0, 10);
+}
+
+/**
+ * Whole-day count between two calendar dates, evaluated in APP_TIMEZONE
+ * (ADR-009). Both endpoints are normalised to start-of-day in the app zone
+ * so the result is an exact integer, never a TZ-skewed fraction.
+ *
+ * @param {string|Date} from
+ * @param {string|Date} to
+ * @returns {number}
+ */
+function calendarDaysBetween(from, to) {
+  const fromUtc = appDateStringToUtc(toYmd(from));
+  const toUtc = appDateStringToUtc(toYmd(to));
+  return Math.round((toUtc.getTime() - fromUtc.getTime()) / MS_PER_DAY);
+}
 
 /** @typedef {'weighted_avg'|'fifo'|'lifo'} CostBasisMethod */
 
@@ -306,9 +343,9 @@ export function calculateAccruedInterest(txns, principal, interestRate) {
   const startDate = lastInterestTxn?.date || firstBuyTxn?.date;
   if (!startDate) return 0;
 
-  const start = new Date(startDate);
-  const now = new Date();
-  const daysSinceStart = Math.max(0, (now.getTime() - start.getTime()) / (1000 * 60 * 60 * 24));
+  // Count whole calendar days in APP_TIMEZONE — mixing a UTC-midnight start
+  // with a wall-clock `new Date()` skewed the day count by up to a day.
+  const daysSinceStart = Math.max(0, calendarDaysBetween(startDate, toAppDateString(new Date())));
 
   const dailyRate = interestRate / 100 / 365;
   return principal * dailyRate * daysSinceStart;
@@ -371,9 +408,7 @@ export function computeMetrics(snapshots) {
   const first = snapshots[0];
   const last = snapshots[snapshots.length - 1];
 
-  const firstDate = new Date(first.snapshot_date);
-  const lastDate = new Date(last.snapshot_date);
-  const days = Math.max(1, Math.round((lastDate.getTime() - firstDate.getTime()) / (1000 * 60 * 60 * 24)));
+  const days = Math.max(1, calendarDaysBetween(first.snapshot_date, last.snapshot_date));
 
   const totalInvested = toNumber(toDecimal(last.invested));
   const currentValue = toNumber(toDecimal(last.value));
@@ -419,15 +454,22 @@ export function computeHeatmap(snapshots) {
     return { years: [], data: {}, maxAbsPct: 0 };
   }
 
-  // Group by month — take last snapshot of each month
+  // Normalise each snapshot's date to a YYYY-MM-DD string, then sort
+  // ascending — the input order is not guaranteed, and "last snapshot of the
+  // month" only holds if we iterate in date order.
+  const withDate = snapshots.map((s) => ({
+    snap: s,
+    dateStr: typeof s.snapshot_date === 'string'
+      ? s.snapshot_date
+      : /** @type {Date} */ (s.snapshot_date).toISOString().slice(0, 10),
+  }));
+  withDate.sort((a, b) => a.dateStr.localeCompare(b.dateStr));
+
+  // Group by month — take the last (latest-dated) snapshot of each month.
   /** @type {Map<string, { snapshot_date: string|Date, value: string|number, invested: string|number }>} */
   const byMonth = new Map();
-  for (const s of snapshots) {
-    const date = typeof s.snapshot_date === 'string'
-      ? s.snapshot_date
-      : /** @type {Date} */ (s.snapshot_date).toISOString().slice(0, 10);
-    const month = date.slice(0, 7);
-    byMonth.set(month, s);
+  for (const { snap, dateStr } of withDate) {
+    byMonth.set(dateStr.slice(0, 7), snap);
   }
 
   const monthKeys = [...byMonth.keys()].sort();
@@ -441,6 +483,13 @@ export function computeHeatmap(snapshots) {
   }
 
   for (let i = 1; i < monthKeys.length; i++) {
+    // Only compute a monthly return between *consecutive* calendar months.
+    // monthKeys skips months with no snapshot, so a Jan→Mar pair would
+    // otherwise be charted as March's one-month return when it spans two.
+    const [py, pm] = monthKeys[i - 1].split('-').map(Number);
+    const [cy, cm] = monthKeys[i].split('-').map(Number);
+    if (cy * 12 + cm !== py * 12 + pm + 1) continue;
+
     const prev = byMonth.get(monthKeys[i - 1]);
     const curr = byMonth.get(monthKeys[i]);
     const year = parseInt(monthKeys[i].slice(0, 4));

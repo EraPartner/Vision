@@ -329,6 +329,11 @@ let exchangeRateRefreshInterval = null;
 let quotesRefreshInterval = null;
 let cashflowForecastRefreshInterval = null;
 
+// HTTP server handle — module-scoped so shutdown() can drain in-flight requests.
+let httpServer = null;
+// Guards shutdown() against a second SIGINT/SIGTERM re-entering mid-drain.
+let isShuttingDown = false;
+
 // ── Boot instrumentation ───────────────────────────────────────────────────
 const BOOT_TRACE_ENABLED = process.env.VISION_BOOT_TRACE !== '0';
 const _bootT0 = Date.now();
@@ -431,6 +436,8 @@ async function start() {
       }
     });
 
+    httpServer = server;
+
     server.on('error', (err) => {
       logger.error('HTTP server error', { error: err.message });
       process.exit(1);
@@ -442,18 +449,44 @@ async function start() {
 }
 
 // Graceful shutdown
-async function shutdown() {
-  logger.info('Shutting down...');
+const SHUTDOWN_FORCE_EXIT_MS = 10_000;
+
+async function shutdown(signal) {
+  // A second SIGINT/SIGTERM while a drain is already in progress should not
+  // restart the sequence — just note it and let the first run finish.
+  if (isShuttingDown) {
+    logger.warn(`Received ${signal || 'signal'} during shutdown — already draining`);
+    return;
+  }
+  isShuttingDown = true;
+  logger.info('Shutting down...', { signal });
+
+  // Hard backstop: if draining hangs (a stuck request, a pool that won't
+  // close), force-exit rather than wedging the process forever.
+  const forceExit = setTimeout(() => {
+    logger.error('Graceful shutdown timed out — forcing exit');
+    process.exit(1);
+  }, SHUTDOWN_FORCE_EXIT_MS);
+  forceExit.unref();
+
   if (exchangeRateRefreshInterval) clearInterval(exchangeRateRefreshInterval);
   if (quotesRefreshInterval) clearInterval(quotesRefreshInterval);
   if (cashflowForecastRefreshInterval) clearInterval(cashflowForecastRefreshInterval);
   cancelPendingAggregationRefresh();
+
+  // Stop accepting new connections and let in-flight requests finish before
+  // tearing down the pool — closePool() mid-request would error live handlers.
+  if (httpServer) {
+    await new Promise((resolve) => httpServer.close(() => resolve()));
+  }
+
   await Promise.allSettled([closePool(), closePuppeteerBrowser()]);
+  clearTimeout(forceExit);
   process.exit(0);
 }
 
-process.on('SIGINT', shutdown);
-process.on('SIGTERM', shutdown);
+process.on('SIGINT', () => shutdown('SIGINT'));
+process.on('SIGTERM', () => shutdown('SIGTERM'));
 
 start().catch((err) => {
   logger.error('Failed to start application', { error: err.message });

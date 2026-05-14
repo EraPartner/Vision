@@ -109,8 +109,13 @@ export const transactionRepository = {
       ? `${sortCol} ${sortDirection}, t.date DESC`
       : `t.date DESC`;
 
+    // Partition by bank_account: a running balance is a per-account ledger
+    // figure. Without the partition, a list spanning multiple accounts summed
+    // them into one meaningless cross-account total. (The window itself is
+    // evaluated over the full filtered set, before LIMIT/OFFSET, so the value
+    // is still correct across pages.)
     const runningBalanceCol = includeBalance
-      ? `, SUM(t.amount) OVER (ORDER BY t.date ASC, t.id ASC) AS running_balance`
+      ? `, SUM(t.amount) OVER (PARTITION BY t.bank_account ORDER BY t.date ASC, t.id ASC) AS running_balance`
       : '';
 
     const sql = `
@@ -415,8 +420,13 @@ export const transactionRepository = {
       ? `${sortCol} ${sortDirection}, t.date DESC`
       : `t.date DESC`;
 
+    // Partition by bank_account: a running balance is a per-account ledger
+    // figure. Without the partition, a list spanning multiple accounts summed
+    // them into one meaningless cross-account total. (The window itself is
+    // evaluated over the full filtered set, before LIMIT/OFFSET, so the value
+    // is still correct across pages.)
     const runningBalanceCol = includeBalance
-      ? `, SUM(t.amount) OVER (ORDER BY t.date ASC, t.id ASC) AS running_balance`
+      ? `, SUM(t.amount) OVER (PARTITION BY t.bank_account ORDER BY t.date ASC, t.id ASC) AS running_balance`
       : '';
 
     const sql = `

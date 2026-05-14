@@ -8,6 +8,25 @@
 
 import fs from 'fs';
 import { parse } from 'csv-parse/sync';
+import { toDecimal } from '../../../lib/money.js';
+
+/**
+ * Parse an already-cleaned numeric string into a number via the canonical
+ * decimal path. Returns NaN for empty or non-numeric input. Use instead of
+ * raw `parseFloat` so the imported amount has one well-defined interpretation.
+ *
+ * @param {unknown} value
+ * @returns {number}
+ */
+export function parseDecimalSafe(value) {
+  const s = String(value ?? '').trim();
+  if (!s) return NaN;
+  try {
+    return toDecimal(s).toNumber();
+  } catch {
+    return NaN;
+  }
+}
 
 /**
  * @param {string} filePath
@@ -34,7 +53,7 @@ export function parseDayMonthYear(dateStr) {
 }
 
 export function parseCommaDecimal(value) {
-  return parseFloat(String(value).replace(/\s/g, '').replace(',', '.'));
+  return parseDecimalSafe(String(value).replace(/\s/g, '').replace(',', '.'));
 }
 
 /**
@@ -73,7 +92,7 @@ export function parseAmountField(raw) {
       s = s.replace(',', '.');
     }
   }
-  const n = parseFloat(s);
+  const n = parseDecimalSafe(s);
   if (isNaN(n)) return NaN;
   return negative ? -n : n;
 }

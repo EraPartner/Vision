@@ -15,6 +15,7 @@ import {
 } from '../../config/kinesisConfig.js';
 import { toNumber, isValidPrice } from './priceCache.js';
 import { median } from '../../lib/math.js';
+import { convertToCurrency } from '../currency/currencyConversionService.js';
 
 const yahooFinance = new YahooFinance({ suppressNotices: ['yahooSurvey'] });
 
@@ -76,6 +77,10 @@ export function resolveKinesisConfig(inv) {
   if (providerId.endsWith('_EUR') && !KINESIS_EUR_TO_USD[providerId]) {
     logger.warn(`Kinesis: unmapped EUR symbol "${providerId}" — add it to KINESIS_EUR_TO_USD or the API call will fail`);
   }
+  // The Kinesis API only serves USD-denominated symbols. When a EUR symbol is
+  // remapped to its USD variant, the fetched prices are in USD and the caller
+  // must convert them to the investment's currency before use/persistence.
+  const needsUsdToEur = Boolean(KINESIS_EUR_TO_USD[providerId]);
   let symbol = KINESIS_EUR_TO_USD[providerId] || providerId;
   let timeframe = KINESIS_DEFAULT_TIMEFRAME;
   let fromDate = KINESIS_DEFAULT_FROM_DATE;
@@ -89,7 +94,7 @@ export function resolveKinesisConfig(inv) {
     }
   }
 
-  return { symbol, timeframe, fromDate };
+  return { symbol, timeframe, fromDate, needsUsdToEur };
 }
 
 // ─── HTTP helper ──────────────────────────────────────────────────────────────
@@ -427,7 +432,7 @@ export const PROVIDERS = {
   async kinesis(investments) {
     const prices = {};
     for (const inv of investments) {
-      const { symbol, timeframe, fromDate } = resolveKinesisConfig(inv);
+      const { symbol, timeframe, fromDate, needsUsdToEur } = resolveKinesisConfig(inv);
 
       if (!symbol) {
         logger.warn(`Kinesis: no symbol configured for investment ${inv.id}`);
@@ -458,9 +463,19 @@ export const PROVIDERS = {
         if (!parsedPoints.length) continue;
 
         const latestPoint = parsedPoints[parsedPoints.length - 1];
-        const price = toNumber(latestPoint?.price);
-        if (isValidPrice(price)) {
-          prices[inv.id] = { price, currency: 'USD', source: 'live' };
+        const usdPrice = toNumber(latestPoint?.price);
+        if (isValidPrice(usdPrice)) {
+          // Kinesis only quotes USD. When a EUR symbol was remapped to its USD
+          // variant, convert the latest price to the investment's currency at
+          // the current rate before it becomes this asset's current price.
+          const invCurrency = (inv.currency || 'EUR').toUpperCase();
+          let price = usdPrice;
+          if (needsUsdToEur && invCurrency !== 'USD') {
+            price = await convertToCurrency(usdPrice, 'USD', invCurrency);
+          }
+          if (isValidPrice(price)) {
+            prices[inv.id] = { price, currency: invCurrency, source: 'live' };
+          }
         }
       } catch (err) {
         logger.warn(`Kinesis fetch failed for ${symbol}: ${err.message}`);

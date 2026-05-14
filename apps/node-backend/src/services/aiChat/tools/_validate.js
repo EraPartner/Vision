@@ -24,7 +24,10 @@ export function parseDate(value, field) {
     throw new ToolValidationError(`${field} must be an ISO date (YYYY-MM-DD)`, field);
   }
   const d = new Date(`${value}T00:00:00Z`);
-  if (Number.isNaN(d.getTime())) {
+  // `new Date('2025-02-30T00:00:00Z')` silently rolls to Mar 2 instead of
+  // throwing. Reject any string that doesn't round-trip — otherwise the bad
+  // date reaches SQL as an opaque error instead of a clean validation error.
+  if (Number.isNaN(d.getTime()) || d.toISOString().slice(0, 10) !== value) {
     throw new ToolValidationError(`${field} is not a valid date`, field);
   }
   return value;

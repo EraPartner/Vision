@@ -46,30 +46,43 @@ export function useConfirmDialog() {
 
   const { t } = useLanguage();
 
-  const ConfirmDialog = useCallback(
-    () => (
-      <AlertDialog open={open} onOpenChange={(v) => { if (!v) handleCancel(); }}>
+  // Keep the live render values in a ref so `ConfirmDialog` can have a stable
+  // identity. Previously its deps included `open`/`options`, so every
+  // open/close handed the consumer a new component type — React unmounted and
+  // remounted the whole AlertDialog, killing its enter/exit animation.
+  const renderRef = useRef({ open, options, handleConfirm, handleCancel, t });
+  renderRef.current = { open, options, handleConfirm, handleCancel, t };
+
+  const ConfirmDialog = useCallback(() => {
+    const {
+      open: isOpen,
+      options: opts,
+      handleConfirm: onConfirm,
+      handleCancel: onCancel,
+      t: translate,
+    } = renderRef.current;
+    return (
+      <AlertDialog open={isOpen} onOpenChange={(v) => { if (!v) onCancel(); }}>
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>{options.title ?? t('common.confirm')}</AlertDialogTitle>
-            <AlertDialogDescription>{options.description}</AlertDialogDescription>
+            <AlertDialogTitle>{opts.title ?? translate('common.confirm')}</AlertDialogTitle>
+            <AlertDialogDescription>{opts.description}</AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
-            <AlertDialogCancel onClick={handleCancel}>
-              {options.cancelLabel ?? t('common.cancel')}
+            <AlertDialogCancel onClick={onCancel}>
+              {opts.cancelLabel ?? translate('common.cancel')}
             </AlertDialogCancel>
             <AlertDialogAction
-              onClick={handleConfirm}
-              className={options.variant === "destructive" ? "bg-destructive text-destructive-foreground hover:bg-destructive/90" : ""}
+              onClick={onConfirm}
+              className={opts.variant === "destructive" ? "bg-destructive text-destructive-foreground hover:bg-destructive/90" : ""}
             >
-              {options.confirmLabel ?? t('common.confirm')}
+              {opts.confirmLabel ?? translate('common.confirm')}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
-    ),
-    [open, options, handleConfirm, handleCancel, t]
-  );
+    );
+  }, []);
 
   return { confirm, ConfirmDialog };
 }

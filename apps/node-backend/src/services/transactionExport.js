@@ -42,6 +42,22 @@ function buildExportProbeSql(whereSql) {
   return `SELECT 1 ${EXPORT_JOINS_SQL} WHERE ${whereSql} LIMIT 1`;
 }
 
+/**
+ * Write a chunk to the response, respecting backpressure. When the socket
+ * buffer is full `res.write` returns false — without this a slow client lets
+ * rows buffer unboundedly in memory on a large export.
+ *
+ * @param {import('express').Response} res
+ * @param {string} chunk
+ * @returns {Promise<void>}
+ */
+function writeWithBackpressure(res, chunk) {
+  // `res.once` is missing on minimal/mocked response objects — in that case
+  // there's no drain event to await, so just resolve.
+  if (res.write(chunk) || typeof res.once !== 'function') return Promise.resolve();
+  return new Promise((resolve) => res.once('drain', resolve));
+}
+
 function buildExportChunkSql(whereSql, limitParamIdx, offsetParamIdx) {
   return `
     SELECT t.id, t.date, t.bank_account,
@@ -136,7 +152,7 @@ async function streamExport(res, { whereSql, params, nextParamIdx, contentType, 
       const chunk = await dbQuery(chunkSql, [...params, EXPORT_CHUNK_SIZE, chunkOffset]);
       if (chunk.rows.length === 0) break;
       for (const row of chunk.rows) {
-        res.write(formatRow(row, rowCount));
+        await writeWithBackpressure(res, formatRow(row, rowCount));
         rowCount++;
       }
       if (chunk.rows.length < EXPORT_CHUNK_SIZE) break;
@@ -155,7 +171,9 @@ async function streamExport(res, { whereSql, params, nextParamIdx, contentType, 
 }
 
 export async function streamCsvExport(res, { whereSql, params, nextParamIdx, includeBalance = false }) {
-  let runningBalance = 0;
+  // Kept as a Decimal across the whole stream — collapsing to a JS number each
+  // row re-ingested a drifted float into the next step's running balance.
+  let runningBalance = toDecimal(0);
   return streamExport(res, {
     whereSql,
     params,
@@ -170,8 +188,8 @@ export async function streamCsvExport(res, { whereSql, params, nextParamIdx, inc
     },
     formatRow(row) {
       if (includeBalance) {
-        runningBalance = toDecimal(runningBalance).plus(toDecimal(row.amount ?? 0)).toNumber();
-        return `${buildCsvRow({ ...row, running_balance: runningBalance }, { includeBalance })}\n`;
+        runningBalance = runningBalance.plus(toDecimal(row.amount ?? 0));
+        return `${buildCsvRow({ ...row, running_balance: runningBalance.toNumber() }, { includeBalance })}\n`;
       }
       return `${buildCsvRow(row)}\n`;
     },

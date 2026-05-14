@@ -126,14 +126,19 @@ export const getRecipientInsights = {
       ? parsePositiveInt(args.recipientId, 'recipientId', { min: 1, max: Number.MAX_SAFE_INTEGER })
       : null;
 
+    const SCAN_LIMIT = 50_000;
     const allRows = await transactionRepository.getAll({
-      limit: 50_000,
+      limit: SCAN_LIMIT,
       offset: 0,
       active: true,
       ...(recipientId != null ? { recipientId } : {}),
     });
 
     const rows = allRows;
+    // The scan is capped at SCAN_LIMIT rows with no ordering guarantee that the
+    // newest are kept — for a high-volume recipient the aggregates below are a
+    // partial view. Surface that so the model can caveat its answer.
+    const truncated = rows.length >= SCAN_LIMIT;
 
     const byRecipient = new Map();
     for (const row of rows) {
@@ -179,7 +184,7 @@ export const getRecipientInsights = {
     return {
       ok: true,
       data: shaped.slice(0, maxRows),
-      meta: { recipientCount: byRecipient.size, currency: 'EUR', renderAs: 'table' },
+      meta: { recipientCount: byRecipient.size, currency: 'EUR', renderAs: 'table', truncated },
     };
   },
 };

@@ -96,7 +96,12 @@ describe('calculateCostBasis', () => {
         const result = calculateCostBasis(buys);
         if (result.totalUnits > 0) {
           const expected = result.totalCost / result.totalUnits;
-          expect(result.avgCostBasis).toBeCloseTo(expected, 6);
+          // Relative tolerance: avgCostBasis is computed with decimal.js while
+          // `expected` here is a raw-float division — on billion-magnitude
+          // inputs the two diverge by more than a fixed 6-digit absolute
+          // tolerance would allow, even though the invariant holds.
+          const relErr = Math.abs(result.avgCostBasis - expected) / Math.max(Math.abs(expected), 1);
+          expect(relErr).toBeLessThan(1e-9);
         }
       }),
       { numRuns: 500 }

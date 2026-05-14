@@ -17,13 +17,14 @@ import {
   calculateAccruedInterest,
   projectedAnnualInterest as calculateProjectedAnnualInterest,
 } from '../../utils/portfolioMath.js';
+import { toDecimal, addAll, multiply, divide, roundMoney } from '../../lib/money.js';
 
 const UNIT_BASED_CLASSES = new Set(['stock', 'etf', 'crypto', 'metals']);
 const FIXED_INCOME_CLASSES = new Set(['savings', 'bond']);
 const REAL_ESTATE_CLASS = 'real_estate';
 
-const round2 = (value) => Math.round(Number(value) * 100) / 100;
-const round6 = (value) => Math.round(Number(value) * 1000000) / 1000000;
+const round2 = (value) => roundMoney(value, 2);
+const round6 = (value) => roundMoney(value, 6);
 
 /**
  * Fetch active investments and their transactions, then compute per-investment
@@ -110,100 +111,106 @@ function buildInvestmentSummary(inv, txns, targetCurrency, multiplierByCurrency)
   const isFixedIncome = FIXED_INCOME_CLASSES.has(inv.asset_class);
   const isRealEstate = inv.asset_class === REAL_ESTATE_CLASS;
 
-  let totalDividends = 0;
-  let totalInterestPaid = 0;
-  let totalRent = 0;
-  let totalAppreciation = 0;
-  let totalBuyAmount = 0;
-  let totalBuyOrGiftAmount = 0;
-  let totalSellAmount = 0;
-  let feeTxnAmount = 0;
-  let taxTxnAmount = 0;
-  let feesFieldAmount = 0;
-  let taxesFieldAmount = 0;
+  // All running sums are kept as Decimal — IEEE-754 drift on money paths
+  // compounds across many transactions before the single round-on-emit below.
+  let totalDividends = toDecimal(0);
+  let totalInterestPaid = toDecimal(0);
+  let totalRent = toDecimal(0);
+  let totalAppreciation = toDecimal(0);
+  let totalBuyAmount = toDecimal(0);
+  let totalBuyOrGiftAmount = toDecimal(0);
+  let totalSellAmount = toDecimal(0);
+  let feeTxnAmount = toDecimal(0);
+  let taxTxnAmount = toDecimal(0);
+  let feesFieldAmount = toDecimal(0);
+  let taxesFieldAmount = toDecimal(0);
 
   for (const txn of txns) {
-    const amount = Number(txn.amount) || 0;
-    feesFieldAmount += Number(txn.fees) || 0;
-    taxesFieldAmount += Number(txn.taxes) || 0;
+    const amount = toDecimal(txn.amount);
+    feesFieldAmount = feesFieldAmount.plus(toDecimal(txn.fees));
+    taxesFieldAmount = taxesFieldAmount.plus(toDecimal(txn.taxes));
 
     switch (txn.type) {
-      case 'buy':          totalBuyAmount += amount; totalBuyOrGiftAmount += amount; break;
-      case 'gift':         totalBuyOrGiftAmount += amount; break;
-      case 'sell':         totalSellAmount += amount; break;
-      case 'fee':          feeTxnAmount += amount; break;
-      case 'tax':          taxTxnAmount += amount; break;
-      case 'dividend':     totalDividends += amount; break;
-      case 'interest':     totalInterestPaid += amount; break;
-      case 'rent_income':  totalRent += amount; break;
-      case 'appreciation': totalAppreciation += amount; break;
+      case 'buy':          totalBuyAmount = totalBuyAmount.plus(amount); totalBuyOrGiftAmount = totalBuyOrGiftAmount.plus(amount); break;
+      case 'gift':         totalBuyOrGiftAmount = totalBuyOrGiftAmount.plus(amount); break;
+      case 'sell':         totalSellAmount = totalSellAmount.plus(amount); break;
+      case 'fee':          feeTxnAmount = feeTxnAmount.plus(amount); break;
+      case 'tax':          taxTxnAmount = taxTxnAmount.plus(amount); break;
+      case 'dividend':     totalDividends = totalDividends.plus(amount); break;
+      case 'interest':     totalInterestPaid = totalInterestPaid.plus(amount); break;
+      case 'rent_income':  totalRent = totalRent.plus(amount); break;
+      case 'appreciation': totalAppreciation = totalAppreciation.plus(amount); break;
     }
   }
 
-  const totalFees = feeTxnAmount + feesFieldAmount;
-  const totalTaxes = taxTxnAmount + taxesFieldAmount;
+  const totalFees = feeTxnAmount.plus(feesFieldAmount);
+  const totalTaxes = taxTxnAmount.plus(taxesFieldAmount);
 
-  let totalUnits = 0;
-  let avgCostBasis = 0;
+  let totalUnits = toDecimal(0);
+  let avgCostBasis = toDecimal(0);
   let totalBuyCost;
   let totalSellProceeds;
-  let realizedGain = 0;
-  let unrealizedGain = 0;
+  let realizedGain = toDecimal(0);
+  let unrealizedGain = toDecimal(0);
   let currentValue;
   let totalInvested;
-  let accruedInterest = 0;
-  let projectedInterest = 0;
+  let accruedInterest = toDecimal(0);
+  let projectedInterest = toDecimal(0);
 
   if (isUnitBased) {
     const cb = calculateCostBasis(txns);
-    totalUnits = cb.totalUnits;
-    avgCostBasis = cb.avgCostBasis;
-    totalBuyCost = cb.totalBuyCost;
-    totalSellProceeds = cb.totalSellProceeds;
-    totalInvested = cb.totalCost;
-    realizedGain = cb.realizedGain;
+    totalUnits = toDecimal(cb.totalUnits);
+    avgCostBasis = toDecimal(cb.avgCostBasis);
+    totalBuyCost = toDecimal(cb.totalBuyCost);
+    totalSellProceeds = toDecimal(cb.totalSellProceeds);
+    totalInvested = toDecimal(cb.totalCost);
+    realizedGain = toDecimal(cb.realizedGain);
 
-    const currentPrice = Number(inv.current_price) || 0;
-    currentValue = totalUnits * currentPrice;
-    unrealizedGain = totalUnits > 0 ? (currentPrice - avgCostBasis) * totalUnits : 0;
+    const currentPrice = toDecimal(inv.current_price);
+    currentValue = totalUnits.times(currentPrice);
+    unrealizedGain = totalUnits.gt(0)
+      ? currentPrice.minus(avgCostBasis).times(totalUnits)
+      : toDecimal(0);
   } else if (isFixedIncome) {
-    totalInvested = totalBuyOrGiftAmount - totalSellAmount;
+    totalInvested = totalBuyOrGiftAmount.minus(totalSellAmount);
     totalBuyCost = totalBuyOrGiftAmount;
     totalSellProceeds = totalSellAmount;
 
     const interestRate = Number(inv.interest_rate) || 0;
-    accruedInterest = calculateAccruedInterest(txns, totalInvested, interestRate);
-    projectedInterest = calculateProjectedAnnualInterest(totalInvested, interestRate);
+    accruedInterest = toDecimal(calculateAccruedInterest(txns, totalInvested.toNumber(), interestRate));
+    projectedInterest = toDecimal(calculateProjectedAnnualInterest(totalInvested.toNumber(), interestRate));
 
-    currentValue = totalInvested + accruedInterest;
+    currentValue = totalInvested.plus(accruedInterest);
     realizedGain = totalInterestPaid;
     unrealizedGain = accruedInterest;
   } else if (isRealEstate) {
-    totalInvested = totalBuyAmount - totalSellAmount;
+    totalInvested = totalBuyAmount.minus(totalSellAmount);
     totalBuyCost = totalBuyAmount;
     totalSellProceeds = totalSellAmount;
-    currentValue = totalInvested + totalAppreciation;
+    currentValue = totalInvested.plus(totalAppreciation);
     unrealizedGain = totalAppreciation;
-    realizedGain = totalRent - totalFees - totalTaxes;
+    realizedGain = totalRent.minus(totalFees).minus(totalTaxes);
   } else {
-    totalInvested = totalBuyAmount - totalSellAmount;
+    totalInvested = totalBuyAmount.minus(totalSellAmount);
     totalBuyCost = totalBuyAmount;
     totalSellProceeds = totalSellAmount;
     currentValue = totalInvested;
   }
 
-  const totalIncome = totalDividends + totalInterestPaid + totalRent;
-  const totalGain = realizedGain + unrealizedGain;
-  const gainLoss = totalGain + totalIncome - totalFees - totalTaxes;
-  const gainLossPercent = totalBuyCost > 0 ? (gainLoss / totalBuyCost) * 100 : 0;
+  const totalIncome = totalDividends.plus(totalInterestPaid).plus(totalRent);
+  const totalGain = realizedGain.plus(unrealizedGain);
+  const gainLoss = totalGain.plus(totalIncome).minus(totalFees).minus(totalTaxes);
+  const gainLossPercent = totalBuyCost.gt(0)
+    ? divide(gainLoss, totalBuyCost).times(100)
+    : toDecimal(0);
 
   const invCurrency = (inv.currency || 'EUR').toUpperCase();
   // Multiplier was resolved once per distinct currency by the caller.
   const multiplier = multiplierByCurrency.get(invCurrency) ?? 1;
-  const conv = (v) => v * multiplier;
+  const conv = (v) => multiply(v, multiplier);
 
   const convertedCurrentValue = conv(currentValue);
-  const convertedTotalInvested = conv(Math.abs(totalInvested));
+  const convertedTotalInvested = conv(totalInvested.abs());
   const convertedTotalBuyCost = conv(totalBuyCost);
   const convertedTotalSellProceeds = conv(totalSellProceeds);
   const convertedTotalFees = conv(totalFees);
@@ -289,34 +296,21 @@ function buildInvestmentSummary(inv, txns, targetCurrency, multiplierByCurrency)
  * All values are already in the same target currency, so straight summation.
  */
 function aggregateTotals(summaries) {
-  const acc = summaries.reduce(
-    (a, s) => ({
-      totalPortfolioValue: a.totalPortfolioValue + s.currentValue,
-      totalInvested: a.totalInvested + s.totalBuyCost,
-      totalGainLoss: a.totalGainLoss + s.gainLoss,
-      totalRealizedGain: a.totalRealizedGain + s.realizedGain,
-      totalUnrealizedGain: a.totalUnrealizedGain + s.unrealizedGain,
-      totalGain: a.totalGain + s.totalGain,
-      totalIncome: a.totalIncome + s.totalIncome,
-      totalFees: a.totalFees + s.totalFees,
-      totalTaxes: a.totalTaxes + s.totalTaxes,
-    }),
-    {
-      totalPortfolioValue: 0,
-      totalInvested: 0,
-      totalGainLoss: 0,
-      totalRealizedGain: 0,
-      totalUnrealizedGain: 0,
-      totalGain: 0,
-      totalIncome: 0,
-      totalFees: 0,
-      totalTaxes: 0,
-    }
-  );
+  const acc = {
+    totalPortfolioValue: addAll(summaries.map((s) => s.currentValue)),
+    totalInvested: addAll(summaries.map((s) => s.totalBuyCost)),
+    totalGainLoss: addAll(summaries.map((s) => s.gainLoss)),
+    totalRealizedGain: addAll(summaries.map((s) => s.realizedGain)),
+    totalUnrealizedGain: addAll(summaries.map((s) => s.unrealizedGain)),
+    totalGain: addAll(summaries.map((s) => s.totalGain)),
+    totalIncome: addAll(summaries.map((s) => s.totalIncome)),
+    totalFees: addAll(summaries.map((s) => s.totalFees)),
+    totalTaxes: addAll(summaries.map((s) => s.totalTaxes)),
+  };
 
-  const totalReturnPct = acc.totalInvested > 0
-    ? (acc.totalGainLoss / acc.totalInvested) * 100
-    : 0;
+  const totalReturnPct = acc.totalInvested.gt(0)
+    ? divide(acc.totalGainLoss, acc.totalInvested).times(100)
+    : toDecimal(0);
 
   return {
     totalPortfolioValue: round2(acc.totalPortfolioValue),

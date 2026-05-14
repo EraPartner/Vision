@@ -18,48 +18,55 @@
  * Amounts are returned as-is in their stored currency (no FX conversion —
  * future rates are unknown and the forecast is inherently approximate).
  *
+ * All date bucketing happens in APP_TIMEZONE wall-clock so it stays consistent
+ * with `calculateNextDate` (which advances recurrences in APP_TIMEZONE). Mixing
+ * UTC-midnight parsing with app-TZ advance previously let an occurrence land in
+ * the wrong forecast month across a DST boundary.
+ *
  * @module cashflowForecast
  */
 
 import plannedTransactionRepository from '../../../repositories/plannedTransactionRepository.js';
 import { calculateNextDate } from '../recurrence.js';
 import { buildEnvelope } from './_envelope.js';
+import { toAppTz, appDateStringToUtc, toAppDateString } from '../../../lib/timezone.js';
+import { toDecimal, roundMoney } from '../../../lib/money.js';
 
 const MAX_MONTHS = 24;
 const MAX_OCCURRENCES_PER_ITEM = 500; // guard against infinite-loop on tiny intervals
 
 /**
- * @param {Date} d
- * @returns {string} 'YYYY-MM'
+ * @param {Date} d  UTC Date
+ * @returns {string} 'YYYY-MM' in APP_TIMEZONE
  */
 function toMonthKey(d) {
-  const y = d.getUTCFullYear();
-  const m = String(d.getUTCMonth() + 1).padStart(2, '0');
-  return `${y}-${m}`;
+  const { year, month } = toAppTz(d);
+  return `${year}-${String(month).padStart(2, '0')}`;
 }
 
 /**
  * @param {string} isoDateStr  e.g. '2026-05-15'
- * @returns {Date} UTC midnight
+ * @returns {Date} UTC Date for start-of-day in APP_TIMEZONE
  */
-function parseUtcDate(isoDateStr) {
-  const [y, m, day] = String(isoDateStr).slice(0, 10).split('-').map(Number);
-  return new Date(Date.UTC(y, m - 1, day));
+function parseDate(isoDateStr) {
+  return appDateStringToUtc(String(isoDateStr).slice(0, 10));
 }
 
 /**
  * Build the ordered list of month keys for the forecast window.
  * Starts with the current month, runs for `months` months.
  *
- * @param {Date} today
+ * @param {{ year: number, month: number }} todayParts  APP_TIMEZONE components
  * @param {number} months
  * @returns {string[]}
  */
-function buildMonthKeys(today, months) {
+function buildMonthKeys(todayParts, months) {
   const keys = [];
   for (let i = 0; i < months; i++) {
-    const d = new Date(Date.UTC(today.getUTCFullYear(), today.getUTCMonth() + i, 1));
-    keys.push(toMonthKey(d));
+    const monthIndex = todayParts.month - 1 + i;
+    const year = todayParts.year + Math.floor(monthIndex / 12);
+    const month = (monthIndex % 12) + 1;
+    keys.push(`${year}-${String(month).padStart(2, '0')}`);
   }
   return keys;
 }
@@ -73,7 +80,7 @@ function buildMonthKeys(today, months) {
  * @returns {Array<{date: Date, item: object}>}
  */
 function expandOccurrences(row, start, end) {
-  const amount = parseFloat(row.amount);
+  const amount = toDecimal(row.amount).toNumber();
   const base = {
     id: row.id,
     currency: row.currency ?? 'EUR',
@@ -89,23 +96,23 @@ function expandOccurrences(row, start, end) {
 
   if (!row.is_recurring || !row.recurrence_pattern) {
     // One-shot: include only if within window
-    const d = parseUtcDate(row.planned_date);
+    const d = parseDate(row.planned_date);
     if (d >= start && d <= end) {
-      occurrences.push({ date: d, item: { ...base, planned_date: d.toISOString().slice(0, 10) } });
+      occurrences.push({ date: d, item: { ...base, planned_date: toAppDateString(d) } });
     }
     return occurrences;
   }
 
   // Recurring: walk forward from the stored planned_date (first upcoming
   // occurrence), generating dates until we exceed the forecast horizon.
-  let current = parseUtcDate(row.planned_date);
+  let current = parseDate(row.planned_date);
   let count = 0;
 
   while (current <= end && count < MAX_OCCURRENCES_PER_ITEM) {
     if (current >= start) {
       occurrences.push({
         date: current,
-        item: { ...base, planned_date: current.toISOString().slice(0, 10) },
+        item: { ...base, planned_date: toAppDateString(current) },
       });
     }
     const next = calculateNextDate(current, row.recurrence_pattern);
@@ -124,19 +131,25 @@ function expandOccurrences(row, start, end) {
 export async function computeCashflowForecast({ months = 3 } = {}) {
   const safeMonths = Math.max(1, Math.min(MAX_MONTHS, Math.round(months)));
 
-  const today = new Date();
-  const windowStart = new Date(Date.UTC(today.getUTCFullYear(), today.getUTCMonth(), 1));
-  const windowEnd = new Date(
-    Date.UTC(today.getUTCFullYear(), today.getUTCMonth() + safeMonths, 0) // last day of last month
-  );
+  const todayParts = toAppTz(new Date());
+  const monthKeys = buildMonthKeys(todayParts, safeMonths);
+  const windowStart = appDateStringToUtc(`${monthKeys[0]}-01`);
+  // Last day of the final window month = day 0 of the month after it.
+  const lastKey = monthKeys[monthKeys.length - 1];
+  const [lastYear, lastMonth] = lastKey.split('-').map(Number);
+  const lastDay = new Date(Date.UTC(lastYear, lastMonth, 0)).getUTCDate();
+  const windowEnd = appDateStringToUtc(`${lastKey}-${String(lastDay).padStart(2, '0')}`);
 
   const rows = await plannedTransactionRepository.getForForecast(safeMonths);
 
-  // Build month buckets
-  const monthKeys = buildMonthKeys(today, safeMonths);
-  /** @type {Map<string, { month: string, income: number, expenses: number, net: number, items: any[] }>} */
+  // Build month buckets — income/expenses/net accumulate as Decimal so a long
+  // window of many occurrences doesn't drift before the round-on-emit below.
+  /** @type {Map<string, { month: string, income: import('decimal.js').default, expenses: import('decimal.js').default, net: import('decimal.js').default, items: any[] }>} */
   const buckets = new Map(
-    monthKeys.map((k) => [k, { month: k, income: 0, expenses: 0, net: 0, items: [] }])
+    monthKeys.map((k) => [
+      k,
+      { month: k, income: toDecimal(0), expenses: toDecimal(0), net: toDecimal(0), items: [] },
+    ])
   );
 
   for (const row of rows) {
@@ -146,13 +159,13 @@ export async function computeCashflowForecast({ months = 3 } = {}) {
       const bucket = buckets.get(key);
       if (!bucket) continue; // outside window (shouldn't happen)
 
-      const amt = item.amount;
-      if (amt >= 0) {
-        bucket.income += amt;
+      const amt = toDecimal(item.amount);
+      if (amt.gte(0)) {
+        bucket.income = bucket.income.plus(amt);
       } else {
-        bucket.expenses += amt;
+        bucket.expenses = bucket.expenses.plus(amt);
       }
-      bucket.net += amt;
+      bucket.net = bucket.net.plus(amt);
       bucket.items.push(item);
     }
   }
@@ -162,9 +175,9 @@ export async function computeCashflowForecast({ months = 3 } = {}) {
     const b = buckets.get(k);
     return {
       month: b.month,
-      income: Math.round(b.income * 100) / 100,
-      expenses: Math.round(b.expenses * 100) / 100,
-      net: Math.round(b.net * 100) / 100,
+      income: roundMoney(b.income),
+      expenses: roundMoney(b.expenses),
+      net: roundMoney(b.net),
       items: b.items.sort((a, z) => a.planned_date.localeCompare(z.planned_date)),
     };
   });

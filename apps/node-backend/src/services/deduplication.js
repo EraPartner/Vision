@@ -26,11 +26,19 @@ export function createManualTransactionHash({ date, amount, recipientId, memo, b
 export async function isDuplicate(transactionData) {
   // Field-based dedup matches date + amount + recipient + memo so two
   // legitimate same-day same-amount same-vendor purchases are not collapsed.
+  //
+  // Match the recipient by name through a LEFT JOIN rather than a
+  // `recipient_id = (SELECT ... LIMIT 1)` subquery: the subquery returned NULL
+  // for an unknown name (so an otherwise-identical `recipient_id IS NULL` row
+  // was never flagged) and its LIMIT-without-ORDER-BY was non-deterministic on
+  // name collisions. COALESCE handles the no-recipient case symmetrically.
   const result = await query(
-    `SELECT id FROM transactions
-     WHERE date = $1 AND amount = $2 AND recipient_id = (
-       SELECT id FROM recipients WHERE UPPER(name) = $3 LIMIT 1
-     ) AND COALESCE(TRIM(memo), '') = $4 AND is_active = true
+    `SELECT t.id FROM transactions t
+     LEFT JOIN recipients r ON t.recipient_id = r.id
+     WHERE t.date = $1 AND t.amount = $2
+       AND COALESCE(UPPER(r.name), '') = $3
+       AND COALESCE(TRIM(t.memo), '') = $4
+       AND t.is_active = true
      LIMIT 1`,
     [
       transactionData.date.toISOString().split('T')[0],

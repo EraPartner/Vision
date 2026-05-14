@@ -540,11 +540,27 @@ export const investmentRepository = {
   },
 
   async updatePrice(id, { current_price, price_updated_at }) {
-    return updateThroughInheritanceTables(
-      id,
-      { current_price, price_updated_at },
-      this.getById.bind(this)
-    );
+    const fields = { current_price, price_updated_at };
+    // Mirror update(): only go through the inheritance tables when that schema
+    // is actually present. On a flat `investments` schema the inheritance path
+    // throws, which previously broke the live-price scheduler entirely.
+    if (await hasInvestmentInheritanceSchema()) {
+      return updateThroughInheritanceTables(id, fields, this.getById.bind(this));
+    }
+    try {
+      const result = await query(
+        `UPDATE investments
+            SET current_price = $1, price_updated_at = $2
+          WHERE id = $3
+        RETURNING *`,
+        [current_price, price_updated_at, id]
+      );
+      return result.rows[0] || null;
+    } catch (err) {
+      if (!isNonUpdatableInvestmentsViewError(err)) throw err;
+      _hasInvestmentInheritanceSchema = true;
+      return updateThroughInheritanceTables(id, fields, this.getById.bind(this));
+    }
   },
 
   async getLatestPriceUpdatedAt() {

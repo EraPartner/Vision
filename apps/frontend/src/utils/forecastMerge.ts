@@ -157,60 +157,28 @@ export function mergeForView(
     visibleMethodIds: ReadonlySet<string>,
     actualLabel: string,
 ): { rows: MergedDay[]; series: LineSeries<MergedDay>[] } {
+    // Shares buildBandMaps / buildSeries with mergeForViewRolling — the only
+    // genuine difference is the row shape (dayNum here vs a Date `t` there).
     const cumulativeByDate = new Map(
         data.actual.map((p) => [p.date, p.cumulative]),
     );
     const actualByDate = new Map(data.actual.map((p) => [p.date, p.net]));
-
     const allDates = data.actual.map((p) => p.date);
 
-    type BandPair = { pLo: Map<string, number>; pHi: Map<string, number> };
+    const lastActualCum =
+        data.actual.filter((p) => p.cumulative !== null).at(-1)?.cumulative ?? 0;
 
-    const bandsCumByMethod = new Map<string, BandPair>();
-
-    if (view === "cumulative") {
-        const lastActualCum =
-            data.actual.filter((p) => p.cumulative !== null).at(-1)
-                ?.cumulative ?? 0;
-
-        for (const m of data.methods) {
-            if (!m.bands || !visibleMethodIds.has(m.id)) continue;
-            const { loKey, hiKey } = bandBoundaryKeys(m.bands);
-            const loSrc = m.bands[loKey] ?? [];
-            const hiSrc = m.bands[hiKey] ?? [];
-
-            let cumLo = lastActualCum;
-            let cumHi = lastActualCum;
-            const pLo = new Map<string, number>();
-            const pHi = new Map<string, number>();
-            for (const pt of loSrc) {
-                cumLo += pt.value;
-                pLo.set(pt.date, cumLo);
-            }
-            for (const pt of hiSrc) {
-                cumHi += pt.value;
-                pHi.set(pt.date, cumHi);
-            }
-            bandsCumByMethod.set(m.id, { pLo, pHi });
-        }
-    }
+    const { bandsCum, bandsDaily } = buildBandMaps(
+        data.methods,
+        visibleMethodIds,
+        view,
+        lastActualCum,
+    );
 
     const methodMaps = new Map<string, Map<string, number>>();
     for (const m of data.methods) {
         const src = view === "cumulative" ? m.cumulative : m.daily;
         methodMaps.set(m.id, new Map(src.map((p) => [p.date, p.value])));
-    }
-
-    const bandsDailyByMethod = new Map<string, BandPair>();
-    if (view === "daily") {
-        for (const m of data.methods) {
-            if (!m.bands || !visibleMethodIds.has(m.id)) continue;
-            const { loKey, hiKey } = bandBoundaryKeys(m.bands);
-            bandsDailyByMethod.set(m.id, {
-                pLo: new Map((m.bands[loKey] ?? []).map((p) => [p.date, p.value])),
-                pHi: new Map((m.bands[hiKey] ?? []).map((p) => [p.date, p.value])),
-            });
-        }
     }
 
     const rows: MergedDay[] = allDates.map((date, i) => {
@@ -226,73 +194,17 @@ export function mergeForView(
         for (const m of data.methods) {
             if (!visibleMethodIds.has(m.id)) continue;
             row[m.id] = methodMaps.get(m.id)?.get(date) ?? null;
-
-            if (view === "cumulative") {
-                const bands = bandsCumByMethod.get(m.id);
-                if (bands) {
-                    row[`${m.id}__pLo`] = bands.pLo.get(date) ?? null;
-                    row[`${m.id}__pHi`] = bands.pHi.get(date) ?? null;
-                }
-            } else {
-                const bands = bandsDailyByMethod.get(m.id);
-                if (bands) {
-                    row[`${m.id}__pLo`] = bands.pLo.get(date) ?? null;
-                    row[`${m.id}__pHi`] = bands.pHi.get(date) ?? null;
-                }
+            const bands = view === "cumulative" ? bandsCum.get(m.id) : bandsDaily.get(m.id);
+            if (bands) {
+                row[`${m.id}__pLo`] = bands.pLo.get(date) ?? null;
+                row[`${m.id}__pHi`] = bands.pHi.get(date) ?? null;
             }
         }
 
         return row;
     });
 
-    const series: LineSeries<MergedDay>[] = [
-        {
-            key: "actual",
-            label: actualLabel,
-            accessor: (d) => d.actual as number | null,
-            color: ACTUAL_COLOR,
-            strokeWidth: 2.5,
-            connectNulls: false,
-        },
-    ];
-
-    for (const m of data.methods) {
-        if (!visibleMethodIds.has(m.id)) continue;
-        const color = METHOD_COLORS[m.id] ?? getChartColor(7);
-
-        series.push({
-            key: m.id,
-            label: m.label,
-            accessor: (d) => (d[m.id] as number | null) ?? null,
-            color,
-            strokeWidth: 1.5,
-            dashed: false,
-            connectNulls: true,
-        });
-
-        if (m.bands) {
-            const { loLabel, hiLabel } = bandBoundaryKeys(m.bands);
-            series.push({
-                key: `${m.id}__pLo`,
-                label: `${m.label} ${loLabel}`,
-                accessor: (d) => (d[`${m.id}__pLo`] as number | null) ?? null,
-                color,
-                strokeWidth: 1,
-                dashed: true,
-                connectNulls: true,
-            });
-            series.push({
-                key: `${m.id}__pHi`,
-                label: `${m.label} ${hiLabel}`,
-                accessor: (d) => (d[`${m.id}__pHi`] as number | null) ?? null,
-                color,
-                strokeWidth: 1,
-                dashed: true,
-                connectNulls: true,
-            });
-        }
-    }
-
+    const series = buildSeries<MergedDay>(data.methods, visibleMethodIds, actualLabel);
     return { rows, series };
 }
 

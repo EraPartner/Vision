@@ -69,13 +69,20 @@ export function CustomChart({ savedChart, data, onEdit, onDelete }: CustomChartP
   const hasRecipients = savedChart.recipient_ids.length > 0;
   const { recipientData, isLoading: recipientLoading } = useRecipientPivot(savedChart);
 
+  // Resolve the selected categories once — this was recomputed three times per
+  // render (allPeriods, seriesMeta, chartData) with an O(n) `.includes` lookup
+  // against category_ids on every row.
+  const catData = useMemo(() => {
+    const selected = new Set(savedChart.category_ids);
+    return data.categoryPivot.filter(
+      (c) => c.categoryId !== null && selected.has(c.categoryId)
+    );
+  }, [data.categoryPivot, savedChart.category_ids]);
+
   // Collect all periods from both sources, apply date filter
   const allPeriods = useMemo(() => {
     const periodSet = new Set<string>();
 
-    const catData = data.categoryPivot.filter((c) =>
-      c.categoryId !== null && savedChart.category_ids.includes(c.categoryId)
-    );
     for (const cat of catData) {
       for (const p of Object.keys(cat.months)) periodSet.add(p);
     }
@@ -95,16 +102,13 @@ export function CustomChart({ savedChart, data, onEdit, onDelete }: CustomChartP
     }
 
     return periods;
-  }, [data.categoryPivot, recipientData, savedChart]);
+  }, [catData, recipientData, savedChart.date_range_start, savedChart.date_range_end]);
 
   // Build unified series metadata
   const seriesMeta = useMemo<SeriesMeta[]>(() => {
     const result: SeriesMeta[] = [];
     let colorIdx = 0;
 
-    const catData = data.categoryPivot.filter((c) =>
-      c.categoryId !== null && savedChart.category_ids.includes(c.categoryId)
-    );
     for (const cat of catData) {
       result.push({ key: `cat:${cat.categoryId}`, label: cat.categoryName, color: CHART_COLORS[colorIdx++ % CHART_COLORS.length] });
     }
@@ -114,12 +118,9 @@ export function CustomChart({ savedChart, data, onEdit, onDelete }: CustomChartP
     }
 
     return result;
-  }, [data.categoryPivot, recipientData, savedChart.category_ids]);
+  }, [catData, recipientData]);
 
   const chartData = useMemo<ChartDatum[]>(() => {
-    const catData = data.categoryPivot.filter((c) =>
-      c.categoryId !== null && savedChart.category_ids.includes(c.categoryId)
-    );
     const recDataMap = new Map(recipientData.map((r) => [r.recipientId, r]));
 
     return allPeriods.map((period) => {
@@ -138,9 +139,35 @@ export function CustomChart({ savedChart, data, onEdit, onDelete }: CustomChartP
         values,
       };
     });
-  }, [allPeriods, data.categoryPivot, recipientData, savedChart, bucket]);
+  }, [allPeriods, catData, recipientData, savedChart.recipient_ids, bucket]);
 
-  const legendItems: ChartLegendItem[] = seriesMeta.map((s) => ({ label: s.label, color: s.color }));
+  // Memoised so the chart components and legend get stable array identities
+  // instead of a fresh `.map()` result on every render.
+  const legendItems = useMemo<ChartLegendItem[]>(
+    () => seriesMeta.map((s) => ({ label: s.label, color: s.color })),
+    [seriesMeta]
+  );
+  // Series definitions for bar-family charts (no stroke) and line-family
+  // charts (with stroke). Built once per seriesMeta change.
+  const barSeries = useMemo<BarSeries<ChartDatum>[]>(
+    () => seriesMeta.map((s) => ({
+      key: s.key,
+      label: s.label,
+      accessor: (d: ChartDatum) => d.values[s.key] ?? 0,
+      color: s.color,
+    })),
+    [seriesMeta]
+  );
+  const lineSeries = useMemo<LineSeries<ChartDatum>[]>(
+    () => seriesMeta.map((s) => ({
+      key: s.key,
+      label: s.label,
+      accessor: (d: ChartDatum) => d.values[s.key] ?? 0,
+      color: s.color,
+      strokeWidth: 2,
+    })),
+    [seriesMeta]
+  );
   const yTick = (v: number) => `${currencySymbol}${(v / 1000).toFixed(0)}k`;
   const xTickFmt = (v: unknown) => formatDate(v as Date, bucket === 'yearly' ? 'yyyy' : 'MMM yy');
 
@@ -198,12 +225,7 @@ export function CustomChart({ savedChart, data, onEdit, onDelete }: CustomChartP
               <StackedBarChart<ChartDatum>
                 data={chartData}
                 categoryAccessor={(d) => d.periodLabel}
-                series={seriesMeta.map<StackedBarSeries<ChartDatum>>((s) => ({
-                  key: s.key,
-                  label: s.label,
-                  accessor: (d) => d.values[s.key] ?? 0,
-                  color: s.color,
-                }))}
+                series={barSeries as StackedBarSeries<ChartDatum>[]}
                 height={350}
                 valueTickFormat={yTick}
                 tooltipTitle={(d) => d.periodLabel}
@@ -213,12 +235,7 @@ export function CustomChart({ savedChart, data, onEdit, onDelete }: CustomChartP
               <BarChart<ChartDatum>
                 data={chartData}
                 categoryAccessor={(d) => d.periodLabel}
-                series={seriesMeta.map<BarSeries<ChartDatum>>((s) => ({
-                  key: s.key,
-                  label: s.label,
-                  accessor: (d) => d.values[s.key] ?? 0,
-                  color: s.color,
-                }))}
+                series={barSeries}
                 height={350}
                 valueTickFormat={yTick}
                 tooltipTitle={(d) => d.periodLabel}
@@ -228,13 +245,7 @@ export function CustomChart({ savedChart, data, onEdit, onDelete }: CustomChartP
               <AreaChart<ChartDatum>
                 data={chartData}
                 xAccessor={(d) => d.date}
-                series={seriesMeta.map<AreaSeries<ChartDatum>>((s) => ({
-                  key: s.key,
-                  label: s.label,
-                  accessor: (d) => d.values[s.key] ?? 0,
-                  color: s.color,
-                  strokeWidth: 2,
-                }))}
+                series={lineSeries as AreaSeries<ChartDatum>[]}
                 height={350}
                 stacked={chartVariant === 'stacked'}
                 xTickFormat={xTickFmt}
@@ -246,13 +257,7 @@ export function CustomChart({ savedChart, data, onEdit, onDelete }: CustomChartP
               <LineChart<ChartDatum>
                 data={chartData}
                 xAccessor={(d) => d.date}
-                series={seriesMeta.map<LineSeries<ChartDatum>>((s) => ({
-                  key: s.key,
-                  label: s.label,
-                  accessor: (d) => d.values[s.key] ?? 0,
-                  color: s.color,
-                  strokeWidth: 2,
-                }))}
+                series={lineSeries}
                 height={350}
                 xTickFormat={xTickFmt}
                 yTickFormat={yTick}

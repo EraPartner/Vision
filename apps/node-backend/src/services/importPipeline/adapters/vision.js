@@ -4,7 +4,7 @@
 
 import { cleanRecipientName, normalizeToUppercase } from '../../textNormalization.js';
 import { logger } from '../../../config/logger.js';
-import { parseCsvFile, buildOptionalComment, buildRawRowString } from './_shared.js';
+import { parseCsvFile, buildOptionalComment, buildRawRowString, parseDecimalSafe } from './_shared.js';
 
 const NAME = 'vision';
 const BANK_LABEL = 'Vision';
@@ -17,7 +17,7 @@ function rowToTransaction(row) {
   if (isNaN(date.getTime())) return null;
 
   const amountStr = (row['Amount'] || '').replace(/[€$£,\s]/g, '').trim();
-  const amount = parseFloat(amountStr);
+  const amount = parseDecimalSafe(amountStr);
   if (isNaN(amount)) return null;
 
   const bankAccount = normalizeToUppercase((row['Bank Account'] || 'VISION').trim());
@@ -26,7 +26,7 @@ function rowToTransaction(row) {
   const memo = row['Memo'] ? normalizeToUppercase(row['Memo'].trim()) : '';
   const currency = (row['Currency'] || 'EUR').trim().toUpperCase();
   const balanceStr = (row['Balance'] || '').trim();
-  const balance = balanceStr ? parseFloat(balanceStr) : null;
+  const balance = balanceStr ? parseDecimalSafe(balanceStr) : null;
   const category = (row['Category'] || '').trim();
   const comment = (row['Comment'] || '').trim() || null;
 

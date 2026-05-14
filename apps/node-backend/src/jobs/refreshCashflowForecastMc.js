@@ -1,9 +1,11 @@
 /**
  * Nightly job: materialise MC + point-estimate forecast cache.
  *
- * Runs computeCashflowForecast (without backtest) for every known user and
- * persists the result to cashflow_forecast_mc so daytime requests hit the
- * cache instead of re-running the expensive MC simulation.
+ * Runs computeCashflowForecast (with backtest — see `includeBacktest` below)
+ * for every known user and persists the result to cashflow_forecast_mc so
+ * daytime requests hit the cache instead of re-running the expensive MC
+ * simulation. The backtest is included so the cached payload is complete for
+ * the UI; the cost is paid once per user per night rather than per request.
  *
  * Called from main.js via setInterval every 24 hours. Also exported so it
  * can be triggered manually or in integration tests.

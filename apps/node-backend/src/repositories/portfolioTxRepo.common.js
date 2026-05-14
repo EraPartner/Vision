@@ -403,12 +403,13 @@ export async function createThroughInheritanceTables(fields, getByIdFn, preloade
   const insertSql = `INSERT INTO ${childTable} (${columns.join(', ')}) VALUES (${placeholders}) RETURNING id`;
 
   try {
-    await resyncPortfolioTransactionsBaseIdSequence();
-
     let insertResult;
     try {
       insertResult = await query(insertSql, values);
     } catch (err) {
+      // Resync only on an actual duplicate-id collision. Running setval()
+      // unconditionally before every insert made concurrent creates race each
+      // other into 23505 instead of preventing it.
       if (!isDuplicatePortfolioTransactionIdError(err, childTable)) throw err;
       await resyncPortfolioTransactionsBaseIdSequence();
       insertResult = await query(insertSql, values);

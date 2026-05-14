@@ -24,6 +24,7 @@ import { createAdapter } from './bankAdapters.js';
 import { query } from '../database/connection.js';
 import { logger } from '../config/logger.js';
 import { normalizeForMatching } from './textNormalization.js';
+import { toDecimal } from '../lib/money.js';
 import {
   computeHash,
   belfiusRawRepo,
@@ -90,10 +91,18 @@ function determineBankType(bankName) {
  * If the row already existed (empty RETURNING), falls back to a single SELECT.
  * Total DB calls: 1 (new recipients) or 2 (existing recipients), down from 2-4.
  */
-async function getOrCreateRecipient(name, accountNumber, address, bankName) {
+async function getOrCreateRecipient(name, accountNumber, address, bankName, cache = null) {
   if (!name) name = 'UNKNOWN';
   const upperName = name.toUpperCase().trim();
   const normalizedName = normalizeForMatching(name);
+
+  // Per-import cache: merchants repeat heavily within one CSV. Keyed by
+  // (normalized name + account) so a genuinely new account for a known
+  // merchant still runs the account-link path.
+  const cacheKey = `${normalizedName}|${accountNumber || ''}`;
+  if (cache && cache.has(cacheKey)) {
+    return cache.get(cacheKey);
+  }
 
   // Upsert recipient
   const insertResult = await query(
@@ -140,6 +149,7 @@ async function getOrCreateRecipient(name, accountNumber, address, bankName) {
     });
   }
 
+  if (cache) cache.set(cacheKey, recipientId);
   return recipientId;
 }
 
@@ -147,8 +157,9 @@ async function getOrCreateRecipient(name, accountNumber, address, bankName) {
 
 /**
  * Process a single transaction row. Returns 'imported' | 'duplicate' | 'error'.
+ * `recipientCache` is shared across all rows of one import.
  */
-async function processRow(txData, bankType) {
+async function processRow(txData, bankType, recipientCache = null) {
   try {
     if (bankType !== 'generic' && txData.rawData) {
       const dedupHash = computeHash(txData.rawData);
@@ -172,7 +183,7 @@ async function processRow(txData, bankType) {
 
       // Insert transaction and link raw reference
       const recipientId = await getOrCreateRecipient(
-        txData.recipient, txData.recipientAccount, txData.recipientAddress, txData.recipientBankName
+        txData.recipient, txData.recipientAccount, txData.recipientAddress, txData.recipientBankName, recipientCache
       );
       if (!(txData.date instanceof Date)) throw new Error(`Invalid date for transaction: ${txData.date}`);
       const dateStr = txData.date.toISOString().split('T')[0];
@@ -221,7 +232,7 @@ async function processRow(txData, bankType) {
     if (isDup) return 'duplicate';
 
     const recipientId = await getOrCreateRecipient(
-      txData.recipient, txData.recipientAccount, txData.recipientAddress, txData.recipientBankName
+      txData.recipient, txData.recipientAccount, txData.recipientAddress, txData.recipientBankName, recipientCache
     );
     await query(
       `INSERT INTO transactions (date, bank_account, recipient_id, amount, memo, currency, balance, comment, is_active)
@@ -277,6 +288,10 @@ export async function importCSVStreaming(filePath, bankName, customConfig = null
 
     const results = { total_processed: total, imported: 0, duplicates: 0, errors: 0 };
 
+    // Shared across the whole import: repeated merchants resolve to a recipient
+    // id from memory instead of re-running the upsert + account/notes writes.
+    const recipientCache = new Map();
+
     // Process in parallel batches
     for (let batchStart = 0; batchStart < total; batchStart += IMPORT_BATCH_SIZE) {
       const batchEnd = Math.min(batchStart + IMPORT_BATCH_SIZE, total);
@@ -285,7 +300,7 @@ export async function importCSVStreaming(filePath, bankName, customConfig = null
       // All rows in the batch run concurrently; use allSettled so one failure
       // doesn't short-circuit the rest.
       const settled = await Promise.allSettled(
-        batch.map((txData) => processRow(txData, bankType))
+        batch.map((txData) => processRow(txData, bankType, recipientCache))
       );
 
       for (const outcome of settled) {
@@ -353,7 +368,12 @@ function parseDecimal(value) {
   if (v.includes('.') && v.includes(',')) { v = v.replace(/\./g, '').replace(',', '.'); }
   else { v = v.replace(',', '.'); }
   v = v.replace(/\s/g, '');
-  const n = parseFloat(v);
+  let n;
+  try {
+    n = toDecimal(v).toNumber();
+  } catch {
+    return 0;
+  }
   if (isNaN(n)) return 0;
   return negative ? -n : n;
 }

@@ -17,6 +17,22 @@ import {
 
 const ASSET_CLASSES = ['stock', 'etf', 'crypto', 'metals', 'real_estate', 'savings', 'bond'];
 
+const MS_PER_DAY = 24 * 60 * 60 * 1000;
+
+/** Start-of-day UTC epoch ms for a YYYY-MM-DD string. */
+function startOfDayMs(ymd) {
+  return new Date(`${ymd}T00:00:00Z`).getTime();
+}
+
+/**
+ * Inclusive end-of-day UTC epoch ms for a YYYY-MM-DD string. A `to` date
+ * parsed as plain UTC midnight would otherwise exclude same-day transactions
+ * carrying a non-midnight timestamp (tax.js already does it this way).
+ */
+function endOfDayMs(ymd) {
+  return startOfDayMs(ymd) + (MS_PER_DAY - 1);
+}
+
 // Only these transaction types move the unit count.
 const UNIT_CREDIT_TYPES = new Set(['buy', 'gift']);
 const UNIT_DEBIT_TYPES = new Set(['sell']);
@@ -133,8 +149,8 @@ export const getReturnsForRange = {
     const ids = investments.map((inv) => inv.id);
     const txns = await loadTransactionsForInvestments(cache, assetClass, ids);
 
-    const fromMs = new Date(from).getTime();
-    const toMs = new Date(to).getTime();
+    const fromMs = startOfDayMs(from);
+    const toMs = endOfDayMs(to);
 
     const byInvestment = new Map();
     for (const t of txns) {
@@ -226,8 +242,8 @@ export const getDividendIncome = {
     const ids = investments.map((inv) => inv.id);
     const txns = await loadTransactionsForInvestments(cache, null, ids, { type: 'dividend' });
 
-    const fromMs = new Date(from).getTime();
-    const toMs = new Date(to).getTime();
+    const fromMs = startOfDayMs(from);
+    const toMs = endOfDayMs(to);
 
     const byInvestment = new Map();
     let grandTotal = toDecimal(0);
@@ -452,8 +468,8 @@ export const getBestWorstPerformers = {
     const ids = investments.map((inv) => inv.id);
     const txns = await loadTransactionsForInvestments(cache, assetClass, ids);
 
-    const fromMs = new Date(from).getTime();
-    const toMs = new Date(to).getTime();
+    const fromMs = startOfDayMs(from);
+    const toMs = endOfDayMs(to);
 
     const byInvestment = new Map();
     for (const t of txns) {

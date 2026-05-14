@@ -14,6 +14,7 @@ import {
   roundToCents as roundToCentsCalc,
 } from '../services/calculations/splits.js';
 import { toDecimal, subtract, toNumber, roundToCents } from '../lib/money.js';
+import { toAppDateString } from '../lib/timezone.js';
 import { NotFoundError, ValidationError } from '../middleware/errorHandler.js';
 
 /**
@@ -355,7 +356,10 @@ export const splitRepository = {
         split_id,
         amount,
         note || null,
-        paid_at || (() => { const d = new Date(); return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`; })(),
+        // Default to today's calendar date in APP_TIMEZONE — server-local
+        // getFullYear/getMonth/getDate logged the wrong day near midnight on
+        // a non-UTC server.
+        paid_at || toAppDateString(new Date()),
       ]);
 
       const settledResult = await client.query(
@@ -363,11 +367,11 @@ export const splitRepository = {
          SET is_settled = true
          WHERE ts.id = $1
            AND ts.is_settled = false
-           AND (
+           AND ROUND((
              SELECT COALESCE(SUM(sp.amount), 0)
              FROM split_payments sp
              WHERE sp.split_id = ts.id
-           ) >= ts.amount
+           ), 2) >= ROUND(ts.amount, 2)
          RETURNING id`,
         [split_id]
       );

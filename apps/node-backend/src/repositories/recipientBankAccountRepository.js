@@ -92,22 +92,31 @@ export const recipientBankAccountRepository = {
       return { bankAccount: refreshed, created: false };
     }
 
-    // Check if first account for this recipient
-    const existingAccounts = await this.getByRecipientId(recipientId);
+    // Check if first account for this recipient — count ALL accounts including
+    // soft-deleted ones, so a recipient whose only accounts were deactivated
+    // doesn't get a surprise new primary.
+    const existingAccounts = await this.getByRecipientId(recipientId, false);
     const isFirst = existingAccounts.length === 0;
+    const willBePrimary = setAsPrimary || isFirst;
 
-    const result = await query(
-      `INSERT INTO recipient_bank_accounts (recipient_id, account_number, bank_name, address, account_label, is_primary, is_active)
-       VALUES ($1, $2, $3, $4, $5, $6, true) RETURNING *`,
-      [recipientId, accountNumber.trim().toUpperCase(), bankName, address, accountLabel, setAsPrimary || isFirst]
-    );
-
-    const created = result.rows[0];
-
-    // If setting as primary and not first, unset others
-    if (created.is_primary && !isFirst) {
-      await this.setPrimary(created.id, recipientId);
-    }
+    // Unset the current primary and insert the new one in a single
+    // transaction — doing the insert-as-primary then a separate setPrimary()
+    // left a brief window where the recipient had two primary accounts.
+    const created = await withTransaction(async (client) => {
+      if (willBePrimary) {
+        await client.query(
+          `UPDATE recipient_bank_accounts SET is_primary = false, updated_at = NOW()
+           WHERE recipient_id = $1 AND is_primary = true`,
+          [recipientId]
+        );
+      }
+      const result = await client.query(
+        `INSERT INTO recipient_bank_accounts (recipient_id, account_number, bank_name, address, account_label, is_primary, is_active)
+         VALUES ($1, $2, $3, $4, $5, $6, true) RETURNING *`,
+        [recipientId, accountNumber.trim().toUpperCase(), bankName, address, accountLabel, willBePrimary]
+      );
+      return result.rows[0];
+    });
 
     return { bankAccount: created, created: true };
   },

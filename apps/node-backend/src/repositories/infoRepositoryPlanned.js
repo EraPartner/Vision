@@ -4,6 +4,7 @@
 
 import { query } from '../database/connection.js';
 import { convertRowsToEur } from '../services/currency/currencyConversionService.js';
+import { toAppTz } from '../lib/timezone.js';
 import {
   roundToCents,
   formatDateToYmd,
@@ -12,9 +13,13 @@ import {
 
 export const plannedRepository = {
   async getPlannedExpensesNextMonth(targetCurrency = 'EUR') {
-    const now = new Date();
-    const nextMonth = new Date(now.getFullYear(), now.getMonth() + 1, 1);
-    const monthAfter = new Date(now.getFullYear(), now.getMonth() + 2, 1);
+    // Anchor the month window to today's calendar month in APP_TIMEZONE.
+    // Server-local `new Date(y, m+1, 1)` serialized via toISOString() could
+    // resolve to the last day of the *current* month on a non-UTC server,
+    // shifting the whole planned_date SQL range by a month.
+    const today = toAppTz(new Date());
+    const nextMonth = new Date(Date.UTC(today.year, today.month, 1));
+    const monthAfter = new Date(Date.UTC(today.year, today.month + 1, 1));
     const lastDay = new Date(monthAfter.getTime() - 1);
 
     const sql = `
@@ -78,8 +83,8 @@ export const plannedRepository = {
     const totalExpenses = dailyData.reduce((s, d) => s + d.total_expenses, 0);
 
     return {
-      month: nextMonth.getMonth() + 1,
-      year: nextMonth.getFullYear(),
+      month: nextMonth.getUTCMonth() + 1,
+      year: nextMonth.getUTCFullYear(),
       period_start: formatDateToYmd(nextMonth),
       period_end: formatDateToYmd(lastDay),
       daily_data: dailyData,

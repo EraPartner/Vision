@@ -62,10 +62,13 @@ export function calculateNextDate(currentDate, recurrencePattern) {
   if (pattern === 'quarterly') return addMonthsClampedInAppTz(currentDate, 3);
   if (pattern === 'yearly') return addMonthsClampedInAppTz(currentDate, 12);
 
-  // Custom: "every N days"
+  // Custom: "every N days" — N must be >= 1. "every 0 days" matches the regex
+  // but returns the same date, which is an infinite loop for any caller that
+  // advances until the date passes a target.
   const match = pattern.match(/^every\s+(\d+)\s+days?$/);
   if (match) {
-    return addDaysUtc(currentDate, parseInt(match[1], 10));
+    const days = parseInt(match[1], 10);
+    return days >= 1 ? addDaysUtc(currentDate, days) : null;
   }
 
   return null;

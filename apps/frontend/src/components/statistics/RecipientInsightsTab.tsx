@@ -34,12 +34,29 @@ export function RecipientInsightsTab({ statisticsTopRecipientsChart }: Recipient
   const { appSettings } = useAppSettings();
   const locale = numberFormatToLocale(appSettings.numberFormat);
   const targetCurrency = appSettings.defaultCurrency || "EUR";
-  const formatCurrency = useCallback((val: number, fractionDigits = appSettings.showDecimalPlaces) => new Intl.NumberFormat(locale, {
-    style: "currency",
-    currency: appSettings.defaultCurrency || "EUR",
-    minimumFractionDigits: fractionDigits,
-    maximumFractionDigits: fractionDigits,
-  }).format(val), [locale, appSettings.defaultCurrency, appSettings.showDecimalPlaces]);
+  // Memoise the common-case formatter instead of constructing a new
+  // Intl.NumberFormat on every formatCurrency call. A non-default
+  // fractionDigits override (rare) still builds a one-off formatter.
+  const defaultCurrencyFormatter = useMemo(
+    () => new Intl.NumberFormat(locale, {
+      style: "currency",
+      currency: appSettings.defaultCurrency || "EUR",
+      minimumFractionDigits: appSettings.showDecimalPlaces,
+      maximumFractionDigits: appSettings.showDecimalPlaces,
+    }),
+    [locale, appSettings.defaultCurrency, appSettings.showDecimalPlaces],
+  );
+  const formatCurrency = useCallback((val: number, fractionDigits = appSettings.showDecimalPlaces) => {
+    if (fractionDigits === appSettings.showDecimalPlaces) {
+      return defaultCurrencyFormatter.format(val);
+    }
+    return new Intl.NumberFormat(locale, {
+      style: "currency",
+      currency: appSettings.defaultCurrency || "EUR",
+      minimumFractionDigits: fractionDigits,
+      maximumFractionDigits: fractionDigits,
+    }).format(val);
+  }, [defaultCurrencyFormatter, locale, appSettings.defaultCurrency, appSettings.showDecimalPlaces]);
   const { data, isLoading, isError } = useQuery({
     queryKey: ["recipient-insights", targetCurrency],
     queryFn: () => apiClient.getRecipientInsights({ currency: targetCurrency }),

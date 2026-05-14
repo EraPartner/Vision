@@ -33,14 +33,30 @@ pool.on('error', (err) => {
 
 
 /**
+ * A statement is safe to transparently retry only if it cannot have applied a
+ * write before the connection dropped. A transient error (e.g. ECONNRESET) can
+ * fire *after* the server committed an INSERT/UPDATE/DELETE — retrying that
+ * would double-apply the write. Restrict retries to plain read statements.
+ *
+ * @param {string} sql
+ * @returns {boolean}
+ */
+function isRetryableStatement(sql) {
+  return /^\s*(?:SELECT|SHOW|EXPLAIN)\b/i.test(sql);
+}
+
+/**
  * Execute a query against the database with optional retry on transient errors.
+ * Retries apply to read-only statements only — see {@link isRetryableStatement}.
  * @param {string} text - SQL query
  * @param {any[]} [params] - Query parameters
  * @param {{ retries?: number }} [opts]
  * @returns {Promise<pg.QueryResult>}
  */
 export async function query(text, params, opts = {}) {
-  const maxRetries = opts.retries ?? 0;
+  const maxRetries = (opts.retries ?? 0) > 0 && isRetryableStatement(text)
+    ? opts.retries
+    : 0;
   let attempt = 0;
 
   while (true) {
@@ -109,6 +125,7 @@ export async function getClient() {
  */
 export async function withTransaction(fn) {
   const client = await getClient();
+  let rollbackFailed = false;
   try {
     await client.query('BEGIN');
     const result = await fn(client);
@@ -119,10 +136,14 @@ export async function withTransaction(fn) {
       await client.query('ROLLBACK');
     } catch (rollbackErr) {
       logger.error('Transaction rollback failed', rollbackErr);
+      rollbackFailed = true;
     }
     throw err;
   } finally {
-    client.release();
+    // If ROLLBACK threw, the connection's transaction state is unknown.
+    // Passing a truthy arg to release() destroys the client instead of
+    // returning a poisoned connection to the pool.
+    client.release(rollbackFailed || undefined);
   }
 }
 

@@ -192,7 +192,11 @@ export async function refreshMaterializedViews() {
             logger.warn(`Falling back to non-concurrent refresh for ${view}`);
             return query(`REFRESH MATERIALIZED VIEW ${view}`);
           }
+          // Any other error is a real refresh failure — re-throw so the outer
+          // catch logs it. Swallowing it here let refreshMaterializedViews
+          // resolve "successfully" while leaving a stale view in place.
           logger.warn(`Failed to refresh ${view}`, { error: err.message });
+          throw err;
         })
       )
     );

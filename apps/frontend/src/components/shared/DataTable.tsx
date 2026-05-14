@@ -72,14 +72,20 @@ export function DataTable<T extends Record<string, unknown>>({
 
     // Debounced server-side search
     const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+    // True between a keystroke and the debounced server call landing — guards
+    // the searchValue→localSearchQuery sync effect so a stale prop can't revert
+    // characters mid-typing.
+    const isTypingRef = useRef(false);
     const handleSearchInput = useCallback((value: string) => {
         if (isServerSearch) {
             // Update local display immediately
             setLocalSearchQuery(value);
+            isTypingRef.current = true;
             // Debounce the server call
             if (debounceRef.current) clearTimeout(debounceRef.current);
             debounceRef.current = setTimeout(() => {
                 debounceRef.current = null;
+                isTypingRef.current = false;
                 onSearchChange!(value);
                 // Reset to page 0 on new search
                 if (onPageChange) onPageChange(0);
@@ -100,7 +106,7 @@ export function DataTable<T extends Record<string, unknown>>({
 
     useEffect(() => {
         if (!isServerSearch) return;
-        if (debounceRef.current) return;
+        if (isTypingRef.current || debounceRef.current) return;
 
         const externalQuery = searchValue ?? "";
         if (externalQuery !== localSearchQuery) {
@@ -119,6 +125,24 @@ export function DataTable<T extends Record<string, unknown>>({
         });
         return widths;
     });
+
+    // Re-seed defaultWidth for any column not yet tracked — the useState
+    // initialiser only runs once, so a locale change (new column objects) or
+    // an added column would otherwise never pick up its default width.
+    // Existing (possibly user-resized) widths are left untouched.
+    useEffect(() => {
+        setColumnWidths((prev) => {
+            let changed = false;
+            const next = { ...prev };
+            for (const col of columns) {
+                if (col.defaultWidth && next[col.key] === undefined) {
+                    next[col.key] = col.defaultWidth;
+                    changed = true;
+                }
+            }
+            return changed ? next : prev;
+        });
+    }, [columns]);
 
     const resizingRef = useRef<{ key: string; startX: number; startWidth: number } | null>(null);
 
@@ -260,6 +284,7 @@ export function DataTable<T extends Record<string, unknown>>({
             clearTimeout(debounceRef.current);
             debounceRef.current = null;
         }
+        isTypingRef.current = false;
         setColumnFilters({});
         setLocalSearchQuery("");
         if (isServerSearch) onSearchChange!("");
@@ -312,6 +337,7 @@ export function DataTable<T extends Record<string, unknown>>({
                                     clearTimeout(debounceRef.current);
                                     debounceRef.current = null;
                                 }
+                                isTypingRef.current = false;
                                 setLocalSearchQuery("");
                                 if (isServerSearch) onSearchChange!("");
                             }}
@@ -557,11 +583,8 @@ export function DataTable<T extends Record<string, unknown>>({
                             <Button
                                 variant="outline"
                                 size="sm"
-                                disabled={totalPages <= 1}
-                                onClick={() => {
-                                    if (currentPage === 0) onPageChange!(totalPages - 1);
-                                    else onPageChange!(currentPage - 1);
-                                }}
+                                disabled={currentPage <= 0}
+                                onClick={() => onPageChange!(currentPage - 1)}
                             >
                                 <ChevronLeft className="h-4 w-4 mr-1" />
                                 {t('table.previous')}
@@ -572,11 +595,8 @@ export function DataTable<T extends Record<string, unknown>>({
                             <Button
                                 variant="outline"
                                 size="sm"
-                                disabled={totalPages <= 1}
-                                onClick={() => {
-                                    if (currentPage >= totalPages - 1) onPageChange!(0);
-                                    else onPageChange!(currentPage + 1);
-                                }}
+                                disabled={currentPage >= totalPages - 1}
+                                onClick={() => onPageChange!(currentPage + 1)}
                             >
                                 {t('table.next')}
                                 <ChevronRight className="h-4 w-4 ml-1" />

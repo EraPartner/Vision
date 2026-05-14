@@ -3,7 +3,7 @@ title: Code Patterns Reference
 type: reference
 status: active
 date: 2026-04-26
-updated: 2026-05-13
+updated: 2026-05-14
 tags: [reference, patterns, conventions, code-style, backend, frontend, phase-0, phase-1, phase-2, phase-3, phase-4, phase-5, phase-6, phase-9, phase-12, phase-14, phase-q, phase-c, phase-d, motion, liquid-glass, design-system, decimal, money, timezone, openapi, domain-split, import, import-pipeline, concurrency, batching, decimal-enforcement, zustand, slice-selection, typescript, error-handling, type-safety, csv, formula-injection, cwe-1236, csv-record-splitter, csv-parsing, multi-line-fields, date-utilities, immutability, aggregation-optimization, recipient-groups, portfolio-totals, query-parameter-filtering, buildquery, bug-hunt-2026-05-05, bug-hunt-2026-05-06, bug-hunt-2026-05-08, react-keys, stable-keys, mount-guard, memory-leak-prevention, parseLocaleNumber, number-parsing, locale-number, settings-backed-hook, portfolio-tax-classifications, audit-2026-05-11, belgian-tax, freeze-display-pattern, adr-059, dev-observability, devtools, api-inspector, observability, postgres-locking, for-update-group-by]
 description: Standard code patterns used throughout the Vision project — repositories, routes, hooks, API client, Express setup, error handling, type safety, filter builders, aggregation envelopes, aggregation refresh, trigger-maintained tables, golden fixtures, database fixtures, pure calculation services, atomic multi-step transactions, streaming CSV exports with formula injection prevention, import batch concurrency, motion consumers, surface shells, gradient icon tiles, money utilities, decimal utilities, shared date utilities with input validation and locale support, timezone boundary handling, TypeScript type annotations, type-safe error handling, domain-split API client, Zustand store with useShallow slice selection, immutable PATCH field sanitization, aggregation query optimization with Map-based single-pass accumulation, recipient group resolution via scalar subqueries (Phase Q), portfolio totals single-source-of-truth pattern (Phase 14), Belgian Tax freeze/display pattern for engine-drift protection (ADR-059, May 2026), dev-only observability integration pattern (May 2026 devtools: module-level pub-sub event bus with zero-cost tree-shaking in production). May 2026 bug hunt adds React key generation pattern (use UUID instead of index), mount guard pattern (prevent setState after unmount), and documents parseLocaleNumber heuristic with single-comma thousands separator fix.
 aliases: [code patterns, coding patterns, conventions, patterns, how to write code, repository pattern, route pattern, hook pattern, error handling, type-safe error handling, type annotations, filter builder, golden fixture, aggregation envelope, calculation services, import concurrency, motion pattern, surface shell pattern, gradient icon pattern, money pattern, decimal pattern, timezone pattern, domain split, openapi, typescript types, csv export, safe csv, formula injection, cwe-1236, date utilities, immutability, aggregation optimization, Map pattern, recipient group filter, recipientGroupId, portfolio totals, single source of truth, parseLocaleNumber, number parsing, locale-aware number parsing, thousands separator, decimal separator, belgian-tax-pattern, freeze-display-pattern, as-filed-calculation, engine-drift-protection]
@@ -28,7 +28,7 @@ All monetary calculations must use Decimal.js to eliminate IEEE 754 floating-poi
 ### Pattern
 
 ```js
-import { toDecimal, addAll, subtract, roundToCents, toNumber } from '../lib/money.js';
+import { toDecimal, addAll, subtract, multiply, divide, roundMoney, toNumber } from '../lib/money.js';
 
 // Convert any input (number, string, Decimal, null) to Decimal
 const amount = toDecimal(100.5);
@@ -39,8 +39,15 @@ const total = toNumber(addAll([0.1, 0.2, 0.3])); // 0.6 exactly
 // Safe subtraction (e.g., outstanding balance)
 const outstanding = toNumber(subtract('100.00', '66.67')); // 33.33 exactly
 
-// Round to cents with banker's rounding (HALF_EVEN)
-const rounded = toNumber(roundToCents('10.125')); // 10.12 (rounds to even)
+// Safe multiplication (e.g., currency conversion, portfolio aggregation)
+const converted = toNumber(multiply('100.00', '1.2145')); // 121.45 exactly
+
+// Safe division (e.g., split allocation, fee distribution)
+const perShare = toNumber(divide('100.00', 3)); // 33.33 (pre-rounded)
+
+// Round to cents with banker's rounding (HALF_EVEN) or custom places
+const rounded = toNumber(roundMoney('10.125')); // 10.12 (rounds to even)
+const scaled = toNumber(roundMoney('0.123456', 4)); // 0.1235 (to 4 DP)
 
 // Database NUMERIC strings
 const dbAmount = toNumber(toDecimal('100.00')); // Safe from string precision loss
@@ -52,22 +59,27 @@ const dbAmount = toNumber(toDecimal('100.00')); // Safe from string precision lo
 |------|-----------|
 | All monetary input | Wrap in `toDecimal()` immediately |
 | All accumulations | Use `addAll([...])` instead of `.reduce((a, b) => a + b)` |
-| Rounding strategy | Always explicit `roundToCents()` before persistence |
+| Multiplication | Use `multiply(a, b)` for FX rates, portfolio aggregation, fee scaling |
+| Division | Use `divide(a, b)` for per-unit costs, fee splits; result auto-rounded to 2 DP |
+| Rounding strategy | Use `roundMoney(value, places=2)` for custom precision; defaults to banker's rounding (HALF_EVEN) |
 | Final output | Use `toNumber()` or `.toString()` for JSON/display |
 | Null/undefined | Treated as 0 by `toDecimal()` |
 | Database NUMERIC | Convert string to `toDecimal(string)` for safe math |
 | Banker's rounding | HALF_EVEN default; 0.005 rounds to 0, 0.015 to 0.02 |
 
-### Mandatory Scopes (Phase 9 Complete)
+### Mandatory Scopes (Phase 9 Complete + May 2026 Audit)
 
-As of 2026-04-23, decimal enforcement is **mandatory** for all monetary API output paths:
+As of 2026-05-14, decimal enforcement is **mandatory** for all monetary API output paths and extends to portfolio aggregation and import pipeline precision:
 
 | Scope | Files | Enforcement |
 |-------|-------|-----------|
 | **Repository reads** | splitRepository, infoRepositoryBanks/Helpers/Monthly, portfolioTransactionRepository, rawTransactionRepository | `toNumber(toDecimal(value))` on all NUMERIC/DECIMAL DB columns |
 | **Route responses** | transactions, plannedTransactions, info, aggregations | `toDecimal()` → math → `toNumber()` before JSON serialization |
-| **Service calculations** | recurringDetectionService, currencyConversionService, portfolioMath, snapshotBuilder | Decimal.js throughout; `toNumber()` for output |
-| **CSV/XML parsing** | Bank import adapters | parseFloat only; DB writes go through repositories (which enforce decimal) |
+| **Service calculations** | recurringDetectionService, currencyConversionService, portfolioMath, snapshotBuilder, portfolioSummaryService | Decimal.js throughout; `toNumber()` for output |
+| **Portfolio aggregation** | portfolioSummaryService.js, portfolio/snapshotBuilder.js, portfolioMath.js | Per-investment accumulators + FX multipliers routed through Decimal; `multiply()` for conversion factors; `toNumber()` final aggregate |
+| **CSV/XML parsing** | Bank import adapters (_shared.js, belfius.js, revolut.js, sabb.js, vision.js) | parseFloat only; streaming running balances held as Decimal throughout import; DB writes go through repositories |
+| **Imports** | streamingImportService.js, rawTransactionImportService.js, importPipeline/commit.js | Amount parsers → Decimal; running balance accumulation via Decimal; `roundMoney()` before persistence |
+| **Exports** | transactionExport.js, calculations/aggregation/cashflowForecast.js, calculations/recurrence.js | All accumulations (running balance, cumulative flows) via Decimal; `divide()` for per-row allocation |
 
 ### When to Use
 
@@ -400,9 +412,16 @@ export default entityRepository;
 
 ---
 
-## Timezone Boundary Handling (Phase 9)
+## Timezone Boundary Handling & APP_TIMEZONE Consistency (Phase 9, ADR-009)
 
 **Source:** [[apps/node-backend/src/lib/timezone.js|timezone.js]], [[apps/node-backend/tests/timezone.test.js|timezone.test.js]]
+
+**May 2026 Update:** As of 2026-05-14, date bucketing throughout the backend now consistently uses `APP_TIMEZONE` (default `Europe/Brussels`):
+- `cashflowForecast.js`: All date bucketing via `toAppTz` / `appDateStringToUtc` / `toAppDateString`
+- `infoRepositoryPlanned.js`: Month window anchored to APP_TIMEZONE
+- `portfolioMath.js`: Calendar-day counts via `calendarDaysBetween` helper
+- SQL aggregations: `date_trunc()` with `AT TIME ZONE` clause set to APP_TIMEZONE
+- All recurring/loan-schedule date math operates on zoned components `{year, month, day}`
 
 Certain JavaScript environments (some older Intl implementations, edge cases in Safari) report `hour=24` at midnight when converting from UTC to zoned wall-clock time. This is technically valid per ECMAScript (hour is in range [0,24]) but breaks logic expecting [0,23]. The fix normalizes hour=24 to day+1, hour=0 and re-normalizes via `Date.UTC()` to handle month/year overflow.
 

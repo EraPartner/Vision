@@ -21,6 +21,7 @@
 import { query } from '../../../database/connection.js';
 import { convertRowsToEur } from '../../currency/currencyConversionService.js';
 import { buildEnvelope } from './_envelope.js';
+import { roundMoney } from '../../../lib/money.js';
 
 const INCOME_NODE_ID = '__income__';
 const SAVINGS_NODE_ID = '__savings__';
@@ -152,7 +153,7 @@ export async function computeSankeyFlow({
 }
 
 function round(n) {
-  return Math.round(n * 100) / 100;
+  return roundMoney(n);
 }
 
 export default { computeSankeyFlow };

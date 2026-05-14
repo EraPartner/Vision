@@ -25,6 +25,22 @@ function lastDayOfMonth(period: string): string {
   return `${period}-${String(day).padStart(2, '0')}`;
 }
 
+/**
+ * Pure period-value accessor — hoisted out of the component so it isn't
+ * redefined each render and the useMemos below can list it as a real (stable)
+ * dependency instead of suppressing exhaustive-deps.
+ */
+function getPeriodValue(
+  cat: StatisticsData["categoryPivot"][number],
+  period: string,
+  valueMode: PivotValueMode,
+): number {
+  if (valueMode === "net") return cat.netMonths[period] || 0;
+  if (valueMode === "income") return cat.incomeMonths[period] || 0;
+  if (valueMode === "expense") return cat.expenseMonths[period] || 0;
+  return cat.months[period] || 0;
+}
+
 function buildDrillUrl(params: {
   categoryId?: number;
   categoryIds?: number[];
@@ -68,17 +84,10 @@ export function CategoryPivotTable({
     return data.allPeriods.filter((p) => p.startsWith(yearFilter));
   }, [yearFilter, data.allPeriods]);
 
-  const getPeriodValue = (cat: StatisticsData["categoryPivot"][number], period: string) => {
-    if (valueMode === "net") return cat.netMonths[period] || 0;
-    if (valueMode === "income") return cat.incomeMonths[period] || 0;
-    if (valueMode === "expense") return cat.expenseMonths[period] || 0;
-    return cat.months[period] || 0;
-  };
-
   const filteredCategories = useMemo(() => {
     return data.categoryPivot
       .map((cat) => {
-        const filteredTotal = filteredPeriods.reduce((s, p) => s + getPeriodValue(cat, p), 0);
+        const filteredTotal = filteredPeriods.reduce((s, p) => s + getPeriodValue(cat, p, valueMode), 0);
         return { ...cat, filteredTotal };
       })
       .filter((cat) => {
@@ -90,7 +99,6 @@ export function CategoryPivotTable({
           ? Math.abs(b.filteredTotal) - Math.abs(a.filteredTotal)
           : b.filteredTotal - a.filteredTotal
       );
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [data.categoryPivot, filteredPeriods, valueMode]);
 
   const hierarchicalCategories = useMemo(() => {
@@ -118,7 +126,7 @@ export function CategoryPivotTable({
       const group = grouped.get(general)!;
       group.total += cat.filteredTotal;
       for (const period of filteredPeriods) {
-        group.months[period] += getPeriodValue(cat, period);
+        group.months[period] += getPeriodValue(cat, period, valueMode);
       }
       group.children.push({ ...cat, detailName });
     }
@@ -137,16 +145,19 @@ export function CategoryPivotTable({
           ? Math.abs(b.total) - Math.abs(a.total)
           : b.total - a.total
       );
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [filteredCategories, filteredPeriods, t, valueMode]);
 
   const columnTotals = useMemo(() => {
+    // Single pass over categories accumulating per period, rather than a
+    // reduce-over-categories *per period* (periods × categories).
     const totals: Record<string, number> = {};
-    for (const period of filteredPeriods) {
-      totals[period] = filteredCategories.reduce((s, cat) => s + getPeriodValue(cat, period), 0);
+    for (const period of filteredPeriods) totals[period] = 0;
+    for (const cat of filteredCategories) {
+      for (const period of filteredPeriods) {
+        totals[period] += getPeriodValue(cat, period, valueMode);
+      }
     }
     return totals;
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [filteredCategories, filteredPeriods, valueMode]);
 
   const [collapsedGroups, setCollapsedGroups] = useState<Set<string>>(new Set());

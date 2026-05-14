@@ -1,6 +1,12 @@
 import { query, withTransaction } from '../database/connection.js';
 import { logger } from '../config/logger.js';
 import { recordSuccess as recordProviderSuccess, recordError as recordProviderError } from './providerHealthService.js';
+import { roundMoney } from '../lib/money.js';
+
+// belgian_inflation_rates.monthly_rate is NUMERIC(10,8): keep the full 8 dp of
+// stored scale. Rounding to 6 dp here threw away precision the column could
+// hold, and the truncation compounds multiplicatively in snapshotBuilder.
+const RATE_DECIMALS = 8;
 
 const CACHE_LIFETIME_MS = 24 * 60 * 60 * 1000;
 const STATBEL_REQUEST_TIMEOUT_MS = 10_000;
@@ -203,7 +209,7 @@ function normalizeRatesFromPayload(payload) {
     if (!month || !Number.isFinite(monthlyRate)) continue;
     byMonth.set(month, {
       month,
-      monthly_rate: Math.round(monthlyRate * 1_000_000) / 1_000_000,
+      monthly_rate: roundMoney(monthlyRate, RATE_DECIMALS),
     });
   }
 
@@ -242,7 +248,7 @@ function normalizeRatesFromStatbelPayload(payload) {
     const curr = indexed[i];
     const monthlyRate = (curr.cpi / prev.cpi) - 1;
     if (!Number.isFinite(monthlyRate) || Math.abs(monthlyRate) > 1) continue;
-    rates.push({ month: curr.month, monthly_rate: Math.round(monthlyRate * 1_000_000) / 1_000_000 });
+    rates.push({ month: curr.month, monthly_rate: roundMoney(monthlyRate, RATE_DECIMALS) });
   }
 
   return rates;
@@ -284,7 +290,7 @@ function normalizeRatesFromEurostatIndexPayload(payload) {
 
     rates.push({
       month: current.month,
-      monthly_rate: Math.round(monthlyRate * 1_000_000) / 1_000_000,
+      monthly_rate: roundMoney(monthlyRate, RATE_DECIMALS),
     });
   }
 
@@ -525,8 +531,13 @@ export async function getInflationRates({
     };
   } catch (error) {
     logStatbelFallbackWarning(error);
-    const fallbackRates = dbRates.length > 0 ? dbRates : await loadFromDatabase(normalizedStart, normalizedEnd);
-    memoryCache = { rates: fallbackRates, timestamp: Date.now() };
+    // Cache the *full* rate set, never a date-range-filtered subset — caching
+    // the subset let a later wider-range call get a truncated cache hit.
+    const allDbRates = await loadFromDatabase();
+    memoryCache = { rates: allDbRates, timestamp: Date.now() };
+    const fallbackRates = dbRates.length > 0
+      ? dbRates
+      : filterRates(allDbRates, normalizedStart, normalizedEnd);
     return { source: 'database', rates: fallbackRates };
   }
 }

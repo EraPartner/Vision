@@ -5,7 +5,7 @@
 
 import { query } from '../database/connection.js';
 import { convertRowsToEur } from '../services/currency/currencyConversionService.js';
-import { toDecimal, toNumber } from '../lib/money.js';
+import { toDecimal, toNumber, roundMoney } from '../lib/money.js';
 
 // ── Materialized-view cache ────────────────────────────────────────────────
 // Keyed by view name; cleared via clearMvCache() after bulk import.
@@ -72,7 +72,7 @@ export function clearMvCache() {
 // ── Numeric helpers ────────────────────────────────────────────────────────
 
 export function roundToCents(value) {
-  return Math.round(value * 100) / 100;
+  return roundMoney(value);
 }
 
 // ── Date helpers ───────────────────────────────────────────────────────────

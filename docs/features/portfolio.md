@@ -3,9 +3,9 @@ title: Feature - Portfolio & Investments
 type: feature
 status: active
 date: 2026-04-27
-last_modified: 2026-05-08
-updated: 2026-05-08
-tags: [feature, portfolio, investments, stocks, crypto, metals, phase-1, phase-3.5, phase-3.6, phase-9, phase-8, phase-14, pdf-export, offline-resilience, stale-prices, online-status-detection, graceful-degradation, portfolio-summary, realtime-totals]
+last_modified: 2026-05-14
+updated: 2026-05-14
+tags: [feature, portfolio, investments, stocks, crypto, metals, phase-1, phase-3.5, phase-3.6, phase-9, phase-8, phase-14, pdf-export, offline-resilience, stale-prices, online-status-detection, graceful-degradation, portfolio-summary, realtime-totals, decimal-precision, monetary-math]
 aliases: [portfolio-feature, investments-feature, holdings, net-worth, stocks, crypto, real-estate, savings, bonds, metals, performance, watchlist]
 description: Track stocks, ETFs, crypto, metals, real estate, savings, and bonds; includes Phase 8 PDF report export with 6 portfolio sections
 related_code: ["apps/node-backend/src/routes/investments.js", "apps/node-backend/src/services/priceProviderService.js", "apps/node-backend/src/services/portfolioPerformanceSnapshotService.js", "apps/node-backend/src/services/portfolio/portfolioSummaryService.js", "apps/node-backend/src/routes/info/portfolioSummary.js", "apps/frontend/src/pages/portfolio/PerformancePage.tsx", "apps/frontend/src/pages/portfolio/MetalsPage.tsx", "apps/frontend/src/pages/portfolio/PortfolioOverviewPage.tsx", "apps/frontend/src/hooks/portfolio/usePortfolioSummary.ts", "apps/frontend/src/lib/api.ts"]
@@ -182,6 +182,21 @@ Oversell safety behavior:
 - Metals listing explicitly uses base (non-FX-aware) realized/unrealized calculations.
 
 Code links: [[apps/frontend/src/pages/portfolio/StocksPage.tsx]], [[apps/frontend/src/types/api.ts]], [[apps/node-backend/src/routes/investments.js]], [[alembic/versions/0016_add_fx_rate_to_portfolio_transactions.py]]
+
+### Portfolio Decimal Precision (May 2026 Audit)
+
+All portfolio aggregation now uses Decimal.js to eliminate IEEE 754 floating-point drift:
+
+**Monetary calculation paths:**
+- `portfolioSummaryService.js`: Per-investment accumulators, FX multiplier aggregation, `aggregateTotals()` all use `multiply()` and Decimal accumulation
+- `portfolio/snapshotBuilder.js`: `cumulativeInvested`, per-class totals, `totalValue`, `cumulativeInflation` computed via Decimal; `convertAmount()` returns Decimal for safe FX composition
+- Frontend hooks: `usePortfolioSummaries.ts`, `usePortfolioCalculations.ts` (fixed gross/net bug: `totalSellProceeds` now scales by `sellRatio` via Decimal division)
+- `portfolioMath.js`: `calculateAccruedInterest()`, `computeMetrics()` use `calendarDaysBetween` helper for precise day counts (not floating-point averages)
+
+**Benefits:**
+- No phantom balances from FX-aware composition (e.g., 3 FX rates × 20 stocks = exact sum, not ±0.01 rounding)
+- Snapshot consistency: cost basis matches database NUMERIC precision
+- Oversell prevention: unit holdings validated against precise cost basis, not approximated floats
 
 ## Belgian Tax Features
 

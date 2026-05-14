@@ -11,11 +11,9 @@
  *   validateLoanConfig(config) → { errors[], normalized }
  */
 
-const EPSILON = 0.0000001;
+import { roundMoney } from '../../lib/money.js';
 
-function roundMoney(value) {
-  return Math.round((Number(value) + Number.EPSILON) * 100) / 100;
-}
+const EPSILON = 0.0000001;
 
 /**
  * Returns the YYYY-MM-DD string `monthOffset` months after `baseDateStr`,

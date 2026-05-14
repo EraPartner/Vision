@@ -4,7 +4,7 @@
 
 import { cleanRecipientName, normalizeToUppercase } from '../../textNormalization.js';
 import { logger } from '../../../config/logger.js';
-import { parseCsvFile, buildOptionalComment, buildRawRowString } from './_shared.js';
+import { parseCsvFile, buildOptionalComment, buildRawRowString, parseAmountField } from './_shared.js';
 
 const NAME = 'sabb';
 const BANK_LABEL = 'SABB';
@@ -19,7 +19,7 @@ function rowToTransaction(row) {
   const amountRaw = (row['Amount(SAR)'] || '').trim();
   if (!amountRaw) return null;
   const amountStr = amountRaw.replace(/[A-Za-z\s]/g, '').trim();
-  const amount = parseFloat(amountStr);
+  const amount = parseAmountField(amountStr);
   if (isNaN(amount)) return null;
 
   const descriptionRaw = (row['Description'] || '').trim();

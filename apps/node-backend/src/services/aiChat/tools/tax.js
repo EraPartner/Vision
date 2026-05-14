@@ -10,7 +10,7 @@
 
 import { transactionRepository } from '../../../repositories/transactionRepository.js';
 import settings from '../../../config/config.js';
-import { toDecimal, roundToCents } from '../../../lib/money.js';
+import { toDecimal, roundToCents, addAll, roundMoney } from '../../../lib/money.js';
 import { loadActiveInvestments, loadTransactionsForInvestments } from './_portfolioFetch.js';
 import { parsePositiveInt } from './_validate.js';
 
@@ -114,7 +114,7 @@ export const getTaxableIncomeSummary = {
       { source: 'Appreciation (realized)', amount: roundToCents(buckets.appreciation).toNumber() },
     ];
 
-    const grossTotal = rows.reduce((acc, r) => acc + r.amount, 0);
+    const grossTotal = addAll(rows.map((r) => r.amount));
 
     return {
       ok: true,
@@ -123,7 +123,7 @@ export const getTaxableIncomeSummary = {
         year,
         from,
         to,
-        grossTotal: Math.round(grossTotal * 100) / 100,
+        grossTotal: roundMoney(grossTotal),
         currency: 'EUR',
         disclaimer: DISCLAIMER_APPROX,
         renderAs: 'bar',

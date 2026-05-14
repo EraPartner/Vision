@@ -171,6 +171,28 @@ describe('Price Provider Service', () => {
       expect(result[1]).toBe(1999.99);
     });
 
+    it('converts a Kinesis EUR-symbol live price out of USD', async () => {
+      // exchange_rates: 1 USD = 0.5 EUR (rate_to_eur), so the live price halves.
+      query.mockResolvedValue({
+        rows: [{ currency_code: 'USD', rate_to_eur: '0.5' }],
+      });
+      vi.spyOn(globalThis, 'fetch').mockResolvedValue({
+        ok: true,
+        json: () => Promise.resolve({
+          KAU_USD: [
+            { createdAt: '2026-01-01T00:00:00Z', price: 80 },
+            { createdAt: '2026-01-02T00:00:00Z', price: 100 },
+          ],
+        }),
+      });
+
+      const result = await fetchLivePrices([
+        { id: 1, price_provider: 'kinesis', price_provider_id: 'KAU_EUR', currency: 'EUR' },
+      ]);
+
+      expect(result[1]).toBe(50);
+    });
+
     it('should resolve Kinesis symbol from configured asset name when provider id is missing', async () => {
       vi.spyOn(globalThis, 'fetch').mockResolvedValue({
         ok: true,
@@ -594,10 +616,19 @@ describe('Price Provider Service', () => {
     });
 
     it('sanitizes moderate one-day Kinesis spike and preserves series detail', async () => {
-      query
-        .mockResolvedValueOnce({ rows: [] })
-        .mockResolvedValueOnce({})
-        .mockResolvedValueOnce({ rows: [] });
+      // KAU_EUR is fetched from Kinesis as KAU_USD, then converted USD→EUR at
+      // each point's historical rate. A 1:1 USD rate keeps the converted
+      // values identical so the spike-sanitisation assertions stay meaningful.
+      query.mockImplementation(async (sql) => {
+        if (typeof sql === 'string' && sql.includes('FROM exchange_rates')) {
+          return {
+            rows: ['2023-05-19', '2023-05-20', '2023-05-21', '2023-05-22', '2023-05-23'].map(
+              (rate_date) => ({ currency_code: 'USD', rate_date, rate_to_eur: '1' }),
+            ),
+          };
+        }
+        return { rows: [] };
+      });
 
       vi.spyOn(globalThis, 'fetch').mockResolvedValue({
         ok: true,
@@ -617,6 +648,7 @@ describe('Price Provider Service', () => {
           id: 23,
           price_provider: 'kinesis',
           price_provider_id: 'KAU_EUR',
+          currency: 'EUR',
         },
         {
           fromMs: Date.UTC(2023, 4, 19, 0, 0, 0, 0),
@@ -631,6 +663,38 @@ describe('Price Provider Service', () => {
       expect(points[2]?.price).toBeLessThan(61.5);
       expect(points[3]?.price).toBe(61);
       expect(points[4]?.price).toBe(62);
+    });
+
+    it('converts a Kinesis EUR symbol history series from USD at historical rates', async () => {
+      // USD rate 2.0 → every converted EUR price is double the USD source.
+      query.mockImplementation(async (sql) => {
+        if (typeof sql === 'string' && sql.includes('FROM exchange_rates')) {
+          return {
+            rows: ['2023-05-19', '2023-05-20', '2023-05-21'].map(
+              (rate_date) => ({ currency_code: 'USD', rate_date, rate_to_eur: '2' }),
+            ),
+          };
+        }
+        return { rows: [] };
+      });
+
+      vi.spyOn(globalThis, 'fetch').mockResolvedValue({
+        ok: true,
+        json: () => Promise.resolve({
+          KAU_USD: [
+            { createdAt: '2023-05-19T00:00:00Z', price: 50 },
+            { createdAt: '2023-05-20T00:00:00Z', price: 51 },
+            { createdAt: '2023-05-21T00:00:00Z', price: 52 },
+          ],
+        }),
+      });
+
+      const points = await fetchHistoricalPrices(
+        { id: 24, price_provider: 'kinesis', price_provider_id: 'KAU_EUR', currency: 'EUR' },
+        { fromMs: Date.UTC(2023, 4, 19, 0, 0, 0, 0), toMs: Date.UTC(2023, 4, 21, 23, 59, 59, 999) },
+      );
+
+      expect(points.map((p) => p.price)).toEqual([100, 102, 104]);
     });
 
     it('returns empty history for yahoo when symbol cannot be resolved', async () => {

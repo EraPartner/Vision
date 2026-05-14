@@ -64,24 +64,34 @@ describe('validateBatch', () => {
     balance: null,
   }
 
-  it('returns {validated:1, errors:0} for a valid row', async () => {
+  it('returns {validated:1, duplicates:0, errors:0} for a valid row', async () => {
     setupPending(baseRow)
-    expect(await validateBatch({ batchId: 1 })).toEqual({ validated: 1, errors: 0 })
+    expect(await validateBatch({ batchId: 1 })).toEqual({ validated: 1, duplicates: 0, errors: 0 })
   })
 
-  it('returns {validated:0, errors:1} for missing tx_date', async () => {
+  it('returns {validated:0, duplicates:0, errors:1} for missing tx_date', async () => {
     setupPending({ ...baseRow, tx_date: null })
-    expect(await validateBatch({ batchId: 2 })).toEqual({ validated: 0, errors: 1 })
+    expect(await validateBatch({ batchId: 2 })).toEqual({ validated: 0, duplicates: 0, errors: 1 })
   })
 
-  it('returns {validated:0, errors:1} for null amount', async () => {
+  it('returns {validated:0, duplicates:0, errors:1} for null amount', async () => {
     setupPending({ ...baseRow, amount: null })
-    expect(await validateBatch({ batchId: 3 })).toEqual({ validated: 0, errors: 1 })
+    expect(await validateBatch({ batchId: 3 })).toEqual({ validated: 0, duplicates: 0, errors: 1 })
   })
 
-  it('returns {validated:0, errors:1} for non-numeric amount', async () => {
+  it('returns {validated:0, duplicates:0, errors:1} for non-numeric amount', async () => {
     setupPending({ ...baseRow, amount: 'N/A' })
-    expect(await validateBatch({ batchId: 4 })).toEqual({ validated: 0, errors: 1 })
+    expect(await validateBatch({ batchId: 4 })).toEqual({ validated: 0, duplicates: 0, errors: 1 })
+  })
+
+  it('marks a second identical row in the same batch as a duplicate', async () => {
+    const dupRow = { ...baseRow, id: 2, row_index: 1, raw_data: null }
+    query
+      .mockResolvedValueOnce({ rows: [] }) // UPDATE status='validating'
+      .mockResolvedValueOnce({ rows: [baseRow, dupRow] }) // SELECT pending — two identical rows
+    // The UPDATE import_batches rows_duplicate write also issues a query.
+    query.mockResolvedValueOnce({ rows: [] })
+    expect(await validateBatch({ batchId: 5 })).toEqual({ validated: 1, duplicates: 1, errors: 0 })
   })
 })
 
@@ -178,7 +188,12 @@ describe('commitBatch', () => {
 
   it('imports a clean row and triggers aggregation refresh', async () => {
     setupCommit(matchedRow)
-    // default mockClient.query → {rows:[]} for all: no dup, INSERT succeeds
+    // The transactions INSERT now uses ON CONFLICT ... RETURNING id — a
+    // returned row means the insert landed (vs. a tx_hash conflict).
+    mockClient.query.mockImplementation(async (sql) => {
+      if (sql.includes('INSERT INTO transactions')) return { rows: [{ id: 100 }] }
+      return { rows: [] }
+    })
     expect(await commitBatch({ batchId: 1 })).toEqual({ imported: 1, duplicates: 0, errors: 0 })
     expect(refreshAggregations).toHaveBeenCalledOnce()
   })

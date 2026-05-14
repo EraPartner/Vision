@@ -319,6 +319,9 @@ describe('investmentRepository.update', () => {
 
   it('updates price via inheritance tables without touching investments view', async () => {
     query
+      // updatePrice now checks the schema first (mirroring update()) — a
+      // truthy investments_base means take the inheritance path.
+      .mockResolvedValueOnce({ rows: [{ investments_base: 'investments_base' }] })
       .mockResolvedValueOnce({ rows: [{ id: 1, asset_class: 'etf' }] })
       .mockResolvedValueOnce({ rowCount: 1 })
       .mockResolvedValueOnce({ rowCount: 1 })
@@ -329,18 +332,22 @@ describe('investmentRepository.update', () => {
       price_updated_at: '2026-03-23T11:50:00.000Z',
     });
 
-    expect(query).toHaveBeenNthCalledWith(1, 'SELECT * FROM investments WHERE id = $1', [1]);
     expect(query).toHaveBeenNthCalledWith(
-      2,
+      1,
+      "SELECT to_regclass('public.investments_base') AS investments_base"
+    );
+    expect(query).toHaveBeenNthCalledWith(2, 'SELECT * FROM investments WHERE id = $1', [1]);
+    expect(query).toHaveBeenNthCalledWith(
+      3,
       'UPDATE investments_base SET price_updated_at = $1 WHERE id = $2',
       ['2026-03-23T11:50:00.000Z', 1]
     );
     expect(query).toHaveBeenNthCalledWith(
-      3,
+      4,
       'UPDATE etf_investments SET current_price = $1 WHERE id = $2',
       [90.5, 1]
     );
-    expect(query).toHaveBeenNthCalledWith(4, 'SELECT * FROM investments WHERE id = $1', [1]);
+    expect(query).toHaveBeenNthCalledWith(5, 'SELECT * FROM investments WHERE id = $1', [1]);
     expect(result).toEqual({ id: 1, asset_class: 'etf', current_price: '90.50' });
   });
 

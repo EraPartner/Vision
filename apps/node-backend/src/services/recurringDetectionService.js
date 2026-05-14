@@ -128,7 +128,11 @@ function detectAmountChanges(transactions) {
  */
 export async function detectRecurringPatterns() {
   try {
-    // Get transactions grouped by recipient, ordered by date
+    // Get transactions grouped by recipient, ordered by date. Bounded to the
+    // last ~3 years: recurrence is detected from interval cadence, so older
+    // history adds scan cost without changing the result. Without the bound
+    // this was a full-table scan on every call (including via the aiChat
+    // getRecurringDetected tool).
     const result = await query(`
       SELECT t.id, t.date, t.amount, t.currency, t.memo, t.bank_account,
              t.recipient_id, r.name AS recipient_name,
@@ -139,6 +143,7 @@ export async function detectRecurringPatterns() {
       LEFT JOIN categories c ON COALESCE(t.category_id, r.default_category_id) = c.id
       WHERE t.is_active = true
         AND t.recipient_id IS NOT NULL
+        AND t.date >= CURRENT_DATE - INTERVAL '3 years'
       ORDER BY t.recipient_id, t.date
     `);
 
@@ -212,13 +217,19 @@ export async function detectRecurringPatterns() {
       // Check for amount changes
       const amountChanges = detectAmountChanges(txns);
 
-      // Predict next occurrence
+      // Predict next occurrence. Advance in UTC so it stays consistent with
+      // the interval calc above — mixing UTC interval math with local
+      // getDate/setDate shifted predictedNext by a day across a DST boundary.
       const lastDate = new Date(txns[txns.length - 1].date);
       if (Number.isNaN(lastDate.getTime())) {
         continue;
       }
-      const nextDate = new Date(lastDate);
-      nextDate.setDate(nextDate.getDate() + detected.medianDays);
+      const lastUtcMidnight = Date.UTC(
+        lastDate.getFullYear(),
+        lastDate.getMonth(),
+        lastDate.getDate(),
+      );
+      const nextDate = new Date(lastUtcMidnight + detected.medianDays * 24 * 60 * 60 * 1000);
 
       const isAlreadyPlanned = plannedRecipientIds.has(group.recipientId);
 

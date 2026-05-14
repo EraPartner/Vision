@@ -43,6 +43,36 @@ export function roundToCents(v) {
 }
 
 /**
+ * @param {number|string|Decimal} a
+ * @param {number|string|Decimal} b
+ * @returns {Decimal}
+ */
+export function multiply(a, b) {
+  return toDecimal(a).times(toDecimal(b));
+}
+
+/**
+ * @param {number|string|Decimal} a
+ * @param {number|string|Decimal} b
+ * @returns {Decimal}
+ */
+export function divide(a, b) {
+  return toDecimal(a).div(toDecimal(b));
+}
+
+/**
+ * Half-up rounding to N decimal places, returned as a plain number.
+ * Use on emit to replace lossy `Math.round(x * 10**n) / 10**n`.
+ *
+ * @param {number|string|Decimal} v
+ * @param {number} [places=2]
+ * @returns {number}
+ */
+export function roundMoney(v, places = 2) {
+  return toDecimal(v).toDecimalPlaces(places, Decimal.ROUND_HALF_UP).toNumber();
+}
+
+/**
  * @param {number|string|Decimal} v
  * @returns {number}
  */

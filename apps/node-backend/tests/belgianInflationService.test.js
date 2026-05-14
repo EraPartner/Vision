@@ -81,13 +81,12 @@ describe('belgianInflationService', () => {
   });
 
   it('falls back to database when Statbel fetch fails', async () => {
-    query
-      .mockResolvedValueOnce({
-        rows: [{ month_date: '2023-12-01', monthly_rate: '0.00150000' }],
-      })
-      .mockResolvedValueOnce({
-        rows: [{ month_date: '2023-12-01', monthly_rate: '0.00150000' }],
-      });
+    // The catch path now reloads the *full* rate set for the memory cache
+    // (never a date-range subset), so it issues an extra loadFromDatabase() —
+    // a blanket mock keeps the test robust to the exact query count.
+    query.mockResolvedValue({
+      rows: [{ month_date: '2023-12-01', monthly_rate: '0.00150000' }],
+    });
 
     const fetchMock = vi.fn().mockRejectedValue(new Error('network down'));
     vi.stubGlobal('fetch', fetchMock);
@@ -189,9 +188,10 @@ describe('belgianInflationService', () => {
     const result = await getInflationRates({ forceRefresh: true });
 
     expect(result.source).toBe('eurostat');
+    // monthly_rate is now kept to the column's full 8-dp scale (was 6 dp).
     expect(result.rates).toEqual([
       { month: '2024-02', monthly_rate: 0.005 },
-      { month: '2024-03', monthly_rate: 0.004975 },
+      { month: '2024-03', monthly_rate: 0.00497512 },
     ]);
     expect(query).toHaveBeenCalledWith('BEGIN');
     expect(query).toHaveBeenCalledWith('COMMIT');

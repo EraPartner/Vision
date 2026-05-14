@@ -4,7 +4,8 @@
  * Reads staging rows (status='pending'), validates required fields,
  * computes tx_hash per row via deduplication.createTransactionHash
  * (or fallback field-based hash if raw_data is missing), and marks
- * each row 'validated' or 'error'.
+ * each row 'validated', 'duplicate' (a second row in this same batch
+ * with an identical tx_hash), or 'error'.
  */
 
 import crypto from 'crypto';
@@ -27,6 +28,11 @@ export async function validateBatch({ batchId, onProgress }) {
   const total = pending.length;
   let seen = 0;
   let errors = 0;
+  let duplicates = 0;
+  // tx_hashes seen so far in this batch — a repeat is an intra-batch duplicate
+  // (the same row twice in one CSV) and is dropped here rather than inserted
+  // twice at commit time.
+  const seenHashes = new Set();
 
   if (onProgress) onProgress({ phase: 'validating', current: 0, total });
 
@@ -45,9 +51,18 @@ export async function validateBatch({ batchId, onProgress }) {
         txHashes.push(null);
         errorMessages.push(issue);
       } else {
-        statuses.push('validated');
-        txHashes.push(computeRowHash(row));
-        errorMessages.push(null);
+        const hash = computeRowHash(row);
+        if (seenHashes.has(hash)) {
+          duplicates++;
+          statuses.push('duplicate');
+          txHashes.push(hash);
+          errorMessages.push(null);
+        } else {
+          seenHashes.add(hash);
+          statuses.push('validated');
+          txHashes.push(hash);
+          errorMessages.push(null);
+        }
       }
     }
     await query(
@@ -64,9 +79,17 @@ export async function validateBatch({ batchId, onProgress }) {
     if (onProgress) onProgress({ phase: 'validating', current: seen, total });
   }
 
-  logger.info('[pipeline:validate] done', { batchId, total, errors });
-  // eslint-disable-next-line vision-local-money/no-raw-money-arithmetic
-  return { validated: total - errors, errors };
+  if (duplicates > 0) {
+    await query(
+      `UPDATE import_batches
+          SET rows_duplicate = COALESCE(rows_duplicate, 0) + $2
+        WHERE id = $1`,
+      [batchId, duplicates]
+    );
+  }
+
+  logger.info('[pipeline:validate] done', { batchId, total, validated: total - errors - duplicates, duplicates, errors });
+  return { validated: total - errors - duplicates, duplicates, errors };
 }
 
 function validateRow(row) {

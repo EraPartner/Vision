@@ -30,6 +30,7 @@ export async function commitBatch({ batchId, onProgress }) {
             isr.currency,
             isr.balance,
             isr.comment,
+            isr.tx_hash,
             isr.resolved_recipient_id,
             isr.user_override_recipient_id,
             isr.matched_pattern_id,
@@ -48,21 +49,45 @@ export async function commitBatch({ batchId, onProgress }) {
   let imported = 0;
   let duplicates = 0;
   let errors = 0;
-  let lastFlushedImported = 0;
-  let lastFlushedDuplicates = 0;
-  let lastFlushedErrors = 0;
+  // tx_hashes already written to `transactions` by this run — guards against
+  // two identical rows inside the same CSV both passing the field-based dup
+  // check (neither is in `transactions` yet when the first is processed).
+  const committedHashes = new Set();
 
   if (onProgress) onProgress({ phase: 'committing', current: 0, total });
 
   for (let start = 0; start < total; start += COMMIT_CHUNK) {
     const chunk = matched.slice(start, start + COMMIT_CHUNK);
+    // Chunk-local counters: only folded into the running totals (and the
+    // import_batches checkpoint) *after* withTransaction resolves, so a chunk
+    // that rolls back doesn't leave the JS counters — and the persisted
+    // checkpoint — inflated past what's actually in `transactions`.
+    let chunkImported = 0;
+    let chunkDuplicates = 0;
+    let chunkErrors = 0;
     await withTransaction(async (client) => {
+      // Reset inside the callback so a withTransaction retry recounts cleanly.
+      chunkImported = 0;
+      chunkDuplicates = 0;
+      chunkErrors = 0;
       for (const row of chunk) {
         const dateStr = row.tx_date instanceof Date
           ? row.tx_date.toISOString().slice(0, 10)
           : String(row.tx_date).slice(0, 10);
 
         const effectiveRecipientId = row.user_override_recipient_id ?? row.resolved_recipient_id ?? null;
+
+        // Intra-batch dedup: a row whose tx_hash was already committed by an
+        // earlier row in this same run is a duplicate even though it is not
+        // yet visible to the field-based check below.
+        if (row.tx_hash && committedHashes.has(row.tx_hash)) {
+          chunkDuplicates++;
+          await client.query(
+            `UPDATE import_staging_rows SET status = 'duplicate' WHERE id = $1`,
+            [row.id]
+          );
+          continue;
+        }
 
         // Field-based duplicate check against canonical transactions.
         // Includes memo so two legitimate same-day same-amount same-recipient
@@ -84,7 +109,7 @@ export async function commitBatch({ batchId, onProgress }) {
         );
 
         if (dupCheck.rows.length > 0) {
-          duplicates++;
+          chunkDuplicates++;
           await client.query(
             `UPDATE import_staging_rows SET status = 'duplicate' WHERE id = $1`,
             [row.id]
@@ -100,7 +125,7 @@ export async function commitBatch({ batchId, onProgress }) {
         // safe from injection without falsely rejecting string-form bigints.
         const idStr = String(row.id);
         if (!/^\d+$/.test(idStr)) {
-          errors++;
+          chunkErrors++;
           continue;
         }
         const sp = `sp_row_${idStr}`;
@@ -115,11 +140,16 @@ export async function commitBatch({ batchId, onProgress }) {
           const effectiveCategoryId =
             row.override_category_id ?? row.recipient_default_category_id ?? null;
 
-          await client.query(
+          // ON CONFLICT on the partial unique index over tx_hash makes the
+          // insert race-safe — a concurrent import that slipped past the
+          // field-based check above can't double-insert.
+          const insertResult = await client.query(
             `INSERT INTO transactions
                 (date, bank_account, recipient_id, category_id, amount, memo, currency, balance, comment,
-                 import_batch_id, matched_pattern_id, is_active)
-             VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, true)`,
+                 import_batch_id, matched_pattern_id, tx_hash, is_active)
+             VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, true)
+             ON CONFLICT (tx_hash) WHERE tx_hash IS NOT NULL DO NOTHING
+             RETURNING id`,
             [
               dateStr,
               row.bank_account || null,
@@ -132,9 +162,23 @@ export async function commitBatch({ batchId, onProgress }) {
               row.comment || null,
               batchId,
               effectivePatternId,
+              row.tx_hash || null,
             ]
           );
-          imported++;
+
+          if (insertResult.rows.length === 0) {
+            // tx_hash conflict — another row/import already has this hash.
+            chunkDuplicates++;
+            await client.query(
+              `UPDATE import_staging_rows SET status = 'duplicate' WHERE id = $1`,
+              [row.id]
+            );
+            await client.query(`RELEASE SAVEPOINT ${sp}`);
+            continue;
+          }
+
+          chunkImported++;
+          if (row.tx_hash) committedHashes.add(row.tx_hash);
           await client.query(
             `UPDATE import_staging_rows SET status = 'committed' WHERE id = $1`,
             [row.id]
@@ -142,7 +186,7 @@ export async function commitBatch({ batchId, onProgress }) {
           await client.query(`RELEASE SAVEPOINT ${sp}`);
         } catch (err) {
           await client.query(`ROLLBACK TO SAVEPOINT ${sp}`);
-          errors++;
+          chunkErrors++;
           await client.query(
             `UPDATE import_staging_rows SET status = 'error', error_message = $2 WHERE id = $1`,
             [row.id, err?.message?.slice(0, 500) || 'insert failed']
@@ -151,25 +195,24 @@ export async function commitBatch({ batchId, onProgress }) {
       }
     });
 
+    // Transaction committed — only now is it safe to fold the chunk's counts
+    // into the running totals and the persisted checkpoint.
+    imported += chunkImported;
+    duplicates += chunkDuplicates;
+    errors += chunkErrors;
     seen += chunk.length;
 
     // Checkpoint counters per chunk so a crash mid-import leaves recoverable
     // state in import_batches. Increment by chunk-local delta to preserve
     // any rows_error already set by earlier pipeline phases (validate).
-    const dImported = imported - lastFlushedImported;
-    const dDuplicates = duplicates - lastFlushedDuplicates;
-    const dErrors = errors - lastFlushedErrors;
     await query(
       `UPDATE import_batches
           SET rows_imported = COALESCE(rows_imported, 0) + $2,
               rows_duplicate = COALESCE(rows_duplicate, 0) + $3,
               rows_error = COALESCE(rows_error, 0) + $4
         WHERE id = $1`,
-      [batchId, dImported, dDuplicates, dErrors]
+      [batchId, chunkImported, chunkDuplicates, chunkErrors]
     );
-    lastFlushedImported = imported;
-    lastFlushedDuplicates = duplicates;
-    lastFlushedErrors = errors;
 
     if (onProgress) {
       onProgress({ phase: 'committing', current: seen, total, imported, duplicates, errors });

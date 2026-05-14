@@ -41,15 +41,18 @@ export async function prepareImport({ batchId, filePath, adapterName, customConf
 
   const { errors: validateErrors } = await validateBatch({ batchId, onProgress });
 
-  const { matchSourceCounts } = await matchBatch({ batchId, onProgress });
+  const { matchSourceCounts, unresolved } = await matchBatch({ batchId, onProgress });
 
   // Review is required when any row was resolved by something other than an
   // exact normalized match — fuzzy hits, pattern hits, and new recipients
-  // all warrant user confirmation before committing.
+  // all warrant user confirmation before committing. Unresolved rows (e.g. a
+  // batch of blank `recipient_raw` rows) must NOT auto-commit either: they
+  // would otherwise land as transactions with no resolved recipient.
   const requiresReview = (
     (matchSourceCounts.fuzzy || 0) > 0 ||
     (matchSourceCounts.pattern || 0) > 0 ||
-    (matchSourceCounts.new || 0) > 0
+    (matchSourceCounts.new || 0) > 0 ||
+    (unresolved || 0) > 0
   );
 
   if (requiresReview) {

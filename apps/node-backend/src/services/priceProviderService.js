@@ -8,6 +8,7 @@
 
 import { logger } from '../config/logger.js';
 import { recordSuccess as recordProviderSuccess, recordError as recordProviderError } from './providerHealthService.js';
+import { convertRowsToEur } from './currency/currencyConversionService.js';
 import {
   cacheGet,
   cacheSet,
@@ -144,6 +145,7 @@ export async function fetchLivePricesDetailed(investments, { cachedPricesByInves
   if (stale.kinesis.length) {
     providerTasks.push((async () => {
       try {
+        // PROVIDERS.kinesis already converts EUR-symbol prices out of USD.
         const prices = await PROVIDERS.kinesis(stale.kinesis);
         for (const inv of stale.kinesis) {
           const data = prices[inv.id];
@@ -342,7 +344,7 @@ export async function fetchHistoricalPrices(investment, { fromMs, toMs, dbOnly =
   }
 
   if (provider === 'kinesis') {
-    const { symbol, timeframe, fromDate } = resolveKinesisConfig(investment);
+    const { symbol, timeframe, fromDate, needsUsdToEur } = resolveKinesisConfig(investment);
 
     if (!symbol) {
       logger.warn(`Kinesis history: no symbol configured for investment ${investment.id}`);
@@ -380,6 +382,26 @@ export async function fetchHistoricalPrices(investment, { fromMs, toMs, dbOnly =
         logger.warn(`Kinesis history fetch error for ${symbol}: ${err.message}`);
         return _fallbackHistoricalPoints(cachedDbPoints, from, to);
       }
+    }
+
+    // Kinesis serves USD only. For a non-USD investment, convert the fetched
+    // series to the investment's currency at each point's *historical* FX rate
+    // before it's persisted as this asset's price history. convertRowsToEur
+    // bulk-loads the rate index in one query — no per-date round-trips.
+    // Applied outside the cache block so a shared USD cache entry is converted
+    // per-investment.
+    const invCurrency = (investment.currency || 'EUR').toUpperCase();
+    if (needsUsdToEur && invCurrency !== 'USD' && Array.isArray(points) && points.length > 0) {
+      const rows = points.map((p) => ({
+        amount: p.price,
+        currency: 'USD',
+        date: new Date(p.timestampMs).toISOString().slice(0, 10),
+      }));
+      const converted = await convertRowsToEur(rows, invCurrency, {
+        useHistoricalRatesByDate: true,
+        dateField: 'date',
+      });
+      points = points.map((p, i) => ({ ...p, price: converted[i].amount_eur }));
     }
 
     return _persistAndResolve(investment.id, points, 'kinesis', cachedDbPoints, { fromMs: from, toMs: to });
