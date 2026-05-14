@@ -14,17 +14,10 @@
 import { query as dbQuery } from '../database/connection.js';
 import { ValidationError } from '../middleware/errorHandler.js';
 import { buildTransactionWhere, validateInt4Ids } from './filterBuilder.js';
+import { EXPORT_JOINS_SQL } from './transactionExport.js';
 
 const DEFAULT_ID_CAP = 500;
 const DEFAULT_FILTER_CAP = 5000;
-
-const EXPORT_JOINS_SQL = `
-    FROM transactions t
-    LEFT JOIN recipients r ON t.recipient_id = r.id
-    LEFT JOIN recipients pr ON r.primary_recipient_id = pr.id
-    LEFT JOIN categories c ON t.category_id = c.id
-    LEFT JOIN categories rc ON r.default_category_id = rc.id
-    LEFT JOIN categories pc ON pr.default_category_id = pc.id`;
 
 /**
  * Coerce a wire filter object into the shape `buildTransactionWhere` expects.

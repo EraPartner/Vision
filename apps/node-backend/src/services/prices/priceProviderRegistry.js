@@ -14,6 +14,7 @@ import {
   getKinesisAssetConfig,
 } from '../../config/kinesisConfig.js';
 import { toNumber, isValidPrice } from './priceCache.js';
+import { median } from '../../lib/math.js';
 
 const yahooFinance = new YahooFinance({ suppressNotices: ['yahooSurvey'] });
 
@@ -132,15 +133,6 @@ export function parseCustomHistoryPoints(data, config) {
 
 // ─── Kinesis spike detector (MAD-based) ───────────────────────────────────────
 
-function _median(values) {
-  if (!Array.isArray(values) || values.length === 0) return undefined;
-  const sorted = [...values].sort((a, b) => a - b);
-  const mid = Math.floor(sorted.length / 2);
-  return sorted.length % 2 === 0
-    ? (sorted[mid - 1] + sorted[mid]) / 2
-    : sorted[mid];
-}
-
 // Removes runs of ≥ minRunLength consecutive identical prices (stale API data).
 // Keeps only the first point of each such run so the series resumes at the
 // correct price when real updates arrive.
@@ -201,9 +193,9 @@ export function sanitizeKinesisIsolatedSpikes(points) {
 
   if (logReturns.length < 4) return sanitized;
 
-  const medianReturn = _median(logReturns) ?? 0;
+  const medianReturn = median(logReturns) ?? 0;
   const absDeviations = logReturns.map(r => Math.abs(r - medianReturn));
-  const mad = _median(absDeviations) ?? 0;
+  const mad = median(absDeviations) ?? 0;
   const robustSigma = Math.max(1.4826 * mad, 0.0015);
 
   const spikeThreshold = 6 * robustSigma;
