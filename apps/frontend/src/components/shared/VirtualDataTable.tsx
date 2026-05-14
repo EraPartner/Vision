@@ -656,9 +656,9 @@ export function VirtualDataTable<T extends Record<string, unknown>>({
                 {/* Footer: count */}
                 <div className="flex items-center justify-between border-t px-6 py-3">
                     <p className="text-sm text-muted-foreground">
-                        {processedRows.length !== data.length
+                        {processedRows.length !== deferredData.length
                             ? t('table.shownOfFiltered', { shown: processedRows.length.toString(), total: displayTotal.toString() })
-                            : t('table.loadedOf', { loaded: data.length.toString(), total: displayTotal.toString() })}
+                            : t('table.loadedOf', { loaded: deferredData.length.toString(), total: displayTotal.toString() })}
                         {hasMore && ` · ${t('table.scrollForMore')}`}
                     </p>
                 </div>

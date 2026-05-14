@@ -84,9 +84,9 @@ export function TagInput({ value, onChange, disabled, className, maxTags = 20 }:
     const canCreate = liveSlug.length > 0 && !exactMatch && value.length < maxTags;
 
     const addSlug = useCallback((slug: string) => {
-        if (!slug || selectedSet.has(slug) || value.length >= maxTags) return;
+        if (!slug || value.includes(slug) || value.length >= maxTags) return;
         onChange([...value, slug]);
-    }, [value, onChange, selectedSet, maxTags]);
+    }, [value, onChange, maxTags]);
 
     const removeSlug = useCallback((slug: string) => {
         onChange(value.filter((s) => s !== slug));

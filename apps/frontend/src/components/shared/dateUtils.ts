@@ -13,7 +13,11 @@ export function formatDate(date: Date, pattern: string, locale = "en-US"): strin
   const dd = pad2(d);
   const HH = pad2(H);
   const mm2 = pad2(min);
-  const MMM = new Intl.DateTimeFormat(locale, { month: "short" }).format(date);
+  // Constructing Intl.DateTimeFormat is relatively costly and formatDate runs
+  // per table cell — only build it for patterns that actually use a month name.
+  const MMM = pattern.includes("MMM")
+    ? new Intl.DateTimeFormat(locale, { month: "short" }).format(date)
+    : "";
 
   switch (pattern) {
     case "yyyy-MM-dd":       return `${y}-${mm}-${dd}`;
