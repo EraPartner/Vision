@@ -218,6 +218,10 @@ export async function getCashflowForecastData(
   excludedRecipientIds = [],
   targetCurrency = 'EUR',
 ) {
+  if (!Number.isInteger(historyMonths) || historyMonths < 1 || historyMonths > 120) {
+    throw new Error('historyMonths must be an integer in [1, 120]');
+  }
+
   const validCatIds = (excludedCategoryIds || []).filter(id => Number.isInteger(id) && id > 0 && id < 2147483647);
   const validRecIds = (excludedRecipientIds || []).filter(id => Number.isInteger(id) && id > 0 && id < 2147483647);
 
@@ -431,6 +435,10 @@ export async function getCashflowForecastDataByCategory(
   excludedRecipientIds = [],
   targetCurrency = 'EUR',
 ) {
+  if (!Number.isInteger(historyMonths) || historyMonths < 1 || historyMonths > 120) {
+    throw new Error('historyMonths must be an integer in [1, 120]');
+  }
+
   const validCatIds = (excludedCategoryIds || []).filter(
     (id) => Number.isInteger(id) && id > 0 && id < 2147483647,
   );

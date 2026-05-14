@@ -111,7 +111,9 @@ export function LinkTransactionDialog({ open, onOpenChange, payment, onExecute }
       isMounted = false;
       if (timer) clearTimeout(timer);
     };
-  }, [open, payment, txFilters, txSearchQuery]);
+    // txSearchQuery is intentionally excluded: it only drives client-side
+    // filtering (filteredCandidates) and is never sent to the API.
+  }, [open, payment, txFilters]);
 
   const handleClose = () => {
     onOpenChange(false);
