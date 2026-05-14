@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { Check, ChevronsUpDown } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
@@ -19,8 +19,8 @@ export function CategoryMultiCombobox({ value, onChange, disabled, className }: 
     const [open, setOpen] = useState(false);
     const { data } = useCategories({ limit: 500, active: true });
 
-    const categories = data?.items ?? [];
-    const selectedSet = new Set(value);
+    const categories = useMemo(() => data?.items ?? [], [data?.items]);
+    const selectedSet = useMemo(() => new Set(value), [value]);
 
     const displayLabel = value.length === 0
         ? t('combobox.categoryMulti.allSelected')
@@ -34,10 +34,10 @@ export function CategoryMultiCombobox({ value, onChange, disabled, className }: 
         }
     }
 
-    const sorted = [
+    const sorted = useMemo(() => [
         ...categories.filter((c) => selectedSet.has(c.id)),
         ...categories.filter((c) => !selectedSet.has(c.id)),
-    ];
+    ], [categories, selectedSet]);
 
     return (
         <Popover open={open} onOpenChange={setOpen}>

@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import { SidebarProvider, SidebarTrigger } from "@/components/ui/sidebar";
 import { AppSidebar } from "@/components/layout/AppSidebar";
 import { Button } from "@/components/ui/button";
@@ -33,12 +33,12 @@ export function AppLayout({ children }: AppLayoutProps) {
     const { t } = useLanguage();
     const { isComplete: onboardingComplete, isLoading: onboardingLoading, complete: completeOnboarding } = useOnboarding();
 
-    const modeIcon = {
+    const modeIcon = useMemo(() => ({
         light: <Sun className="h-5 w-5" />,
         dark: <Moon className="h-5 w-5" />,
         system: <Monitor className="h-5 w-5" />,
         schedule: <Clock className="h-5 w-5" />,
-    }[mode];
+    }[mode]), [mode]);
 
     return (
         <SidebarProvider defaultOpen={false}>

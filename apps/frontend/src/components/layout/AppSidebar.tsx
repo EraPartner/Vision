@@ -1,4 +1,4 @@
-import { useCallback } from "react";
+import { useCallback, useMemo } from "react";
 import { NavLink, useLocation } from "react-router-dom";
 import {
   Sidebar,
@@ -66,7 +66,7 @@ export function AppSidebar() {
     else if (url === "/portfolio/performance") prefetchPerformance();
   }, [prefetchNetWorth, prefetchPerformance]);
 
-  const budgetingGroups = [
+  const budgetingGroups = useMemo(() => [
     {
       label: t('nav.overview'),
       items: [
@@ -96,16 +96,16 @@ export function AppSidebar() {
         { title: t('nav.importExport'), url: "/import", icon: Import },
       ],
     },
-  ];
+  ], [t]);
 
-  const adminItems = [
+  const adminItems = useMemo(() => [
     { title: t('nav.adminOverview'), url: "/admin", icon: ShieldCheck },
     { title: t('nav.dbMaintenance'), url: "/admin/db", icon: Database },
     { title: t('nav.adminProviders'), url: "/admin/providers", icon: Globe },
     { title: t('nav.adminEndpoints'), url: "/admin/endpoints", icon: Activity },
-  ];
+  ], [t]);
 
-  const portfolioGroups = [
+  const portfolioGroups = useMemo(() => [
     {
       label: t('nav.overview'),
       items: [
@@ -138,7 +138,7 @@ export function AppSidebar() {
         { title: t('nav.taxOverview'), url: "/portfolio/tax", icon: Landmark },
       ],
     },
-  ];
+  ], [t]);
 
   const groups = workspace === "budgeting" ? budgetingGroups : portfolioGroups;
 

@@ -1,4 +1,4 @@
-import { useState, useCallback, useRef, useEffect } from "react";
+import { useState, useCallback, useRef, useEffect, useMemo } from "react";
 import { useNavigate } from "react-router-dom";
 import { useLanguage } from "@/contexts/LanguageContext";
 import logger from "@/lib/logger";
@@ -132,42 +132,11 @@ export default function RecipientsPage() {
         });
     };
 
-    const toggleActive = (id: number, currentActive: boolean) => {
+    const toggleActive = useCallback((id: number, currentActive: boolean) => {
         updateMutation.mutate({ id, data: { is_active: !currentActive } });
-    };
+    }, [updateMutation]);
 
-    if (isLoading) {
-        return (
-            <div className="space-y-8 animate-in">
-                <PageHeader title={t('recipientsPage.tableTitle')} icon={Users} />
-                <Card>
-                    <CardHeader className="pb-3">
-                        <Skeleton className="h-6 w-44" />
-                    </CardHeader>
-                    <CardContent className="space-y-2">
-                        {[...Array(8)].map((_, i) => (
-                            <Skeleton key={i} className="h-12 w-full" />
-                        ))}
-                    </CardContent>
-                </Card>
-            </div>
-        );
-    }
-
-    if (error) {
-        return (
-            <div className="space-y-8 animate-in">
-                <PageHeader title={t('recipientsPage.tableTitle')} icon={Users} />
-                <Card>
-                    <CardContent className="pt-0">
-                        <PageError message={t('recipientsPage.error', { msg: error.message })} />
-                    </CardContent>
-                </Card>
-            </div>
-        );
-    }
-
-    const recipients: TableRecipient[] = allItems.map((r) => ({
+    const recipients: TableRecipient[] = useMemo(() => allItems.map((r) => ({
         id: r.id,
         name: r.name,
         primary_bank_account: r.primary_bank_account || t('recipientsPage.none'),
@@ -178,9 +147,9 @@ export default function RecipientsPage() {
         alias_count: r.alias_count,
         is_active: r.is_active,
         notes: r.notes || '',
-    }));
+    })), [allItems, t]);
 
-    const columns = [
+    const columns = useMemo(() => [
         {
             key: "name",
             header: t('recipientsPage.col.recipient'),
@@ -338,7 +307,38 @@ export default function RecipientsPage() {
                 </div>
             ),
         },
-    ];
+    ], [t, toggleActive, queryClient, cancelEditingRef, updateMutation, unmergeMutation, deleteMutation, confirm]);
+
+    if (isLoading) {
+        return (
+            <div className="space-y-8 animate-in">
+                <PageHeader title={t('recipientsPage.tableTitle')} icon={Users} />
+                <Card>
+                    <CardHeader className="pb-3">
+                        <Skeleton className="h-6 w-44" />
+                    </CardHeader>
+                    <CardContent className="space-y-2">
+                        {[...Array(8)].map((_, i) => (
+                            <Skeleton key={i} className="h-12 w-full" />
+                        ))}
+                    </CardContent>
+                </Card>
+            </div>
+        );
+    }
+
+    if (error) {
+        return (
+            <div className="space-y-8 animate-in">
+                <PageHeader title={t('recipientsPage.tableTitle')} icon={Users} />
+                <Card>
+                    <CardContent className="pt-0">
+                        <PageError message={t('recipientsPage.error', { msg: error.message })} />
+                    </CardContent>
+                </Card>
+            </div>
+        );
+    }
 
     const tableActions = (
         <div className="flex gap-2">

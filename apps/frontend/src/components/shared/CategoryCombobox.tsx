@@ -1,4 +1,4 @@
-import {useState} from "react";
+import {useMemo, useState} from "react";
 import {Check, ChevronsUpDown} from "lucide-react";
 import {cn} from "@/lib/utils";
 import {Button} from "@/components/ui/button";
@@ -20,8 +20,8 @@ export function CategoryCombobox({value, onSelect, disabled, className, portalCo
     const [open, setOpen] = useState(false);
     const {data} = useCategories({limit: 500, active: true});
 
-    const categories = data?.items ?? [];
-    const selected = categories.find((c) => c.id === value);
+    const categories = useMemo(() => data?.items ?? [], [data?.items]);
+    const selected = useMemo(() => categories.find((c) => c.id === value), [categories, value]);
     const displayLabel = selected ? `${selected.general}: ${selected.detail}` : t('combobox.category.placeholder');
 
     return (

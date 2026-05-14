@@ -1,4 +1,4 @@
-import { useState, useCallback } from "react";
+import { useState, useCallback, useMemo } from "react";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { useAppSettings } from "@/contexts/AppSettingsContext";
 import { numberFormatToLocale } from "@/utils/currency";
@@ -220,9 +220,12 @@ export default function MarketLookupPage() {
   const isPositive = (quote?.change ?? 0) >= 0;
 
   // Check if this asset already exists in portfolio
-  const existingInvestment = quote ? summaries.find(s =>
-    s.symbol?.toLowerCase() === quote.symbol.toLowerCase()
-  ) : null;
+  const existingInvestment = useMemo(
+    () => (quote
+      ? summaries.find(s => s.symbol?.toLowerCase() === quote.symbol.toLowerCase())
+      : null),
+    [quote, summaries],
+  );
 
   return (
     <div className="space-y-6">
