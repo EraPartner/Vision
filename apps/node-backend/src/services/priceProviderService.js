@@ -12,6 +12,7 @@ import {
   cacheGet,
   cacheSet,
   loadHistoricalPointsFromDatabase,
+  loadLatestHistoricalPointByInvestmentIds,
   normalizeHistoryPoints,
   filterPointsByRange,
   needsHistoryRefresh,
@@ -175,25 +176,27 @@ export async function fetchLivePricesDetailed(investments, { cachedPricesByInves
   // price from `asset_price_history`. Prevents portfolio valuations from
   // silently dropping investments when both the live provider and the
   // in-memory/DB-warm caches are unavailable (e.g. machine offline).
-  for (const inv of investments) {
-    if (results[inv.id] !== undefined) continue;
-    if ((inv.price_provider || 'manual') === 'manual') continue;
+  const fallbackIds = investments
+    .filter((inv) => results[inv.id] === undefined && (inv.price_provider || 'manual') !== 'manual')
+    .map((inv) => inv.id);
 
+  if (fallbackIds.length > 0) {
     try {
-      const points = await loadHistoricalPointsFromDatabase(inv.id);
-      if (Array.isArray(points) && points.length > 0) {
-        const last = points[points.length - 1];
-        const price = toNumber(last?.price);
+      const latestByInvestment = await loadLatestHistoricalPointByInvestmentIds(fallbackIds);
+      for (const invId of fallbackIds) {
+        const last = latestByInvestment.get(invId);
+        if (!last) continue;
+        const price = toNumber(last.price);
         if (isValidPrice(price)) {
-          results[inv.id] = {
+          results[invId] = {
             price,
             source: 'historical_fallback',
-            stale_as_of_ms: Number.isFinite(last?.timestampMs) ? last.timestampMs : null,
+            stale_as_of_ms: Number.isFinite(last.timestampMs) ? last.timestampMs : null,
           };
         }
       }
     } catch (err) {
-      logger.warn('Historical price fallback failed', { investmentId: inv.id, error: err.message });
+      logger.warn('Historical price fallback failed', { error: err.message });
     }
   }
 

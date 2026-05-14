@@ -299,10 +299,30 @@ export async function convertToCurrency(amount, fromCurrency, toCurrency) {
   if (!fromCurrency || fromCurrency.toUpperCase().trim() === (toCurrency || 'EUR').toUpperCase().trim()) {
     return amount;
   }
+  const rates = await getRates();
+  return convertWithRates(amount, fromCurrency, toCurrency, rates);
+}
+
+/**
+ * Fetch the current rate table once. Callers that convert many rows in a loop
+ * should call this once and pass the result to {@link convertWithRates},
+ * avoiding a per-row `await` on the (already memory-cached) rate lookup.
+ */
+export async function loadCurrentRates() {
+  return getRates();
+}
+
+/**
+ * Synchronous conversion against a pre-fetched rate table. Mirrors the logic of
+ * {@link convertToCurrency} exactly — only the rate acquisition is hoisted out.
+ */
+export function convertWithRates(amount, fromCurrency, toCurrency, rates) {
+  if (!fromCurrency || fromCurrency.toUpperCase().trim() === (toCurrency || 'EUR').toUpperCase().trim()) {
+    return amount;
+  }
 
   const from = fromCurrency.toUpperCase().trim();
   const to = (toCurrency || 'EUR').toUpperCase().trim();
-  const rates = await getRates();
 
   const rateFrom = rates[from];
   const rateTo = rates[to];
@@ -379,6 +399,8 @@ export default {
   convertToEur,
   convertRowsToEur,
   convertToCurrency,
+  convertWithRates,
+  loadCurrentRates,
   warmCache,
   clearMemoryCache,
   backfillPortfolioHistoricalRates,

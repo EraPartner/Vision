@@ -291,27 +291,28 @@ router.post(
       let removed = 0;
       const affectedTxIds = new Set();
 
-      for (const tagId of addTagIds) {
+      if (addTagIds.length > 0) {
         const r = await client.query(
           `INSERT INTO transaction_tags (transaction_id, tag_id)
-           SELECT t_id, $2
+           SELECT t_id, g_id
            FROM unnest($1::int[]) AS t(t_id)
+           CROSS JOIN unnest($2::int[]) AS g(g_id)
            ON CONFLICT DO NOTHING
            RETURNING transaction_id`,
-          [txIds, tagId],
+          [txIds, addTagIds],
         );
-        added += r.rows.length;
+        added = r.rows.length;
         r.rows.forEach((row) => affectedTxIds.add(row.transaction_id));
       }
 
-      for (const tagId of removeTagIds) {
+      if (removeTagIds.length > 0) {
         const r = await client.query(
           `DELETE FROM transaction_tags
-           WHERE transaction_id = ANY($1::int[]) AND tag_id = $2
+           WHERE transaction_id = ANY($1::int[]) AND tag_id = ANY($2::int[])
            RETURNING transaction_id`,
-          [txIds, tagId],
+          [txIds, removeTagIds],
         );
-        removed += r.rows.length;
+        removed = r.rows.length;
         r.rows.forEach((row) => affectedTxIds.add(row.transaction_id));
       }
 

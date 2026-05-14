@@ -16,7 +16,7 @@
  * row was resolved.
  */
 
-import { query, withTransaction } from '../../database/connection.js';
+import { query } from '../../database/connection.js';
 import { logger } from '../../config/logger.js';
 import {
   findBestRecipientMatches,
@@ -118,36 +118,40 @@ export async function matchBatch({ batchId, onProgress }) {
 
   for (let start = 0; start < staged.length; start += MATCH_UPDATE_CHUNK) {
     const chunk = staged.slice(start, start + MATCH_UPDATE_CHUNK);
-    await withTransaction(async (client) => {
-      for (const row of chunk) {
-        const info = row.recipient_raw ? resolved.get(row.recipient_raw) : null;
-        if (info) {
-          matched++;
-          await client.query(
-            `UPDATE import_staging_rows
-                SET status             = 'matched',
-                    resolved_recipient_id = $2,
-                    match_source       = $3,
-                    match_similarity   = $4,
-                    matched_pattern_id = $5
-              WHERE id = $1`,
-            [row.id, info.recipientId, info.matchSource, info.matchSimilarity, info.matchedPatternId]
-          );
-        } else {
-          unresolved++;
-          await client.query(
-            `UPDATE import_staging_rows
-                SET status             = 'matched',
-                    resolved_recipient_id = NULL,
-                    match_source       = NULL,
-                    match_similarity   = NULL,
-                    matched_pattern_id = NULL
-              WHERE id = $1`,
-            [row.id]
-          );
-        }
+    const ids = [];
+    const recipientIds = [];
+    const matchSources = [];
+    const similarities = [];
+    const patternIds = [];
+    for (const row of chunk) {
+      const info = row.recipient_raw ? resolved.get(row.recipient_raw) : null;
+      ids.push(row.id);
+      if (info) {
+        matched++;
+        recipientIds.push(info.recipientId);
+        matchSources.push(info.matchSource);
+        similarities.push(info.matchSimilarity);
+        patternIds.push(info.matchedPatternId);
+      } else {
+        unresolved++;
+        recipientIds.push(null);
+        matchSources.push(null);
+        similarities.push(null);
+        patternIds.push(null);
       }
-    });
+    }
+    await query(
+      `UPDATE import_staging_rows s
+          SET status                = 'matched',
+              resolved_recipient_id = v.recipient_id,
+              match_source          = v.match_source,
+              match_similarity      = v.match_similarity,
+              matched_pattern_id    = v.matched_pattern_id
+         FROM unnest($1::bigint[], $2::int[], $3::text[], $4::real[], $5::int[])
+              AS v(id, recipient_id, match_source, match_similarity, matched_pattern_id)
+        WHERE s.id = v.id`,
+      [ids, recipientIds, matchSources, similarities, patternIds]
+    );
     seen += chunk.length;
     if (onProgress) onProgress({ phase: 'matching', current: seen, total });
   }

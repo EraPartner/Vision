@@ -1,3 +1,4 @@
+import { useCallback, useMemo } from "react";
 import { Link } from "react-router-dom";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -75,25 +76,25 @@ export function TransactionsTable({
     const { appSettings } = useAppSettings();
     const locale = numberFormatToLocale(appSettings.numberFormat);
 
-    function toggleSelect(id: number) {
+    const toggleSelect = useCallback((id: number) => {
         const next = new Set(selectedIds);
         if (next.has(id)) next.delete(id);
         else next.add(id);
         onSelectionChange(next);
-    }
+    }, [selectedIds, onSelectionChange]);
 
-    function toggleSelectAll() {
+    const toggleSelectAll = useCallback(() => {
         if (selectedIds.size === transactions.length) {
             onSelectionChange(new Set());
         } else {
             onSelectionChange(new Set(transactions.map((t) => t.id)));
         }
-    }
+    }, [selectedIds, transactions, onSelectionChange]);
 
     const allSelected = transactions.length > 0 && selectedIds.size === transactions.length;
     const someSelected = selectedIds.size > 0 && !allSelected;
 
-    const columns = [
+    const columns = useMemo(() => [
         {
             key: "select",
             header: (
@@ -283,7 +284,25 @@ export function TransactionsTable({
                 </Button>
             ),
         },
-    ];
+    ], [
+        t,
+        locale,
+        appSettings.dateFormat,
+        allSelected,
+        someSelected,
+        selectedIds,
+        toggleSelect,
+        toggleSelectAll,
+        allItems,
+        onSelectCategory,
+        onSelectRecipient,
+        onOpenInfo,
+        onToggleActive,
+        onDelete,
+        cancelEditingRef,
+        updatePending,
+        deletePending,
+    ]);
 
     return (
         <VirtualDataTable

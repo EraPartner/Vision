@@ -6,7 +6,7 @@
  */
 
 import { query } from '../../database/connection.js';
-import { convertToCurrency } from '../currency/currencyConversionService.js';
+import { convertWithRates, loadCurrentRates } from '../currency/currencyConversionService.js';
 import { getTaxTable } from './belgianTaxTables.js';
 import { logger } from '../../config/logger.js';
 
@@ -116,16 +116,16 @@ async function fetchTaxTransactions(targetCurrency, startDate, endDate) {
   const byAssetClass    = new Map();
   const byInvestment    = new Map();
 
+  const rates = await loadCurrentRates();
+
   for (const row of result.rows) {
     const cur = row.currency;
-    const convert = async (v) =>
-      cur !== targetCurrency ? await convertToCurrency(Number(v), cur, targetCurrency) : Number(v);
+    const convert = (v) =>
+      cur !== targetCurrency ? convertWithRates(Number(v), cur, targetCurrency, rates) : Number(v);
 
-    const [taxes, fees, amount] = await Promise.all([
-      convert(row.taxes),
-      convert(row.fees),
-      convert(row.amount),
-    ]);
+    const taxes    = convert(row.taxes);
+    const fees     = convert(row.fees);
+    const amount   = convert(row.amount);
 
     // Classify taxes by transaction type
     let tobAmt = 0, whtAmt = 0, sellAmt = 0, otherAmt = 0;
