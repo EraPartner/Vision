@@ -14,7 +14,11 @@ import { escapeCsvValue } from '../lib/csv.js';
 export const EXPORT_CHUNK_SIZE = 1000;
 export const EXPORT_MAX_LIST_SIZE = 50;
 
-const EXPORT_JOINS_SQL = `
+/**
+ * Shared FROM + JOIN block for transaction list/export queries. Exported so
+ * `bulkSelection` runs against the exact same join shape.
+ */
+export const EXPORT_JOINS_SQL = `
     FROM transactions t
     LEFT JOIN recipients r ON t.recipient_id = r.id
     LEFT JOIN recipients pr ON r.primary_recipient_id = pr.id

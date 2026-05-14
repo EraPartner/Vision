@@ -32,15 +32,9 @@ import { computeSankeyFlow } from '../services/calculations/aggregation/sankey.j
 import { computeCategoryPivot } from '../services/calculations/aggregation/categoryPivot.js';
 import { computeRecipientByYear } from '../services/calculations/aggregation/recipientByYear.js';
 import { computeRecipientPivot } from '../services/calculations/aggregation/recipientPivot.js';
+import { getTargetCurrency } from './info/_queryParams.js';
 
 const router = Router();
-
-function getTargetCurrency(req) {
-  const raw = req.query.currency ?? req.query.target_currency;
-  if (raw == null || raw === '') return 'EUR';
-  const value = String(raw).toUpperCase().trim();
-  return /^[A-Z]{3}$/.test(value) ? value : 'EUR';
-}
 
 function parseNumericArrayQueryParam(raw) {
   if (!raw) return [];

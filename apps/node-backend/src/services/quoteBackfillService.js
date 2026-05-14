@@ -16,6 +16,8 @@
 import { logger } from '../config/logger.js';
 import { query } from '../database/connection.js';
 import { getDayKeyUtc } from '../repositories/infoRepositoryHelpers.js';
+import { median } from '../lib/math.js';
+import { forEachConcurrent } from '../lib/concurrency.js';
 import {
   fetchHistoricalPrices,
   saveHistoricalPointsToDatabase,
@@ -27,23 +29,6 @@ const SPIKE_RATIO_THRESHOLD = 3; // 3× single-day jump = spike
 const HISTORY_DAY_MS = 24 * 60 * 60 * 1000;
 const HOURLY_LOOKBACK_DAYS = 7;
 const BACKFILL_CONCURRENCY = 4;
-
-// ─── Concurrency Helper ──────────────────────────────────────────────────────
-
-/**
- * Process items with at most `limit` concurrent async tasks.
- * Work-queue pattern: workers pull from a shared queue until it empties.
- */
-async function forEachConcurrent(items, limit, fn) {
-  const queue = [...items];
-  async function worker() {
-    let item;
-    while ((item = queue.shift()) !== undefined) {
-      await fn(item);
-    }
-  }
-  await Promise.all(Array.from({ length: Math.min(limit, items.length) }, worker));
-}
 
 // ─── Pure Functions ─────────────────────────────────────────────────────────
 
@@ -152,9 +137,9 @@ export function sanitizeIsolatedSpikes(points) {
 
   if (logReturns.length < 4) return sanitized;
 
-  const medianReturn = _median(logReturns) ?? 0;
+  const medianReturn = median(logReturns) ?? 0;
   const absDeviations = logReturns.map((r) => Math.abs(r - medianReturn));
-  const mad = _median(absDeviations) ?? 0;
+  const mad = median(absDeviations) ?? 0;
   const robustSigma = Math.max(1.4826 * mad, 0.0015);
   const spikeThreshold = 6 * robustSigma;
   const bridgeThreshold = 4 * robustSigma;
@@ -577,14 +562,4 @@ export async function cleanupStaleQuotes(investmentWindows) {
 
 function _isPositive(value) {
   return Number.isFinite(value) && value > 0;
-}
-
-function _median(values) {
-  if (!Array.isArray(values) || values.length === 0) return undefined;
-  const sorted = [...values].sort((a, b) => a - b);
-  const mid = Math.floor(sorted.length / 2);
-  if (sorted.length % 2 === 0) {
-    return (sorted[mid - 1] + sorted[mid]) / 2;
-  }
-  return sorted[mid];
 }
