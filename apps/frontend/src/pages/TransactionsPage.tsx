@@ -258,6 +258,23 @@ export default function TransactionsPage() {
         });
     };
 
+    const transactions: TableTransaction[] = useMemo(() => allItems.map((tx) => ({
+        id: tx.id,
+        date: (tx.transaction_date as string | undefined) || tx.date || '',
+        memo: tx.memo || '',
+        category: (tx.category_name as string | undefined) || t('txPage.field.uncategorized'),
+        categoryId: tx.category_id ?? undefined,
+        recipient: (tx.recipient_name as string | undefined) || t('txPage.field.unknown'),
+        recipientId: tx.recipient_id ?? 0,
+        bank: (tx.bank_account as string | undefined) || tx.bank || '',
+        amount: tx.amount ?? 0,
+        currency: tx.currency || appSettings.defaultCurrency,
+        balance: tx.balance ?? undefined,
+        comment: tx.comment || '',
+        is_active: tx.is_active ?? true,
+        tags: tx.tags ?? [],
+    })), [allItems, t, appSettings.defaultCurrency]);
+
     if (isLoading) {
         return (
             <div className="space-y-8 animate-in">
@@ -289,23 +306,6 @@ export default function TransactionsPage() {
             </div>
         );
     }
-
-    const transactions: TableTransaction[] = allItems.map((tx) => ({
-        id: tx.id,
-        date: (tx.transaction_date as string | undefined) || tx.date || '',
-        memo: tx.memo || '',
-        category: (tx.category_name as string | undefined) || t('txPage.field.uncategorized'),
-        categoryId: tx.category_id ?? undefined,
-        recipient: (tx.recipient_name as string | undefined) || t('txPage.field.unknown'),
-        recipientId: tx.recipient_id ?? 0,
-        bank: (tx.bank_account as string | undefined) || tx.bank || '',
-        amount: tx.amount ?? 0,
-        currency: tx.currency || appSettings.defaultCurrency,
-        balance: tx.balance ?? undefined,
-        comment: tx.comment || '',
-        is_active: tx.is_active ?? true,
-        tags: tx.tags ?? [],
-    }));
 
     return (
         <>

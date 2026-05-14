@@ -172,21 +172,20 @@ export function DataTable<T extends Record<string, unknown>>({
 
     const activeFilterCount = Object.keys(columnFilters).length;
 
-    // Get unique values for filter dropdowns
-    const uniqueValues = useMemo(() => {
-        const result: Record<string, string[]> = {};
-        columns.forEach((col) => {
-            if (col.filterable === false || !col.header) return;
-            const vals = new Set<string>();
-            data.forEach((row) => {
-                const v = row[col.key];
-                if (v != null && String(v).trim()) vals.add(String(v));
-            });
-            const sorted = Array.from(vals).sort((a, b) => a.localeCompare(b, undefined, { numeric: true }));
-            result[col.key] = sorted;
+    // Unique values are only needed for the filter popover currently open —
+    // scoped to `openFilter` so the dataset scan happens lazily on open rather
+    // than for every column on every data change.
+    const openFilterUniqueValues = useMemo(() => {
+        if (!openFilter) return [] as string[];
+        const col = columns.find((c) => c.key === openFilter);
+        if (!col || col.filterable === false || !col.header) return [];
+        const vals = new Set<string>();
+        data.forEach((row) => {
+            const v = row[col.key];
+            if (v != null && String(v).trim()) vals.add(String(v));
         });
-        return result;
-    }, [data, columns]);
+        return Array.from(vals).sort((a, b) => a.localeCompare(b, undefined, { numeric: true }));
+    }, [data, columns, openFilter]);
 
     // Filter + search + sort pipeline
     const processedRows = useMemo(() => {
@@ -416,7 +415,7 @@ export function DataTable<T extends Record<string, unknown>>({
                                                                 header={col.header}
                                                                 value={columnFilters[col.key] || ""}
                                                                 onChange={(v) => setColumnFilter(col.key, v)}
-                                                                uniqueValues={uniqueValues[col.key] || []}
+                                                                uniqueValues={openFilter === col.key ? openFilterUniqueValues : []}
                                                                 onClose={() => setOpenFilter(null)}
                                                             />
                                                         </PopoverContent>

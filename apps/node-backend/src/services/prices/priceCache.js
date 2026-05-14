@@ -175,6 +175,41 @@ export async function loadHistoricalPointsFromDatabase(investmentId, { fromMs, t
   }
 }
 
+/**
+ * Batched variant of {@link loadHistoricalPointsFromDatabase} that returns only
+ * the single most-recent persisted point per investment. One query for the
+ * whole set instead of one per investment.
+ *
+ * @param {number[]} investmentIds
+ * @returns {Promise<Map<number, { timestampMs: number, price: number }>>}
+ */
+export async function loadLatestHistoricalPointByInvestmentIds(investmentIds) {
+  const ids = [...new Set((investmentIds || []).map(Number).filter(Number.isFinite))];
+  if (ids.length === 0) return new Map();
+
+  try {
+    const result = await query(
+      `SELECT DISTINCT ON (investment_id) investment_id, price_date, close_price
+       FROM asset_price_history
+       WHERE investment_id = ANY($1::int[])
+       ORDER BY investment_id, price_date DESC`,
+      [ids]
+    );
+
+    const byId = new Map();
+    for (const row of result.rows) {
+      byId.set(row.investment_id, {
+        timestampMs: dateOnlyToTimestampMs(row.price_date),
+        price: toNumber(row.close_price),
+      });
+    }
+    return byId;
+  } catch (error) {
+    if (error?.code === '42P01') return new Map();
+    throw error;
+  }
+}
+
 async function _dropForeignKey() {
   try {
     await query(`

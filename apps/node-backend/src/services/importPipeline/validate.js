@@ -8,7 +8,7 @@
  */
 
 import crypto from 'crypto';
-import { query, withTransaction } from '../../database/connection.js';
+import { query } from '../../database/connection.js';
 import { logger } from '../../config/logger.js';
 
 const VALIDATE_CHUNK = 500;
@@ -32,24 +32,34 @@ export async function validateBatch({ batchId, onProgress }) {
 
   for (let start = 0; start < total; start += VALIDATE_CHUNK) {
     const chunk = pending.slice(start, start + VALIDATE_CHUNK);
-    await withTransaction(async (client) => {
-      for (const row of chunk) {
-        const issue = validateRow(row);
-        if (issue) {
-          errors++;
-          await client.query(
-            `UPDATE import_staging_rows SET status = 'error', error_message = $2 WHERE id = $1`,
-            [row.id, issue]
-          );
-          continue;
-        }
-        const txHash = computeRowHash(row);
-        await client.query(
-          `UPDATE import_staging_rows SET status = 'validated', tx_hash = $2 WHERE id = $1`,
-          [row.id, txHash]
-        );
+    const ids = [];
+    const statuses = [];
+    const txHashes = [];
+    const errorMessages = [];
+    for (const row of chunk) {
+      const issue = validateRow(row);
+      ids.push(row.id);
+      if (issue) {
+        errors++;
+        statuses.push('error');
+        txHashes.push(null);
+        errorMessages.push(issue);
+      } else {
+        statuses.push('validated');
+        txHashes.push(computeRowHash(row));
+        errorMessages.push(null);
       }
-    });
+    }
+    await query(
+      `UPDATE import_staging_rows s
+          SET status        = v.status,
+              tx_hash       = v.tx_hash,
+              error_message = v.error_message
+         FROM unnest($1::bigint[], $2::text[], $3::text[], $4::text[])
+              AS v(id, status, tx_hash, error_message)
+        WHERE s.id = v.id`,
+      [ids, statuses, txHashes, errorMessages]
+    );
     seen += chunk.length;
     if (onProgress) onProgress({ phase: 'validating', current: seen, total });
   }

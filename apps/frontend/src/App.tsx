@@ -16,10 +16,10 @@ import { Loader2 } from "lucide-react";
 import { ErrorBoundary } from "@/components/shared/ErrorBoundary";
 import { ScrollToTop } from "@/components/shared/ScrollToTop";
 import { RequireAdmin } from "@/components/auth/RequireAdmin";
-import TaxOverviewPage from "@/pages/TaxOverviewPage.tsx";
-import PortfolioTaxPage from "@/pages/portfolio/tax/PortfolioTaxPage";
 
 // Lazy-loaded pages for code splitting
+const TaxOverviewPage = lazy(() => import("./pages/TaxOverviewPage"));
+const PortfolioTaxPage = lazy(() => import("./pages/portfolio/tax/PortfolioTaxPage"));
 const DashboardPage = lazy(() => import("./pages/DashboardPage"));
 const TransactionsPage = lazy(() => import("./pages/TransactionsPage"));
 const CategoriesPage = lazy(() => import("./pages/CategoriesPage"));

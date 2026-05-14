@@ -8,7 +8,7 @@
 
 import { query } from '../../database/connection.js';
 import { getSnapshots, getBreakdownSummary } from '../portfolioPerformanceSnapshotService.js';
-import { convertToCurrency } from '../currency/currencyConversionService.js';
+import { convertWithRates, loadCurrentRates } from '../currency/currencyConversionService.js';
 import { logger } from '../../config/logger.js';
 
 /**
@@ -91,10 +91,11 @@ async function fetchDividends(targetCurrency, startDate, endDate) {
   // Convert each row and aggregate
   const byMonthMap = new Map();
   const byInvestmentMap = new Map();
+  const rates = await loadCurrentRates();
 
   for (const row of result.rows) {
     const converted = row.currency !== targetCurrency
-      ? await convertToCurrency(Number(row.amount), row.currency, targetCurrency)
+      ? convertWithRates(Number(row.amount), row.currency, targetCurrency, rates)
       : Number(row.amount);
 
     const monthKey = `${row.year}-${String(row.month).padStart(2, '0')}`;
