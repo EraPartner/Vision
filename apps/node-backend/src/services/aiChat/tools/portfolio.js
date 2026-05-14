@@ -51,7 +51,7 @@ export const getPortfolioHoldings = {
       },
     },
   },
-  async run(args, { maxRows = settings.aiChat.maxToolRows, cache } = {}) {
+  async run(args, { maxRows = settings.aiChat.maxToolRows, cache = undefined } = {}) {
     const assetClass = parseEnum(args.assetClass, 'assetClass', ASSET_CLASSES, { defaultValue: null });
 
     const investments = await loadActiveInvestments(cache, assetClass);
@@ -122,7 +122,7 @@ export const getReturnsForRange = {
     },
     required: ['from', 'to'],
   },
-  async run(args, { maxRows = settings.aiChat.maxToolRows, cache } = {}) {
+  async run(args, { maxRows = settings.aiChat.maxToolRows, cache = undefined } = {}) {
     const from = requireDate(args.from, 'from');
     const to = requireDate(args.to, 'to');
     assertDateOrder(from, to);
@@ -216,7 +216,7 @@ export const getDividendIncome = {
     },
     required: ['from', 'to'],
   },
-  async run(args, { maxRows = settings.aiChat.maxToolRows, cache } = {}) {
+  async run(args, { maxRows = settings.aiChat.maxToolRows, cache = undefined } = {}) {
     const from = requireDate(args.from, 'from');
     const to = requireDate(args.to, 'to');
     assertDateOrder(from, to);
@@ -289,7 +289,7 @@ export const getAssetAllocation = {
     type: 'object',
     properties: {},
   },
-  async run(_args, { maxRows = settings.aiChat.maxToolRows, cache } = {}) {
+  async run(_args, { maxRows = settings.aiChat.maxToolRows, cache = undefined } = {}) {
     const investments = await loadActiveInvestments(cache);
 
     const ids = investments.map((inv) => inv.id);
@@ -359,7 +359,7 @@ export const getUnrealizedGains = {
       assetClass: { type: 'string', enum: ASSET_CLASSES, description: 'Optional filter by asset class.' },
     },
   },
-  async run(args, { maxRows = settings.aiChat.maxToolRows, cache } = {}) {
+  async run(args, { maxRows = settings.aiChat.maxToolRows, cache = undefined } = {}) {
     const assetClass = parseEnum(args.assetClass, 'assetClass', ASSET_CLASSES, { defaultValue: null });
 
     const investments = await loadActiveInvestments(cache, assetClass);
@@ -440,7 +440,7 @@ export const getBestWorstPerformers = {
     },
     required: ['from', 'to'],
   },
-  async run(args, { maxRows = settings.aiChat.maxToolRows, cache } = {}) {
+  async run(args, { maxRows = settings.aiChat.maxToolRows, cache = undefined } = {}) {
     const from = requireDate(args.from, 'from');
     const to = requireDate(args.to, 'to');
     assertDateOrder(from, to);

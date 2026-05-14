@@ -70,7 +70,7 @@ export const getTaxableIncomeSummary = {
     },
     required: ['year'],
   },
-  async run(args, { maxRows = settings.aiChat.maxToolRows, cache } = {}) {
+  async run(args, { maxRows = settings.aiChat.maxToolRows, cache = undefined } = {}) {
     const year = parseYear(args.year);
     const { from, to, fromMs, toMs } = yearRange(year);
 
@@ -156,7 +156,7 @@ export const getCapitalGainsForYear = {
     },
     required: ['year'],
   },
-  async run(args, { maxRows = settings.aiChat.maxToolRows, cache } = {}) {
+  async run(args, { maxRows = settings.aiChat.maxToolRows, cache = undefined } = {}) {
     const year = parseYear(args.year);
     const { fromMs, toMs, from, to } = yearRange(year);
 
