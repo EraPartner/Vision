@@ -9,10 +9,9 @@
  */
 
 import { transactionRepository } from '../../../repositories/transactionRepository.js';
-import { portfolioTransactionRepository } from '../../../repositories/portfolioTransactionRepository.js';
-import { investmentRepository } from '../../../repositories/investmentRepository.js';
 import settings from '../../../config/config.js';
 import { toDecimal, roundToCents } from '../../../lib/money.js';
+import { loadActiveInvestments, loadTransactionsForInvestments } from './_portfolioFetch.js';
 import { parsePositiveInt } from './_validate.js';
 
 const MIN_YEAR = 1970;
@@ -71,7 +70,7 @@ export const getTaxableIncomeSummary = {
     },
     required: ['year'],
   },
-  async run(args, { maxRows = settings.aiChat.maxToolRows } = {}) {
+  async run(args, { maxRows = settings.aiChat.maxToolRows, cache } = {}) {
     const year = parseYear(args.year);
     const { from, to, fromMs, toMs } = yearRange(year);
 
@@ -89,19 +88,10 @@ export const getTaxableIncomeSummary = {
       if (amount.gt(0)) transactionIncome = transactionIncome.plus(amount);
     }
 
-    const investments = await investmentRepository.getAll({
-      limit: 10_000,
-      offset: 0,
-      active: true,
-    });
+    const investments = await loadActiveInvestments(cache);
 
     const ids = investments.map((inv) => inv.id);
-    const portfolioTxns = ids.length > 0
-      ? await portfolioTransactionRepository.getAllByInvestmentIds({
-        investmentIds: ids,
-        perInvestmentLimit: 5000,
-      })
-      : [];
+    const portfolioTxns = await loadTransactionsForInvestments(cache, null, ids);
 
     const buckets = {
       dividend: toDecimal(0),
@@ -166,24 +156,14 @@ export const getCapitalGainsForYear = {
     },
     required: ['year'],
   },
-  async run(args, { maxRows = settings.aiChat.maxToolRows } = {}) {
+  async run(args, { maxRows = settings.aiChat.maxToolRows, cache } = {}) {
     const year = parseYear(args.year);
     const { fromMs, toMs, from, to } = yearRange(year);
 
-    const investments = await investmentRepository.getAll({
-      limit: 10_000,
-      offset: 0,
-      active: true,
-    });
+    const investments = await loadActiveInvestments(cache);
 
     const ids = investments.map((inv) => inv.id);
-    const sells = ids.length > 0
-      ? await portfolioTransactionRepository.getAllByInvestmentIds({
-        investmentIds: ids,
-        type: 'sell',
-        perInvestmentLimit: 5000,
-      })
-      : [];
+    const sells = await loadTransactionsForInvestments(cache, null, ids, { type: 'sell' });
 
     const byInvestment = new Map();
     let totalProceeds = toDecimal(0);
