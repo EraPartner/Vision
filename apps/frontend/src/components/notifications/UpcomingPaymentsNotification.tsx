@@ -61,13 +61,14 @@ export function UpcomingPaymentsNotification() {
   const { data: upcoming } = useQuery({
     queryKey: ["upcomingPlannedPayments", queryDate],
     queryFn: async () => {
-      const today = new Date();
-      const nextWeek = new Date();
-      nextWeek.setDate(today.getDate() + 7);
+      // Derive the range from queryDate (the key) so the fetched window can't
+      // disagree with the cache key across a midnight boundary.
+      const nextWeek = new Date(`${queryDate}T00:00:00`);
+      nextWeek.setDate(nextWeek.getDate() + 7);
 
       const response = await apiClient.getPlannedTransactions({
         active: true,
-        start_date: toYmd(today),
+        start_date: queryDate,
         end_date: toYmd(nextWeek),
         limit: 100,
       });

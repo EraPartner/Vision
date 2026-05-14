@@ -19,8 +19,11 @@ function sanitizeRemoteImageUrl(raw: string): string | null {
 }
 
 export function RemoteNewsImage({ src, alt = "", className, fallbackClassName }: RemoteNewsImageProps) {
-  const [failed, setFailed] = useState(false);
+  // Track which URL failed (rather than a bare boolean) so the failed state
+  // resets automatically when `src` changes to a different image.
+  const [failedSrc, setFailedSrc] = useState<string | null>(null);
   const safeSrc = useMemo(() => sanitizeRemoteImageUrl(src), [src]);
+  const failed = failedSrc !== null && failedSrc === safeSrc;
 
   if (!safeSrc || failed) {
     return (
@@ -47,7 +50,7 @@ export function RemoteNewsImage({ src, alt = "", className, fallbackClassName }:
       loading="lazy"
       decoding="async"
       referrerPolicy="no-referrer"
-      onError={() => setFailed(true)}
+      onError={() => setFailedSrc(safeSrc)}
     />
   );
 }

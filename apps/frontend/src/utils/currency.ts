@@ -47,6 +47,10 @@ export function parseLocaleNumber(input: string | number | null | undefined): nu
     const tail = s.length - lastComma - 1;
     if (tail === 3) s = s.replace(/,/g, '');
     else s = s.replace(',', '.');
+  } else if (lastDot >= 0 && s.indexOf('.') !== lastDot) {
+    // Only dots, more than one of them → EU thousands grouping (e.g.
+    // "1.234.567"). A single dot is left untouched as the decimal point.
+    s = s.replace(/\./g, '');
   }
   const n = parseFloat(s);
   if (isNaN(n)) return NaN;

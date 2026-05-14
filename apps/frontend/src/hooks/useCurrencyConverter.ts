@@ -19,7 +19,11 @@ export function useCurrencyConverter(targetCurrency: string) {
     staleTime: 60_000,
   });
 
+  // Fallback rates are hardcoded constants that only fill gaps the live DB
+  // rates don't cover — so they must be spread first (lowest priority) and the
+  // live rates last, otherwise stale constants shadow real rates.
   const ratesToEur: Record<string, number> = useMemo(() => ({
+    ...(exchangeData?.fallback_rates ?? {}),
     EUR: 1,
     ...Object.fromEntries(
       (exchangeData?.rates ?? []).map((r) => [
@@ -27,7 +31,6 @@ export function useCurrencyConverter(targetCurrency: string) {
         Number(r.rate_to_eur),
       ])
     ),
-    ...(exchangeData?.fallback_rates ?? {}),
   }), [exchangeData]);
 
   const convertToTarget = useCallback(

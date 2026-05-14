@@ -105,7 +105,9 @@ async function getRates() {
   }
 
   logger.warn('Using fallback exchange rates — ECB API and database unavailable');
-  return { ...liveFallbackRates };
+  // Return the reference (callers never mutate) so warmCache can detect that
+  // the fallback path was taken via identity comparison.
+  return liveFallbackRates;
 }
 
 /**

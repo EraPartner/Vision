@@ -286,7 +286,7 @@ export async function previewPatternMatches(patternRow) {
       `SELECT id, name FROM recipients WHERE is_active = true`,
       [],
     );
-    const matched = rows.filter((r) => re.test(r.name.toUpperCase()));
+    const matched = rows.filter((r) => re.test(String(r.name ?? '').toUpperCase()));
     return { matchCount: matched.length, recipientIds: matched.map((r) => r.id) };
   }
 

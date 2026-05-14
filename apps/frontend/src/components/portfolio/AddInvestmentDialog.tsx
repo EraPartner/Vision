@@ -130,8 +130,9 @@ export function AddInvestmentDialog({ allowedAssetClasses }: Props) {
   const fixedIncome = isFixedIncome(form.assetClass as AssetClass);
   const realEstate = isRealEstate(form.assetClass as AssetClass);
   const selectedProvider = priceProviders.find(p => p.key === form.priceProvider);
-  const computedPricePerUnit = form.initialAmount && form.initialUnits
-    ? (parseDecimal(form.initialAmount) / parseDecimal(form.initialUnits)).toFixed(4)
+  const computedInitialUnits = parseDecimal(form.initialUnits);
+  const computedPricePerUnit = form.initialAmount && computedInitialUnits > 0
+    ? (parseDecimal(form.initialAmount) / computedInitialUnits).toFixed(4)
     : '';
 
   const visibleAssetClasses = (allowedAssetClasses && allowedAssetClasses.length > 0)

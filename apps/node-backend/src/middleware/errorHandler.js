@@ -83,7 +83,18 @@ export class RateLimitedError extends AppError {
  * @returns {import('express').ErrorRequestHandler}
  */
 export function createErrorHandler(isProduction) {
-  return function errorHandler(err, req, res, _next) {
+  return function errorHandler(err, req, res, next) {
+    // The response is already committed (e.g. a streaming/SSE handler threw
+    // mid-stream). Writing another body would throw ERR_HTTP_HEADERS_SENT, so
+    // hand off to Express's default handler which just closes the connection.
+    if (res.headersSent) return next(err);
+
+    // Normalize non-Error throws (`throw null`, `throw 'string'`, rejected
+    // promises with non-Error values) so property access below is always safe.
+    if (!(err instanceof Error)) {
+      err = new Error(typeof err === 'string' ? err : 'Unknown error');
+    }
+
     const isApp = err instanceof AppError;
     const status = isApp ? err.status : 500;
     const code = isApp ? err.code : ApiErrorCode.INTERNAL_SERVER_ERROR;

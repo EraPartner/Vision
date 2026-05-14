@@ -121,9 +121,11 @@ async function fetchTaxTransactions(targetCurrency, startDate, endDate) {
     const convert = async (v) =>
       cur !== targetCurrency ? await convertToCurrency(Number(v), cur, targetCurrency) : Number(v);
 
-    const taxes    = await convert(row.taxes);
-    const fees     = await convert(row.fees);
-    const amount   = await convert(row.amount);
+    const [taxes, fees, amount] = await Promise.all([
+      convert(row.taxes),
+      convert(row.fees),
+      convert(row.amount),
+    ]);
 
     // Classify taxes by transaction type
     let tobAmt = 0, whtAmt = 0, sellAmt = 0, otherAmt = 0;

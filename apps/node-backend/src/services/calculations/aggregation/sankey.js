@@ -105,14 +105,13 @@ export async function computeSankeyFlow({
   }
 
   // Take top N spending categories
-  const sortedCategories = [...spendingByCategory.entries()]
-    .sort((a, b) => b[1] - a[1])
-    .slice(0, TOP_N);
+  const allSortedCategories = [...spendingByCategory.entries()]
+    .sort((a, b) => b[1] - a[1]);
+  const sortedCategories = allSortedCategories.slice(0, TOP_N);
 
   // Merge the rest into "Other"
-  if (spendingByCategory.size > TOP_N) {
-    const otherTotal = [...spendingByCategory.entries()]
-      .sort((a, b) => b[1] - a[1])
+  if (allSortedCategories.length > TOP_N) {
+    const otherTotal = allSortedCategories
       .slice(TOP_N)
       .reduce((acc, [, v]) => acc + v, 0);
     if (otherTotal > 0) {

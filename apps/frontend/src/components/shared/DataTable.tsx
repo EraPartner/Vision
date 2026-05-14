@@ -79,6 +79,7 @@ export function DataTable<T extends Record<string, unknown>>({
             // Debounce the server call
             if (debounceRef.current) clearTimeout(debounceRef.current);
             debounceRef.current = setTimeout(() => {
+                debounceRef.current = null;
                 onSearchChange!(value);
                 // Reset to page 0 on new search
                 if (onPageChange) onPageChange(0);
