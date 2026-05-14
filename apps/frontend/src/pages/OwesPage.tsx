@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useLanguage } from '@/contexts/LanguageContext';
 import { useOwedSummary, useOwedByRecipient, useRecordPayment, useSettleSplit, useDeleteSplit, useSettleAllSplitsByRecipient } from "@/hooks/useSplits";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -402,7 +402,7 @@ function RecentRecipientTransactionsTable({ recipientId, recipientName }: { reci
         }
     }, [recipientId]);
 
-    const transactions: RecentRecipientTransactionRow[] = allItems.map((tx) => ({
+    const transactions: RecentRecipientTransactionRow[] = useMemo(() => allItems.map((tx) => ({
         id: tx.id,
         date: tx.transaction_date || tx.date || '',
         description: tx.memo || t('owesPage.transaction'),
@@ -410,9 +410,9 @@ function RecentRecipientTransactionsTable({ recipientId, recipientName }: { reci
         amount: tx.amount,
         currency: tx.currency || appSettings.defaultCurrency,
         bankAccount: tx.bank_account || '—',
-    }));
+    })), [allItems, t, appSettings.defaultCurrency]);
 
-    const columns = [
+    const columns = useMemo(() => [
         {
             key: 'date',
             header: t('txPage.col.date'),
@@ -448,7 +448,7 @@ function RecentRecipientTransactionsTable({ recipientId, recipientName }: { reci
             header: t('txPage.field.bankAccount'),
             minWidth: 160,
         },
-    ];
+    ], [t, appSettings.dateFormat, locale]);
 
     if (isLoading) {
         return <Skeleton className="h-[320px]" />;

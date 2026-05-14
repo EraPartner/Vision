@@ -1,4 +1,4 @@
-import { useState, useRef, useCallback } from 'react';
+import { useState, useRef, useCallback, useMemo } from 'react';
 import { X, Plus, Tag as TagIcon } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from '@/components/ui/command';
@@ -69,18 +69,25 @@ export function TagInput({ value, onChange, disabled, className, maxTags = 20 }:
     const inputRef = useRef<HTMLInputElement>(null);
 
     const { data: tagListData } = useTags({ is_active: true });
-    const allActiveTags = tagListData?.items ?? [];
+    const allActiveTags = useMemo(() => tagListData?.items ?? [], [tagListData?.items]);
 
     const createTag = useCreateTag();
 
-    const selectedSet = new Set(value);
-    const liveSlug = slugify(inputValue);
-
-    const suggestions = allActiveTags.filter((t) =>
-        !selectedSet.has(t.slug) &&
-        (inputValue === '' || t.slug.includes(liveSlug)),
+    const selectedSet = useMemo(() => new Set(value), [value]);
+    const tagsBySlug = useMemo(
+        () => new Map(allActiveTags.map((tag) => [tag.slug, tag])),
+        [allActiveTags],
     );
-    const exactMatch = allActiveTags.find((t) => t.slug === liveSlug);
+    const liveSlug = useMemo(() => slugify(inputValue), [inputValue]);
+
+    const suggestions = useMemo(
+        () => allActiveTags.filter((tag) =>
+            !selectedSet.has(tag.slug) &&
+            (inputValue === '' || tag.slug.includes(liveSlug)),
+        ),
+        [allActiveTags, selectedSet, inputValue, liveSlug],
+    );
+    const exactMatch = useMemo(() => tagsBySlug.get(liveSlug), [tagsBySlug, liveSlug]);
     const canCreate = liveSlug.length > 0 && !exactMatch && value.length < maxTags;
 
     const addSlug = useCallback((slug: string) => {
@@ -120,9 +127,12 @@ export function TagInput({ value, onChange, disabled, className, maxTags = 20 }:
         }
     }
 
-    const selectedTags = value
-        .map((slug) => allActiveTags.find((t) => t.slug === slug) ?? { id: -1, slug, color: null, is_active: true, created_at: '', updated_at: '' })
-        .filter(Boolean) as Tag[];
+    const selectedTags = useMemo(
+        () => value.map((slug): Tag =>
+            tagsBySlug.get(slug) ?? { id: -1, slug, color: null, is_active: true, created_at: '', updated_at: '' },
+        ),
+        [value, tagsBySlug],
+    );
 
     return (
         <Popover open={open} onOpenChange={setOpen}>

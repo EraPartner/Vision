@@ -29,7 +29,7 @@ export function RecipientCombobox({ value, onSelect, disabled, className, portal
     });
 
     const recipients = useMemo(() => data?.items ?? [], [data?.items]);
-    const selected = recipients.find((r) => r.id === value);
+    const selected = useMemo(() => recipients.find((r) => r.id === value), [recipients, value]);
     const displayLabel = selected ? selected.name : t('combobox.recipient.placeholder');
 
     return (
