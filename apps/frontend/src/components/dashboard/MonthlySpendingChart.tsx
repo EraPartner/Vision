@@ -1,3 +1,4 @@
+import { useCallback, useMemo } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { BarChart, ChartLegend } from "@/components/charts";
 import { useLanguage } from "@/contexts/LanguageContext";
@@ -20,13 +21,20 @@ export function MonthlySpendingChart({ data }: MonthlySpendingChartProps) {
     const locale = numberFormatToLocale(appSettings.numberFormat);
     const defaultCurrency = appSettings.defaultCurrency || "EUR";
 
-    const formatCompactCurrency = (value: number) =>
-        new Intl.NumberFormat(locale, {
-            style: "currency",
-            currency: defaultCurrency,
-            notation: "compact",
-            maximumFractionDigits: 1,
-        }).format(value);
+    const compactFormat = useMemo(
+        () =>
+            new Intl.NumberFormat(locale, {
+                style: "currency",
+                currency: defaultCurrency,
+                notation: "compact",
+                maximumFractionDigits: 1,
+            }),
+        [locale, defaultCurrency],
+    );
+    const formatCompactCurrency = useCallback(
+        (value: number) => compactFormat.format(value),
+        [compactFormat],
+    );
 
     if (!data || data.length === 0) {
         return (

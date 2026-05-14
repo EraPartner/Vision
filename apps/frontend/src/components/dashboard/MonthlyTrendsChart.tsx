@@ -1,3 +1,4 @@
+import { useCallback, useMemo } from "react";
 import {
     Card,
     CardContent,
@@ -40,25 +41,43 @@ export function MonthlyTrendsChart({ data, embedded = false }: MonthlyTrendsChar
     const locale = numberFormatToLocale(appSettings.numberFormat);
     const defaultCurrency = appSettings.defaultCurrency || "EUR";
 
-    const formatCompactCurrency = (value: number) =>
-        new Intl.NumberFormat(locale, {
-            style: "currency",
-            currency: defaultCurrency,
-            notation: "compact",
-            maximumFractionDigits: 1,
-        }).format(value);
+    const compactFormat = useMemo(
+        () =>
+            new Intl.NumberFormat(locale, {
+                style: "currency",
+                currency: defaultCurrency,
+                notation: "compact",
+                maximumFractionDigits: 1,
+            }),
+        [locale, defaultCurrency],
+    );
+    const formatCompactCurrency = useCallback(
+        (value: number) => compactFormat.format(value),
+        [compactFormat],
+    );
 
-    const chartData: ReadonlyArray<ChartRow> = data.map((monthData) => {
-        const date = new Date(monthData.year, monthData.month - 1, 1);
-        return {
-            month: formatMonthYearWithAppSettings(date, appSettings.dateFormat, locale),
-            income: monthData.total_income,
-            spending: Math.abs(monthData.total_spending),
-        };
-    });
+    const chartData: ReadonlyArray<ChartRow> = useMemo(
+        () =>
+            data.map((monthData) => {
+                const date = new Date(monthData.year, monthData.month - 1, 1);
+                return {
+                    month: formatMonthYearWithAppSettings(date, appSettings.dateFormat, locale),
+                    income: monthData.total_income,
+                    spending: Math.abs(monthData.total_spending),
+                };
+            }),
+        [data, appSettings.dateFormat, locale],
+    );
 
-    const totalIncome = data.reduce((sum, m) => sum + m.total_income, 0);
-    const totalSpending = Math.abs(data.reduce((sum, m) => sum + m.total_spending, 0));
+    const { totalIncome, totalSpending } = useMemo(() => {
+        let income = 0;
+        let spending = 0;
+        for (const m of data) {
+            income += m.total_income;
+            spending += m.total_spending;
+        }
+        return { totalIncome: income, totalSpending: Math.abs(spending) };
+    }, [data]);
 
     const incomeColor = "hsl(var(--accent))";
     const spendingColor = "hsl(var(--destructive))";

@@ -1,3 +1,4 @@
+import { useMemo } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { useSettings } from '@/contexts/SettingsContext';
 import { getAggregationRecipientPivot, type RecipientPivotItem } from '@/lib/api/aggregations';
@@ -58,12 +59,16 @@ export function useRecipientPivot(chart: SavedChart | null | undefined) {
         staleTime: 60_000,
     });
 
-    const rawPivot = query.data?.data?.recipientPivot ?? {};
-    const recipientData = buildRecipientPeriodData(rawPivot);
+    const rawPivot = query.data?.data?.recipientPivot;
 
-    // Filter to only the recipient IDs selected in the chart
-    const selected = new Set(chart?.recipient_ids ?? []);
-    const filtered = recipientData.filter((r) => selected.has(r.recipientId));
+    // Filter to only the recipient IDs selected in the chart. Memoized so the
+    // nested-loop reshape + filter only runs when the query data or selected
+    // recipient ids actually change, not on every consumer render.
+    const filtered = useMemo(() => {
+        const recipientData = buildRecipientPeriodData(rawPivot ?? {});
+        const selected = new Set(chart?.recipient_ids ?? []);
+        return recipientData.filter((r) => selected.has(r.recipientId));
+    }, [rawPivot, chart?.recipient_ids]);
 
     return { ...query, recipientData: filtered };
 }

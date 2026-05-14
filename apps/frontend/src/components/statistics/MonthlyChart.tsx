@@ -42,10 +42,10 @@ export const MonthlyChart = memo(function MonthlyChart({ data }: MonthlyChartPro
     }));
   }, [data.monthlyData]);
 
-  const series: BarSeries<IncomeSpendingDatum>[] = [
+  const series: BarSeries<IncomeSpendingDatum>[] = useMemo(() => [
     { key: "income", label: t("statsPage.income"), accessor: (d) => d.income, color: "hsl(var(--primary))" },
     { key: "spending", label: t("statsPage.spending"), accessor: (d) => d.spending, color: "hsl(var(--destructive))" },
-  ];
+  ], [t]);
 
   const overlays: BarOverlay<IncomeSpendingDatum>[] = useMemo(() => {
     if (!showOverlay) return [];

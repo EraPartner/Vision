@@ -1,4 +1,4 @@
-import { memo } from "react";
+import { memo, useMemo } from "react";
 import { LineChart, type LineSeries } from "@/components/charts";
 import { useChartCurrencyFormatter } from "@/hooks/useChartCurrencyFormatter";
 import { formatPeriodShort } from "./statisticsUtils";
@@ -18,23 +18,31 @@ interface CategoryTrendChartProps {
 export const CategoryTrendChart = memo(function CategoryTrendChart({ data }: CategoryTrendChartProps) {
   const { formatCurrency, currencySymbol } = useChartCurrencyFormatter();
 
-  const topCategories = data.categoryPivot.slice(0, 5);
+  const topCategories = useMemo(() => data.categoryPivot.slice(0, 5), [data.categoryPivot]);
 
-  const chartData: CategoryTrendDatum[] = data.allPeriods.map((period) => {
-    const values: Record<string, number> = {};
-    for (const cat of topCategories) {
-      values[cat.categoryId] = Math.round(cat.months[period] || 0);
-    }
-    return { period, date: parseISO(`${period}-01`), values };
-  });
+  const chartData: CategoryTrendDatum[] = useMemo(
+    () =>
+      data.allPeriods.map((period) => {
+        const values: Record<string, number> = {};
+        for (const cat of topCategories) {
+          values[cat.categoryId] = Math.round(cat.months[period] || 0);
+        }
+        return { period, date: parseISO(`${period}-01`), values };
+      }),
+    [data.allPeriods, topCategories],
+  );
 
-  const series: LineSeries<CategoryTrendDatum>[] = topCategories.map((cat, i) => ({
-    key: cat.categoryId,
-    label: cat.categoryName,
-    accessor: (d) => d.values[cat.categoryId] ?? 0,
-    color: `hsl(var(--chart-${(i % 8) + 1}))`,
-    strokeWidth: 2,
-  }));
+  const series: LineSeries<CategoryTrendDatum>[] = useMemo(
+    () =>
+      topCategories.map((cat, i) => ({
+        key: cat.categoryId,
+        label: cat.categoryName,
+        accessor: (d) => d.values[cat.categoryId] ?? 0,
+        color: `hsl(var(--chart-${(i % 8) + 1}))`,
+        strokeWidth: 2,
+      })),
+    [topCategories],
+  );
 
   return (
     <LineChart<CategoryTrendDatum>

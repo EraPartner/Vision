@@ -4,6 +4,7 @@
  * that was duplicated across every statistics chart component.
  */
 
+import { useCallback, useMemo } from "react";
 import { useAppSettings } from "@/contexts/AppSettingsContext";
 import { getCurrencySymbol, numberFormatToLocale, formatCurrencyCompact, type CompactFormatResult } from "@/utils/currency";
 
@@ -22,16 +23,32 @@ export function useChartCurrencyFormatter(): ChartCurrencyFormatter {
   const currencySymbol = getCurrencySymbol(currency);
   const fractionDigits = appSettings.showDecimalPlaces;
 
-  const formatCurrency = (val: number) =>
-    new Intl.NumberFormat(locale, {
-      style: "currency",
-      currency,
-      minimumFractionDigits: fractionDigits,
-      maximumFractionDigits: fractionDigits,
-    }).format(val);
+  // A single Intl.NumberFormat instance reused across every call — these
+  // formatters run once per axis tick / table cell, so rebuilding the
+  // (relatively expensive) formatter per call is wasteful.
+  const currencyNumberFormat = useMemo(
+    () =>
+      new Intl.NumberFormat(locale, {
+        style: "currency",
+        currency,
+        minimumFractionDigits: fractionDigits,
+        maximumFractionDigits: fractionDigits,
+      }),
+    [locale, currency, fractionDigits],
+  );
 
-  const formatCompact = (val: number) =>
-    formatCurrencyCompact(val, currency, locale, fractionDigits);
+  const formatCurrency = useCallback(
+    (val: number) => currencyNumberFormat.format(val),
+    [currencyNumberFormat],
+  );
 
-  return { formatCurrency, formatCompact, currencySymbol, locale, currency };
+  const formatCompact = useCallback(
+    (val: number) => formatCurrencyCompact(val, currency, locale, fractionDigits),
+    [currency, locale, fractionDigits],
+  );
+
+  return useMemo(
+    () => ({ formatCurrency, formatCompact, currencySymbol, locale, currency }),
+    [formatCurrency, formatCompact, currencySymbol, locale, currency],
+  );
 }
