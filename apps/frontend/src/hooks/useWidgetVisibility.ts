@@ -71,23 +71,30 @@ export function useWidgetVisibility(pageKey: string, widgets: WidgetDefinition[]
         },
         [pageVisibility, widgets]
     );
+    // Base mutations on `cachedVisibility` (the module-level source of truth
+    // that `notify` keeps current synchronously) rather than the captured
+    // `visibility` state. Otherwise two writes within the same render cycle —
+    // rapid toggles, or two pages mounted at once — both build from the same
+    // stale snapshot and the last writer silently clobbers the first.
     const setWidgetVisible = useCallback(
         (widgetId: string, visible: boolean) => {
+            const base = cachedVisibility ?? visibility;
             const next = {
-                ...visibility,
-                [pageKey]: { ...pageVisibility, [widgetId]: visible },
+                ...base,
+                [pageKey]: { ...(base[pageKey] || {}), [widgetId]: visible },
             };
             notify(next);
             if (saveTimerRef.current) clearTimeout(saveTimerRef.current);
             saveTimerRef.current = setTimeout(() => saveToBackend(next), 500);
         },
-        [visibility, pageKey, pageVisibility]
+        [visibility, pageKey]
     );
     const setAllVisible = useCallback(
         (visible: boolean) => {
             const pageMap: Record<string, boolean> = {};
             widgets.forEach((w) => (pageMap[w.id] = visible));
-            const next = { ...visibility, [pageKey]: pageMap };
+            const base = cachedVisibility ?? visibility;
+            const next = { ...base, [pageKey]: pageMap };
             notify(next);
             if (saveTimerRef.current) clearTimeout(saveTimerRef.current);
             saveTimerRef.current = setTimeout(() => saveToBackend(next), 500);
@@ -95,7 +102,7 @@ export function useWidgetVisibility(pageKey: string, widgets: WidgetDefinition[]
         [visibility, pageKey, widgets]
     );
     const resetToDefaults = useCallback(() => {
-        const next = { ...visibility };
+        const next = { ...(cachedVisibility ?? visibility) };
         delete next[pageKey];
         notify(next);
         if (saveTimerRef.current) clearTimeout(saveTimerRef.current);
