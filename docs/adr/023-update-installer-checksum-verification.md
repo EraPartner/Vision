@@ -216,5 +216,5 @@ This addresses the supply-chain risk where an attacker could replace the Homebre
 
 - [[docs/adr/022-electron-sandbox-hardening-and-recovery|ADR-022: Electron Sandbox Hardening]] — Complements sandbox isolation with integrity verification
 - [[docs/security/data-protection|Data Protection Policy]] — Part of supply-chain security posture
-- [[docs/architecture/electron-desktop-app|Electron Desktop App Architecture]] — Update flow architecture
+- [[docs/architecture/electron|Electron Desktop App Architecture]] — Update flow architecture
 - [[docs/adr/038-dependency-slim-down-supply-chain-risk|ADR-038: Dependency Slim Down]] — Parallel supply-chain hardening effort

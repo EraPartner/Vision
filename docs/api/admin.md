@@ -58,9 +58,7 @@ Get system health and initialization status.
 **Response:** `500 Internal Server Error`
 
 ```json
-{
-  "detail": "Failed to retrieve administration status"
-}
+{ "ok": false, "error": { "code": "APP_ERROR", "message": "Failed to retrieve administration status" } }
 ```
 
 Implementation note:
@@ -87,9 +85,7 @@ Verify database connection and initialization status.
 **Response:** `500 Internal Server Error`
 
 ```json
-{
-  "detail": "Administrative operation failed"
-}
+{ "ok": false, "error": { "code": "APP_ERROR", "message": "Administrative operation failed" } }
 ```
 
 ---
@@ -119,9 +115,7 @@ Reset the database (requires explicit confirmation).
 **Response:** `404 Not Found`
 
 ```json
-{
-  "detail": "Database reset endpoint disabled"
-}
+{ "ok": false, "error": { "code": "APP_ERROR", "message": "Database reset endpoint disabled" } }
 ```
 
 **Response:** `400 Bad Request`
@@ -157,9 +151,7 @@ Run persisted Kinesis history sanitization for all investments where `price_prov
 **Response:** `500 Internal Server Error`
 
 ```json
-{
-  "detail": "Failed to sanitize Kinesis history"
-}
+{ "ok": false, "error": { "code": "APP_ERROR", "message": "Failed to sanitize Kinesis history" } }
 ```
 
 ---
@@ -211,9 +203,7 @@ Retrieve current database table statistics.
 **Response:** `500 Internal Server Error`
 
 ```json
-{
-  "detail": "Failed to retrieve database statistics"
-}
+{ "ok": false, "error": { "code": "APP_ERROR", "message": "Failed to retrieve database statistics" } }
 ```
 
 See [[docs/features/database-maintenance|Database Maintenance Feature]] for details.
@@ -256,9 +246,7 @@ Run `VACUUM ANALYZE` on one or all tables.
 **Response:** `409 Conflict` (VACUUM already running)
 
 ```json
-{
-  "detail": "VACUUM already running. Please wait."
-}
+{ "ok": false, "error": { "code": "APP_ERROR", "message": "VACUUM already running. Please wait." } }
 ```
 
 **Implementation note:**
@@ -302,9 +290,7 @@ Check for application updates via GitHub Releases API.
 **Response:** `500 Internal Server Error`
 
 ```json
-{
-  "detail": "Administrative operation failed"
-}
+{ "ok": false, "error": { "code": "APP_ERROR", "message": "Administrative operation failed" } }
 ```
 
 Implementation notes:
@@ -419,9 +405,7 @@ Retrieve a paginated list of aggregation shadow divergences from the `agg_shadow
 **Response:** `500 Internal Server Error`
 
 ```json
-{
-  "detail": "Failed to retrieve shadow divergences"
-}
+{ "ok": false, "error": { "code": "APP_ERROR", "message": "Failed to retrieve shadow divergences" } }
 ```
 
 ---
@@ -515,7 +499,7 @@ The probe updates the `provider_health` row (calls `recordSuccess` or `recordErr
 **Response:** `400 Bad Request` (unknown provider)
 
 ```json
-{ "detail": "Unknown provider: unknown-name" }
+{ "ok": false, "error": { "code": "APP_ERROR", "message": "Unknown provider: unknown-name" } }
 ```
 
 ---

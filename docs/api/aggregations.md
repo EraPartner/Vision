@@ -13,7 +13,7 @@ related_code:
   - apps/node-backend/src/routes/aggregations.js
   - apps/node-backend/src/services/calculations/aggregation/
   - apps/node-backend/src/services/calculations/aggregation/recipientPivot.js
-  - apps/node-backend/src/services/calculations/forecast/
+  - apps/node-backend/src/services/calculations/forecast/index.js
   - apps/node-backend/src/services/calculations/forecast/categoryBreakdown.js
   - apps/node-backend/src/repositories/infoRepositoryMonthly.js
   - apps/node-backend/src/repositories/infoRepo.forecast.js
@@ -930,7 +930,7 @@ Each Monte Carlo method uses a seeded PRNG derived from `hash(userId | yyyymm | 
 - Enables ensemble combination and cross-session caching
 - `filterHash` includes currency, excluded categories, excluded recipients, and `include_planned` flag
 
-See [[docs/services/calculations/forecast|Forecast Service]] for implementation details.
+See [[apps/node-backend/src/services/calculations/forecast/index.js|Forecast Service]] for implementation details.
 
 **Caching (Phase E):**
 
@@ -1112,8 +1112,8 @@ All aggregation endpoints return errors in the standard envelope:
 
 | Status | Response | Cause |
 |--------|----------|-------|
-| 400 | `{ "detail": "Invalid currency code" }` | Malformed currency param |
-| 500 | `{ "detail": "Error computing aggregation: {label}" }` | Server error during computation |
+| 400 | `{ "ok": false, "error": { "code": "APP_ERROR", "message": "Invalid currency code" } }` | Malformed currency param |
+| 500 | `{ "ok": false, "error": { "code": "APP_ERROR", "message": "Error computing aggregation: {label}" } }` | Server error during computation |
 
 ---
 

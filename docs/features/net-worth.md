@@ -7,7 +7,7 @@ tags: [feature, net-worth, portfolio, chart, zoom, frontend, performance, snapsh
 description: Daily net worth tracking with zoomable/scrollable charts, series toggling, LTTB downsampling, and daily breakdown tables. Powered by pre-computed snapshots including unit-based and fixed-income investments.
 aliases: [net worth, networth, wealth tracking, financial health]
 related_code:
-  - apps/frontend/src/pages/portfolio/NetWorthPage.tsx
+  - apps/frontend/src/pages/portfolio/net-worth/NetWorthPage.tsx
   - apps/frontend/src/utils/downsample.ts
   - apps/node-backend/src/routes/info.js
   - apps/node-backend/src/repositories/infoRepository.js

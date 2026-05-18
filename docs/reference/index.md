@@ -28,10 +28,10 @@ SORT title ASC
 |----------|-------------|
 | [[docs/reference/data-model\|Data Model]] | Complete entity reference — core, portfolio, planning, supporting |
 | [[docs/reference/code-patterns\|Code Patterns]] | Standard patterns for all layers (routes, services, repositories, components) |
-| [[docs/reference/service-layer\|Service Layer Reference]] | Complete reference for all 16 backend services |
-| [[docs/reference/repository-layer\|Repository Layer Reference]] | Complete reference for all 13 backend repositories |
+| [[docs/reference/service-layer\|Service Layer Reference]] | Complete reference for the 24 top-level backend service modules (+ 7 sub-directories) |
+| [[docs/reference/repository-layer\|Repository Layer Reference]] | Complete reference for all 21 backend repository domains (+ infoRepository and portfolioTxRepo sub-modules) |
 | [[docs/reference/database-query-patterns\|Database Query Patterns]] | PostgreSQL query patterns, index strategies, optimization techniques |
-| [[docs/reference/frontend-routes\|Frontend Routes]] | Complete route table for all 23 pages |
+| [[docs/reference/frontend-routes\|Frontend Routes]] | Complete route table for all 15 top-level pages (+ 19 nested pages in admin / portfolio subtrees) |
 | [[docs/reference/react-query-keys\|React Query Keys]] | All frontend query keys for cache invalidation |
 | [[docs/reference/typescript-types\|TypeScript Types]] | All frontend type definitions |
 | [[docs/reference/agent-navigation-map\|AI Agent Navigation Map]] | File navigation map organized by feature, layer, and task |
@@ -58,7 +58,7 @@ SORT title ASC
 |----------|-------------|
 | [[docs/reference/environment-variables|Environment Variables]] | All env vars for frontend and backend |
 | [[docs/reference/scripts|Scripts Reference]] | All bun/npm commands |
-| [[docs/reference/api-endpoint-matrix|API Endpoint Matrix]] | Complete matrix of all 146 API endpoints (Phase G removed 6 info endpoints in favor of aggregations) |
+| [[docs/reference/api-endpoint-matrix|API Endpoint Matrix]] | Complete matrix of all 163 API endpoints across 28 route files (+ 8 IPC handlers for Electron backup/restore) |
 
 ## Error Handling
 

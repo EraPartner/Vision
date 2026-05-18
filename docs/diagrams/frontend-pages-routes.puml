@@ -61,6 +61,23 @@ package "Budgeting Pages" {
   class OwesPage {
     +Owed Amounts
   }
+
+  class ImportReviewPage {
+    +Per-row recipient overrides
+    +Commit / cancel batch
+  }
+
+  class RecipientInsightsPage {
+    +Per-recipient charts
+    +Owes detail
+    +Tag breakdown
+  }
+
+  class AIChatPage <<ADR-024>> {
+    +Local Ollama chat
+    +Tool-augmented result cards
+    +Conversation history
+  }
 }
 
 package "Portfolio Pages" {
@@ -185,8 +202,11 @@ AppLayout --> RecipientsPage : "/recipients"
 AppLayout --> PlannedPaymentsPage : "/planned"
 AppLayout --> StatisticsPage : "/statistics"
 AppLayout --> ImportPage : "/import"
+ImportPage --> ImportReviewPage : "/import/review/:batchId"
 AppLayout --> OwesPage : "/owes"
 AppLayout --> TaxOverviewPage : "/tax"
+AppLayout --> AIChatPage : "/ai-chat"
+RecipientsPage --> RecipientInsightsPage : "/recipients/:id/insights"
 
 AppLayout --> PortfolioOverviewPage : "/portfolio"
 PortfolioOverviewPage --> MarketLookupPage : "/portfolio/market"

@@ -106,7 +106,7 @@ Retrieve a single recipient by ID.
 
 **Error Response (404):**
 ```json
-{ "detail": "Recipient not found" }
+{ "ok": false, "error": { "code": "APP_ERROR", "message": "Recipient not found" } }
 ```
 
 ### PATCH /api/recipients/:id

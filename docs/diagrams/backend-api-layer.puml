@@ -191,7 +191,13 @@ package "Routes" {
     +POST /investments/kinesis/sanitize-history : sanitize Kinesis spikes
     +GET /db/stats : database table statistics (Phase 7)
     +POST /db/vacuum : run VACUUM ANALYZE (Phase 7)
-    +/api/admin/* : optional bearer auth gate
+    +GET /providers/health : provider health summary (Phase F, ADR-034)
+    +POST /providers/:provider/probe : synthetic probe
+    +GET /metrics/requests : in-memory rolling p50/p95 (Phase F)
+    +GET /endpoints : live route manifest (Phase F)
+    +POST /backup : create backup (REST mirror of Electron IPC)
+    +POST /restore : restore backup
+    +/api/admin/* : timing-safe bearer auth (ADR-037)
   }
 
   class AggregationsRouter {
@@ -209,7 +215,34 @@ package "Routes" {
     +POST /financial : PDF financial report (7 sections, Puppeteer)
     +POST /portfolio : PDF portfolio report (6 sections, Phase 8)
     +POST /tax : PDF tax report (7 sections, Phase 8)
-    +GET /financial : legacy PDF financial (deprecated Phase 5)
+  }
+
+  class AiRouter <<ADR-024>> {
+    +POST /chat : Ollama tool-loop chat (rate-limited via AI_CHAT_RATE_LIMIT)
+    +GET /conversations : list saved conversations
+    +DELETE /conversations/:id : delete conversation
+    +GET /health : Ollama reachability probe
+  }
+
+  class AttachmentsRouter <<Phase 5A>> {
+    +POST /transaction/:id : upload receipt (attachmentRateLimiter 60/min)
+    +GET /transaction/:id : list attachments
+    +GET /:id/download : stream attachment (RFC 5987 filename, ADR-036)
+    +DELETE /:id : delete attachment + file
+  }
+
+  class TagsRouter <<ADR-052>> {
+    +GET / : list tags (?is_active)
+    +POST / : find-or-create by slug
+    +PATCH /:id : update tag (color, is_active)
+    +DELETE /:id : soft-delete
+  }
+
+  class BulkActionsRoutes <<mounted on /api/transactions>> {
+    +POST /bulk-tag : add/remove tags on ≤500 transactions
+    +POST /bulk-delete : ≤500 ids OR ≤5000 filter matches
+    +POST /bulk-update : category / recipient / active update
+    +POST /bulk-export : CSV / NDJSON streamed export
   }
 }
 
@@ -275,6 +308,10 @@ Main --> InfoRouter
 Main --> AdminRouter
 Main --> AggregationsRouter
 Main --> ReportsRouter
+Main --> AiRouter
+Main --> AttachmentsRouter
+Main --> TagsRouter
+TransactionsRouter ..> BulkActionsRoutes : mounts bulk endpoints
 
 ' Nested route (RecipientsRouter mounts RecipientBankAccountsRouter at /recipients/:id/bank-accounts)
 RecipientsRouter ..> RecipientBankAccountsRouter : mounts at /recipients/:id/bank-accounts

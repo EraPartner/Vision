@@ -555,7 +555,7 @@ Input sanitization and XSS prevention utilities. These are pure functions (not R
 
 Shared processing module for statistics aggregation. `useStatistics` delegates pivot aggregation and recipient yearly aggregation to this module.
 
-**Code**: [[apps/frontend/src/hooks/statisticsProcessing.ts]]
+**Code**: [[apps/frontend/src/components/statistics/statisticsUtils.ts]]
 
 | Export | Description |
 |--------|-------------|

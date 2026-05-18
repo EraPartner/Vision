@@ -29,7 +29,7 @@ Symptoms observed:
 - Planned payments dated `2026-03-01` execute one day early when the server runs in `UTC` and the user is in `Europe/Brussels` during DST spring-forward.
 - Monthly aggregates count a `23:30 UTC` transaction on the 31st into the next month when rebucketed as `Europe/Brussels`.
 
-The refactor in [[docs/adr/..]] (Phase 2 dashboard + Phase 3 planned) removes client-side re-aggregation. Every aggregate becomes a single Postgres view or trigger-maintained table. Those Postgres objects need a deterministic notion of "what month is this transaction in" that matches the user's expectation.
+The refactor in [[docs/adr/index|ADR index]] (Phase 2 dashboard + Phase 3 planned) removes client-side re-aggregation. Every aggregate becomes a single Postgres view or trigger-maintained table. Those Postgres objects need a deterministic notion of "what month is this transaction in" that matches the user's expectation.
 
 ## Decision
 

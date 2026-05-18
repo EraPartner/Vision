@@ -1,0 +1,53 @@
+@startuml Dev Observability Flow
+title Dev-Only Observability — API Inspector (Cmd+Shift+A)
+
+!theme plain
+skinparam ranksep 50
+skinparam nodesep 30
+skinparam linetype ortho
+
+actor "Developer" as Dev
+
+package "Frontend  ·  dev build only" as FE {
+  node "Any domain hook\n(38 hooks emit automatically)" as Hook
+  node "apiRequest()\nlib/api/client.ts" as ApiClient
+  node "apiEventBus\nmodule pub-sub" as Bus
+  node "apiRequestLog\nring buffer (200)" as Log
+  node "queryMetrics\nTanStack stats aggregator" as Metrics
+  node "devtoolsHotkey\nCmd+Shift+A / Ctrl+Shift+A" as Hotkey
+  node "DevtoolsRoot (lazy)" as Root
+  node "ApiInspector\n(filter + virtualised list)" as Inspector
+}
+
+cloud "Backend API" as BE
+
+Hook --> ApiClient : useQuery / useMutation
+ApiClient --> BE  : fetch + auth header
+BE --> ApiClient  : envelope
+ApiClient --> Bus : emit ApiRequestEvent\n(start, success, error)
+Bus --> Log       : append (drop oldest)
+Bus --> Metrics   : update p50 / p95 / cache-hit
+Dev --> Hotkey    : keypress
+Hotkey --> Root   : import.meta.env.DEV gate
+Root --> Inspector: React.lazy + Suspense
+Inspector --> Log     : useApiRequestLog()
+Inspector --> Metrics : useQueryMetrics()
+
+note right of Inspector
+  Renders:
+   - request list (virtualised)
+   - request detail pane
+   - metrics panel (errors, cache hit)
+   - top endpoints (p50, p95)
+   - slow requests (>1s)
+   - in-flight counter on the toggle
+end note
+
+note right of Root
+  Tree-shaken in production:
+  dist/ contains zero devtools refs.
+  Zero cost when inspector is closed
+  (no subscribers on the event bus).
+end note
+
+@enduml

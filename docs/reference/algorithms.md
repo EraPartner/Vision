@@ -237,7 +237,7 @@ The algorithm uses **temporal pattern analysis** on transaction sequences.
 
 ## Currency Conversion Service
 
-**Location:** [[apps/node-backend/src/services/currencyConversionService.js]]
+**Location:** [[apps/node-backend/src/services/currency/currencyConversionService.js]]
 
 ### Problem Statement
 

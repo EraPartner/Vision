@@ -163,7 +163,7 @@ Rules:
 
 When `fx_rate_to_eur` is left empty, portfolio FX conversion uses historical rates from `exchange_rates` by transaction date; missing historical rows are auto-backfilled from ECB historical data on startup, with nearest stored DB rate as fallback.
 
-Code links: [[apps/frontend/src/components/portfolio/AddPortfolioTxnDialog.tsx]], [[apps/frontend/src/components/portfolio/EditPortfolioTxnDialog.tsx]], [[apps/frontend/src/hooks/usePortfolio.ts]], [[apps/node-backend/src/repositories/portfolioTransactionRepository.js]], [[apps/node-backend/src/services/currencyConversionService.js]], [[apps/node-backend/src/main.js]]
+Code links: [[apps/frontend/src/components/portfolio/AddPortfolioTxnDialog.tsx]], [[apps/frontend/src/components/portfolio/EditPortfolioTxnDialog.tsx]], [[apps/frontend/src/hooks/usePortfolio.ts]], [[apps/node-backend/src/repositories/portfolioTransactionRepository.js]], [[apps/node-backend/src/services/currency/currencyConversionService.js]], [[apps/node-backend/src/main.js]]
 
 ## Holdings Calculation
 
@@ -291,7 +291,7 @@ Current behavior:
 - Portfolio summaries now pre-group transactions by `investment_id` before per-investment calculations, reducing repeated global scans during render/memo recompute.
 - **Snapshot atomicity (2026-04-29)**: `computeAndStoreSnapshots()` now wraps DELETE + batched INSERTs in a single PostgreSQL transaction. This guarantees concurrent readers (e.g., `/api/info/net-worth` requests during startup warmup) see either fully-old or fully-new snapshots via MVCC, never a torn/partial table. Fixes a race condition where concurrent reads could trigger cache of zero portfolio value. See [[docs/adr/043-portfolio-snapshot-atomicity|ADR-043]].
 
-Code links: [[apps/node-backend/src/repositories/infoRepository.js]], [[apps/node-backend/tests/infoRepository.test.js]], [[apps/frontend/src/pages/portfolio/NetWorthPage.tsx]], [[apps/frontend/src/lib/api.ts]], [[apps/node-backend/src/services/portfolio/snapshotBuilder.js]]
+Code links: [[apps/node-backend/src/repositories/infoRepository.js]], [[apps/node-backend/tests/infoRepository.test.js]], [[apps/frontend/src/pages/portfolio/net-worth/NetWorthPage.tsx]], [[apps/frontend/src/lib/api.ts]], [[apps/node-backend/src/services/portfolio/snapshotBuilder.js]]
 
 ## Cross-Currency Display Normalization
 
@@ -368,7 +368,7 @@ When internet is unavailable and the backend cannot reach live price providers, 
 - If prices are >1 day old, age in days appears next to the date (e.g., "Prices as of 2026-04-25 (2 days old)").
 - If no live prices have ever been recorded, shows "No live prices recorded" to indicate data freshness uncertainty.
 
-Code links: [[apps/frontend/src/hooks/useOnlineStatus.ts]], [[apps/frontend/src/utils/priceStaleness.ts]], [[apps/frontend/src/components/portfolio/StalePriceIndicator.tsx]], [[apps/frontend/src/components/portfolio/StalePricesBanner.tsx]], [[apps/frontend/src/components/portfolio/PortfolioNewsFeed.tsx]], [[apps/frontend/src/pages/portfolio/PortfolioOverviewPage.tsx]], [[apps/frontend/src/pages/portfolio/PerformancePage.tsx]], [[apps/frontend/src/pages/portfolio/NetWorthPage.tsx]], [[apps/frontend/src/hooks/portfolio/useInvestments.ts]], [[apps/node-backend/src/services/reports/index.js]], [[apps/node-backend/src/repositories/investmentRepository.js]]
+Code links: [[apps/frontend/src/hooks/useOnlineStatus.ts]], [[apps/frontend/src/utils/priceStaleness.ts]], [[apps/frontend/src/components/portfolio/StalePriceIndicator.tsx]], [[apps/frontend/src/components/portfolio/StalePricesBanner.tsx]], [[apps/frontend/src/components/portfolio/PortfolioNewsFeed.tsx]], [[apps/frontend/src/pages/portfolio/PortfolioOverviewPage.tsx]], [[apps/frontend/src/pages/portfolio/PerformancePage.tsx]], [[apps/frontend/src/pages/portfolio/net-worth/NetWorthPage.tsx]], [[apps/frontend/src/hooks/portfolio/useInvestments.ts]], [[apps/node-backend/src/services/reports/index.js]], [[apps/node-backend/src/repositories/investmentRepository.js]]
 
 ## Performance Page Rewrite (Server-Computed Response)
 
@@ -406,7 +406,7 @@ The Performance page architecture was significantly refactored to move heavy com
 
 Code links: [[apps/frontend/src/pages/portfolio/PerformancePage.tsx]], [[apps/frontend/src/components/portfolio/PerformanceBreakdown.tsx]], [[apps/node-backend/src/routes/info.js]], [[apps/node-backend/src/services/portfolioPerformanceSnapshotService.js]]
 
-Code links: [[apps/frontend/src/pages/portfolio/PortfolioOverviewPage.tsx]], [[apps/frontend/src/pages/portfolio/PerformancePage.tsx]], [[apps/frontend/src/pages/portfolio/PortfolioTaxPage.tsx]], [[apps/frontend/src/pages/portfolio/StocksPage.tsx]], [[apps/frontend/src/pages/portfolio/CryptoPage.tsx]], [[apps/frontend/src/pages/portfolio/RealEstatePage.tsx]], [[apps/frontend/src/pages/portfolio/SavingsPage.tsx]], [[apps/frontend/src/pages/portfolio/MetalsPage.tsx]], [[apps/frontend/src/lib/api.ts]]
+Code links: [[apps/frontend/src/pages/portfolio/PortfolioOverviewPage.tsx]], [[apps/frontend/src/pages/portfolio/PerformancePage.tsx]], [[apps/frontend/src/pages/portfolio/tax/PortfolioTaxPage.tsx]], [[apps/frontend/src/pages/portfolio/StocksPage.tsx]], [[apps/frontend/src/pages/portfolio/CryptoPage.tsx]], [[apps/frontend/src/pages/portfolio/RealEstatePage.tsx]], [[apps/frontend/src/pages/portfolio/SavingsPage.tsx]], [[apps/frontend/src/pages/portfolio/MetalsPage.tsx]], [[apps/frontend/src/lib/api.ts]]
 
 ## Portfolio Summary: Single Source of Truth (Phase 14)
 

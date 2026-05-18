@@ -195,7 +195,7 @@ All 20 frontend page integration test files complete with 354 total tests. Key h
 | `apps/frontend/src/pages/__tests__/CategoriesPage.integration.test.tsx` | Component-integration | 18 | Category list, add/edit/delete dialogs, validation |
 | `apps/frontend/src/pages/__tests__/RecipientsPage.integration.test.tsx` | Component-integration | 18 | Recipient list, add/edit/delete dialogs, validation, insights button |
 | `apps/frontend/src/pages/__tests__/StatisticsPage.integration.test.tsx` | Component-integration | 13 | Analytics page, chart rendering, period/category filters |
-| `apps/frontend/src/pages/__tests__/PortfolioPages.integration.test.tsx` | Component-integration | 69 | Investments, Performance, Net Worth pages with data loading and chart states |
+| `apps/frontend/src/pages/__tests__/portfolio/PortfolioPages.integration.test.tsx` | Component-integration | 69 | Investments, Performance, Net Worth pages with data loading and chart states |
 | `apps/frontend/src/pages/__tests__/DashboardPage.integration.test.tsx` | Component-integration | 18 | Landing page, quick stats, recent activity, error states (full error + partial warning) |
 | `apps/frontend/src/pages/__tests__/AIChatPage.integration.test.tsx` | Component-integration | 15 | AI chat interface, message submission, error handling |
 | `apps/frontend/src/pages/__tests__/MarketLookupPage.integration.test.tsx` | Component-integration | 12 | Market data lookup, quote search, news display |
@@ -968,7 +968,7 @@ bun vitest run --test-name-pattern="testName"
 
 Validation runs (passed): `bun vitest run tests/currencyConversionService.test.js tests/routes/plannedTransactions.test.js tests/routes/transactions.test.js`; `npm test -- --coverage`
 
-Related code: [[apps/node-backend/src/services/currencyConversionService.js]], [[apps/node-backend/src/routes/plannedTransactions.js]], [[apps/node-backend/src/routes/transactions.js]]
+Related code: [[apps/node-backend/src/services/currency/currencyConversionService.js]], [[apps/node-backend/src/routes/plannedTransactions.js]], [[apps/node-backend/src/routes/transactions.js]]
 
 ### Test Updates (2026-04-22)
 
@@ -997,7 +997,7 @@ Related code: [[apps/node-backend/src/repositories/categoryRepository.js]], [[ap
 ### Incremental backend coverage addendum (2026-04-11)
 
 - [[apps/node-backend/tests/currencyConversionService.test.js]] adds a historical miss-cache regression scenario, verifying repeated historical misses do **not** cause duplicate DB lookups.
-- Related code: [[apps/node-backend/src/services/currencyConversionService.js]]
+- Related code: [[apps/node-backend/src/services/currency/currencyConversionService.js]]
 - Validation context (passed): `bun vitest run tests/currencyConversionService.test.js`; `npm test -- --coverage` (overall `74.18/59.54/78.47/77.68`).
 
 
@@ -1047,7 +1047,7 @@ Validation runs (passed):
 
 Coverage snapshot after this update: overall `81.12/66.86/84.49/84.53` and [[apps/node-backend/src/routes/info.js]] `93.62/78.72/100/94.58` (statements/branches/functions/lines).
 
-Related source links: [[apps/node-backend/src/routes/info.js]], [[apps/node-backend/src/database/connection.js]], [[apps/node-backend/src/services/recurringDetectionService.js]], [[apps/node-backend/src/services/materializedViewService.js]], [[apps/node-backend/src/services/currencyConversionService.js]], [[apps/node-backend/src/services/portfolioPerformanceSnapshotService.js]], [[docs/testing/testing|Testing Documentation]]
+Related source links: [[apps/node-backend/src/routes/info.js]], [[apps/node-backend/src/database/connection.js]], [[apps/node-backend/src/services/recurringDetectionService.js]], [[apps/node-backend/src/services/materializedViewService.js]], [[apps/node-backend/src/services/currency/currencyConversionService.js]], [[apps/node-backend/src/services/portfolioPerformanceSnapshotService.js]], [[docs/testing/testing|Testing Documentation]]
 
 ### Backend coverage addendum (2026-04-11, portfolio transaction repository)
 

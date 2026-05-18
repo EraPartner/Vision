@@ -10,7 +10,7 @@ last_modified: 2026-05-08
 tags: [api, transactions, finance, phase-5a, phase-9, phase-13, phase-q, decimal, money, export, drillthrough, filters, recipient-groups, bulk-actions]
 status: active
 aliases: [transactions-api, transaction-crud, financial-records, income, expenses]
-related_code: [[apps/node-backend/src/routes/transactions.js]], [[apps/node-backend/src/repositories/transactionRepository.js]], [[apps/node-backend/src/services/currencyConversionService.js]], [[apps/node-backend/src/services/bulkSelection.js]], [[apps/node-backend/src/services/transactionExport.js]]
+related_code: [[apps/node-backend/src/routes/transactions.js]], [[apps/node-backend/src/repositories/transactionRepository.js]], [[apps/node-backend/src/services/currency/currencyConversionService.js]], [[apps/node-backend/src/services/bulkSelection.js]], [[apps/node-backend/src/services/transactionExport.js]]
 ---
 
 # Transactions API
@@ -528,5 +528,5 @@ Recent coverage in [[apps/node-backend/tests/routes/transactions.test.js]] verif
 - unresolved `recipient_name`/`category_name` validation branches in patch flow
 
 Related services: 
-- [[apps/node-backend/src/services/currencyConversionService.js]]
+- [[apps/node-backend/src/services/currency/currencyConversionService.js]]
 - [[apps/node-backend/src/services/filterBuilder.js]] (shared filter construction)
