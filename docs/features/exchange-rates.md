@@ -9,7 +9,7 @@ aliases: [FX rates, currency rates, exchange rates page]
 related_code:
   - apps/frontend/src/pages/portfolio/ExchangeRatesPage.tsx
   - apps/node-backend/src/routes/info.js
-  - apps/node-backend/src/services/currencyConversionService.js
+  - apps/node-backend/src/services/currency/currencyConversionService.js
 ---
 
 # Exchange Rates Feature
@@ -81,7 +81,7 @@ Forces a fresh fetch from the ECB API:
 
 ### Fallback: Hardcoded Rates
 
-Defined in `FALLBACK_RATES` constant in `[[apps/node-backend/src/services/currencyConversionService.js]]`:
+Defined in `FALLBACK_RATES` constant in `[[apps/node-backend/src/services/currency/currencyConversionService.js]]`:
 - Covers ~40 currencies
 - Used when ECB data is unavailable or for rare currencies
 - Updated manually when significant rate changes occur

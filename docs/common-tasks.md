@@ -66,7 +66,7 @@ aliases: [common tasks, quick reference, i want to, task navigation, cheat sheet
 | Understand inflation adjustment | [[docs/features/portfolio\|Portfolio]] | [[docs/api/info\|Info API]] |
 | Update investment prices | [[docs/integrations/price-providers\|Price Providers]] | [[docs/api/investments\|Investments API]] |
 | View a past tax year without changing my live profile | [[docs/features/belgian-tax#historical-year-viewer-adr-058\|Belgian Tax Historical Year Viewer]] | [[docs/adr/058-belgian-tax-historical-year-snapshots\|ADR-058]], [[docs/features/portfolio-tax\|Portfolio Tax]] |
-| Create a profile snapshot for a historical year | [[docs/features/belgian-tax#historical-year-viewer-adr-058\|Historical Year Viewer]] | [[docs/components/tax/TaxYearSwitcher.tsx\|TaxYearSwitcher]] |
+| Create a profile snapshot for a historical year | [[docs/features/belgian-tax#historical-year-viewer-adr-058\|Historical Year Viewer]] | [[apps/frontend/src/components/tax/TaxYearSwitcher.tsx\|TaxYearSwitcher]] |
 | Freeze a tax year calculation to prevent engine drift | [[docs/features/belgian-tax#historical-year-extensions-adr-059\|Historical Year Extensions (ADR-059)]] | [[docs/adr/059-belgian-tax-historical-year-extensions\|ADR-059]], YearActionsMenu component |
 | Mark a tax year as filed with a reference number | [[docs/features/belgian-tax#historical-year-extensions-adr-059\|Historical Year Extensions (ADR-059)]] | [[docs/adr/059-belgian-tax-historical-year-extensions\|ADR-059]], MarkAsFiledDialog component |
 | Export a tax year as CSV for backup | [[docs/features/belgian-tax#historical-year-extensions-adr-059\|Historical Year Extensions (ADR-059)]] | [[docs/adr/059-belgian-tax-historical-year-extensions\|ADR-059]], exportTaxYearCsv module |

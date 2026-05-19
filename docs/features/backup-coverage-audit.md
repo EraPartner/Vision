@@ -305,4 +305,4 @@ Adding a table or localStorage key without updating the registries causes a CI f
 - [[docs/reference/api-endpoint-matrix#ipc-handlers--electron-desktop-phase-12|API Endpoint Matrix — IPC Section]] — All 8 backup/restore handlers
 - [[docs/features/settings|Settings Feature]] — Backup tab UI integration
 - [[docs/adr/022-electron-sandbox-hardening-and-recovery|ADR-022: Electron Sandbox Hardening]] — Security model for backup/restore
-- [[docs/adr/|Architecture Decision Records]]
+- [[docs/adr/index|Architecture Decision Records]]

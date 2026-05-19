@@ -224,4 +224,4 @@ Backend (`packaging/electron/i18n/en.json` + `nl.json`):
 - [[docs/adr/019-framer-motion-adoption|ADR-019: Framer Motion Adoption]] — Recovery page uses animation library
 - [[docs/features/settings|Settings Feature]] — Settings recovery flows
 - [[docs/security/data-protection|Data Protection Policy]] — Sandbox isolates renderer from file system
-- [[docs/architecture/electron-desktop-app|Electron Desktop App Architecture]] — Full Electron architecture
+- [[docs/architecture/electron|Electron Desktop App Architecture]] — Full Electron architecture

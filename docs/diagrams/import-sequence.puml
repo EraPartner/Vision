@@ -10,16 +10,24 @@ actor "User" as User
 
 participant "ImportPage" as Page
 participant "useImport" as Hook
-participant "ApiClient" as API
+participant "ApiClient\n(lib/api/imports.ts)" as API
 participant "Express" as Express
-participant "ImportRouter" as Router
-participant "RawTransactionImportService" as ImportService
+participant "importRoutes.js" as Router
+participant "importPipeline\n(stage / validate / match / commit)" as Pipeline
 participant "BankAdapters" as Adapter
-participant "DeduplicationService" as Dedup
+participant "DeduplicationService\n+ RecipientPatternService" as Dedup
 participant "RecipientRepository" as RecipientRepo
 participant "TransactionRepository" as TransRepo
+participant "ImportBatchRepository" as BatchRepo
 participant "RawTransactionRepository" as RawRepo
+participant "AggregationRefresh\n+ MaterializedViewService" as MV
 participant "PostgreSQL" as DB
+
+note over Pipeline
+  Phase C consolidation (2026): the legacy
+  RawTransactionPipeline + StreamingPipeline
+  are folded into a single importPipeline with 4 phases.
+end note
 
 group Step 1: User uploads CSV
   User -> Page : Upload CSV File
@@ -34,50 +42,50 @@ group Step 2: API call
 end
 
 group Step 3: Raw transaction import service
-  Router -> ImportService : importCSVWithRawStorage(filePath, bankName, config)
-  ImportService -> Adapter : createAdapter(bankName)
+  Router -> Pipeline : importCSVWithRawStorage(filePath, bankName, config)
+  Pipeline -> Adapter : createAdapter(bankName)
 
   alt Supported Bank
     Adapter -> Adapter : parse(filePath)
-    Adapter -> ImportService : TransactionData[]
+    Adapter -> Pipeline : TransactionData[]
   else Custom Config
-    ImportService -> Adapter : parse with custom config
+    Pipeline -> Adapter : parse with custom config
   end
 end
 
 group Step 4: Raw storage + deduplication
   loop For each transaction
-    ImportService -> RawRepo : insert(rawData, hash)
-    ImportService -> Dedup : isDuplicateByFields(date, amount, recipient, memo)
+    Pipeline -> RawRepo : insert(rawData, hash)
+    Pipeline -> Dedup : isDuplicateByFields(date, amount, recipient, memo)
     Dedup -> DB : check existing hash
    
     alt Not duplicate
-      ImportService -> RecipientRepo : getOrCreateRecipient(name)
+      Pipeline -> RecipientRepo : getOrCreateRecipient(name)
       RecipientRepo -> DB : INSERT ON CONFLICT
       DB -> RecipientRepo : recipient_id
-      RecipientRepo -> ImportService : recipientId
+      RecipientRepo -> Pipeline : recipientId
     else Duplicate
-      Dedup -> ImportService : skip
+      Dedup -> Pipeline : skip
     end
   end
 end
 
 group Step 5: Batch Insert
-  ImportService -> TransRepo : batchInsert(transactions)
+  Pipeline -> TransRepo : batchInsert(transactions)
   TransRepo -> DB : INSERT (250 rows/batch)
   DB -> TransRepo : inserted_count
 end
 
 group Step 6: Response
-  TransRepo -> ImportService : results {imported, duplicates, errors}
-  ImportService -> Router : ImportResult
+  TransRepo -> Pipeline : results {imported, duplicates, errors}
+  Pipeline -> Router : ImportResult
   Router -> API : JSON
   API -> Hook : ImportResult
   Hook -> Page : update UI
   Page -> User : Show Summary
 end
 
-note over ImportService
+note over Pipeline
   Phase 1: Dedup + Recipient Resolution
   Phase 2: Raw storage (audit/re-import)
   Phase 3: Batch Insert (250 rows)

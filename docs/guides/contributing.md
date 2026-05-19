@@ -318,7 +318,7 @@ bun run db:revision -- "add new_column to transactions"
 Link to code files using Obsidian-style links:
 
 ```markdown
-See [[apps/node-backend/src/services/importService.js]] for implementation.
+See [[apps/node-backend/src/services/importPipeline/index.js]] for implementation.
 ```
 
 ## AI Agent Guidelines

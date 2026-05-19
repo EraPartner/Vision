@@ -3,36 +3,36 @@ title: Error Codes Reference
 type: reference
 status: active
 date: 2026-03-31
-tags: [reference, errors, api, responses, status-codes]
-description: Complete reference of all API error responses, status codes, and error formats used by the Vision backend
+updated: 2026-05-16
+tags: [reference, errors, api, responses, status-codes, envelope, adr-026]
+description: Complete reference of all API error responses, status codes, and error formats used by the Vision backend. All responses use the unified envelope (ADR-026).
 aliases: [error codes, error responses, status codes, HTTP errors, API errors, error handling]
 ---
 
 # Error Codes Reference
 
 > [!abstract] Overview
-> All error responses returned by the Vision API. Every error follows the same format for predictable handling.
+> All error responses returned by the Vision API use the unified envelope defined in [[docs/adr/026-unified-api-response-envelope|ADR-026]]. Route handlers throw typed errors (`AppError`, `ValidationError`, `NotFoundError`, `ConflictError`, `UnauthorizedError`, `ForbiddenError`); the central error handler shapes them.
 
 ## Error Format
 
-All error responses use this structure:
+Every API response — success or failure — uses this envelope shape:
 
 ```json
-{
-  "detail": "Human-readable error message"
-}
+// success
+{ "ok": true, "data": { /* … */ }, "meta": { "requestId": "…" } }
+
+// failure
+{ "ok": false, "error": { "code": "VALIDATION_ERROR", "message": "Amount must be a non-zero number", "details": { /* optional, non-sensitive */ } }, "meta": { "requestId": "…" } }
 ```
 
-Some endpoints include additional fields:
+- `error.code` is a stable, machine-readable identifier from `@vision/types/errors` (`ApiErrorCode`). Client error handling switches on `code`, never on `message`.
+- `error.message` is human-readable and may be redacted in production for untyped 500s.
+- `error.details` is optional and carries non-sensitive debug info (e.g. field-level Zod issues for validation errors).
+- `meta.requestId` is always present when the request went through the `requestId` middleware (every API request does).
 
-```json
-{
-  "detail": "Validation error",
-  "errors": [
-    { "field": "amount", "message": "Must be a non-zero number" }
-  ]
-}
-```
+> [!info] Legacy `{ "detail": "…" }` shape removed
+> Pre-ADR-026 endpoints returned `{ "detail": "…" }`. That shape no longer exists anywhere in the backend. The envelope is enforced by `middleware/envelope.js` (success) and `middleware/errorHandler.js` (failure); the unit `tests/contract/responseEnvelope.test.js` blocks regressions.
 
 ## Status Codes
 

@@ -351,7 +351,7 @@ The following component-integration tests are now available, with all 20 fronten
 | `apps/frontend/src/pages/__tests__/CategoriesPage.integration.test.tsx` | Categories management | 18 |
 | `apps/frontend/src/pages/__tests__/RecipientsPage.integration.test.tsx` | Recipients management | 18 |
 | `apps/frontend/src/pages/__tests__/StatisticsPage.integration.test.tsx` | Statistics and analytics | 13 |
-| `apps/frontend/src/pages/__tests__/PortfolioPages.integration.test.tsx` | Portfolio (investments, performance, net worth) | 69 |
+| `apps/frontend/src/pages/__tests__/portfolio/PortfolioPages.integration.test.tsx` | Portfolio (investments, performance, net worth) | 69 |
 | `apps/frontend/src/pages/__tests__/DashboardPage.integration.test.tsx` | Dashboard landing page with error-state coverage | 18 |
 | `apps/frontend/src/pages/__tests__/AIChatPage.integration.test.tsx` | AI Chat feature | 15 |
 | `apps/frontend/src/pages/__tests__/MarketLookupPage.integration.test.tsx` | Market lookup/quotes | 12 |
@@ -430,7 +430,7 @@ await screen.findByRole("heading");
 
 **Pattern:** Pages that load async data and render empty states (e.g., PerformancePage) are especially prone to this. Just `await findByRole(...)` is sufficient.
 
-**Example in code:** [[apps/frontend/src/pages/__tests__/PortfolioPages.integration.test.tsx]] (PerformancePage) removed `.toBeInTheDocument()` after awaited `findByRole`.
+**Example in code:** [[apps/frontend/src/pages/__tests__/portfolio/PortfolioPages.integration.test.tsx]] (PerformancePage) removed `.toBeInTheDocument()` after awaited `findByRole`.
 
 ### Multiple Same Elements: Use findAllByRole
 

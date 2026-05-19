@@ -133,7 +133,7 @@ The backend's admin API (`/api/admin/*`) is protected by:
 
 **Important:** If you modify `docker-compose.yml` to change the port binding from `127.0.0.1` to `0.0.0.0`, you **must** set `ADMIN_AUTH_TOKEN` to prevent LAN access to dangerous admin operations. See [[docs/adr/037-admin-auth-localhost-fallback|ADR-037]] for details.
 
-**Critical synchronization:** Any named volumes added to `docker-compose.yml` **must also be added** to `packaging/electron/resources/docker-compose.yml` (the embedded Electron app compose file). Omitting a volume from the embedded file causes data loss on updates — see [[docs/guides/cicd-pipelines#3-verify-compose-sync--docker-compose-sync-check|CI/CD Pipelines: Verify Compose Sync]] and [[docs/adr/046-named-volumes-attachment-wipe-bug|ADR-046]] for details.
+**Critical synchronization:** Any named volumes added to `docker-compose.yml` **must also be added** to `packaging/electron/resources/docker-compose.yml` (the embedded Electron app compose file). Omitting a volume from the embedded file causes data loss on updates — see [[docs/guides/cicd-pipelines#3-verify-compose-sync--docker-compose-sync-check|CI/CD Pipelines: Verify Compose Sync]] and [[docs/adr/051-docker-compose-sync-named-volumes|ADR-046]] for details.
 
 ### 7. Container Hardening
 

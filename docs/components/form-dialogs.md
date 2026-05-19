@@ -18,8 +18,8 @@ Modal dialog components for creating, editing data, and configuring application 
 | Component | Description | File |
 |-----------|-------------|------|
 | AddTransactionDialog | Add new transaction | [[apps/frontend/src/components/forms/AddTransactionDialog.tsx\|AddTransactionDialog.tsx]] |
-| AddCategoryDialog | Add new category | [[apps/frontend/src/components/forms/AddCategoryDialog.tsx\|AddCategoryDialog.tsx]] |
-| AddRecipientDialog | Add new recipient | [[apps/frontend/src/components/forms/AddRecipientDialog.tsx\|AddRecipientDialog.tsx]] |
+| AddCategoryDialog | Add new category | [[apps/frontend/src/features/categories/AddCategoryDialog.tsx\|AddCategoryDialog.tsx]] |
+| AddRecipientDialog | Add new recipient | [[apps/frontend/src/features/recipients/AddRecipientDialog.tsx\|AddRecipientDialog.tsx]] |
 
 ---
 
@@ -457,7 +457,7 @@ Two-step dialog for merging duplicate recipients. Users first select a primary r
 - Filters out already-aliased entries from the alias selection
 - Portal container support for dialog focus trap compatibility
 
-**Code**: [[apps/frontend/src/components/recipients/MergeRecipientsDialog.tsx]]
+**Code**: [[apps/frontend/src/features/recipients/MergeRecipientsDialog.tsx]]
 
 ---
 
@@ -620,7 +620,7 @@ Two-step dialog for merging duplicate recipients.
 3. Uses `useMergeRecipients` hook for the merge operation
 4. Paginates all recipients and filters out already-aliased entries
 
-**Code**: [[apps/frontend/src/components/recipients/MergeRecipientsDialog.tsx]]
+**Code**: [[apps/frontend/src/features/recipients/MergeRecipientsDialog.tsx]]
 
 ---
 

@@ -1,0 +1,71 @@
+@startuml Backup AEAD Encryption (v2)
+title Backup AEAD Encryption (v2 — AES-256-GCM)
+
+!theme plain
+skinparam participantSpacing 10
+skinparam ranksep 50
+
+actor "User" as User
+
+participant "BackupTab\n(settings)" as UI
+participant "useBackup" as Hook
+participant "Electron main\n(packaging/electron/main.js)" as Main
+participant "backup service\n(backup/coverage.js)" as Backup
+database  "PostgreSQL" as DB
+participant "Attachments\n($ATTACHMENTS_DIR)" as Files
+participant "localStorage\n(frontend-state)" as LS
+
+group Create backup
+  User -> UI : click "Create backup"\n(+ optional passphrase)
+  UI -> Hook : useBackup.create({ passphrase? })
+  Hook -> Main : ipc invoke 'backup:run'
+  Main -> DB   : pg_dump  >>  bundle/db.sql
+  Main -> Files: copy $ATTACHMENTS_DIR/* >> bundle/attachments/
+  Main -> LS   : snapshot (theme, preferences) >> bundle/frontend-state.json
+  Main -> Backup: encryptBundle(bundle, passphrase)
+  Backup -> Backup : v2 header (magic + version + salt)\n+ scrypt(passphrase, salt, N=2^15)\n+ AES-256-GCM(plaintext, key, iv, aad=email)
+  Backup -> Main : { ciphertext, iv, tag, salt }
+  Main -> Files : write .visionbak.enc
+  Main -> UI    : { ok, sha256, bytes, path }
+  UI -> User    : toast (checksum + size)
+end
+
+group Restore backup
+  User -> UI    : select .visionbak.enc
+  UI -> Main    : ipc invoke 'backup:restore'
+  Main -> Backup: detect magic header
+  alt v2 encrypted, no passphrase yet
+    Backup -> Main : PASSPHRASE_REQUIRED
+    Main -> UI     : prompt
+    User -> UI     : passphrase
+    UI -> Main     : retry with passphrase
+  end
+  Main -> Backup : decryptBundle(file, passphrase)
+  Backup -> Backup : AES-256-GCM verify auth tag\n(detects tampering)
+  alt schema check
+    Backup -> Main : BUNDLE_SCHEMA_NEWER
+    Main -> UI     : "upgrade Vision first"
+  end
+  Main -> DB    : pg_restore  (drop + recreate user data)
+  Main -> Files : swap $ATTACHMENTS_DIR
+  Main -> LS    : hydrate frontend-state.json
+  Main -> UI    : { ok }
+  UI -> User    : reload window
+end
+
+note right of Backup
+  v2 upgrade (ADR-040):
+  - AES-256-GCM AEAD (was CBC + manual mac)
+  - per-backup random salt (was static)
+  - scrypt N=2^15 (was 2^14)
+  - v1 files still readable via magic-header
+    dispatch.
+end note
+
+note right of Main
+  Coverage: 31 user-data tables
+  + attachments + 9 localStorage keys.
+  CI enforces coverage on every migration.
+end note
+
+@enduml

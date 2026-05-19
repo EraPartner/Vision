@@ -7,7 +7,7 @@ last_modified: 2026-04-25
 tags: [performance, caching, optimization, startup, dependency-ordering]
 description: In-memory caching implementation for exchange rates and price feeds
 aliases: [caching, cache layers, in-memory cache, ttl, cache invalidation]
-related_code: ["apps/node-backend/src/services/currencyConversionService.js", "apps/node-backend/src/services/priceProviderService.js"]
+related_code: ["apps/node-backend/src/services/currency/currencyConversionService.js", "apps/node-backend/src/services/priceProviderService.js"]
 ---
 
 # Caching Strategies

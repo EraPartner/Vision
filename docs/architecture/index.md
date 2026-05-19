@@ -46,6 +46,13 @@ Located in `docs/diagrams/`:
 | Price Provider | Investment price updates from external APIs | `price-provider-flow.puml` |
 | Recurring Detection | Automatic recurring transaction detection | `recurring-detection-flow.puml` |
 | Materialized Views | View refresh on startup and schedules | `materialized-view-flow.puml` |
+| AI Chat Tool Loop | Ollama tool-call loop with repository dispatch | `ai-chat-tool-loop.puml` |
+| Backup AEAD Encryption | AES-256-GCM v2 bundle create + restore (ADR-040) | `backup-aead-encryption.puml` |
+| Dev Observability | API event bus → ring buffer → Cmd+Shift+A Inspector | `dev-observability-flow.puml` |
+
+## Interactive Flow Visualizer
+
+For an interactive companion to these diagrams, open `docs/flow-visualizer.html` — a single-page HTML map of all packages and 15 end-to-end flows. Click a flow to highlight the path, step through it, and inspect the payload at every hop. Data lives in an embedded JSON block; extending it is a copy-paste.
 
 ## Frontend Diagrams
 

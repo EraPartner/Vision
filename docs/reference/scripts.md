@@ -3,145 +3,179 @@ title: Package.json Scripts Reference
 type: reference
 status: active
 date: 2026-04-29
-updated: 2026-05-02
+updated: 2026-05-16
 tags: [reference, scripts, npm, bun, build, commands, phase-1, testing, e2e, mutation-testing]
-description: Complete reference of all npm/bun scripts available in the Vision project
+description: Complete reference of all npm/bun scripts available in the Vision project — root, frontend workspace, and backend workspace.
 aliases: [scripts, npm scripts, bun scripts, commands, build commands, run commands]
 ---
 
 # Package.json Scripts Reference
 
 > [!abstract] Overview
-> All available scripts from the root `package.json`. Run with `bun run <script-name>`.
+> Vision is a Bun workspace with scripts at three levels: the repo root (`package.json`), the frontend (`apps/frontend/package.json`), and the backend (`apps/node-backend/package.json`). The tables below mirror those three files verbatim.
 
-## Development
+> [!info] Workspace conventions
+> - Root scripts dispatch into workspaces via `bun run --filter '<pkg-name>' <script>`.
+> - Frontend workspace name: `vision-frontend`. Backend: `financial-transaction-manager-node`.
+> - Run a workspace script from anywhere with `bun --cwd apps/frontend run <script>` or the root proxy if present.
 
-| Script | Command | Description | When to Use |
-|--------|---------|-------------|-------------|
-| `dev` | `concurrently "bun --cwd apps/node-backend run dev" "bun --cwd apps/frontend run dev"` | Run both backend and frontend dev servers | Daily development |
-| `dev:backend` | `bun --cwd apps/node-backend run dev` | Run only backend dev server | Backend-only work |
-| `dev:frontend` | `bun --cwd apps/frontend run dev` | Run only frontend dev server | Frontend-only work |
+## Root scripts (`package.json`)
 
-## Build
-
-| Script | Command | Description | When to Use |
-|--------|---------|-------------|-------------|
-| `build` | `bun --cwd apps/frontend run build && bun run locale:generate` | Production build + locale generation | Before deployment |
-| `build:dev` | `bun --cwd apps/frontend run build:dev` | Development build (no minification) | Debugging build issues |
-| `build:backend` | `bun --cwd apps/node-backend run build` | Backend build | Backend deployment |
-| `locale:generate` | `node scripts/generate-locales.js` | Generate TypeScript locale files from JSON | After adding translation keys |
-
-## Linting & Quality
-
-| Script | Command | Description | When to Use |
-|--------|---------|-------------|-------------|
-| `lint` | `eslint apps/frontend/src` | ESLint on frontend code | Before committing |
-| `lint:fix` | `eslint apps/frontend/src --fix` | ESLint with auto-fix | Fixing lint errors |
-| `typecheck` | `bun --cwd apps/frontend run typecheck` | TypeScript type checking | Before committing |
-
-## Security & Dependency Hygiene
-
-| Script / Command | Command | Description | When to Use |
-|--------|---------|-------------|-------------|
-| `bun audit` | `bun audit` | Scan lockfile/dependencies for known vulnerabilities | Before release, after dependency updates |
-| `bun update` | `bun update` | Refresh dependency graph to latest allowed versions | Planned maintenance windows |
-
-For transitive vulnerability remediation patterns, see [[docs/security/dependency-security-remediation-2026-04|Dependency Security Remediation (2026-04)]] and root config in [[package.json]].
-
-## Testing
-
-### Backend
-
-| Script | Command | Description | When to Use |
-|--------|---------|-------------|-------------|
-| `test` | `bun --cwd apps/node-backend vitest run` | Run all backend tests | Before committing |
-| `test:watch` | `bun --cwd apps/node-backend vitest` | Watch mode for backend tests | During test development |
-| `test:coverage` | `bun --cwd apps/node-backend vitest run --coverage` | Run tests with coverage | Coverage reporting |
-
-### Frontend
-
-| Script | Command | Description | When to Use |
-|--------|---------|-------------|-------------|
-| `test:frontend` | `bun --cwd apps/frontend vitest run` | Run all frontend unit + integration tests (Vitest + RTL + MSW) | Before committing |
-| `test:frontend:watch` | `bun --cwd apps/frontend vitest` | Watch mode for frontend tests | During test development |
-| `test:coverage` | `bun --cwd apps/frontend vitest run --coverage` | Run frontend tests with V8 coverage | Coverage reporting (Phase F1: 17/11/10/18) |
-| `test:e2e` | `bun run --filter 'vision-frontend' test:e2e` | Run Playwright E2E tests (smoke, dialogs-edge, critical-flows, mutations-parity, network-drift, a11y) | Before pushing; validates real browser behavior |
-| `test:e2e:visual` | `bun run --filter 'vision-frontend' test:e2e:visual` | Update Playwright visual regression baselines | After intentional visual changes |
-| `test:e2e:update-snapshots` | `bun run --filter 'vision-frontend' test:e2e:update-snapshots` | Update all Playwright snapshots | After intentional changes to pages |
-| `test:mutation` | `bun --cwd apps/frontend run test:mutation` | Run Stryker mutation testing on scoped modules (currency + API client) | Measure test quality baseline (opt-in, not in CI) |
-
-## Database
-
-Alembic is the single source of schema DDL ([[docs/adr/027-alembic-single-source-of-schema|ADR-027]]). The node-backend shells out to `alembic upgrade head` on startup via `src/database/migrate.js`; there is no longer a `schemaInit.js` idempotent bootstrap.
-
-### Root-scoped (repo root `package.json`)
-
-| Script | Command | Description | When to Use |
-|--------|---------|-------------|-------------|
-| `db:upgrade` | `venv/bin/alembic -c config/alembic.ini upgrade head` | Run all pending migrations | After pulling new migrations |
-| `db:downgrade` | `venv/bin/alembic -c config/alembic.ini downgrade -1` | Roll back the latest migration | Migration recovery/testing |
-| `db:current` | `venv/bin/alembic -c config/alembic.ini current` | Show current migration version | Verify schema state |
-| `db:history` | `venv/bin/alembic -c config/alembic.ini history` | Show migration history | Inspect revision chain |
-| `db:stamp` | `venv/bin/alembic -c config/alembic.ini stamp head` | Mark DB at a revision without running migrations | Recovery/bootstrap workflows |
-| `db:revision` | `venv/bin/alembic -c config/alembic.ini revision --autogenerate -m` | Create new migration | After schema changes |
-
-### Backend-scoped (`apps/node-backend/package.json`)
-
-Shorthand wrappers that resolve the repo root and invoke alembic directly. Run from `apps/node-backend/` or via `bun --cwd apps/node-backend run <script>`.
+### Install / development
 
 | Script | Command | Description |
 |--------|---------|-------------|
-| `db:migrate` | `alembic upgrade head` | Apply all pending migrations |
-| `db:migrate:down` | `alembic downgrade -1` | Revert the latest migration |
-| `db:new-migration` | `alembic revision -m <slug>` | Create a new empty revision |
-| `db:reset` | `alembic downgrade base && alembic upgrade head` | Wipe and reapply the full chain |
+| `install:all` | `bun install` | Install workspace dependencies (frontend + backend + packages/types). |
+| `dev` | `concurrently … backend dev … frontend dev` | Run both workspaces' `dev` scripts in parallel with coloured prefixes. |
+| `backend` | `bun run --filter '…-node' start` | Start the backend in production mode (no watcher). |
+| `update` | `bun update` | Refresh dependency graph to the latest allowed versions. |
 
-## Docker
+### Build
 
-| Script | Command | Description | When to Use |
-|--------|---------|-------------|-------------|
-| `docker:dev` | `npm run generate-locales-if-not-ci && docker compose -f docker-compose.yml -f docker-compose.dev.yml up` | Start dev environment with Docker | Docker-based development |
-| `docker:dev:down` | `docker compose -f docker-compose.yml -f docker-compose.dev.yml down` | Stop Docker dev environment | Stopping Docker |
-| `docker:dev:rebuild` | `npm run generate-locales-if-not-ci && docker compose -f docker-compose.yml -f docker-compose.dev.yml down && docker compose -f docker-compose.yml -f docker-compose.dev.yml up --build` | Rebuild Docker containers | After Dockerfile changes |
-| `docker:clean` | `npm run generate-locales-if-not-ci && docker compose -f docker-compose.yml -f docker-compose.clean.yml up --build` | Start clean-slate environment | First-run/onboarding testing |
-| `docker:clean:down` | `npm run generate-locales-if-not-ci && docker compose -f docker-compose.yml -f docker-compose.clean.yml down` | Stop clean-slate environment | End clean test run |
-| `docker:clean:reset` | `npm run generate-locales-if-not-ci && docker compose -f docker-compose.yml -f docker-compose.clean.yml down -v && docker compose -f docker-compose.yml -f docker-compose.clean.yml up --build` | Reset clean volume and restart | Repeat clean-state tests |
-| `docker:logs` | `docker compose -f docker-compose.yml -f docker-compose.dev.yml logs -f app` | Tail backend logs | Runtime debugging |
+| Script | Command | Description |
+|--------|---------|-------------|
+| `build` | `npm run generate-locales-if-not-ci && bun run --filter 'vision-frontend' build` | Production frontend build, preceded by locale generation outside CI. |
+| `build:dev` | `bun run --filter 'vision-frontend' build:dev` | Frontend build in development mode (no minification). |
+| `dist` | `npm run build && cd packaging/electron && npm run dist` | Full Electron desktop build (signs + notarises on macOS in CI). |
+| `preview` | `bun run --filter 'vision-frontend' preview` | Serve the built frontend bundle locally for smoke-testing. |
+| `generate:types` | `openapi-typescript openapi.yaml -o apps/frontend/src/types/generated.ts` | Regenerate the TypeScript types from `openapi.yaml` (ADR-031). |
 
-## Electron
+### Locales
 
-| Script | Command | Description | When to Use |
-|--------|---------|-------------|-------------|
-| `electron:dev` | `bun run build:dev && electron .` | Run Electron app in dev mode | Desktop app development |
-| `electron:prod` | `bun run build && electron .` | Run Electron app in prod mode | Testing production desktop build |
+| Script | Command | Description |
+|--------|---------|-------------|
+| `generate-locales` | `node scripts/generate-locales.js` | Build typed `en.ts` / `nl.ts` from `i18n/source/*.json`. |
+| `generate-locales-if-not-ci` | conditional `node scripts/generate-locales.js` | Skipped automatically inside CI (`$CI` set). |
+| `sanitize-locales` | `node scripts/generate-locales.js --sanitize-only` | Normalise quotes / whitespace in existing locale bundles. |
+| `sync-nl` | `node scripts/sync-nl-with-en.js` | Add any keys present in `en.json` but missing in `nl.json` (placeholder Dutch). |
+| `validate-locales` | `node scripts/validate-locales.js` | Parity check between `en.json` and `nl.json`; fails CI on drift. |
 
-## Quick Reference by Task
+### Linting
 
-### Starting Development
+| Script | Command | Description |
+|--------|---------|-------------|
+| `lint` | `bun run --filter 'vision-frontend' lint` | ESLint on the frontend workspace. |
+| `lint:backend` | `bun run --filter '…-node' lint` | ESLint on the backend workspace. |
+
+### Testing
+
+| Script | Command | Description |
+|--------|---------|-------------|
+| `test` | `bun run --filter '…-node' test` | Backend unit + integration tests (Vitest). |
+| `test:frontend` | `bun run --filter 'vision-frontend' test` | Frontend unit + integration tests (Vitest + RTL + MSW). |
+| `test:all` | `concurrently … backend test … frontend test` | Run both test suites in parallel. |
+| `test:watch` | `bun run --filter '…-node' test:watch` | Backend tests in watch mode. |
+| `test:coverage` | `bun run --filter 'vision-frontend' test:coverage` | Frontend test coverage (V8). |
+| `test:e2e` | `bun run --filter 'vision-frontend' test:e2e` | Playwright E2E (smoke, dialogs-edge, critical-flows, mutations-parity, network-drift, a11y). |
+| `test:e2e:visual` | `bun run --filter 'vision-frontend' test:e2e:visual` | Update visual regression baselines that are missing. |
+
+### Database (Alembic)
+
+Alembic is the single source of schema DDL ([[docs/adr/027-alembic-single-source-of-schema|ADR-027]]). The node-backend shells out to `alembic upgrade head` on startup via `src/database/migrate.js`.
+
+| Script | Command | Description |
+|--------|---------|-------------|
+| `db:upgrade` | `venv/bin/alembic -c config/alembic.ini upgrade head` | Apply all pending migrations. |
+| `db:downgrade` | `venv/bin/alembic -c config/alembic.ini downgrade -1` | Roll back the latest migration. |
+| `db:current` | `venv/bin/alembic -c config/alembic.ini current` | Show the current migration version. |
+| `db:history` | `venv/bin/alembic -c config/alembic.ini history` | Show migration history. |
+| `db:stamp` | `venv/bin/alembic -c config/alembic.ini stamp head` | Mark DB at a revision without running migrations. |
+| `db:revision` | `venv/bin/alembic … revision --autogenerate -m` | Create a new migration. |
+| `db:index-stats` | `bun run apps/node-backend/scripts/index-stats.js` | Dump per-index usage stats from `pg_stat_user_indexes`. |
+| `db:precision-drift` | `bun run apps/node-backend/scripts/check-precision-drift.js` | Check NUMERIC columns for precision drift across snapshots. |
+
+### Docker
+
+| Script | Command | Description |
+|--------|---------|-------------|
+| `docker:dev` | `… docker compose -f docker-compose.yml -f docker-compose.dev.yml up` | Start the dev stack (Postgres + app). |
+| `docker:dev:down` | `docker compose … down` | Stop the dev stack. |
+| `docker:dev:rebuild` | `… down && … up --build` | Rebuild app image. |
+| `docker:clean` | `… -f docker-compose.clean.yml up --build` | Start a first-run / onboarding stack. |
+| `docker:clean:down` | `docker compose … down` | Stop the clean stack. |
+| `docker:clean:reset` | `… down -v && … up --build` | Reset clean volumes and restart. |
+| `docker:logs` | `docker compose … logs -f app` | Tail backend logs. |
+
+### Electron
+
+The wrappers spawn Electron from `packaging/electron/`, layering a docker-compose override based on the desired flavour.
+
+| Script | Command | Description |
+|--------|---------|-------------|
+| `electron:dev` | `… VISION_COMPOSE_OVERRIDE=docker-compose.dev.yml electron …` | Run Electron against the dev compose stack. |
+| `electron:prod` | `… electron packaging/electron/main.js` | Run Electron against the base compose stack. |
+| `electron:clean` | `… VISION_COMPOSE_OVERRIDE=docker-compose.clean.yml electron …` | Run Electron against the clean compose stack. |
+
+## Frontend workspace scripts (`apps/frontend/package.json`)
+
+| Script | Command | Description |
+|--------|---------|-------------|
+| `dev` | `vite` | Vite dev server with HMR (port 5174). |
+| `build` | `GENERATE_LOCALES_AST=1 node ../../scripts/generate-locales.js && vite build` | Locale codegen + Vite production build. |
+| `build:dev` | `vite build --mode development` | Build without minification, useful for debugging. |
+| `preview` | `vite preview` | Serve the production build at a local port. |
+| `lint` | `eslint .` | Frontend ESLint. |
+| `test` | `vitest run` | Vitest one-shot. |
+| `test:coverage` | `vitest run --coverage` | Vitest with V8 coverage. |
+| `test:e2e` | `playwright test e2e/{smoke,dialogs-edge,critical-flows,mutations-parity,network-drift,a11y}.spec.ts` | Playwright real-browser suite. |
+| `test:e2e:visual` | `playwright test --update-snapshots=missing e2e/visual.spec.ts` | Add missing visual baselines (does not overwrite existing). |
+| `test:e2e:update-snapshots` | `playwright test --update-snapshots` | Overwrite *all* Playwright snapshots — run after intentional UI changes. |
+| `test:mutation` | `stryker run` | Stryker mutation testing on scoped modules (currency + API client). Opt-in; not in CI. |
+
+## Backend workspace scripts (`apps/node-backend/package.json`)
+
+| Script | Command | Description |
+|--------|---------|-------------|
+| `start` | `bun run src/main.js` | Production-mode backend (no watcher). |
+| `dev` | `bun --watch src/main.js` | Backend dev server with watch reload (port 3002). |
+| `test` | `bun vitest run` | Vitest one-shot. |
+| `test:watch` | `bun vitest` | Vitest watch mode. |
+| `lint` | `eslint src/` | Backend ESLint. |
+| `lint:fix` | `eslint src/ --fix` | Backend ESLint with auto-fix. |
+| `db:migrate` | `cd ../.. && alembic upgrade head` | Backend-relative wrapper around `db:upgrade`. |
+| `db:migrate:down` | `cd ../.. && alembic downgrade -1` | Backend-relative wrapper around `db:downgrade`. |
+| `db:new-migration` | `cd ../.. && alembic revision -m` | Create a new empty revision. |
+| `db:reset` | `cd ../.. && alembic downgrade base && alembic upgrade head` | Wipe and reapply the full chain. |
+
+## Quick reference by task
+
+### Daily development
+
 ```bash
-bun run docker:dev    # Start Docker stack (db + app)
-bun run dev           # Optional web-only frontend+backend loop
+bun run docker:dev    # Postgres + backend in containers
+bun run dev           # Optional: frontend + backend dev servers without docker
 ```
 
-### Before Committing
+### Before committing
+
 ```bash
-bun run lint          # Check code quality
-bun run test          # Run tests
-bun run db:upgrade    # Apply any new migrations
+bun run lint && bun run lint:backend
+bun run test:all
+bun run validate-locales
 ```
 
-### Adding a Feature
+### Adding a migration
+
 ```bash
-bun run db:revision -- "describe_change"  # Create migration
-bun run dev                               # Test locally
-bun run test                              # Verify tests pass
+bun run db:revision -- "describe_change"
+# edit alembic/versions/<n>_describe_change.py
+bun run db:upgrade
 ```
 
-### Deploying
+### Building a desktop release
+
 ```bash
-bun run build         # Production build
-# Then deploy via Docker or Electron packaging
+bun run dist          # Builds frontend + packs Electron app via packaging/electron
 ```
+
+### Security & dependency hygiene
+
+```bash
+bun audit             # Vulnerability scan
+bun update            # Refresh dependency graph
+```
+
+For transitive vulnerability remediation patterns, see [[docs/security/dependency-security-remediation-2026-04|Dependency Security Remediation (2026-04)]].
 
 ## Related
 

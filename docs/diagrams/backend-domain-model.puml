@@ -243,6 +243,81 @@ package "Supporting Entities" {
   }
 }
 
+package "Storage & Observability (May 2026)" {
+  class Attachment {
+    +id: bigint
+    +transaction_id: integer <<FK>>
+    +stored_path: text
+    +mime_type: text
+    +size_bytes: bigint
+    +original_filename: text
+    +created_at: timestamptz
+  }
+
+  class AiConversation {
+    +id: uuid
+    +title: text
+    +messages: jsonb
+    +tool_transcripts: jsonb
+    +created_at: timestamptz
+    +updated_at: timestamptz
+  }
+
+  class ProviderHealth {
+    +id: bigint
+    +provider: text
+    +ok: boolean
+    +latency_ms: integer
+    +status_code: integer
+    +error: text
+    +observed_at: timestamptz
+  }
+
+  class ImportBatch {
+    +id: integer
+    +adapter: text
+    +status: text
+    +rows_total: integer
+    +rows_committed: integer
+    +meta: jsonb
+    +created_at: timestamptz
+  }
+
+  class ImportRow {
+    +id: bigint
+    +batch_id: integer <<FK>>
+    +row_index: integer
+    +raw: jsonb
+    +candidate_recipient_id: integer
+    +override_recipient_id: integer
+    +decision: text
+  }
+
+  class ExchangeRateCache {
+    +id: integer
+    +base: text
+    +quote: text
+    +rate: numeric
+    +as_of: date
+    +source: text
+  }
+
+  class CashflowForecastMc {
+    +id: uuid
+    +params_hash: text
+    +paths: jsonb
+    +computed_at: timestamptz
+    +ttl_seconds: integer
+  }
+
+  class AggRecipientTotals {
+    +recipient_id: integer
+    +total_eur: numeric
+    +count: integer
+    +updated_at: timestamptz
+  }
+}
+
 ' Relationships (using UML standard notation)
 Recipient "1" --> "0..1" Recipient : primary_recipient_id
 Recipient "1" --> "0..1" Category : default_category_id
@@ -275,5 +350,9 @@ TransactionSplit "1" --> "1" Recipient : owed to
 TransactionSplit "1" o-- "*" SplitPayment : payments
 
 Transaction "1" --> "0..1" TransactionRawReference : references
+
+Transaction "1" o-- "*" Attachment : "has receipts"
+ImportBatch "1" o-- "*" ImportRow : contains
+Recipient "1" --> "0..1" AggRecipientTotals : "trigger-maintained"
 
 @enduml

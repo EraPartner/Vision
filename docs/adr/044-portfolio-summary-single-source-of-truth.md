@@ -181,6 +181,9 @@ const { data } = usePortfolioSummaryQuery(targetCurrency);
 2. **Cache TTL**: Totals may lag live prices by up to 60 seconds; acceptable for user-facing dashboards (volatility and price refresh intervals are on 5-minute+ timescales)
 3. **Snapshot-timeseries loss**: Performance page no longer shows snapshot-era totals in the heatmap. Instead, it uses current totals + snapshot-era allocation percentages. Acceptable because the goal is to show recent performance, not historical portfolio value (which would require storing totals at each snapshot).
 
+> [!info] ADR-061 extension (2026-05-18)
+> ADR-044 unified Dashboard and Performance onto `portfolioSummaryService`. The third surface — Net Worth's historical "Investments" series — was still computed by `snapshotBuilder` using a different (flat `current_price`) formula, leaving a residual divergence. ADR-061 rewrites `snapshotBuilder` non-unit valuation to mirror `portfolioSummaryService` exactly, closing the divergence across all three pages. See [[docs/adr/061-snapshot-valuation-parity|ADR-061]].
+
 ## Rejected Alternatives
 
 ### 1. Snapshot-Only Approach (Always Historical)

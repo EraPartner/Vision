@@ -144,15 +144,13 @@ sum(summaries[].gainLoss) === totals.gainLoss
 
 | Status | Description | Example |
 |--------|-------------|---------|
-| 400 | Invalid currency code | `{ "detail": "Unsupported currency: XYZ" }` |
+| 400 | Invalid currency code | `{ "ok": false, "error": { "code": "APP_ERROR", "message": "Unsupported currency: XYZ" } }` |
 | 401 | Not authenticated | User session expired |
 | 429 | Rate limited | User exceeded 60 req/min quota |
 | 500 | Server error | Database or conversion service unavailable |
 
 ```json
-{
-  "detail": "Error message"
-}
+{ "ok": false, "error": { "code": "APP_ERROR", "message": "Error message" } }
 ```
 
 ## Caching Strategy
@@ -290,7 +288,7 @@ return <div>Total: {data.totals.currentValue}</div>;
 - [[docs/features/portfolio|Portfolio Feature]] — Feature overview and asset classes
 - [[docs/adr/044-portfolio-summary-single-source-of-truth|ADR-044]] — Architecture decision and rationale
 - [[docs/reference/code-patterns#portfolio-totals-pattern|Portfolio Totals Pattern]] — Implementation guidelines
-- [[docs/api/portfolio-performance|Performance API]] — Snapshot timeseries and annualized metrics
+- [[docs/api/portfolio-summary|Performance API]] — Snapshot timeseries and annualized metrics
 
 ## Changelog
 

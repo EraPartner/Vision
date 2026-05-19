@@ -119,5 +119,5 @@ Tracking item: `TODO.md` → Phase 9 → "Remove aggregation shadow + legacy /ap
 - [[docs/adr/011-phase2-aggregation-envelope-standard]] — `{ data, meta }` envelope the shadow unwraps
 - [[docs/reference/code-patterns#aggregation-envelope-pattern|Aggregation Envelope Pattern]]
 - [[docs/testing/testing#property-test-pattern-phase-8|Property Test Pattern]] — invariants locked for calc parity
-- [[apps/node-backend/tests/golden/INVENTORY|Calculation Inventory]] — G/P/S coverage matrix
+- [[apps/node-backend/tests/golden/INVENTORY.md|Calculation Inventory]] — G/P/S coverage matrix
 - [[docs/adr/index|All ADRs]]
