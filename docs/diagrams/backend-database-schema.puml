@@ -468,4 +468,166 @@ split_payments }o--|| transaction_splits
 
 transaction_raw_references }o--|| transactions
 
+' ───────────────────────────────────────────────────────────────
+' Additions (May 2026)
+' ───────────────────────────────────────────────────────────────
+
+entity "tags" as tags {
+  * id : serial <<PK>>
+  * slug : text <<UNIQUE>>
+  * name : text
+  color : text
+  is_active : boolean
+  created_at : timestamptz
+  updated_at : timestamptz
+}
+
+entity "transaction_tags" as transaction_tags {
+  * transaction_id : integer <<FK>>
+  * tag_id : integer <<FK>>
+  created_at : timestamptz
+  ---
+  PRIMARY KEY (transaction_id, tag_id)
+}
+
+entity "attachments" as attachments {
+  * id : bigserial <<PK>>
+  * transaction_id : integer <<FK ON DELETE CASCADE>>
+  * stored_path : text
+  * mime_type : text
+  * size_bytes : bigint
+  original_filename : text
+  created_at : timestamptz
+}
+
+entity "ai_conversations" as ai_conversations {
+  * id : uuid <<PK>>
+  title : text
+  messages : jsonb
+  tool_transcripts : jsonb
+  created_at : timestamptz
+  updated_at : timestamptz
+}
+
+entity "provider_health" as provider_health {
+  * id : bigserial <<PK>>
+  * provider : text
+  * ok : boolean
+  latency_ms : integer
+  status_code : integer
+  error : text
+  observed_at : timestamptz
+}
+
+entity "import_batches" as import_batches {
+  * id : serial <<PK>>
+  * adapter : text
+  status : text
+  rows_total : integer
+  rows_committed : integer
+  meta : jsonb
+  created_at : timestamptz
+}
+
+entity "import_rows" as import_rows {
+  * id : bigserial <<PK>>
+  * batch_id : integer <<FK>>
+  * row_index : integer
+  raw : jsonb
+  candidate_recipient_id : integer
+  override_recipient_id : integer
+  decision : text
+}
+
+entity "exchange_rate_cache" as exchange_rate_cache {
+  * id : serial <<PK>>
+  * base : text
+  * quote : text
+  * rate : numeric
+  * as_of : date
+  source : text
+  ---
+  UNIQUE (base, quote, as_of)
+}
+
+entity "cashflow_forecast_mc" as cashflow_forecast_mc {
+  * id : uuid <<PK>>
+  params_hash : text
+  paths : jsonb
+  computed_at : timestamptz
+  ttl_seconds : integer
+}
+
+entity "cashflow_forecast_mc_rolling" as cashflow_forecast_mc_rolling {
+  * id : uuid <<PK>>
+  params_hash : text
+  paths : jsonb
+  computed_at : timestamptz
+}
+
+entity "cashflow_forecast_accuracy" as cashflow_forecast_accuracy {
+  * id : bigserial <<PK>>
+  snapshot_id : uuid <<FK>>
+  metrics : jsonb
+  observed_at : timestamptz
+}
+
+entity "agg_recipient_totals" as agg_recipient_totals {
+  * recipient_id : integer <<PK>>
+  total_eur : numeric
+  count : integer
+  updated_at : timestamptz
+  ---
+  trigger-maintained (Phase 1)
+}
+
+entity "agg_split_outstanding" as agg_split_outstanding {
+  * recipient_id : integer <<PK>>
+  outstanding_eur : numeric
+  updated_at : timestamptz
+  ---
+  trigger-maintained (Phase 1)
+}
+
+entity "ing_raw_transactions" as ing_raw_transactions {
+  * id : serial <<PK>>
+  * file_hash : text
+  raw_record : jsonb
+  imported_at : timestamptz
+}
+
+note bottom of provider_health
+  Rolling-window admin observability hub (ADR-034).
+  See providerHealthRepository.js for query patterns.
+end note
+
+note bottom of tags
+  Orthogonal labelling dimension (ADR-052).
+  Slug-based, soft-delete via is_active.
+end note
+
+note bottom of import_batches
+  Drives the staging / validate / match / commit pipeline
+  in services/importPipeline.
+end note
+
+' Materialized views (read-only projections — listed for reference)
+note as MV_NOTE
+  Materialized views (refreshed by materializedViewService):
+   - mv_monthly_summary
+   - mv_category_totals
+   - mv_cashflow_daily
+   - mv_bank_balances
+   - mv_recipient_monthly
+end note
+
+attachments }o--|| transactions
+transaction_tags }o--|| transactions
+transaction_tags }o--|| tags
+provider_health ..> "external\nproviders" : observes
+import_rows }o--|| import_batches
+cashflow_forecast_accuracy }o--|| cashflow_forecast_mc
+agg_recipient_totals }o--|| recipients
+agg_split_outstanding }o--|| recipients
+
 @enduml

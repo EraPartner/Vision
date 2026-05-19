@@ -31,10 +31,14 @@ The frontend HTTP client in `apps/frontend/src/lib/api/` implements a three-laye
 - `api.ts` — ApiClient facade
 
 ### Phase 2 (2026-04-22) — Domain Split + OpenAPI
-- Split monolithic `api.ts` (1553 lines) into 13 domain modules
+- Split monolithic `api.ts` (1553 lines) into domain modules
 - Added `openapi.yaml` as authoritative API spec
 - Added `openapi-typescript` codegen for type generation
 - All domain modules export their methods; `api.ts` re-exports as `apiClient` for backward compat
+
+### Current modules (`apps/frontend/src/lib/api/`, 18 domain modules as of 2026-05-16)
+
+`admin`, `aggregations`, `ai`, `attachments`, `categories`, `charts`, `electron`, `helpers`, `imports`, `info`, `market`, `planned`, `portfolio`, `recipients`, `reports`, `settings`, `splits`, `sse`, `tags`, `transactions` — plus `client.ts` (transport) and `types.ts` (envelope / error types).
 
 ## Environment Configuration
 

@@ -5,7 +5,7 @@ status: active
 date: 2026-04-24
 last_modified: 2026-05-05
 tags: [backend, services, reference, business-logic, phase-1, phase-c, import-pipeline, graceful-shutdown, bug-hunt-2026-05-05, error-handling, robustness]
-description: Complete reference for all 18 backend services — exported functions, dependencies, algorithms, and usage patterns. Updated for Phase C import pipeline consolidation, snapshot-backed net worth computation, quoteBackfillService refactor, AI Chat service, aggregationRefresh cancellation support (2026-04-29), and error handling improvements for belgianInflationService (2026-05-05 bug hunt).
+description: Complete reference for the 24 top-level backend service modules (and 7 sub-directories — calculations/, currency/, prices/, portfolio/, reports/, aiChat/, importPipeline/). Updated for Phase C import pipeline consolidation, snapshot-backed net worth computation, quoteBackfillService refactor, AI Chat service, aggregationRefresh cancellation support (2026-04-29), and error handling improvements for belgianInflationService (2026-05-05 bug hunt).
 aliases: [services, service layer, business logic, backend services]
 related_code: ["apps/node-backend/src/services/"]
 ---
@@ -123,7 +123,7 @@ Repository Layer (SQL queries)
 
 ---
 
-## 3. currencyConversionService.js
+## 3. currency/currencyConversionService.js
 
 **File:** [[apps/node-backend/src/services/currency/currencyConversionService.js]]  
 **Purpose:** Converts amounts between currencies using ECB (primary), open.er-api.com (supplementary), database, and hardcoded fallbacks.
@@ -297,9 +297,9 @@ createBatch → stageBatch → validateBatch → matchBatch → commitBatch → 
 
 ---
 
-## 8. loanRepaymentService.js
+## 8. calculations/loanSchedule.js  _(formerly loanRepaymentService.js)_
 
-**File:** [[apps/node-backend/src/services/loanRepaymentService.js]]  
+**File:** [[apps/node-backend/src/services/calculations/loanSchedule.js]]  
 **Purpose:** Generates loan repayment schedules for planned transactions.
 
 ### Exported Functions
@@ -525,9 +525,9 @@ See [[docs/features/import#import-pipeline-orchestrator|Import Feature — Pipel
 
 ---
 
-## 14. recurrenceService.js
+## 14. calculations/recurrence.js  _(formerly recurrenceService.js)_
 
-**File:** [[apps/node-backend/src/services/recurrenceService.js]]  
+**File:** [[apps/node-backend/src/services/calculations/recurrence.js]]  
 **Purpose:** Calculates next occurrence dates for recurring patterns.
 
 ### Exported Functions
@@ -722,13 +722,17 @@ Maps Ollama errors to `AiChatServiceError` with HTTP status:
 
 | Category | Services |
 |----------|----------|
-| **Pure Computation** | `loanRepaymentService`, `recurrenceService`, `iban`, `textNormalization` |
-| **External Data** | `belgianInflationService`, `currencyConversionService`, `priceProviderService` |
+| **Pure Computation** | `calculations/loanSchedule`, `calculations/recurrence`, `calculations/forecast/*`, `iban`, `textNormalization`, `filterBuilder` |
+| **External Data** | `belgianInflationService`, `currency/currencyConversionService`, `priceProviderService` |
 | **Quote Management** | `quoteBackfillService` |
-| **Import Pipeline** | `importPipeline` (unified orchestrator), `bankAdapters`, `dataImportService` (reference data), deprecated: `importService`, `streamingImportService`, `rawTransactionImportService` |
-| **Data Quality** | `deduplication`, `recurringDetectionService` |
-| **Performance** | `materializedViewService`, `portfolioPerformanceSnapshotService` |
-| **AI & Natural Language** | `aiChatService` |
+| **Import Pipeline** | `importPipeline` (unified orchestrator, phases stage/validate/match/commit), `bankAdapters`, `dataImportService` (reference data); deprecated: `streamingImportService`, `rawTransactionImportService` |
+| **Data Quality** | `deduplication`, `recurringDetectionService`, `recipientClusterService`, `recipientPatternService` |
+| **Identity & Aggregations** | `recipientMergeService`, `aggregationRefresh`, `materializedViewService` |
+| **Performance** | `portfolioPerformanceSnapshotService` |
+| **Storage** | `attachmentService`, `transactionExport` |
+| **Selection** | `bulkSelection` (resolves `ids[]` or `filter` for bulk endpoints) |
+| **Observability** | `providerHealthService`, `routeManifest` |
+| **AI & Natural Language** | `aiChatService` (+ `aiChat/` subdirectory) |
 
 ## Info Repository Refactor (Net Worth)
 
@@ -765,6 +769,129 @@ See [[docs/features/net-worth|Net Worth Feature]] for details on the new snapsho
 
 ### Dependencies
 - `materializedViewService.js`, `connection.js`, `logger.js`
+
+---
+
+## attachmentService.js
+
+**File:** [[apps/node-backend/src/services/attachmentService.js]]
+**Purpose:** Owns the on-disk lifecycle of receipt attachments — validation, hashed-path layout, mime detection, and cleanup on transaction delete.
+
+| Function | Returns |
+|----------|---------|
+| `storeAttachment(txId, file, opts)` | Persisted attachment metadata |
+| `streamAttachment(attachmentId)` | Readable stream + content-type for downloads |
+| `removeAttachment(attachmentId)` | Deletes row + file (idempotent) |
+
+**Dependencies:** `attachmentRepository.js`, `connection.js`, `node:fs/promises`, `crypto`. Lives behind `attachmentRateLimiter` (60 req/min, ADR-042).
+
+---
+
+## providerHealthService.js
+
+**File:** [[apps/node-backend/src/services/providerHealthService.js]]
+**Purpose:** Records success/error metrics for every external data source call and exposes on-demand probe endpoints for the admin observability hub (ADR-034).
+
+| Function | Returns |
+|----------|---------|
+| `recordSuccess(providerKey, latencyMs)` / `recordError(providerKey, err)` | void (fire-and-forget) |
+| `probe(providerKey)` | `{ ok, latencyMs, statusCode }` |
+| `getSummary()` | rolling-window stats grouped by provider |
+
+**Dependencies:** `providerHealthRepository.js`, `connection.js`, the price/inflation provider modules it instruments.
+
+---
+
+## recipientMergeService.js
+
+**File:** [[apps/node-backend/src/services/recipientMergeService.js]]
+**Purpose:** Transactional merge of duplicate recipients into a primary; rewrites transaction FKs, transfers bank-account ownership, and warms aggregations.
+
+| Function | Returns |
+|----------|---------|
+| `mergeRecipients(primaryId, duplicateIds[])` | `{ mergedInto, affectedRows }` |
+| `unmergeRecipient(id)` | boolean |
+
+**Dependencies:** `recipientRepository.js`, `recipientBankAccountRepository.js`, `transactionRepository.js`, `aggregationRefresh.js`.
+
+---
+
+## recipientClusterService.js
+
+**File:** [[apps/node-backend/src/services/recipientClusterService.js]]
+**Purpose:** Identifies merge-candidate clusters from the recipient list using normalized-name similarity + alias overlap; powers `GET /api/recipients/clusters` and the Recipients page suggestions UI.
+
+| Function | Returns |
+|----------|---------|
+| `findClusters(opts)` | `Array<{ primary, members[], confidence }>` |
+
+**Dependencies:** `recipientRepository.js`, `textNormalization.js`.
+
+---
+
+## recipientPatternService.js
+
+**File:** [[apps/node-backend/src/services/recipientPatternService.js]]
+**Purpose:** Detects recurring name patterns and IBAN-based identity hints; used by the import pipeline to assign recipients and by `recipientClusterService` to refine clusters.
+
+| Function | Returns |
+|----------|---------|
+| `inferRecipientFromRow(row)` | `{ recipientId?, confidence, source }` |
+
+**Dependencies:** `recipientRepository.js`, `iban.js`, `textNormalization.js`.
+
+---
+
+## transactionExport.js
+
+**File:** [[apps/node-backend/src/services/transactionExport.js]]
+**Purpose:** Streams transaction exports (CSV + NDJSON) — paginates the source query, applies `escapeCsvValue` / formula-injection protection, and respects the same filters as `GET /api/transactions`.
+
+| Function | Returns |
+|----------|---------|
+| `streamCsv(res, filters)` | streams `text/csv` |
+| `streamNdjson(res, filters)` | streams `application/x-ndjson` |
+
+**Dependencies:** `transactionRepository.js`, `lib/csv.js`, `filterBuilder.js`.
+
+---
+
+## routeManifest.js
+
+**File:** [[apps/node-backend/src/services/routeManifest.js]]
+**Purpose:** Scans the live Express router stack and emits a static manifest of every registered route (method + path + description). Drives the admin `/admin/endpoints` page and the dev observability inspector's "top endpoints" view.
+
+| Function | Returns |
+|----------|---------|
+| `buildManifest(app)` | `Array<{ method, path, description }>` |
+
+**Dependencies:** Express internals only.
+
+---
+
+## filterBuilder.js
+
+**File:** [[apps/node-backend/src/services/filterBuilder.js]]
+**Purpose:** Builds parameterised `WHERE` clauses for transaction queries from a normalised filter object. Single source of truth shared by list, export, bulk and aggregation paths to keep filter semantics consistent.
+
+| Function | Returns |
+|----------|---------|
+| `buildTransactionWhere(filters)` | `{ sql, params }` |
+
+**Dependencies:** none (pure).
+
+---
+
+## bulkSelection.js
+
+**File:** [[apps/node-backend/src/services/bulkSelection.js]]
+**Purpose:** Resolves either an explicit `ids[]` (≤500) or a `filter` object (capped at 5000 matches) into a concrete transaction id set for the bulk endpoints (`bulk-update`, `bulk-delete`, `bulk-export`, `bulk-tag`).
+
+| Function | Returns |
+|----------|---------|
+| `resolveSelection({ ids?, filter? }, opts)` | `{ ids[], count, truncated }` |
+
+**Dependencies:** `transactionRepository.js`, `filterBuilder.js`. See [[docs/features/bulk-actions|Bulk Actions Feature]].
 
 ---
 

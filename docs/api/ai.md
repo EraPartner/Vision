@@ -12,7 +12,7 @@ aliases: [ai api, chat api, ollama api, ai endpoints]
 # AI Chat API
 
 > [!abstract] Overview
-> All `/api/ai/*` endpoints proxy to a **local Ollama** instance. No data leaves the machine. When `aiChat.enabled` is `false` every endpoint returns `503 {"detail": "AI chat is disabled"}`.
+> All `/api/ai/*` endpoints proxy to a **local Ollama** instance. No data leaves the machine. When `AI_CHAT_ENABLED` is `false` every endpoint returns `503 { "ok": false, "error": { "code": "AI_CHAT_DISABLED", "message": "AI chat is disabled" } }`.
 
 ## Endpoint Map
 
@@ -62,7 +62,7 @@ Pass-through of `GET /api/tags` from Ollama.
 
 **Response 502** when Ollama is down:
 ```json
-{ "detail": "Ollama not reachable: connect ECONNREFUSED", "code": "OLLAMA_UNREACHABLE" }
+{ "ok": false, "error": { "code": "OLLAMA_UNREACHABLE", "message": "Ollama not reachable: connect ECONNREFUSED" } }
 ```
 
 ## GET /api/ai/conversations

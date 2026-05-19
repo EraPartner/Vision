@@ -242,23 +242,17 @@ The endpoint validates split allocation via `validateSplitAllocation` before wri
 **Error Response:** `400 Bad Request`
 
 ```json
-{
-  "detail": "Missing required fields: transaction_id, recipient_id, amount"
-}
+{ "ok": false, "error": { "code": "APP_ERROR", "message": "Missing required fields: transaction_id, recipient_id, amount" } }
 ```
 
 ```json
-{
-  "detail": "Split amount exceeds transaction total"
-}
+{ "ok": false, "error": { "code": "APP_ERROR", "message": "Split amount exceeds transaction total" } }
 ```
 
 **Error Response:** `404 Not Found`
 
 ```json
-{
-  "detail": "Transaction not found"
-}
+{ "ok": false, "error": { "code": "APP_ERROR", "message": "Transaction not found" } }
 ```
 
 Implementation notes:
@@ -302,23 +296,17 @@ The endpoint validates total batch allocation via `validateBatchSplitAllocation`
 **Error Response:** `400 Bad Request`
 
 ```json
-{
-  "detail": "Missing required fields: transaction_id, splits[]"
-}
+{ "ok": false, "error": { "code": "APP_ERROR", "message": "Missing required fields: transaction_id, splits[]" } }
 ```
 
 ```json
-{
-  "detail": "Split amount exceeds transaction total"
-}
+{ "ok": false, "error": { "code": "APP_ERROR", "message": "Split amount exceeds transaction total" } }
 ```
 
 **Error Response:** `404 Not Found`
 
 ```json
-{
-  "detail": "Transaction not found"
-}
+{ "ok": false, "error": { "code": "APP_ERROR", "message": "Transaction not found" } }
 ```
 
 Implementation notes:
@@ -364,23 +352,17 @@ The endpoint validates payment amount via `validatePaymentAmount` before write. 
 **Error Response:** `404 Not Found`
 
 ```json
-{
-  "detail": "Split not found"
-}
+{ "ok": false, "error": { "code": "APP_ERROR", "message": "Split not found" } }
 ```
 
 **Error Response:** `400 Bad Request`
 
 ```json
-{
-  "detail": "Payment would exceed split outstanding balance"
-}
+{ "ok": false, "error": { "code": "APP_ERROR", "message": "Payment would exceed split outstanding balance" } }
 ```
 
 ```json
-{
-  "detail": "Payment amount must be a positive number"
-}
+{ "ok": false, "error": { "code": "APP_ERROR", "message": "Payment amount must be a positive number" } }
 ```
 
 Implementation notes:
@@ -447,9 +429,7 @@ This is a manual settlement operation (not triggered by payment reaching the ful
 **Error Response:** `404 Not Found`
 
 ```json
-{
-  "detail": "Split not found"
-}
+{ "ok": false, "error": { "code": "APP_ERROR", "message": "Split not found" } }
 ```
 
 Implementation notes:
@@ -484,9 +464,7 @@ This endpoint matches existing settlement behavior: it only sets `is_settled = t
 **Error Response:** `500 Internal Server Error`
 
 ```json
-{
-  "detail": "Error settling all splits for recipient"
-}
+{ "ok": false, "error": { "code": "APP_ERROR", "message": "Error settling all splits for recipient" } }
 ```
 
 Implementation notes:
@@ -518,9 +496,7 @@ Splits are physically deleted (not soft-deleted). The deletion is permanent and 
 **Error Response:** `404 Not Found`
 
 ```json
-{
-  "detail": "Split not found"
-}
+{ "ok": false, "error": { "code": "APP_ERROR", "message": "Split not found" } }
 ```
 
 Implementation notes:

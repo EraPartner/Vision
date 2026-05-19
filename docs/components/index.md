@@ -33,7 +33,7 @@ aliases: [components, UI, frontend components, chart components, visx charts]
 | [[docs/components/dashboard-settings-dialog\|Settings Dialog]] | Multi-tab settings with thin orchestrator pattern (Phase 3) | General, Dashboard, App, Backup, Appearance tabs |
 | [[docs/components/export-dialog\|Export Dialog]] | PDF report export configuration (Phase 4) | Report type, period, sections, currency selection |
 | [[docs/components/layout\|Layout]] | App shell and navigation (M1-optimized) | AppLayout, AppSidebar |
-| [[docs/components/admin\|Admin Pages]] | System observability dashboards (Phase F) | AdminOverview, ProviderHealth, EndpointLiveness, FeatureFlags |
+| [[docs/components/admin\|Admin Pages]] | System observability dashboards (Phase F) | AdminOverview, ProviderHealth, EndpointLiveness, DbMaintenance |
 | [[docs/components/portfolio\|Portfolio]] | Investment components | AddInvestment, Watchlist, PerformanceChart |
 | [[docs/components/hooks\|Hooks]] | Custom React hooks | useTransactions, usePortfolio, useChartCurrencyFormatter |
 | [[docs/components/shared-components\|Shared Components]] | Cross-cutting utilities | VirtualDataTable, PageHeader, EmptyState, ErrorBoundary |

@@ -6,7 +6,7 @@ date: 2026-04-23
 updated: 2026-04-28
 tags: [backend, repositories, reference, data-access, postgresql, phase-0, phase-1, phase-3, phase-3-1, phase-9, phase-q, decimal, money, recipient-groups]
 aliases: [repositories, repository layer, data access, DAL, database access]
-description: Complete reference for all 13 backend repositories — exported methods, SQL patterns, and usage conventions. Phase 3.1: infoRepository split into 7 domain sub-modules with batch FX optimization. Phase Q: transactionRepository supports recipientGroupId filtering via filterBuilder.
+description: Complete reference for all 21 backend repository domains (plus infoRepository's 7 sub-modules and portfolioTransactionRepository's 3 split files). Phase 3.1: infoRepository split into 7 domain sub-modules with batch FX optimization. Phase Q: transactionRepository supports recipientGroupId filtering via filterBuilder.
 related_code: ["apps/node-backend/src/repositories/"]
 ---
 
@@ -510,6 +510,118 @@ Uses `hidden` boolean flag instead of `DELETE`:
 ```sql
 UPDATE transactions SET hidden = true WHERE id = $1
 ```
+
+## 14. tagRepository.js
+
+**File:** [[apps/node-backend/src/repositories/tagRepository.js]]
+**Purpose:** CRUD for the `tags` table (orthogonal labelling dimension, ADR-052). Soft-delete via `is_active=false`.
+
+| Method | Returns |
+|--------|---------|
+| `getAll({ isActive? })` | tag list |
+| `findOrCreateBySlug(name, color)` | upsert by normalised slug |
+| `update(id, fields)` | updated tag |
+| `softDelete(id)` | boolean |
+| `attachToTransactions(tagIds, txIds)` / `detachFromTransactions(...)` | join-table maintenance |
+
+---
+
+## 15. attachmentRepository.js
+
+**File:** [[apps/node-backend/src/repositories/attachmentRepository.js]]
+**Purpose:** Persists receipt attachment metadata (stored path, mime type, size). The on-disk file lifecycle lives in [[apps/node-backend/src/services/attachmentService.js|attachmentService.js]].
+
+| Method | Returns |
+|--------|---------|
+| `insert(metadata)` | created row |
+| `getById(id)` / `listByTransaction(txId)` | rows |
+| `delete(id)` | boolean |
+
+---
+
+## 16. importBatchRepository.js
+
+**File:** [[apps/node-backend/src/repositories/importBatchRepository.js]]
+**Purpose:** Persists `import_batches` + `import_rows` for the import pipeline (stage / validate / match / commit phases).
+
+| Method | Returns |
+|--------|---------|
+| `createBatch(meta)` | batch id |
+| `insertStaged(batchId, rows)` | inserted count |
+| `markPhase(batchId, phase, payload)` | progress metadata |
+| `listRecent(limit)` | history view |
+| `getRowsForReview(batchId)` | ambiguous rows |
+| `deleteBatch(batchId)` | rollback |
+
+---
+
+## 17. aiChatRepository.js
+
+**File:** [[apps/node-backend/src/repositories/aiChatRepository.js]]
+**Purpose:** Persists Ollama chat conversations and per-turn tool transcripts for the AI Chat feature (ADR-024).
+
+| Method | Returns |
+|--------|---------|
+| `loadConversation(id)` | message history |
+| `persistTurn(id, prompt, toolTranscript, answer)` | inserted row |
+| `listConversations(limit)` | rows |
+| `delete(id)` | boolean |
+
+---
+
+## 18. providerHealthRepository.js
+
+**File:** [[apps/node-backend/src/repositories/providerHealthRepository.js]]
+**Purpose:** Rolling-window health metrics per external provider (latency, success/error counts). Drives the admin observability hub (ADR-034).
+
+| Method | Returns |
+|--------|---------|
+| `record({ provider, ok, latencyMs, statusCode, error? })` | void |
+| `getSummary()` | rows grouped by provider |
+| `getRecent({ provider, window })` | sample rows |
+
+---
+
+## 19. cashflowForecastMcRepository.js
+
+**File:** [[apps/node-backend/src/repositories/cashflowForecastMcRepository.js]]
+**Purpose:** Stores Monte-Carlo cashflow forecast snapshots (P25/P50/P75 paths) — the materialised cache for Phase 10 + Phase E forecast endpoints.
+
+| Method | Returns |
+|--------|---------|
+| `upsertSnapshot(params, paths)` | stored snapshot |
+| `getCached(params, ttl)` | cached snapshot or null |
+
+---
+
+## 20. cashflowForecastMcRollingRepository.js
+
+**File:** [[apps/node-backend/src/repositories/cashflowForecastMcRollingRepository.js]]
+**Purpose:** Same shape as `cashflowForecastMcRepository.js` but specialised for the Phase H rolling-window forecast (500 paths, P25/P75 defaults).
+
+---
+
+## 21. cashflowForecastAccuracyRepository.js
+
+**File:** [[apps/node-backend/src/repositories/cashflowForecastAccuracyRepository.js]]
+**Purpose:** Persists realised-vs-forecast accuracy metrics per snapshot. Powers the Phase D accuracy endpoint and dashboard widget.
+
+| Method | Returns |
+|--------|---------|
+| `recordAccuracy(snapshotId, metrics)` | void |
+| `getRolling({ window })` | accuracy time-series |
+
+---
+
+## portfolioTransactionRepository sub-modules
+
+`portfolioTransactionRepository.js` is split into three files for clarity:
+
+- [[apps/node-backend/src/repositories/portfolioTxRepo.common.js|portfolioTxRepo.common.js]] — shared helpers, mappers, and the public barrel.
+- [[apps/node-backend/src/repositories/portfolioTxRepo.reads.js|portfolioTxRepo.reads.js]] — read paths (list, summary, by-investment).
+- [[apps/node-backend/src/repositories/portfolioTxRepo.writes.js|portfolioTxRepo.writes.js]] — mutations (create, update, FIFO/LIFO cost-basis recompute).
+
+---
 
 ## Related Documentation
 

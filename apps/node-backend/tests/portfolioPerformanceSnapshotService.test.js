@@ -80,6 +80,7 @@ function buildQueryResponses({ includeData = true, emptyLatest = false } = {}) {
 function mockSnapshotQueries({
   firstDate = '2026-01-01',
   investments = [{ id: 1, currency: 'EUR', current_price: 10, asset_class: 'stock' }],
+  nonUnitInvestments = [],
   transactions = [],
   prices = [],
   inflation = [{ month: '2026-01', monthly_rate: 0 }],
@@ -91,6 +92,9 @@ function mockSnapshotQueries({
     }
     if (sql.includes('FROM investments i') && sql.includes('asset_class IN')) {
       return { rows: investments };
+    }
+    if (sql.includes('FROM investments') && sql.includes('asset_class = ANY')) {
+      return { rows: nonUnitInvestments };
     }
     if (sql.includes('FROM portfolio_transactions pt') && sql.includes('ORDER BY pt.date::date, pt.id')) {
       return { rows: transactions };
@@ -221,9 +225,12 @@ describe('portfolioPerformanceSnapshotService', () => {
   });
 
   it('falls back from historical price to last known transaction price and current price', async () => {
+    // current_price set to match historical close so the latest-day override
+    // (which uses inv.current_price for parity with /portfolio-summary) does
+    // not skew the historical-fallback assertion on day 2.
     mockSnapshotQueries({
       investments: [
-        { id: 1, currency: 'EUR', current_price: 14, asset_class: 'stock' },
+        { id: 1, currency: 'EUR', current_price: 12, asset_class: 'stock' },
         { id: 2, currency: 'EUR', current_price: 9, asset_class: 'crypto' },
       ],
       transactions: [
@@ -237,10 +244,10 @@ describe('portfolioPerformanceSnapshotService', () => {
 
     const snapshots = await computeAndStoreSnapshots('EUR');
 
-    // day 2/3: investment 1 uses previous historical price 12, investment 2 uses last tx price 9
-    expect(snapshots[2].value).toBe(54);
-    expect(snapshots[2].stocks_etfs_value).toBe(36);
-    expect(snapshots[2].crypto_value).toBe(18);
+    // day 2: investment 1 uses historical price 12 (forward-filled), investment 2 uses last tx price 9.
+    expect(snapshots[1].value).toBe(54);
+    expect(snapshots[1].stocks_etfs_value).toBe(36);
+    expect(snapshots[1].crypto_value).toBe(18);
   });
 
   it('handles missing fx-rates query and still computes in target currency', async () => {
@@ -259,7 +266,11 @@ describe('portfolioPerformanceSnapshotService', () => {
   });
 
   it('sanitizes isolated one-day spikes in computed values', async () => {
+    // current_price set to match day-3 historical close — the latest-day
+    // override uses current_price, so it must reflect the same price tier
+    // for the spike-detection assertion to be meaningful.
     mockSnapshotQueries({
+      investments: [{ id: 1, currency: 'EUR', current_price: 101, asset_class: 'stock' }],
       transactions: [
         { investment_id: 1, day: '2026-01-01', type: 'buy', amount: 100, units: 1, currency: 'EUR', fx_rate_to_eur: null },
       ],
@@ -290,6 +301,103 @@ describe('portfolioPerformanceSnapshotService', () => {
 
     expect(rows).toHaveLength(1);
     expect(query.mock.calls[0][1]).toEqual(['EUR', '2026-01-01', '2026-01-31']);
+  });
+
+  // Reconciliation regression tests — these lock in parity between the
+  // snapshot builder and the live /portfolio-summary valuation. Bug:
+  // pre-fix the snapshot ignored accrued interest and appreciation, leading
+  // to the dashboard/net-worth headline mismatch users reported.
+  it('values fixed-income (savings) as runningInvested + accrued interest, matching live summary', async () => {
+    // 2 days in window: buy on Jan 1, snapshot taken Jan 3.
+    // Live summary formula: principal × (rate/100/365) × daysSinceFirstBuy
+    // 1000 × (5/100/365) × 2 = 0.27397...
+    mockSnapshotQueries({
+      investments: [],
+      nonUnitInvestments: [
+        { id: 1, currency: 'EUR', current_price: 9999, interest_rate: 5, asset_class: 'savings', active_from: '2026-01-01' },
+      ],
+      transactions: [
+        { investment_id: 1, day: '2026-01-01', type: 'buy', amount: 1000, units: 0, currency: 'EUR', fx_rate_to_eur: null },
+      ],
+    });
+
+    const snapshots = await computeAndStoreSnapshots('EUR');
+
+    const expectedAccrued = 1000 * (5 / 100 / 365) * 2;
+    const expectedValue = 1000 + expectedAccrued;
+    expect(snapshots[2].value).toBeCloseTo(expectedValue, 2);
+    expect(snapshots[2].cash_value).toBeCloseTo(expectedValue, 2);
+    // Critically: NOT the inv.current_price (9999) — that would be the pre-fix bug.
+    expect(snapshots[2].value).toBeLessThan(9999);
+  });
+
+  it('values real-estate as runningInvested + cumulative appreciation, matching live summary', async () => {
+    mockSnapshotQueries({
+      investments: [],
+      nonUnitInvestments: [
+        { id: 1, currency: 'EUR', current_price: 9999, interest_rate: 0, asset_class: 'real_estate', active_from: '2026-01-01' },
+      ],
+      transactions: [
+        { investment_id: 1, day: '2026-01-01', type: 'buy', amount: 200000, units: 0, currency: 'EUR', fx_rate_to_eur: null },
+        { investment_id: 1, day: '2026-01-02', type: 'appreciation', amount: 5000, units: 0, currency: 'EUR', fx_rate_to_eur: null },
+      ],
+    });
+
+    const snapshots = await computeAndStoreSnapshots('EUR');
+
+    // Day 1: buy only → 200000
+    expect(snapshots[0].value).toBeCloseTo(200000, 2);
+    // Day 2-3: buy + appreciation → 205000
+    expect(snapshots[1].value).toBeCloseTo(205000, 2);
+    expect(snapshots[2].value).toBeCloseTo(205000, 2);
+    // Critically: NOT inv.current_price.
+    expect(snapshots[2].value).not.toBe(9999);
+  });
+
+  it('resets fixed-income accrual clock when an interest payment is recorded', async () => {
+    // Live summary: lastInterestDate beats firstBuyDate. After interest is paid
+    // on day 2, the snapshot on day 3 should accrue from day 2, not day 1.
+    mockSnapshotQueries({
+      investments: [],
+      nonUnitInvestments: [
+        { id: 1, currency: 'EUR', current_price: 0, interest_rate: 5, asset_class: 'bond', active_from: '2026-01-01' },
+      ],
+      transactions: [
+        { investment_id: 1, day: '2026-01-01', type: 'buy', amount: 1000, units: 0, currency: 'EUR', fx_rate_to_eur: null },
+        { investment_id: 1, day: '2026-01-02', type: 'interest', amount: 10, units: 0, currency: 'EUR', fx_rate_to_eur: null },
+      ],
+    });
+
+    const snapshots = await computeAndStoreSnapshots('EUR');
+
+    // Day 3 accrues from day 2 (1 day), not from day 1 (2 days).
+    const expectedAccrued = 1000 * (5 / 100 / 365) * 1;
+    expect(snapshots[2].value).toBeCloseTo(1000 + expectedAccrued, 2);
+  });
+
+  it('uses live current_price for the latest day so snapshot reconciles with /portfolio-summary', async () => {
+    // asset_price_history lags behind investments.current_price (e.g. user
+    // edited the price manually). The latest snapshot must reflect the live
+    // value, not the stale historical close.
+    mockSnapshotQueries({
+      investments: [
+        { id: 1, currency: 'EUR', current_price: 25, asset_class: 'stock' },
+      ],
+      transactions: [
+        { investment_id: 1, day: '2026-01-01', type: 'buy', amount: 10, units: 1, currency: 'EUR', fx_rate_to_eur: null },
+      ],
+      prices: [
+        { investment_id: 1, day: '2026-01-01', close_price: 10 },
+        { investment_id: 1, day: '2026-01-02', close_price: 12 },
+        // Day 3 (today): no price history row, current_price = 25.
+      ],
+    });
+
+    const snapshots = await computeAndStoreSnapshots('EUR');
+
+    expect(snapshots[0].value).toBe(10);  // historical: close_price = 10
+    expect(snapshots[1].value).toBe(12);  // historical: close_price = 12
+    expect(snapshots[2].value).toBe(25);  // latest day: uses inv.current_price
   });
 });
 

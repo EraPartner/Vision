@@ -35,6 +35,9 @@ aliases: [diagram index, UML diagrams, plantuml diagrams]
 | [[docs/diagrams/price-provider-flow.puml|Price Provider]] | `price-provider-flow.puml` | Investment price updates | Understanding price feeds |
 | [[docs/diagrams/recurring-detection-flow.puml|Recurring Detection]] | `recurring-detection-flow.puml` | Automatic recurring detection | Understanding detection |
 | [[docs/diagrams/materialized-view-flow.puml|Materialized Views]] | `materialized-view-flow.puml` | View refresh strategy | Performance optimization |
+| [[docs/diagrams/ai-chat-tool-loop.puml|AI Chat Tool Loop]] | `ai-chat-tool-loop.puml` | Ollama tool-call loop with repository dispatch | Understanding AI chat |
+| [[docs/diagrams/backup-aead-encryption.puml|Backup AEAD Encryption]] | `backup-aead-encryption.puml` | AES-256-GCM v2 bundle create + restore | Understanding backup format |
+| [[docs/diagrams/dev-observability-flow.puml|Dev Observability]] | `dev-observability-flow.puml` | API event bus → ring buffer → Inspector | Frontend internals |
 
 ## Frontend Diagrams
 
@@ -69,6 +72,15 @@ aliases: [diagram index, UML diagrams, plantuml diagrams]
 | Diagram | File | Description | Use Case |
 |---------|------|-------------|----------|
 | [[docs/diagrams/recipient-merge-sequence.puml|Recipient Merge]] | `recipient-merge-sequence.puml` | Recipient merge workflow | Understanding merges |
+
+## Interactive Flow Visualizer
+
+A single-page HTML companion to these PlantUML diagrams — click a flow on the left, see the path light up, step through it, and read the payload + annotation at each hop.
+
+- **File:** `docs/flow-visualizer.html` — open it directly in any browser (no build step, no network calls).
+- **Coverage:** 46 components / 15 flows including transactions, imports, portfolio, AI chat, backup, admin, build/release, dev observability, sign-in.
+- **Extending:** edit the JSON block at the bottom of the HTML (schema documented inline).
+- **Shortcuts:** ←/→ step, Space play, R restart, A show all, Esc clear.
 
 ## Embedded in Documentation
 

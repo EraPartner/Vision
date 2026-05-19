@@ -121,9 +121,7 @@ Create or retrieve a bank account for a recipient.
 **Error Response:** `400 Bad Request`
 
 ```json
-{
-  "detail": "Missing required field: account_number"
-}
+{ "ok": false, "error": { "code": "APP_ERROR", "message": "Missing required field: account_number" } }
 ```
 
 ---
@@ -165,9 +163,7 @@ Update a bank account's details.
 **Error Response:** `404 Not Found`
 
 ```json
-{
-  "detail": "Bank account not found"
-}
+{ "ok": false, "error": { "code": "APP_ERROR", "message": "Bank account not found" } }
 ```
 
 ---
@@ -195,9 +191,7 @@ Soft delete (deactivate) a bank account.
 **Error Response:** `404 Not Found`
 
 ```json
-{
-  "detail": "Bank account not found"
-}
+{ "ok": false, "error": { "code": "APP_ERROR", "message": "Bank account not found" } }
 ```
 
 ---
@@ -230,9 +224,7 @@ Set a bank account as the primary account for a recipient.
 **Error Response:** `404 Not Found`
 
 ```json
-{
-  "detail": "Bank account not found or does not belong to this recipient"
-}
+{ "ok": false, "error": { "code": "APP_ERROR", "message": "Bank account not found or does not belong to this recipient" } }
 ```
 
 ## IBAN Support

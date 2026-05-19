@@ -13,7 +13,7 @@ related_code:
   - apps/frontend/src/components/statistics/
   - apps/frontend/src/hooks/useStatistics.ts
   - apps/frontend/src/hooks/useChartCurrencyFormatter.ts
-  - apps/frontend/src/hooks/statisticsProcessing.ts
+  - apps/frontend/src/components/statistics/statisticsUtils.ts
   - apps/frontend/src/hooks/useSavedCharts.ts
   - apps/node-backend/src/routes/info.js
   - apps/node-backend/src/repositories/infoRepository.js
@@ -110,7 +110,7 @@ The Statistics page **is still computed entirely on the frontend**. The `useStat
 
 ### processTransactions()
 
-Located in `[[apps/frontend/src/hooks/statisticsProcessing.ts]]`, this pure function processes transaction arrays into a `StatisticsData` object:
+Located in `[[apps/frontend/src/components/statistics/statisticsUtils.ts]]`, this pure function processes transaction arrays into a `StatisticsData` object:
 
 ```typescript
 processTransactions(

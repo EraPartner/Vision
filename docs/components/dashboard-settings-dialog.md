@@ -665,7 +665,7 @@ This hook is also used by **RestoreFromBackupCard** in the onboarding wizard for
 
 - `[[apps/frontend/src/hooks/useRestoreBackup.tsx]]` — Encrypted-aware restore hook (Phase 2)
 - `[[apps/frontend/src/lib/api/electron.ts]]` — `isBackupEncrypted()` and `restoreBackup(filePath, opts?)` exports
-- `[[apps/node-backend/src/routes/backup.js]]` — Backup and restore endpoints
+- `[[apps/node-backend/src/backup/coverage.js]]` — Backup and restore endpoints
 - `[[docs/features/backup-coverage-audit|Backup Coverage Audit]]` — Full restore process and encryption details
 - `[[docs/features/settings|Settings Feature]]` — Backup configuration and passphrase handling
 - `[[docs/features/onboarding|Onboarding Feature]]` — RestoreFromBackupCard integration

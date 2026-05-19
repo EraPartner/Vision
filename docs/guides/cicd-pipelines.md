@@ -194,7 +194,7 @@ Named volumes in Docker Compose define persistent data storage. If a volume is a
 
 **Policy:** Blocks quality gate if volumes diverge; must add all new named volumes to both compose files before merging.
 
-**Related:** [[docs/adr/046-named-volumes-attachment-wipe-bug|ADR-046]] (v1.0.2 attachments bug analysis + fix)
+**Related:** [[docs/adr/051-docker-compose-sync-named-volumes|ADR-046]] (v1.0.2 attachments bug analysis + fix)
 
 ---
 

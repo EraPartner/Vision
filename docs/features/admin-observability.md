@@ -5,7 +5,7 @@ status: active
 date: 2026-04-25
 updated: 2026-05-08
 tags: [feature, admin, observability, provider-health, endpoint-liveness, shadow-divergences, aggregation, migration, phase-f, phase-9-complete, rate-limiting, admin-guard, route-gating]
-description: Unified admin hub — DB maintenance, provider health, endpoint liveness, and feature flag controls — gated via Settings toggle.
+description: Unified admin hub — DB maintenance, provider health, endpoint liveness, and request metrics — gated via Settings toggle.
 aliases: [admin dashboard, system observability, admin monitoring, admin hub]
 related_code:
   - apps/node-backend/src/routes/admin.js

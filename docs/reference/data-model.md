@@ -270,24 +270,30 @@ related_code: ["apps/node-backend/src/repositories/", "alembic/versions/"]
 
 ### PortfolioPerformanceSnapshot
 
-**Purpose:** Daily cached portfolio performance for fast loading.
+**Purpose:** Daily cached portfolio performance for fast loading. Populated by `snapshotBuilder.computeAndStoreSnapshots()`.
 
 | Field | Type | Description |
 |-------|------|-------------|
 | `snapshot_date` | DATE | Date of snapshot |
-| `invested_stocks_etfs` | NUMERIC(18,2) | Invested in stocks/ETFs |
-| `invested_crypto` | NUMERIC(18,2) | Invested in crypto |
-| `invested_metals` | NUMERIC(18,2) | Invested in metals |
-| `value_stocks_etfs` | NUMERIC(18,2) | Market value of stocks/ETFs |
-| `value_crypto` | NUMERIC(18,2) | Market value of crypto |
-| `value_metals` | NUMERIC(18,2) | Market value of metals |
-| `total_invested` | NUMERIC(18,2) | Total invested capital |
-| `total_value` | NUMERIC(18,2) | Total market value |
+| `currency` | VARCHAR(10) | Target currency (e.g. EUR) |
+| `invested` | NUMERIC(18,2) | Total invested capital (all asset classes) |
+| `value` | NUMERIC(18,2) | Total portfolio value (all asset classes) |
+| `stocks_etfs_value` | NUMERIC(18,2) | Market value of stocks/ETFs |
+| `crypto_value` | NUMERIC(18,2) | Market value of crypto |
+| `metals_value` | NUMERIC(18,2) | Market value of metals |
+| `cash_value` | NUMERIC(18,2) | Value of non-unit assets (savings, bonds, real estate). Since 2026-05-18 (ADR-061): `runningInvested + accruedInterest` for fixed-income; `runningInvested + cumulativeAppreciation` for real estate. Previously used flat `current_price`. |
+| `stocks_etfs_invested` | NUMERIC(18,2) | Invested in stocks/ETFs |
+| `crypto_invested` | NUMERIC(18,2) | Invested in crypto |
+| `metals_invested` | NUMERIC(18,2) | Invested in metals |
+| `gain_loss` | NUMERIC(18,2) | Absolute gain/loss (`value - invested`) |
+| `return_pct` | NUMERIC(8,4) | Percentage gain/loss |
 | `inflation_adjusted_value` | NUMERIC(18,2) | Value adjusted for Belgian inflation |
-| `gain_loss` | NUMERIC(18,2) | Absolute gain/loss |
-| `gain_loss_pct` | NUMERIC(8,4) | Percentage gain/loss |
+| `computed_at` | TIMESTAMPTZ | When this row was last computed |
 
-**Related:** [[docs/performance/caching-strategies|Caching Strategies]]
+> [!info] Valuation parity (2026-05-18)
+> `cash_value` (and by extension `value`) now mirrors `portfolioSummaryService` formulas exactly. The latest snapshot's `value` reconciles with `GET /api/info/portfolio-summary`. See [[docs/adr/061-snapshot-valuation-parity|ADR-061]].
+
+**Related:** [[docs/performance/caching-strategies|Caching Strategies]], [[docs/adr/043-portfolio-snapshot-atomicity|ADR-043]], [[docs/adr/061-snapshot-valuation-parity|ADR-061]]
 
 ---
 

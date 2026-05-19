@@ -120,7 +120,10 @@ SORT file.name ASC
 LIMIT 20
 ```
 
-**View all diagrams:** [[docs/diagrams/index|Diagrams Index]] | [[docs/architecture/index|Architecture Overview]]
+**View all diagrams:** [[docs/diagrams/index|Diagrams Index]] | [[docs/architecture/index|Architecture Overview]] | [Interactive Flow Visualizer](flow-visualizer.html)
+
+> [!tip] Interactive Flow Visualizer
+> `docs/flow-visualizer.html` is a single-page, interactive map of all packages + 15 end-to-end flows (create-transaction, CSV import, AI chat, AES-256-GCM backup, ToDesktop release, …). Open it directly in any browser — click a flow on the left, watch the path light up, and read the payload at each hop. Add new flows by editing the JSON block at the bottom of the file.
 
 | Resource | Description |
 |----------|-------------|
@@ -146,7 +149,7 @@ LIMIT 20
 | [[docs/reference/agent-navigation-map|🗺️ Agent Navigation Map]] | File navigation by feature, layer, task |
 | [[docs/reference/frontend-api-client|🔌 Frontend API Client]] | Transport, types, and facade layers of the HTTP client (Phase 1) |
 | [[docs/reference/schema-initialization|🗃️ Schema Initialization (Archived)]] | Legacy database startup schema initialization |
-| [[docs/reference/api-endpoint-matrix|📊 API Endpoint Matrix]] | Complete matrix of all 128 API endpoints |
+| [[docs/reference/api-endpoint-matrix|📊 API Endpoint Matrix]] | Complete matrix of all 163 API endpoints across 28 route files |
 
 ## Recent Updates
 
@@ -189,7 +192,7 @@ LIMIT 10
 - [[docs/components/devtools|Devtools Components]] — Component API reference
 - [[docs/reference/code-patterns#devtools-integration-pattern|Code Patterns — Devtools Integration]]
 
-See [[docs/lib/api/client.ts|API Client]], [[apps/frontend/src/App.tsx|App Root]]
+See [[apps/frontend/src/lib/api/client.ts|API Client]], [[apps/frontend/src/App.tsx|App Root]]
 
 ### 2026-05-06 Phase C/D Bug Fixes — Accessibility, CSV Parsing, Memory Safety
 

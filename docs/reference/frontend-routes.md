@@ -39,11 +39,11 @@ aliases: [routes, pages, navigation, url paths, frontend routes, admin routes]
 | `/portfolio/real-estate` | `RealEstatePage` | AppLayout | Real estate holdings | [[apps/frontend/src/pages/portfolio/RealEstatePage.tsx\|RealEstatePage.tsx]] |
 | `/portfolio/savings` | `SavingsPage` | AppLayout | Savings accounts | [[apps/frontend/src/pages/portfolio/SavingsPage.tsx\|SavingsPage.tsx]] |
 | `/portfolio/performance` | `PerformancePage` | AppLayout | Portfolio performance charts | [[apps/frontend/src/pages/portfolio/PerformancePage.tsx\|PerformancePage.tsx]] |
-| `/portfolio/net-worth` | `NetWorthPage` | AppLayout | Net worth tracking | [[apps/frontend/src/pages/portfolio/NetWorthPage.tsx\|NetWorthPage.tsx]] |
+| `/portfolio/net-worth` | `NetWorthPage` | AppLayout | Net worth tracking | [[apps/frontend/src/pages/portfolio/net-worth/NetWorthPage.tsx\|NetWorthPage.tsx]] |
 | `/portfolio/exchange-rates` | `ExchangeRatesPage` | AppLayout | Exchange rate management | [[apps/frontend/src/pages/portfolio/ExchangeRatesPage.tsx\|ExchangeRatesPage.tsx]] |
 | `/portfolio/watchlist` | `WatchlistPage` | AppLayout | Investment watchlist | [[apps/frontend/src/pages/portfolio/WatchlistPage.tsx\|WatchlistPage.tsx]] |
 | `/portfolio/market` | `MarketLookupPage` | AppLayout | Market data lookup | [[apps/frontend/src/pages/MarketLookupPage.tsx\|MarketLookupPage.tsx]] |
-| `/portfolio/tax` | `PortfolioTaxPage` | AppLayout | Portfolio tax calculations | [[apps/frontend/src/pages/portfolio/PortfolioTaxPage.tsx\|PortfolioTaxPage.tsx]] |
+| `/portfolio/tax` | `PortfolioTaxPage` | AppLayout | Portfolio tax calculations | [[apps/frontend/src/pages/portfolio/tax/PortfolioTaxPage.tsx\|PortfolioTaxPage.tsx]] |
 
 ## Admin Routes
 
@@ -61,7 +61,8 @@ Admin routes are workspace-agnostic and preserve the active workspace when navig
 | Route | Component | Layout | Description | Code |
 |-------|-----------|--------|-------------|------|
 | `/ai-chat` | `AIChatPage` | AppLayout | Local AI chat for natural-language queries | [[apps/frontend/src/pages/AIChatPage.tsx\|AIChatPage.tsx]] |
-| `/settings` | `SettingsPage` | AppLayout | Application settings | [[apps/frontend/src/pages/SettingsPage.tsx\|SettingsPage.tsx]] |
+
+> Settings is no longer a route — it is rendered as `DashboardSettingsDialog` opened from the layout. See [[apps/frontend/src/components/settings/DashboardSettingsDialog.tsx\|DashboardSettingsDialog.tsx]] and [[docs/features/settings|Settings Feature]].
 
 ## Special Routes
 

@@ -350,7 +350,7 @@ Scheduled 12h exchange rate refreshes also skip themselves when `isInternetReach
 ---
 
 > [!info] Locked contracts (Phase 8)
-> Currency round-trip correctness is pinned by [[apps/node-backend/tests/property/currencyRoundTrip.property.test.js]]. Bounded random amount + rate pairs must satisfy `convert(convert(x, A→B), B→A) ≈ x` within cent tolerance, and cross-rate composition `A→B→C` must equal the direct `A→C` conversion within the same tolerance. See [[docs/testing/testing#property-test-pattern-phase-8|Property Test Pattern]] and [[apps/node-backend/tests/golden/INVENTORY|Calculation Inventory]].
+> Currency round-trip correctness is pinned by [[apps/node-backend/tests/property/currencyRoundTrip.property.test.js]]. Bounded random amount + rate pairs must satisfy `convert(convert(x, A→B), B→A) ≈ x` within cent tolerance, and cross-rate composition `A→B→C` must equal the direct `A→C` conversion within the same tolerance. See [[docs/testing/testing#property-test-pattern-phase-8|Property Test Pattern]] and [[apps/node-backend/tests/golden/INVENTORY.md|Calculation Inventory]].
 
 ## See Also
 
