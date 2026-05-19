@@ -80,12 +80,67 @@ if [[ -n "${RESOLVER:-}" ]]; then
   iptables -A OUTPUT -p tcp --dport 53 -d "$RESOLVER" -j ACCEPT
 fi
 
-# Resolve each allowed domain to IPs and add them to the ipset.
+# Resolve a domain with retry+backoff. NSS/getent inside Docker Desktop's
+# vpnkit network sometimes returns empty on the first try right after the
+# container attaches to the bridge (the embedded DNS forwarder hasn't fully
+# warmed up). Retrying for ~10s with widening backoff catches that without
+# stretching firewall-apply time when DNS is healthy.
+resolve_with_retry() {
+  local domain="$1"
+  local attempt=1
+  local max_attempts=4
+  local ips=""
+  while (( attempt <= max_attempts )); do
+    ips="$(getent ahostsv4 "$domain" 2>/dev/null | awk '{print $1}' | sort -u)"
+    if [[ -n "$ips" ]]; then
+      printf '%s\n' "$ips"
+      return 0
+    fi
+    sleep "$attempt"   # 1s, 2s, 3s, 4s
+    attempt=$(( attempt + 1 ))
+  done
+  return 1
+}
+
+# Resolve each allowed domain to IPs and add them to the ipset. Track per-domain
+# counts so we can warn loudly if a critical domain couldn't be resolved —
+# silently leaving an empty ipset + default-DROP egress produces ECONNREFUSED
+# at runtime (via vpnkit/gVisor) which is hard to diagnose.
+declare -A RESOLVED_DOMAINS=()
 for domain in "${ALLOWED_DOMAINS[@]}"; do
+  count=0
   while read -r ip; do
-    [[ -n "$ip" ]] && ipset add vision-allowed "$ip" 2>/dev/null || true
-  done < <(getent ahostsv4 "$domain" | awk '{print $1}' | sort -u)
+    if [[ -n "$ip" ]] && ipset add vision-allowed "$ip" 2>/dev/null; then
+      count=$(( count + 1 ))
+    fi
+  done < <(resolve_with_retry "$domain" || true)
+  RESOLVED_DOMAINS["$domain"]=$count
 done
+
+# Verify the domains Claude actually needs resolved to at least one IP each.
+# If not, the container's DNS path is broken (usually: detached from Docker
+# bridge network). Print a clear recovery hint instead of failing silently.
+CRITICAL_DOMAINS=("api.anthropic.com" "registry.npmjs.org" "github.com")
+missing=()
+for d in "${CRITICAL_DOMAINS[@]}"; do
+  [[ "${RESOLVED_DOMAINS[$d]:-0}" -eq 0 ]] && missing+=("$d")
+done
+if (( ${#missing[@]} > 0 )); then
+  cat >&2 <<EOF
+[firewall] ⚠  Could not resolve critical domain(s): ${missing[*]}
+[firewall]    The container's DNS path is broken — every outbound call will
+[firewall]    fail with ECONNREFUSED until this is fixed.
+[firewall]
+[firewall]    Most common cause: Docker Desktop detached the container from
+[firewall]    its bridge network (host sleep/resume, DD update, reaper).
+[firewall]
+[firewall]    On your HOST shell (not inside the container), run:
+[firewall]      docker network connect bridge $HOSTNAME
+[firewall]
+[firewall]    Then re-apply the firewall from inside the container:
+[firewall]      sudo $0
+EOF
+fi
 
 # Default policies — drop everything not explicitly allowed.
 iptables -P INPUT   DROP

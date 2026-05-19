@@ -76,5 +76,12 @@ RUN mkdir -p /var/lib/postgresql && chown postgres:postgres /var/lib/postgresql
 # in a dev-owned dir (ssh-keygen rejects loose perms on .ssh).
 RUN install -d -o dev -g dev -m 0700 /home/dev/.ssh
 
+# Pre-create dirs that will be backed by named Docker volumes. Docker only
+# inherits the image-side ownership+perms on FIRST mount of a fresh volume —
+# but that one chance matters: without these lines, the volume comes up as
+# root:root and dev can't write into it, which silently broke .claude seeding.
+RUN install -d -o dev -g dev -m 0700 /home/dev/.claude \
+ && install -d -o dev -g dev -m 0755 /home/dev/.config /home/dev/.config/gh
+
 USER dev
 WORKDIR /workspaces/Vision

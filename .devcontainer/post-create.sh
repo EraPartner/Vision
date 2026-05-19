@@ -120,19 +120,37 @@ fi
 # After seeding, the container manages its own writable copies, and the
 # `vision-claude-sync` fish function does explicit pull/push between
 # host and container so changes propagate without live-bind corruption.
-sudo chown -R dev:dev /home/dev/.claude 2>/dev/null || true
+# Docker creates the named-volume mountpoint as root:root the first time the
+# volume is fresh, regardless of any dev-owned directory we baked into the
+# image (the bake only matters if the volume inherits, and it does so only on
+# first mount of a brand-new volume — pre-existing volumes don't re-inherit).
+# Take ownership BEFORE seeding so dev can actually write into it. Silent
+# failure here was the cause of the "Let's get started" onboarding loop:
+# chown errored, was swallowed by `2>/dev/null || true`, and the subsequent
+# rsync into a root-owned dir then no-op'd silently too.
+if [[ "$(stat -c %U /home/dev/.claude)" != "dev" ]]; then
+  echo "[post-create] /home/dev/.claude is not dev-owned — chowning..."
+  if ! sudo chown -R dev:dev /home/dev/.claude; then
+    echo "[post-create] ERROR: sudo chown of /home/dev/.claude failed." >&2
+    echo "[post-create]        Check /etc/sudoers.d/dev-vision includes chown." >&2
+  fi
+fi
+
 if [[ ! -f /home/dev/.claude/settings.json && -d /home/dev/.claude-host ]]; then
   echo "[post-create] Seeding ~/.claude from host..."
   # Best-effort copy — host claude may be running and rewriting volatile
   # state (telemetry, sessions, paste-cache) while we read. Exit 23 from
-  # rsync = "some files vanished mid-copy"; that's fine for seeding.
-  rsync -a --ignore-errors \
-    --exclude='.credentials.json' \
-    --exclude='backups' --exclude='daemon.log' \
-    --exclude='cache' --exclude='paste-cache' \
-    --exclude='telemetry' --exclude='debug' \
-    --exclude='session-env' --exclude='shell-snapshots' \
-    /home/dev/.claude-host/ /home/dev/.claude/ || true
+  # rsync = "some files vanished mid-copy"; tolerate that, log anything else.
+  if ! rsync -a --ignore-errors \
+        --exclude='.credentials.json' \
+        --exclude='backups' --exclude='daemon.log' \
+        --exclude='cache' --exclude='paste-cache' \
+        --exclude='telemetry' --exclude='debug' \
+        --exclude='session-env' --exclude='shell-snapshots' \
+        /home/dev/.claude-host/ /home/dev/.claude/; then
+    echo "[post-create] WARN: ~/.claude rsync seed had errors (some files may be missing)." >&2
+  fi
+  echo "[post-create] Seeded $(find /home/dev/.claude -mindepth 1 -maxdepth 1 | wc -l) entries into ~/.claude."
 fi
 if [[ ! -f /home/dev/.claude.json && -f /home/dev/.claude-json-seed ]]; then
   cp /home/dev/.claude-json-seed /home/dev/.claude.json
