@@ -34,9 +34,11 @@ SORT title ASC
 ### Organization
 - [[docs/features/categories\|Categories]] - Transaction categorization with GENERAL:DETAIL format and atomic assignment (Phase 6)
 - [[docs/features/recipients\|Recipients]] - Payee/payer management with atomic merge and fuzzy matching (Phase 6)
+- [[docs/features/tags\|Tags]] - Slug-based orthogonal labelling dimension layered on transactions (ADR-052, May 2026)
 - [[docs/features/bulk-actions\|Bulk Actions]] - Multi-row select with atomic delete, recategorize, reassign, export, tag operations
 - [[docs/api/categories\|Categories API]] - REST endpoint contract
 - [[docs/api/recipients\|Recipients API]] - REST endpoint contract
+- [[docs/api/tags\|Tags API]] - REST endpoint contract
 
 ### Planning & Scheduling
 - [[docs/features/plannedTransactions\|Planned Payments]] - Scheduled and recurring transactions, including loan support

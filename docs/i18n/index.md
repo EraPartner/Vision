@@ -96,11 +96,12 @@ Used in [[apps/frontend/src/hooks/useSplits.ts]] by `useSettleSplit()` hook for 
 Added ~60 new keys for the admin observability hub (Phase F):
 
 - Settings toggle: `settings.app.adminMode`, `settings.app.adminModeHint`, `settings.app.developer`
-- Navigation: `nav.admin`, `nav.adminOverview`, `nav.adminProviders`, `nav.adminEndpoints`, `nav.adminFeatureFlags`
-- Overview page: `admin.overview.{title,description,dbSize,tables,dataSources,failing,endpoints,errorRate,requests,featureFlags,flagsEnabled,allHealthy}`
+- Navigation: `nav.admin`, `nav.adminOverview`, `nav.adminProviders`, `nav.adminEndpoints`
+- Overview page: `admin.overview.{title,description,dbSize,tables,dataSources,failing,endpoints,errorRate,requests,allHealthy}`
 - Data Sources page: `admin.providers.{title,description,tableTitle,colProvider,colKind,colLastSuccess,colLastError,colFailures,never,checkNow,probeOk,probeFail,probeError}`
 - Endpoints page: `admin.endpoints.{title,description,tableTitle,colPath,colMethod,colRequests,colErrors,colErrorRate,colP50,colP95,filterPlaceholder}`
-- Feature Flags page: `admin.flags.{title,description,tableTitle,colKey,colEnabled,colDescription,colUpdated,toggle,enabled,disabled,toggleFailed,empty}`
+
+> The Feature Flags admin page and its `admin.flags.*` / `nav.adminFeatureFlags` / `admin.overview.{featureFlags,flagsEnabled}` keys were removed alongside the runtime feature-flag system in [[docs/adr/035-remove-feature-flags|ADR-035]].
 
 All keys added to `i18n/source/en.json` and `i18n/source/nl.json`; generated into frontend locale bundles.
 

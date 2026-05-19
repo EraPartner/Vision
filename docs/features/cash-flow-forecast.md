@@ -10,7 +10,7 @@ aliases: [cashflow-forecast, forward-projections, cash-flow-planning, income-exp
 description: Project income and expenses forward based on planned transactions (Phase 6) or using 8 statistical methods including 7 base methods + inverse-MSE ensemble (Phase 10, F). Phase C adds frontend dashboard visualization with controls, MC confidence bands, and diagnostics panel. Phase E adds nightly cache materialization. Phase G adds per-category breakdown with hierarchical reconciliation.
 related_code:
   - apps/node-backend/src/services/calculations/aggregation/cashflowForecast.js
-  - apps/node-backend/src/services/calculations/forecast/
+  - apps/node-backend/src/services/calculations/forecast/index.js
   - apps/node-backend/src/services/calculations/forecast/categoryBreakdown.js
   - apps/node-backend/src/services/calculations/forecast/accuracyStore.js
   - apps/node-backend/src/routes/aggregations.js
@@ -571,7 +571,7 @@ Pure calculation module with no I/O; called by aggregations route. Returns struc
 
 ### Phase 10: Multi-Method Statistical Forecast
 
-**Implementation:** [[apps/node-backend/src/services/calculations/forecast/]]
+**Implementation:** [[apps/node-backend/src/services/calculations/forecast/index.js]]
 
 Modular forecast orchestrator with 7 pluggable methods:
 - **Methods:** `simpleAverage.js`, `weightedAverage.js`, `ewma.js`, `holtWinters.js`, `prophetLite.js`, `monteCarloParametric.js`, `monteCarloBlockBootstrap.js`

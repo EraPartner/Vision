@@ -6,7 +6,7 @@ date: 2026-04-02
 tags: [integration, loans, amortization, repayment, planned-transactions]
 description: Loan repayment calculation service supporting amortizing, fixed principal, and interest-only loans
 aliases: [loan repayment, amortization, loan calculator, planned loans]
-related_code: ["apps/node-backend/src/services/loanRepaymentService.js", "apps/node-backend/src/routes/plannedTransactions.js"]
+related_code: ["apps/node-backend/src/services/calculations/loanSchedule.js", "apps/node-backend/src/routes/plannedTransactions.js"]
 ---
 
 # Integration: Loan Repayment Service

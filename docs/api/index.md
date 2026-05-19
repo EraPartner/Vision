@@ -58,7 +58,10 @@ SORT path ASC
 | Reports (Phase 3) | `/api/reports` | POST, GET (legacy) | [[docs/api/reports\|Reports API]] |
 | Aggregations (Phase 2) | `/api/aggregations` | GET | [[docs/api/aggregations\|Aggregations API]] |
 | Info & Analytics | `/api/info` | GET | [[docs/api/info\|Info & Analytics API]] |
+| Portfolio Summary | `/api/info/portfolio-summary` | GET | [[docs/api/portfolio-summary\|Portfolio Summary API]] |
 | AI Chat | `/api/ai` | GET, POST, PATCH, DELETE | [[docs/api/ai\|AI Chat API]] |
+| Tags (ADR-052, May 2026) | `/api/tags` | GET, POST, PATCH, DELETE | [[docs/api/tags\|Tags API]] |
+| Health | `/health` · `/health/detailed` | GET | [[docs/api/health\|Health API]] |
 
 ## Core Concepts
 
@@ -76,9 +79,12 @@ SORT path ASC
 ## Rate Limiting
 
 > [!warning] Rate Limits
-> - **Standard endpoints**: 100 requests per minute
-> - **Export/Patch endpoints**: 30 requests per minute
-> - **Admin refresh endpoints**: stricter limits (e.g., `/api/info/refresh-views` uses admin limiter)
+> - **Standard endpoints**: 200 requests per minute (global default)
+> - **Export / Patch / bulk endpoints**: 30 requests per minute
+> - **Attachments**: `attachmentRateLimiter` 60 requests per minute (ADR-042)
+> - **AI Chat**: per `AI_CHAT_RATE_LIMIT` env var (default 30 req/min)
+> - **SPA fallback**: `spaRateLimiter` 600 requests per minute
+> - **Admin endpoints**: stricter limits (e.g., `/api/info/refresh-views` uses `adminRateLimiter`)
 > - Check `X-RateLimit-*` headers for current usage
 
 ## Authentication Notes

@@ -3,9 +3,9 @@ title: Algorithms & Data Structures
 type: algorithm-doc
 status: active
 date: 2026-04-02
-updated: 2026-04-25
-tags: [algorithms, computer-science, performance, data-structures]
-description: Formal documentation of all algorithms used in Vision — LTTB downsampling, deduplication hashing, recurring pattern detection, currency conversion, and more
+updated: 2026-05-18
+tags: [algorithms, computer-science, performance, data-structures, snapshot-valuation, fixed-income, real-estate, accrued-interest]
+description: Formal documentation of all algorithms used in Vision — LTTB downsampling, deduplication hashing, recurring pattern detection, currency conversion, portfolio snapshot valuation, and more
 aliases: [algorithms, data structures, CS, computational methods]
 ---
 
@@ -237,7 +237,7 @@ The algorithm uses **temporal pattern analysis** on transaction sequences.
 
 ## Currency Conversion Service
 
-**Location:** [[apps/node-backend/src/services/currencyConversionService.js]]
+**Location:** [[apps/node-backend/src/services/currency/currencyConversionService.js]]
 
 ### Problem Statement
 
@@ -341,11 +341,11 @@ Multi-pass normalization pipeline:
 
 ## Net Worth Snapshot Algorithm
 
-**Location:** [[apps/node-backend/src/repositories/infoRepository.js]]
+**Location:** [[apps/node-backend/src/services/portfolio/snapshotBuilder.js]] (day walk + non-unit valuation), [[apps/node-backend/src/repositories/infoRepository.js]] (liquid component + cache layer)
 
 ### Problem Statement
 
-Compute daily net worth snapshots across multiple asset classes with proper handling of contribution flows, price history, and spike sanitization.
+Compute daily net worth snapshots across multiple asset classes with proper handling of contribution flows, price history, accrued interest, appreciation, and spike sanitization. The snapshot pipeline must produce values that reconcile with the live `portfolioSummaryService` formulas used by the Dashboard and Performance pages.
 
 ### Algorithm Description
 
@@ -363,17 +363,35 @@ seed_date = min(
 
 ```
 For each day from seed_date to today:
-  1. Liquid component:
+  1. Apply transactions for this day to running accumulators
+  2. Investment component — unit-based (stock, etf, crypto, metals):
+     a. price = asset_price_history forward-fill (binary-search for latest day ≤ current)
+     b. Exception: on the latest day, use investments.current_price directly
+        (guarantees reconciliation with live summary after a price refresh)
+     c. value += units × price, converted to target currency
+  3. Investment component — fixed-income (savings, bond):
+     a. runningInvested accumulates buy+gift amounts (minus sells), per-txn FX
+     b. lastInterestDate tracks most recent `interest` transaction (resets clock)
+     c. firstBuyDate tracks first `buy` transaction
+     d. startDate = lastInterestDate ?? firstBuyDate
+     e. accruedInterest = runningInvested × (interestRate/100/365)
+                          × calendarDaysBetween(startDate, day)
+     f. value = runningInvested + accruedInterest
+  4. Investment component — real estate:
+     a. runningInvested accumulates buy amounts (minus sells)
+     b. runningAppreciation accumulates `appreciation` transaction amounts
+     c. value = runningInvested + runningAppreciation
+  5. Legacy fallback (no transactions):
+     If non-unit investment has no buy transactions AND current_price > 0
+     AND day >= active_from: value = current_price (converted to target currency)
+  6. Liquid component:
      a. Cumulative transaction flow from seed_date
-     b. If account balance snapshots available, use those
-  2. Investment component (per unit-priced asset):
-     a. Start from investment's first activity date
-     b. Use provider historical close quotes when available
-     c. Fall back to last known transaction unit price (carry-forward)
-     d. Never use mutable current_price for past days
-  3. Total = Liquid + Investments
-  4. Apply spike sanitization (see below)
+     b. If account balance snapshots available, use those instead
+  7. Total = Investments + Liquid
+  8. Apply spike sanitization (see below)
 ```
+
+`calendarDaysBetween` uses `APP_TIMEZONE` (ADR-009) for exact integer day counts.
 
 #### Spike Sanitization
 
@@ -389,15 +407,28 @@ For each day i (not first or last):
      value[i] = geometric_mean(value[i-1], value[i+1])
 ```
 
+#### Parity Invariant (2026-05-18)
+
+The snapshot builder mirrors `portfolioSummaryService` formulas so that:
+
+```
+snapshot[todayYmd].value ≈ portfolioSummary.totals.currentValue
+```
+
+This invariant is verified by regression tests in `portfolioPerformanceSnapshotService.test.js`.
+
 #### Complexity
 
 - **Time:** O(D × A) where D = days, A = active investments
-- **Space:** O(D) for snapshot array
+- **Space:** O(D) for snapshot array + O(A) for per-investment accumulators
 - **Caching:** 60-second in-memory cache per currency with in-flight request deduplication
 
 ### Related
 
 - [[docs/features/portfolio#net-worth-tracking]] — Net worth feature docs
+- [[docs/features/net-worth#non-unit-asset-valuation-formulas-2026-05-18-adr-061]] — Detailed formula description
+- [[docs/adr/061-snapshot-valuation-parity|ADR-061]] — Decision record for the parity fix
+- [[docs/adr/044-portfolio-summary-single-source-of-truth|ADR-044]] — Live summary as source of truth for dashboard + performance totals
 - [[docs/performance/caching-strategies]] — Caching strategy
 
 ---
@@ -448,7 +479,7 @@ CAGR = (currentValue / investedCapital)^(1/years) - 1
 | Recurring Detection | O(N log N) | O(N) | Tolerance-based pattern matching |
 | Currency Conversion | O(1) cached | O(N) map | Historical rate support |
 | Text Normalization | O(L) | O(L) | Multi-pass pipeline |
-| Net Worth Snapshots | O(D × A) | O(D) | Spike sanitization |
+| Net Worth Snapshots | O(D × A) | O(D + A) | Parity-invariant valuation + spike sanitization |
 | Modified Dietz Return | O(M) | O(M) | Contribution-adjusted |
 | CAGR | O(1) | O(1) | Geometric mean |
 

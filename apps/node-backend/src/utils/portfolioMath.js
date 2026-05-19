@@ -40,7 +40,7 @@ function toYmd(value) {
  * @param {string|Date} to
  * @returns {number}
  */
-function calendarDaysBetween(from, to) {
+export function calendarDaysBetween(from, to) {
   const fromUtc = appDateStringToUtc(toYmd(from));
   const toUtc = appDateStringToUtc(toYmd(to));
   return Math.round((toUtc.getTime() - fromUtc.getTime()) / MS_PER_DAY);

@@ -14,7 +14,18 @@ aliases: [migration dependencies, migration chain, migration groups, alembic cha
 > [!abstract] Overview
 > The Vision database uses a linear migration chain with logical groupings. This document shows the dependency chain and which migrations belong together.
 
-## Migration Chain
+> [!warning] Two migration trees
+> The repository keeps two parallel Alembic trees:
+> - **`alembic/versions/`** — the **active** chain (0001-0036, currently 36 revisions). Renumbered in early 2026 around the Phase-1 aggregation work.
+> - **`alembic/legacy_versions/`** — the **archived** pre-renumbering chain (0001-0032 + 5 hash-named revisions, 38 files). Kept for history and for re-stamping older deployments; not applied on fresh installs.
+>
+> The chain summary below predates the renumbering — treat it as historical context for the legacy tree. For the active chain, `bun run db:history` is authoritative. Notable recent revisions in `alembic/versions/`:
+> - **0030** — `add_user_settings_table` (settings persistence)
+> - **0031** — `add_transaction_tags` (orthogonal-dimension tags, ADR-052)
+> - **0035** — `add_recipient_aggregations` (Phase 1 aggregations consolidated)
+> - **0036** — `add_transactions_tx_hash` (May 2026 monetary precision + deduplication audit, ADR-060)
+
+## Migration Chain (legacy tree — historical reference)
 
 ```
 0001 (initial schema)

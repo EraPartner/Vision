@@ -831,7 +831,7 @@ The report fetches all data in parallel via `fetchFinancialData()`:
 ## Related Features
 
 - [[docs/features/statistics|Statistics Feature]] — Primary host page for export dialog
-- [[docs/features/tax|Tax Overview]] — Uses ExportDialog with tax reports
+- [[docs/features/belgian-tax|Tax Overview]] — Uses ExportDialog with tax reports
 - [[docs/features/portfolio|Portfolio Feature]] — Stocks page uses ExportDialog for portfolio reports
 - [[docs/features/transactions|Transactions]] — Underlying transaction data for financial reports
 
@@ -846,4 +846,4 @@ The report fetches all data in parallel via `fetchFinancialData()`:
 
 - [[docs/api/index|API Documentation]]
 - [[docs/features/statistics|Statistics Feature]]
-- [[docs/adr/pdf-report-redesign|ADR: PDF Report Redesign]]
+- [[docs/api/reports|Reports API]]

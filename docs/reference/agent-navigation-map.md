@@ -60,7 +60,7 @@ aliases: [agent navigation, codebase map, file map, navigation guide]
 |-------|-------|
 | Frontend Page | [[apps/frontend/src/pages/RecipientsPage.tsx]] |
 | Hook | [[apps/frontend/src/hooks/useRecipients.ts]] |
-| Merge Dialog | [[apps/frontend/src/components/recipients/MergeRecipientsDialog.tsx]] |
+| Merge Dialog | [[apps/frontend/src/features/recipients/MergeRecipientsDialog.tsx]] |
 | Backend Route | [[apps/node-backend/src/routes/recipients.js]] |
 | Backend Repository | [[apps/node-backend/src/repositories/recipientRepository.js]] |
 | API Doc | [[docs/api/recipients]] |
@@ -75,7 +75,7 @@ aliases: [agent navigation, codebase map, file map, navigation guide]
 | Recurring Detection | [[apps/frontend/src/components/planned/RecurringDetectionPanel.tsx]] |
 | Backend Route | [[apps/node-backend/src/routes/plannedTransactions.js]] |
 | Backend Repository | [[apps/node-backend/src/repositories/plannedTransactionRepository.js]] |
-| Backend Service | [[apps/node-backend/src/services/recurrenceService.js]], [[apps/node-backend/src/services/recurringDetectionService.js]] |
+| Backend Service | [[apps/node-backend/src/services/calculations/recurrence.js]], [[apps/node-backend/src/services/recurringDetectionService.js]] |
 | API Doc | [[docs/api/plannedTransactions]] |
 | Feature Doc | [[docs/features/plannedTransactions]] |
 
@@ -90,7 +90,7 @@ aliases: [agent navigation, codebase map, file map, navigation guide]
 | Real Estate Page | [[apps/frontend/src/pages/portfolio/RealEstatePage.tsx]] |
 | Savings Page | [[apps/frontend/src/pages/portfolio/SavingsPage.tsx]] |
 | Performance Page | [[apps/frontend/src/pages/portfolio/PerformancePage.tsx]] |
-| Net Worth Page | [[apps/frontend/src/pages/portfolio/NetWorthPage.tsx]] |
+| Net Worth Page | [[apps/frontend/src/pages/portfolio/net-worth/NetWorthPage.tsx]] |
 | Watchlist Page | [[apps/frontend/src/pages/portfolio/WatchlistPage.tsx]] |
 | Hook | [[apps/frontend/src/hooks/usePortfolio.ts]] |
 | Dialogs | [[apps/frontend/src/components/portfolio/AddInvestmentDialog.tsx]], [[apps/frontend/src/components/portfolio/EditInvestmentDialog.tsx]], [[apps/frontend/src/components/portfolio/InvestmentDetailDialog.tsx]] |
@@ -145,7 +145,7 @@ aliases: [agent navigation, codebase map, file map, navigation guide]
 | Frontend Page | [[apps/frontend/src/pages/TaxOverviewPage.tsx]] |
 | Components | [[apps/frontend/src/components/tax/TaxProfileDialog.tsx]], [[apps/frontend/src/components/tax/SuggestedDeductionsCard.tsx]] |
 | Context | [[apps/frontend/src/contexts/BelgianTaxProfileContext.tsx]] |
-| Backend Service | [[apps/node-backend/src/services/belgianInflationService.js]], [[apps/node-backend/src/services/loanRepaymentService.js]] |
+| Backend Service | [[apps/node-backend/src/services/belgianInflationService.js]], [[apps/node-backend/src/services/calculations/loanSchedule.js]] |
 | Feature Doc | [[docs/features/belgian-tax]] |
 | Integration Doc | [[docs/integrations/belgian-inflation]], [[docs/integrations/loan-repayment-service]] |
 
@@ -199,10 +199,10 @@ aliases: [agent navigation, codebase map, file map, navigation guide]
 | `/portfolio/real-estate` | [[apps/frontend/src/pages/portfolio/RealEstatePage.tsx]] |
 | `/portfolio/savings` | [[apps/frontend/src/pages/portfolio/SavingsPage.tsx]] |
 | `/portfolio/performance` | [[apps/frontend/src/pages/portfolio/PerformancePage.tsx]] |
-| `/portfolio/net-worth` | [[apps/frontend/src/pages/portfolio/NetWorthPage.tsx]] |
+| `/portfolio/net-worth` | [[apps/frontend/src/pages/portfolio/net-worth/NetWorthPage.tsx]] |
 | `/portfolio/exchange-rates` | [[apps/frontend/src/pages/portfolio/ExchangeRatesPage.tsx]] |
 | `/portfolio/watchlist` | [[apps/frontend/src/pages/portfolio/WatchlistPage.tsx]] |
-| `/portfolio/tax` | [[apps/frontend/src/pages/portfolio/PortfolioTaxPage.tsx]] |
+| `/portfolio/tax` | [[apps/frontend/src/pages/portfolio/tax/PortfolioTaxPage.tsx]] |
 | `/portfolio/market` | [[apps/frontend/src/pages/MarketLookupPage.tsx]] |
 | `*` (404) | [[apps/frontend/src/pages/NotFound.tsx]] |
 
@@ -279,17 +279,17 @@ Full reference: [[docs/reference/service-layer|Service Layer Reference]]
 | AI Chat | [[apps/node-backend/src/services/aiChatService.js]] |
 | Bank Adapters | [[apps/node-backend/src/services/bankAdapters.js]] |
 | Belgian Inflation | [[apps/node-backend/src/services/belgianInflationService.js]] |
-| Currency Conversion | [[apps/node-backend/src/services/currencyConversionService.js]] |
+| Currency Conversion | [[apps/node-backend/src/services/currency/currencyConversionService.js]] |
 | Data Import | [[apps/node-backend/src/services/dataImportService.js]] |
 | Deduplication | [[apps/node-backend/src/services/deduplication.js]] |
 | IBAN | [[apps/node-backend/src/services/iban.js]] |
 | Import Pipeline | [[apps/node-backend/src/services/importPipeline/index.js]] (Phase C) |
-| Loan Repayment | [[apps/node-backend/src/services/loanRepaymentService.js]] |
+| Loan Repayment | [[apps/node-backend/src/services/calculations/loanSchedule.js]] |
 | Materialized Views | [[apps/node-backend/src/services/materializedViewService.js]] |
 | Portfolio Performance | [[apps/node-backend/src/services/portfolioPerformanceSnapshotService.js]] |
 | Price Provider | [[apps/node-backend/src/services/priceProviderService.js]] |
 | Quote Backfill | [[apps/node-backend/src/services/quoteBackfillService.js]] |
-| Recurrence | [[apps/node-backend/src/services/recurrenceService.js]] |
+| Recurrence | [[apps/node-backend/src/services/calculations/recurrence.js]] |
 | Recurring Detection | [[apps/node-backend/src/services/recurringDetectionService.js]] |
 | Text Normalization | [[apps/node-backend/src/services/textNormalization.js]] |
 

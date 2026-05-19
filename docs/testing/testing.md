@@ -761,7 +761,7 @@ Code links: [[apps/node-backend/tests/priceProviderService.test.js]], [[apps/nod
 - `apps/frontend/src/hooks/useStatistics.test.ts` now covers category pivot metric mode aggregations (absolute, net, income-only, expense-only) and recipient yearly aggregation (`topRecipientsByYear`) used by year-filtered top-recipient statistics.
 - Currency target conversion coverage expanded for analytics and conversion paths: `apps/node-backend/tests/routes/info.test.js`, `apps/node-backend/tests/infoRepository.test.js`, and `apps/node-backend/tests/currencyConversionService.test.js`.
 - Final readability/enforcement verification pass: targeted frontend tests passed (3 files, 13 tests), frontend build passed, and grep checks confirmed no `toLocaleDateString(` or `toLocaleString(` under `apps/frontend/src`, no `form.currency || 'EUR'`, and no persisted `defaultBankAccount` (removed — was unused).
-- Runtime `ReferenceError` hotfix validation after settings refactor: `bunx tsc -p apps/frontend/tsconfig.json --noEmit --ignoreDeprecations 6.0` passes with no undefined-variable TypeScript errors; frontend build also passes for locale-scoped month-label callsites in [[apps/frontend/src/pages/DashboardPage.tsx]], [[apps/frontend/src/components/dashboard/CashFlowComparisonChart.tsx]], and [[apps/frontend/src/pages/portfolio/NetWorthPage.tsx]].
+- Runtime `ReferenceError` hotfix validation after settings refactor: `bunx tsc -p apps/frontend/tsconfig.json --noEmit --ignoreDeprecations 6.0` passes with no undefined-variable TypeScript errors; frontend build also passes for locale-scoped month-label callsites in [[apps/frontend/src/pages/DashboardPage.tsx]], [[apps/frontend/src/components/dashboard/CashFlowComparisonChart.tsx]], and [[apps/frontend/src/pages/portfolio/net-worth/NetWorthPage.tsx]].
 - Watchlist locale runtime-safety hotfix: `formatDisplayCurrency` moved into component scope in [[apps/frontend/src/components/portfolio/WatchlistChartDialog.tsx]] so `locale` and `appSettings` are in scope at runtime.
 - Validation snapshot: locale/language undefined-name sweep after patch reports no `Cannot find name 'locale'` or `Cannot find name 'language'`, and frontend build passes.
 - Validation status for this implementation batch: targeted frontend tests passed, frontend build passed, and root build passed.
@@ -772,7 +772,7 @@ Code links: [[apps/node-backend/tests/priceProviderService.test.js]], [[apps/nod
 - `getBankBalances(targetCurrency)` FX-history coverage expanded: [[apps/node-backend/tests/infoRepository.test.js]] now verifies `convertRowsToEur(..., targetCurrency, { useHistoricalRatesByDate: true, dateField: 'date' })` is used for both current balances and monthly history rows.
 - `apps/node-backend/tests/infoRepository.test.js` adds regression coverage for `/api/info/net-worth` snapshot sanitization of isolated one-day unit investment spikes, asserting outlier-day correction between neighbors and stable current investment totals ([[apps/node-backend/src/repositories/infoRepository.js]], [[apps/node-backend/tests/infoRepository.test.js]]).
 
-Code links: [[apps/frontend/src/components/dashboard/MonthlyTrendsChart.tsx]], [[apps/frontend/src/pages/portfolio/PerformancePage.tsx]], [[apps/frontend/src/components/portfolio/AddInvestmentDialog.tsx]], [[apps/frontend/src/components/portfolio/WatchlistChartDialog.tsx]], [[apps/frontend/src/components/ui/chart.tsx]], [[apps/frontend/src/components/shared/dateUtils.ts]], [[apps/frontend/src/hooks/useStatistics.test.ts]], [[apps/frontend/src/hooks/statisticsProcessing.ts]], [[apps/frontend/src/utils/currency.ts]], [[apps/frontend/src/contexts/AppSettingsContext.tsx]], [[apps/frontend/src/contexts/SettingsContext.tsx]], [[apps/node-backend/tests/routes/info.test.js]], [[apps/node-backend/tests/infoRepository.test.js]], [[apps/node-backend/tests/currencyConversionService.test.js]]
+Code links: [[apps/frontend/src/components/dashboard/MonthlyTrendsChart.tsx]], [[apps/frontend/src/pages/portfolio/PerformancePage.tsx]], [[apps/frontend/src/components/portfolio/AddInvestmentDialog.tsx]], [[apps/frontend/src/components/portfolio/WatchlistChartDialog.tsx]], `apps/frontend/src/components/charts/` (chart.tsx removed in ADR-018 visx/d3 migration), [[apps/frontend/src/components/shared/dateUtils.ts]], [[apps/frontend/src/hooks/useStatistics.test.ts]], [[apps/frontend/src/components/statistics/statisticsUtils.ts]], [[apps/frontend/src/utils/currency.ts]], [[apps/frontend/src/contexts/AppSettingsContext.tsx]], [[apps/frontend/src/contexts/SettingsContext.tsx]], [[apps/node-backend/tests/routes/info.test.js]], [[apps/node-backend/tests/infoRepository.test.js]], [[apps/node-backend/tests/currencyConversionService.test.js]]
 
 Dependency remediation links: [[apps/node-backend/tests/priceProviderService.test.js]], [[apps/node-backend/package.json]], [[apps/frontend/package.json]], [[package.json]]
 
@@ -1208,7 +1208,7 @@ Validation runs (passed):
 - `bun vitest run tests/currencyConversionService.test.js tests/routes/plannedTransactions.test.js tests/routes/transactions.test.js`
 - `npm test -- --coverage`
 
-Related code: [[apps/node-backend/src/services/currencyConversionService.js]], [[apps/node-backend/src/routes/plannedTransactions.js]], [[apps/node-backend/src/routes/transactions.js]]
+Related code: [[apps/node-backend/src/services/currency/currencyConversionService.js]], [[apps/node-backend/src/routes/plannedTransactions.js]], [[apps/node-backend/src/routes/transactions.js]]
 
 ### Additional backend repository/schema coverage (2026-04-11)
 
@@ -1226,7 +1226,7 @@ Validation run (passed): `bun vitest run tests/categoryRepository.test.js tests/
 ### Incremental coverage addendum (2026-04-11)
 
 - [[apps/node-backend/tests/currencyConversionService.test.js]] now includes historical miss-cache coverage to ensure duplicate historical-rate DB lookups are avoided for repeated misses.
-- Related code: [[apps/node-backend/src/services/currencyConversionService.js]]
+- Related code: [[apps/node-backend/src/services/currency/currencyConversionService.js]]
 - Validation context (passed): `bun vitest run tests/currencyConversionService.test.js`; `npm test -- --coverage` (`74.18/59.54/78.47/77.68`).
 
 
@@ -1287,7 +1287,7 @@ Validation runs (Phase C):
   - [[apps/node-backend/src/database/connection.js]] query behavior
   - [[apps/node-backend/src/services/recurringDetectionService.js]]
   - [[apps/node-backend/src/services/materializedViewService.js]]
-  - [[apps/node-backend/src/services/currencyConversionService.js]] cache helpers
+  - [[apps/node-backend/src/services/currency/currencyConversionService.js]] cache helpers
   - [[apps/node-backend/src/services/portfolioPerformanceSnapshotService.js]]
 - Added assertions for:
   - `GET /recurring-patterns` success + detector-failure fallback (`{ patterns: [], total: 0 }`)

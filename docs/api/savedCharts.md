@@ -78,7 +78,7 @@ Create a new saved chart configuration.
 **Error Response:** `400 Bad Request`
 
 ```json
-{ "detail": "Missing or invalid \"name\"" }
+{ "ok": false, "error": { "code": "VALIDATION_ERROR", "message": "Missing or invalid \"name\"" } }
 ```
 
 Invalid `(chartType, chartVariant)` combinations also return `400`:

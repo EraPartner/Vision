@@ -143,6 +143,60 @@ package "Repositories" {
     +getNetWorth(): Promise<NetWorth>
     +getRecipientInsights(): Promise<RecipientInsight[]>
     +getExchangeRates(): Promise<ExchangeRate[]>
+    note bottom: Composite (Phase 3.1) — split into\n7 sub-modules: Statistics, Monthly,\nBanks, NetWorth, Planned, Recipients,\nHelpers (+ getNetWorthFromSnapshots).
+  }
+
+  class TagRepository {
+    +getAll({ isActive? }): Promise<Tag[]>
+    +findOrCreateBySlug(name, color): Promise<Tag>
+    +update(id, fields): Promise<Tag>
+    +softDelete(id): Promise<boolean>
+    +attachToTransactions(tagIds, txIds): Promise<void>
+    +detachFromTransactions(tagIds, txIds): Promise<void>
+  }
+
+  class AttachmentRepository {
+    +insert(metadata): Promise<Attachment>
+    +getById(id): Promise<Attachment | null>
+    +listByTransaction(txId): Promise<Attachment[]>
+    +delete(id): Promise<boolean>
+  }
+
+  class ImportBatchRepository {
+    +createBatch(meta): Promise<Batch>
+    +insertStaged(batchId, rows): Promise<number>
+    +markPhase(batchId, phase, payload): Promise<void>
+    +getRowsForReview(batchId): Promise<Row[]>
+    +listRecent(limit): Promise<Batch[]>
+    +deleteBatch(batchId): Promise<boolean>
+  }
+
+  class AiChatRepository {
+    +loadConversation(id): Promise<Message[]>
+    +persistTurn(id, prompt, transcript, answer): Promise<void>
+    +listConversations(limit): Promise<Conversation[]>
+    +delete(id): Promise<boolean>
+  }
+
+  class ProviderHealthRepository {
+    +record({ provider, ok, latencyMs, statusCode }): Promise<void>
+    +getSummary(): Promise<Summary[]>
+    +getRecent({ provider, window }): Promise<Row[]>
+  }
+
+  class CashflowForecastMcRepository {
+    +upsertSnapshot(params, paths): Promise<Snapshot>
+    +getCached(params, ttl): Promise<Snapshot | null>
+  }
+
+  class CashflowForecastMcRollingRepository {
+    +upsertRollingSnapshot(params, paths): Promise<Snapshot>
+    +getRollingCached(params): Promise<Snapshot | null>
+  }
+
+  class CashflowForecastAccuracyRepository {
+    +recordAccuracy(snapshotId, metrics): Promise<void>
+    +getRolling({ window }): Promise<Metrics[]>
   }
 }
 
@@ -246,6 +300,14 @@ DB <.. SettingsRepository
 DB <.. SavedChartsRepository
 DB <.. RawTransactionRepository
 DB <.. InfoRepository
+DB <.. TagRepository
+DB <.. AttachmentRepository
+DB <.. ImportBatchRepository
+DB <.. AiChatRepository
+DB <.. ProviderHealthRepository
+DB <.. CashflowForecastMcRepository
+DB <.. CashflowForecastMcRollingRepository
+DB <.. CashflowForecastAccuracyRepository
 
 ' Import service dependencies
 ImportService --> BankAdapters

@@ -1,0 +1,76 @@
+@startuml AI Chat Tool Loop
+title AI Chat Tool Loop (Ollama)
+
+!theme plain
+skinparam participantSpacing 10
+skinparam ranksep 50
+
+actor "User" as User
+
+participant "AIChatPage" as Page
+participant "ApiClient\n(lib/api/ai.ts)" as API
+participant "routes/ai.js" as Route
+participant "aiChatService" as ChatSvc
+participant "ollama client\n(integrations/ollama)" as Ollama
+participant "Local Ollama\n(127.0.0.1:11434)" as OllamaSrv
+participant "transactionRepository\n(+ other repos)" as Repos
+participant "aiChatRepository" as ChatRepo
+database  "PostgreSQL" as DB
+
+group 1. Open chat
+  User -> Page : type prompt
+  Page -> API : POST /api/ai/chat\n{ message, conversationId }
+  API -> Route : envelope-wrapped request
+end
+
+group 2. Load history + tool schema
+  Route -> ChatSvc : respond(messages, tools)
+  ChatSvc -> ChatRepo : loadConversation(id)
+  ChatRepo -> DB : SELECT * FROM ai_conversations ...
+  ChatSvc -> ChatSvc : build tool schema\n(query_transactions,\nquery_categories, ...)
+end
+
+group 3. First Ollama call
+  ChatSvc -> Ollama : chat({ messages, tools })
+  Ollama -> OllamaSrv : POST /api/chat
+  OllamaSrv -> Ollama : { tool_calls: [...] } OR final answer
+end
+
+group 4. Tool-call loop  [until model returns pure assistant message]
+  loop until response.tool_calls is empty
+    Ollama -> ChatSvc : tool_calls
+    loop for each tool_call
+      ChatSvc -> ChatSvc : dispatchTool(name, args)
+      ChatSvc -> Repos : repo.search(args)
+      Repos -> DB : parameterised SELECT
+      DB -> Repos : rows
+      Repos -> ChatSvc : tool_result
+    end
+    ChatSvc -> Ollama : chat({ messages + tool_results })
+    Ollama -> OllamaSrv : POST /api/chat
+    OllamaSrv -> Ollama : next response
+  end
+end
+
+group 5. Persist + stream
+  ChatSvc -> ChatRepo : persistTurn(prompt, toolTranscript, answer)
+  ChatRepo -> DB : INSERT INTO ai_conversations ...
+  ChatSvc -> Route : stream tokens
+  Route -> API : Server-Sent tokens
+  API -> Page : render assistant message + result cards
+end
+
+note over OllamaSrv
+  Local-only by design — privacy is a hard
+  constraint (see project.md). No transaction
+  or portfolio data ever leaves the machine.
+end note
+
+note over ChatSvc
+  Tool dispatch is bounded to read-only repository
+  calls. The LLM never produces raw SQL — it picks
+  a tool by name and the service runs the
+  parameterised query.
+end note
+
+@enduml

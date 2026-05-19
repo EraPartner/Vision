@@ -115,6 +115,42 @@ Route liveness matrix with rolling request metrics (15-minute window):
 - `getEndpointManifest()` — Static list of all routes (method, path, description)
 - `getRequestMetrics()` — Rolling metrics per route (counts, error count, p50/p95)
 
+## DbMaintenancePage
+
+Path: `/admin/db`
+
+Per-table statistics + VACUUM ANALYZE controls (Phase 7).
+
+| Column | Data | Calculation |
+|--------|------|-------------|
+| Table | Table name (e.g. `transactions`) | `pg_stat_user_tables` |
+| Rows | Estimated live rows | `n_live_tup` |
+| Size | Total relation size on disk | `pg_total_relation_size` |
+| Last analyse | When ANALYZE last ran | `last_analyze` |
+| Last vacuum | When VACUUM last ran | `last_vacuum` |
+
+### UI features
+
+- Per-table "VACUUM ANALYZE" button → `POST /api/admin/db/vacuum?table=<name>`
+- "Run all" button → bulk VACUUM ANALYZE across non-system tables
+- Live polling (10s) for size + analyse / vacuum timestamps
+- Uses the raw database client (not the pool) because VACUUM cannot run inside a transaction
+
+### Usage
+
+```tsx
+<DbMaintenancePage />
+```
+
+### API methods
+
+- `getDbStats()` — `GET /api/admin/db/stats`
+- `runVacuum({ table? })` — `POST /api/admin/db/vacuum` (admin rate-limited)
+
+**Code:** [[apps/frontend/src/pages/DbMaintenancePage.tsx]]
+
+> The Feature Flags admin page was removed in [[docs/adr/035-remove-feature-flags|ADR-035]] (along with the runtime feature-flag system); the four current admin pages are Overview, Providers, Endpoints, and DB Maintenance.
+
 ## Type Signatures
 
 Frontend types in `apps/frontend/src/lib/api/admin.ts`:
