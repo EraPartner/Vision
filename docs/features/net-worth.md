@@ -3,8 +3,9 @@ title: Net Worth Feature
 type: feature
 status: active
 date: 2026-04-16
-tags: [feature, net-worth, portfolio, chart, zoom, frontend, performance, snapshots, fixed-income]
-description: Daily net worth tracking with zoomable/scrollable charts, series toggling, LTTB downsampling, and daily breakdown tables. Powered by pre-computed snapshots including unit-based and fixed-income investments.
+updated: 2026-05-18
+tags: [feature, net-worth, portfolio, chart, zoom, frontend, performance, snapshots, fixed-income, valuation-parity, accrued-interest, appreciation]
+description: Daily net worth tracking with zoomable/scrollable charts, series toggling, LTTB downsampling, and daily breakdown tables. Powered by pre-computed snapshots whose non-unit asset valuation now mirrors the live portfolio summary formulas exactly (ADR-061).
 aliases: [net worth, networth, wealth tracking, financial health]
 related_code:
   - apps/frontend/src/pages/portfolio/net-worth/NetWorthPage.tsx
@@ -12,6 +13,7 @@ related_code:
   - apps/node-backend/src/routes/info.js
   - apps/node-backend/src/repositories/infoRepository.js
   - apps/node-backend/src/services/portfolioPerformanceSnapshotService.js
+  - apps/node-backend/src/services/portfolio/snapshotBuilder.js
 ---
 
 # Net Worth Feature
@@ -45,10 +47,10 @@ interface NetWorthResponse {
 ### Backend Computation
 
 The net worth is computed by `infoRepository.getNetWorthFromSnapshots(currency)` in the backend, which combines:
-- **Investments**: Pre-computed daily portfolio values from `portfolio_performance_snapshots` (includes unit-based assets: stocks, ETFs, crypto, metals, AND fixed-income: real estate, savings, bonds)
+- **Investments**: Pre-computed daily portfolio values from `portfolio_performance_snapshots` (includes unit-based assets: stocks, ETFs, crypto, metals, AND non-unit assets: real estate, savings, bonds). The snapshot builder now mirrors `portfolioSummaryService` formulas exactly — see valuation formulas below.
 - **Liquid**: Daily bank account balances derived from the transactions table (latest balance per account per day via lateral join, with fallback to cumulative transaction flow)
 
-Key architectural change: **No network calls at request time.** All investment values come from `portfolio_performance_snapshots`, which is populated offline by the snapshot service. Fixed-income investments (real_estate, savings, bond) are included in daily snapshots via their `current_price` applied from their `created_at` date onward.
+Key architectural change: **No network calls at request time.** All investment values come from `portfolio_performance_snapshots`, which is populated offline by `snapshotBuilder.computeDailySnapshots()` ([[apps/node-backend/src/services/portfolio/snapshotBuilder.js]]).
 
 The endpoint uses a sophisticated caching strategy with **inflight request coalescing** to prevent duplicate computations:
 
@@ -62,11 +64,46 @@ const data = await resolveCacheWithInflight(netWorthResponseCache, cacheKey, {
 });
 ```
 
+### Non-Unit Asset Valuation Formulas (2026-05-18, ADR-061)
+
+`portfolio_performance_snapshots` previously valued savings, bonds, and real estate using raw `investments.current_price`, ignoring accrued interest and appreciation transactions. This caused a divergence between Net Worth "Investments" and Portfolio Overview / Performance "Portfolio Value". The snapshot builder now uses the same formulas as `portfolioSummaryService`:
+
+**Fixed-income (savings, bond):**
+```
+value = runningInvested + accruedInterest
+
+accruedInterest = runningInvested × (interestRate / 100 / 365)
+                  × calendarDaysBetween(startDate, day)
+
+startDate = date of most recent `interest` transaction
+            OR date of first `buy` transaction if no interest payments yet
+```
+An `interest` transaction resets the accrual clock to that date (matching how a real interest payment zeroes the owed amount). `calendarDaysBetween` uses `APP_TIMEZONE` per ADR-009.
+
+**Real estate:**
+```
+value = runningInvested + cumulativeAppreciation
+
+runningInvested     = sum of `buy` transaction amounts (converted to target currency)
+                      minus `sell` amounts
+cumulativeAppreciation = sum of `appreciation` transaction amounts
+```
+
+**Legacy fallback:** If an investment has no buy transactions but has `current_price` set and the current day is on or after `active_from`, the snapshot uses `current_price` (converted). This preserves display for manually-entered investments without seed transactions.
+
+**Unit-based assets (stock, etf, crypto, metals) — latest day only:**
+On the most recent snapshot day, `investments.current_price` is used directly instead of `asset_price_history` forward-fill. Historical days are unchanged. This guarantees the latest snapshot reconciles with the live summary even when `asset_price_history` lags behind a price refresh.
+
+> [!warning] Historical chart redraw
+> When `computeAndStoreSnapshots` runs after this change, historical net-worth values for fixed-income and real-estate days shift (typically upward as accrued interest and appreciation are now layered in). Users will see the Net Worth chart redraw on the next page refresh. This is expected and correct behavior.
+
+> [!info] Three-page parity
+> Dashboard "Total Value", Performance "Portfolio Value", and Net Worth "Investments" now show the same value for the same day, all derived from the same underlying formulas.
+
 Implementation notes:
 - Route-level cache behavior in `info` routes is now centralized through shared helpers (`getFreshCachedData`, `setCachedData`, `setInflightCache`, `resolveCacheWithInflight`) and reused by both `GET /api/info/net-worth` and `GET /api/info/portfolio-performance`, preserving TTL and concurrent-request deduplication behavior while reducing duplicate logic ([[apps/node-backend/src/routes/info.js]]).
 - `GET /api/info/category-breakdown` now uses a dedicated repository path (`getCategoryBreakdown`) instead of full `getStatistics`, and hot-path info route imports (exchange-rates + portfolio-performance snapshot service) are module-scoped to remove repeated dynamic import overhead without changing API responses ([[apps/node-backend/src/routes/info.js]], [[apps/node-backend/src/repositories/infoRepository.js]]).
 - Info-route response caches now opportunistically prune expired entries and enforce a bounded maximum entry count to prevent long-lived unbounded memory growth while keeping inflight dedupe semantics intact ([[apps/node-backend/src/routes/info.js]]).
-- **Snapshot-backed computation:** Investment values no longer fetched from price providers at request time. Daily snapshots include fixed-income value in the `cash_value` column, computed from fixed-income investments' `current_price` applied from `created_at` onward ([[apps/node-backend/src/services/portfolioPerformanceSnapshotService.js]]).
 
 ## Chart Architecture
 

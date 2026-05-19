@@ -9,8 +9,12 @@
 
 import { query, withTransaction } from '../../database/connection.js';
 import { logger } from '../../config/logger.js';
-import { sanitizeSnapshotSpikes } from '../../utils/portfolioMath.js';
+import { sanitizeSnapshotSpikes, calendarDaysBetween } from '../../utils/portfolioMath.js';
 import { toDecimal, roundMoney } from '../../lib/money.js';
+
+const FIXED_INCOME_ASSET_CLASSES = new Set(['savings', 'bond']);
+const REAL_ESTATE_ASSET_CLASS = 'real_estate';
+const NON_UNIT_ASSET_CLASSES = ['savings', 'bond', 'real_estate'];
 
 /** @returns {Promise<string|null>} ISO date string or null */
 export async function getFirstDataDate() {
@@ -77,11 +81,13 @@ export async function computeDailySnapshots(targetCurrency = 'EUR') {
     query(`
       SELECT id, COALESCE(currency, 'EUR') AS currency,
              COALESCE(current_price, 0) AS current_price,
+             COALESCE(interest_rate, 0) AS interest_rate,
+             asset_class,
              COALESCE(created_at::date, $1::date)::text AS active_from
       FROM investments
       WHERE is_active = true
-        AND asset_class IN ('real_estate', 'savings', 'bond')
-    `, [firstDateYmd]),
+        AND asset_class = ANY($2::text[])
+    `, [firstDateYmd, NON_UNIT_ASSET_CLASSES]),
     query(`
       SELECT investment_id, to_char(price_date, 'YYYY-MM-DD') AS day, close_price
       FROM asset_price_history
@@ -109,12 +115,18 @@ export async function computeDailySnapshots(targetCurrency = 'EUR') {
     }])
   );
 
-  const fixedIncomeInvestments = fixedIncomeResult.rows.map(row => ({
+  // Non-unit investments (savings/bond/real_estate). Valued from transactions —
+  // current_price is kept as a last-resort fallback only when no buy transactions
+  // exist for the asset, mirroring how the live summary handles such cases.
+  const nonUnitInvestments = fixedIncomeResult.rows.map(row => ({
     id: Number(row.id),
     currency: row.currency,
     currentPrice: Number(row.current_price) || 0,
+    interestRate: Number(row.interest_rate) || 0,
+    assetClass: row.asset_class,
     activeFrom: String(row.active_from).split('T')[0],
   }));
+  const nonUnitInvestmentsById = new Map(nonUnitInvestments.map(inv => [inv.id, inv]));
 
   // { investmentId: { day: price } }  +  sorted day arrays for binary-search forward-fill
   const priceHistoryByInvestment = {};
@@ -222,11 +234,31 @@ export async function computeDailySnapshots(targetCurrency = 'EUR') {
   const lastKnownPrice = {};
   const snapshots = [];
 
+  // Per-investment running state for non-unit assets (mirrors live summary
+  // formulas so the latest snapshot reconciles with /portfolio-summary).
+  //   fixed-income (savings/bond): value = runningInvested + accruedInterest
+  //   real-estate:                 value = runningInvested + runningAppreciation
+  // runningInvested is kept in target currency, accumulated using per-txn FX
+  // (same convention as cumulativeInvested above).
+  const nonUnitState = new Map();
+  for (const inv of nonUnitInvestments) {
+    nonUnitState.set(inv.id, {
+      runningInvested: toDecimal(0),
+      runningAppreciation: toDecimal(0),
+      lastInterestDate: null,
+      firstBuyDate: null,
+    });
+  }
+
+  const todayYmd = allDays[allDays.length - 1];
+
   for (const day of allDays) {
     // Apply transactions
     for (const tx of txByDay[day] || []) {
       const converted = convertAmount(tx.amount, tx.currency, tx.fxRateToEur);
       const inv = investmentsById.get(tx.investmentId);
+      const nonUnitInv = nonUnitInvestmentsById.get(tx.investmentId);
+      const nonUnitS = nonUnitState.get(tx.investmentId);
 
       if (tx.type === 'buy' || tx.type === 'gift') {
         cumulativeInvested = cumulativeInvested.plus(converted);
@@ -235,6 +267,13 @@ export async function computeDailySnapshots(targetCurrency = 'EUR') {
         else if (inv?.assetClass === 'metals') metalsInvested = metalsInvested.plus(converted);
         unitsByInvestment[tx.investmentId] = (unitsByInvestment[tx.investmentId] || 0) + tx.units;
         if (tx.units > 0 && tx.amount > 0) lastKnownPrice[tx.investmentId] = tx.amount / tx.units;
+
+        if (nonUnitS) {
+          // Live summary: fixed-income uses buy+gift; real_estate uses buy only.
+          const includeForInvested = nonUnitInv.assetClass !== REAL_ESTATE_ASSET_CLASS || tx.type === 'buy';
+          if (includeForInvested) nonUnitS.runningInvested = nonUnitS.runningInvested.plus(converted);
+          if (tx.type === 'buy' && !nonUnitS.firstBuyDate) nonUnitS.firstBuyDate = day;
+        }
       } else if (tx.type === 'sell') {
         cumulativeInvested = cumulativeInvested.minus(converted);
         if (inv?.assetClass === 'stock' || inv?.assetClass === 'etf') stocksEtfsInvested = stocksEtfsInvested.minus(converted);
@@ -242,6 +281,13 @@ export async function computeDailySnapshots(targetCurrency = 'EUR') {
         else if (inv?.assetClass === 'metals') metalsInvested = metalsInvested.minus(converted);
         unitsByInvestment[tx.investmentId] = (unitsByInvestment[tx.investmentId] || 0) - tx.units;
         if (tx.units > 0 && tx.amount > 0) lastKnownPrice[tx.investmentId] = tx.amount / tx.units;
+
+        if (nonUnitS) nonUnitS.runningInvested = nonUnitS.runningInvested.minus(converted);
+      } else if (tx.type === 'interest' && nonUnitS) {
+        // Resets the accrual clock to match calculateAccruedInterest.
+        nonUnitS.lastInterestDate = day;
+      } else if (tx.type === 'appreciation' && nonUnitS) {
+        nonUnitS.runningAppreciation = nonUnitS.runningAppreciation.plus(converted);
       }
       // income / dividends / fees / taxes: don't alter invested capital
     }
@@ -252,11 +298,18 @@ export async function computeDailySnapshots(targetCurrency = 'EUR') {
     let cryptoValue = toDecimal(0);
     let metalsValue = toDecimal(0);
 
+    const isLatestDay = day === todayYmd;
+
     for (const inv of investmentsById.values()) {
       const units = unitsByInvestment[inv.id] || 0;
       if (units <= 0) continue;
 
-      const price = resolvePrice(inv, day, lastKnownPrice);
+      // Latest day: use the live current_price so the headline snapshot value
+      // always reconciles with /portfolio-summary, even if asset_price_history
+      // lags behind a price refresh that updated investments.current_price.
+      const price = isLatestDay && inv.currentPrice > 0
+        ? inv.currentPrice
+        : resolvePrice(inv, day, lastKnownPrice);
       if (price <= 0) continue;
 
       // Forward-fill last known price
@@ -271,11 +324,40 @@ export async function computeDailySnapshots(targetCurrency = 'EUR') {
       else if (inv.assetClass === 'metals') metalsValue = metalsValue.plus(invValue);
     }
 
-    // Fixed-income: use current_price from active_from onward
+    // Non-unit assets — value mirrors live summary formulas exactly.
     let fixedIncomeValue = toDecimal(0);
-    for (const inv of fixedIncomeInvestments) {
-      if (day < inv.activeFrom || inv.currentPrice <= 0) continue;
-      fixedIncomeValue = fixedIncomeValue.plus(convertAmount(inv.currentPrice, inv.currency));
+    for (const inv of nonUnitInvestments) {
+      const state = nonUnitState.get(inv.id);
+      const isFixedIncome = FIXED_INCOME_ASSET_CLASSES.has(inv.assetClass);
+      const isRealEstate = inv.assetClass === REAL_ESTATE_ASSET_CLASS;
+
+      let invValue;
+      if (isFixedIncome) {
+        // accruedInterest = principal × dailyRate × days(startDate → day)
+        let accrued = toDecimal(0);
+        if (inv.interestRate > 0 && state.runningInvested.gt(0)) {
+          const startDate = state.lastInterestDate || state.firstBuyDate;
+          if (startDate) {
+            const days = Math.max(0, calendarDaysBetween(startDate, day));
+            const dailyRate = toDecimal(inv.interestRate).div(100).div(365);
+            accrued = state.runningInvested.times(dailyRate).times(days);
+          }
+        }
+        invValue = state.runningInvested.plus(accrued);
+      } else if (isRealEstate) {
+        invValue = state.runningInvested.plus(state.runningAppreciation);
+      } else {
+        invValue = state.runningInvested;
+      }
+
+      // Fallback: investments with no transactions yet — preserve legacy behaviour
+      // of showing current_price from active_from so we don't regress users who
+      // entered a current_price without seed transactions.
+      if (invValue.lte(0) && day >= inv.activeFrom && inv.currentPrice > 0) {
+        invValue = convertAmount(inv.currentPrice, inv.currency);
+      }
+
+      if (invValue.gt(0)) fixedIncomeValue = fixedIncomeValue.plus(invValue);
     }
     totalValue = totalValue.plus(fixedIncomeValue);
 

@@ -911,7 +911,7 @@ The Transaction Tags feature test suite is now **complete and passing**. All tes
 |------|-------|----------------|
 | **Repository layer** | All 13 repositories | SQL query correctness, edge cases |
 | **Route handlers** | All 14 route files | Request validation, error responses |
-| **Portfolio performance** | `portfolioPerformanceSnapshotService.js` | Daily forward-fill, spike sanitization |
+| ~~**Portfolio performance**~~ | ~~`portfolioPerformanceSnapshotService.js`~~ | ✓ **COVERED** (2026-05-18) — parity regression tests: savings accrual, real-estate appreciation, bond interest-payment clock reset, latest-day unit price |
 | **IBAN validation** | `iban.js` | Mod-97 checksum algorithm |
 | **Recurrence service** | `recurrenceService.js` | Date calculation for patterns |
 
@@ -1063,6 +1063,12 @@ Coverage snapshot after this update: overall `81.81/67.61/85.42/85.25`; reposito
 
 Related source links: [[apps/node-backend/src/repositories/portfolioTransactionRepository.js]], [[docs/testing/testing|Testing Documentation]]
 
+
+### Backend coverage additions (2026-05-18, snapshot valuation parity)
+
+| File | Area | Coverage Added |
+|------|------|----------------|
+| [[apps/node-backend/tests/portfolioPerformanceSnapshotService.test.js]] | Portfolio snapshot valuation parity | Regression tests locking savings accrual formula (`principal × rate × days / (100 × 365)`), real-estate appreciation summed from `appreciation` transactions, bond `interest` transaction resetting the accrual clock, and latest-day unit-based snapshot using `investments.current_price` not stale history |
 
 ### Backend coverage additions (2026-04-11, managed loop safe/sequential)
 
