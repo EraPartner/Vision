@@ -14,6 +14,9 @@ related_code: [[package.json]]
 
 This guide covers setting up Vision for local development.
 
+> [!tip] Devcontainer option
+> If you want to run `claude --dangerously-skip-permissions` safely, use the devcontainer instead of the steps below. See [[docs/guides/devcontainer|Devcontainer Guide]] for setup instructions. Normal development on the host is covered here.
+
 ## Prerequisites
 
 | Tool | Version | Notes |

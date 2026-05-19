@@ -1,0 +1,86 @@
+#!/usr/bin/env bash
+# Wrapper: route `claude` invocations into the Vision devcontainer.
+#
+# This script lives at .devcontainer/bin/claude. The walk-up logic finds the
+# project root by looking for .devcontainer/devcontainer.json so the wrapper
+# works whether you call it directly (./devcontainer/bin/claude) or via a
+# PATH/shell-function indirection from anywhere inside the repo.
+#
+# It is intentionally idempotent: `devcontainer up` is a no-op if the
+# container is already running (~0.3s overhead), so we always call it.
+
+set -euo pipefail
+
+# Walk up from PWD until we find .devcontainer/devcontainer.json.
+find_project_root() {
+  local d="$PWD"
+  while [[ "$d" != "/" ]]; do
+    if [[ -f "$d/.devcontainer/devcontainer.json" ]]; then
+      echo "$d"
+      return 0
+    fi
+    d="$(dirname "$d")"
+  done
+  return 1
+}
+
+# Caller (e.g. the fish function) can pre-resolve the project path and
+# pass it via VISION_PROJECT_ROOT so the wrapper works from anywhere.
+if [[ -n "${VISION_PROJECT_ROOT:-}" && -f "${VISION_PROJECT_ROOT}/.devcontainer/devcontainer.json" ]]; then
+  PROJECT_ROOT="$VISION_PROJECT_ROOT"
+else
+  PROJECT_ROOT="$(find_project_root || true)"
+fi
+
+if [[ -z "$PROJECT_ROOT" ]]; then
+  echo "claude (vision-wrapper): no .devcontainer/devcontainer.json above $PWD." >&2
+  echo "Falling back to host claude binary." >&2
+  exec command claude "$@"
+fi
+
+if ! command -v devcontainer >/dev/null 2>&1; then
+  echo "claude (vision-wrapper): @devcontainers/cli not installed." >&2
+  echo "  npm install -g @devcontainers/cli" >&2
+  exit 1
+fi
+
+# Ensure the container is up (idempotent, fast when warm).
+devcontainer up --workspace-folder "$PROJECT_ROOT" >/dev/null
+
+# Forward Claude / Anthropic auth env vars from the host so the container's
+# claude can authenticate without going through the in-container OAuth
+# browser flow (which has a known double-encoded-redirect-URI bug).
+#
+# Credential sources, in order of preference:
+#   1. macOS Keychain entry  service="vision-claude-code-token"  (recommended;
+#      credential never touches a plaintext file on disk)
+#   2. Plain env vars already set in the host shell (CLAUDE_CODE_OAUTH_TOKEN,
+#      ANTHROPIC_API_KEY, ANTHROPIC_AUTH_TOKEN) — fallback
+EXEC_ARGS=()
+
+# 1) Try Keychain (macOS only). `security` returns non-zero if not found.
+if command -v security >/dev/null 2>&1; then
+  if kc_token="$(security find-generic-password -s 'vision-claude-code-token' -w 2>/dev/null)"; then
+    if [[ -n "$kc_token" ]]; then
+      EXEC_ARGS+=(--remote-env "CLAUDE_CODE_OAUTH_TOKEN=$kc_token")
+    fi
+  fi
+fi
+
+# 2) Plain env vars from the host shell (only kicks in if not already
+#    supplied by Keychain above).
+already_set=0
+for arg in "${EXEC_ARGS[@]}"; do
+  [[ "$arg" == CLAUDE_CODE_OAUTH_TOKEN=* ]] && already_set=1
+done
+if (( ! already_set )); then
+  for var in CLAUDE_CODE_OAUTH_TOKEN ANTHROPIC_API_KEY ANTHROPIC_AUTH_TOKEN; do
+    val="${!var:-}"
+    if [[ -n "$val" ]]; then
+      EXEC_ARGS+=(--remote-env "${var}=${val}")
+    fi
+  done
+fi
+
+# Forward all args. claude is interactive — stdin/tty flow through devcontainer exec.
+exec devcontainer exec --workspace-folder "$PROJECT_ROOT" "${EXEC_ARGS[@]}" claude "$@"

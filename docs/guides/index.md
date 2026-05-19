@@ -26,6 +26,7 @@ SORT title ASC
 
 ### Getting Started
 - [[docs/guides/setup\|Setup Guide]] - Local development environment setup
+- [[docs/guides/devcontainer\|Devcontainer Guide]] - Isolated dev environment for Claude Code `--dangerously-skip-permissions`
 - [[docs/guides/backend-configuration\|Backend Configuration]] - Config, logging, and database utilities
 
 ### Development
