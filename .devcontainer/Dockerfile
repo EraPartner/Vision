@@ -29,7 +29,6 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
       postgresql-client \
   && rm -rf /var/lib/apt/lists/* \
   && useradd --create-home --uid 1000 --shell /bin/bash dev \
-  && usermod -aG proxy dev \
   && echo "C.UTF-8 UTF-8" > /etc/locale.gen && locale-gen
 
 # GitHub CLI from the official cli.github.com apt repo.
@@ -97,15 +96,13 @@ RUN install -d -o dev -g dev -m 0700 /home/dev/.ssh
 RUN install -d -o dev -g dev -m 0700 /home/dev/.claude \
  && install -d -o dev -g dev -m 0755 /home/dev/.config /home/dev/.config/gh
 
-# Strip setuid/setgid bits from binaries we never use. Inert under
-# no-new-privileges, but clean defense-in-depth. NOTE: we use `runuser` for
-# privilege drops and pg_ctlcluster runs as root (so `su`'s setuid bit is not
-# needed even for Postgres), and signing uses the forwarded host ssh-agent.
-RUN for b in /usr/bin/su /bin/su /usr/bin/mount /bin/mount /usr/bin/umount /bin/umount \
-             /usr/bin/passwd /usr/bin/chsh /usr/bin/chfn /usr/bin/newgrp /usr/bin/gpasswd \
-             /usr/bin/chage /usr/bin/expiry /usr/bin/wall /usr/bin/crontab /usr/bin/ssh-agent; do \
-      [ -e "$b" ] && chmod -s "$b" 2>/dev/null || true; \
-    done
+# Strip ALL setuid/setgid bits image-wide. Inert under no-new-privileges, but
+# clean defense-in-depth — and a generic find won't go stale like a hand-list
+# (it also catches ssh-keysign, unix_chkpwd, squid/pinger). NOTE: we use
+# `runuser` for privilege drops, pg_ctlcluster runs as root (so `su`'s setuid
+# bit isn't needed for Postgres), signing uses the forwarded host ssh-agent,
+# and squid's pinger is unused (no cache peers) — nothing needs elevated bits.
+RUN find / -xdev -type f -perm /6000 -exec chmod -s {} + 2>/dev/null || true
 
 # Container process (PID 1 / entrypoint) runs as root so it can apply iptables,
 # start Postgres, and start the proxy; devcontainer.json sets remoteUser=dev for

@@ -125,6 +125,8 @@ log "Setup complete. Container ready (dev sessions via 'devcontainer exec')."
 #    opens a gap; it only restores the allowlisted path. Process-existence check
 #    (pgrep) — not a socket connect — so it doesn't spam the squid access log.
 squid_restarts=0
+ACCESS_LOG=/var/log/squid/access.log
+LOG_CAP=$(( 50 * 1024 * 1024 ))   # rotate the audit log past ~50 MB
 while true; do
   if ! pgrep -x squid >/dev/null 2>&1; then
     squid_restarts=$(( squid_restarts + 1 ))
@@ -133,5 +135,12 @@ while true; do
     (( squid_restarts >= 5 )) && \
       log "⚠ squid restarted $squid_restarts times — likely a config error; see /var/log/squid/boot.log"
   fi
+  # Bound the egress audit log (logfile_rotate keeps 1 old generation).
+  if [[ -f "$ACCESS_LOG" ]] && (( $(stat -c %s "$ACCESS_LOG" 2>/dev/null || echo 0) > LOG_CAP )); then
+    squid -k rotate 2>/dev/null || true
+  fi
+  # Keep the audit log world-readable so `dev` (no longer in the proxy group)
+  # can inspect it; squid recreates it 0640 on start/rotate.
+  chmod o+r /var/log/squid/access.log* 2>/dev/null || true
   sleep 30
 done
