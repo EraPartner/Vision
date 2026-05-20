@@ -101,4 +101,11 @@ RUN install -d -o dev -g dev -m 0700 /home/dev/.claude \
 # start Postgres, and start the proxy; devcontainer.json sets remoteUser=dev for
 # sessions and --security-opt=no-new-privileges so dev cannot escalate.
 WORKDIR /workspaces/Vision
+
+# Health: the egress proxy must be listening AND Postgres must accept
+# connections. start-period covers entrypoint setup. Surfaces in `docker ps`;
+# `.devcontainer/bin/doctor` is the fuller manual check.
+HEALTHCHECK --interval=30s --timeout=5s --start-period=90s --retries=3 \
+  CMD bash -c '(exec 3<>/dev/tcp/127.0.0.1/3128) 2>/dev/null && pg_isready -h 127.0.0.1 -p 5432 -q'
+
 ENTRYPOINT ["/usr/local/sbin/vision-entrypoint"]

@@ -111,6 +111,8 @@ log "Setup complete. Container ready (dev sessions via 'devcontainer exec')."
 while true; do
   if ! (exec 3<>/dev/tcp/127.0.0.1/3128) 2>/dev/null; then
     log "egress proxy not responding — restarting squid..."
+    # Kill any stale/hung squid first so the relaunch can bind 3128 cleanly.
+    pkill -x squid 2>/dev/null && sleep 2 || true
     squid -N >>/var/log/squid/boot.log 2>&1 &
   fi
   sleep 30

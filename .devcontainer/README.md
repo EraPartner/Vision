@@ -88,11 +88,12 @@ Egress is enforced in two layers by the root entrypoint on every start:
 Allowlist (in `squid.conf`): Anthropic + Claude Code, `registry.npmjs.org`,
 GitHub, PyPI, Debian/PostgreSQL apt, Yahoo Finance, `*.visualstudio.com`.
 
-> **Tools must honor `HTTPS_PROXY`.** `claude`, `bun`, `npm`, `git`, `gh`,
-> `pip` all do. Node's global `fetch` does **not** — so the backend's
-> yahoo-finance calls won't work inside the container. Run the app on the
-> host for live data. To change the allowlist, edit `squid.conf` and
-> **rebuild** (it's baked into the image).
+> **Everything routes through the proxy.** `HTTP(S)_PROXY` is set, and
+> `NODE_USE_ENV_PROXY=1` makes Node ≥24's global `fetch` honor it too — so
+> `claude`, `bun`, `npm`, `git`, `gh`, `pip`, and app `fetch` all egress via
+> squid. The backend's yahoo-finance calls **work inside the container** now
+> (those hosts are allowlisted). To change the allowlist, edit `squid.conf`
+> and **rebuild** (it's baked into the image).
 
 squid is supervised by the entrypoint: if it crashes, it's restarted
 (egress stays denied while down — fail-closed).
@@ -111,9 +112,17 @@ Run `.devcontainer/bin/doctor` for a one-shot readiness check.
 **Not covered:** WebSearch/WebFetch run Anthropic-side, not through the
 proxy. ECH (encrypted SNI) destinations fail closed (no SNI → terminated).
 
-**Prereqs:** `~/.gitconfig` and `~/.ssh/github.pub` must exist on the host
-(bind-mounted RO; missing → opaque `devcontainer up` failure). Docker
-Desktop VM needs ≥4 GB (the container requests `--memory=4g`).
+**Caps:** drops all Linux caps, re-adds only `NET_ADMIN, CHOWN,
+DAC_OVERRIDE, FOWNER, SETUID, SETGID, SETPCAP` (entrypoint iptables/perms/
+Postgres + squid privilege-drops). Add to `runArgs` if new tooling needs more.
+
+**Prereqs / portability:** `~/.gitconfig` and `~/.ssh/github.pub` must exist
+on the host (bind-mounted RO; missing → opaque `devcontainer up` failure).
+Docker Desktop VM needs ≥4 GB. **macOS/Docker-Desktop only** — the Keychain
+auth and `/run/host-services/ssh-auth.sock` mount don't exist on Linux/Colima/
+OrbStack; drop that mount and export `CLAUDE_CODE_OAUTH_TOKEN`/`GH_TOKEN`
+there. Use a **fine-grained PAT scoped to this repo** for `vision-gh-token`
+(it's inherited by Claude's subprocesses + GitHub is allowlisted).
 
 ## Persistence
 

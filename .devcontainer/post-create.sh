@@ -59,8 +59,11 @@ EOF
 fi
 
 # Install JS deps (bun honors HTTPS_PROXY → squid → registry.npmjs.org).
-echo "[post-create] bun install..."
-bun install
+# --frozen-lockfile is the reproducible install: it builds strictly from
+# bun.lock and fails loudly on a stale lock (matching the pinned base image /
+# SHA-pinned bun / devcontainer-lock).
+echo "[post-create] bun install --frozen-lockfile..."
+bun install --frozen-lockfile
 
 # Alembic migrations are intentionally NOT run here — the Node backend
 # pre-creates alembic_version as VARCHAR(64) before invoking alembic (see
