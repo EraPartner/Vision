@@ -84,6 +84,20 @@ stage_claude_config
 # --- 2) Ensure the container is up (idempotent) ------------------------------
 devcontainer up --workspace-folder "$PROJECT_ROOT" >/dev/null
 
+# --- 2a) Resolve THIS container + auto-pull host config into it ---------------
+# Re-apply the sanitized allowlist stage (built above) into the live ~/.claude
+# volume so host config edits land WITHOUT a rebuild — previously only the
+# create-time seed did this. Newer-wins rsync (no --delete) + a key-merge of
+# .claude.json where container values win, so it never clobbers container state.
+CID="$(docker ps -q --filter "label=devcontainer.local_folder=$PROJECT_ROOT" 2>/dev/null | head -1 || true)"
+if [[ -n "$CID" ]]; then
+  docker exec -u dev "$CID" bash -c '
+    rsync -a --update --ignore-errors /home/dev/.claude-stage/dot-claude/ /home/dev/.claude/ >/dev/null 2>&1 || true
+    if [[ -f /home/dev/.claude-stage/claude.json && -f /home/dev/.claude.json ]]; then
+      t="$(mktemp)" && jq -s ".[1] * .[0]" /home/dev/.claude.json /home/dev/.claude-stage/claude.json >"$t" 2>/dev/null && mv "$t" /home/dev/.claude.json || rm -f "$t"
+    fi' >/dev/null 2>&1 || true
+fi
+
 # --- 3) Forward credentials from the macOS Keychain at exec time -------------
 EXEC_ARGS=()
 kc() { security find-generic-password -s "$1" -w 2>/dev/null || true; }
@@ -106,4 +120,31 @@ if (( ! have_claude )); then
   done
 fi
 
-exec devcontainer exec --workspace-folder "$PROJECT_ROOT" ${EXEC_ARGS[@]+"${EXEC_ARGS[@]}"} claude "$@"
+# --- 4) Auto-sync config/memory back to the host when the session ends --------
+# Replaces the manual `vision-claude-sync push`. We deliberately DON'T `exec` the
+# session: bash stays the parent, so when claude exits — normally OR via Ctrl-C —
+# the EXIT trap runs the SAME hardened push the manual wrapper uses (snapshot-to-
+# temp + abort-on-fail, per-file newer-wins, jq key-merge, timestamped backups).
+# Pushing only AFTER the session ends means a single writer (no host/container
+# race on .claude.json), so it cannot corrupt either copy. Disable with
+# VISION_AUTOSYNC=0.
+AUTOSYNC="${VISION_AUTOSYNC:-1}"
+_autosync_done=0
+autosync_push() {
+  if [[ "$_autosync_done" == 1 ]]; then return 0; fi
+  _autosync_done=1
+  if [[ "$AUTOSYNC" != 1 || -z "$CID" ]]; then return 0; fi
+  command -v fish >/dev/null 2>&1 || return 0
+  fish -c "vision-claude-sync push $CID" \
+    || echo "claude (vision-wrapper): auto config-sync push failed — run 'vision-claude-sync push' to retry." >&2
+}
+trap autosync_push EXIT
+
+# Forward all args. claude is interactive — stdin/tty flow through devcontainer
+# exec. NOTE: intentionally NOT `exec` — bash must outlive the session to run the
+# EXIT trap that syncs config/memory back to the host.
+set +e
+devcontainer exec --workspace-folder "$PROJECT_ROOT" ${EXEC_ARGS[@]+"${EXEC_ARGS[@]}"} claude "$@"
+_rc=$?
+set -e
+exit "$_rc"

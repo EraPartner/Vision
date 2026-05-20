@@ -148,8 +148,8 @@ continuously in the background — so corruption-by-concurrent-write
 isn't possible.
 
 ```sh
-vision-claude-sync pull     # refresh container from host (also auto-runs on container start)
-vision-claude-sync push     # propagate container changes back to host (manual; required)
+vision-claude-sync pull     # refresh container from host (also auto-runs on launch)
+vision-claude-sync push     # propagate container changes back to host (also auto-runs on session exit)
 vision-claude-sync status   # show what differs
 ```
 
@@ -172,16 +172,17 @@ them inside the container if you want them active there.
 Pull-on-start is safe under concurrency: it only reads from the stage, so
 there's no write race against a host-side claude session.
 
-### Push remains explicit
+### Push on session exit (automatic)
 
-The reverse (container → host) is **not** automatic. If Claude inside
-the container modifies its own config — adds an agent, edits a rule,
-registers an MCP — those changes live only in the container volume
-until you run `vision-claude-sync push`.
-
-`.claude/CLAUDE.md` instructs in-container Claude to remind the user to
-push at end-of-turn whenever it edits `~/.claude/` or `~/.claude.json`,
-so you shouldn't have to remember unprompted.
+The reverse (container → host) now runs automatically. The `vision-claude`
+wrapper no longer `exec`s the session — it stays the parent process and, on
+**session exit** (normal or Ctrl-C), runs `vision-claude-sync push` against the
+exact container it launched. So if Claude inside the container modifies its own
+config — adds an agent, edits a rule, registers an MCP, writes a memory — those
+changes land back on the host with no manual step. Pushing only after the
+session ends keeps a single writer, so it can't race a live host-side claude on
+`~/.claude.json`. Disable with `VISION_AUTOSYNC=0`; `vision-claude-sync push`
+remains the manual fallback (e.g. after a crash, or to retry a failed auto-push).
 
 **Files excluded from sync** (volatile runtime state, not portable):
 `.credentials.json`, `backups/`, `cache/`, `paste-cache/`, `daemon.log`,
