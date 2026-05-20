@@ -27,13 +27,4 @@ fix_dir_owner /home/dev/.claude       dev
 fix_dir_owner /home/dev/.config       dev
 fix_dir_owner /var/lib/postgresql     postgres
 
-# Docker Desktop's forwarded ssh-agent socket lands as root:root mode 0660.
-# Previously we chmod 666'd it — that's world-writable and any process in the
-# container (including a malicious npm postinstall) could drive the host
-# ssh-agent. Take ownership and tighten to 0600 so only dev can use it.
-if [[ -S /ssh-agent ]]; then
-  chown dev:dev /ssh-agent
-  chmod 0600 /ssh-agent
-fi
-
 exit 0

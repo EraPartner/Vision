@@ -48,12 +48,13 @@
     // CAP_SYS_ADMIN, no-new-privileges, .devcontainer is a busy mountpoint), so
     // edit .devcontainer on the HOST only, then rebuild.
     "source=${localWorkspaceFolder}/.devcontainer,target=${containerWorkspaceFolder}/.devcontainer,type=bind,readonly",
+    // SECURITY: .git is read-only — commits/pushes happen on the HOST, never
+    // inside the container, so no git history can be rewritten from in here
+    // (kernel-enforced). No git push credential and no ssh-agent are forwarded.
+    "source=${localWorkspaceFolder}/.git,target=${containerWorkspaceFolder}/.git,type=bind,readonly",
     "source=vision-claude-${devcontainerId},target=/home/dev/.claude,type=volume",
     "source=${localEnv:HOME}/.claude-vision-stage,target=/home/dev/.claude-stage,type=bind,readonly",
-    "source=vision-pgdata-${devcontainerId},target=/var/lib/postgresql,type=volume",
-    "source=${localEnv:HOME}/.gitconfig,target=/home/dev/.gitconfig-host,type=bind,readonly",
-    "source=${localEnv:HOME}/.ssh/github.pub,target=/home/dev/.ssh/host-signing.pub,type=bind,readonly",
-    "source=/run/host-services/ssh-auth.sock,target=/ssh-agent,type=bind"
+    "source=vision-pgdata-${devcontainerId},target=/var/lib/postgresql,type=volume"
   ],
   "containerEnv": {
     "DEVCONTAINER": "true",
@@ -69,7 +70,6 @@
     "CORS_ORIGINS": "http://localhost:8080,http://localhost:3002",
     "VITE_API_URL": "http://localhost:3002",
     "ALEMBIC_BIN": "/workspaces/Vision/venv/bin/alembic",
-    "SSH_AUTH_SOCK": "/ssh-agent",
     "DISABLE_TELEMETRY": "1",
     "DISABLE_ERROR_REPORTING": "1",
     "BASH_ENV": "/home/dev/.safe-chain/scripts/init-posix.sh",

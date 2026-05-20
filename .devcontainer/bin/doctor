@@ -65,8 +65,9 @@ command -v safe-chain >/dev/null && pass "safe-chain present (package installs a
 # Tokens forwarded?
 [[ -n "${CLAUDE_CODE_OAUTH_TOKEN:-}" ]] && pass "CLAUDE_CODE_OAUTH_TOKEN present" \
   || echo "  note CLAUDE_CODE_OAUTH_TOKEN not set in this shell (the wrapper forwards it to claude only)"
-[[ -n "${GH_TOKEN:-}" ]] && pass "GH_TOKEN present" \
-  || echo "  note GH_TOKEN not set — set host Keychain 'vision-gh-token' for gh/git push"
+[[ -z "${GH_TOKEN:-}${GITHUB_TOKEN:-}" ]] \
+  && pass "no git push token in env (commits happen on the host — expected)" \
+  || fail "GH_TOKEN/GITHUB_TOKEN present — a container must NOT hold a git push credential"
 
 # Egress audit log readable by dev?
 if [[ -r /var/log/squid/access.log ]]; then pass "egress audit log readable: /var/log/squid/access.log"

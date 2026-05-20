@@ -2,7 +2,7 @@
 # Runs every time the container starts, as the `dev` user, AFTER the root
 # ENTRYPOINT has already done perms repair + Postgres start + egress proxy +
 # firewall. This hook only refreshes the Claude config from the host stage and
-# does the ssh-agent signing sanity check. No sudo (no-new-privileges).
+# verifies the egress lock. No sudo (no-new-privileges).
 
 set -euo pipefail
 
@@ -33,23 +33,6 @@ fi
 for p in scheduled-tasks tasks jobs daemon; do
   rm -rf "/home/dev/.claude/$p" 2>/dev/null || true
 done
-
-# Sanity-check: is the signing public key actually loaded in the host
-# ssh-agent we just forwarded? If not, `git commit -S` will fail — emit a hint.
-SIGNING_PUB=/home/dev/.ssh/host-signing.pub
-if [[ -r "$SIGNING_PUB" ]] && command -v ssh-keygen >/dev/null && command -v ssh-add >/dev/null; then
-  want_fp="$(ssh-keygen -lf "$SIGNING_PUB" 2>/dev/null | awk '{print $2}')"
-  agent_fps="$(SSH_AUTH_SOCK=/ssh-agent ssh-add -l 2>/dev/null | awk '{print $2}')"
-  if [[ -n "$want_fp" ]] && ! grep -qF "$want_fp" <<<"$agent_fps"; then
-    cat >&2 <<EOF
-[post-start] ⚠  Signing key not loaded in the forwarded host ssh-agent.
-  want:  $want_fp  ($(awk '{print $3}' "$SIGNING_PUB"))
-  agent: $(SSH_AUTH_SOCK=/ssh-agent ssh-add -l 2>/dev/null | sed 's/^/    /' || echo "    (none)")
-  On the host, run e.g.:  ssh-add ~/.ssh/github
-  Then signed commits inside the container will work.
-EOF
-  fi
-fi
 
 # Refuse to proceed if the egress firewall didn't verify. The entrypoint writes
 # this sentinel only after confirming default-deny is active; its absence means

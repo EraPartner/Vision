@@ -91,9 +91,9 @@ kc() { security find-generic-password -s "$1" -w 2>/dev/null || true; }
 if command -v security >/dev/null 2>&1; then
   tok="$(kc 'vision-claude-code-token')"
   [[ -n "$tok" ]] && EXEC_ARGS+=(--remote-env "CLAUDE_CODE_OAUTH_TOKEN=$tok")
-  gh_tok="$(kc 'vision-gh-token')"
-  [[ -n "$gh_tok" ]] && EXEC_ARGS+=(--remote-env "GH_TOKEN=$gh_tok" --remote-env "GITHUB_TOKEN=$gh_tok")
 fi
+# No git credential is forwarded: commits/pushes happen on the HOST and the
+# in-container .git is read-only. Only the Claude LLM token crosses the boundary.
 
 # ${EXEC_ARGS[@]+...} guards against "unbound variable" on an empty array under
 # `set -u` (macOS default bash 3.2) when no token was found.

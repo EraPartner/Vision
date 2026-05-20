@@ -93,9 +93,6 @@ RUN mkdir -p /etc/squid/certs /var/lib/squid /var/log/squid /var/spool/squid \
 # entrypoint's perms-fix is the runtime backstop after the volume mounts).
 RUN mkdir -p /var/lib/postgresql && chown postgres:postgres /var/lib/postgresql
 
-# Pre-create ~/.ssh with strict perms for the signing-key bind-mount.
-RUN install -d -o dev -g dev -m 0700 /home/dev/.ssh
-
 # Pre-create dirs backed by named volumes so a fresh volume inherits dev
 # ownership on first mount (entrypoint perms-fix is the runtime backstop).
 RUN install -d -o dev -g dev -m 0700 /home/dev/.claude \
@@ -105,8 +102,8 @@ RUN install -d -o dev -g dev -m 0700 /home/dev/.claude \
 # clean defense-in-depth — and a generic find won't go stale like a hand-list
 # (it also catches ssh-keysign, unix_chkpwd, squid/pinger). NOTE: we use
 # `runuser` for privilege drops, pg_ctlcluster runs as root (so `su`'s setuid
-# bit isn't needed for Postgres), signing uses the forwarded host ssh-agent,
-# and squid's pinger is unused (no cache peers) — nothing needs elevated bits.
+# bit isn't needed for Postgres), and squid's pinger is unused (no cache peers)
+# — nothing needs elevated bits.
 RUN find / -xdev -type f -perm /6000 -exec chmod -s {} + 2>/dev/null || true
 
 # Container process (PID 1 / entrypoint) runs as root so it can apply iptables,

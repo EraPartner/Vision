@@ -116,13 +116,10 @@ proxy. ECH (encrypted SNI) destinations fail closed (no SNI → terminated).
 DAC_OVERRIDE, FOWNER, SETUID, SETGID, SETPCAP` (entrypoint iptables/perms/
 Postgres + squid privilege-drops). Add to `runArgs` if new tooling needs more.
 
-**Prereqs / portability:** `~/.gitconfig` and `~/.ssh/github.pub` must exist
-on the host (bind-mounted RO; missing → opaque `devcontainer up` failure).
-Docker Desktop VM needs ≥4 GB. **macOS/Docker-Desktop only** — the Keychain
-auth and `/run/host-services/ssh-auth.sock` mount don't exist on Linux/Colima/
-OrbStack; drop that mount and export `CLAUDE_CODE_OAUTH_TOKEN`/`GH_TOKEN`
-there. Use a **fine-grained PAT scoped to this repo** for `vision-gh-token`
-(it's inherited by Claude's subprocesses + GitHub is allowlisted).
+**Prereqs / portability:** Docker Desktop VM needs ≥4 GB. **macOS/Docker-Desktop
+only** — the Keychain auth doesn't exist on Linux/Colima/OrbStack; export
+`CLAUDE_CODE_OAUTH_TOKEN` there instead. No git credential or ssh-agent is
+forwarded (see "Git" below), so `~/.ssh` and a `*-gh-token` are no longer needed.
 
 ## Persistence
 
@@ -138,9 +135,8 @@ The Vision repo is bind-mounted at `/workspaces/Vision`, so edits appear
 on the host immediately. The Claude config is **not** live-shared (that
 corrupts `~/.claude.json` under concurrent writes, and a raw bind would
 expose host secrets): the container gets its own writable copy seeded
-from the sanitized stage, refreshed read-only on each start. The `gh`
-token is **not** persisted — it's forwarded from the host Keychain
-(`vision-gh-token`) at exec time.
+from the sanitized stage, refreshed read-only on each start. No `gh`/git
+token is forwarded at all — git inside the container is read-only (see "Git").
 
 ## Syncing Claude config between host and container
 
@@ -259,55 +255,24 @@ skip the Keychain dance, the wrapper also picks up
 straight from your shell env. Worse posture (plaintext in
 `~/.config/fish/fish_variables`), but functional.
 
-## Git, GitHub, signed commits
+## Git (read-only inside; commit & push on the host)
+
+The container can **read** git history but cannot change it. The repo's `.git`
+is bind-mounted **read-only**, no git credential (`GH_TOKEN`/`GITHUB_TOKEN`) is
+forwarded, and the host ssh-agent is **not** forwarded. So a compromised agent
+can't rewrite history, push, or sign/authenticate as you over SSH.
 
 | Operation | Works? | Notes |
 | --- | --- | --- |
-| `git status` / `diff` / `log` | ✅ | Read-only on the bind-mounted repo |
-| `git branch` / `switch` / `checkout` | ✅ | Local refs only |
-| `git commit -S` (SSH-signed) | ✅ | Public key bind-mounted from host; private key never enters the container — signing goes through the forwarded ssh-agent (`/run/host-services/ssh-auth.sock`). Make sure your agent is unlocked on the host. |
-| `git push` over HTTPS | ✅ | `GH_TOKEN` forwarded from Keychain; `github.com` allowlisted |
-| `gh pr create`, `gh issue …` | ✅ | Uses the forwarded `GH_TOKEN`; no `gh auth login` needed |
-| `git push` / `git@github.com` (SSH transport) | ❌ by default | `~/.ssh` is not mounted; ssh-agent socket is the only key channel. Use HTTPS push. |
+| `git status` / `diff` / `log` / `show` | ✅ | Read-only on the bind-mounted repo (`safe.directory` is set) |
+| `git commit` / `rebase` / `reset` / `amend` | ❌ | `.git` is read-only — fails with EROFS, by design |
+| `git push` / `gh pr create` | ❌ | No credential in the container; `git push` errors with "could not read Username" |
+| commit signing (ssh-agent) | ❌ (n/a) | No ssh-agent forwarded; nothing to sign with — commits happen on the host |
 
-**One-time GitHub auth (host Keychain, no token in the container):**
-
-```sh
-gh auth token | security add-generic-password -s vision-gh-token -a "$USER" -w
-# or paste a fine-grained PAT instead of `gh auth token`
-```
-
-The wrapper forwards it as `GH_TOKEN`/`GITHUB_TOKEN` at exec time — no `gh`
-config volume, no token on disk in the container.
-
-**How signing works here.** Your host `~/.gitconfig` is bind-mounted read-only
-at `~/.gitconfig-host` and included from an in-container `~/.gitconfig`,
-so `user.name`, `user.email`, `commit.gpgsign`, and `gpg.format = ssh`
-all carry over. The override sets `user.signingkey` to the in-container
-path of the bind-mounted public key. When `git commit -S` runs,
-ssh-keygen queries `SSH_AUTH_SOCK` (= `/ssh-agent`, the forwarded host
-ssh-agent socket) for a private key matching the public key — it never
-sees the private key file directly.
-
-**Prerequisite on your host:** the signing private key must actually be
-loaded in your host ssh-agent before you `vision-claude`. If it isn't,
-`post-start.sh` prints a diagnostic showing the expected fingerprint vs.
-what's in the agent, with the exact `ssh-add` command to fix it.
-
-```sh
-# on the host, once per agent lifetime / login session
-ssh-add ~/.ssh/github
-```
-
-If you use macOS Keychain ssh-agent, add to `~/.ssh/config`:
-
-```
-Host *
-    UseKeychain yes
-    AddKeysToAgent yes
-```
-
-so the key auto-loads on first use and survives reboots.
+**Workflow:** make changes inside the container (they appear on the host via the
+bind mount immediately), then **commit and push from your host** where your
+gitconfig, signing key, and gh auth live. There is no in-container git auth to
+set up.
 
 ## Known limitations
 
@@ -337,8 +302,8 @@ so the key auto-loads on first use and survives reboots.
 | Postgres role/db created by the entrypoint | ✅ `ftm_user` / `financial_transactions` |
 | `dev` can `sudo` or modify iptables | ❌ no sudo; `no-new-privileges` |
 | File written from container appears on host (bind-mount) | ✅ |
-| `git commit -S` (SSH-signed, via forwarded agent) | ✅ |
-| `gh`/`git push` via forwarded `GH_TOKEN` | ✅ no `gh auth login` |
+| `git log`/`diff` (read-only) | ✅ |
+| `git commit` / `push` from inside the container | ❌ `.git` is RO + no credential — commit/push on the host |
 | Host browser hits `http://localhost:8080` | ✅ |
 
 ## Safety note

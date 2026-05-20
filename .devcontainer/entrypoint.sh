@@ -23,8 +23,8 @@ PG_CLUSTER=main
 PG_DATA="/var/lib/postgresql/${PG_VERSION}/${PG_CLUSTER}"
 PG_CONF_DIR="/etc/postgresql/${PG_VERSION}/${PG_CLUSTER}"
 
-# 1) Repair ownership of named-volume mountpoints + ssh-agent socket
-#    (chowns pgdata->postgres, .claude/.config->dev, ssh-agent->dev:0600).
+# 1) Repair ownership of named-volume mountpoints
+#    (chowns pgdata->postgres, .claude/.config->dev).
 /usr/local/sbin/vision-perms-fix || log "WARN: perms-fix returned non-zero."
 
 # Network pre-flight: if Docker Desktop detached us from the bridge, the proxy
