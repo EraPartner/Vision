@@ -128,6 +128,7 @@ there. Use a **fine-grained PAT scoped to this repo** for `vision-gh-token`
 
 | Source | Container path | Type | Holds |
 | --- | --- | --- | --- |
+| `.devcontainer` (host) | `/workspaces/Vision/.devcontainer` | bind **RO** | Overlay on the rw workspace so the sandbox config + host launcher can't be rewritten from inside (see Safety note) |
 | `vision-claude-<id>` | `/home/dev/.claude` | named volume | Container's writable Claude config — seeded from the sanitized stage on first create |
 | `~/.claude-vision-stage` (host) | `/home/dev/.claude-stage` | bind **RO** | Sanitized staging copy the wrapper produces (secrets + `hooks`/`mcpServers`/`enabledPlugins` stripped). Raw host `~/.claude` is **never** mounted. |
 | (container fs) | `/home/dev/.claude.json` | regular file | Container's writable global config, seeded from `…/claude.json` in the stage |
@@ -348,3 +349,19 @@ project can exfiltrate anything inside the container, including the
 `~/.claude` credentials volume. Treat this as *"host is isolated from
 Claude,"* not *"Claude is isolated from a hostile repo."* Only enable
 for trusted repositories.
+
+**Why `.devcontainer` is mounted read-only.** The repo is bind-mounted
+read-write at `/workspaces/Vision` so the agent can edit source — but that
+same mount would otherwise expose the sandbox's own definition
+(`devcontainer.json` `runArgs`, `Dockerfile`) and the **host-side launcher**
+(`bin/claude`, `bin/doctor`), which run on your **Mac** with your shell and
+Keychain. A compromised in-container agent could add `--privileged` /
+`-v /:/host` / a `docker.sock` mount to `runArgs`, or just edit `bin/claude`,
+and the next `claude` invocation (which calls `devcontainer up` and re-execs
+the launcher) would run it on the host — a trivial full escape. To close that,
+`.devcontainer` is re-mounted **read-only on top of** the read-write workspace,
+so it is immutable from inside. The container cannot lift this: it has
+`cap-drop=ALL` (no `CAP_SYS_ADMIN`, so no remount/unmount), `no-new-privileges`,
+and `.devcontainer` is a busy mountpoint that can't be replaced — the protection
+re-applies on every `devcontainer up`. **Edit `.devcontainer` on the host only,**
+then rebuild.
