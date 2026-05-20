@@ -1,68 +1,34 @@
 #!/usr/bin/env bash
-# Runs once when the devcontainer is first created.
-# Initializes the Postgres cluster on the persistent volume, creates the
-# Vision DB + user, installs JS + Python deps, and runs migrations.
+# Runs once when the devcontainer is first created, as the `dev` user.
+# Installs JS + Python deps and seeds config. Postgres init/start + role/db
+# creation now happen in the root ENTRYPOINT (no sudo here — the container runs
+# with no-new-privileges).
 
 set -euo pipefail
 cd /workspaces/Vision
 
-PG_VERSION=18
-PG_CLUSTER=main
-PG_DATA="/var/lib/postgresql/${PG_VERSION}/${PG_CLUSTER}"
-
-echo "[post-create] Ensuring /var/lib/postgresql is owned by postgres..."
-sudo chown -R postgres:postgres /var/lib/postgresql
-
-# Three possible cluster states:
-#  A) /etc/postgresql/18/main config + /var/lib/postgresql/18/main data → start
-#  B) data only (image dropped the cluster, but pgdata volume persisted) → adopt
-#  C) neither → fresh create
-PG_CONF_DIR="/etc/postgresql/${PG_VERSION}/${PG_CLUSTER}"
-if [[ -f "${PG_CONF_DIR}/postgresql.conf" ]]; then
-  echo "[post-create] Registered cluster found, starting..."
-  sudo pg_ctlcluster "${PG_VERSION}" "${PG_CLUSTER}" start || true
-elif sudo -u postgres test -s "${PG_DATA}/PG_VERSION"; then
-  echo "[post-create] Data exists but no config — adopting existing data dir..."
-  sudo pg_createcluster "${PG_VERSION}" "${PG_CLUSTER}" --datadir="${PG_DATA}" --start
-else
-  echo "[post-create] Creating fresh Postgres cluster at ${PG_DATA}..."
-  sudo pg_createcluster "${PG_VERSION}" "${PG_CLUSTER}" --start
-fi
-
-# Wait until postgres accepts connections.
-for _ in {1..30}; do
-  if pg_isready -h 127.0.0.1 -p 5432 >/dev/null 2>&1; then break; fi
+# Wait for the egress proxy (started by the root entrypoint) before any network
+# install — postCreate can race the entrypoint's proxy startup, and with egress
+# locked to the proxy UID, installs fail until 127.0.0.1:3128 is listening.
+echo "[post-create] Waiting for egress proxy on 127.0.0.1:3128..."
+for _ in $(seq 1 30); do
+  (exec 3<>/dev/tcp/127.0.0.1/3128) 2>/dev/null && break
   sleep 1
 done
 
-# Create role + db idempotently. Password matches DATABASE_URL in devcontainer.json.
-sudo -u postgres psql -v ON_ERROR_STOP=1 <<'SQL'
-DO $$
-BEGIN
-  IF NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname='ftm_user') THEN
-    CREATE ROLE ftm_user LOGIN PASSWORD 'localdev';
-  END IF;
-END$$;
-SQL
-
-if ! sudo -u postgres psql -tAc "SELECT 1 FROM pg_database WHERE datname='financial_transactions'" | grep -q 1; then
-  sudo -u postgres createdb -O ftm_user financial_transactions
-fi
-
-# Python venv for alembic. The repo's scripts expect ./venv (see package.json db:* scripts).
-# If a host-side (macOS) venv is present, its symlinks are broken on Linux —
-# detect that case and rebuild. .gitignore covers venv/, so this is safe.
+# Python venv for alembic. The repo's scripts expect ./venv. A host-side (macOS)
+# venv has Linux-invalid symlinks — rebuild if broken. .gitignore covers venv/.
 if [[ ! -x ./venv/bin/python ]] || ! ./venv/bin/python -c '' 2>/dev/null; then
   echo "[post-create] Rebuilding Python venv (host symlinks invalid in container)..."
   rm -rf ./venv
   python3 -m venv venv
 fi
+# pip honors HTTPS_PROXY → squid → pypi.org / files.pythonhosted.org.
 ./venv/bin/pip install --quiet --upgrade pip
 ./venv/bin/pip install --quiet -r config/requirements.txt
 
 # Local .env — only generated if missing. Devcontainer env vars already point
-# the backend at the local cluster; this file is mainly for tooling that reads
-# .env directly (alembic env.py, scripts, etc).
+# the backend at the local cluster; this is for tooling that reads .env directly.
 if [[ ! -f .env ]]; then
   echo "[post-create] Writing .env (devcontainer defaults)..."
   cat > .env <<'EOF'
@@ -78,25 +44,16 @@ ENABLE_LOGGING=true
 EOF
 fi
 
-# Install JS deps (bun resolves the whole workspace).
+# Install JS deps (bun honors HTTPS_PROXY → squid → registry.npmjs.org).
 echo "[post-create] bun install..."
 bun install
 
-# Alembic migrations are intentionally NOT run here. The Node backend pre-creates
-# the alembic_version table as VARCHAR(64) before invoking alembic (see
-# apps/node-backend/src/database/migrate.js); running alembic directly first
-# leaves a VARCHAR(32) table that breaks once revision IDs exceed 32 chars.
-# Mirrors the prod entrypoint (docker-entrypoint.sh) — the backend handles
-# migrations on first boot.
+# Alembic migrations are intentionally NOT run here — the Node backend
+# pre-creates alembic_version as VARCHAR(64) before invoking alembic (see
+# apps/node-backend/src/database/migrate.js). Mirrors the prod entrypoint.
 
-# gh config volume is root-owned on first mount; chown to dev.
-sudo chown -R dev:dev /home/dev/.config/gh 2>/dev/null || true
-
-# Build a writable ~/.gitconfig that:
-#   - includes the read-only bind-mounted host gitconfig (so user.name,
-#     user.email, aliases, etc. carry over without us hardcoding them)
-#   - declares /workspaces/Vision as a safe.directory (the bind mount
-#     ends up with non-dev ownership, which git would otherwise reject)
+# Build a writable ~/.gitconfig that includes the bind-mounted host gitconfig
+# and marks the workspace safe + overrides the signing key path.
 if [[ ! -f /home/dev/.gitconfig || ! -s /home/dev/.gitconfig ]]; then
   cat > /home/dev/.gitconfig <<'EOF'
 [include]
@@ -105,65 +62,40 @@ if [[ ! -f /home/dev/.gitconfig || ! -s /home/dev/.gitconfig ]]; then
     directory = /workspaces/Vision
 # Override the host's signingkey path — that path (/Users/.../ssh/github.pub)
 # doesn't resolve inside the container. The public key is bind-mounted to a
-# container-local path, and the corresponding private key stays on the host;
-# ssh-keygen reaches it through SSH_AUTH_SOCK (Docker Desktop forwards the
-# host's ssh-agent into the container).
+# container-local path; the private key stays on the host and ssh-keygen
+# reaches it through SSH_AUTH_SOCK (forwarded host ssh-agent).
 [user]
     signingkey = /home/dev/.ssh/host-signing.pub
 EOF
 fi
 
-# Seed container's ~/.claude (directory) and ~/.claude.json from the host
-# on first creation. Both host paths are bind-mounted read-only:
-#   /home/dev/.claude-host       (host ~/.claude — directory)
-#   /home/dev/.claude-json-seed  (host ~/.claude.json — single file)
-# After seeding, the container manages its own writable copies, and the
-# `vision-claude-sync` fish function does explicit pull/push between
-# host and container so changes propagate without live-bind corruption.
-# Docker creates the named-volume mountpoint as root:root the first time the
-# volume is fresh, regardless of any dev-owned directory we baked into the
-# image (the bake only matters if the volume inherits, and it does so only on
-# first mount of a brand-new volume — pre-existing volumes don't re-inherit).
-# Take ownership BEFORE seeding so dev can actually write into it. Silent
-# failure here was the cause of the "Let's get started" onboarding loop:
-# chown errored, was swallowed by `2>/dev/null || true`, and the subsequent
-# rsync into a root-owned dir then no-op'd silently too.
-if [[ "$(stat -c %U /home/dev/.claude)" != "dev" ]]; then
-  echo "[post-create] /home/dev/.claude is not dev-owned — chowning..."
-  if ! sudo chown -R dev:dev /home/dev/.claude; then
-    echo "[post-create] ERROR: sudo chown of /home/dev/.claude failed." >&2
-    echo "[post-create]        Check /etc/sudoers.d/dev-vision includes chown." >&2
-  fi
-fi
-
-if [[ ! -f /home/dev/.claude/settings.json && -d /home/dev/.claude-host ]]; then
-  echo "[post-create] Seeding ~/.claude from host..."
-  # Best-effort copy — host claude may be running and rewriting volatile
-  # state (telemetry, sessions, paste-cache) while we read. Exit 23 from
-  # rsync = "some files vanished mid-copy"; tolerate that, log anything else.
-  if ! rsync -a --ignore-errors \
-        --exclude='.credentials.json' \
-        --exclude='backups' --exclude='daemon.log' \
-        --exclude='cache' --exclude='paste-cache' \
-        --exclude='telemetry' --exclude='debug' \
-        --exclude='session-env' --exclude='shell-snapshots' \
-        /home/dev/.claude-host/ /home/dev/.claude/; then
+# Seed the container's ~/.claude + ~/.claude.json from the SANITIZED staging
+# dir the host wrapper produced at /home/dev/.claude-stage (bind RO). The
+# wrapper strips secrets (.credentials.json) and active code-exec config
+# (hooks/mcpServers/enabledPlugins), so a compromised host config can't
+# silently propagate executable config into the container.
+STAGE=/home/dev/.claude-stage
+if [[ ! -f /home/dev/.claude/settings.json && -d "$STAGE/dot-claude" ]]; then
+  echo "[post-create] Seeding ~/.claude from sanitized stage..."
+  if ! rsync -a --ignore-errors "$STAGE/dot-claude/" /home/dev/.claude/; then
     echo "[post-create] WARN: ~/.claude rsync seed had errors (some files may be missing)." >&2
   fi
   echo "[post-create] Seeded $(find /home/dev/.claude -mindepth 1 -maxdepth 1 | wc -l) entries into ~/.claude."
 fi
-if [[ ! -f /home/dev/.claude.json && -f /home/dev/.claude-json-seed ]]; then
-  cp /home/dev/.claude-json-seed /home/dev/.claude.json
+if [[ ! -f /home/dev/.claude.json && -f "$STAGE/claude.json" ]]; then
+  cp "$STAGE/claude.json" /home/dev/.claude.json
   chmod 0600 /home/dev/.claude.json
 fi
 
+# gh authenticates via GH_TOKEN forwarded from the host Keychain by the wrapper.
 if ! gh auth status >/dev/null 2>&1; then
   cat <<'NOTE'
-[post-create] gh is installed but not authenticated. To enable
-              `gh pr create`, `gh issue view`, push-via-https, etc.,
-              run ONCE inside the container:
-                  gh auth login --web --hostname github.com --git-protocol https
-              The token persists in the vision-ghconfig volume across rebuilds.
+[post-create] gh is not authenticated. The wrapper forwards GH_TOKEN from your
+              host Keychain entry `vision-gh-token` if present. To set it up,
+              on the HOST run once:
+                gh auth token | security add-generic-password \
+                  -s vision-gh-token -a "$USER" -w
+              (or paste a PAT). Then re-run `vision-claude`.
 NOTE
 fi
 

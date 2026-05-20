@@ -72,34 +72,44 @@ Bound to `127.0.0.1` only; other devices on your LAN can't see them.
 
 ## Network policy
 
-`init-firewall.sh` applies an iptables default-deny egress policy on
-every container start. Allowlist covers Anthropic / npm / GitHub / PyPI /
-Yahoo Finance / Debian-PostgreSQL apt mirrors. DNS is restricted to the
-resolver configured in `/etc/resolv.conf` to narrow the DNS-tunneling
-surface called out in
-[anthropics/claude-code#36907](https://github.com/anthropics/claude-code/issues/36907).
+Egress is enforced in two layers by the root entrypoint on every start:
 
-To add another domain, edit `ALLOWED_DOMAINS` in `init-firewall.sh` and
-re-run `sudo .devcontainer/init-firewall.sh`.
+1. **In-container SNI proxy** (`squid`, peek+splice). All outbound
+   HTTP(S) must traverse `squid` on `127.0.0.1:3128`. squid peeks the TLS
+   SNI and *splices* allowed hostnames (tunnels without decrypting —
+   end-to-end TLS preserved, no MITM) and terminates the rest. Hostname
+   enforcement can't be bypassed by an exfil endpoint sharing an allowed
+   CDN IP, and it defeats `CONNECT`-host ≠ SNI domain-fronting.
+2. **`iptables` egress lock**: only the `proxy` UID may originate
+   outbound packets; everything else must use the proxy or be dropped.
+   IPv6 is default-deny; denied egress is rate-limited-logged
+   (`dmesg | grep vision-deny`).
+
+Allowlist (in `squid.conf`): Anthropic + Claude Code, `registry.npmjs.org`,
+GitHub, PyPI, Debian/PostgreSQL apt, Yahoo Finance, `*.visualstudio.com`.
+
+> **Tools must honor `HTTPS_PROXY`.** `claude`, `bun`, `npm`, `git`, `gh`,
+> `pip` all do. Node's global `fetch` does **not** — so the backend's
+> yahoo-finance calls won't work inside the container. Run the app on the
+> host for live data. To change the allowlist, edit `squid.conf` and
+> **rebuild** (it's baked into the image).
 
 ## Persistence
 
 | Source | Container path | Type | Holds |
 | --- | --- | --- | --- |
-| `vision-claude-<id>` | `/home/dev/.claude` | named volume | Container's writable Claude config — seeded from host on first create, owned by container thereafter |
-| `~/.claude` (host) | `/home/dev/.claude-host` | bind **RO** | Read-only mirror of host's Claude config — used as the source for sync operations |
-| `~/.claude.json` (host) | `/home/dev/.claude-json-seed` | bind **RO** | Read-only seed for the container's `~/.claude.json` |
-| (container fs) | `/home/dev/.claude.json` | regular file | Container's writable global config, seeded from `.claude-json-seed` on first create |
+| `vision-claude-<id>` | `/home/dev/.claude` | named volume | Container's writable Claude config — seeded from the sanitized stage on first create |
+| `~/.claude-vision-stage` (host) | `/home/dev/.claude-stage` | bind **RO** | Sanitized staging copy the wrapper produces (secrets + `hooks`/`mcpServers`/`enabledPlugins` stripped). Raw host `~/.claude` is **never** mounted. |
+| (container fs) | `/home/dev/.claude.json` | regular file | Container's writable global config, seeded from `…/claude.json` in the stage |
 | `vision-pgdata-<id>` | `/var/lib/postgresql` | named volume | Postgres data dir |
-| `vision-ghconfig-<id>` | `~/.config/gh` | named volume | `gh` auth token |
 
-The Vision repo itself is bind-mounted at `/workspaces/Vision`, so file
-edits appear on the host immediately. The Claude config, however, is
-**not** live-shared — that previously corrupted `~/.claude.json` when
-host claude and container claude were running simultaneously. Instead,
-the container has its own writable copy seeded from the host once, plus
-a read-only mirror of the host config kept around for explicit sync
-operations.
+The Vision repo is bind-mounted at `/workspaces/Vision`, so edits appear
+on the host immediately. The Claude config is **not** live-shared (that
+corrupts `~/.claude.json` under concurrent writes, and a raw bind would
+expose host secrets): the container gets its own writable copy seeded
+from the sanitized stage, refreshed read-only on each start. The `gh`
+token is **not** persisted — it's forwarded from the host Keychain
+(`vision-gh-token`) at exec time.
 
 ## Syncing Claude config between host and container
 
@@ -124,14 +134,15 @@ removed on one side stay on the other until manually cleaned up.
 
 ### Auto-pull on container start
 
-`post-start.sh` runs `rsync --update` from `/home/dev/.claude-host` into
-`/home/dev/.claude` on every container start, including the implicit
-`devcontainer up` that the `vision-claude` wrapper does on each
-invocation. So host-side config changes (new agents, edited rules,
-added MCP servers) are picked up automatically without you running
-anything.
+The `vision-claude` wrapper re-stages a sanitized copy of host
+`~/.claude` into `~/.claude-vision-stage` on every invocation, and
+`post-start.sh` runs `rsync --update` from `/home/dev/.claude-stage` into
+`/home/dev/.claude` on every container start. So host-side config changes
+(new agents, edited rules) are picked up automatically. Note: `hooks`,
+`mcpServers`, and `enabledPlugins` are stripped during staging — re-add
+them inside the container if you want them active there.
 
-Pull-on-start is safe under concurrency: it only reads from host, so
+Pull-on-start is safe under concurrency: it only reads from the stage, so
 there's no write race against a host-side claude session.
 
 ### Push remains explicit
@@ -224,17 +235,19 @@ straight from your shell env. Worse posture (plaintext in
 | `git status` / `diff` / `log` | ✅ | Read-only on the bind-mounted repo |
 | `git branch` / `switch` / `checkout` | ✅ | Local refs only |
 | `git commit -S` (SSH-signed) | ✅ | Public key bind-mounted from host; private key never enters the container — signing goes through the forwarded ssh-agent (`/run/host-services/ssh-auth.sock`). Make sure your agent is unlocked on the host. |
-| `git push` over HTTPS | ✅ after `gh auth login` | `github.com` is allowlisted; `gh` manages the git credential helper |
-| `gh pr create`, `gh issue …` | ✅ after `gh auth login` | `gh` 2.92.0 preinstalled |
-| `git push` / `git@github.com` (SSH transport) | ❌ by default | `~/.ssh` is not mounted; ssh-agent socket is the only key channel. Use HTTPS push via `gh`. |
+| `git push` over HTTPS | ✅ | `GH_TOKEN` forwarded from Keychain; `github.com` allowlisted |
+| `gh pr create`, `gh issue …` | ✅ | Uses the forwarded `GH_TOKEN`; no `gh auth login` needed |
+| `git push` / `git@github.com` (SSH transport) | ❌ by default | `~/.ssh` is not mounted; ssh-agent socket is the only key channel. Use HTTPS push. |
 
-**One-time auth inside the container:**
+**One-time GitHub auth (host Keychain, no token in the container):**
 
 ```sh
-gh auth login --web --hostname github.com --git-protocol https
+gh auth token | security add-generic-password -s vision-gh-token -a "$USER" -w
+# or paste a fine-grained PAT instead of `gh auth token`
 ```
 
-The token persists in the `vision-ghconfig-<id>` volume across rebuilds.
+The wrapper forwards it as `GH_TOKEN`/`GITHUB_TOKEN` at exec time — no `gh`
+config volume, no token on disk in the container.
 
 **How signing works here.** Your host `~/.gitconfig` is bind-mounted read-only
 at `~/.gitconfig-host` and included from an in-container `~/.gitconfig`,
@@ -267,14 +280,18 @@ so the key auto-loads on first use and survives reboots.
 
 ## Known limitations
 
+- **App code using Node global `fetch`** (e.g. yahoo-finance2) — won't
+  reach the internet (undici ignores `HTTPS_PROXY`). `claude`/`bun`/`npm`/
+  `git`/`gh`/`pip` are fine. Run the app on the host for live data.
 - **Puppeteer (PDF rendering)** — Chromium isn't preinstalled. If you
   need PDF rendering in dev, run `bunx playwright install chromium --with-deps`
   once and set `PUPPETEER_EXECUTABLE_PATH`.
 - **Electron `.dmg` build (`bun run dist`)** — needs macOS native tools;
   run on the host, not in this container.
-- **Host Ollama via `host.docker.internal`** — works on Docker Desktop
-  but is firewalled out; add to `ALLOWED_DOMAINS` in `init-firewall.sh`
-  if you want it through.
+- **Changing the egress allowlist** — edit `squid.conf` and rebuild
+  (it's baked into the image, not read from the workspace).
+- **Host Ollama via `host.docker.internal`** — blocked; add it to the
+  `squid.conf` allowlist and rebuild if you want it through.
 
 ## Verified isolation + functionality
 
@@ -284,13 +301,13 @@ so the key auto-loads on first use and survives reboots.
 | Connect to host's `host.docker.internal:5432` | ❌ firewall drops |
 | Connect to host gateway `172.17.0.1:22` | ❌ firewall drops |
 | Reach `api.anthropic.com`, `github.com`, `registry.npmjs.org` | ✅ |
-| Reach `example.com`, `cloudflare.com`, `facebook.com` | ❌ timeout |
+| Reach `example.com` / direct egress bypassing the proxy | ❌ blocked (proxy terminates / firewall drops) |
+| `claude -p` API call through the proxy | ✅ |
+| Postgres role/db created by the entrypoint | ✅ `ftm_user` / `financial_transactions` |
+| `dev` can `sudo` or modify iptables | ❌ no sudo; `no-new-privileges` |
 | File written from container appears on host (bind-mount) | ✅ |
-| Postgres in container as `ftm_user` after migrations | ✅ 44 public tables |
-| `bun run dev` boots on canonical ports | ✅ `:3002` + `:8080` |
-| `claude --version` | ✅ `2.1.144` |
 | `git commit -S` (SSH-signed, via forwarded agent) | ✅ |
-| `gh api /rate_limit` after `gh auth login` | ✅ |
+| `gh`/`git push` via forwarded `GH_TOKEN` | ✅ no `gh auth login` |
 | Host browser hits `http://localhost:8080` | ✅ |
 
 ## Safety note
