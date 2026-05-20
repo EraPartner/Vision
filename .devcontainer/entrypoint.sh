@@ -43,7 +43,7 @@ fi
 
 # 2) LOCK EGRESS FIRST (default-deny + proxy-UID-only), before Postgres/squid or
 #    anything else touches the network. fail-closed: see init-firewall.sh.
-/usr/local/sbin/vision-firewall || log "WARN: firewall apply returned non-zero (egress stays default-DROP)."
+/usr/local/sbin/egress-firewall || log "WARN: firewall apply returned non-zero (egress stays default-DROP)."
 
 # 3) Postgres: start the cluster (init/adopt/create), then ensure role + db.
 #    runuser drops to postgres without setuid (works because we are root).

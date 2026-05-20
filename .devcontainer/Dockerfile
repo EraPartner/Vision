@@ -68,13 +68,17 @@ RUN set -eux; \
 # Bake privileged scripts into the image at /usr/local/sbin (root-owned, not
 # writable from inside the container). Repo copies are source-only — a rewrite
 # there can't affect the running container (closes a root-escalation path).
-COPY init-firewall.sh /usr/local/sbin/vision-firewall
+COPY init-firewall.sh /usr/local/sbin/egress-firewall
 COPY perms-fix.sh     /usr/local/sbin/vision-perms-fix
 COPY entrypoint.sh    /usr/local/sbin/vision-entrypoint
 COPY squid.conf       /etc/squid/squid.conf
 COPY allowlist.txt    /etc/squid/allowlist.txt
-RUN chmod 0755 /usr/local/sbin/vision-firewall /usr/local/sbin/vision-perms-fix /usr/local/sbin/vision-entrypoint \
-  && chown root:root /usr/local/sbin/vision-firewall /usr/local/sbin/vision-perms-fix /usr/local/sbin/vision-entrypoint
+RUN chmod 0755 /usr/local/sbin/egress-firewall /usr/local/sbin/vision-perms-fix /usr/local/sbin/vision-entrypoint \
+  && chown root:root /usr/local/sbin/egress-firewall /usr/local/sbin/vision-perms-fix /usr/local/sbin/vision-entrypoint
+
+# Inbound ports this project publishes (read by the canonical egress-firewall for
+# INPUT ACCEPT). Frontend 8080 + backend 3002.
+RUN mkdir -p /etc/egress && printf '8080\n3002\n' > /etc/egress/inbound-ports
 
 # Pre-build the squid TLS-bump cert + cert DB (entrypoint regenerates if missing).
 # Key + .pem are 0600 — squid reads them at startup as root, so dev never needs
