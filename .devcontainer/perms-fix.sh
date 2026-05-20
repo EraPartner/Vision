@@ -1,15 +1,12 @@
 #!/usr/bin/env bash
 # /usr/local/sbin/vision-perms-fix
 #
-# Image-baked sudoers target that performs ONLY the specific ownership /
-# permission repairs the devcontainer needs at create/start time. Replaces
-# the previous /bin/chown + /bin/chmod sudoers grants, which were unrestricted
-# and trivially exploitable (`sudo chmod 4755 /bin/bash`, `sudo chown dev
-# /etc/sudoers.d/…`).
-#
-# This script lives at /usr/local/sbin/vision-perms-fix inside the image
-# (read-only to dev) and is the ONLY chown/chmod entry in sudoers. The repo
-# copy at .devcontainer/perms-fix.sh is the source — Dockerfile COPYs it in.
+# Image-baked helper that performs ONLY the specific ownership / permission
+# repairs the devcontainer needs at start time. It is invoked by the root
+# ENTRYPOINT (the container has no sudo — it runs with no-new-privileges, and
+# all privileged setup happens in the entrypoint). The repo copy at
+# .devcontainer/perms-fix.sh is the source — the Dockerfile COPYs it in
+# read-only to dev.
 #
 # Takes no arguments and performs no operations parameterised by the caller.
 

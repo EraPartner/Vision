@@ -23,11 +23,20 @@ done
 # mid-session are screened. The project's own pinned deps below are installed
 # plain (already vetted via the lockfile) to avoid first-boot fragility.
 echo "[post-create] Installing safe-chain (supply-chain protection)..."
-if npm install -g @aikidosec/safe-chain >/dev/null 2>&1 && command -v safe-chain >/dev/null 2>&1; then
+sc_ok=0
+for attempt in 1 2 3; do
+  if npm install -g @aikidosec/safe-chain >/dev/null 2>&1 && command -v safe-chain >/dev/null 2>&1; then
+    sc_ok=1; break
+  fi
+  echo "[post-create] safe-chain install attempt $attempt failed; retrying..." >&2
+  sleep $(( attempt * 2 ))
+done
+if (( sc_ok )); then
   safe-chain setup >/dev/null 2>&1 || true
   echo "[post-create] safe-chain installed (screens npm/bun/pip in later sessions)."
 else
-  echo "[post-create] WARN: safe-chain install failed — continuing without it." >&2
+  echo "[post-create] ⚠ WARN: safe-chain install FAILED after retries — package installs are NOT" >&2
+  echo "[post-create]   supply-chain screened. \`.devcontainer/bin/doctor\` will flag this." >&2
 fi
 
 # Python venv for alembic. The repo's scripts expect ./venv. A host-side (macOS)

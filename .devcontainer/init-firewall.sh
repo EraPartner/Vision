@@ -17,10 +17,26 @@
 set -uo pipefail
 
 PROXY_USER="proxy"
+SENTINEL="/run/vision-firewall-ok"
 # Forwarded host ports (Docker DNAT delivers these to the container).
 INBOUND_PORTS=(8080 3002)
 
-# --- IPv4 reset ---
+# Stale sentinel must never outlive a re-apply: clear it up front so a partial
+# failure below can't leave a "verified" marker from a previous run.
+rm -f "$SENTINEL" 2>/dev/null || true
+
+# --- FAIL-CLOSED FIRST ---
+# Set default-deny BEFORE flushing/adding anything. set -e is intentionally off
+# (best-effort apply), so if any rule below fails mid-way the netns is already
+# closed and stays closed — never silently fail-open.
+iptables  -P INPUT   DROP
+iptables  -P OUTPUT  DROP
+iptables  -P FORWARD DROP
+ip6tables -P INPUT   DROP
+ip6tables -P OUTPUT  DROP
+ip6tables -P FORWARD DROP
+
+# --- Reset rules (policies set above stay DROP across a flush) ---
 iptables -F
 iptables -F VISION_DENY 2>/dev/null || true
 iptables -X VISION_DENY 2>/dev/null || true
@@ -31,13 +47,10 @@ iptables -X 2>/dev/null || true
 # name resolution — this devcontainer targets Docker Desktop/macOS (see README).
 iptables -t nat -F
 iptables -t nat -X 2>/dev/null || true
-
-# --- IPv6: default-deny everything except loopback ---
 ip6tables -F
 ip6tables -X 2>/dev/null || true
-ip6tables -P INPUT   DROP
-ip6tables -P FORWARD DROP
-ip6tables -P OUTPUT  DROP
+
+# --- IPv6: loopback only (everything else stays default-DROP) ---
 ip6tables -A INPUT  -i lo -j ACCEPT
 ip6tables -A OUTPUT -o lo -j ACCEPT
 
@@ -61,9 +74,13 @@ iptables -A VISION_DENY -m limit --limit 10/min -j LOG --log-prefix "vision-deny
 iptables -A VISION_DENY -j DROP
 iptables -A OUTPUT -j VISION_DENY
 
-# Default policies — deny what isn't explicitly allowed above.
-iptables -P INPUT   DROP
-iptables -P FORWARD DROP
-iptables -P OUTPUT  DROP
-
-echo "[firewall] Egress locked to proxy UID '$PROXY_USER' (IPv4 + IPv6 default-deny)."
+# --- Verify the lock actually took, then drop the sentinel ---
+if iptables -S OUTPUT 2>/dev/null | grep -q '^-P OUTPUT DROP' \
+   && iptables -C OUTPUT -m owner --uid-owner "$PROXY_USER" -j ACCEPT 2>/dev/null; then
+  : > "$SENTINEL" 2>/dev/null || true
+  echo "[firewall] Egress locked to proxy UID '$PROXY_USER' (IPv4 + IPv6 default-deny, verified)."
+else
+  rm -f "$SENTINEL" 2>/dev/null || true
+  echo "[firewall] ERROR: egress-lock verification FAILED — egress stays default-DROP (fail-closed)." >&2
+  exit 1
+fi

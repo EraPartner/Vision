@@ -6,8 +6,10 @@
 # container can run with --security-opt=no-new-privileges (dev sessions then
 # have no path to root — no sudo, no setuid).
 #
-# Order: perms repair -> start Postgres (init/adopt/create + role/db) ->
-# start the egress proxy -> apply the iptables egress lock -> keep-alive PID 1.
+# Order: perms repair -> LOCK EGRESS (firewall, fail-closed) -> start Postgres
+# -> start the egress proxy -> keep-alive PID 1. The firewall goes up before
+# anything can touch the network, so there's no boot window where a racing
+# post-create install could egress unfiltered.
 #
 # Best-effort and non-fatal: the container must always reach the keep-alive so
 # you can exec in and diagnose even if something failed.
@@ -25,7 +27,25 @@ PG_CONF_DIR="/etc/postgresql/${PG_VERSION}/${PG_CLUSTER}"
 #    (chowns pgdata->postgres, .claude/.config->dev, ssh-agent->dev:0600).
 /usr/local/sbin/vision-perms-fix || log "WARN: perms-fix returned non-zero."
 
-# 2) Postgres: start the cluster (init/adopt/create), then ensure role + db.
+# Network pre-flight: if Docker Desktop detached us from the bridge, the proxy
+# can't resolve upstreams. Warn with the fix; still lock the firewall.
+has_iface=0
+for iface in /sys/class/net/eth*; do [[ -e "$iface" ]] && has_iface=1; done
+default_route=$(awk 'NR>1 && $2=="00000000" {print $1; exit}' /proc/net/route 2>/dev/null)
+if (( ! has_iface )) || [[ -z "$default_route" ]]; then
+  cat >&2 <<EOF
+[entrypoint] ⚠  No external network interface / default route.
+[entrypoint]    The proxy won't resolve upstreams until this is fixed.
+[entrypoint]    On your HOST shell:  docker network connect bridge $HOSTNAME
+[entrypoint]    Then restart the container.
+EOF
+fi
+
+# 2) LOCK EGRESS FIRST (default-deny + proxy-UID-only), before Postgres/squid or
+#    anything else touches the network. fail-closed: see init-firewall.sh.
+/usr/local/sbin/vision-firewall || log "WARN: firewall apply returned non-zero (egress stays default-DROP)."
+
+# 3) Postgres: start the cluster (init/adopt/create), then ensure role + db.
 #    runuser drops to postgres without setuid (works because we are root).
 if [[ -f "${PG_CONF_DIR}/postgresql.conf" ]]; then
   log "Registered Postgres cluster found, starting..."
@@ -60,7 +80,8 @@ else
   log "WARN: Postgres did not become ready."
 fi
 
-# 3) Ensure squid TLS-bump cert + cert DB exist, then start the proxy.
+# 4) Ensure squid TLS-bump cert + cert DB exist, then start the proxy (it
+#    egresses as the proxy UID, which the firewall above permits).
 if [[ ! -f /etc/squid/certs/bump.pem ]]; then
   log "Generating squid bump cert..."
   mkdir -p /etc/squid/certs
@@ -84,23 +105,6 @@ for _ in $(seq 1 20); do
   if (exec 3<>/dev/tcp/127.0.0.1/3128) 2>/dev/null; then log "Proxy listening on 127.0.0.1:3128."; break; fi
   sleep 1
 done
-
-# Network pre-flight: if Docker Desktop detached us from the bridge, the proxy
-# can't resolve upstreams. Warn with the fix; still lock the firewall.
-has_iface=0
-for iface in /sys/class/net/eth*; do [[ -e "$iface" ]] && has_iface=1; done
-default_route=$(awk 'NR>1 && $2=="00000000" {print $1; exit}' /proc/net/route 2>/dev/null)
-if (( ! has_iface )) || [[ -z "$default_route" ]]; then
-  cat >&2 <<EOF
-[entrypoint] ⚠  No external network interface / default route.
-[entrypoint]    The proxy won't resolve upstreams until this is fixed.
-[entrypoint]    On your HOST shell:  docker network connect bridge $HOSTNAME
-[entrypoint]    Then restart the container.
-EOF
-fi
-
-# 4) Apply the egress firewall (locks outbound to the proxy UID only).
-/usr/local/sbin/vision-firewall || log "WARN: firewall apply returned non-zero."
 
 # Graceful shutdown on `docker stop` (SIGTERM): stop Postgres (fast) and squid
 # cleanly so the next start doesn't trigger crash recovery. (With "init": true

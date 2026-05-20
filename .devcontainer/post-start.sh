@@ -61,4 +61,18 @@ EOF
   fi
 fi
 
+# Refuse to proceed if the egress firewall didn't verify. The entrypoint writes
+# this sentinel only after confirming default-deny is active; its absence means
+# the lock may be open. Egress is fail-closed regardless (init-firewall.sh sets
+# DROP first), but surface it loudly and fail the lifecycle so it's not missed.
+if [[ ! -f /run/vision-firewall-ok ]]; then
+  cat >&2 <<'EOF'
+[post-start] ✖✖ EGRESS FIREWALL NOT VERIFIED (/run/vision-firewall-ok missing).
+[post-start]     The egress lock did not confirm. Check `docker logs` for the
+[post-start]     [firewall] error, then restart the container. Do NOT run
+[post-start]     --dangerously-skip-permissions until this is resolved.
+EOF
+  exit 1
+fi
+
 echo "[post-start] Ready. Inside the container, run:  bun run dev"
