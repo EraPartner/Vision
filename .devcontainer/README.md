@@ -94,6 +94,27 @@ GitHub, PyPI, Debian/PostgreSQL apt, Yahoo Finance, `*.visualstudio.com`.
 > host for live data. To change the allowlist, edit `squid.conf` and
 > **rebuild** (it's baked into the image).
 
+squid is supervised by the entrypoint: if it crashes, it's restarted
+(egress stays denied while down — fail-closed).
+
+**Supply-chain scanning.** `post-create` installs Aikido safe-chain and
+`BASH_ENV` wires it into every shell, so `npm`/`bun`/`pip` installs are
+screened against `malware-list.aikido.dev` before running. Defense-in-depth
+on top of the sandbox.
+
+**Observability.** Blocked egress shows as a TLS/cert error or
+`CONNECT 403` — that's the policy denying it. The definitive log is
+`/var/log/squid/access.log` (`dev`-readable; `TCP_DENIED`/`NONE` = blocked).
+`dmesg | grep vision-deny` catches proxy-bypass attempts but needs root.
+Run `.devcontainer/bin/doctor` for a one-shot readiness check.
+
+**Not covered:** WebSearch/WebFetch run Anthropic-side, not through the
+proxy. ECH (encrypted SNI) destinations fail closed (no SNI → terminated).
+
+**Prereqs:** `~/.gitconfig` and `~/.ssh/github.pub` must exist on the host
+(bind-mounted RO; missing → opaque `devcontainer up` failure). Docker
+Desktop VM needs ≥4 GB (the container requests `--memory=4g`).
+
 ## Persistence
 
 | Source | Container path | Type | Holds |

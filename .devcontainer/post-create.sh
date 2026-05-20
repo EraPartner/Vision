@@ -16,6 +16,20 @@ for _ in $(seq 1 30); do
   sleep 1
 done
 
+# Supply-chain protection: install Aikido safe-chain so package installs are
+# screened against its malware list (malware-list.aikido.dev, allowlisted in
+# squid). `safe-chain setup` writes shell wrappers; BASH_ENV (devcontainer.json)
+# sources them into every bash session so npm/bun/pip installs Claude runs
+# mid-session are screened. The project's own pinned deps below are installed
+# plain (already vetted via the lockfile) to avoid first-boot fragility.
+echo "[post-create] Installing safe-chain (supply-chain protection)..."
+if npm install -g @aikidosec/safe-chain >/dev/null 2>&1 && command -v safe-chain >/dev/null 2>&1; then
+  safe-chain setup >/dev/null 2>&1 || true
+  echo "[post-create] safe-chain installed (screens npm/bun/pip in later sessions)."
+else
+  echo "[post-create] WARN: safe-chain install failed — continuing without it." >&2
+fi
+
 # Python venv for alembic. The repo's scripts expect ./venv. A host-side (macOS)
 # venv has Linux-invalid symlinks — rebuild if broken. .gitignore covers venv/.
 if [[ ! -x ./venv/bin/python ]] || ! ./venv/bin/python -c '' 2>/dev/null; then

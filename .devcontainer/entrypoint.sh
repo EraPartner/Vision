@@ -104,5 +104,14 @@ fi
 
 log "Setup complete. Container ready (dev sessions via 'devcontainer exec')."
 
-# 5) Keep PID 1 alive. devcontainer exec/postStart sessions run as dev.
-exec sleep infinity
+# 5) Keep PID 1 alive AND supervise the egress proxy. If squid dies mid-session
+#    all egress stops (fail-closed) — restart it so it self-heals. The firewall
+#    is independent and stays in force while the proxy is down, so this never
+#    opens a gap; it only restores the allowlisted path. Run `doctor` to check.
+while true; do
+  if ! (exec 3<>/dev/tcp/127.0.0.1/3128) 2>/dev/null; then
+    log "egress proxy not responding — restarting squid..."
+    squid -N >>/var/log/squid/boot.log 2>&1 &
+  fi
+  sleep 30
+done
