@@ -102,18 +102,32 @@ fi
 # 4) Apply the egress firewall (locks outbound to the proxy UID only).
 /usr/local/sbin/vision-firewall || log "WARN: firewall apply returned non-zero."
 
+# Graceful shutdown on `docker stop` (SIGTERM): stop Postgres (fast) and squid
+# cleanly so the next start doesn't trigger crash recovery. (With "init": true
+# in devcontainer.json, tini reaps zombies and forwards this signal here.)
+shutdown() {
+  log "shutting down..."
+  pg_ctlcluster "${PG_VERSION}" "${PG_CLUSTER}" stop -m fast 2>/dev/null || true
+  squid -k shutdown 2>/dev/null || true
+  exit 0
+}
+trap shutdown TERM INT
+
 log "Setup complete. Container ready (dev sessions via 'devcontainer exec')."
 
 # 5) Keep PID 1 alive AND supervise the egress proxy. If squid dies mid-session
 #    all egress stops (fail-closed) — restart it so it self-heals. The firewall
 #    is independent and stays in force while the proxy is down, so this never
-#    opens a gap; it only restores the allowlisted path. Run `doctor` to check.
+#    opens a gap; it only restores the allowlisted path. Process-existence check
+#    (pgrep) — not a socket connect — so it doesn't spam the squid access log.
+squid_restarts=0
 while true; do
-  if ! (exec 3<>/dev/tcp/127.0.0.1/3128) 2>/dev/null; then
-    log "egress proxy not responding — restarting squid..."
-    # Kill any stale/hung squid first so the relaunch can bind 3128 cleanly.
-    pkill -x squid 2>/dev/null && sleep 2 || true
+  if ! pgrep -x squid >/dev/null 2>&1; then
+    squid_restarts=$(( squid_restarts + 1 ))
+    log "egress proxy process gone — restarting squid (restart #$squid_restarts)..."
     squid -N >>/var/log/squid/boot.log 2>&1 &
+    (( squid_restarts >= 5 )) && \
+      log "⚠ squid restarted $squid_restarts times — likely a config error; see /var/log/squid/boot.log"
   fi
   sleep 30
 done

@@ -24,6 +24,26 @@ if [[ -f "$STAGE/claude.json" && -f /home/dev/.claude.json ]]; then
   fi
 fi
 
+# Prune host-origin auto-exec surfaces from the container's ~/.claude on every
+# start. The host stage is an allowlist, but the ~/.claude *volume* persists
+# across rebuilds and may retain code-exec files from an older (blocklist-era)
+# seed — and rsync --update never deletes. Removing them here converges any
+# volume to a safe state regardless of history. (statusLine/status-line.sh runs
+# on every render; scheduled-tasks/jobs/daemon/hooks/plugins are auto-run.)
+for p in status-line.sh statusline scheduled-tasks tasks jobs daemon hooks plugins; do
+  rm -rf "/home/dev/.claude/$p" 2>/dev/null || true
+done
+if [[ -f /home/dev/.claude/settings.json ]]; then
+  tmp=$(mktemp)
+  jq 'del(.hooks)|del(.enabledPlugins)|del(.statusLine)' /home/dev/.claude/settings.json >"$tmp" 2>/dev/null \
+    && mv "$tmp" /home/dev/.claude/settings.json || rm -f "$tmp"
+fi
+if [[ -f /home/dev/.claude.json ]]; then
+  tmp=$(mktemp)
+  jq 'del(.mcpServers)|del(.hooks)|del(.enabledPlugins)' /home/dev/.claude.json >"$tmp" 2>/dev/null \
+    && mv "$tmp" /home/dev/.claude.json || rm -f "$tmp"
+fi
+
 # Sanity-check: is the signing public key actually loaded in the host
 # ssh-agent we just forwarded? If not, `git commit -S` will fail — emit a hint.
 SIGNING_PUB=/home/dev/.ssh/host-signing.pub

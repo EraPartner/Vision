@@ -102,10 +102,12 @@ RUN install -d -o dev -g dev -m 0700 /home/dev/.claude \
 # sessions and --security-opt=no-new-privileges so dev cannot escalate.
 WORKDIR /workspaces/Vision
 
-# Health: the egress proxy must be listening AND Postgres must accept
-# connections. start-period covers entrypoint setup. Surfaces in `docker ps`;
-# `.devcontainer/bin/doctor` is the fuller manual check.
+# Health: the egress proxy must be running, the firewall must still enforce
+# default-deny (the apply is best-effort/non-fatal, so this turns a silent
+# fail-open into a visible `unhealthy`), and Postgres must accept connections.
+# Uses pgrep, not a socket connect, so it doesn't spam the squid access log.
+# start-period covers entrypoint setup; `.devcontainer/bin/doctor` is fuller.
 HEALTHCHECK --interval=30s --timeout=5s --start-period=90s --retries=3 \
-  CMD bash -c '(exec 3<>/dev/tcp/127.0.0.1/3128) 2>/dev/null && pg_isready -h 127.0.0.1 -p 5432 -q'
+  CMD bash -c 'pgrep -x squid >/dev/null && /usr/sbin/iptables -S OUTPUT 2>/dev/null | grep -q "^-P OUTPUT DROP" && pg_isready -h 127.0.0.1 -p 5432 -q'
 
 ENTRYPOINT ["/usr/local/sbin/vision-entrypoint"]

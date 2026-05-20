@@ -25,6 +25,10 @@ iptables -F
 iptables -F VISION_DENY 2>/dev/null || true
 iptables -X VISION_DENY 2>/dev/null || true
 iptables -X 2>/dev/null || true
+# NOTE: flushing the NAT table is safe on Docker Desktop (DNS resolver is a
+# real host at resolv.conf's nameserver). On plain Docker/bridge networking the
+# embedded DNS at 127.0.0.11 is NAT-based, so flushing -t nat there would break
+# name resolution — this devcontainer targets Docker Desktop/macOS (see README).
 iptables -t nat -F
 iptables -t nat -X 2>/dev/null || true
 

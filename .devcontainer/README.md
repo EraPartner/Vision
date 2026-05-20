@@ -310,9 +310,9 @@ so the key auto-loads on first use and survives reboots.
 
 ## Known limitations
 
-- **App code using Node global `fetch`** (e.g. yahoo-finance2) — won't
-  reach the internet (undici ignores `HTTPS_PROXY`). `claude`/`bun`/`npm`/
-  `git`/`gh`/`pip` are fine. Run the app on the host for live data.
+- **App `fetch` to non-allowlisted hosts** — works for allowlisted hosts
+  via `NODE_USE_ENV_PROXY=1` (e.g. yahoo-finance reaches `*.finance.yahoo.com`
+  through the proxy); anything not in `squid.conf`'s allowlist is denied.
 - **Puppeteer (PDF rendering)** — Chromium isn't preinstalled. If you
   need PDF rendering in dev, run `bunx playwright install chromium --with-deps`
   once and set `PUPPETEER_EXECUTABLE_PATH`.
