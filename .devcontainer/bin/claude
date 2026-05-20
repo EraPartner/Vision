@@ -56,27 +56,28 @@ stage_claude_config() {
     # surfaces that a "copy all, delete a few" approach would leak:
     # status-line.sh / statusLine (runs every render), scheduled-tasks/, tasks/,
     # jobs/, daemon/, plugins/ (code), and host secrets/session state.
-    # statusline/ + status-line.sh are user-chosen statusLine scripts; they run
-    # in-container on every render (see SECURITY NOTE in README). Kept because
-    # the user relies on the status bar. hooks/mcpServers/enabledPlugins stay
-    # stripped (higher-risk auto-run the user hasn't opted into).
-    for item in settings.json keybindings.json CLAUDE.md agents rules commands statusline status-line.sh; do
+    # Allowlisted config. The user opted in (devcontainer hardening review) to
+    # plugins, MCP servers, hooks, and the statusLine script running in-container
+    # — so settings.json is staged as-is (statusLine/hooks/enabledPlugins kept)
+    # and plugins/ is staged so enabledPlugins resolve. These are user-chosen,
+    # trusted, host-origin code that runs in the sandbox — see README SECURITY
+    # NOTE. Still excluded: host secrets, sessions/history, and background-task
+    # state (scheduled-tasks/tasks/jobs/daemon), which the user did NOT enable.
+    for item in settings.json keybindings.json CLAUDE.md agents rules commands statusline status-line.sh plugins; do
       [[ -e "$src/$item" ]] && cp -a "$src/$item" "$dst/dot-claude/" 2>/dev/null || true
     done
-    rm -rf "$dst/dot-claude/statusline/.git" 2>/dev/null || true
-    # Defense-in-depth: strip the highest-risk auto-run keys from staged settings.
-    if [[ -f "$dst/dot-claude/settings.json" ]] && command -v jq >/dev/null 2>&1; then
-      tmp="$(mktemp)"
-      if jq 'del(.hooks) | del(.enabledPlugins)' "$dst/dot-claude/settings.json" > "$tmp" 2>/dev/null; then
-        mv "$tmp" "$dst/dot-claude/settings.json"
-      else rm -f "$tmp"; fi
-    fi
+    # Trim VCS dirs from staged statusline/plugins (bloat only).
+    find "$dst/dot-claude/statusline" "$dst/dot-claude/plugins" -name .git -type d -prune -exec rm -rf {} + 2>/dev/null || true
+    # Plugin marketplace metadata stores ABSOLUTE host paths (installLocation);
+    # rewrite them to the container home so enabledPlugins resolve in-container.
+    for jf in known_marketplaces.json installed_plugins.json; do
+      f="$dst/dot-claude/plugins/$jf"
+      [[ -f "$f" ]] && sed -i '' -e "s#$HOME/.claude#/home/dev/.claude#g" -e "s#$src#/home/dev/.claude#g" "$f" 2>/dev/null || true
+    done
     find "$dst/dot-claude" -name '.DS_Store' -delete 2>/dev/null || true
   fi
-  if [[ -f "$HOME/.claude.json" ]] && command -v jq >/dev/null 2>&1; then
-    jq 'del(.mcpServers) | del(.hooks) | del(.enabledPlugins)' "$HOME/.claude.json" \
-      > "$dst/claude.json" 2>/dev/null || true
-  fi
+  # ~/.claude.json seed staged as-is (mcpServers/hooks kept — user opted in).
+  [[ -f "$HOME/.claude.json" ]] && cp "$HOME/.claude.json" "$dst/claude.json" 2>/dev/null || true
 }
 stage_claude_config
 
