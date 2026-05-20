@@ -30,12 +30,15 @@ fi
 # seed — and rsync --update never deletes. Removing them here converges any
 # volume to a safe state regardless of history. (statusLine/status-line.sh runs
 # on every render; scheduled-tasks/jobs/daemon/hooks/plugins are auto-run.)
-for p in status-line.sh statusline scheduled-tasks tasks jobs daemon hooks plugins; do
+# NOTE: statusline/ + status-line.sh are intentionally NOT pruned — the user's
+# statusLine runs in-container by design (see README SECURITY NOTE). Only the
+# higher-risk auto-run surfaces the user hasn't opted into are removed.
+for p in scheduled-tasks tasks jobs daemon hooks plugins; do
   rm -rf "/home/dev/.claude/$p" 2>/dev/null || true
 done
 if [[ -f /home/dev/.claude/settings.json ]]; then
   tmp=$(mktemp)
-  jq 'del(.hooks)|del(.enabledPlugins)|del(.statusLine)' /home/dev/.claude/settings.json >"$tmp" 2>/dev/null \
+  jq 'del(.hooks)|del(.enabledPlugins)' /home/dev/.claude/settings.json >"$tmp" 2>/dev/null \
     && mv "$tmp" /home/dev/.claude/settings.json || rm -f "$tmp"
 fi
 if [[ -f /home/dev/.claude.json ]]; then

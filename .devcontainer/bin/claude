@@ -56,13 +56,18 @@ stage_claude_config() {
     # surfaces that a "copy all, delete a few" approach would leak:
     # status-line.sh / statusLine (runs every render), scheduled-tasks/, tasks/,
     # jobs/, daemon/, plugins/ (code), and host secrets/session state.
-    for item in settings.json keybindings.json CLAUDE.md agents rules commands; do
+    # statusline/ + status-line.sh are user-chosen statusLine scripts; they run
+    # in-container on every render (see SECURITY NOTE in README). Kept because
+    # the user relies on the status bar. hooks/mcpServers/enabledPlugins stay
+    # stripped (higher-risk auto-run the user hasn't opted into).
+    for item in settings.json keybindings.json CLAUDE.md agents rules commands statusline status-line.sh; do
       [[ -e "$src/$item" ]] && cp -a "$src/$item" "$dst/dot-claude/" 2>/dev/null || true
     done
-    # Defense-in-depth: strip any exec-capable keys from staged settings.json.
+    rm -rf "$dst/dot-claude/statusline/.git" 2>/dev/null || true
+    # Defense-in-depth: strip the highest-risk auto-run keys from staged settings.
     if [[ -f "$dst/dot-claude/settings.json" ]] && command -v jq >/dev/null 2>&1; then
       tmp="$(mktemp)"
-      if jq 'del(.hooks) | del(.enabledPlugins) | del(.statusLine)' "$dst/dot-claude/settings.json" > "$tmp" 2>/dev/null; then
+      if jq 'del(.hooks) | del(.enabledPlugins)' "$dst/dot-claude/settings.json" > "$tmp" 2>/dev/null; then
         mv "$tmp" "$dst/dot-claude/settings.json"
       else rm -f "$tmp"; fi
     fi

@@ -89,6 +89,7 @@ if [[ ! -f /etc/squid/certs/bump.pem ]]; then
     -subj "/CN=vision-egress-proxy" \
     -keyout /etc/squid/certs/bump.key -out /etc/squid/certs/bump.crt >/dev/null 2>&1
   cat /etc/squid/certs/bump.key /etc/squid/certs/bump.crt > /etc/squid/certs/bump.pem
+  chmod 600 /etc/squid/certs/bump.key /etc/squid/certs/bump.pem
 fi
 if [[ ! -d /var/lib/squid/ssl_db ]]; then
   log "Initializing squid ssl_db..."

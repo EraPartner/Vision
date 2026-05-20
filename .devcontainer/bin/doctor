@@ -61,5 +61,14 @@ else echo "  note /var/log/squid/access.log not yet created or unreadable (appea
 [[ -f /home/dev/.claude/settings.json ]] && pass "~/.claude seeded (settings.json present)" \
   || fail "~/.claude not seeded — claude will show first-run onboarding"
 
+# Host disk: the workspace is a bind mount onto the host filesystem, so a
+# runaway write here fills the HOST disk (no quota). Warn when free space is low.
+avail_kb=$(df -P /workspaces/Vision 2>/dev/null | awk 'NR==2{print $4}')
+if [[ -n "$avail_kb" ]]; then
+  avail_gb=$(( avail_kb / 1024 / 1024 ))
+  (( avail_gb < 5 )) && fail "low free space on the workspace/host filesystem (${avail_gb} GB) — risk of filling the host disk" \
+                     || pass "workspace/host free space OK (${avail_gb} GB)"
+fi
+
 echo "--------------------------"
 (( FAILED )) && { echo "Some checks FAILED."; exit 1; } || { echo "All checks passed."; exit 0; }
