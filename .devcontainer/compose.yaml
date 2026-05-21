@@ -15,7 +15,7 @@ services:
     container_name: vision-dev
     build:
       context: .
-      dockerfile: Dockerfile.compose
+      dockerfile: Dockerfile
     init: true
     cap_drop: [ALL]
     cap_add: [NET_ADMIN, CHOWN, DAC_OVERRIDE, FOWNER, SETUID, SETGID, SETPCAP]

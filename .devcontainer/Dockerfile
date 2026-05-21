@@ -1,27 +1,26 @@
-# Vision devcontainer — runs the full dev stack (Postgres + backend + frontend)
-# natively inside the container, so we don't need Docker-in-Docker.
+# Vision sandbox image — devcontainer-FREE (built by docker compose).
+#
+# Self-contained twin of ./Dockerfile. The devcontainer build relied on
+# devcontainer FEATURES (node:1, python:1, anthropics/claude-code:1.0) layered by
+# the devcontainer CLI; compose has no feature system, so this file installs
+# Node + Python + the Claude CLI itself. Everything else (Postgres, Bun,
+# hardening, egress proxy, baked scripts) is identical to Dockerfile.
 #
 # Hardened for Claude CLI in --dangerously-skip-permissions mode:
-#   - runs with --security-opt=no-new-privileges (no sudo, no setuid escalation)
+#   - --security-opt=no-new-privileges (no sudo, no setuid escalation)
 #   - a root ENTRYPOINT does all privileged setup (perms, Postgres, proxy,
-#     firewall), then drops to a keep-alive; dev sessions have no path to root
-#   - all egress is forced through an in-container squid proxy enforcing a
-#     HOSTNAME allowlist (peek+splice SNI, no TLS interception)
-#
-# Tools installed by features (devcontainer.json): node, python, claude-code.
+#     firewall), then drops to a keep-alive
+#   - all egress forced through an in-container squid proxy (hostname allowlist)
 
-# Pin the base image by digest for reproducibility + supply-chain integrity.
 FROM debian:bookworm-slim@sha256:0104b334637a5f19aa9c983a91b54c89887c0984081f2068983107a6f6c21eeb
 
 ARG TZ=UTC
 ENV TZ="$TZ"
 ENV DEBIAN_FRONTEND=noninteractive
 
-# Base utilities + a non-root `dev` user (UID 1000). NOTE: sudo is intentionally
-# NOT installed — the container runs with no-new-privileges and all privileged
-# setup happens in the root ENTRYPOINT.
+# Base utilities + a non-root `dev` user (UID 1000). sudo intentionally absent.
 RUN apt-get update && apt-get install -y --no-install-recommends \
-      ca-certificates curl gnupg lsb-release \
+      ca-certificates curl gnupg lsb-release xz-utils \
       git less procps jq locales openssh-client unzip rsync \
       iptables dnsutils openssl \
       squid-openssl \
@@ -50,8 +49,7 @@ RUN install -d /usr/share/postgresql-common/pgdg \
   && apt-get update && apt-get install -y --no-install-recommends postgresql-18 \
   && rm -rf /var/lib/apt/lists/*
 
-# Bun, pinned to a versioned GitHub release with SHA256 verification (replaces
-# the unverified `curl https://bun.sh/install | bash` supply-chain hole).
+# Bun, pinned to a versioned GitHub release with SHA256 verification.
 RUN set -eux; \
     case "$(dpkg --print-architecture)" in \
       arm64) BUN_ARCH=aarch64; BUN_SHA=a27ffb63a8310375836e0d6f668ae17fa8d8d18b88c37c821c65331973a19a3b ;; \
@@ -65,9 +63,45 @@ RUN set -eux; \
     chmod +x /usr/local/bin/bun; \
     rm -rf /tmp/bun /tmp/bun.zip
 
-# Bake privileged scripts into the image at /usr/local/sbin (root-owned, not
-# writable from inside the container). Repo copies are source-only — a rewrite
-# there can't affect the running container (closes a root-escalation path).
+# --- Node.js (replaces the `node:1` feature) — official static build ---------
+ARG NODE_VERSION=24.15.0
+RUN set -eux; \
+    case "$(dpkg --print-architecture)" in amd64) na=x64 ;; arm64) na=arm64 ;; *) exit 1 ;; esac; \
+    curl -fsSLo /tmp/node.tar.xz "https://nodejs.org/dist/v${NODE_VERSION}/node-v${NODE_VERSION}-linux-${na}.tar.xz"; \
+    tar -xJf /tmp/node.tar.xz -C /usr/local --strip-components=1 --no-same-owner \
+      --exclude='*/CHANGELOG.md' --exclude='*/LICENSE' --exclude='*/README.md'; \
+    rm /tmp/node.tar.xz; \
+    mkdir -p /usr/local/share/npm-global
+
+# --- Python 3.12 (replaces the `python:1` feature) — python-build-standalone --
+# The feature compiled CPython from source; we use the prebuilt relocatable
+# CPython (the same builds uv/rye use), resolved from the latest release. Gives
+# python3 + pip + venv + ssl with no compile. Bump by re-resolving on rebuild.
+RUN set -eux; \
+    case "$(dpkg --print-architecture)" in arm64) pa=aarch64 ;; amd64) pa=x86_64 ;; *) exit 1 ;; esac; \
+    rel="$(curl -fsSL https://api.github.com/repos/astral-sh/python-build-standalone/releases/latest)"; \
+    url="$(printf '%s' "$rel" | jq -r --arg pa "$pa" '.assets[].browser_download_url | select(endswith($pa + "-unknown-linux-gnu-install_only.tar.gz")) | select(contains("/cpython-3.12."))' | head -1)"; \
+    test -n "$url"; echo "python-build-standalone: $url"; \
+    curl -fsSLo /tmp/py.tar.gz "$url"; \
+    mkdir -p /opt/python; \
+    tar -xzf /tmp/py.tar.gz --strip-components=1 -C /opt/python; \
+    rm /tmp/py.tar.gz; \
+    [ -x /opt/python/bin/python ] || ln -s python3 /opt/python/bin/python; \
+    /opt/python/bin/python3 --version; /opt/python/bin/python3 -m venv --help >/dev/null
+
+# Global npm prefix -> a dev-owned dir so runtime `npm i -g` (safe-chain) works.
+ENV NPM_CONFIG_PREFIX=/usr/local/share/npm-global
+ENV PATH=/usr/local/share/npm-global/bin:/opt/python/bin:/usr/local/bin:$PATH
+# Login shells reset PATH via /etc/profile; re-add the tool dirs for them too.
+RUN printf 'export PATH="/usr/local/share/npm-global/bin:/opt/python/bin:/usr/local/bin:$PATH"\n' \
+      > /etc/profile.d/00-sandbox-path.sh
+
+# --- Claude Code CLI (replaces the `anthropics/claude-code:1.0` feature) -----
+RUN npm install -g @anthropic-ai/claude-code \
+  && claude --version \
+  && chown -R dev:dev /usr/local/share/npm-global
+
+# Bake privileged scripts into the image (root-owned, source-only repo copies).
 COPY init-firewall.sh /usr/local/sbin/egress-firewall
 COPY perms-fix.sh     /usr/local/sbin/vision-perms-fix
 COPY entrypoint.sh    /usr/local/sbin/vision-entrypoint
@@ -76,14 +110,10 @@ COPY allowlist.txt    /etc/squid/allowlist.txt
 RUN chmod 0755 /usr/local/sbin/egress-firewall /usr/local/sbin/vision-perms-fix /usr/local/sbin/vision-entrypoint \
   && chown root:root /usr/local/sbin/egress-firewall /usr/local/sbin/vision-perms-fix /usr/local/sbin/vision-entrypoint
 
-# Inbound ports this project publishes (read by the canonical egress-firewall for
-# INPUT ACCEPT). Frontend 8080 + backend 3002.
+# Inbound ports this project publishes (read by egress-firewall for INPUT ACCEPT).
 RUN mkdir -p /etc/egress && printf '8080\n3002\n' > /etc/egress/inbound-ports
 
 # Pre-build the squid TLS-bump cert + cert DB (entrypoint regenerates if missing).
-# Key + .pem are 0600 — squid reads them at startup as root, so dev never needs
-# to. (Bump CA is in no trust store and allowed traffic is spliced, so it can't
-# MITM anything, but a private key shouldn't be world-readable.)
 RUN mkdir -p /etc/squid/certs /var/lib/squid /var/log/squid /var/spool/squid \
   && openssl req -new -newkey rsa:2048 -days 3650 -nodes -x509 \
        -subj "/CN=vision-egress-proxy" \
@@ -93,33 +123,19 @@ RUN mkdir -p /etc/squid/certs /var/lib/squid /var/log/squid /var/spool/squid \
   && /usr/lib/squid/security_file_certgen -c -s /var/lib/squid/ssl_db -M 4MB \
   && chown -R proxy:proxy /etc/squid/certs /var/lib/squid /var/log/squid /var/spool/squid
 
-# postgres data root must be writable by postgres on volume mount (the
-# entrypoint's perms-fix is the runtime backstop after the volume mounts).
+# postgres data root must be writable by postgres on volume mount.
 RUN mkdir -p /var/lib/postgresql && chown postgres:postgres /var/lib/postgresql
 
-# Pre-create dirs backed by named volumes so a fresh volume inherits dev
-# ownership on first mount (entrypoint perms-fix is the runtime backstop).
+# Pre-create dirs backed by named volumes so a fresh volume inherits dev ownership.
 RUN install -d -o dev -g dev -m 0700 /home/dev/.claude \
  && install -d -o dev -g dev -m 0755 /home/dev/.config /home/dev/.config/gh
 
-# Strip ALL setuid/setgid bits image-wide. Inert under no-new-privileges, but
-# clean defense-in-depth — and a generic find won't go stale like a hand-list
-# (it also catches ssh-keysign, unix_chkpwd, squid/pinger). NOTE: we use
-# `runuser` for privilege drops, pg_ctlcluster runs as root (so `su`'s setuid
-# bit isn't needed for Postgres), and squid's pinger is unused (no cache peers)
-# — nothing needs elevated bits.
+# Strip ALL setuid/setgid bits image-wide (defense-in-depth).
 RUN find / -xdev -type f -perm /6000 -exec chmod -s {} + 2>/dev/null || true
 
-# Container process (PID 1 / entrypoint) runs as root so it can apply iptables,
-# start Postgres, and start the proxy; devcontainer.json sets remoteUser=dev for
-# sessions and --security-opt=no-new-privileges so dev cannot escalate.
 WORKDIR /workspaces/Vision
 
-# Health: the egress proxy must be running, the firewall must still enforce
-# default-deny (the apply is best-effort/non-fatal, so this turns a silent
-# fail-open into a visible `unhealthy`), and Postgres must accept connections.
-# Uses pgrep, not a socket connect, so it doesn't spam the squid access log.
-# start-period covers entrypoint setup; `.devcontainer/bin/doctor` is fuller.
+# Health: proxy running, firewall default-deny, Postgres accepting connections.
 HEALTHCHECK --interval=30s --timeout=5s --start-period=90s --retries=3 \
   CMD bash -c 'pgrep -x squid >/dev/null && /usr/sbin/iptables -S OUTPUT 2>/dev/null | grep -q "^-P OUTPUT DROP" && pg_isready -h 127.0.0.1 -p 5432 -q'
 

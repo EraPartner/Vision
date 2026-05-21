@@ -1,133 +1,82 @@
 #!/usr/bin/env bash
-# Wrapper: route `claude` invocations into the Vision devcontainer.
-#
-# Walk-up logic finds the project root via .devcontainer/devcontainer.json so
-# the wrapper works from anywhere in the repo (or via WALK-up / a fish func).
-#
-# Responsibilities (all on the HOST, before entering the container):
-#   1. Stage a SANITIZED copy of ~/.claude into ~/.claude-vision-stage so the
-#      container never sees host secrets (.credentials.json) or auto-runs host
-#      hooks/MCP servers/plugins. Only that staging dir is bind-mounted (RO).
-#   2. `devcontainer up` (idempotent; fast when warm).
-#   3. Forward the Claude OAuth token and the gh token from the macOS Keychain
-#      as env vars at exec time — neither is ever written to a file on disk.
-
+# Compose launcher: route `claude` into the Vision sandbox WITHOUT devcontainers.
+# The devcontainer-free equivalent of bin/claude — uses `docker compose` +
+# .devcontainer/compose.yaml instead of `devcontainer up`/`exec`. bin/claude
+# (devcontainer) stays as the fallback during the migration.
 set -euo pipefail
 
 find_project_root() {
   local d="$PWD"
   while [[ "$d" != "/" ]]; do
-    if [[ -f "$d/.devcontainer/devcontainer.json" ]]; then echo "$d"; return 0; fi
+    [[ -f "$d/.devcontainer/compose.yaml" ]] && { echo "$d"; return 0; }
     d="$(dirname "$d")"
   done
   return 1
 }
 
-if [[ -n "${VISION_PROJECT_ROOT:-}" && -f "${VISION_PROJECT_ROOT}/.devcontainer/devcontainer.json" ]]; then
+if [[ -n "${VISION_PROJECT_ROOT:-}" && -f "${VISION_PROJECT_ROOT}/.devcontainer/compose.yaml" ]]; then
   PROJECT_ROOT="$VISION_PROJECT_ROOT"
 else
   PROJECT_ROOT="$(find_project_root || true)"
 fi
+[[ -z "$PROJECT_ROOT" ]] && { echo "claude (vision-compose): no .devcontainer/compose.yaml above $PWD." >&2; exit 1; }
 
-if [[ -z "$PROJECT_ROOT" ]]; then
-  echo "claude (vision-wrapper): no .devcontainer/devcontainer.json above $PWD." >&2
-  echo "Falling back to host claude binary." >&2
-  exec command claude "$@"
-fi
+command -v docker >/dev/null 2>&1 || { echo "claude (vision-compose): docker not installed." >&2; exit 1; }
+docker compose version >/dev/null 2>&1 || { echo "claude (vision-compose): docker compose v2 required." >&2; exit 1; }
 
-if ! command -v devcontainer >/dev/null 2>&1; then
-  echo "claude (vision-wrapper): @devcontainers/cli not installed." >&2
-  echo "  npm install -g @devcontainers/cli" >&2
-  exit 1
-fi
+COMPOSE=(docker compose -f "$PROJECT_ROOT/.devcontainer/compose.yaml")
+SVC=app
 
 # --- 1) Stage a sanitized ~/.claude for the read-only bind mount -------------
 stage_claude_config() {
-  local src dst
-  local item
+  local src dst item jf f
   src="$(cd "$HOME/.claude" 2>/dev/null && pwd -P || true)"
   dst="$HOME/.claude-vision-stage"
-  # Rebuild the stage from scratch each time so a previously-staged file that's
-  # no longer allowlisted (or a removed host file) doesn't linger.
   rm -rf "$dst/dot-claude"; mkdir -p "$dst/dot-claude"
   if [[ -n "$src" && -d "$src" ]]; then
-    # ALLOWLIST (not blocklist): copy only known-safe, non-auto-executing
-    # config. Everything else is excluded by default — including code-exec
-    # surfaces that a "copy all, delete a few" approach would leak:
-    # status-line.sh / statusLine (runs every render), scheduled-tasks/, tasks/,
-    # jobs/, daemon/, plugins/ (code), and host secrets/session state.
-    # Allowlisted config. The user opted in (devcontainer hardening review) to
-    # plugins, MCP servers, hooks, and the statusLine script running in-container
-    # — so settings.json is staged as-is (statusLine/hooks/enabledPlugins kept)
-    # and plugins/ is staged so enabledPlugins resolve. These are user-chosen,
-    # trusted, host-origin code that runs in the sandbox — see README SECURITY
-    # NOTE. Still excluded: host secrets, sessions/history, and background-task
-    # state (scheduled-tasks/tasks/jobs/daemon), which the user did NOT enable.
     for item in settings.json keybindings.json CLAUDE.md agents rules commands statusline status-line.sh plugins; do
       [[ -e "$src/$item" ]] && cp -a "$src/$item" "$dst/dot-claude/" 2>/dev/null || true
     done
-    # Trim VCS dirs from staged statusline/plugins (bloat only).
     find "$dst/dot-claude/statusline" "$dst/dot-claude/plugins" -name .git -type d -prune -exec rm -rf {} + 2>/dev/null || true
-    # Plugin marketplace metadata stores ABSOLUTE host paths (installLocation);
-    # rewrite them to the container home so enabledPlugins resolve in-container.
     for jf in known_marketplaces.json installed_plugins.json; do
       f="$dst/dot-claude/plugins/$jf"
       [[ -f "$f" ]] && sed -i '' -e "s#$HOME/.claude#/home/dev/.claude#g" -e "s#$src#/home/dev/.claude#g" "$f" 2>/dev/null || true
     done
     find "$dst/dot-claude" -name '.DS_Store' -delete 2>/dev/null || true
   fi
-  # ~/.claude.json seed staged as-is (mcpServers/hooks kept — user opted in).
   [[ -f "$HOME/.claude.json" ]] && cp "$HOME/.claude.json" "$dst/claude.json" 2>/dev/null || true
 }
 stage_claude_config
 
-# --- 2) Ensure the container is up (idempotent) ------------------------------
-devcontainer up --workspace-folder "$PROJECT_ROOT" >/dev/null
+# --- 2) Build + start (idempotent) -------------------------------------------
+"${COMPOSE[@]}" up -d --build >/dev/null
+CID="$("${COMPOSE[@]}" ps -q "$SVC" 2>/dev/null | head -1 || true)"
 
-# --- 2a) Resolve THIS container + auto-pull host config into it ---------------
-# Re-apply the sanitized allowlist stage (built above) into the live ~/.claude
-# volume so host config edits land WITHOUT a rebuild — previously only the
-# create-time seed did this. Newer-wins rsync (no --delete) + a key-merge of
-# .claude.json where container values win, so it never clobbers container state.
-CID="$(docker ps -q --filter "label=devcontainer.local_folder=$PROJECT_ROOT" 2>/dev/null | head -1 || true)"
-if [[ -n "$CID" ]]; then
-  docker exec -u dev "$CID" bash -c '
-    rsync -a --update --ignore-errors /home/dev/.claude-stage/dot-claude/ /home/dev/.claude/ >/dev/null 2>&1 || true
-    if [[ -f /home/dev/.claude-stage/claude.json && -f /home/dev/.claude.json ]]; then
-      t="$(mktemp)" && jq -s ".[1] * .[0]" /home/dev/.claude.json /home/dev/.claude-stage/claude.json >"$t" 2>/dev/null && mv "$t" /home/dev/.claude.json || rm -f "$t"
-    fi' >/dev/null 2>&1 || true
-fi
+# --- 3) Replay lifecycle as dev (post-create once, post-start every start) ----
+"${COMPOSE[@]}" exec -u dev -T "$SVC" bash -lc '
+  set -e
+  cd /workspaces/Vision
+  if [[ ! -f /home/dev/.postcreate-done ]]; then
+    bash .devcontainer/post-create.sh && touch /home/dev/.postcreate-done
+  fi
+  bash .devcontainer/post-start.sh'
 
-# --- 3) Forward credentials from the macOS Keychain at exec time -------------
-EXEC_ARGS=()
+# --- 4) Forward the Claude OAuth token from the macOS Keychain at exec time ---
 kc() { security find-generic-password -s "$1" -w 2>/dev/null || true; }
-
+EXEC_ENV=()
 if command -v security >/dev/null 2>&1; then
   tok="$(kc 'vision-claude-code-token')"
-  [[ -n "$tok" ]] && EXEC_ARGS+=(--remote-env "CLAUDE_CODE_OAUTH_TOKEN=$tok")
+  [[ -n "$tok" ]] && EXEC_ENV+=(-e "CLAUDE_CODE_OAUTH_TOKEN=$tok")
 fi
-# No git credential is forwarded: commits/pushes happen on the HOST and the
-# in-container .git is read-only. Only the Claude LLM token crosses the boundary.
-
-# ${EXEC_ARGS[@]+...} guards against "unbound variable" on an empty array under
-# `set -u` (macOS default bash 3.2) when no token was found.
 have_claude=0
-for a in ${EXEC_ARGS[@]+"${EXEC_ARGS[@]}"}; do [[ "$a" == CLAUDE_CODE_OAUTH_TOKEN=* ]] && have_claude=1; done
+for a in ${EXEC_ENV[@]+"${EXEC_ENV[@]}"}; do [[ "$a" == "CLAUDE_CODE_OAUTH_TOKEN="* ]] && have_claude=1; done
 if (( ! have_claude )); then
   for var in CLAUDE_CODE_OAUTH_TOKEN ANTHROPIC_API_KEY ANTHROPIC_AUTH_TOKEN; do
-    val="${!var:-}"
-    [[ -n "$val" ]] && EXEC_ARGS+=(--remote-env "${var}=${val}")
+    val="${!var:-}"; [[ -n "$val" ]] && EXEC_ENV+=(-e "${var}=${val}")
   done
 fi
 
-# --- 4) Auto-sync config/memory back to the host when the session ends --------
-# Replaces the manual `vision-claude-sync push`. We deliberately DON'T `exec` the
-# session: bash stays the parent, so when claude exits — normally OR via Ctrl-C —
-# the EXIT trap runs the SAME hardened push the manual wrapper uses (snapshot-to-
-# temp + abort-on-fail, per-file newer-wins, jq key-merge, timestamped backups).
-# Pushing only AFTER the session ends means a single writer (no host/container
-# race on .claude.json), so it cannot corrupt either copy. Disable with
-# VISION_AUTOSYNC=0.
+# --- 5) Auto config-sync: push container changes back on exit -----------------
 AUTOSYNC="${VISION_AUTOSYNC:-1}"
 _autosync_done=0
 autosync_push() {
@@ -136,15 +85,12 @@ autosync_push() {
   if [[ "$AUTOSYNC" != 1 || -z "$CID" ]]; then return 0; fi
   command -v fish >/dev/null 2>&1 || return 0
   fish -c "vision-claude-sync push $CID" \
-    || echo "claude (vision-wrapper): auto config-sync push failed — run 'vision-claude-sync push' to retry." >&2
+    || echo "claude (vision-compose): auto config-sync push failed — run 'vision-claude-sync push' to retry." >&2
 }
 trap autosync_push EXIT
 
-# Forward all args. claude is interactive — stdin/tty flow through devcontainer
-# exec. NOTE: intentionally NOT `exec` — bash must outlive the session to run the
-# EXIT trap that syncs config/memory back to the host.
 set +e
-devcontainer exec --workspace-folder "$PROJECT_ROOT" ${EXEC_ARGS[@]+"${EXEC_ARGS[@]}"} claude "$@"
+"${COMPOSE[@]}" exec -u dev ${EXEC_ENV[@]+"${EXEC_ENV[@]}"} "$SVC" claude "$@"
 _rc=$?
 set -e
 exit "$_rc"
