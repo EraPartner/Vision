@@ -29,6 +29,7 @@ dist/
 .claude/
 .opencode/
 AGENTS.*
+CLAUDE.*
 
 # OS
 .DS_Store
