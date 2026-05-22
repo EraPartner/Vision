@@ -7,6 +7,26 @@
 set -euo pipefail
 cd /workspaces/Vision
 
+# Seed the container's ~/.claude + ~/.claude.json from the SANITIZED staging dir
+# the host wrapper produced at /home/dev/.claude-stage (bind RO). Done FIRST,
+# before any network install: it needs only the local bind mount, so a later dep
+# failure (pip/bun) can never leave Claude unconfigured. The wrapper strips
+# secrets (.credentials.json) and active code-exec config
+# (hooks/mcpServers/enabledPlugins), so a compromised host config can't silently
+# propagate executable config into the container.
+STAGE=/home/dev/.claude-stage
+if [[ ! -f /home/dev/.claude/settings.json && -d "$STAGE/dot-claude" ]]; then
+  echo "[post-create] Seeding ~/.claude from sanitized stage..."
+  if ! rsync -a --ignore-errors "$STAGE/dot-claude/" /home/dev/.claude/; then
+    echo "[post-create] WARN: ~/.claude rsync seed had errors (some files may be missing)." >&2
+  fi
+  echo "[post-create] Seeded $(find /home/dev/.claude -mindepth 1 -maxdepth 1 | wc -l) entries into ~/.claude."
+fi
+if [[ ! -f /home/dev/.claude.json && -f "$STAGE/claude.json" ]]; then
+  cp "$STAGE/claude.json" /home/dev/.claude.json
+  chmod 0600 /home/dev/.claude.json
+fi
+
 # Wait for the egress proxy (started by the root entrypoint) before any network
 # install — postCreate can race the entrypoint's proxy startup, and with egress
 # locked to the proxy UID, installs fail until 127.0.0.1:3128 is listening.
@@ -87,24 +107,6 @@ if [[ ! -f /home/dev/.gitconfig || ! -s /home/dev/.gitconfig ]]; then
 [safe]
     directory = /workspaces/Vision
 EOF
-fi
-
-# Seed the container's ~/.claude + ~/.claude.json from the SANITIZED staging
-# dir the host wrapper produced at /home/dev/.claude-stage (bind RO). The
-# wrapper strips secrets (.credentials.json) and active code-exec config
-# (hooks/mcpServers/enabledPlugins), so a compromised host config can't
-# silently propagate executable config into the container.
-STAGE=/home/dev/.claude-stage
-if [[ ! -f /home/dev/.claude/settings.json && -d "$STAGE/dot-claude" ]]; then
-  echo "[post-create] Seeding ~/.claude from sanitized stage..."
-  if ! rsync -a --ignore-errors "$STAGE/dot-claude/" /home/dev/.claude/; then
-    echo "[post-create] WARN: ~/.claude rsync seed had errors (some files may be missing)." >&2
-  fi
-  echo "[post-create] Seeded $(find /home/dev/.claude -mindepth 1 -maxdepth 1 | wc -l) entries into ~/.claude."
-fi
-if [[ ! -f /home/dev/.claude.json && -f "$STAGE/claude.json" ]]; then
-  cp "$STAGE/claude.json" /home/dev/.claude.json
-  chmod 0600 /home/dev/.claude.json
 fi
 
 echo "[post-create] Done."

@@ -75,19 +75,32 @@ RUN set -eux; \
 
 # --- Python 3.12 (replaces the `python:1` feature) — python-build-standalone --
 # The feature compiled CPython from source; we use the prebuilt relocatable
-# CPython (the same builds uv/rye use), resolved from the latest release. Gives
-# python3 + pip + venv + ssl with no compile. Bump by re-resolving on rebuild.
+# CPython (the same builds uv/rye use). python3 + pip + venv + ssl, no compile.
+# Downloaded DIRECTLY from a pinned release asset, NOT resolved via the GitHub API:
+# the unauthenticated api.github.com 60-req/hr limit gets exhausted when several
+# images build in a row, returning 403 and failing the build (curl exit 22). Asset
+# downloads from the releases/download host don't count against that limit.
+# Bump by editing PY_RELEASE/PY_VERSION (asset = cpython-<ver>+<release>-<arch>...).
+ARG PY_RELEASE=20260510
+ARG PY_VERSION=3.12.13
 RUN set -eux; \
     case "$(dpkg --print-architecture)" in arm64) pa=aarch64 ;; amd64) pa=x86_64 ;; *) exit 1 ;; esac; \
-    rel="$(curl -fsSL https://api.github.com/repos/astral-sh/python-build-standalone/releases/latest)"; \
-    url="$(printf '%s' "$rel" | jq -r --arg pa "$pa" '.assets[].browser_download_url | select(endswith($pa + "-unknown-linux-gnu-install_only.tar.gz")) | select(contains("/cpython-3.12."))' | head -1)"; \
-    test -n "$url"; echo "python-build-standalone: $url"; \
+    url="https://github.com/astral-sh/python-build-standalone/releases/download/${PY_RELEASE}/cpython-${PY_VERSION}+${PY_RELEASE}-${pa}-unknown-linux-gnu-install_only.tar.gz"; \
+    echo "python-build-standalone: $url"; \
     curl -fsSLo /tmp/py.tar.gz "$url"; \
     mkdir -p /opt/python; \
     tar -xzf /tmp/py.tar.gz --strip-components=1 -C /opt/python; \
     rm /tmp/py.tar.gz; \
     [ -x /opt/python/bin/python ] || ln -s python3 /opt/python/bin/python; \
     /opt/python/bin/python3 --version; /opt/python/bin/python3 -m venv --help >/dev/null
+
+# python-build-standalone bakes CC=clang into its sysconfig, so building any C
+# extension (e.g. psycopg2, which ships no wheels) invokes clang — absent here;
+# this image carries gcc via build-essential. Pin CC to gcc so source builds
+# work (setuptools rewrites LDSHARED clang->gcc off CC, so linking follows too).
+# Without this, `pip install psycopg2` aborts post-create before it seeds
+# ~/.claude, and Claude starts unconfigured. Covers mid-session pip builds too.
+ENV CC=gcc CXX=g++
 
 # Global npm prefix -> a dev-owned dir so runtime `npm i -g` (safe-chain) works.
 ENV NPM_CONFIG_PREFIX=/usr/local/share/npm-global
