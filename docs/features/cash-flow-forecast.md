@@ -3,8 +3,8 @@ title: Cash Flow Forecast
 type: feature
 status: active
 date: 2026-04-25
-updated: 2026-05-14
-last_modified: 2026-05-14
+updated: 2026-05-23
+last_modified: 2026-05-23
 tags: [feature, cash-flow, forecast, planning, aggregations, phase-6, phase-10, phase-c, phase-d, phase-e, phase-g, planned-transactions, statistical-forecasting, ensemble-methods, frontend-visualization, multi-method-forecast, diagnostics-sheet, accuracy-persistence, materialized-cache, nightly-job, category-breakdown, fallback-resilience]
 aliases: [cashflow-forecast, forward-projections, cash-flow-planning, income-expense-forecast, budget-projection, multi-method-forecast, ensemble-forecast, category-breakdown]
 description: Project income and expenses forward based on planned transactions (Phase 6) or using 8 statistical methods including 7 base methods + inverse-MSE ensemble (Phase 10, F). Phase C adds frontend dashboard visualization with controls, MC confidence bands, and diagnostics panel. Phase E adds nightly cache materialization. Phase G adds per-category breakdown with hierarchical reconciliation.
@@ -901,7 +901,7 @@ Walk-forward backtest is per-calendar-month: it iterates historical months and m
 ### Frontend wiring
 
 - `apps/frontend/src/components/dashboard/CashFlowForecastChart.tsx` owns `mode` and `rollingDays` state, branches between two `useQuery` calls (one enabled at a time), and renders either `ForecastInner` or `ForecastInnerRolling`.
-- `apps/frontend/src/components/dashboard/ForecastInnerRolling.tsx` uses `LineChart` with `xIsDate` and a vertical reference line at `data.today`.
+- `apps/frontend/src/components/dashboard/ForecastInnerRolling.tsx` uses `LineChart` with `xIsDate` and a vertical reference line at `data.today`. X-axis month abbreviations use the app **language** setting (`language === "nl" ? "nl-NL" : "en-US"`), matching the canonical pattern from `NetWorthPage` and `PerformancePage`. The y-axis currency formatter independently uses `numberFormatToLocale(appSettings.numberFormat)`. See [[docs/components/dashboard#ForecastInnerRolling (Phase H)|ForecastInnerRolling component doc]] for the fix rationale.
 - `apps/frontend/src/utils/forecastMerge.ts` exports `mergeForViewRolling` that produces date-keyed `MergedDayDate[]` rows (with `t: Date`) instead of dayNum-keyed rows.
 - `apps/frontend/src/components/charts/LineChart.tsx` extends `LineReferenceLine` to support an optional `x: Date | number` field for vertical reference lines (backwards-compatible with existing `y` references).
 

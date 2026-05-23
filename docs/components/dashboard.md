@@ -3,7 +3,7 @@ title: Dashboard Components
 type: component
 status: active
 date: 2026-04-17
-updated: 2026-04-28
+updated: 2026-05-23
 tags: [components, dashboard, charts, widgets, liquid-glass, design-system, phase-9, phase-d, phase-f, phase-h, phase-h-v2, ensemble, visx, url-persistence, rolling-cache, rolling-diagnostics]
 description: Dashboard-specific components for financial overview and visualization with liquid-glass aesthetic and visx charts, including dual-mode cash flow forecast with URL state persistence and rolling window diagnostics
 aliases: [dashboard-widgets, dashboard-charts, overview-components, stat-cards]
@@ -444,6 +444,11 @@ interface ForecastInnerRollingProps {
 - **Source coloring** — Visually distinct colors for `'actual'` (muted), `'planned'` (highlight), `'forecast'` (projection)
 - **Window boundaries** — Displays window start and end dates for context
 - **Loading state** — Renders skeleton/spinner during API fetch
+
+> [!info] X-axis month-label locale
+> Month abbreviations on the rolling forecast x-axis follow the app **language** setting, not the number-format setting. The component derives `monthLabelLocale` as `language === "nl" ? "nl-NL" : "en-US"` and passes it to `formatDate(d, "MMM d", monthLabelLocale)`. This matches the canonical pattern used by `NetWorthPage` and `PerformancePage`. The y-axis currency formatter continues to use `numberFormatToLocale(appSettings.numberFormat)` — only the x-axis month label was changed.
+>
+> **Root cause (fixed):** Previously, `ForecastInnerRolling` passed the number-format locale to `formatDate` for `xTickFormat`. Because the default number format is `'eu'` (which maps to `'de-DE'`), the x-axis always showed German month abbreviations (e.g. "Mär", "Mai") regardless of the selected app language. Other charts were unaffected: they either omit the locale argument (defaulting to en-US) or use `formatMonthYearWithAppSettings` whose localized-month branch is unreachable for the 5 numeric `dateFormat` options.
 
 ### Data Shape
 
