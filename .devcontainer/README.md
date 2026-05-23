@@ -111,7 +111,7 @@ forwarded (see "Git" below), so `~/.ssh` and a `*-gh-token` are no longer needed
 | --- | --- | --- | --- |
 | `.devcontainer` (host) | `/workspaces/Vision/.devcontainer` | bind **RO** | Overlay on the rw workspace so the sandbox config + host launcher can't be rewritten from inside (see Safety note) |
 | `vision-claude-<id>` | `/home/dev/.claude` | named volume | Container's writable Claude config — seeded from the sanitized stage on first create |
-| `~/.claude-vision-stage` (host) | `/home/dev/.claude-stage` | bind **RO** | Sanitized staging copy the wrapper produces (secrets + `hooks`/`mcpServers`/`enabledPlugins` stripped). Raw host `~/.claude` is **never** mounted. |
+| `~/.claude-sandbox/stage/vision` (host) | `/home/dev/.claude-stage` | bind **RO** | Sanitized staging copy the wrapper produces (secrets + `hooks`/`mcpServers`/`enabledPlugins` stripped). Raw host `~/.claude` is **never** mounted. |
 | (container fs) | `/home/dev/.claude.json` | regular file | Container's writable global config, seeded from `…/claude.json` in the stage |
 | `vision-pgdata-<id>` | `/var/lib/postgresql` | named volume | Postgres data dir |
 
@@ -146,7 +146,7 @@ removed on one side stay on the other until manually cleaned up.
 ### Auto-pull on container start
 
 The `vision-claude` wrapper re-stages a sanitized copy of host
-`~/.claude` into `~/.claude-vision-stage` on every invocation, and
+`~/.claude` into `~/.claude-sandbox/stage/vision` on every invocation, and
 `post-start.sh` runs `rsync --update` from `/home/dev/.claude-stage` into
 `/home/dev/.claude` on every container start. So host-side config changes
 (new agents, edited rules) are picked up automatically. Note: `hooks`,
