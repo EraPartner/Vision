@@ -1,0 +1,36 @@
+# Vision project-specific egress extras (merged onto base-allowlist.txt by
+# devcontainer-egress/sync.sh into the baked allowlist.txt).
+
+# Anthropic / Claude Code (auth, auto-updater, docs beyond the base API).
+platform.claude.com
+claude.ai
+code.claude.com
+docs.claude.com
+downloads.claude.ai
+
+# bun + npm
+bun.sh
+registry.npmjs.org
+
+# GitHub container registry (releases / images).
+ghcr.io
+pkg-containers.githubusercontent.com
+
+# PyPI (runtime alembic / pip install)
+pypi.org
+files.pythonhosted.org
+
+# Vision runtime external calls (yahoo-finance2)
+query1.finance.yahoo.com
+query2.finance.yahoo.com
+finance.yahoo.com
+
+# safe-chain malware list
+malware-list.aikido.dev
+
+# Plugins: context7 MCP (npx @upstash/context7-mcp → context7 docs API)
+.context7.com
+
+# Playwright browser binary downloads (E2E in apps/frontend)
+cdn.playwright.dev
+playwright.download.prss.microsoft.com
