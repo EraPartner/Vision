@@ -85,7 +85,7 @@ aliases: [env vars, environment variables, .env, configuration, env]
 | `VISION_HEALTH_POLL_ATTEMPTS` | `200` | No | Max readiness poll attempts for warm (normal) boots; 200 × 300ms ≈ 56s timeout. Triggers the slow-start modal on expiry. Polls `GET /health/detailed` (materializedViews-gated) for the initial navigation, `GET /health` for watchdog/restart flows. | [[packaging/electron/main.js\|main.js]] |
 | `VISION_HEALTH_POLL_INTERVAL_MS` | `300` | No | Interval (ms) between readiness poll retries at startup | [[packaging/electron/main.js\|main.js]] |
 | `VISION_HEALTH_POLL_BUILD_ATTEMPTS` | `600` | No | Max readiness poll attempts after a cold/dev build (image pulled or built during that launch); 600 × 300ms ≈ 3 min. Build launches skip the slow-start modal and fall through to the recoverable error page on expiry. | [[packaging/electron/main.js\|main.js]] |
-| `VISION_BACKUP_PASSPHRASE` | _(unset)_ | No | AES-GCM passphrase for encrypted SQL backup; unset → unencrypted backup with warning | [[packaging/electron/main.js\|main.js]] |
+| `VISION_BACKUP_PASSPHRASE` | _(unset)_ | No | AES-GCM passphrase for encrypted backups. When set, bypasses Electron `safeStorage` / macOS Keychain entirely — the shell reads this env var before querying the Keychain, so no login-password prompts occur. Useful on unsigned builds (ad-hoc code identity) or in CI/automation. Unset → falls back to Keychain-stored passphrase, or unencrypted backup if none configured. | [[packaging/electron/main.js\|main.js]] |
 | `VISION_COMPOSE_OVERRIDE` | _(unset)_ | No | Filename (relative to `workDir`) layered onto base `docker-compose.yml` | [[packaging/electron/main.js\|main.js]] |
 
 ## Docker/Deployment Variables

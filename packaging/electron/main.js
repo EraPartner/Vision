@@ -506,13 +506,16 @@ async function getBackupDeviceId() {
 async function getBackupPassphrase() {
   const envPassphrase = process.env.VISION_BACKUP_PASSPHRASE;
   if (envPassphrase) return envPassphrase;
+  // Read the stored blob BEFORE touching safeStorage. On an unsigned/ad-hoc macOS
+  // build every safeStorage call hits the keychain and triggers a password prompt,
+  // so we never reach for it unless an encrypted passphrase actually exists.
+  const settings = await loadSettings();
+  const encoded = settings.backupPassphraseEncrypted;
+  if (!encoded || typeof encoded !== 'string') return null;
   if (!safeStorage || typeof safeStorage.isEncryptionAvailable !== 'function' || !safeStorage.isEncryptionAvailable()) {
     return null;
   }
   try {
-    const settings = await loadSettings();
-    const encoded = settings.backupPassphraseEncrypted;
-    if (!encoded || typeof encoded !== 'string') return null;
     const raw = Buffer.from(encoded, 'base64');
     return safeStorage.decryptString(raw);
   } catch {
@@ -543,10 +546,19 @@ async function setBackupPassphrase(passphrase) {
 
 async function getBackupPassphraseStatus() {
   const settings = await loadSettings();
+  const hasStoredPassphrase = typeof settings.backupPassphraseEncrypted === 'string' && settings.backupPassphraseEncrypted.length > 0;
+  // Only probe isEncryptionAvailable() — which can trigger a keychain prompt on an
+  // unsigned macOS build — when a passphrase is already stored (we need the key to
+  // decrypt it anyway). With nothing stored, report availability from the API's mere
+  // presence; setBackupPassphrase runs the real check when the user actually opts in.
+  const hasSafeStorageApi = Boolean(safeStorage && typeof safeStorage.isEncryptionAvailable === 'function');
+  const secureStorageAvailable = hasStoredPassphrase
+    ? hasSafeStorageApi && safeStorage.isEncryptionAvailable()
+    : hasSafeStorageApi;
   return {
     hasEnvPassphrase: Boolean(process.env.VISION_BACKUP_PASSPHRASE),
-    hasStoredPassphrase: typeof settings.backupPassphraseEncrypted === 'string' && settings.backupPassphraseEncrypted.length > 0,
-    secureStorageAvailable: Boolean(safeStorage && typeof safeStorage.isEncryptionAvailable === 'function' && safeStorage.isEncryptionAvailable()),
+    hasStoredPassphrase,
+    secureStorageAvailable,
   };
 }
 

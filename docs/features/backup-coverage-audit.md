@@ -3,10 +3,10 @@ title: Backup Coverage Audit
 type: feature
 status: active
 date: 2026-04-27
-updated: 2026-05-05
-last_modified: 2026-05-05
-tags: [feature, backup, restore, database, filesystem, localStorage, bundle, encryption, schema-migration, phase-1, phase-2, phase-7, passphrase-modal, ux, aead, aes-256-gcm, rolling-cache, concurrent-backup-guard, pre-restore-confirmation, watchdog-pause]
-description: Authoritative audit of every persistence surface in Vision and its backup/restore coverage status. Phase 1+2 implements .visionbak bundle format with optional AES-256-CBC encryption (v1) or AES-256-GCM (v2, 2026-04-28), schema-safe restore, and localStorage hydration. Phase 7 (May 2026) hardens restore with user confirmation, concurrent-backup guard, and health watchdog pause.
+updated: 2026-05-23
+last_modified: 2026-05-23
+tags: [feature, backup, restore, database, filesystem, localStorage, bundle, encryption, schema-migration, phase-1, phase-2, phase-7, passphrase-modal, ux, aead, aes-256-gcm, rolling-cache, concurrent-backup-guard, pre-restore-confirmation, watchdog-pause, safe-storage, keychain, lazy-safeStorage]
+description: Authoritative audit of every persistence surface in Vision and its backup/restore coverage status. Phase 1+2 implements .visionbak bundle format with optional AES-256-CBC encryption (v1) or AES-256-GCM (v2, 2026-04-28), schema-safe restore, and localStorage hydration. Phase 7 (May 2026) hardens restore with user confirmation, concurrent-backup guard, and health watchdog pause. safeStorage is now accessed lazily to avoid macOS Keychain prompts for users without a stored passphrase.
 aliases: [backup audit, coverage audit, backup coverage, visionbak, bundle format]
 related_code: ["packaging/electron/backup/bundle.js", "packaging/electron/main.js", "apps/node-backend/src/backup/coverage.js", "apps/frontend/src/lib/api/electron.ts", "apps/frontend/src/lib/localStorage-keys.ts", "apps/frontend/src/components/settings/tabs/BackupTab.tsx"]
 ---
@@ -167,8 +167,36 @@ Captured as `frontend-state.json` in the bundle. Restored after DB load triggers
 |---------|--------|-------|
 | Materialised views | ❌ Excluded | Re-built at runtime by `materializedViewService.js` |
 | Price provider caches (HTTP) | ❌ Excluded | Re-fetched on demand |
-| Electron `safeStorage` passphrase | ❌ Excluded | User re-enters passphrase post-restore |
+| Electron `safeStorage` passphrase | ❌ Excluded | User re-enters passphrase post-restore. safeStorage is accessed lazily — only when a passphrase blob is already stored — to avoid macOS Keychain prompts for users who have not configured backup encryption. |
 | `settings.json` (Electron-local) | ❌ Excluded | Contains backup dir config + deviceId; meaningless on new machine |
+
+---
+
+## Passphrase Storage & OS Keychain
+
+When the user configures backup encryption, the passphrase is encrypted via Electron's `safeStorage` API and stored as `backupPassphraseEncrypted` in `settings.json`. On macOS, `safeStorage` delegates to the system Keychain under the entry **"Vision Safe Storage"**.
+
+### Lazy Keychain Access
+
+Because Vision ships ad-hoc unsigned (no Developer ID certificate), macOS treats the code identity as unstable. Accessing `safeStorage` at every launch would trigger a login-password prompt even for users who have never configured a passphrase. The Electron main process avoids this:
+
+- **`getBackupPassphrase()`** reads `backupPassphraseEncrypted` from `settings.json` *before* calling any `safeStorage` API. If no blob is present and the `VISION_BACKUP_PASSPHRASE` env var is absent, it returns `undefined` without touching the keychain. Backup-on-quit therefore never prompts for users who have not configured encryption.
+- **`getBackupPassphraseStatus()`** (IPC: `backup:get-encryption-status`, used by the Backup settings tab) only calls `safeStorage.isEncryptionAvailable()` when a passphrase blob is already stored. With nothing stored, it reports availability from the API's mere presence (no actual keychain probe). The real check runs inside `setBackupPassphrase()` when the user actively opts in.
+
+### Keychain Prompts on Unsigned Builds
+
+Users who **do** store a passphrase will see macOS password prompts on an unsigned build because macOS re-challenges an unstable code identity on each access.
+
+**Workarounds:**
+
+| Option | Description |
+|--------|-------------|
+| **Always Allow** | In the Keychain dialog, click "Always Allow" to suppress future challenges for Vision Safe Storage |
+| `VISION_BACKUP_PASSPHRASE` env var | Bypasses `safeStorage` entirely; the shell reads the passphrase from the environment variable instead. Useful for automation, CI, or users who want no Keychain involvement |
+| No stored passphrase | If you do not configure backup encryption, no Keychain prompts occur at all |
+
+> [!note]
+> `safeStorage` only stores and retrieves the *passphrase text*. The backup encryption key itself is always derived via scrypt from the passphrase; the Keychain never holds the raw key.
 
 ---
 

@@ -302,6 +302,23 @@ This forces npm and electron-builder to include them at the correct depth inside
 - `apps/frontend/src/components/settings/tabs/BackupTab.tsx` — UI for backup/restore, passphrases, directory selection
   - Handles `BUNDLE_SCHEMA_NEWER` error with user-friendly toast
 
+**Passphrase Storage & OS Keychain (Lazy safeStorage):**
+
+The backup encryption passphrase (when set by the user) is stored encrypted in `settings.json` using Electron's `safeStorage` API, which on macOS delegates to the system Keychain under the entry "Vision Safe Storage".
+
+Vision is ad-hoc unsigned (no Developer ID certificate), so macOS treats the code identity as unstable. Normally, accessing `safeStorage` on every launch would trigger a login-password prompt even for users who have never configured a passphrase. The shell avoids this with lazy access:
+
+- `getBackupPassphrase()` reads the stored `backupPassphraseEncrypted` blob from `settings.json` **before** calling `safeStorage.isEncryptionAvailable()` or `decryptString()`. If no blob is stored and the `VISION_BACKUP_PASSPHRASE` env var is absent, it returns without touching the keychain — zero prompts.
+- `getBackupPassphraseStatus()` (IPC: `backup:get-encryption-status`, used by the Backup settings tab) only calls `isEncryptionAvailable()` when a passphrase is already stored. With nothing stored it reports availability from the mere presence of the `safeStorage` API object (no keychain probe). The real availability check happens in `setBackupPassphrase()` when the user actually opts in.
+
+> [!info] Keychain prompts on unsigned builds
+> Users who store a passphrase will still see macOS password prompts on an unsigned build because macOS re-challenges an unstable code identity each time. Workarounds:
+> - Click **Always Allow** in the Keychain prompt to suppress future challenges for this app.
+> - Set the `VISION_BACKUP_PASSPHRASE` environment variable — this bypasses `safeStorage` entirely and is useful for automation or CI.
+> - Do not configure a backup passphrase if prompts are unwanted; unencrypted backups work without keychain access.
+>
+> Note: `safeStorage` only *stores/retrieves the passphrase*. The backup encryption key itself is always scrypt-derived from the passphrase and never touches the keychain.
+
 **Bundle Format:**
 
 See [[docs/features/backup-coverage-audit|Backup Coverage Audit]] for `.visionbak` structure, encryption details, and restore process.
