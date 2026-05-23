@@ -108,6 +108,11 @@ const APP_NAME = 'Vision';
 const DEFAULT_APP_PORT = 3002;
 const HEALTH_POLL_ATTEMPTS = Number(process.env.VISION_HEALTH_POLL_ATTEMPTS) || 200;  // 200 × 300ms = 60s max
 const HEALTH_POLL_INTERVAL_MS = Number(process.env.VISION_HEALTH_POLL_INTERVAL_MS) || 300;
+// After a cold/dev build the image finishes building, then the backend still has to
+// boot from scratch (deps + migrations + server) — that routinely overshoots the
+// warm-boot budget above. Give the post-build poll a much larger budget so a first
+// launch or `docker:dev:rebuild` doesn't trip the slow-start warning. 600 × 300ms ≈ 3 min.
+const HEALTH_POLL_BUILD_ATTEMPTS = Number(process.env.VISION_HEALTH_POLL_BUILD_ATTEMPTS) || 600;
 const HEALTH_WATCHDOG_INTERVAL_MS = 10_000;
 const HEALTH_WATCHDOG_FAILURE_THRESHOLD = 3;
 
@@ -875,13 +880,65 @@ function pingHealth(timeoutMs = 1500) {
 // standard interval. Total budget unchanged.
 const HEALTH_POLL_FAST_INTERVAL_MS = 100;
 const HEALTH_POLL_FAST_ATTEMPTS = 20;
-function pollHealth() {
+function pollHealth(maxAttempts = HEALTH_POLL_ATTEMPTS) {
   return new Promise((resolve, reject) => {
     let tries = 0;
     const attempt = async () => {
       if (await pingHealth()) return resolve();
       tries += 1;
-      if (tries >= HEALTH_POLL_ATTEMPTS) return reject(new Error('timeout'));
+      if (tries >= maxAttempts) return reject(new Error('timeout'));
+      const interval = tries < HEALTH_POLL_FAST_ATTEMPTS
+        ? HEALTH_POLL_FAST_INTERVAL_MS
+        : HEALTH_POLL_INTERVAL_MS;
+      setTimeout(attempt, interval);
+    };
+    attempt();
+  });
+}
+
+// Single /health/detailed probe used to gate the FIRST navigation on warmup
+// readiness — the plain /health (above) flips to 200 the moment Express listens,
+// which is before the dashboard's materialized views are refreshed, so navigating
+// on it paints an empty dashboard on cold starts. Resolves { ready } when the
+// dashboard-relevant data is populated, or undefined when the server isn't up yet.
+// Falls back to ready on a missing endpoint (older backend) or unparseable 2xx so
+// we never block longer than the liveness check would have.
+function pingReady(timeoutMs = 2000) {
+  return new Promise((resolve) => {
+    const req = http.get(`${APP_URL}/health/detailed`, { agent: healthAgent }, (res) => {
+      const code = res.statusCode;
+      if (code === 404) { res.resume(); return resolve({ ready: true }); }
+      if (code < 200 || code >= 400) { res.resume(); return resolve(undefined); }
+      let body = '';
+      res.setEncoding('utf8');
+      res.on('data', (c) => { body += c; });
+      res.on('end', () => {
+        try {
+          const d = JSON.parse(body);
+          // `materializedViews` backs the dashboard aggregations; gate on it rather
+          // than full `ready` so a slow/offline network warmup can't stall startup.
+          resolve({ ready: d.status === 'ready' || d?.caches?.materializedViews === true });
+        } catch {
+          resolve({ ready: true });
+        }
+      });
+    });
+    req.on('error', () => resolve(undefined));
+    req.setTimeout(timeoutMs, () => { req.destroy(); resolve(undefined); });
+  });
+}
+
+// Same cadence/budget as pollHealth, but waits for warmup readiness, not just
+// liveness. Used only for the initial navigation; restart/update flows keep using
+// the lighter pollHealth liveness probe.
+function pollReady(maxAttempts = HEALTH_POLL_ATTEMPTS) {
+  return new Promise((resolve, reject) => {
+    let tries = 0;
+    const attempt = async () => {
+      const status = await pingReady();
+      if (status && status.ready) return resolve();
+      tries += 1;
+      if (tries >= maxAttempts) return reject(new Error('timeout'));
       const interval = tries < HEALTH_POLL_FAST_ATTEMPTS
         ? HEALTH_POLL_FAST_INTERVAL_MS
         : HEALTH_POLL_INTERVAL_MS;
@@ -945,9 +1002,9 @@ function startHealthWatchdog() {
   }, HEALTH_WATCHDOG_INTERVAL_MS);
 }
 
-function pollAndLoad() {
-  const endPollHealth = bootMark('poll_health');
-  pollHealth()
+function pollAndLoad({ building = false } = {}) {
+  const endPollHealth = bootMark('poll_ready');
+  pollReady(building ? HEALTH_POLL_BUILD_ATTEMPTS : HEALTH_POLL_ATTEMPTS)
     .then(() => {
       endPollHealth();
       if (mainWindow) mainWindow.loadURL(APP_URL);
@@ -958,6 +1015,11 @@ function pollAndLoad() {
     .catch(() => {
       endPollHealth();
       loadErrorPage();
+      // A cold build already got the longer budget that covers backend boot; if it
+      // still isn't up, drop to the error page (with Retry) but skip the blocking
+      // "taking longer than expected" modal — that warning is meant for warm boots
+      // where a slow start is genuinely unexpected, not a first/dev rebuild.
+      if (building) return;
       dialog.showMessageBox({
         type: 'warning',
         buttons: [t('common.ok')],
@@ -2619,7 +2681,9 @@ async function launch() {
   }
 
   // 8. Backend is being polled — poll /health in the background; navigate once ready.
-  pollAndLoad();
+  //    A cold/dev build (composeDidBuild) gets the extended budget and skips the
+  //    slow-start modal, since first-launch boot is expected to be slow.
+  pollAndLoad({ building: composeDidBuild });
 
   // 10. Set up manual shell updater (source/dev mode only — not in embedded .app mode)
   if (!app.isPackaged || useRepoMode) {

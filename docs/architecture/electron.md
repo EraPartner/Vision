@@ -3,7 +3,7 @@ title: Electron Desktop Architecture
 type: architecture-doc
 status: active
 date: 2026-04-27
-updated: 2026-05-05
+updated: 2026-05-23
 tags: [architecture, electron, desktop, packaging, security, sandbox, health-monitoring, async-io, csp-headers, dev-rebuild, phase-0, phase-1, phase-2, phase-6, phase-7, backup, restore, bundle, ipc, encryption, schema-migration, npm-vs-bun, docker-compose, pre-pull, startup, troubleshooting, alembic-migration-fixes, deployment-modes, shell-installer, docker-pull, update-system, checksum-verification, backup-before-update, cicd, april-2026, bug-hunt, recovery-hardening, concurrent-backup-guard, timeout, watchdog-pause]
 description: Electron desktop application architecture, IPC communication, sandbox hardening, health monitoring, Docker image pre-pull optimization, backup/restore bundle system (Phase 1+2), three-mode application update system with checksum verification (April 2026), and Phase 7 backup/restore hardening with concurrent-backup guard, HTTP timeout, and watchdog pause (May 2026)
 aliases: [electron, desktop app, packaging, IPC, main process, sandbox, watchdog, backup, bundle, update system, deployment modes]
@@ -145,11 +145,18 @@ Migration is non-fatal; any error is logged and app continues.
 
 ### Frontend Initialization
 
-7. **Health Poll** — `pollHealth()` loops:
-   - Polls `GET /health` every 300ms (`VISION_HEALTH_POLL_INTERVAL_MS`)
-   - Max 200 attempts (`VISION_HEALTH_POLL_ATTEMPTS`)
+7. **Readiness Poll** — `pollAndLoad({ building })` uses a build-aware budget and gates the FIRST navigation on `/health/detailed` readiness:
+   - Polls `GET /health/detailed` every 300ms (`VISION_HEALTH_POLL_INTERVAL_MS`) via `pingReady()` + `pollReady()`
+   - **Readiness predicate:** navigate when `/health/detailed` returns `status === 'ready'` OR `caches.materializedViews === true`. The materialized-views flag is DB-only and fast; network-bound warmup tasks (exchange rates, portfolio snapshots) cannot stall startup.
+   - **Fallback:** if the `/health/detailed` endpoint returns 404 (older backend) or an unparseable 2xx, the shell treats the response as ready and navigates — ensuring it never blocks longer than the previous shallow liveness check.
+   - **Warm boot** (no build): max `VISION_HEALTH_POLL_ATTEMPTS` attempts (default 200, ≈56s). On timeout the "taking longer than expected" modal fires and then the error page loads with Retry/OpenLogs.
+   - **Cold/build launch** (image was pulled or built during this launch): max `VISION_HEALTH_POLL_BUILD_ATTEMPTS` attempts (default 600, ≈3 min). The slow-start modal is suppressed; on timeout the app falls through directly to the recoverable error page.
+   - `pollReady(maxAttempts)` replaces `pollHealth` inside `pollAndLoad` for the initial navigation path. The boot mark was renamed `poll_health` → `poll_ready`.
+   - The `recovery:retry` IPC handler calls `pollAndLoad()` with no arguments (warm budget + modal), because a manual retry means the image already exists. Restart/update/dev-rebuild flows still use the lighter `pollHealth` liveness probe (unchanged).
    - On success: proceed to step 8
-   - On timeout (~60s): load error page, enable Retry/OpenLogs buttons
+
+> [!info] Why `/health/detailed` for initial navigation only
+> `GET /health` (shallow liveness) returns 200 the moment Express listens — before `refreshMaterializedViews()` and other warmup tasks finish. Navigating on that caused a cold-start blank dashboard until a restart. The health watchdog and restart/update flows still use the shallow `/health` probe because "is the backend process alive?" is the right question for those paths. See [[docs/api/health|Health API]] for the distinction between `status: warming` and `status: ready`.
 
 8. **Create BrowserWindow** with sandbox enabled + loading frontend
 
@@ -584,20 +591,32 @@ If `settings.json` is unparsable:
 
 ## Health Monitoring
 
-### Startup Health Poll
+### Poll Functions
+
+Two poll functions cover distinct use cases:
+
+| Function | Endpoint | Purpose |
+|----------|----------|---------|
+| `pollReady(maxAttempts)` | `GET /health/detailed` | Gates the **initial page navigation** on materialized-view warmup. Navigate when `status === 'ready'` OR `caches.materializedViews === true`. 404/unparseable responses fall back to ready. Boot mark: `poll_ready`. |
+| `pollHealth(maxAttempts)` | `GET /health` | Used by watchdog, restart, update, and dev-rebuild flows. Only tests that Express is listening. |
+
+### Startup Readiness Poll
 
 **Env vars:**
-- `VISION_HEALTH_POLL_ATTEMPTS` (default: 200)
-- `VISION_HEALTH_POLL_INTERVAL_MS` (default: 300)
+- `VISION_HEALTH_POLL_ATTEMPTS` (default: 200) — warm-boot budget; triggers the slow-start modal on expiry
+- `VISION_HEALTH_POLL_BUILD_ATTEMPTS` (default: 600) — cold/build-launch budget; ≈3 min, no modal on expiry
+- `VISION_HEALTH_POLL_INTERVAL_MS` (default: 300) — poll cadence in ms
 
-**Example:** 200 attempts × 300ms = 60-second startup timeout
+**Examples:**
+- Warm boot: 200 attempts × 300ms ≈ 56-second timeout (modal fires)
+- Cold/build launch: 600 attempts × 300ms ≈ 3-minute timeout (no modal; falls to error page)
 
 ### Endpoints
 
-- `GET /health` — Simple liveness check (empty body OK)
-- `GET /health/detailed` — Includes warmup status (caches loading?)
+- `GET /health` — Shallow liveness check: returns 200 as soon as Express is listening. Used by the runtime watchdog and restart/update flows.
+- `GET /health/detailed` — Warmup readiness: returns `status: 'warming' | 'ready'` plus per-cache boolean flags (including `materializedViews`). Used by `pollReady()` for initial navigation.
 
-See [[docs/api/health|Health API]] for details.
+See [[docs/api/health|Health API]] for full field semantics and the `caches.materializedViews` gate.
 
 ---
 

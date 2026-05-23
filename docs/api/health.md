@@ -3,8 +3,9 @@ title: Health API
 type: api
 status: active
 date: 2026-04-19
-tags: [api, health, monitoring, backend, readiness, warmup]
-description: Health check endpoints for backend readiness and cache warmup status
+updated: 2026-05-23
+tags: [api, health, monitoring, backend, readiness, warmup, electron, liveness, startup]
+description: Health check endpoints for backend readiness and cache warmup status. GET /health is a shallow liveness probe; GET /health/detailed is the warmup readiness gate used by the Electron shell for initial navigation.
 aliases: [health endpoints, readiness check, backend health]
 ---
 
@@ -12,12 +13,15 @@ aliases: [health endpoints, readiness check, backend health]
 
 ## Overview
 
-The Health API provides two endpoints for monitoring backend readiness:
+The Health API provides two endpoints that serve distinct roles:
 
-- **`GET /health`** — Simple liveness/readiness check (all Electron apps poll this at startup)
-- **`GET /health/detailed`** — Includes warmup status for caches (exchange rates, inflation, portfolio snapshots)
+- **`GET /health`** — Shallow **liveness** probe. Returns 200 as soon as Express is listening, before any warmup tasks have run. Used by the Electron runtime watchdog and by restart/update/dev-rebuild flows.
+- **`GET /health/detailed`** — **Warmup readiness** probe. Returns `status: warming | ready` and per-cache boolean flags. Used by the Electron shell to gate the **first** page navigation (`pollReady()`), preventing a blank dashboard on cold start.
 
-Both endpoints return quickly (no I/O on success) and are safe for high-frequency polling.
+> [!info] Why two probes?
+> `GET /health` can return 200 before `refreshMaterializedViews()` and other backend warmup tasks finish. The Electron shell previously navigated on this shallow check, causing cold-start blank dashboards. It now navigates only when `/health/detailed` reports `status === 'ready'` OR `caches.materializedViews === true`. The watchdog intentionally keeps polling the lighter `/health` — "is the backend process alive?" is the right question there, not "are all caches warm?".
+
+Both endpoints return quickly (no I/O on the hot path) and are safe for high-frequency polling.
 
 ## GET /health
 
@@ -42,10 +46,13 @@ GET /health
 
 ### Usage
 
-- Electron startup health poll (200 attempts, 300ms interval, 60s timeout)
-- Electron watchdog (10s interval, 3 consecutive failures triggers backend:lost event)
-- Load balancer/reverse proxy readiness checks
-- Kubernetes liveness probes
+- **Electron runtime watchdog** — polls every 10s; 3 consecutive failures trigger `backend:lost` IPC event
+- **Electron restart/update/dev-rebuild flows** — uses `pollHealth` (shallow liveness) because these flows only need to know when Express is back up
+- **Load balancer / reverse proxy readiness checks**
+- **Kubernetes liveness probes**
+
+> [!note]
+> The Electron shell does **not** use `GET /health` for initial navigation. It uses `GET /health/detailed` via `pollReady()` to wait for materialized-view warmup. See below.
 
 ## GET /health/detailed
 
@@ -69,6 +76,7 @@ GET /health/detailed
   "version": "1.0.0",
   "timestamp": "2026-04-19T14:30:45.123Z",
   "caches": {
+    "materializedViews": true,
     "exchangeRates": true,
     "inflation": true,
     "portfolioSnapshots": true,
@@ -86,6 +94,7 @@ GET /health/detailed
 | `version` | string | Application version |
 | `timestamp` | string | ISO 8601 timestamp when response was generated |
 | `caches` | object | Map of cache names to boolean warmup flags |
+| `caches.materializedViews` | boolean | Materialized views have been refreshed (`refreshMaterializedViews()` complete). **This is the primary gate used by the Electron shell for initial navigation** — it is DB-only and fast, so it becomes true well before network-bound tasks. |
 | `caches.exchangeRates` | boolean | Exchange rate cache is warm (loaded + synced from price provider) |
 | `caches.inflation` | boolean | Inflation rate cache is warm |
 | `caches.portfolioSnapshots` | boolean | Portfolio snapshot cache is warm |
@@ -111,10 +120,19 @@ Each warmup task:
 - **`"ready"`** — All warmup tasks have completed (not necessarily succeeded; failures are logged)
 - **`"warming"`** — At least one warmup task is still running
 
-### Usage
+### Electron Initial Navigation Gate
+
+The Electron shell (`packaging/electron/main.js`) uses `GET /health/detailed` via `pollReady()` to gate the first page load:
+
+- **Navigate when:** `status === 'ready'` OR `caches.materializedViews === true`
+- **materializedViews flag** — DB-only and fast; used as the gating condition so network-bound tasks (exchange rates, portfolio snapshots) cannot stall startup if they're slow
+- **404 / unparseable 2xx fallback** — If the endpoint is absent (older backend) or the response cannot be parsed, the shell treats it as ready and navigates, ensuring it never blocks longer than the old shallow check
+- Boot mark `poll_ready` (renamed from `poll_health`) is emitted on success
+
+### Other Usage
 
 - Frontend can poll `/health/detailed` to display warmup status (e.g., "Loading exchange rates…")
-- Electron can show detailed error page if a specific cache failed
+- Electron can show a detailed error page if a specific cache failed
 - Observability: check which caches are taking longest to warm
 
 ## Error Responses
@@ -142,9 +160,12 @@ General database or initialization errors return HTTP 500.
 - Warmup flags are set module-level; checked synchronously at request time
 - No rate limiting on health endpoints
 - Suitable for high-frequency polling (Electron: 200 attempts in 60s = ~3/sec)
+- `GET /health` returns 200 as soon as Express's `listen()` callback fires — **before** any `warmup.js` tasks complete
+- `GET /health/detailed` reflects live warmup state; once all flags are `true`, `status` transitions from `"warming"` to `"ready"` permanently until the process restarts
 
 ## Related
 
+- [[docs/architecture/electron|Electron Desktop Architecture]] — `pollReady()` / `pollHealth()` split, startup sequence
 - [[docs/adr/022-electron-sandbox-hardening-and-recovery|ADR-022: Electron Sandbox Hardening]] — Health polling strategy
 - [[docs/features/settings|Settings Feature]] — Backend initialization
 - [[docs/reference/code-patterns|Code Patterns]] — Warmup task pattern
