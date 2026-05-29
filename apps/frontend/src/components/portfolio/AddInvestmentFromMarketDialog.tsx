@@ -168,7 +168,6 @@ export function AddInvestmentFromMarketDialog({ quote, existingInvestment }: Pro
 
   const showUnits = unitBased && ['buy', 'sell'].includes(transactionForm.type);
   const showFeesTaxes = ['buy', 'sell'].includes(transactionForm.type);
-  const _showRecurring = ['buy', 'sell', 'dividend', 'interest', 'rent_income'].includes(transactionForm.type);
 
   return (
     <Dialog open={open} onOpenChange={(v) => { setOpen(v); if (!v) reset(); }}>

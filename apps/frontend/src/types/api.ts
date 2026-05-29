@@ -211,8 +211,8 @@ export interface PlannedTransactionsListResponse {
 
 export interface PlannedTransactionCreate {
     planned_date: string; // YYYY-MM-DD format
-    bank_account: string;
-    recipient_id: number;
+    bank_account?: string;
+    recipient_id?: number;
     memo?: string;
     amount: number;
     currency?: string;

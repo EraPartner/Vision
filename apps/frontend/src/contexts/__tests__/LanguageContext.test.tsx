@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import { describe, it, expect, vi } from "vitest";
-import React, { useState, type ReactNode } from "react";
+import { useState, type ReactNode } from "react";
 import { renderHook, act, waitFor } from "@testing-library/react";
 import { LanguageProvider, useLanguage, type Language } from "@/contexts/LanguageContext";
 

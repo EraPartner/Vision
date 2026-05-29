@@ -89,7 +89,7 @@ export function SplitTransactionDialog({ transactionId, transactionAmount, trans
             {
                 onSuccess: () => {
                     setOpen(false);
-                    setEntries([{ recipient_id: null, amount: "", note: "" }]);
+                    setEntries([{ uid: crypto.randomUUID(), recipient_id: null, amount: "", note: "" }]);
                 },
             }
         );

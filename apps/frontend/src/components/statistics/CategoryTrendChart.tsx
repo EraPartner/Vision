@@ -25,7 +25,7 @@ export const CategoryTrendChart = memo(function CategoryTrendChart({ data }: Cat
       data.allPeriods.map((period) => {
         const values: Record<string, number> = {};
         for (const cat of topCategories) {
-          values[cat.categoryId] = Math.round(cat.months[period] || 0);
+          values[cat.categoryId ?? -1] = Math.round(cat.months[period] || 0);
         }
         return { period, date: parseISO(`${period}-01`), values };
       }),
@@ -35,9 +35,9 @@ export const CategoryTrendChart = memo(function CategoryTrendChart({ data }: Cat
   const series: LineSeries<CategoryTrendDatum>[] = useMemo(
     () =>
       topCategories.map((cat, i) => ({
-        key: cat.categoryId,
+        key: String(cat.categoryId ?? -1),
         label: cat.categoryName,
-        accessor: (d) => d.values[cat.categoryId] ?? 0,
+        accessor: (d) => d.values[cat.categoryId ?? -1] ?? 0,
         color: `hsl(var(--chart-${(i % 8) + 1}))`,
         strokeWidth: 2,
       })),

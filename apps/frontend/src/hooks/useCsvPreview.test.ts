@@ -157,7 +157,7 @@ describe("useCsvPreview", () => {
     const file = makeFile(csv);
     const { result, rerender } = renderHook(
       ({ f }: { f: File | null }) => useCsvPreview(f, ","),
-      { initialProps: { f: file } },
+      { initialProps: { f: file as File | null } },
     );
 
     await waitFor(() => expect(result.current.isLoading).toBe(false));

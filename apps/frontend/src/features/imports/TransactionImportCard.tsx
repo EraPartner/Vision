@@ -121,7 +121,7 @@ export function TransactionImportCard({ onImportSuccess }: TransactionImportCard
           customConfig.memoColumn || undefined,
           customConfig.separator, customConfig.encoding, customConfig.skipRows,
         );
-        setProgress({ phase: 'complete', current: data.total_processed, total: data.total_processed, imported: data.imported, duplicates: data.duplicates, errors: data.errors || 0, percent: 100 });
+        setProgress({ phase: 'complete', current: data.total_processed, total: data.total_processed, imported: data.imported, duplicates: data.duplicates, errors: (data as { errors?: number }).errors || 0, percent: 100 });
       } else {
         const { abort, result } = apiClient.importCSVWithProgress(file, bank, (p) => setProgress(p));
         abortRef.current = abort;
@@ -129,7 +129,7 @@ export function TransactionImportCard({ onImportSuccess }: TransactionImportCard
         abortRef.current = null;
       }
 
-      if (data.requires_review && data.batch_id != null) {
+      if ('requires_review' in data && data.requires_review && data.batch_id != null) {
         navigate(`/import/${data.batch_id}/review`);
         return;
       }

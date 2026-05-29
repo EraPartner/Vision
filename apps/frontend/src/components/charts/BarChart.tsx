@@ -71,7 +71,7 @@ function buildOverlayPath<Datum>(
     data: ReadonlyArray<Datum>,
     accessor: (d: Datum) => number | null,
     categoryAccessor: (d: Datum) => string,
-    categoryScale: ReturnType<typeof scaleBand>,
+    categoryScale: { (value: string): number | undefined; bandwidth(): number },
     valueScale: ReturnType<typeof scaleLinear>,
 ): string {
     let path = "";

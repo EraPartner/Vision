@@ -23,6 +23,7 @@
     "preview": "bun run --filter 'vision-frontend' preview",
     "lint": "bun run --filter 'vision-frontend' lint",
     "lint:backend": "bun run --filter 'financial-transaction-manager-node' lint",
+    "typecheck": "bun run --filter 'vision-frontend' typecheck",
     "backend": "bun run --filter 'financial-transaction-manager-node' start",
     "test": "bun run --filter 'financial-transaction-manager-node' test",
     "test:frontend": "bun run --filter 'vision-frontend' test",
@@ -70,7 +71,8 @@
     "lodash": "4.18.1",
     "basic-ftp": "5.3.1",
     "ip-address": "^10.1.1",
-    "postcss": ">=8.5.10"
+    "postcss": ">=8.5.10",
+    "qs": ">=6.15.2"
   },
   "resolutions": {
     "rollup": "4.59.0",
@@ -82,6 +84,7 @@
     "lodash": "4.18.1",
     "basic-ftp": "5.3.1",
     "ip-address": "^10.1.1",
-    "postcss": ">=8.5.10"
+    "postcss": ">=8.5.10",
+    "qs": ">=6.15.2"
   }
 }

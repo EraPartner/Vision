@@ -158,7 +158,7 @@ jobs:
         run: CI=1 bun run generate-locales
 
       - name: Type-check frontend
-        run: cd apps/frontend && bunx tsc --noEmit
+        run: cd apps/frontend && bun run typecheck
 
   # ─────────────────────────────────────────────────────────────────────────────
   # Backend checkJs — tsc --checkJs over JSDoc-typed JS files.

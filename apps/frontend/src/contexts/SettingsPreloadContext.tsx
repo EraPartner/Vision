@@ -11,7 +11,7 @@
  * Now there is exactly 1 round-trip at mount time.
  */
 
-import React, { createContext, useContext, useEffect, useState, type ReactNode } from 'react';
+import { createContext, useContext, useEffect, useState, type ReactNode } from 'react';
 import { apiClient } from '@/lib/api';
 import logger from '@/lib/logger';
 

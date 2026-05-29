@@ -133,20 +133,22 @@ export default function TransactionsPage() {
         setAllItems(prev => prev.map((item) => {
             if (item.id !== transactionId) return item;
             switch (field) {
-                case 'date':
-                    return { ...item, transaction_date: value, date: value };
+                case 'date': {
+                    const date = value === undefined ? undefined : String(value);
+                    return { ...item, transaction_date: date, date };
+                }
                 case 'memo':
-                    return { ...item, memo: value };
+                    return { ...item, memo: value === undefined ? undefined : String(value) };
                 case 'amount':
-                    return { ...item, amount: value };
+                    return { ...item, amount: typeof value === 'number' ? value : item.amount };
                 case 'currency':
-                    return { ...item, currency: value };
+                    return { ...item, currency: value === undefined ? undefined : String(value) };
                 case 'bank':
-                    return { ...item, bank_account: value };
+                    return { ...item, bank: value === undefined ? undefined : String(value) };
                 case 'balance':
-                    return { ...item, balance: value };
+                    return { ...item, balance: typeof value === 'number' ? value : item.balance };
                 case 'comment':
-                    return { ...item, comment: value };
+                    return { ...item, comment: value === undefined ? undefined : String(value) };
                 default:
                     return item;
             }

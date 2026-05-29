@@ -100,7 +100,7 @@ export default function StatisticsPage() {
         <PageHeader title={t("statsPage.title")} icon={BarChart3} />
         <Card>
           <CardContent className="pt-6">
-            <p className="text-destructive">{t("statsPage.error", { msg: error?.message })}</p>
+            <p className="text-destructive">{t("statsPage.error", { msg: error?.message ?? '' })}</p>
           </CardContent>
         </Card>
       </div>

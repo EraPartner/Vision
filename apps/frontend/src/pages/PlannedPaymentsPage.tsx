@@ -31,7 +31,7 @@ const FREQ_LABEL_KEYS: Record<string, string> = {
 };
 
 
-type TranslateFn = (key: string, params?: Record<string, unknown>) => string;
+type TranslateFn = (key: string, params?: Record<string, string | number>) => string;
 
 function dueBadge(t: TranslateFn, dateFormat: string, dateStr?: string | null) {
   if (!dateStr || typeof dateStr !== "string") {
@@ -64,7 +64,7 @@ function dueBadge(t: TranslateFn, dateFormat: string, dateStr?: string | null) {
   return <Badge variant="secondary">{formatDateStringWithAppSettings(toYmd(normalizedDue), dateFormat)}</Badge>;
 }
 
-type TableRow = PlannedPayment & { _idx: number };
+type TableRow = PlannedPayment & { _idx: number } & Record<string, unknown>;
 
 export default function PlannedPaymentsPage() {
   const { t } = useLanguage();
@@ -145,7 +145,7 @@ export default function PlannedPaymentsPage() {
             }
           }}
           disabled={actionLoading || !row.is_active || row.is_executed}
-          title={row.is_executed ? t('plannedPage.execute.linked', { n: row.executed_transaction_id }) : t('plannedPage.execute.button')}
+          title={row.is_executed ? t('plannedPage.execute.linked', { n: row.executed_transaction_id ?? 0 }) : t('plannedPage.execute.button')}
         >
           {row.is_executed ? <CheckCircle2 className="h-5 w-5" /> : <Circle className="h-5 w-5" />}
         </Button>
@@ -213,8 +213,8 @@ export default function PlannedPaymentsPage() {
                 <Repeat className="h-3.5 w-3.5 text-primary" />
                 <span className="text-sm">{`loan(${row.loan_term_months} months)`}</span>
               </div>
-              {row.execution_count > 0 && (
-                <span className="text-xs text-muted-foreground">{t('plannedPage.executedCount', { n: row.execution_count })}</span>
+              {(row.execution_count ?? 0) > 0 && (
+                <span className="text-xs text-muted-foreground">{t('plannedPage.executedCount', { n: row.execution_count ?? 0 })}</span>
               )}
             </div>
           );
@@ -230,9 +230,9 @@ export default function PlannedPaymentsPage() {
                   : t(FREQ_LABEL_KEYS[row.frequency ?? "monthly"])}
               </span>
             </div>
-            {row.execution_count > 0 && (
+            {(row.execution_count ?? 0) > 0 && (
               <span className="text-xs text-muted-foreground">
-                {t('plannedPage.executedCount', { n: row.execution_count })}
+                {t('plannedPage.executedCount', { n: row.execution_count ?? 0 })}
               </span>
             )}
           </div>

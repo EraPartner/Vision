@@ -327,7 +327,7 @@ export default function MarketLookupPage() {
                     {quote && (
                       <AddInvestmentFromMarketDialog
                         quote={quote}
-                        existingInvestment={existingInvestment}
+                        existingInvestment={existingInvestment ?? undefined}
                       />
                     )}
                   </div>

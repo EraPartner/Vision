@@ -5,7 +5,7 @@ export { AreaChart } from "./AreaChart";
 export type { AreaChartProps, AreaReferenceLine, AreaSeries } from "./AreaChart";
 
 export { BarChart } from "./BarChart";
-export type { BarChartProps, BarSeries } from "./BarChart";
+export type { BarChartProps, BarSeries, BarOverlay } from "./BarChart";
 
 export { StackedBarChart } from "./StackedBarChart";
 export type { StackedBarChartProps, StackedBarSeries } from "./StackedBarChart";

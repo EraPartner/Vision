@@ -213,7 +213,7 @@ function AreaChartInner<Datum>({
                     value: tooltipValueFormat ? tooltipValueFormat(raw, s.key) : String(raw),
                 };
             })
-            .filter((x): x is ChartTooltipDatum => x !== null);
+            .filter((x): x is NonNullable<typeof x> => x !== null);
     }, [hoverDatum, series, tooltipValueFormat]);
 
     const tooltipLeft =

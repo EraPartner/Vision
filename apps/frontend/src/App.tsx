@@ -123,12 +123,7 @@ const App = () => {
                                     <TooltipProvider>
                                     <ErrorBoundary>
                                         <Sonner />
-                                        <BrowserRouter
-                                            future={{
-                                                v7_startTransition: true,
-                                                v7_relativeSplatPath: true,
-                                            }}
-                                        >
+                                        <BrowserRouter>
                                             <ScrollToTop />
                                             <AppLayout>
                                                 <Suspense fallback={<PageLoader />}>

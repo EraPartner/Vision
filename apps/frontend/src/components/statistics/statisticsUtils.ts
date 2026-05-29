@@ -7,7 +7,7 @@ import type { WidgetDefinition } from "@/hooks/useWidgetVisibility";
 
 export type PivotValueMode = "absolute" | "net" | "income" | "expense";
 
-export const STATISTICS_WIDGETS: Array<WidgetDefinition & { labelKey?: string }> = [
+export const STATISTICS_WIDGETS: Array<WidgetDefinition & { labelKey: string }> = [
   { id: "summaryCards",     labelKey: "statsPage.widget.summaryCards",     defaultVisible: true },
   { id: "monthly",          labelKey: "statsPage.widget.monthly",          defaultVisible: true },
   { id: "netTrend",         labelKey: "statsPage.widget.netTrend",         defaultVisible: true },

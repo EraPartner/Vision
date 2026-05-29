@@ -108,7 +108,7 @@ export function useTransactionListData({
 
     useEffect(() => {
         if (initialData && !isEditingRef.current) {
-            setAllItems(initialData.items);
+            setAllItems(initialData.items as unknown as RawApiTransaction[]);
             setTotalItems(initialData.total ?? initialData.items.length);
             offsetRef.current = initialData.items.length;
             hasMoreRef.current = initialData.items.length < (initialData.total ?? initialData.items.length);
@@ -142,7 +142,7 @@ export function useTransactionListData({
             if (myRequestId !== requestIdRef.current) return;
             setAllItems(prev => {
                 const existingIds = new Set(prev.map((t) => t.id));
-                const newItems = (result.items as RawApiTransaction[]).filter((t) => !existingIds.has(t.id));
+                const newItems = (result.items as unknown as RawApiTransaction[]).filter((t) => !existingIds.has(t.id));
                 return [...prev, ...newItems];
             });
             offsetRef.current += result.items.length;

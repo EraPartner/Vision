@@ -9,7 +9,7 @@
  * useShallow ensures the hook only re-renders when the selected values change.
  */
 
-import React, { useEffect, useRef, type ReactNode } from 'react';
+import { useEffect, useRef, type ReactNode } from 'react';
 import { useShallow } from 'zustand/react/shallow';
 import { apiClient } from '@/lib/api';
 import logger from '@/lib/logger';

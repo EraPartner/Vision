@@ -17,7 +17,7 @@ function Calendar({className, classNames, showOutsideDays = true, ...props}: Cal
             classNames={{
                 months: "flex flex-col sm:flex-row space-y-4 sm:space-x-4 sm:space-y-0",
                 month: "space-y-4",
-                caption: "flex justify-center pt-1 relative items-center",
+                month_caption: "flex justify-center pt-1 relative items-center",
                 caption_label: "font-display text-sm font-semibold tracking-tight text-foreground",
                 nav: "space-x-1 flex items-center",
                 nav_button: cn(
@@ -45,11 +45,16 @@ function Calendar({className, classNames, showOutsideDays = true, ...props}: Cal
                 day_disabled: "text-muted-foreground/50 opacity-50",
                 day_range_middle: "aria-selected:bg-primary/10 aria-selected:text-foreground",
                 day_hidden: "invisible",
+                // TODO(react-day-picker v10): these are mostly v8 classNames keys; v10
+                // renamed them (caption→month_caption, cell→day, day→day_button, etc.) and
+                // switched selected/today/outside to data-attributes. Migrate + visually
+                // verify the calendar theme, then drop this cast. Tracked in TODO.md.
                 ...classNames,
-            }}
+            } as React.ComponentProps<typeof DayPicker>["classNames"]}
             components={{
-                IconLeft: ({..._props}) => <ChevronLeft className="h-4 w-4"/>,
-                IconRight: ({..._props}) => <ChevronRight className="h-4 w-4"/>,
+                Chevron: ({orientation}) => orientation === "left"
+                    ? <ChevronLeft className="h-4 w-4"/>
+                    : <ChevronRight className="h-4 w-4"/>,
             }}
             {...props}
         />

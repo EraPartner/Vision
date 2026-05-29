@@ -1,4 +1,6 @@
 import type {
+    ChatDoneEvent,
+    ChatMessage,
     ChatStreamEvent,
     ChatTurnResponse,
     Conversation,
@@ -92,13 +94,13 @@ export function streamChat(
         const p = payload as Record<string, unknown>;
         switch (eventName) {
             case 'user_message':
-                return { type: 'user_message', message: p.message as string };
+                return { type: 'user_message', message: p.message as ChatMessage };
             case 'tool_call':
                 return { type: 'tool_call', name: p.name as string, args: (p.args as Record<string, unknown>) ?? {} };
             case 'tool_result':
-                return { type: 'tool_result', message: p.message as string };
+                return { type: 'tool_result', message: p.message as ChatMessage };
             case 'done':
-                return { type: 'done', payload: p };
+                return { type: 'done', payload: p as unknown as ChatDoneEvent };
             case 'error':
                 return { type: 'error', detail: (p.detail as string) ?? 'AI chat error', code: p.code as string | undefined };
             default:
@@ -164,7 +166,8 @@ export function streamChat(
             if (buffer.trim()) processEventBlock(buffer.trimEnd());
 
             if (terminalError) {
-                throw Object.assign(new Error(terminalError.detail), { code: terminalError.code });
+                const te = terminalError as { detail: string; code?: string };
+                throw Object.assign(new Error(te.detail), { code: te.code });
             }
             if (!terminal) throw new Error('Stream ended without terminal event');
             return terminal;

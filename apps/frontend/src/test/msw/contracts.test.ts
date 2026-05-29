@@ -38,7 +38,7 @@ async function getEnvelope(path: string): Promise<unknown> {
 }
 
 async function mutateEnvelope(
-    method: "POST" | "PATCH" | "DELETE",
+    method: "POST" | "PATCH" | "PUT" | "DELETE",
     path: string,
     body?: Record<string, unknown>,
 ): Promise<unknown> {
@@ -209,7 +209,7 @@ const TransactionDeleteResponseSchema = DeleteResponseSchema.extend({
 
 // ── Other endpoint schemas ────────────────────────────────────────────────────
 
-const SettingsSchema = z.record(z.unknown());
+const SettingsSchema = z.record(z.string(), z.unknown());
 const SettingValueSchema = z.unknown();
 
 const InfoSchema = z.object({
@@ -228,7 +228,7 @@ const ExchangeRateItemSchema = z.object({
 });
 const ExchangeRatesSchema = z.object({
     rates: z.array(ExchangeRateItemSchema),
-    fallback_rates: z.record(z.unknown()),
+    fallback_rates: z.record(z.string(), z.unknown()),
     base: z.string(),
     date: z.string(),
 });
@@ -889,7 +889,7 @@ describe("Phase F1: extended GET endpoint contracts", () => {
     it("GET /api/aggregations/category-pivot returns expected shape", async () => {
         const data = await getEnvelope("/api/aggregations/category-pivot");
         validate(
-            aggregationsEnvelope(z.object({ categoryPivot: z.record(z.unknown()) })),
+            aggregationsEnvelope(z.object({ categoryPivot: z.record(z.string(), z.unknown()) })),
             data,
             "GET /api/aggregations/category-pivot",
         );
@@ -898,7 +898,7 @@ describe("Phase F1: extended GET endpoint contracts", () => {
     it("GET /api/aggregations/recipient-by-year returns expected shape", async () => {
         const data = await getEnvelope("/api/aggregations/recipient-by-year");
         validate(
-            aggregationsEnvelope(z.object({ recipientsByYear: z.record(z.unknown()) })),
+            aggregationsEnvelope(z.object({ recipientsByYear: z.record(z.string(), z.unknown()) })),
             data,
             "GET /api/aggregations/recipient-by-year",
         );
@@ -907,7 +907,7 @@ describe("Phase F1: extended GET endpoint contracts", () => {
     it("GET /api/aggregations/recipient-pivot returns expected shape", async () => {
         const data = await getEnvelope("/api/aggregations/recipient-pivot");
         validate(
-            aggregationsEnvelope(z.object({ recipientPivot: z.record(z.unknown()) })),
+            aggregationsEnvelope(z.object({ recipientPivot: z.record(z.string(), z.unknown()) })),
             data,
             "GET /api/aggregations/recipient-pivot",
         );
@@ -944,7 +944,7 @@ describe("Phase F1: extended GET endpoint contracts", () => {
                 z.object({
                     accounts: z.array(z.unknown()),
                     total_net_position: z.number(),
-                    history: z.record(z.array(z.unknown())),
+                    history: z.record(z.string(), z.array(z.unknown())),
                     total_history: z.array(z.unknown()),
                 }),
             ),

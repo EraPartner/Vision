@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import { describe, it, expect, vi } from "vitest";
-import React, { type ReactNode } from "react";
+import { type ReactNode } from "react";
 import { renderHook, waitFor } from "@testing-library/react";
 import { http } from "msw";
 import { server } from "@/test/msw/server";

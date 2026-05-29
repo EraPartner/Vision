@@ -318,7 +318,7 @@ export function CategoryPivotTable({
                             {cat.detailName}
                           </td>
                           {filteredPeriods.map((p) => {
-                            const val = getPeriodValue(cat, p);
+                            const val = getPeriodValue(cat, p, valueMode);
                             const canClick = val !== 0 && cat.categoryId != null;
                             return (
                               <td

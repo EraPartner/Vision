@@ -156,7 +156,7 @@ export function BankBalancesWidget() {
                                         <div className="flex items-center gap-2 min-w-0">
                                             <div
                                                 className="h-3 w-3 rounded-full shrink-0 ring-2 ring-offset-1 ring-offset-card transition-transform duration-300 group-hover:scale-125"
-                                                style={{ backgroundColor: color, ringColor: color }}
+                                                style={{ backgroundColor: color, ['--tw-ring-color']: color } as React.CSSProperties}
                                             />
                                             <span className="text-xs font-mono text-muted-foreground truncate" title={acct.bank_account}>
                                                 {shortAccountName(acct.bank_account)}

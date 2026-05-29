@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import { describe, it, expect, vi, afterEach } from "vitest";
-import React, { type ReactNode } from "react";
+import { type ReactNode } from "react";
 import { renderHook, act, waitFor } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { LanguageProvider } from "@/contexts/LanguageContext";
@@ -89,11 +89,11 @@ describe("useCreateSavedChart", () => {
         await act(async () => {
             result.current.mutate({
                 name: "Monthly Income",
-                chart_type: "bar",
-                chart_variant: "default",
-                time_bucket: "monthly",
-                category_ids: [],
-                recipient_ids: [],
+                chartType: "bar",
+                chartVariant: "default",
+                timeBucket: "monthly",
+                categoryIds: [],
+                recipientIds: [],
             });
         });
         await waitFor(() => expect(result.current.isSuccess).toBe(true));
@@ -149,7 +149,7 @@ describe("useOllamaModels", () => {
     });
 
     it("fetches models when enabled=true", async () => {
-        vi.spyOn(apiClient, "getOllamaModels").mockResolvedValue([{ name: "llama3", modified_at: "", size: 0 }]);
+        vi.spyOn(apiClient, "getOllamaModels").mockResolvedValue([{ name: "llama3", modified: "", size: 0 }]);
         const { result } = renderHook(() => useOllamaModels(true), { wrapper: makeQueryWrapper() });
         await waitFor(() => expect(result.current.isSuccess).toBe(true));
         expect(result.current.data).toHaveLength(1);

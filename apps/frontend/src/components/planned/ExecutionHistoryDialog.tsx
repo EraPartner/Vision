@@ -72,7 +72,7 @@ export function ExecutionHistoryDialog({ open, onOpenChange, payments }: Executi
     setHistoryLoading(true);
     try {
       const results = await Promise.allSettled(
-        links.map(async (link) => {
+        links.map(async (link): Promise<ExecutionHistoryItem | null> => {
           const txResponse = await apiClient.getTransactions({ transaction_id: link.transactionId, limit: 1 });
           const transaction = txResponse.items[0];
           if (!transaction) return null;
@@ -93,7 +93,7 @@ export function ExecutionHistoryDialog({ open, onOpenChange, payments }: Executi
       );
 
       const resolved = results
-        .filter((result): result is PromiseFulfilledResult<ExecutionHistoryItem | null> => result.status === 'fulfilled')
+        .filter((result): result is Extract<typeof result, { status: 'fulfilled' }> => result.status === 'fulfilled')
         .map((result) => result.value)
         .filter((item): item is ExecutionHistoryItem => item != null)
         .sort((a, b) => (b.executionDate || '').localeCompare(a.executionDate || ''));

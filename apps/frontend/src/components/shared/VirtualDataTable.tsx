@@ -525,7 +525,7 @@ export function VirtualDataTable<T extends Record<string, unknown>>({
                                                 </PopoverTrigger>
                                                 <PopoverContent className="w-56 p-2" align="start">
                                                     <ColumnFilter
-                                                        header={col.header}
+                                                        header={typeof col.header === "string" ? col.header : ""}
                                                         value={columnFilters[col.key] || ""}
                                                         onChange={(v) => setColumnFilter(col.key, v)}
                                                         uniqueValues={openFilter === col.key ? openFilterUniqueValues : []}
@@ -622,7 +622,7 @@ export function VirtualDataTable<T extends Record<string, unknown>>({
                                                         ) : (
                                                             <Input
                                                                 type={col.type || "text"}
-                                                                value={editValues[col.key] ?? ""}
+                                                                value={String(editValues[col.key] ?? "")}
                                                                 onChange={(e) =>
                                                                     setEditValues((prev) => ({
                                                                         ...prev,

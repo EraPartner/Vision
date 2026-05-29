@@ -10,6 +10,29 @@ export interface SplitItem {
     is_settled: boolean;
     created_at: string;
     updated_at: string;
+    recipient_name?: string | null;
+}
+
+/** Aggregated "who owes what" row from GET /api/splits/owed (computeOwedSummary). */
+export interface OwedSummaryItem {
+    recipient_id: number;
+    recipient_name: string;
+    total_owed: number;
+    total_paid: number;
+    remaining: number;
+    split_count: number;
+}
+
+/** Per-split detail row from GET /api/splits/owed/:recipientId, enriched with parent-transaction fields. */
+export interface OwedDetailItem extends SplitItem {
+    transaction_date: string;
+    transaction_memo?: string | null;
+    transaction_amount: number;
+    transaction_currency: string;
+    bank_account?: string | null;
+    transaction_recipient_name?: string | null;
+    amount_paid: number;
+    remaining: number;
 }
 
 export interface SplitPayment {
@@ -21,11 +44,11 @@ export interface SplitPayment {
     created_at: string;
 }
 
-export function getOwedSummary(): Promise<{ items: SplitItem[] }> {
+export function getOwedSummary(): Promise<{ items: OwedSummaryItem[] }> {
     return apiRequest('/api/splits/owed');
 }
 
-export function getOwedByRecipient(recipientId: number): Promise<{ items: SplitItem[] }> {
+export function getOwedByRecipient(recipientId: number): Promise<{ items: OwedDetailItem[] }> {
     return apiRequest(`/api/splits/owed/${recipientId}`);
 }
 

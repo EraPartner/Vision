@@ -404,7 +404,7 @@ function RecentRecipientTransactionsTable({ recipientId, recipientName }: { reci
 
     const transactions: RecentRecipientTransactionRow[] = useMemo(() => allItems.map((tx) => ({
         id: tx.id,
-        date: tx.transaction_date || tx.date || '',
+        date: tx.transaction_date || '',
         description: tx.memo || t('owesPage.transaction'),
         category: tx.category_name || t('txPage.field.uncategorized'),
         amount: tx.amount,

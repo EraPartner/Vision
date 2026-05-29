@@ -48,6 +48,7 @@ const TXN_TYPE_COLORS: Record<PortfolioTxnType, string> = {
   dividend: 'bg-primary/10 text-primary border-primary/20',
   interest: 'bg-primary/10 text-primary border-primary/20',
   rent_income: 'bg-accent/10 text-accent border-accent/20',
+  gift: 'bg-primary/10 text-primary border-primary/20',
   fee: 'bg-muted text-muted-foreground border-border',
   tax: 'bg-muted text-muted-foreground border-border',
   appreciation: 'bg-accent/10 text-accent border-accent/20',
@@ -452,11 +453,11 @@ export function InvestmentDetailDialog({
                           {['buy', 'fee', 'tax'].includes(txn.type) ? '-' : '+'}{fmt(txn.amount, investment.currency)}
                         </p>
                         
-                        {(txn.fees > 0 || txn.taxes > 0) && (
+                        {((txn.fees ?? 0) > 0 || (txn.taxes ?? 0) > 0) && (
                           <p className="text-xs text-muted-foreground">
-                             {txn.fees > 0 && t('invDetail.fee', { amount: fmt(txn.fees, investment.currency) })}
-                            {txn.fees > 0 && txn.taxes > 0 && ' · '}
-                            {txn.taxes > 0 && t('invDetail.tax', { amount: fmt(txn.taxes, investment.currency) })}
+                             {(txn.fees ?? 0) > 0 && t('invDetail.fee', { amount: fmt(txn.fees ?? 0, investment.currency) })}
+                            {(txn.fees ?? 0) > 0 && (txn.taxes ?? 0) > 0 && ' · '}
+                            {(txn.taxes ?? 0) > 0 && t('invDetail.tax', { amount: fmt(txn.taxes ?? 0, investment.currency) })}
                           </p>
                         )}
                       </div>

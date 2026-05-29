@@ -153,7 +153,7 @@ describe("BackupTab", () => {
     it("triggers backup when 'Back up now' is clicked with a configured directory", async () => {
         // Arrange
         const runBackup = vi
-            .fn<[], Promise<BackupResult>>()
+            .fn<() => Promise<BackupResult>>()
             .mockResolvedValue({ success: true, file: "/Users/me/backups/vision.visionbak" });
         installElectronStubs(
             { runBackup },
@@ -188,7 +188,7 @@ describe("BackupTab", () => {
     it("Browse button updates the backup directory via setBackupDir", async () => {
         // Arrange
         const selectDir = vi
-            .fn<[], Promise<string | null>>()
+            .fn<() => Promise<string | null>>()
             .mockResolvedValue("/Users/me/picked");
         installElectronStubs({ selectDir });
 
@@ -212,7 +212,7 @@ describe("BackupTab", () => {
     it("opens the restore confirmation dialog when 'Restore now' is clicked with a selected file", async () => {
         // Arrange
         const selectFile = vi
-            .fn<[], Promise<string | null>>()
+            .fn<() => Promise<string | null>>()
             .mockResolvedValue("/Users/me/backups/snapshot.visionbak");
         installElectronStubs(
             { selectFile },
@@ -247,10 +247,10 @@ describe("BackupTab", () => {
     it("saves a passphrase via the encryption section when secure storage is available", async () => {
         // Arrange
         const setPassphrase = vi
-            .fn<[string], Promise<{ success: boolean; available: boolean; error?: string }>>()
+            .fn<(passphrase: string) => Promise<{ success: boolean; available: boolean; error?: string }>>()
             .mockResolvedValue({ success: true, available: true });
         const getEncryptionStatus = vi
-            .fn<[], Promise<EncryptionStatus>>()
+            .fn<() => Promise<EncryptionStatus>>()
             .mockResolvedValue({
                 success: true,
                 secureStorageAvailable: true,

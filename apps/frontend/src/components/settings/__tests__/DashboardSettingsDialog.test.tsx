@@ -6,8 +6,6 @@ import { renderWithApp } from "@/test/renderWithApp";
 import { server } from "@/test/msw/server";
 import { DashboardSettingsDialog } from "@/components/settings/DashboardSettingsDialog";
 
-const API_BASE = "http://localhost:3002";
-
 beforeEach(() => {
     server.resetHandlers();
 });

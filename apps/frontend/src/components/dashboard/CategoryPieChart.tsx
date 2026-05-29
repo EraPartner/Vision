@@ -25,10 +25,6 @@ export function CategoryPieChart({ data, embedded = false, formatValue }: Catego
         () => formatValue ?? ((v: number) => formatCurrency(v, defaultCurrency, locale)),
         [formatValue, defaultCurrency, locale],
     );
-    const legendItems = useMemo(
-        () => coloredData.map((d) => ({ label: d.name, color: d.color })),
-        [coloredData],
-    );
 
     const chartContent = (
         <div className="flex h-72 flex-col gap-2">

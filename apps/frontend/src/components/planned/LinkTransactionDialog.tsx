@@ -156,7 +156,7 @@ export function LinkTransactionDialog({ open, onOpenChange, payment, onExecute }
     <Dialog open={open} onOpenChange={(isOpen) => { if (!isOpen) handleClose(); }}>
       <DialogContent className="sm:max-w-2xl">
         <DialogHeader>
-          <DialogTitle>{t('plannedPage.link.title', { name: payment?.name })}</DialogTitle>
+          <DialogTitle>{t('plannedPage.link.title', { name: payment?.name ?? '' })}</DialogTitle>
         </DialogHeader>
 
         <div className="grid gap-3 py-2">

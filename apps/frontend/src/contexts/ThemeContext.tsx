@@ -12,7 +12,7 @@
  * re-renders in theme consumers.
  */
 
-import React, { useCallback, useEffect, useRef, type ReactNode } from 'react';
+import { useCallback, useEffect, useRef, type ReactNode } from 'react';
 import { useShallow } from 'zustand/react/shallow';
 import { apiClient } from '@/lib/api';
 import { usePreloadedSetting } from '@/contexts/SettingsPreloadContext';
