@@ -87,6 +87,14 @@ services:
         source: ${HOME}/.claude/hooks/managed-settings.json
         target: /etc/claude-code/managed-settings.json
         read_only: true
+      # Project memory LIVE-SHARED with the host (RW, bidirectional). The container
+      # root is /workspaces/Vision, so Claude keys memory under `-workspaces-Vision`,
+      # NOT the host key. Map the host repo key's memory/ onto the container key's.
+      # ONLY memory/ is shared (never sessions/tool-results). Host source key tracks
+      # the repo's host path (~/Code/Vision); update SOURCE if the repo moves.
+      - type: bind
+        source: ${HOME}/.claude/projects/-Users-computer-Code-Vision/memory
+        target: /home/dev/.claude/projects/-workspaces-Vision/memory
       - type: volume
         source: pgdata
         target: /var/lib/postgresql

@@ -110,7 +110,7 @@ RUN printf 'export PATH="/usr/local/share/npm-global/bin:/opt/python/bin:/usr/lo
       > /etc/profile.d/00-sandbox-path.sh
 
 # --- Claude Code CLI (replaces the `anthropics/claude-code:1.0` feature) -----
-RUN npm install -g @anthropic-ai/claude-code \
+RUN npm install -g @anthropic-ai/claude-code@2.1.156 \
   && claude --version \
   && chown -R dev:dev /usr/local/share/npm-global
 
@@ -122,6 +122,10 @@ COPY squid.conf       /etc/squid/squid.conf
 COPY allowlist.txt    /etc/squid/allowlist.txt
 RUN chmod 0755 /usr/local/sbin/egress-firewall /usr/local/sbin/vision-perms-fix /usr/local/sbin/vision-entrypoint \
   && chown root:root /usr/local/sbin/egress-firewall /usr/local/sbin/vision-perms-fix /usr/local/sbin/vision-entrypoint
+
+# Launch-integrity check (the binary fingerprint manifest is baked below).
+COPY bin/verify-pins /usr/local/bin/vision-verify-pins
+RUN chmod 0755 /usr/local/bin/vision-verify-pins
 
 # Inbound ports this project publishes (read by egress-firewall for INPUT ACCEPT).
 RUN mkdir -p /etc/egress && printf '8080\n3002\n' > /etc/egress/inbound-ports
@@ -142,6 +146,20 @@ RUN mkdir -p /var/lib/postgresql && chown postgres:postgres /var/lib/postgresql
 # Pre-create dirs backed by named volumes so a fresh volume inherits dev ownership.
 RUN install -d -o dev -g dev -m 0700 /home/dev/.claude \
  && install -d -o dev -g dev -m 0755 /home/dev/.config /home/dev/.config/gh
+
+# Pin the agent's executables: record SHA-256 so vision-verify-pins can
+# fail-closed on drift at launch. A legit tool upgrade changes these — rebuild.
+RUN set -eux; \
+    pinfile=/usr/local/share/vision/binary-pins.txt; \
+    mkdir -p /usr/local/share/vision; \
+    : > "$pinfile"; \
+    for b in node npm claude gh git python3; do \
+      p="$(command -v "$b")"; \
+      h="$(sha256sum "$p" | awk '{print $1}')"; \
+      printf '%s\t%s\t%s\n' "$b" "$p" "$h" >> "$pinfile"; \
+    done; \
+    chmod 0644 "$pinfile"; \
+    cat "$pinfile"
 
 # Strip ALL setuid/setgid bits image-wide (defense-in-depth).
 RUN find / -xdev -type f -perm /6000 -exec chmod -s {} + 2>/dev/null || true

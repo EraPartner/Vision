@@ -28,33 +28,12 @@ COMPOSE=(docker compose -f "$PROJECT_ROOT/.devcontainer/compose.yaml")
 SVC=app
 
 # --- 1) Stage a sanitized ~/.claude for the read-only bind mount -------------
-stage_claude_config() {
-  local src dst item jf f
-  src="$(cd "$HOME/.claude" 2>/dev/null && pwd -P || true)"
-  dst="$HOME/.claude-sandbox/stage/vision"
-  rm -rf "$dst/dot-claude"; mkdir -p "$dst/dot-claude"
-  if [[ -n "$src" && -d "$src" ]]; then
-    for item in settings.json keybindings.json CLAUDE.md agents rules commands statusline status-line.sh plugins; do
-      [[ -e "$src/$item" ]] && cp -a "$src/$item" "$dst/dot-claude/" 2>/dev/null || true
-    done
-    find "$dst/dot-claude/statusline" "$dst/dot-claude/plugins" -name .git -type d -prune -exec rm -rf {} + 2>/dev/null || true
-    for jf in known_marketplaces.json installed_plugins.json; do
-      f="$dst/dot-claude/plugins/$jf"
-      [[ -f "$f" ]] && sed -i '' -e "s#$HOME/.claude#/home/dev/.claude#g" -e "s#$src#/home/dev/.claude#g" "$f" 2>/dev/null || true
-    done
-    find "$dst/dot-claude" -name '.DS_Store' -delete 2>/dev/null || true
-    # The PreToolUse safety guard reaches the sandbox out-of-band via the
-    # root-owned /etc/claude-code/managed-settings.json policy (see compose.yaml).
-    # Strip hooks from the staged USER settings so the host's host-path hook
-    # entry can't dangle here or duplicate the managed one. Mirrors the sync pull.
-    if [[ -f "$dst/dot-claude/settings.json" ]] && command -v jq >/dev/null 2>&1; then
-      local hjt; hjt="$(mktemp)"
-      jq 'del(.hooks)' "$dst/dot-claude/settings.json" >"$hjt" 2>/dev/null && mv "$hjt" "$dst/dot-claude/settings.json" || rm -f "$hjt"
-    fi
-  fi
-  [[ -f "$HOME/.claude.json" ]] && cp "$HOME/.claude.json" "$dst/claude.json" 2>/dev/null || true
-}
-stage_claude_config
+# Shared host-side helpers (vendored by devcontainer-egress/sync.sh).
+LIB="$PROJECT_ROOT/.devcontainer/launcher-common.sh"
+[[ -f "$LIB" ]] || { echo "claude (vision-compose): missing $LIB (run devcontainer-egress/sync.sh)." >&2; exit 1; }
+# shellcheck source=/dev/null
+source "$LIB"
+sandbox_stage_claude_config vision
 
 # --- 2) Build + start (idempotent) -------------------------------------------
 "${COMPOSE[@]}" up -d --build >/dev/null
@@ -70,32 +49,26 @@ CID="$("${COMPOSE[@]}" ps -q "$SVC" 2>/dev/null | head -1 || true)"
   bash .devcontainer/post-start.sh'
 
 # --- 4) Forward the Claude OAuth token from the macOS Keychain at exec time ---
-kc() { security find-generic-password -s "$1" -w 2>/dev/null || true; }
 EXEC_ENV=()
-if command -v security >/dev/null 2>&1; then
-  tok="$(kc 'vision-claude-code-token')"
-  [[ -n "$tok" ]] && EXEC_ENV+=(-e "CLAUDE_CODE_OAUTH_TOKEN=$tok")
-fi
-have_claude=0
-for a in ${EXEC_ENV[@]+"${EXEC_ENV[@]}"}; do [[ "$a" == "CLAUDE_CODE_OAUTH_TOKEN="* ]] && have_claude=1; done
-if (( ! have_claude )); then
-  for var in CLAUDE_CODE_OAUTH_TOKEN ANTHROPIC_API_KEY ANTHROPIC_AUTH_TOKEN; do
-    val="${!var:-}"; [[ -n "$val" ]] && EXEC_ENV+=(-e "${var}=${val}")
-  done
-fi
+sandbox_forward_llm_creds vision-claude-code-token
 
 # --- 5) Auto config-sync: push container changes back on exit -----------------
-AUTOSYNC="${VISION_AUTOSYNC:-1}"
-_autosync_done=0
-autosync_push() {
-  if [[ "$_autosync_done" == 1 ]]; then return 0; fi
-  _autosync_done=1
-  if [[ "$AUTOSYNC" != 1 || -z "$CID" ]]; then return 0; fi
-  command -v fish >/dev/null 2>&1 || return 0
-  fish -c "vision-claude-sync push $CID" \
-    || echo "claude (vision-compose): auto config-sync push failed — run 'vision-claude-sync push' to retry." >&2
-}
-trap autosync_push EXIT
+sandbox_install_autosync_trap vision "$CID" "${VISION_AUTOSYNC:-1}"
+
+# --- 6) Launch-integrity gate: refuse to start if a pinned binary drifted ------
+# Tolerant: warns (doesn't abort) until the image is rebuilt with the pins baked,
+# so this lands without breaking a running container; once rebuilt it enforces.
+if "${COMPOSE[@]}" exec -u dev -T "$SVC" bash -lc 'command -v vision-verify-pins >/dev/null 2>&1'; then
+  # Run in a CLEAN shell: safe-chain (BASH_ENV) wraps npm/pip as shell functions,
+  # which shadow the real binary paths and would false-trip the gate.
+  if ! "${COMPOSE[@]}" exec -u dev -T -e BASH_ENV= "$SVC" vision-verify-pins --quiet; then
+    echo "claude (vision-compose): ABORT — binary fingerprint drift (see above)." >&2
+    echo "  If you intentionally upgraded a tool, rebuild to re-pin: ${COMPOSE[*]} build --no-cache $SVC" >&2
+    exit 1
+  fi
+else
+  echo "claude (vision-compose): verify-pins not baked yet — rebuild to enable launch-integrity checks: ${COMPOSE[*]} build $SVC" >&2
+fi
 
 set +e
 "${COMPOSE[@]}" exec -u dev ${EXEC_ENV[@]+"${EXEC_ENV[@]}"} "$SVC" claude "$@"
