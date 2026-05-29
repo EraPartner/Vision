@@ -88,8 +88,12 @@ export async function validateBatch({ batchId, onProgress }) {
     );
   }
 
-  logger.info('[pipeline:validate] done', { batchId, total, validated: total - errors - duplicates, duplicates, errors });
-  return { validated: total - errors - duplicates, duplicates, errors };
+  // `total`, `errors`, and `duplicates` are row counts (not currency), so plain
+  // integer arithmetic is correct here — exempt from the monetary-arithmetic rule.
+  // eslint-disable-next-line vision-local-money/no-raw-money-arithmetic
+  const validated = total - errors - duplicates;
+  logger.info('[pipeline:validate] done', { batchId, total, validated, duplicates, errors });
+  return { validated, duplicates, errors };
 }
 
 function validateRow(row) {

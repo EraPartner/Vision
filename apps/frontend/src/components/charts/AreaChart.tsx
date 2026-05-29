@@ -118,7 +118,7 @@ function AreaChartInner<Datum>({
     // The ref always tracks the latest accessor; the stable wrapper never changes identity.
     const xAccessorRef = useRef(xAccessor);
     xAccessorRef.current = xAccessor;
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+     
     const stableXAccessor = useCallback((d: Datum) => xAccessorRef.current(d), []);
 
     const xValues = useMemo(() => data.map((d) => stableXAccessor(d)), [data, stableXAccessor]);

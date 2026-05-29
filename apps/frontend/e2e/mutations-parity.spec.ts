@@ -26,7 +26,6 @@ test.describe("Phase F4 — CRUD lifecycle parity (real browser)", () => {
         await expect(page.getByRole("heading", { level: 1, name: /categories/i })).toBeVisible();
 
         const unique = `F4_${Date.now()}`;
-        const renamed = `${unique}_R`;
 
         // Create
         await page.getByRole("button", { name: /add category/i }).first().click();

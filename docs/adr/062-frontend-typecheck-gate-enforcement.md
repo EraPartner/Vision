@@ -59,9 +59,12 @@ errors across 57 files** to accumulate on `main` undetected — a mix of:
 - **Positive:** the type-check gate now validates 435 files; type regressions are caught in CI
   instead of reaching `main`. Several real runtime bugs were fixed as a side effect.
 - **Positive:** developers get accurate `tsc` results locally via `bun run typecheck`.
-- **Neutral / follow-up:** `components/ui/calendar.tsx` carries a temporary cast on its
-  `classNames` object — the react-day-picker v10 migration (renamed keys + data-attribute
-  selectors) needs a proper pass with visual verification before the cast is removed
+- **Follow-up (done):** `components/ui/calendar.tsx` has since been migrated to the
+  react-day-picker v10 styling API — `classNames` keys renamed (`caption`→`month_caption`,
+  `cell`→`day`, `day`→`day_button`, `nav_button*`→`button_previous`/`button_next`,
+  `head_row`→`weekdays`, `row`→`week`, `day_selected`→`selected`, …), `IconLeft`/`IconRight`
+  replaced by the `Chevron` component, and the temporary cast removed. Typecheck + tests pass;
+  a visual spot-check of the calendar theme in the running app is the only remaining item
   (tracked in `TODO.md`).
 - **Verification:** `bun run typecheck` exits 0 (app + node); backend `tsc -p tsconfig.check.json`
   exits 0; frontend 1,379 tests pass; backend 1,983 tests pass; ESLint 0 errors.
