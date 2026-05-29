@@ -5,7 +5,7 @@ method: GET, POST, PATCH, DELETE
 path: /api/investments
 description: Investment portfolio management (stocks, crypto, real estate, savings)
 date: 2026-04-23
-last_modified: 2026-04-29
+last_modified: 2026-05-29
 tags: [api, investments, portfolio, stocks, crypto, metals, phase-9, decimal, money, offline-fallback]
 status: active
 aliases: [investments-api, portfolio-api, holdings, stocks, crypto, real-estate, savings, bonds, metals]
@@ -15,6 +15,9 @@ related_code: [[apps/node-backend/src/routes/investments.js]], [[apps/node-backe
 # Investments API
 
 ## Overview
+
+> [!info] Rate Limiting
+> All `/api/investments/*` endpoints are subject to a 300 req/min route-group limiter (`investmentRateLimiter`). The limiter is bypassed in development. See [[docs/security/rate-limiting|Rate Limiting]] for details.
 
 The Investments API manages investment holdings across various asset classes: stocks, ETFs, crypto, metals, real estate, savings, and bonds. It supports live price feeds from multiple providers.
 

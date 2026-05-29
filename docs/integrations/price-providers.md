@@ -3,8 +3,8 @@ title: Integration - Price Providers
 type: integration
 description: Live and historical price feeds for stocks, crypto, and other investments. Startup price refresh is skipped when the host is offline (2026-05-03).
 date: 2026-04-21
-last_modified: 2026-05-03
-updated: 2026-05-03
+last_modified: 2026-05-29
+updated: 2026-05-29
 tags: [integration, price, stocks, crypto, api, historical-quotes, quote-backfill, phase-1, eur-to-usd-mapping, data-sanitization, kinesis, offline-resilience, price-history-default, provider-timeout, parallel-fetching, startup-optimization, network-reachability]
 aliases: [price providers, market data, Binance, Kinesis, Yahoo Finance, live prices]
 status: active
@@ -54,6 +54,7 @@ Price providers fetch live and historical market prices for investments, support
 - **Implementation**: Web scraping / Yahoo Finance API
 - **Features**:
   - Real-time quotes
+  - **Batched quote requests (2026-05-29):** `PROVIDERS.yahoo` in `priceProviderRegistry.js` now issues a single `yahooFinance.quote([symbols])` call for all Yahoo-backed investments, normalizing the result to an array. A portfolio of ~30 holdings drops from ~30 outbound requests to 1. The per-symbol chart-close fallback (`_fetchYahooLatestClose`) is retained for symbols unresolved by the batch and for whole-batch failure.
   - Previous close fallback when real-time quote is unavailable/zero
   - Historical data
   - Wide coverage

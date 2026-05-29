@@ -3,6 +3,7 @@ import { useLanguage } from "@/contexts/LanguageContext";
 import { useAppSettings } from "@/contexts/AppSettingsContext";
 import { useBelgianTaxProfile } from "@/contexts/BelgianTaxProfileContext";
 import { computeBelgianPIT } from "@/lib/belgianTax";
+import { recordedTaxesForYear, type PortfolioTaxInvestment } from "@/lib/belgianTax/portfolioTax";
 import { TaxYearSwitcher } from "@/components/tax/TaxYearSwitcher";
 import { HistoricalYearBanner } from "@/components/tax/HistoricalYearBanner";
 import { YearActionsMenu } from "@/components/tax/YearActionsMenu";
@@ -134,24 +135,16 @@ export default function TaxOverviewPage() {
     return result;
   }, [taxableIncomeByMonth]);
 
-  const portfolioTaxesForYear = useMemo(() => {
-    const year = viewedYear;
-    return summaries.reduce((sum, inv) => {
-      const yearlyInvestmentTaxes = inv.transactions.reduce((txnSum: number, txn: { date?: string; type?: string; amount?: number; taxes?: number; currency?: string }) => {
-        const date = txn.date;
-        if (!date) return txnSum;
-
-        const txnYear = Number.parseInt(date.slice(0, 4), 10);
-        if (Number.isNaN(txnYear) || txnYear !== year) return txnSum;
-
-        const explicitTaxTxn = txn.type === "tax" ? convertToTarget(Number(txn.amount) || 0, txn.currency) : 0;
-        const taxField = convertToTarget(Number(txn.taxes) || 0, txn.currency);
-        return txnSum + explicitTaxTxn + taxField;
-      }, 0);
-
-      return sum + yearlyInvestmentTaxes;
-    }, 0);
-  }, [summaries, viewedYear, convertToTarget]);
+  // Shared with PortfolioTaxPage via the pure recordedTaxesForYear helper so both
+  // pages accumulate recorded portfolio taxes identically (see lib/belgianTax/portfolioTax.ts).
+  const portfolioTaxesForYear = useMemo(
+    () =>
+      summaries.reduce(
+        (sum, inv) => sum + recordedTaxesForYear(inv as PortfolioTaxInvestment, viewedYear, convertToTarget),
+        0,
+      ),
+    [summaries, viewedYear, convertToTarget],
+  );
 
   const totalTaxIncludingPortfolio = calculation.totalPIT + portfolioTaxesForYear;
   // include estimated property tax in an alternate total (informational)

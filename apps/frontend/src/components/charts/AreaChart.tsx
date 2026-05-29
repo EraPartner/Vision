@@ -10,6 +10,7 @@
  *  - Crosshair tooltip powered by ChartTooltip
  */
 import { curveMonotoneX } from "@visx/curve";
+import { summarizeSeriesChart } from "./chartAria";
 import { LinearGradient } from "@visx/gradient";
 import { Group } from "@visx/group";
 import { ParentSize } from "@visx/responsive";
@@ -224,7 +225,7 @@ function AreaChartInner<Datum>({
 
     return (
         <div style={{ position: "relative", width, height }}>
-            <svg width={width} height={height} role="img" aria-label={ariaLabel ?? "Area chart"}>
+            <svg width={width} height={height} role="img" aria-label={ariaLabel ?? summarizeSeriesChart("Area chart", data.length, series.map((s) => s.label))}>
                 <Group left={margin.left} top={margin.top}>
                     {series.map((s, i) => {
                         const color = s.color ?? getChartColor(i);

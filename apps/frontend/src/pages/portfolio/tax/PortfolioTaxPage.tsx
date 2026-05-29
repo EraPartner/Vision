@@ -5,6 +5,18 @@ import { useLanguage } from "@/contexts/LanguageContext";
 import { useAppSettings } from "@/contexts/AppSettingsContext";
 import { useBelgianTaxProfile } from "@/contexts/BelgianTaxProfileContext";
 import { getTaxTable } from "@/lib/belgianTax";
+import {
+  yearOf,
+  enrichInvestmentCosts,
+  computeTobRecorded,
+  computeTobAutoEstimate,
+  computeTacrEstimate,
+  computeRealizedGainSplit,
+  computeReyndersEstimate,
+  computeCgtEstimate,
+  computeDividendWht,
+  type PortfolioTaxInvestment,
+} from "@/lib/belgianTax/portfolioTax";
 import { usePortfolio } from "@/hooks/usePortfolio";
 import { usePortfolioTaxAdjustments } from "@/hooks/usePortfolioTaxAdjustments";
 import { usePortfolioTaxClassifications } from "@/hooks/usePortfolioTaxClassifications";
@@ -49,12 +61,6 @@ function getPortfolioTaxWidgets(t: (key: string, vars?: Record<string, string>) 
   ];
 }
 
-function yearOf(date?: string): number | null {
-  if (!date) return null;
-  const n = Number.parseInt(date.slice(0, 4), 10);
-  return Number.isFinite(n) ? n : null;
-}
-
 export default function PortfolioTaxPage() {
   const { t } = useLanguage();
   const { appSettings } = useAppSettings();
@@ -93,7 +99,6 @@ export default function PortfolioTaxPage() {
 
   const taxTable = getTaxTable(txYear);
   const dividendExemption = taxTable.dividendExemption;
-  const dividendWhtRate = taxTable.dividendWHTRate;
 
   const WIDGETS = getPortfolioTaxWidgets(t);
   const { isVisible, setWidgetVisible, setAllVisible, resetToDefaults, widgets: widgetDefs } = useWidgetVisibility("portfolioTax", WIDGETS);
@@ -109,37 +114,16 @@ export default function PortfolioTaxPage() {
 
   const enrichedInvestments = useMemo(
     () =>
-      summaries.map((inv) => {
-        const yearlyRecordedTaxes = inv.transactions.reduce((sum: number, txn: TxnLite) => {
-          const y = yearOf(txn.date);
-          if (y !== txYear) return sum;
-          const explicit = txn.type === "tax" ? convertToTarget(Number(txn.amount) || 0, txn.currency) : 0;
-          return sum + explicit + convertToTarget(Number(txn.taxes) || 0, txn.currency);
-        }, 0);
-
-        const yearlyRecordedFees = inv.transactions.reduce((sum: number, txn: TxnLite) => {
-          const y = yearOf(txn.date);
-          if (y !== txYear) return sum;
-          const explicit = txn.type === "fee" ? convertToTarget(Number(txn.amount) || 0, txn.currency) : 0;
-          return sum + explicit + convertToTarget(Number(txn.fees) || 0, txn.currency);
-        }, 0);
-
-        const manual = getAdjustment(txYear, inv.id);
-        const taxes = yearlyRecordedTaxes + manual.taxes;
-        const fees = yearlyRecordedFees + manual.fees;
-
-        return {
-          ...inv,
-          assetClassLabel: getAssetClassLabel(t, inv.assetClass),
-          recordedTaxes: yearlyRecordedTaxes,
-          recordedFees: yearlyRecordedFees,
-          manualTaxes: manual.taxes,
-          manualFees: manual.fees,
-          taxes,
-          fees,
-          total: taxes + fees,
-        };
-      }),
+      summaries.map((inv) => ({
+        ...inv,
+        assetClassLabel: getAssetClassLabel(t, inv.assetClass),
+        ...enrichInvestmentCosts(
+          inv as PortfolioTaxInvestment,
+          txYear,
+          convertToTarget,
+          getAdjustment(txYear, inv.id),
+        ),
+      })),
     [summaries, txYear, getAdjustment, t, convertToTarget],
   );
 
@@ -266,102 +250,35 @@ export default function PortfolioTaxPage() {
     return Object.values(map).sort((a, b) => a.period.localeCompare(b.period));
   }, [summaries, txYear, convertToTarget]);
 
-  const totalDividendIncome = useMemo(
-    () =>
-      summaries.reduce(
-        (sum, inv) =>
-          sum +
-          inv.transactions.reduce((txSum: number, txn: TxnLite) => {
-            if (yearOf(txn.date) !== txYear) return txSum;
-            return txSum + (txn.type === "dividend" ? convertToTarget(Number(txn.amount) || 0, txn.currency) : 0);
-          }, 0),
-        0,
-      ),
-    [summaries, txYear, convertToTarget],
+  const {
+    totalDividendIncome,
+    grossDividendWht,
+    dividendWhtReclaim,
+    dividendWhtNetCost,
+  } = useMemo(
+    () => computeDividendWht(summaries as PortfolioTaxInvestment[], txYear, taxTable, convertToTarget),
+    [summaries, txYear, taxTable, convertToTarget],
   );
-
-  const dividendWhtRecorded = useMemo(
-    () =>
-      summaries.reduce(
-        (sum, inv) =>
-          sum +
-          inv.transactions.reduce((txSum: number, txn: TxnLite) => {
-            if (yearOf(txn.date) !== txYear || txn.type !== "dividend") return txSum;
-            return txSum + convertToTarget(Number(txn.taxes) || 0, txn.currency);
-          }, 0),
-        0,
-      ),
-    [summaries, txYear, convertToTarget],
-  );
-
-  // Gross = recorded net amount + recorded WHT. Works for both recording conventions:
-  // net-in-amount (net + WHT = gross) and gross-in-amount (gross + 0 = gross).
-  const grossDividendBase = totalDividendIncome + dividendWhtRecorded;
-  const grossDividendWht = dividendWhtRecorded;
-  const dividendWhtReclaim = Math.min(dividendWhtRecorded, Math.min(grossDividendBase, dividendExemption) * dividendWhtRate);
-  const dividendWhtNetCost = Math.max(grossDividendWht - dividendWhtReclaim, 0);
 
   const tobRecorded = useMemo(
-    () =>
-      summaries.reduce(
-        (sum, inv) =>
-          sum +
-          inv.transactions.reduce((txSum: number, txn: TxnLite) => {
-            if (yearOf(txn.date) !== txYear) return txSum;
-            return txSum + (txn.type === "buy" ? convertToTarget(Number(txn.taxes) || 0, txn.currency) : 0);
-          }, 0),
-        0,
-      ),
+    () => computeTobRecorded(summaries as PortfolioTaxInvestment[], txYear, convertToTarget),
     [summaries, txYear, convertToTarget],
   );
 
-  // Auto-TOB: estimated stock-exchange tax on `buy` transactions, capped per leg. Per-leg
-  // cap is statutorily a per-transaction cap, so we apply it to each buy. ETFs default to
-  // the accumulating-fund rate (1.32%) because retail BE ETFs are predominantly accumulating;
-  // users can override per-investment via `etfStructure`.
-  const tobAutoEstimate = useMemo(() => {
-    const tobRates = taxTable.tob;
-    const rateForInvestment = (inv: InvestmentSummary): { rate: number; cap: number } | null => {
-      switch (inv.assetClass) {
-        case "bond":
-          return tobRates.bonds;
-        case "stock":
-          return tobRates.sharesAndOther;
-        case "etf":
-          return inv.etfStructure === "distributing"
-            ? tobRates.distributingFunds
-            : tobRates.accumulatingFunds;
-        case "crypto":
-        case "metals":
-        case "real_estate":
-        case "savings":
-        default:
-          return null;
-      }
-    };
-    return summaries.reduce((total, inv) => {
-      const params = rateForInvestment(inv as InvestmentSummary);
-      if (!params) return total;
-      const invTob = inv.transactions.reduce((sum: number, txn: TxnLite) => {
-        if (txn.type !== "buy" || yearOf(txn.date) !== txYear) return sum;
-        const amount = convertToTarget(Math.abs(Number(txn.amount) || 0), txn.currency);
-        return sum + Math.min(amount * params.rate, params.cap);
-      }, 0);
-      return total + invTob;
-    }, 0);
-  }, [summaries, txYear, taxTable.tob, convertToTarget]);
+  // Auto-TOB: estimated stock-exchange tax on `buy` transactions, capped per leg. ETFs
+  // default to the accumulating-fund rate because retail BE ETFs are predominantly
+  // accumulating; users can override per-investment via `etfStructure`. See portfolioTax.ts.
+  const tobAutoEstimate = useMemo(
+    () => computeTobAutoEstimate(summaries as PortfolioTaxInvestment[], txYear, taxTable, convertToTarget),
+    [summaries, txYear, taxTable, convertToTarget],
+  );
 
-  // Securities account tax (TACR / "taxe annuelle sur les comptes-titres") — 0.15% on
-  // accounts averaging ≥ €1M. We don't track per-account averages, so use the aggregate
-  // current value as a conservative estimate. Real liability is per-account and may differ.
-  const tacrEstimate = useMemo(() => {
-    const aggregate = summaries.reduce(
-      (sum, inv) => sum + convertToTarget(Number(inv.currentValue) || 0, inv.currency),
-      0,
-    );
-    if (aggregate < taxTable.securitiesAccountTaxThreshold) return 0;
-    return aggregate * taxTable.securitiesAccountTaxRate;
-  }, [summaries, taxTable.securitiesAccountTaxRate, taxTable.securitiesAccountTaxThreshold, convertToTarget]);
+  // Securities account tax (TACR) — flat rate on accounts averaging ≥ threshold. We don't
+  // track per-account averages, so the aggregate current value is a conservative proxy.
+  const tacrEstimate = useMemo(
+    () => computeTacrEstimate(summaries as PortfolioTaxInvestment[], taxTable, convertToTarget),
+    [summaries, taxTable, convertToTarget],
+  );
 
   // Realized gains routed across three pools:
   //  - `reyndersInterest`: bond-fund interest portion → 30% Reynders.
@@ -374,70 +291,24 @@ export default function PortfolioTaxPage() {
   //   2. Fallback heuristic: `assetClass === 'bond'` → Reynders (treats the bond asset
   //      class as a bond-fund proxy, since retail "bond" holdings are typically funds).
   // Reynders interest portion: per-investment `reyndersInterestPortion` in [0, 1], default 1.0.
+  // Realized gains routed across the Reynders-interest pool (30%) and the CGT pool (10%,
+  // from IY 2026). Full resolution rules (overrides, interest portion, pre/post-2026 bond
+  // treatment) live in portfolioTax.ts and are covered by golden tests.
   const cgtActive = taxTable.capitalGainsTaxRate > 0;
-  const realizedGainSplit = useMemo(() => {
-    let reyndersInterest = 0;
-    let cgtGains = 0;
-    for (const inv of summaries) {
-      const gain = convertToTarget(Number(inv.realizedGain) || 0, inv.currency);
-      if (gain <= 0) continue;
-      const investment = inv as InvestmentSummary;
-      const override = investment.subjectToReynders;
-      const subjectToReynders = override === undefined ? inv.assetClass === "bond" : override;
-      if (subjectToReynders) {
-        const portionRaw = investment.reyndersInterestPortion;
-        const portion =
-          typeof portionRaw === "number" && portionRaw >= 0 && portionRaw <= 1
-            ? portionRaw
-            : 1;
-        reyndersInterest += gain * portion;
-        // Non-interest remainder of a Reynders-tagged fund (EY: "the remaining capital
-        // gains will fall under the 10% capital gains tax"). Pre-2026 (cgtActive=false)
-        // the remainder is exempt and drops out of both pools.
-        if (cgtActive) cgtGains += gain * (1 - portion);
-      } else if (inv.assetClass !== "bond") {
-        cgtGains += gain;
-      } else if (cgtActive) {
-        // Direct bonds: pre-2026 exempt under normal management; from IY 2026 onwards
-        // they are in CGT scope (EY/Curvo).
-        cgtGains += gain;
-      }
-    }
-    return { reyndersInterest, cgtGains };
-  }, [summaries, convertToTarget, cgtActive]);
+  const realizedGainSplit = useMemo(
+    () => computeRealizedGainSplit(summaries as PortfolioTaxInvestment[], convertToTarget, cgtActive),
+    [summaries, convertToTarget, cgtActive],
+  );
 
-  // Reynders tax — 30% on the interest-attributable portion of gains from bond / mixed funds.
-  // Direct bond holdings (override `subjectToReynders === false`) are EXCLUDED.
-  const reyndersEstimate = useMemo(() => {
-    if (!taxTable.reyndersTaxRate) return 0;
-    if (realizedGainSplit.reyndersInterest <= 0) return 0;
-    return realizedGainSplit.reyndersInterest * taxTable.reyndersTaxRate;
-  }, [taxTable.reyndersTaxRate, realizedGainSplit.reyndersInterest]);
+  const reyndersEstimate = useMemo(
+    () => computeReyndersEstimate(realizedGainSplit, taxTable),
+    [realizedGainSplit, taxTable],
+  );
 
-  // 10% capital-gains tax on financial assets — Arizona reform. Applies to gains realized on
-  // or after 1 January 2026 (the law was passed 3 April 2026; broker withholding starts 1
-  // June 2026, but the taxable event covers the full year). Step-up basis at 31 Dec 2025
-  // shields historical gains. Annual exemption €10,000 single / €20,000 married, with a
-  // 5-year +€1k/year carryforward — the carryforward is not modeled here; the step-up basis
-  // is approximated by `realizedGain` (a true model would require per-lot FMV at 31 Dec 2025).
-  // Includes: equity gains, Reynders non-interest remainder, direct bonds from IY 2026.
-  const cgtEstimate = useMemo(() => {
-    if (!cgtActive) return 0;
-    if (realizedGainSplit.cgtGains <= 0) return 0;
-    const exemption =
-      profile.filingStatus === "married_joint"
-        ? taxTable.capitalGainsTaxExemptionMarried
-        : taxTable.capitalGainsTaxExemptionSingle;
-    const taxable = Math.max(realizedGainSplit.cgtGains - exemption, 0);
-    return taxable * taxTable.capitalGainsTaxRate;
-  }, [
-    cgtActive,
-    taxTable.capitalGainsTaxRate,
-    taxTable.capitalGainsTaxExemptionMarried,
-    taxTable.capitalGainsTaxExemptionSingle,
-    profile.filingStatus,
-    realizedGainSplit.cgtGains,
-  ]);
+  const cgtEstimate = useMemo(
+    () => computeCgtEstimate(realizedGainSplit, taxTable, profile.filingStatus, cgtActive),
+    [realizedGainSplit, taxTable, profile.filingStatus, cgtActive],
+  );
 
   const isEmpty = summaries.length === 0;
   const hasProfile = liveProfile.profileConfigured || liveProfile.grossAnnualIncome > 0;

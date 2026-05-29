@@ -3,7 +3,7 @@ title: Rate Limiting
 type: security
 status: active
 date: 2026-04-23
-updated: 2026-04-29
+updated: 2026-05-29
 tags:
   - security
   - rate-limiting
@@ -18,6 +18,10 @@ related_code:
   - apps/node-backend/src/middleware/rateLimiter.js
   - apps/node-backend/src/routes/info.js
   - apps/node-backend/src/routes/transactions.js
+  - apps/node-backend/src/routes/reports.js
+  - apps/node-backend/src/routes/marketLookup.js
+  - apps/node-backend/src/routes/investments.js
+  - apps/node-backend/src/routes/aggregations.js
 ---
 
 # Rate Limiting
@@ -90,6 +94,50 @@ export const importRateLimiter = rateLimiter({ windowMs: 60_000, maxRequests: 20
 
 Applied to `POST /api/import/*` endpoints.
 
+#### Report Rate Limiter
+
+Restrictive for Puppeteer/Chromium PDF render, which forks a headless Chrome process — prevents fork-bomb scenarios:
+
+```javascript
+// 30 requests per minute per IP
+export const reportRateLimiter = rateLimiter({ windowMs: 60_000, maxRequests: 30, keyPrefix: 'reports' });
+```
+
+Applied to all `/api/reports/*` endpoints (financial, portfolio, tax POST and legacy GET).
+
+#### Market Rate Limiter
+
+Bounds upstream Yahoo Finance API hammering:
+
+```javascript
+// 90 requests per minute per IP
+export const marketRateLimiter = rateLimiter({ windowMs: 60_000, maxRequests: 90, keyPrefix: 'market' });
+```
+
+Applied to `/api/market/*` endpoints (search, quote, chart, news).
+
+#### Investment Rate Limiter
+
+Allows active portfolio workflows; `refresh-prices` reaches external providers:
+
+```javascript
+// 300 requests per minute per IP
+export const investmentRateLimiter = rateLimiter({ windowMs: 60_000, maxRequests: 300, keyPrefix: 'investments' });
+```
+
+Applied to `/api/investments/*` endpoints.
+
+#### Aggregation Rate Limiter
+
+Permissive for GET-heavy dashboard/statistics endpoints; Monte-Carlo forecast endpoints are CPU-bound:
+
+```javascript
+// 600 requests per minute per IP
+export const aggregationRateLimiter = rateLimiter({ windowMs: 60_000, maxRequests: 600, keyPrefix: 'aggregations' });
+```
+
+Applied to `/api/aggregations/*` endpoints.
+
 #### Attachment Rate Limiter
 
 Restrictive for file upload and download operations:
@@ -117,6 +165,15 @@ Applied only to `GET /^(?!\/api)/` fallback route in production (serving `index.
 ### Endpoint-Specific Rate Limits
 
 Certain routes have additional custom rate limits beyond the global presets:
+
+| Route group | Limit | Limiter | Reason |
+|-------------|-------|---------|--------|
+| `/api/reports/*` | 30/min | `reportRateLimiter` | Puppeteer forks headless Chrome; prevents fork-bomb |
+| `/api/market/*` | 90/min | `marketRateLimiter` | Proxies Yahoo Finance; bounds upstream hammering |
+| `/api/investments/*` | 300/min | `investmentRateLimiter` | refresh-prices hits external providers |
+| `/api/aggregations/*` | 600/min | `aggregationRateLimiter` | GET-heavy dashboard; Monte-Carlo endpoints are CPU-bound |
+
+**Per-endpoint overrides (applied in addition to route-group limiters):**
 
 | Endpoint | Limit | Reason |
 |----------|-------|--------|
@@ -171,12 +228,16 @@ For production deployments:
 - [[docs/security/input-validation]] - Input Validation
 - [[docs/api/index]] - API Index
 
-## Test Coverage Notes (2026-04-10, Updated 2026-04-29)
+## Test Coverage Notes (2026-04-10, Updated 2026-05-29)
 
 Rate-limiter middleware behavior is covered by [[apps/node-backend/tests/rateLimiter.test.js]], including:
 - allow-under-limit and `429 Too Many Requests` over-limit behavior,
 - rolling window reset behavior,
 - client IP key fallback order (`req.ip` → `remoteAddress` → `unknown`),
-- presets: `adminRateLimiter` (`500 req/min` for observability reads), `adminMutateLimiter` (`30 req/min` for destructive operations), `importRateLimiter` (`20 req/min`), `attachmentRateLimiter` (`60 req/min` for file operations), and `spaRateLimiter` (`600 req/min` for SPA fallback serving).
+- presets: `adminRateLimiter` (`500 req/min` for observability reads), `adminMutateLimiter` (`30 req/min` for destructive operations), `importRateLimiter` (`20 req/min`), `attachmentRateLimiter` (`60 req/min` for file operations), `spaRateLimiter` (`600 req/min` for SPA fallback serving), `reportRateLimiter` (`30 req/min` for Puppeteer render), `marketRateLimiter` (`90 req/min` for Yahoo Finance proxy), `investmentRateLimiter` (`300 req/min` for external price providers), and `aggregationRateLimiter` (`600 req/min` for CPU-bound dashboard/forecast endpoints).
 
 Related code: [[apps/node-backend/src/middleware/rateLimiter.js]]
+
+## Development Bypass
+
+All limiters check `settings.isDevelopment()` and are bypassed in development mode, matching the existing behavior of admin and import limiters.

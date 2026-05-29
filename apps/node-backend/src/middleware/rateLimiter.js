@@ -118,3 +118,31 @@ export const attachmentRateLimiter = rateLimiter({ windowMs: 60_000, maxRequests
  * client cannot loop on index.html. Tuned generously for normal browsing.
  */
 export const spaRateLimiter = rateLimiter({ windowMs: 60_000, maxRequests: 600, keyPrefix: 'spa' });
+
+/**
+ * Strict limiter for report generation. Each POST forks a Puppeteer/Chromium
+ * render (heavy CPU + memory); without a cap a single client on the LAN can
+ * fork-bomb the host. 30/min is far above any human's "generate PDF" cadence.
+ */
+export const reportRateLimiter = rateLimiter({ windowMs: 60_000, maxRequests: 30, keyPrefix: 'reports' });
+
+/**
+ * Limiter for market-lookup endpoints, which proxy the external Yahoo Finance
+ * API. Caps how hard a client can make us hammer the upstream (and how much of
+ * its rate budget we burn). Search is debounced client-side; 90/min is ample.
+ */
+export const marketRateLimiter = rateLimiter({ windowMs: 60_000, maxRequests: 90, keyPrefix: 'market' });
+
+/**
+ * Limiter for the investments router. Mostly DB reads, but `refresh-prices`
+ * reaches external providers — keep a generous per-client ceiling that still
+ * bounds abuse while never tripping normal portfolio browsing.
+ */
+export const investmentRateLimiter = rateLimiter({ windowMs: 60_000, maxRequests: 300, keyPrefix: 'investments' });
+
+/**
+ * Limiter for the aggregations router. GET-heavy (dashboard + statistics fan
+ * out many calls per page), but the Monte-Carlo forecast endpoints are real
+ * CPU. Set high enough for rapid navigation, low enough to bound a fork-bomb.
+ */
+export const aggregationRateLimiter = rateLimiter({ windowMs: 60_000, maxRequests: 600, keyPrefix: 'aggregations' });

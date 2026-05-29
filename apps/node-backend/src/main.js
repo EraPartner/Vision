@@ -12,7 +12,7 @@ import { dirname, resolve } from 'path';
 import { fileURLToPath } from 'url';
 import { getSettings } from './config/config.js';
 import { logger } from './config/logger.js';
-import { checkConnection, closePool } from './database/connection.js';
+import { checkConnection, closePool, getPoolStats } from './database/connection.js';
 import { runMigrations } from './database/migrate.js';
 import {
   createMaterializedViews,
@@ -55,6 +55,10 @@ import {
   importRateLimiter,
   attachmentRateLimiter,
   spaRateLimiter,
+  reportRateLimiter,
+  marketRateLimiter,
+  investmentRateLimiter,
+  aggregationRateLimiter,
 } from './middleware/rateLimiter.js';
 import { buildRouteManifest, mountRouter } from './services/routeManifest.js';
 
@@ -210,13 +214,13 @@ app.use(wrapResponse);
 
 // ==================== Health Check ====================
 
-const warmupStatus = {
-  exchangeRates: false,
-  inflation: false,
-  portfolioSnapshots: false,
-  infoCaches: false,
-  materializedViews: false,
-};
+// Tri-state warmup tracking: each task is 'pending' until it settles, then
+// 'ready' (success) or 'failed' (best-effort task errored). runWarmupTasks
+// mutates these. The wire format below keeps a backward-compatible boolean
+// `caches` map (the Electron shell gates first navigation on
+// `caches.materializedViews === true`) and adds `warmup` (tri-state) + `degraded`.
+const WARMUP_KEYS = ['exchangeRates', 'inflation', 'portfolioSnapshots', 'infoCaches', 'materializedViews'];
+const warmupStatus = Object.fromEntries(WARMUP_KEYS.map((k) => [k, 'pending']));
 
 app.get('/health', (req, res) => {
   res.json({
@@ -227,14 +231,26 @@ app.get('/health', (req, res) => {
   });
 });
 
-app.get('/health/detailed', (req, res) => {
-  const ready = Object.values(warmupStatus).every(Boolean);
+app.get('/health/detailed', async (req, res) => {
+  const states = Object.values(warmupStatus);
+  const warming = states.includes('pending');
+  const degraded = states.includes('failed');
+
+  // Real liveness probe — a SELECT 1 round-trip catches a wedged pool that a
+  // process-level "I'm listening" check would miss. checkConnection never throws.
+  const dbConnected = await checkConnection();
+
   res.json({
-    status: ready ? 'ready' : 'warming',
+    status: warming ? 'warming' : 'ready', // unchanged contract: 'ready' once warmup settles (pass or fail)
+    degraded, // a best-effort warmup task failed; app is serving but missing some warm data
     service: 'financial-transaction-manager-node',
     version: settings.api.version,
     timestamp: new Date().toISOString(),
-    caches: { ...warmupStatus },
+    database: { connected: dbConnected, pool: getPoolStats() },
+    warmup: { ...warmupStatus }, // tri-state: pending | ready | failed
+    // Backward-compatible boolean map (true once a task settles, pass or fail) —
+    // consumed by the Electron readiness gate. Prefer `warmup` for new code.
+    caches: Object.fromEntries(WARMUP_KEYS.map((k) => [k, warmupStatus[k] !== 'pending'])),
   });
 });
 
@@ -259,17 +275,17 @@ mountRouter(app, '/api/recipients', recipientsRouter);
 mountRouter(app, '/api/recipients', recipientBankAccountsRouter);
 mountRouter(app, '/api/planned-transactions', plannedTransactionsRouter);
 mountRouter(app, '/api/info', infoRouter);
-mountRouter(app, '/api/aggregations', aggregationsRouter);
+mountRouter(app, '/api/aggregations', aggregationRateLimiter, aggregationsRouter);
 mountRouter(app, '/api/admin', adminRateLimiter, adminAuthMiddleware, adminRouter);
 mountRouter(app, '/api/import', importRateLimiter, importRouter);
-mountRouter(app, '/api/investments', investmentsRouter);
+mountRouter(app, '/api/investments', investmentRateLimiter, investmentsRouter);
 mountRouter(app, '/api/settings', settingsRouter);
-mountRouter(app, '/api/market', marketLookupRouter);
+mountRouter(app, '/api/market', marketRateLimiter, marketLookupRouter);
 mountRouter(app, '/api/watchlist', watchlistRouter);
 mountRouter(app, '/api/splits', splitsRouter);
 mountRouter(app, '/api/saved-charts', savedChartsRouter);
 mountRouter(app, '/api/attachments', attachmentRateLimiter, attachmentsRouter);
-mountRouter(app, '/api/reports', reportsRouter);
+mountRouter(app, '/api/reports', reportRateLimiter, reportsRouter);
 mountRouter(app, '/api/tags', tagsRouter);
 
 // AI chat: dedicated per-minute limit on /chat (Ollama calls are expensive);
@@ -487,6 +503,33 @@ async function shutdown(signal) {
 
 process.on('SIGINT', () => shutdown('SIGINT'));
 process.on('SIGTERM', () => shutdown('SIGTERM'));
+
+// Last-resort handlers. Node terminates the process on an unhandled rejection
+// or uncaught exception anyway — but with no structured log line, so under a
+// supervisor (Docker `restart: unless-stopped`, Electron) the only visible
+// symptom is a container that silently bounced. Log with stack + requestId
+// (when the error carries one) so the crash leaves a trace, then exit non-zero
+// to hand control back to the supervisor for a clean restart. Many of the
+// fire-and-forget chains here (warmup, deferred refresh, SSE) are exactly where
+// a stray rejection would otherwise escape unseen.
+function logFatal(kind, err) {
+  const error = err instanceof Error ? err : new Error(String(err));
+  logger.error(`${kind} — exiting`, {
+    error: error.message,
+    stack: error.stack,
+    requestId: error.requestId,
+  });
+}
+
+process.on('unhandledRejection', (reason) => {
+  logFatal('Unhandled promise rejection', reason);
+  process.exit(1);
+});
+
+process.on('uncaughtException', (err) => {
+  logFatal('Uncaught exception', err);
+  process.exit(1);
+});
 
 start().catch((err) => {
   logger.error('Failed to start application', { error: err.message });

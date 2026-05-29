@@ -375,7 +375,7 @@ Statistics page header includes "Export PDF" button:
 
 - **Generates**: A4 PDF with summary cards, monthly table, top 10 categories
 - **Endpoint**: `GET /api/reports/financial?currency=EUR`
-- **Implementation**: Server-side via `pdfkit@0.18.0` with streaming response
+- **Implementation**: Server-side via Puppeteer (headless Chrome); `pdfkit` was removed (see [[docs/adr/038-dependency-slim-down-supply-chain-risk|ADR-038]])
 - **Download**: Browser automatically downloads as `financial-report-{YYYY-MM-DD}.pdf`
 
 See [[docs/features/pdf-report-export|PDF Report Export Feature]].

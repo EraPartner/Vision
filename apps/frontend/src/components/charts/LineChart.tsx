@@ -2,6 +2,7 @@
  * LineChart — visx + framer-motion multi-series line chart.
  */
 import { curveMonotoneX } from "@visx/curve";
+import { summarizeSeriesChart } from "./chartAria";
 import { Group } from "@visx/group";
 import { ParentSize } from "@visx/responsive";
 import { scaleLinear, scaleTime } from "@visx/scale";
@@ -176,7 +177,7 @@ function Inner<Datum>({
 
     return (
         <div style={{ position: "relative", width, height }}>
-            <svg width={width} height={height} role="img" aria-label={ariaLabel ?? "Line chart"}>
+            <svg width={width} height={height} role="img" aria-label={ariaLabel ?? summarizeSeriesChart("Line chart", data.length, series.map((s) => s.label))}>
                 <Group left={margin.left} top={margin.top}>
                     {yScale.ticks(numYTicks).map((tick) => (
                         <line

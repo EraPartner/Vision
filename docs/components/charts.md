@@ -3,11 +3,14 @@ title: Chart Primitives
 type: component
 status: active
 date: 2026-04-24
-updated: 2026-04-28
-tags: [components, charts, visx, d3, visualization, phase-9, phase-h]
-description: Low-level chart primitives built on visx + d3, replacing Recharts with design-token-aware styling
+updated: 2026-05-29
+tags: [components, charts, visx, d3, visualization, phase-9, phase-h, accessibility, aria-label, screen-reader]
+description: Low-level chart primitives built on visx + d3, replacing Recharts with design-token-aware styling. 2026-05-29: chartAria.ts helper generates meaningful default aria-label summaries for all 7 chart types; screen readers now announce data content instead of bare chart type.
 aliases: [charts, chart-components, visx-charts, charting, visualization]
-related_code: ["apps/frontend/src/components/charts"]
+related_code:
+  - apps/frontend/src/components/charts
+  - apps/frontend/src/components/charts/chartAria.ts
+  - apps/frontend/src/components/charts/__tests__/chartAria.test.ts
 ---
 
 # Chart Primitives
@@ -272,6 +275,27 @@ All chart types perform optimally; no optimization required.
 
 ## Accessibility
 
+### Generated `aria-label` Summaries (2026-05-29)
+
+**Location:** `apps/frontend/src/components/charts/chartAria.ts`
+
+All 7 chart components (`BarChart`, `LineChart`, `AreaChart`, `StackedBarChart`, `PieChart`, `DonutChart`, `Sparkline`) now generate a meaningful one-line `aria-label` by default. Previously the `ariaLabel` prop existed but no caller populated it, so screen readers announced only "Bar chart" or "Pie chart" with no data context.
+
+Three generator functions handle the main chart shapes:
+
+| Function | Output example |
+|----------|---------------|
+| `summarizeSeriesChart(type, data, seriesKeys)` | `"Bar chart with 12 months, series: Income, Expenses"` |
+| `summarizeProportionChart(type, data, labelKey)` | `"Pie chart with 5 categories"` |
+| `summarizeSparkline(data)` | `"Sparkline with 7 data points"` |
+
+The generated label is used as the default value for `role="img"` on the outermost SVG element. The `ariaLabel` prop on each chart component still overrides the default when callers supply a custom description.
+
+**Tests:** `apps/frontend/src/components/charts/__tests__/chartAria.test.ts` — 6 unit tests covering all three generators (empty data, single series, multiple series, label-key variation).
+
+> [!tip] When to supply a custom `ariaLabel`
+> The generated summaries describe shape and axis dimensionality. For charts showing specific business KPIs (e.g., "Year-to-date tax spend by asset class"), supply a custom `ariaLabel` that describes the *data story*, not just the chart structure.
+
 ### Color
 
 - Use semantic colors (emerald = positive, red = negative, gold = accent)
@@ -282,7 +306,7 @@ All chart types perform optimally; no optimization required.
 
 - All charts include `ChartTooltip` on hover for numeric values
 - Legends are keyboard-accessible (tab to focus, arrow keys to navigate)
-- Aria labels on SVG elements describe chart purpose
+- SVG elements carry a generated `aria-label` describing chart type and data dimensions (see above)
 
 ### Keyboard Navigation
 

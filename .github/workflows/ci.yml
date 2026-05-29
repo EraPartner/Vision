@@ -234,6 +234,9 @@ jobs:
           fi
           echo "OpenAPI types in sync."
 
+      - name: Verify endpoint matrix count matches openapi.yaml
+        run: bun run check-endpoint-matrix
+
   # ─────────────────────────────────────────────────────────────────────────────
   # Build — verify the frontend production bundle compiles
   # ─────────────────────────────────────────────────────────────────────────────

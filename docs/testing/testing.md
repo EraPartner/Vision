@@ -1270,9 +1270,10 @@ Validation run (passed): `bun vitest run tests/categoryRepository.test.js tests/
   - multer middleware error handling
   - generic bank delegation via orchestrator
 
-**Legacy tests (Phase C, deprecated):**
-- `rawTransactionImportService.test.js` — Superseded by route tests
-- `streamingImportService.test.js` — Superseded by route tests
+**Legacy tests (Phase C, removed 2026-05-29):**
+- `rawTransactionImportService.test.js` — Deleted (file and test removed together)
+- `streamingImportService.test.js` — Deleted (file and test removed together)
+- `iban.test.js` — Deleted (orphan; `iban.js` removed)
 - `importService.test.js` — Superseded by route tests
 
 Related code: [[apps/node-backend/src/services/bankAdapters.js]], [[apps/node-backend/src/services/importPipeline/index.js]]

@@ -3,10 +3,12 @@ title: Test Inventory
 type: testing
 status: active
 date: 2026-04-30
-last_modified: 2026-05-08
-updated: 2026-05-08
-last-updated: 2026-05-08
-last_updated_timestamp: 2026-05-08T00:00:00Z
+last_modified: 2026-05-29
+updated: 2026-05-29
+last-updated: 2026-05-29
+last_updated_timestamp: 2026-05-29T00:00:00Z
+added_portfolio_tax_pure_module_tests: 2026-05-29
+added_chart_aria_tests: 2026-05-29
 added_portfolio_math_tests: 2026-05-05
 added_import_pipeline_tests: 2026-05-05
 added_dashboard_error_state_tests: 2026-05-02
@@ -630,6 +632,26 @@ Six new frontend dialog and wizard component integration test files added. Tests
 
 **Related documentation:** [[docs/testing/testing|Testing Conventions]], [[docs/testing/frontend-component-integration|Component-Integration Test Guide]], [[docs/adr/026-unified-api-response-envelope|ADR-026]]
 
+### Portfolio Tax Pure-Module Tests (2026-05-29)
+
+New golden-fixture unit tests for the extracted `portfolioTax.ts` pure estimator module:
+
+| File | Area | Tests | Coverage |
+|------|------|-------|----------|
+| `apps/frontend/src/lib/belgianTax/__tests__/portfolioTax.test.ts` | Portfolio-tax estimators | 12 | Golden-output cases locking all ten exported functions (`recordedTaxesForYear`, `recordedFeesForYear`, `enrichInvestmentCosts`, `computeTobRecorded`, `computeTobAutoEstimate`, `computeTacrEstimate`, `computeRealizedGainSplit`, `computeReyndersEstimate`, `computeCgtEstimate`, `computeDividendWht`) to 8 decimal places. Verifies Decimal-accumulation correctness across multiple transactions in different currencies. `ConvertFn` injected as a simple identity stub. |
+
+**Related documentation:** [[docs/features/belgian-tax#portfoliotaxts--pure-portfolio-tax-estimators-2026-05-29|Belgian Tax: portfolioTax.ts]], [[docs/features/portfolio-tax#pure-estimator-module-2026-05-29|Portfolio Tax: Pure Estimator Module]]
+
+### Chart Accessibility Helper Tests (2026-05-29)
+
+New unit tests for the `chartAria.ts` accessibility helper module:
+
+| File | Area | Tests | Coverage |
+|------|------|-------|----------|
+| `apps/frontend/src/components/charts/__tests__/chartAria.test.ts` | Chart aria-label generation | 6 | `summarizeSeriesChart` (empty data, single series, multiple series), `summarizeProportionChart` (empty + populated), `summarizeSparkline` (point count). Asserts that generated labels include chart type, dimension count, and series names. |
+
+**Related documentation:** [[docs/components/charts#generated-aria-label-summaries-2026-05-29|Chart Primitives: Generated aria-label Summaries]]
+
 ### Test Suite Summary (2026-05-01, Phase F1 backend-drift detection 2026-05-02)
 
 | Layer | Files | Tests | Status |
@@ -654,9 +676,11 @@ Six new frontend dialog and wizard component integration test files added. Tests
 | Phase F5 (Property + chaos) | 3 | +14 vitest | All passing (NEW 2026-05-02): currency.property.test.ts (8 fast-check parseLocaleNumber properties), envelope.property.test.ts (4 unwrapEnvelope properties), chaos-resilience.test.tsx (2 random-fault-injection page boots via chaos() MSW wrapper in src/test/msw/chaos.ts) |
 | Phase F6 (Mutation testing — Stryker) | config + harness | runs on `bun run test:mutation` | NEW 2026-05-02: stryker.config.json scoped to currency.ts + lib/api/client.ts, vitest runner, TS checker, perTest coverage, html report; opt-in (not in CI yet — first baseline run before gating) |
 | Phase F7 (Coverage matrix gap-fill) | 3 | +5 | All passing (NEW 2026-05-02): TransactionsPage refetch revision + offset/limit pagination contract + loading skeleton; RecipientsPage limit pagination + loading; StatisticsPage multi-filter combo (monthly + category-pivot + recipient-by-year fan-out across tab switches) |
-| **Frontend Total** | **81** | **1238** | **All passing (Phase F1–F7 complete: backend drift, mutation invalidation, dialog completeness, Playwright parity, property/chaos, mutation harness, coverage matrix gap-fill)** |
+| Portfolio tax pure-module tests (2026-05-29) | 1 | 12 | All passing (NEW: portfolioTax.ts golden-output cases, 8 dp precision, Decimal accumulation) |
+| Chart aria-label helper tests (2026-05-29) | 1 | 6 | All passing (NEW: summarizeSeriesChart, summarizeProportionChart, summarizeSparkline) |
+| **Frontend Total** | **83** | **1256** | **All passing (Phase F1–F7 complete + 2026-05-29: portfolio-tax pure-module +12, chart-aria +6)** |
 | **Backend** | 56+ | 882+ | All passing (NEW 2026-05-05: portfolioMath.test.js 21 tests, importPipeline.test.js 11 tests) |
-| **Grand Total** | **137+** | **2120** | **All passing (1238 frontend vitest + 882 backend; +24 live-API + ~41 Playwright in CI; mutation runner opt-in)** |
+| **Grand Total** | **139+** | **2138** | **All passing (1256 frontend vitest + 882 backend; +24 live-API + ~41 Playwright in CI; mutation runner opt-in)** |
 
 ### Phase F1 — Backend Drift Detection Sweep (2026-05-02)
 
@@ -912,7 +936,7 @@ The Transaction Tags feature test suite is now **complete and passing**. All tes
 | **Repository layer** | All 13 repositories | SQL query correctness, edge cases |
 | **Route handlers** | All 14 route files | Request validation, error responses |
 | ~~**Portfolio performance**~~ | ~~`portfolioPerformanceSnapshotService.js`~~ | ✓ **COVERED** (2026-05-18) — parity regression tests: savings accrual, real-estate appreciation, bond interest-payment clock reset, latest-day unit price |
-| **IBAN validation** | `iban.js` | Mod-97 checksum algorithm |
+| ~~**IBAN validation**~~ | ~~`iban.js`~~ | Deleted 2026-05-29 (`iban.js` and `iban.test.js` removed) |
 | **Recurrence service** | `recurrenceService.js` | Date calculation for patterns |
 
 ### Frontend Missing Tests
@@ -1027,9 +1051,10 @@ Related code: [[apps/node-backend/src/repositories/categoryRepository.js]], [[ap
 | [[apps/node-backend/tests/visionAdapter.test.js]] | Bank adapters | Vision adapter parsing/normalization paths |
 | [[apps/node-backend/tests/routes/import.test.js]] | Import routes (Phase C) | Orchestrator integration, SSE backpressure, recipients/categories bulk import, multer error handling |
 
-Legacy tests (deprecated, Phase C):
-- `rawTransactionImportService.test.js` — Superseded by route-level tests mocking unified orchestrator
-- `streamingImportService.test.js` — Superseded by route-level tests mocking unified orchestrator
+Removed tests (2026-05-29):
+- `rawTransactionImportService.test.js` — Deleted (file and implementation removed)
+- `streamingImportService.test.js` — Deleted (file and implementation removed)
+- `iban.test.js` — Deleted (orphan; `iban.js` removed)
 - `importService.test.js` — Superseded by route-level tests mocking unified orchestrator
 
 Related code: [[apps/node-backend/src/services/bankAdapters.js]], [[apps/node-backend/src/services/importPipeline/index.js]], [[docs/testing/testing|Testing Documentation]]

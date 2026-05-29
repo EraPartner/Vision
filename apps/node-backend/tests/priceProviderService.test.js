@@ -275,6 +275,26 @@ describe('Price Provider Service', () => {
       expect(result[1]).toEqual({ price: 173.22, source: 'close' });
     });
 
+    it('should batch multiple Yahoo symbols into a single quote() call', async () => {
+      // yahoo-finance2 `.quote([symbols])` returns one Quote per symbol; the
+      // provider must issue ONE request for the whole portfolio, not one each.
+      mockYahooQuote.mockResolvedValue([
+        { symbol: 'AAPL', regularMarketPrice: 175.5, regularMarketPreviousClose: 174.2, currency: 'USD' },
+        { symbol: 'MSFT', regularMarketPrice: 420.1, regularMarketPreviousClose: 418.9, currency: 'USD' },
+      ]);
+
+      const result = await fetchLivePricesDetailed([
+        { id: 1, price_provider: 'yahoo', price_provider_id: 'AAPL', currency: 'USD' },
+        { id: 2, price_provider: 'yahoo', price_provider_id: 'MSFT', currency: 'USD' },
+      ]);
+
+      expect(result[1]).toEqual({ price: 175.5, source: 'live' });
+      expect(result[2]).toEqual({ price: 420.1, source: 'live' });
+      // The whole point of the change: exactly one upstream request.
+      expect(mockYahooQuote).toHaveBeenCalledTimes(1);
+      expect(mockYahooChart).not.toHaveBeenCalled();
+    });
+
     it('should use yahoo-finance2 quote path for Yahoo provider', async () => {
       mockYahooQuote.mockResolvedValue({
         symbol: 'IONQ',

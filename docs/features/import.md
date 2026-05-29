@@ -194,15 +194,14 @@ Each phase is idempotent at its boundary. On error, the batch is marked `failed`
 - Ensures `/api/aggregations/*` endpoints see new data immediately in the response
 - Previously fire-and-forget; now blocking to guarantee consistency
 
-### Legacy Services (Deprecated)
+### Legacy Services (Removed)
 
-> [!warning] Deprecated
-> The following services are no longer used by routes as of Phase C:
-> - `importService.js`
-> - `streamingImportService.js`
-> - `rawTransactionImportService.js`
-> 
-> Routes now call `runImportPipeline()` directly. Legacy services remain in codebase for backwards compatibility but are not part of the active code path.
+> [!warning] Deleted (2026-05-29)
+> The following services were removed from the codebase (zero importers after Phase C consolidation):
+> - `streamingImportService.js` — deleted
+> - `rawTransactionImportService.js` — deleted
+>
+> `importService.js` was superseded by routes calling `runImportPipeline()` directly.
 
 ### Data Import Service (Recipients & Categories)
 **File:** [[apps/node-backend/src/services/dataImportService.js]]

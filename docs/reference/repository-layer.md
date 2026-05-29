@@ -3,7 +3,7 @@ title: Repository Layer Reference
 type: reference
 status: active
 date: 2026-04-23
-updated: 2026-04-28
+updated: 2026-05-29
 tags: [backend, repositories, reference, data-access, postgresql, phase-0, phase-1, phase-3, phase-3-1, phase-9, phase-q, decimal, money, recipient-groups]
 aliases: [repositories, repository layer, data access, DAL, database access]
 description: Complete reference for all 21 backend repository domains (plus infoRepository's 7 sub-modules and portfolioTransactionRepository's 3 split files). Phase 3.1: infoRepository split into 7 domain sub-modules with batch FX optimization. Phase Q: transactionRepository supports recipientGroupId filtering via filterBuilder.
@@ -189,7 +189,7 @@ See [[docs/adr/021-decimal-arithmetic-for-monetary-values|ADR-021]] and [[docs/r
 
 ### Dependencies
 - `connection.js`
-- `iban.js`
+- ~~`iban.js`~~ (deleted 2026-05-29; IBAN validation now handled inline)
 
 ---
 

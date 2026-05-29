@@ -3,6 +3,7 @@ title: Market Lookup API
 type: endpoint
 status: active
 date: 2026-04-10
+updated: 2026-05-29
 tags:
   - api
   - market
@@ -206,7 +207,7 @@ Code links: [[apps/node-backend/src/main.js]], [[apps/node-backend/src/routes/ma
 
 ## Rate Limiting
 
-Market lookup endpoints are subject to [[docs/security/rate-limiting]] due to external API dependencies.
+All `/api/market/*` endpoints are subject to a 90 req/min route-group limiter (`marketRateLimiter`; bypassed in development). This bounds upstream Yahoo Finance API hammering. See [[docs/security/rate-limiting|Rate Limiting]] for details.
 
 ## Data Source
 

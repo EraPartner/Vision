@@ -2,6 +2,7 @@
  * DonutChart — hollow pie with optional center content.
  */
 import { Group } from "@visx/group";
+import { summarizeProportionChart } from "./chartAria";
 import { Pie } from "@visx/shape";
 import { ParentSize } from "@visx/responsive";
 import { motion, useReducedMotion } from "framer-motion";
@@ -56,7 +57,7 @@ function Inner({
 
     return (
         <div style={{ position: "relative", width, height }}>
-            <svg width={width} height={height} role="img" aria-label={ariaLabel ?? "Donut chart"}>
+            <svg width={width} height={height} role="img" aria-label={ariaLabel ?? summarizeProportionChart("Donut chart", data.map((d) => d.name))}>
                 <Group top={cy} left={cx}>
                     <Pie
                         data={data as PieDatum[]}

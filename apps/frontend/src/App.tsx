@@ -1,7 +1,7 @@
 import { Toaster as Sonner } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { BrowserRouter, Route, Routes } from "react-router-dom";
+import { BrowserRouter, Route, Routes, useLocation } from "react-router-dom";
 import { AppLayout } from "@/components/layout/AppLayout";
 import { SettingsProvider } from "@/contexts/SettingsContext";
 import { SettingsPreloadProvider } from "@/contexts/SettingsPreloadContext";
@@ -11,7 +11,7 @@ import { ThemeProvider } from "@/contexts/ThemeContext";
 import { LanguageProvider, type Language } from "@/contexts/LanguageContext";
 import { configureCurrencyFormatDefaults, numberFormatToLocale } from "@/utils/currency";
 
-import { lazy, Suspense, useEffect, type ComponentType } from "react";
+import { lazy, Suspense, useEffect, type ComponentType, type ReactNode } from "react";
 import { Loader2 } from "lucide-react";
 import { ErrorBoundary } from "@/components/shared/ErrorBoundary";
 import { ScrollToTop } from "@/components/shared/ScrollToTop";
@@ -106,6 +106,16 @@ function LanguageBridge({ children }: { children: React.ReactNode }) {
     );
 }
 
+// Per-route error boundary, keyed by pathname. Keying remounts the boundary on
+// every navigation, so (a) a crash on one page is automatically cleared when the
+// user navigates elsewhere, and (b) being nested inside AppLayout, a page crash
+// replaces only the content area — the nav shell stays interactive. The outer
+// app-level <ErrorBoundary> remains the last-resort catch for the shell itself.
+function RoutedErrorBoundary({ children }: { children: ReactNode }) {
+    const { pathname } = useLocation();
+    return <ErrorBoundary key={pathname}>{children}</ErrorBoundary>;
+}
+
 const App = () => {
     return (
         <QueryClientProvider client={queryClient}>
@@ -126,6 +136,7 @@ const App = () => {
                                         <BrowserRouter>
                                             <ScrollToTop />
                                             <AppLayout>
+                                                <RoutedErrorBoundary>
                                                 <Suspense fallback={<PageLoader />}>
                                                     <Routes>
                                                     {/* Budgeting */}
@@ -161,6 +172,7 @@ const App = () => {
                                                     <Route path="*" element={<NotFound />} />
                                                     </Routes>
                                                 </Suspense>
+                                                </RoutedErrorBoundary>
                                             </AppLayout>
                                         </BrowserRouter>
                                     </ErrorBoundary>

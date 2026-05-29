@@ -3,7 +3,7 @@ title: Service Layer Reference
 type: reference
 status: active
 date: 2026-04-24
-last_modified: 2026-05-05
+last_modified: 2026-05-29
 tags: [backend, services, reference, business-logic, phase-1, phase-c, import-pipeline, graceful-shutdown, bug-hunt-2026-05-05, error-handling, robustness]
 description: Complete reference for the 24 top-level backend service modules (and 7 sub-directories — calculations/, currency/, prices/, portfolio/, reports/, aiChat/, importPipeline/). Updated for Phase C import pipeline consolidation, snapshot-backed net worth computation, quoteBackfillService refactor, AI Chat service, aggregationRefresh cancellation support (2026-04-29), and error handling improvements for belgianInflationService (2026-05-05 bug hunt).
 aliases: [services, service layer, business logic, backend services]
@@ -214,24 +214,12 @@ Repository Layer (SQL queries)
 
 ---
 
-## 6. iban.js
+## 6. iban.js (Removed — 2026-05-29)
 
-**File:** [[apps/node-backend/src/services/iban.js]]  
-**Purpose:** Validates and normalizes IBAN (International Bank Account Number) strings.
+> [!warning] Deleted
+> **Status:** File deleted (zero importers; no active code path depended on it after the import pipeline consolidation). IBAN validation for recipient bank accounts is now handled inline in the relevant route/repository. The orphan test `tests/iban.test.js` was also deleted.
 
-### Exported Functions
-
-| Function | Signature | Returns |
-|----------|-----------|---------|
-| `normalizeIban` | `(iban: string) => string` | Uppercased, spaceless IBAN |
-| `isValidIban` | `(iban: string) => boolean` | Mod-97 checksum validation result |
-
-### Key Algorithms
-
-- **Mod-97 Checksum:** Rearranges IBAN (first 4 chars to end), converts letters to numbers (A=10..Z=35), computes mod 97 in 9-digit chunks to avoid BigInt overflow
-
-### Dependencies
-- None (pure utility)
+**Previous Purpose:** Validated and normalized IBAN strings (`normalizeIban`, `isValidIban`) using a Mod-97 checksum algorithm.
 
 ---
 
@@ -285,15 +273,17 @@ createBatch → stageBatch → validateBatch → matchBatch → commitBatch → 
 - `materializedViewService.js` (post-pipeline refresh)
 - `importBatchRepository.js`, `connection.js`, `logger.js`
 
-### Related Services (Deprecated, Phase C)
+### Related Services (Removed)
 
-> [!warning] Deprecated
-> The following services are no longer used by active code paths but remain in codebase for backwards compatibility:
-> - `importService.js` — legacy sequential import
-> - `streamingImportService.js` — legacy streaming with callbacks
-> - `rawTransactionImportService.js` — legacy raw data orchestrator
-> 
-> All functionality consolidated into `importPipeline`.
+> [!warning] Deleted (2026-05-29)
+> The following legacy service files have been removed from the codebase (zero importers; the live path is `importPipeline/`):
+> - `streamingImportService.js` — deleted
+> - `rawTransactionImportService.js` — deleted
+> - `iban.js` — deleted (IBAN logic was only used by the recipient-bank-account flow, which now handles validation inline)
+>
+> Their orphan tests (`tests/streamingImportService.test.js`, `tests/iban.test.js`) were also deleted.
+>
+> All import functionality consolidated into `importPipeline`.
 
 ---
 
@@ -503,14 +493,11 @@ Uses **MAD-based statistical detection** (Median Absolute Deviation):
 
 ---
 
-## 13. rawTransactionImportService.js (Deprecated — Phase C)
+## 13. rawTransactionImportService.js (Removed — 2026-05-29)
 
-> [!warning] Deprecated Service
-> **Status:** Superseded by `importPipeline` (Phase C). Functionality consolidated into `importPipeline/commit.js`.
-> 
-> Remains in codebase for backwards compatibility; not used by active routes.
+> [!warning] Deleted
+> **Status:** File deleted. Superseded by `importPipeline` (Phase C). Functionality consolidated into `importPipeline/commit.js`.
 
-**File:** [[apps/node-backend/src/services/rawTransactionImportService.js]]  
 **Previous Purpose:** Imported CSV transactions while preserving raw data in bank-specific tables for audit trail.
 
 **Current Implementation:** `importPipeline` handles raw data preservation in the **commit phase**. The pipeline's `commitBatch()` function inserts canonical transactions and raw references in a single coordinated operation with proper error handling and batch tracking.
@@ -574,14 +561,11 @@ See [[docs/features/import#import-pipeline-orchestrator|Import Feature — Pipel
 
 ---
 
-## 16. streamingImportService.js (Deprecated — Phase C)
+## 16. streamingImportService.js (Removed — 2026-05-29)
 
-> [!warning] Deprecated Service
-> **Status:** Superseded by `importPipeline` (Phase C). Functionality consolidated into unified import orchestrator.
-> 
-> Remains in codebase for backwards compatibility; not used by active routes.
+> [!warning] Deleted
+> **Status:** File deleted. Superseded by `importPipeline` (Phase C). Functionality consolidated into unified import orchestrator.
 
-**File:** [[apps/node-backend/src/services/streamingImportService.js]]  
 **Previous Purpose:** Imported CSV transactions with real-time progress reporting via callbacks.
 
 **Current Implementation:** `importPipeline` handles streaming imports via the **streaming endpoint** (`POST /api/import/csv/stream`). The pipeline's `runImportPipeline()` function accepts an `onProgress` callback (async) that propagates backpressure from `createSseWriter()` into the batch processing loop.
@@ -725,7 +709,7 @@ Maps Ollama errors to `AiChatServiceError` with HTTP status:
 | **Pure Computation** | `calculations/loanSchedule`, `calculations/recurrence`, `calculations/forecast/*`, `iban`, `textNormalization`, `filterBuilder` |
 | **External Data** | `belgianInflationService`, `currency/currencyConversionService`, `priceProviderService` |
 | **Quote Management** | `quoteBackfillService` |
-| **Import Pipeline** | `importPipeline` (unified orchestrator, phases stage/validate/match/commit), `bankAdapters`, `dataImportService` (reference data); deprecated: `streamingImportService`, `rawTransactionImportService` |
+| **Import Pipeline** | `importPipeline` (unified orchestrator, phases stage/validate/match/commit), `bankAdapters`, `dataImportService` (reference data); `streamingImportService` and `rawTransactionImportService` deleted (2026-05-29) |
 | **Data Quality** | `deduplication`, `recurringDetectionService`, `recipientClusterService`, `recipientPatternService` |
 | **Identity & Aggregations** | `recipientMergeService`, `aggregationRefresh`, `materializedViewService` |
 | **Performance** | `portfolioPerformanceSnapshotService` |

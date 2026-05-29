@@ -2,6 +2,7 @@
  * PieChart — visx + framer-motion pie chart with optional labels.
  */
 import { Group } from "@visx/group";
+import { summarizeProportionChart } from "./chartAria";
 import { Pie } from "@visx/shape";
 import { ParentSize } from "@visx/responsive";
 import { motion, useReducedMotion } from "framer-motion";
@@ -62,7 +63,7 @@ function Inner({
 
     return (
         <div style={{ position: "relative", width, height }}>
-            <svg width={width} height={height} role="img" aria-label={ariaLabel ?? "Pie chart"}>
+            <svg width={width} height={height} role="img" aria-label={ariaLabel ?? summarizeProportionChart("Pie chart", data.map((d) => d.name))}>
                 <Group top={centerY} left={centerX}>
                     <Pie
                         data={data as PieDatum[]}

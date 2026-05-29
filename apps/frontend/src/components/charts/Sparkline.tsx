@@ -2,6 +2,7 @@
  * Sparkline — tiny trend line with draw-in motion.
  */
 import { curveMonotoneX } from "@visx/curve";
+import { summarizeSparkline } from "./chartAria";
 import { ParentSize } from "@visx/responsive";
 import { scaleLinear } from "@visx/scale";
 import { Area, LinePath } from "@visx/shape";
@@ -60,7 +61,7 @@ function Inner({
     }, [data, height]);
 
     return (
-        <svg width={width} height={height} role="img" aria-label={ariaLabel ?? "Sparkline"}>
+        <svg width={width} height={height} role="img" aria-label={ariaLabel ?? summarizeSparkline(data)}>
             {fillArea ? (
                 <motion.g
                     initial={reduce ? { opacity: 1 } : { opacity: 0 }}

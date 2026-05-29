@@ -339,17 +339,22 @@ export const PROVIDERS = {
   async yahoo(providerIds) {
     const prices = {};
     const resolved = new Set();
-    await Promise.all(providerIds.map(async (providerId) => {
-      const symbol = (providerId || '').toUpperCase();
-      if (!symbol) return;
 
-      try {
-        // yahoo-finance2 overloads `.quote(string)` to return Quote, but its
-        // typings collapse to QuoteResponseArray; cast to a structural shape
-        // to access fields without losing runtime safety.
-        const quote = /** @type {{ regularMarketPrice?: number, regularMarketPreviousClose?: number, currency?: string }} */ (
-          await yahooFinance.quote(symbol)
-        );
+    const symbols = [...new Set(providerIds.map((s) => (s || '').toUpperCase()).filter(Boolean))];
+    if (symbols.length === 0) return prices;
+
+    try {
+      // Single batched request. yahoo-finance2 `.quote()` accepts an array and
+      // returns one Quote per resolvable symbol — collapsing what used to be N
+      // separate `quote()` round-trips into one call (a 30-holding portfolio
+      // went from ~30 outbound requests to 1). Normalise to an array so a
+      // single-symbol response (object) is handled the same way.
+      const raw = /** @type {any} */ (await yahooFinance.quote(symbols));
+      const quotes = Array.isArray(raw) ? raw : (raw ? [raw] : []);
+
+      for (const quote of quotes) {
+        const symbol = (quote?.symbol || '').toUpperCase();
+        if (!symbol) continue;
         const livePrice = toNumber(quote?.regularMarketPrice);
         const previousClose = toNumber(quote?.regularMarketPreviousClose);
 
@@ -360,15 +365,14 @@ export const PROVIDERS = {
           resolved.add(symbol);
           prices[symbol] = { price: previousClose, currency: quote?.currency || 'USD', source: 'close' };
         }
-      } catch (err) {
-        logger.warn(`Yahoo quote failed for ${symbol}`, { error: err.message });
       }
-    }));
+    } catch (err) {
+      // Whole-batch failure (network/validation): leave every symbol unresolved
+      // so the per-symbol chart fallback below recovers each independently.
+      logger.warn('Yahoo batch quote failed; falling back per-symbol', { error: err.message });
+    }
 
-    const unresolved = providerIds
-      .map(s => (s || '').toUpperCase())
-      .filter(Boolean)
-      .filter(symbol => !resolved.has(symbol));
+    const unresolved = symbols.filter((symbol) => !resolved.has(symbol));
 
     if (unresolved.length) {
       await Promise.all(unresolved.map(async (symbol) => {

@@ -3,7 +3,7 @@ title: Input Validation
 type: security
 status: active
 date: 2026-04-26
-updated: 2026-04-29
+updated: 2026-05-29
 tags: [security, validation, sanitization, csv, formula-injection, cwe-1236, path-injection, redos]
 description: Input validation and sanitization mechanisms to prevent SQL injection, XSS, formula injection in CSV exports, path injection, ReDoS, and malformed data
 aliases: [input validation, sanitization, sql injection, xss, validation middleware, csv formula injection, cwe-1236]
@@ -275,6 +275,24 @@ const csv = cols.map(escapeCsvValue).join(',');
 
 - [[apps/node-backend/src/routes/transactions.js]] — `GET /api/transactions/export/csv` ✓
 - [[apps/node-backend/src/routes/splits.js]] — `GET /api/splits/owed/:id/export/csv` ✓
+
+---
+
+## CSS Injection Prevention (2026-05-29)
+
+Report theme tokens are interpolated into a Puppeteer-rendered `:root {}` CSS block. Without constraints, a crafted value could inject arbitrary CSS or trigger a `url()`-based SSRF.
+
+**Protection:** Each theme token is validated against `HSL_COMPONENT_RE` at both the Zod route boundary and the `themeCss.js` sink (defense-in-depth). Invalid tokens fall back to the mode default; the raw value is never interpolated.
+
+```
+HSL_COMPONENT_RE = /^\d{1,3}(?:\.\d+)?\s+\d{1,3}(?:\.\d+)?%\s+\d{1,3}(?:\.\d+)?%$/
+```
+
+Valid example: `"250 84% 60%"` (bare HSL components without `hsl()` wrapper).
+
+**Test coverage:** [[apps/node-backend/tests/themeCss.test.js]]
+
+**Related:** [[docs/api/reports#css-injection-hardening-2026-05-29|Reports API — CSS Injection Hardening]]
 
 ---
 

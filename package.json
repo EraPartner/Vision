@@ -51,7 +51,8 @@
     "electron:clean": "npm run generate-locales-if-not-ci && VISION_COMPOSE_OVERRIDE=docker-compose.clean.yml packaging/electron/node_modules/.bin/electron packaging/electron/main.js",
     "docker:logs": "docker compose -f docker-compose.yml -f docker-compose.dev.yml logs -f app",
     "update": "bun update",
-    "generate:types": "openapi-typescript openapi.yaml -o apps/frontend/src/types/generated.ts"
+    "generate:types": "openapi-typescript openapi.yaml -o apps/frontend/src/types/generated.ts",
+    "check-endpoint-matrix": "node scripts/check-endpoint-matrix.js"
   },
   "dependencies": {
     "archiver": "^8.0.0",

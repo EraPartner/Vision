@@ -3,8 +3,8 @@ title: Aggregations API
 type: endpoint
 status: active
 date: 2026-04-25
-updated: 2026-04-28
-last_modified: 2026-04-28
+updated: 2026-05-29
+last_modified: 2026-05-29
 recipient_pivot_added: 2026-04-28
 tags: [endpoint, api, aggregations, backend, phase-2, phase-6, phase-9, phase-10, phase-d, phase-e, phase-f, phase-g, phase-h, phase-h-v2, decimal, money, cashflow-forecast, multi-method-forecast, statistical-forecasting, ensemble-methods, accuracy-persistence, materialized-cache, nightly-job, category-breakdown, fallback-resilience, rolling-window, url-persistence, rolling-cache, rolling-diagnostics, recipient-pivot, saved-charts]
 description: Server-computed transaction aggregations with materialized-view source distinction; includes planned cash flow forecast (Phase 6), 8-method statistical forecast with inverse-MSE ensemble (Phase 10 + F), persisted accuracy metrics with fallback-to-memory resilience (Phase D), nightly cache materialization (Phase E), per-category breakdown with reconciliation (Phase G), rolling-window cash flow forecast (Phase H), and per-recipient spending pivot for custom charts (April 2026)
@@ -52,7 +52,7 @@ related_code:
 | **Base Path** | `/api/aggregations` |
 | **Methods** | GET (read-only) |
 | **Authentication** | None |
-| **Rate Limit** | None |
+| **Rate Limit** | 600 req/min (`aggregationRateLimiter`; bypassed in development) |
 
 ## Response Envelope
 

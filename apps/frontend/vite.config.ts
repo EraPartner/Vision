@@ -122,14 +122,15 @@ export default defineConfig(({ mode }) => ({
             ],
             // Ratchet gate — tracks current actual coverage so regressions are
             // caught immediately. Bump after each phase adds meaningful tests;
-            // never lower these values.
-            // Last measured (Phase D baseline):
-            //   statements 17.82 % | branches 11.75 % | functions 11.03 % | lines 19 %
+            // never lower these values. Set a 2-3 pt buffer below the measured
+            // figure to absorb v8 line-attribution variance between runs.
+            // Last measured (2026-05-29, 1.4k-test suite):
+            //   statements 52.47 % | branches 43.74 % | functions 44.31 % | lines 54.7 %
             thresholds: {
-                statements: 17,
-                branches: 11,
-                functions: 10,
-                lines: 18,
+                statements: 50,
+                branches: 41,
+                functions: 42,
+                lines: 52,
             },
         },
     },

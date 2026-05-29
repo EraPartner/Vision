@@ -16,7 +16,6 @@ aliases:
 related_code:
   - apps/node-backend/src/routes/recipientBankAccounts.js
   - apps/node-backend/src/repositories/recipientBankAccountRepository.js
-  - apps/node-backend/src/services/iban.js
 ---
 
 # Recipient Bank Accounts API

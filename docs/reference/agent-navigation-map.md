@@ -3,7 +3,7 @@ title: AI Agent Codebase Navigation Map
 type: reference
 status: active
 date: 2026-04-24
-updated: 2026-05-08
+updated: 2026-05-29
 tags: [ai-agent, navigation, codebase-map, developer-tool, phase-1, phase-c, phase-e, bulk-actions]
 description: Navigation map for AI agents and developers to quickly find code by feature, layer, or task. Updated for Phase C import pipeline consolidation, Phase E component decomposition, and bulk transaction actions.
 aliases: [agent navigation, codebase map, file map, navigation guide]
@@ -282,7 +282,7 @@ Full reference: [[docs/reference/service-layer|Service Layer Reference]]
 | Currency Conversion | [[apps/node-backend/src/services/currency/currencyConversionService.js]] |
 | Data Import | [[apps/node-backend/src/services/dataImportService.js]] |
 | Deduplication | [[apps/node-backend/src/services/deduplication.js]] |
-| IBAN | [[apps/node-backend/src/services/iban.js]] |
+| IBAN | ~~[[apps/node-backend/src/services/iban.js]]~~ (deleted 2026-05-29; validation now inline) |
 | Import Pipeline | [[apps/node-backend/src/services/importPipeline/index.js]] (Phase C) |
 | Loan Repayment | [[apps/node-backend/src/services/calculations/loanSchedule.js]] |
 | Materialized Views | [[apps/node-backend/src/services/materializedViewService.js]] |

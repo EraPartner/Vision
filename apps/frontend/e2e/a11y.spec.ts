@@ -22,7 +22,7 @@ const PAGES: Array<{ name: string; path: string; heading: RegExp }> = [
 
 test.describe("Phase F4 — a11y axe scans (WCAG 2.1 A/AA)", () => {
     for (const { name, path, heading } of PAGES) {
-        test(`${name} has no critical a11y violations`, async ({ page }) => {
+        test(`${name} has no critical or serious a11y violations`, async ({ page }) => {
             await page.goto(path);
             await expect(page.getByRole("heading", { level: 1, name: heading })).toBeVisible();
             // Wait for late content (translations + charts)
@@ -40,11 +40,19 @@ test.describe("Phase F4 — a11y axe scans (WCAG 2.1 A/AA)", () => {
                 .disableRules(["aria-valid-attr-value"])
                 .analyze();
 
-            const critical = results.violations.filter((v) => v.impact === "critical");
-            if (critical.length > 0) {
-                console.log("Critical a11y violations:", JSON.stringify(critical, null, 2));
+            // Gate on critical AND serious (raised from critical-only). This
+            // suite runs in the scheduled e2e workflow, not PR CI, so a newly
+            // surfaced serious issue is reported nightly without blocking merges.
+            const blocking = results.violations.filter(
+                (v) => v.impact === "critical" || v.impact === "serious",
+            );
+            if (blocking.length > 0) {
+                console.log(
+                    "Blocking a11y violations (critical/serious):",
+                    JSON.stringify(blocking, null, 2),
+                );
             }
-            expect(critical).toHaveLength(0);
+            expect(blocking).toHaveLength(0);
         });
     }
 });

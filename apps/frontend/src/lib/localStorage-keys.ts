@@ -39,4 +39,7 @@ export const LOCAL_STORAGE_EXCLUDED_KEYS: ReadonlyArray<string> = Object.freeze(
   // Legacy key — SettingsContext migrates value to DB and then removes it.
   // No value survives to be backed up.
   'vision_dashboardSettings',
+  // Admin Bearer token (see lib/adminToken.ts). Session-scoped auth held in
+  // sessionStorage only — must never be persisted to a backup snapshot.
+  'vision.adminToken',
 ]);

@@ -2,6 +2,7 @@
  * StackedBarChart — visx + framer-motion stacked bar chart (vertical).
  */
 import { Group } from "@visx/group";
+import { summarizeSeriesChart } from "./chartAria";
 import { ParentSize } from "@visx/responsive";
 import { scaleBand, scaleLinear } from "@visx/scale";
 import { BarStack } from "@visx/shape";
@@ -146,7 +147,7 @@ function Inner<Datum>({
 
     return (
         <div style={{ position: "relative", width, height }}>
-            <svg width={width} height={height} role="img" aria-label={ariaLabel ?? "Stacked bar chart"}>
+            <svg width={width} height={height} role="img" aria-label={ariaLabel ?? summarizeSeriesChart("Stacked bar chart", data.length, series.map((s) => s.label))}>
                 <Group left={margin.left} top={margin.top}>
                     {valueScale.ticks(5).map((tick) => (
                         <line

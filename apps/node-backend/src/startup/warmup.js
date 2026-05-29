@@ -5,8 +5,10 @@
  * Runs after the HTTP server is listening; populates exchange-rate / inflation
  * / portfolio-snapshot / info caches, then schedules recurring refreshes.
  *
- * All tasks are best-effort: failures are logged and `warmupStatus` flags are
- * still set to true so /health/detailed eventually reports "ready".
+ * All tasks are best-effort: failures are logged and the task is marked
+ * 'failed' (not left 'pending'), so /health/detailed still settles out of
+ * "warming" — reporting `degraded: true` rather than masking the failure.
+ * Each `warmupStatus` flag is tri-state: 'pending' | 'ready' | 'failed'.
  */
 
 import { logger } from '../config/logger.js';
@@ -175,9 +177,9 @@ async function refreshInvestmentPricesOnStartup() {
  */
 export async function runWarmupTasks({ warmupStatus }) {
   refreshMaterializedViews()
-    .then(() => { warmupStatus.materializedViews = true; })
+    .then(() => { warmupStatus.materializedViews = 'ready'; })
     .catch((err) => {
-      warmupStatus.materializedViews = true;
+      warmupStatus.materializedViews = 'failed';
       logger.error('Failed to refresh materialized views on startup', { error: err.message });
     });
 
@@ -189,16 +191,16 @@ export async function runWarmupTasks({ warmupStatus }) {
   const exchangeRateWarmPromise = (online
     ? warmExchangeRateCache()
     : Promise.resolve())
-    .then(() => { warmupStatus.exchangeRates = true; })
+    .then(() => { warmupStatus.exchangeRates = 'ready'; })
     .catch((err) => {
-      warmupStatus.exchangeRates = true;
+      warmupStatus.exchangeRates = 'failed';
       logger.error('Failed to warm exchange rate cache on startup', { error: err.message });
     });
 
   warmInflationCache()
-    .then(() => { warmupStatus.inflation = true; })
+    .then(() => { warmupStatus.inflation = 'ready'; })
     .catch((err) => {
-      warmupStatus.inflation = true;
+      warmupStatus.inflation = 'failed';
       logger.error('Failed to warm Belgian inflation cache on startup', { error: err.message });
     });
 
@@ -224,17 +226,17 @@ export async function runWarmupTasks({ warmupStatus }) {
   Promise.all([exchangeRateWarmPromise, fxBackfillPromise])
     .then(() => computeAndStoreSnapshots())
     .then(() => {
-      warmupStatus.portfolioSnapshots = true;
+      warmupStatus.portfolioSnapshots = 'ready';
       return warmInfoCaches()
-        .then(() => { warmupStatus.infoCaches = true; })
+        .then(() => { warmupStatus.infoCaches = 'ready'; })
         .catch((err) => {
-          warmupStatus.infoCaches = true;
+          warmupStatus.infoCaches = 'failed';
           logger.error('Failed to warm info caches on startup', { error: err.message });
         });
     })
     .catch((err) => {
-      warmupStatus.portfolioSnapshots = true;
-      warmupStatus.infoCaches = true;
+      warmupStatus.portfolioSnapshots = 'failed';
+      warmupStatus.infoCaches = 'failed';
       logger.error('Failed to compute portfolio performance snapshots on startup', { error: err.message });
     });
 

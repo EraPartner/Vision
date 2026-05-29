@@ -110,7 +110,7 @@ RUN printf 'export PATH="/usr/local/share/npm-global/bin:/opt/python/bin:/usr/lo
       > /etc/profile.d/00-sandbox-path.sh
 
 # --- Claude Code CLI (replaces the `anthropics/claude-code:1.0` feature) -----
-RUN npm install -g @anthropic-ai/claude-code@2.1.156 \
+RUN npm install -g @anthropic-ai/claude-code@latest \
   && claude --version \
   && chown -R dev:dev /usr/local/share/npm-global
 

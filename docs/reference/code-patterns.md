@@ -78,7 +78,7 @@ As of 2026-05-14, decimal enforcement is **mandatory** for all monetary API outp
 | **Service calculations** | recurringDetectionService, currencyConversionService, portfolioMath, snapshotBuilder, portfolioSummaryService | Decimal.js throughout; `toNumber()` for output |
 | **Portfolio aggregation** | portfolioSummaryService.js, portfolio/snapshotBuilder.js, portfolioMath.js | Per-investment accumulators + FX multipliers routed through Decimal; `multiply()` for conversion factors; `toNumber()` final aggregate |
 | **CSV/XML parsing** | Bank import adapters (_shared.js, belfius.js, revolut.js, sabb.js, vision.js) | parseFloat only; streaming running balances held as Decimal throughout import; DB writes go through repositories |
-| **Imports** | streamingImportService.js, rawTransactionImportService.js, importPipeline/commit.js | Amount parsers → Decimal; running balance accumulation via Decimal; `roundMoney()` before persistence |
+| **Imports** | importPipeline/commit.js | Amount parsers → Decimal; running balance accumulation via Decimal; `roundMoney()` before persistence (`streamingImportService.js` and `rawTransactionImportService.js` deleted 2026-05-29) |
 | **Exports** | transactionExport.js, calculations/aggregation/cashflowForecast.js, calculations/recurrence.js | All accumulations (running balance, cumulative flows) via Decimal; `divide()` for per-row allocation |
 
 ### When to Use
