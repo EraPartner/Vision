@@ -3,8 +3,8 @@ title: Planned Transactions
 type: feature
 status: active
 date: 2026-04-26
-updated: 2026-04-26
-tags: [feature, planned, recurring, bills, loans, phase-3, phase-12, calculations, immutability, error-handling, toast]
+updated: 2026-05-29
+tags: [feature, planned, recurring, bills, loans, phase-3, phase-12, calculations, immutability, error-handling, toast, atomic-patch]
 aliases: [planned-payments, scheduled-payments, recurring-payments, bills, subscriptions, loan-amortization]
 description: Scheduled and recurring payment tracking - manage bills, subscriptions, and future expenses
 related_code: ["apps/node-backend/src/routes/plannedTransactions.js", "apps/node-backend/src/repositories/plannedTransactionRepository.js", "apps/node-backend/src/services/calculations/loanSchedule.js", "apps/node-backend/src/services/calculations/recurrence.js", "apps/node-backend/src/services/recurringDetectionService.js", "apps/frontend/src/components/planned/PlannedPaymentForm.tsx", "apps/frontend/src/components/planned/LinkTransactionDialog.tsx", "apps/frontend/src/components/planned/ExecutionHistoryDialog.tsx", "apps/frontend/src/components/notifications/UpcomingPaymentsNotification.tsx", "apps/frontend/src/components/shared/DatePicker.tsx", "apps/frontend/src/components/shared/dateUtils.ts"]
@@ -156,6 +156,21 @@ Useful for:
 - Account portals
 
 ---
+
+## Atomic Loan PATCH (2026-05-29)
+
+`PATCH /api/planned-transactions/:id` for loan-type planned transactions now applies the field update and the loan-schedule replacement in a **single database transaction** via `plannedTransactionRepository.updateWithLoanSchedule(id, fields, scheduleEntries)`.
+
+**Before:** the route issued two separate calls — `repository.update()` followed by `repository.replaceLoanSchedule()`. A failure between the two left the row's header fields updated but the schedule stale (or vice versa), producing inconsistent amortization data.
+
+**After:** `updateWithLoanSchedule` wraps both operations in `withTransaction(client => …)`:
+1. `UPDATE planned_transactions SET … WHERE id = $n RETURNING id`
+2. `DELETE FROM planned_transaction_loan_schedule WHERE planned_transaction_id = $1`
+3. Batch `INSERT` of the new schedule rows
+
+All three steps commit or roll back together. If the row no longer exists, `null` is returned and no schedule mutation occurs.
+
+**Scope:** Only the PATCH path for loan-bearing rows uses this method. Non-loan PATCHes continue through the standard `repository.update()` path. The standalone `replaceLoanSchedule()` method remains for any direct schedule-reset calls.
 
 ## Execution Atomicity and Idempotency (Phase 3)
 

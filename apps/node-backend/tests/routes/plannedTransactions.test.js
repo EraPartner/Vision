@@ -24,6 +24,7 @@ vi.mock('../../src/repositories/plannedTransactionRepository.js', () => ({
     getById: vi.fn(),
     create: vi.fn(),
     update: vi.fn(),
+    updateWithLoanSchedule: vi.fn(),
     hardDelete: vi.fn(),
     addExecution: vi.fn(),
     replaceLoanSchedule: vi.fn(),
@@ -300,21 +301,18 @@ describe('Planned Transaction Routes', () => {
       expect(res.json).toHaveBeenCalled();
     });
 
-    it('should clear loan fields and loan schedule when toggled off', async () => {
-      plannedTransactionRepository.getById
-        .mockResolvedValueOnce({
-          id: 1,
-          is_loan: true,
-          loan_type: 'amortizing',
-          loan_principal: 10000,
-          loan_annual_interest_rate: 6,
-          loan_term_months: 12,
-          loan_start_date: '2026-04-01',
-          loan_payment_day: 1,
-        })
-        .mockResolvedValueOnce({ id: 1, is_loan: false, loan_schedule: [] });
-      plannedTransactionRepository.update.mockResolvedValue({ id: 1, is_loan: false });
-      plannedTransactionRepository.replaceLoanSchedule.mockResolvedValue(undefined);
+    it('should clear loan fields and loan schedule atomically when toggled off', async () => {
+      plannedTransactionRepository.getById.mockResolvedValueOnce({
+        id: 1,
+        is_loan: true,
+        loan_type: 'amortizing',
+        loan_principal: 10000,
+        loan_annual_interest_rate: 6,
+        loan_term_months: 12,
+        loan_start_date: '2026-04-01',
+        loan_payment_day: 1,
+      });
+      plannedTransactionRepository.updateWithLoanSchedule.mockResolvedValue({ id: 1, is_loan: false, loan_schedule: [] });
 
       const req = {
         params: { id: '1' },
@@ -323,7 +321,9 @@ describe('Planned Transaction Routes', () => {
       const res = mockResponse();
       await routeHandlers['patch:/:id'](req, res);
 
-      expect(plannedTransactionRepository.update).toHaveBeenCalledWith(
+      // Field update + schedule clear must go through ONE atomic method ([] clears
+      // the schedule) — not a separate update() + replaceLoanSchedule() pair.
+      expect(plannedTransactionRepository.updateWithLoanSchedule).toHaveBeenCalledWith(
         1,
         expect.objectContaining({
           is_loan: false,
@@ -335,9 +335,10 @@ describe('Planned Transaction Routes', () => {
           loan_payment_day: null,
           loan_regular_payment_amount: null,
           loan_first_payment_date: null,
-        })
+        }),
+        [],
       );
-      expect(plannedTransactionRepository.replaceLoanSchedule).toHaveBeenCalledWith(1, []);
+      expect(plannedTransactionRepository.update).not.toHaveBeenCalled();
       expect(res.json).toHaveBeenCalled();
     });
   });

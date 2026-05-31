@@ -131,16 +131,15 @@ function getCurrentDateString() {
   return new Date().toISOString().split('T')[0];
 }
 
-async function updateLoanScheduleForPatch(id, generatedLoanSchedule, fields, existing) {
-  if (generatedLoanSchedule) {
-    await plannedTransactionRepository.replaceLoanSchedule(id, generatedLoanSchedule.schedule);
-    return true;
-  } else if (fields.is_loan === false && existing.is_loan) {
-    await plannedTransactionRepository.replaceLoanSchedule(id, []);
-    return true;
-  }
-
-  return false;
+/**
+ * Decide whether this PATCH must rewrite the loan schedule, and to what.
+ * Returns the installment array to write, [] to clear it, or undefined to leave
+ * the existing schedule untouched.
+ */
+function resolveLoanScheduleDirective(generatedLoanSchedule, fields, existing) {
+  if (generatedLoanSchedule) return generatedLoanSchedule.schedule;
+  if (fields.is_loan === false && existing.is_loan) return []; // loan turned off → clear
+  return undefined;
 }
 
 router.get('/', async (req, res) => {
@@ -247,16 +246,16 @@ router.patch(
     ]);
 
     const generatedLoanSchedule = applyLoanPatchDefaults(fields, existing);
+    const loanScheduleDirective = resolveLoanScheduleDirective(generatedLoanSchedule, fields, existing);
 
-    const updated = await plannedTransactionRepository.update(id, fields);
+    // When the loan schedule must change, the field update and the schedule
+    // rewrite MUST happen in one transaction — otherwise a crash between them
+    // leaves the planned row's loan params disagreeing with the installment rows.
+    const updated = loanScheduleDirective !== undefined
+      ? await plannedTransactionRepository.updateWithLoanSchedule(id, fields, loanScheduleDirective)
+      : await plannedTransactionRepository.update(id, fields);
 
-    const loanScheduleChanged = await updateLoanScheduleForPatch(id, generatedLoanSchedule, fields, existing);
-
-    if (loanScheduleChanged) {
-      const withSchedule = await plannedTransactionRepository.getById(id);
-      res.ok(formatPlannedTransaction(withSchedule || updated));
-      return;
-    }
+    if (!updated) throw new NotFoundError(`Planned transaction ${id} not found`);
 
     res.ok(formatPlannedTransaction(updated));
   },

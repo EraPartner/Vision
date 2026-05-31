@@ -459,6 +459,65 @@ export const plannedTransactionRepository = {
   },
 
   /**
+   * Atomic counterpart to update(): applies the field update AND replaces the
+   * loan amortization schedule inside ONE transaction. The PATCH route uses this
+   * whenever a loan parameter changed (or a loan was turned off) so the planned
+   * row (loan_regular_payment_amount / loan_first_payment_date / is_loan) and the
+   * planned_transaction_loan_schedule rows can never disagree after a partial
+   * failure. `scheduleEntries` of [] clears the schedule.
+   *
+   * @param {number} id
+   * @param {object} fields  sanitized update fields (may include `tags`)
+   * @param {Array}  scheduleEntries  installments to write ([] clears)
+   * @returns {Promise<object|null>} the hydrated row, or null if the row is gone
+   */
+  async updateWithLoanSchedule(id, fields, scheduleEntries = []) {
+    const { tags, ...txFields } = fields;
+    const sanitized = sanitizeUpdateFields('planned_transactions', txFields);
+
+    const found = await withTransaction(async (client) => {
+      const setClauses = [];
+      const params = [];
+      let paramIdx = 1;
+      for (const [key, value] of Object.entries(sanitized)) {
+        if (value === undefined) continue;
+        setClauses.push(`"${key}" = $${paramIdx++}`);
+        params.push(value);
+      }
+
+      if (setClauses.length > 0) {
+        setClauses.push('updated_at = NOW()');
+        params.push(id);
+        const r = await client.query(
+          `UPDATE planned_transactions SET ${setClauses.join(', ')} WHERE id = $${paramIdx} RETURNING id`,
+          params,
+        );
+        if (r.rowCount === 0) return false;
+      } else {
+        const r = await client.query('SELECT id FROM planned_transactions WHERE id = $1', [id]);
+        if (r.rowCount === 0) return false;
+      }
+
+      if (tags !== undefined) {
+        await setPlannedTransactionTags(client, id, tags);
+      }
+
+      // Replace the amortization schedule in the SAME transaction as the field
+      // update so loan params and per-installment rows commit (or roll back) together.
+      await client.query(
+        'DELETE FROM planned_transaction_loan_schedule WHERE planned_transaction_id = $1',
+        [id],
+      );
+      await insertLoanScheduleBatch(client, id, scheduleEntries);
+
+      return true;
+    });
+
+    if (!found) return null;
+    return this.getById(id);
+  },
+
+  /**
    * Return active, unexecuted planned transactions whose planned_date falls within
    * the next `days` days. Used by the bill-reminder endpoint.
    *
