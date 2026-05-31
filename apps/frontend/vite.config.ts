@@ -68,9 +68,12 @@ export default defineConfig(({ mode }) => ({
                         norm.includes('@tanstack/react-virtual') || norm.includes('@tanstack+react-virtual')) {
                         return 'tanstack';
                     }
-                    if (norm.includes('/recharts') || norm.includes('+recharts')) {
-                        return 'charts';
-                    }
+                    // recharts is used by exactly one component (ToolResultCard),
+                    // reachable only through the lazy-loaded AIChatPage. Forcing it
+                    // into a named chunk dragged it (114 kB gz) into the initial
+                    // modulepreload graph via a shared module. Leaving it unnamed
+                    // lets Rollup keep it inside the AIChatPage async chunk so it
+                    // loads only when /ai-chat is opened.
                     if (norm.includes('@radix-ui/') || norm.includes('@radix-ui+')) {
                         return 'radix-ui';
                     }
