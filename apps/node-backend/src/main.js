@@ -20,6 +20,7 @@ import {
 } from './services/materializedViewService.js';
 import { createErrorHandler, NotFoundError } from './middleware/errorHandler.js';
 import { createAdminAuthMiddleware } from './middleware/adminAuth.js';
+import { createCsrfGuard } from './middleware/csrfGuard.js';
 import { closeBrowser as closePuppeteerBrowser } from './services/reports/puppeteerRenderer.js';
 import { wrapResponse } from './middleware/envelope.js';
 import { requestId } from './middleware/requestId.js';
@@ -28,6 +29,9 @@ import { cancelPendingAggregationRefresh } from './services/aggregationRefresh.j
 import { runWarmupTasks } from './startup/warmup.js';
 
 const adminAuthMiddleware = createAdminAuthMiddleware(() => settings.admin.authToken);
+// Blocks cross-site state-changing requests (browser CSRF) to destructive admin
+// routes, which the loopback binding alone cannot stop.
+const adminCsrfGuard = createCsrfGuard(() => settings.api.corsOrigins);
 
 // Import route modules
 import transactionsRouter from './routes/transactions.js';
@@ -276,7 +280,7 @@ mountRouter(app, '/api/recipients', recipientBankAccountsRouter);
 mountRouter(app, '/api/planned-transactions', plannedTransactionsRouter);
 mountRouter(app, '/api/info', infoRouter);
 mountRouter(app, '/api/aggregations', aggregationRateLimiter, aggregationsRouter);
-mountRouter(app, '/api/admin', adminRateLimiter, adminAuthMiddleware, adminRouter);
+mountRouter(app, '/api/admin', adminRateLimiter, adminCsrfGuard, adminAuthMiddleware, adminRouter);
 mountRouter(app, '/api/import', importRateLimiter, importRouter);
 mountRouter(app, '/api/investments', investmentRateLimiter, investmentsRouter);
 mountRouter(app, '/api/settings', settingsRouter);
@@ -375,8 +379,10 @@ function bootSummary(extraPhase = 'backend_total') {
 async function start() {
   if (!settings.admin.authToken) {
     logger.warn(
-      'ADMIN_AUTH_TOKEN is not set — admin endpoints are accessible from local/private network addresses only. ' +
-      'Set ADMIN_AUTH_TOKEN to enforce token-based auth.'
+      'ADMIN_AUTH_TOKEN is not set — admin endpoints have no per-request token check. ' +
+      'This is safe only because the port is published on 127.0.0.1 (loopback) and the ' +
+      'CSRF guard blocks cross-site browser requests. If you publish the port on 0.0.0.0 ' +
+      'or behind a proxy, SET ADMIN_AUTH_TOKEN to enforce token-based auth.'
     );
   }
 

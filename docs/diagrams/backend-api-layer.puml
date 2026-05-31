@@ -36,7 +36,8 @@ package "Middleware" {
     +compression: custom inline middleware via node:zlib (Phase 5, replaces compression package)
     +securityHeaders: middleware (inline in main.js)
     +requestLogger: middleware (inline in main.js)
-    +adminAuth middleware (optional bearer token)
+    +adminAuth middleware (token-or-open: timing-safe Bearer when ADMIN_AUTH_TOKEN set, open otherwise — ADR-063)
+    +csrfGuard middleware (Sec-Fetch-Site / Origin allowlist; blocks cross-site state-changing requests to /api/admin)
   }
 }
 

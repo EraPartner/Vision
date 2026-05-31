@@ -3,10 +3,10 @@ title: Architecture Decision Records Index
 type: adr-index
 status: active
 date: 2026-04-23
-updated: 2026-05-18
-last_modified: 2026-05-18
+updated: 2026-05-29
+last_modified: 2026-05-29
 tags: [adr, index, architecture, decisions, phase-1, phase-4, phase-5, phase-6, phase-7, security, dependency-slim-down, container-hardening, docker, backup, encryption, aead, aes-256-gcm, codeql, dependabot, rate-limiting, tailwind-v4, css-architecture, dependencies, ai, streaming, useSyncExternalStore, bug-hunt, recovery-hardening, updated-at-constraints, concurrent-backup, ci-cd, secrets-scanning, supply-chain-security, gitleaks, deps-audit, trivy-scan, docker-compose-sync, named-volumes, data-loss, tags, tagging, transaction-tags, orthogonal-dimension, belgian-tax, exemption-brackets, own-home-credits, taxable-income-sources, audit-2026-05-11, disabled-dependents, regional-autonomy-factor, property-tax-centimes, etf-tob, reynders-routing, as-filed, audit-log, comparison, trend-strip, may-2026-audit, monetary-precision, decimal-enforcement, tx-hash-dedup, race-safe-dedup, portfolio-precision, import-precision, forecast-precision, timezone-consistency, snapshot-valuation-parity, fixed-income-accrual, real-estate-appreciation, net-worth-reconciliation]
-description: Architecture Decision Records documenting significant technical choices and their rationale. May 2026 (ADR-061): Snapshot valuation parity — snapshotBuilder non-unit asset formulas rewritten to mirror portfolioSummaryService exactly, eliminating 2,142.24 € Net Worth vs Portfolio divergence; fixed-income accrues daily interest, real-estate sums appreciation txns, latest-day unit assets use investments.current_price. Prior May 2026: Monetary Precision & Deduplication Audit (ADR-060); Belgian Tax historical year extensions (ADR-059); Belgian Tax historical year snapshots viewer (ADR-058); Belgian Tax follow-up audit (ADR-057); Belgian Tax audit fixes with PwC AY 2026 alignment (ADR-056); exemption-bracket correction (ADR-053), regional own-home credits (ADR-054), taxable income source filtering (ADR-055); Transaction Tags as orthogonal dimension (ADR-052), Docker Compose volume sync policy (ADR-051), CI supply chain security tooling (ADR-050), Phase 6.1–7 bug hunt recovery hardening (ADR-049), AI Chat module-level stream store (ADR-048), Tailwind CSS v4 migration (ADR-047).
+description: Architecture Decision Records documenting significant technical choices and their rationale. 2026-05-29 (ADR-063): Admin auth token-or-open + CSRF guard supersedes ADR-037 RFC1918 IP-allowlist. May 2026 (ADR-061): Snapshot valuation parity — snapshotBuilder non-unit asset formulas rewritten to mirror portfolioSummaryService exactly, eliminating 2,142.24 € Net Worth vs Portfolio divergence; fixed-income accrues daily interest, real-estate sums appreciation txns, latest-day unit assets use investments.current_price. Prior May 2026: Monetary Precision & Deduplication Audit (ADR-060); Belgian Tax historical year extensions (ADR-059); Belgian Tax historical year snapshots viewer (ADR-058); Belgian Tax follow-up audit (ADR-057); Belgian Tax audit fixes with PwC AY 2026 alignment (ADR-056); exemption-bracket correction (ADR-053), regional own-home credits (ADR-054), taxable income source filtering (ADR-055); Transaction Tags as orthogonal dimension (ADR-052), Docker Compose volume sync policy (ADR-051), CI supply chain security tooling (ADR-050), Phase 6.1–7 bug hunt recovery hardening (ADR-049), AI Chat module-level stream store (ADR-048), Tailwind CSS v4 migration (ADR-047).
 aliases: [ADRs, decisions, architecture decisions]
 ---
 
@@ -44,6 +44,10 @@ See [[docs/adr/template\|the ADR template]] for the format to use when creating 
 > - Recording a decision that affects multiple parts of the system
 
 ## Recent Decisions
+
+### 2026-05-29: Admin Auth Token-or-Open + CSRF Guard
+
+[[docs/adr/063-admin-auth-csrf-guard|ADR-063]] — Supersedes ADR-037's RFC1918 IP-allowlist admin fallback. `adminAuth.js` is now token-or-open: when `ADMIN_AUTH_TOKEN` is set, enforce timing-safe Bearer; when unset, call `next()` immediately and rely on the docker-compose loopback binding plus the new `csrfGuard.js`. `createCsrfGuard` blocks cross-site state-changing browser requests via `Sec-Fetch-Site` (allow `same-origin`/`none`; reject `same-site`/`cross-site`) with an `Origin` allowlist fallback for browsers that omit `Sec-Fetch-Site`. Mounted before `adminAuthMiddleware` on `/api/admin`. Addresses codebase-audit-2026-05 finding `security.2`.
 
 ### 2026-05-29: Frontend Type-Check Gate Enforcement
 

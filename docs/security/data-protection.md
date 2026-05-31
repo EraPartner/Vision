@@ -3,11 +3,11 @@ title: Security - Data Protection & CSP
 type: security
 status: active
 date: 2026-04-19
-updated: 2026-05-23
-tags: [security, csp, cors, data-protection, privacy, content-security-policy, xss, dangerouslySetInnerHTML, path-traversal, rfc-5987, backup-encryption, passphrase, phase-7, phase-c, pre-restore-confirmation, concurrent-backup-guard, watchdog-pause, bug-hunt-2026-05-05, bug-hunt-2026-05-06, electron-hardening, window-open-handler, will-navigate, checksum-verification, backup-directory-restrictions, csv-filename-sanitization, safe-storage, keychain, lazy-safeStorage]
-description: Content Security Policy, CORS, data protection, path traversal prevention, backup security, and privacy considerations for Vision. Phase 7 adds pre-restore confirmation dialog and concurrent-backup guard. May 2026 bug hunt hardens Electron with setWindowOpenHandler denial, will-navigate whitelist, mandatory installer checksum verification, and backup directory restrictions. safeStorage is now accessed lazily to avoid macOS Keychain prompts when no passphrase is configured.
+updated: 2026-05-29
+tags: [security, csp, cors, data-protection, privacy, content-security-policy, xss, dangerouslySetInnerHTML, path-traversal, rfc-5987, backup-encryption, passphrase, phase-7, phase-c, pre-restore-confirmation, concurrent-backup-guard, watchdog-pause, bug-hunt-2026-05-05, bug-hunt-2026-05-06, electron-hardening, window-open-handler, will-navigate, checksum-verification, backup-directory-restrictions, csv-filename-sanitization, safe-storage, keychain, lazy-safeStorage, csrf-guard, sec-fetch-site, admin-auth, token-or-open]
+description: Content Security Policy, CORS, data protection, path traversal prevention, backup security, and privacy considerations for Vision. Phase 7 adds pre-restore confirmation dialog and concurrent-backup guard. May 2026 bug hunt hardens Electron with setWindowOpenHandler denial, will-navigate whitelist, mandatory installer checksum verification, and backup directory restrictions. safeStorage is now accessed lazily to avoid macOS Keychain prompts when no passphrase is configured. 2026-05-29: admin auth replaced with token-or-open + CSRF guard (ADR-063).
 aliases: [CSP, data protection, privacy, content security policy, security headers, XSS prevention, path traversal]
-related_code: ["apps/node-backend/src/main.js", "apps/frontend/src/lib/api.ts", "apps/node-backend/src/services/attachmentService.js"]
+related_code: ["apps/node-backend/src/main.js", "apps/frontend/src/lib/api.ts", "apps/node-backend/src/services/attachmentService.js", "apps/node-backend/src/middleware/adminAuth.js", "apps/node-backend/src/middleware/csrfGuard.js"]
 ---
 
 # Security: Data Protection & CSP
@@ -329,14 +329,36 @@ Limited IPC channel exposure through preload scripts. Only validated functions a
 - Implementation: `BLOCKED_BACKUP_PREFIXES.some(p => resolvedDest === p || resolvedDest.startsWith(p + '/'))`
 - Impact: Prevents accidental (or malicious) restore to system directories that could break macOS, corrupt system libraries, or escalate privileges
 
-### Admin Bearer Token Authentication (2026-04-28)
+### Admin Auth: Token-or-Open + CSRF Guard (2026-05-29)
 
-Admin endpoints protected by optional `ADMIN_AUTH_TOKEN` environment variable now use timing-safe comparison:
+Admin endpoints (`/api/admin/*`) are protected by two co-operating guards. See [[docs/adr/063-admin-auth-csrf-guard|ADR-063]] for the full decision record.
 
-- **Timing Attack Prevention**: Bearer token comparison uses `crypto.timingSafeEqual()` instead of `!==` operator
-- **Impact**: Prevents side-channel timing attacks where response time leaks information about token validity (e.g., attacker can time how many characters of the token match, reducing brute-force search space)
-- **Implementation**: In `middleware/adminAuth.js`, token comparison wraps both bearer value and configured token with equal-length padding before `timingSafeEqual()` call
-- **Fallback**: If `ADMIN_AUTH_TOKEN` not set, localhost-only access is allowed (see [[docs/adr/037-admin-auth-localhost-fallback|ADR-037]])
+**`adminAuth.js` — Token-or-Open**
+
+- When `ADMIN_AUTH_TOKEN` is set: every admin request must carry `Authorization: Bearer <token>`. Comparison uses `crypto.timingSafeEqual()` on equal-length buffers to prevent timing side-channels.
+- When `ADMIN_AUTH_TOKEN` is unset: the middleware calls `next()` immediately. No IP check is performed. Protection is then provided entirely by (a) the docker-compose loopback binding (`127.0.0.1:PORT`) and (b) the CSRF guard below.
+- A startup warning is logged when the token is absent, instructing operators to set it if the port is published on `0.0.0.0`.
+
+> [!warning] This supersedes the RFC1918 IP-allowlist fallback from ADR-037. The middleware no longer trusts the entire private address space — `10.x`, `172.16.x`, `192.168.x`, IPv6 ULA are no longer implicitly trusted.
+
+**`csrfGuard.js` — `createCsrfGuard` (mounted before `adminAuthMiddleware`)**
+
+Blocks cross-site state-changing browser requests. Strategy (zero-config, no tokens/cookies):
+
+- `GET`/`HEAD`/`OPTIONS` are always allowed.
+- `Sec-Fetch-Site` header (sent by Chrome 76+, Firefox 90+, Safari 16.4+) is authoritative:
+  - `same-origin` or `none` (typed URL, curl, Electron IPC): allow.
+  - `same-site` or `cross-site`: reject with 403.
+- Fallback when `Sec-Fetch-Site` absent: if `Origin` is present it must be in `settings.api.corsOrigins`; if `Origin` is absent the request is treated as a non-browser client and allowed.
+
+CORS alone does not stop cross-site requests from executing — it only hides the response. The CSRF guard prevents the request body from reaching the route handler.
+
+Mount order in `main.js`:
+```
+mountRouter(app, '/api/admin', adminRateLimiter, adminCsrfGuard, adminAuthMiddleware, adminRouter);
+```
+
+Code links: [[apps/node-backend/src/middleware/adminAuth.js]], [[apps/node-backend/src/middleware/csrfGuard.js]]
 
 ### CSV Download Filename Sanitization (Phase C)
 
@@ -470,6 +492,8 @@ Homebrew installation script now prevents pipe-to-bash vulnerabilities:
 
 ## Related
 
+- [[docs/adr/063-admin-auth-csrf-guard|ADR-063: Admin Auth Token-or-Open + CSRF Guard]] — Current admin auth model (supersedes ADR-037)
+- [[docs/adr/037-admin-auth-localhost-fallback|ADR-037: Admin Auth Localhost Fallback]] — Superseded RFC1918 IP-allowlist model
 - [[docs/adr/050-ci-supply-chain-security-tooling|ADR-050: CI Supply Chain Security Tooling]] — Secrets scanning, dependency audit, container image scanning, Electron permission handler, error-page strict CSP
 - [[docs/adr/049-phase-6-7-bug-hunt-recovery-hardening|ADR-049: Phase 6.1–7 Bug Hunt Recovery Hardening]] — Database schema fixes, Electron backup/restore safety
 - [[docs/adr/040-backup-format-v2-aead-encryption|ADR-040: Backup Format v2 AEAD Encryption]] — Backup encryption scheme (v1 legacy, v2 current)

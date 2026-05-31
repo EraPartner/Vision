@@ -567,9 +567,10 @@ Return a static manifest of all registered Express routes.
 
 - Database reset is disabled by default (`admin.enableResetDb` setting)
 - Update checks are read-only operations
-- Admin auth middleware enforces per [[docs/adr/037-admin-auth-localhost-fallback|ADR-036]]:
-  - **When `ADMIN_AUTH_TOKEN` is configured:** Requests must include `Authorization: Bearer <token>`
-  - **When `ADMIN_AUTH_TOKEN` is unset:** Requests must originate from a local network address — loopback (`127.0.0.1`, `::1`, `::ffff:127.0.0.1`) or RFC 1918 private ranges (`10.x.x.x`, `172.16–31.x.x`, `192.168.x.x`) including IPv4-mapped and IPv6 ULA (`fc00::/7`). All other origins receive `401 Unauthorized`.
+- Admin auth follows the **token-or-open + CSRF guard** model per [[docs/adr/063-admin-auth-csrf-guard|ADR-063]] (supersedes the RFC 1918 IP allowlist of ADR-037):
+  - **When `ADMIN_AUTH_TOKEN` is configured:** Requests must include `Authorization: Bearer <token>` (timing-safe compare); otherwise `401 Unauthorized`.
+  - **When `ADMIN_AUTH_TOKEN` is unset:** Admin routes are open at the auth layer — protection is the loopback-only host port binding plus the CSRF guard.
+  - **CSRF guard (all `/api/admin` state-changing requests):** cross-site requests are rejected via `Sec-Fetch-Site` (allow `same-origin`/`none`, reject `cross-site`/`same-site`) with an `Origin`-allowlist fallback for older/non-browser clients. This blocks a malicious page from POSTing to destructive routes (e.g. `database/reset`) — which the loopback binding alone cannot stop.
 - Error responses for admin operations are sanitized to generic `Administrative operation failed` to avoid leaking internals.
 
 ### Docker Deployment — LAN Isolation and Admin Access
@@ -581,9 +582,9 @@ ports:
   - "127.0.0.1:${PORT:-3002}:3002"
 ```
 
-This means only the host machine can reach the backend — devices on the same Wi-Fi or LAN cannot. Inside the container, the host browser's request arrives via docker-proxy with a Docker bridge source IP (e.g. `172.17.0.1`). The admin middleware trusts RFC 1918 ranges, so admin endpoints work without a token.
+This means only the host machine can reach the backend — devices on the same Wi-Fi or LAN cannot. Because admin auth no longer relies on an IP allowlist, the docker-proxy bridge source IP (e.g. `172.17.0.1`) is irrelevant: with no token set, admin routes are reachable from any client that can hit the loopback-bound port, and the CSRF guard blocks cross-site browser requests.
 
-> **Warning:** If you change the port mapping back to `"${PORT:-3002}:3002"` (binding `0.0.0.0`), LAN devices will also pass the private-IP check because their source IPs fall in RFC 1918 ranges. Set `ADMIN_AUTH_TOKEN` and consider adding auth to non-admin routes in that case.
+> **Warning:** If you change the port mapping back to `"${PORT:-3002}:3002"` (binding `0.0.0.0`), the loopback isolation is gone — **set `ADMIN_AUTH_TOKEN`** so admin routes require a Bearer token, and consider adding auth/CSRF protection to non-admin routes too.
 
 ### Rate Limits
 

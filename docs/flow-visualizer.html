@@ -600,7 +600,7 @@
     { "id": "pkg.types",        "label": "packages/types",      "sub": "openapi-generated TS",                      "kind": "shared",   "x": 760,  "y": 260 },
     { "id": "pkg.openapi",      "label": "openapi.yaml",        "sub": "API contract  ·  source of truth",          "kind": "shared",   "x": 940,  "y": 260 },
 
-    { "id": "be.middleware",    "label": "Middleware chain",    "sub": "adminAuth · rateLimit · errorHandler",      "kind": "backend",  "x": 220,  "y": 348 },
+    { "id": "be.middleware",    "label": "Middleware chain",    "sub": "adminAuth · csrfGuard · rateLimit · errorHandler",      "kind": "backend",  "x": 220,  "y": 348 },
     { "id": "be.routes",        "label": "Express routes",      "sub": "20 route files  ·  148 endpoints",          "kind": "backend",  "x": 460,  "y": 348 },
     { "id": "be.envelope",      "label": "Envelope mw",         "sub": "{ data, error, meta }",                     "kind": "backend",  "x": 700,  "y": 348 },
     { "id": "be.requestmetrics","label": "Request metrics",     "sub": "middleware/requestMetrics",                 "kind": "backend",  "x": 880,  "y": 348 },
@@ -705,7 +705,7 @@
         { "from": "fe.features",   "to": "fe.apiclient",    "payload": "useCreateTransaction() · React Query mutation",
           "annotation": "The feature calls a typed hook; types come from packages/types (OpenAPI codegen)." },
         { "from": "fe.apiclient",  "to": "be.middleware",   "payload": "POST /api/transactions  ·  Bearer ADMIN_AUTH_TOKEN",
-          "annotation": "lib/api/transactions.ts uses the shared transport; adminAuth uses timingSafeEqual." },
+          "annotation": "lib/api/transactions.ts uses the shared transport; adminAuth is token-or-open (timingSafeEqual when ADMIN_AUTH_TOKEN set, see ADR-063); csrfGuard blocks cross-site POSTs via Sec-Fetch-Site." },
         { "from": "be.middleware", "to": "be.routes",       "payload": "validated request body",
           "annotation": "Middleware chain attaches requestId, validates the envelope, and forwards to routes/transactions.js." },
         { "from": "be.routes",     "to": "be.repos",        "payload": "transactionRepository.create({...})",
