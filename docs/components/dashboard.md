@@ -3,7 +3,7 @@ title: Dashboard Components
 type: component
 status: active
 date: 2026-04-17
-updated: 2026-05-23
+updated: 2026-05-29
 tags: [components, dashboard, charts, widgets, liquid-glass, design-system, phase-9, phase-d, phase-f, phase-h, phase-h-v2, ensemble, visx, url-persistence, rolling-cache, rolling-diagnostics]
 description: Dashboard-specific components for financial overview and visualization with liquid-glass aesthetic and visx charts, including dual-mode cash flow forecast with URL state persistence and rolling window diagnostics
 aliases: [dashboard-widgets, dashboard-charts, overview-components, stat-cards]
@@ -652,9 +652,7 @@ Dashboard Page (`DashboardPage.tsx`) uses `useMemo` to stabilize frequently-reco
 |-------|--------------|---------|
 | `integerLocaleFormatter` | `locale` | Reusable `Intl.NumberFormat` for transaction count formatting |
 | `DASHBOARD_WIDGETS` | `t` (translation function) | Widget definition array with i18n labels |
-| `allExcludedCategoryIds` | `settings`, `categoriesData` | Combined category exclusion list (user-selected + hidden categories) |
-| `excludedRecipientIds` | `settings` | Recipient exclusion list derived from settings scope |
-| `filteredExclusionParams` | `allExcludedCategoryIds`, `excludedRecipientIds` | Stable query params object for API calls |
+| `filteredExclusionParams` | `excludedCategoryIds`, `excludedRecipientIds` | Stable query params object for API calls — values now sourced from `useExcludedIds('dashboard')` (2026-05-29) |
 | `transactions` | Transaction query key | Memoized transaction list result |
 | `monthlyData` | Monthly summary query keys | Memoized filtered/unfiltered monthly summaries |
 | `categoryBreakdown` | Category query key | Memoized category spending breakdown |
@@ -685,6 +683,7 @@ API (/api/aggregations/monthly-summary) → Hook (useFilteredDashboardStats) →
 ### Related Hooks
 
 - `useFilteredDashboardStats()` - Fetches `/api/aggregations/monthly-summary` with server-side exclusions (Phase 2)
+- `useExcludedIds('dashboard')` — Single source of truth for excluded category/recipient IDs; consumed by `useFilteredDashboardStats` and `DashboardPage` (2026-05-29) — see [[docs/components/hooks#useexcludedids-2026-05-29|Custom Hooks — useExcludedIds]]
 - `useTransactions()` - Transaction list with filters
 - `useWidgetVisibility()` - Widget visibility state
 

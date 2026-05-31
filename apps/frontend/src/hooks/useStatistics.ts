@@ -1,8 +1,7 @@
 import { useQuery } from '@tanstack/react-query';
 import { useMemo, useState, useCallback } from 'react';
-import { useSettings } from '@/contexts/SettingsContext';
 import { useAppSettings } from '@/contexts/AppSettingsContext';
-import { apiClient } from '@/lib/api';
+import { useExcludedIds } from '@/hooks/useExcludedIds';
 import {
   getAggregationMonthlySummary,
   getAggregationCategoryPivot,
@@ -180,7 +179,6 @@ export function mapToStatisticsData(
 // ── Hook ──────────────────────────────────────────────────────────────────────
 
 export function useStatistics() {
-  const { settings } = useSettings();
   const { appSettings } = useAppSettings();
   const targetCurrency = appSettings.defaultCurrency || 'EUR';
 
@@ -193,44 +191,21 @@ export function useStatistics() {
     }));
   }, []);
 
-  const exclusionsApply =
-    settings.exclusionScope === 'everywhere' || settings.exclusionScope === 'statistics';
-
-  const settingsExcludedCatIds = useMemo(
-    () => [...settings.excludedCategoryIds].sort((a, b) => a - b),
-    [settings.excludedCategoryIds],
-  );
-
-  const settingsExcludedRecIds = useMemo(
-    () => [...settings.excludedRecipientIds].sort((a, b) => a - b),
-    [settings.excludedRecipientIds],
-  );
-
-  const categoriesQuery = useQuery({
-    queryKey: ['categories', 'all-for-stats'],
-    queryFn: async () => {
-      const res = await apiClient.getCategories({ limit: 500 });
-      return res.items;
-    },
-    // Only needed to resolve hidden-category IDs; skip the fetch otherwise.
-    enabled: settings.excludeHiddenCategories,
-    staleTime: 60_000,
-  });
-
-  const hiddenCategoryIds = useMemo(() => {
-    if (!settings.excludeHiddenCategories || !categoriesQuery.data) return [] as number[];
-    return categoriesQuery.data.filter((c) => !c.is_active).map((c) => c.id);
-  }, [settings.excludeHiddenCategories, categoriesQuery.data]);
-
-  const effectiveExcludedCategoryIds = useMemo(
-    () => [...new Set([...settingsExcludedCatIds, ...hiddenCategoryIds])].sort((a, b) => a - b),
-    [settingsExcludedCatIds, hiddenCategoryIds],
-  );
+  // Excluded IDs (settings + hidden categories) resolved by the shared hook so
+  // statistics and the dashboard exclude exactly the same set — see useExcludedIds.
+  const {
+    excludedCategoryIds: effectiveExcludedCategoryIds,
+    excludedRecipientIds: settingsExcludedRecIds,
+    exclusionsApply,
+    isReady,
+  } = useExcludedIds('statistics');
 
   const hasExclusions =
     effectiveExcludedCategoryIds.length > 0 || settingsExcludedRecIds.length > 0;
 
-  const filteredEnabled = exclusionsApply && hasExclusions;
+  // Gate on isReady so the filtered queries don't fire with an incomplete
+  // hidden-category set on the first render.
+  const filteredEnabled = exclusionsApply && hasExclusions && isReady;
 
   // ── Unfiltered queries ────────────────────────────────────────────────────
 

@@ -15,7 +15,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { ArrowUpRight, LayoutDashboard, Receipt, TrendingDown, Tags, AlertTriangle } from "lucide-react";
 import { useTransactions } from "@/hooks/useTransactions";
 import { useFilteredDashboardStats } from "@/hooks/useFilteredDashboardStats";
-import { useSettings } from "@/contexts/SettingsContext";
+import { useExcludedIds } from "@/hooks/useExcludedIds";
 import { useQuery } from "@tanstack/react-query";
 import { apiClient } from "@/lib/api";
 import { getCategoryColor } from "@/utils/categoryColors";
@@ -46,7 +46,6 @@ export default function DashboardPage() {
     ], [t]);
 
     const { isVisible, setWidgetVisible, setAllVisible, resetToDefaults, widgets: widgetDefs } = useWidgetVisibility('dashboard', DASHBOARD_WIDGETS);
-    const { settings } = useSettings();
 
     // Per-graph exclusion override state
     const [graphExclusions, setGraphExclusions] = useState<GraphExclusions>({});
@@ -57,54 +56,24 @@ export default function DashboardPage() {
         }));
     }, []);
 
-    // Check if exclusions should apply to dashboard
-    const exclusionsApply = (settings.exclusionScope === 'everywhere' || settings.exclusionScope === 'dashboard') &&
-        (settings.excludedCategoryIds.length > 0 || settings.excludedRecipientIds.length > 0 || settings.excludeHiddenCategories);
+    // Excluded category/recipient IDs (settings + hidden categories) from the
+    // shared resolver, so the dashboard and statistics exclude exactly the same set.
+    const {
+        excludedCategoryIds: allExcludedCategoryIds,
+        excludedRecipientIds,
+        exclusionsApply: exclusionScopeApplies,
+    } = useExcludedIds('dashboard');
+
+    // Switch to the *filtered* aggregation queries only when there is actually
+    // something to exclude (preserves prior enable behavior).
+    const exclusionsApply = exclusionScopeApplies &&
+        (allExcludedCategoryIds.length > 0 || excludedRecipientIds.length > 0);
 
     // Fetch real-time statistics from /api/info endpoints with applied filters
     const { data: statsData, isLoading: statsLoading, error: statsError } = useFilteredDashboardStats();
 
     // Fetch transactions for charts and recent transactions table
     const { data: transactionsData, isLoading: transactionsLoading, error: transactionsError } = useTransactions({ limit: 50 });
-
-    // Fetch categories (needed to resolve hidden category exclusions)
-    const { data: categoriesData } = useQuery({
-        queryKey: ['categories', 'all'],
-        queryFn: () => apiClient.getCategories({ limit: 1000 }),
-        staleTime: 60000,
-    });
-
-    // Build complete excluded category IDs list (including hidden categories)
-    // Memoized — only recomputes when the relevant settings or categories change.
-    const allExcludedCategoryIds = useMemo(() => {
-        if (settings.exclusionScope !== 'everywhere' && settings.exclusionScope !== 'dashboard') {
-            return [];
-        }
-        const ids = [...settings.excludedCategoryIds];
-        if (settings.excludeHiddenCategories && categoriesData) {
-            const hiddenIds = categoriesData.items
-                .filter((cat) => !cat.is_active)
-                .map((cat) => cat.id);
-            ids.push(...hiddenIds);
-        }
-        const seen = new Set<number>();
-        const ordered: number[] = [];
-        for (const id of ids) {
-            if (!seen.has(id)) {
-                seen.add(id);
-                ordered.push(id);
-            }
-        }
-        return ordered;
-    }, [settings.exclusionScope, settings.excludedCategoryIds, settings.excludeHiddenCategories, categoriesData]);
-
-    // Recipient exclusions
-    const excludedRecipientIds = useMemo(
-        () => ((settings.exclusionScope === 'everywhere' || settings.exclusionScope === 'dashboard')
-            ? settings.excludedRecipientIds
-            : []),
-        [settings.exclusionScope, settings.excludedRecipientIds],
-    );
 
     // Stable exclusion params (don't change with toggle)
     const filteredExclusionParams = useMemo(() => ({
@@ -190,39 +159,21 @@ export default function DashboardPage() {
 
     const allTransactions = useMemo(() => transactionsData?.items || [], [transactionsData]);
 
-    // Apply settings filters to transactions
+    // Apply settings filters to transactions, using the shared resolved exclusion set.
     const transactions = useMemo(() => {
-        if (settings.exclusionScope !== 'everywhere' && settings.exclusionScope !== 'dashboard') {
+        if (!exclusionScopeApplies) {
             return allTransactions;
         }
 
-        let hiddenCategoryIds: number[] = [];
-        if (settings.excludeHiddenCategories && categoriesData) {
-            hiddenCategoryIds = categoriesData.items
-                .filter((cat) => !cat.is_active)
-                .map((cat) => cat.id);
-        }
-
-        const excludedCategoryIdSet = new Set([
-            ...settings.excludedCategoryIds,
-            ...hiddenCategoryIds,
-        ]);
-
-        const excludedRecipientIdSet = new Set(settings.excludedRecipientIds);
+        const excludedCategoryIdSet = new Set(allExcludedCategoryIds);
+        const excludedRecipientIdSet = new Set(excludedRecipientIds);
 
         return allTransactions.filter((tx) => {
             if (tx.category_id && excludedCategoryIdSet.has(tx.category_id)) return false;
             if (tx.recipient_id && excludedRecipientIdSet.has(tx.recipient_id)) return false;
             return true;
         });
-    }, [
-        allTransactions,
-        settings.exclusionScope,
-        settings.excludedCategoryIds,
-        settings.excludedRecipientIds,
-        settings.excludeHiddenCategories,
-        categoriesData,
-    ]);
+    }, [allTransactions, exclusionScopeApplies, allExcludedCategoryIds, excludedRecipientIds]);
 
     // Use real-time statistics from API (last month with data)
     const totalTransactions = statsData?.totalTransactions ?? 0;

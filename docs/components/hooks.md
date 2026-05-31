@@ -3,10 +3,10 @@ title: Custom Hooks
 type: component
 status: active
 date: 2026-04-23
-updated: 2026-05-08
-last_modified: 2026-05-08
-tags: [components, hooks, react-query, zustand, form-state, data-table, phase-4, phase-13, phase-c, phase-d, i18n, notifications, export-filters, bug-hunt-2026-05-05, bug-hunt-2026-05-06, bug-hunt-2026-05-08, mount-guard, query-key-fix, prefetch, memoization, useCallback, parseLocaleNumber, currency-utilities]
-description: Custom React hooks for data fetching and state management. Includes toast notifications for mutations via i18n keys. Phase 13 adds useBankAccounts hook for export filtering. May 2026 bug hunt adds mount guard to usePlannedPayments, fixes queryKey mismatch in usePortfolioPrefetch, and documents parseLocaleNumber utility for locale-aware number parsing.
+updated: 2026-05-29
+last_modified: 2026-05-29
+tags: [components, hooks, react-query, zustand, form-state, data-table, phase-4, phase-13, phase-c, phase-d, i18n, notifications, export-filters, bug-hunt-2026-05-05, bug-hunt-2026-05-06, bug-hunt-2026-05-08, mount-guard, query-key-fix, prefetch, memoization, useCallback, parseLocaleNumber, currency-utilities, exclusion-ids, ssrf-correctness, loading-states, error-states, isError, refetch]
+description: Custom React hooks for data fetching and state management. Includes toast notifications for mutations via i18n keys. Phase 13 adds useBankAccounts hook for export filtering. May 2026 bug hunt adds mount guard to usePlannedPayments, fixes queryKey mismatch in usePortfolioPrefetch, and documents parseLocaleNumber utility for locale-aware number parsing. 2026-05-29 adds useExcludedIds as a shared exclusion-resolution hook and exposes isLoading/isError/error/refetch from usePortfolio so asset pages can distinguish loading/error from empty.
 related_code: ["apps/frontend/src/hooks"]
 ---
 
@@ -45,6 +45,7 @@ Vision uses custom hooks for data fetching, state management, and reusable logic
 |------|-------------|------|
 | `useWidgetVisibility()` | Widget visibility | [[apps/frontend/src/hooks/useWidgetVisibility.ts\|useWidgetVisibility.ts]] |
 | `useFilteredDashboardStats()` | Filtered dashboard data | [[apps/frontend/src/hooks/useFilteredDashboardStats.ts\|useFilteredDashboardStats.ts]] |
+| `useExcludedIds(scope)` | Single source of truth for excluded category/recipient IDs (2026-05-29) | [[apps/frontend/src/hooks/useExcludedIds.ts\|useExcludedIds.ts]] |
 | `useConfirmDialog()` | Confirmation dialogs | [[apps/frontend/src/hooks/useConfirmDialog.tsx\|useConfirmDialog.tsx]] |
 | `useFormState()` | Generic typed form state with dirty tracking (Phase 4) | [[apps/frontend/src/hooks/useFormState.ts\|useFormState.ts]] |
 
@@ -178,12 +179,23 @@ const {
   totalUnrealizedGain,   // Unrealized gains
   refreshPrices,         // Refresh all prices
   isRefreshingPrices,    // Refreshing state
+  // Query state (2026-05-29) — allows pages to distinguish loading/error from empty
+  isLoading,             // boolean — true while initial fetch is in flight
+  isError,               // boolean — true when the fetch has failed
+  error,                 // Error | null
+  refetch,               // () => void — re-trigger the failed query
 } = usePortfolio();
 
 // Mutations
 const deleteInvestment = useDeleteInvestment();
 const createInvestment = useCreateInvestment();
 ```
+
+### Loading / Error State Exposure (2026-05-29)
+
+Prior to this change, a failed investments fetch resolved to an empty `investments` array, causing asset pages to silently render the "no holdings" empty state. `usePortfolio` now forwards `isLoading`, `isError`, `error`, and `refetch` from the underlying `useInvestmentsQuery` so callers can render a skeleton while loading and a `PageError` with retry on failure.
+
+All four asset pages (Stocks, Crypto, Savings, Real Estate; Metals via `StocksPage`) use this to gate their rendering. See [[docs/features/portfolio#portfolio-asset-page-loading-and-error-states-2026-05-29|Portfolio — Loading/Error States]] for the full state table.
 
 ### Investment Summary
 
@@ -293,6 +305,7 @@ interface CategoryPivot {
 
 ### Features
 
+- **Shared exclusion resolution**: Delegates exclusion-ID resolution to `useExcludedIds('statistics')` (2026-05-29) — no longer owns a separate category-list fetch; ensures exclusion set is identical to the Dashboard surface
 - **Per-graph exclusion toggle**: Each chart can independently toggle category/recipient exclusions
 - **Category normalization**: Ensures consistent `GENERAL: DETAIL` formatting across all charts
 - **Automatic query invalidation**: Reacts to settings changes
@@ -403,13 +416,57 @@ const {
 
 ### Features
 
-- Respects exclusion settings
+- Delegates exclusion-ID resolution to `useExcludedIds('dashboard')` (2026-05-29) — no longer owns a separate category-list fetch
 - Applies category/recipient filters
 - Requests monthly summary in selected app currency via `currency` query param
 - Includes selected app currency in query key for cache isolation
 - Uses the **latest month with data** for dashboard income/spending cards
 - Computes card totals from live transactions for that month to avoid stale materialized-view lag
 - Fetches month transactions in pages so totals remain complete on large datasets
+
+---
+
+## useExcludedIds (2026-05-29)
+
+Single source of truth for "which category/recipient IDs are excluded from money totals" across the dashboard and statistics surfaces.
+
+**File:** [[apps/frontend/src/hooks/useExcludedIds.ts]]
+
+### Problem it solves
+
+Previously, exclusion ID resolution was duplicated across three call sites (`useFilteredDashboardStats`, `useStatistics`, `DashboardPage`). Each call fetched the full category list under a different React Query cache key and a different `limit` (500 vs 1000). A deployment with more than 500 categories would get a different hidden-category set on the Dashboard vs Statistics, silently producing different income/spending/net totals across screens.
+
+### API
+
+```typescript
+const {
+  excludedCategoryIds,   // number[] — settings exclusions + hidden categories, sorted asc
+  excludedRecipientIds,  // number[] — settings recipient exclusions, sorted asc
+  exclusionsApply,       // boolean — false when scope doesn't include this surface
+  isReady,               // boolean — true once category data resolved (or not needed)
+} = useExcludedIds(scope);  // scope: 'dashboard' | 'statistics'
+```
+
+### Behavior
+
+- Calls `apiClient.getCategories({ limit: CATEGORY_FETCH_LIMIT })` (limit: 1000) under the stable cache key `['categories', 'all-for-exclusions']`. One shared query instance — no duplication.
+- The category fetch is skipped entirely when `settings.excludeHiddenCategories` is false or when `exclusionsApply` is false (no wasted request).
+- If the category list hits the 1000-item cap, a `console.warn` is emitted rather than silently truncating (the exclusion set is still uniform across screens).
+- Returned arrays are de-duplicated and sorted ascending; a stable `EMPTY` reference (`[]`) is reused when exclusions do not apply, maintaining memoization stability for downstream `useMemo`/`useCallback` dependencies.
+
+### Consumers
+
+| Consumer | Before | After |
+|----------|--------|-------|
+| `useFilteredDashboardStats` | Fetched categories with limit 500, own cache key | Calls `useExcludedIds('dashboard')` |
+| `useStatistics` | Fetched categories with limit 1000, own cache key | Calls `useExcludedIds('statistics')` |
+| `DashboardPage` | Inline `useMemo` over `categoriesData` from separate query | Calls `useExcludedIds('dashboard')` |
+
+### Constants
+
+```typescript
+export const CATEGORY_FETCH_LIMIT = 1000;  // shared across all consumers
+```
 
 ---
 
@@ -861,6 +918,7 @@ Code link: [[apps/frontend/src/hooks/usePortfolioPrefetch.ts]]
 - [[docs/components/index]] - Components Index
 - [[docs/api/index]] - API documentation
 - [[docs/components/statistics]] - Statistics components
+- [[docs/components/dashboard]] - Dashboard components (DashboardPage exclusion flow)
 - [[docs/features/settings]] - Settings feature architecture
 - [[docs/reference/code-patterns#zustand-store-pattern-phase-4]] - Zustand pattern reference
 - [React Query Docs](https://tanstack.com/query)
