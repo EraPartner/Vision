@@ -52,10 +52,7 @@ CID="$("${COMPOSE[@]}" ps -q "$SVC" 2>/dev/null | head -1 || true)"
 EXEC_ENV=()
 sandbox_forward_llm_creds vision-claude-code-token
 
-# --- 5) Auto config-sync: push container changes back on exit -----------------
-sandbox_install_autosync_trap vision "$CID" "${VISION_AUTOSYNC:-1}"
-
-# --- 6) Launch-integrity gate: refuse to start if a pinned binary drifted ------
+# --- 5) Launch-integrity gate: refuse to start if a pinned binary drifted ------
 # Tolerant: warns (doesn't abort) until the image is rebuilt with the pins baked,
 # so this lands without breaking a running container; once rebuilt it enforces.
 if "${COMPOSE[@]}" exec -u dev -T "$SVC" bash -lc 'command -v vision-verify-pins >/dev/null 2>&1'; then
@@ -69,6 +66,12 @@ if "${COMPOSE[@]}" exec -u dev -T "$SVC" bash -lc 'command -v vision-verify-pins
 else
   echo "claude (vision-compose): verify-pins not baked yet — rebuild to enable launch-integrity checks: ${COMPOSE[*]} build $SVC" >&2
 fi
+
+# --- 6) Auto config-sync: push container changes back on exit -----------------
+# Installed AFTER the verify-pins gate on purpose: an aborted launch (pin drift,
+# exit 1 above) must NOT fire the EXIT trap and push a never-used container
+# ~/.claude back to the host.
+sandbox_install_autosync_trap vision "$CID" "${VISION_AUTOSYNC:-1}"
 
 set +e
 "${COMPOSE[@]}" exec -u dev ${EXEC_ENV[@]+"${EXEC_ENV[@]}"} "$SVC" claude "$@"

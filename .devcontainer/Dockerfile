@@ -68,6 +68,10 @@ ARG NODE_VERSION=24.15.0
 RUN set -eux; \
     case "$(dpkg --print-architecture)" in amd64) na=x64 ;; arm64) na=arm64 ;; *) exit 1 ;; esac; \
     curl -fsSLo /tmp/node.tar.xz "https://nodejs.org/dist/v${NODE_VERSION}/node-v${NODE_VERSION}-linux-${na}.tar.xz"; \
+    curl -fsSLo /tmp/node-SHASUMS256.txt "https://nodejs.org/dist/v${NODE_VERSION}/SHASUMS256.txt"; \
+    want="$(grep " node-v${NODE_VERSION}-linux-${na}.tar.xz\$" /tmp/node-SHASUMS256.txt | cut -d' ' -f1)"; \
+    echo "${want}  /tmp/node.tar.xz" | sha256sum -c -; \
+    rm /tmp/node-SHASUMS256.txt; \
     tar -xJf /tmp/node.tar.xz -C /usr/local --strip-components=1 --no-same-owner \
       --exclude='*/CHANGELOG.md' --exclude='*/LICENSE' --exclude='*/README.md'; \
     rm /tmp/node.tar.xz; \
@@ -88,6 +92,10 @@ RUN set -eux; \
     url="https://github.com/astral-sh/python-build-standalone/releases/download/${PY_RELEASE}/cpython-${PY_VERSION}+${PY_RELEASE}-${pa}-unknown-linux-gnu-install_only.tar.gz"; \
     echo "python-build-standalone: $url"; \
     curl -fsSLo /tmp/py.tar.gz "$url"; \
+    curl -fsSLo /tmp/py-SHA256SUMS "https://github.com/astral-sh/python-build-standalone/releases/download/${PY_RELEASE}/SHA256SUMS"; \
+    want="$(grep " cpython-${PY_VERSION}+${PY_RELEASE}-${pa}-unknown-linux-gnu-install_only.tar.gz\$" /tmp/py-SHA256SUMS | cut -d' ' -f1)"; \
+    echo "${want}  /tmp/py.tar.gz" | sha256sum -c -; \
+    rm /tmp/py-SHA256SUMS; \
     mkdir -p /opt/python; \
     tar -xzf /tmp/py.tar.gz --strip-components=1 -C /opt/python; \
     rm /tmp/py.tar.gz; \
@@ -102,17 +110,28 @@ RUN set -eux; \
 # ~/.claude, and Claude starts unconfigured. Covers mid-session pip builds too.
 ENV CC=gcc CXX=g++
 
-# Global npm prefix -> a dev-owned dir so runtime `npm i -g` (safe-chain) works.
+# Build-time global prefix for the agent CLI (claude). Kept ROOT-owned (see the
+# claude install below): the unprivileged dev user must NOT be able to overwrite
+# the pinned claude/npm binaries post-launch, or the verify-pins launch gate is
+# bypassable (it fingerprints exactly these paths). Runtime `npm i -g` (safe-chain)
+# uses a SEPARATE dev-owned prefix, /home/dev/.npm-global, set after the install.
+# Root prefix is FIRST on PATH so claude always resolves to the pinned copy.
 ENV NPM_CONFIG_PREFIX=/usr/local/share/npm-global
-ENV PATH=/usr/local/share/npm-global/bin:/opt/python/bin:/usr/local/bin:$PATH
+ENV PATH=/usr/local/share/npm-global/bin:/home/dev/.npm-global/bin:/opt/python/bin:/usr/local/bin:$PATH
 # Login shells reset PATH via /etc/profile; re-add the tool dirs for them too.
-RUN printf 'export PATH="/usr/local/share/npm-global/bin:/opt/python/bin:/usr/local/bin:$PATH"\n' \
+RUN printf 'export PATH="/usr/local/share/npm-global/bin:/home/dev/.npm-global/bin:/opt/python/bin:/usr/local/bin:$PATH"\n' \
       > /etc/profile.d/00-sandbox-path.sh
 
 # --- Claude Code CLI (replaces the `anthropics/claude-code:1.0` feature) -----
+# Installed as root into the root-owned global prefix and deliberately NOT chown'd
+# to dev — so the pinned claude/npm cannot be replaced by the dev user.
 RUN npm install -g @anthropic-ai/claude-code@latest \
-  && claude --version \
-  && chown -R dev:dev /usr/local/share/npm-global
+  && claude --version
+
+# Runtime global installs (safe-chain in post-create) go to a SEPARATE dev-owned
+# prefix, so they never need write access to the pinned root prefix above.
+RUN install -d -o dev -g dev -m 0755 /home/dev/.npm-global
+ENV NPM_CONFIG_PREFIX=/home/dev/.npm-global
 
 # Bake privileged scripts into the image (root-owned, source-only repo copies).
 COPY init-firewall.sh /usr/local/sbin/egress-firewall

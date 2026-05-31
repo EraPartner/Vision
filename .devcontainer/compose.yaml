@@ -18,7 +18,7 @@ services:
       dockerfile: Dockerfile
     init: true
     cap_drop: [ALL]
-    cap_add: [NET_ADMIN, CHOWN, DAC_OVERRIDE, FOWNER, SETUID, SETGID, SETPCAP]
+    cap_add: [NET_ADMIN, CHOWN, DAC_OVERRIDE, FOWNER, SETUID, SETGID]
     security_opt:
       - no-new-privileges:true
     mem_limit: 4g
