@@ -5,7 +5,7 @@ description: Live and historical price feeds for stocks, crypto, and other inves
 date: 2026-04-21
 last_modified: 2026-05-29
 updated: 2026-05-29
-tags: [integration, price, stocks, crypto, api, historical-quotes, quote-backfill, phase-1, eur-to-usd-mapping, data-sanitization, kinesis, offline-resilience, price-history-default, provider-timeout, parallel-fetching, startup-optimization, network-reachability]
+tags: [integration, price, stocks, crypto, api, historical-quotes, quote-backfill, phase-1, eur-to-usd-mapping, data-sanitization, kinesis, offline-resilience, price-history-default, provider-timeout, parallel-fetching, startup-optimization, network-reachability, ssrf, url-safety]
 aliases: [price providers, market data, Binance, Kinesis, Yahoo Finance, live prices]
 status: active
 related_code: [[apps/node-backend/src/services/priceProviderService.js], [apps/node-backend/src/services/quoteBackfillService.js], [apps/node-backend/src/services/prices/priceProviderRegistry.js], [apps/node-backend/tests/priceProviderRegistry.test.js], [apps/node-backend/src/lib/network.js]]
@@ -64,6 +64,15 @@ Price providers fetch live and historical market prices for investments, support
 - **Asset Classes**: All
 - **Configuration**: Custom latest/history URLs and JSON paths
 - **Usage**: For proprietary or unsupported APIs
+
+#### Custom Provider URL Constraints (2026-05-29)
+
+Custom provider URLs (`price_provider_url`, `price_provider_latest_url`, `price_provider_history_url`) are validated at two points to prevent SSRF:
+
+1. **Write time** (`investmentController.js`): scheme and IP-literal check (no DNS resolution) — rejects non-http(s) schemes and IP-literal private/loopback/link-local addresses with a 400 before the row is stored.
+2. **Fetch time** (`priceProviderRegistry.js`): full DNS resolution via `assertPublicHttpUrl` (with `resolveDns: true`), repeated for every redirect hop. Responses are capped at 5 MB.
+
+URLs that target private networks (RFC 1918, loopback, CGNAT `100.64/10`, cloud metadata `169.254.169.254`, IPv6 ULA/link-local) are blocked at both boundaries. See [[docs/security/input-validation#outbound-request-guard-ssrf-2026-05-29|Input Validation — SSRF guard]] for the full range list and module reference.
 
 ## Historical Quote Cache
 

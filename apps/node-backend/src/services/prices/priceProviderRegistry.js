@@ -16,6 +16,7 @@ import {
 import { toNumber, isValidPrice } from './priceCache.js';
 import { median } from '../../lib/math.js';
 import { convertToCurrency } from '../currency/currencyConversionService.js';
+import { assertPublicHttpUrl } from '../../lib/urlSafety.js';
 
 const yahooFinance = new YahooFinance({ suppressNotices: ['yahooSurvey'] });
 
@@ -99,13 +100,44 @@ export function resolveKinesisConfig(inv) {
 
 // ─── HTTP helper ──────────────────────────────────────────────────────────────
 
+const CUSTOM_FETCH_MAX_REDIRECTS = 3;
+const CUSTOM_FETCH_MAX_BYTES = 5 * 1024 * 1024; // 5 MB — provider JSON is tiny; cap guards against memory-exhaustion responses.
+
+/**
+ * Fetch JSON from a user-controlled custom-provider URL.
+ *
+ * Custom provider URLs come from the investment record (price_provider_*_url),
+ * so this is an SSRF sink: every hop is validated against the public-URL guard
+ * (scheme + private/loopback/link-local block, DNS-resolved). Redirects are
+ * followed manually so a public host cannot 302 the request to an internal
+ * address, and the response body is size-capped.
+ */
 async function _fetchJson(url) {
-  const res = await fetch(url, {
-    headers: { Accept: 'application/json' },
-    signal: AbortSignal.timeout(10_000),
-  });
-  if (!res.ok) throw new Error(`HTTP ${res.status}`);
-  return res.json();
+  let current = String(url);
+  for (let hop = 0; hop <= CUSTOM_FETCH_MAX_REDIRECTS; hop += 1) {
+    await assertPublicHttpUrl(current); // throws BlockedUrlError on private/loopback/non-http
+    const res = await fetch(current, {
+      headers: { Accept: 'application/json' },
+      redirect: 'manual',
+      signal: AbortSignal.timeout(10_000),
+    });
+
+    if (res.status >= 300 && res.status < 400) {
+      const location = res.headers.get('location');
+      if (!location) throw new Error(`HTTP ${res.status} redirect without Location`);
+      current = new URL(location, current).toString(); // re-validated at top of next loop
+      continue;
+    }
+
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+
+    const declaredLength = Number(res.headers?.get?.('content-length') || 0);
+    if (declaredLength > CUSTOM_FETCH_MAX_BYTES) {
+      throw new Error(`Response too large: ${declaredLength} bytes`);
+    }
+    return res.json();
+  }
+  throw new Error('Too many redirects');
 }
 
 // ─── Custom endpoint parsing ──────────────────────────────────────────────────

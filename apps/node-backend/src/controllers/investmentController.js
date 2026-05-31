@@ -18,6 +18,25 @@ import { logger } from '../config/logger.js';
 import { getKinesisAssetConfig } from '../config/kinesisConfig.js';
 import { NotFoundError, ValidationError } from '../middleware/errorHandler.js';
 import { invalidatePortfolioCaches } from '../routes/info/_cache.js';
+import { assertPublicHttpUrl } from '../lib/urlSafety.js';
+
+// Custom price-provider URLs are fetched server-side at refresh time, so reject
+// non-public targets at the write boundary too (SSRF defense-in-depth). DNS is
+// not resolved here — that would couple investment writes to DNS availability;
+// the full DNS-resolved check runs at fetch time in priceProviderRegistry.
+const PROVIDER_URL_FIELDS = ['price_provider_url', 'price_provider_latest_url', 'price_provider_history_url'];
+
+async function validateProviderUrls(body) {
+  for (const field of PROVIDER_URL_FIELDS) {
+    const value = body?.[field];
+    if (value === undefined || value === null || value === '') continue;
+    try {
+      await assertPublicHttpUrl(value, { resolveDns: false });
+    } catch (err) {
+      throw new ValidationError(`Invalid ${field}: ${err.message}`);
+    }
+  }
+}
 
 // ── In-memory response caches ────────────────────────────────────────────────
 
@@ -208,6 +227,8 @@ export async function createInvestment(req, res) {
     throw new ValidationError('name and asset_class are required');
   }
 
+  await validateProviderUrls(req.body);
+
   let inv;
   try {
     inv = await investmentRepository.create({
@@ -333,6 +354,8 @@ export async function getInvestment(req, res) {
 }
 
 export async function updateInvestment(req, res) {
+  await validateProviderUrls(req.body);
+
   let inv;
   try {
     inv = await investmentRepository.update(parseRequestId(req), req.body);

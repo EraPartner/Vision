@@ -26,6 +26,14 @@ vi.mock('../src/database/connection.js', () => ({
   query: vi.fn(),
 }));
 
+// The SSRF guard (lib/urlSafety) resolves custom-provider hostnames before fetch.
+// Stub DNS to a public address so these hermetic tests don't hit the network;
+// the guard's private-IP/scheme logic is unit-tested in tests/urlSafety.test.js.
+vi.mock('node:dns/promises', () => {
+  const lookup = vi.fn(async () => [{ address: '93.184.216.34', family: 4 }]);
+  return { default: { lookup }, lookup };
+});
+
 import {
   fetchLivePrices,
   fetchLivePricesDetailed,
