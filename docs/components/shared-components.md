@@ -3,10 +3,10 @@ title: Shared Components Reference
 type: component
 status: active
 date: 2026-04-26
-updated: 2026-05-06
-last_modified: 2026-05-06
-tags: [component, shared, utility, frontend, reference, phase-13, phase-c, phase-d, multi-select, export-filters, bug-hunt-2026-05-05, bug-hunt-2026-05-06, dateutils, utc-safe-dates, date-formatting, debounce, accessibility, aria-label, useCallback]
-description: Reference documentation for shared utility components used across the application. May 2026 adds UTC-safe date parsing and expanded dateUtils documentation.
+updated: 2026-05-29
+last_modified: 2026-05-29
+tags: [component, shared, utility, frontend, reference, phase-13, phase-c, phase-d, multi-select, export-filters, bug-hunt-2026-05-05, bug-hunt-2026-05-06, dateutils, utc-safe-dates, date-formatting, debounce, accessibility, aria-label, useCallback, aria-grid, keyboard-operability, a11y, performance, memoization, selection-toggle]
+description: Reference documentation for shared utility components used across the application. May 2026 adds UTC-safe date parsing, ARIA grid semantics on VirtualDataTable, the onActivateKeyDown keyboard helper, and the columnKeySignature selection-toggle reprocessing fix.
 aliases: [shared components, utility components, common components]
 related_code:
   - apps/frontend/src/components/shared/VirtualDataTable.tsx
@@ -23,6 +23,7 @@ related_code:
   - apps/frontend/src/components/shared/RemoteNewsImage.tsx
   - apps/frontend/src/components/notifications/UpdateNotification.tsx
   - apps/frontend/src/components/notifications/UpcomingPaymentsNotification.tsx
+  - apps/frontend/src/utils/a11y.ts
 ---
 
 # Shared Components Reference
@@ -47,6 +48,54 @@ The most complex shared component — a high-performance virtualized data table 
 - **Infinite scroll**: `onLoadMore` callback for pagination
 - **Deferred rendering**: Uses `useDeferredValue` to avoid blocking during search
 - **Edit cancellation** — `cancelEditing` wrapped in `useCallback` with proper dependency tracking (Phase C fix) to prevent memory leaks during unmount
+- **ARIA grid semantics** (2026-05-29) — full screen-reader table structure; see section below
+- **Keyboard row activation** (2026-05-29) — rows are focusable and Enter/Space-operable when `onRowDoubleClick` is set
+
+### Performance: Selection-Toggle Reprocessing Fix (2026-05-29)
+
+Remediates audit finding [[docs/reference/codebase-audit-2026-05#performance.4|performance.4]].
+
+`processedRows` and the column-width re-seed effect previously depended on the `columns` array reference. `TransactionsTable` rebuilds the `columns` array on every checkbox toggle (new `Set` identity → new column array identity), causing `processedRows` to re-map and re-filter the entire loaded dataset on each selection change.
+
+**Fix applied in `VirtualDataTable.tsx`:**
+
+- A `columnsRef` (`useRef`) is kept current on every render, giving the body of `processedRows` and the width-seed effect access to the live column definitions without needing the array in their deps.
+- A `columnKeySignature` string (`columns.map(c => c.key).join(",")`) replaces the `columns` array as the dependency. `columnKeySignature` is value-stable across selection toggles (column keys do not change when selection state changes), so neither `processedRows` nor the width-seed effect is invalidated by checkbox ticks.
+
+```tsx
+// Stable string dep — value-equal across selection toggles
+const columnKeySignature = columns.map((c) => c.key).join(",");
+const columnsRef = useRef(columns);
+columnsRef.current = columns; // keep live reference current
+
+// processedRows and the width-seed effect now depend on columnKeySignature
+// and read columnsRef.current instead of listing `columns` directly.
+```
+
+### ARIA Grid Semantics (2026-05-29)
+
+Resolves audit finding [[docs/reference/codebase-audit-2026-05#ux.1|ux.1]]. The `div`-based layout now carries a complete ARIA table role tree:
+
+| Element | Role / Attribute | Notes |
+|---|---|---|
+| `CardContent` outer container | `role="table"` + `aria-rowcount` + `aria-colcount` | Row count = processed (filtered/sorted) rows; col count includes optional edit column |
+| Header scroll wrapper | `role="rowgroup"` | Groups the single header row |
+| Header row `div` | `role="row"` | |
+| Each header cell | `role="columnheader"` + `aria-sort` | `aria-sort` reflects current sort: `"ascending"`, `"descending"`, or `"none"` |
+| Body scroll wrapper | `role="rowgroup"` | Groups all body rows |
+| Virtualizer sizing `div` | `role="presentation"` | Suppresses the layout-only container from the accessibility tree |
+| Each body row | `role="row"` + `aria-rowindex` | `aria-rowindex` = virtual row index + 2 (1-based, +1 for header row) |
+| Each body cell | `role="cell"` | |
+
+### Keyboard Row Activation (2026-05-29)
+
+Resolves audit finding [[docs/reference/codebase-audit-2026-05#ux.2|ux.2]] for VirtualDataTable rows. When `onRowDoubleClick` is provided:
+
+- Rows receive `tabIndex={0}` — they enter the tab order.
+- `onKeyDown` fires `onRowDoubleClick(row, sourceIndex)` on **Enter** or **Space** (same handler as double-click), giving keyboard users the same activation path as mouse users.
+- Rows display a `focus-visible` ring for sighted keyboard users.
+
+> [!info] The `onActivateKeyDown` helper in `[[apps/frontend/src/utils/a11y.ts]]` is used for similar keyboard activation on non-table interactive surfaces (CategoriesPage, OwesPage, WatchlistPage, StocksPage, CryptoPage). VirtualDataTable uses an inline handler with the same semantics.
 
 ### Props Interface
 
@@ -313,6 +362,52 @@ Toggle button for per-graph exclusion control in the Statistics page. Shows whet
 
 Dialog for toggling widget visibility on pages that support configurable layouts (Statistics, Portfolio Tax).
 
+## onActivateKeyDown (a11y utility)
+
+**Path:** `[[apps/frontend/src/utils/a11y.ts]]`
+
+A small keyboard-activation helper that makes previously mouse-only surfaces operable by keyboard users. Resolves audit finding [[docs/reference/codebase-audit-2026-05#ux.2|ux.2]] across non-table interactive elements.
+
+```typescript
+import { onActivateKeyDown } from "@/utils/a11y";
+
+// Non-interactive div or Card that had only onClick/onDoubleClick:
+<div
+  role="button"
+  tabIndex={0}
+  onClick={handleOpen}
+  onKeyDown={onActivateKeyDown(handleOpen)}
+>
+  ...
+</div>
+
+// Native button that previously had only onDoubleClick:
+<button
+  type="button"
+  onKeyDown={onActivateKeyDown(() => openMarketLookup(symbol))}
+>
+  ...
+</button>
+```
+
+`onActivateKeyDown(handler)` returns an `onKeyDown` callback that:
+- Fires `handler` on **Enter** or **Space**.
+- Calls `e.preventDefault()` to suppress page scrolling on Space.
+- **Ignores events that bubbled from a nested focusable child** (`e.target !== e.currentTarget`) — prevents double-firing when the user operates an inner control.
+
+### Usage in the codebase
+
+| Surface | Pattern | Notes |
+|---|---|---|
+| `CategoriesPage` rows | `role="button"` + `tabIndex` + `onKeyDown` | Opens category detail on Enter/Space |
+| `OwesPage` debtor cards | `role="button"` + `tabIndex` + `onKeyDown` | Selects recipient on Enter/Space |
+| `WatchlistPage` holding cards | `role="button"` + `tabIndex` + `onKeyDown` | Opens detail dialog on Enter/Space |
+| `StocksPage` name buttons | Native `<button>` + `onKeyDown` | Opens market lookup on Enter/Space |
+| `CryptoPage` name buttons | Native `<button>` + `onKeyDown` | Opens market lookup on Enter/Space |
+| `InvestmentDetailDialog` title button | Native `<button>` + `onKeyDown` | Opens market lookup on Enter/Space |
+
+> [!tip] Pair `role="button"` + `tabIndex={0}` + `onActivateKeyDown` only on elements that cannot be refactored to a real `<button>`. When the element is already a native button, omit `role` and `tabIndex` — just add `onKeyDown`.
+
 ## RemoteNewsImage
 
 **Path:** `[[apps/frontend/src/components/shared/RemoteNewsImage.tsx]]`
@@ -354,3 +449,4 @@ Shows notifications for upcoming planned/recurring payments.
 | ExclusionToggle | Statistics page (per-graph toggles) |
 | WidgetVisibilityDialog | Statistics, Portfolio Tax |
 | ErrorBoundary | App root (wraps entire application) |
+| onActivateKeyDown | CategoriesPage, OwesPage, WatchlistPage, StocksPage, CryptoPage, InvestmentDetailDialog |

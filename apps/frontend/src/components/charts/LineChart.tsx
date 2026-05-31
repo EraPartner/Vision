@@ -15,6 +15,7 @@ import { BottomAxis, LeftAxis, RightAxis } from "./ChartAxis";
 import { ChartTooltip, type ChartTooltipDatum } from "./ChartTooltip";
 import { CHART_NEUTRAL, getChartColor } from "./palette";
 import { durations, easings } from "@/lib/motion";
+import { useLanguage } from "@/contexts/LanguageContext";
 
 export interface LineSeries<Datum> {
     readonly key: string;
@@ -85,6 +86,7 @@ function Inner<Datum>({
     height,
     ariaLabel,
 }: LineChartProps<Datum> & { width: number; height: number }) {
+    const { t } = useLanguage();
     const reduce = useReducedMotion();
 
     const innerWidth = Math.max(0, width - margin.left - margin.right);
@@ -177,7 +179,7 @@ function Inner<Datum>({
 
     return (
         <div style={{ position: "relative", width, height }}>
-            <svg width={width} height={height} role="img" aria-label={ariaLabel ?? summarizeSeriesChart("Line chart", data.length, series.map((s) => s.label))}>
+            <svg width={width} height={height} role="img" aria-label={ariaLabel ?? summarizeSeriesChart(t, 'chart.aria.kind.line', data.length, series.map((s) => s.label))}>
                 <Group left={margin.left} top={margin.top}>
                     {yScale.ticks(numYTicks).map((tick) => (
                         <line

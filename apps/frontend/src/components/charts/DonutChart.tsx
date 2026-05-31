@@ -11,6 +11,7 @@ import { useCallback, useState, type ReactNode } from "react";
 import { ChartTooltip } from "./ChartTooltip";
 import { getChartColor } from "./palette";
 import { durations, easings } from "@/lib/motion";
+import { useLanguage } from "@/contexts/LanguageContext";
 import type { PieDatum } from "./PieChart";
 
 export interface DonutChartProps {
@@ -46,6 +47,7 @@ function Inner({
     height,
     ariaLabel,
 }: DonutChartProps & { width: number; height: number }) {
+    const { t } = useLanguage();
     const reduce = useReducedMotion();
     const outer = Math.min(width, height) / 2 - 8;
     const inner = outer * innerRadiusRatio;
@@ -57,7 +59,7 @@ function Inner({
 
     return (
         <div style={{ position: "relative", width, height }}>
-            <svg width={width} height={height} role="img" aria-label={ariaLabel ?? summarizeProportionChart("Donut chart", data.map((d) => d.name))}>
+            <svg width={width} height={height} role="img" aria-label={ariaLabel ?? summarizeProportionChart(t, 'chart.aria.kind.donut', data.map((d) => d.name))}>
                 <Group top={cy} left={cx}>
                     <Pie
                         data={data as PieDatum[]}

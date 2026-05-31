@@ -1,46 +1,53 @@
 /**
- * Accessible default summaries for chart `role="img"` labels.
+ * Accessible, localized summaries for chart `role="img"` labels.
  *
  * Every chart renders an `<svg role="img">`. Without a meaningful label a screen
  * reader announces only the chart type ("Bar chart"), conveying nothing about
- * the data. The `ariaLabel` prop existed but no caller populated it, so these
- * builders generate a one-line data summary as the default. Callers may still
- * pass an explicit `ariaLabel` to override.
+ * the data. These builders generate a one-line, translated data summary as the
+ * default; callers may still pass an explicit `ariaLabel` to override.
+ *
+ * The translator `t` and a `kindKey` (e.g. `chart.aria.kind.bar`) are injected by
+ * each chart component so the summaries are localized (previously they were
+ * hardcoded English, so Dutch screen-reader users heard English for every chart).
  */
 
-function pluralize(n: number, singular: string, plural: string): string {
-  return `${n} ${n === 1 ? singular : plural}`;
-}
+type TFn = (key: string, vars?: Record<string, string | number>) => string;
 
 /** Summary for category/series charts (bar, line, area, stacked bar). */
 export function summarizeSeriesChart(
-  kind: string,
+  t: TFn,
+  kindKey: string,
   categoryCount: number,
   seriesLabels: ReadonlyArray<string | undefined>,
 ): string {
+  const kind = t(kindKey);
   const named = seriesLabels.filter((l): l is string => Boolean(l));
-  const seriesPart = named.length ? `, series: ${named.join(', ')}` : '';
-  return `${kind} with ${pluralize(categoryCount, 'category', 'categories')}${seriesPart}`;
+  const base = t(categoryCount === 1 ? 'chart.aria.seriesOne' : 'chart.aria.seriesOther', { kind, count: categoryCount });
+  return named.length ? base + t('chart.aria.series', { names: named.join(', ') }) : base;
 }
 
 /** Summary for proportion charts (pie, donut), listing the first few segment names. */
-export function summarizeProportionChart(kind: string, names: ReadonlyArray<string>): string {
+export function summarizeProportionChart(t: TFn, kindKey: string, names: ReadonlyArray<string>): string {
+  const kind = t(kindKey);
   const named = names.filter(Boolean);
   const shown = named.slice(0, 6);
-  const more = named.length > shown.length ? `, and ${named.length - shown.length} more` : '';
-  const labelPart = shown.length ? `: ${shown.join(', ')}${more}` : '';
-  return `${kind} with ${pluralize(names.length, 'segment', 'segments')}${labelPart}`;
+  let out = t(names.length === 1 ? 'chart.aria.segmentOne' : 'chart.aria.segmentOther', { kind, count: names.length });
+  if (shown.length) {
+    out += t('chart.aria.segmentNames', { names: shown.join(', ') });
+    if (named.length > shown.length) out += t('chart.aria.andMore', { count: named.length - shown.length });
+  }
+  return out;
 }
 
 /** Summary for a sparkline (array of numbers): point count + value range. */
-export function summarizeSparkline(values: ReadonlyArray<number>): string {
+export function summarizeSparkline(t: TFn, values: ReadonlyArray<number>): string {
   const finite = values.filter((v) => Number.isFinite(v));
-  if (!finite.length) return 'Sparkline, no data';
+  if (!finite.length) return t('chart.aria.sparklineEmpty');
   let min = finite[0];
   let max = finite[0];
   for (const v of finite) {
     if (v < min) min = v;
     if (v > max) max = v;
   }
-  return `Sparkline of ${pluralize(finite.length, 'point', 'points')}, ranging ${min} to ${max}`;
+  return t(finite.length === 1 ? 'chart.aria.sparklineOne' : 'chart.aria.sparklineOther', { count: finite.length, min, max });
 }

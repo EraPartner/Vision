@@ -330,7 +330,7 @@ export function DataTable<T extends Record<string, unknown>>({
                         <Button
                             variant="ghost"
                             size="icon"
-                            aria-label="Clear search"
+                            aria-label={t('aria.clearSearch')}
                             className="absolute right-1 top-1/2 -translate-y-1/2 icon-touch-target text-muted-foreground"
                             onClick={() => {
                                 if (debounceRef.current) {
@@ -531,7 +531,7 @@ export function DataTable<T extends Record<string, unknown>>({
                                                             <Button
                                                                 variant="ghost"
                                                                 size="icon"
-                                                                aria-label="Save"
+                                                                aria-label={t('aria.save')}
                                                                 className="icon-touch-target text-accent hover:text-accent hover:bg-accent/10"
                                                                 onClick={() => saveEditing(sourceIndex, row)}
                                                             >
@@ -540,7 +540,7 @@ export function DataTable<T extends Record<string, unknown>>({
                                                             <Button
                                                                 variant="ghost"
                                                                 size="icon"
-                                                                aria-label="Cancel"
+                                                                aria-label={t('aria.cancel')}
                                                                 className="icon-touch-target text-muted-foreground hover:text-destructive hover:bg-destructive/10"
                                                                 onClick={cancelEditing}
                                                             >
@@ -551,7 +551,7 @@ export function DataTable<T extends Record<string, unknown>>({
                                                         <Button
                                                             variant="ghost"
                                                             size="icon"
-                                                            aria-label="Edit"
+                                                            aria-label={t('aria.edit')}
                                                             className="icon-touch-target text-muted-foreground hover:text-primary hover:bg-primary/10"
                                                             onClick={() => startEditing(sourceIndex, row)}
                                                         >

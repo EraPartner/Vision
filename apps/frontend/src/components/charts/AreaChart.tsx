@@ -24,6 +24,7 @@ import { BottomAxis, LeftAxis, RightAxis } from "./ChartAxis";
 import { ChartTooltip, type ChartTooltipDatum } from "./ChartTooltip";
 import { CHART_NEUTRAL, getChartColor } from "./palette";
 import { durations, easings } from "@/lib/motion";
+import { useLanguage } from "@/contexts/LanguageContext";
 
 export interface AreaSeries<Datum> {
     readonly key: string;
@@ -110,6 +111,7 @@ function AreaChartInner<Datum>({
     height,
     ariaLabel,
 }: InnerProps<Datum>) {
+    const { t } = useLanguage();
     const reduce = useReducedMotion();
 
     const innerWidth = Math.max(0, width - margin.left - margin.right);
@@ -225,7 +227,7 @@ function AreaChartInner<Datum>({
 
     return (
         <div style={{ position: "relative", width, height }}>
-            <svg width={width} height={height} role="img" aria-label={ariaLabel ?? summarizeSeriesChart("Area chart", data.length, series.map((s) => s.label))}>
+            <svg width={width} height={height} role="img" aria-label={ariaLabel ?? summarizeSeriesChart(t, 'chart.aria.kind.area', data.length, series.map((s) => s.label))}>
                 <Group left={margin.left} top={margin.top}>
                     {series.map((s, i) => {
                         const color = s.color ?? getChartColor(i);

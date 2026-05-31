@@ -3,9 +3,9 @@ title: Code Patterns Reference
 type: reference
 status: active
 date: 2026-04-26
-updated: 2026-05-14
-tags: [reference, patterns, conventions, code-style, backend, frontend, phase-0, phase-1, phase-2, phase-3, phase-4, phase-5, phase-6, phase-9, phase-12, phase-14, phase-q, phase-c, phase-d, motion, liquid-glass, design-system, decimal, money, timezone, openapi, domain-split, import, import-pipeline, concurrency, batching, decimal-enforcement, zustand, slice-selection, typescript, error-handling, type-safety, csv, formula-injection, cwe-1236, csv-record-splitter, csv-parsing, multi-line-fields, date-utilities, immutability, aggregation-optimization, recipient-groups, portfolio-totals, query-parameter-filtering, buildquery, bug-hunt-2026-05-05, bug-hunt-2026-05-06, bug-hunt-2026-05-08, react-keys, stable-keys, mount-guard, memory-leak-prevention, parseLocaleNumber, number-parsing, locale-number, settings-backed-hook, portfolio-tax-classifications, audit-2026-05-11, belgian-tax, freeze-display-pattern, adr-059, dev-observability, devtools, api-inspector, observability, postgres-locking, for-update-group-by]
-description: Standard code patterns used throughout the Vision project — repositories, routes, hooks, API client, Express setup, error handling, type safety, filter builders, aggregation envelopes, aggregation refresh, trigger-maintained tables, golden fixtures, database fixtures, pure calculation services, atomic multi-step transactions, streaming CSV exports with formula injection prevention, import batch concurrency, motion consumers, surface shells, gradient icon tiles, money utilities, decimal utilities, shared date utilities with input validation and locale support, timezone boundary handling, TypeScript type annotations, type-safe error handling, domain-split API client, Zustand store with useShallow slice selection, immutable PATCH field sanitization, aggregation query optimization with Map-based single-pass accumulation, recipient group resolution via scalar subqueries (Phase Q), portfolio totals single-source-of-truth pattern (Phase 14), Belgian Tax freeze/display pattern for engine-drift protection (ADR-059, May 2026), dev-only observability integration pattern (May 2026 devtools: module-level pub-sub event bus with zero-cost tree-shaking in production). May 2026 bug hunt adds React key generation pattern (use UUID instead of index), mount guard pattern (prevent setState after unmount), and documents parseLocaleNumber heuristic with single-comma thousands separator fix.
+updated: 2026-05-29
+tags: [reference, patterns, conventions, code-style, backend, frontend, phase-0, phase-1, phase-2, phase-3, phase-4, phase-5, phase-6, phase-9, phase-12, phase-14, phase-q, phase-c, phase-d, motion, liquid-glass, design-system, decimal, money, timezone, openapi, domain-split, import, import-pipeline, concurrency, batching, decimal-enforcement, zustand, slice-selection, typescript, error-handling, type-safety, csv, formula-injection, cwe-1236, csv-record-splitter, csv-parsing, multi-line-fields, date-utilities, immutability, aggregation-optimization, recipient-groups, portfolio-totals, query-parameter-filtering, buildquery, bug-hunt-2026-05-05, bug-hunt-2026-05-06, bug-hunt-2026-05-08, react-keys, stable-keys, mount-guard, memory-leak-prevention, parseLocaleNumber, number-parsing, locale-number, settings-backed-hook, portfolio-tax-classifications, audit-2026-05-11, belgian-tax, freeze-display-pattern, adr-059, dev-observability, devtools, api-inspector, observability, postgres-locking, for-update-group-by, accessibility, a11y, keyboard-operability, aria, onActivateKeyDown]
+description: Standard code patterns used throughout the Vision project — repositories, routes, hooks, API client, Express setup, error handling, type safety, filter builders, aggregation envelopes, aggregation refresh, trigger-maintained tables, golden fixtures, database fixtures, pure calculation services, atomic multi-step transactions, streaming CSV exports with formula injection prevention, import batch concurrency, motion consumers, surface shells, gradient icon tiles, money utilities, decimal utilities, shared date utilities with input validation and locale support, timezone boundary handling, TypeScript type annotations, type-safe error handling, domain-split API client, Zustand store with useShallow slice selection, immutable PATCH field sanitization, aggregation query optimization with Map-based single-pass accumulation, recipient group resolution via scalar subqueries (Phase Q), portfolio totals single-source-of-truth pattern (Phase 14), Belgian Tax freeze/display pattern for engine-drift protection (ADR-059, May 2026), dev-only observability integration pattern (May 2026 devtools: module-level pub-sub event bus with zero-cost tree-shaking in production). May 2026 bug hunt adds React key generation pattern (use UUID instead of index), mount guard pattern (prevent setState after unmount), and documents parseLocaleNumber heuristic with single-comma thousands separator fix. May 2026 a11y pass adds onActivateKeyDown keyboard-activation helper pattern.
 aliases: [code patterns, coding patterns, conventions, patterns, how to write code, repository pattern, route pattern, hook pattern, error handling, type-safe error handling, type annotations, filter builder, golden fixture, aggregation envelope, calculation services, import concurrency, motion pattern, surface shell pattern, gradient icon pattern, money pattern, decimal pattern, timezone pattern, domain split, openapi, typescript types, csv export, safe csv, formula injection, cwe-1236, date utilities, immutability, aggregation optimization, Map pattern, recipient group filter, recipientGroupId, portfolio totals, single source of truth, parseLocaleNumber, number parsing, locale-aware number parsing, thousands separator, decimal separator, belgian-tax-pattern, freeze-display-pattern, as-filed-calculation, engine-drift-protection]
 ---
 
@@ -3346,6 +3346,62 @@ const metrics = useQueryMetrics();
 
 - **Production builds** — Inspector code is tree-shaken; no overhead
 - **User-facing observability** — Use [[docs/features/admin-observability|Admin Observability API]] instead (backend-provided system health)
+
+---
+
+## Keyboard Activation Helper — `onActivateKeyDown` (Frontend, 2026-05-29)
+
+**Source:** [[apps/frontend/src/utils/a11y.ts|a11y.ts]]
+
+Use `onActivateKeyDown` to give keyboard users an activation path for surfaces that were previously reachable only via mouse click or double-click.
+
+```typescript
+import { onActivateKeyDown } from "@/utils/a11y";
+
+// Non-interactive element that must become keyboard-operable:
+<div
+  role="button"
+  tabIndex={0}
+  onClick={handleOpen}
+  onKeyDown={onActivateKeyDown(handleOpen)}
+>
+  ...
+</div>
+
+// Native <button> that had only onDoubleClick — add keyboard path:
+<button
+  type="button"
+  onDoubleClick={handleOpen}
+  onKeyDown={onActivateKeyDown(handleOpen)}
+>
+  ...
+</button>
+```
+
+The helper fires the handler on **Enter** or **Space** and ignores events that bubbled from a nested focusable child (`e.target !== e.currentTarget`), preventing double-firing when an inner control is operated.
+
+### Key Rules
+
+| Rule | Rationale |
+|------|-----------|
+| Pair with `role="button"` + `tabIndex={0}` | Required on non-interactive elements; omit on native `<button>` |
+| `e.preventDefault()` is called inside | Prevents Space from scrolling the page |
+| Do not fire on bubbled events | Inner `<input>`, `<select>`, or `<button>` key events must not trigger the outer handler |
+| Keep `onDoubleClick` / `onClick` as-is | Keyboard path supplements, does not replace, the mouse binding |
+
+### When to Use
+
+- A `<div>` or `<Card>` has `onClick`/`onDoubleClick` but no `role`/`tabIndex`/`onKeyDown`.
+- A native `<button>` has `onDoubleClick` only (pressing Enter/Space fires `click`, not `dblclick`).
+- Any non-interactive container that acts as a primary navigation target.
+
+### When NOT to Use
+
+- Elements that are already fully keyboard-operable via native semantics (links, standard buttons with `onClick`).
+- Forms — use `onSubmit` on `<form>` instead.
+- Elements inside a `VirtualDataTable` row — the table's own inline `onKeyDown` covers row activation.
+
+See [[docs/components/shared-components#onActivateKeyDown (a11y utility)|onActivateKeyDown component doc]] for the list of surfaces where it is applied.
 
 ---
 

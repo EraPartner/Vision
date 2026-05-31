@@ -11,6 +11,7 @@ import { useCallback, useMemo, useState } from "react";
 import { ChartTooltip } from "./ChartTooltip";
 import { getChartColor } from "./palette";
 import { durations, easings } from "@/lib/motion";
+import { useLanguage } from "@/contexts/LanguageContext";
 
 export interface PieDatum {
     readonly name: string;
@@ -51,6 +52,7 @@ function Inner({
     height,
     ariaLabel,
 }: PieChartProps & { width: number; height: number }) {
+    const { t } = useLanguage();
     const reduce = useReducedMotion();
     const radius = Math.min(width, height) / 2 - 8;
     const centerX = width / 2;
@@ -63,7 +65,7 @@ function Inner({
 
     return (
         <div style={{ position: "relative", width, height }}>
-            <svg width={width} height={height} role="img" aria-label={ariaLabel ?? summarizeProportionChart("Pie chart", data.map((d) => d.name))}>
+            <svg width={width} height={height} role="img" aria-label={ariaLabel ?? summarizeProportionChart(t, 'chart.aria.kind.pie', data.map((d) => d.name))}>
                 <Group top={centerY} left={centerX}>
                     <Pie
                         data={data as PieDatum[]}

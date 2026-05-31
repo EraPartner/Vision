@@ -17,6 +17,7 @@ import { useNavigate } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
 import { apiClient } from "@/lib/api";
 import { downloadBlob } from "@/lib/downloadBlob";
+import { onActivateKeyDown } from "@/utils/a11y";
 import { VirtualDataTable } from "@/components/shared/VirtualDataTable";
 import type { Transaction } from "@/types/api";
 import { toast } from "sonner";
@@ -89,8 +90,12 @@ export default function OwesPage() {
                         return (
                             <Card
                                 key={item.recipient_id}
-                                className="cursor-pointer hover:border-primary/40 transition-colors"
+                                role="button"
+                                tabIndex={0}
+                                aria-label={item.recipient_name}
+                                className="cursor-pointer hover:border-primary/40 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50"
                                 onClick={() => setSelectedRecipient({ id: item.recipient_id, name: item.recipient_name })}
+                                onKeyDown={onActivateKeyDown(() => setSelectedRecipient({ id: item.recipient_id, name: item.recipient_name }))}
                             >
                                 <CardHeader className="pb-2">
                                     <CardTitle className="text-base flex items-center justify-between">

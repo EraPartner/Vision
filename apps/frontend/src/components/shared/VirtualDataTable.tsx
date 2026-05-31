@@ -174,6 +174,15 @@ export function VirtualDataTable<T extends Record<string, unknown>>({
 
     const [columnFilters, setColumnFilters] = useState<Record<string, string>>({});
     const [openFilter, setOpenFilter] = useState<string | null>(null);
+    // Selection (and other per-render) changes rebuild the `columns` array with
+    // fresh render/header closures while the column SET stays the same. Keying
+    // expensive memos/effects on this value-stable key signature — and reading
+    // the live array via a ref — avoids reprocessing the whole dataset on every
+    // checkbox toggle (the array identity would otherwise invalidate them).
+    const columnsRef = useRef(columns);
+    columnsRef.current = columns;
+    const columnKeySignature = columns.map((c) => c.key).join(",");
+
     const [columnWidths, setColumnWidths] = useState<Record<string, number>>(() => {
         const widths: Record<string, number> = {};
         columns.forEach((col) => {
@@ -190,7 +199,7 @@ export function VirtualDataTable<T extends Record<string, unknown>>({
         setColumnWidths((prev) => {
             let changed = false;
             const next = { ...prev };
-            for (const col of columns) {
+            for (const col of columnsRef.current) {
                 if (col.defaultWidth && next[col.key] === undefined) {
                     next[col.key] = col.defaultWidth;
                     changed = true;
@@ -198,7 +207,9 @@ export function VirtualDataTable<T extends Record<string, unknown>>({
             }
             return changed ? next : prev;
         });
-    }, [columns]);
+        // Keyed on the column SET, not the array identity — a selection toggle
+        // rebuilds `columns` with the same keys and must not re-run this.
+    }, [columnKeySignature]);
 
     const resizingRef = useRef<{ key: string; startX: number; startWidth: number } | null>(null);
 
@@ -297,7 +308,7 @@ export function VirtualDataTable<T extends Record<string, unknown>>({
         if (!isServerSearch && localSearchQuery.trim()) {
             const q = localSearchQuery.toLowerCase();
             result = result.filter(({ row }) =>
-                columns.some((col) => {
+                columnsRef.current.some((col) => {
                     const val = row[col.key];
                     return val != null && String(val).toLowerCase().includes(q);
                 })
@@ -317,7 +328,11 @@ export function VirtualDataTable<T extends Record<string, unknown>>({
         }
 
         return result;
-    }, [deferredData, columnFilters, localSearchQuery, isServerSearch, isServerSort, sortKey, sortDir, columns]);
+        // columnKeySignature stands in for `columns` (read via columnsRef) so the
+        // pipeline re-runs when the column SET changes but not on selection-driven
+        // array rebuilds. eslint can't see that relationship.
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [deferredData, columnFilters, localSearchQuery, isServerSearch, isServerSort, sortKey, sortDir, columnKeySignature]);
 
     // Virtualizer
     const parentRef = useRef<HTMLDivElement>(null);
@@ -435,7 +450,7 @@ export function VirtualDataTable<T extends Record<string, unknown>>({
                         <Button
                             variant="ghost"
                             size="icon"
-                            aria-label="Clear search"
+                            aria-label={t('aria.clearSearch')}
                             className="absolute right-1 top-1/2 -translate-y-1/2 icon-touch-target text-muted-foreground"
                             onClick={clearSearch}
                         >
@@ -477,19 +492,30 @@ export function VirtualDataTable<T extends Record<string, unknown>>({
                 </div>
             )}
 
-            <CardContent className="p-0">
+            <CardContent
+                className="p-0"
+                role="table"
+                aria-rowcount={processedRows.length}
+                aria-colcount={columns.length + (hasEditableColumns ? 1 : 0)}
+            >
                 {/* Sticky header */}
-                <div className="overflow-x-auto border-b border-border">
-                    <div className="flex items-center bg-muted/50 min-h-[40px]">
+                <div className="overflow-x-auto border-b border-border" role="rowgroup">
+                    <div className="flex items-center bg-muted/50 min-h-[40px]" role="row">
                         {columns.map((col) => {
                             const width = columnWidths[col.key];
                             const isSortable = col.sortable !== false && !!col.header;
                             const isFilterable = col.filterable !== false && !!col.header;
                             const hasFilter = !!columnFilters[col.key];
 
+                            const ariaSort = sortKey === col.key
+                                ? (sortDir === "asc" ? "ascending" : sortDir === "desc" ? "descending" : "none")
+                                : undefined;
+
                             return (
                                 <div
                                     key={col.key}
+                                    role="columnheader"
+                                    aria-sort={ariaSort}
                                     className={`px-4 py-2 font-semibold text-muted-foreground text-sm relative select-none group flex-1 min-w-0 whitespace-nowrap ${col.className || ""}`}
                                     style={width ? { width: `${width}px`, flex: "none" } : undefined}
                                 >
@@ -550,7 +576,7 @@ export function VirtualDataTable<T extends Record<string, unknown>>({
                             );
                         })}
                         {hasEditableColumns && (
-                            <div className="px-2 py-2 text-right font-semibold text-muted-foreground text-sm" style={{ width: "40px", flex: "none" }}>
+                            <div role="columnheader" className="px-2 py-2 text-right font-semibold text-muted-foreground text-sm" style={{ width: "40px", flex: "none" }}>
                                 {t('table.edit')}
                             </div>
                         )}
@@ -562,6 +588,7 @@ export function VirtualDataTable<T extends Record<string, unknown>>({
                     ref={parentRef}
                     className="overflow-auto"
                     style={{ maxHeight: `${maxHeight}px` }}
+                    role="rowgroup"
                 >
                     {processedRows.length === 0 ? (
                         <div className="text-center text-muted-foreground py-12">
@@ -570,7 +597,7 @@ export function VirtualDataTable<T extends Record<string, unknown>>({
                                 : (emptyMessage ?? t('table.noData'))}
                         </div>
                     ) : (
-                        <div style={{ height: `${virtualizer.getTotalSize()}px`, width: "100%", position: "relative" }}>
+                        <div role="presentation" style={{ height: `${virtualizer.getTotalSize()}px`, width: "100%", position: "relative" }}>
                             {virtualizer.getVirtualItems().map((virtualRow) => {
                                 const indexedRow = processedRows[virtualRow.index];
                                 if (!indexedRow) return null;
@@ -588,7 +615,12 @@ export function VirtualDataTable<T extends Record<string, unknown>>({
                                         key={getRowKey(row, sourceIndex)}
                                         data-index={virtualRow.index}
                                         ref={virtualizer.measureElement}
-                                        className={`flex items-center border-b border-border transition-colors hover:bg-muted/50 ${isEditing ? "bg-primary/5" : ""} ${onRowDoubleClick ? "cursor-pointer" : ""}`}
+                                        role="row"
+                                        aria-rowindex={virtualRow.index + 2}
+                                        // Keyboard equivalent for the double-click open action so the
+                                        // row isn't mouse-only. Focusable + Enter/Space activates.
+                                        tabIndex={onRowDoubleClick ? 0 : undefined}
+                                        className={`flex items-center border-b border-border transition-colors hover:bg-muted/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50 focus-visible:ring-inset ${isEditing ? "bg-primary/5" : ""} ${onRowDoubleClick ? "cursor-pointer" : ""}`}
                                         style={{
                                             position: "absolute",
                                             top: 0,
@@ -603,12 +635,21 @@ export function VirtualDataTable<T extends Record<string, unknown>>({
                                                 startEditing(sourceIndex, row);
                                             }
                                         }}
+                                        onKeyDown={onRowDoubleClick ? (e) => {
+                                            // Don't hijack keys while typing in an inline-edit field.
+                                            if (e.target !== e.currentTarget) return;
+                                            if (e.key === "Enter" || e.key === " ") {
+                                                e.preventDefault();
+                                                onRowDoubleClick(row, sourceIndex);
+                                            }
+                                        } : undefined}
                                     >
                                         {columns.map((col) => {
                                             const width = columnWidths[col.key];
                                             return (
                                                 <div
                                                     key={col.key}
+                                                    role="cell"
                                                     className={`px-4 py-2 text-sm flex-1 min-w-0 whitespace-normal break-words [overflow-wrap:anywhere] ${col.className || ""}`}
                                                     style={width ? { width: `${width}px`, flex: "none" } : undefined}
                                                 >
@@ -647,22 +688,22 @@ export function VirtualDataTable<T extends Record<string, unknown>>({
                                             );
                                         })}
                                         {hasEditableColumns && (
-                                            <div className="px-1 py-2 text-right" style={{ width: isEditing ? "88px" : "40px", flex: "none" }}>
+                                            <div role="cell" className="px-1 py-2 text-right" style={{ width: isEditing ? "88px" : "40px", flex: "none" }}>
                                                 {isEditing ? (
                                                     <div className="flex items-center justify-end gap-1">
-                                                        <Button variant="ghost" size="icon" aria-label="Save"
+                                                        <Button variant="ghost" size="icon" aria-label={t('aria.save')}
                                                             className="icon-touch-target text-accent hover:text-accent hover:bg-accent/10"
                                                             onClick={() => saveEditing(sourceIndex, row)}>
                                                             <Check className="h-4 w-4" />
                                                         </Button>
-                                                        <Button variant="ghost" size="icon" aria-label="Cancel"
+                                                        <Button variant="ghost" size="icon" aria-label={t('aria.cancel')}
                                                             className="icon-touch-target text-muted-foreground hover:text-destructive hover:bg-destructive/10"
                                                             onClick={cancelEditing}>
                                                             <X className="h-4 w-4" />
                                                         </Button>
                                                     </div>
                                                 ) : (
-                                                    <Button variant="ghost" size="icon" aria-label="Edit"
+                                                    <Button variant="ghost" size="icon" aria-label={t('aria.edit')}
                                                         className="icon-touch-target text-muted-foreground hover:text-primary hover:bg-primary/10"
                                                         onClick={() => startEditing(sourceIndex, row)}>
                                                         <Pencil className="h-4 w-4" />

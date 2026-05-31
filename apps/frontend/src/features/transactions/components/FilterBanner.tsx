@@ -92,7 +92,7 @@ export function FilterBanner({
                     filterLabel={filterLabel}
                 />
                 {hasMainFilter && (
-                    <Button variant="ghost" size="icon" className="icon-touch-target" onClick={onClear} aria-label="Clear filter">
+                    <Button variant="ghost" size="icon" className="icon-touch-target" onClick={onClear} aria-label={t('aria.clearFilter')}>
                         <X className="h-4 w-4" />
                     </Button>
                 )}

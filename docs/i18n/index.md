@@ -3,9 +3,9 @@ title: Localization Documentation Index
 type: i18n-index
 status: active
 date: 2026-04-24
-updated: 2026-04-27
-tags: [i18n, index, localization, translations, phase-6, phase-f, admin, observability, splits, settlement]
-description: Internationalization system including supported languages, translation workflow, and usage patterns. Phase 6 adds 32 export keys for PDF report export dialog. Phase F adds 60 admin observability keys. Recent additions include splits settlement success/failure notifications.
+updated: 2026-05-29
+tags: [i18n, index, localization, translations, phase-6, phase-f, admin, observability, splits, settlement, chart-aria, screen-reader, accessibility, aria-label]
+description: Internationalization system including supported languages, translation workflow, and usage patterns. Phase 6 adds 32 export keys for PDF report export dialog. Phase F adds 60 admin observability keys. 2026-05-29 adds 16 chart.aria.* keys (localized chart screen-reader summaries) and 21 aria.* keys (localized icon-button aria-labels).
 aliases: [i18n, localization, translations, languages]
 ---
 
@@ -81,6 +81,15 @@ function Component() {
 4. Use in components via `useLanguage()` hook
 
 ## Recent Key Additions
+
+### Chart Screen-Reader + aria-label i18n (2026-05-29)
+
+Added 37 new keys remediating audit findings [[docs/reference/codebase-audit-2026-05#ux.4|ux.4]] and [[docs/reference/codebase-audit-2026-05#ux.5|ux.5]]:
+
+- **16 `chart.aria.*` keys** — `chartAria.ts` chart screen-reader summary generators now accept `t` + `kindKey`. All 6 chart components call `useLanguage()`. Keys cover kind labels, series/segment counts, sparkline descriptions, and "and N more" overflow. Dutch equivalents added to `nl.json`.
+- **21 `aria.*` keys** — Icon-only interactive elements across pages, features, and shared components now use `t('aria.*')` instead of hardcoded English strings. Covers delete, edit, save, cancel, close, clear, dismiss, select-all, sidebar toggles, remove-entry, remove-from-watchlist, and transaction-info labels.
+
+See [[docs/i18n/translations#chart.aria and aria namespaces (2026-05-29)|translations — chart.aria and aria namespaces]].
 
 ### Splits Settlement (2026-04-27)
 

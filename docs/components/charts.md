@@ -4,8 +4,8 @@ type: component
 status: active
 date: 2026-04-24
 updated: 2026-05-29
-tags: [components, charts, visx, d3, visualization, phase-9, phase-h, accessibility, aria-label, screen-reader]
-description: Low-level chart primitives built on visx + d3, replacing Recharts with design-token-aware styling. 2026-05-29: chartAria.ts helper generates meaningful default aria-label summaries for all 7 chart types; screen readers now announce data content instead of bare chart type.
+tags: [components, charts, visx, d3, visualization, phase-9, phase-h, accessibility, aria-label, screen-reader, i18n, localization]
+description: Low-level chart primitives built on visx + d3, replacing Recharts with design-token-aware styling. 2026-05-29: chartAria.ts generators now accept t()/kindKey for fully localized chart screen-reader summaries across all 7 chart types and both supported languages.
 aliases: [charts, chart-components, visx-charts, charting, visualization]
 related_code:
   - apps/frontend/src/components/charts
@@ -279,19 +279,27 @@ All chart types perform optimally; no optimization required.
 
 **Location:** `apps/frontend/src/components/charts/chartAria.ts`
 
-All 7 chart components (`BarChart`, `LineChart`, `AreaChart`, `StackedBarChart`, `PieChart`, `DonutChart`, `Sparkline`) now generate a meaningful one-line `aria-label` by default. Previously the `ariaLabel` prop existed but no caller populated it, so screen readers announced only "Bar chart" or "Pie chart" with no data context.
+All 7 chart components (`BarChart`, `LineChart`, `AreaChart`, `StackedBarChart`, `PieChart`, `DonutChart`, `Sparkline`) now generate a meaningful one-line `aria-label` by default. Previously the `ariaLabel` prop existed but no caller populated it, so screen readers announced only "Bar chart" or "Pie chart" with no data context. The initial implementation used hardcoded English; as of 2026-05-29 all strings are fully localized (audit finding [[docs/reference/codebase-audit-2026-05#ux.4|ux.4]]).
 
-Three generator functions handle the main chart shapes:
+Three generator functions handle the main chart shapes. Each now accepts `t` (the `TFn` translator from `useLanguage()`) and a `kindKey` string instead of a hardcoded English label:
 
-| Function | Output example |
-|----------|---------------|
-| `summarizeSeriesChart(type, data, seriesKeys)` | `"Bar chart with 12 months, series: Income, Expenses"` |
-| `summarizeProportionChart(type, data, labelKey)` | `"Pie chart with 5 categories"` |
-| `summarizeSparkline(data)` | `"Sparkline with 7 data points"` |
+| Function | Signature | Output example (EN) |
+|----------|-----------|---------------------|
+| `summarizeSeriesChart` | `(t, kindKey, categoryCount, seriesLabels?)` | `"Bar chart with 12 categories, series: Income, Expenses"` |
+| `summarizeProportionChart` | `(t, kindKey, names)` | `"Pie chart with 5 segments"` |
+| `summarizeSparkline` | `(t, values)` | `"Sparkline of 7 points, ranging 100 to 160"` |
 
-The generated label is used as the default value for `role="img"` on the outermost SVG element. The `ariaLabel` prop on each chart component still overrides the default when callers supply a custom description.
+Chart kind keys live in the `chart.aria.kind.*` namespace (e.g. `chart.aria.kind.bar`, `chart.aria.kind.pie`). All callers pass the appropriate key:
 
-**Tests:** `apps/frontend/src/components/charts/__tests__/chartAria.test.ts` — 6 unit tests covering all three generators (empty data, single series, multiple series, label-key variation).
+```tsx
+// BarChart.tsx — example caller
+const { t } = useLanguage();
+const ariaLabel = ariaLabelProp ?? summarizeSeriesChart(t, 'chart.aria.kind.bar', data.length, series.map(s => s.label));
+```
+
+The generated label is used as the default value for `role="img"` on the outermost SVG element. The `ariaLabel` prop still overrides the default when callers supply a custom description.
+
+**Tests:** `apps/frontend/src/components/charts/__tests__/chartAria.test.ts` — unit tests covering all three generators (empty data, single series, multiple series, label-key variation, Dutch locale).
 
 > [!tip] When to supply a custom `ariaLabel`
 > The generated summaries describe shape and axis dimensionality. For charts showing specific business KPIs (e.g., "Year-to-date tax spend by asset class"), supply a custom `ariaLabel` that describes the *data story*, not just the chart structure.

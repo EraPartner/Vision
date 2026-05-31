@@ -3,9 +3,9 @@ title: Translations & i18n
 type: i18n
 status: active
 date: 2026-04-27
-updated: 2026-05-06
-tags: [i18n, translations, localization, internationalization, phase-6, phase-8, phase-f, phase-9, phase-c, phase-d, phase-2, splits, settlement, admin, observability, cash-flow-forecast, pdf-export, portfolio, tax, backup, encrypt, passphrase-modal, accessibility, aria-label, bug-hunt-2026-05-06]
-description: Internationalization system including supported languages, translation workflow, and usage patterns. Phase 6 adds 32 export keys for PDF report localization. Phase 8 adds 11 additional export.section.* keys for portfolio (6) and tax (7) report sections. Phase C adds 15 cash flow forecast keys. Phase F adds 60 admin observability keys. Recent additions include splits settlement success/failure notifications.
+updated: 2026-05-29
+tags: [i18n, translations, localization, internationalization, phase-6, phase-8, phase-f, phase-9, phase-c, phase-d, phase-2, splits, settlement, admin, observability, cash-flow-forecast, pdf-export, portfolio, tax, backup, encrypt, passphrase-modal, accessibility, aria-label, bug-hunt-2026-05-06, chart-aria, screen-reader]
+description: Internationalization system including supported languages, translation workflow, and usage patterns. Phase 6 adds 32 export keys for PDF report localization. Phase 8 adds 11 additional export.section.* keys for portfolio (6) and tax (7) report sections. Phase C adds 15 cash flow forecast keys. Phase F adds 60 admin observability keys. 2026-05-29 adds 16 chart.aria.* keys (localized chart screen-reader summaries) and 21 aria.* keys (localized icon-button aria-labels).
 aliases: [i18n, translations, localization, language, nl, en, dutch, english]
 related_code: ["apps/frontend/src/locales", "apps/frontend/src/contexts/LanguageContext.tsx", "apps/frontend/src/hooks/useSplits.ts"]
 ---
@@ -124,6 +124,8 @@ Examples:
 | `dialog.*` | Dialog text | `dialog.confirm` |
 | `toast.*` | Toast messages | `toast.success` |
 | `settings.*` | Settings labels, tabs, and sections | `settings.language`, `settings.tab.appearance`, `settings.appearance.variant` |
+| `aria.*` | Icon-button accessible names | `aria.deleteTransaction`, `aria.save` |
+| `chart.aria.*` | Chart screen-reader summary fragments | `chart.aria.kind.bar`, `chart.aria.seriesOther` |
 
 ## Adding New Translations
 
@@ -156,6 +158,44 @@ bun run build
 ```
 
 ### Recent keys added
+
+#### `chart.aria` and `aria` namespaces (2026-05-29)
+
+Remediates audit findings [[docs/reference/codebase-audit-2026-05#ux.4|ux.4]] (chart screen-reader labels hardcoded English) and [[docs/reference/codebase-audit-2026-05#ux.5|ux.5]] (~30 aria-labels bypassing `t()`).
+
+**16 new `chart.aria.*` keys** — used by `chartAria.ts` generators (`summarizeSeriesChart`, `summarizeProportionChart`, `summarizeSparkline`). All 6 chart components now call `useLanguage()` and pass `t` + a `kindKey`:
+
+- `chart.aria.kind.bar` — "Bar chart"
+- `chart.aria.kind.line` — "Line chart"
+- `chart.aria.kind.area` — "Area chart"
+- `chart.aria.kind.pie` — "Pie chart"
+- `chart.aria.kind.donut` — "Donut chart"
+- `chart.aria.kind.stackedBar` — "Stacked bar chart"
+- `chart.aria.seriesOne` — `"{kind} with {count} category"`
+- `chart.aria.seriesOther` — `"{kind} with {count} categories"`
+- `chart.aria.series` — `", series: {names}"`
+- `chart.aria.segmentOne` — `"{kind} with {count} segment"`
+- `chart.aria.segmentOther` — `"{kind} with {count} segments"`
+- `chart.aria.segmentNames` — `": {names}"`
+- `chart.aria.andMore` — `", and {count} more"`
+- `chart.aria.sparklineEmpty` — "Sparkline, no data"
+- `chart.aria.sparklineOne` — `"Sparkline of {count} point, ranging {min} to {max}"`
+- `chart.aria.sparklineOther` — `"Sparkline of {count} points, ranging {min} to {max}"`
+
+**21 new `aria.*` keys** — replace hardcoded English `aria-label` attributes across pages/features/shared components:
+
+- `aria.cancel`, `aria.edit`, `aria.save`, `aria.close`
+- `aria.clearSearch`, `aria.clearFilter`, `aria.clearSelection`
+- `aria.deleteTransaction`, `aria.editTransaction`, `aria.transactionInfo`, `aria.selectAll`
+- `aria.deleteCategory`, `aria.deleteRecipient`
+- `aria.deleteInvestment`
+- `aria.deletePlannedPayment`, `aria.editPlannedPayment`
+- `aria.removeEntry`, `aria.removeFromWatchlist`
+- `aria.dismiss`
+- `aria.toggleSidebar`, `aria.collapseSidebar`
+
+> [!info] Key naming convention
+> `chart.aria.*` keys belong exclusively to the chart accessibility layer (`chartAria.ts`). `aria.*` keys are a flat namespace for icon-only interactive element labels across all surfaces. This separates charting-specific accessibility strings from the general interactive-element label set.
 
 **Phase 6 (2026-04-24):**
 - `export.title` — "Export PDF Report"

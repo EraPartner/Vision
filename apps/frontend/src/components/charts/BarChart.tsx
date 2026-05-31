@@ -14,6 +14,7 @@ import { BottomAxis, LeftAxis } from "./ChartAxis";
 import { ChartTooltip, type ChartTooltipDatum } from "./ChartTooltip";
 import { CHART_NEUTRAL, getChartColor } from "./palette";
 import { durations, easings } from "@/lib/motion";
+import { useLanguage } from "@/contexts/LanguageContext";
 
 export interface BarSeries<Datum> {
     readonly key: string;
@@ -111,6 +112,7 @@ function Inner<Datum>({
     width,
     height,
 }: BarChartProps<Datum> & { width: number; height: number }) {
+    const { t } = useLanguage();
     const reduce = useReducedMotion();
 
     const effMargin =
@@ -206,7 +208,7 @@ function Inner<Datum>({
 
     return (
         <div style={{ position: "relative", width, height }}>
-            <svg width={width} height={height} role="img" aria-label={ariaLabel ?? summarizeSeriesChart("Bar chart", data.length, series.map((s) => s.label))}>
+            <svg width={width} height={height} role="img" aria-label={ariaLabel ?? summarizeSeriesChart(t, 'chart.aria.kind.bar', data.length, series.map((s) => s.label))}>
                 <Group left={effMargin.left} top={effMargin.top}>
                     {valueScale.ticks(5).map((tick) =>
                         layout === "vertical" ? (

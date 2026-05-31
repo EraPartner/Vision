@@ -255,7 +255,7 @@ export function RecurringDetectionPanel({ onCreatePlanned }: Props) {
                                             variant="ghost"
                                             size="icon"
                                             className="icon-touch-target shrink-0 text-muted-foreground hover:text-foreground"
-                                            aria-label="Dismiss"
+                                            aria-label={t('aria.dismiss')}
                                             onClick={() => dismiss(pattern.recipientId)}
                                         >
                                             <X className="h-3.5 w-3.5" />

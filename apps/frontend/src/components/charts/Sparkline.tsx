@@ -11,6 +11,7 @@ import { useMemo } from "react";
 
 import { CHART_NEUTRAL } from "./palette";
 import { durations, easings } from "@/lib/motion";
+import { useLanguage } from "@/contexts/LanguageContext";
 
 export interface SparklineProps {
     readonly data: ReadonlyArray<number>;
@@ -43,6 +44,7 @@ function Inner({
     height,
     ariaLabel,
 }: SparklineProps & { width: number; height: number }) {
+    const { t } = useLanguage();
     const reduce = useReducedMotion();
 
     const xScale = useMemo(
@@ -61,7 +63,7 @@ function Inner({
     }, [data, height]);
 
     return (
-        <svg width={width} height={height} role="img" aria-label={ariaLabel ?? summarizeSparkline(data)}>
+        <svg width={width} height={height} role="img" aria-label={ariaLabel ?? summarizeSparkline(t, data)}>
             {fillArea ? (
                 <motion.g
                     initial={reduce ? { opacity: 1 } : { opacity: 0 }}

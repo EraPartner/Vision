@@ -10,6 +10,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import {useCategories, useUpdateCategory, useDeleteCategory} from "@/hooks/useCategories";
 import {AddCategoryDialog} from "@/features/categories/AddCategoryDialog";
 import {cn} from "@/lib/utils";
+import {onActivateKeyDown} from "@/utils/a11y";
 import {useConfirmDialog} from "@/hooks/useConfirmDialog";
 
 type CategoryItem = {
@@ -197,9 +198,14 @@ export default function CategoriesPage() {
                                                         "transition-colors hover:bg-muted/50 cursor-pointer",
                                                         cat.is_active === false && "opacity-60"
                                                     )}
+                                                    role="button"
+                                                    tabIndex={0}
                                                     onDoubleClick={() => {
                                                         navigate(`/transactions?category_id=${cat.id}&filter_label=${encodeURIComponent(cat.general + ':' + cat.detail)}`);
                                                     }}
+                                                    onKeyDown={onActivateKeyDown(() =>
+                                                        navigate(`/transactions?category_id=${cat.id}&filter_label=${encodeURIComponent(cat.general + ':' + cat.detail)}`)
+                                                    )}
                                                 >
                                                     <Badge
                                                         variant="outline"
@@ -249,7 +255,7 @@ export default function CategoriesPage() {
                                                             variant="ghost"
                                                             size="icon"
                                                             className="icon-touch-target text-muted-foreground hover:text-destructive hover:bg-destructive/10"
-                                                            aria-label="Delete category"
+                                                            aria-label={t('aria.deleteCategory')}
                                                             onClick={async (e) => {
                                                                 e.stopPropagation();
                                                                 const ok = await confirm({

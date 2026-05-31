@@ -222,7 +222,7 @@ export function OnboardingWizard({ open, onComplete, onOpenSettings }: Onboardin
                             </div>
                             <span className="font-bold text-foreground">Vision</span>
                         </div>
-                        <Button variant="ghost" size="icon" className="icon-touch-target" aria-label="Close" onClick={onComplete}>
+                        <Button variant="ghost" size="icon" className="icon-touch-target" aria-label={t('aria.close')} onClick={onComplete}>
                             <X className="h-4 w-4" />
                         </Button>
                     </div>
