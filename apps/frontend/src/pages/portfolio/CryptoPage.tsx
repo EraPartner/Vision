@@ -15,7 +15,10 @@ import { useAppSettings } from "@/contexts/AppSettingsContext";
 import { numberFormatToLocale } from "@/utils/currency";
 import { useNavigate } from "react-router-dom";
 import { PageHeader } from "@/components/shared/PageHeader";
+import { PageError } from "@/components/shared/PageError";
+import { Skeleton } from "@/components/ui/skeleton";
 import { EmptyState } from "@/components/shared/EmptyState";
+import { onActivateKeyDown } from "@/utils/a11y";
 
 function fmtPct(val: number) {
   return `${val >= 0 ? '+' : ''}${val.toFixed(2)}%`;
@@ -27,7 +30,7 @@ export default function CryptoPage() {
   const { appSettings } = useAppSettings();
   const locale = numberFormatToLocale(appSettings.numberFormat);
   const targetCurrency = appSettings.defaultCurrency || 'EUR';
-  const { byAssetClass, deleteInvestment, refreshPrices, isRefreshingPrices } = usePortfolio();
+  const { byAssetClass, deleteInvestment, refreshPrices, isRefreshingPrices, isLoading, isError, error, refetch } = usePortfolio();
   const { confirm, ConfirmDialog } = useConfirmDialog();
   const holdings = byAssetClass('crypto');
 
@@ -52,6 +55,24 @@ export default function CryptoPage() {
   const totalFees = holdings.reduce((s, h) => s + convertToTarget(h.totalFees, h.currency), 0);
   const totalTaxes = holdings.reduce((s, h) => s + convertToTarget(h.totalTaxes, h.currency), 0);
   const netGain = totalRealizedGain + totalUnrealizedGain - totalFees - totalTaxes;
+
+  if (isLoading) {
+    return (
+      <div className="space-y-6">
+        <PageHeader title={t('crypto.title')} icon={Bitcoin} />
+        <Skeleton className="h-24 w-full" />
+        <Skeleton className="h-64 w-full" />
+      </div>
+    );
+  }
+  if (isError) {
+    return (
+      <div className="space-y-6">
+        <PageHeader title={t('crypto.title')} icon={Bitcoin} />
+        <PageError message={error?.message ?? t('common.error')} onRetry={() => refetch()} />
+      </div>
+    );
+  }
 
   if (holdings.length === 0) {
     return (
@@ -204,6 +225,7 @@ export default function CryptoPage() {
                             type="button"
                             className="block text-xs text-muted-foreground hover:underline cursor-pointer"
                             onDoubleClick={() => openMarketLookup(h.symbol)}
+                            onKeyDown={onActivateKeyDown(() => openMarketLookup(h.symbol))}
                             title={h.symbol ? t('watchlist.doubleClickChart') : undefined}
                           >
                             {h.name}

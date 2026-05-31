@@ -19,6 +19,9 @@ import type { AssetClass } from "@/types/portfolio";
 import { useCallback, useMemo } from "react";
 import { useNavigate } from "react-router-dom";
 import { PageHeader } from "@/components/shared/PageHeader";
+import { PageError } from "@/components/shared/PageError";
+import { Skeleton } from "@/components/ui/skeleton";
+import { onActivateKeyDown } from "@/utils/a11y";
 import { EmptyState } from "@/components/shared/EmptyState";
 import { ExportDialog } from "@/components/reports/ExportDialog";
 
@@ -50,7 +53,7 @@ export default function StocksPage({
   const navigate = useNavigate();
   const { appSettings } = useAppSettings();
   const locale = numberFormatToLocale(appSettings.numberFormat);
-  const { byAssetClass, deleteInvestment, refreshPrices, isRefreshingPrices } = usePortfolio();
+  const { byAssetClass, deleteInvestment, refreshPrices, isRefreshingPrices, isLoading, isError, error, refetch } = usePortfolio();
   const { confirm, ConfirmDialog } = useConfirmDialog();
   const holdings = useMemo(() => byAssetClass(assetClasses), [byAssetClass, assetClasses]);
   const targetCurrency = appSettings.defaultCurrency || 'EUR';
@@ -182,6 +185,24 @@ export default function StocksPage({
     totalTaxes,
   } = totals;
   const netGain = totalRealizedGain + totalUnrealizedGain + totalDividends - totalFees - totalTaxes;
+
+  if (isLoading) {
+    return (
+      <div className="space-y-6">
+        <PageHeader title={t(titleKey)} icon={TrendingUp} />
+        <Skeleton className="h-24 w-full" />
+        <Skeleton className="h-64 w-full" />
+      </div>
+    );
+  }
+  if (isError) {
+    return (
+      <div className="space-y-6">
+        <PageHeader title={t(titleKey)} icon={TrendingUp} />
+        <PageError message={error?.message ?? t('common.error')} onRetry={() => refetch()} />
+      </div>
+    );
+  }
 
   if (holdings.length === 0) {
     return (
@@ -340,6 +361,7 @@ export default function StocksPage({
                         type="button"
                         className="font-medium text-left hover:underline cursor-pointer"
                         onDoubleClick={() => openMarketLookup(h.symbol)}
+                        onKeyDown={onActivateKeyDown(() => openMarketLookup(h.symbol))}
                         title={h.symbol ? t('watchlist.doubleClickChart') : undefined}
                       >
                         {h.name}

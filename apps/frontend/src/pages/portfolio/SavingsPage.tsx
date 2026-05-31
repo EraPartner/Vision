@@ -15,6 +15,8 @@ import { parseYmd, daysBetween } from "@/lib/timezone";
 import { cn } from "@/lib/utils";
 import { useCurrencyConverter } from "@/hooks/useCurrencyConverter";
 import { PageHeader } from "@/components/shared/PageHeader";
+import { PageError } from "@/components/shared/PageError";
+import { Skeleton } from "@/components/ui/skeleton";
 import { EmptyState } from "@/components/shared/EmptyState";
 
 function daysUntil(dateStr?: string) {
@@ -27,7 +29,7 @@ export default function SavingsPage() {
   const { appSettings } = useAppSettings();
   const locale = numberFormatToLocale(appSettings.numberFormat);
   const targetCurrency = appSettings.defaultCurrency || 'EUR';
-  const { byAssetClass, deleteInvestment } = usePortfolio();
+  const { byAssetClass, deleteInvestment, isLoading, isError, error, refetch } = usePortfolio();
   const { confirm, ConfirmDialog } = useConfirmDialog();
   const accounts = byAssetClass(['savings', 'bond']);
 
@@ -48,6 +50,24 @@ export default function SavingsPage() {
   const weightedRate = totalBalance > 0
     ? accounts.reduce((s, a) => s + (a.interestRate ?? 0) * convertToTarget(a.currentValue, a.currency), 0) / totalBalance
     : 0;
+
+  if (isLoading) {
+    return (
+      <div className="space-y-6">
+        <PageHeader title={t('savings.title')} icon={PiggyBank} />
+        <Skeleton className="h-24 w-full" />
+        <Skeleton className="h-64 w-full" />
+      </div>
+    );
+  }
+  if (isError) {
+    return (
+      <div className="space-y-6">
+        <PageHeader title={t('savings.title')} icon={PiggyBank} />
+        <PageError message={error?.message ?? t('common.error')} onRetry={() => refetch()} />
+      </div>
+    );
+  }
 
   if (accounts.length === 0) {
     return (

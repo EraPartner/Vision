@@ -15,6 +15,7 @@ import { WatchlistChartDialog } from "@/components/portfolio/WatchlistChartDialo
 import type { WatchlistItem } from "@/types/watchlist";
 import { PageHeader } from "@/components/shared/PageHeader";
 import { EmptyState } from "@/components/shared/EmptyState";
+import { onActivateKeyDown } from "@/utils/a11y";
 import { useOnlineStatus } from "@/hooks/useOnlineStatus";
 import { toast } from "sonner";
 
@@ -151,11 +152,15 @@ export default function WatchlistPage() {
             return (
               <Card
                 key={item.id}
+                role="button"
+                tabIndex={0}
+                aria-label={item.name}
                 className={cn(
-                  "surface-elevated premium-frame micro-lift cursor-pointer transition-all hover:shadow-md hover:border-primary/50",
+                  "surface-elevated premium-frame micro-lift cursor-pointer transition-all hover:shadow-md hover:border-primary/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50",
                   isBelowTarget && "ring-2 ring-green-500/50"
                 )}
                 onDoubleClick={() => handleDoubleClick(item)}
+                onKeyDown={onActivateKeyDown(() => handleDoubleClick(item))}
               >
                 <CardHeader className="pb-2">
                   <div className="flex items-start justify-between">
@@ -227,7 +232,7 @@ export default function WatchlistPage() {
                       variant="ghost"
                       size="icon"
                       className="icon-touch-target text-muted-foreground hover:text-destructive"
-                      aria-label="Remove from watchlist"
+                      aria-label={t('aria.removeFromWatchlist')}
                       onClick={(e) => {
                         e.stopPropagation();
                         deleteMutation.mutate(item.id);

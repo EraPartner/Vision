@@ -397,7 +397,7 @@ export default function PortfolioOverviewPage() {
                               <AddPortfolioTxnDialog investment={inv} />
                               <Button
                                 variant="ghost" size="icon" className="icon-touch-target text-muted-foreground hover:text-destructive hover:bg-destructive/10"
-                                aria-label="Delete investment"
+                                aria-label={t('aria.deleteInvestment')}
                                 onClick={async () => {
                                    const ok = await confirm({
                                     title: t('portfolio.deleteInvestment'),

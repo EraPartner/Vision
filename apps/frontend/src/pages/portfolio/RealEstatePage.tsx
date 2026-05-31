@@ -12,6 +12,8 @@ import { useAppSettings } from "@/contexts/AppSettingsContext";
 import { numberFormatToLocale } from "@/utils/currency";
 import { useCurrencyConverter } from "@/hooks/useCurrencyConverter";
 import { PageHeader } from "@/components/shared/PageHeader";
+import { PageError } from "@/components/shared/PageError";
+import { Skeleton } from "@/components/ui/skeleton";
 import { EmptyState } from "@/components/shared/EmptyState";
 
 export default function RealEstatePage() {
@@ -19,7 +21,7 @@ export default function RealEstatePage() {
   const { appSettings } = useAppSettings();
   const locale = numberFormatToLocale(appSettings.numberFormat);
   const targetCurrency = appSettings.defaultCurrency || 'EUR';
-  const { byAssetClass, deleteInvestment } = usePortfolio();
+  const { byAssetClass, deleteInvestment, isLoading, isError, error, refetch } = usePortfolio();
   const { confirm, ConfirmDialog } = useConfirmDialog();
   const properties = byAssetClass('real_estate');
 
@@ -55,6 +57,24 @@ export default function RealEstatePage() {
   const annualYield = totalValue > 0 ? (estimatedMonthlyRent * 12) / totalValue * 100 : 0;
   const totalReturn = totalAppreciation + totalRentIncome - totalFees - totalTaxes;
   const roi = totalCost > 0 ? (totalReturn / totalCost) * 100 : 0;
+
+  if (isLoading) {
+    return (
+      <div className="space-y-6">
+        <PageHeader title={t('realestate.title')} icon={Building2} />
+        <Skeleton className="h-24 w-full" />
+        <Skeleton className="h-64 w-full" />
+      </div>
+    );
+  }
+  if (isError) {
+    return (
+      <div className="space-y-6">
+        <PageHeader title={t('realestate.title')} icon={Building2} />
+        <PageError message={error?.message ?? t('common.error')} onRetry={() => refetch()} />
+      </div>
+    );
+  }
 
   if (properties.length === 0) {
     return (
