@@ -253,7 +253,11 @@ jobs:
         run: |
           set -euo pipefail
           cd packaging/electron
-          npm install
+          # Hardened install for the shipped artifact: pin to the committed lockfile
+          # (npm ci) and block transitive lifecycle scripts (--ignore-scripts) so no
+          # postinstall code runs into the signed .dmg. electron-builder fetches the
+          # Electron binary itself via @electron/get, independent of npm postinstall.
+          npm ci --ignore-scripts
           npx electron-builder --mac --arm64 --publish never
 
       - name: Stage release artifacts
