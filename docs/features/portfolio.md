@@ -3,12 +3,12 @@ title: Feature - Portfolio & Investments
 type: feature
 status: active
 date: 2026-04-27
-last_modified: 2026-05-18
-updated: 2026-05-18
-tags: [feature, portfolio, investments, stocks, crypto, metals, phase-1, phase-3.5, phase-3.6, phase-9, phase-8, phase-14, pdf-export, offline-resilience, stale-prices, online-status-detection, graceful-degradation, portfolio-summary, realtime-totals, decimal-precision, monetary-math, snapshot-valuation-parity, fixed-income-accrual, real-estate-appreciation, net-worth-reconciliation]
+last_modified: 2026-05-29
+updated: 2026-05-29
+tags: [feature, portfolio, investments, stocks, crypto, metals, phase-1, phase-3.5, phase-3.6, phase-9, phase-8, phase-14, pdf-export, offline-resilience, stale-prices, online-status-detection, graceful-degradation, portfolio-summary, realtime-totals, decimal-precision, monetary-math, snapshot-valuation-parity, fixed-income-accrual, real-estate-appreciation, net-worth-reconciliation, historical-fx, snapshot-fx, loading-states, error-states, page-error, skeleton]
 aliases: [portfolio-feature, investments-feature, holdings, net-worth, stocks, crypto, real-estate, savings, bonds, metals, performance, watchlist]
-description: Track stocks, ETFs, crypto, metals, real estate, savings, and bonds; includes Phase 8 PDF report export with 6 portfolio sections
-related_code: ["apps/node-backend/src/routes/investments.js", "apps/node-backend/src/services/priceProviderService.js", "apps/node-backend/src/services/portfolioPerformanceSnapshotService.js", "apps/node-backend/src/services/portfolio/portfolioSummaryService.js", "apps/node-backend/src/routes/info/portfolioSummary.js", "apps/frontend/src/pages/portfolio/PerformancePage.tsx", "apps/frontend/src/pages/portfolio/MetalsPage.tsx", "apps/frontend/src/pages/portfolio/PortfolioOverviewPage.tsx", "apps/frontend/src/hooks/portfolio/usePortfolioSummary.ts", "apps/frontend/src/lib/api.ts"]
+description: Track stocks, ETFs, crypto, metals, real estate, savings, and bonds; includes Phase 8 PDF report export with 6 portfolio sections. 2026-05-29 adds historical FX in snapshots and loading/error states on all asset pages.
+related_code: ["apps/node-backend/src/routes/investments.js", "apps/node-backend/src/services/priceProviderService.js", "apps/node-backend/src/services/portfolioPerformanceSnapshotService.js", "apps/node-backend/src/services/portfolio/portfolioSummaryService.js", "apps/node-backend/src/routes/info/portfolioSummary.js", "apps/frontend/src/pages/portfolio/PerformancePage.tsx", "apps/frontend/src/pages/portfolio/MetalsPage.tsx", "apps/frontend/src/pages/portfolio/PortfolioOverviewPage.tsx", "apps/frontend/src/hooks/portfolio/usePortfolioSummary.ts", "apps/frontend/src/hooks/usePortfolio.ts", "apps/frontend/src/lib/api.ts"]
 ---
 
 # Feature: Portfolio & Investments
@@ -292,6 +292,14 @@ Current behavior:
 - **Snapshot atomicity (2026-04-29)**: `computeAndStoreSnapshots()` now wraps DELETE + batched INSERTs in a single PostgreSQL transaction. This guarantees concurrent readers (e.g., `/api/info/net-worth` requests during startup warmup) see either fully-old or fully-new snapshots via MVCC, never a torn/partial table. Fixes a race condition where concurrent reads could trigger cache of zero portfolio value. See [[docs/adr/043-portfolio-snapshot-atomicity|ADR-043]].
 - **Snapshot valuation parity (2026-05-18)**: `snapshotBuilder` non-unit asset formulas were rewritten to mirror `portfolioSummaryService` exactly, eliminating a 2,142.24 € divergence between Net Worth "Investments" and Portfolio Overview / Performance "Portfolio Value". Fixed-income (savings/bond): `value = runningInvested + accruedInterest` where accrual walks `interest`/`buy`/`gift`/`sell` transactions day-by-day. Real-estate: `value = runningInvested + cumulativeAppreciation` via explicit `appreciation` transactions. Unit-based assets: the latest-day snapshot uses `investments.current_price` directly, so Net Worth always reconciles with the live summary even after a price refresh. All three pages (Dashboard, Performance, Net Worth) now show the same value for the same day. Historical chart will redraw on next snapshot run as accrued interest and appreciation are applied retroactively. See [[docs/adr/061-snapshot-valuation-parity|ADR-061]].
 
+- **Historical FX in snapshots (2026-05-29)**: `snapshotBuilder.js` now loads a full historical `exchange_rates` index (per currency, sorted day arrays) alongside the existing `is_latest` rates. A binary-search `rateToEurOnOrBefore(currency, day)` lookup finds the most recent stored rate on or before each day. `convertAmount(amount, currency, fxRateToEur, asOfDay)` uses this to convert values at the rate that applied at the time:
+  - **Market value** (unit-based assets): converted at the rate on the snapshot day, not today's.
+  - **Invested capital** (transaction amounts): converted at the rate on the transaction date, or at the stored `fx_rate_to_eur` when present.
+  - **Latest day**: always uses the `is_latest` rate so the headline snapshot value reconciles with `/portfolio-summary` (and the Net Worth "Investments" total remains consistent with Portfolio Overview).
+
+  > [!info] Invested cost-basis caveat for foreign holdings
+  > The snapshot `invested` column for foreign-currency holdings now reflects true historical cost (e.g., a USD buy in 2023 uses the 2023 EUR/USD rate). The live Portfolio Summary endpoint restates invested at the latest FX rate. Users may therefore see a small difference between the Performance page "Total Invested" (historical snapshot) and the Portfolio Overview "Total Invested" (live restatement) for foreign holdings purchased when exchange rates differed significantly from today. This is correct behaviour — snapshots show what was paid; the live summary shows current equivalent.
+
 Code links: [[apps/node-backend/src/repositories/infoRepository.js]], [[apps/node-backend/tests/infoRepository.test.js]], [[apps/frontend/src/pages/portfolio/net-worth/NetWorthPage.tsx]], [[apps/frontend/src/lib/api.ts]], [[apps/node-backend/src/services/portfolio/snapshotBuilder.js]], [[apps/node-backend/tests/portfolioPerformanceSnapshotService.test.js]]
 
 ## Cross-Currency Display Normalization
@@ -526,6 +534,44 @@ Code links: [[apps/node-backend/src/utils/portfolioMath.js]], [[apps/frontend/sr
 Portfolio info cards (Crypto, Savings, Real Estate, Stocks) previously rendered translations via `dangerouslySetInnerHTML`. This pattern was unnecessarily risky. Since translation strings are plain text with no embedded HTML, all info cards now render translations as plain text: `{t(...)}` instead of `dangerouslySetInnerHTML={{ __html: t(...) }}`. This eliminates the XSS surface while maintaining identical output.
 
 Code links: [[apps/frontend/src/pages/portfolio/CryptoPage.tsx]], [[apps/frontend/src/pages/portfolio/SavingsPage.tsx]], [[apps/frontend/src/pages/portfolio/RealEstatePage.tsx]], [[apps/frontend/src/pages/portfolio/StocksPage.tsx]], [[docs/security/data-protection#xss-prevention]]
+
+## Portfolio Asset Page Loading and Error States (2026-05-29)
+
+The four portfolio asset pages — Stocks & ETFs, Crypto, Savings, and Real Estate (Metals renders via `StocksPage` with `assetClasses={["metals"]}`) — now handle loading and error conditions explicitly rather than falling through to the empty state.
+
+### `usePortfolio` hook surface
+
+`usePortfolio()` now surfaces the underlying React Query state from `useInvestmentsQuery`:
+
+```typescript
+const {
+  isLoading,   // true while the initial investments fetch is in flight
+  isError,     // true when the fetch has failed
+  error,       // Error object (or null)
+  refetch,     // () => void — re-trigger the failed query
+  ...
+} = usePortfolio();
+```
+
+Previously a failed fetch would resolve to an empty `investments` array, silently rendering the "no holdings yet" empty state and masking the error from the user.
+
+### Page-level states
+
+Each asset page checks these values before rendering the holdings list:
+
+| State | Rendered | Trigger |
+|---|---|---|
+| Loading | Skeleton placeholder | `isLoading === true` |
+| Error | `PageError` component with "Retry" button | `isError === true` |
+| Empty | Asset-class-specific empty state | Fetch succeeded; zero holdings |
+| Populated | Holdings table / cards | Fetch succeeded; holdings present |
+
+The "Retry" button on the error state calls `refetch()` so users can recover from transient network failures without a full page reload.
+
+> [!tip]
+> The `PageError` component is shared across portfolio pages. It accepts an `onRetry` callback prop and renders a localized error message with the underlying error detail.
+
+Code links: [[apps/frontend/src/hooks/usePortfolio.ts]], [[apps/frontend/src/pages/portfolio/StocksPage.tsx]], [[apps/frontend/src/pages/portfolio/CryptoPage.tsx]], [[apps/frontend/src/pages/portfolio/SavingsPage.tsx]], [[apps/frontend/src/pages/portfolio/RealEstatePage.tsx]], [[apps/frontend/src/pages/portfolio/MetalsPage.tsx]]
 
 ## PDF Report Export (Phase 8)
 

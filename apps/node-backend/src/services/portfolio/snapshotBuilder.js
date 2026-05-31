@@ -57,6 +57,7 @@ export async function computeDailySnapshots(targetCurrency = 'EUR') {
     priceHistoryResult,
     inflationResult,
     fxResult,
+    fxHistoryResult,
   ] = await Promise.all([
     query(`
       SELECT i.id, COALESCE(i.currency, 'EUR') AS currency,
@@ -102,6 +103,15 @@ export async function computeDailySnapshots(targetCurrency = 'EUR') {
     `, [firstDateYmd]),
     query(`SELECT currency_code, rate_to_eur FROM exchange_rates WHERE is_latest = true`)
       .catch(() => ({ rows: [] })),
+    // Historical FX so each day of the walk converts at the rate that applied
+    // then, not today's. Sparse/empty is fine — convertAmount falls back to the
+    // latest (is_latest) rate when no historical row precedes the day.
+    query(`
+      SELECT currency_code, to_char(rate_date, 'YYYY-MM-DD') AS day, rate_to_eur
+      FROM exchange_rates
+      WHERE rate_date >= $1::date
+      ORDER BY currency_code, rate_date
+    `, [firstDateYmd]).catch(() => ({ rows: [] })),
   ]);
 
   // --- Build lookup maps ---
@@ -155,6 +165,27 @@ export async function computeDailySnapshots(targetCurrency = 'EUR') {
     fxRates[row.currency_code] = Number(row.rate_to_eur) || 1;
   }
 
+  // Historical rate_to_eur per currency, with sorted day arrays for binary-search
+  // nearest-on-or-before lookup (mirrors the price-history forward-fill above).
+  // { CURRENCY: { day: rate } } + { CURRENCY: [day, ...] }
+  const fxHistoryByCurrency = {};
+  const fxHistorySortedDays = {};
+  for (const row of fxHistoryResult.rows) {
+    const cur = row.currency_code;
+    if (!cur) continue;
+    const rate = Number(row.rate_to_eur) || 0;
+    if (rate <= 0) continue;
+    if (!fxHistoryByCurrency[cur]) {
+      fxHistoryByCurrency[cur] = {};
+      fxHistorySortedDays[cur] = [];
+    }
+    fxHistoryByCurrency[cur][row.day] = rate;
+    fxHistorySortedDays[cur].push(row.day);
+  }
+  for (const days of Object.values(fxHistorySortedDays)) {
+    days.sort();
+  }
+
   // { day: tx[] }
   const txByDay = {};
   for (const row of allTxResult.rows) {
@@ -172,19 +203,64 @@ export async function computeDailySnapshots(targetCurrency = 'EUR') {
   // --- Day walk helpers ---
 
   /**
+   * rate_to_eur for `currency` as of `day`: the most recent historical rate on or
+   * before `day`, falling back to the latest (is_latest) rate when no historical
+   * row precedes it (or no history is loaded). The latest day always uses the
+   * latest rate so the headline snapshot reconciles with /portfolio-summary.
+   *
+   * @param {string} currency
+   * @param {string} [day] YYYY-MM-DD
+   * @returns {number}
+   */
+  function rateToEurOnOrBefore(currency, day) {
+    const cur = (currency || 'EUR').toUpperCase();
+    if (cur === 'EUR') return 1;
+    const latest = fxRates[cur] > 0 ? fxRates[cur] : 1;
+    if (!day || day === todayYmd) return latest;
+
+    const byDay = fxHistoryByCurrency[cur];
+    if (byDay) {
+      if (byDay[day] > 0) return byDay[day];
+      const days = fxHistorySortedDays[cur];
+      let lo = 0;
+      let hi = days.length - 1;
+      let bestDay = '';
+      while (lo <= hi) {
+        const mid = (lo + hi) >>> 1;
+        if (days[mid] <= day) {
+          bestDay = days[mid];
+          lo = mid + 1;
+        } else {
+          hi = mid - 1;
+        }
+      }
+      if (bestDay && byDay[bestDay] > 0) return byDay[bestDay];
+    }
+    return latest;
+  }
+
+  /**
+   * Convert `amount` from `fromCurrency` to the target currency as of `asOfDay`.
+   * Prefers the rate stored on the transaction (`fxRateToEur`); otherwise uses the
+   * historical rate that applied on `asOfDay` (not today's). For invested capital
+   * pass the transaction date; for market value pass the day being valued.
+   *
    * @param {number|string|import('decimal.js').default} amount
+   * @param {string} fromCurrency
+   * @param {number} [fxRateToEur] rate stored at transaction time
+   * @param {string} [asOfDay] YYYY-MM-DD the conversion applies to
    * @returns {import('decimal.js').default} converted amount as Decimal
    */
-  function convertAmount(amount, fromCurrency, fxRateToEur) {
+  function convertAmount(amount, fromCurrency, fxRateToEur, asOfDay) {
     const from = (fromCurrency || 'EUR').toUpperCase();
     const to = targetCurrency.toUpperCase();
     const amt = toDecimal(amount);
     if (from === to) return amt;
-    const rateTo = fxRates[to] || 1;
-    if (fxRateToEur !== undefined && Number.isFinite(fxRateToEur) && fxRateToEur > 0) {
-      return amt.times(fxRateToEur).div(rateTo);
-    }
-    return amt.times(fxRates[from] || 1).div(rateTo);
+    const rateTo = to === 'EUR' ? 1 : rateToEurOnOrBefore(to, asOfDay);
+    const rateFrom = (fxRateToEur !== undefined && Number.isFinite(fxRateToEur) && fxRateToEur > 0)
+      ? fxRateToEur
+      : rateToEurOnOrBefore(from, asOfDay);
+    return amt.times(rateFrom).div(rateTo);
   }
 
   function resolvePrice(inv, day, lastKnownPrice) {
@@ -253,9 +329,10 @@ export async function computeDailySnapshots(targetCurrency = 'EUR') {
   const todayYmd = allDays[allDays.length - 1];
 
   for (const day of allDays) {
-    // Apply transactions
+    // Apply transactions. Invested capital converts at the rate on the
+    // transaction's own day (or the stored fx_rate_to_eur), not today's.
     for (const tx of txByDay[day] || []) {
-      const converted = convertAmount(tx.amount, tx.currency, tx.fxRateToEur);
+      const converted = convertAmount(tx.amount, tx.currency, tx.fxRateToEur, day);
       const inv = investmentsById.get(tx.investmentId);
       const nonUnitInv = nonUnitInvestmentsById.get(tx.investmentId);
       const nonUnitS = nonUnitState.get(tx.investmentId);
@@ -317,7 +394,9 @@ export async function computeDailySnapshots(targetCurrency = 'EUR') {
         lastKnownPrice[inv.id] = priceHistoryByInvestment[inv.id][day];
       }
 
-      const invValue = convertAmount(toDecimal(units).times(price), inv.currency);
+      // Market value converts at the rate on the day being valued (latest day
+      // uses the latest rate, so the headline value still reconciles).
+      const invValue = convertAmount(toDecimal(units).times(price), inv.currency, undefined, day);
       totalValue = totalValue.plus(invValue);
       if (inv.assetClass === 'stock' || inv.assetClass === 'etf') stocksEtfsValue = stocksEtfsValue.plus(invValue);
       else if (inv.assetClass === 'crypto') cryptoValue = cryptoValue.plus(invValue);
@@ -354,7 +433,7 @@ export async function computeDailySnapshots(targetCurrency = 'EUR') {
       // of showing current_price from active_from so we don't regress users who
       // entered a current_price without seed transactions.
       if (invValue.lte(0) && day >= inv.activeFrom && inv.currentPrice > 0) {
-        invValue = convertAmount(inv.currentPrice, inv.currency);
+        invValue = convertAmount(inv.currentPrice, inv.currency, undefined, day);
       }
 
       if (invValue.gt(0)) fixedIncomeValue = fixedIncomeValue.plus(invValue);

@@ -85,6 +85,7 @@ function mockSnapshotQueries({
   prices = [],
   inflation = [{ month: '2026-01', monthly_rate: 0 }],
   fxRates = [{ currency_code: 'EUR', rate_to_eur: 1 }],
+  fxHistory = [],
 } = {}) {
   query.mockImplementation(async (sql) => {
     if (sql.includes('SELECT MIN(first_date)::date AS first_data_date')) {
@@ -106,6 +107,9 @@ function mockSnapshotQueries({
       return { rows: inflation };
     }
     if (sql.includes('FROM exchange_rates')) {
+      if (sql.includes('rate_date >=')) {
+        return { rows: fxHistory };
+      }
       if (fxRates instanceof Error) throw fxRates;
       return { rows: fxRates };
     }
@@ -222,6 +226,42 @@ describe('portfolioPerformanceSnapshotService', () => {
     expect(snapshots[1].value).toBe(10);
     expect(snapshots[1].gain_loss).toBe(2.5);
     expect(snapshots[1].return_pct).toBeCloseTo(33.333, 2);
+  });
+
+  it('converts a foreign-currency holding with no stored fx rate at each day\'s historical rate', async () => {
+    // USD holding, no fx_rate_to_eur on the buy. USD/EUR moves 0.80 → 0.85 → 0.90
+    // (latest). System time is 2026-01-03, so 01-03 is the latest day.
+    mockSnapshotQueries({
+      investments: [{ id: 1, currency: 'USD', current_price: 10, asset_class: 'stock' }],
+      transactions: [
+        { investment_id: 1, day: '2026-01-01', type: 'buy', amount: 100, units: 10, currency: 'USD', fx_rate_to_eur: null },
+      ],
+      prices: [
+        { investment_id: 1, day: '2026-01-01', close_price: 10 },
+        { investment_id: 1, day: '2026-01-02', close_price: 10 },
+        { investment_id: 1, day: '2026-01-03', close_price: 10 },
+      ],
+      fxRates: [
+        { currency_code: 'EUR', rate_to_eur: 1 },
+        { currency_code: 'USD', rate_to_eur: 0.9 }, // is_latest
+      ],
+      fxHistory: [
+        { currency_code: 'USD', day: '2026-01-01', rate_to_eur: 0.8 },
+        { currency_code: 'USD', day: '2026-01-02', rate_to_eur: 0.85 },
+      ],
+    });
+
+    const snapshots = await computeAndStoreSnapshots('EUR');
+
+    expect(snapshots).toHaveLength(3);
+    // Value uses the rate that applied on each day — NOT today's 0.90 everywhere.
+    expect(snapshots[0].value).toBe(80); // 100 USD × 0.80 (2026-01-01)
+    expect(snapshots[1].value).toBe(85); // 100 USD × 0.85 (2026-01-02)
+    // Latest day uses the latest (is_latest) rate so it reconciles with /portfolio-summary.
+    expect(snapshots[2].value).toBe(90); // 100 USD × 0.90 (latest)
+    // Invested reflects the buy-day rate (true cost), not today's — would be 90 if buggy.
+    expect(snapshots[0].invested).toBe(80);
+    expect(snapshots[2].invested).toBe(80);
   });
 
   it('falls back from historical price to last known transaction price and current price', async () => {

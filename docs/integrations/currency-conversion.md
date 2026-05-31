@@ -3,7 +3,7 @@ title: Currency Conversion
 type: integration
 status: active
 date: 2026-04-25
-updated: 2026-05-03
+updated: 2026-05-29
 tags: [integration, currency, exchange-rates, phase-0, phase-1, phase-3-1, offline-resilience, network-reachability, startup-optimization]
 description: Multi-currency support with automatic conversion to target currencies using ECB and supplementary exchange rates, including date-aware historical conversion and batch grouped conversion (Phase 3.1+). Startup FX warmup is skipped when offline (2026-05-03).
 related_code: ["apps/node-backend/src/services/currency/currencyConversionService.js", "apps/node-backend/src/repositories/infoRepositoryHelpers.js", "apps/node-backend/src/lib/network.js"]
@@ -351,6 +351,23 @@ Scheduled 12h exchange rate refreshes also skip themselves when `isInternetReach
 
 > [!info] Locked contracts (Phase 8)
 > Currency round-trip correctness is pinned by [[apps/node-backend/tests/property/currencyRoundTrip.property.test.js]]. Bounded random amount + rate pairs must satisfy `convert(convert(x, A→B), B→A) ≈ x` within cent tolerance, and cross-rate composition `A→B→C` must equal the direct `A→C` conversion within the same tolerance. See [[docs/testing/testing#property-test-pattern-phase-8|Property Test Pattern]] and [[apps/node-backend/tests/golden/INVENTORY.md|Calculation Inventory]].
+
+## Historical FX in Portfolio Snapshots (2026-05-29)
+
+The portfolio snapshot builder (`snapshotBuilder.js`) owns a separate, lightweight historical FX lookup that it loads in bulk directly from the `exchange_rates` table (not through `currencyConversionService`). This is intentional: the snapshot builder walks every day from first transaction to today in a single pass, so it pre-loads the full rate history once per snapshot run rather than making per-row service calls.
+
+Key differences from `currencyConversionService`:
+
+| Concern | `currencyConversionService` | `snapshotBuilder` internal lookup |
+|---|---|---|
+| Data source | ECB + Open Exchange Rates → DB + in-memory cache | `exchange_rates` table only (bulk preload) |
+| Lookup granularity | Per-conversion call | Binary-search in pre-sorted per-currency day arrays |
+| Fallback | In-memory cache → hardcoded constants | Latest `is_latest` rate |
+| Scope | All backend services | Snapshot day-walk only |
+
+The `is_latest` rows in `exchange_rates` are the same rows consumed by `currencyConversionService`'s `warmCache()`, so the latest-day snapshot always uses the same rate as the live portfolio summary endpoint, ensuring the headline portfolio value reconciles between Net Worth and Portfolio Overview.
+
+See [[docs/features/portfolio#historical-fx-in-snapshots-2026-05-29|Portfolio — Historical FX in Snapshots]] for the correctness implications on the invested cost-basis column.
 
 ## See Also
 
