@@ -40,6 +40,7 @@
     "db:revision": "venv/bin/alembic -c config/alembic.ini revision --autogenerate -m",
     "db:index-stats": "bun run apps/node-backend/scripts/index-stats.js",
     "db:precision-drift": "bun run apps/node-backend/scripts/check-precision-drift.js",
+    "quotes:densify": "bun run apps/node-backend/scripts/densify-asset-history.js",
     "docker:dev": "npm run generate-locales-if-not-ci && docker compose -f docker-compose.yml -f docker-compose.dev.yml up",
     "docker:dev:down": "docker compose -f docker-compose.yml -f docker-compose.dev.yml down",
     "docker:dev:rebuild": "npm run generate-locales-if-not-ci && docker compose -f docker-compose.yml -f docker-compose.dev.yml down && docker compose -f docker-compose.yml -f docker-compose.dev.yml up --build",

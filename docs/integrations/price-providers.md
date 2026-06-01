@@ -3,9 +3,9 @@ title: Integration - Price Providers
 type: integration
 description: Live and historical price feeds for stocks, crypto, and other investments. Startup price refresh is skipped when the host is offline (2026-05-03).
 date: 2026-04-21
-last_modified: 2026-05-29
-updated: 2026-05-29
-tags: [integration, price, stocks, crypto, api, historical-quotes, quote-backfill, phase-1, eur-to-usd-mapping, data-sanitization, kinesis, offline-resilience, price-history-default, provider-timeout, parallel-fetching, startup-optimization, network-reachability, ssrf, url-safety]
+last_modified: 2026-05-31
+updated: 2026-05-31
+tags: [integration, price, stocks, crypto, api, historical-quotes, quote-backfill, phase-1, eur-to-usd-mapping, data-sanitization, kinesis, offline-resilience, price-history-default, provider-timeout, parallel-fetching, startup-optimization, network-reachability, ssrf, url-safety, binance-pagination, gap-fill, daily-granularity, densify]
 aliases: [price providers, market data, Binance, Kinesis, Yahoo Finance, live prices]
 status: active
 related_code: [[apps/node-backend/src/services/priceProviderService.js], [apps/node-backend/src/services/quoteBackfillService.js], [apps/node-backend/src/services/prices/priceProviderRegistry.js], [apps/node-backend/tests/priceProviderRegistry.test.js], [apps/node-backend/src/lib/network.js]]
@@ -30,10 +30,11 @@ Price providers fetch live and historical market prices for investments, support
 ### Binance
 - **Asset Classes**: Crypto
 - **API**: Binance market data API
-- **Endpoint**: `https://api.binance.com/api/v3/ticker/price`
-- **Features**: 
+- **Endpoint**: `https://api.binance.com/api/v3/ticker/price` (live); `/api/v3/klines` (historical)
+- **Features**:
   - Real-time crypto quote data
   - Broad pair coverage
+  - **Full-window paginated history (2026-05-31):** Historical fetch uses `/api/v3/klines` with `startTime`/`endTime`/`limit=1000` (BINANCE_PAGE_LIMIT) across the full holding window. A runaway guard of 30 pages maximum (BINANCE_MAX_PAGES) logs a `WARN` if hit. The old `days = Math.min(daysDiff, 365)` cap that silently discarded all history older than ~1 year has been removed. A crypto position held since 2023 now receives 3+ years of daily closes on first backfill. Cache key is window-aware: `binance-history:${symbol}:${dayKey(start)}:${dayKey(end)}`.
 
 ### Kinesis
 - **Asset Classes**: Metals, commodities
@@ -48,6 +49,10 @@ Price providers fetch live and historical market prices for investments, support
   - **Stale-run removal (2026-04-26):** Kinesis API occasionally stalls for 60–137 hours (observed on KAU/KAG), returning ≥ 8 consecutive identical prices before jumping to new levels. Sanitizer collapses these runs to first point only, preserving correct price level without chart flatlines
   - **Edge-point anomalies (2026-04-26):** Year-boundary rollover bugs cause first/last points at ~50% of real price (Jan 1, 2025 artifact on KAU observed). Edge sanitizer checks first and last points using local needle ratio `1.8x`, replacing anomalies with neighbor value
   - Isolated needle-spike sanitization (up/down) replaces only confirmed single-point anomalies using geometric interpolation from neighboring points, preserving non-spike detail; thresholds are tuned for moderate one-day needles (robust `6σ`, bridge `4σ`, min jump `18%`, local needle ratio `1.8x`)
+
+> [!warning] Kinesis `timeFrame` unit ambiguity (open follow-up)
+> The Kinesis provider's default `timeFrame=60` parameter has an unresolved unit ambiguity: `kinesisConfig.js` comments say "minutes"; `docs/reference/environment-variables.md` says "days"; `providerHealthService` probes using 60. The value was deliberately **not changed** in the 2026-05-31 daily gap-fill work. Changing it without first running an empirical diagnostic (fetching with different values and inspecting returned point density) risks breaking Kinesis history coverage. Resolve via a targeted diagnostic before any change. Tracked in `TODO.md`.
+> Note: `normalizeHistoryPoints` deduplicates by date, so finer-than-daily provider cadence does not itself cause sparsity — only missing date rows do.
 
 ### Yahoo Finance
 - **Asset Classes**: Stocks, ETFs, Metals
@@ -85,7 +90,13 @@ URLs that target private networks (RFC 1918, loopback, CGNAT `100.64/10`, cloud 
   - Cleans up stale quotes outside windows after backfill
   - Ignores `is_active` flag — all investments with transaction history get quotes
 - Lightweight hourly refresh via `refreshActiveHoldingQuotes()` updates currently-held investments (7-day lookback, open windows only)
+- **Daily gap-detecting backfill (2026-05-31, ADR-065):** `backfillHoldingGaps({ thresholdDays })` runs on a daily `setInterval` in `warmup.js` (wrapped in `withInFlightGuard` + offline guard). It detects interior gaps in `asset_price_history` that `needsHistoryRefresh` cannot catch (endpoint-only check), then re-fetches with `force=true` to bypass the short-circuit:
+  - `holdingWindowsNeedBackfill(holdingWindows, storedDates, { thresholdDays=9, todayUtc })` — pure fn; walks `[windowStart, ...storedDatesInWindow, windowEnd]` per holding window; returns `true` if any consecutive-date gap exceeds the threshold (`GAP_THRESHOLD_DAYS=9` — above weekend/holiday gaps, below ~14-day biweekly cadence).
+  - Covers **all** holding windows including closed positions, unlike the hourly refresh.
+  - If `result.filled > 0`, `computeAndStoreSnapshots()` is called so Performance and Net Worth charts reflect the denser history.
+  - Idempotent: `filled` increments only when the stored row count actually grows; a run against an already-dense series makes one DB read per investment and no provider calls.
 - Transaction-triggered refresh via `refreshQuotesForInvestment()` (fire-and-forget) handles single-investment updates on buy/sell/edit
+- **`force` option on `fetchHistoricalPrices` (2026-05-31):** `fetchHistoricalPrices(investment, { fromMs, toMs, dbOnly, force })` accepts `force=true` to bypass the `needsHistoryRefresh` short-circuit unconditionally. The gap-fill path uses this to re-populate interior holes in series that already span the window endpoints.
 - Startup live refresh now prioritizes fast availability for Kinesis-backed investments: when a valid persisted `current_price` exists, it is used immediately and the external Kinesis refresh is deferred to background execution.
 - If provider fetch fails, history requests fall back to persisted DB rows.
 - `fetchLivePricesDetailed` uses provider-consistent cache keys, including investment-scoped keys for `custom`/`kinesis` to keep cache reads and writes aligned.
@@ -215,5 +226,6 @@ Code links: [[apps/node-backend/src/services/prices/priceProviderRegistry.js]], 
 - [[docs/api/admin|API: Admin]] (Kinesis history sanitization endpoint)
 - [[docs/features/portfolio|Feature: Portfolio]]
 - [[docs/performance/chart-downsampling|Chart Data Downsampling]]
+- [[docs/adr/065-daily-gap-fill-dense-asset-history|ADR-065]] — Daily gap-fill decision record (Binance pagination, force-refetch, gap-threshold rationale)
 
 Code links: [[apps/node-backend/src/services/priceProviderService.js]], [[apps/node-backend/src/config/kinesisConfig.js]], [[apps/node-backend/src/main.js]], [[apps/node-backend/src/routes/admin.js]], [[alembic/versions/0019_asset_price_history_cache.py]]

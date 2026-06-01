@@ -3,7 +3,7 @@ title: Algorithms & Data Structures
 type: algorithm-doc
 status: active
 date: 2026-04-02
-updated: 2026-05-18
+updated: 2026-05-31
 tags: [algorithms, computer-science, performance, data-structures, snapshot-valuation, fixed-income, real-estate, accrued-interest]
 description: Formal documentation of all algorithms used in Vision — LTTB downsampling, deduplication hashing, recurring pattern detection, currency conversion, portfolio snapshot valuation, and more
 aliases: [algorithms, data structures, CS, computational methods]
@@ -417,6 +417,14 @@ snapshot[todayYmd].value ≈ portfolioSummary.totals.currentValue
 
 This invariant is verified by regression tests in `portfolioPerformanceSnapshotService.test.js`.
 
+#### Live Overlay at Read Time (2026-05-31, ADR-064)
+
+Because `computeAndStoreSnapshots` runs only at startup, the stored snapshot's investments value drifts from the live summary after each hourly price refresh. To close this freshness gap, `infoRepositoryNetWorth.getNetWorthFromSnapshots` accepts an optional `liveInvestments` argument. When finite, it overwrites the latest snapshot row's `investments` and recomputes `netWorth = liquid + liveInvestments` before deriving `current` and `monthlyChange`. The caller (`netWorth.js` and the startup warmup path in `info.js`) resolves this value from `portfolioSummaryService` via the shared `portfolioSummaryCache` (60s TTL) using `resolveLivePortfolioValue(targetCurrency)` in `_liveSummary.js`. Historical snapshot rows are not modified. If the live resolution fails, `liveInvestments` is `undefined` and the algorithm falls back to the stored snapshot value.
+
+#### Dense Input via Daily Gap-Fill (2026-05-31, ADR-065)
+
+The snapshot algorithm assumes `asset_price_history` contains daily close prices for every held day. Prior to ADR-065 this assumption was violated by the Binance 365-day history cap and the `needsHistoryRefresh` endpoint-only check, producing forward-fill runs of 14+ days that manifested as biweekly granularity in the output series. ADR-065 ensures the input table is kept dense by a daily gap-detecting backfill job (`backfillHoldingGaps`). When the job writes new rows, it triggers `computeAndStoreSnapshots()` so the snapshot pipeline re-runs with the denser input. The algorithm itself is unchanged; only the quality of `asset_price_history` input improved.
+
 #### Complexity
 
 - **Time:** O(D × A) where D = days, A = active investments
@@ -428,6 +436,8 @@ This invariant is verified by regression tests in `portfolioPerformanceSnapshotS
 - [[docs/features/portfolio#net-worth-tracking]] — Net worth feature docs
 - [[docs/features/net-worth#non-unit-asset-valuation-formulas-2026-05-18-adr-061]] — Detailed formula description
 - [[docs/adr/061-snapshot-valuation-parity|ADR-061]] — Decision record for the parity fix
+- [[docs/adr/064-net-worth-current-value-live-overlay|ADR-064]] — Live overlay for the current snapshot point
+- [[docs/adr/065-daily-gap-fill-dense-asset-history|ADR-065]] — Daily gap-fill ensuring dense daily input to the snapshot algorithm
 - [[docs/adr/044-portfolio-summary-single-source-of-truth|ADR-044]] — Live summary as source of truth for dashboard + performance totals
 - [[docs/performance/caching-strategies]] — Caching strategy
 

@@ -22,7 +22,7 @@ export const netWorthRepository = {
    * Bank balances are still derived live from the transactions table.
    * No network calls — all data from the database.
    */
-  async getNetWorthFromSnapshots(targetCurrency = 'EUR') {
+  async getNetWorthFromSnapshots(targetCurrency = 'EUR', { liveInvestments } = {}) {
     const firstDateResult = await query(`
       SELECT LEAST(
         (SELECT MIN(snapshot_date) FROM portfolio_performance_snapshots WHERE currency = $1),
@@ -204,6 +204,21 @@ export const netWorthRepository = {
     }
 
     const sanitizedSnapshots = sanitizeIsolatedDailyInvestmentSpikes(snapshots);
+
+    // Reconcile the most-recent point with the live portfolio summary. The
+    // stored snapshot value is only rebuilt at startup (snapshotBuilder runs
+    // once in warmup), so on its own the Net Worth "Investments" headline
+    // freezes at the boot-time price while the Dashboard/Performance cards —
+    // served live from portfolioSummaryService — keep moving with each hourly
+    // price refresh. The caller passes the live total so the latest snapshot
+    // (headline, last chart point, and latest table row) always matches those
+    // two surfaces. See ADR-064.
+    if (Number.isFinite(liveInvestments) && sanitizedSnapshots.length > 0) {
+      const last = sanitizedSnapshots[sanitizedSnapshots.length - 1];
+      const investments = roundToCents(liveInvestments);
+      last.investments = investments;
+      last.netWorth = roundToCents(last.liquid + investments);
+    }
 
     const latest = sanitizedSnapshots[sanitizedSnapshots.length - 1] || { liquid: 0, investments: 0, netWorth: 0 };
     const currentMonthPrefix = latest.date ? extractYearMonth(latest.date) : null;

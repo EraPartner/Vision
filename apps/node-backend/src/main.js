@@ -348,6 +348,7 @@ const HOST = settings.server.host;
 let exchangeRateRefreshInterval = null;
 let quotesRefreshInterval = null;
 let cashflowForecastRefreshInterval = null;
+let holdingGapBackfillInterval = null;
 
 // HTTP server handle — module-scoped so shutdown() can drain in-flight requests.
 let httpServer = null;
@@ -453,6 +454,7 @@ async function start() {
         exchangeRateRefreshInterval = intervals.exchangeRateRefreshInterval;
         quotesRefreshInterval = intervals.quotesRefreshInterval;
         cashflowForecastRefreshInterval = intervals.cashflowForecastRefreshInterval;
+        holdingGapBackfillInterval = intervals.holdingGapBackfillInterval;
       } catch (err) {
         logger.error('Warmup tasks failed', { error: err.message });
       }
@@ -494,6 +496,7 @@ async function shutdown(signal) {
   if (exchangeRateRefreshInterval) clearInterval(exchangeRateRefreshInterval);
   if (quotesRefreshInterval) clearInterval(quotesRefreshInterval);
   if (cashflowForecastRefreshInterval) clearInterval(cashflowForecastRefreshInterval);
+  if (holdingGapBackfillInterval) clearInterval(holdingGapBackfillInterval);
   cancelPendingAggregationRefresh();
 
   // Stop accepting new connections and let in-flight requests finish before

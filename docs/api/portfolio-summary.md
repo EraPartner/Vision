@@ -3,16 +3,17 @@ title: Portfolio Summary API
 type: endpoint
 status: active
 date: 2026-04-29
-tags: [endpoint, api, portfolio, realtime, summary, totals, dashboard, performance]
-description: Realtime portfolio totals endpoint serving as single source of truth for dashboard and performance page metrics. Single computation path, consistent FX timing, 60s cache TTL.
+updated: 2026-05-31
+tags: [endpoint, api, portfolio, realtime, summary, totals, dashboard, performance, net-worth, live-overlay]
+description: Realtime portfolio totals endpoint serving as single source of truth for dashboard, performance, and (from 2026-05-31) net-worth current-point metrics. Single computation path, consistent FX timing, 60s cache TTL.
 aliases: [portfolio-totals, portfolio-metrics, summary-api]
-related_code: ["apps/node-backend/src/services/portfolio/portfolioSummaryService.js", "apps/node-backend/src/routes/info/portfolioSummary.js", "apps/node-backend/src/routes/info/_cache.js", "apps/frontend/src/hooks/portfolio/usePortfolioSummary.ts", "apps/frontend/src/lib/api/info.ts"]
+related_code: ["apps/node-backend/src/services/portfolio/portfolioSummaryService.js", "apps/node-backend/src/routes/info/portfolioSummary.js", "apps/node-backend/src/routes/info/_cache.js", "apps/node-backend/src/routes/info/_liveSummary.js", "apps/frontend/src/hooks/portfolio/usePortfolioSummary.ts", "apps/frontend/src/lib/api/info.ts"]
 ---
 
 # Portfolio Summary API
 
 > [!abstract] Overview
-> Realtime endpoint computing portfolio totals (value, invested, gain/loss, returns) with FX conversion applied server-side. Single source of truth for dashboard overview cards and performance page headline metrics. Eliminates divergence from dual compute paths and ensures consistent FX timing across UI surfaces.
+> Realtime endpoint computing portfolio totals (value, invested, gain/loss, returns) with FX conversion applied server-side. Single source of truth for dashboard overview cards, performance page headline metrics, and (from 2026-05-31) the Net Worth endpoint's *current* investments value. Eliminates divergence from dual compute paths and ensures consistent FX timing across all three UI surfaces.
 
 ## Endpoint Details
 
@@ -222,6 +223,10 @@ const metricsBlock = {
 };
 ```
 
+### Net Worth Current-Point Overlay (2026-05-31)
+
+The `GET /api/info/net-worth` endpoint now overlays its *current* investments value with the live summary from this endpoint, via the shared `portfolioSummaryCache`. The new shared helper `resolveLivePortfolioValue(targetCurrency)` in `apps/node-backend/src/routes/info/_liveSummary.js` reads `totals.totalPortfolioValue` from the cache and passes it to `infoRepositoryNetWorth.getNetWorthFromSnapshots`. This means Dashboard, Performance, and Net Worth all derive their "current portfolio value" from the same source — a true single source of truth across all three surfaces. Historical Net Worth snapshot days are unaffected. See [[docs/adr/064-net-worth-current-value-live-overlay|ADR-064]].
+
 ### Per-Asset-Class Breakdown
 
 Portfolio composition chart uses `summaries`:
@@ -291,6 +296,13 @@ return <div>Total: {data.totals.currentValue}</div>;
 - [[docs/api/portfolio-summary|Performance API]] — Snapshot timeseries and annualized metrics
 
 ## Changelog
+
+### 2026-05-31 — Net Worth overlay extended single source of truth
+
+- The Net Worth endpoint (`GET /api/info/net-worth`) now reads `totals.totalPortfolioValue` from `portfolioSummaryCache` (this endpoint's cache) and overlays it onto the latest snapshot before computing the headline `current` value, last chart point, and latest table row.
+- New shared helper `apps/node-backend/src/routes/info/_liveSummary.js` exposes `resolveLiveSummary` and `resolveLivePortfolioValue` for use by both `netWorth.js` and the startup warmup path.
+- API response shape of `/api/info/net-worth` is UNCHANGED. No frontend changes.
+- This extends the "single source of truth" guarantee from Dashboard + Performance to all three portfolio pages. See [[docs/adr/064-net-worth-current-value-live-overlay|ADR-064]].
 
 ### 2026-04-29 — Initial Release
 

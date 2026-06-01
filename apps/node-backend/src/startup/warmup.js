@@ -31,6 +31,7 @@ import { computeAndStoreSnapshots } from '../services/portfolioPerformanceSnapsh
 import {
   backfillHistoricalAssetQuotes,
   refreshActiveHoldingQuotes,
+  backfillHoldingGaps,
 } from '../services/quoteBackfillService.js';
 import { warmInfoCaches } from '../routes/info.js';
 import { refreshCashflowForecastMc } from '../jobs/refreshCashflowForecastMc.js';
@@ -173,7 +174,7 @@ async function refreshInvestmentPricesOnStartup() {
  *  4. Schedule recurring intervals (12h FX, 1h quotes, 24h cashflow MC).
  *
  * @param {{ warmupStatus: object }} args
- * @returns {Promise<{ exchangeRateRefreshInterval: NodeJS.Timeout, quotesRefreshInterval: NodeJS.Timeout, cashflowForecastRefreshInterval: NodeJS.Timeout }>}
+ * @returns {Promise<{ exchangeRateRefreshInterval: NodeJS.Timeout, quotesRefreshInterval: NodeJS.Timeout, cashflowForecastRefreshInterval: NodeJS.Timeout, holdingGapBackfillInterval: NodeJS.Timeout }>}
  */
 export async function runWarmupTasks({ warmupStatus }) {
   refreshMaterializedViews()
@@ -290,9 +291,32 @@ export async function runWarmupTasks({ warmupStatus }) {
     ONE_DAY_MS,
   );
 
+  // Daily gap-fill: densify any holding window whose stored daily series has grown sparse
+  // (provider outages, the old Binance 365-day cap, etc). Recompute snapshots only when new
+  // rows were actually written, so the Performance page reflects the denser history.
+  const holdingGapBackfillInterval = setInterval(
+    withInFlightGuard('holding-gap backfill', async () => {
+      if (!(await isInternetReachable({ force: true }))) {
+        logger.debug('Skipping scheduled holding-gap backfill — offline');
+        return;
+      }
+      const result = await backfillHoldingGaps().catch((err) => {
+        logger.error('Scheduled holding-gap backfill failed', { error: err.message });
+        return undefined;
+      });
+      if (result && result.filled > 0) {
+        await computeAndStoreSnapshots().catch((err) => {
+          logger.error('Snapshot recompute after holding-gap backfill failed', { error: err.message });
+        });
+      }
+    }),
+    ONE_DAY_MS,
+  );
+
   return {
     exchangeRateRefreshInterval,
     quotesRefreshInterval,
     cashflowForecastRefreshInterval,
+    holdingGapBackfillInterval,
   };
 }

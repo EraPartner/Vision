@@ -3,8 +3,8 @@ title: Package.json Scripts Reference
 type: reference
 status: active
 date: 2026-04-29
-updated: 2026-05-16
-tags: [reference, scripts, npm, bun, build, commands, phase-1, testing, e2e, mutation-testing]
+updated: 2026-05-31
+tags: [reference, scripts, npm, bun, build, commands, phase-1, testing, e2e, mutation-testing, quote-backfill, gap-fill]
 description: Complete reference of all npm/bun scripts available in the Vision project — root, frontend workspace, and backend workspace.
 aliases: [scripts, npm scripts, bun scripts, commands, build commands, run commands]
 ---
@@ -83,6 +83,7 @@ Alembic is the single source of schema DDL ([[docs/adr/027-alembic-single-source
 | `db:revision` | `venv/bin/alembic … revision --autogenerate -m` | Create a new migration. |
 | `db:index-stats` | `bun run apps/node-backend/scripts/index-stats.js` | Dump per-index usage stats from `pg_stat_user_indexes`. |
 | `db:precision-drift` | `bun run apps/node-backend/scripts/check-precision-drift.js` | Check NUMERIC columns for precision drift across snapshots. |
+| `quotes:densify` | `bun run apps/node-backend/scripts/densify-asset-history.js` | One-time gap-fill: runs `backfillHoldingGaps` across all investments to heal sparse `asset_price_history`, then recomputes portfolio snapshots if new rows were written. Safe to re-run (idempotent). Run once after upgrading from a version where Binance history was capped at 365 days. See [[docs/adr/065-daily-gap-fill-dense-asset-history\|ADR-065]]. |
 
 ### Docker
 

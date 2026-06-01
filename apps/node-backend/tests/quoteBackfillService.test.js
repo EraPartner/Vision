@@ -24,6 +24,8 @@ import {
   refreshActiveHoldingQuotes,
   refreshQuotesForInvestment,
   cleanupStaleQuotes,
+  holdingWindowsNeedBackfill,
+  backfillHoldingGaps,
 } from '../src/services/quoteBackfillService.js';
 import { query } from '../src/database/connection.js';
 import {
@@ -565,6 +567,106 @@ describe('Quote Backfill Service', () => {
 
       expect(deleted).toBe(0);
       expect(query).not.toHaveBeenCalled();
+    });
+  });
+
+  // ─── holdingWindowsNeedBackfill ───────────────────────────────────────────
+
+  describe('holdingWindowsNeedBackfill', () => {
+    it('returns false for a dense daily series covering the window', () => {
+      const stored = Array.from({ length: 31 }, (_, i) => `2026-01-${String(i + 1).padStart(2, '0')}`);
+      const windows = [{ fromDate: '2026-01-01', toDate: '2026-01-31' }];
+      expect(holdingWindowsNeedBackfill(windows, stored, { todayUtc: '2026-02-01' })).toBe(false);
+    });
+
+    it('returns true for a biweekly (sparse) series', () => {
+      const stored = ['2026-01-01', '2026-01-15', '2026-01-29'];
+      const windows = [{ fromDate: '2026-01-01', toDate: '2026-01-31' }];
+      expect(holdingWindowsNeedBackfill(windows, stored, { todayUtc: '2026-02-01' })).toBe(true);
+    });
+
+    it('returns true for an empty window (full-span gap)', () => {
+      const windows = [{ fromDate: '2026-01-01', toDate: '2026-01-31' }];
+      expect(holdingWindowsNeedBackfill(windows, [], { todayUtc: '2026-02-01' })).toBe(true);
+    });
+
+    it('returns false for a single-day window with no rows', () => {
+      const windows = [{ fromDate: '2026-01-01', toDate: '2026-01-01' }];
+      expect(holdingWindowsNeedBackfill(windows, [], { todayUtc: '2026-02-01' })).toBe(false);
+    });
+
+    it('detects a trailing gap on an open window using todayUtc', () => {
+      const windows = [{ fromDate: '2026-01-01', toDate: null }];
+      expect(holdingWindowsNeedBackfill(windows, ['2026-01-01'], { todayUtc: '2026-01-15' })).toBe(true);
+    });
+
+    it('respects a custom threshold', () => {
+      const stored = ['2026-01-01', '2026-01-08', '2026-01-15'];
+      const windows = [{ fromDate: '2026-01-01', toDate: '2026-01-15' }];
+      // 7-day gaps: under default(9) → dense, but a threshold of 5 flags them.
+      expect(holdingWindowsNeedBackfill(windows, stored, { todayUtc: '2026-02-01' })).toBe(false);
+      expect(holdingWindowsNeedBackfill(windows, stored, { thresholdDays: 5, todayUtc: '2026-02-01' })).toBe(true);
+    });
+  });
+
+  // ─── backfillHoldingGaps ──────────────────────────────────────────────────
+
+  describe('backfillHoldingGaps', () => {
+    it('force-refetches a sparse investment and counts a fill when rows grow', async () => {
+      query
+        // getInvestmentsWithHoldingWindows: one open stock position
+        .mockResolvedValueOnce({
+          rows: [{
+            id: 1, asset_class: 'stock', currency: 'EUR',
+            price_provider: 'yahoo', price_provider_id: 'AAPL', symbol: 'AAPL',
+            tx_id: 1, tx_type: 'buy', tx_date: '2026-01-01', tx_units: '10',
+          }],
+        })
+        // getStoredPriceDates (before): a single sparse row
+        .mockResolvedValueOnce({ rows: [{ d: '2026-01-01' }] })
+        // getStoredPriceDates (after): densified
+        .mockResolvedValueOnce({
+          rows: Array.from({ length: 10 }, (_, i) => ({ d: `2026-01-${String(i + 1).padStart(2, '0')}` })),
+        });
+
+      fetchHistoricalPrices.mockResolvedValue([{ timestampMs: Date.UTC(2026, 0, 2), price: 101 }]);
+      saveHistoricalPointsToDatabase.mockResolvedValue(undefined);
+
+      const result = await backfillHoldingGaps();
+
+      expect(result).toEqual({ checked: 1, needed: 1, filled: 1, failed: 0 });
+      expect(fetchHistoricalPrices).toHaveBeenCalledWith(
+        expect.objectContaining({ id: 1 }),
+        expect.objectContaining({ force: true }),
+      );
+    });
+
+    it('skips an already-dense investment without refetching', async () => {
+      query
+        // closed window 2026-01-01 → 2026-01-05
+        .mockResolvedValueOnce({
+          rows: [
+            {
+              id: 2, asset_class: 'stock', currency: 'EUR',
+              price_provider: 'yahoo', price_provider_id: 'MSFT', symbol: 'MSFT',
+              tx_id: 1, tx_type: 'buy', tx_date: '2026-01-01', tx_units: '5',
+            },
+            {
+              id: 2, asset_class: 'stock', currency: 'EUR',
+              price_provider: 'yahoo', price_provider_id: 'MSFT', symbol: 'MSFT',
+              tx_id: 2, tx_type: 'sell', tx_date: '2026-01-05', tx_units: '5',
+            },
+          ],
+        })
+        // getStoredPriceDates: dense across the window
+        .mockResolvedValueOnce({
+          rows: ['2026-01-01', '2026-01-02', '2026-01-03', '2026-01-04', '2026-01-05'].map((d) => ({ d })),
+        });
+
+      const result = await backfillHoldingGaps();
+
+      expect(result).toEqual({ checked: 1, needed: 0, filled: 0, failed: 0 });
+      expect(fetchHistoricalPrices).not.toHaveBeenCalled();
     });
   });
 });

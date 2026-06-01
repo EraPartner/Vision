@@ -87,6 +87,46 @@ describe('InfoRepository', () => {
       );
     });
 
+    it('should overlay the latest point with the live portfolio value when provided', async () => {
+      const now = new Date();
+      const todayKey = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
+      query.mockImplementation(async (sql) => {
+        if (sql.includes('SELECT 1 FROM')) return { rows: [] };
+        if (sql.includes('first_data_date')) return { rows: [{ first_data_date: '2026-02-01' }] };
+        if (sql.includes('portfolio_performance_snapshots') && sql.includes('value AS investments')) {
+          return {
+            rows: [
+              { day: '2026-02-01', investments: '3235' },
+              { day: todayKey, investments: '4470' },
+            ],
+          };
+        }
+        if (sql.includes('account_list') && sql.includes('LEFT JOIN LATERAL')) {
+          return {
+            rows: [
+              { day: '2026-02-01', bank_account: 'Chase', balance: '4500', currency: 'EUR' },
+              { day: todayKey, bank_account: 'Chase', balance: '5000', currency: 'EUR' },
+            ],
+          };
+        }
+        return { rows: [] };
+      });
+
+      convertRowsToEur.mockImplementation(async (rows) => rows.map(r => ({ ...r, amount_eur: Number(r.amount || 0) })));
+
+      const result = await infoRepository.getNetWorthFromSnapshots('EUR', { liveInvestments: 5123.45 });
+
+      // Headline "investments" comes from the live summary (5123.45), not the
+      // stored snapshot value (4470) — this is the parity fix.
+      expect(result.current.investments).toBe(5123.45);
+      expect(result.current.netWorth).toBe(10123.45);
+      // The latest chart point / table row reflects the same overlay so the
+      // page is internally consistent with its own headline.
+      const lastSnapshot = result.snapshots[result.snapshots.length - 1];
+      expect(lastSnapshot.investments).toBe(5123.45);
+      expect(lastSnapshot.netWorth).toBe(10123.45);
+    });
+
     it('should pass target currency through conversion calls', async () => {
       const now = new Date();
       const todayKey = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;

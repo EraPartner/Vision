@@ -14,6 +14,7 @@ import {
   NET_WORTH_CACHE_TTL_MS,
   resolveCacheWithInflight,
 } from './_cache.js';
+import { resolveLivePortfolioValue } from './_liveSummary.js';
 
 const router = Router();
 
@@ -28,7 +29,10 @@ router.get(
       ttlMs: NET_WORTH_CACHE_TTL_MS,
       requireData: true,
       keepPreviousData: true,
-      loader: () => infoRepository.getNetWorthFromSnapshots(targetCurrency),
+      loader: async () => {
+        const liveInvestments = await resolveLivePortfolioValue(targetCurrency);
+        return infoRepository.getNetWorthFromSnapshots(targetCurrency, { liveInvestments });
+      },
     });
 
     const hasLimit = Object.prototype.hasOwnProperty.call(req.query, 'limit');

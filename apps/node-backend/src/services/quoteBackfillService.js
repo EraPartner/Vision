@@ -29,6 +29,11 @@ const SPIKE_RATIO_THRESHOLD = 3; // 3× single-day jump = spike
 const HISTORY_DAY_MS = 24 * 60 * 60 * 1000;
 const HOURLY_LOOKBACK_DAYS = 7;
 const BACKFILL_CONCURRENCY = 4;
+// A stored daily series within a holding window should have no consecutive-date gap larger
+// than this. Weekend (Fri→Mon = 3d) and multi-day market holidays stay under it; a biweekly
+// (~14d) sparse series trips it. Tuned above realistic holiday closures to avoid re-fetching
+// already-dense or genuinely-low-cadence (e.g. weekly) series every day.
+const GAP_THRESHOLD_DAYS = 9;
 
 // ─── Pure Functions ─────────────────────────────────────────────────────────
 
@@ -323,6 +328,63 @@ async function getInvestmentWithHoldingWindows(investmentId) {
   return { investment, holdingWindows };
 }
 
+/**
+ * Load the sorted set of dates (YYYY-MM-DD) that already have a stored price row.
+ *
+ * @param {number} investmentId
+ * @returns {Promise<string[]>}
+ */
+async function getStoredPriceDates(investmentId) {
+  const result = await query(
+    `SELECT to_char(price_date, 'YYYY-MM-DD') AS d
+       FROM asset_price_history
+      WHERE investment_id = $1
+      ORDER BY price_date`,
+    [Number(investmentId)]
+  );
+  return (result.rows || []).map((row) => row.d);
+}
+
+function _daysBetween(aYmd, bYmd) {
+  const a = Date.parse(`${aYmd}T00:00:00.000Z`);
+  const b = Date.parse(`${bYmd}T00:00:00.000Z`);
+  if (!Number.isFinite(a) || !Number.isFinite(b)) return 0;
+  return Math.round((b - a) / HISTORY_DAY_MS);
+}
+
+/**
+ * Decide whether any holding window has an interior (or edge) date gap large enough to warrant
+ * a forced provider re-fetch. Pure — easy to unit-test.
+ *
+ * For each window we walk [windowStart, ...storedDatesInWindow, windowEnd] and look for any
+ * consecutive pair more than thresholdDays apart. An empty window (no stored rows) trips on the
+ * full-span gap. Open windows use todayUtc as their end.
+ *
+ * @param {Array<{ fromDate: string, toDate: string | null }>} holdingWindows
+ * @param {string[]} storedDates - sorted YYYY-MM-DD dates already in asset_price_history
+ * @param {{ thresholdDays?: number, todayUtc?: string }} [opts]
+ * @returns {boolean}
+ */
+export function holdingWindowsNeedBackfill(holdingWindows, storedDates, { thresholdDays = GAP_THRESHOLD_DAYS, todayUtc } = {}) {
+  if (!Array.isArray(holdingWindows) || holdingWindows.length === 0) return false;
+  const today = todayUtc || getDayKeyUtc(new Date());
+  const sortedStored = Array.isArray(storedDates) ? [...storedDates].sort() : [];
+
+  for (const window of holdingWindows) {
+    const fromDate = window?.fromDate;
+    const toDate = window?.toDate !== null && window?.toDate !== undefined ? window.toDate : today;
+    if (!fromDate || !toDate || fromDate > toDate) continue;
+
+    const inWindow = sortedStored.filter((d) => d >= fromDate && d <= toDate);
+    const boundaries = [fromDate, ...inWindow, toDate];
+    for (let i = 1; i < boundaries.length; i += 1) {
+      if (_daysBetween(boundaries[i - 1], boundaries[i]) > thresholdDays) return true;
+    }
+  }
+
+  return false;
+}
+
 // ─── Backfill Orchestration ─────────────────────────────────────────────────
 
 /**
@@ -331,9 +393,11 @@ async function getInvestmentWithHoldingWindows(investmentId) {
  *
  * @param {object} investment - Investment object with provider config
  * @param {Array<{ fromDate: string, toDate: string | null }>} holdingWindows
+ * @param {{ force?: boolean }} [opts] - force re-queries the provider even when the stored
+ *   series already spans the window endpoints (needed to repopulate interior gaps).
  * @returns {Promise<{ hasHistory: boolean, windowCount: number }>}
  */
-async function backfillInvestmentQuotes(investment, holdingWindows) {
+async function backfillInvestmentQuotes(investment, holdingWindows, { force = false } = {}) {
   let hasHistory = false;
 
   for (const window of holdingWindows) {
@@ -344,7 +408,7 @@ async function backfillInvestmentQuotes(investment, holdingWindows) {
 
     if (!Number.isFinite(fromMs)) continue;
 
-    const rawPoints = await fetchHistoricalPrices(investment, { fromMs, toMs });
+    const rawPoints = await fetchHistoricalPrices(investment, { fromMs, toMs, force });
 
     if (rawPoints.length > 0) {
       hasHistory = true;
@@ -464,6 +528,59 @@ export async function refreshActiveHoldingQuotes() {
 
   logger.info('Periodic active quote refresh complete', { refreshed, failed });
   return { refreshed, failed };
+}
+
+/**
+ * Gap-filling backfill: for each investment whose stored daily series has a hole larger than
+ * GAP_THRESHOLD_DAYS inside a holding window, force a provider re-fetch to densify it.
+ *
+ * Unlike the hourly refresh (last 7 days, open positions only) this heals interior gaps across
+ * the full history — including closed windows — and unlike the startup full backfill it is
+ * idempotent and skips already-dense investments, so it is cheap to run on a daily schedule.
+ *
+ * @param {{ thresholdDays?: number }} [opts]
+ * @returns {Promise<{ checked: number, needed: number, filled: number, failed: number }>}
+ */
+export async function backfillHoldingGaps({ thresholdDays = GAP_THRESHOLD_DAYS } = {}) {
+  const investmentWindows = await getInvestmentsWithHoldingWindows();
+  if (investmentWindows.size === 0) {
+    return { checked: 0, needed: 0, filled: 0, failed: 0 };
+  }
+
+  const todayUtc = getDayKeyUtc(new Date());
+  let checked = 0;
+  let needed = 0;
+  let filled = 0;
+  let failed = 0;
+
+  await forEachConcurrent(
+    [...investmentWindows.entries()],
+    BACKFILL_CONCURRENCY,
+    async ([invId, { investment, holdingWindows }]) => {
+      checked += 1;
+      try {
+        const storedDates = await getStoredPriceDates(invId);
+        if (!holdingWindowsNeedBackfill(holdingWindows, storedDates, { thresholdDays, todayUtc })) {
+          return;
+        }
+
+        needed += 1;
+        const before = storedDates.length;
+        await backfillInvestmentQuotes(investment, holdingWindows, { force: true });
+        const after = (await getStoredPriceDates(invId)).length;
+        if (after > before) filled += 1;
+      } catch (error) {
+        failed += 1;
+        logger.warn('Holding-gap backfill failed for investment', {
+          investmentId: invId,
+          error: error?.message,
+        });
+      }
+    }
+  );
+
+  logger.info('Holding-gap backfill complete', { checked, needed, filled, failed });
+  return { checked, needed, filled, failed };
 }
 
 /**

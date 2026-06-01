@@ -4,47 +4,6 @@ Format: Obsidian Tasks plugin emoji. Priority 🔺 highest / ⏫ high / 🔼 med
 
 - [ ] 🔽 Visually spot-check `apps/frontend/src/components/ui/calendar.tsx` in the running app after its react-day-picker v10 migration ([[docs/adr/062-frontend-typecheck-gate-enforcement|ADR-062]]). The code migration is **done** — v10 `classNames` keys, the `Chevron` component, and the removed temporary cast (typecheck + 1,379 frontend tests green) — but the theme (selected/today/range styling, nav button positioning) has not been confirmed visually. Open any date picker (e.g. Add Transaction → date) at 320/768/1440 in both themes. 🛫 2026-05-29
 
-## "100x" initiative — deferred items
-
-> Context: the 2026-05-29 improvement initiative shipped 14/15 planned items (all verified; see memory `vision-100x-initiative`). These three were **deliberately not shipped** because each is unsafe/unverifiable to rush — they need a running stack or careful pattern design, not a budget-tail change. Plans below are self-contained.
-
-- [ ] ⏫ **Import → commit E2E (data-integrity safety net).** The single highest-stakes write path — CSV upload → staged review → commit — has only "page loads" smoke coverage. Add a real write + dedup E2E. 🛫 2026-05-29
-	- **Why deferred:** needs the running Docker stack to validate (can't run E2E in the sandbox); the upload flow lives in nested `features/imports/*` components, so a blindly-authored spec risks wrong selectors / false confidence on the most consequential path.
-	- **Plan:**
-		1. Add a fixed CSV fixture under `apps/frontend/e2e/fixtures/` (e.g. `belfius-sample.csv`). Reuse the realistic rows from `apps/node-backend/tests/belfiusAdapter.test.js` so the expected amounts/signs are pinned and known.
-		2. (Recommended first) Add `data-testid` to the upload `<input type="file">` in `apps/frontend/src/features/imports/TransactionImportCard.tsx` and to the commit button in `apps/frontend/src/pages/ImportReviewPage.tsx`, so the spec is robust to copy changes.
-		3. New spec `apps/frontend/e2e/import-commit.spec.ts`: `goto('/import')` → `setInputFiles` the fixture → adapter auto-detect → land on `/import/:batchId/review` → click commit.
-		4. **Assert (write):** navigate to `/transactions`, confirm the imported rows appear with correct **amounts and signs** (− expense / + income).
-		5. **Assert (dedup):** re-upload the *same* CSV → staging/commit yields **0 new rows**.
-		6. Register the spec in the `test:e2e` file list in `apps/frontend/package.json` (it then runs in the scheduled `.github/workflows/e2e.yml`).
-	- **Acceptance:** spec green against a live stack (`bun run dev` or `docker compose up`, `PLAYWRIGHT_BASE_URL=http://localhost:3002`); dedup assertion passes on re-upload.
-	- **Refs:** model on `apps/frontend/e2e/critical-flows.spec.ts`; [[docs/features/import|Import feature]]; `.github/workflows/e2e.yml`.
-
-- [ ] 🔼 **Optimistic updates on high-frequency CRUD mutations.** Today every core mutation invalidate-and-refetches, so the most repetitive workflows (categorize / tag / toggle) wait a full round-trip. Only 2 of ~64 `useMutation` sites are optimistic. 🛫 2026-05-29
-	- **Why deferred:** there is **no existing `onMutate` pattern** in the codebase to copy, and transaction list queries are keyed `['transactions', params]` (parameterized by filter + pagination). A naïve optimistic patch updates one cached page and corrupts others — i.e. **wrong money on screen**. Must be designed carefully with a rollback test, not rushed.
-	- **Plan:**
-		1. Start with the **lowest-risk, non-money** mutation: tag toggle (`useBulkTagTransactions`) or the exclusion toggle in `apps/frontend/src/hooks/useTransactions.ts`. **Never** start with amount edits.
-		2. Per mutation, implement the full TanStack pattern:
-			- `onMutate`: `await queryClient.cancelQueries({ queryKey: ['transactions'] })`; snapshot **all** matching caches via `queryClient.getQueriesData({ queryKey: ['transactions'] })`; apply the optimistic change to each via `setQueriesData`; return the snapshot.
-			- `onError`: restore every snapshotted `[key, data]` with `setQueryData`.
-			- `onSettled`: keep the existing `invalidateQueries` for `['transactions']`, `['transactions-virtual']`, `['monthlySummary']`, `['tags']` as the reconcile/settle step.
-		3. Extract the snapshot/rollback boilerplate into a small `apps/frontend/src/lib/optimistic.ts` helper so the remaining mutations reuse one audited implementation.
-		4. **Gate (do not ship without):** an integration test (RTL + MSW) per mutation asserting (a) the optimistic value renders immediately and (b) it **rolls back** on a forced 500.
-		5. Roll-out order: tags/exclusion → category assignment → (only then, with extra care) money-changing edits.
-	- **Acceptance:** optimistic render + verified rollback test for each migrated mutation; aggregates (`monthlySummary`, totals) are **never** optimistically derived — always invalidate-on-settle.
-	- **Risk:** HIGH if wrong. Keep invalidate-on-settle as the safety net.
-	- **Refs:** `apps/frontend/src/hooks/useTransactions.ts`, `useTags.ts`; TanStack Query "optimistic updates" guide.
-
-- [ ] 🔽 **Empty-state standardization + Dashboard zero-data CTA.** Bespoke empty states are scattered across pages; the shared `apps/frontend/src/components/shared/EmptyState.tsx` exists but isn't used everywhere. 🛫 2026-05-29
-	- **Why deferred:** broad cross-page refactor (presentational); low risk but wide surface — out of scope for a single verified pass.
-	- **Plan:**
-		1. Inventory bespoke empty states: grep `src/pages` + `src/features` for centered "no … yet" blocks / `noData` / `emptyTitle` usages not going through `EmptyState`.
-		2. Migrate each to `<EmptyState>` (icon + title + description + optional CTA), preserving existing i18n keys.
-		3. Add a Dashboard zero-data "get started" CTA (shown when no transactions exist) linking to `/import`, in `apps/frontend/src/pages/DashboardPage.tsx`.
-		4. Any new copy → add keys to `i18n/source/en.json` **and** `nl.json`, then `bun run generate-locales` + `bun run validate-locales` (keep parity green).
-	- **Acceptance:** no remaining bespoke empty-state blocks where `EmptyState` fits; fresh-install Dashboard shows an actionable CTA; locale parity clean.
-	- **Refs:** `apps/frontend/src/components/shared/EmptyState.tsx`.
-
 ## Codebase audit — May 2026 (open backlog)
 
 > 105 findings total — full report with evidence + per-finding fixes: [[docs/reference/codebase-audit-2026-05|Codebase Improvement Audit — May 2026]] (findings tagged there by id, e.g. `sec-auth-headers`, `correctness-money`).
@@ -55,7 +14,7 @@ Format: Obsidian Tasks plugin emoji. Priority 🔺 highest / ⏫ high / 🔼 med
 - [ ] 🔼 **No baseline rate limiting on the data plane.** Only a few sub-routes are throttled (`main.js:272-289`); `/api/transactions`, `/api/settings`, etc. have none. **Fix:** mount a global limiter (the default 100/min `'global'` bucket from `middleware/rateLimiter.js`) app-wide before the data routers, keeping stricter per-route limiters on top. _(audit: sec-auth-headers)_ 🛫 2026-05-29
 - [ ] 🔼 **Rate limiter trusts `X-Forwarded-For` from any private/link-local peer** → per-request bucket evasion. `middleware/rateLimiter.js:23-35` (`isTrustedProxyAddr`) + key derivation `:62-67`. **Fix:** only honor XFF from an explicitly configured trusted proxy IP/CIDR (env), not the whole private range; otherwise key on the socket address. _(audit: sec-auth-headers)_ 🛫 2026-05-29
 - [ ] 🔼 **Zip restore has no zip-bomb guard.** `packaging/electron/backup/bundle.js:414-457` (`extractZip`, via `openBundle:480-497`) — no per-entry, total-size, or entry-count cap. **Fix:** track running bytes written and abort+cleanup past a `MAX_RESTORE_BYTES`; also cap entry count and reject any entry whose uncompressed size is implausible. _(audit: sec-files-ssrf)_ 🛫 2026-05-29
-- [ ] 🔽 **Response-size cap on the *hardcoded* provider fetches.** The user-controlled custom-provider path is already capped (5 MB `Content-Length` check in `priceProviderRegistry._fetchJson`, shipped 2026-05-29); the fixed Binance (`priceProviderRegistry.js:315`), Kinesis, and Yahoo fetches are still uncapped. **Fix:** apply the same `Content-Length` guard to those. _(audit: sec-files-ssrf)_
+- [ ] 🔽 **Response-size cap on the _hardcoded_ provider fetches.** The user-controlled custom-provider path is already capped (5 MB `Content-Length` check in `priceProviderRegistry._fetchJson`, shipped 2026-05-29); the fixed Binance (`priceProviderRegistry.js:315`), Kinesis, and Yahoo fetches are still uncapped. **Fix:** apply the same `Content-Length` guard to those. _(audit: sec-files-ssrf)_
 - [ ] 🔽 **Dev mode fails open.** Rate limiting is fully disabled and CORS reflects a wildcard origin when env is `development` (`rateLimiter.js:56-60`, `main.js:100-106`). **Fix:** default the environment to `production` (fail-safe), or gate the dev bypasses on an explicit `VISION_DEV=true` so an unset env isn't permissive. _(audit: sec-auth-headers)_
 
 ### Correctness (money)
@@ -64,6 +23,8 @@ Format: Obsidian Tasks plugin emoji. Priority 🔺 highest / ⏫ high / 🔼 med
 - [ ] 🔼 **Lossy `Math.round` in portfolio buy/sell math.** `repositories/portfolioTxRepo.common.js:116-118` (`roundTo`) used by `normalizeBuySellMath:121-154` — float rounding despite Decimal helpers in scope. **Fix:** replace `roundTo` with `roundMoney` from `lib/money.js` (Decimal path). _(audit: arch-deadcode-dup)_ 🛫 2026-05-29
 - [ ] 🔼 **Snapshot 'today' boundary uses UTC, not `APP_TIMEZONE`.** `services/portfolio/snapshotBuilder.js:219-223` (day-walk start/end) + `:253` (`todayYmd`) compute the calendar day in UTC, so near midnight the last snapshot can land on the wrong day vs the rest of the calc layer. **Fix:** derive the end day from `toAppDateString(new Date())` (`lib/timezone.js`). _(audit: correctness-money)_ 🛫 2026-05-29
 - [ ] 🔼 **Portfolio unit-math duplicated verbatim across Add/Edit dialogs.** The "derive the missing one of amount/units/price" logic + its rounding precisions (4/8/6) + float tolerance (`0.0001`) is copy-pasted in `components/portfolio/AddPortfolioTxnDialog.tsx:95-118` and `EditPortfolioTxnDialog.tsx:110-133` — drift here means Add and Edit silently accept/reject different inputs. **Fix:** extract one pure `deriveUnitMath({amount,units,price})` helper with named constants; unit-test it; both dialogs call it. _(audit: correctness, high finding)_ 🛫 2026-05-29
+- [ ] 🔼 **Snapshot builder ignores `split` and `return_of_capital` units for unit assets.** `services/portfolio/snapshotBuilder.js` day-loop (`:334-370`) accumulates units only on `buy`/`gift`/`sell`, whereas the live `calculateCostBasis` (`utils/portfolioMath.js`) also handles `split` (units = new post-split total) and `return_of_capital`, and clamps oversells with `min(units, totalUnits)`. So for any holding with a stock split, the **historical** Net Worth chart diverges from the live summary (the latest point is now reconciled by the [[docs/adr/064-net-worth-current-value-live-overlay|ADR-064]] overlay, but historical days are not). **Fix:** mirror `calculateCostBasis`'s `split`/`return_of_capital`/clamp handling in the snapshot day-walk so historical unit counts match. Not triggered by buy-and-hold portfolios. _(found: 2026-05-31 net-worth parity investigation)_ 🛫 2026-05-31
+- [ ] 🔼 **Pre-existing test failure: `getRecipientInsights` MoM returns empty.** `tests/infoRepository.test.js` › "should return top merchants and month-over-month data" fails (`monthOverMonth` is `[]`, expected length 1) on a clean tree — unrelated to net-worth work. The test mocks `query()` by call-index (1=top merchants, 2=MoM, 3=period keys) and derives current/prev month via `new Date()`; the impl in `repositories/infoRepositoryRecipients.js` either issues queries in a different order/count or the month-boundary derivation no longer matches. **Fix:** reconcile the test's `callIdx` assumptions + period derivation with the current `getRecipientInsights` implementation (decide whether the empty MoM is a real regression or a stale test). _(found: 2026-05-31)_ 🛫 2026-05-31
 
 ### Performance (frontend)
 
@@ -74,6 +35,7 @@ Format: Obsidian Tasks plugin emoji. Priority 🔺 highest / ⏫ high / 🔼 med
 > **Why all three are deferred:** they rewrite money-aggregation SQL whose correctness the **Vitest suite cannot catch** — `tests/**` mock `database/connection.js`'s `query()`, so the SQL string is never executed; a passing unit test only proves the JS around the query, not the query. One also needs an Alembic migration (you apply migrations; they're not auto-run — see AGENTS.md). Wrong aggregation here = wrong money on the dashboard/reports.
 >
 > **How to validate (do this before shipping any of these):**
+>
 > 1. Bring up the stack with real data: `bun run docker:dev` (Postgres + backend, hot-reload) — or `docker compose up`. Apply migrations: `bun run db:upgrade`.
 > 2. Seed/import a **multi-currency, multi-year** dataset (e.g. import a CSV with USD + EUR rows spanning several years; ensure `exchange_rates` has historical rows — run a price/rate backfill if needed).
 > 3. Capture the **current** endpoint output as the baseline (`curl localhost:3002/api/info/transaction-summary`, `/api/info/monthly-summary?all_time=true`, `/api/aggregations/recipient-insights`), then apply the change and diff — the numbers must match exactly (these are read-only perf rewrites, not behavior changes).

@@ -751,6 +751,39 @@ describe('Price Provider Service', () => {
       expect(points[0].price).toBe(100);
     });
 
+    it('paginates binance history beyond a single 1000-row page', async () => {
+      const DAY = 24 * 60 * 60 * 1000;
+      const base = Date.UTC(2020, 0, 1);
+      const fromMs = base;
+      const toMs = base + 1001 * DAY;
+
+      // cachedDbPoints empty, save upsert, persisted-load empty (forces in-memory resolution)
+      query
+        .mockResolvedValueOnce({ rows: [] })
+        .mockResolvedValueOnce({ rows: [] })
+        .mockResolvedValueOnce({ rows: [] });
+
+      const page1 = Array.from({ length: 1000 }, (_, i) => [
+        base + i * DAY, '0', '0', '0', String(100 + i), '0',
+      ]);
+      const page2 = [[base + 1000 * DAY, '0', '0', '0', '2000', '0']];
+
+      const fetchSpy = vi.spyOn(globalThis, 'fetch')
+        .mockResolvedValueOnce({ ok: true, json: () => Promise.resolve(page1) })
+        .mockResolvedValueOnce({ ok: true, json: () => Promise.resolve(page2) });
+
+      const points = await fetchHistoricalPrices(
+        { id: 21, price_provider: 'binance', price_provider_id: 'BTCUSDT' },
+        { fromMs, toMs },
+      );
+
+      // Two pages fetched; the second request advances startTime past the first page.
+      expect(fetchSpy).toHaveBeenCalledTimes(2);
+      expect(String(fetchSpy.mock.calls[1][0])).toContain(`startTime=${base + 1000 * DAY}`);
+      // All 1001 daily points survive into the merged series (old 365-day cap would drop most).
+      expect(points).toHaveLength(1001);
+    });
+
     it('falls back to cached db points when kinesis has no symbol', async () => {
       query.mockResolvedValueOnce({ rows: [{ price_date: '2026-01-03', close_price: '104.5' }] });
 

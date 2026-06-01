@@ -3,15 +3,17 @@ title: Net Worth Feature
 type: feature
 status: active
 date: 2026-04-16
-updated: 2026-05-18
-tags: [feature, net-worth, portfolio, chart, zoom, frontend, performance, snapshots, fixed-income, valuation-parity, accrued-interest, appreciation]
-description: Daily net worth tracking with zoomable/scrollable charts, series toggling, LTTB downsampling, and daily breakdown tables. Powered by pre-computed snapshots whose non-unit asset valuation now mirrors the live portfolio summary formulas exactly (ADR-061).
+updated: 2026-05-31
+tags: [feature, net-worth, portfolio, chart, zoom, frontend, performance, snapshots, fixed-income, valuation-parity, accrued-interest, appreciation, live-overlay, valuation-freshness, daily-granularity, gap-fill, price-history]
+description: Daily net worth tracking with zoomable/scrollable charts, series toggling, LTTB downsampling, and daily breakdown tables. Powered by pre-computed snapshots whose non-unit asset valuation mirrors live portfolio summary formulas (ADR-061); the latest point is overlaid with the live summary at read time so the headline stays in sync across hourly price refreshes (ADR-064). Historical price series are kept dense at daily granularity via a daily gap-detecting backfill that heals interior holes in asset_price_history and re-triggers computeAndStoreSnapshots when new rows are added (ADR-065).
 aliases: [net worth, networth, wealth tracking, financial health]
 related_code:
   - apps/frontend/src/pages/portfolio/net-worth/NetWorthPage.tsx
   - apps/frontend/src/utils/downsample.ts
   - apps/node-backend/src/routes/info.js
-  - apps/node-backend/src/repositories/infoRepository.js
+  - apps/node-backend/src/routes/info/netWorth.js
+  - apps/node-backend/src/routes/info/_liveSummary.js
+  - apps/node-backend/src/repositories/infoRepositoryNetWorth.js
   - apps/node-backend/src/services/portfolioPerformanceSnapshotService.js
   - apps/node-backend/src/services/portfolio/snapshotBuilder.js
 ---
@@ -46,11 +48,11 @@ interface NetWorthResponse {
 
 ### Backend Computation
 
-The net worth is computed by `infoRepository.getNetWorthFromSnapshots(currency)` in the backend, which combines:
-- **Investments**: Pre-computed daily portfolio values from `portfolio_performance_snapshots` (includes unit-based assets: stocks, ETFs, crypto, metals, AND non-unit assets: real estate, savings, bonds). The snapshot builder now mirrors `portfolioSummaryService` formulas exactly — see valuation formulas below.
+The net worth is computed by `infoRepositoryNetWorth.getNetWorthFromSnapshots(targetCurrency, { liveInvestments })` in the backend, which combines:
+- **Investments**: Pre-computed daily portfolio values from `portfolio_performance_snapshots` (includes unit-based assets: stocks, ETFs, crypto, metals, AND non-unit assets: real estate, savings, bonds). The snapshot builder mirrors `portfolioSummaryService` formulas exactly — see valuation formulas below. The **latest snapshot row's** `investments` value is then overlaid with the live summary total at read time (see "Live overlay" below).
 - **Liquid**: Daily bank account balances derived from the transactions table (latest balance per account per day via lateral join, with fallback to cumulative transaction flow)
 
-Key architectural change: **No network calls at request time.** All investment values come from `portfolio_performance_snapshots`, which is populated offline by `snapshotBuilder.computeDailySnapshots()` ([[apps/node-backend/src/services/portfolio/snapshotBuilder.js]]).
+Key architectural property: historical days are **snapshot-backed** (no network calls for past data). The *current* point is overlaid live (see below).
 
 The endpoint uses a sophisticated caching strategy with **inflight request coalescing** to prevent duplicate computations:
 
@@ -60,9 +62,45 @@ const data = await resolveCacheWithInflight(netWorthResponseCache, cacheKey, {
   ttlMs: NET_WORTH_CACHE_TTL_MS,
   requireData: true,
   keepPreviousData: true,
-  loader: () => infoRepository.getNetWorthFromSnapshots(targetCurrency),
+  loader: async () => {
+    const liveInvestments = await resolveLivePortfolioValue(targetCurrency);
+    return infoRepositoryNetWorth.getNetWorthFromSnapshots(targetCurrency, { liveInvestments });
+  },
 });
 ```
+
+#### Live overlay for the current point (2026-05-31, ADR-064)
+
+`computeAndStoreSnapshots()` runs only at startup warmup. After the hourly `refreshActiveHoldingQuotes` mutates `investments.current_price`, the stored snapshots do not change — but Dashboard and Performance recompute from the live service immediately. Before this fix, Net Worth froze at the boot-time price.
+
+The fix mirrors the pattern already used by the Performance route (`_performanceHelpers.js:84-95`): a new shared helper `resolveLivePortfolioValue(targetCurrency)` (in [[apps/node-backend/src/routes/info/_liveSummary.js]]) reads `portfolioSummaryService.getPortfolioSummary().totals.totalPortfolioValue` from the shared 60-second `portfolioSummaryCache`. The repository overlays this value onto the latest snapshot row before computing `current` and `monthlyChange`. Historical rows are untouched.
+
+Staleness budget: the overlay is baked into the 5-minute net-worth cache; the live value refreshes ~hourly. Net Worth therefore tracks Dashboard within ≤5 min vs. the previous "frozen since startup" behaviour.
+
+If `resolveLivePortfolioValue` errors, it returns `undefined` and the repository falls back to the stored snapshot value, so Net Worth still responds rather than failing.
+
+> [!info] Known limitation — historical unit-split days
+> The live overlay reconciles only the latest point. For holdings with a stock split in their history, the *historical* chart days prior to the split may still show an inflated cost basis. This secondary issue is tracked in `TODO.md` and requires a separate `snapshotBuilder` change to propagate split-adjusted prices into `asset_price_history`.
+
+#### Daily-granularity price history (2026-05-31, ADR-065)
+
+The historical price series that feeds snapshot computation is now kept dense at daily granularity by a recurring gap-fill job. This ensures Net Worth and Portfolio Performance charts render at daily resolution across the full holding window, including multi-year positions.
+
+**What was wrong before:** Three compounding issues produced ~biweekly chart granularity:
+1. Binance history was capped at 365 days, silently discarding all older crypto data.
+2. `needsHistoryRefresh` only checked that the stored series *spanned* the window endpoints — interior gaps were invisible to it, so sparse-but-endpoint-spanning series were never re-fetched.
+3. Full backfill (`backfillHistoricalAssetQuotes`) ran only at startup; no job healed gaps introduced by partial provider responses, outages, or the 365-day cap.
+
+**How it is fixed:**
+- Binance paginates with `startTime`/`endTime`/`limit=1000` across the full holding window (30-page guard).
+- `fetchHistoricalPrices` accepts a `force=true` option that bypasses the `needsHistoryRefresh` short-circuit.
+- A daily `setInterval` in `warmup.js` calls `backfillHoldingGaps()` from `quoteBackfillService`, which uses `holdingWindowsNeedBackfill` (gap threshold: 9 days) to detect interior holes across all holding windows (including closed positions) and re-fetches with `force=true`.
+- When `backfillHoldingGaps` writes new rows (`filled > 0`), it calls `computeAndStoreSnapshots()` so the Net Worth chart reflects the denser history in the same daily job cycle.
+- A one-time `bun run quotes:densify` script (see [[docs/reference/scripts|Scripts Reference]]) heals existing sparse deployments without requiring a restart.
+
+**LTTB downsampling is unchanged**: The 400-point hard cap on LTTB applied in the frontend is unaffected. For dense multi-year series the downsampler now receives daily-resolution input rather than biweekly-sparse input, producing better shape-preservation in the output. See [[docs/reference/algorithms#lttb-largest-triangle-three-buckets-downsampling|LTTB algorithm]].
+
+See [[docs/adr/065-daily-gap-fill-dense-asset-history|ADR-065]] for the full decision record including the Kinesis `timeFrame` unit ambiguity caveat.
 
 ### Non-Unit Asset Valuation Formulas (2026-05-18, ADR-061)
 
@@ -97,13 +135,14 @@ On the most recent snapshot day, `investments.current_price` is used directly in
 > [!warning] Historical chart redraw
 > When `computeAndStoreSnapshots` runs after this change, historical net-worth values for fixed-income and real-estate days shift (typically upward as accrued interest and appreciation are now layered in). Users will see the Net Worth chart redraw on the next page refresh. This is expected and correct behavior.
 
-> [!info] Three-page parity
-> Dashboard "Total Value", Performance "Portfolio Value", and Net Worth "Investments" now show the same value for the same day, all derived from the same underlying formulas.
+> [!info] Three-page parity (formula + freshness)
+> Dashboard "Total Value", Performance "Portfolio Value", and Net Worth "Investments" now show the same value for the current day — derived from the same underlying formulas (ADR-061) **and** sourced from the same live `portfolioSummaryService` result (ADR-064). Parity is maintained across hourly price refreshes, not just at snapshot compute time. Historical days remain snapshot-backed (correct — history must not swing with today's live price). See [[docs/adr/064-net-worth-current-value-live-overlay|ADR-064]].
 
 Implementation notes:
-- Route-level cache behavior in `info` routes is now centralized through shared helpers (`getFreshCachedData`, `setCachedData`, `setInflightCache`, `resolveCacheWithInflight`) and reused by both `GET /api/info/net-worth` and `GET /api/info/portfolio-performance`, preserving TTL and concurrent-request deduplication behavior while reducing duplicate logic ([[apps/node-backend/src/routes/info.js]]).
-- `GET /api/info/category-breakdown` now uses a dedicated repository path (`getCategoryBreakdown`) instead of full `getStatistics`, and hot-path info route imports (exchange-rates + portfolio-performance snapshot service) are module-scoped to remove repeated dynamic import overhead without changing API responses ([[apps/node-backend/src/routes/info.js]], [[apps/node-backend/src/repositories/infoRepository.js]]).
-- Info-route response caches now opportunistically prune expired entries and enforce a bounded maximum entry count to prevent long-lived unbounded memory growth while keeping inflight dedupe semantics intact ([[apps/node-backend/src/routes/info.js]]).
+- Route-level cache behavior in `info` routes is centralized through shared helpers (`getFreshCachedData`, `setCachedData`, `setInflightCache`, `resolveCacheWithInflight`) and reused by both `GET /api/info/net-worth` and `GET /api/info/portfolio-performance`, preserving TTL and concurrent-request deduplication behavior while reducing duplicate logic ([[apps/node-backend/src/routes/info.js]]).
+- The live-overlay helper `resolveLivePortfolioValue` (and the broader `resolveLiveSummary`) live in [[apps/node-backend/src/routes/info/_liveSummary.js]] so they can be imported by both `netWorth.js` and the warmup pre-warm path in `info.js` without circular dependencies.
+- `GET /api/info/category-breakdown` uses a dedicated repository path (`getCategoryBreakdown`) instead of full `getStatistics`, and hot-path info route imports (exchange-rates + portfolio-performance snapshot service) are module-scoped to remove repeated dynamic import overhead without changing API responses ([[apps/node-backend/src/routes/info.js]], [[apps/node-backend/src/repositories/infoRepositoryNetWorth.js]]).
+- Info-route response caches opportunistically prune expired entries and enforce a bounded maximum entry count to prevent long-lived unbounded memory growth while keeping inflight dedupe semantics intact ([[apps/node-backend/src/routes/info.js]]).
 
 ## Chart Architecture
 
