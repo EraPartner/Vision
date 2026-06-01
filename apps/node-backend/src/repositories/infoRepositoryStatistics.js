@@ -197,8 +197,21 @@ export const statisticsRepository = {
   },
 
   async getTransactionSummary({ bankAccount = null, startDate = null, endDate = null, targetCurrency = 'EUR' } = {}) {
+    // Push count/sum/min/max into SQL, grouped by currency, instead of streaming
+    // every active row into JS. The grouped result is tiny (one row per currency)
+    // and the combine below is exact: convertRowsToEur defaults to one latest
+    // rate per currency (useHistoricalRatesByDate = false), so for each currency
+    // c with rate_c > 0:
+    //   count = Σ cnt_c
+    //   total = Σ (sum_c × rate_c)
+    //   min   = min_c (min_c × rate_c)   max = max_c (max_c × rate_c)
+    // min/max combine because multiplying by a positive rate is monotonic.
     let sql = `
-      SELECT t.amount, t.currency, t.date
+      SELECT t.currency,
+             COUNT(*)      AS cnt,
+             SUM(t.amount) AS sum_amount,
+             MIN(t.amount) AS min_amount,
+             MAX(t.amount) AS max_amount
       FROM transactions t
       WHERE t.is_active = true
     `;
@@ -209,28 +222,30 @@ export const statisticsRepository = {
     if (startDate) { sql += ` AND t.date >= $${paramIdx++}`; params.push(startDate); }
     if (endDate) { sql += ` AND t.date <= $${paramIdx}`; params.push(endDate); }
 
+    sql += ` GROUP BY t.currency`;
+
     const result = await query(sql, params);
 
     if (result.rows.length === 0) {
       return { total_count: 0, total_amount: 0, average: 0, min: null, max: null };
     }
 
-    const converted = await convertRowsToEur(
-      mapRowsForAmountConversion(result.rows, 'amount', false),
-      targetCurrency
-    );
+    // Convert each per-currency aggregate by that currency's latest rate.
+    const [sumRows, minRows, maxRows] = await Promise.all([
+      convertRowsToEur(mapRowsForAmountConversion(result.rows, 'sum_amount', false), targetCurrency),
+      convertRowsToEur(mapRowsForAmountConversion(result.rows, 'min_amount', false), targetCurrency),
+      convertRowsToEur(mapRowsForAmountConversion(result.rows, 'max_amount', false), targetCurrency),
+    ]);
 
     let total = toDecimal(0);
-    let min = Infinity;
-    let max = -Infinity;
-    for (const row of converted) {
-      const eur = row.amount_eur;
-      total = total.plus(toDecimal(eur));
-      if (eur < min) min = eur;
-      if (eur > max) max = eur;
+    let count = 0;
+    for (let i = 0; i < result.rows.length; i += 1) {
+      total = total.plus(toDecimal(sumRows[i].amount_eur));
+      count += Number(result.rows[i].cnt);
     }
+    const min = Math.min(...minRows.map(r => r.amount_eur));
+    const max = Math.max(...maxRows.map(r => r.amount_eur));
 
-    const count = result.rows.length;
     return {
       total_count: count,
       total_amount: roundToCents(total),

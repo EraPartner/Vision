@@ -3,10 +3,10 @@ title: Custom Hooks
 type: component
 status: active
 date: 2026-04-23
-updated: 2026-05-29
-last_modified: 2026-05-29
-tags: [components, hooks, react-query, zustand, form-state, data-table, phase-4, phase-13, phase-c, phase-d, i18n, notifications, export-filters, bug-hunt-2026-05-05, bug-hunt-2026-05-06, bug-hunt-2026-05-08, mount-guard, query-key-fix, prefetch, memoization, useCallback, parseLocaleNumber, currency-utilities, exclusion-ids, ssrf-correctness, loading-states, error-states, isError, refetch]
-description: Custom React hooks for data fetching and state management. Includes toast notifications for mutations via i18n keys. Phase 13 adds useBankAccounts hook for export filtering. May 2026 bug hunt adds mount guard to usePlannedPayments, fixes queryKey mismatch in usePortfolioPrefetch, and documents parseLocaleNumber utility for locale-aware number parsing. 2026-05-29 adds useExcludedIds as a shared exclusion-resolution hook and exposes isLoading/isError/error/refetch from usePortfolio so asset pages can distinguish loading/error from empty.
+updated: 2026-06-01
+last_modified: 2026-06-01
+tags: [components, hooks, react-query, zustand, form-state, data-table, phase-4, phase-13, phase-c, phase-d, i18n, notifications, export-filters, bug-hunt-2026-05-05, bug-hunt-2026-05-06, bug-hunt-2026-05-08, mount-guard, query-key-fix, prefetch, memoization, useCallback, parseLocaleNumber, currency-utilities, exclusion-ids, ssrf-correctness, loading-states, error-states, isError, refetch, recipient-insights-filter]
+description: Custom React hooks for data fetching and state management. Includes toast notifications for mutations via i18n keys. Phase 13 adds useBankAccounts hook for export filtering. May 2026 bug hunt adds mount guard to usePlannedPayments, fixes queryKey mismatch in usePortfolioPrefetch, and documents parseLocaleNumber utility for locale-aware number parsing. 2026-05-29 adds useExcludedIds as a shared exclusion-resolution hook and exposes isLoading/isError/error/refetch from usePortfolio so asset pages can distinguish loading/error from empty. 2026-06-01: useStatistics adds recipientInsightsFilteredQuery so the all-years Top Recipients chart reacts to exclusion toggles.
 related_code: ["apps/frontend/src/hooks"]
 ---
 
@@ -307,6 +307,7 @@ interface CategoryPivot {
 
 - **Shared exclusion resolution**: Delegates exclusion-ID resolution to `useExcludedIds('statistics')` (2026-05-29) — no longer owns a separate category-list fetch; ensures exclusion set is identical to the Dashboard surface
 - **Per-graph exclusion toggle**: Each chart can independently toggle category/recipient exclusions
+- **Filtered recipient-insights query (2026-06-01)**: Issues a separate `recipientInsightsFilteredQuery` (keyed on `effectiveExcludedCategoryIds` + `settingsExcludedRecIds`) when exclusions are active. The filtered payload is used for `topRecipients` in `mapToStatisticsData` so the "all years" Top Recipients chart reacts to exclusion toggles. Previously only the per-year view was filtered; the all-years aggregate silently ignored exclusions.
 - **Category normalization**: Ensures consistent `GENERAL: DETAIL` formatting across all charts
 - **Automatic query invalidation**: Reacts to settings changes
 - **Currency-aware stats fetching**: Uses `appSettings.defaultCurrency` as target currency for normalized transaction pulls (`normalize_to_eur=true` + `target_currency`)

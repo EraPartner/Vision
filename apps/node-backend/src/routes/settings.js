@@ -9,8 +9,7 @@
  */
 
 import { Router } from 'express';
-// eslint-disable-next-line vision-local/no-repo-direct-from-route
-import settingsRepository from '../repositories/settingsRepository.js';
+import settingsRepository from '../services/settingsService.js';
 import { validateIntArray } from '../middleware/validation.js';
 import { NotFoundError, ValidationError } from '../middleware/errorHandler.js';
 

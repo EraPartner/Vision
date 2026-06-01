@@ -3,8 +3,9 @@ title: Database Query Patterns & Optimization
 type: reference
 status: active
 date: 2026-04-21
-tags: [database, postgresql, queries, optimization, performance, indexes, phase-1]
-description: PostgreSQL query patterns, index strategies, and optimization techniques used throughout Vision
+updated: 2026-06-01
+tags: [database, postgresql, queries, optimization, performance, indexes, phase-1, group-by-currency, per-currency-aggregation]
+description: PostgreSQL query patterns, index strategies, and optimization techniques used throughout Vision. June 2026 adds multi-currency GROUP BY aggregation pattern.
 aliases: [db optimization, query patterns, postgresql performance, indexing strategy]
 related_code: ["apps/node-backend/src/repositories/", "apps/node-backend/src/database/", "alembic/versions/"]
 ---
@@ -324,6 +325,30 @@ def downgrade():
 | Price history lookup | 1-10ms | Index on (investment_id, timestamp) |
 
 ---
+
+## Multi-Currency GROUP BY Aggregation Pattern (June 2026)
+
+When summarizing data that spans multiple currencies, push the aggregation fully into SQL rather than fetching all rows and summing in JavaScript. The canonical example is `getTransactionSummary` in `infoRepositoryStatistics.js`:
+
+```sql
+SELECT
+  currency,
+  COUNT(*)                                            AS transaction_count,
+  SUM(CASE WHEN amount >= 0 THEN amount ELSE 0 END)  AS total_income,
+  SUM(CASE WHEN amount < 0  THEN amount ELSE 0 END)  AS total_spending,
+  MIN(date)                                           AS first_date,
+  MAX(date)                                           AS last_date
+FROM transactions
+WHERE <filters>
+GROUP BY currency
+```
+
+The route/service layer then receives one row per currency and combines them in JS (applying FX conversion). This eliminates N+1 per-currency queries and reduces the result set from O(transactions) to O(currencies).
+
+The same pattern is applied in `infoRepo.monthly.js` for the all-time live path: aggregates `(date, currency)` pairs in SQL with sign-split sums, converts at per-date historical FX rates, then buckets into months in JavaScript.
+
+> [!info] Validation status (June 2026)
+> These rewrites are present in the codebase but validation against a live multi-currency database is still pending (tracked in `TODO.md`). Verify on a dataset with non-EUR transactions before treating aggregate numbers as confirmed correct.
 
 ## Anti-Patterns to Avoid
 

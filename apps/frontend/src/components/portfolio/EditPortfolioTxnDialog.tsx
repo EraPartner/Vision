@@ -1,5 +1,6 @@
 import { useMemo, useState } from 'react';
 import { parseDecimal } from '@/lib/decimal';
+import { deriveUnitMath } from '@/lib/portfolioUnitMath';
 import { useLanguage } from '@/contexts/LanguageContext';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
@@ -17,10 +18,6 @@ import type { InvestmentSummary, PortfolioTxnType, RecurrenceInterval } from '@/
 import type { PortfolioTransaction } from '@/types/api';
 import { getTxnTypeLabel } from '@/types/portfolio';
 
-function roundTo(value: number, decimals: number): number {
-  const factor = 10 ** decimals;
-  return Math.round(value * factor) / factor;
-}
 
 function parsePositive(value: string): number | undefined {
   if (!value.trim()) return undefined;
@@ -103,34 +100,14 @@ export function EditPortfolioTxnDialog({ investment, transaction, trigger }: Pro
   const unitsInput = parsePositive(form.units);
   const priceInput = parsePositive(form.pricePerUnit);
 
-  let derivedAmount: number | undefined;
-  let derivedUnits: number | undefined;
-  let derivedPrice: number | undefined;
-  if (isUnitMathTxn) {
-    const provided = Number(amountInput !== undefined) + Number(unitsInput !== undefined) + Number(priceInput !== undefined);
-    if (provided >= 2) {
-      if (amountInput === undefined && unitsInput !== undefined && priceInput !== undefined) {
-        derivedAmount = roundTo(unitsInput * priceInput, 4);
-      }
-      if (unitsInput === undefined && amountInput !== undefined && priceInput !== undefined) {
-        derivedUnits = roundTo(amountInput / priceInput, 8);
-      }
-      if (priceInput === undefined && amountInput !== undefined && unitsInput !== undefined) {
-        derivedPrice = roundTo(amountInput / unitsInput, 6);
-      }
-    }
-  }
+  const unitMath = deriveUnitMath({ amount: amountInput, units: unitsInput, price: priceInput, derive: isUnitMathTxn });
+  const { derivedAmount } = unitMath;
 
-  const effectiveAmount = amountInput ?? derivedAmount;
-  const effectiveUnits = unitsInput ?? derivedUnits;
-  const effectivePrice = priceInput ?? derivedPrice;
+  const effectiveAmount = unitMath.effectiveAmount;
+  const effectiveUnits = unitMath.effectiveUnits;
+  const effectivePrice = unitMath.effectivePrice;
 
-  const buySellIsValid = !isBuySell
-    || ((Number(amountInput !== undefined) + Number(unitsInput !== undefined) + Number(priceInput !== undefined)) >= 2
-      && effectiveAmount !== undefined
-      && effectiveUnits !== undefined
-      && effectivePrice !== undefined
-      && Math.abs(roundTo(effectiveUnits * effectivePrice, 4) - roundTo(effectiveAmount, 4)) <= 0.0001);
+  const buySellIsValid = !isBuySell || unitMath.isConsistent;
 
   const showUnits = unitBased && ['buy', 'sell', 'gift'].includes(transaction.type);
   const showFeesTaxes = ['buy', 'sell', 'dividend'].includes(transaction.type);

@@ -173,6 +173,24 @@ package "Supporting" {
   }
 }
 
+package "Thin Route Seams (ADR-067, June 2026)" {
+  note "14 new thin seam services created to enforce\nroute→service boundary (no-repo-direct-from-route ERROR).\nEach delegates to the matching repository; exists to\nprovide a stable extension point." as SeamNote
+  class CategoryService { +list() +create() +update() +delete() }
+  class TransactionService { +list() +create() +update() +delete() }
+  class RecipientService { +list() +create() +update() +merge() }
+  class RecipientBankAccountService { +list() +create() +delete() }
+  class SavedChartsService { +list() +create() +update() +delete() }
+  class InfoService { +getSummary() +getNetWorth() +getMonthly() }
+  class PlannedTransactionService { +list() +create() +update() +execute() }
+  class SettingsService { +get() +set() }
+  class SplitService { +list() +create() +settle() }
+  class WatchlistService { +list() +create() +update() +delete() }
+  class AttachmentRecordService { +list() +delete() }
+  class ImportBatchService { +list() +get() +rollback() }
+  class CustomParserConfigService { +list() +create() +update() +delete() }
+  class PortfolioTxService { +create() +update() +delete() }
+}
+
 ' Relationships
 ImportPipeline --> BankAdapters
 ImportPipeline --> DeduplicationService

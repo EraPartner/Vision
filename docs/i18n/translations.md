@@ -3,9 +3,9 @@ title: Translations & i18n
 type: i18n
 status: active
 date: 2026-04-27
-updated: 2026-05-29
-tags: [i18n, translations, localization, internationalization, phase-6, phase-8, phase-f, phase-9, phase-c, phase-d, phase-2, splits, settlement, admin, observability, cash-flow-forecast, pdf-export, portfolio, tax, backup, encrypt, passphrase-modal, accessibility, aria-label, bug-hunt-2026-05-06, chart-aria, screen-reader]
-description: Internationalization system including supported languages, translation workflow, and usage patterns. Phase 6 adds 32 export keys for PDF report localization. Phase 8 adds 11 additional export.section.* keys for portfolio (6) and tax (7) report sections. Phase C adds 15 cash flow forecast keys. Phase F adds 60 admin observability keys. 2026-05-29 adds 16 chart.aria.* keys (localized chart screen-reader summaries) and 21 aria.* keys (localized icon-button aria-labels).
+updated: 2026-06-01
+tags: [i18n, translations, localization, internationalization, phase-6, phase-8, phase-f, phase-9, phase-c, phase-d, phase-2, splits, settlement, admin, observability, cash-flow-forecast, pdf-export, portfolio, tax, backup, encrypt, passphrase-modal, accessibility, aria-label, bug-hunt-2026-05-06, chart-aria, screen-reader, plural, tc, intl-plural-rules, planned-page, toast]
+description: Internationalization system including supported languages, translation workflow, and usage patterns. Phase 6 adds 32 export keys for PDF report localization. Phase 8 adds 11 additional export.section.* keys for portfolio (6) and tax (7) report sections. Phase C adds 15 cash flow forecast keys. Phase F adds 60 admin observability keys. 2026-05-29 adds 16 chart.aria.* keys (localized chart screen-reader summaries) and 21 aria.* keys (localized icon-button aria-labels). June 2026 adds tc() plural mechanism and plannedPage error-toast keys.
 aliases: [i18n, translations, localization, language, nl, en, dutch, english]
 related_code: ["apps/frontend/src/locales", "apps/frontend/src/contexts/LanguageContext.tsx", "apps/frontend/src/hooks/useSplits.ts"]
 ---
@@ -69,8 +69,11 @@ function MyComponent() {
 ### Translation Function
 
 ```typescript
-// t() function signature
+// t() function signature — simple key lookup with optional interpolation
 t(key: string, params?: Record<string, string | number>): string
+
+// tc() function signature — plural-aware, uses Intl.PluralRules (June 2026)
+tc(key: string, count: number, vars?: Record<string, string | number>): string
 ```
 
 ### With Parameters
@@ -84,6 +87,40 @@ t('welcome', { name: 'John' }) // "Welcome, John!"
 // Usage:
 t('addItem', { item: 'Investment' }) // "Add Investment"
 ```
+
+### With Plural Forms — `tc()` (June 2026)
+
+`tc(key, count, vars?)` selects the correct plural form using `Intl.PluralRules` with the active language code. It looks up `key.one` when the count maps to category `"one"` (per CLDR rules), and `key.other` otherwise.
+
+```tsx
+// i18n/source/en.json
+// "table.items": {
+//   "one": "{{count}} item",
+//   "other": "{{count}} items"
+// }
+//
+// i18n/source/nl.json
+// "table.items": {
+//   "one": "{{count}} artikel",
+//   "other": "{{count}} artikelen"
+// }
+
+const { tc } = useLanguage();
+tc('table.items', 1)  // EN: "1 item"    / NL: "1 artikel"
+tc('table.items', 5)  // EN: "5 items"   / NL: "5 artikelen"
+```
+
+`count` is automatically injected as `{{count}}` in the template unless overridden in `vars`.
+
+**Keys using plural forms (en + nl):**
+
+| Key | one | other |
+|-----|-----|-------|
+| `table.items` | `{{count}} item` | `{{count}} items` |
+| `portfolio.investments` | `{{count}} investment` | `{{count}} investments` |
+| `performance.holdings` | `{{count}} holding` | `{{count}} holdings` |
+
+The key `performance.holdingsPlural` (formerly a separate plural key) has been **removed**. Migrate to `tc('performance.holdings', count)`.
 
 ## Translation Keys
 
@@ -158,6 +195,21 @@ bun run build
 ```
 
 ### Recent keys added
+
+#### Plural forms + PlannedPaymentsPage toasts (June 2026)
+
+**Plural key variants** (`table.items`, `portfolio.investments`, `performance.holdings`) — see [[docs/i18n/translations#with-plural-forms--tc-june-2026|tc() section]] above.
+
+**Removed key:** `performance.holdingsPlural` — migrate callers to `tc('performance.holdings', count)`.
+
+**2 new error-toast keys for `PlannedPaymentsPage`** (native `alert()` replaced with `toast.error`):
+
+| Key | EN | NL |
+|-----|----|----|
+| `plannedPage.toggleFailed` | "Failed to toggle planned payment" | "Geplande betaling kon niet worden gewijzigd" |
+| `plannedPage.deleteFailed` | "Failed to delete planned payment" | "Geplande betaling kon niet worden verwijderd" |
+
+Code link: [[apps/frontend/src/pages/PlannedPaymentsPage.tsx]]
 
 #### `chart.aria` and `aria` namespaces (2026-05-29)
 

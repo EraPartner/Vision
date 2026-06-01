@@ -135,32 +135,32 @@ describe('getMonthlyFinancialSummary — materialized-view fast path', () => {
     expect(sql).toContain('SELECT MIN(date_trunc');
   });
 
-  it('groups live transactions into income vs spending buckets', async () => {
+  it('buckets per-(date,currency) grouped aggregates into income vs spending', async () => {
     mvAvailable.mockResolvedValueOnce(false);
 
+    // Live path now returns SQL aggregates grouped by (date, currency): income
+    // and spending are pre-summed per day. Empty months arrive with date null.
     query.mockResolvedValueOnce({
       rows: [
-        { txn_id: 1, month: 4, year: 2025, period_start: '2025-04-01', period_end: '2025-04-30', amount: '500', currency: 'EUR', date: '2025-04-05' },
-        { txn_id: 2, month: 4, year: 2025, period_start: '2025-04-01', period_end: '2025-04-30', amount: '-100', currency: 'EUR', date: '2025-04-10' },
-        { txn_id: 3, month: 4, year: 2025, period_start: '2025-04-01', period_end: '2025-04-30', amount: '-50', currency: 'EUR', date: '2025-04-15' },
-        // Empty placeholder month with no txn (txn_id null) — filtered before convert.
-        { txn_id: null, month: 5, year: 2025, period_start: '2025-05-01', period_end: '2025-05-31', amount: null, currency: null, date: null },
+        { month: 4, year: 2025, period_start: '2025-04-01', period_end: '2025-04-30', date: '2025-04-05', currency: 'EUR', cnt: '1', income_amount: '500', spending_amount: '0' },
+        { month: 4, year: 2025, period_start: '2025-04-01', period_end: '2025-04-30', date: '2025-04-10', currency: 'EUR', cnt: '2', income_amount: '0', spending_amount: '-150' },
+        { month: 5, year: 2025, period_start: '2025-05-01', period_end: '2025-05-31', date: null, currency: null, cnt: null, income_amount: null, spending_amount: null },
       ],
     });
 
-    convertRowsToEur.mockResolvedValueOnce([
-      { month: 4, year: 2025, amount_eur: 500 },
-      { month: 4, year: 2025, amount_eur: -100 },
-      { month: 4, year: 2025, amount_eur: -50 },
-    ]);
+    // Two conversion calls: income aggregates, then spending aggregates.
+    convertRowsToEur
+      .mockResolvedValueOnce([{ amount_eur: 500 }, { amount_eur: 0 }])
+      .mockResolvedValueOnce([{ amount_eur: 0 }, { amount_eur: -150 }]);
 
     const r = await getMonthlyFinancialSummary([], 'EUR', [], false);
+    expect(convertRowsToEur).toHaveBeenCalledTimes(2);
     const apr = r.months.find((m) => m.month === 4);
     expect(apr).toMatchObject({
       total_income: 500,
       total_spending: -150,
       net_amount: 350,
-      transaction_count: 3,
+      transaction_count: 3, // 1 + 2
     });
     const may = r.months.find((m) => m.month === 5);
     expect(may).toMatchObject({

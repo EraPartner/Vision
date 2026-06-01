@@ -3,10 +3,10 @@ title: Planned Transactions
 type: feature
 status: active
 date: 2026-04-26
-updated: 2026-05-29
-tags: [feature, planned, recurring, bills, loans, phase-3, phase-12, calculations, immutability, error-handling, toast, atomic-patch]
+updated: 2026-06-01
+tags: [feature, planned, recurring, bills, loans, phase-3, phase-12, calculations, immutability, error-handling, toast, atomic-patch, virtual-data-table, i18n-toasts]
 aliases: [planned-payments, scheduled-payments, recurring-payments, bills, subscriptions, loan-amortization]
-description: Scheduled and recurring payment tracking - manage bills, subscriptions, and future expenses
+description: Scheduled and recurring payment tracking - manage bills, subscriptions, and future expenses. June 2026: PlannedPaymentsPage migrated from DataTable to VirtualDataTable; native alert() replaced with toast.error (new i18n keys plannedPage.toggleFailed/deleteFailed).
 related_code: ["apps/node-backend/src/routes/plannedTransactions.js", "apps/node-backend/src/repositories/plannedTransactionRepository.js", "apps/node-backend/src/services/calculations/loanSchedule.js", "apps/node-backend/src/services/calculations/recurrence.js", "apps/node-backend/src/services/recurringDetectionService.js", "apps/frontend/src/components/planned/PlannedPaymentForm.tsx", "apps/frontend/src/components/planned/LinkTransactionDialog.tsx", "apps/frontend/src/components/planned/ExecutionHistoryDialog.tsx", "apps/frontend/src/components/notifications/UpcomingPaymentsNotification.tsx", "apps/frontend/src/components/shared/DatePicker.tsx", "apps/frontend/src/components/shared/dateUtils.ts"]
 ---
 
@@ -485,6 +485,24 @@ The `PlannedPaymentsPage` was refactored from 914 lines to 503 lines by extracti
 - Dialog state management and logic moved to respective dialog components
 - Main page now focuses on list display, form submission, and deletions
 - Performance improvement: `loadExecutionHistory` wrapped in `useCallback` to prevent function recreation
+
+### PlannedPaymentsPage — VirtualDataTable + Toast Errors (June 2026)
+
+- **DataTable → VirtualDataTable:** `PlannedPaymentsPage` now uses `VirtualDataTable` for row rendering. This enables consistent virtualized list behavior with the rest of the app and handles large planned-payment lists without DOM bloat.
+- **alert() → toast.error:** Native `window.alert()` calls for toggle and delete failures have been replaced with `toast.error(t('plannedPage.toggleFailed'))` and `toast.error(t('plannedPage.deleteFailed'))`. These are new i18n keys added to `en.json` and `nl.json` in June 2026. See [[docs/i18n/translations|Translations]] for key values.
+
+**Column sizing (follow-up polish, June 2026):**
+
+After the VirtualDataTable migration the column widths were adjusted so the table fills its container correctly without overflow:
+
+| Column | `defaultWidth` | `minWidth` | Notes |
+|--------|---------------|-----------|-------|
+| `is_executed` | 52 (fixed) | — | Icon column; fixed so it does not expand as a flex column |
+| `category` | _none_ (auto-fit) | 140 | **Flexible column** — no `defaultWidth`; absorbs all remaining table width after fixed/semi-fixed columns are placed. Category labels are typically the longest cells. Previously had a fixed 120px width that caused overflow. |
+| `status` | 130 | — | Widened from 100 to fit status badge + toggle |
+| `actions` | 96 (fixed) | — | Action buttons column; fixed to prevent greedy flex growth |
+
+The category column's absence of `defaultWidth` is intentional — VirtualDataTable treats columns without a `defaultWidth` as the auto-fill column.
 
 ---
 

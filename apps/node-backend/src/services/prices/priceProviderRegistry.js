@@ -104,6 +104,21 @@ const CUSTOM_FETCH_MAX_REDIRECTS = 3;
 const CUSTOM_FETCH_MAX_BYTES = 5 * 1024 * 1024; // 5 MB — provider JSON is tiny; cap guards against memory-exhaustion responses.
 
 /**
+ * Reject a response whose declared Content-Length exceeds the size cap, before
+ * buffering the body. Applies to every provider fetch (custom + hardcoded
+ * Binance/Kinesis) so a hostile or wedged upstream can't exhaust memory.
+ *
+ * @param {Response} res
+ * @param {string} provider - label for the error message
+ */
+function _assertResponseWithinCap(res, provider) {
+  const declaredLength = Number(res.headers?.get?.('content-length') || 0);
+  if (declaredLength > CUSTOM_FETCH_MAX_BYTES) {
+    throw new Error(`${provider} response too large: ${declaredLength} bytes`);
+  }
+}
+
+/**
  * Fetch JSON from a user-controlled custom-provider URL.
  *
  * Custom provider URLs come from the investment record (price_provider_*_url),
@@ -131,10 +146,7 @@ async function _fetchJson(url) {
 
     if (!res.ok) throw new Error(`HTTP ${res.status}`);
 
-    const declaredLength = Number(res.headers?.get?.('content-length') || 0);
-    if (declaredLength > CUSTOM_FETCH_MAX_BYTES) {
-      throw new Error(`Response too large: ${declaredLength} bytes`);
-    }
+    _assertResponseWithinCap(res, 'Custom provider');
     return res.json();
   }
   throw new Error('Too many redirects');
@@ -344,6 +356,7 @@ export const PROVIDERS = {
         signal: AbortSignal.timeout(8_000),
       });
       if (!res.ok) throw new Error(`Binance API error: ${res.status}`);
+      _assertResponseWithinCap(res, 'Binance');
       const data = await res.json();
 
       const priceMap = {};
@@ -487,6 +500,7 @@ export const PROVIDERS = {
           continue;
         }
 
+        _assertResponseWithinCap(res, 'Kinesis');
         const data = await res.json();
         const rawPoints = data?.[symbol];
 

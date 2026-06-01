@@ -64,6 +64,21 @@ const envSchema = z.object({
 
   CORS_ORIGINS: csvEnv('http://localhost:5174,http://localhost:8080'),
 
+  // Explicit opt-in for dev-only bypasses (rate-limit skip, wildcard CORS).
+  // Unset/default is fail-safe: bypasses stay OFF even when ENVIRONMENT is
+  // 'development', so a misconfigured deploy is never silently permissive.
+  VISION_DEV: booleanEnv(false),
+
+  // Reverse-proxy IPs/CIDRs whose X-Forwarded-For we trust to identify the real
+  // client (for rate-limit keying). Empty = trust nothing → key on socket addr.
+  TRUSTED_PROXIES: csvEnv(''),
+
+  // Baseline app-wide rate-limit ceiling for the data plane (per IP per window).
+  // A DoS backstop above normal single-user bursts; stricter per-route limiters
+  // sit on top of it.
+  RATE_LIMIT_GLOBAL_MAX: intEnv(1000),
+  RATE_LIMIT_GLOBAL_WINDOW_MS: intEnv(60_000),
+
   ENABLE_RESET_DB: booleanEnv(false),
   ADMIN_AUTH_TOKEN: stringEnv(''),
 

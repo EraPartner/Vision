@@ -3,9 +3,9 @@ title: Security - Data Protection & CSP
 type: security
 status: active
 date: 2026-04-19
-updated: 2026-05-29
-tags: [security, csp, cors, data-protection, privacy, content-security-policy, xss, dangerouslySetInnerHTML, path-traversal, rfc-5987, backup-encryption, passphrase, phase-7, phase-c, pre-restore-confirmation, concurrent-backup-guard, watchdog-pause, bug-hunt-2026-05-05, bug-hunt-2026-05-06, electron-hardening, window-open-handler, will-navigate, checksum-verification, backup-directory-restrictions, csv-filename-sanitization, safe-storage, keychain, lazy-safeStorage, csrf-guard, sec-fetch-site, admin-auth, token-or-open]
-description: Content Security Policy, CORS, data protection, path traversal prevention, backup security, and privacy considerations for Vision. Phase 7 adds pre-restore confirmation dialog and concurrent-backup guard. May 2026 bug hunt hardens Electron with setWindowOpenHandler denial, will-navigate whitelist, mandatory installer checksum verification, and backup directory restrictions. safeStorage is now accessed lazily to avoid macOS Keychain prompts when no passphrase is configured. 2026-05-29: admin auth replaced with token-or-open + CSRF guard (ADR-063).
+updated: 2026-06-01
+tags: [security, csp, cors, data-protection, privacy, content-security-policy, xss, dangerouslySetInnerHTML, path-traversal, rfc-5987, backup-encryption, passphrase, phase-7, phase-c, pre-restore-confirmation, concurrent-backup-guard, watchdog-pause, bug-hunt-2026-05-05, bug-hunt-2026-05-06, electron-hardening, window-open-handler, will-navigate, checksum-verification, backup-directory-restrictions, csv-filename-sanitization, safe-storage, keychain, lazy-safeStorage, csrf-guard, sec-fetch-site, admin-auth, token-or-open, zip-bomb, response-cap, content-length]
+description: Content Security Policy, CORS, data protection, path traversal prevention, backup security, and privacy considerations for Vision. Phase 7 adds pre-restore confirmation dialog and concurrent-backup guard. May 2026 bug hunt hardens Electron with setWindowOpenHandler denial, will-navigate whitelist, mandatory installer checksum verification, and backup directory restrictions. safeStorage is now accessed lazily to avoid macOS Keychain prompts when no passphrase is configured. 2026-05-29: admin auth replaced with token-or-open + CSRF guard (ADR-063). June 2026: zip-bomb guard on restore, 5 MB Content-Length response cap on external fetches.
 aliases: [CSP, data protection, privacy, content security policy, security headers, XSS prevention, path traversal]
 related_code: ["apps/node-backend/src/main.js", "apps/frontend/src/lib/api.ts", "apps/node-backend/src/services/attachmentService.js", "apps/node-backend/src/middleware/adminAuth.js", "apps/node-backend/src/middleware/csrfGuard.js"]
 ---
@@ -328,6 +328,35 @@ Limited IPC channel exposure through preload scripts. Only validated functions a
 - Blocked prefixes include: `/bin`, `/boot`, `/dev`, `/etc`, `/lib`, `/opt`, `/proc`, `/root`, `/sbin`, `/sys`, `/usr`, `/var` (and subdirectories)
 - Implementation: `BLOCKED_BACKUP_PREFIXES.some(p => resolvedDest === p || resolvedDest.startsWith(p + '/'))`
 - Impact: Prevents accidental (or malicious) restore to system directories that could break macOS, corrupt system libraries, or escalate privileges
+
+### Zip-Bomb Guard on Backup Restore (June 2026)
+
+The backup restore `extractZip()` function now enforces hard limits to prevent decompression-bomb attacks:
+
+| Guard | Limit | Description |
+|-------|-------|-------------|
+| `MAX_RESTORE_BYTES` | 10 GiB | Total bytes written across all extracted files; abort if exceeded |
+| `MAX_RESTORE_ENTRIES` | 100,000 | Maximum number of files in the archive |
+| Implausible declared size | > 10 GiB per entry | Reject before extraction begins |
+
+Bytes are tracked against **actual written bytes** (not the declared uncompressed size in the zip metadata, which an attacker can set to any value). On violation the extraction is aborted and the partial output directory is cleaned up.
+
+Code: [[packaging/electron/backup/bundle.js]]
+
+### Content-Length Response Cap on External Fetches (June 2026)
+
+The backend's `_assertResponseWithinCap()` helper enforces a **5 MB** per-response limit on external HTTP calls. This prevents a misbehaving or compromised price provider from streaming arbitrarily large payloads into memory.
+
+**Coverage:**
+- Binance price/history fetches — explicitly capped
+- Kinesis trendline fetches — explicitly capped
+- Yahoo Finance — uses `yahoo-finance2` npm library; the library controls response handling, so no `Response` object is available for direct capping. Rate-limiting still applies.
+
+> [!info] External currency/inflation endpoints (ECB, open.er-api, Statbel, Eurostat) have their own timeout guards and are separate from the price-provider fetch path.
+
+Code: [[apps/node-backend/src/services/prices/priceProviderRegistry.js]]
+
+---
 
 ### Admin Auth: Token-or-Open + CSRF Guard (2026-05-29)
 

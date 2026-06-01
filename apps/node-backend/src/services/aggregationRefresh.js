@@ -1,42 +1,27 @@
 /**
- * Aggregation Refresh Orchestrator (Phase 1).
+ * Aggregation Refresh Orchestrator.
  *
- * Single entrypoint for refreshing the Postgres-backed aggregation layer
- * that powers dashboard / statistics / recipient-insights endpoints.
+ * Single entrypoint for refreshing the Postgres-backed aggregation layer that
+ * powers the dashboard / statistics endpoints: the legacy materialized views
+ * managed by `materializedViewService`, plus a record of the trigger-maintained
+ * tables that never need application-side refresh.
  *
- * Two maintenance strategies live behind this module:
- *
- *  1. Materialized views — refreshed on demand. Composes the existing
- *     `materializedViewService` (4 legacy MVs) and adds `mv_recipient_monthly`
- *     introduced in alembic 0026. REFRESH ... CONCURRENTLY requires each
- *     view to have a unique index and to have been populated at least once;
- *     we fall back to a plain REFRESH on the first call after migration.
- *
- *  2. Trigger-maintained tables — `agg_recipient_totals` and
- *     `agg_split_outstanding` (both introduced in alembic 0026) are kept
- *     in sync by row-level triggers on `transactions`, `transaction_splits`
- *     and `split_payments`. These never need refresh from application code;
- *     they are documented here so write-side services don't try to.
- *
- * Call sites (to be wired up in Phases 2–7):
- *   - after bulk transaction imports commit
- *   - after single-row mutations, via `scheduleAggregationRefresh()`
- *   - nightly cron (if configured)
- *
- * Request-coalescing: the existing `materializedViewService` already
- * serialises refreshes. This module reuses that coalescer for the legacy
- * MVs and adds its own guard around `mv_recipient_monthly`.
+ * `mv_recipient_monthly` was previously refreshed here on every mutation, but
+ * nothing ever read it — the recipient-insight reads (getRecipientInsights /
+ * getRecipientByYear / getRecipientPivot) are live scans, and the view's monthly
+ * granularity can't reproduce their per-date-FX / exact-first-seen / spending-only
+ * outputs anyway. It has been removed from the refresh set to drop that
+ * write-amplification; a companion migration drops the view itself. See the
+ * "wire mv_recipient_monthly reads" investigation in TODO/ git history.
  */
 
-import { query } from '../database/connection.js';
-import { logger } from '../config/logger.js';
 import {
   refreshMaterializedViews as refreshLegacyMaterializedViews,
   scheduleRefresh as scheduleLegacyRefresh,
 } from './materializedViewService.js';
-
-/** Phase-1 materialized views not managed by the legacy service. */
-const PHASE_1_MATERIALIZED_VIEWS = ['mv_recipient_monthly'];
+import mcCacheRepo from '../repositories/cashflowForecastMcRepository.js';
+import mcRollingCacheRepo from '../repositories/cashflowForecastMcRollingRepository.js';
+import { logger } from '../config/logger.js';
 
 /** Trigger-maintained tables — documented here, never refreshed from app code. */
 export const TRIGGER_MAINTAINED_TABLES = Object.freeze([
@@ -44,99 +29,36 @@ export const TRIGGER_MAINTAINED_TABLES = Object.freeze([
   'agg_split_outstanding',
 ]);
 
-let phase1InFlight = false;
-let phase1Queued = false;
-
 /**
- * Refresh the Phase-1 materialized views (currently `mv_recipient_monthly`).
- *
- * Uses CONCURRENTLY when possible; falls back to a plain REFRESH the first
- * time the view is touched after a migration (before it has been populated
- * for a concurrent refresh).
- */
-async function refreshPhase1Views() {
-  if (phase1InFlight) {
-    phase1Queued = true;
-    return;
-  }
-
-  phase1InFlight = true;
-  const start = Date.now();
-
-  try {
-    for (const view of PHASE_1_MATERIALIZED_VIEWS) {
-      try {
-        await query(`REFRESH MATERIALIZED VIEW CONCURRENTLY ${view}`);
-      } catch (err) {
-        const msg = err?.message ?? '';
-        if (
-          msg.includes('has not been populated') ||
-          msg.includes('cannot refresh materialized view') ||
-          msg.includes('concurrently')
-        ) {
-          logger.warn(`Falling back to non-concurrent refresh for ${view}`);
-          await query(`REFRESH MATERIALIZED VIEW ${view}`);
-        } else {
-          logger.warn(`Failed to refresh ${view}`, { error: msg });
-        }
-      }
-    }
-    logger.info(`Phase-1 aggregations refreshed in ${Date.now() - start}ms`);
-  } finally {
-    phase1InFlight = false;
-    if (phase1Queued) {
-      phase1Queued = false;
-      const t = setTimeout(() => {
-        refreshPhase1Views().catch(err =>
-          logger.error('Deferred Phase-1 refresh failed', { error: err?.message })
-        );
-      }, 500);
-      if (typeof t.unref === 'function') t.unref();
-    }
-  }
-}
-
-/**
- * Refresh every managed aggregation source.
- *
- * - Legacy MVs: delegated to `materializedViewService.refreshMaterializedViews`.
- * - Phase-1 MVs: refreshed here.
- * - Trigger-maintained tables: no-op (kept in sync row-by-row).
+ * Refresh every managed aggregation source after a data change:
+ *  - the legacy materialized views (`materializedViewService` serialises them), and
+ *  - invalidate the cashflow-forecast MC caches so the forecast and its
+ *    walk-forward backtest diagnostics recompute against the new data instead
+ *    of serving a stale 6-hour cache entry (the error rates were "static"
+ *    between imports otherwise).
  */
 export async function refreshAggregations() {
-  // Legacy + Phase-1 are independent sets — refresh in parallel.
-  await Promise.all([refreshLegacyMaterializedViews(), refreshPhase1Views()]);
+  await refreshLegacyMaterializedViews();
+  await Promise.all([
+    mcCacheRepo.clearAll().catch((err) => logger.warn('Forecast MC cache invalidation failed', { error: err.message })),
+    mcRollingCacheRepo.clearAll().catch((err) => logger.warn('Rolling forecast MC cache invalidation failed', { error: err.message })),
+  ]);
 }
 
 /**
- * Debounced refresh for single-row mutations. Coalesces bursts into one pass.
- * Phase-1 views follow the legacy debounce to avoid refresh storms under load.
+ * Debounced refresh for single-row mutations. Delegates to the legacy service,
+ * which owns its own debounce/coalescing window.
  */
-let debounceTimer = null;
-
 export function scheduleAggregationRefresh() {
-  // Legacy service has its own debounce; we reuse it and kick Phase-1 alongside.
   scheduleLegacyRefresh();
-  if (debounceTimer) clearTimeout(debounceTimer);
-  debounceTimer = setTimeout(() => {
-    debounceTimer = null;
-    refreshPhase1Views().catch(err =>
-      logger.error('Scheduled Phase-1 refresh failed', { error: err?.message })
-    );
-  }, 1000);
-  if (typeof debounceTimer.unref === 'function') debounceTimer.unref();
 }
 
 /**
- * Cancel any pending debounced Phase-1 refresh. Called from graceful
- * shutdown so the process can exit without waiting on the debounce window.
+ * Cancel any pending debounced refresh. Retained for API stability (graceful
+ * shutdown calls it); now a no-op since the only app-side debounce
+ * (mv_recipient_monthly) was removed and the legacy service manages its own.
  */
-export function cancelPendingAggregationRefresh() {
-  if (debounceTimer) {
-    clearTimeout(debounceTimer);
-    debounceTimer = null;
-  }
-}
+export function cancelPendingAggregationRefresh() {}
 
 export default {
   refreshAggregations,

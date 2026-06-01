@@ -34,15 +34,6 @@ export function useTransactions(params?: UseTransactionsParams) {
     });
 }
 
-export function useTransaction(id: number) {
-    return useQuery({
-        queryKey: ['transactions', id],
-        queryFn: () => apiClient.getTransaction(id),
-        enabled: !!id,
-        staleTime: 60_000,
-    });
-}
-
 export function useCreateTransaction() {
     const queryClient = useQueryClient();
     const { t } = useLanguage();

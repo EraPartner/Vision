@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { toDecimal, addAll, subtract, roundToCents, toNumber } from '../src/lib/money.js';
+import { toDecimal, addAll, subtract, roundToCents, roundMoney, toNumber } from '../src/lib/money.js';
 
 describe('money util', () => {
   it('handles 0.1 + 0.2 exactly', () => {
@@ -26,6 +26,16 @@ describe('money util', () => {
     const a = toNumber(addAll([0.1, 0.2, 0.3]));
     const b = toNumber(addAll([0.3, 0.2, 0.1]));
     expect(a).toBe(b);
+  });
+
+  it('roundMoney uses banker\'s rounding, matching roundToCents', () => {
+    expect(roundMoney('0.005')).toBe(0);
+    expect(roundMoney('0.015')).toBe(0.02);
+    expect(roundMoney('0.025')).toBe(0.02);
+    expect(roundMoney('0.035')).toBe(0.04);
+    expect(roundMoney('1.005', 2)).toBe(1);
+    expect(roundMoney('2.5', 0)).toBe(2);
+    expect(roundMoney('3.5', 0)).toBe(4);
   });
 
   it('handles null/undefined/empty as zero', () => {

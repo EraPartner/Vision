@@ -3,9 +3,9 @@ title: Service Layer Reference
 type: reference
 status: active
 date: 2026-04-24
-last_modified: 2026-05-29
-tags: [backend, services, reference, business-logic, phase-1, phase-c, import-pipeline, graceful-shutdown, bug-hunt-2026-05-05, error-handling, robustness]
-description: Complete reference for the 24 top-level backend service modules (and 7 sub-directories — calculations/, currency/, prices/, portfolio/, reports/, aiChat/, importPipeline/). Updated for Phase C import pipeline consolidation, snapshot-backed net worth computation, quoteBackfillService refactor, AI Chat service, aggregationRefresh cancellation support (2026-04-29), and error handling improvements for belgianInflationService (2026-05-05 bug hunt).
+last_modified: 2026-06-01
+tags: [backend, services, reference, business-logic, phase-1, phase-c, import-pipeline, graceful-shutdown, bug-hunt-2026-05-05, error-handling, robustness, route-service-boundary, thin-seams, adr-067]
+description: Complete reference for backend service modules. June 2026 — all 15 route files now go through thin `services/<domain>Service.js` seams; the lint rule `vision-local/no-repo-direct-from-route` is enforced as ERROR. 14 new thin seam modules added.
 aliases: [services, service layer, business logic, backend services]
 related_code: ["apps/node-backend/src/services/"]
 ---
@@ -879,9 +879,57 @@ See [[docs/features/net-worth|Net Worth Feature]] for details on the new snapsho
 
 ---
 
+---
+
+## Route → Service Boundary (Enforced, June 2026)
+
+**ADR:** [[docs/adr/067-enforce-route-service-boundary|ADR-067]]
+
+All 15 Express route files now import **only** from `services/<domain>Service.js` — never directly from repository modules. The ESLint rule `vision-local/no-repo-direct-from-route` is now an **ERROR** (previously `warn`).
+
+### New Thin Seam Service Modules
+
+14 new thin service files were added to complete the boundary. Each is a pass-through delegation layer that owns orchestration, validation helpers, and future expansion points:
+
+| Service Module | Route it covers | Scope |
+|---|---|---|
+| `categoryService.js` | `categories.js` | CRUD + merge delegation |
+| `transactionService.js` | `transactions.js` | Create/update + filter delegation |
+| `recipientService.js` | `recipients.js` | CRUD + cluster/merge delegation |
+| `recipientBankAccountService.js` | `recipientBankAccounts.js` | Bank account CRUD |
+| `savedChartsService.js` | `savedCharts.js` | Chart config persistence |
+| `infoService.js` | `info/` route group | Summary/net-worth/monthly delegation |
+| `plannedTransactionService.js` | `plannedTransactions.js` | Planned CRUD + execution |
+| `settingsService.js` | `settings.js` | Settings read/write |
+| `splitService.js` | `splits.js` | Split lifecycle + payment |
+| `watchlistService.js` | `watchlist.js` | Watchlist CRUD |
+| `attachmentRecordService.js` | `attachments.js` | Attachment metadata (complements `attachmentService.js`) |
+| `importBatchService.js` | `importRoutes.js` | Batch management delegation |
+| `customParserConfigService.js` | `importRoutes.js` | Named parser CRUD |
+| `portfolioTxService.js` | (reused existing) | Portfolio transaction coordination |
+
+**Pre-existing substantial services** (not newly added) remain unchanged: `portfolioPerformanceSnapshotService`, `recipientMergeService`, `aiChatService`, `importPipeline`, `bankAdapters`, `priceProviderService`, `quoteBackfillService`, `currencyConversionService`, `aggregationRefresh`, `attachmentService`, `transactionExport`, `bulkSelection`, etc.
+
+### What the Rule Enforces
+
+```javascript
+// routes/transactions.js
+// ✅ Allowed — import from service seam
+import { createTransaction } from '../services/transactionService.js';
+
+// routes/transactions.js
+// ESLint ERROR — no-repo-direct-from-route
+import { insertTransaction } from '../repositories/transactionRepository.js';
+```
+
+The lint rule inspects the resolved import path: any file under `src/routes/` importing from `src/repositories/` triggers the error. Services may still import repositories freely.
+
+---
+
 ## Related Documentation
 
 - [[docs/adr/006-three-layer-architecture|ADR-006: Three-Layer Architecture]]
+- [[docs/adr/067-enforce-route-service-boundary|ADR-067: Enforced Route → Service Boundary]]
 - [[docs/reference/code-patterns|Code Patterns]]
 - [[docs/features/import|Import Feature]]
 - [[docs/features/net-worth|Net Worth Feature]]

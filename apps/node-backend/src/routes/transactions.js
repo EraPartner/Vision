@@ -6,8 +6,7 @@
 
 import { Router } from 'express';
 import { query as dbQuery, withTransaction } from '../database/connection.js';
-// eslint-disable-next-line vision-local/no-repo-direct-from-route
-import transactionRepository from '../repositories/transactionRepository.js';
+import transactionRepository from '../services/transactionService.js';
 import { isManualDuplicate, recordManualRawTransaction } from '../services/deduplication.js';
 import { convertRowsToEur } from '../services/currency/currencyConversionService.js';
 import { normalizeForMatching } from '../services/textNormalization.js';

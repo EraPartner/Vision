@@ -15,9 +15,19 @@ package "Express Application" {
 
 package "Middleware" {
   class RateLimiter {
-    +rateLimiter(opts): middleware
-    +adminRateLimiter(opts): middleware
-    +importRateLimiter(opts): middleware
+    +globalRateLimiter: mounted on /api before all routers\n  (RATE_LIMIT_GLOBAL_MAX=1000/min, RATE_LIMIT_GLOBAL_WINDOW_MS=60000)\n  per-route limiters stack on top — June 2026
+    +resolveClientIp(req): trusts XFF only from TRUSTED_PROXIES — June 2026
+    +adminRateLimiter: 500/min observability reads
+    +adminMutateLimiter: 30/min destructive ops
+    +importRateLimiter: 20/min
+    +reportRateLimiter: 30/min (Puppeteer)
+    +marketRateLimiter: 90/min (Yahoo Finance proxy)
+    +investmentRateLimiter: 300/min
+    +aggregationRateLimiter: 600/min
+    +attachmentRateLimiter: 60/min
+    +spaRateLimiter: 600/min (SPA fallback)
+    +ipMatchesRule(ip, rule): CIDR/IP matching for TRUSTED_PROXIES
+    note: dev bypasses gated on VISION_DEV=true (fail-safe) — June 2026
   }
 
   class Validation {

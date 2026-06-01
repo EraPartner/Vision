@@ -280,6 +280,23 @@ export function useStatistics() {
     staleTime: 60_000,
   });
 
+  // Recipient insights (the "all years" Top Recipients chart) must honour the
+  // same exclusions as the other charts — both category and recipient.
+  const recipientInsightsFilteredQuery = useQuery({
+    queryKey: [
+      'aggregations', 'recipient-insights', 'filtered',
+      targetCurrency, effectiveExcludedCategoryIds, settingsExcludedRecIds,
+    ],
+    queryFn: () =>
+      getAggregationRecipientInsights({
+        currency: targetCurrency,
+        excluded_category_ids: effectiveExcludedCategoryIds,
+        excluded_recipient_ids: settingsExcludedRecIds,
+      }),
+    enabled: filteredEnabled,
+    staleTime: 60_000,
+  });
+
   // ── Map to StatisticsData ─────────────────────────────────────────────────
 
   const unfilteredReady =
@@ -305,7 +322,7 @@ export function useStatistics() {
     const filteredData = mapToStatisticsData(
       monthlySummaryFilteredQuery.data.data,
       categoryPivotFilteredQuery.data.data,
-      recipientInsightsQuery.data!.data,
+      (recipientInsightsFilteredQuery.data ?? recipientInsightsQuery.data!).data,
       (recipientByYearFilteredQuery.data ?? recipientByYearUnfilteredQuery.data!).data,
     );
 
@@ -320,6 +337,7 @@ export function useStatistics() {
     monthlySummaryFilteredQuery.data,
     categoryPivotFilteredQuery.data,
     recipientByYearFilteredQuery.data,
+    recipientInsightsFilteredQuery.data,
   ]);
 
   const getGraphData = useCallback(

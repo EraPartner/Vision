@@ -96,6 +96,16 @@ export async function getMonthlyFinancialSummary(
     ? `COALESCE((SELECT MIN(date_trunc('month', date)) FROM transactions WHERE is_active = true), date_trunc('month', CURRENT_DATE))`
     : `date_trunc('month', CURRENT_DATE - interval '5 months')`;
 
+  // Aggregate per (date, currency) in SQL instead of streaming every transaction
+  // into JS. This path converts at each transaction's historical date rate
+  // (useHistoricalRatesByDate below), so we can only collapse rows that share a
+  // rate — i.e. the same date+currency. Within such a group every row uses the
+  // same rate, and rate > 0 preserves sign, so:
+  //   • SUM(amount) FILTER (amount >= 0) converted == Σ converted incomes
+  //   • SUM(amount) FILTER (amount <  0) converted == Σ converted spendings
+  // making this numerically identical to the old per-transaction loop while
+  // pushing the heavy SUM/COUNT into Postgres. (A month-level GROUP BY would NOT
+  // be valid here because intra-month FX varies.)
   const sql = `
     WITH months AS (
       SELECT generate_series(
@@ -106,7 +116,6 @@ export async function getMonthlyFinancialSummary(
     ),
     filtered_transactions AS (
       SELECT
-        t.id,
         t.amount,
         t.currency,
         t.date,
@@ -116,17 +125,27 @@ export async function getMonthlyFinancialSummary(
       WHERE t.is_active = true
       ${categoryExcludeClause}
       ${recipientExcludeClause}
+    ),
+    daily AS (
+      SELECT
+        date,
+        currency,
+        COUNT(*) AS cnt,
+        COALESCE(SUM(amount) FILTER (WHERE amount >= 0), 0) AS income_amount,
+        COALESCE(SUM(amount) FILTER (WHERE amount < 0), 0) AS spending_amount
+      FROM filtered_transactions
+      GROUP BY date, currency
     )
     SELECT
       EXTRACT(MONTH FROM m.month_start)::int AS month,
       EXTRACT(YEAR FROM m.month_start)::int AS year,
       m.month_start AS period_start,
       (m.month_start + interval '1 month' - interval '1 day')::date AS period_end,
-      t.amount, t.currency, t.date, t.id AS txn_id
+      d.date, d.currency, d.cnt, d.income_amount, d.spending_amount
     FROM months m
-    LEFT JOIN filtered_transactions t ON t.date >= m.month_start
-      AND t.date < m.month_start + interval '1 month'
-    ORDER BY m.month_start, t.date
+    LEFT JOIN daily d ON d.date >= m.month_start
+      AND d.date < m.month_start + interval '1 month'
+    ORDER BY m.month_start, d.date
   `;
   logger.debug('Monthly summary SQL executing', {
     categoryExcludeClause: categoryExcludeClause || '(none)',
@@ -137,11 +156,20 @@ export async function getMonthlyFinancialSummary(
   const result = await query(sql, params);
   logger.debug('Monthly summary query returned', { rowCount: result.rows.length });
 
-  const liveConverted = await convertRowsToEur(
-    mapRowsForAmountConversion(result.rows.filter(r => r.txn_id != null), 'amount', false),
-    targetCurrency,
-    { useHistoricalRatesByDate: true, dateField: 'date' }
-  );
+  const dailyRows = result.rows.filter(r => r.date != null);
+  // Convert each (date, currency) income/spending aggregate at that date's rate.
+  const [incomeConverted, spendingConverted] = await Promise.all([
+    convertRowsToEur(
+      mapRowsForAmountConversion(dailyRows, 'income_amount', false),
+      targetCurrency,
+      { useHistoricalRatesByDate: true, dateField: 'date' },
+    ),
+    convertRowsToEur(
+      mapRowsForAmountConversion(dailyRows, 'spending_amount', false),
+      targetCurrency,
+      { useHistoricalRatesByDate: true, dateField: 'date' },
+    ),
+  ]);
 
   const monthMap = {};
   for (const row of result.rows) {
@@ -160,13 +188,15 @@ export async function getMonthlyFinancialSummary(
     }
   }
 
-  for (const row of liveConverted) {
+  for (let i = 0; i < dailyRows.length; i += 1) {
+    const row = dailyRows[i];
     const key = formatYearMonthKey(row.year, row.month);
-    const eur = row.amount_eur;
-    monthMap[key].transaction_count++;
-    monthMap[key].net_amount += eur;
-    if (eur < 0) monthMap[key].total_spending += eur;
-    else monthMap[key].total_income += eur;
+    const incomeEur = incomeConverted[i].amount_eur;
+    const spendingEur = spendingConverted[i].amount_eur;
+    monthMap[key].total_income += incomeEur;
+    monthMap[key].total_spending += spendingEur;
+    monthMap[key].net_amount += incomeEur + spendingEur;
+    monthMap[key].transaction_count += Number(row.cnt);
   }
 
   const months = Object.values(monthMap)

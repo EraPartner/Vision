@@ -3,9 +3,9 @@ title: Architecture Diagrams
 type: architecture-index
 status: active
 date: 2026-04-27
-updated: 2026-05-11
-tags: [architecture, index, uml, plantuml, diagrams, phase-1, phase-2, phase-3, phase-e, frontend, api-client, openapi, domain-split, repository-split, statistics-refactoring, component-decomposition, refactoring, bug-fixes, csv, formula-injection, parallelization, deployment, container-hardening, backup, restore, bundle, electron, tags, tagging, orthogonal-dimension, may-2026]
-description: Index of all UML diagrams for the Vision project - backend, frontend, system, and sequence diagrams; includes Phase 1+2 backup bundle format and IPC handlers, Phase 2 API client domain split, OpenAPI architecture, April 2026 Statistics page refactoring, Phase E component decomposition, April 25 CSV security & parallelization improvements, container hardening, and May 2026 transaction tags orthogonal dimension
+updated: 2026-06-01
+tags: [architecture, index, uml, plantuml, diagrams, phase-1, phase-2, phase-3, phase-e, frontend, api-client, openapi, domain-split, repository-split, statistics-refactoring, component-decomposition, refactoring, bug-fixes, csv, formula-injection, parallelization, deployment, container-hardening, backup, restore, bundle, electron, tags, tagging, orthogonal-dimension, may-2026, june-2026, route-service-boundary, thin-seams, global-rate-limiter, shared-utils, mv-recipient-monthly-drop]
+description: Index of all UML diagrams for the Vision project - backend, frontend, system, and sequence diagrams. June 2026 updates: backend-service-layer.puml adds 14 thin route-seam services (ADR-067); backend-api-layer.puml adds globalRateLimiter on /api + TRUSTED_PROXIES XFF handling + VISION_DEV dev-bypass flag.
 aliases: [architecture, diagrams, UML, system design, backup architecture, electron IPC]
 ---
 
@@ -52,7 +52,7 @@ Located in `docs/diagrams/`:
 
 ## Interactive Flow Visualizer
 
-For an interactive companion to these diagrams, open `docs/flow-visualizer.html` — a single-page HTML map of all packages and 15 end-to-end flows. Click a flow to highlight the path, step through it, and inspect the payload at every hop. Data lives in an embedded JSON block; extending it is a copy-paste.
+For an interactive companion to these diagrams, open `docs/flow-visualizer.html` — a single-page HTML map of all packages (51 components) and 21 end-to-end flows. Click a flow to highlight the path, step through it, and inspect the payload at every hop. Data lives in an embedded JSON block; extending it is a copy-paste.
 
 ## Frontend Diagrams
 
@@ -297,6 +297,28 @@ Documentation:
 - [[docs/architecture/frontend-architecture#css-architecture-tailwind-v4-may-2026|Frontend Architecture — CSS Architecture]]
 - [[docs/reference/code-patterns#motion-consumer-pattern-phase-9|Motion Consumer Pattern]]
 - [[docs/reference/code-patterns#surface-shell-pattern-phase-9|Surface Shell Pattern]]
+
+## June 2026 Remediation Pass (ADRs 067–069)
+
+### Enforced Route → Service Boundary (ADR-067)
+
+[[docs/adr/067-enforce-route-service-boundary|ADR-067]] — All 15 route files now import exclusively from thin `services/<domain>Service.js` seams. ESLint rule `vision-local/no-repo-direct-from-route` promoted to ERROR. 14 new service modules added. Diagram updated: `backend-service-layer.puml` has a new "Thin Route Seams" package.
+
+### Drop mv_recipient_monthly (ADR-068)
+
+[[docs/adr/068-drop-mv-recipient-monthly|ADR-068]] — The `mv_recipient_monthly` materialized view was never read after `agg_recipient_totals` became the live source. Migration `0038` drops it. `aggregationRefresh.js` no longer schedules its refresh. See [[docs/performance/materialized-views|Materialized Views]] for updated strategy.
+
+### @vision/shared-utils Monorepo Package (ADR-069)
+
+[[docs/adr/069-shared-utils-monorepo-package|ADR-069]] — New Bun workspace package `packages/shared-utils/` holds `money`, `slugify`, and `downsample`. Both apps re-export from it. `roundMoney` is now canonically `ROUND_HALF_EVEN` (banker's rounding) everywhere. Eliminates frontend/backend money-rounding drift.
+
+### Other June 2026 Security & Correctness
+
+- **Global rate limiter on `/api`** — `globalRateLimiter` mounted before all routers; configurable via `RATE_LIMIT_GLOBAL_MAX` / `RATE_LIMIT_GLOBAL_WINDOW_MS`. See `backend-api-layer.puml`.
+- **Trusted-proxy XFF gating** — `TRUSTED_PROXIES` env var controls when `X-Forwarded-For` is trusted for IP keying.
+- **VISION_DEV fail-safe** — dev bypasses (rate-limit skip, wildcard CORS) now require explicit `VISION_DEV=true`.
+- **Zip-bomb guard** — `extractZip` in Electron backup restore enforces `MAX_RESTORE_BYTES` (10 GiB) and `MAX_RESTORE_ENTRIES` (100,000).
+- **5 MB response cap** — `_assertResponseWithinCap` applied to Binance and Kinesis fetches.
 
 ## May 2026 Recent Decisions (ADRs 053–058)
 

@@ -1008,6 +1008,16 @@
       "kind": "build",
       "x": 580,
       "y": 852
+    },
+    {
+      "id": "pkg.shared-utils",
+      "label": "@vision/shared-utils",
+      "sub": "money · slugify · downsample",
+      "kind": "shared",
+      "path": "packages/shared-utils/",
+      "desc": "Bun workspace package for pure helpers shared between frontend and backend. money.js uses ROUND_HALF_EVEN (banker's rounding). Both apps re-export via shims.",
+      "x": 1120,
+      "y": 260
     }
   ],
   "baseEdges": [
@@ -1190,6 +1200,18 @@
     [
       "build.release",
       "build.docker"
+    ],
+    [
+      "fe.hooks",
+      "pkg.shared-utils"
+    ],
+    [
+      "be.routes",
+      "pkg.shared-utils"
+    ],
+    [
+      "be.repos",
+      "pkg.shared-utils"
     ]
   ],
   "flows": [
@@ -2296,8 +2318,8 @@
         {
           "from": "sv.forecast",
           "to": "sv.forecast",
-          "payload": "ensemble: holtWinters + prophetLite + weightedAverage + … (inverse-MSE blend)",
-          "annotation": "Phase 10+F: 7 base methods + inverse-MSE ensemble (8th).  Backtest accuracy persisted."
+          "payload": "ensemble (v2): holtWinters + prophetLite + weightedAverage + … (shrunk-RMSE inverse-MSE + 5% uniform floor)",
+          "annotation": "Phase 10+F+v2: 7 base methods + Ensemble (v2) as 8th. Weights use empirical-Bayes shrinkage (K=30 days) + uniform floor so no method dominates. Backtest accuracy persisted."
         },
         {
           "from": "sv.forecast",

@@ -3,11 +3,11 @@ title: Cash Flow Forecast
 type: feature
 status: active
 date: 2026-04-25
-updated: 2026-05-23
-last_modified: 2026-05-23
-tags: [feature, cash-flow, forecast, planning, aggregations, phase-6, phase-10, phase-c, phase-d, phase-e, phase-g, planned-transactions, statistical-forecasting, ensemble-methods, frontend-visualization, multi-method-forecast, diagnostics-sheet, accuracy-persistence, materialized-cache, nightly-job, category-breakdown, fallback-resilience]
+updated: 2026-06-01
+last_modified: 2026-06-01
+tags: [feature, cash-flow, forecast, planning, aggregations, phase-6, phase-10, phase-c, phase-d, phase-e, phase-g, planned-transactions, statistical-forecasting, ensemble-methods, ensemble-v2, empirical-bayes, frontend-visualization, multi-method-forecast, diagnostics-sheet, accuracy-persistence, materialized-cache, nightly-job, category-breakdown, fallback-resilience]
 aliases: [cashflow-forecast, forward-projections, cash-flow-planning, income-expense-forecast, budget-projection, multi-method-forecast, ensemble-forecast, category-breakdown]
-description: Project income and expenses forward based on planned transactions (Phase 6) or using 8 statistical methods including 7 base methods + inverse-MSE ensemble (Phase 10, F). Phase C adds frontend dashboard visualization with controls, MC confidence bands, and diagnostics panel. Phase E adds nightly cache materialization. Phase G adds per-category breakdown with hierarchical reconciliation.
+description: Project income and expenses forward based on planned transactions (Phase 6) or using 8 statistical methods including 7 base methods + Ensemble (v2) (Phase 10, F). Phase C adds frontend dashboard visualization with controls, MC confidence bands, and diagnostics panel. Phase E adds nightly cache materialization. Phase G adds per-category breakdown with hierarchical reconciliation. June 2026: ensemble weighting upgraded from plain inverse-MSE to sample-size-shrunk RMSE + uniform-blend floor (empirical Bayes).
 related_code:
   - apps/node-backend/src/services/calculations/aggregation/cashflowForecast.js
   - apps/node-backend/src/services/calculations/forecast/index.js
@@ -53,11 +53,11 @@ Takes all active planned transactions and expands them into future occurrences b
 
 ### Phase 10 + F: Multi-Method Statistical Forecasting with Ensemble
 
-Forecasts the rest of the current month using 8 statistical methods: 5 point forecasts, 2 Monte Carlo distribution methods, and 1 inverse-MSE ensemble combining point forecasts. Includes walk-forward backtesting to measure accuracy with persistent history for trend analysis.
+Forecasts the rest of the current month using 8 statistical methods: 5 point forecasts, 2 Monte Carlo distribution methods, and 1 ensemble (v2) combining point forecasts. Includes walk-forward backtesting to measure accuracy with persistent history for trend analysis.
 
 **Key characteristics:**
 - **Historical pattern-based** — Learns from 36+ months of historical transactions (configurable)
-- **Multiple methods** — 5 point forecasts (simple/weighted average, EWMA, Holt-Winters, Prophet Lite) + 2 Monte Carlo methods with confidence bands + 1 ensemble combining point methods by inverse-MSE weighting
+- **Multiple methods** — 5 point forecasts (simple/weighted average, EWMA, Holt-Winters, Prophet Lite) + 2 Monte Carlo methods with confidence bands + 1 Ensemble (v2) combining point methods with empirical-Bayes shrinkage and uniform-blend floor
 - **Real-time** — Computed on-demand; methods are stateless and deterministic
 - **Diagnostic** — Walk-forward backtest shows MAE/RMSE/MAPE per method; Phase D persists monthly accuracy metrics
 - **Current month only** — Forecasts remaining days in current month (future months covered by Phase 6 planned projection)
@@ -70,7 +70,7 @@ Dashboard widget (`CashFlowForecastChart`) displays the 8-method forecast (7 bas
 **Features:**
 - **Multi-method chart** — Tabs to toggle between cumulative balance and daily net views
 - **Method toggles** — Per-method pill controls to show/hide individual forecasts on the chart
-- **Default visibility** — Displays 5 point methods + ensemble inv-MSE by default; Monte Carlo methods hidden by default but toggleable
+- **Default visibility** — Displays 5 point methods + Ensemble (v2) by default; Monte Carlo methods hidden by default but toggleable
 - **MC confidence bands** — Dashed LineSeries rendering P10/P90 bands for parametric and block bootstrap methods (visible when those methods are toggled on)
 - **Planned transaction overlay** — Switch to include pending planned transactions in cumulative view (triggers refetch)
 - **Diagnostics panel** — Right-side sheet showing:
@@ -105,11 +105,17 @@ The multi-method forecast endpoint returns daily predictions from 8 statistical 
 | **Monte Carlo (Parametric)** | Gaussian | Per-(day-of-week, day-of-month) bucket: mean + std → Gaussian sampling. `paths` independent samples. | p10, p25, p50, p75, p90 (configurable) | O(paths × days) |
 | **Monte Carlo (Block Bootstrap)** | Resampling | Stationary block bootstrap over detrended residuals (block length L=7, geometric distribution). Preserves temporal structure in residual correlation. | p10, p25, p50, p75, p90 (configurable) | O(paths × days) |
 
-### Ensemble Forecast (Phase F)
+### Ensemble Forecast (Phase F + v2, June 2026)
 
 | Method | Type | Description | Weighting | Cost |
 |--------|------|-------------|-----------|------|
-| **Ensemble (inv-MSE)** | Combination | Weighted average of 5 point-forecast methods. Weights inversely proportional to RMSE from historical accuracy. Falls back to equal weights on first run. | Inverse-MSE normalized (dynamic) | O(methods) |
+| **Ensemble (v2)** | Combination | Weighted average of 5 point-forecast methods. Weights use sample-size-shrunk inverse-MSE (empirical Bayes) blended toward a uniform 5% floor. Falls back to equal weights on first run. Method id: `ensemble_imse`. | Shrunk inverse-MSE + uniform floor (dynamic) | O(methods) |
+
+> [!info] v2 Weighting Rationale (June 2026)
+> The original Phase F ensemble weighted purely by inverse-MSE (1/RMSE²). A method whose low RMSE came from a tiny backtest window was over-trusted. v2 addresses this with two adjustments applied in `ensemble.js`:
+> 1. **Empirical-Bayes shrinkage**: `shrunkRmse = (n·rmse + K·meanRmse) / (n + K)` where `n = sampleDays` from the accuracy row and `K = 30` days. Methods with fewer sample days are pulled toward the cross-method mean RMSE.
+> 2. **Uniform-blend floor (5%)**: Final weight = `(1 - 0.05) × (inverseMSE_share) + 0.05 / m`. No single method can consume the entire weight budget; every eligible method contributes at least `0.05 / m`.
+> The method id (`ensemble_imse`) and fallback behavior are unchanged. The human-readable label changed from "Ensemble (inv-MSE)" to "Ensemble (v2)".
 
 ### Parameters
 

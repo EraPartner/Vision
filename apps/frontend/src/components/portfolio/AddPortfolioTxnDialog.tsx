@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { parseDecimal } from '@/lib/decimal';
+import { deriveUnitMath } from '@/lib/portfolioUnitMath';
 import { useLanguage } from '@/contexts/LanguageContext';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
@@ -24,10 +25,6 @@ function parsePositive(value: string): number | undefined {
   return n;
 }
 
-function roundTo(value: number, decimals: number): number {
-  const factor = 10 ** decimals;
-  return Math.round(value * factor) / factor;
-}
 
 interface Props {
   investment: InvestmentSummary;
@@ -88,34 +85,14 @@ export function AddPortfolioTxnDialog({ investment, trigger }: Props) {
   const isBuySell = ['buy', 'sell'].includes(form.type);
   const isGift = form.type === 'gift';
 
-  let derivedAmount: number | undefined;
-  let derivedUnits: number | undefined;
-  let derivedPrice: number | undefined;
-  if (isBuySell) {
-    const provided = Number(amountInput !== undefined) + Number(unitsInput !== undefined) + Number(priceInput !== undefined);
-    if (provided >= 2) {
-      if (amountInput === undefined && unitsInput !== undefined && priceInput !== undefined) {
-        derivedAmount = roundTo(unitsInput * priceInput, 4);
-      }
-      if (unitsInput === undefined && amountInput !== undefined && priceInput !== undefined) {
-        derivedUnits = roundTo(amountInput / priceInput, 8);
-      }
-      if (priceInput === undefined && amountInput !== undefined && unitsInput !== undefined) {
-        derivedPrice = roundTo(amountInput / unitsInput, 6);
-      }
-    }
-  }
+  const unitMath = deriveUnitMath({ amount: amountInput, units: unitsInput, price: priceInput, derive: isBuySell });
+  const { derivedAmount } = unitMath;
 
-  const effectiveAmount = isGift ? 0 : (amountInput ?? derivedAmount);
-  const effectiveUnits = unitsInput ?? derivedUnits;
-  const effectivePrice = priceInput ?? derivedPrice;
+  const effectiveAmount = isGift ? 0 : unitMath.effectiveAmount;
+  const effectiveUnits = unitMath.effectiveUnits;
+  const effectivePrice = unitMath.effectivePrice;
 
-  const buySellIsValid = !isBuySell
-    || ((Number(amountInput !== undefined) + Number(unitsInput !== undefined) + Number(priceInput !== undefined)) >= 2
-      && effectiveAmount !== undefined
-      && effectiveUnits !== undefined
-      && effectivePrice !== undefined
-      && Math.abs(roundTo(effectiveUnits * effectivePrice, 4) - roundTo(effectiveAmount, 4)) <= 0.0001);
+  const buySellIsValid = !isBuySell || unitMath.isConsistent;
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();

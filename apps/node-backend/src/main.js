@@ -55,6 +55,7 @@ import reportsRouter from './routes/reports.js';
 import tagsRouter from './routes/tags.js';
 import {
   rateLimiter,
+  globalRateLimiter,
   adminRateLimiter,
   importRateLimiter,
   attachmentRateLimiter,
@@ -101,8 +102,9 @@ app.use((req, res, next) => {
     res.setHeader('Access-Control-Allow-Methods', CORS_METHODS);
     res.setHeader('Access-Control-Allow-Headers', CORS_ALLOWED_HEADERS);
     res.setHeader('Access-Control-Expose-Headers', CORS_EXPOSED_HEADERS);
-  } else if (isWildcard && settings.isDevelopment()) {
-    // Dev convenience only: wildcard origin without credentials.
+  } else if (isWildcard && settings.security.devBypass) {
+    // Dev convenience only: wildcard origin without credentials. Gated on the
+    // explicit VISION_DEV opt-in so an unset env never reflects a wildcard.
     res.setHeader('Access-Control-Allow-Origin', '*');
     res.setHeader('Access-Control-Allow-Methods', CORS_METHODS);
     res.setHeader('Access-Control-Allow-Headers', CORS_ALLOWED_HEADERS);
@@ -272,6 +274,10 @@ app.get('/api/', (req, res) => {
 
 // ==================== Route Registration ====================
 
+// Baseline rate limiting across the whole data plane. Mounted before every
+// router so previously-unthrottled routes (/api/transactions, /api/settings, …)
+// get a DoS backstop; stricter per-route limiters below stack on top.
+app.use('/api', globalRateLimiter);
 
 mountRouter(app, '/api/transactions', transactionsRouter);
 mountRouter(app, '/api/categories', categoriesRouter);

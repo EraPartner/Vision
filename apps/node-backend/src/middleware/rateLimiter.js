@@ -11,27 +11,61 @@ const settings = getSettings();
 const requestCounts = new Map();
 
 /**
- * Whether `X-Forwarded-For` from this peer can be trusted to identify the
- * real client. Loopback alone is too narrow: in the packaged Docker stack the
- * backend sits behind the bridge gateway, so the peer address is a private
- * (RFC1918) / link-local address. Trusting those lets each client keep its
- * own rate-limit bucket instead of all sharing the gateway's.
+ * Parse a dotted-quad IPv4 string to a uint32, or undefined if not IPv4.
+ * @param {string} ip
+ * @returns {number|undefined}
+ */
+function ipv4ToInt(ip) {
+  const parts = ip.split('.');
+  if (parts.length !== 4) return undefined;
+  let n = 0;
+  for (const part of parts) {
+    const octet = Number(part);
+    if (!Number.isInteger(octet) || octet < 0 || octet > 255 || !/^\d+$/.test(part)) return undefined;
+    n = n * 256 + octet;
+  }
+  return n >>> 0;
+}
+
+/**
+ * Whether `addr` matches an IP or IPv4 CIDR `rule` (e.g. `172.18.0.1` or
+ * `172.18.0.0/16`). Non-CIDR rules are matched exactly (works for IPv6 too).
+ *
+ * @param {string} addr
+ * @param {string} rule
+ * @returns {boolean}
+ */
+export function ipMatchesRule(addr, rule) {
+  if (!addr || !rule) return false;
+  if (addr === rule) return true;
+  const slash = rule.indexOf('/');
+  if (slash === -1) return false;
+  const base = ipv4ToInt(rule.slice(0, slash));
+  const bits = Number(rule.slice(slash + 1));
+  const target = ipv4ToInt(addr);
+  if (base === undefined || target === undefined || !Number.isInteger(bits) || bits < 0 || bits > 32) {
+    return false;
+  }
+  if (bits === 0) return true;
+  const mask = (bits === 32 ? 0xffffffff : ~((1 << (32 - bits)) - 1)) >>> 0;
+  return (target & mask) === (base & mask);
+}
+
+/**
+ * Whether `X-Forwarded-For` from this peer can be trusted to identify the real
+ * client. Only honored when the immediate peer matches an explicitly configured
+ * `TRUSTED_PROXIES` IP/CIDR. Empty config trusts nothing, so a LAN client can't
+ * spoof XFF to mint a fresh rate-limit bucket per request (fail-safe default).
  *
  * @param {string} addr
  * @returns {boolean}
  */
 function isTrustedProxyAddr(addr) {
   if (!addr) return false;
+  const trusted = settings.security?.trustedProxies || [];
+  if (trusted.length === 0) return false;
   const a = addr.replace(/^::ffff:/i, '');
-  if (a === '127.0.0.1' || a === '::1') return true;
-  return (
-    /^10\./.test(a) ||
-    /^192\.168\./.test(a) ||
-    /^172\.(1[6-9]|2\d|3[01])\./.test(a) ||
-    /^169\.254\./.test(a) ||  // IPv4 link-local
-    /^fd/i.test(a) ||         // IPv6 unique-local
-    /^fe80:/i.test(a)         // IPv6 link-local
-  );
+  return trusted.some((rule) => ipMatchesRule(a, rule) || ipMatchesRule(addr, rule));
 }
 
 // Clean up old entries every 60 seconds.
@@ -55,7 +89,9 @@ setInterval(() => {
 export function rateLimiter({ windowMs = 60_000, maxRequests = 100, keyPrefix = 'global' } = {}) {
   return (req, res, next) => {
     // Dev bypass: skip throttling entirely so hot-reload doesn't trip limits.
-    if (settings.isDevelopment()) {
+    // Gated on an explicit VISION_DEV opt-in (not merely ENVIRONMENT) so an
+    // unset/misconfigured env never silently disables rate limiting.
+    if (settings.security?.devBypass) {
       return next();
     }
 
@@ -91,6 +127,18 @@ export function rateLimiter({ windowMs = 60_000, maxRequests = 100, keyPrefix = 
     next();
   };
 }
+
+/**
+ * Baseline limiter mounted app-wide on the data plane (`/api`) before any
+ * router. A DoS backstop above normal single-user bursts (default 1000/min per
+ * IP, configurable via RATE_LIMIT_GLOBAL_MAX); the stricter per-route limiters
+ * below sit on top of it for expensive endpoints.
+ */
+export const globalRateLimiter = rateLimiter({
+  windowMs: settings.rateLimit?.globalWindowMs ?? 60_000,
+  maxRequests: settings.rateLimit?.globalMax ?? 1000,
+  keyPrefix: 'global',
+});
 
 /**
  * Rate limiter for admin routes (read-heavy observability hub).

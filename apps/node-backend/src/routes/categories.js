@@ -3,8 +3,7 @@
  */
 
 import { Router } from 'express';
-// eslint-disable-next-line vision-local/no-repo-direct-from-route
-import categoryRepository from '../repositories/categoryRepository.js';
+import categoryRepository from '../services/categoryService.js';
 import { NotFoundError, ValidationError } from '../middleware/errorHandler.js';
 import { validateIdParam } from '../middleware/validation.js';
 
