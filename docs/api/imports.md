@@ -1,15 +1,16 @@
 ---
 title: API - Imports
 type: endpoint
-method: POST, GET
+method: POST, GET, PATCH, DELETE
 path: /api/import
-description: CSV import for transactions, recipients, and categories
+description: CSV import for transactions, recipients, and categories; CRUD for saved named custom CSV parsers
 date: 2026-04-26
-updated: 2026-05-12
-tags: [api, import, csv, bank, ing, bnp]
+updated: 2026-06-01
+last_modified: 2026-06-01
+tags: [api, import, csv, bank, ing, bnp, saved-custom-parsers, custom-parser-configs, named-parsers, adr-066]
 status: active
 aliases: [imports-api, csv-import, bank-import, bank-statement, deduplication]
-related_code: ["apps/node-backend/src/routes/importRoutes.js", "apps/node-backend/src/services/importPipeline/index.js", "apps/node-backend/src/lib/sse.js", "apps/node-backend/src/repositories/importBatchRepository.js"]
+related_code: ["apps/node-backend/src/routes/importRoutes.js", "apps/node-backend/src/services/importPipeline/index.js", "apps/node-backend/src/lib/sse.js", "apps/node-backend/src/repositories/importBatchRepository.js", "apps/node-backend/src/repositories/customParserConfigRepository.js"]
 ---
 
 # Imports API
@@ -240,6 +241,138 @@ See [[docs/testing/testing|Testing Documentation]] for envelope-aware test patte
 - Import route failures now return generic `detail: "Import failed"` style responses and avoid leaking raw internal exception strings.
 - SSE error events also use sanitized generic details to keep payloads safe for frontend display.
 
+## Saved Custom Parser Endpoints (ADR-066)
+
+These four endpoints manage persisted named custom CSV parser configurations. See [[docs/adr/066-saved-named-custom-csv-parsers|ADR-066]] and [[docs/features/import#saved-named-custom-csv-parsers-adr-066|Import Feature]] for full context.
+
+### GET /api/import/parsers
+
+List all saved parser configurations.
+
+**Response:**
+```json
+{
+  "ok": true,
+  "data": [
+    {
+      "id": 1,
+      "name": "My Savings Bank",
+      "config": {
+        "dateColumn": "Date",
+        "dateFormat": "DD/MM/YYYY",
+        "recipientColumn": "Description",
+        "amountColumn": "Amount",
+        "memoColumn": "Memo",
+        "separator": ";",
+        "encoding": "utf-8",
+        "skipRows": 0
+      },
+      "created_at": "2026-06-01T10:00:00Z",
+      "updated_at": "2026-06-01T10:00:00Z"
+    }
+  ]
+}
+```
+
+### POST /api/import/parsers
+
+Create a new saved parser configuration.
+
+**Request Body:**
+```json
+{
+  "name": "My Savings Bank",
+  "config": {
+    "dateColumn": "Date",
+    "dateFormat": "DD/MM/YYYY",
+    "recipientColumn": "Description",
+    "amountColumn": "Amount",
+    "memoColumn": "Memo",
+    "separator": ";",
+    "encoding": "utf-8",
+    "skipRows": 0
+  }
+}
+```
+
+| Field | Required | Notes |
+|-------|----------|-------|
+| `name` | Yes | Unique display name; used as `bank_account` label on imported transactions |
+| `config.dateColumn` | Yes | CSV header name for the date field |
+| `config.recipientColumn` | Yes | CSV header name for the recipient/description field |
+| `config.amountColumn` | Yes | CSV header name for the amount field |
+| `config.dateFormat` | No | Date format string (e.g. `DD/MM/YYYY`) |
+| `config.memoColumn` | No | CSV header name for the memo/notes field |
+| `config.separator` | No | CSV column delimiter (default `,`) |
+| `config.encoding` | No | File encoding (default `utf-8`) |
+| `config.skipRows` | No | Header rows to skip (default `0`) |
+
+**Responses:**
+
+| Status | Meaning |
+|--------|---------|
+| `201 Created` | Parser created; body contains the created record |
+| `400 Bad Request` | `name` missing, or one of `dateColumn` / `recipientColumn` / `amountColumn` missing from `config` |
+| `409 Conflict` | A parser with the same `name` already exists |
+
+**201 Body:**
+```json
+{
+  "ok": true,
+  "data": {
+    "id": 1,
+    "name": "My Savings Bank",
+    "config": { "...": "..." },
+    "created_at": "2026-06-01T10:00:00Z",
+    "updated_at": "2026-06-01T10:00:00Z"
+  }
+}
+```
+
+### PATCH /api/import/parsers/:id
+
+Update an existing saved parser. Both `name` and `config` are optional; supply only the fields to change.
+
+**Path Parameters:**
+- `id` — parser id (integer)
+
+**Request Body:**
+```json
+{
+  "name": "Renamed Bank",
+  "config": {
+    "separator": ","
+  }
+}
+```
+
+> [!warning] Rename impact
+> Renaming a parser does not retroactively update the `bank_account` label on transactions already imported with the old name.
+
+**Responses:**
+
+| Status | Meaning |
+|--------|---------|
+| `200 OK` | Parser updated; body contains the updated record |
+| `404 Not Found` | No parser with the given `id` |
+| `409 Conflict` | Another parser already uses the requested `name` |
+
+### DELETE /api/import/parsers/:id
+
+Delete a saved parser configuration.
+
+**Path Parameters:**
+- `id` — parser id (integer)
+
+**Responses:**
+
+| Status | Meaning |
+|--------|---------|
+| `204 No Content` | Parser deleted successfully |
+| `404 Not Found` | No parser with the given `id` |
+
+---
+
 ## Review Endpoints
 
 When the pipeline detects fuzzy / pattern / new recipient resolutions it leaves the batch in `awaiting_review` status and the streaming endpoint emits a `review_required` SSE event with the `batch_id` so the frontend can navigate to the review page. The review endpoints below let the client inspect, override, and commit the staged batch.
@@ -306,6 +439,8 @@ Commit a reviewed batch. Honours all recipient and category overrides set above.
 - [[docs/api/transactions|Transactions API]]
 - [[docs/api/recipients|Recipients API]]
 - [[docs/integrations/index|Integrations]]
+- [[docs/adr/066-saved-named-custom-csv-parsers|ADR-066: Saved Named Custom CSV Parsers]]
+- [[docs/features/import|Import Feature]]
 
 ## Test Coverage
 

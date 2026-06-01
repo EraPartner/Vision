@@ -539,6 +539,14 @@ entity "import_rows" as import_rows {
   decision : text
 }
 
+entity "custom_parser_configs" as custom_parser_configs {
+  * id : serial <<PK>>
+  * name : text UNIQUE
+  * config_json : jsonb
+  created_at : timestamptz
+  updated_at : timestamptz
+}
+
 entity "exchange_rate_cache" as exchange_rate_cache {
   * id : serial <<PK>>
   * base : text
@@ -609,6 +617,12 @@ end note
 note bottom of import_batches
   Drives the staging / validate / match / commit pipeline
   in services/importPipeline.
+end note
+
+note bottom of custom_parser_configs
+  Saved named custom CSV parser configs (ADR-066).
+  name doubles as bank_account label on imported transactions.
+  config_json mirrors the CustomConfig frontend shape.
 end note
 
 ' Materialized views (read-only projections — listed for reference)

@@ -10,6 +10,7 @@
 import { query, withTransaction } from '../../database/connection.js';
 import { logger } from '../../config/logger.js';
 import { getAdapter } from './adapters/index.js';
+import generic from './adapters/generic.js';
 
 const STAGE_INSERT_CHUNK = 500;
 
@@ -36,7 +37,11 @@ export async function stageBatch({ batchId, filePath, adapterName, customConfig,
     [batchId]
   );
 
-  const adapter = getAdapter(adapterName);
+  // When a customConfig is supplied the import is column-mapping driven, not
+  // tied to a built-in bank. The adapterName is then a free-form label (e.g. a
+  // saved parser's name) that won't be in the static registry, so fall back to
+  // the generic adapter — mirroring createAdapter() in adapters/index.js.
+  const adapter = (customConfig && !getAdapter(adapterName)) ? generic : getAdapter(adapterName);
   if (!adapter) throw new Error(`Unknown adapter: ${adapterName}`);
 
   const rows = await (customConfig && typeof adapter.parseWithConfig === 'function'

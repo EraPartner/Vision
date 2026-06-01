@@ -34,6 +34,7 @@ export const BACKUP_COVERED_TABLES = Object.freeze([
   'cashflow_forecast_mc',
   'cashflow_forecast_mc_rolling',
   'categories',
+  'custom_parser_configs',
   'custom_raw_transactions',
   'exchange_rates',
   'import_batches',

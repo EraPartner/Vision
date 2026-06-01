@@ -23,17 +23,27 @@ import { CsvColumnMapper } from "@/components/import/CsvColumnMapper";
 import { apiClient } from "@/lib/api";
 import { toast } from "sonner";
 import {
+  Bookmark,
   CheckCircle2,
   CloudUpload,
   File,
   Landmark,
   Loader2,
+  Pencil,
   PencilLine,
+  Save,
   Trash2,
   Upload,
   XCircle,
 } from "lucide-react";
 import { useAdapters } from "./useAdapters";
+import {
+  useCustomParserConfigs,
+  useCreateCustomParserConfig,
+  useUpdateCustomParserConfig,
+  useDeleteCustomParserConfig,
+} from "@/hooks/useCustomParserConfigs";
+import { useConfirmDialog } from "@/hooks/useConfirmDialog";
 import type { ImportProgress } from "@/lib/api/types";
 
 interface CustomConfig {
@@ -73,8 +83,71 @@ export function TransactionImportCard({ onImportSuccess }: TransactionImportCard
   const [dragOver, setDragOver] = useState(false);
   const [progress, setProgress] = useState<ImportProgress | null>(null);
   const [customConfig, setCustomConfig] = useState<CustomConfig>(DEFAULT_CUSTOM_CONFIG);
+  const [editingSaved, setEditingSaved] = useState(false);
   const abortRef = useRef<(() => void) | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  const { data: savedParsers } = useCustomParserConfigs();
+  const createParser = useCreateCustomParserConfig();
+  const updateParser = useUpdateCustomParserConfig();
+  const deleteParser = useDeleteCustomParserConfig();
+  const { confirm, ConfirmDialog } = useConfirmDialog();
+
+  const isSaved = bankSource.startsWith("saved:");
+  const selectedParser = isSaved
+    ? savedParsers?.find((p) => p.id === Number(bankSource.slice(6)))
+    : undefined;
+  const isCustomLike = isSaved || bankSource === "custom";
+  // Editable config form shows for new custom imports, or when editing a saved parser.
+  const showConfigEditor = bankSource === "custom" || (isSaved && editingSaved);
+
+  const handleBankChange = (val: string) => {
+    setBankSource(val);
+    setProgress(null);
+    setEditingSaved(false);
+    if (val.startsWith("saved:")) {
+      const parser = savedParsers?.find((p) => p.id === Number(val.slice(6)));
+      if (parser) {
+        setCustomConfig({ ...DEFAULT_CUSTOM_CONFIG, ...parser.config });
+        setCustomBank(parser.name);
+      }
+    } else if (val === "custom") {
+      setCustomConfig(DEFAULT_CUSTOM_CONFIG);
+      setCustomBank("");
+    }
+  };
+
+  const hasRequiredMapping = Boolean(
+    customConfig.dateColumn && customConfig.recipientColumn && customConfig.amountColumn,
+  );
+
+  const handleSaveParser = async () => {
+    const name = customBank.trim();
+    if (!name) { toast.error(t('importPage.customParser.nameRequired')); return; }
+    if (!hasRequiredMapping) { toast.error(t('importPage.toast.noConfig')); return; }
+    const config = { ...customConfig };
+    if (isSaved && selectedParser) {
+      await updateParser.mutateAsync({ id: selectedParser.id, name, config });
+      setEditingSaved(false);
+    } else {
+      const created = await createParser.mutateAsync({ name, config });
+      setBankSource(`saved:${created.id}`);
+    }
+  };
+
+  const handleDeleteParser = async () => {
+    if (!selectedParser) return;
+    const ok = await confirm({
+      title: t('importPage.customParser.deleteTitle'),
+      description: t('importPage.customParser.deleteConfirm', { name: selectedParser.name }),
+      variant: "destructive",
+    });
+    if (!ok) return;
+    await deleteParser.mutateAsync(selectedParser.id);
+    setBankSource("");
+    setCustomBank("");
+    setCustomConfig(DEFAULT_CUSTOM_CONFIG);
+  };
 
   const handleFile = useCallback((f: File | null) => {
     if (f && f.type !== "text/csv" && !f.name.endsWith(".csv")) {
@@ -97,13 +170,17 @@ export function TransactionImportCard({ onImportSuccess }: TransactionImportCard
 
   const onDragLeave = useCallback(() => setDragOver(false), []);
 
-  const resolvedBank = () => bankSource === "custom" ? (customBank || "generic") : bankSource;
+  const resolvedBank = () => {
+    if (isSaved) return selectedParser?.name || "generic";
+    if (bankSource === "custom") return customBank || "generic";
+    return bankSource;
+  };
 
   const handleImport = async () => {
     if (!file) { toast.error(t('importPage.toast.noFileSel')); return; }
     const bank = resolvedBank();
     if (!bank) { toast.error(t('importPage.toast.noBank')); return; }
-    if (bankSource === "custom" && (!customConfig.dateColumn || !customConfig.recipientColumn || !customConfig.amountColumn)) {
+    if (isCustomLike && !hasRequiredMapping) {
       toast.error(t('importPage.toast.noConfig'));
       return;
     }
@@ -113,7 +190,7 @@ export function TransactionImportCard({ onImportSuccess }: TransactionImportCard
 
     try {
       let data;
-      if (bankSource === "custom") {
+      if (isCustomLike) {
         data = await apiClient.importCSVCustom(
           file, bank,
           customConfig.dateFormat, customConfig.dateColumn,
@@ -174,7 +251,7 @@ export function TransactionImportCard({ onImportSuccess }: TransactionImportCard
         {/* Bank selector */}
         <div className="space-y-2">
           <Label htmlFor="bank-select" className="font-semibold">{t('importPage.bankSource')}</Label>
-          <Select value={bankSource} onValueChange={setBankSource}>
+          <Select value={bankSource} onValueChange={handleBankChange}>
             <SelectTrigger id="bank-select">
               <SelectValue placeholder={t('importPage.bankSourcePlaceholder')} />
             </SelectTrigger>
@@ -195,6 +272,14 @@ export function TransactionImportCard({ onImportSuccess }: TransactionImportCard
               ) : (
                 <SelectItem value="none" disabled>{t('importPage.noParsers')}</SelectItem>
               )}
+              {savedParsers && savedParsers.length > 0 && savedParsers.map((parser) => (
+                <SelectItem key={parser.id} value={`saved:${parser.id}`}>
+                  <span className="inline-flex items-center gap-2">
+                    <Bookmark className="h-3.5 w-3.5 text-primary" />
+                    {parser.name}
+                  </span>
+                </SelectItem>
+              ))}
               <SelectItem value="custom">
                 <span className="inline-flex items-center gap-2">
                   <PencilLine className="h-3.5 w-3.5 text-muted-foreground" />
@@ -203,22 +288,55 @@ export function TransactionImportCard({ onImportSuccess }: TransactionImportCard
               </SelectItem>
             </SelectContent>
           </Select>
-
-          {bankSource === "custom" && (
-            <Input
-              placeholder={t('importPage.customBankName')}
-              value={customBank}
-              onChange={(e) => setCustomBank(e.target.value)}
-              className="mt-2"
-            />
-          )}
           <p className="text-xs text-muted-foreground">{t('importPage.bankHint')}</p>
         </div>
 
         {/* Custom CSV configuration */}
-        {bankSource === "custom" && (
+        {isCustomLike && (
           <div className="space-y-4 p-4 border rounded-lg bg-muted/30">
-            <p className="text-sm font-semibold text-foreground">{t('importPage.customConfig')}</p>
+            <div className="flex items-center justify-between gap-2">
+              <p className="text-sm font-semibold text-foreground">{t('importPage.customConfig')}</p>
+              {isSaved && !editingSaved && (
+                <div className="flex gap-2">
+                  <Button variant="outline" size="sm" onClick={() => setEditingSaved(true)}>
+                    <Pencil className="h-4 w-4 mr-1" /> {t('importPage.customParser.edit')}
+                  </Button>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    className="text-destructive hover:text-destructive"
+                    onClick={handleDeleteParser}
+                    disabled={deleteParser.isPending}
+                  >
+                    <Trash2 className="h-4 w-4 mr-1" /> {t('importPage.customParser.delete')}
+                  </Button>
+                </div>
+              )}
+            </div>
+
+            {/* Read-only summary for a selected saved parser */}
+            {isSaved && !editingSaved && (
+              <div className="grid grid-cols-2 gap-x-4 gap-y-1 text-xs text-muted-foreground">
+                <div><span className="font-medium text-foreground">{t('importPage.dateCol')}:</span> {customConfig.dateColumn}</div>
+                <div><span className="font-medium text-foreground">{t('importPage.recipientCol')}:</span> {customConfig.recipientColumn}</div>
+                <div><span className="font-medium text-foreground">{t('importPage.amountCol')}:</span> {customConfig.amountColumn}</div>
+                <div><span className="font-medium text-foreground">{t('importPage.memoCol')}:</span> {customConfig.memoColumn || "—"}</div>
+                <div><span className="font-medium text-foreground">{t('importPage.separator')}:</span> {customConfig.separator}</div>
+                <div><span className="font-medium text-foreground">{t('importPage.dateFormat')}:</span> {customConfig.dateFormat}</div>
+              </div>
+            )}
+
+            {showConfigEditor && (
+            <>
+            <div className="space-y-2">
+              <Label htmlFor="parser-name">{t('importPage.customParser.name')}</Label>
+              <Input
+                id="parser-name"
+                placeholder={t('importPage.customBankName')}
+                value={customBank}
+                onChange={(e) => setCustomBank(e.target.value)}
+              />
+            </div>
 
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div className="space-y-2">
@@ -286,6 +404,33 @@ export function TransactionImportCard({ onImportSuccess }: TransactionImportCard
               onChange={(cols) => setCustomConfig({ ...customConfig, ...cols })}
             />
             <p className="text-xs text-muted-foreground">{t('importPage.requiredNote')}</p>
+            <div className="flex gap-2">
+              <Button
+                size="sm"
+                onClick={handleSaveParser}
+                disabled={createParser.isPending || updateParser.isPending || !hasRequiredMapping || !customBank.trim()}
+              >
+                <Save className="h-4 w-4 mr-1" />
+                {isSaved ? t('importPage.customParser.saveChanges') : t('importPage.customParser.save')}
+              </Button>
+              {isSaved && (
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => {
+                    setEditingSaved(false);
+                    if (selectedParser) {
+                      setCustomConfig({ ...DEFAULT_CUSTOM_CONFIG, ...selectedParser.config });
+                      setCustomBank(selectedParser.name);
+                    }
+                  }}
+                >
+                  {t('common.cancel')}
+                </Button>
+              )}
+            </div>
+            </>
+            )}
           </div>
         )}
 
@@ -395,6 +540,7 @@ export function TransactionImportCard({ onImportSuccess }: TransactionImportCard
             </Button>
           )}
         </div>
+        <ConfirmDialog />
       </CardContent>
     </Card>
   );

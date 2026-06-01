@@ -198,6 +198,15 @@ package "Repositories" {
     +recordAccuracy(snapshotId, metrics): Promise<void>
     +getRolling({ window }): Promise<Metrics[]>
   }
+
+  class CustomParserConfigRepository {
+    +getAll(): Promise<Config[]>
+    +getById(id): Promise<Config | null>
+    +getByName(name): Promise<Config | null>
+    +create({ name, config }): Promise<Config>
+    +update(id, { name?, config? }): Promise<Config | null>
+    +delete(id): Promise<boolean>
+  }
 }
 
 package "Services" {
@@ -308,6 +317,7 @@ DB <.. ProviderHealthRepository
 DB <.. CashflowForecastMcRepository
 DB <.. CashflowForecastMcRollingRepository
 DB <.. CashflowForecastAccuracyRepository
+DB <.. CustomParserConfigRepository
 
 ' Import service dependencies
 ImportService --> BankAdapters

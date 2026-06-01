@@ -3,12 +3,12 @@ title: Feature - CSV Import, Export, Attachments & Deduplication
 type: feature
 status: active
 date: 2026-04-24
-updated: 2026-05-14
-last_modified: 2026-05-14
-tags: [feature, import, export, csv, json, deduplication, phase-5a, attachments, phase-c, phase-e, phase-1, phase-12, phase-13, performance, concurrency, import-pipeline, component-split, error-handling, recipient-clusters, multi-select, export-filters, adr-046, category-review, bigserial-fix, staging-rows, tx-hash-dedup, race-safe-dedup, decimal-precision, ing, bnp]
+updated: 2026-06-01
+last_modified: 2026-06-01
+tags: [feature, import, export, csv, json, deduplication, phase-5a, attachments, phase-c, phase-e, phase-1, phase-12, phase-13, performance, concurrency, import-pipeline, component-split, error-handling, recipient-clusters, multi-select, export-filters, adr-046, category-review, bigserial-fix, staging-rows, tx-hash-dedup, race-safe-dedup, decimal-precision, ing, bnp, saved-custom-parsers, custom-parser-configs, named-parsers, adr-066]
 aliases: [csv-import, bank-import, bank-statement, deduplication, data-import, streaming-import]
-description: Import transactions from bank CSV files with automatic deduplication, fuzzy/pattern recipient matching, per-row category review (ADR-046), and May 2026 BIGSERIAL fix for staging row ID validation.
-related_code: ["apps/node-backend/src/services/importPipeline/index.js", "apps/node-backend/src/services/importPipeline/stage.js", "apps/node-backend/src/services/importPipeline/validate.js", "apps/node-backend/src/services/importPipeline/match.js", "apps/node-backend/src/services/importPipeline/commit.js", "apps/node-backend/src/services/dataImportService.js", "apps/node-backend/src/services/deduplication.js", "apps/node-backend/src/services/textNormalization.js", "apps/node-backend/src/routes/importRoutes.js", "apps/node-backend/src/lib/sse.js", "apps/node-backend/src/repositories/importBatchRepository.js", "apps/frontend/src/features/imports/TransactionImportCard.tsx", "apps/frontend/src/features/imports/RecipientsImportCard.tsx", "apps/frontend/src/features/imports/CategoriesImportCard.tsx", "apps/frontend/src/features/imports/ExportCard.tsx", "apps/frontend/src/features/imports/SupportedBanksCard.tsx", "apps/frontend/src/features/imports/useAdapters.ts", "apps/frontend/src/pages/ImportPage.tsx", "apps/frontend/src/pages/ImportReviewPage.tsx"]
+description: Import transactions from bank CSV files with automatic deduplication, fuzzy/pattern recipient matching, per-row category review (ADR-046), May 2026 BIGSERIAL fix for staging row ID validation, and saved named custom CSV parsers (ADR-066) persisted in `custom_parser_configs`.
+related_code: ["apps/node-backend/src/services/importPipeline/index.js", "apps/node-backend/src/services/importPipeline/stage.js", "apps/node-backend/src/services/importPipeline/validate.js", "apps/node-backend/src/services/importPipeline/match.js", "apps/node-backend/src/services/importPipeline/commit.js", "apps/node-backend/src/services/dataImportService.js", "apps/node-backend/src/services/deduplication.js", "apps/node-backend/src/services/textNormalization.js", "apps/node-backend/src/routes/importRoutes.js", "apps/node-backend/src/lib/sse.js", "apps/node-backend/src/repositories/importBatchRepository.js", "apps/node-backend/src/repositories/customParserConfigRepository.js", "apps/frontend/src/features/imports/TransactionImportCard.tsx", "apps/frontend/src/features/imports/RecipientsImportCard.tsx", "apps/frontend/src/features/imports/CategoriesImportCard.tsx", "apps/frontend/src/features/imports/ExportCard.tsx", "apps/frontend/src/features/imports/SupportedBanksCard.tsx", "apps/frontend/src/features/imports/useAdapters.ts", "apps/frontend/src/hooks/useCustomParserConfigs.ts", "apps/frontend/src/pages/ImportPage.tsx", "apps/frontend/src/pages/ImportReviewPage.tsx"]
 ---
 
 # Feature: CSV Import & Deduplication
@@ -338,9 +338,69 @@ AND is_active = true
 - **Skipped**: Duplicate transactions are counted but not imported
 - **Status**: Import result includes `duplicates_skipped` count
 
-## Custom CSV Configuration
+## Saved Named Custom CSV Parsers (ADR-066)
 
-For unsupported banks, use custom import:
+**Status:** Complete (June 2026)
+
+Users can now save a custom CSV column-mapping configuration under a unique name and reuse it across import sessions without re-entering the column mapping each time. Saved parsers appear in the bank-source dropdown alongside pre-configured bank adapters, marked with a Bookmark icon.
+
+### Database Storage
+
+Saved parsers are persisted in the `custom_parser_configs` table (migration `0037_add_custom_parser_configs`):
+
+| Column | Type | Notes |
+|--------|------|-------|
+| `id` | SERIAL PK | |
+| `name` | TEXT NOT NULL | Unique (index `uq_custom_parser_configs_name`); also used as `bank_account` label on imported transactions |
+| `config_json` | JSONB NOT NULL | Column mapping: `{ dateColumn, dateFormat, recipientColumn, amountColumn, memoColumn, separator, encoding, skipRows }` |
+| `created_at` | TIMESTAMPTZ | |
+| `updated_at` | TIMESTAMPTZ | Maintained by the shared `update_updated_at_column()` trigger |
+
+**Repository**: [[apps/node-backend/src/repositories/customParserConfigRepository.js]] — `getAll`, `getById`, `getByName`, `create`, `update`, `delete`; maps `config_json` → `config` for callers.
+
+**Backup**: `custom_parser_configs` is registered in `apps/node-backend/src/backup/coverage.js` and travels with `.visionbak` exports.
+
+### CRUD Endpoints
+
+Four new endpoints under `/api/import/parsers` (see [[docs/api/imports|Imports API]] for full contracts):
+
+| Method | Path | Description |
+|--------|------|-------------|
+| GET | `/api/import/parsers` | List all saved parsers |
+| POST | `/api/import/parsers` | Create; 409 on duplicate name; 400 if required columns missing |
+| PATCH | `/api/import/parsers/:id` | Update name and/or config; 404 if missing; 409 on name conflict |
+| DELETE | `/api/import/parsers/:id` | Delete; 204 on success; 404 if missing |
+
+### Parser Name as Bank/Account Label
+
+The name the user assigns (e.g. `"My Savings Bank"`) is used as `adapterName` in the import pipeline. It is stored as the `bank_account` field on every imported transaction, providing the same stable label that a pre-configured adapter (e.g. `"belfius"`) provides. This ensures consistent grouping in Analytics, filters, and exports.
+
+> [!warning] Rename impact
+> Renaming a saved parser via PATCH does not retroactively update `bank_account` on existing transactions. Users who rename a parser will see a split in bank-account groupings between old and new imports.
+
+### Frontend UX
+
+- **Dropdown**: Saved parsers appear in the bank-source dropdown with a Bookmark icon; selecting one loads its config automatically.
+- **Read-only summary**: Shows the loaded parser's name and config with Edit and "Delete this parser" (confirmation dialog) buttons.
+- **Create**: In custom-config mode a name field and "Save parser" button create a new saved parser.
+- **Edit**: Editing a saved parser shows "Save changes" / "Cancel".
+- **Hook**: [[apps/frontend/src/hooks/useCustomParserConfigs.ts]] — React Query list + mutations under cache key `['custom-parser-configs']`.
+- **API client**: [[apps/frontend/src/lib/api/imports.ts]] — `listCustomParserConfigs`, `createCustomParserConfig`, `updateCustomParserConfig`, `deleteCustomParserConfig`; types `SavedParserConfig`, `CustomParserConfigPayload`.
+- **i18n**: `importPage.customParser.*` keys added to `en.json` / `nl.json`.
+
+### `stageBatch` Generic-Adapter Fallback (Latent Bug Fix)
+
+`apps/node-backend/src/services/importPipeline/stage.js` previously threw `Unknown adapter` when `adapterName` was not in the static adapter registry, even when a `customConfig` was present. The fix mirrors `createAdapter()` in `adapters/index.js`: if `getAdapter(adapterName)` returns `null` and `customConfig` is present, fall back to the `generic` adapter. Callers with an unrecognised name but no `customConfig` still receive the error (intentional — a missing mapping is a programming error).
+
+This fix applies to all callers, not only the saved-parser path, and closes a latent failure mode for any typed free-form bank name passed with a custom config.
+
+See [[docs/adr/066-saved-named-custom-csv-parsers|ADR-066]] for full decision context.
+
+---
+
+## Custom CSV Configuration (Ad-hoc, Non-Saved)
+
+For a one-off import from an unsupported bank without saving the configuration:
 
 ```
 POST /api/import/csv/custom
@@ -579,6 +639,8 @@ See [[docs/api/attachments|Attachments API]] for endpoint contracts and examples
 - [[docs/api/transactions|API: Transactions]]
 - [[docs/api/recipients|API: Recipients]]
 - [[docs/api/attachments|API: Attachments]]
+- [[docs/adr/066-saved-named-custom-csv-parsers|ADR-066: Saved Named Custom CSV Parsers]]
+- [[docs/adr/046-import-review-category-assignment|ADR-046: Import Review Category Assignment]]
 
 ## Testing References
 

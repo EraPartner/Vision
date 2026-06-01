@@ -88,6 +88,10 @@ export const apiClient = {
     overrideImportRow: imp.overrideImportRow,
     overrideImportRowCategory: imp.overrideImportRowCategory,
     commitImportBatch: imp.commitImportBatch,
+    listCustomParserConfigs: imp.listCustomParserConfigs,
+    createCustomParserConfig: imp.createCustomParserConfig,
+    updateCustomParserConfig: imp.updateCustomParserConfig,
+    deleteCustomParserConfig: imp.deleteCustomParserConfig,
 
     // Settings
     getSettings: sett.getSettings,
@@ -247,6 +251,7 @@ export type {
     ToolRenderAs,
     ToolResultPayload,
 } from '@/types/aiChat';
+export type { SavedParserConfig, CustomParserConfigPayload } from '@/lib/api/imports';
 export type { SplitItem, SplitPayment } from '@/lib/api/splits';
 export type { RecipientPattern, RecipientPatternCreate, RecipientPatternUpdate, RecipientCluster, PatternSuggestion } from '@/lib/api/recipients';
 export type { ExchangeRate, ExchangeRatesData, PortfolioSummaryItem, PortfolioSummaryResponse, PortfolioSummaryTotals } from '@/lib/api/info';
