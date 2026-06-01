@@ -12,7 +12,7 @@ import { getSupportedBanks } from '../services/bankAdapters.js';
 import { importRecipientsCSV, importCategoriesCSV } from '../services/dataImportService.js';
 import { logger } from '../config/logger.js';
 import { runImportPipeline, commitImport } from '../services/importPipeline/index.js';
-import { ValidationError, NotFoundError } from '../middleware/errorHandler.js';
+import { ValidationError, NotFoundError, ConflictError } from '../middleware/errorHandler.js';
 import { createSseWriter } from '../lib/sse.js';
 // eslint-disable-next-line vision-local/no-repo-direct-from-route
 import {
@@ -24,6 +24,8 @@ import {
   overrideCategory,
   categoryExists,
 } from '../repositories/importBatchRepository.js';
+// eslint-disable-next-line vision-local/no-repo-direct-from-route
+import customParserConfigRepository from '../repositories/customParserConfigRepository.js';
 import { refreshAggregations } from '../services/aggregationRefresh.js';
 
 const router = Router();
@@ -217,6 +219,95 @@ router.post('/csv/custom', upload.single('file'), async (req, res) => {
   } finally {
     cleanup(req.file.path);
   }
+});
+
+// --- Saved custom parser configs (CRUD) ---------------------------------
+
+function parseParserId(req) {
+  const id = parseInt(req.params.id, 10);
+  if (Number.isNaN(id)) throw new ValidationError('Invalid parser config id');
+  return id;
+}
+
+function normalizeParserName(name) {
+  if (!name || typeof name !== 'string' || name.trim().length === 0) {
+    throw new ValidationError('Missing or invalid "name"');
+  }
+  return name.trim();
+}
+
+// Validates and normalizes the column-mapping config to the frontend's
+// CustomConfig shape. Required: dateColumn, recipientColumn, amountColumn.
+function normalizeParserConfig(config) {
+  if (!config || typeof config !== 'object' || Array.isArray(config)) {
+    throw new ValidationError('Missing or invalid "config"');
+  }
+  const required = ['dateColumn', 'recipientColumn', 'amountColumn'];
+  for (const key of required) {
+    if (!config[key] || typeof config[key] !== 'string' || config[key].trim().length === 0) {
+      throw new ValidationError(`config.${key} is required`);
+    }
+  }
+  const skipRows = parseInt(config.skipRows, 10);
+  return {
+    dateColumn: config.dateColumn.trim(),
+    recipientColumn: config.recipientColumn.trim(),
+    amountColumn: config.amountColumn.trim(),
+    memoColumn: typeof config.memoColumn === 'string' ? config.memoColumn.trim() : '',
+    dateFormat: typeof config.dateFormat === 'string' && config.dateFormat.trim() ? config.dateFormat.trim() : '%Y-%m-%d',
+    separator: typeof config.separator === 'string' && config.separator.length ? config.separator : ',',
+    encoding: typeof config.encoding === 'string' && config.encoding.trim() ? config.encoding.trim() : 'utf-8',
+    skipRows: Number.isFinite(skipRows) && skipRows > 0 ? skipRows : 0,
+  };
+}
+
+const PARSER_NAME_CONSTRAINT = 'uq_custom_parser_configs_name';
+
+// GET /api/import/parsers
+router.get('/parsers', async (req, res) => {
+  const configs = await customParserConfigRepository.getAll();
+  res.ok(configs);
+});
+
+// POST /api/import/parsers
+router.post('/parsers', async (req, res) => {
+  const name = normalizeParserName(req.body.name);
+  const config = normalizeParserConfig(req.body.config);
+  try {
+    const created = await customParserConfigRepository.create({ name, config });
+    res.status(201);
+    res.ok(created);
+  } catch (err) {
+    if (err.code === '23505' && err.constraint === PARSER_NAME_CONSTRAINT) {
+      throw new ConflictError(`A parser named "${name}" already exists`);
+    }
+    throw err;
+  }
+});
+
+// PATCH /api/import/parsers/:id
+router.patch('/parsers/:id', async (req, res) => {
+  const id = parseParserId(req);
+  const name = req.body.name !== undefined ? normalizeParserName(req.body.name) : undefined;
+  const config = req.body.config !== undefined ? normalizeParserConfig(req.body.config) : undefined;
+  try {
+    const updated = await customParserConfigRepository.update(id, { name, config });
+    if (!updated) throw new NotFoundError('Parser config not found');
+    res.ok(updated);
+  } catch (err) {
+    if (err.code === '23505' && err.constraint === PARSER_NAME_CONSTRAINT) {
+      throw new ConflictError(`A parser named "${name}" already exists`);
+    }
+    throw err;
+  }
+});
+
+// DELETE /api/import/parsers/:id
+router.delete('/parsers/:id', async (req, res) => {
+  const id = parseParserId(req);
+  const deleted = await customParserConfigRepository.delete(id);
+  if (!deleted) throw new NotFoundError('Parser config not found');
+  res.status(204).send();
 });
 
 // POST /api/import/csv/stream — SSE, preserves raw event protocol

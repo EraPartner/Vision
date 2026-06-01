@@ -3,9 +3,10 @@ title: Data Model Reference
 type: reference
 status: active
 date: 2026-04-24
-updated: 2026-05-12
-tags: [reference, data-model, entities, database, schema, phase-5a, phase-0, phase-1, may-2026, tags, tagging, orthogonal-dimension, aggregations, migration-0035]
-description: Complete reference for all data entities in Vision — core, portfolio, planning, supporting, and aggregation entities. Includes exchange_rate_cache (Phase 0), aggregation tables (Phase 1, consolidated in 0035), attachment entity (Phase 5A), and transaction tags (May 2026).
+updated: 2026-06-01
+last_modified: 2026-06-01
+tags: [reference, data-model, entities, database, schema, phase-5a, phase-0, phase-1, may-2026, tags, tagging, orthogonal-dimension, aggregations, migration-0035, saved-custom-parsers, custom-parser-configs, adr-066]
+description: Complete reference for all data entities in Vision — core, portfolio, planning, supporting, and aggregation entities. Includes exchange_rate_cache (Phase 0), aggregation tables (Phase 1, consolidated in 0035), attachment entity (Phase 5A), transaction tags (May 2026), and custom_parser_configs (June 2026, ADR-066).
 aliases: [data model, entities, domain model, schema entities]
 related_code: ["apps/node-backend/src/repositories/", "alembic/versions/"]
 ---
@@ -559,6 +560,31 @@ related_code: ["apps/node-backend/src/repositories/", "alembic/versions/"]
 | `import_id` | INTEGER | FK → imports |
 
 **Related:** [[docs/features/import|Import Feature]]
+
+---
+
+### CustomParserConfig (June 2026, ADR-066)
+
+**Purpose:** Persisted named custom CSV parser configurations. Each record stores a complete column-mapping setup that a user can select from the import bank-source dropdown. The `name` doubles as the `bank_account` label written onto imported transactions.
+
+| Field | Type | Constraints | Description |
+|-------|------|-------------|-------------|
+| `id` | SERIAL | PK | Unique identifier |
+| `name` | TEXT | NOT NULL, UNIQUE | User-assigned display name; used as `bank_account` label on imported transactions |
+| `config_json` | JSONB | NOT NULL | Column mapping: `{ dateColumn, dateFormat, recipientColumn, amountColumn, memoColumn, separator, encoding, skipRows }` |
+| `created_at` | TIMESTAMPTZ | NOT NULL, DEFAULT NOW() | Creation timestamp |
+| `updated_at` | TIMESTAMPTZ | NOT NULL, DEFAULT NOW() | Last modification timestamp; maintained by shared `update_updated_at_column()` trigger |
+
+**Indexes:**
+- Unique: `uq_custom_parser_configs_name` on `(name)` — enforces uniqueness and enables fast lookup by name
+
+**Migration:** [[alembic/versions/0037_add_custom_parser_configs.py]] (down_revision `0036_add_transactions_tx_hash`)
+
+**Repository:** [[apps/node-backend/src/repositories/customParserConfigRepository.js]] — maps `config_json` → `config` for application callers
+
+**Backup:** Included in `.visionbak` exports (registered in `apps/node-backend/src/backup/coverage.js`)
+
+**Related:** [[docs/features/import#saved-named-custom-csv-parsers-adr-066|Import Feature — Saved Parsers]], [[docs/api/imports|Imports API]], [[docs/adr/066-saved-named-custom-csv-parsers|ADR-066]]
 
 ---
 
