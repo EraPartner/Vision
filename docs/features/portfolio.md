@@ -3,11 +3,11 @@ title: Feature - Portfolio & Investments
 type: feature
 status: active
 date: 2026-04-27
-last_modified: 2026-05-29
-updated: 2026-05-29
-tags: [feature, portfolio, investments, stocks, crypto, metals, phase-1, phase-3.5, phase-3.6, phase-9, phase-8, phase-14, pdf-export, offline-resilience, stale-prices, online-status-detection, graceful-degradation, portfolio-summary, realtime-totals, decimal-precision, monetary-math, snapshot-valuation-parity, fixed-income-accrual, real-estate-appreciation, net-worth-reconciliation, historical-fx, snapshot-fx, loading-states, error-states, page-error, skeleton]
+last_modified: 2026-06-01
+updated: 2026-06-01
+tags: [feature, portfolio, investments, stocks, crypto, metals, phase-1, phase-3.5, phase-3.6, phase-9, phase-8, phase-14, pdf-export, offline-resilience, stale-prices, online-status-detection, graceful-degradation, portfolio-summary, realtime-totals, decimal-precision, monetary-math, snapshot-valuation-parity, fixed-income-accrual, real-estate-appreciation, net-worth-reconciliation, historical-fx, snapshot-fx, loading-states, error-states, page-error, skeleton, portfolio-unit-math, shared-utils, splits-event, return-of-capital, banker-rounding]
 aliases: [portfolio-feature, investments-feature, holdings, net-worth, stocks, crypto, real-estate, savings, bonds, metals, performance, watchlist]
-description: Track stocks, ETFs, crypto, metals, real estate, savings, and bonds; includes Phase 8 PDF report export with 6 portfolio sections. 2026-05-29 adds historical FX in snapshots and loading/error states on all asset pages.
+description: Track stocks, ETFs, crypto, metals, real estate, savings, and bonds; includes Phase 8 PDF report export with 6 portfolio sections. 2026-05-29 adds historical FX in snapshots and loading/error states on all asset pages. June 2026 adds snapshotBuilder split/return_of_capital events, APP_TIMEZONE day-boundary fix, and shared portfolioUnitMath.ts.
 related_code: ["apps/node-backend/src/routes/investments.js", "apps/node-backend/src/services/priceProviderService.js", "apps/node-backend/src/services/portfolioPerformanceSnapshotService.js", "apps/node-backend/src/services/portfolio/portfolioSummaryService.js", "apps/node-backend/src/routes/info/portfolioSummary.js", "apps/frontend/src/pages/portfolio/PerformancePage.tsx", "apps/frontend/src/pages/portfolio/MetalsPage.tsx", "apps/frontend/src/pages/portfolio/PortfolioOverviewPage.tsx", "apps/frontend/src/hooks/portfolio/usePortfolioSummary.ts", "apps/frontend/src/hooks/usePortfolio.ts", "apps/frontend/src/lib/api.ts"]
 ---
 
@@ -182,6 +182,51 @@ Oversell safety behavior:
 - Metals listing explicitly uses base (non-FX-aware) realized/unrealized calculations.
 
 Code links: [[apps/frontend/src/pages/portfolio/StocksPage.tsx]], [[apps/frontend/src/types/api.ts]], [[apps/node-backend/src/routes/investments.js]], [[alembic/versions/0016_add_fx_rate_to_portfolio_transactions.py]]
+
+### Portfolio Unit Math — Shared Frontend Library (June 2026)
+
+`apps/frontend/src/lib/portfolioUnitMath.ts` is a new shared module consumed by both the **Add** and **Edit** portfolio transaction dialogs:
+
+```typescript
+// Named precision constants (4 DP for units, 8 DP for price, 6 DP for FX)
+export const UNIT_PRECISION = 4;
+export const PRICE_PRECISION = 8;
+export const FX_PRECISION = 6;
+export const TOLERANCE = 0.0001;
+
+// Derive the third field when two of amount/units/price are filled
+export function deriveUnitMath(
+  amount: number | null,
+  units: number | null,
+  price: number | null,
+): { amount: number; units: number; price: number } | null
+```
+
+`deriveUnitMath` fills the missing field (whichever of amount/units/price is null) using the other two and rounds to the appropriate precision. It returns `null` when fewer than two inputs are non-null (nothing can be derived).
+
+This eliminates the prior copy-paste inconsistency where Add and Edit dialogs used different rounding constants and tolerance checks.
+
+### snapshotBuilder Improvements (June 2026)
+
+`apps/node-backend/src/services/portfolio/snapshotBuilder.js` received three correctness fixes that make the historical Net Worth chart consistent with the live portfolio summary:
+
+**1. Timezone-correct day-walk boundary**
+
+The end-of-day boundary for the forward-simulation loop is now derived via `toAppDateString(new Date(), APP_TIMEZONE)` rather than UTC date. Portfolios with transactions close to midnight (in the user's timezone) were previously misattributed to the wrong day.
+
+**2. `split` event type handling**
+
+The day-loop now processes `split` transaction types. A stock split resets the per-investment unit count to the post-split total (rather than adding units as if it were a buy). This mirrors the live `calculateCostBasis` function and fixes Net Worth chart values for portfolios with historic splits.
+
+**3. `return_of_capital` event type handling**
+
+`return_of_capital` transactions now reduce the `runningInvested` cost basis by the returned amount, matching accounting convention and the live summary calculation.
+
+**4. Buy/sell unit math uses Decimal**
+
+`repositories/portfolioTxRepo.common.js` buy/sell/gift calculations now use Decimal `roundMoney()`, `multiply()`, and `divide()` instead of `roundTo()` with native float arithmetic. This eliminates the remaining FP drift in portfolio transaction math.
+
+Code links: [[apps/node-backend/src/services/portfolio/snapshotBuilder.js]], [[apps/node-backend/src/repositories/portfolioTxRepo.common.js]], [[apps/frontend/src/lib/portfolioUnitMath.ts]]
 
 ### Portfolio Decimal Precision (May 2026 Audit)
 

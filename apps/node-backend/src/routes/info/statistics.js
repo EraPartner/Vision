@@ -10,8 +10,7 @@
  */
 
 import { Router } from 'express';
-// eslint-disable-next-line vision-local/no-repo-direct-from-route
-import infoRepository from '../../repositories/infoRepository.js';
+import infoRepository from '../../services/infoService.js';
 import { detectRecurringPatterns } from '../../services/recurringDetectionService.js';
 import { logger } from '../../config/logger.js';
 import { getTargetCurrency } from './_queryParams.js';

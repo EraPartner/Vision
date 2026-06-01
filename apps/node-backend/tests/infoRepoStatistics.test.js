@@ -185,28 +185,40 @@ describe('statisticsRepository.getTransactionSummary', () => {
     expect(convertRowsToEur).not.toHaveBeenCalled();
   });
 
-  it('computes total/avg/min/max from converted amounts', async () => {
+  it('combines per-currency grouped aggregates after FX conversion', async () => {
+    // SQL now returns one row per currency. EUR: 2 txns; USD: 1 txn @ rate 0.9.
     query.mockResolvedValueOnce({
       rows: [
-        { amount: '100', currency: 'EUR', date: '2025-04-01' },
-        { amount: '-50', currency: 'EUR', date: '2025-04-02' },
-        { amount: '200', currency: 'EUR', date: '2025-04-03' },
+        { currency: 'EUR', cnt: '2', sum_amount: '250', min_amount: '-50', max_amount: '200' },
+        { currency: 'USD', cnt: '1', sum_amount: '100', min_amount: '100', max_amount: '100' },
       ],
     });
-    convertRowsToEur.mockResolvedValueOnce([
-      { amount_eur: 100 },
-      { amount_eur: -50 },
-      { amount_eur: 200 },
-    ]);
+    // Three convertRowsToEur calls (sum, then min, then max), each [EUR, USD].
+    convertRowsToEur
+      .mockResolvedValueOnce([{ amount_eur: 250 }, { amount_eur: 90 }]) // sum: 250 + 90 = 340
+      .mockResolvedValueOnce([{ amount_eur: -50 }, { amount_eur: 90 }]) // min over all = -50
+      .mockResolvedValueOnce([{ amount_eur: 200 }, { amount_eur: 90 }]); // max over all = 200
 
     const r = await statisticsRepository.getTransactionSummary();
+    expect(convertRowsToEur).toHaveBeenCalledTimes(3);
     expect(r).toEqual({
-      total_count: 3,
-      total_amount: 250,
-      average: 83.33,
+      total_count: 3,        // 2 + 1
+      total_amount: 340,     // 250 + 90
+      average: 113.33,       // 340 / 3
       min: -50,
       max: 200,
     });
+  });
+
+  it('aggregates in SQL grouped by currency', async () => {
+    query.mockResolvedValueOnce({ rows: [] });
+    await statisticsRepository.getTransactionSummary();
+    const [sql] = query.mock.calls[0];
+    expect(sql).toContain('GROUP BY t.currency');
+    expect(sql).toContain('SUM(t.amount)');
+    expect(sql).toContain('MIN(t.amount)');
+    expect(sql).toContain('MAX(t.amount)');
+    expect(sql).toContain('COUNT(*)');
   });
 
   it('applies bankAccount, startDate, endDate filters in SQL', async () => {

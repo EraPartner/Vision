@@ -3,11 +3,11 @@ title: Materialized Views & Aggregation Strategy
 type: performance
 status: active
 date: 2026-04-25
-updated: 2026-05-12
-tags: [performance, database, materialized-views, aggregations, optimization, phase-1, migration-0035]
-description: PostgreSQL materialized views and trigger-maintained tables for pre-computing dashboard aggregations. Phase 1 aggregation refactor, consolidated in migration 0035.
+updated: 2026-06-01
+tags: [performance, database, materialized-views, aggregations, optimization, phase-1, migration-0035, migration-0038, mv-recipient-monthly-drop, adr-068]
+description: PostgreSQL materialized views and trigger-maintained tables for pre-computing dashboard aggregations. Phase 1 aggregation refactor consolidated in migration 0035. June 2026 (ADR-068): mv_recipient_monthly dropped via migration 0038 — recipient-insights aggregation served entirely from agg_recipient_totals trigger table.
 aliases: [materialized views, pre-computed queries, dashboard optimization, aggregation tables, trigger-maintained tables]
-related_code: ["apps/node-backend/src/services/aggregationRefresh.js", "apps/node-backend/src/services/materializedViewService.js", "alembic/versions/0035_add_recipient_aggregations.py"]
+related_code: ["apps/node-backend/src/services/aggregationRefresh.js", "apps/node-backend/src/services/materializedViewService.js", "alembic/versions/0035_add_recipient_aggregations.py", "alembic/versions/0038_drop_mv_recipient_monthly.py"]
 ---
 
 # Materialized Views & Aggregation Strategy
@@ -95,24 +95,18 @@ Running totals per bank account.
 
 ### Phase 1 Views (Aggregation Refactor)
 
-#### mv_recipient_monthly
+#### mv_recipient_monthly — DROPPED (June 2026, ADR-068)
 
-Pre-computed monthly aggregates per recipient per currency. Rolls up sub-recipients under a primary recipient when `primary_recipient_id` is set.
+> [!warning] Removed
+> `mv_recipient_monthly` was dropped by migration `0038_drop_mv_recipient_monthly.py`. **Do not reference this view in new code.**
 
-**Data retained:** Last 24 months (older totals available from `agg_recipient_totals`)
+**Reason:** The view was never read by application code after the trigger-maintained `agg_recipient_totals` table was introduced. It added write-amplification (every transaction mutation triggered a concurrent MV refresh) with no query serving it. The `aggregationRefresh.js` service no longer refreshes it.
 
-**Key columns:**
-- `month_start` — first day of the month (bucketed in `APP_TIMEZONE`)
-- `recipient_id` — rolled up to primary recipient
-- `currency` — ISO currency code
-- `transaction_count`, `total_income`, `total_spending`, `net_amount`
+**Downgrade path:** The `downgrade()` function in `0038` recreates the 24-month version of the view for safe rollback.
 
-**Use case:** Recipient insights page, top-recipient widgets
+**What replaced it:** Recipient-insights aggregation is served entirely from `agg_recipient_totals` (trigger-maintained, real-time). The aggregation envelope `source` field was corrected from `'mv'` to `'live'` to reflect this.
 
-**Timezone handling:** Buckets transactions in `APP_TIMEZONE` (not UTC) via:
-```sql
-date_trunc('month', t.date AT TIME ZONE 'Europe/Brussels')
-```
+See [[docs/adr/068-drop-mv-recipient-monthly|ADR-068]] for the full decision record.
 
 ---
 
@@ -180,7 +174,7 @@ await refreshAggregations();
 
 **What it does:**
 - Delegates legacy views (`mv_monthly_summary`, `mv_category_totals`, etc.) to `materializedViewService.refreshMaterializedViews()`
-- Refreshes Phase-1 views (`mv_recipient_monthly`) in parallel
+- `mv_recipient_monthly` is no longer refreshed — it was dropped in migration `0038` (June 2026, ADR-068)
 - No-op for trigger-maintained tables (they update automatically)
 
 ### Debounced Refresh (Single-Row Mutations)

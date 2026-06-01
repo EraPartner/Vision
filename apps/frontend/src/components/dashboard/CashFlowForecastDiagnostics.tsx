@@ -249,9 +249,6 @@ export function CashFlowForecastDiagnostics({
                                     );
                                 })}
                         </div>
-                        <p className="mt-3 text-[11px] text-muted-foreground italic">
-                            {t("cashflow.diagnostics.weightsReadOnly")}
-                        </p>
                     </section>
                 )}
             </SheetContent>

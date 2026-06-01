@@ -29,6 +29,16 @@ vi.mock('../src/config/logger.js', () => ({
 
 import { logger } from '../src/config/logger.js';
 
+// YYYY-MM period helpers. Derive the previous month from the first-of-month in
+// UTC so end-of-month run dates (the 29th–31st) don't roll `setMonth(-1)` into
+// the wrong month and collapse current==prev — which made these MoM tests
+// fail only on certain calendar days.
+const currentPeriod = () => new Date().toISOString().substring(0, 7);
+const prevPeriod = () => {
+  const now = new Date();
+  return new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth() - 1, 1)).toISOString().substring(0, 7);
+};
+
 describe('InfoRepository', () => {
   beforeEach(() => {
     vi.clearAllMocks();
@@ -323,9 +333,9 @@ describe('InfoRepository', () => {
           // MoM comparison query
           return {
             rows: [
-              { recipient_id: 1, recipient_name: 'Amazon', period: new Date().toISOString().substring(0, 7), currency: 'EUR', abs_amount: '120.00' },
-              { recipient_id: 1, recipient_name: 'Amazon', period: (() => { const d = new Date(); d.setMonth(d.getMonth() - 1); return d.toISOString().substring(0, 7); })(), currency: 'EUR', abs_amount: '80.00' },
-              { recipient_id: 2, recipient_name: 'Walmart', period: new Date().toISOString().substring(0, 7), currency: 'EUR', abs_amount: '60.00' },
+              { recipient_id: 1, recipient_name: 'Amazon', period: currentPeriod(), currency: 'EUR', abs_amount: '120.00' },
+              { recipient_id: 1, recipient_name: 'Amazon', period: prevPeriod(), currency: 'EUR', abs_amount: '80.00' },
+              { recipient_id: 2, recipient_name: 'Walmart', period: currentPeriod(), currency: 'EUR', abs_amount: '60.00' },
             ]
           };
         }
@@ -333,8 +343,8 @@ describe('InfoRepository', () => {
           // Current/previous month keys derived in-DB.
           return {
             rows: [{
-              current_period: new Date().toISOString().substring(0, 7),
-              prev_period: (() => { const d = new Date(); d.setMonth(d.getMonth() - 1); return d.toISOString().substring(0, 7); })(),
+              current_period: currentPeriod(),
+              prev_period: prevPeriod(),
             }],
           };
         }
@@ -378,13 +388,13 @@ describe('InfoRepository', () => {
         if (callIdx === 1) return { rows: [{ recipient_id: 1, recipient_name: 'Shop', tx_count: 5, total_abs_amount: '200', first_seen: '2025-01-01', last_seen: '2026-03-01', currency: 'EUR' }] };
         if (callIdx === 2) return {
           rows: [
-            { recipient_id: 1, recipient_name: 'Shop', period: new Date().toISOString().substring(0, 7), currency: 'EUR', abs_amount: '50' },
+            { recipient_id: 1, recipient_name: 'Shop', period: currentPeriod(), currency: 'EUR', abs_amount: '50' },
           ]
         };
         if (callIdx === 3) return {
           rows: [{
-            current_period: new Date().toISOString().substring(0, 7),
-            prev_period: (() => { const d = new Date(); d.setMonth(d.getMonth() - 1); return d.toISOString().substring(0, 7); })(),
+            current_period: currentPeriod(),
+            prev_period: prevPeriod(),
           }],
         };
         return { rows: [] };
@@ -516,7 +526,8 @@ describe('InfoRepository', () => {
       expect(fallbackSql).toContain('filtered_transactions AS');
       expect(fallbackSql).toContain('LEFT JOIN recipients r ON t.recipient_id = r.id');
       expect(fallbackSql).toContain('COALESCE(t.category_id, r.default_category_id) NOT IN ($1,$2)');
-      expect(fallbackSql).toContain('LEFT JOIN filtered_transactions t ON t.date >= m.month_start');
+      // Aggregated per (date,currency) in the `daily` CTE, then joined by month.
+      expect(fallbackSql).toContain('LEFT JOIN daily d ON d.date >= m.month_start');
     });
   });
 
@@ -600,7 +611,8 @@ describe('InfoRepository', () => {
 
       query
         .mockResolvedValueOnce({ rows: [] })
-        .mockResolvedValueOnce({ rows: [{ amount: '-4', currency: 'EUR', date: '2026-01-01' }, { amount: '2', currency: 'EUR', date: '2026-01-02' }] });
+        // Grouped-by-currency aggregate: 2 EUR txns summing to -2, range [-4, 2].
+        .mockResolvedValueOnce({ rows: [{ currency: 'EUR', cnt: '2', sum_amount: '-2', min_amount: '-4', max_amount: '2' }] });
 
       const empty = await infoRepository.getTransactionSummary({ bankAccount: 'REV' });
       expect(empty).toEqual({ total_count: 0, total_amount: 0, average: 0, min: null, max: null });

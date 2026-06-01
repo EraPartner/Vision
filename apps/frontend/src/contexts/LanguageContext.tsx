@@ -38,6 +38,24 @@ export interface LanguageContextType {
     language: Language;
     setLanguage: (lang: Language) => void;
     t: (key: TranslationKey, vars?: Record<string, string | number>) => string;
+    /**
+     * Plural-aware translation. Resolves `${key}.${category}` where category is
+     * the Intl.PluralRules CLDR plural category for `count` in the active locale
+     * (e.g. `one` / `other`), falling back to `${key}.other` then `${key}`.
+     * `count` is always available as a `{count}` interpolation var.
+     */
+    tc: (key: TranslationKey, count: number, vars?: Record<string, string | number>) => string;
+}
+
+// Intl.PluralRules instances are not free to construct; cache one per locale.
+const pluralRulesCache = new Map<Language, Intl.PluralRules>();
+function getPluralRules(language: Language): Intl.PluralRules {
+    let rules = pluralRulesCache.get(language);
+    if (!rules) {
+        rules = new Intl.PluralRules(language);
+        pluralRulesCache.set(language, rules);
+    }
+    return rules;
 }
 
 const LanguageContext = createContext<LanguageContextType | undefined>(undefined);
@@ -93,9 +111,25 @@ export function LanguageProvider({ children, language, setLanguage }: LanguagePr
         [dicts, language]
     );
 
+    const tc = useCallback(
+        (key: TranslationKey, count: number, vars?: Record<string, string | number>): string => {
+            const dict = dicts[language];
+            const enDict = dicts['en'];
+            const category = getPluralRules(language).select(count);
+            const lookup = (cat: string) => dict?.[`${key}.${cat}`] ?? enDict?.[`${key}.${cat}`];
+            let text = lookup(category) ?? lookup('other') ?? dict?.[key] ?? enDict?.[key] ?? key;
+            const allVars: Record<string, string | number> = { count, ...vars };
+            for (const [k, v] of Object.entries(allVars)) {
+                text = text.replaceAll(`{${k}}`, String(v));
+            }
+            return text;
+        },
+        [dicts, language]
+    );
+
     const value = useMemo(
-        () => ({ language, setLanguage, t }),
-        [language, setLanguage, t]
+        () => ({ language, setLanguage, t, tc }),
+        [language, setLanguage, t, tc]
     );
 
     return (

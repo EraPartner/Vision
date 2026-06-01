@@ -3,10 +3,10 @@ title: Statistics Feature
 type: feature
 status: active
 date: 2026-04-24
-updated: 2026-04-28
-last_modified: 2026-04-28
-tags: [feature, statistics, analytics, charts, frontend, backend, refactor, phase-7, phase-13, sankey-flow, rolling-averages, pdf-export, year-selector, useMemo, drillthrough]
-description: Complete analytics and statistics system with per-graph exclusions, pivot tables with clickable drillthrough, year-over-year comparisons, saved custom charts, Sankey flow visualization, rolling average overlays, and PDF export. Phase 7 adds flow diagram, moving averages, and financial report export. Phase 13 adds pivot table drillthrough to filtered transaction list and multi-select export filters.
+updated: 2026-06-01
+last_modified: 2026-06-01
+tags: [feature, statistics, analytics, charts, frontend, backend, refactor, phase-7, phase-13, sankey-flow, rolling-averages, pdf-export, year-selector, useMemo, drillthrough, exclusion-filters, recipient-insights]
+description: Complete analytics and statistics system with per-graph exclusions, pivot tables with clickable drillthrough, year-over-year comparisons, saved custom charts, Sankey flow visualization, rolling average overlays, and PDF export. Phase 7 adds flow diagram, moving averages, and financial report export. Phase 13 adds pivot table drillthrough to filtered transaction list and multi-select export filters. June 2026: all-years Top Recipients chart now honours exclusion filters (bug fix).
 aliases: [stats, analytics, charts, pivot table, yearly comparison]
 related_code:
   - apps/frontend/src/pages/StatisticsPage.tsx
@@ -189,6 +189,9 @@ The page is organized into 6 tabs:
 - Top Recipients bar chart (horizontal, year-filterable)
 - Embedded `RecipientInsightsTab` component for MoM alerts
 
+> [!info] June 2026 — All-Years Top Recipients Exclusion Fix
+> The "all years" view of the Top Recipients chart previously ignored active category/recipient exclusion toggles. The per-year sub-query already used filtered data, but the all-years aggregate (`GET /api/aggregations/recipient-insights`) did not accept exclusion params. The endpoint now accepts `excluded_category_ids[]` and `excluded_recipient_ids[]`; `useStatistics.ts` fires a second filtered query (`recipientInsightsFilteredQuery`) when exclusions are active and passes its payload into `mapToStatisticsData`. The all-years and per-year charts now react consistently to exclusion toggles.
+
 ### Yearly Tab
 - Year-over-Year Comparison bar chart
 - Yearly Summary table (year, income, spending, net, transaction count)
@@ -302,10 +305,12 @@ The statistics feature relies on these backend endpoints:
 | `GET /api/transactions` | Fetch all transactions (paginated, with currency conversion) | [[apps/node-backend/src/routes/transactions.js]] |
 | `GET /api/categories` | Fetch all categories | [[apps/node-backend/src/routes/categories.js]] |
 | `GET /api/info/recurring-patterns` | Recurring pattern detection (used in Planned Payments) | [[apps/node-backend/src/routes/info.js]] |
-| `GET /api/aggregations/recipient-insights` | Merchant spending insights (Phase G: aggregations) | [[apps/node-backend/src/routes/aggregations.js]] |
+| `GET /api/aggregations/recipient-insights` | Merchant spending insights; now accepts `excluded_category_ids[]` / `excluded_recipient_ids[]` (June 2026 bug fix) | [[apps/node-backend/src/routes/aggregations.js]] |
 | `GET /api/info/exchange-rates` | Exchange rates for currency normalization | [[apps/node-backend/src/routes/info.js]] |
 
 **Phase G Migration (April 2026):** Recipient insights now use the aggregations endpoint. The apiClient method `getRecipientInsights()` transparently unwraps the aggregation envelope to maintain compatibility.
+
+**June 2026 — All-Years Exclusion Fix:** `useStatistics.ts` now issues a `recipientInsightsFilteredQuery` (keyed on `effectiveExcludedCategoryIds` and `settingsExcludedRecIds`) alongside the baseline unfiltered query. When `filteredEnabled` is true, the filtered payload is used for `topRecipients` in `mapToStatisticsData` so the "all years" bar chart reacts to exclusion toggles in the same way the per-year view does.
 
 ## Phase 13 Additions: Pivot Table Drillthrough (April 2026)
 

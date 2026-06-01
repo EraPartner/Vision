@@ -14,7 +14,6 @@ import { logger } from '../config/logger.js';
 import { runImportPipeline, commitImport } from '../services/importPipeline/index.js';
 import { ValidationError, NotFoundError, ConflictError } from '../middleware/errorHandler.js';
 import { createSseWriter } from '../lib/sse.js';
-// eslint-disable-next-line vision-local/no-repo-direct-from-route
 import {
   listBatches,
   getBatch,
@@ -23,9 +22,8 @@ import {
   overrideRecipient,
   overrideCategory,
   categoryExists,
-} from '../repositories/importBatchRepository.js';
-// eslint-disable-next-line vision-local/no-repo-direct-from-route
-import customParserConfigRepository from '../repositories/customParserConfigRepository.js';
+} from '../services/importBatchService.js';
+import customParserConfigRepository from '../services/customParserConfigService.js';
 import { refreshAggregations } from '../services/aggregationRefresh.js';
 
 const router = Router();

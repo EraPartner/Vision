@@ -3,14 +3,19 @@ title: Recipient Insights Feature
 type: feature
 status: active
 date: 2026-04-09
-tags: [feature, recipients, analytics, insights, frontend, merchant]
-description: Merchant/recipient spending analytics with KPI cards, month-over-month change alerts, and detailed spending tables
+updated: 2026-06-01
+last_modified: 2026-06-01
+tags: [feature, recipients, analytics, insights, frontend, merchant, exclusion-filters]
+description: Merchant/recipient spending analytics with KPI cards, month-over-month change alerts, and detailed spending tables. June 2026: the all-years Top Recipients chart now honours category/recipient exclusion filters via new optional params on GET /api/aggregations/recipient-insights.
 aliases: [merchant insights, spending insights, recipient analytics]
 related_code:
   - apps/frontend/src/pages/RecipientInsightsPage.tsx
   - apps/frontend/src/components/statistics/RecipientInsightsTab.tsx
-  - apps/node-backend/src/routes/info.js
-  - apps/node-backend/src/repositories/infoRepository.js
+  - apps/frontend/src/hooks/useStatistics.ts
+  - apps/frontend/src/lib/api/aggregations.ts
+  - apps/node-backend/src/routes/aggregations.js
+  - apps/node-backend/src/repositories/infoRepositoryRecipients.js
+  - apps/node-backend/src/services/calculations/aggregation/recipient.js
 ---
 
 # Recipient Insights Feature
@@ -68,6 +73,9 @@ Located at `[[apps/frontend/src/pages/RecipientInsightsPage.tsx]]`, the page con
 
 ## Exclusion Support
 
+> [!info] June 2026 — All-Years Chart Now Filtered
+> Prior to June 2026, `GET /api/aggregations/recipient-insights` accepted only `currency`. The "all years" Top Recipients chart embedded in the Statistics page therefore never reacted to category/recipient exclusion toggles — only the per-year sub-queries were filtered. The endpoint now accepts `excluded_category_ids[]` and `excluded_recipient_ids[]`, and `useStatistics.ts` issues a second filtered query (`recipientInsightsFilteredQuery`) when exclusions are active. The `mapToStatisticsData` function picks the filtered payload for `topRecipients` when available.
+
 The page respects the global exclusion settings:
 
 ```typescript
@@ -75,7 +83,11 @@ const exclusionsApply = settings.exclusionScope === 'everywhere' || settings.exc
 const excludedRecipientIds = new Set(exclusionsApply ? settings.excludedRecipientIds : []);
 ```
 
-When exclusions apply, filtered-out recipients are removed from both `topMerchants` and `monthOverMonth` arrays. A badge shows the count of excluded recipients.
+When exclusions apply, filtered-out recipients are removed from both `topMerchants` and `monthOverMonth` arrays in the "all years" chart. The per-year breakdown uses `getAggregationRecipientByYear` which already accepted exclusion params. A badge shows the count of excluded recipients.
+
+**Backend exclusion clauses (June 2026):**
+- Category exclusion: `COALESCE(t.category_id, r.default_category_id) != ALL($excluded_category_ids)`
+- Recipient exclusion: `COALESCE(pr.id, r.id) != ALL($excluded_recipient_ids)` (resolves cluster roots via `primary_recipient_id`)
 
 ## Pagination Strategy
 
@@ -97,24 +109,41 @@ The `RecipientInsightsTab` component (`[[apps/frontend/src/components/statistics
 
 ## Query Configuration
 
+`useStatistics.ts` manages two queries for recipient insights (June 2026):
+
 ```typescript
+// Unfiltered — always active
 useQuery({
-  queryKey: ["recipient-insights", targetCurrency],
-  queryFn: () => apiClient.getRecipientInsights({ currency: targetCurrency }),
-  staleTime: 60000,
-})
+  queryKey: ['aggregations', 'recipient-insights', targetCurrency],
+  queryFn: () => getAggregationRecipientInsights({ currency: targetCurrency }),
+  staleTime: 60_000,
+});
+
+// Filtered — only when exclusions are active and isReady
+useQuery({
+  queryKey: ['aggregations', 'recipient-insights', 'filtered',
+             targetCurrency, effectiveExcludedCategoryIds, settingsExcludedRecIds],
+  queryFn: () =>
+    getAggregationRecipientInsights({
+      currency: targetCurrency,
+      excluded_category_ids: effectiveExcludedCategoryIds,
+      excluded_recipient_ids: settingsExcludedRecIds,
+    }),
+  enabled: filteredEnabled,
+  staleTime: 60_000,
+});
 ```
 
-- **Query key**: `["recipient-insights", targetCurrency]`
 - **Stale time**: 60 seconds
 - **Currency-aware**: Results are normalized to the target currency
+- **Filtered query key** includes both excluded-category and excluded-recipient arrays so exclusion changes invalidate the cache
 
 ## Backend Implementation
 
 > [!info] Phase G Migration (April 2026)
 > The legacy `/api/info/recipient-insights` endpoint was removed. This feature now uses `GET /api/aggregations/recipient-insights` via [[docs/api/aggregations|Aggregations API]].
 
-The endpoint `GET /api/aggregations/recipient-insights` in `[[apps/node-backend/src/routes/aggregations.js]]` delegates to `infoRepository.getRecipientInsights(currency)`, which performs SQL aggregations to compute:
+The endpoint `GET /api/aggregations/recipient-insights` in `[[apps/node-backend/src/routes/aggregations.js]]` delegates to `infoRepositoryRecipients.getRecipientInsights(targetCurrency, { excludedCategoryIds, excludedRecipientIds })` (via `aggregation/recipient.js` `computeRecipientInsights`), which performs SQL aggregations to compute:
 
 1. **Top merchants**: SUM of expenses grouped by recipient, ordered by total spend descending
 2. **Month-over-month changes**: Compares current month vs previous month spending per recipient

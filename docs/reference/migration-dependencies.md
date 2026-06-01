@@ -3,9 +3,9 @@ title: Migration Dependency Graph
 type: reference
 status: active
 date: 2026-03-31
-updated: 2026-05-12
-tags: [reference, database, migrations, dependencies, alembic, migration-0035, aggregations]
-description: Migration dependency chain and grouping for the Vision database schema. Latest (0035): add_recipient_aggregations consolidates Phase 1 aggregation artifacts.
+updated: 2026-06-01
+tags: [reference, database, migrations, dependencies, alembic, migration-0035, migration-0037, migration-0038, aggregations, custom-parser-configs, mv-recipient-monthly-drop, adr-068]
+description: Migration dependency chain and grouping for the Vision database schema. Latest active chain is 0001–0038. 0037 adds custom_parser_configs table (named CSV parsers, ADR-066). 0038 drops mv_recipient_monthly materialized view (ADR-068).
 aliases: [migration dependencies, migration chain, migration groups, alembic chain]
 ---
 
@@ -16,7 +16,7 @@ aliases: [migration dependencies, migration chain, migration groups, alembic cha
 
 > [!warning] Two migration trees
 > The repository keeps two parallel Alembic trees:
-> - **`alembic/versions/`** — the **active** chain (0001-0036, currently 36 revisions). Renumbered in early 2026 around the Phase-1 aggregation work.
+> - **`alembic/versions/`** — the **active** chain (0001-0038, currently 38 revisions). Renumbered in early 2026 around the Phase-1 aggregation work.
 > - **`alembic/legacy_versions/`** — the **archived** pre-renumbering chain (0001-0032 + 5 hash-named revisions, 38 files). Kept for history and for re-stamping older deployments; not applied on fresh installs.
 >
 > The chain summary below predates the renumbering — treat it as historical context for the legacy tree. For the active chain, `bun run db:history` is authoritative. Notable recent revisions in `alembic/versions/`:
@@ -24,6 +24,8 @@ aliases: [migration dependencies, migration chain, migration groups, alembic cha
 > - **0031** — `add_transaction_tags` (orthogonal-dimension tags, ADR-052)
 > - **0035** — `add_recipient_aggregations` (Phase 1 aggregations consolidated)
 > - **0036** — `add_transactions_tx_hash` (May 2026 monetary precision + deduplication audit, ADR-060)
+> - **0037** — `add_custom_parser_configs` (saved named custom CSV parsers, ADR-066)
+> - **0038** — `drop_mv_recipient_monthly` (drops the unread recipient monthly MV; downgrade recreates the 24-month version; ADR-068)
 
 ## Migration Chain (legacy tree — historical reference)
 

@@ -2,7 +2,7 @@ import { useState } from "react";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { Upload } from "lucide-react";
 import { PageHeader } from "@/components/shared/PageHeader";
-import { ImportHistoryCard } from "@/components/import/ImportHistoryCard";
+import { ImportHistoryCard } from "@/features/imports/ImportHistoryCard";
 import { TransactionImportCard } from "@/features/imports/TransactionImportCard";
 import { RecipientsImportCard } from "@/features/imports/RecipientsImportCard";
 import { CategoriesImportCard } from "@/features/imports/CategoriesImportCard";

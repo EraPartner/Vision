@@ -78,7 +78,7 @@ aliases: [diagram index, UML diagrams, plantuml diagrams]
 A single-page HTML companion to these PlantUML diagrams — click a flow on the left, see the path light up, step through it, and read the payload + annotation at each hop.
 
 - **File:** `docs/flow-visualizer.html` — open it directly in any browser (no build step, no network calls).
-- **Coverage:** 46 components / 15 flows including transactions, imports, portfolio, AI chat, backup, admin, build/release, dev observability, sign-in.
+- **Coverage:** 51 components / 21 flows including transactions, imports, portfolio, AI chat, backup, admin, build/release, dev observability, sign-in, custom CSV parsers, cashflow forecast, app update.
 - **Extending:** edit the JSON block at the bottom of the HTML (schema documented inline).
 - **Shortcuts:** ←/→ step, Space play, R restart, A show all, Esc clear.
 

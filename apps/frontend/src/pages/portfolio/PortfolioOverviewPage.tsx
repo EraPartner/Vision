@@ -44,7 +44,7 @@ const COLORS = [
 ];
 
 export default function PortfolioOverviewPage() {
-  const { t } = useLanguage();
+  const { t, tc } = useLanguage();
   const { appSettings } = useAppSettings();
   const targetCurrency = appSettings.defaultCurrency || 'EUR';
   const locale = numberFormatToLocale(appSettings.numberFormat);
@@ -278,7 +278,7 @@ export default function PortfolioOverviewPage() {
                   totalValue={totalPortfolioValueInTarget}
                   labels={{
                     title: t('portfolio.totalValue'),
-                    investments: t('portfolio.investments', { count: String(summaries.length) }),
+                    investments: tc('portfolio.investments', summaries.length),
                     assetSplit: t('portfolio.allocationByClass'),
                     bestPerformer: t('portfolio.bestPerformer'),
                     worstPerformer: t('portfolio.worstPerformer'),

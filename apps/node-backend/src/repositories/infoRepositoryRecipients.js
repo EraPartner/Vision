@@ -18,7 +18,21 @@ export const recipientInsightsRepository = {
    * - spending frequency & average per recipient
    * - month-over-month comparison alerts ("You spent X% more at …")
    */
-  async getRecipientInsights(targetCurrency = 'EUR') {
+  async getRecipientInsights(targetCurrency = 'EUR', { excludedCategoryIds = [], excludedRecipientIds = [] } = {}) {
+    // Same exclusion semantics as the dashboard / statistics endpoints: drop
+    // hidden categories (by effective category) and excluded recipients (rolled
+    // up to the primary recipient). Built once and reused by both queries below
+    // since neither carries any other bound parameters.
+    const validCatIds = (excludedCategoryIds || []).filter(id => Number.isInteger(id) && id > 0 && id < 2147483647);
+    const validRecIds = (excludedRecipientIds || []).filter(id => Number.isInteger(id) && id > 0 && id < 2147483647);
+    const params = [];
+    const catExclude = validCatIds.length > 0
+      ? `AND COALESCE(t.category_id, r.default_category_id) NOT IN (${validCatIds.map(id => { params.push(id); return `$${params.length}`; }).join(',')})`
+      : '';
+    const recExclude = validRecIds.length > 0
+      ? `AND COALESCE(pr.id, r.id) NOT IN (${validRecIds.map(id => { params.push(id); return `$${params.length}`; }).join(',')})`
+      : '';
+
     const topRawResult = await query(`
       SELECT
         COALESCE(pr.name, r.name)   AS recipient_name,
@@ -33,8 +47,10 @@ export const recipientInsightsRepository = {
       LEFT JOIN recipients pr ON r.primary_recipient_id = pr.id
       WHERE t.amount < 0
         AND t.is_active = true
+        ${catExclude}
+        ${recExclude}
       GROUP BY COALESCE(pr.id, r.id), COALESCE(pr.name, r.name), t.currency
-    `);
+    `, params);
 
     const topConverted = await convertRowsToEur(
       mapRowsForAmountConversion(topRawResult.rows, 'total_abs_amount', false),
@@ -84,8 +100,10 @@ export const recipientInsightsRepository = {
       WHERE t.amount < 0
         AND t.is_active = true
         AND t.date >= (DATE_TRUNC('month', CURRENT_DATE) - INTERVAL '1 month')
+        ${catExclude}
+        ${recExclude}
       GROUP BY COALESCE(pr.id, r.id), COALESCE(pr.name, r.name), TO_CHAR(t.date, 'YYYY-MM'), t.currency
-    `);
+    `, params);
 
     const momConverted = await convertRowsToEur(
       mapRowsForAmountConversion(momRawResult.rows, 'abs_amount', false),

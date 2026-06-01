@@ -3,8 +3,7 @@
  */
 
 import { Router } from 'express';
-// eslint-disable-next-line vision-local/no-repo-direct-from-route
-import splitRepository from '../repositories/splitRepository.js';
+import splitRepository from '../services/splitService.js';
 import { validateIdParam } from '../middleware/validation.js';
 import { NotFoundError, ValidationError } from '../middleware/errorHandler.js';
 import { escapeCsvValue } from '../lib/csv.js';

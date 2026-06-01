@@ -7,7 +7,8 @@ import { RecurringDetectionPanel } from "@/components/planned/RecurringDetection
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { DataTable } from "@/components/shared/DataTable";
+import { VirtualDataTable } from "@/components/shared/VirtualDataTable";
+import { toast } from "sonner";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import PlannedPaymentForm from "@/components/planned/PlannedPaymentForm";
 import { LinkTransactionDialog } from "@/components/planned/LinkTransactionDialog";
@@ -131,7 +132,7 @@ export default function PlannedPaymentsPage() {
       key: "is_executed",
       header: "",
       editable: false,
-      className: "w-12",
+      defaultWidth: 52,
       render: (row: TableRow) => (
         <Button
           variant="ghost"
@@ -153,9 +154,11 @@ export default function PlannedPaymentsPage() {
     },
     {
       key: "name",
+      // Flexible like the category column: name + category share the leftover
+      // width so neither is cramped while the rest stay sized to their content.
       header: t('plannedPage.col.payment'),
       editable: false,
-      defaultWidth: 180,
+      minWidth: 180,
       render: (row: TableRow) => (
         <div className="flex flex-col gap-0.5">
           <div className={`font-medium flex items-center gap-2 ${!row.is_active ? "text-muted-foreground line-through" :
@@ -243,9 +246,12 @@ export default function PlannedPaymentsPage() {
     },
     {
       key: "category",
+      // No defaultWidth: this is the flexible column, so it absorbs the
+      // remaining table width (auto-fit) — category labels are the longest cell
+      // and were overflowing the old fixed 120px.
       header: t('plannedPage.col.category'),
       editable: false,
-      defaultWidth: 120,
+      minWidth: 140,
       render: (row: TableRow) => {
         const categoryLabel = typeof row.category === "string"
           ? row.category
@@ -264,7 +270,7 @@ export default function PlannedPaymentsPage() {
       key: "is_active",
       header: t('plannedPage.col.status'),
       editable: false,
-      defaultWidth: 100,
+      defaultWidth: 130,
       render: (row: TableRow) => (
         <Button
           variant="ghost"
@@ -277,6 +283,7 @@ export default function PlannedPaymentsPage() {
               await toggleActive(row.id);
             } catch (err) {
               logger.error("Failed to toggle status:", err);
+              toast.error(t('plannedPage.toggleFailed'));
             } finally {
               setActionLoading(false);
             }
@@ -292,7 +299,7 @@ export default function PlannedPaymentsPage() {
       key: "actions",
       header: "",
       editable: false,
-      className: "w-20",
+      defaultWidth: 96,
       render: (row: TableRow) => (
         <div className="flex items-center gap-1">
           <Button
@@ -324,6 +331,7 @@ export default function PlannedPaymentsPage() {
                   await deletePayment(row.id);
                 } catch (err) {
                   logger.error("Failed to delete payment:", err);
+                  toast.error(t('plannedPage.deleteFailed'));
                 } finally {
                   setActionLoading(false);
                 }
@@ -350,7 +358,7 @@ export default function PlannedPaymentsPage() {
       setFormOpen(false);
     } catch (err) {
       logger.error("Failed to save payment:", err);
-      alert(t('plannedPage.saveFailed'));
+      toast.error(t('plannedPage.saveFailed'));
     } finally {
       setActionLoading(false);
     }
@@ -463,7 +471,7 @@ export default function PlannedPaymentsPage() {
 
         <RecurringDetectionPanel />
 
-        <DataTable
+        <VirtualDataTable
           title={t('plannedPage.tableTitle')}
           subtitle={t('plannedPage.tableSubtitle', { n: payments.length })}
           columns={columns}

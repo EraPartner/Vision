@@ -50,6 +50,8 @@ export function getAggregationCategoryBreakdown(params?: {
 
 export function getAggregationRecipientInsights(params?: {
     currency?: string;
+    excluded_category_ids?: number[];
+    excluded_recipient_ids?: number[];
 }): Promise<AggregationEnvelope<{
     topMerchants: Array<{
         recipientId: number;
@@ -68,7 +70,8 @@ export function getAggregationRecipientInsights(params?: {
         changePercent: number;
     }>;
 }>> {
-    return requestWithQuery('/api/aggregations/recipient-insights', params);
+    const q = buildExclusionQuery(params);
+    return apiRequest(`/api/aggregations/recipient-insights${q ? `?${q}` : ''}`);
 }
 
 export function getAggregationCashflowComparison(params?: {

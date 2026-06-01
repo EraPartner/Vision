@@ -228,6 +228,53 @@ describe('portfolioPerformanceSnapshotService', () => {
     expect(snapshots[1].return_pct).toBeCloseTo(33.333, 2);
   });
 
+  it('applies stock splits to historical units so value tracks the live summary', async () => {
+    // 10 units bought at 10; 2:1 split on day 2 → 20 units, price halves to 5.
+    // Value must stay 100 across the split, not drop to 50 (the pre-fix bug).
+    mockSnapshotQueries({
+      investments: [{ id: 1, currency: 'EUR', current_price: 5, asset_class: 'stock' }],
+      transactions: [
+        { investment_id: 1, day: '2026-01-01', type: 'buy', amount: 100, units: 10, currency: 'EUR', fx_rate_to_eur: null },
+        { investment_id: 1, day: '2026-01-02', type: 'split', amount: 0, units: 20, currency: 'EUR', fx_rate_to_eur: null },
+      ],
+      prices: [
+        { investment_id: 1, day: '2026-01-01', close_price: 10 },
+        { investment_id: 1, day: '2026-01-02', close_price: 5 },
+        { investment_id: 1, day: '2026-01-03', close_price: 5 },
+      ],
+    });
+
+    const snapshots = await computeAndStoreSnapshots('EUR');
+
+    expect(snapshots).toHaveLength(3);
+    expect(snapshots[0].value).toBe(100); // 10 × 10
+    expect(snapshots[1].value).toBe(100); // 20 × 5 (split applied)
+    expect(snapshots[2].value).toBe(100); // 20 × 5
+    expect(snapshots[0].invested).toBe(100);
+    expect(snapshots[2].invested).toBe(100); // split leaves invested unchanged
+  });
+
+  it('reduces invested on return_of_capital without changing units/value', async () => {
+    mockSnapshotQueries({
+      investments: [{ id: 1, currency: 'EUR', current_price: 10, asset_class: 'stock' }],
+      transactions: [
+        { investment_id: 1, day: '2026-01-01', type: 'buy', amount: 100, units: 10, currency: 'EUR', fx_rate_to_eur: null },
+        { investment_id: 1, day: '2026-01-02', type: 'return_of_capital', amount: 30, units: 0, currency: 'EUR', fx_rate_to_eur: null },
+      ],
+      prices: [
+        { investment_id: 1, day: '2026-01-01', close_price: 10 },
+        { investment_id: 1, day: '2026-01-02', close_price: 10 },
+        { investment_id: 1, day: '2026-01-03', close_price: 10 },
+      ],
+    });
+
+    const snapshots = await computeAndStoreSnapshots('EUR');
+
+    expect(snapshots[0].invested).toBe(100);
+    expect(snapshots[1].invested).toBe(70); // 100 − 30 returned
+    expect(snapshots[1].value).toBe(100); // units unchanged → value unchanged
+  });
+
   it('converts a foreign-currency holding with no stored fx rate at each day\'s historical rate', async () => {
     // USD holding, no fx_rate_to_eur on the buy. USD/EUR moves 0.80 → 0.85 → 0.90
     // (latest). System time is 2026-01-03, so 01-03 is the latest day.

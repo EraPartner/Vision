@@ -71,6 +71,8 @@ router.get('/category-breakdown', async (req, res) => {
 router.get('/recipient-insights', async (req, res) => {
   const { data, meta } = await computeRecipientInsights({
     targetCurrency: getTargetCurrency(req),
+    excludedCategoryIds: parseNumericArrayQueryParam(req.query.excluded_category_ids),
+    excludedRecipientIds: parseNumericArrayQueryParam(req.query.excluded_recipient_ids),
   });
   res.ok({ data, meta });
 });

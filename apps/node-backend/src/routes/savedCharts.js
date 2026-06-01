@@ -3,8 +3,7 @@
  */
 
 import { Router } from 'express';
-// eslint-disable-next-line vision-local/no-repo-direct-from-route
-import savedChartsRepository from '../repositories/savedChartsRepository.js';
+import savedChartsRepository from '../services/savedChartsService.js';
 import { validateIntArray } from '../middleware/validation.js';
 import { NotFoundError, ValidationError } from '../middleware/errorHandler.js';
 

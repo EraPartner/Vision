@@ -57,9 +57,10 @@ The monolithic `ImportPage.tsx` was decomposed into `apps/frontend/src/features/
 - Callback increments `historyKey`, forcing `ImportHistoryCard` to refetch history
 - Avoids exposing `setHistoryKey` to child components
 
-**Existing Imports:**
-- `ImportHistoryCard` remains in `@/components/import/ImportHistoryCard` (not moved to features folder)
-- Re-imported by `ImportPage` and composed alongside feature components
+**Existing Imports (June 2026 update):**
+- `ImportHistoryCard` and `CsvColumnMapper` have been moved from `@/components/import/` to `apps/frontend/src/features/imports/` to co-locate all import-related UI within the feature module.
+- `ImportPage` imports both from `@/features/imports/`.
+- `components/import/` no longer exists as a source directory.
 
 ### Benefits
 
@@ -430,7 +431,7 @@ The Import Page now features an interactive visual CSV column mapper for flexibl
 
 ### Implementation
 - **Hook**: [[apps/frontend/src/hooks/useCsvPreview.ts]] — handles CSV parsing, header extraction, preview row generation
-- **Component**: [[apps/frontend/src/components/import/CsvColumnMapper.tsx]] — UI for dropdown mapping and preview display
+- **Component**: [[apps/frontend/src/features/imports/CsvColumnMapper.tsx]] — UI for dropdown mapping and preview display (moved from `components/import/` in June 2026)
 - **Integration**: Replaces 4 inline text inputs in [[apps/frontend/src/pages/ImportPage.tsx]]; separator field moved above mapper
 - **i18n**: New keys: `csvParsing`, `csvParseError`, `csvPreviewTitle`, `noMapping` (en + nl translations)
 

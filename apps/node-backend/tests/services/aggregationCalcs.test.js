@@ -107,11 +107,14 @@ describe('computeCategoryBreakdown', () => {
 });
 
 describe('computeRecipientInsights', () => {
-  it('returns mv-sourced envelope', async () => {
+  it('returns a live-sourced envelope (getRecipientInsights is a live scan)', async () => {
     infoRepository.getRecipientInsights.mockResolvedValue({ top_recipients: [] });
     const env = await computeRecipientInsights({ targetCurrency: 'EUR' });
-    expect(infoRepository.getRecipientInsights).toHaveBeenCalledWith('EUR');
-    expectEnvelope(env, { source: 'mv' });
+    expect(infoRepository.getRecipientInsights).toHaveBeenCalledWith('EUR', {
+      excludedCategoryIds: [],
+      excludedRecipientIds: [],
+    });
+    expectEnvelope(env, { source: 'live' });
   });
 });
 

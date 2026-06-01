@@ -3,8 +3,8 @@ title: Environment Variables Reference
 type: reference
 status: active
 date: 2026-05-23
-updated: 2026-04-25
-tags: [reference, environment, configuration, deployment, docker, admin-auth]
+updated: 2026-06-01
+tags: [reference, environment, configuration, deployment, docker, admin-auth, rate-limiting, trusted-proxies, dev-mode]
 description: Complete reference of all environment variables used by the Vision application
 aliases: [env vars, environment variables, .env, configuration, env]
 ---
@@ -45,6 +45,10 @@ aliases: [env vars, environment variables, .env, configuration, env]
 | `IMPORT_PIPELINE_V2` | `false` | No | Gate for import pipeline v2 | [[apps/node-backend/src/config/env.js\|env.js]] |
 | `ATTACHMENTS_DIR` | `./data/attachments` | No | Filesystem root for receipt attachments (Phase 5A) | [[apps/node-backend/src/config/env.js\|env.js]] |
 | `ATTACHMENT_MAX_SIZE_MB` | `10` | No | Per-file upload ceiling in MB | [[apps/node-backend/src/config/env.js\|env.js]] |
+| `RATE_LIMIT_GLOBAL_MAX` | `1000` | No | Max requests per window for the app-wide baseline limiter mounted on `/api`. Per-route limiters stack on top. | [[apps/node-backend/src/middleware/rateLimiter.js\|rateLimiter.js]], [[apps/node-backend/src/config/env.js\|env.js]] |
+| `RATE_LIMIT_GLOBAL_WINDOW_MS` | `60000` | No | Rolling window size (ms) for `globalRateLimiter`. Default 60 s. | [[apps/node-backend/src/middleware/rateLimiter.js\|rateLimiter.js]], [[apps/node-backend/src/config/env.js\|env.js]] |
+| `TRUSTED_PROXIES` | _(unset)_ | No | Comma-separated IP addresses or CIDR ranges trusted for `X-Forwarded-For`. When unset the client IP is keyed on the raw socket address. Use this when running behind a reverse proxy — set to the proxy's IP (e.g. `192.168.1.1,10.0.0.0/8`). Validated by `ipMatchesRule()` helper. | [[apps/node-backend/src/middleware/rateLimiter.js\|rateLimiter.js]], [[apps/node-backend/src/config/config.js\|config.js]] |
+| `VISION_DEV` | _(unset)_ | No | When `true`, enables dev-only bypasses: rate-limit skipping and wildcard CORS reflection. Previously controlled by `ENVIRONMENT=development`; now explicit and fail-safe. The backend `dev` npm script sets this automatically. Do **not** set in production. | [[apps/node-backend/src/config/config.js\|config.js]], [[apps/node-backend/src/main.js\|main.js]] |
 
 ## AI Chat / Ollama
 

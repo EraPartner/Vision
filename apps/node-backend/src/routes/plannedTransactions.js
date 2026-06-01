@@ -6,8 +6,7 @@
 
 import { Router } from 'express';
 import { query as dbQuery } from '../database/connection.js';
-// eslint-disable-next-line vision-local/no-repo-direct-from-route
-import plannedTransactionRepository from '../repositories/plannedTransactionRepository.js';
+import plannedTransactionRepository from '../services/plannedTransactionService.js';
 import { validateIdParam } from '../middleware/validation.js';
 import { rateLimiter } from '../middleware/rateLimiter.js';
 import { generateLoanRepaymentSchedule } from '../services/calculations/loanSchedule.js';

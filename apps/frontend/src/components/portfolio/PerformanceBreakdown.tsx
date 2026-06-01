@@ -46,7 +46,7 @@ function getHeatColor(val: number | null, maxAbsPct: number): string {
 }
 
 export default function PerformanceBreakdown({ heatmapData, breakdownSummary }: Props) {
-    const { t, language } = useLanguage();
+    const { t, tc, language } = useLanguage();
     const { appSettings } = useAppSettings();
     const locale = numberFormatToLocale(appSettings.numberFormat);
     const defaultCurrency = appSettings.defaultCurrency || "EUR";
@@ -108,9 +108,7 @@ export default function PerformanceBreakdown({ heatmapData, breakdownSummary }: 
                             <div className="flex items-center justify-between mb-2">
                                 <span className="text-sm font-semibold text-muted-foreground">{label}</span>
                                 <span className="text-xs text-muted-foreground">
-                                    {count === 1
-                                        ? t('performance.holdings', { count: String(count) })
-                                        : t('performance.holdingsPlural', { count: String(count) })}
+                                    {tc('performance.holdings', count)}
                                 </span>
                             </div>
                             <div className="text-xl font-bold text-foreground">

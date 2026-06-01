@@ -11,6 +11,7 @@ import { query, withTransaction } from '../../database/connection.js';
 import { logger } from '../../config/logger.js';
 import { sanitizeSnapshotSpikes, calendarDaysBetween } from '../../utils/portfolioMath.js';
 import { toDecimal, roundMoney } from '../../lib/money.js';
+import { toAppDateString } from '../../lib/timezone.js';
 
 const FIXED_INCOME_ASSET_CLASSES = new Set(['savings', 'bond']);
 const REAL_ESTATE_ASSET_CLASS = 'real_estate';
@@ -291,9 +292,12 @@ export async function computeDailySnapshots(targetCurrency = 'EUR') {
 
   // --- Main day loop ---
 
+  // End the walk on the calendar day in APP_TIMEZONE, not UTC: near midnight the
+  // two diverge, which would otherwise land the last snapshot on the wrong day
+  // versus the rest of the calc layer (ADR-009).
+  const todayYmd = toAppDateString(new Date());
   const allDays = [];
-  const _now = new Date();
-  const today = new Date(Date.UTC(_now.getUTCFullYear(), _now.getUTCMonth(), _now.getUTCDate()));
+  const today = new Date(todayYmd);
   for (let d = new Date(firstDateYmd); d <= today; d.setUTCDate(d.getUTCDate() + 1)) {
     allDays.push(d.toISOString().split('T')[0]);
   }
@@ -326,8 +330,6 @@ export async function computeDailySnapshots(targetCurrency = 'EUR') {
     });
   }
 
-  const todayYmd = allDays[allDays.length - 1];
-
   for (const day of allDays) {
     // Apply transactions. Invested capital converts at the rate on the
     // transaction's own day (or the stored fx_rate_to_eur), not today's.
@@ -356,10 +358,28 @@ export async function computeDailySnapshots(targetCurrency = 'EUR') {
         if (inv?.assetClass === 'stock' || inv?.assetClass === 'etf') stocksEtfsInvested = stocksEtfsInvested.minus(converted);
         else if (inv?.assetClass === 'crypto') cryptoInvested = cryptoInvested.minus(converted);
         else if (inv?.assetClass === 'metals') metalsInvested = metalsInvested.minus(converted);
-        unitsByInvestment[tx.investmentId] = (unitsByInvestment[tx.investmentId] || 0) - tx.units;
+        // Clamp oversells to held units (mirrors calculateCostBasis's
+        // min(units, totalUnits)) so a later buy isn't offset by a negative.
+        const heldUnits = unitsByInvestment[tx.investmentId] || 0;
+        unitsByInvestment[tx.investmentId] = heldUnits > 0 ? Math.max(0, heldUnits - tx.units) : heldUnits;
         if (tx.units > 0 && tx.amount > 0) lastKnownPrice[tx.investmentId] = tx.amount / tx.units;
 
         if (nonUnitS) nonUnitS.runningInvested = nonUnitS.runningInvested.minus(converted);
+      } else if (tx.type === 'split') {
+        // units = new total post-split; invested/cost basis is unchanged
+        // (mirrors calculateCostBasis). Only applies once units are held.
+        const heldUnits = unitsByInvestment[tx.investmentId] || 0;
+        if (heldUnits > 0 && tx.units > 0) unitsByInvestment[tx.investmentId] = tx.units;
+      } else if (tx.type === 'return_of_capital') {
+        // Returns capital, reducing net invested (mirrors calculateCostBasis
+        // reducing cost basis). Units are unchanged. Only while units are held.
+        const heldUnits = unitsByInvestment[tx.investmentId] || 0;
+        if (heldUnits > 0) {
+          cumulativeInvested = cumulativeInvested.minus(converted);
+          if (inv?.assetClass === 'stock' || inv?.assetClass === 'etf') stocksEtfsInvested = stocksEtfsInvested.minus(converted);
+          else if (inv?.assetClass === 'crypto') cryptoInvested = cryptoInvested.minus(converted);
+          else if (inv?.assetClass === 'metals') metalsInvested = metalsInvested.minus(converted);
+        }
       } else if (tx.type === 'interest' && nonUnitS) {
         // Resets the accrual clock to match calculateAccruedInterest.
         nonUnitS.lastInterestDate = day;

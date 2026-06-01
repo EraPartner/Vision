@@ -64,7 +64,7 @@ export function DataTable<T extends Record<string, unknown>>({
     onSearchChange,
     searchValue,
 }: DataTableProps<T>) {
-    const { t } = useLanguage();
+    const { t, tc } = useLanguage();
     const [editingRow, setEditingRow] = useState<number | null>(null);
     const [editValues, setEditValues] = useState<Record<string, unknown>>({});
     const [localSearchQuery, setLocalSearchQuery] = useState(searchValue ?? "");
@@ -575,7 +575,7 @@ export function DataTable<T extends Record<string, unknown>>({
                             ? t('table.shownOf', { shown: processedRows.length.toString(), total: (hasPagination ? totalItems! : data.length).toString() })
                             : hasPagination && totalItems! > 0
                                 ? t('table.showingRange', { from: (currentPage * pageSize + 1).toString(), to: Math.min((currentPage + 1) * pageSize, totalItems!).toString(), total: totalItems!.toString() })
-                                : t('table.items', { count: data.length.toString() })
+                                : tc('table.items', data.length)
                         }
                     </p>
                     {hasPagination && totalItems! > 0 && (

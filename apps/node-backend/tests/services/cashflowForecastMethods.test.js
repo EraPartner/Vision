@@ -300,6 +300,32 @@ describe('ensemble', () => {
     expect(w.get('ewma')).toBeGreaterThan(w.get('simple_avg'));
   });
 
+  it('computeWeights (v2) trusts a low-RMSE method less when it has few backtest samples', () => {
+    const ids = ['a', 'b'];
+    const fewSamples = ensemble.computeWeights(
+      [{ methodId: 'a', rmse: 1, sampleDays: 2 }, { methodId: 'b', rmse: 3, sampleDays: 300 }],
+      ids,
+    );
+    const manySamples = ensemble.computeWeights(
+      [{ methodId: 'a', rmse: 1, sampleDays: 300 }, { methodId: 'b', rmse: 3, sampleDays: 300 }],
+      ids,
+    );
+    // 'a' has the better RMSE in both, but with only 2 sample days its low RMSE
+    // is shrunk toward the mean, so it earns less weight than when well-sampled.
+    expect(manySamples.get('a')).toBeGreaterThan(fewSamples.get('a'));
+  });
+
+  it('computeWeights (v2) blends toward uniform so the best method never takes all the weight', () => {
+    const w = ensemble.computeWeights(
+      [{ methodId: 'a', rmse: 0.001, sampleDays: 300 }, { methodId: 'b', rmse: 100, sampleDays: 300 }],
+      ['a', 'b'],
+    );
+    const total = [...w.values()].reduce((s, v) => s + v, 0);
+    expect(total).toBeCloseTo(1, 6);
+    expect(w.get('a')).toBeLessThan(1);   // dominance capped by the uniform floor
+    expect(w.get('b')).toBeGreaterThan(0); // weakest method still contributes
+  });
+
   it('forecast equal-weights all methods when weights map is empty', () => {
     const outputs = makeOutputs(['simple_avg', 'ewma'], [10, 20]);
     const result = ensemble.forecast({ forecastDates: dates, methodOutputs: outputs, weights: new Map() });
