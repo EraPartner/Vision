@@ -44,9 +44,12 @@ export default function CryptoPage() {
     return new Intl.NumberFormat(locale, { style: "currency", currency, minimumFractionDigits: decimals, maximumFractionDigits: decimals }).format(val);
   }
 
-  function openMarketLookup(symbol?: string) {
+  function openMarketLookup(symbol?: string, investmentId?: number) {
     if (!symbol) return;
-    navigate(`/portfolio/market?symbol=${encodeURIComponent(symbol)}`);
+    // Pass the holding id so the market page can chart non-Yahoo providers
+    // (binance/custom) from this holding's own price history.
+    const suffix = investmentId != null ? `&investmentId=${investmentId}` : "";
+    navigate(`/portfolio/market?symbol=${encodeURIComponent(symbol)}${suffix}`);
   }
 
   const totalValue = holdings.reduce((s, h) => s + convertToTarget(h.currentValue, h.currency), 0);
@@ -224,8 +227,8 @@ export default function CryptoPage() {
                           <button
                             type="button"
                             className="block text-xs text-muted-foreground hover:underline cursor-pointer"
-                            onDoubleClick={() => openMarketLookup(h.symbol)}
-                            onKeyDown={onActivateKeyDown(() => openMarketLookup(h.symbol))}
+                            onDoubleClick={() => openMarketLookup(h.symbol, h.id)}
+                            onKeyDown={onActivateKeyDown(() => openMarketLookup(h.symbol, h.id))}
                             title={h.symbol ? t('watchlist.doubleClickChart') : undefined}
                           >
                             {h.name}

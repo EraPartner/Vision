@@ -44,6 +44,14 @@ function pickBestThumbnail(thumbnail) {
 }
 const yahooFinance = new YahooFinance({ suppressNotices: ['yahooSurvey'] });
 
+// yahoo-finance2 validates every upstream payload against its own schema and
+// THROWS on any mismatch. Yahoo's responses drift (new quoteTypes, non-Yahoo
+// entries missing fields, null meta) and vary by IP/geo, so an otherwise fine
+// request intermittently 502s — search dropdowns go empty, charts break. We only
+// read a small subset of well-known fields, so opt out of the throw: degrade to
+// whatever data came back instead of failing the whole request.
+const NO_VALIDATE = { validateResult: false };
+
 function upstreamError(message, cause) {
   return new AppError(message, { status: 502, code: ApiErrorCode.BAD_GATEWAY, cause });
 }
@@ -74,7 +82,7 @@ router.get('/search', async (req, res) => {
 
   let results;
   try {
-    results = await yahooFinance.search(q, { quotesCount: 8, newsCount: 0 });
+    results = await yahooFinance.search(q, { quotesCount: 8, newsCount: 0 }, NO_VALIDATE);
   } catch (err) {
     throw upstreamError('Market search unavailable', err);
   }
@@ -102,7 +110,7 @@ router.get('/quote', async (req, res) => {
     quoteResults = await Promise.allSettled(
       symbolList.map(async (sym) => {
         const [quote, summary] = await Promise.allSettled([
-          yahooFinance.quote(sym),
+          yahooFinance.quote(sym, {}, NO_VALIDATE),
           yahooFinance.quoteSummary(sym, {
             modules: [
               'summaryDetail',
@@ -112,7 +120,7 @@ router.get('/quote', async (req, res) => {
               'recommendationTrend',
               'upgradeDowngradeHistory',
             ],
-          }),
+          }, NO_VALIDATE),
         ]);
 
         if (quote.status === 'rejected') return null;
@@ -209,11 +217,14 @@ router.get('/chart', async (req, res) => {
 
   let result;
   try {
+    // NO_VALIDATE: Yahoo intermittently returns an incomplete `meta` block (null
+    // currency/regularMarketTime, missing regularMarketPrice); the time-series
+    // `quotes` we render are still present, so degrade instead of 502-ing.
     result = await yahooFinance.chart(symbol, {
       period1: rangeToDate(range),
       interval,
       includePrePost: false,
-    });
+    }, NO_VALIDATE);
   } catch (err) {
     throw upstreamError('Market chart unavailable', err);
   }
@@ -251,7 +262,7 @@ router.get('/news', async (req, res) => {
         const results = await yahooFinance.search(sym.trim(), {
           quotesCount: 0,
           newsCount,
-        });
+        }, NO_VALIDATE);
         return (results.news || []).map((n) => ({
           title: n.title,
           link: n.link,

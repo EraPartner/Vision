@@ -21,6 +21,7 @@ import { AreaChart, BarChart, type AreaSeries, type BarSeries } from "@/componen
 import { useDebounce } from "@/hooks/useDebounce";
 import { cn } from "@/lib/utils";
 import { usePortfolio } from "@/hooks/usePortfolio";
+import { getInvestmentPriceHistory } from "@/lib/api/portfolio";
 import { AddInvestmentFromMarketDialog } from "@/components/portfolio/AddInvestmentFromMarketDialog";
 import { RemoteNewsImage } from "@/components/shared/RemoteNewsImage";
 import { useSearchParams } from "react-router-dom";
@@ -47,6 +48,25 @@ const RANGES = [
   { label: "5Y", range: "5y", interval: "1mo" },
   { label: "MAX", range: "max", interval: "1mo" },
 ];
+
+const DAY_MS = 24 * 60 * 60 * 1000;
+
+// Lower bound (epoch ms) for a range, used when serving the chart from an
+// investment's own price provider instead of Yahoo. 'max' returns 0 (all data).
+function rangeToFromMs(range: string): number {
+  const now = Date.now();
+  switch (range) {
+    case "1d": return now - 1 * DAY_MS;
+    case "5d": return now - 5 * DAY_MS;
+    case "1mo": return now - 30 * DAY_MS;
+    case "3mo": return now - 91 * DAY_MS;
+    case "6mo": return now - 182 * DAY_MS;
+    case "1y": return now - 365 * DAY_MS;
+    case "5y": return now - 5 * 365 * DAY_MS;
+    case "max": return 0;
+    default: return now - 30 * DAY_MS;
+  }
+}
 
 interface SearchResult {
   symbol: string;
@@ -154,7 +174,23 @@ export default function MarketLookupPage() {
   const symbolFromQuery = searchParams.get("symbol")?.trim().toUpperCase();
   const effectiveSelectedSymbol = selectedSymbol || symbolFromQuery || null;
   const debouncedSearch = useDebounce(searchText, 300);
-  const { summaries } = usePortfolio();
+  const { summaries, isLoading: isPortfolioLoading } = usePortfolio();
+
+  // When the page is opened from a portfolio holding (double-click), the URL
+  // carries its investmentId. If that holding prices via a non-Yahoo provider
+  // (Kinesis/custom/binance), Yahoo has no data for the symbol — so we serve the
+  // chart + a minimal price header from the holding's own stored history instead.
+  const investmentId = searchParams.get("investmentId");
+  const providerInvestment = useMemo(
+    () => (investmentId ? summaries.find((s) => String(s.id) === investmentId) : undefined),
+    [investmentId, summaries],
+  );
+  // Still waiting to learn which provider this holding uses — don't fire Yahoo yet.
+  const resolvingProvider = !!investmentId && !providerInvestment && isPortfolioLoading;
+  const isProviderAsset = !!providerInvestment
+    && !!providerInvestment.price_provider
+    && providerInvestment.price_provider !== "yahoo";
+  const useYahoo = !!effectiveSelectedSymbol && !isProviderAsset && !resolvingProvider;
 
   // Search
   const { data: searchResults, isFetching: isSearching } = useQuery({
@@ -178,7 +214,7 @@ export default function MarketLookupPage() {
       const envelope = await res.json() as { data: { quotes: Quote[] } };
       return envelope.data.quotes[0] || null;
     },
-    enabled: !!effectiveSelectedSymbol,
+    enabled: useYahoo,
     staleTime: 30_000,
     refetchInterval: 60_000,
   });
@@ -194,7 +230,34 @@ export default function MarketLookupPage() {
       const envelope = await res.json() as { data: { symbol: string; currency: string; points: ChartPoint[] } };
       return envelope.data;
     },
-    enabled: !!effectiveSelectedSymbol,
+    enabled: useYahoo,
+    staleTime: 60_000,
+  });
+
+  // Provider-aware chart — served from the holding's own price provider when
+  // Yahoo can't (Kinesis/custom/binance). Points carry only a price, so high/low
+  // collapse to close and volume is omitted (no volume bars in this mode).
+  const { data: providerChartData, isFetching: isProviderChartLoading } = useQuery({
+    queryKey: ["provider-chart", providerInvestment?.id, selectedRange.range],
+    queryFn: async () => {
+      const res = await getInvestmentPriceHistory(providerInvestment!.id, {
+        from_ms: rangeToFromMs(selectedRange.range),
+        db_only: false,
+      });
+      const points: ChartPoint[] = res.points.map((p) => ({
+        time: p.timestampMs,
+        close: p.price,
+        high: p.price,
+        low: p.price,
+        volume: 0,
+      }));
+      return {
+        symbol: providerInvestment!.symbol ?? effectiveSelectedSymbol ?? "",
+        currency: providerInvestment!.currency,
+        points,
+      };
+    },
+    enabled: isProviderAsset && !!providerInvestment,
     staleTime: 60_000,
   });
 
@@ -207,7 +270,7 @@ export default function MarketLookupPage() {
       const envelope = await res.json() as { data: { articles: NewsArticle[] } };
       return envelope.data;
     },
-    enabled: !!effectiveSelectedSymbol,
+    enabled: useYahoo,
     staleTime: 120_000,
   });
 
@@ -216,7 +279,33 @@ export default function MarketLookupPage() {
     setSearchText("");
   }, []);
 
-  const quote = quoteData;
+  // Minimal quote synthesized from provider history: price = latest point,
+  // change = move across the visible range. Fundamentals/news don't exist for
+  // these assets, so those sections are hidden in provider mode.
+  const providerQuote = useMemo<Quote | null>(() => {
+    if (!isProviderAsset || !providerInvestment) return null;
+    const pts = providerChartData?.points ?? [];
+    if (pts.length === 0) return null;
+    const last = pts[pts.length - 1].close;
+    const first = pts[0].close;
+    const change = last - first;
+    const changePercent = first ? (change / first) * 100 : 0;
+    return {
+      symbol: providerInvestment.symbol ?? effectiveSelectedSymbol ?? "",
+      name: providerInvestment.name,
+      price: last,
+      change,
+      changePercent,
+      currency: providerInvestment.currency,
+      exchange: "",
+      type: (providerInvestment.price_provider ?? "").toUpperCase(),
+    } as Quote;
+  }, [isProviderAsset, providerInvestment, providerChartData, effectiveSelectedSymbol]);
+
+  const quote = isProviderAsset ? providerQuote : quoteData;
+  const displayChart = isProviderAsset ? providerChartData : chartData;
+  const isChartBusy = isProviderAsset ? isProviderChartLoading : isChartLoading;
+  const isQuoteBusy = isProviderAsset ? isProviderChartLoading : isQuoteLoading;
   const isPositive = (quote?.change ?? 0) >= 0;
 
   // Check if this asset already exists in portfolio
@@ -284,7 +373,7 @@ export default function MarketLookupPage() {
       {effectiveSelectedSymbol && (
         <>
           {/* Header */}
-          {isQuoteLoading ? (
+          {isQuoteBusy ? (
             <Card>
               <CardContent className="py-6 space-y-3">
                 <Skeleton className="h-8 w-64" />
@@ -320,11 +409,13 @@ export default function MarketLookupPage() {
                     </div>
                   </div>
                   <div className="flex items-center gap-2">
-                    <div className="flex items-center gap-1 text-xs text-muted-foreground">
-                      <Clock className="h-3 w-3" />
-                      <span>{t('market.autoRefresh')}</span>
-                    </div>
-                    {quote && (
+                    {!isProviderAsset && (
+                      <div className="flex items-center gap-1 text-xs text-muted-foreground">
+                        <Clock className="h-3 w-3" />
+                        <span>{t('market.autoRefresh')}</span>
+                      </div>
+                    )}
+                    {quote && !isProviderAsset && (
                       <AddInvestmentFromMarketDialog
                         quote={quote}
                         existingInvestment={existingInvestment ?? undefined}
@@ -363,19 +454,19 @@ export default function MarketLookupPage() {
               </div>
             </CardHeader>
             <CardContent>
-              {isChartLoading ? (
+              {isChartBusy ? (
                 <Skeleton className="h-[320px] w-full rounded-lg" />
-              ) : chartData?.points && chartData.points.length > 0 ? (
+              ) : displayChart?.points && displayChart.points.length > 0 ? (
                 <div className="space-y-4">
                   <AreaChart
-                    data={chartData.points}
+                    data={displayChart.points}
                     xAccessor={(d) => new Date(d.time)}
                     xIsDate
                     height={320}
                     xTickFormat={(v) => fmtDate((v as Date).getTime(), selectedRange.range, appSettings.dateFormat, locale)}
                     yTickFormat={(v) => fmtNum(v, { maximumFractionDigits: 2 })}
                     tooltipTitle={(d) => formatDateTimeWithAppSettings(new Date(d.time), appSettings.dateFormat, locale)}
-                    tooltipValueFormat={(v) => fmtPrice(v, chartData.currency || "USD")}
+                    tooltipValueFormat={(v) => fmtPrice(v, displayChart.currency || "USD")}
                     series={[
                       {
                         key: "close",
@@ -384,29 +475,31 @@ export default function MarketLookupPage() {
                         color: isPositive ? "hsl(var(--accent))" : "hsl(var(--destructive))",
                         strokeWidth: 2,
                       },
-                    ] as AreaSeries<typeof chartData.points[number]>[]}
+                    ] as AreaSeries<typeof displayChart.points[number]>[]}
                   />
 
-                  {/* Volume bars */}
-                  <BarChart
-                    data={chartData.points}
-                    categoryAccessor={(d) => String(d.time)}
-                    height={60}
-                    barRadius={2}
-                    margin={{ top: 4, right: 0, bottom: 0, left: 0 }}
-                    categoryTickFormat={() => ""}
-                    valueTickFormat={() => ""}
-                    tooltipTitle={(d) => formatDateTimeWithAppSettings(new Date(d.time), appSettings.dateFormat, locale)}
-                    tooltipValueFormat={(v) => fmtLargeNum(v)}
-                    series={[
-                      {
-                        key: "volume",
-                        label: t('market.volume'),
-                        accessor: (d) => d.volume,
-                        color: "hsl(var(--muted-foreground))",
-                      },
-                    ] as BarSeries<typeof chartData.points[number]>[]}
-                  />
+                  {/* Volume bars — Yahoo only; provider history carries no volume. */}
+                  {!isProviderAsset && (
+                    <BarChart
+                      data={displayChart.points}
+                      categoryAccessor={(d) => String(d.time)}
+                      height={60}
+                      barRadius={2}
+                      margin={{ top: 4, right: 0, bottom: 0, left: 0 }}
+                      categoryTickFormat={() => ""}
+                      valueTickFormat={() => ""}
+                      tooltipTitle={(d) => formatDateTimeWithAppSettings(new Date(d.time), appSettings.dateFormat, locale)}
+                      tooltipValueFormat={(v) => fmtLargeNum(v)}
+                      series={[
+                        {
+                          key: "volume",
+                          label: t('market.volume'),
+                          accessor: (d) => d.volume,
+                          color: "hsl(var(--muted-foreground))",
+                        },
+                      ] as BarSeries<typeof displayChart.points[number]>[]}
+                    />
+                  )}
                 </div>
               ) : (
                 <div className="h-[320px] flex items-center justify-center text-sm text-muted-foreground">
@@ -417,7 +510,7 @@ export default function MarketLookupPage() {
           </Card>
 
           {/* Key Metrics */}
-          {quote && (
+          {quote && !isProviderAsset && (
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <Card>
                 <CardHeader className="pb-2">
@@ -565,7 +658,8 @@ export default function MarketLookupPage() {
             );
           })()}
 
-          {/* News */}
+          {/* News — Yahoo only; provider-priced assets have no news feed. */}
+          {!isProviderAsset && (
           <Card>
             <CardHeader className="pb-2">
                 <CardTitle className="text-base flex items-center gap-2">
@@ -629,6 +723,7 @@ export default function MarketLookupPage() {
               )}
             </CardContent>
           </Card>
+          )}
         </>
       )}
     </div>

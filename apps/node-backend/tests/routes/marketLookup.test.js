@@ -183,7 +183,11 @@ describe('Market Lookup Routes', () => {
 
       await routeHandlers['get:/search'](req, res);
 
-      expect(mockYahooSearch).toHaveBeenCalledWith('apple', { quotesCount: 8, newsCount: 0 });
+      expect(mockYahooSearch).toHaveBeenCalledWith(
+        'apple',
+        { quotesCount: 8, newsCount: 0 },
+        { validateResult: false },
+      );
       expect(res.json).toHaveBeenCalledWith({
         ok: true,
         data: {
@@ -291,6 +295,28 @@ describe('Market Lookup Routes', () => {
 
       await expect(routeHandlers['get:/chart'](req, res)).rejects.toBeInstanceOf(AppError);
     });
+
+    it('passes validateResult:false so incomplete Yahoo meta degrades instead of 502', async () => {
+      mockYahooChart.mockResolvedValue({
+        meta: { symbol: 'KAU_EUR', currency: null, regularMarketTime: null },
+        quotes: [
+          { date: '2026-01-02T00:00:00.000Z', close: 200, high: 201, low: 199, volume: 10 },
+        ],
+      });
+
+      const req = { query: { symbol: 'KAU_EUR' } };
+      const res = mockResponse();
+
+      await routeHandlers['get:/chart'](req, res);
+
+      expect(mockYahooChart).toHaveBeenCalledWith(
+        'KAU_EUR',
+        expect.any(Object),
+        { validateResult: false },
+      );
+      const payload = res.json.mock.calls[0][0].data;
+      expect(payload.points).toHaveLength(1);
+    });
   });
 
   describe('GET /news', () => {
@@ -362,7 +388,11 @@ describe('Market Lookup Routes', () => {
       await routeHandlers['get:/news'](req, res);
 
       expect(mockYahooSearch).toHaveBeenCalledTimes(3);
-      expect(mockYahooSearch).toHaveBeenCalledWith('SPY', { quotesCount: 0, newsCount: 50 });
+      expect(mockYahooSearch).toHaveBeenCalledWith(
+        'SPY',
+        { quotesCount: 0, newsCount: 50 },
+        { validateResult: false },
+      );
       expect(res.json).toHaveBeenCalled();
     });
 
@@ -376,8 +406,8 @@ describe('Market Lookup Routes', () => {
       await routeHandlers['get:/news'](req, res);
 
       expect(res.json).toHaveBeenCalled();
-      expect(mockYahooSearch).toHaveBeenCalledWith('AAPL', expect.anything());
-      expect(mockYahooSearch).toHaveBeenCalledWith('MSFT', expect.anything());
+      expect(mockYahooSearch).toHaveBeenCalledWith('AAPL', expect.anything(), expect.anything());
+      expect(mockYahooSearch).toHaveBeenCalledWith('MSFT', expect.anything(), expect.anything());
     });
   });
 

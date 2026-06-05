@@ -91,9 +91,12 @@ export default function StocksPage({
     return rateTo ? amountEur / rateTo : amountEur;
   }, [getRateToEur, targetCurrency]);
 
-  const openMarketLookup = useCallback((symbol?: string) => {
+  const openMarketLookup = useCallback((symbol?: string, investmentId?: number) => {
     if (!symbol) return;
-    navigate(`/portfolio/market?symbol=${encodeURIComponent(symbol)}`);
+    // Pass the holding id so the market page can chart non-Yahoo providers
+    // (custom/kinesis) from this holding's own price history.
+    const suffix = investmentId != null ? `&investmentId=${investmentId}` : "";
+    navigate(`/portfolio/market?symbol=${encodeURIComponent(symbol)}${suffix}`);
   }, [navigate]);
 
   const calculateFxAwarePnl = useCallback((holding: InvestmentSummary) => {
@@ -360,8 +363,8 @@ export default function StocksPage({
                       <button
                         type="button"
                         className="font-medium text-left hover:underline cursor-pointer"
-                        onDoubleClick={() => openMarketLookup(h.symbol)}
-                        onKeyDown={onActivateKeyDown(() => openMarketLookup(h.symbol))}
+                        onDoubleClick={() => openMarketLookup(h.symbol, h.id)}
+                        onKeyDown={onActivateKeyDown(() => openMarketLookup(h.symbol, h.id))}
                         title={h.symbol ? t('watchlist.doubleClickChart') : undefined}
                       >
                         {h.name}
