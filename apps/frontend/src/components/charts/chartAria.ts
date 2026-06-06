@@ -49,5 +49,7 @@ export function summarizeSparkline(t: TFn, values: ReadonlyArray<number>): strin
     if (v < min) min = v;
     if (v > max) max = v;
   }
-  return t(finite.length === 1 ? 'chart.aria.sparklineOne' : 'chart.aria.sparklineOther', { count: finite.length, min, max });
+  // Round to 2 decimals so the label never leaks float noise (e.g. 81.26999999999998).
+  const round2 = (v: number) => Math.round(v * 100) / 100;
+  return t(finite.length === 1 ? 'chart.aria.sparklineOne' : 'chart.aria.sparklineOther', { count: finite.length, min: round2(min), max: round2(max) });
 }

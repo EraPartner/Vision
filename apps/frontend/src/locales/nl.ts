@@ -960,6 +960,7 @@ const nl: Record<string, string> = {
   'layout.settings': 'Instellingen',
   'layout.system': 'Systeem',
   'layout.theme': 'Thema',
+  'layout.toggleTheme': 'Thema wijzigen',
   'market.52wRange': '52-weeks bereik',
   'market.analystCount': '{n} analist',
   'market.analystCountPlural': '{n} analisten',

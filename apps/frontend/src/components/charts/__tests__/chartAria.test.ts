@@ -57,6 +57,12 @@ describe('summarizeSparkline', () => {
     expect(summarizeSparkline(t, [3, 1, 4, 1, 5])).toBe('Sparkline of 5 points, ranging 1 to 5');
   });
 
+  it('rounds min/max to 2 decimals so the label never leaks float noise', () => {
+    expect(summarizeSparkline(t, [-402.5, 81.26999999999998, 0.1 + 0.2])).toBe(
+      'Sparkline of 3 points, ranging -402.5 to 81.27',
+    );
+  });
+
   it('handles empty / non-finite input', () => {
     expect(summarizeSparkline(t, [])).toBe('Sparkline, no data');
     expect(summarizeSparkline(t, [NaN, Infinity])).toBe('Sparkline, no data');

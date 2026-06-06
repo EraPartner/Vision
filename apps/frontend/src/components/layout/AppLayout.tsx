@@ -56,8 +56,8 @@ export function AppLayout({ children }: AppLayoutProps) {
                                     variant="ghost"
                                     size="icon"
                                     className="premium-icon-action ml-auto mr-2"
-                                    title={t('layout.settings')}
-                                    aria-label={t('layout.openSettings')}
+                                    title={t('layout.toggleTheme')}
+                                    aria-label={t('layout.toggleTheme')}
                                 >
                                     {modeIcon}
                                 </Button>

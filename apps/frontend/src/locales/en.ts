@@ -960,6 +960,7 @@ const en: Record<string, string> = {
   'layout.settings': 'Settings',
   'layout.system': 'System',
   'layout.theme': 'Theme',
+  'layout.toggleTheme': 'Change theme',
   'market.52wRange': '52-Week Range',
   'market.analystCount': '{n} analyst',
   'market.analystCountPlural': '{n} analysts',
