@@ -260,14 +260,15 @@ export default function CryptoPage() {
                         <InvestmentDetailDialog 
                           investment={h} 
                           trigger={
-                            <Button variant="ghost" size="icon" className="icon-touch-target">
+                            <Button variant="ghost" size="icon" className="icon-touch-target" aria-label={t('portfolio.viewDetails')} title={t('portfolio.viewDetails')}>
                               <Eye className="h-3.5 w-3.5" />
                             </Button>
                           }
                         />
                         <AddPortfolioTxnDialog investment={h} />
                         <Button variant="ghost" size="icon" className="icon-touch-target text-muted-foreground hover:text-destructive"
-                          onClick={async () => { 
+                          aria-label={t('crypto.deleteAsset')} title={t('crypto.deleteAsset')}
+                          onClick={async () => {
                             const ok = await confirm({ 
                               title: t('crypto.deleteAsset'), 
                               description: t('crypto.deleteAssetDesc', { name: h.name }), 

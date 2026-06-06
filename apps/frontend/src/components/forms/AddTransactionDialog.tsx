@@ -141,7 +141,7 @@ export function AddTransactionDialog() {
 
                     <DialogFooter className="pt-2">
                         <Button type="button" variant="outline" onClick={() => setOpen(false)}>{t('common.cancel')}</Button>
-                        <Button type="submit" disabled={createMutation.isPending}>
+                        <Button type="submit" disabled={createMutation.isPending || !form.transaction_date || !form.bank_account.trim() || !form.recipient_id || !form.amount}>
                             {createMutation.isPending && <Loader2 className="h-4 w-4 animate-spin" />}
                             {t('common.create')}
                         </Button>

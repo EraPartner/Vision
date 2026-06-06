@@ -198,14 +198,15 @@ export default function SavingsPage() {
                     <InvestmentDetailDialog 
                       investment={a} 
                       trigger={
-                        <Button variant="ghost" size="icon" className="icon-touch-target">
+                        <Button variant="ghost" size="icon" className="icon-touch-target" aria-label={t('portfolio.viewDetails')} title={t('portfolio.viewDetails')}>
                           <Eye className="h-4 w-4" />
                         </Button>
                       }
                     />
                     <AddPortfolioTxnDialog investment={a} />
                     <Button variant="ghost" size="icon" className="icon-touch-target text-muted-foreground hover:text-destructive"
-                      onClick={async () => { 
+                      aria-label={t('savings.deleteAccount')} title={t('savings.deleteAccount')}
+                      onClick={async () => {
                         const ok = await confirm({ 
                           title: t('savings.deleteAccount'), 
                           description: t('savings.deleteAccountDesc', { name: a.name }), 

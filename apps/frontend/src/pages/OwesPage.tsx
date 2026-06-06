@@ -287,7 +287,15 @@ function RecipientOwesDetail({ recipient, onBack }: { recipient: { id: number; n
                                                 <Button
                                                     variant="ghost" size="icon" className="icon-touch-target text-muted-foreground hover:text-destructive"
                                                     title={t('owesPage.deleteSplit')}
-                                                    onClick={() => deleteSplit.mutate(split.id)}
+                                                    onClick={async () => {
+                                                        const ok = await confirm({
+                                                            title: t('owesPage.deleteSplitConfirmTitle'),
+                                                            description: t('owesPage.deleteSplitConfirmDescription'),
+                                                            confirmLabel: t('common.delete'),
+                                                            variant: "destructive",
+                                                        });
+                                                        if (ok) deleteSplit.mutate(split.id);
+                                                    }}
                                                 >
                                                     <Trash2 className="h-4 w-4" />
                                                 </Button>

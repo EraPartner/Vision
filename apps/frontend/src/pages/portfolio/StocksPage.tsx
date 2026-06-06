@@ -402,15 +402,16 @@ export default function StocksPage({
                           fxAwarePnl={enableFxAwarePnl ? displayedPnlByHoldingId[h.id] : undefined}
                           fxAwareCurrency={enableFxAwarePnl ? targetCurrency : undefined}
                           trigger={
-                            <Button variant="ghost" size="icon" className="icon-touch-target">
+                            <Button variant="ghost" size="icon" className="icon-touch-target" aria-label={t('portfolio.viewDetails')} title={t('portfolio.viewDetails')}>
                               <Eye className="h-3.5 w-3.5" />
                             </Button>
                           }
                         />
                         <AddPortfolioTxnDialog investment={h} />
                         <Button variant="ghost" size="icon" className="icon-touch-target text-muted-foreground hover:text-destructive"
-                          onClick={async () => { 
-                            const ok = await confirm({ 
+                          aria-label={t('portfolio.deleteInvestment')} title={t('portfolio.deleteInvestment')}
+                          onClick={async () => {
+                            const ok = await confirm({
                               title: t('portfolio.deleteInvestment'), 
                               description: t('portfolio.deleteInvestmentDesc', { name: h.name }), 
                               confirmLabel: t('common.delete'), 

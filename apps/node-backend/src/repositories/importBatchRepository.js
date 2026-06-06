@@ -181,6 +181,43 @@ export async function rollbackBatch(id) {
             [id]
         );
 
+        // Clean up recipients this import auto-created that are now orphaned.
+        // Candidates: referenced by this batch's staging rows AND created during the
+        // import window (created_at >= the batch start) AND no longer referenced by any
+        // transaction, planned transaction, or merge alias. This prevents rolled-back
+        // imports from leaving behind zero-transaction recipients, without touching
+        // pre-existing recipients (older created_at) or any still in use.
+        const { rows: orphanRows } = await client.query(
+            `SELECT r.id FROM recipients r
+              WHERE r.id IN (
+                    SELECT resolved_recipient_id FROM import_staging_rows
+                     WHERE batch_id = $1 AND resolved_recipient_id IS NOT NULL
+                    UNION
+                    SELECT user_override_recipient_id FROM import_staging_rows
+                     WHERE batch_id = $1 AND user_override_recipient_id IS NOT NULL
+                )
+                AND r.created_at >= COALESCE(
+                    (SELECT started_at FROM import_batches WHERE id = $1), to_timestamp(0))
+                AND NOT EXISTS (SELECT 1 FROM transactions t WHERE t.recipient_id = r.id)
+                AND NOT EXISTS (SELECT 1 FROM planned_transactions pt WHERE pt.recipient_id = r.id)
+                AND NOT EXISTS (SELECT 1 FROM recipients r2 WHERE r2.primary_recipient_id = r.id)`,
+            [id]
+        );
+        const orphanIds = orphanRows.map((r) => r.id);
+        let recipientsRemoved = 0;
+        if (orphanIds.length > 0) {
+            // recipient_bank_accounts FK is NO ACTION, so clear those first; the rest cascade.
+            await client.query(
+                `DELETE FROM recipient_bank_accounts WHERE recipient_id = ANY($1::int[])`,
+                [orphanIds]
+            );
+            const { rowCount } = await client.query(
+                `DELETE FROM recipients WHERE id = ANY($1::int[])`,
+                [orphanIds]
+            );
+            recipientsRemoved = rowCount ?? 0;
+        }
+
         await client.query(
             `UPDATE import_batches
                 SET status = 'aborted',
@@ -190,6 +227,6 @@ export async function rollbackBatch(id) {
             [id]
         );
 
-        return { deleted: deleted ?? 0 };
+        return { deleted: deleted ?? 0, recipientsRemoved };
     });
 }

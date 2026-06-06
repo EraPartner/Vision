@@ -229,14 +229,15 @@ export default function RealEstatePage() {
                     <InvestmentDetailDialog 
                       investment={p} 
                       trigger={
-                        <Button variant="ghost" size="icon" className="icon-touch-target">
+                        <Button variant="ghost" size="icon" className="icon-touch-target" aria-label={t('portfolio.viewDetails')} title={t('portfolio.viewDetails')}>
                           <Eye className="h-4 w-4" />
                         </Button>
                       }
                     />
                     <AddPortfolioTxnDialog investment={p} />
                      <Button variant="ghost" size="icon" className="icon-touch-target text-muted-foreground hover:text-destructive"
-                      onClick={async () => { 
+                      aria-label={t('realestate.deleteProperty')} title={t('realestate.deleteProperty')}
+                      onClick={async () => {
                         const ok = await confirm({ 
                           title: t('realestate.deleteProperty'), 
                           description: t('realestate.deletePropertyDesc', { name: p.name }), 

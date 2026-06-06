@@ -55,7 +55,7 @@ export default function PlannedPaymentForm({ open, onOpenChange, onSubmit, initi
   const loading = false;
 
   const handleSubmit = () => {
-    if (!name.trim() || !dueDate || (!isLoan && !amount)) {
+    if (!name.trim() || !dueDate || (!isLoan && !amount) || !bankAccount.trim()) {
       alert(t('plannedForm.requiredFieldsHint'));
       return;
     }
@@ -200,7 +200,7 @@ export default function PlannedPaymentForm({ open, onOpenChange, onSubmit, initi
 
             {/* Bank account */}
             <div className="grid gap-1.5">
-              <Label htmlFor="pp-bank">{t('plannedForm.bankAccount')}</Label>
+              <Label htmlFor="pp-bank">{t('plannedForm.bankAccountRequired')}</Label>
               <Input id="pp-bank" placeholder={t('plannedForm.bankPlaceholder')} value={bankAccount} onChange={(e) => setBankAccount(e.target.value)} />
             </div>
 
@@ -320,7 +320,7 @@ export default function PlannedPaymentForm({ open, onOpenChange, onSubmit, initi
 
         <DialogFooter>
           <Button variant="outline" onClick={() => onOpenChange(false)}>{t('plannedForm.cancel')}</Button>
-          <Button onClick={handleSubmit} disabled={loading || !name.trim() || !dueDate || (!isLoan && !amount)}>
+          <Button onClick={handleSubmit} disabled={loading || !name.trim() || !dueDate || (!isLoan && !amount) || !bankAccount.trim()}>
             {initial ? t('plannedForm.saveChanges') : t('plannedForm.createPayment')}
           </Button>
         </DialogFooter>

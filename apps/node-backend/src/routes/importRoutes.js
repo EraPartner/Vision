@@ -461,10 +461,10 @@ router.delete('/batches/:id', async (req, res) => {
     throw new ValidationError('Cannot rollback a batch that is still in progress');
   }
 
-  const { deleted } = await rollbackBatch(id);
-  logger.info('[import] batch rolled back', { batchId: id, deleted });
+  const { deleted, recipientsRemoved } = await rollbackBatch(id);
+  logger.info('[import] batch rolled back', { batchId: id, deleted, recipientsRemoved });
 
-  if (deleted > 0) {
+  if (deleted > 0 || recipientsRemoved > 0) {
     try {
       await refreshAggregations();
     } catch (err) {
@@ -472,7 +472,7 @@ router.delete('/batches/:id', async (req, res) => {
     }
   }
 
-  res.ok({ deleted });
+  res.ok({ deleted, recipientsRemoved });
 });
 
 // ─── Import review endpoints ──────────────────────────────────────────────────
