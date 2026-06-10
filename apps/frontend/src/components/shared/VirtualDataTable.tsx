@@ -1,9 +1,10 @@
-import { useCallback, useDeferredValue, useEffect, useMemo, useRef, useState } from "react";
+import { Fragment, useCallback, useDeferredValue, useEffect, useMemo, useRef, useState } from "react";
 import { parseDecimal } from "@/lib/decimal";
 import { useVirtualizer } from "@tanstack/react-virtual";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
+import { ContextMenu, ContextMenuTrigger } from "@/components/ui/context-menu";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import {
     ArrowDown, ArrowUp, ArrowUpDown, Check, Filter, Loader2,
@@ -29,6 +30,16 @@ interface VirtualDataTableProps<T> {
     onRowUpdate?: (index: number, updatedRow: T) => void;
     /** Called when a row is double-clicked */
     onRowDoubleClick?: (row: T, index: number) => void;
+    /** Called on Enter on a focused row. Falls back to onRowDoubleClick. */
+    onRowOpen?: (row: T, index: number) => void;
+    /** Called on Space on a focused row (Quick Look). Falls back to onRowDoubleClick. */
+    onRowQuickLook?: (row: T, index: number) => void;
+    /**
+     * Right-click menu for rows: return a <ContextMenuContent> (it is rendered
+     * inside a per-row Radix ContextMenu root). `helpers.startEditing` begins
+     * the table's inline edit for that row.
+     */
+    rowContextMenu?: (row: T, index: number, helpers: { startEditing: () => void }) => React.ReactNode;
     /** Total items available on server */
     totalItems?: number;
     /** Whether more data is currently being fetched */
@@ -88,6 +99,9 @@ export function VirtualDataTable<T extends Record<string, unknown>>({
     actions,
     onRowUpdate,
     onRowDoubleClick,
+    onRowOpen,
+    onRowQuickLook,
+    rowContextMenu,
     totalItems,
     isFetchingMore = false,
     onLoadMore,
@@ -343,6 +357,24 @@ export function VirtualDataTable<T extends Record<string, unknown>>({
         estimateSize: () => rowHeight,
         overscan: 10,
     });
+
+    // Arrow-key row navigation: scroll the target row into the virtual window,
+    // then focus it. The row may not be mounted on the first frame after
+    // scrollToIndex, so retry across a few frames.
+    const focusRowByIndex = useCallback((index: number) => {
+        if (processedRows.length === 0) return;
+        const clamped = Math.max(0, Math.min(index, processedRows.length - 1));
+        virtualizer.scrollToIndex(clamped);
+        const tryFocus = (attempt: number) => {
+            const el = parentRef.current?.querySelector<HTMLElement>(`[data-index="${clamped}"]`);
+            if (el) {
+                el.focus({ preventScroll: true });
+                return;
+            }
+            if (attempt < 5) requestAnimationFrame(() => tryFocus(attempt + 1));
+        };
+        requestAnimationFrame(() => tryFocus(0));
+    }, [processedRows.length, virtualizer]);
 
     const maybeLoadMore = useCallback(() => {
         if (!onLoadMore || !hasMore || isFetchingMore) return;
@@ -604,22 +636,23 @@ export function VirtualDataTable<T extends Record<string, unknown>>({
                                 const row = indexedRow.row;
                                 const sourceIndex = indexedRow.sourceIndex;
                                 const isEditing = editingRow === sourceIndex;
+                                // Key by the row's stable id, not the virtualizer's
+                                // index-based key — on a sort/filter reorder an index
+                                // key would re-attach in-progress inline edits and
+                                // row transitions to the wrong row.
+                                const rowKey = getRowKey(row, sourceIndex);
+                                const rowsInteractive = !!(onRowDoubleClick || onRowOpen || onRowQuickLook);
 
-                                return (
+                                const rowEl = (
                                     <div
-                                        // Key by the row's stable id, not the
-                                        // virtualizer's index-based key — on a
-                                        // sort/filter reorder an index key would
-                                        // re-attach in-progress inline edits and
-                                        // row transitions to the wrong row.
-                                        key={getRowKey(row, sourceIndex)}
                                         data-index={virtualRow.index}
                                         ref={virtualizer.measureElement}
                                         role="row"
                                         aria-rowindex={virtualRow.index + 2}
-                                        // Keyboard equivalent for the double-click open action so the
-                                        // row isn't mouse-only. Focusable + Enter/Space activates.
-                                        tabIndex={onRowDoubleClick ? 0 : undefined}
+                                        // Keyboard equivalent for the mouse-only row actions:
+                                        // focusable rows take ↑/↓ (move), Enter (open) and
+                                        // Space (quick look).
+                                        tabIndex={rowsInteractive ? 0 : undefined}
                                         className={`flex items-center border-b border-border transition-colors hover:bg-muted/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50 focus-visible:ring-inset ${isEditing ? "bg-primary/5" : ""} ${onRowDoubleClick ? "cursor-pointer" : ""}`}
                                         style={{
                                             position: "absolute",
@@ -635,12 +668,18 @@ export function VirtualDataTable<T extends Record<string, unknown>>({
                                                 startEditing(sourceIndex, row);
                                             }
                                         }}
-                                        onKeyDown={onRowDoubleClick ? (e) => {
+                                        onKeyDown={rowsInteractive ? (e) => {
                                             // Don't hijack keys while typing in an inline-edit field.
                                             if (e.target !== e.currentTarget) return;
-                                            if (e.key === "Enter" || e.key === " ") {
+                                            if (e.key === "ArrowDown" || e.key === "ArrowUp") {
                                                 e.preventDefault();
-                                                onRowDoubleClick(row, sourceIndex);
+                                                focusRowByIndex(virtualRow.index + (e.key === "ArrowDown" ? 1 : -1));
+                                            } else if (e.key === "Enter") {
+                                                e.preventDefault();
+                                                (onRowOpen ?? onRowDoubleClick)?.(row, sourceIndex);
+                                            } else if (e.key === " ") {
+                                                e.preventDefault();
+                                                (onRowQuickLook ?? onRowDoubleClick)?.(row, sourceIndex);
                                             }
                                         } : undefined}
                                     >
@@ -712,6 +751,17 @@ export function VirtualDataTable<T extends Record<string, unknown>>({
                                             </div>
                                         )}
                                     </div>
+                                );
+
+                                if (!rowContextMenu) return <Fragment key={rowKey}>{rowEl}</Fragment>;
+                                return (
+                                    // modal={false}: menu items open page-level dialogs;
+                                    // a modal menu's body pointer-events lock can race the
+                                    // dialog's own lock and leave the page inert.
+                                    <ContextMenu key={rowKey} modal={false}>
+                                        <ContextMenuTrigger asChild>{rowEl}</ContextMenuTrigger>
+                                        {rowContextMenu(row, sourceIndex, { startEditing: () => startEditing(sourceIndex, row) })}
+                                    </ContextMenu>
                                 );
                             })}
                         </div>

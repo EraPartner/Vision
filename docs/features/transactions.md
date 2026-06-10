@@ -4,9 +4,9 @@ type: feature
 status: active
 date: 2026-04-16
 updated: 2026-06-10
-tags: [feature, transactions, finance, phase-q, recipient-groups, bulk-actions, optimistic-updates, optimistic-create, june-2026]
+tags: [feature, transactions, finance, phase-q, recipient-groups, bulk-actions, optimistic-updates, optimistic-create, june-2026, context-menu, quick-look, keyboard-nav, duplicate, filter-by-recipient]
 aliases: [transactions-feature, income, expenses, financial-records, money-tracking]
-description: Core transaction management - income, expenses, and tracking financial activities. Phase Q adds recipient-group filtering for linked-recipient transaction discovery. Bulk operations enable atomic multi-row delete, recategorize, reassign, activate/deactivate, export, and tag. June 2026 (ADR-070): useUpdateTransaction/useDeleteTransaction are now optimistic. June 2026 Premium v3 (ADR-071): useCreateTransaction is now optimistic (temp negative-id row → server-row swap → onSettled invalidate; virtual list excluded; 6 tests).
+description: Core transaction management - income, expenses, and tracking financial activities. Phase Q adds recipient-group filtering for linked-recipient transaction discovery. Bulk operations enable atomic multi-row delete, recategorize, reassign, activate/deactivate, export, and tag. June 2026 (ADR-070): useUpdateTransaction/useDeleteTransaction are now optimistic. June 2026 Premium v3 (ADR-071): useCreateTransaction is now optimistic (temp negative-id row → server-row swap → onSettled invalidate; virtual list excluded; 6 tests). June 2026 Premium v3 V5-V7: per-row context menu, Quick Look dialog (Space), keyboard row navigation (↑/↓/Enter), Duplicate, and Filter-by-recipient actions.
 related_code: ["apps/node-backend/src/routes/transactions.js", "apps/node-backend/src/repositories/transactionRepository.js", "apps/node-backend/src/services/filterBuilder.js", "apps/node-backend/src/services/bulkSelection.js", "apps/frontend/src/features/transactions/", "apps/frontend/src/pages/TransactionsPage.tsx"]
 ---
 
@@ -143,9 +143,64 @@ TransactionsPage has been decomposed into feature-scoped modules under [[apps/fr
 - `components/TableActions.tsx` — Toolbar actions: CSV export button and "show inactive" toggle
 - `components/TransactionsTable.tsx` — `VirtualDataTable` wrapper with column renderers (category/recipient comboboxes, inline date/amount edit, row toggle/delete, info/split dialogs)
 - `components/TransactionInfoDialog.tsx` — Per-row info display and inline field editor
-- `pages/TransactionsPage.tsx` — Slim composer (~280 LOC) that wires the hook to components and owns mutation handlers (`applyTransactionLocalPatch`, `applyInfoFieldLocally`) and `useConfirmDialog`
+- `components/TransactionQuickLook.tsx` — Read-only Space-toggled glance dialog (NEW, premium v3 V6)
+- `pages/TransactionsPage.tsx` — Slim composer that wires the hook to components and owns mutation handlers (`applyTransactionLocalPatch`, `applyInfoFieldLocally`, `handleDuplicate`, `handleFilterByRecipient`) and `useConfirmDialog`
 
 This structure keeps related code together, makes each module focused and testable, and makes the page composition logic clear at a glance.
+
+---
+
+### Row Interactions — Context Menu, Quick Look & Keyboard Navigation (Premium v3 V5-V7, June 2026)
+
+The transaction table rows gained a full interaction layer in the premium-v3 V5-V7 batch.
+
+#### Per-Row Context Menu (right-click)
+
+Right-clicking a transaction row opens a Radix `ContextMenu` (`modal={false}` — see [[docs/components/ui-components#per-row-context-menu|VirtualDataTable context-menu gotcha]]) with these actions:
+
+| Action | Key hint | Condition |
+|--------|----------|-----------|
+| Show details | ↵ | Always |
+| Quick Look | ␣ | Always |
+| Edit in row | — | Always |
+| Duplicate | — | `recipient_id` + `date` + `bank_account` all present |
+| Show all from {recipient} | — | Recipient known |
+| Mark active / inactive | — | Always |
+| Delete… | — | Always (destructive style) |
+
+#### Keyboard Row Navigation
+
+Rows are focusable when any row handler is wired. Shortcuts while a row is focused:
+
+- **↑ / ↓** — move focus to adjacent row (virtual scroll aware; up to 5 rAF retries until the target DOM node is mounted).
+- **Enter** — open the transaction details dialog (`TransactionInfoDialog`).
+- **Space** — open the Quick Look dialog (`TransactionQuickLook`).
+
+These shortcuts are shown in `ShortcutsOverlay` (`?` key).
+
+#### Quick Look Dialog
+
+`TransactionQuickLook` is a read-only glance dialog (Space to open, Space or Esc to close):
+
+- Displays: big money amount with sign color, recipient, date · bank, category badge, inactive badge, tag chips, memo/comment.
+- Intentionally read-only — editing lives in `TransactionInfoDialog`.
+- Focus returns to the source row on close so keyboard navigation continues.
+
+#### Duplicate
+
+`handleDuplicate` in `TransactionsPage` copies the focused row into a new transaction via `useCreateTransaction`. Fields copied: `transaction_date`, `bank_account`, `recipient_id`, `memo`, `amount`, `currency`, `category_id`, `comment`, `tags`. Field deliberately **not** copied: `balance` (running balance belongs to the original row).
+
+Gate: `recipient_id`, `transaction_date`, and `bank_account` must all be present (same contract as the create endpoint).
+
+#### Filter by Recipient
+
+"Show all from {recipient}" in the context menu calls `handleFilterByRecipient`, which:
+1. Clears the local search string.
+2. Sets `?recipient_id=<id>&filter_label=<name>` in `searchParams`, replacing all previously active URL filters.
+
+This replaces the entire filter set with a single-recipient view, consistent with how pivot-table drilldowns work throughout the app.
+
+Code links: [[apps/frontend/src/features/transactions/components/TransactionsTable.tsx]], [[apps/frontend/src/features/transactions/components/TransactionQuickLook.tsx]], [[apps/frontend/src/pages/TransactionsPage.tsx]], [[apps/frontend/src/components/shared/VirtualDataTable.tsx]], [[apps/frontend/src/components/shared/ShortcutsOverlay.tsx]]
 
 ---
 

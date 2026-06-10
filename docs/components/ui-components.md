@@ -4,8 +4,8 @@ type: component
 status: active
 date: 2026-04-17
 updated: 2026-06-10
-tags: [components, ui, radix, shadcn, design-system, phase-9, phase-5, performance, glass-downgrade, dependency-slim-down, liquid-glass-v2, premium-v3, june-2026, command-palette, rolling-number, money-typography, delta-pill, shortcuts-overlay, chart-skeleton]
-description: Reusable UI components built on Radix UI primitives with Tailwind CSS, styled with emerald + champagne-gold palette and optimized design tokens. Phase 5 removes unused Carousel, Resizable, and Drawer wrappers. June 2026 Liquid Glass v2 — Card gains universal premium-frame hover, Dialog/AlertDialog use dialog-in/out keyframes, Sonner toasts are glass-thick, EmptyState upgraded, CommandPalette added. June 2026 Premium v3 — RollingNumber, Money, DeltaPill, ShortcutsOverlay, ChartSkeleton shared components; tabs.tsx animated active-pill indicator.
+tags: [components, ui, radix, shadcn, design-system, phase-9, phase-5, performance, glass-downgrade, dependency-slim-down, liquid-glass-v2, premium-v3, june-2026, command-palette, rolling-number, money-typography, delta-pill, shortcuts-overlay, chart-skeleton, virtual-data-table, context-menu, quick-look, keyboard-nav]
+description: Reusable UI components built on Radix UI primitives with Tailwind CSS, styled with emerald + champagne-gold palette and optimized design tokens. Phase 5 removes unused Carousel, Resizable, and Drawer wrappers. June 2026 Liquid Glass v2 — Card gains universal premium-frame hover, Dialog/AlertDialog use dialog-in/out keyframes, Sonner toasts are glass-thick, EmptyState upgraded, CommandPalette added. June 2026 Premium v3 — RollingNumber, Money, DeltaPill, ShortcutsOverlay, ChartSkeleton shared components; tabs.tsx animated active-pill indicator. June 2026 Premium v3 V5-V7 — VirtualDataTable gains per-row context menu, keyboard row navigation (↑/↓/Enter/Space), and onRowOpen/onRowQuickLook/rowContextMenu props; TransactionQuickLook added.
 aliases: [ui-components, radix-components, shadcn-components, primitive-components]
 related_code: ["apps/frontend/src/components/ui"]
 ---
@@ -519,9 +519,9 @@ Standardized tinted change chip:
 Glass dialog listing real keyboard shortcuts:
 
 - Triggered by the `?` key (when focus is not in an `input`/`textarea`/`contenteditable`).
-- Lists: ⌘K (command palette), ? (this overlay), Esc (close dialog), and the chart scrub drag hint.
+- Lists: ⌘K (command palette), ⌘, (settings), ⌘B (toggle sidebar), ⌘Z (undo delete), ↑/↓ (table row navigation), ↵ (open transaction details), Space (Quick Look), ? (this overlay), Esc (close dialog), the chart scrub drag hint, and a right-click row tip.
 - Mounted in `AppLayout` alongside `CommandPalette`.
-- i18n keys: `shortcuts.title`, `shortcuts.showHelp`, `shortcuts.closeDialog`, `shortcuts.chartScrub`.
+- i18n keys (premium v3 V5 additions): `shortcuts.tableNav`, `shortcuts.tableOpen`, `shortcuts.quickLook`, `shortcuts.rowMenu` (tip line); prior batch: `shortcuts.title`, `shortcuts.showHelp`, `shortcuts.closeDialog`, `shortcuts.chartScrub`, `shortcuts.undoDelete`, `shortcuts.goTo`.
 
 ### ChartSkeleton
 
@@ -532,6 +532,64 @@ Ghost waveform placeholder for chart loading states:
 - Renders an SVG waveform path + shimmer animation.
 - Replaces plain rectangle `Skeleton` components in `DashboardPage` chart card skeletons.
 - Accepts a `height` prop; defaults to the standard chart card height.
+
+---
+
+## VirtualDataTable — Row Interactions (Premium v3 V5-V7, June 2026)
+
+**File:** [[apps/frontend/src/components/shared/VirtualDataTable.tsx]]
+
+`VirtualDataTable` received three new interaction capabilities in the premium-v3 V5-V7 batch. All are optional and backward-compatible — consumers that pass none of these props retain the existing double-click-only behavior.
+
+### New Props
+
+| Prop | Type | Description |
+|------|------|-------------|
+| `onRowOpen` | `(row, index) => void` | Called on Enter key when a row is focused. Falls back to `onRowDoubleClick` if absent. |
+| `onRowQuickLook` | `(row, index) => void` | Called on Space key when a row is focused. Falls back to `onRowDoubleClick` if absent. |
+| `rowContextMenu` | `(row, index, helpers: { startEditing() }) => ReactNode` | Per-row right-click menu. Return a `<ContextMenuContent>`. Each row is wrapped in a Radix `ContextMenu` root. |
+
+### Keyboard Row Navigation
+
+When any of `onRowDoubleClick`, `onRowOpen`, or `onRowQuickLook` is present, rows become focusable (`tabIndex=0`) and support:
+
+- **↑ / ↓** — move focus to the previous/next row. Uses `virtualizer.scrollToIndex()` to bring the target row into the virtual window, then retries `focus()` via `requestAnimationFrame` (up to 5 attempts) until the `[data-index]` element is mounted.
+- **Enter** — fires `onRowOpen ?? onRowDoubleClick`.
+- **Space** — fires `onRowQuickLook ?? onRowDoubleClick`.
+- Keys are suppressed if the event target is a descendant (e.g., an inline-edit input), so typing in edit fields is not hijacked.
+
+Rows display a `focus-visible:ring-2 focus-visible:ring-primary/50` focus ring when keyboard-focused.
+
+### Per-Row Context Menu
+
+The `rowContextMenu` callback receives:
+
+```tsx
+rowContextMenu={(row, sourceIndex, helpers) => (
+    <ContextMenuContent>
+        <ContextMenuItem onSelect={() => doSomething(row)}>Action</ContextMenuItem>
+        <ContextMenuItem onSelect={helpers.startEditing}>Edit in row</ContextMenuItem>
+    </ContextMenuContent>
+)}
+```
+
+`helpers.startEditing` begins the table's built-in inline edit for that row (equivalent to clicking the pencil icon).
+
+> [!warning] `modal={false}` on ContextMenu root
+> Each row's `ContextMenu` is mounted with `modal={false}`. A modal Radix menu locks `pointer-events` on the document body while open. When a menu item opens a page-level `Dialog`, the dialog's own pointer-event lock races the menu's lock and can leave the page in an inert state. `modal={false}` avoids this. The menu still closes on selection and on outside clicks — only the body pointer-event lock is skipped.
+
+### TransactionQuickLook
+
+**File:** [[apps/frontend/src/features/transactions/components/TransactionQuickLook.tsx]]
+
+Read-only glanceable peek dialog toggled by Space on a focused transaction row (Finder-style behavior — Space also closes it):
+
+- Displays: large money amount (sign + color), recipient, date · bank, category badge, inactive badge if applicable, tag chips, memo/comment block, "Press Space to close" hint.
+- `Dialog` opened by `quickLookTransaction` state in `TransactionsPage`; closed by Space inside `DialogContent` or by Esc (Radix default).
+- Focus returns to the originating row after close so ↑/↓ navigation continues uninterrupted.
+- Distinct from `TransactionInfoDialog` (which allows editing). Quick Look is intentionally read-only.
+
+Code links: [[apps/frontend/src/components/shared/VirtualDataTable.tsx]], [[apps/frontend/src/features/transactions/components/TransactionQuickLook.tsx]], [[apps/frontend/src/features/transactions/components/TransactionsTable.tsx]], [[apps/frontend/src/pages/TransactionsPage.tsx]]
 
 ---
 

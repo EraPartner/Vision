@@ -3,13 +3,19 @@ import { Link } from "react-router-dom";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
+import {
+    ContextMenuContent,
+    ContextMenuItem,
+    ContextMenuSeparator,
+    ContextMenuShortcut,
+} from "@/components/ui/context-menu";
 import { VirtualDataTable } from "@/components/shared/VirtualDataTable";
 import { CategoryCombobox } from "@/components/shared/CategoryCombobox";
 import { RecipientCombobox } from "@/components/shared/RecipientCombobox";
 import { SplitTransactionDialog } from "@/components/splits/SplitTransactionDialog";
 import { TagChip } from "@/components/shared/TagInput";
 import { EmptyState } from "@/components/shared/EmptyState";
-import { Import, Info, ToggleLeft, ToggleRight, Trash2 } from "lucide-react";
+import { Copy, Eye, Filter, Import, Info, Pencil, ToggleLeft, ToggleRight, Trash2 } from "lucide-react";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { useAppSettings } from "@/contexts/AppSettingsContext";
 import { Money } from "@/components/shared/Money";
@@ -32,6 +38,9 @@ interface TransactionsTableProps {
     onLoadMore: () => void | Promise<void>;
     onRowUpdate: (sourceIndex: number, updated: TableTransaction) => void;
     onOpenInfo: (row: TableTransaction) => void;
+    onQuickLook: (row: TableTransaction) => void;
+    onDuplicate: (row: TableTransaction) => void;
+    onFilterByRecipient: (row: TableTransaction) => void;
     onToggleActive: (id: number, currentActive: boolean) => void;
     onDelete: (id: number, description?: string) => void;
     onSelectCategory: (transactionId: number, catId: number | null, categoryName: string | null) => void;
@@ -60,6 +69,9 @@ export function TransactionsTable({
     onLoadMore,
     onRowUpdate,
     onOpenInfo,
+    onQuickLook,
+    onDuplicate,
+    onFilterByRecipient,
     onToggleActive,
     onDelete,
     onSelectCategory,
@@ -302,6 +314,60 @@ export function TransactionsTable({
         deletePending,
     ]);
 
+    const rowContextMenu = useCallback((row: TableTransaction, _sourceIndex: number, helpers: { startEditing: () => void }) => {
+        const hasRecipient = !!row.recipientId;
+        // Mirrors the create contract (recipient_id + date + bank_account
+        // required) — same gate the delete-undo restore uses.
+        const canDuplicate = hasRecipient && !!row.date && !!row.bank;
+        return (
+            <ContextMenuContent className="w-60">
+                <ContextMenuItem onSelect={() => onOpenInfo(row)}>
+                    <Info className="mr-2 h-4 w-4 text-muted-foreground" />
+                    {t('contextMenu.info')}
+                    <ContextMenuShortcut>↵</ContextMenuShortcut>
+                </ContextMenuItem>
+                <ContextMenuItem onSelect={() => onQuickLook(row)}>
+                    <Eye className="mr-2 h-4 w-4 text-muted-foreground" />
+                    {t('contextMenu.quickLook')}
+                    <ContextMenuShortcut>␣</ContextMenuShortcut>
+                </ContextMenuItem>
+                <ContextMenuItem onSelect={helpers.startEditing}>
+                    <Pencil className="mr-2 h-4 w-4 text-muted-foreground" />
+                    {t('contextMenu.editInline')}
+                </ContextMenuItem>
+                {(canDuplicate || hasRecipient) && <ContextMenuSeparator />}
+                {canDuplicate && (
+                    <ContextMenuItem onSelect={() => onDuplicate(row)}>
+                        <Copy className="mr-2 h-4 w-4 text-muted-foreground" />
+                        {t('contextMenu.duplicate')}
+                    </ContextMenuItem>
+                )}
+                {hasRecipient && (
+                    <ContextMenuItem onSelect={() => onFilterByRecipient(row)}>
+                        <Filter className="mr-2 h-4 w-4 text-muted-foreground" />
+                        {t('contextMenu.showAllFromRecipient', { name: row.recipient })}
+                    </ContextMenuItem>
+                )}
+                <ContextMenuSeparator />
+                <ContextMenuItem onSelect={() => onToggleActive(row.id, row.is_active)} disabled={updatePending}>
+                    {row.is_active
+                        ? <ToggleLeft className="mr-2 h-4 w-4 text-muted-foreground" />
+                        : <ToggleRight className="mr-2 h-4 w-4 text-muted-foreground" />}
+                    {row.is_active ? t('contextMenu.markInactive') : t('contextMenu.markActive')}
+                </ContextMenuItem>
+                <ContextMenuSeparator />
+                <ContextMenuItem
+                    onSelect={() => onDelete(row.id, row.memo || row.recipient)}
+                    disabled={deletePending}
+                    className="text-destructive focus:bg-destructive/10 focus:text-destructive"
+                >
+                    <Trash2 className="mr-2 h-4 w-4" />
+                    {t('contextMenu.delete')}
+                </ContextMenuItem>
+            </ContextMenuContent>
+        );
+    }, [t, onOpenInfo, onQuickLook, onDuplicate, onFilterByRecipient, onToggleActive, onDelete, updatePending, deletePending]);
+
     return (
         <VirtualDataTable
             title={t('txPage.tableTitle')}
@@ -309,6 +375,9 @@ export function TransactionsTable({
             columns={columns}
             data={transactions}
             onRowUpdate={onRowUpdate}
+            onRowOpen={onOpenInfo}
+            onRowQuickLook={onQuickLook}
+            rowContextMenu={rowContextMenu}
             emptyMessage={(
                 <EmptyState
                     icon={Import}

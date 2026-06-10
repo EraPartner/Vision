@@ -7,13 +7,14 @@ import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { PageHeader } from "@/components/shared/PageHeader";
 import { PageError } from "@/components/shared/PageError";
-import { useUpdateTransaction, useDeleteTransaction } from "@/hooks/useTransactions";
+import { useCreateTransaction, useUpdateTransaction, useDeleteTransaction } from "@/hooks/useTransactions";
 import { useConfirmDialog } from "@/hooks/useConfirmDialog";
 import { useTransactionListData } from "@/features/transactions/hooks/useTransactionListData";
 import { FilterBanner } from "@/features/transactions/components/FilterBanner";
 import { TableActions } from "@/features/transactions/components/TableActions";
 import { TransactionsTable } from "@/features/transactions/components/TransactionsTable";
 import { TransactionInfoDialog } from "@/features/transactions/components/TransactionInfoDialog";
+import { TransactionQuickLook } from "@/features/transactions/components/TransactionQuickLook";
 import { BulkActionsBar, type BulkSelectionMode } from "@/features/transactions/components/bulk/BulkActionsBar";
 import type { TableTransaction, InfoEditableField } from "@/features/transactions/types";
 import type { BulkTransactionFilter } from "@/types/api";
@@ -33,6 +34,7 @@ export default function TransactionsPage() {
         if (searchParam !== null) setSearch(searchParam);
     }, [searchParam]);
     const [infoTransaction, setInfoTransaction] = useState<TableTransaction | null>(null);
+    const [quickLookTransaction, setQuickLookTransaction] = useState<TableTransaction | null>(null);
 
     const recipientIdFilter = searchParams.get('recipient_id') ? Number(searchParams.get('recipient_id')) : undefined;
     const categoryIdFilter = searchParams.get('category_id') ? Number(searchParams.get('category_id')) : undefined;
@@ -77,6 +79,7 @@ export default function TransactionsPage() {
         tagsFilter,
     });
 
+    const createMutation = useCreateTransaction();
     const updateMutation = useUpdateTransaction();
     const deleteMutation = useDeleteTransaction();
     const { confirm, ConfirmDialog } = useConfirmDialog();
@@ -196,6 +199,36 @@ export default function TransactionsPage() {
     const toggleActive = (id: number, currentActive: boolean) => {
         updateMutation.mutate({ id, data: { is_active: !currentActive } });
     };
+
+    const handleDuplicate = useCallback((row: TableTransaction) => {
+        const raw = allItems.find((item) => item.id === row.id);
+        const transactionDate = (((raw?.transaction_date as string | undefined) || row.date) ?? '').split('T')[0];
+        const bankAccount = (raw?.bank_account as string | undefined) || row.bank;
+        const recipientId = raw?.recipient_id ?? (row.recipientId || undefined);
+        // Create contract: recipient_id, date and bank_account are required.
+        if (recipientId == null || !transactionDate || !bankAccount) return;
+        createMutation.mutate({
+            transaction_date: transactionDate,
+            bank_account: bankAccount,
+            recipient_id: recipientId,
+            memo: raw?.memo ?? (row.memo || undefined),
+            amount: raw?.amount ?? row.amount,
+            currency: raw?.currency || row.currency,
+            category_id: raw?.category_id ?? undefined,
+            comment: raw?.comment ?? undefined,
+            tags: row.tags?.length ? row.tags.map((tag) => tag.slug) : undefined,
+            // balance deliberately not copied — the running balance belongs to
+            // the original row, not a new transaction.
+        });
+    }, [allItems, createMutation]);
+
+    const handleFilterByRecipient = useCallback((row: TableTransaction) => {
+        if (!row.recipientId) return;
+        // Fresh filter set: "show all from X" replaces every active filter,
+        // including the text search (kept in local state, so clear it too).
+        setSearch("");
+        setSearchParams({ recipient_id: String(row.recipientId), filter_label: row.recipient });
+    }, [setSearchParams]);
 
     const handleUpdate = (sourceIndex: number, updated: TableTransaction) => {
         const originalTransaction = allItems[sourceIndex];
@@ -360,6 +393,9 @@ export default function TransactionsPage() {
                     onLoadMore={loadMore}
                     onRowUpdate={handleUpdate}
                     onOpenInfo={setInfoTransaction}
+                    onQuickLook={setQuickLookTransaction}
+                    onDuplicate={handleDuplicate}
+                    onFilterByRecipient={handleFilterByRecipient}
                     onToggleActive={toggleActive}
                     onDelete={handleDelete}
                     onSelectCategory={handleSelectCategory}
@@ -391,6 +427,10 @@ export default function TransactionsPage() {
                 infoTransaction={infoTransaction}
                 onClose={() => setInfoTransaction(null)}
                 onApplyLocal={applyInfoFieldLocally}
+            />
+            <TransactionQuickLook
+                transaction={quickLookTransaction}
+                onClose={() => setQuickLookTransaction(null)}
             />
         </>
     );

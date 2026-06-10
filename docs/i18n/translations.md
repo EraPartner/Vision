@@ -5,7 +5,7 @@ status: active
 date: 2026-04-27
 updated: 2026-06-10
 tags: [i18n, translations, localization, internationalization, phase-6, phase-8, phase-f, phase-9, phase-c, phase-d, phase-2, splits, settlement, admin, observability, cash-flow-forecast, pdf-export, portfolio, tax, backup, encrypt, passphrase-modal, accessibility, aria-label, bug-hunt-2026-05-06, chart-aria, screen-reader, plural, tc, intl-plural-rules, planned-page, toast]
-description: Internationalization system including supported languages, translation workflow, and usage patterns. Phase 6 adds 32 export keys for PDF report localization. Phase 8 adds 11 additional export.section.* keys for portfolio (6) and tax (7) report sections. Phase C adds 15 cash flow forecast keys. Phase F adds 60 admin observability keys. 2026-05-29 adds 16 chart.aria.* keys (localized chart screen-reader summaries) and 21 aria.* keys (localized icon-button aria-labels). June 2026 adds tc() plural mechanism and plannedPage error-toast keys. June 2026 (ADR-070) adds 5 commandPalette.* keys (en + nl) for the new ⌘K command palette. June 2026 Premium v3 (ADR-071) adds 8 keys: settings.general.enhancedEffects/Hint, shortcuts.title/showHelp/closeDialog/chartScrub, commandPalette.recent/searchTransactions. Total: 2854 keys.
+description: Internationalization system including supported languages, translation workflow, and usage patterns. Phase 6 adds 32 export keys for PDF report localization. Phase 8 adds 11 additional export.section.* keys for portfolio (6) and tax (7) report sections. Phase C adds 15 cash flow forecast keys. Phase F adds 60 admin observability keys. 2026-05-29 adds 16 chart.aria.* keys (localized chart screen-reader summaries) and 21 aria.* keys (localized icon-button aria-labels). June 2026 adds tc() plural mechanism and plannedPage error-toast keys. June 2026 (ADR-070) adds 5 commandPalette.* keys (en + nl) for the new ⌘K command palette. June 2026 Premium v3 (ADR-071) adds 8 keys: settings.general.enhancedEffects/Hint, shortcuts.title/showHelp/closeDialog/chartScrub, commandPalette.recent/searchTransactions. June 2026 Premium v3 V5-V7 adds 14 keys: contextMenu.* (8 keys), quickLook.* (2 keys), shortcuts table-interaction additions (4 keys). Total: 2887 keys.
 aliases: [i18n, translations, localization, language, nl, en, dutch, english]
 related_code: ["apps/frontend/src/locales", "apps/frontend/src/contexts/LanguageContext.tsx", "apps/frontend/src/hooks/useSplits.ts"]
 ---
@@ -195,6 +195,43 @@ bun run build
 ```
 
 ### Recent keys added
+
+#### Premium v3 V5-V7 batch (June 2026, ADR-071)
+
+14 new keys added to `i18n/source/en.json` + `nl.json`; `bun run generate-locales` + `validate-locales` clean. Total after this batch: **2887 keys**.
+
+**8 new `contextMenu.*` keys** — transaction row right-click menu:
+
+| Key | EN |
+|-----|----|
+| `contextMenu.info` | "Show details" |
+| `contextMenu.quickLook` | "Quick Look" |
+| `contextMenu.editInline` | "Edit in row" |
+| `contextMenu.duplicate` | "Duplicate" |
+| `contextMenu.showAllFromRecipient` | "Show all from {name}" |
+| `contextMenu.markActive` | "Mark as active" |
+| `contextMenu.markInactive` | "Mark as inactive" |
+| `contextMenu.delete` | "Delete…" |
+
+**2 new `quickLook.*` keys** — Quick Look dialog:
+
+| Key | EN |
+|-----|----|
+| `quickLook.title` | "Quick Look" |
+| `quickLook.hint` | "Press Space to close" |
+
+**4 new `shortcuts.*` keys** — ShortcutsOverlay table-interaction rows:
+
+| Key | EN |
+|-----|----|
+| `shortcuts.tableNav` | "Move between table rows" |
+| `shortcuts.tableOpen` | "Open transaction details" |
+| `shortcuts.quickLook` | "Quick Look the focused row" |
+| `shortcuts.rowMenu` | "Tip: right-click a transaction row for quick actions." |
+
+Code links: [[apps/frontend/src/features/transactions/components/TransactionsTable.tsx]], [[apps/frontend/src/features/transactions/components/TransactionQuickLook.tsx]], [[apps/frontend/src/components/shared/ShortcutsOverlay.tsx]], [[i18n/source/en.json]], [[i18n/source/nl.json]]
+
+---
 
 #### Premium v3 batch (June 2026, ADR-071)
 

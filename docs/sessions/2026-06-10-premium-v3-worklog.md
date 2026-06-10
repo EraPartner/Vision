@@ -108,14 +108,15 @@ User approved everything from the apple-axes brainstorm + reported topbar seam b
 - [x] V2. DONE — palette inline answers: FX (`100 USD [in GBP]`, useCurrencyConverter, Intl currency format) + charset-safe arithmetic eval; Result group at top, Enter copies + toast. Orig: Palette FX conversion + calculator: in CommandPalette, detect `100 USD [in EUR]` (use existing FX api/hook — check useCurrencyConverter) and charset-validated arithmetic; show Result group, Enter copies. i18n: commandPalette.copyResult or similar.
 - [x] V3. DONE — @media (prefers-contrast: more): glass/frame border-color hsl(--foreground/0.45), 3px solid focus outline, aurora hidden. Property-level (variant inline tokens can't override). Orig: prefers-contrast: more CSS block (stronger borders/text, kill low-alpha text).
 - [x] V4. DONE — vision.lastRoute (registered + backup-excluded); AppLayout persists pathname+search, restores once on boot when landing at '/'. Orig: Route restoration: localStorage vision.lastRoute (register + exclude from backup), AppLayout saves on route change; on boot at '/' restore stored route (replace).
-- [ ] V5. ← NEXT SESSION STARTS HERE. Context menu on transaction rows (Radix context-menu installed, unused): needs VirtualDataTable row render seam — read components/shared/VirtualDataTable.tsx first; menu: info/edit, duplicate?, toggle active, delete, "show all from recipient". If row seam too tangled, do plain DataTable rows first.
-- [ ] V6. Quick Look: Space on selected/hovered row → glass preview dialog (TransactionInfoDialog reuse?) — depends on V5 row-selection plumbing.
-- [ ] V7. Arrow-key table navigation (↑/↓ selection, Enter info, Space quick look).
-- [ ] V8. Icon success micro-animations (SF-symbols-style bounce on save/import-complete).
+- [x] V5. DONE — VirtualDataTable got a clean row seam: new props `rowContextMenu(row, idx, {startEditing})` (each virtual row wrapped in Radix ContextMenu root, `modal={false}` — modal menus' body pointer-events lock races page-level dialogs and leaves the page inert), `onRowOpen` (Enter), `onRowQuickLook` (Space); Enter/Space fall back to onRowDoubleClick (back-compat for RecipientsPage etc.). TransactionsTable builds the menu (info ↵ / quick look ␣ / edit-in-row / duplicate / show-all-from-recipient / toggle active / delete-destructive) from existing handlers + 3 new props (onQuickLook/onDuplicate/onFilterByRecipient). Duplicate (TransactionsPage handleDuplicate) gated by the create contract (recipient_id+date+bank, same as undo-restore), balance deliberately NOT copied; show-all-from-recipient = setSearchParams({recipient_id, filter_label}) + setSearch("") (param wipe does NOT clear local search state — stale-search gotcha). Orig: Context menu on transaction rows (Radix context-menu installed, unused): needs VirtualDataTable row render seam; menu: info/edit, duplicate?, toggle active, delete, "show all from recipient".
+- [x] V6. DONE — features/transactions/components/TransactionQuickLook.tsx: read-only glass dialog (big Money amount accent/destructive, recipient, date·bank, category badge + inactive badge + TagChips, memo/comment panel, "Press Space to close" hint); Space inside closes (Finder toggle); Radix restores focus to the row on close so arrow-nav continues. Wired in TransactionsPage (quickLookTransaction state). Deliberately NOT TransactionInfoDialog reuse — Enter=full editable info, Space=glanceable peek. Orig: Quick Look: Space on selected row → glass preview dialog.
+- [x] V7. DONE — rows focusable (tabIndex=0) whenever any row handler present; ↑/↓ = focusRowByIndex (virtualizer.scrollToIndex + rAF-retry focus on `[data-index]`, clamped); Enter→onRowOpen→info dialog, Space→onRowQuickLook. Inline-edit guard kept (e.target!==currentTarget). ShortcutsOverlay lists ↑/↓, ↵, Space + right-click tip. Tests: 8 new in VirtualDataTable.test.tsx (nav/dispatch/fallback/context-menu; useVirtualizer mock needs scrollToIndex). Orig: Arrow-key table navigation (↑/↓ selection, Enter info, Space quick look).
+- [ ] V8. ← NEXT SESSION STARTS HERE. Icon success micro-animations (SF-symbols-style bounce on save/import-complete).
 - [ ] V9. Stat-card value scrubbing through netHistory.
 - [ ] V10. Genie dialog close toward trigger.
 - [ ] V11. Contextual suggestion card (planned-payments-due slot on dashboard).
-- [ ] V12. ELECTRON (needs focused session — security posture review per AGENTS.md, can't visually verify headless): hiddenInset traffic lights (+ frontend topbar left-inset when window.electronAPI && darwin), native menu bar (Go menu mirroring GO_TO_ROUTES, File→Import, View→sidebar, system roles), dock badge (planned payments due — IPC), dock menu (New transaction/Dashboard), drag-CSV-onto-window → import handoff, vibrancy/under-window (HIGH regression risk with opaque tokens — prototype behind enhancedEffects?), system accent color as theme variant.
+- [/] V12. IN PROGRESS (this session). ELECTRON (needs focused session — security posture review per AGENTS.md, can't visually verify headless): hiddenInset traffic lights (+ frontend topbar left-inset when window.electronAPI && darwin), native menu bar (Go menu mirroring GO_TO_ROUTES, File→Import, View→sidebar, system roles), dock badge (planned payments due — IPC), dock menu (New transaction/Dashboard), drag-CSV-onto-window → import handoff, vibrancy/under-window (HIGH regression risk with opaque tokens — prototype behind enhancedEffects?), system accent color as theme variant.
+  Plan: main.js (hiddenInset+vibrancy window opts darwin-only, Menu.setApplicationMenu after initI18n, dock badge/menu, open-file CSV, systemPreferences accent + AppleColorPreferencesChangedNotification); preload `electronAPI` bridge (platform, setDockBadge, getAccentColor, onMenuAction/onCsvOpen/onFullScreenChange/onAccentColorChanged); frontend ElectronBridge in AppLayout (html.electron-mac classes, menu routing, window CSV drop → lib/importHandoff one-slot), badge from UpcomingPaymentsNotification, ?new=1 in AddTransactionDialog, system-accent as ThemeContext overlay toggle (NOT a 5th variant — composes with all variants), vibrancy CSS behind enhancedEffects. Security posture unchanged (contextIsolation on, nodeIntegration off, sandbox on; IPC validates sender+input).
 
 ### v5 session-end note (context exhausted before V5-V12)
 V0-V4 done + committed. V5-V7 (context menus / Quick Look / arrow nav) need the
@@ -123,6 +124,21 @@ VirtualDataTable row-render seam — read components/shared/VirtualDataTable.tsx
 (~610 lines) before attempting. V12 Electron block deliberately deferred to a
 focused session (security posture: contextIsolation on, nodeIntegration off,
 sandbox on; cannot be visually verified headless). i18n now 2862 keys.
+
+### V5-V7 session (2026-06-10, this session)
+Files: components/shared/VirtualDataTable.tsx (seam + arrow nav),
+features/transactions/components/TransactionsTable.tsx (menu + 3 props),
+features/transactions/components/TransactionQuickLook.tsx (NEW),
+pages/TransactionsPage.tsx (quick look state, handleDuplicate, handleFilterByRecipient),
+components/shared/ShortcutsOverlay.tsx, i18n source en+nl (14 keys: contextMenu.*,
+quickLook.*, shortcuts.tableNav/tableOpen/quickLook/rowMenu → now 2887 keys),
+VirtualDataTable.test.tsx (+8 tests). Verified: tsc clean, lint 0 errors (12
+pre-existing warnings, none in touched files), vitest 1425 pass + known
+adminToken env failure. Committed (V5-V7 only — the i18n files were staged as
+HEAD + the 14 new keys so the V12 keys stayed out). NOTE: tree also carries uncommitted
+in-progress V12 Electron work from the prior session (ElectronBridge.tsx,
+accentColor.ts, importHandoff.ts, packaging/electron main/preload, theme/settings
+edits) — untouched by this session.
 
 ### Money typography sweep (2026-06-10 night, user request)
 - Money sizing fixed: currency 0.7em→0.85em, fraction 0.78em→0.88em, raise reduced (was unreadably small in table cells).

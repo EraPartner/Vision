@@ -4,8 +4,8 @@ type: reference
 status: active
 date: 2026-04-26
 updated: 2026-06-10
-tags: [reference, patterns, conventions, code-style, backend, frontend, phase-0, phase-1, phase-2, phase-3, phase-4, phase-5, phase-6, phase-9, phase-12, phase-14, phase-q, phase-c, phase-d, motion, liquid-glass, design-system, decimal, money, timezone, openapi, domain-split, import, import-pipeline, concurrency, batching, decimal-enforcement, zustand, slice-selection, typescript, error-handling, type-safety, csv, formula-injection, cwe-1236, csv-record-splitter, csv-parsing, multi-line-fields, date-utilities, immutability, aggregation-optimization, recipient-groups, portfolio-totals, query-parameter-filtering, buildquery, bug-hunt-2026-05-05, bug-hunt-2026-05-06, bug-hunt-2026-05-08, react-keys, stable-keys, mount-guard, memory-leak-prevention, parseLocaleNumber, number-parsing, locale-number, settings-backed-hook, portfolio-tax-classifications, audit-2026-05-11, belgian-tax, freeze-display-pattern, adr-059, dev-observability, devtools, api-inspector, observability, postgres-locking, for-update-group-by, accessibility, a11y, keyboard-operability, aria, onActivateKeyDown, shared-utils, monorepo, workspace, banker-rounding, plural, tc, portfolio-unit-math, premium-v3, optimistic-create, chart-scrub, chart-sync, june-2026]
-description: Standard code patterns used throughout the Vision project — repositories, routes, hooks, API client, Express setup, error handling, type safety, filter builders, aggregation envelopes, aggregation refresh, trigger-maintained tables, golden fixtures, database fixtures, pure calculation services, atomic multi-step transactions, streaming CSV exports with formula injection prevention, import batch concurrency, motion consumers, surface shells, gradient icon tiles, money utilities, decimal utilities, shared date utilities with input validation and locale support, timezone boundary handling, TypeScript type annotations, type-safe error handling, domain-split API client, Zustand store with useShallow slice selection, immutable PATCH field sanitization, aggregation query optimization with Map-based single-pass accumulation, recipient group resolution via scalar subqueries (Phase Q), portfolio totals single-source-of-truth pattern (Phase 14), Belgian Tax freeze/display pattern for engine-drift protection (ADR-059, May 2026), dev-only observability integration pattern (May 2026 devtools: module-level pub-sub event bus with zero-cost tree-shaking in production). May 2026 bug hunt adds React key generation pattern (use UUID instead of index), mount guard pattern (prevent setState after unmount), and documents parseLocaleNumber heuristic with single-comma thousands separator fix. May 2026 a11y pass adds onActivateKeyDown keyboard-activation helper pattern. June 2026: shared-utils monorepo package (@vision/shared-utils) consolidates money/slugify/downsample; banker's rounding is now the canonical roundMoney mode; tc() plural pattern documented. June 2026 (ADR-070): optimistic mutation pattern (snapshot/patch/rollback via setQueriesData); surface shell updated with glass-regular/glass-elevated/opaque-table canonical rules; motion consumer updated for PageTransition re-addition and dialog keyframe animation. June 2026 Premium v3 (ADR-071): optimistic-create pattern (temp negative-id row, server swap, rollback, onSettled invalidate); chart scrub pattern (useChartScrub, pointer capture, glass Δ pill); chart sync pattern (ChartSyncProvider, syncId prop, domain guard).
+tags: [reference, patterns, conventions, code-style, backend, frontend, phase-0, phase-1, phase-2, phase-3, phase-4, phase-5, phase-6, phase-9, phase-12, phase-14, phase-q, phase-c, phase-d, motion, liquid-glass, design-system, decimal, money, timezone, openapi, domain-split, import, import-pipeline, concurrency, batching, decimal-enforcement, zustand, slice-selection, typescript, error-handling, type-safety, csv, formula-injection, cwe-1236, csv-record-splitter, csv-parsing, multi-line-fields, date-utilities, immutability, aggregation-optimization, recipient-groups, portfolio-totals, query-parameter-filtering, buildquery, bug-hunt-2026-05-05, bug-hunt-2026-05-06, bug-hunt-2026-05-08, react-keys, stable-keys, mount-guard, memory-leak-prevention, parseLocaleNumber, number-parsing, locale-number, settings-backed-hook, portfolio-tax-classifications, audit-2026-05-11, belgian-tax, freeze-display-pattern, adr-059, dev-observability, devtools, api-inspector, observability, postgres-locking, for-update-group-by, accessibility, a11y, keyboard-operability, aria, onActivateKeyDown, shared-utils, monorepo, workspace, banker-rounding, plural, tc, portfolio-unit-math, premium-v3, optimistic-create, chart-scrub, chart-sync, context-menu, dialog-interplay, radix, june-2026]
+description: Standard code patterns used throughout the Vision project — repositories, routes, hooks, API client, Express setup, error handling, type safety, filter builders, aggregation envelopes, aggregation refresh, trigger-maintained tables, golden fixtures, database fixtures, pure calculation services, atomic multi-step transactions, streaming CSV exports with formula injection prevention, import batch concurrency, motion consumers, surface shells, gradient icon tiles, money utilities, decimal utilities, shared date utilities with input validation and locale support, timezone boundary handling, TypeScript type annotations, type-safe error handling, domain-split API client, Zustand store with useShallow slice selection, immutable PATCH field sanitization, aggregation query optimization with Map-based single-pass accumulation, recipient group resolution via scalar subqueries (Phase Q), portfolio totals single-source-of-truth pattern (Phase 14), Belgian Tax freeze/display pattern for engine-drift protection (ADR-059, May 2026), dev-only observability integration pattern (May 2026 devtools: module-level pub-sub event bus with zero-cost tree-shaking in production). May 2026 bug hunt adds React key generation pattern (use UUID instead of index), mount guard pattern (prevent setState after unmount), and documents parseLocaleNumber heuristic with single-comma thousands separator fix. May 2026 a11y pass adds onActivateKeyDown keyboard-activation helper pattern. June 2026: shared-utils monorepo package (@vision/shared-utils) consolidates money/slugify/downsample; banker's rounding is now the canonical roundMoney mode; tc() plural pattern documented. June 2026 (ADR-070): optimistic mutation pattern (snapshot/patch/rollback via setQueriesData); surface shell updated with glass-regular/glass-elevated/opaque-table canonical rules; motion consumer updated for PageTransition re-addition and dialog keyframe animation. June 2026 Premium v3 (ADR-071): optimistic-create pattern (temp negative-id row, server swap, rollback, onSettled invalidate); chart scrub pattern (useChartScrub, pointer capture, glass Δ pill); chart sync pattern (ChartSyncProvider, syncId prop, domain guard). June 2026 Premium v3 V5 (ADR-071): Radix ContextMenu + Dialog interplay pattern — modal={false} prevents body pointer-events race when menu items spawn Dialogs.
 aliases: [code patterns, coding patterns, conventions, patterns, how to write code, repository pattern, route pattern, hook pattern, error handling, type-safe error handling, type annotations, filter builder, golden fixture, aggregation envelope, calculation services, import concurrency, motion pattern, surface shell pattern, gradient icon pattern, money pattern, decimal pattern, timezone pattern, domain split, openapi, typescript types, csv export, safe csv, formula injection, cwe-1236, date utilities, immutability, aggregation optimization, Map pattern, recipient group filter, recipientGroupId, portfolio totals, single source of truth, parseLocaleNumber, number parsing, locale-aware number parsing, thousands separator, decimal separator, belgian-tax-pattern, freeze-display-pattern, as-filed-calculation, engine-drift-protection, shared-utils, workspace, plural, tc]
 ---
 
@@ -3595,6 +3595,43 @@ The helper fires the handler on **Enter** or **Space** and ignores events that b
 - Elements inside a `VirtualDataTable` row — the table's own inline `onKeyDown` covers row activation.
 
 See [[docs/components/shared-components#onActivateKeyDown (a11y utility)|onActivateKeyDown component doc]] for the list of surfaces where it is applied.
+
+---
+
+## Radix ContextMenu + Dialog Interplay — `modal={false}` (Premium v3 V5, June 2026)
+
+**Source:** [[apps/frontend/src/components/shared/VirtualDataTable.tsx]], [[apps/frontend/src/features/transactions/components/TransactionsTable.tsx]]
+
+When a Radix `ContextMenu` has items that open a page-level `Dialog`, the menu **must** be mounted with `modal={false}`.
+
+### Why
+
+A modal Radix overlay (`modal={true}`, the default) sets `pointer-events: none` on `document.body` while it is open. The `Dialog` component does the same when it opens. If the menu closes at the same moment the dialog opens, the two locks race: the menu's cleanup removes the `pointer-events` override while the dialog has already set its own. Depending on timing, the result is a page stuck in an inert state where no pointer events reach any element until the dialog closes.
+
+`modal={false}` skips the body pointer-event lock entirely. The menu still dismisses on item selection and on outside clicks — all expected Radix ContextMenu behavior is preserved.
+
+### Pattern
+
+```tsx
+// Inside VirtualDataTable render (per row):
+<ContextMenu modal={false}>
+    <ContextMenuTrigger asChild>{rowEl}</ContextMenuTrigger>
+    {rowContextMenu(row, sourceIndex, { startEditing: () => startEditing(sourceIndex, row) })}
+</ContextMenu>
+```
+
+### Rules
+
+| Rule | Rationale |
+|------|-----------|
+| Use `modal={false}` when any menu item opens a `Dialog` or `AlertDialog` | Prevents the body pointer-events race described above |
+| Do not use `modal={false}` on standalone menus with no dialog children | The default modal=true is safer (traps focus correctly for pure menus) |
+| Verify with both mouse and keyboard (Tab + Space/Enter) | Keyboard-only users open dialogs from menu items too |
+
+### When to Apply
+
+- Any `ContextMenu` or `DropdownMenu` whose items conditionally open a `Dialog`, `AlertDialog`, or `Sheet`.
+- Per-row menus in virtual tables (the most common case — each row context menu spawns the edit, delete-confirm, or quick-look dialog).
 
 ---
 
