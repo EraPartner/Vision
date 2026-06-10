@@ -58,7 +58,7 @@ export function SummaryCards({ data }: SummaryCardsProps) {
   return (
     <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 animate-stagger">
       {cards.map((card) => (
-        <Card key={card.title} className="group relative overflow-hidden surface-elevated premium-frame micro-lift bg-card backdrop-blur-sm">
+        <Card key={card.title} className="group relative overflow-hidden glass-regular premium-frame micro-lift">
           <CardHeader className="flex flex-row items-center justify-between pb-2">
             <CardTitle className="text-sm font-medium text-muted-foreground">{card.title}</CardTitle>
             <span className={cn(

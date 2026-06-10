@@ -157,13 +157,32 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
         return () => mq.removeEventListener('change', handler);
     }, [mode, _setResolvedTheme]);
 
-    // Apply CSS class to <html> and mirror to localStorage (FOUC prevention)
+    // Apply CSS class to <html> and mirror to localStorage (FOUC prevention).
+    // Wrapped in a View Transition (where supported) so light↔dark crossfades
+    // instead of hard-cutting; skipped under prefers-reduced-motion.
     useEffect(() => {
-        if (theme === 'dark') {
-            document.documentElement.classList.add('dark');
+        const apply = () => {
+            if (theme === 'dark') {
+                document.documentElement.classList.add('dark');
+            } else {
+                document.documentElement.classList.remove('dark');
+            }
+        };
+
+        const alreadyApplied = document.documentElement.classList.contains('dark') === (theme === 'dark');
+        const prefersReducedMotion =
+            typeof window.matchMedia === 'function' &&
+            window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+        const startViewTransition = (
+            document as Document & { startViewTransition?: (cb: () => void) => unknown }
+        ).startViewTransition;
+
+        if (!alreadyApplied && !prefersReducedMotion && typeof startViewTransition === 'function') {
+            startViewTransition.call(document, apply);
         } else {
-            document.documentElement.classList.remove('dark');
+            apply();
         }
+
         try { localStorage.setItem(THEME_STORAGE_KEY, theme); } catch { /* ignore */ }
     }, [theme]);
 

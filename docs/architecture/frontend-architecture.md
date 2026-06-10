@@ -2,12 +2,15 @@
 title: Frontend Architecture
 type: architecture
 status: active
-description: React frontend architecture, design system, and diagrams with liquid-glass aesthetic, visx charts, Framer Motion, and Zustand store. May 2026 Tailwind v4 migration with unified CSS architecture. Updated April 2026 with Statistics page component refactoring and Phase 4 unified settings store.
+description: React frontend architecture, design system, and diagrams with liquid-glass aesthetic, visx charts, Framer Motion, and Zustand store. May 2026 Tailwind v4 migration with unified CSS architecture. June 2026 Liquid Glass v2 — atmosphere layer, saturated blur tiers, CommandPalette, optimistic mutations, route preload.
 date: 2026-04-23
-updated: 2026-05-03
-tags: [architecture, frontend, uml, plantuml, react, phase-4, phase-6, phase-9, liquid-glass, visx, framer-motion, statistics-refactoring, zustand, state-management, tailwind-v4, css-architecture]
+updated: 2026-06-10
+tags: [architecture, frontend, uml, plantuml, react, phase-4, phase-6, phase-9, liquid-glass, liquid-glass-v2, visx, framer-motion, statistics-refactoring, zustand, state-management, tailwind-v4, css-architecture, command-palette, optimistic-updates, route-preload, june-2026]
 aliases: [frontend architecture, react architecture, frontend design, design system]
 ---
+
+> [!info] June 2026 — Liquid Glass v2 (ADR-070)
+> The design system was overhauled in June 2026. The atmosphere layer has been restored, blur tiers raised to 12–32px with saturation, the material class vocabulary simplified, `PageTransition` re-added as an enter-only spring, `CommandPalette` wired, sidebar active rail converted to a framer `layoutId` element, and `useUpdateTransaction`/`useDeleteTransaction` made optimistic. See [[docs/adr/070-liquid-glass-v2-premium-frontend|ADR-070]] for the full decision record.
 
 # Frontend Architecture
 
@@ -369,9 +372,9 @@ PortfolioOverviewPage --> PortfolioTaxPage
 @enduml
 ```
 
-## Design System: Emerald + Gold Aesthetic (Phase 9 + Performance Optimization)
+## Design System: Emerald + Gold Aesthetic (Liquid Glass v2, June 2026)
 
-The frontend implements a premium emerald + champagne-gold aesthetic with performance-optimized surface patterns:
+The frontend implements a premium emerald + champagne-gold aesthetic. The June 2026 Liquid Glass v2 pass ([[docs/adr/070-liquid-glass-v2-premium-frontend|ADR-070]]) restored the atmosphere layer and simplified the material vocabulary.
 
 ### Color Palette
 
@@ -380,30 +383,50 @@ The frontend implements a premium emerald + champagne-gold aesthetic with perfor
 - **Background**: Deep charcoal (`oklch(14% 0 0)`)
 - **Neutral**: Supporting grays for hierarchy
 
-All colors defined in `apps/frontend/src/styles/tokens.css` and consumed via Tailwind theme extension.
+All colors defined in `apps/frontend/src/styles/tokens.css` and consumed via Tailwind theme extension. Aurora blob colors derive from `--primary` / `--accent`, so all five theme variants work without changes to `themes.ts`.
 
-### Material Hierarchy (Performance-Optimized)
+### Atmosphere Layer
 
-Selective glass system with reduced blur (Electron M1 GPU optimization):
+`AppLayout` renders a `position: fixed; z-index: -1` liquid canvas layer (`liquid-canvas` class) containing:
 
-| Class | Purpose | Blur | Usage |
-|-------|---------|------|-------|
-| `glass-thin` | Subtle interactive elements | 6px | Rarely used |
-| `glass-regular` | Standard overlays (default) | 8px | Popover, Tooltip |
-| `glass-thick` | Modal dialogs | 12px | Dialog, AlertDialog, Sheet |
-| `glass-chrome` | Navigation chrome | 8px | Sidebar, AppLayout |
-| `bg-card/95` | Dense surfaces (default) | none | Card, Input, Button, Tabs, etc. |
+- Two slow-drifting aurora blobs animated via compositor-only `transform` (64s / 76s alternating cycles) — drift pauses under `prefers-reduced-motion`.
+- A static radial wash behind the blobs.
+- An SVG `feTurbulence` film-grain overlay child.
+- New CSS tokens: `--aurora-one-alpha`, `--aurora-two-alpha`, `--grain-alpha` (higher in dark mode for luminosity).
 
-**Rationale**: Glass blur filtered removed from frequently-occluded surfaces (Card, Input, Textarea, Tabs, Select, DropdownMenu, etc.) to eliminate Electron M1 GPU regression. Blur retained only on modal overlays + navigation chrome.
+With real background content behind glass surfaces, `backdrop-filter` now produces a visible refraction effect instead of tinted-card appearance.
 
-Additional utilities:
+### Material Hierarchy (Liquid Glass v2)
 
-- `surface-elevated` — non-glass elevated cards with premium depth (shadow only)
-- `premium-frame` — elevated depth without blur (multi-layer shadows)
-- `micro-lift` — subtle hover elevation (transform: translateY, GPU-safe)
-- **Removed**: `liquid-canvas` animated background (static grain overlay retained)
+Five saturated blur tiers (blur + `saturate(var(--glass-saturate))`):
 
-See [[docs/adr/020-glass-system-downgrade-liquid-canvas-removal|ADR-020]] for performance optimization details.
+| Class | Blur | Saturate | Usage |
+|-------|------|---------|-------|
+| `glass-thin` | 12px | 180%/150% | Subtle interactive elements |
+| `glass-regular` | 20px | 180%/150% | KPI cards, chart cards, AI-chat panes |
+| `glass-chrome` | 24px | 180%/150% | Sidebar, AppLayout topbar |
+| `glass-thick` | 28px | 180%/150% | Modal dialogs (Dialog, AlertDialog, Sheet), toasts |
+| `glass-elevated` | 32px | 180%/150% | Dashboard hero cards |
+
+Saturate: 180% in light mode, 150% in dark (tokens `--glass-saturate`).
+
+Thick and elevated materials gain lensing edges (inset top specular + bottom concave shade + long soft drop shadow).
+
+**Opaque surfaces (deliberate perf budget — ~6 backdrop-filter surfaces per viewport):**
+- `DataTable`, `VirtualDataTable`, Watchlist grid — intentionally opaque for render performance.
+- `Input`, `Textarea`, `Button`, `Tabs`, `Select`, `DropdownMenu`, `ContextMenu` — no blur.
+
+Additional layout utilities:
+- `premium-frame` — baked into the base `Card` component; provides the primary-tinted hover outline universally (previously had to be applied per-callsite). Both `premium-frame` and `micro-lift` animate border-color, box-shadow, and transform identically so either class wins the cascade safely.
+- `micro-lift` — subtle hover elevation (`translateY(-2px)`, GPU-safe).
+- `liquid-canvas` — fixed-position atmosphere wrapper rendered by `AppLayout`.
+- `liquid-canvas-grain` — SVG grain child of the atmosphere layer.
+
+### A11y Correction (Liquid Glass v2)
+
+`backdrop-filter` stripping was previously gated on `prefers-reduced-motion` (incorrect — blur is static). As of ADR-070 it is gated on `prefers-reduced-transparency`, with near-opaque fallbacks. Aurora drift still pauses under `prefers-reduced-motion`.
+
+See [[docs/adr/070-liquid-glass-v2-premium-frontend|ADR-070]] for the full material decision and [[docs/adr/020-glass-system-downgrade-liquid-canvas-removal|ADR-020]] for the prior downgrade context.
 
 ### Typography
 
@@ -413,7 +436,7 @@ See [[docs/adr/020-glass-system-downgrade-liquid-canvas-removal|ADR-020]] for pe
 
 Previous variable fonts superseded by static weight selection for performance.
 
-### Motion System
+### Motion System (Liquid Glass v2)
 
 Centralized in `apps/frontend/src/lib/motion.ts`:
 
@@ -421,9 +444,12 @@ Centralized in `apps/frontend/src/lib/motion.ts`:
 - **Easings**: cubic-bezier variants (out-expo, out-cubic, in-quad)
 - **Spring configs**: SPRING_BOUNCE, SPRING_SMOOTH, SPRING_SNAPPY
 - **Reduced-motion**: `useReducedMotion()` hook ensures `prefers-reduced-motion: reduce` compliance
-- **Page transitions**: Removed (`PageTransition.tsx` deleted; instant route transitions)
-- **Dialog/Popover entry**: Retained spring + fade animations (low GPU impact on modals)
-- **Chart animations**: Stagger + fade entry (gated by `useReducedMotion()`)
+- **Page transitions**: `PageTransition.tsx` (re-added June 2026) — enter-only spring keyed on pathname; no `AnimatePresence` exit to avoid double-rendering Suspense boundaries around lazy routes.
+- **Route loading**: 2px top hairline shimmer replaces the old `PageLoader` full-screen spinner.
+- **Dialog/alert-dialog**: `dialog-in` / `dialog-out` CSS keyframes with overshoot bezier (`cubic-bezier(0.34, 1.45, 0.64, 1)`); `motion-reduce` disables both. Fixes Tailwind v4 `translate`-property double-offset bug from the prior shadcn recipe.
+- **Sidebar active rail**: framer-motion `layoutId="active-rail"` (`ActiveRail` component) that glides between nav items on route change; instant under reduced motion.
+- **Chart animations**: Stagger + fade entry (extended to 12 children, was 8); gated by `useReducedMotion()`.
+- **Theme crossfade**: `ThemeContext` wraps the dark-class flip in `document.startViewTransition` (degrades gracefully on unsupported browsers / reduced-motion).
 
 ### Charts
 
@@ -474,12 +500,31 @@ The `@import "tailwindcss"` loads entire Tailwind v4 layer system; explicit `@co
 
 See [[docs/adr/047-tailwind-v4-migration-dependency-upgrades|ADR-047: Tailwind v4 Migration]] for full migration details.
 
+### Command Palette (Liquid Glass v2)
+
+`components/shared/CommandPalette.tsx` — new ⌘K / Ctrl+K palette (built on `cmdk`):
+
+- Covers all budgeting and portfolio pages, admin pages (when enabled), theme and settings actions.
+- Mounted by `AppLayout` with a topbar `⌘K` trigger button.
+- Cross-workspace jumps sync the sidebar workspace automatically.
+- 5 new i18n keys: `commandPalette.*` (en + nl).
+
+### Route Preload (Liquid Glass v2)
+
+`lib/routePreload.ts` — route → `import()` loader map shared by `App.tsx` `lazy()` calls and `AppSidebar` hover handlers:
+
+- Sidebar item `onMouseEnter` triggers `routePreload(path)`, warming the chunk before click.
+- `App.tsx` reuses the same loaders for `React.lazy()` so there is no separate dynamic import per call site.
+- Errors fall through to the normal lazy path (no UI impact on failure).
+- De-duplicated via a `Set` — repeated hover events do not fire multiple fetches.
+
 ### Related Documentation
 
+- [[docs/adr/070-liquid-glass-v2-premium-frontend|ADR-070: Liquid Glass v2 Premium Frontend Overhaul]] (June 2026)
 - [[docs/adr/017-liquid-glass-aesthetic-design-system|ADR-017: Liquid Glass Aesthetic]]
 - [[docs/adr/018-visx-d3-chart-migration|ADR-018: visx/d3 Chart Migration]]
 - [[docs/adr/019-framer-motion-adoption|ADR-019: Framer Motion Adoption]]
-- [[docs/adr/020-glass-system-downgrade-liquid-canvas-removal|ADR-020: Glass System Downgrade & Liquid Canvas Removal]] (Performance optimization)
+- [[docs/adr/020-glass-system-downgrade-liquid-canvas-removal|ADR-020: Glass System Downgrade & Liquid Canvas Removal]] (superseded in implementation by ADR-070)
 - [[docs/adr/047-tailwind-v4-migration-dependency-upgrades|ADR-047: Tailwind v4 Migration & Dependency Upgrades]]
 - [[docs/components/ui-components|UI Components]]
 
@@ -501,7 +546,11 @@ App
 │                               ├── Sonner
 │                               └── BrowserRouter
 │                                   └── AppLayout
-│                                       ├── Sidebar (navigation)
+│                                       ├── LiquidCanvas (fixed atmosphere layer)
+│                                       ├── Topbar (scroll-linked ::before + ⌘K trigger)
+│                                       ├── CommandPalette (⌘K, all pages + theme/settings)
+│                                       ├── AppSidebar (ActiveRail layoutId)
+│                                       ├── PageTransition (enter-only spring)
 │                                       └── Routes
 │                                           ├── Budgeting (/, /transactions, etc.)
 │                                           └── Portfolio (/portfolio/*)
@@ -509,10 +558,13 @@ App
 
 ## Key Patterns
 
-### 1. Code Splitting
-All pages are lazy-loaded for optimal bundle size:
+### 1. Code Splitting with Route Preload
+All pages are lazy-loaded using the shared route loader map:
 ```typescript
-const DashboardPage = lazy(() => import("./pages/DashboardPage"));
+// lib/routePreload.ts — shared map; used by App.tsx lazy() AND AppSidebar hover
+const routeLoaders = { '/': () => import('./pages/DashboardPage'), ... };
+const DashboardPage = lazy(routeLoaders['/']);
+// AppSidebar onMouseEnter: routePreload('/') — warms chunk before click
 ```
 
 ### 2. React Query Configuration
@@ -851,6 +903,7 @@ The frontend uses a token-based theming system with runtime color palette swappi
 ---
 
 **Related Documentation**
+- [[docs/adr/070-liquid-glass-v2-premium-frontend|ADR-070: Liquid Glass v2 Premium Frontend Overhaul]] (June 2026)
 - [[docs/adr/017-liquid-glass-aesthetic-design-system|ADR-017: Liquid Glass Aesthetic]]
 - [[docs/adr/018-visx-d3-chart-migration|ADR-018: visx/d3 Chart Migration]]
 - [[docs/adr/019-framer-motion-adoption|ADR-019: Framer Motion Adoption]]
@@ -860,7 +913,7 @@ The frontend uses a token-based theming system with runtime color palette swappi
 - [[docs/api/index|API Documentation]] - API endpoint details
 - [[docs/components/index|Components]] - Component documentation
 - [[docs/components/charts|Chart Primitives]] - Chart library documentation
-- [[docs/components/layout|Layout Components]] - AppLayout, AppSidebar
-- [[docs/components/hooks|Hooks]] - Custom hooks reference
+- [[docs/components/layout|Layout Components]] - AppLayout, AppSidebar, CommandPalette, PageTransition
+- [[docs/components/hooks|Hooks]] - Custom hooks reference (see useTransactions optimistic mutations)
 - [[docs/reference/code-patterns#motion-consumer-pattern-phase-9|Motion Consumer Pattern]]
 - [[docs/reference/code-patterns#surface-shell-pattern-phase-9|Surface Shell Pattern]]

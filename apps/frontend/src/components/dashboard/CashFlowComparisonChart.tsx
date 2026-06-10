@@ -153,7 +153,7 @@ export function CashFlowComparisonChart({
     }
 
     return (
-        <Card className="relative overflow-hidden surface-elevated premium-frame micro-lift bg-card backdrop-blur-sm lg:col-span-2">
+        <Card className="relative overflow-hidden glass-regular premium-frame micro-lift lg:col-span-2">
             <div className="absolute top-0 right-0 w-32 h-32 bg-gradient-to-br from-primary/10 to-transparent rounded-full -mr-16 -mt-16" />
             <CardHeader className="space-y-3">
                 <div className="flex items-center gap-3">

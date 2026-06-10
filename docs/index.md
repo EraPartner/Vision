@@ -3,8 +3,8 @@ title: Vision Project Knowledge Base
 type: index
 status: active
 date: 2026-04-27
-updated: 2026-05-19
-last_modified: 2026-05-19
+updated: 2026-06-10
+last_modified: 2026-06-10
 tags: [knowledge-base, index, project, overview, phase-8, phase-5a, phase-6, phase-7, phase-4, phase-3, phase-9, phase-13, aead, backup-v2, security-hardening, offline-resilience, export-filters, multi-select, bug-hunt-2026-04-29, bug-hunt-2026-05-05, startup-optimization, network-reachability, tailwind-v4, dependencies, css-architecture, mount-guard, react-keys, decimal-safety, date-safety, electron-hardening, belgian-tax, as-filed-snapshots, audit-log, comparison, trend-strip, dev-observability, devtools, api-inspector, devcontainer, claude-code-permissions]
 description: Main entry point to the Vision project documentation - financial transaction management application. May 19 2026: Devcontainer added — isolated Debian 12 environment with native PostgreSQL 18, bun, and default-deny egress firewall for safe claude --dangerously-skip-permissions use. May 12 2026 (ADR-059): Belgian Tax historical year extensions — frozen "as-filed" calculations, filed soft-lock, snapshot audit log, year-over-year comparison, multi-year trend strip, CSV export. Phase 9 complete with aggregation shadow cutover; all aggregations now served via `/api/aggregations/*`. Phase 8 complete with portfolio and tax PDF report export (6 + 7 sections). Phase 13 (2026-04-28): Multi-select export filters with CategoryMultiCombobox and BankAccountMultiCombobox components; pivot table drillthrough to filtered transaction lists. Bug-hunt (2026-04-29): Trivy exit-code hardening, release workflow concurrency + setup-bun action, docker-compose volume fix, graceful shutdown timer cleanup (3 intervals + debounce), import cleanup logging, watchlist dialog API client, install.sh interactive checksum gate. May 3 2026: Tailwind CSS v4 migration (3.4.19 → 4.2.4) with unified postcss plugin, sonner 2.0.7, recharts 3.8.1. May 3 2026: Offline-aware startup optimization — backend detects network unavailability early and skips 5-15s external data fetches, reducing readiness time ~15s when offline. **May 5 2026 Bug Hunt:** Comprehensive correctness hardening — frontend mount guards (usePlannedPayments), stable React keys (SplitTransactionDialog, TaxProfileDialog), queryKey fixes (usePortfolioPrefetch), UTC-safe date parsing (dateUtils), pagination stale-response guards (RecipientsPage), decimal arithmetic correctness, backend robustness (recipientPatternService, recurringDetectionService, belgianInflationService), Electron hardening (window/navigation/backup restrictions), and release workflow version sync (3-way check: git tag + root package.json + electron/package.json).
 aliases: [KB, docs, documentation, knowledge base, home]
@@ -160,6 +160,20 @@ WHERE date AND date >= date(today) - dur(7 days)
 SORT date DESC
 LIMIT 10
 ```
+
+### 2026-06-10 Liquid Glass v2 — Premium Frontend Overhaul (ADR-070)
+
+**Five-tier frontend overhaul** restoring and completing the ADR-017 liquid-glass system:
+
+- **Atmosphere layer**: `AppLayout` now renders a fixed `liquid-canvas` layer (two slow-drifting aurora blobs + radial wash + SVG grain). Glass surfaces have real background content to refract.
+- **Saturated materials**: blur tiers raised to 12/20/24/28/32px (thin/regular/chrome/thick/elevated) + `saturate(180%/150%)`. A11y: `prefers-reduced-transparency` now strips `backdrop-filter`.
+- **Material vocabulary simplified**: `surface-elevated … bg-card backdrop-blur-sm` across ~45 KPI/chart cards replaced with `glass-regular` (KPI/chart) or `glass-elevated` (hero). `premium-frame` baked into base `Card`. Tables stay opaque.
+- **Motion**: `PageTransition.tsx` (enter-only spring, re-added); 2px hairline shimmer replaces `PageLoader`; dialogs use `dialog-in`/`dialog-out` CSS keyframes with overshoot bezier; sidebar `ActiveRail` is a framer `layoutId` element.
+- **CommandPalette**: ⌘K palette covering all pages, theme/settings, workspace sync. Topbar trigger button. 5 new i18n keys.
+- **Optimistic mutations**: `useUpdateTransaction`/`useDeleteTransaction` are now optimistic (snapshot → patch → rollback via `setQueriesData`; `['transactions-virtual']` deliberately excluded; 4 new tests).
+- **Route preload**: `lib/routePreload.ts` shared by `App.tsx` lazy() and `AppSidebar` hover prefetch.
+
+See [[docs/adr/070-liquid-glass-v2-premium-frontend|ADR-070]], [[docs/architecture/frontend-architecture|Frontend Architecture]], [[docs/reference/code-patterns#surface-shell-pattern-phase-9|Surface Shell Pattern]], [[docs/components/layout|Layout Components]]
 
 ### 2026-05-19 Devcontainer: Isolated Dev Environment for Claude Code
 

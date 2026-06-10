@@ -85,7 +85,7 @@ export default function CryptoPage() {
           icon={Bitcoin}
           actions={<AddInvestmentDialog allowedAssetClasses={[ 'crypto' ]} />}
         />
-        <Card className="group relative overflow-hidden surface-elevated premium-frame bg-card backdrop-blur-sm">
+        <Card className="group relative overflow-hidden glass-regular premium-frame">
           <CardContent className="pt-0">
             <EmptyState
               icon={Bitcoin}
@@ -116,7 +116,7 @@ export default function CryptoPage() {
 
       {/* Summary Cards */}
       <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
-        <Card className="group relative overflow-hidden surface-elevated premium-frame micro-lift bg-card backdrop-blur-sm">
+        <Card className="group relative overflow-hidden glass-regular premium-frame micro-lift">
           <CardHeader className="pb-1 pt-3 px-4">
             <CardTitle className="text-xs font-medium text-muted-foreground flex items-center gap-1.5">
               <span className="inline-flex h-6 w-6 items-center justify-center rounded-md bg-gradient-to-br from-primary/20 to-primary/5 text-primary ring-1 ring-primary/15">
@@ -130,7 +130,7 @@ export default function CryptoPage() {
           </CardContent>
         </Card>
 
-        <Card className="group relative overflow-hidden surface-elevated premium-frame micro-lift bg-card backdrop-blur-sm">
+        <Card className="group relative overflow-hidden glass-regular premium-frame micro-lift">
           <CardHeader className="pb-1 pt-3 px-4">
             <CardTitle className="text-xs font-medium text-muted-foreground flex items-center gap-1.5">
               <span className={cn(
@@ -151,7 +151,7 @@ export default function CryptoPage() {
           </CardContent>
         </Card>
 
-        <Card className="group relative overflow-hidden surface-elevated premium-frame micro-lift bg-card backdrop-blur-sm">
+        <Card className="group relative overflow-hidden glass-regular premium-frame micro-lift">
           <CardHeader className="pb-1 pt-3 px-4">
             <CardTitle className="text-xs font-medium text-muted-foreground flex items-center gap-1.5">
               <span className={cn(
@@ -172,7 +172,7 @@ export default function CryptoPage() {
           </CardContent>
         </Card>
 
-        <Card className="group relative overflow-hidden surface-elevated premium-frame micro-lift bg-card backdrop-blur-sm">
+        <Card className="group relative overflow-hidden glass-regular premium-frame micro-lift">
           <CardHeader className="pb-1 pt-3 px-4">
             <CardTitle className="text-xs font-medium text-muted-foreground">{t('portfolio.feesAndTaxes')}</CardTitle>
           </CardHeader>
@@ -182,7 +182,7 @@ export default function CryptoPage() {
         </Card>
 
         <Card className={cn(
-          "group relative overflow-hidden surface-elevated premium-frame micro-lift bg-card backdrop-blur-sm border-l-4",
+          "group relative overflow-hidden glass-regular premium-frame micro-lift border-l-4",
           netGain >= 0 ? "border-l-accent" : "border-l-destructive"
         )}>
           <CardHeader className="pb-1 pt-3 px-4">

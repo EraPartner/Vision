@@ -61,14 +61,32 @@ package "UI Components (Radix + Tailwind)" {
 
 package "Layout Components" {
   class AppLayout {
+    +LiquidCanvas: atmosphere layer
+    +Topbar: scroll-linked header
     +Sidebar: AppSidebar
-    +Header: header
+    +CommandPalette: ⌘K palette
+    +PageTransition: enter-only spring
     +Content: Outlet
   }
 
   class AppSidebar {
     +Navigation: nav items
+    +ActiveRail: framer layoutId
     +Collapsible: boolean
+    +RoutePreload: hover prefetch
+  }
+
+  class PageTransition {
+    +spring: enter-only
+    +pathname: key
+    +reducedMotion: instant
+  }
+
+  class CommandPalette {
+    +trigger: ⌘K / Ctrl+K
+    +pages: all budgeting/portfolio
+    +theme: variant switch
+    +workspaceSync: boolean
   }
 }
 
@@ -229,6 +247,8 @@ App --> SettingsProvider
 App --> ErrorBoundary
 
 AppLayout --> AppSidebar
+AppLayout --> CommandPalette
+AppLayout --> PageTransition
 
 AddTransactionDialog --> CategoryCombobox
 AddTransactionDialog --> RecipientCombobox

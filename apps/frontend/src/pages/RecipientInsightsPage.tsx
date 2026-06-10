@@ -183,7 +183,7 @@ export default function RecipientInsightsPage() {
 
       {/* KPI cards */}
       <div className="grid gap-4 md:grid-cols-3">
-        <Card className="surface-elevated premium-frame">
+        <Card className="glass-regular premium-frame">
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
             <CardTitle className="text-sm font-medium">{t('insights.topRecipient')}</CardTitle>
             <Store className="h-4 w-4 text-muted-foreground" />
@@ -195,7 +195,7 @@ export default function RecipientInsightsPage() {
             </p>
           </CardContent>
         </Card>
-        <Card className="surface-elevated premium-frame">
+        <Card className="glass-regular premium-frame">
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
             <CardTitle className="text-sm font-medium">{t('insights.top10Total')}</CardTitle>
             <DollarSign className="h-4 w-4 text-muted-foreground" />
@@ -205,7 +205,7 @@ export default function RecipientInsightsPage() {
             <p className="text-xs text-muted-foreground">{t('insights.txCount', { n: totalTopTx })}</p>
           </CardContent>
         </Card>
-        <Card className="surface-elevated premium-frame">
+        <Card className="glass-regular premium-frame">
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
             <CardTitle className="text-sm font-medium">{t('insights.avgTxn')}</CardTitle>
             <Hash className="h-4 w-4 text-muted-foreground" />

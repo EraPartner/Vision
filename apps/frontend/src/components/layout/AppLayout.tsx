@@ -1,8 +1,8 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { SidebarProvider, SidebarTrigger } from "@/components/ui/sidebar";
 import { AppSidebar } from "@/components/layout/AppSidebar";
 import { Button } from "@/components/ui/button";
-import { Settings, Sun, Moon, Monitor, Clock } from "lucide-react";
+import { Settings, Sun, Moon, Monitor, Clock, Search } from "lucide-react";
 import {
     DropdownMenu, DropdownMenuContent, DropdownMenuItem,
     DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger,
@@ -16,6 +16,8 @@ import { UpcomingPaymentsNotification } from "@/components/notifications/Upcomin
 import { FxStatusBanner } from "@/components/notifications/FxStatusBanner";
 import { UpdateNotification } from "@/components/notifications/UpdateNotification";
 import { OnboardingWizard, useOnboarding } from "@/components/onboarding/OnboardingWizard";
+import { PageTransition } from "@/components/layout/PageTransition";
+import { CommandPalette } from "@/components/shared/CommandPalette";
 
 interface AppLayoutProps {
     children: React.ReactNode;
@@ -24,6 +26,7 @@ interface AppLayoutProps {
 export function AppLayout({ children }: AppLayoutProps) {
     const [settingsOpen, setSettingsOpen] = useState(false);
     const [settingsDefaultTab, setSettingsDefaultTab] = useState('general');
+    const [paletteOpen, setPaletteOpen] = useState(false);
 
     const openSettingsOnTab = (tab: string) => {
         setSettingsDefaultTab(tab);
@@ -32,6 +35,15 @@ export function AppLayout({ children }: AppLayoutProps) {
     const { mode, schedule, setMode, setSchedule } = useTheme();
     const { t } = useLanguage();
     const { isComplete: onboardingComplete, isLoading: onboardingLoading, complete: completeOnboarding } = useOnboarding();
+
+    // Topbar material fades in once the page scrolls under it.
+    const [scrolled, setScrolled] = useState(false);
+    useEffect(() => {
+        const onScroll = () => setScrolled(window.scrollY > 8);
+        onScroll();
+        window.addEventListener('scroll', onScroll, { passive: true });
+        return () => window.removeEventListener('scroll', onScroll);
+    }, []);
 
     const modeIcon = useMemo(() => ({
         light: <Sun className="h-5 w-5" />,
@@ -43,12 +55,28 @@ export function AppLayout({ children }: AppLayoutProps) {
     return (
         <SidebarProvider defaultOpen={false}>
             <div className="relative min-h-screen flex w-full overflow-x-clip">
+                <div aria-hidden="true" className="liquid-canvas">
+                    <div className="liquid-canvas-grain" />
+                </div>
                 <AppSidebar />
                 <div className="flex-1 flex flex-col min-w-0">
                     <header
-                        className="app-topbar glass-thin h-14 border-b border-border/50 flex items-center px-4 sticky top-0 z-30">
+                        data-scrolled={scrolled}
+                        className="app-topbar h-14 flex items-center px-4 sticky top-0 z-30">
                         <SidebarTrigger className="mr-4" />
                         <div className="flex-1" />
+                        <button
+                            type="button"
+                            onClick={() => setPaletteOpen(true)}
+                            aria-label={t('commandPalette.openLabel')}
+                            className="hidden sm:flex items-center gap-2 h-9 rounded-xl border border-border/50 bg-background/50 px-3 mr-2 text-sm text-muted-foreground tracking-tight transition-[border-color,background-color,color] duration-[var(--duration-fast)] ease-[var(--ease-out-expo)] hover:border-primary/40 hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/70"
+                        >
+                            <Search className="h-3.5 w-3.5" />
+                            <span className="hidden md:inline">{t('commandPalette.hint')}</span>
+                            <kbd className="hidden md:inline-flex items-center gap-0.5 rounded-md border border-border/60 bg-muted/60 px-1.5 py-0.5 text-[10px] font-medium text-muted-foreground">
+                                ⌘K
+                            </kbd>
+                        </button>
                         <UpdateNotification />
                         <DropdownMenu>
                             <DropdownMenuTrigger asChild>
@@ -140,10 +168,11 @@ export function AppLayout({ children }: AppLayoutProps) {
                     <main className="flex-1 p-4 md:p-6 min-h-[calc(100vh-3.5rem)]">
                         <FxStatusBanner />
                         <UpcomingPaymentsNotification />
-                        {children}
+                        <PageTransition>{children}</PageTransition>
                     </main>
                 </div>
             </div>
+            <CommandPalette open={paletteOpen} onOpenChange={setPaletteOpen} onOpenSettings={openSettingsOnTab} />
             <DashboardSettingsDialog open={settingsOpen} onOpenChange={(o) => { setSettingsOpen(o); if (!o) setSettingsDefaultTab('general'); }} defaultTab={settingsDefaultTab} />
             {!onboardingLoading && (
                 <OnboardingWizard open={!onboardingComplete} onComplete={completeOnboarding} onOpenSettings={openSettingsOnTab} />

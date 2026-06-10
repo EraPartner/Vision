@@ -3,10 +3,10 @@ title: Custom Hooks
 type: component
 status: active
 date: 2026-04-23
-updated: 2026-06-01
-last_modified: 2026-06-01
-tags: [components, hooks, react-query, zustand, form-state, data-table, phase-4, phase-13, phase-c, phase-d, i18n, notifications, export-filters, bug-hunt-2026-05-05, bug-hunt-2026-05-06, bug-hunt-2026-05-08, mount-guard, query-key-fix, prefetch, memoization, useCallback, parseLocaleNumber, currency-utilities, exclusion-ids, ssrf-correctness, loading-states, error-states, isError, refetch, recipient-insights-filter]
-description: Custom React hooks for data fetching and state management. Includes toast notifications for mutations via i18n keys. Phase 13 adds useBankAccounts hook for export filtering. May 2026 bug hunt adds mount guard to usePlannedPayments, fixes queryKey mismatch in usePortfolioPrefetch, and documents parseLocaleNumber utility for locale-aware number parsing. 2026-05-29 adds useExcludedIds as a shared exclusion-resolution hook and exposes isLoading/isError/error/refetch from usePortfolio so asset pages can distinguish loading/error from empty. 2026-06-01: useStatistics adds recipientInsightsFilteredQuery so the all-years Top Recipients chart reacts to exclusion toggles.
+updated: 2026-06-10
+last_modified: 2026-06-10
+tags: [components, hooks, react-query, zustand, form-state, data-table, phase-4, phase-13, phase-c, phase-d, i18n, notifications, export-filters, bug-hunt-2026-05-05, bug-hunt-2026-05-06, bug-hunt-2026-05-08, mount-guard, query-key-fix, prefetch, memoization, useCallback, parseLocaleNumber, currency-utilities, exclusion-ids, ssrf-correctness, loading-states, error-states, isError, refetch, recipient-insights-filter, optimistic-updates, liquid-glass-v2, june-2026]
+description: Custom React hooks for data fetching and state management. Includes toast notifications for mutations via i18n keys. Phase 13 adds useBankAccounts hook for export filtering. May 2026 bug hunt adds mount guard to usePlannedPayments, fixes queryKey mismatch in usePortfolioPrefetch, and documents parseLocaleNumber utility for locale-aware number parsing. 2026-05-29 adds useExcludedIds as a shared exclusion-resolution hook and exposes isLoading/isError/error/refetch from usePortfolio so asset pages can distinguish loading/error from empty. 2026-06-01: useStatistics adds recipientInsightsFilteredQuery so the all-years Top Recipients chart reacts to exclusion toggles. 2026-06-10: useUpdateTransaction/useDeleteTransaction made optimistic (ADR-070 Tier 5).
 related_code: ["apps/frontend/src/hooks"]
 ---
 
@@ -76,6 +76,21 @@ Vision uses custom hooks for data fetching, state management, and reusable logic
 
 Hook for managing transactions.
 
+### Optimistic Update / Delete (June 2026, ADR-070)
+
+`useUpdateTransaction` and `useDeleteTransaction` are now optimistic as of June 2026 (ADR-070 Tier 5):
+
+- **Pattern**: snapshot-all → optimistic-patch-all → rollback-on-error → `onSettled` invalidate.
+- `onMutate`: calls `queryClient.setQueriesData` across all `['transactions', params]` cache entries to apply the change immediately before the network request returns.
+- `onError`: restores the snapshot so every patched cache key reverts to its previous value.
+- `onSettled`: calls `queryClient.invalidateQueries(['transactions'])` so server truth always wins after settlement.
+- **`['transactions-virtual']` deliberately not patched**: `useTransactionListData` mirrors the virtual list's first page into local state; patching that cache key while the user is scrolled would collapse the list. It is invalidated by `onSettled` like the rest.
+- **`tags` excluded from merge**: the mutation payload carries `string[]` tag slugs but the cached row holds `Tag[]` objects; merging them would produce wrong shapes. Tags are corrected by the `onSettled` refetch.
+- 4 new tests in `hooks/__tests__/useOptimisticTransactions.test.tsx`.
+
+> [!note] Stale category/recipient name
+> An optimistic update can briefly show a stale `category_name` or `recipient_name` when only the id changed (the id is in the payload but the joined name is not). The `onSettled` invalidation corrects this within one round-trip. Amounts always come from user input, never derived.
+
 ### API
 
 ```typescript
@@ -88,8 +103,8 @@ const {
 
 // Mutations
 const createMutation = useCreateTransaction();
-const updateMutation = useUpdateTransaction();
-const deleteMutation = useDeleteTransaction();
+const updateMutation = useUpdateTransaction();   // optimistic since ADR-070
+const deleteMutation = useDeleteTransaction();   // optimistic since ADR-070
 ```
 
 ### Options

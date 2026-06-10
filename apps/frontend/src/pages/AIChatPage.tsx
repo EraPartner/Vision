@@ -140,14 +140,14 @@ export default function AIChatPage() {
         <div className="flex h-[calc(100vh-8rem)] gap-4 p-4">
             {/* Desktop: persistent rail. Mobile (<md): hidden — opened via the
                 header menu button as a left drawer below. */}
-            <aside className="hidden w-72 shrink-0 rounded-2xl border border-border/50 bg-card/60 backdrop-blur-sm md:block">
+            <aside className="hidden w-72 shrink-0 rounded-2xl glass-regular md:block">
                 <ChatConversationList
                     selectedId={selectedId}
                     onSelect={setSelectedId}
                 />
             </aside>
 
-            <main className="flex flex-1 flex-col overflow-hidden rounded-2xl border border-border/50 bg-card/60 backdrop-blur-sm">
+            <main className="flex flex-1 flex-col overflow-hidden rounded-2xl glass-regular">
                 <header className="flex items-center justify-between border-b border-border/50 px-5 py-4">
                     <div className="flex min-w-0 items-center gap-3">
                         <Sheet open={railOpen} onOpenChange={setRailOpen}>

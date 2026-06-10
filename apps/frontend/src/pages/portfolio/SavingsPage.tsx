@@ -77,7 +77,7 @@ export default function SavingsPage() {
           icon={PiggyBank}
           actions={<AddInvestmentDialog allowedAssetClasses={[ 'savings', 'bond' ]} />}
         />
-        <Card className="group relative overflow-hidden surface-elevated premium-frame bg-card backdrop-blur-sm">
+        <Card className="group relative overflow-hidden glass-regular premium-frame">
           <CardContent className="pt-0">
             <EmptyState
               icon={PiggyBank}
@@ -102,7 +102,7 @@ export default function SavingsPage() {
 
       {/* Summary Cards */}
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-        <Card className="group relative overflow-hidden surface-elevated premium-frame micro-lift bg-card backdrop-blur-sm">
+        <Card className="group relative overflow-hidden glass-regular premium-frame micro-lift">
           <CardHeader className="pb-1 pt-3 px-4">
             <CardTitle className="text-xs font-medium text-muted-foreground flex items-center gap-2">
               <span className="inline-flex h-6 w-6 items-center justify-center rounded-md bg-gradient-to-br from-primary/20 to-primary/5 text-primary ring-1 ring-primary/15">
@@ -116,7 +116,7 @@ export default function SavingsPage() {
           </CardContent>
         </Card>
 
-        <Card className="group relative overflow-hidden surface-elevated premium-frame micro-lift bg-card backdrop-blur-sm">
+        <Card className="group relative overflow-hidden glass-regular premium-frame micro-lift">
           <CardHeader className="pb-1 pt-3 px-4">
             <CardTitle className="text-xs font-medium text-muted-foreground flex items-center gap-2">
               <span className="inline-flex h-6 w-6 items-center justify-center rounded-md bg-gradient-to-br from-accent/20 to-accent/5 text-accent ring-1 ring-accent/15">
@@ -130,7 +130,7 @@ export default function SavingsPage() {
           </CardContent>
         </Card>
 
-        <Card className="group relative overflow-hidden surface-elevated premium-frame micro-lift bg-card backdrop-blur-sm">
+        <Card className="group relative overflow-hidden glass-regular premium-frame micro-lift">
           <CardHeader className="pb-1 pt-3 px-4">
             <CardTitle className="text-xs font-medium text-muted-foreground flex items-center gap-2">
               <span className="inline-flex h-6 w-6 items-center justify-center rounded-md bg-gradient-to-br from-accent/20 to-accent/5 text-accent ring-1 ring-accent/15">
@@ -144,7 +144,7 @@ export default function SavingsPage() {
           </CardContent>
         </Card>
 
-        <Card className="group relative overflow-hidden surface-elevated premium-frame micro-lift bg-card backdrop-blur-sm border-l-4 border-l-primary">
+        <Card className="group relative overflow-hidden glass-regular premium-frame micro-lift border-l-4 border-l-primary">
           <CardHeader className="pb-1 pt-3 px-4">
             <CardTitle className="text-xs font-medium text-muted-foreground">{t('portfolio.projectedAnnual')}</CardTitle>
           </CardHeader>

@@ -54,7 +54,7 @@ export function CategoryPieChart({ data, embedded = false, formatValue }: Catego
         }
 
         return (
-            <Card className="relative overflow-hidden surface-elevated premium-frame micro-lift bg-card backdrop-blur-sm">
+            <Card className="relative overflow-hidden glass-regular premium-frame micro-lift">
                 <div className="absolute top-0 right-0 w-32 h-32 bg-gradient-to-br from-white/50 to-transparent dark:from-white/10 rounded-full -mr-16 -mt-16"></div>
                 <CardHeader>
                     <CardTitle className="text-lg font-semibold">
@@ -74,7 +74,7 @@ export function CategoryPieChart({ data, embedded = false, formatValue }: Catego
     }
 
     return (
-        <Card className="relative overflow-hidden surface-elevated premium-frame micro-lift bg-card backdrop-blur-sm">
+        <Card className="relative overflow-hidden glass-regular premium-frame micro-lift">
             <div className="absolute top-0 right-0 w-32 h-32 bg-gradient-to-br from-white/50 to-transparent dark:from-white/10 rounded-full -mr-16 -mt-16"></div>
             <CardHeader>
                 <CardTitle className="text-lg font-semibold">

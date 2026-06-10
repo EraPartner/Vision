@@ -302,15 +302,20 @@ Meets WCAG AAA accessibility standards:
 - Navy (`hsl(240, 100%, 20%)`) primary on light backgrounds exceeds 7:1 contrast ratio
 - Neon green accent is distinguishable for colorblind users
 
+### Theme Crossfade (June 2026)
+
+`ThemeContext` now wraps the dark-class flip in `document.startViewTransition` (where supported by the browser) to produce a smooth crossfade between light and dark mode. Falls back to instant flip on unsupported browsers and when `prefers-reduced-motion: reduce` is active.
+
 ### Reduced Motion
 
 All theme transitions respect `prefers-reduced-motion`:
-- If `prefers-reduced-motion: reduce`, variant changes apply instantly without fade effects
+- If `prefers-reduced-motion: reduce`, variant changes apply instantly without fade effects; `startViewTransition` is skipped
 - Schedule mode does not animate between light/dark; transitions are instant
 
 ## Related Features
 
 - [[docs/features/settings|Settings Feature]] — Settings system overview
+- [[docs/adr/070-liquid-glass-v2-premium-frontend|ADR-070: Liquid Glass v2]] — Theme crossfade via `startViewTransition` (June 2026)
 - [[docs/adr/017-liquid-glass-aesthetic-design-system|ADR-017: Liquid Glass Aesthetic]] — Design system foundation
 - [[docs/adr/025-theme-variant-system|ADR-025: Theme Variant System]] — Architectural decision and token details
 - [[docs/api/settings|Settings API]] — Backend API contracts

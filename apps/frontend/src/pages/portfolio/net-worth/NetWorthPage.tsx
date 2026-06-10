@@ -297,7 +297,7 @@ export default function NetWorthPage() {
 
       {/* Historical extremes */}
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-        <Card className="group relative overflow-hidden surface-elevated premium-frame micro-lift bg-card backdrop-blur-sm">
+        <Card className="group relative overflow-hidden glass-regular premium-frame micro-lift">
           <CardHeader className="flex flex-row items-center justify-between pb-2">
             <CardTitle className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">{t('networth.peak')}</CardTitle>
             <TrendingUp className="h-4 w-4 text-accent" />
@@ -306,7 +306,7 @@ export default function NetWorthPage() {
             <p className="text-2xl font-bold text-foreground tabular-nums">{fmt(peak)}</p>
           </CardContent>
         </Card>
-        <Card className="group relative overflow-hidden surface-elevated premium-frame micro-lift bg-card backdrop-blur-sm">
+        <Card className="group relative overflow-hidden glass-regular premium-frame micro-lift">
           <CardHeader className="flex flex-row items-center justify-between pb-2">
             <CardTitle className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">{t('networth.lowest')}</CardTitle>
             <TrendingDown className="h-4 w-4 text-destructive" />
@@ -315,7 +315,7 @@ export default function NetWorthPage() {
             <p className="text-2xl font-bold text-foreground tabular-nums">{fmt(trough)}</p>
           </CardContent>
         </Card>
-        <Card className="group relative overflow-hidden surface-elevated premium-frame micro-lift bg-card backdrop-blur-sm">
+        <Card className="group relative overflow-hidden glass-regular premium-frame micro-lift">
           <CardHeader className="flex flex-row items-center justify-between pb-2">
             <CardTitle className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">{t('networth.daysTracked')}</CardTitle>
             <Wallet className="h-4 w-4 text-primary" />

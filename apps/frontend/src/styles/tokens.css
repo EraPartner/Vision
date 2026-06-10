@@ -87,12 +87,18 @@
         --glass-tint: 158 40% 40%;
 
         /* Blur + saturation per material */
-        --glass-thin-blur: 6px;
-        --glass-regular-blur: 8px;
-        --glass-thick-blur: 10px;
-        --glass-chrome-blur: 8px;
-        --glass-elevated-blur: 12px;
-        --glass-saturate: 110%;
+        --glass-thin-blur: 12px;
+        --glass-regular-blur: 20px;
+        --glass-thick-blur: 28px;
+        --glass-chrome-blur: 24px;
+        --glass-elevated-blur: 32px;
+        --glass-saturate: 180%;
+
+        /* -------- Atmosphere (liquid canvas) -------- */
+        --aurora-primary-alpha: 0.1;
+        --aurora-accent-alpha: 0.08;
+        --aurora-wash-alpha: 0.06;
+        --grain-alpha: 0.018;
 
         /* -------- Motion -------- */
         --duration-fast: 150ms;
@@ -185,5 +191,12 @@
         --glass-highlight: 42 40% 94%;
         --glass-shadow: 0 0% 0%;
         --glass-tint: 158 50% 45%;
+        --glass-saturate: 150%;
+
+        /* -------- Atmosphere (dark: more luminous aurora) -------- */
+        --aurora-primary-alpha: 0.16;
+        --aurora-accent-alpha: 0.12;
+        --aurora-wash-alpha: 0.1;
+        --grain-alpha: 0.028;
     }
 }

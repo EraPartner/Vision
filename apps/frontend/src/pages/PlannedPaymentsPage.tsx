@@ -420,7 +420,7 @@ export default function PlannedPaymentsPage() {
         )}
 
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-          <Card className="group relative overflow-hidden surface-elevated premium-frame micro-lift bg-card backdrop-blur-sm">
+          <Card className="group relative overflow-hidden glass-regular premium-frame micro-lift">
             <CardHeader className="pb-2">
               <CardTitle className="text-sm font-medium text-muted-foreground">{t('plannedPage.pending')}</CardTitle>
             </CardHeader>
@@ -428,7 +428,7 @@ export default function PlannedPaymentsPage() {
               <p className="text-2xl font-bold">{pending}</p>
             </CardContent>
           </Card>
-          <Card className="group relative overflow-hidden surface-elevated premium-frame micro-lift bg-card backdrop-blur-sm">
+          <Card className="group relative overflow-hidden glass-regular premium-frame micro-lift">
             <CardHeader className="pb-2">
               <CardTitle className="text-sm font-medium text-muted-foreground flex items-center gap-2">
                 <span className="inline-flex h-6 w-6 items-center justify-center rounded-md bg-gradient-to-br from-accent/20 to-accent/5 text-accent ring-1 ring-accent/15">
@@ -441,7 +441,7 @@ export default function PlannedPaymentsPage() {
               <p className="text-2xl font-bold text-accent">{executed}</p>
             </CardContent>
           </Card>
-          <Card className="group relative overflow-hidden surface-elevated premium-frame micro-lift bg-card backdrop-blur-sm">
+          <Card className="group relative overflow-hidden glass-regular premium-frame micro-lift">
             <CardHeader className="pb-2">
               <CardTitle className="text-sm font-medium text-muted-foreground flex items-center gap-2">
                 <span className="inline-flex h-6 w-6 items-center justify-center rounded-md bg-gradient-to-br from-primary/20 to-primary/5 text-primary ring-1 ring-primary/15">
@@ -454,7 +454,7 @@ export default function PlannedPaymentsPage() {
               <p className="text-2xl font-bold tabular-nums">{formatDisplayCurrency(totalMonthly)}</p>
             </CardContent>
           </Card>
-          <Card className="group relative overflow-hidden surface-elevated premium-frame micro-lift bg-card backdrop-blur-sm">
+          <Card className="group relative overflow-hidden glass-regular premium-frame micro-lift">
             <CardHeader className="pb-2">
               <CardTitle className="text-sm font-medium text-muted-foreground flex items-center gap-2">
                 <span className="inline-flex h-6 w-6 items-center justify-center rounded-md bg-gradient-to-br from-accent/20 to-accent/5 text-accent ring-1 ring-accent/15">

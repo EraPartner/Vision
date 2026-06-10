@@ -3,9 +3,9 @@ title: UI Components
 type: component
 status: active
 date: 2026-04-17
-updated: 2026-04-25
-tags: [components, ui, radix, shadcn, design-system, phase-9, phase-5, performance, glass-downgrade, dependency-slim-down]
-description: Reusable UI components built on Radix UI primitives with Tailwind CSS, styled with emerald + champagne-gold palette and optimized design tokens. Phase 5 removes unused Carousel, Resizable, and Drawer wrappers.
+updated: 2026-06-10
+tags: [components, ui, radix, shadcn, design-system, phase-9, phase-5, performance, glass-downgrade, dependency-slim-down, liquid-glass-v2, june-2026, command-palette]
+description: Reusable UI components built on Radix UI primitives with Tailwind CSS, styled with emerald + champagne-gold palette and optimized design tokens. Phase 5 removes unused Carousel, Resizable, and Drawer wrappers. June 2026 Liquid Glass v2 — Card gains universal premium-frame hover, Dialog/AlertDialog use dialog-in/out keyframes, Sonner toasts are glass-thick, EmptyState upgraded, CommandPalette added.
 aliases: [ui-components, radix-components, shadcn-components, primitive-components]
 related_code: ["apps/frontend/src/components/ui"]
 ---
@@ -18,82 +18,88 @@ Vision uses a comprehensive set of UI components (45 total, Phase 5 slim-down re
 
 All UI components are located in `apps/frontend/src/components/ui/` and are based on [shadcn/ui](https://ui.shadcn.com) design patterns. As of Phase 9 + performance optimization (2026-04-17), all components have been tuned to use the emerald + champagne-gold palette, centralized design tokens, and selective glass surfaces optimized for Electron M1 performance.
 
-## Surface Styling (Performance-Optimized Glass)
+## Surface Styling (Liquid Glass v2, June 2026)
 
-The UI primitives use a shared surface system defined in [[apps/frontend/src/index.css\|index.css]], with glass blur selectively applied to high-priority overlays only:
+> [!info] Updated — ADR-070
+> The glass surface system was overhauled in June 2026. Blur tiers are higher and saturate is active. See [[docs/adr/070-liquid-glass-v2-premium-frontend|ADR-070]] for full rationale.
 
-**Glass-based surfaces** (retained blur, 6-12px):
+The UI primitives use a shared surface system defined in [[apps/frontend/src/index.css\|index.css]] and [[apps/frontend/src/styles/tokens.css\|tokens.css]]:
 
-- `.glass-thin` (6px) — subtle interactive elements
-- `.glass-regular` (8px) — standard overlay (default)
-- `.glass-thick` (12px) — modal dialogs (Dialog, AlertDialog)
-- `.glass-chrome` (8px) — navigation chrome (Sidebar, AppLayout)
+**Glass-based surfaces** (blur + saturate, `backdrop-filter`):
 
-Applied to modals only:
-- `Dialog`, `AlertDialog`, `Sheet` (modal overlays) use `.glass-thick` with `bg-card/95` fallback
-- `Sidebar`/`AppLayout` navigation chrome uses `.glass-chrome`
-- Popovers + Tooltips use `.glass-regular` (lowest-impact overlays)
+| Class | Blur | Usage |
+|-------|------|-------|
+| `.glass-thin` | 12px | Subtle interactive elements |
+| `.glass-regular` | 20px | KPI/chart cards, AI-chat panes, popovers |
+| `.glass-chrome` | 24px | Sidebar, AppLayout topbar |
+| `.glass-thick` | 28px | Modal dialogs (Dialog, AlertDialog, Sheet), Sonner toasts |
+| `.glass-elevated` | 32px | Dashboard hero cards (StatCard, NetSummaryCard) |
 
-**Solid-surface pattern** (removed blur, 95% opacity):
+All glass tiers include `saturate(var(--glass-saturate))` — 180% in light mode, 150% in dark. Thick and elevated tiers add lensing edges (inset specular + concave shade + drop shadow).
 
-Dense components now use `bg-card/95` + single subtle border + ≤8px shadow:
-- `Card` root (standard app surface)
-- `Button` variants (removed `.liquid-glass-soft`)
-- Input, Textarea, Checkbox, RadioGroup, Switch, Slider, Label
-- Tabs, Select, DropdownMenu, ContextMenu, MenuBar
-- Accordion, Collapsible, Toggle, ToggleGroup
-- Alert, HoverCard
-- Sonner toast notifications
+**`prefers-reduced-transparency`** — strips `backdrop-filter` and applies near-opaque fallbacks. (Previously incorrectly gated on `prefers-reduced-motion`; corrected in ADR-070.)
+
+**Opaque surfaces** (no `backdrop-filter` — deliberate perf budget):
+- `DataTable`, `VirtualDataTable`, Watchlist grid — stay opaque for render performance (~6 backdrop-filter surfaces per viewport budget)
+- `Input`, `Textarea`, `Checkbox`, `RadioGroup`, `Switch`, `Slider`, `Label`
+- `Tabs`, `Select`, `DropdownMenu`, `ContextMenu`, `MenuBar`
+- `Accordion`, `Collapsible`, `Toggle`, `ToggleGroup`
+- `Alert`, `HoverCard`
 
 **Removed UI wrappers (Phase 5 slim-down)**:
 - `Carousel` — unused wrapper around embla-carousel-react; removed with package
 - `Resizable` — unused wrapper around react-resizable-panels; removed with package
 - `Drawer` — unused wrapper around vaul; removed with package (using Sheet instead)
 
-**Rationale**: Electron M1 GPU regression from blur + saturation filtering on frequently-occluded surfaces. Solid opacity-based layering (95% color + transparency) achieves visual depth with zero GPU blur cost. See [[docs/adr/020-glass-system-downgrade-liquid-canvas-removal|ADR-020]] for details.
+Code links: [[apps/frontend/src/index.css]], [[apps/frontend/src/styles/tokens.css]], [[apps/frontend/src/components/ui/card.tsx]], [[apps/frontend/src/components/ui/dialog.tsx]], [[apps/frontend/src/components/ui/input.tsx]], [[apps/frontend/src/components/ui/button.tsx]]
 
-**Removed components**:
-- `.liquid-canvas` animated background mesh (see AppLayout, below)
-- `liquid-drift` / `liquid-canvas-drift` keyframes (static grain overlay retained)
-- `saturate()` filters (drop color saturation amplification; rely on opacity for readability)
+**Motion and premium polish utilities**:
 
-Code links: [[apps/frontend/src/index.css]], [[apps/frontend/src/components/ui/card.tsx]], [[apps/frontend/src/components/ui/dialog.tsx]], [[apps/frontend/src/components/ui/input.tsx]], [[apps/frontend/src/components/ui/button.tsx]]
-
-**Minimal motion and premium polish utilities**:
-
-- `.micro-lift` — very small hover elevation (transform only, GPU-safe; `will-change: transform` on `:hover` only)
+- `.micro-lift` — hover elevation (`translateY(-2px)` + shadow increase, GPU-safe)
 - `.press-feedback` — subtle click/tap compression feedback
 - `.premium-icon-action` — premium icon-button hover/focus polish in chrome controls
-- `.premium-frame` — elevated depth without glass blur (shadows + opacity)
+- `.premium-frame` — baked into base `Card` (since ADR-070) — primary-tinted hover outline; previously had to be added per callsite. Declares the same full `transition` list as `micro-lift` (border-color, box-shadow, transform) so both classes harmonize when combined.
 - `.icon-touch-target` — consistent touch-safe icon action hit areas (2.5rem square)
-- `.surface-default` / `.surface-elevated` / `.surface-glass` — sanctioned surface recipes
+- `.liquid-canvas` — fixed-position atmosphere wrapper rendered by `AppLayout`
+- `.liquid-canvas-grain` — SVG grain child of the atmosphere layer
 
-Shared table shells (`DataTable`, `VirtualDataTable`) use `premium-frame` + `micro-lift` (non-glass) for cleaner density and readability.
+Shared table shells (`DataTable`, `VirtualDataTable`) use `premium-frame` + `micro-lift` (opaque, non-glass) for density and readability.
 
-Reduced-motion behavior explicitly disables transitions/animations when `prefers-reduced-motion: reduce` is active.
+`prefers-reduced-motion`: transitions/animations disabled; aurora drift paused; sidebar `ActiveRail` transitions are instant.
 
 Code links: [[apps/frontend/src/index.css]], [[apps/frontend/src/components/ui/button.tsx]], [[apps/frontend/src/components/layout/AppLayout.tsx]]
 
 ---
 
-## AppLayout & Shell Components
+## AppLayout & Shell Components (Liquid Glass v2)
+
+> [!info] June 2026 update — atmosphere layer, topbar, CommandPalette, PageTransition re-added
 
 **AppLayout.tsx** — Main app container:
-- Removed: `.liquid-canvas` animated gradient mesh + `liquid-drift` keyframe animation
-- Retained: Static grain overlay (CSS rule, no animation)
-- Sidebar + chrome use `.glass-chrome` (8px blur retained)
-- Page transitions: Direct route outlet render (PageTransition wrapper removed)
+- Renders a fixed `liquid-canvas` atmosphere layer (two aurora blobs + radial wash + SVG grain). Blobs animate via compositor-only `transform`; drift pauses under `prefers-reduced-motion`.
+- Scroll-linked topbar: material lives in a `::before` pseudo-element that fades in when `[data-scrolled]` is set (gradients cannot `transition` directly); passive scroll listener sets the attribute.
+- Mounts `CommandPalette` with topbar ⌘K trigger button.
+- Wraps child routes in `PageTransition` (enter-only spring).
+- Sidebar + chrome: `.glass-chrome` (24px blur, saturated).
 
 **AppSidebar.tsx** — Navigation chrome:
-- `.glass-chrome` with emerald accent rail on active route
-- `micro-lift` on hover
+- `.glass-chrome` with active-route accent rail.
+- Active rail is now a framer-motion `layoutId="active-rail"` element (`ActiveRail`) that animates between nav items on route change; instant under reduced motion.
+- Item `onMouseEnter` triggers `routePreload(path)` via `lib/routePreload.ts` to warm route chunks before click.
+- `micro-lift` on hover.
 
-**PageTransition.tsx** — Removed entirely (confirmed unused):
-- Previous: Spring-based route choreography (enter: 300ms spring, exit: 200ms fade)
-- Now: Direct React Router outlet (instant transitions)
-- Rationale: Spring physics on route changes added GPU complexity for marginal UX benefit
+**PageTransition.tsx** — New in June 2026 (enter-only spring):
+- Enter-only `motion.div` spring keyed on `location.pathname` — no `AnimatePresence` exit to avoid double-rendering React Suspense boundaries around lazy routes.
+- Instant transition when `prefers-reduced-motion` is active.
+- Was removed in 2026-04-17 (ADR-020); re-added as enter-only in 2026-06-10 (ADR-070).
 
-Code links: [[apps/frontend/src/components/layout/AppLayout.tsx]], [[apps/frontend/src/components/layout/AppSidebar.tsx]]
+**CommandPalette.tsx** — New in June 2026:
+- ⌘K / Ctrl+K keyboard shortcut, also triggered by topbar button.
+- Built on `cmdk` library; covers all budgeting/portfolio/admin pages, theme variant switch, and settings navigation.
+- Cross-workspace jumps sync the sidebar workspace automatically.
+- 5 new i18n keys: `commandPalette.*` in en/nl.
+
+Code links: [[apps/frontend/src/components/layout/AppLayout.tsx]], [[apps/frontend/src/components/layout/AppSidebar.tsx]], [[apps/frontend/src/components/layout/PageTransition.tsx]], [[apps/frontend/src/components/shared/CommandPalette.tsx]], [[apps/frontend/src/lib/routePreload.ts]]
 
 ---
 
@@ -118,10 +124,18 @@ Code links: [[apps/frontend/package.json]], [[apps/frontend/src/index.css]]
 Page-level consistency is provided by reusable shared components:
 
 - `PageHeader` for canonical page title/subtitle/icon/actions layout
-- `EmptyState` for standardized empty-state messaging and CTA composition
+- `EmptyState` for standardized empty-state messaging and CTA composition (see below)
 - `PageError` for standardized recoverable error presentation
 
 `EmptyState` supports rich content for `title` and `description` via `ReactNode`, enabling multi-line and mixed-content copy while preserving one visual pattern.
+
+### EmptyState (upgraded — Liquid Glass v2)
+
+`EmptyState` was upgraded in June 2026 (ADR-070 Tier 3):
+
+- Icon container is now a `glass-regular` tile over a blurred brand glow (glass material, not a flat background square).
+- Title uses the display-serif (Fraunces) `font-display` class for premium emphasis.
+- All existing `title` / `description` / `action` props preserved; no API change.
 
 Code links: [[apps/frontend/src/components/shared/PageHeader.tsx]], [[apps/frontend/src/components/shared/EmptyState.tsx]], [[apps/frontend/src/components/shared/PageError.tsx]], [[apps/frontend/src/pages/TransactionsPage.tsx]], [[apps/frontend/src/pages/RecipientsPage.tsx]], [[apps/frontend/src/pages/ImportPage.tsx]], [[apps/frontend/src/pages/portfolio/PortfolioOverviewPage.tsx]], [[apps/frontend/src/pages/portfolio/WatchlistPage.tsx]], [[apps/frontend/src/pages/portfolio/StocksPage.tsx]], [[apps/frontend/src/pages/portfolio/CryptoPage.tsx]], [[apps/frontend/src/pages/portfolio/RealEstatePage.tsx]], [[apps/frontend/src/pages/portfolio/SavingsPage.tsx]], [[apps/frontend/src/pages/portfolio/PerformancePage.tsx]], [[apps/frontend/src/pages/portfolio/net-worth/NetWorthPage.tsx]], [[apps/frontend/src/pages/portfolio/ExchangeRatesPage.tsx]], [[apps/frontend/src/pages/portfolio/tax/PortfolioTaxPage.tsx]], [[apps/frontend/src/pages/RecipientInsightsPage.tsx]], [[apps/frontend/src/pages/TaxOverviewPage.tsx]], [[apps/frontend/src/pages/OwesPage.tsx]], [[apps/frontend/src/pages/MarketLookupPage.tsx]]
 
@@ -298,7 +312,7 @@ Content container with header, content, and footer sections.
 - `CardContent` - Main content
 - `CardFooter` - Footer/actions
 
-`Card` uses standard app surface defaults and glass can be applied selectively via `className` utilities.
+`Card` now has `premium-frame` baked into its base class (June 2026, ADR-070). All cards receive the primary-tinted hover outline and transition list (border-color, box-shadow, transform) without adding any class manually. Add `glass-regular` / `glass-elevated` via `className` to opt into the glass material. Tables inside cards should remain opaque.
 
 ---
 
@@ -352,15 +366,31 @@ Modal dialog overlay.
 </Dialog>
 ```
 
+### Animation (Liquid Glass v2)
+
+Dialog and `AlertDialog` animations were rebuilt in June 2026 (ADR-070):
+
+- Enter: `animate-dialog-in` keyframe with overshoot bezier `cubic-bezier(0.34, 1.45, 0.64, 1)` — spring feel without JS, fixes Tailwind v4 `translate`-property double-offset glitch from the prior `slide-in-from-left-1/2` recipe.
+- Exit: `animate-dialog-out` keyframe.
+- `motion-reduce` media query disables both keyframes.
+
 ### Components
 
 - `Dialog` - Root
 - `DialogTrigger` - Open trigger
-- `DialogContent` - Modal content
+- `DialogContent` - Modal content (`.glass-thick`)
 - `DialogHeader` - Header section
 - `DialogTitle` - Title
 - `DialogDescription` - Description
 - `DialogFooter` - Footer with actions
+
+---
+
+## Sonner (Liquid Glass v2)
+
+Toasts use `.glass-thick` material (28px blur + saturate) as of June 2026 (ADR-070). Previously a solid/semi-transparent surface.
+
+Code links: [[apps/frontend/src/components/ui/sonner.tsx]]
 
 ---
 

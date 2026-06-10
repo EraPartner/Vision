@@ -40,10 +40,29 @@ import {
   Globe,
   PanelLeftClose,
 } from "lucide-react";
+import { motion, useReducedMotion } from "framer-motion";
 import { useWorkspace } from "@/contexts/WorkspaceContext";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { usePortfolioPrefetch } from "@/hooks/usePortfolioPrefetch";
 import { useAppSettings } from "@/contexts/AppSettingsContext";
+import { springs } from "@/lib/motion";
+import { preloadRoute } from "@/lib/routePreload";
+
+/**
+ * The active-route accent rail as a shared layout element: framer-motion
+ * glides it between nav items on navigation instead of blinking it on/off.
+ */
+function ActiveRail() {
+  const reducedMotion = useReducedMotion();
+  return (
+    <motion.span
+      layoutId="sidebar-active-rail"
+      aria-hidden="true"
+      className="absolute left-0 top-[15%] bottom-[15%] w-[3px] rounded-r-[2px] bg-gradient-to-b from-primary to-accent shadow-[0_0_14px_hsl(var(--primary)/0.6)]"
+      transition={reducedMotion ? { duration: 0 } : springs.snappy}
+    />
+  );
+}
 
 function isActiveRoute(itemUrl: string, pathname: string) {
   if (itemUrl === "/" && pathname === "/") return true;
@@ -62,6 +81,7 @@ export function AppSidebar() {
   const { appSettings } = useAppSettings();
 
   const handleNavHover = useCallback((url: string) => {
+    preloadRoute(url);
     if (url === "/portfolio/net-worth") prefetchNetWorth();
     else if (url === "/portfolio/performance") prefetchPerformance();
   }, [prefetchNetWorth, prefetchPerformance]);
@@ -190,9 +210,11 @@ export function AppSidebar() {
                 >
                   <NavLink
                     to="/ai-chat"
-                    className={isActiveRoute("/ai-chat", location.pathname) ? "accent-rail" : ""}
+                    onMouseEnter={() => handleNavHover("/ai-chat")}
+                    className="relative"
                     aria-label={t('nav.aiChat')}
                   >
+                    {isActiveRoute("/ai-chat", location.pathname) && <ActiveRail />}
                     <Sparkles className={`h-4 w-4 transition-colors duration-[var(--duration-normal)] ${isActiveRoute("/ai-chat", location.pathname) ? "text-primary" : ""}`} />
                     <span className={isActiveRoute("/ai-chat", location.pathname) ? "font-semibold tracking-tight" : "tracking-tight"}>
                       {t('nav.aiChat')}
@@ -248,9 +270,10 @@ export function AppSidebar() {
                         <NavLink
                           to={item.url}
                           onMouseEnter={() => handleNavHover(item.url)}
-                          className={isActive ? "accent-rail" : ""}
+                          className="relative"
                           aria-label={item.title}
                         >
+                          {isActive && <ActiveRail />}
                           <item.icon className={`h-4 w-4 transition-colors duration-[var(--duration-normal)] ${isActive ? "text-primary" : ""}`} />
                           <span className={isActive ? "font-semibold tracking-tight" : "tracking-tight"}>{item.title}</span>
                         </NavLink>
@@ -277,9 +300,11 @@ export function AppSidebar() {
                       <SidebarMenuButton asChild isActive={isActive} tooltip={item.title}>
                         <NavLink
                           to={item.url}
-                          className={isActive ? "accent-rail" : ""}
+                          onMouseEnter={() => handleNavHover(item.url)}
+                          className="relative"
                           aria-label={item.title}
                         >
+                          {isActive && <ActiveRail />}
                           <item.icon className={`h-4 w-4 transition-colors duration-[var(--duration-normal)] ${isActive ? "text-primary" : ""}`} />
                           <span className={isActive ? "font-semibold tracking-tight" : "tracking-tight"}>{item.title}</span>
                         </NavLink>

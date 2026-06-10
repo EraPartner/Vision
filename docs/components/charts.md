@@ -88,6 +88,9 @@ function MonthlyTrendsPage() {
 
 ### Sparkline in StatCard
 
+> [!note] Surface class update (June 2026)
+> The example below uses `surface-elevated premium-frame` (pre-ADR-070 style). Current canonical recipe for KPI/stat cards is `glass-regular premium-frame micro-lift` or use the `<Card>` component with `className="glass-regular micro-lift"` (`premium-frame` is now baked into `Card`).
+
 ```tsx
 import { Sparkline } from '@/components/charts/Sparkline';
 

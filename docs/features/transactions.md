@@ -3,10 +3,10 @@ title: Transactions
 type: feature
 status: active
 date: 2026-04-16
-updated: 2026-05-08
-tags: [feature, transactions, finance, phase-q, recipient-groups, bulk-actions]
+updated: 2026-06-10
+tags: [feature, transactions, finance, phase-q, recipient-groups, bulk-actions, optimistic-updates, june-2026]
 aliases: [transactions-feature, income, expenses, financial-records, money-tracking]
-description: Core transaction management - income, expenses, and tracking financial activities. Phase Q adds recipient-group filtering for linked-recipient transaction discovery. Bulk operations enable atomic multi-row delete, recategorize, reassign, activate/deactivate, export, and tag.
+description: Core transaction management - income, expenses, and tracking financial activities. Phase Q adds recipient-group filtering for linked-recipient transaction discovery. Bulk operations enable atomic multi-row delete, recategorize, reassign, activate/deactivate, export, and tag. June 2026 (ADR-070): useUpdateTransaction/useDeleteTransaction are now optimistic.
 related_code: ["apps/node-backend/src/routes/transactions.js", "apps/node-backend/src/repositories/transactionRepository.js", "apps/node-backend/src/services/filterBuilder.js", "apps/node-backend/src/services/bulkSelection.js", "apps/frontend/src/features/transactions/", "apps/frontend/src/pages/TransactionsPage.tsx"]
 ---
 
@@ -259,6 +259,16 @@ Transactions support multi-row selection and bulk operations for efficiency:
 - **Bulk tag** — Apply or remove tags from many rows simultaneously
 
 See [[docs/features/bulk-actions]] for full details on selection modes (IDs vs. filter), UI patterns, and atomic guarantees.
+
+---
+
+## Optimistic Update / Delete (June 2026)
+
+`useUpdateTransaction` and `useDeleteTransaction` are now optimistic (ADR-070 Tier 5). On mutation start, the change is applied immediately to all `['transactions', params]` React Query cache entries via `setQueriesData`, giving the user instant feedback. On error, all entries are rolled back to their snapshot. On settlement (success or error), `['transactions']` is invalidated so server truth wins.
+
+**Important constraint**: `['transactions-virtual']` is deliberately not patched optimistically — `useTransactionListData` mirrors the virtual list's cached first page into local component state, and patching that key while the user has scrolled would collapse the list. It is corrected by the `onSettled` invalidation.
+
+See [[docs/components/hooks#useTransactions|useTransactions hook]] and [[docs/adr/070-liquid-glass-v2-premium-frontend|ADR-070]] for full details and test coverage.
 
 ---
 

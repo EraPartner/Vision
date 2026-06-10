@@ -3,9 +3,9 @@ title: Code Patterns Reference
 type: reference
 status: active
 date: 2026-04-26
-updated: 2026-06-01
+updated: 2026-06-10
 tags: [reference, patterns, conventions, code-style, backend, frontend, phase-0, phase-1, phase-2, phase-3, phase-4, phase-5, phase-6, phase-9, phase-12, phase-14, phase-q, phase-c, phase-d, motion, liquid-glass, design-system, decimal, money, timezone, openapi, domain-split, import, import-pipeline, concurrency, batching, decimal-enforcement, zustand, slice-selection, typescript, error-handling, type-safety, csv, formula-injection, cwe-1236, csv-record-splitter, csv-parsing, multi-line-fields, date-utilities, immutability, aggregation-optimization, recipient-groups, portfolio-totals, query-parameter-filtering, buildquery, bug-hunt-2026-05-05, bug-hunt-2026-05-06, bug-hunt-2026-05-08, react-keys, stable-keys, mount-guard, memory-leak-prevention, parseLocaleNumber, number-parsing, locale-number, settings-backed-hook, portfolio-tax-classifications, audit-2026-05-11, belgian-tax, freeze-display-pattern, adr-059, dev-observability, devtools, api-inspector, observability, postgres-locking, for-update-group-by, accessibility, a11y, keyboard-operability, aria, onActivateKeyDown, shared-utils, monorepo, workspace, banker-rounding, plural, tc, portfolio-unit-math]
-description: Standard code patterns used throughout the Vision project — repositories, routes, hooks, API client, Express setup, error handling, type safety, filter builders, aggregation envelopes, aggregation refresh, trigger-maintained tables, golden fixtures, database fixtures, pure calculation services, atomic multi-step transactions, streaming CSV exports with formula injection prevention, import batch concurrency, motion consumers, surface shells, gradient icon tiles, money utilities, decimal utilities, shared date utilities with input validation and locale support, timezone boundary handling, TypeScript type annotations, type-safe error handling, domain-split API client, Zustand store with useShallow slice selection, immutable PATCH field sanitization, aggregation query optimization with Map-based single-pass accumulation, recipient group resolution via scalar subqueries (Phase Q), portfolio totals single-source-of-truth pattern (Phase 14), Belgian Tax freeze/display pattern for engine-drift protection (ADR-059, May 2026), dev-only observability integration pattern (May 2026 devtools: module-level pub-sub event bus with zero-cost tree-shaking in production). May 2026 bug hunt adds React key generation pattern (use UUID instead of index), mount guard pattern (prevent setState after unmount), and documents parseLocaleNumber heuristic with single-comma thousands separator fix. May 2026 a11y pass adds onActivateKeyDown keyboard-activation helper pattern. June 2026: shared-utils monorepo package (@vision/shared-utils) consolidates money/slugify/downsample; banker's rounding is now the canonical roundMoney mode; tc() plural pattern documented.
+description: Standard code patterns used throughout the Vision project — repositories, routes, hooks, API client, Express setup, error handling, type safety, filter builders, aggregation envelopes, aggregation refresh, trigger-maintained tables, golden fixtures, database fixtures, pure calculation services, atomic multi-step transactions, streaming CSV exports with formula injection prevention, import batch concurrency, motion consumers, surface shells, gradient icon tiles, money utilities, decimal utilities, shared date utilities with input validation and locale support, timezone boundary handling, TypeScript type annotations, type-safe error handling, domain-split API client, Zustand store with useShallow slice selection, immutable PATCH field sanitization, aggregation query optimization with Map-based single-pass accumulation, recipient group resolution via scalar subqueries (Phase Q), portfolio totals single-source-of-truth pattern (Phase 14), Belgian Tax freeze/display pattern for engine-drift protection (ADR-059, May 2026), dev-only observability integration pattern (May 2026 devtools: module-level pub-sub event bus with zero-cost tree-shaking in production). May 2026 bug hunt adds React key generation pattern (use UUID instead of index), mount guard pattern (prevent setState after unmount), and documents parseLocaleNumber heuristic with single-comma thousands separator fix. May 2026 a11y pass adds onActivateKeyDown keyboard-activation helper pattern. June 2026: shared-utils monorepo package (@vision/shared-utils) consolidates money/slugify/downsample; banker's rounding is now the canonical roundMoney mode; tc() plural pattern documented. June 2026 (ADR-070): optimistic mutation pattern (snapshot/patch/rollback via setQueriesData); surface shell updated with glass-regular/glass-elevated/opaque-table canonical rules; motion consumer updated for PageTransition re-addition and dialog keyframe animation.
 aliases: [code patterns, coding patterns, conventions, patterns, how to write code, repository pattern, route pattern, hook pattern, error handling, type-safe error handling, type annotations, filter builder, golden fixture, aggregation envelope, calculation services, import concurrency, motion pattern, surface shell pattern, gradient icon pattern, money pattern, decimal pattern, timezone pattern, domain split, openapi, typescript types, csv export, safe csv, formula injection, cwe-1236, date utilities, immutability, aggregation optimization, Map pattern, recipient group filter, recipientGroupId, portfolio totals, single source of truth, parseLocaleNumber, number parsing, locale-aware number parsing, thousands separator, decimal separator, belgian-tax-pattern, freeze-display-pattern, as-filed-calculation, engine-drift-protection, shared-utils, workspace, plural, tc]
 ---
 
@@ -2410,14 +2410,17 @@ Both queries execute within the same transaction, so atomicity is preserved: the
 
 ---
 
-## Motion Consumer Pattern (Phase 9)
+## Motion Consumer Pattern (Phase 9 + June 2026)
 
 **Source:** [[apps/frontend/src/lib/motion.ts|motion.ts]]
 
 All Framer Motion-enabled components must check `useReducedMotion()` and conditionally apply animations to respect OS accessibility settings.
 
-> [!note] PageTransition Removed (2026-04-17)
-> The `PageTransition` component was removed as part of Electron M1 performance optimization. See [[docs/adr/020-glass-system-downgrade-liquid-canvas-removal|ADR-020]] for details. Motion consumers remain relevant for modal/dialog entry animations and chart effects.
+> [!info] PageTransition Re-added (June 2026 — ADR-070)
+> `PageTransition.tsx` was removed in 2026-04-17 (ADR-020) and re-added in 2026-06-10 (ADR-070) as an enter-only spring keyed on `location.pathname`. There is no `AnimatePresence` exit — that caused double-renders of React Suspense boundaries around lazy routes. Under `prefers-reduced-motion`, the transition is instant.
+
+> [!info] Dialog Animation Changed (June 2026 — ADR-070)
+> Dialog and AlertDialog no longer use framer-motion for their enter/exit. They use CSS `dialog-in`/`dialog-out` keyframes with an overshoot bezier (`cubic-bezier(0.34, 1.45, 0.64, 1)`). `motion-reduce` disables both keyframes. This fixes the Tailwind v4 `translate`-property double-offset bug from the prior `slide-in-from-left-1/2` recipe.
 
 ### Pattern
 
@@ -2466,28 +2469,50 @@ export function MyAnimatedComponent() {
 
 ---
 
-## Surface Shell Pattern (Phase 9)
+## Surface Shell Pattern (Phase 9 + June 2026)
 
 **Source:** [[apps/frontend/src/components/ui/card.tsx|card.tsx]], [[apps/frontend/src/components/dashboard/StatCard.tsx|StatCard.tsx]], [[apps/frontend/src/components/layout/AppLayout.tsx|AppLayout.tsx]]
 
 Standard card and surface shell for consistent material hierarchy and visual cohesion.
 
+> [!info] Updated June 2026 — ADR-070
+> The canonical card material rule changed. `surface-elevated … bg-card backdrop-blur-sm` is replaced by the glass vocabulary below. `premium-frame` is now baked into the base `Card` component.
+
+### Canonical Card Material Rule (June 2026)
+
+| Surface type | Class | Notes |
+|---|---|---|
+| KPI / chart card | `glass-regular` | 20px blur + saturate; add `premium-frame micro-lift` for hover |
+| Dashboard hero card | `glass-elevated` | 32px blur + saturate; trend tint in overlay child |
+| Table (DataTable / VirtualDataTable / Watchlist) | opaque (no glass class) | Deliberate perf budget — ~6 backdrop surfaces per viewport |
+| Modal dialog | `glass-thick` | Handled by the base Dialog component |
+| Toast | `glass-thick` | Handled by Sonner |
+| Navigation chrome | `glass-chrome` | Handled by AppLayout/AppSidebar |
+
+`premium-frame` is baked into the base `Card` component — you no longer need to add it as a className. Both `premium-frame` and `micro-lift` declare identical full `transition` lists (border-color, box-shadow, transform) so whichever class wins the cascade still animates all three properties.
+
 ### Pattern
 
 ```tsx
-// Standard elevated card (most common)
-<div className="group relative overflow-hidden surface-elevated premium-frame micro-lift bg-card backdrop-blur-sm">
-  {/* Content */}
-</div>
+// KPI / chart card (most common)
+<Card className="glass-regular micro-lift">
+  {/* Content — premium-frame hover outline included automatically from Card base */}
+</Card>
 
-// Glass surface (dialogs, overlays)
+// Dashboard hero card (income/net summary)
+<Card className="glass-elevated micro-lift">
+  {/* Trend tint as overlay child, not on the card itself */}
+  <div className="absolute inset-0 opacity-30 bg-gradient-to-br from-primary/20 to-transparent pointer-events-none" />
+  {/* Content */}
+</Card>
+
+// Opaque table container (performance budget)
+<Card>
+  <DataTable ... />  {/* No glass class — tables stay opaque */}
+</Card>
+
+// Glass surface (dialogs, overlays — handled by Dialog component)
 <div className="relative overflow-hidden glass-thick rounded-lg border border-white/10">
-  {/* Content */}
-</div>
-
-// Premium stat card (hero emphasis)
-<div className="group relative overflow-hidden glass-regular rounded-lg border border-white/10 micro-lift">
-  <div className="absolute inset-0 opacity-40 bg-gradient-to-br from-primary/20 to-transparent" />
   {/* Content */}
 </div>
 
@@ -2501,24 +2526,28 @@ Standard card and surface shell for consistent material hierarchy and visual coh
 
 | Utility | Purpose |
 |---------|---------|
-| `surface-elevated` | Elevated non-glass card background (default for most cards) |
-| `premium-frame` | Elevated depth + subtle shadow (works with or without glass) |
-| `micro-lift` | Hover transform: very small `translateY(-2px)` + shadow increase |
-| `glass-*` | Glass variants (thin, regular, thick, chrome, elevated) |
+| `glass-regular` | KPI/chart cards — 20px blur + saturate |
+| `glass-elevated` | Hero cards — 32px blur + saturate + lensing edges |
+| `glass-thick` | Modal dialogs, toasts — 28px blur + saturate |
+| `glass-chrome` | Sidebar/topbar navigation — 24px blur + saturate |
+| `glass-thin` | Subtle elements — 12px blur + saturate |
+| `premium-frame` | Primary-tinted hover outline (baked into Card base since ADR-070) |
+| `micro-lift` | Hover transform: `translateY(-2px)` + shadow increase |
 | `group` | Parent selector for hover states affecting children |
 | `overflow-hidden` | Clip rounded corners (important for glass + grain texture) |
-| `backdrop-blur-sm` | Subtle blur fallback for browsers without full glass support |
 | `border border-white/10` | Subtle highlight rim at 10% white opacity |
 
-### Gradient Icon Tile Pattern (Phase 9)
+### Gradient Icon Tile Pattern (Phase 9 + June 2026)
 
 **Source:** [[apps/frontend/src/pages/DashboardPage.tsx|DashboardPage.tsx]], [[apps/frontend/src/components/dashboard/StatCard.tsx|StatCard.tsx]]
 
-Summary cards and stat tiles use a semi-transparent gradient background with an icon inside for visual interest:
+Summary cards and stat tiles use a glass-elevated or glass-regular card with a tint overlay child for hero emphasis. The gradient lives in an overlay child (not on the card background) so it survives the `backdrop-filter` cascade:
 
 ```tsx
-<div className="surface-elevated premium-frame micro-lift rounded-lg p-4">
-  <div className="flex items-center gap-3">
+<Card className="glass-elevated micro-lift relative">
+  {/* Tint overlay as child — not on the card background itself */}
+  <div className="absolute inset-0 opacity-30 bg-gradient-to-br from-primary/20 to-transparent pointer-events-none rounded-[inherit]" />
+  <CardContent className="relative flex items-center gap-3">
     <div className="h-12 w-12 rounded-lg bg-gradient-to-br from-emerald-400/30 via-transparent to-primary/20 flex items-center justify-center">
       <TrendingUpIcon className="h-6 w-6 text-emerald-400" />
     </div>
@@ -2526,8 +2555,8 @@ Summary cards and stat tiles use a semi-transparent gradient background with an 
       <p className="text-sm text-muted-foreground">Monthly Income</p>
       <p className="text-2xl font-semibold">€4,250</p>
     </div>
-  </div>
-</div>
+  </CardContent>
+</Card>
 ```
 
 ### Key Rules
@@ -2535,11 +2564,104 @@ Summary cards and stat tiles use a semi-transparent gradient background with an 
 | Rule | Rationale |
 |------|-----------|
 | Always use `overflow-hidden` with rounded corners | Prevents gradient overflow; clips grain texture properly |
-| Pair `surface-elevated` with `premium-frame` | Consistent depth signal across all cards |
-| Use `micro-lift` on interactive containers | Hover feedback without changing layout |
-| Gradient icons 12×12–16×16 max | Avoid visual clutter; icon should be supplementary |
-| Mute gradient opacity (20-40%) | Ensure text contrast and readability |
-| Apply in card shell, not direct wrapping | Compose surfaces from these utilities, don't mix |
+| Do NOT put `premium-frame` on `<Card>` manually | It is now baked into the Card base class |
+| Use `glass-regular` for KPI/chart cards | Consistent material across all ~45 non-hero cards |
+| Use `glass-elevated` for hero/summary cards | Max-tier material for dashboard emphasis |
+| Tables stay opaque | ~6 backdrop-filter surfaces per viewport is the performance budget |
+| Tint overlay as child, not on card bg | `backdrop-filter` shorthand resets `background`, silently defeating tints set on the card itself |
+| Gradient icons muted opacity (20-40%) | Ensure text contrast and readability |
+
+---
+
+## Optimistic Mutation Pattern (Frontend, June 2026 — ADR-070)
+
+**Source:** [[apps/frontend/src/hooks/useTransactions.ts|useTransactions.ts]], [[apps/frontend/src/hooks/__tests__/useOptimisticTransactions.test.tsx|useOptimisticTransactions.test.tsx]]
+
+Use this pattern for mutations where instant perceived feedback matters and rollback on error is required. Implemented for `useUpdateTransaction` and `useDeleteTransaction` in ADR-070 Tier 5.
+
+### Pattern
+
+```typescript
+export function useUpdateTransaction() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: ({ id, data }: { id: number; data: TransactionUpdate }) =>
+      apiClient.updateTransaction(id, data),
+
+    onMutate: async ({ id, data }) => {
+      // 1. Cancel any in-flight refetches so they don't overwrite optimistic data
+      await queryClient.cancelQueries({ queryKey: ['transactions'] });
+
+      // 2. Snapshot all matching cache entries
+      const snapshots = queryClient.getQueriesData<TransactionListResponse>({
+        queryKey: ['transactions'],
+      });
+
+      // 3. Apply optimistic update across all ['transactions', params] caches
+      //    NOTE: ['transactions-virtual'] is intentionally NOT patched here
+      queryClient.setQueriesData<TransactionListResponse>(
+        { queryKey: ['transactions'], exact: false },
+        (old) => {
+          if (!old) return old;
+          return {
+            ...old,
+            items: old.items.map((tx) =>
+              tx.id === id
+                ? { ...tx, ...data, tags: tx.tags }  // tags excluded from merge
+                : tx,
+            ),
+          };
+        },
+      );
+
+      return { snapshots };  // context passed to onError
+    },
+
+    onError: (_err, _vars, context) => {
+      // 4. Roll back all patched caches on error
+      if (context?.snapshots) {
+        for (const [queryKey, data] of context.snapshots) {
+          queryClient.setQueryData(queryKey, data);
+        }
+      }
+    },
+
+    onSettled: () => {
+      // 5. Always invalidate so server truth wins after settlement
+      queryClient.invalidateQueries({ queryKey: ['transactions'] });
+    },
+  });
+}
+```
+
+### Key Rules
+
+| Rule | Rationale |
+|------|-----------|
+| `cancelQueries` before `setQueriesData` | Prevents an in-flight refetch from overwriting the optimistic state |
+| Snapshot with `getQueriesData` | Returns all matching cache entries (not just the most recent) |
+| `setQueriesData` with `exact: false` | Patches all `['transactions', params]` variants (different pages, filters) |
+| Exclude `['transactions-virtual']` | `useTransactionListData` mirrors its first page to local state; patching would collapse the scrolled list |
+| Exclude `tags` from merge | Payload carries `string[]` slugs; cache holds `Tag[]` objects; shapes differ |
+| Rollback via snapshot | Restore every key from the snapshot in `onError` |
+| Invalidate in `onSettled` | Always refetch after success OR error so server truth wins |
+
+### When to Use
+
+- **Mutations that change values the user just edited** — amount, category, memo on a visible list row.
+- **Deletions** — row should disappear instantly; if the request fails, it reappears.
+- **Any mutation where a ~200–500ms network delay would produce visible "lag"** on a live list.
+
+### When NOT to Use
+
+- **Creates** — the new row has no id yet; optimistic id generation is complex and error-prone.
+- **Bulk mutations** — diff against large snapshots is expensive; invalidate after settle instead.
+- **Mutations with derived fields** — e.g., `category_name` / `recipient_name` (only the id is in the payload). The optimistic row will show the stale name until `onSettled` refetches. This is acceptable when the amount/date/memo are correct.
+
+### Virtual List Exception
+
+`['transactions-virtual']` is not patched optimistically. `useTransactionListData` keeps the virtual list's first-page cache entry mirrored into local React state. Patching the cache key mid-scroll would cause the list to collapse. The `onSettled` invalidation corrects it.
 
 ---
 

@@ -84,7 +84,7 @@ export default function RealEstatePage() {
           icon={Building2}
           actions={<AddInvestmentDialog allowedAssetClasses={[ 'real_estate' ]} />}
         />
-        <Card className="group relative overflow-hidden surface-elevated premium-frame bg-card backdrop-blur-sm">
+        <Card className="group relative overflow-hidden glass-regular premium-frame">
           <CardContent className="pt-0">
             <EmptyState
               icon={Building2}
@@ -109,7 +109,7 @@ export default function RealEstatePage() {
 
       {/* Summary Cards */}
       <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
-        <Card className="group relative overflow-hidden surface-elevated premium-frame micro-lift bg-card backdrop-blur-sm">
+        <Card className="group relative overflow-hidden glass-regular premium-frame micro-lift">
           <CardHeader className="pb-1 pt-3 px-4">
             <CardTitle className="text-xs font-medium text-muted-foreground flex items-center gap-2">
               <span className="inline-flex h-6 w-6 items-center justify-center rounded-md bg-gradient-to-br from-primary/20 to-primary/5 text-primary ring-1 ring-primary/15">
@@ -123,7 +123,7 @@ export default function RealEstatePage() {
           </CardContent>
         </Card>
 
-        <Card className="group relative overflow-hidden surface-elevated premium-frame micro-lift bg-card backdrop-blur-sm">
+        <Card className="group relative overflow-hidden glass-regular premium-frame micro-lift">
           <CardHeader className="pb-1 pt-3 px-4">
             <CardTitle className="text-xs font-medium text-muted-foreground flex items-center gap-2">
               <span className="inline-flex h-6 w-6 items-center justify-center rounded-md bg-gradient-to-br from-muted-foreground/20 to-muted-foreground/5 text-muted-foreground ring-1 ring-muted-foreground/15">
@@ -137,7 +137,7 @@ export default function RealEstatePage() {
           </CardContent>
         </Card>
 
-        <Card className="group relative overflow-hidden surface-elevated premium-frame micro-lift bg-card backdrop-blur-sm">
+        <Card className="group relative overflow-hidden glass-regular premium-frame micro-lift">
           <CardHeader className="pb-1 pt-3 px-4">
             <CardTitle className="text-xs font-medium text-muted-foreground flex items-center gap-2">
               <span className={cn(
@@ -158,7 +158,7 @@ export default function RealEstatePage() {
           </CardContent>
         </Card>
 
-        <Card className="group relative overflow-hidden surface-elevated premium-frame micro-lift bg-card backdrop-blur-sm">
+        <Card className="group relative overflow-hidden glass-regular premium-frame micro-lift">
           <CardHeader className="pb-1 pt-3 px-4">
             <CardTitle className="text-xs font-medium text-muted-foreground">{t('portfolio.rentalIncome')}</CardTitle>
           </CardHeader>
@@ -168,7 +168,7 @@ export default function RealEstatePage() {
           </CardContent>
         </Card>
 
-        <Card className="group relative overflow-hidden surface-elevated premium-frame micro-lift bg-card backdrop-blur-sm">
+        <Card className="group relative overflow-hidden glass-regular premium-frame micro-lift">
           <CardHeader className="pb-1 pt-3 px-4">
             <CardTitle className="text-xs font-medium text-muted-foreground flex items-center gap-2">
               <span className="inline-flex h-6 w-6 items-center justify-center rounded-md bg-gradient-to-br from-foreground/15 to-foreground/5 text-foreground ring-1 ring-foreground/10">
@@ -183,7 +183,7 @@ export default function RealEstatePage() {
           </CardContent>
         </Card>
 
-        <Card className={cn("group relative overflow-hidden surface-elevated premium-frame micro-lift bg-card backdrop-blur-sm border-l-4", totalReturn >= 0 ? "border-l-accent" : "border-l-destructive")}>
+        <Card className={cn("group relative overflow-hidden glass-regular premium-frame micro-lift border-l-4", totalReturn >= 0 ? "border-l-accent" : "border-l-destructive")}>
           <CardHeader className="pb-1 pt-3 px-4">
             <CardTitle className="text-xs font-medium text-muted-foreground">{t('portfolio.totalReturn')}</CardTitle>
           </CardHeader>

@@ -12,39 +12,41 @@ import { LanguageProvider, type Language } from "@/contexts/LanguageContext";
 import { configureCurrencyFormatDefaults, numberFormatToLocale } from "@/utils/currency";
 
 import { lazy, Suspense, useEffect, type ComponentType, type ReactNode } from "react";
-import { Loader2 } from "lucide-react";
 import { ErrorBoundary } from "@/components/shared/ErrorBoundary";
 import { ScrollToTop } from "@/components/shared/ScrollToTop";
 import { RequireAdmin } from "@/components/auth/RequireAdmin";
 
-// Lazy-loaded pages for code splitting
-const TaxOverviewPage = lazy(() => import("./pages/TaxOverviewPage"));
-const PortfolioTaxPage = lazy(() => import("./pages/portfolio/tax/PortfolioTaxPage"));
-const DashboardPage = lazy(() => import("./pages/DashboardPage"));
-const TransactionsPage = lazy(() => import("./pages/TransactionsPage"));
-const CategoriesPage = lazy(() => import("./pages/CategoriesPage"));
-const RecipientsPage = lazy(() => import("./pages/RecipientsPage"));
-const ImportPage = lazy(() => import("./pages/ImportPage"));
-const ImportReviewPage = lazy(() => import("./pages/ImportReviewPage"));
-const PlannedPaymentsPage = lazy(() => import("./pages/PlannedPaymentsPage"));
-const StatisticsPage = lazy(() => import("./pages/StatisticsPage"));
-const OwesPage = lazy(() => import("./pages/OwesPage"));
-const PortfolioOverviewPage = lazy(() => import("./pages/portfolio/PortfolioOverviewPage"));
-const MarketLookupPage = lazy(() => import("./pages/MarketLookupPage"));
-const StocksPage = lazy(() => import("./pages/portfolio/StocksPage"));
-const CryptoPage = lazy(() => import("./pages/portfolio/CryptoPage"));
-const MetalsPage = lazy(() => import("./pages/portfolio/MetalsPage"));
-const RealEstatePage = lazy(() => import("./pages/portfolio/RealEstatePage"));
-const SavingsPage = lazy(() => import("./pages/portfolio/SavingsPage"));
-const PerformancePage = lazy(() => import("./pages/portfolio/PerformancePage"));
-const NetWorthPage = lazy(() => import("./pages/portfolio/net-worth/NetWorthPage"));
-const ExchangeRatesPage = lazy(() => import("./pages/portfolio/ExchangeRatesPage"));
-const WatchlistPage = lazy(() => import("./pages/portfolio/WatchlistPage"));
-const DbMaintenancePage = lazy(() => import("./pages/DbMaintenancePage"));
-const AdminOverviewPage = lazy(() => import("./pages/admin/AdminOverviewPage"));
-const ProviderHealthPage = lazy(() => import("./pages/admin/ProviderHealthPage"));
-const EndpointLivenessPage = lazy(() => import("./pages/admin/EndpointLivenessPage"));
-const AIChatPage = lazy(() => import("./pages/AIChatPage"));
+// Lazy-loaded pages for code splitting. Loaders live in lib/routePreload so
+// sidebar hover can warm the same chunks the router requests on click.
+import { routeLoaders } from "@/lib/routePreload";
+
+const TaxOverviewPage = lazy(routeLoaders["/tax"]);
+const PortfolioTaxPage = lazy(routeLoaders["/portfolio/tax"]);
+const DashboardPage = lazy(routeLoaders["/"]);
+const TransactionsPage = lazy(routeLoaders["/transactions"]);
+const CategoriesPage = lazy(routeLoaders["/categories"]);
+const RecipientsPage = lazy(routeLoaders["/recipients"]);
+const ImportPage = lazy(routeLoaders["/import"]);
+const ImportReviewPage = lazy(routeLoaders["/import/:batchId/review"]);
+const PlannedPaymentsPage = lazy(routeLoaders["/planned"]);
+const StatisticsPage = lazy(routeLoaders["/statistics"]);
+const OwesPage = lazy(routeLoaders["/owes"]);
+const PortfolioOverviewPage = lazy(routeLoaders["/portfolio"]);
+const MarketLookupPage = lazy(routeLoaders["/portfolio/market"]);
+const StocksPage = lazy(routeLoaders["/portfolio/stocks"]);
+const CryptoPage = lazy(routeLoaders["/portfolio/crypto"]);
+const MetalsPage = lazy(routeLoaders["/portfolio/metals"]);
+const RealEstatePage = lazy(routeLoaders["/portfolio/real-estate"]);
+const SavingsPage = lazy(routeLoaders["/portfolio/savings"]);
+const PerformancePage = lazy(routeLoaders["/portfolio/performance"]);
+const NetWorthPage = lazy(routeLoaders["/portfolio/net-worth"]);
+const ExchangeRatesPage = lazy(routeLoaders["/portfolio/exchange-rates"]);
+const WatchlistPage = lazy(routeLoaders["/portfolio/watchlist"]);
+const DbMaintenancePage = lazy(routeLoaders["/admin/db"]);
+const AdminOverviewPage = lazy(routeLoaders["/admin"]);
+const ProviderHealthPage = lazy(routeLoaders["/admin/providers"]);
+const EndpointLivenessPage = lazy(routeLoaders["/admin/endpoints"]);
+const AIChatPage = lazy(routeLoaders["/ai-chat"]);
 const NotFound = lazy(() => import("./pages/NotFound"));
 
 // Dev-only devtools — tree-shaken from production builds.
@@ -70,17 +72,12 @@ const queryClient = new QueryClient({
     },
 });
 
+// Route-chunk loading indicator: a hairline progress shimmer pinned to the
+// top edge instead of a content-area spinner, so navigation never "flashes".
 function PageLoader() {
     return (
-        <div className="flex items-center justify-center h-96">
-            <div className="flex flex-col items-center gap-4">
-                <div className="relative">
-                    <div className="h-12 w-12 rounded-xl bg-gradient-to-br from-primary/20 to-primary/5 flex items-center justify-center">
-                        <Loader2 className="h-6 w-6 animate-spin text-primary" />
-                    </div>
-                </div>
-                <p className="text-sm text-muted-foreground animate-pulse">Loading…</p>
-            </div>
+        <div aria-busy="true" className="fixed inset-x-0 top-0 z-50 h-[2px] overflow-hidden">
+            <div className="h-full w-full animate-shimmer bg-[linear-gradient(90deg,transparent_0%,hsl(var(--primary))_35%,hsl(var(--accent))_65%,transparent_100%)] bg-[length:200%_100%] motion-reduce:animate-none motion-reduce:bg-primary/60" />
         </div>
     );
 }

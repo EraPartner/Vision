@@ -233,7 +233,11 @@
                 hsl(var(--glass-surface-deep) / 0.7) 100%
             );
         border: 1px solid hsl(var(--glass-border) / 0.14);
-        box-shadow: 0 8px 16px hsl(var(--glass-shadow) / 0.14);
+        box-shadow:
+            0 1px 0 hsl(var(--glass-highlight) / 0.5) inset,
+            0 -1px 0 hsl(var(--glass-shadow) / 0.1) inset,
+            0 8px 16px hsl(var(--glass-shadow) / 0.14),
+            0 24px 64px -24px hsl(var(--glass-shadow) / 0.25);
     }
 
     .dark .glass-thick {
@@ -245,7 +249,11 @@
                 hsl(var(--glass-surface-deep) / 0.94) 100%
             );
         border: 1px solid hsl(var(--glass-border) / 0.1);
-        box-shadow: 0 8px 16px hsl(0 0% 0% / 0.42);
+        box-shadow:
+            0 1px 0 hsl(var(--glass-highlight) / 0.1) inset,
+            0 -1px 0 hsl(0 0% 0% / 0.35) inset,
+            0 8px 16px hsl(0 0% 0% / 0.42),
+            0 32px 80px -28px hsl(0 0% 0% / 0.55);
     }
 
     /* Chrome — sidebar rail, persistent toolbars */
@@ -286,7 +294,11 @@
                 hsl(var(--glass-tint) / 0.08) 100%
             );
         border: 1px solid hsl(var(--glass-border) / 0.16);
-        box-shadow: 0 8px 16px hsl(var(--glass-shadow) / 0.14);
+        box-shadow:
+            0 1px 0 hsl(var(--glass-highlight) / 0.55) inset,
+            0 -1px 0 hsl(var(--glass-shadow) / 0.1) inset,
+            0 8px 16px hsl(var(--glass-shadow) / 0.14),
+            0 28px 72px -24px hsl(var(--glass-shadow) / 0.28);
     }
 
     .dark .glass-elevated,
@@ -299,7 +311,11 @@
                 hsl(var(--glass-tint) / 0.22) 100%
             );
         border: 1px solid hsl(var(--glass-border) / 0.12);
-        box-shadow: 0 8px 16px hsl(0 0% 0% / 0.42);
+        box-shadow:
+            0 1px 0 hsl(var(--glass-highlight) / 0.12) inset,
+            0 -1px 0 hsl(0 0% 0% / 0.35) inset,
+            0 8px 16px hsl(0 0% 0% / 0.42),
+            0 36px 88px -28px hsl(0 0% 0% / 0.6);
     }
 
     /* Trend accents — layered on top of glass-regular */
@@ -351,32 +367,39 @@
         border-color: hsl(var(--destructive) / 0.44);
     }
 
-    /* Apply backdrop filters where supported, with saturation per material */
+    /* Apply backdrop filters where supported, with saturation per material.
+       Saturation is what makes blurred content glow through the material —
+       blur alone reads as fog. */
     @supports ((-webkit-backdrop-filter: blur(1px)) or (backdrop-filter: blur(1px))) {
         .glass,
-        .glass-regular {
-            -webkit-backdrop-filter: blur(var(--glass-regular-blur));
-            backdrop-filter: blur(var(--glass-regular-blur));
+        .glass-regular,
+        .liquid-glass,
+        .surface-glass,
+        .glass-effect {
+            -webkit-backdrop-filter: blur(var(--glass-regular-blur)) saturate(var(--glass-saturate));
+            backdrop-filter: blur(var(--glass-regular-blur)) saturate(var(--glass-saturate));
         }
 
-        .glass-thin {
-            -webkit-backdrop-filter: blur(var(--glass-thin-blur));
-            backdrop-filter: blur(var(--glass-thin-blur));
+        .glass-thin,
+        .liquid-glass-soft {
+            -webkit-backdrop-filter: blur(var(--glass-thin-blur)) saturate(var(--glass-saturate));
+            backdrop-filter: blur(var(--glass-thin-blur)) saturate(var(--glass-saturate));
         }
 
         .glass-thick {
-            -webkit-backdrop-filter: blur(var(--glass-thick-blur));
-            backdrop-filter: blur(var(--glass-thick-blur));
+            -webkit-backdrop-filter: blur(var(--glass-thick-blur)) saturate(var(--glass-saturate));
+            backdrop-filter: blur(var(--glass-thick-blur)) saturate(var(--glass-saturate));
         }
 
         .glass-chrome {
-            -webkit-backdrop-filter: blur(var(--glass-chrome-blur));
-            backdrop-filter: blur(var(--glass-chrome-blur));
+            -webkit-backdrop-filter: blur(var(--glass-chrome-blur)) saturate(var(--glass-saturate));
+            backdrop-filter: blur(var(--glass-chrome-blur)) saturate(var(--glass-saturate));
         }
 
-        .glass-elevated {
-            -webkit-backdrop-filter: blur(var(--glass-elevated-blur));
-            backdrop-filter: blur(var(--glass-elevated-blur));
+        .glass-elevated,
+        .liquid-glass-hero {
+            -webkit-backdrop-filter: blur(var(--glass-elevated-blur)) saturate(var(--glass-saturate));
+            backdrop-filter: blur(var(--glass-elevated-blur)) saturate(var(--glass-saturate));
         }
     }
 
@@ -384,7 +407,13 @@
      * Shell surfaces
      * ------------------------------------------------------------------ */
 
-    .app-topbar {
+    /* Visuals live on ::before so the whole material can fade with scroll
+       position (gradient backgrounds cannot be transitioned directly). */
+    .app-topbar::before {
+        content: "";
+        position: absolute;
+        inset: 0;
+        z-index: -1;
         background:
             linear-gradient(
                 180deg,
@@ -395,9 +424,15 @@
         box-shadow:
             0 1px 0 hsl(var(--glass-highlight) / 0.3) inset,
             0 12px 28px hsl(var(--glass-shadow) / 0.05);
+        opacity: 1;
+        transition: opacity var(--duration-normal) var(--ease-out-quint);
     }
 
-    .dark .app-topbar {
+    .app-topbar[data-scrolled="false"]::before {
+        opacity: 0;
+    }
+
+    .dark .app-topbar::before {
         background:
             linear-gradient(
                 180deg,
@@ -412,9 +447,101 @@
 
     @supports ((-webkit-backdrop-filter: blur(1px)) or (backdrop-filter: blur(1px))) {
         .app-topbar {
-            -webkit-backdrop-filter: blur(8px);
-            backdrop-filter: blur(8px);
+            -webkit-backdrop-filter: blur(16px) saturate(var(--glass-saturate));
+            backdrop-filter: blur(16px) saturate(var(--glass-saturate));
         }
+    }
+
+    /* ------------------------------------------------------------------
+     * Liquid canvas — fixed atmosphere layer behind the app.
+     *
+     * Two slow-drifting aurora blobs (compositor-only transforms) over a
+     * static radial wash, plus a film-grain child. This is what the glass
+     * materials blur; without it backdrop-filter is invisible.
+     * Colors derive from --primary/--accent so all theme variants work.
+     * ------------------------------------------------------------------ */
+
+    .liquid-canvas {
+        position: fixed;
+        inset: 0;
+        z-index: -1;
+        overflow: hidden;
+        pointer-events: none;
+        background:
+            radial-gradient(
+                120rem 60rem at 70% -20%,
+                hsl(var(--primary) / var(--aurora-wash-alpha)),
+                transparent 60%
+            );
+    }
+
+    .liquid-canvas::before,
+    .liquid-canvas::after {
+        content: "";
+        position: absolute;
+        border-radius: 9999px;
+        will-change: transform;
+    }
+
+    /* Emerald aurora — upper left, drifts right and breathes */
+    .liquid-canvas::before {
+        width: 55vw;
+        height: 55vw;
+        min-width: 34rem;
+        min-height: 34rem;
+        top: -18%;
+        left: -12%;
+        background: radial-gradient(
+            closest-side,
+            hsl(var(--primary) / var(--aurora-primary-alpha)),
+            transparent 72%
+        );
+        animation: aurora-drift-a 64s var(--ease-in-out-quart) infinite alternate;
+    }
+
+    /* Champagne aurora — lower right, counter-drifts */
+    .liquid-canvas::after {
+        width: 48vw;
+        height: 48vw;
+        min-width: 30rem;
+        min-height: 30rem;
+        bottom: -22%;
+        right: -10%;
+        background: radial-gradient(
+            closest-side,
+            hsl(var(--accent) / var(--aurora-accent-alpha)),
+            transparent 72%
+        );
+        animation: aurora-drift-b 76s var(--ease-in-out-quart) infinite alternate;
+    }
+
+    @keyframes aurora-drift-a {
+        from {
+            transform: translate3d(0, 0, 0) scale(1);
+        }
+
+        to {
+            transform: translate3d(14vw, 9vh, 0) scale(1.18);
+        }
+    }
+
+    @keyframes aurora-drift-b {
+        from {
+            transform: translate3d(0, 0, 0) scale(1.12);
+        }
+
+        to {
+            transform: translate3d(-11vw, -7vh, 0) scale(0.96);
+        }
+    }
+
+    /* Film grain — tactile richness over the gradients */
+    .liquid-canvas-grain {
+        position: absolute;
+        inset: 0;
+        opacity: var(--grain-alpha);
+        background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.8' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+        background-size: 160px 160px;
     }
 
     /* ------------------------------------------------------------------
@@ -443,6 +570,10 @@
      * Interaction feedback
      * ------------------------------------------------------------------ */
 
+    /* premium-frame and micro-lift are frequently combined (and premium-frame
+       is baked into the Card base): both declare the same full transition
+       list so whichever wins the cascade still animates border, shadow, and
+       transform together. */
     .premium-frame {
         border: 1px solid hsl(var(--border) / 0.7);
         box-shadow:
@@ -450,7 +581,8 @@
             0 8px 24px hsl(var(--glass-shadow) / 0.06);
         transition:
             border-color var(--duration-normal) var(--ease-out-quint),
-            box-shadow var(--duration-normal) var(--ease-out-quint);
+            box-shadow var(--duration-normal) var(--ease-out-quint),
+            transform var(--duration-fast) var(--ease-out-quint);
     }
 
     .premium-frame:hover {
@@ -476,7 +608,8 @@
     .micro-lift {
         transition:
             transform var(--duration-fast) var(--ease-out-quint),
-            box-shadow var(--duration-normal) var(--ease-out-quint);
+            box-shadow var(--duration-normal) var(--ease-out-quint),
+            border-color var(--duration-normal) var(--ease-out-quint);
     }
 
     .micro-lift:hover {
@@ -580,6 +713,10 @@
     .animate-stagger > *:nth-child(6) { animation-delay: 300ms; }
     .animate-stagger > *:nth-child(7) { animation-delay: 360ms; }
     .animate-stagger > *:nth-child(8) { animation-delay: 420ms; }
+    .animate-stagger > *:nth-child(9) { animation-delay: 480ms; }
+    .animate-stagger > *:nth-child(10) { animation-delay: 540ms; }
+    .animate-stagger > *:nth-child(11) { animation-delay: 600ms; }
+    .animate-stagger > *:nth-child(12) { animation-delay: 660ms; }
 
     .gradient-bg {
         background: linear-gradient(
@@ -624,6 +761,11 @@
             animation: none;
         }
 
+        .liquid-canvas::before,
+        .liquid-canvas::after {
+            animation: none;
+        }
+
         .micro-lift,
         .press-feedback,
         .premium-icon-action,
@@ -644,15 +786,30 @@
         .press-feedback:active {
             transform: none;
         }
+    }
 
+    /* Blur is static, so it belongs under reduced-transparency, not
+       reduced-motion. Fall back to near-opaque surfaces. */
+    @media (prefers-reduced-transparency: reduce) {
         .glass,
         .glass-thin,
         .glass-regular,
         .glass-thick,
         .glass-chrome,
-        .glass-elevated {
+        .glass-elevated,
+        .liquid-glass,
+        .liquid-glass-soft,
+        .liquid-glass-hero,
+        .surface-glass,
+        .glass-effect,
+        .app-topbar {
             backdrop-filter: none;
             -webkit-backdrop-filter: none;
+            background: hsl(var(--card) / 0.97);
+        }
+
+        .liquid-canvas {
+            display: none;
         }
     }
 }

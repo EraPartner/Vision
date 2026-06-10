@@ -3,8 +3,9 @@ title: Views & Pages
 type: feature
 status: active
 date: 2026-04-10
-tags: [feature, views, pages, frontend, ui]
-description: Complete overview of all views and pages in the Vision application
+updated: 2026-06-10
+tags: [feature, views, pages, frontend, ui, liquid-glass-v2, june-2026]
+description: Complete overview of all views and pages in the Vision application. June 2026 Liquid Glass v2 — KPI/chart cards migrated to glass-regular, hero cards to glass-elevated, tables stay opaque, surface-elevated recipe superseded.
 aliases: [views, pages, frontend views, application pages, ui views]
 related_code: ["apps/frontend/src/App.tsx", "apps/frontend/src/pages"]
 ---
@@ -587,20 +588,22 @@ Simple 404 page displayed when no route matches.
 
 ---
 
-## Premium UI Consistency Sweep (April 2026)
+## Premium UI Consistency Sweep (April 2026) + Liquid Glass v2 (June 2026)
 
-Cross-page premium polish now follows shared UI primitives and utility classes for consistent hierarchy, interaction ergonomics, and surface depth.
+Cross-page premium polish follows shared UI primitives and utility classes for consistent hierarchy, interaction ergonomics, and surface depth.
 
-### What was standardized
+> [!info] June 2026 update — Liquid Glass v2 (ADR-070)
+> The canonical card surface recipe changed. `surface-elevated premium-frame micro-lift` is superseded by `glass-regular premium-frame micro-lift` for KPI/chart cards and `glass-elevated` for hero cards. Tables stay opaque. See [[docs/adr/070-liquid-glass-v2-premium-frontend|ADR-070]] and [[docs/reference/code-patterns#surface-shell-pattern-phase-9|Surface Shell Pattern]] for the updated rules.
+
+### What was standardized (April 2026)
 
 - **Page headers**: Top-level page title rows are standardized via `PageHeader` across budgeting and portfolio pages, including key detail subviews where appropriate.
-- **Empty/error states**: Shared `EmptyState` and `PageError` are used in place of bespoke ad-hoc empty/error blocks on high-traffic pages.
+- **Empty/error states**: Shared `EmptyState` and `PageError` are used in place of bespoke ad-hoc empty/error blocks on high-traffic pages. `EmptyState` upgraded in June 2026 (glass icon tile, display-serif title).
 - **Touch ergonomics**: Icon-only actions now use `icon-touch-target` (`2.5rem` hit area) across table rows, dialogs, and detail action bars.
-- **Surface recipes**: Ad-hoc elevated card class chains are replaced in key summary/KPI surfaces by sanctioned recipes (`surface-elevated premium-frame micro-lift`).
+- **Surface recipes**: Ad-hoc elevated card class chains replaced with sanctioned recipes. As of June 2026 the canonical recipe is `glass-regular` (not `surface-elevated`) for KPI/chart cards.
 - **Responsive forms**: Remaining narrow fixed two-column filter grids were upgraded to `grid-cols-1 sm:grid-cols-2` in Planned Payments link flow and related import/filter touchpoints.
-- **Toast consistency**: App shell mounts Sonner as the active toaster; watchlist flows were migrated to Sonner toast API.
+- **Toast consistency**: App shell mounts Sonner as the active toaster; watchlist flows were migrated to Sonner toast API. Toasts use `glass-thick` material as of June 2026.
 - **Toast cleanup completion**: Legacy Radix toast bridge/hook wrappers were removed; Sonner is now the only toast stack in frontend code.
-- **Dashboard surface sweep**: Dashboard page and dashboard chart/stat card wrappers now use sanctioned surface recipes (`surface-elevated premium-frame micro-lift`) for visual consistency with the rest of the app.
 
 ### Coverage highlights
 
