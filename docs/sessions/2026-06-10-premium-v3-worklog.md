@@ -98,3 +98,28 @@ Also outstanding: packaged-Electron M1 profiling, e2e visual snapshot regen (`bu
 - DonutChart: floating ChartTooltip REMOVED; in-hollow center morph (AnimatePresence crossfade, hovered slice name + dot + value) + arc whileHover lift (transformBox fill-box). Hover color resolved from palette at arc level.
 - Verified: tsc clean, lint 0 errors, component tests 300 pass. Committed.
 - Still open from v4 list: items 2-9 (n quick-create, empty-state sweep, portfolio DeltaPill, sticky glass headers, sheet polish, onboarding pass) + shader visual iteration by user + M1 profiling + e2e snapshots.
+
+## v5 — "Apple-like across axes" batch (approved 2026-06-10 night, ALL items)
+
+User approved everything from the apple-axes brainstorm + reported topbar seam bug.
+
+- [x] V0. BUG: topbar brightness band — backdrop-filter (saturate) applied at scroll-top while veil hidden → bar strip showed saturated aurora. Fixed: `.app-topbar[data-scrolled="false"] { backdrop-filter: none }` in index.css @supports block.
+- [x] V1. DONE — lib/undo.ts (one-slot, 8s TTL); delete keeps deletedRow from snapshot, onSuccess registers recreate undo + sonner action toast (only when recipient_id/date/account present — create contract); AppLayout ⌘Z consumes (inert in inputs so text undo works); overlay lists ⌘Z. Orig: Undo + ⌘Z for transaction delete: lib/undo.ts one-slot registry (registerUndo/consumeUndo, ~8s expiry); delete onSuccess registers a recreate-from-cached-row undo + sonner action toast; AppLayout ⌘Z consumes. i18n: common.undo (check existing key first).
+- [x] V2. DONE — palette inline answers: FX (`100 USD [in GBP]`, useCurrencyConverter, Intl currency format) + charset-safe arithmetic eval; Result group at top, Enter copies + toast. Orig: Palette FX conversion + calculator: in CommandPalette, detect `100 USD [in EUR]` (use existing FX api/hook — check useCurrencyConverter) and charset-validated arithmetic; show Result group, Enter copies. i18n: commandPalette.copyResult or similar.
+- [x] V3. DONE — @media (prefers-contrast: more): glass/frame border-color hsl(--foreground/0.45), 3px solid focus outline, aurora hidden. Property-level (variant inline tokens can't override). Orig: prefers-contrast: more CSS block (stronger borders/text, kill low-alpha text).
+- [x] V4. DONE — vision.lastRoute (registered + backup-excluded); AppLayout persists pathname+search, restores once on boot when landing at '/'. Orig: Route restoration: localStorage vision.lastRoute (register + exclude from backup), AppLayout saves on route change; on boot at '/' restore stored route (replace).
+- [ ] V5. ← NEXT SESSION STARTS HERE. Context menu on transaction rows (Radix context-menu installed, unused): needs VirtualDataTable row render seam — read components/shared/VirtualDataTable.tsx first; menu: info/edit, duplicate?, toggle active, delete, "show all from recipient". If row seam too tangled, do plain DataTable rows first.
+- [ ] V6. Quick Look: Space on selected/hovered row → glass preview dialog (TransactionInfoDialog reuse?) — depends on V5 row-selection plumbing.
+- [ ] V7. Arrow-key table navigation (↑/↓ selection, Enter info, Space quick look).
+- [ ] V8. Icon success micro-animations (SF-symbols-style bounce on save/import-complete).
+- [ ] V9. Stat-card value scrubbing through netHistory.
+- [ ] V10. Genie dialog close toward trigger.
+- [ ] V11. Contextual suggestion card (planned-payments-due slot on dashboard).
+- [ ] V12. ELECTRON (needs focused session — security posture review per AGENTS.md, can't visually verify headless): hiddenInset traffic lights (+ frontend topbar left-inset when window.electronAPI && darwin), native menu bar (Go menu mirroring GO_TO_ROUTES, File→Import, View→sidebar, system roles), dock badge (planned payments due — IPC), dock menu (New transaction/Dashboard), drag-CSV-onto-window → import handoff, vibrancy/under-window (HIGH regression risk with opaque tokens — prototype behind enhancedEffects?), system accent color as theme variant.
+
+### v5 session-end note (context exhausted before V5-V12)
+V0-V4 done + committed. V5-V7 (context menus / Quick Look / arrow nav) need the
+VirtualDataTable row-render seam — read components/shared/VirtualDataTable.tsx
+(~610 lines) before attempting. V12 Electron block deliberately deferred to a
+focused session (security posture: contextIsolation on, nodeIntegration off,
+sandbox on; cannot be visually verified headless). i18n now 2862 keys.

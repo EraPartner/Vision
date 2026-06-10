@@ -50,6 +50,14 @@ Follow-up to [[docs/adr/070-liquid-glass-v2-premium-frontend|ADR-070]]. The user
 - Post-review fixes: `formatScrubDelta` strips signs that value formatters already emit (double "+" on relative-performance scrubs); shader fbm thresholds lowered into the noise's actual [0.3, 0.7] band (initial constants made the layer effectively invisible).
 - When on, **`ShaderAurora`** (`components/layout/`) renders inside the liquid canvas: raw WebGL (no dependency), one fullscreen triangle, 4-octave value-noise fbm tinted from `--primary`/`--accent` (re-resolved on theme change via MutationObserver). Budget: 0.25× resolution upscaled, ~30 fps cap, single static frame under reduced motion, rAF-paused when hidden, and any WebGL failure silently leaves the CSS blobs (always rendered underneath) as fallback.
 
+### Apple-behavior pass (third review pass, same day)
+- **Undo + ⌘Z** (`lib/undo.ts`): transaction delete offers an 8-second undo via toast action and ⌘Z (inert in text fields); undo faithfully recreates the row from the cache snapshot, offered only when the create contract can be satisfied (`recipient_id`, date, account present).
+- **Spotlight-style palette answers**: `100 USD in GBP` converts via the app's own FX data; charset-validated arithmetic evaluates inline; Enter copies the result.
+- **`prefers-contrast: more`** support (stronger hairlines, 3px focus outline, aurora off) — completes the macOS a11y triad with the existing reduced-motion/reduced-transparency handling.
+- **Window-state restoration**: last route persisted (`vision.lastRoute`, backup-excluded); fresh launches landing at `/` reopen where the user left off.
+- **Topbar seam fix** (user-reported): the always-on `saturate()` backdrop-filter rendered the bar region brighter than the page at scroll-top while the veil was hidden; the filter is now gated on `data-scrolled` like the veil.
+- Deferred to a focused session (worklog V5-V12): row context menus, Quick Look, arrow-key table nav, icon micro-bounce, stat scrubbing, genie close, suggestion card, and the Electron-native block (traffic lights, menu bar, dock badge/menu, CSV drag-import, vibrancy, system accent).
+
 ### Perceived speed
 - **Per-widget dashboard hydration**: the all-queries loading gate in DashboardPage is gone; each section (stats, charts, recent table) renders its own skeleton keyed to its own query.
 - **Optimistic create** (completes the ADR-070 mutation work): temp negative-id row inserted at the head of plain `['transactions']` caches, server row swapped in on success, rollback on error, `onSettled` invalidation restores true ordering/filtering. Virtual list still deliberately untouched. 6 tests total in `useOptimisticTransactions.test.tsx`.

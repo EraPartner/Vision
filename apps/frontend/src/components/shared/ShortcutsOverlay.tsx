@@ -40,6 +40,7 @@ export function ShortcutsOverlay({ open, onOpenChange }: ShortcutsOverlayProps) 
         { keys: <><Key>{mod}</Key> <Key>K</Key></>, label: t("commandPalette.openLabel") },
         { keys: <><Key>{mod}</Key> <Key>,</Key></>, label: t("layout.settings") },
         { keys: <><Key>{mod}</Key> <Key>B</Key></>, label: t("aria.toggleSidebar") },
+        { keys: <><Key>{mod}</Key> <Key>Z</Key></>, label: t("shortcuts.undoDelete") },
         { keys: <Key>?</Key>, label: t("shortcuts.showHelp") },
         { keys: <Key>Esc</Key>, label: t("shortcuts.closeDialog") },
     ];

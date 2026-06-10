@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { SidebarProvider, SidebarTrigger } from "@/components/ui/sidebar";
 import { AppSidebar } from "@/components/layout/AppSidebar";
 import { Button } from "@/components/ui/button";
@@ -22,6 +22,10 @@ import { PageTitleProvider, usePageTitle } from "@/contexts/PageTitleContext";
 import { ShortcutsOverlay } from "@/components/shared/ShortcutsOverlay";
 import { ShaderAurora } from "@/components/layout/ShaderAurora";
 import { useGoToShortcuts } from "@/hooks/useGoToShortcuts";
+import { consumeUndo } from "@/lib/undo";
+import { useLocation, useNavigate } from "react-router-dom";
+import { LOCAL_STORAGE_KEYS } from "@/lib/localStorage-keys";
+import { isTypingTarget } from "@/lib/keyboard";
 import { useWorkspace } from "@/contexts/WorkspaceContext";
 import { useAppSettings } from "@/contexts/AppSettingsContext";
 
@@ -41,12 +45,18 @@ export function AppLayout({ children }: AppLayoutProps) {
     };
 
     // ⌘, — the macOS settings convention (always free in Electron).
+    // ⌘Z — consume a pending destructive-action undo (inert while typing,
+    // so text-field undo keeps working).
     useEffect(() => {
         const onKeyDown = (e: KeyboardEvent) => {
             if (e.key === ',' && (e.metaKey || e.ctrlKey) && !e.altKey && !e.shiftKey) {
                 e.preventDefault();
                 setSettingsDefaultTab('general');
                 setSettingsOpen(true);
+                return;
+            }
+            if (e.key.toLowerCase() === 'z' && (e.metaKey || e.ctrlKey) && !e.altKey && !e.shiftKey && !isTypingTarget(e.target)) {
+                if (consumeUndo()) e.preventDefault();
             }
         };
         document.addEventListener('keydown', onKeyDown);
@@ -57,6 +67,27 @@ export function AppLayout({ children }: AppLayoutProps) {
     const { workspace } = useWorkspace();
     const { appSettings } = useAppSettings();
     useGoToShortcuts();
+
+    // Window-state restoration (macOS "reopen where you left off"): persist
+    // the route continuously; on a fresh launch landing at "/", jump back.
+    const location = useLocation();
+    const navigate = useNavigate();
+    const restoredRef = useRef(false);
+    useEffect(() => {
+        if (!restoredRef.current) {
+            restoredRef.current = true;
+            try {
+                const stored = localStorage.getItem(LOCAL_STORAGE_KEYS.LAST_ROUTE);
+                if (stored && stored !== '/' && location.pathname === '/' && stored.startsWith('/')) {
+                    navigate(stored, { replace: true });
+                    return;
+                }
+            } catch { /* localStorage unavailable */ }
+        }
+        try {
+            localStorage.setItem(LOCAL_STORAGE_KEYS.LAST_ROUTE, location.pathname + location.search);
+        } catch { /* localStorage unavailable */ }
+    }, [location.pathname, location.search, navigate]);
     const { isComplete: onboardingComplete, isLoading: onboardingLoading, complete: completeOnboarding } = useOnboarding();
 
     // Topbar material fades in once the page scrolls under it; the inline

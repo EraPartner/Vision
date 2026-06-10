@@ -1,4 +1,5 @@
 import {useMutation, useQuery, useQueryClient} from '@tanstack/react-query';
+import {registerUndo} from '@/lib/undo';
 import {apiClient} from '@/lib/api';
 import type {
     BulkExportRequest,
@@ -156,6 +157,12 @@ export function useDeleteTransaction() {
         onMutate: async (id) => {
             await queryClient.cancelQueries({queryKey: ['transactions']});
             const snapshot = snapshotTransactionLists(queryClient);
+            // Keep the deleted row so Undo can faithfully recreate it.
+            let deletedRow: Transaction | undefined;
+            for (const [, data] of snapshot) {
+                deletedRow = data?.items?.find((tx) => tx.id === id);
+                if (deletedRow) break;
+            }
             queryClient.setQueriesData<TransactionsListResponse>({queryKey: ['transactions']}, (old) => {
                 if (!old?.items) return old;
                 const items = old.items.filter((tx) => tx.id !== id);
@@ -166,10 +173,42 @@ export function useDeleteTransaction() {
                     total: Math.max(0, (old.total ?? old.items.length) - 1),
                 };
             });
-            return {snapshot};
+            return {snapshot, deletedRow};
         },
-        onSuccess: () => {
-            toast.success(t('transactions.deleted'));
+        onSuccess: (_data, _id, context) => {
+            const row = context?.deletedRow;
+            // recipient_id is required by the create contract — without it we
+            // cannot faithfully restore, so no Undo is offered.
+            if (row?.recipient_id != null && row.transaction_date && row.bank_account) {
+                const restore = async () => {
+                    try {
+                        await apiClient.createTransaction({
+                            transaction_date: row.transaction_date,
+                            bank_account: row.bank_account,
+                            recipient_id: row.recipient_id as number,
+                            memo: row.memo,
+                            amount: row.amount,
+                            currency: row.currency,
+                            balance: row.balance,
+                            category_id: row.category_id,
+                            comment: row.comment,
+                            tags: row.tags?.map((tag) => (typeof tag === 'string' ? tag : tag.slug)),
+                        });
+                        invalidateTransactionLists(queryClient);
+                        toast.success(t('transactions.restored'));
+                    } catch (error) {
+                        toast.error(t('transactions.restoreFailedTitle'), {
+                            description: error instanceof Error ? error.message : String(error),
+                        });
+                    }
+                };
+                registerUndo(restore);
+                toast.success(t('transactions.deleted'), {
+                    action: {label: t('common.undo'), onClick: () => void restore()},
+                });
+            } else {
+                toast.success(t('transactions.deleted'));
+            }
         },
         onError: (error: Error, _id, context) => {
             if (context?.snapshot) rollbackTransactionLists(queryClient, context.snapshot);

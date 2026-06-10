@@ -450,6 +450,14 @@
             -webkit-backdrop-filter: blur(16px) saturate(var(--glass-saturate));
             backdrop-filter: blur(16px) saturate(var(--glass-saturate));
         }
+
+        /* At scroll-top the veil is hidden, so the filter must go too:
+           saturate() over the bare aurora otherwise renders the bar region
+           brighter than the page below it (visible seam). */
+        .app-topbar[data-scrolled="false"] {
+            -webkit-backdrop-filter: none;
+            backdrop-filter: none;
+        }
     }
 
     /* ------------------------------------------------------------------
@@ -805,6 +813,35 @@
         .micro-lift:hover,
         .press-feedback:active {
             transform: none;
+        }
+    }
+
+    /* High-contrast preference: strengthen hairlines and focus affordances.
+       Property-level (not token swaps) so theme-variant inline styles on
+       :root cannot override it. */
+    @media (prefers-contrast: more) {
+        .glass,
+        .glass-thin,
+        .glass-regular,
+        .glass-thick,
+        .glass-chrome,
+        .glass-elevated,
+        .liquid-glass,
+        .liquid-glass-soft,
+        .liquid-glass-hero,
+        .premium-frame,
+        .surface-default,
+        .surface-elevated {
+            border-color: hsl(var(--foreground) / 0.45);
+        }
+
+        :focus-visible {
+            outline-width: 3px;
+            outline-color: hsl(var(--ring));
+        }
+
+        .liquid-canvas {
+            display: none;
         }
     }
 

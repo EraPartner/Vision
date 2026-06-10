@@ -45,7 +45,10 @@ import { apiClient } from "@/lib/api";
 import { useDebounce } from "@/hooks/useDebounce";
 import { LOCAL_STORAGE_KEYS } from "@/lib/localStorage-keys";
 import { GO_TO_ROUTES } from "@/hooks/useGoToShortcuts";
-import { Keyboard } from "lucide-react";
+import { Keyboard, Calculator } from "lucide-react";
+import { useCurrencyConverter } from "@/hooks/useCurrencyConverter";
+import { numberFormatToLocale } from "@/utils/currency";
+import { toast } from "sonner";
 
 interface PaletteEntry {
     titleKey: string;
@@ -88,6 +91,33 @@ function GoToHint({ url }: { url: string }) {
     const key = GO_TO_BY_URL.get(url);
     if (!key) return null;
     return <CommandShortcut>G {key.toUpperCase()}</CommandShortcut>;
+}
+
+// Spotlight-style inline answers ------------------------------------------
+
+const FX_QUERY = /^(\d+(?:[.,]\d+)?)\s*([a-zA-Z]{3})(?:\s+(?:in|to|naar)\s+([a-zA-Z]{3}))?$/;
+// Arithmetic only: digits, operators, parens, separators. No identifiers can
+// pass this charset, so evaluation is safe.
+const CALC_QUERY = /^[\d\s+\-*/().,]+$/;
+
+function parseFxQuery(q: string): { amount: number; from: string; to?: string } | null {
+    const m = q.match(FX_QUERY);
+    if (!m) return null;
+    const amount = Number(m[1].replace(",", "."));
+    if (!Number.isFinite(amount)) return null;
+    return { amount, from: m[2].toUpperCase(), to: m[3]?.toUpperCase() };
+}
+
+function evaluateArithmetic(q: string): number | null {
+    if (!CALC_QUERY.test(q)) return null;
+    if (!/[+\-*/]/.test(q) || !/\d/.test(q)) return null;
+    if (/^\s*[\d.,]+\s*$/.test(q)) return null;
+    try {
+        const result = new Function(`"use strict"; return (${q.replace(/,/g, ".")});`)() as unknown;
+        return typeof result === "number" && Number.isFinite(result) ? result : null;
+    } catch {
+        return null;
+    }
 }
 
 const RECENTS_KEY = LOCAL_STORAGE_KEYS.PALETTE_RECENTS;
@@ -134,6 +164,35 @@ export function CommandPalette({ open, onOpenChange, onOpenSettings, onOpenShort
             setQuery("");
         }
     }, [open]);
+
+    const locale = numberFormatToLocale(appSettings.numberFormat);
+    const fxParsed = useMemo(() => parseFxQuery(query.trim()), [query]);
+    const fxTarget = fxParsed?.to ?? appSettings.defaultCurrency ?? "EUR";
+    const { convertToTarget } = useCurrencyConverter(fxTarget);
+    const fxResult = useMemo(() => {
+        if (!fxParsed || fxParsed.from === fxTarget) return null;
+        const converted = convertToTarget(fxParsed.amount, fxParsed.from);
+        if (converted == null || !Number.isFinite(converted)) return null;
+        try {
+            return new Intl.NumberFormat(locale, { style: "currency", currency: fxTarget }).format(converted);
+        } catch {
+            return `${converted.toFixed(2)} ${fxTarget}`;
+        }
+    }, [fxParsed, fxTarget, convertToTarget, locale]);
+
+    const calcResult = useMemo(() => {
+        if (fxParsed) return null;
+        const value = evaluateArithmetic(query.trim());
+        return value == null ? null : new Intl.NumberFormat(locale, { maximumFractionDigits: 6 }).format(value);
+    }, [fxParsed, query, locale]);
+
+    const copyResult = (text: string) => {
+        onOpenChange(false);
+        navigator.clipboard?.writeText(text).then(
+            () => toast.success(t("commandPalette.copied")),
+            () => undefined,
+        );
+    };
 
     const { data: recipientHits } = useQuery({
         queryKey: ["palette-recipients", debouncedQuery],
@@ -204,6 +263,19 @@ export function CommandPalette({ open, onOpenChange, onOpenSettings, onOpenShort
             />
             <CommandList>
                 <CommandEmpty>{t("commandPalette.noResults")}</CommandEmpty>
+                {(fxResult || calcResult) && (
+                    <CommandGroup heading={t("commandPalette.result")} forceMount>
+                        <CommandItem
+                            forceMount
+                            value={`result ${query}`}
+                            onSelect={() => copyResult((fxResult ?? calcResult) as string)}
+                        >
+                            {fxResult ? <ArrowLeftRight className="text-muted-foreground" /> : <Calculator className="text-muted-foreground" />}
+                            <span className="font-semibold tabular-nums">{fxResult ?? calcResult}</span>
+                            <CommandShortcut>{t("commandPalette.copyHint")}</CommandShortcut>
+                        </CommandItem>
+                    </CommandGroup>
+                )}
                 {query.trim().length >= 2 && (
                     <CommandGroup heading={t("commandPalette.actions")} forceMount>
                         <CommandItem

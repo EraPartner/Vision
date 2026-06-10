@@ -30,6 +30,9 @@ export const LOCAL_STORAGE_KEYS = Object.freeze({
 
   /** JSON array of recently visited routes shown in the ⌘K palette */
   PALETTE_RECENTS: 'vision.palette.recents',
+
+  /** Last visited route (pathname+search) for window-state restoration */
+  LAST_ROUTE: 'vision.lastRoute',
 } as const);
 
 export type LocalStorageKey = typeof LOCAL_STORAGE_KEYS[keyof typeof LOCAL_STORAGE_KEYS];
@@ -47,4 +50,6 @@ export const LOCAL_STORAGE_EXCLUDED_KEYS: ReadonlyArray<string> = Object.freeze(
   'vision.adminToken',
   // Transient ⌘K palette recents — navigation convenience, not user data.
   'vision.palette.recents',
+  // Transient window-state restoration — meaningless on another machine.
+  'vision.lastRoute',
 ]);
