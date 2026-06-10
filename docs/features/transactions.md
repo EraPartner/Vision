@@ -4,9 +4,9 @@ type: feature
 status: active
 date: 2026-04-16
 updated: 2026-06-10
-tags: [feature, transactions, finance, phase-q, recipient-groups, bulk-actions, optimistic-updates, optimistic-create, june-2026, context-menu, quick-look, keyboard-nav, duplicate, filter-by-recipient]
+tags: [feature, transactions, finance, phase-q, recipient-groups, bulk-actions, optimistic-updates, optimistic-create, june-2026, context-menu, quick-look, keyboard-nav, duplicate, filter-by-recipient, deep-link, electron-native, new-transaction]
 aliases: [transactions-feature, income, expenses, financial-records, money-tracking]
-description: Core transaction management - income, expenses, and tracking financial activities. Phase Q adds recipient-group filtering for linked-recipient transaction discovery. Bulk operations enable atomic multi-row delete, recategorize, reassign, activate/deactivate, export, and tag. June 2026 (ADR-070): useUpdateTransaction/useDeleteTransaction are now optimistic. June 2026 Premium v3 (ADR-071): useCreateTransaction is now optimistic (temp negative-id row → server-row swap → onSettled invalidate; virtual list excluded; 6 tests). June 2026 Premium v3 V5-V7: per-row context menu, Quick Look dialog (Space), keyboard row navigation (↑/↓/Enter), Duplicate, and Filter-by-recipient actions.
+description: Core transaction management - income, expenses, and tracking financial activities. Phase Q adds recipient-group filtering for linked-recipient transaction discovery. Bulk operations enable atomic multi-row delete, recategorize, reassign, activate/deactivate, export, and tag. June 2026 (ADR-070): useUpdateTransaction/useDeleteTransaction are now optimistic. June 2026 Premium v3 (ADR-071): useCreateTransaction is now optimistic (temp negative-id row → server-row swap → onSettled invalidate; virtual list excluded; 6 tests). June 2026 Premium v3 V5-V7: per-row context menu, Quick Look dialog (Space), keyboard row navigation (↑/↓/Enter), Duplicate, and Filter-by-recipient actions. June 2026 V12 (ADR-072): /transactions?new=1 deep link opens AddTransactionDialog (used by native menu and dock menu).
 related_code: ["apps/node-backend/src/routes/transactions.js", "apps/node-backend/src/repositories/transactionRepository.js", "apps/node-backend/src/services/filterBuilder.js", "apps/node-backend/src/services/bulkSelection.js", "apps/frontend/src/features/transactions/", "apps/frontend/src/pages/TransactionsPage.tsx"]
 ---
 
@@ -211,6 +211,22 @@ Code links: [[apps/frontend/src/features/transactions/components/TransactionsTab
 - Inline row editing provides save/cancel controls and persists through the existing transaction update flow (`PATCH /api/transactions/:id`).
 
 Code link: [[apps/frontend/src/pages/TransactionsPage.tsx]]
+
+---
+
+### Deep Links / Query-Param Triggers (V12, June 2026)
+
+#### `/transactions?new=1` — Open Add Transaction Dialog
+
+Navigating to `/transactions?new=1` immediately opens `AddTransactionDialog`. The dialog's mounting hook reads the `new` search param and, if present, opens the dialog and then strips the param from the URL (using `replace` navigation so the browser Back button does not re-trigger it).
+
+This deep link is used by:
+- The **native macOS menu** (File → New Transaction ⌘N via `ElectronBridge` `menu:action` dispatch)
+- The **dock menu** (New Transaction item)
+
+The param is safe to include in any navigation: navigating to `/transactions` without `?new=1` is unaffected.
+
+Code link: [[apps/frontend/src/components/forms/AddTransactionDialog.tsx]]
 
 ---
 

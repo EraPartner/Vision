@@ -1,4 +1,4 @@
-import { useCallback, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useLanguage } from "@/contexts/LanguageContext";
 import {
@@ -44,6 +44,7 @@ import {
   useDeleteCustomParserConfig,
 } from "@/hooks/useCustomParserConfigs";
 import { useConfirmDialog } from "@/hooks/useConfirmDialog";
+import { consumePendingImportFile } from "@/lib/importHandoff";
 import type { ImportProgress } from "@/lib/api/types";
 
 interface CustomConfig {
@@ -161,6 +162,13 @@ export function TransactionImportCard({ onImportSuccess }: TransactionImportCard
     e.preventDefault();
     setDragOver(false);
     handleFile(e.dataTransfer.files?.[0] ?? null);
+  }, [handleFile]);
+
+  // CSV dropped on the window / opened via Finder before this card mounted
+  // (see lib/importHandoff.ts + ElectronBridge).
+  useEffect(() => {
+    const pending = consumePendingImportFile();
+    if (pending) handleFile(pending);
   }, [handleFile]);
 
   const onDragOver = useCallback((e: React.DragEvent) => {
@@ -438,6 +446,7 @@ export function TransactionImportCard({ onImportSuccess }: TransactionImportCard
         <div className="space-y-2">
           <Label className="font-semibold">{t('importPage.csvFile')}</Label>
           <div
+            data-dropzone
             onClick={() => fileInputRef.current?.click()}
             onDrop={onDrop}
             onDragOver={onDragOver}
@@ -508,7 +517,7 @@ export function TransactionImportCard({ onImportSuccess }: TransactionImportCard
         {/* Import complete summary */}
         {progress && !loading && progress.phase === 'complete' && (
           <div className="flex items-center gap-3 p-4 rounded-lg border border-green-200 bg-green-50 dark:border-green-900 dark:bg-green-950/30">
-            <CheckCircle2 className="h-5 w-5 text-green-600 dark:text-green-400 shrink-0" />
+            <CheckCircle2 className="icon-success-bounce h-5 w-5 text-green-600 dark:text-green-400 shrink-0" />
             <div className="text-sm">
               <p className="font-medium text-green-800 dark:text-green-300">{t('importPage.complete')}</p>
               <p className="text-green-700 dark:text-green-400">

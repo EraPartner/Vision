@@ -461,6 +461,35 @@
     }
 
     /* ------------------------------------------------------------------
+     * Electron shell on macOS (html classes set by ElectronBridge).
+     *
+     * hiddenInset traffic lights overlap the topbar's left edge, so inset
+     * its content and make the bar itself the window drag region. Lights
+     * auto-hide in native fullscreen → inset drops with them.
+     * ------------------------------------------------------------------ */
+
+    html.electron-mac .app-topbar {
+        -webkit-app-region: drag;
+    }
+
+    html.electron-mac .app-topbar :is(button, a, input, [role="button"], [role="combobox"]) {
+        -webkit-app-region: no-drag;
+    }
+
+    html.electron-mac:not(.electron-fullscreen) .app-topbar {
+        padding-left: 88px;
+    }
+
+    /* Vibrancy prototype — only when enhancedEffects is on (ElectronBridge
+       adds .vibrancy). The window carries an under-window material; a
+       translucent body lets the blurred desktop glow through while the
+       liquid-canvas wash keeps contrast usable. body background propagates
+       to the root canvas, so this one rule controls the whole backdrop. */
+    html.electron-mac.vibrancy body {
+        background-color: hsl(var(--background) / 0.72);
+    }
+
+    /* ------------------------------------------------------------------
      * Liquid canvas — fixed atmosphere layer behind the app.
      *
      * Two slow-drifting aurora blobs (compositor-only transforms) over a
@@ -746,6 +775,38 @@
     .animate-stagger > *:nth-child(11) { animation-delay: 600ms; }
     .animate-stagger > *:nth-child(12) { animation-delay: 660ms; }
 
+    /* SF-Symbols-style success bounce: icon pops past full size and settles.
+       Applied to inline success icons on mount and, globally below, to the
+       icon slot of sonner success toasts (covers every toast.success). */
+    .icon-success-bounce {
+        animation: icon-success-bounce 600ms var(--ease-out-quint) 100ms both;
+    }
+
+    @keyframes icon-success-bounce {
+        0% {
+            transform: scale(0.4);
+            opacity: 0;
+        }
+
+        45% {
+            transform: scale(1.22);
+            opacity: 1;
+        }
+
+        70% {
+            transform: scale(0.92);
+        }
+
+        100% {
+            transform: scale(1);
+            opacity: 1;
+        }
+    }
+
+    [data-sonner-toast][data-type="success"] [data-icon] {
+        animation: icon-success-bounce 600ms var(--ease-out-quint) 150ms both;
+    }
+
     .gradient-bg {
         background: linear-gradient(
             135deg,
@@ -785,7 +846,9 @@
 
     @media (prefers-reduced-motion: reduce) {
         .animate-in,
-        .animate-stagger > * {
+        .animate-stagger > *,
+        .icon-success-bounce,
+        [data-sonner-toast][data-type="success"] [data-icon] {
             animation: none;
         }
 

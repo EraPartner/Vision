@@ -4,10 +4,10 @@ type: component
 status: active
 date: 2026-04-25
 updated: 2026-06-10
-tags: [components, layout, navigation, design-system, phase-9, performance, workspace, liquid-glass-v2, command-palette, route-preload, june-2026]
-description: Core layout components including sidebar, header, and app structure with emerald + gold aesthetic. June 2026 Liquid Glass v2 — atmosphere layer restored, PageTransition re-added as enter-only spring, sidebar ActiveRail is a framer layoutId element, CommandPalette wired, scroll-linked topbar, route-chunk hover prefetch.
-aliases: [layout, app layout, sidebar, navigation]
-related_code: ["apps/frontend/src/components/layout"]
+tags: [components, layout, navigation, design-system, phase-9, performance, workspace, liquid-glass-v2, command-palette, route-preload, electron-native, electron-bridge, ipc, macos, june-2026]
+description: Core layout components including sidebar, header, and app structure with emerald + gold aesthetic. June 2026 Liquid Glass v2 — atmosphere layer restored, PageTransition re-added as enter-only spring, sidebar ActiveRail is a framer layoutId element, CommandPalette wired, scroll-linked topbar, route-chunk hover prefetch. June 2026 V12 (ADR-072) — ElectronBridge mounted in AppLayout handles native menu actions, CSV drag-drop, fullscreen class toggling, and dock badge via window.electronAPI.
+aliases: [layout, app layout, sidebar, navigation, ElectronBridge]
+related_code: ["apps/frontend/src/components/layout", "apps/frontend/src/components/layout/ElectronBridge.tsx"]
 ---
 
 # Layout Components
@@ -24,8 +24,9 @@ Core layout components that structure the application shell.
 
 | Component | Description | File |
 |-----------|-------------|------|
-| AppLayout | Main app wrapper with sidebar, atmosphere, topbar, CommandPalette | [[apps/frontend/src/components/layout/AppLayout.tsx\|AppLayout.tsx]] |
+| AppLayout | Main app wrapper with sidebar, atmosphere, topbar, CommandPalette, ElectronBridge | [[apps/frontend/src/components/layout/AppLayout.tsx\|AppLayout.tsx]] |
 | AppSidebar | Navigation sidebar with ActiveRail + route prefetch | [[apps/frontend/src/components/layout/AppSidebar.tsx\|AppSidebar.tsx]] |
+| ElectronBridge | Electron IPC bridge — menu actions, CSV handoff, fullscreen, dock badge (Electron-only, mounted in AppLayout inside SidebarProvider) | [[apps/frontend/src/components/layout/ElectronBridge.tsx\|ElectronBridge.tsx]] |
 | PageTransition | Enter-only spring route wrapper (re-added June 2026) | [[apps/frontend/src/components/layout/PageTransition.tsx\|PageTransition.tsx]] |
 | CommandPalette | ⌘K global command palette | [[apps/frontend/src/components/shared/CommandPalette.tsx\|CommandPalette.tsx]] |
 
@@ -318,16 +319,41 @@ Code link: [[apps/frontend/src/components/shared/CommandPalette.tsx]]
 
 ---
 
+## ElectronBridge
+
+**Status**: Added June 2026 (ADR-072).
+
+`components/layout/ElectronBridge.tsx` is a side-effect-only component mounted once in `AppLayout` inside `SidebarProvider`. It is a no-op in browser (non-Electron) builds — every call is gated on `isElectronMac()` or `getElectronAPI()`.
+
+**Responsibilities:**
+
+| Responsibility | Detail |
+|----------------|--------|
+| Ready handshake | Calls `electronAPI.ready()` on mount — drains the pending IPC send queue in main |
+| Menu action routing | Subscribes to `onMenuAction`; maps `{action, payload}` to React Router navigation, settings/shortcuts dialog dispatch, sidebar toggle, or `/transactions?new=1` navigate |
+| CSV drag-drop | Window-level `dragover`/`drop` intercept; `.csv` → `importHandoff`; exempts `[data-dropzone]` ancestors |
+| CSV open-with | Subscribes to `onCsvOpen`; receives `{name, content}` from main; pushes to `importHandoff` and navigates to `/import` |
+| Fullscreen class | Subscribes to `onFullScreenChange`; adds/removes `electron-fullscreen` on `<html>` |
+| html class management | Adds `electron-mac` on mount; adds/removes `vibrancy` based on `appSettings.enhancedEffects` |
+
+All IPC subscriptions are attached via stable refs (`useRef`) so React re-renders do not tear down and re-attach listeners. Unsubscribe functions are called in the effect cleanup.
+
+Code link: [[apps/frontend/src/components/layout/ElectronBridge.tsx]]
+
+---
+
 ## Related Documentation
 
 - [[docs/components/index]] - Components Index
 - [[docs/features/views]] - All views
 - [[docs/i18n/index]] - Internationalization
 - [[docs/components/state-management|State Management]] - Context providers
+- [[docs/adr/072-electron-native-desktop-integration|ADR-072: Electron-Native Desktop Integration]] (June 2026 — ElectronBridge, native menu, CSV handoff, system accent)
 - [[docs/adr/070-liquid-glass-v2-premium-frontend|ADR-070: Liquid Glass v2]] (June 2026 — atmosphere, PageTransition, CommandPalette, ActiveRail)
 - [[docs/adr/017-liquid-glass-aesthetic-design-system|ADR-017: Liquid Glass Aesthetic]]
 - [[docs/adr/019-framer-motion-adoption|ADR-019: Framer Motion Adoption]]
 - [[docs/adr/020-glass-system-downgrade-liquid-canvas-removal|ADR-020: Glass System Downgrade & Liquid Canvas Removal]]
+- [[docs/architecture/electron|Electron Architecture]] — Full IPC surface and native integration docs
 - [[docs/reference/code-patterns#motion-consumer-pattern-phase-9|Motion Consumer Pattern]]
 - [[docs/reference/code-patterns#surface-shell-pattern-phase-9|Surface Shell Pattern]]
 

@@ -101,6 +101,8 @@ interface SettingsState {
     themeMode: ThemeMode;
     themeSchedule: ThemeSchedule;
     themeVariant: ThemeVariant;
+    /** macOS only: override the variant's primary/ring with the system accent color. */
+    themeSystemAccent: boolean;
     isThemeLoaded: boolean;
 }
 
@@ -121,6 +123,7 @@ interface SettingsActions {
     setThemeMode: (mode: ThemeMode) => void;
     setThemeSchedule: (schedule: ThemeSchedule) => void;
     setThemeVariant: (variant: ThemeVariant) => void;
+    setThemeSystemAccent: (on: boolean) => void;
     setTheme: (theme: Theme) => void;
     toggleTheme: () => void;
     /** Called by ThemeProvider once preloaded data arrives. */
@@ -128,6 +131,7 @@ interface SettingsActions {
         mode?: ThemeMode;
         schedule?: ThemeSchedule;
         variant?: ThemeVariant;
+        systemAccent?: boolean;
     }) => void;
     /** Called by ThemeProvider after the resolved theme is computed. */
     _setResolvedTheme: (theme: Theme) => void;
@@ -170,11 +174,13 @@ export const useSettingsStore = create<SettingsStore>((set, get) => ({
     themeMode: 'dark',
     themeSchedule: DEFAULT_THEME_SCHEDULE,
     themeVariant: 'default',
+    themeSystemAccent: false,
     isThemeLoaded: false,
 
     setThemeMode: (mode) => set({ themeMode: mode }),
     setThemeSchedule: (schedule) => set({ themeSchedule: schedule }),
     setThemeVariant: (variant) => set({ themeVariant: variant }),
+    setThemeSystemAccent: (on) => set({ themeSystemAccent: on }),
     // Sets both the resolved theme AND the mode (used for explicit light/dark override)
     setTheme: (theme) => set({ theme, themeMode: theme }),
     toggleTheme: () => {
@@ -187,6 +193,7 @@ export const useSettingsStore = create<SettingsStore>((set, get) => ({
             themeMode: data.mode ?? s.themeMode,
             themeSchedule: data.schedule ?? s.themeSchedule,
             themeVariant: data.variant ?? s.themeVariant,
+            themeSystemAccent: data.systemAccent ?? s.themeSystemAccent,
         })),
 
     _setResolvedTheme: (theme) => set({ theme }),

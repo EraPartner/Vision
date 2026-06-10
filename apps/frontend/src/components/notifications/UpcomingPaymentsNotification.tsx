@@ -10,6 +10,7 @@ import { useAppSettings } from "@/contexts/AppSettingsContext";
 import { numberFormatToLocale } from "@/utils/currency";
 import { toYmd } from "@/lib/timezone";
 import { formatDateStringWithAppSettings } from "@/components/shared/dateUtils";
+import { isElectronMac, setDockBadge } from "@/lib/api/electron";
 
 const DISMISSED_UPCOMING_PLANNED_STORAGE_KEY = "dismissed_upcoming_planned_payments";
 
@@ -80,6 +81,16 @@ export function UpcomingPaymentsNotification() {
   });
 
   const visibleUpcoming = (upcoming ?? []).filter((pt) => !dismissedIds.has(pt.id));
+
+  // macOS dock badge mirrors the visible (non-dismissed) due count.
+  const badgeCount = dismissedLoaded && upcoming !== undefined ? visibleUpcoming.length : null;
+  useEffect(() => {
+    if (!isElectronMac() || badgeCount === null) return;
+    setDockBadge(badgeCount);
+  }, [badgeCount]);
+  useEffect(() => {
+    return () => { if (isElectronMac()) setDockBadge(0); };
+  }, []);
 
   if (!dismissedLoaded || visibleUpcoming.length === 0) return null;
 

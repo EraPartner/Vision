@@ -115,8 +115,17 @@ User approved everything from the apple-axes brainstorm + reported topbar seam b
 - [ ] V9. Stat-card value scrubbing through netHistory.
 - [ ] V10. Genie dialog close toward trigger.
 - [ ] V11. Contextual suggestion card (planned-payments-due slot on dashboard).
-- [/] V12. IN PROGRESS (this session). ELECTRON (needs focused session — security posture review per AGENTS.md, can't visually verify headless): hiddenInset traffic lights (+ frontend topbar left-inset when window.electronAPI && darwin), native menu bar (Go menu mirroring GO_TO_ROUTES, File→Import, View→sidebar, system roles), dock badge (planned payments due — IPC), dock menu (New transaction/Dashboard), drag-CSV-onto-window → import handoff, vibrancy/under-window (HIGH regression risk with opaque tokens — prototype behind enhancedEffects?), system accent color as theme variant.
-  Plan: main.js (hiddenInset+vibrancy window opts darwin-only, Menu.setApplicationMenu after initI18n, dock badge/menu, open-file CSV, systemPreferences accent + AppleColorPreferencesChangedNotification); preload `electronAPI` bridge (platform, setDockBadge, getAccentColor, onMenuAction/onCsvOpen/onFullScreenChange/onAccentColorChanged); frontend ElectronBridge in AppLayout (html.electron-mac classes, menu routing, window CSV drop → lib/importHandoff one-slot), badge from UpcomingPaymentsNotification, ?new=1 in AddTransactionDialog, system-accent as ThemeContext overlay toggle (NOT a 5th variant — composes with all variants), vibrancy CSS behind enhancedEffects. Security posture unchanged (contextIsolation on, nodeIntegration off, sandbox on; IPC validates sender+input).
+- [x] V12. DONE (ADR-072) — implemented + checks green, NOT visually verified (user tests the built .app). Security posture unchanged (contextIsolation on, nodeIntegration off, sandbox on; new IPC validates sender + clamps input). Files:
+  - packaging/electron/main.js: hiddenInset + trafficLightPosition{20,20} + vibrancy 'under-window' (darwin-only spread in createWindow); enter/leave-full-screen → IPC; native-integration section before "Compose override" (sendToApp queue + app:renderer-ready handshake, rendererReady resets on did-start-loading/closed; GO_MENU_ROUTES mirrors GO_TO_ROUTES — MANUAL SYNC POINT; setupApplicationMenu/setupDockMenu/subscribeAccentColorChanges called in launch() AFTER initI18n; app:set-badge clamps 0-999; app:get-accent-color; accent change via AppleColorPreferencesChangedNotification — the 'accent-color-changed' event is Windows-only; open-file → .csv whitelist + 25MB cap → {name,content} over IPC, OS path never enters the renderer).
+  - packaging/electron/preload.js: new `electronAPI` bridge (platform, ready, setDockBadge, getAccentColor, onAccentColorChanged/onMenuAction/onCsvOpen/onFullScreenChange — subs return unsubscribe).
+  - components/layout/ElectronBridge.tsx (NEW, in AppLayout inside SidebarProvider): html .electron-mac/.electron-fullscreen/.vibrancy classes, menu-action routing (handlers via ref so IPC subs attach exactly ONCE — useNavigate identity is not stable), window-level CSV drop (also closes Chromium's navigate-to-dropped-file hole; [data-dropzone] ancestors exempt), ready() handshake.
+  - lib/importHandoff.ts (NEW, one-slot 30s TTL like lib/undo.ts); TransactionImportCard consumes on mount + dropzone got data-dropzone.
+  - AddTransactionDialog: /transactions?new=1 opens the dialog, strips param (replace) — target of menu ⌘N + dock-menu New Transaction (also delivers v4-list item 2's param half; `n` key shortcut still open).
+  - UpcomingPaymentsNotification: dock badge = visible (non-dismissed) due count, cleared on unmount.
+  - System accent = runtime token OVERLAY, not a 6th variant: settingsStore.themeSystemAccent + ThemeContext applyPalette (re-runs applyThemePalette then overrides --primary/--ring/--sidebar-primary(+fg); epoch counter kills stale async; live re-tint sub) + lib/accentColor.ts (RRGGBBAA→HSL + WCAG fg pick) + AppearanceTab Switch (rendered only when isElectronMac()). Persisted inside the existing theme_settings blob (`systemAccent` key, older payloads hydrate fine).
+  - index.css: .electron-mac topbar = drag region (interactive children no-drag) + 88px left inset (dropped under .electron-fullscreen); vibrancy = ONE rule (html.electron-mac.vibrancy body → hsl(--background/0.72); body bg propagates to root canvas).
+  - i18n +11 keys (menu.* en+nl, settings.appearance.systemAccent*) + enhancedEffectsHint now mentions window translucency. Source now 2887 keys (V12's 11 are the uncommitted i18n diff — V5-V7's commit deliberately excluded them).
+  Follow-ups: user visual pass (vibrancy 0.72 alpha + traffic-light/topbar geometry tuned blind); ShortcutsOverlay doesn't list native accelerators (⌘1-9/⌘N/⇧⌘I/⌃⌘S — overlay was concurrently reworked in V5-V7, add isElectronMac() rows later); error.html not adapted to hiddenInset (cosmetic).
 
 ### v5 session-end note (context exhausted before V5-V12)
 V0-V4 done + committed. V5-V7 (context menus / Quick Look / arrow nav) need the
@@ -139,6 +148,20 @@ HEAD + the 14 new keys so the V12 keys stayed out). NOTE: tree also carries unco
 in-progress V12 Electron work from the prior session (ElectronBridge.tsx,
 accentColor.ts, importHandoff.ts, packaging/electron main/preload, theme/settings
 edits) — untouched by this session.
+
+### V12 session (2026-06-10, focused Electron session)
+Everything in the V12 item above; ADR-072 written
+(docs/adr/072-electron-native-desktop-integration.md). Verified: node --check on
+main.js/preload.js, tsc clean, lint 0 errors (12 pre-existing warnings, none in
+touched files), frontend vitest green except the known adminToken env failure
+(the V5-V7 session's 1425-pass run already covered this tree's V12 frontend
+files), generate+validate-locales clean. Committed at user request as
+9046f6a3 (V12 files only — TODO.md edits, the liquid-glass-v2 session-doc
+deletion, and another session's in-flight V10 dialog work stayed out). Could
+not verify visually headless — user will test the built .app: traffic
+lights/drag region, menu bar (⌘1-9, ⌘N, ⇧⌘I, ⌃⌘S, ⌘,), dock badge+menu,
+CSV drop + Finder open-with, system accent toggle in Appearance (Electron
+only), vibrancy via the enhanced-effects toggle.
 
 ### Money typography sweep (2026-06-10 night, user request)
 - Money sizing fixed: currency 0.7em→0.85em, fraction 0.78em→0.88em, raise reduced (was unreadably small in table cells).

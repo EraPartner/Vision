@@ -4,13 +4,15 @@ type: feature
 status: active
 date: 2026-04-21
 updated: 2026-06-10
-tags: [feature, appearance, theming, personalization, frontend, settings, phase-1, enhanced-effects, shader-aurora, webgl, premium-v3, june-2026]
-description: Per-user theme variant selection with five color palettes, light/dark mode switching, and schedule-based mode transitions. June 2026 Premium v3 (ADR-071): new Enhanced Visual Effects toggle in Settings → General gates the WebGL ShaderAurora (default off).
-aliases: [appearance, theming, theme variants, color palettes, dark mode, light mode]
+tags: [feature, appearance, theming, personalization, frontend, settings, phase-1, enhanced-effects, shader-aurora, webgl, premium-v3, system-accent, vibrancy, electron-native, macos, june-2026]
+description: Per-user theme variant selection with five color palettes, light/dark mode switching, and schedule-based mode transitions. June 2026 Premium v3 (ADR-071): new Enhanced Visual Effects toggle in Settings → General gates the WebGL ShaderAurora (default off) and window vibrancy. June 2026 V12 (ADR-072): system accent color overlay (Electron/macOS only, persisted in theme_settings.systemAccent) and vibrancy opt-in via enhancedEffects.
+aliases: [appearance, theming, theme variants, color palettes, dark mode, light mode, system accent, vibrancy]
 related_code:
   - apps/frontend/src/styles/themes.ts
   - apps/frontend/src/contexts/ThemeContext.tsx
   - apps/frontend/src/components/settings/AppearanceTab.tsx
+  - apps/frontend/src/lib/accentColor.ts
+  - apps/frontend/src/stores/settingsStore.ts
   - apps/node-backend/src/routes/settings.js
 ---
 
@@ -140,9 +142,12 @@ User preferences are stored in the `theme_settings` JSONB key:
   "schedule": {
     "lightFrom": "HH:MM",
     "darkFrom": "HH:MM"
-  }
+  },
+  "systemAccent": true
 }
 ```
+
+`systemAccent` is optional. Payloads that omit it hydrate fine (treated as `false`).
 
 ### Defaults
 
@@ -333,20 +338,62 @@ All theme transitions respect `prefers-reduced-motion`:
 
 **Why default off**: The ADR-020 Electron M1 history (GPU jank from sustained animations) makes always-on unacceptable. The shader is self-throttling but adds GPU work; users must explicitly opt in.
 
+**Vibrancy gate**: The `enhancedEffects` toggle also controls under-window vibrancy on Electron/macOS. The window is always created with `vibrancy: 'under-window'` + `visualEffectState: 'followWindow'` (invisible while the page paints opaque pixels). Only when `enhancedEffects` is `true` does `ElectronBridge` add the `vibrancy` html class, and one CSS rule makes `body` translucent (`hsl(var(--background) / 0.72)`). See [[docs/architecture/electron|Electron Architecture — Under-Window Vibrancy]].
+
+**enhancedEffectsHint rewording (ADR-072)**: The `settings.general.enhancedEffectsHint` i18n key was reworded to mention window translucency in addition to the WebGL aurora.
+
 **i18n keys**: `settings.general.enhancedEffects`, `settings.general.enhancedEffectsHint` (en + nl).
 
 Code links: [[apps/frontend/src/components/layout/ShaderAurora.tsx]], [[apps/frontend/src/stores/settingsStore.ts]], [[apps/frontend/src/components/settings/tabs/GeneralTab.tsx]]
 
 ---
 
+## System Accent Color (Electron/macOS Only, V12 June 2026 — ADR-072)
+
+> [!info] Added in ADR-072
+> **"Use system accent color"** Switch in **Settings → Appearance**, rendered only when `isElectronMac()` returns true.
+
+### What it does
+
+When enabled, `ThemeContext` re-applies `applyThemePalette` (resets all variant tokens) and then **overlays** the macOS system accent color onto five CSS custom properties:
+
+| Property | Role |
+|----------|------|
+| `--primary` / `--primary-foreground` | Buttons, links, active indicators |
+| `--ring` | Focus rings |
+| `--sidebar-primary` / `--sidebar-primary-foreground` | Sidebar active-item highlight |
+| `--sidebar-ring` | Sidebar focus ring |
+
+Because `applyThemePalette` runs first, the overlay **composes with all five theme variants and both light/dark modes** — it is not a sixth variant.
+
+### Implementation details
+
+- **`lib/accentColor.ts`** — `hexToHslComponents(rrggbbaa)` converts Electron's RRGGBBAA hex string to `"h s% l%"` component form. `accentForegroundComponents(h, s, l)` picks a WCAG-contrast foreground: ink for yellow/green accents, white for blue/purple.
+- **`settingsStore.ts`** — adds `themeSystemAccent: boolean` + `setThemeSystemAccent` with hydration support. The flag is persisted inside the existing `theme_settings` blob under the key `systemAccent`.
+- **`ThemeContext.tsx`** — An **epoch counter** ensures that stale async accent-color fetches arriving out-of-order do not overwrite a more recent apply. Live re-tint on `AppleColorPreferencesChangedNotification` (pushed via `electronAPI.onAccentColorChanged`).
+- Toggling off self-heals: `applyThemePalette` resets every token back to the active variant's values.
+
+### Degradation
+
+- On non-Electron / non-macOS builds the Switch is hidden entirely.
+- If `getAccentColor()` fails (permissions, OS version), the overlay is silently skipped; the active variant is left unchanged.
+
+**i18n keys**: `settings.appearance.systemAccent`, `settings.appearance.systemAccentHint` (en + nl, +2 keys from ADR-072).
+
+Code links: [[apps/frontend/src/lib/accentColor.ts]], [[apps/frontend/src/contexts/ThemeContext.tsx]], [[apps/frontend/src/stores/settingsStore.ts]], [[apps/frontend/src/components/settings/AppearanceTab.tsx]]
+
+---
+
 ## Related Features
 
 - [[docs/features/settings|Settings Feature]] — Settings system overview
+- [[docs/adr/072-electron-native-desktop-integration|ADR-072: Electron-Native Desktop Integration]] — System accent overlay, vibrancy opt-in (June 2026)
 - [[docs/adr/071-premium-v3-effects-toggle|ADR-071: Premium v3]] — Enhanced effects toggle + full Premium v3 batch (June 2026)
 - [[docs/adr/070-liquid-glass-v2-premium-frontend|ADR-070: Liquid Glass v2]] — Theme crossfade via `startViewTransition` (June 2026)
 - [[docs/adr/020-glass-system-downgrade-liquid-canvas-removal|ADR-020: Glass System Downgrade]] — GPU budget rationale (Electron M1)
 - [[docs/adr/017-liquid-glass-aesthetic-design-system|ADR-017: Liquid Glass Aesthetic]] — Design system foundation
 - [[docs/adr/025-theme-variant-system|ADR-025: Theme Variant System]] — Architectural decision and token details
+- [[docs/architecture/electron|Electron Architecture]] — Under-window vibrancy, system accent IPC
 - [[docs/api/settings|Settings API]] — Backend API contracts
 - [[docs/i18n/translations|Translations & i18n]] — Localization system
 - [[apps/frontend/src/styles/themes.ts|Theme Variants Source Code]] — Palette definitions and `applyThemePalette()` function

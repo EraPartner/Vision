@@ -1,6 +1,6 @@
 'use strict';
 
-const { app, BrowserWindow, dialog, Notification, shell, ipcMain, safeStorage, session } = require('electron');
+const { app, BrowserWindow, dialog, Menu, Notification, shell, ipcMain, safeStorage, session, systemPreferences } = require('electron');
 const { execFile, spawn } = require('child_process');
 const crypto = require('crypto');
 const fs = require('fs');
@@ -1207,6 +1207,17 @@ function createWindow() {
     width: 1280,
     height: 800,
     title: APP_NAME,
+    // macOS-native chrome: frameless content with inset traffic lights. The
+    // renderer adds a drag region + left inset to its topbar when it detects
+    // electronAPI.platform === 'darwin' (see ElectronBridge in the frontend).
+    // Vibrancy is a no-op while the page paints opaque backgrounds — the
+    // renderer only goes translucent behind the enhancedEffects toggle.
+    ...(process.platform === 'darwin' ? {
+      titleBarStyle: 'hiddenInset',
+      trafficLightPosition: { x: 20, y: 20 },
+      vibrancy: 'under-window',
+      visualEffectState: 'followWindow',
+    } : {}),
     webPreferences: {
       nodeIntegration: false,
       contextIsolation: true,
@@ -1214,6 +1225,14 @@ function createWindow() {
       // Preload exposes a minimal update API to the renderer
       preload: path.join(__dirname, 'preload.js'),
     },
+  });
+  // Renderer drops the traffic-light inset while in native fullscreen
+  // (the lights auto-hide there).
+  mainWindow.on('enter-full-screen', () => {
+    if (mainWindow && !mainWindow.isDestroyed()) mainWindow.webContents.send('window:fullscreen', true);
+  });
+  mainWindow.on('leave-full-screen', () => {
+    if (mainWindow && !mainWindow.isDestroyed()) mainWindow.webContents.send('window:fullscreen', false);
   });
   // Block all new-window spawns (target="_blank", window.open, etc.)
   mainWindow.webContents.setWindowOpenHandler(() => ({ action: 'deny' }));
@@ -1232,8 +1251,12 @@ function createWindow() {
     }
   });
 
+  // Renderer readiness is per-document: any navigation/reload invalidates the
+  // previous document's app:renderer-ready signal.
+  mainWindow.webContents.on('did-start-loading', () => { rendererReady = false; });
+
   // Caller is responsible for loading the initial URL.
-  mainWindow.on('closed', () => { mainWindow = null; });
+  mainWindow.on('closed', () => { mainWindow = null; rendererReady = false; });
 }
 
 // ── Manual shell updater (.zip-only, no blockmaps) ───────────────────────────
@@ -2455,6 +2478,236 @@ ipcMain.handle('recovery:open-logs', async () => {
   }
 });
 
+// ── macOS-native integration (menu bar, dock, open-file, accent color) ───────
+// All renderer-bound messages funnel through sendToApp() so actions fired
+// before React mounts (dock menu on a closed window, Finder open-file at
+// launch) are queued and flushed when the renderer signals readiness via
+// app:renderer-ready. The renderer side lives in ElectronBridge.
+
+let rendererReady = false;
+const pendingAppMessages = [];
+
+function sendToApp(channel, payload) {
+  if (!mainWindow || mainWindow.isDestroyed()) {
+    pendingAppMessages.push([channel, payload]);
+    createWindow();
+    mainWindow.loadURL(APP_URL);
+    return;
+  }
+  if (mainWindow.isMinimized()) mainWindow.restore();
+  mainWindow.show();
+  mainWindow.focus();
+  if (rendererReady) {
+    mainWindow.webContents.send(channel, payload);
+  } else {
+    pendingAppMessages.push([channel, payload]);
+  }
+}
+
+ipcMain.handle('app:renderer-ready', (event) => {
+  if (!mainWindow || event.sender !== mainWindow.webContents) return { success: false };
+  rendererReady = true;
+  while (pendingAppMessages.length > 0) {
+    const [channel, payload] = pendingAppMessages.shift();
+    mainWindow.webContents.send(channel, payload);
+  }
+  return { success: true };
+});
+
+function menuAction(action, payload) {
+  sendToApp('menu:action', { action, payload });
+}
+
+// Mirrors GO_TO_ROUTES in apps/frontend/src/hooks/useGoToShortcuts.ts — keep
+// both lists in sync when adding a destination.
+const GO_MENU_ROUTES = [
+  { url: '/', titleKey: 'nav.dashboard' },
+  { url: '/transactions', titleKey: 'nav.transactions' },
+  { url: '/statistics', titleKey: 'nav.statistics' },
+  { url: '/categories', titleKey: 'nav.categories' },
+  { url: '/recipients', titleKey: 'nav.recipients' },
+  { url: '/import', titleKey: 'nav.importExport' },
+  { url: '/portfolio', titleKey: 'nav.portfolio' },
+  { url: '/portfolio/net-worth', titleKey: 'nav.netWorth' },
+  { url: '/ai-chat', titleKey: 'nav.aiChat' },
+];
+
+function setupApplicationMenu() {
+  const template = [
+    ...(process.platform === 'darwin' ? [{
+      label: APP_NAME,
+      submenu: [
+        { role: 'about' },
+        { type: 'separator' },
+        {
+          label: t('menu.settings'),
+          accelerator: 'CmdOrCtrl+,',
+          click: () => menuAction('open-settings'),
+        },
+        { type: 'separator' },
+        { role: 'services' },
+        { type: 'separator' },
+        { role: 'hide' },
+        { role: 'hideOthers' },
+        { role: 'unhide' },
+        { type: 'separator' },
+        { role: 'quit' },
+      ],
+    }] : []),
+    {
+      label: t('menu.file'),
+      submenu: [
+        {
+          label: t('menu.newTransaction'),
+          accelerator: 'CmdOrCtrl+N',
+          click: () => menuAction('new-transaction'),
+        },
+        {
+          label: t('menu.importCsv'),
+          accelerator: 'Shift+CmdOrCtrl+I',
+          click: () => menuAction('navigate', '/import'),
+        },
+        { type: 'separator' },
+        { role: process.platform === 'darwin' ? 'close' : 'quit' },
+      ],
+    },
+    {
+      label: t('menu.edit'),
+      submenu: [
+        { role: 'undo' },
+        { role: 'redo' },
+        { type: 'separator' },
+        { role: 'cut' },
+        { role: 'copy' },
+        { role: 'paste' },
+        { role: 'selectAll' },
+      ],
+    },
+    {
+      label: t('menu.view'),
+      submenu: [
+        {
+          label: t('menu.toggleSidebar'),
+          // ⌃⌘S mirrors Finder/Mail "Show/Hide Sidebar" on macOS.
+          accelerator: process.platform === 'darwin' ? 'Ctrl+Cmd+S' : 'Ctrl+Shift+S',
+          click: () => menuAction('toggle-sidebar'),
+        },
+        { type: 'separator' },
+        { role: 'reload' },
+        ...(app.isPackaged ? [] : [{ role: 'toggleDevTools' }]),
+        { type: 'separator' },
+        { role: 'resetZoom' },
+        { role: 'zoomIn' },
+        { role: 'zoomOut' },
+        { type: 'separator' },
+        { role: 'togglefullscreen' },
+      ],
+    },
+    {
+      label: t('menu.go'),
+      submenu: GO_MENU_ROUTES.map((route, i) => ({
+        label: t(route.titleKey),
+        accelerator: `CmdOrCtrl+${i + 1}`,
+        click: () => menuAction('navigate', route.url),
+      })),
+    },
+    { role: 'windowMenu' },
+    {
+      role: 'help',
+      submenu: [
+        {
+          label: t('menu.keyboardShortcuts'),
+          click: () => menuAction('open-shortcuts'),
+        },
+      ],
+    },
+  ];
+  Menu.setApplicationMenu(Menu.buildFromTemplate(template));
+}
+
+function setupDockMenu() {
+  if (process.platform !== 'darwin' || !app.dock) return;
+  app.dock.setMenu(Menu.buildFromTemplate([
+    {
+      label: t('menu.newTransaction'),
+      click: () => menuAction('new-transaction'),
+    },
+    {
+      label: t('nav.dashboard'),
+      click: () => menuAction('navigate', '/'),
+    },
+  ]));
+}
+
+// Dock badge — count of planned payments due, pushed by the renderer (it owns
+// the query + the user's dismissals). Input is clamped server-side so a
+// compromised renderer can at most show a number.
+ipcMain.handle('app:set-badge', (event, count) => {
+  if (!mainWindow || event.sender !== mainWindow.webContents) return { success: false };
+  if (process.platform !== 'darwin' || !app.dock) return { success: false };
+  const n = Number(count);
+  if (!Number.isFinite(n)) return { success: false };
+  const clamped = Math.max(0, Math.min(999, Math.floor(n)));
+  app.dock.setBadge(clamped > 0 ? String(clamped) : '');
+  return { success: true };
+});
+
+// System accent color — RRGGBBAA hex from macOS, or null when unavailable.
+function readSystemAccentColor() {
+  if (process.platform !== 'darwin') return null;
+  try {
+    const color = systemPreferences.getAccentColor();
+    return typeof color === 'string' && color ? color : null;
+  } catch {
+    return null;
+  }
+}
+
+ipcMain.handle('app:get-accent-color', (event) => {
+  if (!mainWindow || event.sender !== mainWindow.webContents) return null;
+  return readSystemAccentColor();
+});
+
+function subscribeAccentColorChanges() {
+  if (process.platform !== 'darwin') return;
+  try {
+    systemPreferences.subscribeNotification('AppleColorPreferencesChangedNotification', () => {
+      if (mainWindow && !mainWindow.isDestroyed() && rendererReady) {
+        mainWindow.webContents.send('app:accent-color-changed', readSystemAccentColor());
+      }
+    });
+  } catch (err) {
+    console.warn('accent-color subscription failed (non-fatal):', err && err.message ? err.message : err);
+  }
+}
+
+// Finder/dock "open with Vision" for CSVs → forwarded to the renderer as file
+// contents (the sandboxed renderer cannot read arbitrary paths, and we do not
+// widen its filesystem access for this). Extension + size checked here; the
+// import flow re-validates and previews before anything is written.
+const CSV_OPEN_MAX_BYTES = 25 * 1024 * 1024;
+
+async function forwardCsvOpen(filePath) {
+  try {
+    if (!/\.csv$/i.test(filePath)) return;
+    const stat = await fs.promises.stat(filePath);
+    if (!stat.isFile() || stat.size > CSV_OPEN_MAX_BYTES) return;
+    const content = await fs.promises.readFile(filePath, 'utf8');
+    sendToApp('app:csv-opened', { name: path.basename(filePath), content });
+  } catch (err) {
+    console.warn('open-file forward failed (non-fatal):', err && err.message ? err.message : err);
+  }
+}
+
+app.on('open-file', (event, filePath) => {
+  event.preventDefault();
+  if (app.isReady()) {
+    forwardCsvOpen(filePath);
+  } else {
+    app.whenReady().then(() => forwardCsvOpen(filePath));
+  }
+});
+
 // ── Compose override (dev modes) ─────────────────────────────────────────────
 // Set VISION_COMPOSE_OVERRIDE to a filename (relative to workDir) to layer an
 // additional compose file on top of the base — e.g. docker-compose.dev.yml.
@@ -2485,6 +2738,12 @@ async function launch() {
   const endI18n = bootMark('init_i18n');
   await initI18n();
   endI18n();
+
+  // 0a-bis. Native menu bar + dock menu need localized labels, so they follow
+  // initI18n. Accent-color push subscription is darwin-only and inert otherwise.
+  setupApplicationMenu();
+  setupDockMenu();
+  subscribeAccentColorChanges();
 
   // 0b. Open the loading window IMMEDIATELY so the user sees something straight
   //    away — before any Docker I/O, which can take seconds or even minutes on

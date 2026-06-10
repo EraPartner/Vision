@@ -4,10 +4,12 @@ import { useLanguage } from '@/contexts/LanguageContext';
 import { Label } from '@/components/ui/label';
 import { Input } from '@/components/ui/input';
 import { Separator } from '@/components/ui/separator';
+import { Switch } from '@/components/ui/switch';
 import {
     Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from '@/components/ui/select';
 import { THEME_VARIANTS, themes, type ThemeVariant } from '@/styles/themes';
+import { isElectronMac } from '@/lib/api/electron';
 
 interface VariantMeta {
     value: ThemeVariant;
@@ -55,7 +57,7 @@ function VariantSwatch({ variant, mode }: SwatchProps) {
 
 export const AppearanceTab = memo(function AppearanceTab() {
     const { t } = useLanguage();
-    const { theme, mode, schedule, variant, setMode, setSchedule, setVariant } = useTheme();
+    const { theme, mode, schedule, variant, systemAccent, setMode, setSchedule, setVariant, setSystemAccent } = useTheme();
 
     return (
         <div className="space-y-6 py-4">
@@ -95,6 +97,25 @@ export const AppearanceTab = memo(function AppearanceTab() {
                     })}
                 </div>
             </div>
+
+            {/* macOS system accent (Electron shell only) */}
+            {isElectronMac() && (
+                <div className="flex items-center justify-between gap-4 rounded-lg border border-border p-3">
+                    <div className="space-y-1">
+                        <Label htmlFor="system-accent" className="text-sm font-medium">
+                            {t('settings.appearance.systemAccent')}
+                        </Label>
+                        <p className="text-xs text-muted-foreground">
+                            {t('settings.appearance.systemAccentHint')}
+                        </p>
+                    </div>
+                    <Switch
+                        id="system-accent"
+                        checked={systemAccent}
+                        onCheckedChange={setSystemAccent}
+                    />
+                </div>
+            )}
 
             <Separator />
 

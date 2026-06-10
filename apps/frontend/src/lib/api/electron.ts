@@ -37,6 +37,29 @@ type ElectronBackup = {
     setPassphrase?: (passphrase: string) => Promise<{ success: boolean; available: boolean; error?: string }>;
 };
 
+/** Native menu / dock menu message — see packaging/electron/main.js menuAction(). */
+export interface ElectronMenuAction {
+    action: 'navigate' | 'open-settings' | 'open-shortcuts' | 'new-transaction' | 'toggle-sidebar';
+    payload?: unknown;
+}
+
+/** CSV handed over by Finder/dock "open with Vision". */
+export interface ElectronCsvFile {
+    name: string;
+    content: string;
+}
+
+type ElectronAPI = {
+    platform: string;
+    ready: () => Promise<{ success: boolean }>;
+    setDockBadge: (count: number) => Promise<{ success: boolean }>;
+    getAccentColor: () => Promise<string | null>;
+    onAccentColorChanged: (cb: (color: string | null) => void) => () => void;
+    onMenuAction: (cb: (message: ElectronMenuAction) => void) => () => void;
+    onCsvOpen: (cb: (file: ElectronCsvFile) => void) => () => void;
+    onFullScreenChange: (cb: (isFullScreen: boolean) => void) => () => void;
+};
+
 function getElectronUpdater(): ElectronUpdater | undefined {
     return (window as Window & { electronUpdater?: ElectronUpdater }).electronUpdater;
 }
@@ -45,8 +68,33 @@ function getElectronBackup(): ElectronBackup | undefined {
     return (window as Window & { electronBackup?: ElectronBackup }).electronBackup;
 }
 
+export function getElectronAPI(): ElectronAPI | undefined {
+    return (window as Window & { electronAPI?: ElectronAPI }).electronAPI;
+}
+
 export function isElectron(): boolean {
     return !!getElectronUpdater();
+}
+
+/** True inside the Electron shell on macOS — gates traffic-light inset, dock features, accent. */
+export function isElectronMac(): boolean {
+    return getElectronAPI()?.platform === 'darwin';
+}
+
+/** Set the macOS dock badge (0 clears). No-op outside Electron. */
+export function setDockBadge(count: number): void {
+    getElectronAPI()?.setDockBadge(count).catch(() => { /* badge is best-effort */ });
+}
+
+/** macOS system accent color as RRGGBBAA hex, or null outside Electron/macOS. */
+export async function getSystemAccentColor(): Promise<string | null> {
+    const api = getElectronAPI();
+    if (!api) return null;
+    try {
+        return await api.getAccentColor();
+    } catch {
+        return null;
+    }
 }
 
 export async function checkForUpdates(): Promise<{

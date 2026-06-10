@@ -3,12 +3,12 @@ title: Feature - CSV Import, Export, Attachments & Deduplication
 type: feature
 status: active
 date: 2026-04-24
-updated: 2026-06-01
-last_modified: 2026-06-01
-tags: [feature, import, export, csv, json, deduplication, phase-5a, attachments, phase-c, phase-e, phase-1, phase-12, phase-13, performance, concurrency, import-pipeline, component-split, error-handling, recipient-clusters, multi-select, export-filters, adr-046, category-review, bigserial-fix, staging-rows, tx-hash-dedup, race-safe-dedup, decimal-precision, ing, bnp, saved-custom-parsers, custom-parser-configs, named-parsers, adr-066]
+updated: 2026-06-10
+last_modified: 2026-06-10
+tags: [feature, import, export, csv, json, deduplication, phase-5a, attachments, phase-c, phase-e, phase-1, phase-12, phase-13, performance, concurrency, import-pipeline, component-split, error-handling, recipient-clusters, multi-select, export-filters, adr-046, category-review, bigserial-fix, staging-rows, tx-hash-dedup, race-safe-dedup, decimal-precision, ing, bnp, saved-custom-parsers, custom-parser-configs, named-parsers, adr-066, electron-native, csv-open-with, import-handoff, drag-drop, june-2026]
 aliases: [csv-import, bank-import, bank-statement, deduplication, data-import, streaming-import]
-description: Import transactions from bank CSV files with automatic deduplication, fuzzy/pattern recipient matching, per-row category review (ADR-046), May 2026 BIGSERIAL fix for staging row ID validation, and saved named custom CSV parsers (ADR-066) persisted in `custom_parser_configs`.
-related_code: ["apps/node-backend/src/services/importPipeline/index.js", "apps/node-backend/src/services/importPipeline/stage.js", "apps/node-backend/src/services/importPipeline/validate.js", "apps/node-backend/src/services/importPipeline/match.js", "apps/node-backend/src/services/importPipeline/commit.js", "apps/node-backend/src/services/dataImportService.js", "apps/node-backend/src/services/deduplication.js", "apps/node-backend/src/services/textNormalization.js", "apps/node-backend/src/routes/importRoutes.js", "apps/node-backend/src/lib/sse.js", "apps/node-backend/src/repositories/importBatchRepository.js", "apps/node-backend/src/repositories/customParserConfigRepository.js", "apps/frontend/src/features/imports/TransactionImportCard.tsx", "apps/frontend/src/features/imports/RecipientsImportCard.tsx", "apps/frontend/src/features/imports/CategoriesImportCard.tsx", "apps/frontend/src/features/imports/ExportCard.tsx", "apps/frontend/src/features/imports/SupportedBanksCard.tsx", "apps/frontend/src/features/imports/useAdapters.ts", "apps/frontend/src/hooks/useCustomParserConfigs.ts", "apps/frontend/src/pages/ImportPage.tsx", "apps/frontend/src/pages/ImportReviewPage.tsx"]
+description: Import transactions from bank CSV files with automatic deduplication, fuzzy/pattern recipient matching, per-row category review (ADR-046), May 2026 BIGSERIAL fix for staging row ID validation, saved named custom CSV parsers (ADR-066), and June 2026 V12 (ADR-072) window-wide CSV drag-drop + Finder/dock open-with handoff.
+related_code: ["apps/node-backend/src/services/importPipeline/index.js", "apps/node-backend/src/services/importPipeline/stage.js", "apps/node-backend/src/services/importPipeline/validate.js", "apps/node-backend/src/services/importPipeline/match.js", "apps/node-backend/src/services/importPipeline/commit.js", "apps/node-backend/src/services/dataImportService.js", "apps/node-backend/src/services/deduplication.js", "apps/node-backend/src/services/textNormalization.js", "apps/node-backend/src/routes/importRoutes.js", "apps/node-backend/src/lib/sse.js", "apps/node-backend/src/repositories/importBatchRepository.js", "apps/node-backend/src/repositories/customParserConfigRepository.js", "apps/frontend/src/features/imports/TransactionImportCard.tsx", "apps/frontend/src/features/imports/RecipientsImportCard.tsx", "apps/frontend/src/features/imports/CategoriesImportCard.tsx", "apps/frontend/src/features/imports/ExportCard.tsx", "apps/frontend/src/features/imports/SupportedBanksCard.tsx", "apps/frontend/src/features/imports/useAdapters.ts", "apps/frontend/src/hooks/useCustomParserConfigs.ts", "apps/frontend/src/lib/importHandoff.ts", "apps/frontend/src/pages/ImportPage.tsx", "apps/frontend/src/pages/ImportReviewPage.tsx"]
 ---
 
 # Feature: CSV Import & Deduplication
@@ -68,6 +68,50 @@ The monolithic `ImportPage.tsx` was decomposed into `apps/frontend/src/features/
 2. **Reusability:** Components can be imported independently in other contexts
 3. **Testability:** Each card can be tested in isolation without mocking the entire page
 4. **Scalability:** New import card types can be added without growing page size
+
+## Electron CSV Import Handoff (V12, June 2026 — ADR-072)
+
+> [!info] Added in ADR-072
+> Two new paths for opening a CSV file directly from the OS into the import UI without requiring the user to navigate to `/import` first.
+
+### Path 1 — Window-Wide Drag-and-Drop (renderer)
+
+`ElectronBridge` (`apps/frontend/src/components/layout/ElectronBridge.tsx`) attaches a `dragover`/`drop` listener to `window`. Any file dropped anywhere on the application window is intercepted:
+
+- **Non-CSV files** are silently discarded.
+- **CSV files** are read as text via the `File` API (no filesystem permission required in the sandboxed renderer) and pushed into `lib/importHandoff.ts`. The app then navigates to `/import`.
+- **`[data-dropzone]` ancestors** are exempted: the in-card dropzone on `TransactionImportCard` has `data-dropzone` on its root element, so drops inside the card still reach the card's own handler normally.
+- This also closes the Chromium default behavior of *navigating to* a dropped file, which would have produced a blank page.
+
+### Path 2 — Finder "Open With" / Dock Drop (main process)
+
+When the OS fires `app.on('open-file')` (macOS Finder "Open With" or dock drop):
+
+1. Main process validates the file extension (`.csv` only) and size (≤ 25 MB).
+2. Main reads the file itself — the renderer is sandboxed and **never receives the filesystem path**.
+3. Main forwards `{name: string, content: string}` over IPC channel `app:csv-opened`.
+4. `ElectronBridge` receives the payload, reconstructs a `File` object, and pushes it into `lib/importHandoff.ts`. The app navigates to `/import`.
+
+### `lib/importHandoff.ts` — One-Slot TTL Registry
+
+**File:** `apps/frontend/src/lib/importHandoff.ts`
+
+Provides two functions:
+
+| Function | Description |
+|----------|-------------|
+| `registerPendingImportFile(file: File)` | Stores the file in a module-level slot with a 30-second TTL. Overwrites any previous pending slot. |
+| `consumePendingImportFile(): File \| undefined` | Returns and clears the pending slot. Returns `undefined` if empty or expired. |
+
+Pattern mirrors `lib/undo.ts` (same one-slot, TTL design). `TransactionImportCard` calls `consumePendingImportFile()` on mount; if a slot is waiting, the card pre-fills its dropzone with that file and begins the import flow automatically.
+
+The 30-second TTL prevents a stale file from being auto-applied if the user navigates to `/import` later for a different reason.
+
+### `data-dropzone` Convention
+
+The root element of the dropzone region in `TransactionImportCard` carries the attribute `data-dropzone`. `ElectronBridge`'s window-level drop handler walks `event.target` ancestors and skips interception when a `[data-dropzone]` ancestor is found, so in-card drops are not double-handled.
+
+---
 
 ## Recipient Match Patterns and Cluster Analysis
 

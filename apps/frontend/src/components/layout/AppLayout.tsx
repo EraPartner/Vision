@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { SidebarProvider, SidebarTrigger } from "@/components/ui/sidebar";
 import { AppSidebar } from "@/components/layout/AppSidebar";
 import { Button } from "@/components/ui/button";
@@ -21,6 +21,7 @@ import { CommandPalette } from "@/components/shared/CommandPalette";
 import { PageTitleProvider, usePageTitle } from "@/contexts/PageTitleContext";
 import { ShortcutsOverlay } from "@/components/shared/ShortcutsOverlay";
 import { ShaderAurora } from "@/components/layout/ShaderAurora";
+import { ElectronBridge } from "@/components/layout/ElectronBridge";
 import { useGoToShortcuts } from "@/hooks/useGoToShortcuts";
 import { consumeUndo } from "@/lib/undo";
 import { useLocation, useNavigate } from "react-router-dom";
@@ -39,10 +40,11 @@ export function AppLayout({ children }: AppLayoutProps) {
     const [paletteOpen, setPaletteOpen] = useState(false);
     const [shortcutsOpen, setShortcutsOpen] = useState(false);
 
-    const openSettingsOnTab = (tab: string) => {
+    const openSettingsOnTab = useCallback((tab: string) => {
         setSettingsDefaultTab(tab);
         setSettingsOpen(true);
-    };
+    }, []);
+    const openShortcuts = useCallback(() => setShortcutsOpen(true), []);
 
     // ⌘, — the macOS settings convention (always free in Electron).
     // ⌘Z — consume a pending destructive-action undo (inert while typing,
@@ -114,6 +116,7 @@ export function AppLayout({ children }: AppLayoutProps) {
     return (
         <PageTitleProvider>
         <SidebarProvider defaultOpen={false}>
+            <ElectronBridge onOpenSettings={openSettingsOnTab} onOpenShortcuts={openShortcuts} />
             <div className="relative min-h-screen flex w-full overflow-x-clip">
                 <div aria-hidden="true" className="liquid-canvas" data-workspace={workspace}>
                     {appSettings.enhancedEffects && <ShaderAurora />}

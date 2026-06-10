@@ -1,4 +1,5 @@
-import {useState} from "react";
+import {useEffect, useState} from "react";
+import {useSearchParams} from "react-router-dom";
 import {Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger} from "@/components/ui/dialog";
 import {toast} from "sonner";
 import {Button} from "@/components/ui/button";
@@ -26,6 +27,20 @@ export function AddTransactionDialog() {
     const {data: categoriesData} = useCategories({limit: 200, active: true});
 
     const [form, setForm] = useState(() => createAddTransactionFormState(appSettings.defaultCurrency));
+
+    // Deep link: /transactions?new=1 opens the dialog (native menu ⌘N + dock
+    // menu "New Transaction"). Param is consumed so back/refresh don't reopen.
+    const [searchParams, setSearchParams] = useSearchParams();
+    const wantsNew = searchParams.get('new') === '1';
+    useEffect(() => {
+        if (!wantsNew) return;
+        setOpen(true);
+        setSearchParams((prev) => {
+            const next = new URLSearchParams(prev);
+            next.delete('new');
+            return next;
+        }, { replace: true });
+    }, [wantsNew, setSearchParams]);
 
     const resetForm = () => {
         setForm(createAddTransactionFormState(appSettings.defaultCurrency));

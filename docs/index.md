@@ -161,6 +161,23 @@ SORT date DESC
 LIMIT 10
 ```
 
+### 2026-06-10 V12 — Electron-Native Desktop Integration (ADR-072)
+
+**Full macOS shell integration** — the app now behaves like a native Mac application:
+
+- **Window chrome**: `titleBarStyle: 'hiddenInset'`, traffic lights at `{x:20,y:20}`, topbar with `-webkit-app-region: drag`, `electron-fullscreen` class on enter/leave fullscreen.
+- **Native menu bar**: App (Settings… ⌘,), File (New Transaction ⌘N, Import CSV… ⇧⌘I), Edit/View (Toggle Sidebar ⌃⌘S) / Window / Help roles, Go ⌘1–⌘9 mirroring in-app shortcuts — all labels from the shared i18n JSON.
+- **Dock menu + badge**: dock menu has New Transaction and Dashboard; badge driven by `UpcomingPaymentsNotification` (visible upcoming payment count).
+- **CSV import handoff**: window-wide drag-and-drop (renderer reads `File` directly, closes Chromium navigate-to-file hole); Finder "Open With" / dock drop (main reads file, sends `{name, content}` — path never crosses sandbox boundary). Both paths feed `lib/importHandoff.ts` (one-slot 30s-TTL, same pattern as `lib/undo.ts`).
+- **`/transactions?new=1` deep link**: opens `AddTransactionDialog`, strips param on open (used by menu and dock).
+- **System accent overlay**: `systemAccent` boolean in `theme_settings`; `ThemeContext` overlays `--primary`/`--ring`/`--sidebar-primary` (+ foregrounds) via `lib/accentColor.ts` HSL; composes with all five variants; live via `AppleColorPreferencesChangedNotification`. Switch in Settings → Appearance (Electron/macOS only).
+- **Vibrancy opt-in**: window always created with `vibrancy: 'under-window'`; `body` turns translucent (`/0.72`) only when `enhancedEffects` (ADR-071) is on.
+- **`window.electronAPI` bridge**: new minimal contextBridge surface (`platform`, `ready()`, `setDockBadge`, `getAccentColor`, `onAccentColorChanged`, `onMenuAction`, `onCsvOpen`, `onFullScreenChange`). Sandbox posture unchanged.
+- **`ElectronBridge.tsx`**: side-effect component mounted in `AppLayout` — routes all of the above, attaches listeners via stable refs.
+- **i18n**: +11 keys (`menu.*`, `settings.appearance.systemAccent*`); `enhancedEffectsHint` reworded; source total: 2898 keys.
+
+See [[docs/adr/072-electron-native-desktop-integration|ADR-072]], [[docs/architecture/electron|Electron Architecture — macOS Native Integration]], [[docs/features/appearance|Appearance — System Accent]], [[docs/features/import|Import — Electron CSV Handoff]], [[docs/components/layout|Layout — ElectronBridge]]
+
 ### 2026-06-10 Premium v3 — Numbers, Chart Interactions, and Enhanced-Effects Toggle (ADR-071)
 
 **18-item Premium v3 batch** adding hero numbers, chart interactivity, and a GPU effects gate:

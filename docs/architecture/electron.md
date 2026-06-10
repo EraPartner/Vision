@@ -3,11 +3,11 @@ title: Electron Desktop Architecture
 type: architecture-doc
 status: active
 date: 2026-04-27
-updated: 2026-05-23
-tags: [architecture, electron, desktop, packaging, security, sandbox, health-monitoring, async-io, csp-headers, dev-rebuild, phase-0, phase-1, phase-2, phase-6, phase-7, backup, restore, bundle, ipc, encryption, schema-migration, npm-vs-bun, docker-compose, pre-pull, startup, troubleshooting, alembic-migration-fixes, deployment-modes, shell-installer, docker-pull, update-system, checksum-verification, backup-before-update, cicd, april-2026, bug-hunt, recovery-hardening, concurrent-backup-guard, timeout, watchdog-pause]
-description: Electron desktop application architecture, IPC communication, sandbox hardening, health monitoring, Docker image pre-pull optimization, backup/restore bundle system (Phase 1+2), three-mode application update system with checksum verification (April 2026), and Phase 7 backup/restore hardening with concurrent-backup guard, HTTP timeout, and watchdog pause (May 2026)
-aliases: [electron, desktop app, packaging, IPC, main process, sandbox, watchdog, backup, bundle, update system, deployment modes]
-related_code: ["packaging/electron/", "packaging/electron/backup/bundle.js", "packaging/electron/main.js", "packaging/electron/preload.js", "apps/frontend/src/lib/api/electron.ts", "apps/frontend/src/components/notifications/UpdateNotification.tsx", "apps/frontend/src/components/settings/tabs/AppTab.tsx", "apps/node-backend/src/main.js", "alembic/versions/0001_initial_database_schema.py", ".github/workflows/ci.yml", ".github/workflows/release.yml"]
+updated: 2026-06-10
+tags: [architecture, electron, desktop, packaging, security, sandbox, health-monitoring, async-io, csp-headers, dev-rebuild, phase-0, phase-1, phase-2, phase-6, phase-7, backup, restore, bundle, ipc, encryption, schema-migration, npm-vs-bun, docker-compose, pre-pull, startup, troubleshooting, alembic-migration-fixes, deployment-modes, shell-installer, docker-pull, update-system, checksum-verification, backup-before-update, cicd, april-2026, bug-hunt, recovery-hardening, concurrent-backup-guard, timeout, watchdog-pause, electron-native, macos, hiddeninset, vibrancy, system-accent, native-menu, dock-badge, csv-open-with, electronapi, renderer-ready-queue, june-2026]
+description: Electron desktop application architecture, IPC communication, sandbox hardening, health monitoring, Docker image pre-pull optimization, backup/restore bundle system (Phase 1+2), three-mode application update system with checksum verification (April 2026), Phase 7 backup/restore hardening with concurrent-backup guard, HTTP timeout, and watchdog pause (May 2026), and June 2026 V12 native macOS integration (ADR-072) — hiddenInset chrome, native menu/dock, CSV open-with handoff, system accent overlay, under-window vibrancy.
+aliases: [electron, desktop app, packaging, IPC, main process, sandbox, watchdog, backup, bundle, update system, deployment modes, electronAPI, native menu, dock badge, system accent, vibrancy]
+related_code: ["packaging/electron/", "packaging/electron/backup/bundle.js", "packaging/electron/main.js", "packaging/electron/preload.js", "apps/frontend/src/lib/api/electron.ts", "apps/frontend/src/components/layout/ElectronBridge.tsx", "apps/frontend/src/lib/importHandoff.ts", "apps/frontend/src/lib/accentColor.ts", "apps/frontend/src/components/notifications/UpdateNotification.tsx", "apps/frontend/src/components/settings/tabs/AppTab.tsx", "apps/node-backend/src/main.js", "alembic/versions/0001_initial_database_schema.py", ".github/workflows/ci.yml", ".github/workflows/release.yml"]
 ---
 
 # Electron Desktop Architecture
@@ -278,6 +278,123 @@ This forces npm and electron-builder to include them at the correct depth inside
 ---
 
 ## Native Features
+
+### macOS Native Integration (V12, June 2026 — ADR-072)
+
+> [!info] Added in ADR-072
+> This section documents the third contextBridge surface (`window.electronAPI`), native menu bar / dock, window chrome, CSV import handoff, and system accent color. See [[docs/adr/072-electron-native-desktop-integration|ADR-072]] for the full decision record.
+
+#### `window.electronAPI` contextBridge Surface (preload.js)
+
+The new surface sits alongside the existing `window.electronUpdater` and `window.electronBackup`. All subscriptions return an unsubscribe function for clean teardown.
+
+| Method | Description |
+|--------|-------------|
+| `platform` | `'darwin'` or other platform string |
+| `ready()` | Invoke `app:renderer-ready` — drains the pending send queue |
+| `setDockBadge(count)` | Push integer badge count (0 clears); clamped 0–999 in main |
+| `getAccentColor()` | Return current macOS system accent color as RRGGBBAA hex |
+| `onAccentColorChanged(cb)` | Subscribe to `AppleColorPreferencesChangedNotification` pushes |
+| `onMenuAction(cb)` | Subscribe to `menu:action` — receives `{action, payload}` objects |
+| `onCsvOpen(cb)` | Subscribe to `app:csv-opened` — receives `{name, content}` (no path) |
+| `onFullScreenChange(cb)` | Subscribe to `window:fullscreen` with `{isFullScreen: boolean}` |
+
+Frontend helpers in `lib/api/electron.ts`: `getElectronAPI()`, `isElectronMac()`, `setDockBadge()`, `getSystemAccentColor()`. Types: `ElectronMenuAction`, `ElectronCsvFile`.
+
+**IPC hygiene**: every `ipcMain.handle` that renderer can invoke validates `event.sender === mainWindow.webContents`. `app:set-badge` clamps the count to an integer 0–999. No handler ever accepts a filesystem path from the renderer.
+
+#### Renderer-Ready Queue Protocol
+
+`sendToApp(channel, payload)` in main queues messages until the renderer has mounted its listeners. The queue drains the moment the renderer calls `electronAPI.ready()`. The `rendererReady` flag resets on every `did-start-loading` (page reload) and on window close, so the handshake re-runs after every navigation.
+
+This prevents lost IPC messages when the OS fires an `open-file` event (Finder "Open With" or dock drop) before the React app has mounted.
+
+#### Window Chrome (darwin-only)
+
+`createWindow()` applies these options only on macOS:
+
+| Option | Value | Effect |
+|--------|-------|--------|
+| `titleBarStyle` | `'hiddenInset'` | Hides the title bar; traffic lights stay in the frame |
+| `trafficLightPosition` | `{x:20, y:20}` | Centers traffic lights in the 56px topbar |
+| `vibrancy` | `'under-window'` | NSVisualEffectView behind the window content |
+| `visualEffectState` | `'followWindow'` | Active/inactive vibrancy follows window focus |
+
+`enter-full-screen` and `leave-full-screen` Electron events push `{isFullScreen: boolean}` over `window:fullscreen`. `ElectronBridge` adds/removes the `electron-fullscreen` html class so CSS can drop the 88px left inset when the traffic lights disappear in fullscreen mode.
+
+#### Native Application Menu
+
+Built via `Menu.setApplicationMenu` **after** `await initI18n()` inside `launch()`, so all labels come from the same flat JSON the shell dialogs use (`menu.*` i18n keys, en + nl).
+
+**Menu structure:**
+
+| Menu | Items |
+|------|-------|
+| App | Settings… (⌘,) |
+| File | New Transaction (⌘N), Import CSV… (⇧⌘I) |
+| Edit | System role (undo, cut, copy, paste, …) |
+| View | Toggle Sidebar (⌃⌘S), Reload (dev-only), Zoom In/Out/Reset, Enter Full Screen, Toggle DevTools (dev-only) |
+| Go | ⌘1–⌘9 routes from `GO_MENU_ROUTES` (manually mirrors `GO_TO_ROUTES` in `hooks/useGoToShortcuts.ts`) |
+| Window | System role (minimise, zoom, …) |
+| Help | Keyboard Shortcuts (opens overlay via `menu:action`) |
+
+> [!warning] Manual sync point
+> `GO_MENU_ROUTES` in `packaging/electron/main.js` must be kept in sync by hand with `GO_TO_ROUTES` in `apps/frontend/src/hooks/useGoToShortcuts.ts`. Both files carry a comment flagging this dependency.
+
+Menu and dock items dispatch `{action, payload}` over `menu:action`. `ElectronBridge` maps actions to: `navigate` (React Router push), `open-settings`, `open-shortcuts` (ShortcutsOverlay), `new-transaction` (navigate to `/transactions?new=1`), `toggle-sidebar`.
+
+#### Dock Menu and Dock Badge
+
+The dock menu is set once on startup: **New Transaction** and **Dashboard**. Both dispatch the same `menu:action` channel.
+
+The **dock badge** reflects the visible (non-dismissed) count of upcoming planned payments. `UpcomingPaymentsNotification` owns the due-payments query and dismissal state; it calls `setDockBadge(count)` whenever the count changes and clears it on unmount. The badge is entirely renderer-driven — main has no knowledge of upcoming payments.
+
+#### CSV Import Handoff — Two Paths
+
+**Path 1 — Window-wide drag-and-drop (renderer handles)**
+
+`ElectronBridge` attaches a `dragover`/`drop` listener to `window`. All file drops are swallowed (closes the Chromium "navigate-to-dropped-file" hole). `.csv` files are read as text via the `File` API and pushed into `lib/importHandoff.ts`; non-CSV files are silently ignored. `data-dropzone` descendants of the dropzone div in `TransactionImportCard` are exempted via ancestor-check so in-card drops still work normally.
+
+**Path 2 — Finder "Open With" / dock drop (main handles)**
+
+`app.on('open-file')` in main applies an extension whitelist (`.csv` only) and a 25 MB cap, reads the file content itself, and forwards `{name, content}` over `app:csv-opened`. The renderer reconstructs a `File` object. The OS-chosen filesystem path never crosses into the renderer.
+
+**`lib/importHandoff.ts`**: a one-slot, 30-second TTL registry (`registerPendingImportFile` / `consumePendingImportFile`) in the same style as `lib/undo.ts`. `TransactionImportCard` calls `consumePendingImportFile()` on mount; if a slot is waiting it pre-fills the import dropzone. Both paths converge on this slot, then navigate to `/import`.
+
+#### System Accent Color Overlay
+
+The system accent is a **runtime token overlay**, not a sixth theme variant, so it composes with all five variants and both light/dark modes.
+
+- `settingsStore.ts` adds `themeSystemAccent: boolean` + `setThemeSystemAccent` + hydration support.
+- `theme_settings` JSONB gains an optional `systemAccent` key; older payloads hydrate fine.
+- Switch rendered in `AppearanceTab` only when `isElectronMac()` returns true.
+- When enabled, `ThemeContext` calls `applyThemePalette` (resets all tokens) then overrides `--primary`, `--primary-foreground`, `--ring`, `--sidebar-primary`, `--sidebar-primary-foreground`, `--sidebar-ring` with the converted accent.
+- `lib/accentColor.ts`: `hexToHslComponents` converts Electron's RRGGBBAA hex to `"h s% l%"`; `accentForegroundComponents` picks WCAG-contrast foreground (ink for yellow/green accents, white for blue/purple).
+- Live updates arrive via `onAccentColorChanged`. An **epoch counter** in `ThemeContext` discards stale async applies that arrive out-of-order.
+- Toggling off self-heals: `applyThemePalette` resets every token back to the variant default.
+
+#### Under-Window Vibrancy
+
+The window is always created with `vibrancy: 'under-window'` + `visualEffectState: 'followWindow'`. While the page paints opaque pixels the glass effect is invisible — default rendering is unchanged.
+
+Only when `AppSettings.enhancedEffects` (ADR-071) is `true` does `ElectronBridge` add the `vibrancy` html class. One CSS rule in `index.css` then makes `body` translucent (`hsl(var(--background) / 0.72)`). Since body background propagates to the root canvas, a single rule controls the entire backdrop.
+
+> [!warning] Requires visual pass on-device
+> The 0.72 alpha and traffic-light/topbar geometry are tuned without a display. The user must validate contrast and positioning in the built `.app` before shipping.
+
+#### Frontend Component: `ElectronBridge.tsx`
+
+**File:** `apps/frontend/src/components/layout/ElectronBridge.tsx`
+
+Mounted once in `AppLayout`, inside `SidebarProvider`. Responsibilities:
+
+- Calls `electronAPI.ready()` on mount (drains the send queue).
+- Attaches `onMenuAction`, `onCsvOpen`, `onFullScreenChange` listeners via stable refs so React re-renders never tear down IPC subscriptions.
+- Routes menu actions: `navigate` → React Router; `open-settings` / `open-shortcuts` / `toggle-sidebar` → dispatch to UI state; `new-transaction` → navigate to `/transactions?new=1`.
+- Manages `electron-mac`, `electron-fullscreen`, and `vibrancy` html classes.
+- Attaches window-level `dragover`/`drop` for CSV handoff (exempts `[data-dropzone]` ancestors).
+
+---
 
 ### Backup/Restore (Phase 1+2)
 
@@ -746,10 +863,15 @@ With automatic pre-pull + `pull_policy: missing`, Docker Compose finds the local
 
 ## Related
 
+- [[docs/adr/072-electron-native-desktop-integration|ADR-072: Electron-Native Desktop Integration]] — hiddenInset chrome, native menu/dock, CSV handoff, system accent, vibrancy (June 2026)
+- [[docs/adr/071-premium-v3-effects-toggle|ADR-071: Premium v3]] — `enhancedEffects` toggle that gates vibrancy
 - [[docs/adr/045-electron-app-name-userData-migration|ADR-045: App Name & userData Migration]] — macOS TCC prompt fix + legacy dir migration
 - [[docs/adr/022-electron-sandbox-hardening-and-recovery|ADR-022: Electron Sandbox Hardening]] — Security + recovery design
 - [[docs/adr/023-update-installer-checksum-verification|ADR-023: Installer Checksum Verification]] — Supply-chain security
+- [[docs/adr/020-glass-system-downgrade-liquid-canvas-removal|ADR-020: Glass System Downgrade]] — Electron M1 GPU budget history (vibrancy context)
 - [[docs/api/health|Health API]] — Backend readiness endpoints
+- [[docs/features/appearance|Appearance]] — System accent toggle, enhancedEffects, vibrancy
+- [[docs/features/import|Import Feature]] — CSV drag-and-drop + Finder handoff
 - [[docs/guides/deployment]] — Deployment guide
 - [[docs/reference/scripts]] — Build scripts
 - [[docs/security/index]] — Security documentation

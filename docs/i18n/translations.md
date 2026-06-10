@@ -4,8 +4,8 @@ type: i18n
 status: active
 date: 2026-04-27
 updated: 2026-06-10
-tags: [i18n, translations, localization, internationalization, phase-6, phase-8, phase-f, phase-9, phase-c, phase-d, phase-2, splits, settlement, admin, observability, cash-flow-forecast, pdf-export, portfolio, tax, backup, encrypt, passphrase-modal, accessibility, aria-label, bug-hunt-2026-05-06, chart-aria, screen-reader, plural, tc, intl-plural-rules, planned-page, toast]
-description: Internationalization system including supported languages, translation workflow, and usage patterns. Phase 6 adds 32 export keys for PDF report localization. Phase 8 adds 11 additional export.section.* keys for portfolio (6) and tax (7) report sections. Phase C adds 15 cash flow forecast keys. Phase F adds 60 admin observability keys. 2026-05-29 adds 16 chart.aria.* keys (localized chart screen-reader summaries) and 21 aria.* keys (localized icon-button aria-labels). June 2026 adds tc() plural mechanism and plannedPage error-toast keys. June 2026 (ADR-070) adds 5 commandPalette.* keys (en + nl) for the new ⌘K command palette. June 2026 Premium v3 (ADR-071) adds 8 keys: settings.general.enhancedEffects/Hint, shortcuts.title/showHelp/closeDialog/chartScrub, commandPalette.recent/searchTransactions. June 2026 Premium v3 V5-V7 adds 14 keys: contextMenu.* (8 keys), quickLook.* (2 keys), shortcuts table-interaction additions (4 keys). Total: 2887 keys.
+tags: [i18n, translations, localization, internationalization, phase-6, phase-8, phase-f, phase-9, phase-c, phase-d, phase-2, splits, settlement, admin, observability, cash-flow-forecast, pdf-export, portfolio, tax, backup, encrypt, passphrase-modal, accessibility, aria-label, bug-hunt-2026-05-06, chart-aria, screen-reader, plural, tc, intl-plural-rules, planned-page, toast, electron-native, menu, system-accent, june-2026]
+description: Internationalization system including supported languages, translation workflow, and usage patterns. Phase 6 adds 32 export keys for PDF report localization. Phase 8 adds 11 additional export.section.* keys for portfolio (6) and tax (7) report sections. Phase C adds 15 cash flow forecast keys. Phase F adds 60 admin observability keys. 2026-05-29 adds 16 chart.aria.* keys (localized chart screen-reader summaries) and 21 aria.* keys (localized icon-button aria-labels). June 2026 adds tc() plural mechanism and plannedPage error-toast keys. June 2026 (ADR-070) adds 5 commandPalette.* keys (en + nl) for the new ⌘K command palette. June 2026 Premium v3 (ADR-071) adds 8 keys: settings.general.enhancedEffects/Hint, shortcuts.title/showHelp/closeDialog/chartScrub, commandPalette.recent/searchTransactions. June 2026 Premium v3 V5-V7 adds 14 keys: contextMenu.* (8 keys), quickLook.* (2 keys), shortcuts table-interaction additions (4 keys). June 2026 V12 (ADR-072) adds 11 keys: menu.edit/file/go/importCsv/keyboardShortcuts/newTransaction/settings/toggleSidebar/view, settings.appearance.systemAccent/systemAccentHint; settings.general.enhancedEffectsHint reworded. Total: 2887 keys.
 aliases: [i18n, translations, localization, language, nl, en, dutch, english]
 related_code: ["apps/frontend/src/locales", "apps/frontend/src/contexts/LanguageContext.tsx", "apps/frontend/src/hooks/useSplits.ts"]
 ---
@@ -196,9 +196,40 @@ bun run build
 
 ### Recent keys added
 
+#### Electron-Native Desktop Integration (June 2026, ADR-072)
+
+11 new keys added to `i18n/source/en.json` + `nl.json`; `bun run generate-locales` + `validate-locales` clean. Source total stays **2887 keys** — the V5-V7 count below was a working-tree snapshot that already included these 11 (then-uncommitted) V12 keys; the V5-V7 *commit* carried 2876.
+
+**9 new `menu.*` keys** — native macOS application menu labels:
+
+| Key | EN |
+|-----|----|
+| `menu.settings` | "Settings…" |
+| `menu.file` | "File" |
+| `menu.newTransaction` | "New Transaction" |
+| `menu.importCsv` | "Import CSV…" |
+| `menu.edit` | "Edit" |
+| `menu.view` | "View" |
+| `menu.toggleSidebar` | "Toggle Sidebar" |
+| `menu.go` | "Go" |
+| `menu.keyboardShortcuts` | "Keyboard Shortcuts" |
+
+**2 new `settings.appearance.*` keys** — system accent color toggle:
+
+| Key | EN | NL |
+|-----|----|----|
+| `settings.appearance.systemAccent` | "Use system accent color" | (Dutch equivalent) |
+| `settings.appearance.systemAccentHint` | "Match buttons and highlights to your macOS accent color" | (Dutch equivalent) |
+
+**1 key reworded** — `settings.general.enhancedEffectsHint` updated to mention window translucency in addition to the WebGL aurora (en + nl).
+
+Code links: [[packaging/electron/main.js]], [[apps/frontend/src/components/settings/AppearanceTab.tsx]], [[i18n/source/en.json]], [[i18n/source/nl.json]]
+
+---
+
 #### Premium v3 V5-V7 batch (June 2026, ADR-071)
 
-14 new keys added to `i18n/source/en.json` + `nl.json`; `bun run generate-locales` + `validate-locales` clean. Total after this batch: **2887 keys**.
+14 new keys added to `i18n/source/en.json` + `nl.json`; `bun run generate-locales` + `validate-locales` clean. Total after this batch: **2887 keys** (working-tree snapshot incl. 11 uncommitted V12 keys; 2876 committed).
 
 **8 new `contextMenu.*` keys** — transaction row right-click menu:
 
