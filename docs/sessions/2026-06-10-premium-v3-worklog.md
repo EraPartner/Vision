@@ -73,3 +73,20 @@ description: Live implementation log for the Premium v3 batch (18 items). THE au
 - i18n source JSONs: flat, alphabetical, 2-space indent, trailing newline; edit via python json (sort_keys), keep diff minimal.
 - ADR-020 history: Electron M1 GPU jank is why effects must stay budgeted; shader aurora MUST default off.
 - Edit tool requires Read on files first (Bash `cat` doesn't count).
+
+## Premium v4 candidates (scan done 2026-06-10 evening — user asked for "another pass")
+
+Prioritized; none started. Next agent: confirm with user before implementing.
+
+1. **Donut/Pie selection morph** — clicking a slice animates the center label/value (springs); CategoryPieChart + portfolio allocation donuts. Medium effort, high demo value.
+2. **`n` quick-create shortcut** — `n` (or `g x`) opens the Add Transaction dialog from anywhere: needs `/transactions?new=1` param + TransactionsPage dialog-open wiring; pairs with optimistic create. Small functionality add.
+3. **Empty-state sweep (T15 completion)** — adopt the upgraded EmptyState across all pages' ad-hoc empty divs (grep `py-16 text-center` + table.noData paths).
+4. **Portfolio DeltaPill sweep (B3 completion)** — StocksPage/CryptoPage/RealEstatePage colored "+x%" texts → DeltaPill(invert-aware).
+5. **Sheet/drawer spring polish** — sheet.tsx still uses default shadcn slide; give it the dialog treatment (overshoot bezier, glass-thick already?) — check first.
+6. **Sticky table headers with glass** — DataTable/VirtualDataTable header rows get glass-thin + shadow on scroll within their scroll containers.
+7. **Number transitions on filter changes** — totals in table footers/summaries use RollingNumber.
+8. **View Transitions for in-page filter swaps** — startViewTransition around table filter changes (progressive).
+9. **Onboarding wizard cinematic pass** — glass panels + staggered steps + aurora intro.
+10. **Shader aurora visual iteration** — user must eyeball current constants (tuned blind: smoothstep 0.34-0.68/0.38-0.72, alpha 0.65, opacity 60/80%); consider exposing intensity sub-setting if still too subtle/strong.
+
+Also outstanding: packaged-Electron M1 profiling, e2e visual snapshot regen (`bun run test:e2e:visual` needs running stack).
