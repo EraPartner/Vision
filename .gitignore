@@ -30,6 +30,7 @@ dist/
 .opencode/
 AGENTS.*
 CLAUDE.*
+.playwright-mcp
 
 # OS
 .DS_Store

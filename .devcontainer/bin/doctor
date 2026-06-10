@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Vision devcontainer readiness check. Run INSIDE the container:
 #   bash .devcontainer/bin/doctor
-# (or:  devcontainer exec --workspace-folder . bash .devcontainer/bin/doctor)
+# (or:  container exec vision-dev bash /workspaces/Vision/.devcontainer/bin/doctor)
 #
 # The root entrypoint is intentionally best-effort/non-fatal, so failures are
 # silent. This gives a one-shot health signal for the things that matter.
@@ -14,23 +14,23 @@ echo "Vision devcontainer doctor"
 echo "--------------------------"
 
 # Sandbox integrity: .devcontainer holds the HOST-side launcher (bin/claude) and
-# the sandbox definition (devcontainer.json runArgs). If writable from inside, a
-# compromised agent can rewrite them and escape to the host on the next launch.
-# devcontainer.json re-mounts it read-only, but that only applies on container
-# CREATE — a stale container booted before the change leaves the door open. Prove
-# it's live by trying to write, not by trusting the config.
+# the sandbox definition (Dockerfile, launcher run args). If writable from inside,
+# a compromised agent can rewrite them and escape to the host on the next launch.
+# The launcher mounts it read-only, but that only applies on container CREATE — a
+# stale container booted before the change leaves the door open. Prove it's live
+# by trying to write, not by trusting the config.
 DC_DIR="$(cd "$(dirname "$0")/.." 2>/dev/null && pwd -P || echo /workspaces/Vision/.devcontainer)"
 _probe="$DC_DIR/.doctor-write-probe.$$"
 if ( : > "$_probe" ) 2>/dev/null; then
   rm -f "$_probe" 2>/dev/null || true
-  fail ".devcontainer WRITABLE from inside — host launcher/runArgs can be tampered; REBUILD: devcontainer up --remove-existing-container"
+  fail ".devcontainer WRITABLE from inside — host launcher/run args can be tampered; REBUILD: VISION_REBUILD=1 vision-claude"
 else
   pass ".devcontainer is read-only (anti-tamper overlay active)"
 fi
 
 # Egress proxy listening?
 if (exec 3<>/dev/tcp/127.0.0.1/3128) 2>/dev/null; then pass "egress proxy listening on 127.0.0.1:3128"
-else fail "egress proxy NOT listening on 127.0.0.1:3128 (check 'docker logs <id>')"; fi
+else fail "egress proxy NOT listening on 127.0.0.1:3128 (check 'container logs <id>')"; fi
 
 # Allowed egress through the proxy?
 code=$(curl -sS -o /dev/null -w '%{http_code}' --max-time 12 https://api.anthropic.com/ 2>/dev/null || echo 000)

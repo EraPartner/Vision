@@ -1,7 +1,7 @@
 # ============================================================
 # Stage 1: Build the React frontend
 # ============================================================
-FROM oven/bun:1-alpine AS frontend-builder
+FROM oven/bun:1-alpine@sha256:5acc90a93e91ff07bf72aa90a7c9f0fa189765aec90b47bdbf2152d2196383c0 AS frontend-builder
 
 WORKDIR /app
 
@@ -33,7 +33,7 @@ RUN bun run --filter vision-frontend build
 # ============================================================
 # Stage 2: Production backend
 # ============================================================
-FROM oven/bun:1-alpine
+FROM oven/bun:1-alpine@sha256:5acc90a93e91ff07bf72aa90a7c9f0fa189765aec90b47bdbf2152d2196383c0
 
 WORKDIR /app
 

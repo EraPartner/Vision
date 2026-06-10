@@ -1,4 +1,4 @@
-# Vision sandbox image — devcontainer-FREE (built by docker compose).
+# Vision sandbox image — devcontainer-FREE (built by `container build`).
 #
 # Self-contained twin of ./Dockerfile. The devcontainer build relied on
 # devcontainer FEATURES (node:1, python:1, anthropics/claude-code:1.0) layered by
@@ -7,7 +7,7 @@
 # hardening, egress proxy, baked scripts) is identical to Dockerfile.
 #
 # Hardened for Claude CLI in --dangerously-skip-permissions mode:
-#   - --security-opt=no-new-privileges (no sudo, no setuid escalation)
+#   - no privilege escalation: setuid/setgid bits stripped, no sudo (apple/container has no --security-opt)
 #   - a root ENTRYPOINT does all privileged setup (perms, Postgres, proxy,
 #     firewall), then drops to a keep-alive
 #   - all egress forced through an in-container squid proxy (hostname allowlist)
@@ -125,7 +125,7 @@ RUN printf 'export PATH="/usr/local/share/npm-global/bin:/home/dev/.npm-global/b
 # --- Claude Code CLI (replaces the `anthropics/claude-code:1.0` feature) -----
 # Installed as root into the root-owned global prefix and deliberately NOT chown'd
 # to dev — so the pinned claude/npm cannot be replaced by the dev user.
-RUN npm install -g @anthropic-ai/claude-code@latest \
+RUN npm install -g @anthropic-ai/claude-code@2.1.170 \
   && claude --version
 
 # Runtime global installs (safe-chain in post-create) go to a SEPARATE dev-owned
@@ -186,6 +186,9 @@ RUN find / -xdev -type f -perm /6000 -exec chmod -s {} + 2>/dev/null || true
 WORKDIR /workspaces/Vision
 
 # Health: proxy running, firewall default-deny, Postgres accepting connections.
+# NOTE: docker-only. apple/container 1.0.0 has no healthcheck runner, so this
+#   HEALTHCHECK is a no-op under the current runtime; real supervision is the
+#   entrypoint keep-alive loop (squid auto-restart). Kept for parity / docker use.
 HEALTHCHECK --interval=30s --timeout=5s --start-period=90s --retries=3 \
   CMD bash -c 'pgrep -x squid >/dev/null && /usr/sbin/iptables -S OUTPUT 2>/dev/null | grep -q "^-P OUTPUT DROP" && pg_isready -h 127.0.0.1 -p 5432 -q'
 
