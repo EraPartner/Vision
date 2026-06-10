@@ -3,8 +3,9 @@ title: Appearance Feature
 type: feature
 status: active
 date: 2026-04-21
-tags: [feature, appearance, theming, personalization, frontend, settings, phase-1]
-description: Per-user theme variant selection with five color palettes, light/dark mode switching, and schedule-based mode transitions
+updated: 2026-06-10
+tags: [feature, appearance, theming, personalization, frontend, settings, phase-1, enhanced-effects, shader-aurora, webgl, premium-v3, june-2026]
+description: Per-user theme variant selection with five color palettes, light/dark mode switching, and schedule-based mode transitions. June 2026 Premium v3 (ADR-071): new Enhanced Visual Effects toggle in Settings → General gates the WebGL ShaderAurora (default off).
 aliases: [appearance, theming, theme variants, color palettes, dark mode, light mode]
 related_code:
   - apps/frontend/src/styles/themes.ts
@@ -312,10 +313,38 @@ All theme transitions respect `prefers-reduced-motion`:
 - If `prefers-reduced-motion: reduce`, variant changes apply instantly without fade effects; `startViewTransition` is skipped
 - Schedule mode does not animate between light/dark; transitions are instant
 
+## Enhanced Visual Effects Toggle (Premium v3, June 2026)
+
+> [!info] Added in ADR-071
+> New **Enhanced visual effects** toggle in **Settings → General**.
+
+`AppSettings.enhancedEffects: boolean` (default **false**) is persisted in the Zustand settings store (`stores/settingsStore.ts`). A `Switch` with id `enhanced-effects` is rendered in `settings/tabs/GeneralTab.tsx`.
+
+**Effect**: When `enhancedEffects` is `true`, `AppLayout` renders `ShaderAurora` (`components/layout/ShaderAurora.tsx`) inside the liquid canvas. The CSS aurora blobs are always rendered underneath as an unconditional fallback.
+
+**`ShaderAurora` technical details:**
+- Raw WebGL (no external dependency) — one fullscreen triangle, 4-octave value-noise fbm.
+- Colors tinted from `--primary` and `--accent` CSS vars; re-resolved on theme change via `MutationObserver`.
+- Renders at 0.25× resolution, upscaled to full viewport.
+- ~30 fps cap (rAF-throttled).
+- Single static frame when `prefers-reduced-motion: reduce` is active.
+- rAF paused when `document.hidden` (tab not visible).
+- Any WebGL context creation failure → silently falls back to CSS blobs only (no error shown).
+
+**Why default off**: The ADR-020 Electron M1 history (GPU jank from sustained animations) makes always-on unacceptable. The shader is self-throttling but adds GPU work; users must explicitly opt in.
+
+**i18n keys**: `settings.general.enhancedEffects`, `settings.general.enhancedEffectsHint` (en + nl).
+
+Code links: [[apps/frontend/src/components/layout/ShaderAurora.tsx]], [[apps/frontend/src/stores/settingsStore.ts]], [[apps/frontend/src/components/settings/tabs/GeneralTab.tsx]]
+
+---
+
 ## Related Features
 
 - [[docs/features/settings|Settings Feature]] — Settings system overview
+- [[docs/adr/071-premium-v3-effects-toggle|ADR-071: Premium v3]] — Enhanced effects toggle + full Premium v3 batch (June 2026)
 - [[docs/adr/070-liquid-glass-v2-premium-frontend|ADR-070: Liquid Glass v2]] — Theme crossfade via `startViewTransition` (June 2026)
+- [[docs/adr/020-glass-system-downgrade-liquid-canvas-removal|ADR-020: Glass System Downgrade]] — GPU budget rationale (Electron M1)
 - [[docs/adr/017-liquid-glass-aesthetic-design-system|ADR-017: Liquid Glass Aesthetic]] — Design system foundation
 - [[docs/adr/025-theme-variant-system|ADR-025: Theme Variant System]] — Architectural decision and token details
 - [[docs/api/settings|Settings API]] — Backend API contracts

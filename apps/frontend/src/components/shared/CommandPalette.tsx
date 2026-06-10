@@ -1,4 +1,4 @@
-import { useEffect, useMemo } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import {
     CommandDialog,
@@ -39,6 +39,10 @@ import { useLanguage } from "@/contexts/LanguageContext";
 import { useTheme } from "@/contexts/ThemeContext";
 import { useWorkspace } from "@/contexts/WorkspaceContext";
 import { useAppSettings } from "@/contexts/AppSettingsContext";
+import { useQuery } from "@tanstack/react-query";
+import { apiClient } from "@/lib/api";
+import { useDebounce } from "@/hooks/useDebounce";
+import { LOCAL_STORAGE_KEYS } from "@/lib/localStorage-keys";
 
 interface PaletteEntry {
     titleKey: string;
@@ -74,6 +78,26 @@ const PORTFOLIO_PAGES: PaletteEntry[] = [
     { titleKey: "nav.taxOverview", url: "/portfolio/tax", icon: Landmark },
 ];
 
+const RECENTS_KEY = LOCAL_STORAGE_KEYS.PALETTE_RECENTS;
+const MAX_RECENTS = 5;
+
+function readRecents(): string[] {
+    try {
+        const raw = localStorage.getItem(RECENTS_KEY);
+        const parsed = raw ? JSON.parse(raw) : [];
+        return Array.isArray(parsed) ? parsed.filter((x): x is string => typeof x === "string") : [];
+    } catch {
+        return [];
+    }
+}
+
+function pushRecent(url: string): void {
+    try {
+        const next = [url, ...readRecents().filter((u) => u !== url)].slice(0, MAX_RECENTS);
+        localStorage.setItem(RECENTS_KEY, JSON.stringify(next));
+    } catch { /* localStorage unavailable */ }
+}
+
 interface CommandPaletteProps {
     open: boolean;
     onOpenChange: (open: boolean) => void;
@@ -86,6 +110,24 @@ export function CommandPalette({ open, onOpenChange, onOpenSettings }: CommandPa
     const { setMode } = useTheme();
     const { setWorkspace } = useWorkspace();
     const { appSettings } = useAppSettings();
+    const [query, setQuery] = useState("");
+    const debouncedQuery = useDebounce(query.trim(), 250);
+    const [recents, setRecents] = useState<string[]>([]);
+
+    useEffect(() => {
+        if (open) {
+            setRecents(readRecents());
+        } else {
+            setQuery("");
+        }
+    }, [open]);
+
+    const { data: recipientHits } = useQuery({
+        queryKey: ["palette-recipients", debouncedQuery],
+        queryFn: () => apiClient.getRecipients({ search: debouncedQuery, active: true, limit: 5 }),
+        enabled: open && debouncedQuery.length >= 2,
+        staleTime: 30_000,
+    });
 
     useEffect(() => {
         const onKeyDown = (e: KeyboardEvent) => {
@@ -100,6 +142,7 @@ export function CommandPalette({ open, onOpenChange, onOpenSettings }: CommandPa
 
     const goTo = (url: string) => {
         onOpenChange(false);
+        pushRecent(url);
         // Keep the sidebar workspace in sync with cross-workspace jumps.
         if (url.startsWith("/portfolio")) {
             setWorkspace("portfolio");
@@ -127,11 +170,64 @@ export function CommandPalette({ open, onOpenChange, onOpenSettings }: CommandPa
         [appSettings.adminMode],
     );
 
+    const allPages = useMemo(
+        () => [...BUDGETING_PAGES, ...PORTFOLIO_PAGES, ...adminPages],
+        [adminPages],
+    );
+    const recentEntries = useMemo(
+        () => recents
+            .map((url) => allPages.find((p) => p.url === url))
+            .filter((p): p is PaletteEntry => Boolean(p)),
+        [recents, allPages],
+    );
+
     return (
         <CommandDialog open={open} onOpenChange={onOpenChange}>
-            <CommandInput placeholder={t("commandPalette.placeholder")} aria-label={t("commandPalette.placeholder")} />
+            <CommandInput
+                value={query}
+                onValueChange={setQuery}
+                placeholder={t("commandPalette.placeholder")}
+                aria-label={t("commandPalette.placeholder")}
+            />
             <CommandList>
                 <CommandEmpty>{t("commandPalette.noResults")}</CommandEmpty>
+                {query.trim().length >= 2 && (
+                    <CommandGroup heading={t("commandPalette.actions")} forceMount>
+                        <CommandItem
+                            forceMount
+                            value={`tx-search ${query}`}
+                            onSelect={() => goTo(`/transactions?search=${encodeURIComponent(query.trim())}`)}
+                        >
+                            <Receipt className="text-muted-foreground" />
+                            <span>{t("commandPalette.searchTransactions", { q: query.trim() })}</span>
+                        </CommandItem>
+                    </CommandGroup>
+                )}
+                {(recipientHits?.items?.length ?? 0) > 0 && (
+                    <CommandGroup heading={t("nav.recipients")} forceMount>
+                        {recipientHits!.items.map((r) => (
+                            <CommandItem
+                                key={`recipient-${r.id}`}
+                                forceMount
+                                value={`recipient ${r.name} ${query}`}
+                                onSelect={() => goTo(`/transactions?recipient_id=${r.id}&filter_label=${encodeURIComponent(r.name)}`)}
+                            >
+                                <Users className="text-muted-foreground" />
+                                <span>{r.name}</span>
+                            </CommandItem>
+                        ))}
+                    </CommandGroup>
+                )}
+                {recentEntries.length > 0 && query.trim() === "" && (
+                    <CommandGroup heading={t("commandPalette.recent")}>
+                        {recentEntries.map((page) => (
+                            <CommandItem key={`recent-${page.url}`} value={`recent ${t(page.titleKey)} ${page.url}`} onSelect={() => goTo(page.url)}>
+                                <page.icon className="text-muted-foreground" />
+                                <span>{t(page.titleKey)}</span>
+                            </CommandItem>
+                        ))}
+                    </CommandGroup>
+                )}
                 <CommandGroup heading={t("nav.budgeting")}>
                     {BUDGETING_PAGES.map((page) => (
                         <CommandItem key={page.url} value={`${t(page.titleKey)} ${page.url}`} onSelect={() => goTo(page.url)}>

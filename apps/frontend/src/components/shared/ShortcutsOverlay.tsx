@@ -1,0 +1,73 @@
+import { useEffect, useState } from "react";
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { useLanguage } from "@/contexts/LanguageContext";
+import { isTypingTarget } from "@/lib/keyboard";
+import { GO_TO_ROUTES } from "@/hooks/useGoToShortcuts";
+
+const IS_MAC = typeof navigator !== "undefined" && /Mac|iPhone|iPad/.test(navigator.platform);
+
+function Key({ children }: { children: React.ReactNode }) {
+    return (
+        <kbd className="inline-flex min-w-[1.6rem] items-center justify-center rounded-md border border-border/60 bg-muted/60 px-1.5 py-0.5 text-[11px] font-medium text-muted-foreground">
+            {children}
+        </kbd>
+    );
+}
+
+/** `?` opens a glass sheet listing the app's real keyboard shortcuts. */
+export function ShortcutsOverlay() {
+    const [open, setOpen] = useState(false);
+    const { t } = useLanguage();
+
+    useEffect(() => {
+        const onKeyDown = (e: KeyboardEvent) => {
+            if (e.key === "?" && !e.metaKey && !e.ctrlKey && !e.altKey && !isTypingTarget(e.target)) {
+                e.preventDefault();
+                setOpen((o) => !o);
+            }
+        };
+        document.addEventListener("keydown", onKeyDown);
+        return () => document.removeEventListener("keydown", onKeyDown);
+    }, []);
+
+    const mod = IS_MAC ? "⌘" : "Ctrl";
+    const general: Array<{ keys: React.ReactNode; label: string }> = [
+        { keys: <><Key>{mod}</Key> <Key>K</Key></>, label: t("commandPalette.openLabel") },
+        { keys: <><Key>{mod}</Key> <Key>B</Key></>, label: t("aria.toggleSidebar") },
+        { keys: <Key>?</Key>, label: t("shortcuts.showHelp") },
+        { keys: <Key>Esc</Key>, label: t("shortcuts.closeDialog") },
+    ];
+
+    return (
+        <Dialog open={open} onOpenChange={setOpen}>
+            <DialogContent className="max-w-md">
+                <DialogHeader>
+                    <DialogTitle className="font-display">{t("shortcuts.title")}</DialogTitle>
+                </DialogHeader>
+                <div className="space-y-3">
+                    {general.map((row, i) => (
+                        <div key={i} className="flex items-center justify-between gap-4 text-sm">
+                            <span className="text-foreground/85">{row.label}</span>
+                            <span className="flex items-center gap-1">{row.keys}</span>
+                        </div>
+                    ))}
+                    <p className="pt-2 text-[10px] font-medium uppercase tracking-[0.12em] text-muted-foreground/70">
+                        {t("shortcuts.goTo")}
+                    </p>
+                    <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+                        {GO_TO_ROUTES.map((route) => (
+                            <div key={route.key} className="flex items-center justify-between gap-3 text-sm">
+                                <span className="truncate text-foreground/85">{t(route.titleKey)}</span>
+                                <span className="flex shrink-0 items-center gap-1">
+                                    <Key>G</Key>
+                                    <Key>{route.key.toUpperCase()}</Key>
+                                </span>
+                            </div>
+                        ))}
+                    </div>
+                    <p className="pt-1 text-xs text-muted-foreground">{t("shortcuts.chartScrub")}</p>
+                </div>
+            </DialogContent>
+        </Dialog>
+    );
+}

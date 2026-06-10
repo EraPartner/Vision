@@ -1,4 +1,6 @@
+import { useEffect } from "react";
 import type { LucideIcon } from "lucide-react";
+import { usePageTitle } from "@/contexts/PageTitleContext";
 
 interface PageHeaderProps {
     title: string;
@@ -11,6 +13,13 @@ interface PageHeaderProps {
 }
 
 export function PageHeader({ title, subtitle, description, icon: Icon, iconColor = "from-primary/20 to-primary/5 text-primary", actions }: PageHeaderProps) {
+    // Register the title so the topbar can show it when this header scrolls out.
+    const { setTitle } = usePageTitle();
+    useEffect(() => {
+        setTitle(title);
+        return () => setTitle(null);
+    }, [title, setTitle]);
+
     return (
         <div className="flex items-start justify-between gap-4">
             <div className="flex items-center gap-4">

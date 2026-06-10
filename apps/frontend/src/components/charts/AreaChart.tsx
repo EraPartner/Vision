@@ -21,6 +21,8 @@ import { motion, useReducedMotion } from "framer-motion";
 import { useCallback, useMemo, useRef, useState } from "react";
 
 import { BottomAxis, LeftAxis, RightAxis } from "./ChartAxis";
+import { useChartSync } from "./ChartSyncContext";
+import { formatScrubDelta, useChartScrub } from "./scrub";
 import { ChartTooltip, type ChartTooltipDatum } from "./ChartTooltip";
 import { CHART_NEUTRAL, getChartColor } from "./palette";
 import { durations, easings } from "@/lib/motion";
@@ -62,6 +64,10 @@ export interface AreaChartProps<Datum> {
     readonly margin?: { top: number; right: number; bottom: number; left: number };
     readonly width?: number;
     readonly ariaLabel?: string;
+    /** Opt into synced crosshairs with sibling charts sharing this id (needs ChartSyncProvider). */
+    readonly syncId?: string;
+    /** Enable pointer-drag range compare (Δ + %) on the primary series. */
+    readonly scrubbable?: boolean;
 }
 
 const DEFAULT_MARGIN = { top: 16, right: 24, bottom: 28, left: 90 };
@@ -110,6 +116,8 @@ function AreaChartInner<Datum>({
     width,
     height,
     ariaLabel,
+    syncId,
+    scrubbable = false,
 }: InnerProps<Datum>) {
     const { t } = useLanguage();
     const reduce = useReducedMotion();
@@ -188,21 +196,69 @@ function AreaChartInner<Datum>({
     );
 
     const [hoverIndex, setHoverIndex] = useState<number | null>(null);
+    const { syncedX, publishHover } = useChartSync(syncId);
+    const scrub = useChartScrub();
 
-    const handleMove = useCallback(
+    const indexAtClientX = useCallback(
         (event: React.PointerEvent<SVGRectElement>) => {
             const rect = event.currentTarget.getBoundingClientRect();
             const x = event.clientX - rect.left;
             const x0 = xScale.invert(x);
             const idx = bisect(data, x0 as never);
-            if (idx >= 0 && idx < data.length) setHoverIndex(idx);
+            return idx >= 0 && idx < data.length ? idx : null;
         },
         [bisect, data, xScale],
     );
 
-    const handleLeave = useCallback(() => setHoverIndex(null), []);
+    const handleMove = useCallback(
+        (event: React.PointerEvent<SVGRectElement>) => {
+            const idx = indexAtClientX(event);
+            if (idx == null) return;
+            setHoverIndex(idx);
+            publishHover(Number(stableXAccessor(data[idx])));
+            if (scrub.scrubbing) scrub.move(idx);
+        },
+        [indexAtClientX, publishHover, stableXAccessor, data, scrub],
+    );
 
-    const hoverDatum = hoverIndex != null ? data[hoverIndex] : null;
+    const handleLeave = useCallback(() => {
+        setHoverIndex(null);
+        publishHover(null);
+        scrub.end();
+    }, [publishHover, scrub]);
+
+    const handleDown = useCallback(
+        (event: React.PointerEvent<SVGRectElement>) => {
+            if (!scrubbable) return;
+            const idx = indexAtClientX(event);
+            if (idx == null) return;
+            event.currentTarget.setPointerCapture(event.pointerId);
+            scrub.begin(idx);
+        },
+        [scrubbable, indexAtClientX, scrub],
+    );
+
+    const handleUp = useCallback(() => scrub.end(), [scrub]);
+
+    // Mirror a sibling chart's hover when not hovered locally (nearest point).
+    const syncedIndex = useMemo(() => {
+        if (hoverIndex != null || syncedX == null || data.length === 0) return null;
+        // Only mirror when the synced x falls inside this chart's domain —
+        // disjoint timelines (history vs forecast) must not pin to an edge.
+        const lo = Number(stableXAccessor(data[0]));
+        const hi = Number(stableXAccessor(data[data.length - 1]));
+        if (syncedX < Math.min(lo, hi) || syncedX > Math.max(lo, hi)) return null;
+        let best = 0;
+        let bestDist = Infinity;
+        for (let i = 0; i < data.length; i++) {
+            const dist = Math.abs(Number(stableXAccessor(data[i])) - syncedX);
+            if (dist < bestDist) { bestDist = dist; best = i; }
+        }
+        return best;
+    }, [hoverIndex, syncedX, data, stableXAccessor]);
+
+    const effectiveIndex = hoverIndex ?? syncedIndex;
+    const hoverDatum = effectiveIndex != null ? data[effectiveIndex] : null;
 
     const tooltipItems: ChartTooltipDatum[] = useMemo(() => {
         if (!hoverDatum) return [];
@@ -224,11 +280,25 @@ function AreaChartInner<Datum>({
     const tooltipTop = margin.top;
 
     const gradId = useMemo(() => `area-grad-${Math.random().toString(36).slice(2, 8)}`, []);
+    const revealId = `${gradId}-reveal`;
 
     return (
         <div style={{ position: "relative", width, height }}>
             <svg width={width} height={height} role="img" aria-label={ariaLabel ?? summarizeSeriesChart(t, 'chart.aria.kind.area', data.length, series.map((s) => s.label))}>
                 <Group left={margin.left} top={margin.top}>
+                    {/* Draw-in: horizontal sweep reveal (skipped under reduced motion) */}
+                    <defs>
+                        <clipPath id={revealId}>
+                            <motion.rect
+                                x={0}
+                                y={-margin.top}
+                                height={height}
+                                initial={reduce ? { width: innerWidth } : { width: 0 }}
+                                animate={{ width: innerWidth }}
+                                transition={{ duration: reduce ? 0 : durations.page, ease: easings.outExpo }}
+                            />
+                        </clipPath>
+                    </defs>
                     {series.map((s, i) => {
                         const color = s.color ?? getChartColor(i);
                         return (
@@ -258,6 +328,7 @@ function AreaChartInner<Datum>({
                     ))}
 
                     {/* Stacked or unstacked */}
+                    <g clipPath={`url(#${revealId})`}>
                     {stacked ? (
                         <AreaStack<Datum>
                             keys={series.map((s) => s.key)}
@@ -338,6 +409,7 @@ function AreaChartInner<Datum>({
                             );
                         })
                     )}
+                    </g>
 
                     {/* Reference lines */}
                     {referenceLines?.map((r, i) => {
@@ -366,6 +438,25 @@ function AreaChartInner<Datum>({
                             </g>
                         );
                     })}
+
+                    {/* Scrub range band */}
+                    {scrub.range ? (() => {
+                        const xA = xScale(stableXAccessor(data[scrub.range.startIndex]) as never) ?? 0;
+                        const xB = xScale(stableXAccessor(data[scrub.range.endIndex]) as never) ?? 0;
+                        return (
+                            <rect
+                                x={Math.min(xA, xB)}
+                                y={0}
+                                width={Math.abs(xB - xA)}
+                                height={innerHeight}
+                                fill={CHART_NEUTRAL.label}
+                                fillOpacity={0.08}
+                                stroke={CHART_NEUTRAL.label}
+                                strokeOpacity={0.25}
+                                pointerEvents="none"
+                            />
+                        );
+                    })() : null}
 
                     {/* Crosshair */}
                     {hoverDatum != null ? (
@@ -421,14 +512,39 @@ function AreaChartInner<Datum>({
                         width={innerWidth}
                         height={innerHeight}
                         fill="transparent"
+                        style={scrubbable ? { touchAction: "none", cursor: "crosshair" } : undefined}
                         onPointerMove={handleMove}
                         onPointerLeave={handleLeave}
+                        onPointerDown={handleDown}
+                        onPointerUp={handleUp}
+                        onPointerCancel={handleUp}
                     />
                 </Group>
             </svg>
 
+            {scrub.range ? (() => {
+                const first = series[0];
+                const a = first?.accessor(data[scrub.range.startIndex]);
+                const b = first?.accessor(data[scrub.range.endIndex]);
+                if (a == null || b == null || !Number.isFinite(a) || !Number.isFinite(b)) return null;
+                const fmt = (v: number) =>
+                    tooltipValueFormat ? tooltipValueFormat(v, first.key) : String(Math.round(v * 100) / 100);
+                const xA = margin.left + (xScale(stableXAccessor(data[scrub.range.startIndex]) as never) ?? 0);
+                const xB = margin.left + (xScale(stableXAccessor(data[scrub.range.endIndex]) as never) ?? 0);
+                const mid = (xA + xB) / 2;
+                const rising = b - a > 0;
+                return (
+                    <div
+                        className={`glass-thick pointer-events-none absolute z-10 -translate-x-1/2 whitespace-nowrap rounded-full px-2.5 py-1 text-xs font-semibold tabular-nums ${rising ? "text-success" : b - a < 0 ? "text-destructive" : "text-foreground"}`}
+                        style={{ left: mid, top: 2 }}
+                    >
+                        {formatScrubDelta(a, b, fmt)}
+                    </div>
+                );
+            })() : null}
+
             <ChartTooltip
-                open={hoverDatum != null}
+                open={hoverDatum != null && !scrub.range}
                 left={tooltipLeft}
                 top={tooltipTop}
                 title={

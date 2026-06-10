@@ -1,8 +1,8 @@
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Sparkline as ChartSparkline } from "@/components/charts";
+import { RollingNumber } from "@/components/shared/RollingNumber";
 import { ArrowUpRight, DollarSign, TrendingDown } from "lucide-react";
-import { useCountUp } from "@/hooks/useCountUp";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { useAppSettings } from "@/contexts/AppSettingsContext";
 import { numberFormatToLocale } from "@/utils/currency";
@@ -23,7 +23,6 @@ export function NetSummaryCard({ netBalance, income, spending, history }: NetSum
   const locale = numberFormatToLocale(appSettings.numberFormat);
   const { formatCompact } = useChartCurrencyFormatter();
 
-  const animatedNet = useCountUp(netBalance, 800);
   const isPositive = netBalance >= 0;
 
   const savingsRate = income > 0 ? ((income - spending) / income) * 100 : null;
@@ -42,7 +41,7 @@ export function NetSummaryCard({ netBalance, income, spending, history }: NetSum
   const netColor = isPositive ? "text-accent" : "text-destructive";
   const areaStroke = isPositive ? "var(--color-accent, oklch(72% 0.15 160))" : "var(--color-destructive, oklch(65% 0.2 25))";
 
-  const netCompact = formatCompact(animatedNet);
+  const netCompact = formatCompact(netBalance);
   const incomeCompact = formatCompact(incomeTotal);
   const spendingCompact = formatCompact(spendingTotal);
 
@@ -70,7 +69,9 @@ export function NetSummaryCard({ netBalance, income, spending, history }: NetSum
       <CardContent className="flex flex-1 flex-col gap-4">
         <div className="flex items-end gap-3 flex-wrap">
           <div className={`text-4xl md:text-5xl font-bold tabular-nums ${netColor}`}>
-            <span title={netCompact.isCompact ? netCompact.full : undefined}>{netCompact.display}</span>
+            <span title={netCompact.isCompact ? netCompact.full : undefined}>
+              <RollingNumber value={netCompact.display} />
+            </span>
           </div>
           {savingsRate !== null && (
             <Badge variant="outline" className="font-semibold text-xs">

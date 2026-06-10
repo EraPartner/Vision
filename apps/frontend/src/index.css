@@ -535,6 +535,24 @@
         }
     }
 
+    /* Workspace-aware hue: portfolio leads with champagne gold, budgeting
+       with emerald. Same alphas, swapped hues. */
+    .liquid-canvas[data-workspace="portfolio"]::before {
+        background: radial-gradient(
+            closest-side,
+            hsl(var(--accent) / var(--aurora-primary-alpha)),
+            transparent 72%
+        );
+    }
+
+    .liquid-canvas[data-workspace="portfolio"]::after {
+        background: radial-gradient(
+            closest-side,
+            hsl(var(--primary) / var(--aurora-accent-alpha)),
+            transparent 72%
+        );
+    }
+
     /* Film grain — tactile richness over the gradients */
     .liquid-canvas-grain {
         position: absolute;
@@ -576,8 +594,10 @@
        transform together. */
     .premium-frame {
         border: 1px solid hsl(var(--border) / 0.7);
+        /* Light mode reads as embossed paper: top highlight + bottom hairline. */
         box-shadow:
             0 1px 0 hsl(var(--glass-highlight) / 0.16) inset,
+            0 -1px 0 hsl(var(--glass-shadow) / 0.05) inset,
             0 8px 24px hsl(var(--glass-shadow) / 0.06);
         transition:
             border-color var(--duration-normal) var(--ease-out-quint),

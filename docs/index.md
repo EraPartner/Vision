@@ -161,6 +161,20 @@ SORT date DESC
 LIMIT 10
 ```
 
+### 2026-06-10 Premium v3 — Numbers, Chart Interactions, and Enhanced-Effects Toggle (ADR-071)
+
+**18-item Premium v3 batch** adding hero numbers, chart interactivity, and a GPU effects gate:
+
+- **Numbers as hero**: `RollingNumber` (odometer digit reels, reduced-motion → plain span) replaces count-up in StatCard/NetSummaryCard. `Money` micro-typography (raised symbol, de-emphasized decimals) in transactions table + dashboard. `DeltaPill` standardized tinted chip in StatCard.
+- **Chart interactions**: `scrubbable` prop + `scrub.tsx` (`useChartScrub`) — pointer-drag range shows glass Δ pill, suppresses tooltip. `syncId` prop + `ChartSyncContext.tsx` — dashboard time-series share `syncId="dashboard-timeline"`. Sweep reveal on AreaChart clipPath. `ChartSkeleton` ghost waveform replaces rectangle skeletons.
+- **Navigation**: `PageTitleContext` large-title collapse (topbar shows page title past 96px scroll). Palette v2 — recents (`vision.palette.recents`, excluded from backups), debounced recipient search deep-link, "search transactions for X". `ShortcutsOverlay` (`?` key). Animated `tabs.tsx` framer `layoutId` pill indicator.
+- **Materials**: Workspace-aware aurora (`data-workspace` hue swap). Light-mode paper & ink token pass. (A cursor-specular sheen was tried and removed same-day at user request.)
+- **Enhanced-effects toggle**: `AppSettings.enhancedEffects` (default **off**) in Settings → General. Gates `ShaderAurora` (raw WebGL fbm, 0.25× res, ~30 fps cap, silent CSS-blob fallback). ADR-020 GPU rationale makes default-off mandatory.
+- **Perceived speed**: Per-widget dashboard hydration — global loading gate removed, per-section skeletons. Optimistic CREATE (`useCreateTransaction`: temp negative-id, server swap, rollback; virtual list excluded; 6 tests).
+- **i18n**: 8 new keys (en + nl); total 2854.
+
+See [[docs/adr/071-premium-v3-effects-toggle|ADR-071]], [[docs/architecture/frontend-architecture|Frontend Architecture]], [[docs/features/appearance|Appearance — Enhanced Effects]], [[docs/components/charts|Chart Primitives — Premium v3]], [[docs/components/dashboard|Dashboard Components — Premium v3]]
+
 ### 2026-06-10 Liquid Glass v2 — Premium Frontend Overhaul (ADR-070)
 
 **Five-tier frontend overhaul** restoring and completing the ADR-017 liquid-glass system:

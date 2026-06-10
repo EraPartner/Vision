@@ -8,10 +8,10 @@
 
 @layer base {
     :root {
-        /* -------- Surface & text (light polished) -------- */
-        --background: 42 30% 97%;
-        /* warm ivory */
-        --foreground: 200 18% 10%;
+        /* -------- Surface & text (light polished: paper & ink) -------- */
+        --background: 40 36% 96%;
+        /* warm paper ivory */
+        --foreground: 200 20% 9%;
         /* deep ink */
 
         --card: 0 0% 100%;
@@ -20,14 +20,14 @@
         --popover: 0 0% 100%;
         --popover-foreground: 200 18% 10%;
 
-        --muted: 42 18% 93%;
-        --muted-foreground: 200 10% 36%;
+        --muted: 40 22% 92%;
+        --muted-foreground: 200 12% 34%;
 
         --secondary: 42 18% 93%;
         --secondary-foreground: 200 18% 10%;
 
-        --border: 42 15% 87%;
-        --input: 42 15% 87%;
+        --border: 40 18% 85%;
+        --input: 40 18% 85%;
 
         /* -------- Brand -------- */
         --primary: 158 62% 32%;

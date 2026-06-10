@@ -18,6 +18,12 @@ import { UpdateNotification } from "@/components/notifications/UpdateNotificatio
 import { OnboardingWizard, useOnboarding } from "@/components/onboarding/OnboardingWizard";
 import { PageTransition } from "@/components/layout/PageTransition";
 import { CommandPalette } from "@/components/shared/CommandPalette";
+import { PageTitleProvider, usePageTitle } from "@/contexts/PageTitleContext";
+import { ShortcutsOverlay } from "@/components/shared/ShortcutsOverlay";
+import { ShaderAurora } from "@/components/layout/ShaderAurora";
+import { useGoToShortcuts } from "@/hooks/useGoToShortcuts";
+import { useWorkspace } from "@/contexts/WorkspaceContext";
+import { useAppSettings } from "@/contexts/AppSettingsContext";
 
 interface AppLayoutProps {
     children: React.ReactNode;
@@ -34,12 +40,20 @@ export function AppLayout({ children }: AppLayoutProps) {
     };
     const { mode, schedule, setMode, setSchedule } = useTheme();
     const { t } = useLanguage();
+    const { workspace } = useWorkspace();
+    const { appSettings } = useAppSettings();
+    useGoToShortcuts();
     const { isComplete: onboardingComplete, isLoading: onboardingLoading, complete: completeOnboarding } = useOnboarding();
 
-    // Topbar material fades in once the page scrolls under it.
+    // Topbar material fades in once the page scrolls under it; the inline
+    // page title appears once the large PageHeader has scrolled out.
     const [scrolled, setScrolled] = useState(false);
+    const [titleVisible, setTitleVisible] = useState(false);
     useEffect(() => {
-        const onScroll = () => setScrolled(window.scrollY > 8);
+        const onScroll = () => {
+            setScrolled(window.scrollY > 8);
+            setTitleVisible(window.scrollY > 96);
+        };
         onScroll();
         window.addEventListener('scroll', onScroll, { passive: true });
         return () => window.removeEventListener('scroll', onScroll);
@@ -53,9 +67,11 @@ export function AppLayout({ children }: AppLayoutProps) {
     }[mode]), [mode]);
 
     return (
+        <PageTitleProvider>
         <SidebarProvider defaultOpen={false}>
             <div className="relative min-h-screen flex w-full overflow-x-clip">
-                <div aria-hidden="true" className="liquid-canvas">
+                <div aria-hidden="true" className="liquid-canvas" data-workspace={workspace}>
+                    {appSettings.enhancedEffects && <ShaderAurora />}
                     <div className="liquid-canvas-grain" />
                 </div>
                 <AppSidebar />
@@ -64,6 +80,7 @@ export function AppLayout({ children }: AppLayoutProps) {
                         data-scrolled={scrolled}
                         className="app-topbar h-14 flex items-center px-4 sticky top-0 z-30">
                         <SidebarTrigger className="mr-4" />
+                        <TopbarPageTitle visible={titleVisible} />
                         <div className="flex-1" />
                         <button
                             type="button"
@@ -173,10 +190,27 @@ export function AppLayout({ children }: AppLayoutProps) {
                 </div>
             </div>
             <CommandPalette open={paletteOpen} onOpenChange={setPaletteOpen} onOpenSettings={openSettingsOnTab} />
+            <ShortcutsOverlay />
             <DashboardSettingsDialog open={settingsOpen} onOpenChange={(o) => { setSettingsOpen(o); if (!o) setSettingsDefaultTab('general'); }} defaultTab={settingsDefaultTab} />
             {!onboardingLoading && (
                 <OnboardingWizard open={!onboardingComplete} onComplete={completeOnboarding} onOpenSettings={openSettingsOnTab} />
             )}
         </SidebarProvider>
+        </PageTitleProvider>
+    );
+}
+
+// iOS-style inline title: appears in the topbar once the large PageHeader
+// scrolls out of view.
+function TopbarPageTitle({ visible }: { visible: boolean }) {
+    const { title } = usePageTitle();
+    const shown = visible && Boolean(title);
+    return (
+        <div
+            aria-hidden={!shown}
+            className={`min-w-0 truncate font-display text-sm font-semibold tracking-tight transition-[opacity,transform] duration-[var(--duration-normal)] ease-[var(--ease-out-quint)] motion-reduce:transition-none ${shown ? "opacity-100 translate-y-0" : "pointer-events-none opacity-0 translate-y-1"}`}
+        >
+            {title}
+        </div>
     );
 }

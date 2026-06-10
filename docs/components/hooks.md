@@ -5,8 +5,8 @@ status: active
 date: 2026-04-23
 updated: 2026-06-10
 last_modified: 2026-06-10
-tags: [components, hooks, react-query, zustand, form-state, data-table, phase-4, phase-13, phase-c, phase-d, i18n, notifications, export-filters, bug-hunt-2026-05-05, bug-hunt-2026-05-06, bug-hunt-2026-05-08, mount-guard, query-key-fix, prefetch, memoization, useCallback, parseLocaleNumber, currency-utilities, exclusion-ids, ssrf-correctness, loading-states, error-states, isError, refetch, recipient-insights-filter, optimistic-updates, liquid-glass-v2, june-2026]
-description: Custom React hooks for data fetching and state management. Includes toast notifications for mutations via i18n keys. Phase 13 adds useBankAccounts hook for export filtering. May 2026 bug hunt adds mount guard to usePlannedPayments, fixes queryKey mismatch in usePortfolioPrefetch, and documents parseLocaleNumber utility for locale-aware number parsing. 2026-05-29 adds useExcludedIds as a shared exclusion-resolution hook and exposes isLoading/isError/error/refetch from usePortfolio so asset pages can distinguish loading/error from empty. 2026-06-01: useStatistics adds recipientInsightsFilteredQuery so the all-years Top Recipients chart reacts to exclusion toggles. 2026-06-10: useUpdateTransaction/useDeleteTransaction made optimistic (ADR-070 Tier 5).
+tags: [components, hooks, react-query, zustand, form-state, data-table, phase-4, phase-13, phase-c, phase-d, i18n, notifications, export-filters, bug-hunt-2026-05-05, bug-hunt-2026-05-06, bug-hunt-2026-05-08, mount-guard, query-key-fix, prefetch, memoization, useCallback, parseLocaleNumber, currency-utilities, exclusion-ids, ssrf-correctness, loading-states, error-states, isError, refetch, recipient-insights-filter, optimistic-updates, optimistic-create, liquid-glass-v2, premium-v3, june-2026]
+description: Custom React hooks for data fetching and state management. Includes toast notifications for mutations via i18n keys. Phase 13 adds useBankAccounts hook for export filtering. May 2026 bug hunt adds mount guard to usePlannedPayments, fixes queryKey mismatch in usePortfolioPrefetch, and documents parseLocaleNumber utility for locale-aware number parsing. 2026-05-29 adds useExcludedIds as a shared exclusion-resolution hook and exposes isLoading/isError/error/refetch from usePortfolio so asset pages can distinguish loading/error from empty. 2026-06-01: useStatistics adds recipientInsightsFilteredQuery so the all-years Top Recipients chart reacts to exclusion toggles. 2026-06-10: useUpdateTransaction/useDeleteTransaction made optimistic (ADR-070 Tier 5). 2026-06-10 Premium v3 (ADR-071): useCreateTransaction made optimistic (temp negative-id row, server swap, rollback, onSettled invalidate; 6 tests total).
 related_code: ["apps/frontend/src/hooks"]
 ---
 
@@ -75,6 +75,19 @@ Vision uses custom hooks for data fetching, state management, and reusable logic
 ## useTransactions
 
 Hook for managing transactions.
+
+### Optimistic Create (Premium v3, June 2026, ADR-071)
+
+`useCreateTransaction` is now optimistic as of the Premium v3 batch (ADR-071):
+
+- **Pattern**: insert temp row → swap on success → remove + rollback on error → `onSettled` invalidate.
+- `onMutate`: generates a temp id (`-Date.now()`) and inserts the new row at the head of all plain `['transactions', params]` caches via `queryClient.setQueriesData`.
+- `onSuccess`: swaps the temp row with the server-returned row (matching on the temp id).
+- `onError`: removes the temp row and restores the snapshot.
+- `onSettled`: invalidates `['transactions']` so server truth (correct ordering, filters, derived fields) wins.
+- **`['transactions-virtual']` deliberately not patched**: same rationale as update/delete — the virtual list mirrors cached first-page data into local React state; patching mid-scroll would collapse the list.
+- **Derived fields**: the optimistically inserted row may lack `category_name` and `recipient_name` (only ids are in the payload). The `onSettled` refetch corrects this within one round-trip.
+- 6 tests total in `hooks/__tests__/useOptimisticTransactions.test.tsx`.
 
 ### Optimistic Update / Delete (June 2026, ADR-070)
 

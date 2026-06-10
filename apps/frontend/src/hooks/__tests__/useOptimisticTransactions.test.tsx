@@ -6,7 +6,7 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { LanguageProvider } from "@/contexts/LanguageContext";
 import { apiClient } from "@/lib/api";
 import type { Transaction, TransactionsListResponse } from "@/types/api";
-import { useUpdateTransaction, useDeleteTransaction } from "@/hooks/useTransactions";
+import { useUpdateTransaction, useDeleteTransaction, useCreateTransaction } from "@/hooks/useTransactions";
 
 function makeClient() {
     return new QueryClient({
@@ -125,6 +125,53 @@ describe("useDeleteTransaction (optimistic)", () => {
         const { result } = renderHook(() => useDeleteTransaction(), { wrapper: makeWrapper(qc) });
         act(() => {
             result.current.mutate(1);
+        });
+
+        await waitFor(() => expect(result.current.isError).toBe(true));
+        const list = qc.getQueryData<TransactionsListResponse>(LIST_KEY);
+        expect(list?.items).toHaveLength(2);
+        expect(list?.total).toBe(2);
+    });
+});
+
+describe("useCreateTransaction (optimistic)", () => {
+    it("inserts a temp row immediately and swaps in the server row on success", async () => {
+        const qc = makeClient();
+        qc.setQueryData(LIST_KEY, seedList());
+
+        let resolveCreate!: (tx: Transaction) => void;
+        vi.spyOn(apiClient, "createTransaction").mockImplementation(
+            () => new Promise<Transaction>((res) => { resolveCreate = res; }),
+        );
+
+        const { result } = renderHook(() => useCreateTransaction(), { wrapper: makeWrapper(qc) });
+        act(() => {
+            result.current.mutate({ amount: -7, memo: "snack" } as never);
+        });
+
+        await waitFor(() => {
+            const list = qc.getQueryData<TransactionsListResponse>(LIST_KEY);
+            expect(list?.items).toHaveLength(3);
+        });
+        let list = qc.getQueryData<TransactionsListResponse>(LIST_KEY);
+        expect(list?.items[0]?.memo).toBe("snack");
+        expect(list?.items[0]?.id).toBeLessThan(0);
+        expect(list?.total).toBe(3);
+
+        resolveCreate({ id: 99, amount: -7, memo: "snack" } as unknown as Transaction);
+        await waitFor(() => expect(result.current.isSuccess).toBe(true));
+        list = qc.getQueryData<TransactionsListResponse>(LIST_KEY);
+        expect(list?.items[0]?.id).toBe(99);
+    });
+
+    it("removes the temp row when the server rejects", async () => {
+        const qc = makeClient();
+        qc.setQueryData(LIST_KEY, seedList());
+        vi.spyOn(apiClient, "createTransaction").mockRejectedValue(new Error("boom"));
+
+        const { result } = renderHook(() => useCreateTransaction(), { wrapper: makeWrapper(qc) });
+        act(() => {
+            result.current.mutate({ amount: -7, memo: "snack" } as never);
         });
 
         await waitFor(() => expect(result.current.isError).toBe(true));

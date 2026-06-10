@@ -27,6 +27,9 @@ export const LOCAL_STORAGE_KEYS = Object.freeze({
 
   /** JSON array of dismissed recurring-pattern keys */
   DISMISSED_RECURRING_PATTERNS: 'dismissed_recurring_patterns',
+
+  /** JSON array of recently visited routes shown in the ⌘K palette */
+  PALETTE_RECENTS: 'vision.palette.recents',
 } as const);
 
 export type LocalStorageKey = typeof LOCAL_STORAGE_KEYS[keyof typeof LOCAL_STORAGE_KEYS];
@@ -42,4 +45,6 @@ export const LOCAL_STORAGE_EXCLUDED_KEYS: ReadonlyArray<string> = Object.freeze(
   // Admin Bearer token (see lib/adminToken.ts). Session-scoped auth held in
   // sessionStorage only — must never be persisted to a backup snapshot.
   'vision.adminToken',
+  // Transient ⌘K palette recents — navigation convenience, not user data.
+  'vision.palette.recents',
 ]);

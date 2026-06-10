@@ -189,6 +189,8 @@ export function BankBalancesWidget() {
                     </CardHeader>
                     <CardContent className="space-y-3">
                         <AreaChart<BankChartDatum>
+                            syncId="dashboard-timeline"
+                            scrubbable
                             data={chartData}
                             xAccessor={(d) => d.date}
                             series={accountSeries}

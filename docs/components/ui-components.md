@@ -4,8 +4,8 @@ type: component
 status: active
 date: 2026-04-17
 updated: 2026-06-10
-tags: [components, ui, radix, shadcn, design-system, phase-9, phase-5, performance, glass-downgrade, dependency-slim-down, liquid-glass-v2, june-2026, command-palette]
-description: Reusable UI components built on Radix UI primitives with Tailwind CSS, styled with emerald + champagne-gold palette and optimized design tokens. Phase 5 removes unused Carousel, Resizable, and Drawer wrappers. June 2026 Liquid Glass v2 — Card gains universal premium-frame hover, Dialog/AlertDialog use dialog-in/out keyframes, Sonner toasts are glass-thick, EmptyState upgraded, CommandPalette added.
+tags: [components, ui, radix, shadcn, design-system, phase-9, phase-5, performance, glass-downgrade, dependency-slim-down, liquid-glass-v2, premium-v3, june-2026, command-palette, rolling-number, money-typography, delta-pill, shortcuts-overlay, chart-skeleton]
+description: Reusable UI components built on Radix UI primitives with Tailwind CSS, styled with emerald + champagne-gold palette and optimized design tokens. Phase 5 removes unused Carousel, Resizable, and Drawer wrappers. June 2026 Liquid Glass v2 — Card gains universal premium-frame hover, Dialog/AlertDialog use dialog-in/out keyframes, Sonner toasts are glass-thick, EmptyState upgraded, CommandPalette added. June 2026 Premium v3 — RollingNumber, Money, DeltaPill, ShortcutsOverlay, ChartSkeleton shared components; tabs.tsx animated active-pill indicator.
 aliases: [ui-components, radix-components, shadcn-components, primitive-components]
 related_code: ["apps/frontend/src/components/ui"]
 ---
@@ -76,9 +76,11 @@ Code links: [[apps/frontend/src/index.css]], [[apps/frontend/src/components/ui/b
 > [!info] June 2026 update — atmosphere layer, topbar, CommandPalette, PageTransition re-added
 
 **AppLayout.tsx** — Main app container:
-- Renders a fixed `liquid-canvas` atmosphere layer (two aurora blobs + radial wash + SVG grain). Blobs animate via compositor-only `transform`; drift pauses under `prefers-reduced-motion`.
-- Scroll-linked topbar: material lives in a `::before` pseudo-element that fades in when `[data-scrolled]` is set (gradients cannot `transition` directly); passive scroll listener sets the attribute.
+- Renders a fixed `liquid-canvas` atmosphere layer (two aurora blobs + radial wash + SVG grain). Blobs animate via compositor-only `transform`; drift pauses under `prefers-reduced-motion`. Sets `data-workspace` on the liquid canvas for workspace-aware hue swaps (premium v3).
+- Conditionally renders `ShaderAurora` inside the liquid canvas when `appSettings.enhancedEffects === true` (premium v3). The CSS aurora blobs are always rendered underneath as a fallback.
+- Scroll-linked topbar: material lives in a `::before` pseudo-element that fades in when `[data-scrolled]` is set; passive scroll listener sets the attribute. Also shows page title (from `PageTitleContext`) past 96px scroll (premium v3).
 - Mounts `CommandPalette` with topbar ⌘K trigger button.
+- Mounts `ShortcutsOverlay` (`?` key) alongside `CommandPalette` (premium v3).
 - Wraps child routes in `PageTransition` (enter-only spring).
 - Sidebar + chrome: `.glass-chrome` (24px blur, saturated).
 
@@ -436,6 +438,16 @@ Data table for displaying lists.
 
 Tabbed interface for organizing content.
 
+### Animated Active-Pill Indicator (Premium v3, June 2026)
+
+`components/ui/tabs.tsx` was rewritten in June 2026 (ADR-071):
+
+- **Active-value context**: `Tabs` now intercepts `value`, `defaultValue`, and `onValueChange` props and mirrors the active tab value through a React context. Both controlled and uncontrolled usage is handled.
+- **Framer `layoutId` pill**: Each `TabsTrigger` renders a `motion.span` background pill with `layoutId` scoped per-tablist via `useId()`. Framer Motion smoothly animates the pill between triggers on tab change. The static active background color / ring class is removed in favor of the pill.
+- **Constraint**: New `Tabs` consumers must route through this wrapper (they already do, since all existing consumers use `components/ui/tabs.tsx`).
+
+Code link: [[apps/frontend/src/components/ui/tabs.tsx]]
+
 ### Usage
 
 ```tsx
@@ -452,6 +464,74 @@ Tabbed interface for organizing content.
   </TabsContent>
 </Tabs>
 ```
+
+---
+
+## Premium v3 Shared Components (June 2026)
+
+> [!info] Added in Premium v3 — ADR-071
+> The following shared components were added in the Premium v3 batch. They live in `components/shared/` and `components/charts/`.
+
+### RollingNumber
+
+**File:** [[apps/frontend/src/components/shared/RollingNumber.tsx]]
+
+Odometer-style digit animation for hero numeric values.
+
+- Renders per-digit vertical 0–9 strips animated via `translateY` in em units.
+- Digits are keyed from the right so digit identity is preserved across length changes (e.g., "9" → "10" only the new digit animates in, the "0" is stable).
+- Non-digit characters (currency symbol, decimal separator, thousands separator) are rendered as static spans.
+- `aria-label` on the parent container; `aria-hidden` on the digit reels.
+- `prefers-reduced-motion` → renders a plain `<span>` with no animation.
+
+**Adoption:** StatCard and NetSummaryCard hero values. Replaces `useCountUp` interpolation in those components (the `useCountUp` hook itself is retained — other consumers may still use it).
+
+### Money
+
+**File:** [[apps/frontend/src/components/shared/Money.tsx]]
+
+`Intl.NumberFormat.formatToParts`-based currency micro-typography:
+
+- Currency symbol: ~0.65em, raised (superscript-aligned), muted color.
+- Integer part: normal weight.
+- Fraction + decimal separator: ~0.7em, 70% opacity — visually de-emphasized without hiding.
+- Negative amounts now display an explicit "−" prefix (was color-only on the dashboard).
+
+**Adoption:** Transactions table amount cell, DashboardPage recent-transactions amount column.
+
+**Not adopted (deferred):** NetSummaryCard income/spending sub-stats (compact format conflicts with decimals treatment); portfolio asset pages (sweep later).
+
+### DeltaPill
+
+**File:** [[apps/frontend/src/components/shared/DeltaPill.tsx]]
+
+Standardized tinted change chip:
+
+- **success** tint for positive deltas; **destructive** tint for negative; **muted** for neutral.
+- Direction arrow (↑/↓) included.
+- `invert?: boolean` prop for spend-down-is-good semantics (e.g., expense reduction should be green).
+- **Adoption:** StatCard `change` prop. Portfolio colored-delta text conversion deferred to a later sweep.
+
+### ShortcutsOverlay
+
+**File:** [[apps/frontend/src/components/shared/ShortcutsOverlay.tsx]]
+
+Glass dialog listing real keyboard shortcuts:
+
+- Triggered by the `?` key (when focus is not in an `input`/`textarea`/`contenteditable`).
+- Lists: ⌘K (command palette), ? (this overlay), Esc (close dialog), and the chart scrub drag hint.
+- Mounted in `AppLayout` alongside `CommandPalette`.
+- i18n keys: `shortcuts.title`, `shortcuts.showHelp`, `shortcuts.closeDialog`, `shortcuts.chartScrub`.
+
+### ChartSkeleton
+
+**File:** [[apps/frontend/src/components/charts/ChartSkeleton.tsx]]
+
+Ghost waveform placeholder for chart loading states:
+
+- Renders an SVG waveform path + shimmer animation.
+- Replaces plain rectangle `Skeleton` components in `DashboardPage` chart card skeletons.
+- Accepts a `height` prop; defaults to the standard chart card height.
 
 ---
 

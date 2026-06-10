@@ -265,6 +265,7 @@ export default function PerformancePage() {
                     </CardHeader>
                     <CardContent>
                         <VisxAreaChart
+                            scrubbable
                             data={chartData}
                             xAccessor={(d) => parseISO(d.day)}
                             series={[
@@ -312,6 +313,7 @@ export default function PerformancePage() {
                     </CardHeader>
                     <CardContent>
                         <VisxAreaChart
+                            scrubbable
                             data={relativePerformanceData}
                             xAccessor={(d) => parseISO(d.day)}
                             series={[

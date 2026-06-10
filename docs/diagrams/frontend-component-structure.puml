@@ -62,9 +62,11 @@ package "UI Components (Radix + Tailwind)" {
 package "Layout Components" {
   class AppLayout {
     +LiquidCanvas: atmosphere layer
-    +Topbar: scroll-linked header
+    +ShaderAurora: WebGL (enhancedEffects only)
+    +Topbar: scroll-linked + title collapse
     +Sidebar: AppSidebar
     +CommandPalette: ⌘K palette
+    +ShortcutsOverlay: ? key
     +PageTransition: enter-only spring
     +Content: Outlet
   }
@@ -87,6 +89,20 @@ package "Layout Components" {
     +pages: all budgeting/portfolio
     +theme: variant switch
     +workspaceSync: boolean
+    +recents: localStorage
+    +recipientSearch: debounced
+  }
+
+  class ShaderAurora {
+    +webgl: raw (no deps)
+    +fbm: 4-octave noise
+    +resolution: 0.25x
+    +gate: enhancedEffects
+  }
+
+  class ShortcutsOverlay {
+    +trigger: ? key
+    +dialog: glass
   }
 }
 
@@ -131,6 +147,23 @@ package "Shared Components" {
 
   class WidgetVisibilityDialog {
     +manage widget visibility
+  }
+
+  class RollingNumber {
+    +odometer digit reels
+    +keyed from right
+    +reducedMotion: plain span
+  }
+
+  class Money {
+    +formatToParts micro-typography
+    +raised symbol
+    +de-emphasized decimals
+  }
+
+  class DeltaPill {
+    +tinted change chip
+    +invert prop
   }
 }
 
@@ -248,7 +281,9 @@ App --> ErrorBoundary
 
 AppLayout --> AppSidebar
 AppLayout --> CommandPalette
+AppLayout --> ShortcutsOverlay
 AppLayout --> PageTransition
+AppLayout --> ShaderAurora
 
 AddTransactionDialog --> CategoryCombobox
 AddTransactionDialog --> RecipientCombobox

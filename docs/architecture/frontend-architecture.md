@@ -2,12 +2,15 @@
 title: Frontend Architecture
 type: architecture
 status: active
-description: React frontend architecture, design system, and diagrams with liquid-glass aesthetic, visx charts, Framer Motion, and Zustand store. May 2026 Tailwind v4 migration with unified CSS architecture. June 2026 Liquid Glass v2 — atmosphere layer, saturated blur tiers, CommandPalette, optimistic mutations, route preload.
+description: React frontend architecture, design system, and diagrams with liquid-glass aesthetic, visx charts, Framer Motion, and Zustand store. May 2026 Tailwind v4 migration with unified CSS architecture. June 2026 Liquid Glass v2 — atmosphere layer, saturated blur tiers, CommandPalette, optimistic mutations, route preload. June 2026 Premium v3 — RollingNumber/Money/DeltaPill, chart scrub+sync, ChartSkeleton, PageTitleContext, palette v2, ShortcutsOverlay + go-to sequences, animated tabs, workspace aurora, ShaderAurora enhanced-effects toggle, per-widget dashboard hydration, optimistic create.
 date: 2026-04-23
 updated: 2026-06-10
-tags: [architecture, frontend, uml, plantuml, react, phase-4, phase-6, phase-9, liquid-glass, liquid-glass-v2, visx, framer-motion, statistics-refactoring, zustand, state-management, tailwind-v4, css-architecture, command-palette, optimistic-updates, route-preload, june-2026]
+tags: [architecture, frontend, uml, plantuml, react, phase-4, phase-6, phase-9, liquid-glass, liquid-glass-v2, premium-v3, visx, framer-motion, statistics-refactoring, zustand, state-management, tailwind-v4, css-architecture, command-palette, optimistic-updates, route-preload, chart-scrub, chart-sync, shader-aurora, enhanced-effects, june-2026]
 aliases: [frontend architecture, react architecture, frontend design, design system]
 ---
+
+> [!info] June 2026 — Premium v3 (ADR-071)
+> The second June 2026 batch adds RollingNumber/Money/DeltaPill shared components, chart scrub-to-compare and synced crosshairs, ChartSkeleton, large-title collapse (PageTitleContext), palette v2 with recents and recipient search, ShortcutsOverlay, go-to key sequences (g+key), animated tab indicator, workspace-aware aurora, ShaderAurora behind an opt-in `AppSettings.enhancedEffects` toggle (default off, gates the WebGL aurora; ADR-020 Electron M1 rationale), light-mode paper & ink token pass, per-widget dashboard hydration, and optimistic transaction CREATE. See [[docs/adr/071-premium-v3-effects-toggle|ADR-071]].
 
 > [!info] June 2026 — Liquid Glass v2 (ADR-070)
 > The design system was overhauled in June 2026. The atmosphere layer has been restored, blur tiers raised to 12–32px with saturation, the material class vocabulary simplified, `PageTransition` re-added as an enter-only spring, `CommandPalette` wired, sidebar active rail converted to a framer `layoutId` element, and `useUpdateTransaction`/`useDeleteTransaction` made optimistic. See [[docs/adr/070-liquid-glass-v2-premium-frontend|ADR-070]] for the full decision record.
@@ -518,8 +521,68 @@ See [[docs/adr/047-tailwind-v4-migration-dependency-upgrades|ADR-047: Tailwind v
 - Errors fall through to the normal lazy path (no UI impact on failure).
 - De-duplicated via a `Set` — repeated hover events do not fire multiple fetches.
 
+### Premium v3 (ADR-071, June 2026)
+
+A second June 2026 batch with 18 items. See [[docs/adr/071-premium-v3-effects-toggle|ADR-071]] for the full decision record.
+
+#### Shared Components (new)
+
+| Component | Location | Purpose |
+|-----------|----------|---------|
+| `RollingNumber` | `components/shared/RollingNumber.tsx` | Odometer digit reels (per-digit 0–9 strips, em-based transforms, keyed from right); reduced-motion → plain span. Replaces `useCountUp` in StatCard/NetSummaryCard hero values. |
+| `Money` | `components/shared/Money.tsx` | `Intl.NumberFormat.formatToParts`-based micro-typography: raised small currency symbol (~0.65em), de-emphasized fraction+separator. Adopted in transactions table amount cell and dashboard recent-transactions. Dashboard negatives now show an explicit "−" (was color-only). |
+| `DeltaPill` | `components/shared/DeltaPill.tsx` | Standardized tinted change chip (success/destructive/muted, `invert` prop for spend-down-is-good). Adopted in StatCard `change` prop. |
+| `ShortcutsOverlay` | `components/shared/ShortcutsOverlay.tsx` | `?` key opens a glass dialog listing real shortcuts (⌘K, ?, Esc, chart scrub). Mounted in AppLayout. i18n keys: `shortcuts.*`. |
+| `ChartSkeleton` | `components/charts/ChartSkeleton.tsx` | Ghost waveform + shimmer; replaces rectangle skeletons for charts in DashboardPage. |
+
+#### Chart Interactions (new)
+
+- **Scrub-to-compare**: `scrub.tsx` exports `useChartScrub` + `formatScrubDelta`. AreaChart/LineChart accept a `scrubbable` prop. Pointer-drag selects a range, shows a glass Δ pill (abs + %), suppresses the tooltip while scrubbing. Enabled on: CashFlowComparisonChart, ForecastInner(+Rolling), BankBalancesWidget, PerformancePage (2×), NetWorthChart.
+- **Synced crosshairs**: `ChartSyncContext.tsx` exports `ChartSyncProvider` + `useChartSync`. Charts sharing a `syncId` under one provider mirror hover (nearest point, with a domain guard so disjoint timelines don't pin to edges). Dashboard time-series share `syncId="dashboard-timeline"`. `ChartSyncProvider` wraps `DashboardPage`. BarChart (MonthlyTrends) excluded — categorical band scale.
+- **Sweep reveal**: AreaChart animates a clipPath on mount.
+
+#### Navigation Additions
+
+- **Large-title collapse**: `PageTitleContext` in `contexts/PageTitleContext.tsx`. `PageHeader` registers its title; the topbar shows it (fade/slide) past 96px scroll (separate `titleVisible` state).
+- **Palette v2**: Recents track last ~5 visited routes in `localStorage` (`LOCAL_STORAGE_KEYS.PALETTE_RECENTS = 'vision.palette.recents'`, registered in `lib/localStorage-keys.ts` and added to `LOCAL_STORAGE_EXCLUDED_KEYS` — not backed up). Debounced recipient search (≥2 chars, 250ms) deep-links to `/transactions?recipient_id=…&filter_label=…`. "Search transactions for X" action navigates to `/transactions?search=…`; `TransactionsPage` seeds and syncs its search state from that URL param.
+- **Animated tab indicator**: `tabs.tsx` rewritten — `Tabs` mirrors active value via React context (both controlled and uncontrolled); `TabsTrigger` renders a framer `layoutId` pill scoped per-tablist via `useId`. Static active background/ring removed in favor of pill. New Tabs consumers must route through the wrapper; existing consumers already do.
+
+#### Materials & Atmosphere (Premium v3)
+
+- **Go-to key sequences**: `hooks/useGoToShortcuts.ts` — `g` then a destination key (900 ms window, inert in inputs); route table shared with ShortcutsOverlay so the help sheet stays truthful. (A cursor-specular sheen was implemented and removed same-day at user request.)
+- **Workspace-aware aurora**: `AppLayout` reads `useWorkspace()` (route-derived, no provider), sets `data-workspace` on `.liquid-canvas`. CSS swaps blob hue emphasis (portfolio = gold-led, budgeting = emerald-led).
+- **Light-mode paper & ink**: Conservative token deltas in `tokens.css` light block (warmer paper background `oklch(40 36% 96%)`, deeper ink foreground, warmed border/muted). `premium-frame` gains an embossed bottom hairline. `styles/themes.ts` `defaultLight` palette kept mirrored; `themes.test.ts` 4/4 green.
+- **`ShaderAurora`** (`components/layout/ShaderAurora.tsx`): Raw WebGL (no external dependency), one fullscreen triangle, 4-octave value-noise fbm tinted from `--primary`/`--accent` CSS vars (re-resolved on theme change via `MutationObserver`). Renders at 0.25× resolution upscaled, ~30 fps cap, single static frame under `prefers-reduced-motion`, rAF-paused when `document.hidden`. Any WebGL creation failure silently leaves the CSS blobs (always rendered underneath) as the fallback. Rendered in `AppLayout` only when `appSettings.enhancedEffects === true`.
+
+#### Enhanced-Effects Toggle
+
+`AppSettings.enhancedEffects: boolean` (default **false**) persisted in the settings store. A `Switch` in **Settings → General** (`GeneralTab.tsx`) with id `enhanced-effects`. This is the gate for `ShaderAurora`. See [[docs/adr/020-glass-system-downgrade-liquid-canvas-removal|ADR-020]] for the GPU-budget rationale that makes default-off mandatory.
+
+i18n keys: `settings.general.enhancedEffects`, `settings.general.enhancedEffectsHint`.
+
+#### Perceived Speed (Premium v3)
+
+- **Per-widget dashboard hydration**: The all-queries loading gate in `DashboardPage` is gone. Each section (stats, chart widgets, recent table) renders its own skeleton keyed to its own query's loading state. `ChartSkeleton` replaces rectangle placeholders for chart cards.
+- **Optimistic CREATE**: `useCreateTransaction` in `hooks/useTransactions.ts` inserts a temp negative-id row (`id: -Date.now()`) at the head of plain `['transactions']` caches on `onMutate`; swaps temp→server row on `onSuccess`; removes row and rolls back on `onError`; calls `onSettled` invalidation to restore true ordering and filtering. `['transactions-virtual']` is still deliberately excluded (virtual list mirrors first-page cache into local state). 6 tests total in `useOptimisticTransactions.test.tsx`.
+
+#### Component Hierarchy (updated)
+
+```
+AppLayout
+├── LiquidCanvas (fixed atmosphere layer)
+│   ├── CSS aurora blobs (always rendered)
+│   └── ShaderAurora (WebGL, only when enhancedEffects=true)
+├── Topbar (scroll-linked ::before + ⌘K trigger + page title collapse)
+├── CommandPalette (⌘K, all pages + theme/settings + palette v2 recents+search)
+├── ShortcutsOverlay (? key, glass dialog)
+├── AppSidebar (ActiveRail layoutId)
+├── PageTransition (enter-only spring)
+└── Routes (each page wrapped in per-widget skeleton pattern)
+```
+
 ### Related Documentation
 
+- [[docs/adr/071-premium-v3-effects-toggle|ADR-071: Premium v3 — Numbers, Chart Interactions, and Enhanced-Effects Toggle]] (June 2026)
 - [[docs/adr/070-liquid-glass-v2-premium-frontend|ADR-070: Liquid Glass v2 Premium Frontend Overhaul]] (June 2026)
 - [[docs/adr/017-liquid-glass-aesthetic-design-system|ADR-017: Liquid Glass Aesthetic]]
 - [[docs/adr/018-visx-d3-chart-migration|ADR-018: visx/d3 Chart Migration]]
@@ -903,6 +966,7 @@ The frontend uses a token-based theming system with runtime color palette swappi
 ---
 
 **Related Documentation**
+- [[docs/adr/071-premium-v3-effects-toggle|ADR-071: Premium v3 — Numbers, Chart Interactions, and Enhanced-Effects Toggle]] (June 2026)
 - [[docs/adr/070-liquid-glass-v2-premium-frontend|ADR-070: Liquid Glass v2 Premium Frontend Overhaul]] (June 2026)
 - [[docs/adr/017-liquid-glass-aesthetic-design-system|ADR-017: Liquid Glass Aesthetic]]
 - [[docs/adr/018-visx-d3-chart-migration|ADR-018: visx/d3 Chart Migration]]

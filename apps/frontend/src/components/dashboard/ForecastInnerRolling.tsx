@@ -70,6 +70,8 @@ function ForecastInnerRollingImpl({
 
     return (
         <LineChart<MergedDayDate>
+            syncId="dashboard-timeline"
+            scrubbable
             data={rows}
             xAccessor={(d) => d.t}
             xIsDate

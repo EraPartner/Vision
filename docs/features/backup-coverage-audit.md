@@ -158,6 +158,7 @@ Captured as `frontend-state.json` in the bundle. Restored after DB load triggers
 | `dismissed_upcoming_planned_payments` | Dismissed upcoming-payment IDs | ✅ Included |
 | `dismissed_recurring_patterns` | Dismissed recurring-pattern keys | ✅ Included |
 | `vision_dashboardSettings` | Legacy dashboard layout | ❌ Excluded — SettingsContext migrates to DB and removes on read; no live value to back up |
+| `vision.palette.recents` | Command palette recent routes (last ~5 visited) | ❌ Excluded — Ephemeral navigation state; registered in `LOCAL_STORAGE_EXCLUDED_KEYS` (Premium v3, ADR-071) |
 
 ---
 

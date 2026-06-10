@@ -4,8 +4,8 @@ type: component
 status: active
 date: 2026-04-17
 updated: 2026-06-10
-tags: [components, dashboard, charts, widgets, liquid-glass, liquid-glass-v2, design-system, phase-9, phase-d, phase-f, phase-h, phase-h-v2, ensemble, visx, url-persistence, rolling-cache, rolling-diagnostics, june-2026]
-description: Dashboard-specific components for financial overview and visualization with liquid-glass aesthetic and visx charts, including dual-mode cash flow forecast with URL state persistence and rolling window diagnostics. June 2026 Liquid Glass v2 — StatCard/NetSummaryCard upgraded to glass-elevated; KPI/chart cards migrated from surface-elevated to glass-regular.
+tags: [components, dashboard, charts, widgets, liquid-glass, liquid-glass-v2, premium-v3, design-system, phase-9, phase-d, phase-f, phase-h, phase-h-v2, ensemble, visx, url-persistence, rolling-cache, rolling-diagnostics, chart-scrub, chart-sync, per-widget-hydration, june-2026]
+description: Dashboard-specific components for financial overview and visualization with liquid-glass aesthetic and visx charts, including dual-mode cash flow forecast with URL state persistence and rolling window diagnostics. June 2026 Liquid Glass v2 — StatCard/NetSummaryCard upgraded to glass-elevated; KPI/chart cards migrated from surface-elevated to glass-regular. June 2026 Premium v3 (ADR-071) — per-widget hydration (no global loading gate), synced dashboard-timeline charts, ChartSkeleton, RollingNumber/DeltaPill adoption.
 aliases: [dashboard-widgets, dashboard-charts, overview-components, stat-cards]
 related_code: ["apps/frontend/src/components/dashboard"]
 ---
@@ -13,6 +13,9 @@ related_code: ["apps/frontend/src/components/dashboard"]
 # Dashboard Components
 
 Components for the main Dashboard page (`/`), providing financial overview and visualization widgets. As of Phase 9, all dashboard components use the liquid-glass aesthetic, glass surfaces, and visx + d3 charts.
+
+> [!info] June 2026 — Premium v3 (ADR-071)
+> **Per-widget dashboard hydration**: The all-queries loading gate in `DashboardPage` is removed. Each section (stat grid, chart widgets, recent transactions table) renders its own skeleton keyed to its own query loading state. Chart skeletons use `ChartSkeleton` (ghost waveform) rather than plain `Skeleton` rectangles. **StatCard** now uses `RollingNumber` for the hero value and `DeltaPill` for the change indicator. **Synced dashboard charts**: Time-series charts (CashFlowComparisonChart, BankBalancesWidget, forecast) share `syncId="dashboard-timeline"` under a `ChartSyncProvider` in `DashboardPage`; scrub is enabled on those same charts. See [[docs/adr/071-premium-v3-effects-toggle|ADR-071]].
 
 > [!info] June 2026 — Liquid Glass v2 (ADR-070)
 > Dashboard stat cards and hero summary cards were migrated to `glass-elevated` (StatCard, NetSummaryCard) with tint overlays as child elements. KPI/chart card wrappers use `glass-regular`. Tables stay opaque. References to `surface-elevated premium-frame` in this document reflect the pre-June 2026 state; the current canonical recipe is documented in [[docs/reference/code-patterns#surface-shell-pattern-phase-9|Surface Shell Pattern]].

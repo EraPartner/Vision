@@ -144,6 +144,7 @@ export function NetWorthChart({
         <div ref={chartScrollRef} className="overflow-x-auto pb-2">
           <div className="min-w-full" style={{ width: chartWidth }}>
             <VisxAreaChart
+                scrubbable
               data={displaySnapshots}
               xAccessor={(d) => parseLocalDateFromYmd(normalizeYmd(d.date))}
               series={series}

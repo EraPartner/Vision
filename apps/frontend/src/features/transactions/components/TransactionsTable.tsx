@@ -12,7 +12,7 @@ import { EmptyState } from "@/components/shared/EmptyState";
 import { Import, Info, ToggleLeft, ToggleRight, Trash2 } from "lucide-react";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { useAppSettings } from "@/contexts/AppSettingsContext";
-import { formatCurrency, numberFormatToLocale } from "@/utils/currency";
+import { Money } from "@/components/shared/Money";
 import { formatDateStringWithAppSettings } from "@/components/shared/dateUtils";
 import { getCategoryColor } from "@/utils/categoryColors";
 import type { RawApiTransaction, TableTransaction } from "../types";
@@ -74,7 +74,6 @@ export function TransactionsTable({
 }: TransactionsTableProps) {
     const { t } = useLanguage();
     const { appSettings } = useAppSettings();
-    const locale = numberFormatToLocale(appSettings.numberFormat);
 
     const toggleSelect = useCallback((id: number) => {
         const next = new Set(selectedIds);
@@ -214,7 +213,7 @@ export function TransactionsTable({
             render: (row: TableTransaction) => (
                 <span className={`font-mono font-medium whitespace-nowrap ${row.amount >= 0 ? 'text-accent' : 'text-destructive'
                     } ${!row.is_active ? 'opacity-50 line-through' : ''}`}>
-                    {row.amount >= 0 ? '+' : '-'}{formatCurrency(Math.abs(row.amount), row.currency, locale)}
+                    {row.amount >= 0 ? '+' : '-'}<Money amount={Math.abs(row.amount)} currency={row.currency} />
                 </span>
             ),
         },
@@ -286,7 +285,6 @@ export function TransactionsTable({
         },
     ], [
         t,
-        locale,
         appSettings.dateFormat,
         allSelected,
         someSelected,

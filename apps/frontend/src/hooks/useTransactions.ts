@@ -5,6 +5,7 @@ import type {
     BulkSelectionRequest,
     BulkTagRequest,
     BulkUpdateRequest,
+    Transaction,
     TransactionCreate,
     TransactionsListResponse,
     TransactionUpdate,
@@ -41,14 +42,44 @@ export function useCreateTransaction() {
 
     return useMutation({
         mutationFn: (transaction: TransactionCreate) => apiClient.createTransaction(transaction),
-        onSuccess: () => {
-            queryClient.invalidateQueries({queryKey: ['transactions']});
-            queryClient.invalidateQueries({queryKey: ['transactions-virtual']});
-            queryClient.invalidateQueries({queryKey: ['monthlySummary']});
+        // Optimistic insert at the head of the plain list caches with a
+        // temporary negative id; onSuccess swaps in the server row (so row
+        // actions get the real id immediately), onSettled re-sorts/filters
+        // via invalidation. Derived fields (category_name, …) stay undefined
+        // until the refetch — renderers already fall back for those.
+        onMutate: async (transaction) => {
+            await queryClient.cancelQueries({queryKey: ['transactions']});
+            const snapshot = snapshotTransactionLists(queryClient);
+            const tempId = -Date.now();
+            const tempRow = {...transaction, id: tempId} as unknown as Transaction;
+            queryClient.setQueriesData<TransactionsListResponse>({queryKey: ['transactions']}, (old) => {
+                if (!old?.items) return old;
+                return {
+                    ...old,
+                    items: [tempRow, ...old.items],
+                    total: (old.total ?? old.items.length) + 1,
+                };
+            });
+            return {snapshot, tempId};
+        },
+        onSuccess: (created, _vars, context) => {
+            if (context?.tempId != null) {
+                queryClient.setQueriesData<TransactionsListResponse>({queryKey: ['transactions']}, (old) => {
+                    if (!old?.items) return old;
+                    return {
+                        ...old,
+                        items: old.items.map((tx) => (tx.id === context.tempId ? created : tx)),
+                    };
+                });
+            }
             toast.success(t('transactions.created'));
         },
-        onError: (error: Error) => {
+        onError: (error: Error, _vars, context) => {
+            if (context?.snapshot) rollbackTransactionLists(queryClient, context.snapshot);
             toast.error(t('transactions.createFailedTitle'), { description: error.message });
+        },
+        onSettled: () => {
+            invalidateTransactionLists(queryClient);
         },
     });
 }

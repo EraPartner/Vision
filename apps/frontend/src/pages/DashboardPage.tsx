@@ -19,7 +19,10 @@ import { useExcludedIds } from "@/hooks/useExcludedIds";
 import { useQuery } from "@tanstack/react-query";
 import { apiClient } from "@/lib/api";
 import { getCategoryColor } from "@/utils/categoryColors";
-import { formatCurrency, formatCurrencyCompact, numberFormatToLocale } from "@/utils/currency";
+import { formatCurrencyCompact, numberFormatToLocale } from "@/utils/currency";
+import { Money } from "@/components/shared/Money";
+import { ChartSyncProvider } from "@/components/charts/ChartSyncContext";
+import { ChartSkeleton } from "@/components/charts/ChartSkeleton";
 import { WidgetVisibilityDialog } from "@/components/shared/WidgetVisibilityDialog";
 import { useWidgetVisibility, type WidgetDefinition } from "@/hooks/useWidgetVisibility";
 import { useLanguage } from "@/contexts/LanguageContext";
@@ -290,53 +293,45 @@ export default function DashboardPage() {
             className: "text-right",
             render: (row: (typeof recentTransactions)[0]) => (
                 <span className={`font-semibold ${row.amount >= 0 ? "text-accent" : "text-destructive"}`}>
-                    {row.amount >= 0 ? "+" : ""}{formatCurrency(Math.abs(row.amount), row.currency, locale)}
+                    {row.amount >= 0 ? "+" : "-"}<Money amount={Math.abs(row.amount)} currency={row.currency} />
                 </span>
             ),
         },
-    ], [t, appSettings.dateFormat, locale]);
+    ], [t, appSettings.dateFormat]);
 
-    if (statsLoading || transactionsLoading || monthlyLoading || recentTransactionsLoading) {
-        return (
-            <div className="space-y-8 animate-in">
-                <PageHeader title={t('dashboard.title')} subtitle={t('dashboard.loadingData')} icon={LayoutDashboard} />
-                {/* Stat cards skeleton */}
-                <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-                    {[...Array(4)].map((_, i) => (
-                        <Card key={i} className="surface-elevated premium-frame micro-lift">
-                            <CardHeader className="pb-3 flex flex-row items-center justify-between space-y-0">
-                                <Skeleton className="h-4 w-28" />
-                                <Skeleton className="h-10 w-10 rounded-xl" />
-                            </CardHeader>
-                            <CardContent>
-                                <Skeleton className="h-8 w-32 mb-2" />
-                                <Skeleton className="h-3 w-20" />
-                            </CardContent>
-                        </Card>
-                    ))}
-                </div>
-                {/* Bank balances skeleton */}
-                <Skeleton className="h-64 w-full rounded-xl" />
-                {/* Charts skeleton */}
-                <div className="grid gap-6 lg:grid-cols-2">
-                    <Skeleton className="h-80 w-full rounded-xl" />
-                    <Skeleton className="h-80 w-full rounded-xl" />
-                </div>
-                {/* Recent transactions skeleton */}
-                <Card>
-                    <CardHeader>
-                        <Skeleton className="h-6 w-44" />
-                        <Skeleton className="h-4 w-32 mt-1" />
+    // Per-widget hydration: each section renders its own skeleton while its
+    // queries load, so the hero stats appear the moment they arrive instead
+    // of gating the whole page on the slowest query.
+    const statSkeleton = (
+        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+            {[...Array(4)].map((_, i) => (
+                <Card key={i} className="micro-lift">
+                    <CardHeader className="pb-3 flex flex-row items-center justify-between space-y-0">
+                        <Skeleton className="h-4 w-28" />
+                        <Skeleton className="h-10 w-10 rounded-xl" />
                     </CardHeader>
-                    <CardContent className="space-y-2">
-                        {[...Array(5)].map((_, i) => (
-                            <Skeleton key={i} className="h-10 w-full" />
-                        ))}
+                    <CardContent>
+                        <Skeleton className="h-8 w-32 mb-2" />
+                        <Skeleton className="h-3 w-20" />
                     </CardContent>
                 </Card>
-            </div>
-        );
-    }
+            ))}
+        </div>
+    );
+
+    const recentSkeleton = (
+        <Card>
+            <CardHeader>
+                <Skeleton className="h-6 w-44" />
+                <Skeleton className="h-4 w-32 mt-1" />
+            </CardHeader>
+            <CardContent className="space-y-2">
+                {[...Array(5)].map((_, i) => (
+                    <Skeleton key={i} className="h-10 w-full" />
+                ))}
+            </CardContent>
+        </Card>
+    );
 
     // Show an inline banner for failed queries instead of replacing the whole
     // page. Cached data from any successful query still renders so the user
@@ -366,6 +361,7 @@ export default function DashboardPage() {
     const compactCurrencyFormatter = (n: number) => formatCurrencyCompact(n, appSettings.defaultCurrency, locale).display;
 
     return (
+        <ChartSyncProvider>
         <div className="space-y-8 animate-in">
             {/* Page header */}
             <PageHeader
@@ -396,7 +392,8 @@ export default function DashboardPage() {
             )}
 
             {/* Stats — bento: featured net-balance tile + secondary metrics */}
-            {isVisible('statCards') && (
+            {isVisible('statCards') && statsLoading && statSkeleton}
+            {isVisible('statCards') && !statsLoading && (
             <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-6 lg:grid-rows-2 animate-stagger">
                 <div className="sm:col-span-2 lg:col-span-3 lg:row-span-2">
                     <NetSummaryCard
@@ -423,7 +420,10 @@ export default function DashboardPage() {
 
             {/* Charts — asymmetric bento: trends span 3 of 5 cols, category pie spans 2 */}
             <div className="grid gap-6 lg:grid-cols-5">
-                {isVisible('monthlyTrends') && monthlyData.length > 0 && (
+                {isVisible('monthlyTrends') && monthlyLoading && (
+                    <Card className="glass-regular lg:col-span-3"><CardContent className="pt-6"><ChartSkeleton height={300} /></CardContent></Card>
+                )}
+                {isVisible('monthlyTrends') && !monthlyLoading && monthlyData.length > 0 && (
                     <Card className="group relative overflow-hidden glass-regular premium-frame micro-lift lg:col-span-3">
                         <CardHeader className="flex flex-row items-center justify-between">
                             <div className="flex items-center gap-3">
@@ -447,7 +447,10 @@ export default function DashboardPage() {
                         </CardContent>
                     </Card>
                 )}
-                {isVisible('categoryPie') && (
+                {isVisible('categoryPie') && transactionsLoading && (
+                    <Card className="glass-regular lg:col-span-2"><CardContent className="pt-6"><ChartSkeleton height={300} /></CardContent></Card>
+                )}
+                {isVisible('categoryPie') && !transactionsLoading && (
                 <Card className="group relative overflow-hidden glass-regular premium-frame micro-lift lg:col-span-2">
                     <CardHeader className="flex flex-row items-center justify-between">
                         <div className="flex items-center gap-3">
@@ -483,7 +486,8 @@ export default function DashboardPage() {
             )}
 
             {/* Recent transactions */}
-            {isVisible('recentTransactions') && (
+            {isVisible('recentTransactions') && (transactionsLoading || recentTransactionsLoading) && recentSkeleton}
+            {isVisible('recentTransactions') && !(transactionsLoading || recentTransactionsLoading) && (
             <DataTable
                 title={t('dashboard.recentTransactions')}
                 subtitle={t('dashboard.recentTransactionsSubtitle', { n: recentTransactions.length })}
@@ -501,5 +505,6 @@ export default function DashboardPage() {
             />
             )}
         </div>
+        </ChartSyncProvider>
     );
 }

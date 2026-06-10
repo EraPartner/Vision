@@ -56,6 +56,8 @@ function CashFlowLineChart({ data, currentDay }: { data: DayData[]; currentDay: 
                 className="mb-2"
             />
             <LineChart<DayData>
+                syncId="dashboard-timeline"
+                scrubbable
                 data={data}
                 xAccessor={(d) => d.day}
                 xIsDate={false}

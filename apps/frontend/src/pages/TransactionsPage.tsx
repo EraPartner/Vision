@@ -25,7 +25,13 @@ export default function TransactionsPage() {
     const loadMoreOffset = Math.min(50, Math.max(15, Math.floor(pageSize / 5)));
     const [searchParams, setSearchParams] = useSearchParams();
     const [showAll, setShowAll] = useState(false);
-    const [search, setSearch] = useState("");
+    const [search, setSearch] = useState(() => searchParams.get('search') || "");
+    // Palette-driven searches land as ?search= while already mounted (same
+    // pathname → no remount), so mirror later param changes into state.
+    const searchParam = searchParams.get('search');
+    useEffect(() => {
+        if (searchParam !== null) setSearch(searchParam);
+    }, [searchParam]);
     const [infoTransaction, setInfoTransaction] = useState<TableTransaction | null>(null);
 
     const recipientIdFilter = searchParams.get('recipient_id') ? Number(searchParams.get('recipient_id')) : undefined;

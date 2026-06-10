@@ -4,9 +4,9 @@ type: feature
 status: active
 date: 2026-04-16
 updated: 2026-06-10
-tags: [feature, transactions, finance, phase-q, recipient-groups, bulk-actions, optimistic-updates, june-2026]
+tags: [feature, transactions, finance, phase-q, recipient-groups, bulk-actions, optimistic-updates, optimistic-create, june-2026]
 aliases: [transactions-feature, income, expenses, financial-records, money-tracking]
-description: Core transaction management - income, expenses, and tracking financial activities. Phase Q adds recipient-group filtering for linked-recipient transaction discovery. Bulk operations enable atomic multi-row delete, recategorize, reassign, activate/deactivate, export, and tag. June 2026 (ADR-070): useUpdateTransaction/useDeleteTransaction are now optimistic.
+description: Core transaction management - income, expenses, and tracking financial activities. Phase Q adds recipient-group filtering for linked-recipient transaction discovery. Bulk operations enable atomic multi-row delete, recategorize, reassign, activate/deactivate, export, and tag. June 2026 (ADR-070): useUpdateTransaction/useDeleteTransaction are now optimistic. June 2026 Premium v3 (ADR-071): useCreateTransaction is now optimistic (temp negative-id row → server-row swap → onSettled invalidate; virtual list excluded; 6 tests).
 related_code: ["apps/node-backend/src/routes/transactions.js", "apps/node-backend/src/repositories/transactionRepository.js", "apps/node-backend/src/services/filterBuilder.js", "apps/node-backend/src/services/bulkSelection.js", "apps/frontend/src/features/transactions/", "apps/frontend/src/pages/TransactionsPage.tsx"]
 ---
 
@@ -262,13 +262,23 @@ See [[docs/features/bulk-actions]] for full details on selection modes (IDs vs. 
 
 ---
 
+## Optimistic Create (Premium v3, June 2026)
+
+`useCreateTransaction` is now optimistic (ADR-071). On mutation start, a temp row with a negative id (`-Date.now()`) is inserted at the head of all plain `['transactions', params]` React Query caches. On success, the temp row is swapped with the server-returned row. On error, the temp row is removed and the snapshot is restored. On settlement, `['transactions']` is invalidated.
+
+**Derived fields**: the optimistic row may briefly show stale or missing `category_name` / `recipient_name` until the `onSettled` refetch completes (only ids are in the mutation payload). Amounts and dates from user input are always correct.
+
+**Virtual list excluded**: `['transactions-virtual']` is deliberately not patched — same rationale as update/delete.
+
+6 tests total in `hooks/__tests__/useOptimisticTransactions.test.tsx`.
+
 ## Optimistic Update / Delete (June 2026)
 
 `useUpdateTransaction` and `useDeleteTransaction` are now optimistic (ADR-070 Tier 5). On mutation start, the change is applied immediately to all `['transactions', params]` React Query cache entries via `setQueriesData`, giving the user instant feedback. On error, all entries are rolled back to their snapshot. On settlement (success or error), `['transactions']` is invalidated so server truth wins.
 
 **Important constraint**: `['transactions-virtual']` is deliberately not patched optimistically — `useTransactionListData` mirrors the virtual list's cached first page into local component state, and patching that key while the user has scrolled would collapse the list. It is corrected by the `onSettled` invalidation.
 
-See [[docs/components/hooks#useTransactions|useTransactions hook]] and [[docs/adr/070-liquid-glass-v2-premium-frontend|ADR-070]] for full details and test coverage.
+See [[docs/components/hooks#useTransactions|useTransactions hook]], [[docs/adr/071-premium-v3-effects-toggle|ADR-071]] (optimistic create), and [[docs/adr/070-liquid-glass-v2-premium-frontend|ADR-070]] (optimistic update/delete) for full details and test coverage.
 
 ---
 

@@ -5,7 +5,7 @@ status: active
 date: 2026-04-27
 updated: 2026-06-10
 tags: [i18n, translations, localization, internationalization, phase-6, phase-8, phase-f, phase-9, phase-c, phase-d, phase-2, splits, settlement, admin, observability, cash-flow-forecast, pdf-export, portfolio, tax, backup, encrypt, passphrase-modal, accessibility, aria-label, bug-hunt-2026-05-06, chart-aria, screen-reader, plural, tc, intl-plural-rules, planned-page, toast]
-description: Internationalization system including supported languages, translation workflow, and usage patterns. Phase 6 adds 32 export keys for PDF report localization. Phase 8 adds 11 additional export.section.* keys for portfolio (6) and tax (7) report sections. Phase C adds 15 cash flow forecast keys. Phase F adds 60 admin observability keys. 2026-05-29 adds 16 chart.aria.* keys (localized chart screen-reader summaries) and 21 aria.* keys (localized icon-button aria-labels). June 2026 adds tc() plural mechanism and plannedPage error-toast keys. June 2026 (ADR-070) adds 5 commandPalette.* keys (en + nl) for the new ⌘K command palette.
+description: Internationalization system including supported languages, translation workflow, and usage patterns. Phase 6 adds 32 export keys for PDF report localization. Phase 8 adds 11 additional export.section.* keys for portfolio (6) and tax (7) report sections. Phase C adds 15 cash flow forecast keys. Phase F adds 60 admin observability keys. 2026-05-29 adds 16 chart.aria.* keys (localized chart screen-reader summaries) and 21 aria.* keys (localized icon-button aria-labels). June 2026 adds tc() plural mechanism and plannedPage error-toast keys. June 2026 (ADR-070) adds 5 commandPalette.* keys (en + nl) for the new ⌘K command palette. June 2026 Premium v3 (ADR-071) adds 8 keys: settings.general.enhancedEffects/Hint, shortcuts.title/showHelp/closeDialog/chartScrub, commandPalette.recent/searchTransactions. Total: 2854 keys.
 aliases: [i18n, translations, localization, language, nl, en, dutch, english]
 related_code: ["apps/frontend/src/locales", "apps/frontend/src/contexts/LanguageContext.tsx", "apps/frontend/src/hooks/useSplits.ts"]
 ---
@@ -195,6 +195,35 @@ bun run build
 ```
 
 ### Recent keys added
+
+#### Premium v3 batch (June 2026, ADR-071)
+
+8 new keys added to `i18n/source/en.json` + `nl.json`; `bun run generate-locales` + `validate-locales` clean. Total after this batch: **2854 keys**.
+
+**2 new `settings.general.*` keys** — Enhanced visual effects toggle:
+
+| Key | EN | NL |
+|-----|----|----|
+| `settings.general.enhancedEffects` | "Enhanced visual effects" | (Dutch equivalent) |
+| `settings.general.enhancedEffectsHint` | "Enable WebGL aurora background (may increase GPU usage)" | (Dutch equivalent) |
+
+**4 new `shortcuts.*` keys** — ShortcutsOverlay (`?` key dialog):
+
+| Key | EN |
+|-----|----|
+| `shortcuts.title` | "Keyboard Shortcuts" |
+| `shortcuts.showHelp` | "Show keyboard shortcuts" |
+| `shortcuts.closeDialog` | "Close dialog" |
+| `shortcuts.chartScrub` | "Drag on a chart to compare a range" |
+
+**2 new `commandPalette.*` keys** — Palette v2 additions:
+
+| Key | EN |
+|-----|----|
+| `commandPalette.recent` | "Recent" |
+| `commandPalette.searchTransactions` | "Search transactions for…" |
+
+Code links: [[apps/frontend/src/components/shared/ShortcutsOverlay.tsx]], [[apps/frontend/src/components/settings/tabs/GeneralTab.tsx]], [[apps/frontend/src/components/shared/CommandPalette.tsx]], [[i18n/source/en.json]], [[i18n/source/nl.json]]
 
 #### Plural forms + PlannedPaymentsPage toasts (June 2026)
 

@@ -1,6 +1,7 @@
 import { memo } from 'react';
 import { Label } from '@/components/ui/label';
 import { Separator } from '@/components/ui/separator';
+import { Switch } from '@/components/ui/switch';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import {
     Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
@@ -209,6 +210,25 @@ export const GeneralTab = memo(function GeneralTab({ localAppSettings, onUpdate 
                     <p className="text-xs text-muted-foreground">
                         {t('settings.general.costBasisMethodHint')}
                     </p>
+                </div>
+
+                <Separator />
+
+                {/* Enhanced visual effects (GPU) */}
+                <div className="flex items-start justify-between gap-4">
+                    <div className="space-y-1">
+                        <Label htmlFor="enhanced-effects" className="text-sm font-semibold">
+                            {t('settings.general.enhancedEffects')}
+                        </Label>
+                        <p className="text-xs text-muted-foreground">
+                            {t('settings.general.enhancedEffectsHint')}
+                        </p>
+                    </div>
+                    <Switch
+                        id="enhanced-effects"
+                        checked={localAppSettings.enhancedEffects ?? false}
+                        onCheckedChange={(v) => onUpdate({ ...localAppSettings, enhancedEffects: v })}
+                    />
                 </div>
             </div>
         </ScrollArea>

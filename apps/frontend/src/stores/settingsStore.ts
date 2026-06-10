@@ -34,6 +34,8 @@ export interface AppSettings {
     aiDefaultModel?: string;
     costBasisMethod: CostBasisMethod;
     adminMode: boolean;
+    /** GPU-heavier visuals (WebGL shader aurora). Default off — see ADR-020/ADR-071. */
+    enhancedEffects: boolean;
 }
 
 // ─── Dashboard settings types ─────────────────────────────────────────────────
@@ -68,6 +70,7 @@ export const DEFAULT_APP_SETTINGS: AppSettings = {
     language: 'en',
     costBasisMethod: 'weighted_avg',
     adminMode: false,
+    enhancedEffects: false,
 };
 
 export const DEFAULT_DASHBOARD_SETTINGS: DashboardSettings = {

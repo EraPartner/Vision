@@ -3,14 +3,17 @@ title: Chart Primitives
 type: component
 status: active
 date: 2026-04-24
-updated: 2026-05-29
-tags: [components, charts, visx, d3, visualization, phase-9, phase-h, accessibility, aria-label, screen-reader, i18n, localization]
-description: Low-level chart primitives built on visx + d3, replacing Recharts with design-token-aware styling. 2026-05-29: chartAria.ts generators now accept t()/kindKey for fully localized chart screen-reader summaries across all 7 chart types and both supported languages.
+updated: 2026-06-10
+tags: [components, charts, visx, d3, visualization, phase-9, phase-h, accessibility, aria-label, screen-reader, i18n, localization, premium-v3, chart-scrub, chart-sync, chart-skeleton, sweep-reveal, june-2026]
+description: Low-level chart primitives built on visx + d3, replacing Recharts with design-token-aware styling. 2026-05-29: chartAria.ts generators now accept t()/kindKey for fully localized chart screen-reader summaries across all 7 chart types and both supported languages. June 2026 Premium v3 (ADR-071): scrubbable prop + useChartScrub (scrub-to-compare), syncId prop + ChartSyncContext (synced crosshairs), sweep reveal on AreaChart, ChartSkeleton ghost waveform.
 aliases: [charts, chart-components, visx-charts, charting, visualization]
 related_code:
   - apps/frontend/src/components/charts
   - apps/frontend/src/components/charts/chartAria.ts
   - apps/frontend/src/components/charts/__tests__/chartAria.test.ts
+  - apps/frontend/src/components/charts/scrub.tsx
+  - apps/frontend/src/components/charts/ChartSyncContext.tsx
+  - apps/frontend/src/components/charts/ChartSkeleton.tsx
 ---
 
 # Chart Primitives
@@ -54,6 +57,14 @@ See [[docs/adr/018-visx-d3-chart-migration|ADR-018: visx/d3 Chart Migration]] fo
 | `ChartTooltip` | Shared tooltip renderer with design-token colors |
 | `ChartLegend` | Shared legend component respecting reduced-motion |
 | `ChartAxis` | Shared axis renderer (x, y) with token-based styling |
+| `ChartSkeleton` | Ghost waveform + shimmer loading placeholder (Premium v3) |
+
+### Interaction Modules (Premium v3)
+
+| Module | Exports | Purpose |
+|--------|---------|---------|
+| `scrub.tsx` | `useChartScrub`, `formatScrubDelta` | Scrub-to-compare: pointer-drag range, glass Δ pill |
+| `ChartSyncContext.tsx` | `ChartSyncProvider`, `useChartSync` | Synced crosshairs across charts sharing a `syncId` |
 
 ## Usage Patterns
 
@@ -385,8 +396,59 @@ function FlowTab() {
 
 ---
 
+## Premium v3 Chart Features (ADR-071, June 2026)
+
+### Scrub-to-Compare (`scrubbable` prop)
+
+**File:** [[apps/frontend/src/components/charts/scrub.tsx]]
+
+`AreaChart` and `LineChart` accept a `scrubbable?: boolean` prop. When enabled:
+
+- A `useChartScrub` hook tracks pointer events via pointer capture (works on desktop and touch).
+- While the user drags, a semi-transparent range band rect is drawn over the chart.
+- A glass Δ pill shows the absolute change and percentage change across the selected range (`formatScrubDelta`).
+- The standard `ChartTooltip` is suppressed during scrubbing.
+- Pointer capture ensures the drag works even when the pointer leaves the SVG element.
+
+**Enabled on:** `CashFlowComparisonChart`, `ForecastInner`, `ForecastInnerRolling`, `BankBalancesWidget`, `PerformancePage` (×2), `NetWorthChart`.
+
+### Synced Crosshairs (`syncId` prop + `ChartSyncContext`)
+
+**Files:** [[apps/frontend/src/components/charts/ChartSyncContext.tsx]]
+
+Charts sharing the same `syncId` string under a `ChartSyncProvider` mirror hover position:
+
+- `ChartSyncProvider` maintains a shared hovered x-key via React context.
+- Each participating chart calls `useChartSync(syncId)` to read the hovered position and to publish its own hover.
+- **Domain guard**: If the hovered x-key falls outside a chart's domain, no crosshair is shown (prevents edge-pinning across disjoint timelines).
+- **Dashboard usage**: All dashboard time-series share `syncId="dashboard-timeline"`. `ChartSyncProvider` wraps `DashboardPage`.
+- **BarChart excluded**: The categorical `MonthlyTrendsChart` uses a band scale and is not synced.
+
+```tsx
+// DashboardPage wraps with provider
+<ChartSyncProvider>
+  <CashFlowComparisonChart syncId="dashboard-timeline" ... />
+  <BankBalancesWidget syncId="dashboard-timeline" ... />
+</ChartSyncProvider>
+```
+
+### Sweep Reveal (AreaChart)
+
+`AreaChart` animates a `clipPath` on mount: a `motion.rect` inside a `<defs>` clipPath starts at `width=0` and expands to the full chart width. The series group is clipped to this rect, producing a left-to-right sweep reveal. Skipped when `useReducedMotion()` is true.
+
+`LineChart` retains its per-series fade-in; sweep is area-only.
+
+### ChartSkeleton
+
+**File:** [[apps/frontend/src/components/charts/ChartSkeleton.tsx]]
+
+Renders an SVG ghost waveform path with a shimmer animation as a chart loading state. Used in `DashboardPage` to replace plain rectangle `Skeleton` placeholders for chart card sections. Accepts a `height` prop.
+
+---
+
 ## Related Documentation
 
+- [[docs/adr/071-premium-v3-effects-toggle|ADR-071: Premium v3 (chart scrub, sync, skeleton)]]
 - [[docs/adr/018-visx-d3-chart-migration|ADR-018: visx/d3 Chart Migration]]
 - [[docs/adr/017-liquid-glass-aesthetic-design-system|ADR-017: Liquid Glass Aesthetic]]
 - [[docs/adr/008-performance-page-server-computed-response|ADR-008: Performance Page Server-Computed Response]]
