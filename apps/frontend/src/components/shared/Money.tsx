@@ -45,14 +45,14 @@ export function Money({ amount, currency, fractionDigits, signed = false, classN
             {parts.map((part, i) => {
                 if (part.type === "currency") {
                     return (
-                        <span key={i} className="text-[0.7em] font-medium opacity-80 self-start mt-[0.08em]">
+                        <span key={i} className="text-[0.85em] font-medium opacity-85 self-start mt-[0.04em] mr-[0.06em]">
                             {part.value}
                         </span>
                     );
                 }
                 if (part.type === "decimal" || part.type === "fraction") {
                     return (
-                        <span key={i} className="text-[0.78em] opacity-70">
+                        <span key={i} className="text-[0.88em] opacity-75">
                             {part.value}
                         </span>
                     );

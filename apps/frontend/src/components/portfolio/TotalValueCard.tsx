@@ -10,6 +10,7 @@
  */
 
 import { Sparkline as ChartSparkline } from '@/components/charts';
+import { Money } from "@/components/shared/Money";
 import { ArrowDownRight, ArrowUpRight, DollarSign, TrendingDown, TrendingUp } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { cn } from '@/lib/utils';
@@ -121,7 +122,6 @@ function PerformerRow({
   entry,
   label,
   kind,
-  formatCurrency,
 }: {
   entry?: PerformerEntry;
   label: string;
@@ -154,7 +154,7 @@ function PerformerRow({
         </p>
         <p className="text-[10px] leading-tight mt-0.5">
           {entry.gainLossInTarget >= 0 ? '+' : ''}
-          {formatCurrency(entry.gainLossInTarget)}
+          <Money amount={entry.gainLossInTarget} />
         </p>
       </div>
     </div>

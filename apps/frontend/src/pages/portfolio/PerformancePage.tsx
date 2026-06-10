@@ -1,4 +1,5 @@
 import { useMemo, useState } from "react";
+import { Money } from "@/components/shared/Money";
 import { useQuery, keepPreviousData } from "@tanstack/react-query";
 import { apiClient } from "@/lib/api";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
@@ -432,16 +433,16 @@ function TotalValueCard({
             <CardContent className="space-y-4">
                 <div>
                     <div className="text-3xl font-bold text-foreground leading-tight">
-                        {formatCurrency(currentValue, currency, locale)}
+                        <Money amount={currentValue} currency={currency} />
                     </div>
                     <div className="mt-2 flex flex-wrap items-baseline gap-x-4 gap-y-1 text-xs">
                         <span className="text-muted-foreground">
-                            {labels.invested}: <span className="font-medium text-foreground">{formatCurrency(totalInvested, currency, locale)}</span>
+                            {labels.invested}: <span className="font-medium text-foreground"><Money amount={totalInvested} currency={currency} /></span>
                         </span>
                         <span className="text-muted-foreground">
                             {labels.netPL}:{" "}
                             <span className={`font-semibold ${gainToneClass}`}>
-                                {isGain ? "+" : ""}{formatCurrency(totalGainLoss, currency, locale)}
+                                {isGain ? "+" : ""}<Money amount={totalGainLoss} currency={currency} />
                             </span>{" "}
                             <span className={`font-medium ${gainToneClass}`}>
                                 ({isGain ? "+" : ""}{totalReturnPct.toFixed(2)}%)
@@ -484,7 +485,7 @@ interface AssetAllocationBarProps {
     labels: { allocation: string; stocksEtfs: string; crypto: string; metals: string };
 }
 
-function AssetAllocationBar({ split, currency, locale, labels }: AssetAllocationBarProps) {
+function AssetAllocationBar({ split, currency, labels }: AssetAllocationBarProps) {
     const rows = [
         { key: "stocksEtfs", label: labels.stocksEtfs, pct: split.stocksEtfs.pct, value: split.stocksEtfs.value, color: "bg-rose-500" },
         { key: "crypto", label: labels.crypto, pct: split.crypto.pct, value: split.crypto.value, color: "bg-emerald-500" },
@@ -514,7 +515,7 @@ function AssetAllocationBar({ split, currency, locale, labels }: AssetAllocation
                             {r.label}
                         </span>
                         <span className="text-foreground font-medium tabular-nums">
-                            {formatCurrency(r.value, currency, locale)}{" "}
+                            <Money amount={r.value} currency={currency} />{" "}
                             <span className="text-muted-foreground font-normal">({r.pct.toFixed(1)}%)</span>
                         </span>
                     </li>

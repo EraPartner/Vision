@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
+import { Money } from "@/components/shared/Money";
 import { useQuery } from "@tanstack/react-query";
 import { apiClient } from "@/lib/api";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -117,7 +118,7 @@ export function RecipientInsightsTab({ statisticsTopRecipientsChart }: Recipient
       key: "totalSpend",
       header: t('insights.col.totalSpend'),
       className: "text-right",
-      render: (row: RecipientDetailRow) => <span className="font-mono">{formatCurrency(row.totalSpend)}</span>,
+      render: (row: RecipientDetailRow) => <span className="font-mono"><Money amount={row.totalSpend} /></span>,
     },
     {
       key: "transactionCount",
@@ -128,7 +129,7 @@ export function RecipientInsightsTab({ statisticsTopRecipientsChart }: Recipient
       key: "avgAmount",
       header: t('insights.col.avgAmount'),
       className: "text-right",
-      render: (row: RecipientDetailRow) => <span className="font-mono">{formatCurrency(row.avgAmount)}</span>,
+      render: (row: RecipientDetailRow) => <span className="font-mono"><Money amount={row.avgAmount} /></span>,
     },
     {
       key: "firstSeen",
@@ -200,7 +201,7 @@ export function RecipientInsightsTab({ statisticsTopRecipientsChart }: Recipient
             <DollarSign className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">{formatCurrency(totalTopSpend)}</div>
+            <div className="text-2xl font-bold"><Money amount={totalTopSpend} /></div>
             <p className="text-xs text-muted-foreground">{totalTopTx} {t('insights.transactionCount').toLowerCase()}</p>
           </CardContent>
         </Card>
@@ -210,7 +211,7 @@ export function RecipientInsightsTab({ statisticsTopRecipientsChart }: Recipient
             <Hash className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">{formatCurrency(avgTopAmount)}</div>
+            <div className="text-2xl font-bold"><Money amount={avgTopAmount} /></div>
             <p className="text-xs text-muted-foreground">{t('insights.acrossTop10')}</p>
           </CardContent>
         </Card>

@@ -123,3 +123,9 @@ VirtualDataTable row-render seam — read components/shared/VirtualDataTable.tsx
 (~610 lines) before attempting. V12 Electron block deliberately deferred to a
 focused session (security posture: contextIsolation on, nodeIntegration off,
 sandbox on; cannot be visually verified headless). i18n now 2862 keys.
+
+### Money typography sweep (2026-06-10 night, user request)
+- Money sizing fixed: currency 0.7em→0.85em, fraction 0.78em→0.88em, raise reduced (was unreadably small in table cells).
+- Adopted across: OwesPage (5 sites incl. table cell), PlannedPaymentsPage (table cell + monthly total; ExecutionHistoryDialog, LinkTransactionDialog), TotalValueCard gain/loss, PerformancePage (current value, invested, gain/loss, allocation rows), PerformanceBreakdown (class value/gain, top/bottom performers), RecipientInsightsPage + RecipientInsightsTab (table cells + KPI tiles). Dead formatDisplayCurrency helpers removed.
+- NOT converted (strings by necessity): chart tick/tooltip formatter props, t() interpolations ({amount} placeholders), TransactionInfoDialog value strings, StatCard subtitle strings, title attrs.
+- Suspicious pre-existing: RecipientInsightsPage:262/279 call formatCurrency(x, 2) — `2` lands in the currency parameter. Not touched; worth an audit item.

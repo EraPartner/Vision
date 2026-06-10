@@ -1,4 +1,5 @@
 import { useState, useCallback, useEffect } from "react";
+import { Money } from "@/components/shared/Money";
 import logger from "@/lib/logger";
 import { ExternalLink } from "lucide-react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
@@ -9,7 +10,6 @@ import { useAppSettings } from "@/contexts/AppSettingsContext";
 import { apiClient } from "@/lib/api";
 import { useNavigate } from "react-router-dom";
 import type { PlannedPayment } from "@/hooks/usePlannedPayments";
-import { formatCurrency, numberFormatToLocale } from "@/utils/currency";
 
 type ExecutionHistoryItem = {
   plannedPaymentId: number;
@@ -33,9 +33,6 @@ interface ExecutionHistoryDialogProps {
 export function ExecutionHistoryDialog({ open, onOpenChange, payments }: ExecutionHistoryDialogProps) {
   const { t } = useLanguage();
   const { appSettings } = useAppSettings();
-  const locale = numberFormatToLocale(appSettings.numberFormat);
-  const formatDisplayCurrency = (amount: number, currency?: string) =>
-    formatCurrency(amount, currency || appSettings.defaultCurrency, locale);
   const navigate = useNavigate();
 
   const [historyLoading, setHistoryLoading] = useState(false);
@@ -152,7 +149,7 @@ export function ExecutionHistoryDialog({ open, onOpenChange, payments }: Executi
                   </div>
                   <div className="col-span-2 flex items-center justify-end gap-2">
                     <span className={`tabular-nums font-semibold ${item.amount < 0 ? 'text-destructive' : 'text-accent'}`}>
-                      {item.amount < 0 ? '−' : '+'}{formatDisplayCurrency(Math.abs(item.amount), item.currency)}
+                      {item.amount < 0 ? '−' : '+'}<Money amount={Math.abs(item.amount)} currency={item.currency} />
                     </span>
                     <Button
                       variant="ghost"

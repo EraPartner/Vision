@@ -1,4 +1,5 @@
 import { useMemo } from "react";
+import { Money } from "@/components/shared/Money";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { formatCurrency, numberFormatToLocale } from "@/utils/currency";
 import { useLanguage } from "@/contexts/LanguageContext";
@@ -112,10 +113,10 @@ export default function PerformanceBreakdown({ heatmapData, breakdownSummary }: 
                                 </span>
                             </div>
                             <div className="text-xl font-bold text-foreground">
-                                {formatCurrency(classValue, defaultCurrency, locale)}
+                                <Money amount={classValue} currency={defaultCurrency} />
                             </div>
                             <div className={`text-sm font-medium mt-1 ${classGain >= 0 ? "text-accent" : "text-destructive"}`}>
-                                {classGain >= 0 ? "+" : ""}{formatCurrency(classGain, defaultCurrency, locale)} ({classPct >= 0 ? "+" : ""}{classPct.toFixed(1)}%)
+                                {classGain >= 0 ? "+" : ""}<Money amount={classGain} currency={defaultCurrency} /> ({classPct >= 0 ? "+" : ""}{classPct.toFixed(1)}%)
                             </div>
                             <div className="text-xs text-muted-foreground mt-1">
                                 {t('portfolio.invested', { amount: formatCurrency(classInvested, defaultCurrency, locale) })}
@@ -221,7 +222,7 @@ export default function PerformanceBreakdown({ heatmapData, breakdownSummary }: 
                                             {inv.gainLossPercent >= 0 ? "+" : ""}{inv.gainLossPercent.toFixed(1)}%
                                         </p>
                                         <p className="text-xs text-muted-foreground">
-                                            {formatCurrency(inv.gainLoss, defaultCurrency, locale)}
+                                            <Money amount={inv.gainLoss} currency={defaultCurrency} />
                                         </p>
                                     </div>
                                 </div>
@@ -250,7 +251,7 @@ export default function PerformanceBreakdown({ heatmapData, breakdownSummary }: 
                                             {inv.gainLossPercent >= 0 ? "+" : ""}{inv.gainLossPercent.toFixed(1)}%
                                         </p>
                                         <p className="text-xs text-muted-foreground">
-                                            {formatCurrency(inv.gainLoss, defaultCurrency, locale)}
+                                            <Money amount={inv.gainLoss} currency={defaultCurrency} />
                                         </p>
                                     </div>
                                 </div>

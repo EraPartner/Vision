@@ -1,4 +1,5 @@
 import { useState, useEffect } from "react";
+import { Money } from "@/components/shared/Money";
 import { toast } from "sonner";
 import logger from "@/lib/logger";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
@@ -14,7 +15,6 @@ import { apiClient } from "@/lib/api";
 import { getRecipient } from "@/lib/api/recipients";
 import type { Transaction } from "@/types/api";
 import type { PlannedPayment } from "@/hooks/usePlannedPayments";
-import { formatCurrency, numberFormatToLocale } from "@/utils/currency";
 
 interface LinkTransactionDialogProps {
   open: boolean;
@@ -26,9 +26,6 @@ interface LinkTransactionDialogProps {
 export function LinkTransactionDialog({ open, onOpenChange, payment, onExecute }: LinkTransactionDialogProps) {
   const { t } = useLanguage();
   const { appSettings } = useAppSettings();
-  const locale = numberFormatToLocale(appSettings.numberFormat);
-  const formatDisplayCurrency = (amount: number, currency?: string) =>
-    formatCurrency(amount, currency || appSettings.defaultCurrency, locale);
 
   const [txSearchQuery, setTxSearchQuery] = useState("");
   const [candidateTxs, setCandidateTxs] = useState<Transaction[]>([]);
@@ -262,7 +259,7 @@ export function LinkTransactionDialog({ open, onOpenChange, payment, onExecute }
                     </div>
                   </div>
                   <div className="text-right">
-                    <div className={`font-semibold ${tx.amount < 0 ? 'text-destructive' : 'text-accent'}`}>{tx.amount < 0 ? '−' : '+'}{formatDisplayCurrency(Math.abs(tx.amount), tx.currency)}</div>
+                    <div className={`font-semibold ${tx.amount < 0 ? 'text-destructive' : 'text-accent'}`}>{tx.amount < 0 ? '−' : '+'}<Money amount={Math.abs(tx.amount)} currency={tx.currency} /></div>
                     <div className="text-xs text-muted-foreground">#{tx.id}</div>
                   </div>
                 </label>

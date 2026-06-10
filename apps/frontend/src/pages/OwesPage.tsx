@@ -11,6 +11,7 @@ import { formatCurrency, numberFormatToLocale } from "@/utils/currency";
 import { parseDecimal } from "@/lib/decimal";
 import { ArrowLeft, Check, DollarSign, HandCoins, Trash2, Users } from "lucide-react";
 import { PageHeader } from "@/components/shared/PageHeader";
+import { Money } from "@/components/shared/Money";
 import { Progress } from "@/components/ui/progress";
 import { useConfirmDialog } from "@/hooks/useConfirmDialog";
 import { useNavigate } from "react-router-dom";
@@ -63,7 +64,7 @@ export default function OwesPage() {
                         <div className="text-center">
                             <p className="text-sm text-muted-foreground">{t('owesPage.totalOutstanding')}</p>
                             <p className="text-3xl font-bold text-primary mt-1">
-                                {formatCurrency(totalOwed, defaultCurrency, locale)}
+                                <Money amount={totalOwed} currency={defaultCurrency} />
                             </p>
                             <p className="text-sm text-muted-foreground mt-1">
                                 {items.length === 1 ? t('owesPage.fromPerson', { n: items.length }) : t('owesPage.fromPeople', { n: items.length })}
@@ -109,7 +110,7 @@ export default function OwesPage() {
                                     <div className="flex justify-between text-sm">
                                         <span className="text-muted-foreground">{t('owesPage.remaining')}</span>
                                         <span className="font-semibold text-primary">
-                                            {formatCurrency(item.remaining, defaultCurrency, locale)}
+                                            <Money amount={item.remaining} currency={defaultCurrency} />
                                         </span>
                                     </div>
                                     <Progress value={progress} className="h-2" />
@@ -262,13 +263,13 @@ function RecipientOwesDetail({ recipient, onBack }: { recipient: { id: number; n
                                                 <div className="flex items-center gap-3 mt-2">
                                                     <Progress value={progress} className="h-1.5 flex-1" />
                                                     <span className="text-xs text-muted-foreground whitespace-nowrap">
-                                                        {formatCurrency(split.amount_paid, defaultCurrency, locale)} / {formatCurrency(split.amount, defaultCurrency, locale)}
+                                                        <Money amount={split.amount_paid} currency={defaultCurrency} /> / <Money amount={split.amount} currency={defaultCurrency} />
                                                     </span>
                                                 </div>
                                             </div>
                                             <div className="flex items-center gap-1 shrink-0">
                                                 <span className="text-sm font-semibold text-primary mr-2">
-                                                    {formatCurrency(split.remaining, defaultCurrency, locale)}
+                                                    <Money amount={split.remaining} currency={defaultCurrency} />
                                                 </span>
                                                 <Button
                                                     variant="ghost" size="icon" className="icon-touch-target text-accent hover:text-accent"
@@ -452,7 +453,7 @@ function RecentRecipientTransactionsTable({ recipientId, recipientName }: { reci
             minWidth: 100,
             render: (row: RecentRecipientTransactionRow) => (
                 <span className={`font-mono whitespace-nowrap ${row.amount >= 0 ? 'text-accent' : 'text-destructive'}`}>
-                    {row.amount >= 0 ? '+' : '-'}{formatCurrency(Math.abs(row.amount), row.currency, locale)}
+                    {row.amount >= 0 ? '+' : '-'}<Money amount={Math.abs(row.amount)} currency={row.currency} />
                 </span>
             ),
         },

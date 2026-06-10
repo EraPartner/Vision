@@ -1,4 +1,5 @@
 import { useState, useMemo } from "react";
+import { Money } from "@/components/shared/Money";
 import logger from "@/lib/logger";
 import { Plus, CalendarClock, Repeat, Trash2, Pencil, ToggleLeft, ToggleRight, AlertCircle, CheckCircle2, Circle, Eye, EyeOff, History } from "lucide-react";
 import { PageHeader } from "@/components/shared/PageHeader";
@@ -18,8 +19,6 @@ import { usePlannedPayments, type PlannedPayment } from "@/hooks/usePlannedPayme
 import { useLanguage } from '@/contexts/LanguageContext';
 import { useAppSettings } from "@/contexts/AppSettingsContext";
 import { useConfirmDialog } from "@/hooks/useConfirmDialog";
-import { formatCurrency } from "@/utils/currency";
-import { numberFormatToLocale } from "@/utils/currency";
 
 const FREQ_LABEL_KEYS: Record<string, string> = {
   daily: 'plannedPage.freq.daily',
@@ -70,9 +69,6 @@ type TableRow = PlannedPayment & { _idx: number } & Record<string, unknown>;
 export default function PlannedPaymentsPage() {
   const { t } = useLanguage();
   const { appSettings } = useAppSettings();
-  const locale = numberFormatToLocale(appSettings.numberFormat);
-  const formatDisplayCurrency = (amount: number, currency?: string) =>
-    formatCurrency(amount, currency || appSettings.defaultCurrency, locale);
 
   const [showAll, setShowAll] = useState(false);
   const { payments, addPayment, updatePayment, deletePayment, toggleActive, executePayment, loading, error } = usePlannedPayments(showAll);
@@ -192,7 +188,7 @@ export default function PlannedPaymentsPage() {
       defaultWidth: 120,
       render: (row: TableRow) => (
         <span className={`font-semibold tabular-nums ${row.amount < 0 ? "text-destructive" : "text-accent"}`}>
-          {row.amount < 0 ? "−" : "+"}{formatDisplayCurrency(Math.abs(row.amount), row.currency)}
+          {row.amount < 0 ? "−" : "+"}<Money amount={Math.abs(row.amount)} currency={row.currency} />
         </span>
       ),
     },
@@ -451,7 +447,7 @@ export default function PlannedPaymentsPage() {
               </CardTitle>
             </CardHeader>
             <CardContent>
-              <p className="text-2xl font-bold tabular-nums">{formatDisplayCurrency(totalMonthly)}</p>
+              <p className="text-2xl font-bold tabular-nums"><Money amount={totalMonthly} /></p>
             </CardContent>
           </Card>
           <Card className="group relative overflow-hidden glass-regular premium-frame micro-lift">
