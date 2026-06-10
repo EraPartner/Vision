@@ -47,6 +47,7 @@ import { usePortfolioPrefetch } from "@/hooks/usePortfolioPrefetch";
 import { useAppSettings } from "@/contexts/AppSettingsContext";
 import { springs } from "@/lib/motion";
 import { preloadRoute } from "@/lib/routePreload";
+import { GO_TO_ROUTES } from "@/hooks/useGoToShortcuts";
 
 /**
  * The active-route accent rail as a shared layout element: framer-motion
@@ -62,6 +63,14 @@ function ActiveRail() {
       transition={reducedMotion ? { duration: 0 } : springs.snappy}
     />
   );
+}
+
+// Collapsed-rail tooltips double as shortcut teachers: "Transactions · G T".
+const GO_TO_BY_URL = new Map(GO_TO_ROUTES.map((r) => [r.url, r.key]));
+
+function withGoToHint(title: string, url: string): string {
+  const key = GO_TO_BY_URL.get(url);
+  return key ? `${title} · G ${key.toUpperCase()}` : title;
 }
 
 function isActiveRoute(itemUrl: string, pathname: string) {
@@ -206,7 +215,7 @@ export function AppSidebar() {
                 <SidebarMenuButton
                   asChild
                   isActive={isActiveRoute("/ai-chat", location.pathname)}
-                  tooltip={t('nav.aiChat')}
+                  tooltip={withGoToHint(t('nav.aiChat'), "/ai-chat")}
                 >
                   <NavLink
                     to="/ai-chat"
@@ -266,7 +275,7 @@ export function AppSidebar() {
                   const isActive = isActiveRoute(item.url, location.pathname);
                   return (
                     <SidebarMenuItem key={item.url}>
-                      <SidebarMenuButton asChild isActive={isActive} tooltip={item.title}>
+                      <SidebarMenuButton asChild isActive={isActive} tooltip={withGoToHint(item.title, item.url)}>
                         <NavLink
                           to={item.url}
                           onMouseEnter={() => handleNavHover(item.url)}
@@ -297,7 +306,7 @@ export function AppSidebar() {
                     : isActiveRoute(item.url, location.pathname);
                   return (
                     <SidebarMenuItem key={item.url}>
-                      <SidebarMenuButton asChild isActive={isActive} tooltip={item.title}>
+                      <SidebarMenuButton asChild isActive={isActive} tooltip={withGoToHint(item.title, item.url)}>
                         <NavLink
                           to={item.url}
                           onMouseEnter={() => handleNavHover(item.url)}

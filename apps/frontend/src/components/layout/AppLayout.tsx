@@ -33,11 +33,25 @@ export function AppLayout({ children }: AppLayoutProps) {
     const [settingsOpen, setSettingsOpen] = useState(false);
     const [settingsDefaultTab, setSettingsDefaultTab] = useState('general');
     const [paletteOpen, setPaletteOpen] = useState(false);
+    const [shortcutsOpen, setShortcutsOpen] = useState(false);
 
     const openSettingsOnTab = (tab: string) => {
         setSettingsDefaultTab(tab);
         setSettingsOpen(true);
     };
+
+    // ⌘, — the macOS settings convention (always free in Electron).
+    useEffect(() => {
+        const onKeyDown = (e: KeyboardEvent) => {
+            if (e.key === ',' && (e.metaKey || e.ctrlKey) && !e.altKey && !e.shiftKey) {
+                e.preventDefault();
+                setSettingsDefaultTab('general');
+                setSettingsOpen(true);
+            }
+        };
+        document.addEventListener('keydown', onKeyDown);
+        return () => document.removeEventListener('keydown', onKeyDown);
+    }, []);
     const { mode, schedule, setMode, setSchedule } = useTheme();
     const { t } = useLanguage();
     const { workspace } = useWorkspace();
@@ -176,7 +190,7 @@ export function AppLayout({ children }: AppLayoutProps) {
                             size="icon"
                             onClick={() => setSettingsOpen(true)}
                             className="premium-icon-action ml-2"
-                            title={t('layout.settings')}
+                            title={`${t('layout.settings')} (⌘,)`}
                             aria-label={t('layout.openSettings')}
                         >
                             <Settings className="h-5 w-5" />
@@ -189,8 +203,13 @@ export function AppLayout({ children }: AppLayoutProps) {
                     </main>
                 </div>
             </div>
-            <CommandPalette open={paletteOpen} onOpenChange={setPaletteOpen} onOpenSettings={openSettingsOnTab} />
-            <ShortcutsOverlay />
+            <CommandPalette
+                open={paletteOpen}
+                onOpenChange={setPaletteOpen}
+                onOpenSettings={openSettingsOnTab}
+                onOpenShortcuts={() => setShortcutsOpen(true)}
+            />
+            <ShortcutsOverlay open={shortcutsOpen} onOpenChange={setShortcutsOpen} />
             <DashboardSettingsDialog open={settingsOpen} onOpenChange={(o) => { setSettingsOpen(o); if (!o) setSettingsDefaultTab('general'); }} defaultTab={settingsDefaultTab} />
             {!onboardingLoading && (
                 <OnboardingWizard open={!onboardingComplete} onComplete={completeOnboarding} onOpenSettings={openSettingsOnTab} />

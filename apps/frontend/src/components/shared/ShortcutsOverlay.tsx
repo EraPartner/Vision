@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect } from "react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { isTypingTarget } from "@/lib/keyboard";
@@ -14,32 +14,38 @@ function Key({ children }: { children: React.ReactNode }) {
     );
 }
 
-/** `?` opens a glass sheet listing the app's real keyboard shortcuts. */
-export function ShortcutsOverlay() {
-    const [open, setOpen] = useState(false);
+interface ShortcutsOverlayProps {
+    open: boolean;
+    onOpenChange: (open: boolean) => void;
+}
+
+/** `?` (or the palette's "Keyboard shortcuts" action) opens a glass sheet
+ *  listing the app's real keyboard shortcuts. */
+export function ShortcutsOverlay({ open, onOpenChange }: ShortcutsOverlayProps) {
     const { t } = useLanguage();
 
     useEffect(() => {
         const onKeyDown = (e: KeyboardEvent) => {
             if (e.key === "?" && !e.metaKey && !e.ctrlKey && !e.altKey && !isTypingTarget(e.target)) {
                 e.preventDefault();
-                setOpen((o) => !o);
+                onOpenChange(!open);
             }
         };
         document.addEventListener("keydown", onKeyDown);
         return () => document.removeEventListener("keydown", onKeyDown);
-    }, []);
+    }, [open, onOpenChange]);
 
     const mod = IS_MAC ? "⌘" : "Ctrl";
     const general: Array<{ keys: React.ReactNode; label: string }> = [
         { keys: <><Key>{mod}</Key> <Key>K</Key></>, label: t("commandPalette.openLabel") },
+        { keys: <><Key>{mod}</Key> <Key>,</Key></>, label: t("layout.settings") },
         { keys: <><Key>{mod}</Key> <Key>B</Key></>, label: t("aria.toggleSidebar") },
         { keys: <Key>?</Key>, label: t("shortcuts.showHelp") },
         { keys: <Key>Esc</Key>, label: t("shortcuts.closeDialog") },
     ];
 
     return (
-        <Dialog open={open} onOpenChange={setOpen}>
+        <Dialog open={open} onOpenChange={onOpenChange}>
             <DialogContent className="max-w-md">
                 <DialogHeader>
                     <DialogTitle className="font-display">{t("shortcuts.title")}</DialogTitle>

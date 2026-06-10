@@ -90,3 +90,11 @@ Prioritized; none started. Next agent: confirm with user before implementing.
 10. **Shader aurora visual iteration** — user must eyeball current constants (tuned blind: smoothstep 0.34-0.68/0.38-0.72, alpha 0.65, opacity 60/80%); consider exposing intensity sub-setting if still too subtle/strong.
 
 Also outstanding: packaged-Electron M1 profiling, e2e visual snapshot regen (`bun run test:e2e:visual` needs running stack).
+
+## Review pass 2 (2026-06-10 late) — Apple-native + learnable shortcuts, donut morph
+
+- ⌘, opens Settings (AppLayout listener); settings button title shows it.
+- Learnability: palette items show G-sequences via CommandShortcut (GoToHint, GO_TO_BY_URL map), settings action shows ⌘,, new "Keyboard shortcuts" palette action opens overlay (state lifted to AppLayout; ShortcutsOverlay now controlled via props), sidebar tooltips append " · G T" (withGoToHint in AppSidebar), overlay lists ⌘, row.
+- DonutChart: floating ChartTooltip REMOVED; in-hollow center morph (AnimatePresence crossfade, hovered slice name + dot + value) + arc whileHover lift (transformBox fill-box). Hover color resolved from palette at arc level.
+- Verified: tsc clean, lint 0 errors, component tests 300 pass. Committed.
+- Still open from v4 list: items 2-9 (n quick-create, empty-state sweep, portfolio DeltaPill, sticky glass headers, sheet polish, onboarding pass) + shader visual iteration by user + M1 profiling + e2e snapshots.

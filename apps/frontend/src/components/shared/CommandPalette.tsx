@@ -8,6 +8,7 @@ import {
     CommandItem,
     CommandList,
     CommandSeparator,
+    CommandShortcut,
 } from "@/components/ui/command";
 import {
     ArrowLeftRight,
@@ -43,6 +44,8 @@ import { useQuery } from "@tanstack/react-query";
 import { apiClient } from "@/lib/api";
 import { useDebounce } from "@/hooks/useDebounce";
 import { LOCAL_STORAGE_KEYS } from "@/lib/localStorage-keys";
+import { GO_TO_ROUTES } from "@/hooks/useGoToShortcuts";
+import { Keyboard } from "lucide-react";
 
 interface PaletteEntry {
     titleKey: string;
@@ -78,6 +81,15 @@ const PORTFOLIO_PAGES: PaletteEntry[] = [
     { titleKey: "nav.taxOverview", url: "/portfolio/tax", icon: Landmark },
 ];
 
+// url → go-to key, so palette entries display their keyboard sequence.
+const GO_TO_BY_URL = new Map(GO_TO_ROUTES.map((r) => [r.url, r.key]));
+
+function GoToHint({ url }: { url: string }) {
+    const key = GO_TO_BY_URL.get(url);
+    if (!key) return null;
+    return <CommandShortcut>G {key.toUpperCase()}</CommandShortcut>;
+}
+
 const RECENTS_KEY = LOCAL_STORAGE_KEYS.PALETTE_RECENTS;
 const MAX_RECENTS = 5;
 
@@ -102,9 +114,10 @@ interface CommandPaletteProps {
     open: boolean;
     onOpenChange: (open: boolean) => void;
     onOpenSettings: (tab: string) => void;
+    onOpenShortcuts: () => void;
 }
 
-export function CommandPalette({ open, onOpenChange, onOpenSettings }: CommandPaletteProps) {
+export function CommandPalette({ open, onOpenChange, onOpenSettings, onOpenShortcuts }: CommandPaletteProps) {
     const navigate = useNavigate();
     const { t } = useLanguage();
     const { setMode } = useTheme();
@@ -224,6 +237,7 @@ export function CommandPalette({ open, onOpenChange, onOpenSettings }: CommandPa
                             <CommandItem key={`recent-${page.url}`} value={`recent ${t(page.titleKey)} ${page.url}`} onSelect={() => goTo(page.url)}>
                                 <page.icon className="text-muted-foreground" />
                                 <span>{t(page.titleKey)}</span>
+                                <GoToHint url={page.url} />
                             </CommandItem>
                         ))}
                     </CommandGroup>
@@ -233,6 +247,7 @@ export function CommandPalette({ open, onOpenChange, onOpenSettings }: CommandPa
                         <CommandItem key={page.url} value={`${t(page.titleKey)} ${page.url}`} onSelect={() => goTo(page.url)}>
                             <page.icon className="text-muted-foreground" />
                             <span>{t(page.titleKey)}</span>
+                            <GoToHint url={page.url} />
                         </CommandItem>
                     ))}
                 </CommandGroup>
@@ -242,6 +257,7 @@ export function CommandPalette({ open, onOpenChange, onOpenSettings }: CommandPa
                         <CommandItem key={page.url} value={`${t(page.titleKey)} ${page.url}`} onSelect={() => goTo(page.url)}>
                             <page.icon className="text-muted-foreground" />
                             <span>{t(page.titleKey)}</span>
+                            <GoToHint url={page.url} />
                         </CommandItem>
                     ))}
                 </CommandGroup>
@@ -271,6 +287,12 @@ export function CommandPalette({ open, onOpenChange, onOpenSettings }: CommandPa
                     <CommandItem value={t("layout.settings")} onSelect={() => runAction(() => onOpenSettings("general"))}>
                         <Settings className="text-muted-foreground" />
                         <span>{t("layout.settings")}</span>
+                        <CommandShortcut>⌘,</CommandShortcut>
+                    </CommandItem>
+                    <CommandItem value={t("shortcuts.title")} onSelect={() => runAction(onOpenShortcuts)}>
+                        <Keyboard className="text-muted-foreground" />
+                        <span>{t("shortcuts.title")}</span>
+                        <CommandShortcut>?</CommandShortcut>
                     </CommandItem>
                 </CommandGroup>
             </CommandList>
