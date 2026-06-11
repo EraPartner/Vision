@@ -1,6 +1,6 @@
 'use strict';
 
-const { app, BrowserWindow, dialog, Menu, Notification, shell, ipcMain, safeStorage, session, systemPreferences } = require('electron');
+const { app, BrowserWindow, dialog, Menu, Notification, screen, shell, ipcMain, safeStorage, session, systemPreferences } = require('electron');
 const { execFile, spawn } = require('child_process');
 const crypto = require('crypto');
 const fs = require('fs');
@@ -1175,8 +1175,14 @@ async function composeStartOrUp(cwd, extraFiles = [], skipBuild = false) {
   return { built: !skipBuild && (!app.isPackaged || useRepoMode) };
 }
 
+// `stop`, not `down`: keeping the stopped containers + network around is what
+// lets composeStartOrUp()'s `compose start` fast path fire on the next launch
+// (a `down` here forced full container/network recreation on every boot).
+// The clean-run flow does its own `down --volumes` at launch, and
+// `restart: unless-stopped` treats user-stopped containers as stopped, so
+// nothing auto-revives them when the Docker daemon restarts.
 function stopContainers(cwd, extraFiles = []) {
-  const args = ['compose', ...composeArgs(cwd, extraFiles), 'down'];
+  const args = ['compose', ...composeArgs(cwd, extraFiles), 'stop'];
   return run('docker', args, cwd, { timeout: 60000 });
 }
 
@@ -1202,10 +1208,118 @@ async function restartAppContainer(cwd, extraFiles = []) {
 // ── Main window ───────────────────────────────────────────────────────────────
 let mainWindow = null;
 
+// ── Boot splash ───────────────────────────────────────────────────────────────
+// Localized, theme-aware (prefers-color-scheme) splash shown before any
+// Docker I/O. setSplashStatus() narrates the slow boot phases (image pull,
+// service start) using the boot-phase structure launch() already has.
+function splashDataUrl() {
+  const html = `<!doctype html>
+<html><head><meta charset="utf-8"><style>
+  :root { color-scheme: light dark; }
+  body {
+    margin: 0; height: 100vh; display: flex; flex-direction: column;
+    align-items: center; justify-content: center; gap: 14px;
+    background: #0f172a; color: #94a3b8;
+    font-family: -apple-system, BlinkMacSystemFont, system-ui, sans-serif;
+    -webkit-font-smoothing: antialiased; user-select: none; cursor: default;
+  }
+  .name { color: #e2e8f0; }
+  @media (prefers-color-scheme: light) {
+    body { background: #f8fafc; color: #475569; }
+    .name { color: #1e293b; }
+  }
+  .spinner {
+    width: 26px; height: 26px; border-radius: 50%;
+    border: 2.5px solid currentColor; border-top-color: transparent;
+    opacity: 0.55; animation: spin 0.9s linear infinite;
+  }
+  @keyframes spin { to { transform: rotate(360deg); } }
+  @media (prefers-reduced-motion: reduce) { .spinner { display: none; } }
+  .name { font-size: 15px; font-weight: 600; letter-spacing: 0.01em; }
+  .status { font-size: 13px; font-variant-numeric: tabular-nums; }
+</style></head><body>
+  <div class="spinner"></div>
+  <div class="name">${APP_NAME}</div>
+  <div class="status" id="splash-status">${t('splash.starting')}</div>
+</body></html>`;
+  return `data:text/html;charset=utf-8,${encodeURIComponent(html)}`;
+}
+
+function setSplashStatus(key) {
+  if (!mainWindow || mainWindow.isDestroyed()) return;
+  // Only while the splash is still showing — never poke the real app.
+  if (!mainWindow.webContents.getURL().startsWith('data:')) return;
+  mainWindow.webContents
+    .executeJavaScript(
+      `(() => { const el = document.getElementById('splash-status'); if (el) el.textContent = ${JSON.stringify(t(key))}; })()`,
+      true,
+    )
+    .catch(() => { /* splash already navigated away */ });
+}
+
+// ── Window-state persistence ──────────────────────────────────────────────────
+// Restore frame across launches (baseline macOS behavior). Bounds live in the
+// existing settings.json mirror under `windowBounds`; saved debounced on
+// resize/move, restored clamped to the matching display's workArea so an
+// unplugged monitor can't strand the window off-screen.
+const WINDOW_BOUNDS_KEY = 'windowBounds';
+const WINDOW_MIN_WIDTH = 800;
+const WINDOW_MIN_HEIGHT = 600;
+const WINDOW_BOUNDS_SAVE_DEBOUNCE_MS = 500;
+
+// Sync read: createWindow() runs once, before any window exists, and the
+// splash must not wait on async settings I/O ordering.
+function readSavedWindowBounds() {
+  try {
+    const data = JSON.parse(fs.readFileSync(settingsPath, 'utf8'));
+    const b = data?.[WINDOW_BOUNDS_KEY];
+    if (!b || ![b.x, b.y, b.width, b.height].every(Number.isFinite)) return undefined;
+    return b;
+  } catch {
+    return undefined;
+  }
+}
+
+function clampBoundsToWorkArea(bounds) {
+  const wa = (screen.getDisplayMatching(bounds) || screen.getPrimaryDisplay()).workArea;
+  const width = Math.max(WINDOW_MIN_WIDTH, Math.min(bounds.width, wa.width));
+  const height = Math.max(WINDOW_MIN_HEIGHT, Math.min(bounds.height, wa.height));
+  const clamp = (v, lo, hi) => Math.min(Math.max(v, lo), hi);
+  return {
+    width,
+    height,
+    x: clamp(bounds.x, wa.x, wa.x + wa.width - width),
+    y: clamp(bounds.y, wa.y, wa.y + wa.height - height),
+  };
+}
+
+let windowBoundsSaveTimer = null;
+function scheduleWindowBoundsSave(win) {
+  if (windowBoundsSaveTimer) clearTimeout(windowBoundsSaveTimer);
+  windowBoundsSaveTimer = setTimeout(async () => {
+    windowBoundsSaveTimer = null;
+    if (!win || win.isDestroyed()) return;
+    try {
+      // getNormalBounds: a maximized/fullscreen window records its restored
+      // frame, not the screen size.
+      const bounds = win.getNormalBounds();
+      const settings = await loadSettings();
+      settings[WINDOW_BOUNDS_KEY] = bounds;
+      await saveSettings(settings);
+    } catch (err) {
+      console.warn('window-bounds save failed (non-fatal):', err.message || err);
+    }
+  }, WINDOW_BOUNDS_SAVE_DEBOUNCE_MS);
+}
+
 function createWindow() {
+  const savedBounds = readSavedWindowBounds();
   mainWindow = new BrowserWindow({
-    width: 1280,
-    height: 800,
+    ...(savedBounds
+      ? clampBoundsToWorkArea(savedBounds)
+      : { width: 1280, height: 800 }),
+    minWidth: WINDOW_MIN_WIDTH,
+    minHeight: WINDOW_MIN_HEIGHT,
     title: APP_NAME,
     // macOS-native chrome: frameless content with inset traffic lights. The
     // renderer adds a drag region + left inset to its topbar when it detects
@@ -1254,6 +1368,10 @@ function createWindow() {
   // Renderer readiness is per-document: any navigation/reload invalidates the
   // previous document's app:renderer-ready signal.
   mainWindow.webContents.on('did-start-loading', () => { rendererReady = false; });
+
+  // Persist the window frame across launches (debounced).
+  mainWindow.on('resize', () => scheduleWindowBoundsSave(mainWindow));
+  mainWindow.on('move', () => scheduleWindowBoundsSave(mainWindow));
 
   // Caller is responsible for loading the initial URL.
   mainWindow.on('closed', () => { mainWindow = null; rendererReady = false; });
@@ -2750,10 +2868,7 @@ async function launch() {
   //    a cold start. The window will navigate to APP_URL once the backend is ready.
   const endWindow = bootMark('create_window');
   createWindow();
-  mainWindow.loadURL(
-    'data:text/html,<html><body style="margin:0;background:#0f172a;display:flex;align-items:center;justify-content:center;height:100vh">' +
-    '<p style="color:#94a3b8;font-family:system-ui,sans-serif;font-size:1rem">Starting Vision\u2026</p></body></html>'
-  );
+  mainWindow.loadURL(splashDataUrl());
   endWindow();
 
   // 1. Resolve project folder
@@ -2769,6 +2884,7 @@ async function launch() {
   //        if the app image already exists — all are independent so run in parallel.
   let skipBuild = false;
   let dockerStatus = 'ok';
+  setSplashStatus('splash.checkingDocker');
   const endParallelInit = bootMark('parallel_init');
   await Promise.all([
     // Find a free host port for the backend (default 3002, auto-increment if taken)
@@ -2813,6 +2929,7 @@ async function launch() {
               { timeout: 10000, env: dockerEnv }
             ).then(r => r.trim()).catch(() => '');
             if (ids) { end(); return; }
+            setSplashStatus('splash.downloading');
             await run(
               'docker',
               ['compose', ...composeArgs(workDir, overrideFiles), 'pull', '--quiet', 'app'],
@@ -2910,6 +3027,7 @@ async function launch() {
   }
 
   // 7. docker compose start (fast path) or up (cold/dev rebuild)
+  setSplashStatus('splash.startingServices');
   const endComposeUp = bootMark('compose_up');
   let composeDidBuild = false;
   try {
@@ -2954,6 +3072,7 @@ async function launch() {
   // 8. Backend is being polled — poll /health in the background; navigate once ready.
   //    A cold/dev build (composeDidBuild) gets the extended budget and skips the
   //    slow-start modal, since first-launch boot is expected to be slow.
+  setSplashStatus('splash.waitingApp');
   pollAndLoad({ building: composeDidBuild });
 
   // 10. Set up manual shell updater (source/dev mode only — not in embedded .app mode)
@@ -2968,7 +3087,15 @@ async function launch() {
     try {
       let fileChangeTimer = null;
       let activeBuildChild = null;
-      const watchTargets = ['apps/frontend', 'apps/node-backend', 'package.json', 'bun.lock', 'bun.lockb'];
+      // Keep in sync with DOCKER_PATHS: anything that triggers a rebuild on the
+      // next launch should also hot-rebuild while the dev shell is running.
+      const watchTargets = ['apps/frontend', 'apps/node-backend', 'packages', 'i18n/source', 'package.json', 'bun.lock', 'bun.lockb'];
+
+      // Paths whose churn is not source changes: dependency installs, build
+      // output, VCS/dot dirs. Without this, any `bun install` fires a rebuild.
+      const isIgnoredWatchPath = (fname) =>
+        fname.split(path.sep).some((seg) =>
+          seg === 'node_modules' || seg === 'dist' || seg.startsWith('.'));
 
       const runCancellableBuild = () => new Promise((resolve, reject) => {
         const args = ['compose', ...composeArgs(workDir, overrideFiles), 'build', 'app'];
@@ -3023,7 +3150,10 @@ async function launch() {
         try {
           const w = fs.watch(full, { recursive: true }, (evt, fname) => {
             // Ignore temporary editor swap files
-            if (fname && /(^\.|~$|\.swp$|\.swx$)/.test(fname)) return;
+            if (fname && /(~$|\.swp$|\.swx$)/.test(fname)) return;
+            // Ignore dependency/build/dot-dir churn (covers nested paths,
+            // which the old `^\.` anchor missed).
+            if (fname && isIgnoredWatchPath(fname)) return;
             scheduleRebuild();
           });
           // Do not keep the watcher references — they live for the app lifetime
@@ -3082,7 +3212,13 @@ app.on('will-quit', (e) => {
       : Promise.resolve();
 
     doBackup
-      .then(() => stopContainers(workDir, overrideFiles))
+      .then(() => {
+        // Drop the watchdog's idle keep-alive socket so the backend's
+        // graceful shutdown isn't held open waiting on it.
+        stopHealthWatchdog();
+        try { healthAgent.destroy(); } catch { /* already gone */ }
+        return stopContainers(workDir, overrideFiles);
+      })
       .catch((err) => console.error('docker compose down failed:', err))
       .finally(() => {
         clearTimeout(forceQuitTimer);
