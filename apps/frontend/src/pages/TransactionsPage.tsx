@@ -44,12 +44,19 @@ export default function TransactionsPage() {
     const endDateFilter = searchParams.get('end_date') || undefined;
     const transactionTypeRaw = searchParams.get('transaction_type');
     const transactionTypeFilter = (transactionTypeRaw === 'income' || transactionTypeRaw === 'expense') ? transactionTypeRaw : undefined;
+    // Memoized on the raw param strings: a fresh array identity per render
+    // would ripple through the currentFilter memo into the selection-clear
+    // effect below, which setStates — an unconditional render→effect→render
+    // loop ("Maximum update depth exceeded") for any multi-value filter URL
+    // (general-category pivot drills, tag filters).
     const categoryIdsRaw = searchParams.get('category_ids');
-    const categoryIdsFilter = categoryIdsRaw
+    const categoryIdsFilter = useMemo(() => categoryIdsRaw
         ? categoryIdsRaw.split(',').map(Number).filter((n) => Number.isFinite(n) && n > 0)
-        : undefined;
+        : undefined, [categoryIdsRaw]);
     const tagsRaw = searchParams.get('tags');
-    const tagsFilter = tagsRaw ? tagsRaw.split(',').filter(Boolean) : undefined;
+    const tagsFilter = useMemo(() => tagsRaw
+        ? tagsRaw.split(',').filter(Boolean)
+        : undefined, [tagsRaw]);
 
     const {
         allItems,
