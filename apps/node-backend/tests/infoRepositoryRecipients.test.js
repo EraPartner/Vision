@@ -108,6 +108,22 @@ describe('recipientInsightsRepository.getRecipientInsights', () => {
     expect(r.monthOverMonth).toHaveLength(10);
     expect(r.monthOverMonth[0].currentSpend).toBe(100);
   });
+
+  it('applies the canonical 3-level category exclusion to both queries', async () => {
+    query.mockResolvedValueOnce({ rows: [] });
+    query.mockResolvedValueOnce({ rows: [] });
+    query.mockResolvedValueOnce({ rows: [{ current_period: '2025-04', prev_period: '2025-03' }] });
+    convertRowsToEur.mockResolvedValueOnce([]).mockResolvedValueOnce([]);
+
+    await recipientInsightsRepository.getRecipientInsights('EUR', { excludedCategoryIds: [5, 7] });
+
+    const [topSql, topParams] = query.mock.calls[0];
+    const [momSql] = query.mock.calls[1];
+    for (const sql of [topSql, momSql]) {
+      expect(sql).toContain('COALESCE(t.category_id, r.default_category_id, pr.default_category_id) NOT IN');
+    }
+    expect(topParams).toEqual([5, 7]);
+  });
 });
 
 describe('recipientInsightsRepository.getRecipientByYear', () => {

@@ -3,11 +3,11 @@ title: Aggregations API
 type: endpoint
 status: active
 date: 2026-04-25
-updated: 2026-06-01
-last_modified: 2026-06-01
+updated: 2026-06-11
+last_modified: 2026-06-11
 recipient_pivot_added: 2026-04-28
 tags: [endpoint, api, aggregations, backend, phase-2, phase-6, phase-9, phase-10, phase-d, phase-e, phase-f, phase-g, phase-h, phase-h-v2, decimal, money, cashflow-forecast, multi-method-forecast, statistical-forecasting, ensemble-methods, accuracy-persistence, materialized-cache, nightly-job, category-breakdown, fallback-resilience, rolling-window, url-persistence, rolling-cache, rolling-diagnostics, recipient-pivot, saved-charts, exclusion-filters, ensemble-v2]
-description: Server-computed transaction aggregations with materialized-view source distinction; includes planned cash flow forecast (Phase 6), 8-method statistical forecast with empirical-Bayes ensemble v2 (Phase 10 + F), persisted accuracy metrics with fallback-to-memory resilience (Phase D), nightly cache materialization (Phase E), per-category breakdown with reconciliation (Phase G), rolling-window cash flow forecast (Phase H), and per-recipient spending pivot for custom charts (April 2026). June 2026: recipient-insights endpoint accepts exclusion params; ensemble weighting upgraded to v2 (sample-size-shrunk RMSE + uniform-blend floor).
+description: Server-computed transaction aggregations with materialized-view source distinction; includes planned cash flow forecast (Phase 6), 8-method statistical forecast with empirical-Bayes ensemble v2 (Phase 10 + F), persisted accuracy metrics with fallback-to-memory resilience (Phase D), nightly cache materialization (Phase E), per-category breakdown with reconciliation (Phase G), rolling-window cash flow forecast (Phase H), and per-recipient spending pivot for custom charts (April 2026). June 2026: recipient-insights endpoint accepts exclusion params; ensemble weighting upgraded to v2 (sample-size-shrunk RMSE + uniform-blend floor); bank-balances history changed from monthly to daily points (YYYY-MM-DD date field replaces month field).
 aliases: [aggregations, stats aggregation, computed stats, aggregation endpoints, cashflow-forecast, cash-flow-forecast, multi-method-forecast]
 related_code:
   - apps/node-backend/src/routes/aggregations.js
@@ -311,7 +311,7 @@ Average metrics vs. current period (always computed live in Phase 2).
 
 ### Bank Balances
 
-Account balances and historical balance data.
+Account balances and daily historical balance data over the last 12 months.
 
 **Path:** `GET /api/aggregations/bank-balances`
 
@@ -320,6 +320,11 @@ Account balances and historical balance data.
 | Parameter | Type | Default | Description |
 |-----------|------|---------|-------------|
 | `currency` | string | EUR | Target currency |
+
+> [!info] History granularity changed to daily (2026-06-11)
+> The `history` and `total_history` arrays previously used monthly `{ month: 'YYYY-MM' }` points. They now emit one point per calendar day (`{ date: 'YYYY-MM-DD' }`) over the last 12 months, using a `LATERAL` probe to find the latest recorded balance ≤ each day. **The `month` field is gone; use `date` instead.**
+>
+> Motivation: the dashboard Balance History chart uses a time-scale axis that auto-generates tick marks based on available data density. With ~12 monthly points the auto-ticks had wider spacing than the data, causing duplicate month labels. ~365 daily points match or exceed the tick density and eliminate the duplication. The `LATERAL` index scan (`idx_transactions_bank_date_active`) keeps each daily probe cheap.
 
 **Response (data field):**
 
@@ -337,15 +342,15 @@ Account balances and historical balance data.
   "total_net_position": 12450.75,
   "history": {
     "IBAN:BE12345678901234": [
-      { "month": "2026-01", "balance": 4800.00 },
-      { "month": "2026-02", "balance": 5100.00 },
-      { "month": "2026-03", "balance": 5230.50 }
+      { "date": "2026-04-08", "balance": 4800.00 },
+      { "date": "2026-04-09", "balance": 4800.00 },
+      { "date": "2026-04-10", "balance": 5230.50 }
     ]
   },
   "total_history": [
-    { "month": "2026-01", "balance": 9500.00 },
-    { "month": "2026-02", "balance": 10200.00 },
-    { "month": "2026-03", "balance": 12450.75 }
+    { "date": "2026-04-08", "balance": 9500.00 },
+    { "date": "2026-04-09", "balance": 9500.00 },
+    { "date": "2026-04-10", "balance": 12450.75 }
   ]
 }
 ```

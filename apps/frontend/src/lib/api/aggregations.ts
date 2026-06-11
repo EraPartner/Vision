@@ -107,8 +107,9 @@ export function getAggregationBankBalances(params?: {
         last_transaction: string;
     }>;
     total_net_position: number;
-    history: Record<string, Array<{ month: string; balance: number }>>;
-    total_history: Array<{ month: string; balance: number }>;
+    // Daily balance points (YYYY-MM-DD) over the last 12 months.
+    history: Record<string, Array<{ date: string; balance: number }>>;
+    total_history: Array<{ date: string; balance: number }>;
 }>> {
     return requestWithQuery('/api/aggregations/bank-balances', params);
 }

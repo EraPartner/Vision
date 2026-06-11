@@ -343,7 +343,7 @@ local-getter `toYmd()` that handles pg Dates correctly but is not exported.
   - **Verify:** unit test: buy 10 units, split with `units = 20` → `computeNetUnits` returns 20.
     Run `bun run test`.
 
-- [x] 🔼 AI-chat expense tools bucket transactions into the wrong month when server TZ ≠ UTC 🛫 2026-06-09 ✅ 2026-06-11
+- [x] 🔼 AI-chat expense tools bucket transactions into the wrong month when server TZ ≠ UTC 🛫 2026-06-09 ✅ 2026-06-11 (audit follow-up 2026-06-11: same pattern also fixed in getMonthlySpend.bucketKey, getNetCashflow, four per-row `toISOString().slice(0,10)` serializations in expenses.js, and insights.js first/last_transaction — all via toYmd)
   - **File:** `apps/node-backend/src/services/aiChat/tools/expenses.js` lines 308–309 (and the same
     pattern at ~line 508):
 
@@ -1036,6 +1036,18 @@ details were adjusted. Raw verified JSON: see session workflow artifact wf_b5c2a
   - **Verify:** Extend apps/node-backend/tests/infoRepoMonthly.test.js and infoRepoStatistics.test.js: capture the SQL passed to the mocked query() and assert the recipient exclusion uses COALESCE(r.primary_recipient_id, t.recipient_id) and the category exclusion the 3-level COALESCE; add one cross-module test asserting monthly-summary and recipient-insights produce consistent exclusion SQL for the same ids. Run bun run test.
   - **Verifier corrections (read these before fixing):** Line numbers slightly off: infoRepo.monthly.js excerpt is at 87-93 (cited 86-92); infoRepositoryStatistics.js at 142-147 (cited 143-146); infoRepositoryRecipients.js at 29-34 (cited 30-33); buildExclusionClauses at filterBuilder.js:211-246. Substantive correction to the category sub-claim: the claimed direction ('a transaction categorized only via the primary recipient's default category is excluded from forecasts but not from monthly totals') is wrong — for such a row the 2-level COALESCE is NULL, and `NULL NOT IN (...)` evaluates to NULL, so monthly ALSO drops the row whenever any category exclusion is active. The actual 2-vs-3-level divergence is broader: with any non-empty category exclusion list, the 2-level variants silently drop ALL rows whose 2-level effective category is NULL (including genuinely uncategorized transactions), while the 3-level forecast variant keeps the ones whose resolved category is not excluded. The recipient-alias divergence (the headline mechanism) is exactly as described. Fix and severity (high) stand; the fix should also note the NULL-handling change in row retention for uncategorized transactions when migrating to buildExclusionClauses.
 
+- [ ] 🔽 Follow-up: consolidate the now-unified exclusion SQL onto `buildExclusionClauses` 🛫 2026-06-11
+  - The item above fixed the *semantics* (3-level category COALESCE + alias-aware recipient
+    exclusion now match across infoRepo.monthly.js, infoRepositoryStatistics.js,
+    infoRepositoryRecipients.js — incl. `getRecipientInsights`, fixed 2026-06-11 — and the
+    forecast queries), but the clauses are still hand-rolled copies with explanatory comments;
+    `services/filterBuilder.js` `buildExclusionClauses`/`buildAggregationFilter` still have zero
+    production callers, and the per-file `Number.isInteger(id) && id > 0 && id < 2147483647`
+    filters duplicate `validateInt4Ids`. Migrate the call sites to the builder so the semantics
+    can't drift again, update the SQL-string assertions in infoRepoMonthly/infoRepoStatistics/
+    infoRepositoryRecipients tests, and note the NULL-handling change for uncategorized rows
+    (see verifier correction above). Pure refactor — no behavior change expected.
+
 - [x] 🔼 Phase 9 aggregation cutover incomplete: AGGREGATIONS_V2_ENABLED flag is fictional and legacy GET /api/info + GET /api/info/transaction-summary are dead route surface still maintained in five places 🛫 2026-06-10 ✅ 2026-06-11
   - **File:** `apps/node-backend/src/routes/info/statistics.js` lines 20-24, 50-60 (plus routes/aggregations.js:13-15, repositories/infoRepositoryStatistics.js:16-80 and 199-256).
   - **Offending code:**
@@ -1266,7 +1278,7 @@ surfaces bypass the centralized exclusion resolver" — that item has been **ame
 the confirmed symptom, the exact KPI-card lines, the alias-id root cause, and a priority bump
 (🔽→🔼). Reports 2 and 3 are the new items below.
 
-- [x] 🔼 Dashboard "Balance History" chart: monthly datapoints but ~12 auto-generated sub-month x-ticks — duplicated/incorrect month labels; preferred fix is finer-grained data 🛫 2026-06-10 ✅ 2026-06-11
+- [x] 🔼 Dashboard "Balance History" chart: monthly datapoints but ~12 auto-generated sub-month x-ticks — duplicated/incorrect month labels; preferred fix is finer-grained data 🛫 2026-06-10 ✅ 2026-06-11 (option B shipped first; option A — the user-preferred daily granularity — landed later the same day: daily LATERAL series in infoRepositoryBanks.js, history/total_history now `{date: YYYY-MM-DD}`, xTickValues pin removed)
   - **Files:** `apps/frontend/src/components/dashboard/BankBalancesWidget.tsx` lines 92-105 (chartData = one point per month from `total_history`/`history`) + 191-201 (AreaChart with `xTickFormat="MMM yy"`, no `xTickValues`); `apps/frontend/src/components/charts/AreaChart.tsx` line 390 (`BottomAxis numTicks = max(2, floor(innerWidth / 90))`); backend `apps/node-backend/src/repositories/infoRepositoryBanks.js` lines 42-77 (months CTE = last 12 month-ends).
   - **Why wrong:** The data is one point per month-end (≤12 points; with ~6 months of history, 5-6 points — matching the user's "5-ish points of data"), but the x-axis is a `scaleTime` whose tick count comes from chart *width*, not data density: a full-width dashboard (~1100px inner) yields ~12 ticks. d3's time scale places those at "nice" sub-month intervals (every ~1-2 weeks across a 5-month domain), and each is formatted `"MMM yy"` → the axis reads "Feb 25 · Feb 25 · Mar 25 · Mar 25 · Apr 25 …" — many axis points, few datapoints, months apparently duplicated/wrong. (The 6-Month Trends bar chart is immune — band scale, one tick per bar; this is the only dashboard time-scale chart with monthly granularity.)
   - **Fix (option A — preferred by user: more granular data):** emit weekly (or daily (preferred by user)) balance points instead of month-ends. The backend already has the "latest balance ≤ day" machinery; change the `months` CTE to `generate_series` over weeks/days. ⚠ **Must land together with the round-4 ⏫ perf item on this same query** ("Bank-balances 12-month history query materializes ~12× the whole transactions table"): with the current ROW_NUMBER-over-join shape, going daily multiplies the blow-up ~30×; with that item's `LEFT JOIN LATERAL … LIMIT 1` rewrite, daily granularity is ~365×accounts cheap index probes. Keep the response size sane (52 weekly or ~365 daily points × accounts) and let the existing AreaChart density handle it; with ≥ tick-count datapoints the auto-ticks become unobjectionable.

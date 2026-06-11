@@ -3,7 +3,7 @@ title: Dashboard Components
 type: component
 status: active
 date: 2026-04-17
-updated: 2026-06-10
+updated: 2026-06-11
 tags: [components, dashboard, charts, widgets, liquid-glass, liquid-glass-v2, premium-v3, design-system, phase-9, phase-d, phase-f, phase-h, phase-h-v2, ensemble, visx, url-persistence, rolling-cache, rolling-diagnostics, chart-scrub, chart-sync, per-widget-hydration, stat-scrub, suggestion-card, june-2026]
 description: Dashboard-specific components for financial overview and visualization with liquid-glass aesthetic and visx charts, including dual-mode cash flow forecast with URL state persistence and rolling window diagnostics. June 2026 Liquid Glass v2 — StatCard/NetSummaryCard upgraded to glass-elevated; KPI/chart cards migrated from surface-elevated to glass-regular. June 2026 Premium v3 (ADR-071) — per-widget hydration (no global loading gate), synced dashboard-timeline charts, ChartSkeleton, RollingNumber/DeltaPill adoption. V9: NetSummaryCard sparkline scrub surface. V11: SuggestionCard widget (Siri-suggestion style, upcoming payments).
 aliases: [dashboard-widgets, dashboard-charts, overview-components, stat-cards]
@@ -594,45 +594,41 @@ const { data: rollingData } = useQuery({
 
 ## BankBalancesWidget
 
-Displays current balances for all bank accounts.
+Displays current balances for all bank accounts and a 12-month Balance History chart (stacked area or multi-line).
 
-### Props
+The component fetches from `GET /api/aggregations/bank-balances` via React Query key `["bankBalances", currency]`. It does not accept props — all data is loaded internally.
+
+### Data shape consumed
 
 ```typescript
-interface BankBalancesWidgetProps {
+{
   accounts: Array<{
-    bankAccount: string;
+    bank_account: string;
     balance: number;
-    currency: string;
-    transactionCount?: number;
-    firstTransaction?: string;
-    lastTransaction?: string;
+    transaction_count: number;
+    first_transaction: string;   // YYYY-MM-DD
+    last_transaction: string;    // YYYY-MM-DD
   }>;
+  total_net_position: number;
+  // One entry per calendar day over the last 12 months (daily since 2026-06-11).
+  history: Record<string, Array<{ date: string; balance: number }>>;
+  total_history: Array<{ date: string; balance: number }>;
 }
 ```
 
-### Usage
-
-```tsx
-<BankBalancesWidget
-  accounts={[
-    { bankAccount: "Main Account", balance: 5000, currency: "EUR" },
-    { bankAccount: "Savings", balance: 10000, currency: "EUR" },
-  ]}
-/>
-```
+> [!info] Daily history (2026-06-11)
+> `history` and `total_history` now carry one point per day (`date: 'YYYY-MM-DD'`) over ~365 days. The former `month: 'YYYY-MM'` field is gone. The Balance History chart no longer pins `xTickValues`; the time-scale auto-ticks at a density that matches the ~365-point series, eliminating the duplicate month-label problem that appeared with sparse monthly data.
 
 ### Features
 
-- List of accounts with balances
-- Transaction count per account
-- Date range of transactions
+- Total net-position hero card
+- Per-account balance cards (accounts with a current non-zero balance)
+- Balance History chart: stacked area when all balances are non-negative, multi-line when any account carries a negative balance (overdraft)
 - Currency formatting — large balances use compact notation (`formatCurrencyCompact`) with full value in `title` tooltip
 - Integer transaction counts use app locale formatter for consistent separators/grouping
-- Total net-position card now uses non-glass `premium-frame` treatment for clearer hierarchy against dashboard hero stat cards
-- Per-account balance cards use a subtle `premium-frame` treatment (non-glass) to keep dense data readable
+- `premium-frame` treatment on the net-position and per-account cards for consistent visual hierarchy
 
-Code links: [[apps/frontend/src/components/dashboard/BankBalancesWidget.tsx]], [[apps/frontend/src/pages/DashboardPage.tsx]], [[apps/frontend/src/contexts/AppSettingsContext.tsx]]
+Code links: [[apps/frontend/src/components/dashboard/BankBalancesWidget.tsx]], [[apps/frontend/src/pages/DashboardPage.tsx]], [[apps/node-backend/src/repositories/infoRepositoryBanks.js]], [[docs/api/aggregations#bank-balances|Bank Balances API]]
 
 ---
 

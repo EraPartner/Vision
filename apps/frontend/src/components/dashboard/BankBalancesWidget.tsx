@@ -21,7 +21,6 @@ const ACCOUNT_COLORS = [
 ];
 
 interface BankChartDatum {
-    month: string;
     date: Date;
     values: Record<string, number>;
     total: number;
@@ -96,17 +95,21 @@ export function BankBalancesWidget() {
         return (history[acct.bank_account] || []).some((h) => Math.abs(h.balance) > 0.000001);
     });
 
-    // Build chart data from total_history
+    // Build chart data from total_history (daily points). Index each account's
+    // history by date first — a per-entry .find() would be O(days²) at ~365 points.
+    const balancesByAccount = new Map<string, Map<string, number>>(
+        chartAccounts.map((acct) => [
+            acct.bank_account,
+            new Map((history[acct.bank_account] || []).map((h) => [h.date, h.balance])),
+        ]),
+    );
     const chartData: BankChartDatum[] = total_history.map((entry) => {
         const values: Record<string, number> = {};
         for (const acct of chartAccounts) {
-            const acctHistory = history[acct.bank_account] || [];
-            const match = acctHistory.find((h) => h.month === entry.month);
-            values[acct.bank_account] = match?.balance ?? 0;
+            values[acct.bank_account] = balancesByAccount.get(acct.bank_account)?.get(entry.date) ?? 0;
         }
         return {
-            month: entry.month,
-            date: parseISO(entry.month + "-01"),
+            date: parseISO(entry.date),
             values,
             total: entry.balance,
         };
@@ -209,13 +212,12 @@ export function BankBalancesWidget() {
                             series={accountSeries}
                             stacked={!hasNegativeBalances}
                             height={320}
-                            // Pin ticks to the monthly datapoints. Without this the
-                            // time-scale auto-ticks (count from width) landed on ~weekly
-                            // intervals, so "MMM yy" labels repeated (Feb·Feb·Mar·Mar…).
-                            xTickValues={chartData.map((d) => d.date)}
+                            // Daily datapoints (~365) now outnumber the time-scale
+                            // auto-ticks, so the width-derived tick spacing is fine —
+                            // no more duplicated "MMM yy" labels between sparse points.
                             xTickFormat={(v) => formatDate(v as Date, "MMM yy")}
                             yTickFormat={(v) => formatCurrency(v, defaultCurrency, locale)}
-                            tooltipTitle={(d) => formatDate(d.date, "MMM yy")}
+                            tooltipTitle={(d) => formatDate(d.date, "d MMM yy")}
                             tooltipValueFormat={(v) => formatCurrency(v, defaultCurrency, locale)}
                         />
                         <ChartLegend items={legendItems} align="center" />

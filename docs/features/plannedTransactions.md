@@ -3,7 +3,7 @@ title: Planned Transactions
 type: feature
 status: active
 date: 2026-04-26
-updated: 2026-06-10
+updated: 2026-06-11
 tags: [feature, planned, recurring, bills, loans, phase-3, phase-12, calculations, immutability, error-handling, toast, atomic-patch, virtual-data-table, i18n-toasts, suggestion-card, upcoming-payments-hook, june-2026]
 aliases: [planned-payments, scheduled-payments, recurring-payments, bills, subscriptions, loan-amortization]
 description: Scheduled and recurring payment tracking - manage bills, subscriptions, and future expenses. June 2026: PlannedPaymentsPage migrated from DataTable to VirtualDataTable; native alert() replaced with toast.error (new i18n keys plannedPage.toggleFailed/deleteFailed). V11: useUpcomingPlannedPayments shared hook (single fetch + shared dismissed-ID store); SuggestionCard dashboard widget; UpcomingPaymentsNotification stands down on dashboard route when suggestions widget is visible.
@@ -242,6 +242,29 @@ Calculates next occurrence dates for recurring planned transactions. Pure calcul
 | `getSupportedPatterns()` | Returns array of supported pattern names |
 
 **Implementation Details (2026-04-25):** Month-end clamping uses a double-modulo pattern `((targetMonthIndex % 12) + 12) % 12` to normalize negative month indices to their zero-based month equivalents (e.g., `-1` → `11` for December). This ensures that month arithmetic in TZ-aware contexts correctly handles month overflow/underflow before converting back to UTC.
+
+#### Recurrence advancement: sticky month-end clamp (2026-06-11)
+
+When `POST /:id/execute` advances a recurring planned transaction it calls `calculateNextDate(baseDate, recurrence_pattern)` where `baseDate` is the row's current `planned_date`. The next date is then stored via `toAppDateString(nextDate)`.
+
+`addMonthsClampedInAppTz` clamps the day-of-month to the last valid day of the *target* month:
+
+```
+Jan 31  --[+1 month]--> Feb 28   (28 stored; Feb has no 31st)
+Feb 28  --[+1 month]--> Mar 28   (advance chains from 28, not from the original 31)
+Mar 28  --[+1 month]--> Apr 28   (stays at 28 forever)
+```
+
+**This "sticky clamp" is intentional, documented behavior.** The alternative — storing the user's original day-of-month as a `preferred_day` anchor and restoring it each cycle (the pattern used in `loanSchedule.js#addMonthsAtDay`) — was considered and deliberately not implemented. Reasons:
+
+- Planned transactions are created with a single `planned_date` field; there is no separate anchor column.
+- The sticky behavior is transparent and deterministic: the stored `planned_date` is always the actual next due date, with no hidden state.
+- Adding a `preferred_day` column is a possible future enhancement but requires a migration and a UI affordance for users to understand the gap.
+
+> [!info] Scope of this note
+> The 2026-04-25 note above this section describes the *double-modulo math* for normalizing month indices (a low-level arithmetic detail). This section describes the *anchor semantics*: that after a clamp the chain advances from the clamped date, not from a remembered original day-of-month. These are separate concerns.
+
+The code comment in `routes/plannedTransactions.js` at the `updateFields.planned_date` assignment points to this section: `(Day-of-month anchor is intentionally sticky-clamped — see docs/features planned-transactions.)`
 
 ### `services/calculations/loanSchedule.js`
 **File:** [[apps/node-backend/src/services/calculations/loanSchedule.js]]

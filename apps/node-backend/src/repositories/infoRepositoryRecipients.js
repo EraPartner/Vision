@@ -27,7 +27,7 @@ export const recipientInsightsRepository = {
     const validRecIds = (excludedRecipientIds || []).filter(id => Number.isInteger(id) && id > 0 && id < 2147483647);
     const params = [];
     const catExclude = validCatIds.length > 0
-      ? `AND COALESCE(t.category_id, r.default_category_id) NOT IN (${validCatIds.map(id => { params.push(id); return `$${params.length}`; }).join(',')})`
+      ? `AND COALESCE(t.category_id, r.default_category_id, pr.default_category_id) NOT IN (${validCatIds.map(id => { params.push(id); return `$${params.length}`; }).join(',')})`
       : '';
     const recExclude = validRecIds.length > 0
       ? `AND COALESCE(pr.id, r.id) NOT IN (${validRecIds.map(id => { params.push(id); return `$${params.length}`; }).join(',')})`

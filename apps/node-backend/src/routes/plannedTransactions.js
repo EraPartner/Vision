@@ -208,7 +208,7 @@ router.post('/', async (req, res) => {
 
   // Reject patterns calculateNextDate can't advance (e.g. "fortnightly"): they
   // store fine but on /execute leave the row stuck as perpetually-due. Loans
-  // delete recurrence_pattern above, so this never trips loan creation.
+  // set recurrence_pattern='monthly' above, so this never trips loan creation.
   if (data.is_recurring && data.recurrence_pattern && !isValidPattern(data.recurrence_pattern)) {
     throw new ValidationError(`Invalid recurrence_pattern: ${data.recurrence_pattern}`);
   }
