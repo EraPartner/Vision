@@ -17,7 +17,7 @@ const MAX_ROWS = 3;
  * stands down on the dashboard while this card is the active surface.
  */
 export function SuggestionCard() {
-  const { t } = useLanguage();
+  const { t, tc } = useLanguage();
   const { appSettings } = useAppSettings();
   const { visibleUpcoming, dismiss } = useUpcomingPlannedPayments();
 
@@ -40,9 +40,7 @@ export function SuggestionCard() {
             {t('suggestions.kicker')}
           </p>
           <p className="mt-0.5 font-display text-sm font-semibold text-foreground">
-            {visibleUpcoming.length === 1
-              ? t('upcoming.countSingle', { count: String(visibleUpcoming.length) })
-              : t('upcoming.countPlural', { count: String(visibleUpcoming.length) })}
+            {tc('upcoming.count', visibleUpcoming.length)}
           </p>
           <div className="mt-1 flex flex-wrap gap-x-4 gap-y-0.5 text-xs text-muted-foreground">
             {shown.map((pt) => (
@@ -72,7 +70,7 @@ export function SuggestionCard() {
         className="absolute top-2 right-2 inline-flex items-center justify-center h-6 w-6 rounded-md text-muted-foreground hover:bg-foreground/[0.06] hover:text-foreground transition-colors"
         title={t('upcoming.dismissAll')}
         aria-label={t('upcoming.dismissAll')}
-        onClick={() => dismiss(visibleUpcoming.map((pt) => pt.id))}
+        onClick={() => dismiss(visibleUpcoming)}
       >
         <X className="h-3.5 w-3.5" />
       </button>

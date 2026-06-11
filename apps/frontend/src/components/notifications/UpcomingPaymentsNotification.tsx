@@ -12,7 +12,7 @@ import { useUpcomingPlannedPayments } from "@/hooks/useUpcomingPlannedPayments";
 import { useWidgetVisibility } from "@/hooks/useWidgetVisibility";
 
 export function UpcomingPaymentsNotification() {
-  const { t } = useLanguage();
+  const { t, tc } = useLanguage();
   const { appSettings } = useAppSettings();
   const locale = numberFormatToLocale(appSettings.numberFormat);
   const { upcoming, visibleUpcoming, dismiss } = useUpcomingPlannedPayments();
@@ -41,9 +41,7 @@ export function UpcomingPaymentsNotification() {
       <CalendarClock className="h-4 w-4 text-primary" />
       <AlertTitle className="flex items-center gap-2 text-primary font-semibold">
         <Bell className="h-4 w-4" />
-        {visibleUpcoming.length === 1
-          ? t('upcoming.countSingle', { count: String(visibleUpcoming.length) })
-          : t('upcoming.countPlural', { count: String(visibleUpcoming.length) })}
+        {tc('upcoming.count', visibleUpcoming.length)}
       </AlertTitle>
       <AlertDescription className="mt-2 space-y-1">
         {visibleUpcoming.slice(0, 5).map((pt) => (
@@ -61,7 +59,7 @@ export function UpcomingPaymentsNotification() {
                 className="inline-flex items-center justify-center h-5 w-5 rounded-sm text-muted-foreground hover:bg-accent hover:text-accent-foreground transition-colors"
                 title={t('recurring.dismiss')}
                 aria-label={t('recurring.dismiss')}
-                onClick={() => dismiss(pt.id)}
+                onClick={() => dismiss(pt)}
               >
                 <X className="h-3 w-3" />
               </button>
@@ -87,7 +85,7 @@ export function UpcomingPaymentsNotification() {
         className="absolute top-2 right-2 inline-flex items-center justify-center h-5 w-5 rounded-sm text-muted-foreground hover:bg-accent hover:text-accent-foreground transition-colors"
         title={t('upcoming.dismissAll')}
         aria-label={t('upcoming.dismissAll')}
-        onClick={() => dismiss(visibleUpcoming.map((pt) => pt.id))}
+        onClick={() => dismiss(visibleUpcoming)}
       >
         <X className="h-3 w-3" />
       </button>
