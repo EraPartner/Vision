@@ -29,7 +29,7 @@ function OverviewCard({
 }) {
     const statusRing =
         status === 'error' ? 'ring-1 ring-destructive/40' :
-        status === 'warn' ? 'ring-1 ring-amber-500/40' :
+        status === 'warn' ? 'ring-1 ring-warning/40' :
         '';
 
     return (
@@ -102,7 +102,7 @@ function AdminTokenCard() {
                         {t('admin.token.clear')}
                     </Button>
                 </div>
-                {active && <p className="text-xs text-emerald-600">{t('admin.token.active')}</p>}
+                {active && <p className="text-xs text-success">{t('admin.token.active')}</p>}
             </CardContent>
         </Card>
     );

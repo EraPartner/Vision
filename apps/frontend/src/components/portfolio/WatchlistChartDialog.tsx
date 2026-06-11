@@ -217,7 +217,7 @@ export function WatchlistChartDialog({ item, open, onOpenChange }: WatchlistChar
                   {priceDiff != null && (
                     <div className={cn(
                       "flex items-center gap-1 text-sm mt-1",
-                      priceDiff > 0 ? "text-red-500" : "text-green-500"
+                      priceDiff > 0 ? "text-destructive" : "text-success"
                     )}>
                       {priceDiff > 0 ? <TrendingUp className="h-4 w-4" /> : <TrendingDown className="h-4 w-4" />}
                       {Math.abs(priceDiff).toFixed(2)}% {priceDiff > 0 ? t('watchlistChart.aboveTarget', { n: Math.abs(priceDiff).toFixed(0) }) : t('watchlistChart.belowTarget', { n: Math.abs(priceDiff).toFixed(0) })}
@@ -231,7 +231,7 @@ export function WatchlistChartDialog({ item, open, onOpenChange }: WatchlistChar
           </div>
 
           {isBelowTarget && (
-            <div className="bg-green-500/10 border border-green-500/30 text-green-600 dark:text-green-400 rounded-lg p-3 text-center font-medium">
+            <div className="bg-success/10 border border-success/30 text-success rounded-lg p-3 text-center font-medium">
               ✓ {t('watchlistChart.atTarget')}
             </div>
           )}

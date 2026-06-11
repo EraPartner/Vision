@@ -149,11 +149,11 @@ function BatchRow({
           <span>{started}</span>
           {batch.rows_imported != null && (
             <>
-              <span className="text-green-600 dark:text-green-400">
+              <span className="text-success">
                 +{batch.rows_imported}
               </span>
               {(batch.rows_duplicate ?? 0) > 0 && (
-                <span className="text-amber-600 dark:text-amber-400">
+                <span className="text-warning">
                   {batch.rows_duplicate} dup
                 </span>
               )}

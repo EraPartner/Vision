@@ -112,7 +112,7 @@ export function MultiYearTrendStrip({ className, maxYears = DEFAULT_MAX_YEARS }:
                                     <span className="flex items-center gap-0.5">
                                         {tile.isFiled && (
                                             <Lock
-                                                className="h-3 w-3 text-amber-600"
+                                                className="h-3 w-3 text-warning"
                                                 aria-label={t('tax.yearSwitcher.filedAria')}
                                             />
                                         )}

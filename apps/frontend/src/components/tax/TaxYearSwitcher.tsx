@@ -80,7 +80,7 @@ export function TaxYearSwitcher({ className }: TaxYearSwitcherProps) {
                                 <span className="font-medium tabular-nums">{entry.year}</span>
                                 {entry.isFiled && (
                                     <Lock
-                                        className="h-3 w-3 text-amber-600"
+                                        className="h-3 w-3 text-warning"
                                         aria-label={t('tax.yearSwitcher.filedAria')}
                                     />
                                 )}
@@ -101,7 +101,7 @@ export function TaxYearSwitcher({ className }: TaxYearSwitcherProps) {
                                 {!entry.isCurrent && entry.isFiled && (
                                     <Badge
                                         variant="outline"
-                                        className="h-4 px-1.5 text-[10px] border-amber-500/40 text-amber-700"
+                                        className="h-4 px-1.5 text-[10px] border-warning/40 text-warning"
                                     >
                                         {t('tax.yearSwitcher.filedBadge')}
                                     </Badge>

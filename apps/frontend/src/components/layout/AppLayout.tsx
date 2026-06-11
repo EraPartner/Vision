@@ -195,7 +195,7 @@ export function AppLayout({ children }: AppLayoutProps) {
                                         <DropdownMenuSeparator />
                                         <div className="px-3 py-2 space-y-2" onClick={(e) => e.stopPropagation()}>
                                             <div className="flex items-center gap-2">
-                                                <Sun className="h-3.5 w-3.5 text-amber-500 shrink-0" />
+                                                <Sun className="h-3.5 w-3.5 text-warning shrink-0" />
                                                 <Label className="text-xs text-muted-foreground w-14 shrink-0">{t('layout.lightAt')}</Label>
                                                 <Input
                                                     type="time"

@@ -45,7 +45,7 @@ function matchSourceBadge(source: MatchSource, similarity?: number | null) {
       );
     case "fuzzy":
       return (
-        <Badge variant="outline" className="text-xs border-amber-400 text-amber-600 dark:text-amber-400">
+        <Badge variant="outline" className="text-xs border-warning/60 text-warning">
           fuzzy {similarity != null ? (similarity * 100).toFixed(0) + "%" : ""}
         </Badge>
       );
@@ -57,7 +57,7 @@ function matchSourceBadge(source: MatchSource, similarity?: number | null) {
       );
     case "new":
       return (
-        <Badge variant="outline" className="text-xs border-emerald-400 text-emerald-600 dark:text-emerald-400">
+        <Badge variant="outline" className="text-xs border-success/60 text-success">
           new
         </Badge>
       );
@@ -287,7 +287,7 @@ export default function ImportReviewPage() {
         )}
         {preview.totals.fuzzy > 0 && (
           <span className="text-muted-foreground">
-            <Badge variant="outline" className="text-xs border-amber-400 text-amber-600 dark:text-amber-400 mr-1">fuzzy</Badge>
+            <Badge variant="outline" className="text-xs border-warning/60 text-warning mr-1">fuzzy</Badge>
             {preview.totals.fuzzy}
           </span>
         )}
@@ -299,7 +299,7 @@ export default function ImportReviewPage() {
         )}
         {preview.totals.new > 0 && (
           <span className="text-muted-foreground">
-            <Badge variant="outline" className="text-xs border-emerald-400 text-emerald-600 dark:text-emerald-400 mr-1">new</Badge>
+            <Badge variant="outline" className="text-xs border-success/60 text-success mr-1">new</Badge>
             {preview.totals.new}
           </span>
         )}
@@ -414,7 +414,7 @@ export default function ImportReviewPage() {
                       {row.memo && (
                         <span className="truncate min-w-0 text-muted-foreground/60 hidden sm:block">{row.memo}</span>
                       )}
-                      <span className={`ml-auto shrink-0 tabular-nums font-medium ${Number(row.amount) < 0 ? "text-destructive" : "text-emerald-600 dark:text-emerald-400"}`}>
+                      <span className={`ml-auto shrink-0 tabular-nums font-medium ${Number(row.amount) < 0 ? "text-destructive" : "text-success"}`}>
                         {formatCurrency(Number(row.amount), row.currency ?? "EUR", locale)}
                       </span>
                     </div>

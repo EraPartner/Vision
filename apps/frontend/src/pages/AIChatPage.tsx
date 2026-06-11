@@ -119,7 +119,7 @@ export default function AIChatPage() {
     const statusDotClass = statusLoading
         ? 'bg-muted-foreground/50'
         : status?.ok
-            ? 'bg-emerald-500'
+            ? 'bg-success'
             : 'bg-destructive';
 
     const emptyState = (

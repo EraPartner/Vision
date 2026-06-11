@@ -6,7 +6,7 @@ function StatCard({ label, value, sub, warn }: { label: string; value: string; s
     return (
         <div className="rounded-md border border-border bg-muted/30 px-3 py-2">
             <p className="text-[10px] text-muted-foreground mb-0.5">{label}</p>
-            <p className={cn('text-lg font-mono font-semibold tabular-nums leading-none', warn && 'text-amber-500')}>
+            <p className={cn('text-lg font-mono font-semibold tabular-nums leading-none', warn && 'text-warning')}>
                 {value}
             </p>
             {sub && <p className="text-[10px] text-muted-foreground mt-0.5">{sub}</p>}
@@ -50,7 +50,7 @@ export function MetricsPanel() {
 
             {metrics.slowRequests.length > 0 && (
                 <div>
-                    <p className="text-[10px] font-semibold text-amber-500 mb-1.5">
+                    <p className="text-[10px] font-semibold text-warning mb-1.5">
                         Slow requests (&gt;1 s) — {metrics.slowRequests.length}
                     </p>
                     <div className="space-y-0.5">
@@ -61,7 +61,7 @@ export function MetricsPanel() {
                             >
                                 <span className="text-muted-foreground w-12 shrink-0">{req.method}</span>
                                 <span className="flex-1 truncate text-foreground">{req.endpoint}</span>
-                                <span className="shrink-0 text-amber-500 tabular-nums">
+                                <span className="shrink-0 text-warning tabular-nums">
                                     {((req.durationMs ?? 0) / 1000).toFixed(2)}s
                                 </span>
                             </div>
@@ -85,13 +85,13 @@ export function MetricsPanel() {
                                 <span
                                     className={cn(
                                         'shrink-0 tabular-nums w-16 text-right',
-                                        ep.p95 >= 1000 ? 'text-amber-500' : 'text-muted-foreground',
+                                        ep.p95 >= 1000 ? 'text-warning' : 'text-muted-foreground',
                                     )}
                                 >
                                     p95:{ep.p95.toFixed(0)}ms
                                 </span>
                                 {ep.errorCount > 0 && (
-                                    <span className="shrink-0 text-red-500 tabular-nums">
+                                    <span className="shrink-0 text-destructive tabular-nums">
                                         {ep.errorCount}err
                                     </span>
                                 )}

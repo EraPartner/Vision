@@ -52,7 +52,7 @@ export function MarkAsFiledDialog({ trigger, year }: MarkAsFiledDialogProps) {
             <DialogContent className="max-w-md">
                 <DialogHeader>
                     <DialogTitle className="flex items-center gap-2">
-                        <Lock className="h-4 w-4 text-amber-600" />
+                        <Lock className="h-4 w-4 text-warning" />
                         {t('tax.markFiled.title', { year: String(year) })}
                     </DialogTitle>
                     <DialogDescription>{t('tax.markFiled.description')}</DialogDescription>

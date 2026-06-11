@@ -206,8 +206,8 @@ export const AppTab = memo(function AppTab({
                     {updateStatus && (
                         <div className={`flex items-start gap-3 rounded-lg border px-4 py-3 text-sm ${
                             updateStatus.up_to_date
-                                ? 'border-green-500/30 bg-green-500/5 text-green-700 dark:text-green-400'
-                                : 'border-amber-500/30 bg-amber-500/5 text-amber-700 dark:text-amber-400'
+                                ? 'border-success/30 bg-success/5 text-success'
+                                : 'border-warning/30 bg-warning/5 text-warning'
                         }`}>
                             {updateStatus.up_to_date
                                 ? <CheckCircle2 className="h-4 w-4 mt-0.5 shrink-0" />

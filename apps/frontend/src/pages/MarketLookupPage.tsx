@@ -130,7 +130,7 @@ interface ChartPoint {
 
 function gradeColor(grade: string): string {
   const g = grade.toLowerCase();
-  if (/buy|outperform|overweight|accumulate/.test(g)) return "text-green-500 dark:text-green-400";
+  if (/buy|outperform|overweight|accumulate/.test(g)) return "text-success";
   if (/sell|underperform|underweight|reduce/.test(g)) return "text-destructive";
   return "text-yellow-500 dark:text-yellow-400";
 }
@@ -582,7 +582,7 @@ export default function MarketLookupPage() {
                     : bearPct >= 0.45 ? t('market.sell')
                       : t('market.hold');
             const verdictColor =
-              bullPct >= 0.45 ? "text-green-500 dark:text-green-400"
+              bullPct >= 0.45 ? "text-success"
                 : bearPct >= 0.45 ? "text-destructive"
                   : "text-yellow-500 dark:text-yellow-400";
             return (
@@ -602,11 +602,11 @@ export default function MarketLookupPage() {
                     </div>
                     <div className="flex-1 space-y-2">
                       {([
-                        { label: t('market.strongBuy'), count: strongBuy, barClass: "bg-green-600" },
-                        { label: t('market.buy'), count: buy, barClass: "bg-green-400" },
+                        { label: t('market.strongBuy'), count: strongBuy, barClass: "bg-success" },
+                        { label: t('market.buy'), count: buy, barClass: "bg-success/60" },
                         { label: t('market.hold'), count: hold, barClass: "bg-yellow-400" },
-                        { label: t('market.sell'), count: sell, barClass: "bg-red-400" },
-                        { label: t('market.strongSell'), count: strongSell, barClass: "bg-red-600" },
+                        { label: t('market.sell'), count: sell, barClass: "bg-destructive/60" },
+                        { label: t('market.strongSell'), count: strongSell, barClass: "bg-destructive" },
                       ] as { label: string; count: number; barClass: string }[]).map(({ label, count, barClass }) => (
                         <div key={label} className="flex items-center gap-2 text-xs">
                           <span className="text-muted-foreground w-20 shrink-0">{label}</span>
@@ -629,7 +629,7 @@ export default function MarketLookupPage() {
                         {quote.recentAnalystActions.map((action) => (
                           <div key={`${action.date}-${action.firm}`} className="flex items-center gap-2 text-xs">
                             {action.action === "up"
-                              ? <TrendingUp className="h-3 w-3 text-green-500 dark:text-green-400 shrink-0" />
+                              ? <TrendingUp className="h-3 w-3 text-success shrink-0" />
                               : action.action === "down"
                                 ? <TrendingDown className="h-3 w-3 text-destructive shrink-0" />
                                 : <ArrowUpDown className="h-3 w-3 text-muted-foreground shrink-0" />}

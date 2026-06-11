@@ -24,7 +24,7 @@ import { apiClient } from "@/lib/api";
 const ASSET_CLASS_COLORS: Record<string, string> = {
   stock: "bg-blue-500/10 text-blue-500 border-blue-500/20",
   etf: "bg-emerald-500/10 text-emerald-500 border-emerald-500/20",
-  crypto: "bg-amber-500/10 text-amber-500 border-amber-500/20",
+  crypto: "bg-amber-500/10 text-warning border-amber-500/20",
 };
 
 export default function WatchlistPage() {
@@ -102,8 +102,8 @@ export default function WatchlistPage() {
       />
 
       {quotesUnavailable && data?.items && data.items.length > 0 && (
-        <div className="flex items-start gap-2 rounded-md border border-amber-500/40 bg-amber-500/10 p-3 text-sm">
-          <WifiOff className="h-4 w-4 mt-0.5 text-amber-500 shrink-0" />
+        <div className="flex items-start gap-2 rounded-md border border-warning/40 bg-warning/10 p-3 text-sm">
+          <WifiOff className="h-4 w-4 mt-0.5 text-warning shrink-0" />
           <div className="flex-1 text-foreground/80">
             {t('watchlist.quotesOffline')}
           </div>
@@ -157,7 +157,7 @@ export default function WatchlistPage() {
                 aria-label={item.name}
                 className={cn(
                   "surface-elevated premium-frame micro-lift cursor-pointer transition-all hover:shadow-md hover:border-primary/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50",
-                  isBelowTarget && "ring-2 ring-green-500/50"
+                  isBelowTarget && "ring-2 ring-success/50"
                 )}
                 onDoubleClick={() => handleDoubleClick(item)}
                 onKeyDown={onActivateKeyDown(() => handleDoubleClick(item))}
@@ -198,7 +198,7 @@ export default function WatchlistPage() {
                         {priceDiff! > 0 ? (
                           // Above target: show percentage
                           <div className={cn(
-                            "flex items-center text-sm gap-1 text-red-500"
+                            "flex items-center text-sm gap-1 text-destructive"
                           )}>
                             <TrendingUp className="h-4 w-4" />
                             {Math.abs(priceDiff!).toFixed(1)}% {t('watchlist.aboveTarget')}
@@ -217,7 +217,7 @@ export default function WatchlistPage() {
                   </div>
 
                   {isBelowTarget && (
-                    <div className="bg-green-500/10 text-green-600 dark:text-green-400 text-xs px-2 py-1 rounded text-center font-medium">
+                    <div className="bg-success/10 text-success text-xs px-2 py-1 rounded text-center font-medium">
                       {t('watchlist.atTarget')}
                     </div>
                   )}

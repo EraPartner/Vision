@@ -506,8 +506,8 @@ export function TransactionImportCard({ onImportSuccess }: TransactionImportCard
             {progress.phase === 'importing' && progress.total > 0 && (
               <div className="flex gap-4 text-xs text-muted-foreground">
                 <span>{t('importPage.rows', { current: progress.current, total: progress.total })}</span>
-                <span className="text-green-600 dark:text-green-400">{t('importPage.imported', { n: progress.imported })}</span>
-                <span className="text-amber-600 dark:text-amber-400">{t('importPage.duplicates', { n: progress.duplicates })}</span>
+                <span className="text-success">{t('importPage.imported', { n: progress.imported })}</span>
+                <span className="text-warning">{t('importPage.duplicates', { n: progress.duplicates })}</span>
                 {progress.errors > 0 && <span className="text-destructive">{t('importPage.errors', { n: progress.errors })}</span>}
               </div>
             )}
@@ -516,11 +516,11 @@ export function TransactionImportCard({ onImportSuccess }: TransactionImportCard
 
         {/* Import complete summary */}
         {progress && !loading && progress.phase === 'complete' && (
-          <div className="flex items-center gap-3 p-4 rounded-lg border border-green-200 bg-green-50 dark:border-green-900 dark:bg-green-950/30">
-            <CheckCircle2 className="icon-success-bounce h-5 w-5 text-green-600 dark:text-green-400 shrink-0" />
+          <div className="flex items-center gap-3 p-4 rounded-lg border border-success/30 bg-success/10">
+            <CheckCircle2 className="icon-success-bounce h-5 w-5 text-success shrink-0" />
             <div className="text-sm">
-              <p className="font-medium text-green-800 dark:text-green-300">{t('importPage.complete')}</p>
-              <p className="text-green-700 dark:text-green-400">
+              <p className="font-medium text-success">{t('importPage.complete')}</p>
+              <p className="text-success">
                 {t('importPage.progressSummary', { imported: progress.imported, duplicates: progress.duplicates, errors: progress.errors })}
               </p>
             </div>

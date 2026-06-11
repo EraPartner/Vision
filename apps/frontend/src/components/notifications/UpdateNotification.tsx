@@ -158,7 +158,7 @@ export function UpdateNotification() {
                 variant="ghost"
                 size="sm"
                 onClick={() => { setPhase("idle"); setDialogOpen(true); }}
-                className="gap-1.5 text-amber-600 dark:text-amber-400 hover:text-amber-700 dark:hover:text-amber-300 hover:bg-amber-50 dark:hover:bg-amber-950/30 font-medium text-xs h-8 px-2.5"
+                className="gap-1.5 text-warning hover:text-warning hover:bg-warning/10 font-medium text-xs h-8 px-2.5"
                 title={t('update.versionAvailable', { version: status.latest_version ?? '' })}
             >
                 <ArrowUpCircle className="h-4 w-4" />
@@ -170,7 +170,7 @@ export function UpdateNotification() {
                 <DialogContent className="max-w-md">
                     <DialogHeader>
                         <DialogTitle className="flex items-center gap-2">
-                            <ArrowUpCircle className="h-5 w-5 text-amber-500" />
+                            <ArrowUpCircle className="h-5 w-5 text-warning" />
                             {t('update.title')}
                         </DialogTitle>
                         <DialogDescription>

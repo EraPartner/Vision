@@ -382,8 +382,8 @@ export default function DashboardPage() {
             />
 
             {partialError && (
-                <div className="flex items-start gap-2 rounded-md border border-amber-500/40 bg-amber-500/10 p-3 text-sm">
-                    <AlertTriangle className="h-4 w-4 mt-0.5 text-amber-500 shrink-0" />
+                <div className="flex items-start gap-2 rounded-md border border-warning/40 bg-warning/10 p-3 text-sm">
+                    <AlertTriangle className="h-4 w-4 mt-0.5 text-warning shrink-0" />
                     <div className="text-foreground/80">
                         {allFromCache
                             ? t('dashboard.staleDataWarning', { msg: String(partialErrorMessage) })

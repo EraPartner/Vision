@@ -359,8 +359,8 @@ function CompactReturnCard({
     title: string; value: string; subtitle: string; icon: IconType; trend: boolean;
 }) {
     const iconBg = trend
-        ? "bg-gradient-to-br from-emerald-500/20 to-green-500/20 text-emerald-600 dark:text-emerald-400"
-        : "bg-gradient-to-br from-rose-500/20 to-red-500/20 text-rose-600 dark:text-rose-300";
+        ? "bg-gradient-to-br from-success/20 to-success/10 text-success"
+        : "bg-gradient-to-br from-destructive/20 to-destructive/10 text-destructive";
     const trendGlassClass = trend ? "liquid-glass-trend-up" : "liquid-glass-trend-down";
 
     return (
@@ -415,9 +415,9 @@ function TotalValueCard({
     const isGain = totalGainLoss >= 0;
     const trendGlassClass = isGain ? "liquid-glass-trend-up" : "liquid-glass-trend-down";
     const iconBg = isGain
-        ? "bg-gradient-to-br from-emerald-500/20 to-green-500/20 text-emerald-600 dark:text-emerald-400"
-        : "bg-gradient-to-br from-rose-500/20 to-red-500/20 text-rose-600 dark:text-rose-300";
-    const gainToneClass = isGain ? "text-emerald-600 dark:text-emerald-400" : "text-rose-600 dark:text-rose-400";
+        ? "bg-gradient-to-br from-success/20 to-success/10 text-success"
+        : "bg-gradient-to-br from-destructive/20 to-destructive/10 text-destructive";
+    const gainToneClass = isGain ? "text-success" : "text-destructive";
 
     return (
         <Card

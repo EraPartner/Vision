@@ -23,13 +23,13 @@ export function InspectorToggle() {
             <Activity
                 className={cn(
                     'h-3.5 w-3.5',
-                    hasPending && 'animate-pulse text-amber-500',
+                    hasPending && 'animate-pulse text-warning',
                     isOpen && !hasPending && 'text-primary',
                 )}
             />
             <span>API</span>
             {hasPending && (
-                <span className="text-amber-500 tabular-nums">{inFlight.length}</span>
+                <span className="text-warning tabular-nums">{inFlight.length}</span>
             )}
         </button>
     );
