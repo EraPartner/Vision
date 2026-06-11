@@ -775,20 +775,23 @@ Additionally, the shell destroys its health-poll `keepAlive` agent on quit befor
 
 ### Error Page
 
-If backend is unavailable at startup, `error.html` displays:
+If backend is unavailable at startup, `error.html` displays (strings localized via `app.*` i18n keys since 2026-06-11):
 
 ```
 ┌───────────────────────────────────────────────────┐
-│  Backend Service Unavailable                      │
-│  Vision's backend service is not responding.       │
-│  Check logs or try restarting.                     │
+│  Vision couldn't start                            │
+│  Vision couldn't reach its backend. Try again,    │
+│  or check the logs to see what happened.          │
 │                                                   │
-│  [Retry]      [Open Logs]                         │
+│  [Try again]      [Open logs]                     │
 └───────────────────────────────────────────────────┘
 ```
 
-**Retry** → Re-runs health poll from current state
-**Open Logs** → Opens app logs directory
+**Try again** → Re-runs health poll from current state (`recovery:retry` IPC)
+**Open logs** → Opens app logs directory (`recovery:open-logs` IPC)
+
+> [!info] Localization status
+> The error page has been fully localized since 2026-06-11. Prior to that date, `packaging/electron/main.js` passed the i18n key names as the query-param values (e.g. `?title=app.errorPageTitle`) because the keys were absent from `i18n/source/` — see the correction note in [[docs/adr/022-electron-sandbox-hardening-and-recovery|ADR-022]] and the batch entry in [[docs/i18n/translations|translations]] for details.
 
 ### Runtime Watchdog
 

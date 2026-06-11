@@ -4,8 +4,8 @@ type: i18n
 status: active
 date: 2026-04-27
 updated: 2026-06-11
-tags: [i18n, translations, localization, internationalization, phase-6, phase-8, phase-f, phase-9, phase-c, phase-d, phase-2, splits, settlement, admin, observability, cash-flow-forecast, pdf-export, portfolio, tax, backup, encrypt, passphrase-modal, accessibility, aria-label, bug-hunt-2026-05-06, chart-aria, screen-reader, plural, tc, intl-plural-rules, planned-page, toast, electron-native, menu, system-accent, suggestion-card, splash, upcoming-count, june-2026]
-description: Internationalization system including supported languages, translation workflow, and usage patterns. Phase 6 adds 32 export keys for PDF report localization. Phase 8 adds 11 additional export.section.* keys for portfolio (6) and tax (7) report sections. Phase C adds 15 cash flow forecast keys. Phase F adds 60 admin observability keys. 2026-05-29 adds 16 chart.aria.* keys (localized chart screen-reader summaries) and 21 aria.* keys (localized icon-button aria-labels). June 2026 adds tc() plural mechanism and plannedPage error-toast keys. June 2026 (ADR-070) adds 5 commandPalette.* keys (en + nl) for the new ⌘K command palette. June 2026 Premium v3 (ADR-071) adds 8 keys: settings.general.enhancedEffects/Hint, shortcuts.title/showHelp/closeDialog/chartScrub, commandPalette.recent/searchTransactions. June 2026 Premium v3 V5-V7 adds 14 keys: contextMenu.* (8 keys), quickLook.* (2 keys), shortcuts table-interaction additions (4 keys). June 2026 V12 (ADR-072) adds 11 keys: menu.edit/file/go/importCsv/keyboardShortcuts/newTransaction/settings/toggleSidebar/view, settings.appearance.systemAccent/systemAccentHint; settings.general.enhancedEffectsHint reworded. June 2026 V11 adds 4 keys: dashboard.suggestions, dashboard.widgetDescriptions.suggestions, suggestions.kicker, suggestions.review. June 2026 (startup/UI fixes) adds 5 splash.* keys (en + nl, Electron boot splash narration) + tc()-plural upcoming.count.one/.other; removes upcoming.countSingle/countPlural. Total: ~2898 keys.
+tags: [i18n, translations, localization, internationalization, phase-6, phase-8, phase-f, phase-9, phase-c, phase-d, phase-2, splits, settlement, admin, observability, cash-flow-forecast, pdf-export, portfolio, tax, backup, encrypt, passphrase-modal, accessibility, aria-label, bug-hunt-2026-05-06, chart-aria, screen-reader, plural, tc, intl-plural-rules, planned-page, toast, electron-native, menu, system-accent, suggestion-card, splash, upcoming-count, electron-error-page, backend-watchdog, june-2026]
+description: Internationalization system including supported languages, translation workflow, and usage patterns. Phase 6 adds 32 export keys for PDF report localization. Phase 8 adds 11 additional export.section.* keys for portfolio (6) and tax (7) report sections. Phase C adds 15 cash flow forecast keys. Phase F adds 60 admin observability keys. 2026-05-29 adds 16 chart.aria.* keys (localized chart screen-reader summaries) and 21 aria.* keys (localized icon-button aria-labels). June 2026 adds tc() plural mechanism and plannedPage error-toast keys. June 2026 (ADR-070) adds 5 commandPalette.* keys (en + nl) for the new ⌘K command palette. June 2026 Premium v3 (ADR-071) adds 8 keys: settings.general.enhancedEffects/Hint, shortcuts.title/showHelp/closeDialog/chartScrub, commandPalette.recent/searchTransactions. June 2026 Premium v3 V5-V7 adds 14 keys: contextMenu.* (8 keys), quickLook.* (2 keys), shortcuts table-interaction additions (4 keys). June 2026 V12 (ADR-072) adds 11 keys: menu.edit/file/go/importCsv/keyboardShortcuts/newTransaction/settings/toggleSidebar/view, settings.appearance.systemAccent/systemAccentHint; settings.general.enhancedEffectsHint reworded. June 2026 V11 adds 4 keys: dashboard.suggestions, dashboard.widgetDescriptions.suggestions, suggestions.kicker, suggestions.review. June 2026 (startup/UI fixes) adds 5 splash.* keys (en + nl, Electron boot splash narration) + tc()-plural upcoming.count.one/.other; removes upcoming.countSingle/countPlural. 2026-06-11 adds 5 app.* keys (Electron error page + backend-lost watchdog, en + nl). Total: 2896 keys.
 aliases: [i18n, translations, localization, language, nl, en, dutch, english]
 related_code: ["apps/frontend/src/locales", "apps/frontend/src/contexts/LanguageContext.tsx", "apps/frontend/src/hooks/useSplits.ts"]
 ---
@@ -173,6 +173,7 @@ Examples:
 | `aria.*` | Icon-button accessible names | `aria.deleteTransaction`, `aria.save` |
 | `chart.aria.*` | Chart screen-reader summary fragments | `chart.aria.kind.bar`, `chart.aria.seriesOther` |
 | `splash.*` | Electron boot-splash phase labels (main-process only, not rendered in React) | `splash.checkingDocker`, `splash.waitingApp` |
+| `app.*` | Electron shell error page and watchdog messages (main-process only, not rendered in React) | `app.errorPageTitle`, `app.backendLost` |
 
 ## Adding New Translations
 
@@ -232,6 +233,27 @@ These are used only in the Electron main process (`setSplashStatus()`); they are
 **2 removed keys** — replaced by `tc('upcoming.count', count)`:
 - `upcoming.countSingle`
 - `upcoming.countPlural`
+
+#### Electron error page + backend-lost watchdog (2026-06-11)
+
+5 new keys added to `i18n/source/en.json` + `nl.json`; `bun run generate-locales` + `validate-locales` clean. Keys also flow to `packaging/electron/i18n/en.json` + `nl.json` via `generate-locales`. Total after this batch: **2896 keys**.
+
+**5 new `app.*` keys** — Electron startup error page and runtime backend-lost watchdog (main process only, not rendered in React):
+
+| Key | EN | NL |
+|-----|----|----|
+| `app.errorPageTitle` | "Vision couldn't start" | "Vision kon niet starten" |
+| `app.errorPageMessage` | "Vision couldn't reach its backend. Try again, or check the logs to see what happened." | "Vision kon de backend niet bereiken. Probeer het opnieuw of bekijk de logboeken om te zien wat er gebeurde." |
+| `app.errorPageRetry` | "Try again" | "Opnieuw proberen" |
+| `app.errorPageOpenLogs` | "Open logs" | "Logboeken openen" |
+| `app.backendLost` | "Connection to the Vision backend was lost. Reconnecting…" | "Verbinding met de Vision-backend verbroken. Opnieuw verbinden…" |
+
+> [!info] Implementation gap corrected
+> ADR-022 (section 6) documented these five keys at acceptance time but they were never committed to `i18n/source/`. From ADR-022's merge until today, `packaging/electron/main.js` called `t('app.errorPageTitle')` etc. and received the raw key name back as a fallback string (e.g., the error page title appeared as `"app.errorPageTitle"`). The gap went unnoticed because the error page only appears when the startup health poll times out. This batch closes the gap. See the correction note appended to [[docs/adr/022-electron-sandbox-hardening-and-recovery|ADR-022]] for full details.
+
+Code links: [[packaging/electron/main.js]], [[i18n/source/en.json]], [[i18n/source/nl.json]], [[packaging/electron/i18n/en.json]], [[packaging/electron/i18n/nl.json]]
+
+---
 
 #### Premium v3 V8-V11 batch (June 2026, ADR-071)
 
