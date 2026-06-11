@@ -3,9 +3,9 @@ title: UI Components
 type: component
 status: active
 date: 2026-04-17
-updated: 2026-06-10
-tags: [components, ui, radix, shadcn, design-system, phase-9, phase-5, performance, glass-downgrade, dependency-slim-down, liquid-glass-v2, premium-v3, june-2026, command-palette, rolling-number, money-typography, delta-pill, shortcuts-overlay, chart-skeleton, virtual-data-table, context-menu, quick-look, keyboard-nav]
-description: Reusable UI components built on Radix UI primitives with Tailwind CSS, styled with emerald + champagne-gold palette and optimized design tokens. Phase 5 removes unused Carousel, Resizable, and Drawer wrappers. June 2026 Liquid Glass v2 — Card gains universal premium-frame hover, Dialog/AlertDialog use dialog-in/out keyframes, Sonner toasts are glass-thick, EmptyState upgraded, CommandPalette added. June 2026 Premium v3 — RollingNumber, Money, DeltaPill, ShortcutsOverlay, ChartSkeleton shared components; tabs.tsx animated active-pill indicator. June 2026 Premium v3 V5-V7 — VirtualDataTable gains per-row context menu, keyboard row navigation (↑/↓/Enter/Space), and onRowOpen/onRowQuickLook/rowContextMenu props; TransactionQuickLook added.
+updated: 2026-06-11
+tags: [components, ui, radix, shadcn, design-system, phase-9, phase-5, performance, glass-downgrade, dependency-slim-down, liquid-glass-v2, premium-v3, june-2026, command-palette, rolling-number, money-typography, delta-pill, shortcuts-overlay, chart-skeleton, virtual-data-table, context-menu, quick-look, keyboard-nav, dialog-genie, icon-bounce]
+description: Reusable UI components built on Radix UI primitives with Tailwind CSS, styled with emerald + champagne-gold palette and optimized design tokens. Phase 5 removes unused Carousel, Resizable, and Drawer wrappers. June 2026 Liquid Glass v2 — Card gains universal premium-frame hover, Dialog/AlertDialog use dialog-in/out keyframes, Sonner toasts are glass-thick, EmptyState upgraded, CommandPalette added. June 2026 Premium v3 — RollingNumber, Money, DeltaPill, ShortcutsOverlay, ChartSkeleton shared components; tabs.tsx animated active-pill indicator. June 2026 Premium v3 V5-V7 — VirtualDataTable gains per-row context menu, keyboard row navigation (↑/↓/Enter/Space), and onRowOpen/onRowQuickLook/rowContextMenu props; TransactionQuickLook added. V8: icon-success-bounce animation on Sonner success toast icons. V10: Dialog/AlertDialog genie exit (pointer-driven transform-origin via lib/dialogGenie.ts).
 aliases: [ui-components, radix-components, shadcn-components, primitive-components]
 related_code: ["apps/frontend/src/components/ui"]
 ---
@@ -368,13 +368,36 @@ Modal dialog overlay.
 </Dialog>
 ```
 
-### Animation (Liquid Glass v2)
+### Animation (Liquid Glass v2 + V10 Genie Exit)
 
 Dialog and `AlertDialog` animations were rebuilt in June 2026 (ADR-070):
 
 - Enter: `animate-dialog-in` keyframe with overshoot bezier `cubic-bezier(0.34, 1.45, 0.64, 1)` — spring feel without JS, fixes Tailwind v4 `translate`-property double-offset glitch from the prior `slide-in-from-left-1/2` recipe.
 - Exit: `animate-dialog-out` keyframe.
 - `motion-reduce` media query disables both keyframes.
+
+#### Genie Exit (V10 — `lib/dialogGenie.ts`)
+
+V10 adds pointer-driven transform-origin for dialog close animations:
+
+- **`lib/dialogGenie.ts`**: A module-level `pointerdown` capture listener records the last pointer position and timestamp. `useGenieOrigin()` returns a ref callback; attaching it to `DialogContent` (or `AlertDialogContent`) sets three CSS custom properties on the element at mount time when the opening pointer event is less than 1.5 s old: `--genie-origin` (transform-origin as `{x}% {y}%`), `--genie-scale`, `--genie-y`.
+- **`dialog-out` keyframe target** (tailwind.config.ts): now animates to `scale(var(--genie-scale, 0.97)) translateY(var(--genie-y, 6px))` — pointer-opened dialogs shrink toward the pointer; keyboard-opened dialogs fall back to the previous neutral exit. Duration increased from 160 ms to 200 ms for readable travel.
+- **Closed-state**: `data-[state=closed]:[transform-origin:var(--genie-origin,50%_50%)]` is applied in `dialog.tsx` and `alert-dialog.tsx`.
+- **`composeRefs` helper**: exported from `dialogGenie.ts` for merging multiple React refs on the same element.
+- **Sheets**: not affected (Sheet polish remains on the v4 candidate list).
+- **Reduced motion**: unaffected — `animate-none` already kills both keyframes.
+
+```typescript
+// Consuming the hook (already wired into dialog.tsx / alert-dialog.tsx)
+import { useGenieOrigin, composeRefs } from "@/lib/dialogGenie";
+
+function MyDialogContent({ ref, ...props }) {
+  const genieRef = useGenieOrigin();
+  return <DialogPrimitive.Content ref={composeRefs(ref, genieRef)} {...props} />;
+}
+```
+
+Code links: [[apps/frontend/src/lib/dialogGenie.ts]], [[apps/frontend/src/components/ui/dialog.tsx]], [[apps/frontend/src/components/ui/alert-dialog.tsx]]
 
 ### Components
 
@@ -388,11 +411,31 @@ Dialog and `AlertDialog` animations were rebuilt in June 2026 (ADR-070):
 
 ---
 
-## Sonner (Liquid Glass v2)
+## Sonner (Liquid Glass v2 + V8 Icon Bounce)
 
 Toasts use `.glass-thick` material (28px blur + saturate) as of June 2026 (ADR-070). Previously a solid/semi-transparent surface.
 
-Code links: [[apps/frontend/src/components/ui/sonner.tsx]]
+### Icon Success Bounce (V8)
+
+All Sonner success toast icons receive an SF-Symbols-style bounce animation automatically via a global CSS rule (no per-callsite changes needed):
+
+```css
+/* index.css — covers all ~75 toast.success() call sites */
+[data-sonner-toast][data-type="success"] [data-icon] {
+  animation: icon-success-bounce 0.45s cubic-bezier(0.34, 1.56, 0.64, 1) both;
+}
+
+@keyframes icon-success-bounce {
+  0%   { transform: scale(0.4) rotate(-8deg); opacity: 0; }
+  60%  { transform: scale(1.15) rotate(4deg); opacity: 1; }
+  100% { transform: scale(1) rotate(0deg); }
+}
+```
+
+- The `.icon-success-bounce` utility class is also available for ad-hoc use on any icon element (e.g., the `CheckCircle2` in `TransactionImportCard`'s import-complete summary).
+- `prefers-reduced-motion: reduce` sets `animation: none` on the class and the global rule.
+
+Code links: [[apps/frontend/src/index.css]], [[apps/frontend/src/components/ui/sonner.tsx]], [[apps/frontend/src/features/imports/TransactionImportCard.tsx]]
 
 ---
 
@@ -510,7 +553,7 @@ Standardized tinted change chip:
 - **success** tint for positive deltas; **destructive** tint for negative; **muted** for neutral.
 - Direction arrow (↑/↓) included.
 - `invert?: boolean` prop for spend-down-is-good semantics (e.g., expense reduction should be green).
-- **Adoption:** StatCard `change` prop. Portfolio colored-delta text conversion deferred to a later sweep.
+- **Adoption:** StatCard `change` prop; portfolio holdings tables and summary cards (StocksPage unrealized-percent cell, CryptoPage unrealized-percent cell, RealEstatePage Total Return ROI subtitle and per-property card ROI — B3 of the Premium v3 batch, completed 2026-06-11).
 
 ### ShortcutsOverlay
 

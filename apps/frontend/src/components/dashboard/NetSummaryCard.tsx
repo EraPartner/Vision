@@ -1,3 +1,4 @@
+import { useState } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Sparkline as ChartSparkline } from "@/components/charts";
@@ -23,6 +24,22 @@ export function NetSummaryCard({ netBalance, income, spending, history }: NetSum
   const locale = numberFormatToLocale(appSettings.numberFormat);
   const { formatCompact } = useChartCurrencyFormatter();
 
+  // Scrubbing the sparkline drives the hero number through netHistory;
+  // releasing/leaving snaps back to the live month. Card-level tint and the
+  // header icon deliberately stay bound to the live value so the whole card
+  // doesn't strobe while scrubbing.
+  const [scrubIndex, setScrubIndex] = useState<number | undefined>(undefined);
+  const scrubPoint = scrubIndex !== undefined ? history[scrubIndex] : undefined;
+
+  const scrubFromEvent = (e: React.PointerEvent<HTMLDivElement>) => {
+    if (history.length < 2) return;
+    const rect = e.currentTarget.getBoundingClientRect();
+    if (rect.width === 0) return;
+    const frac = (e.clientX - rect.left) / rect.width;
+    const idx = Math.round(frac * (history.length - 1));
+    setScrubIndex(Math.max(0, Math.min(history.length - 1, idx)));
+  };
+
   const isPositive = netBalance >= 0;
 
   const savingsRate = income > 0 ? ((income - spending) / income) * 100 : null;
@@ -38,10 +55,11 @@ export function NetSummaryCard({ netBalance, income, spending, history }: NetSum
   }));
 
   const trendGradient = isPositive ? "from-accent/10 to-accent/5" : "from-destructive/10 to-destructive/5";
-  const netColor = isPositive ? "text-accent" : "text-destructive";
   const areaStroke = isPositive ? "var(--color-accent, oklch(72% 0.15 160))" : "var(--color-destructive, oklch(65% 0.2 25))";
 
-  const netCompact = formatCompact(netBalance);
+  const shownNet = scrubPoint ? scrubPoint.net : netBalance;
+  const netColor = shownNet >= 0 ? "text-accent" : "text-destructive";
+  const netCompact = formatCompact(shownNet);
   const incomeCompact = formatCompact(incomeTotal);
   const spendingCompact = formatCompact(spendingTotal);
 
@@ -109,11 +127,24 @@ export function NetSummaryCard({ netBalance, income, spending, history }: NetSum
         </div>
 
         {chartData.length > 1 && (
-          <div className="mt-auto">
-            <p className="text-xs text-muted-foreground mb-1">
-              {t('dashboard.stat.netTrend', { n: chartData.length })}
+          <div
+            className="mt-auto cursor-crosshair select-none"
+            style={{ touchAction: "pan-y" }}
+            onPointerMove={scrubFromEvent}
+            onPointerDown={(e) => {
+              e.currentTarget.setPointerCapture(e.pointerId);
+              scrubFromEvent(e);
+            }}
+            onPointerUp={() => setScrubIndex(undefined)}
+            onPointerCancel={() => setScrubIndex(undefined)}
+            onPointerLeave={() => setScrubIndex(undefined)}
+          >
+            <p className={`text-xs mb-1 ${scrubPoint ? "font-medium text-foreground" : "text-muted-foreground"}`}>
+              {scrubPoint && scrubIndex !== undefined
+                ? chartData[scrubIndex].label
+                : t('dashboard.stat.netTrend', { n: chartData.length })}
             </p>
-            <ChartSparkline data={chartData.map((d) => d.net)} height={80} color={areaStroke} fillArea strokeWidth={2} />
+            <ChartSparkline data={chartData.map((d) => d.net)} height={80} color={areaStroke} fillArea strokeWidth={2} activeIndex={scrubIndex} />
           </div>
         )}
       </CardContent>

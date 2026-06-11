@@ -55,6 +55,7 @@ The main landing page providing a quick overview of your finances.
 
 | Widget | Description |
 |--------|-------------|
+| **Suggestions** | Contextual suggestion card — appears only when planned payments are due within 7 days (replaces the global upcoming-payments banner on the dashboard) |
 | **Stat Cards** | Total income, expenses, net worth summary |
 | **Bank Balances** | Current balance per bank account |
 | **Monthly Trends** | Income vs expenses over time (bar chart) |

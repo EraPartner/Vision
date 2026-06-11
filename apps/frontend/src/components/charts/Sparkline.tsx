@@ -20,6 +20,8 @@ export interface SparklineProps {
     readonly strokeWidth?: number;
     readonly fillArea?: boolean;
     readonly ariaLabel?: string;
+    /** Highlight the point at this index (scrub indicator: hairline + dot). */
+    readonly activeIndex?: number;
 }
 
 export function Sparkline(props: SparklineProps) {
@@ -43,6 +45,7 @@ function Inner({
     width,
     height,
     ariaLabel,
+    activeIndex,
 }: SparklineProps & { width: number; height: number }) {
     const { t } = useLanguage();
     const reduce = useReducedMotion();
@@ -102,6 +105,27 @@ function Inner({
                     fill="none"
                 />
             </motion.g>
+            {activeIndex !== undefined && activeIndex >= 0 && activeIndex < data.length && (
+                <g aria-hidden="true">
+                    <line
+                        x1={xScale(activeIndex)}
+                        x2={xScale(activeIndex)}
+                        y1={0}
+                        y2={height}
+                        stroke={color}
+                        strokeOpacity={0.35}
+                        strokeWidth={1}
+                    />
+                    <circle
+                        cx={xScale(activeIndex)}
+                        cy={yScale(data[activeIndex])}
+                        r={3.5}
+                        fill={color}
+                        stroke="hsl(var(--background))"
+                        strokeWidth={1.5}
+                    />
+                </g>
+            )}
         </svg>
     );
 }

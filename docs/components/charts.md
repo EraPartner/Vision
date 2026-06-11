@@ -4,8 +4,8 @@ type: component
 status: active
 date: 2026-04-24
 updated: 2026-06-10
-tags: [components, charts, visx, d3, visualization, phase-9, phase-h, accessibility, aria-label, screen-reader, i18n, localization, premium-v3, chart-scrub, chart-sync, chart-skeleton, sweep-reveal, june-2026]
-description: Low-level chart primitives built on visx + d3, replacing Recharts with design-token-aware styling. 2026-05-29: chartAria.ts generators now accept t()/kindKey for fully localized chart screen-reader summaries across all 7 chart types and both supported languages. June 2026 Premium v3 (ADR-071): scrubbable prop + useChartScrub (scrub-to-compare), syncId prop + ChartSyncContext (synced crosshairs), sweep reveal on AreaChart, ChartSkeleton ghost waveform.
+tags: [components, charts, visx, d3, visualization, phase-9, phase-h, accessibility, aria-label, screen-reader, i18n, localization, premium-v3, chart-scrub, chart-sync, chart-skeleton, sweep-reveal, sparkline-scrub, june-2026]
+description: Low-level chart primitives built on visx + d3, replacing Recharts with design-token-aware styling. 2026-05-29: chartAria.ts generators now accept t()/kindKey for fully localized chart screen-reader summaries across all 7 chart types and both supported languages. June 2026 Premium v3 (ADR-071): scrubbable prop + useChartScrub (scrub-to-compare), syncId prop + ChartSyncContext (synced crosshairs), sweep reveal on AreaChart, ChartSkeleton ghost waveform. V9: Sparkline activeIndex prop (hairline + dot indicator for stat-card scrub).
 aliases: [charts, chart-components, visx-charts, charting, visualization]
 related_code:
   - apps/frontend/src/components/charts
@@ -45,7 +45,7 @@ See [[docs/adr/018-visx-d3-chart-migration|ADR-018: visx/d3 Chart Migration]] fo
 | `PieChart` | Basic pie distribution | Category spending pie | StatisticsPage |
 | `DonutChart` | Donut/ring distribution | Segmented breakdown with center label | StatisticsPage |
 | `LineChart` | Multi-line trends + reference lines | Portfolio performance, rolling cashflow forecast | PerformancePage, WatchlistPage, CashFlowForecastChart (Phase H) |
-| `Sparkline` | Mini inline sparkline | Micro-charts in stat cards or tables | StatCard, performance tables |
+| `Sparkline` | Mini inline sparkline with optional hover indicator | Micro-charts in stat cards or tables | StatCard, NetSummaryCard scrub surface, performance tables |
 | `Candlestick` | OHLC price action | Stock/crypto price visualization | StocksPage, CryptoPage |
 | `TreemapChart` | Hierarchical rectangles | Category spending breakdown | StatisticsPage |
 | `SankeyChart` | Flow diagram with d3-sankey | Income-to-category allocation | StatisticsPage Flow tab |
@@ -126,6 +126,28 @@ function StatCard() {
   );
 }
 ```
+
+### Sparkline `activeIndex` Prop (V9)
+
+`Sparkline` accepts an optional `activeIndex?: number` prop. When set:
+
+- A vertical hairline is drawn at the corresponding data point's x position.
+- A dot is rendered on the line at that point.
+- Used by `NetSummaryCard` to show which month is being scrubbed when the user hovers or drags over the sparkline strip.
+
+```tsx
+const [activeIndex, setActiveIndex] = useState<number | undefined>(undefined);
+
+<Sparkline
+  data={netHistory}
+  width={200}
+  height={32}
+  activeIndex={activeIndex}
+  strokeColor="emerald"
+/>
+```
+
+**Code:** [[apps/frontend/src/components/charts/Sparkline.tsx]]
 
 ### LineChart with Multiple Series
 

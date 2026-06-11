@@ -74,3 +74,15 @@ Follow-up to [[docs/adr/070-liquid-glass-v2-premium-frontend|ADR-070]]. The user
 - [[docs/adr/020-glass-system-downgrade-liquid-canvas-removal|ADR-020: Glass System Downgrade]]
 - [[docs/architecture/frontend-architecture|Frontend Architecture]]
 - [[docs/adr/index|All ADRs]]
+
+---
+
+## Addendum — 2026-06-11: DeltaPill portfolio sweep complete (B3)
+
+The "adopted in StatCard" scope noted in the Decision section above was the initial adoption. B3 of this batch — the portfolio DeltaPill sweep — was completed on 2026-06-11:
+
+- **StocksPage** (`apps/frontend/src/pages/portfolio/StocksPage.tsx`): holdings-table unrealized-percent cell replaced with `DeltaPill` (value = `unrealizedPercent`, label via `fmtPct`).
+- **CryptoPage** (`apps/frontend/src/pages/portfolio/CryptoPage.tsx`): holdings-table unrealized-percent cell replaced with `DeltaPill` (`h.gainLossPercent`).
+- **RealEstatePage** (`apps/frontend/src/pages/portfolio/RealEstatePage.tsx`): two spots — (a) Total Return summary card ROI subtitle ("+x.x% Total ROI") replaced with `DeltaPill` + muted label; (b) each property card's "Total ROI" colored percent replaced with `DeltaPill`.
+
+All ad-hoc green/red percent strings in the three portfolio pages are now standardised on the shared component.

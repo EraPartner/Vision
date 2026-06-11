@@ -1,89 +1,31 @@
-import { useQuery } from "@tanstack/react-query";
-import { apiClient } from "@/lib/api";
 import { Alert, AlertTitle, AlertDescription } from "@/components/ui/alert";
 import { Bell, X, CalendarClock } from "lucide-react";
-import { useEffect, useState } from "react";
+import { useEffect } from "react";
 import { formatCurrency } from "@/utils/currency";
-import { Link } from "react-router-dom";
+import { Link, useLocation } from "react-router-dom";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { useAppSettings } from "@/contexts/AppSettingsContext";
 import { numberFormatToLocale } from "@/utils/currency";
-import { toYmd } from "@/lib/timezone";
 import { formatDateStringWithAppSettings } from "@/components/shared/dateUtils";
 import { isElectronMac, setDockBadge } from "@/lib/api/electron";
-
-const DISMISSED_UPCOMING_PLANNED_STORAGE_KEY = "dismissed_upcoming_planned_payments";
+import { useUpcomingPlannedPayments } from "@/hooks/useUpcomingPlannedPayments";
+import { useWidgetVisibility } from "@/hooks/useWidgetVisibility";
 
 export function UpcomingPaymentsNotification() {
   const { t } = useLanguage();
   const { appSettings } = useAppSettings();
   const locale = numberFormatToLocale(appSettings.numberFormat);
-  const [dismissedIds, setDismissedIds] = useState<Set<number>>(new Set());
-  const [dismissedLoaded, setDismissedLoaded] = useState(false);
+  const { upcoming, visibleUpcoming, dismiss } = useUpcomingPlannedPayments();
 
-  const loadDismissedFromLocalStorage = () => {
-    try {
-      const raw = window.localStorage.getItem(DISMISSED_UPCOMING_PLANNED_STORAGE_KEY);
-      if (!raw) return;
-      const parsed = JSON.parse(raw);
-      if (Array.isArray(parsed)) {
-        const values = parsed
-          .map((v) => Number(v))
-          .filter((v) => Number.isInteger(v) && v > 0);
-        setDismissedIds(new Set(values));
-      }
-    } catch {
-      // Ignore invalid localStorage payloads.
-    }
-  };
-
-  const persistDismissedToLocalStorage = (values: Set<number>) => {
-    try {
-      window.localStorage.setItem(DISMISSED_UPCOMING_PLANNED_STORAGE_KEY, JSON.stringify([...values]));
-    } catch {
-      // Ignore storage write failures.
-    }
-  };
-
-  const dismissById = (plannedPaymentId: number) => {
-    const next = new Set(dismissedIds);
-    next.add(plannedPaymentId);
-    setDismissedIds(next);
-    persistDismissedToLocalStorage(next);
-  };
-
-  useEffect(() => {
-    loadDismissedFromLocalStorage();
-    setDismissedLoaded(true);
-  }, []);
-
-  const queryDate = toYmd(new Date());
-
-  const { data: upcoming } = useQuery({
-    queryKey: ["upcomingPlannedPayments", queryDate],
-    queryFn: async () => {
-      // Derive the range from queryDate (the key) so the fetched window can't
-      // disagree with the cache key across a midnight boundary.
-      const nextWeek = new Date(`${queryDate}T00:00:00`);
-      nextWeek.setDate(nextWeek.getDate() + 7);
-
-      const response = await apiClient.getPlannedTransactions({
-        active: true,
-        start_date: queryDate,
-        end_date: toYmd(nextWeek),
-        limit: 100,
-      });
-
-      // Filter out already-executed one-time payments
-      return response.items.filter((pt) => !(pt.is_executed && !pt.is_recurring));
-    },
-    staleTime: 5 * 60_000,
-  });
-
-  const visibleUpcoming = (upcoming ?? []).filter((pt) => !dismissedIds.has(pt.id));
+  // The dashboard renders the same payments as a contextual SuggestionCard,
+  // so the banner stands down there — unless the user hid that widget, in
+  // which case the banner remains the fallback surface.
+  const { pathname } = useLocation();
+  const { isVisible } = useWidgetVisibility("dashboard", []);
+  const suppressedByDashboardCard = pathname === "/" && isVisible("suggestions");
 
   // macOS dock badge mirrors the visible (non-dismissed) due count.
-  const badgeCount = dismissedLoaded && upcoming !== undefined ? visibleUpcoming.length : null;
+  const badgeCount = upcoming !== undefined ? visibleUpcoming.length : null;
   useEffect(() => {
     if (!isElectronMac() || badgeCount === null) return;
     setDockBadge(badgeCount);
@@ -92,7 +34,7 @@ export function UpcomingPaymentsNotification() {
     return () => { if (isElectronMac()) setDockBadge(0); };
   }, []);
 
-  if (!dismissedLoaded || visibleUpcoming.length === 0) return null;
+  if (suppressedByDashboardCard || visibleUpcoming.length === 0) return null;
 
   return (
     <Alert className="relative border-primary/30 bg-primary/5 mb-4">
@@ -119,7 +61,7 @@ export function UpcomingPaymentsNotification() {
                 className="inline-flex items-center justify-center h-5 w-5 rounded-sm text-muted-foreground hover:bg-accent hover:text-accent-foreground transition-colors"
                 title={t('recurring.dismiss')}
                 aria-label={t('recurring.dismiss')}
-                onClick={() => dismissById(pt.id)}
+                onClick={() => dismiss(pt.id)}
               >
                 <X className="h-3 w-3" />
               </button>
@@ -145,12 +87,7 @@ export function UpcomingPaymentsNotification() {
         className="absolute top-2 right-2 inline-flex items-center justify-center h-5 w-5 rounded-sm text-muted-foreground hover:bg-accent hover:text-accent-foreground transition-colors"
         title={t('upcoming.dismissAll')}
         aria-label={t('upcoming.dismissAll')}
-        onClick={() => {
-          const next = new Set(dismissedIds);
-          visibleUpcoming.forEach((pt) => next.add(pt.id));
-          setDismissedIds(next);
-          persistDismissedToLocalStorage(next);
-        }}
+        onClick={() => dismiss(visibleUpcoming.map((pt) => pt.id))}
       >
         <X className="h-3 w-3" />
       </button>

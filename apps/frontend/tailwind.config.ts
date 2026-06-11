@@ -160,9 +160,12 @@ export default {
                     from: { opacity: "0", transform: "scale(0.95) translateY(12px)" },
                     to: { opacity: "1", transform: "scale(1) translateY(0)" },
                 },
+                // Exit reads per-element genie vars (lib/dialogGenie.ts) so a
+                // pointer-opened dialog shrinks toward its trigger; the
+                // fallbacks reproduce the neutral fade-down for keyboard opens.
                 "dialog-out": {
                     from: { opacity: "1", transform: "scale(1) translateY(0)" },
-                    to: { opacity: "0", transform: "scale(0.97) translateY(6px)" },
+                    to: { opacity: "0", transform: "scale(var(--genie-scale, 0.97)) translateY(var(--genie-y, 6px))" },
                 },
             },
             animation: {
@@ -174,7 +177,7 @@ export default {
                 shimmer: "shimmer 2.4s linear infinite",
                 // Overshooting bezier gives the spring feel without JS.
                 "dialog-in": "dialog-in 420ms cubic-bezier(0.34, 1.45, 0.64, 1) both",
-                "dialog-out": "dialog-out 160ms var(--ease-out-quint) both",
+                "dialog-out": "dialog-out 200ms var(--ease-out-quint) both",
             },
         },
     },

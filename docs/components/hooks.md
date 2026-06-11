@@ -6,7 +6,7 @@ date: 2026-04-23
 updated: 2026-06-10
 last_modified: 2026-06-10
 tags: [components, hooks, react-query, zustand, form-state, data-table, phase-4, phase-13, phase-c, phase-d, i18n, notifications, export-filters, bug-hunt-2026-05-05, bug-hunt-2026-05-06, bug-hunt-2026-05-08, mount-guard, query-key-fix, prefetch, memoization, useCallback, parseLocaleNumber, currency-utilities, exclusion-ids, ssrf-correctness, loading-states, error-states, isError, refetch, recipient-insights-filter, optimistic-updates, optimistic-create, liquid-glass-v2, premium-v3, june-2026]
-description: Custom React hooks for data fetching and state management. Includes toast notifications for mutations via i18n keys. Phase 13 adds useBankAccounts hook for export filtering. May 2026 bug hunt adds mount guard to usePlannedPayments, fixes queryKey mismatch in usePortfolioPrefetch, and documents parseLocaleNumber utility for locale-aware number parsing. 2026-05-29 adds useExcludedIds as a shared exclusion-resolution hook and exposes isLoading/isError/error/refetch from usePortfolio so asset pages can distinguish loading/error from empty. 2026-06-01: useStatistics adds recipientInsightsFilteredQuery so the all-years Top Recipients chart reacts to exclusion toggles. 2026-06-10: useUpdateTransaction/useDeleteTransaction made optimistic (ADR-070 Tier 5). 2026-06-10 Premium v3 (ADR-071): useCreateTransaction made optimistic (temp negative-id row, server swap, rollback, onSettled invalidate; 6 tests total).
+description: Custom React hooks for data fetching and state management. Includes toast notifications for mutations via i18n keys. Phase 13 adds useBankAccounts hook for export filtering. May 2026 bug hunt adds mount guard to usePlannedPayments, fixes queryKey mismatch in usePortfolioPrefetch, and documents parseLocaleNumber utility for locale-aware number parsing. 2026-05-29 adds useExcludedIds as a shared exclusion-resolution hook and exposes isLoading/isError/error/refetch from usePortfolio so asset pages can distinguish loading/error from empty. 2026-06-01: useStatistics adds recipientInsightsFilteredQuery so the all-years Top Recipients chart reacts to exclusion toggles. 2026-06-10: useUpdateTransaction/useDeleteTransaction made optimistic (ADR-070 Tier 5). 2026-06-10 Premium v3 (ADR-071): useCreateTransaction made optimistic (temp negative-id row, server swap, rollback, onSettled invalidate; 6 tests total). 2026-06-10 V11: useUpcomingPlannedPayments — shared "due in next 7 days" query + module-level dismissed-ID store (useSyncExternalStore, persists to localStorage).
 related_code: ["apps/frontend/src/hooks"]
 ---
 
@@ -35,6 +35,7 @@ Vision uses custom hooks for data fetching, state management, and reusable logic
 | `useBankAccounts()` | Distinct bank account IBANs (Phase 13) | [[apps/frontend/src/hooks/useBankAccounts.ts\|useBankAccounts.ts]] |
 | `usePortfolio()` | Investment portfolio | [[apps/frontend/src/hooks/usePortfolio.ts\|usePortfolio.ts]] |
 | `usePlannedPayments()` | Planned transactions | [[apps/frontend/src/hooks/usePlannedPayments.ts\|usePlannedPayments.ts]] |
+| `useUpcomingPlannedPayments()` | Shared "due next 7 days" query + dismissed-ID store (V11) | [[apps/frontend/src/hooks/useUpcomingPlannedPayments.ts\|useUpcomingPlannedPayments.ts]] |
 | `useStatistics()` | Analytics data | [[apps/frontend/src/hooks/useStatistics.ts\|useStatistics.ts]] |
 | `useSplits()` | Debt tracking | [[apps/frontend/src/hooks/useSplits.ts\|useSplits.ts]] |
 | `useSavedCharts()` | Saved chart configs | [[apps/frontend/src/hooks/useSavedCharts.ts\|useSavedCharts.ts]] |
@@ -283,6 +284,52 @@ interface UsePlannedPaymentsOptions {
   includeExecuted?: boolean;
 }
 ```
+
+---
+
+## useUpcomingPlannedPayments (V11)
+
+Shared hook for "planned payments due in the next 7 days" that is consumed by both `SuggestionCard` (dashboard widget) and `UpcomingPaymentsNotification` (app-level banner).
+
+**File:** [[apps/frontend/src/hooks/useUpcomingPlannedPayments.ts]]
+
+### Problem it solves
+
+Previously, `UpcomingPaymentsNotification` owned its own `useQuery` call for upcoming payments and its own dismissed-ID state. `SuggestionCard` (new in V11) would have created a second independent fetch and a second dismissed-ID state, causing both surfaces to disagree on which items are dismissed.
+
+`useUpcomingPlannedPayments` centralizes both concerns:
+
+- **Shared query**: Uses the same React Query key (`"upcomingPlannedPayments"`) as before — zero additional network requests.
+- **Shared dismissed-ID store**: A module-level `Set<number>` subscribed to via `useSyncExternalStore`. Both the banner and the suggestion card read from and write to the same store instance; a dismiss on one surface is immediately reflected on the other.
+- **Persistence**: The dismissed set is persisted to `LOCAL_STORAGE_KEYS.DISMISSED_UPCOMING_PAYMENTS` and restored on mount.
+
+### API
+
+```typescript
+const {
+  upcoming,        // PlannedPayment[] — all non-dismissed payments due within 7 days
+  allUpcoming,     // PlannedPayment[] — all (including dismissed) due within 7 days
+  dismissedIds,    // Set<number>
+  dismiss,         // (id: number) => void — dismiss a single payment
+  dismissAll,      // () => void — dismiss all currently visible IDs
+  isLoading,       // boolean
+  countSingle,     // string — i18n'd "1 upcoming payment"
+  countPlural,     // string — i18n'd "N upcoming payments"
+} = useUpcomingPlannedPayments();
+```
+
+### Consumers
+
+| Consumer | How it uses the hook |
+|----------|---------------------|
+| `SuggestionCard` | Reads `upcoming` (non-dismissed), calls `dismissAll` on the X button |
+| `UpcomingPaymentsNotification` | Reads `upcoming`, calls `dismiss(id)` per item, `dismissAll` for the banner; also checks `useWidgetVisibility` to stand down on `/` when `suggestions` widget is visible |
+
+### Query Key
+
+`["upcomingPlannedPayments"]` — unchanged from the previous `UpcomingPaymentsNotification`-owned query. Existing server-state cache entries are reused.
+
+Code links: [[apps/frontend/src/hooks/useUpcomingPlannedPayments.ts]], [[apps/frontend/src/components/dashboard/SuggestionCard.tsx]], [[apps/frontend/src/components/notifications/UpcomingPaymentsNotification.tsx]]
 
 ---
 

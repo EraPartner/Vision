@@ -2,6 +2,7 @@ import * as React from "react";
 import * as AlertDialogPrimitive from "@radix-ui/react-alert-dialog";
 
 import {cn} from "@/lib/utils";
+import {composeRefs, useGenieOrigin} from "@/lib/dialogGenie";
 import {buttonVariants} from "@/components/ui/button";
 
 const AlertDialog = AlertDialogPrimitive.Root;
@@ -28,19 +29,22 @@ AlertDialogOverlay.displayName = AlertDialogPrimitive.Overlay.displayName;
 const AlertDialogContent = React.forwardRef<
     React.ElementRef<typeof AlertDialogPrimitive.Content>,
     React.ComponentPropsWithoutRef<typeof AlertDialogPrimitive.Content>
->(({className, ...props}, ref) => (
+>(({className, ...props}, ref) => {
+    const genieRef = useGenieOrigin();
+    return (
     <AlertDialogPortal>
         <AlertDialogOverlay/>
         <AlertDialogPrimitive.Content
-            ref={ref}
+            ref={composeRefs(ref, genieRef)}
             className={cn(
-                "glass-thick fixed left-[50%] top-[50%] z-50 grid w-full max-w-lg translate-x-[-50%] translate-y-[-50%] gap-5 rounded-2xl p-6 shadow-glass-elevated data-[state=open]:animate-dialog-in data-[state=closed]:animate-dialog-out motion-reduce:data-[state=open]:animate-none motion-reduce:data-[state=closed]:animate-none",
+                "glass-thick fixed left-[50%] top-[50%] z-50 grid w-full max-w-lg translate-x-[-50%] translate-y-[-50%] gap-5 rounded-2xl p-6 shadow-glass-elevated data-[state=open]:animate-dialog-in data-[state=closed]:animate-dialog-out data-[state=closed]:[transform-origin:var(--genie-origin,50%_50%)] motion-reduce:data-[state=open]:animate-none motion-reduce:data-[state=closed]:animate-none",
                 className,
             )}
             {...props}
         />
     </AlertDialogPortal>
-));
+    );
+});
 AlertDialogContent.displayName = AlertDialogPrimitive.Content.displayName;
 
 const AlertDialogHeader = ({className, ...props}: React.HTMLAttributes<HTMLDivElement>) => (

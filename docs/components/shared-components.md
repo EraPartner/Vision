@@ -3,10 +3,10 @@ title: Shared Components Reference
 type: component
 status: active
 date: 2026-04-26
-updated: 2026-05-29
-last_modified: 2026-05-29
-tags: [component, shared, utility, frontend, reference, phase-13, phase-c, phase-d, multi-select, export-filters, bug-hunt-2026-05-05, bug-hunt-2026-05-06, dateutils, utc-safe-dates, date-formatting, debounce, accessibility, aria-label, useCallback, aria-grid, keyboard-operability, a11y, performance, memoization, selection-toggle]
-description: Reference documentation for shared utility components used across the application. May 2026 adds UTC-safe date parsing, ARIA grid semantics on VirtualDataTable, the onActivateKeyDown keyboard helper, and the columnKeySignature selection-toggle reprocessing fix.
+updated: 2026-06-10
+last_modified: 2026-06-10
+tags: [component, shared, utility, frontend, reference, phase-13, phase-c, phase-d, multi-select, export-filters, bug-hunt-2026-05-05, bug-hunt-2026-05-06, dateutils, utc-safe-dates, date-formatting, debounce, accessibility, aria-label, useCallback, aria-grid, keyboard-operability, a11y, performance, memoization, selection-toggle, upcoming-payments-hook, june-2026]
+description: Reference documentation for shared utility components used across the application. May 2026 adds UTC-safe date parsing, ARIA grid semantics on VirtualDataTable, the onActivateKeyDown keyboard helper, and the columnKeySignature selection-toggle reprocessing fix. June 2026 V11: UpcomingPaymentsNotification refactored onto shared useUpcomingPlannedPayments hook; stands down on dashboard when suggestions widget is visible.
 aliases: [shared components, utility components, common components]
 related_code:
   - apps/frontend/src/components/shared/VirtualDataTable.tsx
@@ -427,6 +427,15 @@ Displays app update notifications in the Electron desktop app. Checks for new ve
 **Path:** `[[apps/frontend/src/components/notifications/UpcomingPaymentsNotification.tsx]]`
 
 Shows notifications for upcoming planned/recurring payments.
+
+#### V11 Refactor (June 2026)
+
+`UpcomingPaymentsNotification` was refactored onto the shared `useUpcomingPlannedPayments` hook:
+
+- Data fetch and dismissed-ID state moved to `hooks/useUpcomingPlannedPayments.ts` (shared with `SuggestionCard`).
+- **Dashboard stand-down**: On the `/` route, the component returns `null` while `useWidgetVisibility('dashboard', []).isVisible('suggestions')` is `true` (the suggestion card is visible). Hiding the widget brings the banner back.
+- **macOS dock badge**: Set to non-dismissed upcoming count; cleared on unmount. Logic unchanged.
+- Dismissal store is now module-level (shared), so dismissing from `SuggestionCard` is immediately reflected here and vice versa.
 
 ### Accessibility (Phase C)
 

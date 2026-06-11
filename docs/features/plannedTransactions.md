@@ -3,10 +3,10 @@ title: Planned Transactions
 type: feature
 status: active
 date: 2026-04-26
-updated: 2026-06-01
-tags: [feature, planned, recurring, bills, loans, phase-3, phase-12, calculations, immutability, error-handling, toast, atomic-patch, virtual-data-table, i18n-toasts]
+updated: 2026-06-10
+tags: [feature, planned, recurring, bills, loans, phase-3, phase-12, calculations, immutability, error-handling, toast, atomic-patch, virtual-data-table, i18n-toasts, suggestion-card, upcoming-payments-hook, june-2026]
 aliases: [planned-payments, scheduled-payments, recurring-payments, bills, subscriptions, loan-amortization]
-description: Scheduled and recurring payment tracking - manage bills, subscriptions, and future expenses. June 2026: PlannedPaymentsPage migrated from DataTable to VirtualDataTable; native alert() replaced with toast.error (new i18n keys plannedPage.toggleFailed/deleteFailed).
+description: Scheduled and recurring payment tracking - manage bills, subscriptions, and future expenses. June 2026: PlannedPaymentsPage migrated from DataTable to VirtualDataTable; native alert() replaced with toast.error (new i18n keys plannedPage.toggleFailed/deleteFailed). V11: useUpcomingPlannedPayments shared hook (single fetch + shared dismissed-ID store); SuggestionCard dashboard widget; UpcomingPaymentsNotification stands down on dashboard route when suggestions widget is visible.
 related_code: ["apps/node-backend/src/routes/plannedTransactions.js", "apps/node-backend/src/repositories/plannedTransactionRepository.js", "apps/node-backend/src/services/calculations/loanSchedule.js", "apps/node-backend/src/services/calculations/recurrence.js", "apps/node-backend/src/services/recurringDetectionService.js", "apps/frontend/src/components/planned/PlannedPaymentForm.tsx", "apps/frontend/src/components/planned/LinkTransactionDialog.tsx", "apps/frontend/src/components/planned/ExecutionHistoryDialog.tsx", "apps/frontend/src/components/notifications/UpcomingPaymentsNotification.tsx", "apps/frontend/src/components/shared/DatePicker.tsx", "apps/frontend/src/components/shared/dateUtils.ts"]
 ---
 
@@ -118,6 +118,21 @@ Vision can alert users about upcoming payments:
 - Upcoming this week
 - Overdue payments
 - Monthly bill summary
+
+#### Shared hook and dismissed-ID store (V11, June 2026)
+
+Both the app-level banner (`UpcomingPaymentsNotification`) and the dashboard suggestion card (`SuggestionCard`) use the shared `useUpcomingPlannedPayments` hook. This ensures:
+
+- **Single network fetch**: One React Query instance keyed on `"upcomingPlannedPayments"` shared across both surfaces.
+- **Consistent dismissal**: A module-level dismissed-ID `Set` backed by `useSyncExternalStore` persists to `LOCAL_STORAGE_KEYS.DISMISSED_UPCOMING_PAYMENTS`. Dismissing from either surface is immediately reflected on the other.
+
+#### Dashboard stand-down
+
+`UpcomingPaymentsNotification` stands down on the `/` route while the `suggestions` widget is visible (`useWidgetVisibility('dashboard', []).isVisible('suggestions')` returns `true`). This prevents showing both the banner and the card simultaneously. Hiding the widget from the widget-visibility dialog re-enables the banner on the dashboard.
+
+#### macOS dock badge
+
+The dock badge count is driven by `UpcomingPaymentsNotification` (non-dismissed due items count) and cleared on unmount — this logic is unaffected by the V11 refactor.
 
 The top-level upcoming-planned-payments notification is dismissible with persistence:
 

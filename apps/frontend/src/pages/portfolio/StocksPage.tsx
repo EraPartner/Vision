@@ -24,6 +24,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { onActivateKeyDown } from "@/utils/a11y";
 import { EmptyState } from "@/components/shared/EmptyState";
 import { ExportDialog } from "@/components/reports/ExportDialog";
+import { DeltaPill } from "@/components/shared/DeltaPill";
 
 function fmtPct(val: number) {
   return `${val >= 0 ? '+' : ''}${val.toFixed(2)}%`;
@@ -387,7 +388,11 @@ export default function StocksPage({
                     <td className="text-right py-2 px-3 tabular-nums font-medium">{fmt(h.currentValue, h.currency)}</td>
                     <td className={cn("text-right py-2 px-3 tabular-nums font-medium", (displayedPnlByHoldingId[h.id]?.unrealizedTarget || 0) >= 0 ? "text-accent" : "text-destructive")}>
                       {(displayedPnlByHoldingId[h.id]?.unrealizedTarget || 0) >= 0 ? "+" : ""}{fmt(displayedPnlByHoldingId[h.id]?.unrealizedTarget || 0)}
-                      <span className="text-xs ml-1 opacity-70">{fmtPct(displayedPnlByHoldingId[h.id]?.unrealizedPercent || 0)}</span>
+                      <DeltaPill
+                        value={displayedPnlByHoldingId[h.id]?.unrealizedPercent || 0}
+                        label={fmtPct(displayedPnlByHoldingId[h.id]?.unrealizedPercent || 0)}
+                        className="ml-1.5"
+                      />
                     </td>
                     <td className={cn("text-right py-2 px-3 tabular-nums", (displayedPnlByHoldingId[h.id]?.realizedTarget || 0) !== 0 ? ((displayedPnlByHoldingId[h.id]?.realizedTarget || 0) >= 0 ? "text-accent" : "text-destructive") : "text-muted-foreground")}>
                       {(displayedPnlByHoldingId[h.id]?.realizedTarget || 0) !== 0 ? `${(displayedPnlByHoldingId[h.id]?.realizedTarget || 0) >= 0 ? "+" : ""}${fmt(displayedPnlByHoldingId[h.id]?.realizedTarget || 0)}` : '—'}

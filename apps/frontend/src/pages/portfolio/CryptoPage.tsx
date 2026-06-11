@@ -19,6 +19,7 @@ import { PageError } from "@/components/shared/PageError";
 import { Skeleton } from "@/components/ui/skeleton";
 import { EmptyState } from "@/components/shared/EmptyState";
 import { onActivateKeyDown } from "@/utils/a11y";
+import { DeltaPill } from "@/components/shared/DeltaPill";
 
 function fmtPct(val: number) {
   return `${val >= 0 ? '+' : ''}${val.toFixed(2)}%`;
@@ -250,7 +251,7 @@ export default function CryptoPage() {
                     <td className="text-right py-2 px-3 tabular-nums font-medium">{fmt(convertToTarget(h.currentValue, h.currency))}</td>
                     <td className={cn("text-right py-2 px-3 tabular-nums font-medium", h.unrealizedGain >= 0 ? "text-accent" : "text-destructive")}>
                       {h.unrealizedGain >= 0 ? "+" : ""}{fmt(convertToTarget(h.unrealizedGain, h.currency))}
-                      <span className="text-xs ml-1 opacity-70">{fmtPct(h.gainLossPercent)}</span>
+                      <DeltaPill value={h.gainLossPercent} label={fmtPct(h.gainLossPercent)} className="ml-1.5" />
                     </td>
                     <td className={cn("text-right py-2 px-3 tabular-nums", h.realizedGain !== 0 ? (h.realizedGain >= 0 ? "text-accent" : "text-destructive") : "text-muted-foreground")}>
                       {h.realizedGain !== 0 ? `${h.realizedGain >= 0 ? "+" : ""}${fmt(convertToTarget(h.realizedGain, h.currency))}` : '—'}

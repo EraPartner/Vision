@@ -15,6 +15,7 @@ import { PageHeader } from "@/components/shared/PageHeader";
 import { PageError } from "@/components/shared/PageError";
 import { Skeleton } from "@/components/ui/skeleton";
 import { EmptyState } from "@/components/shared/EmptyState";
+import { DeltaPill } from "@/components/shared/DeltaPill";
 
 export default function RealEstatePage() {
   const { t } = useLanguage();
@@ -191,7 +192,10 @@ export default function RealEstatePage() {
             <p className={cn("text-xl font-bold tabular-nums", totalReturn >= 0 ? "text-accent" : "text-destructive")}>
               {totalReturn >= 0 ? "+" : ""}{fmt(totalReturn)}
             </p>
-            <p className="text-xs text-muted-foreground mt-0.5">{roi >= 0 ? "+" : ""}{roi.toFixed(1)}% {t('portfolio.totalROI')}</p>
+            <div className="mt-1 flex items-center gap-1.5">
+              <DeltaPill value={roi} label={`${roi >= 0 ? "+" : ""}${roi.toFixed(1)}%`} />
+              <span className="text-xs text-muted-foreground">{t('portfolio.totalROI')}</span>
+            </div>
           </CardContent>
         </Card>
       </div>
@@ -319,14 +323,9 @@ export default function RealEstatePage() {
                      <p className="text-xs text-muted-foreground">{t('portfolio.yield')}</p>
                      <p className="text-sm font-medium">{propertyYield.toFixed(1)}% {t('portfolio.annual')}</p>
                    </div>
-                   <div className="text-right">
+                   <div className="flex flex-col items-end gap-1">
                      <p className="text-xs text-muted-foreground">{t('portfolio.totalROI')}</p>
-                     <p className={cn(
-                       "text-sm font-bold",
-                       propertyROI >= 0 ? "text-accent" : "text-destructive"
-                     )}>
-                       {propertyROI >= 0 ? "+" : ""}{propertyROI.toFixed(1)}%
-                     </p>
+                     <DeltaPill value={propertyROI} label={`${propertyROI >= 0 ? "+" : ""}${propertyROI.toFixed(1)}%`} />
                    </div>
                  </div>
 

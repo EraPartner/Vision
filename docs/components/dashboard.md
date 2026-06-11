@@ -4,8 +4,8 @@ type: component
 status: active
 date: 2026-04-17
 updated: 2026-06-10
-tags: [components, dashboard, charts, widgets, liquid-glass, liquid-glass-v2, premium-v3, design-system, phase-9, phase-d, phase-f, phase-h, phase-h-v2, ensemble, visx, url-persistence, rolling-cache, rolling-diagnostics, chart-scrub, chart-sync, per-widget-hydration, june-2026]
-description: Dashboard-specific components for financial overview and visualization with liquid-glass aesthetic and visx charts, including dual-mode cash flow forecast with URL state persistence and rolling window diagnostics. June 2026 Liquid Glass v2 — StatCard/NetSummaryCard upgraded to glass-elevated; KPI/chart cards migrated from surface-elevated to glass-regular. June 2026 Premium v3 (ADR-071) — per-widget hydration (no global loading gate), synced dashboard-timeline charts, ChartSkeleton, RollingNumber/DeltaPill adoption.
+tags: [components, dashboard, charts, widgets, liquid-glass, liquid-glass-v2, premium-v3, design-system, phase-9, phase-d, phase-f, phase-h, phase-h-v2, ensemble, visx, url-persistence, rolling-cache, rolling-diagnostics, chart-scrub, chart-sync, per-widget-hydration, stat-scrub, suggestion-card, june-2026]
+description: Dashboard-specific components for financial overview and visualization with liquid-glass aesthetic and visx charts, including dual-mode cash flow forecast with URL state persistence and rolling window diagnostics. June 2026 Liquid Glass v2 — StatCard/NetSummaryCard upgraded to glass-elevated; KPI/chart cards migrated from surface-elevated to glass-regular. June 2026 Premium v3 (ADR-071) — per-widget hydration (no global loading gate), synced dashboard-timeline charts, ChartSkeleton, RollingNumber/DeltaPill adoption. V9: NetSummaryCard sparkline scrub surface. V11: SuggestionCard widget (Siri-suggestion style, upcoming payments).
 aliases: [dashboard-widgets, dashboard-charts, overview-components, stat-cards]
 related_code: ["apps/frontend/src/components/dashboard"]
 ---
@@ -14,8 +14,12 @@ related_code: ["apps/frontend/src/components/dashboard"]
 
 Components for the main Dashboard page (`/`), providing financial overview and visualization widgets. As of Phase 9, all dashboard components use the liquid-glass aesthetic, glass surfaces, and visx + d3 charts.
 
-> [!info] June 2026 — Premium v3 (ADR-071)
-> **Per-widget dashboard hydration**: The all-queries loading gate in `DashboardPage` is removed. Each section (stat grid, chart widgets, recent transactions table) renders its own skeleton keyed to its own query loading state. Chart skeletons use `ChartSkeleton` (ghost waveform) rather than plain `Skeleton` rectangles. **StatCard** now uses `RollingNumber` for the hero value and `DeltaPill` for the change indicator. **Synced dashboard charts**: Time-series charts (CashFlowComparisonChart, BankBalancesWidget, forecast) share `syncId="dashboard-timeline"` under a `ChartSyncProvider` in `DashboardPage`; scrub is enabled on those same charts. See [[docs/adr/071-premium-v3-effects-toggle|ADR-071]].
+> [!info] June 2026 — Premium v3 V8-V11 (ADR-071)
+> **V9 — NetSummaryCard sparkline scrub**: The sparkline strip in `NetSummaryCard` is now a pointer scrub surface (hover + `pointerdown` capture for touch, `touch-action: pan-y`). Scrubbing drives the hero `RollingNumber` value, its accent/destructive color, and the trend caption (shows the scrubbed month label) through the 12-month `netHistory` array. The card-level gradient and header icon stay on the live value. Leaving or releasing the pointer resets to the live value. `Sparkline` gained an optional `activeIndex` prop that renders a hairline + dot at the specified data point.
+>
+> **V11 — SuggestionCard widget**: A new `suggestions` widget (default visible, first in `DASHBOARD_WIDGETS`) renders a Siri-suggestion-style glass card between the error banner and stat cards. It shows planned payments due in the next 7 days via the shared `useUpcomingPlannedPayments` hook (same React Query key — no extra fetch). Up to 3 payment rows are shown with `Money` amounts; a Review button navigates to `/planned`; a dismiss-all X hides the card and persists dismissal to `LOCAL_STORAGE_KEYS.DISMISSED_UPCOMING_PAYMENTS`. `UpcomingPaymentsNotification` stands down on the dashboard route (`/`) while the suggestions widget is visible; hiding the widget brings the banner back.
+>
+> **Per-widget dashboard hydration**: The all-queries loading gate in `DashboardPage` is removed. Each section renders its own skeleton keyed to its own query loading state. Chart skeletons use `ChartSkeleton` (ghost waveform). **StatCard** now uses `RollingNumber` for the hero value and `DeltaPill` for the change indicator. **Synced dashboard charts**: Time-series charts share `syncId="dashboard-timeline"` under a `ChartSyncProvider`; scrub is enabled on those same charts. See [[docs/adr/071-premium-v3-effects-toggle|ADR-071]].
 
 > [!info] June 2026 — Liquid Glass v2 (ADR-070)
 > Dashboard stat cards and hero summary cards were migrated to `glass-elevated` (StatCard, NetSummaryCard) with tint overlays as child elements. KPI/chart card wrappers use `glass-regular`. Tables stay opaque. References to `surface-elevated premium-frame` in this document reflect the pre-June 2026 state; the current canonical recipe is documented in [[docs/reference/code-patterns#surface-shell-pattern-phase-9|Surface Shell Pattern]].
@@ -34,6 +38,8 @@ Dashboard components follow the [[docs/reference/code-patterns#surface-shell-pat
 | Component | Description | File |
 |-----------|-------------|------|
 | StatCard | Summary stat card with trend and gradient icon tile | [[apps/frontend/src/components/dashboard/StatCard.tsx\|StatCard.tsx]] |
+| NetSummaryCard | Hero net-worth summary with sparkline scrub (V9) | [[apps/frontend/src/components/dashboard/NetSummaryCard.tsx\|NetSummaryCard.tsx]] |
+| SuggestionCard | Siri-suggestion-style upcoming-payments glass card (V11) | [[apps/frontend/src/components/dashboard/SuggestionCard.tsx\|SuggestionCard.tsx]] |
 | MonthlyTrendsChart | Monthly income vs expenses bar chart (visx) | [[apps/frontend/src/components/dashboard/MonthlyTrendsChart.tsx\|MonthlyTrendsChart.tsx]] |
 | CategoryPieChart | Spending by category pie chart (visx) | [[apps/frontend/src/components/dashboard/CategoryPieChart.tsx\|CategoryPieChart.tsx]] |
 | CashFlowComparisonChart | Current vs previous period comparison (visx) | [[apps/frontend/src/components/dashboard/CashFlowComparisonChart.tsx\|CashFlowComparisonChart.tsx]] |
@@ -105,6 +111,74 @@ function MyCard() {
 - This replaces ad-hoc elevated class chains (`border-none shadow-lg ... hover:-translate-y-*`) for consistent depth/motion behavior.
 
 Code links: [[apps/frontend/src/pages/DashboardPage.tsx]], [[apps/frontend/src/components/dashboard/StatCard.tsx]], [[apps/frontend/src/components/dashboard/CategoryPieChart.tsx]], [[apps/frontend/src/components/dashboard/MonthlyTrendsChart.tsx]], [[apps/frontend/src/components/dashboard/CashFlowComparisonChart.tsx]], [[apps/frontend/src/index.css]]
+
+---
+
+## NetSummaryCard (V9 — Sparkline Scrub)
+
+Hero card showing net balance trend for the current period. As of V9, the sparkline strip is a full scrub surface.
+
+### Sparkline Scrub Behavior
+
+- **Hover**: moves `activeIndex` prop on `Sparkline` to the nearest data point; hairline + dot indicator follows.
+- **Pointer capture (`pointerdown`)**: enables drag scrubbing on desktop and touch (with `touch-action: pan-y` so vertical scroll is preserved).
+- **While scrubbing**: the hero `RollingNumber` value, its accent/destructive color tint, and the trend caption text all update to reflect the selected `netHistory[i]` entry; the caption swaps to the scrubbed month label.
+- **On leave / pointerup / pointercancel**: resets to the live current value.
+- **Card-level gradient and header icon**: deliberately stay on the live value (no strobing).
+- **Out-of-range guard**: if a `netHistory` refetch causes the scrubbed index to become out of range, resets to live value.
+- **Reduced motion**: pointer events still fire; the `RollingNumber` switches to a plain span so there is no rolling animation during scrub.
+
+### Dependencies
+
+- `Sparkline` `activeIndex` prop (see [[docs/components/charts#sparkline|Chart Primitives — Sparkline]]).
+- `RollingNumber` for hero value display.
+- `useUpcomingPlannedPayments` is not consumed here (that is `SuggestionCard`).
+
+Code links: [[apps/frontend/src/components/dashboard/NetSummaryCard.tsx]], [[apps/frontend/src/components/charts/Sparkline.tsx]]
+
+---
+
+## SuggestionCard (V11 — Upcoming Payments Widget)
+
+Siri-suggestion-style glass card displayed as the first widget on the dashboard when planned payments are due within the next 7 days.
+
+### Widget Registration
+
+`suggestions` is the first entry in `DASHBOARD_WIDGETS` in `DashboardPage`, with `defaultVisible: true`. It is rendered in the slot between the error banner and the stat cards.
+
+### Behavior
+
+- **Data source**: `useUpcomingPlannedPayments()` — the same React Query key (`"upcomingPlannedPayments"`) as `UpcomingPaymentsNotification`. No duplicate network fetch.
+- **Layout**: kicker label (`suggestions.kicker` i18n key), count title (`upcoming.countSingle`/`upcoming.countPlural`), up to 3 payment rows with `Money` amounts and recipient names.
+- **Review button**: navigates to `/planned`.
+- **Dismiss X**: dismisses all currently visible upcoming payment IDs. Dismissal state is stored via `useUpcomingPlannedPayments`'s module-level dismissed-ID store (persists to `LOCAL_STORAGE_KEYS.DISMISSED_UPCOMING_PAYMENTS`). Because both `SuggestionCard` and `UpcomingPaymentsNotification` share the same store, dismissing from either surface hides the items on both.
+- **Render condition**: only shown when there are non-dismissed upcoming payments within 7 days.
+
+### Stand-down of UpcomingPaymentsNotification
+
+`UpcomingPaymentsNotification` checks `useWidgetVisibility('dashboard', []).isVisible('suggestions')`:
+
+- Widget visible (default) → notification returns `null` on the `/` route.
+- Widget hidden by user → notification renders normally on `/` (the banner returns).
+
+This prevents double-notification when both surfaces would otherwise fire simultaneously on the dashboard.
+
+### Props
+
+```typescript
+// No external props — fully self-contained; data from useUpcomingPlannedPayments()
+```
+
+### i18n Keys (V11)
+
+| Key | EN |
+|-----|----|
+| `dashboard.suggestions` | Widget label for visibility dialog |
+| `dashboard.widgetDescriptions.suggestions` | Widget description |
+| `suggestions.kicker` | "Suggested for you" |
+| `suggestions.review` | "Review" |
+
+Code links: [[apps/frontend/src/components/dashboard/SuggestionCard.tsx]], [[apps/frontend/src/hooks/useUpcomingPlannedPayments.ts]], [[apps/frontend/src/components/notifications/UpcomingPaymentsNotification.tsx]], [[apps/frontend/src/pages/DashboardPage.tsx]]
 
 ---
 
@@ -612,6 +686,7 @@ Dashboard uses a widget visibility system to let users customize their view.
 import { useWidgetVisibility, WidgetVisibilityDialog } from "@/hooks/useWidgetVisibility";
 
 const DASHBOARD_WIDGETS = [
+  { id: 'suggestions', label: 'Suggestions' },  // V11 — first, default visible
   { id: 'statCards', label: 'Statistics Cards' },
   { id: 'monthlyTrends', label: 'Monthly Trends' },
   { id: 'categoryPie', label: 'Category Distribution' },
@@ -690,6 +765,7 @@ API (/api/aggregations/monthly-summary) → Hook (useFilteredDashboardStats) →
 
 - `useFilteredDashboardStats()` - Fetches `/api/aggregations/monthly-summary` with server-side exclusions (Phase 2)
 - `useExcludedIds('dashboard')` — Single source of truth for excluded category/recipient IDs; consumed by `useFilteredDashboardStats` and `DashboardPage` (2026-05-29) — see [[docs/components/hooks#useexcludedids-2026-05-29|Custom Hooks — useExcludedIds]]
+- `useUpcomingPlannedPayments()` — Shared hook for "due in next 7 days" payments + module-level dismissed-ID store (V11) — see [[docs/components/hooks#useupcomingplannedpayments-v11|Custom Hooks — useUpcomingPlannedPayments]]
 - `useTransactions()` - Transaction list with filters
 - `useWidgetVisibility()` - Widget visibility state
 

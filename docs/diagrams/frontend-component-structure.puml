@@ -173,6 +173,18 @@ package "Shared Components" {
 
 package "Feature Components - Dashboard" {
   class StatCard
+  class NetSummaryCard {
+    +sparkline scrub (V9)
+    +activeIndex: pointer-driven
+    +RollingNumber hero
+  }
+  class SuggestionCard {
+    +kicker + count title
+    +up to 3 payment rows (Money)
+    +Review → /planned
+    +dismiss-all X
+    +useUpcomingPlannedPayments
+  }
   class MonthlyTrendsChart
   class MonthlySpendingChart
   class CategoryPieChart
@@ -277,7 +289,20 @@ package "Feature Components - Import" {
 
 package "Feature Components - Notifications" {
   class UpdateNotification
-  class UpcomingPaymentsNotification
+  class UpcomingPaymentsNotification {
+    +stands down on / when suggestions widget visible
+    +dock badge (non-dismissed count)
+    +useUpcomingPlannedPayments
+  }
+}
+
+package "Hooks - Upcoming Payments" {
+  class useUpcomingPlannedPayments {
+    +queryKey: "upcomingPlannedPayments"
+    +module-level dismissed Set
+    +useSyncExternalStore
+    +persists: DISMISSED_UPCOMING_PAYMENTS
+  }
 }
 
 package "Feature Components - Onboarding" {
@@ -302,6 +327,8 @@ AddTransactionDialog --> RecipientCombobox
 VirtualDataTable --> ColumnFilter
 DataTable --> ColumnFilter
 VirtualDataTable --> TransactionQuickLook : onRowQuickLook (Space)
+SuggestionCard --> useUpcomingPlannedPayments
+UpcomingPaymentsNotification --> useUpcomingPlannedPayments
 
 note right of ImportPage
   Import wizard integrated
