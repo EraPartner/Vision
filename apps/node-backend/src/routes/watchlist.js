@@ -5,9 +5,31 @@
 import { Router } from 'express';
 import { watchlistRepository } from '../services/watchlistService.js';
 import { NotFoundError, ValidationError } from '../middleware/errorHandler.js';
-import { validateIdParam } from '../middleware/validation.js';
+import { validateIdParam, validateNumber } from '../middleware/validation.js';
 
 const router = Router();
+
+const WATCHLIST_ASSET_CLASSES = new Set(['stock', 'etf', 'crypto', 'metals']);
+const CURRENCY_RE = /^[A-Za-z]{3}$/;
+
+// Type-check the fields the repository forwards to typed columns; without
+// this a string target_price surfaces as a DB error (500) instead of a 400.
+// Presence requirements stay in the POST handler — PATCH allows partials.
+function validateWatchlistFields(body) {
+  if (body.target_price !== undefined && body.target_price !== null) {
+    const result = validateNumber(body.target_price, { min: 0, fieldName: 'target_price' });
+    if (!result.valid) throw new ValidationError(result.error);
+    body.target_price = result.value;
+  }
+  if (body.asset_class !== undefined && !WATCHLIST_ASSET_CLASSES.has(body.asset_class)) {
+    throw new ValidationError(
+      `asset_class must be one of: ${[...WATCHLIST_ASSET_CLASSES].join(', ')}`
+    );
+  }
+  if (body.currency !== undefined && body.currency !== null && !CURRENCY_RE.test(String(body.currency))) {
+    throw new ValidationError('currency must be a 3-letter code');
+  }
+}
 
 function parseWatchlistLimit(limit) {
   const parsed = parseInt(limit, 10);
@@ -42,10 +64,12 @@ router.get('/:id', validateIdParam, async (req, res) => {
 });
 
 router.post('/', async (req, res) => {
-  const { name, symbol, asset_class, target_price, currency, notes, price_provider_id } = req.body;
-  if (!name || !asset_class || target_price == null) {
+  if (!req.body.name || !req.body.asset_class || req.body.target_price == null) {
     throw new ValidationError('name, asset_class, and target_price are required');
   }
+  // Coerces target_price in place — destructure only after validation.
+  validateWatchlistFields(req.body);
+  const { name, symbol, asset_class, target_price, currency, notes, price_provider_id } = req.body;
   const item = await watchlistRepository.create({
     name, symbol, asset_class, target_price, currency, notes, price_provider_id,
   });
@@ -55,6 +79,7 @@ router.post('/', async (req, res) => {
 
 router.patch('/:id', validateIdParam, async (req, res) => {
   const id = parseInt(req.params.id, 10);
+  validateWatchlistFields(req.body);
   const item = await watchlistRepository.update(id, req.body);
   if (!item) throw new NotFoundError('Watchlist item not found');
   res.ok(item);
