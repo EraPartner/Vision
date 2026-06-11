@@ -86,6 +86,10 @@ const envSchema = z.object({
   OLLAMA_DEFAULT_MODEL: stringEnv('llama3.1:8b'),
   OLLAMA_REQUEST_TIMEOUT_MS: intEnv(600000),
   OLLAMA_HEALTH_TIMEOUT_MS: intEnv(3000),
+  // Streaming inactivity window: abort only when no chunk arrives for this
+  // long. OLLAMA_REQUEST_TIMEOUT_MS still bounds connect + prompt-eval
+  // (time to FIRST chunk); total generation time is unbounded by design.
+  OLLAMA_STREAM_IDLE_TIMEOUT_MS: intEnv(120000),
 
   AI_CHAT_ENABLED: booleanEnv(true),
   AI_CHAT_RATE_LIMIT: intEnv(30),

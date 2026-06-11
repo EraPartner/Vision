@@ -95,6 +95,7 @@ const settings = deepFreeze({
     defaultModel: env.OLLAMA_DEFAULT_MODEL,
     requestTimeoutMs: env.OLLAMA_REQUEST_TIMEOUT_MS,
     healthTimeoutMs: env.OLLAMA_HEALTH_TIMEOUT_MS,
+    streamIdleTimeoutMs: env.OLLAMA_STREAM_IDLE_TIMEOUT_MS,
   },
 
   aiChat: {

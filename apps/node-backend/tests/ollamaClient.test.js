@@ -377,6 +377,132 @@ describe('ollama client', () => {
       expect(res.doneReason).toBe('tool_calls');
     });
 
+    it('accumulates tool_calls spread across multiple chunks', async () => {
+      const callA = { function: { name: 'getSpendByCategory', arguments: { year: 2025 } } };
+      const callB = { function: { name: 'getRecipients', arguments: { top: 5 } } };
+      const body = ndjson(
+        { message: { content: '', tool_calls: [callA] }, done: false },
+        { message: { content: '', tool_calls: [callB] }, done: false },
+        { message: { content: '' }, done: true, done_reason: 'tool_calls' },
+      );
+      const fetchImpl = vi.fn().mockResolvedValue(streamResponse([body]));
+      const client = makeClient(fetchImpl);
+
+      const res = await client.chatStream({
+        messages: [{ role: 'user', content: 'spend + recipients?' }],
+      });
+
+      expect(res.toolCalls).toHaveLength(2);
+      expect(res.toolCalls.map((c) => c.function.name)).toEqual([
+        'getSpendByCategory',
+        'getRecipients',
+      ]);
+    });
+
+    it('dedupes tool_calls re-emitted in full on the done chunk', async () => {
+      const callA = { function: { name: 'getSpendByCategory', arguments: { year: 2025 } } };
+      const callB = { function: { name: 'getRecipients', arguments: { top: 5 } } };
+      const body = ndjson(
+        { message: { content: '', tool_calls: [callA] }, done: false },
+        { message: { content: '', tool_calls: [callB] }, done: false },
+        // Some builds repeat the complete list on the final chunk.
+        { message: { content: '', tool_calls: [callA, callB] }, done: true, done_reason: 'tool_calls' },
+      );
+      const fetchImpl = vi.fn().mockResolvedValue(streamResponse([body]));
+      const client = makeClient(fetchImpl);
+
+      const res = await client.chatStream({
+        messages: [{ role: 'user', content: 'spend + recipients?' }],
+      });
+
+      expect(res.toolCalls).toHaveLength(2);
+    });
+
+    it('re-arms the idle window per chunk so long generations outlive requestTimeoutMs', async () => {
+      vi.useFakeTimers();
+      const encoder = new TextEncoder();
+      const chunks = [
+        encoder.encode(ndjson({ message: { content: 'a' }, done: false })),
+        encoder.encode(ndjson({ message: { content: 'b' }, done: false })),
+        encoder.encode(ndjson({ message: { content: 'c' }, done: true })),
+      ];
+      let i = 0;
+      // Each read resolves after 800ms — beyond requestTimeoutMs (1000ms)
+      // in TOTAL after a few chunks, but always inside the idle window.
+      const reader = {
+        read: vi.fn(() => new Promise((resolve) => {
+          const idx = i;
+          i += 1;
+          setTimeout(() => {
+            if (idx >= chunks.length) resolve({ value: undefined, done: true });
+            else resolve({ value: chunks[idx], done: false });
+          }, 800);
+        })),
+        releaseLock: vi.fn(),
+      };
+      const response = {
+        ok: true,
+        status: 200,
+        body: { getReader: () => reader },
+        text: vi.fn().mockResolvedValue(''),
+      };
+      const fetchImpl = vi.fn().mockResolvedValue(response);
+      const client = makeClient(fetchImpl, { streamIdleTimeoutMs: 1000 });
+
+      const promise = client.chatStream({ messages: [{ role: 'user', content: 'go' }] });
+      // 3 reads × 800ms = 2400ms total > requestTimeoutMs (1000ms); the
+      // pre-fix total-budget timer would have aborted mid-stream.
+      await vi.advanceTimersByTimeAsync(2600);
+      const res = await promise;
+
+      expect(res.content).toBe('abc');
+      expect(res.done).toBe(true);
+    });
+
+    it('aborts when the stream goes idle past streamIdleTimeoutMs', async () => {
+      vi.useFakeTimers();
+      const encoder = new TextEncoder();
+      const first = encoder.encode(ndjson({ message: { content: 'a' }, done: false }));
+      let callCount = 0;
+      let rejectRead;
+      const composedSignals = [];
+      const reader = {
+        read: vi.fn(() => {
+          callCount += 1;
+          if (callCount === 1) return Promise.resolve({ value: first, done: false });
+          // Second read never yields data; reject when the client aborts,
+          // mirroring how a real body reader fails after signal abort.
+          return new Promise((_, reject) => {
+            rejectRead = reject;
+            composedSignals[0]?.addEventListener('abort', () => {
+              const err = new Error('aborted');
+              err.name = 'AbortError';
+              reject(err);
+            }, { once: true });
+          });
+        }),
+        releaseLock: vi.fn(),
+      };
+      const response = {
+        ok: true,
+        status: 200,
+        body: { getReader: () => reader },
+        text: vi.fn().mockResolvedValue(''),
+      };
+      const fetchImpl = vi.fn((url, init) => {
+        composedSignals.push(init.signal);
+        return Promise.resolve(response);
+      });
+      const client = makeClient(fetchImpl, { streamIdleTimeoutMs: 500 });
+
+      const promise = client.chatStream({ messages: [{ role: 'user', content: 'go' }] });
+      promise.catch(() => {}); // observed below; avoid unhandled-rejection noise under fake timers
+      await vi.advanceTimersByTimeAsync(1600);
+
+      await expect(promise).rejects.toMatchObject({ code: 'TIMEOUT' });
+      expect(rejectRead).toBeDefined();
+    });
+
     it('includes tools in the request body when provided', async () => {
       const body = ndjson({ message: { content: '' }, done: true });
       const fetchImpl = vi.fn().mockResolvedValue(streamResponse([body]));
