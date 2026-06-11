@@ -3,8 +3,8 @@ title: Environment Variables Reference
 type: reference
 status: active
 date: 2026-05-23
-updated: 2026-06-01
-tags: [reference, environment, configuration, deployment, docker, admin-auth, rate-limiting, trusted-proxies, dev-mode]
+updated: 2026-06-11
+tags: [reference, environment, configuration, deployment, docker, admin-auth, rate-limiting, trusted-proxies, dev-mode, ollama, streaming]
 description: Complete reference of all environment variables used by the Vision application
 aliases: [env vars, environment variables, .env, configuration, env]
 ---
@@ -41,8 +41,7 @@ aliases: [env vars, environment variables, .env, configuration, env]
 | `ALEMBIC_BIN` | `alembic` | No | Path to alembic binary; override in containers where alembic is installed to a venv (e.g. `/venv/bin/alembic`). Used by `runMigrations()` on startup | [[apps/node-backend/src/database/migrate.js\|migrate.js]] |
 | `ALEMBIC_CONFIG` | `config/alembic.ini` | No | Path to alembic config file relative to repo root, passed to alembic via `-c` flag | [[apps/node-backend/src/database/migrate.js\|migrate.js]] |
 | `APP_TIMEZONE` | `Europe/Brussels` | No | Default timezone for business math (ADR-009) | [[apps/node-backend/src/config/env.js\|env.js]] |
-| `AGGREGATIONS_V2_ENABLED` | `false` | No | Gate for aggregation v2 routes | [[apps/node-backend/src/config/env.js\|env.js]] |
-| `IMPORT_PIPELINE_V2` | `false` | No | Gate for import pipeline v2 | [[apps/node-backend/src/config/env.js\|env.js]] |
+| `IMPORT_PIPELINE_V2` | `true` | No | Gate for import pipeline v2 (default on) | [[apps/node-backend/src/config/env.js\|env.js]] |
 | `ATTACHMENTS_DIR` | `./data/attachments` | No | Filesystem root for receipt attachments (Phase 5A) | [[apps/node-backend/src/config/env.js\|env.js]] |
 | `ATTACHMENT_MAX_SIZE_MB` | `10` | No | Per-file upload ceiling in MB | [[apps/node-backend/src/config/env.js\|env.js]] |
 | `RATE_LIMIT_GLOBAL_MAX` | `1000` | No | Max requests per window for the app-wide baseline limiter mounted on `/api`. Per-route limiters stack on top. | [[apps/node-backend/src/middleware/rateLimiter.js\|rateLimiter.js]], [[apps/node-backend/src/config/env.js\|env.js]] |
@@ -56,9 +55,10 @@ aliases: [env vars, environment variables, .env, configuration, env]
 |----------|---------|----------|-------------|------|
 | `OLLAMA_URL` | _(unset)_ | No | Base URL for local Ollama server | [[apps/node-backend/src/config/env.js\|env.js]] |
 | `OLLAMA_DEFAULT_MODEL` | `llama3.1:8b` | No | Default model for AI chat | [[apps/node-backend/src/config/env.js\|env.js]] |
-| `OLLAMA_REQUEST_TIMEOUT_MS` | `600000` | No | Chat request timeout | [[apps/node-backend/src/config/env.js\|env.js]] |
+| `OLLAMA_REQUEST_TIMEOUT_MS` | `600000` | No | Budget for the connect + prompt-eval phase (time to first chunk). If no chunk arrives within this window the request is aborted with `TIMEOUT`. Once the first chunk arrives this timer is replaced by the idle window below. | [[apps/node-backend/src/config/env.js\|env.js]] |
+| `OLLAMA_STREAM_IDLE_TIMEOUT_MS` | `120000` | No | Inactivity window between chunks during a streaming response. The timer re-arms on every received chunk; only an actual gap of this length aborts the stream. Total generation time is therefore unbounded. Surfaces in `settings.ollama.streamIdleTimeoutMs`. | [[apps/node-backend/src/config/env.js\|env.js]] |
 | `OLLAMA_HEALTH_TIMEOUT_MS` | `3000` | No | Health-check timeout | [[apps/node-backend/src/config/env.js\|env.js]] |
-| `AI_CHAT_ENABLED` | `false` | No | Feature gate for AI chat endpoint | [[apps/node-backend/src/config/env.js\|env.js]] |
+| `AI_CHAT_ENABLED` | `true` | No | Feature gate for AI chat endpoint | [[apps/node-backend/src/config/env.js\|env.js]] |
 | `AI_CHAT_RATE_LIMIT` | `30` | No | Per-minute rate limit | [[apps/node-backend/src/config/env.js\|env.js]] |
 | `AI_CHAT_MAX_HISTORY` | `30` | No | Max prior turns sent to model | [[apps/node-backend/src/config/env.js\|env.js]] |
 | `AI_CHAT_MAX_TOOL_ROWS` | `500` | No | Cap on rows returned to tool calls | [[apps/node-backend/src/config/env.js\|env.js]] |

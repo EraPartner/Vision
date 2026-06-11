@@ -3,7 +3,7 @@ title: Layout Components
 type: component
 status: active
 date: 2026-04-25
-updated: 2026-06-10
+updated: 2026-06-11
 tags: [components, layout, navigation, design-system, phase-9, performance, workspace, liquid-glass-v2, command-palette, route-preload, electron-native, electron-bridge, ipc, macos, june-2026]
 description: Core layout components including sidebar, header, and app structure with emerald + gold aesthetic. June 2026 Liquid Glass v2 — atmosphere layer restored, PageTransition re-added as enter-only spring, sidebar ActiveRail is a framer layoutId element, CommandPalette wired, scroll-linked topbar, route-chunk hover prefetch. June 2026 V12 (ADR-072) — ElectronBridge mounted in AppLayout handles native menu actions, CSV drag-drop, fullscreen class toggling, and dock badge via window.electronAPI.
 aliases: [layout, app layout, sidebar, navigation, ElectronBridge]
@@ -71,7 +71,7 @@ function App() {
 - **Workspace context provider**: Workspace detection via route path.
 - **Notification system integration**: Sonner toast notifications.
 - **Dark/light theme support**: Full theme switching via `ThemeContext` + `document.startViewTransition`.
-- **Glass chrome sidebar**: `.glass-chrome` (24px blur + saturate) navigation with `ActiveRail` framer `layoutId` element.
+- **Glass chrome sidebar**: `.glass-chrome` (24px blur + saturate) navigation with `ActiveRail` framer `layoutId` element. Background alphas lowered to 0.55→0.72 (light) / 0.55→0.74 (dark) so the aurora and Electron vibrancy glow through; a `@supports not (backdrop-filter)` rule keeps a near-opaque ramp for unsupported browsers.
 
 ### Props
 

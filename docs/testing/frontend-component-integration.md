@@ -3,9 +3,9 @@ title: Frontend Component-Integration Tests (RTL + MSW)
 type: testing
 status: active
 date: 2026-04-30
-updated: 2026-05-02
-last-updated: 2026-05-02
-last_updated_timestamp: 2026-05-02T00:00:00Z
+updated: 2026-06-11
+last-updated: 2026-06-11
+last_updated_timestamp: 2026-06-11T00:00:00Z
 added_dashboard_error_state_tests: 2026-05-02
 added_dialog_integration_tests: 2026-05-01
 added_edge_coverage_sweep_e16: 2026-05-02
@@ -339,7 +339,7 @@ The following component-integration tests are now available, with all 20 fronten
 
 | Test File | Scope | Tests |
 |---|---|---|
-| `apps/frontend/src/pages/__tests__/TransactionsPage.integration.test.tsx` | Transactions list page (with export JSON tests) | 18 |
+| `apps/frontend/src/pages/__tests__/TransactionsPage.integration.test.tsx` | Transactions list page (with export JSON tests + multi-value filter render-loop regression) | 26 |
 | `apps/frontend/src/pages/__tests__/ImportPage.integration.test.tsx` | CSV Import page | 23 |
 | `apps/frontend/src/pages/__tests__/LanguageSwitch.integration.test.tsx` | Language switching across pages | 32 |
 | `apps/frontend/src/pages/__tests__/TaxOverviewPage.integration.test.tsx` | Tax Overview page | 16 |
@@ -360,7 +360,7 @@ The following component-integration tests are now available, with all 20 fronten
 | `apps/frontend/src/pages/__tests__/RecipientInsightsPage.integration.test.tsx` | Recipient insights | 14 |
 | `apps/frontend/src/pages/__tests__/NotFound.integration.test.tsx` | 404 page | 5 |
 
-**Coverage Summary:** 20 page test files, 378 total integration tests, all green (COMPLETE — 2026-05-02; updated 2026-05-02 with AdminPages + PortfolioPages + DashboardPage error-state expansions)
+**Coverage Summary:** 20 page test files, 386 total integration tests, all green (COMPLETE — 2026-05-02; updated 2026-05-02 with AdminPages + PortfolioPages + DashboardPage error-state expansions; updated 2026-06-11 with multi-value filter render-loop regression in TransactionsPage)
 
 ### Phase A Gotchas & Patterns
 
@@ -526,7 +526,7 @@ Two new tests in `OwesPage.integration.test.tsx`:
 
 Covers: Export button in recipient detail view integrating with `GET /api/splits/owed/:id/export/csv` endpoint.
 
-**Impact:** All 20 frontend page integration test files now gap-free. Total: 378 tests across 20 files (updated 2026-05-02 with DashboardPage error-state coverage) covering:
+**Impact:** All 20 frontend page integration test files now gap-free. Total: 386 tests across 20 files (updated 2026-06-11: +8 regression tests in TransactionsPage for multi-value filter render loop; updated 2026-05-02 with DashboardPage error-state coverage) covering:
 - Full CRUD flows for core entities (Transactions, Recipients, Categories, Planned Payments, Portfolio)
 - Export/download endpoints (JSON, CSV)
 - Analytics pages (Statistics, Dashboard, Insights)

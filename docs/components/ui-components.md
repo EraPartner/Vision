@@ -4,8 +4,8 @@ type: component
 status: active
 date: 2026-04-17
 updated: 2026-06-11
-tags: [components, ui, radix, shadcn, design-system, phase-9, phase-5, performance, glass-downgrade, dependency-slim-down, liquid-glass-v2, premium-v3, june-2026, command-palette, rolling-number, money-typography, delta-pill, shortcuts-overlay, chart-skeleton, virtual-data-table, context-menu, quick-look, keyboard-nav, dialog-genie, icon-bounce]
-description: Reusable UI components built on Radix UI primitives with Tailwind CSS, styled with emerald + champagne-gold palette and optimized design tokens. Phase 5 removes unused Carousel, Resizable, and Drawer wrappers. June 2026 Liquid Glass v2 — Card gains universal premium-frame hover, Dialog/AlertDialog use dialog-in/out keyframes, Sonner toasts are glass-thick, EmptyState upgraded, CommandPalette added. June 2026 Premium v3 — RollingNumber, Money, DeltaPill, ShortcutsOverlay, ChartSkeleton shared components; tabs.tsx animated active-pill indicator. June 2026 Premium v3 V5-V7 — VirtualDataTable gains per-row context menu, keyboard row navigation (↑/↓/Enter/Space), and onRowOpen/onRowQuickLook/rowContextMenu props; TransactionQuickLook added. V8: icon-success-bounce animation on Sonner success toast icons. V10: Dialog/AlertDialog genie exit (pointer-driven transform-origin via lib/dialogGenie.ts).
+tags: [components, ui, radix, shadcn, design-system, phase-9, phase-5, performance, glass-downgrade, dependency-slim-down, liquid-glass-v2, premium-v3, june-2026, command-palette, rolling-number, money-typography, delta-pill, shortcuts-overlay, chart-skeleton, virtual-data-table, context-menu, quick-look, keyboard-nav, dialog-genie, icon-bounce, semantic-tokens, focus-visible, overscroll, glass-chrome, liquid-glass-sidebar, canvas-text, aurora-legibility]
+description: Reusable UI components built on Radix UI primitives with Tailwind CSS, styled with emerald + champagne-gold palette and optimized design tokens. Phase 5 removes unused Carousel, Resizable, and Drawer wrappers. June 2026 Liquid Glass v2 — Card gains universal premium-frame hover, Dialog/AlertDialog use dialog-in/out keyframes, Sonner toasts are glass-thick, EmptyState upgraded, CommandPalette added. June 2026 Premium v3 — RollingNumber, Money, DeltaPill, ShortcutsOverlay, ChartSkeleton shared components; tabs.tsx animated active-pill indicator. June 2026 Premium v3 V5-V7 — VirtualDataTable gains per-row context menu, keyboard row navigation (↑/↓/Enter/Space), and onRowOpen/onRowQuickLook/rowContextMenu props; TransactionQuickLook added. V8: icon-success-bounce animation on Sonner success toast icons. V10: Dialog/AlertDialog genie exit (pointer-driven transform-origin via lib/dialogGenie.ts). June 2026 (UI sweep): ~130 raw palette colors replaced with semantic tokens; focus: → focus-visible: ring idiom; body overscroll-behavior-y: none.
 aliases: [ui-components, radix-components, shadcn-components, primitive-components]
 related_code: ["apps/frontend/src/components/ui"]
 ---
@@ -31,11 +31,13 @@ The UI primitives use a shared surface system defined in [[apps/frontend/src/ind
 |-------|------|-------|
 | `.glass-thin` | 12px | Subtle interactive elements |
 | `.glass-regular` | 20px | KPI/chart cards, AI-chat panes, popovers |
-| `.glass-chrome` | 24px | Sidebar, AppLayout topbar |
+| `.glass-chrome` | 24px | Sidebar, AppLayout topbar — background alpha 0.55→0.72 (light) / 0.55→0.74 (dark) so aurora and Electron vibrancy glow through the blur |
 | `.glass-thick` | 28px | Modal dialogs (Dialog, AlertDialog, Sheet), Sonner toasts |
 | `.glass-elevated` | 32px | Dashboard hero cards (StatCard, NetSummaryCard) |
 
 All glass tiers include `saturate(var(--glass-saturate))` — 180% in light mode, 150% in dark. Thick and elevated tiers add lensing edges (inset specular + concave shade + drop shadow).
+
+**`.glass-chrome` sidebar transparency (June 2026):** Background alphas were lowered from 0.72→0.88 (light) / 0.82→0.96 (dark) to 0.55→0.72 / 0.55→0.74, making the sidebar visibly liquid: the aurora blobs and Electron vibrancy glow through the blur. The blur + saturate veil keeps text legibility even at the lowest alpha. Browsers that lack `backdrop-filter` support fall back to a near-opaque ramp (0.92→0.98) via an `@supports not` rule. `prefers-reduced-transparency` fallback is unchanged.
 
 **`prefers-reduced-transparency`** — strips `backdrop-filter` and applies near-opaque fallbacks. (Previously incorrectly gated on `prefers-reduced-motion`; corrected in ADR-070.)
 
@@ -62,10 +64,63 @@ Code links: [[apps/frontend/src/index.css]], [[apps/frontend/src/styles/tokens.c
 - `.icon-touch-target` — consistent touch-safe icon action hit areas (2.5rem square)
 - `.liquid-canvas` — fixed-position atmosphere wrapper rendered by `AppLayout`
 - `.liquid-canvas-grain` — SVG grain child of the atmosphere layer
+- `.canvas-text` — canvas-text legibility guarantee (see below)
 
 Shared table shells (`DataTable`, `VirtualDataTable`) use `premium-frame` + `micro-lift` (opaque, non-glass) for density and readability.
 
 `prefers-reduced-motion`: transitions/animations disabled; aurora drift paused; sidebar `ActiveRail` transitions are instant.
+
+### Canvas-Text Legibility Guarantee (June 2026)
+
+Text rendered directly over the aurora canvas can be washed out when a bright blob drifts behind a glyph — especially visible at aurora peaks in dark mode. A background-colored text-shadow halo restores local contrast exactly at the intersection, and is invisible over surfaces that already match the background.
+
+**Scope**: The halo is applied in dark mode only (`.dark`-scoped). Light mode text is darker than any canvas peak so it needs no supplement.
+
+**Coverage**:
+- `dark:` `h1`, `h2`, `h3`, `.font-display` — unconditionally, app-wide
+- `.canvas-text` subtree — all `h1/h2/h3/p/span/div` children inside the subtree receive the same halo
+
+**Muted text lift**: Inside a `.canvas-text` subtree, `.text-muted-foreground` is lifted to `foreground/0.72` in dark mode. Muted text is tuned for card surfaces and can fall below legibility comfort at aurora peaks; this selective lift keeps subtitles readable without affecting muted text elsewhere. Applied with `!important` because the rule lives in `@layer base` and must outrank the utilities layer.
+
+**`PageHeader` integration**: `PageHeader` (`components/shared/PageHeader.tsx`) applies `canvas-text` to its root wrapper, so every page's title + subtitle area is covered automatically without per-page changes.
+
+**ShaderAurora opacity (dark mode)**: `ShaderAurora`'s `<canvas>` element uses `dark:opacity-50` (previously `dark:opacity-80`). The reduced opacity keeps the WebGL aurora atmospheric without overpowering the text halo at peak brightness.
+
+**Aurora blob alpha tokens (dark mode)**: `--aurora-primary-alpha` / `--aurora-accent-alpha` / `--aurora-wash-alpha` in `tokens.css` dark-mode block were lowered from `0.16/0.12/0.10` to `0.13/0.10/0.08`. The CSS aurora blobs (always-on fallback under the WebGL shader) are less intense but still visible, reducing the baseline brightness against which text must compete.
+
+Code links: [[apps/frontend/src/index.css]], [[apps/frontend/src/styles/tokens.css]], [[apps/frontend/src/components/layout/ShaderAurora.tsx]], [[apps/frontend/src/components/shared/PageHeader.tsx]]
+
+### Semantic Color Token Sweep (June 2026)
+
+Approximately 130 raw Tailwind palette colors (`text-green-600 dark:text-green-400`, `text-red-500`, amber warning tints, etc.) have been replaced with semantic tokens across import pages/cards, watchlist, performance, market lookup, tax components, settings tabs, notifications, onboarding, ai-chat banner, and UI primitives.
+
+**Semantic tokens in use:**
+
+| Token | Meaning | Usage |
+|-------|---------|-------|
+| `text-success` / `bg-success` / `border-success` / `ring-success` | Positive/income/green | Profit indicators, income amounts, success states |
+| `text-destructive` / `bg-destructive` / `border-destructive` / `ring-destructive` | Negative/expense/red | Loss indicators, expense amounts, error states |
+| `text-warning` / `bg-warning` / `border-warning` | Caution/amber | Warning banners, caution states |
+
+These tokens resolve to the correct color for both light and dark modes and respect the macOS system-accent overlay (ADR-072) and all five theme variants.
+
+**Deliberately preserved raw colors (not converted):**
+
+- Categorical palettes: watchlist asset-class hue map, performance allocation series colors, PerformanceBreakdown heatmap ramp, onboarding step decorations, devtools HTTP-method color map
+- Blue info accents (`text-blue-*`) — no `--info` semantic token exists yet
+- Chart series colors (visx color scales)
+
+**`alert` + `badge` success variants:** The `alert.tsx` and `badge.tsx` primitives gained a `success` CVA variant using `bg-success/10 text-success border-success/20`.
+
+**Sonner success icon:** The Sonner success toast icon uses `text-success` instead of `text-emerald-500` so it inherits theme-variant green.
+
+### focus-visible Ring Convention (June 2026)
+
+Interactive elements use `focus-visible:ring-*` rather than `focus:ring-*`. Two stragglers (a `Select` trigger and a devtools filter input) were corrected. This matches the existing convention (33 uses of `focus-visible:ring` in the codebase) and avoids showing focus rings on mouse clicks.
+
+### Overscroll Behavior (June 2026)
+
+`body` now sets `overscroll-behavior-y: none` in `index.css`. In the packaged Electron shell, unsetting this caused rubber-band overscroll to expose the body background seam and — with vibrancy active — the compositor backdrop behind the window. This is a one-line global fix with no impact on in-page scroll containers.
 
 Code links: [[apps/frontend/src/index.css]], [[apps/frontend/src/components/ui/button.tsx]], [[apps/frontend/src/components/layout/AppLayout.tsx]]
 

@@ -3,9 +3,9 @@ title: Electron Desktop Architecture
 type: architecture-doc
 status: active
 date: 2026-04-27
-updated: 2026-06-10
-tags: [architecture, electron, desktop, packaging, security, sandbox, health-monitoring, async-io, csp-headers, dev-rebuild, phase-0, phase-1, phase-2, phase-6, phase-7, backup, restore, bundle, ipc, encryption, schema-migration, npm-vs-bun, docker-compose, pre-pull, startup, troubleshooting, alembic-migration-fixes, deployment-modes, shell-installer, docker-pull, update-system, checksum-verification, backup-before-update, cicd, april-2026, bug-hunt, recovery-hardening, concurrent-backup-guard, timeout, watchdog-pause, electron-native, macos, hiddeninset, vibrancy, system-accent, native-menu, dock-badge, csv-open-with, electronapi, renderer-ready-queue, june-2026]
-description: Electron desktop application architecture, IPC communication, sandbox hardening, health monitoring, Docker image pre-pull optimization, backup/restore bundle system (Phase 1+2), three-mode application update system with checksum verification (April 2026), Phase 7 backup/restore hardening with concurrent-backup guard, HTTP timeout, and watchdog pause (May 2026), and June 2026 V12 native macOS integration (ADR-072) — hiddenInset chrome, native menu/dock, CSV open-with handoff, system accent overlay, under-window vibrancy.
+updated: 2026-06-11
+tags: [architecture, electron, desktop, packaging, security, sandbox, health-monitoring, async-io, csp-headers, dev-rebuild, phase-0, phase-1, phase-2, phase-6, phase-7, backup, restore, bundle, ipc, encryption, schema-migration, npm-vs-bun, docker-compose, pre-pull, startup, troubleshooting, alembic-migration-fixes, deployment-modes, shell-installer, docker-pull, update-system, checksum-verification, backup-before-update, cicd, april-2026, bug-hunt, recovery-hardening, concurrent-backup-guard, timeout, watchdog-pause, electron-native, macos, hiddeninset, vibrancy, system-accent, native-menu, dock-badge, csv-open-with, electronapi, renderer-ready-queue, compose-stop, window-bounds, splash-localized, shutdown-idle-connections, june-2026]
+description: Electron desktop application architecture, IPC communication, sandbox hardening, health monitoring, Docker image pre-pull optimization, backup/restore bundle system (Phase 1+2), three-mode application update system with checksum verification (April 2026), Phase 7 backup/restore hardening with concurrent-backup guard, HTTP timeout, and watchdog pause (May 2026), and June 2026 V12 native macOS integration (ADR-072) — hiddenInset chrome, native menu/dock, CSV open-with handoff, system accent overlay, under-window vibrancy. June 2026 (startup fixes): quit uses compose stop (preserves warm-boot fast path), window bounds persisted/restored, localized theme-aware splash with phase narration, graceful shutdown closes idle keep-alive sockets, dev watcher covers packages/ and i18n/source.
 aliases: [electron, desktop app, packaging, IPC, main process, sandbox, watchdog, backup, bundle, update system, deployment modes, electronAPI, native menu, dock badge, system accent, vibrancy]
 related_code: ["packaging/electron/", "packaging/electron/backup/bundle.js", "packaging/electron/main.js", "packaging/electron/preload.js", "apps/frontend/src/lib/api/electron.ts", "apps/frontend/src/components/layout/ElectronBridge.tsx", "apps/frontend/src/lib/importHandoff.ts", "apps/frontend/src/lib/accentColor.ts", "apps/frontend/src/components/notifications/UpdateNotification.tsx", "apps/frontend/src/components/settings/tabs/AppTab.tsx", "apps/node-backend/src/main.js", "alembic/versions/0001_initial_database_schema.py", ".github/workflows/ci.yml", ".github/workflows/release.yml"]
 ---
@@ -321,6 +321,8 @@ This prevents lost IPC messages when the OS fires an `open-file` event (Finder "
 | `visualEffectState` | `'followWindow'` | Active/inactive vibrancy follows window focus |
 
 `enter-full-screen` and `leave-full-screen` Electron events push `{isFullScreen: boolean}` over `window:fullscreen`. `ElectronBridge` adds/removes the `electron-fullscreen` html class so CSS can drop the 88px left inset when the traffic lights disappear in fullscreen mode.
+
+The same lights also overlap the **sidebar's** top-left corner (the rail reaches the top of the window). `index.css` reserves a Finder-style strip above the sidebar header — `html.electron-mac:not(.electron-fullscreen) [data-sidebar="header"] { margin-top: 28px; }` — so the logo clears the buttons; the strip collapses in fullscreen along with the lights (fixed 2026-06-11, user-reported logo/close-button collision).
 
 #### Native Application Menu
 
@@ -667,7 +669,7 @@ bun run electron:prod
 In dev mode, a file watcher monitors source files and triggers automatic Docker rebuild+restart on code changes:
 
 ```javascript
-// Watches frontend, backend, migrations directories
+// Watches frontend, backend, packages/, i18n/source and bun lockfiles
 fs.watch(sourceDir, { recursive: true }, (eventType, filename) => {
   // Kill in-flight build with SIGTERM to signal cancellation
   if (activeBuildChild) {
@@ -677,6 +679,10 @@ fs.watch(sourceDir, { recursive: true }, (eventType, filename) => {
 });
 ```
 
+**Watch targets (June 2026):** `apps/frontend`, `apps/node-backend`, `packages/`, `i18n/source`, `package.json`, `bun.lock[b]`. The watch callback ignores `node_modules/`, `dist/`, and dot-directory churn.
+
+Previously only the two `apps/` directories were watched, so edits to `packages/shared-utils` or locale strings in `i18n/source` never triggered an auto-rebuild in dev mode — the container kept serving stale code until the next manual relaunch. This was confusing because `DOCKER_PATHS` (the skip-build cache check) already tracked those paths.
+
 **Behavior:**
 - File edit detected → signal SIGTERM to any in-flight build
 - In-flight build catches SIGTERM, marks error as `.cancelled = true`, rejects promise
@@ -684,6 +690,58 @@ fs.watch(sourceDir, { recursive: true }, (eventType, filename) => {
 - New build is immediately queued with the latest source state
 
 **Rationale:** Eliminates stale builds when multiple edits occur in quick succession. Prevents cascading Docker builds while preserving the most recent change for execution.
+
+### Dockerfile Dependency-Layer Cache (June 2026 — P2 fix)
+
+**Problem:** Both Dockerfile stages previously copied the full `packages/` directory and `i18n/source/` before running `bun install --frozen-lockfile`. Any change to `packages/shared-utils/src/*` or a locale string invalidated the install layer, triggering a full dependency reinstall in every image build (CI and Electron dev-mode auto-rebuilds).
+
+**Fix:** Only workspace manifests (`packages/*/package.json`) are copied before `bun install`. The full `packages/` tree and `i18n/source/` are copied after the install layer, before the build steps that require them. Stage 2 also adds a post-install `COPY packages/` so symlink targets for the shared-utils workspace are in place at runtime.
+
+**Verify:** `docker build` twice with a one-line change in `packages/shared-utils/src/money.js` between runs — the second build should show `CACHED` on the install layer.
+
+### Quit and Container Lifecycle (June 2026)
+
+The `will-quit` handler runs `docker compose stop` (not `down`) to stop containers on quit.
+
+**Why this matters:** `compose down` removes containers and the Docker network on every quit. The launcher's warm-boot fast path (`compose start`) requires containers to exist in a stopped state — if they were removed, every boot pays full container/network recreation. With `compose stop`, containers survive in the `exited` state and the next launch completes the `compose start` sub-second path rather than a full `compose up`.
+
+`compose down` is still used by:
+- The explicit clean-slate rebuild path (`docker-compose.clean.yml`)
+- Manual maintenance flows
+
+`restart: unless-stopped` semantics are preserved: user-stopped containers do not auto-start when the Docker daemon relaunches.
+
+### Window Bounds Persistence (June 2026 — U2 fix)
+
+Window size and position are persisted to `settings.json` under the `windowBounds` key and restored on the next launch.
+
+**Behavior:**
+- On `resize` and `move` events, `getNormalBounds()` is written via a debounced handler.
+- On quit, bounds are written synchronously before the process exits.
+- On `createWindow()`, stored bounds are read and clamped to the active display's `workArea` (handles unplugged external monitors). Minimum enforced size: 800×600.
+- If no stored bounds exist, the window opens at the prior default (1280×800, centered).
+
+This is baseline macOS window-state behavior and removes the most visible "not a real Mac app" tell alongside the V12 native-chrome work.
+
+### Boot Splash — Localized and Theme-Aware (June 2026 — P5/U3 fix)
+
+The boot splash (`setSplashStatus()`) is now:
+
+- **Localized** — uses the `splash.*` i18n keys loaded at startup via `initI18n()` (available before the window opens).
+- **Theme-aware** — reads `prefers-color-scheme` to pick between the dark/light background color, rather than hardcoding `#0f172a`.
+- **Phase-narrating** — calls `setSplashStatus(text)` at four boot checkpoints:
+  - `splash.checkingDocker` — Docker socket probe
+  - `splash.downloading` — image pre-pull / build phase
+  - `splash.startingServices` — `compose start`/`up` in progress
+  - `splash.waitingApp` — backend health-poll underway
+
+**i18n keys (en/nl):** `splash.checkingDocker`, `splash.downloading`, `splash.starting`, `splash.startingServices`, `splash.waitingApp`. Keys flow through `i18n/source/*.json` → `apps/frontend/src/locales/*.ts` → `packaging/electron/i18n/*.json` via `generate-locales`.
+
+### Graceful Shutdown — Idle Keep-Alive Sockets (June 2026 — P4 fix)
+
+The backend shutdown path (`httpServer.close()`) now immediately follows with `httpServer.closeIdleConnections?.()`. The Electron health watchdog uses a `keepAlive: true` agent, so an idle keep-alive socket from the shell to the backend is the norm. Without `closeIdleConnections`, `server.close()` could hang for up to the 10-second force-exit backstop waiting for the socket to time out.
+
+Additionally, the shell destroys its health-poll `keepAlive` agent on quit before sending `SIGTERM` to the containers, so the agent socket is already gone by the time the backend initiates shutdown.
 
 ---
 

@@ -3,9 +3,9 @@ title: Translations & i18n
 type: i18n
 status: active
 date: 2026-04-27
-updated: 2026-06-10
-tags: [i18n, translations, localization, internationalization, phase-6, phase-8, phase-f, phase-9, phase-c, phase-d, phase-2, splits, settlement, admin, observability, cash-flow-forecast, pdf-export, portfolio, tax, backup, encrypt, passphrase-modal, accessibility, aria-label, bug-hunt-2026-05-06, chart-aria, screen-reader, plural, tc, intl-plural-rules, planned-page, toast, electron-native, menu, system-accent, suggestion-card, june-2026]
-description: Internationalization system including supported languages, translation workflow, and usage patterns. Phase 6 adds 32 export keys for PDF report localization. Phase 8 adds 11 additional export.section.* keys for portfolio (6) and tax (7) report sections. Phase C adds 15 cash flow forecast keys. Phase F adds 60 admin observability keys. 2026-05-29 adds 16 chart.aria.* keys (localized chart screen-reader summaries) and 21 aria.* keys (localized icon-button aria-labels). June 2026 adds tc() plural mechanism and plannedPage error-toast keys. June 2026 (ADR-070) adds 5 commandPalette.* keys (en + nl) for the new ⌘K command palette. June 2026 Premium v3 (ADR-071) adds 8 keys: settings.general.enhancedEffects/Hint, shortcuts.title/showHelp/closeDialog/chartScrub, commandPalette.recent/searchTransactions. June 2026 Premium v3 V5-V7 adds 14 keys: contextMenu.* (8 keys), quickLook.* (2 keys), shortcuts table-interaction additions (4 keys). June 2026 V12 (ADR-072) adds 11 keys: menu.edit/file/go/importCsv/keyboardShortcuts/newTransaction/settings/toggleSidebar/view, settings.appearance.systemAccent/systemAccentHint; settings.general.enhancedEffectsHint reworded. June 2026 V11 adds 4 keys: dashboard.suggestions, dashboard.widgetDescriptions.suggestions, suggestions.kicker, suggestions.review. Total: 2891 keys.
+updated: 2026-06-11
+tags: [i18n, translations, localization, internationalization, phase-6, phase-8, phase-f, phase-9, phase-c, phase-d, phase-2, splits, settlement, admin, observability, cash-flow-forecast, pdf-export, portfolio, tax, backup, encrypt, passphrase-modal, accessibility, aria-label, bug-hunt-2026-05-06, chart-aria, screen-reader, plural, tc, intl-plural-rules, planned-page, toast, electron-native, menu, system-accent, suggestion-card, splash, upcoming-count, june-2026]
+description: Internationalization system including supported languages, translation workflow, and usage patterns. Phase 6 adds 32 export keys for PDF report localization. Phase 8 adds 11 additional export.section.* keys for portfolio (6) and tax (7) report sections. Phase C adds 15 cash flow forecast keys. Phase F adds 60 admin observability keys. 2026-05-29 adds 16 chart.aria.* keys (localized chart screen-reader summaries) and 21 aria.* keys (localized icon-button aria-labels). June 2026 adds tc() plural mechanism and plannedPage error-toast keys. June 2026 (ADR-070) adds 5 commandPalette.* keys (en + nl) for the new ⌘K command palette. June 2026 Premium v3 (ADR-071) adds 8 keys: settings.general.enhancedEffects/Hint, shortcuts.title/showHelp/closeDialog/chartScrub, commandPalette.recent/searchTransactions. June 2026 Premium v3 V5-V7 adds 14 keys: contextMenu.* (8 keys), quickLook.* (2 keys), shortcuts table-interaction additions (4 keys). June 2026 V12 (ADR-072) adds 11 keys: menu.edit/file/go/importCsv/keyboardShortcuts/newTransaction/settings/toggleSidebar/view, settings.appearance.systemAccent/systemAccentHint; settings.general.enhancedEffectsHint reworded. June 2026 V11 adds 4 keys: dashboard.suggestions, dashboard.widgetDescriptions.suggestions, suggestions.kicker, suggestions.review. June 2026 (startup/UI fixes) adds 5 splash.* keys (en + nl, Electron boot splash narration) + tc()-plural upcoming.count.one/.other; removes upcoming.countSingle/countPlural. Total: ~2898 keys.
 aliases: [i18n, translations, localization, language, nl, en, dutch, english]
 related_code: ["apps/frontend/src/locales", "apps/frontend/src/contexts/LanguageContext.tsx", "apps/frontend/src/hooks/useSplits.ts"]
 ---
@@ -119,8 +119,17 @@ tc('table.items', 5)  // EN: "5 items"   / NL: "5 artikelen"
 | `table.items` | `{{count}} item` | `{{count}} items` |
 | `portfolio.investments` | `{{count}} investment` | `{{count}} investments` |
 | `performance.holdings` | `{{count}} holding` | `{{count}} holdings` |
+| `upcoming.count` | `{count} upcoming payment due this week` | `{count} upcoming payments due this week` |
 
-The key `performance.holdingsPlural` (formerly a separate plural key) has been **removed**. Migrate to `tc('performance.holdings', count)`.
+**Removed flat plural keys (migrate to `tc()`):**
+
+| Removed key | Replacement |
+|-------------|-------------|
+| `performance.holdingsPlural` | `tc('performance.holdings', count)` |
+| `upcoming.countSingle` | `tc('upcoming.count', 1)` |
+| `upcoming.countPlural` | `tc('upcoming.count', count)` |
+
+`upcoming.countSingle`/`countPlural` were replaced in June 2026 when `SuggestionCard`'s hand-rolled singular/plural logic was migrated to `tc()` for consistency with the rest of the app.
 
 ## Translation Keys
 
@@ -163,6 +172,7 @@ Examples:
 | `settings.*` | Settings labels, tabs, and sections | `settings.language`, `settings.tab.appearance`, `settings.appearance.variant` |
 | `aria.*` | Icon-button accessible names | `aria.deleteTransaction`, `aria.save` |
 | `chart.aria.*` | Chart screen-reader summary fragments | `chart.aria.kind.bar`, `chart.aria.seriesOther` |
+| `splash.*` | Electron boot-splash phase labels (main-process only, not rendered in React) | `splash.checkingDocker`, `splash.waitingApp` |
 
 ## Adding New Translations
 
@@ -195,6 +205,33 @@ bun run build
 ```
 
 ### Recent keys added
+
+#### Startup/UI fix batch (June 2026)
+
+7 new keys, 2 removed. `bun run generate-locales` + `validate-locales` clean. Keys also flow to `packaging/electron/i18n/` via `generate-locales`.
+
+**5 new `splash.*` keys** — Electron boot-splash phase narration:
+
+| Key | EN |
+|-----|----|
+| `splash.checkingDocker` | `Checking Docker...` |
+| `splash.downloading` | `Downloading components...` |
+| `splash.starting` | `Starting Vision...` |
+| `splash.startingServices` | `Starting services...` |
+| `splash.waitingApp` | `Almost ready...` |
+
+These are used only in the Electron main process (`setSplashStatus()`); they are not rendered inside React. They require the Electron i18n file to be regenerated via `generate-locales`.
+
+**2 new `upcoming.count` plural keys** (replace 2 removed):
+
+| Key | one | other |
+|-----|----|-------|
+| `upcoming.count.one` | `{count} upcoming payment due this week` | — |
+| `upcoming.count.other` | — | `{count} upcoming payments due this week` |
+
+**2 removed keys** — replaced by `tc('upcoming.count', count)`:
+- `upcoming.countSingle`
+- `upcoming.countPlural`
 
 #### Premium v3 V8-V11 batch (June 2026, ADR-071)
 

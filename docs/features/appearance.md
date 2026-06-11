@@ -3,8 +3,8 @@ title: Appearance Feature
 type: feature
 status: active
 date: 2026-04-21
-updated: 2026-06-10
-tags: [feature, appearance, theming, personalization, frontend, settings, phase-1, enhanced-effects, shader-aurora, webgl, premium-v3, system-accent, vibrancy, electron-native, macos, june-2026]
+updated: 2026-06-11
+tags: [feature, appearance, theming, personalization, frontend, settings, phase-1, enhanced-effects, shader-aurora, webgl, premium-v3, system-accent, vibrancy, electron-native, macos, june-2026, canvas-text, aurora-legibility, liquid-glass-sidebar]
 description: Per-user theme variant selection with five color palettes, light/dark mode switching, and schedule-based mode transitions. June 2026 Premium v3 (ADR-071): new Enhanced Visual Effects toggle in Settings → General gates the WebGL ShaderAurora (default off) and window vibrancy. June 2026 V12 (ADR-072): system accent color overlay (Electron/macOS only, persisted in theme_settings.systemAccent) and vibrancy opt-in via enhancedEffects.
 aliases: [appearance, theming, theme variants, color palettes, dark mode, light mode, system accent, vibrancy]
 related_code:
@@ -335,8 +335,17 @@ All theme transitions respect `prefers-reduced-motion`:
 - Single static frame when `prefers-reduced-motion: reduce` is active.
 - rAF paused when `document.hidden` (tab not visible).
 - Any WebGL context creation failure → silently falls back to CSS blobs only (no error shown).
+- **Dark-mode canvas opacity**: `dark:opacity-50` (was `dark:opacity-80`). Reduces peak brightness in dark mode so the text legibility halo (see below) can do its job without needing excessive shadow values.
 
 **Why default off**: The ADR-020 Electron M1 history (GPU jank from sustained animations) makes always-on unacceptable. The shader is self-throttling but adds GPU work; users must explicitly opt in.
+
+**Aurora blob alpha tokens (CSS fallback, dark mode)**: The always-on CSS aurora blobs in `tokens.css` use lower alpha values in dark mode since June 2026 — `--aurora-primary-alpha: 0.13`, `--aurora-accent-alpha: 0.10`, `--aurora-wash-alpha: 0.08` (was `0.16 / 0.12 / 0.10`). This reduces the brightness ceiling the text legibility halo has to overcome, maintaining canvas atmosphere without washing out headings.
+
+**Canvas-text legibility guarantee (dark mode)**: A background-colored text-shadow halo is applied globally in dark mode to `h1/h2/h3/.font-display` and to any subtree marked `.canvas-text`. `PageHeader` applies `canvas-text`, so every page's title/subtitle area is covered automatically. Muted text (`.text-muted-foreground`) inside `.canvas-text` subtrees is lifted to `foreground/0.72` in dark mode. All three measures are `.dark`-scoped; light mode is structurally unaffected.
+
+See [[docs/components/ui-components#canvas-text-legibility-guarantee-june-2026|Canvas-Text Legibility Guarantee]] for full details.
+
+**Liquid-glass sidebar**: `.glass-chrome` background alphas were lowered to 0.55→0.72 (light) / 0.55→0.74 (dark), allowing the aurora and Electron vibrancy to glow through the sidebar blur. A `@supports not (backdrop-filter)` rule keeps a near-opaque fallback for browsers without blur support. See [[docs/components/ui-components#glass-chrome-sidebar-transparency-june-2026|glass-chrome entry]] for token values.
 
 **Vibrancy gate**: The `enhancedEffects` toggle also controls under-window vibrancy on Electron/macOS. The window is always created with `vibrancy: 'under-window'` + `visualEffectState: 'followWindow'` (invisible while the page paints opaque pixels). Only when `enhancedEffects` is `true` does `ElectronBridge` add the `vibrancy` html class, and one CSS rule makes `body` translucent (`hsl(var(--background) / 0.72)`). See [[docs/architecture/electron|Electron Architecture — Under-Window Vibrancy]].
 

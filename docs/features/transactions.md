@@ -3,8 +3,8 @@ title: Transactions
 type: feature
 status: active
 date: 2026-04-16
-updated: 2026-06-10
-tags: [feature, transactions, finance, phase-q, recipient-groups, bulk-actions, optimistic-updates, optimistic-create, june-2026, context-menu, quick-look, keyboard-nav, duplicate, filter-by-recipient, deep-link, electron-native, new-transaction]
+updated: 2026-06-11
+tags: [feature, transactions, finance, phase-q, recipient-groups, bulk-actions, optimistic-updates, optimistic-create, june-2026, context-menu, quick-look, keyboard-nav, duplicate, filter-by-recipient, deep-link, electron-native, new-transaction, render-loop-fix, category-ids-filter, multi-value-filter]
 aliases: [transactions-feature, income, expenses, financial-records, money-tracking]
 description: Core transaction management - income, expenses, and tracking financial activities. Phase Q adds recipient-group filtering for linked-recipient transaction discovery. Bulk operations enable atomic multi-row delete, recategorize, reassign, activate/deactivate, export, and tag. June 2026 (ADR-070): useUpdateTransaction/useDeleteTransaction are now optimistic. June 2026 Premium v3 (ADR-071): useCreateTransaction is now optimistic (temp negative-id row → server-row swap → onSettled invalidate; virtual list excluded; 6 tests). June 2026 Premium v3 V5-V7: per-row context menu, Quick Look dialog (Space), keyboard row navigation (↑/↓/Enter), Duplicate, and Filter-by-recipient actions. June 2026 V12 (ADR-072): /transactions?new=1 deep link opens AddTransactionDialog (used by native menu and dock menu).
 related_code: ["apps/node-backend/src/routes/transactions.js", "apps/node-backend/src/repositories/transactionRepository.js", "apps/node-backend/src/services/filterBuilder.js", "apps/node-backend/src/services/bulkSelection.js", "apps/frontend/src/features/transactions/", "apps/frontend/src/pages/TransactionsPage.tsx"]
@@ -132,6 +132,18 @@ Implementation note:
 - `TransactionsPage` handlers now consistently consume `sourceIndex` semantics from shared table components.
 
 Code links: [[apps/frontend/src/components/shared/VirtualDataTable.tsx]], [[apps/frontend/src/components/shared/DataTable.tsx]], [[apps/frontend/src/components/shared/ColumnFilter.tsx]], [[apps/frontend/src/pages/TransactionsPage.tsx]], [[apps/frontend/src/pages/RecipientsPage.tsx]]
+
+#### Multi-Value Filter Memoization (June 2026)
+
+`categoryIdsFilter` and `tagsFilter` in `TransactionsPage` are memoized on their raw comma-separated search-param strings (`categoryIdsRaw`, `tagsRaw`) rather than computed inline. This matters because pivot-table drillthrough from the Statistics page generates multi-value URLs such as `?category_ids=1,2,3`, and inline array construction (e.g. `str.split(',')`) produces a new array reference on every render. That fresh reference invalidated the `currentFilter` memo on every render, which in turn triggered the selection-clear effect unconditionally, reaching React's "Maximum update depth exceeded" limit and wedging the page until a hard refresh.
+
+Detail-cell drills (scalar `category_id`) were immune because they produce a simple scalar comparison, not an array. General-category group header drills and tag drills were affected.
+
+**Fix**: Both arrays are wrapped in `useMemo` keyed on the raw string. The `currentFilter` memo dependency stays stable as long as the URL does not change, breaking the loop.
+
+**Regression test**: `apps/frontend/src/pages/__tests__/TransactionsPage.integration.test.tsx` — test case verified to trip on unfixed code.
+
+Code link: [[apps/frontend/src/pages/TransactionsPage.tsx]]
 
 #### Frontend Page Decomposition (Phase 5)
 

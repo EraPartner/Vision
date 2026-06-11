@@ -9,6 +9,9 @@ tags: [architecture, frontend, uml, plantuml, react, phase-4, phase-6, phase-9, 
 aliases: [frontend architecture, react architecture, frontend design, design system]
 ---
 
+> [!info] June 2026 — Semantic Token Sweep + UI Fixes
+> ~130 raw Tailwind palette colors replaced with semantic tokens (`text-success`, `text-destructive`, `text-warning` and bg-/border-/ring- variants) across import pages/cards, watchlist, performance, market lookup, tax, settings, notifications, onboarding, ai-chat banner, and UI primitives (`alert` + `badge` success variants, Sonner success icon). `focus:ring` → `focus-visible:ring` on two stragglers. `body` gains `overscroll-behavior-y: none`. Deliberately kept raw: categorical palettes, chart series colors, blue info accents (no `--info` token). See [[docs/components/ui-components|UI Components]] for the full token table.
+
 > [!info] June 2026 — Premium v3 (ADR-071)
 > The second June 2026 batch adds RollingNumber/Money/DeltaPill shared components, chart scrub-to-compare and synced crosshairs, ChartSkeleton, large-title collapse (PageTitleContext), palette v2 with recents and recipient search, ShortcutsOverlay, go-to key sequences (g+key), animated tab indicator, workspace-aware aurora, ShaderAurora behind an opt-in `AppSettings.enhancedEffects` toggle (default off, gates the WebGL aurora; ADR-020 Electron M1 rationale), light-mode paper & ink token pass, per-widget dashboard hydration, and optimistic transaction CREATE. See [[docs/adr/071-premium-v3-effects-toggle|ADR-071]].
 

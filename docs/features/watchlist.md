@@ -3,10 +3,10 @@ title: Watchlist Feature
 type: feature
 status: active
 date: 2026-04-17
-last_modified: 2026-04-29
-updated: 2026-04-29
-tags: [feature, watchlist, investments, tracking, alerts, phase-3.6, offline-resilience, online-status-detection, api-client-migration]
-description: Investment watchlist for tracking securities not yet in the portfolio with target price alerts
+last_modified: 2026-06-11
+updated: 2026-06-11
+tags: [feature, watchlist, investments, tracking, alerts, phase-3.6, offline-resilience, online-status-detection, api-client-migration, validation, june-2026]
+description: Investment watchlist for tracking securities not yet in the portfolio with target price alerts. June 2026: POST/PATCH now return 400 ValidationError for invalid target_price, asset_class, or currency, instead of DB-level 500.
 aliases: [watch list, price alerts, investment tracking]
 related_code:
   - apps/frontend/src/pages/portfolio/WatchlistPage.tsx
@@ -65,11 +65,23 @@ Implementation note:
 
 ### POST /api/watchlist
 
-Adds a security to the watchlist.
+Adds a security to the watchlist. Required fields: `name`, `asset_class`, `target_price`.
 
 ### PATCH /api/watchlist/:id
 
-Updates a watchlist item (e.g., set target price).
+Updates a watchlist item (e.g., set target price). All fields are optional (partial update).
+
+### Input Validation (June 2026)
+
+POST and PATCH now validate typed fields before the database layer, returning `400 ValidationError` for:
+
+- `target_price` that is not a finite number ≥ 0
+- `asset_class` outside `{stock, etf, crypto, metals}`
+- `currency` that is not a 3-letter alphabetic code
+
+Previously these reached the typed DB column and surfaced as opaque 500 errors. Callers sending valid data are unaffected.
+
+See [[docs/api/watchlist|Watchlist API]] for the full error-response table.
 
 ### DELETE /api/watchlist/:id
 

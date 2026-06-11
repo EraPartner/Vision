@@ -5,7 +5,8 @@ method: GET, POST, PATCH, DELETE
 path: /api/watchlist
 description: Investment watchlist management
 date: 2026-04-10
-tags: [api, watchlist, investments]
+updated: 2026-06-11
+tags: [api, watchlist, investments, validation]
 status: active
 aliases: [watchlist-api, tracked-symbols, watch list]
 related_code:
@@ -31,7 +32,7 @@ Retrieve all watchlist items.
 |-----------|------|---------|-------------|
 | limit | integer | 50 | Max items to return |
 | offset | integer | 0 | Items to skip |
-| asset_class | string | null | Filter by asset class (stock, etf, crypto) |
+| asset_class | string | null | Filter by asset class (stock, etf, crypto, metals) |
 
 Notes:
 - `limit` is normalized to a safe range of `1..5000` (default `50`).
@@ -79,7 +80,22 @@ Add item to watchlist.
 }
 ```
 
-**Required Fields:** name, asset_class, target_price
+**Required Fields:** `name`, `asset_class`, `target_price`
+
+**Field Validation (June 2026):**
+
+POST and PATCH now validate typed fields before reaching the database, returning `400 ValidationError` instead of a DB-level 500 on bad input:
+
+| Field | Rule | Error message |
+|-------|------|---------------|
+| `target_price` | Finite number ≥ 0 | `target_price must be a non-negative number` |
+| `asset_class` | One of `stock`, `etf`, `crypto`, `metals` | `asset_class must be one of: stock, etf, crypto, metals` |
+| `currency` | Exactly 3 letters (`/^[A-Za-z]{3}$/`) | `currency must be a 3-letter code` |
+
+For PATCH, validation applies only to fields that are present in the request body (partial update semantics are preserved). The repository's column allowlist continues to prevent injection regardless of validation.
+
+> [!info] Non-breaking change
+> This tightening only affects requests that would have previously surfaced as opaque 500 errors. Callers sending well-formed data are unaffected.
 
 ### GET /api/watchlist/:id
 
@@ -87,7 +103,7 @@ Get single watchlist item.
 
 ### PATCH /api/watchlist/:id
 
-Update watchlist item.
+Update watchlist item. Accepts any subset of writable fields. See field validation rules above.
 
 ### DELETE /api/watchlist/:id
 

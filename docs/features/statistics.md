@@ -3,8 +3,8 @@ title: Statistics Feature
 type: feature
 status: active
 date: 2026-04-24
-updated: 2026-06-01
-last_modified: 2026-06-01
+updated: 2026-06-11
+last_modified: 2026-06-11
 tags: [feature, statistics, analytics, charts, frontend, backend, refactor, phase-7, phase-13, sankey-flow, rolling-averages, pdf-export, year-selector, useMemo, drillthrough, exclusion-filters, recipient-insights]
 description: Complete analytics and statistics system with per-graph exclusions, pivot tables with clickable drillthrough, year-over-year comparisons, saved custom charts, Sankey flow visualization, rolling average overlays, and PDF export. Phase 7 adds flow diagram, moving averages, and financial report export. Phase 13 adds pivot table drillthrough to filtered transaction list and multi-select export filters. June 2026: all-years Top Recipients chart now honours exclusion filters (bug fix).
 aliases: [stats, analytics, charts, pivot table, yearly comparison]
@@ -345,6 +345,9 @@ Two new query parameters added to `GET /api/transactions`:
 
 **Test Coverage:**
 - `[[apps/frontend/src/components/statistics/CategoryPivotTable.test.ts]]` — 11 tests covering `lastDayOfMonth` and `buildDrillUrl` helpers
+
+> [!warning] General-category group drills previously wedged TransactionsPage
+> Drillthrough URLs with `?category_ids=1,2,3` (produced by GENERAL group header clicks) triggered an infinite render loop in `TransactionsPage` — the multi-value array was rebuilt on every render, causing cascading memo + effect re-runs. Fixed in June 2026 by memoizing `categoryIdsFilter` on the raw param string. Detail-cell (scalar `?category_id=…`) drills were not affected. See [[docs/features/transactions#multi-value-filter-memoization-june-2026|Multi-Value Filter Memoization]] for details.
 
 ## Phase 7 Additions (April 2026)
 
