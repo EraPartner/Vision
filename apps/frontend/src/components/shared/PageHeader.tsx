@@ -21,7 +21,7 @@ export function PageHeader({ title, subtitle, description, icon: Icon, iconColor
     }, [title, setTitle]);
 
     return (
-        <div className="flex items-start justify-between gap-4">
+        <div className="canvas-text flex items-start justify-between gap-4">
             <div className="flex items-center gap-4">
                 {Icon && (
                     <div className={`hidden sm:flex h-12 w-12 shrink-0 rounded-xl bg-gradient-to-br ${iconColor} items-center justify-center shadow-sm`}>

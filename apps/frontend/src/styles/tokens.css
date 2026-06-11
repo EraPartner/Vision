@@ -193,10 +193,12 @@
         --glass-tint: 158 50% 45%;
         --glass-saturate: 150%;
 
-        /* -------- Atmosphere (dark: more luminous aurora) -------- */
-        --aurora-primary-alpha: 0.16;
-        --aurora-accent-alpha: 0.12;
-        --aurora-wash-alpha: 0.1;
+        /* -------- Atmosphere (dark: more luminous aurora) --------
+           Peaks tuned down 2026-06-11: light foreground text sits directly on
+           this canvas (page headers), and brighter washes cost legibility. */
+        --aurora-primary-alpha: 0.13;
+        --aurora-accent-alpha: 0.1;
+        --aurora-wash-alpha: 0.08;
         --grain-alpha: 0.028;
     }
 }

@@ -205,7 +205,12 @@ export function ShaderAurora() {
         <canvas
             ref={canvasRef}
             aria-hidden="true"
-            className="absolute inset-0 h-full w-full opacity-60 dark:opacity-80"
+            // Dark mode capped well below the old 0.8: shader peaks (0.65 in
+            // the fragment) × 0.8 pushed bright primary washes behind light
+            // foreground text — "Good afternoon" went light-on-light. 0.5
+            // keeps the ambiance while the canvas-text halo (index.css)
+            // guarantees legibility at the peaks.
+            className="absolute inset-0 h-full w-full opacity-60 dark:opacity-50"
         />
     );
 }

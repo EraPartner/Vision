@@ -27,6 +27,10 @@
         color: hsl(var(--foreground));
         font-family: var(--font-body);
         letter-spacing: -0.005em;
+        /* No page-level rubber-banding: in the Electron shell the bounce
+           exposes the body edge over the vibrancy/aurora backdrop (visible
+           seam). Inner scrollers keep their native overscroll feel. */
+        overscroll-behavior-y: none;
     }
 
     h1,
@@ -36,6 +40,36 @@
         font-family: var(--font-display);
         font-feature-settings: "ss01", "calt", "dlig", "liga";
         letter-spacing: -0.02em;
+    }
+
+    /* ------------------------------------------------------------------
+     * Canvas-text legibility guarantee.
+     *
+     * Bare text (page headers, section titles) sits directly on the aurora
+     * canvas, whose bright drifts can wash out light dark-mode text. A
+     * background-colored halo restores local contrast exactly where a blob
+     * passes behind a glyph — and is invisible over surfaces that already
+     * match the background. Light mode needs none: its text is darker than
+     * any canvas peak. `.canvas-text` extends the same guarantee to a whole
+     * subtree (PageHeader applies it, covering every page's title/subtitle).
+     * ------------------------------------------------------------------ */
+    .dark h1,
+    .dark h2,
+    .dark h3,
+    .dark .font-display,
+    .dark .canvas-text,
+    .dark .canvas-text :is(h1, h2, h3, p, span, div) {
+        text-shadow:
+            0 1px 2px hsl(var(--background) / 0.6),
+            0 2px 14px hsl(var(--background) / 0.45);
+    }
+
+    /* Secondary text on the canvas gets a small lift: muted-foreground is
+       tuned for card surfaces and dips below comfort at aurora peaks.
+       !important because this lives in @layer base and must outrank the
+       .text-muted-foreground utility (utilities layer wins over base). */
+    .dark .canvas-text .text-muted-foreground {
+        color: hsl(var(--foreground) / 0.72) !important;
     }
 
     /* Focus ring — emerald, glass-aware */
@@ -256,13 +290,18 @@
             0 32px 80px -28px hsl(0 0% 0% / 0.55);
     }
 
-    /* Chrome — sidebar rail, persistent toolbars */
+    /* Chrome — sidebar rail, persistent toolbars.
+       Alphas low enough that the aurora (and Electron vibrancy desktop) glow
+       through the blur — at the old 0.88/0.96 the material read as solid and
+       the sidebar looked flat next to the glassed content. Readability holds
+       because the chrome blur + saturate veil averages whatever drifts behind;
+       prefers-reduced-transparency falls back to near-opaque below. */
     .glass-chrome {
         background:
             linear-gradient(
                 180deg,
-                hsl(var(--sidebar-background) / 0.72) 0%,
-                hsl(var(--sidebar-background) / 0.88) 100%
+                hsl(var(--sidebar-background) / 0.55) 0%,
+                hsl(var(--sidebar-background) / 0.72) 100%
             );
         border: 1px solid hsl(var(--sidebar-border) / 0.5);
         box-shadow:
@@ -274,13 +313,26 @@
         background:
             linear-gradient(
                 180deg,
-                hsl(var(--sidebar-background) / 0.82) 0%,
-                hsl(var(--sidebar-background) / 0.96) 100%
+                hsl(var(--sidebar-background) / 0.55) 0%,
+                hsl(var(--sidebar-background) / 0.74) 100%
             );
         border: 1px solid hsl(var(--sidebar-border) / 0.6);
         box-shadow:
             0 1px 0 hsl(var(--glass-highlight) / 0.06) inset,
             0 20px 56px hsl(0 0% 0% / 0.45);
+    }
+
+    /* No backdrop-filter support → translucency would show raw page behind
+       the rail; keep the old near-opaque ramp there. */
+    @supports not ((-webkit-backdrop-filter: blur(1px)) or (backdrop-filter: blur(1px))) {
+        .glass-chrome {
+            background:
+                linear-gradient(
+                    180deg,
+                    hsl(var(--sidebar-background) / 0.92) 0%,
+                    hsl(var(--sidebar-background) / 0.98) 100%
+                );
+        }
     }
 
     /* Elevated — hero tiles and featured KPIs */
@@ -478,6 +530,16 @@
 
     html.electron-mac:not(.electron-fullscreen) .app-topbar {
         padding-left: 88px;
+    }
+
+    /* The hiddenInset traffic lights (x:20, y:20, ~12px buttons) also overlap
+       the sidebar's top-left, colliding with the logo in its header. Reserve
+       the native strip above the header content, Finder-style. margin (not
+       padding) so the header's own py-* utility keeps winning the cascade —
+       utilities layer beats this base layer. Fullscreen auto-hides the lights,
+       so the strip collapses with them. */
+    html.electron-mac:not(.electron-fullscreen) [data-sidebar="header"] {
+        margin-top: 28px;
     }
 
     /* Vibrancy prototype — only when enhancedEffects is on (ElectronBridge
