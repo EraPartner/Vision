@@ -51,29 +51,33 @@ export const banksRepository = {
           SELECT DISTINCT bank_account
           FROM transactions
           WHERE is_active = true AND bank_account IS NOT NULL
-        ),
-        ranked AS (
-          SELECT
-            a.bank_account,
-            m.month_start,
-            COALESCE(t.currency, 'EUR') AS currency,
-            t.balance,
-            t.date,
-            ROW_NUMBER() OVER (
-              PARTITION BY a.bank_account, m.month_start
-              ORDER BY t.date DESC, t.id DESC
-            ) AS rn
-          FROM months m
-          CROSS JOIN account_list a
-          LEFT JOIN transactions t ON t.bank_account = a.bank_account
-            AND t.date <= (m.month_start + interval '1 month' - interval '1 day')::date
-            AND t.is_active = true
-            AND t.balance IS NOT NULL
         )
-        SELECT bank_account, month_start, currency, balance, date
-        FROM ranked
-        WHERE rn = 1 AND balance IS NOT NULL
-        ORDER BY bank_account, month_start
+        -- One index-backed LATERAL probe per (account, month-end) for the latest
+        -- balance ≤ month-end, instead of a ROW_NUMBER over a months×transactions
+        -- CROSS JOIN that materialized ~12× the whole table. Mirrors the
+        -- "latest balance ≤ day" pattern in infoRepositoryNetWorth.js. Output is
+        -- identical: same row per (account, month) and the same tie-break
+        -- (date DESC, id DESC). Uses idx_transactions_bank_date_active.
+        SELECT
+          a.bank_account,
+          m.month_start,
+          COALESCE(lb.currency, 'EUR') AS currency,
+          lb.balance,
+          lb.date
+        FROM months m
+        CROSS JOIN account_list a
+        LEFT JOIN LATERAL (
+          SELECT t.currency, t.balance, t.date
+          FROM transactions t
+          WHERE t.is_active = true
+            AND t.bank_account = a.bank_account
+            AND t.balance IS NOT NULL
+            AND t.date <= (m.month_start + interval '1 month' - interval '1 day')::date
+          ORDER BY t.date DESC, t.id DESC
+          LIMIT 1
+        ) lb ON true
+        WHERE lb.balance IS NOT NULL
+        ORDER BY a.bank_account, m.month_start
       `),
     ]);
 

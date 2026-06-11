@@ -12,16 +12,15 @@
 import { Router } from 'express';
 import infoRepository from '../../services/infoService.js';
 import { detectRecurringPatterns } from '../../services/recurringDetectionService.js';
+import { listAdapters } from '../../services/importPipeline/adapters/index.js';
 import { logger } from '../../config/logger.js';
 import { getTargetCurrency } from './_queryParams.js';
 
 const router = Router();
 
-router.get('/', async (req, res) => {
-  const targetCurrency = getTargetCurrency(req);
-  const stats = await infoRepository.getStatistics(targetCurrency);
-  res.ok(stats);
-});
+// (Removed legacy GET /api/info and GET /api/info/transaction-summary — Phase 9
+// cutover (ADR-010): the aggregations.js routes superseded them and they had
+// zero production callers. The category breakdown lives on via getCategoryBreakdown.)
 
 router.get('/banks', async (req, res) => {
   const banks = await infoRepository.getBanks();
@@ -29,34 +28,17 @@ router.get('/banks', async (req, res) => {
 });
 
 router.get('/supported-adapters', async (req, res) => {
-  const adapters = [
-    { key: 'kbc', name: 'KBC', adapter_class: 'KBCAdapter' },
-    { key: 'belfius', name: 'Belfius', adapter_class: 'BelfiusAdapter' },
-    { key: 'ing', name: 'ING', adapter_class: 'INGAdapter' },
-    { key: 'bnp', name: 'BNP Paribas Fortis', adapter_class: 'BNPAdapter' },
-    { key: 'revolut', name: 'Revolut', adapter_class: 'RevolutAdapter' },
-    { key: 'vision', name: 'Vision', adapter_class: 'VisionAdapter' },
-    { key: 'sabb', name: 'SABB', adapter_class: 'SABBAdapter' },
-    { key: 'wise', name: 'Wise', adapter_class: 'WiseAdapter' },
-  ];
+  // Derived from the adapter registry (single source of truth) so a newly
+  // registered adapter appears in the import card + onboarding wizard without a
+  // second hardcoded list to update. (The old list also referenced
+  // *Adapter-class names that don't exist anywhere in the codebase.)
+  const adapters = listAdapters();
   res.ok({ adapters, total_count: adapters.length });
 });
 
 router.get('/transaction-count', async (req, res) => {
   const count = await infoRepository.getTransactionCount();
   res.ok({ total_transactions: count });
-});
-
-router.get('/transaction-summary', async (req, res) => {
-  const { bank_account, start_date, end_date } = req.query;
-  const targetCurrency = getTargetCurrency(req);
-  const summary = await infoRepository.getTransactionSummary({
-    bankAccount: bank_account || null,
-    startDate: start_date || null,
-    endDate: end_date || null,
-    targetCurrency,
-  });
-  res.ok(summary);
 });
 
 router.get('/planned-expenses-next-month', async (req, res) => {

@@ -49,7 +49,11 @@ export async function stageBatch({ batchId, filePath, adapterName, customConfig,
     : adapter.parse(filePath));
 
   const total = rows.length;
-  logger.info('[pipeline:stage] parsed rows', { batchId, adapterName, total });
+  // Adapters attach a `skipped` count of unparseable data rows so an import that
+  // silently dropped rows (encoding glitch, format drift) is visible rather than
+  // "succeeding" with fewer rows and no signal.
+  const skipped = Number(rows.skipped) || 0;
+  logger.info('[pipeline:stage] parsed rows', { batchId, adapterName, total, skipped });
 
   await query(`UPDATE import_batches SET rows_total = $1 WHERE id = $2`, [total, batchId]);
 
@@ -65,7 +69,7 @@ export async function stageBatch({ batchId, filePath, adapterName, customConfig,
     if (onProgress) onProgress({ phase: 'staging', current: inserted, total });
   }
 
-  return { rowsTotal: total };
+  return { rowsTotal: total, rowsSkipped: skipped };
 }
 
 async function insertStagingChunk(batchId, rows, startIndex) {

@@ -26,41 +26,57 @@ beforeEach(() => vi.clearAllMocks());
 
 describe('getMonthlyFinancialSummary — materialized-view fast path', () => {
   it('uses mv_monthly_summary when no exclusions and not allTime', async () => {
-    mvAvailable.mockResolvedValueOnce(true);
+    // Pin the clock so the zero-filled 6-month window is deterministic
+    // (2024-11 … 2025-04). The MV returns only the populated month (2025-04).
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date('2025-04-15T12:00:00Z'));
+    try {
+      mvAvailable.mockResolvedValueOnce(true);
 
-    query.mockResolvedValueOnce({
-      rows: [
-        {
-          month_start: new Date('2025-04-01T00:00:00Z'),
-          month: 4,
-          year: 2025,
-          currency: 'EUR',
-          transaction_count: '10',
-          total_income: '1000',
-          total_spending: '-400',
-          net_amount: '600',
-        },
-      ],
-    });
+      query
+        // Currency-homogeneity probe: no rows in a non-target currency.
+        .mockResolvedValueOnce({ rows: [] })
+        .mockResolvedValueOnce({
+          rows: [
+            {
+              month_start: new Date('2025-04-01T00:00:00Z'),
+              month: 4,
+              year: 2025,
+              currency: 'EUR',
+              transaction_count: '10',
+              total_income: '1000',
+              total_spending: '-400',
+              net_amount: '600',
+            },
+          ],
+        });
 
-    convertRowsToEur.mockResolvedValueOnce([
-      { _key: '2025-04', _type: 'income', _row: { month: 4, year: 2025, month_start: new Date('2025-04-01T00:00:00Z'), transaction_count: '10' }, amount_eur: 1000 },
-      { _key: '2025-04', _type: 'spending', _row: { month: 4, year: 2025, month_start: new Date('2025-04-01T00:00:00Z'), transaction_count: '10' }, amount_eur: -400 },
-    ]);
+      convertRowsToEur.mockResolvedValueOnce([
+        { _key: '2025-04', _type: 'income', _row: { month: 4, year: 2025, month_start: new Date('2025-04-01T00:00:00Z'), transaction_count: '10' }, amount_eur: 1000 },
+        { _key: '2025-04', _type: 'spending', _row: { month: 4, year: 2025, month_start: new Date('2025-04-01T00:00:00Z'), transaction_count: '10' }, amount_eur: -400 },
+      ]);
 
-    const r = await getMonthlyFinancialSummary([], 'EUR', [], false);
+      const r = await getMonthlyFinancialSummary([], 'EUR', [], false);
 
-    expect(query.mock.calls[0][0]).toContain('FROM mv_monthly_summary');
-    expect(r.months).toHaveLength(1);
-    expect(r.months[0]).toMatchObject({
-      month: 4,
-      year: 2025,
-      total_income: 1000,
-      total_spending: -400,
-      net_amount: 600,
-      transaction_count: 10, // halved (income+spending counted once each)
-    });
-    expect(r.summary).toBeDefined();
+      expect(query.mock.calls[0][0]).toContain('UPPER(currency)'); // homogeneity probe
+      expect(query.mock.calls[1][0]).toContain('FROM mv_monthly_summary'); // MV aggregation
+      expect(query.mock.calls[1][0]).toContain('GROUP BY month_start');
+      // Zero-filled to the full 6-month window (matches the live path).
+      expect(r.months).toHaveLength(6);
+      const april = r.months.find((m) => m.year === 2025 && m.month === 4);
+      expect(april).toMatchObject({
+        total_income: 1000,
+        total_spending: -400,
+        net_amount: 600,
+        transaction_count: 10, // halved (income+spending counted once each)
+      });
+      // A month with no MV data is present and zeroed.
+      const march = r.months.find((m) => m.year === 2025 && m.month === 3);
+      expect(march).toMatchObject({ total_income: 0, total_spending: 0, transaction_count: 0 });
+      expect(r.summary).toBeDefined();
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   it('falls through to live query when mv unavailable', async () => {
@@ -72,6 +88,22 @@ describe('getMonthlyFinancialSummary — materialized-view fast path', () => {
 
     expect(query.mock.calls[0][0]).toContain('generate_series');
     expect(query.mock.calls[0][0]).toContain('filtered_transactions');
+  });
+
+  it('falls through to the live path when the MV holds a non-target currency', async () => {
+    // Month-start-rate conversion of mixed-currency MV rows is inexact; the live
+    // per-(date,currency) path must handle it instead.
+    mvAvailable.mockResolvedValueOnce(true);
+    query
+      .mockResolvedValueOnce({ rows: [{ exists: 1 }] }) // homogeneity probe finds a non-EUR row
+      .mockResolvedValueOnce({ rows: [] }); // live query
+    convertRowsToEur.mockResolvedValueOnce([]);
+
+    await getMonthlyFinancialSummary([], 'EUR', [], false);
+
+    expect(query.mock.calls[0][0]).toContain('UPPER(currency)'); // probe ran
+    expect(query.mock.calls[1][0]).toContain('generate_series'); // live path, not MV
+    expect(query.mock.calls[1][0]).toContain('filtered_transactions');
   });
 
   it('always uses live query when category exclusions present', async () => {
@@ -104,7 +136,8 @@ describe('getMonthlyFinancialSummary — materialized-view fast path', () => {
     await getMonthlyFinancialSummary([1], 'EUR', [99], false);
     const [sql, params] = query.mock.calls[0];
     expect(sql).toMatch(/category.*\$1/);
-    expect(sql).toMatch(/recipient_id NOT IN \(\$2\)/);
+    // Alias-aware recipient exclusion (canonical), not bare t.recipient_id.
+    expect(sql).toContain('COALESCE(r.primary_recipient_id, t.recipient_id) NOT IN ($2)');
     expect(params).toEqual([1, 99]);
   });
 

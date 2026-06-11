@@ -3,16 +3,11 @@ import { apiRequest } from '@/lib/api/client';
 import { requestWithQuery } from '@/lib/api/helpers';
 import type { NetWorthResponse } from '@/lib/api/types';
 
-export async function getStatistics(params?: { currency?: string }): Promise<{
-    total_transactions: number;
-    total_amount: number;
-    categories: Array<{ name: string; count: number }>;
-}> {
-    return requestWithQuery('/api/info', params);
-}
+// (Removed getStatistics — legacy GET /api/info was deleted in the Phase 9
+// cutover; it had no callers. Use the aggregations endpoints instead.)
 
 export function getSupportedParsers(): Promise<{
-    adapters: Array<{ key: string; name: string; adapter_class: string }>;
+    adapters: Array<{ key: string; name: string; adapter_class?: string }>;
     total_count: number;
 }> {
     return apiRequest('/api/info/supported-adapters');
@@ -28,20 +23,8 @@ export function getDistinctBankAccounts(): Promise<{ banks: string[] }> {
     return apiRequest('/api/info/banks');
 }
 
-export function getTransactionSummary(params?: {
-    bank_account?: string;
-    start_date?: string;
-    end_date?: string;
-    currency?: string;
-}): Promise<{
-    total_count: number;
-    total_amount: number;
-    average: number;
-    min: number | null;
-    max: number | null;
-}> {
-    return requestWithQuery('/api/info/transaction-summary', params);
-}
+// (Removed getTransactionSummary — legacy GET /api/info/transaction-summary was
+// deleted in the Phase 9 cutover; it had no callers.)
 
 export function getTransactionCount(): Promise<{ total_transactions: number }> {
     return apiRequest('/api/info/transaction-count');

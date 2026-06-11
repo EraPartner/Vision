@@ -58,7 +58,12 @@ export default function CryptoPage() {
   const totalUnrealizedGain = holdings.reduce((s, h) => s + convertToTarget(h.unrealizedGain, h.currency), 0);
   const totalFees = holdings.reduce((s, h) => s + convertToTarget(h.totalFees, h.currency), 0);
   const totalTaxes = holdings.reduce((s, h) => s + convertToTarget(h.totalTaxes, h.currency), 0);
-  const netGain = totalRealizedGain + totalUnrealizedGain - totalFees - totalTaxes;
+  // realizedGain/unrealizedGain already fold the per-row fees/taxes columns into
+  // cost basis (calculateCostBasis), so net gain subtracts ONLY standalone
+  // fee/tax transaction rows — totalFees/totalTaxes would double-count the columns.
+  const feeTxns = holdings.reduce((s, h) => s + convertToTarget(h.feeTransactions ?? 0, h.currency), 0);
+  const taxTxns = holdings.reduce((s, h) => s + convertToTarget(h.taxTransactions ?? 0, h.currency), 0);
+  const netGain = totalRealizedGain + totalUnrealizedGain - feeTxns - taxTxns;
 
   if (isLoading) {
     return (

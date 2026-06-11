@@ -54,19 +54,25 @@ export async function computeSankeyFlow({
     clauses.push(`AND t.recipient_id != ALL($${params.length})`);
   }
 
+  // Aggregate in SQL: this endpoint converts with latest rates only (one rate
+  // per currency below), so SUM(ABS(amount)) per (category, currency, is_income)
+  // is identical to summing the per-row converted amounts — but returns ~tens of
+  // rows instead of a whole year of transactions. Each group is sign-homogeneous
+  // (grouped on amount > 0), so ABS distributes over the sum.
   const result = await query(
     `
     SELECT
-      t.amount,
-      t.currency,
       COALESCE(c.general || ': ' || c.detail, 'Uncategorised') AS category_name,
-      t.amount > 0 AS is_income
+      t.currency,
+      (t.amount > 0) AS is_income,
+      SUM(ABS(t.amount)) AS amount
     FROM transactions t
     LEFT JOIN recipients r ON t.recipient_id = r.id
     LEFT JOIN categories c ON COALESCE(t.category_id, r.default_category_id) = c.id
     WHERE t.is_active = true
       AND t.date BETWEEN $1 AND $2
       ${clauses.join('\n      ')}
+    GROUP BY 1, 2, 3
     `,
     params,
   );

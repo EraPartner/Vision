@@ -107,10 +107,19 @@ function rollbackTransactionLists(queryClient: ReturnType<typeof useQueryClient>
     }
 }
 
-function invalidateTransactionLists(queryClient: ReturnType<typeof useQueryClient>) {
+export function invalidateTransactionLists(queryClient: ReturnType<typeof useQueryClient>) {
     queryClient.invalidateQueries({queryKey: ['transactions']});
     queryClient.invalidateQueries({queryKey: ['transactions-virtual']});
     queryClient.invalidateQueries({queryKey: ['monthlySummary']});
+    // Dashboard stat cards (['filteredDashboardStats']), the Statistics page
+    // (['aggregations', …]) and the dashboard recent-transactions widget
+    // (['dashboardRecentTransactions', …]) all derive from transactions but
+    // were never invalidated, so they served stale data (deleted/imported rows
+    // still showing) until staleTime expired. Window-focus refetch is disabled
+    // globally, so only explicit invalidation refreshes them.
+    queryClient.invalidateQueries({queryKey: ['filteredDashboardStats']});
+    queryClient.invalidateQueries({queryKey: ['aggregations']});
+    queryClient.invalidateQueries({queryKey: ['dashboardRecentTransactions']});
 }
 
 export function useUpdateTransaction() {
@@ -227,8 +236,7 @@ export function useBulkTagTransactions() {
     return useMutation({
         mutationFn: (request: BulkTagRequest) => apiClient.bulkTagTransactions(request),
         onSuccess: () => {
-            queryClient.invalidateQueries({queryKey: ['transactions']});
-            queryClient.invalidateQueries({queryKey: ['transactions-virtual']});
+            invalidateTransactionLists(queryClient);
             queryClient.invalidateQueries({queryKey: ['tags']});
             toast.success(t('tags.bulkApplied'));
         },
@@ -238,13 +246,6 @@ export function useBulkTagTransactions() {
     });
 }
 
-function invalidateTransactionViews(queryClient: ReturnType<typeof useQueryClient>) {
-    queryClient.invalidateQueries({ queryKey: ['transactions'] });
-    queryClient.invalidateQueries({ queryKey: ['transactions-virtual'] });
-    queryClient.invalidateQueries({ queryKey: ['monthlySummary'] });
-    queryClient.invalidateQueries({ queryKey: ['stats'] });
-}
-
 export function useBulkDeleteTransactions() {
     const queryClient = useQueryClient();
     const { t } = useLanguage();
@@ -252,7 +253,7 @@ export function useBulkDeleteTransactions() {
     return useMutation({
         mutationFn: (request: BulkSelectionRequest) => apiClient.bulkDeleteTransactions(request),
         onSuccess: (result) => {
-            invalidateTransactionViews(queryClient);
+            invalidateTransactionLists(queryClient);
             toast.success(t('txPage.bulk.deleted', { n: result.deleted }));
         },
         onError: (error: Error) => {
@@ -268,7 +269,7 @@ export function useBulkUpdateTransactions() {
     return useMutation({
         mutationFn: (request: BulkUpdateRequest) => apiClient.bulkUpdateTransactions(request),
         onSuccess: (result) => {
-            invalidateTransactionViews(queryClient);
+            invalidateTransactionLists(queryClient);
             queryClient.invalidateQueries({ queryKey: ['categories'] });
             queryClient.invalidateQueries({ queryKey: ['recipients'] });
             toast.success(t('txPage.bulk.updated', { n: result.updated }));

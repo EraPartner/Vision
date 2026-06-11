@@ -6,6 +6,7 @@ import { toast } from "sonner";
 import { apiClient } from "@/lib/api";
 import type { ImportStagingRow, ImportPreviewGroup } from "@/lib/api";
 import { useLanguage } from "@/contexts/LanguageContext";
+import { invalidateTransactionLists } from "@/hooks/useTransactions";
 import { PageHeader } from "@/components/shared/PageHeader";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -124,6 +125,11 @@ export default function ImportReviewPage() {
         { icon: <CheckCircle2 className="h-4 w-4" /> }
       );
       queryClient.invalidateQueries({ queryKey: ["import-batches"] });
+      // A commit inserts the staged rows into `transactions`; refresh the
+      // transactions list, dashboard stat cards, monthly summary and
+      // aggregations so the imported rows appear immediately instead of after
+      // staleTime expires (window-focus refetch is disabled globally).
+      invalidateTransactionLists(queryClient);
       navigate("/import");
     },
     onError: (err: Error) => {

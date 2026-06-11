@@ -436,10 +436,7 @@ describe.skipIf(!enabled)("Live backend API contracts (E5)", () => {
         validate(z.object({ items: z.array(z.unknown()) }), data, "GET /api/recipients/clusters");
     });
 
-    it("GET /api/info/transaction-summary returns null or summary", async () => {
-        const data = await get("/api/info/transaction-summary");
-        validate(z.unknown(), data, "GET /api/info/transaction-summary");
-    });
+    // (GET /api/info/transaction-summary removed — Phase 9 cutover deleted the route.)
 
     it("GET /api/market/news returns articles array", async () => {
         const data = await get("/api/market/news");

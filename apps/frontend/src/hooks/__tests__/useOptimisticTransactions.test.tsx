@@ -132,6 +132,23 @@ describe("useDeleteTransaction (optimistic)", () => {
         expect(list?.items).toHaveLength(2);
         expect(list?.total).toBe(2);
     });
+
+    it("invalidates dashboard + statistics caches, not a dead ['stats'] key", async () => {
+        const qc = makeClient();
+        qc.setQueryData(LIST_KEY, seedList());
+        const invalidateSpy = vi.spyOn(qc, "invalidateQueries");
+        vi.spyOn(apiClient, "deleteTransaction").mockResolvedValue(undefined as unknown as void);
+
+        const { result } = renderHook(() => useDeleteTransaction(), { wrapper: makeWrapper(qc) });
+        act(() => { result.current.mutate(1); });
+        await waitFor(() => expect(result.current.isSuccess).toBe(true));
+
+        const invalidatedKeys = invalidateSpy.mock.calls.map((c) => (c[0] as { queryKey: unknown[] })?.queryKey?.[0]);
+        for (const key of ["transactions", "transactions-virtual", "monthlySummary", "filteredDashboardStats", "aggregations", "dashboardRecentTransactions"]) {
+            expect(invalidatedKeys).toContain(key);
+        }
+        expect(invalidatedKeys).not.toContain("stats"); // the old dead key
+    });
 });
 
 describe("useCreateTransaction (optimistic)", () => {

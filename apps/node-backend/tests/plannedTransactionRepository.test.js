@@ -216,7 +216,7 @@ describe('plannedTransactionRepository.create', () => {
       comment: 'loan payment',
       url: null,
       is_recurring: true,
-      recurrence_pattern: 'monthly',
+      recurrence_pattern: null, // repo must force 'monthly' for loans
       is_loan: true,
       loan_type: 'mortgage',
       loan_principal: 10000,
@@ -263,6 +263,9 @@ describe('plannedTransactionRepository.create', () => {
     expect(clientQuery).toHaveBeenNthCalledWith(4, 'COMMIT');
     expect(release).toHaveBeenCalledTimes(1);
     expect(result).toEqual(expect.objectContaining({ id: 51, is_loan: true, execution_count: 0 }));
+    // recurrence_pattern (param 11, index 10) is forced to 'monthly' for loans
+    // so executeAndAdvance rolls planned_date forward instead of leaving it due.
+    expect(clientQuery.mock.calls[1][1][10]).toBe('monthly');
   });
 
   it('rolls back and rethrows when loan schedule insert fails', async () => {

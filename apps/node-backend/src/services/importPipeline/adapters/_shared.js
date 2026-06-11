@@ -53,7 +53,15 @@ export function parseDayMonthYear(dateStr) {
 }
 
 export function parseCommaDecimal(value) {
-  return parseDecimalSafe(String(value).replace(/\s/g, '').replace(',', '.'));
+  const s = String(value).replace(/\s/g, '');
+  // EU format: comma is the decimal separator and dots are thousands separators.
+  // "1.234,56" must become "1234.56" — the old code only swapped the comma,
+  // leaving "1.234.56" which Decimal rejects (NaN), silently dropping the row.
+  // Only strip dots when a comma is present so a dot-decimal "12.5" is untouched.
+  if (s.includes(',')) {
+    return parseDecimalSafe(s.replace(/\./g, '').replace(',', '.'));
+  }
+  return parseDecimalSafe(s);
 }
 
 /**

@@ -103,8 +103,15 @@ export function generateLoanRepaymentSchedule(config) {
     throw err;
   }
 
+  // If the payment day lands before the loan's start within the start month
+  // (e.g. start 2026-06-20, payment day 5 → 2026-06-05), the first installment
+  // would be dated before the loan exists. Shift the whole schedule one month.
+  // addMonthsAtDay returns YYYY-MM-DD, so the comparison is lexicographic-safe.
+  const startYmd = String(startDate).slice(0, 10);
+  const monthOffset = addMonthsAtDay(startDate, 0, paymentDay) < startYmd ? 1 : 0;
+
   for (let i = 1; i <= termMonths; i++) {
-    const dueDate = addMonthsAtDay(startDate, i - 1, paymentDay);
+    const dueDate = addMonthsAtDay(startDate, i - 1 + monthOffset, paymentDay);
     const interestAmount = roundMoney(remaining * monthlyRate);
     let principalAmount;
     let paymentAmount;

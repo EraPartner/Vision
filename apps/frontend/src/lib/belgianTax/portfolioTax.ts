@@ -268,6 +268,7 @@ export function computeDividendWht(
   txYear: number,
   taxTable: BelgianTaxYearTable,
   convert: ConvertFn,
+  filingStatus?: string,
 ): DividendWht {
   const incomeTerms: number[] = [];
   const whtTerms: number[] = [];
@@ -282,9 +283,13 @@ export function computeDividendWht(
   const dividendWhtRecorded = sumDecimal(whtTerms);
 
   const grossDividendBase = totalDividendIncome.plus(dividendWhtRecorded);
-  const reclaimCap = Decimal.min(grossDividendBase, taxTable.dividendExemption).times(
-    taxTable.dividendWHTRate,
-  );
+  // The Belgian dividend exemption (~€859 for IY2025) is per taxpayer, so joint
+  // filers can reclaim up to 2× — mirrors computeCgtEstimate's married doubling.
+  const exemption =
+    filingStatus === 'married_joint'
+      ? new Decimal(taxTable.dividendExemption).times(2)
+      : new Decimal(taxTable.dividendExemption);
+  const reclaimCap = Decimal.min(grossDividendBase, exemption).times(taxTable.dividendWHTRate);
   const dividendWhtReclaim = Decimal.min(dividendWhtRecorded, reclaimCap);
   const dividendWhtNetCost = Decimal.max(dividendWhtRecorded.minus(dividendWhtReclaim), 0);
 

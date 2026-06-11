@@ -10,9 +10,10 @@ import plannedTransactionRepository from '../services/plannedTransactionService.
 import { validateIdParam } from '../middleware/validation.js';
 import { rateLimiter } from '../middleware/rateLimiter.js';
 import { generateLoanRepaymentSchedule } from '../services/calculations/loanSchedule.js';
-import { calculateNextDate } from '../services/calculations/recurrence.js';
+import { calculateNextDate, isValidPattern } from '../services/calculations/recurrence.js';
 import { NotFoundError, ValidationError } from '../middleware/errorHandler.js';
 import { toDecimal, toNumber } from '../lib/money.js';
+import { toAppDateString } from '../lib/timezone.js';
 
 const router = Router();
 
@@ -195,11 +196,21 @@ router.post('/', async (req, res) => {
     data.planned_date = generated.first_due_date;
 
     data.is_recurring = true;
-    if (data.recurrence_pattern) delete data.recurrence_pattern;
+    // Loans advance monthly (see plannedTransactionRepository.create). Set it
+    // explicitly so the created row + /execute advance are consistent and the
+    // recurrence_pattern validation below sees a valid pattern.
+    data.recurrence_pattern = 'monthly';
     if (data.frequency) delete data.frequency;
     if (data.custom_interval_days) delete data.custom_interval_days;
     if (data.end_date) delete data.end_date;
     if (data.max_occurrences) delete data.max_occurrences;
+  }
+
+  // Reject patterns calculateNextDate can't advance (e.g. "fortnightly"): they
+  // store fine but on /execute leave the row stuck as perpetually-due. Loans
+  // delete recurrence_pattern above, so this never trips loan creation.
+  if (data.is_recurring && data.recurrence_pattern && !isValidPattern(data.recurrence_pattern)) {
+    throw new ValidationError(`Invalid recurrence_pattern: ${data.recurrence_pattern}`);
   }
 
   const created = await plannedTransactionRepository.create(data);
@@ -247,6 +258,13 @@ router.patch(
     const generatedLoanSchedule = applyLoanPatchDefaults(fields, existing);
     const loanScheduleDirective = resolveLoanScheduleDirective(generatedLoanSchedule, fields, existing);
 
+    // Same guard as POST: a recurrence_pattern calculateNextDate can't advance
+    // leaves the row perpetually due. applyLoanPatchDefaults already set a valid
+    // 'monthly' for loans by here, so this only rejects genuine typos.
+    if (fields.recurrence_pattern && !isValidPattern(fields.recurrence_pattern)) {
+      throw new ValidationError(`Invalid recurrence_pattern: ${fields.recurrence_pattern}`);
+    }
+
     // When the loan schedule must change, the field update and the schedule
     // rewrite MUST happen in one transaction — otherwise a crash between them
     // leaves the planned row's loan params disagreeing with the installment rows.
@@ -281,7 +299,12 @@ router.post('/:id/execute', validateIdParam, async (req, res) => {
     const baseDate = new Date(existing.planned_date);
     const nextDate = calculateNextDate(baseDate, existing.recurrence_pattern);
     if (nextDate) {
-      updateFields.planned_date = nextDate.toISOString().split('T')[0];
+      // calculateNextDate returns a UTC instant for start-of-day in APP_TIMEZONE.
+      // toISOString() takes the UTC calendar day, which is the *previous* day in
+      // a UTC+ zone — moving a monthly payment one day earlier per cycle.
+      // toAppDateString reads the date back in APP_TIMEZONE. (Day-of-month anchor
+      // is intentionally sticky-clamped — see docs/features planned-transactions.)
+      updateFields.planned_date = toAppDateString(nextDate);
       updateFields.is_executed = false;
     }
   }

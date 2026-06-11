@@ -22,6 +22,17 @@ let historicalEcb90dCache = null;
 
 export function normalizeDateInput(dateValue) {
   if (!dateValue) return null;
+  // pg returns DATE columns as a local-midnight JS Date, whose String() form is
+  // "Sun Jun 01 2025 …" — the regex below never matched it, so historical-FX
+  // conversion silently fell back to today's rate at every DB-row call site.
+  // Recover the local calendar day (mirrors toYmd in utils/portfolioMath.js).
+  if (dateValue instanceof Date) {
+    if (isNaN(dateValue.getTime())) return null;
+    const y = dateValue.getFullYear();
+    const mo = String(dateValue.getMonth() + 1).padStart(2, '0');
+    const d = String(dateValue.getDate()).padStart(2, '0');
+    return `${y}-${mo}-${d}`;
+  }
   const str = String(dateValue);
   const m = str.match(/^\d{4}-\d{2}-\d{2}/);
   return m ? m[0] : null;

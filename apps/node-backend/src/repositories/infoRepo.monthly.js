@@ -26,7 +26,24 @@ export async function getMonthlyFinancialSummary(
   const validRecipientIds = (excludedRecipientIds || []).filter(id => Number.isInteger(id) && id > 0 && id < 2147483647);
   logger.debug('getMonthlyFinancialSummary called', { excludedCategoryIds, validIds, validRecipientIds });
 
-  if (!allTime && validIds.length === 0 && validRecipientIds.length === 0 && await mvAvailable('mv_monthly_summary')) {
+  // The MV is grained month×currency, so its fast path converts a whole month's
+  // total at the 1st-of-month rate. That only matches the live per-(date,currency)
+  // path when NO conversion happens — i.e. every MV row is already in the target
+  // currency. If any row differs, fall through to the live path (whose own
+  // comment explains intra-month FX varies). Avoids the dashboard's monthly
+  // history visibly shifting when an unrelated exclusion toggles the path.
+  const mvTarget = (targetCurrency || 'EUR').toUpperCase();
+  let mvCurrencyHomogeneous = false;
+  const mvUsable = !allTime && validIds.length === 0 && validRecipientIds.length === 0 && await mvAvailable('mv_monthly_summary');
+  if (mvUsable) {
+    const hetero = await query(
+      `SELECT 1 FROM mv_monthly_summary WHERE UPPER(currency) <> $1 LIMIT 1`,
+      [mvTarget],
+    );
+    mvCurrencyHomogeneous = hetero.rows.length === 0;
+  }
+
+  if (mvUsable && mvCurrencyHomogeneous) {
     const dateFilterClause = `WHERE month_start >= date_trunc('month', CURRENT_DATE - interval '5 months')`;
     const mvResult = await query(`
       SELECT month_start, month, year, currency,
@@ -67,6 +84,25 @@ export async function getMonthlyFinancialSummary(
       monthMap[key].transaction_count += parseInt(r.transaction_count, 10);
     }
 
+    // Zero-fill months with no transactions so the MV path returns the SAME
+    // 6-month set as the live path's generate_series. Without this, toggling an
+    // exclusion (which switches paths) changed the dashboard's month set.
+    const now = new Date();
+    for (let i = 5; i >= 0; i--) {
+      const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
+      const year = d.getFullYear();
+      const month = d.getMonth() + 1;
+      const key = formatYearMonthKey(year, month);
+      if (!monthMap[key]) {
+        monthMap[key] = {
+          month, year,
+          period_start: `${year}-${String(month).padStart(2, '0')}-01`,
+          period_end: null,
+          total_spending: 0, total_income: 0, net_amount: 0, transaction_count: 0,
+        };
+      }
+    }
+
     for (const m of Object.values(monthMap)) {
       m.transaction_count = Math.round(m.transaction_count / 2);
     }
@@ -85,11 +121,13 @@ export async function getMonthlyFinancialSummary(
   }
 
   const params = [];
+  // Canonical exclusion semantics (match buildExclusionClauses + every other
+  // surface): 3-level category COALESCE and alias-aware recipient exclusion.
   const categoryExcludeClause = validIds.length > 0
-    ? `AND COALESCE(t.category_id, r.default_category_id) NOT IN (${validIds.map(id => { params.push(id); return `$${params.length}`; }).join(',')})`
+    ? `AND COALESCE(t.category_id, r.default_category_id, pr.default_category_id) NOT IN (${validIds.map(id => { params.push(id); return `$${params.length}`; }).join(',')})`
     : '';
   const recipientExcludeClause = validRecipientIds.length > 0
-    ? `AND t.recipient_id NOT IN (${validRecipientIds.map(id => { params.push(id); return `$${params.length}`; }).join(',')})`
+    ? `AND COALESCE(r.primary_recipient_id, t.recipient_id) NOT IN (${validRecipientIds.map(id => { params.push(id); return `$${params.length}`; }).join(',')})`
     : '';
 
   const allTimeStart = allTime
@@ -122,6 +160,7 @@ export async function getMonthlyFinancialSummary(
         COALESCE(t.category_id, r.default_category_id) AS effective_category_id
       FROM transactions t
       LEFT JOIN recipients r ON t.recipient_id = r.id
+      LEFT JOIN recipients pr ON r.primary_recipient_id = pr.id
       WHERE t.is_active = true
       ${categoryExcludeClause}
       ${recipientExcludeClause}

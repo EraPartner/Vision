@@ -7,7 +7,7 @@ import { VirtualDataTable } from "@/components/shared/VirtualDataTable";
 import { Skeleton } from "@/components/ui/skeleton";
 import { TrendingUp, TrendingDown, ArrowRight, Store, Hash, DollarSign, Filter } from "lucide-react";
 import { parseISO } from "@/components/shared/dateUtils";
-import { useSettings } from "@/contexts/SettingsContext";
+import { useExcludedIds } from "@/hooks/useExcludedIds";
 import { Badge } from "@/components/ui/badge";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { useAppSettings } from "@/contexts/AppSettingsContext";
@@ -30,7 +30,13 @@ interface RecipientInsightsTabProps {
 }
 
 export function RecipientInsightsTab({ statisticsTopRecipientsChart }: RecipientInsightsTabProps) {
-  const { settings } = useSettings();
+  // Resolve exclusions (settings + hidden categories, alias-aware) and pass them
+  // to the SERVER. The old client-side filter compared raw settings ids against
+  // the server's alias-rolled-up primary ids, so excluding an alias filtered
+  // nothing, and category/hidden-category exclusions never applied at all.
+  const { excludedCategoryIds, excludedRecipientIds, exclusionsApply } = useExcludedIds('statistics');
+  const effectiveExcludedCatIds = exclusionsApply ? excludedCategoryIds : [];
+  const effectiveExcludedRecIds = exclusionsApply ? excludedRecipientIds : [];
   const { t } = useLanguage();
   const { appSettings } = useAppSettings();
   const locale = numberFormatToLocale(appSettings.numberFormat);
@@ -59,25 +65,17 @@ export function RecipientInsightsTab({ statisticsTopRecipientsChart }: Recipient
     }).format(val);
   }, [defaultCurrencyFormatter, locale, appSettings.defaultCurrency, appSettings.showDecimalPlaces]);
   const { data, isLoading, isError } = useQuery({
-    queryKey: ["recipient-insights", targetCurrency],
-    queryFn: () => apiClient.getRecipientInsights({ currency: targetCurrency }),
+    queryKey: ["recipient-insights", targetCurrency, effectiveExcludedCatIds, effectiveExcludedRecIds],
+    queryFn: () => apiClient.getRecipientInsights({
+      currency: targetCurrency,
+      excluded_category_ids: effectiveExcludedCatIds,
+      excluded_recipient_ids: effectiveExcludedRecIds,
+    }),
     staleTime: 60000,
   });
 
-  const exclusionsApply = settings.exclusionScope === 'everywhere' || settings.exclusionScope === 'statistics';
-  const excludedRecipientIds = useMemo(
-    () => new Set(exclusionsApply ? settings.excludedRecipientIds : []),
-    [exclusionsApply, settings.excludedRecipientIds]
-  );
-
-  const filteredData = useMemo(() => {
-    if (!data) return null;
-    if (excludedRecipientIds.size === 0) return data;
-    return {
-      topMerchants: data.topMerchants.filter(m => !excludedRecipientIds.has(m.recipientId)),
-      monthOverMonth: data.monthOverMonth.filter(m => !excludedRecipientIds.has(m.recipientId)),
-    };
-  }, [data, excludedRecipientIds]);
+  // Server already applied exclusions (alias-aware) — no client-side post-filter.
+  const filteredData = data;
 
   const PAGE_SIZE = appSettings.defaultPageSize;
   const [displayCount, setDisplayCount] = useState(PAGE_SIZE);
@@ -174,10 +172,10 @@ export function RecipientInsightsTab({ statisticsTopRecipientsChart }: Recipient
 
   return (
     <div className="space-y-6">
-      {excludedRecipientIds.size > 0 && (
+      {effectiveExcludedRecIds.length > 0 && (
         <Badge variant="secondary" className="gap-1.5">
           <Filter className="h-3 w-3" />
-          {t('insights.excluded', { n: excludedRecipientIds.size })}
+          {t('insights.excluded', { n: effectiveExcludedRecIds.length })}
         </Badge>
       )}
 

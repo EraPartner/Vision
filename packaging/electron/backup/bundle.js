@@ -222,8 +222,11 @@ async function encryptBundle(bundlePath, passphrase) {
       output.write(salt);
       output.write(iv);
 
-      input.pipe(cipher);
-      cipher.on('data', (chunk) => output.write(chunk));
+      // pipe() honours stream backpressure (the manual cipher.on('data') →
+      // output.write() loop ignored write()===false and could balloon memory on
+      // a multi-GB bundle). end:false keeps `output` open so we can append the
+      // GCM auth tag, which is only available after the cipher finishes.
+      input.pipe(cipher).pipe(output, { end: false });
       cipher.on('end', () => {
         try {
           const tag = cipher.getAuthTag();

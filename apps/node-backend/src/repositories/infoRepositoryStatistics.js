@@ -13,72 +13,6 @@ import {
 } from './infoRepositoryHelpers.js';
 
 export const statisticsRepository = {
-  async getStatistics(targetCurrency = 'EUR') {
-    // ── Fast path: materialized views ──
-    if (await mvAvailable('mv_category_totals')) {
-      const countResult = await query('SELECT count(*) FROM transactions WHERE is_active = true');
-      const catResult = await query('SELECT * FROM mv_category_totals ORDER BY count DESC LIMIT 500');
-
-      const convertedRows = await convertRowsToEur(
-        mapRowsForAmountConversion(catResult.rows, 'total', true),
-        targetCurrency
-      );
-
-      const categories = buildCategoryFromConvertedRows(convertedRows);
-      const totalEur = toNumber(categories.reduce((sum, cat) => sum.plus(toDecimal(cat.total)), toDecimal(0)));
-
-      return {
-        total_transactions: parseInt(countResult.rows[0].count, 10),
-        total_amount: roundToCents(totalEur),
-        categories,
-      };
-    }
-
-    // ── Fallback: live query ──
-    // The category query below already selects every active transaction's
-    // amount/currency/date, so the grand total is derived from the same
-    // converted rows instead of issuing a second identical full-table scan.
-    const countResult = await query('SELECT count(*) FROM transactions WHERE is_active = true');
-
-    const categoryAmountResult = await query(`
-      SELECT COALESCE(c.id, -1) AS category_id,
-             COALESCE(c.general || ':' || c.detail, 'UNCATEGORISED') AS name,
-             t.amount,
-             t.currency,
-             t.date
-      FROM transactions t
-      LEFT JOIN recipients r ON t.recipient_id = r.id
-      LEFT JOIN categories c ON COALESCE(t.category_id, r.default_category_id) = c.id
-      WHERE t.is_active = true
-    `);
-
-    const catConverted = await convertRowsToEur(
-      mapRowsForAmountConversion(categoryAmountResult.rows, 'amount', false),
-      targetCurrency
-    );
-
-    const totalEur = catConverted.reduce((s, r) => s + r.amount_eur, 0);
-
-    const catMap = {};
-    for (const row of catConverted) {
-      const catId = row.category_id === -1 ? null : parseInt(row.category_id, 10);
-      const eur = row.amount_eur;
-      const key = catId ?? 'null';
-      if (!catMap[key]) catMap[key] = { id: catId, name: row.name, count: 0, total: 0 };
-      catMap[key].count++;
-      catMap[key].total += eur;
-    }
-    const categories = Object.values(catMap)
-      .map(cat => ({ ...cat, total: roundToCents(cat.total) }))
-      .sort((a, b) => b.count - a.count);
-
-    return {
-      total_transactions: parseInt(countResult.rows[0].count, 10),
-      total_amount: roundToCents(totalEur),
-      categories,
-    };
-  },
-
   async getCategoryBreakdown(targetCurrency = 'EUR') {
     if (await mvAvailable('mv_category_totals')) {
       const catResult = await query('SELECT * FROM mv_category_totals ORDER BY count DESC LIMIT 500');
@@ -139,33 +73,59 @@ export const statisticsRepository = {
     const validRecIds = (excludedRecipientIds || []).filter(id => Number.isInteger(id) && id > 0 && id < 2147483647);
 
     const params = [];
+    // Canonical exclusion semantics (match services/filterBuilder.buildExclusionClauses
+    // and every other money surface): 3-level category COALESCE and ALIAS-AWARE
+    // recipient exclusion. The bare `t.recipient_id NOT IN` here previously kept
+    // an excluded recipient's transactions whenever they were recorded under an
+    // alias of the excluded primary — disagreeing with the dashboard/forecast.
     const catExclude = validCatIds.length > 0
-      ? `AND COALESCE(t.category_id, r.default_category_id) NOT IN (${validCatIds.map(id => { params.push(id); return `$${params.length}`; }).join(',')})`
+      ? `AND COALESCE(t.category_id, r.default_category_id, pr.default_category_id) NOT IN (${validCatIds.map(id => { params.push(id); return `$${params.length}`; }).join(',')})`
       : '';
     const recExclude = validRecIds.length > 0
-      ? `AND t.recipient_id NOT IN (${validRecIds.map(id => { params.push(id); return `$${params.length}`; }).join(',')})`
+      ? `AND COALESCE(r.primary_recipient_id, t.recipient_id) NOT IN (${validRecIds.map(id => { params.push(id); return `$${params.length}`; }).join(',')})`
       : '';
 
+    // Aggregate in SQL per (category, period, date, currency) instead of
+    // streaming every active transaction into JS. Conversion uses each row's
+    // historical date rate, and rows sharing date+currency share one rate
+    // (rate > 0 preserves sign), so SUM(...) FILTER by sign converted == Σ of
+    // the converted per-transaction amounts — numerically identical to the old
+    // per-row loop. The sign-split also gives explicit income/expense per cell
+    // so consumers no longer have to classify by the sign of the net total.
     const sql = `
       SELECT
         COALESCE(t.category_id, r.default_category_id) AS category_id,
         CONCAT(c.general, ': ', c.detail) AS category_name,
         TO_CHAR(t.date, 'YYYY-MM') AS period,
-        t.amount, t.currency, t.date
+        t.date, t.currency,
+        SUM(t.amount) FILTER (WHERE t.amount >= 0) AS income,
+        SUM(t.amount) FILTER (WHERE t.amount < 0) AS expense,
+        COUNT(*) AS cnt
       FROM transactions t
       LEFT JOIN recipients r ON t.recipient_id = r.id
+      LEFT JOIN recipients pr ON r.primary_recipient_id = pr.id
       LEFT JOIN categories c ON COALESCE(t.category_id, r.default_category_id) = c.id
       WHERE t.is_active = true
         AND COALESCE(t.category_id, r.default_category_id) IS NOT NULL
         ${catExclude}
         ${recExclude}
-      ORDER BY t.date
+      GROUP BY COALESCE(t.category_id, r.default_category_id), CONCAT(c.general, ': ', c.detail), TO_CHAR(t.date, 'YYYY-MM'), t.date, t.currency
+      ORDER BY period
     `;
 
     const result = await query(sql, params);
 
+    // Two conversion legs per group (income + expense) so each converts at its
+    // own date's rate. cnt is the whole group's count — counted once (income leg).
+    const convRows = [];
+    for (const r of result.rows) {
+      const base = { period: r.period, category_id: r.category_id, category_name: r.category_name, date: r.date, currency: r.currency, cnt: parseInt(r.cnt, 10) || 0 };
+      convRows.push({ ...base, _leg: 'income', amount: Number(r.income) || 0 });
+      convRows.push({ ...base, _leg: 'expense', amount: Number(r.expense) || 0 });
+    }
+
     const converted = await convertRowsToEur(
-      mapRowsForAmountConversion(result.rows, 'amount', false),
+      mapRowsForAmountConversion(convRows, 'amount', false),
       targetCurrency,
       { useHistoricalRatesByDate: true, dateField: 'date' }
     );
@@ -180,78 +140,25 @@ export const statisticsRepository = {
 
       if (!periodCatMap[period]) periodCatMap[period] = {};
       if (!periodCatMap[period][catKey]) {
-        periodCatMap[period][catKey] = { categoryId: catId, categoryName: catName, total: 0, transactionCount: 0 };
+        periodCatMap[period][catKey] = { categoryId: catId, categoryName: catName, total: 0, income: 0, expense: 0, transactionCount: 0 };
       }
-      periodCatMap[period][catKey].total += eur;
-      periodCatMap[period][catKey].transactionCount++;
+      const cell = periodCatMap[period][catKey];
+      cell.total += eur;
+      if (row._leg === 'income') {
+        cell.income += eur;
+        cell.transactionCount += row.cnt;
+      } else {
+        cell.expense += eur;
+      }
     }
 
     const categoryPivot = {};
     for (const [period, cats] of Object.entries(periodCatMap)) {
       categoryPivot[period] = Object.values(cats)
-        .map(c => ({ ...c, total: roundToCents(c.total) }))
+        .map(c => ({ ...c, total: roundToCents(c.total), income: roundToCents(c.income), expense: roundToCents(c.expense) }))
         .sort((a, b) => a.total - b.total);
     }
 
     return { categoryPivot };
-  },
-
-  async getTransactionSummary({ bankAccount = null, startDate = null, endDate = null, targetCurrency = 'EUR' } = {}) {
-    // Push count/sum/min/max into SQL, grouped by currency, instead of streaming
-    // every active row into JS. The grouped result is tiny (one row per currency)
-    // and the combine below is exact: convertRowsToEur defaults to one latest
-    // rate per currency (useHistoricalRatesByDate = false), so for each currency
-    // c with rate_c > 0:
-    //   count = Σ cnt_c
-    //   total = Σ (sum_c × rate_c)
-    //   min   = min_c (min_c × rate_c)   max = max_c (max_c × rate_c)
-    // min/max combine because multiplying by a positive rate is monotonic.
-    let sql = `
-      SELECT t.currency,
-             COUNT(*)      AS cnt,
-             SUM(t.amount) AS sum_amount,
-             MIN(t.amount) AS min_amount,
-             MAX(t.amount) AS max_amount
-      FROM transactions t
-      WHERE t.is_active = true
-    `;
-    const params = [];
-    let paramIdx = 1;
-
-    if (bankAccount) { sql += ` AND t.bank_account ILIKE $${paramIdx++}`; params.push(`%${bankAccount}%`); }
-    if (startDate) { sql += ` AND t.date >= $${paramIdx++}`; params.push(startDate); }
-    if (endDate) { sql += ` AND t.date <= $${paramIdx}`; params.push(endDate); }
-
-    sql += ` GROUP BY t.currency`;
-
-    const result = await query(sql, params);
-
-    if (result.rows.length === 0) {
-      return { total_count: 0, total_amount: 0, average: 0, min: null, max: null };
-    }
-
-    // Convert each per-currency aggregate by that currency's latest rate.
-    const [sumRows, minRows, maxRows] = await Promise.all([
-      convertRowsToEur(mapRowsForAmountConversion(result.rows, 'sum_amount', false), targetCurrency),
-      convertRowsToEur(mapRowsForAmountConversion(result.rows, 'min_amount', false), targetCurrency),
-      convertRowsToEur(mapRowsForAmountConversion(result.rows, 'max_amount', false), targetCurrency),
-    ]);
-
-    let total = toDecimal(0);
-    let count = 0;
-    for (let i = 0; i < result.rows.length; i += 1) {
-      total = total.plus(toDecimal(sumRows[i].amount_eur));
-      count += Number(result.rows[i].cnt);
-    }
-    const min = Math.min(...minRows.map(r => r.amount_eur));
-    const max = Math.max(...maxRows.map(r => r.amount_eur));
-
-    return {
-      total_count: count,
-      total_amount: roundToCents(total),
-      average: roundToCents(total.dividedBy(count)),
-      min: roundToCents(min),
-      max: roundToCents(max),
-    };
   },
 };

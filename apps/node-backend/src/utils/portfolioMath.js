@@ -21,7 +21,41 @@ const MS_PER_DAY = 1000 * 60 * 60 * 24;
  * @param {string|Date} value
  * @returns {string}
  */
-function toYmd(value) {
+/**
+ * Smooth isolated one-day value needles (e.g. kinesis price spikes) on an array
+ * of rows, replacing a needle with the geometric mean of its neighbors. Pure —
+ * lives here (not the repository layer) so route helpers can use it too.
+ */
+export function sanitizeIsolatedValueSpikes(rows, field = 'value') {
+  if (!Array.isArray(rows) || rows.length < 3) return Array.isArray(rows) ? rows : [];
+  const out = rows.map((s) => ({ ...s }));
+  const minJump = Math.log(1.18);
+  const neighborTolerance = Math.log(1.12);
+  const localNeedleRatio = 1.8;
+  for (let i = 1; i < out.length - 1; i += 1) {
+    const prev = Number(out[i - 1]?.[field]);
+    const current = Number(out[i]?.[field]);
+    const next = Number(out[i + 1]?.[field]);
+    if (!Number.isFinite(prev) || !Number.isFinite(current) || !Number.isFinite(next)) continue;
+    if (prev <= 0 || current <= 0 || next <= 0) continue;
+    const jump = Math.log(current / prev);
+    const revert = Math.log(next / current);
+    const bridge = Math.log(next / prev);
+    const oppositeDirections = (jump > 0 && revert < 0) || (jump < 0 && revert > 0);
+    const largeMove = Math.abs(jump) >= minJump && Math.abs(revert) >= minJump;
+    const bridgeLooksNormal = Math.abs(bridge) <= neighborTolerance;
+    const maxNeighbor = Math.max(prev, next);
+    const minNeighbor = Math.min(prev, next);
+    const localNeedlePeak = current >= maxNeighbor * localNeedleRatio && bridgeLooksNormal;
+    const localNeedleTrough = current * localNeedleRatio <= minNeighbor && bridgeLooksNormal;
+    if ((oppositeDirections && largeMove && bridgeLooksNormal) || localNeedlePeak || localNeedleTrough) {
+      out[i][field] = toNumber(roundToCents(Math.sqrt(prev * next)));
+    }
+  }
+  return out;
+}
+
+export function toYmd(value) {
   if (value instanceof Date) {
     const y = value.getFullYear();
     const m = String(value.getMonth() + 1).padStart(2, '0');
@@ -459,9 +493,10 @@ export function computeHeatmap(snapshots) {
   // month" only holds if we iterate in date order.
   const withDate = snapshots.map((s) => ({
     snap: s,
-    dateStr: typeof s.snapshot_date === 'string'
-      ? s.snapshot_date
-      : /** @type {Date} */ (s.snapshot_date).toISOString().slice(0, 10),
+    // toYmd uses local getters for pg's local-midnight Date — toISOString() here
+    // shifted every date back a day in UTC+ zones, mis-bucketing the "last
+    // snapshot of month M" into month M+1.
+    dateStr: toYmd(s.snapshot_date),
   }));
   withDate.sort((a, b) => a.dateStr.localeCompare(b.dateStr));
 

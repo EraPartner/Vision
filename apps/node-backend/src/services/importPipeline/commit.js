@@ -22,7 +22,7 @@ export async function commitBatch({ batchId, onProgress }) {
   const { rows: matched } = await query(
     `SELECT isr.id,
             isr.row_index,
-            isr.tx_date,
+            to_char(isr.tx_date, 'YYYY-MM-DD') AS tx_date,
             isr.bank_account,
             isr.recipient_raw,
             isr.memo,
@@ -71,8 +71,12 @@ export async function commitBatch({ batchId, onProgress }) {
       chunkDuplicates = 0;
       chunkErrors = 0;
       for (const row of chunk) {
+        // tx_date arrives as a 'YYYY-MM-DD' string (the SELECT uses to_char).
+        // The Date branch is defensive only: node-postgres parses DATE columns
+        // into a server-local-midnight Date, so use LOCAL getters — toISOString()
+        // would roll back a day for any TZ east of UTC.
         const dateStr = row.tx_date instanceof Date
-          ? row.tx_date.toISOString().slice(0, 10)
+          ? `${row.tx_date.getFullYear()}-${String(row.tx_date.getMonth() + 1).padStart(2, '0')}-${String(row.tx_date.getDate()).padStart(2, '0')}`
           : String(row.tx_date).slice(0, 10);
 
         const effectiveRecipientId = row.user_override_recipient_id ?? row.resolved_recipient_id ?? null;

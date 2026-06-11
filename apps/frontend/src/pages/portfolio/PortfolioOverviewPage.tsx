@@ -282,12 +282,15 @@ export default function PortfolioOverviewPage() {
                     assetSplit: t('portfolio.allocationByClass'),
                     bestPerformer: t('portfolio.bestPerformer'),
                     worstPerformer: t('portfolio.worstPerformer'),
-                    sparkline: t('portfolio.last30Days'),
+                    // This series is cumulative net contributions (buys+gifts−sells),
+                    // not 30-day performance — label and colour it as such.
+                    sparkline: t('portfolio.netContributions30d'),
                   }}
                   allocation={allocationData}
                   bestPerformer={performers.best}
                   worstPerformer={performers.worst}
                   sparkline={sparkline}
+                  neutralSparkline
                   formatCurrency={fmt}
                 />
               </div>

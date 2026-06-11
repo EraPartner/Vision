@@ -265,7 +265,7 @@ export interface PlannedTransactionExecuteRequest {
 // ==================== Portfolio Types ====================
 
 export type AssetClass = 'stock' | 'etf' | 'crypto' | 'metals' | 'real_estate' | 'savings' | 'bond';
-export type PortfolioTxnType = 'buy' | 'sell' | 'dividend' | 'fee' | 'tax' | 'interest' | 'rent_income' | 'appreciation' | 'gift';
+export type PortfolioTxnType = 'buy' | 'sell' | 'dividend' | 'fee' | 'tax' | 'interest' | 'rent_income' | 'appreciation' | 'gift' | 'split' | 'merger' | 'spinoff' | 'return_of_capital';
 export type RecurrenceInterval = 'daily' | 'weekly' | 'bi-weekly' | 'monthly' | 'quarterly' | 'yearly';
 export type PriceProvider = 'manual' | 'binance' | 'yahoo' | 'custom' | 'kinesis';
 

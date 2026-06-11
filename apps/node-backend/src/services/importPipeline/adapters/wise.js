@@ -42,21 +42,38 @@ function rowToTransaction(row) {
 
   const dateStr = (row['Finished on'] || row['Created on'] || '').trim();
   if (!dateStr) return null;
-  const date = new Date(dateStr);
+  // Wise exports "YYYY-MM-DD HH:MM:SS"; V8's new Date() parses that as LOCAL
+  // time, so an early-morning timestamp shifts a day back in a UTC+ zone once
+  // serialized with toISOString. Parse the date part as UTC.
+  const isoMatch = dateStr.match(/^(\d{4})-(\d{2})-(\d{2})/);
+  const date = isoMatch
+    ? new Date(Date.UTC(Number(isoMatch[1]), Number(isoMatch[2]) - 1, Number(isoMatch[3])))
+    : new Date(dateStr);
   if (isNaN(date.getTime())) return null;
 
   const direction = (row['Direction'] || '').trim().toUpperCase();
 
   const targetAmountStr = (row['Target amount (after fees)'] || '').trim();
   const sourceAmountStr = (row['Source amount (after fees)'] || '').trim();
-  const amountStr = targetAmountStr || sourceAmountStr;
+  const targetCurrency = (row['Target currency'] || '').trim().toUpperCase();
+  const sourceCurrency = (row['Source currency'] || '').trim().toUpperCase();
+
+  // The transfer always has a source side and a target side. For an OUT
+  // transfer YOUR account is the source (you send 100 EUR → recipient gets
+  // 108 USD), so book the source amount/currency; for IN your account is the
+  // target. Booking the recipient's side put the wrong amount on the wrong
+  // per-account balance. Fall back to the other side when the preferred one is
+  // blank (same-currency transfers populate both identically).
+  const preferSource = direction === 'OUT';
+  const amountStr = preferSource
+    ? (sourceAmountStr || targetAmountStr)
+    : (targetAmountStr || sourceAmountStr);
   if (!amountStr) return null;
   const amount = resolveAmount(amountStr, direction);
   if (amount === null) return null;
 
-  const targetCurrency = (row['Target currency'] || '').trim().toUpperCase();
-  const sourceCurrency = (row['Source currency'] || '').trim().toUpperCase();
-  const currency = targetCurrency || sourceCurrency || 'USD';
+  const currency =
+    (preferSource ? (sourceCurrency || targetCurrency) : (targetCurrency || sourceCurrency)) || 'USD';
 
   const targetName = (row['Target name'] || '').trim();
   const sourceName = (row['Source name'] || '').trim();
@@ -101,16 +118,19 @@ export async function parse(filePath) {
   });
 
   const transactions = [];
+  let skipped = 0;
   for (const row of records) {
     try {
       const tx = rowToTransaction(row);
       if (tx) transactions.push(tx);
+      else skipped++;
     } catch {
-      continue;
+      skipped++;
     }
   }
+  transactions.skipped = skipped;
 
-  logger.info(`Wise CSV parsed: ${transactions.length} transactions`);
+  logger.info(`Wise CSV parsed: ${transactions.length} transactions, ${skipped} skipped`);
   return transactions;
 }
 

@@ -259,6 +259,21 @@ describe('Settings Routes', () => {
       const res = mockResponse();
       await expect(routeHandlers['put:/'](req, res)).rejects.toThrow('boom');
     });
+
+    it('rejects an invalid cost_basis_method via bulk (no validation bypass)', async () => {
+      const req = { body: { cost_basis_method: 'bogus' } };
+      const res = mockResponse();
+      await expect(routeHandlers['put:/'](req, res)).rejects.toBeInstanceOf(ValidationError);
+      expect(settingsRepository.setMany).not.toHaveBeenCalled();
+    });
+
+    it('accepts a valid cost_basis_method via bulk', async () => {
+      settingsRepository.setMany.mockResolvedValue(undefined);
+      const req = { body: { cost_basis_method: 'fifo' } };
+      const res = mockResponse();
+      await routeHandlers['put:/'](req, res);
+      expect(settingsRepository.setMany).toHaveBeenCalledWith({ cost_basis_method: 'fifo' });
+    });
   });
 
   describe('DELETE /:key', () => {

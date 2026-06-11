@@ -126,8 +126,13 @@ export function mapToStatisticsData(
       }
       const cd = catMap.get(key)!;
       const absTotal = Math.abs(item.total);
-      const expenseAmount = item.total < 0 ? absTotal : 0;
-      const incomeAmount = item.total > 0 ? item.total : 0;
+      // Use the backend's explicit sign-split (income = Σ amount≥0, expense =
+      // Σ amount<0) instead of classifying by the sign of the NET total — a
+      // mixed-sign month (e.g. −300 purchases + 500 refund) was wholly counted
+      // as income or expense and the drill-through contradicted the cell. Fall
+      // back to the old heuristic only for pre-upgrade cached payloads.
+      const incomeAmount = item.income ?? (item.total > 0 ? item.total : 0);
+      const expenseAmount = item.expense != null ? Math.abs(item.expense) : (item.total < 0 ? absTotal : 0);
       cd.months[period] = (cd.months[period] ?? 0) + absTotal;
       cd.expenseMonths[period] = (cd.expenseMonths[period] ?? 0) + expenseAmount;
       cd.incomeMonths[period] = (cd.incomeMonths[period] ?? 0) + incomeAmount;
@@ -269,14 +274,18 @@ export function useStatistics() {
   const recipientByYearFilteredQuery = useQuery({
     queryKey: [
       'aggregations', 'recipient-by-year', 'filtered',
-      targetCurrency, settingsExcludedRecIds,
+      targetCurrency, effectiveExcludedCategoryIds, settingsExcludedRecIds,
     ],
     queryFn: () =>
       getAggregationRecipientByYear({
         currency: targetCurrency,
         excluded_recipient_ids: settingsExcludedRecIds,
+        excluded_category_ids: effectiveExcludedCategoryIds,
       }),
-    enabled: filteredEnabled && settingsExcludedRecIds.length > 0,
+    // Gate on filteredEnabled (not recipient-only) so a category-only exclusion
+    // set — the common "hide transfers/rent" case — still fires the filtered
+    // query instead of silently falling back to the unfiltered payload.
+    enabled: filteredEnabled,
     staleTime: 60_000,
   });
 

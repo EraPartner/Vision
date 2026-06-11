@@ -104,10 +104,12 @@ export const transactionRepository = {
     // Build ORDER BY — fall back to default date DESC when no valid sort supplied
     const sortCol = TRANSACTION_SORT_COLUMNS[sortBy] || 't.date';
     const sortDirection = sortDir === 'asc' ? 'ASC' : 'DESC';
-    // Secondary sort by date DESC keeps rows stable when primary column has ties
+    // Secondary sort by date DESC keeps rows stable when primary column has
+    // ties; t.id DESC is the unique final tiebreaker so LIMIT/OFFSET pages can't
+    // duplicate or skip same-date rows across separate query executions.
     const orderBy = sortBy && TRANSACTION_SORT_COLUMNS[sortBy]
-      ? `${sortCol} ${sortDirection}, t.date DESC`
-      : `t.date DESC`;
+      ? `${sortCol} ${sortDirection}, t.date DESC, t.id DESC`
+      : `t.date DESC, t.id DESC`;
 
     // Partition by bank_account: a running balance is a per-account ledger
     // figure. Without the partition, a list spanning multiple accounts summed
@@ -192,7 +194,7 @@ export const transactionRepository = {
     if (recipientId != null) { sql += ` AND t.recipient_id = $${paramIdx++}`; params.push(recipientId); }
     if (recipientName) { sql += ` AND r.name ILIKE $${paramIdx++}`; params.push(`%${recipientName}%`); }
 
-    sql += ` ORDER BY t.date DESC LIMIT $${paramIdx} OFFSET $${paramIdx + 1}`;
+    sql += ` ORDER BY t.date DESC, t.id DESC LIMIT $${paramIdx} OFFSET $${paramIdx + 1}`;
     params.push(limit, offset);
 
     const result = await query(sql, params);
@@ -284,7 +286,7 @@ export const transactionRepository = {
         FROM transactions t
         LEFT JOIN recipients r ON t.recipient_id = r.id
         WHERE ${uncategorisedWhere}
-        ORDER BY t.date DESC
+        ORDER BY t.date DESC, t.id DESC
         LIMIT $${limitParam} OFFSET $${offsetParam}
       )
       SELECT u.*,
@@ -416,9 +418,11 @@ export const transactionRepository = {
 
     const sortCol = TRANSACTION_SORT_COLUMNS[sortBy] || 't.date';
     const sortDirection = sortDir === 'asc' ? 'ASC' : 'DESC';
+    // t.id DESC is the unique final tiebreaker — without it LIMIT/OFFSET pages
+    // can duplicate or skip same-date rows across separate query executions.
     const orderBy = sortBy && TRANSACTION_SORT_COLUMNS[sortBy]
-      ? `${sortCol} ${sortDirection}, t.date DESC`
-      : `t.date DESC`;
+      ? `${sortCol} ${sortDirection}, t.date DESC, t.id DESC`
+      : `t.date DESC, t.id DESC`;
 
     // Partition by bank_account: a running balance is a per-account ledger
     // figure. Without the partition, a list spanning multiple accounts summed
@@ -502,6 +506,12 @@ export const transactionRepository = {
           `;
           const res = await client.query(updateSql, updateParams);
           if (!res.rows[0]) return null;
+        } else {
+          // Tags-only PATCH: probe existence first. Otherwise setTransactionTags'
+          // junction INSERT hits the transaction_id FK for a missing row → a raw
+          // 23503 surfaces as a 500 instead of the standard 404.
+          const exists = await client.query('SELECT 1 FROM transactions WHERE id = $1', [id]);
+          if (!exists.rows[0]) return null;
         }
         await setTransactionTags(client, id, tags ?? []);
         const res = await client.query(fetchSql, [id]);

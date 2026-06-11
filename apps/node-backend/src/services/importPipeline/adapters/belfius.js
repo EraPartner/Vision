@@ -111,6 +111,7 @@ export async function parse(filePath) {
     ? parseLastBalance(lines[BALANCE_LINE_INDEX].trim())
     : null;
 
+  let skipped = 0;
   for (let i = HEADER_ROWS; i < lines.length; i++) {
     const line = lines[i].trim();
     if (!line) continue;
@@ -118,11 +119,14 @@ export async function parse(filePath) {
     if (tx) {
       delete tx._accountNumber;
       transactions.push(tx);
+    } else {
+      skipped++;
     }
   }
 
   applyRunningBalances(transactions, lastBalance);
-  logger.info(`Belfius CSV parsed: ${transactions.length} transactions`);
+  transactions.skipped = skipped;
+  logger.info(`Belfius CSV parsed: ${transactions.length} transactions, ${skipped} skipped`);
   return transactions;
 }
 

@@ -39,10 +39,16 @@ const UNIT_DEBIT_TYPES = new Set(['sell']);
 
 function computeNetUnits(txns) {
   let net = toDecimal(0);
+  // Rows arrive date-ordered from the repository query.
   for (const t of txns) {
     const units = toDecimal(t.units ?? 0);
     if (UNIT_CREDIT_TYPES.has(t.type)) net = net.plus(units);
     else if (UNIT_DEBIT_TYPES.has(t.type)) net = net.minus(units);
+    // A 'split' row carries `units` = the new TOTAL post-split (the established
+    // convention in portfolioMath.calculateCostBasis / snapshotBuilder). Skipping
+    // it left the chat reporting pre-split units at post-split prices — roughly
+    // half the real value after a 2:1 split.
+    else if (t.type === 'split' && units.gt(0) && net.gt(0)) net = units;
   }
   return net;
 }

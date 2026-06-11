@@ -293,6 +293,42 @@ describe('asset-class formula coverage', () => {
     expect(s.currentValue).toBeCloseTo(1000 + s.accruedInterest, 2);
   });
 
+  it('does not double-count interest in fixed-income gainLoss', async () => {
+    // €10 000 deposit, one €400 interest payment, negligible accrual → economic
+    // gain 400. Old code added interest via realizedGain AND totalIncome → 800.
+    query
+      .mockResolvedValueOnce({
+        rows: [investmentRow({ asset_class: 'savings', interest_rate: 0, current_price: 0, currency: 'EUR' })],
+      })
+      .mockResolvedValueOnce({
+        rows: [
+          txnRow({ id: 1, type: 'buy', amount: 10000, units: 0, currency: 'EUR', date: '2025-01-01' }),
+          txnRow({ id: 2, type: 'interest', amount: 400, units: 0, currency: 'EUR', date: '2026-01-01' }),
+        ],
+      });
+
+    const result = await getPortfolioSummary('EUR');
+    expect(result.summaries[0].gainLoss).toBe(400);
+  });
+
+  it('clamps negative net-invested to 0 instead of flipping it positive (abs)', async () => {
+    // Fixed-income sold above contributions → buys−sells negative. abs() used to
+    // report +500 "invested"; clamp reports 0.
+    query
+      .mockResolvedValueOnce({
+        rows: [investmentRow({ asset_class: 'savings', interest_rate: 0, current_price: 0, currency: 'EUR' })],
+      })
+      .mockResolvedValueOnce({
+        rows: [
+          txnRow({ id: 1, type: 'buy', amount: 1000, units: 0, currency: 'EUR', date: '2025-01-01' }),
+          txnRow({ id: 2, type: 'sell', amount: 1500, units: 0, currency: 'EUR', date: '2026-01-01' }),
+        ],
+      });
+
+    const result = await getPortfolioSummary('EUR');
+    expect(result.summaries[0].totalInvested).toBe(0);
+  });
+
   it('real estate adds appreciation to current value', async () => {
     query
       .mockResolvedValueOnce({
@@ -312,6 +348,43 @@ describe('asset-class formula coverage', () => {
     expect(s.totalAppreciation).toBe(25000);
     expect(s.currentValue).toBe(275000);
     expect(s.unrealizedGain).toBe(25000);
+  });
+
+  it('does not double-count buy fees in gainLoss for unit-based assets', async () => {
+    // Buy 1 unit for 100 with a 10 fee → cost basis 110; current price 150.
+    // Economic gain is 40 (paid 110, worth 150). calculateCostBasis already
+    // folds the fee into cost, so the old code's extra −fee gave 30.
+    query
+      .mockResolvedValueOnce({
+        rows: [investmentRow({ currency: 'EUR', current_price: 150 })],
+      })
+      .mockResolvedValueOnce({
+        rows: [txnRow({ type: 'buy', amount: 100, units: 1, fees: 10, currency: 'EUR' })],
+      });
+
+    const result = await getPortfolioSummary('EUR');
+    expect(result.summaries[0].gainLoss).toBe(40);
+  });
+
+  it('does not double-count rent/fees/taxes in real-estate gainLoss', async () => {
+    // appreciation 10000 + rent 12000 − fees 2000 − taxes 1000 = 19000.
+    // Old code computed appreciation + 2·rent − 2·fees − 2·taxes = 28000.
+    query
+      .mockResolvedValueOnce({
+        rows: [investmentRow({ asset_class: 'real_estate', current_price: 0, currency: 'EUR' })],
+      })
+      .mockResolvedValueOnce({
+        rows: [
+          txnRow({ id: 1, type: 'buy', amount: 250000, units: 0, currency: 'EUR' }),
+          txnRow({ id: 2, type: 'appreciation', amount: 10000, units: 0, currency: 'EUR' }),
+          txnRow({ id: 3, type: 'rent_income', amount: 12000, units: 0, currency: 'EUR' }),
+          txnRow({ id: 4, type: 'fee', amount: 2000, units: 0, currency: 'EUR' }),
+          txnRow({ id: 5, type: 'tax', amount: 1000, units: 0, currency: 'EUR' }),
+        ],
+      });
+
+    const result = await getPortfolioSummary('EUR');
+    expect(result.summaries[0].gainLoss).toBe(19000);
   });
 
   it('sells reduce units and trigger realized gain on a unit-based holding', async () => {

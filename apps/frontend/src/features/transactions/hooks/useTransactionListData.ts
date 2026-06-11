@@ -115,6 +115,15 @@ export function useTransactionListData({
         }
     }, [initialData]);
 
+    // Any change to the query inputs starts a new logical query. Bump the
+    // request id so an in-flight loadMore from the *previous* inputs fails its
+    // `myRequestId !== requestIdRef.current` check and can't append stale rows
+    // (e.g. rows from a now-cleared category filter) into the reset list.
+    // Previously only handleSortChange bumped it, so filter/search changes raced.
+    useEffect(() => {
+        requestIdRef.current += 1;
+    }, [showAll, search, transactionIdFilter, recipientIdFilter, categoryIdFilter, categoryIdsFilter, startDateFilter, endDateFilter, transactionTypeFilter, tagsFilter, sortKey, sortDir, pageSize]);
+
     const loadMore = useCallback(async () => {
         if (loadingRef.current || !hasMoreRef.current) return;
         loadingRef.current = true;

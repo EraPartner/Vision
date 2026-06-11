@@ -18,14 +18,23 @@ interface CategoryTrendChartProps {
 export const CategoryTrendChart = memo(function CategoryTrendChart({ data }: CategoryTrendChartProps) {
   const { formatCurrency, currencySymbol } = useChartCurrencyFormatter();
 
-  const topCategories = useMemo(() => data.categoryPivot.slice(0, 5), [data.categoryPivot]);
+  // "Monthly spending for top 5 categories" — rank by EXPENSE total and plot
+  // expense (not Σ|net|, which let income categories like salary into the top 5).
+  const topCategories = useMemo(
+    () =>
+      [...data.categoryPivot]
+        .filter((c) => c.expenseTotal > 0)
+        .sort((a, b) => b.expenseTotal - a.expenseTotal)
+        .slice(0, 5),
+    [data.categoryPivot],
+  );
 
   const chartData: CategoryTrendDatum[] = useMemo(
     () =>
       data.allPeriods.map((period) => {
         const values: Record<string, number> = {};
         for (const cat of topCategories) {
-          values[cat.categoryId ?? -1] = Math.round(cat.months[period] || 0);
+          values[cat.categoryId ?? -1] = Math.round(cat.expenseMonths[period] || 0);
         }
         return { period, date: parseISO(`${period}-01`), values };
       }),

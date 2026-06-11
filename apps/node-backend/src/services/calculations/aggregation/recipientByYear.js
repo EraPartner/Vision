@@ -11,8 +11,9 @@ import { buildEnvelope } from './_envelope.js';
 export async function computeRecipientByYear({
   targetCurrency = 'EUR',
   excludedRecipientIds = [],
+  excludedCategoryIds = [],
 } = {}) {
-  const data = await infoRepository.getRecipientByYear(targetCurrency, excludedRecipientIds);
+  const data = await infoRepository.getRecipientByYear(targetCurrency, excludedRecipientIds, excludedCategoryIds);
   return buildEnvelope(data, { source: 'live' });
 }
 

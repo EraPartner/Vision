@@ -116,7 +116,9 @@ export function getAggregationBankBalances(params?: {
 export interface CategoryPivotItem {
     categoryId: number | null;
     categoryName: string;
-    total: number;
+    total: number;          // net (income + expense)
+    income?: number;        // sum of amount >= 0 (explicit, not sign-of-net)
+    expense?: number;       // sum of amount < 0 (negative)
     transactionCount: number;
 }
 
@@ -147,11 +149,15 @@ export function getAggregationCategoryPivot(params?: {
 export function getAggregationRecipientByYear(params?: {
     currency?: string;
     excluded_recipient_ids?: number[];
+    excluded_category_ids?: number[];
 }): Promise<AggregationEnvelope<{ recipientsByYear: Record<string, RecipientYearlySpending[]> }>> {
     const qp = new URLSearchParams();
     if (params?.currency) qp.set('currency', params.currency);
     if (params?.excluded_recipient_ids?.length) {
         params.excluded_recipient_ids.forEach((id) => qp.append('excluded_recipient_ids', String(id)));
+    }
+    if (params?.excluded_category_ids?.length) {
+        params.excluded_category_ids.forEach((id) => qp.append('excluded_category_ids', String(id)));
     }
     const q = qp.toString();
     return apiRequest(`/api/aggregations/recipient-by-year${q ? `?${q}` : ''}`);
@@ -167,6 +173,7 @@ export interface RecipientPivotItem {
 export function getAggregationRecipientPivot(params?: {
     currency?: string;
     excluded_recipient_ids?: number[];
+    recipient_ids?: number[];
     bucket?: 'monthly' | 'yearly';
     start?: string | null;
     end?: string | null;
@@ -178,6 +185,9 @@ export function getAggregationRecipientPivot(params?: {
     if (params?.end) qp.set('end', params.end);
     if (params?.excluded_recipient_ids?.length) {
         params.excluded_recipient_ids.forEach((id) => qp.append('excluded_recipient_ids', String(id)));
+    }
+    if (params?.recipient_ids?.length) {
+        params.recipient_ids.forEach((id) => qp.append('recipient_ids', String(id)));
     }
     const q = qp.toString();
     return apiRequest(`/api/aggregations/recipient-pivot${q ? `?${q}` : ''}`);

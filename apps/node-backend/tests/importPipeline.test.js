@@ -108,18 +108,18 @@ describe('stageBatch', () => {
     ).rejects.toThrow('Unknown adapter: bogus')
   })
 
-  it('returns {rowsTotal:2} after staging two parsed rows', async () => {
-    getAdapter.mockReturnValue({
-      parse: vi.fn().mockResolvedValue([
-        { date: '2024-01-01', amount: '-10', recipient: 'A', memo: '', currency: 'EUR' },
-        { date: '2024-01-02', amount: '-20', recipient: 'B', memo: '', currency: 'EUR' },
-      ]),
-    })
+  it('returns {rowsTotal, rowsSkipped} after staging parsed rows', async () => {
+    const parsed = [
+      { date: '2024-01-01', amount: '-10', recipient: 'A', memo: '', currency: 'EUR' },
+      { date: '2024-01-02', amount: '-20', recipient: 'B', memo: '', currency: 'EUR' },
+    ]
+    parsed.skipped = 3 // adapter reported 3 unparseable rows
+    getAdapter.mockReturnValue({ parse: vi.fn().mockResolvedValue(parsed) })
     query
       .mockResolvedValueOnce({ rows: [] }) // UPDATE status='staging'
       .mockResolvedValueOnce({ rows: [] }) // UPDATE rows_total
     expect(await stageBatch({ batchId: 1, filePath: '/tmp/x.csv', adapterName: 'belfius' }))
-      .toEqual({ rowsTotal: 2 })
+      .toEqual({ rowsTotal: 2, rowsSkipped: 3 })
   })
 })
 
@@ -196,6 +196,22 @@ describe('commitBatch', () => {
     })
     expect(await commitBatch({ batchId: 1 })).toEqual({ imported: 1, duplicates: 0, errors: 0 })
     expect(refreshAggregations).toHaveBeenCalledOnce()
+  })
+
+  it('inserts the local calendar day when tx_date is a Date (no UTC day-shift)', async () => {
+    // node-postgres parses DATE columns into a server-local-midnight Date.
+    // toISOString() would roll this back a day under a TZ east of UTC.
+    setupCommit({ ...matchedRow, tx_date: new Date(2026, 5, 15) })
+    let insertedDate
+    mockClient.query.mockImplementation(async (sql, params) => {
+      if (sql.includes('INSERT INTO transactions')) {
+        insertedDate = params[0]
+        return { rows: [{ id: 100 }] }
+      }
+      return { rows: [] }
+    })
+    await commitBatch({ batchId: 7 })
+    expect(insertedDate).toBe('2026-06-15')
   })
 
   it('marks a duplicate row and skips aggregation refresh', async () => {

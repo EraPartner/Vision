@@ -362,11 +362,15 @@ export const defaultHandlers = [
             snapshots: [],
         }),
     ),
-    http.get(`${API_BASE}/api/info/transaction-summary`, () => ok(null)),
-    http.get(`${API_BASE}/api/info/transaction-count`, () => ok(0)),
-    http.get(`${API_BASE}/api/info/recurring-patterns`, () => ok([])),
-    http.get(`${API_BASE}/api/info/banks`, () => ok([])),
-    http.get(`${API_BASE}/api/info/supported-adapters`, () => ok([])),
+    // Live response shapes (these routes all return objects, not bare scalars/
+    // arrays). The old scalar/array mocks let component tests run against
+    // impossible API states (e.g. res.adapters undefined) and made the msw
+    // contract suite pin a shape that contradicted the live-contracts suite.
+    // (transaction-summary handler removed — Phase 9 deleted that route.)
+    http.get(`${API_BASE}/api/info/transaction-count`, () => ok({ total_transactions: 0 })),
+    http.get(`${API_BASE}/api/info/recurring-patterns`, () => ok({ patterns: [], total: 0 })),
+    http.get(`${API_BASE}/api/info/banks`, () => ok({ banks: [] })),
+    http.get(`${API_BASE}/api/info/supported-adapters`, () => ok({ adapters: [], total_count: 0 })),
     http.get(`${API_BASE}/api/info/inflation-rates`, () => ok([])),
 
     http.get(`${API_BASE}/api/admin/endpoint-liveness`, () => ok([])),

@@ -82,6 +82,7 @@ export async function getCashflowComparison(
            EXTRACT(DAY FROM pt.planned_date)::int AS day_of_month
     FROM planned_transactions pt
     WHERE pt.is_active = true
+      AND pt.is_executed = false
       AND pt.planned_date >= date_trunc('month', CURRENT_DATE)
       AND pt.planned_date <= (date_trunc('month', CURRENT_DATE) + interval '1 month' - interval '1 day')
   `;
@@ -92,6 +93,7 @@ export async function getCashflowComparison(
            TO_CHAR(date_trunc('month', pt.planned_date), 'YYYY-MM') AS month_key
     FROM planned_transactions pt
     WHERE pt.is_active = true
+      AND pt.is_executed = false
       AND pt.planned_date >= date_trunc('month', CURRENT_DATE) - interval '${HISTORY_MONTHS} months'
       AND pt.planned_date < date_trunc('month', CURRENT_DATE)
   `;
@@ -273,6 +275,7 @@ export async function getCashflowForecastData(
     SELECT pt.amount, pt.currency, pt.planned_date AS date
     FROM planned_transactions pt
     WHERE pt.is_active = true
+      AND pt.is_executed = false
       AND pt.planned_date >= date_trunc('month', CURRENT_DATE)
       AND pt.planned_date <= (date_trunc('month', CURRENT_DATE) + interval '1 month' - interval '1 day')
   `;
@@ -280,6 +283,7 @@ export async function getCashflowForecastData(
     SELECT pt.amount, pt.currency, pt.planned_date AS date
     FROM planned_transactions pt
     WHERE pt.is_active = true
+      AND pt.is_executed = false
       AND pt.planned_date >= date_trunc('month', CURRENT_DATE) - interval '${historyMonths} months'
       AND pt.planned_date < date_trunc('month', CURRENT_DATE)
   `;
@@ -391,6 +395,7 @@ export async function getCashflowForecastDataRolling(
     SELECT pt.amount, pt.currency, pt.planned_date AS date
     FROM planned_transactions pt
     WHERE pt.is_active = true
+      AND pt.is_executed = false
       AND pt.planned_date > CURRENT_DATE
       AND pt.planned_date <= (CURRENT_DATE + interval '${daysForward} days')
   `;

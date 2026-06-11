@@ -10,9 +10,10 @@
  * unwrapEnvelope strips the outer `{ok, data}` layer.
  * See docs/adr/026-unified-api-response-envelope.md.
  *
- * Mounted in parallel with legacy /api/info/* behind the AGGREGATIONS_V2_ENABLED
- * feature flag during Phase 2–8; legacy routes are removed in Phase 9 after
- * shadow-mode parity is proven.
+ * These are the canonical aggregation routes (ADR-010 Phase 9 cutover complete).
+ * The legacy GET /api/info and GET /api/info/transaction-summary they replaced
+ * have been removed. There is no AGGREGATIONS_V2_ENABLED runtime flag — the
+ * cutover is permanent (the flag was only ever a planning concept).
  */
 
 import { Router } from 'express';
@@ -218,6 +219,7 @@ router.get('/recipient-by-year', async (req, res) => {
   const { data, meta } = await computeRecipientByYear({
     targetCurrency: getTargetCurrency(req),
     excludedRecipientIds: parseNumericArrayQueryParam(req.query.excluded_recipient_ids),
+    excludedCategoryIds: parseNumericArrayQueryParam(req.query.excluded_category_ids),
   });
   res.ok({ data, meta });
 });
@@ -226,12 +228,14 @@ router.get('/recipient-pivot', async (req, res) => {
   const bucket = ['monthly', 'yearly'].includes(req.query.bucket) ? req.query.bucket : 'monthly';
   const startDate = req.query.start || null;
   const endDate = req.query.end || null;
+  const recipientIds = parseNumericArrayQueryParam(req.query.recipient_ids);
   const { data, meta } = await computeRecipientPivot({
     targetCurrency: getTargetCurrency(req),
     excludedRecipientIds: parseNumericArrayQueryParam(req.query.excluded_recipient_ids),
     bucket,
     startDate,
     endDate,
+    recipientIds: recipientIds.length > 0 ? recipientIds : null,
   });
   res.ok({ data, meta });
 });

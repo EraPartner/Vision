@@ -181,7 +181,9 @@ function buildInvestmentSummary(inv, txns, targetCurrency, multiplierByCurrency)
     projectedInterest = toDecimal(calculateProjectedAnnualInterest(totalInvested.toNumber(), interestRate));
 
     currentValue = totalInvested.plus(accruedInterest);
-    realizedGain = totalInterestPaid;
+    // Interest received is income (already in totalIncome below), exactly like
+    // dividends — feeding it into realizedGain too double-counted it in gainLoss.
+    realizedGain = toDecimal(0);
     unrealizedGain = accruedInterest;
   } else if (isRealEstate) {
     totalInvested = totalBuyAmount.minus(totalSellAmount);
@@ -189,7 +191,10 @@ function buildInvestmentSummary(inv, txns, targetCurrency, multiplierByCurrency)
     totalSellProceeds = totalSellAmount;
     currentValue = totalInvested.plus(totalAppreciation);
     unrealizedGain = totalAppreciation;
-    realizedGain = totalRent.minus(totalFees).minus(totalTaxes);
+    // Rent is income (folded into totalIncome below), not a realized gain, and
+    // fees/taxes are already subtracted once in the shared gainLoss line. Feeding
+    // rent−fees−taxes into realizedGain here double-counted all three.
+    realizedGain = toDecimal(0);
   } else {
     totalInvested = totalBuyAmount.minus(totalSellAmount);
     totalBuyCost = totalBuyAmount;
@@ -199,7 +204,15 @@ function buildInvestmentSummary(inv, txns, targetCurrency, multiplierByCurrency)
 
   const totalIncome = totalDividends.plus(totalInterestPaid).plus(totalRent);
   const totalGain = realizedGain.plus(unrealizedGain);
-  const gainLoss = totalGain.plus(totalIncome).minus(totalFees).minus(totalTaxes);
+  // For unit-based assets the per-row fees/taxes *columns* are already folded
+  // into cost basis by calculateCostBasis (buys add them, sells subtract them),
+  // so subtracting totalFees/totalTaxes (= fee/tax tx-types + those columns)
+  // would count them twice. Only the standalone fee/tax transaction *types*
+  // sit outside cost basis. Other branches keep the full subtraction because
+  // their totalInvested excludes the fees/taxes columns.
+  const gainLoss = isUnitBased
+    ? totalGain.plus(totalIncome).minus(feeTxnAmount).minus(taxTxnAmount)
+    : totalGain.plus(totalIncome).minus(totalFees).minus(totalTaxes);
   const gainLossPercent = totalBuyCost.gt(0)
     ? divide(gainLoss, totalBuyCost).times(100)
     : toDecimal(0);
@@ -210,7 +223,12 @@ function buildInvestmentSummary(inv, txns, targetCurrency, multiplierByCurrency)
   const conv = (v) => multiply(v, multiplier);
 
   const convertedCurrentValue = conv(currentValue);
-  const convertedTotalInvested = conv(totalInvested.abs());
+  // Clamp at 0 rather than abs(): for fixed-income/real-estate totalInvested =
+  // buys − sells can be legitimately negative (sold above contributions), and
+  // abs() silently flipped that to a positive "invested" figure. (Unit-based
+  // already clamps in calculateCostBasis.)
+  const clampedInvested = totalInvested.gt(0) ? totalInvested : toDecimal(0);
+  const convertedTotalInvested = conv(clampedInvested);
   const convertedTotalBuyCost = conv(totalBuyCost);
   const convertedTotalSellProceeds = conv(totalSellProceeds);
   const convertedTotalFees = conv(totalFees);
@@ -295,6 +313,13 @@ function buildInvestmentSummary(inv, txns, targetCurrency, multiplierByCurrency)
  * Reduce per-investment summaries into portfolio-wide totals.
  * All values are already in the same target currency, so straight summation.
  */
+// Note on the "invested" definition (see TODO audit): `totalInvested` here sums
+// per-investment `totalBuyCost`, which for unit-based assets is gross cash in
+// INCLUDING acquisition fees/taxes (calculateCostBasis folds them in), and for
+// fixed-income/real-estate is the buy/gift amount only. The frontend mirror
+// matches. Treat this as "gross buy cost (acquisition costs included where the
+// asset class records them per-row)"; documented here rather than re-grained to
+// avoid changing every reported invested figure.
 function aggregateTotals(summaries) {
   const acc = {
     totalPortfolioValue: addAll(summaries.map((s) => s.currentValue)),

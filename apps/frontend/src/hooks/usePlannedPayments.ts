@@ -131,10 +131,10 @@ function mapToCreateAPI(payment: Omit<PlannedPayment, "id" | "created_at">): Pla
     }
   }
 
-  // For display: if this is a loan, show loan(term) in recurrence_pattern so UI lists can display it
-  if (payment.is_loan && payment.loan_term_months) {
-    recurrence_pattern = `loan(${payment.loan_term_months} months)`;
-  }
+  // Loans drive their own monthly schedule server-side (the backend stores
+  // recurrence_pattern='monthly'); don't send a display string like
+  // "loan(12 months)" — it isn't a valid pattern and the UI renders the loan
+  // label from loan_term_months, not this field.
 
   return {
     planned_date: payment.due_date,

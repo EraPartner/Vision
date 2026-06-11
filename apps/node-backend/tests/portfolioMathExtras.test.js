@@ -7,6 +7,7 @@ import {
   contributionAdjustedMonthlyReturn,
   computeMetrics,
   computeHeatmap,
+  toYmd,
 } from '../src/utils/portfolioMath.js';
 
 describe('calculateCostBasis (weighted average)', () => {
@@ -297,5 +298,31 @@ describe('computeHeatmap', () => {
     ]);
     expect(r.years).toEqual([2025]);
     expect(r.data[2025][1]).toBeCloseTo(10, 2);
+  });
+
+  it('buckets a local-midnight Date by its local calendar month (pg DATE shape)', () => {
+    // node-postgres returns DATE columns as a *local-midnight* Date. Bucketing
+    // those with toISOString() shifted them a day back in UTC+ zones, landing
+    // the 1st of a month in the previous month. Using new Date(y, m, d) builds
+    // exactly that local-midnight value, so this is deterministic in any TZ.
+    const r = computeHeatmap([
+      { snapshot_date: new Date(2026, 4, 1), value: 100, invested: 100 }, // 2026-05-01
+      { snapshot_date: new Date(2026, 5, 1), value: 110, invested: 100 }, // 2026-06-01
+    ]);
+    expect(r.years).toEqual([2026]);
+    expect(r.data[2026][5]).toBeCloseTo(10, 2); // June move present (not May)
+    expect(r.data[2026][4]).toBeNull(); // May is the first month, no prior
+  });
+});
+
+describe('toYmd', () => {
+  it('recovers the local calendar day from a local-midnight Date', () => {
+    expect(toYmd(new Date(2026, 5, 1))).toBe('2026-06-01');
+    expect(toYmd(new Date(2026, 0, 31))).toBe('2026-01-31');
+  });
+
+  it('passes a YYYY-MM-DD string straight through', () => {
+    expect(toYmd('2026-06-15')).toBe('2026-06-15');
+    expect(toYmd('2026-06-15T00:00:00.000Z')).toBe('2026-06-15');
   });
 });

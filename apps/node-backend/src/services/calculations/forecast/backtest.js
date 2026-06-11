@@ -5,6 +5,8 @@
  * RMSE, MAPE (on end-of-month cumulative) per method + residual series.
  */
 
+import { densifyDailyHistory } from './_densify.js';
+
 const DEFAULT_BACKTEST_MONTHS = 12;
 
 function addMonths(iso, delta) {
@@ -78,7 +80,12 @@ export function walkForwardBacktest({ history, methods, asOfMonth, windowMonths 
 
   for (let k = windowMonths; k >= 1; k--) {
     const targetMonth = addMonths(asOfMonth, -k);
-    const trainHistory = filterHistoryBefore(history, targetMonth);
+    // Zero-fill the training window (through the last day before targetMonth) so
+    // per-DOM means match the live forecast path; otherwise backtest MAE is
+    // computed against a differently-biased model than the one shipped.
+    const prevMonth = addMonths(targetMonth, -1);
+    const trainEnd = `${prevMonth}-${String(daysInMonth(prevMonth)).padStart(2, '0')}`;
+    const trainHistory = densifyDailyHistory(filterHistoryBefore(history, targetMonth), trainEnd);
     if (trainHistory.length === 0) continue;
     const actual = actualForMonth(history, targetMonth);
     const forecastDates = actual.map((a) => a.date);
@@ -160,8 +167,9 @@ export function walkForwardBacktestRolling({ history, methods, daysBack: _daysBa
     }
     if (forecastDates.length === 0) continue;
 
-    // Train on all data up to (and including) anchorEnd, matching live forecast behaviour.
-    const trainHistory = history.filter((r) => r.date <= anchorEnd);
+    // Train on all data up to (and including) anchorEnd, matching live forecast
+    // behaviour — zero-filled to a dense daily grid (same as the live path).
+    const trainHistory = densifyDailyHistory(history.filter((r) => r.date <= anchorEnd), anchorEnd);
     if (trainHistory.length === 0) continue;
 
     const actualSeries = forecastDates.map((date) => ({ date, net: actualByDate.get(date) ?? 0 }));

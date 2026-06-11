@@ -192,4 +192,16 @@ describe('dividend withholding', () => {
     expect(wht.dividendWhtReclaim).toBeCloseTo(300, 8);
     expect(wht.dividendWhtNetCost).toBeCloseTo(1_200, 8); // 1500 - 300
   });
+
+  it('doubles the exempt bracket for married_joint filers (per-taxpayer exemption)', () => {
+    const fixture: PortfolioTaxInvestment[] = [
+      { id: 12, assetClass: 'stock', currency: 'EUR', currentValue: 0, transactions: [
+        { type: 'dividend', date: '2025-04-01', amount: 5_000, taxes: 1_500 },
+      ] },
+    ];
+    const wht = computeDividendWht(fixture, 2025, table2025, convert, 'married_joint');
+    // exemption ×2 → min(6500, 2000)=2000; reclaim = min(1500, 2000*0.30=600) = 600
+    expect(wht.dividendWhtReclaim).toBeCloseTo(600, 8);
+    expect(wht.dividendWhtNetCost).toBeCloseTo(900, 8); // 1500 - 600
+  });
 });

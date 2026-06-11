@@ -256,8 +256,8 @@ export default function PortfolioTaxPage() {
     dividendWhtReclaim,
     dividendWhtNetCost,
   } = useMemo(
-    () => computeDividendWht(summaries as PortfolioTaxInvestment[], txYear, taxTable, convertToTarget),
-    [summaries, txYear, taxTable, convertToTarget],
+    () => computeDividendWht(summaries as PortfolioTaxInvestment[], txYear, taxTable, convertToTarget, profile.filingStatus),
+    [summaries, txYear, taxTable, convertToTarget, profile.filingStatus],
   );
 
   const tobRecorded = useMemo(

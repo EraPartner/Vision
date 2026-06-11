@@ -9,7 +9,7 @@
 
 import { query, withTransaction } from '../../database/connection.js';
 import { logger } from '../../config/logger.js';
-import { sanitizeSnapshotSpikes, calendarDaysBetween } from '../../utils/portfolioMath.js';
+import { sanitizeSnapshotSpikes, calendarDaysBetween, toYmd } from '../../utils/portfolioMath.js';
 import { toDecimal, roundMoney } from '../../lib/money.js';
 import { toAppDateString } from '../../lib/timezone.js';
 
@@ -47,9 +47,7 @@ export async function computeDailySnapshots(targetCurrency = 'EUR') {
     return [];
   }
 
-  const firstDateYmd = /** @type {unknown} */ (firstDataDate) instanceof Date
-    ? /** @type {Date} */ (firstDataDate).toISOString().split('T')[0]
-    : String(firstDataDate).split('T')[0];
+  const firstDateYmd = toYmd(firstDataDate);
 
   const [
     unitInvestmentsResult,
@@ -264,6 +262,23 @@ export async function computeDailySnapshots(targetCurrency = 'EUR') {
     return amt.times(rateFrom).div(rateTo);
   }
 
+  // Fallback unit price (tx.amount / tx.units) expressed in the INVESTMENT's
+  // currency. lastKnownPrice is consumed as a price in inv.currency (it's later
+  // converted via convertAmount(units*price, inv.currency, …) and is overwritten
+  // by price-history values that are in inv.currency). Storing tx.amount/tx.units
+  // raw mixed the transaction's currency in when tx.currency != inv.currency.
+  function txFallbackPrice(tx, invCurrency, asOfDay) {
+    const from = (tx.currency || 'EUR').toUpperCase();
+    const to = (invCurrency || 'EUR').toUpperCase();
+    const perUnit = tx.amount / tx.units;
+    if (from === to) return perUnit;
+    const rateFrom = (tx.fxRateToEur !== undefined && Number.isFinite(tx.fxRateToEur) && tx.fxRateToEur > 0)
+      ? tx.fxRateToEur
+      : rateToEurOnOrBefore(from, asOfDay);
+    const rateTo = to === 'EUR' ? 1 : rateToEurOnOrBefore(to, asOfDay);
+    return toDecimal(perUnit).times(rateFrom).div(rateTo).toNumber();
+  }
+
   function resolvePrice(inv, day, lastKnownPrice) {
     const histPrices = priceHistoryByInvestment[inv.id];
     if (!histPrices) {
@@ -345,7 +360,7 @@ export async function computeDailySnapshots(targetCurrency = 'EUR') {
         else if (inv?.assetClass === 'crypto') cryptoInvested = cryptoInvested.plus(converted);
         else if (inv?.assetClass === 'metals') metalsInvested = metalsInvested.plus(converted);
         unitsByInvestment[tx.investmentId] = (unitsByInvestment[tx.investmentId] || 0) + tx.units;
-        if (tx.units > 0 && tx.amount > 0) lastKnownPrice[tx.investmentId] = tx.amount / tx.units;
+        if (tx.units > 0 && tx.amount > 0) lastKnownPrice[tx.investmentId] = txFallbackPrice(tx, inv?.currency, day);
 
         if (nonUnitS) {
           // Live summary: fixed-income uses buy+gift; real_estate uses buy only.
@@ -362,7 +377,7 @@ export async function computeDailySnapshots(targetCurrency = 'EUR') {
         // min(units, totalUnits)) so a later buy isn't offset by a negative.
         const heldUnits = unitsByInvestment[tx.investmentId] || 0;
         unitsByInvestment[tx.investmentId] = heldUnits > 0 ? Math.max(0, heldUnits - tx.units) : heldUnits;
-        if (tx.units > 0 && tx.amount > 0) lastKnownPrice[tx.investmentId] = tx.amount / tx.units;
+        if (tx.units > 0 && tx.amount > 0) lastKnownPrice[tx.investmentId] = txFallbackPrice(tx, inv?.currency, day);
 
         if (nonUnitS) nonUnitS.runningInvested = nonUnitS.runningInvested.minus(converted);
       } else if (tx.type === 'split') {

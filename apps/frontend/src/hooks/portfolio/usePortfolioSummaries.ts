@@ -82,7 +82,7 @@ function buildSummary(
   let unrealizedGain = new Decimal(0);
   let currentValue: Decimal;
   let totalInvested: Decimal;
-  let totalBuyCost = new Decimal(0);
+  let totalBuyCost: Decimal; // assigned in every branch of the asset-class if/else below
   let totalSellProceeds = new Decimal(0);
   let accruedInterest = new Decimal(0);
   let projectedAnnualInterest = new Decimal(0);
@@ -115,7 +115,9 @@ function buildSummary(
     );
 
     currentValue = totalInvested.plus(accruedInterest);
-    realizedGain = totalInterestPaid;
+    // Interest received is income (already in totalIncome) — feeding it into
+    // realizedGain too double-counted it in gainLoss. Mirrors the backend.
+    realizedGain = new Decimal(0);
     unrealizedGain = accruedInterest;
   } else if (realEstate) {
     totalInvested = totalBuyAmount.minus(totalSellAmount);
@@ -123,16 +125,27 @@ function buildSummary(
     totalSellProceeds = totalSellAmount;
     currentValue = totalInvested.plus(totalAppreciation);
     unrealizedGain = totalAppreciation;
-    realizedGain = totalRent.minus(totalFees).minus(totalTaxes);
+    // Rent is income (in totalIncome) and fees/taxes are already subtracted once
+    // in the shared gainLoss line — this double-counted all three. Mirrors backend.
+    realizedGain = new Decimal(0);
   } else {
     totalInvested = totalBuyAmount.minus(totalSellAmount);
-    // totalBuyCost stays at its initial 0 — this branch has no buy-cost basis.
+    // Match the backend (portfolioSummaryService): "other" assets use gross buy
+    // amount as the cost basis. Leaving it at 0 forced gainLossPercent to 0% and
+    // dropped these holdings from the best/worst-performers filter (totalBuyCost > 0).
+    totalBuyCost = totalBuyAmount;
     currentValue = totalInvested;
   }
 
   const totalIncome = totalDividends.plus(totalInterestPaid).plus(totalRent);
   const totalGain = realizedGain.plus(unrealizedGain);
-  const gainLoss = totalGain.plus(totalIncome).minus(totalFees).minus(totalTaxes);
+  // Unit-based assets already fold the per-row fees/taxes columns into cost
+  // basis (calculateCostBasis), so subtracting totalFees/totalTaxes again would
+  // double-count them. Only standalone fee/tax transaction types are outside
+  // cost basis. Other branches keep the full subtraction. Mirrors the backend.
+  const gainLoss = unitBased
+    ? totalGain.plus(totalIncome).minus(feeTxnAmount).minus(taxTxnAmount)
+    : totalGain.plus(totalIncome).minus(totalFees).minus(totalTaxes);
   const gainLossPercent = totalBuyCost.gt(0)
     ? divide(gainLoss, totalBuyCost).times(100)
     : new Decimal(0);
@@ -144,6 +157,8 @@ function buildSummary(
     totalInvested: toNumber(totalInvested.abs()),
     totalFees: toNumber(totalFees),
     totalTaxes: toNumber(totalTaxes),
+    feeTransactions: toNumber(feeTxnAmount),
+    taxTransactions: toNumber(taxTxnAmount),
     totalDividends: toNumber(totalDividends),
     totalIncome: toNumber(totalIncome),
     currentValue: toNumber(currentValue),

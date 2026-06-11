@@ -55,7 +55,17 @@ export function calculateCostBasis(txns: PortfolioTransaction[]): CostBasisResul
         // realized-gain calculation above (was: full `amount`).
         totalSellProceeds = totalSellProceeds.plus(amount.times(sellRatio));
       }
+    } else if (txn.type === 'split' && totalUnits.gt(0) && units.gt(0)) {
+      // units = new TOTAL post-split; cost basis unchanged (mirrors backend
+      // portfolioMath.calculateCostBasis). Without this the frontend kept the
+      // pre-split unit count against the post-split price → ~halved value.
+      totalUnits = units;
+    } else if (txn.type === 'return_of_capital' && totalUnits.gt(0)) {
+      // Returns capital, reducing cost basis (units unchanged).
+      totalCost = Decimal.max(0, totalCost.minus(amount));
     }
+    // merger/spinoff are cost-basis-neutral in the backend (portfolioMath.js) —
+    // no unit/cost change here either.
   }
 
   const finalUnits = Decimal.max(0, totalUnits);

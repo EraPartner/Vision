@@ -85,13 +85,21 @@ export function BankBalancesWidget() {
 
     const { accounts, total_net_position, history, total_history } = data;
 
-    // Do not present accounts with a zero balance on the dashboard.
+    // Balance CARDS: only accounts with a non-zero *current* balance.
     const visibleAccounts = accounts.filter((acct) => Math.abs(acct.balance) > 0.000001);
+
+    // CHART: include any account with a non-zero balance anywhere in history, not
+    // just a non-zero current balance — an account closed last month (current 0,
+    // large past balances) must still appear in the 12-month chart.
+    const chartAccounts = accounts.filter((acct) => {
+        if (Math.abs(acct.balance) > 0.000001) return true;
+        return (history[acct.bank_account] || []).some((h) => Math.abs(h.balance) > 0.000001);
+    });
 
     // Build chart data from total_history
     const chartData: BankChartDatum[] = total_history.map((entry) => {
         const values: Record<string, number> = {};
-        for (const acct of visibleAccounts) {
+        for (const acct of chartAccounts) {
             const acctHistory = history[acct.bank_account] || [];
             const match = acctHistory.find((h) => h.month === entry.month);
             values[acct.bank_account] = match?.balance ?? 0;
@@ -104,7 +112,12 @@ export function BankBalancesWidget() {
         };
     });
 
-    const accountSeries: AreaSeries<BankChartDatum>[] = visibleAccounts.map((acct, idx) => ({
+    // visx AreaStack cumulates band edges, which is meaningless/overlapping once a
+    // series goes negative (overdraft/credit line). Stack only when every value is
+    // ≥ 0; otherwise render truthful unstacked multi-lines.
+    const hasNegativeBalances = chartData.some((d) => Object.values(d.values).some((v) => v < 0));
+
+    const accountSeries: AreaSeries<BankChartDatum>[] = chartAccounts.map((acct, idx) => ({
         key: acct.bank_account,
         label: shortAccountName(acct.bank_account),
         accessor: (d) => d.values[acct.bank_account] ?? 0,
@@ -178,7 +191,7 @@ export function BankBalancesWidget() {
             )}
 
             {/* Historical Balance Chart */}
-            {visibleAccounts.length > 0 && chartData.length > 1 && (
+            {chartAccounts.length > 0 && chartData.length > 1 && (
                 <Card>
                     <CardHeader>
                         <CardTitle className="flex items-center gap-2">
@@ -194,8 +207,12 @@ export function BankBalancesWidget() {
                             data={chartData}
                             xAccessor={(d) => d.date}
                             series={accountSeries}
-                            stacked
+                            stacked={!hasNegativeBalances}
                             height={320}
+                            // Pin ticks to the monthly datapoints. Without this the
+                            // time-scale auto-ticks (count from width) landed on ~weekly
+                            // intervals, so "MMM yy" labels repeated (Feb·Feb·Mar·Mar…).
+                            xTickValues={chartData.map((d) => d.date)}
                             xTickFormat={(v) => formatDate(v as Date, "MMM yy")}
                             yTickFormat={(v) => formatCurrency(v, defaultCurrency, locale)}
                             tooltipTitle={(d) => formatDate(d.date, "MMM yy")}

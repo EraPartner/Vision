@@ -319,9 +319,12 @@ export const plannedTransactionRepository = {
       )
       RETURNING *
     `;
-    // sanitize recurrence data: loans should not store recurrence_pattern or related fields
+    // Loans are monthly by construction (generateLoanSchedule walks months via
+    // addMonthsAtDay), so they advance like a monthly recurrence on /execute.
+    // Storing 'monthly' (not null) lets executeAndAdvance roll planned_date
+    // forward — a null left the loan row perpetually due and re-executable.
     if (is_loan) {
-      recurrence_pattern = null;
+      recurrence_pattern = 'monthly';
     }
 
     const params = [

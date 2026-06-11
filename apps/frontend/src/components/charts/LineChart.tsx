@@ -253,12 +253,16 @@ function Inner<Datum>({
                     {series.map((s, i) => {
                         const color = s.color ?? getChartColor(i);
                         const connectNulls = s.connectNulls !== false;
+                        // connectNulls=true → drop null points so the path runs
+                        // continuously through the remaining ones; false → keep
+                        // them and let `defined` (below) break the path at each
+                        // gap. These were inverted (true left gaps, false bridged).
                         const filtered = connectNulls
-                            ? (data as Datum[])
-                            : (data as Datum[]).filter((d) => {
+                            ? (data as Datum[]).filter((d) => {
                                   const v = s.accessor(d);
                                   return v != null && Number.isFinite(v);
-                              });
+                              })
+                            : (data as Datum[]);
                         return (
                             <motion.g
                                 key={s.key}

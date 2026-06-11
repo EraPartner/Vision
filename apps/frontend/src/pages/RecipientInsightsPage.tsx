@@ -8,7 +8,7 @@ import { BarChart, type BarSeries } from "@/components/charts";
 import { Skeleton } from "@/components/ui/skeleton";
 import { TrendingUp, TrendingDown, ArrowRight, Store, Hash, DollarSign, Filter } from "lucide-react";
 import { parseISO } from "@/components/shared/dateUtils";
-import { useSettings } from "@/contexts/SettingsContext";
+import { useExcludedIds } from "@/hooks/useExcludedIds";
 import { Badge } from "@/components/ui/badge";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { useAppSettings } from "@/contexts/AppSettingsContext";
@@ -38,30 +38,27 @@ export default function RecipientInsightsPage() {
     minimumFractionDigits: fractionDigits,
     maximumFractionDigits: fractionDigits,
   }).format(val), [locale, appSettings.defaultCurrency, appSettings.showDecimalPlaces]);
-  const { settings } = useSettings();
+  // Resolve exclusions (settings + hidden categories, alias-aware) and apply them
+  // SERVER-side. The old client-side filter matched raw settings ids against the
+  // server's alias-rolled-up primary ids (so excluding an alias did nothing) and
+  // ignored category/hidden-category exclusions entirely.
+  const { excludedCategoryIds, excludedRecipientIds: resolvedRecIds, exclusionsApply } = useExcludedIds('statistics');
+  const effectiveExcludedCatIds = exclusionsApply ? excludedCategoryIds : [];
+  const effectiveExcludedRecIds = exclusionsApply ? resolvedRecIds : [];
+
   const { data, isLoading, isError } = useQuery({
-    queryKey: ["recipient-insights", targetCurrency],
-    queryFn: () => apiClient.getRecipientInsights({ currency: targetCurrency }),
+    queryKey: ["recipient-insights", targetCurrency, effectiveExcludedCatIds, effectiveExcludedRecIds],
+    queryFn: () => apiClient.getRecipientInsights({
+      currency: targetCurrency,
+      excluded_category_ids: effectiveExcludedCatIds,
+      excluded_recipient_ids: effectiveExcludedRecIds,
+    }),
     staleTime: 60000,
   });
 
-  // Check if exclusions apply
-  const exclusionsApply = settings.exclusionScope === 'everywhere' || settings.exclusionScope === 'statistics';
-  const excludedRecipientIds = useMemo(
-    () => new Set(exclusionsApply ? settings.excludedRecipientIds : []),
-    [exclusionsApply, settings.excludedRecipientIds]
-  );
-
-  // Filter data based on excluded recipients
-  const filteredData = useMemo(() => {
-    if (!data) return null;
-    if (excludedRecipientIds.size === 0) return data;
-
-    return {
-      topMerchants: data.topMerchants.filter(m => !excludedRecipientIds.has(m.recipientId)),
-      monthOverMonth: data.monthOverMonth.filter(m => !excludedRecipientIds.has(m.recipientId)),
-    };
-  }, [data, excludedRecipientIds]);
+  // Server already applied exclusions — no client-side post-filter.
+  const filteredData = data;
+  const excludedCount = effectiveExcludedRecIds.length;
 
   const totalMerchants = filteredData?.topMerchants.length ?? 0;
   const [displayCount, setDisplayCount] = useState(pageSize);
@@ -174,10 +171,10 @@ export default function RecipientInsightsPage() {
         title={t('insights.title')}
         subtitle={t('insights.subtitle')}
         icon={Store}
-        actions={excludedRecipientIds.size > 0 ? (
+        actions={excludedCount > 0 ? (
           <Badge variant="secondary" className="gap-1.5">
             <Filter className="h-3 w-3" />
-            {t('insights.excluded', { n: excludedRecipientIds.size })}
+            {t('insights.excluded', { n: excludedCount })}
           </Badge>
         ) : undefined}
       />

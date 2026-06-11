@@ -37,6 +37,7 @@ import {
   getMonthlySpend,
   getTopRecipients,
   getTransactionsInRange,
+  getMonthlyCategoryBreakdown,
 } from '../src/services/aiChat/tools/expenses.js';
 import {
   getPortfolioHoldings,
@@ -169,6 +170,21 @@ describe('getMonthlySpend', () => {
   });
 });
 
+describe('getMonthlyCategoryBreakdown', () => {
+  it('buckets a local-midnight Date into its local month (pg DATE shape)', async () => {
+    // node-postgres returns DATE columns as a local-midnight Date; getUTC* put
+    // the 1st of a month into the previous month in a UTC+ zone. new Date(y,m,d)
+    // is local midnight, so toYmd reads it back deterministically in any TZ.
+    transactionRepository.getAll.mockResolvedValueOnce([
+      { amount: '-10', date: new Date(2026, 5, 1), category_name: 'FOOD:GROCERIES' },
+    ]);
+
+    const result = await getMonthlyCategoryBreakdown.run({ from: '2026-06-01', to: '2026-06-30' });
+
+    expect(result.data[0].month).toBe('2026-06'); // not 2026-05
+  });
+});
+
 describe('getPortfolioHoldings', () => {
   it('computes net units and market value per investment', async () => {
     investmentRepository.getAll.mockResolvedValueOnce([
@@ -201,6 +217,21 @@ describe('getPortfolioHoldings', () => {
     });
     expect(result.meta.renderAs).toBe('pie');
     expect(result.meta.totalPositions).toBe(2);
+  });
+
+  it('applies a stock split (split units = new post-split total)', async () => {
+    investmentRepository.getAll.mockResolvedValueOnce([
+      { id: 1, name: 'VWCE', symbol: 'VWCE', asset_class: 'etf', currency: 'EUR', current_price: '50.00' },
+    ]);
+    portfolioTransactionRepository.getAllByInvestmentIds.mockResolvedValueOnce([
+      { investment_id: 1, type: 'buy', units: '10' },
+      { investment_id: 1, type: 'split', units: '20' }, // 2:1 split → 20 total units
+    ]);
+
+    const result = await getPortfolioHoldings.run({});
+
+    // Before the fix the split was ignored → 10 units → marketValue 500 (half).
+    expect(result.data[0]).toMatchObject({ name: 'VWCE', units: 20, marketValue: 1000 });
   });
 
   it('passes assetClass filter through to repository', async () => {

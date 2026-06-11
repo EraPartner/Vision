@@ -9,13 +9,30 @@ import { parseCsvFile, buildRawRowString, parseAmountField } from './_shared.js'
 const NAME = 'generic';
 const BANK_LABEL = 'Generic';
 
+// Must mirror the formats offered by the import UI
+// (apps/frontend/src/features/imports/TransactionImportCard.tsx). Every entry
+// here is parsed via Date.UTC so a row never shifts a calendar day under a
+// server TZ east of UTC; an unsupported format is rejected up front (below)
+// rather than silently importing zero rows.
+const SUPPORTED_DATE_FORMATS = ['%Y-%m-%d', '%d/%m/%Y', '%m/%d/%Y', '%d-%m-%Y', '%Y-%m-%d %H:%M:%S'];
+
 function parseDate(dateStr, fmt) {
-  if (fmt.includes('%d/%m/%Y') || fmt === '%d/%m/%Y') {
+  if (fmt.includes('%d/%m/%Y')) {
     const [d, m, y] = dateStr.split('/').map((s) => parseInt(s, 10));
     return new Date(Date.UTC(y, m - 1, d));
   }
-  if (fmt.includes('%m/%d/%Y') || fmt === '%m/%d/%Y') {
+  if (fmt.includes('%m/%d/%Y')) {
     const [m, d, y] = dateStr.split('/').map((s) => parseInt(s, 10));
+    return new Date(Date.UTC(y, m - 1, d));
+  }
+  if (fmt.includes('%d-%m-%Y')) {
+    const [d, m, y] = dateStr.split('-').map((s) => parseInt(s, 10));
+    return new Date(Date.UTC(y, m - 1, d));
+  }
+  if (fmt.includes('%Y-%m-%d')) {
+    // Covers both '%Y-%m-%d' and '%Y-%m-%d %H:%M:%S' — parse the date part only,
+    // as UTC, so an early-morning timestamp can't roll back a day.
+    const [y, m, d] = dateStr.slice(0, 10).split('-').map((s) => parseInt(s, 10));
     return new Date(Date.UTC(y, m - 1, d));
   }
   return new Date(dateStr);
@@ -68,6 +85,16 @@ function rowToTransaction(row, config) {
 }
 
 export async function parseWithConfig(filePath, config) {
+  const dateFormat = config.date_format || '';
+  if (!SUPPORTED_DATE_FORMATS.includes(dateFormat)) {
+    // Fail fast and loudly: a chosen-but-unimplemented format previously fell
+    // through to `new Date(string)`, producing Invalid Date for every row and a
+    // silent zero-row "successful" import.
+    throw new Error(
+      `Unsupported date_format "${dateFormat}". Supported: ${SUPPORTED_DATE_FORMATS.join(', ')}`,
+    );
+  }
+
   const records = await parseCsvFile(
     filePath,
     {
@@ -81,16 +108,21 @@ export async function parseWithConfig(filePath, config) {
   );
 
   const transactions = [];
+  let skipped = 0;
   for (const row of records) {
     try {
       const tx = rowToTransaction(row, config);
       if (tx) transactions.push(tx);
+      else skipped++;
     } catch {
-      continue;
+      skipped++;
     }
   }
 
-  logger.info(`Generic CSV parsed: ${transactions.length} transactions`);
+  // Surface unparseable rows instead of silently dropping them (an all-rows-
+  // skipped import otherwise "succeeds" with 0 transactions and no signal).
+  transactions.skipped = skipped;
+  logger.info(`Generic CSV parsed: ${transactions.length} transactions, ${skipped} skipped`);
   return transactions;
 }
 

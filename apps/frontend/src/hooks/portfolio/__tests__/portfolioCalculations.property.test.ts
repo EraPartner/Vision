@@ -62,6 +62,28 @@ describe('calculateCostBasis', () => {
     expect(result.realizedGain).toBe(0);
   });
 
+  it('applies a split: units = new post-split total, cost basis unchanged', () => {
+    // buy 10 @100, 2:1 split (units=20). Before the fix, totalUnits stayed 10.
+    const txns = [
+      { type: 'buy', units: 10, amount: 1000, fees: 0, taxes: 0, date: '2026-01-01' },
+      { type: 'split', units: 20, amount: 0, fees: 0, taxes: 0, date: '2026-02-01' },
+    ] as unknown as Parameters<typeof calculateCostBasis>[0];
+    const r = calculateCostBasis(txns);
+    expect(r.totalUnits).toBe(20);
+    expect(r.totalCost).toBe(1000); // unchanged
+    expect(r.avgCostBasis).toBe(50); // 1000 / 20
+  });
+
+  it('return_of_capital reduces cost basis without changing units', () => {
+    const txns = [
+      { type: 'buy', units: 10, amount: 1000, fees: 0, taxes: 0, date: '2026-01-01' },
+      { type: 'return_of_capital', units: 0, amount: 100, fees: 0, taxes: 0, date: '2026-02-01' },
+    ] as unknown as Parameters<typeof calculateCostBasis>[0];
+    const r = calculateCostBasis(txns);
+    expect(r.totalUnits).toBe(10);
+    expect(r.totalCost).toBe(900); // 1000 − 100
+  });
+
   it('avgCostBasis >= 0 whenever totalUnits > 0', () => {
     fc.assert(
       fc.property(fc.array(arbBuy, { minLength: 1, maxLength: 10 }), (buys) => {

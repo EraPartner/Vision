@@ -8,6 +8,7 @@
 import { transactionRepository } from '../../../repositories/transactionRepository.js';
 import settings from '../../../config/config.js';
 import { toDecimal, roundToCents } from '../../../lib/money.js';
+import { toYmd } from '../../../utils/portfolioMath.js';
 import {
   requireDate,
   parsePositiveInt,
@@ -305,8 +306,10 @@ function aggregateByMonthCategory(rows, { topN }) {
     const amount = toDecimal(row.amount);
     if (amount.gte(0)) continue;
 
-    const d = row.date instanceof Date ? row.date : new Date(row.date);
-    const month = `${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, '0')}`;
+    // pg returns DATE columns as a local-midnight Date; getUTC* then reported
+    // the previous day in a UTC+ zone, landing the 1st of a month in the prior
+    // month's bucket. toYmd uses local getters for Dates and slices strings.
+    const month = toYmd(row.date).slice(0, 7);
     const category = categoryLabel(row);
 
     const monthMap = byMonth.get(month) || new Map();
@@ -504,8 +507,9 @@ export const getSpendTrendForCategory = {
       const amount = toDecimal(row.amount);
       if (amount.gte(0)) continue;
 
-      const d = row.date instanceof Date ? row.date : new Date(row.date);
-      const key = `${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, '0')}`;
+      // toYmd uses local getters for pg's local-midnight Date (getUTC* shifted
+      // a UTC+ zone's 1st-of-month into the previous month) and slices strings.
+      const key = toYmd(row.date).slice(0, 7);
       const entry = byMonth.get(key) || { bucket: key, total: toDecimal(0), count: 0 };
       entry.total = entry.total.plus(amount.abs());
       entry.count += 1;

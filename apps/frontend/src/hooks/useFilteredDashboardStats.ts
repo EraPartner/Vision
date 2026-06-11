@@ -52,15 +52,17 @@ export function useFilteredDashboardStats() {
     // run would omit hidden categories and momentarily show wrong totals.
     enabled: isReady,
     queryFn: async () => {
-      // Fetch total transaction count from the transaction-count endpoint.
-      // This card reflects the DB total independent of dashboard filtering.
-      const countData = await apiClient.getTransactionCount();
-
-      const envelope = await apiClient.getAggregationMonthlySummary({
-        excluded_category_ids: excludedCategoryIds.length > 0 ? excludedCategoryIds : undefined,
-        excluded_recipient_ids: excludedRecipientIds.length > 0 ? excludedRecipientIds : undefined,
-        currency: targetCurrency,
-      });
+      // The count (DB total, filter-independent) and the monthly summary have no
+      // data dependency — fetch concurrently so this hook (which gates the whole
+      // dashboard skeleton) doesn't pay an extra serial round-trip on every mount.
+      const [countData, envelope] = await Promise.all([
+        apiClient.getTransactionCount(),
+        apiClient.getAggregationMonthlySummary({
+          excluded_category_ids: excludedCategoryIds.length > 0 ? excludedCategoryIds : undefined,
+          excluded_recipient_ids: excludedRecipientIds.length > 0 ? excludedRecipientIds : undefined,
+          currency: targetCurrency,
+        }),
+      ]);
 
       // Use the most recent month with data to keep cards aligned with actual latest activity.
       const monthsWithData = envelope.data.months

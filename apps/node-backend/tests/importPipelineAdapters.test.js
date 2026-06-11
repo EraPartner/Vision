@@ -19,6 +19,7 @@ vi.mock('../src/config/logger.js', () => ({
 import { parse as parseBnp } from '../src/services/importPipeline/adapters/bnp.js';
 import { parse as parseIng } from '../src/services/importPipeline/adapters/ing.js';
 import { parse as parseGeneric } from '../src/services/importPipeline/adapters/generic.js';
+import { parse as parseWise } from '../src/services/importPipeline/adapters/wise.js';
 
 const tmpFiles = [];
 function writeTempCSV(prefix, content) {
@@ -124,5 +125,81 @@ describe('generic adapter — configurable mapping', () => {
     await expect(parseGeneric(writeTempCSV('generic', 'Date,Amount\n1/1/2025,1'))).rejects.toThrow(
       /requires a customConfig/,
     );
+  });
+
+  it('parses %d-%m-%Y dates (previously silently imported zero rows)', async () => {
+    const cfg = { ...config, date_format: '%d-%m-%Y' };
+    const csv = [
+      'Date,Amount,Payee,Note,Cur',
+      '31-12-2024,"-10,00",SHOP,x,EUR',
+      '01-01-2025,"20,00",EMP,y,EUR',
+    ].join('\n');
+    const txns = await parseGeneric(writeTempCSV('generic', csv), cfg);
+
+    expect(txns).toHaveLength(2);
+    expect(txns[0].date.toISOString().slice(0, 10)).toBe('2024-12-31');
+    expect(txns[1].date.toISOString().slice(0, 10)).toBe('2025-01-01');
+  });
+
+  it('parses %Y-%m-%d %H:%M:%S as a UTC calendar day (no early-morning day-shift)', async () => {
+    const cfg = { ...config, date_format: '%Y-%m-%d %H:%M:%S' };
+    const csv = ['Date,Amount,Payee,Note,Cur', '2024-12-31 00:30:00,"5,00",X,n,EUR'].join('\n');
+    const txns = await parseGeneric(writeTempCSV('generic', csv), cfg);
+
+    expect(txns).toHaveLength(1);
+    expect(txns[0].date.toISOString().slice(0, 10)).toBe('2024-12-31');
+  });
+
+  it('reports a skipped count for unparseable rows instead of dropping them silently', async () => {
+    const csv = [
+      'Date,Amount,Payee,Note,Cur',
+      '24/11/2025,"-10,00",SHOP,x,EUR',  // good
+      ',"-5,00",NO_DATE,y,EUR',          // bad: empty date → skipped
+    ].join('\n');
+    const txns = await parseGeneric(writeTempCSV('generic', csv), config);
+
+    expect(txns).toHaveLength(1);
+    expect(txns.skipped).toBe(1);
+  });
+
+  it('rejects an unsupported date_format instead of importing zero rows', async () => {
+    const cfg = { ...config, date_format: '%d.%m.%Y' };
+    await expect(
+      parseGeneric(writeTempCSV('generic', 'Date,Amount,Payee,Note,Cur\n31.12.2024,"-10,00",S,x,EUR'), cfg),
+    ).rejects.toThrow(/Unsupported date_format/);
+  });
+});
+
+describe('wise adapter — cross-currency direction', () => {
+  const HEADER =
+    'Status,Finished on,Direction,Source amount (after fees),Source currency,Target amount (after fees),Target currency,Source name,Target name,Reference';
+
+  it('books a cross-currency OUT transfer on the source (your) side', async () => {
+    // You send 100 EUR, recipient gets 108 USD → −100 on WISE EUR, not −108 USD.
+    const csv = [HEADER, 'COMPLETED,2024-12-31,OUT,100,EUR,108,USD,Me,Shop,Payment'].join('\n');
+    const txns = await parseWise(writeTempCSV('wise', csv));
+
+    expect(txns).toHaveLength(1);
+    expect(txns[0].amount).toBe(-100);
+    expect(txns[0].currency).toBe('EUR');
+    expect(txns[0].bankAccount).toBe('WISE EUR');
+  });
+
+  it('books a cross-currency IN transfer on the target (your) side', async () => {
+    const csv = [HEADER, 'COMPLETED,2024-12-31,IN,100,USD,90,EUR,Sender,Me,Salary'].join('\n');
+    const txns = await parseWise(writeTempCSV('wise', csv));
+
+    expect(txns).toHaveLength(1);
+    expect(txns[0].amount).toBe(90);
+    expect(txns[0].currency).toBe('EUR');
+    expect(txns[0].bankAccount).toBe('WISE EUR');
+  });
+
+  it('parses an early-morning timestamp as a UTC calendar day (no day-shift)', async () => {
+    const csv = [HEADER, 'COMPLETED,2024-12-31 00:30:00,IN,0,EUR,90,EUR,Sender,Me,Salary'].join('\n');
+    const txns = await parseWise(writeTempCSV('wise', csv));
+
+    expect(txns).toHaveLength(1);
+    expect(txns[0].date.toISOString().slice(0, 10)).toBe('2024-12-31');
   });
 });

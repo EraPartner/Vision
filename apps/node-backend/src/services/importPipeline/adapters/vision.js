@@ -68,16 +68,19 @@ export async function parse(filePath) {
   });
 
   const transactions = [];
+  let skipped = 0;
   for (const row of records) {
     try {
       const tx = rowToTransaction(row);
       if (tx) transactions.push(tx);
+      else skipped++;
     } catch {
-      continue;
+      skipped++;
     }
   }
+  transactions.skipped = skipped;
 
-  logger.info(`Vision CSV parsed: ${transactions.length} transactions`);
+  logger.info(`Vision CSV parsed: ${transactions.length} transactions, ${skipped} skipped`);
   return transactions;
 }
 

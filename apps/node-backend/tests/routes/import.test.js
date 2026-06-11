@@ -893,22 +893,8 @@ describe('Import Routes', () => {
   });
 
   // ──────────────────────────────────────────
-  // GET /api/import/supported-banks
-  // ──────────────────────────────────────────
-  describe('GET /supported-banks', () => {
-    it('should return supported banks', async () => {
-      const req = {};
-      const res = mockResponse();
-      await routeHandlers['get:/supported-banks'](req, res);
-
-      const body = res.json.mock.calls[0][0];
-      expect(body.data.banks).toBeDefined();
-      expect(body.data.total).toBe(3);
-      expect(body.data.banks).toContain('Belfius');
-      expect(body.data.banks).toContain('Kbc');
-      expect(body.data.banks).toContain('Revolut');
-    });
-  });
+  // GET /api/import/supported-banks was removed (dead route; adapter catalog is
+  // served from /api/info/supported-adapters, registry-derived — see info.test.js).
 });
 
 describe('Saved custom parser routes', () => {

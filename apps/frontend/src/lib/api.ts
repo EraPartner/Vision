@@ -114,12 +114,11 @@ export const apiClient = {
     updatePortfolioTransaction: port.updatePortfolioTransaction,
     deletePortfolioTransaction: port.deletePortfolioTransaction,
 
-    // Info / statistics
-    getStatistics: info.getStatistics,
+    // Info / statistics (getStatistics + getTransactionSummary removed — Phase 9
+    // cutover deleted the legacy /api/info and /transaction-summary routes)
     getSupportedParsers: info.getSupportedParsers,
     getBanks: info.getBanks,
     getDistinctBankAccounts: info.getDistinctBankAccounts,
-    getTransactionSummary: info.getTransactionSummary,
     getTransactionCount: info.getTransactionCount,
     getCashflowComparison: (params?: Parameters<typeof agg.getAggregationCashflowComparison>[0]) =>
         agg.getAggregationCashflowComparison(params).then(r => r.data),

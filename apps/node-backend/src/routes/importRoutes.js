@@ -8,7 +8,6 @@ import multer from 'multer';
 import fs from 'fs';
 import os from 'os';
 import path from 'path';
-import { getSupportedBanks } from '../services/bankAdapters.js';
 import { importRecipientsCSV, importCategoriesCSV } from '../services/dataImportService.js';
 import { logger } from '../config/logger.js';
 import { runImportPipeline, commitImport } from '../services/importPipeline/index.js';
@@ -373,14 +372,10 @@ router.post('/csv/stream', upload.single('file'), async (req, res) => {
   }
 });
 
-// GET /api/import/supported-banks
-router.get('/supported-banks', (req, res) => {
-  const banks = getSupportedBanks();
-  res.ok({
-    banks: banks.map(b => b.charAt(0).toUpperCase() + b.slice(1)),
-    total: banks.length,
-  });
-});
+// (Removed dead GET /api/import/supported-banks — it had zero frontend callers
+// and returned capitalized internal names that never matched the display list.
+// The adapter catalog is served from /api/info/supported-adapters, derived from
+// the registry, which is the single source of truth.)
 
 // POST /api/import/recipients
 router.post('/recipients', upload.single('file'), async (req, res) => {

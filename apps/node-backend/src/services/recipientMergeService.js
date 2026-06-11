@@ -122,6 +122,20 @@ export async function mergeRecipients(primaryId, aliasIds) {
       [primaryId, ids],
     );
 
+    // 5b. Re-point any GRANDCHILDREN — recipients whose primary_recipient_id was
+    // one of the now-merged aliases — onto the new primary. Without this, merging
+    // C→B then B→A leaves C pointing at B (a depth-2 chain) that the one-level
+    // read layer (getAliases, recipientGroupId filter) cannot resolve, so C
+    // vanishes from A's group and future imports of C divert away from A.
+    await client.query(
+      `UPDATE recipients
+          SET primary_recipient_id = $1,
+              updated_at = NOW()
+        WHERE primary_recipient_id = ANY($2::int[])
+          AND id <> $1`,
+      [primaryId, ids],
+    );
+
     return {
       mergedAliasIds: aliasRes.rows.map((r) => r.id),
       reassigned: {

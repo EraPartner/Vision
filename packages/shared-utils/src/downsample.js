@@ -19,11 +19,17 @@ export function downsampleLTTB(data, threshold, getX = (_item, i) => i, getY) {
   let prevSelectedIndex = 0;
 
   for (let i = 0; i < threshold - 2; i++) {
-    const bucketStart = Math.floor((i + 1) * bucketSize) + 1;
-    const bucketEnd = Math.min(Math.floor((i + 2) * bucketSize) + 1, len - 1);
+    // Standard LTTB: the selection bucket for output point i is
+    // [floor(i*b)+1, floor((i+1)*b)+1) and the apex is averaged over the *next*
+    // bucket [floor((i+1)*b)+1, floor((i+2)*b)+1). The windows must NOT be
+    // shifted forward — doing so makes the first bucket after data[0]
+    // unselectable (a spike there is dropped) and collapses the last iteration
+    // onto data[len-1], duplicating the final point pushed below.
+    const bucketStart = Math.floor(i * bucketSize) + 1;
+    const bucketEnd = Math.min(Math.floor((i + 1) * bucketSize) + 1, len - 1);
 
-    const nextBucketStart = Math.floor((i + 2) * bucketSize) + 1;
-    const nextBucketEnd = Math.min(Math.floor((i + 3) * bucketSize) + 1, len - 1);
+    const nextBucketStart = Math.floor((i + 1) * bucketSize) + 1;
+    const nextBucketEnd = Math.min(Math.floor((i + 2) * bucketSize) + 1, len - 1);
 
     let avgX = 0;
     let avgY = 0;

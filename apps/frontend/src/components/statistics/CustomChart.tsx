@@ -40,7 +40,9 @@ function formatPeriod(period: string, bucket: 'monthly' | 'yearly'): string {
 
 function parseDate(period: string, bucket: 'monthly' | 'yearly'): Date {
   try {
-    return bucket === 'yearly' ? parseISO(`${period}-01-01`) : parseISO(`${period}-01`);
+    // Slice the year first so a stray 'YYYY-MM' key under a yearly bucket can't
+    // produce 'YYYY-MM-01-01' → Invalid Date (which blanked yearly line/area charts).
+    return bucket === 'yearly' ? parseISO(`${period.slice(0, 4)}-01-01`) : parseISO(`${period}-01`);
   } catch {
     return new Date();
   }
@@ -74,10 +76,22 @@ export function CustomChart({ savedChart, data, onEdit, onDelete }: CustomChartP
   // against category_ids on every row.
   const catData = useMemo(() => {
     const selected = new Set(savedChart.category_ids);
-    return data.categoryPivot.filter(
+    const filtered = data.categoryPivot.filter(
       (c) => c.categoryId !== null && selected.has(c.categoryId)
     );
-  }, [data.categoryPivot, savedChart.category_ids]);
+    if (bucket !== 'yearly') return filtered;
+    // The category pivot only ever returns monthly ('YYYY-MM') keys, but recipient
+    // data respects the saved bucket ('YYYY' for yearly). Re-bucket category months
+    // to year keys so both sources share keys and yearly charts aren't blank.
+    return filtered.map((c) => {
+      const months: Record<string, number> = {};
+      for (const [p, v] of Object.entries(c.months)) {
+        const y = p.slice(0, 4);
+        months[y] = (months[y] ?? 0) + v;
+      }
+      return { ...c, months };
+    });
+  }, [data.categoryPivot, savedChart.category_ids, bucket]);
 
   // Collect all periods from both sources, apply date filter
   const allPeriods = useMemo(() => {
@@ -92,13 +106,17 @@ export function CustomChart({ savedChart, data, onEdit, onDelete }: CustomChartP
 
     let periods = Array.from(periodSet).sort();
 
+    // Compare each period against the date bound on a COMMON prefix: yearly
+    // periods are 'YYYY' (length 4), monthly 'YYYY-MM' (length 7). Slicing the
+    // bound to 7 always made a yearly '2026' < '2026-01' lexicographically, so a
+    // yearly chart silently dropped its own start year.
     if (savedChart.date_range_start) {
-      const start = savedChart.date_range_start.slice(0, 7); // YYYY-MM or YYYY
-      periods = periods.filter((p) => p >= start);
+      const s = savedChart.date_range_start;
+      periods = periods.filter((p) => p >= (p.length === 4 ? s.slice(0, 4) : s.slice(0, 7)));
     }
     if (savedChart.date_range_end) {
-      const end = savedChart.date_range_end.slice(0, 7);
-      periods = periods.filter((p) => p <= end);
+      const e = savedChart.date_range_end;
+      periods = periods.filter((p) => p <= (p.length === 4 ? e.slice(0, 4) : e.slice(0, 7)));
     }
 
     return periods;

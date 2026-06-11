@@ -128,7 +128,14 @@ export default function StocksPage({
 
         poolUnits -= sellUnits;
         poolCostEur -= costOfSoldEur;
+      } else if (txn.type === 'split' && units > 0 && poolUnits > 0) {
+        // units = new TOTAL post-split; EUR cost pool is unchanged (mirrors the
+        // backend). Scaling only the unit count keeps avg-cost-per-unit correct.
+        poolUnits = units;
+      } else if (txn.type === 'return_of_capital' && poolUnits > 0) {
+        poolCostEur = Math.max(0, poolCostEur - amount * txnRateToEur);
       }
+      // merger/spinoff are cost-basis-neutral — no change to pool.
     }
 
     poolCostEur = Math.max(0, poolCostEur);
@@ -152,10 +159,16 @@ export default function StocksPage({
         continue;
       }
 
+      // True unrealized % = unrealizedGain / cost-of-held-units (a currency-free
+      // ratio). Previously used gainLossPercent, which is total-return (incl.
+      // dividends + realized) — wrong label for an "unrealized %" column. This
+      // branch is currently unreachable (enableFxAwarePnl defaults true) but kept
+      // correct in case a caller ever opts out.
+      const heldCost = (Number(holding.avgCostBasis) || 0) * (Number(holding.totalUnits) || 0);
       map[holding.id] = {
         realizedTarget: convertToTarget(holding.realizedGain, holding.currency),
         unrealizedTarget: convertToTarget(holding.unrealizedGain, holding.currency),
-        unrealizedPercent: Number(holding.gainLossPercent) || 0,
+        unrealizedPercent: heldCost > 0 ? ((Number(holding.unrealizedGain) || 0) / heldCost) * 100 : 0,
       };
     }
     return map;
@@ -169,6 +182,8 @@ export default function StocksPage({
       acc.totalDividends += convertToTarget(holding.totalDividends, holding.currency);
       acc.totalFees += convertToTarget(holding.totalFees, holding.currency);
       acc.totalTaxes += convertToTarget(holding.totalTaxes, holding.currency);
+      acc.feeTransactions += convertToTarget(holding.feeTransactions ?? 0, holding.currency);
+      acc.taxTransactions += convertToTarget(holding.taxTransactions ?? 0, holding.currency);
       return acc;
     }, {
       totalValue: 0,
@@ -177,6 +192,8 @@ export default function StocksPage({
       totalDividends: 0,
       totalFees: 0,
       totalTaxes: 0,
+      feeTransactions: 0,
+      taxTransactions: 0,
     });
   }, [holdings, displayedPnlByHoldingId, convertToTarget]);
 
@@ -187,8 +204,14 @@ export default function StocksPage({
     totalDividends,
     totalFees,
     totalTaxes,
+    feeTransactions,
+    taxTransactions,
   } = totals;
-  const netGain = totalRealizedGain + totalUnrealizedGain + totalDividends - totalFees - totalTaxes;
+  // realized/unrealized (from the FX-aware pool) already net the per-row
+  // fees/taxes columns into cost/proceeds, so net gain subtracts ONLY standalone
+  // fee/tax transaction rows. Subtracting totalFees/totalTaxes double-counted the
+  // per-row columns. (totalFees/totalTaxes remain for the fees-&-taxes display card.)
+  const netGain = totalRealizedGain + totalUnrealizedGain + totalDividends - feeTransactions - taxTransactions;
 
   if (isLoading) {
     return (

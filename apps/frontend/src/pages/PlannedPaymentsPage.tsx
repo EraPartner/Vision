@@ -18,6 +18,7 @@ import { differenceInDays, formatDateStringWithAppSettings, toYmd } from "@/comp
 import { usePlannedPayments, type PlannedPayment } from "@/hooks/usePlannedPayments";
 import { useLanguage } from '@/contexts/LanguageContext';
 import { useAppSettings } from "@/contexts/AppSettingsContext";
+import { useCurrencyConverter } from "@/hooks/useCurrencyConverter";
 import { useConfirmDialog } from "@/hooks/useConfirmDialog";
 
 const FREQ_LABEL_KEYS: Record<string, string> = {
@@ -69,6 +70,7 @@ type TableRow = PlannedPayment & { _idx: number } & Record<string, unknown>;
 export default function PlannedPaymentsPage() {
   const { t } = useLanguage();
   const { appSettings } = useAppSettings();
+  const { convertToTarget } = useCurrencyConverter(appSettings.defaultCurrency || "EUR");
 
   const [showAll, setShowAll] = useState(false);
   const { payments, addPayment, updatePayment, deletePayment, toggleActive, executePayment, loading, error } = usePlannedPayments(showAll);
@@ -89,7 +91,9 @@ export default function PlannedPaymentsPage() {
 
   const totalMonthly = useMemo(() => {
     return payments
-      .filter((p) => p.is_active && p.is_recurring)
+      // "Est. monthly" = committed monthly OUTGOINGS, so only expense rows
+      // (amount < 0). Counting |income| (e.g. a +2000 salary) inflated the card.
+      .filter((p) => p.is_active && p.is_recurring && p.amount < 0)
       .reduce((sum, p) => {
         const mult =
           p.frequency === "daily" ? 30 :
@@ -99,9 +103,11 @@ export default function PlannedPaymentsPage() {
                   p.frequency === "quarterly" ? 1 / 3 :
                     p.frequency === "yearly" ? 1 / 12 :
                       p.frequency === "custom" && p.custom_interval_days ? 30 / p.custom_interval_days : 1;
-        return sum + Math.abs(p.amount) * mult;
+        // Convert each row's amount to the display currency before summing —
+        // raw summation counted a 500 USD subscription as 500 in the default currency.
+        return sum + Math.abs(convertToTarget(p.amount, p.currency)) * mult;
       }, 0);
-  }, [payments]);
+  }, [payments, convertToTarget]);
 
   const upcoming = useMemo(() => {
     const today = new Date();

@@ -131,13 +131,9 @@ router.get('/:key', async (req, res) => {
   res.ok({ key, value });
 });
 
-router.put('/:key', async (req, res) => {
-  const { key } = req.params;
-  const { value } = req.body;
-
-  assertSettingKeyLength(key);
-  if (value === undefined) throw new ValidationError('Missing "value" in request body');
-
+// Per-key value validation shared by the single-key and bulk handlers so the
+// bulk endpoint can't bypass the rules the single-key endpoint enforces.
+function validateSettingValue(key, value) {
   if (key === 'dashboard_settings') {
     assertDashboardSettingsValue(value, {
       validateExcludeHiddenCategories: true,
@@ -150,6 +146,16 @@ router.put('/:key', async (req, res) => {
       throw new ValidationError(`Invalid cost_basis_method. Allowed: ${ALLOWED_COST_BASIS_METHODS.join(', ')}`);
     }
   }
+}
+
+router.put('/:key', async (req, res) => {
+  const { key } = req.params;
+  const { value } = req.body;
+
+  assertSettingKeyLength(key);
+  if (value === undefined) throw new ValidationError('Missing "value" in request body');
+
+  validateSettingValue(key, value);
 
   const result = await settingsRepository.set(key, value);
   res.ok(result);
@@ -164,8 +170,7 @@ router.put('/', async (req, res) => {
   for (const key of Object.keys(settings)) assertSettingKeyLength(key, true);
 
   for (const [key, value] of Object.entries(settings)) {
-    if (key === 'dashboard_settings') assertDashboardSettingsValue(value);
-    if (key === 'theme_settings') assertThemeSettingsValue(value);
+    validateSettingValue(key, value);
   }
 
   await settingsRepository.setMany(settings);
