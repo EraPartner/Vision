@@ -361,7 +361,6 @@ function RecentRecipientTransactionsTable({ recipientId, recipientName }: { reci
     const navigate = useNavigate();
     const { t } = useLanguage();
     const { appSettings } = useAppSettings();
-    const locale = numberFormatToLocale(appSettings.numberFormat);
     const [allItems, setAllItems] = useState<Transaction[]>([]);
     const [totalItems, setTotalItems] = useState(0);
     const [isFetchingMore, setIsFetchingMore] = useState(false);
@@ -462,7 +461,7 @@ function RecentRecipientTransactionsTable({ recipientId, recipientName }: { reci
             header: t('txPage.field.bankAccount'),
             minWidth: 160,
         },
-    ], [t, appSettings.dateFormat, locale]);
+    ], [t, appSettings.dateFormat]);
 
     if (isLoading) {
         return <Skeleton className="h-[320px]" />;

@@ -154,9 +154,11 @@ export async function warmCache() {
     };
 
     const ecbCount  = ecbRates  ? Object.keys(ecbRates).length  - 1 : 0;
-    const erarCount = erarRates ? Object.keys(erarRates).length - 1 : 0;
     const totalCount = Object.keys(mergedRates).length - 1;
-    logger.info(`Merged exchange rates: ${ecbCount} from ECB + ${erarCount - ecbCount} supplementary = ${totalCount} total`);
+    // Supplementary = er-api currencies that survived the ECB-priority merge,
+    // i.e. total minus ECB (not erarCount − ecbCount, which miscounted when
+    // the two sources didn't fully overlap).
+    logger.info(`Merged exchange rates: ${ecbCount} from ECB + ${totalCount - ecbCount} supplementary = ${totalCount} total`);
 
     liveFallbackRates = mergedRates;
     await saveToDatabase(mergedRates);

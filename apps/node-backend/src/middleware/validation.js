@@ -106,6 +106,17 @@ export function validateDateString(value, fieldName = 'date') {
 }
 
 /**
+ * Throwing variant of validateDateString for route input: returns the value
+ * (or null when empty) and raises ValidationError on malformed input, so a
+ * `?start_date=banana` becomes a 400 instead of a Postgres cast error → 500.
+ */
+export function assertYmd(value, fieldName = 'date') {
+  const result = validateDateString(value, fieldName);
+  if (!result.valid) throw new ValidationError(result.error);
+  return result.value;
+}
+
+/**
  * Validate pagination parameters.
  */
 export function validatePagination(limit, offset) {

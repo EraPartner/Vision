@@ -69,7 +69,10 @@ export interface InvestmentSummary {
   symbol?: string;
   assetClass: AssetClass;
   asset_class: AssetClass;
+  /** Display currency of every monetary field below (the app's target currency). */
   currency: string;
+  /** The investment's native currency, preserved for labelling (mirrors backend). */
+  originalCurrency?: string;
   currentPrice?: number;
   current_price?: number;
   interestRate?: number;

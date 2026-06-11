@@ -7,6 +7,7 @@
 
 import { computeMetrics, computeHeatmap } from '../../services/portfolioPerformanceSnapshotService.js';
 import { getPortfolioSummary } from '../../services/portfolio/portfolioSummaryService.js';
+import { todayAppDateString, addDaysYmd } from '../../lib/timezone.js';
 import { toYmd, sanitizeIsolatedValueSpikes } from '../../utils/portfolioMath.js';
 import { toDecimal, toNumber } from '../../lib/money.js';
 import {
@@ -48,9 +49,7 @@ export function mapPortfolioPerformanceSnapshot(snapshot) {
 function filterSnapshotsByPeriod(snapshots, period) {
   if (!period || period === 'all' || !PERIOD_OFFSETS[period]) return snapshots;
   const daysBack = PERIOD_OFFSETS[period];
-  const cutoff = new Date();
-  cutoff.setDate(cutoff.getDate() - daysBack);
-  const cutoffStr = cutoff.toISOString().slice(0, 10);
+  const cutoffStr = addDaysYmd(todayAppDateString(), -daysBack);
   return snapshots.filter(s => {
     const date = toYmd(s.snapshot_date);
     return date >= cutoffStr;

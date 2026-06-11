@@ -4,7 +4,7 @@
 
 import { cleanRecipientName, normalizeToUppercase } from '../../textNormalization.js';
 import { logger } from '../../../config/logger.js';
-import { parseCsvFile, buildOptionalComment, buildRawRowString, parseDecimalSafe } from './_shared.js';
+import { parseCsvFile, buildOptionalComment, buildRawRowString, parseDecimalSafe, parseDateFlexibleUtc } from './_shared.js';
 
 const NAME = 'vision';
 const BANK_LABEL = 'Vision';
@@ -13,8 +13,8 @@ function rowToTransaction(row) {
   const dateStr = (row['Date'] || '').trim();
   if (!dateStr) return null;
 
-  const date = new Date(dateStr);
-  if (isNaN(date.getTime())) return null;
+  const date = parseDateFlexibleUtc(dateStr);
+  if (!date) return null;
 
   const amountStr = (row['Amount'] || '').replace(/[€$£,\s]/g, '').trim();
   const amount = parseDecimalSafe(amountStr);

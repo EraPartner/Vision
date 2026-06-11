@@ -11,7 +11,7 @@ import { isManualDuplicate, recordManualRawTransaction } from '../services/dedup
 import { convertRowsToEur } from '../services/currency/currencyConversionService.js';
 import { normalizeForMatching } from '../services/textNormalization.js';
 import { logger } from '../config/logger.js';
-import { validateIdParam } from '../middleware/validation.js';
+import { validateIdParam, assertYmd } from '../middleware/validation.js';
 import { rateLimiter } from '../middleware/rateLimiter.js';
 import { scheduleRefresh } from '../services/materializedViewService.js';
 import {
@@ -60,8 +60,8 @@ function parseTransactionListQuery(query) {
     limit: Math.max(1, Math.min(parseInt(limit, 10) || 50, 5000)),
     offset: Math.max(0, parseInt(offset, 10) || 0),
     transactionId: transaction_id ? parseInt(transaction_id, 10) : null,
-    startDate: start_date || null,
-    endDate: end_date || null,
+    startDate: assertYmd(start_date, 'start_date'),
+    endDate: assertYmd(end_date, 'end_date'),
     bankAccount: bank_account || null,
     categoryId: category_id ? parseInt(category_id, 10) : null,
     categoryIds: parsedCategoryIds?.length ? parsedCategoryIds : null,

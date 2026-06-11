@@ -8,6 +8,7 @@
 import { query } from '../../database/connection.js';
 import { convertWithRates, loadCurrentRates } from '../currency/currencyConversionService.js';
 import { getTaxTable } from './belgianTaxTables.js';
+import { todayAppDateString, firstOfMonthYmd } from '../../lib/timezone.js';
 import { logger } from '../../config/logger.js';
 
 /**
@@ -39,29 +40,31 @@ function unwrap(result, label) {
  * @returns {{ taxYear: number; startDate: string; endDate: string; periodNote: string | null }}
  */
 export function periodToTaxContext(period) {
-  const now = new Date();
-  const currentYear = now.getFullYear();
+  // APP_TIMEZONE calendar day + pure string math (see periodToDateRange in
+  // dataFetcherPortfolio.js — same day-shift class).
+  const today = todayAppDateString();
+  const currentYear = Number(today.slice(0, 4));
 
   switch (period.kind) {
     case 'ytd':
-      return { taxYear: currentYear, startDate: `${currentYear}-01-01`, endDate: now.toISOString().slice(0, 10), periodNote: null };
+      return { taxYear: currentYear, startDate: `${currentYear}-01-01`, endDate: today, periodNote: null };
 
     case 'year':
       return { taxYear: period.year, startDate: `${period.year}-01-01`, endDate: `${period.year}-12-31`, periodNote: null };
 
     case 'rolling': {
       // Use current year; add note that period may span two calendar years
-      const start = new Date(now.getFullYear(), now.getMonth() - period.months + 1, 1);
-      const startYear = start.getFullYear();
+      const startDate = firstOfMonthYmd(today, -(period.months - 1));
+      const startYear = Number(startDate.slice(0, 4));
       const note = startYear !== currentYear
         ? `Rolling ${period.months}-month window spans ${startYear}–${currentYear}; brackets use ${currentYear} rates.`
         : null;
-      return { taxYear: currentYear, startDate: start.toISOString().slice(0, 10), endDate: now.toISOString().slice(0, 10), periodNote: note };
+      return { taxYear: currentYear, startDate, endDate: today, periodNote: note };
     }
 
     case 'custom': {
-      const fromYear = new Date(period.from).getFullYear();
-      const toYear   = new Date(period.to).getFullYear();
+      const fromYear = Number(String(period.from).slice(0, 4));
+      const toYear   = Number(String(period.to).slice(0, 4));
       const taxYear  = fromYear;
       const note = fromYear !== toYear
         ? `Custom date range spans ${fromYear}–${toYear}; brackets use ${fromYear} rates.`

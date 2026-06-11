@@ -14,6 +14,10 @@
       "types": "./src/money.d.ts",
       "default": "./src/money.js"
     },
+    "./portfolio": {
+      "types": "./src/portfolio.d.ts",
+      "default": "./src/portfolio.js"
+    },
     "./slugify": {
       "types": "./src/slugify.d.ts",
       "default": "./src/slugify.js"

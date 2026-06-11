@@ -12,19 +12,29 @@
 
 import { query } from '../../database/connection.js';
 import { convertToCurrency } from '../currency/currencyConversionService.js';
-import {
-  calculateCostBasis,
-  calculateAccruedInterest,
-  projectedAnnualInterest as calculateProjectedAnnualInterest,
-} from '../../utils/portfolioMath.js';
+import { buildInvestmentSummaryCore } from '@vision/shared-utils/portfolio';
+import { settingsRepository } from '../../repositories/settingsRepository.js';
+import { todayAppDateString } from '../../lib/timezone.js';
 import { toDecimal, addAll, multiply, divide, roundMoney } from '../../lib/money.js';
-
-const UNIT_BASED_CLASSES = new Set(['stock', 'etf', 'crypto', 'metals']);
-const FIXED_INCOME_CLASSES = new Set(['savings', 'bond']);
-const REAL_ESTATE_CLASS = 'real_estate';
 
 const round2 = (value) => roundMoney(value, 2);
 const round6 = (value) => roundMoney(value, 6);
+
+const COST_BASIS_METHODS = new Set(['weighted_avg', 'fifo', 'lifo']);
+
+/**
+ * Resolve the user's configured cost-basis method (Settings → General).
+ * Falls back to weighted_avg on missing/invalid values or repository errors —
+ * a summary must never fail because a setting row is malformed.
+ */
+async function resolveCostBasisMethod() {
+  try {
+    const value = await settingsRepository.get('cost_basis_method');
+    return COST_BASIS_METHODS.has(value) ? value : 'weighted_avg';
+  } catch {
+    return 'weighted_avg';
+  }
+}
 
 /**
  * Fetch active investments and their transactions, then compute per-investment
@@ -35,6 +45,9 @@ const round6 = (value) => roundMoney(value, 6);
  */
 export async function getPortfolioSummary(targetCurrency = 'EUR') {
   const target = (targetCurrency || 'EUR').toUpperCase();
+
+  const costBasisMethod = await resolveCostBasisMethod();
+  const todayYmd = todayAppDateString();
 
   const [investmentsResult, txnResult] = await Promise.all([
     query(`
@@ -84,7 +97,10 @@ export async function getPortfolioSummary(targetCurrency = 'EUR') {
   );
 
   const summaries = investmentsResult.rows.map((inv) =>
-    buildInvestmentSummary(inv, txnsByInvestment.get(Number(inv.id)) ?? [], target, multiplierByCurrency)
+    buildInvestmentSummary(inv, txnsByInvestment.get(Number(inv.id)) ?? [], target, multiplierByCurrency, {
+      costBasisMethod,
+      todayYmd,
+    })
   );
 
   const totals = aggregateTotals(summaries);
@@ -101,149 +117,42 @@ export async function getPortfolioSummary(targetCurrency = 'EUR') {
  * Compute a rich summary for a single investment, with all monetary fields
  * pre-converted to targetCurrency.
  *
+ * The math lives in @vision/shared-utils/portfolio (buildInvestmentSummaryCore)
+ * and is shared verbatim with the frontend hook — only FX conversion, rounding
+ * and response shaping happen here.
+ *
  * @param {object} inv  raw investment row
  * @param {Array}  txns transaction rows for this investment
  * @param {string} targetCurrency
  * @param {Map<string, number>} multiplierByCurrency  FX multiplier per investment currency
+ * @param {{ costBasisMethod: string, todayYmd: string }} opts
  */
-function buildInvestmentSummary(inv, txns, targetCurrency, multiplierByCurrency) {
-  const isUnitBased = UNIT_BASED_CLASSES.has(inv.asset_class);
-  const isFixedIncome = FIXED_INCOME_CLASSES.has(inv.asset_class);
-  const isRealEstate = inv.asset_class === REAL_ESTATE_CLASS;
-
-  // All running sums are kept as Decimal — IEEE-754 drift on money paths
-  // compounds across many transactions before the single round-on-emit below.
-  let totalDividends = toDecimal(0);
-  let totalInterestPaid = toDecimal(0);
-  let totalRent = toDecimal(0);
-  let totalAppreciation = toDecimal(0);
-  let totalBuyAmount = toDecimal(0);
-  let totalBuyOrGiftAmount = toDecimal(0);
-  let totalSellAmount = toDecimal(0);
-  let feeTxnAmount = toDecimal(0);
-  let taxTxnAmount = toDecimal(0);
-  let feesFieldAmount = toDecimal(0);
-  let taxesFieldAmount = toDecimal(0);
-
-  for (const txn of txns) {
-    const amount = toDecimal(txn.amount);
-    feesFieldAmount = feesFieldAmount.plus(toDecimal(txn.fees));
-    taxesFieldAmount = taxesFieldAmount.plus(toDecimal(txn.taxes));
-
-    switch (txn.type) {
-      case 'buy':          totalBuyAmount = totalBuyAmount.plus(amount); totalBuyOrGiftAmount = totalBuyOrGiftAmount.plus(amount); break;
-      case 'gift':         totalBuyOrGiftAmount = totalBuyOrGiftAmount.plus(amount); break;
-      case 'sell':         totalSellAmount = totalSellAmount.plus(amount); break;
-      case 'fee':          feeTxnAmount = feeTxnAmount.plus(amount); break;
-      case 'tax':          taxTxnAmount = taxTxnAmount.plus(amount); break;
-      case 'dividend':     totalDividends = totalDividends.plus(amount); break;
-      case 'interest':     totalInterestPaid = totalInterestPaid.plus(amount); break;
-      case 'rent_income':  totalRent = totalRent.plus(amount); break;
-      case 'appreciation': totalAppreciation = totalAppreciation.plus(amount); break;
-    }
-  }
-
-  const totalFees = feeTxnAmount.plus(feesFieldAmount);
-  const totalTaxes = taxTxnAmount.plus(taxesFieldAmount);
-
-  let totalUnits = toDecimal(0);
-  let avgCostBasis = toDecimal(0);
-  let totalBuyCost;
-  let totalSellProceeds;
-  let realizedGain = toDecimal(0);
-  let unrealizedGain = toDecimal(0);
-  let currentValue;
-  let totalInvested;
-  let accruedInterest = toDecimal(0);
-  let projectedInterest = toDecimal(0);
-
-  if (isUnitBased) {
-    const cb = calculateCostBasis(txns);
-    totalUnits = toDecimal(cb.totalUnits);
-    avgCostBasis = toDecimal(cb.avgCostBasis);
-    totalBuyCost = toDecimal(cb.totalBuyCost);
-    totalSellProceeds = toDecimal(cb.totalSellProceeds);
-    totalInvested = toDecimal(cb.totalCost);
-    realizedGain = toDecimal(cb.realizedGain);
-
-    const currentPrice = toDecimal(inv.current_price);
-    currentValue = totalUnits.times(currentPrice);
-    unrealizedGain = totalUnits.gt(0)
-      ? currentPrice.minus(avgCostBasis).times(totalUnits)
-      : toDecimal(0);
-  } else if (isFixedIncome) {
-    totalInvested = totalBuyOrGiftAmount.minus(totalSellAmount);
-    totalBuyCost = totalBuyOrGiftAmount;
-    totalSellProceeds = totalSellAmount;
-
-    const interestRate = Number(inv.interest_rate) || 0;
-    accruedInterest = toDecimal(calculateAccruedInterest(txns, totalInvested.toNumber(), interestRate));
-    projectedInterest = toDecimal(calculateProjectedAnnualInterest(totalInvested.toNumber(), interestRate));
-
-    currentValue = totalInvested.plus(accruedInterest);
-    // Interest received is income (already in totalIncome below), exactly like
-    // dividends — feeding it into realizedGain too double-counted it in gainLoss.
-    realizedGain = toDecimal(0);
-    unrealizedGain = accruedInterest;
-  } else if (isRealEstate) {
-    totalInvested = totalBuyAmount.minus(totalSellAmount);
-    totalBuyCost = totalBuyAmount;
-    totalSellProceeds = totalSellAmount;
-    currentValue = totalInvested.plus(totalAppreciation);
-    unrealizedGain = totalAppreciation;
-    // Rent is income (folded into totalIncome below), not a realized gain, and
-    // fees/taxes are already subtracted once in the shared gainLoss line. Feeding
-    // rent−fees−taxes into realizedGain here double-counted all three.
-    realizedGain = toDecimal(0);
-  } else {
-    totalInvested = totalBuyAmount.minus(totalSellAmount);
-    totalBuyCost = totalBuyAmount;
-    totalSellProceeds = totalSellAmount;
-    currentValue = totalInvested;
-  }
-
-  const totalIncome = totalDividends.plus(totalInterestPaid).plus(totalRent);
-  const totalGain = realizedGain.plus(unrealizedGain);
-  // For unit-based assets the per-row fees/taxes *columns* are already folded
-  // into cost basis by calculateCostBasis (buys add them, sells subtract them),
-  // so subtracting totalFees/totalTaxes (= fee/tax tx-types + those columns)
-  // would count them twice. Only the standalone fee/tax transaction *types*
-  // sit outside cost basis. Other branches keep the full subtraction because
-  // their totalInvested excludes the fees/taxes columns.
-  const gainLoss = isUnitBased
-    ? totalGain.plus(totalIncome).minus(feeTxnAmount).minus(taxTxnAmount)
-    : totalGain.plus(totalIncome).minus(totalFees).minus(totalTaxes);
-  const gainLossPercent = totalBuyCost.gt(0)
-    ? divide(gainLoss, totalBuyCost).times(100)
-    : toDecimal(0);
+function buildInvestmentSummary(inv, txns, targetCurrency, multiplierByCurrency, opts) {
+  const core = buildInvestmentSummaryCore(inv, txns, opts);
 
   const invCurrency = (inv.currency || 'EUR').toUpperCase();
   // Multiplier was resolved once per distinct currency by the caller.
   const multiplier = multiplierByCurrency.get(invCurrency) ?? 1;
   const conv = (v) => multiply(v, multiplier);
 
-  const convertedCurrentValue = conv(currentValue);
-  // Clamp at 0 rather than abs(): for fixed-income/real-estate totalInvested =
-  // buys − sells can be legitimately negative (sold above contributions), and
-  // abs() silently flipped that to a positive "invested" figure. (Unit-based
-  // already clamps in calculateCostBasis.)
-  const clampedInvested = totalInvested.gt(0) ? totalInvested : toDecimal(0);
-  const convertedTotalInvested = conv(clampedInvested);
-  const convertedTotalBuyCost = conv(totalBuyCost);
-  const convertedTotalSellProceeds = conv(totalSellProceeds);
-  const convertedTotalFees = conv(totalFees);
-  const convertedTotalTaxes = conv(totalTaxes);
-  const convertedTotalDividends = conv(totalDividends);
-  const convertedTotalIncome = conv(totalIncome);
-  const convertedRealizedGain = conv(realizedGain);
-  const convertedUnrealizedGain = conv(unrealizedGain);
-  const convertedTotalGain = conv(totalGain);
-  const convertedGainLoss = conv(gainLoss);
-  const convertedAccruedInterest = conv(accruedInterest);
-  const convertedProjectedInterest = conv(projectedInterest);
-  const convertedTotalAppreciation = conv(totalAppreciation);
-  const convertedAvgCostBasis = conv(avgCostBasis);
+  const convertedCurrentValue = conv(core.currentValue);
+  const convertedTotalInvested = conv(core.totalInvested);
+  const convertedTotalBuyCost = conv(core.totalBuyCost);
+  const convertedTotalSellProceeds = conv(core.totalSellProceeds);
+  const convertedTotalFees = conv(core.totalFees);
+  const convertedTotalTaxes = conv(core.totalTaxes);
+  const convertedTotalDividends = conv(core.totalDividends);
+  const convertedTotalIncome = conv(core.totalIncome);
+  const convertedRealizedGain = conv(core.realizedGain);
+  const convertedUnrealizedGain = conv(core.unrealizedGain);
+  const convertedTotalGain = conv(core.totalGain);
+  const convertedGainLoss = conv(core.gainLoss);
+  const convertedAccruedInterest = conv(core.accruedInterest);
+  const convertedProjectedInterest = conv(core.projectedAnnualInterest);
+  const convertedTotalAppreciation = conv(core.totalAppreciation);
+  const convertedAvgCostBasis = conv(core.avgCostBasis);
   const convertedCurrentPrice = conv(Number(inv.current_price) || 0);
+  const { totalUnits, gainLossPercent } = core;
 
   return {
     // Identity passthrough — base investment fields the frontend already uses

@@ -21,7 +21,12 @@ vi.mock('../src/services/currency/currencyConversionService.js', () => ({
   }),
 }));
 
+vi.mock('../src/repositories/settingsRepository.js', () => ({
+  settingsRepository: { get: vi.fn(async () => null) },
+}));
+
 import { query } from '../src/database/connection.js';
+import { settingsRepository } from '../src/repositories/settingsRepository.js';
 import {
   getPortfolioSummary,
   getBreakdownSummary,
@@ -406,5 +411,49 @@ describe('asset-class formula coverage', () => {
     expect(s.totalUnits).toBe(1);
     expect(s.realizedGain).toBeGreaterThan(0); // sold above avg cost basis
     expect(s.currentValue).toBe(150); // 1 unit * 150
+  });
+
+  it('honors the cost_basis_method setting (fifo vs weighted_avg realized gain)', async () => {
+    // Two lots at different prices, then sell one unit at 200:
+    //   weighted_avg: cost of sold unit = (100+120)/2 = 110 → gain 90
+    //   fifo:         cost of sold unit = first lot 100    → gain 100
+    const seedQueries = () => query
+      .mockResolvedValueOnce({
+        rows: [investmentRow({ currency: 'EUR', current_price: 150 })],
+      })
+      .mockResolvedValueOnce({
+        rows: [
+          txnRow({ id: 1, type: 'buy', amount: 100, units: 1, currency: 'EUR', date: '2025-01-01' }),
+          txnRow({ id: 2, type: 'buy', amount: 120, units: 1, currency: 'EUR', date: '2025-06-01' }),
+          txnRow({ id: 3, type: 'sell', amount: 200, units: 1, currency: 'EUR', date: '2026-01-01' }),
+        ],
+      });
+
+    settingsRepository.get.mockResolvedValueOnce('weighted_avg');
+    seedQueries();
+    const weighted = await getPortfolioSummary('EUR');
+    expect(weighted.summaries[0].realizedGain).toBe(90);
+
+    settingsRepository.get.mockResolvedValueOnce('fifo');
+    seedQueries();
+    const fifo = await getPortfolioSummary('EUR');
+    expect(fifo.summaries[0].realizedGain).toBe(100);
+    expect(fifo.summaries[0].totalInvested).toBe(120); // remaining lot at 120
+  });
+
+  it('falls back to weighted_avg on an invalid stored method', async () => {
+    settingsRepository.get.mockResolvedValueOnce('not-a-method');
+    query
+      .mockResolvedValueOnce({ rows: [investmentRow({ currency: 'EUR', current_price: 150 })] })
+      .mockResolvedValueOnce({
+        rows: [
+          txnRow({ id: 1, type: 'buy', amount: 100, units: 1, currency: 'EUR', date: '2025-01-01' }),
+          txnRow({ id: 2, type: 'buy', amount: 120, units: 1, currency: 'EUR', date: '2025-06-01' }),
+          txnRow({ id: 3, type: 'sell', amount: 200, units: 1, currency: 'EUR', date: '2026-01-01' }),
+        ],
+      });
+
+    const result = await getPortfolioSummary('EUR');
+    expect(result.summaries[0].realizedGain).toBe(90); // weighted_avg
   });
 });

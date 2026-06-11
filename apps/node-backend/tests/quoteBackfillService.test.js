@@ -500,9 +500,10 @@ describe('Quote Backfill Service', () => {
       const deleted = await cleanupStaleQuotes(investmentWindows);
 
       expect(deleted).toBe(5);
+      // Single-statement cleanup: [invIds, windowInvIds, fromDates, toDates]
       expect(query).toHaveBeenCalledWith(
         expect.stringContaining('DELETE FROM asset_price_history'),
-        [1, ['2025-01-01'], ['2025-03-01']]
+        [[1], [1], ['2025-01-01'], ['2025-03-01']]
       );
     });
 
@@ -521,9 +522,9 @@ describe('Quote Backfill Service', () => {
       await cleanupStaleQuotes(investmentWindows);
 
       const callArgs = query.mock.calls[0][1];
-      expect(callArgs[1]).toEqual(['2025-01-01']);
+      expect(callArgs[2]).toEqual(['2025-01-01']);
       // toDate should be today's date string
-      expect(callArgs[2][0]).toMatch(/^\d{4}-\d{2}-\d{2}$/);
+      expect(callArgs[3][0]).toMatch(/^\d{4}-\d{2}-\d{2}$/);
     });
 
     it('uses UTC for the open-window today sentinel (not the server local time)', async () => {
@@ -549,7 +550,7 @@ describe('Quote Backfill Service', () => {
         await cleanupStaleQuotes(investmentWindows);
 
         const callArgs = query.mock.calls[0][1];
-        expect(callArgs[2]).toEqual(['2025-06-15']);
+        expect(callArgs[3]).toEqual(['2025-06-15']);
       } finally {
         vi.useRealTimers();
       }

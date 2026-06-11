@@ -4,22 +4,16 @@
 
 import { cleanRecipientName, normalizeToUppercase } from '../../textNormalization.js';
 import { logger } from '../../../config/logger.js';
-import { parseCsvFile, buildOptionalComment, parseDecimalSafe } from './_shared.js';
+import { parseCsvFile, buildOptionalComment, parseDecimalSafe, parseDateFlexibleUtc } from './_shared.js';
 
 const NAME = 'revolut';
 const BANK_LABEL = 'Revolut';
 const MIN_FIELDS = 10;
 
 function parseRevolutDate(completedDateStr) {
-  for (const fmt of [
-    /^(\d{4})-(\d{2})-(\d{2})\s/,
-    /^(\d{4})-(\d{2})-(\d{2})$/,
-  ]) {
-    const m = completedDateStr.match(fmt);
-    if (m) return new Date(`${m[1]}-${m[2]}-${m[3]}`);
-  }
-  const generic = new Date(completedDateStr);
-  return isNaN(generic.getTime()) ? null : generic;
+  // "YYYY-MM-DD HH:MM:SS" and plain ISO are both handled by the shared parser;
+  // any other shape is rebuilt at UTC midnight rather than local (day-shift).
+  return parseDateFlexibleUtc(completedDateStr);
 }
 
 function buildBankAccount(product) {

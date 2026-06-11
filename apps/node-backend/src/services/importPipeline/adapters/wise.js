@@ -4,7 +4,7 @@
 
 import { cleanRecipientName, normalizeToUppercase } from '../../textNormalization.js';
 import { logger } from '../../../config/logger.js';
-import { parseCsvFile, buildOptionalComment, buildRawRowString, parseAmountField } from './_shared.js';
+import { parseCsvFile, buildOptionalComment, buildRawRowString, parseAmountField, parseDateFlexibleUtc } from './_shared.js';
 
 const NAME = 'wise';
 const BANK_LABEL = 'Wise';
@@ -42,14 +42,11 @@ function rowToTransaction(row) {
 
   const dateStr = (row['Finished on'] || row['Created on'] || '').trim();
   if (!dateStr) return null;
-  // Wise exports "YYYY-MM-DD HH:MM:SS"; V8's new Date() parses that as LOCAL
-  // time, so an early-morning timestamp shifts a day back in a UTC+ zone once
-  // serialized with toISOString. Parse the date part as UTC.
-  const isoMatch = dateStr.match(/^(\d{4})-(\d{2})-(\d{2})/);
-  const date = isoMatch
-    ? new Date(Date.UTC(Number(isoMatch[1]), Number(isoMatch[2]) - 1, Number(isoMatch[3])))
-    : new Date(dateStr);
-  if (isNaN(date.getTime())) return null;
+  // Wise exports "YYYY-MM-DD HH:MM:SS"; parseDateFlexibleUtc reads the ISO date
+  // part as UTC and rebuilds any other shape at UTC midnight so toISOString in
+  // stage/dedup can't shift the day.
+  const date = parseDateFlexibleUtc(dateStr);
+  if (!date) return null;
 
   const direction = (row['Direction'] || '').trim().toUpperCase();
 

@@ -237,6 +237,20 @@ app.get('/health', (req, res) => {
   });
 });
 
+// /health/* sits outside /api, so the global rate limiter doesn't apply — and
+// the detailed probe costs a DB round-trip. Cache the probe result briefly so
+// a hammering client (or an exposed port) can't turn health checks into a DB
+// DoS; 1s staleness is irrelevant for a liveness signal.
+const DB_PROBE_TTL_MS = 1000;
+let dbProbeCache = { value: false, expiresAt: 0 };
+async function checkConnectionCached() {
+  const now = Date.now();
+  if (now < dbProbeCache.expiresAt) return dbProbeCache.value;
+  const value = await checkConnection();
+  dbProbeCache = { value, expiresAt: now + DB_PROBE_TTL_MS };
+  return value;
+}
+
 app.get('/health/detailed', async (req, res) => {
   const states = Object.values(warmupStatus);
   const warming = states.includes('pending');
@@ -244,7 +258,7 @@ app.get('/health/detailed', async (req, res) => {
 
   // Real liveness probe — a SELECT 1 round-trip catches a wedged pool that a
   // process-level "I'm listening" check would miss. checkConnection never throws.
-  const dbConnected = await checkConnection();
+  const dbConnected = await checkConnectionCached();
 
   res.json({
     status: warming ? 'warming' : 'ready', // unchanged contract: 'ready' once warmup settles (pass or fail)

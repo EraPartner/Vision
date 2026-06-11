@@ -157,17 +157,27 @@ describe('sanitizeSnapshotSpikes', () => {
   })
 
   it('replaces a high needle spike (localNeedlePeak) with geo mean of neighbors', () => {
-    // 500 >= max(100, 102) * 1.8 = 183.6 → spike
+    // 500 >= max(100, 102) * 1.8 = 183.6 → spike. Replacement is rounded to
+    // cents (shared implementation with sanitizeIsolatedValueSpikes).
     const snapshots = [{ value: 100 }, { value: 500 }, { value: 102 }]
     const result = sanitizeSnapshotSpikes(snapshots)
-    expect(result[1].value).toBeCloseTo(Math.sqrt(100 * 102), 5)
+    expect(result[1].value).toBeCloseTo(Math.sqrt(100 * 102), 2)
   })
 
   it('replaces a low needle spike (localNeedleTrough) with geo mean of neighbors', () => {
     // 20 * 1.8 = 36 <= min(100, 102) = 100 → trough spike
     const snapshots = [{ value: 100 }, { value: 20 }, { value: 102 }]
     const result = sanitizeSnapshotSpikes(snapshots)
-    expect(result[1].value).toBeCloseTo(Math.sqrt(100 * 102), 5)
+    expect(result[1].value).toBeCloseTo(Math.sqrt(100 * 102), 2)
+  })
+
+  it('does not smooth a needle when the neighbors disagree (abnormal bridge)', () => {
+    // 400 >= max(100, 200) * 1.8 = 360, but prev→next doubles (bridge is NOT
+    // normal) — the series is repricing, not needling. The unguarded legacy
+    // copy smoothed this; the shared bridge-guarded rule must keep it.
+    const snapshots = [{ value: 100 }, { value: 400 }, { value: 200 }]
+    const result = sanitizeSnapshotSpikes(snapshots)
+    expect(result[1].value).toBe(400)
   })
 
   it('does not mutate the input array or its elements', () => {

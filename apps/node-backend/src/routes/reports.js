@@ -51,7 +51,13 @@ const themeSchema = z.object({
 const periodSchema = z.discriminatedUnion('kind', [
   z.object({ kind: z.literal('ytd') }),
   z.object({ kind: z.literal('rolling'), months: z.number().int().min(1).max(60) }),
-  z.object({ kind: z.literal('custom'), from: z.string().min(1), to: z.string().min(1) }),
+  // Strict YYYY-MM-DD: from/to land in SQL date casts — malformed values were
+  // a 500 (pg cast error) instead of a 400.
+  z.object({
+    kind: z.literal('custom'),
+    from: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'from must be YYYY-MM-DD'),
+    to: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'to must be YYYY-MM-DD'),
+  }),
   z.object({ kind: z.literal('year'), year: z.number().int().min(2000).max(2100) }),
 ]).default({ kind: 'rolling', months: 12 });
 

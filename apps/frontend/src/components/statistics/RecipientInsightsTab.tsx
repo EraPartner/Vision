@@ -145,7 +145,7 @@ export function RecipientInsightsTab({ statisticsTopRecipientsChart }: Recipient
         <span className="text-muted-foreground text-sm">{formatDateWithAppSettings(parseISO(row.lastSeen), appSettings.dateFormat)}</span>
       ),
     },
-  ], [t, appSettings.dateFormat, formatCurrency]);
+  ], [t, appSettings.dateFormat]);
 
   if (isLoading) {
     return (

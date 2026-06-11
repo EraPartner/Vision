@@ -112,6 +112,10 @@ export function generateLoanRepaymentSchedule(config) {
 
   for (let i = 1; i <= termMonths; i++) {
     const dueDate = addMonthsAtDay(startDate, i - 1 + monthOffset, paymentDay);
+    // Whole-month convention: installment 1 charges a full month of interest
+    // even when the loan started mid-month (start 06-05, payment day 20 → 15
+    // days of life, one month of interest). Standard simplification — no
+    // day-count proration. Documented in the planned-transactions feature spec.
     const interestAmount = roundMoney(remaining * monthlyRate);
     let principalAmount;
     let paymentAmount;

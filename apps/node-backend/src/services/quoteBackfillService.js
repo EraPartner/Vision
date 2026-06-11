@@ -635,37 +635,48 @@ export async function refreshQuotesForInvestment(investmentId) {
  * @returns {Promise<number>} Total rows deleted
  */
 export async function cleanupStaleQuotes(investmentWindows) {
-  let totalDeleted = 0;
+  // Flatten all windows into parallel arrays so the cleanup is ONE statement
+  // (was one DELETE per investment — N round-trips on every maintenance pass).
+  const invIds = [];
+  const windowInvIds = [];
+  const fromDates = [];
+  const toDates = [];
+
+  // asset_price_history.price_date is stored in UTC; the open-window sentinel
+  // must be UTC-today as well, otherwise a server in a non-UTC timezone
+  // deletes valid quotes around midnight.
+  const todayUtc = getDayKeyUtc(new Date());
 
   for (const [invId, { holdingWindows }] of investmentWindows) {
     if (holdingWindows.length === 0) continue;
-
-    const fromDates = holdingWindows.map((w) => w.fromDate);
-    // asset_price_history.price_date is stored in UTC; the open-window
-    // sentinel must be UTC-today as well, otherwise a server in a non-UTC
-    // timezone deletes valid quotes around midnight.
-    const todayUtc = getDayKeyUtc(new Date());
-    const toDates = holdingWindows.map((w) =>
-      w.toDate !== null ? w.toDate : todayUtc
-    );
-
-    try {
-      const result = await query(
-        `DELETE FROM asset_price_history
-         WHERE investment_id = $1
-           AND NOT EXISTS (
-             SELECT 1 FROM unnest($2::date[], $3::date[]) AS w(from_date, to_date)
-             WHERE price_date >= w.from_date AND price_date <= w.to_date
-           )`,
-        [invId, fromDates, toDates]
-      );
-      totalDeleted += result.rowCount || 0;
-    } catch (error) {
-      logger.warn('Failed to cleanup stale quotes for investment', {
-        investmentId: invId,
-        error: error?.message,
-      });
+    invIds.push(invId);
+    for (const w of holdingWindows) {
+      windowInvIds.push(invId);
+      fromDates.push(w.fromDate);
+      toDates.push(w.toDate !== null ? w.toDate : todayUtc);
     }
+  }
+
+  if (invIds.length === 0) return 0;
+
+  let totalDeleted = 0;
+  try {
+    const result = await query(
+      `DELETE FROM asset_price_history aph
+       WHERE aph.investment_id = ANY($1::int[])
+         AND NOT EXISTS (
+           SELECT 1 FROM unnest($2::int[], $3::date[], $4::date[]) AS w(inv_id, from_date, to_date)
+           WHERE w.inv_id = aph.investment_id
+             AND aph.price_date >= w.from_date AND aph.price_date <= w.to_date
+         )`,
+      [invIds, windowInvIds, fromDates, toDates]
+    );
+    totalDeleted = result.rowCount || 0;
+  } catch (error) {
+    logger.warn('Failed to cleanup stale quotes', {
+      investmentCount: invIds.length,
+      error: error?.message,
+    });
   }
 
   if (totalDeleted > 0) {

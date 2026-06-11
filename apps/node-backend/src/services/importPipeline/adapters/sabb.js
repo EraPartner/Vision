@@ -4,7 +4,7 @@
 
 import { cleanRecipientName, normalizeToUppercase } from '../../textNormalization.js';
 import { logger } from '../../../config/logger.js';
-import { parseCsvFile, buildOptionalComment, buildRawRowString, parseAmountField, parseDayMonthYear } from './_shared.js';
+import { parseCsvFile, buildOptionalComment, buildRawRowString, parseAmountField, parseDayMonthYear, parseDateFlexibleUtc } from './_shared.js';
 
 const NAME = 'sabb';
 const BANK_LABEL = 'SABB';
@@ -13,20 +13,17 @@ function rowToTransaction(row) {
   const dateStr = (row['Transaction date'] || '').trim();
   if (!dateStr) return null;
 
-  // The SABB export's date format isn't pinned, so parse the two plausible
-  // shapes explicitly: ISO YYYY-MM-DD and DD/MM/YYYY (V8's new Date() would read
-  // DD/MM as MM/DD → silent month/day swap, or Invalid Date for days > 12).
-  // Fall back to native parsing only for other shapes.
-  const iso = dateStr.match(/^(\d{4})-(\d{2})-(\d{2})/);
+  // The SABB export's date format isn't pinned, so parse DD/MM/YYYY explicitly
+  // (V8's new Date() would read DD/MM as MM/DD → silent month/day swap, or
+  // Invalid Date for days > 12); everything else goes through the shared
+  // UTC-normalizing parser.
   let date;
-  if (iso) {
-    date = new Date(Date.UTC(Number(iso[1]), Number(iso[2]) - 1, Number(iso[3])));
-  } else if (/^\d{2}\/\d{2}\/\d{4}/.test(dateStr)) {
+  if (/^\d{2}\/\d{2}\/\d{4}/.test(dateStr)) {
     date = parseDayMonthYear(dateStr.slice(0, 10));
   } else {
-    date = new Date(dateStr);
+    date = parseDateFlexibleUtc(dateStr);
   }
-  if (!date || isNaN(date.getTime())) return null;
+  if (!date) return null;
 
   const amountRaw = (row['Amount(SAR)'] || '').trim();
   if (!amountRaw) return null;

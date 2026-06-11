@@ -8,6 +8,7 @@
 import { query, withTransaction } from '../../database/connection.js';
 import { logger } from '../../config/logger.js';
 import { toDecimal, toNumber } from '../../lib/money.js';
+import { todayAppDateString } from '../../lib/timezone.js';
 
 const ECB_LATEST_URL      = 'https://www.ecb.europa.eu/stats/eurofxref/eurofxref-daily.xml';
 const ERAR_LATEST_URL     = 'https://open.er-api.com/v6/latest/EUR';
@@ -186,7 +187,9 @@ export async function loadFromDatabase() {
  */
 export async function saveToDatabase(rates) {
   try {
-    const today = new Date().toISOString().split('T')[0];
+    // rate_date is compared against APP_TIMEZONE calendar days throughout the
+    // calc layer (historical lookups, snapshot day-walk) — stamp in the same zone.
+    const today = todayAppDateString();
     const entries = Object.entries(rates).filter(([c]) => c !== 'EUR');
     if (entries.length === 0) return;
 

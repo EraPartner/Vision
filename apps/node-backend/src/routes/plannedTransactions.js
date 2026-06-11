@@ -7,13 +7,13 @@
 import { Router } from 'express';
 import { query as dbQuery } from '../database/connection.js';
 import plannedTransactionRepository from '../services/plannedTransactionService.js';
-import { validateIdParam } from '../middleware/validation.js';
+import { validateIdParam, assertYmd, validateId } from '../middleware/validation.js';
 import { rateLimiter } from '../middleware/rateLimiter.js';
 import { generateLoanRepaymentSchedule } from '../services/calculations/loanSchedule.js';
 import { calculateNextDate, isValidPattern } from '../services/calculations/recurrence.js';
 import { NotFoundError, ValidationError } from '../middleware/errorHandler.js';
 import { toDecimal, toNumber } from '../lib/money.js';
-import { toAppDateString } from '../lib/timezone.js';
+import { toAppDateString, todayAppDateString } from '../lib/timezone.js';
 
 const router = Router();
 
@@ -127,9 +127,6 @@ function applyLoanPatchDefaults(fields, existing) {
   return generatedLoanSchedule;
 }
 
-function getCurrentDateString() {
-  return new Date().toISOString().split('T')[0];
-}
 
 /**
  * Decide whether this PATCH must rewrite the loan schedule, and to what.
@@ -153,8 +150,8 @@ router.get('/', async (req, res) => {
   const opts = {
     limit: Math.min(parseInt(limit, 10) || 50, 5000),
     offset: parseInt(offset, 10) || 0,
-    startDate: start_date || null,
-    endDate: end_date || null,
+    startDate: assertYmd(start_date, 'start_date'),
+    endDate: assertYmd(end_date, 'end_date'),
     bankAccount: bank_account || null,
     categoryId: category_id ? parseInt(category_id, 10) : null,
     recipientId: recipient_id ? parseInt(recipient_id, 10) : null,
@@ -285,11 +282,16 @@ router.post('/:id/execute', validateIdParam, async (req, res) => {
   if (!executed_transaction_id) {
     throw new ValidationError('Missing required field: executed_transaction_id');
   }
+  // Validate body inputs up front: malformed values otherwise surface as
+  // Postgres cast errors → 500 instead of a 400.
+  const idCheck = validateId(executed_transaction_id, 'executed_transaction_id');
+  if (!idCheck.valid) throw new ValidationError(idCheck.error);
+  assertYmd(execution_date, 'execution_date');
 
   const existing = await plannedTransactionRepository.getById(id);
   if (!existing) throw new NotFoundError(`Planned transaction ${id} not found`);
 
-  const execDate = execution_date || getCurrentDateString();
+  const execDate = execution_date || todayAppDateString();
   const updateFields = {
     is_executed: !existing.is_recurring,
     last_executed_date: execDate,

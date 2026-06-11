@@ -53,7 +53,9 @@ vi.mock('../../src/services/loanRepaymentService.js', () => ({
   })),
 }));
 
-vi.mock('../../src/middleware/validation.js', () => ({
+vi.mock('../../src/middleware/validation.js', async (importOriginal) => ({
+  // Keep the real helpers (assertYmd, validateId, …); only stub the middleware.
+  ...(await importOriginal()),
   validateIdParam: (_req, _res, next) => next(),
 }));
 

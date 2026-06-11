@@ -4,7 +4,7 @@ type: feature
 status: active
 date: 2026-04-27
 last_modified: 2026-06-01
-updated: 2026-06-01
+updated: 2026-06-11
 tags: [feature, portfolio, investments, stocks, crypto, metals, phase-1, phase-3.5, phase-3.6, phase-9, phase-8, phase-14, pdf-export, offline-resilience, stale-prices, online-status-detection, graceful-degradation, portfolio-summary, realtime-totals, decimal-precision, monetary-math, snapshot-valuation-parity, fixed-income-accrual, real-estate-appreciation, net-worth-reconciliation, historical-fx, snapshot-fx, loading-states, error-states, page-error, skeleton, portfolio-unit-math, shared-utils, splits-event, return-of-capital, banker-rounding]
 aliases: [portfolio-feature, investments-feature, holdings, net-worth, stocks, crypto, real-estate, savings, bonds, metals, performance, watchlist]
 description: Track stocks, ETFs, crypto, metals, real estate, savings, and bonds; includes Phase 8 PDF report export with 6 portfolio sections. 2026-05-29 adds historical FX in snapshots and loading/error states on all asset pages. June 2026 adds snapshotBuilder split/return_of_capital events, APP_TIMEZONE day-boundary fix, and shared portfolioUnitMath.ts.
@@ -542,7 +542,14 @@ Code links: [[apps/node-backend/src/services/priceProviderService.js]], [[apps/n
 
 ## Cost Basis Methods (Phase 6)
 
-Portfolio tax calculations now support multiple cost basis accounting methods, configurable as a user preference in Settings.
+Portfolio tax calculations support multiple cost basis accounting methods, configurable as a user preference in Settings.
+
+> [!info] Wired end-to-end since 2026-06-11 (ADR-073)
+> Until Audit Round 7 the setting was persisted but never read — both the backend summary
+> service and the frontend hooks hard-called weighted average. The calculators now live in
+> `@vision/shared-utils/portfolio` ([[docs/adr/073-shared-portfolio-math-package|ADR-073]]) and
+> `portfolioSummaryService` / `usePortfolioSummaries` both dispatch on the stored
+> `cost_basis_method` (invalid/missing values fall back to `weighted_avg`).
 
 **Available methods:**
 
@@ -554,7 +561,7 @@ Portfolio tax calculations now support multiple cost basis accounting methods, c
 
 **Implementation:**
 
-- Backend calculation functions in `[[apps/node-backend/src/utils/portfolioMath.js]]`:
+- Shared calculation functions in `@vision/shared-utils/portfolio` (re-exported by `[[apps/node-backend/src/utils/portfolioMath.js]]` and `apps/frontend/src/hooks/portfolio/usePortfolioCalculations.ts`):
   - `calculateCostBasis()` — Weighted average method
   - `calculateCostBasisFIFO()` — FIFO method (immutable-safe: uses spread operations, returns immutable lot copies)
   - `calculateCostBasisLIFO()` — LIFO method (immutable-safe: uses spread operations, returns immutable lot copies)

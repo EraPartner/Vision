@@ -77,6 +77,13 @@ Special handling for loans with amortization:
 - Car loan
 - Other
 
+**Interest convention (whole-month):** the schedule charges interest per whole
+month on the remaining principal — installment 1 carries a full month of
+interest even when the loan starts mid-month (e.g. start on the 5th, payment
+day on the 20th). There is no day-count proration; this is the standard
+simplification used by `loanSchedule.js` and matches how most consumer loan
+tables are quoted.
+
 ---
 
 ## Features

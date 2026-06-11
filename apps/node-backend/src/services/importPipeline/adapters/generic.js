@@ -4,7 +4,7 @@
  */
 
 import { logger } from '../../../config/logger.js';
-import { parseCsvFile, buildRawRowString, parseAmountField } from './_shared.js';
+import { parseCsvFile, buildRawRowString, parseAmountField, parseDateFlexibleUtc } from './_shared.js';
 
 const NAME = 'generic';
 const BANK_LABEL = 'Generic';
@@ -35,7 +35,9 @@ function parseDate(dateStr, fmt) {
     const [y, m, d] = dateStr.slice(0, 10).split('-').map((s) => parseInt(s, 10));
     return new Date(Date.UTC(y, m - 1, d));
   }
-  return new Date(dateStr);
+  // Unknown format token: shared parser rebuilds the parsed calendar day at
+  // UTC midnight (plain new Date() was local → day-shift on serialization).
+  return parseDateFlexibleUtc(dateStr);
 }
 
 
@@ -51,7 +53,7 @@ function rowToTransaction(row, config) {
   if (!dateStr) return null;
 
   const date = parseDate(dateStr, config.date_format || '');
-  if (isNaN(date.getTime())) return null;
+  if (!date || isNaN(date.getTime())) return null;
 
   const amount = parseAmountField(row[colMap.amount]);
   if (isNaN(amount)) return null;

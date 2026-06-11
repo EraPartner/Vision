@@ -52,6 +52,33 @@ export function parseDayMonthYear(dateStr) {
   return date;
 }
 
+const ISO_DATE_RE = /^(\d{4})-(\d{2})-(\d{2})(?:[T\s]|$)/;
+
+/**
+ * Parse a date string of unknown format into a UTC-midnight Date.
+ *
+ * ISO dates are constructed directly via Date.UTC. Anything else falls back to
+ * the engine parser, then **rebuilds the parsed local calendar day at UTC
+ * midnight** — `new Date(string)` alone yields local midnight for non-ISO
+ * formats, which `toISOString()` in stage/dedup then shifts to the previous
+ * day in UTC+ zones (and changes the dedup hash with it).
+ *
+ * @param {string} dateStr
+ * @returns {Date|null} UTC-midnight Date, or null when unparseable
+ */
+export function parseDateFlexibleUtc(dateStr) {
+  const s = String(dateStr ?? '').trim();
+  if (!s) return null;
+  const iso = ISO_DATE_RE.exec(s);
+  if (iso) {
+    const date = new Date(Date.UTC(Number(iso[1]), Number(iso[2]) - 1, Number(iso[3])));
+    return isNaN(date.getTime()) ? null : date;
+  }
+  const parsed = new Date(s);
+  if (isNaN(parsed.getTime())) return null;
+  return new Date(Date.UTC(parsed.getFullYear(), parsed.getMonth(), parsed.getDate()));
+}
+
 export function parseCommaDecimal(value) {
   const s = String(value).replace(/\s/g, '');
   // EU format: comma is the decimal separator and dots are thousands separators.

@@ -11,7 +11,7 @@ import { query, withTransaction } from '../../database/connection.js';
 import { logger } from '../../config/logger.js';
 import { sanitizeSnapshotSpikes, calendarDaysBetween, toYmd } from '../../utils/portfolioMath.js';
 import { toDecimal, roundMoney } from '../../lib/money.js';
-import { toAppDateString } from '../../lib/timezone.js';
+import { todayAppDateString } from '../../lib/timezone.js';
 
 const FIXED_INCOME_ASSET_CLASSES = new Set(['savings', 'bond']);
 const REAL_ESTATE_ASSET_CLASS = 'real_estate';
@@ -49,6 +49,11 @@ export async function computeDailySnapshots(targetCurrency = 'EUR') {
 
   const firstDateYmd = toYmd(firstDataDate);
 
+  // Upper bound for the walk AND the queries. Postgres CURRENT_DATE is the
+  // DB-container day (UTC); between local midnight and 01:00/02:00 the walk
+  // emitted today's snapshot while the queries excluded today's rows.
+  const todayYmd = todayAppDateString();
+
   const [
     unitInvestmentsResult,
     allTxResult,
@@ -75,9 +80,9 @@ export async function computeDailySnapshots(targetCurrency = 'EUR') {
              pt.fx_rate_to_eur
       FROM portfolio_transactions pt
       JOIN investments i ON i.id = pt.investment_id
-      WHERE pt.date >= $1::date AND pt.date <= CURRENT_DATE
+      WHERE pt.date >= $1::date AND pt.date <= $2::date
       ORDER BY pt.date::date, pt.id
-    `, [firstDateYmd]),
+    `, [firstDateYmd, todayYmd]),
     query(`
       SELECT id, COALESCE(currency, 'EUR') AS currency,
              COALESCE(current_price, 0) AS current_price,
@@ -91,9 +96,9 @@ export async function computeDailySnapshots(targetCurrency = 'EUR') {
     query(`
       SELECT investment_id, to_char(price_date, 'YYYY-MM-DD') AS day, close_price
       FROM asset_price_history
-      WHERE price_date >= $1::date AND price_date <= CURRENT_DATE
+      WHERE price_date >= $1::date AND price_date <= $2::date
       ORDER BY investment_id, price_date
-    `, [firstDateYmd]),
+    `, [firstDateYmd, todayYmd]),
     query(`
       SELECT to_char(month_date, 'YYYY-MM') AS month, monthly_rate
       FROM belgian_inflation_rates
@@ -307,10 +312,8 @@ export async function computeDailySnapshots(targetCurrency = 'EUR') {
 
   // --- Main day loop ---
 
-  // End the walk on the calendar day in APP_TIMEZONE, not UTC: near midnight the
-  // two diverge, which would otherwise land the last snapshot on the wrong day
-  // versus the rest of the calc layer (ADR-009).
-  const todayYmd = toAppDateString(new Date());
+  // todayYmd (hoisted above the queries) ends the walk on the APP_TIMEZONE
+  // calendar day, matching the query bounds (ADR-009).
   const allDays = [];
   const today = new Date(todayYmd);
   for (let d = new Date(firstDateYmd); d <= today; d.setUTCDate(d.getUTCDate() + 1)) {
