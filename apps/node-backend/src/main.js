@@ -508,7 +508,14 @@ async function shutdown(signal) {
   // Stop accepting new connections and let in-flight requests finish before
   // tearing down the pool — closePool() mid-request would error live handlers.
   if (httpServer) {
-    await new Promise((resolve) => httpServer.close(() => resolve()));
+    await new Promise((resolve) => {
+      httpServer.close(() => resolve());
+      // close() alone leaves idle keep-alive sockets (browser tabs, the
+      // Electron health watchdog's keepAlive agent) holding the server open
+      // until the 10s force-exit. Drop them explicitly; in-flight requests
+      // are untouched. Optional-chained: not every runtime implements it.
+      httpServer.closeIdleConnections?.();
+    });
   }
 
   await Promise.allSettled([closePool(), closePuppeteerBrowser()]);
