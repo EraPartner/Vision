@@ -4,8 +4,8 @@ type: architecture-doc
 status: active
 date: 2026-04-27
 updated: 2026-06-11
-tags: [architecture, electron, desktop, packaging, security, sandbox, health-monitoring, async-io, csp-headers, dev-rebuild, phase-0, phase-1, phase-2, phase-6, phase-7, backup, restore, bundle, ipc, encryption, schema-migration, npm-vs-bun, docker-compose, pre-pull, startup, troubleshooting, alembic-migration-fixes, deployment-modes, shell-installer, docker-pull, update-system, checksum-verification, backup-before-update, cicd, april-2026, bug-hunt, recovery-hardening, concurrent-backup-guard, timeout, watchdog-pause, electron-native, macos, hiddeninset, vibrancy, system-accent, native-menu, dock-badge, csv-open-with, electronapi, renderer-ready-queue, compose-stop, window-bounds, splash-localized, shutdown-idle-connections, june-2026]
-description: Electron desktop application architecture, IPC communication, sandbox hardening, health monitoring, Docker image pre-pull optimization, backup/restore bundle system (Phase 1+2), three-mode application update system with checksum verification (April 2026), Phase 7 backup/restore hardening with concurrent-backup guard, HTTP timeout, and watchdog pause (May 2026), and June 2026 V12 native macOS integration (ADR-072) — hiddenInset chrome, native menu/dock, CSV open-with handoff, system accent overlay, under-window vibrancy. June 2026 (startup fixes): quit uses compose stop (preserves warm-boot fast path), window bounds persisted/restored, localized theme-aware splash with phase narration, graceful shutdown closes idle keep-alive sockets, dev watcher covers packages/ and i18n/source.
+tags: [architecture, electron, desktop, packaging, security, sandbox, health-monitoring, async-io, csp-headers, dev-rebuild, phase-0, phase-1, phase-2, phase-6, phase-7, backup, restore, bundle, ipc, encryption, schema-migration, npm-vs-bun, docker-compose, pre-pull, startup, troubleshooting, alembic-migration-fixes, deployment-modes, shell-installer, docker-pull, update-system, checksum-verification, backup-before-update, cicd, april-2026, bug-hunt, recovery-hardening, concurrent-backup-guard, timeout, watchdog-pause, electron-native, macos, hiddeninset, vibrancy, system-accent, native-menu, dock-badge, csv-open-with, electronapi, renderer-ready-queue, compose-stop, window-bounds, splash-localized, shutdown-idle-connections, accelerator-hardening, before-input-event, did-start-navigation, june-2026]
+description: Electron desktop application architecture, IPC communication, sandbox hardening, health monitoring, Docker image pre-pull optimization, backup/restore bundle system (Phase 1+2), three-mode application update system with checksum verification (April 2026), Phase 7 backup/restore hardening with concurrent-backup guard, HTTP timeout, and watchdog pause (May 2026), and June 2026 V12 native macOS integration (ADR-072) — hiddenInset chrome, native menu/dock, CSV open-with handoff, system accent overlay, under-window vibrancy. June 2026 (startup fixes): quit uses compose stop (preserves warm-boot fast path), window bounds persisted/restored, localized theme-aware splash with phase narration, graceful shutdown closes idle keep-alive sockets, dev watcher covers packages/ and i18n/source. June 2026 (accelerator fixes): renderer-ready reset moved from did-start-loading to did-start-navigation+isSameDocument guard (eliminates sendToApp queue jam on React Router navigations); handleMenuAccelerator on before-input-event bypasses unreliable sandboxed-renderer→native-menu key-equivalent redispatch.
 aliases: [electron, desktop app, packaging, IPC, main process, sandbox, watchdog, backup, bundle, update system, deployment modes, electronAPI, native menu, dock badge, system accent, vibrancy]
 related_code: ["packaging/electron/", "packaging/electron/backup/bundle.js", "packaging/electron/main.js", "packaging/electron/preload.js", "apps/frontend/src/lib/api/electron.ts", "apps/frontend/src/components/layout/ElectronBridge.tsx", "apps/frontend/src/lib/importHandoff.ts", "apps/frontend/src/lib/accentColor.ts", "apps/frontend/src/components/notifications/UpdateNotification.tsx", "apps/frontend/src/components/settings/tabs/AppTab.tsx", "apps/node-backend/src/main.js", "alembic/versions/0001_initial_database_schema.py", ".github/workflows/ci.yml", ".github/workflows/release.yml"]
 ---
@@ -305,9 +305,35 @@ Frontend helpers in `lib/api/electron.ts`: `getElectronAPI()`, `isElectronMac()`
 
 #### Renderer-Ready Queue Protocol
 
-`sendToApp(channel, payload)` in main queues messages until the renderer has mounted its listeners. The queue drains the moment the renderer calls `electronAPI.ready()`. The `rendererReady` flag resets on every `did-start-loading` (page reload) and on window close, so the handshake re-runs after every navigation.
+`sendToApp(channel, payload)` in main queues messages until the renderer has mounted its listeners. The queue drains the moment the renderer calls `electronAPI.ready()` (via `ipcMain.handle('app:renderer-ready')`). The `rendererReady` flag resets on window close and on **real document navigations/reloads** — detected via the `did-start-navigation` event filtered to `details.isMainFrame && !details.isSameDocument`.
 
 This prevents lost IPC messages when the OS fires an `open-file` event (Finder "Open With" or dock drop) before the React app has mounted.
+
+> [!warning] `did-start-loading` must NOT be used here (fixed 2026-06-11)
+> `did-start-loading` fires for same-document navigations (React Router `pushState` calls) as well as real page loads. The renderer only calls `app:renderer-ready` once per document, so resetting `rendererReady` on a same-document navigation permanently jams `pendingAppMessages` — every subsequent menu bar action, dock menu click, and CSV open-file handoff silently queues forever and never reaches the renderer. The fix is `did-start-navigation` with the `isSameDocument` guard, which only resets on actual document loads and reloads.
+
+#### Accelerator Dispatch Hardening (2026-06-11)
+
+The accelerators declared in `setupApplicationMenu()` (⌘1–⌘9, ⌘N, ⇧⌘I, ⌃⌘S) are also matched by a `handleMenuAccelerator(event, input)` function attached to `mainWindow.webContents.on('before-input-event')` in `createWindow()`.
+
+**Why this is necessary:** macOS dispatches unhandled keystrokes from the renderer to the application menu for key-equivalent matching. With the sandboxed renderer focused, this renderer→native-menu redispatch path is unreliable — accelerators assigned to click-handler items (i.e., non-role items) silently do nothing when pressed via keyboard, even though menu-bar mouse clicks work correctly.
+
+**How `handleMenuAccelerator` works:**
+
+- Receives every real keydown before the renderer processes it.
+- Matches ⌘1–⌘9 on `input.code` (`Digit1`…`Digit9`) — the physical-key code rather than `input.key` — so the shortcuts remain positional on non-QWERTY layouts (AZERTY, Dvorak) without requiring `Shift`.
+- Matches ⌘N, ⇧⌘I, and ⌃⌘S on `input.key` (layout-agnostic for letter keys).
+- ⌃⌘S is macOS-specific; on other platforms the chord is Ctrl+Shift+S.
+- Calls `menuAction()` → `sendToApp('menu:action', …)` on match.
+- Calls `event.preventDefault()` to suppress any duplicate native-menu dispatch, ensuring each chord fires at most once.
+- Auto-repeat events (`input.isAutoRepeat`) are ignored.
+- Role items (Reload, Zoom, Copy, Paste, …) are unchanged — they use Electron/AppKit's native path.
+
+> [!warning] Manual sync point — accelerators and routes
+> `handleMenuAccelerator` must mirror the accelerators declared in `setupApplicationMenu()`. `GO_MENU_ROUTES` in `packaging/electron/main.js` must stay in sync with `GO_TO_ROUTES` in `apps/frontend/src/hooks/useGoToShortcuts.ts`. Both files carry a comment flagging the dependency.
+
+> [!info] AZERTY/non-QWERTY confirmation pending
+> End-to-end tests on the real stack confirmed ⌘7 → /portfolio and ⌘1 → / after a client-side navigation. Real-keyboard validation on a built `.app` (including AZERTY layout) is still pending (logged in TODO.md).
 
 #### Window Chrome (darwin-only)
 

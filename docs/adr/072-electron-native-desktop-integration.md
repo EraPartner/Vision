@@ -3,8 +3,9 @@ title: ADR-072 Electron-Native Desktop Integration (macOS)
 type: adr
 status: Accepted
 date: 2026-06-10
-tags: [adr, electron, desktop, macos, security, ipc, frontend, june-2026]
-description: V12 batch — hiddenInset traffic lights, native menu bar + dock menu/badge, CSV drag/open-with import handoff, under-window vibrancy behind the effects toggle, and system-accent theming, all through a new minimal electronAPI bridge with the sandbox posture unchanged
+updated: 2026-06-11
+tags: [adr, electron, desktop, macos, security, ipc, frontend, accelerator-hardening, before-input-event, did-start-navigation, june-2026]
+description: V12 batch — hiddenInset traffic lights, native menu bar + dock menu/badge, CSV drag/open-with import handoff, under-window vibrancy behind the effects toggle, and system-accent theming, all through a new minimal electronAPI bridge with the sandbox posture unchanged. Implementation note (2026-06-11): two post-ship defects fixed — rendererReady reset moved from did-start-loading to did-start-navigation+isSameDocument (eliminates permanent queue jam after React Router navigations), and handleMenuAccelerator on before-input-event bypasses unreliable sandboxed-renderer key-equivalent dispatch for ⌘1-9, ⌘N, ⇧⌘I, ⌃⌘S.
 aliases: [adr-072, electron native, electronAPI bridge, vibrancy, system accent]
 ---
 
@@ -73,3 +74,44 @@ The window is always created with `vibrancy: 'under-window'` + `visualEffectStat
 - [[docs/adr/070-liquid-glass-v2-premium-frontend|ADR-070]] — liquid glass system
 - [[docs/adr/020-glass-system-downgrade-liquid-canvas-removal|ADR-020]] — Electron GPU budget history
 - [[docs/adr/index|All ADRs]]
+
+---
+
+## Implementation Note — Accelerator & Renderer-Ready Bug Fixes (2026-06-11)
+
+Two defects found during end-to-end testing of the packaged app are fixed in `packaging/electron/main.js`. The ADR decision text above stands unchanged; this note records what the original implementation got wrong and how it was corrected.
+
+### Defect 1 — `rendererReady` reset on same-document navigation (root cause of silent queue jam)
+
+**Original code:** `mainWindow.webContents.on('did-start-loading', () => { rendererReady = false; })`
+
+**Problem:** `did-start-loading` fires for *every* navigation, including React Router's `pushState`-based same-document transitions. The renderer only calls `app:renderer-ready` once per document load; after the first client-side route change (e.g., the boot-time route restore), `rendererReady` was permanently set back to `false` and could never be set to `true` again — `pendingAppMessages` accumulated forever. Every subsequent menu bar action, dock menu click, and CSV open-file handoff silently queued and never reached the renderer.
+
+**Fix:** Replaced the listener with:
+```js
+mainWindow.webContents.on('did-start-navigation', (details) => {
+  if (details.isMainFrame && !details.isSameDocument) rendererReady = false;
+});
+```
+`did-start-navigation` exposes `isSameDocument` and `isMainFrame`; the reset now fires only on real document loads and hard reloads. React Router navigations no longer disturb the queue.
+
+### Defect 2 — Sandboxed-renderer accelerators silently swallowed
+
+**Original code:** accelerators (⌘1–⌘9, ⌘N, ⇧⌘I, ⌃⌘S) were declared on menu items via the `accelerator:` field only.
+
+**Problem:** macOS's unhandled-keystroke → native-menu key-equivalent redispatch is unreliable when the sandboxed Electron renderer holds focus. Menu-bar mouse clicks dispatched `menu:action` correctly, but the same items did nothing when pressed via keyboard in the packaged `.app`.
+
+**Fix:** A new `handleMenuAccelerator(event, input)` function is registered on `mainWindow.webContents.on('before-input-event')` inside `createWindow()`. It matches the same chords the menu displays:
+
+| Chord | Match strategy | Action |
+|-------|---------------|--------|
+| ⌘1–⌘9 | `input.code` (`Digit1`…`Digit9`) — physical key, layout-independent | `menuAction('navigate', route.url)` via `GO_MENU_ROUTES` |
+| ⌘N | `input.key === 'n'` | `menuAction('new-transaction')` |
+| ⇧⌘I | `input.key === 'i'` + `input.shift` | `menuAction('navigate', '/import')` |
+| ⌃⌘S (macOS) / Ctrl+Shift+S (other) | `input.key === 's'` + platform-specific modifiers | `menuAction('toggle-sidebar')` |
+
+`event.preventDefault()` on match suppresses any duplicate native-menu dispatch. Auto-repeat events are skipped. Role items (Reload, Zoom, Copy, …) are untouched.
+
+Using `input.code` for digits ensures ⌘1–⌘9 work positionally on AZERTY and other non-QWERTY layouts without requiring `Shift`.
+
+**Verification:** End-to-end test on the real stack confirmed that after a client-side navigation, ⌘7 navigated to `/portfolio` and ⌘1 to `/`. Real-keyboard validation on a built `.app` (including AZERTY) is still pending (logged in TODO.md).

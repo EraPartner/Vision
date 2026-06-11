@@ -69,3 +69,8 @@ interest convention documented in code + feature spec (R7-9).
 - CSSS step tables, progressive brackets + exemption-bracket benefit, donation/childcare/pension credit caps.
 - Multer upload limits + file filters (import 50 MB, attachments), parameterized SQL throughout `filterBuilder`, root vs packaged `docker-compose.yml` parity, root vs electron version match (1.0.2).
 - Backend test suite 128 files / 2083 tests green; `validate-locales` clean.
+
+## Electron shell follow-ups
+
+- [ ] 🔼 **Crash-recovery port walk strands the shell on the error page** — `packaging/electron/main.js` (`findFreePort` + `composeStartOrUp`). If a previous session exits without the quit→`compose stop` path (crash, force-quit, `app.exit`), the containers stay up and keep publishing host port 3002. On the next launch `findFreePort(3002)` can't bind (docker-proxy holds it), walks to 3003, and health-polls a port the running container never publishes → "taking longer than expected" + error page even though the backend is healthy on 3002. Found 2026-06-11 while testing the menu-shortcut fix. **Fix idea:** before walking ports, probe whether the occupant of 3002 *is* the Vision app container (`GET /health` + compose `ps` port match) and adopt it instead of walking; or `compose stop` the project before the port scan when containers are detected running without a live shell. 🛫 2026-06-11
+- [ ] 🔽 **Native menu accelerators unverified with a real keyboard on AZERTY** — the ⌘1-9/⌘N/⇧⌘I/⌃⌘S chords are now matched in `before-input-event` (positional `input.code`), verified end-to-end with synthetic input 2026-06-11. Confirm once by hand on the rebuilt .app (osascript keystroke injection is TCC-blocked for agents). 🛫 2026-06-11

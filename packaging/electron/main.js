@@ -1365,9 +1365,25 @@ function createWindow() {
     }
   });
 
-  // Renderer readiness is per-document: any navigation/reload invalidates the
-  // previous document's app:renderer-ready signal.
-  mainWindow.webContents.on('did-start-loading', () => { rendererReady = false; });
+  // Menu accelerators with click handlers (⌘1-9, ⌘N, ⇧⌘I, ⌃⌘S) are matched
+  // here instead of relying on AppKit key-equivalent dispatch: with the
+  // sandboxed renderer focused, the unhandled-keystroke → menu redispatch is
+  // unreliable, so accelerator-only items silently do nothing from the
+  // keyboard (menu *clicks* were always fine). before-input-event sees every
+  // real keystroke first, and preventDefault() suppresses any late menu
+  // dispatch, so an item can never fire twice. Roles (reload, zoom, copy…)
+  // stay on the native path.
+  mainWindow.webContents.on('before-input-event', handleMenuAccelerator);
+
+  // Renderer readiness is per-document: a real navigation/reload invalidates
+  // the previous document's app:renderer-ready signal. This must NOT listen to
+  // did-start-loading — that also fires for same-document navigations (React
+  // Router pushState), and since the renderer only calls ready() once per
+  // document, resetting there permanently jams sendToApp()'s queue after the
+  // first client-side route change (menu, dock and CSV actions all go silent).
+  mainWindow.webContents.on('did-start-navigation', (details) => {
+    if (details.isMainFrame && !details.isSameDocument) rendererReady = false;
+  });
 
   // Persist the window frame across launches (debounced).
   mainWindow.on('resize', () => scheduleWindowBoundsSave(mainWindow));
@@ -2649,6 +2665,51 @@ const GO_MENU_ROUTES = [
   { url: '/portfolio/net-worth', titleKey: 'nav.netWorth' },
   { url: '/ai-chat', titleKey: 'nav.aiChat' },
 ];
+
+// Keyboard matcher for the accelerator-only menu items (see the
+// before-input-event comment in createWindow). Mirrors the accelerators
+// declared in setupApplicationMenu() — keep both in sync. Digits match on
+// input.code (physical key) so ⌘1-9 stay positional on non-QWERTY layouts
+// (AZERTY digits would otherwise need Shift); letters match on input.key.
+function handleMenuAccelerator(event, input) {
+  if (input.type !== 'keyDown' || input.isAutoRepeat) return;
+  const isMac = process.platform === 'darwin';
+  const primary = isMac ? input.meta : input.control;   // CmdOrCtrl
+  const crossMod = isMac ? input.control : input.meta;  // the other platform's primary
+  if (!primary) return;
+
+  // Go menu: ⌘1 … ⌘9
+  const digit = /^Digit([1-9])$/.exec(input.code || '');
+  if (digit && !input.shift && !input.alt && !crossMod) {
+    const route = GO_MENU_ROUTES[Number(digit[1]) - 1];
+    if (!route) return;
+    event.preventDefault();
+    menuAction('navigate', route.url);
+    return;
+  }
+
+  const key = typeof input.key === 'string' ? input.key.toLowerCase() : '';
+  // File → New Transaction: ⌘N
+  if (key === 'n' && !input.shift && !input.alt && !crossMod) {
+    event.preventDefault();
+    menuAction('new-transaction');
+    return;
+  }
+  // File → Import CSV…: ⇧⌘I
+  if (key === 'i' && input.shift && !input.alt && !crossMod) {
+    event.preventDefault();
+    menuAction('navigate', '/import');
+    return;
+  }
+  // View → Toggle Sidebar: ⌃⌘S on macOS, Ctrl+Shift+S elsewhere
+  const sidebarChord = isMac
+    ? (key === 's' && input.control && !input.shift && !input.alt)
+    : (key === 's' && input.shift && !input.alt && !input.meta);
+  if (sidebarChord) {
+    event.preventDefault();
+    menuAction('toggle-sidebar');
+  }
+}
 
 function setupApplicationMenu() {
   const template = [
