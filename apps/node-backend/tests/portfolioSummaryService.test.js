@@ -99,7 +99,10 @@ describe('getPortfolioSummary', () => {
       totalIncome: 0,
       totalFees: 0,
       totalTaxes: 0,
+      totalAssetGain: 0,
+      totalFxGain: 0,
       totalReturnPct: 0,
+      usedFallbackRate: false,
     });
     expect(result.currency).toBe('EUR');
   });
@@ -138,7 +141,10 @@ describe('getPortfolioSummary', () => {
       })
       .mockResolvedValueOnce({
         rows: [txnRow({ type: 'buy', amount: 100, units: 1, currency: 'USD' })],
-      });
+      })
+      // historical rate index: no stored rates → per-txn conversion falls back
+      // to today's rate (0.9) and the response is flagged
+      .mockResolvedValueOnce({ rows: [] });
 
     const result = await getPortfolioSummary('EUR');
     const s = result.summaries[0];
@@ -149,6 +155,42 @@ describe('getPortfolioSummary', () => {
     expect(s.totalBuyCost).toBe(90);
     expect(s.currency).toBe('EUR');
     expect(s.originalCurrency).toBe('USD');
+    expect(s.usedFallbackRate).toBe(true);
+    expect(result.totals.usedFallbackRate).toBe(true);
+  });
+
+  it('locks invested at the transaction-date rate and attributes the FX gain', async () => {
+    query
+      .mockResolvedValueOnce({
+        rows: [investmentRow({ currency: 'USD', current_price: 200 })],
+      })
+      .mockResolvedValueOnce({
+        // bought at 0.8 EUR/USD (stamped on the transaction)
+        rows: [txnRow({ type: 'buy', amount: 100, units: 1, currency: 'USD', fx_rate_to_eur: 0.8 })],
+      })
+      .mockResolvedValueOnce({ rows: [] });
+
+    const result = await getPortfolioSummary('EUR');
+    const s = result.summaries[0];
+
+    // Invested locked at buy-date rate: 100 USD * 0.8 = 80 EUR (today's 0.9 must not move it)
+    expect(s.totalInvested).toBe(80);
+    expect(s.totalBuyCost).toBe(80);
+    // Value at today's rate: 200 USD * 0.9 = 180 EUR
+    expect(s.currentValue).toBe(180);
+    // Total gain includes FX: 180 − 80 = 100 EUR …
+    expect(s.gainLoss).toBe(100);
+    // … decomposed into native performance (100 USD * 0.9 = 90 EUR) + FX on
+    // the invested capital (100 USD * (0.9 − 0.8) = 10 EUR)
+    expect(s.assetGain).toBe(90);
+    expect(s.fxGain).toBe(10);
+    expect(s.nativeCurrentValue).toBe(200);
+    expect(s.usedFallbackRate).toBe(false);
+
+    expect(result.totals.totalInvested).toBe(80);
+    expect(result.totals.totalGainLoss).toBe(100);
+    expect(result.totals.totalAssetGain).toBe(90);
+    expect(result.totals.totalFxGain).toBe(10);
   });
 
   it('aggregates totals across mixed currencies in target currency', async () => {
@@ -164,7 +206,8 @@ describe('getPortfolioSummary', () => {
           txnRow({ id: 1, investment_id: 1, type: 'buy', amount: 100, units: 1, currency: 'EUR' }),
           txnRow({ id: 2, investment_id: 2, type: 'buy', amount: 200, units: 1, currency: 'USD' }),
         ],
-      });
+      })
+      .mockResolvedValueOnce({ rows: [] });
 
     const result = await getPortfolioSummary('EUR');
 
@@ -250,7 +293,8 @@ describe('getBreakdownSummary (legacy compat)', () => {
       })
       .mockResolvedValueOnce({
         rows: [txnRow({ type: 'buy', amount: 100, units: 1, currency: 'USD' })],
-      });
+      })
+      .mockResolvedValueOnce({ rows: [] });
 
     const summary = await getPortfolioSummary('EUR');
 
@@ -261,12 +305,15 @@ describe('getBreakdownSummary (legacy compat)', () => {
       })
       .mockResolvedValueOnce({
         rows: [txnRow({ type: 'buy', amount: 100, units: 1, currency: 'USD' })],
-      });
+      })
+      .mockResolvedValueOnce({ rows: [] });
     const breakdown = await getBreakdownSummary('EUR');
 
     expect(breakdown[0].currentValue).toBe(summary.summaries[0].currentValue);
     expect(breakdown[0].totalInvested).toBe(summary.summaries[0].totalInvested);
     expect(breakdown[0].gainLoss).toBe(summary.summaries[0].gainLoss);
+    expect(breakdown[0].assetGain).toBe(summary.summaries[0].assetGain);
+    expect(breakdown[0].fxGain).toBe(summary.summaries[0].fxGain);
   });
 });
 

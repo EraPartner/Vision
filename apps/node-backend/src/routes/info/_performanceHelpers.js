@@ -43,6 +43,11 @@ export function mapPortfolioPerformanceSnapshot(snapshot) {
       parseSnapshotNumber(snapshot.inflation_adjusted_value) || parseSnapshotNumber(snapshot.value) || 0,
     gain_loss: parseSnapshotNumber(snapshot.gain_loss),
     return_pct: parseSnapshotNumber(snapshot.return_pct),
+    // Omitted (not 0) when the FX-neutral series isn't available — predates
+    // migration 0039 or the snapshot recompute that fills it.
+    ...(snapshot.value_fx_neutral != null
+      ? { value_fx_neutral: parseSnapshotNumber(snapshot.value_fx_neutral) }
+      : {}),
   };
 }
 
@@ -113,6 +118,10 @@ export async function buildPortfolioPerformancePayload(targetCurrency, startDate
       totalInvested: s.totalInvested,
       gainLoss: s.gainLoss,
       gainLossPercent: s.gainLossPercent,
+      assetGain: s.assetGain,
+      fxGain: s.fxGain,
+      nativeCurrentValue: s.nativeCurrentValue,
+      usedFallbackRate: s.usedFallbackRate,
     })),
     totals: liveSummary.totals,
   };

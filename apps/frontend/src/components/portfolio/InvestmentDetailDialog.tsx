@@ -11,6 +11,7 @@ import {
 import { isUnitBased, isFixedIncome, isRealEstate } from '@/utils/assetClass';
 import { onActivateKeyDown } from '@/utils/a11y';
 import { usePortfolio } from '@/hooks/usePortfolio';
+import { usePortfolioSummaryQuery } from '@/hooks/portfolio/usePortfolioSummary';
 import { AddPortfolioTxnDialog } from './AddPortfolioTxnDialog';
 import { EditInvestmentDialog } from './EditInvestmentDialog';
 import { EditPortfolioTxnDialog } from './EditPortfolioTxnDialog';
@@ -90,6 +91,15 @@ export function InvestmentDetailDialog({
   const unitBased = isUnitBased(investment.assetClass);
   const fixedIncome = isFixedIncome(investment.assetClass);
   const realEstate = isRealEstate(investment.assetClass);
+
+  // FX attribution from the backend summary (it owns the historical-rate
+  // machinery) — only shown for foreign-currency holdings. The query is shared
+  // with the overview/performance pages, so this is usually a cache hit.
+  const targetCurrency = appSettings.defaultCurrency || 'EUR';
+  const { data: apiSummary } = usePortfolioSummaryQuery(targetCurrency);
+  const fxSummary = (investment.currency || 'EUR').toUpperCase() !== targetCurrency.toUpperCase()
+    ? apiSummary?.summaries.find((s) => s.id === investment.id)
+    : undefined;
 
   const handleDeleteTxn = async (txnId: number, txnType: string) => {
     const ok = await confirm({
@@ -337,6 +347,39 @@ export function InvestmentDetailDialog({
                   </div>
                 </CardContent>
               </Card>
+
+              {/* FX attribution — invested at purchase-date rates, gain split
+                  into asset performance vs currency effect */}
+              {fxSummary && typeof fxSummary.fxGain === 'number' && (
+                <Card className="border-primary/20 bg-primary/5">
+                  <CardContent className="pt-4 space-y-2">
+                    <p className="text-sm font-semibold text-muted-foreground">{t('invDetail.fxAttribution')}</p>
+                    <div className="flex justify-between py-1 border-b border-border/50 text-sm">
+                      <span className="text-muted-foreground">{t('portfolio.nativeValue', { currency: investment.currency })}</span>
+                      <span className="font-medium tabular-nums">{fmt(fxSummary.nativeCurrentValue ?? investment.currentValue, investment.currency)}</span>
+                    </div>
+                    <div className="flex justify-between py-1 border-b border-border/50 text-sm">
+                      <span className="text-muted-foreground">{t('invDetail.investedAtHistoricalRates', { currency: targetCurrency })}</span>
+                      <span className="font-medium tabular-nums">{fmt(fxSummary.totalInvested, targetCurrency)}</span>
+                    </div>
+                    <div className="flex justify-between py-1 border-b border-border/50 text-sm">
+                      <span className="text-muted-foreground">{t('portfolio.assetGain')}</span>
+                      <span className={cn("font-medium tabular-nums", (fxSummary.assetGain ?? 0) >= 0 ? "text-accent" : "text-destructive")}>
+                        {(fxSummary.assetGain ?? 0) >= 0 ? '+' : ''}{fmt(fxSummary.assetGain ?? 0, targetCurrency)}
+                      </span>
+                    </div>
+                    <div className="flex justify-between py-1 text-sm">
+                      <span className="text-muted-foreground">{t('portfolio.fxEffect')}</span>
+                      <span className={cn("font-medium tabular-nums", fxSummary.fxGain >= 0 ? "text-accent" : "text-destructive")}>
+                        {fxSummary.fxGain >= 0 ? '+' : ''}{fmt(fxSummary.fxGain, targetCurrency)}
+                      </span>
+                    </div>
+                    {fxSummary.usedFallbackRate && (
+                      <p className="text-xs text-warning">{t('portfolio.fxFallbackNote')}</p>
+                    )}
+                  </CardContent>
+                </Card>
+              )}
 
               {/* Fixed Income Projections */}
               {fixedIncome && investment.projectedAnnualInterest > 0 && (

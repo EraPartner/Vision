@@ -27,6 +27,7 @@ const CHART_KEYS = {
     invested: 'invested',
     inflationAdjusted: 'inflationAdjusted',
     value: 'value',
+    fxNeutral: 'fxNeutral',
     stocksEtfs: 'stocksEtfs',
     crypto: 'crypto',
     metals: 'metals',
@@ -36,6 +37,8 @@ const CHART_KEYS = {
     relativeMetals: 'relativeMetals',
     relativeInflationAdjusted: 'relativeInflationAdjusted',
 } as const;
+
+const FX_NEUTRAL_COLOR = 'hsl(280, 87%, 65%)';
 
 function PerformanceEmptyState() {
     const { t } = useLanguage();
@@ -79,6 +82,7 @@ export default function PerformancePage() {
     const locale = numberFormatToLocale(appSettings.numberFormat);
     const defaultCurrency = appSettings.defaultCurrency || "EUR";
     const [selectedPeriod, setSelectedPeriod] = useState<Period>("all");
+    const [showFxNeutral, setShowFxNeutral] = useState(false);
 
     const { data: portfolioPerformanceData, isLoading } = useQuery({
         queryKey: ["portfolio-performance", defaultCurrency, selectedPeriod],
@@ -117,6 +121,17 @@ export default function PerformancePage() {
     const overallMetrics = portfolioPerformanceData?.metrics ?? null;
     const heatmapData = portfolioPerformanceData?.heatmap ?? { years: [] as number[], data: {} as Record<number, (number | null)[]>, maxAbsPct: 0 };
     const breakdownSummary = portfolioPerformanceData?.breakdownSummary ?? [];
+    const liveTotals = portfolioPerformanceData?.totals;
+
+    // FX attribution is only meaningful when some holding is in a foreign
+    // currency AND the snapshots carry the FX-neutral series (migration 0039
+    // applied + snapshots recomputed). All-EUR portfolios see neither.
+    const hasFxNeutralSeries = useMemo(
+        () => snapshots.some((s) => typeof s.value_fx_neutral === 'number'
+            && Math.abs((s.value_fx_neutral ?? 0) - s.value) > 0.01),
+        [snapshots],
+    );
+    const hasFxExposure = breakdownSummary.some((b) => b.currency && b.currency !== defaultCurrency);
 
     // Lightweight mapping of already-downsampled snapshots to chart format
     const chartData = useMemo(() => snapshots.map((s) => ({
@@ -124,6 +139,7 @@ export default function PerformancePage() {
         [CHART_KEYS.invested]: Math.round(s.invested * 100) / 100,
         [CHART_KEYS.inflationAdjusted]: Math.round(s.inflation_adjusted_value * 100) / 100,
         [CHART_KEYS.value]: Math.round(s.value * 100) / 100,
+        [CHART_KEYS.fxNeutral]: typeof s.value_fx_neutral === 'number' ? Math.round(s.value_fx_neutral * 100) / 100 : undefined,
         [CHART_KEYS.stocksEtfs]: Math.round(s.stocks_etfs_value * 100) / 100,
         [CHART_KEYS.crypto]: Math.round(s.crypto_value * 100) / 100,
         [CHART_KEYS.metals]: Math.round(s.metals_value * 100) / 100,
@@ -217,6 +233,11 @@ export default function PerformancePage() {
                         locale={locale}
                         assetSplit={latestAssetSplit}
                         sparklineData={sparklineData}
+                        fxAttribution={hasFxExposure && liveTotals ? {
+                            assetGain: liveTotals.totalAssetGain ?? 0,
+                            fxGain: liveTotals.totalFxGain ?? 0,
+                            fellBack: liveTotals.usedFallbackRate === true,
+                        } : null}
                         labels={{
                             title: t('portfolio.portfolioValue'),
                             invested: t('portfolio.totalInvested'),
@@ -226,6 +247,9 @@ export default function PerformancePage() {
                             stocksEtfs: t('performance.relativeStocksEtfs'),
                             crypto: t('performance.crypto'),
                             metals: t('performance.metals'),
+                            assetGain: t('portfolio.assetGain'),
+                            fxEffect: t('portfolio.fxEffect'),
+                            fxFallbackNote: t('portfolio.fxFallbackNote'),
                         }}
                     />
                     <CompactReturnCard
@@ -256,13 +280,30 @@ export default function PerformancePage() {
             {chartData.length > 1 && (
                 <Card>
                     <CardHeader>
-                        <CardTitle className="flex items-center gap-2">
-                            <BarChart3 className="h-5 w-5 text-primary" />
-                            {t('performance.valueOverTime')}
-                        </CardTitle>
-                        <CardDescription>
-                            {t('performance.chartDesc', { period: PERIOD_LABELS[selectedPeriod] })}
-                        </CardDescription>
+                        <div className="flex items-start justify-between gap-3">
+                            <div>
+                                <CardTitle className="flex items-center gap-2">
+                                    <BarChart3 className="h-5 w-5 text-primary" />
+                                    {t('performance.valueOverTime')}
+                                </CardTitle>
+                                <CardDescription>
+                                    {t('performance.chartDesc', { period: PERIOD_LABELS[selectedPeriod] })}
+                                </CardDescription>
+                            </div>
+                            {hasFxNeutralSeries && (
+                                <button
+                                    onClick={() => setShowFxNeutral((v) => !v)}
+                                    title={t('performance.fxNeutralDesc')}
+                                    className={`px-3 py-1.5 text-xs font-medium rounded-md border transition-all shrink-0 ${
+                                        showFxNeutral
+                                            ? "bg-background text-foreground shadow-sm border-border"
+                                            : "text-muted-foreground hover:text-foreground border-transparent"
+                                    }`}
+                                >
+                                    {t('performance.fxNeutral')}
+                                </button>
+                            )}
+                        </div>
                     </CardHeader>
                     <CardContent>
                         <VisxAreaChart
@@ -275,6 +316,9 @@ export default function PerformancePage() {
                                 { key: CHART_KEYS.stocksEtfs, label: t('performance.relativeStocksEtfs'), accessor: (d) => d.stocksEtfs, color: 'hsl(0, 72%, 51%)', fillOpacity: 0, strokeWidth: 2 },
                                 { key: CHART_KEYS.crypto, label: t('performance.crypto'), accessor: (d) => d.crypto, color: 'hsl(142, 76%, 36%)', fillOpacity: 0, strokeWidth: 2 },
                                 { key: CHART_KEYS.metals, label: t('performance.metals'), accessor: (d) => d.metals, color: 'hsl(45, 93%, 47%)', fillOpacity: 0, strokeWidth: 2 },
+                                ...(showFxNeutral && hasFxNeutralSeries ? [
+                                    { key: CHART_KEYS.fxNeutral, label: t('performance.fxNeutral'), accessor: (d: typeof chartData[number]) => d.fxNeutral, color: FX_NEUTRAL_COLOR, fillOpacity: 0, dashed: true, strokeWidth: 2 },
+                                ] : []),
                                 { key: CHART_KEYS.value, label: t('portfolio.portfolioValue'), accessor: (d) => d.value, color: 'hsl(var(--primary))', strokeWidth: 2.5 },
                             ]}
                             xIsDate={true}
@@ -293,6 +337,9 @@ export default function PerformancePage() {
                                 { label: t('performance.relativeStocksEtfs'), color: 'hsl(0, 72%, 51%)' },
                                 { label: t('performance.crypto'), color: 'hsl(142, 76%, 36%)' },
                                 { label: t('performance.metals'), color: 'hsl(45, 93%, 47%)' },
+                                ...(showFxNeutral && hasFxNeutralSeries
+                                    ? [{ label: t('performance.fxNeutral'), color: FX_NEUTRAL_COLOR, dashed: true }]
+                                    : []),
                                 { label: t('portfolio.portfolioValue'), color: 'hsl(var(--primary))' },
                             ]}
                         />
@@ -396,6 +443,8 @@ interface TotalValueCardProps {
     locale: string;
     assetSplit: AssetSplit;
     sparklineData: Array<{ day: string; value: number }>;
+    /** Gain decomposition (asset performance vs currency effect); null hides the line. */
+    fxAttribution: { assetGain: number; fxGain: number; fellBack: boolean } | null;
     labels: {
         title: string;
         invested: string;
@@ -405,12 +454,15 @@ interface TotalValueCardProps {
         stocksEtfs: string;
         crypto: string;
         metals: string;
+        assetGain: string;
+        fxEffect: string;
+        fxFallbackNote: string;
     };
 }
 
 function TotalValueCard({
     currentValue, totalInvested, totalGainLoss, totalReturnPct,
-    currency, locale, assetSplit, sparklineData, labels,
+    currency, locale, assetSplit, sparklineData, fxAttribution, labels,
 }: TotalValueCardProps) {
     const isGain = totalGainLoss >= 0;
     const trendGlassClass = isGain ? "liquid-glass-trend-up" : "liquid-glass-trend-down";
@@ -449,6 +501,21 @@ function TotalValueCard({
                             </span>
                         </span>
                     </div>
+                    {fxAttribution && (
+                        <div className="mt-1 text-xs text-muted-foreground tabular-nums">
+                            {labels.assetGain}:{" "}
+                            <span className={fxAttribution.assetGain >= 0 ? "text-success font-medium" : "text-destructive font-medium"}>
+                                {fxAttribution.assetGain >= 0 ? "+" : ""}<Money amount={fxAttribution.assetGain} currency={currency} />
+                            </span>
+                            {" · "}{labels.fxEffect}:{" "}
+                            <span className={fxAttribution.fxGain >= 0 ? "text-success font-medium" : "text-destructive font-medium"}>
+                                {fxAttribution.fxGain >= 0 ? "+" : ""}<Money amount={fxAttribution.fxGain} currency={currency} />
+                            </span>
+                            {fxAttribution.fellBack && (
+                                <span title={labels.fxFallbackNote} aria-label={labels.fxFallbackNote}> ⚠</span>
+                            )}
+                        </div>
+                    )}
                 </div>
 
                 {sparklineData.length > 1 && (

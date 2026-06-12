@@ -88,5 +88,6 @@ portfolio math.
 
 ## Related
 
+- [[docs/adr/074-fx-attribution-historical-rates|ADR-074: FX attribution with purchase-date rates]] — extends the converted track introduced here; `buildInvestmentSummaryCore` gains `opts.fxMultiplierNow` and returns a `converted` block; calculators accept per-txn `fxMultiplier` and `defaultFxMultiplier`
 - [[docs/adr/060-may-2026-monetary-precision-and-deduplication-audit]] — shared money helpers precedent
 - Audit Round 7 findings R7-5 / R7-6 / R7-7 / R7-16 (TODO.md, docs/sessions/2026-06-11-audit-round-7)

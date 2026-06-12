@@ -299,6 +299,6 @@ export function computeHeatmap(snapshots) {
  */
 export function sanitizeSnapshotSpikes(snapshots) {
   return sanitizeIsolatedValueSpikes(snapshots, 'value', {
-    extraFields: ['stocks_etfs_value', 'crypto_value', 'metals_value'],
+    extraFields: ['stocks_etfs_value', 'crypto_value', 'metals_value', 'value_fx_neutral'],
   });
 }

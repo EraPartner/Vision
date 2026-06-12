@@ -3,8 +3,8 @@ title: API Endpoint Matrix
 type: reference
 status: active
 date: 2026-04-27
-updated: 2026-06-01
-last_modified: 2026-06-01
+updated: 2026-06-11
+last_modified: 2026-06-11
 adr-reference: 026
 # Authoritative HTTP-operation count, derived from openapi.yaml and enforced by
 # scripts/check-endpoint-matrix.js (CI verify-generated). Bump when routes change.
@@ -259,7 +259,7 @@ Server-computed aggregations with materialized-view/live/cache distinction. Prod
 
 ## Info/Statistics (15 endpoints — Phase 9 Aggregation Cutover, Phase 14+ Portfolio Totals)
 
-Aggregation routes removed in Phase 9 as migration to `/api/aggregations/*` is complete. These endpoints remain for non-aggregation queries only: portfolio-performance, portfolio-summary (realtime totals, Phase 14), net-worth, exchange-rates, inflation-rates, and supporting refresh endpoints. Portfolio-summary endpoint added 2026-04-29 as single source of truth for dashboard and performance page headline metrics.
+Aggregation routes removed in Phase 9 as migration to `/api/aggregations/*` is complete. These endpoints remain for non-aggregation queries only: portfolio-performance, portfolio-summary (realtime totals, Phase 14), net-worth, exchange-rates, inflation-rates, and supporting refresh endpoints. Portfolio-summary endpoint added 2026-04-29 as single source of truth for dashboard and performance page headline metrics. 2026-06-11 (ADR-074): both portfolio-performance and portfolio-summary gain FX attribution fields (assetGain, fxGain, nativeCurrentValue, usedFallbackRate); flows now converted at transaction-date FX rates; no new endpoints added.
 
 | Method | Path | Description | Rate Limit | Doc |
 |--------|------|-------------|------------|-----|
@@ -276,8 +276,8 @@ Aggregation routes removed in Phase 9 as migration to `/api/aggregations/*` is c
 | GET | `/api/info/inflation-rates` | Inflation rates | 30 req/min | [[docs/api/info\|Info]] |
 | POST | `/api/info/inflation-rates/refresh` | Refresh inflation | admin | [[docs/api/info\|Info]] |
 | POST | `/api/info/refresh-views` | Refresh materialized views | — | [[docs/api/info\|Info]] |
-| GET | `/api/info/portfolio-performance` | Performance snapshots, metrics, heatmap | 30 req/min | [[docs/api/info\|Info]] |
-| GET | `/api/info/portfolio-summary` | Realtime portfolio totals (single source of truth for dashboard + performance) | 60 req/min | [[docs/api/portfolio-summary\|Portfolio Summary]] |
+| GET | `/api/info/portfolio-performance` | Performance snapshots, metrics, heatmap, breakdownSummary. 2026-06-11 (ADR-074): snapshots gain optional `value_fx_neutral`; breakdownSummary entries gain `assetGain`, `fxGain`, `nativeCurrentValue`, `usedFallbackRate` | 30 req/min | [[docs/api/info\|Info]] |
+| GET | `/api/info/portfolio-summary` | Realtime portfolio totals (single source of truth for dashboard + performance). 2026-06-11 (ADR-074): flows converted at transaction-date FX; new `totalAssetGain`, `totalFxGain`, `usedFallbackRate` totals; per-investment `assetGain`, `fxGain`, `nativeCurrentValue`, `usedFallbackRate`; gainLoss = assetGain + fxGain | 60 req/min | [[docs/api/portfolio-summary\|Portfolio Summary]] |
 
 ## AI Chat (9 endpoints + 30 tool-calling tools)
 

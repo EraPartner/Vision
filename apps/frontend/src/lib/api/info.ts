@@ -100,6 +100,8 @@ export function getPortfolioPerformance(params?: {
         inflation_adjusted_value: number;
         gain_loss: number;
         return_pct: number;
+        /** Value at cost-weighted purchase-date FX rates. Absent until migration 0039 + a snapshot recompute. */
+        value_fx_neutral?: number;
     }>;
     metrics: {
         currentValue: number;
@@ -125,6 +127,10 @@ export function getPortfolioPerformance(params?: {
         totalInvested: number;
         gainLoss: number;
         gainLossPercent: number;
+        assetGain?: number;
+        fxGain?: number;
+        nativeCurrentValue?: number;
+        usedFallbackRate?: boolean;
     }>;
     totals?: PortfolioSummaryTotals;
 }> {
@@ -141,7 +147,13 @@ export interface PortfolioSummaryTotals {
     totalIncome: number;
     totalFees: number;
     totalTaxes: number;
+    /** Portion of totalGainLoss from native asset performance (at today's rates). */
+    totalAssetGain: number;
+    /** Portion of totalGainLoss from currency moves (totalGainLoss − totalAssetGain). */
+    totalFxGain: number;
     totalReturnPct: number;
+    /** True when some historical FX rate was missing and today's rate was used instead. */
+    usedFallbackRate: boolean;
 }
 
 export interface PortfolioSummaryItem {
@@ -187,6 +199,13 @@ export interface PortfolioSummaryItem {
     totalGain: number;
     gainLoss: number;
     gainLossPercent: number;
+    /** gainLoss = assetGain (native performance at today's rate) + fxGain (currency effect). */
+    assetGain: number;
+    fxGain: number;
+    /** Current value in the investment's own currency, untouched by FX. */
+    nativeCurrentValue: number;
+    /** True when a historical FX rate was missing and today's rate was used instead. */
+    usedFallbackRate: boolean;
     accruedInterest: number;
     projectedAnnualInterest: number;
     totalAppreciation: number;

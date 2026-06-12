@@ -19,6 +19,24 @@ import { getKinesisAssetConfig } from '../config/kinesisConfig.js';
 import { NotFoundError, ValidationError } from '../middleware/errorHandler.js';
 import { invalidatePortfolioCaches } from '../routes/info/_cache.js';
 import { assertPublicHttpUrl } from '../lib/urlSafety.js';
+import { getStoredRateToEurOnOrBefore, normalizeDateInput } from '../services/currency/rateFetcher.js';
+
+/**
+ * Resolve the FX rate (→EUR) to stamp on a non-EUR portfolio transaction when
+ * the client didn't supply one. DB-only on-or-before lookup (≤ 7 days) — never
+ * blocks the write path on HTTP; rows it can't resolve stay NULL and are
+ * repaired by the startup backfill once historical rates are present.
+ */
+async function autoResolveFxRateToEur(currency, date) {
+  const code = String(currency || 'EUR').toUpperCase().trim();
+  if (code === 'EUR') return undefined;
+  try {
+    return await getStoredRateToEurOnOrBefore(code, normalizeDateInput(date));
+  } catch (err) {
+    logger.warn('fx_rate_to_eur auto-resolution failed', { currency: code, date, error: err.message });
+    return undefined;
+  }
+}
 
 // Custom price-provider URLs are fetched server-side at refresh time, so reject
 // non-public targets at the write boundary too (SSRF defense-in-depth). DNS is
@@ -394,18 +412,24 @@ export async function createTransaction(req, res) {
   const {
     type, date, amount, units, price_per_unit, fees, taxes,
     currency, note, is_recurring, recurrence_interval,
-    recurrence_end_date, fx_rate_to_eur,
+    recurrence_end_date,
   } = req.body;
+  let { fx_rate_to_eur } = req.body;
 
   if (!type || !date) {
     throw new ValidationError('type and date are required');
+  }
+
+  const effectiveCurrency = currency || inv.currency;
+  if (fx_rate_to_eur === undefined || fx_rate_to_eur === null) {
+    fx_rate_to_eur = await autoResolveFxRateToEur(effectiveCurrency, date);
   }
 
   let txn;
   try {
     txn = await portfolioTransactionRepository.create({
       investment_id, type, date, amount, units, price_per_unit, fees, taxes,
-      currency: currency || inv.currency, note, is_recurring,
+      currency: effectiveCurrency, note, is_recurring,
       recurrence_interval, recurrence_end_date, fx_rate_to_eur,
       preloaded_asset_class: inv.asset_class,
     });
@@ -438,10 +462,26 @@ export async function deleteTransaction(req, res) {
 
 export async function updateTransaction(req, res) {
   const txnId = requireTxnId(req);
+  const fields = { ...(req.body || {}) };
+
+  // A date or currency change invalidates the stamped FX rate — recompute it
+  // unless the client supplied one explicitly.
+  if (
+    fields.fx_rate_to_eur === undefined
+    && (fields.date !== undefined || fields.currency !== undefined)
+  ) {
+    const existing = await portfolioTransactionRepository.getById(txnId);
+    if (existing) {
+      const effCurrency = fields.currency ?? existing.currency;
+      const effDate = fields.date ?? existing.date;
+      const rate = await autoResolveFxRateToEur(effCurrency, effDate);
+      if (rate !== undefined) fields.fx_rate_to_eur = rate;
+    }
+  }
 
   let txn;
   try {
-    txn = await portfolioTransactionRepository.update(txnId, req.body || {});
+    txn = await portfolioTransactionRepository.update(txnId, fields);
   } catch (err) {
     translateRepoError(err);
   }

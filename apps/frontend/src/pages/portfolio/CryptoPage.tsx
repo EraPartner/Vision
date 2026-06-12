@@ -2,6 +2,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { TrendingUp, TrendingDown, Trash2, Bitcoin, Eye, DollarSign, ArrowUpRight } from "lucide-react";
 import { usePortfolio } from "@/hooks/usePortfolio";
+import { usePortfolioSummaryQuery } from "@/hooks/portfolio/usePortfolioSummary";
 import { useCurrencyConverter } from "@/hooks/useCurrencyConverter";
 import { AddInvestmentDialog } from "@/components/portfolio/AddInvestmentDialog";
 import { AddPortfolioTxnDialog } from "@/components/portfolio/AddPortfolioTxnDialog";
@@ -36,6 +37,12 @@ export default function CryptoPage() {
   const holdings = byAssetClass('crypto');
 
   const { convertToTarget } = useCurrencyConverter(targetCurrency);
+
+  // Per-investment FX attribution from the backend summary (historical rates);
+  // only rendered when a holding is denominated in a foreign currency.
+  const { data: apiSummary } = usePortfolioSummaryQuery(targetCurrency);
+  const fxInfoById = new Map((apiSummary?.summaries ?? []).map((s) => [s.id, s]));
+  const pageHasFxExposure = holdings.some((h) => (h.currency || 'EUR').toUpperCase() !== targetCurrency.toUpperCase());
 
   function fmt(
     val: number,
@@ -217,6 +224,9 @@ export default function CryptoPage() {
                   <th className="py-2 px-3 text-right font-medium text-muted-foreground">{t('portfolio.value')}</th>
                   <th className="py-2 px-3 text-right font-medium text-muted-foreground">{t('portfolio.unrealized')}</th>
                   <th className="py-2 px-3 text-right font-medium text-muted-foreground">{t('portfolio.realized')}</th>
+                  {pageHasFxExposure && (
+                    <th className="py-2 px-3 text-right font-medium text-muted-foreground" title={t('portfolio.fxEffect')}>{t('portfolio.fxPnl')}</th>
+                  )}
                   <th className="py-2 px-3"></th>
                 </tr>
               </thead>
@@ -261,6 +271,22 @@ export default function CryptoPage() {
                     <td className={cn("text-right py-2 px-3 tabular-nums", h.realizedGain !== 0 ? (h.realizedGain >= 0 ? "text-accent" : "text-destructive") : "text-muted-foreground")}>
                       {h.realizedGain !== 0 ? `${h.realizedGain >= 0 ? "+" : ""}${fmt(convertToTarget(h.realizedGain, h.currency))}` : '—'}
                     </td>
+                    {pageHasFxExposure && (() => {
+                      const fxInfo = fxInfoById.get(h.id);
+                      const isForeign = (h.currency || 'EUR').toUpperCase() !== targetCurrency.toUpperCase();
+                      const fxGain = fxInfo?.fxGain;
+                      if (!isForeign || typeof fxGain !== 'number') {
+                        return <td className="text-right py-2 px-3 tabular-nums text-muted-foreground">—</td>;
+                      }
+                      return (
+                        <td
+                          className={cn("text-right py-2 px-3 tabular-nums", fxGain >= 0 ? "text-accent" : "text-destructive")}
+                          title={fxInfo?.usedFallbackRate ? t('portfolio.fxFallbackNote') : undefined}
+                        >
+                          {fxGain >= 0 ? "+" : ""}{fmt(fxGain)}{fxInfo?.usedFallbackRate ? " ⚠" : ""}
+                        </td>
+                      );
+                    })()}
                     <td className="py-2 px-3">
                       <div className="flex items-center gap-1 justify-end opacity-0 group-hover:opacity-100 transition-opacity">
                         <InvestmentDetailDialog 

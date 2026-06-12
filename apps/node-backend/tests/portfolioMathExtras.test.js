@@ -19,6 +19,11 @@ describe('calculateCostBasis (weighted average)', () => {
       realizedGain: 0,
       totalBuyCost: 0,
       totalSellProceeds: 0,
+      totalCostConv: 0,
+      avgCostBasisConv: 0,
+      realizedGainConv: 0,
+      totalBuyCostConv: 0,
+      totalSellProceedsConv: 0,
     });
   });
 

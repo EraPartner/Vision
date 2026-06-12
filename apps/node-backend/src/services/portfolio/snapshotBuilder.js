@@ -321,6 +321,13 @@ export async function computeDailySnapshots(targetCurrency = 'EUR') {
   }
 
   const unitsByInvestment = {};
+  // Cost-weighted average purchase-date FX multiplier per unit investment:
+  // m̄ = Σ(buyAmount_i × m_i) / Σ(buyAmount_i), where m_i is the txn-date
+  // conversion to the target currency. Valuing units×price at m̄ instead of
+  // the day's rate yields the FX-neutral series — `value − value_fx_neutral`
+  // is the cumulative currency effect on current holdings. Sells reduce both
+  // sums proportionally (m̄ of the remaining position is unchanged).
+  const fxNeutralState = new Map();
   // Money accumulators stay Decimal — float drift compounds across a multi-year
   // day walk and is persisted into portfolio_performance_snapshots.
   let cumulativeInvested = toDecimal(0);
@@ -365,6 +372,13 @@ export async function computeDailySnapshots(targetCurrency = 'EUR') {
         unitsByInvestment[tx.investmentId] = (unitsByInvestment[tx.investmentId] || 0) + tx.units;
         if (tx.units > 0 && tx.amount > 0) lastKnownPrice[tx.investmentId] = txFallbackPrice(tx, inv?.currency, day);
 
+        if (inv && tx.amount > 0) {
+          const fxs = fxNeutralState.get(tx.investmentId) ?? { weight: toDecimal(0), weightedRate: toDecimal(0) };
+          fxs.weight = fxs.weight.plus(tx.amount);
+          fxs.weightedRate = fxs.weightedRate.plus(converted); // amount × m_i
+          fxNeutralState.set(tx.investmentId, fxs);
+        }
+
         if (nonUnitS) {
           // Live summary: fixed-income uses buy+gift; real_estate uses buy only.
           const includeForInvested = nonUnitInv.assetClass !== REAL_ESTATE_ASSET_CLASS || tx.type === 'buy';
@@ -381,6 +395,13 @@ export async function computeDailySnapshots(targetCurrency = 'EUR') {
         const heldUnits = unitsByInvestment[tx.investmentId] || 0;
         unitsByInvestment[tx.investmentId] = heldUnits > 0 ? Math.max(0, heldUnits - tx.units) : heldUnits;
         if (tx.units > 0 && tx.amount > 0) lastKnownPrice[tx.investmentId] = txFallbackPrice(tx, inv?.currency, day);
+
+        const fxs = fxNeutralState.get(tx.investmentId);
+        if (fxs && heldUnits > 0 && tx.units > 0) {
+          const factor = toDecimal(Math.max(0, heldUnits - tx.units)).div(heldUnits);
+          fxs.weight = fxs.weight.times(factor);
+          fxs.weightedRate = fxs.weightedRate.times(factor);
+        }
 
         if (nonUnitS) nonUnitS.runningInvested = nonUnitS.runningInvested.minus(converted);
       } else if (tx.type === 'split') {
@@ -409,6 +430,7 @@ export async function computeDailySnapshots(targetCurrency = 'EUR') {
 
     // Compute portfolio value
     let totalValue = toDecimal(0);
+    let totalValueFxNeutral = toDecimal(0);
     let stocksEtfsValue = toDecimal(0);
     let cryptoValue = toDecimal(0);
     let metalsValue = toDecimal(0);
@@ -434,11 +456,21 @@ export async function computeDailySnapshots(targetCurrency = 'EUR') {
 
       // Market value converts at the rate on the day being valued (latest day
       // uses the latest rate, so the headline value still reconciles).
-      const invValue = convertAmount(toDecimal(units).times(price), inv.currency, undefined, day);
+      const invValueNative = toDecimal(units).times(price);
+      const invValue = convertAmount(invValueNative, inv.currency, undefined, day);
       totalValue = totalValue.plus(invValue);
       if (inv.assetClass === 'stock' || inv.assetClass === 'etf') stocksEtfsValue = stocksEtfsValue.plus(invValue);
       else if (inv.assetClass === 'crypto') cryptoValue = cryptoValue.plus(invValue);
       else if (inv.assetClass === 'metals') metalsValue = metalsValue.plus(invValue);
+
+      // FX-neutral: value the position at its cost-weighted purchase-date
+      // rate. Positions with no recorded buy amounts (e.g. price-only seeds)
+      // have no purchase rate to lock — they contribute at the day's rate.
+      const fxs = fxNeutralState.get(inv.id);
+      const invValueNeutral = fxs && fxs.weight.gt(0)
+        ? invValueNative.times(fxs.weightedRate).div(fxs.weight)
+        : invValue;
+      totalValueFxNeutral = totalValueFxNeutral.plus(invValueNeutral);
     }
 
     // Non-unit assets — value mirrors live summary formulas exactly.
@@ -477,6 +509,9 @@ export async function computeDailySnapshots(targetCurrency = 'EUR') {
       if (invValue.gt(0)) fixedIncomeValue = fixedIncomeValue.plus(invValue);
     }
     totalValue = totalValue.plus(fixedIncomeValue);
+    // Non-unit values accumulate invested capital at txn-date rates already,
+    // so they are FX-neutral by construction — add them unchanged.
+    totalValueFxNeutral = totalValueFxNeutral.plus(fixedIncomeValue);
 
     // Inflation compounding (once per calendar month)
     const monthKey = day.slice(0, 7);
@@ -489,6 +524,7 @@ export async function computeDailySnapshots(targetCurrency = 'EUR') {
       snapshot_date: day,
       invested: roundMoney(cumulativeInvested),
       value: roundMoney(totalValue),
+      value_fx_neutral: roundMoney(totalValueFxNeutral),
       stocks_etfs_value: roundMoney(stocksEtfsValue),
       crypto_value: roundMoney(cryptoValue),
       metals_value: roundMoney(metalsValue),
@@ -519,6 +555,23 @@ export async function computeDailySnapshots(targetCurrency = 'EUR') {
 const BATCH_SIZE = 500;
 
 /**
+ * Whether the snapshots table has the value_fx_neutral column (migration 0039).
+ * Migrations are user-applied, so the writer degrades gracefully on databases
+ * that haven't run it yet — the FX-neutral series is simply not persisted.
+ */
+async function hasFxNeutralColumn() {
+  const result = await query(`
+    SELECT 1
+    FROM information_schema.columns
+    WHERE table_schema = current_schema()
+      AND table_name = 'portfolio_performance_snapshots'
+      AND column_name = 'value_fx_neutral'
+    LIMIT 1
+  `);
+  return result.rows.length > 0;
+}
+
+/**
  * Recompute all daily snapshots and persist to portfolio_performance_snapshots.
  *
  * @param {string} targetCurrency
@@ -533,6 +586,33 @@ export async function computeAndStoreSnapshots(targetCurrency = 'EUR') {
     return [];
   }
 
+  const includeFxNeutral = await hasFxNeutralColumn();
+  if (!includeFxNeutral) {
+    logger.warn('portfolio_performance_snapshots.value_fx_neutral missing — apply migration 0039 to store the FX-neutral series');
+  }
+
+  const columns = [
+    'snapshot_date', 'invested', 'value',
+    'stocks_etfs_value', 'crypto_value', 'metals_value', 'cash_value',
+    'gain_loss', 'return_pct', 'currency',
+    'inflation_adjusted_value',
+    'stocks_etfs_invested', 'crypto_invested', 'metals_invested',
+    ...(includeFxNeutral ? ['value_fx_neutral'] : []),
+  ];
+  const snapParams = (snap) => [
+    snap.snapshot_date, snap.invested, snap.value,
+    snap.stocks_etfs_value, snap.crypto_value, snap.metals_value, snap.cash_value,
+    snap.gain_loss, snap.return_pct, targetCurrency,
+    snap.inflation_adjusted_value,
+    snap.stocks_etfs_invested, snap.crypto_invested, snap.metals_invested,
+    ...(includeFxNeutral ? [snap.value_fx_neutral] : []),
+  ];
+  const updateSet = columns
+    .filter((c) => c !== 'snapshot_date' && c !== 'currency')
+    .map((c) => `${c} = EXCLUDED.${c}`)
+    .concat('computed_at = NOW()')
+    .join(', ');
+
   // Atomic replace: DELETE + INSERTs in one transaction so concurrent readers
   // (e.g. /api/info/net-worth during startup warmup) see either fully-old or
   // fully-new state via Postgres MVCC — never an empty/partial table.
@@ -546,41 +626,14 @@ export async function computeAndStoreSnapshots(targetCurrency = 'EUR') {
       let p = 1;
 
       for (const snap of batch) {
-        values.push(
-          `($${p++},$${p++},$${p++},$${p++},$${p++},$${p++},$${p++},$${p++},$${p++},$${p++},$${p++},$${p++},$${p++},$${p++},NOW())`
-        );
-        params.push(
-          snap.snapshot_date, snap.invested, snap.value,
-          snap.stocks_etfs_value, snap.crypto_value, snap.metals_value, snap.cash_value,
-          snap.gain_loss, snap.return_pct, targetCurrency,
-          snap.inflation_adjusted_value,
-          snap.stocks_etfs_invested, snap.crypto_invested, snap.metals_invested,
-        );
+        values.push(`(${columns.map(() => `$${p++}`).join(',')},NOW())`);
+        params.push(...snapParams(snap));
       }
 
       await client.query(`
-        INSERT INTO portfolio_performance_snapshots (
-          snapshot_date, invested, value,
-          stocks_etfs_value, crypto_value, metals_value, cash_value,
-          gain_loss, return_pct, currency,
-          inflation_adjusted_value,
-          stocks_etfs_invested, crypto_invested, metals_invested,
-          computed_at
-        ) VALUES ${values.join(', ')}
-        ON CONFLICT (snapshot_date, currency) DO UPDATE SET
-          invested                = EXCLUDED.invested,
-          value                   = EXCLUDED.value,
-          stocks_etfs_value       = EXCLUDED.stocks_etfs_value,
-          crypto_value            = EXCLUDED.crypto_value,
-          metals_value            = EXCLUDED.metals_value,
-          cash_value              = EXCLUDED.cash_value,
-          gain_loss               = EXCLUDED.gain_loss,
-          return_pct              = EXCLUDED.return_pct,
-          inflation_adjusted_value= EXCLUDED.inflation_adjusted_value,
-          stocks_etfs_invested    = EXCLUDED.stocks_etfs_invested,
-          crypto_invested         = EXCLUDED.crypto_invested,
-          metals_invested         = EXCLUDED.metals_invested,
-          computed_at             = NOW()
+        INSERT INTO portfolio_performance_snapshots (${columns.join(', ')}, computed_at)
+        VALUES ${values.join(', ')}
+        ON CONFLICT (snapshot_date, currency) DO UPDATE SET ${updateSet}
       `, params);
     }
   });

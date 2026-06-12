@@ -3,11 +3,11 @@ title: Feature - Portfolio & Investments
 type: feature
 status: active
 date: 2026-04-27
-last_modified: 2026-06-01
+last_modified: 2026-06-11
 updated: 2026-06-11
-tags: [feature, portfolio, investments, stocks, crypto, metals, phase-1, phase-3.5, phase-3.6, phase-9, phase-8, phase-14, pdf-export, offline-resilience, stale-prices, online-status-detection, graceful-degradation, portfolio-summary, realtime-totals, decimal-precision, monetary-math, snapshot-valuation-parity, fixed-income-accrual, real-estate-appreciation, net-worth-reconciliation, historical-fx, snapshot-fx, loading-states, error-states, page-error, skeleton, portfolio-unit-math, shared-utils, splits-event, return-of-capital, banker-rounding]
+tags: [feature, portfolio, investments, stocks, crypto, metals, phase-1, phase-3.5, phase-3.6, phase-9, phase-8, phase-14, pdf-export, offline-resilience, stale-prices, online-status-detection, graceful-degradation, portfolio-summary, realtime-totals, decimal-precision, monetary-math, snapshot-valuation-parity, fixed-income-accrual, real-estate-appreciation, net-worth-reconciliation, historical-fx, snapshot-fx, loading-states, error-states, page-error, skeleton, portfolio-unit-math, shared-utils, splits-event, return-of-capital, banker-rounding, fx-attribution, asset-gain, fx-gain, purchase-date-rates, value-fx-neutral, adr-074]
 aliases: [portfolio-feature, investments-feature, holdings, net-worth, stocks, crypto, real-estate, savings, bonds, metals, performance, watchlist]
-description: Track stocks, ETFs, crypto, metals, real estate, savings, and bonds; includes Phase 8 PDF report export with 6 portfolio sections. 2026-05-29 adds historical FX in snapshots and loading/error states on all asset pages. June 2026 adds snapshotBuilder split/return_of_capital events, APP_TIMEZONE day-boundary fix, and shared portfolioUnitMath.ts.
+description: Track stocks, ETFs, crypto, metals, real estate, savings, and bonds; includes Phase 8 PDF report export with 6 portfolio sections. 2026-05-29 adds historical FX in snapshots and loading/error states on all asset pages. June 2026 adds snapshotBuilder split/return_of_capital events, APP_TIMEZONE day-boundary fix, shared portfolioUnitMath.ts, and FX attribution UI (ADR-074): asset gain / FX effect decomposition on overview, performance, asset pages, and investment detail.
 related_code: ["apps/node-backend/src/routes/investments.js", "apps/node-backend/src/services/priceProviderService.js", "apps/node-backend/src/services/portfolioPerformanceSnapshotService.js", "apps/node-backend/src/services/portfolio/portfolioSummaryService.js", "apps/node-backend/src/routes/info/portfolioSummary.js", "apps/frontend/src/pages/portfolio/PerformancePage.tsx", "apps/frontend/src/pages/portfolio/MetalsPage.tsx", "apps/frontend/src/pages/portfolio/PortfolioOverviewPage.tsx", "apps/frontend/src/hooks/portfolio/usePortfolioSummary.ts", "apps/frontend/src/hooks/usePortfolio.ts", "apps/frontend/src/lib/api.ts"]
 ---
 
@@ -142,6 +142,7 @@ POST /api/investments/:id/transactions
 ```
 
 - `fx_rate_to_eur` is optional and persisted per transaction to preserve the effective FX used at booking time.
+- **Auto-resolve (2026-06-11, ADR-074):** On `POST /api/investments/:id/transactions` and `PATCH /api/investments/transactions/:txnId`, when `currency ≠ EUR` and `fx_rate_to_eur` is not supplied, the backend resolves the on-or-before stored rate from `exchange_rates` (≤7-day lookback, DB-only — no outbound HTTP). On PATCH, a date or currency change also recomputes `fx_rate_to_eur` unless the field is explicitly provided in the request.
 - Add/Edit portfolio transaction dialogs now expose an optional `fx_rate_to_eur` input so users can lock a manual booking FX per transaction.
 - Backend create path reuses preloaded investment metadata by passing `preloaded_asset_class` from investments route into `portfolioTransactionRepository.create(...)`, removing a duplicate asset-class lookup query while preserving validation and response behavior.
 - Investment live price refresh now applies bounded write concurrency (batched updates) instead of an unbounded all-at-once write fan-out, reducing pool contention risk while preserving refresh result payload semantics.
@@ -342,8 +343,8 @@ Current behavior:
   - **Invested capital** (transaction amounts): converted at the rate on the transaction date, or at the stored `fx_rate_to_eur` when present.
   - **Latest day**: always uses the `is_latest` rate so the headline snapshot value reconciles with `/portfolio-summary` (and the Net Worth "Investments" total remains consistent with Portfolio Overview).
 
-  > [!info] Invested cost-basis caveat for foreign holdings
-  > The snapshot `invested` column for foreign-currency holdings now reflects true historical cost (e.g., a USD buy in 2023 uses the 2023 EUR/USD rate). The live Portfolio Summary endpoint restates invested at the latest FX rate. Users may therefore see a small difference between the Performance page "Total Invested" (historical snapshot) and the Portfolio Overview "Total Invested" (live restatement) for foreign holdings purchased when exchange rates differed significantly from today. This is correct behaviour — snapshots show what was paid; the live summary shows current equivalent.
+  > [!info] Invested cost-basis — resolved by ADR-074 (2026-06-11)
+  > The snapshot `invested` column uses transaction-date FX rates. As of ADR-074, the live Portfolio Summary endpoint also converts invested capital at transaction-date rates (no longer at today's rate). Performance page "Total Invested" and Portfolio Overview "Total Invested" now use the same semantics — the prior divergence is closed.
 
 Code links: [[apps/node-backend/src/repositories/infoRepository.js]], [[apps/node-backend/tests/infoRepository.test.js]], [[apps/frontend/src/pages/portfolio/net-worth/NetWorthPage.tsx]], [[apps/frontend/src/lib/api.ts]], [[apps/node-backend/src/services/portfolio/snapshotBuilder.js]], [[apps/node-backend/tests/portfolioPerformanceSnapshotService.test.js]]
 
@@ -565,6 +566,8 @@ Portfolio tax calculations support multiple cost basis accounting methods, confi
   - `calculateCostBasis()` — Weighted average method
   - `calculateCostBasisFIFO()` — FIFO method (immutable-safe: uses spread operations, returns immutable lot copies)
   - `calculateCostBasisLIFO()` — LIFO method (immutable-safe: uses spread operations, returns immutable lot copies)
+  - All calculators accept optional `opts.fxMultiplier` (per-transaction FX multiplier array) and `opts.defaultFxMultiplier` (fallback when a transaction has no stamped rate); they return a parallel **converted track** (`totalCostConv`, `avgCostBasisConv`, `realizedGainConv`, `totalBuyCostConv`, `totalSellProceedsConv`) — added in ADR-074 so both sides compute lot-accurate converted realized gains
+  - `buildInvestmentSummaryCore(inv, txns, opts)` accepts `opts.fxMultiplierNow` (today's rate for current-value conversion) and returns a `converted` block alongside the native block; with no FX inputs it degrades to native numbers (previous behaviour)
   - All support `buy`, `sell`, `gift`, `split`, `return_of_capital`, `merger`, `spinoff` transaction types
   - `applyEventToLots()` helper handles corporate actions (splits, return_of_capital) with immutable lot transformations
 - Frontend types in `[[apps/frontend/src/stores/settingsStore.ts]]`: `type CostBasisMethod = 'weighted_avg' | 'fifo' | 'lifo'`
@@ -640,12 +643,48 @@ Portfolio report is available from the Portfolio Overview page (`/portfolio`) an
 
 See [[docs/api/reports#post-apireportsportfolio|Reports API: Portfolio Endpoint]] for request/response details.
 
+## FX Attribution (2026-06-11, ADR-074)
+
+Multi-currency portfolios now expose a decomposition of total gain into **asset gain** (pure performance in the investment's native currency) and **FX gain** (currency movement). The identity `gainLoss = assetGain + fxGain` holds per investment and in totals.
+
+### Where it appears in the UI
+
+| Surface | What is shown |
+|---------|--------------|
+| **Portfolio Overview — Total Gain/Loss card** | Subline: "Asset gain: X · FX effect: Y" beneath the headline gain/loss |
+| **Stocks & ETFs / Metals tables** | FX P/L column — shown only when at least one holding is in a foreign currency |
+| **Crypto table** | FX P/L column — same condition |
+| **Performance page — headline metrics** | FX attribution line below Total Gain/Loss |
+| **Performance page — value-over-time chart** | Optional FX-neutral toggle (dashed series) showing `value_fx_neutral` when migration 0039 has been applied and snapshots recomputed |
+| **Investment detail dialog** | FX Attribution card: shows `assetGain`, `fxGain`, `nativeCurrentValue` |
+
+### Fallback rate disclosure
+
+When a transaction lacked a transaction-date rate and the backend fell back to today's rate, the `usedFallbackRate` flag is `true` in the API response. The UI surfaces this as a small warning callout on the relevant card or row, indicating that the FX attribution figures may be approximate for that investment.
+
+> [!warning]
+> The FX-neutral chart toggle on the Performance page requires migration `0039_add_value_fx_neutral_to_snapshots` to be applied (`bun run db:upgrade`) and snapshots to be recomputed (happens automatically on next startup after migration). Until then, the toggle is hidden.
+
+### Semantics of invested/gainLoss after ADR-074
+
+Before ADR-074, `totalInvested` was restated at today's FX on every request. After ADR-074:
+
+- **`totalInvested`** reflects what was actually paid in EUR-equivalent at the time of purchase. It does not move with the FX market.
+- **`gainLoss`** includes the FX component. A USD holding that gained 0% in USD terms but whose currency strengthened 5% vs EUR will show a positive `gainLoss` driven entirely by `fxGain`.
+- The live portfolio totals and the snapshot series now agree on semantics (both use purchase-date rates for invested capital), closing the contradiction that existed before.
+
+Code links: [[apps/node-backend/src/services/portfolio/portfolioSummaryService.js]], [[apps/node-backend/src/routes/info/_performanceHelpers.js]], [[apps/node-backend/src/controllers/investmentController.js]], [[packages/shared-utils/src/portfolio.js]], [[docs/adr/074-fx-attribution-historical-rates|ADR-074]]
+
 ## Related
 
 - [[docs/api/investments|API: Investments]]
 - [[docs/api/watchlist|API: Watchlist]]
+- [[docs/api/portfolio-summary|Portfolio Summary API]] — FX attribution response fields
 - [[docs/integrations/price-providers|Price Providers]] — Live and historical price data
 - [[docs/integrations/kinesis-price-provider|Kinesis Price Provider]] — Metals and commodities
+- [[docs/integrations/currency-conversion|Currency Conversion]] — ECB full-history tier, startup backfill
+- [[docs/adr/074-fx-attribution-historical-rates|ADR-074]] — FX attribution with purchase-date rates
+- [[docs/adr/073-shared-portfolio-math-package|ADR-073]] — Shared portfolio math (converted track)
 - [[docs/adr/002-database-schema|Database Schema]]
 
 ## Migrations
@@ -665,3 +704,4 @@ See [[docs/api/reports#post-apireportsportfolio|Reports API: Portfolio Endpoint]
 - `0022_add_kinesis_price_provider_enum.py` — Added `kinesis` to `price_provider` enum
 - `0023_portfolio_performance_snapshots.py` — Added `portfolio_performance_snapshots` table for daily performance caching
 - `0024_per_class_invested_columns.py` — Added per-class invested columns (`stocks_etfs_invested`, `crypto_invested`, `metals_invested`) to performance snapshots
+- `0039_add_value_fx_neutral_to_snapshots.py` — Added nullable `value_fx_neutral NUMERIC(18,2)` to `portfolio_performance_snapshots`; writer detects column presence and degrades gracefully (ADR-074)

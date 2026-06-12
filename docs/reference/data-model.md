@@ -3,10 +3,10 @@ title: Data Model Reference
 type: reference
 status: active
 date: 2026-04-24
-updated: 2026-06-01
-last_modified: 2026-06-01
-tags: [reference, data-model, entities, database, schema, phase-5a, phase-0, phase-1, may-2026, tags, tagging, orthogonal-dimension, aggregations, migration-0035, saved-custom-parsers, custom-parser-configs, adr-066]
-description: Complete reference for all data entities in Vision — core, portfolio, planning, supporting, and aggregation entities. Includes exchange_rate_cache (Phase 0), aggregation tables (Phase 1, consolidated in 0035), attachment entity (Phase 5A), transaction tags (May 2026), and custom_parser_configs (June 2026, ADR-066).
+updated: 2026-06-11
+last_modified: 2026-06-11
+tags: [reference, data-model, entities, database, schema, phase-5a, phase-0, phase-1, may-2026, tags, tagging, orthogonal-dimension, aggregations, migration-0035, saved-custom-parsers, custom-parser-configs, adr-066, fx-attribution, value-fx-neutral, adr-074, migration-0039]
+description: Complete reference for all data entities in Vision — core, portfolio, planning, supporting, and aggregation entities. Includes exchange_rate_cache (Phase 0), aggregation tables (Phase 1, consolidated in 0035), attachment entity (Phase 5A), transaction tags (May 2026), custom_parser_configs (June 2026, ADR-066), and value_fx_neutral snapshot column (June 2026, ADR-074 migration 0039).
 aliases: [data model, entities, domain model, schema entities]
 related_code: ["apps/node-backend/src/repositories/", "alembic/versions/"]
 ---
@@ -289,12 +289,16 @@ related_code: ["apps/node-backend/src/repositories/", "alembic/versions/"]
 | `gain_loss` | NUMERIC(18,2) | Absolute gain/loss (`value - invested`) |
 | `return_pct` | NUMERIC(8,4) | Percentage gain/loss |
 | `inflation_adjusted_value` | NUMERIC(18,2) | Value adjusted for Belgian inflation |
+| `value_fx_neutral` | NUMERIC(18,2) NULLABLE | **New (ADR-074, migration 0039).** Portfolio value at each investment's cost-weighted average purchase-date rate. `value − value_fx_neutral` = cumulative FX effect. Absent (NULL) until migration 0039 is applied and snapshots are recomputed. Writer detects column presence and degrades gracefully on un-migrated databases. |
 | `computed_at` | TIMESTAMPTZ | When this row was last computed |
 
 > [!info] Valuation parity (2026-05-18)
 > `cash_value` (and by extension `value`) now mirrors `portfolioSummaryService` formulas exactly. The latest snapshot's `value` reconciles with `GET /api/info/portfolio-summary`. See [[docs/adr/061-snapshot-valuation-parity|ADR-061]].
 
-**Related:** [[docs/performance/caching-strategies|Caching Strategies]], [[docs/adr/043-portfolio-snapshot-atomicity|ADR-043]], [[docs/adr/061-snapshot-valuation-parity|ADR-061]]
+> [!info] FX-neutral series (2026-06-11)
+> `value_fx_neutral` is added by migration `0039_add_value_fx_neutral_to_snapshots`. Until the migration is applied and snapshots are recomputed (next startup after `bun run db:upgrade`), the column is absent and the FX-neutral performance chart toggle shows no data. See [[docs/adr/074-fx-attribution-historical-rates|ADR-074]].
+
+**Related:** [[docs/performance/caching-strategies|Caching Strategies]], [[docs/adr/043-portfolio-snapshot-atomicity|ADR-043]], [[docs/adr/061-snapshot-valuation-parity|ADR-061]], [[docs/adr/074-fx-attribution-historical-rates|ADR-074]]
 
 ---
 

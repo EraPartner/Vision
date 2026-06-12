@@ -12,6 +12,7 @@
 
 import { query } from '../../database/connection.js';
 import { convertToCurrency } from '../currency/currencyConversionService.js';
+import { buildHistoricalRateIndex, findRateOnOrBeforeInIndex } from '../currency/rateFetcher.js';
 import { buildInvestmentSummaryCore } from '@vision/shared-utils/portfolio';
 import { settingsRepository } from '../../repositories/settingsRepository.js';
 import { todayAppDateString } from '../../lib/timezone.js';
@@ -66,7 +67,8 @@ export async function getPortfolioSummary(targetCurrency = 'EUR') {
              COALESCE(pt.fees, 0) AS fees,
              COALESCE(pt.taxes, 0) AS taxes,
              to_char(pt.date::date, 'YYYY-MM-DD') AS date,
-             COALESCE(pt.currency, i.currency, 'EUR') AS currency
+             COALESCE(pt.currency, i.currency, 'EUR') AS currency,
+             pt.fx_rate_to_eur
       FROM portfolio_transactions pt
       JOIN investments i ON i.id = pt.investment_id
       WHERE i.is_active = true
@@ -81,10 +83,15 @@ export async function getPortfolioSummary(targetCurrency = 'EUR') {
     txnsByInvestment.get(id).push(txn);
   }
 
-  // Resolve the FX multiplier once per *distinct* investment currency rather
-  // than once per investment — buildInvestmentSummary then runs synchronously.
+  // Resolve the FX multiplier once per *distinct* currency rather than once
+  // per investment — buildInvestmentSummary then runs synchronously. Both
+  // investment currencies (current-value conversion) and transaction
+  // currencies (per-txn fallback) are needed.
   const distinctCurrencies = [
-    ...new Set(investmentsResult.rows.map((inv) => (inv.currency || 'EUR').toUpperCase())),
+    ...new Set([
+      ...investmentsResult.rows.map((inv) => (inv.currency || 'EUR').toUpperCase()),
+      ...txnResult.rows.map((txn) => (txn.currency || 'EUR').toUpperCase()),
+    ]),
   ];
   const multiplierByCurrency = new Map();
   await Promise.all(
@@ -95,6 +102,12 @@ export async function getPortfolioSummary(targetCurrency = 'EUR') {
       );
     })
   );
+
+  // Historical rates for every involved currency (plus the target), so each
+  // transaction converts at the rate of ITS date — invested capital must not
+  // move when today's rate does (the FX-attribution contract).
+  const historicalIndex = await loadHistoricalRateIndex(distinctCurrencies, target);
+  annotateTransactionFxMultipliers(txnResult.rows, target, historicalIndex, multiplierByCurrency);
 
   const summaries = investmentsResult.rows.map((inv) =>
     buildInvestmentSummary(inv, txnsByInvestment.get(Number(inv.id)) ?? [], target, multiplierByCurrency, {
@@ -114,45 +127,100 @@ export async function getPortfolioSummary(targetCurrency = 'EUR') {
 }
 
 /**
+ * Load all stored historical rates for the involved currencies into an
+ * in-memory index (sorted per currency, binary-searched per lookup).
+ */
+async function loadHistoricalRateIndex(currencies, target) {
+  const relevant = [...new Set([...currencies, target])].filter((c) => c && c !== 'EUR');
+  if (relevant.length === 0) return new Map();
+  const result = await query(
+    `SELECT currency_code, to_char(rate_date, 'YYYY-MM-DD') AS rate_date, rate_to_eur
+     FROM exchange_rates
+     WHERE currency_code = ANY($1::text[])
+     ORDER BY currency_code ASC, rate_date ASC`,
+    [relevant]
+  );
+  return buildHistoricalRateIndex(result.rows || []);
+}
+
+/**
+ * Attach `fxMultiplier` (txn currency → target at the txn's date) to each
+ * transaction row, preferring the rate stamped on the transaction
+ * (fx_rate_to_eur). Rows whose historical rate is unresolvable fall back to
+ * today's rate and are flagged so the response can disclose it.
+ */
+function annotateTransactionFxMultipliers(txns, target, historicalIndex, multiplierByCurrency) {
+  for (const txn of txns) {
+    const txnCurrency = (txn.currency || 'EUR').toUpperCase();
+    if (txnCurrency === target) {
+      txn.fxMultiplier = 1;
+      continue;
+    }
+
+    const stampedRate = Number(txn.fx_rate_to_eur);
+    const rateFrom = Number.isFinite(stampedRate) && stampedRate > 0
+      ? stampedRate
+      : findRateOnOrBeforeInIndex(historicalIndex, txnCurrency, txn.date);
+    const rateTo = target === 'EUR'
+      ? 1
+      : findRateOnOrBeforeInIndex(historicalIndex, target, txn.date);
+
+    if (rateFrom !== undefined && rateTo !== undefined && rateTo > 0) {
+      txn.fxMultiplier = rateFrom / rateTo;
+    } else {
+      txn.fxMultiplier = multiplierByCurrency.get(txnCurrency) ?? 1;
+      txn._fxFellBack = true;
+    }
+  }
+}
+
+/**
  * Compute a rich summary for a single investment, with all monetary fields
  * pre-converted to targetCurrency.
  *
  * The math lives in @vision/shared-utils/portfolio (buildInvestmentSummaryCore)
  * and is shared verbatim with the frontend hook — only FX conversion, rounding
- * and response shaping happen here.
+ * and response shaping happen here. Flow amounts (invested, buy cost, fees,
+ * income, realized gains) convert at their transaction-date rates; holdings
+ * values (current value/price, accrued interest) convert at today's rate. The
+ * resulting gain therefore includes the FX component, decomposed into
+ * assetGain + fxGain (ADR: FX attribution).
  *
  * @param {object} inv  raw investment row
- * @param {Array}  txns transaction rows for this investment
+ * @param {Array}  txns transaction rows for this investment (fxMultiplier-annotated)
  * @param {string} targetCurrency
- * @param {Map<string, number>} multiplierByCurrency  FX multiplier per investment currency
+ * @param {Map<string, number>} multiplierByCurrency  FX multiplier per currency
  * @param {{ costBasisMethod: string, todayYmd: string }} opts
  */
 function buildInvestmentSummary(inv, txns, targetCurrency, multiplierByCurrency, opts) {
-  const core = buildInvestmentSummaryCore(inv, txns, opts);
-
   const invCurrency = (inv.currency || 'EUR').toUpperCase();
   // Multiplier was resolved once per distinct currency by the caller.
   const multiplier = multiplierByCurrency.get(invCurrency) ?? 1;
+
+  const core = buildInvestmentSummaryCore(inv, txns, { ...opts, fxMultiplierNow: multiplier });
+  const cv = core.converted;
   const conv = (v) => multiply(v, multiplier);
 
-  const convertedCurrentValue = conv(core.currentValue);
-  const convertedTotalInvested = conv(core.totalInvested);
-  const convertedTotalBuyCost = conv(core.totalBuyCost);
-  const convertedTotalSellProceeds = conv(core.totalSellProceeds);
-  const convertedTotalFees = conv(core.totalFees);
-  const convertedTotalTaxes = conv(core.totalTaxes);
-  const convertedTotalDividends = conv(core.totalDividends);
-  const convertedTotalIncome = conv(core.totalIncome);
-  const convertedRealizedGain = conv(core.realizedGain);
-  const convertedUnrealizedGain = conv(core.unrealizedGain);
-  const convertedTotalGain = conv(core.totalGain);
-  const convertedGainLoss = conv(core.gainLoss);
+  const convertedCurrentValue = cv.currentValue;
+  const convertedTotalInvested = cv.totalInvested;
+  const convertedTotalBuyCost = cv.totalBuyCost;
+  const convertedTotalSellProceeds = cv.totalSellProceeds;
+  const convertedTotalFees = cv.totalFees;
+  const convertedTotalTaxes = cv.totalTaxes;
+  const convertedTotalDividends = cv.totalDividends;
+  const convertedTotalIncome = cv.totalIncome;
+  const convertedRealizedGain = cv.realizedGain;
+  const convertedUnrealizedGain = cv.unrealizedGain;
+  const convertedTotalGain = cv.totalGain;
+  const convertedGainLoss = cv.gainLoss;
+  const convertedAvgCostBasis = cv.avgCostBasis;
   const convertedAccruedInterest = conv(core.accruedInterest);
   const convertedProjectedInterest = conv(core.projectedAnnualInterest);
   const convertedTotalAppreciation = conv(core.totalAppreciation);
-  const convertedAvgCostBasis = conv(core.avgCostBasis);
   const convertedCurrentPrice = conv(Number(inv.current_price) || 0);
-  const { totalUnits, gainLossPercent } = core;
+  const { totalUnits } = core;
+  const gainLossPercent = cv.gainLossPercent;
+  const usedFallbackRate = txns.some((t) => t._fxFellBack === true);
 
   return {
     // Identity passthrough — base investment fields the frontend already uses
@@ -212,6 +280,14 @@ function buildInvestmentSummary(inv, txns, targetCurrency, multiplierByCurrency,
     gainLoss: round2(convertedGainLoss),
     gainLossPercent: round2(gainLossPercent),
 
+    // FX attribution: gainLoss = assetGain (native performance at today's
+    // rate) + fxGain (currency effect). nativeCurrentValue is the holding's
+    // value in its own currency, untouched by FX.
+    assetGain: round2(cv.assetGain),
+    fxGain: round2(cv.fxGain),
+    nativeCurrentValue: round2(core.currentValue),
+    usedFallbackRate,
+
     accruedInterest: round2(convertedAccruedInterest),
     projectedAnnualInterest: round2(convertedProjectedInterest),
     totalAppreciation: round2(convertedTotalAppreciation),
@@ -240,6 +316,8 @@ function aggregateTotals(summaries) {
     totalIncome: addAll(summaries.map((s) => s.totalIncome)),
     totalFees: addAll(summaries.map((s) => s.totalFees)),
     totalTaxes: addAll(summaries.map((s) => s.totalTaxes)),
+    totalAssetGain: addAll(summaries.map((s) => s.assetGain)),
+    totalFxGain: addAll(summaries.map((s) => s.fxGain)),
   };
 
   const totalReturnPct = acc.totalInvested.gt(0)
@@ -256,7 +334,10 @@ function aggregateTotals(summaries) {
     totalIncome: round2(acc.totalIncome),
     totalFees: round2(acc.totalFees),
     totalTaxes: round2(acc.totalTaxes),
+    totalAssetGain: round2(acc.totalAssetGain),
+    totalFxGain: round2(acc.totalFxGain),
     totalReturnPct: round2(totalReturnPct),
+    usedFallbackRate: summaries.some((s) => s.usedFallbackRate === true),
   };
 }
 
@@ -276,5 +357,9 @@ export async function getBreakdownSummary(targetCurrency = 'EUR') {
     totalInvested: s.totalInvested,
     gainLoss: s.gainLoss,
     gainLossPercent: s.gainLossPercent,
+    assetGain: s.assetGain,
+    fxGain: s.fxGain,
+    nativeCurrentValue: s.nativeCurrentValue,
+    usedFallbackRate: s.usedFallbackRate,
   }));
 }

@@ -18,6 +18,10 @@ interface BreakdownItem {
     totalInvested: number;
     gainLoss: number;
     gainLossPercent: number;
+    assetGain?: number;
+    fxGain?: number;
+    nativeCurrentValue?: number;
+    usedFallbackRate?: boolean;
 }
 
 interface Props {
@@ -223,6 +227,11 @@ export default function PerformanceBreakdown({ heatmapData, breakdownSummary }: 
                                         </p>
                                         <p className="text-xs text-muted-foreground">
                                             <Money amount={inv.gainLoss} currency={defaultCurrency} />
+                                            {typeof inv.fxGain === 'number' && inv.currency !== defaultCurrency && (
+                                                <span className="ml-1.5" title={t('portfolio.fxEffect')}>
+                                                    {t('portfolio.fxShort')} {inv.fxGain >= 0 ? "+" : ""}<Money amount={inv.fxGain} currency={defaultCurrency} />
+                                                </span>
+                                            )}
                                         </p>
                                     </div>
                                 </div>
@@ -252,6 +261,11 @@ export default function PerformanceBreakdown({ heatmapData, breakdownSummary }: 
                                         </p>
                                         <p className="text-xs text-muted-foreground">
                                             <Money amount={inv.gainLoss} currency={defaultCurrency} />
+                                            {typeof inv.fxGain === 'number' && inv.currency !== defaultCurrency && (
+                                                <span className="ml-1.5" title={t('portfolio.fxEffect')}>
+                                                    {t('portfolio.fxShort')} {inv.fxGain >= 0 ? "+" : ""}<Money amount={inv.fxGain} currency={defaultCurrency} />
+                                                </span>
+                                            )}
                                         </p>
                                     </div>
                                 </div>

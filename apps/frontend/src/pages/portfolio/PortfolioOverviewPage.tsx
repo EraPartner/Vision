@@ -4,7 +4,7 @@ import { numberFormatToLocale } from "@/utils/currency";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { TrendingUp, TrendingDown, PieChart as PieChartIcon, Trash2, RefreshCw, Loader2, ArrowUpRight, Clock } from "lucide-react";
+import { TrendingUp, TrendingDown, PieChart as PieChartIcon, Trash2, RefreshCw, Loader2, ArrowUpRight, Clock, AlertTriangle } from "lucide-react";
 import { DonutChart, ChartLegend, type ChartLegendItem } from "@/components/charts";
 import { usePortfolio } from "@/hooks/usePortfolio";
 import { usePortfolioSummaryQuery } from "@/hooks/portfolio/usePortfolioSummary";
@@ -96,6 +96,14 @@ export default function PortfolioOverviewPage() {
   const totalFeesInTarget = totals?.totalFees ?? 0;
   const totalTaxesInTarget = totals?.totalTaxes ?? 0;
   const totalIncome = totals?.totalIncome ?? 0;
+  const totalAssetGainInTarget = totals?.totalAssetGain ?? 0;
+  const totalFxGainInTarget = totals?.totalFxGain ?? 0;
+  const fxRateFellBack = totals?.usedFallbackRate === true;
+  // Only surface FX attribution when some holding is in a foreign currency —
+  // an all-EUR portfolio would just show a noisy "FX effect: €0.00" line.
+  const hasFxExposure = (portfolioSummary?.summaries ?? []).some(
+    (s) => s.originalCurrency && s.originalCurrency !== portfolioSummary?.currency,
+  );
 
   const allocationAndNews = useMemo(() => {
     const classToGroup = new Map<string, string>();
@@ -200,7 +208,12 @@ export default function PortfolioOverviewPage() {
       value: `${totalGainLossInTarget >= 0 ? '+' : ''}${fmt(totalGainLossInTarget)}`,
       icon: totalGainLossInTarget >= 0 ? TrendingUp : TrendingDown,
       desc: `${gainPercent >= 0 ? '+' : ''}${gainPercent.toFixed(1)}% ${t('networth.allTime')}`,
-      cls: totalGainLossInTarget >= 0 ? "text-accent" : "text-destructive"
+      cls: totalGainLossInTarget >= 0 ? "text-accent" : "text-destructive",
+      // Attribution: gain = asset performance + currency effect (FX feature).
+      subline: hasFxExposure
+        ? `${t('portfolio.assetGain')} ${totalAssetGainInTarget >= 0 ? '+' : ''}${fmt(totalAssetGainInTarget)} · ${t('portfolio.fxEffect')} ${totalFxGainInTarget >= 0 ? '+' : ''}${fmt(totalFxGainInTarget)}`
+        : undefined,
+      sublineWarning: hasFxExposure && fxRateFellBack ? t('portfolio.fxFallbackNote') : undefined,
     },
     {
       title: t('portfolio.realizedGains'),
@@ -304,6 +317,16 @@ export default function PortfolioOverviewPage() {
                     <CardContent>
                       <p className={`text-2xl font-bold ${c.cls}`}>{c.value}</p>
                       <p className="text-xs text-muted-foreground mt-1">{c.desc}</p>
+                      {c.subline && (
+                        <p className="text-xs text-muted-foreground mt-1 tabular-nums">
+                          {c.subline}
+                          {c.sublineWarning && (
+                            <span title={c.sublineWarning} aria-label={c.sublineWarning}>
+                              <AlertTriangle className="inline h-3 w-3 ml-1 text-warning align-[-1px]" />
+                            </span>
+                          )}
+                        </p>
+                      )}
                     </CardContent>
                   </Card>
                 ))}
@@ -347,6 +370,10 @@ export default function PortfolioOverviewPage() {
                        { label: t('portfolio.currentValue'), value: totalPortfolioValueInTarget, cls: 'text-foreground' },
                        { label: t('portfolio.realizedGains'), value: totalRealizedGainInTarget, cls: totalRealizedGainInTarget >= 0 ? 'text-accent' : 'text-destructive', showSign: true },
                        { label: t('portfolio.unrealizedGains'), value: totalUnrealizedGainInTarget, cls: totalUnrealizedGainInTarget >= 0 ? 'text-accent' : 'text-destructive', showSign: true },
+                      ...(hasFxExposure ? [
+                        { label: t('portfolio.assetGain'), value: totalAssetGainInTarget, cls: totalAssetGainInTarget >= 0 ? 'text-accent' : 'text-destructive', showSign: true },
+                        { label: t('portfolio.fxEffect'), value: totalFxGainInTarget, cls: totalFxGainInTarget >= 0 ? 'text-accent' : 'text-destructive', showSign: true },
+                      ] : []),
                       { label: t('portfolio.totalIncome'), value: totalIncome, cls: 'text-accent', showSign: true },
                        { label: t('portfolio.totalFees'), value: -totalFeesInTarget, cls: 'text-destructive' },
                         { label: t('portfolio.totalTaxes'), value: -totalTaxesInTarget, cls: 'text-destructive' },

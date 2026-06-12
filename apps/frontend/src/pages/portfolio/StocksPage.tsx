@@ -3,6 +3,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { TrendingUp, Trash2, Eye, DollarSign, ArrowUpRight } from "lucide-react";
 import { usePortfolio } from "@/hooks/usePortfolio";
+import { usePortfolioSummaryQuery } from "@/hooks/portfolio/usePortfolioSummary";
 import { useCurrencyConverter } from "@/hooks/useCurrencyConverter";
 import { AddInvestmentDialog } from "@/components/portfolio/AddInvestmentDialog";
 import { AddPortfolioTxnDialog } from "@/components/portfolio/AddPortfolioTxnDialog";
@@ -60,6 +61,18 @@ export default function StocksPage({
   const targetCurrency = appSettings.defaultCurrency || 'EUR';
 
   const { convertToTarget, ratesToEur } = useCurrencyConverter(targetCurrency);
+
+  // Per-investment FX attribution comes from the backend summary (it has the
+  // historical-rate machinery); only shown when a holding is in a foreign currency.
+  const { data: apiSummary } = usePortfolioSummaryQuery(targetCurrency);
+  const fxInfoById = useMemo(
+    () => new Map((apiSummary?.summaries ?? []).map((s) => [s.id, s])),
+    [apiSummary],
+  );
+  const pageHasFxExposure = useMemo(
+    () => holdings.some((h) => (h.currency || 'EUR').toUpperCase() !== targetCurrency.toUpperCase()),
+    [holdings, targetCurrency],
+  );
 
   const formatterCache = useMemo(() => new Map<string, Intl.NumberFormat>(), []);
 
@@ -375,6 +388,9 @@ export default function StocksPage({
                   <th className="py-2 px-3 text-right font-medium text-muted-foreground">{t('portfolio.value')}</th>
                   <th className="py-2 px-3 text-right font-medium text-muted-foreground">{t('portfolio.unrealized')}</th>
                   <th className="py-2 px-3 text-right font-medium text-muted-foreground">{t('portfolio.realized')}</th>
+                  {pageHasFxExposure && (
+                    <th className="py-2 px-3 text-right font-medium text-muted-foreground" title={t('portfolio.fxEffect')}>{t('portfolio.fxPnl')}</th>
+                  )}
                   <th className="py-2 px-3 text-right font-medium text-muted-foreground">{t('portfolio.dividends')}</th>
                   <th className="py-2 px-3"></th>
                 </tr>
@@ -420,6 +436,22 @@ export default function StocksPage({
                     <td className={cn("text-right py-2 px-3 tabular-nums", (displayedPnlByHoldingId[h.id]?.realizedTarget || 0) !== 0 ? ((displayedPnlByHoldingId[h.id]?.realizedTarget || 0) >= 0 ? "text-accent" : "text-destructive") : "text-muted-foreground")}>
                       {(displayedPnlByHoldingId[h.id]?.realizedTarget || 0) !== 0 ? `${(displayedPnlByHoldingId[h.id]?.realizedTarget || 0) >= 0 ? "+" : ""}${fmt(displayedPnlByHoldingId[h.id]?.realizedTarget || 0)}` : '—'}
                     </td>
+                    {pageHasFxExposure && (() => {
+                      const fxInfo = fxInfoById.get(h.id);
+                      const isForeign = (h.currency || 'EUR').toUpperCase() !== targetCurrency.toUpperCase();
+                      const fxGain = fxInfo?.fxGain;
+                      if (!isForeign || typeof fxGain !== 'number') {
+                        return <td className="text-right py-2 px-3 tabular-nums text-muted-foreground">—</td>;
+                      }
+                      return (
+                        <td
+                          className={cn("text-right py-2 px-3 tabular-nums", fxGain >= 0 ? "text-accent" : "text-destructive")}
+                          title={fxInfo?.usedFallbackRate ? t('portfolio.fxFallbackNote') : undefined}
+                        >
+                          {fxGain >= 0 ? "+" : ""}{fmt(fxGain)}{fxInfo?.usedFallbackRate ? " ⚠" : ""}
+                        </td>
+                      );
+                    })()}
                     <td className="text-right py-2 px-3 tabular-nums text-accent">
                       {h.totalDividends > 0 ? `+${fmt(convertToTarget(h.totalDividends, h.currency))}` : '—'}
                     </td>
