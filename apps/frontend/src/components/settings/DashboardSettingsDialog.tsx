@@ -46,9 +46,46 @@ export function DashboardSettingsDialog({ open, onOpenChange, defaultTab = 'gene
     // General settings (needed for save)
     const [localAppSettings, setLocalAppSettings] = useState(appSettings);
 
-    // Backup dir/quit (needed for save — BackupTab initializes these via setters)
+    // Backup dir/quit (needed for save). Loaded here — not in BackupTab — so the
+    // values are initialized even when the Backup tab is never opened; saving
+    // from another tab used to clobber the stored config with ''/false.
     const [backupDir, setBackupDir] = useState('');
     const [backupOnQuit, setBackupOnQuit] = useState(false);
+    // Guard: only persist backup settings when state holds real loaded values
+    // (or the user explicitly changed them) — never the untouched defaults.
+    const [backupSettingsTrusted, setBackupSettingsTrusted] = useState(false);
+    const [backupSettingsLoading, setBackupSettingsLoading] = useState(false);
+
+    const updateBackupDir = useCallback((dir: string) => {
+        setBackupDir(dir);
+        setBackupSettingsTrusted(true);
+    }, []);
+    const updateBackupOnQuit = useCallback((v: boolean) => {
+        setBackupOnQuit(v);
+        setBackupSettingsTrusted(true);
+    }, []);
+
+    useEffect(() => {
+        if (!open) {
+            setBackupSettingsTrusted(false);
+            return;
+        }
+        if (!apiClient.isElectron()) return;
+        let cancelled = false;
+        setBackupSettingsLoading(true);
+        apiClient.loadBackupSettings()
+            .then((bs) => {
+                if (cancelled || !bs) return;
+                setBackupDir(bs.backupDir || '');
+                setBackupOnQuit(bs.backupOnQuit ?? false);
+                setBackupSettingsTrusted(true);
+            })
+            .catch(() => { /* leave untrusted — save will skip backup settings */ })
+            .finally(() => {
+                if (!cancelled) setBackupSettingsLoading(false);
+            });
+        return () => { cancelled = true; };
+    }, [open]);
 
     const { data: categoriesData, isLoading: categoriesLoading } = useQuery({
         queryKey: ['categories', 'all'],
@@ -73,7 +110,7 @@ export function DashboardSettingsDialog({ open, onOpenChange, defaultTab = 'gene
         setLocalExcludeHidden(settings.excludeHiddenCategories);
         setLocalExclusionScope(settings.exclusionScope);
         setLocalAppSettings(appSettings);
-        // BackupTab handles its own initialization via the open prop
+        // Backup settings are loaded by the dedicated [open] effect above.
     }, [open, settings, appSettings]);
 
     const handleAiModelChange = useCallback(
@@ -93,7 +130,7 @@ export function DashboardSettingsDialog({ open, onOpenChange, defaultTab = 'gene
             exclusionScope: localExclusionScope,
         });
         updateAppSettings(localAppSettings);
-        if (apiClient.isElectron()) {
+        if (apiClient.isElectron() && backupSettingsTrusted) {
             apiClient.saveBackupSettings({ backupDir, backupOnQuit });
         }
         onOpenChange(false);
@@ -173,9 +210,10 @@ export function DashboardSettingsDialog({ open, onOpenChange, defaultTab = 'gene
                         <BackupTab
                             open={open}
                             backupDir={backupDir}
-                            setBackupDir={setBackupDir}
+                            setBackupDir={updateBackupDir}
                             backupOnQuit={backupOnQuit}
-                            setBackupOnQuit={setBackupOnQuit}
+                            setBackupOnQuit={updateBackupOnQuit}
+                            settingsLoading={backupSettingsLoading}
                         />
                     </TabsContent>
                 </Tabs>

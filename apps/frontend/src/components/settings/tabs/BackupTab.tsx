@@ -34,6 +34,8 @@ interface BackupTabProps {
     setBackupDir: (dir: string) => void;
     backupOnQuit: boolean;
     setBackupOnQuit: (v: boolean) => void;
+    /** True while the parent dialog is still loading the stored backup settings. */
+    settingsLoading: boolean;
 }
 
 export const BackupTab = memo(function BackupTab({
@@ -42,10 +44,12 @@ export const BackupTab = memo(function BackupTab({
     setBackupDir,
     backupOnQuit,
     setBackupOnQuit,
+    settingsLoading,
 }: BackupTabProps) {
     const { t } = useLanguage();
 
-    const [backupLoading, setBackupLoading] = useState(false);
+    const [encryptionLoading, setEncryptionLoading] = useState(false);
+    const backupLoading = settingsLoading || encryptionLoading;
     const [backupRunning, setBackupRunning] = useState(false);
     const [encryptionStatus, setEncryptionStatus] = useState<EncryptionStatus | null>(null);
     const [backupPassphrase, setBackupPassphrase] = useState('');
@@ -59,15 +63,11 @@ export const BackupTab = memo(function BackupTab({
         if (!open) return;
         if (!apiClient.isElectron()) return;
 
-        setBackupLoading(true);
-        Promise.all([
-            apiClient.loadBackupSettings(),
-            apiClient.getBackupEncryptionStatus(),
-        ]).then(([bs, enc]) => {
-            if (bs) {
-                setBackupDir(bs.backupDir || '');
-                setBackupOnQuit(bs.backupOnQuit ?? false);
-            }
+        // Backup dir/on-quit values are loaded by DashboardSettingsDialog when it
+        // opens (so Save can't clobber them when this tab is never mounted) —
+        // this tab only fetches the encryption status.
+        setEncryptionLoading(true);
+        apiClient.getBackupEncryptionStatus().then((enc) => {
             if (enc?.success) {
                 setEncryptionStatus({
                     secureStorageAvailable: enc.secureStorageAvailable,
@@ -75,7 +75,7 @@ export const BackupTab = memo(function BackupTab({
                     hasEnvPassphrase: enc.hasEnvPassphrase,
                 });
             }
-        }).finally(() => setBackupLoading(false));
+        }).finally(() => setEncryptionLoading(false));
 
         try {
             const v = window.localStorage.getItem('vision.backup.passphrase.reminder.dismissed');
@@ -83,7 +83,7 @@ export const BackupTab = memo(function BackupTab({
         } catch {
             // ignore
         }
-    }, [open]); // eslint-disable-line react-hooks/exhaustive-deps
+    }, [open]);
 
     const handleBrowseBackupDir = async () => {
         const chosen = await apiClient.selectBackupDir();

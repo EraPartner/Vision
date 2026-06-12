@@ -1,10 +1,14 @@
 // @vitest-environment jsdom
-import { describe, expect, it, beforeEach, vi } from "vitest";
+import { describe, expect, it, beforeEach, afterEach, vi } from "vitest";
 import { screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
+import { http } from "msw";
 import { renderWithApp } from "@/test/renderWithApp";
 import { server } from "@/test/msw/server";
+import { err } from "@/test/msw/handlers";
 import { DashboardSettingsDialog } from "@/components/settings/DashboardSettingsDialog";
+
+const API_BASE = "http://localhost:3002";
 
 beforeEach(() => {
     server.resetHandlers();
@@ -145,5 +149,75 @@ describe("DashboardSettingsDialog", () => {
         await screen.findByRole("dialog");
         const focusables = screen.getAllByRole("button");
         expect(focusables.length).toBeGreaterThan(0);
+    });
+
+    // ─── Backup-settings clobber guard (regression: backup path reverted) ──
+
+    describe("Electron backup settings", () => {
+        function installElectronStubs(loaded: { backupDir: string; backupOnQuit: boolean }) {
+            const win = window as unknown as Record<string, unknown>;
+            win.electronUpdater = { pullImage: vi.fn() };
+            win.electronBackup = {
+                loadSettings: vi.fn().mockResolvedValue(loaded),
+                saveSettings: vi.fn().mockResolvedValue(undefined),
+                getEncryptionStatus: vi.fn().mockResolvedValue({
+                    success: true,
+                    secureStorageAvailable: true,
+                    hasStoredPassphrase: false,
+                    hasEnvPassphrase: false,
+                }),
+            };
+            return win.electronBackup as { loadSettings: ReturnType<typeof vi.fn>; saveSettings: ReturnType<typeof vi.fn> };
+        }
+
+        afterEach(() => {
+            const win = window as unknown as Record<string, unknown>;
+            delete win.electronUpdater;
+            delete win.electronBackup;
+        });
+
+        it("saving from another tab preserves stored backup settings (no clobber)", async () => {
+            // Arrange — stored config exists; user never opens the Backup tab
+            const backup = installElectronStubs({ backupDir: "/Users/me/backups", backupOnQuit: true });
+            const user = userEvent.setup();
+            renderDialog(true, "general");
+            await screen.findByRole("dialog");
+            await waitFor(() => expect(backup.loadSettings).toHaveBeenCalled());
+
+            // Act — save without ever mounting the Backup tab
+            const saveBtn = await screen.findByRole("button", { name: /save changes/i });
+            await user.click(saveBtn);
+
+            // Assert — the loaded values are persisted, not the ''/false defaults
+            await waitFor(() => {
+                expect(backup.saveSettings).toHaveBeenCalledWith({
+                    backupDir: "/Users/me/backups",
+                    backupOnQuit: true,
+                });
+            });
+        });
+
+        it("skips persisting backup settings when the load failed", async () => {
+            // Arrange — both the IPC load and the API fallback fail
+            const backup = installElectronStubs({ backupDir: "ignored", backupOnQuit: false });
+            backup.loadSettings.mockRejectedValue(new Error("ipc down"));
+            server.use(
+                http.get(`${API_BASE}/api/settings/backup_settings`, () =>
+                    err(500, "boom"),
+                ),
+            );
+            const user = userEvent.setup();
+            const { onOpenChange } = renderDialog(true, "general");
+            await screen.findByRole("dialog");
+            await waitFor(() => expect(backup.loadSettings).toHaveBeenCalled());
+
+            // Act
+            const saveBtn = await screen.findByRole("button", { name: /save changes/i });
+            await user.click(saveBtn);
+
+            // Assert — save completes but untrusted defaults are NOT written
+            await waitFor(() => expect(onOpenChange).toHaveBeenCalledWith(false));
+            expect(backup.saveSettings).not.toHaveBeenCalled();
+        });
     });
 });

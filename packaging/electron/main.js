@@ -2580,11 +2580,19 @@ ipcMain.handle('backup:load-settings', async () => {
   // Prefer reading from the database; fall back to settings.json if the backend
   // is not yet available (e.g. during very early startup).
   try {
-    const data = await httpGet(`http://localhost:${appPort}/api/settings/backup_settings`);
-    if (data && data.value) {
-      const v = resolveBackupSettingsWithDefaults(data.value);
-      // Mirror back to local settings.json so will-quit always has a fresh copy.
-      await saveSettings({ ...(await loadSettings()), backupDir: v.backupDir || '', backupOnQuit: v.backupOnQuit === true });
+    // The API wraps responses as { ok, data: { key, value } } (ADR-026).
+    const body = await httpGet(`http://localhost:${appPort}/api/settings/backup_settings`);
+    const stored = body && body.data ? body.data.value : undefined;
+    if (stored && typeof stored === 'object') {
+      // Mirror the RAW stored value (not the default-resolved one) back to
+      // settings.json so the will-quit fallback matches the DB instead of
+      // baking display defaults into the stored config.
+      await saveSettings({
+        ...(await loadSettings()),
+        backupDir: typeof stored.backupDir === 'string' ? stored.backupDir : '',
+        backupOnQuit: stored.backupOnQuit === true,
+      });
+      const v = resolveBackupSettingsWithDefaults(stored);
       return { backupDir: v.backupDir || '', backupOnQuit: v.backupOnQuit === true };
     }
   } catch (err) {
@@ -3249,8 +3257,10 @@ app.on('will-quit', (e) => {
   // settings.json mirror that is kept in sync by backup:save-settings / backup:load-settings.
   async function resolveBackupSettings() {
     try {
-      const data = await httpGet(`http://localhost:${appPort}/api/settings/backup_settings`);
-      if (data && data.value) return data.value;
+      // The API wraps responses as { ok, data: { key, value } } (ADR-026).
+      const body = await httpGet(`http://localhost:${appPort}/api/settings/backup_settings`);
+      const stored = body && body.data ? body.data.value : undefined;
+      if (stored && typeof stored === 'object') return stored;
     } catch { /* backend may already be down, use local mirror */ }
     return loadSettings();
   }

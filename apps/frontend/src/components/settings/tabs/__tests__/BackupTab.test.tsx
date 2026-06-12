@@ -96,10 +96,12 @@ function BackupTabHarness({
     initialBackupDir = "",
     initialBackupOnQuit = false,
     open = true,
+    settingsLoading = false,
 }: {
     initialBackupDir?: string;
     initialBackupOnQuit?: boolean;
     open?: boolean;
+    settingsLoading?: boolean;
 }) {
     const [backupDir, setBackupDir] = useState(initialBackupDir);
     const [backupOnQuit, setBackupOnQuit] = useState(initialBackupOnQuit);
@@ -110,6 +112,7 @@ function BackupTabHarness({
             setBackupDir={setBackupDir}
             backupOnQuit={backupOnQuit}
             setBackupOnQuit={setBackupOnQuit}
+            settingsLoading={settingsLoading}
         />
     );
 }
