@@ -23,6 +23,15 @@ import type { ThemeVariant } from '@/styles/themes';
 
 export type CostBasisMethod = 'weighted_avg' | 'fifo' | 'lifo';
 
+/**
+ * Atmosphere/material tier (ADR-075, supersedes the ADR-071 boolean):
+ * - reduced: no backdrop-filter glass, no liquid canvas — for GPU-starved
+ *   outputs (4K TVs on base M-series).
+ * - standard: CSS aurora blobs + glass materials (the default look).
+ * - enhanced: adds the WebGL shader aurora and Electron vibrancy.
+ */
+export type VisualEffectsTier = 'reduced' | 'standard' | 'enhanced';
+
 export interface AppSettings {
     defaultCurrency: string;
     dateFormat: string;
@@ -34,8 +43,9 @@ export interface AppSettings {
     aiDefaultModel?: string;
     costBasisMethod: CostBasisMethod;
     adminMode: boolean;
-    /** GPU-heavier visuals (WebGL shader aurora). Default off — see ADR-020/ADR-071. */
-    enhancedEffects: boolean;
+    visualEffects: VisualEffectsTier;
+    /** Cap the effective tier at 'reduced' while the window sits on a large display. */
+    autoAdaptDisplay: boolean;
 }
 
 // ─── Dashboard settings types ─────────────────────────────────────────────────
@@ -70,8 +80,27 @@ export const DEFAULT_APP_SETTINGS: AppSettings = {
     language: 'en',
     costBasisMethod: 'weighted_avg',
     adminMode: false,
-    enhancedEffects: false,
+    visualEffects: 'standard',
+    autoAdaptDisplay: true,
 };
+
+/**
+ * Merge a stored app_settings blob over the defaults, mapping the pre-ADR-075
+ * `enhancedEffects` boolean onto `visualEffects` (true → enhanced, false →
+ * standard). The legacy key is dropped so the next persist writes the new
+ * shape. A blob that already carries `visualEffects` wins over the legacy key.
+ */
+export function migrateAppSettings(
+    raw: (Partial<AppSettings> & { enhancedEffects?: boolean }) | undefined,
+): AppSettings {
+    if (!raw) return DEFAULT_APP_SETTINGS;
+    const { enhancedEffects, ...rest } = raw;
+    const merged: AppSettings = { ...DEFAULT_APP_SETTINGS, ...rest };
+    if (rest.visualEffects === undefined && enhancedEffects !== undefined) {
+        merged.visualEffects = enhancedEffects ? 'enhanced' : 'standard';
+    }
+    return merged;
+}
 
 export const DEFAULT_DASHBOARD_SETTINGS: DashboardSettings = {
     excludedCategoryIds: [],
@@ -91,6 +120,13 @@ interface SettingsState {
     // App settings slice
     appSettings: AppSettings;
     isAppSettingsLoading: boolean;
+    /**
+     * Session-only manual tier pick for the auto-adapt cap (ADR-075 addendum):
+     * lives outside appSettings so it is never persisted — in-memory by
+     * design, so a restart returns large displays to auto mode. Only applied
+     * while the cap is active (see resolveEffectiveTier).
+     */
+    sessionTierOverride: VisualEffectsTier | undefined;
 
     // Dashboard settings slice
     dashboardSettings: DashboardSettings;
@@ -110,6 +146,7 @@ interface SettingsActions {
     // App settings
     updateAppSettings: (updates: Partial<AppSettings>) => void;
     resetAppSettings: () => void;
+    setSessionTierOverride: (tier: VisualEffectsTier | undefined) => void;
     /** Called by AppSettingsProvider once preloaded data arrives. */
     _hydrateAppSettings: (settings: AppSettings, isLoading: boolean) => void;
 
@@ -146,12 +183,16 @@ export const useSettingsStore = create<SettingsStore>((set, get) => ({
     // ── App settings ──────────────────────────────────────────────────────────
     appSettings: DEFAULT_APP_SETTINGS,
     isAppSettingsLoading: true,
+    sessionTierOverride: undefined,
 
     updateAppSettings: (updates) =>
         set((s) => ({ appSettings: { ...s.appSettings, ...updates } })),
 
     resetAppSettings: () =>
-        set({ appSettings: DEFAULT_APP_SETTINGS }),
+        set({ appSettings: DEFAULT_APP_SETTINGS, sessionTierOverride: undefined }),
+
+    setSessionTierOverride: (tier) =>
+        set({ sessionTierOverride: tier }),
 
     _hydrateAppSettings: (settings, isLoading) =>
         set({ appSettings: settings, isAppSettingsLoading: isLoading }),

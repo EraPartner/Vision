@@ -171,10 +171,10 @@ LIMIT 10
 - **CSV import handoff**: window-wide drag-and-drop (renderer reads `File` directly, closes Chromium navigate-to-file hole); Finder "Open With" / dock drop (main reads file, sends `{name, content}` — path never crosses sandbox boundary). Both paths feed `lib/importHandoff.ts` (one-slot 30s-TTL, same pattern as `lib/undo.ts`).
 - **`/transactions?new=1` deep link**: opens `AddTransactionDialog`, strips param on open (used by menu and dock).
 - **System accent overlay**: `systemAccent` boolean in `theme_settings`; `ThemeContext` overlays `--primary`/`--ring`/`--sidebar-primary` (+ foregrounds) via `lib/accentColor.ts` HSL; composes with all five variants; live via `AppleColorPreferencesChangedNotification`. Switch in Settings → Appearance (Electron/macOS only).
-- **Vibrancy opt-in**: window always created with `vibrancy: 'under-window'`; `body` turns translucent (`/0.72`) only when `enhancedEffects` (ADR-071) is on.
+- **Vibrancy opt-in**: window always created with `vibrancy: 'under-window'`; `body` turns translucent (`/0.72`) only when the effective visual-effects tier is `enhanced` (ADR-075).
 - **`window.electronAPI` bridge**: new minimal contextBridge surface (`platform`, `ready()`, `setDockBadge`, `getAccentColor`, `onAccentColorChanged`, `onMenuAction`, `onCsvOpen`, `onFullScreenChange`). Sandbox posture unchanged.
 - **`ElectronBridge.tsx`**: side-effect component mounted in `AppLayout` — routes all of the above, attaches listeners via stable refs.
-- **i18n**: +11 keys (`menu.*`, `settings.appearance.systemAccent*`); `enhancedEffectsHint` reworded; source total: 2898 keys.
+- **i18n**: +11 keys (`menu.*`, `settings.appearance.systemAccent*`); source total: 2898 keys.
 
 See [[docs/adr/072-electron-native-desktop-integration|ADR-072]], [[docs/architecture/electron|Electron Architecture — macOS Native Integration]], [[docs/features/appearance|Appearance — System Accent]], [[docs/features/import|Import — Electron CSV Handoff]], [[docs/components/layout|Layout — ElectronBridge]]
 
@@ -186,11 +186,11 @@ See [[docs/adr/072-electron-native-desktop-integration|ADR-072]], [[docs/archite
 - **Chart interactions**: `scrubbable` prop + `scrub.tsx` (`useChartScrub`) — pointer-drag range shows glass Δ pill, suppresses tooltip. `syncId` prop + `ChartSyncContext.tsx` — dashboard time-series share `syncId="dashboard-timeline"`. Sweep reveal on AreaChart clipPath. `ChartSkeleton` ghost waveform replaces rectangle skeletons.
 - **Navigation**: `PageTitleContext` large-title collapse (topbar shows page title past 96px scroll). Palette v2 — recents (`vision.palette.recents`, excluded from backups), debounced recipient search deep-link, "search transactions for X". `ShortcutsOverlay` (`?` key). Animated `tabs.tsx` framer `layoutId` pill indicator.
 - **Materials**: Workspace-aware aurora (`data-workspace` hue swap). Light-mode paper & ink token pass. (A cursor-specular sheen was tried and removed same-day at user request.)
-- **Enhanced-effects toggle**: `AppSettings.enhancedEffects` (default **off**) in Settings → General. Gates `ShaderAurora` (raw WebGL fbm, 0.25× res, ~30 fps cap, silent CSS-blob fallback). ADR-020 GPU rationale makes default-off mandatory.
+- **Visual-effects gate** (originally an `enhancedEffects` boolean; superseded by the ADR-075 tier model on 2026-06-12): `AppSettings.visualEffects: 'reduced' | 'standard' | 'enhanced'` + `autoAdaptDisplay: boolean` in **Settings → Appearance**. Gates `ShaderAurora` at `enhanced`; auto-adapt drops to `reduced` on large displays. See [[docs/adr/075-visual-effects-tiers-display-adaptation|ADR-075]].
 - **Perceived speed**: Per-widget dashboard hydration — global loading gate removed, per-section skeletons. Optimistic CREATE (`useCreateTransaction`: temp negative-id, server swap, rollback; virtual list excluded; 6 tests).
-- **i18n**: 8 new keys (en + nl); total 2854.
+- **i18n**: 8 new keys at ADR-071 (en + nl); total 2854. ADR-075 later replaced `settings.general.enhancedEffects*` with `settings.appearance.visualEffects*` / `autoAdaptDisplay*`.
 
-See [[docs/adr/071-premium-v3-effects-toggle|ADR-071]], [[docs/architecture/frontend-architecture|Frontend Architecture]], [[docs/features/appearance|Appearance — Enhanced Effects]], [[docs/components/charts|Chart Primitives — Premium v3]], [[docs/components/dashboard|Dashboard Components — Premium v3]]
+See [[docs/adr/071-premium-v3-effects-toggle|ADR-071]], [[docs/adr/075-visual-effects-tiers-display-adaptation|ADR-075]], [[docs/architecture/frontend-architecture|Frontend Architecture]], [[docs/features/appearance|Appearance — Visual Effects]], [[docs/components/charts|Chart Primitives — Premium v3]], [[docs/components/dashboard|Dashboard Components — Premium v3]]
 
 ### 2026-06-10 Liquid Glass v2 — Premium Frontend Overhaul (ADR-070)
 

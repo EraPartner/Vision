@@ -2,18 +2,18 @@
 title: Frontend Architecture
 type: architecture
 status: active
-description: React frontend architecture, design system, and diagrams with liquid-glass aesthetic, visx charts, Framer Motion, and Zustand store. May 2026 Tailwind v4 migration with unified CSS architecture. June 2026 Liquid Glass v2 — atmosphere layer, saturated blur tiers, CommandPalette, optimistic mutations, route preload. June 2026 Premium v3 — RollingNumber/Money/DeltaPill, chart scrub+sync, ChartSkeleton, PageTitleContext, palette v2, ShortcutsOverlay + go-to sequences, animated tabs, workspace aurora, ShaderAurora enhanced-effects toggle, per-widget dashboard hydration, optimistic create.
+description: React frontend architecture, design system, and diagrams with liquid-glass aesthetic, visx charts, Framer Motion, and Zustand store. May 2026 Tailwind v4 migration with unified CSS architecture. June 2026 Liquid Glass v2 — atmosphere layer, saturated blur tiers, CommandPalette, optimistic mutations, route preload. June 2026 Premium v3 — RollingNumber/Money/DeltaPill, chart scrub+sync, ChartSkeleton, PageTitleContext, palette v2, ShortcutsOverlay + go-to sequences, animated tabs, workspace aurora, ShaderAurora behind visual-effects tier model (ADR-075), per-widget dashboard hydration, optimistic create.
 date: 2026-04-23
-updated: 2026-06-11
-tags: [architecture, frontend, uml, plantuml, react, phase-4, phase-6, phase-9, liquid-glass, liquid-glass-v2, premium-v3, visx, framer-motion, statistics-refactoring, zustand, state-management, tailwind-v4, css-architecture, command-palette, optimistic-updates, route-preload, chart-scrub, chart-sync, shader-aurora, enhanced-effects, june-2026]
+updated: 2026-06-12
+tags: [architecture, frontend, uml, plantuml, react, phase-4, phase-6, phase-9, liquid-glass, liquid-glass-v2, premium-v3, visx, framer-motion, statistics-refactoring, zustand, state-management, tailwind-v4, css-architecture, command-palette, optimistic-updates, route-preload, chart-scrub, chart-sync, shader-aurora, visual-effects-tiers, auto-adapt-display, fx-reduced, june-2026]
 aliases: [frontend architecture, react architecture, frontend design, design system]
 ---
 
 > [!info] June 2026 — Semantic Token Sweep + UI Fixes
 > ~130 raw Tailwind palette colors replaced with semantic tokens (`text-success`, `text-destructive`, `text-warning` and bg-/border-/ring- variants) across import pages/cards, watchlist, performance, market lookup, tax, settings, notifications, onboarding, ai-chat banner, and UI primitives (`alert` + `badge` success variants, Sonner success icon). `focus:ring` → `focus-visible:ring` on two stragglers. `body` gains `overscroll-behavior-y: none`. Deliberately kept raw: categorical palettes, chart series colors, blue info accents (no `--info` token). See [[docs/components/ui-components|UI Components]] for the full token table.
 
-> [!info] June 2026 — Premium v3 (ADR-071)
-> The second June 2026 batch adds RollingNumber/Money/DeltaPill shared components, chart scrub-to-compare and synced crosshairs, ChartSkeleton, large-title collapse (PageTitleContext), palette v2 with recents and recipient search, ShortcutsOverlay, go-to key sequences (g+key), animated tab indicator, workspace-aware aurora, ShaderAurora behind an opt-in `AppSettings.enhancedEffects` toggle (default off, gates the WebGL aurora; ADR-020 Electron M1 rationale), light-mode paper & ink token pass, per-widget dashboard hydration, and optimistic transaction CREATE. See [[docs/adr/071-premium-v3-effects-toggle|ADR-071]].
+> [!info] June 2026 — Premium v3 (ADR-071) + Visual-Effects Tiers (ADR-075)
+> The second June 2026 batch adds RollingNumber/Money/DeltaPill shared components, chart scrub-to-compare and synced crosshairs, ChartSkeleton, large-title collapse (PageTitleContext), palette v2 with recents and recipient search, ShortcutsOverlay, go-to key sequences (g+key), animated tab indicator, workspace-aware aurora, ShaderAurora (WebGL aurora), light-mode paper & ink token pass, per-widget dashboard hydration, and optimistic transaction CREATE. See [[docs/adr/071-premium-v3-effects-toggle|ADR-071]]. On 2026-06-12 the original `AppSettings.enhancedEffects` boolean was superseded by the ADR-075 tier model — see [[docs/adr/075-visual-effects-tiers-display-adaptation|ADR-075]] and the Enhanced-Effects Toggle section below.
 
 > [!info] June 2026 — Liquid Glass v2 (ADR-070)
 > The design system was overhauled in June 2026. The atmosphere layer has been restored, blur tiers raised to 12–32px with saturation, the material class vocabulary simplified, `PageTransition` re-added as an enter-only spring, `CommandPalette` wired, sidebar active rail converted to a framer `layoutId` element, and `useUpdateTransaction`/`useDeleteTransaction` made optimistic. See [[docs/adr/070-liquid-glass-v2-premium-frontend|ADR-070]] for the full decision record.
@@ -555,13 +555,24 @@ A second June 2026 batch with 18 items. See [[docs/adr/071-premium-v3-effects-to
 - **Go-to key sequences**: `hooks/useGoToShortcuts.ts` — `g` then a destination key (900 ms window, inert in inputs); route table shared with ShortcutsOverlay so the help sheet stays truthful. (A cursor-specular sheen was implemented and removed same-day at user request.)
 - **Workspace-aware aurora**: `AppLayout` reads `useWorkspace()` (route-derived, no provider), sets `data-workspace` on `.liquid-canvas`. CSS swaps blob hue emphasis (portfolio = gold-led, budgeting = emerald-led).
 - **Light-mode paper & ink**: Conservative token deltas in `tokens.css` light block (warmer paper background `oklch(40 36% 96%)`, deeper ink foreground, warmed border/muted). `premium-frame` gains an embossed bottom hairline. `styles/themes.ts` `defaultLight` palette kept mirrored; `themes.test.ts` 4/4 green.
-- **`ShaderAurora`** (`components/layout/ShaderAurora.tsx`): Raw WebGL (no external dependency), one fullscreen triangle, 4-octave value-noise fbm tinted from `--primary`/`--accent` CSS vars (re-resolved on theme change via `MutationObserver`). Renders at 0.25× resolution upscaled, ~30 fps cap, single static frame under `prefers-reduced-motion`, rAF-paused when `document.hidden`. Any WebGL creation failure silently leaves the CSS blobs (always rendered underneath) as the fallback. Rendered in `AppLayout` only when `appSettings.enhancedEffects === true`.
+- **`ShaderAurora`** (`components/layout/ShaderAurora.tsx`): Raw WebGL (no external dependency), one fullscreen triangle, 4-octave value-noise fbm tinted from `--primary`/`--accent` CSS vars (re-resolved on theme change via `MutationObserver`). Renders at 0.25× resolution upscaled and additionally capped at 640px wide, ~30 fps cap, single static frame under `prefers-reduced-motion`, rAF-paused when `document.hidden`. Any WebGL creation failure silently leaves the CSS blobs (always rendered underneath) as the fallback. Mounted in `AppLayout` only when the *effective* visual-effects tier (ADR-075) is `'enhanced'`.
 
-#### Enhanced-Effects Toggle
+#### Visual-Effects Tier Model (ADR-075, supersedes ADR-071 boolean)
 
-`AppSettings.enhancedEffects: boolean` (default **false**) persisted in the settings store. A `Switch` in **Settings → General** (`GeneralTab.tsx`) with id `enhanced-effects`. This is the gate for `ShaderAurora`. See [[docs/adr/020-glass-system-downgrade-liquid-canvas-removal|ADR-020]] for the GPU-budget rationale that makes default-off mandatory.
+`AppSettings.visualEffects: 'reduced' | 'standard' | 'enhanced'` (default `'standard'`) + `AppSettings.autoAdaptDisplay: boolean` (default `true`) persisted in the settings store and applied on dialog Save in **Settings → Appearance** (`AppearanceTab.tsx`).
 
-i18n keys: `settings.general.enhancedEffects`, `settings.general.enhancedEffectsHint`.
+**Tier semantics**: `reduced` = no backdrop-filter glass + no liquid canvas; `standard` = CSS aurora blobs + glass; `enhanced` = adds `ShaderAurora` (WebGL) + Electron vibrancy. **Effective tier**: `reduced` when `autoAdaptDisplay` is on and the window is on a large display (`screen.width × screen.height × devicePixelRatio² > 6,000,000` px), otherwise the chosen tier.
+
+**Session-scoped override (ADR-075 addendum, 2026-06-12)**: The Appearance-tab tier Select shows the **effective tier currently in use**, not the synced preference. `settingsStore` carries `sessionTierOverride` outside `appSettings` — never persisted, cleared on restart. `resolveEffectiveTier` accepts it as an optional 4th argument and uses it to replace the auto-adapt cap while `autoAdaptDisplay && isLargeDisplay`; on a small display or after a restart the synced preference governs. `DashboardSettingsDialog` stages a `tierSelection` value and routes it on Save: capped display → `sessionTierOverride` (picking `'reduced'` clears it); uncapped display → synced `visualEffects` + override cleared; toggling auto-adapt clears the override. `useVisualEffectsTier` reads the override from the store. 4 new tests (17 total in `visualEffects.test.ts`).
+
+**New files introduced by ADR-075**:
+- `lib/visualEffects.ts` — `isLargeDisplay()` + `resolveEffectiveTier()` (4-arg)
+- `hooks/useVisualEffectsTier.ts` — resize listener + 5s property-read poll; reads `sessionTierOverride`
+- `components/layout/VisualEffectsController.tsx` — tags `<html>` with `fx-reduced` / `fx-static-atmosphere`
+
+`ShaderAurora` backing store is additionally capped at 640px wide (`MAX_CANVAS_WIDTH`). The gate moves from a boolean in `AppLayout` (`enhancedEffects === true`) to a check against the *effective* tier (`=== 'enhanced'`). See [[docs/adr/075-visual-effects-tiers-display-adaptation|ADR-075]] and [[docs/adr/020-glass-system-downgrade-liquid-canvas-removal|ADR-020]] for the GPU-budget rationale.
+
+i18n keys added: `settings.appearance.visualEffects`, `settings.appearance.visualEffects.reduced|standard|enhanced`, `settings.appearance.visualEffectsHint`, `settings.appearance.autoAdaptDisplay`, `settings.appearance.autoAdaptDisplayHint`, `settings.appearance.visualEffectsAutoNote`, `settings.appearance.visualEffectsOverrideNote`. Removed: `settings.general.enhancedEffects`, `settings.general.enhancedEffectsHint`.
 
 #### Perceived Speed (Premium v3)
 
@@ -572,9 +583,10 @@ i18n keys: `settings.general.enhancedEffects`, `settings.general.enhancedEffects
 
 ```
 AppLayout
+├── VisualEffectsController (renders null; tags <html> fx-reduced / fx-static-atmosphere — ADR-075)
 ├── LiquidCanvas (fixed atmosphere layer)
 │   ├── CSS aurora blobs (always rendered)
-│   └── ShaderAurora (WebGL, only when enhancedEffects=true)
+│   └── ShaderAurora (WebGL, only when effective tier = 'enhanced')
 ├── Topbar (scroll-linked ::before + ⌘K trigger + page title collapse)
 ├── CommandPalette (⌘K, all pages + theme/settings + palette v2 recents+search)
 ├── ShortcutsOverlay (? key, glass dialog)
@@ -585,7 +597,8 @@ AppLayout
 
 ### Related Documentation
 
-- [[docs/adr/071-premium-v3-effects-toggle|ADR-071: Premium v3 — Numbers, Chart Interactions, and Enhanced-Effects Toggle]] (June 2026)
+- [[docs/adr/075-visual-effects-tiers-display-adaptation|ADR-075: Visual-Effects Tiers and Per-Display Auto-Adaptation]] (2026-06-12)
+- [[docs/adr/071-premium-v3-effects-toggle|ADR-071: Premium v3 — Numbers, Chart Interactions, and Enhanced-Effects Toggle]] (June 2026; enhancedEffects boolean superseded by ADR-075)
 - [[docs/adr/070-liquid-glass-v2-premium-frontend|ADR-070: Liquid Glass v2 Premium Frontend Overhaul]] (June 2026)
 - [[docs/adr/017-liquid-glass-aesthetic-design-system|ADR-017: Liquid Glass Aesthetic]]
 - [[docs/adr/018-visx-d3-chart-migration|ADR-018: visx/d3 Chart Migration]]
@@ -612,6 +625,7 @@ App
 │                               ├── Sonner
 │                               └── BrowserRouter
 │                                   └── AppLayout
+│                                       ├── VisualEffectsController (null render; html class mgr — ADR-075)
 │                                       ├── LiquidCanvas (fixed atmosphere layer)
 │                                       ├── Topbar (scroll-linked ::before + ⌘K trigger)
 │                                       ├── CommandPalette (⌘K, all pages + theme/settings)
@@ -969,7 +983,8 @@ The frontend uses a token-based theming system with runtime color palette swappi
 ---
 
 **Related Documentation**
-- [[docs/adr/071-premium-v3-effects-toggle|ADR-071: Premium v3 — Numbers, Chart Interactions, and Enhanced-Effects Toggle]] (June 2026)
+- [[docs/adr/075-visual-effects-tiers-display-adaptation|ADR-075: Visual-Effects Tiers and Per-Display Auto-Adaptation]] (2026-06-12)
+- [[docs/adr/071-premium-v3-effects-toggle|ADR-071: Premium v3 — Numbers, Chart Interactions, and Enhanced-Effects Toggle]] (June 2026; enhancedEffects boolean superseded by ADR-075)
 - [[docs/adr/070-liquid-glass-v2-premium-frontend|ADR-070: Liquid Glass v2 Premium Frontend Overhaul]] (June 2026)
 - [[docs/adr/017-liquid-glass-aesthetic-design-system|ADR-017: Liquid Glass Aesthetic]]
 - [[docs/adr/018-visx-d3-chart-migration|ADR-018: visx/d3 Chart Migration]]

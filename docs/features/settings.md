@@ -3,7 +3,7 @@ title: Settings Feature
 type: feature
 status: active
 date: 2026-04-23
-updated: 2026-04-27
+updated: 2026-06-12
 tags: [feature, settings, configuration, preferences, frontend, backend, refactor, phase-3, phase-4, zustand, store, backup, encrypt, passphrase, phase-2]
 description: Application settings system with JSONB storage, preload optimization, propagation across all pages, and split DashboardSettingsDialog UI component
 aliases: [preferences, configuration, app settings, user settings]
@@ -225,7 +225,7 @@ The primary UI for managing settings is the **DashboardSettingsDialog** componen
 
 - **DashboardSettingsDialog** (orchestrator, ~170 lines) — Owns save-time state and dialog open/close logic
 - **GeneralTab** (~175 lines) — Currency, date/number format, decimal places, start-of-week, page size, language
-- **AppearanceTab** — Theme variant, color mode, schedule
+- **AppearanceTab** — Theme variant, color mode, schedule, visual effects tier Select (`reduced`/`standard`/`enhanced`) + auto-adapt display Switch (ADR-075)
 - **DashboardTab** (~240 lines) — Category/recipient exclusion, exclusion scope
 - **AppTab** (~230 lines) — Onboarding restart, update check, recurring reset, AI chat, reset-all
 - **BackupTab** (~310 lines) — Backup directory, passphrase, encrypt, restore with encrypted passphrase modal (Electron only)

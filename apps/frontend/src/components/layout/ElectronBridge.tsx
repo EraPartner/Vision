@@ -1,7 +1,7 @@
 import { useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useSidebar } from '@/components/ui/sidebar';
-import { useAppSettings } from '@/contexts/AppSettingsContext';
+import { useVisualEffectsTier } from '@/hooks/useVisualEffectsTier';
 import { getElectronAPI, isElectronMac, type ElectronMenuAction } from '@/lib/api/electron';
 import { registerPendingImportFile } from '@/lib/importHandoff';
 
@@ -16,7 +16,7 @@ interface ElectronBridgeProps {
  *
  * - Tags <html> with `electron-mac` / `electron-fullscreen` so CSS can inset
  *   the topbar around the hiddenInset traffic lights and mark a drag region.
- * - Tags <html> with `vibrancy` (enhancedEffects only) to let the
+ * - Tags <html> with `vibrancy` (effective tier 'enhanced' only) to let the
  *   under-window material show through translucent backgrounds.
  * - Routes native menu / dock menu actions.
  * - Accepts a CSV dropped anywhere on the window (and Finder "open with")
@@ -26,7 +26,7 @@ interface ElectronBridgeProps {
 export function ElectronBridge({ onOpenSettings, onOpenShortcuts }: ElectronBridgeProps) {
     const navigate = useNavigate();
     const { toggleSidebar } = useSidebar();
-    const enhancedEffects = useAppSettings().appSettings.enhancedEffects;
+    const { tier: effectsTier } = useVisualEffectsTier();
 
     // The IPC subscriptions must attach exactly once (main flushes its queue
     // on the first ready() call), so dynamic handlers go through a ref.
@@ -111,12 +111,14 @@ export function ElectronBridge({ onOpenSettings, onOpenShortcuts }: ElectronBrid
     }, []);
 
     // Vibrancy is the one genuinely risky visual (translucent window over
-    // opaque design tokens) — strictly behind the enhancedEffects toggle.
+    // opaque design tokens) — strictly behind the 'enhanced' tier. Using the
+    // *effective* tier means auto-adapt also drops vibrancy on large displays,
+    // where macOS would otherwise blur the desktop behind the whole window.
     useEffect(() => {
-        const on = isElectronMac() && enhancedEffects;
+        const on = isElectronMac() && effectsTier === 'enhanced';
         document.documentElement.classList.toggle('vibrancy', on);
         return () => { document.documentElement.classList.remove('vibrancy'); };
-    }, [enhancedEffects]);
+    }, [effectsTier]);
 
     return null;
 }

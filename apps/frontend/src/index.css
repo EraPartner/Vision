@@ -542,8 +542,8 @@
         margin-top: 28px;
     }
 
-    /* Vibrancy prototype — only when enhancedEffects is on (ElectronBridge
-       adds .vibrancy). The window carries an under-window material; a
+    /* Vibrancy prototype — only at the 'enhanced' effective tier
+       (ElectronBridge adds .vibrancy). The window carries an under-window material; a
        translucent body lets the blurred desktop glow through while the
        liquid-canvas wash keeps contrast usable. body background propagates
        to the root canvas, so this one rule controls the whole backdrop. */
@@ -993,5 +993,46 @@
         .liquid-canvas {
             display: none;
         }
+    }
+
+    /* ------------------------------------------------------------------
+     * Visual-effects tiers (ADR-075) — classes set by VisualEffectsController.
+     *
+     * fx-reduced mirrors the prefers-reduced-transparency fallback above
+     * (keep the two rule bodies in sync): it is the 'reduced' tier and the
+     * auto-adapt cap on large displays. Kept as a separate block — a media
+     * query and a class selector cannot share one rule without a JS-only
+     * source of truth, and the OS preference must keep working from first
+     * paint, before React mounts.
+     * ------------------------------------------------------------------ */
+
+    :root.fx-reduced .glass,
+    :root.fx-reduced .glass-thin,
+    :root.fx-reduced .glass-regular,
+    :root.fx-reduced .glass-thick,
+    :root.fx-reduced .glass-chrome,
+    :root.fx-reduced .glass-elevated,
+    :root.fx-reduced .liquid-glass,
+    :root.fx-reduced .liquid-glass-soft,
+    :root.fx-reduced .liquid-glass-hero,
+    :root.fx-reduced .surface-glass,
+    :root.fx-reduced .glass-effect,
+    :root.fx-reduced .app-topbar {
+        backdrop-filter: none;
+        -webkit-backdrop-filter: none;
+        background: hsl(var(--card) / 0.97);
+    }
+
+    :root.fx-reduced .liquid-canvas {
+        display: none;
+    }
+
+    /* Large display while the user kept a higher tier (auto-adapt off):
+       the aurora blobs stay visible but stop drifting, so the compositor
+       can go idle between frames instead of recompositing a 4K backdrop
+       on every vsync. */
+    :root.fx-static-atmosphere .liquid-canvas::before,
+    :root.fx-static-atmosphere .liquid-canvas::after {
+        animation: none;
     }
 }

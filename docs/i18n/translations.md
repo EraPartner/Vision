@@ -3,9 +3,9 @@ title: Translations & i18n
 type: i18n
 status: active
 date: 2026-04-27
-updated: 2026-06-11
-tags: [i18n, translations, localization, internationalization, phase-6, phase-8, phase-f, phase-9, phase-c, phase-d, phase-2, splits, settlement, admin, observability, cash-flow-forecast, pdf-export, portfolio, tax, backup, encrypt, passphrase-modal, accessibility, aria-label, bug-hunt-2026-05-06, chart-aria, screen-reader, plural, tc, intl-plural-rules, planned-page, toast, electron-native, menu, system-accent, suggestion-card, splash, upcoming-count, electron-error-page, backend-watchdog, june-2026]
-description: Internationalization system including supported languages, translation workflow, and usage patterns. Phase 6 adds 32 export keys for PDF report localization. Phase 8 adds 11 additional export.section.* keys for portfolio (6) and tax (7) report sections. Phase C adds 15 cash flow forecast keys. Phase F adds 60 admin observability keys. 2026-05-29 adds 16 chart.aria.* keys (localized chart screen-reader summaries) and 21 aria.* keys (localized icon-button aria-labels). June 2026 adds tc() plural mechanism and plannedPage error-toast keys. June 2026 (ADR-070) adds 5 commandPalette.* keys (en + nl) for the new ⌘K command palette. June 2026 Premium v3 (ADR-071) adds 8 keys: settings.general.enhancedEffects/Hint, shortcuts.title/showHelp/closeDialog/chartScrub, commandPalette.recent/searchTransactions. June 2026 Premium v3 V5-V7 adds 14 keys: contextMenu.* (8 keys), quickLook.* (2 keys), shortcuts table-interaction additions (4 keys). June 2026 V12 (ADR-072) adds 11 keys: menu.edit/file/go/importCsv/keyboardShortcuts/newTransaction/settings/toggleSidebar/view, settings.appearance.systemAccent/systemAccentHint; settings.general.enhancedEffectsHint reworded. June 2026 V11 adds 4 keys: dashboard.suggestions, dashboard.widgetDescriptions.suggestions, suggestions.kicker, suggestions.review. June 2026 (startup/UI fixes) adds 5 splash.* keys (en + nl, Electron boot splash narration) + tc()-plural upcoming.count.one/.other; removes upcoming.countSingle/countPlural. 2026-06-11 adds 5 app.* keys (Electron error page + backend-lost watchdog, en + nl). Total: 2896 keys.
+updated: 2026-06-12
+tags: [i18n, translations, localization, internationalization, phase-6, phase-8, phase-f, phase-9, phase-c, phase-d, phase-2, splits, settlement, admin, observability, cash-flow-forecast, pdf-export, portfolio, tax, backup, encrypt, passphrase-modal, accessibility, aria-label, bug-hunt-2026-05-06, chart-aria, screen-reader, plural, tc, intl-plural-rules, planned-page, toast, electron-native, menu, system-accent, suggestion-card, splash, upcoming-count, electron-error-page, backend-watchdog, visual-effects-tiers, auto-adapt-display, june-2026]
+description: Internationalization system including supported languages, translation workflow, and usage patterns. Phase 6 adds 32 export keys for PDF report localization. Phase 8 adds 11 additional export.section.* keys for portfolio (6) and tax (7) report sections. Phase C adds 15 cash flow forecast keys. Phase F adds 60 admin observability keys. 2026-05-29 adds 16 chart.aria.* keys (localized chart screen-reader summaries) and 21 aria.* keys (localized icon-button aria-labels). June 2026 adds tc() plural mechanism and plannedPage error-toast keys. June 2026 (ADR-070) adds 5 commandPalette.* keys (en + nl) for the new ⌘K command palette. June 2026 Premium v3 (ADR-071) adds 8 keys: settings.general.enhancedEffects/Hint, shortcuts.title/showHelp/closeDialog/chartScrub, commandPalette.recent/searchTransactions. June 2026 Premium v3 V5-V7 adds 14 keys: contextMenu.* (8 keys), quickLook.* (2 keys), shortcuts table-interaction additions (4 keys). June 2026 V12 (ADR-072) adds 11 keys: menu.edit/file/go/importCsv/keyboardShortcuts/newTransaction/settings/toggleSidebar/view, settings.appearance.systemAccent/systemAccentHint. June 2026 V11 adds 4 keys: dashboard.suggestions, dashboard.widgetDescriptions.suggestions, suggestions.kicker, suggestions.review. June 2026 (startup/UI fixes) adds 5 splash.* keys (en + nl, Electron boot splash narration) + tc()-plural upcoming.count.one/.other; removes upcoming.countSingle/countPlural. 2026-06-11 adds 5 app.* keys (Electron error page + backend-lost watchdog, en + nl). 2026-06-12 (ADR-075) adds 7 settings.appearance.visualEffects*/autoAdaptDisplay* keys; removes settings.general.enhancedEffects + settings.general.enhancedEffectsHint. ADR-075 addendum (same day) adds 2 more contextual-note keys (visualEffectsAutoNote + visualEffectsOverrideNote). Total: 2913 keys (per validate-locales after addendum).
 aliases: [i18n, translations, localization, language, nl, en, dutch, english]
 related_code: ["apps/frontend/src/locales", "apps/frontend/src/contexts/LanguageContext.tsx", "apps/frontend/src/hooks/useSplits.ts"]
 ---
@@ -207,6 +207,40 @@ bun run build
 
 ### Recent keys added
 
+#### Visual-effects tiers (2026-06-12, ADR-075 + addendum)
+
+9 new keys added, 2 removed. `bun run generate-locales` + `validate-locales` clean (2,913 keys parity). Keys also flow to `packaging/electron/i18n/` via `generate-locales`.
+
+**7 new `settings.appearance.*` keys** — visual effects tier Select + auto-adapt Switch (ADR-075 original):
+
+| Key | EN |
+|-----|----|
+| `settings.appearance.visualEffects` | "Visual effects" |
+| `settings.appearance.visualEffects.reduced` | "Reduced" |
+| `settings.appearance.visualEffects.standard` | "Standard" |
+| `settings.appearance.visualEffects.enhanced` | "Enhanced" |
+| `settings.appearance.visualEffectsHint` | Hint describing the three tiers |
+| `settings.appearance.autoAdaptDisplay` | "Auto-adapt to display" |
+| `settings.appearance.autoAdaptDisplayHint` | Hint describing the large-display heuristic |
+
+**2 new `settings.appearance.*` keys** — contextual notes under the Select (ADR-075 addendum, same day):
+
+| Key | EN | Shown when |
+|-----|----|------------|
+| `settings.appearance.visualEffectsAutoNote` | "Reduced automatically for this large display…" (styled `text-primary`) | `autoAdaptDisplay && isLargeDisplay` and no session override active |
+| `settings.appearance.visualEffectsOverrideNote` | "Session override for this device — automatic reduction resumes after the next launch" (styled `text-warning`) | Session override active |
+
+**2 removed keys** — replaced by the tier model above:
+- `settings.general.enhancedEffects`
+- `settings.general.enhancedEffectsHint`
+
+> [!info] Migration note
+> Stored `AppSettings` blobs that contain `enhancedEffects: true` are silently migrated to `visualEffects: 'enhanced'` at hydration by `migrateAppSettings` in `settingsStore.ts`; `enhancedEffects: false` becomes `visualEffects: 'standard'`. The legacy key is stripped on the next debounced persist. No backend change needed.
+
+Code links: [[apps/frontend/src/stores/settingsStore.ts]], [[apps/frontend/src/components/settings/AppearanceTab.tsx]], [[i18n/source/en.json]], [[i18n/source/nl.json]], [[docs/adr/075-visual-effects-tiers-display-adaptation|ADR-075]]
+
+---
+
 #### Startup/UI fix batch (June 2026)
 
 7 new keys, 2 removed. `bun run generate-locales` + `validate-locales` clean. Keys also flow to `packaging/electron/i18n/` via `generate-locales`.
@@ -300,7 +334,7 @@ Code links: [[apps/frontend/src/components/dashboard/SuggestionCard.tsx]], [[app
 | `settings.appearance.systemAccent` | "Use system accent color" | (Dutch equivalent) |
 | `settings.appearance.systemAccentHint` | "Match buttons and highlights to your macOS accent color" | (Dutch equivalent) |
 
-**1 key reworded** — `settings.general.enhancedEffectsHint` updated to mention window translucency in addition to the WebGL aurora (en + nl).
+**1 key reworded** — `settings.general.enhancedEffectsHint` updated to mention window translucency in addition to the WebGL aurora (en + nl). Note: this key was subsequently **removed** by ADR-075 (2026-06-12) along with `settings.general.enhancedEffects`.
 
 Code links: [[packaging/electron/main.js]], [[apps/frontend/src/components/settings/AppearanceTab.tsx]], [[i18n/source/en.json]], [[i18n/source/nl.json]]
 
@@ -347,12 +381,12 @@ Code links: [[apps/frontend/src/features/transactions/components/TransactionsTab
 
 8 new keys added to `i18n/source/en.json` + `nl.json`; `bun run generate-locales` + `validate-locales` clean. Total after this batch: **2854 keys**.
 
-**2 new `settings.general.*` keys** — Enhanced visual effects toggle:
+**2 `settings.general.*` keys** — Enhanced visual effects toggle (original ADR-071 batch; **removed by ADR-075 on 2026-06-12** — replaced by `settings.appearance.visualEffects*` / `autoAdaptDisplay*`):
 
-| Key | EN | NL |
-|-----|----|----|
-| `settings.general.enhancedEffects` | "Enhanced visual effects" | (Dutch equivalent) |
-| `settings.general.enhancedEffectsHint` | "Enable WebGL aurora background (may increase GPU usage)" | (Dutch equivalent) |
+| Key | EN | NL | Status |
+|-----|----|----|--------|
+| `settings.general.enhancedEffects` | "Enhanced visual effects" | (Dutch equivalent) | Removed 2026-06-12 |
+| `settings.general.enhancedEffectsHint` | "Enable WebGL aurora background (may increase GPU usage)" | (Dutch equivalent) | Removed 2026-06-12 |
 
 **4 new `shortcuts.*` keys** — ShortcutsOverlay (`?` key dialog):
 

@@ -2,7 +2,7 @@
 title: ADR-071 Premium v3 — Numbers, Chart Interactions, and the Enhanced-Effects Toggle
 type: adr
 status: Accepted
-date: 2026-06-10
+date: 2026-06-12
 tags: [adr, design, frontend, charts, motion, webgl, performance, settings, june-2026]
 description: Premium v3 batch — odometer numbers, Money typography, chart scrub/sync, large-title collapse, palette v2, workspace aurora, per-widget dashboard hydration, optimistic create, and a user-facing GPU effects toggle gating a WebGL shader aurora
 aliases: [adr-071, premium v3, enhanced effects toggle, shader aurora]
@@ -86,3 +86,24 @@ The "adopted in StatCard" scope noted in the Decision section above was the init
 - **RealEstatePage** (`apps/frontend/src/pages/portfolio/RealEstatePage.tsx`): two spots — (a) Total Return summary card ROI subtitle ("+x.x% Total ROI") replaced with `DeltaPill` + muted label; (b) each property card's "Total ROI" colored percent replaced with `DeltaPill`.
 
 All ad-hoc green/red percent strings in the three portfolio pages are now standardised on the shared component.
+
+---
+
+## Addendum — 2026-06-12: enhancedEffects boolean superseded by ADR-075 tier model
+
+The `AppSettings.enhancedEffects: boolean` introduced in this ADR's Decision section has been **superseded** by [[docs/adr/075-visual-effects-tiers-display-adaptation|ADR-075]] (accepted 2026-06-12).
+
+- `enhancedEffects` no longer exists on `AppSettings`. Stored blobs are migrated on first load by `migrateAppSettings` (in `settingsStore.ts`, applied at hydration via `AppSettingsContext`): `enhancedEffects: true → visualEffects: 'enhanced'`; `false → 'standard'`. The legacy key is stripped so the next debounced persist writes the new shape.
+- The Settings → Appearance UI now renders a tier `Select` (`reduced / standard / enhanced`) and an `autoAdaptDisplay` `Switch`, replacing the single `Switch` documented here.
+- The i18n keys `settings.general.enhancedEffects` and `settings.general.enhancedEffectsHint` have been removed. New keys are under `settings.appearance.visualEffects*` and `settings.appearance.autoAdaptDisplay*`.
+- All other items in this ADR batch (RollingNumber, Money, DeltaPill, chart scrub/sync, navigation, materials, optimistic create, etc.) remain current and are **not** affected by ADR-075.
+
+## Addendum — 2026-06-12: Enhanced-effects toggle moved to Appearance tab
+
+The Decision section above states "Switch in Settings → General." That was the initial placement. On 2026-06-12 the toggle was relocated to **Settings → Appearance**:
+
+- `apps/frontend/src/components/settings/tabs/GeneralTab.tsx` — Switch block and its `Switch` import removed.
+- `apps/frontend/src/components/settings/AppearanceTab.tsx` — now accepts `{ localAppSettings, onUpdate }` (staged `AppSettings`, applied on dialog Save, matching the GeneralTab pattern); renders the enhanced-effects toggle at the bottom of the Appearance tab after the mode/schedule section; content wrapped in `ScrollArea (h-full pr-4)` to prevent clipping in the fixed-height dialog.
+- `apps/frontend/src/components/settings/DashboardSettingsDialog.tsx` — passes `localAppSettings`/`setLocalAppSettings` down to `AppearanceTab`.
+
+**i18n keys intentionally unchanged**: `settings.general.enhancedEffects` / `settings.general.enhancedEffectsHint` retain their existing key names to avoid locale churn. No behavior change otherwise.

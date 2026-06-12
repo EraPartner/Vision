@@ -88,6 +88,10 @@ function resolveThemeColor(varName: string, fallback: [number, number, number]):
 }
 
 const RESOLUTION_SCALE = 0.25;
+// Backing-store width cap (ADR-075): on 1×-scaled large outputs (4K TV at
+// native resolution) innerWidth is huge and 0.25× alone would still be a
+// half-megapixel canvas. The content is blurry noise — capping is invisible.
+const MAX_CANVAS_WIDTH = 640;
 const FRAME_MIN_MS = 33; // ~30 fps cap
 
 export function ShaderAurora() {
@@ -149,8 +153,9 @@ export function ShaderAurora() {
         themeObserver.observe(document.documentElement, { attributes: true, attributeFilter: ["class", "style"] });
 
         const resize = () => {
-            const w = Math.max(1, Math.floor(window.innerWidth * RESOLUTION_SCALE));
-            const h = Math.max(1, Math.floor(window.innerHeight * RESOLUTION_SCALE));
+            const scale = Math.min(RESOLUTION_SCALE, MAX_CANVAS_WIDTH / Math.max(1, window.innerWidth));
+            const w = Math.max(1, Math.floor(window.innerWidth * scale));
+            const h = Math.max(1, Math.floor(window.innerHeight * scale));
             canvas.width = w;
             canvas.height = h;
             gl!.viewport(0, 0, w, h);

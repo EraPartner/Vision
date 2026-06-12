@@ -22,13 +22,14 @@ import { PageTitleProvider, usePageTitle } from "@/contexts/PageTitleContext";
 import { ShortcutsOverlay } from "@/components/shared/ShortcutsOverlay";
 import { ShaderAurora } from "@/components/layout/ShaderAurora";
 import { ElectronBridge } from "@/components/layout/ElectronBridge";
+import { VisualEffectsController } from "@/components/layout/VisualEffectsController";
 import { useGoToShortcuts } from "@/hooks/useGoToShortcuts";
+import { useVisualEffectsTier } from "@/hooks/useVisualEffectsTier";
 import { consumeUndo } from "@/lib/undo";
 import { useLocation, useNavigate } from "react-router-dom";
 import { LOCAL_STORAGE_KEYS } from "@/lib/localStorage-keys";
 import { isTypingTarget } from "@/lib/keyboard";
 import { useWorkspace } from "@/contexts/WorkspaceContext";
-import { useAppSettings } from "@/contexts/AppSettingsContext";
 
 interface AppLayoutProps {
     children: React.ReactNode;
@@ -67,7 +68,7 @@ export function AppLayout({ children }: AppLayoutProps) {
     const { mode, schedule, setMode, setSchedule } = useTheme();
     const { t } = useLanguage();
     const { workspace } = useWorkspace();
-    const { appSettings } = useAppSettings();
+    const { tier: effectsTier } = useVisualEffectsTier();
     useGoToShortcuts();
 
     // Window-state restoration (macOS "reopen where you left off"): persist
@@ -117,9 +118,10 @@ export function AppLayout({ children }: AppLayoutProps) {
         <PageTitleProvider>
         <SidebarProvider defaultOpen={false}>
             <ElectronBridge onOpenSettings={openSettingsOnTab} onOpenShortcuts={openShortcuts} />
+            <VisualEffectsController />
             <div className="relative min-h-screen flex w-full overflow-x-clip">
                 <div aria-hidden="true" className="liquid-canvas" data-workspace={workspace}>
-                    {appSettings.enhancedEffects && <ShaderAurora />}
+                    {effectsTier === 'enhanced' && <ShaderAurora />}
                     <div className="liquid-canvas-grain" />
                 </div>
                 <AppSidebar />

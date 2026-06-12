@@ -3,9 +3,9 @@ title: DashboardSettingsDialog
 type: component
 status: active
 date: 2026-04-23
-updated: 2026-04-27
-tags: [components, forms, dialogs, settings, refactor, phase-3, memoization, useCallback, performance, backup, encrypt, passphrase-modal, phase-2]
-description: Multi-tab settings dialog split into 6 focused components with stable callbacks via useCallback and component memoization
+updated: 2026-06-12
+tags: [components, forms, dialogs, settings, refactor, phase-3, memoization, useCallback, performance, backup, encrypt, passphrase-modal, phase-2, visual-effects-tiers, auto-adapt-display]
+description: Multi-tab settings dialog split into 6 focused components with stable callbacks via useCallback and component memoization. AppearanceTab renders a tier Select (shows effective tier) + autoAdaptDisplay Switch per ADR-075; tierSelection staged state routes to sessionTierOverride on capped displays or synced visualEffects on uncapped displays.
 aliases: [settings-dialog, dashboard-settings, DashboardSettingsDialog]
 related_code:
   - apps/frontend/src/components/settings/DashboardSettingsDialog.tsx
@@ -37,7 +37,7 @@ Multi-tab settings dialog for configuring user preferences, display settings, da
 ```
 DashboardSettingsDialog (orchestrator, ~170 lines)
 ├── GeneralTab (currency, date/number format, decimal places, start-of-week, page size, language)
-├── AppearanceTab (theme variant, color mode, schedule) [pre-existing, unchanged]
+├── AppearanceTab (theme variant, color mode, schedule, enhanced visual effects toggle)
 ├── DashboardTab (category/recipient exclusion, exclusion scope, exclude hidden toggle)
 ├── AppTab (onboarding restart, update check/apply, recurring dismissal reset, AI chat, reset-all)
 └── BackupTab (backup dir, passphrase, encrypt toggle, restore UI, AlertDialog for restore)
@@ -53,7 +53,8 @@ DashboardSettingsDialog (orchestrator, ~170 lines)
 | `localExcludedRecipients` | DashboardSettingsDialog | Save | Recipients to exclude from stats |
 | `localExcludeHidden` | DashboardSettingsDialog | Save | Auto-exclude inactive categories |
 | `localExclusionScope` | DashboardSettingsDialog | Save | Where exclusions apply (everywhere/statistics/nowhere) |
-| `localAppSettings` | DashboardSettingsDialog | Save | Currency, date format, number format, decimal places, start-of-week, page size, language, aiDefaultModel |
+| `localAppSettings` | DashboardSettingsDialog | Save | Currency, date format, number format, decimal places, start-of-week, page size, language, aiDefaultModel, autoAdaptDisplay — passed to both GeneralTab and AppearanceTab. (`visualEffects` is written through `localAppSettings` only on uncapped displays; capped displays use `tierSelection` → session override instead.) |
+| `tierSelection` | DashboardSettingsDialog | Save | Staged tier pick from AppearanceTab (`null` = untouched). Routed on Save: capped display → `sessionTierOverride`; uncapped → synced `visualEffects`. Cleared to `null` on dialog open. |
 | `backupDir` | DashboardSettingsDialog | Save | Electron backup directory path |
 | `backupOnQuit` | DashboardSettingsDialog | Save | Electron auto-backup-on-exit toggle |
 | **BackupTab internal state** | BackupTab | Local | passphrase, encrypt, showRestore, tempPassphrase, tempEncrypt (not persisted to dialog state) |
@@ -277,7 +278,7 @@ Wrapped in `ScrollArea` for overflow handling.
 
 ## AppearanceTab
 
-Tab component for theme and visual preferences: theme variant, color mode, and schedule.
+Tab component for theme and visual preferences: theme variant, color mode, schedule, and visual effects tier controls.
 
 ### File
 
@@ -285,12 +286,43 @@ Tab component for theme and visual preferences: theme variant, color mode, and s
 
 **Performance:** Wrapped with `React.memo()` to prevent re-renders when sibling tabs change state (April 25).
 
+### Props
+
+```typescript
+interface AppearanceTabProps {
+  localAppSettings: AppSettings;
+  onUpdate: (s: AppSettings) => void;
+  tierSelection: 'reduced' | 'standard' | 'enhanced' | null;
+  onTierSelect: (tier: 'reduced' | 'standard' | 'enhanced') => void;
+}
+```
+
+`localAppSettings`/`onUpdate` follow the same staged-save pattern as `GeneralTab` — changes are held in the orchestrator's `localAppSettings` state and persisted only when the dialog is saved.
+
+`tierSelection` / `onTierSelect` carry the staged tier pick separately from `localAppSettings`. `null` means the user has not touched the Select in this dialog session. The orchestrator (`DashboardSettingsDialog`) routes the staged value on Save — see **Save routing** below.
+
 ### Features
 
 - **Theme Variant**: light, dark, custom (configurable via `theme_settings`)
 - **Color Mode**: system, light, dark, schedule (time-based switching)
 - **Schedule**: Start/end times for scheduled mode
-- Uses Radix UI Tabs + Dialog for schedule configuration
+- **Visual effects tier Select**: Shows the **effective tier currently in use on this display** (not the synced preference). Three options: `reduced`, `standard` (default), `enhanced`. Staged via `tierSelection`/`onTierSelect`; routed on Save (see below).
+- **Auto-adapt display** (`AppSettings.autoAdaptDisplay`): `Switch` (default `true`). When on, the effective tier is forced to `reduced` while the window is on a large display (>6M physical px). Staged, applied on Save.
+- **Contextual note under the Select**: when the display is auto-capped, a `text-primary` note explains why; when a session override is active, a `text-warning` note warns it is device-local and cleared on next launch. Keys: `settings.appearance.visualEffectsAutoNote` / `visualEffectsOverrideNote`.
+- Content wrapped in `ScrollArea (h-full pr-4)` so the controls are not clipped in the fixed-height dialog.
+
+#### Save routing for the tier pick
+
+`DashboardSettingsDialog` owns `tierSelection` state (initialised to `null` on dialog open). On Save:
+
+- **Capped display** (`autoAdaptDisplay && isLargeDisplay`): if `tierSelection` is non-null → write it to `sessionTierOverride` (picking `'reduced'` clears the override instead); synced `visualEffects` is not written.
+- **Uncapped display**: if `tierSelection` is non-null → write it to synced `visualEffects` + clear `sessionTierOverride`.
+- **Auto-adapt toggled, tier not touched**: clear `sessionTierOverride` regardless.
+
+This ensures a capped display cannot accidentally change the synced baseline preference.
+
+> [!info] Updated 2026-06-12 (ADR-075 addendum)
+> The `AppearanceTabProps` gained `tierSelection` and `onTierSelect` for the session-override routing. The Select now shows the *effective* tier rather than the stored preference. See [[docs/adr/075-visual-effects-tiers-display-adaptation|ADR-075 addendum]] for the full decision.
 
 ---
 

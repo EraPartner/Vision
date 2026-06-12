@@ -14,7 +14,7 @@ import { useShallow } from 'zustand/react/shallow';
 import { apiClient } from '@/lib/api';
 import logger from '@/lib/logger';
 import { usePreloadedSetting } from '@/contexts/SettingsPreloadContext';
-import { useSettingsStore, DEFAULT_APP_SETTINGS } from '@/stores/settingsStore';
+import { useSettingsStore, DEFAULT_APP_SETTINGS, migrateAppSettings } from '@/stores/settingsStore';
 import type { AppSettings } from '@/stores/settingsStore';
 
 // Re-export so existing consumers don't need to change their imports
@@ -50,13 +50,11 @@ export function AppSettingsProvider({ children }: { children: ReactNode }) {
     // the settings value came from the server and doesn't need saving back.
     const isFirstPersistRun = useRef(true);
 
-    // Hydrate store from preloaded data
+    // Hydrate store from preloaded data (migrates pre-ADR-075 blobs that
+    // still carry the legacy enhancedEffects boolean)
     useEffect(() => {
         if (preloadLoading) return;
-        const merged = preloaded
-            ? { ...DEFAULT_APP_SETTINGS, ...preloaded }
-            : DEFAULT_APP_SETTINGS;
-        _hydrateAppSettings(merged, false);
+        _hydrateAppSettings(migrateAppSettings(preloaded ?? undefined), false);
         hasHydrated.current = true;
     }, [preloaded, preloadLoading, _hydrateAppSettings]);
 

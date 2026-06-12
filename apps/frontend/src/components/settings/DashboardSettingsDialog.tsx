@@ -1,6 +1,8 @@
 import { useState, useEffect, useCallback } from 'react';
 import { useSettings, type ExclusionScope } from '@/contexts/SettingsContext';
 import { useAppSettings, defaultAppSettings } from '@/contexts/AppSettingsContext';
+import { useSettingsStore, type VisualEffectsTier } from '@/stores/settingsStore';
+import { currentDisplayIsLarge } from '@/lib/visualEffects';
 import { useLanguage } from '@/contexts/LanguageContext';
 import { useQuery } from '@tanstack/react-query';
 import { apiClient } from '@/lib/api';
@@ -45,6 +47,13 @@ export function DashboardSettingsDialog({ open, onOpenChange, defaultTab = 'gene
 
     // General settings (needed for save)
     const [localAppSettings, setLocalAppSettings] = useState(appSettings);
+
+    // Visual-effects tier pick (ADR-075 addendum). null = untouched this
+    // dialog session. The Appearance tab shows the tier currently in use;
+    // a changed pick routes on Save to either the synced preference or —
+    // while the auto-adapt cap is active — a session-only local override.
+    const [tierSelection, setTierSelection] = useState<VisualEffectsTier | null>(null);
+    const setSessionTierOverride = useSettingsStore((s) => s.setSessionTierOverride);
 
     // Backup dir/quit (needed for save). Loaded here — not in BackupTab — so the
     // values are initialized even when the Backup tab is never opened; saving
@@ -110,6 +119,7 @@ export function DashboardSettingsDialog({ open, onOpenChange, defaultTab = 'gene
         setLocalExcludeHidden(settings.excludeHiddenCategories);
         setLocalExclusionScope(settings.exclusionScope);
         setLocalAppSettings(appSettings);
+        setTierSelection(null);
         // Backup settings are loaded by the dedicated [open] effect above.
     }, [open, settings, appSettings]);
 
@@ -129,7 +139,24 @@ export function DashboardSettingsDialog({ open, onOpenChange, defaultTab = 'gene
             excludeHiddenCategories: localExcludeHidden,
             exclusionScope: localExclusionScope,
         });
-        updateAppSettings(localAppSettings);
+        const next = { ...localAppSettings };
+        const stagedAuto = next.autoAdaptDisplay ?? true;
+        const savedAuto = appSettings.autoAdaptDisplay ?? true;
+        if (tierSelection !== null) {
+            if (stagedAuto && currentDisplayIsLarge()) {
+                // Capped display: the pick is a session-only, this-device-only
+                // override of the cap; the synced preference stays untouched.
+                // Picking 'reduced' (= what the cap gives) clears the override.
+                setSessionTierOverride(tierSelection === 'reduced' ? undefined : tierSelection);
+            } else {
+                next.visualEffects = tierSelection;
+                setSessionTierOverride(undefined);
+            }
+        } else if (stagedAuto !== savedAuto) {
+            // Auto mode toggled without touching the tier — auto takes back control.
+            setSessionTierOverride(undefined);
+        }
+        updateAppSettings(next);
         if (apiClient.isElectron() && backupSettingsTrusted) {
             apiClient.saveBackupSettings({ backupDir, backupOnQuit });
         }
@@ -139,7 +166,8 @@ export function DashboardSettingsDialog({ open, onOpenChange, defaultTab = 'gene
 
     const handleReset = () => {
         resetSettings();
-        resetAppSettings();
+        resetAppSettings(); // also clears the session tier override
+        setTierSelection(null);
         setLocalExcludedCategories([]);
         setLocalExcludedRecipients([]);
         setLocalExcludeHidden(true);
@@ -175,7 +203,12 @@ export function DashboardSettingsDialog({ open, onOpenChange, defaultTab = 'gene
                     </TabsContent>
 
                     <TabsContent value="appearance" className="flex-1 min-h-0">
-                        <AppearanceTab />
+                        <AppearanceTab
+                            localAppSettings={localAppSettings}
+                            onUpdate={setLocalAppSettings}
+                            tierSelection={tierSelection}
+                            onTierSelect={setTierSelection}
+                        />
                     </TabsContent>
 
                     <TabsContent value="dashboard" className="flex-1 min-h-0">
