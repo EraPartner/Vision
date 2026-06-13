@@ -38,7 +38,7 @@ Regular payments following a recurrence pattern:
 {
   "is_recurring": true,
   "recurrence_pattern": {
-    "interval": "monthly",  // daily, weekly, monthly, yearly
+    "interval": "monthly",  // daily, weekly, biweekly, monthly, quarterly, yearly
     "day_of_month": 15,    // for monthly
     "day_of_week": 1,       // for weekly (0=Sunday)
   }
@@ -48,7 +48,9 @@ Regular payments following a recurrence pattern:
 **Supported Intervals:**
 - Daily
 - Weekly
+- Biweekly
 - Monthly
+- Quarterly
 - Yearly
 
 ---

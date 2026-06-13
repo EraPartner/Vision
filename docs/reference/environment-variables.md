@@ -3,7 +3,7 @@ title: Environment Variables Reference
 type: reference
 status: active
 date: 2026-05-23
-updated: 2026-06-11
+updated: 2026-06-13
 tags: [reference, environment, configuration, deployment, docker, admin-auth, rate-limiting, trusted-proxies, dev-mode, ollama, streaming]
 description: Complete reference of all environment variables used by the Vision application
 aliases: [env vars, environment variables, .env, configuration, env]
@@ -48,6 +48,9 @@ aliases: [env vars, environment variables, .env, configuration, env]
 | `RATE_LIMIT_GLOBAL_WINDOW_MS` | `60000` | No | Rolling window size (ms) for `globalRateLimiter`. Default 60 s. | [[apps/node-backend/src/middleware/rateLimiter.js\|rateLimiter.js]], [[apps/node-backend/src/config/env.js\|env.js]] |
 | `TRUSTED_PROXIES` | _(unset)_ | No | Comma-separated IP addresses or CIDR ranges trusted for `X-Forwarded-For`. When unset the client IP is keyed on the raw socket address. Use this when running behind a reverse proxy — set to the proxy's IP (e.g. `192.168.1.1,10.0.0.0/8`). Validated by `ipMatchesRule()` helper. | [[apps/node-backend/src/middleware/rateLimiter.js\|rateLimiter.js]], [[apps/node-backend/src/config/config.js\|config.js]] |
 | `VISION_DEV` | _(unset)_ | No | When `true`, enables dev-only bypasses: rate-limit skipping and wildcard CORS reflection. Previously controlled by `ENVIRONMENT=development`; now explicit and fail-safe. The backend `dev` npm script sets this automatically. Do **not** set in production. | [[apps/node-backend/src/config/config.js\|config.js]], [[apps/node-backend/src/main.js\|main.js]] |
+| `VISION_BOOT_TRACE` | `1` (enabled) | No | Controls boot-phase timing output. When set to `0`, suppresses per-phase JSON lines written to stderr during startup (`[startup] {"phase":…,"ms":…}`). Enabled by default so cold-start diagnostics are always available. | [[apps/node-backend/src/main.js\|main.js]] |
+| `VISION_CACHE_DIR` | `<repo_root>/.vision-cache` | No | Overrides the directory used for the Alembic skip-at-head cache (`alembic-head.json`). After a successful `alembic upgrade head`, the applied revision + a versions-directory fingerprint are stored here; on the next boot, if both match, the alembic invocation is skipped (~1–3 s warm-boot win). | [[apps/node-backend/src/database/migrate.js\|migrate.js]] |
+| `PUPPETEER_EXECUTABLE_PATH` | _(unset)_ | No | Path to the Chromium binary used by Puppeteer for PDF report rendering. In Docker (Alpine, musl-linked), set this to the distro-packaged Chromium (e.g. `/usr/bin/chromium-browser`) so Puppeteer uses a compatible binary instead of its own bundled Chrome. Unset locally — Puppeteer falls back to its bundled Chrome. | [[apps/node-backend/src/services/reports/puppeteerRenderer.js\|puppeteerRenderer.js]] |
 
 ## AI Chat / Ollama
 
@@ -78,6 +81,7 @@ aliases: [env vars, environment variables, .env, configuration, env]
 | `VITE_API_URL` | `http://localhost:3002` | No | Valid URL string or empty; validated by Zod on boot | Backend API URL | [[apps/frontend/src/lib/env.ts\|env.ts]] |
 | `VITE_LOG_LEVEL` | `debug` (dev), `warn` (prod) | No | One of `debug`, `info`, `warn`, `error`, `silent` or empty; validated by Zod on boot | Frontend log level | [[apps/frontend/src/lib/env.ts\|env.ts]] |
 | `VITE_ENABLE_LOGGING` | `true` | No | String coerced to boolean (`'true'` → true, empty → default); validated by Zod on boot | Enable frontend logging | [[apps/frontend/src/lib/env.ts\|env.ts]] |
+| `VITE_DEVTOOLS` | _(unset)_ | No | — | When `"true"`, enables React Query Devtools in production builds. On the local Vite dev server, devtools are always enabled via `import.meta.env.DEV` regardless of this variable. Injected as a Docker build arg in `docker-compose.dev.yml`. Do **not** set in production. | [[apps/frontend/src/App.tsx\|App.tsx]] |
 
 > [!info] Frontend Env Validation (ADR-030)
 > All three `VITE_*` variables are validated at boot time by Zod schema in `apps/frontend/src/lib/env.ts`. Misconfiguration fails immediately on app startup with an aggregated error message. See [[docs/adr/030-frontend-environment-schema|ADR-030]] for details.

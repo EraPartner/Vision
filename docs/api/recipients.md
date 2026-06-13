@@ -5,7 +5,7 @@ method: GET, POST, PATCH, DELETE
 path: /api/recipients
 description: Recipient (payee/payer) management with atomic merge and normalization-based matching
 date: 2026-04-16
-updated: 2026-04-26
+updated: 2026-06-13
 tags: [api, recipients, payees, merge, atomic, phase-6, recipient-clusters]
 status: active
 aliases: [recipients-api, payee, payer, counterparty, recipient-management]
@@ -232,6 +232,156 @@ Identify recipient clusters for bulk merge operations. Analyzes active primary r
 - Analyzes longest common prefix (LCP) with minimum length of 8 characters
 - Returns up to 50 clusters sorted by confidence (highest first)
 - Used by the frontend to suggest pattern-based merge opportunities after manual merge actions
+
+## Recipient Patterns
+
+Recipients can have matching patterns used for automatic categorization during CSV import. These endpoints are handled inline in `recipients.js`.
+
+### GET /api/recipients/:id/patterns
+
+List all matching patterns for a recipient.
+
+**Path Parameters:**
+
+| Parameter | Description |
+|-----------|-------------|
+| `id` | Recipient ID |
+
+**Response:**
+```json
+{
+  "items": [
+    {
+      "id": 1,
+      "recipient_id": 5,
+      "pattern": "SUPERMARKET",
+      "pattern_kind": "literal_prefix",
+      "case_sensitive": false,
+      "priority": 0,
+      "notes": null
+    }
+  ],
+  "total": 1
+}
+```
+
+### POST /api/recipients/:id/patterns
+
+Create a new matching pattern for a recipient.
+
+**Path Parameters:**
+
+| Parameter | Description |
+|-----------|-------------|
+| `id` | Recipient ID |
+
+**Request Body:**
+```json
+{
+  "pattern": "SUPERMARKET",
+  "pattern_kind": "literal_prefix",
+  "case_sensitive": false,
+  "priority": 0,
+  "notes": "Matches all supermarket transactions"
+}
+```
+
+**Required Fields:** `pattern`
+
+**Response:** `201 Created`
+```json
+{
+  "id": 1,
+  "recipient_id": 5,
+  "pattern": "SUPERMARKET",
+  "pattern_kind": "literal_prefix",
+  "case_sensitive": false,
+  "priority": 0,
+  "notes": "Matches all supermarket transactions"
+}
+```
+
+**Error Response (400):**
+```json
+{ "ok": false, "error": { "code": "APP_ERROR", "message": "Missing required field: pattern" } }
+```
+
+### POST /api/recipients/:id/patterns/preview
+
+Preview which existing transactions would match a given pattern before saving it.
+
+**Path Parameters:**
+
+| Parameter | Description |
+|-----------|-------------|
+| `id` | Recipient ID |
+
+**Request Body:**
+```json
+{
+  "pattern": "SUPERMARKET",
+  "pattern_kind": "literal_prefix",
+  "case_sensitive": false
+}
+```
+
+**Required Fields:** `pattern`
+
+**Defaults:** `pattern_kind` defaults to `literal_prefix`; `case_sensitive` defaults to `false`.
+
+**Response:** `200 OK`
+```json
+{
+  "matchCount": 14,
+  "matches": [
+    { "id": 101, "description": "SUPERMARKET ABC", "date": "2026-05-01", "amount": -45.00 }
+  ]
+}
+```
+
+### PATCH /api/recipients/:id/patterns/:patternId
+
+Update an existing pattern.
+
+**Path Parameters:**
+
+| Parameter | Description |
+|-----------|-------------|
+| `id` | Recipient ID |
+| `patternId` | Pattern ID |
+
+**Request Body:** Any subset of `pattern`, `pattern_kind`, `case_sensitive`, `priority`, `notes`.
+
+**Response:** `200 OK`
+```json
+{ "patternId": 1 }
+```
+
+**Error Response (400):**
+```json
+{ "ok": false, "error": { "code": "APP_ERROR", "message": "Invalid patternId" } }
+```
+
+### DELETE /api/recipients/:id/patterns/:patternId
+
+Delete a pattern.
+
+**Path Parameters:**
+
+| Parameter | Description |
+|-----------|-------------|
+| `id` | Recipient ID |
+| `patternId` | Pattern ID |
+
+**Response:** `200 OK`
+```json
+{ "patternId": 1 }
+```
+
+**Error Response (400):**
+```json
+{ "ok": false, "error": { "code": "APP_ERROR", "message": "Invalid patternId" } }
+```
 
 ## Recipient Bank Accounts
 

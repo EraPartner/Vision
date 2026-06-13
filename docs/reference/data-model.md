@@ -3,10 +3,10 @@ title: Data Model Reference
 type: reference
 status: active
 date: 2026-04-24
-updated: 2026-06-11
-last_modified: 2026-06-11
+updated: 2026-06-13
+last_modified: 2026-06-13
 tags: [reference, data-model, entities, database, schema, phase-5a, phase-0, phase-1, may-2026, tags, tagging, orthogonal-dimension, aggregations, migration-0035, saved-custom-parsers, custom-parser-configs, adr-066, fx-attribution, value-fx-neutral, adr-074, migration-0039]
-description: Complete reference for all data entities in Vision — core, portfolio, planning, supporting, and aggregation entities. Includes exchange_rate_cache (Phase 0), aggregation tables (Phase 1, consolidated in 0035), attachment entity (Phase 5A), transaction tags (May 2026), custom_parser_configs (June 2026, ADR-066), and value_fx_neutral snapshot column (June 2026, ADR-074 migration 0039).
+description: Complete reference for all data entities in Vision — core, portfolio, planning, supporting, and aggregation entities. Includes exchange_rate_cache (Phase 0), aggregation tables (Phase 1, consolidated in 0035), attachment entity (Phase 5A), transaction tags (May 2026), custom_parser_configs (June 2026, ADR-066), value_fx_neutral snapshot column (June 2026, ADR-074 migration 0039), and supporting entities transaction_splits, split_payments, split_audit, import_batches, provider_health, recipient_match_patterns, asset_price_history (June 2026).
 aliases: [data model, entities, domain model, schema entities]
 related_code: ["apps/node-backend/src/repositories/", "alembic/versions/"]
 ---
@@ -38,6 +38,9 @@ related_code: ["apps/node-backend/src/repositories/", "alembic/versions/"]
 | `recipient_bank_account_id` | INTEGER | FK → recipient_bank_accounts | Specific bank account |
 | `category_id` | INTEGER | FK → categories | Associated category |
 | `is_active` | BOOLEAN | DEFAULT true | Soft delete |
+| `import_batch_id` | BIGINT | FK → import_batches ON DELETE SET NULL, NULLABLE | Import batch that created this transaction; NULL for manual entries and pre-pipeline rows (migration 0003) |
+| `updated_at` | TIMESTAMPTZ | NOT NULL, DEFAULT NOW() | Last modification timestamp; NOT NULL enforced by migration 0022 |
+| `tx_hash` | TEXT | UNIQUE (partial, WHERE NOT NULL), NULLABLE | Import-pipeline deduplication hash; NULL for manually-entered transactions; enables race-safe `ON CONFLICT (tx_hash) DO NOTHING` (migration 0036) |
 
 **Indexes:** `idx_transactions_date`, `idx_transactions_recipient`, `idx_transactions_category`
 
@@ -382,6 +385,157 @@ related_code: ["apps/node-backend/src/repositories/", "alembic/versions/"]
 - `ATTACHMENT_MAX_SIZE_MB` configurable via environment (default 10)
 
 **Related:** [[docs/api/attachments|Attachments API]], [[docs/features/import|Import Feature (Phase 5A)]], migration [[alembic/versions/0004_attachments.py|0004]]
+
+---
+
+### ImportBatch
+
+**Purpose:** Tracks each CSV import run through the pipeline from staging to completion. Each committed batch links its transactions via `transactions.import_batch_id`, enabling per-batch rollback and history.
+
+| Field | Type | Constraints | Description |
+|-------|------|-------------|-------------|
+| `id` | BIGSERIAL | PK | Unique batch identifier |
+| `adapter_name` | TEXT | NOT NULL | Bank adapter used (e.g., `belfius`, `revolut`) |
+| `source_filename` | TEXT | NULLABLE | Original uploaded filename |
+| `source_size_bytes` | BIGINT | NULLABLE | File size in bytes |
+| `custom_config` | JSONB | NULLABLE | Custom parser config snapshot at import time |
+| `status` | TEXT | NOT NULL, DEFAULT 'pending' | Pipeline status: `pending`, `staging`, `validating`, `matching`, `committing`, `complete`, `failed`, `aborted`, `awaiting_review` |
+| `rows_total` | INTEGER | NOT NULL, DEFAULT 0 | Total rows parsed |
+| `rows_imported` | INTEGER | NOT NULL, DEFAULT 0 | Rows committed to `transactions` |
+| `rows_duplicate` | INTEGER | NOT NULL, DEFAULT 0 | Rows skipped as duplicates |
+| `rows_error` | INTEGER | NOT NULL, DEFAULT 0 | Rows that failed processing |
+| `error_summary` | TEXT | NULLABLE | Human-readable error description |
+| `started_at` | TIMESTAMPTZ | NOT NULL, DEFAULT NOW() | When the batch was created |
+| `completed_at` | TIMESTAMPTZ | NULLABLE | When the batch reached a terminal state |
+
+**Indexes:** `idx_import_batches_status` (partial, non-terminal only), `idx_import_batches_started_at`
+
+**Related:** [[docs/features/import|Import Feature]], [[docs/api/imports|Imports API]], migration [[alembic/versions/0001_initial_database_schema.py|0001]], [[alembic/versions/0003_import_batch_id_on_transactions.py|0003]]
+
+---
+
+### TransactionSplit
+
+**Purpose:** Tracks money owed by a recipient from a shared expense transaction. Each split records a portion of a transaction that a specific person owes back.
+
+| Field | Type | Constraints | Description |
+|-------|------|-------------|-------------|
+| `id` | SERIAL | PK | Unique identifier |
+| `transaction_id` | INTEGER | NOT NULL, FK → transactions ON DELETE CASCADE | Parent transaction |
+| `recipient_id` | INTEGER | NOT NULL, FK → recipients ON DELETE CASCADE | Person who owes this amount |
+| `amount` | NUMERIC(15,2) | NOT NULL | Amount owed |
+| `note` | TEXT | NULLABLE | Optional note |
+| `is_settled` | BOOLEAN | NOT NULL, DEFAULT false | Whether the split is fully settled |
+| `created_at` | TIMESTAMPTZ | NOT NULL, DEFAULT NOW() | Creation timestamp |
+| `updated_at` | TIMESTAMPTZ | NOT NULL, DEFAULT NOW() | Last modification timestamp; auto-bumped by trigger |
+
+**Indexes:** `idx_splits_transaction`, `idx_splits_recipient`, `idx_splits_unsettled` (partial, `is_settled = false`)
+
+**Related:** [[docs/features/splits|Splits Feature]], migration [[alembic/versions/0019_transaction_splits_and_agg.py|0019]]
+
+---
+
+### SplitPayment
+
+**Purpose:** Records an individual payment toward a split. Multiple payments can partially settle a split over time.
+
+| Field | Type | Constraints | Description |
+|-------|------|-------------|-------------|
+| `id` | SERIAL | PK | Unique identifier |
+| `split_id` | INTEGER | NOT NULL, FK → transaction_splits ON DELETE CASCADE | Parent split |
+| `amount` | NUMERIC(15,2) | NOT NULL | Payment amount |
+| `paid_at` | DATE | NOT NULL, DEFAULT CURRENT_DATE | Date payment was made |
+| `note` | TEXT | NULLABLE | Optional note |
+| `created_at` | TIMESTAMPTZ | NOT NULL, DEFAULT NOW() | Creation timestamp |
+
+**Indexes:** `idx_split_payments_split`
+
+**Related:** [[docs/features/splits|Splits Feature]], migration [[alembic/versions/0019_transaction_splits_and_agg.py|0019]]
+
+---
+
+### SplitAudit
+
+**Purpose:** Audit log for split-related operations (create, update, payment, settle). Written by `splitRepository.writeAudit()`.
+
+| Field | Type | Constraints | Description |
+|-------|------|-------------|-------------|
+| `id` | BIGSERIAL | PK | Unique audit entry identifier |
+| `split_id` | INTEGER | FK → transaction_splits ON DELETE SET NULL, NULLABLE | Split being audited (SET NULL if split is deleted) |
+| `action` | VARCHAR(50) | NOT NULL | Action name (e.g., `create`, `payment`, `settle`) |
+| `actor` | TEXT | NULLABLE | Who performed the action |
+| `payload` | JSONB | NULLABLE | Action-specific data |
+| `created_at` | TIMESTAMPTZ | NOT NULL, DEFAULT NOW() | When the action occurred |
+
+**Indexes:** `idx_split_audit_split_id`
+
+**Related:** migration [[alembic/versions/0021_split_audit.py|0021]]
+
+---
+
+### ProviderHealth
+
+**Purpose:** Tracks per-provider health state for the admin observability hub. Stores last success/error timestamps and consecutive failure count.
+
+| Field | Type | Constraints | Description |
+|-------|------|-------------|-------------|
+| `provider` | TEXT | PK | Provider identifier (e.g., `binance`, `yahoo`) |
+| `kind` | TEXT | NOT NULL | Provider kind (e.g., `price`, `exchange_rate`) |
+| `last_success_at` | TIMESTAMPTZ | NULLABLE | Timestamp of last successful call |
+| `last_error_at` | TIMESTAMPTZ | NULLABLE | Timestamp of last error |
+| `last_error` | TEXT | NULLABLE | Last error message |
+| `consecutive_failures` | INTEGER | NOT NULL, DEFAULT 0 | Count of consecutive failures since last success |
+| `updated_at` | TIMESTAMPTZ | NOT NULL, DEFAULT NOW() | Last update timestamp |
+
+**Indexes:** `idx_ph_kind`
+
+**Related:** [[docs/architecture/backend-architecture|Backend Architecture]], migration [[alembic/versions/0010_add_provider_health.py|0010]]
+
+---
+
+### RecipientMatchPattern
+
+**Purpose:** User-editable patterns bound to a recipient for import pipeline matching. The pattern phase runs before fuzzy matching, normalizing variable bank descriptions (embedded dates, references) to a canonical recipient.
+
+| Field | Type | Constraints | Description |
+|-------|------|-------------|-------------|
+| `id` | SERIAL | PK | Unique identifier |
+| `recipient_id` | INTEGER | NOT NULL, FK → recipients ON DELETE CASCADE | Recipient this pattern resolves to |
+| `pattern` | TEXT | NOT NULL | The pattern string |
+| `pattern_kind` | TEXT | NOT NULL, DEFAULT 'literal_prefix' | One of: `regex`, `glob`, `literal_prefix` |
+| `case_sensitive` | BOOLEAN | NOT NULL, DEFAULT false | Whether matching is case-sensitive |
+| `priority` | INTEGER | NOT NULL, DEFAULT 100 | Lower number = higher priority |
+| `is_active` | BOOLEAN | NOT NULL, DEFAULT true | Soft delete |
+| `source` | TEXT | NOT NULL, DEFAULT 'user' | One of: `user`, `suggested`, `system` |
+| `notes` | TEXT | NULLABLE | Optional notes |
+| `created_at` | TIMESTAMPTZ | NOT NULL, DEFAULT NOW() | Creation timestamp |
+| `updated_at` | TIMESTAMPTZ | NOT NULL, DEFAULT NOW() | Last modification timestamp; auto-bumped by trigger |
+
+**Indexes:** `idx_rmp_active_priority` (partial, `is_active = true`), `idx_rmp_recipient`
+
+**Related:** [[docs/features/import|Import Feature]], migration [[alembic/versions/0015_recipient_match_patterns.py|0015]]
+
+---
+
+### AssetPriceHistory
+
+**Purpose:** Historical daily close prices for investments, sourced from price providers or entered manually.
+
+| Field | Type | Constraints | Description |
+|-------|------|-------------|-------------|
+| `id` | SERIAL | PK | Unique identifier |
+| `investment_id` | INTEGER | NOT NULL, FK → investments ON DELETE CASCADE (added migration 0026) | Parent investment |
+| `price_date` | DATE | NOT NULL | Date the price applies |
+| `close_price` | NUMERIC(18,6) | NOT NULL | Closing price on that date |
+| `source` | VARCHAR(50) | NOT NULL, DEFAULT 'provider' | Source of the price data |
+| `fetched_at` | TIMESTAMPTZ | NOT NULL, DEFAULT NOW() | When the price was fetched |
+| `updated_at` | TIMESTAMPTZ | NOT NULL, DEFAULT NOW() | Last modification timestamp; enforced NOT NULL by migration 0022 |
+
+**Constraints:** `UNIQUE(investment_id, price_date)`
+
+**Indexes:** `idx_asset_price_history_investment_date`, `idx_asset_price_history_date`
+
+**Related:** [[docs/features/portfolio|Portfolio Feature]], migration [[alembic/versions/0001_initial_database_schema.py|0001]], FK added [[alembic/versions/0026_asset_price_history_fk.py|0026]]
 
 ---
 

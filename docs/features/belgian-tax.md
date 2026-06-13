@@ -71,7 +71,7 @@ Pure tax logic lives in [[apps/frontend/src/lib/belgianTax]] and is split by con
 
 **De-duplication:** `recordedTaxesForYear` is now the single implementation shared by both `PortfolioTaxPage` and `TaxOverviewPage`. Each page's `useMemo` calls the shared function instead of duplicating the per-transaction accumulation loop.
 
-**Tests:** `apps/frontend/src/lib/belgianTax/__tests__/portfolioTax.test.ts` — 12 golden-output cases locking all estimators to 8 decimal places. Integrated into the frontend Vitest suite (94 tax-unit + 88 portfolio-integration tests pass; see [[docs/testing/test-inventory|Test Inventory]]).
+**Tests:** `apps/frontend/src/lib/belgianTax/__tests__/portfolioTax.test.ts` — 13 golden-output cases locking all estimators to 8 decimal places. Integrated into the frontend Vitest suite (94 tax-unit + 88 portfolio-integration tests pass; see [[docs/testing/test-inventory|Test Inventory]]).
 
 The React provider [[apps/frontend/src/contexts/BelgianTaxProfileContext]] only owns persistence + state; it re-exports the public surface so existing consumers keep working.
 

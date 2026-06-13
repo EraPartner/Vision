@@ -95,14 +95,14 @@ t('addItem', { item: 'Investment' }) // "Add Investment"
 ```tsx
 // i18n/source/en.json
 // "table.items": {
-//   "one": "{{count}} item",
-//   "other": "{{count}} items"
+//   "one": "{count} item",
+//   "other": "{count} items"
 // }
 //
 // i18n/source/nl.json
 // "table.items": {
-//   "one": "{{count}} artikel",
-//   "other": "{{count}} artikelen"
+//   "one": "{count} artikel",
+//   "other": "{count} artikelen"
 // }
 
 const { tc } = useLanguage();
@@ -110,15 +110,15 @@ tc('table.items', 1)  // EN: "1 item"    / NL: "1 artikel"
 tc('table.items', 5)  // EN: "5 items"   / NL: "5 artikelen"
 ```
 
-`count` is automatically injected as `{{count}}` in the template unless overridden in `vars`.
+`count` is automatically injected as `{count}` in the template unless overridden in `vars`.
 
 **Keys using plural forms (en + nl):**
 
 | Key | one | other |
 |-----|-----|-------|
-| `table.items` | `{{count}} item` | `{{count}} items` |
-| `portfolio.investments` | `{{count}} investment` | `{{count}} investments` |
-| `performance.holdings` | `{{count}} holding` | `{{count}} holdings` |
+| `table.items` | `{count} item` | `{count} items` |
+| `portfolio.investments` | `{count} investment` | `{count} investments` |
+| `performance.holdings` | `{count} holding` | `{count} holdings` |
 | `upcoming.count` | `{count} upcoming payment due this week` | `{count} upcoming payments due this week` |
 
 **Removed flat plural keys (migrate to `tc()`):**
@@ -184,25 +184,23 @@ Add the key to both `i18n/source/en.json` and `i18n/source/nl.json`:
 ```json
 // i18n/source/en.json
 {
-  "myComponent": {
-    "greeting": "Hello!"
-  }
+  "myComponent.greeting": "Hello!",
+  "myComponent.title": "My Component"
 }
 
 // i18n/source/nl.json
 {
-  "myComponent": {
-    "greeting": "Hallo!"
-  }
+  "myComponent.greeting": "Hallo!",
+  "myComponent.title": "Mijn component"
 }
 ```
 
 ### Step 2: Generate Locale Files
 
-Run the build to generate TypeScript files:
+Run the generate-locales script to produce TypeScript files:
 
 ```bash
-bun run build
+bun run generate-locales
 ```
 
 ### Recent keys added
@@ -599,9 +597,10 @@ return <h1>{t('myComponent.greeting')}</h1>;
 
 ```typescript
 interface LanguageContextType {
-  language: string;       // Current language code
-  setLanguage: (lang: string) => void;
-  t: (key: string, params?: object) => string;
+  language: Language;
+  setLanguage: (lang: Language) => void;
+  t: (key: string, vars?: Record<string, string | number>) => string;
+  tc: (key: string, count: number, vars?: Record<string, string | number>) => string;
 }
 ```
 
@@ -625,17 +624,6 @@ setLanguage('en');
 | `{name}` | string | User/entity name |
 | `{amount}` | number | Currency amounts |
 | `{date}` | string | Date values |
-
-### Pluralization
-
-Many languages need different forms for singular/plural:
-
-```json
-{
-  "item": "{{count}} item",
-  "item_plural": "{{count}} items"
-}
-```
 
 ## Translation Coverage
 
@@ -761,15 +749,13 @@ When adding new UI, verify both English and Dutch displays correctly.
 ```
 1. Developer adds English text to UI
    ↓
-2. Run translation script to extract keys
+2. Add keys to en.json (source of truth)
    ↓
-3. Add keys to en.json (source of truth)
+3. Add corresponding nl.json translations
    ↓
-4. Add corresponding nl.json translations
+4. Run bun run generate-locales to produce .ts files
    ↓
-5. Build to generate .ts files
-   ↓
-6. Verify in application
+5. Verify in application
 ```
 
 ## Related Documentation

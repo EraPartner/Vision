@@ -3,7 +3,7 @@ title: Package.json Scripts Reference
 type: reference
 status: active
 date: 2026-04-29
-updated: 2026-05-31
+updated: 2026-06-13
 tags: [reference, scripts, npm, bun, build, commands, phase-1, testing, e2e, mutation-testing, quote-backfill, gap-fill]
 description: Complete reference of all npm/bun scripts available in the Vision project — root, frontend workspace, and backend workspace.
 aliases: [scripts, npm scripts, bun scripts, commands, build commands, run commands]
@@ -50,12 +50,14 @@ aliases: [scripts, npm scripts, bun scripts, commands, build commands, run comma
 | `sync-nl` | `node scripts/sync-nl-with-en.js` | Add any keys present in `en.json` but missing in `nl.json` (placeholder Dutch). |
 | `validate-locales` | `node scripts/validate-locales.js` | Parity check between `en.json` and `nl.json`; fails CI on drift. |
 
-### Linting
+### Linting & type-checking
 
 | Script | Command | Description |
 |--------|---------|-------------|
 | `lint` | `bun run --filter 'vision-frontend' lint` | ESLint on the frontend workspace. |
 | `lint:backend` | `bun run --filter '…-node' lint` | ESLint on the backend workspace. |
+| `typecheck` | `bun run --filter 'vision-frontend' typecheck` | TypeScript type-check of the frontend (runs: `tsc -p tsconfig.app.json --noEmit && tsc -p tsconfig.node.json --noEmit`). No emit; fails on type errors only. |
+| `check-endpoint-matrix` | `node scripts/check-endpoint-matrix.js` | Guards `docs/reference/api-endpoint-matrix.md` against drift from `openapi.yaml`: counts HTTP operations in the spec and compares to the `api_operation_count` frontmatter value; exits 1 on mismatch (caught in CI). |
 
 ### Testing
 
@@ -89,12 +91,12 @@ Alembic is the single source of schema DDL ([[docs/adr/027-alembic-single-source
 
 | Script | Command | Description |
 |--------|---------|-------------|
-| `docker:dev` | `… docker compose -f docker-compose.yml -f docker-compose.dev.yml up` | Start the dev stack (Postgres + app). |
+| `docker:dev` | `npm run generate-locales-if-not-ci && docker compose -f docker-compose.yml -f docker-compose.dev.yml up` | Start the dev stack (Postgres + app). |
 | `docker:dev:down` | `docker compose … down` | Stop the dev stack. |
-| `docker:dev:rebuild` | `… down && … up --build` | Rebuild app image. |
-| `docker:clean` | `… -f docker-compose.clean.yml up --build` | Start a first-run / onboarding stack. |
+| `docker:dev:rebuild` | `npm run generate-locales-if-not-ci && … down && … up --build` | Rebuild app image. |
+| `docker:clean` | `npm run generate-locales-if-not-ci && docker compose -f docker-compose.yml -f docker-compose.clean.yml up --build` | Start a first-run / onboarding stack. |
 | `docker:clean:down` | `docker compose … down` | Stop the clean stack. |
-| `docker:clean:reset` | `… down -v && … up --build` | Reset clean volumes and restart. |
+| `docker:clean:reset` | `npm run generate-locales-if-not-ci && … down -v && … up --build` | Reset clean volumes and restart. |
 | `docker:logs` | `docker compose … logs -f app` | Tail backend logs. |
 
 ### Electron
@@ -128,7 +130,7 @@ The wrappers spawn Electron from `packaging/electron/`, layering a docker-compos
 | Script | Command | Description |
 |--------|---------|-------------|
 | `start` | `bun run src/main.js` | Production-mode backend (no watcher). |
-| `dev` | `bun --watch src/main.js` | Backend dev server with watch reload (port 3002). |
+| `dev` | `VISION_DEV=true bun --watch src/main.js` | Backend dev server with watch reload (port 3002). |
 | `test` | `bun vitest run` | Vitest one-shot. |
 | `test:watch` | `bun vitest` | Vitest watch mode. |
 | `lint` | `eslint src/` | Backend ESLint. |

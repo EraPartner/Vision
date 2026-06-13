@@ -16,6 +16,9 @@ aliases: [admin csrf guard, csrf guard, admin auth 2026, token-or-open]
 **Accepted** — 2026-05-29  
 **Supersedes** [[docs/adr/037-admin-auth-localhost-fallback|ADR-037]] (RFC1918 IP-allowlist fallback)
 
+## Date
+2026-05-29
+
 ## Context
 
 ADR-037 introduced a fallback for `ADMIN_AUTH_TOKEN`-absent deployments: allow admin requests from loopback AND all RFC1918 / IPv6 ULA addresses. The audit (codebase-audit-2026-05 finding `security.2`) identified this as over-broad: the entire private address space is trusted, not just loopback. A bare-metal or compose-override deployment where the port is exposed on `0.0.0.0` would give every LAN device unauthenticated admin access. Additionally, an RFC1918 IP check provides no defence against browser-initiated cross-site requests that originate from the loopback address itself — a malicious web page can `fetch('http://localhost:3002/api/admin/database/reset', { method: 'POST' })` and CORS only hides the response; the request executes.

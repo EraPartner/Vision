@@ -3,8 +3,8 @@ title: Aggregations API
 type: endpoint
 status: active
 date: 2026-04-25
-updated: 2026-06-11
-last_modified: 2026-06-11
+updated: 2026-06-13
+last_modified: 2026-06-13
 recipient_pivot_added: 2026-04-28
 tags: [endpoint, api, aggregations, backend, phase-2, phase-6, phase-9, phase-10, phase-d, phase-e, phase-f, phase-g, phase-h, phase-h-v2, decimal, money, cashflow-forecast, multi-method-forecast, statistical-forecasting, ensemble-methods, accuracy-persistence, materialized-cache, nightly-job, category-breakdown, fallback-resilience, rolling-window, url-persistence, rolling-cache, rolling-diagnostics, recipient-pivot, saved-charts, exclusion-filters, ensemble-v2]
 description: Server-computed transaction aggregations with materialized-view source distinction; includes planned cash flow forecast (Phase 6), 8-method statistical forecast with empirical-Bayes ensemble v2 (Phase 10 + F), persisted accuracy metrics with fallback-to-memory resilience (Phase D), nightly cache materialization (Phase E), per-category breakdown with reconciliation (Phase G), rolling-window cash flow forecast (Phase H), and per-recipient spending pivot for custom charts (April 2026). June 2026: recipient-insights endpoint accepts exclusion params; ensemble weighting upgraded to v2 (sample-size-shrunk RMSE + uniform-blend floor); bank-balances history changed from monthly to daily points (YYYY-MM-DD date field replaces month field).
@@ -452,6 +452,80 @@ const envelope = await apiClient.getAggregationRecipientPivot({
 **Use Case:**
 
 The Recipient Pivot endpoint powers the **Custom Charts** feature's ability to render charts with recipients (merchants) as independent series alongside categories. When a user saves a chart with `recipient_ids` populated, the frontend calls this endpoint with the chart's filters and renders the result as a multi-series chart.
+
+---
+
+### Category Pivot
+
+Aggregated spending data pivoted by category with support for exclusion filters.
+
+**Path:** `GET /api/aggregations/category-pivot`
+
+**Query Parameters:**
+
+| Parameter | Type | Default | Description |
+|-----------|------|---------|-------------|
+| `currency` | string | EUR | Target currency (3-letter code, case-insensitive) |
+| `excluded_category_ids[]` | integer[] | [] | Categories to exclude |
+| `excluded_recipient_ids[]` | integer[] | [] | Recipients to exclude |
+
+**Response (data field):**
+
+```json
+{
+  "categories": [
+    {
+      "category_id": 5,
+      "name": "FOOD:GROCERIES",
+      "total": 1250.75,
+      "count": 42
+    }
+  ]
+}
+```
+
+**Notes:**
+- Serves as an alternative category-level pivot, supporting exclusion filters for filtered dashboard views
+- `meta.source` is `'live'` when exclusion filters are present, `'mv'` otherwise
+
+---
+
+### Recipient by Year
+
+Aggregated per-recipient spending broken out by calendar year, with support for exclusion filters.
+
+**Path:** `GET /api/aggregations/recipient-by-year`
+
+**Query Parameters:**
+
+| Parameter | Type | Default | Description |
+|-----------|------|---------|-------------|
+| `currency` | string | EUR | Target currency (3-letter code, case-insensitive) |
+| `excluded_recipient_ids[]` | integer[] | [] | Recipients to exclude |
+| `excluded_category_ids[]` | integer[] | [] | Categories to exclude |
+
+**Response (data field):**
+
+```json
+{
+  "recipients": [
+    {
+      "recipient_id": 10,
+      "recipient_name": "SuperMart",
+      "years": [
+        { "year": 2025, "total": 1850.00, "count": 32 },
+        { "year": 2026, "total": 980.50, "count": 17 }
+      ],
+      "total": 2830.50,
+      "count": 49
+    }
+  ]
+}
+```
+
+**Notes:**
+- Powers year-over-year recipient spending views
+- `meta.source` is `'live'` when exclusion filters are present, `'mv'` otherwise
 
 ---
 

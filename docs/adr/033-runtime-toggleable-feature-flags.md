@@ -1,7 +1,7 @@
 ---
 title: ADR-033 - Runtime-Toggleable Feature Flags
 type: adr
-status: Accepted
+status: Superseded
 date: 2026-04-23
 tags: [adr, backend, feature-flags, admin, phase-4, runtime-toggles, gradual-rollout]
 description: Persistent feature flags in PostgreSQL (feature_flags table) with admin API endpoints to toggle flags at runtime without redeployment. Replaces hard-coded environment variable checks (AI_CHAT_ENABLED, AGGREGATIONS_V2_ENABLED) with DB-persisted toggles.
@@ -16,7 +16,7 @@ related_code:
 # ADR-033: Runtime-Toggleable Feature Flags
 
 ## Status
-Accepted
+Superseded by [[035-remove-feature-flags]]
 
 ## Date
 2026-04-23
@@ -253,4 +253,5 @@ async function maybeExecuteFeature(key, fn) {
 - [[docs/reference/code-patterns#feature-flag-pattern-backend-phase-4|Feature Flag Pattern Reference]]
 - [[docs/features/ai-chat|AI Chat Feature]] (uses `ai_chat` flag)
 - [[docs/features/aggregations|Aggregations Feature]] (uses `aggregations_v2` flag)
+- [[docs/adr/035-remove-feature-flags|ADR-035: Remove Feature Flags]] — supersedes this ADR
 - [[docs/adr/index|All ADRs]]

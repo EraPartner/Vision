@@ -11,6 +11,7 @@ related_code:
   - apps/frontend/src/stores/settingsStore.ts
   - apps/frontend/src/components/settings/DashboardSettingsDialog.tsx
   - apps/frontend/src/components/settings/tabs/GeneralTab.tsx
+  - apps/frontend/src/components/settings/AppearanceTab.tsx
   - apps/frontend/src/components/settings/tabs/DashboardTab.tsx
   - apps/frontend/src/components/settings/tabs/AppTab.tsx
   - apps/frontend/src/components/settings/tabs/BackupTab.tsx

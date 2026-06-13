@@ -20,6 +20,9 @@ aliases: [admin localhost bind, admin auth fallback, localhost restriction, priv
 
 **Originally Accepted** — 2026-04-25
 
+## Date
+2026-04-25
+
 ## Context
 
 The Vision admin API (`/api/admin/*`) originally required either:

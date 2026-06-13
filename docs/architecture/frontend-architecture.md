@@ -35,17 +35,17 @@ This organization improves feature discoverability and reduces cross-cutting con
 
 ## Technology Stack
 
-- **Framework**: React 18 with TypeScript
+- **Framework**: React 19 with TypeScript
 - **Build Tool**: Vite
 - **Styling**: **Tailwind CSS v4** (4.2.4) with unified `@tailwindcss/postcss` plugin + Radix UI + design tokens
 - **Design System**: Liquid-glass aesthetic (emerald + champagne-gold palette)
-- **Typography**: Fraunces (display) + Inter Tight (body) via `@fontsource` static weights (400/500/600)
+- **Typography**: Fraunces (display) + Inter (body) via `@fontsource` static weights (400/500/600)
 - **Motion**: Framer Motion with centralized motion system + reduced-motion compliance
-- **Charts**: visx + d3 (primary); Recharts 3.8.1 (inactive, retained for compatibility)
+- **Charts**: visx + d3 (primary); Recharts 3.8.1 (active — used in AI chat tool result visualizations)
 - **Notifications**: Sonner 2.0.7 (improved toast API and accessibility)
-- **State Management**: React Query (server state) + React Context (client state)
+- **State Management**: React Query (server state) + Zustand (client state) + React Context (hydration/persistence)
 - **Routing**: React Router v7
-- **HTTP Client**: Axios (custom ApiClient)
+- **HTTP Client**: native Fetch API (custom ApiClient wrapper)
 
 ## Component Architecture
 
@@ -881,7 +881,7 @@ Located in `apps/frontend/src/components/charts/`:
 All charts consume `apps/frontend/src/styles/tokens.css`:
 
 - **Colors**: Emerald + gold + supporting palette (semantic, not hardcoded)
-- **Typography**: Fraunces (display), Inter Tight (body)
+- **Typography**: Fraunces (display), Inter (body)
 - **Spacing**: Clamp-based responsive margins from token system
 - **Motion**: Framer Motion animations check `useReducedMotion()` and disable if needed
 

@@ -35,59 +35,18 @@ related_code: ["packaging/electron/backup/bundle.js", "packaging/electron/main.j
 
 ### 1. Postgres Database Tables
 
-All 31 user-data tables are included in the `pg_dump` SQL artifact inside every `.visionbak` bundle.
+All 44 user-data tables are included in the `pg_dump` SQL artifact inside every `.visionbak` bundle.
 
 **Source of truth:** `apps/node-backend/src/backup/coverage.js` → `BACKUP_COVERED_TABLES`
 
 **Enforced by:** `apps/node-backend/tests/backup-coverage.test.js`
 
-#### Core Transactional Data
+#### Aggregates
 
 | Table | Domain | Backup | Notes |
 |-------|--------|--------|-------|
-| `transactions` | Transactions | ✅ Included | Primary ledger |
-| `categories` | Categorisation | ✅ Included | |
-| `recipients` | Recipients | ✅ Included | |
-| `recipient_bank_accounts` | Recipients | ✅ Included | |
-| `recipient_match_patterns` | Recipients | ✅ Included | Auto-match rules |
-| `transaction_raw_references` | Import | ✅ Included | Raw↔canonical links |
-
-#### Planning & Recurring
-
-| Table | Domain | Backup | Notes |
-|-------|--------|--------|-------|
-| `planned_transactions` | Planning | ✅ Included | Recurring rules |
-| `planned_transaction_executions` | Planning | ✅ Included | Execution history |
-| `planned_transaction_loan_schedule` | Planning | ✅ Included | Loan amortisation |
-
-#### Raw Bank Import Tables
-
-| Table | Domain | Backup | Notes |
-|-------|--------|--------|-------|
-| `belfius_raw_transactions` | Import | ✅ Included | |
-| `revolut_raw_transactions` | Import | ✅ Included | |
-| `kbc_raw_transactions` | Import | ✅ Included | |
-| `sabb_raw_transactions` | Import | ✅ Included | |
-| `wise_raw_transactions` | Import | ✅ Included | |
-| `vision_raw_transactions` | Import | ✅ Included | |
-| `custom_raw_transactions` | Import | ✅ Included | |
-| `manual_raw_transactions` | Import | ✅ Included | |
-
-#### Portfolio & Investments
-
-| Table | Domain | Backup | Notes |
-|-------|--------|--------|-------|
-| `investments` | Portfolio | ✅ Included | Holdings |
-| `portfolio_transactions` | Portfolio | ✅ Included | Buy/sell history |
-| `asset_price_history` | Portfolio | ✅ Included | Price cache |
-| `watchlist` | Portfolio | ✅ Included | |
-
-#### Settings & Personalisation
-
-| Table | Domain | Backup | Notes |
-|-------|--------|--------|-------|
-| `user_settings` | Settings | ✅ Included | All app settings |
-| `saved_charts` | Charts | ✅ Included | Chart configurations |
+| `agg_recipient_totals` | Aggregates | ✅ Included | |
+| `agg_split_outstanding` | Aggregates | ✅ Included | |
 
 #### AI & Conversations
 
@@ -96,27 +55,65 @@ All 31 user-data tables are included in the `pg_dump` SQL artifact inside every 
 | `ai_conversations` | AI Chat | ✅ Included | |
 | `ai_messages` | AI Chat | ✅ Included | |
 
-#### Attachments
+#### Attachments & Reference
 
 | Table | Domain | Backup | Notes |
 |-------|--------|--------|-------|
+| `asset_price_history` | Portfolio | ✅ Included | Price cache |
 | `attachments` | Attachments | ✅ Included | Metadata rows |
 
-#### Reference / Cache Data
+#### Raw Bank Import Tables
 
 | Table | Domain | Backup | Notes |
 |-------|--------|--------|-------|
-| `exchange_rates` | FX | ✅ Included | Rate cache |
+| `belfius_raw_transactions` | Import | ✅ Included | |
 | `belgian_inflation_rates` | Tax | ✅ Included | |
 | `cashflow_forecast_accuracy` | Forecasting | ✅ Included | Backtest metrics |
 | `cashflow_forecast_mc` | Forecasting | ✅ Included | Month-view Monte Carlo cache |
 | `cashflow_forecast_mc_rolling` | Forecasting | ✅ Included | Rolling-window Monte Carlo cache |
+| `categories` | Categorisation | ✅ Included | |
+| `custom_parser_configs` | Import | ✅ Included | Custom bank parser configs |
+| `custom_raw_transactions` | Import | ✅ Included | |
+| `exchange_rates` | FX | ✅ Included | Rate cache |
+| `import_batches` | Import | ✅ Included | Import batch records |
+| `import_staging_rows` | Import | ✅ Included | Staging rows before commit |
+| `investments` | Portfolio | ✅ Included | Holdings |
+| `kbc_raw_transactions` | Import | ✅ Included | |
+| `manual_raw_transactions` | Import | ✅ Included | |
 
-#### Operational
+#### Planning & Recurring
 
 | Table | Domain | Backup | Notes |
 |-------|--------|--------|-------|
+| `planned_transaction_executions` | Planning | ✅ Included | Execution history |
+| `planned_transaction_loan_schedule` | Planning | ✅ Included | Loan amortisation |
+| `planned_transaction_tags` | Planning | ✅ Included | |
+| `planned_transactions` | Planning | ✅ Included | Recurring rules |
+| `portfolio_performance_snapshots` | Portfolio | ✅ Included | Performance snapshots |
+| `portfolio_transactions` | Portfolio | ✅ Included | Buy/sell history |
 | `provider_health` | Observability | ✅ Included | Provider status history |
+
+#### Core Transactional Data
+
+| Table | Domain | Backup | Notes |
+|-------|--------|--------|-------|
+| `recipient_bank_accounts` | Recipients | ✅ Included | |
+| `recipient_match_patterns` | Recipients | ✅ Included | Auto-match rules |
+| `recipients` | Recipients | ✅ Included | |
+| `revolut_raw_transactions` | Import | ✅ Included | |
+| `sabb_raw_transactions` | Import | ✅ Included | |
+| `saved_charts` | Charts | ✅ Included | Chart configurations |
+| `split_audit` | Splits | ✅ Included | Split change audit log |
+| `split_payments` | Splits | ✅ Included | |
+| `tags` | Tags | ✅ Included | |
+| `transaction_raw_references` | Import | ✅ Included | Raw↔canonical links |
+| `transaction_splits` | Splits | ✅ Included | |
+| `transaction_tags` | Tags | ✅ Included | |
+| `transactions` | Transactions | ✅ Included | Primary ledger |
+| `user_settings` | Settings | ✅ Included | All app settings |
+| `vision_raw_transactions` | Import | ✅ Included | |
+| `watchlist` | Portfolio | ✅ Included | |
+| `wise_raw_transactions` | Import | ✅ Included | |
 
 #### Excluded Tables
 

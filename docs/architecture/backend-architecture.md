@@ -974,7 +974,7 @@ actor "User" as User
 
 package "Client" {
   rectangle "Browser (React App)" {
-    node "React 18 + TypeScript" as ReactApp
+    node "React 19 + TypeScript" as ReactApp
     node "Vite" as Vite
     node "Tailwind CSS + Radix UI" as UI
     node "React Router v7" as Router
