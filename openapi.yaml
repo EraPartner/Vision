@@ -4406,19 +4406,6 @@ paths:
               schema:
                 $ref: "#/components/schemas/Envelope"
 
-  /api/import/supported-banks:
-    get:
-      summary: List supported bank CSV adapters
-      operationId: importSupportedBanks
-      tags: [Import]
-      responses:
-        "200":
-          description: Supported bank list
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/Envelope"
-
   /api/import/recipients:
     post:
       summary: Bulk-import recipients from CSV
