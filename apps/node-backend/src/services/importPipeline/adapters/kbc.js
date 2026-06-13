@@ -96,7 +96,7 @@ export function detect(csvSample) {
 export async function parse(filePath) {
   const content = await fs.promises.readFile(filePath, 'utf-8');
   const lines = splitCsvLines(content);
-  const transactions = [];
+  const transactions = /** @type {any[] & { skipped?: number }} */ ([]);
   let skipped = 0;
 
   for (const rawLine of lines) {

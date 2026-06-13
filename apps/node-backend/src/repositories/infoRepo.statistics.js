@@ -60,7 +60,7 @@ export async function getAverageVsCurrentSpending(targetCurrency = 'EUR') {
   // below multiplied a per-active-day rate by full calendar days).
   const sixMonthStart = new Date(now.getFullYear(), now.getMonth() - 6, 1);
   const currentMonthStart = new Date(now.getFullYear(), now.getMonth(), 1);
-  const calendarDays6m = Math.max(1, Math.round((currentMonthStart - sixMonthStart) / 86400000));
+  const calendarDays6m = Math.max(1, Math.round((currentMonthStart.getTime() - sixMonthStart.getTime()) / 86400000));
   const avgDailySpending = totalMonthlySpending / calendarDays6m;
 
   const currentConverted = await convertRowsToEur(

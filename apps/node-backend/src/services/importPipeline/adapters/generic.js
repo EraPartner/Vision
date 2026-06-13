@@ -109,7 +109,7 @@ export async function parseWithConfig(filePath, config) {
     config.encoding || 'utf-8',
   );
 
-  const transactions = [];
+  const transactions = /** @type {any[] & { skipped?: number }} */ ([]);
   let skipped = 0;
   for (const row of records) {
     try {

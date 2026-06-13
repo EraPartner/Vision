@@ -106,7 +106,7 @@ export function detect(csvSample) {
 export async function parse(filePath) {
   const content = await fs.promises.readFile(filePath, 'utf-8');
   const lines = splitCsvLines(content);
-  const transactions = [];
+  const transactions = /** @type {any[] & { skipped?: number }} */ ([]);
   const lastBalance = lines.length > BALANCE_LINE_INDEX
     ? parseLastBalance(lines[BALANCE_LINE_INDEX].trim())
     : null;

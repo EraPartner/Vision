@@ -18,6 +18,8 @@ export const tagService = {
   /**
    * Create a tag by slug, or reactivate a soft-deleted one. Returns the tag plus
    * the metadata the route needs to pick a status code and surface reactivation.
+   *
+   * @param {{ slug?: string, color?: string | null }} [args]
    */
   async createOrReactivate({ slug: rawSlug, color = null } = {}) {
     if (!rawSlug) throw new ValidationError('Missing required field: slug');
@@ -40,7 +42,12 @@ export const tagService = {
     return { tag, reactivated, wasInactive, junctionCount };
   },
 
-  /** Update a tag's color and/or active status. */
+  /**
+   * Update a tag's color and/or active status.
+   *
+   * @param {number | string} id
+   * @param {{ color?: string | null, is_active?: boolean | null }} [updates]
+   */
   async update(id, { color, is_active } = {}) {
     if (color !== undefined && color !== null && typeof color !== 'string') {
       throw new ValidationError('color must be a string or null');

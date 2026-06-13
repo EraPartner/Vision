@@ -65,7 +65,7 @@ export async function buildPortfolioPerformancePayload(targetCurrency, startDate
   // Smooth isolated one-day price needles (kinesis data-quality issue) BEFORE
   // metrics/heatmap/series, mirroring the protection the net-worth path already
   // has. The chart, heatmap month-ends, and metrics all consumed raw needles.
-  const cleanSnapshots = sanitizeIsolatedValueSpikes(allSnapshots, 'value');
+  const cleanSnapshots = /** @type {any} */ (sanitizeIsolatedValueSpikes(allSnapshots, 'value'));
 
   const snapshotMetrics = computeMetrics(cleanSnapshots);
   const heatmap = computeHeatmap(cleanSnapshots);

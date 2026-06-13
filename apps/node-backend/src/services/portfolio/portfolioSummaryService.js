@@ -23,15 +23,19 @@ const round6 = (value) => roundMoney(value, 6);
 
 const COST_BASIS_METHODS = new Set(['weighted_avg', 'fifo', 'lifo']);
 
+/** @typedef {import('@vision/shared-utils/portfolio').CostBasisMethod} CostBasisMethod */
+
 /**
  * Resolve the user's configured cost-basis method (Settings → General).
  * Falls back to weighted_avg on missing/invalid values or repository errors —
  * a summary must never fail because a setting row is malformed.
+ *
+ * @returns {Promise<CostBasisMethod>}
  */
 async function resolveCostBasisMethod() {
   try {
     const value = await settingsRepository.get('cost_basis_method');
-    return COST_BASIS_METHODS.has(value) ? value : 'weighted_avg';
+    return COST_BASIS_METHODS.has(value) ? /** @type {CostBasisMethod} */ (value) : 'weighted_avg';
   } catch {
     return 'weighted_avg';
   }
@@ -190,7 +194,7 @@ function annotateTransactionFxMultipliers(txns, target, historicalIndex, multipl
  * @param {Array}  txns transaction rows for this investment (fxMultiplier-annotated)
  * @param {string} targetCurrency
  * @param {Map<string, number>} multiplierByCurrency  FX multiplier per currency
- * @param {{ costBasisMethod: string, todayYmd: string }} opts
+ * @param {{ costBasisMethod: CostBasisMethod, todayYmd: string }} opts
  */
 function buildInvestmentSummary(inv, txns, targetCurrency, multiplierByCurrency, opts) {
   const invCurrency = (inv.currency || 'EUR').toUpperCase();

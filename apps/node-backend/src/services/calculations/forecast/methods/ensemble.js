@@ -50,7 +50,7 @@ export function computeWeights(accuracyRows, methodIds) {
   const rawWeights = rows.map((r) => {
     const n = Number.isFinite(r.sampleDays) && r.sampleDays > 0 ? r.sampleDays : DEFAULT_SAMPLE_DAYS;
     const shrunkRmse = (n * r.rmse + SHRINKAGE_PRIOR_DAYS * meanRmse) / (n + SHRINKAGE_PRIOR_DAYS);
-    return [r.methodId, 1 / Math.max(shrunkRmse, MIN_RMSE) ** 2];
+    return /** @type {[string, number]} */ ([r.methodId, 1 / Math.max(shrunkRmse, MIN_RMSE) ** 2]);
   });
 
   const total = rawWeights.reduce((s, [, w]) => s + w, 0);

@@ -114,7 +114,7 @@ export async function parse(filePath) {
     trim: true,
   });
 
-  const transactions = [];
+  const transactions = /** @type {any[] & { skipped?: number }} */ ([]);
   let skipped = 0;
   for (const row of records) {
     try {

@@ -20,6 +20,25 @@ export interface CostBasisResult {
     totalSellProceeds: number;
 }
 
+export interface ConvertedTrack {
+    currentValue: Decimal;
+    totalInvested: Decimal;
+    totalBuyCost: Decimal;
+    totalSellProceeds: Decimal;
+    avgCostBasis: Decimal;
+    realizedGain: Decimal;
+    unrealizedGain: Decimal;
+    totalGain: Decimal;
+    gainLoss: Decimal;
+    gainLossPercent: Decimal;
+    assetGain: Decimal;
+    fxGain: Decimal;
+    totalFees: Decimal;
+    totalTaxes: Decimal;
+    totalDividends: Decimal;
+    totalIncome: Decimal;
+}
+
 export interface InvestmentSummaryCore {
     totalUnits: Decimal;
     avgCostBasis: Decimal;
@@ -43,6 +62,7 @@ export interface InvestmentSummaryCore {
     totalIncome: Decimal;
     accruedInterest: Decimal;
     projectedAnnualInterest: Decimal;
+    converted: ConvertedTrack;
 }
 
 export const UNIT_BASED_CLASSES: Set<string>;
@@ -64,5 +84,5 @@ export function projectedAnnualInterest(principal: number, ratePercent: number):
 export function buildInvestmentSummaryCore(
     inv: { asset_class: string; current_price?: number | string | null; interest_rate?: number | string | null },
     txns: PortfolioTxnLike[],
-    opts: { costBasisMethod?: CostBasisMethod; todayYmd: string },
+    opts: { costBasisMethod?: CostBasisMethod; todayYmd: string; fxMultiplierNow?: number | string },
 ): InvestmentSummaryCore;

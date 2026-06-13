@@ -98,7 +98,7 @@ export async function parse(filePath) {
     skip_empty_lines: true,
     relax_column_count: true,
   });
-  const transactions = [];
+  const transactions = /** @type {any[] & { skipped?: number }} */ ([]);
   let skipped = 0;
 
   for (let i = 0; i < records.length; i++) {

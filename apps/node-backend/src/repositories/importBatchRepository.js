@@ -172,7 +172,7 @@ export async function categoryExists(categoryId) {
  * leaves the DB in a consistent state.
  *
  * @param {number} id
- * @returns {Promise<{ deleted: number }>}
+ * @returns {Promise<{ deleted: number, recipientsRemoved: number }>}
  */
 export async function rollbackBatch(id) {
     return withTransaction(async (client) => {

@@ -21,6 +21,9 @@ export const netWorthRepository = {
    * portfolio_performance_snapshots (populated by portfolioPerformanceSnapshotService).
    * Bank balances are still derived live from the transactions table.
    * No network calls — all data from the database.
+   *
+   * @param {string} [targetCurrency]
+   * @param {{ liveInvestments?: number }} [opts]
    */
   async getNetWorthFromSnapshots(targetCurrency = 'EUR', { liveInvestments } = {}) {
     const firstDateResult = await query(`

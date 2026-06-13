@@ -553,7 +553,7 @@ function logFatal(kind, err) {
   logger.error(`${kind} — exiting`, {
     error: error.message,
     stack: error.stack,
-    requestId: error.requestId,
+    requestId: /** @type {any} */ (error).requestId,
   });
 }
 

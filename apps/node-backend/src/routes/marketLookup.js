@@ -50,7 +50,7 @@ const yahooFinance = new YahooFinance({ suppressNotices: ['yahooSurvey'] });
 // request intermittently 502s — search dropdowns go empty, charts break. We only
 // read a small subset of well-known fields, so opt out of the throw: degrade to
 // whatever data came back instead of failing the whole request.
-const NO_VALIDATE = { validateResult: false };
+const NO_VALIDATE = /** @type {{ validateResult: false }} */ ({ validateResult: false });
 
 function upstreamError(message, cause) {
   return new AppError(message, { status: 502, code: ApiErrorCode.BAD_GATEWAY, cause });
@@ -80,6 +80,7 @@ router.get('/search', async (req, res) => {
   const { q } = req.query;
   if (!q || q.length < 1) return res.ok({ items: [] });
 
+  /** @type {any} */
   let results;
   try {
     results = await yahooFinance.search(q, { quotesCount: 8, newsCount: 0 }, NO_VALIDATE);
@@ -215,6 +216,7 @@ router.get('/chart', async (req, res) => {
   const { range = '1mo', interval = '1d' } = req.query;
   if (!symbol) throw new ValidationError('symbol parameter required');
 
+  /** @type {any} */
   let result;
   try {
     // NO_VALIDATE: Yahoo intermittently returns an incomplete `meta` block (null
@@ -263,7 +265,7 @@ router.get('/news', async (req, res) => {
           quotesCount: 0,
           newsCount,
         }, NO_VALIDATE);
-        return (results.news || []).map((n) => ({
+        return ((/** @type {any} */ (results)).news || []).map((n) => ({
           title: n.title,
           link: n.link,
           publisher: n.publisher,
