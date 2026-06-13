@@ -11,6 +11,8 @@
   ],
   "scripts": {
     "install:all": "bun install",
+    "prepare": "node scripts/setup-git-hooks.js",
+    "hooks:setup": "node scripts/setup-git-hooks.js",
     "dev": "concurrently --names \"backend,frontend\" -c \"blue,green\" \"bun run --filter 'financial-transaction-manager-node' dev\" \"bun run --filter 'vision-frontend' dev\"",
     "build": "npm run generate-locales-if-not-ci && bun run --filter 'vision-frontend' build",
     "generate-locales": "node scripts/generate-locales.js",
@@ -60,6 +62,8 @@
     "yauzl": "^3.3.0"
   },
   "devDependencies": {
+    "@commitlint/cli": "^21.0.2",
+    "@commitlint/config-conventional": "^21.0.2",
     "concurrently": "^9.2.1",
     "openapi-typescript": "^7.13.0"
   },

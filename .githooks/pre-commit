@@ -1,11 +1,132 @@
 #!/usr/bin/env sh
-# Scan staged changes for secrets before committing.
-# Requires gitleaks: https://github.com/gitleaks/gitleaks#installation
+#
+# Vision pre-commit -- fast, staged-only checks. The heavier gate (typecheck,
+# endpoint matrix, backend tests) lives in .githooks/pre-push.
+#
+# Wiring:   git config core.hooksPath .githooks   (done by scripts/setup-git-hooks.js)
+# Bypass:   git commit --no-verify        or       SKIP_HOOKS=1 git commit ...
+#
+# Checks (in order):
+#   1. gitleaks -- staged changes scanned for secrets
+#   2. leftover merge-conflict markers in staged content
+#   3. oversized files newly staged (>1 MB; override ALLOW_BIG_FILES=1)
+#   4. ESLint on staged JS/TS -- fully-staged files are auto-fixed and re-staged,
+#      partially-staged files are checked only (we never touch unstaged hunks)
+#   5. validate-locales -- only when locale sources are touched
+#
+# Output is ASCII-only on purpose: this runs under dash/busybox sh too, where a
+# multibyte char next to a $var expansion breaks name parsing under `set -u`.
 
-if ! command -v gitleaks > /dev/null 2>&1; then
-  echo "[gitleaks] not found — skipping pre-commit scan."
-  echo "[gitleaks] Install: brew install gitleaks"
+set -u
+
+if [ "${SKIP_HOOKS:-}" = "1" ]; then
+  echo "[pre-commit] SKIP_HOOKS=1 -- skipping all checks."
   exit 0
 fi
 
-gitleaks protect --staged --config .gitleaks.toml -v
+REPO_ROOT=$(git rev-parse --show-toplevel) || exit 0
+cd "$REPO_ROOT" || exit 1
+
+# Staged files (Added/Copied/Modified/Renamed). Empty -> nothing to do.
+STAGED=$(git diff --cached --name-only --diff-filter=ACMR)
+[ -n "$STAGED" ] || exit 0
+
+# Files with unstaged working-tree changes -- used to tell fully-staged files
+# (safe to auto-fix and re-add) from partially-staged ones (check only).
+GITDIR=$(git rev-parse --git-dir)
+UNSTAGED_FILE="$GITDIR/.vision-precommit-unstaged.$$"
+git diff --name-only > "$UNSTAGED_FILE" 2>/dev/null || : > "$UNSTAGED_FILE"
+trap 'rm -f "$UNSTAGED_FILE"' EXIT INT TERM
+
+fail=0
+CODE_RE='\.(ts|tsx|js|jsx|mjs|cjs)$'
+
+# --- 1. Secret scan (gitleaks) -----------------------------------------------
+if command -v gitleaks >/dev/null 2>&1; then
+  echo "[pre-commit] gitleaks: scanning staged changes..."
+  if gitleaks git --help >/dev/null 2>&1; then
+    # gitleaks >= 8.19 (protect/detect removed)
+    gitleaks git --staged --pre-commit --no-banner --redact -v -c .gitleaks.toml . || fail=1
+  else
+    gitleaks protect --staged --redact -v -c .gitleaks.toml || fail=1
+  fi
+  [ "$fail" -eq 0 ] || echo "[pre-commit] FAIL: gitleaks flagged potential secrets (above)."
+else
+  echo "[pre-commit] gitleaks not found -- skipping secret scan (brew install gitleaks)."
+fi
+
+# --- 2. Leftover merge-conflict markers --------------------------------------
+# --check also reports whitespace errors; we only block on conflict markers.
+conflicts=$(git diff --cached --check 2>/dev/null | grep "conflict marker" || true)
+if [ -n "$conflicts" ]; then
+  echo "[pre-commit] FAIL: leftover merge-conflict markers in staged content:"
+  echo "$conflicts"
+  fail=1
+fi
+
+# --- 3. Oversized files ------------------------------------------------------
+if [ "${ALLOW_BIG_FILES:-}" != "1" ]; then
+  LIMIT=$((1024 * 1024)) # 1 MB
+  big=$(printf '%s\n' "$STAGED" | while IFS= read -r f; do
+    [ -n "$f" ] || continue
+    size=$(git cat-file -s ":$f" 2>/dev/null || echo 0)
+    [ "$size" -gt "$LIMIT" ] && printf '  %s (%s KB)\n' "$f" "$((size / 1024))"
+  done)
+  if [ -n "$big" ]; then
+    echo "[pre-commit] FAIL: files over 1 MB staged (override with ALLOW_BIG_FILES=1):"
+    echo "$big"
+    fail=1
+  fi
+fi
+
+# --- 4. ESLint on staged JS/TS (per workspace; flat config resolves from cwd) -
+run_eslint() { # <workspace-dir> <fix|check> <newline-list of repo-relative paths>
+  _ws="$1"; _mode="$2"; _list="$3"
+  [ -n "$_list" ] || return 0
+  _bin="$REPO_ROOT/$_ws/node_modules/.bin/eslint"
+  if [ ! -x "$_bin" ]; then
+    echo "[pre-commit] ! eslint not installed for ${_ws} (run 'bun install') -- skipping its lint."
+    return 0
+  fi
+  _rel=$(printf '%s\n' "$_list" | sed "s#^${_ws}/##")
+  if [ "$_mode" = fix ]; then
+    printf '%s\n' "$_rel" | ( cd "$REPO_ROOT/$_ws" && xargs "$_bin" --fix --no-error-on-unmatched-pattern )
+  else
+    printf '%s\n' "$_rel" | ( cd "$REPO_ROOT/$_ws" && xargs "$_bin" --no-error-on-unmatched-pattern )
+  fi
+}
+
+lint_workspace() { # <workspace-dir> <path-filter-regex>
+  _ws="$1"; _filter="$2"
+  _staged=$(printf '%s\n' "$STAGED" | grep -E "$_filter" | grep -E "$CODE_RE" || true)
+  [ -n "$_staged" ] || return 0
+  _fix=$(printf '%s\n'   "$_staged" | grep -vxF -f "$UNSTAGED_FILE" || true)   # fully staged
+  _check=$(printf '%s\n' "$_staged" | grep -xF  -f "$UNSTAGED_FILE" || true)   # partially staged
+  echo "[pre-commit] eslint: ${_ws} ($(printf '%s\n' "$_staged" | grep -c .) file(s))"
+  if [ -n "$_fix" ]; then
+    run_eslint "$_ws" fix "$_fix" || fail=1
+    printf '%s\n' "$_fix" | xargs git add --   # re-stage anything --fix changed
+  fi
+  if [ -n "$_check" ]; then
+    echo "[pre-commit]   (partially-staged files checked only, not auto-fixed)"
+    run_eslint "$_ws" check "$_check" || fail=1
+  fi
+}
+
+lint_workspace apps/frontend     '^apps/frontend/'
+lint_workspace apps/node-backend '^apps/node-backend/src/'
+
+# --- 5. Locale validation (only when locale sources change) ------------------
+if printf '%s\n' "$STAGED" | grep -qE '^(i18n/source/|apps/frontend/src/locales/|packaging/electron/i18n/)'; then
+  echo "[pre-commit] locale files changed -- running validate-locales..."
+  node scripts/validate-locales.js || fail=1
+fi
+
+# --- Result ------------------------------------------------------------------
+if [ "$fail" -ne 0 ]; then
+  echo ""
+  echo "[pre-commit] FAIL: checks failed -- fix the issues above, or bypass with: git commit --no-verify"
+  exit 1
+fi
+echo "[pre-commit] OK: all checks passed."
+exit 0
