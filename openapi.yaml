@@ -287,6 +287,39 @@ components:
         transactions_affected:
           type: integer
 
+    BulkSelection:
+      type: object
+      description: >-
+        Selects transactions to act on. Provide an explicit `ids` array or a
+        `filter` object (same shape as GET /api/transactions query filters);
+        exactly one is resolved server-side.
+      properties:
+        ids:
+          type: array
+          items:
+            type: integer
+        filter:
+          type: object
+          additionalProperties: true
+
+    CustomParserConfig:
+      type: object
+      required: [id, name, config]
+      properties:
+        id:
+          type: integer
+        name:
+          type: string
+        config:
+          type: object
+          additionalProperties: true
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+
     # ─── Transactions ────────────────────────────────────────────────────────
     Transaction:
       type: object
@@ -1548,6 +1581,35 @@ paths:
                       data:
                         type: object
                         additionalProperties: true
+    put:
+      summary: Bulk save settings (key→value map)
+      operationId: saveSettings
+      tags: [Settings]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: true
+              description: Map of setting key → value pairs to persist
+      responses:
+        "200":
+          description: Number of settings saved
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/Envelope"
+                  - type: object
+                    properties:
+                      data:
+                        type: object
+                        properties:
+                          saved:
+                            type: integer
+        "400":
+          description: Body must be a JSON object of key→value pairs
 
   /api/settings/{key}:
     parameters:
@@ -1626,6 +1688,61 @@ paths:
                     properties:
                       data:
                         $ref: "#/components/schemas/InvestmentList"
+    post:
+      summary: Create an investment
+      operationId: createInvestment
+      tags: [Portfolio]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [name, asset_class]
+              properties:
+                name:
+                  type: string
+                symbol:
+                  type: string
+                asset_class:
+                  type: string
+                currency:
+                  type: string
+                current_price:
+                  type: number
+                interest_rate:
+                  type: number
+                maturity_date:
+                  type: string
+                  format: date
+                location:
+                  type: string
+                municipality:
+                  type: string
+                cadastral_income:
+                  type: number
+                municipality_tax_rate:
+                  type: number
+                notes:
+                  type: string
+                price_provider:
+                  type: string
+                price_provider_id:
+                  type: string
+      responses:
+        "201":
+          description: Created investment
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/Envelope"
+                  - type: object
+                    properties:
+                      data:
+                        $ref: "#/components/schemas/Investment"
+        "400":
+          description: name and asset_class are required
 
   /api/info/net-worth:
     get:
@@ -1756,6 +1873,117 @@ paths:
                 $ref: "#/components/schemas/Envelope"
 
   # ─── Transactions extra ──────────────────────────────────────────────────────
+  /api/transactions/bulk-delete:
+    post:
+      summary: Bulk-delete transactions selected by ids or filter
+      operationId: bulkDeleteTransactions
+      tags: [Transactions]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/BulkSelection"
+      responses:
+        "200":
+          description: Number of transactions deleted
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/Envelope"
+                  - type: object
+                    properties:
+                      data:
+                        type: object
+                        properties:
+                          deleted:
+                            type: integer
+        "429":
+          description: Rate limit exceeded
+
+  /api/transactions/bulk-update:
+    post:
+      summary: Apply a shared field update to transactions selected by ids or filter
+      operationId: bulkUpdateTransactions
+      tags: [Transactions]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              allOf:
+                - $ref: "#/components/schemas/BulkSelection"
+                - type: object
+                  required: [fields]
+                  properties:
+                    fields:
+                      type: object
+                      description: At least one of the updatable properties
+                      properties:
+                        category_id:
+                          type: integer
+                          nullable: true
+                        recipient_id:
+                          type: integer
+                        is_active:
+                          type: boolean
+      responses:
+        "200":
+          description: Number of transactions updated
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/Envelope"
+                  - type: object
+                    properties:
+                      data:
+                        type: object
+                        properties:
+                          updated:
+                            type: integer
+        "400":
+          description: Invalid or missing fields, or invalid FK reference
+        "429":
+          description: Rate limit exceeded
+
+  /api/transactions/bulk-export:
+    post:
+      summary: Export transactions selected by ids or filter (CSV or NDJSON stream)
+      operationId: bulkExportTransactions
+      tags: [Transactions]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              allOf:
+                - $ref: "#/components/schemas/BulkSelection"
+                - type: object
+                  properties:
+                    format:
+                      type: string
+                      enum: [csv, json]
+                      default: csv
+                    include_balance:
+                      type: boolean
+                      default: false
+      responses:
+        "200":
+          description: Streamed export
+          content:
+            text/csv:
+              schema:
+                type: string
+            application/x-ndjson:
+              schema:
+                type: string
+        "400":
+          description: Invalid format
+        "429":
+          description: Rate limit exceeded
+
   /api/transactions/bulk-tag:
     post:
       summary: Bulk add/remove tags across multiple transactions
@@ -2454,19 +2682,6 @@ paths:
                         $ref: "#/components/schemas/Transaction"
 
   # ─── Info ─────────────────────────────────────────────────────────────────────
-  /api/info:
-    get:
-      summary: Global statistics overview
-      operationId: getInfoStats
-      tags: [Info]
-      responses:
-        "200":
-          description: Statistics summary
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/Envelope"
-
   /api/info/banks:
     get:
       summary: List distinct bank accounts
@@ -2506,34 +2721,6 @@ paths:
       responses:
         "200":
           description: Count
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/Envelope"
-
-  /api/info/transaction-summary:
-    get:
-      summary: Get transaction amount summary (income/expenses)
-      operationId: getTransactionSummary
-      tags: [Info]
-      parameters:
-        - in: query
-          name: start_date
-          schema:
-            type: string
-            format: date
-        - in: query
-          name: end_date
-          schema:
-            type: string
-            format: date
-        - in: query
-          name: currency
-          schema:
-            type: string
-      responses:
-        "200":
-          description: Income/expense totals
           content:
             application/json:
               schema:
@@ -3788,37 +3975,6 @@ paths:
                 $ref: "#/components/schemas/Envelope"
 
   # ─── Attachments ─────────────────────────────────────────────────────────────
-  /api/attachments:
-    post:
-      summary: Upload attachment for a transaction
-      operationId: uploadAttachment
-      tags: [Attachments]
-      requestBody:
-        required: true
-        content:
-          multipart/form-data:
-            schema:
-              type: object
-              required: [file, transaction_id]
-              properties:
-                file:
-                  type: string
-                  format: binary
-                transaction_id:
-                  type: integer
-      responses:
-        "201":
-          description: Uploaded attachment
-          content:
-            application/json:
-              schema:
-                allOf:
-                  - $ref: "#/components/schemas/Envelope"
-                  - type: object
-                    properties:
-                      data:
-                        $ref: "#/components/schemas/Attachment"
-
   /api/attachments/transaction/{id}:
     parameters:
       - in: path
@@ -3844,6 +4000,35 @@ paths:
                         type: array
                         items:
                           $ref: "#/components/schemas/Attachment"
+    post:
+      summary: Upload an attachment for a transaction
+      operationId: uploadAttachment
+      tags: [Attachments]
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              required: [file]
+              properties:
+                file:
+                  type: string
+                  format: binary
+      responses:
+        "201":
+          description: Uploaded attachment
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/Envelope"
+                  - type: object
+                    properties:
+                      data:
+                        $ref: "#/components/schemas/Attachment"
+        "400":
+          description: Upload error or no file provided
 
   /api/attachments/{id}/download:
     parameters:
@@ -4281,6 +4466,106 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/Envelope"
+
+  /api/import/parsers:
+    get:
+      summary: List saved custom CSV parser configs
+      operationId: getCustomParsers
+      tags: [Import]
+      responses:
+        "200":
+          description: Parser config list
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/Envelope"
+                  - type: object
+                    properties:
+                      data:
+                        type: array
+                        items:
+                          $ref: "#/components/schemas/CustomParserConfig"
+    post:
+      summary: Create a saved custom CSV parser config
+      operationId: createCustomParser
+      tags: [Import]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [name, config]
+              properties:
+                name:
+                  type: string
+                config:
+                  type: object
+                  additionalProperties: true
+      responses:
+        "201":
+          description: Created parser config
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/Envelope"
+                  - type: object
+                    properties:
+                      data:
+                        $ref: "#/components/schemas/CustomParserConfig"
+        "409":
+          description: A parser with that name already exists
+
+  /api/import/parsers/{id}:
+    parameters:
+      - in: path
+        name: id
+        required: true
+        schema:
+          type: integer
+    patch:
+      summary: Update a saved custom CSV parser config
+      operationId: updateCustomParser
+      tags: [Import]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                name:
+                  type: string
+                config:
+                  type: object
+                  additionalProperties: true
+      responses:
+        "200":
+          description: Updated parser config
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/Envelope"
+                  - type: object
+                    properties:
+                      data:
+                        $ref: "#/components/schemas/CustomParserConfig"
+        "404":
+          description: Parser config not found
+        "409":
+          description: A parser with that name already exists
+    delete:
+      summary: Delete a saved custom CSV parser config
+      operationId: deleteCustomParser
+      tags: [Import]
+      responses:
+        "204":
+          description: Deleted (no content)
+        "404":
+          description: Parser config not found
 
   /api/import/batches:
     get:
