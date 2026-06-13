@@ -125,7 +125,7 @@ RUN printf 'export PATH="/usr/local/share/npm-global/bin:/home/dev/.npm-global/b
 # --- Claude Code CLI (replaces the `anthropics/claude-code:1.0` feature) -----
 # Installed as root into the root-owned global prefix and deliberately NOT chown'd
 # to dev — so the pinned claude/npm cannot be replaced by the dev user.
-RUN npm install -g @anthropic-ai/claude-code@2.1.170 \
+RUN npm install -g @anthropic-ai/claude-code@2.1.173 \
   && claude --version
 
 # Runtime global installs (safe-chain in post-create) go to a SEPARATE dev-owned
