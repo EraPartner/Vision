@@ -8,7 +8,7 @@
 <p align="center">
   <a href="https://github.com/EraPartner/Vision/actions/workflows/ci.yml"><img src="https://github.com/EraPartner/Vision/actions/workflows/ci.yml/badge.svg" alt="CI" /></a>
   <a href="LICENSE"><img src="https://img.shields.io/badge/License-AGPL--3.0--only-blue.svg" alt="License: AGPL-3.0-only" /></a>
-  <img src="https://img.shields.io/badge/Frontend-React%2018%20%2B%20TypeScript-61DAFB" alt="Frontend: React + TypeScript" />
+  <img src="https://img.shields.io/badge/Frontend-React%2019%20%2B%20TypeScript-61DAFB" alt="Frontend: React + TypeScript" />
   <img src="https://img.shields.io/badge/Backend-Node.js%20(Express)-339933" alt="Backend: Node.js + Express" />
   <img src="https://img.shields.io/badge/Runtime-Bun-black" alt="Runtime: Bun" />
   <img src="https://img.shields.io/badge/Database-PostgreSQL-4169E1" alt="Database: PostgreSQL" />
@@ -138,7 +138,7 @@ bun run dev                # start frontend + backend in watch mode
 ```text
 Vision/
 ├── apps/
-│   ├── frontend/               # React 18 + TypeScript + Vite
+│   ├── frontend/               # React 19 + TypeScript + Vite
 │   │   └── src/
 │   │       ├── features/       # Feature modules (transactions, categories, imports, ai-chat…)
 │   │       ├── components/     # Shared UI components
@@ -223,7 +223,7 @@ bun run generate:types       # regenerate TypeScript types from openapi.yaml
 
 | Layer | Technology |
 |-------|-----------|
-| Frontend | React 18, TypeScript, Vite, Tailwind CSS, Radix UI, shadcn/ui, TanStack Query, TanStack Table |
+| Frontend | React 19, TypeScript, Vite, Tailwind CSS, Radix UI, shadcn/ui, TanStack Query, TanStack Table |
 | Backend | Node.js (Bun runtime), Express |
 | Database | PostgreSQL 18 (Alpine), Alembic migrations |
 | Desktop | Electron |

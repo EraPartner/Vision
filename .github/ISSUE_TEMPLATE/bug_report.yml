@@ -1,0 +1,74 @@
+name: Bug report
+description: Report something that is broken or behaving incorrectly
+labels: ["bug", "triage"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for filing a bug. Please search existing issues first.
+        **Do not report security vulnerabilities here** — use the repository's
+        [private security advisories](https://github.com/EraPartner/Vision/security/advisories/new) instead.
+  - type: textarea
+    id: what-happened
+    attributes:
+      label: What happened?
+      description: A clear description of the bug, including expected vs. actual behavior.
+      placeholder: When I import a BNP Paribas Fortis CSV, the amounts are off by…
+    validations:
+      required: true
+  - type: textarea
+    id: repro
+    attributes:
+      label: Steps to reproduce
+      description: Minimal steps so the bug can be reproduced reliably.
+      placeholder: |
+        1. Go to Imports
+        2. Upload the attached CSV
+        3. Observe …
+    validations:
+      required: true
+  - type: dropdown
+    id: area
+    attributes:
+      label: Area
+      description: Which part of Vision is affected?
+      options:
+        - Transactions / Categorization
+        - Bank CSV import (adapter)
+        - Portfolio / Investments
+        - Belgian tax
+        - Planned / recurring transactions
+        - Dashboard / Statistics
+        - Electron desktop app
+        - Backend / API
+        - i18n (en/nl)
+        - Other / not sure
+    validations:
+      required: true
+  - type: dropdown
+    id: deployment
+    attributes:
+      label: How are you running Vision?
+      options:
+        - Electron desktop app
+        - Docker Compose (self-hosted)
+        - Local dev (bun run dev)
+        - Other
+    validations:
+      required: true
+  - type: input
+    id: version
+    attributes:
+      label: Version / commit
+      description: App version (or `git rev-parse --short HEAD`).
+      placeholder: "1.0.2 / bc187c19"
+    validations:
+      required: true
+  - type: textarea
+    id: logs
+    attributes:
+      label: Relevant logs or screenshots
+      description: Paste backend/console logs or attach screenshots. Redact any PII or secrets.
+      render: shell
+    validations:
+      required: false
