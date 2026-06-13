@@ -708,7 +708,7 @@
     {
       "id": "be.routes",
       "label": "Express routes",
-      "sub": "20 route files  ·  148 endpoints",
+      "sub": "19 route files  ·  158 endpoints",
       "kind": "backend",
       "x": 460,
       "y": 348
@@ -836,7 +836,7 @@
     {
       "id": "sv.reports",
       "label": "Report builder",
-      "sub": "services/reports  · pdfkit",
+      "sub": "services/reports  · puppeteer",
       "kind": "service",
       "x": 940,
       "y": 540
@@ -852,7 +852,7 @@
     {
       "id": "be.bankadapters",
       "label": "Bank adapters",
-      "sub": "Belfius · ING · KBC · Revolut · ...",
+      "sub": "Belfius · ING · KBC · BNP · Revolut · Wise · ...",
       "kind": "backend",
       "x": 40,
       "y": 648
@@ -876,7 +876,7 @@
     {
       "id": "be.repos",
       "label": "Repository layer",
-      "sub": "34 repositories  ·  data access",
+      "sub": "35 repositories  ·  data access",
       "kind": "backend",
       "x": 580,
       "y": 648
@@ -1847,7 +1847,7 @@
       "id": "tax-pdf-report",
       "name": "Export a Belgian tax PDF report",
       "category": "Reports",
-      "summary": "Statistics page → reports route → streamed PDF using pdfkit + frozen tax snapshots.",
+      "summary": "Statistics page → reports route → streamed PDF rendered from themed HTML via Puppeteer + frozen tax snapshots.",
       "steps": [
         {
           "from": "browser",
@@ -1895,7 +1895,7 @@
           "from": "sv.reports",
           "to": "fe.apiclient",
           "payload": "application/pdf stream",
-          "annotation": "pdfkit streams pages with paginated footer + break-inside rules."
+          "annotation": "Puppeteer renders themed HTML to a streamed PDF with paginated footer + break-inside rules."
         }
       ]
     },
