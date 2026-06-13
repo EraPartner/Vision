@@ -94,6 +94,12 @@
         background: transparent;
     }
 
+    /* Corner where vertical + horizontal scrollbars meet — transparent so it
+       inherits the surface behind it instead of WebKit's default white square. */
+    ::-webkit-scrollbar-corner {
+        background: transparent;
+    }
+
     ::-webkit-scrollbar-thumb {
         background: hsl(var(--muted-foreground) / 0.18);
         border-radius: 9999px;
