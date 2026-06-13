@@ -84,7 +84,7 @@ cd Vision
 ./install.sh
 ```
 
-After installation, double-click the `Launch Vision.command` shortcut or run:
+After installation, open **Vision** from `/Applications/Vision.app` or run:
 
 ```bash
 bun run electron:prod
@@ -126,7 +126,7 @@ bun run dev                # start frontend + backend in watch mode
 
 | Service | URL |
 |---------|-----|
-| Frontend | `http://localhost:5174` |
+| Frontend | `http://localhost:8080` (auto-picks next free port if busy) |
 | Backend API | `http://localhost:3002` |
 
 ---
@@ -153,6 +153,7 @@ Vision/
 │           ├── integrations/   # Ollama AI client
 │           └── middleware/     # Auth, logging, error handling
 ├── packages/
+│   ├── shared-utils/           # Pure helpers (money, slugify, downsample) shared by backend + frontend
 │   └── types/                  # Shared TypeScript types (generated from openapi.yaml)
 ├── packaging/
 │   └── electron/               # Desktop wrapper
@@ -177,9 +178,10 @@ bun run build:dev            # dev-mode frontend build
 bun run preview              # preview production build
 bun run dist                 # build + package Electron .app
 
-# Linting
+# Linting & types
 bun run lint                 # frontend ESLint
 bun run lint:backend         # backend ESLint
+bun run typecheck            # frontend TypeScript typecheck
 
 # Testing
 bun run test                 # backend Vitest suite
@@ -187,6 +189,8 @@ bun run test:frontend        # frontend Vitest suite
 bun run test:all             # backend + frontend (concurrent)
 bun run test:coverage        # frontend coverage report
 bun run test:watch           # backend watch mode
+bun run test:e2e             # frontend Playwright end-to-end tests
+bun run test:e2e:visual      # frontend visual-regression tests
 
 # Database (Alembic / PostgreSQL)
 bun run db:upgrade           # apply all pending migrations
@@ -195,6 +199,9 @@ bun run db:current           # show current revision
 bun run db:history           # show migration history
 bun run db:stamp             # stamp DB at head without running migrations
 bun run db:revision          # create a new autogenerate migration
+bun run db:index-stats       # report index usage stats
+bun run db:precision-drift   # check for numeric precision drift
+bun run quotes:densify       # backfill/densify asset price history
 
 # Docker
 bun run docker:dev           # start Compose dev stack
@@ -212,11 +219,13 @@ bun run electron:clean       # desktop with clean Compose override
 
 # i18n
 bun run generate-locales     # compile i18n source → locale files
+bun run sanitize-locales     # sanitize locale files without recompiling
 bun run validate-locales     # check locale completeness
 bun run sync-nl              # sync Dutch locale from English source
 
-# Types
+# Types & API
 bun run generate:types       # regenerate TypeScript types from openapi.yaml
+bun run check-endpoint-matrix # verify docs endpoint matrix matches openapi.yaml
 ```
 
 ### Tech Stack
