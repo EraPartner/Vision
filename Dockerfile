@@ -20,6 +20,11 @@ COPY apps/frontend/package.json ./apps/frontend/
 COPY apps/node-backend/package.json ./apps/node-backend/
 COPY packages/shared-utils/package.json ./packages/shared-utils/
 COPY packages/types/package.json ./packages/types/
+# The root `prepare` lifecycle script runs on `bun install` and invokes this
+# file; it must exist or the install fails. It self-no-ops when there is no git
+# work tree (the case here — .git is excluded by .dockerignore). Stable file, so
+# copying it before install does not meaningfully churn the cache layer.
+COPY scripts/setup-git-hooks.js ./scripts/setup-git-hooks.js
 RUN bun install --frozen-lockfile
 
 # Workspace sources + locale inputs after the install layer (cache-friendly).
@@ -69,6 +74,10 @@ COPY apps/frontend/package.json ./apps/frontend/
 COPY apps/node-backend/package.json ./apps/node-backend/
 COPY packages/shared-utils/package.json ./packages/shared-utils/
 COPY packages/types/package.json ./packages/types/
+# The root `prepare` lifecycle script runs on `bun install` and invokes this
+# file; it must exist or the install fails. It self-no-ops without a git work
+# tree (the case here — .git is excluded by .dockerignore).
+COPY scripts/setup-git-hooks.js ./scripts/setup-git-hooks.js
 # Skip Puppeteer's bundled Chromium download — we use the Alpine system package.
 ENV PUPPETEER_SKIP_CHROMIUM_DOWNLOAD=true
 RUN bun install --frozen-lockfile --production
