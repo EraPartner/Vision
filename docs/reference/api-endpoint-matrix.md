@@ -3,21 +3,21 @@ title: API Endpoint Matrix
 type: reference
 status: active
 date: 2026-04-27
-updated: 2026-06-13
-last_modified: 2026-06-13
+updated: 2026-06-15
+last_modified: 2026-06-15
 adr-reference: 026
 # Authoritative HTTP-operation count, derived from openapi.yaml and enforced by
 # scripts/check-endpoint-matrix.js (CI verify-generated). Bump when routes change.
-api_operation_count: 164
-tags: [reference, api, endpoints, matrix, overview, openapi, phase-1, phase-2, phase-3, phase-4, phase-5a, phase-5, phase-6, phase-7, phase-8, phase-g, phase-9, phase-13, phase-c, phase-d, phase-e, phase-f, cashflow-forecast, bill-reminders, sankey, pdf-report, db-maintenance, puppeteer, reports, multi-method-forecast, accuracy-persistence, materialized-cache, ensemble-methods, dependency-slim-down, backup, ipc, electron, drillthrough, export-filters, multi-select, ing, bnp, supported-adapters]
-description: Complete matrix of all 164 HTTP API operations (authoritative count from openapi.yaml) across the route files, plus 8 Electron IPC handlers, organized by resource for quick lookup. 2026-06-01 (ADR-066): Saved Named Custom CSV Parsers adds 4 Import endpoints (GET/POST /api/import/parsers, PATCH/DELETE /api/import/parsers/:id). Phase 1+2 adds 8 IPC handlers for bundle-based backup/restore with AES-256-CBC encryption and schema-safe restore. Phase 3 adds three new POST report endpoints with Puppeteer rendering. Phase 5A adds JSON export and attachments. Phase 6 adds cash flow forecast. Phase 7 adds Sankey flow and DB maintenance. Phase 8 completes portfolio and tax report generation (6 + 7 sections respectively). Phase F adds 4 admin endpoints. Phase 10 adds multi-method cash flow forecast. Phase C adds dashboard frontend visualization for Phase 10 forecast. Phase D adds persisted accuracy metrics endpoint. Phase E adds cache-aware forecast endpoint with materialized MC cache. Phase H adds rolling-window forecast with rolling-specific MC defaults (500 paths, P25/P75) and lazy-loaded diagnostics. Phase G removes 6 overlapping info endpoints in favor of aggregations. Phase 9 completes aggregation shadow cutover. Phase 13 adds multi-select export filters (`bank_accounts`, `category_ids` params); May 12 2026: ING and BNP Paribas Fortis adapters added (8 banks total); see openapi.yaml for authoritative spec.
+api_operation_count: 176
+tags: [reference, api, endpoints, matrix, overview, openapi, phase-1, phase-2, phase-3, phase-4, phase-5a, phase-5, phase-6, phase-7, phase-8, phase-g, phase-9, phase-13, phase-c, phase-d, phase-e, phase-f, cashflow-forecast, bill-reminders, sankey, pdf-report, db-maintenance, puppeteer, reports, multi-method-forecast, accuracy-persistence, materialized-cache, ensemble-methods, dependency-slim-down, backup, ipc, electron, drillthrough, export-filters, multi-select, ing, bnp, supported-adapters, portfolio-import, portfolio-csv-import, adr-078]
+description: Complete matrix of all 176 HTTP API operations (authoritative count from openapi.yaml) across the route files, plus 8 Electron IPC handlers, organized by resource for quick lookup. 2026-06-15 (ADR-078): Portfolio CSV Import adds 12 endpoints under /api/portfolio/import (2 upload, 2 SSE, 4 parser CRUD, 4 batch/review). 2026-06-01 (ADR-066): Saved Named Custom CSV Parsers adds 4 Import endpoints (GET/POST /api/import/parsers, PATCH/DELETE /api/import/parsers/:id). Phase 1+2 adds 8 IPC handlers for bundle-based backup/restore with AES-256-CBC encryption and schema-safe restore. Phase 3 adds three new POST report endpoints with Puppeteer rendering. Phase 5A adds JSON export and attachments. Phase 6 adds cash flow forecast. Phase 7 adds Sankey flow and DB maintenance. Phase 8 completes portfolio and tax report generation (6 + 7 sections respectively). Phase F adds 4 admin endpoints. Phase 10 adds multi-method cash flow forecast. Phase C adds dashboard frontend visualization for Phase 10 forecast. Phase D adds persisted accuracy metrics endpoint. Phase E adds cache-aware forecast endpoint with materialized MC cache. Phase H adds rolling-window forecast with rolling-specific MC defaults (500 paths, P25/P75) and lazy-loaded diagnostics. Phase G removes 6 overlapping info endpoints in favor of aggregations. Phase 9 completes aggregation shadow cutover. Phase 13 adds multi-select export filters (`bank_accounts`, `category_ids` params); May 12 2026: ING and BNP Paribas Fortis adapters added (8 banks total); see openapi.yaml for authoritative spec.
 aliases: [api matrix, endpoint matrix, all endpoints, api overview, endpoint list]
 ---
 
 # API Endpoint Matrix
 
 > [!abstract] Overview
-> **164 HTTP API operations** (authoritative count = operations in `openapi.yaml`, enforced by `scripts/check-endpoint-matrix.js` in CI) plus 2 unversioned `/health` endpoints and 8 Electron IPC handlers, across the route files. The per-resource tables below are a navigational index — `openapi.yaml` is the source of truth. (updated 2026-06-01 — Saved Named Custom CSV Parsers (ADR-066) adds 4 endpoints: `GET/POST /api/import/parsers` and `PATCH/DELETE /api/import/parsers/:id`; prior: 2026-05-16 — Bulk Actions feature adds `POST /api/transactions/bulk-delete`, `POST /api/transactions/bulk-update`, and `POST /api/transactions/bulk-export`; Tags feature adds `GET/POST /api/tags`, `PATCH/DELETE /api/tags/:id`, `POST /api/transactions/bulk-tag`, and `tags` query param on `GET /api/transactions` and both export endpoints; prior: 2026-04-29 — Phase 14 adds portfolio-summary realtime totals endpoint; Phase 13 adds `category_ids` and `transaction_type` query params to `GET /api/transactions` for pivot table drillthrough; unifies export endpoint filters with `GET /api/transactions` by delegating to shared `buildTransactionWhere`, enabling `transaction_id`, `recipient_id`, `recipient_name`, `search`, and `transaction_type` on export endpoints; adds `bank_accounts` and `category_ids` multi-select params to both list and export for flexible filtering via UI pickers; Phase 7 adds filter exclusions (`excludedCategoryIds`, `excludedRecipientIds`) to report endpoints with filter impact comparison view; adds `GET /api/recipients/clusters` for merge candidate identification; Phase E adds cache-aware forecast endpoint with 6-hour TTL materialized cache; Phase D adds persisted accuracy metrics endpoint; Phase 9 — aggregation shadow cutover complete; Phase F adds 4 admin endpoints for provider health, endpoint liveness, and metrics; Phase 10 adds multi-method cash flow forecast endpoint; Phase C adds dashboard frontend visualization for Phase 10 forecast; Phase 5 slim-down removes legacy GET `/api/reports/financial` endpoint; bank reconciliation removed). Use this as a quick reference to find any endpoint.
+> **176 HTTP API operations** (authoritative count = operations in `openapi.yaml`, enforced by `scripts/check-endpoint-matrix.js` in CI) plus 2 unversioned `/health` endpoints and 8 Electron IPC handlers, across the route files. The per-resource tables below are a navigational index — `openapi.yaml` is the source of truth. (updated 2026-06-15 — Portfolio CSV Import (ADR-078) adds 12 endpoints under `/api/portfolio/import`; 2026-06-01 — Saved Named Custom CSV Parsers (ADR-066) adds 4 endpoints: `GET/POST /api/import/parsers` and `PATCH/DELETE /api/import/parsers/:id`; prior: 2026-05-16 — Bulk Actions feature adds `POST /api/transactions/bulk-delete`, `POST /api/transactions/bulk-update`, and `POST /api/transactions/bulk-export`; Tags feature adds `GET/POST /api/tags`, `PATCH/DELETE /api/tags/:id`, `POST /api/transactions/bulk-tag`, and `tags` query param on `GET /api/transactions` and both export endpoints; prior: 2026-04-29 — Phase 14 adds portfolio-summary realtime totals endpoint; Phase 13 adds `category_ids` and `transaction_type` query params to `GET /api/transactions` for pivot table drillthrough; unifies export endpoint filters with `GET /api/transactions` by delegating to shared `buildTransactionWhere`, enabling `transaction_id`, `recipient_id`, `recipient_name`, `search`, and `transaction_type` on export endpoints; adds `bank_accounts` and `category_ids` multi-select params to both list and export for flexible filtering via UI pickers; Phase 7 adds filter exclusions (`excludedCategoryIds`, `excludedRecipientIds`) to report endpoints with filter impact comparison view; adds `GET /api/recipients/clusters` for merge candidate identification; Phase E adds cache-aware forecast endpoint with 6-hour TTL materialized cache; Phase D adds persisted accuracy metrics endpoint; Phase 9 — aggregation shadow cutover complete; Phase F adds 4 admin endpoints for provider health, endpoint liveness, and metrics; Phase 10 adds multi-method cash flow forecast endpoint; Phase C adds dashboard frontend visualization for Phase 10 forecast; Phase 5 slim-down removes legacy GET `/api/reports/financial` endpoint; bank reconciliation removed). Use this as a quick reference to find any endpoint.
 > 
 > **Note:** As of Phase 2.4, `openapi.yaml` is the authoritative API specification. This matrix provides a quick lookup; see the OpenAPI spec for formal schemas and examples.
 >
@@ -152,6 +152,25 @@ aliases: [api matrix, endpoint matrix, all endpoints, api overview, endpoint lis
 | POST | `/api/import/parsers` | Create saved parser; 409 on duplicate name; 400 if required columns missing | — | [[docs/api/imports\|Imports]] |
 | PATCH | `/api/import/parsers/:id` | Update saved parser name and/or config; 404 if missing; 409 on name conflict | — | [[docs/api/imports\|Imports]] |
 | DELETE | `/api/import/parsers/:id` | Delete saved parser; 204 on success; 404 if missing | — | [[docs/api/imports\|Imports]] |
+
+## Portfolio Import (12 endpoints) — ADR-078
+
+All routes mounted at `/api/portfolio/import` with `importRateLimiter`. Parallel pipeline to the budgeting import: stage → validate → matchInvestments → (review|autoCommit) → commit. Auto-commit only when all rows matched by exact symbol with zero errors; otherwise batch goes to `awaiting_review`. See [[docs/api/portfolio-imports|Portfolio Imports API]] and [[docs/features/portfolio-import|Portfolio Import Feature]].
+
+| Method | Path | Description | Rate Limit | Doc |
+|--------|------|-------------|------------|-----|
+| POST | `/api/portfolio/import/csv/custom` | One-shot portfolio CSV import; returns 201 (committed) or 202 (awaiting_review) | importRateLimiter | [[docs/api/portfolio-imports\|Portfolio Imports]] |
+| POST | `/api/portfolio/import/csv/stream` | SSE-streaming portfolio CSV import; events: progress / review_required / complete / error | importRateLimiter | [[docs/api/portfolio-imports\|Portfolio Imports]] |
+| GET | `/api/portfolio/import/parsers` | List saved portfolio parser configs (kind=portfolio) | — | [[docs/api/portfolio-imports\|Portfolio Imports]] |
+| POST | `/api/portfolio/import/parsers` | Create saved portfolio parser; 409 on duplicate name | — | [[docs/api/portfolio-imports\|Portfolio Imports]] |
+| PATCH | `/api/portfolio/import/parsers/:id` | Update saved portfolio parser name/config | — | [[docs/api/portfolio-imports\|Portfolio Imports]] |
+| DELETE | `/api/portfolio/import/parsers/:id` | Delete saved portfolio parser; 204 on success | — | [[docs/api/portfolio-imports\|Portfolio Imports]] |
+| GET | `/api/portfolio/import/batches` | List portfolio import batches (limit/offset) | — | [[docs/api/portfolio-imports\|Portfolio Imports]] |
+| GET | `/api/portfolio/import/batches/:id` | Get portfolio import batch detail | — | [[docs/api/portfolio-imports\|Portfolio Imports]] |
+| DELETE | `/api/portfolio/import/batches/:id` | Rollback batch (deletes committed portfolio_transactions, marks aborted) | — | [[docs/api/portfolio-imports\|Portfolio Imports]] |
+| GET | `/api/portfolio/import/batches/:id/preview` | Rows grouped by investment; unresolved rows per distinct raw symbol/name | — | [[docs/api/portfolio-imports\|Portfolio Imports]] |
+| POST | `/api/portfolio/import/batches/:id/rows/:rowId/investment-override` | Resolve unmatched row: pick existing investment or create new | — | [[docs/api/portfolio-imports\|Portfolio Imports]] |
+| POST | `/api/portfolio/import/batches/:id/commit` | Commit reviewed batch to portfolio_transactions | — | [[docs/api/portfolio-imports\|Portfolio Imports]] |
 
 ## Attachments (4 endpoints) — Phase 5A
 
@@ -335,6 +354,7 @@ Electron-specific inter-process communication for desktop features (backup, rest
 | Watchlist | 5 | 0 |
 | Market Lookup | 4 | 0 |
 | Import | 16 | 0 |
+| Portfolio Import (ADR-078) | 12 | 2 |
 | Attachments (Phase 5A) | 4 | 0 |
 | Saved Charts | 4 | 0 |
 | Settings | 5 | 0 |
@@ -347,9 +367,9 @@ Electron-specific inter-process communication for desktop features (backup, rest
 | Info/Statistics (Phase 14) | 13 | 5 |
 | AI Chat | 9 | 2 |
 | IPC Handlers (Phase 1+2) | 8 | 0 |
-| **Total** | **174** | **10** |
+| **Total** | **186** | **12** |
 
-> **164** of these are versioned `/api` HTTP operations — the authoritative count enforced against `openapi.yaml` by `scripts/check-endpoint-matrix.js`. The remaining 10 are 2 unversioned `/health` endpoints and 8 Electron IPC handlers, which sit outside the OpenAPI spec. (The Rate-Limited column is an approximate per-section tally, not gate-checked.)
+> **176** of these are versioned `/api` HTTP operations — the authoritative count enforced against `openapi.yaml` by `scripts/check-endpoint-matrix.js`. The remaining 10 are 2 unversioned `/health` endpoints and 8 Electron IPC handlers, which sit outside the OpenAPI spec. (The Rate-Limited column is an approximate per-section tally, not gate-checked.)
 
 ## Phase G Endpoint Consolidation (April 2026)
 

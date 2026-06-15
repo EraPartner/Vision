@@ -145,6 +145,19 @@ package "Portfolio Pages" {
     +Capital Gains
     +Withholding Tax
   }
+
+  class PortfolioImportPage <<ADR-078>> {
+    +Column Mapper (PortfolioCsvColumnMapper)
+    +File Upload + Saved Parser Picker
+    +SSE Progress
+    +FileHeadersPanel preview
+  }
+
+  class PortfolioImportReviewPage <<ADR-078>> {
+    +Groups by investment (unresolved/resolved)
+    +InvestmentCombobox per unresolved group
+    +Commit / abort batch
+  }
 }
 
 package "Tax Pages" {
@@ -220,6 +233,8 @@ PortfolioOverviewPage --> NetWorthPage : "/portfolio/net-worth"
 PortfolioOverviewPage --> ExchangeRatesPage : "/portfolio/exchange-rates"
 PortfolioOverviewPage --> WatchlistPage : "/portfolio/watchlist"
 PortfolioOverviewPage --> PortfolioTaxPage : "/portfolio/tax"
+PortfolioOverviewPage --> PortfolioImportPage : "/portfolio/import"
+PortfolioImportPage --> PortfolioImportReviewPage : "/portfolio/import/review/:batchId"
 
 AppLayout --> AdminOverviewPage : "/admin"
 AdminOverviewPage --> DbMaintenancePage : "/admin/db"

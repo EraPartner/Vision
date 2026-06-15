@@ -922,6 +922,7 @@ describe('Saved custom parser routes', () => {
       expect(customParserConfigRepository.create).toHaveBeenCalledWith({
         name: 'My Bank',
         config: expect.objectContaining({ dateColumn: 'Date', dateFormat: '%Y-%m-%d', separator: ',', encoding: 'utf-8', skipRows: 0 }),
+        kind: 'transaction',
       });
     });
 
@@ -940,7 +941,7 @@ describe('Saved custom parser routes', () => {
     });
 
     it('maps a unique-violation to ConflictError', async () => {
-      const err = Object.assign(new Error('dup'), { code: '23505', constraint: 'uq_custom_parser_configs_name' });
+      const err = Object.assign(new Error('dup'), { code: '23505', constraint: 'uq_custom_parser_configs_name_kind' });
       customParserConfigRepository.create.mockRejectedValue(err);
       const res = mockResponse();
       await expect(
@@ -959,7 +960,7 @@ describe('Saved custom parser routes', () => {
     });
 
     it('maps a unique-violation to ConflictError', async () => {
-      const err = Object.assign(new Error('dup'), { code: '23505', constraint: 'uq_custom_parser_configs_name' });
+      const err = Object.assign(new Error('dup'), { code: '23505', constraint: 'uq_custom_parser_configs_name_kind' });
       customParserConfigRepository.update.mockRejectedValue(err);
       const res = mockResponse();
       await expect(

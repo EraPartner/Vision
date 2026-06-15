@@ -3,12 +3,12 @@ title: Feature - CSV Import, Export, Attachments & Deduplication
 type: feature
 status: active
 date: 2026-04-24
-updated: 2026-06-10
-last_modified: 2026-06-10
-tags: [feature, import, export, csv, json, deduplication, phase-5a, attachments, phase-c, phase-e, phase-1, phase-12, phase-13, performance, concurrency, import-pipeline, component-split, error-handling, recipient-clusters, multi-select, export-filters, adr-046, category-review, bigserial-fix, staging-rows, tx-hash-dedup, race-safe-dedup, decimal-precision, ing, bnp, saved-custom-parsers, custom-parser-configs, named-parsers, adr-066, electron-native, csv-open-with, import-handoff, drag-drop, june-2026]
+updated: 2026-06-15
+last_modified: 2026-06-15
+tags: [feature, import, export, csv, json, deduplication, phase-5a, attachments, phase-c, phase-e, phase-1, phase-12, phase-13, performance, concurrency, import-pipeline, component-split, error-handling, recipient-clusters, multi-select, export-filters, adr-046, category-review, bigserial-fix, staging-rows, tx-hash-dedup, race-safe-dedup, decimal-precision, ing, bnp, saved-custom-parsers, custom-parser-configs, named-parsers, adr-066, electron-native, csv-open-with, import-handoff, drag-drop, june-2026, file-headers-panel, csv-separator, adr-078]
 aliases: [csv-import, bank-import, bank-statement, deduplication, data-import, streaming-import]
-description: Import transactions from bank CSV files with automatic deduplication, fuzzy/pattern recipient matching, per-row category review (ADR-046), May 2026 BIGSERIAL fix for staging row ID validation, saved named custom CSV parsers (ADR-066), and June 2026 V12 (ADR-072) window-wide CSV drag-drop + Finder/dock open-with handoff.
-related_code: ["apps/node-backend/src/services/importPipeline/index.js", "apps/node-backend/src/services/importPipeline/stage.js", "apps/node-backend/src/services/importPipeline/validate.js", "apps/node-backend/src/services/importPipeline/match.js", "apps/node-backend/src/services/importPipeline/commit.js", "apps/node-backend/src/services/dataImportService.js", "apps/node-backend/src/services/deduplication.js", "apps/node-backend/src/services/textNormalization.js", "apps/node-backend/src/routes/importRoutes.js", "apps/node-backend/src/lib/sse.js", "apps/node-backend/src/repositories/importBatchRepository.js", "apps/node-backend/src/repositories/customParserConfigRepository.js", "apps/frontend/src/features/imports/TransactionImportCard.tsx", "apps/frontend/src/features/imports/RecipientsImportCard.tsx", "apps/frontend/src/features/imports/CategoriesImportCard.tsx", "apps/frontend/src/features/imports/ExportCard.tsx", "apps/frontend/src/features/imports/SupportedBanksCard.tsx", "apps/frontend/src/features/imports/useAdapters.ts", "apps/frontend/src/hooks/useCustomParserConfigs.ts", "apps/frontend/src/lib/importHandoff.ts", "apps/frontend/src/pages/ImportPage.tsx", "apps/frontend/src/pages/ImportReviewPage.tsx"]
+description: Import transactions from bank CSV files with automatic deduplication, fuzzy/pattern recipient matching, per-row category review (ADR-046), May 2026 BIGSERIAL fix for staging row ID validation, saved named custom CSV parsers (ADR-066), June 2026 V12 (ADR-072) window-wide CSV drag-drop + Finder/dock open-with handoff, and June 2026 always-on FileHeadersPanel (header chip preview + sample-rows table shown for all adapters in TransactionImportCard).
+related_code: ["apps/node-backend/src/services/importPipeline/index.js", "apps/node-backend/src/services/importPipeline/stage.js", "apps/node-backend/src/services/importPipeline/validate.js", "apps/node-backend/src/services/importPipeline/match.js", "apps/node-backend/src/services/importPipeline/commit.js", "apps/node-backend/src/services/dataImportService.js", "apps/node-backend/src/services/deduplication.js", "apps/node-backend/src/services/textNormalization.js", "apps/node-backend/src/routes/importRoutes.js", "apps/node-backend/src/lib/sse.js", "apps/node-backend/src/repositories/importBatchRepository.js", "apps/node-backend/src/repositories/customParserConfigRepository.js", "apps/frontend/src/features/imports/TransactionImportCard.tsx", "apps/frontend/src/features/imports/FileHeadersPanel.tsx", "apps/frontend/src/features/imports/RecipientsImportCard.tsx", "apps/frontend/src/features/imports/CategoriesImportCard.tsx", "apps/frontend/src/features/imports/ExportCard.tsx", "apps/frontend/src/features/imports/SupportedBanksCard.tsx", "apps/frontend/src/features/imports/useAdapters.ts", "apps/frontend/src/hooks/useCustomParserConfigs.ts", "apps/frontend/src/lib/importHandoff.ts", "apps/frontend/src/lib/csvSeparator.ts", "apps/frontend/src/pages/ImportPage.tsx", "apps/frontend/src/pages/ImportReviewPage.tsx"]
 ---
 
 # Feature: CSV Import & Deduplication
@@ -485,6 +485,35 @@ The Import Page now features an interactive visual CSV column mapper for flexibl
 3. Preview table shows detected headers and sample data
 4. Map each required field using dropdown
 5. Click import when ready
+
+## File Headers Preview Panel (June 2026) {#file-headers-preview-panel}
+
+**Component:** [[apps/frontend/src/features/imports/FileHeadersPanel.tsx]]  
+**Helper:** [[apps/frontend/src/lib/csvSeparator.ts]] — `detectSeparator(rawText: string): string`
+
+The `FileHeadersPanel` is a shared component that renders a column-name chip row and a collapsible sample-rows table as soon as a file is selected, regardless of which bank adapter is chosen. It is independent of the column-mapper UI and appears under the dropzone in both the budgeting and portfolio import paths.
+
+### Behaviour
+
+- **Triggers on file selection**: The panel renders immediately when the user selects (or drops) a CSV file, before any import action.
+- **Separator auto-detection**: `detectSeparator` scans the first line of the raw file text for common delimiters (`;`, `,`, `\t`) and picks the one that produces the most fields. Falls back to `,`.
+- **Header chips**: Each detected column name is shown as a chip. Non-CSV files produce no chips (graceful degradation).
+- **Sample rows table**: Up to 5 data rows displayed in a collapsible `<details>` element, matching the column order from the header chip row.
+- **Built on `useCsvPreview`**: Reuses the existing hook ([[apps/frontend/src/hooks/useCsvPreview.ts]]) — no new CSV-parsing logic.
+
+### Retrofit into TransactionImportCard
+
+Before this change, column-name previews appeared only in the custom-parser path (inside `CsvColumnMapper`). The `FileHeadersPanel` is now placed under the dropzone in [[apps/frontend/src/features/imports/TransactionImportCard.tsx]], so all adapter imports (Belfius, Revolut, ING, KBC, BNP, SABB, Wise, Vision, Custom) show a header preview as soon as a file is chosen.
+
+### i18n
+
+New `csvHeaders.*` keys added to `i18n/source/en.json` and `i18n/source/nl.json`.
+
+### Also used in Portfolio Import
+
+`PortfolioCsvColumnMapper` embeds the same `FileHeadersPanel`. See [[docs/features/portfolio-import#fileheaderspanel-integration|Portfolio Import — FileHeadersPanel Integration]].
+
+---
 
 ## Streaming Import with Server-Sent Events (SSE)
 

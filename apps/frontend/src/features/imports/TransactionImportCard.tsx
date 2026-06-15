@@ -20,6 +20,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Progress } from "@/components/ui/progress";
 import { CsvColumnMapper } from "@/features/imports/CsvColumnMapper";
+import { FileHeadersPanel } from "@/features/imports/FileHeadersPanel";
 import { apiClient } from "@/lib/api";
 import { toast } from "sonner";
 import {
@@ -489,6 +490,23 @@ export function TransactionImportCard({ onImportSuccess }: TransactionImportCard
             )}
           </div>
         </div>
+
+        {/* Detected columns of the selected file (always shown once a file is chosen) */}
+        <FileHeadersPanel
+          file={file}
+          separator={isCustomLike ? customConfig.separator : undefined}
+          highlightedHeaders={
+            isCustomLike
+              ? [
+                  customConfig.dateColumn,
+                  customConfig.recipientColumn,
+                  customConfig.amountColumn,
+                  customConfig.memoColumn,
+                ]
+              : []
+          }
+          defaultCollapsed={isCustomLike}
+        />
 
         {/* Progress indicator */}
         {progress && loading && (

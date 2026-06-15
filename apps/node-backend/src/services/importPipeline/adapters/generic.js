@@ -4,42 +4,10 @@
  */
 
 import { logger } from '../../../config/logger.js';
-import { parseCsvFile, buildRawRowString, parseAmountField, parseDateFlexibleUtc } from './_shared.js';
+import { parseCsvFile, buildRawRowString, parseAmountField, SUPPORTED_DATE_FORMATS, parseDateWithFormat } from './_shared.js';
 
 const NAME = 'generic';
 const BANK_LABEL = 'Generic';
-
-// Must mirror the formats offered by the import UI
-// (apps/frontend/src/features/imports/TransactionImportCard.tsx). Every entry
-// here is parsed via Date.UTC so a row never shifts a calendar day under a
-// server TZ east of UTC; an unsupported format is rejected up front (below)
-// rather than silently importing zero rows.
-const SUPPORTED_DATE_FORMATS = ['%Y-%m-%d', '%d/%m/%Y', '%m/%d/%Y', '%d-%m-%Y', '%Y-%m-%d %H:%M:%S'];
-
-function parseDate(dateStr, fmt) {
-  if (fmt.includes('%d/%m/%Y')) {
-    const [d, m, y] = dateStr.split('/').map((s) => parseInt(s, 10));
-    return new Date(Date.UTC(y, m - 1, d));
-  }
-  if (fmt.includes('%m/%d/%Y')) {
-    const [m, d, y] = dateStr.split('/').map((s) => parseInt(s, 10));
-    return new Date(Date.UTC(y, m - 1, d));
-  }
-  if (fmt.includes('%d-%m-%Y')) {
-    const [d, m, y] = dateStr.split('-').map((s) => parseInt(s, 10));
-    return new Date(Date.UTC(y, m - 1, d));
-  }
-  if (fmt.includes('%Y-%m-%d')) {
-    // Covers both '%Y-%m-%d' and '%Y-%m-%d %H:%M:%S' — parse the date part only,
-    // as UTC, so an early-morning timestamp can't roll back a day.
-    const [y, m, d] = dateStr.slice(0, 10).split('-').map((s) => parseInt(s, 10));
-    return new Date(Date.UTC(y, m - 1, d));
-  }
-  // Unknown format token: shared parser rebuilds the parsed calendar day at
-  // UTC midnight (plain new Date() was local → day-shift on serialization).
-  return parseDateFlexibleUtc(dateStr);
-}
-
 
 function buildBankAccount(config) {
   const bankName = config.bank_name || 'CUSTOM';
@@ -52,7 +20,7 @@ function rowToTransaction(row, config) {
   const dateStr = String(row[colMap.date] || '').trim();
   if (!dateStr) return null;
 
-  const date = parseDate(dateStr, config.date_format || '');
+  const date = parseDateWithFormat(dateStr, config.date_format || '');
   if (!date || isNaN(date.getTime())) return null;
 
   const amount = parseAmountField(row[colMap.amount]);

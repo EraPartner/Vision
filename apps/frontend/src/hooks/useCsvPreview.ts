@@ -7,8 +7,8 @@
  */
 
 import { useEffect, useState } from "react";
+import { PEEK_BYTES } from "@/features/imports/csvSeparator";
 
-const PEEK_BYTES = 16_384; // 16 KB — enough for headers + several rows
 const MAX_PREVIEW_ROWS = 5;
 
 export interface CsvPreview {

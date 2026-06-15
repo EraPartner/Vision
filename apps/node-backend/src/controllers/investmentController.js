@@ -19,24 +19,7 @@ import { getKinesisAssetConfig } from '../config/kinesisConfig.js';
 import { NotFoundError, ValidationError } from '../middleware/errorHandler.js';
 import { invalidatePortfolioCaches } from '../routes/info/_cache.js';
 import { assertPublicHttpUrl } from '../lib/urlSafety.js';
-import { getStoredRateToEurOnOrBefore, normalizeDateInput } from '../services/currency/rateFetcher.js';
-
-/**
- * Resolve the FX rate (→EUR) to stamp on a non-EUR portfolio transaction when
- * the client didn't supply one. DB-only on-or-before lookup (≤ 7 days) — never
- * blocks the write path on HTTP; rows it can't resolve stay NULL and are
- * repaired by the startup backfill once historical rates are present.
- */
-async function autoResolveFxRateToEur(currency, date) {
-  const code = String(currency || 'EUR').toUpperCase().trim();
-  if (code === 'EUR') return undefined;
-  try {
-    return await getStoredRateToEurOnOrBefore(code, normalizeDateInput(date));
-  } catch (err) {
-    logger.warn('fx_rate_to_eur auto-resolution failed', { currency: code, date, error: err.message });
-    return undefined;
-  }
-}
+import { autoResolveFxRateToEur } from '../services/portfolio/fxResolve.js';
 
 // Custom price-provider URLs are fetched server-side at refresh time, so reject
 // non-public targets at the write boundary too (SSRF defense-in-depth). DNS is

@@ -1,11 +1,12 @@
 import { query } from '../database/connection.js';
 
-const COLUMNS = 'id, name, config_json, created_at, updated_at';
+const COLUMNS = 'id, name, kind, config_json, created_at, updated_at';
 
 function mapRow(r) {
   return {
     id: r.id,
     name: r.name,
+    kind: r.kind,
     // pg returns JSONB already parsed; tolerate a string just in case.
     config: typeof r.config_json === 'string' ? JSON.parse(r.config_json) : r.config_json,
     created_at: r.created_at,
@@ -14,8 +15,11 @@ function mapRow(r) {
 }
 
 const customParserConfigRepository = {
-  async getAll() {
-    const result = await query(`SELECT ${COLUMNS} FROM custom_parser_configs ORDER BY name ASC`);
+  async getAll(kind = 'transaction') {
+    const result = await query(
+      `SELECT ${COLUMNS} FROM custom_parser_configs WHERE kind = $1 ORDER BY name ASC`,
+      [kind],
+    );
     return result.rows.map(mapRow);
   },
 
@@ -25,18 +29,21 @@ const customParserConfigRepository = {
     return r ? mapRow(r) : undefined;
   },
 
-  async getByName(name) {
-    const result = await query(`SELECT ${COLUMNS} FROM custom_parser_configs WHERE name = $1`, [name]);
+  async getByName(name, kind = 'transaction') {
+    const result = await query(
+      `SELECT ${COLUMNS} FROM custom_parser_configs WHERE name = $1 AND kind = $2`,
+      [name, kind],
+    );
     const r = result.rows[0];
     return r ? mapRow(r) : undefined;
   },
 
-  async create({ name, config }) {
+  async create({ name, config, kind = 'transaction' }) {
     const result = await query(
-      `INSERT INTO custom_parser_configs (name, config_json)
-       VALUES ($1, $2::jsonb)
+      `INSERT INTO custom_parser_configs (name, kind, config_json)
+       VALUES ($1, $2, $3::jsonb)
        RETURNING ${COLUMNS}`,
-      [name, JSON.stringify(config)]
+      [name, kind, JSON.stringify(config)],
     );
     return mapRow(result.rows[0]);
   },
@@ -54,7 +61,7 @@ const customParserConfigRepository = {
     values.push(id);
     const result = await query(
       `UPDATE custom_parser_configs SET ${fields.join(', ')} WHERE id = $${idx} RETURNING ${COLUMNS}`,
-      values
+      values,
     );
     return result.rows[0] ? mapRow(result.rows[0]) : undefined;
   },

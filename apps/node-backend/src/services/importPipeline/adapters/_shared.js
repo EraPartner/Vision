@@ -79,6 +79,45 @@ export function parseDateFlexibleUtc(dateStr) {
   return new Date(Date.UTC(parsed.getFullYear(), parsed.getMonth(), parsed.getDate()));
 }
 
+// Date formats offered by the import UI and used by the custom-config adapters
+// (generic.js transactions + portfolioGenericAdapter.js). Single source of
+// truth so the two adapters can't drift. Each is parsed via Date.UTC so a row
+// never shifts a calendar day under a server TZ east of UTC; callers reject an
+// unsupported format up front rather than silently importing zero rows.
+export const SUPPORTED_DATE_FORMATS = ['%Y-%m-%d', '%d/%m/%Y', '%m/%d/%Y', '%d-%m-%Y', '%Y-%m-%d %H:%M:%S'];
+
+/**
+ * Parse a date string against one of SUPPORTED_DATE_FORMATS into a UTC-midnight
+ * Date. Unknown tokens fall back to parseDateFlexibleUtc.
+ *
+ * @param {string} dateStr
+ * @param {string} fmt
+ * @returns {Date|null}
+ */
+export function parseDateWithFormat(dateStr, fmt) {
+  if (fmt.includes('%d/%m/%Y')) {
+    const [d, m, y] = dateStr.split('/').map((s) => parseInt(s, 10));
+    return new Date(Date.UTC(y, m - 1, d));
+  }
+  if (fmt.includes('%m/%d/%Y')) {
+    const [m, d, y] = dateStr.split('/').map((s) => parseInt(s, 10));
+    return new Date(Date.UTC(y, m - 1, d));
+  }
+  if (fmt.includes('%d-%m-%Y')) {
+    const [d, m, y] = dateStr.split('-').map((s) => parseInt(s, 10));
+    return new Date(Date.UTC(y, m - 1, d));
+  }
+  if (fmt.includes('%Y-%m-%d')) {
+    // Covers both '%Y-%m-%d' and '%Y-%m-%d %H:%M:%S' — parse the date part only,
+    // as UTC, so an early-morning timestamp can't roll back a day.
+    const [y, m, d] = dateStr.slice(0, 10).split('-').map((s) => parseInt(s, 10));
+    return new Date(Date.UTC(y, m - 1, d));
+  }
+  // Unknown format token: shared parser rebuilds the parsed calendar day at
+  // UTC midnight (plain new Date() was local → day-shift on serialization).
+  return parseDateFlexibleUtc(dateStr);
+}
+
 export function parseCommaDecimal(value) {
   const s = String(value).replace(/\s/g, '');
   // EU format: comma is the decimal separator and dots are thousands separators.

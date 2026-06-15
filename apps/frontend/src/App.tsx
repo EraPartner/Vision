@@ -42,6 +42,8 @@ const PerformancePage = lazy(routeLoaders["/portfolio/performance"]);
 const NetWorthPage = lazy(routeLoaders["/portfolio/net-worth"]);
 const ExchangeRatesPage = lazy(routeLoaders["/portfolio/exchange-rates"]);
 const WatchlistPage = lazy(routeLoaders["/portfolio/watchlist"]);
+const PortfolioImportPage = lazy(routeLoaders["/portfolio/import"]);
+const PortfolioImportReviewPage = lazy(routeLoaders["/portfolio/import/:batchId/review"]);
 const DbMaintenancePage = lazy(routeLoaders["/admin/db"]);
 const AdminOverviewPage = lazy(routeLoaders["/admin"]);
 const ProviderHealthPage = lazy(routeLoaders["/admin/providers"]);
@@ -163,6 +165,8 @@ const App = () => {
                                                     <Route path="/portfolio/net-worth" element={<NetWorthPage />} />
                                                     <Route path="/portfolio/exchange-rates" element={<ExchangeRatesPage />} />
                                                     <Route path="/portfolio/watchlist" element={<WatchlistPage />} />
+                                                    <Route path="/portfolio/import" element={<PortfolioImportPage />} />
+                                                    <Route path="/portfolio/import/:batchId/review" element={<PortfolioImportReviewPage />} />
                                                     <Route path="/portfolio/tax" element={<PortfolioTaxPage />} />
                                                     {/* AI Chat (workspace-agnostic) */}
                                                     <Route path="/ai-chat" element={<AIChatPage />} />

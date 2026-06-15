@@ -4,15 +4,13 @@
  */
 
 import { Router } from 'express';
-import multer from 'multer';
-import fs from 'fs';
-import os from 'os';
-import path from 'path';
 import { importRecipientsCSV, importCategoriesCSV } from '../services/dataImportService.js';
 import { logger } from '../config/logger.js';
 import { runImportPipeline, commitImport } from '../services/importPipeline/index.js';
 import { ValidationError, NotFoundError, ConflictError } from '../middleware/errorHandler.js';
 import { createSseWriter } from '../lib/sse.js';
+import { csvUpload, cleanup, csvUploadErrorTranslator } from '../lib/csvUpload.js';
+import { progressToPercent } from '../lib/importProgress.js';
 import {
   listBatches,
   getBatch,
@@ -27,66 +25,6 @@ import { refreshAggregations } from '../services/aggregationRefresh.js';
 
 const router = Router();
 
-/* eslint-disable vision-local-money/no-raw-money-arithmetic */
-function v2ProgressToLegacy(ev) {
-  const { phase, current = 0, total = 0, imported = 0, duplicates = 0, errors = 0 } = ev;
-  const frac = total > 0 ? current / total : 0;
-  let percent = 0;
-  if (phase === 'staging') percent = Math.round(frac * 40);
-  else if (phase === 'validating') percent = 40 + Math.round(frac * 15);
-  else if (phase === 'matching') percent = 55 + Math.round(frac * 15);
-  else if (phase === 'committing') percent = 70 + Math.round(frac * 30);
-  else if (phase === 'complete') percent = 100;
-  return { phase, current, total, imported, duplicates, errors, percent };
-}
-/* eslint-enable vision-local-money/no-raw-money-arithmetic */
-
-function isLikelyCsvFile(file) {
-  const originalName = file?.originalname?.toLowerCase() || '';
-  const mimeType = file?.mimetype?.toLowerCase() || '';
-  const hasCsvExtension = originalName.endsWith('.csv');
-  const hasLikelyCsvMimeType = mimeType.includes('csv')
-    || mimeType.includes('text/plain')
-    || mimeType.includes('application/vnd.ms-excel')
-    || mimeType === 'application/octet-stream'
-    || mimeType === '';
-  return hasCsvExtension && hasLikelyCsvMimeType;
-}
-
-const upload = multer({
-  dest: os.tmpdir(),
-  limits: { fileSize: 50 * 1024 * 1024 },
-  fileFilter: (req, file, cb) => {
-    if (!isLikelyCsvFile(file)) {
-      cb(new Error('File must be a CSV'));
-    } else {
-      cb(null, true);
-    }
-  },
-});
-
-// Multer writes uploads to os.tmpdir() with a generated alphanumeric filename.
-// We rebuild the path from the basename + os.tmpdir() (a constant) so a tampered
-// req.file.path can't escape the tmp directory, and validate the basename
-// against a strict allowlist to break any taint flow into the unlink call.
-const SAFE_BASENAME_RE = /^[A-Za-z0-9._-]+$/;
-
-function cleanup(filePath) {
-  if (!filePath) return;
-  const basename = path.basename(filePath);
-  if (!SAFE_BASENAME_RE.test(basename)) return;
-  const target = path.join(os.tmpdir(), basename);
-  void fs.promises.unlink(target).catch((err) => {
-    // ENOENT means already removed (e.g. by another handler) — silent OK.
-    if (err && err.code !== 'ENOENT') {
-      logger.warn('Failed to clean up uploaded CSV temp file', {
-        path: target,
-        error: err.message,
-      });
-    }
-  });
-}
-
 function buildImportResult(result) {
   return {
     ...result,
@@ -97,7 +35,7 @@ function buildImportResult(result) {
 }
 
 // POST /api/import/csv
-router.post('/csv', upload.single('file'), async (req, res) => {
+router.post('/csv', csvUpload.single('file'), async (req, res) => {
   if (!req.file) {
     throw new ValidationError('No file uploaded. Send a CSV file as multipart form-data with field name "file".');
   }
@@ -148,7 +86,7 @@ router.post('/csv', upload.single('file'), async (req, res) => {
 });
 
 // POST /api/import/csv/custom
-router.post('/csv/custom', upload.single('file'), async (req, res) => {
+router.post('/csv/custom', csvUpload.single('file'), async (req, res) => {
   if (!req.file) {
     throw new ValidationError('No file uploaded. Send a CSV file as multipart form-data with field name "file".');
   }
@@ -258,11 +196,12 @@ function normalizeParserConfig(config) {
   };
 }
 
-const PARSER_NAME_CONSTRAINT = 'uq_custom_parser_configs_name';
+// (name, kind)-unique since 0041; both budgeting and portfolio parsers share it.
+const PARSER_NAME_CONSTRAINT = 'uq_custom_parser_configs_name_kind';
 
 // GET /api/import/parsers
 router.get('/parsers', async (req, res) => {
-  const configs = await customParserConfigRepository.getAll();
+  const configs = await customParserConfigRepository.getAll('transaction');
   res.ok(configs);
 });
 
@@ -271,7 +210,7 @@ router.post('/parsers', async (req, res) => {
   const name = normalizeParserName(req.body.name);
   const config = normalizeParserConfig(req.body.config);
   try {
-    const created = await customParserConfigRepository.create({ name, config });
+    const created = await customParserConfigRepository.create({ name, config, kind: 'transaction' });
     res.status(201);
     res.ok(created);
   } catch (err) {
@@ -308,7 +247,7 @@ router.delete('/parsers/:id', async (req, res) => {
 });
 
 // POST /api/import/csv/stream — SSE, preserves raw event protocol
-router.post('/csv/stream', upload.single('file'), async (req, res) => {
+router.post('/csv/stream', csvUpload.single('file'), async (req, res) => {
   if (!req.file) {
     throw new ValidationError('No file uploaded.');
   }
@@ -334,7 +273,7 @@ router.post('/csv/stream', upload.single('file'), async (req, res) => {
       adapterName: bankName,
       filename: req.file.originalname,
       sizeBytes: req.file.size,
-      onProgress: async (ev) => { await writer.write('progress', v2ProgressToLegacy(ev)); },
+      onProgress: async (ev) => { await writer.write('progress', progressToPercent(ev)); },
     });
 
     if (pipelineResult.requiresReview) {
@@ -378,7 +317,7 @@ router.post('/csv/stream', upload.single('file'), async (req, res) => {
 // the registry, which is the single source of truth.)
 
 // POST /api/import/recipients
-router.post('/recipients', upload.single('file'), async (req, res) => {
+router.post('/recipients', csvUpload.single('file'), async (req, res) => {
   if (!req.file) {
     throw new ValidationError('No file uploaded. Send a CSV file as multipart form-data with field name "file".');
   }
@@ -402,7 +341,7 @@ router.post('/recipients', upload.single('file'), async (req, res) => {
 });
 
 // POST /api/import/categories
-router.post('/categories', upload.single('file'), async (req, res) => {
+router.post('/categories', csvUpload.single('file'), async (req, res) => {
   if (!req.file) {
     throw new ValidationError('No file uploaded. Send a CSV file as multipart form-data with field name "file".');
   }
@@ -632,17 +571,6 @@ router.post('/batches/:id/commit', async (req, res) => {
 });
 
 // Multer error translator — convert to typed errors so global handler emits envelope.
-router.use((err, req, res, next) => {
-  if (err instanceof multer.MulterError) {
-    if (err.code === 'LIMIT_FILE_SIZE') {
-      return next(new ValidationError('File size exceeds maximum of 50MB'));
-    }
-    return next(new ValidationError(`Upload error: ${err.message}`));
-  }
-  if (err.message === 'File must be a CSV') {
-    return next(new ValidationError('File must be a CSV'));
-  }
-  next(err);
-});
+router.use(csvUploadErrorTranslator);
 
 export default router;

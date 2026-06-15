@@ -708,7 +708,7 @@
     {
       "id": "be.routes",
       "label": "Express routes",
-      "sub": "19 route files  ·  158 endpoints",
+      "sub": "20 route files  ·  176 endpoints",
       "kind": "backend",
       "x": 460,
       "y": 348
@@ -1018,6 +1018,16 @@
       "desc": "Bun workspace package for pure helpers shared between frontend and backend. money.js uses ROUND_HALF_EVEN (banker's rounding). Both apps re-export via shims.",
       "x": 1120,
       "y": 260
+    },
+    {
+      "id": "sv.portfolioimport",
+      "label": "Portfolio import pipeline",
+      "sub": "services/portfolioImportPipeline",
+      "kind": "service",
+      "path": "apps/node-backend/src/services/portfolioImportPipeline/",
+      "desc": "Parallel import pipeline for brokerage/exchange CSV trades (ADR-078). Phases: stage → validate → matchInvestments → commit. Reuses portfolioTransactionRepository.create for 2-of-3 unit math and oversell prevention. FX auto-resolved via fxResolve (ADR-074). Saved parsers stored in custom_parser_configs with kind='portfolio' (migration 0041). Batches tracked in portfolio_import_batches + portfolio_import_staging_rows (migration 0040).",
+      "x": 40,
+      "y": 740
     }
   ],
   "baseEdges": [
@@ -2406,6 +2416,92 @@
           "to": "fe.features",
           "payload": "updated parsers list with Bookmark icon entries",
           "annotation": "On next import session the saved parser appears in the bank-source dropdown; selecting it sets adapterName to the parser name and loads its config into the form."
+        }
+      ]
+    },
+    {
+      "id": "portfolio-csv-import",
+      "name": "Portfolio CSV import (brokerage trades)",
+      "category": "Import",
+      "summary": "User uploads a brokerage CSV; backend runs a stage→validate→matchInvestments pipeline and either auto-commits all rows or sends the batch to awaiting_review for instrument resolution.",
+      "steps": [
+        {
+          "from": "browser",
+          "to": "fe.pages",
+          "payload": "navigate to /portfolio/import; select or drop CSV file",
+          "annotation": "PortfolioImportPage (apps/frontend/src/pages/portfolio/PortfolioImportPage.tsx) renders immediately; FileHeadersPanel shows column-name chips and sample rows as soon as the file is chosen, independent of adapter selection."
+        },
+        {
+          "from": "fe.pages",
+          "to": "fe.features",
+          "payload": "file + PortfolioCsvColumnMapper config: date_column, symbol_column, default_asset_class, type_mapping, …",
+          "annotation": "PortfolioCsvColumnMapper (apps/frontend/src/features/imports/PortfolioCsvColumnMapper.tsx) builds the flattened multipart form fields from the user's column mapping and optional saved portfolio parser (usePortfolioParserConfigs hook, cache key ['portfolio-parser-configs'])."
+        },
+        {
+          "from": "fe.features",
+          "to": "fe.apiclient",
+          "payload": "portfolioImports.uploadPortfolioCsv(formData)  or  portfolioImports.uploadPortfolioCsvStream(formData)",
+          "annotation": "lib/api/portfolioImports.ts — one-shot (POST /api/portfolio/import/csv/custom) or SSE stream (POST /api/portfolio/import/csv/stream). SSE path opens an EventSource and relays progress/review_required/complete/error events to the UI."
+        },
+        {
+          "from": "fe.apiclient",
+          "to": "be.middleware",
+          "payload": "multipart/form-data  ·  file + flattened config fields  ·  importRateLimiter",
+          "annotation": "importRateLimiter (20 req/min) applied at route mount in main.js before portfolioImportRoutes; csvUpload multer middleware (lib/csvUpload.js) writes the temp file and enforces 50 MB limit."
+        },
+        {
+          "from": "be.middleware",
+          "to": "be.routes",
+          "payload": "req.file path + buildPortfolioConfig(req.body) customConfig",
+          "annotation": "portfolioImportRoutes.js (apps/node-backend/src/routes/portfolioImportRoutes.js) validates required fields (date_column, at least one of symbol_column/name_column, valid default_asset_class) via buildPortfolioConfig(), then delegates to the pipeline."
+        },
+        {
+          "from": "be.routes",
+          "to": "sv.portfolioimport",
+          "payload": "runPortfolioImportPipeline({ filePath, customConfig, onProgress })",
+          "annotation": "services/portfolioImportPipeline/index.js orchestrates stage→validate→matchInvestments. The onProgress callback either logs or writes SSE events (via createSseWriter from lib/sse.js) for the streaming path."
+        },
+        {
+          "from": "sv.portfolioimport",
+          "to": "db.postgres",
+          "payload": "INSERT INTO portfolio_import_batches; INSERT INTO portfolio_import_staging_rows (migration 0040)",
+          "annotation": "stage.js parses the CSV via portfolioGenericAdapter and bulk-inserts raw rows into portfolio_import_staging_rows. validate.js resolves types via portfolioTypeNormalizer (type_mapping → built-in aliases → error if unknown), parses numerics, and marks duplicates against portfolio_transactions."
+        },
+        {
+          "from": "sv.portfolioimport",
+          "to": "be.repos",
+          "payload": "SELECT FROM investments WHERE LOWER(symbol)=… OR LOWER(name)=… ",
+          "annotation": "matchInvestments.js (apps/node-backend/src/services/portfolioImportPipeline/matchInvestments.js) queries investments by symbol (exact, case-insensitive) then by name. Sets resolved_investment_id and match_source on staging rows. No ISIN, no fuzzy (ADR-078 §B)."
+        },
+        {
+          "from": "sv.portfolioimport",
+          "to": "be.routes",
+          "payload": "{ batchId, requires_review, match_source_counts }  OR  { batchId, total, imported, duplicates, errors }",
+          "annotation": "If all rows matched (unresolved==0) and errors==0 → auto-commit path calls commitPortfolioImport() directly and returns 201. Otherwise batch status is set to awaiting_review and 202 is returned; SSE stream emits review_required event."
+        },
+        {
+          "from": "be.routes",
+          "to": "fe.pages",
+          "payload": "202 { batch_id, requires_review: true }  →  navigate to /portfolio/import/review/:batchId",
+          "annotation": "Frontend receives review_required SSE event (or 202 response) and navigates to PortfolioImportReviewPage (apps/frontend/src/pages/portfolio/PortfolioImportReviewPage.tsx). GET /api/portfolio/import/batches/:id/preview returns groups by investment; unresolved groups listed first."
+        },
+        {
+          "from": "fe.pages",
+          "to": "fe.apiclient",
+          "payload": "POST /api/portfolio/import/batches/:id/rows/:rowId/investment-override  { investment_id } or { create_new: true }",
+          "annotation": "User resolves each unresolved group via InvestmentCombobox (apps/frontend/src/components/portfolio/InvestmentCombobox.tsx); the override endpoint (portfolioImportBatchService.overrideInvestment) updates resolved_investment_id and propagates to all rows sharing the same raw symbol+name in the batch."
+        },
+        {
+          "from": "fe.apiclient",
+          "to": "sv.portfolioimport",
+          "payload": "POST /api/portfolio/import/batches/:id/commit",
+          "annotation": "commitPortfolioImport() in services/portfolioImportPipeline/index.js iterates resolved staging rows, calls portfolioTransactionRepository.create() per row (2-of-3 unit math, oversell check), calls fxResolve (services/portfolio/fxResolve.js) for non-EUR rows without an explicit rate, and records per-row errors without aborting."
+        },
+        {
+          "from": "sv.portfolioimport",
+          "to": "db.postgres",
+          "payload": "INSERT INTO portfolio_transactions_base (via portfolioTransactionRepository.create)",
+          "annotation": "Commit reuses the same repository path as manual portfolio transaction entry, ensuring 2-of-3 math (units × price ≈ amount) and oversell prevention apply. Intra-batch dedup tracks (date,symbol,units,amount,currency) hashes to skip duplicates within the same upload."
         }
       ]
     }

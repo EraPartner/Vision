@@ -992,6 +992,57 @@ components:
         content:
           type: string
 
+    # ─── Portfolio Import ─────────────────────────────────────────────────────
+    PortfolioImportBatch:
+      type: object
+      required: [id, adapter_name, status, rows_total, rows_imported, rows_duplicate, rows_error, started_at]
+      properties:
+        id:
+          type: string
+        adapter_name:
+          type: string
+        source_filename:
+          type: string
+        source_size_bytes:
+          type: integer
+        status:
+          type: string
+          enum: [pending, staging, validating, matching, committing, complete, failed, aborted, awaiting_review]
+        rows_total:
+          type: integer
+        rows_imported:
+          type: integer
+        rows_duplicate:
+          type: integer
+        rows_error:
+          type: integer
+        error_summary:
+          type: string
+        started_at:
+          type: string
+          format: date-time
+        completed_at:
+          type: string
+          format: date-time
+
+    PortfolioParserConfig:
+      type: object
+      required: [id, name, config]
+      properties:
+        id:
+          type: integer
+        name:
+          type: string
+        config:
+          type: object
+          additionalProperties: true
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+
     # ─── Import ───────────────────────────────────────────────────────────────
     ImportBatch:
       type: object
@@ -4719,6 +4770,385 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/Envelope"
+
+  # ─── Portfolio Import ─────────────────────────────────────────────────────────
+  /api/portfolio/import/csv/custom:
+    post:
+      summary: One-shot portfolio CSV import with custom column mapping
+      operationId: portfolioImportCsvCustom
+      tags: [PortfolioImport]
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              required: [file, date_column, default_asset_class]
+              properties:
+                file:
+                  type: string
+                  format: binary
+                adapter_name:
+                  type: string
+                  description: Display label for the import source
+                date_format:
+                  type: string
+                  description: "Python strptime format, default: %Y-%m-%d"
+                separator:
+                  type: string
+                  description: Single-character CSV delimiter, default ','
+                encoding:
+                  type: string
+                  default: utf-8
+                skip_rows:
+                  type: integer
+                  default: 0
+                date_column:
+                  type: string
+                type_column:
+                  type: string
+                symbol_column:
+                  type: string
+                name_column:
+                  type: string
+                units_column:
+                  type: string
+                price_column:
+                  type: string
+                amount_column:
+                  type: string
+                fees_column:
+                  type: string
+                taxes_column:
+                  type: string
+                currency_column:
+                  type: string
+                fx_rate_column:
+                  type: string
+                note_column:
+                  type: string
+                default_asset_class:
+                  type: string
+                  enum: [stock, etf, crypto, metals, real_estate, savings, bond]
+                default_type:
+                  type: string
+                  enum: [buy, sell, dividend, fee, tax, interest]
+                type_mapping:
+                  type: string
+                  description: JSON object mapping raw CSV type strings to canonical portfolio_txn_type values
+      responses:
+        "201":
+          description: All rows matched — batch committed immediately
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/Envelope"
+                  - type: object
+                    properties:
+                      data:
+                        type: object
+                        properties:
+                          batch_id:
+                            type: string
+                          total:
+                            type: integer
+                          imported:
+                            type: integer
+                          duplicates:
+                            type: integer
+                          errors:
+                            type: integer
+        "202":
+          description: Some rows unresolved — batch left in awaiting_review; client must use review endpoints then POST commit
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/Envelope"
+                  - type: object
+                    properties:
+                      data:
+                        type: object
+                        properties:
+                          batch_id:
+                            type: string
+                          requires_review:
+                            type: boolean
+                          match_source_counts:
+                            type: object
+                            additionalProperties:
+                              type: integer
+
+  /api/portfolio/import/csv/stream:
+    post:
+      summary: SSE-streaming portfolio CSV import
+      operationId: portfolioImportCsvStream
+      tags: [PortfolioImport]
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              description: Same fields as POST /api/portfolio/import/csv/custom
+              required: [file, date_column, default_asset_class]
+              properties:
+                file:
+                  type: string
+                  format: binary
+      responses:
+        "200":
+          description: Server-Sent Events stream; events are progress / review_required / complete / error
+          content:
+            text/event-stream:
+              schema:
+                type: string
+
+  /api/portfolio/import/parsers:
+    get:
+      summary: List saved portfolio parser configs (kind=portfolio)
+      operationId: getPortfolioParsers
+      tags: [PortfolioImport]
+      responses:
+        "200":
+          description: Parser config list
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/Envelope"
+                  - type: object
+                    properties:
+                      data:
+                        type: array
+                        items:
+                          $ref: "#/components/schemas/PortfolioParserConfig"
+    post:
+      summary: Create a saved portfolio parser config; 409 on duplicate name
+      operationId: createPortfolioParser
+      tags: [PortfolioImport]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [name, config]
+              properties:
+                name:
+                  type: string
+                config:
+                  type: object
+                  additionalProperties: true
+      responses:
+        "201":
+          description: Created parser config
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/Envelope"
+                  - type: object
+                    properties:
+                      data:
+                        $ref: "#/components/schemas/PortfolioParserConfig"
+        "409":
+          description: A portfolio parser with that name already exists
+
+  /api/portfolio/import/parsers/{id}:
+    parameters:
+      - in: path
+        name: id
+        required: true
+        schema:
+          type: integer
+    patch:
+      summary: Update a saved portfolio parser config
+      operationId: updatePortfolioParser
+      tags: [PortfolioImport]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                name:
+                  type: string
+                config:
+                  type: object
+                  additionalProperties: true
+      responses:
+        "200":
+          description: Updated parser config
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/Envelope"
+                  - type: object
+                    properties:
+                      data:
+                        $ref: "#/components/schemas/PortfolioParserConfig"
+        "404":
+          description: Parser config not found
+        "409":
+          description: A portfolio parser with that name already exists
+    delete:
+      summary: Delete a saved portfolio parser config
+      operationId: deletePortfolioParser
+      tags: [PortfolioImport]
+      responses:
+        "204":
+          description: Deleted (no content)
+        "404":
+          description: Parser config not found
+
+  /api/portfolio/import/batches:
+    get:
+      summary: List portfolio import batches
+      operationId: getPortfolioImportBatches
+      tags: [PortfolioImport]
+      parameters:
+        - in: query
+          name: limit
+          schema:
+            type: integer
+        - in: query
+          name: offset
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Batch list
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/Envelope"
+                  - type: object
+                    properties:
+                      data:
+                        type: array
+                        items:
+                          $ref: "#/components/schemas/PortfolioImportBatch"
+
+  /api/portfolio/import/batches/{id}:
+    parameters:
+      - in: path
+        name: id
+        required: true
+        schema:
+          type: string
+    get:
+      summary: Get portfolio import batch
+      operationId: getPortfolioImportBatch
+      tags: [PortfolioImport]
+      responses:
+        "200":
+          description: Batch detail
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/Envelope"
+                  - type: object
+                    properties:
+                      data:
+                        $ref: "#/components/schemas/PortfolioImportBatch"
+    delete:
+      summary: Rollback portfolio import batch (deletes committed portfolio_transactions, marks batch aborted)
+      operationId: deletePortfolioImportBatch
+      tags: [PortfolioImport]
+      responses:
+        "200":
+          description: Rollback result
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Envelope"
+
+  /api/portfolio/import/batches/{id}/preview:
+    parameters:
+      - in: path
+        name: id
+        required: true
+        schema:
+          type: string
+    get:
+      summary: Preview portfolio import batch rows grouped by investment
+      operationId: previewPortfolioImportBatch
+      tags: [PortfolioImport]
+      responses:
+        "200":
+          description: Rows grouped by investment with unresolved symbol/name groups and per-group totals
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Envelope"
+
+  /api/portfolio/import/batches/{id}/rows/{rowId}/investment-override:
+    parameters:
+      - in: path
+        name: id
+        required: true
+        schema:
+          type: string
+      - in: path
+        name: rowId
+        required: true
+        schema:
+          type: string
+    post:
+      summary: Resolve an unmatched portfolio import row to an existing investment or request a new one be created
+      operationId: portfolioImportRowInvestmentOverride
+      tags: [PortfolioImport]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                investment_id:
+                  type: integer
+                  description: ID of an existing investment to link this row to
+                create_new:
+                  type: boolean
+                  description: When true, a new investment record is created from the row's symbol/name/asset_class and linked
+      responses:
+        "200":
+          description: Override applied
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Envelope"
+        "400":
+          description: Neither investment_id nor create_new supplied, or create_new validation failed
+        "404":
+          description: Batch or staging row not found
+
+  /api/portfolio/import/batches/{id}/commit:
+    parameters:
+      - in: path
+        name: id
+        required: true
+        schema:
+          type: string
+    post:
+      summary: Commit a reviewed portfolio import batch — writes portfolio_transactions to DB
+      operationId: commitPortfolioImportBatch
+      tags: [PortfolioImport]
+      responses:
+        "200":
+          description: Commit result with row counts
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Envelope"
+        "409":
+          description: Batch is not in awaiting_review or matched status
 
   # ─── Admin ────────────────────────────────────────────────────────────────────
   /api/admin:

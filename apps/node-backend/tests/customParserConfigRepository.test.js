@@ -36,7 +36,7 @@ describe('customParserConfigRepository.getAll', () => {
   it('orders by name and maps config_json to config', async () => {
     query.mockResolvedValue({ rows: [dbRow()] });
     const result = await repo.getAll();
-    expect(query).toHaveBeenCalledWith(expect.stringContaining('ORDER BY name ASC'));
+    expect(query).toHaveBeenCalledWith(expect.stringContaining('ORDER BY name ASC'), ['transaction']);
     expect(result[0]).toMatchObject({ id: 1, name: 'My Bank', config: SAMPLE_CONFIG });
     expect(result[0]).not.toHaveProperty('config_json');
   });
@@ -73,7 +73,8 @@ describe('customParserConfigRepository.create', () => {
     const [sql, params] = query.mock.calls[0];
     expect(sql).toContain('INSERT INTO custom_parser_configs');
     expect(params[0]).toBe('My Bank');
-    expect(JSON.parse(params[1])).toEqual(SAMPLE_CONFIG);
+    expect(params[1]).toBe('transaction'); // kind
+    expect(JSON.parse(params[2])).toEqual(SAMPLE_CONFIG);
     expect(result.config).toEqual(SAMPLE_CONFIG);
   });
 });

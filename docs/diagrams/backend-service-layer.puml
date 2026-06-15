@@ -187,8 +187,11 @@ package "Thin Route Seams (ADR-067, June 2026)" {
   class WatchlistService { +list() +create() +update() +delete() }
   class AttachmentRecordService { +list() +delete() }
   class ImportBatchService { +list() +get() +rollback() }
-  class CustomParserConfigService { +list() +create() +update() +delete() }
+  class CustomParserConfigService { +list(kind) +create(kind) +update() +delete() }
   class PortfolioTxService { +create() +update() +delete() }
+  class PortfolioImportPipelineService <<ADR-078>> { +runPortfolioImportPipeline(opts) +commitPortfolioImport(batchId) }
+  class PortfolioImportBatchService <<ADR-078>> { +listBatches() +getBatch() +getPreviewRows() +overrideInvestment() +rollbackBatch() }
+  class FxResolveService <<ADR-074, ADR-078>> { +resolveRate(currency, date): Promise<number> }
 }
 
 ' Relationships

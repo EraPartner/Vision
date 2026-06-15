@@ -1,0 +1,153 @@
+/**
+ * Portfolio import pipeline — VALIDATE
+ *
+ * For each pending staging row: normalize the transaction type, check the row
+ * carries enough numeric fields for its type (a light pre-check; the repo
+ * re-validates at commit), compute a dedup hash, and mark the row 'validated',
+ * 'duplicate' (same hash earlier in this batch), or 'error'. The normalized
+ * `type` is persisted so match/commit don't re-derive it.
+ */
+
+import crypto from 'crypto';
+import { query } from '../../database/connection.js';
+import { logger } from '../../config/logger.js';
+import { UNIT_BASED_ASSET_CLASSES } from '../../repositories/portfolioTxRepo.common.js';
+import { normalizeType } from './portfolioTypeNormalizer.js';
+
+const VALIDATE_CHUNK = 500;
+
+export async function validateBatch({ batchId, onProgress }) {
+  await query(`UPDATE portfolio_import_batches SET status = 'validating' WHERE id = $1`, [batchId]);
+
+  const { rows: batchRows } = await query(
+    `SELECT default_asset_class, default_type, custom_config FROM portfolio_import_batches WHERE id = $1`,
+    [batchId],
+  );
+  const batch = batchRows[0] || {};
+  const defaultAssetClass = batch.default_asset_class || undefined;
+  const defaultType = batch.default_type || undefined;
+  const config = typeof batch.custom_config === 'string'
+    ? JSON.parse(batch.custom_config)
+    : (batch.custom_config || {});
+  const typeMapping = config.type_mapping || {};
+  const unitBased = defaultAssetClass ? UNIT_BASED_ASSET_CLASSES.has(defaultAssetClass) : false;
+
+  const { rows: pending } = await query(
+    `SELECT id, row_index, tx_date, type_raw, units, price_per_unit, amount, raw_data
+       FROM portfolio_import_staging_rows
+      WHERE batch_id = $1 AND status = 'pending'
+      ORDER BY row_index ASC`,
+    [batchId],
+  );
+
+  const total = pending.length;
+  let seen = 0;
+  let errors = 0;
+  let duplicates = 0;
+  const seenHashes = new Set();
+
+  if (onProgress) onProgress({ phase: 'validating', current: 0, total });
+
+  for (let start = 0; start < total; start += VALIDATE_CHUNK) {
+    const chunk = pending.slice(start, start + VALIDATE_CHUNK);
+    const ids = [];
+    const statuses = [];
+    const types = [];
+    const txHashes = [];
+    const errorMessages = [];
+
+    for (const row of chunk) {
+      ids.push(row.id);
+      const { type, error } = resolveAndCheck(row, { typeMapping, defaultType, unitBased });
+      if (error) {
+        errors++;
+        statuses.push('error');
+        types.push(null);
+        txHashes.push(null);
+        errorMessages.push(error);
+        continue;
+      }
+      const hash = computeRowHash(row, type);
+      if (seenHashes.has(hash)) {
+        duplicates++;
+        statuses.push('duplicate');
+        types.push(type);
+        txHashes.push(hash);
+        errorMessages.push(null);
+      } else {
+        seenHashes.add(hash);
+        statuses.push('validated');
+        types.push(type);
+        txHashes.push(hash);
+        errorMessages.push(null);
+      }
+    }
+
+    await query(
+      `UPDATE portfolio_import_staging_rows s
+          SET status        = v.status,
+              type          = v.type::portfolio_txn_type,
+              tx_hash       = v.tx_hash,
+              error_message = v.error_message
+         FROM unnest($1::bigint[], $2::text[], $3::text[], $4::text[], $5::text[])
+              AS v(id, status, type, tx_hash, error_message)
+        WHERE s.id = v.id`,
+      [ids, statuses, types, txHashes, errorMessages],
+    );
+    seen += chunk.length;
+    if (onProgress) onProgress({ phase: 'validating', current: seen, total });
+  }
+
+  if (duplicates > 0) {
+    await query(
+      `UPDATE portfolio_import_batches SET rows_duplicate = COALESCE(rows_duplicate, 0) + $2 WHERE id = $1`,
+      [batchId, duplicates],
+    );
+  }
+  if (errors > 0) {
+    await query(
+      `UPDATE portfolio_import_batches SET rows_error = COALESCE(rows_error, 0) + $2 WHERE id = $1`,
+      [batchId, errors],
+    );
+  }
+
+  // eslint-disable-next-line vision-local-money/no-raw-money-arithmetic
+  const validated = total - errors - duplicates;
+  logger.info('[portfolio-pipeline:validate] done', { batchId, total, validated, duplicates, errors });
+  return { validated, duplicates, errors };
+}
+
+function resolveAndCheck(row, { typeMapping, defaultType, unitBased }) {
+  if (!row.tx_date) return { error: 'missing date' };
+  const { type, error } = normalizeType(row.type_raw, { typeMapping, defaultType });
+  if (error) return { error };
+
+  const hasUnits = row.units != null;
+  const hasPrice = row.price_per_unit != null;
+  const hasAmount = row.amount != null;
+
+  if ((type === 'buy' || type === 'sell') && unitBased) {
+    if (Number(hasUnits) + Number(hasPrice) + Number(hasAmount) < 2) {
+      return { error: 'provide at least two of units, price, amount' };
+    }
+  } else if (type === 'gift') {
+    if (!hasUnits) return { error: 'gift requires units' };
+  } else if (!hasAmount) {
+    return { error: 'missing amount' };
+  }
+
+  return { type };
+}
+
+function computeRowHash(row, type) {
+  let raw;
+  if (row.raw_data) {
+    raw = `${type}|${row.raw_data}`;
+  } else {
+    const dateStr = typeof row.tx_date === 'string'
+      ? row.tx_date.slice(0, 10)
+      : row.tx_date.toISOString().slice(0, 10);
+    raw = `${dateStr}|${type}|${row.amount ?? ''}|${row.units ?? ''}`;
+  }
+  return crypto.createHash('sha256').update(raw, 'utf-8').digest('hex');
+}

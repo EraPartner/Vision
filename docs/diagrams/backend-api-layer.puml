@@ -124,6 +124,21 @@ package "Routes" {
     +POST /categories : bulk import categories
   }
 
+  class PortfolioImportRouter <<ADR-078>> {
+    +POST /csv/custom : one-shot portfolio CSV import (201|202)
+    +POST /csv/stream : SSE streaming portfolio CSV import
+    +GET /parsers : list portfolio parser configs
+    +POST /parsers : create portfolio parser config
+    +PATCH /parsers/:id : update portfolio parser config
+    +DELETE /parsers/:id : delete portfolio parser config
+    +GET /batches : list portfolio import batches
+    +GET /batches/:id : get portfolio import batch
+    +DELETE /batches/:id : rollback portfolio import batch
+    +GET /batches/:id/preview : preview rows grouped by investment
+    +POST /batches/:id/rows/:rowId/investment-override : resolve unmatched row
+    +POST /batches/:id/commit : commit reviewed batch
+  }
+
   class SettingsRouter {
     +GET / : get all settings
     +GET /:key : get single setting
@@ -290,6 +305,8 @@ package "Services" {
   class RawTransactionImportService
   class StreamingImportService
   class DataImportService
+  class PortfolioImportPipelineService <<ADR-078>>
+  class PortfolioImportBatchService <<ADR-078>>
   class LoanRepaymentService
   class CurrencyConversionService
   class PriceProviderService
@@ -310,6 +327,7 @@ Main --> RecipientBankAccountsRouter
 Main --> PlannedTransactionsRouter
 Main --> InvestmentsRouter
 Main --> ImportRouter
+Main --> PortfolioImportRouter
 Main --> SettingsRouter
 Main --> WatchlistRouter
 Main --> SavedChartsRouter
@@ -338,6 +356,8 @@ ImportRouter --> ImportService
 ImportRouter --> RawTransactionImportService
 ImportRouter --> StreamingImportService
 ImportRouter --> DataImportService
+PortfolioImportRouter --> PortfolioImportPipelineService
+PortfolioImportRouter --> PortfolioImportBatchService
 SettingsRouter --> SR2
 WatchlistRouter --> WR
 SavedChartsRouter --> SCR

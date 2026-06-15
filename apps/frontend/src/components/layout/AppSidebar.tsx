@@ -162,6 +162,7 @@ export function AppSidebar() {
       label: t('nav.tools'),
       items: [
         { title: t('nav.marketLookup'), url: "/portfolio/market", icon: LineChart },
+        { title: t('nav.portfolioImport'), url: "/portfolio/import", icon: Import },
         { title: t('nav.watchlist'), url: "/portfolio/watchlist", icon: Target },
         { title: t('nav.exchangeRates'), url: "/portfolio/exchange-rates", icon: ArrowLeftRight },
         { title: t('nav.taxOverview'), url: "/portfolio/tax", icon: Landmark },

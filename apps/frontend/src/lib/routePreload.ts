@@ -30,6 +30,8 @@ export const routeLoaders = {
     "/portfolio/net-worth": () => import("@/pages/portfolio/net-worth/NetWorthPage"),
     "/portfolio/exchange-rates": () => import("@/pages/portfolio/ExchangeRatesPage"),
     "/portfolio/watchlist": () => import("@/pages/portfolio/WatchlistPage"),
+    "/portfolio/import": () => import("@/pages/portfolio/PortfolioImportPage"),
+    "/portfolio/import/:batchId/review": () => import("@/pages/portfolio/PortfolioImportReviewPage"),
     "/portfolio/tax": () => import("@/pages/portfolio/tax/PortfolioTaxPage"),
     "/ai-chat": () => import("@/pages/AIChatPage"),
 } as const;

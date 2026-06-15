@@ -3,10 +3,10 @@ title: Data Model Reference
 type: reference
 status: active
 date: 2026-04-24
-updated: 2026-06-13
-last_modified: 2026-06-13
-tags: [reference, data-model, entities, database, schema, phase-5a, phase-0, phase-1, may-2026, tags, tagging, orthogonal-dimension, aggregations, migration-0035, saved-custom-parsers, custom-parser-configs, adr-066, fx-attribution, value-fx-neutral, adr-074, migration-0039]
-description: Complete reference for all data entities in Vision — core, portfolio, planning, supporting, and aggregation entities. Includes exchange_rate_cache (Phase 0), aggregation tables (Phase 1, consolidated in 0035), attachment entity (Phase 5A), transaction tags (May 2026), custom_parser_configs (June 2026, ADR-066), value_fx_neutral snapshot column (June 2026, ADR-074 migration 0039), and supporting entities transaction_splits, split_payments, split_audit, import_batches, provider_health, recipient_match_patterns, asset_price_history (June 2026).
+updated: 2026-06-15
+last_modified: 2026-06-15
+tags: [reference, data-model, entities, database, schema, phase-5a, phase-0, phase-1, may-2026, tags, tagging, orthogonal-dimension, aggregations, migration-0035, saved-custom-parsers, custom-parser-configs, adr-066, fx-attribution, value-fx-neutral, adr-074, migration-0039, portfolio-import, portfolio-import-batches, portfolio-import-staging-rows, kind-discriminator, migration-0040, migration-0041, adr-078]
+description: Complete reference for all data entities in Vision — core, portfolio, planning, supporting, and aggregation entities. Includes exchange_rate_cache (Phase 0), aggregation tables (Phase 1, consolidated in 0035), attachment entity (Phase 5A), transaction tags (May 2026), custom_parser_configs (June 2026, ADR-066) with kind discriminator (June 2026, ADR-078 migration 0041), value_fx_neutral snapshot column (June 2026, ADR-074 migration 0039), portfolio_import_batches and portfolio_import_staging_rows (June 2026, ADR-078 migration 0040), and supporting entities transaction_splits, split_payments, split_audit, import_batches, provider_health, recipient_match_patterns, asset_price_history (June 2026).
 aliases: [data model, entities, domain model, schema entities]
 related_code: ["apps/node-backend/src/repositories/", "alembic/versions/"]
 ---
@@ -721,28 +721,99 @@ related_code: ["apps/node-backend/src/repositories/", "alembic/versions/"]
 
 ---
 
-### CustomParserConfig (June 2026, ADR-066)
+### CustomParserConfig (June 2026, ADR-066; extended ADR-078 migration 0041)
 
-**Purpose:** Persisted named custom CSV parser configurations. Each record stores a complete column-mapping setup that a user can select from the import bank-source dropdown. The `name` doubles as the `bank_account` label written onto imported transactions.
+**Purpose:** Persisted named custom CSV parser configurations. Each record stores a complete column-mapping setup that a user can select from the import bank-source dropdown. The `name` doubles as the `bank_account` / source label written onto imported transactions or portfolio_transactions. The `kind` discriminator separates transaction parsers from portfolio parsers.
 
 | Field | Type | Constraints | Description |
 |-------|------|-------------|-------------|
 | `id` | SERIAL | PK | Unique identifier |
-| `name` | TEXT | NOT NULL, UNIQUE | User-assigned display name; used as `bank_account` label on imported transactions |
-| `config_json` | JSONB | NOT NULL | Column mapping: `{ dateColumn, dateFormat, recipientColumn, amountColumn, memoColumn, separator, encoding, skipRows }` |
+| `name` | TEXT | NOT NULL | User-assigned display name; unique within the same `kind` |
+| `kind` | TEXT | NOT NULL, DEFAULT `'transaction'` | `'transaction'` — budgeting import; `'portfolio'` — portfolio import (ADR-078, migration 0041) |
+| `config_json` | JSONB | NOT NULL | Column mapping JSONB; shape differs by kind (transaction: `{ dateColumn, dateFormat, recipientColumn, amountColumn, memoColumn, separator, encoding, skipRows }`; portfolio: `{ date_format, separator, encoding, skip_rows, default_asset_class, default_type, type_mapping, column_mapping }`) |
 | `created_at` | TIMESTAMPTZ | NOT NULL, DEFAULT NOW() | Creation timestamp |
 | `updated_at` | TIMESTAMPTZ | NOT NULL, DEFAULT NOW() | Last modification timestamp; maintained by shared `update_updated_at_column()` trigger |
 
 **Indexes:**
-- Unique: `uq_custom_parser_configs_name` on `(name)` — enforces uniqueness and enables fast lookup by name
+- Unique: `uq_custom_parser_configs_name_kind` on `(name, kind)` — enforces per-kind uniqueness; replaced `uq_custom_parser_configs_name` on `(name)` via migration 0041. A parser named "My Broker" may exist independently as both kind=`'transaction'` and kind=`'portfolio'`.
 
-**Migration:** [[alembic/versions/0037_add_custom_parser_configs.py]] (down_revision `0036_add_transactions_tx_hash`)
+**Migrations:**
+- [[alembic/versions/0037_add_custom_parser_configs.py]] — original table (down_revision `0036_add_transactions_tx_hash`)
+- [[alembic/versions/0041_add_parser_config_kind.py]] — adds `kind` column; drops `uq_custom_parser_configs_name`; creates `uq_custom_parser_configs_name_kind`
 
-**Repository:** [[apps/node-backend/src/repositories/customParserConfigRepository.js]] — maps `config_json` → `config` for application callers
+**Repository:** [[apps/node-backend/src/repositories/customParserConfigRepository.js]] — maps `config_json` → `config` for application callers; `kind` passed as filter parameter
 
 **Backup:** Included in `.visionbak` exports (registered in `apps/node-backend/src/backup/coverage.js`)
 
-**Related:** [[docs/features/import#saved-named-custom-csv-parsers-adr-066|Import Feature — Saved Parsers]], [[docs/api/imports|Imports API]], [[docs/adr/066-saved-named-custom-csv-parsers|ADR-066]]
+**Related:** [[docs/features/import#saved-named-custom-csv-parsers-adr-066|Import Feature — Saved Parsers]], [[docs/api/imports|Imports API]], [[docs/adr/066-saved-named-custom-csv-parsers|ADR-066]], [[docs/features/portfolio-import#saved-portfolio-parser-configs|Portfolio Import — Saved Parser Configs]], [[docs/api/portfolio-imports|Portfolio Imports API]], [[docs/adr/078-portfolio-csv-import|ADR-078]]
+
+---
+
+### PortfolioImportBatch (June 2026, ADR-078, migration 0040)
+
+**Purpose:** Tracks each portfolio CSV import run through the pipeline. Mirrors `import_batches` but with portfolio-specific columns for batch defaults and instrument resolution.
+
+| Field | Type | Constraints | Description |
+|-------|------|-------------|-------------|
+| `id` | BIGSERIAL | PK | Unique batch identifier |
+| `adapter_name` | TEXT | NOT NULL | Display name for the import source (written as identifier on portfolio_transactions) |
+| `source_filename` | TEXT | NULLABLE | Original uploaded filename |
+| `source_size_bytes` | BIGINT | NULLABLE | File size in bytes |
+| `custom_config` | JSONB | NULLABLE | Column mapping config snapshot at import time |
+| `default_asset_class` | TEXT | NOT NULL | Batch-level fallback asset class for rows without explicit asset class |
+| `default_type` | TEXT | NOT NULL, DEFAULT `'buy'` | Batch-level fallback transaction type when no type column is mapped |
+| `status` | TEXT | NOT NULL, DEFAULT `'pending'` | Pipeline status: `pending`, `staging`, `validating`, `matching`, `committing`, `complete`, `failed`, `aborted`, `awaiting_review` |
+| `rows_total` | INTEGER | NOT NULL, DEFAULT 0 | Total rows parsed |
+| `rows_imported` | INTEGER | NOT NULL, DEFAULT 0 | Rows committed to `portfolio_transactions` |
+| `rows_duplicate` | INTEGER | NOT NULL, DEFAULT 0 | Rows skipped as duplicates |
+| `rows_error` | INTEGER | NOT NULL, DEFAULT 0 | Rows that failed processing |
+| `error_summary` | TEXT | NULLABLE | Human-readable error description |
+| `started_at` | TIMESTAMPTZ | NOT NULL, DEFAULT NOW() | When the batch was created |
+| `completed_at` | TIMESTAMPTZ | NULLABLE | When the batch reached a terminal state |
+
+**Backup:** Included in `BACKUP_COVERED_TABLES`.
+
+**Migration:** [[alembic/versions/0040_add_portfolio_import_staging.py]]
+
+**Related:** [[docs/features/portfolio-import|Portfolio Import Feature]], [[docs/api/portfolio-imports|Portfolio Imports API]], [[docs/adr/078-portfolio-csv-import|ADR-078]]
+
+---
+
+### PortfolioImportStagingRow (June 2026, ADR-078, migration 0040)
+
+**Purpose:** Holds one CSV row during the portfolio import pipeline (staging through commit). After commit, rows remain for audit; rolling back the batch deletes the committed `portfolio_transactions` but retains staging rows marked `aborted`.
+
+| Field | Type | Constraints | Description |
+|-------|------|-------------|-------------|
+| `id` | BIGSERIAL | PK | Unique row identifier |
+| `batch_id` | BIGINT | NOT NULL, FK → portfolio_import_batches ON DELETE CASCADE | Parent batch |
+| `row_index` | INTEGER | NOT NULL | 0-based position in the source CSV |
+| `raw_date` | TEXT | NULLABLE | Raw date string as read from CSV |
+| `type` | TEXT | NULLABLE | Normalized portfolio_txn_type after type normalization |
+| `symbol` | TEXT | NULLABLE | Raw ticker symbol from CSV |
+| `name` | TEXT | NULLABLE | Raw instrument name from CSV |
+| `units` | NUMERIC(20,8) | NULLABLE | Number of units traded |
+| `price` | NUMERIC(20,8) | NULLABLE | Unit price |
+| `amount` | NUMERIC(15,4) | NULLABLE | Total trade amount |
+| `fees` | NUMERIC(15,4) | NULLABLE | Transaction fees |
+| `taxes` | NUMERIC(15,4) | NULLABLE | Taxes / withholding |
+| `currency` | VARCHAR(3) | NULLABLE | Trade currency code |
+| `fx_rate` | NUMERIC(20,8) | NULLABLE | EUR FX rate (from CSV or auto-resolved via fxResolve) |
+| `note` | TEXT | NULLABLE | Free-text note from CSV |
+| `resolved_investment_id` | INTEGER | NULLABLE, FK → investments | Set by matchInvestments phase (symbol or name match) |
+| `user_override_investment_id` | INTEGER | NULLABLE, FK → investments | Set by `POST .../rows/:rowId/investment-override`; takes precedence over `resolved_investment_id` |
+| `match_source` | TEXT | NULLABLE | `symbol_exact` \| `name_exact` \| `unresolved` |
+| `status` | TEXT | NOT NULL, DEFAULT `'pending'` | Row status: `pending`, `valid`, `duplicate`, `error`, `committed` |
+| `error_detail` | TEXT | NULLABLE | Validation or commit error message |
+| `committed_txn_id` | INTEGER | NULLABLE, FK → portfolio_transactions | ID of the created portfolio_transaction after commit |
+
+**Indexes:** `idx_portfolio_staging_batch_id`, `idx_portfolio_staging_status` (partial, non-terminal only)
+
+**Backup:** Included in `BACKUP_COVERED_TABLES`.
+
+**Migration:** [[alembic/versions/0040_add_portfolio_import_staging.py]]
+
+**Related:** [[docs/features/portfolio-import|Portfolio Import Feature]], [[docs/api/portfolio-imports|Portfolio Imports API]], [[docs/adr/078-portfolio-csv-import|ADR-078]]
 
 ---
 

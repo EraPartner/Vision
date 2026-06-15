@@ -4,7 +4,8 @@
  * When a CSV file is provided it parses the header row client-side and
  * renders dropdown selects so users can pick which column maps to which
  * transaction field.  Falls back to plain text inputs when no file is
- * loaded yet.
+ * loaded yet. The file's columns + sample rows are shown by the shared
+ * FileHeadersPanel (rendered alongside this component), not here.
  */
 
 import { useLanguage } from "@/contexts/LanguageContext";
@@ -18,15 +19,6 @@ import {
 } from "@/components/ui/select";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Loader2, AlertCircle } from "lucide-react";
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "@/components/ui/table";
 
 export interface CsvColumnConfig {
   dateColumn: string;
@@ -94,7 +86,7 @@ function ColumnSelect({
 
 export function CsvColumnMapper({ file, separator, config, onChange }: Props) {
   const { t } = useLanguage();
-  const { preview, isLoading, error } = useCsvPreview(file, separator);
+  const { preview } = useCsvPreview(file, separator);
 
   const hasHeaders = preview && preview.headers.length > 0;
 
