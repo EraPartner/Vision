@@ -10,15 +10,9 @@
 
 import { useLanguage } from "@/contexts/LanguageContext";
 import { useCsvPreview } from "@/hooks/useCsvPreview";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { ColumnSelect } from "./ColumnSelect";
 
 export interface CsvColumnConfig {
   dateColumn: string;
@@ -32,56 +26,6 @@ interface Props {
   separator: string;
   config: CsvColumnConfig;
   onChange: (next: CsvColumnConfig) => void;
-}
-
-// NONE sentinel — means "not mapped / leave empty"
-const NONE = "__none__";
-
-interface ColumnSelectProps {
-  id: string;
-  label: string;
-  value: string;
-  headers: string[];
-  required?: boolean;
-  onChange: (val: string) => void;
-  noMappingLabel: string;
-}
-
-function ColumnSelect({
-  id,
-  label,
-  value,
-  headers,
-  required,
-  onChange,
-  noMappingLabel,
-}: ColumnSelectProps) {
-  return (
-    <div className="space-y-2">
-      <Label htmlFor={id}>
-        {label}
-        {required && " *"}
-      </Label>
-      <Select
-        value={value || NONE}
-        onValueChange={(v) => onChange(v === NONE ? "" : v)}
-      >
-        <SelectTrigger id={id}>
-          <SelectValue />
-        </SelectTrigger>
-        <SelectContent>
-          <SelectItem value={NONE}>
-            <span className="text-muted-foreground">{noMappingLabel}</span>
-          </SelectItem>
-          {headers.map((h) => (
-            <SelectItem key={h} value={h}>
-              {h}
-            </SelectItem>
-          ))}
-        </SelectContent>
-      </Select>
-    </div>
-  );
 }
 
 export function CsvColumnMapper({ file, separator, config, onChange }: Props) {

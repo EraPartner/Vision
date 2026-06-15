@@ -1,11 +1,12 @@
 // @vitest-environment jsdom
 
 /**
- * Tests for PortfolioCsvColumnMapper. FileReader is stubbed (the mapper and its
- * embedded FileHeadersPanel both read the file via useCsvPreview). Strings
- * resolve through the real English LanguageProvider. Radix Select portals are
- * not opened — assertions target observable output (header chips, fallback
- * inputs, type-mapping seeding).
+ * Tests for PortfolioCsvColumnMapper. FileReader is stubbed (the mapper reads
+ * the file via useCsvPreview to populate its column dropdowns). The file's
+ * columns are shown by the parent-owned FileHeadersPanel, covered separately in
+ * FileHeadersPanel.test.tsx. Strings resolve through the real English
+ * LanguageProvider. Radix Select portals are not opened — assertions target
+ * observable output (fallback inputs vs dropdowns, type-mapping seeding).
  */
 
 import { describe, it, expect, vi, afterEach } from "vitest";
@@ -47,7 +48,7 @@ function baseConfig(overrides: Partial<PortfolioCustomConfig> = {}): PortfolioCu
 function renderMapper(file: File | null, config: PortfolioCustomConfig) {
   return render(
     <LanguageProvider language="en" setLanguage={() => {}}>
-      <PortfolioCsvColumnMapper file={file} config={config} onChange={() => {}} />
+      <PortfolioCsvColumnMapper file={file} separator={config.separator} config={config} onChange={() => {}} />
     </LanguageProvider>,
   );
 }
@@ -63,15 +64,16 @@ describe("PortfolioCsvColumnMapper", () => {
     expect(screen.getAllByRole("textbox")).toHaveLength(12);
   });
 
-  it("surfaces the file's columns via the headers panel once a file is chosen", async () => {
+  it("swaps the text inputs for column dropdowns once the file's headers load", async () => {
     const csv = "Date,Type,Symbol,Qty,Price\n2026-01-05,Buy,AAPL,10,185.50";
     vi.stubGlobal("FileReader", buildFakeFileReader(csv));
 
     renderMapper(makeFile(csv), baseConfig());
 
-    // Header chips come from the embedded FileHeadersPanel.
-    await waitFor(() => expect(screen.getByText("Detected columns")).toBeInTheDocument());
-    expect(screen.getAllByText("Symbol").length).toBeGreaterThan(0);
+    // Once headers are known the 12 column fields render as Radix selects
+    // (comboboxes), not text inputs.
+    await waitFor(() => expect(screen.queryAllByRole("textbox")).toHaveLength(0));
+    expect(screen.getAllByRole("combobox").length).toBeGreaterThan(0);
   });
 
   it("seeds the type-mapping editor from distinct values in the chosen type column", async () => {

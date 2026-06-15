@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useLanguage } from "@/contexts/LanguageContext";
 import {
@@ -20,14 +20,15 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Progress } from "@/components/ui/progress";
 import { CsvColumnMapper } from "@/features/imports/CsvColumnMapper";
+import { CsvDropzone } from "@/features/imports/CsvDropzone";
 import { FileHeadersPanel } from "@/features/imports/FileHeadersPanel";
+import { SeparatorSelect, EncodingSelect, DateFormatSelect } from "@/features/imports/CsvFormatSelects";
+import { isCsvFile } from "@/features/imports/csvFile";
 import { apiClient } from "@/lib/api";
 import { toast } from "sonner";
 import {
   Bookmark,
   CheckCircle2,
-  CloudUpload,
-  File,
   Landmark,
   Loader2,
   Pencil,
@@ -82,12 +83,10 @@ export function TransactionImportCard({ onImportSuccess }: TransactionImportCard
   const [bankSource, setBankSource] = useState("");
   const [customBank, setCustomBank] = useState("");
   const [loading, setLoading] = useState(false);
-  const [dragOver, setDragOver] = useState(false);
   const [progress, setProgress] = useState<ImportProgress | null>(null);
   const [customConfig, setCustomConfig] = useState<CustomConfig>(DEFAULT_CUSTOM_CONFIG);
   const [editingSaved, setEditingSaved] = useState(false);
   const abortRef = useRef<(() => void) | null>(null);
-  const fileInputRef = useRef<HTMLInputElement>(null);
 
   const { data: savedParsers } = useCustomParserConfigs();
   const createParser = useCreateCustomParserConfig();
@@ -151,33 +150,12 @@ export function TransactionImportCard({ onImportSuccess }: TransactionImportCard
     setCustomConfig(DEFAULT_CUSTOM_CONFIG);
   };
 
-  const handleFile = useCallback((f: File | null) => {
-    if (f && f.type !== "text/csv" && !f.name.endsWith(".csv")) {
-      toast.error(t('importPage.toast.noFile'));
-      return;
-    }
-    setFile(f);
-  }, [t]);
-
-  const onDrop = useCallback((e: React.DragEvent) => {
-    e.preventDefault();
-    setDragOver(false);
-    handleFile(e.dataTransfer.files?.[0] ?? null);
-  }, [handleFile]);
-
   // CSV dropped on the window / opened via Finder before this card mounted
   // (see lib/importHandoff.ts + ElectronBridge).
   useEffect(() => {
     const pending = consumePendingImportFile();
-    if (pending) handleFile(pending);
-  }, [handleFile]);
-
-  const onDragOver = useCallback((e: React.DragEvent) => {
-    e.preventDefault();
-    setDragOver(true);
+    if (pending && isCsvFile(pending)) setFile(pending);
   }, []);
-
-  const onDragLeave = useCallback(() => setDragOver(false), []);
 
   const resolvedBank = () => {
     if (isSaved) return selectedParser?.name || "generic";
@@ -348,46 +326,12 @@ export function TransactionImportCard({ onImportSuccess }: TransactionImportCard
             </div>
 
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-              <div className="space-y-2">
-                <Label htmlFor="separator">{t('importPage.separator')}</Label>
-                <Select value={customConfig.separator} onValueChange={(val) => setCustomConfig({ ...customConfig, separator: val })}>
-                  <SelectTrigger id="separator"><SelectValue /></SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value=",">, (Comma)</SelectItem>
-                    <SelectItem value=";">; (Semicolon)</SelectItem>
-                    <SelectItem value="\t">⇥ (Tab)</SelectItem>
-                    <SelectItem value="|">| (Pipe)</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="date-format">{t('importPage.dateFormat')}</Label>
-                <Select value={customConfig.dateFormat} onValueChange={(val) => setCustomConfig({ ...customConfig, dateFormat: val })}>
-                  <SelectTrigger id="date-format"><SelectValue /></SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="%Y-%m-%d">YYYY-MM-DD (2024-12-31)</SelectItem>
-                    <SelectItem value="%d/%m/%Y">DD/MM/YYYY (31/12/2024)</SelectItem>
-                    <SelectItem value="%m/%d/%Y">MM/DD/YYYY (12/31/2024)</SelectItem>
-                    <SelectItem value="%d-%m-%Y">DD-MM-YYYY (31-12-2024)</SelectItem>
-                    <SelectItem value="%Y-%m-%d %H:%M:%S">YYYY-MM-DD HH:MM:SS</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
+              <SeparatorSelect id="separator" value={customConfig.separator} onChange={(val) => setCustomConfig({ ...customConfig, separator: val })} />
+              <DateFormatSelect id="date-format" value={customConfig.dateFormat} onChange={(val) => setCustomConfig({ ...customConfig, dateFormat: val })} />
             </div>
 
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-              <div className="space-y-2">
-                <Label htmlFor="encoding">{t('importPage.encoding')}</Label>
-                <Select value={customConfig.encoding} onValueChange={(val) => setCustomConfig({ ...customConfig, encoding: val })}>
-                  <SelectTrigger id="encoding"><SelectValue /></SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="utf-8">UTF-8</SelectItem>
-                    <SelectItem value="latin-1">Latin-1</SelectItem>
-                    <SelectItem value="iso-8859-1">ISO-8859-1</SelectItem>
-                    <SelectItem value="windows-1252">Windows-1252</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
+              <EncodingSelect id="encoding" value={customConfig.encoding} onChange={(val) => setCustomConfig({ ...customConfig, encoding: val })} />
               <div className="space-y-2">
                 <Label htmlFor="skip-rows">{t('importPage.skipRows')}</Label>
                 <Input
@@ -444,52 +388,7 @@ export function TransactionImportCard({ onImportSuccess }: TransactionImportCard
         )}
 
         {/* Drag-and-drop file picker */}
-        <div className="space-y-2">
-          <Label className="font-semibold">{t('importPage.csvFile')}</Label>
-          <div
-            data-dropzone
-            onClick={() => fileInputRef.current?.click()}
-            onDrop={onDrop}
-            onDragOver={onDragOver}
-            onDragLeave={onDragLeave}
-            className={`relative flex flex-col items-center justify-center gap-3 rounded-xl border-2 border-dashed p-10 cursor-pointer transition-colors duration-200 ${
-              dragOver ? "border-primary bg-primary/5" : "border-border hover:border-primary/50 hover:bg-muted/50"
-            }`}
-          >
-            <input
-              ref={fileInputRef}
-              type="file"
-              accept=".csv"
-              className="hidden"
-              onChange={(e) => handleFile(e.target.files?.[0] ?? null)}
-            />
-            {file ? (
-              <>
-                <File className="h-10 w-10 text-primary" />
-                <div className="text-center">
-                  <p className="font-medium text-foreground">{file.name}</p>
-                  <p className="text-xs text-muted-foreground">{(file.size / 1024).toFixed(1)} {t('common.kb')}</p>
-                </div>
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  className="text-destructive hover:text-destructive"
-                  onClick={(e) => { e.stopPropagation(); setFile(null); }}
-                >
-                  <Trash2 className="h-4 w-4 mr-1" /> {t('importPage.remove')}
-                </Button>
-              </>
-            ) : (
-              <>
-                <CloudUpload className="h-10 w-10 text-muted-foreground" />
-                <div className="text-center">
-                  <p className="font-medium text-foreground">{t('importPage.dropzone')}</p>
-                  <p className="text-sm text-muted-foreground">{t('importPage.dropzoneOr')}</p>
-                </div>
-              </>
-            )}
-          </div>
-        </div>
+        <CsvDropzone file={file} onFileSelect={setFile} label={t('importPage.csvFile')} />
 
         {/* Detected columns of the selected file (always shown once a file is chosen) */}
         <FileHeadersPanel

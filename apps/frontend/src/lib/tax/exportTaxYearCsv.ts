@@ -12,6 +12,7 @@
  */
 import type { BelgianTaxProfile, BelgianTaxCalculation } from '@/lib/belgianTax';
 import { downloadBlob } from '@/lib/downloadBlob';
+import { escapeCsvValue } from '@/lib/csv';
 
 interface ExportTaxYearCsvOptions {
     year: number;
@@ -23,20 +24,8 @@ interface ExportTaxYearCsvOptions {
     generatedAt: string;
 }
 
-/**
- * RFC-4180-ish CSV cell quoting. Quotes any cell containing commas, quotes, or newlines,
- * doubling embedded quotes. Numbers and booleans pass through as their string form so
- * spreadsheet apps interpret them numerically.
- */
-function csvCell(value: string | number | boolean | null | undefined): string {
-    if (value == null) return '';
-    const raw = typeof value === 'string' ? value : String(value);
-    if (/[",\n\r]/.test(raw)) return `"${raw.replace(/"/g, '""')}"`;
-    return raw;
-}
-
 function row(cells: ReadonlyArray<string | number | boolean | null | undefined>): string {
-    return cells.map(csvCell).join(',');
+    return cells.map(escapeCsvValue).join(',');
 }
 
 function profileInputRows(profile: BelgianTaxProfile): Array<[string, string | number | boolean]> {

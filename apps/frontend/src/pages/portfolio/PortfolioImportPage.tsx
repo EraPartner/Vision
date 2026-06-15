@@ -19,9 +19,13 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Progress } from "@/components/ui/progress";
 import { PortfolioCsvColumnMapper } from "@/features/imports/PortfolioCsvColumnMapper";
+import { portfolioMappedColumns } from "@/features/imports/portfolioColumnFields";
+import { CsvDropzone } from "@/features/imports/CsvDropzone";
+import { FileHeadersPanel } from "@/features/imports/FileHeadersPanel";
+import { SeparatorSelect, EncodingSelect, DateFormatSelect } from "@/features/imports/CsvFormatSelects";
 import { toast } from "sonner";
 import {
-  Bookmark, CheckCircle2, CloudUpload, File as FileIcon, Loader2, PencilLine, Save, Trash2, TrendingUp, Upload, XCircle,
+  Bookmark, CheckCircle2, Loader2, PencilLine, Save, Trash2, TrendingUp, Upload, XCircle,
 } from "lucide-react";
 import {
   importPortfolioCSVWithProgress,
@@ -52,10 +56,8 @@ export function PortfolioImportPage() {
   const [parserName, setParserName] = useState("");
   const [config, setConfig] = useState<PortfolioCustomConfig>(DEFAULT_CONFIG);
   const [loading, setLoading] = useState(false);
-  const [dragOver, setDragOver] = useState(false);
   const [progress, setProgress] = useState<ImportProgress | null>(null);
   const abortRef = useRef<(() => void) | null>(null);
-  const fileInputRef = useRef<HTMLInputElement>(null);
 
   const { data: savedParsers } = usePortfolioParserConfigs();
   const createParser = useCreatePortfolioParserConfig();
@@ -83,14 +85,6 @@ export function PortfolioImportPage() {
       setConfig(DEFAULT_CONFIG);
       setParserName("");
     }
-  };
-
-  const handleFile = (f: File | null) => {
-    if (f && f.type !== "text/csv" && !f.name.endsWith(".csv")) {
-      toast.error(t("importPage.toast.noFile"));
-      return;
-    }
-    setFile(f);
   };
 
   const handleSaveParser = async () => {
@@ -201,43 +195,9 @@ export function PortfolioImportPage() {
 
           {/* Format options */}
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-            <div className="space-y-2">
-              <Label htmlFor="pf-separator">{t("importPage.separator")}</Label>
-              <Select value={config.separator} onValueChange={(v) => setConfig({ ...config, separator: v })}>
-                <SelectTrigger id="pf-separator"><SelectValue /></SelectTrigger>
-                <SelectContent>
-                  <SelectItem value=",">, (Comma)</SelectItem>
-                  <SelectItem value=";">; (Semicolon)</SelectItem>
-                  <SelectItem value={"\t"}>⇥ (Tab)</SelectItem>
-                  <SelectItem value="|">| (Pipe)</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="pf-date-format">{t("importPage.dateFormat")}</Label>
-              <Select value={config.dateFormat} onValueChange={(v) => setConfig({ ...config, dateFormat: v })}>
-                <SelectTrigger id="pf-date-format"><SelectValue /></SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="%Y-%m-%d">YYYY-MM-DD (2024-12-31)</SelectItem>
-                  <SelectItem value="%d/%m/%Y">DD/MM/YYYY (31/12/2024)</SelectItem>
-                  <SelectItem value="%m/%d/%Y">MM/DD/YYYY (12/31/2024)</SelectItem>
-                  <SelectItem value="%d-%m-%Y">DD-MM-YYYY (31-12-2024)</SelectItem>
-                  <SelectItem value="%Y-%m-%d %H:%M:%S">YYYY-MM-DD HH:MM:SS</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="pf-encoding">{t("importPage.encoding")}</Label>
-              <Select value={config.encoding} onValueChange={(v) => setConfig({ ...config, encoding: v })}>
-                <SelectTrigger id="pf-encoding"><SelectValue /></SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="utf-8">UTF-8</SelectItem>
-                  <SelectItem value="latin-1">Latin-1</SelectItem>
-                  <SelectItem value="iso-8859-1">ISO-8859-1</SelectItem>
-                  <SelectItem value="windows-1252">Windows-1252</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
+            <SeparatorSelect id="pf-separator" value={config.separator} onChange={(v) => setConfig({ ...config, separator: v })} />
+            <DateFormatSelect id="pf-date-format" value={config.dateFormat} onChange={(v) => setConfig({ ...config, dateFormat: v })} />
+            <EncodingSelect id="pf-encoding" value={config.encoding} onChange={(v) => setConfig({ ...config, encoding: v })} />
             <div className="space-y-2">
               <Label htmlFor="pf-skip-rows">{t("importPage.skipRows")}</Label>
               <Input
@@ -251,7 +211,7 @@ export function PortfolioImportPage() {
           </div>
 
           {/* Column mapping */}
-          <PortfolioCsvColumnMapper file={file} config={config} onChange={setConfig} />
+          <PortfolioCsvColumnMapper file={file} separator={config.separator} config={config} onChange={setConfig} />
 
           {/* Save parser */}
           <div className="flex flex-wrap items-end gap-2">
@@ -280,41 +240,15 @@ export function PortfolioImportPage() {
           </div>
 
           {/* Dropzone */}
-          <div className="space-y-2">
-            <Label className="font-semibold">{t("importPage.csvFile")}</Label>
-            <div
-              data-dropzone
-              onClick={() => fileInputRef.current?.click()}
-              onDrop={(e) => { e.preventDefault(); setDragOver(false); handleFile(e.dataTransfer.files?.[0] ?? null); }}
-              onDragOver={(e) => { e.preventDefault(); setDragOver(true); }}
-              onDragLeave={() => setDragOver(false)}
-              className={`relative flex flex-col items-center justify-center gap-3 rounded-xl border-2 border-dashed p-10 cursor-pointer transition-colors ${
-                dragOver ? "border-primary bg-primary/5" : "border-border hover:border-primary/50 hover:bg-muted/50"
-              }`}
-            >
-              <input ref={fileInputRef} type="file" accept=".csv" className="hidden" onChange={(e) => handleFile(e.target.files?.[0] ?? null)} />
-              {file ? (
-                <>
-                  <FileIcon className="h-10 w-10 text-primary" />
-                  <div className="text-center">
-                    <p className="font-medium text-foreground">{file.name}</p>
-                    <p className="text-xs text-muted-foreground">{(file.size / 1024).toFixed(1)} {t("common.kb")}</p>
-                  </div>
-                  <Button variant="ghost" size="sm" className="text-destructive hover:text-destructive" onClick={(e) => { e.stopPropagation(); setFile(null); }}>
-                    <Trash2 className="h-4 w-4 mr-1" /> {t("importPage.remove")}
-                  </Button>
-                </>
-              ) : (
-                <>
-                  <CloudUpload className="h-10 w-10 text-muted-foreground" />
-                  <div className="text-center">
-                    <p className="font-medium text-foreground">{t("importPage.dropzone")}</p>
-                    <p className="text-sm text-muted-foreground">{t("importPage.dropzoneOr")}</p>
-                  </div>
-                </>
-              )}
-            </div>
-          </div>
+          <CsvDropzone file={file} onFileSelect={setFile} label={t("importPage.csvFile")} />
+
+          {/* Detected columns of the selected file */}
+          <FileHeadersPanel
+            file={file}
+            separator={config.separator}
+            highlightedHeaders={portfolioMappedColumns(config)}
+            defaultCollapsed
+          />
 
           {/* Progress */}
           {progress && loading && (

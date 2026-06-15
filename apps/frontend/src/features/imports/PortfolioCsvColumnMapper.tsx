@@ -2,8 +2,9 @@
  * PortfolioCsvColumnMapper — column-mapping UI for portfolio (brokerage) CSV
  * imports. Like CsvColumnMapper but with the portfolio field set, a default
  * asset-class / default-type, and a small type-mapping editor seeded from the
- * raw values found in the chosen type column. Renders FileHeadersPanel so the
- * user always sees the file's columns while mapping.
+ * raw values found in the chosen type column. The file's columns are shown by
+ * the shared FileHeadersPanel rendered by the parent page (same ownership model
+ * as the transaction import card), not here.
  */
 
 import { useMemo } from "react";
@@ -18,14 +19,12 @@ import {
 } from "@/components/ui/select";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { FileHeadersPanel } from "@/features/imports/FileHeadersPanel";
+import { ColumnSelect, NONE } from "./ColumnSelect";
+import { PORTFOLIO_COLUMN_FIELDS } from "./portfolioColumnFields";
+import { ASSET_CLASSES } from "@/utils/assetClass";
 import type { PortfolioCustomConfig, PortfolioTxnTypeValue, AssetClassValue } from "@/lib/api/portfolioImports";
 
-const NONE = "__none__";
-
-const ASSET_CLASS_OPTIONS: AssetClassValue[] = [
-  "stock", "etf", "crypto", "metals", "real_estate", "savings", "bond",
-];
+const ASSET_CLASS_OPTIONS: readonly AssetClassValue[] = ASSET_CLASSES;
 
 // The types with existing UI labels (portfolio.txnType.*). Corporate actions
 // (split/merger/...) are still importable when the CSV value is canonical, but
@@ -34,60 +33,16 @@ const TXN_TYPE_OPTIONS: PortfolioTxnTypeValue[] = [
   "buy", "sell", "dividend", "fee", "tax", "interest", "gift", "rent_income", "appreciation",
 ];
 
-// (config key, i18n label key, required)
-const COLUMN_FIELDS: Array<[keyof PortfolioCustomConfig, string, boolean]> = [
-  ["dateColumn", "portfolioImport.col.date", true],
-  ["typeColumn", "portfolioImport.col.type", false],
-  ["symbolColumn", "portfolioImport.col.symbol", false],
-  ["nameColumn", "portfolioImport.col.name", false],
-  ["unitsColumn", "portfolioImport.col.units", false],
-  ["priceColumn", "portfolioImport.col.price", false],
-  ["amountColumn", "portfolioImport.col.amount", false],
-  ["feesColumn", "portfolioImport.col.fees", false],
-  ["taxesColumn", "portfolioImport.col.taxes", false],
-  ["currencyColumn", "portfolioImport.col.currency", false],
-  ["fxRateColumn", "portfolioImport.col.fxRate", false],
-  ["noteColumn", "portfolioImport.col.note", false],
-];
-
 interface Props {
   file: File | null;
+  separator: string;
   config: PortfolioCustomConfig;
   onChange: (next: PortfolioCustomConfig) => void;
 }
 
-function ColumnSelect({
-  id, label, value, headers, required, onChange, noMappingLabel,
-}: {
-  id: string;
-  label: string;
-  value: string;
-  headers: string[];
-  required?: boolean;
-  onChange: (v: string) => void;
-  noMappingLabel: string;
-}) {
-  return (
-    <div className="space-y-2">
-      <Label htmlFor={id}>{label}{required && " *"}</Label>
-      <Select value={value || NONE} onValueChange={(v) => onChange(v === NONE ? "" : v)}>
-        <SelectTrigger id={id}><SelectValue /></SelectTrigger>
-        <SelectContent>
-          <SelectItem value={NONE}>
-            <span className="text-muted-foreground">{noMappingLabel}</span>
-          </SelectItem>
-          {headers.map((h) => (
-            <SelectItem key={h} value={h}>{h}</SelectItem>
-          ))}
-        </SelectContent>
-      </Select>
-    </div>
-  );
-}
-
-export function PortfolioCsvColumnMapper({ file, config, onChange }: Props) {
+export function PortfolioCsvColumnMapper({ file, separator, config, onChange }: Props) {
   const { t } = useLanguage();
-  const { preview } = useCsvPreview(file, config.separator);
+  const { preview } = useCsvPreview(file, separator);
   const headers = preview?.headers ?? [];
   const hasHeaders = headers.length > 0;
   const noMappingLabel = t("importPage.noMapping");
@@ -109,10 +64,6 @@ export function PortfolioCsvColumnMapper({ file, config, onChange }: Props) {
     return [...seen];
   }, [config.typeColumn, preview]);
 
-  const mappedColumns = COLUMN_FIELDS
-    .map(([key]) => String(config[key] ?? ""))
-    .filter(Boolean);
-
   const setMapping = (raw: string, canonical: string) => {
     const next = { ...config.typeMapping };
     if (canonical === NONE) delete next[raw];
@@ -122,8 +73,6 @@ export function PortfolioCsvColumnMapper({ file, config, onChange }: Props) {
 
   return (
     <div className="space-y-4">
-      <FileHeadersPanel file={file} separator={config.separator} highlightedHeaders={mappedColumns} defaultCollapsed />
-
       {/* Defaults */}
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
         <div className="space-y-2">
@@ -152,7 +101,7 @@ export function PortfolioCsvColumnMapper({ file, config, onChange }: Props) {
 
       {/* Column mapping */}
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-        {COLUMN_FIELDS.map(([key, labelKey, required]) => (
+        {PORTFOLIO_COLUMN_FIELDS.map(([key, labelKey, required]) => (
           hasHeaders ? (
             <ColumnSelect
               key={key}
