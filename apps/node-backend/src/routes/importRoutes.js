@@ -22,6 +22,8 @@ import {
 } from '../services/importBatchService.js';
 import customParserConfigRepository from '../services/customParserConfigService.js';
 import { refreshAggregations } from '../services/aggregationRefresh.js';
+import { parseParserId, normalizeParserName, PARSER_NAME_CONSTRAINT } from '../lib/parserConfigRoutes.js';
+import { parsePagination } from '../lib/pagination.js';
 
 const router = Router();
 
@@ -158,19 +160,6 @@ router.post('/csv/custom', csvUpload.single('file'), async (req, res) => {
 
 // --- Saved custom parser configs (CRUD) ---------------------------------
 
-function parseParserId(req) {
-  const id = parseInt(req.params.id, 10);
-  if (Number.isNaN(id)) throw new ValidationError('Invalid parser config id');
-  return id;
-}
-
-function normalizeParserName(name) {
-  if (!name || typeof name !== 'string' || name.trim().length === 0) {
-    throw new ValidationError('Missing or invalid "name"');
-  }
-  return name.trim();
-}
-
 // Validates and normalizes the column-mapping config to the frontend's
 // CustomConfig shape. Required: dateColumn, recipientColumn, amountColumn.
 function normalizeParserConfig(config) {
@@ -195,9 +184,6 @@ function normalizeParserConfig(config) {
     skipRows: Number.isFinite(skipRows) && skipRows > 0 ? skipRows : 0,
   };
 }
-
-// (name, kind)-unique since 0041; both budgeting and portfolio parsers share it.
-const PARSER_NAME_CONSTRAINT = 'uq_custom_parser_configs_name_kind';
 
 // GET /api/import/parsers
 router.get('/parsers', async (req, res) => {
@@ -368,8 +354,7 @@ router.post('/categories', csvUpload.single('file'), async (req, res) => {
 
 // GET /api/import/batches
 router.get('/batches', async (req, res) => {
-  const limit = Math.min(parseInt(req.query.limit ?? '50', 10), 200);
-  const offset = parseInt(req.query.offset ?? '0', 10);
+  const { limit, offset } = parsePagination(req.query, { maxLimit: 200 });
   const { batches, total } = await listBatches({ limit, offset });
   res.ok({ batches, total, limit, offset });
 });

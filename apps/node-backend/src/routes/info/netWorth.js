@@ -14,6 +14,7 @@ import {
   resolveCacheWithInflight,
 } from './_cache.js';
 import { resolveLivePortfolioValue } from './_liveSummary.js';
+import { parsePagination } from '../../lib/pagination.js';
 
 const router = Router();
 
@@ -42,10 +43,7 @@ router.get(
       return;
     }
 
-    const limitRaw = parseInt(req.query.limit, 10);
-    const offsetRaw = parseInt(req.query.offset, 10);
-    const limit = Number.isFinite(limitRaw) && limitRaw > 0 ? Math.min(limitRaw, 5000) : 50;
-    const offset = Number.isFinite(offsetRaw) && offsetRaw >= 0 ? offsetRaw : 0;
+    const { limit, offset } = parsePagination(req.query, { maxLimit: 5000 });
 
     const allSnapshots = Array.isArray(data?.snapshots) ? data.snapshots : [];
     // Page newest-first by indexing from the end — avoids copying and

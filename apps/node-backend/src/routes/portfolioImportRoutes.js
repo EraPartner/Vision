@@ -24,12 +24,13 @@ import {
   rollbackBatch,
 } from '../services/portfolioImportBatchService.js';
 import customParserConfigRepository from '../services/customParserConfigService.js';
+import { VALID_ASSET_CLASSES } from '../lib/assetClasses.js';
+import { parseParserId, normalizeParserName, PARSER_NAME_CONSTRAINT } from '../lib/parserConfigRoutes.js';
+import { parsePagination } from '../lib/pagination.js';
 
 const router = Router();
 
-const VALID_ASSET_CLASSES = new Set(['stock', 'etf', 'crypto', 'metals', 'real_estate', 'savings', 'bond']);
 const PARSER_KIND = 'portfolio';
-const PARSER_NAME_CONSTRAINT = 'uq_custom_parser_configs_name_kind';
 
 function parseTypeMapping(raw) {
   if (!raw) return {};
@@ -210,19 +211,6 @@ router.post('/csv/stream', csvUpload.single('file'), async (req, res) => {
 
 // --- Saved portfolio parser configs (CRUD) ------------------------------------
 
-function parseParserId(req) {
-  const id = parseInt(req.params.id, 10);
-  if (Number.isNaN(id)) throw new ValidationError('Invalid parser config id');
-  return id;
-}
-
-function normalizeParserName(name) {
-  if (!name || typeof name !== 'string' || name.trim().length === 0) {
-    throw new ValidationError('Missing or invalid "name"');
-  }
-  return name.trim();
-}
-
 // Stores the frontend's PortfolioCustomConfig (camelCase) as JSONB. Required:
 // dateColumn, a symbol or name column, and a valid defaultAssetClass.
 function normalizePortfolioParserConfig(config) {
@@ -288,8 +276,7 @@ router.delete('/parsers/:id', async (req, res) => {
 // --- Batch history + rollback -------------------------------------------------
 
 router.get('/batches', async (req, res) => {
-  const limit = Math.min(parseInt(req.query.limit ?? '50', 10), 200);
-  const offset = parseInt(req.query.offset ?? '0', 10);
+  const { limit, offset } = parsePagination(req.query, { maxLimit: 200 });
   const { batches, total } = await listBatches({ limit, offset });
   res.ok({ batches, total, limit, offset });
 });

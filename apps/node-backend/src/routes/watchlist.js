@@ -6,6 +6,7 @@ import { Router } from 'express';
 import { watchlistRepository } from '../services/watchlistService.js';
 import { NotFoundError, ValidationError } from '../middleware/errorHandler.js';
 import { validateIdParam, validateNumber } from '../middleware/validation.js';
+import { parsePagination } from '../lib/pagination.js';
 
 const router = Router();
 
@@ -31,21 +32,12 @@ function validateWatchlistFields(body) {
   }
 }
 
-function parseWatchlistLimit(limit) {
-  const parsed = parseInt(limit, 10);
-  return Math.min(Math.max(Number.isNaN(parsed) ? 50 : parsed, 1), 5000);
-}
-
-function parseWatchlistOffset(offset) {
-  const parsed = parseInt(offset, 10);
-  return Math.max(Number.isNaN(parsed) ? 0 : parsed, 0);
-}
-
 router.get('/', async (req, res) => {
-  const { limit = 50, offset = 0, asset_class } = req.query;
+  const { asset_class } = req.query;
+  const { limit, offset } = parsePagination(req.query, { maxLimit: 5000 });
   const opts = {
-    limit: parseWatchlistLimit(limit),
-    offset: parseWatchlistOffset(offset),
+    limit,
+    offset,
     assetClass: asset_class || null,
   };
   const result = await watchlistRepository.getAllWithCount(opts);

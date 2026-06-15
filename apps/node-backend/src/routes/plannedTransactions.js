@@ -14,6 +14,7 @@ import { calculateNextDate, isValidPattern } from '../services/calculations/recu
 import { NotFoundError, ValidationError } from '../middleware/errorHandler.js';
 import { toDecimal, toNumber } from '../lib/money.js';
 import { toAppDateString, todayAppDateString } from '../lib/timezone.js';
+import { parsePagination } from '../lib/pagination.js';
 
 const router = Router();
 
@@ -141,15 +142,15 @@ function resolveLoanScheduleDirective(generatedLoanSchedule, fields, existing) {
 
 router.get('/', async (req, res) => {
   const {
-    limit = 50, offset = 0,
     start_date, end_date, bank_account,
     category_id, recipient_id,
     is_recurring, is_executed, active = 'true', search,
   } = req.query;
 
+  const { limit, offset } = parsePagination(req.query, { maxLimit: 5000 });
   const opts = {
-    limit: Math.min(parseInt(limit, 10) || 50, 5000),
-    offset: parseInt(offset, 10) || 0,
+    limit,
+    offset,
     startDate: assertYmd(start_date, 'start_date'),
     endDate: assertYmd(end_date, 'end_date'),
     bankAccount: bank_account || null,

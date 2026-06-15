@@ -6,14 +6,16 @@ import { Router } from 'express';
 import categoryRepository from '../services/categoryService.js';
 import { NotFoundError, ValidationError } from '../middleware/errorHandler.js';
 import { validateIdParam } from '../middleware/validation.js';
+import { parsePagination } from '../lib/pagination.js';
 
 const router = Router();
 
 router.get('/', async (req, res) => {
-  const { limit = 50, offset = 0, general, detail, active = 'true', search } = req.query;
+  const { general, detail, active = 'true', search } = req.query;
+  const { limit, offset } = parsePagination(req.query, { maxLimit: 1000 });
   const opts = {
-    limit: Math.max(1, Math.min(parseInt(limit, 10) || 50, 1000)),
-    offset: Math.max(0, parseInt(offset, 10) || 0),
+    limit,
+    offset,
     general: general || null,
     detail: detail || null,
     search: search ? String(search).slice(0, 200) : null,

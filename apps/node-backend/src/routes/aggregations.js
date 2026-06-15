@@ -34,6 +34,7 @@ import { computeCategoryPivot } from '../services/calculations/aggregation/categ
 import { computeRecipientByYear } from '../services/calculations/aggregation/recipientByYear.js';
 import { computeRecipientPivot } from '../services/calculations/aggregation/recipientPivot.js';
 import { getTargetCurrency } from './info/_queryParams.js';
+import { parseIntClamped } from '../lib/pagination.js';
 
 const router = Router();
 
@@ -43,12 +44,6 @@ function parseNumericArrayQueryParam(raw) {
   return values
     .map((v) => Number(v))
     .filter((n) => Number.isFinite(n));
-}
-
-function parseIntClamped(raw, { min = 1, max, fallback }) {
-  const parsed = parseInt(raw, 10);
-  if (!Number.isFinite(parsed) || parsed < min) return fallback;
-  return max != null ? Math.min(parsed, max) : parsed;
 }
 
 router.get('/monthly-summary', async (req, res) => {

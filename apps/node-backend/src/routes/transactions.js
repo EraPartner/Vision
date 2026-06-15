@@ -28,6 +28,7 @@ import {
   buildIdListWhere,
 } from '../services/transactionExport.js';
 import { resolveBulkSelection } from '../services/bulkSelection.js';
+import { parsePagination } from '../lib/pagination.js';
 
 const router = Router();
 
@@ -37,7 +38,6 @@ function parseRouteId(req) {
 
 function parseTransactionListQuery(query) {
   const {
-    limit = 50, offset = 0,
     transaction_id,
     start_date, end_date, bank_account,
     category_id, category_ids, recipient_id, recipient_group_id, recipient_name,
@@ -47,6 +47,7 @@ function parseTransactionListQuery(query) {
     transaction_type,
     tags,
   } = query;
+  const { limit, offset } = parsePagination(query, { maxLimit: 5000 });
 
   const parsedCategoryIds = category_ids
     ? String(category_ids).split(',').map((id) => parseInt(id, 10)).filter((id) => Number.isFinite(id) && id > 0)
@@ -57,8 +58,8 @@ function parseTransactionListQuery(query) {
     : null;
 
   return {
-    limit: Math.max(1, Math.min(parseInt(limit, 10) || 50, 5000)),
-    offset: Math.max(0, parseInt(offset, 10) || 0),
+    limit,
+    offset,
     transactionId: transaction_id ? parseInt(transaction_id, 10) : null,
     startDate: assertYmd(start_date, 'start_date'),
     endDate: assertYmd(end_date, 'end_date'),
