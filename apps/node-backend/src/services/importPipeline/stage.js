@@ -9,6 +9,7 @@
 
 import { query, withTransaction } from '../../database/connection.js';
 import { logger } from '../../config/logger.js';
+import { parsedDateToYmd } from '../../lib/importDates.js';
 import { getAdapter } from './adapters/index.js';
 import generic from './adapters/generic.js';
 
@@ -79,9 +80,7 @@ async function insertStagingChunk(batchId, rows, startIndex) {
     const placeholders = [];
     rows.forEach((r, i) => {
       const idx = startIndex + i;
-      const dateStr = r.date instanceof Date
-        ? r.date.toISOString().split('T')[0]
-        : (typeof r.date === 'string' ? r.date.slice(0, 10) : null);
+      const dateStr = parsedDateToYmd(r.date) ?? null;
 
       const base = values.length;
       placeholders.push(

@@ -9,6 +9,7 @@
 
 import { query, withTransaction } from '../../database/connection.js';
 import { logger } from '../../config/logger.js';
+import { parsedDateToYmd } from '../../lib/importDates.js';
 import { parseWithConfig } from './portfolioGenericAdapter.js';
 
 const STAGE_INSERT_CHUNK = 500;
@@ -58,9 +59,7 @@ async function insertStagingChunk(batchId, rows, startIndex) {
     const placeholders = [];
     rows.forEach((r, i) => {
       const idx = startIndex + i;
-      const dateStr = r.date instanceof Date
-        ? r.date.toISOString().split('T')[0]
-        : (typeof r.date === 'string' ? r.date.slice(0, 10) : null);
+      const dateStr = parsedDateToYmd(r.date) ?? null;
 
       const base = values.length;
       const ph = Array.from({ length: 15 }, (_, k) => `$${base + k + 1}`);

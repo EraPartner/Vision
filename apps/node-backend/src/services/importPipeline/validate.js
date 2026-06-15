@@ -11,6 +11,7 @@
 import crypto from 'crypto';
 import { query } from '../../database/connection.js';
 import { logger } from '../../config/logger.js';
+import { parsedDateToYmd } from '../../lib/importDates.js';
 
 const VALIDATE_CHUNK = 500;
 
@@ -109,9 +110,7 @@ function computeRowHash(row) {
   if (row.raw_data) {
     raw = row.raw_data;
   } else {
-    const dateStr = typeof row.tx_date === 'string'
-      ? row.tx_date.slice(0, 10)
-      : row.tx_date.toISOString().slice(0, 10);
+    const dateStr = parsedDateToYmd(row.tx_date);
     raw = `${dateStr}|${row.amount}|${row.recipient_raw || ''}|${row.memo || ''}`;
   }
   return crypto.createHash('sha256').update(raw, 'utf-8').digest('hex');

@@ -11,6 +11,7 @@
 import crypto from 'crypto';
 import { query } from '../../database/connection.js';
 import { logger } from '../../config/logger.js';
+import { parsedDateToYmd } from '../../lib/importDates.js';
 import { UNIT_BASED_ASSET_CLASSES } from '../../repositories/portfolioTxRepo.common.js';
 import { normalizeType } from './portfolioTypeNormalizer.js';
 
@@ -144,9 +145,7 @@ function computeRowHash(row, type) {
   if (row.raw_data) {
     raw = `${type}|${row.raw_data}`;
   } else {
-    const dateStr = typeof row.tx_date === 'string'
-      ? row.tx_date.slice(0, 10)
-      : row.tx_date.toISOString().slice(0, 10);
+    const dateStr = parsedDateToYmd(row.tx_date);
     raw = `${dateStr}|${type}|${row.amount ?? ''}|${row.units ?? ''}`;
   }
   return crypto.createHash('sha256').update(raw, 'utf-8').digest('hex');
