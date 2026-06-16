@@ -132,6 +132,13 @@ contextBridge.exposeInMainWorld('electronAPI', {
   /** macOS accent color as RRGGBBAA hex, or null when unavailable. */
   getAccentColor: () => ipcRenderer.invoke('app:get-accent-color'),
 
+  /**
+   * Persist the active theme's primary colors (HSL component strings) so the
+   * next boot splash matches the chosen palette.
+   * @param {{ background: string, foreground: string }} colors
+   */
+  persistSplashTheme: (colors) => ipcRenderer.invoke('theme:persist-splash', colors),
+
   /** Fires with the new RRGGBBAA hex (or null) when the user changes the system accent. */
   onAccentColorChanged: (cb) => {
     const listener = (_event, color) => cb(color);

@@ -3,7 +3,7 @@ title: ADR-072 Electron-Native Desktop Integration (macOS)
 type: adr
 status: Accepted
 date: 2026-06-10
-updated: 2026-06-11
+updated: 2026-06-16
 tags: [adr, electron, desktop, macos, security, ipc, frontend, accelerator-hardening, before-input-event, did-start-navigation, june-2026]
 description: V12 batch — hiddenInset traffic lights, native menu bar + dock menu/badge, CSV drag/open-with import handoff, under-window vibrancy behind the effects toggle, and system-accent theming, all through a new minimal electronAPI bridge with the sandbox posture unchanged. Implementation note (2026-06-11): two post-ship defects fixed — rendererReady reset moved from did-start-loading to did-start-navigation+isSameDocument (eliminates permanent queue jam after React Router navigations), and handleMenuAccelerator on before-input-event bypasses unreliable sandboxed-renderer key-equivalent dispatch for ⌘1-9, ⌘N, ⇧⌘I, ⌃⌘S.
 aliases: [adr-072, electron native, electronAPI bridge, vibrancy, system accent]
@@ -115,3 +115,19 @@ mainWindow.webContents.on('did-start-navigation', (details) => {
 Using `input.code` for digits ensures ⌘1–⌘9 work positionally on AZERTY and other non-QWERTY layouts without requiring `Shift`.
 
 **Verification:** End-to-end test on the real stack confirmed that after a client-side navigation, ⌘7 navigated to `/portfolio` and ⌘1 to `/`. Real-keyboard validation on a built `.app` (including AZERTY) is still pending (logged in TODO.md).
+
+---
+
+## Implementation Note — Theme-Aware Boot Splash (2026-06-16)
+
+The boot splash (`splashDataUrl()` in `packaging/electron/main.js`, shown immediately on launch before Docker I/O) was a fixed slate (`#0f172a` dark / `#f8fafc` light via `prefers-color-scheme`). It now paints in the **active theme's primary color** — emerald on `default`, purple on `dracula`, etc. The ADR decision text above stands unchanged; this note records the addition.
+
+The splash renders in the main process *before* the backend/DB is up, so it cannot read the DB-persisted `theme_settings`. Instead the renderer mirrors the resolved palette's `primary` / `primary-foreground` (HSL component strings) into the Electron `settings.json` under a new `splashTheme` key whenever the theme/variant/mode changes:
+
+- **Renderer** (`ThemeContext.tsx`): a new effect calls `persistSplashTheme({ background, foreground })` from `lib/api/electron.ts` (no-op outside Electron), sourcing colors from `themes[variant][mode]`.
+- **Bridge**: `electronAPI.persistSplashTheme` → `ipcRenderer.invoke('theme:persist-splash', …)`.
+- **Main**: the `theme:persist-splash` handler validates the sender and the two color strings, then merges `splashTheme` into `settings.json`. `splashDataUrl()` reads it back via `readSplashTheme()`.
+
+**Security:** both values are interpolated into the splash HTML/CSS, so they are validated on write *and* on read against `HSL_COMPONENTS_RE` (digits/spaces/`%`/dots only, ≤32 chars) — anything else is rejected and the slate fallback is used. The sandbox posture is unchanged.
+
+**Fallback:** the very first launch (before any theme has been persisted) shows the original slate splash with its light/dark variants. Subsequent launches use the persisted palette.

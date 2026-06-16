@@ -1251,25 +1251,81 @@ async function restartAppContainer(cwd, extraFiles = []) {
 let mainWindow = null;
 
 // ── Boot splash ───────────────────────────────────────────────────────────────
-// Localized, theme-aware (prefers-color-scheme) splash shown before any
-// Docker I/O. setSplashStatus() narrates the slow boot phases (image pull,
-// service start) using the boot-phase structure launch() already has.
+// Localized, theme-aware splash shown before any Docker I/O. The renderer mirrors
+// the active palette's primary colors into settings.json (theme:persist-splash),
+// so the splash paints in the chosen theme (emerald on default, purple on
+// dracula, …). Falls back to neutral slate (light/dark via prefers-color-scheme)
+// when nothing has been persisted yet — e.g. the very first launch.
+// setSplashStatus() narrates the slow boot phases (image pull, service start).
+const SPLASH_THEME_KEY = 'splashTheme';
+
+// HSL component strings only ("158 64% 52%"): digits, spaces, %, dots. The value
+// is interpolated into the splash HTML/CSS, so this guards against CSS/HTML
+// injection — anything outside the pattern is rejected and the slate fallback wins.
+const HSL_COMPONENTS_RE = /^\d{1,3}(?:\.\d+)?\s+\d{1,3}(?:\.\d+)?%\s+\d{1,3}(?:\.\d+)?%$/;
+function isValidHslComponents(value) {
+  return typeof value === 'string' && value.length <= 32 && HSL_COMPONENTS_RE.test(value);
+}
+
+function readSplashTheme() {
+  try {
+    const data = JSON.parse(fs.readFileSync(settingsPath, 'utf8'));
+    const theme = data?.[SPLASH_THEME_KEY];
+    if (!theme || !isValidHslComponents(theme.background) || !isValidHslComponents(theme.foreground)) {
+      return undefined;
+    }
+    return { background: theme.background, foreground: theme.foreground };
+  } catch {
+    return undefined;
+  }
+}
+
+// Derive the splash colors from the persisted primary (e.g. "158 64% 52%").
+// The raw primary is a vivid accent — full-screen it reads as a neon block — so
+// instead we mirror the app's own backdrop: a near-black base carrying just the
+// primary's hue, lifted by a soft radial glow of the bright accent behind the
+// logo ("pretty much black with a light emerald shine"). The persisted
+// `foreground` (primary-foreground, meant for ink *on* the bright accent) is
+// intentionally ignored — on a near-black fill we want light text.
+function deriveSplashPalette(primary) {
+  const m = /^(\d{1,3}(?:\.\d+)?)\s+(\d{1,3}(?:\.\d+)?)%\s+\d{1,3}(?:\.\d+)?%$/.exec(primary);
+  if (!m) return undefined;
+  const hue = m[1];
+  const sat = Number(m[2]);
+  return {
+    base: `${hue} ${Math.round(Math.min(sat, 45))}% 6%`,   // near-black, faintly hued
+    glow: primary,                                          // bright accent → the "shine"
+    foreground: `${hue} ${Math.round(Math.min(sat, 24))}% 88%`,
+  };
+}
+
 function splashDataUrl() {
+  const theme = readSplashTheme();
+  const derived = theme ? deriveSplashPalette(theme.background) : undefined;
+  const palette = derived
+    ? `body {
+    background:
+      radial-gradient(85% 60% at 50% 38%, hsl(${derived.glow} / 0.16), transparent 70%),
+      hsl(${derived.base});
+    color: hsl(${derived.foreground} / 0.82);
+  }
+  .name { color: hsl(${derived.foreground}); }`
+    : `body { background: #0f172a; color: #94a3b8; }
+  .name { color: #e2e8f0; }
+  @media (prefers-color-scheme: light) {
+    body { background: #f8fafc; color: #475569; }
+    .name { color: #1e293b; }
+  }`;
   const html = `<!doctype html>
 <html><head><meta charset="utf-8"><style>
   :root { color-scheme: light dark; }
   body {
     margin: 0; height: 100vh; display: flex; flex-direction: column;
     align-items: center; justify-content: center; gap: 14px;
-    background: #0f172a; color: #94a3b8;
     font-family: -apple-system, BlinkMacSystemFont, system-ui, sans-serif;
     -webkit-font-smoothing: antialiased; user-select: none; cursor: default;
   }
-  .name { color: #e2e8f0; }
-  @media (prefers-color-scheme: light) {
-    body { background: #f8fafc; color: #475569; }
-    .name { color: #1e293b; }
-  }
+  ${palette}
   .spinner {
     width: 26px; height: 26px; border-radius: 50%;
     border: 2.5px solid currentColor; border-top-color: transparent;
@@ -2895,6 +2951,25 @@ function readSystemAccentColor() {
 ipcMain.handle('app:get-accent-color', (event) => {
   if (!mainWindow || event.sender !== mainWindow.webContents) return null;
   return readSystemAccentColor();
+});
+
+// Renderer mirrors the active theme's primary colors here so the next boot
+// splash matches the chosen palette (see splashDataUrl / readSplashTheme).
+// Validated on write and again on read — the values land in splash HTML/CSS.
+ipcMain.handle('theme:persist-splash', async (event, colors) => {
+  if (!mainWindow || event.sender !== mainWindow.webContents) return { success: false };
+  if (!colors || !isValidHslComponents(colors.background) || !isValidHslComponents(colors.foreground)) {
+    return { success: false };
+  }
+  try {
+    const data = await loadSettings();
+    data[SPLASH_THEME_KEY] = { background: colors.background, foreground: colors.foreground };
+    await saveSettings(data);
+    return { success: true };
+  } catch (err) {
+    console.warn('theme:persist-splash failed (non-fatal):', err && err.message ? err.message : err);
+    return { success: false };
+  }
 });
 
 function subscribeAccentColorChanges() {

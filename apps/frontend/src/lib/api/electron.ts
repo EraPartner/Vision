@@ -58,7 +58,15 @@ type ElectronAPI = {
     onMenuAction: (cb: (message: ElectronMenuAction) => void) => () => void;
     onCsvOpen: (cb: (file: ElectronCsvFile) => void) => () => void;
     onFullScreenChange: (cb: (isFullScreen: boolean) => void) => () => void;
+    /** Persist the active theme's primary colors so the next boot splash matches. */
+    persistSplashTheme?: (colors: SplashThemeColors) => Promise<{ success: boolean }>;
 };
+
+/** HSL component strings (e.g. "158 64% 52%") for the boot-splash background/text. */
+export interface SplashThemeColors {
+    background: string;
+    foreground: string;
+}
 
 function getElectronUpdater(): ElectronUpdater | undefined {
     return (window as Window & { electronUpdater?: ElectronUpdater }).electronUpdater;
@@ -84,6 +92,16 @@ export function isElectronMac(): boolean {
 /** Set the macOS dock badge (0 clears). No-op outside Electron. */
 export function setDockBadge(count: number): void {
     getElectronAPI()?.setDockBadge(count).catch(() => { /* badge is best-effort */ });
+}
+
+/**
+ * Persist the resolved theme's primary colors so the Electron boot splash can
+ * paint in the active palette next launch (emerald on default, purple on
+ * dracula, …). Best-effort, no-op outside Electron — the splash falls back to a
+ * neutral slate when nothing is persisted.
+ */
+export function persistSplashTheme(colors: SplashThemeColors): void {
+    getElectronAPI()?.persistSplashTheme?.(colors).catch(() => { /* best-effort */ });
 }
 
 /** macOS system accent color as RRGGBBAA hex, or null outside Electron/macOS. */

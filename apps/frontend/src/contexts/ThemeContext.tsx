@@ -16,8 +16,8 @@ import { useCallback, useEffect, useRef, type ReactNode } from 'react';
 import { useShallow } from 'zustand/react/shallow';
 import { apiClient } from '@/lib/api';
 import { usePreloadedSetting } from '@/contexts/SettingsPreloadContext';
-import { applyThemePalette, isThemeVariant, type ThemeVariant } from '@/styles/themes';
-import { getElectronAPI, getSystemAccentColor, isElectronMac } from '@/lib/api/electron';
+import { applyThemePalette, isThemeVariant, themes, type ThemeVariant } from '@/styles/themes';
+import { getElectronAPI, getSystemAccentColor, isElectronMac, persistSplashTheme } from '@/lib/api/electron';
 import { accentForegroundComponents, hexToHslComponents } from '@/lib/accentColor';
 import {
     useSettingsStore,
@@ -223,6 +223,14 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
         applyPalette(variant, theme, systemAccent);
         try { localStorage.setItem(VARIANT_STORAGE_KEY, variant); } catch { /* ignore */ }
     }, [variant, theme, systemAccent, isLoaded, applyPalette]);
+
+    // Mirror the resolved palette's primary colors to the Electron shell so the
+    // next boot splash paints in the active theme. No-op outside Electron.
+    useEffect(() => {
+        if (!isLoaded) return;
+        const palette = themes[variant][theme];
+        persistSplashTheme({ background: palette.primary, foreground: palette['primary-foreground'] });
+    }, [variant, theme, isLoaded]);
 
     // Re-tint live when the user changes the accent in System Settings.
     useEffect(() => {
