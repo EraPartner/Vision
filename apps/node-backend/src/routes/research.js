@@ -17,6 +17,8 @@ import { ValidationError } from '../middleware/errorHandler.js';
 import { researchAggregator } from '../services/research/researchAggregator.js';
 import { researchMappingService } from '../services/research/researchMappingService.js';
 import * as researchProviderKeyService from '../services/research/researchProviderKeyService.js';
+import { runPortfolioForecast } from '../services/research/projection/portfolioProjection.js';
+import { fundamentalsScorecard } from '../services/research/fundamentalsScorecard.js';
 
 const router = Router();
 
@@ -92,6 +94,43 @@ router.get('/news', async (req, res) => {
   const symbol = single(req.query.symbol);
   if (!symbol) throw new ValidationError('symbol parameter required');
   await respond(res, 'news', { symbol });
+});
+
+// ─── Analytics: portfolio forecast + fundamentals scorecard (ADR-081) ───────
+
+// GET /api/research/scorecard?symbol=AAPL — heuristic flags + health score.
+router.get('/scorecard', async (req, res) => {
+  const symbol = single(req.query.symbol);
+  if (!symbol) throw new ValidationError('symbol parameter required');
+  const result = await researchAggregator.fetch('fundamentals', {
+    symbol,
+    assetClass: single(req.query.asset_class) || undefined,
+  });
+  if (result.source === 'unavailable') {
+    return res.ok(undefined, { provider: null, source: 'unavailable' });
+  }
+  const scorecard = fundamentalsScorecard(result.data);
+  res.ok({ symbol, fundamentals: result.data, scorecard }, {
+    provider: result.provider ?? null,
+    source: result.source,
+  });
+});
+
+// POST /api/research/portfolio-forecast — Monte-Carlo portfolio value projection.
+// On-demand, never persisted (ADR-079 storage boundary). Deterministic per seed.
+router.post('/portfolio-forecast', async (req, res) => {
+  const body = req.body ?? {};
+  const result = await runPortfolioForecast({
+    horizonMonths: body.horizon_months ?? body.horizonMonths,
+    monthlyContribution: body.monthly_contribution ?? body.monthlyContribution,
+    paths: body.paths,
+    forwardBlend: body.forward_blend ?? body.forwardBlend,
+    method: single(body.method) || undefined,
+    targetValue: body.target_value ?? body.targetValue,
+    currency: single(body.currency) || undefined,
+    seed: single(body.seed) || undefined,
+  });
+  res.ok(result);
 });
 
 // ─── Cross-provider symbol mapping (ADR-079) ────────────────────────────────

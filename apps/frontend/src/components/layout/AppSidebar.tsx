@@ -41,6 +41,7 @@ import {
   PanelLeftClose,
   Telescope,
   GitCompareArrows,
+  CandlestickChart,
 } from "lucide-react";
 import { motion, useReducedMotion } from "framer-motion";
 import { useWorkspace } from "@/contexts/WorkspaceContext";
@@ -188,6 +189,8 @@ export function AppSidebar() {
       label: t('nav.analysis'),
       items: [
         { title: t('nav.compare'), url: "/research/compare", icon: GitCompareArrows },
+        { title: t('nav.chartBuilder'), url: "/research/charts", icon: CandlestickChart },
+        { title: t('nav.forecast'), url: "/research/forecast", icon: TrendingUp },
         { title: t('nav.watchlist'), url: "/research/watchlist", icon: Target },
       ],
     },

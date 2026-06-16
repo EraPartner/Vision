@@ -153,3 +153,20 @@ Twelve Data / Finnhub / FMP / Alpha Vantage API keys live in `.env.local` (gitig
 - [[docs/integrations/price-providers|Price Providers Integration]] — provider registry this layer extends.
 - [[docs/features/market-lookup|Market Lookup]] / [[docs/features/watchlist|Watchlist]] — surfaces the Research workspace consolidates.
 - [[docs/adr/index|All ADRs]]
+
+---
+
+## Follow-up Note — FMP Stable API Migration (2026-06-16)
+
+**Context:** The admin Provider Health dashboard showed `fmp` accumulating `consecutive_failures` with `last_error = "fmp: no fundamentals"` and no successes despite a valid API key.
+
+**Root cause:** FMP retired the legacy `/api/v3` base URL for accounts not subscribed before 2025-08-31. The `/api/v3/profile/AAPL` path-style endpoints returned 401/403, which the adapter caught and re-raised as a generic "no fundamentals" message, concealing the real HTTP status.
+
+**Resolution (not a new architectural decision — same capability-map, same adapter contract):**
+
+1. `fmpAdapter.js` migrated from `https://financialmodelingprep.com/api/v3` to the current stable API at `https://financialmodelingprep.com/stable`. Symbol is now a query param (`?symbol=`) instead of a path segment. Several response field names changed (documented in `fmpAdapter.js` header and [[docs/features/research#fmp-adapter--stable-api-migration-2026-06-16|research feature doc]]).
+2. The FMP health probe in `providerHealthService.js` was changed from `quote('AAPL')` to `fundamentals('AAPL')`. Rationale: FMP is the primary provider for `fundamentals` but only 4th for `quote`; a quote probe never exposed this class of failure. Probing by primary capability is the correct principle for all research providers.
+3. Error messages from `fmpAdapter.fundamentals()` now include the underlying HTTP status (e.g. `"fmp: no fundamentals (HTTP 403)"`) so the admin health row is self-diagnosing without requiring log inspection.
+4. Analyst `consensus` bucket counts (`strongBuy / buy / hold / sell / strongSell`) and `numberOfAnalysts` are now populated for FMP via the stable `grades-consensus` endpoint — both were unavailable on the v3 free tier.
+
+**ADR-079 consequences unaffected:** The capability map, quota governor, cache TTLs, symbol-mapping model, and storage boundary are all unchanged. FMP remains the primary fundamentals provider. The failure mode described under "Negative / Tradeoffs" §3 ("Free-tier churn") was the proximate cause; the health-service probe improvement is a direct mitigation against future silent failures of this kind.

@@ -36,6 +36,8 @@ export const routeLoaders = {
     "/research/watchlist": () => import("@/pages/research/WatchlistPage"),
     "/research/symbol/:symbol": () => import("@/pages/research/ResearchSymbolPage"),
     "/research/compare": () => import("@/pages/research/ResearchComparePage"),
+    "/research/forecast": () => import("@/pages/research/PortfolioForecastPage"),
+    "/research/charts": () => import("@/pages/research/ChartBuilderPage"),
     "/ai-chat": () => import("@/pages/AIChatPage"),
 } as const;
 

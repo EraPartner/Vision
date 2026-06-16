@@ -20,8 +20,11 @@ import { cn } from "@/lib/utils";
 import { apiClient } from "@/lib/api";
 import { PageHeader } from "@/components/shared/PageHeader";
 import { ProvenanceBadge } from "@/components/research/ProvenanceBadge";
+import { ScorecardGradeBadge } from "@/components/research/ResearchScorecard";
+import { SymbolSearchResultItem } from "@/components/shared/SymbolSearchResultItem";
 import type {
-  ResearchChartPoint, ResearchFundamentals, ResearchMeta, ResearchRange,
+  ResearchChartPoint, ResearchFundamentals, ResearchMeta, ResearchRange, ResearchScorecard,
+  ScorecardSeverity,
 } from "@/types/research";
 
 const RANGES: { label: string; range: ResearchRange }[] = [
@@ -131,7 +134,8 @@ function correlationCellStyle(value: number | null): CSSProperties {
 /** Metrics shown side-by-side in the fundamentals comparison. */
 type FundamentalsMetricKey =
   | "pe" | "forwardPE" | "marketCap" | "dividendYield" | "eps"
-  | "beta" | "priceToBook" | "profitMargin" | "returnOnEquity" | "revenue";
+  | "beta" | "priceToBook" | "profitMargin" | "returnOnEquity" | "revenue"
+  | "debtToEquity" | "currentRatio" | "revenueGrowth" | "fcfYield";
 
 interface FundamentalsMetric {
   key: FundamentalsMetricKey;
@@ -140,6 +144,21 @@ interface FundamentalsMetric {
   /** Sort direction when this column is chosen — most "favourable" first. */
   betterWhenHigher: boolean;
 }
+
+/**
+ * Per-cell health tint for the fundamentals table. Reuses the scorecard's
+ * severity verdicts — the same popular-standard thresholds (current ratio < 1,
+ * negative margins, D/E, P/E, etc.) that drive the Health grade — so the
+ * colours stay consistent with the scorecard. Good → green, caution/warn →
+ * amber, risk → red. Metrics the scorecard doesn't grade (market cap, revenue,
+ * forward P/E, EPS, beta) carry no flag and stay neutral.
+ */
+const SEVERITY_TEXT: Record<ScorecardSeverity, string> = {
+  ok: "text-success",
+  caution: "text-warning",
+  warn: "text-warning",
+  risk: "text-destructive",
+};
 
 const FUNDAMENTALS_METRICS: FundamentalsMetric[] = [
   { key: "pe", labelKey: "market.pe", format: "ratio", betterWhenHigher: false },
@@ -152,6 +171,10 @@ const FUNDAMENTALS_METRICS: FundamentalsMetric[] = [
   { key: "profitMargin", labelKey: "research.fundamentals.profitMargin", format: "pct", betterWhenHigher: true },
   { key: "returnOnEquity", labelKey: "research.fundamentals.roe", format: "pct", betterWhenHigher: true },
   { key: "revenue", labelKey: "research.fundamentals.revenue", format: "largeNum", betterWhenHigher: true },
+  { key: "debtToEquity", labelKey: "research.metric.debtToEquity", format: "ratio", betterWhenHigher: false },
+  { key: "currentRatio", labelKey: "research.metric.currentRatio", format: "ratio", betterWhenHigher: true },
+  { key: "revenueGrowth", labelKey: "research.metric.revenueGrowth", format: "pct", betterWhenHigher: true },
+  { key: "fcfYield", labelKey: "research.metric.fcfYield", format: "pct", betterWhenHigher: true },
 ];
 
 function fmtLargeNum(val: number | null | undefined): string {
@@ -213,8 +236,8 @@ export default function ResearchComparePage() {
 
   const fundamentalsQueries = useQueries({
     queries: symbols.map((symbol) => ({
-      queryKey: ["research-fundamentals", symbol],
-      queryFn: () => apiClient.getResearchFundamentals(symbol),
+      queryKey: ["research-scorecard", symbol],
+      queryFn: () => apiClient.getResearchScorecard(symbol),
       enabled: !!symbol,
       staleTime: 24 * 60 * 60 * 1000,
     })),
@@ -273,12 +296,15 @@ export default function ResearchComparePage() {
     const rows = symbols.map((symbol, i) => {
       const q = fundamentalsQueries[i];
       const meta: ResearchMeta | undefined = q?.data?.meta;
-      const data: ResearchFundamentals | null = q?.data?.data ?? null;
+      const payload = q?.data?.data ?? null;
+      const data: ResearchFundamentals | null = payload?.fundamentals ?? null;
+      const scorecard: ResearchScorecard | null = payload?.scorecard ?? null;
       return {
         symbol,
         color: getChartColor(i),
         meta,
         data,
+        scorecard,
         unavailable: meta?.source === "unavailable",
         loading: !!q?.isFetching && !q?.data,
       };
@@ -344,16 +370,12 @@ export default function ResearchComparePage() {
               <Card className="absolute z-50 top-full mt-1 w-full shadow-lg border border-border">
                 <CardContent className="p-1">
                   {searchItems.map((item) => (
-                    <button
+                    <SymbolSearchResultItem
                       key={`${item.symbol}-${item.exchange}`}
-                      onClick={() => addSymbol(item.symbol)}
-                      className="flex items-center gap-3 w-full text-left px-3 py-2 rounded-md hover:bg-muted/70 transition-colors"
-                    >
-                      <Plus className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
-                      <span className="font-mono font-bold text-sm min-w-[4.5rem]">{item.symbol}</span>
-                      <span className="text-sm text-muted-foreground truncate flex-1">{item.name}</span>
-                      <span className="text-xs text-muted-foreground shrink-0">{item.exchange}</span>
-                    </button>
+                      item={item}
+                      onSelect={(it) => addSymbol(it.symbol)}
+                      leadingIcon={<Plus className="h-3.5 w-3.5 text-muted-foreground shrink-0" />}
+                    />
                   ))}
                 </CardContent>
               </Card>
@@ -534,6 +556,7 @@ export default function ResearchComparePage() {
                       <TableHeader>
                         <TableRow>
                           <TableHead className="whitespace-nowrap">{t('research.compare.symbol')}</TableHead>
+                          <TableHead className="whitespace-nowrap">{t('research.scorecard.health')}</TableHead>
                           {FUNDAMENTALS_METRICS.map((m) => (
                             <TableHead key={m.key} className="text-right whitespace-nowrap p-0">
                               <button
@@ -572,17 +595,27 @@ export default function ResearchComparePage() {
                                 )}
                               </span>
                             </TableCell>
-                            {FUNDAMENTALS_METRICS.map((m) => (
-                              <TableCell
-                                key={m.key}
-                                className={cn(
-                                  "text-right tabular-nums",
-                                  sortMetric === m.key && "bg-muted/40 font-medium",
-                                )}
-                              >
-                                {row.unavailable ? "—" : fmtMetric(m, row.data?.[m.key])}
-                              </TableCell>
-                            ))}
+                            <TableCell className="whitespace-nowrap">
+                              {row.scorecard && row.scorecard.evaluated > 0
+                                ? <ScorecardGradeBadge scorecard={row.scorecard} />
+                                : <span className="text-muted-foreground">—</span>}
+                            </TableCell>
+                            {FUNDAMENTALS_METRICS.map((m) => {
+                              const flag = row.unavailable ? undefined : row.scorecard?.flags.find((f) => f.metric === m.key);
+                              return (
+                                <TableCell
+                                  key={m.key}
+                                  title={flag?.reason}
+                                  className={cn(
+                                    "text-right tabular-nums",
+                                    flag && SEVERITY_TEXT[flag.severity],
+                                    sortMetric === m.key && "bg-muted/40 font-medium",
+                                  )}
+                                >
+                                  {row.unavailable ? "—" : fmtMetric(m, row.data?.[m.key])}
+                                </TableCell>
+                              );
+                            })}
                           </TableRow>
                         ))}
                       </TableBody>

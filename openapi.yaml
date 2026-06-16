@@ -5407,6 +5407,11 @@ paths:
             type: string
             default: 1mo
           description: "Time range: 1d, 5d, 1mo, 3mo, 6mo, 1y, 2y, 5y, max"
+        - in: query
+          name: provider
+          schema:
+            type: string
+          description: "Optional preferred provider (pinned to front of the capability chain; still falls through if unkeyed/failing). ADR-081"
       responses:
         "200":
           description: Chart points with provenance meta (provider, source)
@@ -5487,6 +5492,58 @@ paths:
                 $ref: "#/components/schemas/Envelope"
         "400":
           description: symbol parameter required
+  # Research analytics (ADR-081)
+  /api/research/scorecard:
+    get:
+      summary: Fundamentals heuristic scorecard (health score + flags) for a symbol
+      operationId: researchScorecard
+      tags: [Research]
+      parameters:
+        - in: query
+          name: symbol
+          required: true
+          schema:
+            type: string
+        - in: query
+          name: asset_class
+          schema:
+            type: string
+      responses:
+        "200":
+          description: "{ symbol, fundamentals, scorecard } with provenance meta, or unavailable"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Envelope"
+        "400":
+          description: symbol parameter required
+  /api/research/portfolio-forecast:
+    post:
+      summary: Monte-Carlo projection of portfolio value (on-demand, not persisted)
+      operationId: researchPortfolioForecast
+      tags: [Research]
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                horizon_months: { type: integer }
+                monthly_contribution: { type: number }
+                paths: { type: integer }
+                forward_blend: { type: number, description: "0 = historical drift, 1 = forward" }
+                method: { type: string, enum: [parametric, block_bootstrap] }
+                target_value: { type: number }
+                currency: { type: string }
+                seed: { type: string }
+      responses:
+        "200":
+          description: Projection with percentile bands, summary stats, and forward-input provenance
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Envelope"
   # Research symbol mapping (ADR-079)
   /api/research/mappings:
     get:

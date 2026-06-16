@@ -213,6 +213,8 @@ export const apiClient = {
     saveResearchMappings: research.saveResearchMappings,
     deleteResearchMapping: research.deleteResearchMapping,
     auditResearchMappings: research.auditResearchMappings,
+    getResearchScorecard: research.getResearchScorecard,
+    getPortfolioForecast: research.getPortfolioForecast,
 
     // Aggregations
     getAggregationMonthlySummary: agg.getAggregationMonthlySummary,

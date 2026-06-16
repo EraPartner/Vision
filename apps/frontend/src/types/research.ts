@@ -83,6 +83,20 @@ export interface ResearchFundamentals {
     profitMargin: number | null;
     revenue: number | null;
     returnOnEquity: number | null;
+    // Extended fields (ADR-081) — optional; providers expose different subsets.
+    sector?: string | null;
+    pegRatio?: number | null;
+    payoutRatio?: number | null;
+    grossMargin?: number | null;
+    operatingMargin?: number | null;
+    revenueGrowth?: number | null;
+    earningsGrowth?: number | null;
+    debtToEquity?: number | null;
+    currentRatio?: number | null;
+    quickRatio?: number | null;
+    interestCoverage?: number | null;
+    freeCashFlow?: number | null;
+    fcfYield?: number | null;
 }
 
 export interface ResearchAnalystConsensus {
@@ -231,4 +245,107 @@ export interface ProviderKeyStatus {
 
 export interface ProviderKeysResponse {
     providers: ProviderKeyStatus[];
+}
+
+// ── Fundamentals scorecard (ADR-081) ─────────────────────────────────────────
+
+export type ScorecardSeverity = 'ok' | 'caution' | 'warn' | 'risk';
+export type ScorecardGrade = 'strong' | 'healthy' | 'mixed' | 'weak' | 'poor' | 'unknown';
+
+export interface ScorecardFlag {
+    metric: string;
+    category: 'liquidity' | 'leverage' | 'profitability' | 'cashflow' | 'growth' | 'valuation' | 'dividend';
+    better: 'higher' | 'lower';
+    value: number;
+    severity: ScorecardSeverity;
+    /** Stable `<metric>.<severity>` code for i18n. */
+    code: string;
+    /** English fallback explanation. */
+    reason: string;
+    benchmark: string;
+}
+
+export interface ResearchScorecard {
+    score: number | null;
+    grade: ScorecardGrade;
+    evaluated: number;
+    counts: Record<ScorecardSeverity, number>;
+    flags: ScorecardFlag[];
+}
+
+export interface ResearchScorecardResponse {
+    symbol: string;
+    fundamentals: ResearchFundamentals;
+    scorecard: ResearchScorecard;
+}
+
+// ── Portfolio forecast (ADR-081, Pillar C) ───────────────────────────────────
+
+export type ForecastMethod = 'parametric' | 'block_bootstrap';
+export type ForecastReturnSource = 'historical' | 'blended';
+
+export interface PortfolioForecastInput {
+    horizonMonths: number;
+    monthlyContribution?: number;
+    paths?: number;
+    /** 0 = pure historical drift, 1 = pure forward. */
+    forwardBlend?: number;
+    method?: ForecastMethod;
+    targetValue?: number;
+    currency?: string;
+    seed?: string;
+}
+
+export interface ForecastPoint {
+    monthIndex: number;
+    date: string;
+    netInvested: number;
+    p10: number;
+    p25: number;
+    p50: number;
+    p75: number;
+    p90: number;
+}
+
+export interface ForecastForwardHolding {
+    symbol: string;
+    expectedAnnual: number;
+    growth: number;
+    dividendYield?: number;
+}
+
+export interface PortfolioForecast {
+    available: boolean;
+    reason?: 'no_holdings' | 'insufficient_history';
+    currency?: string;
+    method?: ForecastMethod;
+    horizonMonths?: number;
+    paths?: number;
+    seed?: string;
+    historyDays?: number;
+    flowArtifactDays?: number;
+    lowConfidence?: boolean;
+    startValue?: number;
+    startInvested?: number;
+    monthlyContribution?: number;
+    totalContributions?: number;
+    netInvested?: number;
+    expectedAnnualReturn?: number;
+    historicalAnnualReturn?: number;
+    annualVolatility?: number;
+    forwardBlend?: number;
+    usedForward?: boolean;
+    forwardHoldings?: ForecastForwardHolding[];
+    projected?: {
+        mean: number;
+        p10: number;
+        p25: number;
+        p50: number;
+        p75: number;
+        p90: number;
+    };
+    probBelowInvested?: number;
+    targetValue?: number;
+    probTarget?: number;
+    points?: ForecastPoint[];
 }

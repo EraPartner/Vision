@@ -52,6 +52,8 @@ const MarketLookupPage = lazy(routeLoaders["/research/market"]);
 const WatchlistPage = lazy(routeLoaders["/research/watchlist"]);
 const ResearchSymbolPage = lazy(routeLoaders["/research/symbol/:symbol"]);
 const ResearchComparePage = lazy(routeLoaders["/research/compare"]);
+const PortfolioForecastPage = lazy(routeLoaders["/research/forecast"]);
+const ChartBuilderPage = lazy(routeLoaders["/research/charts"]);
 const NotFound = lazy(() => import("./pages/NotFound"));
 
 // Dev-only devtools — tree-shaken from production builds.
@@ -184,6 +186,8 @@ const App = () => {
                                                     <Route path="/research/watchlist" element={<WatchlistPage />} />
                                                     <Route path="/research/symbol/:symbol" element={<ResearchSymbolPage />} />
                                                     <Route path="/research/compare" element={<ResearchComparePage />} />
+                                                    <Route path="/research/forecast" element={<PortfolioForecastPage />} />
+                                                    <Route path="/research/charts" element={<ChartBuilderPage />} />
                                                     {/* Redirects from the pre-ADR-079 portfolio paths (query string preserved) */}
                                                     <Route path="/portfolio/market" element={<RedirectWithQuery to="/research/market" />} />
                                                     <Route path="/portfolio/watchlist" element={<RedirectWithQuery to="/research/watchlist" />} />

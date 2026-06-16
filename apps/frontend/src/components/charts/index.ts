@@ -13,6 +13,12 @@ export type { StackedBarChartProps, StackedBarSeries } from "./StackedBarChart";
 export { LineChart } from "./LineChart";
 export type { LineChartProps, LineReferenceLine, LineSeries } from "./LineChart";
 
+export { ComposedChart } from "./ComposedChart";
+export type { ComposedChartProps, ComposedSeries, ComposedSeriesType } from "./ComposedChart";
+
+export { CandlestickChart } from "./CandlestickChart";
+export type { CandlestickChartProps, CandlePoint } from "./CandlestickChart";
+
 export { PieChart } from "./PieChart";
 export type { PieChartProps, PieDatum } from "./PieChart";
 

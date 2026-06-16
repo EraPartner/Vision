@@ -13,7 +13,12 @@ tags:
   - capability-map
   - quota-governor
   - adr-079
-description: Provider-agnostic research API surface (ADR-079). Six GET endpoints under /api/research expose ticker search, live quotes, historical charts, fundamentals, analyst consensus, and news — routed across providers via the capability map, quota governor, and type-aware cache. All five provider adapters (Yahoo + Twelve Data, Finnhub, FMP, Alpha Vantage) are implemented; the keyed four light up automatically when their API key is set in the root .env.
+  - adr-081
+  - monte-carlo
+  - portfolio-projection
+  - fundamentals-scorecard
+  - chart-builder
+description: Provider-agnostic research API surface (ADR-079 + ADR-081). Eight GET/POST data and analytics endpoints under /api/research expose ticker search, live quotes, historical charts (with optional provider override), fundamentals, analyst consensus, news, a heuristic fundamentals scorecard, and Monte Carlo portfolio projection — plus five symbol-mapping endpoints and three provider-key Settings endpoints (16 total). All five provider adapters (Yahoo + Twelve Data, Finnhub, FMP, Alpha Vantage) are implemented; the keyed four light up automatically when their API key is set in the root .env.
 aliases:
   - research-api
   - research-endpoints
@@ -26,12 +31,14 @@ related_code:
   - apps/node-backend/src/services/research/researchCache.js
   - apps/node-backend/src/services/research/providerKeys.js
   - apps/node-backend/src/services/research/adapters/yahooAdapter.js
+  - apps/node-backend/src/services/research/projection/portfolioProjection.js
+  - apps/node-backend/src/services/research/fundamentalsScorecard.js
   - apps/node-backend/src/repositories/providerQuotaRepository.js
 ---
 
 # Research API
 
-Provider-agnostic market research surface introduced in [[docs/adr/079-multi-provider-research-aggregation|ADR-079]]. Six GET endpoints delegate to the **research aggregation layer**, which routes each request across an ordered provider chain — checking quota, skipping unhealthy/unkeyed providers, returning the first successful response, and caching the result for its type-appropriate TTL.
+Provider-agnostic market research surface introduced in [[docs/adr/079-multi-provider-research-aggregation|ADR-079]] and deepened in [[docs/adr/081-research-analytics-forecasting|ADR-081]]. Sixteen endpoints under `/api/research`: six GET data endpoints delegate to the **research aggregation layer** (capability map → quota governor → cache → race-to-first provider); two analytics endpoints (`scorecard`, `portfolio-forecast`) compute derived outputs from aggregated data; five symbol-mapping endpoints manage cross-provider instrument identity; and three provider-key Settings endpoints manage keyed-provider API keys.
 
 ## Base URL
 
@@ -153,6 +160,7 @@ Historical price chart points for a symbol.
 | `symbol` | string | Yes | — | Ticker symbol |
 | `asset_class` | string | No | — | Asset class hint for provider routing |
 | `range` | string | No | `1mo` | Time range: `1d`, `5d`, `1mo`, `3mo`, `6mo`, `1y`, `2y`, `5y`, `max` |
+| `provider` | string | No | — | Pin a preferred provider to the front of the chart capability chain (e.g. `"finnhub"`, `"twelve_data"`). The aggregator still falls through to the next provider if the pinned one is unkeyed or failing — this is a preference, not a hard requirement. |
 
 **Response:** `200 OK`
 
@@ -188,6 +196,24 @@ Fundamentals snapshot for a symbol (P/E, EPS, market cap, book value, dividend y
 
 **Capability chain:** `[fmp, finnhub, yahoo]` for stocks/ETFs. FMP and Finnhub require their API keys to be present in `.env.local`; without keys those providers are skipped and Yahoo is the fallback.
 
+**Extended fields (ADR-081):** The response now also includes the following fields when available from the provider. Each field is `undefined` (omitted from the response object) when the provider does not expose it — providers expose different subsets.
+
+| Field | Description |
+|---|---|
+| `sector` | Sector classification string |
+| `pegRatio` | Price/Earnings-to-Growth ratio |
+| `payoutRatio` | Dividend payout as a fraction of earnings (0–1+) |
+| `grossMargin` | Gross profit margin as a fraction (0–1) |
+| `operatingMargin` | Operating profit margin as a fraction |
+| `revenueGrowth` | YoY revenue growth as a fraction |
+| `earningsGrowth` | YoY earnings growth as a fraction |
+| `debtToEquity` | Total debt / total equity ratio (normalized to ratio, not %) |
+| `currentRatio` | Current assets / current liabilities |
+| `quickRatio` | (Current assets − inventory) / current liabilities |
+| `interestCoverage` | EBIT / interest expense |
+| `freeCashFlow` | Free cash flow in the reporting currency |
+| `fcfYield` | Free cash flow yield as a fraction of market cap |
+
 **Response:** `200 OK`
 
 ```json
@@ -200,9 +226,19 @@ Fundamentals snapshot for a symbol (P/E, EPS, market cap, book value, dividend y
     "priceToBook": 48.2,
     "dividendYield": 0.0051,
     "beta": 1.28,
-    "marketCap": 3240000000000
+    "marketCap": 3240000000000,
+    "sector": "Technology",
+    "pegRatio": 2.1,
+    "payoutRatio": 0.16,
+    "grossMargin": 0.46,
+    "operatingMargin": 0.31,
+    "debtToEquity": 1.87,
+    "currentRatio": 0.95,
+    "revenueGrowth": 0.05,
+    "freeCashFlow": 108000000000,
+    "fcfYield": 0.033
   },
-  "meta": { "provider": "yahoo", "source": "live" }
+  "meta": { "provider": "fmp", "source": "live" }
 }
 ```
 
@@ -298,6 +334,136 @@ News articles for a symbol.
 - `400 Bad Request` — `symbol` parameter missing
 
 **Cache TTL:** 2 hours
+
+---
+
+### GET /api/research/scorecard
+
+Heuristic fundamentals scorecard for a symbol. Fetches fundamentals via the aggregator (24 h cache respected), then evaluates them through the pure `fundamentalsScorecard.js` engine. Requires no additional provider calls beyond what `GET /api/research/fundamentals` already makes.
+
+**Query Parameters:**
+
+| Parameter | Type | Required | Description |
+|-----------|------|----------|-------------|
+| `symbol` | string | Yes | Ticker symbol |
+| `asset_class` | string | No | Asset class hint for provider routing |
+
+**Response:** `200 OK`
+
+```json
+{
+  "ok": true,
+  "data": {
+    "symbol": "AAPL",
+    "fundamentals": { /* same shape as GET /api/research/fundamentals */ },
+    "scorecard": {
+      "score": 72,
+      "grade": "B",
+      "evaluated": 9,
+      "counts": { "ok": 5, "caution": 3, "warn": 1, "risk": 0 },
+      "flags": [
+        {
+          "metric": "currentRatio",
+          "category": "Leverage & Liquidity",
+          "better": "higher",
+          "value": 0.95,
+          "severity": "warn",
+          "code": "currentRatio.warn",
+          "reason": "Current ratio below 1.0 — current liabilities exceed current assets",
+          "benchmark": 1.0
+        }
+      ]
+    }
+  },
+  "meta": { "provider": "fmp", "source": "cache" }
+}
+```
+
+When fundamentals are unavailable from all providers:
+
+```json
+{ "ok": true, "data": { "unavailable": true }, "meta": { "provider": null, "source": "unavailable" } }
+```
+
+> [!info] Scorecard design invariants
+> Missing fields are **skipped, never penalized** — a provider that does not expose `interestCoverage` does not reduce the score. Grade mapping: 80–100 → A, 60–79 → B, 40–59 → C, 20–39 → D, 0–19 → F. Thresholds are hardcoded industry heuristics; no machine learning or market-relative scoring.
+>
+> **i18n note:** The `reason` field in each flag is an English sentence. Structured fields (`metric`, `severity`, `code`, `grade`, `benchmark`) are localized. The English-only `reason` is a known gap tracked as a follow-up.
+
+**Error Responses:**
+- `400 Bad Request` — `symbol` parameter missing
+
+---
+
+### POST /api/research/portfolio-forecast
+
+Monte Carlo projection of aggregate portfolio value. Non-persisted; re-submit with the same seed to reproduce results.
+
+**Request Body:**
+
+| Field | Type | Required | Default | Description |
+|-------|------|----------|---------|-------------|
+| `horizon_months` | integer | Yes | — | Projection horizon in months (1–360) |
+| `monthly_contribution` | number | No | `0` | Fixed monthly cash contribution in `currency` |
+| `paths` | integer | No | `1000` | Number of simulation paths (10–10000) |
+| `forward_blend` | number | No | `0` | Fraction of drift from forward-looking provider inputs (0 = pure historical, 1 = pure analyst consensus) |
+| `method` | string | No | `"parametric"` | Simulation method: `"parametric"` (Gaussian monthly steps) or `"block_bootstrap"` (stationary Politis–Romano resample of daily residuals) |
+| `target_value` | number | No | — | Optional target portfolio value — enables `probTarget` in summary |
+| `currency` | string | No | app default | Display currency for output values |
+| `seed` | integer | No | random | PRNG seed for deterministic reproduction |
+
+**Response:** `200 OK`
+
+```json
+{
+  "ok": true,
+  "data": {
+    "bands": [
+      { "month": "2026-07", "p10": 98000, "p25": 101000, "p50": 105000, "p75": 110000, "p90": 116000 }
+    ],
+    "summary": {
+      "projectedP10": 115000,
+      "projectedP25": 130000,
+      "projectedP50": 148000,
+      "projectedP75": 170000,
+      "projectedP90": 198000,
+      "expectedAnnualReturn": 0.082,
+      "annualVolatility": 0.154,
+      "probBelowInvested": 0.12,
+      "probTarget": 0.43
+    },
+    "forwardInputs": [
+      {
+        "symbol": "AAPL",
+        "weight": 0.18,
+        "targetGrowth": 0.14,
+        "dividendYield": 0.005,
+        "provider": "finnhub",
+        "skipped": false
+      },
+      {
+        "symbol": "MSFT",
+        "weight": 0.15,
+        "targetGrowth": null,
+        "dividendYield": null,
+        "provider": null,
+        "skipped": true
+      }
+    ],
+    "seed": 42
+  },
+  "meta": { "source": "live" }
+}
+```
+
+**Error Responses:**
+- `400 Bad Request` — missing or invalid body fields
+- `422 Unprocessable Entity` — insufficient portfolio snapshot history (< 60 days); response: `{ "error": "insufficient_history", "message": "..." }`
+
+> [!info] Drift / Risk decoupling
+> **RISK** (σ) is always estimated from the aggregate portfolio **flow-adjusted** daily-return history via `portfolioPerformanceSnapshotService.getSnapshots()` — embedded realized cross-holding covariance, no covariance matrix required. Returns use Modified Dietz (`(Vₜ − Vₜ₋₁ − ΔInvestedₜ) / Vₜ₋₁`) so deposits/withdrawals are not mistaken for market return; gross flow artifacts (>±50% daily) are dropped and reported as `flowArtifactDays`. **DRIFT** (μ) is a per-holding weighted blend of the historical mean (weight = `1 - forward_blend`) and forward-looking analyst inputs (analyst 12m target-implied growth + dividend yield, fetched through `researchAggregator`, capped ±50%, top-25 holdings by weight). Forward inputs that are unavailable (no keyed provider, quota exhausted) appear in `forwardInputs` with `skipped: true` and fall back to historical drift for that holding.
+>
+> `expectedAnnualReturn` is the **median/geometric** CAGR (the simulated mean path runs higher by σ²/2 — the median is the conservative figure shown). `probBelowInvested` compares the terminal value against **net invested capital** (`totals.totalInvested` cost basis + future contributions), not current market value, so existing unrealized gains don't inflate the break-even line.
 
 ---
 
@@ -416,8 +582,9 @@ All `/api/research/*` endpoints share the `marketRateLimiter` (same as `/api/mar
 
 ## Related
 
-- [[docs/adr/079-multi-provider-research-aggregation|ADR-079]] — architectural decision record with full design rationale
-- [[docs/features/research|Research Feature]] — feature spec with the four pillars and aggregation summary
+- [[docs/adr/081-research-analytics-forecasting|ADR-081]] — architecture decision for the scorecard, portfolio projection engine, and chart builder (Pillars B/C/D deepening)
+- [[docs/adr/079-multi-provider-research-aggregation|ADR-079]] — architectural decision record with full design rationale for the aggregation layer
+- [[docs/features/research|Research Feature]] — feature spec with all four pillar statuses and API surface overview
 - [[docs/integrations/price-providers|Price Providers Integration]] — the provider registry this layer extends
 - [[docs/api/marketLookup|Market Lookup API]] — the existing Yahoo-only surface that research coexists with
-- [[docs/api/watchlist|Watchlist API]] — watchlist surface that the future Research workspace will consolidate
+- [[docs/api/watchlist|Watchlist API]] — watchlist surface consolidated into the Research workspace

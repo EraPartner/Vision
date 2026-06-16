@@ -28,6 +28,9 @@ import type {
     ResearchRange,
     ResearchResult,
     ResearchSearchResponse,
+    ResearchScorecardResponse,
+    PortfolioForecast,
+    PortfolioForecastInput,
     ProviderKeysResponse,
 } from '@/types/research';
 
@@ -99,11 +102,14 @@ export function getResearchChart(
     symbol: string,
     range: ResearchRange,
     assetClass?: ResearchAssetClass,
+    /** Pin a preferred provider (still falls through if it fails / is unkeyed). */
+    provider?: string,
 ): Promise<ResearchResult<ResearchChartResponse>> {
     return researchGet<ResearchChartResponse>('/api/research/chart', {
         symbol,
         range,
         asset_class: assetClass,
+        provider,
     });
 }
 
@@ -121,6 +127,33 @@ export function getResearchAnalyst(
 
 export function getResearchNews(symbol: string): Promise<ResearchResult<ResearchNewsResponse>> {
     return researchGet<ResearchNewsResponse>('/api/research/news', { symbol });
+}
+
+// ── Analytics (ADR-081) ───────────────────────────────────────────────────────
+
+export function getResearchScorecard(
+    symbol: string,
+    assetClass?: ResearchAssetClass,
+): Promise<ResearchResult<ResearchScorecardResponse | null>> {
+    return researchGet<ResearchScorecardResponse | null>('/api/research/scorecard', {
+        symbol,
+        asset_class: assetClass,
+    });
+}
+
+export function getPortfolioForecast(
+    input: PortfolioForecastInput,
+): Promise<ResearchResult<PortfolioForecast>> {
+    return researchSend<PortfolioForecast>('/api/research/portfolio-forecast', 'POST', {
+        horizon_months: input.horizonMonths,
+        monthly_contribution: input.monthlyContribution,
+        paths: input.paths,
+        forward_blend: input.forwardBlend,
+        method: input.method,
+        target_value: input.targetValue,
+        currency: input.currency,
+        seed: input.seed,
+    });
 }
 
 // ── Symbol-mapping endpoints ────────────────────────────────────────────────

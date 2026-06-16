@@ -33,6 +33,7 @@ import {
     Target,
     Telescope,
     GitCompareArrows,
+    CandlestickChart,
     TrendingUp,
     Users,
     Wallet,
@@ -87,6 +88,8 @@ const RESEARCH_PAGES: PaletteEntry[] = [
     { titleKey: "nav.researchHome", url: "/research", icon: Telescope },
     { titleKey: "nav.marketLookup", url: "/research/market", icon: LineChart },
     { titleKey: "nav.compare", url: "/research/compare", icon: GitCompareArrows },
+    { titleKey: "nav.chartBuilder", url: "/research/charts", icon: CandlestickChart },
+    { titleKey: "nav.forecast", url: "/research/forecast", icon: TrendingUp },
     { titleKey: "nav.watchlist", url: "/research/watchlist", icon: Target },
 ];
 

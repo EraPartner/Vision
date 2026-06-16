@@ -109,7 +109,7 @@ export function ResearchAnalystTab({ symbol, enabled }: ResearchAnalystTabProps)
                   : action.action === "down" || action.action === "downgrade"
                     ? <TrendingDown className="h-3 w-3 text-destructive shrink-0" />
                     : <ArrowUpDown className="h-3 w-3 text-muted-foreground shrink-0" />}
-                <span className="text-muted-foreground shrink-0 w-16">
+                <span className="text-muted-foreground shrink-0 w-20 tabular-nums whitespace-nowrap">
                   {formatDateStringWithAppSettings(String(action.date), appSettings.dateFormat)}
                 </span>
                 <span className="font-medium text-foreground truncate flex-1">{action.firm}</span>
