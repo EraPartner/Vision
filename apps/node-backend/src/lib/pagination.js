@@ -9,12 +9,22 @@
  * endpoints were neither). Per-resource caps stay configurable via maxLimit.
  */
 
+/**
+ * @param {unknown} raw
+ * @param {{ min?: number, max?: number, fallback: number }} bounds
+ * @returns {number}
+ */
 export function parseIntClamped(raw, { min = 1, max, fallback }) {
-  const parsed = parseInt(raw, 10);
+  const parsed = parseInt(/** @type {string} */ (raw), 10);
   if (!Number.isFinite(parsed) || parsed < min) return fallback;
   return max != null ? Math.min(parsed, max) : parsed;
 }
 
+/**
+ * @param {Record<string, unknown>} [query]
+ * @param {{ defaultLimit?: number, maxLimit?: number }} [options]
+ * @returns {{ limit: number, offset: number }}
+ */
 export function parsePagination(query = {}, { defaultLimit = 50, maxLimit } = {}) {
   return {
     limit: parseIntClamped(query.limit, { min: 1, max: maxLimit, fallback: defaultLimit }),

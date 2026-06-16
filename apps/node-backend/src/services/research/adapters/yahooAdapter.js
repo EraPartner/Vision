@@ -108,7 +108,7 @@ const yahooAdapter = {
 
   async chart(symbol, { range = '1mo', interval = '1d' } = {}) {
     const result = /** @type {any} */ (
-      await yahoo.chart(symbol, { period1: rangeToDate(range), interval, includePrePost: false }, NO_VALIDATE)
+      await yahoo.chart(symbol, { period1: rangeToDate(range), interval: /** @type {any} */ (interval), includePrePost: false }, NO_VALIDATE)
     );
     const points = (result?.quotes || [])
       .filter((p) => p.close != null)

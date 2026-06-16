@@ -84,6 +84,7 @@ const fmpAdapter = {
     // rest). Capture the core endpoints' error so the thrown message carries the
     // real HTTP status (shown as last_error on the admin health row) rather than
     // a bare "no fundamentals".
+    /** @type {Error | undefined} */
     let coreError;
     const onCoreError = (err) => { if (!coreError) coreError = err; return undefined; };
     const [profile, ratios, keyMetrics, growth] = await Promise.all([

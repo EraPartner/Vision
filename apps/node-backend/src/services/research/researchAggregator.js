@@ -34,7 +34,7 @@ const METHOD_BY_TYPE = Object.freeze({
 /**
  * @param {Object} [deps]
  * @param {Record<string, any>} [deps.adapters]  provider key → adapter object
- * @param {ReturnType<typeof createQuotaGovernor>} [deps.governor]
+ * @param {typeof defaultGovernor} [deps.governor]
  * @param {typeof researchCache} [deps.cache]
  * @param {(provider: string) => boolean} [deps.isKeyed]
  * @param {(provider: string) => unknown} [deps.recordSuccess]
@@ -71,7 +71,7 @@ export function createResearchAggregator({
     const { symbol, assetClass, range, count, cacheKey } = params;
     const key = cacheKey ?? `${dataType}:${assetClass ?? ''}:${symbol ?? ''}:${range ?? ''}`;
 
-    const cached = cache.get(key);
+    const cached = /** @type {{ provider?: string, data?: unknown } | undefined} */ (cache.get(key));
     if (cached !== undefined) return { ...cached, source: 'cache' };
 
     const attempted = [];
@@ -129,7 +129,7 @@ export function createResearchAggregator({
    */
   async function fetchFundamentals({ symbol, assetClass } = {}) {
     const key = `fundamentals:merged:${assetClass ?? ''}:${symbol ?? ''}`;
-    const cached = cache.get(key);
+    const cached = /** @type {{ provider?: string, data?: unknown } | undefined} */ (cache.get(key));
     if (cached !== undefined) return { ...cached, source: 'cache' };
 
     // Precedence order: FMP first (richest US fundamentals), Yahoo as the keyless

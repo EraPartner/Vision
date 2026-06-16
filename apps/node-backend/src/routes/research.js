@@ -116,7 +116,7 @@ router.get('/scorecard', async (req, res) => {
   if (result.source === 'unavailable') {
     return res.ok(undefined, { provider: null, source: 'unavailable' });
   }
-  const scorecard = fundamentalsScorecard(result.data);
+  const scorecard = fundamentalsScorecard(/** @type {Record<string, unknown>} */ (result.data));
   res.ok({ symbol, fundamentals: result.data, scorecard }, {
     provider: result.provider ?? null,
     source: result.source,
@@ -132,7 +132,7 @@ router.post('/portfolio-forecast', async (req, res) => {
     monthlyContribution: body.monthly_contribution ?? body.monthlyContribution,
     paths: body.paths,
     forwardBlend: body.forward_blend ?? body.forwardBlend,
-    method: single(body.method) || undefined,
+    method: /** @type {'parametric'|'block_bootstrap'|undefined} */ (single(body.method) || undefined),
     targetValue: body.target_value ?? body.targetValue,
     currency: single(body.currency) || undefined,
     seed: single(body.seed) || undefined,
