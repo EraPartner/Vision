@@ -19,13 +19,17 @@ imports route to review unless every row matched by exact symbol).
 user-overridden investment match, and per-row error so the review screen can
 group by instrument and surface oversell / unmatched / bad-date failures.
 
-Blast radius: additive only — two new tables, no change to existing tables.
-Rollback drops both (staging rows cascade from the batch FK).
+Blast radius: additive only — two new tables, no change to existing tables. The
+investment FKs are added conditionally — skipped when `investments` is a VIEW in
+legacy table-inheritance deployments (PostgreSQL rejects FKs to views; mirrors
+0026_asset_price_history_fk). Rollback drops both tables (staging rows cascade
+from the batch FK).
 """
 
 from typing import Sequence, Union
 
 from alembic import op
+import sqlalchemy as sa
 
 
 revision: str = "0040_add_portfolio_import_staging"
@@ -80,8 +84,8 @@ def upgrade() -> None:
           note TEXT,
           raw_data TEXT,
           tx_hash TEXT,
-          resolved_investment_id INTEGER REFERENCES investments(id) ON DELETE SET NULL,
-          user_override_investment_id INTEGER REFERENCES investments(id) ON DELETE SET NULL,
+          resolved_investment_id INTEGER,
+          user_override_investment_id INTEGER,
           match_source TEXT,
           match_similarity REAL,
           committed_txn_id INTEGER,
@@ -108,6 +112,36 @@ def upgrade() -> None:
           ON portfolio_import_staging_rows (tx_hash)
           WHERE tx_hash IS NOT NULL;
     """)
+
+    # `investments` is a plain table on fresh databases but a VIEW on databases
+    # migrated from the legacy table-inheritance chain (legacy 0013). PostgreSQL
+    # rejects FK references to views, so only add the investment FKs when it is a
+    # real table — mirrors 0026_asset_price_history_fk. On view deployments the
+    # columns stay plain INTEGERs; referential integrity is managed by the import
+    # pipeline (staging rows are transient and cascade-drop with their batch).
+    conn = op.get_bind()
+    row = conn.execute(
+        sa.text("""
+        SELECT relkind FROM pg_class
+        WHERE relname = 'investments'
+          AND relnamespace = (SELECT oid FROM pg_namespace WHERE nspname = 'public')
+    """)
+    ).fetchone()
+    if row and row[0] == "r":
+        op.execute("""
+            ALTER TABLE portfolio_import_staging_rows
+              DROP CONSTRAINT IF EXISTS fk_pf_staging_resolved_investment;
+            ALTER TABLE portfolio_import_staging_rows
+              ADD CONSTRAINT fk_pf_staging_resolved_investment
+              FOREIGN KEY (resolved_investment_id) REFERENCES investments(id) ON DELETE SET NULL;
+        """)
+        op.execute("""
+            ALTER TABLE portfolio_import_staging_rows
+              DROP CONSTRAINT IF EXISTS fk_pf_staging_override_investment;
+            ALTER TABLE portfolio_import_staging_rows
+              ADD CONSTRAINT fk_pf_staging_override_investment
+              FOREIGN KEY (user_override_investment_id) REFERENCES investments(id) ON DELETE SET NULL;
+        """)
 
 
 def downgrade() -> None:
