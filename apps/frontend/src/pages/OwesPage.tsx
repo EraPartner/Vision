@@ -60,7 +60,7 @@ export default function OwesPage() {
             <PageHeader title={t('owesPage.title')} subtitle={t('owesPage.subtitle')} icon={HandCoins} />
 
             {totalOwed > 0 && (
-                <Card className="bg-primary/5 border-primary/20">
+                <Card className="bg-primary/5 !border-primary/50">
                     <CardContent className="pt-6">
                         <div className="text-center">
                             <p className="text-sm text-muted-foreground">{t('owesPage.totalOutstanding')}</p>

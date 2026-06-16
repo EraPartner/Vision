@@ -322,7 +322,7 @@ export default function MarketLookupPage() {
 
       {/* No selection state */}
       {!effectiveSelectedSymbol && (
-        <Card>
+        <Card className="glass-regular">
           <CardContent className="flex flex-col items-center justify-center py-20 text-center">
             <BarChart3 className="h-14 w-14 text-muted-foreground/30 mb-4" />
             <h3 className="text-lg font-semibold text-foreground mb-1">{t('market.searchTicker')}</h3>
@@ -338,7 +338,7 @@ export default function MarketLookupPage() {
         <>
           {/* Header */}
           {isQuoteBusy ? (
-            <Card>
+            <Card className="glass-regular">
               <CardContent className="py-6 space-y-3">
                 <Skeleton className="h-8 w-64" />
                 <Skeleton className="h-12 w-40" />
@@ -346,7 +346,7 @@ export default function MarketLookupPage() {
               </CardContent>
             </Card>
           ) : quote ? (
-            <Card>
+            <Card className="glass-regular">
               <CardContent className="py-6">
                 <div className="flex items-start justify-between flex-wrap gap-4">
                   <div>
@@ -401,7 +401,7 @@ export default function MarketLookupPage() {
               </CardContent>
             </Card>
           ) : (
-            <Card>
+            <Card className="glass-regular">
               <CardContent className="py-8 text-center text-muted-foreground">
                 {t('market.noQuote', { symbol: effectiveSelectedSymbol })}
               </CardContent>
@@ -424,7 +424,7 @@ export default function MarketLookupPage() {
           )}
 
           {/* Chart */}
-          <Card>
+          <Card className="glass-regular">
             <CardHeader className="pb-2">
               <div className="flex items-center justify-between">
                 <CardTitle className="text-base">{t('market.priceChart')}</CardTitle>
@@ -502,7 +502,7 @@ export default function MarketLookupPage() {
           {/* Key Metrics */}
           {quote && !isProviderAsset && (
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <Card>
+              <Card className="glass-regular">
                 <CardHeader className="pb-2">
                   <CardTitle className="text-sm text-muted-foreground flex items-center gap-2">
                     <Activity className="h-4 w-4" /> {t('market.tradingInfo')}
@@ -527,7 +527,7 @@ export default function MarketLookupPage() {
                 </CardContent>
               </Card>
 
-              <Card>
+              <Card className="glass-regular">
                 <CardHeader className="pb-2">
                   <CardTitle className="text-sm text-muted-foreground flex items-center gap-2">
                     <DollarSign className="h-4 w-4" /> {t('market.fundamentals')}
@@ -589,7 +589,7 @@ export default function MarketLookupPage() {
                 : bearPct >= 0.45 ? "text-destructive"
                   : "text-yellow-500 dark:text-yellow-400";
             return (
-              <Card>
+              <Card className="glass-regular">
                 <CardHeader className="pb-2">
                   <CardTitle className="text-base flex items-center gap-2">
                     <Users className="h-4 w-4" /> {t('market.analystRatings')}
@@ -663,7 +663,7 @@ export default function MarketLookupPage() {
 
           {/* News — Yahoo only; provider-priced assets have no news feed. */}
           {!isProviderAsset && (
-          <Card>
+          <Card className="glass-regular">
             <CardHeader className="pb-2">
                 <CardTitle className="text-base flex items-center gap-2">
                   <Newspaper className="h-4 w-4" /> {t('market.latestNews')}

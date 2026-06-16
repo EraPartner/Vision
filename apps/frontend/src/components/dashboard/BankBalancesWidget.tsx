@@ -48,7 +48,7 @@ export function BankBalancesWidget() {
 
     if (isLoading) {
         return (
-            <Card>
+            <Card className="glass-regular">
                 <CardHeader className="flex flex-row items-center gap-2 pb-3">
                     <Landmark className="h-5 w-5 text-primary" />
                     <CardTitle>{t('bankWidget.title')}</CardTitle>
@@ -68,7 +68,7 @@ export function BankBalancesWidget() {
 
     if (error || !data) {
         return (
-            <Card>
+            <Card className="glass-regular">
                 <CardHeader>
                     <CardTitle className="flex items-center gap-2">
                         <Landmark className="h-5 w-5 text-primary" />
@@ -138,7 +138,7 @@ export function BankBalancesWidget() {
     return (
         <div className="space-y-4">
             {/* Total Net Position Card */}
-            <Card className="premium-frame micro-lift group relative overflow-hidden border shadow-lg bg-gradient-to-br from-primary/10 to-primary/5">
+            <Card className="glass-regular premium-frame micro-lift group relative overflow-hidden">
                 <div className="absolute top-0 right-0 w-32 h-32 bg-gradient-to-br from-primary/10 to-transparent rounded-full -mr-16 -mt-16" />
                 <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-3">
                     <CardTitle className="text-sm font-semibold text-muted-foreground">
@@ -166,7 +166,7 @@ export function BankBalancesWidget() {
                         const color = ACCOUNT_COLORS[idx % ACCOUNT_COLORS.length];
                         const acctPositive = acct.balance >= 0;
                         return (
-                            <Card key={acct.bank_account} className="premium-frame group">
+                            <Card key={acct.bank_account} className="glass-regular premium-frame group">
                                 <CardContent className="pt-4 pb-4 px-4">
                                     <div className="flex items-start justify-between mb-2">
                                         <div className="flex items-center gap-2 min-w-0">
@@ -195,7 +195,7 @@ export function BankBalancesWidget() {
 
             {/* Historical Balance Chart */}
             {chartAccounts.length > 0 && chartData.length > 1 && (
-                <Card>
+                <Card className="glass-regular">
                     <CardHeader>
                         <CardTitle className="flex items-center gap-2">
                             <Landmark className="h-5 w-5 text-primary" />

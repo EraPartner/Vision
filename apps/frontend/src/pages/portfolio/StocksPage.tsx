@@ -337,10 +337,11 @@ export default function StocksPage({
           </CardContent>
         </Card>
 
-        <Card className={cn(
-          "group relative overflow-hidden glass-regular premium-frame micro-lift border-l-4",
-          netGain >= 0 ? "border-l-accent" : "border-l-destructive"
-        )}>
+        <Card className="group relative overflow-hidden glass-regular premium-frame micro-lift">
+          <div aria-hidden className={cn(
+            "pointer-events-none absolute inset-0 rounded-[inherit] bg-gradient-to-br",
+            netGain >= 0 ? "from-accent/15 to-accent/5" : "from-destructive/15 to-destructive/5",
+          )} />
           <CardHeader className="pb-1 pt-3 px-4">
             <CardTitle className="text-xs font-medium text-muted-foreground">{t('portfolio.netReturn')}</CardTitle>
           </CardHeader>
@@ -472,7 +473,7 @@ export default function StocksPage({
       </Card>
 
       {/* Info Card */}
-      <Card className="bg-muted/30 border-dashed">
+      <Card className="bg-muted/30 !border-dashed">
         <CardContent className="py-4">
           <p className="text-sm text-muted-foreground">{t('stocks.howItWorks')}</p>
         </CardContent>

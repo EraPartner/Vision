@@ -97,7 +97,7 @@ export default function CategoriesPage() {
         return (
             <div className="space-y-6 animate-in">
                 <PageHeader title={t('categories.title')} icon={Tags} />
-                <Card>
+                <Card className="glass-regular">
                     <CardHeader className="pb-3"><Skeleton className="h-6 w-44" /></CardHeader>
                     <CardContent className="space-y-2">
                         {[...Array(6)].map((_, i) => (
@@ -113,7 +113,7 @@ export default function CategoriesPage() {
         return (
             <div className="space-y-6 animate-in">
                 <PageHeader title={t('categories.title')} icon={Tags} />
-                <Card><CardContent className="pt-6"><p className="text-destructive">{t('categoriesPage.error', { msg: error.message })}</p></CardContent></Card>
+                <Card className="glass-regular"><CardContent className="pt-6"><p className="text-destructive">{t('categoriesPage.error', { msg: error.message })}</p></CardContent></Card>
             </div>
         );
     }
@@ -153,7 +153,7 @@ export default function CategoriesPage() {
                 </div>
             </div>
 
-            <Card>
+            <Card className="glass-regular">
                     <CardHeader className="pb-3">
                     <CardTitle className="text-lg">{t('categoriesPage.treeTitle')}</CardTitle>
                 </CardHeader>

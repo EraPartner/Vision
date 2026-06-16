@@ -416,7 +416,7 @@ export default function TaxOverviewPage() {
 
         {isVisible("trendStrip") && <MultiYearTrendStrip />}
 
-        <Card className="border-primary/20 bg-primary/5">
+        <Card className="!border-primary/50 bg-primary/5">
                     <CardContent className="flex items-start gap-3 py-4">
                       <Info className="h-5 w-5 text-primary shrink-0 mt-0.5" />
                       <div>
@@ -427,14 +427,14 @@ export default function TaxOverviewPage() {
             </Card>
 
         {isProfileLoading ? (
-          <Card>
+          <Card className="glass-regular">
             <CardContent className="flex flex-col items-center justify-center py-16 text-center">
               <Loader2 className="h-8 w-8 text-muted-foreground/60 animate-spin mb-3" />
               <p className="text-sm text-muted-foreground">{t('common.loading')}</p>
             </CardContent>
           </Card>
         ) : isEmpty ? (
-          <Card>
+          <Card className="glass-regular">
             <CardContent className="flex flex-col items-center justify-center py-16 text-center">
               <Landmark className="h-12 w-12 text-muted-foreground/40 mb-4" />
                 <h3 className="text-lg font-semibold text-foreground mb-1">{t('tax.noProfile.title')}</h3>
@@ -526,7 +526,7 @@ export default function TaxOverviewPage() {
               )}
 
               {isVisible("taxRules") && (
-                <Card>
+                <Card className="glass-regular">
                   <CardHeader>
                       <CardTitle className="flex items-center gap-2">
                        {t('tax.rules.title')}
@@ -554,7 +554,7 @@ export default function TaxOverviewPage() {
 
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
               {isVisible("incomeBreakdown") && (
-                <Card>
+                <Card className="glass-regular">
                     <CardHeader>
                     <CardTitle>{t('tax.incomeBreakdown.title')}</CardTitle>
                     <CardDescription>{t('tax.incomeBreakdown.description')}</CardDescription>
@@ -602,7 +602,7 @@ export default function TaxOverviewPage() {
                 </Card>
               )}
 
-              <Card>
+              <Card className="glass-regular">
                 <CardHeader>
                       <CardTitle>{t('tax.profile.currentInputs')}</CardTitle>
                    <CardDescription>{t('tax.profile.currentInputs.desc')}</CardDescription>
@@ -681,7 +681,7 @@ export default function TaxOverviewPage() {
             {isVisible("yearComparison") && <YearComparisonCard />}
 
             {isVisible("yearlyOverview") && (
-              <Card>
+              <Card className="glass-regular">
                 <CardHeader>
                    <CardTitle>{t('tax.yearly.title')}</CardTitle>
                    <CardDescription>{t('tax.yearly.description')}</CardDescription>
@@ -735,7 +735,7 @@ export default function TaxOverviewPage() {
                 </CardContent>
               </Card>
             )}
-            <Card className="border-border/70">
+            <Card className="glass-regular border-border/70">
                 <CardHeader>
                 <CardTitle className="text-base">{t('tax.automation.title')}</CardTitle>
                 </CardHeader>

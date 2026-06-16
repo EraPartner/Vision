@@ -144,7 +144,7 @@ export default function NetWorthPage() {
             <Card key={i}><CardContent className="pt-6"><Skeleton className="h-16 w-full" /></CardContent></Card>
           ))}
         </div>
-        <Card><CardContent className="pt-6"><Skeleton className="h-[400px] w-full" /></CardContent></Card>
+        <Card className="glass-regular"><CardContent className="pt-6"><Skeleton className="h-[400px] w-full" /></CardContent></Card>
       </div>
     );
   }
@@ -153,7 +153,7 @@ export default function NetWorthPage() {
     return (
       <div className="space-y-6">
         <PageHeader title={t('networth.title')} icon={Wallet} />
-        <Card>
+        <Card className="glass-regular">
           <CardContent className="flex flex-col items-center justify-center py-16 text-center">
             <Wallet className="h-12 w-12 text-muted-foreground/40 mb-4" />
             <h3 className="text-lg font-semibold text-foreground mb-1">{t('networth.unableToLoad')}</h3>
@@ -170,7 +170,7 @@ export default function NetWorthPage() {
     return (
       <div className="space-y-6">
         <PageHeader title={t('networth.title')} icon={Wallet} />
-        <Card>
+        <Card className="glass-regular">
           <CardContent className="flex flex-col items-center justify-center gap-3 py-12 text-center">
             <Wallet className="h-10 w-10 text-muted-foreground" />
             <div>

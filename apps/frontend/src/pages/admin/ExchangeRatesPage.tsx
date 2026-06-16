@@ -48,7 +48,7 @@ export default function ExchangeRatesPage() {
 
     if (error) {
         return (
-            <Card>
+            <Card className="glass-regular">
                 <CardContent className="py-8 text-center text-muted-foreground">
                     {t('exchangeRates.failedToLoad')}
                 </CardContent>
@@ -182,7 +182,7 @@ export default function ExchangeRatesPage() {
 
                 <TabsContent value="live">
                     {liveRates.length === 0 ? (
-                        <Card>
+                        <Card className="glass-regular">
                             <CardContent className="py-8 text-center text-muted-foreground">
                                 {t('exchangeRates.noRates')}
                             </CardContent>

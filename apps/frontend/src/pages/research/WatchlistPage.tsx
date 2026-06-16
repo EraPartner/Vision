@@ -156,7 +156,7 @@ export default function WatchlistPage() {
                 tabIndex={0}
                 aria-label={item.name}
                 className={cn(
-                  "surface-elevated premium-frame micro-lift cursor-pointer transition-all hover:shadow-md hover:border-primary/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50",
+                  "glass-regular premium-frame micro-lift cursor-pointer transition-all hover:shadow-md hover:border-primary/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50",
                   isBelowTarget && "ring-2 ring-success/50"
                 )}
                 onDoubleClick={() => handleDoubleClick(item)}

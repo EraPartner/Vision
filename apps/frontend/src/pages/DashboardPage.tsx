@@ -307,7 +307,7 @@ export default function DashboardPage() {
     const statSkeleton = (
         <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
             {[...Array(4)].map((_, i) => (
-                <Card key={i} className="micro-lift">
+                <Card key={i} className="glass-regular micro-lift">
                     <CardHeader className="pb-3 flex flex-row items-center justify-between space-y-0">
                         <Skeleton className="h-4 w-28" />
                         <Skeleton className="h-10 w-10 rounded-xl" />

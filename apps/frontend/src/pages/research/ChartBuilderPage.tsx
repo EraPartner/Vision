@@ -333,7 +333,7 @@ export default function ChartBuilderPage() {
       <PageHeader title={t("research.builder.title")} subtitle={t("research.builder.subtitle")} icon={CandlestickChart} />
 
       {/* Toolbar */}
-      <Card>
+      <Card className="glass-regular">
         <CardContent className="flex flex-wrap items-end gap-4 pt-6">
           <div className="space-y-1.5">
             <Label className="text-xs">{t("research.builder.range")}</Label>
@@ -365,7 +365,7 @@ export default function ChartBuilderPage() {
       </Card>
 
       {/* Series builder */}
-      <Card>
+      <Card className="glass-regular">
         <CardHeader className="pb-2"><CardTitle className="text-base">{t("research.builder.series")}</CardTitle></CardHeader>
         <CardContent className="space-y-3">
           {series.map((s, i) => (
@@ -457,7 +457,7 @@ export default function ChartBuilderPage() {
 
       {/* Chart */}
       {series.length === 0 ? (
-        <Card>
+        <Card className="glass-regular">
           <CardContent className="flex flex-col items-center justify-center gap-2 py-20 text-center">
             <LineChartIcon className="mb-2 h-14 w-14 text-muted-foreground/30" />
             <h3 className="text-lg font-semibold">{t("research.builder.emptyTitle")}</h3>
@@ -465,7 +465,7 @@ export default function ChartBuilderPage() {
           </CardContent>
         </Card>
       ) : (
-        <Card>
+        <Card className="glass-regular">
           <CardContent className="pt-6">
             {isLoading ? (
               <Skeleton className="h-[400px] w-full rounded-lg" />
@@ -492,7 +492,7 @@ export default function ChartBuilderPage() {
 
       {/* Oscillator */}
       {series.length > 0 && (
-        <Card>
+        <Card className="glass-regular">
           <CardHeader className="pb-2">
             <div className="flex items-center justify-between">
               <CardTitle className="text-base">{t("research.builder.oscillator")}</CardTitle>

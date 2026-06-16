@@ -29,7 +29,7 @@ export function ChartCard({
   const isFiltered = graphExclusions[graphKey] ?? true;
 
   return (
-    <Card>
+    <Card className="glass-regular">
       <CardHeader className="flex flex-row items-center justify-between">
         <div>
           <CardTitle>{title}</CardTitle>

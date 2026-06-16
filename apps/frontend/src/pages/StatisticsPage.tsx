@@ -82,7 +82,7 @@ export default function StatisticsPage() {
         <PageHeader title={t("statsPage.title")} icon={BarChart3} />
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
           {[...Array(4)].map((_, i) => (
-            <Card key={i}>
+            <Card key={i} className="glass-regular">
               <CardContent className="pt-6">
                 <Skeleton className="h-20 w-full" />
               </CardContent>
@@ -98,7 +98,7 @@ export default function StatisticsPage() {
     return (
       <div className="space-y-6 animate-in">
         <PageHeader title={t("statsPage.title")} icon={BarChart3} />
-        <Card>
+        <Card className="glass-regular">
           <CardContent className="pt-6">
             <p className="text-destructive">{t("statsPage.error", { msg: error?.message ?? '' })}</p>
           </CardContent>
@@ -120,7 +120,7 @@ export default function StatisticsPage() {
             resetToDefaults={resetToDefaults}
           />
         </div>
-        <Card>
+        <Card className="glass-regular">
           <CardContent className="flex flex-col items-center justify-center py-16 text-center">
             <BarChart3 className="h-12 w-12 text-muted-foreground/40 mb-4" />
             <h3 className="text-lg font-semibold text-foreground mb-2">{t("statsPage.noDataTitle")}</h3>

@@ -245,7 +245,7 @@ export default function PortfolioOverviewPage() {
       />
 
       {isEmpty ? (
-        <Card>
+        <Card className="glass-regular">
           <CardContent className="pt-0">
             <EmptyState
               icon={PieChartIcon}
@@ -316,7 +316,7 @@ export default function PortfolioOverviewPage() {
 
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
             {isVisible('allocation') && allocationData.length > 0 && (
-              <Card>
+              <Card className="glass-regular">
                 <CardHeader><CardTitle>{t('portfolio.widget.allocation')}</CardTitle><CardDescription>{t('portfolio.allocationByClass')}</CardDescription></CardHeader>
                 <CardContent>
                   <DonutChart
@@ -341,7 +341,7 @@ export default function PortfolioOverviewPage() {
             )}
 
             {isVisible('performance') && (
-              <Card>
+              <Card className="glass-regular">
                 <CardHeader><CardTitle>{t('portfolio.widget.performance')}</CardTitle><CardDescription>{t('portfolio.gainsIncomeAndCosts')}</CardDescription></CardHeader>
                 <CardContent>
                   <div className="space-y-3">
@@ -374,7 +374,7 @@ export default function PortfolioOverviewPage() {
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 lg:items-stretch">
             {isVisible('investments') && (
               <div className={cn(isVisible('news') && newsSymbols.length > 0 ? "lg:col-span-2" : "lg:col-span-3", "h-full min-h-0")}>
-                <Card className="h-full flex flex-col">
+                <Card className="glass-regular h-full flex flex-col">
                   <CardHeader><CardTitle>{t('portfolio.widget.investments')}</CardTitle></CardHeader>
                   <CardContent className="min-h-0">
                     <div className="space-y-2">

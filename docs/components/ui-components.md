@@ -3,9 +3,9 @@ title: UI Components
 type: component
 status: active
 date: 2026-04-17
-updated: 2026-06-11
-tags: [components, ui, radix, shadcn, design-system, phase-9, phase-5, performance, glass-downgrade, dependency-slim-down, liquid-glass-v2, premium-v3, june-2026, command-palette, rolling-number, money-typography, delta-pill, shortcuts-overlay, chart-skeleton, virtual-data-table, context-menu, quick-look, keyboard-nav, dialog-genie, icon-bounce, semantic-tokens, focus-visible, overscroll, glass-chrome, liquid-glass-sidebar, canvas-text, aurora-legibility]
-description: Reusable UI components built on Radix UI primitives with Tailwind CSS, styled with emerald + champagne-gold palette and optimized design tokens. Phase 5 removes unused Carousel, Resizable, and Drawer wrappers. June 2026 Liquid Glass v2 — Card gains universal premium-frame hover, Dialog/AlertDialog use dialog-in/out keyframes, Sonner toasts are glass-thick, EmptyState upgraded, CommandPalette added. June 2026 Premium v3 — RollingNumber, Money, DeltaPill, ShortcutsOverlay, ChartSkeleton shared components; tabs.tsx animated active-pill indicator. June 2026 Premium v3 V5-V7 — VirtualDataTable gains per-row context menu, keyboard row navigation (↑/↓/Enter/Space), and onRowOpen/onRowQuickLook/rowContextMenu props; TransactionQuickLook added. V8: icon-success-bounce animation on Sonner success toast icons. V10: Dialog/AlertDialog genie exit (pointer-driven transform-origin via lib/dialogGenie.ts). June 2026 (UI sweep): ~130 raw palette colors replaced with semantic tokens; focus: → focus-visible: ring idiom; body overscroll-behavior-y: none.
+updated: 2026-06-16
+tags: [components, ui, radix, shadcn, design-system, phase-9, phase-5, performance, glass-downgrade, dependency-slim-down, liquid-glass-v2, premium-v3, june-2026, command-palette, rolling-number, money-typography, delta-pill, shortcuts-overlay, chart-skeleton, virtual-data-table, context-menu, quick-look, keyboard-nav, dialog-genie, icon-bounce, semantic-tokens, focus-visible, overscroll, glass-chrome, liquid-glass-sidebar, canvas-text, aurora-legibility, glass-consistency, popover-glass-thick, role-based-glass]
+description: Reusable UI components built on Radix UI primitives with Tailwind CSS, styled with emerald + champagne-gold palette and optimized design tokens. Phase 5 removes unused Carousel, Resizable, and Drawer wrappers. June 2026 Liquid Glass v2 — Card gains universal premium-frame hover, Dialog/AlertDialog use dialog-in/out keyframes, Sonner toasts are glass-thick, EmptyState upgraded, CommandPalette added. June 2026 Premium v3 — RollingNumber, Money, DeltaPill, ShortcutsOverlay, ChartSkeleton shared components; tabs.tsx animated active-pill indicator. June 2026 Premium v3 V5-V7 — VirtualDataTable gains per-row context menu, keyboard row navigation (↑/↓/Enter/Space), and onRowOpen/onRowQuickLook/rowContextMenu props; TransactionQuickLook added. V8: icon-success-bounce animation on Sonner success toast icons. V10: Dialog/AlertDialog genie exit (pointer-driven transform-origin via lib/dialogGenie.ts). June 2026 (UI sweep): ~130 raw palette colors replaced with semantic tokens; focus: → focus-visible: ring idiom; body overscroll-behavior-y: none. June 2026 (glass consistency): full popover family (Popover, DropdownMenu, Select, ContextMenu, MenuBar, HoverCard, Tooltip) converted to glass-thick, matching the dialog/sheet/toast tier.
 aliases: [ui-components, radix-components, shadcn-components, primitive-components]
 related_code: ["apps/frontend/src/components/ui"]
 ---
@@ -30,23 +30,34 @@ The UI primitives use a shared surface system defined in [[apps/frontend/src/ind
 | Class | Blur | Usage |
 |-------|------|-------|
 | `.glass-thin` | 12px | Subtle interactive elements |
-| `.glass-regular` | 20px | KPI/chart cards, AI-chat panes, popovers |
+| `.glass-regular` | 20px | **All content / chart / stat / state cards** (role-based glass, June 2026 — see note below); also AI-chat panes |
 | `.glass-chrome` | 24px | Sidebar, AppLayout topbar — background alpha 0.55→0.72 (light) / 0.55→0.74 (dark) so aurora and Electron vibrancy glow through the blur |
-| `.glass-thick` | 28px | Modal dialogs (Dialog, AlertDialog, Sheet), Sonner toasts |
+| `.glass-thick` | 28px | All floating overlays: Modal dialogs (Dialog, AlertDialog, Sheet), Sonner toasts **and** the full popover family (Popover, DropdownMenu/SubContent, SelectContent, ContextMenu, MenuBar, HoverCard, Tooltip) |
 | `.glass-elevated` | 32px | Dashboard hero cards (StatCard, NetSummaryCard) |
 
 All glass tiers include `saturate(var(--glass-saturate))` — 180% in light mode, 150% in dark. Thick and elevated tiers add lensing edges (inset specular + concave shade + drop shadow).
+
+> [!info] June 2026 — Role-based glass broadening (no ADR yet; a future ADR may formalize this)
+> ADR-070 (Liquid Glass v2) established a selective rule: "glass only on ~6 KPI/hero/chart surfaces per viewport; default Card stays opaque." In practice that produced inconsistency — content cards, chart wrappers, and stat cards on the same page were visibly mixed (some glass, some opaque) in the enhanced/vibrancy visual tier. The rule was broadened in June 2026 to a **role-based** model: `glass-regular` is now applied to ALL content / chart / stat / state (loading/empty/error) cards so peers shine consistently. The base `Card` component was NOT modified — glass remains opt-in via `className`. GPU trade-off: card-dense pages now exceed the old ~6-surface-per-viewport budget in standard/enhanced tier; mitigated by ADR-075 tier auto-adapt (auto-degrades to near-opaque under `fx-reduced` and on large displays). Profiling the packaged Electron app on Apple Silicon before each release remains the recommended watchpoint.
 
 **`.glass-chrome` sidebar transparency (June 2026):** Background alphas were lowered from 0.72→0.88 (light) / 0.82→0.96 (dark) to 0.55→0.72 / 0.55→0.74, making the sidebar visibly liquid: the aurora blobs and Electron vibrancy glow through the blur. The blur + saturate veil keeps text legibility even at the lowest alpha. Browsers that lack `backdrop-filter` support fall back to a near-opaque ramp (0.92→0.98) via an `@supports not` rule. `prefers-reduced-transparency` fallback is unchanged.
 
 **`prefers-reduced-transparency`** — strips `backdrop-filter` and applies near-opaque fallbacks. (Previously incorrectly gated on `prefers-reduced-motion`; corrected in ADR-070.)
 
-**Opaque surfaces** (no `backdrop-filter` — deliberate perf budget):
-- `DataTable`, `VirtualDataTable`, Watchlist grid — stay opaque for render performance (~6 backdrop-filter surfaces per viewport budget)
+**Opaque surfaces** (no `backdrop-filter` — role-based exceptions):
+- `DataTable`, `VirtualDataTable`, Watchlist grid, holdings tables (pivot/summary/RatesTable) — stay opaque; dense row rendering under a backdrop-filter exceeds GPU budget with no readability benefit
+- Dense form/import cards — opaque by design
+- Dashed "add" placeholder cards (`bg-muted/30 border-dashed`) — intentionally flat
+- Accent/danger callout cards (`bg-primary/5`, `bg-destructive/5`) — colored tint defeats glass
+- Cards nested inside an already-glass dialog (e.g., `InvestmentDetailDialog`) — avoids double-blur
+- Dashboard recent-transactions skeleton — pairs with its opaque `DataTable`
 - `Input`, `Textarea`, `Checkbox`, `RadioGroup`, `Switch`, `Slider`, `Label`
-- `Tabs`, `Select`, `DropdownMenu`, `ContextMenu`, `MenuBar`
-- `Accordion`, `Collapsible`, `Toggle`, `ToggleGroup`
-- `Alert`, `HoverCard`
+- `Tabs`, `Accordion`, `Collapsible`, `Toggle`, `ToggleGroup`
+- `Alert`
+- Select/Menu **triggers** (`SelectTrigger`, `MenubarTrigger`) — use `bg-background/80`; their floating content layers are glass-thick
+
+> [!info] Popover family converted to glass-thick (June 2026)
+> Previously only the dialog family (Dialog, AlertDialog, Sheet) and Sonner toasts used `glass-thick`. The full popover family (Popover, DropdownMenu, SelectContent, ContextMenu, MenuBar content, HoverCard, Tooltip) was on the flat `bg-popover` fallback. All content/overlay layers in this family now use `glass-thick`, achieving uniform material across every floating surface. The `bg-popover` token, redundant `border border-border/50`, and `shadow-lg/md` were dropped from each primitive (glass-thick supplies them). Reduced-transparency and dark-mode fallbacks in `index.css` already covered glass-thick and are inherited automatically.
 
 **Removed UI wrappers (Phase 5 slim-down)**:
 - `Carousel` — unused wrapper around embla-carousel-react; removed with package
@@ -369,7 +380,7 @@ Content container with header, content, and footer sections.
 - `CardContent` - Main content
 - `CardFooter` - Footer/actions
 
-`Card` now has `premium-frame` baked into its base class (June 2026, ADR-070). All cards receive the primary-tinted hover outline and transition list (border-color, box-shadow, transform) without adding any class manually. Add `glass-regular` / `glass-elevated` via `className` to opt into the glass material. Tables inside cards should remain opaque.
+`Card` now has `premium-frame` baked into its base class (June 2026, ADR-070). All cards receive the primary-tinted hover outline and transition list (border-color, box-shadow, transform) without adding any class manually. Add `glass-regular` / `glass-elevated` via `className` to opt into the glass material — the role-based glass rule (June 2026) means all content/chart/stat/state cards should carry `glass-regular`; the base Card itself is intentionally left opaque for tables, forms, and other exceptions (see opaque surfaces list above).
 
 ---
 

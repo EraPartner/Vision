@@ -79,7 +79,7 @@ export function NetWorthChart({
   }, [selectedSeries, t]);
 
   return (
-    <Card>
+    <Card className="glass-regular">
       <CardHeader className="sm:flex-row sm:items-start sm:justify-between gap-3">
         <div>
           <CardTitle>{t('networth.overTime')}</CardTitle>

@@ -3,9 +3,9 @@ title: Code Patterns Reference
 type: reference
 status: active
 date: 2026-04-26
-updated: 2026-06-13
-tags: [reference, patterns, conventions, code-style, backend, frontend, phase-0, phase-1, phase-2, phase-3, phase-4, phase-5, phase-6, phase-9, phase-12, phase-14, phase-q, phase-c, phase-d, motion, liquid-glass, design-system, decimal, money, timezone, openapi, domain-split, import, import-pipeline, concurrency, batching, decimal-enforcement, zustand, slice-selection, typescript, error-handling, type-safety, csv, formula-injection, cwe-1236, csv-record-splitter, csv-parsing, multi-line-fields, date-utilities, immutability, aggregation-optimization, recipient-groups, portfolio-totals, query-parameter-filtering, buildquery, bug-hunt-2026-05-05, bug-hunt-2026-05-06, bug-hunt-2026-05-08, react-keys, stable-keys, mount-guard, memory-leak-prevention, parseLocaleNumber, number-parsing, locale-number, settings-backed-hook, portfolio-tax-classifications, audit-2026-05-11, belgian-tax, freeze-display-pattern, adr-059, dev-observability, devtools, api-inspector, observability, postgres-locking, for-update-group-by, accessibility, a11y, keyboard-operability, aria, onActivateKeyDown, shared-utils, monorepo, workspace, banker-rounding, plural, tc, portfolio-unit-math, premium-v3, optimistic-create, chart-scrub, chart-sync, context-menu, dialog-interplay, radix, june-2026]
-description: Standard code patterns used throughout the Vision project — repositories, routes, hooks, API client, Express setup, error handling, type safety, filter builders, aggregation envelopes, aggregation refresh, trigger-maintained tables, golden fixtures, database fixtures, pure calculation services, atomic multi-step transactions, streaming CSV exports with formula injection prevention, import batch concurrency, motion consumers, surface shells, gradient icon tiles, money utilities, decimal utilities, shared date utilities with input validation and locale support, timezone boundary handling, TypeScript type annotations, type-safe error handling, domain-split API client, Zustand store with useShallow slice selection, immutable PATCH field sanitization, aggregation query optimization with Map-based single-pass accumulation, recipient group resolution via scalar subqueries (Phase Q), portfolio totals single-source-of-truth pattern (Phase 14), Belgian Tax freeze/display pattern for engine-drift protection (ADR-059, May 2026), dev-only observability integration pattern (May 2026 devtools: module-level pub-sub event bus with zero-cost tree-shaking in production). May 2026 bug hunt adds React key generation pattern (use UUID instead of index), mount guard pattern (prevent setState after unmount), and documents parseLocaleNumber heuristic with single-comma thousands separator fix. May 2026 a11y pass adds onActivateKeyDown keyboard-activation helper pattern. June 2026: shared-utils monorepo package (@vision/shared-utils) consolidates money/slugify/downsample; banker's rounding is now the canonical roundMoney mode; tc() plural pattern documented. June 2026 (ADR-070): optimistic mutation pattern (snapshot/patch/rollback via setQueriesData); surface shell updated with glass-regular/glass-elevated/opaque-table canonical rules; motion consumer updated for PageTransition re-addition and dialog keyframe animation. June 2026 Premium v3 (ADR-071): optimistic-create pattern (temp negative-id row, server swap, rollback, onSettled invalidate); chart scrub pattern (useChartScrub, pointer capture, glass Δ pill); chart sync pattern (ChartSyncProvider, syncId prop, domain guard). June 2026 Premium v3 V5 (ADR-071): Radix ContextMenu + Dialog interplay pattern — modal={false} prevents body pointer-events race when menu items spawn Dialogs.
+updated: 2026-06-16
+tags: [reference, patterns, conventions, code-style, backend, frontend, phase-0, phase-1, phase-2, phase-3, phase-4, phase-5, phase-6, phase-9, phase-12, phase-14, phase-q, phase-c, phase-d, motion, liquid-glass, design-system, decimal, money, timezone, openapi, domain-split, import, import-pipeline, concurrency, batching, decimal-enforcement, zustand, slice-selection, typescript, error-handling, type-safety, csv, formula-injection, cwe-1236, csv-record-splitter, csv-parsing, multi-line-fields, date-utilities, immutability, aggregation-optimization, recipient-groups, portfolio-totals, query-parameter-filtering, buildquery, bug-hunt-2026-05-05, bug-hunt-2026-05-06, bug-hunt-2026-05-08, react-keys, stable-keys, mount-guard, memory-leak-prevention, parseLocaleNumber, number-parsing, locale-number, settings-backed-hook, portfolio-tax-classifications, audit-2026-05-11, belgian-tax, freeze-display-pattern, adr-059, dev-observability, devtools, api-inspector, observability, postgres-locking, for-update-group-by, accessibility, a11y, keyboard-operability, aria, onActivateKeyDown, shared-utils, monorepo, workspace, banker-rounding, plural, tc, portfolio-unit-math, premium-v3, optimistic-create, chart-scrub, chart-sync, context-menu, dialog-interplay, radix, role-based-glass, june-2026]
+description: Standard code patterns used throughout the Vision project — repositories, routes, hooks, API client, Express setup, error handling, type safety, filter builders, aggregation envelopes, aggregation refresh, trigger-maintained tables, golden fixtures, database fixtures, pure calculation services, atomic multi-step transactions, streaming CSV exports with formula injection prevention, import batch concurrency, motion consumers, surface shells, gradient icon tiles, money utilities, decimal utilities, shared date utilities with input validation and locale support, timezone boundary handling, TypeScript type annotations, type-safe error handling, domain-split API client, Zustand store with useShallow slice selection, immutable PATCH field sanitization, aggregation query optimization with Map-based single-pass accumulation, recipient group resolution via scalar subqueries (Phase Q), portfolio totals single-source-of-truth pattern (Phase 14), Belgian Tax freeze/display pattern for engine-drift protection (ADR-059, May 2026), dev-only observability integration pattern (May 2026 devtools: module-level pub-sub event bus with zero-cost tree-shaking in production). May 2026 bug hunt adds React key generation pattern (use UUID instead of index), mount guard pattern (prevent setState after unmount), and documents parseLocaleNumber heuristic with single-comma thousands separator fix. May 2026 a11y pass adds onActivateKeyDown keyboard-activation helper pattern. June 2026: shared-utils monorepo package (@vision/shared-utils) consolidates money/slugify/downsample; banker's rounding is now the canonical roundMoney mode; tc() plural pattern documented. June 2026 (ADR-070): optimistic mutation pattern (snapshot/patch/rollback via setQueriesData); surface shell updated with glass-regular/glass-elevated/opaque-table canonical rules; motion consumer updated for PageTransition re-addition and dialog keyframe animation. June 2026 Premium v3 (ADR-071): optimistic-create pattern (temp negative-id row, server swap, rollback, onSettled invalidate); chart scrub pattern (useChartScrub, pointer capture, glass Δ pill); chart sync pattern (ChartSyncProvider, syncId prop, domain guard). June 2026 Premium v3 V5 (ADR-071): Radix ContextMenu + Dialog interplay pattern — modal={false} prevents body pointer-events race when menu items spawn Dialogs. June 2026 (role-based glass): surface shell canonical rule broadened — glass-regular now applied to ALL content/chart/stat/state cards; old ~6-surface-per-viewport limit superseded; tables/forms/placeholders/callouts/dialog-nested cards remain opaque as role-based exceptions.
 aliases: [code patterns, coding patterns, conventions, patterns, how to write code, repository pattern, route pattern, hook pattern, error handling, type-safe error handling, type annotations, filter builder, golden fixture, aggregation envelope, calculation services, import concurrency, motion pattern, surface shell pattern, gradient icon pattern, money pattern, decimal pattern, timezone pattern, domain split, openapi, typescript types, csv export, safe csv, formula injection, cwe-1236, date utilities, immutability, aggregation optimization, Map pattern, recipient group filter, recipientGroupId, portfolio totals, single source of truth, parseLocaleNumber, number parsing, locale-aware number parsing, thousands separator, decimal separator, belgian-tax-pattern, freeze-display-pattern, as-filed-calculation, engine-drift-protection, shared-utils, workspace, plural, tc]
 ---
 
@@ -2478,28 +2478,40 @@ export function MyAnimatedComponent() {
 
 Standard card and surface shell for consistent material hierarchy and visual cohesion.
 
-> [!info] Updated June 2026 — ADR-070
-> The canonical card material rule changed. `surface-elevated … bg-card backdrop-blur-sm` is replaced by the glass vocabulary below. `premium-frame` is now baked into the base `Card` component.
+> [!info] Updated June 2026 — ADR-070 + role-based glass broadening (June 2026, no ADR yet)
+> The canonical card material rule changed in two steps. Step 1 (ADR-070): `surface-elevated … bg-card backdrop-blur-sm` replaced by the glass vocabulary below; `premium-frame` baked into base `Card`. Step 2 (June 2026): the narrow "only ~6 KPI/hero/chart surfaces" rule was broadened to role-based glass — ALL content/chart/stat/state cards now carry `glass-regular`. See the note in [[docs/components/ui-components#surface-styling-liquid-glass-v2-june-2026|UI Components — Surface Styling]] for full rationale. A future ADR may formalize this.
 
-### Canonical Card Material Rule (June 2026)
+### Canonical Card Material Rule (June 2026, role-based)
 
 | Surface type | Class | Notes |
 |---|---|---|
-| KPI / chart card | `glass-regular` | 20px blur + saturate; add `premium-frame micro-lift` for hover |
+| Content / chart / stat / state card | `glass-regular` | ALL cards in these roles — peers must shine consistently (role-based glass, June 2026) |
 | Dashboard hero card | `glass-elevated` | 32px blur + saturate; trend tint in overlay child |
-| Table (DataTable / VirtualDataTable / Watchlist) | opaque (no glass class) | Deliberate perf budget — ~6 backdrop surfaces per viewport |
+| Table container (DataTable / VirtualDataTable / Watchlist / pivot/summary/RatesTable) | opaque (no glass class) | Dense row rendering; GPU budget exemption |
+| Dense form/import card | opaque | Intentional flat surface |
+| Dashed "add" placeholder card | opaque | `bg-muted/30 border-dashed` — flat by design |
+| Accent/danger callout card | opaque | `bg-primary/5` / `bg-destructive/5` — colored tint defeats glass |
+| Card nested inside a glass dialog | opaque | Avoids double-blur (e.g., `InvestmentDetailDialog` inner cards) |
 | Modal dialog | `glass-thick` | Handled by the base Dialog component |
 | Toast | `glass-thick` | Handled by Sonner |
 | Navigation chrome | `glass-chrome` | Handled by AppLayout/AppSidebar |
 
 `premium-frame` is baked into the base `Card` component — you no longer need to add it as a className. Both `premium-frame` and `micro-lift` declare identical full `transition` lists (border-color, box-shadow, transform) so whichever class wins the cascade still animates all three properties.
 
+> [!warning] GPU trade-off (card-dense pages)
+> Card-dense pages (e.g., PortfolioOverviewPage, StatisticsPage) now have more active `backdrop-filter` surfaces per viewport than the old ~6-surface budget. This is mitigated by ADR-075 tier auto-adapt: glass auto-degrades to near-opaque on large displays (`fx-reduced` class via `VisualEffectsController`) and under `prefers-reduced-transparency`. Profile the packaged Electron app on Apple Silicon before each release to catch regression.
+
 ### Pattern
 
 ```tsx
-// KPI / chart card (most common)
+// Content / chart / stat card (most common — role-based glass)
 <Card className="glass-regular micro-lift">
   {/* Content — premium-frame hover outline included automatically from Card base */}
+</Card>
+
+// State cards (loading/empty/error) also get glass-regular for peer consistency
+<Card className="glass-regular">
+  <EmptyState ... />
 </Card>
 
 // Dashboard hero card (income/net summary)
@@ -2509,7 +2521,7 @@ Standard card and surface shell for consistent material hierarchy and visual coh
   {/* Content */}
 </Card>
 
-// Opaque table container (performance budget)
+// Opaque table container (role-based exception — dense rows)
 <Card>
   <DataTable ... />  {/* No glass class — tables stay opaque */}
 </Card>
@@ -2529,7 +2541,7 @@ Standard card and surface shell for consistent material hierarchy and visual coh
 
 | Utility | Purpose |
 |---------|---------|
-| `glass-regular` | KPI/chart cards — 20px blur + saturate |
+| `glass-regular` | Content/chart/stat/state cards — 20px blur + saturate |
 | `glass-elevated` | Hero cards — 32px blur + saturate + lensing edges |
 | `glass-thick` | Modal dialogs, toasts — 28px blur + saturate |
 | `glass-chrome` | Sidebar/topbar navigation — 24px blur + saturate |
@@ -2568,9 +2580,10 @@ Summary cards and stat tiles use a glass-elevated or glass-regular card with a t
 |------|-----------|
 | Always use `overflow-hidden` with rounded corners | Prevents gradient overflow; clips grain texture properly |
 | Do NOT put `premium-frame` on `<Card>` manually | It is now baked into the Card base class |
-| Use `glass-regular` for KPI/chart cards | Consistent material across all ~45 non-hero cards |
+| Use `glass-regular` for ALL content/chart/stat/state cards | Role-based glass (June 2026) — peer cards must shine consistently; the old "~6 surfaces" limit is superseded |
 | Use `glass-elevated` for hero/summary cards | Max-tier material for dashboard emphasis |
-| Tables stay opaque | ~6 backdrop-filter surfaces per viewport is the performance budget |
+| Tables, forms, placeholders, and callout cards stay opaque | Role-based exceptions — see table above |
+| Cards nested in glass dialogs stay opaque | Avoid double-blur |
 | Tint overlay as child, not on card bg | `backdrop-filter` shorthand resets `background`, silently defeating tints set on the card itself |
 | Gradient icons muted opacity (20-40%) | Ensure text contrast and readability |
 

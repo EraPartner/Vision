@@ -181,7 +181,7 @@ export function RecipientInsightsTab({ statisticsTopRecipientsChart }: Recipient
 
       {/* KPI cards */}
       <div className="grid gap-4 md:grid-cols-3">
-        <Card>
+        <Card className="glass-regular">
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
             <CardTitle className="text-sm font-medium">{t('insights.topRecipient')}</CardTitle>
             <Store className="h-4 w-4 text-muted-foreground" />
@@ -193,7 +193,7 @@ export function RecipientInsightsTab({ statisticsTopRecipientsChart }: Recipient
             </p>
           </CardContent>
         </Card>
-        <Card>
+        <Card className="glass-regular">
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
             <CardTitle className="text-sm font-medium">{t('insights.top10Total')}</CardTitle>
             <DollarSign className="h-4 w-4 text-muted-foreground" />
@@ -203,7 +203,7 @@ export function RecipientInsightsTab({ statisticsTopRecipientsChart }: Recipient
             <p className="text-xs text-muted-foreground">{totalTopTx} {t('insights.transactionCount').toLowerCase()}</p>
           </CardContent>
         </Card>
-        <Card>
+        <Card className="glass-regular">
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
             <CardTitle className="text-sm font-medium">{t('insights.avgTransaction')}</CardTitle>
             <Hash className="h-4 w-4 text-muted-foreground" />
@@ -220,7 +220,7 @@ export function RecipientInsightsTab({ statisticsTopRecipientsChart }: Recipient
 
       {/* Month over month alerts */}
       {filteredData.monthOverMonth.length > 0 && (
-        <Card>
+        <Card className="glass-regular">
           <CardHeader>
             <CardTitle>{t('insights.momChanges')}</CardTitle>
             <CardDescription>{t('insights.momDesc')}</CardDescription>

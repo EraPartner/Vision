@@ -137,7 +137,8 @@ export default function SavingsPage() {
           </CardContent>
         </Card>
 
-        <Card className="group relative overflow-hidden glass-regular premium-frame micro-lift border-l-4 border-l-primary">
+        <Card className="group relative overflow-hidden glass-regular premium-frame micro-lift">
+          <div aria-hidden className="pointer-events-none absolute inset-0 rounded-[inherit] bg-gradient-to-br from-primary/15 to-primary/5" />
           <CardHeader className="pb-1 pt-3 px-4">
             <CardTitle className="text-xs font-medium text-muted-foreground">{t('portfolio.projectedAnnual')}</CardTitle>
           </CardHeader>
@@ -285,7 +286,7 @@ export default function SavingsPage() {
       </div>
 
       {/* Info Card */}
-      <Card className="bg-muted/30 border-dashed">
+      <Card className="bg-muted/30 !border-dashed">
         <CardContent className="py-4">
           <p className="text-sm text-muted-foreground">{t('savings.howItWorks')}</p>
         </CardContent>

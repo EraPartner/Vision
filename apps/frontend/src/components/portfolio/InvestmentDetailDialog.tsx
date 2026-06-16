@@ -351,7 +351,7 @@ export function InvestmentDetailDialog({
               {/* FX attribution — invested at purchase-date rates, gain split
                   into asset performance vs currency effect */}
               {fxSummary && typeof fxSummary.fxGain === 'number' && (
-                <Card className="border-primary/20 bg-primary/5">
+                <Card className="!border-primary/50 bg-primary/5">
                   <CardContent className="pt-4 space-y-2">
                     <p className="text-sm font-semibold text-muted-foreground">{t('invDetail.fxAttribution')}</p>
                     <div className="flex justify-between py-1 border-b border-border/50 text-sm">
@@ -383,7 +383,7 @@ export function InvestmentDetailDialog({
 
               {/* Fixed Income Projections */}
               {fixedIncome && investment.projectedAnnualInterest > 0 && (
-                <Card className="border-primary/20 bg-primary/5">
+                <Card className="!border-primary/50 bg-primary/5">
                   <CardContent className="pt-4">
                     <div className="flex items-center justify-between">
                       <div>
@@ -410,7 +410,7 @@ export function InvestmentDetailDialog({
 
               {/* Real Estate Appreciation */}
               {realEstate && investment.totalAppreciation !== 0 && (
-                <Card className="border-accent/20 bg-accent/5">
+                <Card className="!border-accent/50 bg-accent/5">
                   <CardContent className="pt-4 flex items-center justify-between">
                     <div>
                        <p className="text-sm text-muted-foreground">{t('invDetail.totalAppreciation')}</p>

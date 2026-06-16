@@ -47,7 +47,7 @@ function PerformanceEmptyState() {
     return (
         <div className="space-y-6">
             <PageHeader title={t('performance.title')} icon={BarChart3} />
-            <Card>
+            <Card className="glass-regular">
                 <CardContent className="flex flex-col items-center justify-center gap-3 py-12 text-center">
                     <BarChart3 className="h-10 w-10 text-muted-foreground" />
                     <div>
@@ -183,7 +183,7 @@ export default function PerformancePage() {
         return (
             <div className="space-y-6">
                 <PageHeader title={t('performance.title')} icon={BarChart3} />
-                <Card>
+                <Card className="glass-regular">
                     <CardContent className="flex items-center justify-center h-48">
                         <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
                     </CardContent>
@@ -278,7 +278,7 @@ export default function PerformancePage() {
 
             {/* Portfolio Value Over Time chart */}
             {chartData.length > 1 && (
-                <Card>
+                <Card className="glass-regular">
                     <CardHeader>
                         <div className="flex items-start justify-between gap-3">
                             <div>
@@ -349,7 +349,7 @@ export default function PerformancePage() {
 
             {/* Relative Performance chart */}
             {relativePerformanceData.length > 1 && (
-                <Card>
+                <Card className="glass-regular">
                     <CardHeader>
                         <CardTitle className="flex items-center gap-2">
                             <Activity className="h-5 w-5 text-primary" />

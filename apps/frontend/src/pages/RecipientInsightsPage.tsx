@@ -216,7 +216,7 @@ export default function RecipientInsightsPage() {
       </div>
 
       {/* Top 10 Bar Chart */}
-      <Card>
+      <Card className="glass-regular">
         <CardHeader>
           <CardTitle>{t('insights.topBySpend')}</CardTitle>
           <CardDescription>{t('insights.topBySpendDesc')}</CardDescription>
@@ -241,7 +241,7 @@ export default function RecipientInsightsPage() {
 
       {/* Month over month alerts */}
       {filteredData.monthOverMonth.length > 0 && (
-        <Card>
+        <Card className="glass-regular">
           <CardHeader>
             <CardTitle>{t('insights.momChanges')}</CardTitle>
             <CardDescription>{t('insights.momDesc')}</CardDescription>

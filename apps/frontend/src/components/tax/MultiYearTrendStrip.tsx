@@ -72,7 +72,7 @@ export function MultiYearTrendStrip({ className, maxYears = DEFAULT_MAX_YEARS }:
     if (tiles.length <= 1) return null;
 
     return (
-        <Card className={cn('overflow-hidden', className)}>
+        <Card className={cn('glass-regular overflow-hidden', className)}>
             <CardHeader className="pb-3">
                 <CardTitle className="flex items-center gap-2 text-base">
                     <TrendingUp className="h-4 w-4 text-muted-foreground" />

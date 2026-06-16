@@ -203,10 +203,24 @@ Field mappings were verified against live AAPL responses on 2026-06-16.
 
 All four symbol-picker pages in the Research section (`ResearchHomePage`, `MarketLookupPage`, `ResearchComparePage`, `ChartBuilderPage`) share two components from `apps/frontend/src/components/shared/` that guarantee visual consistency across the section:
 
-- **`SymbolSearchBox`** — the tall glass input (`h-14 glass-regular`) with a leading `Search` icon, optional trailing loading spinner, and the `glass-elevated` floating results dropdown.
+- **`SymbolSearchBox`** — the tall glass input (`h-14 glass-regular`) with a leading `Search` icon, optional trailing loading spinner, and the `glass-thick` floating results dropdown (changed from `glass-elevated` in the June 2026 glass-consistency pass — floating dropdowns now uniformly use glass-thick).
 - **`SymbolSearchResultItem`** — the canonical result row (monospaced ticker, company name, asset-type badge, exchange label). Also used by `AddToWatchlistDialog` (inline scrollable list inside a modal, not a floating dropdown).
 
 Each page owns its own query logic and passes result rows as `children` to `SymbolSearchBox`. Full props reference: [[docs/components/shared-components#SymbolSearchBox|Shared Components — SymbolSearchBox]].
+
+### Research Workspace Card Material
+
+All content `<Card>` elements on the five Research detail pages use `glass-regular` (added in the June 2026 glass-consistency pass that completed the ADR-070 card-glass rollout for the Research workspace):
+
+| Page | Cards |
+|---|---|
+| `MarketLookupPage` | 9 content cards (quote, fundamentals, analyst, news, etc.) |
+| `ResearchSymbolPage` | 5 content cards |
+| `ResearchComparePage` | 5 content cards |
+| `ChartBuilderPage` | 5 content cards |
+| `PortfolioForecastPage` | 6 content cards |
+
+`WatchlistPage` deliberately stays opaque — it is a dense data grid and is the explicit table exception documented in ADR-070.
 
 ## Related
 

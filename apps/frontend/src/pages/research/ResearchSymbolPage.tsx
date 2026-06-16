@@ -112,7 +112,7 @@ export default function ResearchSymbolPage() {
 
       {/* Quote header */}
       {isQuoteLoading && !quote ? (
-        <Card>
+        <Card className="glass-regular">
           <CardContent className="py-6 space-y-3">
             <Skeleton className="h-8 w-64" />
             <Skeleton className="h-12 w-40" />
@@ -121,7 +121,7 @@ export default function ResearchSymbolPage() {
       ) : quoteUnavailable ? (
         <ResearchUnavailableNote provider={quoteResult?.meta.provider ?? null} />
       ) : quote ? (
-        <Card>
+        <Card className="glass-regular">
           <CardContent className="py-6">
             <div className="flex items-start justify-between flex-wrap gap-4">
               <div>
@@ -150,7 +150,7 @@ export default function ResearchSymbolPage() {
           </CardContent>
         </Card>
       ) : (
-        <Card>
+        <Card className="glass-regular">
           <CardContent className="py-8 text-center text-muted-foreground">
             {t('market.noQuote', { symbol })}
           </CardContent>
@@ -158,7 +158,7 @@ export default function ResearchSymbolPage() {
       )}
 
       {/* Chart */}
-      <Card>
+      <Card className="glass-regular">
         <CardHeader className="pb-2">
           <div className="flex items-center justify-between">
             <CardTitle className="text-base">{t('market.priceChart')}</CardTitle>
@@ -213,7 +213,7 @@ export default function ResearchSymbolPage() {
       </Card>
 
       {/* Lazy per-tab sections — each fetches its endpoint only when opened */}
-      <Card>
+      <Card className="glass-regular">
         <CardHeader className="pb-2">
           <CardTitle className="text-base flex items-center gap-2">
             <BarChart3 className="h-4 w-4" /> {t('research.details')}

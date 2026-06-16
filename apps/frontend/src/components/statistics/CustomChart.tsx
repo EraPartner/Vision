@@ -203,7 +203,7 @@ export function CustomChart({ savedChart, data, onEdit, onDelete }: CustomChartP
       : 'customChart.nSeries';
 
   return (
-    <Card>
+    <Card className="glass-regular">
       <CardHeader className="flex flex-row items-center justify-between flex-wrap gap-3">
         <div className="flex-1 min-w-0">
           <CardTitle className="truncate">{savedChart.name}</CardTitle>

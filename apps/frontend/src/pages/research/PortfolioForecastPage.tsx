@@ -99,7 +99,7 @@ export default function PortfolioForecastPage() {
       />
 
       {/* Controls */}
-      <Card>
+      <Card className="glass-regular">
         <CardContent className="grid gap-6 pt-6 md:grid-cols-2 lg:grid-cols-3">
           <div className="space-y-2">
             <Label>{t("research.forecast.horizon")}</Label>
@@ -200,11 +200,11 @@ export default function PortfolioForecastPage() {
       </Card>
 
       {isError && (
-        <Card><CardContent className="py-8 text-center text-sm text-destructive">{t("research.forecast.error")}</CardContent></Card>
+        <Card className="glass-regular"><CardContent className="py-8 text-center text-sm text-destructive">{t("research.forecast.error")}</CardContent></Card>
       )}
 
       {unavailable && (
-        <Card>
+        <Card className="glass-regular">
           <CardContent className="flex flex-col items-center gap-2 py-16 text-center">
             <AlertTriangle className="h-10 w-10 text-muted-foreground/40" />
             <p className="text-sm text-muted-foreground max-w-sm">
@@ -247,7 +247,7 @@ export default function PortfolioForecastPage() {
           </div>
 
           {/* Fan chart */}
-          <Card>
+          <Card className="glass-regular">
             <CardHeader className="pb-2">
               <div className="flex flex-wrap items-center justify-between gap-2">
                 <CardTitle className="text-base">{t("research.forecast.chartTitle")}</CardTitle>
@@ -283,7 +283,7 @@ export default function PortfolioForecastPage() {
 
           {/* Forward inputs provenance */}
           {forecast?.usedForward && forecast.forwardHoldings && forecast.forwardHoldings.length > 0 && (
-            <Card>
+            <Card className="glass-regular">
               <CardHeader className="pb-2">
                 <CardTitle className="flex items-center gap-2 text-base">
                   <Sparkles className="h-4 w-4 text-primary" />
@@ -321,7 +321,7 @@ function SummaryCard({
   hint?: string;
 }) {
   return (
-    <Card>
+    <Card className="glass-regular">
       <CardContent className="space-y-1 pt-6">
         <div className="flex items-center gap-2 text-xs text-muted-foreground">
           <Icon className="h-3.5 w-3.5" />

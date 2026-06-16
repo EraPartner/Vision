@@ -123,7 +123,7 @@ export default function AIChatPage() {
             : 'bg-destructive';
 
     const emptyState = (
-        <div className="mx-auto max-w-2xl rounded-2xl border border-dashed border-border/50 bg-background/30 px-6 py-10 text-center">
+        <div className="glass-regular mx-auto max-w-2xl rounded-2xl border !border-dashed border-border/50 px-6 py-10 text-center">
             <Sparkles className="mx-auto h-6 w-6 text-primary" />
             <h3 className="mt-3 text-sm font-semibold tracking-tight">
                 {t('aiChat.emptyTitle')}

@@ -184,7 +184,11 @@ export default function RealEstatePage() {
           </CardContent>
         </Card>
 
-        <Card className={cn("group relative overflow-hidden glass-regular premium-frame micro-lift border-l-4", totalReturn >= 0 ? "border-l-accent" : "border-l-destructive")}>
+        <Card className="group relative overflow-hidden glass-regular premium-frame micro-lift">
+          <div aria-hidden className={cn(
+            "pointer-events-none absolute inset-0 rounded-[inherit] bg-gradient-to-br",
+            totalReturn >= 0 ? "from-accent/15 to-accent/5" : "from-destructive/15 to-destructive/5",
+          )} />
           <CardHeader className="pb-1 pt-3 px-4">
             <CardTitle className="text-xs font-medium text-muted-foreground">{t('portfolio.totalReturn')}</CardTitle>
           </CardHeader>
@@ -213,7 +217,7 @@ export default function RealEstatePage() {
           const propertyYield = currentValueInTarget > 0 ? (monthlyRent * 12) / currentValueInTarget * 100 : 0;
           
           return (
-            <Card key={p.id} className="overflow-hidden">
+            <Card key={p.id} className="glass-regular overflow-hidden">
               <CardHeader className="bg-muted/30">
                 <div className="flex items-start justify-between">
                   <div className="flex items-center gap-3">
@@ -343,7 +347,7 @@ export default function RealEstatePage() {
       </div>
 
       {/* Info Card */}
-      <Card className="bg-muted/30 border-dashed">
+      <Card className="bg-muted/30 !border-dashed">
         <CardContent className="py-4">
           <p className="text-sm text-muted-foreground">{t('realestate.howItWorks')}</p>
         </CardContent>

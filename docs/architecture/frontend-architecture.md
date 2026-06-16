@@ -4,8 +4,8 @@ type: architecture
 status: active
 description: React frontend architecture, design system, and diagrams with liquid-glass aesthetic, visx charts, Framer Motion, and Zustand store. May 2026 Tailwind v4 migration with unified CSS architecture. June 2026 Liquid Glass v2 — atmosphere layer, saturated blur tiers, CommandPalette, optimistic mutations, route preload. June 2026 Premium v3 — RollingNumber/Money/DeltaPill, chart scrub+sync, ChartSkeleton, PageTitleContext, palette v2, ShortcutsOverlay + go-to sequences, animated tabs, workspace aurora, ShaderAurora behind visual-effects tier model (ADR-075), per-widget dashboard hydration, optimistic create.
 date: 2026-04-23
-updated: 2026-06-12
-tags: [architecture, frontend, uml, plantuml, react, phase-4, phase-6, phase-9, liquid-glass, liquid-glass-v2, premium-v3, visx, framer-motion, statistics-refactoring, zustand, state-management, tailwind-v4, css-architecture, command-palette, optimistic-updates, route-preload, chart-scrub, chart-sync, shader-aurora, visual-effects-tiers, auto-adapt-display, fx-reduced, june-2026]
+updated: 2026-06-16
+tags: [architecture, frontend, uml, plantuml, react, phase-4, phase-6, phase-9, liquid-glass, liquid-glass-v2, premium-v3, visx, framer-motion, statistics-refactoring, zustand, state-management, tailwind-v4, css-architecture, command-palette, optimistic-updates, route-preload, chart-scrub, chart-sync, shader-aurora, visual-effects-tiers, auto-adapt-display, fx-reduced, role-based-glass, glass-by-default, june-2026]
 aliases: [frontend architecture, react architecture, frontend design, design system]
 ---
 
@@ -409,18 +409,30 @@ Five saturated blur tiers (blur + `saturate(var(--glass-saturate))`):
 | Class | Blur | Saturate | Usage |
 |-------|------|---------|-------|
 | `glass-thin` | 12px | 180%/150% | Subtle interactive elements |
-| `glass-regular` | 20px | 180%/150% | KPI cards, chart cards, AI-chat panes |
+| `glass-regular` | 20px | 180%/150% | **All content / chart / stat / state cards** (loading, empty, error skeletons) — role-based glass applied June 2026 (see note below); also AI-chat panes; Research workspace content cards (MarketLookupPage, ResearchSymbolPage, ResearchComparePage, ChartBuilderPage, PortfolioForecastPage) |
 | `glass-chrome` | 24px | 180%/150% | Sidebar, AppLayout topbar |
-| `glass-thick` | 28px | 180%/150% | Modal dialogs (Dialog, AlertDialog, Sheet), toasts |
-| `glass-elevated` | 32px | 180%/150% | Dashboard hero cards |
+| `glass-thick` | 28px | 180%/150% | All floating overlays: Modal dialogs (Dialog, AlertDialog, Sheet), Sonner toasts, **and** the full popover family (Popover, DropdownMenu/SubContent, SelectContent, ContextMenu, MenuBar content, HoverCard, Tooltip) |
+| `glass-elevated` | 32px | 180%/150% | Dashboard hero cards (StatCard, NetSummaryCard) |
 
 Saturate: 180% in light mode, 150% in dark (tokens `--glass-saturate`).
 
 Thick and elevated materials gain lensing edges (inset top specular + bottom concave shade + long soft drop shadow).
 
-**Opaque surfaces (deliberate perf budget — ~6 backdrop-filter surfaces per viewport):**
-- `DataTable`, `VirtualDataTable`, Watchlist grid — intentionally opaque for render performance.
-- `Input`, `Textarea`, `Button`, `Tabs`, `Select`, `DropdownMenu`, `ContextMenu` — no blur.
+> [!info] June 2026 — Role-based glass (no ADR yet; a future ADR may formalize this)
+> ADR-070 rolled out glass selectively ("only ~6 KPI/hero/chart surfaces per viewport"). In practice that left many content/chart/stat cards opaque while their siblings were glass, causing visible inconsistency in the enhanced/vibrancy tier. The rule was broadened in June 2026 to **role-based**: glass is now applied to ALL content / chart / stat / state cards so peer cards shine consistently. The base `Card` component was NOT changed — glass remains opt-in via `className`. GPU trade-off: card-dense pages now exceed the old 6-surface budget in standard/enhanced; mitigated by ADR-075 tier auto-adapt (auto-degrades to near-opaque on large displays and under `fx-reduced`); profiling the packaged Electron app on Apple Silicon before each release is the watchpoint.
+
+**Opaque surfaces (deliberate — role-based exceptions):**
+- `DataTable`, `VirtualDataTable`, Watchlist grid, holdings tables (pivot/summary/RatesTable) — intentionally opaque; dense row rendering under a backdrop-filter would exceed GPU budget with no readability benefit.
+- Dense form/import cards — opaque by design.
+- Dashed "add" placeholder cards (`bg-muted/30 border-dashed`) — intentionally flat.
+- Accent/danger callout cards (`bg-primary/5`, `bg-destructive/5`) — colored tint defeats glass.
+- Cards nested inside an already-glass dialog (e.g., `InvestmentDetailDialog`) — avoids double-blur.
+- Dashboard recent-transactions skeleton — pairs with its opaque `DataTable`.
+- `Input`, `Textarea`, `Button`, `Tabs` — no blur.
+- Select/Menu **triggers** (`SelectTrigger`, `MenubarTrigger`) — `bg-background/80`; floating content layers are glass-thick.
+
+> [!info] Popover family now glass-thick (June 2026 consistency pass)
+> Previously `DropdownMenu`, `Select` content, `ContextMenu`, `MenuBar` content, `Popover`, `HoverCard`, and `Tooltip` were on the flat `bg-popover` fallback. All were converted to `glass-thick` in a June 2026 consistency audit, completing uniform glass coverage across every floating overlay. Triggers remain opaque by design.
 
 Additional layout utilities:
 - `premium-frame` — baked into the base `Card` component; provides the primary-tinted hover outline universally (previously had to be applied per-callsite). Both `premium-frame` and `micro-lift` animate border-color, box-shadow, and transform identically so either class wins the cascade safely.

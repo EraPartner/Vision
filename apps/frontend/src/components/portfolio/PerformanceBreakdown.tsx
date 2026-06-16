@@ -108,7 +108,7 @@ export default function PerformanceBreakdown({ heatmapData, breakdownSummary }: 
             {/* Per-asset class breakdown */}
             <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
                 {assetClassBreakdown.map(({ assetClass, label, count, classValue, classInvested, classGain, classPct }) => (
-                    <Card key={assetClass} className="border shadow-sm">
+                    <Card key={assetClass} className="glass-regular border shadow-sm">
                         <CardContent className="pt-4 pb-4">
                             <div className="flex items-center justify-between mb-2">
                                 <span className="text-sm font-semibold text-muted-foreground">{label}</span>
@@ -206,7 +206,7 @@ export default function PerformanceBreakdown({ heatmapData, breakdownSummary }: 
 
             {/* Top/Bottom performers */}
             <div className="grid gap-4 lg:grid-cols-2">
-                <Card>
+                <Card className="glass-regular">
                     <CardHeader>
                         <CardTitle className="flex items-center gap-2 text-accent">
                             <TrendingUp className="h-5 w-5" />
@@ -240,7 +240,7 @@ export default function PerformanceBreakdown({ heatmapData, breakdownSummary }: 
                     </CardContent>
                 </Card>
 
-                <Card>
+                <Card className="glass-regular">
                     <CardHeader>
                         <CardTitle className="flex items-center gap-2 text-destructive">
                             <TrendingDown className="h-5 w-5" />

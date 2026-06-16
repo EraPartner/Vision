@@ -5,8 +5,8 @@ status: active
 date: 2026-04-26
 updated: 2026-06-16
 last_modified: 2026-06-16
-tags: [component, shared, utility, frontend, reference, phase-13, phase-c, phase-d, multi-select, export-filters, bug-hunt-2026-05-05, bug-hunt-2026-05-06, dateutils, utc-safe-dates, date-formatting, debounce, accessibility, aria-label, useCallback, aria-grid, keyboard-operability, a11y, performance, memoization, selection-toggle, upcoming-payments-hook, june-2026, symbol-search, research, ui-consistency]
-description: Reference documentation for shared utility components used across the application. May 2026 adds UTC-safe date parsing, ARIA grid semantics on VirtualDataTable, the onActivateKeyDown keyboard helper, and the columnKeySignature selection-toggle reprocessing fix. June 2026 V11: UpcomingPaymentsNotification refactored onto shared useUpcomingPlannedPayments hook; stands down on dashboard when suggestions widget is visible. June 2026 V12: SymbolSearchBox and SymbolSearchResultItem added — canonical chrome and result row for all research symbol pickers.
+tags: [component, shared, utility, frontend, reference, phase-13, phase-c, phase-d, multi-select, export-filters, bug-hunt-2026-05-05, bug-hunt-2026-05-06, dateutils, utc-safe-dates, date-formatting, debounce, accessibility, aria-label, useCallback, aria-grid, keyboard-operability, a11y, performance, memoization, selection-toggle, upcoming-payments-hook, june-2026, symbol-search, research, ui-consistency, glass-consistency, popover-glass-thick]
+description: Reference documentation for shared utility components used across the application. May 2026 adds UTC-safe date parsing, ARIA grid semantics on VirtualDataTable, the onActivateKeyDown keyboard helper, and the columnKeySignature selection-toggle reprocessing fix. June 2026 V11: UpcomingPaymentsNotification refactored onto shared useUpcomingPlannedPayments hook; stands down on dashboard when suggestions widget is visible. June 2026 V12: SymbolSearchBox and SymbolSearchResultItem added — canonical chrome and result row for all research symbol pickers. June 2026 (glass consistency): SymbolSearchBox dropdown material changed from glass-elevated to glass-thick to match the rest of the floating-overlay system.
 aliases: [shared components, utility components, common components]
 related_code:
   - apps/frontend/src/components/shared/VirtualDataTable.tsx
@@ -422,7 +422,7 @@ Image component for loading remote news thumbnails with fallback handling. Used 
 
 Canonical ticker/company search box chrome shared across every symbol picker in the Research section. Introduced in a June 2026 UI-consistency pass that brought `MarketLookupPage`, `ResearchComparePage`, and `ChartBuilderPage` in line with `ResearchHomePage`'s reference look.
 
-**Responsibility split:** `SymbolSearchBox` owns only the visual chrome (tall glass input, leading `Search` icon, optional trailing loading spinner, `glass-elevated` floating dropdown). Each page retains its own query logic and passes result rows as `children`. Rows inside the dropdown should use `SymbolSearchResultItem`.
+**Responsibility split:** `SymbolSearchBox` owns only the visual chrome (tall glass input, leading `Search` icon, optional trailing loading spinner, `glass-thick` floating dropdown). Each page retains its own query logic and passes result rows as `children`. Rows inside the dropdown should use `SymbolSearchResultItem`.
 
 ### Props
 
@@ -450,7 +450,7 @@ interface SymbolSearchBoxProps {
 - Outer wrapper: `relative` + caller-supplied `className` (all four research pickers use `max-w-2xl`).
 - Input: `h-14 pl-12 text-base glass-regular` with a `Search` icon pinned `left-4 top-1/2`.
 - Loading spinner: `h-4 w-4 animate-spin rounded-full border-2 border-primary border-t-transparent`, pinned `right-4 top-1/2`; only rendered when `loading` is `true`.
-- Dropdown: `Card` with `glass-elevated border border-border shadow-lg z-50`, opening `top-full mt-2`; `CardContent` has `p-1` padding.
+- Dropdown: `Card` with `glass-thick border border-border shadow-lg z-50`, opening `top-full mt-2`; `CardContent` has `p-1` padding.
 
 ### Pages using SymbolSearchBox
 

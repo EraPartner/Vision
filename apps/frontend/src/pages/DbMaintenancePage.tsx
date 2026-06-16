@@ -196,7 +196,7 @@ export default function DbMaintenancePage() {
 
             {/* Error state */}
             {error && (
-                <Card className="border-destructive/50 bg-destructive/5">
+                <Card className="!border-destructive/60 bg-destructive/5">
                     <CardContent className="pt-6">
                         <p className="text-sm text-destructive">
                             {t('dbMaintenance.loadError')}: {(error as Error).message}

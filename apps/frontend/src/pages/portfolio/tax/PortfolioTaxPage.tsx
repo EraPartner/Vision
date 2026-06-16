@@ -418,7 +418,7 @@ export default function PortfolioTaxPage() {
       })()}
 
       {!isEmpty && (
-        <Card className="border-primary/20 bg-primary/5">
+        <Card className="!border-primary/50 bg-primary/5">
           <CardContent className="flex items-start gap-3 py-4">
             <Info className="h-5 w-5 text-primary shrink-0 mt-0.5" />
             <div>
@@ -430,7 +430,7 @@ export default function PortfolioTaxPage() {
       )}
 
       {isEmpty ? (
-        <Card>
+        <Card className="glass-regular">
           <CardContent className="flex flex-col items-center justify-center py-16 text-center">
             <Landmark className="h-12 w-12 text-muted-foreground/40 mb-4" />
             <h3 className="text-lg font-semibold text-foreground mb-1">{t("tax.noData")}</h3>
@@ -447,7 +447,7 @@ export default function PortfolioTaxPage() {
             )}
 
             {isVisible("taxTypes") && (taxBreakdown.length > 0 || feeBreakdown.length > 0) && (
-              <Card>
+              <Card className="glass-regular">
                 <CardHeader>
                   <CardTitle>{t("tax.widget.taxTypes")}</CardTitle>
                   <CardDescription>{t("tax.taxTypesDesc")}</CardDescription>
@@ -501,7 +501,7 @@ export default function PortfolioTaxPage() {
             )}
 
             {isVisible("profileInputs") && (
-              <Card>
+              <Card className="glass-regular">
                 <CardHeader>
                   <CardTitle>{t("tax.profile.currentInputs")}</CardTitle>
                   <CardDescription>{t("tax.portfolioProfileInputsDesc")}</CardDescription>
@@ -539,7 +539,7 @@ export default function PortfolioTaxPage() {
           </div>
 
           {isVisible("yearlyTaxFeeTrend") && yearlyCostTrend.length > 0 && (
-            <Card>
+            <Card className="glass-regular">
               <CardHeader>
                 <CardTitle>{t("tax.yearlyTaxFeeTrendTitle", { year: String(txYear) })}</CardTitle>
                 <CardDescription>{t("tax.yearlyTaxFeeTrendDesc")}</CardDescription>
@@ -561,7 +561,7 @@ export default function PortfolioTaxPage() {
           )}
 
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-            <Card>
+            <Card className="glass-regular">
               <CardHeader>
                 <CardTitle>{t("tax.recordedVsManual")}</CardTitle>
                 <CardDescription>{t("tax.recordedVsManualDesc")}</CardDescription>
@@ -590,7 +590,7 @@ export default function PortfolioTaxPage() {
               </CardContent>
             </Card>
 
-            <Card>
+            <Card className="glass-regular">
               <CardHeader>
                 <CardTitle>{t("tax.budgetTitle")}</CardTitle>
                 <CardDescription>{t("tax.portfolioBudgetLikeDesc")}</CardDescription>
@@ -622,7 +622,7 @@ export default function PortfolioTaxPage() {
           )}
 
           {isVisible("belgianRules") && (
-            <Card>
+            <Card className="glass-regular">
               <CardHeader>
                 <CardTitle>{t("tax.widget.belgianRules")}</CardTitle>
                 <CardDescription>{t("tax.belgianRulesDesc")}</CardDescription>

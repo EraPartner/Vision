@@ -379,7 +379,7 @@ export default function ResearchComparePage() {
       </div>
 
       {symbols.length === 0 ? (
-        <Card>
+        <Card className="glass-regular">
           <CardContent className="flex flex-col items-center justify-center py-20 text-center">
             <GitCompareArrows className="h-14 w-14 text-muted-foreground/30 mb-4" />
             <h3 className="text-lg font-semibold text-foreground mb-1">{t('research.compare.startTitle')}</h3>
@@ -395,7 +395,7 @@ export default function ResearchComparePage() {
 
           <TabsContent value="performance" className="space-y-6 pt-4">
             {/* Rebased overlay chart */}
-            <Card>
+            <Card className="glass-regular">
               <CardHeader className="pb-2">
                 <div className="flex items-center justify-between flex-wrap gap-2">
                   <CardTitle className="text-base">{t('research.compare.rebased')}</CardTitle>
@@ -439,7 +439,7 @@ export default function ResearchComparePage() {
             </Card>
 
             {/* Stats table */}
-            <Card>
+            <Card className="glass-regular">
               <CardHeader className="pb-2">
                 <CardTitle className="text-base">{t('research.compare.metrics')}</CardTitle>
               </CardHeader>
@@ -477,7 +477,7 @@ export default function ResearchComparePage() {
 
             {/* Correlation matrix — needs at least two symbols. */}
             {symbols.length >= 2 && (
-              <Card>
+              <Card className="glass-regular">
                 <CardHeader className="pb-2">
                   <CardTitle className="text-base">{t('research.compare.correlation')}</CardTitle>
                   <p className="text-xs text-muted-foreground">{t('research.compare.correlationHint')}</p>
@@ -531,7 +531,7 @@ export default function ResearchComparePage() {
           </TabsContent>
 
           <TabsContent value="fundamentals" className="space-y-4 pt-4">
-            <Card>
+            <Card className="glass-regular">
               <CardHeader className="pb-2">
                 <CardTitle className="text-base">{t('research.compare.tabFundamentals')}</CardTitle>
                 <p className="text-xs text-muted-foreground">{t('research.compare.fundamentalsHint')}</p>

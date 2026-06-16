@@ -57,7 +57,7 @@ export function SymbolSearchBox({
         </div>
       ) : null}
       {open ? (
-        <Card className="absolute z-50 top-full mt-2 w-full shadow-lg border border-border glass-elevated">
+        <Card className="absolute z-50 top-full mt-2 w-full glass-thick">
           <CardContent className="p-1">{children}</CardContent>
         </Card>
       ) : null}

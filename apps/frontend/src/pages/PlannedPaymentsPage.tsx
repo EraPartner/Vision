@@ -372,7 +372,7 @@ export default function PlannedPaymentsPage() {
         <PageHeader title={t('plannedPage.title')} subtitle={t('plannedPage.subtitle')} icon={CalendarClock} />
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
           {[...Array(4)].map((_, i) => (
-            <Card key={i} className="border-none shadow-md">
+            <Card key={i} className="glass-regular border-none shadow-md">
               <CardHeader className="pb-2"><Skeleton className="h-4 w-24" /></CardHeader>
               <CardContent><Skeleton className="h-8 w-20" /></CardContent>
             </Card>

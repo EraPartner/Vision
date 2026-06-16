@@ -31,7 +31,7 @@ export function AssetClassTaxChart({ data, fmt, t }: AssetClassTaxChartProps) {
   ];
 
   return (
-    <Card>
+    <Card className="glass-regular">
       <CardHeader>
         <CardTitle>{t("tax.widget.taxByAssetClass")}</CardTitle>
         <CardDescription>{t("tax.taxByAssetClassDesc")}</CardDescription>

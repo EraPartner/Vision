@@ -63,7 +63,7 @@ export function SankeyTab({ graphExclusions, onToggleExclusion, exclusionsApply,
   const flowData = data?.data;
 
   return (
-    <Card>
+    <Card className="glass-regular">
       <CardHeader>
         <div className="flex items-start justify-between gap-4">
           <div>
