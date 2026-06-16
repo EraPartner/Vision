@@ -21,6 +21,7 @@ import {
 } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
 import { Search, Loader2 } from "lucide-react";
+import { SymbolSearchResultItem } from "@/components/shared/SymbolSearchResultItem";
 import { useDebounce } from "@/hooks/useDebounce";
 import { useLanguage } from '@/contexts/LanguageContext';
 import { useQuery } from "@tanstack/react-query";
@@ -164,24 +165,13 @@ export function AddToWatchlistDialog({ open, onOpenChange }: AddToWatchlistDialo
               )}
 
               {searchResults?.items && searchResults.items.length > 0 && (
-                <div className="border rounded-md max-h-60 overflow-y-auto">
+                <div className="max-h-60 overflow-y-auto rounded-md border border-border p-1">
                   {searchResults.items.map((result) => (
-                    <button
+                    <SymbolSearchResultItem
                       key={result.symbol}
-                      onClick={() => handleSelectAsset(result)}
-                      className="w-full text-left px-3 py-2 hover:bg-muted transition-colors border-b last:border-b-0"
-                    >
-                      <div className="flex items-center justify-between">
-                        <div>
-                          <span className="font-medium">{result.symbol}</span>
-                          <span className="text-muted-foreground ml-2 text-sm">{result.name}</span>
-                        </div>
-                        <Badge variant="outline" className="text-xs">
-                          {result.type}
-                        </Badge>
-                      </div>
-                      <p className="text-xs text-muted-foreground">{result.exchange}</p>
-                    </button>
+                      item={result}
+                      onSelect={handleSelectAsset}
+                    />
                   ))}
                 </div>
               )}

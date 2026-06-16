@@ -26,6 +26,7 @@ import { AddInvestmentFromMarketDialog } from "@/components/portfolio/AddInvestm
 import { RemoteNewsImage } from "@/components/shared/RemoteNewsImage";
 import { useSearchParams } from "react-router-dom";
 import { PageHeader } from "@/components/shared/PageHeader";
+import { SymbolSearchResultItem } from "@/components/shared/SymbolSearchResultItem";
 
 import { apiClient } from "@/lib/api";
 
@@ -299,18 +300,11 @@ export default function MarketLookupPage() {
           <Card className="absolute z-50 top-full mt-1 w-full shadow-lg border border-border">
             <CardContent className="p-1">
               {searchResults.items.map((item) => (
-                <button
+                <SymbolSearchResultItem
                   key={item.symbol}
-                  onClick={() => handleSelect(item.symbol)}
-                  className="flex items-center gap-3 w-full text-left px-3 py-2.5 rounded-md hover:bg-muted/70 transition-colors"
-                >
-                  <span className="font-mono font-bold text-sm text-foreground min-w-[5rem]">
-                    {item.symbol}
-                  </span>
-                  <span className="text-sm text-muted-foreground truncate flex-1">{item.name}</span>
-                  <Badge variant="outline" className="text-[10px] shrink-0">{item.type}</Badge>
-                  <span className="text-xs text-muted-foreground shrink-0">{item.exchange}</span>
-                </button>
+                  item={item}
+                  onSelect={(it) => handleSelect(it.symbol)}
+                />
               ))}
             </CardContent>
           </Card>
@@ -599,7 +593,7 @@ export default function MarketLookupPage() {
                               : action.action === "down"
                                 ? <TrendingDown className="h-3 w-3 text-destructive shrink-0" />
                                 : <ArrowUpDown className="h-3 w-3 text-muted-foreground shrink-0" />}
-                            <span className="text-muted-foreground shrink-0 w-14">
+                            <span className="text-muted-foreground shrink-0 w-20 tabular-nums whitespace-nowrap">
                               {formatDateStringWithAppSettings(action.date, appSettings.dateFormat)}
                             </span>
                             <span className="font-medium text-foreground truncate flex-1">{action.firm}</span>
