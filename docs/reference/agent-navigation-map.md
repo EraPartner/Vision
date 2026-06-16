@@ -200,7 +200,7 @@ aliases: [agent navigation, codebase map, file map, navigation guide]
 | `/portfolio/savings` | [[apps/frontend/src/pages/portfolio/SavingsPage.tsx]] |
 | `/portfolio/performance` | [[apps/frontend/src/pages/portfolio/PerformancePage.tsx]] |
 | `/portfolio/net-worth` | [[apps/frontend/src/pages/portfolio/net-worth/NetWorthPage.tsx]] |
-| `/portfolio/exchange-rates` | [[apps/frontend/src/pages/portfolio/ExchangeRatesPage.tsx]] |
+| `/admin/exchange-rates` | [[apps/frontend/src/pages/admin/ExchangeRatesPage.tsx]] |
 | `/portfolio/watchlist` | [[apps/frontend/src/pages/portfolio/WatchlistPage.tsx]] |
 | `/portfolio/tax` | [[apps/frontend/src/pages/portfolio/tax/PortfolioTaxPage.tsx]] |
 | `/portfolio/market` | [[apps/frontend/src/pages/MarketLookupPage.tsx]] |

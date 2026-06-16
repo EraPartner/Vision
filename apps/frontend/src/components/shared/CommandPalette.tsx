@@ -80,7 +80,6 @@ const PORTFOLIO_PAGES: PaletteEntry[] = [
     { titleKey: "nav.metals", url: "/portfolio/metals", icon: Gem },
     { titleKey: "nav.realEstate", url: "/portfolio/real-estate", icon: Building2 },
     { titleKey: "nav.savingsBonds", url: "/portfolio/savings", icon: PiggyBank },
-    { titleKey: "nav.exchangeRates", url: "/portfolio/exchange-rates", icon: ArrowLeftRight },
     { titleKey: "nav.taxOverview", url: "/portfolio/tax", icon: Landmark },
 ];
 
@@ -246,6 +245,7 @@ export function CommandPalette({ open, onOpenChange, onOpenSettings, onOpenShort
                       { titleKey: "nav.dbMaintenance", url: "/admin/db", icon: Settings },
                       { titleKey: "nav.adminProviders", url: "/admin/providers", icon: Settings },
                       { titleKey: "nav.adminEndpoints", url: "/admin/endpoints", icon: Settings },
+                      { titleKey: "nav.exchangeRates", url: "/admin/exchange-rates", icon: ArrowLeftRight },
                   ]
                 : [],
         [appSettings.adminMode],

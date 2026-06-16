@@ -1098,7 +1098,6 @@ const en: Record<string, string> = {
   'nav.compare': 'Compare',
   'nav.crypto': 'Crypto',
   'nav.dashboard': 'Dashboard',
-  'nav.data': 'Data',
   'nav.dbMaintenance': 'DB Maintenance',
   'nav.exchangeRates': 'Exchange Rates',
   'nav.financeManager': 'Finance Manager',

@@ -1098,7 +1098,6 @@ const nl: Record<string, string> = {
   'nav.compare': 'Vergelijken',
   'nav.crypto': 'Crypto',
   'nav.dashboard': 'Dashboard',
-  'nav.data': 'Gegevens',
   'nav.dbMaintenance': 'DB-onderhoud',
   'nav.exchangeRates': 'Wisselkoersen',
   'nav.financeManager': 'Financieel Beheer',

@@ -342,7 +342,7 @@ package "Portfolio" {
   class SavingsPage <<path: /portfolio/savings>>
   class PerformancePage <<path: /portfolio/performance>>
   class NetWorthPage <<path: /portfolio/net-worth>>
-  class ExchangeRatesPage <<path: /portfolio/exchange-rates>>
+  class ExchangeRatesPage <<path: /admin/exchange-rates>>
   class WatchlistPage <<path: /portfolio/watchlist>>
   class PortfolioTaxPage <<path: /portfolio/tax>>
 }

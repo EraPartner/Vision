@@ -14,7 +14,7 @@ import RealEstatePage from "@/pages/portfolio/RealEstatePage";
 import SavingsPage from "@/pages/portfolio/SavingsPage";
 import PerformancePage from "@/pages/portfolio/PerformancePage";
 import NetWorthPage from "@/pages/portfolio/net-worth/NetWorthPage";
-import ExchangeRatesPage from "@/pages/portfolio/ExchangeRatesPage";
+import ExchangeRatesPage from "@/pages/admin/ExchangeRatesPage";
 import WatchlistPage from "@/pages/research/WatchlistPage";
 import PortfolioTaxPage from "@/pages/portfolio/tax/PortfolioTaxPage";
 import MarketLookupPage from "@/pages/research/MarketLookupPage";

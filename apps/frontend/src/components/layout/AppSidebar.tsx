@@ -123,7 +123,7 @@ export function AppSidebar() {
       ],
     },
     {
-      label: t('nav.data'),
+      label: t('nav.tools'),
       items: [
         { title: t('nav.importExport'), url: "/import", icon: Import },
       ],
@@ -135,6 +135,7 @@ export function AppSidebar() {
     { title: t('nav.dbMaintenance'), url: "/admin/db", icon: Database },
     { title: t('nav.adminProviders'), url: "/admin/providers", icon: Globe },
     { title: t('nav.adminEndpoints'), url: "/admin/endpoints", icon: Activity },
+    { title: t('nav.exchangeRates'), url: "/admin/exchange-rates", icon: ArrowLeftRight },
   ], [t]);
 
   const portfolioGroups = useMemo(() => [
@@ -143,7 +144,6 @@ export function AppSidebar() {
       items: [
         { title: t('nav.dashboard'), url: "/portfolio", icon: LayoutDashboard },
         { title: t('nav.netWorth'), url: "/portfolio/net-worth", icon: Wallet },
-        { title: t('nav.performance'), url: "/portfolio/performance", icon: BarChart3 },
       ],
     },
     {
@@ -162,11 +162,16 @@ export function AppSidebar() {
       ],
     },
     {
+      label: t('nav.analysis'),
+      items: [
+        { title: t('nav.performance'), url: "/portfolio/performance", icon: BarChart3 },
+        { title: t('nav.taxOverview'), url: "/portfolio/tax", icon: Landmark },
+      ],
+    },
+    {
       label: t('nav.tools'),
       items: [
         { title: t('nav.portfolioImport'), url: "/portfolio/import", icon: Import },
-        { title: t('nav.exchangeRates'), url: "/portfolio/exchange-rates", icon: ArrowLeftRight },
-        { title: t('nav.taxOverview'), url: "/portfolio/tax", icon: Landmark },
       ],
     },
   ], [t]);

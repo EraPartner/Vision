@@ -39,7 +39,7 @@ const RealEstatePage = lazy(routeLoaders["/portfolio/real-estate"]);
 const SavingsPage = lazy(routeLoaders["/portfolio/savings"]);
 const PerformancePage = lazy(routeLoaders["/portfolio/performance"]);
 const NetWorthPage = lazy(routeLoaders["/portfolio/net-worth"]);
-const ExchangeRatesPage = lazy(routeLoaders["/portfolio/exchange-rates"]);
+const ExchangeRatesPage = lazy(routeLoaders["/admin/exchange-rates"]);
 const PortfolioImportPage = lazy(routeLoaders["/portfolio/import"]);
 const PortfolioImportReviewPage = lazy(routeLoaders["/portfolio/import/:batchId/review"]);
 const DbMaintenancePage = lazy(routeLoaders["/admin/db"]);
@@ -164,6 +164,7 @@ const App = () => {
                                                     <Route path="/admin/db" element={<RequireAdmin><DbMaintenancePage /></RequireAdmin>} />
                                                     <Route path="/admin/providers" element={<RequireAdmin><ProviderHealthPage /></RequireAdmin>} />
                                                     <Route path="/admin/endpoints" element={<RequireAdmin><EndpointLivenessPage /></RequireAdmin>} />
+                                                    <Route path="/admin/exchange-rates" element={<RequireAdmin><ExchangeRatesPage /></RequireAdmin>} />
                                                     {/* Portfolio */}
                                                     <Route path="/portfolio" element={<PortfolioOverviewPage />} />
                                                     <Route path="/portfolio/stocks" element={<StocksPage />} />
@@ -173,7 +174,7 @@ const App = () => {
                                                     <Route path="/portfolio/savings" element={<SavingsPage />} />
                                                     <Route path="/portfolio/performance" element={<PerformancePage />} />
                                                     <Route path="/portfolio/net-worth" element={<NetWorthPage />} />
-                                                    <Route path="/portfolio/exchange-rates" element={<ExchangeRatesPage />} />
+                                                    <Route path="/portfolio/exchange-rates" element={<Navigate to="/admin/exchange-rates" replace />} />
                                                     <Route path="/portfolio/import" element={<PortfolioImportPage />} />
                                                     <Route path="/portfolio/import/:batchId/review" element={<PortfolioImportReviewPage />} />
                                                     <Route path="/portfolio/tax" element={<PortfolioTaxPage />} />

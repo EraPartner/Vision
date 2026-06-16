@@ -221,7 +221,7 @@ Code links: [[apps/frontend/src/components/planned/PlannedPaymentForm.tsx]], [[a
 
 Shared date utilities include app-settings-aware date-time helpers used by settings propagation across date/time labels.
 
-Code links: [[apps/frontend/src/components/shared/dateUtils.ts]], [[apps/frontend/src/components/settings/DashboardSettingsDialog.tsx]], [[apps/frontend/src/components/notifications/UpdateNotification.tsx]], [[apps/frontend/src/pages/portfolio/ExchangeRatesPage.tsx]], [[apps/frontend/src/pages/MarketLookupPage.tsx]]
+Code links: [[apps/frontend/src/components/shared/dateUtils.ts]], [[apps/frontend/src/components/settings/DashboardSettingsDialog.tsx]], [[apps/frontend/src/components/notifications/UpdateNotification.tsx]], [[apps/frontend/src/pages/admin/ExchangeRatesPage.tsx]], [[apps/frontend/src/pages/MarketLookupPage.tsx]]
 
 ## Related
 
