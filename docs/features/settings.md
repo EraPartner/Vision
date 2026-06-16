@@ -3,7 +3,7 @@ title: Settings Feature
 type: feature
 status: active
 date: 2026-04-23
-updated: 2026-06-12
+updated: 2026-06-16
 tags: [feature, settings, configuration, preferences, frontend, backend, refactor, phase-3, phase-4, zustand, store, backup, encrypt, passphrase, phase-2]
 description: Application settings system with JSONB storage, preload optimization, propagation across all pages, and split DashboardSettingsDialog UI component
 aliases: [preferences, configuration, app settings, user settings]
@@ -88,6 +88,30 @@ SettingsPreloadContext → SettingsContext/AppSettingsContext/ThemeContext
 | `widget_visibility` | object | `{}` | Per-page widget visibility |
 | `portfolio_tax_adjustments_v1` | object | `{}` | Manual tax adjustments |
 | `backup_settings` | object | `{}` | Backup configuration |
+| `startupSection` | `StartupSection` | `'budgeting'` | Section the app navigates to at launch (field within the `app_settings` JSONB blob) |
+
+## Startup Section
+
+The `startupSection` field controls which top-level section the app opens on immediately after launch. It is persisted as a field inside the existing `app_settings` JSONB blob — no separate backend setting key and no migration are required.
+
+**Type definition (from `[[apps/frontend/src/stores/settingsStore.ts]]`):**
+
+```typescript
+type StartupSection = 'budgeting' | 'portfolio' | 'research' | 'ai-chat';
+```
+
+**Section → home-page mapping:**
+
+| Value | Navigates to |
+|-------|-------------|
+| `'budgeting'` | `/` (default, no redirect) |
+| `'portfolio'` | `/portfolio` |
+| `'research'` | `/research` |
+| `'ai-chat'` | `/ai-chat` |
+
+**Redirect behavior** is handled by `[[apps/frontend/src/components/shared/StartupRedirect.tsx]]`, mounted inside `<BrowserRouter>` in `App.tsx`. It fires once, after settings hydrate, and only when the app opened at the root path `/`. It calls `navigate(..., { replace: true })` so the redirect does not create a history entry. Deep links (any non-`/` initial path) and later in-app navigation back to `/` are unaffected.
+
+**UI:** a "Open app on" Select is located in the **General** tab of `DashboardSettingsDialog` (`[[apps/frontend/src/components/settings/tabs/GeneralTab.tsx]]`). The option labels reuse `nav.*` i18n keys. Two new i18n keys cover the label and hint: `settings.general.startupSection`, `settings.general.startupSectionHint`.
 
 ## Backend Storage
 

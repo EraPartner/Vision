@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { parseDecimal } from "@/lib/decimal";
 import { useQueryClient } from "@tanstack/react-query";
 import {
@@ -35,13 +35,36 @@ import {
 } from "@/lib/api/market";
 
 type SearchResult = MarketSearchResult;
+type AssetClass = "stock" | "etf" | "crypto" | "metals";
+
+/**
+ * An already-known security to seed the dialog with, skipping the search step.
+ * Used by callers like Market Lookup where the user is already viewing a symbol.
+ */
+export interface WatchlistPrefill {
+  symbol: string;
+  name: string;
+  type?: string;
+  currency?: string;
+  /** Current price — used as the default target so the add is one confirm away. */
+  price?: number;
+}
+
+function detectAssetClass(type: string | undefined): AssetClass {
+  const t = type?.toLowerCase() ?? "";
+  if (t.includes("etf")) return "etf";
+  if (t.includes("crypto") || t.includes("cryptocurrency")) return "crypto";
+  return "stock";
+}
 
 interface AddToWatchlistDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
+  /** When set, the dialog opens pre-filled with this asset instead of a search. */
+  prefill?: WatchlistPrefill;
 }
 
-export function AddToWatchlistDialog({ open, onOpenChange }: AddToWatchlistDialogProps) {
+export function AddToWatchlistDialog({ open, onOpenChange, prefill }: AddToWatchlistDialogProps) {
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedAsset, setSelectedAsset] = useState<SearchResult | null>(null);
   const [assetClass, setAssetClass] = useState<"stock" | "etf" | "crypto" | "metals">("stock");
@@ -85,14 +108,30 @@ export function AddToWatchlistDialog({ open, onOpenChange }: AddToWatchlistDialo
     refetchOnWindowFocus: false,
   });
 
+  // Seed from a prefill when the dialog opens that way (e.g. from Market
+  // Lookup), so the user lands straight on the target-price step.
+  useEffect(() => {
+    if (!open || !prefill) return;
+    setSelectedAsset({
+      symbol: prefill.symbol,
+      name: prefill.name,
+      type: prefill.type ?? "",
+      exchange: "",
+    });
+    setAssetClass(detectAssetClass(prefill.type));
+    if (prefill.currency) setCurrency(prefill.currency);
+    setTargetPrice(
+      prefill.price != null && Number.isFinite(prefill.price) ? String(prefill.price) : "",
+    );
+    setSearchQuery("");
+    // Re-seed only when a new prefilled asset opens, not on every keystroke.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open, prefill?.symbol]);
+
   const handleSelectAsset = (result: SearchResult) => {
     setSelectedAsset(result);
     setSearchQuery("");
-    // Auto-detect asset class
-    const type = result.type?.toLowerCase() || "";
-    if (type.includes("etf")) setAssetClass("etf");
-    else if (type.includes("crypto") || type.includes("cryptocurrency")) setAssetClass("crypto");
-    else setAssetClass("stock");
+    setAssetClass(detectAssetClass(result.type));
   };
 
   const handleSubmit = async () => {

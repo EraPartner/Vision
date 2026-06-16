@@ -14,7 +14,7 @@ import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import {
   TrendingUp, TrendingDown, BarChart3, ArrowUpDown,
-  DollarSign, Activity, Clock, Newspaper, ExternalLink, Users,
+  DollarSign, Activity, Clock, Newspaper, ExternalLink, Users, Star,
 } from "lucide-react";
 import { AreaChart, BarChart, type AreaSeries, type BarSeries } from "@/components/charts";
 import { useDebounce } from "@/hooks/useDebounce";
@@ -22,6 +22,7 @@ import { cn } from "@/lib/utils";
 import { usePortfolio } from "@/hooks/usePortfolio";
 import { getInvestmentPriceHistory } from "@/lib/api/portfolio";
 import { AddInvestmentFromMarketDialog } from "@/components/portfolio/AddInvestmentFromMarketDialog";
+import { AddToWatchlistDialog } from "@/components/portfolio/AddToWatchlistDialog";
 import { RemoteNewsImage } from "@/components/shared/RemoteNewsImage";
 import { useSearchParams } from "react-router-dom";
 import { PageHeader } from "@/components/shared/PageHeader";
@@ -154,6 +155,7 @@ export default function MarketLookupPage() {
   }, [fmtNum]);
   const [searchText, setSearchText] = useState("");
   const [selectedSymbol, setSelectedSymbol] = useState<string | null>(null);
+  const [watchlistOpen, setWatchlistOpen] = useState(false);
   const [selectedRange, setSelectedRange] = useState(RANGES[2]); // 1M default
   const [searchParams] = useSearchParams();
   const symbolFromQuery = searchParams.get("symbol")?.trim().toUpperCase();
@@ -378,6 +380,17 @@ export default function MarketLookupPage() {
                       </div>
                     )}
                     {quote && !isProviderAsset && (
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        className="gap-1.5"
+                        onClick={() => setWatchlistOpen(true)}
+                      >
+                        <Star className="h-4 w-4" />
+                        {t('addWatchlist.title')}
+                      </Button>
+                    )}
+                    {quote && !isProviderAsset && (
                       <AddInvestmentFromMarketDialog
                         quote={quote}
                         existingInvestment={existingInvestment ?? undefined}
@@ -393,6 +406,21 @@ export default function MarketLookupPage() {
                 {t('market.noQuote', { symbol: effectiveSelectedSymbol })}
               </CardContent>
             </Card>
+          )}
+
+          {/* Quick add-to-watchlist for the symbol being looked up */}
+          {quote && !isProviderAsset && (
+            <AddToWatchlistDialog
+              open={watchlistOpen}
+              onOpenChange={setWatchlistOpen}
+              prefill={{
+                symbol: quote.symbol,
+                name: quote.name,
+                type: quote.type,
+                currency: quote.currency,
+                price: quote.price,
+              }}
+            />
           )}
 
           {/* Chart */}

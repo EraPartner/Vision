@@ -3,13 +3,14 @@ title: Watchlist Feature
 type: feature
 status: active
 date: 2026-04-17
-last_modified: 2026-06-11
-updated: 2026-06-11
+last_modified: 2026-06-16
+updated: 2026-06-16
 tags: [feature, watchlist, investments, tracking, alerts, phase-3.6, offline-resilience, online-status-detection, api-client-migration, validation, june-2026]
 description: Investment watchlist for tracking securities not yet in the portfolio with target price alerts. June 2026: POST/PATCH now return 400 ValidationError for invalid target_price, asset_class, or currency, instead of DB-level 500.
 aliases: [watch list, price alerts, investment tracking]
 related_code:
   - apps/frontend/src/pages/portfolio/WatchlistPage.tsx
+  - apps/frontend/src/components/portfolio/AddToWatchlistDialog.tsx
   - apps/frontend/src/hooks/usePortfolio.ts
   - apps/frontend/src/types/watchlist.ts
   - apps/frontend/src/lib/api.ts
@@ -127,6 +128,24 @@ Watchlist prices are updated when:
 - Removed hardcoded `API_BASE_URL` dependency (now sourced via api client)
 - Added `MarketSearchResult` type export from `[[apps/frontend/src/lib/api/market.ts]]`
 - Dialog now benefits from shared error handling, retry logic, and timeout controls
+
+### Prefill from Market Lookup (2026-06-16)
+
+`AddToWatchlistDialog` accepts an optional `prefill?: WatchlistPrefill` prop:
+
+```typescript
+interface WatchlistPrefill {
+  symbol: string;
+  name: string;
+  type?: string;      // maps to asset class auto-detection
+  currency?: string;
+  price?: number;     // seeds the target price field
+}
+```
+
+When `prefill` is provided the dialog **skips its internal search step**: it seeds the selected asset, auto-detects asset class from `type`, sets currency, and defaults the target price to the current price. The user is one confirm away from adding the item. Search-based usage (no `prefill`) is completely unchanged.
+
+The primary caller of the prefill path is `[[apps/frontend/src/pages/research/MarketLookupPage.tsx]]`: when a Yahoo symbol's detail view is open, an "Add to Watchlist" outline button in the quote header opens this dialog pre-populated from the current live quote. See [[docs/features/market-lookup|Market Lookup]] for the full quote-header action context.
 
 ## Offline Resilience
 

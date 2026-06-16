@@ -24,6 +24,14 @@ import type { ThemeVariant } from '@/styles/themes';
 export type CostBasisMethod = 'weighted_avg' | 'fifo' | 'lifo';
 
 /**
+ * The section the app lands on at launch. Maps to a sidebar workspace's main
+ * page (budgeting → /, portfolio → /portfolio, research → /research) plus the
+ * workspace-agnostic AI Chat (/ai-chat). 'last' reopens the page the user was
+ * on when they last closed the app. See StartupRedirect.
+ */
+export type StartupSection = 'budgeting' | 'portfolio' | 'research' | 'ai-chat' | 'last';
+
+/**
  * Atmosphere/material tier (ADR-075, supersedes the ADR-071 boolean):
  * - reduced: no backdrop-filter glass, no liquid canvas — for GPU-starved
  *   outputs (4K TVs on base M-series).
@@ -46,6 +54,8 @@ export interface AppSettings {
     visualEffects: VisualEffectsTier;
     /** Cap the effective tier at 'reduced' while the window sits on a large display. */
     autoAdaptDisplay: boolean;
+    /** Section whose main page the app opens on at launch. */
+    startupSection: StartupSection;
 }
 
 // ─── Dashboard settings types ─────────────────────────────────────────────────
@@ -82,6 +92,7 @@ export const DEFAULT_APP_SETTINGS: AppSettings = {
     adminMode: false,
     visualEffects: 'standard',
     autoAdaptDisplay: true,
+    startupSection: 'budgeting',
 };
 
 /**

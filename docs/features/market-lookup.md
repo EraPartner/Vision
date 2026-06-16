@@ -3,11 +3,14 @@ title: Market Lookup Feature
 type: feature
 status: active
 date: 2026-06-05
+updated: 2026-06-16
 tags: [feature, market, lookup, stocks, search, frontend]
 description: Market security lookup for finding stocks, ETFs, and other securities to add to the portfolio
 aliases: [stock lookup, market search, security search, ticker search]
 related_code:
   - apps/frontend/src/pages/MarketLookupPage.tsx
+  - apps/frontend/src/pages/research/MarketLookupPage.tsx
+  - apps/frontend/src/components/portfolio/AddToWatchlistDialog.tsx
   - apps/node-backend/src/routes/marketLookup.js
 ---
 
@@ -98,6 +101,16 @@ Yahoo quote/chart/news path.
 > broken charts. We read only a small subset of well-known fields, so the routes opt
 > out of the throw and degrade to whatever data came back. Note: yahoo-finance2
 > v3.14.1 is behind latest; bumping it may reduce (but won't eliminate) these drifts.
+
+### Quote Header Actions (Yahoo symbols)
+
+When viewing the detail view for a **Yahoo symbol** (free symbol search or a Yahoo-priced portfolio holding), the quote header exposes two side-by-side action buttons:
+
+- **Add to portfolio** — opens `AddInvestmentFromMarketDialog` pre-filled with the symbol and provider (existing behaviour).
+- **Add to watchlist** (Star icon, label `addWatchlist.title`) — opens `[[apps/frontend/src/components/portfolio/AddToWatchlistDialog.tsx|AddToWatchlistDialog]]` with a `prefill` object seeded from the current quote (`symbol`, `name`, `type`, `currency`, `price`). The dialog skips its internal search step and is one confirm away from adding the item. See [[docs/features/watchlist|Watchlist]] for full prefill details.
+
+> [!info]
+> The "Add to watchlist" button is shown only for Yahoo symbols. Provider-priced assets (Kinesis, Binance, custom JSON) use the alternate price-history path and do not show this button, since those symbols cannot be looked up independently via Yahoo.
 
 ### Adding to Portfolio
 

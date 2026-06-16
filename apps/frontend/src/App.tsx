@@ -14,6 +14,7 @@ import { configureCurrencyFormatDefaults, numberFormatToLocale } from "@/utils/c
 import { lazy, Suspense, useEffect, type ComponentType, type ReactNode } from "react";
 import { ErrorBoundary } from "@/components/shared/ErrorBoundary";
 import { ScrollToTop } from "@/components/shared/ScrollToTop";
+import { StartupRedirect } from "@/components/shared/StartupRedirect";
 import { RequireAdmin } from "@/components/auth/RequireAdmin";
 
 // Lazy-loaded pages for code splitting. Loaders live in lib/routePreload so
@@ -147,6 +148,7 @@ const App = () => {
                                         <Sonner />
                                         <BrowserRouter>
                                             <ScrollToTop />
+                                            <StartupRedirect />
                                             <AppLayout>
                                                 <RoutedErrorBoundary>
                                                 <Suspense fallback={<PageLoader />}>

@@ -7,7 +7,7 @@ import {
 } from '@/components/ui/select';
 import { useLanguage } from '@/contexts/LanguageContext';
 import type { AppSettings } from '@/contexts/AppSettingsContext';
-import type { CostBasisMethod } from '@/stores/settingsStore';
+import type { CostBasisMethod, StartupSection } from '@/stores/settingsStore';
 
 const CURRENCIES = [
     'EUR', 'USD', 'GBP', 'CHF', 'JPY', 'CAD', 'AUD', 'SEK', 'NOK', 'DKK',
@@ -185,6 +185,31 @@ export const GeneralTab = memo(function GeneralTab({ localAppSettings, onUpdate 
                     </Select>
                     <p className="text-xs text-muted-foreground">
                         {t('settings.general.languageHint')}
+                    </p>
+                </div>
+
+                <Separator />
+
+                {/* Startup Section — page the app opens on at launch */}
+                <div className="space-y-2">
+                    <Label className="text-sm font-semibold">{t('settings.general.startupSection')}</Label>
+                    <Select
+                        value={localAppSettings.startupSection ?? 'budgeting'}
+                        onValueChange={(v) => onUpdate({ ...localAppSettings, startupSection: v as StartupSection })}
+                    >
+                        <SelectTrigger>
+                            <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                            <SelectItem value="budgeting">{t('nav.budgeting')}</SelectItem>
+                            <SelectItem value="portfolio">{t('nav.portfolio')}</SelectItem>
+                            <SelectItem value="research">{t('nav.research')}</SelectItem>
+                            <SelectItem value="ai-chat">{t('nav.aiChat')}</SelectItem>
+                            <SelectItem value="last">{t('settings.general.startupSection.last')}</SelectItem>
+                        </SelectContent>
+                    </Select>
+                    <p className="text-xs text-muted-foreground">
+                        {t('settings.general.startupSectionHint')}
                     </p>
                 </div>
 
