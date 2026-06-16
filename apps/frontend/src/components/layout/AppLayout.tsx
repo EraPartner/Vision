@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { SidebarProvider, SidebarTrigger } from "@/components/ui/sidebar";
 import { AppSidebar } from "@/components/layout/AppSidebar";
 import { Button } from "@/components/ui/button";
@@ -26,8 +26,6 @@ import { VisualEffectsController } from "@/components/layout/VisualEffectsContro
 import { useGoToShortcuts } from "@/hooks/useGoToShortcuts";
 import { useVisualEffectsTier } from "@/hooks/useVisualEffectsTier";
 import { consumeUndo } from "@/lib/undo";
-import { useLocation, useNavigate } from "react-router-dom";
-import { LOCAL_STORAGE_KEYS } from "@/lib/localStorage-keys";
 import { isTypingTarget } from "@/lib/keyboard";
 import { useWorkspace } from "@/contexts/WorkspaceContext";
 
@@ -71,26 +69,9 @@ export function AppLayout({ children }: AppLayoutProps) {
     const { tier: effectsTier } = useVisualEffectsTier();
     useGoToShortcuts();
 
-    // Window-state restoration (macOS "reopen where you left off"): persist
-    // the route continuously; on a fresh launch landing at "/", jump back.
-    const location = useLocation();
-    const navigate = useNavigate();
-    const restoredRef = useRef(false);
-    useEffect(() => {
-        if (!restoredRef.current) {
-            restoredRef.current = true;
-            try {
-                const stored = localStorage.getItem(LOCAL_STORAGE_KEYS.LAST_ROUTE);
-                if (stored && stored !== '/' && location.pathname === '/' && stored.startsWith('/')) {
-                    navigate(stored, { replace: true });
-                    return;
-                }
-            } catch { /* localStorage unavailable */ }
-        }
-        try {
-            localStorage.setItem(LOCAL_STORAGE_KEYS.LAST_ROUTE, location.pathname + location.search);
-        } catch { /* localStorage unavailable */ }
-    }, [location.pathname, location.search, navigate]);
+    // Launch navigation (the "open app on" startup-section setting) and the
+    // "last opened page" restoration both live in StartupRedirect now, so there
+    // is no competing window-state restore here.
     const { isComplete: onboardingComplete, isLoading: onboardingLoading, complete: completeOnboarding } = useOnboarding();
 
     // Topbar material fades in once the page scrolls under it; the inline

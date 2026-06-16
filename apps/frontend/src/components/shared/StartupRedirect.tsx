@@ -1,6 +1,7 @@
 import { useEffect, useRef } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 import { useAppSettings } from "@/contexts/AppSettingsContext";
+import { LOCAL_STORAGE_KEYS } from "@/lib/localStorage-keys";
 import type { StartupSection } from "@/stores/settingsStore";
 
 // Each fixed startup section's main page. Budgeting is the app root, so it
@@ -13,13 +14,11 @@ const SECTION_HOME: Record<Exclude<StartupSection, "last">, string> = {
     "ai-chat": "/ai-chat",
 };
 
-// Persists across sessions (unlike the per-session workspace key), so the
-// "last opened page" startup option can restore it on the next launch.
-const LAST_PAGE_KEY = "vision_last_page";
-
+// Canonical last-route key (lib/localStorage-keys). Persists across launches so
+// the "last opened page" startup option can restore it on the next launch.
 function readLastPage(): string | undefined {
     try {
-        const v = localStorage.getItem(LAST_PAGE_KEY);
+        const v = localStorage.getItem(LOCAL_STORAGE_KEYS.LAST_ROUTE);
         // Only accept in-app absolute paths; ignore anything else.
         return v && v.startsWith("/") ? v : undefined;
     } catch {
@@ -68,7 +67,7 @@ export function StartupRedirect() {
     // Track the current page (path + query) for the "last opened page" option.
     useEffect(() => {
         try {
-            localStorage.setItem(LAST_PAGE_KEY, location.pathname + location.search);
+            localStorage.setItem(LOCAL_STORAGE_KEYS.LAST_ROUTE, location.pathname + location.search);
         } catch {
             // localStorage unavailable — last-page restore disabled this session.
         }
