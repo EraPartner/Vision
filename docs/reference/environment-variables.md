@@ -74,7 +74,7 @@ aliases: [env vars, environment variables, .env, configuration, env]
 | Variable | Default | Required | Description | Code |
 |----------|---------|----------|-------------|------|
 | `KINESIS_BASE_URL` | `https://api.kinesis.money/api/market-data/trendlines` | No | Kinesis API base URL | [[apps/node-backend/src/config/kinesisConfig.js\|kinesisConfig.js]] |
-| `KINESIS_DEFAULT_TIMEFRAME` | `60` | No | Default timeframe in days | [[apps/node-backend/src/config/kinesisConfig.js\|kinesisConfig.js]] |
+| `KINESIS_DEFAULT_TIMEFRAME` | `60` | No | Default trendline timeframe in minutes (confirmed 2026-06-16) | [[apps/node-backend/src/config/kinesisConfig.js\|kinesisConfig.js]] |
 | `KINESIS_DEFAULT_FROM_DATE` | `2019-01-01T08:47:55.843Z` | No | Default start date for history | [[apps/node-backend/src/config/kinesisConfig.js\|kinesisConfig.js]] |
 
 ## Research Providers (ADR-079)
