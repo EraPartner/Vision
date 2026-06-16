@@ -20,7 +20,6 @@ export const routeLoaders = {
     "/admin/providers": () => import("@/pages/admin/ProviderHealthPage"),
     "/admin/endpoints": () => import("@/pages/admin/EndpointLivenessPage"),
     "/portfolio": () => import("@/pages/portfolio/PortfolioOverviewPage"),
-    "/portfolio/market": () => import("@/pages/MarketLookupPage"),
     "/portfolio/stocks": () => import("@/pages/portfolio/StocksPage"),
     "/portfolio/crypto": () => import("@/pages/portfolio/CryptoPage"),
     "/portfolio/metals": () => import("@/pages/portfolio/MetalsPage"),
@@ -29,10 +28,14 @@ export const routeLoaders = {
     "/portfolio/performance": () => import("@/pages/portfolio/PerformancePage"),
     "/portfolio/net-worth": () => import("@/pages/portfolio/net-worth/NetWorthPage"),
     "/portfolio/exchange-rates": () => import("@/pages/portfolio/ExchangeRatesPage"),
-    "/portfolio/watchlist": () => import("@/pages/portfolio/WatchlistPage"),
     "/portfolio/import": () => import("@/pages/portfolio/PortfolioImportPage"),
     "/portfolio/import/:batchId/review": () => import("@/pages/portfolio/PortfolioImportReviewPage"),
     "/portfolio/tax": () => import("@/pages/portfolio/tax/PortfolioTaxPage"),
+    "/research": () => import("@/pages/research/ResearchHomePage"),
+    "/research/market": () => import("@/pages/research/MarketLookupPage"),
+    "/research/watchlist": () => import("@/pages/research/WatchlistPage"),
+    "/research/symbol/:symbol": () => import("@/pages/research/ResearchSymbolPage"),
+    "/research/compare": () => import("@/pages/research/ResearchComparePage"),
     "/ai-chat": () => import("@/pages/AIChatPage"),
 } as const;
 

@@ -39,6 +39,8 @@ import {
   Activity,
   Globe,
   PanelLeftClose,
+  Telescope,
+  GitCompareArrows,
 } from "lucide-react";
 import { motion, useReducedMotion } from "framer-motion";
 import { useWorkspace } from "@/contexts/WorkspaceContext";
@@ -76,7 +78,8 @@ function withGoToHint(title: string, url: string): string {
 function isActiveRoute(itemUrl: string, pathname: string) {
   if (itemUrl === "/" && pathname === "/") return true;
   if (itemUrl === "/portfolio" && pathname === "/portfolio") return true;
-  if (itemUrl !== "/" && itemUrl !== "/portfolio") return pathname.startsWith(itemUrl);
+  if (itemUrl === "/research" && pathname === "/research") return true;
+  if (itemUrl !== "/" && itemUrl !== "/portfolio" && itemUrl !== "/research") return pathname.startsWith(itemUrl);
   return false;
 }
 
@@ -161,16 +164,34 @@ export function AppSidebar() {
     {
       label: t('nav.tools'),
       items: [
-        { title: t('nav.marketLookup'), url: "/portfolio/market", icon: LineChart },
         { title: t('nav.portfolioImport'), url: "/portfolio/import", icon: Import },
-        { title: t('nav.watchlist'), url: "/portfolio/watchlist", icon: Target },
         { title: t('nav.exchangeRates'), url: "/portfolio/exchange-rates", icon: ArrowLeftRight },
         { title: t('nav.taxOverview'), url: "/portfolio/tax", icon: Landmark },
       ],
     },
   ], [t]);
 
-  const groups = workspace === "budgeting" ? budgetingGroups : portfolioGroups;
+  const researchGroups = useMemo(() => [
+    {
+      label: t('nav.overview'),
+      items: [
+        { title: t('nav.researchHome'), url: "/research", icon: Telescope },
+        { title: t('nav.marketLookup'), url: "/research/market", icon: LineChart },
+      ],
+    },
+    {
+      label: t('nav.analysis'),
+      items: [
+        { title: t('nav.compare'), url: "/research/compare", icon: GitCompareArrows },
+        { title: t('nav.watchlist'), url: "/research/watchlist", icon: Target },
+      ],
+    },
+  ], [t]);
+
+  const groups =
+    workspace === "budgeting" ? budgetingGroups
+      : workspace === "research" ? researchGroups
+        : portfolioGroups;
 
   return (
     <Sidebar collapsible="icon" className="glass-chrome border-r border-sidebar-border/60">
@@ -252,17 +273,27 @@ export function AppSidebar() {
                 icon={<Briefcase className="h-3.5 w-3.5" />}
                 label={t('nav.portfolio')}
               />
+              <WorkspaceTab
+                active={workspace === "research"}
+                onClick={() => setWorkspace("research")}
+                icon={<Telescope className="h-3.5 w-3.5" />}
+                label={t('nav.research')}
+              />
             </div>
           </div>
         )}
         {collapsed && (
           <div className="flex justify-center pt-3 px-1.5">
             <button
-              onClick={() => setWorkspace(workspace === "budgeting" ? "portfolio" : "budgeting")}
+              onClick={() => setWorkspace(
+                workspace === "budgeting" ? "portfolio"
+                  : workspace === "portfolio" ? "research"
+                    : "budgeting",
+              )}
               className="w-9 h-9 flex items-center justify-center rounded-lg bg-primary/10 text-primary hover:bg-primary/20 transition-colors"
-              title={workspace === "budgeting" ? t('nav.budgeting') : t('nav.portfolio')}
+              title={workspace === "budgeting" ? t('nav.budgeting') : workspace === "portfolio" ? t('nav.portfolio') : t('nav.research')}
             >
-              {workspace === "budgeting" ? <Receipt className="h-4 w-4" /> : <Briefcase className="h-4 w-4" />}
+              {workspace === "budgeting" ? <Receipt className="h-4 w-4" /> : workspace === "portfolio" ? <Briefcase className="h-4 w-4" /> : <Telescope className="h-4 w-4" />}
             </button>
           </div>
         )}

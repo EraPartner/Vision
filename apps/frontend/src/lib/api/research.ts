@@ -1,0 +1,165 @@
+/**
+ * Research API client (ADR-079).
+ *
+ * Unlike the rest of the API layer — which unwraps the envelope to bare `data`
+ * via `apiRequest` — the research endpoints carry provenance in `meta`
+ * (`provider`, `source`). The UI needs that to render "live data unavailable"
+ * instead of a silent blank, so these helpers return `{ data, meta }` together.
+ *
+ * See docs/api/research.md and docs/features/research.md.
+ */
+
+import { API_BASE_URL, parseEnvelopeError, rawFetch } from '@/lib/api/client';
+import { buildQuery, type QueryParams } from '@/lib/api/helpers';
+import type {
+    InstrumentProviderMapping,
+    MappingAuditResponse,
+    MappingKeyType,
+    MappingResolveResponse,
+    MappingSaveInput,
+    MappingsResponse,
+    ResearchAnalyst,
+    ResearchAssetClass,
+    ResearchChartResponse,
+    ResearchFundamentals,
+    ResearchMeta,
+    ResearchNewsResponse,
+    ResearchQuote,
+    ResearchRange,
+    ResearchResult,
+    ResearchSearchResponse,
+} from '@/types/research';
+
+interface RawEnvelope<T> {
+    ok?: boolean;
+    data?: T;
+    meta?: Partial<ResearchMeta> & Record<string, unknown>;
+}
+
+function normalizeMeta(meta: RawEnvelope<unknown>['meta']): ResearchMeta {
+    return {
+        provider: (meta?.provider as string | null | undefined) ?? null,
+        source: (meta?.source as ResearchMeta['source']) ?? 'unavailable',
+        requestId: meta?.requestId as string | undefined,
+    };
+}
+
+/**
+ * GET an `/api/research/*` endpoint and return `{ data, meta }`. Keeps the
+ * tracked transport (timeout, abort registration, correlation id) and unified
+ * envelope error parsing, but preserves `meta` instead of discarding it.
+ */
+async function researchGet<T>(endpoint: string, params?: QueryParams): Promise<ResearchResult<T>> {
+    const query = buildQuery(params);
+    const url = `${API_BASE_URL}${endpoint}${query ? `?${query}` : ''}`;
+    const response = await rawFetch(url);
+    if (!response.ok) {
+        throw await parseEnvelopeError(response, 'Research request failed');
+    }
+    const body = (await response.json()) as RawEnvelope<T>;
+    return { data: body.data as T, meta: normalizeMeta(body.meta) };
+}
+
+async function researchSend<T>(
+    endpoint: string,
+    method: 'POST' | 'DELETE',
+    payload?: unknown,
+): Promise<ResearchResult<T>> {
+    const url = `${API_BASE_URL}${endpoint}`;
+    const response = await rawFetch(url, {
+        method,
+        headers: { 'Content-Type': 'application/json' },
+        ...(payload !== undefined ? { body: JSON.stringify(payload) } : {}),
+    });
+    if (!response.ok) {
+        throw await parseEnvelopeError(response, 'Research request failed');
+    }
+    const body = (await response.json()) as RawEnvelope<T>;
+    return { data: body.data as T, meta: normalizeMeta(body.meta) };
+}
+
+// ── Data endpoints ──────────────────────────────────────────────────────────
+
+export function searchResearch(query: string): Promise<ResearchResult<ResearchSearchResponse>> {
+    return researchGet<ResearchSearchResponse>('/api/research/search', { q: query });
+}
+
+export function getResearchQuote(
+    symbol: string,
+    assetClass?: ResearchAssetClass,
+): Promise<ResearchResult<ResearchQuote | null>> {
+    return researchGet<ResearchQuote | null>('/api/research/quote', {
+        symbol,
+        asset_class: assetClass,
+    });
+}
+
+export function getResearchChart(
+    symbol: string,
+    range: ResearchRange,
+    assetClass?: ResearchAssetClass,
+): Promise<ResearchResult<ResearchChartResponse>> {
+    return researchGet<ResearchChartResponse>('/api/research/chart', {
+        symbol,
+        range,
+        asset_class: assetClass,
+    });
+}
+
+export function getResearchFundamentals(
+    symbol: string,
+): Promise<ResearchResult<ResearchFundamentals | null>> {
+    return researchGet<ResearchFundamentals | null>('/api/research/fundamentals', { symbol });
+}
+
+export function getResearchAnalyst(
+    symbol: string,
+): Promise<ResearchResult<ResearchAnalyst | null>> {
+    return researchGet<ResearchAnalyst | null>('/api/research/analyst', { symbol });
+}
+
+export function getResearchNews(symbol: string): Promise<ResearchResult<ResearchNewsResponse>> {
+    return researchGet<ResearchNewsResponse>('/api/research/news', { symbol });
+}
+
+// ── Symbol-mapping endpoints ────────────────────────────────────────────────
+
+export function getResearchMappings(
+    instrumentKey: string,
+    keyType: MappingKeyType = 'isin',
+): Promise<ResearchResult<MappingsResponse>> {
+    return researchGet<MappingsResponse>('/api/research/mappings', {
+        instrument_key: instrumentKey,
+        key_type: keyType,
+    });
+}
+
+export function resolveResearchMappings(input: {
+    instrument_key: string;
+    key_type?: MappingKeyType;
+    asset_class?: ResearchAssetClass;
+    query: string;
+}): Promise<ResearchResult<MappingResolveResponse>> {
+    return researchSend<MappingResolveResponse>('/api/research/mappings/resolve', 'POST', input);
+}
+
+export function saveResearchMappings(input: {
+    instrument_key: string;
+    key_type?: MappingKeyType;
+    mappings: MappingSaveInput[];
+}): Promise<ResearchResult<MappingsResponse>> {
+    return researchSend<MappingsResponse>('/api/research/mappings', 'POST', input);
+}
+
+export function deleteResearchMapping(id: number): Promise<ResearchResult<{ removed: boolean }>> {
+    return researchSend<{ removed: boolean }>(`/api/research/mappings/${id}`, 'DELETE');
+}
+
+export function auditResearchMappings(input: {
+    instrument_key: string;
+    key_type?: MappingKeyType;
+}): Promise<ResearchResult<MappingAuditResponse>> {
+    return researchSend<MappingAuditResponse>('/api/research/mappings/audit', 'POST', input);
+}
+
+export type { InstrumentProviderMapping };

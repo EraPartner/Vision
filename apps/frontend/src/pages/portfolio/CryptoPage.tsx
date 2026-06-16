@@ -50,7 +50,7 @@ export default function CryptoPage() {
     // Pass the holding id so the market page can chart non-Yahoo providers
     // (binance/custom) from this holding's own price history.
     const suffix = investmentId != null ? `&investmentId=${investmentId}` : "";
-    navigate(`/portfolio/market?symbol=${encodeURIComponent(symbol)}${suffix}`);
+    navigate(`/research/market?symbol=${encodeURIComponent(symbol)}${suffix}`);
   }
 
   const totalValue = holdings.reduce((s, h) => s + convertToTarget(h.currentValue, h.currency), 0);

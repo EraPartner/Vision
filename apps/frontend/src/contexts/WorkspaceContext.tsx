@@ -1,14 +1,14 @@
 import { useCallback, useEffect } from "react";
 import { useNavigate, useLocation } from "react-router-dom";
 
-export type Workspace = "budgeting" | "portfolio";
+export type Workspace = "budgeting" | "portfolio" | "research";
 
 const WORKSPACE_KEY = "vision_workspace";
 
 function readStoredWorkspace(): Workspace {
   try {
     const v = sessionStorage.getItem(WORKSPACE_KEY);
-    if (v === "portfolio" || v === "budgeting") return v;
+    if (v === "portfolio" || v === "budgeting" || v === "research") return v;
   } catch {
     // sessionStorage unavailable (private mode, SSR) — fall through to default
   }
@@ -34,11 +34,14 @@ export function useWorkspace() {
 
   const path = location.pathname;
   const isPortfolio = path.startsWith("/portfolio");
+  const isResearch = path.startsWith("/research");
   const isAdmin = path.startsWith("/admin");
 
   let workspace: Workspace;
   if (isAdmin) {
     workspace = readStoredWorkspace();
+  } else if (isResearch) {
+    workspace = "research";
   } else {
     workspace = isPortfolio ? "portfolio" : "budgeting";
   }
@@ -52,7 +55,9 @@ export function useWorkspace() {
       writeWorkspace(ws);
       if (ws === "portfolio" && !path.startsWith("/portfolio")) {
         navigate("/portfolio");
-      } else if (ws === "budgeting" && (path.startsWith("/portfolio") || path.startsWith("/admin"))) {
+      } else if (ws === "research" && !path.startsWith("/research")) {
+        navigate("/research");
+      } else if (ws === "budgeting" && (path.startsWith("/portfolio") || path.startsWith("/research") || path.startsWith("/admin"))) {
         navigate("/");
       }
     },

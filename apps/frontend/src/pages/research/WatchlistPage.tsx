@@ -72,7 +72,7 @@ export default function WatchlistPage() {
       setSelectedItem(item);
       return;
     }
-    navigate(`/portfolio/market?symbol=${encodeURIComponent(item.symbol)}`);
+    navigate(`/research/market?symbol=${encodeURIComponent(item.symbol)}`);
   };
 
   const formatDisplayCurrency = (value: number, currency: string) =>

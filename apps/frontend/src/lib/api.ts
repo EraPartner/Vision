@@ -28,6 +28,7 @@ import * as splits from '@/lib/api/splits';
 import * as electron from '@/lib/api/electron';
 import * as charts from '@/lib/api/charts';
 import * as market from '@/lib/api/market';
+import * as research from '@/lib/api/research';
 import * as agg from '@/lib/api/aggregations';
 import * as ai from '@/lib/api/ai';
 import * as tags from '@/lib/api/tags';
@@ -199,6 +200,19 @@ export const apiClient = {
     createWatchlistItem: market.createWatchlistItem,
     updateWatchlistItem: market.updateWatchlistItem,
     deleteWatchlistItem: market.deleteWatchlistItem,
+
+    // Research (ADR-079) — multi-provider, envelope meta preserved
+    searchResearch: research.searchResearch,
+    getResearchQuote: research.getResearchQuote,
+    getResearchChart: research.getResearchChart,
+    getResearchFundamentals: research.getResearchFundamentals,
+    getResearchAnalyst: research.getResearchAnalyst,
+    getResearchNews: research.getResearchNews,
+    getResearchMappings: research.getResearchMappings,
+    resolveResearchMappings: research.resolveResearchMappings,
+    saveResearchMappings: research.saveResearchMappings,
+    deleteResearchMapping: research.deleteResearchMapping,
+    auditResearchMappings: research.auditResearchMappings,
 
     // Aggregations
     getAggregationMonthlySummary: agg.getAggregationMonthlySummary,

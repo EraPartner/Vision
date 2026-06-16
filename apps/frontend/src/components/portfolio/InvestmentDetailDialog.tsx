@@ -116,7 +116,7 @@ export function InvestmentDetailDialog({
     // Pass the investment id so the market page can serve the chart from this
     // holding's own price provider (Kinesis/custom/binance) when Yahoo has no
     // data for the symbol; Yahoo holdings are unaffected.
-    navigate(`/portfolio/market?symbol=${encodeURIComponent(investment.symbol)}&investmentId=${investment.id}`);
+    navigate(`/research/market?symbol=${encodeURIComponent(investment.symbol)}&investmentId=${investment.id}`);
   };
 
   return (

@@ -31,6 +31,8 @@ import {
     Sun,
     Tags,
     Target,
+    Telescope,
+    GitCompareArrows,
     TrendingUp,
     Users,
     Wallet,
@@ -78,10 +80,15 @@ const PORTFOLIO_PAGES: PaletteEntry[] = [
     { titleKey: "nav.metals", url: "/portfolio/metals", icon: Gem },
     { titleKey: "nav.realEstate", url: "/portfolio/real-estate", icon: Building2 },
     { titleKey: "nav.savingsBonds", url: "/portfolio/savings", icon: PiggyBank },
-    { titleKey: "nav.marketLookup", url: "/portfolio/market", icon: LineChart },
-    { titleKey: "nav.watchlist", url: "/portfolio/watchlist", icon: Target },
     { titleKey: "nav.exchangeRates", url: "/portfolio/exchange-rates", icon: ArrowLeftRight },
     { titleKey: "nav.taxOverview", url: "/portfolio/tax", icon: Landmark },
+];
+
+const RESEARCH_PAGES: PaletteEntry[] = [
+    { titleKey: "nav.researchHome", url: "/research", icon: Telescope },
+    { titleKey: "nav.marketLookup", url: "/research/market", icon: LineChart },
+    { titleKey: "nav.compare", url: "/research/compare", icon: GitCompareArrows },
+    { titleKey: "nav.watchlist", url: "/research/watchlist", icon: Target },
 ];
 
 // url → go-to key, so palette entries display their keyboard sequence.
@@ -218,6 +225,8 @@ export function CommandPalette({ open, onOpenChange, onOpenSettings, onOpenShort
         // Keep the sidebar workspace in sync with cross-workspace jumps.
         if (url.startsWith("/portfolio")) {
             setWorkspace("portfolio");
+        } else if (url.startsWith("/research")) {
+            setWorkspace("research");
         } else if (url !== "/ai-chat") {
             setWorkspace("budgeting");
         }
@@ -243,7 +252,7 @@ export function CommandPalette({ open, onOpenChange, onOpenSettings, onOpenShort
     );
 
     const allPages = useMemo(
-        () => [...BUDGETING_PAGES, ...PORTFOLIO_PAGES, ...adminPages],
+        () => [...BUDGETING_PAGES, ...PORTFOLIO_PAGES, ...RESEARCH_PAGES, ...adminPages],
         [adminPages],
     );
     const recentEntries = useMemo(
@@ -326,6 +335,16 @@ export function CommandPalette({ open, onOpenChange, onOpenSettings, onOpenShort
                 <CommandSeparator />
                 <CommandGroup heading={t("nav.portfolio")}>
                     {PORTFOLIO_PAGES.map((page) => (
+                        <CommandItem key={page.url} value={`${t(page.titleKey)} ${page.url}`} onSelect={() => goTo(page.url)}>
+                            <page.icon className="text-muted-foreground" />
+                            <span>{t(page.titleKey)}</span>
+                            <GoToHint url={page.url} />
+                        </CommandItem>
+                    ))}
+                </CommandGroup>
+                <CommandSeparator />
+                <CommandGroup heading={t("nav.research")}>
+                    {RESEARCH_PAGES.map((page) => (
                         <CommandItem key={page.url} value={`${t(page.titleKey)} ${page.url}`} onSelect={() => goTo(page.url)}>
                             <page.icon className="text-muted-foreground" />
                             <span>{t(page.titleKey)}</span>

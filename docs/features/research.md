@@ -17,7 +17,7 @@ tags:
   - pillar-a
   - pillar-b
   - pillar-d
-description: Research section (ADR-079) — a provider-agnostic market research surface backed by a capability map, quota governor, and type-aware in-memory cache. Yahoo Finance is the only adapter wired today; Twelve Data, Finnhub, FMP, and Alpha Vantage are defined in the capability map and activate when their API keys are provisioned. Frontend workspace pages are not yet built.
+description: Research section (ADR-079) — a provider-agnostic market research surface backed by a capability map, quota governor, and type-aware in-memory cache. Yahoo Finance is the only adapter wired today; Twelve Data, Finnhub, FMP, and Alpha Vantage are defined in the capability map and activate when their API keys are provisioned. The `/research` frontend workspace (home, moved Market Lookup + Watchlist, symbol detail with lazy tabs, compare, and the symbol-mapping confirm dialog) is shipped.
 aliases:
   - research
   - research section
@@ -42,13 +42,15 @@ The Research section gives users a unified hub to investigate any security — n
 
 | Pillar | Description | Status |
 |---|---|---|
-| **A — Research workspace** | A consolidated area combining [[docs/features/market-lookup\|Market Lookup]] and [[docs/features/watchlist\|Watchlist]] into a single navigable research surface for any symbol | Backend API shipped; frontend pages not yet built |
-| **B — Comparative analysis** | Multi-symbol overlay charts (rebased), return/volatility/drawdown comparisons, cross-holding correlation — all computable from daily closes | Backend API shipped; frontend not yet built |
-| **D — Screening / fundamentals** | Side-by-side fundamentals comparison; screening partially unlocked via free tiers (FMP/Finnhub for US; EU fundamentals depth limited without a paid source) | Backend API shipped; frontend not yet built |
+| **A — Research workspace** | A consolidated area combining [[docs/features/market-lookup\|Market Lookup]] and [[docs/features/watchlist\|Watchlist]] into a single navigable research surface for any symbol | **Shipped** — `/research` workspace (3rd workspace alongside Budget + Portfolio); Market Lookup + Watchlist moved here from `/portfolio/*` |
+| **B — Comparative analysis** | Multi-symbol overlay charts (rebased), return/volatility/drawdown comparisons, cross-holding correlation — all computable from daily closes | **Shipped** — `/research/compare` (rebased overlay + return/volatility/max-drawdown table); correlation matrix deferred |
+| **D — Screening / fundamentals** | Side-by-side fundamentals comparison; screening partially unlocked via free tiers (FMP/Finnhub for US; EU fundamentals depth limited without a paid source) | Backend + per-symbol fundamentals tab shipped; multi-symbol screening UI not yet built |
 | **C — Portfolio value projection** | Monte Carlo projection of portfolio value / net worth using the existing forecast engine | Deferred — orthogonal to this work; tracked separately |
 
-> [!info] What shipped in the "Yahoo slice"
-> The backend API surface (11 endpoints under `/api/research` — 6 data + 5 cross-provider symbol-mapping), the full aggregation layer (capability map, quota governor, type-aware cache), the Yahoo adapter, the symbol-mapping service + self-audit, and the DB migration creating `instrument_provider_map` and `provider_quota` tables. No frontend pages are built yet. Other provider adapters (Twelve Data, Finnhub, FMP, Alpha Vantage) are wired into the capability map but have no adapter modules yet — they become active once their API keys are added to `.env.local` and their adapter modules are implemented.
+> [!info] What shipped
+> **Backend:** the API surface (11 endpoints under `/api/research` — 6 data + 5 cross-provider symbol-mapping), the full aggregation layer (capability map, quota governor, type-aware cache), the Yahoo adapter, the symbol-mapping service + self-audit, and the DB migration creating `instrument_provider_map` and `provider_quota` tables.
+> **Frontend:** the `/research` workspace — home (`ResearchHomePage`), moved Market Lookup + Watchlist, symbol detail (`ResearchSymbolPage`: quote header + visx chart + lazy per-tab Fundamentals/Analyst/News), comparison (`ResearchComparePage`), and the symbol-mapping confirm dialog (`ResearchMappingDialog`: resolve → confirm → save + audit). Routing/sidebar/CommandPalette/go-to shortcuts updated; old `/portfolio/market` + `/portfolio/watchlist` redirect (preserving query params). i18n en/nl added.
+> **Not yet:** the four keyed provider adapters (Twelve Data, Finnhub, FMP, Alpha Vantage activate once their `.env.local` key + adapter module exist), multi-symbol screening UI, correlation matrix, and the holdings pre-seed for mappings.
 
 ## API Surface
 
@@ -131,7 +133,7 @@ Two tables are created by migration `0042_add_research_provider_mapping_and_quot
 | Table | Persists | Purpose |
 |---|---|---|
 | `provider_quota` | Per-day request counts per provider | Daily quota governor so budgets survive restarts |
-| `instrument_provider_map` | User-confirmed cross-provider symbol mappings (ISIN-anchored) | Backend shipped — exposed via `/api/research/mappings*`; frontend confirm dialog not yet built |
+| `instrument_provider_map` | User-confirmed cross-provider symbol mappings (ISIN-anchored) | Shipped — `/api/research/mappings*` + frontend `ResearchMappingDialog` |
 
 ## ISIN-Anchored Symbol Mapping
 
@@ -143,8 +145,8 @@ International ticker reuse is rampant (the same string is a different instrument
 4. Holdings pre-seed the map from `price_provider` + `price_provider_id` already stored on `investments` *(planned — not yet wired)*.
 5. `POST /mappings/audit` cross-checks currency match and last-price agreement (>5% from median flagged) across mapped providers and stamps `verified_at`.
 
-> [!info] Backend shipped; frontend pending
-> The symbol-mapping endpoints (resolve / save / list / delete over `instrument_provider_map`) and the cross-provider self-audit are **implemented** ([[apps/node-backend/src/services/research/researchMappingService.js]]). The frontend confirm dialog and the holdings pre-seed step are not yet built.
+> [!info] Shipped; holdings pre-seed pending
+> The symbol-mapping endpoints (resolve / save / list / delete over `instrument_provider_map`) and the cross-provider self-audit are **implemented** ([[apps/node-backend/src/services/research/researchMappingService.js]]), and the frontend confirm dialog (`ResearchMappingDialog`) consumes them (resolve → confirm/deselect → save, with an audit action). The **holdings pre-seed** step (step 4 above) is not yet wired.
 
 ## Planned: Additional Provider Adapters
 

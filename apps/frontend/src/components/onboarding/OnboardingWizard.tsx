@@ -116,7 +116,7 @@ export function OnboardingWizard({ open, onComplete, onOpenSettings }: Onboardin
         { icon: CalendarClock,title: t('onboarding.feature.planned.title'),      desc: t('onboarding.feature.planned.desc'),      path: "/planned" },
         { icon: BarChart3,    title: t('onboarding.feature.statistics.title'),   desc: t('onboarding.feature.statistics.desc'),   path: "/statistics" },
         { icon: TrendingUp,   title: t('onboarding.feature.portfolio.title'),    desc: t('onboarding.feature.portfolio.desc'),    path: "/portfolio" },
-        { icon: LineChart,    title: t('onboarding.feature.market.title'),       desc: t('onboarding.feature.market.desc'),       path: "/portfolio/market" },
+        { icon: LineChart,    title: t('onboarding.feature.market.title'),       desc: t('onboarding.feature.market.desc'),       path: "/research/market" },
     ];
 
     const OVERVIEW_SECTIONS = [

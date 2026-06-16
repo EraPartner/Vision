@@ -6,7 +6,7 @@ import { http } from "msw";
 import { renderWithApp } from "@/test/renderWithApp";
 import { server } from "@/test/msw/server";
 import { ok, err } from "@/test/msw/handlers";
-import MarketLookupPage from "@/pages/MarketLookupPage";
+import MarketLookupPage from "@/pages/research/MarketLookupPage";
 
 const API_BASE = "http://localhost:3002";
 

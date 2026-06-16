@@ -1,7 +1,7 @@
 import { Toaster as Sonner } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { BrowserRouter, Route, Routes, useLocation } from "react-router-dom";
+import { BrowserRouter, Navigate, Route, Routes, useLocation } from "react-router-dom";
 import { AppLayout } from "@/components/layout/AppLayout";
 import { SettingsProvider } from "@/contexts/SettingsContext";
 import { SettingsPreloadProvider } from "@/contexts/SettingsPreloadContext";
@@ -32,7 +32,6 @@ const PlannedPaymentsPage = lazy(routeLoaders["/planned"]);
 const StatisticsPage = lazy(routeLoaders["/statistics"]);
 const OwesPage = lazy(routeLoaders["/owes"]);
 const PortfolioOverviewPage = lazy(routeLoaders["/portfolio"]);
-const MarketLookupPage = lazy(routeLoaders["/portfolio/market"]);
 const StocksPage = lazy(routeLoaders["/portfolio/stocks"]);
 const CryptoPage = lazy(routeLoaders["/portfolio/crypto"]);
 const MetalsPage = lazy(routeLoaders["/portfolio/metals"]);
@@ -41,7 +40,6 @@ const SavingsPage = lazy(routeLoaders["/portfolio/savings"]);
 const PerformancePage = lazy(routeLoaders["/portfolio/performance"]);
 const NetWorthPage = lazy(routeLoaders["/portfolio/net-worth"]);
 const ExchangeRatesPage = lazy(routeLoaders["/portfolio/exchange-rates"]);
-const WatchlistPage = lazy(routeLoaders["/portfolio/watchlist"]);
 const PortfolioImportPage = lazy(routeLoaders["/portfolio/import"]);
 const PortfolioImportReviewPage = lazy(routeLoaders["/portfolio/import/:batchId/review"]);
 const DbMaintenancePage = lazy(routeLoaders["/admin/db"]);
@@ -49,6 +47,11 @@ const AdminOverviewPage = lazy(routeLoaders["/admin"]);
 const ProviderHealthPage = lazy(routeLoaders["/admin/providers"]);
 const EndpointLivenessPage = lazy(routeLoaders["/admin/endpoints"]);
 const AIChatPage = lazy(routeLoaders["/ai-chat"]);
+const ResearchHomePage = lazy(routeLoaders["/research"]);
+const MarketLookupPage = lazy(routeLoaders["/research/market"]);
+const WatchlistPage = lazy(routeLoaders["/research/watchlist"]);
+const ResearchSymbolPage = lazy(routeLoaders["/research/symbol/:symbol"]);
+const ResearchComparePage = lazy(routeLoaders["/research/compare"]);
 const NotFound = lazy(() => import("./pages/NotFound"));
 
 // Dev-only devtools — tree-shaken from production builds.
@@ -115,6 +118,14 @@ function RoutedErrorBoundary({ children }: { children: ReactNode }) {
     return <ErrorBoundary key={pathname}>{children}</ErrorBoundary>;
 }
 
+// Redirect a relocated route to its new path, preserving the query string so
+// deep-links (e.g. /portfolio/market?symbol=AAPL&investmentId=3) survive the
+// ADR-079 Research move.
+function RedirectWithQuery({ to }: { to: string }) {
+    const { search } = useLocation();
+    return <Navigate to={`${to}${search}`} replace />;
+}
+
 const App = () => {
     return (
         <QueryClientProvider client={queryClient}>
@@ -155,7 +166,6 @@ const App = () => {
                                                     <Route path="/admin/endpoints" element={<RequireAdmin><EndpointLivenessPage /></RequireAdmin>} />
                                                     {/* Portfolio */}
                                                     <Route path="/portfolio" element={<PortfolioOverviewPage />} />
-                                                    <Route path="/portfolio/market" element={<MarketLookupPage />} />
                                                     <Route path="/portfolio/stocks" element={<StocksPage />} />
                                                     <Route path="/portfolio/crypto" element={<CryptoPage />} />
                                                     <Route path="/portfolio/metals" element={<MetalsPage />} />
@@ -164,10 +174,18 @@ const App = () => {
                                                     <Route path="/portfolio/performance" element={<PerformancePage />} />
                                                     <Route path="/portfolio/net-worth" element={<NetWorthPage />} />
                                                     <Route path="/portfolio/exchange-rates" element={<ExchangeRatesPage />} />
-                                                    <Route path="/portfolio/watchlist" element={<WatchlistPage />} />
                                                     <Route path="/portfolio/import" element={<PortfolioImportPage />} />
                                                     <Route path="/portfolio/import/:batchId/review" element={<PortfolioImportReviewPage />} />
                                                     <Route path="/portfolio/tax" element={<PortfolioTaxPage />} />
+                                                    {/* Research (ADR-079) — Market Lookup & Watchlist relocated here */}
+                                                    <Route path="/research" element={<ResearchHomePage />} />
+                                                    <Route path="/research/market" element={<MarketLookupPage />} />
+                                                    <Route path="/research/watchlist" element={<WatchlistPage />} />
+                                                    <Route path="/research/symbol/:symbol" element={<ResearchSymbolPage />} />
+                                                    <Route path="/research/compare" element={<ResearchComparePage />} />
+                                                    {/* Redirects from the pre-ADR-079 portfolio paths (query string preserved) */}
+                                                    <Route path="/portfolio/market" element={<RedirectWithQuery to="/research/market" />} />
+                                                    <Route path="/portfolio/watchlist" element={<RedirectWithQuery to="/research/watchlist" />} />
                                                     {/* AI Chat (workspace-agnostic) */}
                                                     <Route path="/ai-chat" element={<AIChatPage />} />
                                                     <Route path="*" element={<NotFound />} />
