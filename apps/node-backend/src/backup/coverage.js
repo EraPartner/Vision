@@ -51,6 +51,7 @@ export const BACKUP_COVERED_TABLES = Object.freeze([
   'portfolio_import_staging_rows',
   'portfolio_performance_snapshots',
   'portfolio_transactions',
+  'provider_api_keys',
   'provider_health',
   'provider_quota',
   'recipient_bank_accounts',

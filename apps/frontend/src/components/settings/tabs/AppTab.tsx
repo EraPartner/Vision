@@ -13,6 +13,7 @@ import { useOnboarding } from '@/components/onboarding/OnboardingWizard';
 import { apiClient } from '@/lib/api';
 import { formatDateStringWithAppSettings } from '@/components/shared/dateUtils';
 import { AIChatSettingsSection } from '@/components/settings/AIChatSettingsSection';
+import { ResearchKeysSection } from '@/components/settings/ResearchKeysSection';
 
 type UpdateStatus = {
     up_to_date: boolean;
@@ -322,6 +323,11 @@ export const AppTab = memo(function AppTab({
                     value={aiDefaultModel}
                     onChange={onAiModelChange}
                 />
+
+                <Separator />
+
+                {/* Research providers */}
+                <ResearchKeysSection />
 
                 <Separator />
 

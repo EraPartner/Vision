@@ -35,6 +35,7 @@ import {
 } from '../services/quoteBackfillService.js';
 import { warmInfoCaches } from '../routes/info.js';
 import { refreshCashflowForecastMc } from '../jobs/refreshCashflowForecastMc.js';
+import * as researchProviderKeyService from '../services/research/researchProviderKeyService.js';
 import { isInternetReachable } from '../lib/network.js';
 import investmentRepository from '../repositories/investmentRepository.js';
 
@@ -177,6 +178,17 @@ async function refreshInvestmentPricesOnStartup() {
  * @returns {Promise<{ exchangeRateRefreshInterval: NodeJS.Timeout, quotesRefreshInterval: NodeJS.Timeout, cashflowForecastRefreshInterval: NodeJS.Timeout, holdingGapBackfillInterval: NodeJS.Timeout }>}
  */
 export async function runWarmupTasks({ warmupStatus }) {
+  // Load Settings-managed research provider API keys into the in-memory override
+  // map so keyed providers reflect Settings on boot. Defensive: a missing table
+  // (migration 0043 not applied) or DB hiccup must not break warmup — the env-var
+  // fallback still applies.
+  try {
+    const hydrated = await researchProviderKeyService.hydrate();
+    logger.info(`Hydrated ${hydrated} research provider API key override(s) from settings`);
+  } catch (err) {
+    logger.warn('Could not hydrate research provider API keys; using env fallback', { error: err.message });
+  }
+
   refreshMaterializedViews()
     .then(() => { warmupStatus.materializedViews = 'ready'; })
     .catch((err) => {

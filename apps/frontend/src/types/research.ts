@@ -217,3 +217,18 @@ export interface MappingAuditResponse {
     quotes: MappingAuditQuote[];
     discrepancies: MappingDiscrepancy[];
 }
+
+// ── Provider API keys (Settings) ──────────────────────────────────────────────
+
+export interface ProviderKeyStatus {
+    provider: string;
+    label: string;
+    envVar: string;
+    configured: boolean;
+    source: 'settings' | 'env' | 'none';
+    masked?: string;
+}
+
+export interface ProviderKeysResponse {
+    providers: ProviderKeyStatus[];
+}

@@ -16,6 +16,7 @@ import { Router } from 'express';
 import { ValidationError } from '../middleware/errorHandler.js';
 import { researchAggregator } from '../services/research/researchAggregator.js';
 import { researchMappingService } from '../services/research/researchMappingService.js';
+import * as researchProviderKeyService from '../services/research/researchProviderKeyService.js';
 
 const router = Router();
 
@@ -167,6 +168,30 @@ router.post('/mappings/audit', async (req, res) => {
     keyType: keyType(key_type),
   });
   res.ok(result);
+});
+
+// ─── Provider API keys (Settings UI, ADR-079) ───────────────────────────────
+// Keys are masked in responses and never returned in full.
+
+// GET /api/research/provider-keys
+router.get('/provider-keys', async (_req, res) => {
+  const providers = await researchProviderKeyService.listKeyStatuses();
+  res.ok({ providers });
+});
+
+// PUT /api/research/provider-keys/:provider  { api_key }
+router.put('/provider-keys/:provider', async (req, res) => {
+  const { api_key } = req.body ?? {};
+  await researchProviderKeyService.setKey(req.params.provider, api_key);
+  const providers = await researchProviderKeyService.listKeyStatuses();
+  res.ok({ providers });
+});
+
+// DELETE /api/research/provider-keys/:provider
+router.delete('/provider-keys/:provider', async (req, res) => {
+  const removed = await researchProviderKeyService.clearKey(req.params.provider);
+  const providers = await researchProviderKeyService.listKeyStatuses();
+  res.ok({ removed, providers });
 });
 
 export default router;

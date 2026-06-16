@@ -9,7 +9,7 @@
  * See docs/api/research.md and docs/features/research.md.
  */
 
-import { API_BASE_URL, parseEnvelopeError, rawFetch } from '@/lib/api/client';
+import { API_BASE_URL, apiRequest, parseEnvelopeError, rawFetch } from '@/lib/api/client';
 import { buildQuery, type QueryParams } from '@/lib/api/helpers';
 import type {
     InstrumentProviderMapping,
@@ -28,6 +28,7 @@ import type {
     ResearchRange,
     ResearchResult,
     ResearchSearchResponse,
+    ProviderKeysResponse,
 } from '@/types/research';
 
 interface RawEnvelope<T> {
@@ -162,6 +163,28 @@ export function auditResearchMappings(input: {
     key_type?: MappingKeyType;
 }): Promise<ResearchResult<MappingAuditResponse>> {
     return researchSend<MappingAuditResponse>('/api/research/mappings/audit', 'POST', input);
+}
+
+// ── Provider API keys (Settings) ──────────────────────────────────────────────
+// Plain envelopes (no provenance meta); keys are returned masked, never in full.
+
+export function getResearchProviderKeys(): Promise<ProviderKeysResponse> {
+    return apiRequest('/api/research/provider-keys');
+}
+
+export function setResearchProviderKey(provider: string, apiKey: string): Promise<ProviderKeysResponse> {
+    return apiRequest(`/api/research/provider-keys/${encodeURIComponent(provider)}`, {
+        method: 'PUT',
+        body: JSON.stringify({ api_key: apiKey }),
+    });
+}
+
+export function clearResearchProviderKey(
+    provider: string,
+): Promise<{ removed: boolean } & ProviderKeysResponse> {
+    return apiRequest(`/api/research/provider-keys/${encodeURIComponent(provider)}`, {
+        method: 'DELETE',
+    });
 }
 
 export type { InstrumentProviderMapping };

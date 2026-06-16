@@ -339,6 +339,22 @@ Cross-provider self-audit: fetches a quote from each mapped provider and flags `
 
 ---
 
+## Provider API Keys (Settings)
+
+Manage the keyed providers' API keys from the app (or via the root `.env`, ADR-080). Keys are stored in `provider_api_keys` (migration 0043), masked in responses (never returned in full), and a Settings value **overrides** the env var. Changes take effect immediately (the in-memory override map is updated and is hydrated at startup).
+
+### GET /api/research/provider-keys
+
+Returns `{ providers: [{ provider, label, envVar, configured, source, masked }] }` — `source` ∈ `settings` | `env` | `none`; `masked` shows only the last 4 characters.
+
+### PUT /api/research/provider-keys/:provider
+
+Body `{ api_key }`. Stores/replaces the key for `provider` (one of `twelve_data` / `finnhub` / `fmp` / `alpha_vantage`) and returns the updated masked statuses. `400` on unknown provider or empty key.
+
+### DELETE /api/research/provider-keys/:provider
+
+Clears the stored key (the env var, if set, then applies again). Returns `{ removed, providers }`.
+
 ## Aggregation Layer Architecture
 
 The six data endpoints are thin wrappers over the `researchAggregator` singleton in [[apps/node-backend/src/services/research/researchAggregator.js]]. The orchestration steps on every request are:
@@ -386,12 +402,13 @@ The cache sweeps expired entries every 5 minutes (`setInterval` with `.unref()`)
 | FMP | `FMP_API_KEY` |
 | Alpha Vantage | `ALPHA_VANTAGE_API_KEY` |
 
-### DB Tables Created by Migration 0042
+### DB Tables Created by Migrations 0042–0043
 
 | Table | Purpose |
 |---|---|
 | `provider_quota` | Per-provider, per-UTC-day request counters persisted so daily budgets survive restarts |
 | `instrument_provider_map` | User-confirmed cross-provider symbol mappings (ISIN-anchored where available); exposed via the `/api/research/mappings*` endpoints documented above |
+| `provider_api_keys` | Settings-managed keyed-provider API keys (migration 0043); masked in responses, env-overriding; exposed via the `/api/research/provider-keys*` endpoints |
 
 ## Rate Limiting
 

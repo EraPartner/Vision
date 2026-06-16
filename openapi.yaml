@@ -5633,3 +5633,67 @@ paths:
                 $ref: "#/components/schemas/Envelope"
         "400":
           description: valid mapping id required
+  # Research provider API keys (Settings, ADR-079)
+  /api/research/provider-keys:
+    get:
+      summary: List keyed-provider API-key statuses (masked; never the full key)
+      operationId: researchListProviderKeys
+      tags: [Research]
+      responses:
+        "200":
+          description: "{ providers: [{ provider, label, envVar, configured, source, masked }] }"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Envelope"
+  /api/research/provider-keys/{provider}:
+    put:
+      summary: Set or replace a provider's API key (takes effect immediately)
+      operationId: researchSetProviderKey
+      tags: [Research]
+      parameters:
+        - in: path
+          name: provider
+          required: true
+          schema:
+            type: string
+            enum: [twelve_data, finnhub, fmp, alpha_vantage]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [api_key]
+              properties:
+                api_key:
+                  type: string
+      responses:
+        "200":
+          description: Updated masked statuses
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Envelope"
+        "400":
+          description: unknown provider or empty api_key
+    delete:
+      summary: Clear a provider's stored API key (env fallback then applies)
+      operationId: researchClearProviderKey
+      tags: [Research]
+      parameters:
+        - in: path
+          name: provider
+          required: true
+          schema:
+            type: string
+            enum: [twelve_data, finnhub, fmp, alpha_vantage]
+      responses:
+        "200":
+          description: "{ removed, providers }"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Envelope"
+        "400":
+          description: unknown provider
