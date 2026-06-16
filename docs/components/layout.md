@@ -3,7 +3,7 @@ title: Layout Components
 type: component
 status: active
 date: 2026-04-25
-updated: 2026-06-11
+updated: 2026-06-16
 tags: [components, layout, navigation, design-system, phase-9, performance, workspace, liquid-glass-v2, command-palette, route-preload, electron-native, electron-bridge, ipc, macos, june-2026]
 description: Core layout components including sidebar, header, and app structure with emerald + gold aesthetic. June 2026 Liquid Glass v2 — atmosphere layer restored, PageTransition re-added as enter-only spring, sidebar ActiveRail is a framer layoutId element, CommandPalette wired, scroll-linked topbar, route-chunk hover prefetch. June 2026 V12 (ADR-072) — ElectronBridge mounted in AppLayout handles native menu actions, CSV drag-drop, fullscreen class toggling, and dock badge via window.electronAPI.
 aliases: [layout, app layout, sidebar, navigation, ElectronBridge]
@@ -91,6 +91,8 @@ Navigation sidebar with workspace-aware navigation.
 
 The sidebar adapts based on the active workspace:
 
+All three workspaces share one group skeleton — `Overview → [section content groups] → Analysis → Tools` — so equivalent pages sit in the same place everywhere: **Tax** always lives under **Analysis** (alongside the other report/analytics pages), and the data-import bucket is always named **Tools**.
+
 ### Budgeting Workspace
 
 ```
@@ -105,7 +107,7 @@ The sidebar adapts based on the active workspace:
 │   ├── Planned Payments
 │   ├── Who Owes You
 │   └── Tax
-└── Data
+└── Tools
     └── Import
 ```
 
@@ -114,20 +116,33 @@ The sidebar adapts based on the active workspace:
 ```
 ├── Overview
 │   ├── Dashboard
-│   ├── Net Worth
-│   └── Performance
+│   └── Net Worth
 ├── Investments
 │   ├── Stocks/ETFs
-│   └── Crypto
+│   ├── Crypto
+│   └── Metals
 ├── Assets
 │   ├── Real Estate
 │   └── Savings/Bonds
+├── Analysis
+│   ├── Performance
+│   └── Tax
 └── Tools
-    ├── Market Lookup
-    ├── Watchlist
-    ├── Exchange Rates
-    └── Tax
+    └── Import
 ```
+
+### Research Workspace
+
+```
+├── Overview
+│   ├── Research Home
+│   └── Market Lookup
+└── Analysis
+    ├── Compare
+    └── Watchlist
+```
+
+Market Lookup and Watchlist live in Research (moved from Portfolio by [[docs/adr/079-multi-provider-research-aggregation|ADR-079]]); Exchange Rates lives under the workspace-agnostic Admin group (admin mode only), not Portfolio.
 
 ### Usage
 

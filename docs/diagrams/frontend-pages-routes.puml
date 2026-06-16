@@ -72,12 +72,6 @@ package "Budgeting Pages" {
     +Owes detail
     +Tag breakdown
   }
-
-  class AIChatPage <<ADR-024>> {
-    +Local Ollama chat
-    +Tool-augmented result cards
-    +Conversation history
-  }
 }
 
 package "Portfolio Pages" {
@@ -85,11 +79,6 @@ package "Portfolio Pages" {
     +Asset Allocation
     +Total Value
     +Performance Summary
-  }
-
-  class MarketLookupPage {
-    +Search
-    +Price Display
   }
 
   class StocksPage {
@@ -130,16 +119,6 @@ package "Portfolio Pages" {
     +Time Series
   }
 
-  class ExchangeRatesPage {
-    +Current Rates
-    +Historical Chart
-  }
-
-  class WatchlistPage {
-    +Watchlist Items
-    +Price Alerts
-  }
-
   class PortfolioTaxPage {
     +Tax Lots
     +Capital Gains
@@ -157,6 +136,33 @@ package "Portfolio Pages" {
     +Groups by investment (unresolved/resolved)
     +InvestmentCombobox per unresolved group
     +Commit / abort batch
+  }
+}
+
+package "Research Pages (ADR-079)" {
+  class ResearchHomePage {
+    +Aggregated Provider Data
+    +Quick Symbol Search
+  }
+
+  class MarketLookupPage {
+    +Search
+    +Price Display
+  }
+
+  class WatchlistPage {
+    +Watchlist Items
+    +Price Alerts
+  }
+
+  class ResearchComparePage {
+    +Multi-symbol Compare
+    +Metric Table
+  }
+
+  class ResearchSymbolPage {
+    +Symbol Detail
+    +Provider Breakdown
   }
 }
 
@@ -188,6 +194,19 @@ package "Admin Pages (Workspace-Agnostic)" {
     +Route Liveness Matrix
     +Rolling Metrics
   }
+
+  class ExchangeRatesPage {
+    +Current Rates
+    +Historical Chart
+  }
+}
+
+package "Workspace-Agnostic Pages" {
+  class AIChatPage <<ADR-024>> {
+    +Local Ollama chat
+    +Tool-augmented result cards
+    +Conversation history
+  }
 }
 
 package "Error Pages" {
@@ -215,14 +234,13 @@ AppLayout --> RecipientsPage : "/recipients"
 AppLayout --> PlannedPaymentsPage : "/planned"
 AppLayout --> StatisticsPage : "/statistics"
 AppLayout --> ImportPage : "/import"
-ImportPage --> ImportReviewPage : "/import/review/:batchId"
+ImportPage --> ImportReviewPage : "/import/:batchId/review"
 AppLayout --> OwesPage : "/owes"
 AppLayout --> TaxOverviewPage : "/tax"
 AppLayout --> AIChatPage : "/ai-chat"
 RecipientsPage --> RecipientInsightsPage : "/recipients/:id/insights"
 
 AppLayout --> PortfolioOverviewPage : "/portfolio"
-PortfolioOverviewPage --> MarketLookupPage : "/portfolio/market"
 PortfolioOverviewPage --> StocksPage : "/portfolio/stocks"
 PortfolioOverviewPage --> CryptoPage : "/portfolio/crypto"
 PortfolioOverviewPage --> MetalsPage : "/portfolio/metals"
@@ -230,30 +248,35 @@ PortfolioOverviewPage --> RealEstatePage : "/portfolio/real-estate"
 PortfolioOverviewPage --> SavingsPage : "/portfolio/savings"
 PortfolioOverviewPage --> PerformancePage : "/portfolio/performance"
 PortfolioOverviewPage --> NetWorthPage : "/portfolio/net-worth"
-PortfolioOverviewPage --> ExchangeRatesPage : "/admin/exchange-rates"
-PortfolioOverviewPage --> WatchlistPage : "/portfolio/watchlist"
 PortfolioOverviewPage --> PortfolioTaxPage : "/portfolio/tax"
 PortfolioOverviewPage --> PortfolioImportPage : "/portfolio/import"
-PortfolioImportPage --> PortfolioImportReviewPage : "/portfolio/import/review/:batchId"
+PortfolioImportPage --> PortfolioImportReviewPage : "/portfolio/import/:batchId/review"
+
+AppLayout --> ResearchHomePage : "/research"
+ResearchHomePage --> MarketLookupPage : "/research/market"
+ResearchHomePage --> WatchlistPage : "/research/watchlist"
+ResearchHomePage --> ResearchComparePage : "/research/compare"
+ResearchHomePage --> ResearchSymbolPage : "/research/symbol/:symbol"
 
 AppLayout --> AdminOverviewPage : "/admin"
 AdminOverviewPage --> DbMaintenancePage : "/admin/db"
 AdminOverviewPage --> ProviderHealthPage : "/admin/providers"
 AdminOverviewPage --> EndpointLivenessPage : "/admin/endpoints"
+AdminOverviewPage --> ExchangeRatesPage : "/admin/exchange-rates"
 
-note right of TaxOverviewPage
-  Not lazy-loaded
-  Imported directly
-end note
-
-note right of PortfolioTaxPage
-  Not lazy-loaded
-  Imported directly
-end note
+AppLayout --> NotFound : "*"
 
 note right of AdminOverviewPage
   Workspace-agnostic routes
   Preserve last active workspace
+end note
+
+note bottom of ResearchHomePage
+  Market Lookup & Watchlist moved here from
+  Portfolio (ADR-079). Legacy /portfolio/market
+  and /portfolio/watchlist redirect here;
+  /portfolio/exchange-rates redirects to
+  /admin/exchange-rates
 end note
 
 @enduml
