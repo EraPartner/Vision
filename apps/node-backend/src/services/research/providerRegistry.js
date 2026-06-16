@@ -11,12 +11,24 @@
  */
 
 import yahooAdapter from './adapters/yahooAdapter.js';
+import twelveDataAdapter from './adapters/twelveDataAdapter.js';
+import finnhubAdapter from './adapters/finnhubAdapter.js';
+import fmpAdapter from './adapters/fmpAdapter.js';
+import alphaVantageAdapter from './adapters/alphaVantageAdapter.js';
 import { createQuotaGovernor } from './quotaGovernor.js';
 import { createDbQuotaStore } from '../../repositories/providerQuotaRepository.js';
 
-/** provider key → adapter object. */
+/**
+ * provider key → adapter object. Yahoo needs no key; the others self-throw if
+ * their key is absent and are dropped from the capability chain by the
+ * aggregator's `isProviderKeyed` gate, so listing them here is always safe.
+ */
 export const ADAPTERS = Object.freeze({
   yahoo: yahooAdapter,
+  twelve_data: twelveDataAdapter,
+  finnhub: finnhubAdapter,
+  fmp: fmpAdapter,
+  alpha_vantage: alphaVantageAdapter,
 });
 
 /** Process-wide governor shared by all research consumers. */

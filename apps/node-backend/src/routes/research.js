@@ -109,6 +109,12 @@ function requireInstrumentKey(value) {
   return key;
 }
 
+/** Coerce an optional id to a positive integer; undefined when absent or invalid. */
+function positiveInt(value) {
+  const n = Number.parseInt(value, 10);
+  return Number.isInteger(n) && n > 0 ? n : undefined;
+}
+
 // GET /api/research/mappings?instrument_key=US0378331005&key_type=isin
 router.get('/mappings', async (req, res) => {
   const instrumentKey = requireInstrumentKey(req.query.instrument_key);
@@ -116,9 +122,9 @@ router.get('/mappings', async (req, res) => {
   res.ok({ mappings: rows });
 });
 
-// POST /api/research/mappings/resolve  { instrument_key, key_type, asset_class, query }
+// POST /api/research/mappings/resolve  { instrument_key, key_type, asset_class, query, investment_id }
 router.post('/mappings/resolve', async (req, res) => {
-  const { instrument_key, key_type, asset_class, query } = req.body ?? {};
+  const { instrument_key, key_type, asset_class, query, investment_id } = req.body ?? {};
   const q = single(query);
   if (!q) throw new ValidationError('query required');
   const result = await researchMappingService.resolve({
@@ -126,6 +132,7 @@ router.post('/mappings/resolve', async (req, res) => {
     keyType: keyType(key_type),
     assetClass: single(asset_class) || undefined,
     query: q,
+    investmentId: positiveInt(investment_id),
   });
   res.ok(result);
 });

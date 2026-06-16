@@ -14,8 +14,11 @@ aliases: [env vars, environment variables, .env, configuration, env]
 > [!abstract] Overview
 > Complete reference of all environment variables used by the Vision application. Organized by component (backend, frontend, Electron, Docker).
 
-> [!tip] Quick Start
-> Copy `.env` to `.env.local` and override only the values you need to change. The application has sensible defaults for local development.
+> [!tip] Which file reads what? (ADR-080)
+> - **`<repo-root>/.env`** — shared base: Docker config (`POSTGRES_PASSWORD`, `DATABASE_URL`) **and** context-independent secrets like provider API keys. Read by Docker (`env_file: .env`) and layered *under* dev by the backend loader.
+> - **`apps/node-backend/.env.local`** — local-dev backend **overrides** only (localhost `DATABASE_URL`, CORS, ports); layered *over* the root `.env`. Precedence: real `process.env` > this file > root `.env`.
+> - **`apps/frontend/.env.local`** — Vite frontend dev (`VITE_`-prefixed vars only).
+> - **Provider API keys** (`TWELVE_DATA_API_KEY` / `FINNHUB_API_KEY` / `FMP_API_KEY` / `ALPHA_VANTAGE_API_KEY`) go in the **root `.env`** — set once, used by both dev and Docker. There is no separate root `.env.local` (retired in ADR-080).
 
 ## Backend Variables
 
@@ -76,11 +79,24 @@ aliases: [env vars, environment variables, .env, configuration, env]
 
 ## Research Providers (ADR-079)
 
-API keys for the multi-provider Research aggregation layer. Each is **optional**:
-a provider whose key is absent is dropped from the capability chain (the research
-suite degrades to whichever providers are keyed — Yahoo needs no key). See
-[[docs/adr/079-multi-provider-research-aggregation|ADR-079]] and
+API keys for the multi-provider Research aggregation layer. Set these in the
+**repo-root `.env`** (ADR-080) — read by both Docker and local dev, so they're
+configured once. Each is **optional**: a provider whose key is absent is dropped
+from the capability chain (the research suite degrades to whichever providers are
+keyed — Yahoo needs no key). See
+[[docs/adr/079-multi-provider-research-aggregation|ADR-079]],
+[[docs/adr/080-layered-env-loading-shared-secrets|ADR-080]], and
 [[docs/features/research|Research]].
+
+> [!info] Desktop app (Vision.app)
+> The packaged app runs an embedded Docker stack with its own canonical env file at
+> `<userData>/embedded_compose/.env` (macOS: `~/Library/Application Support/Vision/embedded_compose/.env`),
+> injected into the container via `env_file`. On launch, `ensureEnv` in
+> `packaging/electron/main.js` **merges these provider keys into that file** from the
+> dev repo-root `.env` (when run via `electron:dev`) or from `process.env` (when the
+> app is launched from a shell that has them set) — existing values are never
+> overwritten. For a **Finder-launched packaged install**, add the keys directly to
+> that canonical `.env` (they persist across launches) and restart the app.
 
 | Variable | Default | Required | Description | Code |
 |----------|---------|----------|-------------|------|

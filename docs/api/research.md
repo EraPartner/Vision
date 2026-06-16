@@ -7,12 +7,13 @@ updated: 2026-06-16
 tags:
   - api
   - research
+  - holdings-preseed
   - market-data
   - multi-provider
   - capability-map
   - quota-governor
   - adr-079
-description: Provider-agnostic research API surface (ADR-079). Six GET endpoints under /api/research expose ticker search, live quotes, historical charts, fundamentals, analyst consensus, and news — routed across providers via the capability map, quota governor, and type-aware cache. Yahoo Finance is the only adapter wired today; additional providers (Twelve Data, Finnhub, FMP, Alpha Vantage) are defined and light up as API keys are provisioned.
+description: Provider-agnostic research API surface (ADR-079). Six GET endpoints under /api/research expose ticker search, live quotes, historical charts, fundamentals, analyst consensus, and news — routed across providers via the capability map, quota governor, and type-aware cache. All five provider adapters (Yahoo + Twelve Data, Finnhub, FMP, Alpha Vantage) are implemented; the keyed four light up automatically when their API key is set in the root .env.
 aliases:
   - research-api
   - research-endpoints
@@ -314,9 +315,11 @@ List stored mappings for an instrument. **Query:** `instrument_key` (required), 
 
 Auto-propose a per-provider symbol by running each search-capable, keyed provider's search. **Does not persist** — the user confirms before saving. Each proposal carries the resolved `name`/`exchange` so ticker collisions (e.g. `APLE` vs `AAPL`) are caught at confirm time.
 
-**Body:** `{ instrument_key, key_type?, asset_class?, query }` (`query` required).
+**Body:** `{ instrument_key, key_type?, asset_class?, query, investment_id? }` (`query` required).
 
-**Response:** `{ instrument_key, key_type, proposals: [ { provider, status, providerSymbol?, resolvedName?, exchange?, candidates? } ], existing: [...] }`. Proposal `status` ∈ `auto` (proposed) | `confirmed` (kept from store) | `skipped` (quota) | `none` (no hit) | `unavailable` (no adapter/key) | `error`.
+`investment_id` (optional, positive integer) **pre-seeds from a held investment**: when the id resolves to an investment that already has both `price_provider` and `price_provider_id`, that provider is injected as a `confirmed` proposal carrying `fromHolding: true` (with the holding's `name` as `resolvedName` and its `currency`), and its **live search is skipped** — the holding already mapped it, so there is nothing to re-map. A stored `confirmed` mapping for that provider still wins, and providers are de-duplicated so none appears twice. Invalid/absent ids are ignored (behavior unchanged). The frontend passes it when the symbol page is opened from a holding (`?investmentId=`).
+
+**Response:** `{ instrument_key, key_type, proposals: [ { provider, status, providerSymbol?, resolvedName?, exchange?, candidates?, fromStore?, fromHolding? } ], existing: [...] }`. Proposal `status` ∈ `auto` (proposed) | `confirmed` (kept from store or pre-seeded from a holding) | `skipped` (quota) | `none` (no hit) | `unavailable` (no adapter/key) | `error`.
 
 ### POST /api/research/mappings
 

@@ -5569,6 +5569,13 @@ paths:
                   type: string
                 query:
                   type: string
+                investment_id:
+                  type: integer
+                  description: >-
+                    Optional held-investment id. When set, that holding's
+                    already-configured provider (price_provider +
+                    price_provider_id) is pre-seeded as a confirmed proposal
+                    (fromHolding) and its live search is skipped.
       responses:
         "200":
           description: Per-provider proposals + existing mappings

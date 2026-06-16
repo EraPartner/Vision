@@ -74,7 +74,17 @@ export function createQuotaGovernor({ limits = PROVIDER_LIMITS, store, now = () 
   async function dayCount(provider, dk) {
     const key = `${provider}:${dk}`;
     if (dayMirror.has(key)) return dayMirror.get(key);
-    const stored = store ? await store.getDayCount(provider, dk) : 0;
+    // Degrade to in-memory if the store is unavailable (e.g. provider_quota
+    // migration 0042 not yet applied, or Postgres unreachable) — a quota check
+    // must never break a research request. Mirrors the accuracyStore fallback.
+    let stored = 0;
+    if (store) {
+      try {
+        stored = await store.getDayCount(provider, dk);
+      } catch {
+        stored = 0;
+      }
+    }
     dayMirror.set(key, stored);
     return stored;
   }
@@ -102,7 +112,13 @@ export function createQuotaGovernor({ limits = PROVIDER_LIMITS, store, now = () 
     const dk = dayKeyUtc(t);
     const current = await dayCount(provider, dk);
     dayMirror.set(`${provider}:${dk}`, current + n);
-    if (store) await store.addDayCount(provider, dk, n);
+    if (store) {
+      try {
+        await store.addDayCount(provider, dk, n);
+      } catch {
+        // In-memory mirror still tracks the spend for this process lifetime.
+      }
+    }
   }
 
   function snapshot() {

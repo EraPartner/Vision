@@ -1,4 +1,4 @@
-import { useCallback, useMemo, useState } from "react";
+import { useCallback, useMemo, useState, type CSSProperties } from "react";
 import { useQueries, useQuery } from "@tanstack/react-query";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { useAppSettings } from "@/contexts/AppSettingsContext";
@@ -9,16 +9,20 @@ import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
+import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import {
   Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
 } from "@/components/ui/table";
-import { GitCompareArrows, Plus, Search, X } from "lucide-react";
+import { ArrowDown, ArrowUp, GitCompareArrows, Plus, Search, X } from "lucide-react";
 import { LineChart, getChartColor, type LineSeries } from "@/components/charts";
 import { useDebounce } from "@/hooks/useDebounce";
 import { cn } from "@/lib/utils";
 import { apiClient } from "@/lib/api";
 import { PageHeader } from "@/components/shared/PageHeader";
-import type { ResearchChartPoint, ResearchRange } from "@/types/research";
+import { ProvenanceBadge } from "@/components/research/ProvenanceBadge";
+import type {
+  ResearchChartPoint, ResearchFundamentals, ResearchMeta, ResearchRange,
+} from "@/types/research";
 
 const RANGES: { label: string; range: ResearchRange }[] = [
   { label: "1M", range: "1mo" },
@@ -35,6 +39,24 @@ interface SymbolStats {
   totalReturn: number | null;
   volatility: number | null;
   maxDrawdown: number | null;
+}
+
+/** A symbol's daily log returns keyed by the closing timestamp, for correlation alignment. */
+interface ReturnSeries {
+  symbol: string;
+  byTime: Map<number, number>;
+}
+
+/** Daily log returns keyed by the point's timestamp (paired close → return at the later time). */
+function dailyReturnsByTime(points: ResearchChartPoint[]): Map<number, number> {
+  const valid = points
+    .filter((p) => Number.isFinite(p.close) && p.close > 0 && Number.isFinite(p.time))
+    .sort((a, b) => a.time - b.time);
+  const out = new Map<number, number>();
+  for (let i = 1; i < valid.length; i++) {
+    out.set(valid[i].time, Math.log(valid[i].close / valid[i - 1].close));
+  }
+  return out;
 }
 
 /** Annualized stdev of daily log returns (approximate, 252 trading days). */
@@ -61,6 +83,86 @@ function computeStats(symbol: string, points: ResearchChartPoint[]): SymbolStats
   return { symbol, totalReturn, volatility, maxDrawdown };
 }
 
+/**
+ * Pearson correlation of two return series, aligned on shared timestamps.
+ *
+ * Returns are keyed by their closing timestamp, so two symbols are paired only on
+ * dates where both traded (intersection of the maps). This is more correct than
+ * index-alignment: a holiday/half-day that one exchange observes but the other
+ * does not would otherwise shift every later return by one and corrupt the result.
+ * Needs ≥ 2 overlapping points and non-zero variance on both sides, else null.
+ */
+function pearsonOnTime(a: Map<number, number>, b: Map<number, number>): number | null {
+  const xs: number[] = [];
+  const ys: number[] = [];
+  for (const [time, av] of a) {
+    const bv = b.get(time);
+    if (bv !== undefined) { xs.push(av); ys.push(bv); }
+  }
+  const n = xs.length;
+  if (n < 2) return null;
+
+  const meanX = xs.reduce((s, v) => s + v, 0) / n;
+  const meanY = ys.reduce((s, v) => s + v, 0) / n;
+  let cov = 0;
+  let varX = 0;
+  let varY = 0;
+  for (let i = 0; i < n; i++) {
+    const dx = xs[i] - meanX;
+    const dy = ys[i] - meanY;
+    cov += dx * dy;
+    varX += dx * dx;
+    varY += dy * dy;
+  }
+  if (varX === 0 || varY === 0) return null;
+  return cov / Math.sqrt(varX * varY);
+}
+
+/** Diverging green (+1) → muted (0) → red (-1) background for a correlation cell. */
+function correlationCellStyle(value: number | null): CSSProperties {
+  if (value == null) return {};
+  const v = Math.max(-1, Math.min(1, value));
+  // Positive → green hue 145, negative → red hue 0; alpha scales with magnitude.
+  const hue = v >= 0 ? 145 : 0;
+  const alpha = Math.abs(v) * 0.32;
+  return { backgroundColor: `hsl(${hue} 70% 45% / ${alpha})` };
+}
+
+/** Metrics shown side-by-side in the fundamentals comparison. */
+type FundamentalsMetricKey =
+  | "pe" | "forwardPE" | "marketCap" | "dividendYield" | "eps"
+  | "beta" | "priceToBook" | "profitMargin" | "returnOnEquity" | "revenue";
+
+interface FundamentalsMetric {
+  key: FundamentalsMetricKey;
+  labelKey: string;
+  format: "ratio" | "largeNum" | "pct";
+  /** Sort direction when this column is chosen — most "favourable" first. */
+  betterWhenHigher: boolean;
+}
+
+const FUNDAMENTALS_METRICS: FundamentalsMetric[] = [
+  { key: "pe", labelKey: "market.pe", format: "ratio", betterWhenHigher: false },
+  { key: "forwardPE", labelKey: "market.forwardPE", format: "ratio", betterWhenHigher: false },
+  { key: "marketCap", labelKey: "market.marketCap", format: "largeNum", betterWhenHigher: true },
+  { key: "dividendYield", labelKey: "market.divYield", format: "pct", betterWhenHigher: true },
+  { key: "eps", labelKey: "market.eps", format: "ratio", betterWhenHigher: true },
+  { key: "beta", labelKey: "market.beta", format: "ratio", betterWhenHigher: false },
+  { key: "priceToBook", labelKey: "market.priceBook", format: "ratio", betterWhenHigher: false },
+  { key: "profitMargin", labelKey: "research.fundamentals.profitMargin", format: "pct", betterWhenHigher: true },
+  { key: "returnOnEquity", labelKey: "research.fundamentals.roe", format: "pct", betterWhenHigher: true },
+  { key: "revenue", labelKey: "research.fundamentals.revenue", format: "largeNum", betterWhenHigher: true },
+];
+
+function fmtLargeNum(val: number | null | undefined): string {
+  if (val == null || isNaN(val)) return "—";
+  const abs = Math.abs(val);
+  if (abs >= 1e12) return `${(val / 1e12).toFixed(2)}T`;
+  if (abs >= 1e9) return `${(val / 1e9).toFixed(2)}B`;
+  if (abs >= 1e6) return `${(val / 1e6).toFixed(2)}M`;
+  return String(val);
+}
+
 /** Rebase each series' closes to start at 100 so different price levels overlay. */
 function rebaseTo100(points: ResearchChartPoint[]): { time: number; value: number }[] {
   const valid = points.filter((p) => Number.isFinite(p.close) && p.close > 0);
@@ -76,10 +178,13 @@ export default function ResearchComparePage() {
   const [symbols, setSymbols] = useState<string[]>([]);
   const [searchText, setSearchText] = useState("");
   const [selectedRange, setSelectedRange] = useState(RANGES[3]); // 1Y
+  const [sortMetric, setSortMetric] = useState<FundamentalsMetricKey | null>(null);
   const debouncedSearch = useDebounce(searchText.trim(), 300);
 
-  const fmtPct = useCallback((val: number | null) =>
-    val == null ? "—" : `${val >= 0 ? "+" : ""}${(val * 100).toFixed(2)}%`, []);
+  const fmtPct = useCallback((val: number | null | undefined) =>
+    val == null || isNaN(val) ? "—" : `${val >= 0 ? "+" : ""}${(val * 100).toFixed(2)}%`, []);
+  const fmtRatio = useCallback((val: number | null | undefined) =>
+    val == null || isNaN(val) ? "—" : val.toFixed(2), []);
 
   const { data: searchResult, isFetching: isSearching } = useQuery({
     queryKey: ["research-search", debouncedSearch],
@@ -106,13 +211,27 @@ export default function ResearchComparePage() {
     })),
   });
 
+  const fundamentalsQueries = useQueries({
+    queries: symbols.map((symbol) => ({
+      queryKey: ["research-fundamentals", symbol],
+      queryFn: () => apiClient.getResearchFundamentals(symbol),
+      enabled: !!symbol,
+      staleTime: 24 * 60 * 60 * 1000,
+    })),
+  });
+
   const isLoading = chartQueries.some((q) => q.isFetching && !q.data);
 
-  // Build the rebased overlay: union of all time points keyed by timestamp.
-  const { chartData, series, statsRows } = useMemo(() => {
+  // Build the rebased overlay, per-symbol stats, and time-aligned return series.
+  const { chartData, series, statsRows, correlation } = useMemo(() => {
     const perSymbol = symbols.map((symbol, i) => {
       const points = chartQueries[i]?.data?.data.points ?? [];
-      return { symbol, rebased: rebaseTo100(points), stats: computeStats(symbol, points) };
+      return {
+        symbol,
+        rebased: rebaseTo100(points),
+        stats: computeStats(symbol, points),
+        returns: dailyReturnsByTime(points),
+      };
     });
 
     const timeSet = new Set<number>();
@@ -135,12 +254,61 @@ export default function ResearchComparePage() {
       strokeWidth: 2,
     }));
 
+    // Pairwise Pearson correlation matrix (symmetric, 1.0 on the diagonal).
+    const returnSeries: ReturnSeries[] = perSymbol.map((s) => ({ symbol: s.symbol, byTime: s.returns }));
+    const matrix: (number | null)[][] = returnSeries.map((a, i) =>
+      returnSeries.map((b, j) => (i === j ? 1 : pearsonOnTime(a.byTime, b.byTime))),
+    );
+
     return {
       chartData: data,
       series: lineSeries,
       statsRows: perSymbol.map((s, i) => ({ ...s.stats, color: getChartColor(i) })),
+      correlation: { symbols: returnSeries.map((r) => r.symbol), matrix },
     };
   }, [symbols, chartQueries]);
+
+  // Fundamentals comparison rows (one per selected symbol), sortable by a metric.
+  const fundamentalsRows = useMemo(() => {
+    const rows = symbols.map((symbol, i) => {
+      const q = fundamentalsQueries[i];
+      const meta: ResearchMeta | undefined = q?.data?.meta;
+      const data: ResearchFundamentals | null = q?.data?.data ?? null;
+      return {
+        symbol,
+        color: getChartColor(i),
+        meta,
+        data,
+        unavailable: meta?.source === "unavailable",
+        loading: !!q?.isFetching && !q?.data,
+      };
+    });
+    if (!sortMetric) return rows;
+    const metric = FUNDAMENTALS_METRICS.find((m) => m.key === sortMetric);
+    if (!metric) return rows;
+    const dir = metric.betterWhenHigher ? -1 : 1;
+    return [...rows].sort((a, b) => {
+      const av = a.data?.[sortMetric];
+      const bv = b.data?.[sortMetric];
+      const an = av == null || isNaN(av);
+      const bn = bv == null || isNaN(bv);
+      if (an && bn) return 0;
+      if (an) return 1; // missing always sorts last
+      if (bn) return -1;
+      return (av! - bv!) * dir;
+    });
+  }, [symbols, fundamentalsQueries, sortMetric]);
+
+  const fundamentalsLoading = fundamentalsQueries.some((q) => q.isFetching && !q.data);
+
+  const fmtMetric = useCallback((metric: FundamentalsMetric, val: number | null | undefined) => {
+    if (metric.format === "largeNum") return fmtLargeNum(val);
+    if (metric.format === "pct") return val == null || isNaN(val) ? "—" : `${(val * 100).toFixed(2)}%`;
+    return fmtRatio(val);
+  }, [fmtRatio]);
+
+  const toggleSort = (key: FundamentalsMetricKey) =>
+    setSortMetric((prev) => (prev === key ? null : key));
 
   return (
     <div className="space-y-6 animate-in">
@@ -208,88 +376,223 @@ export default function ResearchComparePage() {
           </CardContent>
         </Card>
       ) : (
-        <>
-          {/* Rebased overlay chart */}
-          <Card>
-            <CardHeader className="pb-2">
-              <div className="flex items-center justify-between flex-wrap gap-2">
-                <CardTitle className="text-base">{t('research.compare.rebased')}</CardTitle>
-                <div className="flex gap-1">
-                  {RANGES.map((r) => (
-                    <Button
-                      key={r.label}
-                      variant={selectedRange.range === r.range ? "default" : "ghost"}
-                      size="sm"
-                      className="h-7 px-2.5 text-xs"
-                      onClick={() => setSelectedRange(r)}
-                    >
-                      {r.label}
-                    </Button>
-                  ))}
-                </div>
-              </div>
-            </CardHeader>
-            <CardContent>
-              {isLoading ? (
-                <Skeleton className="h-[340px] w-full rounded-lg" />
-              ) : chartData.length > 0 ? (
-                <LineChart
-                  data={chartData}
-                  xAccessor={(d) => new Date(d.time)}
-                  xIsDate
-                  height={340}
-                  series={series}
-                  referenceLines={[{ y: 100, label: "100", dashed: true }]}
-                  xTickFormat={(v) => formatDateWithAppSettings(v as Date, appSettings.dateFormat)}
-                  yTickFormat={(v) => v.toFixed(0)}
-                  tooltipTitle={(d) => formatDateTimeWithAppSettings(new Date(d.time), appSettings.dateFormat, locale)}
-                  tooltipValueFormat={(v) => v.toFixed(2)}
-                />
-              ) : (
-                <div className="h-[340px] flex items-center justify-center text-sm text-muted-foreground">
-                  {t('market.noChartData')}
-                </div>
-              )}
-            </CardContent>
-          </Card>
+        <Tabs defaultValue="performance">
+          <TabsList>
+            <TabsTrigger value="performance">{t('research.compare.tabPerformance')}</TabsTrigger>
+            <TabsTrigger value="fundamentals">{t('research.compare.tabFundamentals')}</TabsTrigger>
+          </TabsList>
 
-          {/* Stats table */}
-          <Card>
-            <CardHeader className="pb-2">
-              <CardTitle className="text-base">{t('research.compare.metrics')}</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead>{t('research.compare.symbol')}</TableHead>
-                    <TableHead className="text-right">{t('research.compare.return')}</TableHead>
-                    <TableHead className="text-right">{t('research.compare.volatility')}</TableHead>
-                    <TableHead className="text-right">{t('research.compare.maxDrawdown')}</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {statsRows.map((row) => (
-                    <TableRow key={row.symbol}>
-                      <TableCell className="font-medium">
-                        <span className="inline-flex items-center gap-2">
-                          <span className="h-2.5 w-2.5 rounded-full" style={{ background: row.color }} />
-                          <span className="font-mono">{row.symbol}</span>
-                        </span>
-                      </TableCell>
-                      <TableCell className={cn("text-right tabular-nums",
-                        row.totalReturn == null ? "" : row.totalReturn >= 0 ? "text-accent" : "text-destructive")}>
-                        {fmtPct(row.totalReturn)}
-                      </TableCell>
-                      <TableCell className="text-right tabular-nums">{fmtPct(row.volatility)}</TableCell>
-                      <TableCell className="text-right tabular-nums text-destructive">{fmtPct(row.maxDrawdown)}</TableCell>
+          <TabsContent value="performance" className="space-y-6 pt-4">
+            {/* Rebased overlay chart */}
+            <Card>
+              <CardHeader className="pb-2">
+                <div className="flex items-center justify-between flex-wrap gap-2">
+                  <CardTitle className="text-base">{t('research.compare.rebased')}</CardTitle>
+                  <div className="flex gap-1">
+                    {RANGES.map((r) => (
+                      <Button
+                        key={r.label}
+                        variant={selectedRange.range === r.range ? "default" : "ghost"}
+                        size="sm"
+                        className="h-7 px-2.5 text-xs"
+                        onClick={() => setSelectedRange(r)}
+                      >
+                        {r.label}
+                      </Button>
+                    ))}
+                  </div>
+                </div>
+              </CardHeader>
+              <CardContent>
+                {isLoading ? (
+                  <Skeleton className="h-[340px] w-full rounded-lg" />
+                ) : chartData.length > 0 ? (
+                  <LineChart
+                    data={chartData}
+                    xAccessor={(d) => new Date(d.time)}
+                    xIsDate
+                    height={340}
+                    series={series}
+                    referenceLines={[{ y: 100, label: "100", dashed: true }]}
+                    xTickFormat={(v) => formatDateWithAppSettings(v as Date, appSettings.dateFormat)}
+                    yTickFormat={(v) => v.toFixed(0)}
+                    tooltipTitle={(d) => formatDateTimeWithAppSettings(new Date(d.time), appSettings.dateFormat, locale)}
+                    tooltipValueFormat={(v) => v.toFixed(2)}
+                  />
+                ) : (
+                  <div className="h-[340px] flex items-center justify-center text-sm text-muted-foreground">
+                    {t('market.noChartData')}
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+
+            {/* Stats table */}
+            <Card>
+              <CardHeader className="pb-2">
+                <CardTitle className="text-base">{t('research.compare.metrics')}</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>{t('research.compare.symbol')}</TableHead>
+                      <TableHead className="text-right">{t('research.compare.return')}</TableHead>
+                      <TableHead className="text-right">{t('research.compare.volatility')}</TableHead>
+                      <TableHead className="text-right">{t('research.compare.maxDrawdown')}</TableHead>
                     </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
-            </CardContent>
-          </Card>
-        </>
+                  </TableHeader>
+                  <TableBody>
+                    {statsRows.map((row) => (
+                      <TableRow key={row.symbol}>
+                        <TableCell className="font-medium">
+                          <span className="inline-flex items-center gap-2">
+                            <span className="h-2.5 w-2.5 rounded-full" style={{ background: row.color }} />
+                            <span className="font-mono">{row.symbol}</span>
+                          </span>
+                        </TableCell>
+                        <TableCell className={cn("text-right tabular-nums",
+                          row.totalReturn == null ? "" : row.totalReturn >= 0 ? "text-accent" : "text-destructive")}>
+                          {fmtPct(row.totalReturn)}
+                        </TableCell>
+                        <TableCell className="text-right tabular-nums">{fmtPct(row.volatility)}</TableCell>
+                        <TableCell className="text-right tabular-nums text-destructive">{fmtPct(row.maxDrawdown)}</TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              </CardContent>
+            </Card>
+
+            {/* Correlation matrix — needs at least two symbols. */}
+            {symbols.length >= 2 && (
+              <Card>
+                <CardHeader className="pb-2">
+                  <CardTitle className="text-base">{t('research.compare.correlation')}</CardTitle>
+                  <p className="text-xs text-muted-foreground">{t('research.compare.correlationHint')}</p>
+                </CardHeader>
+                <CardContent>
+                  {isLoading ? (
+                    <Skeleton className="h-40 w-full rounded-lg" />
+                  ) : (
+                    <div className="overflow-x-auto">
+                      <table className="w-full text-sm border-separate border-spacing-1">
+                        <thead>
+                          <tr>
+                            <th className="p-1.5" />
+                            {correlation.symbols.map((s, i) => (
+                              <th key={s} className="p-1.5 text-center font-mono text-xs">
+                                <span className="inline-flex items-center gap-1.5">
+                                  <span className="h-2 w-2 rounded-full" style={{ background: getChartColor(i) }} />
+                                  {s}
+                                </span>
+                              </th>
+                            ))}
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {correlation.symbols.map((rowSym, i) => (
+                            <tr key={rowSym}>
+                              <th className="p-1.5 text-left font-mono text-xs whitespace-nowrap">
+                                <span className="inline-flex items-center gap-1.5">
+                                  <span className="h-2 w-2 rounded-full" style={{ background: getChartColor(i) }} />
+                                  {rowSym}
+                                </span>
+                              </th>
+                              {correlation.matrix[i].map((value, j) => (
+                                <td
+                                  key={`${rowSym}-${correlation.symbols[j]}`}
+                                  className="p-1.5 text-center tabular-nums rounded-md"
+                                  style={correlationCellStyle(value)}
+                                >
+                                  {value == null ? "—" : value.toFixed(2)}
+                                </td>
+                              ))}
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  )}
+                </CardContent>
+              </Card>
+            )}
+          </TabsContent>
+
+          <TabsContent value="fundamentals" className="space-y-4 pt-4">
+            <Card>
+              <CardHeader className="pb-2">
+                <CardTitle className="text-base">{t('research.compare.tabFundamentals')}</CardTitle>
+                <p className="text-xs text-muted-foreground">{t('research.compare.fundamentalsHint')}</p>
+              </CardHeader>
+              <CardContent>
+                {fundamentalsLoading ? (
+                  <Skeleton className="h-48 w-full rounded-lg" />
+                ) : (
+                  <div className="overflow-x-auto">
+                    <Table>
+                      <TableHeader>
+                        <TableRow>
+                          <TableHead className="whitespace-nowrap">{t('research.compare.symbol')}</TableHead>
+                          {FUNDAMENTALS_METRICS.map((m) => (
+                            <TableHead key={m.key} className="text-right whitespace-nowrap p-0">
+                              <button
+                                type="button"
+                                onClick={() => toggleSort(m.key)}
+                                className={cn(
+                                  "inline-flex items-center gap-1 px-3 py-2 w-full justify-end hover:text-foreground transition-colors",
+                                  sortMetric === m.key ? "text-foreground font-semibold" : "text-muted-foreground",
+                                )}
+                                aria-label={t('research.compare.sortBy', { metric: t(m.labelKey) })}
+                              >
+                                {t(m.labelKey)}
+                                {sortMetric === m.key && (
+                                  m.betterWhenHigher
+                                    ? <ArrowDown className="h-3 w-3" />
+                                    : <ArrowUp className="h-3 w-3" />
+                                )}
+                              </button>
+                            </TableHead>
+                          ))}
+                        </TableRow>
+                      </TableHeader>
+                      <TableBody>
+                        {fundamentalsRows.map((row) => (
+                          <TableRow key={row.symbol}>
+                            <TableCell className="font-medium whitespace-nowrap">
+                              <span className="inline-flex items-center gap-2">
+                                <span className="h-2.5 w-2.5 rounded-full" style={{ background: row.color }} />
+                                <span className="font-mono">{row.symbol}</span>
+                                {row.unavailable ? (
+                                  <Badge variant="outline" className="text-[10px] border-warning/40 text-warning">
+                                    {t('research.unavailable')}
+                                  </Badge>
+                                ) : (
+                                  <ProvenanceBadge meta={row.meta} />
+                                )}
+                              </span>
+                            </TableCell>
+                            {FUNDAMENTALS_METRICS.map((m) => (
+                              <TableCell
+                                key={m.key}
+                                className={cn(
+                                  "text-right tabular-nums",
+                                  sortMetric === m.key && "bg-muted/40 font-medium",
+                                )}
+                              >
+                                {row.unavailable ? "—" : fmtMetric(m, row.data?.[m.key])}
+                              </TableCell>
+                            ))}
+                          </TableRow>
+                        ))}
+                      </TableBody>
+                    </Table>
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+          </TabsContent>
+        </Tabs>
       )}
     </div>
   );

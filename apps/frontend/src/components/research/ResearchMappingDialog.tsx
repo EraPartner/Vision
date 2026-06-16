@@ -28,15 +28,25 @@ interface ResearchMappingDialogProps {
   query: string;
   assetClass?: ResearchAssetClass;
   displayName?: string;
+  /**
+   * When this mapping is for a held investment, its id — the holding's
+   * already-configured provider is pre-seeded as a confirmed proposal.
+   */
+  investmentId?: number;
 }
 
-/** A proposal worth confirming carries a provider symbol. */
+/** A proposal that was pre-seeded from the held investment is already known-good. */
+function isFromHolding(p: MappingProposal): boolean {
+  return p.fromHolding === true;
+}
+
+/** A proposal worth confirming carries a provider symbol (held providers are already confirmed). */
 function isConfirmable(p: MappingProposal): boolean {
-  return !!p.providerSymbol && (p.status === "auto" || p.status === "confirmed");
+  return !!p.providerSymbol && !isFromHolding(p) && (p.status === "auto" || p.status === "confirmed");
 }
 
 export function ResearchMappingDialog({
-  open, onOpenChange, instrumentKey, keyType = "isin", query, assetClass, displayName,
+  open, onOpenChange, instrumentKey, keyType = "isin", query, assetClass, displayName, investmentId,
 }: ResearchMappingDialogProps) {
   const { t } = useLanguage();
   const queryClient = useQueryClient();
@@ -57,6 +67,7 @@ export function ResearchMappingDialog({
   const resolveMutation = useMutation({
     mutationFn: () => apiClient.resolveResearchMappings({
       instrument_key: instrumentKey, key_type: keyType, asset_class: assetClass, query,
+      ...(investmentId !== undefined ? { investment_id: investmentId } : {}),
     }),
   });
   const proposals = useMemo(
@@ -70,7 +81,7 @@ export function ResearchMappingDialog({
       resolveMutation.mutate();
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [open, instrumentKey, query]);
+  }, [open, instrumentKey, query, investmentId]);
 
   // Pre-select confirmable proposals not already stored.
   useEffect(() => {
@@ -160,12 +171,14 @@ export function ResearchMappingDialog({
             <ul className="space-y-2">
               {proposals.map((p) => {
                 const confirmable = isConfirmable(p);
+                const fromHolding = isFromHolding(p);
                 return (
                   <li
                     key={p.provider}
                     className={cn(
                       "flex items-start gap-3 rounded-lg border border-border p-3",
-                      !confirmable && "opacity-70",
+                      fromHolding && "border-success/40 bg-success/5",
+                      !confirmable && !fromHolding && "opacity-70",
                     )}
                   >
                     {confirmable && (
@@ -177,6 +190,9 @@ export function ResearchMappingDialog({
                         aria-label={p.provider}
                       />
                     )}
+                    {fromHolding && (
+                      <Check className="mt-0.5 h-4 w-4 text-success shrink-0" aria-label={t('research.mapping.fromHolding')} />
+                    )}
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center gap-2 flex-wrap">
                         <span className="font-semibold text-sm">{p.provider}</span>
@@ -184,6 +200,11 @@ export function ResearchMappingDialog({
                           <Badge variant="secondary" className="font-mono text-[10px]">{p.providerSymbol}</Badge>
                         )}
                         <ProposalStatus status={p.status} />
+                        {fromHolding && (
+                          <Badge variant="outline" className="text-[10px] border-success/30 text-success">
+                            {t('research.mapping.fromHolding')}
+                          </Badge>
+                        )}
                       </div>
                       {/* resolved name + exchange + currency so the user can catch ticker collisions */}
                       {(p.resolvedName || p.exchange || p.currency) && (

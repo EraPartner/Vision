@@ -110,6 +110,58 @@ describe('researchMappingService.resolve', () => {
     expect(adapters.yahoo.search).not.toHaveBeenCalled();
   });
 
+  it('pre-seeds a held investment\'s configured provider as confirmed and skips its search', async () => {
+    const adapters = {
+      yahoo: { search: vi.fn(async () => ({ items: [{ symbol: 'WRONG', name: 'Wrong Co.' }] })) },
+    };
+    const investments = {
+      getById: vi.fn(async () => ({
+        price_provider: 'yahoo',
+        price_provider_id: 'AAPL',
+        name: 'Apple Inc.',
+        currency: 'USD',
+      })),
+    };
+    const svc = build({ repo: makeRepo(), adapters, investments, governor: governorAllow(), isKeyed: () => true });
+
+    const { proposals } = await svc.resolve({
+      instrumentKey: KEY, keyType: TYPE, assetClass: 'stock', query: 'apple', investmentId: 42,
+    });
+
+    const yahoo = proposals.find((p) => p.provider === 'yahoo');
+    expect(yahoo).toMatchObject({
+      status: 'confirmed',
+      fromHolding: true,
+      providerSymbol: 'AAPL',
+      resolvedName: 'Apple Inc.',
+      currency: 'USD',
+    });
+    expect(adapters.yahoo.search).not.toHaveBeenCalled();
+    expect(investments.getById).toHaveBeenCalledWith(42);
+    // No duplicate yahoo proposals.
+    expect(proposals.filter((p) => p.provider === 'yahoo')).toHaveLength(1);
+  });
+
+  it('lets an existing confirmed mapping win over the held-provider pre-seed', async () => {
+    const adapters = { yahoo: { search: vi.fn() } };
+    const repo = makeRepo([
+      { instrument_key: KEY, key_type: TYPE, provider: 'yahoo', provider_symbol: 'STORED', resolved_name: 'Stored Co.', status: 'confirmed' },
+    ]);
+    const investments = {
+      getById: vi.fn(async () => ({ price_provider: 'yahoo', price_provider_id: 'AAPL', name: 'Apple Inc.', currency: 'USD' })),
+    };
+    const svc = build({ repo, adapters, investments, governor: governorAllow(), isKeyed: () => true });
+
+    const { proposals } = await svc.resolve({
+      instrumentKey: KEY, keyType: TYPE, assetClass: 'stock', query: 'apple', investmentId: 7,
+    });
+
+    const yahoo = proposals.find((p) => p.provider === 'yahoo');
+    expect(yahoo).toMatchObject({ status: 'confirmed', providerSymbol: 'STORED', fromStore: true });
+    expect(proposals.filter((p) => p.provider === 'yahoo')).toHaveLength(1);
+    expect(adapters.yahoo.search).not.toHaveBeenCalled();
+  });
+
   it('surfaces an existing mapping for an unkeyed provider instead of searching', async () => {
     const adapters = {
       yahoo: { search: vi.fn(async () => ({ items: [] })) },

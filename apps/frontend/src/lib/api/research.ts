@@ -139,6 +139,8 @@ export function resolveResearchMappings(input: {
     key_type?: MappingKeyType;
     asset_class?: ResearchAssetClass;
     query: string;
+    /** When set, the held investment's configured provider is pre-seeded as confirmed. */
+    investment_id?: number;
 }): Promise<ResearchResult<MappingResolveResponse>> {
     return researchSend<MappingResolveResponse>('/api/research/mappings/resolve', 'POST', input);
 }

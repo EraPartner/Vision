@@ -171,6 +171,10 @@ export interface MappingProposal {
     exchange?: string;
     currency?: string;
     candidates?: MappingProposalCandidate[];
+    /** Kept from a stored mapping rather than freshly searched. */
+    fromStore?: boolean;
+    /** Pre-seeded from a held investment's already-configured provider. */
+    fromHolding?: boolean;
 }
 
 export interface MappingResolveResponse {

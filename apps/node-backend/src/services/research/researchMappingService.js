@@ -24,6 +24,7 @@ import { isProviderKeyed } from './providerKeys.js';
 import { ADAPTERS, defaultGovernor, adapterSupports } from './providerRegistry.js';
 import * as providerHealth from '../providerHealthService.js';
 import * as mapRepo from '../../repositories/instrumentProviderMapRepository.js';
+import investmentRepo from '../../repositories/investmentRepository.js';
 
 /** Relative price agreement tolerance for the self-audit (5%). */
 export const AUDIT_PRICE_TOLERANCE = 0.05;
@@ -32,6 +33,7 @@ const errMessage = (err) => (err instanceof Error ? err.message : String(err));
 
 export function createResearchMappingService({
   repo = mapRepo,
+  investments = investmentRepo,
   adapters = ADAPTERS,
   governor = defaultGovernor,
   isKeyed = isProviderKeyed,
@@ -47,16 +49,45 @@ export function createResearchMappingService({
 
   /**
    * Auto-propose per-provider symbols for an instrument. Does NOT persist.
-   * @param {{ instrumentKey: string, keyType: string, assetClass?: string, query: string }} params
+   *
+   * When `investmentId` is supplied and that holding already has a configured
+   * `price_provider` + `price_provider_id`, that provider is pre-seeded as a
+   * confirmed proposal (`fromHolding: true`) and its live search is skipped — the
+   * user already mapped it on the investment, so there's nothing to re-map. An
+   * existing stored `confirmed` mapping still wins; providers never appear twice.
+   *
+   * @param {{ instrumentKey: string, keyType: string, assetClass?: string, query: string, investmentId?: number }} params
    */
-  async function resolve({ instrumentKey, keyType, assetClass, query }) {
+  async function resolve({ instrumentKey, keyType, assetClass, query, investmentId }) {
     const existing = await repo.listByInstrument(instrumentKey, keyType);
     const existingByProvider = new Map(existing.map((r) => [r.provider, r]));
 
-    // Search-capable providers first, then any already-mapped provider not in that chain.
+    // Pre-seed from a held investment's already-configured provider, if asked.
+    // Not user-scoped: Vision is single-tenant/self-hosted — `investments` has no
+    // owner column and there is no per-user request identity (see ADR-034); this
+    // `getById` mirrors the existing GET /api/investments/:id read. A missing id
+    // returns null and is silently skipped (no existence oracle beyond that route).
+    // If Vision ever becomes multi-tenant, scope this AND every other :id read.
+    const holdingByProvider = new Map();
+    if (investmentId !== undefined) {
+      const holding = await investments.getById(investmentId);
+      if (holding && holding.price_provider && holding.price_provider_id) {
+        holdingByProvider.set(holding.price_provider, {
+          provider: holding.price_provider,
+          status: 'confirmed',
+          providerSymbol: holding.price_provider_id,
+          resolvedName: holding.name,
+          currency: holding.currency,
+          fromHolding: true,
+        });
+      }
+    }
+
+    // Search-capable providers first, then any already-mapped or held provider not in that chain.
     const searchChain = resolveProviderChain('search', assetClass);
     const providerOrder = [...searchChain];
     for (const r of existing) if (!providerOrder.includes(r.provider)) providerOrder.push(r.provider);
+    for (const p of holdingByProvider.keys()) if (!providerOrder.includes(p)) providerOrder.push(p);
 
     const proposals = [];
     for (const provider of providerOrder) {
@@ -64,6 +95,11 @@ export function createResearchMappingService({
 
       if (ex && ex.status === 'confirmed') {
         proposals.push(fromStore(provider, ex, 'confirmed'));
+        continue;
+      }
+      // A held provider is known-good: pre-seed it confirmed and skip the live search.
+      if (holdingByProvider.has(provider)) {
+        proposals.push(holdingByProvider.get(provider));
         continue;
       }
       if (!adapterSupports(provider, 'search', adapters) || !isKeyed(provider)) {

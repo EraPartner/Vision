@@ -228,7 +228,7 @@ The research aggregation layer (`apps/node-backend/src/services/research/`) buil
 - **Quota governor** — per-minute in-memory + per-day persisted token buckets (via the `provider_quota` table) guard against free-tier 429s.
 - **Type-aware TTL cache** — research data for arbitrary symbols is cached in memory only and is **never written to `asset_price_history`**.
 
-Yahoo is the only adapter wired today. Twelve Data, Finnhub, FMP, and Alpha Vantage are defined in the capability map and activate when their API keys are provisioned in `.env.local`. See [[docs/features/research|Research Feature]] and [[docs/adr/079-multi-provider-research-aggregation|ADR-079]] for full details.
+All five adapters are wired (Yahoo needs no key; Twelve Data, Finnhub, FMP, and Alpha Vantage activate when their API key is set in the root `.env` — see [[docs/adr/080-layered-env-loading-shared-secrets|ADR-080]]). See [[docs/features/research|Research Feature]] and [[docs/adr/079-multi-provider-research-aggregation|ADR-079]] for full details.
 
 ## Related
 

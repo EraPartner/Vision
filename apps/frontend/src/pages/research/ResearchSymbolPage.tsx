@@ -1,5 +1,5 @@
 import { useCallback, useState } from "react";
-import { useParams, useNavigate } from "react-router-dom";
+import { useParams, useNavigate, useSearchParams } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { useAppSettings } from "@/contexts/AppSettingsContext";
@@ -51,6 +51,11 @@ export default function ResearchSymbolPage() {
   const symbol = (rawSymbol ?? "").toUpperCase();
   const { t } = useLanguage();
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
+  // When this symbol page is opened from a holding, the URL carries its
+  // investmentId so the mapping dialog can pre-seed the holding's provider.
+  const investmentIdParam = Number.parseInt(searchParams.get("investmentId") ?? "", 10);
+  const investmentId = Number.isInteger(investmentIdParam) && investmentIdParam > 0 ? investmentIdParam : undefined;
   const { appSettings } = useAppSettings();
   const locale = numberFormatToLocale(appSettings.numberFormat);
   const [selectedRange, setSelectedRange] = useState<{ label: string; range: ResearchRange }>(RANGES[2]);
@@ -241,6 +246,7 @@ export default function ResearchSymbolPage() {
         keyType="internal"
         query={symbol}
         displayName={quote?.name ?? symbol}
+        investmentId={investmentId}
       />
     </div>
   );

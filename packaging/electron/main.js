@@ -355,6 +355,43 @@ function generateFreshEnvContents() {
   ].join('\n') + '\n';
 }
 
+// Research provider API keys (ADR-079) are not part of the generated baseline, but
+// the embedded stack (Vision.app) should pick up the same keys configured for dev
+// or Docker (which live in the repo-root .env per ADR-080). These helpers merge any
+// such keys into the canonical .env so `env_file: .env` injects them into the app
+// container — without that, the desktop app's keyed providers stay unconfigured.
+const PROVIDER_KEY_VARS = [
+  'TWELVE_DATA_API_KEY', 'FINNHUB_API_KEY', 'FMP_API_KEY', 'ALPHA_VANTAGE_API_KEY',
+];
+
+function parseEnvKeys(contents) {
+  const map = new Map();
+  for (const line of (contents || '').split('\n')) {
+    const trimmed = line.trim();
+    if (!trimmed || trimmed.startsWith('#')) continue;
+    const eq = trimmed.indexOf('=');
+    if (eq === -1) continue;
+    map.set(trimmed.slice(0, eq).trim(), trimmed.slice(eq + 1).trim());
+  }
+  return map;
+}
+
+// Append provider keys present in `workContents` (e.g. the repo-root .env) or, as a
+// fallback, process.env — but only those not already in `truth`. Existing values are
+// never overwritten, so a key set in the canonical .env is stable across launches.
+function mergeProviderKeys(truth, workContents) {
+  const present = parseEnvKeys(truth);
+  const fromWork = parseEnvKeys(workContents);
+  const additions = [];
+  for (const key of PROVIDER_KEY_VARS) {
+    if (present.has(key)) continue;
+    const value = fromWork.get(key) ?? process.env[key];
+    if (value !== undefined && value !== '') additions.push(`${key}=${value}`);
+  }
+  if (additions.length === 0) return truth;
+  return `${truth}${truth.endsWith('\n') ? '' : '\n'}${additions.join('\n')}\n`;
+}
+
 async function ensureEnv(workDir) {
   const canonicalEnv = canonicalEnvPath();
   const workEnv = path.join(workDir, '.env');
@@ -374,6 +411,11 @@ async function ensureEnv(workDir) {
   if (truth === null) {
     truth = generateFreshEnvContents();
   }
+
+  // Carry research provider API keys (ADR-079/080) into the embedded stack so the
+  // desktop app gets the same keys as dev/Docker. Merged from the work .env (dev's
+  // repo-root .env) or process.env; never overwrites values already in the .env.
+  truth = mergeProviderKeys(truth, workContents);
 
   if (canonicalContents !== truth) {
     await fs.promises.writeFile(canonicalEnv, truth, { encoding: 'utf8', mode: 0o600 });

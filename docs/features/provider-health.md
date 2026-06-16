@@ -3,9 +3,9 @@ title: Provider Health Tracking
 type: feature
 status: active
 date: 2026-04-24
-updated: 2026-04-24
-tags: [feature, admin, provider-health, observability]
-description: Passive health tracking and active probing for all price, FX, and inflation data providers
+updated: 2026-06-16
+tags: [feature, admin, provider-health, observability, research-providers, twelve-data, finnhub, fmp, alpha-vantage]
+description: Passive health tracking and active probing for all price, FX, inflation, and research data providers
 aliases: [provider health, data source health, provider monitoring]
 related_code:
   - apps/node-backend/src/services/providerHealth/providerHealthService.js
@@ -31,6 +31,16 @@ related_code:
 | `open.er-api` | Open Exchange Rates | fx |
 | `statbel` | Statbel | inflation |
 | `eurostat` | Eurostat | inflation |
+| `twelve_data` | Twelve Data | research |
+| `finnhub` | Finnhub | research |
+| `fmp` | FMP | research |
+| `alpha_vantage` | Alpha Vantage | research |
+
+> The four `research` providers (ADR-079) are recorded by the research aggregator's
+> success/error calls; their probe uses the adapter's own `quote`, so an unconfigured
+> or invalid key surfaces as a failing probe (`<VAR> not configured`). A probe
+> consumes one real API call against that provider's quota. Yahoo is shared with the
+> price stack and stays under `price`.
 
 ## Data Model
 
@@ -39,7 +49,7 @@ Table: `provider_health`
 | Column | Type | Description |
 |--------|------|-------------|
 | `provider` | text PK | Provider key (e.g. `binance`) |
-| `kind` | text | `price` \| `fx` \| `inflation` |
+| `kind` | text | `price` \| `fx` \| `inflation` \| `research` |
 | `label` | text | Human-readable display name |
 | `last_success_at` | timestamptz | Most recent successful fetch |
 | `last_error_at` | timestamptz | Most recent error timestamp |
@@ -85,7 +95,7 @@ Located at `/admin/providers` (visible only with admin mode enabled).
 | Column | Description |
 |--------|-------------|
 | Provider | Status icon + name |
-| Kind | Type badge (`price` / `fx` / `inflation`) |
+| Kind | Type badge (`price` / `fx` / `inflation` / `research`) |
 | Last Success | Formatted timestamp or "Never" |
 | Failures | Consecutive failures badge |
 | Last Error | Truncated error, expandable on click (only shown when `consecutive_failures > 0`) |
