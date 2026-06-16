@@ -81,6 +81,11 @@ export function ScorecardPanel({ scorecard }: { scorecard: ResearchScorecard }) 
         <ul className="space-y-2">
           {concerns.map((flag) => {
             const Icon = SEVERITY_ICON[flag.severity];
+            // Prefer the localized message; fall back to the backend's English
+            // `reason` if a reasonKey has no i18n entry yet (t() returns the key on a miss).
+            const reasonI18nKey = `research.scorecard.reason.${flag.reasonKey}`;
+            const localizedReason = t(reasonI18nKey);
+            const reasonText = localizedReason === reasonI18nKey ? flag.reason : localizedReason;
             return (
               <li
                 key={flag.metric}
@@ -96,7 +101,7 @@ export function ScorecardPanel({ scorecard }: { scorecard: ResearchScorecard }) 
                       {t("research.scorecard.benchmark", { value: flag.benchmark })}
                     </span>
                   </div>
-                  <p className="text-xs text-muted-foreground">{flag.reason}</p>
+                  <p className="text-xs text-muted-foreground">{reasonText}</p>
                 </div>
               </li>
             );

@@ -258,9 +258,11 @@ export interface ScorecardFlag {
     better: 'higher' | 'lower';
     value: number;
     severity: ScorecardSeverity;
-    /** Stable `<metric>.<severity>` code for i18n. */
+    /** Stable `<metric>.<severity>` code (severity-derived; can collide across reasons). */
     code: string;
-    /** English fallback explanation. */
+    /** Stable `<metric>.<slug>` key, unique per distinct message — used for i18n lookup. */
+    reasonKey: string;
+    /** English fallback explanation (used when no localized `reasonKey` string exists). */
     reason: string;
     benchmark: string;
 }
