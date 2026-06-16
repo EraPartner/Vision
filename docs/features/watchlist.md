@@ -169,9 +169,10 @@ Code links: [[apps/frontend/src/pages/portfolio/WatchlistPage.tsx]], [[apps/fron
 - Translated `portfolio.refreshPricesFailedTitle` from English "Refresh prices failed" to Dutch "Bijwerken van koersen mislukt"
 - Translated `portfolio.recordTxnFailedTitle` from English "Record transaction failed" to Dutch "Registreren van portfoliotransactie mislukt"
 
-**Known Dutch Translation Gap:**
-- Multiple `*FailedTitle` keys remain untranslated in Dutch: `categories.FailedTitle`, `recipients.FailedTitle`, `transactions.FailedTitle`, and additional portfolio error keys
-- These keys currently display English text in Dutch locale; flagged as follow-up work to complete Dutch coverage
+**Dutch Translation Gap — RESOLVED (2026-06-16):**
+- The `*FailedTitle` keys (categories/recipients/transactions/portfolio — 18 keys total) that
+  previously displayed English text in the Dutch locale are now fully translated in
+  `i18n/source/nl.json`. No remaining `*FailedTitle` gap.
 
 ## Adding from Watchlist
 

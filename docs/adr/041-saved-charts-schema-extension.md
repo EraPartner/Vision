@@ -109,3 +109,11 @@ to resolve alias members of the requested recipient IDs, then filters transactio
 **Cache-sharing trade-off:** Two charts that happen to request the same `recipient_ids` set (same elements, same order preserved by `JSON.stringify`) still share one cached response. Charts with different recipient selections get independent cache entries, which is correct — a narrowed payload for chart A must not be served to chart B with different recipients.
 
 **Code:** [[apps/frontend/src/hooks/useRecipientPivot.ts]], [[apps/node-backend/src/routes/aggregations.js]]
+
+## Addendum (2026-06-16, follow-up closed: CustomCategoryChart removed)
+
+The Neutral consequence above noted `CustomCategoryChart.tsx` would remain alongside
+`CustomChart.tsx` "until the tax page is migrated." That follow-up is **done**:
+`CustomCategoryChart.tsx` no longer exists in the tree (only `CustomChart.tsx` and
+`CustomChartBuilderModal.tsx` remain, with zero references to the old component). No coexistence
+remains.
