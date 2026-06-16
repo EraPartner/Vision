@@ -3,6 +3,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/u
 import { useLanguage } from "@/contexts/LanguageContext";
 import { isTypingTarget } from "@/lib/keyboard";
 import { GO_TO_ROUTES } from "@/hooks/useGoToShortcuts";
+import { isElectron } from "@/lib/api/electron";
 
 const IS_MAC = typeof navigator !== "undefined" && /Mac|iPhone|iPad/.test(navigator.platform);
 
@@ -48,6 +49,28 @@ export function ShortcutsOverlay({ open, onOpenChange }: ShortcutsOverlayProps) 
         { keys: <Key>Esc</Key>, label: t("shortcuts.closeDialog") },
     ];
 
+    // Native menu accelerators — desktop app only. Mirror packaging/electron/main.js's
+    // application menu; ⇧/⌃ modifiers differ by platform (⇧⌘I/⌃⌘S on macOS, Ctrl+Shift on
+    // Windows/Linux), matching the `process.platform === 'darwin'` branches there.
+    const shift = IS_MAC ? "⇧" : "Shift";
+    const ctrl = IS_MAC ? "⌃" : "Ctrl";
+    const desktop: Array<{ keys: React.ReactNode; label: string }> = [
+        { keys: <><Key>{mod}</Key> <Key>N</Key></>, label: t("shortcuts.newTransaction") },
+        {
+            keys: IS_MAC
+                ? <><Key>{shift}</Key> <Key>{mod}</Key> <Key>I</Key></>
+                : <><Key>{ctrl}</Key> <Key>{shift}</Key> <Key>I</Key></>,
+            label: t("shortcuts.importCsv"),
+        },
+        {
+            keys: IS_MAC
+                ? <><Key>{ctrl}</Key> <Key>{mod}</Key> <Key>S</Key></>
+                : <><Key>{ctrl}</Key> <Key>{shift}</Key> <Key>S</Key></>,
+            label: t("aria.toggleSidebar"),
+        },
+        { keys: <><Key>{mod}</Key> <Key>1</Key>–<Key>9</Key></>, label: t("shortcuts.goToSection") },
+    ];
+
     return (
         <Dialog open={open} onOpenChange={onOpenChange}>
             <DialogContent className="max-w-md">
@@ -75,6 +98,19 @@ export function ShortcutsOverlay({ open, onOpenChange }: ShortcutsOverlayProps) 
                             </div>
                         ))}
                     </div>
+                    {isElectron() && (
+                        <>
+                            <p className="pt-2 text-[10px] font-medium uppercase tracking-[0.12em] text-muted-foreground/70">
+                                {t("shortcuts.desktopSection")}
+                            </p>
+                            {desktop.map((row, i) => (
+                                <div key={`desktop-${i}`} className="flex items-center justify-between gap-4 text-sm">
+                                    <span className="text-foreground/85">{row.label}</span>
+                                    <span className="flex items-center gap-1">{row.keys}</span>
+                                </div>
+                            ))}
+                        </>
+                    )}
                     <p className="pt-1 text-xs text-muted-foreground">{t("shortcuts.chartScrub")}</p>
                     <p className="text-xs text-muted-foreground">{t("shortcuts.rowMenu")}</p>
                 </div>
