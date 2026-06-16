@@ -45,7 +45,7 @@ export default function WatchlistPage() {
   const symbols = data?.items?.map((i) => i.symbol).filter(Boolean).join(",") || "";
   const { data: quotesData, isError: quotesError } = useQuery({
     queryKey: ["watchlist-quotes", symbols],
-    queryFn: () => symbols ? apiClient.getMarketQuotes(symbols) : Promise.resolve({ quotes: [] }),
+    queryFn: () => symbols ? apiClient.getMarketQuotes(symbols, { detail: "basic" }) : Promise.resolve({ quotes: [] }),
     enabled: !!symbols && isOnline,
     refetchInterval: isOnline ? 60_000 : false,
     refetchOnWindowFocus: false,

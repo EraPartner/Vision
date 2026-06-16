@@ -233,6 +233,12 @@ All five adapters are wired (Yahoo needs no key; Twelve Data, Finnhub, FMP, and 
 > [!info] FMP base URL (2026-06-16)
 > FMP retired its legacy `/api/v3` base URL for accounts not subscribed before 2025-08-31. The FMP adapter now uses the current **stable API** at `https://financialmodelingprep.com/stable` with symbol passed as a query param. `FMP_API_KEY` is unchanged. See [[docs/adr/079-multi-provider-research-aggregation#follow-up-note--fmp-stable-api-migration-2026-06-16|ADR-079 follow-up note]] for details.
 
+> [!info] Quote / chart / news provider ordering — Yahoo-first (2026-06-16)
+> The capability map (`capabilityMap.js`) was reordered so that **Yahoo leads the `quote`, `chart`, and `news` default chains**, with paid providers (Twelve Data, Finnhub, FMP, Alpha Vantage) as fallbacks. Yahoo is keyless and carries no contractual per-day cap, so routing it first avoids burning paid-tier quota on the highest-frequency data types. The aggregator's fall-through semantics are unchanged — a Yahoo failure still routes to Twelve Data → Finnhub → …. `fundamentals.default` remains FMP-first (Yahoo's fundamentals depth is shallower). See [[docs/adr/079-multi-provider-research-aggregation#follow-up-note--yahoo-first-provider-ordering-for-quote--chart--news-2026-06-16|ADR-079 follow-up note (2026-06-16)]] for the full change table and rationale.
+
+> [!info] Fundamentals: one composed data type, not raced (2026-06-16)
+> **Fundamentals is the only data type that is composed rather than raced.** `GET /api/research/fundamentals` and `GET /api/research/scorecard` call `researchAggregator.fetchFundamentals()`, which fetches **FMP and Yahoo in parallel** and merges their fields with FMP preferred. FMP-only fields (e.g. `interestCoverage`) and Yahoo-only fields (e.g. `forwardPE`, `freeCashFlow`) both appear in every response — the result is the union. `meta.provider` is `"fmp+yahoo"` when both contribute, or the single provider name when only one responds. All other research data types (quote, chart, news, analyst, search) continue to use the race-to-first capability-map chain unchanged. See [[docs/adr/079-multi-provider-research-aggregation#follow-up-note--fundamentals-merged-across-fmp--yahoo-2026-06-16|ADR-079 follow-up note (2026-06-16)]].
+
 ## Related
 
 - [[docs/api/investments|API: Investments]]

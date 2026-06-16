@@ -26,11 +26,18 @@ export interface MarketQuote {
  * Fetch quotes for one or more comma-separated symbols. The default `Q` covers
  * the fields every caller relies on; pass a richer type parameter (e.g. the
  * market-lookup page's full `Quote`) when the endpoint's extra fields are needed.
+ *
+ * `detail: 'basic'` skips the per-symbol fundamentals/analyst `quoteSummary`
+ * fetch (~half the outbound Yahoo calls) — use it for price-only views like the
+ * benchmark strip and watchlist; omit it (default 'full') when the rich
+ * fundamentals/analyst fields are rendered.
  */
 export function getMarketQuotes<Q = MarketQuote>(
     symbols: string,
+    opts?: { detail?: 'basic' | 'full' },
 ): Promise<{ quotes: Q[] }> {
-    return apiRequest(`/api/market/quote?symbols=${encodeURIComponent(symbols)}`);
+    const detail = opts?.detail === 'basic' ? '&detail=basic' : '';
+    return apiRequest(`/api/market/quote?symbols=${encodeURIComponent(symbols)}${detail}`);
 }
 
 export interface MarketChartPoint {

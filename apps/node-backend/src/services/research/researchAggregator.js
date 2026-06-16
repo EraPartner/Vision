@@ -96,7 +96,79 @@ export function createResearchAggregator({
     return { source: 'unavailable', attempted };
   }
 
-  return { fetch, usableChain };
+  /**
+   * Field-level merge of fundamentals snapshots in precedence order (earliest =
+   * highest precedence). A higher-precedence provider's value wins per field, but
+   * only when present — a null/NaN never clobbers a real value from a
+   * lower-precedence provider. This is the "FMP where possible, Yahoo otherwise"
+   * union: FMP-only fields (interestCoverage), Yahoo-only fields (forwardPE,
+   * revenue, freeCashFlow), and shared fields (FMP wins) all survive.
+   * @param {Array<Record<string, any>>} snapshots  highest-precedence first
+   */
+  function mergeFundamentals(snapshots) {
+    const merged = {};
+    // Overlay lowest → highest so the highest-precedence present value lands last.
+    for (const snap of [...snapshots].reverse()) {
+      if (!snap || typeof snap !== 'object') continue;
+      for (const [field, value] of Object.entries(snap)) {
+        const missing = value == null || (typeof value === 'number' && !Number.isFinite(value));
+        if (!missing) merged[field] = value;
+      }
+    }
+    return merged;
+  }
+
+  /**
+   * Fundamentals are MERGED rather than raced: FMP and Yahoo are fetched in
+   * parallel (each gated by key + quota) and combined field-by-field, FMP
+   * preferred. This is the one data type the user wants composed from two
+   * providers; every other type stays single-provider race-to-first via `fetch`.
+   *
+   * @param {{ symbol?: string, assetClass?: string }} [params]
+   * @returns {Promise<{ provider?: string, data?: unknown, source: 'cache'|'live'|'unavailable', attempted?: object[] }>}
+   */
+  async function fetchFundamentals({ symbol, assetClass } = {}) {
+    const key = `fundamentals:merged:${assetClass ?? ''}:${symbol ?? ''}`;
+    const cached = cache.get(key);
+    if (cached !== undefined) return { ...cached, source: 'cache' };
+
+    // Precedence order: FMP first (richest US fundamentals), Yahoo as the keyless
+    // fallback. Drop any provider without an adapter method or key.
+    const order = ['fmp', 'yahoo'].filter((p) => supports(p, 'fundamentals') && isKeyed(p));
+
+    const attempted = [];
+    const settled = await Promise.all(
+      order.map(async (provider) => {
+        if (!(await governor.canSpend(provider))) {
+          attempted.push({ provider, skipped: 'quota' });
+          return undefined;
+        }
+        try {
+          const data = await adapters[provider].fundamentals(symbol, {});
+          await governor.spend(provider);
+          Promise.resolve(recordSuccess(provider)).catch(() => {});
+          return { provider, data };
+        } catch (err) {
+          Promise.resolve(recordError(provider, err)).catch(() => {});
+          attempted.push({ provider, error: err instanceof Error ? err.message : String(err) });
+          return undefined;
+        }
+      }),
+    );
+
+    // `settled` preserves `order`, so filtering keeps FMP ahead of Yahoo.
+    const contributions = settled.filter(Boolean);
+    if (contributions.length === 0) return { source: 'unavailable', attempted };
+
+    const result = {
+      provider: contributions.map((c) => c.provider).join('+'),
+      data: mergeFundamentals(contributions.map((c) => c.data)),
+    };
+    cache.set(key, result, ttlForType('fundamentals'));
+    return { ...result, source: 'live' };
+  }
+
+  return { fetch, fetchFundamentals, usableChain };
 }
 
 /** Process-wide singleton used by the research routes. */

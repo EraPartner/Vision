@@ -136,6 +136,37 @@ describe('Market Lookup Routes', () => {
       expect(body.data.quotes[0].recentAnalystActions).toHaveLength(1);
     });
 
+    it('detail=basic returns price-only fields and skips the quoteSummary call', async () => {
+      mockYahooQuote.mockResolvedValue({
+        symbol: 'AAPL',
+        shortName: 'Apple Inc.',
+        regularMarketPrice: 190.11,
+        regularMarketChange: 1.1,
+        regularMarketChangePercent: 0.58,
+        currency: 'USD',
+        regularMarketPreviousClose: 189.01,
+      });
+
+      const req = { query: { symbols: 'AAPL', detail: 'basic' } };
+      const res = mockResponse();
+
+      await routeHandlers['get:/quote'](req, res);
+
+      expect(mockYahooQuoteSummary).not.toHaveBeenCalled();
+      const quote = res.json.mock.calls[0][0].data.quotes[0];
+      expect(quote).toMatchObject({
+        symbol: 'AAPL',
+        name: 'Apple Inc.',
+        price: 190.11,
+        change: 1.1,
+        changePercent: 0.58,
+        currency: 'USD',
+        prevClose: 189.01,
+      });
+      expect(quote).not.toHaveProperty('marketCap');
+      expect(quote).not.toHaveProperty('analystConsensus');
+    });
+
     it('should return empty quotes when all symbol quote fetches fail', async () => {
       mockYahooQuote.mockRejectedValue(new Error('upstream quote failure'));
       mockYahooQuoteSummary.mockResolvedValue({});

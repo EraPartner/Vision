@@ -38,7 +38,7 @@ related_code:
 
 # Research API
 
-Provider-agnostic market research surface introduced in [[docs/adr/079-multi-provider-research-aggregation|ADR-079]] and deepened in [[docs/adr/081-research-analytics-forecasting|ADR-081]]. Sixteen endpoints under `/api/research`: six GET data endpoints delegate to the **research aggregation layer** (capability map → quota governor → cache → race-to-first provider); two analytics endpoints (`scorecard`, `portfolio-forecast`) compute derived outputs from aggregated data; five symbol-mapping endpoints manage cross-provider instrument identity; and three provider-key Settings endpoints manage keyed-provider API keys.
+Provider-agnostic market research surface introduced in [[docs/adr/079-multi-provider-research-aggregation|ADR-079]] and deepened in [[docs/adr/081-research-analytics-forecasting|ADR-081]]. Sixteen endpoints under `/api/research`: six GET data endpoints delegate to the **research aggregation layer** (capability map → quota governor → cache → race-to-first provider, except `fundamentals` which uses a parallel merge — see below); two analytics endpoints (`scorecard`, `portfolio-forecast`) compute derived outputs from aggregated data; five symbol-mapping endpoints manage cross-provider instrument identity; and three provider-key Settings endpoints manage keyed-provider API keys.
 
 ## Base URL
 
@@ -194,9 +194,9 @@ Fundamentals snapshot for a symbol (P/E, EPS, market cap, book value, dividend y
 | `symbol` | string | Yes | Ticker symbol |
 | `asset_class` | string | No | Asset class hint for provider routing |
 
-**Capability chain:** `[fmp, finnhub, yahoo]` for stocks/ETFs. FMP and Finnhub require their API keys to be present in `.env.local`; without keys those providers are skipped and Yahoo is the fallback.
+**Data sourcing — merged FMP + Yahoo (2026-06-16):** This endpoint does **not** race through the capability map chain. It calls `researchAggregator.fetchFundamentals()`, which fetches **FMP and Yahoo in parallel** and merges the results **field-by-field with FMP preferred**: a field from FMP wins when present and non-null/non-NaN; Yahoo fills every gap. This yields the union of both providers — FMP-only fields (e.g. `interestCoverage`) and Yahoo-only fields (e.g. `forwardPE`, `revenue`, `freeCashFlow`) both appear. Finnhub is not called by this route (it remains in `capabilityMap.fundamentals.default` for the generic `fetch()` path only). FMP requires `FMP_API_KEY` in `.env.local`; without it Yahoo is the sole provider. Cache key: `fundamentals:merged:<assetClass>:<symbol>`. See [[docs/adr/079-multi-provider-research-aggregation#follow-up-note--fundamentals-merged-across-fmp--yahoo-2026-06-16|ADR-079 follow-up note (2026-06-16)]].
 
-**Extended fields (ADR-081):** The response now also includes the following fields when available from the provider. Each field is `undefined` (omitted from the response object) when the provider does not expose it — providers expose different subsets.
+**Extended fields (ADR-081):** The response includes the following fields when available from either provider. Each field is `undefined` (omitted from the response object) when neither provider exposes it.
 
 | Field | Description |
 |---|---|
@@ -238,14 +238,20 @@ Fundamentals snapshot for a symbol (P/E, EPS, market cap, book value, dividend y
     "freeCashFlow": 108000000000,
     "fcfYield": 0.033
   },
-  "meta": { "provider": "fmp", "source": "live" }
+  "meta": { "provider": "fmp+yahoo", "source": "live" }
 }
 ```
+
+> [!info] `meta.provider` values for fundamentals
+> - `"fmp+yahoo"` — both providers contributed at least one field (typical when both are keyed and healthy).
+> - `"fmp"` — only FMP responded (Yahoo unavailable or returned no fields).
+> - `"yahoo"` — only Yahoo responded (FMP unkeyed or failing).
+> - `null` with `source: "unavailable"` — both failed.
 
 **Error Responses:**
 - `400 Bad Request` — `symbol` parameter missing
 
-**Cache TTL:** 24 hours
+**Cache TTL:** 12 hours (`fundamentals:merged:<assetClass>:<symbol>`)
 
 ---
 
@@ -339,7 +345,7 @@ News articles for a symbol.
 
 ### GET /api/research/scorecard
 
-Heuristic fundamentals scorecard for a symbol. Fetches fundamentals via the aggregator (24 h cache respected), then evaluates them through the pure `fundamentalsScorecard.js` engine. Requires no additional provider calls beyond what `GET /api/research/fundamentals` already makes.
+Heuristic fundamentals scorecard for a symbol. Fetches fundamentals via `researchAggregator.fetchFundamentals()` (merged FMP + Yahoo, 12 h cache respected — the same call as `GET /api/research/fundamentals`), then evaluates them through the pure `fundamentalsScorecard.js` engine. Requires no additional provider calls beyond what `GET /api/research/fundamentals` already makes. `meta.provider` follows the same composite provenance rules as `/fundamentals` (e.g. `"fmp+yahoo"`).
 
 **Query Parameters:**
 
@@ -375,7 +381,7 @@ Heuristic fundamentals scorecard for a symbol. Fetches fundamentals via the aggr
       ]
     }
   },
-  "meta": { "provider": "fmp", "source": "cache" }
+  "meta": { "provider": "fmp+yahoo", "source": "cache" }
 }
 ```
 
@@ -528,7 +534,7 @@ The six data endpoints are thin wrappers over the `researchAggregator` singleton
 1. **Cache check** — `researchCache.get(key)` keyed by `dataType:assetClass:symbol:range`. A hit returns `source: 'cache'` immediately; no quota is spent.
 2. **Capability chain** — `resolveProviderChain(dataType, assetClass)` from [[apps/node-backend/src/services/research/capabilityMap.js]] returns the ordered provider preference for that data type and asset class. Providers absent an adapter method or API key are filtered out by `isProviderKeyed` ([[apps/node-backend/src/services/research/providerKeys.js]]).
 3. **Quota gate** — `governor.canSpend(provider)` checks per-minute (in-memory) and per-day (persisted to `provider_quota` table via [[apps/node-backend/src/repositories/providerQuotaRepository.js]]) token buckets. A full bucket moves to the next provider instead of issuing a 429.
-4. **Race-to-first** — The first provider that returns successfully wins. `governor.spend()` records the token, `providerHealthService.recordSuccess()` updates health, the result is cached with the type TTL.
+4. **Race-to-first** — The first provider that returns successfully wins. `governor.spend()` records the token, `providerHealthService.recordSuccess()` updates health, the result is cached with the type TTL. **Exception: `fundamentals`** — `GET /api/research/fundamentals` and `GET /api/research/scorecard` bypass this step and call `researchAggregator.fetchFundamentals()`, which fetches FMP and Yahoo **in parallel** and merges field-by-field (FMP preferred). See the `/fundamentals` endpoint doc above.
 5. **Provider error** — `providerHealthService.recordError()` is called, the error is noted in `attempted[]`, and the next provider is tried.
 6. **Unavailable** — If all providers are skipped/errored, `source: 'unavailable'` is returned with a stable empty shape.
 
@@ -539,8 +545,8 @@ The six data endpoints are thin wrappers over the `researchAggregator` singleton
 | `search` | 10 min |
 | `quote` | 10 min |
 | `chart` | 12 h |
-| `fundamentals` | 24 h |
-| `analyst` | 24 h |
+| `fundamentals` | 12 h (merged cache key `fundamentals:merged:<assetClass>:<symbol>`) |
+| `analyst` | 12 h |
 | `news` | 2 h |
 
 The cache sweeps expired entries every 5 minutes (`setInterval` with `.unref()`).
@@ -552,7 +558,7 @@ The cache sweeps expired entries every 5 minutes (`setInterval` with `.unref()`)
 | `search` | yahoo → twelve_data → finnhub → fmp | — | — |
 | `quote` | twelve_data → yahoo → finnhub → fmp → alpha_vantage | binance → twelve_data → yahoo | kinesis → yahoo → twelve_data |
 | `chart` | twelve_data → yahoo → finnhub → alpha_vantage | binance → twelve_data → yahoo | kinesis → yahoo → twelve_data |
-| `fundamentals` | fmp → finnhub → yahoo | — | — |
+| `fundamentals` | fmp → finnhub → yahoo *(capability map — used by generic `fetch()` only; `/fundamentals` + `/scorecard` routes use parallel FMP+Yahoo merge instead)* | — | — |
 | `analyst` | yahoo → finnhub → fmp | — | — |
 | `news` | finnhub → yahoo | — | — |
 

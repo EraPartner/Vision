@@ -2,10 +2,9 @@ import { useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import {
-  Search, Telescope, GitCompareArrows, LineChart, Target, ArrowRight,
+  Telescope, GitCompareArrows, LineChart, Target, ArrowRight,
   CandlestickChart, TrendingUp, TrendingDown, Activity, Plus,
 } from "lucide-react";
 import { useLanguage } from "@/contexts/LanguageContext";
@@ -19,6 +18,7 @@ import { PageHeader } from "@/components/shared/PageHeader";
 import { PortfolioNewsFeed } from "@/components/portfolio/PortfolioNewsFeed";
 import { ResearchUnavailableNote } from "@/components/research/ResearchUnavailableNote";
 import { SymbolSearchResultItem } from "@/components/shared/SymbolSearchResultItem";
+import { SymbolSearchBox } from "@/components/shared/SymbolSearchBox";
 
 // Global-mix market snapshot (ADR-079 Research home). Yahoo index/crypto
 // symbols; labels are proper nouns kept out of i18n. Index prices are points,
@@ -59,7 +59,7 @@ export default function ResearchHomePage() {
   // Live benchmark strip. 60s polling mirrors the watchlist quote cadence.
   const { data: benchmarkData } = useQuery({
     queryKey: ["research-benchmarks", BENCHMARK_SYMBOLS],
-    queryFn: () => apiClient.getMarketQuotes(BENCHMARK_SYMBOLS),
+    queryFn: () => apiClient.getMarketQuotes(BENCHMARK_SYMBOLS, { detail: "basic" }),
     enabled: isOnline,
     staleTime: 60_000,
     refetchInterval: isOnline ? 60_000 : false,
@@ -86,7 +86,7 @@ export default function ResearchHomePage() {
   );
   const { data: watchlistQuotes } = useQuery({
     queryKey: ["watchlist-quotes", watchlistSymbols],
-    queryFn: () => watchlistSymbols ? apiClient.getMarketQuotes(watchlistSymbols) : Promise.resolve({ quotes: [] }),
+    queryFn: () => watchlistSymbols ? apiClient.getMarketQuotes(watchlistSymbols, { detail: "basic" }) : Promise.resolve({ quotes: [] }),
     enabled: !!watchlistSymbols && isOnline,
     staleTime: 60_000,
     refetchInterval: isOnline ? 60_000 : false,
@@ -121,38 +121,30 @@ export default function ResearchHomePage() {
       <PageHeader title={t('research.title')} subtitle={t('research.subtitle')} icon={Telescope} />
 
       {/* Prominent search */}
-      <div className="relative max-w-2xl">
-        <Search className="absolute left-4 top-1/2 -translate-y-1/2 h-5 w-5 text-muted-foreground" />
-        <Input
-          autoFocus
-          placeholder={t('research.searchPlaceholder')}
-          value={searchText}
-          onChange={(e) => setSearchText(e.target.value)}
-          className="h-14 pl-12 text-base glass-regular"
-          aria-label={t('research.searchPlaceholder')}
-        />
-        {debouncedSearch.length >= 1 && searchText.length > 0 && (
-          <Card className="absolute z-50 top-full mt-2 w-full shadow-lg border border-border glass-elevated">
-            <CardContent className="p-1">
-              {searchUnavailable ? (
-                <div className="px-3 py-3">
-                  <ResearchUnavailableNote provider={searchResult?.meta.provider ?? null} />
-                </div>
-              ) : items.length > 0 ? (
-                items.map((item) => (
-                  <SymbolSearchResultItem
-                    key={`${item.symbol}-${item.exchange}`}
-                    item={item}
-                    onSelect={(it) => goToSymbol(it.symbol)}
-                  />
-                ))
-              ) : !isFetching ? (
-                <p className="px-3 py-3 text-sm text-muted-foreground">{t('research.noResults')}</p>
-              ) : null}
-            </CardContent>
-          </Card>
-        )}
-      </div>
+      <SymbolSearchBox
+        autoFocus
+        className="max-w-2xl"
+        placeholder={t('research.searchPlaceholder')}
+        value={searchText}
+        onChange={setSearchText}
+        open={debouncedSearch.length >= 1 && searchText.length > 0}
+      >
+        {searchUnavailable ? (
+          <div className="px-3 py-3">
+            <ResearchUnavailableNote provider={searchResult?.meta.provider ?? null} />
+          </div>
+        ) : items.length > 0 ? (
+          items.map((item) => (
+            <SymbolSearchResultItem
+              key={`${item.symbol}-${item.exchange}`}
+              item={item}
+              onSelect={(it) => goToSymbol(it.symbol)}
+            />
+          ))
+        ) : !isFetching ? (
+          <p className="px-3 py-3 text-sm text-muted-foreground">{t('research.noResults')}</p>
+        ) : null}
+      </SymbolSearchBox>
 
       {/* Market snapshot strip */}
       <section className="space-y-3">

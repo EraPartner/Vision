@@ -100,16 +100,52 @@ router.get('/search', async (req, res) => {
   res.ok({ items });
 });
 
-// GET /api/market/quote?symbols=AAPL,MSFT
+/**
+ * Core price fields available from a single `yahooFinance.quote()` call — no
+ * `quoteSummary` needed. This is everything the benchmark strip, watchlist, and
+ * dialogs render.
+ * @param {any} q
+ */
+function mapQuoteCore(q) {
+  return {
+    symbol: q.symbol,
+    name: q.shortName || q.longName || q.symbol,
+    price: q.regularMarketPrice,
+    change: q.regularMarketChange,
+    changePercent: q.regularMarketChangePercent,
+    currency: q.currency || 'USD',
+    exchange: q.fullExchangeName || q.exchange,
+    type: q.quoteType,
+    open: q.regularMarketOpen,
+    dayHigh: q.regularMarketDayHigh,
+    dayLow: q.regularMarketDayLow,
+    prevClose: q.regularMarketPreviousClose,
+    volume: q.regularMarketVolume,
+    avgVolume: q.averageDailyVolume3Month,
+    high52w: q.fiftyTwoWeekHigh,
+    low52w: q.fiftyTwoWeekLow,
+  };
+}
+
+// GET /api/market/quote?symbols=AAPL,MSFT[&detail=basic]
+// `detail=basic` returns price fields only via a single quote() call per symbol;
+// the default (full) additionally fetches quoteSummary for fundamentals/analyst
+// data — roughly 2× the outbound Yahoo calls, so light callers opt out.
 router.get('/quote', async (req, res) => {
   const symbols = coerceQueryString(req.query.symbols);
   if (!symbols) throw new ValidationError('symbols parameter required');
+  const basic = coerceQueryString(req.query.detail).trim() === 'basic';
 
   let quoteResults;
   try {
     const symbolList = symbols.split(',').map((s) => s.trim()).filter(Boolean);
     quoteResults = await Promise.allSettled(
       symbolList.map(async (sym) => {
+        if (basic) {
+          const q = /** @type {any} */ (await yahooFinance.quote(sym, {}, NO_VALIDATE));
+          return mapQuoteCore(q);
+        }
+
         const [quote, summary] = await Promise.allSettled([
           yahooFinance.quote(sym, {}, NO_VALIDATE),
           yahooFinance.quoteSummary(sym, {
@@ -168,22 +204,7 @@ router.get('/quote', async (req, res) => {
           }));
 
         return {
-          symbol: q.symbol,
-          name: q.shortName || q.longName || q.symbol,
-          price: q.regularMarketPrice,
-          change: q.regularMarketChange,
-          changePercent: q.regularMarketChangePercent,
-          currency: q.currency || 'USD',
-          exchange: q.fullExchangeName || q.exchange,
-          type: q.quoteType,
-          open: q.regularMarketOpen,
-          dayHigh: q.regularMarketDayHigh,
-          dayLow: q.regularMarketDayLow,
-          prevClose: q.regularMarketPreviousClose,
-          volume: q.regularMarketVolume,
-          avgVolume: q.averageDailyVolume3Month,
-          high52w: q.fiftyTwoWeekHigh,
-          low52w: q.fiftyTwoWeekLow,
+          ...mapQuoteCore(q),
           marketCap,
           pe: trailingPE,
           forwardPE,

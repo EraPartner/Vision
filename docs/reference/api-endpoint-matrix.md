@@ -128,23 +128,23 @@ aliases: [api matrix, endpoint matrix, all endpoints, api overview, endpoint lis
 | Method | Path | Description | Rate Limit | Doc |
 |--------|------|-------------|------------|-----|
 | GET | `/api/market/search` | Search tickers | — | [[docs/api/marketLookup\|Market Lookup]] |
-| GET | `/api/market/quote` | Get quotes | — | [[docs/api/marketLookup\|Market Lookup]] |
+| GET | `/api/market/quote` | Get quotes; optional `detail=basic\|full` (default `full`) — `basic` skips `quoteSummary` fetch, returns price-only fields, halves Yahoo calls for benchmark strip / watchlist / chart-dialog callers | — | [[docs/api/marketLookup\|Market Lookup]] |
 | GET | `/api/market/chart` | Historical chart data | — | [[docs/api/marketLookup\|Market Lookup]] |
 | GET | `/api/market/news` | News articles | — | [[docs/api/marketLookup\|Market Lookup]] |
 
 ## Research (16 endpoints) — ADR-079, ADR-081
 
-Provider-agnostic research surface mounted at `/api/research` under `marketRateLimiter`. Six data endpoints route through the capability map → quota governor → cache → race-to-first provider. Two analytics endpoints (`scorecard`, `portfolio-forecast`) compute derived outputs from aggregated data; the projection endpoint is non-persisted (ADR-079 / ADR-065 storage boundary). All data-endpoint responses carry `meta.provider` (which provider answered, or `null`) and `meta.source` (`'cache'` | `'live'` | `'unavailable'`). All five adapters are wired; the keyed four (Twelve Data / Finnhub / FMP / Alpha Vantage) light up when their API key is set via Settings (`/provider-keys`) or the root `.env` (ADR-080). See [[docs/api/research|Research API]] and [[docs/features/research|Research Feature]].
+Provider-agnostic research surface mounted at `/api/research` under `marketRateLimiter`. Six data endpoints route through the capability map → quota governor → cache → race-to-first provider, **except `fundamentals`** which fetches FMP + Yahoo in parallel and merges field-by-field (FMP preferred) via `researchAggregator.fetchFundamentals()`. Two analytics endpoints (`scorecard`, `portfolio-forecast`) compute derived outputs from aggregated data; the projection endpoint is non-persisted (ADR-079 / ADR-065 storage boundary). All data-endpoint responses carry `meta.provider` (which provider answered, or `null`; may be `"fmp+yahoo"` composite for fundamentals/scorecard) and `meta.source` (`'cache'` | `'live'` | `'unavailable'`). All five adapters are wired; the keyed four (Twelve Data / Finnhub / FMP / Alpha Vantage) light up when their API key is set via Settings (`/provider-keys`) or the root `.env` (ADR-080). See [[docs/api/research|Research API]] and [[docs/features/research|Research Feature]].
 
 | Method | Path | Description | Rate Limit | Doc |
 |--------|------|-------------|------------|-----|
 | GET | `/api/research/search` | Search tickers / securities by name or symbol; returns `{ items: [] }` when query is blank | — | [[docs/api/research\|Research]] |
 | GET | `/api/research/quote` | Current quote for `symbol` (+ optional `asset_class` hint for provider routing) | — | [[docs/api/research\|Research]] |
 | GET | `/api/research/chart` | Historical chart points; `range` default `1mo` (1d/5d/1mo/3mo/6mo/1y/2y/5y/max); optional `provider` param pins preferred provider (ADR-081) | — | [[docs/api/research\|Research]] |
-| GET | `/api/research/fundamentals` | Extended fundamentals snapshot (P/E, EPS, market cap + ADR-081: sector, pegRatio, payoutRatio, grossMargin, operatingMargin, debtToEquity, currentRatio, revenueGrowth, freeCashFlow, fcfYield, …); 24 h cache | — | [[docs/api/research\|Research]] |
+| GET | `/api/research/fundamentals` | Extended fundamentals snapshot merged from FMP + Yahoo in parallel (FMP preferred per field, Yahoo fills gaps; `meta.provider` may be `"fmp+yahoo"`); fields: P/E, EPS, market cap + ADR-081: sector, pegRatio, payoutRatio, grossMargin, operatingMargin, debtToEquity, currentRatio, revenueGrowth, freeCashFlow, fcfYield, …; 12 h cache | — | [[docs/api/research\|Research]] |
 | GET | `/api/research/analyst` | Analyst consensus + price targets + recent rating actions; 24 h cache | — | [[docs/api/research\|Research]] |
 | GET | `/api/research/news` | News articles for a symbol; 2 h cache | — | [[docs/api/research\|Research]] |
-| GET | `/api/research/scorecard` | Heuristic fundamentals scorecard: 0–100 score, A–F grade, per-metric flags with severity (ok/caution/warn/risk); missing fields skipped not penalized (ADR-081) | — | [[docs/api/research\|Research]] |
+| GET | `/api/research/scorecard` | Heuristic fundamentals scorecard: 0–100 score, A–F grade, per-metric flags with severity (ok/caution/warn/risk); missing fields skipped not penalized (ADR-081); fundamentals sourced via merged FMP + Yahoo (same as `/fundamentals`); `meta.provider` may be `"fmp+yahoo"` | — | [[docs/api/research\|Research]] |
 | POST | `/api/research/portfolio-forecast` | Monte Carlo projection of aggregate portfolio value; body: horizon_months, monthly_contribution, paths, forward_blend, method (parametric/block_bootstrap), target_value, currency, seed; returns P10–P90 bands + summary + forward-input provenance; non-persisted (ADR-081) | — | [[docs/api/research\|Research]] |
 | GET | `/api/research/mappings` | List stored cross-provider mappings for `instrument_key`/`key_type` | — | [[docs/api/research\|Research]] |
 | POST | `/api/research/mappings/resolve` | Auto-propose per-provider symbols (provider searches; user confirms resolved instrument) | — | [[docs/api/research\|Research]] |

@@ -22,8 +22,8 @@ import {
 describe('capabilityMap', () => {
   it('returns the default chain for an asset class with no override', () => {
     expect(providerChain('quote', 'stock')).toEqual([
-      PROVIDERS.twelveData,
       PROVIDERS.yahoo,
+      PROVIDERS.twelveData,
       PROVIDERS.finnhub,
       PROVIDERS.fmp,
       PROVIDERS.alphaVantage,

@@ -5,7 +5,6 @@ import { useAppSettings } from "@/contexts/AppSettingsContext";
 import { numberFormatToLocale } from "@/utils/currency";
 import { formatDateWithAppSettings, formatDateTimeWithAppSettings } from "@/components/shared/dateUtils";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -13,7 +12,7 @@ import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import {
   Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
 } from "@/components/ui/table";
-import { ArrowDown, ArrowUp, GitCompareArrows, Plus, Search, X } from "lucide-react";
+import { ArrowDown, ArrowUp, GitCompareArrows, Plus, X } from "lucide-react";
 import { LineChart, getChartColor, type LineSeries } from "@/components/charts";
 import { useDebounce } from "@/hooks/useDebounce";
 import { cn } from "@/lib/utils";
@@ -22,6 +21,7 @@ import { PageHeader } from "@/components/shared/PageHeader";
 import { ProvenanceBadge } from "@/components/research/ProvenanceBadge";
 import { ScorecardGradeBadge } from "@/components/research/ResearchScorecard";
 import { SymbolSearchResultItem } from "@/components/shared/SymbolSearchResultItem";
+import { SymbolSearchBox } from "@/components/shared/SymbolSearchBox";
 import type {
   ResearchChartPoint, ResearchFundamentals, ResearchMeta, ResearchRange, ResearchScorecard,
   ScorecardSeverity,
@@ -358,34 +358,23 @@ export default function ResearchComparePage() {
         </div>
 
         {symbols.length < MAX_SYMBOLS && (
-          <div className="relative max-w-md">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-            <Input
-              placeholder={t('research.compare.addPlaceholder')}
-              value={searchText}
-              onChange={(e) => setSearchText(e.target.value)}
-              className="pl-10"
-            />
-            {debouncedSearch.length >= 1 && searchText.length > 0 && searchItems.length > 0 && (
-              <Card className="absolute z-50 top-full mt-1 w-full shadow-lg border border-border">
-                <CardContent className="p-1">
-                  {searchItems.map((item) => (
-                    <SymbolSearchResultItem
-                      key={`${item.symbol}-${item.exchange}`}
-                      item={item}
-                      onSelect={(it) => addSymbol(it.symbol)}
-                      leadingIcon={<Plus className="h-3.5 w-3.5 text-muted-foreground shrink-0" />}
-                    />
-                  ))}
-                </CardContent>
-              </Card>
-            )}
-            {isSearching && searchText.length > 0 && (
-              <div className="absolute right-3 top-1/2 -translate-y-1/2">
-                <div className="h-4 w-4 animate-spin rounded-full border-2 border-primary border-t-transparent" />
-              </div>
-            )}
-          </div>
+          <SymbolSearchBox
+            className="max-w-2xl"
+            placeholder={t('research.compare.addPlaceholder')}
+            value={searchText}
+            onChange={setSearchText}
+            loading={isSearching && searchText.length > 0}
+            open={debouncedSearch.length >= 1 && searchText.length > 0 && searchItems.length > 0}
+          >
+            {searchItems.map((item) => (
+              <SymbolSearchResultItem
+                key={`${item.symbol}-${item.exchange}`}
+                item={item}
+                onSelect={(it) => addSymbol(it.symbol)}
+                leadingIcon={<Plus className="h-3.5 w-3.5 text-muted-foreground shrink-0" />}
+              />
+            ))}
+          </SymbolSearchBox>
         )}
       </div>
 

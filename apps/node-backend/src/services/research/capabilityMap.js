@@ -44,15 +44,19 @@ const CAPABILITY = Object.freeze({
     default: [yahoo, twelveData, finnhub, fmp],
   },
   quote: {
-    default: [twelveData, yahoo, finnhub, fmp, alphaVantage],
+    default: [yahoo, twelveData, finnhub, fmp, alphaVantage],
     crypto: [binance, twelveData, yahoo],
     metals: [kinesis, yahoo, twelveData],
   },
   chart: {
-    default: [twelveData, yahoo, finnhub, alphaVantage],
+    default: [yahoo, twelveData, finnhub, alphaVantage],
     crypto: [binance, twelveData, yahoo],
     metals: [kinesis, yahoo, twelveData],
   },
+  // NOTE: the /api/research/fundamentals + /scorecard routes do NOT race this
+  // chain — they call researchAggregator.fetchFundamentals(), which MERGES FMP +
+  // Yahoo field-by-field (FMP preferred). This chain is retained for the generic
+  // fetch('fundamentals') path and as documented preference.
   fundamentals: {
     default: [fmp, finnhub, yahoo],
   },
@@ -60,7 +64,7 @@ const CAPABILITY = Object.freeze({
     default: [yahoo, finnhub, fmp],
   },
   news: {
-    default: [finnhub, yahoo],
+    default: [yahoo, finnhub],
   },
 });
 

@@ -1,12 +1,11 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useQueries, useQuery } from "@tanstack/react-query";
-import { CandlestickChart, LineChart as LineChartIcon, Plus, Search, Trash2, X } from "lucide-react";
+import { CandlestickChart, LineChart as LineChartIcon, Plus, Trash2, X } from "lucide-react";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { useAppSettings } from "@/contexts/AppSettingsContext";
 import { numberFormatToLocale } from "@/utils/currency";
 import { formatDateWithAppSettings } from "@/components/shared/dateUtils";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -16,6 +15,7 @@ import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from "@
 import { ComposedChart, LineChart, getChartColor, type ComposedSeries, type LineSeries } from "@/components/charts";
 import { PageHeader } from "@/components/shared/PageHeader";
 import { SymbolSearchResultItem } from "@/components/shared/SymbolSearchResultItem";
+import { SymbolSearchBox } from "@/components/shared/SymbolSearchBox";
 import { useDebounce } from "@/hooks/useDebounce";
 import { apiClient } from "@/lib/api";
 import { sma, ema, bollinger, rsi, macd } from "@/lib/research/indicators";
@@ -408,24 +408,22 @@ export default function ChartBuilderPage() {
           ))}
 
           {series.length < MAX_SERIES && (
-            <div className="relative max-w-md">
-              <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-              <Input placeholder={t("research.builder.addSeries")} value={searchText} onChange={(e) => setSearchText(e.target.value)} className="pl-10" />
-              {debouncedSearch.length >= 1 && searchText.length > 0 && searchItems.length > 0 && (
-                <Card className="absolute z-50 top-full mt-1 w-full border border-border shadow-lg">
-                  <CardContent className="p-1">
-                    {searchItems.map((item) => (
-                      <SymbolSearchResultItem
-                        key={`${item.symbol}-${item.exchange}`}
-                        item={item}
-                        onSelect={(it) => addSeries(it.symbol)}
-                        leadingIcon={<Plus className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />}
-                      />
-                    ))}
-                  </CardContent>
-                </Card>
-              )}
-            </div>
+            <SymbolSearchBox
+              className="max-w-2xl"
+              placeholder={t("research.builder.addSeries")}
+              value={searchText}
+              onChange={setSearchText}
+              open={debouncedSearch.length >= 1 && searchText.length > 0 && searchItems.length > 0}
+            >
+              {searchItems.map((item) => (
+                <SymbolSearchResultItem
+                  key={`${item.symbol}-${item.exchange}`}
+                  item={item}
+                  onSelect={(it) => addSeries(it.symbol)}
+                  leadingIcon={<Plus className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />}
+                />
+              ))}
+            </SymbolSearchBox>
           )}
 
           {/* Indicators */}

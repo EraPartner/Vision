@@ -12,10 +12,11 @@ const makeGovernor = (canSpendImpl = () => true) => ({
   spend: vi.fn(async () => {}),
 });
 
-// 'quote'/'stock' capability chain is [twelve_data, yahoo, finnhub, fmp, alpha_vantage].
+// 'quote'/'stock' capability chain is [yahoo, twelve_data, finnhub, fmp, alpha_vantage]
+// — Yahoo (keyless) is preferred; paid providers are the fallback.
 const makeAdapters = (overrides = {}) => ({
-  twelve_data: { quote: vi.fn(async () => ({ price: 1, src: 'twelve_data' })) },
   yahoo: { quote: vi.fn(async () => ({ price: 2, src: 'yahoo' })) },
+  twelve_data: { quote: vi.fn(async () => ({ price: 1, src: 'twelve_data' })) },
   ...overrides,
 });
 
@@ -47,12 +48,12 @@ describe('researchAggregator.fetch', () => {
     const out = await agg.fetch('quote', { symbol: 'AAPL', assetClass: 'stock' });
 
     expect(out.source).toBe('live');
-    expect(out.provider).toBe('twelve_data'); // first in chain
-    expect(out.data).toEqual({ price: 1, src: 'twelve_data' });
-    expect(adapters.twelve_data.quote).toHaveBeenCalledWith('AAPL', { range: undefined, count: undefined });
-    expect(adapters.yahoo.quote).not.toHaveBeenCalled();
-    expect(governor.spend).toHaveBeenCalledWith('twelve_data');
-    expect(recordSuccess).toHaveBeenCalledWith('twelve_data');
+    expect(out.provider).toBe('yahoo'); // first in chain
+    expect(out.data).toEqual({ price: 2, src: 'yahoo' });
+    expect(adapters.yahoo.quote).toHaveBeenCalledWith('AAPL', { range: undefined, count: undefined });
+    expect(adapters.twelve_data.quote).not.toHaveBeenCalled();
+    expect(governor.spend).toHaveBeenCalledWith('yahoo');
+    expect(recordSuccess).toHaveBeenCalledWith('yahoo');
   });
 
   it('serves the second call from cache without spending again', async () => {
@@ -64,35 +65,35 @@ describe('researchAggregator.fetch', () => {
     const second = await agg.fetch('quote', { symbol: 'AAPL', assetClass: 'stock' });
 
     expect(second.source).toBe('cache');
-    expect(second.data).toEqual({ price: 1, src: 'twelve_data' });
-    expect(adapters.twelve_data.quote).toHaveBeenCalledTimes(1);
+    expect(second.data).toEqual({ price: 2, src: 'yahoo' });
+    expect(adapters.yahoo.quote).toHaveBeenCalledTimes(1);
     expect(governor.spend).toHaveBeenCalledTimes(1);
   });
 
   it('skips a quota-exhausted provider and falls through to the next', async () => {
     const adapters = makeAdapters();
-    const governor = makeGovernor((p) => p !== 'twelve_data'); // twelve_data tapped out
+    const governor = makeGovernor((p) => p !== 'yahoo'); // yahoo tapped out
     const agg = build({ adapters, governor });
 
     const out = await agg.fetch('quote', { symbol: 'AAPL', assetClass: 'stock' });
 
-    expect(out.provider).toBe('yahoo');
-    expect(adapters.twelve_data.quote).not.toHaveBeenCalled();
-    expect(adapters.yahoo.quote).toHaveBeenCalledTimes(1);
+    expect(out.provider).toBe('twelve_data');
+    expect(adapters.yahoo.quote).not.toHaveBeenCalled();
+    expect(adapters.twelve_data.quote).toHaveBeenCalledTimes(1);
   });
 
   it('falls through on a provider error and records the health error', async () => {
     const adapters = makeAdapters({
-      twelve_data: { quote: vi.fn(async () => { throw new Error('upstream 502'); }) },
+      yahoo: { quote: vi.fn(async () => { throw new Error('upstream 502'); }) },
     });
     const governor = makeGovernor();
     const agg = build({ adapters, governor });
 
     const out = await agg.fetch('quote', { symbol: 'AAPL', assetClass: 'stock' });
 
-    expect(out.provider).toBe('yahoo');
-    expect(recordError).toHaveBeenCalledWith('twelve_data', expect.any(Error));
-    expect(recordSuccess).toHaveBeenCalledWith('yahoo');
+    expect(out.provider).toBe('twelve_data');
+    expect(recordError).toHaveBeenCalledWith('yahoo', expect.any(Error));
+    expect(recordSuccess).toHaveBeenCalledWith('twelve_data');
   });
 
   it('drops unkeyed providers from the chain', async () => {
@@ -116,8 +117,80 @@ describe('researchAggregator.fetch', () => {
     expect(out.source).toBe('unavailable');
     expect(out.provider).toBeUndefined();
     expect(out.attempted).toEqual([
-      { provider: 'twelve_data', skipped: 'quota' },
       { provider: 'yahoo', skipped: 'quota' },
+      { provider: 'twelve_data', skipped: 'quota' },
     ]);
+  });
+});
+
+describe('researchAggregator.fetchFundamentals (FMP + Yahoo merge)', () => {
+  const makeFundamentalsAdapters = (overrides = {}) => ({
+    fmp: {
+      fundamentals: vi.fn(async () => ({
+        symbol: 'AAPL', pe: 30, interestCoverage: 12, forwardPE: null, revenue: null,
+      })),
+    },
+    yahoo: {
+      fundamentals: vi.fn(async () => ({
+        symbol: 'AAPL', pe: 28, forwardPE: 25, revenue: 1000, freeCashFlow: 500,
+      })),
+    },
+    ...overrides,
+  });
+
+  it('merges FMP over Yahoo per field and keeps each provider\'s unique fields', async () => {
+    const adapters = makeFundamentalsAdapters();
+    const agg = build({ adapters, governor: makeGovernor() });
+
+    const out = await agg.fetchFundamentals({ symbol: 'AAPL' });
+
+    expect(out.source).toBe('live');
+    expect(out.provider).toBe('fmp+yahoo');
+    expect(out.data).toMatchObject({
+      pe: 30, // shared → FMP wins
+      interestCoverage: 12, // FMP-only
+      forwardPE: 25, // FMP null → Yahoo fills
+      revenue: 1000, // FMP null → Yahoo fills
+      freeCashFlow: 500, // Yahoo-only
+    });
+    expect(adapters.fmp.fundamentals).toHaveBeenCalledTimes(1);
+    expect(adapters.yahoo.fundamentals).toHaveBeenCalledTimes(1);
+  });
+
+  it('falls back to Yahoo-only when FMP is unkeyed', async () => {
+    const adapters = makeFundamentalsAdapters();
+    const agg = build({ adapters, governor: makeGovernor(), isKeyed: (p) => p !== 'fmp' });
+
+    const out = await agg.fetchFundamentals({ symbol: 'AAPL' });
+
+    expect(out.provider).toBe('yahoo');
+    expect(out.data).toMatchObject({ pe: 28, forwardPE: 25 });
+    expect(adapters.fmp.fundamentals).not.toHaveBeenCalled();
+  });
+
+  it('uses FMP alone when Yahoo throws, recording the health error', async () => {
+    const adapters = makeFundamentalsAdapters({
+      yahoo: { fundamentals: vi.fn(async () => { throw new Error('yahoo 502'); }) },
+    });
+    const agg = build({ adapters, governor: makeGovernor() });
+
+    const out = await agg.fetchFundamentals({ symbol: 'AAPL' });
+
+    expect(out.provider).toBe('fmp');
+    expect(out.data).toMatchObject({ pe: 30 });
+    expect(recordError).toHaveBeenCalledWith('yahoo', expect.any(Error));
+  });
+
+  it('reports unavailable when both providers fail', async () => {
+    const adapters = makeFundamentalsAdapters({
+      fmp: { fundamentals: vi.fn(async () => { throw new Error('fmp down'); }) },
+      yahoo: { fundamentals: vi.fn(async () => { throw new Error('yahoo down'); }) },
+    });
+    const agg = build({ adapters, governor: makeGovernor() });
+
+    const out = await agg.fetchFundamentals({ symbol: 'AAPL' });
+
+    expect(out.source).toBe('unavailable');
+    expect(out.provider).toBeUndefined();
   });
 });

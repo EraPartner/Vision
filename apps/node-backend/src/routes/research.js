@@ -76,10 +76,17 @@ router.get('/chart', async (req, res) => {
 });
 
 // GET /api/research/fundamentals?symbol=AAPL
+// Fundamentals are MERGED across FMP + Yahoo (FMP preferred, Yahoo fills gaps),
+// not raced like the other data types.
 router.get('/fundamentals', async (req, res) => {
   const symbol = single(req.query.symbol);
   if (!symbol) throw new ValidationError('symbol parameter required');
-  await respond(res, 'fundamentals', { symbol, assetClass: single(req.query.asset_class) || undefined });
+  const result = await researchAggregator.fetchFundamentals({
+    symbol,
+    assetClass: single(req.query.asset_class) || undefined,
+  });
+  const data = result.source === 'unavailable' ? EMPTY_BY_TYPE.fundamentals : result.data;
+  res.ok(data ?? null, { provider: result.provider ?? null, source: result.source });
 });
 
 // GET /api/research/analyst?symbol=AAPL
@@ -102,7 +109,7 @@ router.get('/news', async (req, res) => {
 router.get('/scorecard', async (req, res) => {
   const symbol = single(req.query.symbol);
   if (!symbol) throw new ValidationError('symbol parameter required');
-  const result = await researchAggregator.fetch('fundamentals', {
+  const result = await researchAggregator.fetchFundamentals({
     symbol,
     assetClass: single(req.query.asset_class) || undefined,
   });

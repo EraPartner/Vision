@@ -9,12 +9,11 @@ import {
 } from "@/components/shared/dateUtils";
 import { useQuery } from "@tanstack/react-query";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import {
-  Search, TrendingUp, TrendingDown, BarChart3, ArrowUpDown,
+  TrendingUp, TrendingDown, BarChart3, ArrowUpDown,
   DollarSign, Activity, Clock, Newspaper, ExternalLink, Users,
 } from "lucide-react";
 import { AreaChart, BarChart, type AreaSeries, type BarSeries } from "@/components/charts";
@@ -27,6 +26,7 @@ import { RemoteNewsImage } from "@/components/shared/RemoteNewsImage";
 import { useSearchParams } from "react-router-dom";
 import { PageHeader } from "@/components/shared/PageHeader";
 import { SymbolSearchResultItem } from "@/components/shared/SymbolSearchResultItem";
+import { SymbolSearchBox } from "@/components/shared/SymbolSearchBox";
 
 import { apiClient } from "@/lib/api";
 
@@ -241,6 +241,17 @@ export default function MarketLookupPage() {
     staleTime: 120_000,
   });
 
+  // Fundamentals — merged FMP + Yahoo (FMP preferred, Yahoo fills gaps) via the
+  // research aggregator, so this card matches the Compare/Symbol fundamentals.
+  // Backend caches 12h; staleTime mirrors that. The display falls back to the
+  // Yahoo quote's own fields when unavailable (e.g. indices/ETFs FMP omits).
+  const { data: fundamentalsResult } = useQuery({
+    queryKey: ["market-fundamentals", effectiveSelectedSymbol],
+    queryFn: () => apiClient.getResearchFundamentals(effectiveSelectedSymbol!),
+    enabled: useYahoo,
+    staleTime: 12 * 60 * 60 * 1000,
+  });
+
   const handleSelect = useCallback((symbol: string) => {
     setSelectedSymbol(symbol);
     setSearchText("");
@@ -270,6 +281,8 @@ export default function MarketLookupPage() {
   }, [isProviderAsset, providerInvestment, providerChartData, effectiveSelectedSymbol]);
 
   const quote = isProviderAsset ? providerQuote : quoteData;
+  // Merged FMP+Yahoo fundamentals; the card prefers these over the quote's own.
+  const fundamentals = fundamentalsResult?.data ?? null;
   const displayChart = isProviderAsset ? providerChartData : chartData;
   const isChartBusy = isProviderAsset ? isProviderChartLoading : isChartLoading;
   const isQuoteBusy = isProviderAsset ? isProviderChartLoading : isQuoteLoading;
@@ -288,33 +301,22 @@ export default function MarketLookupPage() {
       <PageHeader title={t('marketLookup.title')} icon={BarChart3} />
 
       {/* Search */}
-      <div className="relative max-w-xl">
-        <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-        <Input
-          placeholder={t('market.searchPlaceholder')}
-          value={searchText}
-          onChange={(e) => setSearchText(e.target.value)}
-          className="pl-10"
-        />
-        {debouncedSearch.length >= 1 && searchResults?.items && searchResults.items.length > 0 && searchText.length > 0 && (
-          <Card className="absolute z-50 top-full mt-1 w-full shadow-lg border border-border">
-            <CardContent className="p-1">
-              {searchResults.items.map((item) => (
-                <SymbolSearchResultItem
-                  key={item.symbol}
-                  item={item}
-                  onSelect={(it) => handleSelect(it.symbol)}
-                />
-              ))}
-            </CardContent>
-          </Card>
-        )}
-        {isSearching && searchText.length > 0 && (
-          <div className="absolute right-3 top-1/2 -translate-y-1/2">
-            <div className="h-4 w-4 animate-spin rounded-full border-2 border-primary border-t-transparent" />
-          </div>
-        )}
-      </div>
+      <SymbolSearchBox
+        className="max-w-2xl"
+        placeholder={t('market.searchPlaceholder')}
+        value={searchText}
+        onChange={setSearchText}
+        loading={isSearching && searchText.length > 0}
+        open={debouncedSearch.length >= 1 && searchText.length > 0 && (searchResults?.items?.length ?? 0) > 0}
+      >
+        {searchResults?.items?.map((item) => (
+          <SymbolSearchResultItem
+            key={item.symbol}
+            item={item}
+            onSelect={(it) => handleSelect(it.symbol)}
+          />
+        ))}
+      </SymbolSearchBox>
 
       {/* No selection state */}
       {!effectiveSelectedSymbol && (
@@ -505,16 +507,29 @@ export default function MarketLookupPage() {
                 </CardHeader>
                 <CardContent>
                   <div className="space-y-2.5">
-                    {[
-                      { label: t('market.marketCap'), value: fmtLargeNum(quote.marketCap) },
-                      { label: t('market.pe'), value: quote.pe ? quote.pe.toFixed(2) : "—" },
-                      { label: t('market.forwardPE'), value: quote.forwardPE ? quote.forwardPE.toFixed(2) : "—" },
-                      { label: t('market.eps'), value: quote.eps ? fmtPrice(quote.eps, quote.currency) : "—" },
-                      { label: t('market.divYield'), value: quote.dividendYield ? `${(quote.dividendYield * 100).toFixed(2)}%` : "—" },
-                      { label: t('market.beta'), value: quote.beta != null ? quote.beta.toFixed(2) : "—" },
-                      { label: t('market.priceBook'), value: quote.priceToBook != null ? quote.priceToBook.toFixed(2) : "—" },
-                      { label: t('market.52wRange'), value: `${fmtPrice(quote.low52w, quote.currency)} – ${fmtPrice(quote.high52w, quote.currency)}` },
-                    ].map(({ label, value }) => (
+                    {(() => {
+                      // FMP-preferred merged fundamentals, falling back per field
+                      // to the Yahoo quote. 52-week range is a price field only
+                      // the quote carries.
+                      const marketCap = fundamentals?.marketCap ?? quote.marketCap;
+                      const pe = fundamentals?.pe ?? quote.pe;
+                      const forwardPE = fundamentals?.forwardPE ?? quote.forwardPE;
+                      const eps = fundamentals?.eps ?? quote.eps;
+                      const dividendYield = fundamentals?.dividendYield ?? quote.dividendYield;
+                      const beta = fundamentals?.beta ?? quote.beta;
+                      const priceToBook = fundamentals?.priceToBook ?? quote.priceToBook;
+                      const currency = fundamentals?.currency || quote.currency;
+                      return [
+                        { label: t('market.marketCap'), value: fmtLargeNum(marketCap) },
+                        { label: t('market.pe'), value: pe ? pe.toFixed(2) : "—" },
+                        { label: t('market.forwardPE'), value: forwardPE ? forwardPE.toFixed(2) : "—" },
+                        { label: t('market.eps'), value: eps ? fmtPrice(eps, currency) : "—" },
+                        { label: t('market.divYield'), value: dividendYield ? `${(dividendYield * 100).toFixed(2)}%` : "—" },
+                        { label: t('market.beta'), value: beta != null ? beta.toFixed(2) : "—" },
+                        { label: t('market.priceBook'), value: priceToBook != null ? priceToBook.toFixed(2) : "—" },
+                        { label: t('market.52wRange'), value: `${fmtPrice(quote.low52w, quote.currency)} – ${fmtPrice(quote.high52w, quote.currency)}` },
+                      ];
+                    })().map(({ label, value }) => (
                       <div key={label} className="flex justify-between items-center py-1 border-b border-border/50 last:border-0">
                         <span className="text-sm text-muted-foreground">{label}</span>
                         <span className="text-sm font-medium tabular-nums text-foreground">{value}</span>

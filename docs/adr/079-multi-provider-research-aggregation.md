@@ -170,3 +170,44 @@ Twelve Data / Finnhub / FMP / Alpha Vantage API keys live in `.env.local` (gitig
 4. Analyst `consensus` bucket counts (`strongBuy / buy / hold / sell / strongSell`) and `numberOfAnalysts` are now populated for FMP via the stable `grades-consensus` endpoint — both were unavailable on the v3 free tier.
 
 **ADR-079 consequences unaffected:** The capability map, quota governor, cache TTLs, symbol-mapping model, and storage boundary are all unchanged. FMP remains the primary fundamentals provider. The failure mode described under "Negative / Tradeoffs" §3 ("Free-tier churn") was the proximate cause; the health-service probe improvement is a direct mitigation against future silent failures of this kind.
+
+---
+
+## Follow-up Note — Yahoo-First Provider Ordering for Quote / Chart / News (2026-06-16)
+
+**Context:** The original ADR-079 Decision (§1, Capability map) specified a reliability-first ordering with paid/keyed providers leading the quote and chart chains (e.g. `quote/chart, stock/etf → [twelveData, yahoo, finnhub, alphaVantage]`). After the full aggregation layer shipped, an explicit product decision was made to prefer the keyless, unmetered Yahoo feed for the highest-volume data types, spending paid provider quota only as a fallback.
+
+**Change (`capabilityMap.js`):**
+
+| Data type | Previous default chain | New default chain |
+|---|---|---|
+| `quote` (stock/etf/default) | `[twelve_data, yahoo, finnhub, fmp, alpha_vantage]` | `[yahoo, twelve_data, finnhub, fmp, alpha_vantage]` |
+| `chart` (stock/etf/default) | `[twelve_data, yahoo, finnhub, alpha_vantage]` | `[yahoo, twelve_data, finnhub, alpha_vantage]` |
+| `news` (default) | `[finnhub, yahoo]` | `[yahoo, finnhub]` |
+
+**Unchanged:** `fundamentals.default` stays `[fmp, finnhub, yahoo]` (FMP-first — Yahoo's fundamentals depth is shallower; cost-vs-quality trade-off deliberately retained in favour of the paid provider here). `analyst.default` and `search.default` were already Yahoo-first and are unaffected. Crypto and metals overrides for quote/chart (Binance/Kinesis first, both keyless) are unchanged.
+
+**Rationale:** Quote, chart, and news are the highest-frequency data types. Yahoo carries no API key and no contractual per-day cap, so it does not consume any paid-provider daily budget. The aggregator's fall-through semantics are preserved: a Yahoo 502 or transient failure still routes to Twelve Data → Finnhub → … — reliability backstop intact. The previous paid-first ordering was correct at ADR-079 design time (pre-implementation, reliability unknown); after the layer was proven in production, cost-minimisation is the better steady-state policy.
+
+**Note on the Decision section example:** The code snippet in §1 of this ADR (`quote/chart, stock/etf → [twelveData, yahoo, finnhub, alphaVantage]`) reflects the original ordering and is superseded by this follow-up for quote/chart/news. The fundamentals and crypto/metals rows in that snippet remain accurate.
+
+---
+
+## Follow-up Note — Fundamentals Merged Across FMP + Yahoo (2026-06-16)
+
+**Context:** Previously, `GET /api/research/fundamentals` and `GET /api/research/scorecard` resolved fundamentals by racing through the capability map's `fundamentals.default` chain (`[fmp, finnhub, yahoo]`) and returning the first successful provider's response wholesale. This left Yahoo-only fields (e.g. `forwardPE`, `revenue`, `freeCashFlow`) absent when FMP answered, and FMP-only fields (e.g. `interestCoverage`) absent when Yahoo was the fallback. The user requirement is that fundamentals views everywhere (Market Lookup, Compare, Symbol Fundamentals tab) show the richest possible composite, not just what one provider happens to return.
+
+**Change:** A dedicated `researchAggregator.fetchFundamentals({ symbol, assetClass })` method replaces the generic race-to-first for this data type. It:
+
+1. **Fetches FMP and Yahoo in parallel** (each gated by `isProviderKeyed` + the quota governor, the same gates as the race path). Finnhub is **not included** in this parallel fetch; it remains listed in `capabilityMap.fundamentals.default` for the generic `fetch('fundamentals')` path and for documentation purposes, but the `/fundamentals` and `/scorecard` routes no longer call it.
+2. **Merges field-by-field with FMP preferred**: for each field in the union of both responses, the higher-precedence provider (FMP) wins when its value is present and non-null/non-NaN; the other provider (Yahoo) fills in any gap.
+3. **Cache key:** `fundamentals:merged:<assetClass>:<symbol>`, TTL = fundamentals TTL (12 h — corrected from the 24 h in the ADR-079 §3 table; `researchCache.js` uses 12 h for `fundamentals`).
+4. **Provenance in `meta.provider`:** `"fmp+yahoo"` when both contribute a field, the single provider name when only one responds (e.g. FMP unkeyed → `"yahoo"`; Yahoo 502 → `"fmp"`). If both fail → `source: 'unavailable'`.
+
+**Routes changed:** `GET /api/research/fundamentals` and `GET /api/research/scorecard` in `apps/node-backend/src/routes/research.js` now call `researchAggregator.fetchFundamentals()` instead of `researchAggregator.fetch('fundamentals', ...)`. Response field shapes and HTTP status codes are **unchanged**; only the data sourcing and `meta.provider` value changed.
+
+**`capabilityMap.js`:** `fundamentals.default = [fmp, finnhub, yahoo]` is retained unchanged. A code comment in `capabilityMap.js` notes that the `/fundamentals` and `/scorecard` routes do not use this chain directly — they call `fetchFundamentals()` — so Finnhub's position in the map has no effect on those routes but is preserved for the generic `fetch('fundamentals')` method and for future use.
+
+**Frontend:** The Market Lookup page (`MarketLookupPage.tsx`) was updated to source its Fundamentals card metrics (marketCap, P/E, forward P/E, EPS, dividend yield, beta, price/book) from `GET /api/research/fundamentals` with per-field fallback to the Yahoo quote. The 52-week range still comes from the Yahoo quote. The Compare page and Symbol-detail Fundamentals tab already read `/api/research/scorecard` and receive the merged data automatically with no frontend change.
+
+**Supersedes:** The fundamentals portion of the `fundamentals.default` race-to-first behavior for the `/fundamentals` and `/scorecard` routes. ADR-079 §1 Capability map and §4 Lazy field-merge remain accurate descriptions of the general architecture; this follow-up documents the one data type (fundamentals) that is now composed rather than raced.

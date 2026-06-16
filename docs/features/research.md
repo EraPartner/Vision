@@ -63,7 +63,7 @@ The Research section gives users a unified hub to investigate any security — n
 
 > [!info] What shipped (ADR-079 + ADR-081)
 > **Backend:** 16 endpoints under `/api/research` — 6 data (search/quote/chart/fundamentals/analyst/news) + 2 analytics (scorecard + portfolio-forecast) + 5 cross-provider symbol-mapping + 3 provider-key Settings. Full aggregation layer (capability map, quota governor, type-aware cache), all five provider adapters with extended fundamentals normalization (Yahoo/Finnhub/FMP), the symbol-mapping service + self-audit (including the holdings pre-seed on resolve), the projection engine (parametric + block-bootstrap Monte Carlo), the fundamentals scorecard engine, and the DB migrations creating `instrument_provider_map`, `provider_quota`, and `provider_api_keys` tables.
-> **Frontend:** the `/research` workspace — home (`ResearchHomePage`: bento live-market hub matching the Budgeting Dashboard and Portfolio Overview home pages; top-to-bottom: (1) prominent symbol search bar; (2) **market snapshot strip** — five live benchmark tiles, S&P 500 `^GSPC`, Euro Stoxx 50 `^STOXX50E`, FTSE 100 `^FTSE`, BEL 20 `^BFX`, Bitcoin `BTC-USD`, each showing price + absolute/percent change, polled every 60 s via the existing `GET /api/market/quote` batch endpoint; index prices rendered as locale-formatted points, not currency; each tile degrades to an em-dash when the quote is unavailable; (3) **five-tool grid** covering all research tools including the two previously unlinked from the home — Chart Builder at `/research/charts` and Portfolio Forecast at `/research/forecast` — alongside Market Lookup, Compare, and Watchlist; (4) **live watchlist tiles** replacing the old plain chips — each shows symbol, name, live price in the item's currency, and percent change via the shared `["watchlist-quotes", symbols]` React Query cache key; empty state shows a "Go to watchlist" CTA; (5) **market news feed** via the existing `PortfolioNewsFeed` component, seeded from watchlist symbols with a fallback to general market headlines when the watchlist is empty), moved Market Lookup + Watchlist, symbol detail (`ResearchSymbolPage`: quote header + visx chart + lazy per-tab Fundamentals/Analyst/News), comparison (`ResearchComparePage`: Performance tab with rebased overlay + stats + correlation matrix, Fundamentals tab with side-by-side comparison + Health column + extended metrics, each metric cell tinted green/amber/red by the scorecard's per-metric severity verdict), portfolio forecast page (`PortfolioForecastPage` at `/research/forecast`: horizon/contribution/blend/model controls, confidence-band LineChart, summary cards, forward-input provenance), freeform chart builder (`ChartBuilderPage` at `/research/charts`: multi-symbol, dual-axis, candlesticks, SMA/EMA/Bollinger/RSI/MACD, presets, localStorage layout), and the symbol-mapping confirm dialog (`ResearchMappingDialog`). Scorecard UI: `ResearchScorecard.tsx` (grade badge + panel); `ResearchFundamentalsTab` uses the scorecard endpoint. Routing/sidebar (Analysis group: Chart Builder, Forecast)/CommandPalette/go-to shortcuts updated; old `/portfolio/market` + `/portfolio/watchlist` redirect (preserving query params). **Settings → App** gains a *Research providers* section. i18n en/nl added including new keys `research.marketSnapshot`, `research.entry.charts`, `research.entry.forecast`, `research.watchlistEmpty`, and `research.watchlistEmptyCta` (note: scorecard `reason` sentences are English-only — tracked follow-up).
+> **Frontend:** the `/research` workspace — home (`ResearchHomePage`: bento live-market hub matching the Budgeting Dashboard and Portfolio Overview home pages; top-to-bottom: (1) prominent symbol search bar; (2) **market snapshot strip** — five live benchmark tiles, S&P 500 `^GSPC`, Euro Stoxx 50 `^STOXX50E`, FTSE 100 `^FTSE`, BEL 20 `^BFX`, Bitcoin `BTC-USD`, each showing price + absolute/percent change, polled every 60 s via the existing `GET /api/market/quote` batch endpoint with `detail=basic` (price-only fields; skips the `quoteSummary` fetch to halve Yahoo calls); index prices rendered as locale-formatted points, not currency; each tile degrades to an em-dash when the quote is unavailable; (3) **five-tool grid** covering all research tools including the two previously unlinked from the home — Chart Builder at `/research/charts` and Portfolio Forecast at `/research/forecast` — alongside Market Lookup, Compare, and Watchlist; (4) **live watchlist tiles** replacing the old plain chips — each shows symbol, name, live price in the item's currency, and percent change via the shared `["watchlist-quotes", symbols]` React Query cache key (fetched with `detail=basic`); empty state shows a "Go to watchlist" CTA; (5) **market news feed** via the existing `PortfolioNewsFeed` component, seeded from watchlist symbols with a fallback to general market headlines when the watchlist is empty), moved Market Lookup + Watchlist, symbol detail (`ResearchSymbolPage`: quote header + visx chart + lazy per-tab Fundamentals/Analyst/News), comparison (`ResearchComparePage`: Performance tab with rebased overlay + stats + correlation matrix, Fundamentals tab with side-by-side comparison + Health column + extended metrics, each metric cell tinted green/amber/red by the scorecard's per-metric severity verdict), portfolio forecast page (`PortfolioForecastPage` at `/research/forecast`: horizon/contribution/blend/model controls, confidence-band LineChart, summary cards, forward-input provenance), freeform chart builder (`ChartBuilderPage` at `/research/charts`: multi-symbol, dual-axis, candlesticks, SMA/EMA/Bollinger/RSI/MACD, presets, localStorage layout), and the symbol-mapping confirm dialog (`ResearchMappingDialog`). Scorecard UI: `ResearchScorecard.tsx` (grade badge + panel); `ResearchFundamentalsTab` uses the scorecard endpoint. Routing/sidebar (Analysis group: Chart Builder, Forecast)/CommandPalette/go-to shortcuts updated; old `/portfolio/market` + `/portfolio/watchlist` redirect (preserving query params). **Settings → App** gains a *Research providers* section. i18n en/nl added including new keys `research.marketSnapshot`, `research.entry.charts`, `research.entry.forecast`, `research.watchlistEmpty`, and `research.watchlistEmptyCta` (note: scorecard `reason` sentences are English-only — tracked follow-up).
 > **Provider keys:** all five adapters are implemented; the keyed four (Twelve Data, Finnhub, FMP, Alpha Vantage) activate when their key is set via the Settings UI or the root `.env` (ADR-080). Adapter normalization is unit-tested with mocks — **live verification per provider/tier is still recommended**. Universe screening remains out of scope — there is no universe-scan endpoint and free-tier quotas can't support one (Pillar D ships as a *selected-symbol* fundamentals comparison + per-symbol scorecard instead).
 
 ## API Surface
@@ -75,10 +75,10 @@ Sixteen endpoints at `/api/research`, all under `marketRateLimiter`: six GET dat
 | `GET /api/research/search?q=` | Ticker/security search | 10 min |
 | `GET /api/research/quote?symbol=&asset_class=` | Live quote | 10 min |
 | `GET /api/research/chart?symbol=&asset_class=&range=&provider=` | Historical chart points | 12 h; `provider` pins preferred provider (fallthrough still applies) |
-| `GET /api/research/fundamentals?symbol=` | Fundamentals snapshot (extended fields: sector, pegRatio, payoutRatio, grossMargin, operatingMargin, revenueGrowth, earningsGrowth, debtToEquity, currentRatio, quickRatio, interestCoverage, freeCashFlow, fcfYield) | 24 h |
+| `GET /api/research/fundamentals?symbol=` | Fundamentals snapshot merged from FMP + Yahoo in parallel (FMP preferred per field, Yahoo fills gaps); extended fields include sector, pegRatio, payoutRatio, grossMargin, operatingMargin, revenueGrowth, earningsGrowth, debtToEquity, currentRatio, quickRatio, interestCoverage, freeCashFlow, fcfYield; `meta.provider` may be `"fmp+yahoo"` | 12 h |
 | `GET /api/research/analyst?symbol=` | Analyst consensus + targets + recent actions | 24 h |
 | `GET /api/research/news?symbol=` | News articles | 2 h |
-| `GET /api/research/scorecard?symbol=&asset_class=` | Heuristic fundamentals scorecard (0–100 score, A–F grade, per-metric flags with severity) | reuses fundamentals 24 h cache |
+| `GET /api/research/scorecard?symbol=&asset_class=` | Heuristic fundamentals scorecard (0–100 score, A–F grade, per-metric flags with severity); fundamentals sourced via merged FMP + Yahoo (same as `/fundamentals`) | reuses fundamentals 12 h merged cache |
 | `POST /api/research/portfolio-forecast` | Monte Carlo projection of aggregate portfolio value; returns P10/P25/P50/P75/P90 bands + summary + forward-input provenance | on-demand, not persisted |
 
 Each data endpoint response carries `meta.provider` (the provider that answered, or `null`) and `meta.source` (`'cache'` | `'live'` | `'unavailable'`). Symbol-mapping and provider-key endpoints documented in [[docs/api/research|Research API]].
@@ -93,9 +93,18 @@ The aggregation layer sits in `apps/node-backend/src/services/research/` and is 
 
 | Data type | Default chain | Crypto override | Metals override |
 |---|---|---|---|
-| `quote` | twelve_data → yahoo → finnhub → fmp → alpha_vantage | binance → twelve_data → yahoo | kinesis → yahoo → twelve_data |
+| `quote` | yahoo → twelve_data → finnhub → fmp → alpha_vantage | binance → twelve_data → yahoo | kinesis → yahoo → twelve_data |
+| `chart` | yahoo → twelve_data → finnhub → alpha_vantage | binance → twelve_data → yahoo | kinesis → yahoo → twelve_data |
 | `fundamentals` | fmp → finnhub → yahoo | — | — |
-| `news` | finnhub → yahoo | — | — |
+| `news` | yahoo → finnhub | — | — |
+
+> [!info] Yahoo-first for quote / chart / news (2026-06-16)
+> The `quote`, `chart`, and `news` default chains were reordered to place Yahoo first, demoting paid providers (Twelve Data, Finnhub, FMP, Alpha Vantage) to fallback positions. Yahoo is keyless and unmetered, so it does not consume any paid-tier daily quota. The fall-through semantics are unchanged — a Yahoo failure still routes to the next provider in the chain. `fundamentals.default` deliberately remains FMP-first (Yahoo's fundamentals depth is shallower). See [[docs/adr/079-multi-provider-research-aggregation#follow-up-note--yahoo-first-provider-ordering-for-quote--chart--news-2026-06-16|ADR-079 follow-up note (2026-06-16)]] for the full rationale.
+
+> [!info] Fundamentals: merged FMP + Yahoo, not raced (2026-06-16)
+> `GET /api/research/fundamentals` and `GET /api/research/scorecard` do **not** race through the `fundamentals.default` chain. They call `researchAggregator.fetchFundamentals()`, which fetches **FMP and Yahoo in parallel** and merges results **field-by-field** (FMP preferred; Yahoo fills gaps). This gives the union of both providers: FMP-only fields (e.g. `interestCoverage`) and Yahoo-only fields (e.g. `forwardPE`, `revenue`, `freeCashFlow`) both appear in every response. Finnhub is retained in `fundamentals.default` in `capabilityMap.js` for documentation and the generic `fetch('fundamentals')` path, but is not called by these routes. `meta.provider` is `"fmp+yahoo"` when both contribute, or the single provider name when only one responds. Cache key `fundamentals:merged:<assetClass>:<symbol>`, TTL 12 h. See [[docs/adr/079-multi-provider-research-aggregation#follow-up-note--fundamentals-merged-across-fmp--yahoo-2026-06-16|ADR-079 follow-up note (2026-06-16)]].
+>
+> **Surfaces that render merged fundamentals:** Market Lookup (`MarketLookupPage.tsx` Fundamentals card — per-field fallback to Yahoo quote for indices/ETFs FMP does not cover), Compare page (Fundamentals tab), Symbol-detail Fundamentals tab (via `/scorecard`). All three now show the same merged composite.
 
 The map is unit-testable in isolation (no I/O, no env reads; `isUsable` is injected).
 
@@ -126,7 +135,8 @@ In-memory TTL cache with type-specific expiry. Caching — not scheduling — is
 |---|---|
 | `search`, `quote` | 10 min |
 | `chart` | 12 h |
-| `fundamentals`, `analyst` | 24 h |
+| `fundamentals` | 12 h (merged cache key `fundamentals:merged:<assetClass>:<symbol>`) |
+| `analyst` | 12 h |
 | `news` | 2 h |
 
 ### 4. Provider Key Gating (`providerKeys.js`)
@@ -189,6 +199,15 @@ Field mappings were verified against live AAPL responses on 2026-06-16.
 - **[[docs/features/watchlist|Watchlist]]** — tracks securities not yet in the portfolio. The future Research workspace (Pillar A) will surface watchlist items alongside research data.
 - **[[docs/integrations/price-providers|Price Providers]]** — `priceProviderRegistry` and `providerHealthService` are reused by the research layer; Yahoo, Binance, and Kinesis are the existing providers.
 
+## Shared UI Components
+
+All four symbol-picker pages in the Research section (`ResearchHomePage`, `MarketLookupPage`, `ResearchComparePage`, `ChartBuilderPage`) share two components from `apps/frontend/src/components/shared/` that guarantee visual consistency across the section:
+
+- **`SymbolSearchBox`** — the tall glass input (`h-14 glass-regular`) with a leading `Search` icon, optional trailing loading spinner, and the `glass-elevated` floating results dropdown.
+- **`SymbolSearchResultItem`** — the canonical result row (monospaced ticker, company name, asset-type badge, exchange label). Also used by `AddToWatchlistDialog` (inline scrollable list inside a modal, not a floating dropdown).
+
+Each page owns its own query logic and passes result rows as `children` to `SymbolSearchBox`. Full props reference: [[docs/components/shared-components#SymbolSearchBox|Shared Components — SymbolSearchBox]].
+
 ## Related
 
 - [[docs/adr/081-research-analytics-forecasting|ADR-081]] — architecture decision for Pillars B/C/D deepening (portfolio projection engine, scorecard, chart builder)
@@ -197,6 +216,7 @@ Field mappings were verified against live AAPL responses on 2026-06-16.
 - [[docs/integrations/price-providers|Price Providers Integration]] — provider registry and health service this layer builds on
 - [[docs/features/market-lookup|Market Lookup]] — existing Yahoo surface
 - [[docs/features/watchlist|Watchlist]] — watchlist surface
+- [[docs/components/shared-components|Shared Components]] — `SymbolSearchBox` and `SymbolSearchResultItem` canonical chrome components
 - [[docs/adr/073-shared-portfolio-math-package|ADR-073]] — shared portfolio math used by the projection engine
 - [[docs/adr/065-daily-gap-fill-dense-asset-history|ADR-065]] — held-asset storage model (unchanged; storage boundary preserved)
 - [[docs/adr/034-admin-environment|ADR-034]] — `providerHealthService` used for capability routing
