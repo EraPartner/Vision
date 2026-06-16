@@ -47,6 +47,7 @@ import investmentsRouter from './routes/investments.js';
 import recipientBankAccountsRouter from './routes/recipientBankAccounts.js';
 import settingsRouter from './routes/settings.js';
 import marketLookupRouter from './routes/marketLookup.js';
+import researchRouter from './routes/research.js';
 import watchlistRouter from './routes/watchlist.js';
 import splitsRouter from './routes/splits.js';
 import savedChartsRouter from './routes/savedCharts.js';
@@ -307,6 +308,7 @@ mountRouter(app, '/api/portfolio/import', importRateLimiter, portfolioImportRout
 mountRouter(app, '/api/investments', investmentRateLimiter, investmentsRouter);
 mountRouter(app, '/api/settings', settingsRouter);
 mountRouter(app, '/api/market', marketRateLimiter, marketLookupRouter);
+mountRouter(app, '/api/research', marketRateLimiter, researchRouter);
 mountRouter(app, '/api/watchlist', watchlistRouter);
 mountRouter(app, '/api/splits', splitsRouter);
 mountRouter(app, '/api/saved-charts', savedChartsRouter);

@@ -3,8 +3,8 @@ title: Environment Variables Reference
 type: reference
 status: active
 date: 2026-05-23
-updated: 2026-06-13
-tags: [reference, environment, configuration, deployment, docker, admin-auth, rate-limiting, trusted-proxies, dev-mode, ollama, streaming]
+updated: 2026-06-16
+tags: [reference, environment, configuration, deployment, docker, admin-auth, rate-limiting, trusted-proxies, dev-mode, ollama, streaming, research-providers, twelve-data, finnhub, fmp, alpha-vantage]
 description: Complete reference of all environment variables used by the Vision application
 aliases: [env vars, environment variables, .env, configuration, env]
 ---
@@ -73,6 +73,21 @@ aliases: [env vars, environment variables, .env, configuration, env]
 | `KINESIS_BASE_URL` | `https://api.kinesis.money/api/market-data/trendlines` | No | Kinesis API base URL | [[apps/node-backend/src/config/kinesisConfig.js\|kinesisConfig.js]] |
 | `KINESIS_DEFAULT_TIMEFRAME` | `60` | No | Default timeframe in days | [[apps/node-backend/src/config/kinesisConfig.js\|kinesisConfig.js]] |
 | `KINESIS_DEFAULT_FROM_DATE` | `2019-01-01T08:47:55.843Z` | No | Default start date for history | [[apps/node-backend/src/config/kinesisConfig.js\|kinesisConfig.js]] |
+
+## Research Providers (ADR-079)
+
+API keys for the multi-provider Research aggregation layer. Each is **optional**:
+a provider whose key is absent is dropped from the capability chain (the research
+suite degrades to whichever providers are keyed — Yahoo needs no key). See
+[[docs/adr/079-multi-provider-research-aggregation|ADR-079]] and
+[[docs/features/research|Research]].
+
+| Variable | Default | Required | Description | Code |
+|----------|---------|----------|-------------|------|
+| `TWELVE_DATA_API_KEY` | — | No | Twelve Data key — quotes/charts (free tier 8/min, 800/day) | [[apps/node-backend/src/services/research/providerKeys.js\|providerKeys.js]] |
+| `FINNHUB_API_KEY` | — | No | Finnhub key — news, US fundamentals (free tier 60/min) | [[apps/node-backend/src/services/research/providerKeys.js\|providerKeys.js]] |
+| `FMP_API_KEY` | — | No | Financial Modeling Prep key — fundamentals (free tier 250/day) | [[apps/node-backend/src/services/research/providerKeys.js\|providerKeys.js]] |
+| `ALPHA_VANTAGE_API_KEY` | — | No | Alpha Vantage key — fallback quotes/fundamentals (free tier ~25/day) | [[apps/node-backend/src/services/research/providerKeys.js\|providerKeys.js]] |
 
 ## Frontend Variables
 

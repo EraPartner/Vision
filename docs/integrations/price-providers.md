@@ -3,9 +3,9 @@ title: Integration - Price Providers
 type: integration
 description: Live and historical price feeds for stocks, crypto, and other investments. Startup price refresh is skipped when the host is offline (2026-05-03).
 date: 2026-04-21
-last_modified: 2026-05-31
-updated: 2026-05-31
-tags: [integration, price, stocks, crypto, api, historical-quotes, quote-backfill, phase-1, eur-to-usd-mapping, data-sanitization, kinesis, offline-resilience, price-history-default, provider-timeout, parallel-fetching, startup-optimization, network-reachability, ssrf, url-safety, binance-pagination, gap-fill, daily-granularity, densify]
+last_modified: 2026-06-16
+updated: 2026-06-16
+tags: [integration, price, stocks, crypto, api, historical-quotes, quote-backfill, phase-1, eur-to-usd-mapping, data-sanitization, kinesis, offline-resilience, price-history-default, provider-timeout, parallel-fetching, startup-optimization, network-reachability, ssrf, url-safety, binance-pagination, gap-fill, daily-granularity, densify, research, adr-079, capability-map, quota-governor]
 aliases: [price providers, market data, Binance, Kinesis, Yahoo Finance, live prices]
 status: active
 related_code: [[apps/node-backend/src/services/priceProviderService.js], [apps/node-backend/src/services/quoteBackfillService.js], [apps/node-backend/src/services/prices/priceProviderRegistry.js], [apps/node-backend/tests/priceProviderRegistry.test.js], [apps/node-backend/src/lib/network.js]]
@@ -220,12 +220,25 @@ Code links: [[apps/node-backend/src/services/prices/priceProviderRegistry.js]], 
 - Backend provides `getLatestPriceUpdatedAt()` helper returning `MAX(price_updated_at)` across active non-manual investments for report provenance.
 - Portfolio PDF reports include a "Prices as of <date>" meta row on the cover page. If prices are >1 day old, age in days is shown. If no live prices ever recorded, shows "No live prices recorded".
 
+## Research Aggregation Layer (ADR-079)
+
+The research aggregation layer (`apps/node-backend/src/services/research/`) builds on this provider infrastructure to serve a provider-agnostic `/api/research/*` surface for arbitrary-symbol market research. It reuses `providerHealthService` for health-signal routing and adds three new mechanisms:
+
+- **Capability map** — routes each data type (quote/chart/fundamentals/analyst/news) to an ordered provider preference per asset class.
+- **Quota governor** — per-minute in-memory + per-day persisted token buckets (via the `provider_quota` table) guard against free-tier 429s.
+- **Type-aware TTL cache** — research data for arbitrary symbols is cached in memory only and is **never written to `asset_price_history`**.
+
+Yahoo is the only adapter wired today. Twelve Data, Finnhub, FMP, and Alpha Vantage are defined in the capability map and activate when their API keys are provisioned in `.env.local`. See [[docs/features/research|Research Feature]] and [[docs/adr/079-multi-provider-research-aggregation|ADR-079]] for full details.
+
 ## Related
 
 - [[docs/api/investments|API: Investments]]
 - [[docs/api/admin|API: Admin]] (Kinesis history sanitization endpoint)
+- [[docs/api/research|Research API]] — provider-agnostic research surface
 - [[docs/features/portfolio|Feature: Portfolio]]
+- [[docs/features/research|Research Feature]] — capability map, quota governor, cache TTLs
 - [[docs/performance/chart-downsampling|Chart Data Downsampling]]
 - [[docs/adr/065-daily-gap-fill-dense-asset-history|ADR-065]] — Daily gap-fill decision record (Binance pagination, force-refetch, gap-threshold rationale)
+- [[docs/adr/079-multi-provider-research-aggregation|ADR-079]] — Research aggregation architectural decision
 
 Code links: [[apps/node-backend/src/services/priceProviderService.js]], [[apps/node-backend/src/config/kinesisConfig.js]], [[apps/node-backend/src/main.js]], [[apps/node-backend/src/routes/admin.js]], [[alembic/versions/0019_asset_price_history_cache.py]]

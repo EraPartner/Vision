@@ -5338,3 +5338,291 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/Envelope"
+
+  # ─── Research (ADR-079) ───────────────────────────────────────────────────────
+  /api/research/search:
+    get:
+      summary: Search tickers / securities across research providers
+      operationId: researchSearch
+      tags: [Research]
+      parameters:
+        - in: query
+          name: q
+          required: true
+          schema:
+            type: string
+          description: Search query (ticker or company name)
+      responses:
+        "200":
+          description: Search results with provenance meta (provider, source)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Envelope"
+
+  /api/research/quote:
+    get:
+      summary: Current quote for a symbol
+      operationId: researchQuote
+      tags: [Research]
+      parameters:
+        - in: query
+          name: symbol
+          required: true
+          schema:
+            type: string
+        - in: query
+          name: asset_class
+          schema:
+            type: string
+          description: "Asset class hint for provider routing (e.g. stock, crypto, metals)"
+      responses:
+        "200":
+          description: Quote data with provenance meta (provider, source)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Envelope"
+        "400":
+          description: symbol parameter required
+
+  /api/research/chart:
+    get:
+      summary: Historical chart points for a symbol
+      operationId: researchChart
+      tags: [Research]
+      parameters:
+        - in: query
+          name: symbol
+          required: true
+          schema:
+            type: string
+        - in: query
+          name: asset_class
+          schema:
+            type: string
+        - in: query
+          name: range
+          schema:
+            type: string
+            default: 1mo
+          description: "Time range: 1d, 5d, 1mo, 3mo, 6mo, 1y, 2y, 5y, max"
+      responses:
+        "200":
+          description: Chart points with provenance meta (provider, source)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Envelope"
+        "400":
+          description: symbol parameter required
+
+  /api/research/fundamentals:
+    get:
+      summary: Fundamentals snapshot for a symbol
+      operationId: researchFundamentals
+      tags: [Research]
+      parameters:
+        - in: query
+          name: symbol
+          required: true
+          schema:
+            type: string
+        - in: query
+          name: asset_class
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Fundamentals data with provenance meta (provider, source)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Envelope"
+        "400":
+          description: symbol parameter required
+
+  /api/research/analyst:
+    get:
+      summary: Analyst consensus, price targets, and recent actions for a symbol
+      operationId: researchAnalyst
+      tags: [Research]
+      parameters:
+        - in: query
+          name: symbol
+          required: true
+          schema:
+            type: string
+        - in: query
+          name: asset_class
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Analyst data with provenance meta (provider, source)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Envelope"
+        "400":
+          description: symbol parameter required
+
+  /api/research/news:
+    get:
+      summary: News articles for a symbol
+      operationId: researchNews
+      tags: [Research]
+      parameters:
+        - in: query
+          name: symbol
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: News articles with provenance meta (provider, source)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Envelope"
+        "400":
+          description: symbol parameter required
+  # Research symbol mapping (ADR-079)
+  /api/research/mappings:
+    get:
+      summary: List stored cross-provider symbol mappings for an instrument
+      operationId: researchListMappings
+      tags: [Research]
+      parameters:
+        - in: query
+          name: instrument_key
+          required: true
+          schema:
+            type: string
+        - in: query
+          name: key_type
+          required: false
+          schema:
+            type: string
+            enum: [isin, internal]
+            default: isin
+      responses:
+        "200":
+          description: Stored mappings ({ mappings: [...] })
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Envelope"
+        "400":
+          description: instrument_key required or invalid key_type
+    post:
+      summary: Persist user-confirmed cross-provider mappings (upsert per provider)
+      operationId: researchSaveMappings
+      tags: [Research]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [instrument_key, mappings]
+              properties:
+                instrument_key:
+                  type: string
+                key_type:
+                  type: string
+                  enum: [isin, internal]
+                  default: isin
+                mappings:
+                  type: array
+                  items:
+                    type: object
+      responses:
+        "200":
+          description: Updated mapping set
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Envelope"
+        "400":
+          description: instrument_key required or mappings must be a non-empty array
+  /api/research/mappings/resolve:
+    post:
+      summary: Auto-propose per-provider symbols for an instrument (does not persist)
+      operationId: researchResolveMappings
+      tags: [Research]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [instrument_key, query]
+              properties:
+                instrument_key:
+                  type: string
+                key_type:
+                  type: string
+                  enum: [isin, internal]
+                  default: isin
+                asset_class:
+                  type: string
+                query:
+                  type: string
+      responses:
+        "200":
+          description: Per-provider proposals + existing mappings
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Envelope"
+        "400":
+          description: instrument_key and query required
+  /api/research/mappings/audit:
+    post:
+      summary: Cross-provider self-audit of an instrument's mappings (currency/price agreement)
+      operationId: researchAuditMappings
+      tags: [Research]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [instrument_key]
+              properties:
+                instrument_key:
+                  type: string
+                key_type:
+                  type: string
+                  enum: [isin, internal]
+                  default: isin
+      responses:
+        "200":
+          description: Audit result (ok, quotes, discrepancies); stamps verified_at
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Envelope"
+        "400":
+          description: instrument_key required
+  /api/research/mappings/{id}:
+    delete:
+      summary: Delete a stored mapping by id
+      operationId: researchDeleteMapping
+      tags: [Research]
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: "{ removed: boolean }"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Envelope"
+        "400":
+          description: valid mapping id required
