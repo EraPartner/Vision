@@ -22,6 +22,7 @@ import * as pln from '@/lib/api/planned';
 import * as imp from '@/lib/api/imports';
 import * as sett from '@/lib/api/settings';
 import * as port from '@/lib/api/portfolio';
+import * as portImp from '@/lib/api/portfolioImports';
 import * as info from '@/lib/api/info';
 import * as splits from '@/lib/api/splits';
 import * as electron from '@/lib/api/electron';
@@ -113,6 +114,18 @@ export const apiClient = {
     createPortfolioTransaction: port.createPortfolioTransaction,
     updatePortfolioTransaction: port.updatePortfolioTransaction,
     deletePortfolioTransaction: port.deletePortfolioTransaction,
+
+    // Portfolio imports
+    importPortfolioCSVCustom: portImp.importPortfolioCSVCustom,
+    importPortfolioCSVWithProgress: portImp.importPortfolioCSVWithProgress,
+    getPortfolioImportPreview: portImp.getPortfolioImportPreview,
+    overridePortfolioImportRow: portImp.overridePortfolioImportRow,
+    commitPortfolioImportBatch: portImp.commitPortfolioImportBatch,
+    rollbackPortfolioImportBatch: portImp.rollbackPortfolioImportBatch,
+    listPortfolioParserConfigs: portImp.listPortfolioParserConfigs,
+    createPortfolioParserConfig: portImp.createPortfolioParserConfig,
+    updatePortfolioParserConfig: portImp.updatePortfolioParserConfig,
+    deletePortfolioParserConfig: portImp.deletePortfolioParserConfig,
 
     // Info / statistics (getStatistics + getTransactionSummary removed — Phase 9
     // cutover deleted the legacy /api/info and /transaction-summary routes)

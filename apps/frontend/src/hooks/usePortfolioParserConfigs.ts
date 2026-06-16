@@ -1,20 +1,15 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
 import { useLanguage } from '@/contexts/LanguageContext';
-import {
-  listPortfolioParserConfigs,
-  createPortfolioParserConfig,
-  updatePortfolioParserConfig,
-  deletePortfolioParserConfig,
-  type PortfolioCustomConfig,
-} from '@/lib/api/portfolioImports';
+import { apiClient } from '@/lib/api';
+import type { PortfolioCustomConfig } from '@/lib/api/portfolioImports';
 
 const QUERY_KEY = ['portfolio-parser-configs'];
 
 export function usePortfolioParserConfigs() {
   return useQuery({
     queryKey: QUERY_KEY,
-    queryFn: () => listPortfolioParserConfigs(),
+    queryFn: () => apiClient.listPortfolioParserConfigs(),
     staleTime: 60_000,
   });
 }
@@ -24,7 +19,7 @@ export function useCreatePortfolioParserConfig() {
   const { t } = useLanguage();
   return useMutation({
     mutationFn: ({ name, config }: { name: string; config: PortfolioCustomConfig }) =>
-      createPortfolioParserConfig(name, config),
+      apiClient.createPortfolioParserConfig(name, config),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: QUERY_KEY });
       toast.success(t('importPage.customParser.saved'));
@@ -40,7 +35,7 @@ export function useUpdatePortfolioParserConfig() {
   const { t } = useLanguage();
   return useMutation({
     mutationFn: ({ id, ...patch }: { id: number; name?: string; config?: PortfolioCustomConfig }) =>
-      updatePortfolioParserConfig(id, patch),
+      apiClient.updatePortfolioParserConfig(id, patch),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: QUERY_KEY });
       toast.success(t('importPage.customParser.updated'));
@@ -55,7 +50,7 @@ export function useDeletePortfolioParserConfig() {
   const queryClient = useQueryClient();
   const { t } = useLanguage();
   return useMutation({
-    mutationFn: (id: number) => deletePortfolioParserConfig(id),
+    mutationFn: (id: number) => apiClient.deletePortfolioParserConfig(id),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: QUERY_KEY });
       toast.success(t('importPage.customParser.deleted'));

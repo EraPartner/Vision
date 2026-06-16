@@ -27,10 +27,8 @@ import { toast } from "sonner";
 import {
   Bookmark, CheckCircle2, Loader2, PencilLine, Save, Trash2, TrendingUp, Upload, XCircle,
 } from "lucide-react";
-import {
-  importPortfolioCSVWithProgress,
-  type PortfolioCustomConfig,
-} from "@/lib/api/portfolioImports";
+import { apiClient } from "@/lib/api";
+import type { PortfolioCustomConfig } from "@/lib/api/portfolioImports";
 import {
   usePortfolioParserConfigs,
   useCreatePortfolioParserConfig,
@@ -120,7 +118,7 @@ export function PortfolioImportPage() {
     const adapterName = isSaved && selectedParser ? selectedParser.name : (parserName.trim() || "portfolio_generic");
 
     try {
-      const { abort, result } = importPortfolioCSVWithProgress(file, config, adapterName, (p) => setProgress(p));
+      const { abort, result } = apiClient.importPortfolioCSVWithProgress(file, config, adapterName, (p) => setProgress(p));
       abortRef.current = abort;
       const data = await result;
       abortRef.current = null;

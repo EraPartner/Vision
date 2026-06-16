@@ -14,12 +14,8 @@ import { Badge } from "@/components/ui/badge";
 import { InvestmentCombobox } from "@/components/portfolio/InvestmentCombobox";
 import { toast } from "sonner";
 import { AlertTriangle, CheckCircle2, Loader2, PlusCircle } from "lucide-react";
-import {
-  getPortfolioImportPreview,
-  overridePortfolioImportRow,
-  commitPortfolioImportBatch,
-  type PortfolioPreviewGroup,
-} from "@/lib/api/portfolioImports";
+import { apiClient } from "@/lib/api";
+import type { PortfolioPreviewGroup } from "@/lib/api/portfolioImports";
 
 export function PortfolioImportReviewPage() {
   const { t } = useLanguage();
@@ -32,12 +28,12 @@ export function PortfolioImportReviewPage() {
   const queryKey = ["portfolio-import-preview", batchId];
   const { data, isLoading, error } = useQuery({
     queryKey,
-    queryFn: () => getPortfolioImportPreview(batchId),
+    queryFn: () => apiClient.getPortfolioImportPreview(batchId),
     enabled: Number.isFinite(batchId),
   });
 
   const commit = useMutation({
-    mutationFn: () => commitPortfolioImportBatch(batchId),
+    mutationFn: () => apiClient.commitPortfolioImportBatch(batchId),
     onSuccess: (res) => {
       toast.success(t("portfolioImport.toast.importSuccess", { n: res.imported, dups: res.duplicates }), {
         icon: <CheckCircle2 className="h-4 w-4" />,
@@ -57,7 +53,7 @@ export function PortfolioImportReviewPage() {
     setBusyGroup(groupKey(g));
     try {
       for (const row of g.rows) {
-        await overridePortfolioImportRow(batchId, row.id, { investmentId });
+        await apiClient.overridePortfolioImportRow(batchId, row.id, { investmentId });
       }
       await refresh();
     } catch (err) {
@@ -72,11 +68,11 @@ export function PortfolioImportReviewPage() {
     setBusyGroup(groupKey(g));
     try {
       const [first, ...rest] = g.rows;
-      const created = await overridePortfolioImportRow(batchId, first.id, { createNew: true });
+      const created = await apiClient.overridePortfolioImportRow(batchId, first.id, { createNew: true });
       const newId = created.investment_id;
       if (newId) {
         for (const row of rest) {
-          await overridePortfolioImportRow(batchId, row.id, { investmentId: newId });
+          await apiClient.overridePortfolioImportRow(batchId, row.id, { investmentId: newId });
         }
       }
       await refresh();
