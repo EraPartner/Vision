@@ -11,6 +11,7 @@ import { TrendingUp, TrendingDown, Wallet, Landmark, PiggyBank } from "lucide-re
 import { cn } from "@/lib/utils";
 import { downsampleLTTB } from "@/utils/downsample";
 import { PageHeader } from "@/components/shared/PageHeader";
+import { EmptyState } from "@/components/shared/EmptyState";
 import { StatCard } from "@/components/dashboard/StatCard";
 import {
   EMPTY_SNAPSHOTS,
@@ -170,31 +171,29 @@ export default function NetWorthPage() {
     return (
       <div className="space-y-6">
         <PageHeader title={t('networth.title')} icon={Wallet} />
-        <Card className="glass-regular">
-          <CardContent className="flex flex-col items-center justify-center gap-3 py-12 text-center">
-            <Wallet className="h-10 w-10 text-muted-foreground" />
-            <div>
-              <p className="font-medium">{t('networth.emptyTitle')}</p>
-              <p className="text-sm text-muted-foreground max-w-md mt-1">
-                {t('networth.emptyDescription')}
-              </p>
+        <EmptyState
+          icon={Wallet}
+          title={t('networth.emptyTitle')}
+          description={t('networth.emptyDescription')}
+          action={(
+            <div className="flex flex-col items-center gap-2">
+              <Button
+                onClick={refreshPrices}
+                disabled={isRefreshingPrices || !isOnline}
+                size="sm"
+                title={!isOnline ? t('portfolio.refreshPricesOffline') : undefined}
+              >
+                <RefreshCw className={`h-3.5 w-3.5 mr-2 ${isRefreshingPrices ? "animate-spin" : ""}`} />
+                {t('portfolio.refreshPrices')}
+              </Button>
+              {!isOnline && (
+                <p className="text-xs text-muted-foreground max-w-md">
+                  {t('portfolio.refreshPricesOffline')}
+                </p>
+              )}
             </div>
-            <Button
-              onClick={refreshPrices}
-              disabled={isRefreshingPrices || !isOnline}
-              size="sm"
-              title={!isOnline ? t('portfolio.refreshPricesOffline') : undefined}
-            >
-              <RefreshCw className={`h-3.5 w-3.5 mr-2 ${isRefreshingPrices ? "animate-spin" : ""}`} />
-              {t('portfolio.refreshPrices')}
-            </Button>
-            {!isOnline && (
-              <p className="text-xs text-muted-foreground max-w-md">
-                {t('portfolio.refreshPricesOffline')}
-              </p>
-            )}
-          </CardContent>
-        </Card>
+          )}
+        />
       </div>
     );
   }

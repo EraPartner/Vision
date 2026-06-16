@@ -11,6 +11,7 @@ import { formatCurrency, numberFormatToLocale } from "@/utils/currency";
 import { parseDecimal } from "@/lib/decimal";
 import { ArrowLeft, Check, DollarSign, HandCoins, Trash2, Users } from "lucide-react";
 import { PageHeader } from "@/components/shared/PageHeader";
+import { EmptyState } from "@/components/shared/EmptyState";
 import { Money } from "@/components/shared/Money";
 import { Progress } from "@/components/ui/progress";
 import { useConfirmDialog } from "@/hooks/useConfirmDialog";
@@ -76,15 +77,7 @@ export default function OwesPage() {
             )}
 
             {items.length === 0 ? (
-                <Card>
-                    <CardContent className="py-12 text-center">
-                        <Users className="h-10 w-10 text-muted-foreground/40 mx-auto mb-3" />
-                        <p className="text-sm font-medium text-foreground mb-1">{t('owesPage.noDebts')}</p>
-                        <p className="text-xs text-muted-foreground">
-                            {t('owesPage.splitToTrack')}
-                        </p>
-                    </CardContent>
-                </Card>
+                <EmptyState icon={Users} title={t('owesPage.noDebts')} description={t('owesPage.splitToTrack')} />
             ) : (
                 <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
                     {items.map((item) => {
@@ -224,11 +217,7 @@ function RecipientOwesDetail({ recipient, onBack }: { recipient: { id: number; n
                     {[...Array(3)].map((_, i) => <Skeleton key={i} className="h-24" />)}
                 </div>
             ) : items.length === 0 ? (
-                <Card>
-                    <CardContent className="py-8 text-center">
-                        <p className="text-sm text-muted-foreground">{t('owesPage.allSettled')}</p>
-                    </CardContent>
-                </Card>
+                <EmptyState icon={Check} title={t('owesPage.allSettled')} />
             ) : (
                 <>
                     <div className="space-y-3">

@@ -36,6 +36,7 @@ import { PortfolioTaxAdjustmentsDialog } from "@/components/portfolio/PortfolioT
 import { WidgetVisibilityDialog } from "@/components/shared/WidgetVisibilityDialog";
 import { useWidgetVisibility, type WidgetDefinition } from "@/hooks/useWidgetVisibility";
 import { PageHeader } from "@/components/shared/PageHeader";
+import { EmptyState } from "@/components/shared/EmptyState";
 import { TaxSummaryCard } from "./TaxSummaryCard";
 import { AssetClassTaxChart } from "./AssetClassTaxChart";
 import { InvestmentTaxBreakdownTable } from "./InvestmentTaxBreakdownTable";
@@ -430,13 +431,7 @@ export default function PortfolioTaxPage() {
       )}
 
       {isEmpty ? (
-        <Card className="glass-regular">
-          <CardContent className="flex flex-col items-center justify-center py-16 text-center">
-            <Landmark className="h-12 w-12 text-muted-foreground/40 mb-4" />
-            <h3 className="text-lg font-semibold text-foreground mb-1">{t("tax.noData")}</h3>
-            <p className="text-muted-foreground text-sm max-w-sm">{t("tax.noDataDesc")}</p>
-          </CardContent>
-        </Card>
+        <EmptyState icon={Landmark} title={t("tax.noData")} description={t("tax.noDataDesc")} />
       ) : (
         <>
           {isVisible("summaryCards") && <TaxSummaryCard cards={cards} />}

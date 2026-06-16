@@ -18,6 +18,7 @@ import { useDebounce } from "@/hooks/useDebounce";
 import { cn } from "@/lib/utils";
 import { apiClient } from "@/lib/api";
 import { PageHeader } from "@/components/shared/PageHeader";
+import { EmptyState } from "@/components/shared/EmptyState";
 import { ProvenanceBadge } from "@/components/research/ProvenanceBadge";
 import { ScorecardGradeBadge } from "@/components/research/ResearchScorecard";
 import { SymbolSearchResultItem } from "@/components/shared/SymbolSearchResultItem";
@@ -379,13 +380,7 @@ export default function ResearchComparePage() {
       </div>
 
       {symbols.length === 0 ? (
-        <Card className="glass-regular">
-          <CardContent className="flex flex-col items-center justify-center py-20 text-center">
-            <GitCompareArrows className="h-14 w-14 text-muted-foreground/30 mb-4" />
-            <h3 className="text-lg font-semibold text-foreground mb-1">{t('research.compare.startTitle')}</h3>
-            <p className="text-sm text-muted-foreground max-w-md">{t('research.compare.startHint')}</p>
-          </CardContent>
-        </Card>
+        <EmptyState icon={GitCompareArrows} title={t('research.compare.startTitle')} description={t('research.compare.startHint')} />
       ) : (
         <Tabs defaultValue="performance">
           <TabsList>

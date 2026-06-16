@@ -8,6 +8,7 @@ import { Button } from "@/components/ui/button";
 import { BarChart3, Import } from "lucide-react";
 import { ExportDialog } from "@/components/reports/ExportDialog";
 import { PageHeader } from "@/components/shared/PageHeader";
+import { EmptyState } from "@/components/shared/EmptyState";
 import { WidgetVisibilityDialog } from "@/components/shared/WidgetVisibilityDialog";
 import { useWidgetVisibility } from "@/hooks/useWidgetVisibility";
 import { useLanguage } from "@/contexts/LanguageContext";
@@ -120,19 +121,19 @@ export default function StatisticsPage() {
             resetToDefaults={resetToDefaults}
           />
         </div>
-        <Card className="glass-regular">
-          <CardContent className="flex flex-col items-center justify-center py-16 text-center">
-            <BarChart3 className="h-12 w-12 text-muted-foreground/40 mb-4" />
-            <h3 className="text-lg font-semibold text-foreground mb-2">{t("statsPage.noDataTitle")}</h3>
-            <p className="text-sm text-muted-foreground mb-4 max-w-sm">{t("statsPage.noDataDesc")}</p>
+        <EmptyState
+          icon={BarChart3}
+          title={t("statsPage.noDataTitle")}
+          description={t("statsPage.noDataDesc")}
+          action={(
             <Button asChild size="sm">
               <Link to="/import">
                 <Import className="h-4 w-4 mr-2" />
                 {t("statsPage.importBtn")}
               </Link>
             </Button>
-          </CardContent>
-        </Card>
+          )}
+        />
       </div>
     );
   }

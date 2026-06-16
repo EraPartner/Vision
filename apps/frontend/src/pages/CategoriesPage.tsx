@@ -6,6 +6,7 @@ import {Button} from "@/components/ui/button";
 import {Card, CardContent, CardHeader, CardTitle} from "@/components/ui/card";
 import {Eye, EyeOff, ToggleLeft, ToggleRight, Trash2, ChevronRight, ChevronDown, FolderOpen, Folder, Pencil, Tags} from "lucide-react";
 import { PageHeader } from "@/components/shared/PageHeader";
+import { EmptyState } from "@/components/shared/EmptyState";
 import { Skeleton } from "@/components/ui/skeleton";
 import {useCategories, useUpdateCategory, useDeleteCategory} from "@/hooks/useCategories";
 import {AddCategoryDialog} from "@/features/categories/AddCategoryDialog";
@@ -160,7 +161,7 @@ export default function CategoriesPage() {
                 <CardContent className="p-0">
                     <div className="divide-y divide-border">
                         {grouped.length === 0 && (
-                            <p className="text-muted-foreground text-center py-8">{t('categoriesPage.empty')}</p>
+                            <EmptyState icon={Tags} title={t('categoriesPage.empty')} />
                         )}
                         {grouped.map(({general, items, activeCount}) => {
                             const isExpanded = expandedGroups.has(general);

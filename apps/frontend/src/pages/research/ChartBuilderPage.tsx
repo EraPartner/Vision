@@ -14,6 +14,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from "@/components/ui/select";
 import { ComposedChart, LineChart, getChartColor, type ComposedSeries, type LineSeries } from "@/components/charts";
 import { PageHeader } from "@/components/shared/PageHeader";
+import { EmptyState } from "@/components/shared/EmptyState";
 import { SymbolSearchResultItem } from "@/components/shared/SymbolSearchResultItem";
 import { SymbolSearchBox } from "@/components/shared/SymbolSearchBox";
 import { useDebounce } from "@/hooks/useDebounce";
@@ -457,13 +458,7 @@ export default function ChartBuilderPage() {
 
       {/* Chart */}
       {series.length === 0 ? (
-        <Card className="glass-regular">
-          <CardContent className="flex flex-col items-center justify-center gap-2 py-20 text-center">
-            <LineChartIcon className="mb-2 h-14 w-14 text-muted-foreground/30" />
-            <h3 className="text-lg font-semibold">{t("research.builder.emptyTitle")}</h3>
-            <p className="max-w-md text-sm text-muted-foreground">{t("research.builder.emptyHint")}</p>
-          </CardContent>
-        </Card>
+        <EmptyState icon={LineChartIcon} title={t("research.builder.emptyTitle")} description={t("research.builder.emptyHint")} />
       ) : (
         <Card className="glass-regular">
           <CardContent className="pt-6">
