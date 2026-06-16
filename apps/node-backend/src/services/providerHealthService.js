@@ -76,7 +76,9 @@ const PROVIDER_DEFINITIONS = {
   fmp: {
     kind: 'research',
     label: 'FMP',
-    probe: () => fmpAdapter.quote('AAPL'),
+    // FMP's role in the capability chain is primary fundamentals (it is only 4th
+    // for quotes, so a quote probe never reflects how the app actually uses it).
+    probe: () => fmpAdapter.fundamentals('AAPL'),
   },
   alpha_vantage: {
     kind: 'research',

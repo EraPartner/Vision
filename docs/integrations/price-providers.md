@@ -230,6 +230,9 @@ The research aggregation layer (`apps/node-backend/src/services/research/`) buil
 
 All five adapters are wired (Yahoo needs no key; Twelve Data, Finnhub, FMP, and Alpha Vantage activate when their API key is set in the root `.env` — see [[docs/adr/080-layered-env-loading-shared-secrets|ADR-080]]). See [[docs/features/research|Research Feature]] and [[docs/adr/079-multi-provider-research-aggregation|ADR-079]] for full details.
 
+> [!info] FMP base URL (2026-06-16)
+> FMP retired its legacy `/api/v3` base URL for accounts not subscribed before 2025-08-31. The FMP adapter now uses the current **stable API** at `https://financialmodelingprep.com/stable` with symbol passed as a query param. `FMP_API_KEY` is unchanged. See [[docs/adr/079-multi-provider-research-aggregation#follow-up-note--fmp-stable-api-migration-2026-06-16|ADR-079 follow-up note]] for details.
+
 ## Related
 
 - [[docs/api/investments|API: Investments]]

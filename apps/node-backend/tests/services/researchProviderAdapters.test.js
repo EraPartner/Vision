@@ -87,22 +87,38 @@ describe('finnhubAdapter', () => {
 });
 
 describe('fmpAdapter', () => {
-  it('normalizes a quote (changesPercentage/yearHigh → changePercent/high52w)', async () => {
-    mockFetch([['/quote/', [{
-      symbol: 'AAPL', name: 'Apple', price: 190.5, change: 1.5, changesPercentage: 0.8,
+  it('normalizes a stable quote (changePercentage/yearHigh → changePercent/high52w)', async () => {
+    mockFetch([['/quote?', [{
+      symbol: 'AAPL', name: 'Apple', price: 190.5, change: 1.5, changePercentage: 0.8,
       open: 189, dayHigh: 191, dayLow: 188, previousClose: 189, volume: 1000, yearHigh: 200, yearLow: 150,
     }]]]);
     const q = await fmp.quote('AAPL');
     expect(q).toMatchObject({ price: 190.5, changePercent: 0.8, high52w: 200, low52w: 150 });
   });
 
-  it('merges profile + ratios-ttm into fundamentals', async () => {
+  it('merges stable profile + ratios-ttm + key-metrics-ttm into fundamentals', async () => {
     mockFetch([
-      ['/profile/', [{ companyName: 'Apple', currency: 'USD', mktCap: 3e12, beta: 1.2 }]],
-      ['/ratios-ttm/', [{ peRatioTTM: 30, priceToBookRatioTTM: 45, dividendYieldTTM: 0.005, netProfitMarginTTM: 0.25, returnOnEquityTTM: 1.5 }]],
+      ['/profile?', [{ companyName: 'Apple', currency: 'USD', marketCap: 3e12, beta: 1.2 }]],
+      ['/ratios-ttm?', [{ priceToEarningsRatioTTM: 30, priceToBookRatioTTM: 45, dividendYieldTTM: 0.005, netProfitMarginTTM: 0.25, debtToEquityRatioTTM: 0.8 }]],
+      ['/key-metrics-ttm?', [{ returnOnEquityTTM: 1.5, freeCashFlowYieldTTM: 0.03 }]],
     ]);
     const f = await fmp.fundamentals('AAPL');
-    expect(f).toMatchObject({ name: 'Apple', currency: 'USD', marketCap: 3e12, pe: 30, priceToBook: 45, profitMargin: 0.25, returnOnEquity: 1.5 });
+    expect(f).toMatchObject({ name: 'Apple', currency: 'USD', marketCap: 3e12, pe: 30, priceToBook: 45, profitMargin: 0.25, debtToEquity: 0.8, returnOnEquity: 1.5, fcfYield: 0.03 });
+  });
+
+  it('builds analyst consensus buckets from stable grades-consensus', async () => {
+    mockFetch([
+      ['/price-target-consensus?', [{ targetConsensus: 326.47, targetHigh: 400, targetLow: 253 }]],
+      ['/grades?', [{ date: '2026-06-09', gradingCompany: 'Needham', previousGrade: 'Hold', newGrade: 'Hold', action: 'maintain' }]],
+      ['/grades-consensus?', [{ strongBuy: 1, buy: 69, hold: 33, sell: 7, strongSell: 0, consensus: 'Buy' }]],
+    ]);
+    const a = await fmp.analyst('AAPL');
+    expect(a).toMatchObject({
+      targetMean: 326.47,
+      numberOfAnalysts: 110,
+      consensus: { strongBuy: 1, buy: 69, hold: 33, sell: 7, strongSell: 0 },
+    });
+    expect(a.recentActions[0]).toMatchObject({ firm: 'Needham', toGrade: 'Hold', action: 'maintain' });
   });
 });
 

@@ -126,7 +126,11 @@ const yahooAdapter = {
     const s = /** @type {any} */ (
       await yahoo.quoteSummary(
         symbol,
-        { modules: ['summaryDetail', 'defaultKeyStatistics', 'price', 'financialData'] },
+        {
+          modules: [
+            'summaryDetail', 'defaultKeyStatistics', 'price', 'financialData', 'assetProfile',
+          ],
+        },
         NO_VALIDATE,
       )
     );
@@ -134,20 +138,39 @@ const yahooAdapter = {
     const ks = s?.defaultKeyStatistics || {};
     const pr = s?.price || {};
     const fd = s?.financialData || {};
+    const ap = s?.assetProfile || {};
+    const marketCap = sd.marketCap ?? pr.marketCap;
+    const freeCashFlow = fd.freeCashflow;
+    const fcfYield = Number.isFinite(freeCashFlow) && Number.isFinite(marketCap) && marketCap > 0
+      ? freeCashFlow / marketCap
+      : undefined;
     return {
       symbol,
       name: pr.longName || pr.shortName || symbol,
       currency: pr.currency,
-      marketCap: sd.marketCap ?? pr.marketCap,
+      sector: ap.sector,
+      marketCap,
       pe: sd.trailingPE ?? ks.trailingPE,
       forwardPE: sd.forwardPE ?? ks.forwardPE,
+      pegRatio: ks.pegRatio,
       dividendYield: sd.dividendYield ?? pr.dividendYield,
+      payoutRatio: sd.payoutRatio,
       eps: pr.epsTrailingTwelveMonths ?? ks.trailingEps,
       beta: sd.beta ?? ks.beta,
       priceToBook: ks.priceToBook,
       profitMargin: fd.profitMargins,
+      grossMargin: fd.grossMargins,
+      operatingMargin: fd.operatingMargins,
       revenue: fd.totalRevenue,
+      revenueGrowth: fd.revenueGrowth,
+      earningsGrowth: fd.earningsGrowth,
       returnOnEquity: fd.returnOnEquity,
+      // Yahoo reports debt/equity as a percentage (150 = 1.5×); normalize to a ratio.
+      debtToEquity: Number.isFinite(fd.debtToEquity) ? fd.debtToEquity / 100 : undefined,
+      currentRatio: fd.currentRatio,
+      quickRatio: fd.quickRatio,
+      freeCashFlow,
+      fcfYield,
     };
   },
 

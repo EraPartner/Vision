@@ -77,6 +77,9 @@ const finnhubAdapter = {
   async fundamentals(symbol) {
     const data = await getJson(`${BASE}/stock/metric?symbol=${encodeURIComponent(symbol)}&metric=all&token=${key()}`);
     const m = data?.metric || {};
+    // Finnhub reports most ratios as percentages (e.g. margins, growth, yield);
+    // normalize those to fractions so they match the cross-provider contract.
+    const pct = (v) => { const n = num(v); return n == null ? undefined : n / 100; };
     return {
       symbol,
       name: symbol,
@@ -84,13 +87,23 @@ const finnhubAdapter = {
       marketCap: num(m.marketCapitalization), // reported in millions by Finnhub
       pe: num(m.peTTM ?? m.peBasicExclExtraTTM),
       forwardPE: undefined,
-      dividendYield: num(m.dividendYieldIndicatedAnnual),
+      pegRatio: num(m.pegTTM),
+      dividendYield: pct(m.dividendYieldIndicatedAnnual),
+      payoutRatio: pct(m.payoutRatioTTM ?? m.payoutRatioAnnual),
       eps: num(m.epsTTM),
       beta: num(m.beta),
       priceToBook: num(m.pbAnnual ?? m.pbQuarterly),
-      profitMargin: num(m.netProfitMarginTTM),
+      profitMargin: pct(m.netProfitMarginTTM),
+      grossMargin: pct(m.grossMarginTTM),
+      operatingMargin: pct(m.operatingMarginTTM),
       revenue: num(m.revenuePerShareTTM),
-      returnOnEquity: num(m.roeTTM),
+      revenueGrowth: pct(m.revenueGrowthTTMYoy ?? m.revenueGrowthQuarterlyYoy),
+      earningsGrowth: pct(m.epsGrowthTTMYoy),
+      returnOnEquity: pct(m.roeTTM),
+      debtToEquity: num(m['totalDebt/totalEquityAnnual'] ?? m['totalDebt/totalEquityQuarterly']),
+      currentRatio: num(m.currentRatioAnnual ?? m.currentRatioQuarterly),
+      quickRatio: num(m.quickRatioAnnual ?? m.quickRatioQuarterly),
+      interestCoverage: num(m.netInterestCoverageTTM ?? m.netInterestCoverageAnnual),
     };
   },
 
