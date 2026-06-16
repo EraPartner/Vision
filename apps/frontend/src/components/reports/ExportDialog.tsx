@@ -32,6 +32,7 @@ import { Input } from '@/components/ui/input';
 import { Separator } from '@/components/ui/separator';
 import { DatePicker } from '@/components/shared/DatePicker';
 import { parseLocalDateFromYmd, toYmd } from '@/components/shared/dateUtils';
+import { todayYmd } from '@/lib/timezone';
 import { useLanguage } from '@/contexts/LanguageContext';
 import { useAppSettings } from '@/contexts/AppSettingsContext';
 import { useSettings } from '@/contexts/SettingsContext';
@@ -139,7 +140,7 @@ export function ExportDialog({ trigger, defaultType = 'financial' }: ExportDialo
   const [periodPreset, setPeriodPreset] = useState<PeriodPreset>('rolling12');
   const [customYear, setCustomYear] = useState(String(currentYear));
   const [customFrom, setCustomFrom] = useState(`${currentYear - 1}-01-01`);
-  const [customTo, setCustomTo] = useState(new Date().toISOString().slice(0, 10));
+  const [customTo, setCustomTo] = useState(todayYmd());
   const [sections, setSections] = useState<Set<string>>(() => defaultSectionSet(SECTIONS_BY_TYPE[defaultType]));
   const [currency, setCurrency] = useState(defaultCurrency);
   const [isSubmitting, setIsSubmitting] = useState(false);

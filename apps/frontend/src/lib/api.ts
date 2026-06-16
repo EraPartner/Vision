@@ -193,6 +193,8 @@ export const apiClient = {
     // Market / watchlist
     getMarketNews: market.getMarketNews,
     getMarketQuotes: market.getMarketQuotes,
+    getMarketChart: market.getMarketChart,
+    searchMarket: market.searchMarket,
     getWatchlist: market.getWatchlist,
     createWatchlistItem: market.createWatchlistItem,
     updateWatchlistItem: market.updateWatchlistItem,

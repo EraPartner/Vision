@@ -18,6 +18,7 @@ import { useNavigate } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
 import { apiClient } from "@/lib/api";
 import { downloadBlob } from "@/lib/downloadBlob";
+import { todayYmd } from "@/lib/timezone";
 import { onActivateKeyDown } from "@/utils/a11y";
 import { VirtualDataTable } from "@/components/shared/VirtualDataTable";
 import type { Transaction } from "@/types/api";
@@ -178,7 +179,7 @@ function RecipientOwesDetail({ recipient, onBack }: { recipient: { id: number; n
         try {
             const blob = await apiClient.exportOwedByRecipientCsv(recipient.id);
             const safeName = recipient.name.replace(/[^a-zA-Z0-9\s-]/g, '').replace(/\s+/g, '_').toLowerCase().slice(0, 64);
-            const filename = `owed_${safeName}_${new Date().toISOString().slice(0, 10)}.csv`;
+            const filename = `owed_${safeName}_${todayYmd()}.csv`;
             downloadBlob(blob, filename);
             toast.success(t('owesPage.export.success'));
         } catch (error) {

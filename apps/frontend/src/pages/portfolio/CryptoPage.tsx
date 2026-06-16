@@ -13,7 +13,7 @@ import { cn } from "@/lib/utils";
 import { useConfirmDialog } from "@/hooks/useConfirmDialog";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { useAppSettings } from "@/contexts/AppSettingsContext";
-import { numberFormatToLocale } from "@/utils/currency";
+import { useCurrencyFormatter } from "@/hooks/useCurrencyFormatter";
 import { useNavigate } from "react-router-dom";
 import { PageHeader } from "@/components/shared/PageHeader";
 import { PageError } from "@/components/shared/PageError";
@@ -30,7 +30,6 @@ export default function CryptoPage() {
   const { t } = useLanguage();
   const navigate = useNavigate();
   const { appSettings } = useAppSettings();
-  const locale = numberFormatToLocale(appSettings.numberFormat);
   const targetCurrency = appSettings.defaultCurrency || 'EUR';
   const { byAssetClass, deleteInvestment, refreshPrices, isRefreshingPrices, isLoading, isError, error, refetch } = usePortfolio();
   const { confirm, ConfirmDialog } = useConfirmDialog();
@@ -44,13 +43,7 @@ export default function CryptoPage() {
   const fxInfoById = new Map((apiSummary?.summaries ?? []).map((s) => [s.id, s]));
   const pageHasFxExposure = holdings.some((h) => (h.currency || 'EUR').toUpperCase() !== targetCurrency.toUpperCase());
 
-  function fmt(
-    val: number,
-    currency = targetCurrency,
-    decimals = appSettings.showDecimalPlaces
-  ) {
-    return new Intl.NumberFormat(locale, { style: "currency", currency, minimumFractionDigits: decimals, maximumFractionDigits: decimals }).format(val);
-  }
+  const fmt = useCurrencyFormatter(targetCurrency);
 
   function openMarketLookup(symbol?: string, investmentId?: number) {
     if (!symbol) return;

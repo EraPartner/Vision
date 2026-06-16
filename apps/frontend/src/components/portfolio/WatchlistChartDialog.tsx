@@ -23,7 +23,7 @@ import { cn } from "@/lib/utils";
 import { toast } from "sonner";
 import type { WatchlistItem } from "@/types/watchlist";
 
-import { API_BASE_URL } from "@/lib/api";
+import { apiClient } from "@/lib/api";
 
 const RANGES = [
   { label: "1M", range: "1mo", interval: "1d" },
@@ -32,11 +32,6 @@ const RANGES = [
   { label: "1Y", range: "1y", interval: "1wk" },
   { label: "5Y", range: "5y", interval: "1mo" },
 ];
-
-interface ChartPoint {
-  time: number;
-  close: number;
-}
 
 interface WatchlistChartDialogProps {
   item: WatchlistItem | null;
@@ -67,11 +62,7 @@ export function WatchlistChartDialog({ item, open, onOpenChange }: WatchlistChar
     queryFn: async () => {
       if (!item?.symbol) return null;
       try {
-        const res = await fetch(
-          `${API_BASE_URL}/api/market/chart?symbol=${encodeURIComponent(item.symbol)}&range=${selectedRange.range}&interval=${selectedRange.interval}`
-        );
-        if (!res.ok) return null;
-        return (await res.json()) as { symbol: string; currency: string; points: ChartPoint[] };
+        return await apiClient.getMarketChart(item.symbol, selectedRange.range, selectedRange.interval);
       } catch {
         return null;
       }
@@ -86,10 +77,8 @@ export function WatchlistChartDialog({ item, open, onOpenChange }: WatchlistChar
     queryFn: async () => {
       if (!item?.symbol) return null;
       try {
-        const res = await fetch(`${API_BASE_URL}/api/market/quote?symbols=${encodeURIComponent(item.symbol)}`);
-        if (!res.ok) return null;
-        const data = await res.json();
-        return data.quotes?.[0] || null;
+        const { quotes } = await apiClient.getMarketQuotes(item.symbol);
+        return quotes[0] ?? null;
       } catch {
         return null;
       }
@@ -103,13 +92,7 @@ export function WatchlistChartDialog({ item, open, onOpenChange }: WatchlistChar
     if (!item || !newTargetPrice) return;
 
     try {
-      const res = await fetch(`${API_BASE_URL}/api/watchlist/${item.id}`, {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ target_price: parseDecimal(newTargetPrice) }),
-      });
-
-      if (!res.ok) throw new Error("Failed to update");
+      await apiClient.updateWatchlistItem(item.id, { target_price: parseDecimal(newTargetPrice) });
 
       queryClient.invalidateQueries({ queryKey: ["watchlist"] });
       toast.success(t('watchlist.targetUpdated'));

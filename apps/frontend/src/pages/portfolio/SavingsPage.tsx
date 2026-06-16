@@ -9,7 +9,7 @@ import { InvestmentDetailDialog } from "@/components/portfolio/InvestmentDetailD
 import { useConfirmDialog } from "@/hooks/useConfirmDialog";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { useAppSettings } from "@/contexts/AppSettingsContext";
-import { numberFormatToLocale } from "@/utils/currency";
+import { useCurrencyFormatter } from "@/hooks/useCurrencyFormatter";
 import { formatDateStringWithAppSettings } from "@/components/shared/dateUtils";
 import { parseYmd, daysBetween } from "@/lib/timezone";
 import { cn } from "@/lib/utils";
@@ -27,7 +27,6 @@ function daysUntil(dateStr?: string) {
 export default function SavingsPage() {
   const { t } = useLanguage();
   const { appSettings } = useAppSettings();
-  const locale = numberFormatToLocale(appSettings.numberFormat);
   const targetCurrency = appSettings.defaultCurrency || 'EUR';
   const { byAssetClass, deleteInvestment, isLoading, isError, error, refetch } = usePortfolio();
   const { confirm, ConfirmDialog } = useConfirmDialog();
@@ -35,13 +34,7 @@ export default function SavingsPage() {
 
   const { convertToTarget } = useCurrencyConverter(targetCurrency);
 
-  function fmt(
-    val: number,
-    currency = targetCurrency,
-    decimals = appSettings.showDecimalPlaces
-  ) {
-    return new Intl.NumberFormat(locale, { style: "currency", currency, minimumFractionDigits: decimals, maximumFractionDigits: decimals }).format(val);
-  }
+  const fmt = useCurrencyFormatter(targetCurrency);
 
   const totalBalance = accounts.reduce((s, a) => s + convertToTarget(a.currentValue, a.currency), 0);
   const totalInterestEarned = accounts.reduce((s, a) => s + convertToTarget(a.totalIncome, a.currency), 0);

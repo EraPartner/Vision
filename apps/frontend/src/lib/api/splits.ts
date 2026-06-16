@@ -1,4 +1,5 @@
-import { API_BASE_URL, apiRequest, generateRequestId, parseEnvelopeError } from '@/lib/api/client';
+import { apiRequest } from '@/lib/api/client';
+import { requestBlob } from '@/lib/api/helpers';
 
 export interface SplitItem {
     id: number;
@@ -53,16 +54,7 @@ export function getOwedByRecipient(recipientId: number): Promise<{ items: OwedDe
 }
 
 export async function exportOwedByRecipientCsv(recipientId: number): Promise<Blob> {
-    const response = await fetch(`${API_BASE_URL}/api/splits/owed/${recipientId}/export/csv`, {
-        method: 'GET',
-        headers: { 'X-Request-Id': generateRequestId() },
-    });
-
-    if (!response.ok) {
-        throw await parseEnvelopeError(response, 'Failed to export owed transactions');
-    }
-
-    return response.blob();
+    return requestBlob(`/api/splits/owed/${recipientId}/export/csv`);
 }
 
 export function getSplitsByTransaction(transactionId: number): Promise<{ items: SplitItem[] }> {

@@ -1,8 +1,8 @@
 import { useState } from "react";
 import { useLanguage } from "@/contexts/LanguageContext";
-import { API_BASE_URL } from "@/lib/api";
-import { generateRequestId, parseEnvelopeError } from "@/lib/api/client";
+import { requestBlob } from "@/lib/api/helpers";
 import { downloadBlob } from "@/lib/downloadBlob";
+import { todayYmd } from "@/lib/timezone";
 import { Button } from "@/components/ui/button";
 import { Download, Loader2 } from "lucide-react";
 import { toast } from "sonner";
@@ -46,7 +46,7 @@ function slugify(label: string): string {
 
 function buildFilename(format: ExportFormat, filterLabel?: string): string {
     const ext = format === 'json' ? 'ndjson' : 'csv';
-    const date = new Date().toISOString().slice(0, 10);
+    const date = todayYmd();
     const slug = filterLabel ? slugify(filterLabel) : '';
     const middle = slug || 'filtered';
     return `transactions_${middle}_${date}.${ext}`;
@@ -61,15 +61,7 @@ export function TransactionsExportButtons(props: TransactionsExportButtonsProps)
         setExportingFormat(format);
         try {
             const qs = buildQueryString(props);
-            const url = `${API_BASE_URL}/api/transactions/export/${format}${qs ? `?${qs}` : ''}`;
-            const response = await fetch(url, {
-                method: 'GET',
-                headers: { 'X-Request-Id': generateRequestId() },
-            });
-            if (!response.ok) {
-                throw await parseEnvelopeError(response, t('txPage.toast.exportFailed'));
-            }
-            const blob = await response.blob();
+            const blob = await requestBlob(`/api/transactions/export/${format}${qs ? `?${qs}` : ''}`);
             downloadBlob(blob, buildFilename(format, props.filterLabel));
             toast.success(t('txPage.toast.exportSuccess'));
         } catch (error) {

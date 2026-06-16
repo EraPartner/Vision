@@ -27,16 +27,7 @@ import { RemoteNewsImage } from "@/components/shared/RemoteNewsImage";
 import { useSearchParams } from "react-router-dom";
 import { PageHeader } from "@/components/shared/PageHeader";
 
-import { API_BASE_URL } from "@/lib/api";
-
-interface NewsArticle {
-  title: string;
-  link: string;
-  publisher: string;
-  publishedAt: number | null;
-  thumbnail: string | null;
-  relatedSymbols: string[];
-}
+import { apiClient } from "@/lib/api";
 
 const RANGES = [
   { label: "1D", range: "1d", interval: "5m" },
@@ -66,13 +57,6 @@ function rangeToFromMs(range: string): number {
     case "max": return 0;
     default: return now - 30 * DAY_MS;
   }
-}
-
-interface SearchResult {
-  symbol: string;
-  name: string;
-  type: string;
-  exchange: string;
 }
 
 interface AnalystConsensus {
@@ -195,12 +179,7 @@ export default function MarketLookupPage() {
   // Search
   const { data: searchResults, isFetching: isSearching } = useQuery({
     queryKey: ["market-search", debouncedSearch],
-    queryFn: async () => {
-      const res = await fetch(`${API_BASE_URL}/api/market/search?q=${encodeURIComponent(debouncedSearch)}`);
-      if (!res.ok) return { items: [] as SearchResult[] };
-      const envelope = await res.json() as { data: { items: SearchResult[] } };
-      return envelope.data;
-    },
+    queryFn: () => apiClient.searchMarket(debouncedSearch),
     enabled: debouncedSearch.length >= 1,
     staleTime: 60_000,
   });
@@ -209,10 +188,8 @@ export default function MarketLookupPage() {
   const { data: quoteData, isFetching: isQuoteLoading } = useQuery({
     queryKey: ["market-quote", effectiveSelectedSymbol],
     queryFn: async () => {
-      const res = await fetch(`${API_BASE_URL}/api/market/quote?symbols=${encodeURIComponent(effectiveSelectedSymbol!)}`);
-      if (!res.ok) throw new Error("Quote fetch failed");
-      const envelope = await res.json() as { data: { quotes: Quote[] } };
-      return envelope.data.quotes[0] || null;
+      const { quotes } = await apiClient.getMarketQuotes<Quote>(effectiveSelectedSymbol!);
+      return quotes[0] ?? null;
     },
     enabled: useYahoo,
     staleTime: 30_000,
@@ -222,14 +199,8 @@ export default function MarketLookupPage() {
   // Chart
   const { data: chartData, isFetching: isChartLoading } = useQuery({
     queryKey: ["market-chart", effectiveSelectedSymbol, selectedRange.range, selectedRange.interval],
-    queryFn: async () => {
-      const res = await fetch(
-        `${API_BASE_URL}/api/market/chart?symbol=${encodeURIComponent(effectiveSelectedSymbol!)}&range=${selectedRange.range}&interval=${selectedRange.interval}`
-      );
-      if (!res.ok) throw new Error("Chart fetch failed");
-      const envelope = await res.json() as { data: { symbol: string; currency: string; points: ChartPoint[] } };
-      return envelope.data;
-    },
+    queryFn: () =>
+      apiClient.getMarketChart(effectiveSelectedSymbol!, selectedRange.range, selectedRange.interval),
     enabled: useYahoo,
     staleTime: 60_000,
   });
@@ -264,12 +235,7 @@ export default function MarketLookupPage() {
   // News
   const { data: newsData, isFetching: isNewsLoading } = useQuery({
     queryKey: ["market-news", effectiveSelectedSymbol],
-    queryFn: async () => {
-      const res = await fetch(`${API_BASE_URL}/api/market/news?symbols=${encodeURIComponent(effectiveSelectedSymbol!)}&count=10`);
-      if (!res.ok) throw new Error("News fetch failed");
-      const envelope = await res.json() as { data: { articles: NewsArticle[] } };
-      return envelope.data;
-    },
+    queryFn: () => apiClient.getMarketNews([effectiveSelectedSymbol!], 10),
     enabled: useYahoo,
     staleTime: 120_000,
   });

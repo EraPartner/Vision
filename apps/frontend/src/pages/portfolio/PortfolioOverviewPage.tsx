@@ -1,6 +1,6 @@
 import { useLanguage } from "@/contexts/LanguageContext";
 import { useAppSettings } from "@/contexts/AppSettingsContext";
-import { numberFormatToLocale } from "@/utils/currency";
+import { useCurrencyFormatter } from "@/hooks/useCurrencyFormatter";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -18,7 +18,7 @@ import { ASSET_CLASS_LABELS, getAssetClassGroups } from "@/types/portfolio";
 import { isUnitBased } from "@/utils/assetClass";
 import { cn } from "@/lib/utils";
 import { useConfirmDialog } from "@/hooks/useConfirmDialog";
-import { useCallback, useMemo } from "react";
+import { useMemo } from "react";
 import { useCurrencyConverter } from "@/hooks/useCurrencyConverter";
 import { useOnlineStatus } from "@/hooks/useOnlineStatus";
 import { WidgetVisibilityDialog } from "@/components/shared/WidgetVisibilityDialog";
@@ -47,7 +47,6 @@ export default function PortfolioOverviewPage() {
   const { t, tc } = useLanguage();
   const { appSettings } = useAppSettings();
   const targetCurrency = appSettings.defaultCurrency || 'EUR';
-  const locale = numberFormatToLocale(appSettings.numberFormat);
   const {
     summaries, transactions,
     deleteInvestment, refreshPrices, isRefreshingPrices
@@ -60,26 +59,7 @@ export default function PortfolioOverviewPage() {
 
   const { convertToTarget } = useCurrencyConverter(targetCurrency);
 
-  const formatterCache = useMemo(() => new Map<string, Intl.NumberFormat>(), []);
-
-  const fmt = useCallback((
-    val: number,
-    currency = targetCurrency,
-    decimals = appSettings.showDecimalPlaces
-  ) => {
-    const key = `${locale}:${currency}:${decimals}`;
-    let formatter = formatterCache.get(key);
-    if (!formatter) {
-      formatter = new Intl.NumberFormat(locale, {
-        style: "currency",
-        currency,
-        minimumFractionDigits: decimals,
-        maximumFractionDigits: decimals,
-      });
-      formatterCache.set(key, formatter);
-    }
-    return formatter.format(val);
-  }, [targetCurrency, appSettings.showDecimalPlaces, formatterCache, locale]);
+  const fmt = useCurrencyFormatter(targetCurrency);
 
   const assetClassGroups = useMemo(() => getAssetClassGroups(t), [t]);
 

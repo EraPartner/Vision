@@ -15,10 +15,44 @@ export function getMarketNews(
     return requestWithQuery('/api/market/news', params);
 }
 
-export function getMarketQuotes(
+export interface MarketQuote {
+    symbol: string;
+    price: number;
+    change: number;
+    changePercent: number;
+}
+
+/**
+ * Fetch quotes for one or more comma-separated symbols. The default `Q` covers
+ * the fields every caller relies on; pass a richer type parameter (e.g. the
+ * market-lookup page's full `Quote`) when the endpoint's extra fields are needed.
+ */
+export function getMarketQuotes<Q = MarketQuote>(
     symbols: string,
-): Promise<{ quotes: Array<{ symbol: string; price: number; change: number; changePercent: number }> }> {
+): Promise<{ quotes: Q[] }> {
     return apiRequest(`/api/market/quote?symbols=${encodeURIComponent(symbols)}`);
+}
+
+export interface MarketChartPoint {
+    time: number;
+    close: number;
+    high: number;
+    low: number;
+    volume: number;
+}
+
+export interface MarketChartResponse<P = MarketChartPoint> {
+    symbol?: string;
+    currency?: string;
+    points: P[];
+}
+
+export function getMarketChart<P = MarketChartPoint>(
+    symbol: string,
+    range: string,
+    interval: string,
+): Promise<MarketChartResponse<P>> {
+    return requestWithQuery('/api/market/chart', { symbol, range, interval });
 }
 
 export interface MarketSearchResult {

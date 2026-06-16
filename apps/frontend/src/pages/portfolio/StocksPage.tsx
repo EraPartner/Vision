@@ -5,6 +5,7 @@ import { TrendingUp, Trash2, Eye, DollarSign, ArrowUpRight } from "lucide-react"
 import { usePortfolio } from "@/hooks/usePortfolio";
 import { usePortfolioSummaryQuery } from "@/hooks/portfolio/usePortfolioSummary";
 import { useCurrencyConverter } from "@/hooks/useCurrencyConverter";
+import { useCurrencyFormatter } from "@/hooks/useCurrencyFormatter";
 import { AddInvestmentDialog } from "@/components/portfolio/AddInvestmentDialog";
 import { AddPortfolioTxnDialog } from "@/components/portfolio/AddPortfolioTxnDialog";
 import { InvestmentDetailDialog } from "@/components/portfolio/InvestmentDetailDialog";
@@ -15,7 +16,6 @@ import type { InvestmentSummary } from "@/types/portfolio";
 import { useConfirmDialog } from "@/hooks/useConfirmDialog";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { useAppSettings } from "@/contexts/AppSettingsContext";
-import { numberFormatToLocale } from "@/utils/currency";
 import type { AssetClass } from "@/types/portfolio";
 import { useCallback, useMemo } from "react";
 import { useNavigate } from "react-router-dom";
@@ -54,7 +54,6 @@ export default function StocksPage({
   const { t } = useLanguage();
   const navigate = useNavigate();
   const { appSettings } = useAppSettings();
-  const locale = numberFormatToLocale(appSettings.numberFormat);
   const { byAssetClass, deleteInvestment, refreshPrices, isRefreshingPrices, isLoading, isError, error, refetch } = usePortfolio();
   const { confirm, ConfirmDialog } = useConfirmDialog();
   const holdings = useMemo(() => byAssetClass(assetClasses), [byAssetClass, assetClasses]);
@@ -74,26 +73,7 @@ export default function StocksPage({
     [holdings, targetCurrency],
   );
 
-  const formatterCache = useMemo(() => new Map<string, Intl.NumberFormat>(), []);
-
-  const fmt = useCallback((
-    val: number,
-    currency = targetCurrency,
-    decimals = appSettings.showDecimalPlaces
-  ) => {
-    const key = `${locale}:${currency}:${decimals}`;
-    let formatter = formatterCache.get(key);
-    if (!formatter) {
-      formatter = new Intl.NumberFormat(locale, {
-        style: "currency",
-        currency,
-        minimumFractionDigits: decimals,
-        maximumFractionDigits: decimals,
-      });
-      formatterCache.set(key, formatter);
-    }
-    return formatter.format(val);
-  }, [targetCurrency, appSettings.showDecimalPlaces, locale, formatterCache]);
+  const fmt = useCurrencyFormatter(targetCurrency);
 
   const getRateToEur = useCallback((currency?: string) => {
     const code = (currency || 'EUR').toUpperCase();

@@ -9,7 +9,8 @@ import type {
     TransactionsListResponse,
     TransactionUpdate,
 } from '@/types/api';
-import { API_BASE_URL, apiRequest } from '@/lib/api/client';
+import { apiRequest } from '@/lib/api/client';
+import { requestBlob } from '@/lib/api/helpers';
 import { requestWithQuery } from '@/lib/api/helpers';
 
 export async function getTransactions(params?: {
@@ -84,21 +85,14 @@ export function bulkUpdateTransactions(request: BulkUpdateRequest): Promise<Bulk
 }
 
 /**
- * Streams a bulk export to the browser as a `Blob`. Bypasses `apiRequest` because
- * the response is a binary/text stream rather than the standard JSON envelope.
+ * Streams a bulk export to the browser as a `Blob`. Uses `requestBlob` (shared
+ * tracked transport) rather than `apiRequest` because the response is a
+ * binary/text stream rather than the standard JSON envelope.
  */
 export async function bulkExportTransactions(request: BulkExportRequest): Promise<Blob> {
-    const response = await fetch(`${API_BASE_URL}/api/transactions/bulk-export`, {
+    return requestBlob('/api/transactions/bulk-export', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(request),
     });
-
-    if (!response.ok) {
-        const errBody = await response.json().catch(() => null);
-        const message = errBody?.error?.message ?? `Export failed (HTTP ${response.status})`;
-        throw new Error(message);
-    }
-
-    return response.blob();
 }
