@@ -56,6 +56,8 @@ export interface AppSettings {
     autoAdaptDisplay: boolean;
     /** Section whose main page the app opens on at launch. */
     startupSection: StartupSection;
+    /** Auto-clear a planned payment when an imported/created transaction unambiguously matches it. */
+    autoClearPlannedOnMatch: boolean;
 }
 
 // ─── Dashboard settings types ─────────────────────────────────────────────────
@@ -93,6 +95,7 @@ export const DEFAULT_APP_SETTINGS: AppSettings = {
     visualEffects: 'standard',
     autoAdaptDisplay: true,
     startupSection: 'budgeting',
+    autoClearPlannedOnMatch: true,
 };
 
 /**

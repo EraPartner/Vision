@@ -224,6 +224,34 @@ export const plannedTransactionRepository = {
     return { items: rows, total };
   },
 
+  // Lightweight candidate list for auto-link / match suggestions. Returns only
+  // the fields the matcher needs (recipient cluster root, amount, planned_date)
+  // for active, not-yet-executed rows. Loans are excluded: their installments
+  // carry amortization semantics that a fuzzy recipient+amount match must not
+  // silently advance. Recurring rows are always eligible (they never stay
+  // is_executed=true), one-off rows only while is_executed=false.
+  async listActiveUnexecuted() {
+    const result = await query(
+      `SELECT pt.id,
+              pt.recipient_id,
+              COALESCE(r.primary_recipient_id, pt.recipient_id) AS recipient_cluster_id,
+              pt.amount,
+              pt.planned_date,
+              pt.currency,
+              pt.is_recurring,
+              pt.recurrence_pattern,
+              pt.memo,
+              r.name AS recipient_name
+         FROM planned_transactions pt
+         LEFT JOIN recipients r ON pt.recipient_id = r.id
+        WHERE pt.is_active = true
+          AND pt.is_executed = false
+          AND pt.recipient_id IS NOT NULL
+          AND (pt.is_loan = false OR pt.is_loan IS NULL)`
+    );
+    return result.rows;
+  },
+
   async getById(id) {
     const sql = `
       SELECT pt.*,

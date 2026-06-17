@@ -2616,6 +2616,54 @@ paths:
                         items:
                           $ref: "#/components/schemas/PlannedTransaction"
 
+  /api/planned-transactions/match-suggestions:
+    get:
+      summary: List planned payments with likely-matching unlinked transactions
+      description: >
+        Active, unexecuted planned payments that have one or more recent unlinked
+        transactions within match tolerance (same recipient cluster, sign, ±5%
+        amount, ±5 days) but were not auto-cleared — ambiguous matches or
+        auto-clear disabled. Each entry carries its candidate transactions for
+        the user to confirm.
+      operationId: getPlannedMatchSuggestions
+      tags: [PlannedTransactions]
+      responses:
+        "200":
+          description: Match suggestions
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/Envelope"
+                  - type: object
+                    properties:
+                      data:
+                        type: array
+                        items:
+                          type: object
+                          properties:
+                            planned:
+                              type: object
+                              properties:
+                                id: { type: integer }
+                                recipient_id: { type: integer, nullable: true }
+                                recipient_name: { type: string, nullable: true }
+                                amount: { type: number }
+                                planned_date: { type: string }
+                                currency: { type: string, nullable: true }
+                                is_recurring: { type: boolean }
+                            candidates:
+                              type: array
+                              items:
+                                type: object
+                                properties:
+                                  id: { type: integer }
+                                  recipient_name: { type: string, nullable: true }
+                                  amount: { type: number }
+                                  transaction_date: { type: string }
+                                  currency: { type: string, nullable: true }
+                                  memo: { type: string, nullable: true }
+
   /api/planned-transactions/{id}:
     parameters:
       - in: path

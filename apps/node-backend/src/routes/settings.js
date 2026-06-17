@@ -99,6 +99,7 @@ const SETTING_DEFAULTS = {
     startOfWeek: 'monday',
     showDecimalPlaces: 2,
     language: 'en',
+    autoClearPlannedOnMatch: true,
   },
   dashboard_settings: {
     excludedCategoryIds: [],

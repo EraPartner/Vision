@@ -194,7 +194,7 @@ describe('commitBatch', () => {
       if (sql.includes('INSERT INTO transactions')) return { rows: [{ id: 100 }] }
       return { rows: [] }
     })
-    expect(await commitBatch({ batchId: 1 })).toEqual({ imported: 1, duplicates: 0, errors: 0 })
+    expect(await commitBatch({ batchId: 1 })).toEqual({ imported: 1, duplicates: 0, errors: 0, autoLinkedCount: 0 })
     expect(refreshAggregations).toHaveBeenCalledOnce()
   })
 
@@ -220,7 +220,7 @@ describe('commitBatch', () => {
       if (sql.includes('SELECT t.id')) return { rows: [{ id: 999 }] }
       return { rows: [] }
     })
-    expect(await commitBatch({ batchId: 2 })).toEqual({ imported: 0, duplicates: 1, errors: 0 })
+    expect(await commitBatch({ batchId: 2 })).toEqual({ imported: 0, duplicates: 1, errors: 0, autoLinkedCount: 0 })
     expect(refreshAggregations).not.toHaveBeenCalled()
   })
 
@@ -230,7 +230,7 @@ describe('commitBatch', () => {
       if (sql.includes('INSERT INTO transactions')) throw new Error('constraint violation')
       return { rows: [] }
     })
-    expect(await commitBatch({ batchId: 3 })).toEqual({ imported: 0, duplicates: 0, errors: 1 })
+    expect(await commitBatch({ batchId: 3 })).toEqual({ imported: 0, duplicates: 0, errors: 1, autoLinkedCount: 0 })
   })
 
   it('rejects a non-integer staging row.id before issuing SAVEPOINT', async () => {
@@ -239,7 +239,7 @@ describe('commitBatch', () => {
     // identifier interpolation would become an injection vector. The assert
     // makes that fail loudly rather than silently injecting.
     setupCommit({ ...matchedRow, id: "1; DROP TABLE x" })
-    expect(await commitBatch({ batchId: 4 })).toEqual({ imported: 0, duplicates: 0, errors: 1 })
+    expect(await commitBatch({ batchId: 4 })).toEqual({ imported: 0, duplicates: 0, errors: 1, autoLinkedCount: 0 })
     const savepointCalls = mockClient.query.mock.calls.filter(
       ([sql]) => typeof sql === 'string' && sql.startsWith('SAVEPOINT'),
     )

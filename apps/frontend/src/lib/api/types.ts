@@ -33,6 +33,8 @@ export interface ImportResult {
     error_message?: string;
     batch_id?: number;
     requires_review?: boolean;
+    /** Planned payments auto-cleared by matching imported transactions. */
+    auto_linked_count?: number;
 }
 
 export type MatchSource = 'exact' | 'fuzzy' | 'pattern' | 'new';

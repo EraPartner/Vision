@@ -72,6 +72,7 @@ router.post('/csv', csvUpload.single('file'), async (req, res) => {
       duplicates: pipelineResult.duplicates,
       errors: pipelineResult.errors,
       batch_id: pipelineResult.batchId,
+      auto_linked_count: pipelineResult.autoLinkedCount || 0,
     };
 
     logger.info('CSV import completed', { bankName, fileName: req.file.originalname, ...result });
@@ -150,6 +151,7 @@ router.post('/csv/custom', csvUpload.single('file'), async (req, res) => {
       duplicates: pipelineResult.duplicates,
       errors: pipelineResult.errors,
       batch_id: pipelineResult.batchId,
+      auto_linked_count: pipelineResult.autoLinkedCount || 0,
     };
     res.status(201);
     res.ok(buildImportResult(result));
@@ -278,6 +280,7 @@ router.post('/csv/stream', csvUpload.single('file'), async (req, res) => {
         duplicates: pipelineResult.duplicates,
         errors: pipelineResult.errors,
         batch_id: pipelineResult.batchId,
+        auto_linked_count: pipelineResult.autoLinkedCount || 0,
       };
       await writer.write('complete', {
         ...result,
@@ -549,10 +552,17 @@ router.post('/batches/:id/commit', async (req, res) => {
     throw new ValidationError(`Batch ${batchId} is not in a reviewable state (status: ${batch.status})`);
   }
 
-  const { imported, duplicates, errors } = await commitImport({ batchId });
+  const { imported, duplicates, errors, autoLinkedCount } = await commitImport({ batchId });
 
-  logger.info('[import] batch committed after review', { batchId, imported, duplicates, errors });
-  res.ok(buildImportResult({ batch_id: batchId, total: imported + duplicates + errors, imported, duplicates, errors }));
+  logger.info('[import] batch committed after review', { batchId, imported, duplicates, errors, autoLinkedCount });
+  res.ok(buildImportResult({
+    batch_id: batchId,
+    total: imported + duplicates + errors,
+    imported,
+    duplicates,
+    errors,
+    auto_linked_count: autoLinkedCount || 0,
+  }));
 });
 
 // Multer error translator — convert to typed errors so global handler emits envelope.
