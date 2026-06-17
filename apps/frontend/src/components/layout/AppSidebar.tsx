@@ -395,13 +395,14 @@ function WorkspaceTab({
   return (
     <button
       onClick={onClick}
-      className={`flex-1 flex items-center justify-center gap-1.5 rounded-lg px-2 py-1.5 text-xs font-medium tracking-tight transition-all duration-[var(--duration-normal)] ease-[var(--ease-out-expo)] ${active
+      title={label}
+      className={`min-w-0 flex-1 flex items-center justify-center gap-1 rounded-lg px-1.5 py-1.5 text-xs font-medium tracking-tight transition-all duration-[var(--duration-normal)] ease-[var(--ease-out-expo)] ${active
           ? "bg-background/90 text-foreground shadow-[0_6px_18px_-8px_hsl(var(--primary)/0.35)] ring-1 ring-primary/25 scale-[1.02]"
           : "text-muted-foreground hover:text-foreground hover:bg-background/40"
         }`}
     >
-      <span className={`transition-colors duration-200 ${active ? "text-primary" : ""}`}>{icon}</span>
-      {label}
+      <span className={`shrink-0 transition-colors duration-200 ${active ? "text-primary" : ""}`}>{icon}</span>
+      <span className="truncate">{label}</span>
     </button>
   );
 }
