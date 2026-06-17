@@ -71,7 +71,7 @@ export async function prepareImport({ batchId, filePath, adapterName, customConf
  * Applies user_override_recipient_id before writing transactions.
  *
  * @param {{ batchId: number, onProgress?: Function }} args
- * @returns {Promise<{ imported: number, duplicates: number, errors: number }>}
+ * @returns {Promise<{ imported: number, duplicates: number, errors: number, autoLinkedCount: number }>}
  */
 export async function commitImport({ batchId, onProgress }) {
   const { imported, duplicates, errors, autoLinkedCount } = await commitBatch({ batchId, onProgress });
@@ -104,7 +104,7 @@ export async function commitImport({ batchId, onProgress }) {
  * for the frontend to present the ImportReviewPage.
  *
  * @param {{ filePath: string, adapterName: string, customConfig?: object, filename?: string, sizeBytes?: number, onProgress?: Function }} args
- * @returns {Promise<{ batchId: number, total: number, requiresReview: boolean, imported?: number, duplicates?: number, errors?: number, matchSourceCounts?: object }>}
+ * @returns {Promise<{ batchId: number, total: number, requiresReview: boolean, imported?: number, duplicates?: number, errors?: number, matchSourceCounts?: object, autoLinkedCount?: number }>}
  */
 export async function runImportPipeline({ filePath, adapterName, customConfig, filename, sizeBytes, onProgress }) {
   const batchId = await createBatch({ adapterName, filename, sizeBytes, customConfig });
