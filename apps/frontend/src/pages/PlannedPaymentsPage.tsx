@@ -111,9 +111,10 @@ export default function PlannedPaymentsPage() {
 
   const totalMonthly = useMemo(() => {
     return payments
-      // "Est. monthly" = committed monthly OUTGOINGS, so only expense rows
-      // (amount < 0). Counting |income| (e.g. a +2000 salary) inflated the card.
-      .filter((p) => p.is_active && p.is_recurring && p.amount < 0)
+      // "Est. monthly" = net monthly impact of recurring rows: incoming
+      // (amount > 0) and outgoing (amount < 0) both counted, signed, so e.g.
+      // +70 income and -100 expense net to -30.
+      .filter((p) => p.is_active && p.is_recurring)
       .reduce((sum, p) => {
         const mult =
           p.frequency === "daily" ? 30 :
@@ -125,7 +126,7 @@ export default function PlannedPaymentsPage() {
                       p.frequency === "custom" && p.custom_interval_days ? 30 / p.custom_interval_days : 1;
         // Convert each row's amount to the display currency before summing —
         // raw summation counted a 500 USD subscription as 500 in the default currency.
-        return sum + Math.abs(convertToTarget(p.amount, p.currency)) * mult;
+        return sum + convertToTarget(p.amount, p.currency) * mult;
       }, 0);
   }, [payments, convertToTarget]);
 
@@ -473,7 +474,7 @@ export default function PlannedPaymentsPage() {
               </CardTitle>
             </CardHeader>
             <CardContent>
-              <p className="text-2xl font-bold tabular-nums"><Money amount={totalMonthly} /></p>
+              <p className="text-2xl font-bold tabular-nums"><Money amount={totalMonthly} signed /></p>
             </CardContent>
           </Card>
           <Card className="group relative overflow-hidden glass-regular premium-frame micro-lift">

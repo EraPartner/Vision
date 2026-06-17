@@ -7,7 +7,7 @@ updated: 2026-06-17
 tags: [feature, planned, recurring, bills, loans, phase-3, phase-12, calculations, immutability, error-handling, toast, atomic-patch, virtual-data-table, i18n-toasts, suggestion-card, upcoming-payments-hook, occurrence-key-dismissal, june-2026, auto-link, planned-match]
 aliases: [planned-payments, scheduled-payments, recurring-payments, bills, subscriptions, loan-amortization]
 description: Scheduled and recurring payment tracking - manage bills, subscriptions, and future expenses. June 2026: auto-link & auto-clear planned payments on match — ingested transactions are automatically linked to matching planned payments (same recipient cluster, same sign, ±5% amount, ±5 days); ambiguous matches surface as confirmable suggestions. PlannedPaymentsPage migrated from DataTable to VirtualDataTable; native alert() replaced with toast.error (new i18n keys plannedPage.toggleFailed/deleteFailed). V11: useUpcomingPlannedPayments shared hook (single fetch + shared dismissed-ID store); SuggestionCard dashboard widget; UpcomingPaymentsNotification stands down on dashboard route when suggestions widget is visible. June 2026 (B1 fix): dismissals now keyed per occurrence (id:YYYY-MM-DD) so recurring reminders re-surface each cycle; past-dated keys pruned on load; legacy id-only entries silently dropped on next load.
-related_code: ["apps/node-backend/src/routes/plannedTransactions.js", "apps/node-backend/src/repositories/plannedTransactionRepository.js", "apps/node-backend/src/services/plannedExecutionService.js", "apps/node-backend/src/services/plannedMatchService.js", "apps/node-backend/src/services/calculations/loanSchedule.js", "apps/node-backend/src/services/calculations/recurrence.js", "apps/node-backend/src/services/recurringDetectionService.js", "apps/frontend/src/components/planned/PlannedPaymentForm.tsx", "apps/frontend/src/components/planned/LinkTransactionDialog.tsx", "apps/frontend/src/components/planned/MatchSuggestionsBanner.tsx", "apps/frontend/src/components/planned/ExecutionHistoryDialog.tsx", "apps/frontend/src/components/notifications/UpcomingPaymentsNotification.tsx", "apps/frontend/src/components/shared/DatePicker.tsx", "apps/frontend/src/components/shared/dateUtils.ts", "apps/frontend/src/hooks/useUpcomingPlannedPayments.ts", "apps/frontend/src/hooks/usePlannedMatchSuggestions.ts"]
+related_code: ["apps/node-backend/src/routes/plannedTransactions.js", "apps/node-backend/src/repositories/plannedTransactionRepository.js", "apps/node-backend/src/services/plannedExecutionService.js", "apps/node-backend/src/services/plannedMatchService.js", "apps/node-backend/src/services/calculations/loanSchedule.js", "apps/node-backend/src/services/calculations/recurrence.js", "apps/node-backend/src/services/recurringDetectionService.js", "apps/frontend/src/pages/PlannedPaymentsPage.tsx", "apps/frontend/src/components/planned/PlannedPaymentForm.tsx", "apps/frontend/src/components/planned/LinkTransactionDialog.tsx", "apps/frontend/src/components/planned/MatchSuggestionsBanner.tsx", "apps/frontend/src/components/planned/ExecutionHistoryDialog.tsx", "apps/frontend/src/components/notifications/UpcomingPaymentsNotification.tsx", "apps/frontend/src/components/shared/DatePicker.tsx", "apps/frontend/src/components/shared/dateUtils.ts", "apps/frontend/src/hooks/useUpcomingPlannedPayments.ts", "apps/frontend/src/hooks/usePlannedMatchSuggestions.ts"]
 ---
 
 # Planned Transactions
@@ -655,6 +655,40 @@ After the VirtualDataTable migration the column widths were adjusted so the tabl
 | `actions` | 96 (fixed) | — | Action buttons column; fixed to prevent greedy flex growth |
 
 The category column's absence of `defaultWidth` is intentional — VirtualDataTable treats columns without a `defaultWidth` as the auto-fill column.
+
+### PlannedPaymentsPage — "Est. Monthly" Summary Card (June 2026)
+
+The summary bar at the top of `PlannedPaymentsPage` contains an **Est. Monthly** card whose value is computed by the `totalMonthly` `useMemo` in [[apps/frontend/src/pages/PlannedPaymentsPage.tsx]].
+
+**Semantics (current, as of 2026-06-17): net monthly figure.**
+
+The card shows the **net** monthly impact of all active recurring planned payments across both income and expense rows. Incoming (positive `amount`) and outgoing (negative `amount`) are both included with their original sign, so the result can be positive (net inflow), negative (net outflow), or zero.
+
+> [!info] Previous behavior (before 2026-06-17)
+> "Est. Monthly" previously summed only outgoing recurring rows (`amount < 0`) using `Math.abs`, so it displayed a positive cost figure and silently excluded recurring income. A user with a +70 monthly income and a −100 monthly expense would have seen 100 (outgoings only). Now they see −30 (net).
+
+**Calculation:**
+
+```
+totalMonthly = Σ ( convertToTarget(p.amount, p.currency) × frequencyMultiplier(p.frequency) )
+               for each p where p.is_active && p.is_recurring
+```
+
+Frequency-to-monthly multipliers:
+
+| Frequency | Multiplier |
+|-----------|-----------|
+| daily | 30 |
+| weekly | 4.33 |
+| biweekly | 2.17 |
+| monthly | 1 |
+| quarterly | 1/3 |
+| yearly | 1/12 |
+| custom | 30 / `custom_interval_days` |
+
+Each row's amount is converted to the display currency via `convertToTarget(amount, currency)` before being multiplied — this prevents raw multi-currency amounts from being summed in mismatched units.
+
+**Display:** The `<Money>` component for this card is rendered with the `signed` prop, so a net inflow displays an explicit leading `+` and a net outflow displays `−`. One-time (non-recurring) planned payments are excluded entirely; only rows where `is_recurring` is true contribute.
 
 ---
 
