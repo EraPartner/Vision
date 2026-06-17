@@ -3,7 +3,7 @@ title: UI Components
 type: component
 status: active
 date: 2026-04-17
-updated: 2026-06-16
+updated: 2026-06-17
 tags: [components, ui, radix, shadcn, design-system, phase-9, phase-5, performance, glass-downgrade, dependency-slim-down, liquid-glass-v2, premium-v3, june-2026, command-palette, rolling-number, money-typography, delta-pill, shortcuts-overlay, chart-skeleton, virtual-data-table, context-menu, quick-look, keyboard-nav, dialog-genie, icon-bounce, semantic-tokens, focus-visible, overscroll, glass-chrome, liquid-glass-sidebar, canvas-text, aurora-legibility, glass-consistency, popover-glass-thick, role-based-glass]
 description: Reusable UI components built on Radix UI primitives with Tailwind CSS, styled with emerald + champagne-gold palette and optimized design tokens. Phase 5 removes unused Carousel, Resizable, and Drawer wrappers. June 2026 Liquid Glass v2 — Card gains universal premium-frame hover, Dialog/AlertDialog use dialog-in/out keyframes, Sonner toasts are glass-thick, EmptyState upgraded, CommandPalette added. June 2026 Premium v3 — RollingNumber, Money, DeltaPill, ShortcutsOverlay, ChartSkeleton shared components; tabs.tsx animated active-pill indicator. June 2026 Premium v3 V5-V7 — VirtualDataTable gains per-row context menu, keyboard row navigation (↑/↓/Enter/Space), and onRowOpen/onRowQuickLook/rowContextMenu props; TransactionQuickLook added. V8: icon-success-bounce animation on Sonner success toast icons. V10: Dialog/AlertDialog genie exit (pointer-driven transform-origin via lib/dialogGenie.ts). June 2026 (UI sweep): ~130 raw palette colors replaced with semantic tokens; focus: → focus-visible: ring idiom; body overscroll-behavior-y: none. June 2026 (glass consistency): full popover family (Popover, DropdownMenu, Select, ContextMenu, MenuBar, HoverCard, Tooltip) converted to glass-thick, matching the dialog/sheet/toast tier.
 aliases: [ui-components, radix-components, shadcn-components, primitive-components]
@@ -36,6 +36,14 @@ The UI primitives use a shared surface system defined in [[apps/frontend/src/ind
 | `.glass-elevated` | 32px | Dashboard hero cards (StatCard, NetSummaryCard) |
 
 All glass tiers include `saturate(var(--glass-saturate))` — 180% in light mode, 150% in dark. Thick and elevated tiers add lensing edges (inset specular + concave shade + drop shadow).
+
+> [!info] June 2026 — `.glass-sticky-col` (tier-aware frozen-column helper)
+> A `position: sticky` first column inside a glass card needs a background opaque enough to occlude the value cells scrolling beneath it. Plain `bg-card` reads as a matte slab against the translucent card; a per-cell **gradient** is worse (it bands row-to-row down the stack of frozen cells); and `saturate()` over the blur amplifies the aurora behind the card into a muddy tint on the narrow column. `.glass-sticky-col` instead uses a **flat** tint that blends into the card material plus a plain (no-saturate) backdrop blur, scaled by the visual-effects tier (ADR-075):
+> - **reduced** (`.fx-reduced`) / `prefers-reduced-transparency` / no `backdrop-filter` support → fully opaque `hsl(var(--card))`, no blur.
+> - **standard** (base) → `hsl(var(--card) / 0.72)` + `blur(12px)`.
+> - **enhanced** (`.fx-enhanced`) → `hsl(var(--card) / 0.55)` + `blur(16px)` — the card glass reads softly through the column.
+>
+> The freeze edge is a **soft drop shadow** (`box-shadow: 7px 0 12px -9px …`) — a depth cue, not a hairline border (an earlier hairline read as a "weird border"). `VisualEffectsController` also tags `<html>` with `fx-enhanced` (standard carries no tier class — it is the CSS base). Used by the Category Pivot Table (`CategoryPivotTable.tsx`) on its frozen Category column: header, group/detail rows, and total row.
 
 > [!info] June 2026 — Role-based glass broadening (no ADR yet; a future ADR may formalize this)
 > ADR-070 (Liquid Glass v2) established a selective rule: "glass only on ~6 KPI/hero/chart surfaces per viewport; default Card stays opaque." In practice that produced inconsistency — content cards, chart wrappers, and stat cards on the same page were visibly mixed (some glass, some opaque) in the enhanced/vibrancy visual tier. The rule was broadened in June 2026 to a **role-based** model: `glass-regular` is now applied to ALL content / chart / stat / state (loading/empty/error) cards so peers shine consistently. The base `Card` component was NOT modified — glass remains opt-in via `className`. GPU trade-off: card-dense pages now exceed the old ~6-surface-per-viewport budget in standard/enhanced tier; mitigated by ADR-075 tier auto-adapt (auto-degrades to near-opaque under `fx-reduced` and on large displays). Profiling the packaged Electron app on Apple Silicon before each release remains the recommended watchpoint.

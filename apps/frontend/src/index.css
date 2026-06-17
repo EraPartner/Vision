@@ -425,6 +425,21 @@
         border-color: hsl(var(--destructive) / 0.44);
     }
 
+    /* Frozen first column inside a glass card (e.g. the Category Pivot Table).
+       A plain bg-card here reads as a flat matte slab against the translucent
+       card. This keeps the column on the same glass: a FLAT tint (never a
+       per-cell gradient — that bands row-to-row down a stack of cells) that
+       blends into the card material, plus a frosted backdrop blur that occludes
+       the value cells scrolling beneath it. The freeze edge is marked by a soft
+       drop shadow (a depth cue), NOT a hairline border. Translucency and blur
+       scale with the visual-effects tier (ADR-075): this base is the opaque
+       fallback (no backdrop-filter support, and the reduced tier); @supports
+       adds the standard frost; fx-enhanced is the most translucent. */
+    .glass-sticky-col {
+        background: hsl(var(--card));
+        box-shadow: 7px 0 12px -9px hsl(0 0% 0% / 0.5);
+    }
+
     /* Apply backdrop filters where supported, with saturation per material.
        Saturation is what makes blurred content glow through the material —
        blur alone reads as fog. */
@@ -458,6 +473,28 @@
         .liquid-glass-hero {
             -webkit-backdrop-filter: blur(var(--glass-elevated-blur)) saturate(var(--glass-saturate));
             backdrop-filter: blur(var(--glass-elevated-blur)) saturate(var(--glass-saturate));
+        }
+
+        /* Standard tier — translucent enough to blend into the card glass,
+           opaque enough to occlude scrolled cells. Deliberately NO saturate:
+           saturate amplifies the aurora behind the card into a muddy tint over
+           the narrow column. */
+        .glass-sticky-col {
+            background: hsl(var(--card) / 0.72);
+            -webkit-backdrop-filter: blur(12px);
+            backdrop-filter: blur(12px);
+        }
+
+        /* Enhanced tier — more translucent and a wider blur so the card glass
+           and aurora read softly through the frozen column. Gated to
+           no-preference so it yields to prefers-reduced-transparency (whose
+           opaque fallback would otherwise lose this selector's specificity). */
+        @media (prefers-reduced-transparency: no-preference) {
+            :root.fx-enhanced .glass-sticky-col {
+                background: hsl(var(--card) / 0.55);
+                -webkit-backdrop-filter: blur(16px);
+                backdrop-filter: blur(16px);
+            }
         }
     }
 
@@ -996,6 +1033,13 @@
             background: hsl(var(--card) / 0.97);
         }
 
+        /* Frozen column must stay fully opaque (it occludes scrolling cells). */
+        .glass-sticky-col {
+            backdrop-filter: none;
+            -webkit-backdrop-filter: none;
+            background: hsl(var(--card));
+        }
+
         .liquid-canvas {
             display: none;
         }
@@ -1031,6 +1075,15 @@
 
     :root.fx-reduced .liquid-canvas {
         display: none;
+    }
+
+    /* Reduced tier — frozen column goes fully opaque and unblurred. It must
+       stay opaque: with no blur to hide them, the value cells scrolling under
+       the column would otherwise ghost through. */
+    :root.fx-reduced .glass-sticky-col {
+        background: hsl(var(--card));
+        -webkit-backdrop-filter: none;
+        backdrop-filter: none;
     }
 
     /* Large display while the user kept a higher tier (auto-adapt off):
