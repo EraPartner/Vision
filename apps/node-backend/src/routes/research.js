@@ -19,6 +19,7 @@ import { researchMappingService } from '../services/research/researchMappingServ
 import * as researchProviderKeyService from '../services/research/researchProviderKeyService.js';
 import { runPortfolioForecast } from '../services/research/projection/portfolioProjection.js';
 import { fundamentalsScorecard } from '../services/research/fundamentalsScorecard.js';
+import { MACRO_PROVIDERS, isValidSeriesId } from '../services/research/adapters/macroCatalog.js';
 
 const router = Router();
 
@@ -101,6 +102,34 @@ router.get('/news', async (req, res) => {
   const symbol = single(req.query.symbol);
   if (!symbol) throw new ValidationError('symbol parameter required');
   await respond(res, 'news', { symbol });
+});
+
+// ─── Macro economic indicators (ADR-082) ────────────────────────────────────
+// Provider-pinned (FRED / Eurostat / DBnomics), NOT raced. macro/search fans out
+// and unions a catalog/search; macro/series fetches one provider's observations.
+
+// GET /api/research/macro/search?q=inflation
+router.get('/macro/search', async (req, res) => {
+  const q = single(req.query.q);
+  if (!q) return res.ok({ items: [] }, { provider: null, source: 'live' });
+  const result = await researchAggregator.searchMacro(q);
+  res.ok({ items: result.items ?? [] }, { provider: null, source: result.source });
+});
+
+// GET /api/research/macro/series?provider=fred&series_id=CPIAUCSL&range=5y
+router.get('/macro/series', async (req, res) => {
+  const provider = single(req.query.provider);
+  const seriesId = single(req.query.series_id);
+  if (!MACRO_PROVIDERS.includes(provider)) {
+    throw new ValidationError(`provider must be one of: ${MACRO_PROVIDERS.join(', ')}`);
+  }
+  if (!isValidSeriesId(provider, seriesId)) {
+    throw new ValidationError('valid series_id required for the given provider');
+  }
+  const range = single(req.query.range) || '5y';
+  const result = await researchAggregator.fetchMacroSeries({ provider, seriesId, range });
+  const data = result.source === 'unavailable' ? { provider, seriesId, points: [] } : result.data;
+  res.ok(data ?? null, { provider: result.provider ?? provider, source: result.source });
 });
 
 // ─── Analytics: portfolio forecast + fundamentals scorecard (ADR-081) ───────

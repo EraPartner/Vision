@@ -20,7 +20,7 @@ import { SymbolSearchBox } from "@/components/shared/SymbolSearchBox";
 import { useDebounce } from "@/hooks/useDebounce";
 import { apiClient } from "@/lib/api";
 import { sma, ema, bollinger, rsi, macd } from "@/lib/research/indicators";
-import type { ResearchChartPoint, ResearchRange } from "@/types/research";
+import type { MacroProvider, MacroSeriesItem, ResearchChartPoint, ResearchRange } from "@/types/research";
 
 const RANGES: { label: string; range: ResearchRange }[] = [
   { label: "1M", range: "1mo" },
@@ -43,6 +43,18 @@ interface BuilderSeries {
   type: SeriesType;
   axis: "left" | "right";
   provider: string;
+  /** Set when this is a macroeconomic series (ADR-082); provider-pinned, fetched via getMacroSeries. */
+  macro?: { provider: MacroProvider; seriesId: string; title: string };
+}
+
+/** Stable fetch/cache key for a series — distinct (symbol,provider) for tickers, (provider,seriesId) for macro. */
+function seriesKey(s: Pick<BuilderSeries, "symbol" | "provider" | "macro">): string {
+  return s.macro ? `m|${s.macro.provider}|${s.macro.seriesId}` : `c|${s.symbol}|${s.provider}`;
+}
+
+/** Display label for a series (macro uses its title; tickers use the symbol). */
+function seriesLabel(s: BuilderSeries): string {
+  return s.macro ? s.macro.title : s.symbol;
 }
 
 type IndicatorType = "sma" | "ema" | "bollinger";
@@ -109,6 +121,15 @@ export default function ChartBuilderPage() {
     enabled: debouncedSearch.length >= 1,
     staleTime: 60_000,
   });
+  // Macro search runs alongside the ticker search; results merge into one
+  // dropdown, tagged "Economic" (ADR-082). Keyless providers always respond;
+  // FRED contributes only when its key is configured.
+  const { data: macroResult } = useQuery({
+    queryKey: ["macro-search", debouncedSearch],
+    queryFn: () => apiClient.searchMacro(debouncedSearch),
+    enabled: debouncedSearch.length >= 1,
+    staleTime: 60_000,
+  });
 
   const addSeries = (symbol: string) => {
     const s = symbol.toUpperCase();
@@ -116,6 +137,24 @@ export default function ChartBuilderPage() {
       if (prev.series.length >= MAX_SERIES) return prev;
       const id = uid();
       const next = [...prev.series, { id, symbol: s, field: "price" as Field, type: "line" as SeriesType, axis: "left" as const, provider: "" }];
+      return { ...prev, series: next, oscillatorSeriesId: prev.oscillatorSeriesId ?? id };
+    });
+    setSearchText("");
+  };
+
+  const addMacroSeries = (item: MacroSeriesItem) => {
+    setState((prev) => {
+      if (prev.series.length >= MAX_SERIES) return prev;
+      const id = uid();
+      const next: BuilderSeries[] = [...prev.series, {
+        id,
+        symbol: item.seriesId,
+        field: "price",
+        type: "line",
+        axis: "left",
+        provider: item.provider,
+        macro: { provider: item.provider, seriesId: item.seriesId, title: item.title },
+      }];
       return { ...prev, series: next, oscillatorSeriesId: prev.oscillatorSeriesId ?? id };
     });
     setSearchText("");
@@ -138,30 +177,32 @@ export default function ChartBuilderPage() {
     patch({ indicators: indicators.map((i) => (i.id === id ? { ...i, ...p } : i)) });
   const removeIndicator = (id: string) => patch({ indicators: indicators.filter((i) => i.id !== id) });
 
-  // ── Fetch chart data per distinct (symbol, provider) ──
+  // ── Fetch chart data per distinct series key (ticker or macro) ──
   const fetchKeys = useMemo(() => {
     const seen = new Set<string>();
-    const keys: { symbol: string; provider: string }[] = [];
+    const keys: { key: string; symbol: string; provider: string; macro?: BuilderSeries["macro"] }[] = [];
     for (const s of series) {
-      const k = `${s.symbol}|${s.provider}`;
-      if (!seen.has(k)) { seen.add(k); keys.push({ symbol: s.symbol, provider: s.provider }); }
+      const key = seriesKey(s);
+      if (!seen.has(key)) { seen.add(key); keys.push({ key, symbol: s.symbol, provider: s.provider, macro: s.macro }); }
     }
     return keys;
   }, [series]);
 
   const chartQueries = useQueries({
-    queries: fetchKeys.map(({ symbol, provider }) => ({
-      queryKey: ["research-chart", symbol, range, provider],
-      queryFn: () => apiClient.getResearchChart(symbol, range, undefined, provider || undefined),
-      enabled: !!symbol,
+    queries: fetchKeys.map((fk) => ({
+      queryKey: ["research-chart", fk.key, range],
+      queryFn: () => (fk.macro
+        ? apiClient.getMacroSeries(fk.macro.provider, fk.macro.seriesId, range)
+        : apiClient.getResearchChart(fk.symbol, range, undefined, fk.provider || undefined)),
+      enabled: fk.macro ? true : !!fk.symbol,
       staleTime: 60_000,
     })),
   });
 
   const pointsByKey = useMemo(() => {
     const map = new Map<string, ResearchChartPoint[]>();
-    fetchKeys.forEach(({ symbol, provider }, i) => {
-      map.set(`${symbol}|${provider}`, chartQueries[i]?.data?.data.points ?? []);
+    fetchKeys.forEach((fk, i) => {
+      map.set(fk.key, chartQueries[i]?.data?.data.points ?? []);
     });
     return map;
   }, [fetchKeys, chartQueries]);
@@ -171,7 +212,7 @@ export default function ChartBuilderPage() {
   // ── Build the unified row set + ComposedChart series ──
   const { rows, composed } = useMemo(() => {
     const pointsBySeries = new Map<string, ResearchChartPoint[]>();
-    for (const s of series) pointsBySeries.set(s.id, pointsByKey.get(`${s.symbol}|${s.provider}`) ?? []);
+    for (const s of series) pointsBySeries.set(s.id, pointsByKey.get(seriesKey(s)) ?? []);
 
     // Per-series rebase factor (close-based), applied to price values & OHLC.
     const factor = new Map<string, number>();
@@ -240,13 +281,13 @@ export default function ChartBuilderPage() {
       const color = getChartColor(i);
       if (s.type === "candlestick" && s.field === "price") {
         composed.push({
-          key: s.id, label: s.symbol, type: "candlestick", axis: s.axis,
+          key: s.id, label: seriesLabel(s), type: "candlestick", axis: s.axis,
           open: (d) => d[`${s.id}_o`], high: (d) => d[`${s.id}_h`], low: (d) => d[`${s.id}_l`], close: (d) => d[`${s.id}`],
         });
       } else {
         composed.push({
           key: s.id,
-          label: s.field === "volume" ? `${s.symbol} ${t("research.builder.volume")}` : s.symbol,
+          label: s.field === "volume" ? `${seriesLabel(s)} ${t("research.builder.volume")}` : seriesLabel(s),
           type: s.type === "candlestick" ? "line" : s.type,
           axis: s.axis,
           color,
@@ -274,7 +315,7 @@ export default function ChartBuilderPage() {
     const srcId = oscillatorSeriesId ?? series[0]?.id;
     const src = series.find((s) => s.id === srcId);
     if (oscillator === "none" || !src) return { oscRows: [] as Row[], oscSeries: [] as LineSeries<Row>[], oscRefs: [] };
-    const pts = (pointsByKey.get(`${src.symbol}|${src.provider}`) ?? []);
+    const pts = (pointsByKey.get(seriesKey(src)) ?? []);
     const closes = pts.map((p) => p.close);
     const oscRows: Row[] = pts.map((p) => ({ time: p.time }));
     if (oscillator === "rsi") {
@@ -304,7 +345,10 @@ export default function ChartBuilderPage() {
     if (!primary) return;
     const priceOnly = series.filter((s) => s.field === "price");
     if (preset === "priceVolume") {
-      const volume: BuilderSeries = { id: uid(), symbol: primary.symbol, field: "volume", type: "bar", axis: "right", provider: primary.provider };
+      // Macro series carry no volume — base the volume overlay on a ticker.
+      const volBase = series.find((s) => s.field === "price" && !s.macro);
+      if (!volBase) return;
+      const volume: BuilderSeries = { id: uid(), symbol: volBase.symbol, field: "volume", type: "bar", axis: "right", provider: volBase.provider };
       patch({ series: [...priceOnly.map((s) => ({ ...s, type: "line" as SeriesType })), volume], indicators: [], oscillator: "none" });
     } else if (preset === "sma") {
       patch({
@@ -327,11 +371,12 @@ export default function ChartBuilderPage() {
   };
 
   const searchItems = searchResult?.data.items ?? [];
+  const macroItems = macroResult?.data.items ?? [];
   const priceSeries = series.filter((s) => s.field === "price");
   // Lift the Series card above the chart/oscillator cards below it while the
   // results dropdown is open, so its overflowing rows aren't painted behind
   // those later glass cards (each forms its own backdrop-filter stacking context).
-  const searchOpen = debouncedSearch.length >= 1 && searchText.length > 0 && searchItems.length > 0;
+  const searchOpen = debouncedSearch.length >= 1 && searchText.length > 0 && (searchItems.length > 0 || macroItems.length > 0);
 
   return (
     <div className="space-y-6 animate-in">
@@ -376,7 +421,11 @@ export default function ChartBuilderPage() {
           {series.map((s, i) => (
             <div key={s.id} className="flex flex-wrap items-center gap-2 rounded-lg border border-border/60 p-2">
               <span className="h-2.5 w-2.5 rounded-full" style={{ background: getChartColor(i) }} />
-              <span className="min-w-[4.5rem] font-mono font-semibold">{s.symbol}</span>
+              {s.macro ? (
+                <span className="min-w-[4.5rem] max-w-[18rem] truncate text-sm font-medium" title={s.macro.title}>{s.macro.title}</span>
+              ) : (
+                <span className="min-w-[4.5rem] font-mono font-semibold">{s.symbol}</span>
+              )}
               {s.field === "volume" ? (
                 <Badge variant="secondary" className="text-xs">{t("research.builder.volume")}</Badge>
               ) : (
@@ -385,7 +434,7 @@ export default function ChartBuilderPage() {
                   <SelectContent>
                     <SelectItem value="line">{t("research.builder.type.line")}</SelectItem>
                     <SelectItem value="area">{t("research.builder.type.area")}</SelectItem>
-                    <SelectItem value="candlestick">{t("research.builder.type.candlestick")}</SelectItem>
+                    {!s.macro && <SelectItem value="candlestick">{t("research.builder.type.candlestick")}</SelectItem>}
                   </SelectContent>
                 </Select>
               )}
@@ -396,16 +445,20 @@ export default function ChartBuilderPage() {
                   <SelectItem value="right">{t("research.builder.axisRight")}</SelectItem>
                 </SelectContent>
               </Select>
-              <Select value={s.provider || "auto"} onValueChange={(v) => updateSeries(s.id, { provider: v === "auto" ? "" : v })}>
-                <SelectTrigger className="h-8 w-36"><SelectValue /></SelectTrigger>
-                <SelectContent>
-                  {PROVIDERS.map((p) => (
-                    <SelectItem key={p || "auto"} value={p || "auto"}>
-                      {p ? p.replace("_", " ") : t("research.builder.providerAuto")}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+              {s.macro ? (
+                <Badge variant="outline" className="h-8 px-2.5 text-xs capitalize">{s.macro.provider}</Badge>
+              ) : (
+                <Select value={s.provider || "auto"} onValueChange={(v) => updateSeries(s.id, { provider: v === "auto" ? "" : v })}>
+                  <SelectTrigger className="h-8 w-36"><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    {PROVIDERS.map((p) => (
+                      <SelectItem key={p || "auto"} value={p || "auto"}>
+                        {p ? p.replace("_", " ") : t("research.builder.providerAuto")}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              )}
               <Button size="icon" variant="ghost" className="ml-auto h-8 w-8" onClick={() => removeSeries(s.id)} aria-label={t("research.builder.removeSeries")}>
                 <Trash2 className="h-4 w-4" />
               </Button>
@@ -413,6 +466,7 @@ export default function ChartBuilderPage() {
           ))}
 
           {series.length < MAX_SERIES && (
+            <>
             <SymbolSearchBox
               className="max-w-2xl"
               placeholder={t("research.builder.addSeries")}
@@ -420,6 +474,11 @@ export default function ChartBuilderPage() {
               onChange={setSearchText}
               open={searchOpen}
             >
+              {searchItems.length > 0 && macroItems.length > 0 && (
+                <div className="px-3 pb-1 pt-2 text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
+                  {t("research.builder.groupMarkets")}
+                </div>
+              )}
               {searchItems.map((item) => (
                 <SymbolSearchResultItem
                   key={`${item.symbol}-${item.exchange}`}
@@ -428,7 +487,22 @@ export default function ChartBuilderPage() {
                   leadingIcon={<Plus className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />}
                 />
               ))}
+              {macroItems.length > 0 && (
+                <div className="px-3 pb-1 pt-2 text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
+                  {t("research.builder.groupEconomic")}
+                </div>
+              )}
+              {macroItems.map((item) => (
+                <SymbolSearchResultItem
+                  key={`macro-${item.provider}-${item.seriesId}`}
+                  item={{ symbol: item.region ?? "", name: item.title, type: item.source ?? "", exchange: item.units ?? "" }}
+                  onSelect={() => addMacroSeries(item)}
+                  leadingIcon={<Plus className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />}
+                />
+              ))}
             </SymbolSearchBox>
+            <p className="px-1 text-[11px] text-muted-foreground">{t("research.builder.economicHint")}</p>
+            </>
           )}
 
           {/* Indicators */}

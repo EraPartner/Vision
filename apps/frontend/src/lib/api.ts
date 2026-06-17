@@ -216,6 +216,8 @@ export const apiClient = {
     auditResearchMappings: research.auditResearchMappings,
     getResearchScorecard: research.getResearchScorecard,
     getPortfolioForecast: research.getPortfolioForecast,
+    searchMacro: research.searchMacro,
+    getMacroSeries: research.getMacroSeries,
 
     // Aggregations
     getAggregationMonthlySummary: agg.getAggregationMonthlySummary,

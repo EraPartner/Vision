@@ -16,6 +16,9 @@ export const TTL_BY_TYPE = Object.freeze({
   fundamentals: 24 * 60 * 60_000, // 24 h
   analyst: 24 * 60 * 60_000, //  24 h
   news: 2 * 60 * 60_000, //      2 h
+  // Macro vertical (ADR-082): monthly/quarterly data → long TTLs.
+  macro_search: 60 * 60_000, //    1 h
+  macro_series: 12 * 60 * 60_000, // 12 h
 });
 
 const DEFAULT_TTL = 10 * 60_000;

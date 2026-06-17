@@ -20,6 +20,7 @@ export const ENV_VAR_BY_PROVIDER = Object.freeze({
   finnhub: 'FINNHUB_API_KEY',
   fmp: 'FMP_API_KEY',
   alpha_vantage: 'ALPHA_VANTAGE_API_KEY',
+  fred: 'FRED_API_KEY', // macro vertical (ADR-082); Eurostat/DBnomics are keyless
 });
 
 /** The keyed provider list (those that require an API key). */

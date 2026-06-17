@@ -144,6 +144,42 @@ export type ResearchRange = '1d' | '5d' | '1mo' | '3mo' | '6mo' | '1y' | '2y' | 
 /** Asset-class routing hint passed to quote/chart/fundamentals. */
 export type ResearchAssetClass = 'stock' | 'etf' | 'crypto' | 'metals';
 
+// ── Macro economic indicators (ADR-082) ──────────────────────────────────────
+
+/** Macro data providers (provider-pinned; a series lives at exactly one). */
+export type MacroProvider = 'fred' | 'eurostat' | 'dbnomics';
+
+/** One macroeconomic series in a search result (CPI, rates, unemployment, …). */
+export interface MacroSeriesItem {
+    provider: MacroProvider;
+    /** Provider-native id (FRED `CPIAUCSL`; Eurostat `<dataset>?<dims>`; DBnomics `provider/dataset/series`). */
+    seriesId: string;
+    title: string;
+    region?: string;
+    units?: string;
+    frequency?: string;
+    /** Human-readable source label for the result badge (e.g. "FRED", "Eurostat"). */
+    source?: string;
+}
+
+export interface MacroSearchResponse {
+    items: MacroSeriesItem[];
+}
+
+/**
+ * Observations for one macro series. Points reuse {@link ResearchChartPoint} so
+ * macro series drop straight into the Chart Builder; only `close` (the reading)
+ * is populated — `high`/`low`/`volume` are absent at runtime.
+ */
+export interface MacroSeriesResponse {
+    provider: MacroProvider;
+    seriesId: string;
+    title: string;
+    units?: string;
+    frequency?: string;
+    points: ResearchChartPoint[];
+}
+
 // ── Symbol-mapping endpoints ────────────────────────────────────────────────
 
 export type MappingKeyType = 'isin' | 'internal';

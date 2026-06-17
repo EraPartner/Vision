@@ -3,7 +3,7 @@ title: Research API
 type: endpoint
 status: active
 date: 2026-06-16
-updated: 2026-06-16
+updated: 2026-06-17
 tags:
   - api
   - research
@@ -14,11 +14,18 @@ tags:
   - quota-governor
   - adr-079
   - adr-081
+  - adr-082
   - monte-carlo
   - portfolio-projection
   - fundamentals-scorecard
   - chart-builder
-description: Provider-agnostic research API surface (ADR-079 + ADR-081). Eight GET/POST data and analytics endpoints under /api/research expose ticker search, live quotes, historical charts (with optional provider override), fundamentals, analyst consensus, news, a heuristic fundamentals scorecard, and Monte Carlo portfolio projection — plus five symbol-mapping endpoints and three provider-key Settings endpoints (16 total). All five provider adapters (Yahoo + Twelve Data, Finnhub, FMP, Alpha Vantage) are implemented; the keyed four light up automatically when their API key is set in the root .env.
+  - macro
+  - macroeconomic
+  - fred
+  - dbnomics
+  - eurostat
+  - provider-pinned
+description: Provider-agnostic research API surface (ADR-079 + ADR-081 + ADR-082). Eighteen endpoints under /api/research — eight GET/POST data and analytics endpoints (search/quote/chart/fundamentals/analyst/news/scorecard/portfolio-forecast), two macro endpoints (macro/search and macro/series — provider-pinned, ADR-082), five symbol-mapping endpoints, and three provider-key Settings endpoints. All five equity provider adapters (Yahoo + Twelve Data, Finnhub, FMP, Alpha Vantage) plus three macro adapters (FRED keyed, Eurostat and DBnomics keyless) are implemented.
 aliases:
   - research-api
   - research-endpoints
@@ -31,6 +38,11 @@ related_code:
   - apps/node-backend/src/services/research/researchCache.js
   - apps/node-backend/src/services/research/providerKeys.js
   - apps/node-backend/src/services/research/adapters/yahooAdapter.js
+  - apps/node-backend/src/services/research/adapters/fredAdapter.js
+  - apps/node-backend/src/services/research/adapters/eurostatAdapter.js
+  - apps/node-backend/src/services/research/adapters/dbnomicsAdapter.js
+  - apps/node-backend/src/services/research/adapters/macroRange.js
+  - apps/node-backend/src/services/research/adapters/macroCatalog.js
   - apps/node-backend/src/services/research/projection/portfolioProjection.js
   - apps/node-backend/src/services/research/fundamentalsScorecard.js
   - apps/node-backend/src/repositories/providerQuotaRepository.js
@@ -38,7 +50,7 @@ related_code:
 
 # Research API
 
-Provider-agnostic market research surface introduced in [[docs/adr/079-multi-provider-research-aggregation|ADR-079]] and deepened in [[docs/adr/081-research-analytics-forecasting|ADR-081]]. Sixteen endpoints under `/api/research`: six GET data endpoints delegate to the **research aggregation layer** (capability map → quota governor → cache → race-to-first provider, except `fundamentals` which uses a parallel merge — see below); two analytics endpoints (`scorecard`, `portfolio-forecast`) compute derived outputs from aggregated data; five symbol-mapping endpoints manage cross-provider instrument identity; and three provider-key Settings endpoints manage keyed-provider API keys.
+Provider-agnostic market research surface introduced in [[docs/adr/079-multi-provider-research-aggregation|ADR-079]], deepened in [[docs/adr/081-research-analytics-forecasting|ADR-081]], and extended with a macroeconomic data vertical in [[docs/adr/082-macroeconomic-indicators-data-vertical|ADR-082]]. Eighteen endpoints under `/api/research`: six GET data endpoints delegate to the **research aggregation layer** (capability map → quota governor → cache → race-to-first provider, except `fundamentals` which uses a parallel merge — see below); two analytics endpoints (`scorecard`, `portfolio-forecast`) compute derived outputs from aggregated data; **two macro endpoints** (`macro/search`, `macro/series`) route to provider-pinned macro adapters (never raced — see [Macro Endpoints](#macro-endpoints-adr-082) below); five symbol-mapping endpoints manage cross-provider instrument identity; and three provider-key Settings endpoints manage keyed-provider API keys.
 
 ## Base URL
 
@@ -473,6 +485,113 @@ Monte Carlo projection of aggregate portfolio value. Non-persisted; re-submit wi
 
 ---
 
+## Macro Endpoints (ADR-082)
+
+Macroeconomic series are **provider-pinned** — a series code (`CPIAUCSL`, `Eurostat/prc_hicp_midx/M.I15.CP00.BE`) identifies exactly one provider. The race-to-first capability-map chain does not apply here. Three adapters serve these endpoints: `fredAdapter` (keyed, `FRED_API_KEY`), `eurostatAdapter` (keyless), `dbnomicsAdapter` (keyless). With no FRED key the surface degrades to the keyless Eurostat catalog and DBnomics fetch-by-id.
+
+> [!info] Storage boundary preserved (ADR-079)
+> Macro observations are cached in memory only and are **never written to `asset_price_history`**. The `macro_search` TTL is 1 h; `macro_series` TTL is 12 h.
+
+> [!warning] PMI is out of scope
+> Real PMI data (S&P Global / ISM) is proprietary. Free proxies reachable through this surface: OECD CLI via DBnomics, and regional-Fed manufacturing surveys (Philly, NY Empire State, Richmond, Dallas) via FRED.
+
+---
+
+### GET /api/research/macro/search
+
+Catalog search for macroeconomic series. Fans out across all usable macro adapters in parallel (FRED if keyed, plus the curated keyless Eurostat catalog), concatenating results into one list. A provider that errors or is unkeyed is simply absent from the union.
+
+**Query Parameters:**
+
+| Parameter | Type | Required | Description |
+|-----------|------|----------|-------------|
+| `q` | string | Yes | Search query (e.g. `"cpi"`, `"unemployment"`, `"policy rate"`) |
+
+**Response:** `200 OK`
+
+```json
+{
+  "ok": true,
+  "data": {
+    "items": [
+      {
+        "provider": "fred",
+        "seriesId": "CPIAUCSL",
+        "title": "Consumer Price Index for All Urban Consumers: All Items in U.S. City Average",
+        "frequency": "Monthly",
+        "units": "Index 1982-1984=100",
+        "region": "US"
+      },
+      {
+        "provider": "eurostat",
+        "seriesId": "Eurostat/prc_hicp_midx/M.I15.CP00.BE",
+        "title": "HICP (2015=100) — Belgium, all-items",
+        "frequency": "Monthly",
+        "units": "Index 2015=100",
+        "region": "BE"
+      }
+    ]
+  },
+  "meta": { "provider": null, "source": "live" }
+}
+```
+
+`MacroSeriesItem` shape: `{ provider, seriesId, title, frequency, units, region?, source? }`.
+
+`meta.provider` is `null` for fan-out responses (multiple providers contributed). `meta.source` is `"cache"` when served from the 1 h TTL cache.
+
+**Cache TTL:** 1 hour
+
+**Error Responses:**
+- `400 Bad Request` — `q` missing or blank
+
+---
+
+### GET /api/research/macro/series
+
+Fetch observations for a specific macro series from a specific provider (no fallback chain).
+
+**Query Parameters:**
+
+| Parameter | Type | Required | Default | Description |
+|-----------|------|----------|---------|-------------|
+| `provider` | string | Yes | — | Macro provider: `fred`, `eurostat`, or `dbnomics` |
+| `series_id` | string | Yes | — | Provider-native series identifier (e.g. `CPIAUCSL` for FRED; `Eurostat/prc_hicp_midx/M.I15.CP00.BE` for DBnomics/Eurostat) |
+| `range` | string | No | `5y` | Time range: `1y`, `2y`, `5y`, `10y`, `max` |
+
+> [!info] Range anchoring on last observation, not wall clock
+> `macroRange.trimToRange` anchors the window on the **last available observation**, not today. Macro data lags publication; anchoring on "now" produced empty charts for short ranges when a series had not yet published its most recent point.
+
+**Response:** `200 OK`
+
+```json
+{
+  "ok": true,
+  "data": {
+    "provider": "fred",
+    "seriesId": "CPIAUCSL",
+    "title": "Consumer Price Index for All Urban Consumers: All Items in U.S. City Average",
+    "units": "Index 1982-1984=100",
+    "frequency": "Monthly",
+    "points": [
+      { "time": 1704067200000, "close": 308.417 },
+      { "time": 1706745600000, "close": 308.822 }
+    ]
+  },
+  "meta": { "provider": "fred", "source": "live" }
+}
+```
+
+`points` are `ResearchChartPoint[]` with the observation value mapped to `close`; `high`, `low`, and `volume` are `undefined` — so macro series drop directly into the Chart Builder's existing `ComposedChart` renderer. Missing observations (FRED returns `"."` for unreleased values) are skipped.
+
+**Error Responses:**
+- `400 Bad Request` — `provider` or `series_id` missing; `provider` not in `[fred, eurostat, dbnomics]`; `series_id` fails the adapter's shape guard (`isValidSeriesId`)
+- `503 Service Unavailable` — provider unkeyed (FRED without `FRED_API_KEY`) or adapter error
+
+**Cache TTL:** 12 hours
+
+---
+
 ## Symbol Mapping Endpoints (ADR-079)
 
 The cross-provider symbol map is the fool-proof anchor against silent wrong-instrument merges: a provider's data is only used for an instrument when a mapping records which symbol on that provider backs it. Mappings are stored in `instrument_provider_map`, anchored on ISIN (`key_type=isin`) where available or a Vision-internal id (`key_type=internal`) for crypto/metals. See [[apps/node-backend/src/services/research/researchMappingService.js]].
@@ -521,7 +640,7 @@ Returns `{ providers: [{ provider, label, envVar, configured, source, masked }] 
 
 ### PUT /api/research/provider-keys/:provider
 
-Body `{ api_key }`. Stores/replaces the key for `provider` (one of `twelve_data` / `finnhub` / `fmp` / `alpha_vantage`) and returns the updated masked statuses. `400` on unknown provider or empty key.
+Body `{ api_key }`. Stores/replaces the key for `provider` (one of `twelve_data` / `finnhub` / `fmp` / `alpha_vantage` / `fred`) and returns the updated masked statuses. `400` on unknown provider or empty key.
 
 ### DELETE /api/research/provider-keys/:provider
 
@@ -548,6 +667,8 @@ The six data endpoints are thin wrappers over the `researchAggregator` singleton
 | `fundamentals` | 12 h (merged cache key `fundamentals:merged:<assetClass>:<symbol>`) |
 | `analyst` | 12 h |
 | `news` | 2 h |
+| `macro_search` | 1 h |
+| `macro_series` | 12 h |
 
 The cache sweeps expired entries every 5 minutes (`setInterval` with `.unref()`).
 
@@ -573,6 +694,7 @@ The cache sweeps expired entries every 5 minutes (`setInterval` with `.unref()`)
 | Finnhub | `FINNHUB_API_KEY` |
 | FMP | `FMP_API_KEY` |
 | Alpha Vantage | `ALPHA_VANTAGE_API_KEY` |
+| FRED (economic data) | `FRED_API_KEY` |
 
 ### DB Tables Created by Migrations 0042–0043
 
@@ -588,9 +710,10 @@ All `/api/research/*` endpoints share the `marketRateLimiter` (same as `/api/mar
 
 ## Related
 
+- [[docs/adr/082-macroeconomic-indicators-data-vertical|ADR-082]] — architecture decision for the macro data vertical (FRED + Eurostat + DBnomics, provider-pinned)
 - [[docs/adr/081-research-analytics-forecasting|ADR-081]] — architecture decision for the scorecard, portfolio projection engine, and chart builder (Pillars B/C/D deepening)
 - [[docs/adr/079-multi-provider-research-aggregation|ADR-079]] — architectural decision record with full design rationale for the aggregation layer
-- [[docs/features/research|Research Feature]] — feature spec with all four pillar statuses and API surface overview
+- [[docs/features/research|Research Feature]] — feature spec with all four pillar statuses, macro section, and API surface overview
 - [[docs/integrations/price-providers|Price Providers Integration]] — the provider registry this layer extends
 - [[docs/api/marketLookup|Market Lookup API]] — the existing Yahoo-only surface that research coexists with
 - [[docs/api/watchlist|Watchlist API]] — watchlist surface consolidated into the Research workspace

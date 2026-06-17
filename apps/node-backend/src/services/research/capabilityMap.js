@@ -20,9 +20,17 @@ export const PROVIDERS = Object.freeze({
   alphaVantage: 'alpha_vantage',
   binance: 'binance',
   kinesis: 'kinesis',
+  // Macro vertical (ADR-082): provider-pinned, not raced — no CAPABILITY entries.
+  fred: 'fred',
+  eurostat: 'eurostat',
+  dbnomics: 'dbnomics',
 });
 
-/** Research data types the map can route. */
+/**
+ * Research data types. `search…news` route via the CAPABILITY race chains below;
+ * `macro_search`/`macro_series` (ADR-082) are provider-pinned and handled by the
+ * aggregator directly, so they have no chain here but still key the cache TTLs.
+ */
 export const DATA_TYPES = Object.freeze([
   'search',
   'quote',
@@ -30,6 +38,8 @@ export const DATA_TYPES = Object.freeze([
   'fundamentals',
   'analyst',
   'news',
+  'macro_search',
+  'macro_series',
 ]);
 
 const { yahoo, twelveData, finnhub, fmp, alphaVantage, binance, kinesis } = PROVIDERS;

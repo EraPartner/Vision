@@ -123,7 +123,7 @@ LIMIT 20
 **View all diagrams:** [[docs/diagrams/index|Diagrams Index]] | [[docs/architecture/index|Architecture Overview]] | [Interactive Flow Visualizer](flow-visualizer.html)
 
 > [!tip] Interactive Flow Visualizer
-> `docs/flow-visualizer.html` is a single-page, interactive map of all packages (51 components) + 21 end-to-end flows (create-transaction, CSV import, AI chat, AES-256-GCM backup, ToDesktop release, …). Open it directly in any browser — click a flow on the left, watch the path light up, and read the payload at each hop. Add new flows by editing the JSON block at the bottom of the file.
+> `docs/flow-visualizer.html` is a single-page, interactive map of all packages (55 components) + 23 end-to-end flows (create-transaction, CSV import, AI chat, AES-256-GCM backup, ToDesktop release, macro-series-fetch, …). Open it directly in any browser — click a flow on the left, watch the path light up, and read the payload at each hop. Add new flows by editing the JSON block at the bottom of the file.
 
 | Resource | Description |
 |----------|-------------|

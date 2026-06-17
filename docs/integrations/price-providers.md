@@ -3,9 +3,9 @@ title: Integration - Price Providers
 type: integration
 description: Live and historical price feeds for stocks, crypto, and other investments. Startup price refresh is skipped when the host is offline (2026-05-03).
 date: 2026-04-21
-last_modified: 2026-06-16
-updated: 2026-06-16
-tags: [integration, price, stocks, crypto, api, historical-quotes, quote-backfill, phase-1, eur-to-usd-mapping, data-sanitization, kinesis, offline-resilience, price-history-default, provider-timeout, parallel-fetching, startup-optimization, network-reachability, ssrf, url-safety, binance-pagination, gap-fill, daily-granularity, densify, research, adr-079, capability-map, quota-governor]
+last_modified: 2026-06-17
+updated: 2026-06-17
+tags: [integration, price, stocks, crypto, api, historical-quotes, quote-backfill, phase-1, eur-to-usd-mapping, data-sanitization, kinesis, offline-resilience, price-history-default, provider-timeout, parallel-fetching, startup-optimization, network-reachability, ssrf, url-safety, binance-pagination, gap-fill, daily-granularity, densify, research, adr-079, adr-082, capability-map, quota-governor, macro, macroeconomic, fred, dbnomics, eurostat, provider-pinned]
 aliases: [price providers, market data, Binance, Kinesis, Yahoo Finance, live prices]
 status: active
 related_code: [[apps/node-backend/src/services/priceProviderService.js], [apps/node-backend/src/services/quoteBackfillService.js], [apps/node-backend/src/services/prices/priceProviderRegistry.js], [apps/node-backend/tests/priceProviderRegistry.test.js], [apps/node-backend/src/lib/network.js]]
@@ -239,6 +239,15 @@ All five adapters are wired (Yahoo needs no key; Twelve Data, Finnhub, FMP, and 
 > [!info] Fundamentals: one composed data type, not raced (2026-06-16)
 > **Fundamentals is the only data type that is composed rather than raced.** `GET /api/research/fundamentals` and `GET /api/research/scorecard` call `researchAggregator.fetchFundamentals()`, which fetches **FMP and Yahoo in parallel** and merges their fields with FMP preferred. FMP-only fields (e.g. `interestCoverage`) and Yahoo-only fields (e.g. `forwardPE`, `freeCashFlow`) both appear in every response — the result is the union. `meta.provider` is `"fmp+yahoo"` when both contribute, or the single provider name when only one responds. All other research data types (quote, chart, news, analyst, search) continue to use the race-to-first capability-map chain unchanged. See [[docs/adr/079-multi-provider-research-aggregation#follow-up-note--fundamentals-merged-across-fmp--yahoo-2026-06-16|ADR-079 follow-up note (2026-06-16)]].
 
+> [!info] Macro vertical (ADR-082, 2026-06-17) — provider-pinned, never persisted
+> The macroeconomic data vertical adds **three new adapters** to the research aggregation layer: `fredAdapter` (keyed via `FRED_API_KEY`), `eurostatAdapter` (keyless, first-party), and `dbnomicsAdapter` (keyless). Unlike the equity data types above, **macro series are provider-pinned, not raced** — a series code (e.g. `CPIAUCSL` on FRED) identifies exactly one provider. Two aggregator functions handle this: `searchMacro(query)` fans out across all usable macro adapters in parallel (union, not race), and `fetchMacroSeries({ provider, seriesId, range })` routes to exactly one provider with no fallback chain.
+>
+> Two new endpoints are exposed under the existing `/api/research` surface: `GET /api/research/macro/search?q=` and `GET /api/research/macro/series?provider=&series_id=&range=`. Both carry the standard `meta.provider`/`meta.source` provenance envelope.
+>
+> **Storage boundary:** macro observations are cached in memory only (TTLs: `macro_search` 1 h, `macro_series` 12 h) and are **never written to `asset_price_history`** — the ADR-079 storage boundary is preserved. FRED is quota-governed (`{ perMinute: 120 }`); Eurostat and DBnomics are unmetered. No DB migration is required — macro reuses the existing `provider_quota` table and the `provider_api_keys` table (migration 0043) for the FRED key.
+>
+> With no `FRED_API_KEY`, the surface degrades gracefully to the keyless Eurostat catalog and DBnomics fetch-by-id (ECB rates, OECD CLI). See [[docs/adr/082-macroeconomic-indicators-data-vertical|ADR-082]] and [[docs/features/research#macroeconomic-indicators-adr-082|Research Feature — Macro section]] for full details.
+
 ## Related
 
 - [[docs/api/investments|API: Investments]]
@@ -249,5 +258,6 @@ All five adapters are wired (Yahoo needs no key; Twelve Data, Finnhub, FMP, and 
 - [[docs/performance/chart-downsampling|Chart Data Downsampling]]
 - [[docs/adr/065-daily-gap-fill-dense-asset-history|ADR-065]] — Daily gap-fill decision record (Binance pagination, force-refetch, gap-threshold rationale)
 - [[docs/adr/079-multi-provider-research-aggregation|ADR-079]] — Research aggregation architectural decision
+- [[docs/adr/082-macroeconomic-indicators-data-vertical|ADR-082]] — Macro data vertical (FRED + Eurostat + DBnomics, provider-pinned, in-memory only)
 
 Code links: [[apps/node-backend/src/services/priceProviderService.js]], [[apps/node-backend/src/config/kinesisConfig.js]], [[apps/node-backend/src/main.js]], [[apps/node-backend/src/routes/admin.js]], [[alembic/versions/0019_asset_price_history_cache.py]]
