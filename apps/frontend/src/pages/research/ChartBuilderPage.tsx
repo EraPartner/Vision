@@ -328,6 +328,10 @@ export default function ChartBuilderPage() {
 
   const searchItems = searchResult?.data.items ?? [];
   const priceSeries = series.filter((s) => s.field === "price");
+  // Lift the Series card above the chart/oscillator cards below it while the
+  // results dropdown is open, so its overflowing rows aren't painted behind
+  // those later glass cards (each forms its own backdrop-filter stacking context).
+  const searchOpen = debouncedSearch.length >= 1 && searchText.length > 0 && searchItems.length > 0;
 
   return (
     <div className="space-y-6 animate-in">
@@ -366,7 +370,7 @@ export default function ChartBuilderPage() {
       </Card>
 
       {/* Series builder */}
-      <Card className="glass-regular">
+      <Card className={`glass-regular ${searchOpen ? "relative z-20" : ""}`}>
         <CardHeader className="pb-2"><CardTitle className="text-base">{t("research.builder.series")}</CardTitle></CardHeader>
         <CardContent className="space-y-3">
           {series.map((s, i) => (
@@ -414,7 +418,7 @@ export default function ChartBuilderPage() {
               placeholder={t("research.builder.addSeries")}
               value={searchText}
               onChange={setSearchText}
-              open={debouncedSearch.length >= 1 && searchText.length > 0 && searchItems.length > 0}
+              open={searchOpen}
             >
               {searchItems.map((item) => (
                 <SymbolSearchResultItem
