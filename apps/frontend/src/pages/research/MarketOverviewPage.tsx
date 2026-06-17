@@ -9,14 +9,23 @@ import { apiClient } from "@/lib/api";
 import { cn } from "@/lib/utils";
 import { PageHeader } from "@/components/shared/PageHeader";
 
-// A market "view" is a curated, themed basket of Yahoo symbols. Regions group
-// into Indices + Top stocks; sectors are a single global basket (often led by a
-// sector ETF). Yahoo is keyless/unmetered and there's no universe-scan API, so
-// membership is a static config baked in here. A symbol Yahoo can't quote
-// (coverage drifts by IP/geo) degrades to a neutral em-dash tile.
+// The overview crosses two orthogonal axes: a Region (Worldwide / USA / Europe /
+// Asia) and a Sector (Overview + themed baskets). Region is the global axis —
+// when the Sector is "Overview" we show that region's Indices + Top stocks;
+// otherwise we show the sector's basket filtered to the region. Worldwide shows
+// every member; a region shows only members tagged with it (members that fit no
+// region — Canadian, Saudi, Brazilian, Australian names — are worldwide-only and
+// carry no `region` tag). Yahoo is keyless/unmetered and has no universe-scan
+// API, so membership is a static config baked in here. A symbol Yahoo can't
+// quote (coverage drifts by IP/geo) degrades to a neutral em-dash tile.
+type Region = "worldwide" | "usa" | "europe" | "asia";
+
 interface SymbolEntry {
   symbol: string;
   label: string;
+  // Sector entries only: the region this name is grouped under. Omitted = the
+  // name fits none of usa/europe/asia and is shown only in the Worldwide view.
+  region?: Exclude<Region, "worldwide">;
 }
 
 interface ViewGroup {
@@ -124,6 +133,7 @@ const REGION_VIEWS: ReadonlyArray<MarketView> = [
           { symbol: "BAC", label: "Bank of America" },
           { symbol: "ABBV", label: "AbbVie" },
           { symbol: "CVX", label: "Chevron" },
+          { symbol: "HAL", label: "Halliburton" },
           { symbol: "NFLX", label: "Netflix" },
           { symbol: "AMD", label: "AMD" },
           { symbol: "CRM", label: "Salesforce" },
@@ -237,255 +247,346 @@ const SECTOR_VIEWS: ReadonlyArray<MarketView> = [
     key: "semiconductors",
     labelKey: "research.markets.sector.semiconductors",
     groups: [{ entries: [
-      { symbol: "SMH", label: "Semis ETF" },
-      { symbol: "NVDA", label: "Nvidia" },
-      { symbol: "TSM", label: "TSMC" },
-      { symbol: "ASML.AS", label: "ASML" },
-      { symbol: "AVGO", label: "Broadcom" },
-      { symbol: "AMD", label: "AMD" },
-      { symbol: "QCOM", label: "Qualcomm" },
-      { symbol: "TXN", label: "Texas Instruments" },
-      { symbol: "INTC", label: "Intel" },
-      { symbol: "MU", label: "Micron" },
-      { symbol: "AMAT", label: "Applied Materials" },
-      { symbol: "LRCX", label: "Lam Research" },
-      { symbol: "KLAC", label: "KLA" },
-      { symbol: "ADI", label: "Analog Devices" },
-      { symbol: "MRVL", label: "Marvell" },
-      { symbol: "MCHP", label: "Microchip" },
-      { symbol: "NXPI", label: "NXP" },
-      { symbol: "ARM", label: "Arm" },
-      { symbol: "STM", label: "STMicro" },
-      { symbol: "000660.KS", label: "SK Hynix" },
+      { symbol: "SMH", label: "Semis ETF", region: "usa" },
+      { symbol: "NVDA", label: "Nvidia", region: "usa" },
+      { symbol: "AVGO", label: "Broadcom", region: "usa" },
+      { symbol: "AMD", label: "AMD", region: "usa" },
+      { symbol: "QCOM", label: "Qualcomm", region: "usa" },
+      { symbol: "TXN", label: "Texas Instruments", region: "usa" },
+      { symbol: "INTC", label: "Intel", region: "usa" },
+      { symbol: "MU", label: "Micron", region: "usa" },
+      { symbol: "AMAT", label: "Applied Materials", region: "usa" },
+      { symbol: "LRCX", label: "Lam Research", region: "usa" },
+      { symbol: "KLAC", label: "KLA", region: "usa" },
+      { symbol: "ADI", label: "Analog Devices", region: "usa" },
+      { symbol: "MRVL", label: "Marvell", region: "usa" },
+      { symbol: "MCHP", label: "Microchip", region: "usa" },
+      { symbol: "ASML.AS", label: "ASML", region: "europe" },
+      { symbol: "ARM", label: "Arm", region: "europe" },
+      { symbol: "NXPI", label: "NXP", region: "europe" },
+      { symbol: "STM", label: "STMicro", region: "europe" },
+      { symbol: "IFX.DE", label: "Infineon", region: "europe" },
+      { symbol: "ASM.AS", label: "ASM International", region: "europe" },
+      { symbol: "BESI.AS", label: "BE Semiconductor", region: "europe" },
+      { symbol: "SOI.PA", label: "Soitec", region: "europe" },
+      { symbol: "TSM", label: "TSMC", region: "asia" },
+      { symbol: "000660.KS", label: "SK Hynix", region: "asia" },
+      { symbol: "005930.KS", label: "Samsung", region: "asia" },
+      { symbol: "8035.T", label: "Tokyo Electron", region: "asia" },
+      { symbol: "6857.T", label: "Advantest", region: "asia" },
+      { symbol: "3711.TW", label: "ASE Technology", region: "asia" },
     ] }],
   },
   {
     key: "ai",
     labelKey: "research.markets.sector.ai",
     groups: [{ entries: [
-      { symbol: "NVDA", label: "Nvidia" },
-      { symbol: "MSFT", label: "Microsoft" },
-      { symbol: "GOOGL", label: "Alphabet" },
-      { symbol: "META", label: "Meta" },
-      { symbol: "AMZN", label: "Amazon" },
-      { symbol: "AVGO", label: "Broadcom" },
-      { symbol: "AMD", label: "AMD" },
-      { symbol: "TSM", label: "TSMC" },
-      { symbol: "PLTR", label: "Palantir" },
-      { symbol: "SMCI", label: "Super Micro" },
-      { symbol: "ARM", label: "Arm" },
-      { symbol: "NOW", label: "ServiceNow" },
-      { symbol: "CRM", label: "Salesforce" },
-      { symbol: "SNOW", label: "Snowflake" },
-      { symbol: "ORCL", label: "Oracle" },
-      { symbol: "ANET", label: "Arista" },
-      { symbol: "DELL", label: "Dell" },
-      { symbol: "MRVL", label: "Marvell" },
-      { symbol: "IBM", label: "IBM" },
-      { symbol: "TSLA", label: "Tesla" },
+      { symbol: "NVDA", label: "Nvidia", region: "usa" },
+      { symbol: "MSFT", label: "Microsoft", region: "usa" },
+      { symbol: "GOOGL", label: "Alphabet", region: "usa" },
+      { symbol: "META", label: "Meta", region: "usa" },
+      { symbol: "AMZN", label: "Amazon", region: "usa" },
+      { symbol: "AVGO", label: "Broadcom", region: "usa" },
+      { symbol: "AMD", label: "AMD", region: "usa" },
+      { symbol: "PLTR", label: "Palantir", region: "usa" },
+      { symbol: "SMCI", label: "Super Micro", region: "usa" },
+      { symbol: "NOW", label: "ServiceNow", region: "usa" },
+      { symbol: "CRM", label: "Salesforce", region: "usa" },
+      { symbol: "SNOW", label: "Snowflake", region: "usa" },
+      { symbol: "ORCL", label: "Oracle", region: "usa" },
+      { symbol: "ANET", label: "Arista", region: "usa" },
+      { symbol: "DELL", label: "Dell", region: "usa" },
+      { symbol: "MRVL", label: "Marvell", region: "usa" },
+      { symbol: "IBM", label: "IBM", region: "usa" },
+      { symbol: "TSLA", label: "Tesla", region: "usa" },
+      { symbol: "ARM", label: "Arm", region: "europe" },
+      { symbol: "SAP.DE", label: "SAP", region: "europe" },
+      { symbol: "ASML.AS", label: "ASML", region: "europe" },
+      { symbol: "IFX.DE", label: "Infineon", region: "europe" },
+      { symbol: "TSM", label: "TSMC", region: "asia" },
+      { symbol: "9988.HK", label: "Alibaba", region: "asia" },
+      { symbol: "0700.HK", label: "Tencent", region: "asia" },
+      { symbol: "BIDU", label: "Baidu", region: "asia" },
+      { symbol: "9984.T", label: "SoftBank", region: "asia" },
+      { symbol: "005930.KS", label: "Samsung", region: "asia" },
     ] }],
   },
   {
     key: "software",
     labelKey: "research.markets.sector.software",
     groups: [{ entries: [
-      { symbol: "IGV", label: "Software ETF" },
-      { symbol: "MSFT", label: "Microsoft" },
-      { symbol: "ORCL", label: "Oracle" },
-      { symbol: "CRM", label: "Salesforce" },
-      { symbol: "ADBE", label: "Adobe" },
-      { symbol: "SAP.DE", label: "SAP" },
-      { symbol: "NOW", label: "ServiceNow" },
-      { symbol: "INTU", label: "Intuit" },
-      { symbol: "IBM", label: "IBM" },
+      { symbol: "IGV", label: "Software ETF", region: "usa" },
+      { symbol: "MSFT", label: "Microsoft", region: "usa" },
+      { symbol: "ORCL", label: "Oracle", region: "usa" },
+      { symbol: "CRM", label: "Salesforce", region: "usa" },
+      { symbol: "ADBE", label: "Adobe", region: "usa" },
+      { symbol: "NOW", label: "ServiceNow", region: "usa" },
+      { symbol: "INTU", label: "Intuit", region: "usa" },
+      { symbol: "IBM", label: "IBM", region: "usa" },
+      { symbol: "PLTR", label: "Palantir", region: "usa" },
+      { symbol: "PANW", label: "Palo Alto", region: "usa" },
+      { symbol: "CRWD", label: "CrowdStrike", region: "usa" },
+      { symbol: "DDOG", label: "Datadog", region: "usa" },
+      { symbol: "SNOW", label: "Snowflake", region: "usa" },
+      { symbol: "WDAY", label: "Workday", region: "usa" },
+      { symbol: "SNPS", label: "Synopsys", region: "usa" },
+      { symbol: "CDNS", label: "Cadence", region: "usa" },
+      { symbol: "FTNT", label: "Fortinet", region: "usa" },
+      { symbol: "NET", label: "Cloudflare", region: "usa" },
       { symbol: "SHOP", label: "Shopify" },
-      { symbol: "PLTR", label: "Palantir" },
-      { symbol: "PANW", label: "Palo Alto" },
-      { symbol: "CRWD", label: "CrowdStrike" },
-      { symbol: "DDOG", label: "Datadog" },
-      { symbol: "SNOW", label: "Snowflake" },
-      { symbol: "WDAY", label: "Workday" },
-      { symbol: "SNPS", label: "Synopsys" },
-      { symbol: "CDNS", label: "Cadence" },
-      { symbol: "FTNT", label: "Fortinet" },
-      { symbol: "NET", label: "Cloudflare" },
+      { symbol: "SAP.DE", label: "SAP", region: "europe" },
+      { symbol: "DSY.PA", label: "Dassault Systèmes", region: "europe" },
+      { symbol: "SAGE.L", label: "Sage", region: "europe" },
+      { symbol: "ADYEN.AS", label: "Adyen", region: "europe" },
+      { symbol: "INFY", label: "Infosys", region: "asia" },
+      { symbol: "035420.KS", label: "Naver", region: "asia" },
+      { symbol: "035720.KS", label: "Kakao", region: "asia" },
     ] }],
   },
   {
     key: "space",
     labelKey: "research.markets.sector.space",
     groups: [{ entries: [
-      { symbol: "ARKX", label: "Space ETF" },
-      { symbol: "RKLB", label: "Rocket Lab" },
-      { symbol: "ASTS", label: "AST SpaceMobile" },
-      { symbol: "LUNR", label: "Intuitive Machines" },
-      { symbol: "RDW", label: "Redwire" },
-      { symbol: "PL", label: "Planet Labs" },
-      { symbol: "BKSY", label: "BlackSky" },
-      { symbol: "SPIR", label: "Spire Global" },
-      { symbol: "IRDM", label: "Iridium" },
-      { symbol: "VSAT", label: "Viasat" },
-      { symbol: "GSAT", label: "Globalstar" },
-      { symbol: "RTX", label: "RTX" },
-      { symbol: "LMT", label: "Lockheed Martin" },
-      { symbol: "NOC", label: "Northrop Grumman" },
-      { symbol: "BA", label: "Boeing" },
-      { symbol: "GD", label: "General Dynamics" },
-      { symbol: "LHX", label: "L3Harris" },
-      { symbol: "TDG", label: "TransDigm" },
-      { symbol: "HEI", label: "Heico" },
-      { symbol: "AVAV", label: "AeroVironment" },
-      { symbol: "KTOS", label: "Kratos" },
-      { symbol: "BWXT", label: "BWX Technologies" },
-      { symbol: "AIR.PA", label: "Airbus" },
-      { symbol: "BA.L", label: "BAE Systems" },
+      { symbol: "ARKX", label: "Space ETF", region: "usa" },
+      { symbol: "RKLB", label: "Rocket Lab", region: "usa" },
+      { symbol: "ASTS", label: "AST SpaceMobile", region: "usa" },
+      { symbol: "LUNR", label: "Intuitive Machines", region: "usa" },
+      { symbol: "RDW", label: "Redwire", region: "usa" },
+      { symbol: "PL", label: "Planet Labs", region: "usa" },
+      { symbol: "BKSY", label: "BlackSky", region: "usa" },
+      { symbol: "SPIR", label: "Spire Global", region: "usa" },
+      { symbol: "IRDM", label: "Iridium", region: "usa" },
+      { symbol: "VSAT", label: "Viasat", region: "usa" },
+      { symbol: "GSAT", label: "Globalstar", region: "usa" },
+      { symbol: "RTX", label: "RTX", region: "usa" },
+      { symbol: "LMT", label: "Lockheed Martin", region: "usa" },
+      { symbol: "NOC", label: "Northrop Grumman", region: "usa" },
+      { symbol: "BA", label: "Boeing", region: "usa" },
+      { symbol: "GD", label: "General Dynamics", region: "usa" },
+      { symbol: "LHX", label: "L3Harris", region: "usa" },
+      { symbol: "TDG", label: "TransDigm", region: "usa" },
+      { symbol: "HEI", label: "Heico", region: "usa" },
+      { symbol: "AVAV", label: "AeroVironment", region: "usa" },
+      { symbol: "KTOS", label: "Kratos", region: "usa" },
+      { symbol: "BWXT", label: "BWX Technologies", region: "usa" },
+      { symbol: "AIR.PA", label: "Airbus", region: "europe" },
+      { symbol: "BA.L", label: "BAE Systems", region: "europe" },
+      { symbol: "HO.PA", label: "Thales", region: "europe" },
+      { symbol: "SAF.PA", label: "Safran", region: "europe" },
+      { symbol: "LDO.MI", label: "Leonardo", region: "europe" },
+      { symbol: "RHM.DE", label: "Rheinmetall", region: "europe" },
+      { symbol: "7011.T", label: "Mitsubishi Heavy", region: "asia" },
+      { symbol: "7013.T", label: "IHI", region: "asia" },
+      { symbol: "012450.KS", label: "Hanwha Aerospace", region: "asia" },
     ] }],
   },
   {
     key: "realEstate",
     labelKey: "research.markets.sector.realEstate",
     groups: [{ entries: [
-      { symbol: "VNQ", label: "REIT ETF" },
-      { symbol: "PLD", label: "Prologis" },
-      { symbol: "AMT", label: "American Tower" },
-      { symbol: "EQIX", label: "Equinix" },
-      { symbol: "WELL", label: "Welltower" },
-      { symbol: "SPG", label: "Simon Property" },
-      { symbol: "O", label: "Realty Income" },
-      { symbol: "PSA", label: "Public Storage" },
-      { symbol: "CCI", label: "Crown Castle" },
-      { symbol: "DLR", label: "Digital Realty" },
-      { symbol: "VICI", label: "VICI Properties" },
-      { symbol: "AVB", label: "AvalonBay" },
-      { symbol: "EXR", label: "Extra Space" },
-      { symbol: "SBAC", label: "SBA Communications" },
-      { symbol: "CBRE", label: "CBRE" },
-      { symbol: "EQR", label: "Equity Residential" },
-      { symbol: "VTR", label: "Ventas" },
-      { symbol: "IRM", label: "Iron Mountain" },
+      { symbol: "VNQ", label: "REIT ETF", region: "usa" },
+      { symbol: "PLD", label: "Prologis", region: "usa" },
+      { symbol: "AMT", label: "American Tower", region: "usa" },
+      { symbol: "EQIX", label: "Equinix", region: "usa" },
+      { symbol: "WELL", label: "Welltower", region: "usa" },
+      { symbol: "SPG", label: "Simon Property", region: "usa" },
+      { symbol: "O", label: "Realty Income", region: "usa" },
+      { symbol: "PSA", label: "Public Storage", region: "usa" },
+      { symbol: "CCI", label: "Crown Castle", region: "usa" },
+      { symbol: "DLR", label: "Digital Realty", region: "usa" },
+      { symbol: "VICI", label: "VICI Properties", region: "usa" },
+      { symbol: "AVB", label: "AvalonBay", region: "usa" },
+      { symbol: "EXR", label: "Extra Space", region: "usa" },
+      { symbol: "SBAC", label: "SBA Communications", region: "usa" },
+      { symbol: "CBRE", label: "CBRE", region: "usa" },
+      { symbol: "EQR", label: "Equity Residential", region: "usa" },
+      { symbol: "VTR", label: "Ventas", region: "usa" },
+      { symbol: "IRM", label: "Iron Mountain", region: "usa" },
+      { symbol: "VNA.DE", label: "Vonovia", region: "europe" },
+      { symbol: "SGRO.L", label: "Segro", region: "europe" },
+      { symbol: "LAND.L", label: "Land Securities", region: "europe" },
+      { symbol: "BLND.L", label: "British Land", region: "europe" },
+      { symbol: "0016.HK", label: "Sun Hung Kai", region: "asia" },
+      { symbol: "0823.HK", label: "Link REIT", region: "asia" },
+      { symbol: "1113.HK", label: "CK Asset", region: "asia" },
+      { symbol: "8801.T", label: "Mitsui Fudosan", region: "asia" },
+      { symbol: "8802.T", label: "Mitsubishi Estate", region: "asia" },
     ] }],
   },
   {
     key: "energy",
     labelKey: "research.markets.sector.energy",
     groups: [{ entries: [
-      { symbol: "XLE", label: "Energy ETF" },
-      { symbol: "XOM", label: "Exxon Mobil" },
-      { symbol: "CVX", label: "Chevron" },
-      { symbol: "SHEL.L", label: "Shell" },
-      { symbol: "TTE.PA", label: "TotalEnergies" },
-      { symbol: "BP.L", label: "BP" },
-      { symbol: "COP", label: "ConocoPhillips" },
-      { symbol: "SLB", label: "Schlumberger" },
-      { symbol: "EOG", label: "EOG Resources" },
+      { symbol: "XLE", label: "Energy ETF", region: "usa" },
+      { symbol: "XOM", label: "Exxon Mobil", region: "usa" },
+      { symbol: "CVX", label: "Chevron", region: "usa" },
+      { symbol: "COP", label: "ConocoPhillips", region: "usa" },
+      { symbol: "SLB", label: "Schlumberger", region: "usa" },
+      { symbol: "HAL", label: "Halliburton", region: "usa" },
+      { symbol: "EOG", label: "EOG Resources", region: "usa" },
+      { symbol: "OXY", label: "Occidental", region: "usa" },
+      { symbol: "MPC", label: "Marathon Petroleum", region: "usa" },
+      { symbol: "PSX", label: "Phillips 66", region: "usa" },
+      { symbol: "VLO", label: "Valero", region: "usa" },
+      { symbol: "WMB", label: "Williams", region: "usa" },
       { symbol: "ENB", label: "Enbridge" },
-      { symbol: "EQNR", label: "Equinor" },
       { symbol: "2222.SR", label: "Saudi Aramco" },
-      { symbol: "OXY", label: "Occidental" },
-      { symbol: "MPC", label: "Marathon Petroleum" },
-      { symbol: "PSX", label: "Phillips 66" },
-      { symbol: "VLO", label: "Valero" },
-      { symbol: "WMB", label: "Williams" },
+      { symbol: "SHEL.L", label: "Shell", region: "europe" },
+      { symbol: "TTE.PA", label: "TotalEnergies", region: "europe" },
+      { symbol: "BP.L", label: "BP", region: "europe" },
+      { symbol: "EQNR", label: "Equinor", region: "europe" },
+      { symbol: "ENI.MI", label: "Eni", region: "europe" },
+      { symbol: "REP.MC", label: "Repsol", region: "europe" },
+      { symbol: "0857.HK", label: "PetroChina", region: "asia" },
+      { symbol: "0883.HK", label: "CNOOC", region: "asia" },
+      { symbol: "0386.HK", label: "Sinopec", region: "asia" },
+      { symbol: "RELIANCE.NS", label: "Reliance", region: "asia" },
     ] }],
   },
   {
     key: "financials",
     labelKey: "research.markets.sector.financials",
     groups: [{ entries: [
-      { symbol: "XLF", label: "Financials ETF" },
-      { symbol: "JPM", label: "JPMorgan" },
-      { symbol: "BAC", label: "Bank of America" },
-      { symbol: "WFC", label: "Wells Fargo" },
-      { symbol: "GS", label: "Goldman Sachs" },
-      { symbol: "MS", label: "Morgan Stanley" },
-      { symbol: "C", label: "Citigroup" },
-      { symbol: "V", label: "Visa" },
-      { symbol: "MA", label: "Mastercard" },
-      { symbol: "AXP", label: "American Express" },
-      { symbol: "BRK-B", label: "Berkshire Hathaway" },
-      { symbol: "BLK", label: "BlackRock" },
-      { symbol: "SCHW", label: "Charles Schwab" },
-      { symbol: "SPGI", label: "S&P Global" },
-      { symbol: "BX", label: "Blackstone" },
-      { symbol: "HSBA.L", label: "HSBC" },
-      { symbol: "UBS", label: "UBS" },
-      { symbol: "BNP.PA", label: "BNP Paribas" },
+      { symbol: "XLF", label: "Financials ETF", region: "usa" },
+      { symbol: "JPM", label: "JPMorgan", region: "usa" },
+      { symbol: "BAC", label: "Bank of America", region: "usa" },
+      { symbol: "WFC", label: "Wells Fargo", region: "usa" },
+      { symbol: "GS", label: "Goldman Sachs", region: "usa" },
+      { symbol: "MS", label: "Morgan Stanley", region: "usa" },
+      { symbol: "C", label: "Citigroup", region: "usa" },
+      { symbol: "V", label: "Visa", region: "usa" },
+      { symbol: "MA", label: "Mastercard", region: "usa" },
+      { symbol: "AXP", label: "American Express", region: "usa" },
+      { symbol: "BRK-B", label: "Berkshire Hathaway", region: "usa" },
+      { symbol: "BLK", label: "BlackRock", region: "usa" },
+      { symbol: "SCHW", label: "Charles Schwab", region: "usa" },
+      { symbol: "SPGI", label: "S&P Global", region: "usa" },
+      { symbol: "BX", label: "Blackstone", region: "usa" },
+      { symbol: "HSBA.L", label: "HSBC", region: "europe" },
+      { symbol: "UBS", label: "UBS", region: "europe" },
+      { symbol: "BNP.PA", label: "BNP Paribas", region: "europe" },
+      { symbol: "ALV.DE", label: "Allianz", region: "europe" },
+      { symbol: "ING", label: "ING Groep", region: "europe" },
+      { symbol: "DBK.DE", label: "Deutsche Bank", region: "europe" },
+      { symbol: "ISP.MI", label: "Intesa Sanpaolo", region: "europe" },
+      { symbol: "1398.HK", label: "ICBC", region: "asia" },
+      { symbol: "0939.HK", label: "China Construction Bank", region: "asia" },
+      { symbol: "1299.HK", label: "AIA", region: "asia" },
+      { symbol: "8306.T", label: "Mitsubishi UFJ", region: "asia" },
+      { symbol: "HDB", label: "HDFC Bank", region: "asia" },
+      { symbol: "IBN", label: "ICICI Bank", region: "asia" },
     ] }],
   },
   {
     key: "healthcare",
     labelKey: "research.markets.sector.healthcare",
     groups: [{ entries: [
-      { symbol: "XLV", label: "Healthcare ETF" },
-      { symbol: "LLY", label: "Eli Lilly" },
-      { symbol: "UNH", label: "UnitedHealth" },
-      { symbol: "JNJ", label: "Johnson & Johnson" },
-      { symbol: "NVO", label: "Novo Nordisk" },
-      { symbol: "MRK", label: "Merck" },
-      { symbol: "ABBV", label: "AbbVie" },
-      { symbol: "PFE", label: "Pfizer" },
-      { symbol: "TMO", label: "Thermo Fisher" },
-      { symbol: "ABT", label: "Abbott" },
-      { symbol: "DHR", label: "Danaher" },
-      { symbol: "AMGN", label: "Amgen" },
-      { symbol: "MDT", label: "Medtronic" },
-      { symbol: "ISRG", label: "Intuitive Surgical" },
-      { symbol: "AZN.L", label: "AstraZeneca" },
-      { symbol: "NOVN.SW", label: "Novartis" },
-      { symbol: "ROG.SW", label: "Roche" },
-      { symbol: "SAN.PA", label: "Sanofi" },
+      { symbol: "XLV", label: "Healthcare ETF", region: "usa" },
+      { symbol: "LLY", label: "Eli Lilly", region: "usa" },
+      { symbol: "UNH", label: "UnitedHealth", region: "usa" },
+      { symbol: "JNJ", label: "Johnson & Johnson", region: "usa" },
+      { symbol: "MRK", label: "Merck", region: "usa" },
+      { symbol: "ABBV", label: "AbbVie", region: "usa" },
+      { symbol: "PFE", label: "Pfizer", region: "usa" },
+      { symbol: "TMO", label: "Thermo Fisher", region: "usa" },
+      { symbol: "ABT", label: "Abbott", region: "usa" },
+      { symbol: "DHR", label: "Danaher", region: "usa" },
+      { symbol: "AMGN", label: "Amgen", region: "usa" },
+      { symbol: "MDT", label: "Medtronic", region: "usa" },
+      { symbol: "ISRG", label: "Intuitive Surgical", region: "usa" },
+      { symbol: "NVO", label: "Novo Nordisk", region: "europe" },
+      { symbol: "AZN.L", label: "AstraZeneca", region: "europe" },
+      { symbol: "NOVN.SW", label: "Novartis", region: "europe" },
+      { symbol: "ROG.SW", label: "Roche", region: "europe" },
+      { symbol: "SAN.PA", label: "Sanofi", region: "europe" },
+      { symbol: "GSK.L", label: "GSK", region: "europe" },
+      { symbol: "BAYN.DE", label: "Bayer", region: "europe" },
+      { symbol: "SHL.DE", label: "Siemens Healthineers", region: "europe" },
+      { symbol: "4502.T", label: "Takeda", region: "asia" },
+      { symbol: "4568.T", label: "Daiichi Sankyo", region: "asia" },
+      { symbol: "4519.T", label: "Chugai", region: "asia" },
+      { symbol: "2269.HK", label: "WuXi Biologics", region: "asia" },
     ] }],
   },
   {
     key: "automotive",
     labelKey: "research.markets.sector.automotive",
     groups: [{ entries: [
-      { symbol: "TSLA", label: "Tesla" },
-      { symbol: "TM", label: "Toyota" },
-      { symbol: "F", label: "Ford" },
-      { symbol: "GM", label: "General Motors" },
-      { symbol: "MBG.DE", label: "Mercedes-Benz" },
-      { symbol: "VOW3.DE", label: "Volkswagen" },
-      { symbol: "BMW.DE", label: "BMW" },
-      { symbol: "P911.DE", label: "Porsche" },
-      { symbol: "RACE", label: "Ferrari" },
-      { symbol: "STLA", label: "Stellantis" },
-      { symbol: "HMC", label: "Honda" },
-      { symbol: "005380.KS", label: "Hyundai" },
-      { symbol: "BYDDY", label: "BYD" },
-      { symbol: "NIO", label: "NIO" },
-      { symbol: "LI", label: "Li Auto" },
-      { symbol: "XPEV", label: "XPeng" },
-      { symbol: "RIVN", label: "Rivian" },
+      { symbol: "TSLA", label: "Tesla", region: "usa" },
+      { symbol: "F", label: "Ford", region: "usa" },
+      { symbol: "GM", label: "General Motors", region: "usa" },
+      { symbol: "RIVN", label: "Rivian", region: "usa" },
+      { symbol: "LCID", label: "Lucid", region: "usa" },
+      { symbol: "MBG.DE", label: "Mercedes-Benz", region: "europe" },
+      { symbol: "VOW3.DE", label: "Volkswagen", region: "europe" },
+      { symbol: "BMW.DE", label: "BMW", region: "europe" },
+      { symbol: "P911.DE", label: "Porsche", region: "europe" },
+      { symbol: "RACE", label: "Ferrari", region: "europe" },
+      { symbol: "STLA", label: "Stellantis", region: "europe" },
+      { symbol: "RNO.PA", label: "Renault", region: "europe" },
+      { symbol: "CON.DE", label: "Continental", region: "europe" },
+      { symbol: "TM", label: "Toyota", region: "asia" },
+      { symbol: "HMC", label: "Honda", region: "asia" },
+      { symbol: "7201.T", label: "Nissan", region: "asia" },
+      { symbol: "7269.T", label: "Suzuki", region: "asia" },
+      { symbol: "005380.KS", label: "Hyundai", region: "asia" },
+      { symbol: "000270.KS", label: "Kia", region: "asia" },
+      { symbol: "BYDDY", label: "BYD", region: "asia" },
+      { symbol: "NIO", label: "NIO", region: "asia" },
+      { symbol: "LI", label: "Li Auto", region: "asia" },
+      { symbol: "XPEV", label: "XPeng", region: "asia" },
     ] }],
   },
   {
     key: "consumer",
     labelKey: "research.markets.sector.consumer",
     groups: [{ entries: [
-      { symbol: "AMZN", label: "Amazon" },
-      { symbol: "WMT", label: "Walmart" },
-      { symbol: "COST", label: "Costco" },
-      { symbol: "HD", label: "Home Depot" },
-      { symbol: "MC.PA", label: "LVMH" },
-      { symbol: "NESN.SW", label: "Nestlé" },
-      { symbol: "KO", label: "Coca-Cola" },
-      { symbol: "PG", label: "Procter & Gamble" },
-      { symbol: "PEP", label: "PepsiCo" },
-      { symbol: "MCD", label: "McDonald's" },
-      { symbol: "NKE", label: "Nike" },
-      { symbol: "SBUX", label: "Starbucks" },
-      { symbol: "PM", label: "Philip Morris" },
-      { symbol: "DIS", label: "Disney" },
-      { symbol: "BKNG", label: "Booking" },
-      { symbol: "LOW", label: "Lowe's" },
-      { symbol: "OR.PA", label: "L'Oréal" },
-      { symbol: "DEO", label: "Diageo" },
+      { symbol: "AMZN", label: "Amazon", region: "usa" },
+      { symbol: "WMT", label: "Walmart", region: "usa" },
+      { symbol: "COST", label: "Costco", region: "usa" },
+      { symbol: "HD", label: "Home Depot", region: "usa" },
+      { symbol: "KO", label: "Coca-Cola", region: "usa" },
+      { symbol: "PG", label: "Procter & Gamble", region: "usa" },
+      { symbol: "PEP", label: "PepsiCo", region: "usa" },
+      { symbol: "MCD", label: "McDonald's", region: "usa" },
+      { symbol: "NKE", label: "Nike", region: "usa" },
+      { symbol: "SBUX", label: "Starbucks", region: "usa" },
+      { symbol: "PM", label: "Philip Morris", region: "usa" },
+      { symbol: "DIS", label: "Disney", region: "usa" },
+      { symbol: "BKNG", label: "Booking", region: "usa" },
+      { symbol: "LOW", label: "Lowe's", region: "usa" },
+      { symbol: "MC.PA", label: "LVMH", region: "europe" },
+      { symbol: "NESN.SW", label: "Nestlé", region: "europe" },
+      { symbol: "OR.PA", label: "L'Oréal", region: "europe" },
+      { symbol: "DEO", label: "Diageo", region: "europe" },
+      { symbol: "RMS.PA", label: "Hermès", region: "europe" },
+      { symbol: "ULVR.L", label: "Unilever", region: "europe" },
+      { symbol: "ABI.BR", label: "AB InBev", region: "europe" },
+      { symbol: "ADS.DE", label: "Adidas", region: "europe" },
+      { symbol: "CFR.SW", label: "Richemont", region: "europe" },
+      { symbol: "9988.HK", label: "Alibaba", region: "asia" },
+      { symbol: "PDD", label: "PDD", region: "asia" },
+      { symbol: "3690.HK", label: "Meituan", region: "asia" },
+      { symbol: "9983.T", label: "Fast Retailing", region: "asia" },
+      { symbol: "7974.T", label: "Nintendo", region: "asia" },
+      { symbol: "600519.SS", label: "Kweichow Moutai", region: "asia" },
     ] }],
   },
 ];
 
-const ALL_VIEWS = [...REGION_VIEWS, ...SECTOR_VIEWS];
+const REGION_OPTIONS: ReadonlyArray<{ key: Region; labelKey: string }> = [
+  { key: "worldwide", labelKey: "research.markets.region.worldwide" },
+  { key: "usa", labelKey: "research.markets.region.usa" },
+  { key: "europe", labelKey: "research.markets.region.europe" },
+  { key: "asia", labelKey: "research.markets.region.asia" },
+];
+
+// Sector switcher: "Overview" (the region's Indices + Top stocks) plus each
+// themed basket.
+const SECTOR_OPTIONS: ReadonlyArray<{ key: string; labelKey: string }> = [
+  { key: "overview", labelKey: "research.markets.sector.overview" },
+  ...SECTOR_VIEWS.map((v) => ({ key: v.key, labelKey: v.labelKey })),
+];
 
 interface OverviewQuote {
   symbol: string;
@@ -511,24 +612,37 @@ export default function MarketOverviewPage() {
   const { t } = useLanguage();
   const navigate = useNavigate();
   const isOnline = useOnlineStatus();
-  const [viewKey, setViewKey] = useState<string>("worldwide");
+  const [region, setRegion] = useState<Region>("worldwide");
+  const [sector, setSector] = useState<string>("overview");
 
-  const view = useMemo(
-    () => ALL_VIEWS.find((v) => v.key === viewKey) ?? ALL_VIEWS[0],
-    [viewKey],
-  );
+  // Region is the global axis. With "Overview" selected we show that region's
+  // Indices + Top stocks; with a sector selected we show its basket filtered to
+  // the region (Worldwide keeps every member; a region keeps only its tagged
+  // members). Filtering is by tag, not a second fetch, so the basket stays one
+  // curated config.
+  const groups = useMemo<ReadonlyArray<ViewGroup>>(() => {
+    if (sector === "overview") {
+      const rv = REGION_VIEWS.find((v) => v.key === region) ?? REGION_VIEWS[0];
+      return rv.groups;
+    }
+    const sv = SECTOR_VIEWS.find((v) => v.key === sector) ?? SECTOR_VIEWS[0];
+    const all = sv.groups[0]?.entries ?? [];
+    const entries = region === "worldwide" ? all : all.filter((e) => e.region === region);
+    return [{ entries }];
+  }, [region, sector]);
 
-  // One batch quote per active view. Same cadence/guards as the home benchmark
-  // strip: 60s poll, online-gated, price-only (we only read changePercent).
+  // One batch quote per active selection. Same cadence/guards as the home
+  // benchmark strip: 60s poll, online-gated, price-only (we only read
+  // changePercent).
   const symbols = useMemo(
-    () => Array.from(new Set(view.groups.flatMap((grp) => grp.entries.map((e) => e.symbol)))).join(","),
-    [view],
+    () => Array.from(new Set(groups.flatMap((grp) => grp.entries.map((e) => e.symbol)))).join(","),
+    [groups],
   );
 
   const { data } = useQuery({
-    queryKey: ["market-overview", view.key],
+    queryKey: ["market-overview", region, sector],
     queryFn: () => apiClient.getMarketQuotes<OverviewQuote>(symbols, { detail: "basic" }),
-    enabled: isOnline,
+    enabled: isOnline && symbols.length > 0,
     staleTime: 60_000,
     refetchInterval: isOnline ? 60_000 : false,
     refetchOnWindowFocus: false,
@@ -544,7 +658,7 @@ export default function MarketOverviewPage() {
     navigate(`/research/market?symbol=${encodeURIComponent(symbol)}`);
   };
 
-  const showHeadings = view.groups.length > 1;
+  const showHeadings = groups.length > 1;
 
   const renderGrid = (entries: ReadonlyArray<SymbolEntry>) => (
     <div className="grid grid-cols-2 gap-2.5 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6">
@@ -584,26 +698,32 @@ export default function MarketOverviewPage() {
       <div className="space-y-3">
         <ToggleCluster
           label={t("research.markets.regions")}
-          views={REGION_VIEWS}
-          value={viewKey}
-          onChange={setViewKey}
+          options={REGION_OPTIONS}
+          value={region}
+          onChange={(v) => setRegion(v as Region)}
           t={t}
         />
         <ToggleCluster
           label={t("research.markets.sectors")}
-          views={SECTOR_VIEWS}
-          value={viewKey}
-          onChange={setViewKey}
+          options={SECTOR_OPTIONS}
+          value={sector}
+          onChange={setSector}
           t={t}
         />
       </div>
 
-      {view.groups.map((group, i) => (
+      {groups.map((group, i) => (
         <section key={group.titleKey ?? i} className="space-y-3">
           {showHeadings && group.titleKey && (
             <h2 className="text-sm font-semibold text-muted-foreground">{t(group.titleKey)}</h2>
           )}
-          {renderGrid(group.entries)}
+          {group.entries.length > 0 ? (
+            renderGrid(group.entries)
+          ) : (
+            <p className="rounded-xl border border-dashed border-border/40 px-4 py-8 text-center text-sm text-muted-foreground">
+              {t("research.markets.empty")}
+            </p>
+          )}
         </section>
       ))}
     </div>
@@ -612,13 +732,13 @@ export default function MarketOverviewPage() {
 
 interface ToggleClusterProps {
   label: string;
-  views: ReadonlyArray<MarketView>;
+  options: ReadonlyArray<{ key: string; labelKey: string }>;
   value: string;
   onChange: (key: string) => void;
   t: (key: string) => string;
 }
 
-function ToggleCluster({ label, views, value, onChange, t }: ToggleClusterProps) {
+function ToggleCluster({ label, options, value, onChange, t }: ToggleClusterProps) {
   return (
     <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
       <span className="w-16 shrink-0 text-xs font-semibold uppercase tracking-wide text-muted-foreground">{label}</span>
@@ -629,9 +749,9 @@ function ToggleCluster({ label, views, value, onChange, t }: ToggleClusterProps)
         variant="outline"
         className="flex-wrap justify-start"
       >
-        {views.map((v) => (
-          <ToggleGroupItem key={v.key} value={v.key} className="px-3">
-            {t(v.labelKey)}
+        {options.map((o) => (
+          <ToggleGroupItem key={o.key} value={o.key} className="px-3">
+            {t(o.labelKey)}
           </ToggleGroupItem>
         ))}
       </ToggleGroup>

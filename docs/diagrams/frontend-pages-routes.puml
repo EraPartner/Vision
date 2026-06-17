@@ -184,11 +184,13 @@ package "Research Pages (ADR-079)" {
   }
 
   class MarketOverviewPage {
-    +Region Switcher (USA/Europe/Asia/Worldwide)
-    +Indices Section (locale-formatted points)
-    +Top Stocks Section (symbol currency)
-    +Tiles colored by daily change
-    +60s poll via GET /api/market/quote
+    +Region Axis (Worldwide/USA/Europe/China·Asia)
+    +Sector Axis (Overview + 10 sectors)
+    +Overview mode: Indices + Top Stocks grids
+    +Sector mode: region-filtered basket grid
+    +Empty-state when combo has no symbols
+    +Heat-map tiles (changePercent, em-dash fallback)
+    +60s poll via GET /api/market/quote (detail=basic)
   }
 }
 
