@@ -1,8 +1,8 @@
 #!/usr/bin/env sh
 #
-# Vision commit-msg -- enforce Conventional Commits. CONTRIBUTING.md documents the
+# Vision commit-msg -- enforce Conventional Commits. .github/CONTRIBUTING.md documents the
 # policy ("type(scope): subject"); this hook makes it real. Runs commitlint with
-# @commitlint/config-conventional (config: commitlint.config.mjs).
+# @commitlint/config-conventional (config: config/commitlint.config.mjs).
 #
 # Wiring:   git config core.hooksPath .githooks   (done by scripts/setup-git-hooks.js)
 # Bypass:   git commit --no-verify        or       SKIP_HOOKS=1 git commit ...
@@ -26,4 +26,4 @@ if [ ! -x "$CL" ]; then
   exit 0
 fi
 
-"$CL" --edit "$1"
+"$CL" --config "$REPO_ROOT/config/commitlint.config.mjs" --edit "$1"

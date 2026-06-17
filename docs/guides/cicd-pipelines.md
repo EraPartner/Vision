@@ -3,11 +3,11 @@ title: CI/CD Pipelines
 type: guide
 status: active
 date: 2026-04-28
-updated: 2026-05-29
+updated: 2026-06-17
 tags: [guide, cicd, github-actions, testing, linting, docker, release, packaging, automation, april-2026, may-2026, security, secrets-scan, deps-audit, trivy-scan, quality-gate, verify-compose-sync, ci-complete, live-api-contracts, branch-protection]
 description: GitHub Actions CI/CD pipelines including continuous integration checks, supply chain security scanning (secrets, dependencies, container images), quality gates, Docker Compose sync verification, and release automation with checksums
 aliases: [github-actions, ci-cd, pipelines, release-workflow, testing-automation, security-scanning, quality-gates, branch-protection]
-related_code: [".github/workflows/ci.yml", ".github/workflows/release.yml", ".gitleaks.toml", ".githooks/pre-commit", "packaging/electron/main.js", "packaging/electron/assets/error.html", "packaging/electron/resources/docker-compose.yml", "docker-compose.yml"]
+related_code: [".github/workflows/ci.yml", ".github/workflows/release.yml", "config/gitleaks.toml", ".githooks/pre-commit", "packaging/electron/main.js", "packaging/electron/assets/error.html", "packaging/electron/resources/docker-compose.yml", "docker-compose.yml"]
 ---
 
 # CI/CD Pipelines
@@ -69,7 +69,7 @@ secrets-scan:
 - Slack webhooks, Discord tokens
 - Any pattern matching known secret formats
 
-**Config:** `.gitleaks.toml` allowlists documentation placeholders and Obsidian plugin artifacts
+**Config:** `config/gitleaks.toml` allowlists documentation placeholders and Obsidian plugin artifacts
 
 **Policy:** Blocks merge if secrets found; must rewrite history or rotate exposed credentials immediately
 

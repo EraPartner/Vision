@@ -46,9 +46,9 @@ if command -v gitleaks >/dev/null 2>&1; then
   echo "[pre-commit] gitleaks: scanning staged changes..."
   if gitleaks git --help >/dev/null 2>&1; then
     # gitleaks >= 8.19 (protect/detect removed)
-    gitleaks git --staged --pre-commit --no-banner --redact -v -c .gitleaks.toml . || fail=1
+    gitleaks git --staged --pre-commit --no-banner --redact -v -c config/gitleaks.toml . || fail=1
   else
-    gitleaks protect --staged --redact -v -c .gitleaks.toml || fail=1
+    gitleaks protect --staged --redact -v -c config/gitleaks.toml || fail=1
   fi
   [ "$fail" -eq 0 ] || echo "[pre-commit] FAIL: gitleaks flagged potential secrets (above)."
 else
