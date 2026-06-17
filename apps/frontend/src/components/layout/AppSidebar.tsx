@@ -77,11 +77,12 @@ function withGoToHint(title: string, url: string): string {
 }
 
 function isActiveRoute(itemUrl: string, pathname: string) {
-  if (itemUrl === "/" && pathname === "/") return true;
-  if (itemUrl === "/portfolio" && pathname === "/portfolio") return true;
-  if (itemUrl === "/research" && pathname === "/research") return true;
-  if (itemUrl !== "/" && itemUrl !== "/portfolio" && itemUrl !== "/research") return pathname.startsWith(itemUrl);
-  return false;
+  // Workspace roots are active only on an exact match (they have children).
+  if (itemUrl === "/" || itemUrl === "/portfolio" || itemUrl === "/research") return pathname === itemUrl;
+  // Boundary-aware prefix match so a route whose path is a string prefix of
+  // another (e.g. /research/market vs /research/markets) doesn't light up its
+  // sibling. Child routes (/import/:id) still highlight their parent nav item.
+  return pathname === itemUrl || pathname.startsWith(itemUrl + "/");
 }
 
 export function AppSidebar() {
@@ -182,6 +183,7 @@ export function AppSidebar() {
       label: t('nav.overview'),
       items: [
         { title: t('nav.researchHome'), url: "/research", icon: Telescope },
+        { title: t('nav.markets'), url: "/research/markets", icon: Globe },
         { title: t('nav.marketLookup'), url: "/research/market", icon: LineChart },
       ],
     },

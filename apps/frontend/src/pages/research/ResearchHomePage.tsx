@@ -5,7 +5,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import {
   Telescope, GitCompareArrows, LineChart, Target, ArrowRight,
-  CandlestickChart, TrendingUp, TrendingDown, Activity, Plus,
+  CandlestickChart, TrendingUp, TrendingDown, Activity, Plus, Globe,
 } from "lucide-react";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { useAppSettings } from "@/contexts/AppSettingsContext";
@@ -105,7 +105,7 @@ export default function ResearchHomePage() {
   );
 
   const goToSymbol = (symbol: string) => {
-    navigate(`/research/symbol/${encodeURIComponent(symbol)}`);
+    navigate(`/research/market?symbol=${encodeURIComponent(symbol)}`);
   };
 
   const formatPrice = (value: number, currency: string) =>
@@ -186,6 +186,12 @@ export default function ResearchHomePage() {
 
       {/* Entry points — all five research tools */}
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+        <EntryCard
+          icon={Globe}
+          title={t('nav.markets')}
+          desc={t('research.entry.markets')}
+          onClick={() => navigate("/research/markets")}
+        />
         <EntryCard
           icon={LineChart}
           title={t('nav.marketLookup')}

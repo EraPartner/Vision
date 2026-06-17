@@ -3,7 +3,6 @@ import { useLanguage } from "@/contexts/LanguageContext";
 import { useAppSettings } from "@/contexts/AppSettingsContext";
 import { numberFormatToLocale } from "@/utils/currency";
 import {
-  formatDateStringWithAppSettings,
   formatDateTimeWithAppSettings,
   formatDateWithAppSettings,
 } from "@/components/shared/dateUtils";
@@ -12,9 +11,9 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
+import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import {
-  TrendingUp, TrendingDown, BarChart3, ArrowUpDown,
-  DollarSign, Activity, Clock, Newspaper, ExternalLink, Users, Star,
+  TrendingUp, TrendingDown, BarChart3, Activity, Clock, Star, Link2,
 } from "lucide-react";
 import { AreaChart, BarChart, type AreaSeries, type BarSeries } from "@/components/charts";
 import { useDebounce } from "@/hooks/useDebounce";
@@ -23,11 +22,14 @@ import { usePortfolio } from "@/hooks/usePortfolio";
 import { getInvestmentPriceHistory } from "@/lib/api/portfolio";
 import { AddInvestmentFromMarketDialog } from "@/components/portfolio/AddInvestmentFromMarketDialog";
 import { AddToWatchlistDialog } from "@/components/portfolio/AddToWatchlistDialog";
-import { RemoteNewsImage } from "@/components/shared/RemoteNewsImage";
 import { useSearchParams } from "react-router-dom";
 import { PageHeader } from "@/components/shared/PageHeader";
 import { SymbolSearchResultItem } from "@/components/shared/SymbolSearchResultItem";
 import { SymbolSearchBox } from "@/components/shared/SymbolSearchBox";
+import { ResearchFundamentalsTab } from "@/components/research/ResearchFundamentalsTab";
+import { ResearchAnalystTab } from "@/components/research/ResearchAnalystTab";
+import { ResearchNewsTab } from "@/components/research/ResearchNewsTab";
+import { ResearchMappingDialog } from "@/components/research/ResearchMappingDialog";
 
 import { apiClient } from "@/lib/api";
 
@@ -114,13 +116,6 @@ interface ChartPoint {
   volume: number;
 }
 
-function gradeColor(grade: string): string {
-  const g = grade.toLowerCase();
-  if (/buy|outperform|overweight|accumulate/.test(g)) return "text-success";
-  if (/sell|underperform|underweight|reduce/.test(g)) return "text-destructive";
-  return "text-yellow-500 dark:text-yellow-400";
-}
-
 function fmtDate(ts: number, range: string, appDateFormat: string, locale: string) {
   const d = new Date(ts);
   if (range === "1d" || range === "5d") {
@@ -156,6 +151,8 @@ export default function MarketLookupPage() {
   const [searchText, setSearchText] = useState("");
   const [selectedSymbol, setSelectedSymbol] = useState<string | null>(null);
   const [watchlistOpen, setWatchlistOpen] = useState(false);
+  const [mappingOpen, setMappingOpen] = useState(false);
+  const [activeTab, setActiveTab] = useState("fundamentals");
   const [selectedRange, setSelectedRange] = useState(RANGES[2]); // 1M default
   const [searchParams] = useSearchParams();
   const symbolFromQuery = searchParams.get("symbol")?.trim().toUpperCase();
@@ -168,6 +165,10 @@ export default function MarketLookupPage() {
   // (Kinesis/custom/binance), Yahoo has no data for the symbol — so we serve the
   // chart + a minimal price header from the holding's own stored history instead.
   const investmentId = searchParams.get("investmentId");
+  const mappingInvestmentId = useMemo(() => {
+    const n = Number(investmentId);
+    return investmentId && Number.isInteger(n) && n > 0 ? n : undefined;
+  }, [investmentId]);
   const providerInvestment = useMemo(
     () => (investmentId ? summaries.find((s) => String(s.id) === investmentId) : undefined),
     [investmentId, summaries],
@@ -187,11 +188,13 @@ export default function MarketLookupPage() {
     staleTime: 60_000,
   });
 
-  // Quote
+  // Quote — price-only (detail=basic); the rich fundamentals/analyst/news now
+  // come from the multi-provider research tabs below, so the quoteSummary fetch
+  // is no longer needed here.
   const { data: quoteData, isFetching: isQuoteLoading } = useQuery({
     queryKey: ["market-quote", effectiveSelectedSymbol],
     queryFn: async () => {
-      const { quotes } = await apiClient.getMarketQuotes<Quote>(effectiveSelectedSymbol!);
+      const { quotes } = await apiClient.getMarketQuotes<Quote>(effectiveSelectedSymbol!, { detail: "basic" });
       return quotes[0] ?? null;
     },
     enabled: useYahoo,
@@ -235,25 +238,6 @@ export default function MarketLookupPage() {
     staleTime: 60_000,
   });
 
-  // News
-  const { data: newsData, isFetching: isNewsLoading } = useQuery({
-    queryKey: ["market-news", effectiveSelectedSymbol],
-    queryFn: () => apiClient.getMarketNews([effectiveSelectedSymbol!], 10),
-    enabled: useYahoo,
-    staleTime: 120_000,
-  });
-
-  // Fundamentals — merged FMP + Yahoo (FMP preferred, Yahoo fills gaps) via the
-  // research aggregator, so this card matches the Compare/Symbol fundamentals.
-  // Backend caches 12h; staleTime mirrors that. The display falls back to the
-  // Yahoo quote's own fields when unavailable (e.g. indices/ETFs FMP omits).
-  const { data: fundamentalsResult } = useQuery({
-    queryKey: ["market-fundamentals", effectiveSelectedSymbol],
-    queryFn: () => apiClient.getResearchFundamentals(effectiveSelectedSymbol!),
-    enabled: useYahoo,
-    staleTime: 12 * 60 * 60 * 1000,
-  });
-
   const handleSelect = useCallback((symbol: string) => {
     setSelectedSymbol(symbol);
     setSearchText("");
@@ -283,8 +267,6 @@ export default function MarketLookupPage() {
   }, [isProviderAsset, providerInvestment, providerChartData, effectiveSelectedSymbol]);
 
   const quote = isProviderAsset ? providerQuote : quoteData;
-  // Merged FMP+Yahoo fundamentals; the card prefers these over the quote's own.
-  const fundamentals = fundamentalsResult?.data ?? null;
   const displayChart = isProviderAsset ? providerChartData : chartData;
   const isChartBusy = isProviderAsset ? isProviderChartLoading : isChartLoading;
   const isQuoteBusy = isProviderAsset ? isProviderChartLoading : isQuoteLoading;
@@ -388,6 +370,17 @@ export default function MarketLookupPage() {
                       >
                         <Star className="h-4 w-4" />
                         {t('addWatchlist.title')}
+                      </Button>
+                    )}
+                    {quote && !isProviderAsset && (
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        className="gap-1.5"
+                        onClick={() => setMappingOpen(true)}
+                      >
+                        <Link2 className="h-4 w-4" />
+                        {t('research.mapping.button')}
                       </Button>
                     )}
                     {quote && !isProviderAsset && (
@@ -499,233 +492,77 @@ export default function MarketLookupPage() {
             </CardContent>
           </Card>
 
-          {/* Key Metrics */}
+          {/* Trading info (Yahoo symbols only) */}
           {quote && !isProviderAsset && (
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <Card className="glass-regular">
-                <CardHeader className="pb-2">
-                  <CardTitle className="text-sm text-muted-foreground flex items-center gap-2">
-                    <Activity className="h-4 w-4" /> {t('market.tradingInfo')}
-                  </CardTitle>
-                </CardHeader>
-                <CardContent>
-                  <div className="space-y-2.5">
-                    {[
-                      { label: t('market.open'), value: fmtPrice(quote.open, quote.currency) },
-                      { label: t('market.dayHigh'), value: fmtPrice(quote.dayHigh, quote.currency) },
-                      { label: t('market.dayLow'), value: fmtPrice(quote.dayLow, quote.currency) },
-                      { label: t('market.prevClose'), value: fmtPrice(quote.prevClose, quote.currency) },
-                      { label: t('market.volume'), value: fmtLargeNum(quote.volume) },
-                      { label: t('market.avgVolume'), value: fmtLargeNum(quote.avgVolume) },
-                    ].map(({ label, value }) => (
-                      <div key={label} className="flex justify-between items-center py-1 border-b border-border/50 last:border-0">
-                        <span className="text-sm text-muted-foreground">{label}</span>
-                        <span className="text-sm font-medium tabular-nums text-foreground">{value}</span>
-                      </div>
-                    ))}
-                  </div>
-                </CardContent>
-              </Card>
-
-              <Card className="glass-regular">
-                <CardHeader className="pb-2">
-                  <CardTitle className="text-sm text-muted-foreground flex items-center gap-2">
-                    <DollarSign className="h-4 w-4" /> {t('market.fundamentals')}
-                  </CardTitle>
-                </CardHeader>
-                <CardContent>
-                  <div className="space-y-2.5">
-                    {(() => {
-                      // FMP-preferred merged fundamentals, falling back per field
-                      // to the Yahoo quote. 52-week range is a price field only
-                      // the quote carries.
-                      const marketCap = fundamentals?.marketCap ?? quote.marketCap;
-                      const pe = fundamentals?.pe ?? quote.pe;
-                      const forwardPE = fundamentals?.forwardPE ?? quote.forwardPE;
-                      const eps = fundamentals?.eps ?? quote.eps;
-                      const dividendYield = fundamentals?.dividendYield ?? quote.dividendYield;
-                      const beta = fundamentals?.beta ?? quote.beta;
-                      const priceToBook = fundamentals?.priceToBook ?? quote.priceToBook;
-                      const currency = fundamentals?.currency || quote.currency;
-                      return [
-                        { label: t('market.marketCap'), value: fmtLargeNum(marketCap) },
-                        { label: t('market.pe'), value: pe ? pe.toFixed(2) : "—" },
-                        { label: t('market.forwardPE'), value: forwardPE ? forwardPE.toFixed(2) : "—" },
-                        { label: t('market.eps'), value: eps ? fmtPrice(eps, currency) : "—" },
-                        { label: t('market.divYield'), value: dividendYield ? `${(dividendYield * 100).toFixed(2)}%` : "—" },
-                        { label: t('market.beta'), value: beta != null ? beta.toFixed(2) : "—" },
-                        { label: t('market.priceBook'), value: priceToBook != null ? priceToBook.toFixed(2) : "—" },
-                        { label: t('market.52wRange'), value: `${fmtPrice(quote.low52w, quote.currency)} – ${fmtPrice(quote.high52w, quote.currency)}` },
-                      ];
-                    })().map(({ label, value }) => (
-                      <div key={label} className="flex justify-between items-center py-1 border-b border-border/50 last:border-0">
-                        <span className="text-sm text-muted-foreground">{label}</span>
-                        <span className="text-sm font-medium tabular-nums text-foreground">{value}</span>
-                      </div>
-                    ))}
-                  </div>
-                </CardContent>
-              </Card>
-            </div>
-          )}
-
-          {/* Analyst Ratings */}
-          {quote?.analystConsensus && (() => {
-            const { strongBuy, buy, hold, sell, strongSell } = quote.analystConsensus!;
-            const total = strongBuy + buy + hold + sell + strongSell;
-            if (total === 0) return null;
-            const bullish = strongBuy + buy;
-            const bearish = sell + strongSell;
-            const bullPct = bullish / total;
-            const bearPct = bearish / total;
-            const verdict =
-              bullPct >= 0.6 ? t('market.strongBuy')
-                : bullPct >= 0.45 ? t('market.buy')
-                  : bearPct >= 0.6 ? t('market.strongSell')
-                    : bearPct >= 0.45 ? t('market.sell')
-                      : t('market.hold');
-            const verdictColor =
-              bullPct >= 0.45 ? "text-success"
-                : bearPct >= 0.45 ? "text-destructive"
-                  : "text-yellow-500 dark:text-yellow-400";
-            return (
-              <Card className="glass-regular">
-                <CardHeader className="pb-2">
-                  <CardTitle className="text-base flex items-center gap-2">
-                    <Users className="h-4 w-4" /> {t('market.analystRatings')}
-                  </CardTitle>
-                </CardHeader>
-                <CardContent className="space-y-4">
-                  <div className="flex items-start gap-6">
-                    <div className="text-center shrink-0">
-                      <div className={cn("text-2xl font-bold", verdictColor)}>{verdict}</div>
-                      <div className="text-xs text-muted-foreground mt-0.5">
-                        {total !== 1 ? t('market.analystCountPlural', { n: total }) : t('market.analystCount', { n: total })}
-                      </div>
-                    </div>
-                    <div className="flex-1 space-y-2">
-                      {([
-                        { label: t('market.strongBuy'), count: strongBuy, barClass: "bg-success" },
-                        { label: t('market.buy'), count: buy, barClass: "bg-success/60" },
-                        { label: t('market.hold'), count: hold, barClass: "bg-yellow-400" },
-                        { label: t('market.sell'), count: sell, barClass: "bg-destructive/60" },
-                        { label: t('market.strongSell'), count: strongSell, barClass: "bg-destructive" },
-                      ] as { label: string; count: number; barClass: string }[]).map(({ label, count, barClass }) => (
-                        <div key={label} className="flex items-center gap-2 text-xs">
-                          <span className="text-muted-foreground w-20 shrink-0">{label}</span>
-                          <div className="flex-1 h-2 bg-muted rounded-full overflow-hidden">
-                            <div
-                              className={cn("h-full rounded-full", barClass)}
-                              style={{ width: `${(count / total) * 100}%` }}
-                            />
-                          </div>
-                          <span className="w-4 text-right tabular-nums text-muted-foreground">{count}</span>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-
-                  {quote.recentAnalystActions && quote.recentAnalystActions.length > 0 && (
-                    <div className="border-t border-border pt-3">
-                      <p className="text-xs font-medium text-muted-foreground mb-2">{t('market.recentActions')}</p>
-                      <div className="space-y-2">
-                        {quote.recentAnalystActions.map((action) => (
-                          <div key={`${action.date}-${action.firm}`} className="flex items-center gap-2 text-xs">
-                            {action.action === "up"
-                              ? <TrendingUp className="h-3 w-3 text-success shrink-0" />
-                              : action.action === "down"
-                                ? <TrendingDown className="h-3 w-3 text-destructive shrink-0" />
-                                : <ArrowUpDown className="h-3 w-3 text-muted-foreground shrink-0" />}
-                            <span className="text-muted-foreground shrink-0 w-20 tabular-nums whitespace-nowrap">
-                              {formatDateStringWithAppSettings(action.date, appSettings.dateFormat)}
-                            </span>
-                            <span className="font-medium text-foreground truncate flex-1">{action.firm}</span>
-                            <span className={cn("shrink-0", gradeColor(action.toGrade))}>
-                              {action.toGrade}
-                              {action.fromGrade && action.fromGrade !== action.toGrade && (
-                                <span className="text-muted-foreground font-normal"> ← {action.fromGrade}</span>
-                              )}
-                            </span>
-                            {action.priceTarget != null && (
-                              <span className="shrink-0 text-muted-foreground ml-2">
-                                PT {fmtPrice(action.priceTarget, quote.currency)}
-                              </span>
-                            )}
-                          </div>
-                        ))}
-                      </div>
-                    </div>
-                  )}
-                </CardContent>
-              </Card>
-            );
-          })()}
-
-          {/* News — Yahoo only; provider-priced assets have no news feed. */}
-          {!isProviderAsset && (
-          <Card className="glass-regular">
-            <CardHeader className="pb-2">
-                <CardTitle className="text-base flex items-center gap-2">
-                  <Newspaper className="h-4 w-4" /> {t('market.latestNews')}
+            <Card className="glass-regular">
+              <CardHeader className="pb-2">
+                <CardTitle className="text-sm text-muted-foreground flex items-center gap-2">
+                  <Activity className="h-4 w-4" /> {t('market.tradingInfo')}
                 </CardTitle>
-            </CardHeader>
-            <CardContent>
-              {isNewsLoading ? (
-                <div className="space-y-3">
-                  {Array.from({ length: 3 }).map((_, i) => (
-                    <div key={i} className="flex gap-3">
-                      <Skeleton className="h-16 w-24 rounded shrink-0" />
-                      <div className="flex-1 space-y-2">
-                        <Skeleton className="h-4 w-full" />
-                        <Skeleton className="h-3 w-2/3" />
-                      </div>
+              </CardHeader>
+              <CardContent>
+                <div className="grid grid-cols-2 gap-x-8 gap-y-2.5 sm:grid-cols-3">
+                  {[
+                    { label: t('market.open'), value: fmtPrice(quote.open, quote.currency) },
+                    { label: t('market.dayHigh'), value: fmtPrice(quote.dayHigh, quote.currency) },
+                    { label: t('market.dayLow'), value: fmtPrice(quote.dayLow, quote.currency) },
+                    { label: t('market.prevClose'), value: fmtPrice(quote.prevClose, quote.currency) },
+                    { label: t('market.volume'), value: fmtLargeNum(quote.volume) },
+                    { label: t('market.avgVolume'), value: fmtLargeNum(quote.avgVolume) },
+                    { label: t('market.52wRange'), value: `${fmtPrice(quote.low52w, quote.currency)} – ${fmtPrice(quote.high52w, quote.currency)}` },
+                  ].map(({ label, value }) => (
+                    <div key={label} className="flex justify-between items-center gap-2 py-1 border-b border-border/50">
+                      <span className="text-sm text-muted-foreground">{label}</span>
+                      <span className="text-sm font-medium tabular-nums text-foreground">{value}</span>
                     </div>
                   ))}
                 </div>
-              ) : newsData?.articles && newsData.articles.length > 0 ? (
-                <div className="space-y-3">
-                  {newsData.articles.map((article) => {
-                    const safeHref = /^https?:\/\//i.test(article.link) ? article.link : undefined;
-                    return (
-                    <a
-                      key={article.link}
-                      href={safeHref}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="flex gap-3 p-2 -mx-2 rounded-md hover:bg-muted/70 transition-colors group"
-                    >
-                      {article.thumbnail && (
-                        <RemoteNewsImage
-                          src={article.thumbnail}
-                          alt={article.title}
-                          className="h-16 w-24 rounded shrink-0"
-                          fallbackClassName="hidden"
-                        />
-                      )}
-                      <div className="flex-1 min-w-0">
-                        <p className="text-sm font-medium text-foreground line-clamp-2 group-hover:text-primary transition-colors">
-                          {article.title}
-                        </p>
-                        <div className="flex items-center gap-2 mt-1 text-xs text-muted-foreground">
-                          <span>{article.publisher}</span>
-                          {article.publishedAt && (
-                            <>
-                              <span>·</span>
-                              <span>{formatDateWithAppSettings(new Date(article.publishedAt * 1000), appSettings.dateFormat)}</span>
-                            </>
-                          )}
-                          <ExternalLink className="h-3 w-3 ml-auto opacity-0 group-hover:opacity-100 transition-opacity" />
-                        </div>
-                      </div>
-                    </a>
-                    );
-                  })}
-                </div>
-              ) : (
-                <p className="text-sm text-muted-foreground text-center py-4">{t('market.noNews')}</p>
-              )}
-            </CardContent>
-          </Card>
+              </CardContent>
+            </Card>
+          )}
+
+          {/* Details — multi-provider scorecard + graded fundamentals, analyst
+              consensus, and news (lazy per tab). Hidden for provider-priced
+              assets, which Yahoo/FMP don't cover. */}
+          {effectiveSelectedSymbol && !isProviderAsset && (
+            <Card className="glass-regular">
+              <CardHeader className="pb-2">
+                <CardTitle className="text-base flex items-center gap-2">
+                  <BarChart3 className="h-4 w-4" /> {t('research.details')}
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                <Tabs value={activeTab} onValueChange={setActiveTab}>
+                  <TabsList>
+                    <TabsTrigger value="fundamentals">{t('market.fundamentals')}</TabsTrigger>
+                    <TabsTrigger value="analyst">{t('market.analystRatings')}</TabsTrigger>
+                    <TabsTrigger value="news">{t('market.latestNews')}</TabsTrigger>
+                  </TabsList>
+                  <TabsContent value="fundamentals" className="pt-4">
+                    <ResearchFundamentalsTab symbol={effectiveSelectedSymbol} enabled={activeTab === "fundamentals"} />
+                  </TabsContent>
+                  <TabsContent value="analyst" className="pt-4">
+                    <ResearchAnalystTab symbol={effectiveSelectedSymbol} enabled={activeTab === "analyst"} />
+                  </TabsContent>
+                  <TabsContent value="news" className="pt-4">
+                    <ResearchNewsTab symbol={effectiveSelectedSymbol} enabled={activeTab === "news"} />
+                  </TabsContent>
+                </Tabs>
+              </CardContent>
+            </Card>
+          )}
+
+          {/* Cross-provider symbol mapping (matches the retired symbol page) */}
+          {effectiveSelectedSymbol && !isProviderAsset && (
+            <ResearchMappingDialog
+              open={mappingOpen}
+              onOpenChange={setMappingOpen}
+              instrumentKey={effectiveSelectedSymbol}
+              keyType="internal"
+              query={effectiveSelectedSymbol}
+              displayName={quote?.name ?? effectiveSelectedSymbol}
+              investmentId={mappingInvestmentId}
+            />
           )}
         </>
       )}

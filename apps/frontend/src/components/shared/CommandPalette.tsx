@@ -18,6 +18,7 @@ import {
     CalendarClock,
     Coins,
     Gem,
+    Globe,
     HandCoins,
     Import,
     Landmark,
@@ -52,11 +53,21 @@ import { Keyboard, Calculator } from "lucide-react";
 import { useCurrencyConverter } from "@/hooks/useCurrencyConverter";
 import { numberFormatToLocale } from "@/utils/currency";
 import { toast } from "sonner";
+import { cn } from "@/lib/utils";
 
 interface PaletteEntry {
     titleKey: string;
     url: string;
     icon: LucideIcon;
+}
+
+interface PaletteQuote {
+    symbol: string;
+    name: string;
+    price: number;
+    change: number;
+    changePercent: number;
+    currency: string;
 }
 
 const BUDGETING_PAGES: PaletteEntry[] = [
@@ -86,6 +97,7 @@ const PORTFOLIO_PAGES: PaletteEntry[] = [
 
 const RESEARCH_PAGES: PaletteEntry[] = [
     { titleKey: "nav.researchHome", url: "/research", icon: Telescope },
+    { titleKey: "nav.markets", url: "/research/markets", icon: Globe },
     { titleKey: "nav.marketLookup", url: "/research/market", icon: LineChart },
     { titleKey: "nav.compare", url: "/research/compare", icon: GitCompareArrows },
     { titleKey: "nav.chartBuilder", url: "/research/charts", icon: CandlestickChart },
@@ -127,6 +139,19 @@ function evaluateArithmetic(q: string): number | null {
     } catch {
         return null;
     }
+}
+
+// Ticker lookup — a bare ticker (AAPL, BRK-B, ASML.AS, BTC-USD) or an explicit
+// $cashtag ($AAPL). The pattern is only a shape filter: the card renders solely
+// when a live quote returns, so ordinary words that fit the shape show nothing.
+const CASHTAG_QUERY = /^\$([A-Za-z][A-Za-z0-9.-]{0,9})$/;
+const BARE_TICKER_QUERY = /^[A-Za-z]{2,5}(?:[.-][A-Za-z0-9]{1,4})?$/;
+
+function parseTickerQuery(q: string): string | null {
+    const cash = q.match(CASHTAG_QUERY);
+    if (cash) return cash[1].toUpperCase();
+    if (BARE_TICKER_QUERY.test(q)) return q.toUpperCase();
+    return null;
 }
 
 const RECENTS_KEY = LOCAL_STORAGE_KEYS.PALETTE_RECENTS;
@@ -210,6 +235,27 @@ export function CommandPalette({ open, onOpenChange, onOpenSettings, onOpenShort
         staleTime: 30_000,
     });
 
+    // Inline ticker quote — when the query looks like a symbol, fetch a price-only
+    // quote and surface its absolute + relative move. Enter opens Market Lookup.
+    const tickerSymbol = useMemo(() => parseTickerQuery(query.trim()), [query]);
+    const debouncedTicker = useDebounce(tickerSymbol ?? "", 250);
+    const { data: tickerQuote, isFetching: tickerLoading } = useQuery({
+        queryKey: ["palette-quote", debouncedTicker],
+        queryFn: async () => {
+            const { quotes } = await apiClient.getMarketQuotes<PaletteQuote>(debouncedTicker, { detail: "basic" });
+            return quotes[0] ?? null;
+        },
+        enabled: open && debouncedTicker.length >= 1,
+        staleTime: 30_000,
+    });
+    const fmtTickerPrice = (val: number, currency: string) => {
+        try {
+            return new Intl.NumberFormat(locale, { style: "currency", currency, minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(val);
+        } catch {
+            return `${val.toFixed(2)} ${currency}`;
+        }
+    };
+
     useEffect(() => {
         const onKeyDown = (e: KeyboardEvent) => {
             if (e.key === "k" && (e.metaKey || e.ctrlKey)) {
@@ -275,6 +321,38 @@ export function CommandPalette({ open, onOpenChange, onOpenSettings, onOpenShort
             />
             <CommandList>
                 <CommandEmpty>{t("commandPalette.noResults")}</CommandEmpty>
+                {tickerSymbol && (tickerQuote || tickerLoading) && (
+                    <CommandGroup heading={t("commandPalette.market")} forceMount>
+                        <CommandItem
+                            forceMount
+                            value={`market ${tickerSymbol} ${tickerQuote?.name ?? ""}`}
+                            onSelect={() => goTo(`/research/market?symbol=${encodeURIComponent(tickerQuote?.symbol ?? tickerSymbol)}`)}
+                        >
+                            <LineChart className="text-muted-foreground" />
+                            <span className="font-medium">{tickerQuote?.symbol ?? tickerSymbol}</span>
+                            {tickerQuote ? (
+                                <>
+                                    {tickerQuote.name && (
+                                        <span className="truncate text-xs text-muted-foreground">{tickerQuote.name}</span>
+                                    )}
+                                    <span className="ml-auto flex items-baseline gap-2 tabular-nums">
+                                        <span className="font-semibold text-foreground">
+                                            {fmtTickerPrice(tickerQuote.price, tickerQuote.currency)}
+                                        </span>
+                                        <span className={cn(
+                                            "text-xs font-semibold",
+                                            tickerQuote.change >= 0 ? "text-accent" : "text-destructive",
+                                        )}>
+                                            {tickerQuote.change >= 0 ? "+" : "−"}{Math.abs(tickerQuote.changePercent).toFixed(2)}%
+                                        </span>
+                                    </span>
+                                </>
+                            ) : (
+                                <CommandShortcut>{t("commandPalette.lookingUp")}</CommandShortcut>
+                            )}
+                        </CommandItem>
+                    </CommandGroup>
+                )}
                 {(fxResult || calcResult) && (
                     <CommandGroup heading={t("commandPalette.result")} forceMount>
                         <CommandItem

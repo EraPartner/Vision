@@ -23,7 +23,7 @@ import { ShortcutsOverlay } from "@/components/shared/ShortcutsOverlay";
 import { ShaderAurora } from "@/components/layout/ShaderAurora";
 import { ElectronBridge } from "@/components/layout/ElectronBridge";
 import { VisualEffectsController } from "@/components/layout/VisualEffectsController";
-import { useGoToShortcuts } from "@/hooks/useGoToShortcuts";
+import { useGoToShortcuts, useSectionCycleShortcuts } from "@/hooks/useGoToShortcuts";
 import { useVisualEffectsTier } from "@/hooks/useVisualEffectsTier";
 import { consumeUndo } from "@/lib/undo";
 import { isTypingTarget } from "@/lib/keyboard";
@@ -68,6 +68,7 @@ export function AppLayout({ children }: AppLayoutProps) {
     const { workspace } = useWorkspace();
     const { tier: effectsTier } = useVisualEffectsTier();
     useGoToShortcuts();
+    useSectionCycleShortcuts();
 
     // Launch navigation (the "open app on" startup-section setting) and the
     // "last opened page" restoration both live in StartupRedirect now, so there

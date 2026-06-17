@@ -3,7 +3,7 @@ title: Views & Pages
 type: feature
 status: active
 date: 2026-04-10
-updated: 2026-06-10
+updated: 2026-06-17
 tags: [feature, views, pages, frontend, ui, liquid-glass-v2, june-2026]
 description: Complete overview of all views and pages in the Vision application. June 2026 Liquid Glass v2 — KPI/chart cards migrated to glass-regular, hero cards to glass-elevated, tables stay opaque, surface-elevated recipe superseded.
 aliases: [views, pages, frontend views, application pages, ui views]
@@ -653,11 +653,41 @@ This is available on:
 
 ## Keyboard Shortcuts
 
+The in-app help sheet (`?`) lists all active shortcuts. The table below mirrors what `ShortcutsOverlay` shows at runtime.
+
+### General
+
 | Shortcut | Action |
 |----------|--------|
-| `Ctrl/Cmd + K` | Search/command palette |
-| `Ctrl/Cmd + N` | New transaction |
-| `Escape` | Close dialogs |
+| `Ctrl/Cmd + K` | Open command palette |
+| `Ctrl/Cmd + ,` | Open Settings |
+| `Ctrl/Cmd + B` | Toggle sidebar |
+| `[` / `]` | Cycle backward / forward through the three workspace sections (Budgeting → Portfolio → Research); wraps around; inert while typing or with modifier keys held |
+| `Ctrl/Cmd + Z` | Undo last delete |
+| `↑` / `↓` | Navigate table rows |
+| `↵` | Open selected row |
+| `Space` | Quick-look selected row |
+| `?` | Show keyboard shortcuts help |
+| `Esc` | Close dialog |
+
+### Go-to sequences (`g`, then destination key)
+
+| Shortcut | Destination |
+|----------|-------------|
+| `g d` | Dashboard (`/`) |
+| `g t` | Transactions (`/transactions`) |
+| `g s` | Statistics (`/statistics`) |
+| `g c` | Categories (`/categories`) |
+| `g r` | Recipients (`/recipients`) |
+| `g i` | Import (`/import`) |
+| `g p` | Portfolio (`/portfolio`) |
+| `g n` | Net Worth (`/portfolio/net-worth`) |
+| `g m` | Markets Overview (`/research/markets`) |
+| `g a` | AI Chat (`/ai-chat`) |
+
+### Command palette ticker lookup
+
+Typing a bare ticker symbol (`AAPL`, `BRK-B`, `ASML.AS`, `BTC-USD`) or a `$`-cashtag (`$AAPL`) into the command palette triggers a debounced (250 ms) price-only quote via `GET /api/market/quote?...&detail=basic`. When a live quote returns, a **Market** group appears at the top of the palette showing the symbol, company name, current price, and percent change (green/red). Pressing **Enter** navigates to Market Lookup (`/research/market?symbol=<symbol>`). The card is hidden when no quote returns, so ordinary words that happen to match the ticker shape produce no false positives.
 
 ---
 

@@ -409,7 +409,7 @@ Five saturated blur tiers (blur + `saturate(var(--glass-saturate))`):
 | Class | Blur | Saturate | Usage |
 |-------|------|---------|-------|
 | `glass-thin` | 12px | 180%/150% | Subtle interactive elements |
-| `glass-regular` | 20px | 180%/150% | **All content / chart / stat / state cards** (loading, empty, error skeletons) — role-based glass applied June 2026 (see note below); also AI-chat panes; Research workspace content cards (MarketLookupPage, ResearchSymbolPage, ResearchComparePage, ChartBuilderPage, PortfolioForecastPage) |
+| `glass-regular` | 20px | 180%/150% | **All content / chart / stat / state cards** (loading, empty, error skeletons) — role-based glass applied June 2026 (see note below); also AI-chat panes; Research workspace content cards (MarketLookupPage, ResearchComparePage, ChartBuilderPage, PortfolioForecastPage) |
 | `glass-chrome` | 24px | 180%/150% | Sidebar, AppLayout topbar |
 | `glass-thick` | 28px | 180%/150% | All floating overlays: Modal dialogs (Dialog, AlertDialog, Sheet), Sonner toasts, **and** the full popover family (Popover, DropdownMenu/SubContent, SelectContent, ContextMenu, MenuBar content, HoverCard, Tooltip) |
 | `glass-elevated` | 32px | 180%/150% | Dashboard hero cards (StatCard, NetSummaryCard) |

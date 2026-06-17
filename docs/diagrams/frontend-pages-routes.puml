@@ -143,11 +143,20 @@ package "Research Pages (ADR-079)" {
   class ResearchHomePage {
     +Aggregated Provider Data
     +Quick Symbol Search
+    +Market Snapshot Strip
+    +Six-Tool Entry Grid
+    +Live Watchlist Tiles
+    +Market News Feed
   }
 
   class MarketLookupPage {
     +Search
-    +Price Display
+    +Quote Header (price, actions)
+    +Price Chart + Volume
+    +Tabbed Details (Fundamentals/Analyst/News)
+    +Trading Info Card
+    +Map-provider Dialog
+    +deep-link: ?symbol= query param
   }
 
   class WatchlistPage {
@@ -157,12 +166,29 @@ package "Research Pages (ADR-079)" {
 
   class ResearchComparePage {
     +Multi-symbol Compare
-    +Metric Table
+    +Performance Tab
+    +Fundamentals Tab
   }
 
-  class ResearchSymbolPage {
-    +Symbol Detail
-    +Provider Breakdown
+  class ChartBuilderPage <<ADR-081>> {
+    +Multi-symbol Overlay
+    +Dual-axis / Candlesticks
+    +SMA/EMA/Bollinger/RSI/MACD
+    +localStorage Layout Persistence
+  }
+
+  class PortfolioForecastPage <<ADR-081>> {
+    +Monte Carlo Projection
+    +Confidence Bands P10-P90
+    +Horizon / Blend / Model Controls
+  }
+
+  class MarketOverviewPage {
+    +Region Switcher (USA/Europe/Asia/Worldwide)
+    +Indices Section (locale-formatted points)
+    +Top Stocks Section (symbol currency)
+    +Tiles colored by daily change
+    +60s poll via GET /api/market/quote
   }
 }
 
@@ -256,7 +282,9 @@ AppLayout --> ResearchHomePage : "/research"
 ResearchHomePage --> MarketLookupPage : "/research/market"
 ResearchHomePage --> WatchlistPage : "/research/watchlist"
 ResearchHomePage --> ResearchComparePage : "/research/compare"
-ResearchHomePage --> ResearchSymbolPage : "/research/symbol/:symbol"
+ResearchHomePage --> ChartBuilderPage : "/research/charts"
+ResearchHomePage --> PortfolioForecastPage : "/research/forecast"
+ResearchHomePage --> MarketOverviewPage : "/research/markets"
 
 AppLayout --> AdminOverviewPage : "/admin"
 AdminOverviewPage --> DbMaintenancePage : "/admin/db"
@@ -276,7 +304,15 @@ note bottom of ResearchHomePage
   Portfolio (ADR-079). Legacy /portfolio/market
   and /portfolio/watchlist redirect here;
   /portfolio/exchange-rates redirects to
-  /admin/exchange-rates
+  /admin/exchange-rates.
+  7 active routes: /research, /research/market,
+  /research/watchlist, /research/compare,
+  /research/charts, /research/forecast,
+  /research/markets.
+  /research/symbol/:symbol is a redirect-only
+  route (RedirectSymbolToMarket in App.tsx)
+  that forwards to /research/market?symbol=.
+  ResearchSymbolPage retired 2026-06-17.
 end note
 
 @enduml

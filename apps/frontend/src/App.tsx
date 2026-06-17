@@ -1,7 +1,7 @@
 import { Toaster as Sonner } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { BrowserRouter, Navigate, Route, Routes, useLocation } from "react-router-dom";
+import { BrowserRouter, Navigate, Route, Routes, useLocation, useParams } from "react-router-dom";
 import { AppLayout } from "@/components/layout/AppLayout";
 import { SettingsProvider } from "@/contexts/SettingsContext";
 import { SettingsPreloadProvider } from "@/contexts/SettingsPreloadContext";
@@ -49,9 +49,9 @@ const ProviderHealthPage = lazy(routeLoaders["/admin/providers"]);
 const EndpointLivenessPage = lazy(routeLoaders["/admin/endpoints"]);
 const AIChatPage = lazy(routeLoaders["/ai-chat"]);
 const ResearchHomePage = lazy(routeLoaders["/research"]);
+const MarketOverviewPage = lazy(routeLoaders["/research/markets"]);
 const MarketLookupPage = lazy(routeLoaders["/research/market"]);
 const WatchlistPage = lazy(routeLoaders["/research/watchlist"]);
-const ResearchSymbolPage = lazy(routeLoaders["/research/symbol/:symbol"]);
 const ResearchComparePage = lazy(routeLoaders["/research/compare"]);
 const PortfolioForecastPage = lazy(routeLoaders["/research/forecast"]);
 const ChartBuilderPage = lazy(routeLoaders["/research/charts"]);
@@ -129,6 +129,17 @@ function RedirectWithQuery({ to }: { to: string }) {
     return <Navigate to={`${to}${search}`} replace />;
 }
 
+// The standalone research symbol page was retired in favour of Market Lookup as
+// the single security-detail surface. Old /research/symbol/:symbol links (and
+// holding deep-links carrying ?investmentId=) redirect into the ?symbol= form.
+function RedirectSymbolToMarket() {
+    const { symbol } = useParams<{ symbol: string }>();
+    const { search } = useLocation();
+    const params = new URLSearchParams(search);
+    if (symbol) params.set("symbol", symbol);
+    return <Navigate to={`/research/market?${params.toString()}`} replace />;
+}
+
 const App = () => {
     return (
         <QueryClientProvider client={queryClient}>
@@ -184,9 +195,10 @@ const App = () => {
                                                     <Route path="/portfolio/tax" element={<PortfolioTaxPage />} />
                                                     {/* Research (ADR-079) — Market Lookup & Watchlist relocated here */}
                                                     <Route path="/research" element={<ResearchHomePage />} />
+                                                    <Route path="/research/markets" element={<MarketOverviewPage />} />
                                                     <Route path="/research/market" element={<MarketLookupPage />} />
                                                     <Route path="/research/watchlist" element={<WatchlistPage />} />
-                                                    <Route path="/research/symbol/:symbol" element={<ResearchSymbolPage />} />
+                                                    <Route path="/research/symbol/:symbol" element={<RedirectSymbolToMarket />} />
                                                     <Route path="/research/compare" element={<ResearchComparePage />} />
                                                     <Route path="/research/forecast" element={<PortfolioForecastPage />} />
                                                     <Route path="/research/charts" element={<ChartBuilderPage />} />

@@ -1,5 +1,5 @@
 import { useEffect } from "react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useLocation } from "react-router-dom";
 import { isTypingTarget } from "@/lib/keyboard";
 
 /** Gmail-style go-to sequences: press `g`, then a destination key.
@@ -13,8 +13,25 @@ export const GO_TO_ROUTES: ReadonlyArray<{ key: string; url: string; titleKey: s
     { key: "i", url: "/import", titleKey: "nav.importExport" },
     { key: "p", url: "/portfolio", titleKey: "nav.portfolio" },
     { key: "n", url: "/portfolio/net-worth", titleKey: "nav.netWorth" },
+    { key: "m", url: "/research/markets", titleKey: "nav.markets" },
     { key: "a", url: "/ai-chat", titleKey: "nav.aiChat" },
 ];
+
+/** The three workspace section roots, in left-to-right cycle order. `[` / `]`
+ *  step between them; shared with ShortcutsOverlay so the help stays truthful. */
+export const SECTION_CYCLE: ReadonlyArray<{ url: string; titleKey: string }> = [
+    { url: "/", titleKey: "nav.budgeting" },
+    { url: "/portfolio", titleKey: "nav.portfolio" },
+    { url: "/research", titleKey: "nav.research" },
+];
+
+// Budgeting owns the root and every route that isn't portfolio/research
+// (admin included — it has no section root of its own).
+function currentSectionIndex(pathname: string): number {
+    if (pathname.startsWith("/portfolio")) return 1;
+    if (pathname.startsWith("/research")) return 2;
+    return 0;
+}
 
 const SEQUENCE_WINDOW_MS = 900;
 
@@ -56,4 +73,26 @@ export function useGoToShortcuts(): void {
             document.removeEventListener("keydown", onKeyDown);
         };
     }, [navigate]);
+}
+
+/** `[` / `]` step backward / forward through the three workspace sections,
+ *  landing on each section's root. Inert while typing or with modifiers held
+ *  (so bracketed text input and AltGr-composed brackets are never hijacked). */
+export function useSectionCycleShortcuts(): void {
+    const navigate = useNavigate();
+    const location = useLocation();
+
+    useEffect(() => {
+        const onKeyDown = (e: KeyboardEvent) => {
+            if (e.metaKey || e.ctrlKey || e.altKey || e.shiftKey || isTypingTarget(e.target)) return;
+            if (e.key !== "[" && e.key !== "]") return;
+            e.preventDefault();
+            const current = currentSectionIndex(location.pathname);
+            const delta = e.key === "]" ? 1 : -1;
+            const next = (current + delta + SECTION_CYCLE.length) % SECTION_CYCLE.length;
+            navigate(SECTION_CYCLE[next].url);
+        };
+        document.addEventListener("keydown", onKeyDown);
+        return () => document.removeEventListener("keydown", onKeyDown);
+    }, [navigate, location.pathname]);
 }

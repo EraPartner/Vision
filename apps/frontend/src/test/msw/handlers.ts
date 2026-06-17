@@ -335,6 +335,13 @@ export const defaultHandlers = [
 
     http.get(`${API_BASE}/api/market/quote`, () => ok({ quotes: [] })),
     http.get(`${API_BASE}/api/market/search`, () => ok({ results: [] })),
+    // Research aggregator endpoints (consumed by the Market Lookup Details tabs
+    // — scorecard fires on load, analyst/news on tab-click). Default to an
+    // unavailable envelope so component tests degrade gracefully; integration
+    // tests override per-flow via server.use().
+    http.get(`${API_BASE}/api/research/scorecard`, () => ok(null, { provider: null, source: "unavailable" })),
+    http.get(`${API_BASE}/api/research/analyst`, () => ok(null, { provider: null, source: "unavailable" })),
+    http.get(`${API_BASE}/api/research/news`, () => ok(null, { provider: null, source: "unavailable" })),
     http.get(`${API_BASE}/api/watchlist`, () =>
         ok({ items: [], total: 0, limit: 50, offset: 0 }),
     ),
