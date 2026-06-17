@@ -32,6 +32,9 @@ import type {
     PortfolioForecast,
     PortfolioForecastInput,
     ProviderKeysResponse,
+    MacroProvider,
+    MacroSearchResponse,
+    MacroSeriesResponse,
 } from '@/types/research';
 
 interface RawEnvelope<T> {
@@ -127,6 +130,26 @@ export function getResearchAnalyst(
 
 export function getResearchNews(symbol: string): Promise<ResearchResult<ResearchNewsResponse>> {
     return researchGet<ResearchNewsResponse>('/api/research/news', { symbol });
+}
+
+// ── Macro economic indicators (ADR-082) ──────────────────────────────────────
+
+/** Search macro series (CPI, rates, unemployment, …) across the macro providers. */
+export function searchMacro(query: string): Promise<ResearchResult<MacroSearchResponse>> {
+    return researchGet<MacroSearchResponse>('/api/research/macro/search', { q: query });
+}
+
+/** Observations for one provider-pinned macro series. */
+export function getMacroSeries(
+    provider: MacroProvider,
+    seriesId: string,
+    range: ResearchRange,
+): Promise<ResearchResult<MacroSeriesResponse>> {
+    return researchGet<MacroSeriesResponse>('/api/research/macro/series', {
+        provider,
+        series_id: seriesId,
+        range,
+    });
 }
 
 // ── Analytics (ADR-081) ───────────────────────────────────────────────────────

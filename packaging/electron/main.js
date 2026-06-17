@@ -360,8 +360,13 @@ function generateFreshEnvContents() {
 // or Docker (which live in the repo-root .env per ADR-080). These helpers merge any
 // such keys into the canonical .env so `env_file: .env` injects them into the app
 // container — without that, the desktop app's keyed providers stay unconfigured.
+// MUST stay in sync with ENV_VAR_BY_PROVIDER in
+// apps/node-backend/src/services/research/providerKeys.js. A key missing here is
+// not merged into the canonical .env AND is stripped from the repo-root .env on
+// the write-back below — so an unlisted key silently disappears on every launch.
 const PROVIDER_KEY_VARS = [
   'TWELVE_DATA_API_KEY', 'FINNHUB_API_KEY', 'FMP_API_KEY', 'ALPHA_VANTAGE_API_KEY',
+  'FRED_API_KEY', // macro vertical (ADR-082)
 ];
 
 function parseEnvKeys(contents) {

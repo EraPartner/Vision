@@ -5540,6 +5540,62 @@ paths:
                 $ref: "#/components/schemas/Envelope"
         "400":
           description: symbol parameter required
+  # Macro economic indicators (ADR-082) — provider-pinned (FRED/Eurostat/DBnomics)
+  /api/research/macro/search:
+    get:
+      summary: Search macroeconomic series (CPI, rates, unemployment, …) across macro providers
+      operationId: researchMacroSearch
+      tags: [Research]
+      parameters:
+        - in: query
+          name: q
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: >-
+            Union of macro series across FRED (open search) + Eurostat/DBnomics
+            (curated catalog); each item carries { provider, seriesId, title,
+            region, units, frequency, source }. Returns { items: [] } when blank.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Envelope"
+  /api/research/macro/series:
+    get:
+      summary: Observations for one provider-pinned macro series (value→close chart points)
+      operationId: researchMacroSeries
+      tags: [Research]
+      parameters:
+        - in: query
+          name: provider
+          required: true
+          schema:
+            type: string
+            enum: [fred, eurostat, dbnomics]
+        - in: query
+          name: series_id
+          required: true
+          description: Provider-native id (FRED CPIAUCSL; Eurostat `<dataset>?<dims>`; DBnomics `provider/dataset/series`)
+          schema:
+            type: string
+        - in: query
+          name: range
+          required: false
+          schema:
+            type: string
+            enum: [1d, 5d, 1mo, 3mo, 6mo, 1y, 2y, 5y, max]
+            default: 5y
+      responses:
+        "200":
+          description: "{ provider, seriesId, title, units, frequency, points: [{time, close}] } with provenance meta"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Envelope"
+        "400":
+          description: invalid provider or series_id
   # Research analytics (ADR-081)
   /api/research/scorecard:
     get:

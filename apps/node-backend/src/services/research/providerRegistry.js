@@ -15,13 +15,18 @@ import twelveDataAdapter from './adapters/twelveDataAdapter.js';
 import finnhubAdapter from './adapters/finnhubAdapter.js';
 import fmpAdapter from './adapters/fmpAdapter.js';
 import alphaVantageAdapter from './adapters/alphaVantageAdapter.js';
+import fredAdapter from './adapters/fredAdapter.js';
+import eurostatAdapter from './adapters/eurostatAdapter.js';
+import dbnomicsAdapter from './adapters/dbnomicsAdapter.js';
 import { createQuotaGovernor } from './quotaGovernor.js';
 import { createDbQuotaStore } from '../../repositories/providerQuotaRepository.js';
 
 /**
- * provider key → adapter object. Yahoo needs no key; the others self-throw if
- * their key is absent and are dropped from the capability chain by the
- * aggregator's `isProviderKeyed` gate, so listing them here is always safe.
+ * provider key → adapter object. Yahoo/Eurostat/DBnomics need no key; the others
+ * self-throw if their key is absent and are dropped from the capability chain by
+ * the aggregator's `isProviderKeyed` gate, so listing them here is always safe.
+ * FRED/Eurostat/DBnomics implement the macro method set (macroSearch/macroSeries,
+ * ADR-082) rather than the symbol-centric methods.
  */
 export const ADAPTERS = Object.freeze({
   yahoo: yahooAdapter,
@@ -29,6 +34,9 @@ export const ADAPTERS = Object.freeze({
   finnhub: finnhubAdapter,
   fmp: fmpAdapter,
   alpha_vantage: alphaVantageAdapter,
+  fred: fredAdapter,
+  eurostat: eurostatAdapter,
+  dbnomics: dbnomicsAdapter,
 });
 
 /** Process-wide governor shared by all research consumers. */

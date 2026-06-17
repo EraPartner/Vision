@@ -573,7 +573,8 @@
       kind ∈ client | frontend | shared | backend | service | data | external | build
     flows[]: { id, name, category, summary, steps: [ { from, to, payload?, annotation } ] }
 -->
-<script type="application/json" id="flow-data">{
+<script type="application/json" id="flow-data">
+{
   "layers": [
     {
       "y": 28,
@@ -1028,6 +1029,32 @@
       "desc": "Parallel import pipeline for brokerage/exchange CSV trades (ADR-078). Phases: stage → validate → matchInvestments → commit. Reuses portfolioTransactionRepository.create for 2-of-3 unit math and oversell prevention. FX auto-resolved via fxResolve (ADR-074). Saved parsers stored in custom_parser_configs with kind='portfolio' (migration 0041). Batches tracked in portfolio_import_batches + portfolio_import_staging_rows (migration 0040).",
       "x": 40,
       "y": 740
+    },
+    {
+      "id": "sv.research",
+      "label": "Research aggregation",
+      "sub": "services/research/researchAggregator.js",
+      "kind": "service",
+      "path": "apps/node-backend/src/services/research/",
+      "desc": "Provider-agnostic research surface (ADR-079 + ADR-081 + ADR-082). Capability map routes (dataType, assetClass) to ordered provider preference chains; quota governor token-buckets guard free-tier limits; type-aware TTL cache. Fundamentals: merged FMP+Yahoo in parallel. Macro vertical (ADR-082): searchMacro() fans out across FRED+Eurostat in parallel; fetchMacroSeries() is provider-pinned. All research data in-memory only, never persisted to asset_price_history.",
+      "x": 220,
+      "y": 740
+    },
+    {
+      "id": "ex.fred",
+      "label": "FRED · St. Louis Fed",
+      "sub": "Keyed (FRED_API_KEY) · macro series · ADR-082",
+      "kind": "external",
+      "x": 1320,
+      "y": 1040
+    },
+    {
+      "id": "ex.dbnomics",
+      "label": "DBnomics",
+      "sub": "Keyless · ECB/OECD/IMF via SDMX · ADR-082",
+      "kind": "external",
+      "x": 1320,
+      "y": 1128
     }
   ],
   "baseEdges": [
@@ -1222,6 +1249,26 @@
     [
       "be.repos",
       "pkg.shared-utils"
+    ],
+    [
+      "be.routes",
+      "sv.research"
+    ],
+    [
+      "sv.research",
+      "ex.yahoo"
+    ],
+    [
+      "sv.research",
+      "ex.fred"
+    ],
+    [
+      "sv.research",
+      "ex.dbnomics"
+    ],
+    [
+      "sv.research",
+      "sv.providerhealth"
     ]
   ],
   "flows": [
@@ -2504,9 +2551,90 @@
           "annotation": "Commit reuses the same repository path as manual portfolio transaction entry, ensuring 2-of-3 math (units × price ≈ amount) and oversell prevention apply. Intra-batch dedup tracks (date,symbol,units,amount,currency) hashes to skip duplicates within the same upload."
         }
       ]
+    },
+    {
+      "id": "macro-series-fetch",
+      "name": "Fetch a macroeconomic series (Chart Builder)",
+      "category": "Research",
+      "summary": "Chart Builder adds a macro series; the request routes through the research aggregator to a provider-pinned macro adapter and returns ResearchChartPoint[] — never persisted.",
+      "steps": [
+        {
+          "from": "browser",
+          "to": "fe.pages",
+          "payload": "User types in unified search box on /research/charts",
+          "annotation": "ChartBuilderPage.tsx fires both searchResearch() and searchMacro() debounced at 300 ms from a single input."
+        },
+        {
+          "from": "fe.pages",
+          "to": "fe.apiclient",
+          "payload": "GET /api/research/macro/search?q=cpi",
+          "annotation": "searchMacro() in apps/frontend/src/lib/api/research.ts, surfaced on apiClient in lib/api.ts alongside existing searchResearch."
+        },
+        {
+          "from": "fe.apiclient",
+          "to": "be.routes",
+          "payload": "q=cpi (query string)",
+          "annotation": "apps/node-backend/src/routes/research.js GET /api/research/macro/search under marketRateLimiter."
+        },
+        {
+          "from": "be.routes",
+          "to": "sv.research",
+          "payload": "researchAggregator.searchMacro('cpi')",
+          "annotation": "Fan-out: fires fredAdapter.macroSearch() + keyless Eurostat catalog (macroCatalog.js) in parallel. A provider that errors or is unkeyed is absent from the union. Cached 1 h (macro_search TTL)."
+        },
+        {
+          "from": "sv.research",
+          "to": "ex.fred",
+          "payload": "GET https://api.stlouisfed.org/fred/series/search?search_text=cpi&api_key=...&file_type=json",
+          "annotation": "fredAdapter.js. Quota-governed at 120 req/min. Returns MacroSeriesItem[] with provider='fred'. Skipped when FRED_API_KEY is absent."
+        },
+        {
+          "from": "be.routes",
+          "to": "fe.apiclient",
+          "payload": "{ data: { items: [{ provider, seriesId, title, frequency, units }] } }",
+          "annotation": "Merged union across all usable adapters; results grouped under 'Economic data' header in the Chart Builder dropdown alongside ticker results under 'Markets'."
+        },
+        {
+          "from": "fe.pages",
+          "to": "fe.apiclient",
+          "payload": "GET /api/research/macro/series?provider=fred&series_id=CPIAUCSL&range=5y",
+          "annotation": "User picks a macro row — ChartBuilderPage calls getMacroSeries(). apps/frontend/src/lib/api/research.ts."
+        },
+        {
+          "from": "fe.apiclient",
+          "to": "be.routes",
+          "payload": "provider=fred&series_id=CPIAUCSL&range=5y",
+          "annotation": "GET /api/research/macro/series. Validates provider enum and isValidSeriesId shape guard in fredAdapter before dispatching."
+        },
+        {
+          "from": "be.routes",
+          "to": "sv.research",
+          "payload": "researchAggregator.fetchMacroSeries({ provider: 'fred', seriesId: 'CPIAUCSL', range: '5y' })",
+          "annotation": "Provider-pinned path — no capability-map chain, no fallback. macroRange.trimToRange anchors on last available observation (not wall clock) to avoid empty charts when data lags publication."
+        },
+        {
+          "from": "sv.research",
+          "to": "ex.fred",
+          "payload": "GET .../fred/series/observations?series_id=CPIAUCSL&observation_start=...&api_key=...&file_type=json",
+          "annotation": "fredAdapter.js macroSeries(). FRED returns value as string; '.' = missing observation, skipped. Result cached 12 h (macro_series TTL). Never written to asset_price_history."
+        },
+        {
+          "from": "be.routes",
+          "to": "fe.apiclient",
+          "payload": "{ data: { provider, seriesId, title, units, frequency, points: [{ time, close }] } }",
+          "annotation": "ResearchChartPoint[] with observation value mapped to close; high/low/volume undefined. Storage boundary from ADR-079 is preserved: in-memory cache only."
+        },
+        {
+          "from": "fe.pages",
+          "to": "browser",
+          "payload": "Macro series rendered as a line in the ComposedChart alongside equities",
+          "annotation": "Provider dropdown hidden (pinned); candlestick disabled. Rebase-to-100 works across macro + equity series. Monthly macro data plots at month boundaries with null gaps between when overlaid with daily equity data."
+        }
+      ]
     }
   ]
-}</script>
+}
+</script>
 
 <script>
 (() => {

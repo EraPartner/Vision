@@ -18,7 +18,7 @@ aliases: [env vars, environment variables, .env, configuration, env]
 > - **`<repo-root>/.env`** — shared base: Docker config (`POSTGRES_PASSWORD`, `DATABASE_URL`) **and** context-independent secrets like provider API keys. Read by Docker (`env_file: .env`) and layered *under* dev by the backend loader.
 > - **`apps/node-backend/.env.local`** — local-dev backend **overrides** only (localhost `DATABASE_URL`, CORS, ports); layered *over* the root `.env`. Precedence: real `process.env` > this file > root `.env`.
 > - **`apps/frontend/.env.local`** — Vite frontend dev (`VITE_`-prefixed vars only).
-> - **Provider API keys** (`TWELVE_DATA_API_KEY` / `FINNHUB_API_KEY` / `FMP_API_KEY` / `ALPHA_VANTAGE_API_KEY`) go in the **root `.env`** — set once, used by both dev and Docker. There is no separate root `.env.local` (retired in ADR-080).
+> - **Provider API keys** (`TWELVE_DATA_API_KEY` / `FINNHUB_API_KEY` / `FMP_API_KEY` / `ALPHA_VANTAGE_API_KEY` / `FRED_API_KEY`) go in the **root `.env`** — set once, used by both dev and Docker. There is no separate root `.env.local` (retired in ADR-080).
 
 ## Backend Variables
 
@@ -104,6 +104,7 @@ keyed — Yahoo needs no key). See
 | `FINNHUB_API_KEY` | — | No | Finnhub key — news, US fundamentals (free tier 60/min) | [[apps/node-backend/src/services/research/providerKeys.js\|providerKeys.js]] |
 | `FMP_API_KEY` | — | No | Financial Modeling Prep key — fundamentals (free tier 250/day) | [[apps/node-backend/src/services/research/providerKeys.js\|providerKeys.js]] |
 | `ALPHA_VANTAGE_API_KEY` | — | No | Alpha Vantage key — fallback quotes/fundamentals (free tier ~25/day) | [[apps/node-backend/src/services/research/providerKeys.js\|providerKeys.js]] |
+| `FRED_API_KEY` | — | No | FRED key — macroeconomic series open search + fetch (ADR-082; free, ~120/min, get one at fredaccount.stlouisfed.org/apikeys). Eurostat/DBnomics macro providers need no key | [[apps/node-backend/src/services/research/providerKeys.js\|providerKeys.js]] |
 
 ## Frontend Variables
 

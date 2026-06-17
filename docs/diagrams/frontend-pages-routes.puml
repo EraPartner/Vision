@@ -170,11 +170,13 @@ package "Research Pages (ADR-079)" {
     +Fundamentals Tab
   }
 
-  class ChartBuilderPage <<ADR-081>> {
+  class ChartBuilderPage <<ADR-081, ADR-082>> {
     +Multi-symbol Overlay
     +Dual-axis / Candlesticks
     +SMA/EMA/Bollinger/RSI/MACD
     +localStorage Layout Persistence
+    +Unified search: Markets + Economic data groups
+    +Macro series support (provider-pinned, ADR-082)
   }
 
   class PortfolioForecastPage <<ADR-081>> {

@@ -28,6 +28,9 @@ export const PROVIDER_LIMITS = Object.freeze({
   finnhub: { perMinute: 60 },
   fmp: { perDay: 250 },
   alpha_vantage: { perMinute: 5, perDay: 25 },
+  // Macro vertical (ADR-082). FRED's documented limit is generous and requests
+  // are mostly cache-served; Eurostat/DBnomics are keyless and left unmetered.
+  fred: { perMinute: 120 },
 });
 
 /**

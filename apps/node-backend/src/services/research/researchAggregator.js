@@ -20,6 +20,7 @@ import { isProviderKeyed } from './providerKeys.js';
 import { researchCache, ttlForType } from './researchCache.js';
 import * as providerHealth from '../providerHealthService.js';
 import { ADAPTERS, defaultGovernor, adapterSupports } from './providerRegistry.js';
+import { MACRO_PROVIDERS } from './adapters/macroCatalog.js';
 
 /** Research data type → adapter method name. */
 const METHOD_BY_TYPE = Object.freeze({
@@ -168,7 +169,89 @@ export function createResearchAggregator({
     return { ...result, source: 'live' };
   }
 
-  return { fetch, fetchFundamentals, usableChain };
+  /**
+   * Macro series search (ADR-082). Fans out to every usable macro adapter (has a
+   * `macroSearch` method + key) in PARALLEL and UNIONs their results — not a race
+   * and not a field-merge. Each item carries its own provider; a provider that
+   * errors or is unkeyed (e.g. no FRED key) is simply absent from the union.
+   * @param {string} query
+   * @returns {Promise<{ items: object[], source: 'cache'|'live', attempted?: object[] }>}
+   */
+  async function searchMacro(query) {
+    const q = String(query ?? '').trim();
+    if (!q) return { items: [], source: 'live' };
+
+    const key = `macro_search::${q.toLowerCase()}`;
+    const cached = /** @type {{ items: object[] } | undefined} */ (cache.get(key));
+    if (cached !== undefined) return { ...cached, source: 'cache' };
+
+    const providers = MACRO_PROVIDERS.filter(
+      (p) => adapterSupports(p, 'macroSearch', adapters) && isKeyed(p),
+    );
+    const attempted = [];
+    const settled = await Promise.all(
+      providers.map(async (provider) => {
+        if (!(await governor.canSpend(provider))) {
+          attempted.push({ provider, skipped: 'quota' });
+          return [];
+        }
+        try {
+          const res = await adapters[provider].macroSearch(q);
+          await governor.spend(provider);
+          Promise.resolve(recordSuccess(provider)).catch(() => {});
+          return Array.isArray(res?.items) ? res.items : [];
+        } catch (err) {
+          Promise.resolve(recordError(provider, err)).catch(() => {});
+          attempted.push({ provider, error: err instanceof Error ? err.message : String(err) });
+          return [];
+        }
+      }),
+    );
+
+    const result = { items: settled.flat() };
+    cache.set(key, result, ttlForType('macro_search'));
+    return { ...result, source: 'live', attempted };
+  }
+
+  /**
+   * Provider-pinned macro series fetch (ADR-082). A macro series lives at exactly
+   * one provider, so this routes to the named adapter with NO fallback chain.
+   * @param {{ provider?: string, seriesId?: string, range?: string }} [params]
+   * @returns {Promise<{ provider?: string, data?: unknown, source: 'cache'|'live'|'unavailable', attempted?: object[] }>}
+   */
+  async function fetchMacroSeries({ provider, seriesId, range } = {}) {
+    if (!provider || !seriesId) throw new Error('provider and seriesId required');
+
+    const key = `macro_series::${provider}::${seriesId}::${range ?? ''}`;
+    const cached = /** @type {{ provider?: string, data?: unknown } | undefined} */ (cache.get(key));
+    if (cached !== undefined) return { ...cached, source: 'cache' };
+
+    if (!adapterSupports(provider, 'macroSeries', adapters)) {
+      return { source: 'unavailable', attempted: [{ provider, skipped: 'unsupported' }] };
+    }
+    if (!isKeyed(provider)) {
+      return { source: 'unavailable', attempted: [{ provider, skipped: 'no_key' }] };
+    }
+    if (!(await governor.canSpend(provider))) {
+      return { source: 'unavailable', attempted: [{ provider, skipped: 'quota' }] };
+    }
+    try {
+      const data = await adapters[provider].macroSeries(seriesId, { range });
+      await governor.spend(provider);
+      Promise.resolve(recordSuccess(provider)).catch(() => {});
+      const result = { provider, data };
+      cache.set(key, result, ttlForType('macro_series'));
+      return { ...result, source: 'live' };
+    } catch (err) {
+      Promise.resolve(recordError(provider, err)).catch(() => {});
+      return {
+        source: 'unavailable',
+        attempted: [{ provider, error: err instanceof Error ? err.message : String(err) }],
+      };
+    }
+  }
+
+  return { fetch, fetchFundamentals, searchMacro, fetchMacroSeries, usableChain };
 }
 
 /** Process-wide singleton used by the research routes. */

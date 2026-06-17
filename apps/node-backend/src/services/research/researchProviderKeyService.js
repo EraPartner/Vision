@@ -23,6 +23,7 @@ const LABELS = Object.freeze({
   finnhub: 'Finnhub',
   fmp: 'FMP',
   alpha_vantage: 'Alpha Vantage',
+  fred: 'FRED (economic data)',
 });
 
 /** Mask a key to its last 4 chars; never expose the full value. */
