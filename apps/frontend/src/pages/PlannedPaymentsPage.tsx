@@ -1,4 +1,5 @@
-import { useState, useMemo } from "react";
+import { useState, useMemo, useCallback } from "react";
+import { useQueryClient } from "@tanstack/react-query";
 import { Money } from "@/components/shared/Money";
 import logger from "@/lib/logger";
 import { Plus, CalendarClock, Repeat, Trash2, Pencil, ToggleLeft, ToggleRight, AlertCircle, CheckCircle2, Circle, Eye, EyeOff, History } from "lucide-react";
@@ -13,6 +14,8 @@ import { toast } from "sonner";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import PlannedPaymentForm from "@/components/planned/PlannedPaymentForm";
 import { LinkTransactionDialog } from "@/components/planned/LinkTransactionDialog";
+import { MatchSuggestionsBanner } from "@/components/planned/MatchSuggestionsBanner";
+import { PLANNED_MATCH_SUGGESTIONS_KEY } from "@/hooks/usePlannedMatchSuggestions";
 import { ExecutionHistoryDialog } from "@/components/planned/ExecutionHistoryDialog";
 import { differenceInDays, formatDateStringWithAppSettings, toYmd } from "@/components/shared/dateUtils";
 import { usePlannedPayments, type PlannedPayment } from "@/hooks/usePlannedPayments";
@@ -81,6 +84,23 @@ export default function PlannedPaymentsPage() {
   const [linkDialogOpen, setLinkDialogOpen] = useState(false);
   const [paymentToLink, setPaymentToLink] = useState<PlannedPayment | null>(null);
   const [historyOpen, setHistoryOpen] = useState(false);
+  const queryClient = useQueryClient();
+
+  // Open the link dialog for a suggested planned payment so the user can
+  // confirm which transaction clears it.
+  const handleReviewSuggestion = useCallback((plannedId: number) => {
+    const payment = payments.find((p) => p.id === plannedId);
+    if (!payment) return;
+    setPaymentToLink(payment);
+    setLinkDialogOpen(true);
+  }, [payments]);
+
+  // After a manual/confirmed execute, refresh both the payments list and the
+  // match suggestions (the cleared pair must drop off the suggestions banner).
+  const handleExecute = useCallback(async (id: number, transactionId: number, executionDate?: string) => {
+    await executePayment(id, transactionId, executionDate);
+    await queryClient.invalidateQueries({ queryKey: PLANNED_MATCH_SUGGESTIONS_KEY });
+  }, [executePayment, queryClient]);
 
   const filteredPayments = useMemo(() => {
     if (showAll) return payments;
@@ -471,6 +491,8 @@ export default function PlannedPaymentsPage() {
           </Card>
         </div>
 
+        <MatchSuggestionsBanner onReview={handleReviewSuggestion} />
+
         <RecurringDetectionPanel />
 
         <VirtualDataTable
@@ -493,7 +515,7 @@ export default function PlannedPaymentsPage() {
           open={linkDialogOpen}
           onOpenChange={(open) => { setLinkDialogOpen(open); if (!open) setPaymentToLink(null); }}
           payment={paymentToLink}
-          onExecute={executePayment}
+          onExecute={handleExecute}
         />
 
         <ExecutionHistoryDialog

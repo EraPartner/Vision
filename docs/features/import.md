@@ -3,9 +3,9 @@ title: Feature - CSV Import, Export, Attachments & Deduplication
 type: feature
 status: active
 date: 2026-04-24
-updated: 2026-06-15
-last_modified: 2026-06-15
-tags: [feature, import, export, csv, json, deduplication, phase-5a, attachments, phase-c, phase-e, phase-1, phase-12, phase-13, performance, concurrency, import-pipeline, component-split, error-handling, recipient-clusters, multi-select, export-filters, adr-046, category-review, bigserial-fix, staging-rows, tx-hash-dedup, race-safe-dedup, decimal-precision, ing, bnp, saved-custom-parsers, custom-parser-configs, named-parsers, adr-066, electron-native, csv-open-with, import-handoff, drag-drop, june-2026, file-headers-panel, csv-separator, adr-078]
+updated: 2026-06-17
+last_modified: 2026-06-17
+tags: [feature, import, export, csv, json, deduplication, phase-5a, attachments, phase-c, phase-e, phase-1, phase-12, phase-13, performance, concurrency, import-pipeline, component-split, error-handling, recipient-clusters, multi-select, export-filters, adr-046, category-review, bigserial-fix, staging-rows, tx-hash-dedup, race-safe-dedup, decimal-precision, ing, bnp, saved-custom-parsers, custom-parser-configs, named-parsers, adr-066, electron-native, csv-open-with, import-handoff, drag-drop, june-2026, file-headers-panel, csv-separator, adr-078, auto-link, planned-match]
 aliases: [csv-import, bank-import, bank-statement, deduplication, data-import, streaming-import]
 description: Import transactions from bank CSV files with automatic deduplication, fuzzy/pattern recipient matching, per-row category review (ADR-046), May 2026 BIGSERIAL fix for staging row ID validation, saved named custom CSV parsers (ADR-066), June 2026 V12 (ADR-072) window-wide CSV drag-drop + Finder/dock open-with handoff, and June 2026 always-on FileHeadersPanel (header chip preview + sample-rows table shown for all adapters in TransactionImportCard).
 related_code: ["apps/node-backend/src/services/importPipeline/index.js", "apps/node-backend/src/services/importPipeline/stage.js", "apps/node-backend/src/services/importPipeline/validate.js", "apps/node-backend/src/services/importPipeline/match.js", "apps/node-backend/src/services/importPipeline/commit.js", "apps/node-backend/src/services/dataImportService.js", "apps/node-backend/src/services/deduplication.js", "apps/node-backend/src/services/textNormalization.js", "apps/node-backend/src/routes/importRoutes.js", "apps/node-backend/src/lib/sse.js", "apps/node-backend/src/repositories/importBatchRepository.js", "apps/node-backend/src/repositories/customParserConfigRepository.js", "apps/frontend/src/features/imports/TransactionImportCard.tsx", "apps/frontend/src/features/imports/FileHeadersPanel.tsx", "apps/frontend/src/features/imports/RecipientsImportCard.tsx", "apps/frontend/src/features/imports/CategoriesImportCard.tsx", "apps/frontend/src/features/imports/ExportCard.tsx", "apps/frontend/src/features/imports/SupportedBanksCard.tsx", "apps/frontend/src/features/imports/useAdapters.ts", "apps/frontend/src/hooks/useCustomParserConfigs.ts", "apps/frontend/src/lib/importHandoff.ts", "apps/frontend/src/lib/csvSeparator.ts", "apps/frontend/src/pages/ImportPage.tsx", "apps/frontend/src/pages/ImportReviewPage.tsx"]
@@ -238,6 +238,17 @@ Each phase is idempotent at its boundary. On error, the batch is marked `failed`
 - Awaits aggregation refresh before import response is sent
 - Ensures `/api/aggregations/*` endpoints see new data immediately in the response
 - Previously fire-and-forget; now blocking to guarantee consistency
+
+#### 6. **Auto-Link Planned Payments** (post-commit, June 2026)
+
+After committed rows are inserted and aggregations refreshed, `commit.js` calls `autoLinkTransactions(insertedRows)` from [[apps/node-backend/src/services/plannedMatchService.js]]:
+
+- Runs only when `app_settings.autoClearPlannedOnMatch` is `true` (default).
+- Checks each newly committed transaction against active, unexecuted planned payments using the moderate tolerance rule (same recipient cluster, same sign, ±5 % amount, ±5 calendar days). See [[docs/features/plannedTransactions#auto-link--auto-clear-on-ingest-june-2026|Auto-Link on Ingest]] for the full matching spec.
+- **Never fails the import**: any error in the auto-link step is caught and logged; the import result is still returned as successful.
+- **Mutually-unambiguous rule**: if two imported rows match the same planned payment, or one row matches two planned payments, neither is auto-linked.
+- The commit result and the upload summary both include `auto_linked_count` (integer, 0 when none matched or when the setting is off).
+- `ImportReviewPage` shows a toast when `auto_linked_count > 0` (i18n key `importReview.toast.autoLinked`) and invalidates the `["plannedMatchSuggestions"]` React Query cache so the suggestions banner on `PlannedPaymentsPage` refreshes.
 
 ### Legacy Services (Removed)
 

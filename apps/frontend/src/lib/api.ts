@@ -76,6 +76,7 @@ export const apiClient = {
     updatePlannedTransaction: pln.updatePlannedTransaction,
     deletePlannedTransaction: pln.deletePlannedTransaction,
     executePlannedTransaction: pln.executePlannedTransaction,
+    getPlannedMatchSuggestions: pln.getPlannedMatchSuggestions,
 
     // Imports
     importCSV: imp.importCSV,

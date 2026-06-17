@@ -299,6 +299,24 @@ export const recipientRepository = {
     const result = await query(sql, [primaryId]);
     return result.rows;
   },
+
+  /**
+   * Resolve recipient ids to their cluster root (primary_recipient_id ?? id).
+   * Returns a Map<recipientId, clusterRootId> for the ids that exist.
+   */
+  async getClusterRootMap(recipientIds) {
+    const ids = [...new Set((recipientIds || []).filter((id) => id != null))];
+    if (ids.length === 0) return new Map();
+    const result = await query(
+      `SELECT id, COALESCE(primary_recipient_id, id) AS cluster_root
+         FROM recipients
+        WHERE id = ANY($1::int[])`,
+      [ids]
+    );
+    const map = new Map();
+    for (const row of result.rows) map.set(row.id, row.cluster_root);
+    return map;
+  },
 };
 
 export default recipientRepository;

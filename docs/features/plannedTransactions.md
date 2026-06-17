@@ -3,11 +3,11 @@ title: Planned Transactions
 type: feature
 status: active
 date: 2026-04-26
-updated: 2026-06-11
-tags: [feature, planned, recurring, bills, loans, phase-3, phase-12, calculations, immutability, error-handling, toast, atomic-patch, virtual-data-table, i18n-toasts, suggestion-card, upcoming-payments-hook, occurrence-key-dismissal, june-2026]
+updated: 2026-06-17
+tags: [feature, planned, recurring, bills, loans, phase-3, phase-12, calculations, immutability, error-handling, toast, atomic-patch, virtual-data-table, i18n-toasts, suggestion-card, upcoming-payments-hook, occurrence-key-dismissal, june-2026, auto-link, planned-match]
 aliases: [planned-payments, scheduled-payments, recurring-payments, bills, subscriptions, loan-amortization]
-description: Scheduled and recurring payment tracking - manage bills, subscriptions, and future expenses. June 2026: PlannedPaymentsPage migrated from DataTable to VirtualDataTable; native alert() replaced with toast.error (new i18n keys plannedPage.toggleFailed/deleteFailed). V11: useUpcomingPlannedPayments shared hook (single fetch + shared dismissed-ID store); SuggestionCard dashboard widget; UpcomingPaymentsNotification stands down on dashboard route when suggestions widget is visible. June 2026 (B1 fix): dismissals now keyed per occurrence (id:YYYY-MM-DD) so recurring reminders re-surface each cycle; past-dated keys pruned on load; legacy id-only entries silently dropped on next load.
-related_code: ["apps/node-backend/src/routes/plannedTransactions.js", "apps/node-backend/src/repositories/plannedTransactionRepository.js", "apps/node-backend/src/services/calculations/loanSchedule.js", "apps/node-backend/src/services/calculations/recurrence.js", "apps/node-backend/src/services/recurringDetectionService.js", "apps/frontend/src/components/planned/PlannedPaymentForm.tsx", "apps/frontend/src/components/planned/LinkTransactionDialog.tsx", "apps/frontend/src/components/planned/ExecutionHistoryDialog.tsx", "apps/frontend/src/components/notifications/UpcomingPaymentsNotification.tsx", "apps/frontend/src/components/shared/DatePicker.tsx", "apps/frontend/src/components/shared/dateUtils.ts", "apps/frontend/src/hooks/useUpcomingPlannedPayments.ts"]
+description: Scheduled and recurring payment tracking - manage bills, subscriptions, and future expenses. June 2026: auto-link & auto-clear planned payments on match — ingested transactions are automatically linked to matching planned payments (same recipient cluster, same sign, ±5% amount, ±5 days); ambiguous matches surface as confirmable suggestions. PlannedPaymentsPage migrated from DataTable to VirtualDataTable; native alert() replaced with toast.error (new i18n keys plannedPage.toggleFailed/deleteFailed). V11: useUpcomingPlannedPayments shared hook (single fetch + shared dismissed-ID store); SuggestionCard dashboard widget; UpcomingPaymentsNotification stands down on dashboard route when suggestions widget is visible. June 2026 (B1 fix): dismissals now keyed per occurrence (id:YYYY-MM-DD) so recurring reminders re-surface each cycle; past-dated keys pruned on load; legacy id-only entries silently dropped on next load.
+related_code: ["apps/node-backend/src/routes/plannedTransactions.js", "apps/node-backend/src/repositories/plannedTransactionRepository.js", "apps/node-backend/src/services/plannedExecutionService.js", "apps/node-backend/src/services/plannedMatchService.js", "apps/node-backend/src/services/calculations/loanSchedule.js", "apps/node-backend/src/services/calculations/recurrence.js", "apps/node-backend/src/services/recurringDetectionService.js", "apps/frontend/src/components/planned/PlannedPaymentForm.tsx", "apps/frontend/src/components/planned/LinkTransactionDialog.tsx", "apps/frontend/src/components/planned/MatchSuggestionsBanner.tsx", "apps/frontend/src/components/planned/ExecutionHistoryDialog.tsx", "apps/frontend/src/components/notifications/UpcomingPaymentsNotification.tsx", "apps/frontend/src/components/shared/DatePicker.tsx", "apps/frontend/src/components/shared/dateUtils.ts", "apps/frontend/src/hooks/useUpcomingPlannedPayments.ts", "apps/frontend/src/hooks/usePlannedMatchSuggestions.ts"]
 ---
 
 # Planned Transactions
@@ -115,9 +115,11 @@ Code links: [[apps/frontend/src/components/planned/PlannedPaymentForm.tsx]], [[a
 
 Track when planned transactions become real transactions:
 
-- Mark as **executed** when paid
-- **Auto-create** transactions on due date
+- Mark as **executed** when paid (manual tick via `POST /:id/execute`, or automatic via auto-link on ingest — see [[#auto-link--auto-clear-on-ingest-june-2026|Auto-Link on Ingest]])
 - Track **last executed date**
+
+> [!warning] No scheduler — no auto-create on due date
+> There is no background scheduler and no mechanism that automatically creates a transaction when a planned payment's due date arrives. The only automated path is **auto-link on ingest** (below), which links an already-ingested real transaction back to its matching planned payment. Planned payments that are not matched by an incoming transaction must be executed manually.
 
 ---
 
@@ -178,6 +180,91 @@ Dismissals in the recurring-pattern detection panel are persistent and do not re
 - Backend settings persistence now stores dismissal arrays as explicit JSONB (`JSON.stringify` + `::jsonb`) to prevent invalid JSON writes when dismissing suggestions
 
 Code links: [[apps/frontend/src/components/planned/RecurringDetectionPanel.tsx]], [[apps/frontend/src/components/shared/dateUtils.ts]], [[apps/node-backend/src/repositories/settingsRepository.js]]
+
+---
+
+---
+
+## Auto-Link & Auto-Clear on Ingest (June 2026)
+
+When a real transaction enters the system — either via CSV import commit or manual `POST /api/transactions` — the backend automatically checks it against active, unexecuted planned payments and links/executes any unambiguous match.
+
+### Trigger surfaces
+
+| Trigger | Auto-link behavior |
+|---|---|
+| CSV import commit (`POST /api/import/batches/:id/commit`) | Runs after all rows are committed; never fails the import if matching errors. Returns `auto_linked_count` in the commit/upload result. |
+| Manual transaction create (`POST /api/transactions`) | Runs immediately after create; response includes `auto_linked` (cleared planned payment id, or `null`). |
+
+### Match tolerance (moderate)
+
+A planned payment matches a transaction when **all four criteria** are met:
+
+| Criterion | Rule |
+|---|---|
+| Recipient cluster | `primary_recipient_id ?? id` must be the same cluster root on both sides (`getClusterRootMap` in `recipientRepository`) |
+| Sign | Amount signs must match (both income or both expense) |
+| Amount | Within ±5 % of the larger amount; minimum floor of ±1 (mirrors `LinkTransactionDialog` tolerance) |
+| Date | Transaction date within ±5 calendar days of `planned_date` |
+
+Loan-type planned payments (`is_loan = true`) are **excluded** from auto-match; their amortization semantics require explicit execution.
+
+### Unambiguous-only rule
+
+Auto-link only fires when exactly one planned payment matches exactly one transaction in the same batch (or create call). Any of the following blocks auto-link and instead surfaces the candidate as a suggestion:
+
+- Zero planned payments match the transaction
+- Two or more planned payments match the same transaction
+- Two transactions in the same import batch match the same planned payment
+
+This prevents incorrect auto-execution and leaves the user in control for any ambiguous case.
+
+### Auto-link execution path
+
+A successful auto-link follows the same execution path as a manual tick:
+
+1. Calls `plannedExecutionService.executePlanned({ id, executedTransactionId, executionDate })` (extracted from `POST /:id/execute`)
+2. Records a row in `planned_transaction_executions`
+3. Inherits tags from the planned payment
+4. For recurring rows: advances `planned_date` one recurrence cycle
+
+### Setting: `autoClearPlannedOnMatch`
+
+Auto-link is gated by the `autoClearPlannedOnMatch` field in the `app_settings` JSONB blob. Default: `true` (on).
+
+| Value | Effect |
+|---|---|
+| `true` (default) | Auto-link runs on ingest and import commit |
+| `false` | Auto-link is skipped; matches are not surfaced as suggestions either |
+
+Users control this toggle via **Settings → General → Auto-clear planned payments** (Switch in `GeneralTab.tsx`).
+
+### Service files
+
+| File | Purpose |
+|---|---|
+| [[apps/node-backend/src/services/plannedExecutionService.js]] | `executePlanned({id, executedTransactionId, executionDate})` — shared execution logic extracted from `POST /:id/execute` route |
+| [[apps/node-backend/src/services/plannedMatchService.js]] | `matchesTolerance`, `findAutoLinkTarget`, `autoLinkTransactions` (batch + mutual-unambiguity rule), `getMatchSuggestions` |
+| [[apps/node-backend/src/repositories/plannedTransactionRepository.js]] | New `listActiveUnexecuted()` method |
+| [[apps/node-backend/src/repositories/transactionRepository.js]] | New `listRecentUnlinked({ sinceDate })` (45-day lookback, NOT EXISTS against executions table) |
+| [[apps/node-backend/src/repositories/recipientRepository.js]] | New `getClusterRootMap(ids)` |
+
+### Match Suggestions surface
+
+When auto-link is on but a match is ambiguous, the backend exposes candidates via `GET /api/planned-transactions/match-suggestions`. The frontend surfaces these in `MatchSuggestionsBanner` on `PlannedPaymentsPage`. Each entry opens the existing `LinkTransactionDialog` so the user can confirm the link.
+
+After the user confirms, `PlannedPaymentsPage` invalidates the `["plannedMatchSuggestions"]` React Query cache key.
+
+**Frontend files:**
+- [[apps/frontend/src/lib/api/planned.ts]] — `getPlannedMatchSuggestions()` + types `PlannedMatchSuggestion`, `PlannedMatchCandidate`
+- [[apps/frontend/src/hooks/usePlannedMatchSuggestions.ts]] — React Query hook, cache key `["plannedMatchSuggestions"]`
+- [[apps/frontend/src/components/planned/MatchSuggestionsBanner.tsx]] — UI banner on PlannedPaymentsPage
+
+**i18n keys added:**
+- `settings.general.autoClearPlanned` — toggle label
+- `settings.general.autoClearPlannedHint` — toggle hint
+- `plannedPage.suggestions.*` — suggestions banner strings
+- `importReview.toast.autoLinked` — toast shown on ImportReviewPage when `auto_linked_count > 0`
 
 ---
 
@@ -386,6 +473,7 @@ Returns bills due in the next 14 days (common use: dashboard notification banner
 | DELETE | `/api/planned-transactions/:id` | Delete planned transaction |
 | POST | `/api/planned-transactions/:id/execute` | Execute as transaction |
 | GET | `/api/planned-transactions/due-soon` | Upcoming bills within N days (Phase 6) |
+| GET | `/api/planned-transactions/match-suggestions` | Ambiguous auto-link candidates for user confirmation (June 2026) |
 
 ---
 

@@ -2,6 +2,7 @@ import { memo } from 'react';
 import { Label } from '@/components/ui/label';
 import { Separator } from '@/components/ui/separator';
 import { ScrollArea } from '@/components/ui/scroll-area';
+import { Switch } from '@/components/ui/switch';
 import {
     Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from '@/components/ui/select';
@@ -233,6 +234,25 @@ export const GeneralTab = memo(function GeneralTab({ localAppSettings, onUpdate 
                     </Select>
                     <p className="text-xs text-muted-foreground">
                         {t('settings.general.costBasisMethodHint')}
+                    </p>
+                </div>
+
+                <Separator />
+
+                {/* Auto-clear planned payments on match */}
+                <div className="space-y-2">
+                    <div className="flex items-center justify-between gap-4">
+                        <Label htmlFor="auto-clear-planned" className="text-sm font-semibold">
+                            {t('settings.general.autoClearPlanned')}
+                        </Label>
+                        <Switch
+                            id="auto-clear-planned"
+                            checked={localAppSettings.autoClearPlannedOnMatch ?? true}
+                            onCheckedChange={(v) => onUpdate({ ...localAppSettings, autoClearPlannedOnMatch: v })}
+                        />
+                    </div>
+                    <p className="text-xs text-muted-foreground">
+                        {t('settings.general.autoClearPlannedHint')}
                     </p>
                 </div>
             </div>

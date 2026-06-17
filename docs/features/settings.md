@@ -3,8 +3,8 @@ title: Settings Feature
 type: feature
 status: active
 date: 2026-04-23
-updated: 2026-06-16
-tags: [feature, settings, configuration, preferences, frontend, backend, refactor, phase-3, phase-4, zustand, store, backup, encrypt, passphrase, phase-2]
+updated: 2026-06-17
+tags: [feature, settings, configuration, preferences, frontend, backend, refactor, phase-3, phase-4, zustand, store, backup, encrypt, passphrase, phase-2, auto-link, planned-match, june-2026]
 description: Application settings system with JSONB storage, preload optimization, propagation across all pages, and split DashboardSettingsDialog UI component
 aliases: [preferences, configuration, app settings, user settings]
 related_code:
@@ -89,6 +89,7 @@ SettingsPreloadContext → SettingsContext/AppSettingsContext/ThemeContext
 | `portfolio_tax_adjustments_v1` | object | `{}` | Manual tax adjustments |
 | `backup_settings` | object | `{}` | Backup configuration |
 | `startupSection` | `StartupSection` | `'budgeting'` | Section the app navigates to at launch (field within the `app_settings` JSONB blob) |
+| `autoClearPlannedOnMatch` | boolean | `true` | When `true`, automatically links and executes a planned payment when an ingested transaction unambiguously matches it. When `false`, auto-link is disabled entirely (no suggestions surface either). See [[docs/features/plannedTransactions#auto-link--auto-clear-on-ingest-june-2026\|Planned Transactions: Auto-Link on Ingest]]. |
 
 ## Startup Section
 

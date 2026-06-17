@@ -124,6 +124,11 @@ export default function ImportReviewPage() {
         }),
         { icon: <CheckCircle2 className="h-4 w-4" /> }
       );
+      if (data.auto_linked_count && data.auto_linked_count > 0) {
+        toast.success(t("importReview.toast.autoLinked", { n: data.auto_linked_count }));
+        queryClient.invalidateQueries({ queryKey: ["plannedMatchSuggestions"] });
+        queryClient.invalidateQueries({ queryKey: ["upcomingPlannedPayments"] });
+      }
       queryClient.invalidateQueries({ queryKey: ["import-batches"] });
       // A commit inserts the staged rows into `transactions`; refresh the
       // transactions list, dashboard stat cards, monthly summary and

@@ -223,6 +223,6 @@ export function overrideImportRowCategory(batchId: number, rowId: number, catego
     });
 }
 
-export function commitImportBatch(batchId: number): Promise<{ batch_id: number; imported: number; duplicates: number; errors: number }> {
+export function commitImportBatch(batchId: number): Promise<{ batch_id: number; imported: number; duplicates: number; errors: number; auto_linked_count?: number }> {
     return apiRequest(`/api/import/batches/${batchId}/commit`, { method: 'POST' });
 }

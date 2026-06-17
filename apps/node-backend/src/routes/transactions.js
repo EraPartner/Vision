@@ -14,6 +14,7 @@ import { logger } from '../config/logger.js';
 import { validateIdParam, assertYmd } from '../middleware/validation.js';
 import { rateLimiter } from '../middleware/rateLimiter.js';
 import { scheduleRefresh } from '../services/materializedViewService.js';
+import { autoLinkTransactions } from '../services/plannedMatchService.js';
 import {
   ValidationError,
   NotFoundError,
@@ -531,10 +532,22 @@ router.post('/', async (req, res) => {
     transactionId: transaction.id,
   });
 
+  // Auto-clear a matching planned payment if this transaction unambiguously
+  // matches one. Never let an auto-link failure fail the create.
+  let autoLink = { autoLinkedCount: 0, links: [] };
+  try {
+    autoLink = await autoLinkTransactions([transaction]);
+  } catch (err) {
+    logger.warn('Auto-link after manual create failed', { id: transaction.id, error: err?.message });
+  }
+
   logger.info('Transaction created', { id: transaction.id });
   scheduleRefresh();
   res.status(201);
-  res.ok(formatTransaction(transaction));
+  res.ok({
+    ...formatTransaction(transaction),
+    auto_linked: autoLink.links[0]?.plannedTransactionId ?? null,
+  });
 });
 
 // PATCH /api/transactions/:id

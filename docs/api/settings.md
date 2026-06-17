@@ -5,7 +5,8 @@ method: GET, PUT, DELETE
 path: /api/settings
 description: User preferences and application settings
 date: 2026-04-23
-tags: [api, settings, preferences, phase-3]
+updated: 2026-06-17
+tags: [api, settings, preferences, phase-3, auto-link, planned-match, june-2026]
 status: active
 aliases: [settings-api, preferences-api, user-settings, app-settings]
 related_code: [[apps/node-backend/src/routes/settings.js]], [[apps/node-backend/src/repositories/settingsRepository.js]], [[apps/frontend/src/components/settings/DashboardSettingsDialog.tsx]]
@@ -136,9 +137,12 @@ Typical fields persisted in `app_settings`:
   "defaultPageSize": 50,
   "startOfWeek": "monday",
   "showDecimalPlaces": 2,
-  "language": "en"
+  "language": "en",
+  "autoClearPlannedOnMatch": true
 }
 ```
+
+**`autoClearPlannedOnMatch` (June 2026):** When `true` (default), an ingested transaction that unambiguously matches exactly one active unexecuted planned payment is automatically linked and that planned payment is executed (same path as a manual `POST /:id/execute`). Ambiguous matches (0 or ≥2 candidates) surface as confirmable suggestions via `GET /api/planned-transactions/match-suggestions`. Set to `false` to disable all auto-link behavior including suggestions. See [[docs/features/plannedTransactions#auto-link--auto-clear-on-ingest-june-2026|Planned Transactions: Auto-Link on Ingest]].
 
 Code links: [[apps/frontend/src/contexts/AppSettingsContext.tsx]], [[apps/frontend/src/components/settings/DashboardSettingsDialog.tsx]]
 

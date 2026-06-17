@@ -10,10 +10,11 @@ import plannedTransactionRepository from '../services/plannedTransactionService.
 import { validateIdParam, assertYmd, validateId } from '../middleware/validation.js';
 import { rateLimiter } from '../middleware/rateLimiter.js';
 import { generateLoanRepaymentSchedule } from '../services/calculations/loanSchedule.js';
-import { calculateNextDate, isValidPattern } from '../services/calculations/recurrence.js';
+import { isValidPattern } from '../services/calculations/recurrence.js';
+import { executePlanned } from '../services/plannedExecutionService.js';
+import { getMatchSuggestions } from '../services/plannedMatchService.js';
 import { NotFoundError, ValidationError } from '../middleware/errorHandler.js';
 import { toDecimal, toNumber } from '../lib/money.js';
-import { toAppDateString, todayAppDateString } from '../lib/timezone.js';
 import { parsePagination } from '../lib/pagination.js';
 
 const router = Router();
@@ -230,6 +231,20 @@ router.get('/due-soon', async (req, res) => {
   res.ok(items, { days, total: items.length });
 });
 
+/**
+ * GET /api/planned-transactions/match-suggestions
+ *
+ * Active, unexecuted planned payments that have one or more recent unlinked
+ * transactions within match tolerance but were not auto-cleared (ambiguous
+ * matches, or auto-clear disabled). Each entry carries its candidate
+ * transactions for the user to confirm. Registered before /:id so the literal
+ * segment is not captured by the id param.
+ */
+router.get('/match-suggestions', async (req, res) => {
+  const suggestions = await getMatchSuggestions();
+  res.ok(suggestions, { total: suggestions.length });
+});
+
 router.get('/:id', validateIdParam, async (req, res) => {
   const id = parseRouteId(req);
   const pt = await plannedTransactionRepository.getById(id);
@@ -289,39 +304,12 @@ router.post('/:id/execute', validateIdParam, async (req, res) => {
   if (!idCheck.valid) throw new ValidationError(idCheck.error);
   assertYmd(execution_date, 'execution_date');
 
-  const existing = await plannedTransactionRepository.getById(id);
-  if (!existing) throw new NotFoundError(`Planned transaction ${id} not found`);
-
-  const execDate = execution_date || todayAppDateString();
-  const updateFields = {
-    is_executed: !existing.is_recurring,
-    last_executed_date: execDate,
-  };
-
-  if (existing.is_recurring && existing.recurrence_pattern) {
-    const baseDate = new Date(existing.planned_date);
-    const nextDate = calculateNextDate(baseDate, existing.recurrence_pattern);
-    if (nextDate) {
-      // calculateNextDate returns a UTC instant for start-of-day in APP_TIMEZONE.
-      // toISOString() takes the UTC calendar day, which is the *previous* day in
-      // a UTC+ zone — moving a monthly payment one day earlier per cycle.
-      // toAppDateString reads the date back in APP_TIMEZONE. (Day-of-month anchor
-      // is intentionally sticky-clamped — see docs/features planned-transactions.)
-      updateFields.planned_date = toAppDateString(nextDate);
-      updateFields.is_executed = false;
-    }
-  }
-
-  const tagIdsToInherit = (existing.tags || []).map((t) => t.id);
-  const { duplicate } = await plannedTransactionRepository.executeAndAdvance(
+  const { current, duplicate } = await executePlanned({
     id,
-    executed_transaction_id,
-    execDate,
-    updateFields,
-    tagIdsToInherit,
-  );
+    executedTransactionId: executed_transaction_id,
+    executionDate: execution_date,
+  });
 
-  const current = await plannedTransactionRepository.getById(id);
   if (duplicate) res.set('Idempotent-Replay', 'true');
   res.ok(formatPlannedTransaction(current));
 });

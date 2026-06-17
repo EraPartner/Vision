@@ -60,3 +60,33 @@ export function executePlannedTransaction(
         body: JSON.stringify(executeRequest),
     });
 }
+
+export interface PlannedMatchCandidate {
+    id: number;
+    recipient_name: string | null;
+    amount: number;
+    transaction_date: string;
+    currency: string | null;
+    memo: string | null;
+}
+
+export interface PlannedMatchSuggestion {
+    planned: {
+        id: number;
+        recipient_id: number | null;
+        recipient_name: string | null;
+        amount: number;
+        planned_date: string;
+        currency: string | null;
+        is_recurring: boolean;
+    };
+    candidates: PlannedMatchCandidate[];
+}
+
+/**
+ * Planned payments with recent unlinked transactions within match tolerance
+ * that were not auto-cleared (ambiguous matches, or auto-clear disabled).
+ */
+export function getPlannedMatchSuggestions(): Promise<PlannedMatchSuggestion[]> {
+    return apiRequest<PlannedMatchSuggestion[]>('/api/planned-transactions/match-suggestions');
+}

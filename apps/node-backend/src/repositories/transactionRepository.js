@@ -561,6 +561,35 @@ export const transactionRepository = {
     const result = await queryPrepared('tx_hard_delete', 'DELETE FROM transactions WHERE id = $1', [id]);
     return result.rowCount > 0;
   },
+
+  // Recent active transactions not yet linked to any planned-transaction
+  // execution. Feeds the match-suggestions read endpoint so already-cleared
+  // transactions never resurface as candidates. Returns the cluster root so the
+  // matcher can compare against planned-payment clusters directly.
+  async listRecentUnlinked({ sinceDate }) {
+    const result = await query(
+      `SELECT t.id,
+              t.recipient_id,
+              COALESCE(r.primary_recipient_id, t.recipient_id) AS recipient_cluster_id,
+              t.amount,
+              t.date AS transaction_date,
+              t.currency,
+              t.memo,
+              r.name AS recipient_name
+         FROM transactions t
+         LEFT JOIN recipients r ON t.recipient_id = r.id
+        WHERE t.is_active = true
+          AND t.recipient_id IS NOT NULL
+          AND t.date >= $1
+          AND NOT EXISTS (
+            SELECT 1 FROM planned_transaction_executions pte
+             WHERE pte.executed_transaction_id = t.id
+          )
+        ORDER BY t.date DESC, t.id DESC`,
+      [sinceDate]
+    );
+    return result.rows;
+  },
 };
 
 export default transactionRepository;

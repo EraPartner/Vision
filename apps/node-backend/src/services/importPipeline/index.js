@@ -74,7 +74,7 @@ export async function prepareImport({ batchId, filePath, adapterName, customConf
  * @returns {Promise<{ imported: number, duplicates: number, errors: number }>}
  */
 export async function commitImport({ batchId, onProgress }) {
-  const { imported, duplicates, errors } = await commitBatch({ batchId, onProgress });
+  const { imported, duplicates, errors, autoLinkedCount } = await commitBatch({ batchId, onProgress });
 
   await query(
     `UPDATE import_batches
@@ -92,8 +92,8 @@ export async function commitImport({ batchId, onProgress }) {
     scheduleRefresh();
   }
 
-  logger.info('[pipeline] committed', { batchId, imported, duplicates, errors });
-  return { imported, duplicates, errors };
+  logger.info('[pipeline] committed', { batchId, imported, duplicates, errors, autoLinkedCount });
+  return { imported, duplicates, errors, autoLinkedCount };
 }
 
 /**
@@ -126,7 +126,7 @@ export async function runImportPipeline({ filePath, adapterName, customConfig, f
     }
 
     // All rows resolved exactly — auto-commit without review.
-    const { imported, duplicates, errors: commitErrors } = await commitImport({ batchId, onProgress });
+    const { imported, duplicates, errors: commitErrors, autoLinkedCount } = await commitImport({ batchId, onProgress });
 
     const totalErrors = (validateErrors || 0) + (commitErrors || 0);
     await query(
@@ -134,8 +134,8 @@ export async function runImportPipeline({ filePath, adapterName, customConfig, f
       [batchId, totalErrors]
     );
 
-    logger.info('[pipeline] complete', { batchId, total: rowsTotal, imported, duplicates, errors: totalErrors });
-    return { batchId, total: rowsTotal, requiresReview: false, imported, duplicates, errors: totalErrors };
+    logger.info('[pipeline] complete', { batchId, total: rowsTotal, imported, duplicates, errors: totalErrors, autoLinkedCount });
+    return { batchId, total: rowsTotal, requiresReview: false, imported, duplicates, errors: totalErrors, autoLinkedCount };
   } catch (err) {
     await query(
       `UPDATE import_batches
