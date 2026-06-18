@@ -2,60 +2,78 @@
 
 Format: Obsidian Tasks plugin emoji. Priority 🔺 highest / ⏫ high / 🔼 medium / 🔽 low / ⏬ lowest. Dates 📅 due / 🛫 start / ⏳ scheduled.
 
-> Rebuilt 2026-06-16 after the June audit-backlog clears (`5ac3656c`, `65d3dac0`, `a28dd694`)
-> left this file empty while several ADRs still cited "tracked in `TODO.md`". The running-stack /
-> built-`.app` / hardware verification items have been completed by the user and removed.
+## Cross-workspace feature epic — account entity & spanning features
 
-## Open follow-ups (actionable)
+> Brainstormed 2026-06-18. Features that span the three workspaces (Budgeting · Portfolio ·
+> Research), anchored on introducing a real account entity. **The user wants all of these
+> regardless of effort.** Ordering reflects dependency (foundation first), not priority or cost.
 
-- [ ] 🔼 Resolve Kinesis `timeFrame=60` unit ambiguity (ADR-065)
-  - `config/kinesisConfig.js` comments said "minutes"; `docs/reference/environment-variables.md`
-    said "days"; `providerHealthService` probes with `timeframe=60`. Both docs now flag the unit
-    as **unverified** (2026-06-16) rather than asserting. Resolve empirically (fetch `trendline`
-    with different `timeframe` values, compare point density) before changing — a wrong unit
-    silently changes returned density for all Kinesis metals history.
-- [ ] 🔼 Empty-state standardization sweep (T15, ADR-070) — `components/shared/EmptyState.tsx`
-      already exists and is adopted on transactions/recipients/portfolio list pages. Sweep the
-      remaining pages that show data lists but lack a consistent empty/zero-data state. Per-page
-      judgment (dashboards, NotFound, admin, and chart-only pages are intentionally exempt).
-- [ ] 🔽 Scorecard `reason` strings are English-only (ADR-081). **Low value:** the UI already
-      localizes via the structured `code`; `reason` is an English fallback for API/tests that
-      users don't normally see. Localize only if API consumers need it.
+### Foundation — the account entity
 
-## Deferred by design (product/scope decisions — not defects)
+- [ ] 🔺 **Account entity** — replace the implicit `bank_account` TEXT column with a real
+      `accounts` table. There is no accounts table today: accounts are free strings and the
+      running balance is partitioned by the `bank_account` string. Safe path is expand/contract —
+      create `accounts`, backfill one row per distinct string, add a nullable `account_id` FK
+      alongside, dual-write, flip reads, drop the string. Blast radius: running-balance ledger,
+      import, statistics, transfers (ADR-083), planned transactions. ADR-worthy; unblocks the
+      rest of this section.
+- [ ] ⏫ **Cash sleeve** — brokerage / crypto-exchange accounts hold spendable or idle cash
+      alongside holdings. **Single source of truth per sleeve** — must not be double-counted
+      against net-worth "liquid" or a portfolio "savings" asset.
+- [ ] ⏫ **Trades = transfers (cash-sleeve plumbing)** — model buy / sell / dividend / fee as
+      internal transfers on the cash sleeve, reusing the ADR-083 transfer machinery: buy =
+      cash→holding (net-worth-neutral, kept out of "spending"); sell = holding→cash (kept out of
+      "income"); dividend = income into the sleeve; fee = spending out of the sleeve. Keeps the
+      cash sleeve honest when holdings change; required for brokerage import to balance.
 
-- [ ] 🔽 Belgian tax point-in-time FX rates (ADR-058/059) — multi-currency conversion still uses
-      today's rates, not purchase-date rates. Same "v3 bucket" as the tax-engine-drift advisory.
-- [ ] 🔽 Tax-engine-drift "law-change advisory" banner (ADR-059 option #9).
-- [ ] 🔽 Dutch LLM chat support (ADR-024) — deferred until per-model quality is validated.
-- [ ] 🔽 Transparent v1→v2 backup migration (ADR-040) — v1 backups stay v1 until re-exported.
-- [ ] 🔽 Rolling-window walk-forward backtest (cash-flow-forecast) — only per-calendar-month today.
-- [ ] 🔽 Electron async file I/O for `loadSettings`/`saveSettings` — deferred (module-load coupling).
-- [ ] ⏬ `split_audit` archival for a future multi-tenant world (ADR-013).
-- [ ] ⏬ Bundle a minimal Python runtime for Alembic in the Electron build (ADR-027) — only if the
-      bundling strategy materially changes.
-- [ ] ⏬ Decide whether to remove the legacy `/api/info/*` router (`main.js:303`). The ADR-016
-      shadow middleware is already retired; full removal of `/api/info` is a separate, undecided call.
+### Account model — attributes & reach (ride on the entity)
 
-## Optional cleanup — decided won't-do unless the area is touched anyway
+- [ ] ⏫ **Account-typed model** — `checking` / `savings` / `brokerage` / `crypto-exchange` /
+      `wallet` / `pension` / `liability` as orthogonal flags: type, liquidity class, spendable/
+      earmarked, in-net-worth, tax wrapper, owner, multi-currency cash. Same entity, different
+      flag combinations. Stress-test types that must all work: brokerage (cash + holdings),
+      pensioensparen (locked, deductible, tax-advantaged), crypto wallet (no cash sleeve),
+      mortgage (negative, illiquid liability).
+- [ ] ⏫ **Per-account positioning / lots** — give `investments` / `portfolio_transactions` an
+      account FK (none today — holdings are global). Enables per-account cost basis ("100 AAPL at
+      IBKR vs 50 at Degiro") and a real "close this account" workflow.
+- [ ] ⏫ **Liabilities as negative accounts** — model a mortgage / loan as an account with
+      negative value; net worth = sum of accounts incl. debt, no special-casing. Unifies the
+      existing loan schedule into the account model.
+- [ ] ⏫ **Balance reconciliation / drift detection** — store an authoritative statement balance
+      per account and diff it against the computed running-balance ledger ("drifted €12.40 —
+      missing a transaction"). Only possible once accounts have an identity instead of a string.
+- [ ] 🔼 **Owner dimension → tax allocation** — me / partner / joint on accounts, feeding the
+      Belgian marital quotient.
 
-- [ ] 🔽 `buildExclusionClauses` consolidation. `infoRepositoryStatistics.js:76` and
-      `infoRepo.monthly.js:124` re-implement the canonical exclusion semantics inline. The code is
-      correct and explicitly documented as matching `services/filterBuilder.buildExclusionClauses`.
-      Forcing the shared helper into these hand-built aggregation queries (which already emit their
-      own joins, `AND`-prefixed clauses, and `params.length`-based placeholders) is a risky refactor
-      in money-path SQL for **zero** behavior change. Leave as-is.
+### Brokerage import
 
-## Done in the 2026-06-16 deferred-items audit pass
+- [ ] ⏫ **Brokerage account import** — unified importer that splits one brokerage statement into
+      both `transactions` (cash movements) and `portfolio_transactions` (trades) and links the
+      legs. Depends on the account entity + cash sleeve + trades=transfers. **Handle carefully** —
+      routing rows to the right target, leg-linking, dedup, and avoiding double-counting are the
+      danger areas (this is the "dangerous" part originally flagged).
 
-- [x] ✅ ShortcutsOverlay: added an Electron-only "Desktop app menu" section listing ⌘N (new
-      transaction), ⇧⌘I (import CSV), ⌃⌘S (toggle sidebar), ⌘1–9 (go to section) — closes the
-      ADR-072 follow-up. 4 new `shortcuts.*` i18n keys (en + nl), gated on `isElectron()`.
-- [x] ✅ Doc-drift corrected: `*FailedTitle` Dutch keys (all 18 translated), `CustomCategoryChart`
-      removal (ADR-041 addendum), `calendar.tsx` v10 migration (adr/index.md), aggregation shadow
-      mode already retired (ADR-016).
-- [x] ✅ Kinesis `timeFrame` unit contradiction reconciled to "unverified" in `kinesisConfig.js`
-      and `environment-variables.md` (value unchanged — needs an empirical probe, see above).
-- [x] ✅ Running-stack / built-`.app` / hardware verifications completed by the user (calendar
-      visual spot-check, 4K-TV GPU profiling, AZERTY accelerator test, E2E visual snapshots,
-      import→commit E2E, migrations 0039–0043).
+### Portfolio statistics — descriptive only, NOT budgeting forecast
+
+- [ ] 🔼 **Dividend / coupon income** — projected + realized investment income as a portfolio-level
+      statistic. **Must NOT feed Planned Transactions or the cash-flow forecast** — stays
+      descriptive, inside the portfolio workspace.
+- [ ] 🔼 **FIRE / coverage ratio** — spending run-rate (read from budgeting) vs passive yield,
+      shown in portfolio statistics. Reads budgeting numbers; never writes into them.
+
+### Portfolio × Research
+
+- [ ] 🔼 **Watchlist "what-if" backtest** — "had I bought when I added it to the watchlist…"
+- [ ] 🔼 **Allocation drift + classic-portfolio benchmarks** — target vs actual weights, plus
+      comparison against canonical compositions (60/40, all-weather, three-fund).
+
+### All three workspaces (Budgeting × Portfolio × Research)
+
+- [ ] 🔼 **Net-worth / financial-independence projection** — compose the cash-flow forecast +
+      holdings + research market forecast (ADR-081) into a projected net-worth cone with
+      confidence bands.
+- [ ] 🔼 **Cash-aware rebalancing** — research target weights + portfolio actual weights +
+      available budgeting cash → "deploy €X into the underweight sleeve."
+- [ ] 🔼 **Unified tax view** — one surface pulling earned income (budgeting) + realized gains
+      (portfolio) + dividend income (cash sleeve).

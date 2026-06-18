@@ -7,6 +7,7 @@
 
 import { query } from '../../database/connection.js';
 import { convertWithRates, loadCurrentRates } from '../currency/currencyConversionService.js';
+import { buildHistoricalRateIndex, findRateOnOrBeforeInIndex } from '../currency/rateFetcher.js';
 import { getTaxTable } from './belgianTaxTables.js';
 import { todayAppDateString, firstOfMonthYmd } from '../../lib/timezone.js';
 import { logger } from '../../config/logger.js';
@@ -98,6 +99,7 @@ async function fetchTaxTransactions(targetCurrency, startDate, endDate) {
       COALESCE(pt.taxes,  0)  AS taxes,
       COALESCE(pt.fees,   0)  AS fees,
       COALESCE(pt.currency, i.currency, 'EUR') AS currency,
+      to_char(pt.date::date, 'YYYY-MM-DD') AS rate_date,
       EXTRACT(YEAR  FROM pt.date::date)::int AS year,
       EXTRACT(MONTH FROM pt.date::date)::int AS month
     FROM portfolio_transactions pt
@@ -119,12 +121,57 @@ async function fetchTaxTransactions(targetCurrency, startDate, endDate) {
   const byAssetClass    = new Map();
   const byInvestment    = new Map();
 
-  const rates = await loadCurrentRates();
+  // Belgian tax values foreign-currency income and transactions at the exchange rate
+  // on the date the income was collected / the transaction took place — not today's
+  // rate. The TOB (stock-exchange tax) guidance is explicit ("the ECB rate of the day
+  // the transaction took place") and foreign movable income (dividends/interest) is
+  // taxable at its date of collection. So each row converts at its transaction-date
+  // rate, falling back to the current rate only when no historical rate is stored on or
+  // before that date (e.g. a brand-new transaction before the FX backfill runs). See
+  // ADR-085.
+  const currentRates = await loadCurrentRates();
+  const toCur = String(targetCurrency || 'EUR').toUpperCase().trim();
+
+  const relevantCurrencies = [...new Set([
+    ...result.rows.map((r) => String(r.currency || 'EUR').toUpperCase().trim()),
+    toCur,
+  ])].filter((c) => c && c !== 'EUR');
+
+  let historicalIndex = new Map();
+  if (relevantCurrencies.length > 0) {
+    const ratesResult = await query(
+      `SELECT currency_code, rate_date, rate_to_eur
+       FROM exchange_rates
+       WHERE currency_code = ANY($1::text[])
+       ORDER BY currency_code ASC, rate_date ASC`,
+      [relevantCurrencies]
+    );
+    historicalIndex = buildHistoricalRateIndex(ratesResult.rows || []);
+  }
+
+  // Rate-to-EUR for a currency on a given date: the stored historical rate on or
+  // before the date when available, else the current rate. EUR is always 1.
+  const rateToEurForDate = (code, dateStr) => {
+    const c = String(code || 'EUR').toUpperCase().trim();
+    if (c === 'EUR') return 1;
+    const historical = findRateOnOrBeforeInIndex(historicalIndex, c, dateStr);
+    if (historical !== undefined) return historical;
+    return currentRates[c];
+  };
 
   for (const row of result.rows) {
     const cur = row.currency;
+    const rowDate = row.rate_date;
+    // Per-row rate table built from the transaction-date rates, so convertWithRates
+    // applies the same conversion math and unsupported-currency handling as the live
+    // path — only the rate source (historical vs current) differs.
+    const rowRates = {
+      EUR: 1,
+      [String(cur || 'EUR').toUpperCase().trim()]: rateToEurForDate(cur, rowDate),
+      [toCur]: rateToEurForDate(toCur, rowDate),
+    };
     const convert = (v) =>
-      cur !== targetCurrency ? convertWithRates(Number(v), cur, targetCurrency, rates) : Number(v);
+      cur !== targetCurrency ? convertWithRates(Number(v), cur, targetCurrency, rowRates) : Number(v);
 
     const taxes    = convert(row.taxes);
     const fees     = convert(row.fees);

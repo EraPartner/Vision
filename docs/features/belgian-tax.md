@@ -3,8 +3,8 @@ title: Feature - Belgian Tax
 type: feature
 status: active
 date: 2026-05-11
-updated: 2026-06-11
-tags: [feature, tax, belgian, cadastral-income, deductions, phase-8, pdf-export, regional-own-home-credit, exemption-brackets, taxable-income-sources, audit-2026-05-11, disabled-dependents, regional-autonomy-factor, property-tax-centimes, etf-tob, reynders-routing, portfolio-tax-pure-module, decimal-migration]
+updated: 2026-06-18
+tags: [feature, tax, belgian, cadastral-income, deductions, phase-8, pdf-export, regional-own-home-credit, exemption-brackets, taxable-income-sources, audit-2026-05-11, disabled-dependents, regional-autonomy-factor, property-tax-centimes, etf-tob, reynders-routing, portfolio-tax-pure-module, decimal-migration, point-in-time-fx]
 description: Belgian tax profile management with PIT calculator using exemption-bracket method (CIR-92 art. 134 §3), regional own-home credits (Flemish woonbonus, Walloon chèque habitat), taxable income source filtering, cadastral income tracking, deduction management, PDF tax report export, and May 2026 PwC audit fixes (disabled-dependent doubling, child-under-3 forfeiture, regional autonomy factor, property-tax centimes calibration). May 2026: Portfolio-tax estimators extracted to a pure, tested module with Decimal.js accumulation.
 aliases: [belgian-tax, tax-feature, cadastral, deductions, belgium]
 related_code:
@@ -332,7 +332,7 @@ Each entry exposes `{ year, isCurrent, hasSnapshot, hasTransactions }` for the s
 ### Known limits
 
 - **Engine drift.** When no calculation is frozen for a year (see ADR-059), past displayed numbers reflect today's `computeBelgianPIT` — engine bug fixes propagate retroactively. Freezing or filing a year captures the calculation verbatim and blocks drift for that year.
-- **Exchange rates.** Multi-currency conversion still uses today's rates, not point-in-time rates. Out of scope for ADR-058 and ADR-059.
+- **Exchange rates.** The tax report (`dataFetcherTax.js`) converts foreign-currency tax, fee, and dividend amounts at the exchange rate **on each transaction's date** (point-in-time), not today's rate — matching the Belgian rules for the TOB ("ECB rate of the day the transaction took place") and for foreign movable income (taxable at its date of collection). See ADR-085. The frontend tax-overview's live portfolio figures still display at current rates (a current-value concern, not the tax computation).
 - **Soft lock.** Past snapshots remain editable behind a warning banner; filing upgrades the warning to an explicit "Amend this filed year" confirmation (ADR-059) but does not hard-freeze.
 
 ## Historical Year Extensions (ADR-059)
