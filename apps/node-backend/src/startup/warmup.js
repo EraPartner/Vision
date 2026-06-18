@@ -34,6 +34,7 @@ import {
   backfillHoldingGaps,
 } from '../services/quoteBackfillService.js';
 import { warmInfoCaches } from '../routes/info.js';
+import { backfillTransfersOnce } from '../services/transferReconciliationService.js';
 import { refreshCashflowForecastMc } from '../jobs/refreshCashflowForecastMc.js';
 import * as researchProviderKeyService from '../services/research/researchProviderKeyService.js';
 import { isInternetReachable } from '../lib/network.js';
@@ -188,6 +189,15 @@ export async function runWarmupTasks({ warmupStatus }) {
   } catch (err) {
     logger.warn('Could not hydrate research provider API keys; using env fallback', { error: err.message });
   }
+
+  // One-time internal-transfer backfill on upgrade (ADR-083). Best-effort and
+  // DB-only; refreshes the MVs afterwards so the exclusion is reflected. Runs
+  // before the MV refresh below kicks off; both are idempotent.
+  backfillTransfersOnce()
+    .then((r) => { if (!r.skipped) return refreshMaterializedViews(); })
+    .catch((err) => {
+      logger.error('Internal-transfer backfill failed on startup', { error: err.message });
+    });
 
   refreshMaterializedViews()
     .then(() => { warmupStatus.materializedViews = 'ready'; })

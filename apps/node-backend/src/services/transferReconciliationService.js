@@ -14,6 +14,7 @@
 
 import { query, withTransaction } from '../database/connection.js';
 import { resolveTransferMatches } from './calculations/transfers.js';
+import { scheduleRefresh } from './materializedViewService.js';
 import { logger } from '../config/logger.js';
 
 const DEFAULT_WINDOW_DAYS = 3;
@@ -52,12 +53,37 @@ async function releaseOrphans() {
   );
 }
 
+// Auto-pairs whose legs no longer satisfy the match rule (e.g. an amount or date
+// was edited) are released so they can re-match. The predicate is symmetric, so
+// both legs of a now-invalid pair qualify and are released together — this makes
+// a plain reconcile fully self-correcting after any edit, no per-id plumbing.
+async function releaseInvalidAutoPairs(windowDays) {
+  await query(
+    `UPDATE transactions t
+        SET is_transfer = false, transfer_peer_id = NULL, transfer_source = NULL
+      WHERE t.transfer_source = 'auto' AND t.transfer_peer_id IS NOT NULL
+        AND NOT EXISTS (
+          SELECT 1 FROM transactions p
+           WHERE p.id = t.transfer_peer_id
+             AND p.amount = -t.amount
+             AND COALESCE(p.currency, 'EUR') = COALESCE(t.currency, 'EUR')
+             AND p.bank_account IS DISTINCT FROM t.bank_account
+             AND p.bank_account IS NOT NULL AND t.bank_account IS NOT NULL
+             AND p.date BETWEEN t.date - $1::int AND t.date + $1::int
+             AND p.is_active AND t.is_active
+        )`,
+    [windowDays],
+  );
+}
+
 /**
- * Reconcile the corpus: release orphans, then auto-pair unambiguous matches.
+ * Reconcile the corpus: release invalidated/orphaned pairs, then auto-pair
+ * unambiguous matches. Safe to call after any mutation — fully idempotent.
  * @param {{windowDays?:number}} [opts]
  * @returns {Promise<{pairsCreated:number}>}
  */
 export async function reconcileTransfers({ windowDays = DEFAULT_WINDOW_DAYS } = {}) {
+  await releaseInvalidAutoPairs(windowDays);
   await releaseOrphans();
   const { autoPairs } = resolveTransferMatches(await loadCandidatePairs(windowDays));
   let created = 0;
@@ -156,4 +182,38 @@ export async function releaseAutoPairsFor(ids) {
       WHERE transfer_source = 'auto' AND (id = ANY($1) OR transfer_peer_id = ANY($1))`,
     [ids],
   );
+}
+
+let reconcileTimer;
+
+/**
+ * Debounced reconcile after single-row mutations (coalesces rapid edits), then
+ * schedules a materialized-view refresh so the transfer exclusion is reflected.
+ * Mirrors materializedViewService.scheduleRefresh's 1s debounce.
+ */
+export function scheduleReconcile() {
+  if (reconcileTimer) clearTimeout(reconcileTimer);
+  reconcileTimer = setTimeout(() => {
+    reconcileTimer = undefined;
+    reconcileTransfers()
+      .catch((err) => logger.warn('[transfers] debounced reconcile failed', { err: err?.message }))
+      .finally(() => scheduleRefresh());
+  }, 1000);
+}
+
+/**
+ * One-time backfill over existing transactions, run on upgrade (ADR-083). Gated
+ * by a settings flag so it runs once; thereafter detection is incremental via
+ * the import-commit and mutation hooks.
+ * @returns {Promise<{skipped:boolean, pairsCreated?:number}>}
+ */
+export async function backfillTransfersOnce() {
+  const { rows } = await query("SELECT 1 FROM user_settings WHERE key = 'transfers_backfilled' LIMIT 1");
+  if (rows.length) return { skipped: true };
+  const result = await reconcileTransfers();
+  await query(
+    "INSERT INTO user_settings (key, value) VALUES ('transfers_backfilled', 'true'::jsonb) ON CONFLICT (key) DO NOTHING",
+  );
+  logger.info(`[transfers] one-time backfill complete: ${result.pairsCreated} pair(s)`);
+  return { skipped: false, ...result };
 }

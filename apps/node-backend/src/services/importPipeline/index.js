@@ -26,6 +26,7 @@ import { createBatch, stageBatch } from './stage.js';
 import { validateBatch } from './validate.js';
 import { matchBatch } from './match.js';
 import { commitBatch } from './commit.js';
+import { reconcileTransfers } from '../transferReconciliationService.js';
 
 export { createBatch, stageBatch, validateBatch, matchBatch, commitBatch };
 
@@ -83,6 +84,13 @@ export async function commitImport({ batchId, onProgress }) {
       WHERE id = $1`,
     [batchId]
   );
+
+  // Detect internal transfers across the whole corpus (not just this batch) so
+  // cross-bank pairs whose legs arrived in separate imports get matched (ADR-083).
+  // Runs before the MV refresh so the views reflect the exclusion immediately.
+  await reconcileTransfers().catch((err) => {
+    logger.warn('[pipeline] transfer reconcile failed (non-fatal)', { err: err?.message });
+  });
 
   if (imported > 100) {
     await refreshMaterializedViews().catch((err) => {

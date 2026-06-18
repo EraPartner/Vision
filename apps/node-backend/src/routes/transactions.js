@@ -13,7 +13,7 @@ import { normalizeForMatching } from '../services/textNormalization.js';
 import { logger } from '../config/logger.js';
 import { validateIdParam, assertYmd } from '../middleware/validation.js';
 import { rateLimiter } from '../middleware/rateLimiter.js';
-import { scheduleRefresh } from '../services/materializedViewService.js';
+import { scheduleReconcile } from '../services/transferReconciliationService.js';
 import { autoLinkTransactions } from '../services/plannedMatchService.js';
 import {
   ValidationError,
@@ -320,7 +320,7 @@ router.post(
       return { added, removed, transactions_affected: affectedTxIds.size };
     });
 
-    scheduleRefresh();
+    scheduleReconcile();
     res.ok(result);
   },
 );
@@ -344,7 +344,7 @@ router.post(
       return r.rows.length;
     });
 
-    if (deleted > 0) scheduleRefresh();
+    if (deleted > 0) scheduleReconcile();
     res.ok({ deleted });
   },
 );
@@ -435,7 +435,7 @@ router.post(
       return r.rows.length;
     });
 
-    if (updated > 0) scheduleRefresh();
+    if (updated > 0) scheduleReconcile();
     res.ok({ updated });
   },
 );
@@ -542,7 +542,7 @@ router.post('/', async (req, res) => {
   }
 
   logger.info('Transaction created', { id: transaction.id });
-  scheduleRefresh();
+  scheduleReconcile();
   res.status(201);
   res.ok({
     ...formatTransaction(transaction),
@@ -574,7 +574,7 @@ router.patch(
       throw new NotFoundError(`Transaction with ID ${id} not found`);
     }
 
-    scheduleRefresh();
+    scheduleReconcile();
     res.ok(formatTransaction(updated));
   },
 );
@@ -586,7 +586,7 @@ router.delete('/:id', validateIdParam, async (req, res) => {
   if (!deleted) {
     throw new NotFoundError(`Transaction with ID ${id} not found`);
   }
-  scheduleRefresh();
+  scheduleReconcile();
   res.ok({ message: 'Transaction deleted permanently', details: { method: 'hard delete' }, links: [] });
 });
 
