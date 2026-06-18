@@ -1238,6 +1238,8 @@ const en: Record<string, string> = {
   'networth.account': 'Account',
   'networth.allTime': 'all time',
   'networth.byAccount': 'By Account',
+  'networth.byAccountHistory': 'Holdings by Account',
+  'networth.byAccountHistoryDesc': 'Daily holdings at market, stacked by account',
   'networth.change': 'Change',
   'networth.chartDesc': 'Daily snapshots combining liquid assets and investments',
   'networth.daily': 'Daily',

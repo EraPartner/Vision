@@ -1238,6 +1238,8 @@ const nl: Record<string, string> = {
   'networth.account': 'Rekening',
   'networth.allTime': 'alle tijden',
   'networth.byAccount': 'Per rekening',
+  'networth.byAccountHistory': 'Posities per rekening',
+  'networth.byAccountHistoryDesc': 'Dagelijkse marktwaarde, gestapeld per rekening',
   'networth.change': 'Wijziging',
   'networth.chartDesc': 'Dagelijkse momentopnamen van liquide middelen en beleggingen',
   'networth.daily': 'Dagelijks',

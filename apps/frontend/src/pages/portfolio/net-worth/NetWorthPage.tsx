@@ -34,6 +34,7 @@ import { RefreshCw } from "lucide-react";
 import { usePortfolio } from "@/hooks/usePortfolio";
 import { useOnlineStatus } from "@/hooks/useOnlineStatus";
 import { useAccountNetWorth } from "@/hooks/portfolio/useAccountNetWorth";
+import { NetWorthByAccountChart } from "./NetWorthByAccountChart";
 
 const MONTH_LABEL_MIN_PX = 60;
 
@@ -46,6 +47,13 @@ export default function NetWorthPage() {
   const { data, isLoading, error } = useQuery({
     queryKey: ["net-worth", targetCurrency],
     queryFn: () => apiClient.getNetWorth({ currency: targetCurrency }),
+    staleTime: 120_000,
+  });
+
+  // Per-account holdings history (ADR-100) — the rebuilt daily series, served Σ accounts.
+  const { data: byAccountData } = useQuery({
+    queryKey: ["net-worth-by-account", targetCurrency],
+    queryFn: () => apiClient.getNetWorthByAccount({ currency: targetCurrency }),
     staleTime: 120_000,
   });
 
@@ -323,6 +331,15 @@ export default function NetWorthPage() {
           </CardContent>
         </Card>
       )}
+
+      {/* Per-account holdings history (ADR-100): stacked daily series, Σ accounts */}
+      <NetWorthByAccountChart
+        accounts={byAccountData?.accounts ?? []}
+        fmt={fmt}
+        title={t('networth.byAccountHistory')}
+        description={t('networth.byAccountHistoryDesc')}
+        unassignedLabel={t('accounts.unassigned')}
+      />
 
       {/* Historical extremes */}
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
