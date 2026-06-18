@@ -47,6 +47,7 @@ export const recipientInsightsRepository = {
       LEFT JOIN recipients pr ON r.primary_recipient_id = pr.id
       WHERE t.amount < 0
         AND t.is_active = true
+        AND t.is_transfer = false
         ${catExclude}
         ${recExclude}
       GROUP BY COALESCE(pr.id, r.id), COALESCE(pr.name, r.name), t.currency
@@ -99,6 +100,7 @@ export const recipientInsightsRepository = {
       LEFT JOIN recipients pr ON r.primary_recipient_id = pr.id
       WHERE t.amount < 0
         AND t.is_active = true
+        AND t.is_transfer = false
         AND t.date >= (DATE_TRUNC('month', CURRENT_DATE) - INTERVAL '1 month')
         -- Like-for-like windows: the current month is month-to-date, so cap the
         -- previous month at the SAME day-of-month. Otherwise (partial current vs
@@ -185,6 +187,7 @@ export const recipientInsightsRepository = {
       LEFT JOIN recipients pr ON r.primary_recipient_id = pr.id
       WHERE t.is_active = true
         AND t.amount < 0
+        AND t.is_transfer = false
         ${recExclude}
         ${catExclude}
       GROUP BY EXTRACT(YEAR FROM t.date)::int, COALESCE(pr.id, r.id), COALESCE(pr.name, r.name), t.date, t.currency
@@ -275,6 +278,7 @@ export const recipientInsightsRepository = {
       LEFT JOIN recipients pr ON r.primary_recipient_id = pr.id
       WHERE t.is_active = true
         AND t.amount < 0
+        AND t.is_transfer = false
         ${recExclude}
         ${recipientInclude}
         ${dateWhere ? `AND ${dateWhere}` : ''}

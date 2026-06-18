@@ -162,6 +162,7 @@ export async function getMonthlyFinancialSummary(
       LEFT JOIN recipients r ON t.recipient_id = r.id
       LEFT JOIN recipients pr ON r.primary_recipient_id = pr.id
       WHERE t.is_active = true
+      AND t.is_transfer = false
       ${categoryExcludeClause}
       ${recipientExcludeClause}
     ),

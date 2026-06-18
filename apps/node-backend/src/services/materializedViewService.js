@@ -42,7 +42,7 @@ export async function createMaterializedViews() {
     FROM transactions t
     LEFT JOIN recipients r ON t.recipient_id = r.id
     LEFT JOIN categories c ON COALESCE(t.category_id, r.default_category_id) = c.id
-    WHERE t.is_active = true
+    WHERE t.is_active = true AND t.is_transfer = false
       AND t.date >= date_trunc('month', CURRENT_DATE) - interval '12 months'
     GROUP BY month_start, month, year, t.currency, c.id, category_name
     ORDER BY month_start
@@ -69,7 +69,7 @@ export async function createMaterializedViews() {
       FROM transactions t
       LEFT JOIN recipients r ON t.recipient_id = r.id
       LEFT JOIN categories c ON COALESCE(t.category_id, r.default_category_id) = c.id
-      WHERE t.is_active = true
+      WHERE t.is_active = true AND t.is_transfer = false
       GROUP BY
         COALESCE(c.id, -1),
         COALESCE(c.general || ':' || c.detail, 'UNCATEGORISED'),
@@ -90,7 +90,7 @@ export async function createMaterializedViews() {
         t.currency,
         SUM(t.amount) AS net
       FROM transactions t
-      WHERE t.is_active = true
+      WHERE t.is_active = true AND t.is_transfer = false
         AND t.date >= date_trunc('month', CURRENT_DATE) - interval '6 months'
       GROUP BY t.date, day_of_month, month_start, t.currency
       ORDER BY t.date

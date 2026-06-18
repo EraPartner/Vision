@@ -106,6 +106,7 @@ export const statisticsRepository = {
       LEFT JOIN recipients pr ON r.primary_recipient_id = pr.id
       LEFT JOIN categories c ON COALESCE(t.category_id, r.default_category_id) = c.id
       WHERE t.is_active = true
+        AND t.is_transfer = false
         AND COALESCE(t.category_id, r.default_category_id) IS NOT NULL
         ${catExclude}
         ${recExclude}
