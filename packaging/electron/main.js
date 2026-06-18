@@ -73,7 +73,15 @@ function t(key, vars) {
 //      "embedded_compose") is shared and keeps the OLD password — backend
 //      auth fails, frontend loads empty.
 // MUST run before any `app.getPath('userData')` (e.g. settingsPath below).
-app.setName('Vision');
+//
+// Demo builds ship a `resources/DEMO` marker (electron-builder-demo.json). When
+// present, the app runs as a fully separate "Vision Demo" — its own userData dir,
+// its own embedded stack/volumes — and can never reach the real app's data.
+const __IS_DEMO = (() => {
+  try { return fs.existsSync(path.join(process.resourcesPath || '', 'resources', 'DEMO')); }
+  catch { return false; }
+})();
+app.setName(__IS_DEMO ? 'Vision Demo' : 'Vision');
 
 // One-shot migration from the legacy "vision-desktop" userData dir to the
 // canonical "Vision" dir. Preserves existing settings.json + embedded_compose
@@ -81,6 +89,7 @@ app.setName('Vision');
 // volume keeps authenticating after the rename.
 (function migrateLegacyUserData() {
   try {
+    if (__IS_DEMO) return; // demo build never adopts the real app's legacy data
     const target = app.getPath('userData');
     const legacy = path.join(path.dirname(target), 'vision-desktop');
     if (legacy === target) return;
@@ -104,7 +113,7 @@ app.setName('Vision');
 })();
 
 // ── Constants ─────────────────────────────────────────────────────────────────
-const APP_NAME = 'Vision';
+const APP_NAME = __IS_DEMO ? 'Vision Demo' : 'Vision';
 const DEFAULT_APP_PORT = 3002;
 const HEALTH_POLL_ATTEMPTS = Number(process.env.VISION_HEALTH_POLL_ATTEMPTS) || 200;  // 200 × 300ms = 60s max
 const HEALTH_POLL_INTERVAL_MS = Number(process.env.VISION_HEALTH_POLL_INTERVAL_MS) || 300;

@@ -61,3 +61,7 @@ opencode.json
 !apps/node-backend/tests/golden/__fixtures__/**/*.json
 !.devcontainer/devcontainer.json
 !.devcontainer/devcontainer-lock.json
+!packaging/electron/electron-builder-demo.json
+
+# Vision demo build output (install-demo.sh)
+dist-demo/
