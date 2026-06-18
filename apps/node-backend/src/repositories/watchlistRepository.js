@@ -3,6 +3,13 @@
  */
 
 import { query } from '../database/connection.js';
+import { coerceNumericFields } from '../lib/money.js';
+
+// target_price is NUMERIC (node-postgres returns it as a string); coerce on
+// emit so it matches the `number` API/TS type. current_price/price_change are
+// added later by the route from the price provider, not read from this table.
+const WATCHLIST_NUMERIC_FIELDS = ['target_price'];
+const mapWatchlistRow = (row) => coerceNumericFields(row, WATCHLIST_NUMERIC_FIELDS);
 
 export const watchlistRepository = {
   buildWhereClause({ assetClass = null } = {}) {
@@ -27,7 +34,7 @@ export const watchlistRepository = {
     params.push(limit, offset);
 
     const result = await query(sql, params);
-    return result.rows;
+    return result.rows.map(mapWatchlistRow);
   },
 
   async getAllWithCount({ limit = 50, offset = 0, assetClass = null } = {}) {
@@ -43,7 +50,7 @@ export const watchlistRepository = {
     const queryParams = [...params, limit, offset];
     const result = await query(sql, queryParams);
     const total = result.rows.length > 0 ? parseInt(result.rows[0].total_count, 10) : 0;
-    const rows = result.rows.map(({ total_count: _total_count, ...row }) => row);
+    const rows = result.rows.map(({ total_count: _total_count, ...row }) => mapWatchlistRow(row));
     return { rows, total };
   },
 
@@ -57,7 +64,7 @@ export const watchlistRepository = {
 
   async getById(id) {
     const result = await query('SELECT * FROM watchlist WHERE id = $1', [id]);
-    return result.rows[0] || null;
+    return result.rows[0] ? mapWatchlistRow(result.rows[0]) : null;
   },
 
   async create({ name, symbol, asset_class, target_price, currency = 'EUR', notes, price_provider_id }) {
@@ -66,7 +73,7 @@ export const watchlistRepository = {
        VALUES ($1, $2, $3, $4, $5, $6, $7) RETURNING *`,
       [name, symbol || null, asset_class, target_price, currency, notes || null, price_provider_id || null]
     );
-    return result.rows[0];
+    return mapWatchlistRow(result.rows[0]);
   },
 
   async update(id, fields) {
@@ -87,7 +94,7 @@ export const watchlistRepository = {
     params.push(id);
     const sql = `UPDATE watchlist SET ${setClauses.join(', ')} WHERE id = $${idx} RETURNING *`;
     const result = await query(sql, params);
-    return result.rows[0] || null;
+    return result.rows[0] ? mapWatchlistRow(result.rows[0]) : null;
   },
 
   async delete(id) {

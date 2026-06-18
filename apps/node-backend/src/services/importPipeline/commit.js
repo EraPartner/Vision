@@ -167,7 +167,9 @@ export async function commitBatch({ batchId, onProgress }) {
               effectiveCategoryId,
               row.amount,
               row.memo || '',
-              row.currency || null,
+              // currency is NOT NULL at the DB level (migration 0046); default
+              // a missing import currency to EUR rather than writing NULL.
+              row.currency || 'EUR',
               row.balance != null ? row.balance : null,
               row.comment || null,
               batchId,

@@ -3,6 +3,13 @@
  */
 
 import { query, withTransaction } from '../database/connection.js';
+import { coerceNumericFields } from '../lib/money.js';
+
+// NUMERIC columns node-postgres returns as strings; coerce to numbers on emit
+// so rows match the `number` API/TS types (the inheritance create/update paths
+// all return through getById, so coercing the methods below covers them too).
+const INVESTMENT_NUMERIC_FIELDS = ['current_price', 'interest_rate', 'cadastral_income', 'municipality_tax_rate'];
+const mapInvestmentRow = (row) => coerceNumericFields(row, INVESTMENT_NUMERIC_FIELDS);
 
 let _hasInvestmentInheritanceSchema;
 let _hasMetalsInheritanceTable;
@@ -343,7 +350,7 @@ export const investmentRepository = {
     params.push(limit, offset);
 
     const result = await query(sql, params);
-    return result.rows;
+    return result.rows.map(mapInvestmentRow);
   },
 
   async getCount({ assetClass = null, active = true } = {}) {
@@ -378,13 +385,13 @@ export const investmentRepository = {
 
     const result = await query(sql, params);
     const total = result.rows.length > 0 ? parseInt(result.rows[0].total_count, 10) : 0;
-    const rows = result.rows.map(({ total_count: _total_count, ...row }) => row);
+    const rows = result.rows.map(({ total_count: _total_count, ...row }) => mapInvestmentRow(row));
     return { rows, total };
   },
 
   async getById(id) {
     const result = await query('SELECT * FROM investments WHERE id = $1', [id]);
-    return result.rows[0] || null;
+    return result.rows[0] ? mapInvestmentRow(result.rows[0]) : null;
   },
 
   async create({ name, symbol, asset_class, currency = 'EUR', current_price, interest_rate, maturity_date, location, municipality, cadastral_income, municipality_tax_rate, notes, price_provider, price_provider_id, price_provider_url, price_provider_latest_url, price_provider_latest_path, price_provider_history_url, price_provider_history_path, price_provider_history_ts_path, price_provider_history_price_path }) {
@@ -450,7 +457,7 @@ export const investmentRepository = {
          VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21) RETURNING *`,
         modernValues
       );
-      return result.rows[0];
+      return mapInvestmentRow(result.rows[0]);
     } catch (err) {
       if (isUndefinedColumnError(err, 'price_provider_latest_url')) {
         const legacyProviderUrl = price_provider_url || price_provider_latest_url || null;
@@ -478,7 +485,7 @@ export const investmentRepository = {
              VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15) RETURNING *`,
             legacyValues
           );
-          return legacyResult.rows[0];
+          return mapInvestmentRow(legacyResult.rows[0]);
         } catch (legacyErr) {
           if (!isNonUpdatableInvestmentsViewError(legacyErr)) throw legacyErr;
           _hasInvestmentInheritanceSchema = true;
@@ -531,7 +538,7 @@ export const investmentRepository = {
     const sql = `UPDATE investments SET ${setClauses.join(', ')} WHERE id = $${idx} RETURNING *`;
     try {
       const result = await query(sql, params);
-      return result.rows[0] || null;
+      return result.rows[0] ? mapInvestmentRow(result.rows[0]) : null;
     } catch (err) {
       if (!isNonUpdatableInvestmentsViewError(err)) throw err;
       _hasInvestmentInheritanceSchema = true;
@@ -555,7 +562,7 @@ export const investmentRepository = {
         RETURNING *`,
         [current_price, price_updated_at, id]
       );
-      return result.rows[0] || null;
+      return result.rows[0] ? mapInvestmentRow(result.rows[0]) : null;
     } catch (err) {
       if (!isNonUpdatableInvestmentsViewError(err)) throw err;
       _hasInvestmentInheritanceSchema = true;

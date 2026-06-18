@@ -3,7 +3,7 @@ title: Database Query Patterns & Optimization
 type: reference
 status: active
 date: 2026-04-21
-updated: 2026-06-01
+updated: 2026-06-18
 tags: [database, postgresql, queries, optimization, performance, indexes, phase-1, group-by-currency, per-currency-aggregation]
 description: PostgreSQL query patterns, index strategies, and optimization techniques used throughout Vision. June 2026 adds multi-currency GROUP BY aggregation pattern.
 aliases: [db optimization, query patterns, postgresql performance, indexing strategy]
@@ -350,6 +350,46 @@ The same pattern is applied in `infoRepo.monthly.js` for the all-time live path:
 > [!info] Validation status (June 2026)
 > These rewrites are present in the codebase but validation against a live multi-currency database is still pending (tracked in `TODO.md`). Verify on a dataset with non-EUR transactions before treating aggregate numbers as confirmed correct.
 
+## Constraint and Index Conventions (June 2026)
+
+### Currency Integrity (migration 0046)
+
+`transactions.currency` and `planned_transactions.currency` are now:
+- `NOT NULL` (backed by backfill — NULL rows set to `'EUR'`)
+- `DEFAULT 'EUR'`
+- `CHECK (currency ~ '^[A-Z]{3}$') NOT VALID` — enforced for new/updated rows; legacy rows may be validated retroactively with `VALIDATE CONSTRAINT` in a follow-up
+
+Any INSERT path that previously wrote explicit NULL must now write `'EUR'`. See [[docs/adr/086-currency-integrity|ADR-086]].
+
+> [!warning] AUTHORED, NOT YET APPLIED
+> Migration `0046_currency_integrity.py` is authored and pending user review/apply.
+
+### One Primary Bank Account Per Recipient (migration 0047)
+
+`recipient_bank_accounts` now has a partial unique index:
+
+```sql
+CREATE UNIQUE INDEX uq_recipient_primary_account
+    ON recipient_bank_accounts (recipient_id)
+ WHERE is_primary
+```
+
+This moves the "at most one primary per recipient" invariant from application code into the database. Pre-existing duplicates were demoted (lowest `id` wins) before the index was built.
+
+> [!warning] AUTHORED, NOT YET APPLIED
+> Migration `0047_one_primary_bank_account_per_recipient.py` is authored and pending user review/apply.
+
+### Category FK ON DELETE SET NULL (migration 0048)
+
+The three FKs from `transactions.category_id`, `recipients.default_category_id`, and `planned_transactions.category_id` to `categories(id)` are now `ON DELETE SET NULL`. Previously they had the implicit `NO ACTION` (RESTRICT) behavior, so deleting an in-use category surfaced as a raw 500. After this migration, deleting a category un-categorizes the affected rows rather than blocking the delete.
+
+FKs that protect financial history (e.g. `transactions.recipient_id`) are deliberately left as RESTRICT.
+
+> [!warning] AUTHORED, NOT YET APPLIED
+> Migration `0048_category_fk_on_delete_set_null.py` is authored and pending user review/apply.
+
+---
+
 ## Anti-Patterns to Avoid
 
 | Anti-Pattern | Why Bad | Solution |
@@ -359,6 +399,8 @@ The same pattern is applied in `infoRepo.monthly.js` for the all-time live path:
 | Missing WHERE clause on UPDATE/DELETE | Accidental data loss | Always include WHERE |
 | Unbounded queries | Memory exhaustion | Always use LIMIT |
 | Dropping columns without migration | Data loss | Add → backfill → drop in separate migrations |
+| Returning raw pg NUMERIC as-is | Leaks strings where `number` is declared | Use `numericColumn()` / `coerceNumericFields()` at the repo read boundary |
+| Nullable currency without DEFAULT | Forces implicit EUR assumptions in read layer | Add `DEFAULT 'EUR' NOT NULL` + ISO CHECK (migration 0046 pattern) |
 
 ---
 

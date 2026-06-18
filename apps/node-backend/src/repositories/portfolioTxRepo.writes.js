@@ -4,7 +4,7 @@
  */
 
 import { query } from '../database/connection.js';
-import { getById } from './portfolioTxRepo.reads.js';
+import { getById, mapPortfolioTxRow } from './portfolioTxRepo.reads.js';
 import {
   hasPortfolioTransactionInheritanceSchema,
   markInheritanceSchemaPresent,
@@ -86,7 +86,7 @@ export async function create({ investment_id, type, date, amount, units, price_p
         payload.fx_rate_to_eur ?? null,
       ]
     );
-    return result.rows[0];
+    return mapPortfolioTxRow(result.rows[0]);
   } catch (err) {
     if (!isNonUpdatablePortfolioTransactionsViewError(err)) throw err;
     markInheritanceSchemaPresent();
@@ -177,7 +177,7 @@ export async function update(id, fields) {
   const sql = `UPDATE portfolio_transactions SET ${normalizedSetClauses.join(', ')} WHERE id = $${normalizedIdx} RETURNING *`;
   try {
     const result = await query(sql, normalizedParams);
-    return result.rows[0] || null;
+    return result.rows[0] ? mapPortfolioTxRow(result.rows[0]) : null;
   } catch (err) {
     if (!isNonUpdatablePortfolioTransactionsViewError(err)) throw err;
     markInheritanceSchemaPresent();

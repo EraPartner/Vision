@@ -117,7 +117,7 @@ describe('portfolioTransactionRepository.create', () => {
       'INSERT INTO stock_transactions (investment_id, type, date, amount, fees, taxes, currency, note, is_recurring, recurrence_interval, recurrence_end_date, fx_rate_to_eur, units, price_per_unit) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14) RETURNING id',
       [1, 'buy', '2026-03-24', 1000, 0, 0, 'EUR', null, false, null, null, null, 5, 200]
     );
-    expect(result).toEqual({ id: 30, amount: '1000.0000', units: '5.00000000', price_per_unit: '200.000000' });
+    expect(result).toEqual({ id: 30, amount: 1000, units: 5, price_per_unit: 200 });
   });
 
   it('rejects buy/sell when fewer than two of amount/units/price_per_unit are provided', async () => {
@@ -155,7 +155,7 @@ describe('portfolioTransactionRepository.create', () => {
       'INSERT INTO stock_transactions (investment_id, type, date, amount, fees, taxes, currency, note, is_recurring, recurrence_interval, recurrence_end_date, fx_rate_to_eur, units, price_per_unit) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14) RETURNING id',
       [1, 'gift', '2026-03-24', 0, 0, 0, 'EUR', null, false, null, null, null, 2, null]
     );
-    expect(result).toEqual({ id: 40, type: 'gift', amount: '0.0000', units: '2.00000000' });
+    expect(result).toEqual({ id: 40, type: 'gift', amount: 0, units: 2 });
   });
 
   it('routes metals transactions to metals_transactions table in inheritance mode', async () => {
@@ -282,7 +282,7 @@ describe('portfolioTransactionRepository.update', () => {
     expect(query).toHaveBeenNthCalledWith(7, 'UPDATE portfolio_transactions_base SET amount = $1, fees = $2, taxes = $3 WHERE id = $4', [1200, 3, 0, 6]);
     expect(query).toHaveBeenNthCalledWith(8, 'UPDATE stock_transactions SET units = $1, price_per_unit = $2 WHERE id = $3', [4, 300, 6]);
     expect(query).toHaveBeenNthCalledWith(9, 'SELECT * FROM portfolio_transactions WHERE id = $1', [6]);
-    expect(result).toEqual({ id: 6, investment_id: 1, amount: '1200.00', units: '4.00000000', fees: '3.00' });
+    expect(result).toEqual({ id: 6, investment_id: 1, amount: 1200, units: 4, fees: 3 });
   });
 
   it('normalizes buy/sell math on update when one of three fields is omitted', async () => {
@@ -311,7 +311,7 @@ describe('portfolioTransactionRepository.update', () => {
       'UPDATE stock_transactions SET units = $1, price_per_unit = $2 WHERE id = $3',
       [6, 200, 8]
     );
-    expect(result).toEqual({ id: 8, amount: '1200.0000', units: '6.00000000', price_per_unit: '200.000000' });
+    expect(result).toEqual({ id: 8, amount: 1200, units: 6, price_per_unit: 200 });
   });
 
   it('rejects buy/sell update when only one of amount/units/price_per_unit is provided', async () => {
@@ -338,7 +338,7 @@ describe('portfolioTransactionRepository.update', () => {
       'UPDATE portfolio_transactions SET amount = $1 WHERE id = $2 RETURNING *',
       [1200, 9]
     );
-    expect(result).toEqual({ id: 9, amount: '1200.00' });
+    expect(result).toEqual({ id: 9, amount: 1200 });
   });
 
   it('rejects changing transaction type', async () => {
@@ -363,7 +363,7 @@ describe('portfolioTransactionRepository.update', () => {
 
     const result = await portfolioTransactionRepository.update(21, { unsupported: 'field' });
 
-    expect(result).toEqual({ id: 21, investment_id: 1, type: 'dividend', amount: '100', asset_class: 'stock' });
+    expect(result).toEqual({ id: 21, investment_id: 1, type: 'dividend', amount: 100, asset_class: 'stock' });
     expect(query).toHaveBeenCalledTimes(1);
   });
 
@@ -513,11 +513,11 @@ describe('portfolioTransactionRepository.getSummary', () => {
     expect(rows).toEqual([
       {
         type: 'buy',
-        total_amount: '1000.00',
-        total_units: '5.00000000',
-        total_fees: '2.00',
-        total_taxes: '1.00',
-        count: '2',
+        total_amount: 1000,
+        total_units: 5,
+        total_fees: 2,
+        total_taxes: 1,
+        count: 2,
       },
     ]);
   });

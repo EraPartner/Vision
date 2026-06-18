@@ -3,9 +3,9 @@ title: Migration Dependency Graph
 type: reference
 status: active
 date: 2026-03-31
-updated: 2026-06-01
-tags: [reference, database, migrations, dependencies, alembic, migration-0035, migration-0037, migration-0038, aggregations, custom-parser-configs, mv-recipient-monthly-drop, adr-068]
-description: Migration dependency chain and grouping for the Vision database schema. Latest active chain is 0001–0038. 0037 adds custom_parser_configs table (named CSV parsers, ADR-066). 0038 drops mv_recipient_monthly materialized view (ADR-068).
+updated: 2026-06-18
+tags: [reference, database, migrations, dependencies, alembic, migration-0035, migration-0037, migration-0038, aggregations, custom-parser-configs, mv-recipient-monthly-drop, adr-068, migration-0046, migration-0047, migration-0048, currency-integrity, recipient-bank-accounts, category-fk, adr-086, adr-087]
+description: Migration dependency chain and grouping for the Vision database schema. Latest active chain is 0001–0049. 0046–0049 are AUTHORED but not yet applied — currency integrity, one-primary-bank-account, category FK ON DELETE SET NULL, and currency-check validation.
 aliases: [migration dependencies, migration chain, migration groups, alembic chain]
 ---
 
@@ -16,7 +16,7 @@ aliases: [migration dependencies, migration chain, migration groups, alembic cha
 
 > [!warning] Two migration trees
 > The repository keeps two parallel Alembic trees:
-> - **`alembic/versions/`** — the **active** chain (0001-0038, currently 38 revisions). Renumbered in early 2026 around the Phase-1 aggregation work.
+> - **`alembic/versions/`** — the **active** chain (0001-0049, currently 49 revisions). Renumbered in early 2026 around the Phase-1 aggregation work.
 > - **`alembic/legacy_versions/`** — the **archived** pre-renumbering chain (0001-0032 + 5 hash-named revisions, 38 files). Kept for history and for re-stamping older deployments; not applied on fresh installs.
 >
 > The chain summary below predates the renumbering — treat it as historical context for the legacy tree. For the active chain, `bun run db:history` is authoritative. Notable recent revisions in `alembic/versions/`:
@@ -26,6 +26,11 @@ aliases: [migration dependencies, migration chain, migration groups, alembic cha
 > - **0036** — `add_transactions_tx_hash` (May 2026 monetary precision + deduplication audit, ADR-060)
 > - **0037** — `add_custom_parser_configs` (saved named custom CSV parsers, ADR-066)
 > - **0038** — `drop_mv_recipient_monthly` (drops the unread recipient monthly MV; downgrade recreates the 24-month version; ADR-068)
+> - **0045** — `exclude_transfers_from_aggregations` (internal-transfer flag, ADR-083)
+> - **0046** — `currency_integrity` (transactions + planned_transactions: backfill NULL → 'EUR', ISO CHECK NOT VALID, DEFAULT 'EUR', NOT NULL; ADR-086) **AUTHORED, NOT YET APPLIED**
+> - **0047** — `one_primary_bank_account_per_recipient` (partial unique index on recipient_bank_accounts; ADR-087) **AUTHORED, NOT YET APPLIED**
+> - **0048** — `category_fk_on_delete_set_null` (transactions/recipients/planned_transactions category FK changed from RESTRICT to ON DELETE SET NULL; ADR-087) **AUTHORED, NOT YET APPLIED**
+> - **0049** — `validate_currency_checks` (normalise legacy currency codes, then VALIDATE the 0046 ISO checks retroactively; ADR-086) **AUTHORED, NOT YET APPLIED**
 
 ## Migration Chain (legacy tree — historical reference)
 
@@ -113,6 +118,17 @@ Restores recipient aggregation artifacts that were referenced by code but missin
 | # | Migration | Key Changes |
 |---|-----------|------------|
 | 0035 | `add_recipient_aggregations` | Creates `mv_recipient_monthly` (materialized view), `agg_recipient_totals` (trigger-maintained table), supporting functions and indexes. Backfills from existing transactions. |
+
+### Group 7: DB Constraint Hardening (0046–0049) — AUTHORED, NOT YET APPLIED
+
+> [!warning] These migrations are authored and pending user review/apply. Apply in order: 0046 → 0047 → 0048 → 0049.
+
+| # | Migration | Key Changes |
+|---|-----------|------------|
+| 0046 | `currency_integrity` | `transactions` + `planned_transactions`: backfill NULL currency → 'EUR'; add `CHECK (currency ~ '^[A-Z]{3}$') NOT VALID`; `SET DEFAULT 'EUR'; SET NOT NULL`. Coupled app change: three INSERT paths write `'EUR'` instead of NULL. See [[docs/adr/086-currency-integrity\|ADR-086]]. |
+| 0047 | `one_primary_bank_account_per_recipient` | Demote duplicate primaries (lowest id wins), then `CREATE UNIQUE INDEX uq_recipient_primary_account ON recipient_bank_accounts (recipient_id) WHERE is_primary`. No app change required. See [[docs/adr/087-db-constraint-hardening\|ADR-087]]. |
+| 0048 | `category_fk_on_delete_set_null` | Drop + recreate `category_id` FKs on `transactions`, `recipients`, `planned_transactions` with `ON DELETE SET NULL` (was implicit RESTRICT, which surfaced as 500 on category delete). History-protecting FKs left as RESTRICT. See [[docs/adr/087-db-constraint-hardening\|ADR-087]]. |
+| 0049 | `validate_currency_checks` | Normalise legacy currency codes (trim+upper where it yields a valid code), then `VALIDATE CONSTRAINT` the two 0046 ISO checks so they apply retroactively. Idempotent → trivially passes on fresh per-user DBs. See [[docs/adr/086-currency-integrity\|ADR-086]]. |
 
 ### Infrastructure
 | Migration | Purpose |

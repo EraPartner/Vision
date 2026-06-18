@@ -29,14 +29,14 @@ related_code: ["apps/node-backend/src/repositories/", "alembic/versions/"]
 | `id` | SERIAL | PK | Unique identifier |
 | `date` | DATE | NOT NULL | Transaction date |
 | `amount` | NUMERIC(15,2) | NOT NULL | Amount (negative=expense, positive=income) |
-| `currency` | VARCHAR(3) | DEFAULT 'EUR' | Currency code |
+| `currency` | VARCHAR(3) | NOT NULL, DEFAULT 'EUR', CHECK (`currency ~ '^[A-Z]{3}$'`) NOT VALID | Currency code (migration 0046 — see note below) |
 | `balance` | NUMERIC(15,2) | NULLABLE | Running balance after transaction |
 | `memo` | TEXT | NULLABLE | Original bank description |
 | `comment` | TEXT | NULLABLE | User-added note |
 | `bank_account` | TEXT | NULLABLE | Source bank account |
 | `recipient_id` | INTEGER | FK → recipients | Associated recipient |
 | `recipient_bank_account_id` | INTEGER | FK → recipient_bank_accounts | Specific bank account |
-| `category_id` | INTEGER | FK → categories | Associated category |
+| `category_id` | INTEGER | FK → categories ON DELETE SET NULL, NULLABLE | Associated category; FK updated to ON DELETE SET NULL by migration 0048 — deleting a category un-categorizes affected rows |
 | `is_active` | BOOLEAN | DEFAULT true | Soft delete |
 | `import_batch_id` | BIGINT | FK → import_batches ON DELETE SET NULL, NULLABLE | Import batch that created this transaction; NULL for manual entries and pre-pipeline rows (migration 0003) |
 | `updated_at` | TIMESTAMPTZ | NOT NULL, DEFAULT NOW() | Last modification timestamp; NOT NULL enforced by migration 0022 |
@@ -46,6 +46,11 @@ related_code: ["apps/node-backend/src/repositories/", "alembic/versions/"]
 | `transfer_source` | TEXT | NULLABLE, CHECK `auto` \| `manual` | How the transfer was marked; `manual` is sticky and never overwritten by auto-detection |
 
 **Indexes:** `idx_transactions_date`, `idx_transactions_recipient`, `idx_transactions_category`, `idx_transactions_amount_date` (transfer matching), `idx_transactions_transfer_peer` (partial, peer lookups)
+
+> [!warning] Pending migrations (AUTHORED, NOT YET APPLIED)
+> - **0046**: backfills `currency` NULL → `'EUR'`; adds ISO format CHECK (`^[A-Z]{3}$`) NOT VALID; sets `DEFAULT 'EUR' NOT NULL`. Three INSERT paths now write `'EUR'` instead of NULL (`transactionRepository.create`, `plannedTransactionRepository.create`, `importPipeline/commit.js`).
+> - **0048**: changes `category_id` FK to `ON DELETE SET NULL` (previously implicit RESTRICT, which surfaced as 500 on category delete).
+> - **0047**: adds partial unique index `uq_recipient_primary_account ON recipient_bank_accounts (recipient_id) WHERE is_primary` (see RecipientBankAccount below).
 
 **Related:** [[docs/features/transactions|Transactions Feature]], [[docs/api/transactions|Transactions API]]
 
@@ -60,7 +65,7 @@ related_code: ["apps/node-backend/src/repositories/", "alembic/versions/"]
 | `id` | SERIAL | PK | Unique identifier |
 | `name` | TEXT | NOT NULL | Display name |
 | `normalized_name` | TEXT | UNIQUE | Canonical form for matching |
-| `default_category_id` | INTEGER | FK → categories | Suggested category |
+| `default_category_id` | INTEGER | FK → categories ON DELETE SET NULL, NULLABLE | Suggested category; FK updated to ON DELETE SET NULL by migration 0048 |
 | `primary_recipient_id` | INTEGER | FK → recipients | Merge target (self-referencing) |
 | `notes` | TEXT | NULLABLE | User notes |
 | `is_active` | BOOLEAN | DEFAULT true | Soft delete |
@@ -149,6 +154,11 @@ related_code: ["apps/node-backend/src/repositories/", "alembic/versions/"]
 | `is_primary` | BOOLEAN | DEFAULT false | Primary payment account |
 | `is_active` | BOOLEAN | DEFAULT true | Soft delete |
 
+**Indexes:** Partial unique index `uq_recipient_primary_account ON recipient_bank_accounts (recipient_id) WHERE is_primary` — enforces at most one primary account per recipient at the DB level (migration 0047, AUTHORED NOT YET APPLIED; previously enforced at application level only).
+
+> [!warning] Pending migration 0047 (AUTHORED, NOT YET APPLIED)
+> Pre-existing duplicate primaries are demoted (lowest `id` wins) before the index is built. Downgrade drops the index but does not restore the prior duplicates.
+
 **Related:** [[docs/api/recipientBankAccounts|Recipient Bank Accounts API]]
 
 ---
@@ -165,7 +175,8 @@ related_code: ["apps/node-backend/src/repositories/", "alembic/versions/"]
 | `planned_date` | DATE | NOT NULL | Scheduled date |
 | `amount` | NUMERIC(15,2) | NOT NULL | Planned amount |
 | `recipient_id` | INTEGER | FK → recipients | Payee |
-| `category_id` | INTEGER | FK → categories | Category |
+| `category_id` | INTEGER | FK → categories ON DELETE SET NULL, NULLABLE | Category; FK updated to ON DELETE SET NULL by migration 0048 |
+| `currency` | VARCHAR(3) | NOT NULL, DEFAULT 'EUR', CHECK (`currency ~ '^[A-Z]{3}$'`) NOT VALID | Currency code (migration 0046, AUTHORED NOT YET APPLIED) |
 | `is_recurring` | BOOLEAN | DEFAULT false | Recurring flag |
 | `recurrence_pattern` | TEXT | NULLABLE | Pattern (daily, weekly, monthly, etc.) |
 | `reminder_days_before` | INTEGER | NULLABLE | Days before planned_date to show reminder (Phase 6) |

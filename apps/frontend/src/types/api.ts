@@ -1,6 +1,15 @@
 /**
- * TypeScript types for the FastAPI backend
- * Based on the backend API schemas (apps/backend/api/api_schemas.py)
+ * Hand-written, ergonomic TypeScript types for the Vision REST API, consumed
+ * across the frontend. The authoritative contract lives in `openapi.yaml`; the
+ * machine-generated mirror is `./generated.ts` (regenerated + drift-checked in
+ * CI via `bun run generate:types`). These hand types are kept assignable to the
+ * generated contract by the compile-time assertions in `./contract-guard.ts`,
+ * which fail `bun run typecheck` if the two drift apart.
+ *
+ * Note: money/quantity fields are typed `number` here, but pg returns NUMERIC
+ * columns as strings — the backend repository layer coerces them on emit (see
+ * packages/shared-utils/src/money.js). Do not assume raw repository rows are
+ * already numeric.
  */
 
 export interface Link {

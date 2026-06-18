@@ -361,7 +361,9 @@ export const transactionRepository = {
       recipient_id,
       amount,
       memo ? memo.toUpperCase() : null,
-      currency ? currency.toUpperCase() : null,
+      // Default to EUR rather than NULL: currency is NOT NULL at the DB level
+      // (migration 0046) and the read layer already coalesces missing → EUR.
+      currency ? currency.toUpperCase() : 'EUR',
       balance,
       category_id,
       comment,

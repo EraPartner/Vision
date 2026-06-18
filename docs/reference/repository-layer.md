@@ -3,7 +3,7 @@ title: Repository Layer Reference
 type: reference
 status: active
 date: 2026-04-23
-updated: 2026-05-29
+updated: 2026-06-18
 tags: [backend, repositories, reference, data-access, postgresql, phase-0, phase-1, phase-3, phase-3-1, phase-9, phase-q, decimal, money, recipient-groups]
 aliases: [repositories, repository layer, data access, DAL, database access]
 description: Complete reference for all 21 backend repository domains (plus infoRepository's 7 sub-modules and portfolioTransactionRepository's 3 split files). Phase 3.1: infoRepository split into 7 domain sub-modules with batch FX optimization. Phase Q: transactionRepository supports recipientGroupId filtering via filterBuilder.
@@ -39,11 +39,19 @@ Service Layer (business logic)
 
 **Phase 0+ Note:** Hot-path queries now use `queryPrepared()` for plan caching. This includes frequent repository methods like `getById`, `create`, `hardDelete` in `transactionRepository`, and equivalents in `infoRepository`. The prepared-statement name is the function name + operation, e.g., `'tx_get_by_id'` for `transactionRepository.getById`. See `apps/node-backend/src/database/connection.js` for the implementation and `docs/reference/query-patterns.md` for usage guidelines.
 
-**Phase 9+ Note — Decimal Enforcement (Mandatory):** All repositories returning monetary values must wrap NUMERIC/DECIMAL columns with `toNumber(toDecimal(value))` to eliminate IEEE 754 floating-point drift. This is enforced across all monetary API output paths:
+**Phase 9+ Note — Decimal Enforcement (Mandatory):** All repositories returning monetary values must coerce NUMERIC/DECIMAL columns on emit to eliminate IEEE 754 floating-point drift (node-postgres returns NUMERIC as JS strings; no global type parser is set deliberately to avoid loss in the decimal.js pipeline). Two helpers in `packages/shared-utils/src/money.js` (re-exported via `apps/node-backend/src/lib/money.js`) cover the boundary:
+- `numericColumn(v)` — converts a single NUMERIC value to number; `null`/`undefined` pass through unchanged; `''` → `undefined`
+- `coerceNumericFields(row, fields)` — shallow-copy coercion of named columns via `numericColumn`; no-op on nullish rows
+
+Enforced across all monetary API output paths (Phase 9 + June 2026 stragglers):
 - `splitRepository.js` — split amounts, outstanding balance
 - `infoRepositoryBanks.js`, `infoRepositoryHelpers.js`, `infoRepositoryMonthly.js` — balance, total, running sums
-- `portfolioTransactionRepository.js`, `rawTransactionRepository.js` — amounts, valuations
-See [[docs/adr/021-decimal-arithmetic-for-monetary-values|ADR-021]] and [[docs/reference/code-patterns#money-utility-pattern-phase-9|Money Utility Pattern]] for guidance.
+- `portfolioTransactionRepository.js` / `portfolioTxRepo.reads.js` + `portfolioTxRepo.writes.js` — amounts, units, fees, taxes, fx_rate_to_eur, getSummary totals
+- `rawTransactionRepository.js` — amounts, valuations
+- `investmentRepository.js` — current_price, interest_rate, cadastral_income, municipality_tax_rate (all read paths + create/update/updatePrice return through getById)
+- `watchlistRepository.js` — target_price
+
+See [[docs/adr/021-decimal-arithmetic-for-monetary-values|ADR-021]] and [[docs/reference/code-patterns#money-utility-pattern-phase-9--june-2026|Money Utility Pattern]] for guidance.
 
 ---
 
@@ -214,9 +222,11 @@ See [[docs/adr/021-decimal-arithmetic-for-monetary-values|ADR-021]] and [[docs/r
 - **PostgreSQL Inheritance:** Writes to child tables (`stock_investments`, `crypto_investments`, etc.), reads from `investments` legacy view
 - **Type Routing:** `create` inserts into the appropriate child table based on `asset_class`
 - **Legacy View Compatibility:** `investments` view unions all child tables for backward compatibility
+- **NUMERIC Coercion (June 2026):** `coerceNumericFields(row, ['current_price', 'interest_rate', 'cadastral_income', 'municipality_tax_rate'])` applied via `mapInvestmentRow` on every row emitted by `getAll`, `getAllWithCount`, `getById`, `create`, `update`, and `updatePrice`. All inheritance paths return through `getById`, so coercion is covered end-to-end.
 
 ### Dependencies
 - `connection.js`
+- `../lib/money.js` (`coerceNumericFields`)
 
 ---
 
@@ -240,9 +250,11 @@ See [[docs/adr/021-decimal-arithmetic-for-monetary-values|ADR-021]] and [[docs/r
 
 - **Inheritance:** Same pattern as investments — writes to child tables, reads from `portfolio_transactions` view
 - **Units Tracking:** `units`, `price_per_unit`, `total_amount` for unit-based assets
+- **NUMERIC Coercion (June 2026):** `mapPortfolioTxRow` (exported from `portfolioTxRepo.reads.js`) coerces `['amount', 'units', 'price_per_unit', 'fees', 'taxes', 'fx_rate_to_eur']` on every row; reused in `portfolioTxRepo.writes.js` so write paths are also coerced. `getSummary` additionally coerces totals (`total_amount`, `total_units`, `total_fees`, `total_taxes`) and applies `parseInt` to `count`.
 
 ### Dependencies
 - `connection.js`
+- `../lib/money.js` (`coerceNumericFields`)
 
 ---
 
@@ -255,14 +267,21 @@ See [[docs/adr/021-decimal-arithmetic-for-monetary-values|ADR-021]] and [[docs/r
 
 | Method | Signature | Returns |
 |--------|-----------|---------|
-| `getAll` | `(opts: { limit?, offset? }) => Promise<Watchlist[]>` | Watchlist items |
+| `getAll` | `(opts: { limit?, offset?, assetClass? }) => Promise<Watchlist[]>` | Watchlist items |
+| `getAllWithCount` | `(opts: { limit?, offset?, assetClass? }) => Promise<{ rows, total }>` | Paginated results with total |
+| `getCount` | `(opts: { assetClass? }) => Promise<number>` | Total count |
 | `getById` | `(id: number) => Promise<Watchlist \| null>` | Single item or null |
 | `create` | `(data: WatchlistCreate) => Promise<Watchlist>` | Created item |
 | `update` | `(id: number, fields: Partial<Watchlist>) => Promise<Watchlist>` | Updated item |
-| `hardDelete` | `(id: number) => Promise<boolean>` | Deletion success |
+| `delete` | `(id: number) => Promise<boolean>` | Deletion success |
+
+### Key Query Patterns
+
+- **NUMERIC Coercion (June 2026):** `coerceNumericFields(row, ['target_price'])` via `mapWatchlistRow` on every emitted row. `current_price` and `price_change` are not stored in this table — they are appended by the route from the price provider.
 
 ### Dependencies
 - `connection.js`
+- `../lib/money.js` (`coerceNumericFields`)
 
 ---
 
@@ -618,8 +637,8 @@ UPDATE transactions SET hidden = true WHERE id = $1
 `portfolioTransactionRepository.js` is split into three files for clarity:
 
 - [[apps/node-backend/src/repositories/portfolioTxRepo.common.js|portfolioTxRepo.common.js]] — shared helpers, mappers, and the public barrel.
-- [[apps/node-backend/src/repositories/portfolioTxRepo.reads.js|portfolioTxRepo.reads.js]] — read paths (list, summary, by-investment).
-- [[apps/node-backend/src/repositories/portfolioTxRepo.writes.js|portfolioTxRepo.writes.js]] — mutations (create, update, FIFO/LIFO cost-basis recompute).
+- [[apps/node-backend/src/repositories/portfolioTxRepo.reads.js|portfolioTxRepo.reads.js]] — read paths (list, summary, by-investment). Exports `mapPortfolioTxRow` (the NUMERIC coercion mapper) so write paths can reuse it.
+- [[apps/node-backend/src/repositories/portfolioTxRepo.writes.js|portfolioTxRepo.writes.js]] — mutations (create, update, FIFO/LIFO cost-basis recompute); imports `mapPortfolioTxRow` from the reads module.
 
 ---
 
