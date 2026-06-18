@@ -37,6 +37,7 @@ export const BACKUP_COVERED_TABLES = Object.freeze([
   'categories',
   'custom_parser_configs',
   'custom_raw_transactions',
+  'db_editor_audit',
   'exchange_rates',
   'import_batches',
   'import_staging_rows',

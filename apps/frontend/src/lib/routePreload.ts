@@ -18,6 +18,7 @@ export const routeLoaders = {
     "/tax": () => import("@/pages/TaxOverviewPage"),
     "/admin": () => import("@/pages/admin/AdminOverviewPage"),
     "/admin/db": () => import("@/pages/DbMaintenancePage"),
+    "/admin/db/:table": () => import("@/pages/admin/TableDataEditorPage"),
     "/admin/providers": () => import("@/pages/admin/ProviderHealthPage"),
     "/admin/endpoints": () => import("@/pages/admin/EndpointLivenessPage"),
     "/portfolio": () => import("@/pages/portfolio/PortfolioOverviewPage"),

@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { Database, HardDrive, RefreshCw, Zap } from 'lucide-react';
 import { toast } from 'sonner';
@@ -53,11 +54,13 @@ function StatCard({ label, value, icon: Icon }: { label: string; value: string; 
 function TableStatRow({
     row,
     onVacuum,
+    onOpen,
     isVacuuming,
     t,
 }: {
     row: DbTableStat;
     onVacuum: (table: string) => void;
+    onOpen: (table: string) => void;
     isVacuuming: boolean;
     t: (key: string) => string;
 }) {
@@ -74,7 +77,11 @@ function TableStatRow({
     }
 
     return (
-        <TableRow>
+        <TableRow
+            className="cursor-pointer"
+            onDoubleClick={() => onOpen(row.table_name)}
+            title={t('dbEditor.openHint')}
+        >
             <TableCell className="font-mono text-xs">{row.table_name}</TableCell>
             <TableCell className="text-right tabular-nums">
                 {Number(row.live_rows).toLocaleString()}
@@ -108,6 +115,7 @@ function TableStatRow({
 export default function DbMaintenancePage() {
     const { t } = useLanguage();
     const qc = useQueryClient();
+    const navigate = useNavigate();
     const [vacuumingTable, setVacuumingTable] = useState<string | null>(undefined as unknown as null);
 
     const { data, isLoading, error } = useQuery({
@@ -231,6 +239,7 @@ export default function DbMaintenancePage() {
                                         key={row.table_name}
                                         row={row}
                                         onVacuum={handleVacuumTable}
+                                        onOpen={(table) => navigate(`/admin/db/${encodeURIComponent(table)}`)}
                                         isVacuuming={isVacuuming}
                                         t={t}
                                     />

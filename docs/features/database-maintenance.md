@@ -3,20 +3,22 @@ title: Database Maintenance UI
 type: feature
 status: active
 date: 2026-04-25
-updated: 2026-04-25
-tags: [feature, admin, database, maintenance, performance, phase-7, vacuum]
-description: Administrative interface for monitoring database statistics and running maintenance operations (VACUUM ANALYZE) on PostgreSQL tables; includes per-table and bulk operation modes.
-aliases: [db maintenance, database admin, VACUUM, table stats]
+updated: 2026-06-18
+tags: [feature, admin, database, maintenance, performance, phase-7, vacuum, db-data-editor, adr-101, audit]
+description: Administrative interface for monitoring database statistics, running VACUUM ANALYZE operations, and (ADR-101) browsing/editing raw table data with optimistic concurrency, dry-run preview, and a committed-SQL audit trail.
+aliases: [db maintenance, database admin, VACUUM, table stats, db data editor, table editor]
 related_code:
   - apps/node-backend/src/routes/admin.js
+  - apps/node-backend/src/services/dbEditor.js
   - apps/frontend/src/pages/DbMaintenancePage.tsx
+  - apps/frontend/src/pages/admin/TableDataEditorPage.tsx
   - apps/node-backend/src/services/databaseMaintenanceService.js
 ---
 
-# Database Maintenance UI (Phase 7)
+# Database Maintenance UI (Phase 7 + ADR-101)
 
 > [!abstract] Overview
-> The Database Maintenance page provides administrators with real-time visibility into PostgreSQL table health and the ability to execute VACUUM ANALYZE operations for performance optimization. Phase 7 addition.
+> The Database Maintenance page provides administrators with real-time visibility into PostgreSQL table health and the ability to execute VACUUM ANALYZE operations for performance optimization. Phase 7 addition. ADR-101 (2026-06-18) extends it with a JetBrains-style **data editor**: double-click any table row to open a grid editor where you can browse, filter, sort, and edit/insert/delete rows with optimistic-concurrency protection, a SQL dry-run preview, and a committed-SQL audit trail.
 
 ## Feature Overview
 
@@ -167,13 +169,116 @@ The page consists of:
 3. Click "Vacuum All Tables" for bulk maintenance, or click "Vacuum" on specific tables
 4. Monitor progress; page auto-refreshes stats upon completion
 
+---
+
+## DB Data Editor (ADR-101)
+
+> [!info] Added 2026-06-18
+> The data editor is reached by double-clicking any table row on the DB Maintenance page. It opens at route `/admin/db/:table`.
+
+### How to open
+
+1. Navigate to `/admin/db` (DB Maintenance page).
+2. Double-click any row in the table list to open that table in the editor (`/admin/db/:table`).
+
+### Browsing, filtering, and sorting
+
+The editor page (`TableDataEditorPage.tsx`) renders a controlled grid using the existing `ui/table` primitives (no new dependency). Features:
+
+- **Column headers** are sortable (click once for ASC, again for DESC). Sorting is paused while uncommitted changes exist to prevent silent loss of dirty state.
+- **Per-column filter inputs** appear below each header. Supported ops: `eq`, `ne`, `lt`, `lte`, `gt`, `gte`, `contains` (ILIKE), `startsWith` (ILIKE), `isnull`, `notnull`.
+- **Raw WHERE box** for free-form SQL predicates. Semicolons are rejected server-side; the query runs inside a READ ONLY transaction so mutation is structurally impossible.
+- **Pagination** via `limit` (default 100, max 500) and `offset` controls.
+
+The backend endpoint is `GET /api/admin/database/tables/:table/rows` — see [[docs/api/admin|Admin API]].
+
+### Editing cells
+
+- Click any non-PK, non-generated cell to activate an inline editor.
+- A **NULL toggle** checkbox is shown for nullable columns.
+- Boolean columns render as checkboxes.
+- Edited cells are highlighted as **dirty state**. Filtering, sorting, and paging are paused while dirty rows exist so refetches cannot silently discard changes.
+- **Add row** button appends a new blank row in dirty state.
+- **Mark for deletion** button marks an existing row for delete in dirty state.
+
+### Previewing and committing
+
+- The **Preview** button sends the pending change set to `POST /api/admin/database/tables/:table/mutate` with `dryRun: true`. The server renders exact SQL statements and returns them in a dialog — no DB write occurs.
+- The **Commit** button sends the batch with `dryRun: false`. All changes execute in one transaction (all-or-nothing). Any failure rolls back the entire batch.
+
+### Optimistic concurrency
+
+Each row returned by `/rows` includes a hidden `__xmin` token (PostgreSQL row version). On commit, the server locks each target row `FOR UPDATE` and compares the current `xmin` to the client's token. If another write changed the row since the editor loaded it, the server returns `409 Conflict` and the entire batch is rolled back. This prevents silent overwrites without requiring a full serializable transaction on reads.
+
+### Tables with no primary key
+
+Tables that lack a primary key are **read-only** in the data editor — the Commit button is disabled and `op: 'insert'/'update'/'delete'` changes are rejected server-side with a `400` error.
+
+### Safety model summary
+
+| Concern | Mitigation |
+|---------|-----------|
+| SQL injection via table/column identifiers | Names validated against `pg_stat_user_tables` / `information_schema.columns`; identifiers double-quoted |
+| SQL injection via values | Always parameterized |
+| Read queries causing mutations | All reads run in a `READ ONLY` transaction |
+| Hung read queries | `SET LOCAL statement_timeout = '10s'` |
+| Raw WHERE clause abuse | Semicolons rejected; runs inside READ ONLY transaction |
+| Silent concurrent overwrites | `xmin` optimistic-concurrency token; `409 Conflict` on mismatch |
+| Constraint violations surfaced as raw Postgres errors | SQLSTATEs (`23502/23503/23505/23514/22P02`) mapped to friendly 400/409 messages |
+| Partial batch application | Entire batch runs in one transaction; any failure rolls back all changes |
+| No audit trail | Every committed statement written to `db_editor_audit` inside the same transaction + structured logger |
+
+### Bypass-domain-validation caveat
+
+> [!warning] Raw writes bypass app-level domain logic
+> The data editor writes directly to PostgreSQL. It honors every *structural* constraint Postgres enforces (FK, CHECK, NOT NULL, UNIQUE), but **skips** application-level rules, computed/derived values, and cascade side-effects that live only in repository/service code. Only the admin (with full visibility into the data model) should use this tool. See [[docs/adr/101-db-data-editor|ADR-101]] for the full trade-off discussion.
+
+### Materialized-view auto-refresh
+
+After a successful commit to `transactions`, `recipients`, or `categories` (the base tables for the dashboard materialized views), the service calls the existing debounced `scheduleRefresh()` from `materializedViewService`. The commit response includes `refreshScheduled: true` when this happens. Edits to other tables skip the refresh.
+
+### Audit table
+
+Migration `alembic/versions/0059_db_editor_audit.py` creates:
+
+```sql
+CREATE TABLE db_editor_audit (
+  id          BIGSERIAL PRIMARY KEY,
+  table_name  TEXT NOT NULL,
+  op          TEXT NOT NULL,          -- 'insert' | 'update' | 'delete'
+  pk_json     JSONB,
+  before_json JSONB,
+  after_json  JSONB,
+  statement   TEXT NOT NULL,
+  created_at  TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+CREATE INDEX db_editor_audit_table_time_idx ON db_editor_audit (table_name, created_at DESC);
+```
+
+Audit rows are written inside the same transaction as the change, so a rollback also removes the audit entry. The `db_editor_audit` table is itself browsable (and editable) through the data editor.
+
+### API endpoints
+
+| Method | Path | Purpose |
+|--------|------|---------|
+| `GET` | `/api/admin/database/tables/:table/schema` | Column metadata + PK discovery |
+| `GET` | `/api/admin/database/tables/:table/rows` | Paginated/filtered/sorted read |
+| `POST` | `/api/admin/database/tables/:table/mutate` | Batch write (insert/update/delete); `dryRun` mode |
+
+Full endpoint documentation: [[docs/api/admin|Admin API]].
+
+---
+
 ## Related
 
 - [[docs/api/admin|Admin API]]
+- [[docs/adr/101-db-data-editor|ADR-101: Admin DB data editor]]
 - [[docs/features/settings|Settings & Administration]]
 - [[docs/performance/index|Performance Optimization]]
 
 ## Related Code
 
 - [[apps/node-backend/src/routes/admin.js]]
+- [[apps/node-backend/src/services/dbEditor.js]]
 - [[apps/frontend/src/pages/DbMaintenancePage.tsx]]
+- [[apps/frontend/src/pages/admin/TableDataEditorPage.tsx]]

@@ -47,6 +47,7 @@ const ExchangeRatesPage = lazy(routeLoaders["/admin/exchange-rates"]);
 const PortfolioImportPage = lazy(routeLoaders["/portfolio/import"]);
 const PortfolioImportReviewPage = lazy(routeLoaders["/portfolio/import/:batchId/review"]);
 const DbMaintenancePage = lazy(routeLoaders["/admin/db"]);
+const TableDataEditorPage = lazy(routeLoaders["/admin/db/:table"]);
 const AdminOverviewPage = lazy(routeLoaders["/admin"]);
 const ProviderHealthPage = lazy(routeLoaders["/admin/providers"]);
 const EndpointLivenessPage = lazy(routeLoaders["/admin/endpoints"]);
@@ -193,6 +194,7 @@ const App = () => {
                                                     <Route path="/tax" element={<TaxOverviewPage />} />
                                                     <Route path="/admin" element={<RequireAdmin><AdminOverviewPage /></RequireAdmin>} />
                                                     <Route path="/admin/db" element={<RequireAdmin><DbMaintenancePage /></RequireAdmin>} />
+                                                    <Route path="/admin/db/:table" element={<RequireAdmin><TableDataEditorPage /></RequireAdmin>} />
                                                     <Route path="/admin/providers" element={<RequireAdmin><ProviderHealthPage /></RequireAdmin>} />
                                                     <Route path="/admin/endpoints" element={<RequireAdmin><EndpointLivenessPage /></RequireAdmin>} />
                                                     <Route path="/admin/exchange-rates" element={<RequireAdmin><ExchangeRatesPage /></RequireAdmin>} />
