@@ -147,6 +147,9 @@ function validateSettingValue(key, value) {
       throw new ValidationError(`Invalid cost_basis_method. Allowed: ${ALLOWED_COST_BASIS_METHODS.join(', ')}`);
     }
   }
+  if (key === 'includeTransfers' && typeof value !== 'boolean') {
+    throw new ValidationError('includeTransfers must be a boolean');
+  }
 }
 
 router.put('/:key', async (req, res) => {

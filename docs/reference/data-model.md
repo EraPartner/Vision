@@ -3,8 +3,8 @@ title: Data Model Reference
 type: reference
 status: active
 date: 2026-04-24
-updated: 2026-06-15
-last_modified: 2026-06-15
+updated: 2026-06-18
+last_modified: 2026-06-18
 tags: [reference, data-model, entities, database, schema, phase-5a, phase-0, phase-1, may-2026, tags, tagging, orthogonal-dimension, aggregations, migration-0035, saved-custom-parsers, custom-parser-configs, adr-066, fx-attribution, value-fx-neutral, adr-074, migration-0039, portfolio-import, portfolio-import-batches, portfolio-import-staging-rows, kind-discriminator, migration-0040, migration-0041, adr-078]
 description: Complete reference for all data entities in Vision — core, portfolio, planning, supporting, and aggregation entities. Includes exchange_rate_cache (Phase 0), aggregation tables (Phase 1, consolidated in 0035), attachment entity (Phase 5A), transaction tags (May 2026), custom_parser_configs (June 2026, ADR-066) with kind discriminator (June 2026, ADR-078 migration 0041), value_fx_neutral snapshot column (June 2026, ADR-074 migration 0039), portfolio_import_batches and portfolio_import_staging_rows (June 2026, ADR-078 migration 0040), and supporting entities transaction_splits, split_payments, split_audit, import_batches, provider_health, recipient_match_patterns, asset_price_history (June 2026).
 aliases: [data model, entities, domain model, schema entities]
@@ -41,8 +41,11 @@ related_code: ["apps/node-backend/src/repositories/", "alembic/versions/"]
 | `import_batch_id` | BIGINT | FK → import_batches ON DELETE SET NULL, NULLABLE | Import batch that created this transaction; NULL for manual entries and pre-pipeline rows (migration 0003) |
 | `updated_at` | TIMESTAMPTZ | NOT NULL, DEFAULT NOW() | Last modification timestamp; NOT NULL enforced by migration 0022 |
 | `tx_hash` | TEXT | UNIQUE (partial, WHERE NOT NULL), NULLABLE | Import-pipeline deduplication hash; NULL for manually-entered transactions; enables race-safe `ON CONFLICT (tx_hash) DO NOTHING` (migration 0036) |
+| `is_transfer` | BOOLEAN | NOT NULL, DEFAULT false | Internal transfer between own accounts — excluded from cash-flow aggregates by default (ADR-083, migration 0044) |
+| `transfer_peer_id` | INTEGER | FK → transactions ON DELETE SET NULL, NULLABLE | The matched transfer leg (self-referential pairing) |
+| `transfer_source` | TEXT | NULLABLE, CHECK `auto` \| `manual` | How the transfer was marked; `manual` is sticky and never overwritten by auto-detection |
 
-**Indexes:** `idx_transactions_date`, `idx_transactions_recipient`, `idx_transactions_category`
+**Indexes:** `idx_transactions_date`, `idx_transactions_recipient`, `idx_transactions_category`, `idx_transactions_amount_date` (transfer matching), `idx_transactions_transfer_peer` (partial, peer lookups)
 
 **Related:** [[docs/features/transactions|Transactions Feature]], [[docs/api/transactions|Transactions API]]
 

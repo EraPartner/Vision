@@ -2063,6 +2063,72 @@ paths:
         "429":
           description: Rate limit exceeded
 
+  /api/transactions/transfer-suggestions:
+    get:
+      summary: Ambiguous internal-transfer matches awaiting confirmation (ADR-083)
+      operationId: getTransferSuggestions
+      tags: [Transactions]
+      responses:
+        "200":
+          description: Suggested transfer pairs (each an outflow + candidate inflows)
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/Envelope"
+                  - type: object
+                    properties:
+                      data:
+                        type: object
+                        properties:
+                          items:
+                            type: array
+                            items:
+                              type: object
+
+  /api/transactions/transfers:
+    post:
+      summary: Manually confirm an internal-transfer pair (ADR-083)
+      operationId: markTransfer
+      tags: [Transactions]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [aId, bId]
+              properties:
+                aId: { type: integer }
+                bId: { type: integer }
+      responses:
+        "200":
+          description: Pair marked as a transfer
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Envelope"
+        "400":
+          description: aId and bId must be two distinct transaction ids
+
+  /api/transactions/transfers/{id}:
+    delete:
+      summary: Clear a transfer mark on a transaction and its peer (ADR-083)
+      operationId: unmarkTransfer
+      tags: [Transactions]
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: integer }
+      responses:
+        "200":
+          description: Transfer mark cleared
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Envelope"
+
   /api/transactions/export/csv:
     get:
       summary: Export transactions as CSV (streaming)
