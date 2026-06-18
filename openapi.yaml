@@ -255,6 +255,172 @@ components:
         is_active:
           type: boolean
 
+    Account:
+      type: object
+      required: [id, name, currency, type, liquidity_class, spendable, in_net_worth, tax_wrapper, owner, multi_currency_cash, has_cash_sleeve, is_active, created_at, updated_at]
+      properties:
+        id:
+          type: integer
+        name:
+          type: string
+        display_name:
+          type: string
+          nullable: true
+        institution:
+          type: string
+          nullable: true
+        currency:
+          type: string
+          description: ISO 4217 currency code
+        type:
+          type: string
+          enum: [checking, savings, brokerage, crypto_exchange, wallet, pension, liability]
+        liquidity_class:
+          type: string
+          enum: [liquid, semi_liquid, illiquid]
+        spendable:
+          type: boolean
+        in_net_worth:
+          type: boolean
+        tax_wrapper:
+          type: string
+          enum: [none, pension, tax_advantaged]
+        owner:
+          type: string
+          enum: [me, partner, joint]
+        multi_currency_cash:
+          type: boolean
+        has_cash_sleeve:
+          type: boolean
+        funding_account_id:
+          type: integer
+          nullable: true
+        statement_balance:
+          type: number
+          nullable: true
+        statement_balance_date:
+          type: string
+          format: date
+          nullable: true
+        computed_balance:
+          type: number
+          nullable: true
+          description: Latest active transaction balance for the account (ADR-094)
+        drift:
+          type: number
+          nullable: true
+          description: statement_balance − computed_balance; null if no statement balance (ADR-094)
+        is_active:
+          type: boolean
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+
+    AccountList:
+      allOf:
+        - $ref: "#/components/schemas/PaginationMeta"
+        - type: object
+          required: [items]
+          properties:
+            items:
+              type: array
+              items:
+                $ref: "#/components/schemas/Account"
+
+    AccountCreate:
+      type: object
+      required: [name]
+      properties:
+        name:
+          type: string
+        display_name:
+          type: string
+          nullable: true
+        institution:
+          type: string
+          nullable: true
+        currency:
+          type: string
+        type:
+          type: string
+          enum: [checking, savings, brokerage, crypto_exchange, wallet, pension, liability]
+        liquidity_class:
+          type: string
+          enum: [liquid, semi_liquid, illiquid]
+        spendable:
+          type: boolean
+        in_net_worth:
+          type: boolean
+        tax_wrapper:
+          type: string
+          enum: [none, pension, tax_advantaged]
+        owner:
+          type: string
+          enum: [me, partner, joint]
+        multi_currency_cash:
+          type: boolean
+        has_cash_sleeve:
+          type: boolean
+        funding_account_id:
+          type: integer
+          nullable: true
+        statement_balance:
+          type: number
+          nullable: true
+        statement_balance_date:
+          type: string
+          format: date
+          nullable: true
+
+    AccountUpdate:
+      type: object
+      properties:
+        name:
+          type: string
+        display_name:
+          type: string
+          nullable: true
+        institution:
+          type: string
+          nullable: true
+        currency:
+          type: string
+        type:
+          type: string
+          enum: [checking, savings, brokerage, crypto_exchange, wallet, pension, liability]
+        liquidity_class:
+          type: string
+          enum: [liquid, semi_liquid, illiquid]
+        spendable:
+          type: boolean
+        in_net_worth:
+          type: boolean
+        tax_wrapper:
+          type: string
+          enum: [none, pension, tax_advantaged]
+        owner:
+          type: string
+          enum: [me, partner, joint]
+        multi_currency_cash:
+          type: boolean
+        has_cash_sleeve:
+          type: boolean
+        funding_account_id:
+          type: integer
+          nullable: true
+        statement_balance:
+          type: number
+          nullable: true
+        statement_balance_date:
+          type: string
+          format: date
+          nullable: true
+        is_active:
+          type: boolean
+
     BulkTagRequest:
       type: object
       required: [transaction_ids]
@@ -768,6 +934,10 @@ components:
           type: string
         fx_rate_to_eur:
           type: number
+        account_id:
+          type: integer
+          nullable: true
+          description: Owning account for the lot (ADR-091); null = unassigned/global
         note:
           type: string
         is_recurring:
@@ -1207,6 +1377,149 @@ paths:
                 $ref: "#/components/schemas/Envelope"
         "404":
           description: Tag not found
+
+  /api/accounts:
+    get:
+      summary: List accounts
+      operationId: getAccounts
+      tags: [Accounts]
+      parameters:
+        - in: query
+          name: active
+          schema:
+            type: string
+            enum: ["true", "false", "all"]
+          description: Filter by active status (default true)
+      responses:
+        "200":
+          description: Account list
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/Envelope"
+                  - type: object
+                    properties:
+                      data:
+                        $ref: "#/components/schemas/AccountList"
+    post:
+      summary: Create account
+      operationId: createAccount
+      tags: [Accounts]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AccountCreate"
+      responses:
+        "201":
+          description: Created account
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/Envelope"
+                  - type: object
+                    properties:
+                      data:
+                        $ref: "#/components/schemas/Account"
+        "409":
+          description: An account with that name already exists
+
+  /api/accounts/{id}:
+    parameters:
+      - in: path
+        name: id
+        required: true
+        schema:
+          type: integer
+    get:
+      summary: Get one account
+      operationId: getAccount
+      tags: [Accounts]
+      responses:
+        "200":
+          description: Account
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/Envelope"
+                  - type: object
+                    properties:
+                      data:
+                        $ref: "#/components/schemas/Account"
+        "404":
+          description: Account not found
+    patch:
+      summary: Update account
+      operationId: updateAccount
+      tags: [Accounts]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AccountUpdate"
+      responses:
+        "200":
+          description: Updated account
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/Envelope"
+                  - type: object
+                    properties:
+                      data:
+                        $ref: "#/components/schemas/Account"
+        "404":
+          description: Account not found
+        "409":
+          description: An account with that name already exists
+    delete:
+      summary: Delete account (409 if still referenced — archive instead)
+      operationId: deleteAccount
+      tags: [Accounts]
+      responses:
+        "200":
+          description: Deleted account
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Envelope"
+        "404":
+          description: Account not found
+        "409":
+          description: Account still has transactions; archive it instead
+    post:
+      summary: Merge source accounts into this account
+      description: Repoints all references (transactions, planned, portfolio lots, funding_account_id) from each source account to this (survivor) account, then deletes the sources (ADR-088).
+      operationId: mergeAccounts
+      tags: [Accounts]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [source_ids]
+              properties:
+                source_ids:
+                  type: array
+                  items:
+                    type: integer
+                  description: Account ids to merge into this account and delete
+      responses:
+        "200":
+          description: Merge result (survivor id, merged ids, reassigned counts)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Envelope"
+        "404":
+          description: Target or a source account not found
 
   # ─── Transactions ────────────────────────────────────────────────────────────
 
@@ -3655,6 +3968,44 @@ paths:
                       data:
                         $ref: "#/components/schemas/PortfolioTransaction"
 
+  /api/investments/{id}/move:
+    parameters:
+      - in: path
+        name: id
+        required: true
+        schema:
+          type: integer
+    post:
+      summary: Move this holding between accounts (in-specie, cost-basis-preserving)
+      description: Moves the investment's lots from `from_account_id` to `to_account_id` (ADR-091). Omit `units` (or pass ≥ net) for a whole move (re-points all lots incl. history); pass `units` for a partial move (unit-based only — FIFO lot re-point + pro-rata boundary split). No sell/buy, no realized gain, no cash leg.
+      operationId: moveHolding
+      tags: [Investments]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [from_account_id, to_account_id]
+              properties:
+                from_account_id:
+                  type: integer
+                to_account_id:
+                  type: integer
+                units:
+                  type: number
+                  nullable: true
+                  description: Units to move; omit for the whole position
+      responses:
+        "200":
+          description: Move result (mode, movedUnits, lotsMoved, lotsSplit)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Envelope"
+        "404":
+          description: Investment or an account not found
+
   /api/investments/{id}/summary:
     parameters:
       - in: path
@@ -5735,7 +6086,7 @@ paths:
             default: isin
       responses:
         "200":
-          description: Stored mappings ({ mappings: [...] })
+          description: "Stored mappings ({ mappings: [...] })"
           content:
             application/json:
               schema:

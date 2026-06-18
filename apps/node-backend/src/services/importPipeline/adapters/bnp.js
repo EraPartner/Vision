@@ -23,7 +23,7 @@
 import fs from 'fs';
 import { cleanRecipientName, normalizeToUppercase } from '../../textNormalization.js';
 import { logger } from '../../../config/logger.js';
-import { parseDayMonthYear, parseAmountField, buildOptionalComment, splitCsvLines } from './_shared.js';
+import { parseDayMonthYear, parseAmountField, buildOptionalComment, splitCsvLines, canonicalIban } from './_shared.js';
 
 const NAME = 'bnp';
 const BANK_LABEL = 'BNP Paribas Fortis';
@@ -69,7 +69,7 @@ function parseLine(line) {
 
   return {
     date,
-    bankAccount: accountNumber || 'BNP',
+    bankAccount: canonicalIban(accountNumber) || 'BNP',
     recipient,
     memo,
     amount,

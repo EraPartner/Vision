@@ -263,6 +263,27 @@ export function AppSidebar() {
                   </NavLink>
                 </SidebarMenuButton>
               </SidebarMenuItem>
+              {/* Accounts — workspace-agnostic hub (ADR-088) */}
+              <SidebarMenuItem>
+                <SidebarMenuButton
+                  asChild
+                  isActive={isActiveRoute("/accounts", location.pathname)}
+                  tooltip={withGoToHint(t('nav.accounts'), "/accounts")}
+                >
+                  <NavLink
+                    to="/accounts"
+                    onMouseEnter={() => handleNavHover("/accounts")}
+                    className="relative"
+                    aria-label={t('nav.accounts')}
+                  >
+                    {isActiveRoute("/accounts", location.pathname) && <ActiveRail />}
+                    <Landmark className={`h-4 w-4 transition-colors duration-[var(--duration-normal)] ${isActiveRoute("/accounts", location.pathname) ? "text-primary" : ""}`} />
+                    <span className={isActiveRoute("/accounts", location.pathname) ? "font-semibold tracking-tight" : "tracking-tight"}>
+                      {t('nav.accounts')}
+                    </span>
+                  </NavLink>
+                </SidebarMenuButton>
+              </SidebarMenuItem>
             </SidebarMenu>
           </SidebarGroupContent>
         </SidebarGroup>

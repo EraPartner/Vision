@@ -33,7 +33,8 @@ related_code: ["apps/node-backend/src/repositories/", "alembic/versions/"]
 | `balance` | NUMERIC(15,2) | NULLABLE | Running balance after transaction |
 | `memo` | TEXT | NULLABLE | Original bank description |
 | `comment` | TEXT | NULLABLE | User-added note |
-| `bank_account` | TEXT | NULLABLE | Source bank account |
+| `bank_account` | TEXT | NULLABLE | Source bank account (string; being retired in favour of `account_id` — ADR-088) |
+| `account_id` | INTEGER | FK → accounts ON DELETE RESTRICT, NULLABLE | Owning account (ADR-088, migration 0050); kept in sync with `bank_account` by the dual-write trigger (migration 0051) |
 | `recipient_id` | INTEGER | FK → recipients | Associated recipient |
 | `recipient_bank_account_id` | INTEGER | FK → recipient_bank_accounts | Specific bank account |
 | `category_id` | INTEGER | FK → categories ON DELETE SET NULL, NULLABLE | Associated category; FK updated to ON DELETE SET NULL by migration 0048 — deleting a category un-categorizes affected rows |
@@ -51,8 +52,41 @@ related_code: ["apps/node-backend/src/repositories/", "alembic/versions/"]
 > - **0046**: backfills `currency` NULL → `'EUR'`; adds ISO format CHECK (`^[A-Z]{3}$`) NOT VALID; sets `DEFAULT 'EUR' NOT NULL`. Three INSERT paths now write `'EUR'` instead of NULL (`transactionRepository.create`, `plannedTransactionRepository.create`, `importPipeline/commit.js`).
 > - **0048**: changes `category_id` FK to `ON DELETE SET NULL` (previously implicit RESTRICT, which surfaced as 500 on category delete).
 > - **0047**: adds partial unique index `uq_recipient_primary_account ON recipient_bank_accounts (recipient_id) WHERE is_primary` (see RecipientBankAccount below).
+> - **0050** (ADR-088): creates the `accounts` table + nullable `account_id` FKs (`ON DELETE RESTRICT`) on transactions/planned_transactions, backfilled one account per distinct `bank_account` string.
+> - **0051** (ADR-088): `BEFORE INSERT/UPDATE` trigger that keeps `account_id` in sync with `bank_account` (dual-write phase).
 
 **Related:** [[docs/features/transactions|Transactions Feature]], [[docs/api/transactions|Transactions API]]
+
+---
+
+### Account
+
+**Purpose:** The user's own account (ADR-088) — the spine tying budgeting cash, portfolio
+holdings, and liabilities together. Distinct from `recipient_bank_accounts` (counterparty IBANs).
+
+| Field | Type | Constraints | Description |
+|-------|------|-------------|-------------|
+| `id` | SERIAL | PK | Unique identifier |
+| `name` | TEXT | NOT NULL, UNIQUE | Canonical account name (backfilled from `bank_account`) |
+| `display_name` | TEXT | NULLABLE | Friendly label |
+| `institution` | TEXT | NULLABLE | Bank / broker |
+| `currency` | VARCHAR(3) | NOT NULL, DEFAULT 'EUR', CHECK (`^[A-Z]{3}$`) | ISO-4217 (ADR-086 convention) |
+| `type` | account_type | NOT NULL, DEFAULT 'checking' | checking/savings/brokerage/crypto_exchange/wallet/pension/liability |
+| `liquidity_class` | account_liquidity_class | NOT NULL, DEFAULT 'liquid' | liquid/semi_liquid/illiquid |
+| `spendable` | BOOLEAN | NOT NULL, DEFAULT true | Spendable vs earmarked |
+| `in_net_worth` | BOOLEAN | NOT NULL, DEFAULT true | Counts toward net worth |
+| `tax_wrapper` | account_tax_wrapper | NOT NULL, DEFAULT 'none' | none/pension/tax_advantaged |
+| `owner` | account_owner | NOT NULL, DEFAULT 'me' | me/partner/joint (feeds marital quotient) |
+| `multi_currency_cash` | BOOLEAN | NOT NULL, DEFAULT false | Holds cash in multiple currencies |
+| `has_cash_sleeve` | BOOLEAN | NOT NULL, DEFAULT true | Holds a spendable cash balance (false for holding-only wallets) |
+| `funding_account_id` | INTEGER | FK → accounts ON DELETE SET NULL, NULLABLE | Settlement account for sleeve-less trades |
+| `is_active` | BOOLEAN | NOT NULL, DEFAULT true | Archived when false |
+| `created_at` / `updated_at` | TIMESTAMPTZ | NOT NULL, DEFAULT NOW() | Timestamps (`updated_at` trigger) |
+
+The flag columns exist from migration 0050; their semantics are activated in ADR-089. Flag enum
+types: `account_type`, `account_liquidity_class`, `account_tax_wrapper`, `account_owner`.
+
+**Related:** [[docs/api/accounts|Accounts API]], [[docs/adr/088-account-entity|ADR-088]]
 
 ---
 

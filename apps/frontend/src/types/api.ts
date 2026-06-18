@@ -53,6 +53,74 @@ export interface CategoryUpdate {
     is_active?: boolean;
 }
 
+// ==================== Account Types (ADR-088) ====================
+
+export type AccountType =
+    | 'checking'
+    | 'savings'
+    | 'brokerage'
+    | 'crypto_exchange'
+    | 'wallet'
+    | 'pension'
+    | 'liability';
+export type AccountLiquidityClass = 'liquid' | 'semi_liquid' | 'illiquid';
+export type AccountTaxWrapper = 'none' | 'pension' | 'tax_advantaged';
+export type AccountOwner = 'me' | 'partner' | 'joint';
+
+export interface Account {
+    id: number;
+    name: string;
+    display_name?: string;
+    institution?: string;
+    currency: string;
+    type: AccountType;
+    liquidity_class: AccountLiquidityClass;
+    spendable: boolean;
+    in_net_worth: boolean;
+    tax_wrapper: AccountTaxWrapper;
+    owner: AccountOwner;
+    multi_currency_cash: boolean;
+    has_cash_sleeve: boolean;
+    funding_account_id?: number;
+    statement_balance?: number;
+    statement_balance_date?: string;
+    /** Latest active transaction balance (ADR-094); computed, read-only. */
+    computed_balance?: number;
+    /** statement_balance − computed_balance; null when no statement balance (ADR-094). */
+    drift?: number;
+    is_active: boolean;
+    created_at: string;
+    updated_at?: string;
+}
+
+export interface AccountsListResponse {
+    items: Account[];
+    total: number;
+    links?: Link[];
+}
+
+export interface AccountCreate {
+    name: string;
+    display_name?: string;
+    institution?: string;
+    currency?: string;
+    type?: AccountType;
+    liquidity_class?: AccountLiquidityClass;
+    spendable?: boolean;
+    in_net_worth?: boolean;
+    tax_wrapper?: AccountTaxWrapper;
+    owner?: AccountOwner;
+    multi_currency_cash?: boolean;
+    has_cash_sleeve?: boolean;
+    funding_account_id?: number;
+    statement_balance?: number;
+    statement_balance_date?: string;
+}
+
+export interface AccountUpdate extends Partial<AccountCreate> {
+    is_active?: boolean;
+}
+
 // ==================== Recipient Types ====================
 
 export interface Recipient {
@@ -380,6 +448,7 @@ export interface PortfolioTransaction {
     taxes?: number;
     currency: string;
     fx_rate_to_eur?: number;
+    account_id?: number;
     note?: string;
     is_recurring: boolean;
     recurrence_interval?: RecurrenceInterval;
@@ -406,6 +475,9 @@ export interface PortfolioTransactionCreate {
     taxes?: number;
     currency?: string;
     fx_rate_to_eur?: number;
+    account_id?: number;
+    /** Cash account whose sleeve the trade's cash leg posts to (ADR-090); create-only. */
+    cash_account_id?: number;
     note?: string;
     is_recurring?: boolean;
     recurrence_interval?: RecurrenceInterval;

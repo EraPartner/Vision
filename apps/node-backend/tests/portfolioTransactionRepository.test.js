@@ -35,17 +35,17 @@ describe('portfolioTransactionRepository.create', () => {
     expect(query).toHaveBeenNthCalledWith(
       3,
       `INSERT INTO portfolio_transactions
-         (investment_id, type, date, amount, units, price_per_unit, fees, taxes, currency, note, is_recurring, recurrence_interval, recurrence_end_date, fx_rate_to_eur)
-         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)
+         (investment_id, type, date, amount, units, price_per_unit, fees, taxes, currency, note, is_recurring, recurrence_interval, recurrence_end_date, fx_rate_to_eur, account_id)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15)
          RETURNING *`,
-      [1, 'buy', '2026-03-24', 1000, 3, 333.33, 0, 0, 'EUR', null, false, null, null, null]
+      [1, 'buy', '2026-03-24', 1000, 3, 333.33, 0, 0, 'EUR', null, false, null, null, null, null]
     );
     // No unconditional pre-resync — the child INSERT runs straight after the
     // view INSERT fails.
     expect(query).toHaveBeenNthCalledWith(
       4,
-      'INSERT INTO stock_transactions (investment_id, type, date, amount, fees, taxes, currency, note, is_recurring, recurrence_interval, recurrence_end_date, fx_rate_to_eur, units, price_per_unit) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14) RETURNING id',
-      [1, 'buy', '2026-03-24', 1000, 0, 0, 'EUR', null, false, null, null, null, 3, 333.33]
+      'INSERT INTO stock_transactions (investment_id, type, date, amount, fees, taxes, currency, note, is_recurring, recurrence_interval, recurrence_end_date, fx_rate_to_eur, account_id, units, price_per_unit) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15) RETURNING id',
+      [1, 'buy', '2026-03-24', 1000, 0, 0, 'EUR', null, false, null, null, null, null, 3, 333.33]
     );
     expect(query).toHaveBeenNthCalledWith(5, 'SELECT * FROM portfolio_transactions WHERE id = $1', [11]);
     expect(result).toEqual({ id: 11, investment_id: 1, type: 'buy' });
@@ -78,8 +78,8 @@ describe('portfolioTransactionRepository.create', () => {
     // First child INSERT collides on a duplicate id...
     expect(query).toHaveBeenNthCalledWith(
       3,
-      'INSERT INTO stock_transactions (investment_id, type, date, amount, fees, taxes, currency, note, is_recurring, recurrence_interval, recurrence_end_date, fx_rate_to_eur, units, price_per_unit) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14) RETURNING id',
-      [1, 'buy', '2026-03-24', 1000, 0, 0, 'EUR', null, false, null, null, null, 3, 333.33]
+      'INSERT INTO stock_transactions (investment_id, type, date, amount, fees, taxes, currency, note, is_recurring, recurrence_interval, recurrence_end_date, fx_rate_to_eur, account_id, units, price_per_unit) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15) RETURNING id',
+      [1, 'buy', '2026-03-24', 1000, 0, 0, 'EUR', null, false, null, null, null, null, 3, 333.33]
     );
     // ...which triggers a resync only in the catch path...
     expect(query).toHaveBeenNthCalledWith(
@@ -89,8 +89,8 @@ describe('portfolioTransactionRepository.create', () => {
     // ...then the insert is retried once.
     expect(query).toHaveBeenNthCalledWith(
       5,
-      'INSERT INTO stock_transactions (investment_id, type, date, amount, fees, taxes, currency, note, is_recurring, recurrence_interval, recurrence_end_date, fx_rate_to_eur, units, price_per_unit) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14) RETURNING id',
-      [1, 'buy', '2026-03-24', 1000, 0, 0, 'EUR', null, false, null, null, null, 3, 333.33]
+      'INSERT INTO stock_transactions (investment_id, type, date, amount, fees, taxes, currency, note, is_recurring, recurrence_interval, recurrence_end_date, fx_rate_to_eur, account_id, units, price_per_unit) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15) RETURNING id',
+      [1, 'buy', '2026-03-24', 1000, 0, 0, 'EUR', null, false, null, null, null, null, 3, 333.33]
     );
     expect(query).toHaveBeenNthCalledWith(6, 'SELECT * FROM portfolio_transactions WHERE id = $1', [21]);
     expect(result).toEqual({ id: 21, investment_id: 1, type: 'buy' });
@@ -114,8 +114,8 @@ describe('portfolioTransactionRepository.create', () => {
 
     expect(query).toHaveBeenNthCalledWith(
       3,
-      'INSERT INTO stock_transactions (investment_id, type, date, amount, fees, taxes, currency, note, is_recurring, recurrence_interval, recurrence_end_date, fx_rate_to_eur, units, price_per_unit) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14) RETURNING id',
-      [1, 'buy', '2026-03-24', 1000, 0, 0, 'EUR', null, false, null, null, null, 5, 200]
+      'INSERT INTO stock_transactions (investment_id, type, date, amount, fees, taxes, currency, note, is_recurring, recurrence_interval, recurrence_end_date, fx_rate_to_eur, account_id, units, price_per_unit) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15) RETURNING id',
+      [1, 'buy', '2026-03-24', 1000, 0, 0, 'EUR', null, false, null, null, null, null, 5, 200]
     );
     expect(result).toEqual({ id: 30, amount: 1000, units: 5, price_per_unit: 200 });
   });
@@ -152,8 +152,8 @@ describe('portfolioTransactionRepository.create', () => {
 
     expect(query).toHaveBeenNthCalledWith(
       3,
-      'INSERT INTO stock_transactions (investment_id, type, date, amount, fees, taxes, currency, note, is_recurring, recurrence_interval, recurrence_end_date, fx_rate_to_eur, units, price_per_unit) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14) RETURNING id',
-      [1, 'gift', '2026-03-24', 0, 0, 0, 'EUR', null, false, null, null, null, 2, null]
+      'INSERT INTO stock_transactions (investment_id, type, date, amount, fees, taxes, currency, note, is_recurring, recurrence_interval, recurrence_end_date, fx_rate_to_eur, account_id, units, price_per_unit) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15) RETURNING id',
+      [1, 'gift', '2026-03-24', 0, 0, 0, 'EUR', null, false, null, null, null, null, 2, null]
     );
     expect(result).toEqual({ id: 40, type: 'gift', amount: 0, units: 2 });
   });
@@ -177,8 +177,8 @@ describe('portfolioTransactionRepository.create', () => {
 
     expect(query).toHaveBeenNthCalledWith(
       3,
-      'INSERT INTO metals_transactions (investment_id, type, date, amount, fees, taxes, currency, note, is_recurring, recurrence_interval, recurrence_end_date, fx_rate_to_eur, units, price_per_unit) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14) RETURNING id',
-      [1, 'buy', '2026-03-24', 1000, 0, 0, 'EUR', null, false, null, null, null, 2, 500]
+      'INSERT INTO metals_transactions (investment_id, type, date, amount, fees, taxes, currency, note, is_recurring, recurrence_interval, recurrence_end_date, fx_rate_to_eur, account_id, units, price_per_unit) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15) RETURNING id',
+      [1, 'buy', '2026-03-24', 1000, 0, 0, 'EUR', null, false, null, null, null, null, 2, 500]
     );
     expect(result).toEqual({ id: 60, investment_id: 1, type: 'buy' });
   });

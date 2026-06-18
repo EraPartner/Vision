@@ -2,78 +2,62 @@
 
 Format: Obsidian Tasks plugin emoji. Priority 🔺 highest / ⏫ high / 🔼 medium / 🔽 low / ⏬ lowest. Dates 📅 due / 🛫 start / ⏳ scheduled.
 
-## Cross-workspace feature epic — account entity & spanning features
+## Account-entity epic — deferred follow-ups
 
-> Brainstormed 2026-06-18. Features that span the three workspaces (Budgeting · Portfolio ·
-> Research), anchored on introducing a real account entity. **The user wants all of these
-> regardless of effort.** Ordering reflects dependency (foundation first), not priority or cost.
+> The cross-workspace account-entity epic landed across **ADRs 088–099** (account entity, typed
+> model, cash sleeve + trades-as-transfers, per-account positioning, liabilities, net worth = Σ
+> accounts, drift reconciliation, brokerage import design, dividend/FIRE, portfolio×research,
+> cross-workspace surfaces, sidebar IA). The items below are the pieces deliberately **parked
+> during implementation** — each is independently shippable. Logged 2026-06-18.
 
-### Foundation — the account entity
+### Account foundation (ADR-088)
 
-- [ ] 🔺 **Account entity** — replace the implicit `bank_account` TEXT column with a real
-      `accounts` table. There is no accounts table today: accounts are free strings and the
-      running balance is partitioned by the `bank_account` string. Safe path is expand/contract —
-      create `accounts`, backfill one row per distinct string, add a nullable `account_id` FK
-      alongside, dual-write, flip reads, drop the string. Blast radius: running-balance ledger,
-      import, statistics, transfers (ADR-083), planned transactions. ADR-worthy; unblocks the
-      rest of this section.
-- [ ] ⏫ **Cash sleeve** — brokerage / crypto-exchange accounts hold spendable or idle cash
-      alongside holdings. **Single source of truth per sleeve** — must not be double-counted
-      against net-worth "liquid" or a portfolio "savings" asset.
-- [ ] ⏫ **Trades = transfers (cash-sleeve plumbing)** — model buy / sell / dividend / fee as
-      internal transfers on the cash sleeve, reusing the ADR-083 transfer machinery: buy =
-      cash→holding (net-worth-neutral, kept out of "spending"); sell = holding→cash (kept out of
-      "income"); dividend = income into the sleeve; fee = spending out of the sleeve. Keeps the
-      cash sleeve honest when holdings change; required for brokerage import to balance.
+- [ ] ⏫ **Contract phase — drop the `bank_account` string.** Currently dual-written (string +
+      `account_id` via the migration-0051 trigger). Removing the string is **out-of-band, manual,
+      and irreversible** — do it only after a dual-write soak confirms
+      `count(*) WHERE bank_account IS NOT NULL AND account_id IS NULL = 0`, the coupled read/write
+      code is off the string, **and `mv_bank_balances` is redefined on `account_id`** (it still
+      groups by `bank_account` today). Migration `0055` is intentionally a no-op; `0056` is the
+      recovery. Not a chain migration (the app auto-runs `upgrade head`).
 
-### Account model — attributes & reach (ride on the entity)
+### Per-account positioning (ADR-091)
 
-- [ ] ⏫ **Account-typed model** — `checking` / `savings` / `brokerage` / `crypto-exchange` /
-      `wallet` / `pension` / `liability` as orthogonal flags: type, liquidity class, spendable/
-      earmarked, in-net-worth, tax wrapper, owner, multi-currency cash. Same entity, different
-      flag combinations. Stress-test types that must all work: brokerage (cash + holdings),
-      pensioensparen (locked, deductible, tax-advantaged), crypto wallet (no cash sleeve),
-      mortgage (negative, illiquid liability).
-- [ ] ⏫ **Per-account positioning / lots** — give `investments` / `portfolio_transactions` an
-      account FK (none today — holdings are global). Enables per-account cost basis ("100 AAPL at
-      IBKR vs 50 at Degiro") and a real "close this account" workflow.
-- [ ] ⏫ **Liabilities as negative accounts** — model a mortgage / loan as an account with
-      negative value; net worth = sum of accounts incl. debt, no special-casing. Unifies the
-      existing loan schedule into the account model.
-- [ ] ⏫ **Balance reconciliation / drift detection** — store an authoritative statement balance
-      per account and diff it against the computed running-balance ledger ("drifted €12.40 —
-      missing a transaction"). Only possible once accounts have an identity instead of a string.
-- [ ] 🔼 **Owner dimension → tax allocation** — me / partner / joint on accounts, feeding the
-      Belgian marital quotient.
+- [ ] ⏫ **Per-account holdings breakdown UI.** Backend derives positions per
+      `(investment, account)`, but there's no frontend per-account view
+      ("AAPL 150 → IBKR 100 · Degiro 50"). The cost-basis math already groups; this is UI only.
+- [ ] 🔼 **Account picker in the edit-trade dialog.** `EditPortfolioTxnDialog` has no account
+      selector (only the add dialog does) — changing a lot's account is API-only today.
+- [ ] 🔼 **Close-account workflow.** Guided liquidate/transfer-positions → archive
+      (`is_active=false`). The move-holding feature (`POST /api/investments/:id/move`) is the
+      building block; the guided flow isn't built.
+- [ ] 🔽 **Partial-move cost-basis option.** The move feature splits boundary lots **FIFO**
+      (oldest first). Offer proportional / average-cost lot selection as an alternative if wanted.
 
-### Brokerage import
+### Net worth (ADR-093)
 
-- [ ] ⏫ **Brokerage account import** — unified importer that splits one brokerage statement into
-      both `transactions` (cash movements) and `portfolio_transactions` (trades) and links the
-      legs. Depends on the account entity + cash sleeve + trades=transfers. **Handle carefully** —
-      routing rows to the right target, leg-linking, dedup, and avoiding double-counting are the
-      danger areas (this is the "dangerous" part originally flagged).
+- [ ] 🔼 **Per-account net-worth breakdown** — each account's cash + holdings at market (depends on
+      the per-account portfolio summary above).
+- [ ] 🔼 **Supersede ADR-064 snapshots natively** — express the persisted daily snapshots + the
+      net-worth page as Σ accounts, with **ADR-061 parity tests** locking outputs across the
+      cutover. (The live aggregate already equals Σ accounts; this is the snapshot engine.)
 
-### Portfolio statistics — descriptive only, NOT budgeting forecast
+### Brokerage import (ADR-095)
 
-- [ ] 🔼 **Dividend / coupon income** — projected + realized investment income as a portfolio-level
-      statistic. **Must NOT feed Planned Transactions or the cash-flow forecast** — stays
-      descriptive, inside the portfolio workspace.
-- [ ] 🔼 **FIRE / coverage ratio** — spending run-rate (read from budgeting) vs passive yield,
-      shown in portfolio statistics. Reads budgeting numbers; never writes into them.
+- [ ] ⏫ **Assign an account on portfolio import.** Portfolio/brokerage imports leave
+      `portfolio_transactions.account_id` **NULL** — `portfolioImportPipeline/commit.js` never sets
+      it and there's no account picker in the import flow. Smallest fix: a batch-level brokerage
+      account (picker → store on the batch → pass through commit; migration for the column).
+- [ ] 🔼 **Full ADR-095 fan-out.** Wire `brokerageRouting.js` (currently **dead code**) so one
+      statement splits into cash ledger + trades with the ADR-090 cash legs, deduped on both sides,
+      behind the mandatory staged review. The originally-flagged "dangerous" part.
 
-### Portfolio × Research
+### Portfolio × Research (ADR-097)
 
-- [ ] 🔼 **Watchlist "what-if" backtest** — "had I bought when I added it to the watchlist…"
-- [ ] 🔼 **Allocation drift + classic-portfolio benchmarks** — target vs actual weights, plus
-      comparison against canonical compositions (60/40, all-weather, three-fund).
+- [ ] 🔽 **Watchlist "what-if" backtest.** Store watchlist add-date; "had I bought when I added
+      it…". Watchlist CRUD exists; the add-date capture + backtest do not.
 
-### All three workspaces (Budgeting × Portfolio × Research)
+### Cross-workspace UX (ADR-099)
 
-- [ ] 🔼 **Net-worth / financial-independence projection** — compose the cash-flow forecast +
-      holdings + research market forecast (ADR-081) into a projected net-worth cone with
-      confidence bands.
-- [ ] 🔼 **Cash-aware rebalancing** — research target weights + portfolio actual weights +
-      available budgeting cash → "deploy €X into the underweight sleeve."
-- [ ] 🔼 **Unified tax view** — one surface pulling earned income (budgeting) + realized gains
-      (portfolio) + dividend income (cash sleeve).
+- [ ] 🔼 **Runtime nav / UX validation.** Walk the new cross-workspace surfaces (accounts hub,
+      net-worth/FI projection, cash-aware rebalancing, unified tax view) on the running app
+      (Playwright): ≤2-click discoverability, cross-workspace items read as first-class.

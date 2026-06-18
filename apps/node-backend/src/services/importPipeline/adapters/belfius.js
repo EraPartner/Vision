@@ -6,7 +6,7 @@
 import fs from 'fs';
 import { cleanRecipientName, normalizeToUppercase } from '../../textNormalization.js';
 import { logger } from '../../../config/logger.js';
-import { parseDayMonthYear, parseCommaDecimal, parseDecimalSafe, buildOptionalComment, splitCsvLines } from './_shared.js';
+import { parseDayMonthYear, parseCommaDecimal, parseDecimalSafe, buildOptionalComment, splitCsvLines, canonicalIban } from './_shared.js';
 import { toDecimal, roundMoney } from '../../../lib/money.js';
 
 const NAME = 'belfius';
@@ -81,7 +81,7 @@ function parseTransactionLine(line) {
 
   return {
     date,
-    bankAccount: 'BELFIUS',
+    bankAccount: canonicalIban(accountNumber) || 'BELFIUS',
     recipient: fullRecipient,
     memo,
     amount,
@@ -92,7 +92,6 @@ function parseTransactionLine(line) {
     recipientBankName: recipientAccount ? 'BELFIUS' : null,
     comment: buildOptionalComment(commentParts),
     rawData: line,
-    _accountNumber: accountNumber,
   };
 }
 
@@ -117,7 +116,6 @@ export async function parse(filePath) {
     if (!line) continue;
     const tx = parseTransactionLine(line);
     if (tx) {
-      delete tx._accountNumber;
       transactions.push(tx);
     } else {
       skipped++;

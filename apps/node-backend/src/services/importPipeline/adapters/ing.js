@@ -19,7 +19,7 @@
 import fs from 'fs';
 import { normalizeToUppercase } from '../../textNormalization.js';
 import { logger } from '../../../config/logger.js';
-import { parseDayMonthYear, parseCommaDecimal, buildOptionalComment, splitCsvLines } from './_shared.js';
+import { parseDayMonthYear, parseCommaDecimal, buildOptionalComment, splitCsvLines, canonicalIban } from './_shared.js';
 
 const NAME = 'ing';
 const BANK_LABEL = 'ING';
@@ -59,7 +59,7 @@ function parseLine(line) {
 
   return {
     date,
-    bankAccount: accountNumber || 'ING',
+    bankAccount: canonicalIban(accountNumber) || 'ING',
     recipient,
     memo,
     amount,

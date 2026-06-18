@@ -20,6 +20,8 @@ import { NotFoundError, ValidationError } from '../middleware/errorHandler.js';
 import { invalidatePortfolioCaches } from '../routes/info/_cache.js';
 import { assertPublicHttpUrl } from '../lib/urlSafety.js';
 import { autoResolveFxRateToEur } from '../services/portfolio/fxResolve.js';
+import { createTradeCashLeg, deleteTradeCashLegs } from '../services/portfolio/tradeCashLegService.js';
+import { moveHolding as moveHoldingSvc } from '../services/portfolio/moveHoldingService.js';
 
 // Custom price-provider URLs are fetched server-side at refresh time, so reject
 // non-public targets at the write boundary too (SSRF defense-in-depth). DNS is
@@ -395,7 +397,7 @@ export async function createTransaction(req, res) {
   const {
     type, date, amount, units, price_per_unit, fees, taxes,
     currency, note, is_recurring, recurrence_interval,
-    recurrence_end_date,
+    recurrence_end_date, account_id, cash_account_id,
   } = req.body;
   let { fx_rate_to_eur } = req.body;
 
@@ -414,17 +416,48 @@ export async function createTransaction(req, res) {
       investment_id, type, date, amount, units, price_per_unit, fees, taxes,
       currency: effectiveCurrency, note, is_recurring,
       recurrence_interval, recurrence_end_date, fx_rate_to_eur,
+      account_id: account_id != null ? Number(account_id) : undefined,
       preloaded_asset_class: inv.asset_class,
     });
   } catch (err) {
     translateRepoError(err);
   }
+
+  // Trades = transfers (ADR-090): when a cash account is designated, post the
+  // paired cash leg on its sleeve. NOTE: not yet in one DB transaction with the
+  // trade insert — a leg failure leaves the trade without its leg (follow-up:
+  // thread a shared client through the repo create path).
+  if (txn && cash_account_id != null) {
+    try {
+      await createTradeCashLeg({ portfolioTxn: txn, cashAccountId: Number(cash_account_id) });
+    } catch (err) {
+      logger.error('Trade cash-leg creation failed', { txnId: txn.id, error: err.message });
+      throw err;
+    }
+  }
+
   clearInvestmentsCaches();
   refreshQuotesForInvestment(investment_id).catch((err) => {
     logger.error('Transaction-triggered quote refresh failed', { investmentId: investment_id, error: err.message });
   });
   res.status(201);
   res.ok(txn);
+}
+
+export async function moveHolding(req, res) {
+  const investmentId = parseRequestId(req);
+  const inv = await investmentRepository.getById(investmentId);
+  if (!inv) throw new NotFoundError('Investment not found');
+
+  const { from_account_id, to_account_id, units } = req.body || {};
+  const result = await moveHoldingSvc({
+    investmentId,
+    fromAccountId: from_account_id != null ? Number(from_account_id) : NaN,
+    toAccountId: to_account_id != null ? Number(to_account_id) : NaN,
+    units: units != null ? Number(units) : null,
+  });
+  clearInvestmentsCaches();
+  res.ok(result);
 }
 
 export async function deleteTransaction(req, res) {
@@ -435,6 +468,12 @@ export async function deleteTransaction(req, res) {
 
   const ok = await portfolioTransactionRepository.hardDelete(txnId);
   if (!ok) throw new NotFoundError('Portfolio transaction not found');
+
+  // App-side cascade for the trade cash leg (ADR-090): portfolio_transaction_id is not a FK
+  // (inheritance/view schema), so remove any linked cash legs here.
+  await deleteTradeCashLegs(txnId).catch((err) => {
+    logger.error('Trade cash-leg cleanup failed', { txnId, error: err.message });
+  });
 
   clearInvestmentsCaches();
   refreshQuotesForInvestment(existingTxn.investment_id).catch((err) => {

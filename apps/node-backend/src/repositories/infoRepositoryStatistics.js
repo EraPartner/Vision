@@ -56,9 +56,18 @@ export const statisticsRepository = {
   },
 
   async getBanks() {
+    // Account labels for filter dropdowns, sourced from accounts.name (ADR-088).
+    // EXISTS keeps the prior behaviour: only accounts that actually have active
+    // transactions appear (an account is "seen" once it has activity).
     const result = await queryPrepared(
       'info_get_banks',
-      `SELECT DISTINCT bank_account FROM transactions WHERE is_active = true AND bank_account IS NOT NULL ORDER BY bank_account`,
+      `SELECT a.name AS bank_account
+         FROM accounts a
+        WHERE a.id IN (
+          SELECT t.account_id FROM transactions t
+           WHERE t.is_active = true AND t.account_id IS NOT NULL
+        )
+        ORDER BY a.name`,
       []
     );
     return result.rows.map(r => r.bank_account);

@@ -64,7 +64,7 @@ describe('statisticsRepository.getBanks', () => {
     expect(r).toEqual(['BANK_A', 'BANK_B']);
     expect(queryPrepared).toHaveBeenCalledWith(
       'info_get_banks',
-      expect.stringContaining('SELECT DISTINCT bank_account'),
+      expect.stringContaining('SELECT a.name AS bank_account'),
       [],
     );
   });

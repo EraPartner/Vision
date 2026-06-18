@@ -19,7 +19,7 @@ import {
   hardDeleteThroughInheritanceTables,
 } from './portfolioTxRepo.common.js';
 
-export async function create({ investment_id, type, date, amount, units, price_per_unit, fees, taxes, currency = 'EUR', note, is_recurring, recurrence_interval, recurrence_end_date, fx_rate_to_eur, preloaded_asset_class }) {
+export async function create({ investment_id, type, date, amount, units, price_per_unit, fees, taxes, currency = 'EUR', note, is_recurring, recurrence_interval, recurrence_end_date, fx_rate_to_eur, account_id, preloaded_asset_class }) {
   let assetClass = preloaded_asset_class;
   if (!assetClass) {
     const investmentResult = await query('SELECT asset_class FROM investments WHERE id = $1', [investment_id]);
@@ -45,6 +45,7 @@ export async function create({ investment_id, type, date, amount, units, price_p
     recurrence_interval,
     recurrence_end_date,
     fx_rate_to_eur,
+    account_id,
   }, { assetClass });
 
   await validateSellUnitsAvailability({
@@ -66,8 +67,8 @@ export async function create({ investment_id, type, date, amount, units, price_p
   try {
     const result = await query(
       `INSERT INTO portfolio_transactions
-         (investment_id, type, date, amount, units, price_per_unit, fees, taxes, currency, note, is_recurring, recurrence_interval, recurrence_end_date, fx_rate_to_eur)
-         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)
+         (investment_id, type, date, amount, units, price_per_unit, fees, taxes, currency, note, is_recurring, recurrence_interval, recurrence_end_date, fx_rate_to_eur, account_id)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15)
          RETURNING *`,
       [
         payload.investment_id,
@@ -84,6 +85,7 @@ export async function create({ investment_id, type, date, amount, units, price_p
         payload.recurrence_interval || null,
         payload.recurrence_end_date || null,
         payload.fx_rate_to_eur ?? null,
+        payload.account_id ?? null,
       ]
     );
     return mapPortfolioTxRow(result.rows[0]);
@@ -95,7 +97,7 @@ export async function create({ investment_id, type, date, amount, units, price_p
 }
 
 export async function update(id, fields) {
-  const allowed = ['date', 'amount', 'units', 'price_per_unit', 'fees', 'taxes', 'currency', 'note', 'is_recurring', 'recurrence_interval', 'recurrence_end_date', 'fx_rate_to_eur'];
+  const allowed = ['date', 'amount', 'units', 'price_per_unit', 'fees', 'taxes', 'currency', 'note', 'is_recurring', 'recurrence_interval', 'recurrence_end_date', 'fx_rate_to_eur', 'account_id'];
 
   const existing = await getById(id);
   if (!existing) return null;

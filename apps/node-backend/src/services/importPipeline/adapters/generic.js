@@ -4,15 +4,20 @@
  */
 
 import { logger } from '../../../config/logger.js';
+import { normalizeToUppercase } from '../../textNormalization.js';
 import { parseCsvFile, buildRawRowString, parseAmountField, SUPPORTED_DATE_FORMATS, parseDateWithFormat } from './_shared.js';
 
 const NAME = 'generic';
 const BANK_LABEL = 'Generic';
 
+// Normalize to UPPER+trim so the custom/generic adapter matches every built-in adapter and the
+// manual-entry path (transactionRepository.create uppercases bank_account) — otherwise the same
+// bank reached two ways resolves to two different accounts (ADR-088 account identity).
 function buildBankAccount(config) {
   const bankName = config.bank_name || 'CUSTOM';
   const accountType = config.account_type;
-  return accountType ? `${bankName} ${accountType.toUpperCase()}` : bankName;
+  const label = accountType ? `${bankName} ${accountType.toUpperCase()}` : bankName;
+  return normalizeToUppercase(label);
 }
 
 function rowToTransaction(row, config) {

@@ -35,12 +35,15 @@ describe('KBCAdapter', () => {
     expect(txns).toHaveLength(3);
   });
 
-  it('detects account type as KBC', async () => {
+  it('uses the own-account IBAN (col 0, canonicalized) as the account', async () => {
     tmpPath = writeTempCSV(SAMPLE_KBC_CSV);
     const txns = await parse(tmpPath);
+    // The sample spans multiple own accounts → each row carries its own canonical IBAN
+    // (no spaces, uppercase), not the literal 'KBC'.
     for (const txn of txns) {
-      expect(txn.bankAccount).toBe('KBC');
+      expect(txn.bankAccount).toMatch(/^BE\d{14}$/);
     }
+    expect(txns[0].bankAccount).toBe('BE61734041478017');
   });
 
   it('parses transaction fields correctly', async () => {

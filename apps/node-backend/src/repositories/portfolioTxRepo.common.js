@@ -300,6 +300,7 @@ export const BASE_ALLOWED_FIELDS = [
   'recurrence_interval',
   'recurrence_end_date',
   'fx_rate_to_eur',
+  'account_id', // owning account for the lot (ADR-091)
 ];
 
 export const CHILD_ALLOWED_FIELDS_BY_ASSET_CLASS = {
@@ -349,6 +350,7 @@ export async function createThroughInheritanceTables(fields, getByIdFn, preloade
     recurrence_interval,
     recurrence_end_date,
     fx_rate_to_eur,
+    account_id,
   } = fields;
 
   const assetClass = preloadedAssetClass;
@@ -369,6 +371,7 @@ export async function createThroughInheritanceTables(fields, getByIdFn, preloade
     'recurrence_interval',
     'recurrence_end_date',
     'fx_rate_to_eur',
+    'account_id',
   ];
   const baseValues = [
     investment_id,
@@ -383,6 +386,7 @@ export async function createThroughInheritanceTables(fields, getByIdFn, preloade
     recurrence_interval || null,
     recurrence_end_date || null,
     fx_rate_to_eur ?? null,
+    account_id ?? null,
   ];
 
   const childColumns = [];

@@ -6,7 +6,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import {
   TrendingUp, TrendingDown, Eye, Trash2, Calendar,
-  DollarSign, Percent, ArrowUpRight, Clock, Pencil,
+  DollarSign, Percent, ArrowUpRight, Clock, Pencil, ArrowLeftRight,
 } from 'lucide-react';
 import { isUnitBased, isFixedIncome, isRealEstate } from '@/utils/assetClass';
 import { onActivateKeyDown } from '@/utils/a11y';
@@ -14,6 +14,7 @@ import { usePortfolio } from '@/hooks/usePortfolio';
 import { usePortfolioSummaryQuery } from '@/hooks/portfolio/usePortfolioSummary';
 import { AddPortfolioTxnDialog } from './AddPortfolioTxnDialog';
 import { EditInvestmentDialog } from './EditInvestmentDialog';
+import { MoveHoldingDialog } from '@/features/portfolio/MoveHoldingDialog';
 import { EditPortfolioTxnDialog } from './EditPortfolioTxnDialog';
 import { useLanguage } from '@/contexts/LanguageContext';
 import { useAppSettings } from '@/contexts/AppSettingsContext';
@@ -61,6 +62,7 @@ export function InvestmentDetailDialog({
   onAddTransaction, onEditInvestment, onEditTransaction,
 }: Props) {
   const [open, setOpen] = useState(false);
+  const [moving, setMoving] = useState(false);
   const navigate = useNavigate();
   const { deleteTransaction } = usePortfolio();
   const { confirm, ConfirmDialog } = useConfirmDialog();
@@ -147,7 +149,10 @@ export function InvestmentDetailDialog({
                 </button>
               </DialogTitle>
               <Badge variant="secondary">{getAssetClassLabel(t, investment.assetClass)}</Badge>
-              <div className="ml-auto">
+              <div className="ml-auto flex items-center gap-1.5">
+                <Button size="sm" variant="outline" className="gap-1.5" onClick={() => setMoving(true)}>
+                  <ArrowLeftRight className="h-4 w-4" /> {t('portfolio.move.action')}
+                </Button>
                 {onEditInvestment ? (
                   <Button size="sm" variant="outline" className="gap-1.5" onClick={() => onEditInvestment(investment)}>
                     <Pencil className="h-4 w-4" /> {t('common.edit')}
@@ -568,6 +573,12 @@ export function InvestmentDetailDialog({
         </DialogContent>
       </Dialog>
       <ConfirmDialog />
+      <MoveHoldingDialog
+        investmentId={investment.id}
+        investmentLabel={investment.name}
+        open={moving}
+        onOpenChange={setMoving}
+      />
     </>
   );
 }

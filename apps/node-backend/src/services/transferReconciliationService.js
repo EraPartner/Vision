@@ -30,8 +30,8 @@ async function loadCandidatePairs(windowDays) {
        JOIN transactions b
          ON b.amount = -a.amount
         AND COALESCE(b.currency, 'EUR') = COALESCE(a.currency, 'EUR')
-        AND b.bank_account IS DISTINCT FROM a.bank_account
-        AND a.bank_account IS NOT NULL AND b.bank_account IS NOT NULL
+        AND b.account_id IS DISTINCT FROM a.account_id
+        AND a.account_id IS NOT NULL AND b.account_id IS NOT NULL
         AND b.date BETWEEN a.date - $1::int AND a.date + $1::int
       WHERE a.is_active AND b.is_active
         AND a.is_transfer = false AND b.is_transfer = false
@@ -67,8 +67,8 @@ async function releaseInvalidAutoPairs(windowDays) {
            WHERE p.id = t.transfer_peer_id
              AND p.amount = -t.amount
              AND COALESCE(p.currency, 'EUR') = COALESCE(t.currency, 'EUR')
-             AND p.bank_account IS DISTINCT FROM t.bank_account
-             AND p.bank_account IS NOT NULL AND t.bank_account IS NOT NULL
+             AND p.account_id IS DISTINCT FROM t.account_id
+             AND p.account_id IS NOT NULL AND t.account_id IS NOT NULL
              AND p.date BETWEEN t.date - $1::int AND t.date + $1::int
              AND p.is_active AND t.is_active
         )`,

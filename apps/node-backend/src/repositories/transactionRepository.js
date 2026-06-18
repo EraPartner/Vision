@@ -111,13 +111,15 @@ export const transactionRepository = {
       ? `${sortCol} ${sortDirection}, t.date DESC, t.id DESC`
       : `t.date DESC, t.id DESC`;
 
-    // Partition by bank_account: a running balance is a per-account ledger
+    // Partition by account_id (ADR-088): a running balance is a per-account ledger
     // figure. Without the partition, a list spanning multiple accounts summed
-    // them into one meaningless cross-account total. (The window itself is
-    // evaluated over the full filtered set, before LIMIT/OFFSET, so the value
+    // them into one meaningless cross-account total. account_id is the real
+    // account identity (the bank_account string is being retired); it is kept in
+    // sync on every write by the dual-write trigger (migration 0051). (The window
+    // is evaluated over the full filtered set, before LIMIT/OFFSET, so the value
     // is still correct across pages.)
     const runningBalanceCol = includeBalance
-      ? `, SUM(t.amount) OVER (PARTITION BY t.bank_account ORDER BY t.date ASC, t.id ASC) AS running_balance`
+      ? `, SUM(t.amount) OVER (PARTITION BY t.account_id ORDER BY t.date ASC, t.id ASC) AS running_balance`
       : '';
 
     const sql = `
@@ -426,13 +428,10 @@ export const transactionRepository = {
       ? `${sortCol} ${sortDirection}, t.date DESC, t.id DESC`
       : `t.date DESC, t.id DESC`;
 
-    // Partition by bank_account: a running balance is a per-account ledger
-    // figure. Without the partition, a list spanning multiple accounts summed
-    // them into one meaningless cross-account total. (The window itself is
-    // evaluated over the full filtered set, before LIMIT/OFFSET, so the value
-    // is still correct across pages.)
+    // Partition by account_id (ADR-088) — see getAll for the rationale; account_id
+    // is kept in sync with bank_account by the dual-write trigger (migration 0051).
     const runningBalanceCol = includeBalance
-      ? `, SUM(t.amount) OVER (PARTITION BY t.bank_account ORDER BY t.date ASC, t.id ASC) AS running_balance`
+      ? `, SUM(t.amount) OVER (PARTITION BY t.account_id ORDER BY t.date ASC, t.id ASC) AS running_balance`
       : '';
 
     const sql = `

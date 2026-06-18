@@ -185,6 +185,20 @@ export function buildOptionalComment(commentParts) {
 }
 
 /**
+ * Canonicalize an account identifier (IBAN/account number) for use as the
+ * account label: strip all whitespace and uppercase, so the same account never
+ * splits on spacing/case across imports or a manual entry (ADR-088). Empty in →
+ * empty out (callers fall back to the bank literal). Belgian IBANs arrive
+ * space-grouped (e.g. "BE81 0637 5694 4024") → "BE81063756944024".
+ * @param {string|null|undefined} value
+ * @returns {string}
+ */
+export function canonicalIban(value) {
+  if (!value) return '';
+  return String(value).replace(/\s+/g, '').toUpperCase();
+}
+
+/**
  * @param {string} filePath
  * @param {object} options
  * @param {BufferEncoding} [encoding]

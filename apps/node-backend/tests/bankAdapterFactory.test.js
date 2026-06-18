@@ -102,7 +102,7 @@ describe('BankAdapterFactory', () => {
     expect(txns[0].recipient).toBe('Grocery Store');
     expect(txns[0].amount).toBe(-50.00);
     expect(txns[1].amount).toBe(2000.00);
-    expect(txns[0].bankAccount).toBe('TestBank');
+    expect(txns[0].bankAccount).toBe('TESTBANK');
   });
 
   describe('ING adapter', () => {

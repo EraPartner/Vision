@@ -26,6 +26,7 @@ const PortfolioTaxPage = lazy(routeLoaders["/portfolio/tax"]);
 const DashboardPage = lazy(routeLoaders["/"]);
 const TransactionsPage = lazy(routeLoaders["/transactions"]);
 const CategoriesPage = lazy(routeLoaders["/categories"]);
+const AccountsPage = lazy(routeLoaders["/accounts"]);
 const RecipientsPage = lazy(routeLoaders["/recipients"]);
 const ImportPage = lazy(routeLoaders["/import"]);
 const ImportReviewPage = lazy(routeLoaders["/import/:batchId/review"]);
@@ -168,6 +169,7 @@ const App = () => {
                                                     <Route path="/" element={<DashboardPage />} />
                                                     <Route path="/transactions" element={<TransactionsPage />} />
                                                     <Route path="/categories" element={<CategoriesPage />} />
+                                                    <Route path="/accounts" element={<AccountsPage />} />
                                                     <Route path="/recipients" element={<RecipientsPage />} />
                                                     <Route path="/planned" element={<PlannedPaymentsPage />} />
                                                     <Route path="/statistics" element={<StatisticsPage />} />

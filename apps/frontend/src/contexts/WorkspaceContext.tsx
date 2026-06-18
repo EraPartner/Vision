@@ -35,10 +35,12 @@ export function useWorkspace() {
   const path = location.pathname;
   const isPortfolio = path.startsWith("/portfolio");
   const isResearch = path.startsWith("/research");
-  const isAdmin = path.startsWith("/admin");
+  // Workspace-agnostic top-level routes preserve whichever workspace was active
+  // (admin and the cross-workspace Accounts hub, ADR-088).
+  const isAgnostic = path.startsWith("/admin") || path.startsWith("/accounts");
 
   let workspace: Workspace;
-  if (isAdmin) {
+  if (isAgnostic) {
     workspace = readStoredWorkspace();
   } else if (isResearch) {
     workspace = "research";
@@ -47,8 +49,8 @@ export function useWorkspace() {
   }
 
   useEffect(() => {
-    if (!isAdmin) writeWorkspace(workspace);
-  }, [isAdmin, workspace]);
+    if (!isAgnostic) writeWorkspace(workspace);
+  }, [isAgnostic, workspace]);
 
   const setWorkspace = useCallback(
     (ws: Workspace) => {
@@ -57,7 +59,7 @@ export function useWorkspace() {
         navigate("/portfolio");
       } else if (ws === "research" && !path.startsWith("/research")) {
         navigate("/research");
-      } else if (ws === "budgeting" && (path.startsWith("/portfolio") || path.startsWith("/research") || path.startsWith("/admin"))) {
+      } else if (ws === "budgeting" && (path.startsWith("/portfolio") || path.startsWith("/research") || path.startsWith("/admin") || path.startsWith("/accounts"))) {
         navigate("/");
       }
     },

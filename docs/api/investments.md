@@ -385,6 +385,23 @@ Create-path compatibility:
 - Add/Edit portfolio transaction dialogs expose an optional `fx_rate_to_eur` field and pass it through to create payloads when set ([[apps/frontend/src/components/portfolio/AddPortfolioTxnDialog.tsx]], [[apps/frontend/src/components/portfolio/EditPortfolioTxnDialog.tsx]], [[apps/frontend/src/hooks/usePortfolio.ts]]).
 - If `fx_rate_to_eur` is omitted, FX conversion uses historical rates from `exchange_rates` for transaction dates; missing rows are auto-backfilled from ECB historical data at startup, with nearest DB historical-rate fallback when exact dates are unavailable ([[apps/node-backend/src/services/currency/currencyConversionService.js]], [[apps/node-backend/src/main.js]]).
 
+### POST /api/investments/:id/move
+
+Move this holding between accounts — an **in-specie transfer that preserves cost basis** (no
+sell/buy, no realized gain, **no cash leg**), per ADR-091. Body: `{ from_account_id, to_account_id, units? }`.
+
+- **Whole move** (omit `units`, or pass `units` ≥ net, or any non-unit-based asset): re-points
+  *every* lot of the `(investment, from_account)` — including history — to the target. One UPDATE.
+- **Partial move** (unit-based, `0 < units < net`): moves buy/gift lots **oldest-first (FIFO)**;
+  the single boundary lot is **split** — its units and cost (`amount`/`fees`/`taxes`) are divided
+  pro-rata so per-unit cost basis is identical on both sides. Sells stay with the source; `units ≤
+  net` keeps the source's position non-negative.
+
+Inheritance-aware (`portfolio_transactions_base.account_id` + child-table `units`, or the flat
+table). Returns `{ investmentId, from, to, mode, movedUnits, lotsMoved, lotsSplit }`. `404` if the
+investment or either account is missing; `400` if `units` exceeds the holding or the investment has
+no lots in the source account. Implemented by `services/portfolio/moveHoldingService.js`.
+
 ### PATCH /api/investments/transactions/:txnId
 
 Update a portfolio transaction by transaction ID.

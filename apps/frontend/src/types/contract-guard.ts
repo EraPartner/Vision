@@ -26,6 +26,7 @@ import type { components } from './generated';
 import type {
   Transaction,
   Category,
+  Account,
   Recipient,
   Tag,
   PlannedTransaction,
@@ -56,6 +57,7 @@ type IsNumeric<T> = [NonNullable<T>] extends [number]
 // ── Key coverage: every field the consumed type reads must exist in the contract.
 export type _KeysTransaction = Expect<KeysSubsetOf<Transaction, Schemas['Transaction']>>;
 export type _KeysCategory = Expect<KeysSubsetOf<Category, Schemas['Category']>>;
+export type _KeysAccount = Expect<KeysSubsetOf<Account, Schemas['Account']>>;
 export type _KeysRecipient = Expect<KeysSubsetOf<Recipient, Schemas['Recipient']>>;
 export type _KeysTag = Expect<KeysSubsetOf<Tag, Schemas['Tag']>>;
 export type _KeysPlannedTransaction = Expect<KeysSubsetOf<PlannedTransaction, Schemas['PlannedTransaction']>>;

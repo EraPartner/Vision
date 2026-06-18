@@ -80,10 +80,15 @@ export const netWorthRepository = {
         FROM bounds
       ),
       account_list AS (
-        SELECT DISTINCT bank_account
-        FROM transactions
-        WHERE is_active = true
-          AND bank_account IS NOT NULL
+        -- in_net_worth gates the bank/cash side of net worth (ADR-089): a
+        -- tracking-only account (in_net_worth=false) does not contribute.
+        SELECT a.id AS account_id, a.name AS bank_account
+        FROM accounts a
+        WHERE a.in_net_worth = true
+          AND a.id IN (
+            SELECT t.account_id FROM transactions t
+             WHERE t.is_active = true AND t.account_id IS NOT NULL
+          )
       )
       SELECT
         to_char(d.day, 'YYYY-MM-DD') AS day,
@@ -96,14 +101,14 @@ export const netWorthRepository = {
         SELECT t.currency, t.balance
         FROM transactions t
         WHERE t.is_active = true
-          AND t.bank_account = a.bank_account
+          AND t.account_id = a.account_id
           AND t.balance IS NOT NULL
           AND t.date <= d.day
         ORDER BY t.date DESC, t.id DESC
         LIMIT 1
       ) lb ON true
       WHERE lb.balance IS NOT NULL
-      ORDER BY d.day, a.bank_account
+      ORDER BY d.day, a.account_id
     `, [firstDataDateYmd]);
 
     let bankHistoryConverted = await convertRowsWithHistoricalRateFallback(

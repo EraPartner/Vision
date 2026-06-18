@@ -117,7 +117,7 @@ describe('generic adapter — configurable mapping', () => {
     expect(txns.map((t) => t.amount)).toEqual([-1234.56, 2500, 10.5]);
     expect(txns[0].recipient).toBe('SHOP');
     expect(txns[0].currency).toBe('EUR');
-    expect(txns[0].bankAccount).toBe('MyBank CHECKING');
+    expect(txns[0].bankAccount).toBe('MYBANK CHECKING');
     expect(txns).toHaveLength(3);
   });
 

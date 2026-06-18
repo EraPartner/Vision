@@ -5,7 +5,7 @@
 import fs from 'fs';
 import { cleanKbcRecipientName, normalizeToUppercase } from '../../textNormalization.js';
 import { logger } from '../../../config/logger.js';
-import { parseDayMonthYear, parseCommaDecimal, buildOptionalComment, splitCsvLines } from './_shared.js';
+import { parseDayMonthYear, parseCommaDecimal, buildOptionalComment, splitCsvLines, canonicalIban } from './_shared.js';
 
 const NAME = 'kbc';
 const BANK_LABEL = 'KBC';
@@ -27,6 +27,7 @@ function parseLine(line) {
   const parts = line.split(';');
   if (parts.length < MIN_FIELDS) return null;
 
+  const ownAccount = parts[0].trim(); // "Rekeningnummer" — the account holder's own IBAN
   const currency = parts[3].trim();
   const statementNumber = parts[4].trim();
   const transactionDateStr = parts[5].trim();
@@ -66,7 +67,7 @@ function parseLine(line) {
 
   return {
     date,
-    bankAccount: 'KBC',
+    bankAccount: canonicalIban(ownAccount) || 'KBC',
     recipient: fullRecipient,
     memo,
     amount,

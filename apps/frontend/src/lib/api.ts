@@ -17,6 +17,7 @@ export type { AggregationEnvelope, ImportProgress, ImportResult, NetWorthSnapsho
 import { cancelAllRequests } from '@/lib/api/client';
 import * as txn from '@/lib/api/transactions';
 import * as cat from '@/lib/api/categories';
+import * as acct from '@/lib/api/accounts';
 import * as rec from '@/lib/api/recipients';
 import * as pln from '@/lib/api/planned';
 import * as imp from '@/lib/api/imports';
@@ -52,6 +53,14 @@ export const apiClient = {
     createCategory: cat.createCategory,
     updateCategory: cat.updateCategory,
     deleteCategory: cat.deleteCategory,
+
+    // Accounts (ADR-088)
+    getAccounts: acct.getAccounts,
+    getAccount: acct.getAccount,
+    createAccount: acct.createAccount,
+    updateAccount: acct.updateAccount,
+    deleteAccount: acct.deleteAccount,
+    mergeAccounts: acct.mergeAccounts,
 
     // Recipients
     getRecipients: rec.getRecipients,
@@ -110,6 +119,7 @@ export const apiClient = {
     getPriceProviders: port.getPriceProviders,
     updateInvestment: port.updateInvestment,
     deleteInvestment: port.deleteInvestment,
+    moveHolding: port.moveHolding,
     getInvestmentPriceHistory: port.getInvestmentPriceHistory,
     getPortfolioTransactions: port.getPortfolioTransactions,
     getPortfolioTransactionsBulk: port.getPortfolioTransactionsBulk,
@@ -250,6 +260,14 @@ export const apiClient = {
 export type {
     Transaction,
     Category,
+    Account,
+    AccountCreate,
+    AccountUpdate,
+    AccountsListResponse,
+    AccountType,
+    AccountLiquidityClass,
+    AccountTaxWrapper,
+    AccountOwner,
     Recipient,
     PlannedTransaction,
     Investment,

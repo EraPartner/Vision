@@ -55,6 +55,7 @@ import aiRouter from './routes/ai.js';
 import attachmentsRouter from './routes/attachments.js';
 import reportsRouter from './routes/reports.js';
 import tagsRouter from './routes/tags.js';
+import accountsRouter from './routes/accounts.js';
 import {
   rateLimiter,
   globalRateLimiter,
@@ -315,6 +316,7 @@ mountRouter(app, '/api/saved-charts', savedChartsRouter);
 mountRouter(app, '/api/attachments', attachmentRateLimiter, attachmentsRouter);
 mountRouter(app, '/api/reports', reportRateLimiter, reportsRouter);
 mountRouter(app, '/api/tags', tagsRouter);
+mountRouter(app, '/api/accounts', accountsRouter);
 
 // AI chat: dedicated per-minute limit on /chat (Ollama calls are expensive);
 // other /api/ai/* endpoints fall back to the global limiter.

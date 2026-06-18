@@ -12,10 +12,11 @@ import {
 
 export const banksRepository = {
   /**
-   * Get current balance per bank account and daily historical balances over
+   * Get current balance per account and daily historical balances over
    * the last 12 months. Uses the balance field from the single most recent
-   * transaction (by date) per bank account, matching the old Python backend
-   * behaviour.
+   * transaction (by date) per account. Grouped by account_id (ADR-088) — the
+   * label is sourced from accounts.name so the response contract is unchanged
+   * while the bank_account string is being retired.
    */
   async getBankBalances(targetCurrency = 'EUR') {
     const accounts = [];
@@ -25,19 +26,21 @@ export const banksRepository = {
     // with one historical-rate lookup instead of two.
     const [latestBalanceResult, historyResult] = await Promise.all([
       query(`
-        SELECT DISTINCT ON (bank_account)
-               bank_account,
-               COALESCE(currency, 'EUR') AS currency,
-               balance,
-               date,
-               COUNT(*) OVER (PARTITION BY bank_account) AS transaction_count,
-               MIN(date) OVER (PARTITION BY bank_account) AS first_transaction,
-               MAX(date) OVER (PARTITION BY bank_account) AS last_transaction
-        FROM transactions
-        WHERE is_active = true
-          AND bank_account IS NOT NULL
-          AND balance IS NOT NULL
-        ORDER BY bank_account, date DESC, id DESC
+        SELECT DISTINCT ON (t.account_id)
+               a.name AS bank_account,
+               COALESCE(t.currency, 'EUR') AS currency,
+               t.balance,
+               t.date,
+               COUNT(*) OVER (PARTITION BY t.account_id) AS transaction_count,
+               MIN(t.date) OVER (PARTITION BY t.account_id) AS first_transaction,
+               MAX(t.date) OVER (PARTITION BY t.account_id) AS last_transaction
+        FROM transactions t
+        JOIN accounts a ON a.id = t.account_id
+        WHERE t.is_active = true
+          AND t.account_id IS NOT NULL
+          AND t.balance IS NOT NULL
+          AND a.type <> 'liability'
+        ORDER BY t.account_id, t.date DESC, t.id DESC
       `),
       query(`
         WITH days AS (
@@ -48,15 +51,19 @@ export const banksRepository = {
           )::date AS day
         ),
         account_list AS (
-          SELECT DISTINCT bank_account
-          FROM transactions
-          WHERE is_active = true AND bank_account IS NOT NULL
+          SELECT a.id AS account_id, a.name AS bank_account
+          FROM accounts a
+          WHERE a.type <> 'liability'
+            AND a.id IN (
+              SELECT t.account_id FROM transactions t
+               WHERE t.is_active = true AND t.account_id IS NOT NULL
+            )
         )
         -- One index-backed LATERAL probe per (account, day) for the latest
         -- balance ≤ day, instead of a ROW_NUMBER over a series×transactions
         -- CROSS JOIN that materialized many copies of the table. Mirrors the
         -- "latest balance ≤ day" pattern in infoRepositoryNetWorth.js; same
-        -- tie-break (date DESC, id DESC). Uses idx_transactions_bank_date_active.
+        -- tie-break (date DESC, id DESC). Uses idx_transactions_account_date_active.
         -- Daily (not month-end) points: the dashboard Balance History chart's
         -- time-scale auto-ticks outnumbered monthly datapoints, duplicating
         -- month labels; ~365 probes per account stay cheap index scans.
@@ -74,14 +81,14 @@ export const banksRepository = {
           SELECT t.currency, t.balance, t.date
           FROM transactions t
           WHERE t.is_active = true
-            AND t.bank_account = a.bank_account
+            AND t.account_id = a.account_id
             AND t.balance IS NOT NULL
             AND t.date <= d.day
           ORDER BY t.date DESC, t.id DESC
           LIMIT 1
         ) lb ON true
         WHERE lb.balance IS NOT NULL
-        ORDER BY a.bank_account, d.day
+        ORDER BY a.account_id, d.day
       `),
     ]);
 

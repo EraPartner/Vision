@@ -22,6 +22,7 @@
  * Last verified against: 0035_add_recipient_aggregations
  */
 export const BACKUP_COVERED_TABLES = Object.freeze([
+  'accounts',
   'agg_recipient_totals',
   'agg_split_outstanding',
   'ai_conversations',

@@ -430,7 +430,7 @@ describe('InfoRepository', () => {
     it('should return account balances with history', async () => {
       query.mockImplementation(async (sql) => {
         if (sql.includes('SELECT 1 FROM')) return { rows: [] };
-        if (sql.includes('DISTINCT ON (bank_account)')) {
+        if (sql.includes('DISTINCT ON (t.account_id)')) {
           return {
             rows: [
               {
