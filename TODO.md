@@ -12,6 +12,10 @@ Format: Obsidian Tasks plugin emoji. Priority 🔺 highest / ⏫ high / 🔼 med
 
 ### Account foundation (ADR-088)
 
+> ⏸️ **Deliberately not done in the 2026-06-18 pass** — irreversible + requires a production
+> dual-write-soak verification that can't be performed from a coding session. Left for a manual,
+> supervised run.
+
 - [ ] ⏫ **Contract phase — drop the `bank_account` string.** Currently dual-written (string +
       `account_id` via the migration-0051 trigger). Removing the string is **out-of-band, manual,
       and irreversible** — do it only after a dual-write soak confirms
@@ -22,41 +26,49 @@ Format: Obsidian Tasks plugin emoji. Priority 🔺 highest / ⏫ high / 🔼 med
 
 ### Per-account positioning (ADR-091)
 
-- [ ] ⏫ **Per-account holdings breakdown UI.** Backend derives positions per
-      `(investment, account)`, but there's no frontend per-account view
-      ("AAPL 150 → IBKR 100 · Degiro 50"). The cost-basis math already groups; this is UI only.
-- [ ] 🔼 **Account picker in the edit-trade dialog.** `EditPortfolioTxnDialog` has no account
-      selector (only the add dialog does) — changing a lot's account is API-only today.
-- [ ] 🔼 **Close-account workflow.** Guided liquidate/transfer-positions → archive
-      (`is_active=false`). The move-holding feature (`POST /api/investments/:id/move`) is the
-      building block; the guided flow isn't built.
-- [ ] 🔽 **Partial-move cost-basis option.** The move feature splits boundary lots **FIFO**
-      (oldest first). Offer proportional / average-cost lot selection as an alternative if wanted.
+- [x] ⏫ **Per-account holdings breakdown UI.** ✅ 2026-06-18 — `getPortfolioSummary` extended
+      with additive `byAccount`; frontend `useAccountPositions` + "Holdings by Account" card in
+      `InvestmentDetailDialog`. Parity test locks Σ byAccount == per-investment totals.
+- [x] 🔼 **Account picker in the edit-trade dialog.** ✅ 2026-06-18 — `EditPortfolioTxnDialog`
+      now has an account selector; PATCH accepts `account_id` (null clears).
+- [x] 🔼 **Close-account workflow.** ✅ 2026-06-18 — `CloseAccountDialog`: lists holdings →
+      in-specie transfer to another account → archive (`is_active=false`); wired into AccountsPage.
+- [x] 🔽 **Partial-move cost-basis option.** ✅ 2026-06-18 — move service + dialog take
+      `strategy: 'fifo' | 'proportional'` (proportional = average-cost, splits every lot by the
+      same fraction).
 
 ### Net worth (ADR-093)
 
-- [ ] 🔼 **Per-account net-worth breakdown** — each account's cash + holdings at market (depends on
-      the per-account portfolio summary above).
-- [ ] 🔼 **Supersede ADR-064 snapshots natively** — express the persisted daily snapshots + the
-      net-worth page as Σ accounts, with **ADR-061 parity tests** locking outputs across the
-      cutover. (The live aggregate already equals Σ accounts; this is the snapshot engine.)
+- [x] 🔼 **Per-account net-worth breakdown** — ✅ 2026-06-18 — `useAccountNetWorth` + "By Account"
+      table on the net-worth page (cash + holdings + total per in-net-worth account).
+- [x] 🔼 **Supersede ADR-064 snapshots natively** — ✅ 2026-06-18 (ADR-100). Holdings now expressed
+      as Σ accounts in the live summary with ADR-061 parity tests. The **historical daily series is
+      deliberately retained** (no per-account daily holdings snapshot exists; rebuilding it would
+      shift the series — see ADR-100 / ADR-093 risk note). Liquid side was already account-native.
 
 ### Brokerage import (ADR-095)
 
-- [ ] ⏫ **Assign an account on portfolio import.** Portfolio/brokerage imports leave
-      `portfolio_transactions.account_id` **NULL** — `portfolioImportPipeline/commit.js` never sets
-      it and there's no account picker in the import flow. Smallest fix: a batch-level brokerage
-      account (picker → store on the batch → pass through commit; migration for the column).
-- [ ] 🔼 **Full ADR-095 fan-out.** Wire `brokerageRouting.js` (currently **dead code**) so one
-      statement splits into cash ledger + trades with the ADR-090 cash legs, deduped on both sides,
-      behind the mandatory staged review. The originally-flagged "dangerous" part.
+- [x] ⏫ **Assign an account on portfolio import.** ✅ 2026-06-18 — migration `0057` adds
+      `portfolio_import_batches.account_id`; the review flow has a brokerage-account picker; commit
+      stamps it onto every imported lot. (Migration authored, not yet applied.)
+- [~] 🔼 **Full ADR-095 fan-out.** ⚠️ 2026-06-18 — **core implemented & tested**: wired the
+      previously-dead `brokerageRouting.js` into `brokerageFanout.js` (`planBrokerageFanout` +
+      `commitBrokerageFanout`) — routes one statement into cash ledger + trades + ADR-090 cash legs,
+      dedups both sides, enforces the double-count guard (a trade's only cash movement is its leg).
+      **Remaining surface (not built):** the brokerage parser kind, mixed-row staging, and the
+      review UI that feeds this commit core. The dangerous algorithmic part is done; the integration
+      layer is the follow-up.
 
 ### Portfolio × Research (ADR-097)
 
-- [ ] 🔽 **Watchlist "what-if" backtest.** Store watchlist add-date; "had I bought when I added
-      it…". Watchlist CRUD exists; the add-date capture + backtest do not.
+- [x] 🔽 **Watchlist "what-if" backtest.** ✅ 2026-06-18 — migration `0058` adds
+      `watchlist.added_price` (snapshotted from the live quote at add time); the watchlist page shows
+      "Since added {date} +X%" (created_at is the add-date). (Migration authored, not yet applied.)
 
 ### Cross-workspace UX (ADR-099)
+
+> ⏸️ **Deliberately not done in the 2026-06-18 pass** — requires the running app + a browser
+> (Playwright) and human UX judgement; out of scope for the headless implementation pass.
 
 - [ ] 🔼 **Runtime nav / UX validation.** Walk the new cross-workspace surfaces (accounts hub,
       net-worth/FI projection, cash-aware rebalancing, unified tax view) on the running app

@@ -37,10 +37,16 @@ export async function prepareImport({ batchId, filePath, customConfig, onProgres
   const { errors: validateErrors } = await validateBatch({ batchId, onProgress });
   const { matchSourceCounts, unresolved } = await matchBatch({ batchId, onProgress });
 
+  // Brokerage imports (ADR-095) ALWAYS go through staged review — the user must
+  // confirm cash-vs-trade routing and instrument matching before any fan-out.
+  const { rows: brRows } = await query(`SELECT is_brokerage FROM portfolio_import_batches WHERE id = $1`, [batchId]);
+  const isBrokerage = brRows[0]?.is_brokerage === true;
+
   // Conservative: only a batch where every row matched by exact symbol and
   // nothing errored or went unresolved is safe to auto-commit. Name matches are
   // weaker (homonyms) and unresolved rows have no instrument yet.
   const requiresReview = (
+    isBrokerage ||
     (validateErrors || 0) > 0 ||
     (matchSourceCounts.name_exact || 0) > 0 ||
     (unresolved || 0) > 0
@@ -80,8 +86,8 @@ export async function commitPortfolioImport({ batchId, onProgress }) {
 /**
  * @param {{ filePath: string, adapterName: string, customConfig: object, defaultAssetClass?: string, defaultType?: string, filename?: string, sizeBytes?: number, onProgress?: Function }} args
  */
-export async function runPortfolioImportPipeline({ filePath, adapterName, customConfig, defaultAssetClass, defaultType, filename, sizeBytes, onProgress }) {
-  const batchId = await createBatch({ adapterName, filename, sizeBytes, customConfig, defaultAssetClass, defaultType });
+export async function runPortfolioImportPipeline({ filePath, adapterName, customConfig, defaultAssetClass, defaultType, filename, sizeBytes, isBrokerage, accountId, onProgress }) {
+  const batchId = await createBatch({ adapterName, filename, sizeBytes, customConfig, defaultAssetClass, defaultType, isBrokerage, accountId });
   logger.info('[portfolio-pipeline] created batch', { batchId, adapterName });
 
   try {

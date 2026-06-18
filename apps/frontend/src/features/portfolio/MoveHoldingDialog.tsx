@@ -13,6 +13,7 @@ import { useAccounts } from "@/hooks/useAccounts";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { toast } from "sonner";
 import type { Account } from "@/types/api";
+import type { MoveHoldingStrategy } from "@/lib/api/portfolio";
 
 const label = (a: Account) => a.display_name || a.name;
 
@@ -35,14 +36,20 @@ export function MoveHoldingDialog({ investmentId, investmentLabel, open, onOpenC
     const [fromId, setFromId] = useState("");
     const [toId, setToId] = useState("");
     const [units, setUnits] = useState("");
+    const [strategy, setStrategy] = useState<MoveHoldingStrategy>("fifo");
 
-    const reset = () => { setFromId(""); setToId(""); setUnits(""); };
+    const reset = () => { setFromId(""); setToId(""); setUnits(""); setStrategy("fifo"); };
+
+    // The strategy only changes which lots a PARTIAL unit move draws from; a whole
+    // move (units blank) re-points every lot regardless.
+    const isPartial = units.trim() !== "" && Number(units) > 0;
 
     const move = useMutation({
         mutationFn: () => apiClient.moveHolding(investmentId, {
             from_account_id: Number(fromId),
             to_account_id: Number(toId),
             units: units.trim() ? Number(units) : null,
+            ...(isPartial ? { strategy } : {}),
         }),
         onSuccess: (r) => {
             queryClient.invalidateQueries();
@@ -92,6 +99,21 @@ export function MoveHoldingDialog({ investmentId, investmentLabel, open, onOpenC
                         />
                         <p className="text-xs text-muted-foreground">{t('portfolio.move.unitsHint')}</p>
                     </div>
+                    {isPartial && (
+                        <div className="space-y-1.5">
+                            <Label htmlFor="move-strategy">{t('portfolio.move.strategy')}</Label>
+                            <Select value={strategy} onValueChange={(v) => setStrategy(v as MoveHoldingStrategy)}>
+                                <SelectTrigger id="move-strategy"><SelectValue /></SelectTrigger>
+                                <SelectContent>
+                                    <SelectItem value="fifo">{t('portfolio.move.strategy.fifo')}</SelectItem>
+                                    <SelectItem value="proportional">{t('portfolio.move.strategy.proportional')}</SelectItem>
+                                </SelectContent>
+                            </Select>
+                            <p className="text-xs text-muted-foreground">
+                                {strategy === 'fifo' ? t('portfolio.move.strategy.fifoHint') : t('portfolio.move.strategy.proportionalHint')}
+                            </p>
+                        </div>
+                    )}
                 </div>
                 <DialogFooter className="pt-2">
                     <Button variant="outline" onClick={() => onOpenChange(false)}>{t('common.cancel')}</Button>

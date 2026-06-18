@@ -33,6 +33,7 @@ import { Button } from "@/components/ui/button";
 import { RefreshCw } from "lucide-react";
 import { usePortfolio } from "@/hooks/usePortfolio";
 import { useOnlineStatus } from "@/hooks/useOnlineStatus";
+import { useAccountNetWorth } from "@/hooks/portfolio/useAccountNetWorth";
 
 const MONTH_LABEL_MIN_PX = 60;
 
@@ -48,8 +49,9 @@ export default function NetWorthPage() {
     staleTime: 120_000,
   });
 
-  const { investments, refreshPrices, isRefreshingPrices } = usePortfolio();
+  const { investments, summaries, refreshPrices, isRefreshingPrices } = usePortfolio();
   const isOnline = useOnlineStatus();
+  const accountRows = useAccountNetWorth(summaries);
 
   const {
     allItems: tableSnapshots,
@@ -293,6 +295,34 @@ export default function NetWorthPage() {
         tooltipValueFormatter={tooltipValueFormatter}
         t={t}
       />
+
+      {/* Per-account breakdown (ADR-093): cash + holdings at market per account */}
+      {accountRows.length > 0 && (
+        <Card className="glass-regular">
+          <CardHeader className="pb-2">
+            <CardTitle className="text-sm font-medium">{t('networth.byAccount')}</CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-1">
+            <div className="grid grid-cols-[1fr_auto_auto_auto] gap-x-4 sm:gap-x-8 text-xs uppercase tracking-wider text-muted-foreground pb-2 border-b border-border/50">
+              <span>{t('networth.account')}</span>
+              <span className="text-right">{t('networth.liquid')}</span>
+              <span className="text-right">{t('networth.investments')}</span>
+              <span className="text-right">{t('networth.title')}</span>
+            </div>
+            {accountRows.map((row) => (
+              <div
+                key={row.accountId ?? 'unassigned'}
+                className="grid grid-cols-[1fr_auto_auto_auto] gap-x-4 sm:gap-x-8 py-1.5 text-sm border-b border-border/30 last:border-0"
+              >
+                <span className="truncate text-foreground">{row.name ?? t('accounts.unassigned')}</span>
+                <span className="text-right tabular-nums text-muted-foreground">{fmt(row.cash)}</span>
+                <span className="text-right tabular-nums text-muted-foreground">{fmt(row.holdings)}</span>
+                <span className="text-right tabular-nums font-medium">{fmt(row.total)}</span>
+              </div>
+            ))}
+          </CardContent>
+        </Card>
+      )}
 
       {/* Historical extremes */}
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">

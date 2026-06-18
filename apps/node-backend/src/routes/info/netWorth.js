@@ -63,4 +63,21 @@ router.get(
   },
 );
 
+// Net worth as Σ accounts (ADR-100): per-account current cash + holdings and the
+// rebuilt daily holdings history. Σ accounts == the aggregate by construction.
+router.get(
+  '/net-worth/by-account',
+  rateLimiter({ windowMs: 60_000, maxRequests: 30, keyPrefix: 'net-worth-by-account' }),
+  async (req, res) => {
+    const targetCurrency = getTargetCurrency(req);
+    const data = await resolveCacheWithInflight(netWorthResponseCache, `by-account:${targetCurrency}`, {
+      ttlMs: NET_WORTH_CACHE_TTL_MS,
+      requireData: true,
+      keepPreviousData: true,
+      loader: () => infoRepository.getNetWorthByAccount(targetCurrency),
+    });
+    res.ok(data);
+  },
+);
+
 export default router;

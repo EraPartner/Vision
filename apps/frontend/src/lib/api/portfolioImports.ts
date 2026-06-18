@@ -46,6 +46,8 @@ export interface PortfolioPreviewRow {
   id: number;
   row_index: number;
   status: string;
+  /** Brokerage routing (ADR-095): 'cash' | 'portfolio' | null (legacy/non-brokerage). */
+  route?: string | null;
   tx_date: string;
   type: string | null;
   type_raw: string | null;
@@ -65,6 +67,8 @@ export interface PortfolioPreviewRow {
 }
 
 export interface PortfolioPreviewGroup {
+  /** Brokerage cash group (ADR-095): deposits/withdrawals, no instrument to resolve. */
+  is_cash?: boolean;
   investment_id: number | null;
   investment_name: string | null;
   investment_symbol: string | null;
@@ -118,12 +122,27 @@ function configToParams(config: PortfolioCustomConfig, adapterName: string): URL
   return p;
 }
 
+/** Brokerage fan-out (ADR-095): mark the import and the sleeve account its rows land on. */
+export interface BrokerageImportOptions {
+  isBrokerage: boolean;
+  accountId?: number;
+}
+
+function appendBrokerage(p: URLSearchParams, brokerage?: BrokerageImportOptions): URLSearchParams {
+  if (brokerage?.isBrokerage) {
+    p.append('is_brokerage', 'true');
+    if (brokerage.accountId != null) p.append('account_id', String(brokerage.accountId));
+  }
+  return p;
+}
+
 export function importPortfolioCSVCustom(
   file: File,
   config: PortfolioCustomConfig,
   adapterName: string,
+  brokerage?: BrokerageImportOptions,
 ): Promise<PortfolioImportResult> {
-  return postMultipartImport('/api/portfolio/import/csv/custom', file, configToParams(config, adapterName));
+  return postMultipartImport('/api/portfolio/import/csv/custom', file, appendBrokerage(configToParams(config, adapterName), brokerage));
 }
 
 export function importPortfolioCSVWithProgress(
@@ -131,11 +150,12 @@ export function importPortfolioCSVWithProgress(
   config: PortfolioCustomConfig,
   adapterName: string,
   onProgress: (progress: ImportProgress) => void,
+  brokerage?: BrokerageImportOptions,
 ): { abort: () => void; result: Promise<PortfolioImportResult> } {
   const controller = new AbortController();
   const formData = new FormData();
   formData.append('file', file);
-  const url = `${API_BASE_URL}/api/portfolio/import/csv/stream?${configToParams(config, adapterName).toString()}`;
+  const url = `${API_BASE_URL}/api/portfolio/import/csv/stream?${appendBrokerage(configToParams(config, adapterName), brokerage).toString()}`;
 
   const extractErrorDetail = (payload: unknown): string => {
     if (payload && typeof payload === 'object' && 'detail' in payload) {
@@ -229,8 +249,14 @@ export function overridePortfolioImportRow(
   });
 }
 
-export function commitPortfolioImportBatch(batchId: number): Promise<{ batch_id: number; imported: number; duplicates: number; errors: number }> {
-  return apiRequest(`/api/portfolio/import/batches/${batchId}/commit`, { method: 'POST' });
+export function commitPortfolioImportBatch(
+  batchId: number,
+  accountId?: number | null,
+): Promise<{ batch_id: number; imported: number; duplicates: number; errors: number }> {
+  return apiRequest(`/api/portfolio/import/batches/${batchId}/commit`, {
+    method: 'POST',
+    body: JSON.stringify(accountId != null ? { account_id: accountId } : {}),
+  });
 }
 
 export function rollbackPortfolioImportBatch(id: number): Promise<{ deleted: number }> {

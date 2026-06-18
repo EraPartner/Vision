@@ -4,9 +4,9 @@ type: endpoint
 method: GET, POST, PATCH, DELETE
 path: /api/watchlist
 description: Investment watchlist management
-date: 2026-04-10
-updated: 2026-06-11
-tags: [api, watchlist, investments, validation]
+date: 2026-06-18
+updated: 2026-06-18
+tags: [api, watchlist, investments, validation, backtest, added-price, adr-097, migration-0058]
 status: active
 aliases: [watchlist-api, tracked-symbols, watch list]
 related_code:
@@ -50,6 +50,7 @@ Notes:
       "symbol": "TSLA",
       "asset_class": "stock",
       "target_price": 250.00,
+      "added_price": 212.50,
       "currency": "USD",
       "notes": "Watch for drop",
       "price_provider_id": "TSLA",
@@ -74,6 +75,7 @@ Add item to watchlist.
   "symbol": "TSLA",
   "asset_class": "stock",
   "target_price": 250.00,
+  "added_price": 212.50,
   "currency": "USD",
   "notes": "Watch for drop",
   "price_provider_id": "TSLA"
@@ -81,6 +83,15 @@ Add item to watchlist.
 ```
 
 **Required Fields:** `name`, `asset_class`, `target_price`
+
+**`added_price` (June 2026, ADR-097, migration 0058):**
+
+Optional field. When omitted, the backend attempts to snapshot the live quote for `symbol` at add time and set `added_price` automatically. If no quote is available, `added_price` is stored as `null`. The frontend displays "Since added {date} +X%" only when `added_price` is non-null.
+
+`PATCH /api/watchlist/:id` can update `added_price` to reset the baseline.
+
+> [!info] Migration required
+> `added_price` is added by migration 0058 (authored, not applied). Until the migration runs, the column does not exist and the backtest display is suppressed.
 
 **Field Validation (June 2026):**
 

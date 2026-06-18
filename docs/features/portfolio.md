@@ -2,10 +2,10 @@
 title: Feature - Portfolio & Investments
 type: feature
 status: active
-date: 2026-04-27
-last_modified: 2026-06-11
-updated: 2026-06-11
-tags: [feature, portfolio, investments, stocks, crypto, metals, phase-1, phase-3.5, phase-3.6, phase-9, phase-8, phase-14, pdf-export, offline-resilience, stale-prices, online-status-detection, graceful-degradation, portfolio-summary, realtime-totals, decimal-precision, monetary-math, snapshot-valuation-parity, fixed-income-accrual, real-estate-appreciation, net-worth-reconciliation, historical-fx, snapshot-fx, loading-states, error-states, page-error, skeleton, portfolio-unit-math, shared-utils, splits-event, return-of-capital, banker-rounding, fx-attribution, asset-gain, fx-gain, purchase-date-rates, value-fx-neutral, adr-074]
+date: 2026-06-18
+last_modified: 2026-06-18
+updated: 2026-06-18
+tags: [feature, portfolio, investments, stocks, crypto, metals, phase-1, phase-3.5, phase-3.6, phase-9, phase-8, phase-14, pdf-export, offline-resilience, stale-prices, online-status-detection, graceful-degradation, portfolio-summary, realtime-totals, decimal-precision, monetary-math, snapshot-valuation-parity, fixed-income-accrual, real-estate-appreciation, net-worth-reconciliation, historical-fx, snapshot-fx, loading-states, error-states, page-error, skeleton, portfolio-unit-math, shared-utils, splits-event, return-of-capital, banker-rounding, fx-attribution, asset-gain, fx-gain, purchase-date-rates, value-fx-neutral, adr-074, adr-091, adr-100, per-account, move-holding, close-account, brokerage-fanout]
 aliases: [portfolio-feature, investments-feature, holdings, net-worth, stocks, crypto, real-estate, savings, bonds, metals, performance, watchlist]
 description: Track stocks, ETFs, crypto, metals, real estate, savings, and bonds; includes Phase 8 PDF report export with 6 portfolio sections. 2026-05-29 adds historical FX in snapshots and loading/error states on all asset pages. June 2026 adds snapshotBuilder split/return_of_capital events, APP_TIMEZONE day-boundary fix, shared portfolioUnitMath.ts, and FX attribution UI (ADR-074): asset gain / FX effect decomposition on overview, performance, asset pages, and investment detail.
 related_code: ["apps/node-backend/src/routes/investments.js", "apps/node-backend/src/services/priceProviderService.js", "apps/node-backend/src/services/portfolioPerformanceSnapshotService.js", "apps/node-backend/src/services/portfolio/portfolioSummaryService.js", "apps/node-backend/src/routes/info/portfolioSummary.js", "apps/frontend/src/pages/portfolio/PerformancePage.tsx", "apps/frontend/src/pages/portfolio/MetalsPage.tsx", "apps/frontend/src/pages/portfolio/PortfolioOverviewPage.tsx", "apps/frontend/src/hooks/portfolio/usePortfolioSummary.ts", "apps/frontend/src/hooks/usePortfolio.ts", "apps/frontend/src/lib/api.ts"]
@@ -643,6 +643,52 @@ Portfolio report is available from the Portfolio Overview page (`/portfolio`) an
 
 See [[docs/api/reports#post-apireportsportfolio|Reports API: Portfolio Endpoint]] for request/response details.
 
+## Per-Account Holdings (2026-06-18, ADR-091 / ADR-100)
+
+### Per-account breakdown in portfolio summary
+
+`getPortfolioSummary` is extended (additively — the per-investment contract and its golden tests are untouched) with a top-level `byAccount` array. Each element is:
+
+```typescript
+{ account_id: number | null, currentValue: number, totalInvested: number, gainLoss: number }
+```
+
+`account_id: null` means unassigned lots (no account set). Callers resolve names from the accounts list. The parity invariant `Σ byAccount.currentValue == totals.totalPortfolioValue` is locked by a test (ADR-061 discipline). See [[docs/api/portfolio-summary|Portfolio Summary API]] for the updated response shape.
+
+Frontend hook: `apps/frontend/src/hooks/portfolio/useAccountPositions.ts`. `InvestmentDetailDialog` shows a "Holdings by Account" card.
+
+### Edit-trade account picker
+
+`EditPortfolioTxnDialog` has an account selector. `PATCH /api/investments/transactions/:id` accepts `account_id` (integer to reassign a lot to a different account, or `null` to unassign it). No other transaction fields are required alongside it.
+
+### Partial-move cost-basis strategy
+
+`POST /api/investments/:id/move` accepts an optional `strategy` field:
+
+| `strategy` | Behavior |
+|------------|----------|
+| `'fifo'` | Default. Move oldest buy lots first; boundary lot split pro-rata. |
+| `'proportional'` | Average-cost: split *every* lot by the same fraction. Useful for mutual fund–style holdings. |
+
+The strategy selector is shown in `MoveHoldingDialog` only for partial moves (`units < net`). `MoveHoldingService` implements both paths.
+
+### Close-account workflow
+
+`CloseAccountDialog` (wired into `AccountsPage`) lists all of an account's holdings, lets the user pick a destination account, transfers all lots in-specie (calls `POST /api/investments/:id/move` per holding), then archives the account (`PATCH /api/accounts/:id` with `{ is_active: false }`). This is a UI-level workflow with no dedicated backend endpoint; the `ON DELETE RESTRICT` FK on `portfolio_transactions_base.account_id` prevents hard-deletion of an account that still has lots.
+
+Code links: [[apps/frontend/src/components/portfolio/CloseAccountDialog.tsx]], [[apps/node-backend/src/services/portfolio/moveHoldingService.js]]
+
+### Brokerage fan-out core (ADR-095)
+
+`apps/node-backend/src/services/importPipeline/brokerageFanout.js` is now wired and tested. It exports `planBrokerageFanout(rows, accountId)` and `commitBrokerageFanout(plan, db)`, which route one parsed brokerage statement into:
+- cash ledger rows (deposits, withdrawals, fees, dividends, taxes, interest) → `transactions`
+- trade rows (buys, sells) → `portfolio_transactions` with an ADR-090 cash leg
+
+The double-count guard is enforced: a trade emits exactly one cash movement (its leg); no standalone cash row is also created for the same buy/sell.
+
+> [!warning] Remaining surface
+> The brokerage **parser kind** (mixed-row CSV classifier), the **staging schema** for mixed-row batches, and the **review UI integration** for per-row routing decisions are **not yet built**. The fan-out service is correct and tested but is not reachable through the import UI. See [[docs/adr/095-brokerage-account-import|ADR-095]] for the full status.
+
 ## FX Attribution (2026-06-11, ADR-074)
 
 Multi-currency portfolios now expose a decomposition of total gain into **asset gain** (pure performance in the investment's native currency) and **FX gain** (currency movement). The identity `gainLoss = assetGain + fxGain` holds per investment and in totals.
@@ -679,10 +725,13 @@ Code links: [[apps/node-backend/src/services/portfolio/portfolioSummaryService.j
 
 - [[docs/api/investments|API: Investments]]
 - [[docs/api/watchlist|API: Watchlist]]
-- [[docs/api/portfolio-summary|Portfolio Summary API]] — FX attribution response fields
+- [[docs/api/portfolio-summary|Portfolio Summary API]] — FX attribution response fields; `byAccount` breakdown
 - [[docs/integrations/price-providers|Price Providers]] — Live and historical price data
 - [[docs/integrations/kinesis-price-provider|Kinesis Price Provider]] — Metals and commodities
 - [[docs/integrations/currency-conversion|Currency Conversion]] — ECB full-history tier, startup backfill
+- [[docs/adr/100-net-worth-account-native-holdings|ADR-100]] — Per-account holdings parity (Σ byAccount)
+- [[docs/adr/091-per-account-positioning|ADR-091]] — Per-account lots, move-holding, close-account
+- [[docs/adr/095-brokerage-account-import|ADR-095]] — Brokerage fan-out (core built; parser/UI deferred)
 - [[docs/adr/074-fx-attribution-historical-rates|ADR-074]] — FX attribution with purchase-date rates
 - [[docs/adr/073-shared-portfolio-math-package|ADR-073]] — Shared portfolio math (converted track)
 - [[docs/adr/002-database-schema|Database Schema]]
@@ -705,3 +754,5 @@ Code links: [[apps/node-backend/src/services/portfolio/portfolioSummaryService.j
 - `0023_portfolio_performance_snapshots.py` — Added `portfolio_performance_snapshots` table for daily performance caching
 - `0024_per_class_invested_columns.py` — Added per-class invested columns (`stocks_etfs_invested`, `crypto_invested`, `metals_invested`) to performance snapshots
 - `0039_add_value_fx_neutral_to_snapshots.py` — Added nullable `value_fx_neutral NUMERIC(18,2)` to `portfolio_performance_snapshots`; writer detects column presence and degrades gracefully (ADR-074)
+- `0057_portfolio_import_batches_account_id.py` — Adds `account_id` FK to `portfolio_import_batches` so committed lots inherit the destination account (**authored, not applied** — run `bun run db:upgrade`)
+- `0058_watchlist_added_price.py` — Adds `added_price NUMERIC(18,6) NULLABLE` to `watchlist` for the what-if backtest (**authored, not applied** — run `bun run db:upgrade`)

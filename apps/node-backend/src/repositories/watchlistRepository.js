@@ -8,7 +8,7 @@ import { coerceNumericFields } from '../lib/money.js';
 // target_price is NUMERIC (node-postgres returns it as a string); coerce on
 // emit so it matches the `number` API/TS type. current_price/price_change are
 // added later by the route from the price provider, not read from this table.
-const WATCHLIST_NUMERIC_FIELDS = ['target_price'];
+const WATCHLIST_NUMERIC_FIELDS = ['target_price', 'added_price'];
 const mapWatchlistRow = (row) => coerceNumericFields(row, WATCHLIST_NUMERIC_FIELDS);
 
 export const watchlistRepository = {
@@ -67,11 +67,11 @@ export const watchlistRepository = {
     return result.rows[0] ? mapWatchlistRow(result.rows[0]) : null;
   },
 
-  async create({ name, symbol, asset_class, target_price, currency = 'EUR', notes, price_provider_id }) {
+  async create({ name, symbol, asset_class, target_price, currency = 'EUR', notes, price_provider_id, added_price }) {
     const result = await query(
-      `INSERT INTO watchlist (name, symbol, asset_class, target_price, currency, notes, price_provider_id)
-       VALUES ($1, $2, $3, $4, $5, $6, $7) RETURNING *`,
-      [name, symbol || null, asset_class, target_price, currency, notes || null, price_provider_id || null]
+      `INSERT INTO watchlist (name, symbol, asset_class, target_price, currency, notes, price_provider_id, added_price)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8) RETURNING *`,
+      [name, symbol || null, asset_class, target_price, currency, notes || null, price_provider_id || null, added_price ?? null]
     );
     return mapWatchlistRow(result.rows[0]);
   },

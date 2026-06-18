@@ -5,7 +5,7 @@ status: active
 date: 2026-03-31
 updated: 2026-06-18
 tags: [reference, database, migrations, dependencies, alembic, migration-0035, migration-0037, migration-0038, aggregations, custom-parser-configs, mv-recipient-monthly-drop, adr-068, migration-0046, migration-0047, migration-0048, currency-integrity, recipient-bank-accounts, category-fk, adr-086, adr-087]
-description: Migration dependency chain and grouping for the Vision database schema. Latest active chain is 0001–0049. 0046–0049 are AUTHORED but not yet applied — currency integrity, one-primary-bank-account, category FK ON DELETE SET NULL, and currency-check validation.
+description: Migration dependency chain and grouping for the Vision database schema. Latest active chain is 0001–0058 (authored). 0046–0058 are AUTHORED but not yet applied — currency integrity, primary-bank-account, category FK, accounts entity (ADR-088/091), cash legs (ADR-090), balance reconciliation (ADR-094), portfolio import account_id (ADR-091/095 migration 0057), watchlist added_price (ADR-097 migration 0058).
 aliases: [migration dependencies, migration chain, migration groups, alembic chain]
 ---
 
@@ -31,6 +31,15 @@ aliases: [migration dependencies, migration chain, migration groups, alembic cha
 > - **0047** — `one_primary_bank_account_per_recipient` (partial unique index on recipient_bank_accounts; ADR-087) **AUTHORED, NOT YET APPLIED**
 > - **0048** — `category_fk_on_delete_set_null` (transactions/recipients/planned_transactions category FK changed from RESTRICT to ON DELETE SET NULL; ADR-087) **AUTHORED, NOT YET APPLIED**
 > - **0049** — `validate_currency_checks` (normalise legacy currency codes, then VALIDATE the 0046 ISO checks retroactively; ADR-086) **AUTHORED, NOT YET APPLIED**
+> - **0050** — `add_accounts_table` (accounts entity + account_id FKs on transactions/planned_transactions; ADR-088) **AUTHORED, NOT YET APPLIED**
+> - **0051** — `account_dual_write_trigger` (BEFORE INSERT/UPDATE trigger keeping account_id ↔ bank_account in sync; ADR-088) **AUTHORED, NOT YET APPLIED**
+> - **0052** — `portfolio_transactions_account_id` (nullable account_id FK on portfolio_transactions_base; ADR-091) **AUTHORED, NOT YET APPLIED**
+> - **0053** — `trade_cash_legs` (portfolio_transaction_id FK on transactions for ADR-090 cash legs; ADR-090) **AUTHORED, NOT YET APPLIED**
+> - **0054** — `account_statement_balance` (statement_balance + statement_balance_date on accounts; ADR-094) **AUTHORED, NOT YET APPLIED**
+> - **0055** — `account_merge_table_support` (merge-related schema updates; ADR-088) **AUTHORED, NOT YET APPLIED**
+> - **0056** — `account_funding_account_id` (funding_account_id FK on accounts for sleeve-less settlement; ADR-090) **AUTHORED, NOT YET APPLIED**
+> - **0057** — `portfolio_import_batches_account_id` (account_id FK on portfolio_import_batches; ADR-091/ADR-095) **AUTHORED, NOT YET APPLIED**
+> - **0058** — `watchlist_added_price` (added_price NUMERIC(18,6) NULLABLE on watchlist; ADR-097) **AUTHORED, NOT YET APPLIED**
 
 ## Migration Chain (legacy tree — historical reference)
 

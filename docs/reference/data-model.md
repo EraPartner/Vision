@@ -6,7 +6,7 @@ date: 2026-04-24
 updated: 2026-06-18
 last_modified: 2026-06-18
 tags: [reference, data-model, entities, database, schema, phase-5a, phase-0, phase-1, may-2026, tags, tagging, orthogonal-dimension, aggregations, migration-0035, saved-custom-parsers, custom-parser-configs, adr-066, fx-attribution, value-fx-neutral, adr-074, migration-0039, portfolio-import, portfolio-import-batches, portfolio-import-staging-rows, kind-discriminator, migration-0040, migration-0041, adr-078]
-description: Complete reference for all data entities in Vision — core, portfolio, planning, supporting, and aggregation entities. Includes exchange_rate_cache (Phase 0), aggregation tables (Phase 1, consolidated in 0035), attachment entity (Phase 5A), transaction tags (May 2026), custom_parser_configs (June 2026, ADR-066) with kind discriminator (June 2026, ADR-078 migration 0041), value_fx_neutral snapshot column (June 2026, ADR-074 migration 0039), portfolio_import_batches and portfolio_import_staging_rows (June 2026, ADR-078 migration 0040), and supporting entities transaction_splits, split_payments, split_audit, import_batches, provider_health, recipient_match_patterns, asset_price_history (June 2026).
+description: Complete reference for all data entities in Vision — core, portfolio, planning, supporting, and aggregation entities. Includes exchange_rate_cache (Phase 0), aggregation tables (Phase 1, consolidated in 0035), attachment entity (Phase 5A), transaction tags (May 2026), custom_parser_configs (June 2026, ADR-066) with kind discriminator (June 2026, ADR-078 migration 0041), value_fx_neutral snapshot column (June 2026, ADR-074 migration 0039), portfolio_import_batches and portfolio_import_staging_rows (June 2026, ADR-078 migration 0040), watchlist.added_price (June 2026, ADR-097 migration 0058), portfolio_import_batches.account_id (June 2026, ADR-091 migration 0057), and supporting entities transaction_splits, split_payments, split_audit, import_batches, provider_health, recipient_match_patterns, asset_price_history (June 2026).
 aliases: [data model, entities, domain model, schema entities]
 related_code: ["apps/node-backend/src/repositories/", "alembic/versions/"]
 ---
@@ -314,9 +314,14 @@ types: `account_type`, `account_liquidity_class`, `account_tax_wrapper`, `accoun
 | `symbol` | VARCHAR(20) | NOT NULL | Trading symbol |
 | `asset_class` | asset_class | NOT NULL | Asset type |
 | `target_price` | NUMERIC(18,6) | NOT NULL | Target price |
+| `added_price` | NUMERIC(18,6) | NULLABLE | **New (ADR-097, migration 0058 — authored, not applied).** Live quote snapshotted at add time; used for the "Since added +X%" what-if backtest. `null` when no live quote was available at add time or migration not yet applied. |
 | `currency` | VARCHAR(10) | NULLABLE | Currency |
 
-**Related:** [[docs/features/watchlist|Watchlist Feature]], [[docs/api/watchlist|API]]
+> [!info] Migration 0058 required
+> `added_price` is added by migration `0058_watchlist_added_price` (authored, not applied). Existing
+> rows will have `added_price = null` until set manually via `PATCH /api/watchlist/:id`.
+
+**Related:** [[docs/features/watchlist|Watchlist Feature]], [[docs/api/watchlist|API]], [[docs/adr/097-portfolio-research-analytics|ADR-097]]
 
 ---
 
@@ -797,7 +802,7 @@ types: `account_type`, `account_liquidity_class`, `account_tax_wrapper`, `accoun
 
 ---
 
-### PortfolioImportBatch (June 2026, ADR-078, migration 0040)
+### PortfolioImportBatch (June 2026, ADR-078, migration 0040; account_id added migration 0057)
 
 **Purpose:** Tracks each portfolio CSV import run through the pipeline. Mirrors `import_batches` but with portfolio-specific columns for batch defaults and instrument resolution.
 
@@ -808,6 +813,7 @@ types: `account_type`, `account_liquidity_class`, `account_tax_wrapper`, `accoun
 | `source_filename` | TEXT | NULLABLE | Original uploaded filename |
 | `source_size_bytes` | BIGINT | NULLABLE | File size in bytes |
 | `custom_config` | JSONB | NULLABLE | Column mapping config snapshot at import time |
+| `account_id` | INTEGER | FK → accounts ON DELETE SET NULL, NULLABLE | **New (migration 0057 — authored, not applied).** Destination brokerage account; committed `portfolio_transactions` inherit this value (ADR-091 per-account lots). `null` = unassigned. |
 | `default_asset_class` | TEXT | NOT NULL | Batch-level fallback asset class for rows without explicit asset class |
 | `default_type` | TEXT | NOT NULL, DEFAULT `'buy'` | Batch-level fallback transaction type when no type column is mapped |
 | `status` | TEXT | NOT NULL, DEFAULT `'pending'` | Pipeline status: `pending`, `staging`, `validating`, `matching`, `committing`, `complete`, `failed`, `aborted`, `awaiting_review` |
@@ -821,9 +827,9 @@ types: `account_type`, `account_liquidity_class`, `account_tax_wrapper`, `accoun
 
 **Backup:** Included in `BACKUP_COVERED_TABLES`.
 
-**Migration:** [[alembic/versions/0040_add_portfolio_import_staging.py]]
+**Migrations:** [[alembic/versions/0040_add_portfolio_import_staging.py]] (base); `0057_portfolio_import_batches_account_id` (authored, not applied — adds `account_id`)
 
-**Related:** [[docs/features/portfolio-import|Portfolio Import Feature]], [[docs/api/portfolio-imports|Portfolio Imports API]], [[docs/adr/078-portfolio-csv-import|ADR-078]]
+**Related:** [[docs/features/portfolio-import|Portfolio Import Feature]], [[docs/api/portfolio-imports|Portfolio Imports API]], [[docs/adr/078-portfolio-csv-import|ADR-078]], [[docs/adr/091-per-account-positioning|ADR-091]]
 
 ---
 

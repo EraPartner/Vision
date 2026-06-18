@@ -22,6 +22,12 @@ function validateWatchlistFields(body) {
     if (!result.valid) throw new ValidationError(result.error);
     body.target_price = result.value;
   }
+  // Snapshot of the live price when the item was added (ADR-097 backtest); optional.
+  if (body.added_price !== undefined && body.added_price !== null) {
+    const result = validateNumber(body.added_price, { min: 0, fieldName: 'added_price' });
+    if (!result.valid) throw new ValidationError(result.error);
+    body.added_price = result.value;
+  }
   if (body.asset_class !== undefined && !WATCHLIST_ASSET_CLASSES.has(body.asset_class)) {
     throw new ValidationError(
       `asset_class must be one of: ${[...WATCHLIST_ASSET_CLASSES].join(', ')}`
@@ -61,9 +67,9 @@ router.post('/', async (req, res) => {
   }
   // Coerces target_price in place — destructure only after validation.
   validateWatchlistFields(req.body);
-  const { name, symbol, asset_class, target_price, currency, notes, price_provider_id } = req.body;
+  const { name, symbol, asset_class, target_price, currency, notes, price_provider_id, added_price } = req.body;
   const item = await watchlistRepository.create({
-    name, symbol, asset_class, target_price, currency, notes, price_provider_id,
+    name, symbol, asset_class, target_price, currency, notes, price_provider_id, added_price,
   });
   res.status(201);
   res.ok(item);

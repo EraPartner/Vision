@@ -164,6 +164,7 @@ export const apiClient = {
     getPortfolioPerformance: info.getPortfolioPerformance,
     getPortfolioSummary: info.getPortfolioSummary,
     getNetWorth: info.getNetWorth,
+    getNetWorthByAccount: info.getNetWorthByAccount,
     refreshMaterializedViews: info.refreshMaterializedViews,
     getExchangeRates: info.getExchangeRates,
     refreshExchangeRates: info.refreshExchangeRates,

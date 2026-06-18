@@ -14,11 +14,11 @@ import { parseWithConfig } from './portfolioGenericAdapter.js';
 
 const STAGE_INSERT_CHUNK = 500;
 
-export async function createBatch({ adapterName, filename, sizeBytes, customConfig, defaultAssetClass, defaultType }) {
+export async function createBatch({ adapterName, filename, sizeBytes, customConfig, defaultAssetClass, defaultType, isBrokerage = false, accountId }) {
   const result = await query(
     `INSERT INTO portfolio_import_batches
-       (adapter_name, source_filename, source_size_bytes, custom_config, default_asset_class, default_type, status, started_at)
-     VALUES ($1, $2, $3, $4, $5, $6, 'pending', NOW())
+       (adapter_name, source_filename, source_size_bytes, custom_config, default_asset_class, default_type, is_brokerage, account_id, status, started_at)
+     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, 'pending', NOW())
      RETURNING id`,
     [
       adapterName,
@@ -27,6 +27,8 @@ export async function createBatch({ adapterName, filename, sizeBytes, customConf
       customConfig ? JSON.stringify(customConfig) : null,
       defaultAssetClass || null,
       defaultType || null,
+      !!isBrokerage,
+      accountId != null ? Number(accountId) : null,
     ],
   );
   return result.rows[0].id;

@@ -256,6 +256,31 @@ describe('getPortfolioSummary', () => {
     expect(result.totals.totalInvested).toBeCloseTo(sumInvested, 2);
     expect(result.totals.totalGainLoss).toBeCloseTo(sumGainLoss, 2);
   });
+
+  it('byAccount splits holdings per account and re-sums to the totals (ADR-091/ADR-093 parity)', async () => {
+    query
+      .mockResolvedValueOnce({ rows: [investmentRow({ id: 1, currency: 'EUR', current_price: 12 })] })
+      .mockResolvedValueOnce({
+        rows: [
+          txnRow({ id: 1, investment_id: 1, type: 'buy', amount: 1000, units: 100, currency: 'EUR', account_id: 10 }),
+          txnRow({ id: 2, investment_id: 1, type: 'buy', amount: 500, units: 50, currency: 'EUR', account_id: 20 }),
+          txnRow({ id: 3, investment_id: 1, type: 'buy', amount: 120, units: 10, currency: 'EUR', account_id: null }),
+        ],
+      });
+
+    const result = await getPortfolioSummary('EUR');
+
+    // Three groups: IBKR(10), Degiro(20), unassigned(null), sorted by value desc.
+    expect(result.byAccount.map((a) => a.account_id)).toEqual([10, 20, null]);
+    const sumCV = result.byAccount.reduce((s, a) => s + a.currentValue, 0);
+    const sumGL = result.byAccount.reduce((s, a) => s + a.gainLoss, 0);
+    const sumInv = result.byAccount.reduce((s, a) => s + a.totalInvested, 0);
+    expect(sumCV).toBeCloseTo(result.totals.totalPortfolioValue, 2);
+    expect(sumGL).toBeCloseTo(result.totals.totalGainLoss, 2);
+    expect(sumInv).toBeCloseTo(result.totals.totalInvested, 2);
+    // 100 units @ 12 = 1200 at the largest account.
+    expect(result.byAccount[0]).toMatchObject({ account_id: 10, currentValue: 1200 });
+  });
 });
 
 describe('getBreakdownSummary (legacy compat)', () => {

@@ -77,7 +77,8 @@ export async function computeDailySnapshots(targetCurrency = 'EUR') {
              COALESCE(pt.amount, 0) AS amount,
              COALESCE(pt.units, 0) AS units,
              COALESCE(pt.currency, i.currency, 'EUR') AS currency,
-             pt.fx_rate_to_eur
+             pt.fx_rate_to_eur,
+             pt.account_id
       FROM portfolio_transactions pt
       JOIN investments i ON i.id = pt.investment_id
       WHERE pt.date >= $1::date AND pt.date <= $2::date
@@ -201,6 +202,9 @@ export async function computeDailySnapshots(targetCurrency = 'EUR') {
       units: Number(row.units) || 0,
       currency: row.currency,
       fxRateToEur: row.fx_rate_to_eur != null ? Number(row.fx_rate_to_eur) : undefined,
+      // Per-account positioning (ADR-091): the lot's owning account ('unassigned'
+      // for legacy NULLs). Used to split each day's value Σ accounts (ADR-100).
+      accountKey: row.account_id == null ? 'unassigned' : String(Number(row.account_id)),
     });
   }
 
@@ -321,6 +325,28 @@ export async function computeDailySnapshots(targetCurrency = 'EUR') {
   }
 
   const unitsByInvestment = {};
+  // Per-account positioning (ADR-091/ADR-100): a relative weight per (investment,
+  // account) — units for unit assets, net invested for non-unit — used to split
+  // each day's per-investment value across accounts. Σ shares == 1 per investment,
+  // so Σ accounts == the aggregate value by construction (the parity guarantee).
+  const weightByAcctInv = new Map();
+  const bumpWeight = (invId, acctKey, delta) => {
+    let m = weightByAcctInv.get(invId);
+    if (!m) { m = new Map(); weightByAcctInv.set(invId, m); }
+    m.set(acctKey, (m.get(acctKey) || 0) + delta);
+  };
+  const splitByAccount = (target, invId, value) => {
+    const m = weightByAcctInv.get(invId);
+    if (!m) return;
+    let totalW = 0;
+    for (const w of m.values()) totalW += w > 0 ? w : 0;
+    if (totalW <= 0) return;
+    for (const [acctKey, w] of m) {
+      if (w <= 0) continue;
+      const share = toDecimal(w).div(totalW);
+      target.set(acctKey, (target.get(acctKey) ?? toDecimal(0)).plus(value.times(share)));
+    }
+  };
   // Cost-weighted average purchase-date FX multiplier per unit investment:
   // m̄ = Σ(buyAmount_i × m_i) / Σ(buyAmount_i), where m_i is the txn-date
   // conversion to the target currency. Valuing units×price at m̄ instead of
@@ -370,6 +396,8 @@ export async function computeDailySnapshots(targetCurrency = 'EUR') {
         else if (inv?.assetClass === 'crypto') cryptoInvested = cryptoInvested.plus(converted);
         else if (inv?.assetClass === 'metals') metalsInvested = metalsInvested.plus(converted);
         unitsByInvestment[tx.investmentId] = (unitsByInvestment[tx.investmentId] || 0) + tx.units;
+        // Per-account weight: units for unit assets, net invested for non-unit.
+        bumpWeight(tx.investmentId, tx.accountKey, inv ? tx.units : converted.toNumber());
         if (tx.units > 0 && tx.amount > 0) lastKnownPrice[tx.investmentId] = txFallbackPrice(tx, inv?.currency, day);
 
         if (inv && tx.amount > 0) {
@@ -394,6 +422,8 @@ export async function computeDailySnapshots(targetCurrency = 'EUR') {
         // min(units, totalUnits)) so a later buy isn't offset by a negative.
         const heldUnits = unitsByInvestment[tx.investmentId] || 0;
         unitsByInvestment[tx.investmentId] = heldUnits > 0 ? Math.max(0, heldUnits - tx.units) : heldUnits;
+        // Reduce the selling account's weight (the sell carries its account).
+        bumpWeight(tx.investmentId, tx.accountKey, inv ? -tx.units : converted.negated().toNumber());
         if (tx.units > 0 && tx.amount > 0) lastKnownPrice[tx.investmentId] = txFallbackPrice(tx, inv?.currency, day);
 
         const fxs = fxNeutralState.get(tx.investmentId);
@@ -434,6 +464,7 @@ export async function computeDailySnapshots(targetCurrency = 'EUR') {
     let stocksEtfsValue = toDecimal(0);
     let cryptoValue = toDecimal(0);
     let metalsValue = toDecimal(0);
+    const valueByAccount = new Map(); // acctKey → Decimal (ADR-100 per-account split)
 
     const isLatestDay = day === todayYmd;
 
@@ -459,6 +490,7 @@ export async function computeDailySnapshots(targetCurrency = 'EUR') {
       const invValueNative = toDecimal(units).times(price);
       const invValue = convertAmount(invValueNative, inv.currency, undefined, day);
       totalValue = totalValue.plus(invValue);
+      splitByAccount(valueByAccount, inv.id, invValue);
       if (inv.assetClass === 'stock' || inv.assetClass === 'etf') stocksEtfsValue = stocksEtfsValue.plus(invValue);
       else if (inv.assetClass === 'crypto') cryptoValue = cryptoValue.plus(invValue);
       else if (inv.assetClass === 'metals') metalsValue = metalsValue.plus(invValue);
@@ -506,7 +538,10 @@ export async function computeDailySnapshots(targetCurrency = 'EUR') {
         invValue = convertAmount(inv.currentPrice, inv.currency, undefined, day);
       }
 
-      if (invValue.gt(0)) fixedIncomeValue = fixedIncomeValue.plus(invValue);
+      if (invValue.gt(0)) {
+        fixedIncomeValue = fixedIncomeValue.plus(invValue);
+        splitByAccount(valueByAccount, inv.id, invValue);
+      }
     }
     totalValue = totalValue.plus(fixedIncomeValue);
     // Non-unit values accumulate invested capital at txn-date rates already,
@@ -535,6 +570,11 @@ export async function computeDailySnapshots(targetCurrency = 'EUR') {
       cumulative_inflation: roundMoney(cumulativeInflation.minus(1).times(100), 2),
       inflation_adjusted_value: cumulativeInflation.gt(0)
         ? roundMoney(totalValue.div(cumulativeInflation)) : roundMoney(totalValue),
+      // Per-account holdings split (ADR-100). Σ value_by_account == value by
+      // construction. In-memory only — not persisted to the snapshots table.
+      value_by_account: Object.fromEntries(
+        [...valueByAccount].map(([k, v]) => [k, roundMoney(v)]),
+      ),
     });
   }
 

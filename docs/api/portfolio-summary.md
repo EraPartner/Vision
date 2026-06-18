@@ -2,10 +2,10 @@
 title: Portfolio Summary API
 type: endpoint
 status: active
-date: 2026-04-29
-updated: 2026-06-11
-tags: [endpoint, api, portfolio, realtime, summary, totals, dashboard, performance, net-worth, live-overlay, fx-attribution, asset-gain, fx-gain, purchase-date-rates]
-description: Realtime portfolio totals endpoint serving as single source of truth for dashboard, performance, and (from 2026-05-31) net-worth current-point metrics. Single computation path, consistent FX timing, 60s cache TTL. 2026-06-11 (ADR-074): flows convert at transaction-date FX; gainLoss = assetGain + fxGain; new per-investment assetGain/fxGain/nativeCurrentValue/usedFallbackRate fields; new totals totalAssetGain/totalFxGain/usedFallbackRate.
+date: 2026-06-18
+updated: 2026-06-18
+tags: [endpoint, api, portfolio, realtime, summary, totals, dashboard, performance, net-worth, live-overlay, fx-attribution, asset-gain, fx-gain, purchase-date-rates, per-account, byAccount, adr-091, adr-100]
+description: Realtime portfolio totals endpoint serving as single source of truth for dashboard, performance, and (from 2026-05-31) net-worth current-point metrics. Single computation path, consistent FX timing, 60s cache TTL. 2026-06-11 (ADR-074): flows convert at transaction-date FX; gainLoss = assetGain + fxGain. 2026-06-18 (ADR-091/ADR-100): additive byAccount array — per-account holdings breakdown with parity guarantee.
 aliases: [portfolio-totals, portfolio-metrics, summary-api]
 related_code: ["apps/node-backend/src/services/portfolio/portfolioSummaryService.js", "apps/node-backend/src/routes/info/portfolioSummary.js", "apps/node-backend/src/routes/info/_cache.js", "apps/node-backend/src/routes/info/_liveSummary.js", "apps/frontend/src/hooks/portfolio/usePortfolioSummary.ts", "apps/frontend/src/lib/api/info.ts"]
 ---
@@ -104,6 +104,11 @@ Content-Type: application/json
       "count": 3,
       "usedFallbackRate": false
     }
+  ],
+  "byAccount": [
+    { "account_id": 3, "currentValue": 90000.00, "totalInvested": 72000.00, "gainLoss": 18000.00 },
+    { "account_id": 7, "currentValue": 35000.00, "totalInvested": 28000.00, "gainLoss": 7000.00 },
+    { "account_id": null, "currentValue": 0.00, "totalInvested": 0.00, "gainLoss": 0.00 }
   ]
 }
 ```
@@ -117,6 +122,23 @@ Content-Type: application/json
 | `computed_at` | string (ISO-8601) | Timestamp when this snapshot was computed; refreshes on cache invalidation |
 | `totals` | object | Aggregate portfolio metrics across all assets |
 | `summaries` | array | Per-asset-class breakdown with individual metrics |
+| `byAccount` | array | **New (ADR-091/ADR-100, 2026-06-18).** Per-account holdings breakdown. Additive — existing fields are unchanged. |
+
+**byAccount[] object (one per account that holds at least one lot, plus one `null` entry for unassigned lots):**
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `account_id` | `number \| null` | Account identifier; `null` = unassigned lots |
+| `currentValue` | number | Holdings market value for this account in target currency |
+| `totalInvested` | number | Cost basis for this account at transaction-date FX rates |
+| `gainLoss` | number | `currentValue − totalInvested` for this account |
+
+**Parity invariant (locked by test, per ADR-061 discipline):**
+```
+Σ byAccount[].currentValue  === totals.currentValue
+Σ byAccount[].totalInvested === totals.totalInvested
+Σ byAccount[].gainLoss      === totals.totalGainLoss
+```
 
 **totals object:**
 | Field | Type | Description |
@@ -317,15 +339,25 @@ return <div>Total: {data.totals.currentValue}</div>;
 
 - [[docs/api/info|Info & Analytics API]] — Other portfolio/statistics endpoints
 - [[docs/api/investments|Investments API]] — Per-investment data and price updates
-- [[docs/features/portfolio|Portfolio Feature]] — Feature overview and asset classes
+- [[docs/features/portfolio|Portfolio Feature]] — Feature overview and asset classes; per-account breakdown
+- [[docs/features/net-worth|Net Worth Feature]] — Per-account breakdown table consuming byAccount
+- [[docs/adr/100-net-worth-account-native-holdings|ADR-100]] — Per-account byAccount parity decision
+- [[docs/adr/091-per-account-positioning|ADR-091]] — account_id on lots; prerequisite for byAccount
 - [[docs/adr/074-fx-attribution-historical-rates|ADR-074]] — FX attribution decision and rationale
 - [[docs/adr/044-portfolio-summary-single-source-of-truth|ADR-044]] — Single source of truth architecture decision
 - [[docs/adr/073-shared-portfolio-math-package|ADR-073]] — Shared portfolio math (fxMultiplier converted track)
 - [[docs/integrations/currency-conversion|Currency Conversion]] — ECB full-history tier, on-or-before convention
 - [[docs/reference/code-patterns#portfolio-totals-pattern|Portfolio Totals Pattern]] — Implementation guidelines
-- [[docs/api/portfolio-summary|Performance API]] — Snapshot timeseries and annualized metrics
 
 ## Changelog
+
+### 2026-06-18 — Per-account holdings breakdown (ADR-091 / ADR-100)
+
+- **New additive top-level field `byAccount[]`:** `{ account_id: number | null, currentValue, totalInvested, gainLoss }` per account. Existing `totals` and `summaries` fields are completely unchanged.
+- Lots grouped by `account_id`; `null` entry covers unassigned lots. Both sides run through the same cost-basis math and FX multipliers as the per-investment path, so parity holds by construction.
+- Parity invariant (`Σ byAccount == totals`) locked by test (ADR-061 approach).
+- Frontend hook: `apps/frontend/src/hooks/portfolio/useAccountPositions.ts`. `InvestmentDetailDialog` now shows "Holdings by Account" card.
+- Net Worth page uses this via `useAccountNetWorth` to compose the per-account breakdown table. See [[docs/adr/100-net-worth-account-native-holdings|ADR-100]].
 
 ### 2026-06-11 — FX attribution fields + purchase-date rate semantics (ADR-074)
 

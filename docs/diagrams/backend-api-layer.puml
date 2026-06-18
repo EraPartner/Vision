@@ -217,6 +217,9 @@ package "Routes" {
     +POST /investments/kinesis/sanitize-history : sanitize Kinesis spikes
     +GET /db/stats : database table statistics (Phase 7)
     +POST /db/vacuum : run VACUUM ANALYZE (Phase 7)
+    +GET /database/tables/:table/schema : column schema + PK discovery (ADR-101)
+    +GET /database/tables/:table/rows : paginated/filtered/sorted read; READ ONLY txn (ADR-101)
+    +POST /database/tables/:table/mutate : batch insert/update/delete; dryRun; xmin OCC (ADR-101)
     +GET /providers/health : provider health summary (Phase F, ADR-034)
     +POST /providers/:provider/probe : synthetic probe
     +GET /metrics/requests : in-memory rolling p50/p95 (Phase F)

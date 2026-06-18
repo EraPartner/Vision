@@ -68,6 +68,28 @@ describe('moveHolding (ADR-091)', () => {
     expect(insert[1]).toEqual(expect.arrayContaining([1000, 10, 2, 5]));
   });
 
+  it('partial move (proportional): splits every buy lot by the same fraction', async () => {
+    route({ lots: [
+      { id: 10, type: 'buy', date: '2020-01-01', amount: 1000, units: 10, fees: 0, taxes: 0, currency: 'EUR', fx_rate_to_eur: 1 },
+      { id: 11, type: 'buy', date: '2021-01-01', amount: 2000, units: 10, fees: 20, taxes: 0, currency: 'EUR', fx_rate_to_eur: 1 },
+    ]});
+    const r = await moveHolding({ investmentId: 1, fromAccountId: 1, toAccountId: 2, units: 10, strategy: 'proportional' });
+    // 10 of 20 units → fraction 0.5 of BOTH lots; no whole-lot re-points.
+    expect(r).toMatchObject({ mode: 'partial', strategy: 'proportional', movedUnits: 10, lotsMoved: 0, lotsSplit: 2 });
+
+    const calls = mockClient.query.mock.calls;
+    // No bulk re-point in proportional mode.
+    expect(calls.find(([s]) => s.includes('SET account_id = $1') && s.includes('ANY'))).toBeUndefined();
+    // Both lots get a 5-unit moved sibling on account 2.
+    const childUnitUpdates = calls.filter(([s]) => s.includes('SET units = $1'));
+    expect(childUnitUpdates).toHaveLength(2);
+    expect(childUnitUpdates.every(([, p]) => p[0] === 5)).toBe(true);
+    const inserts = calls.filter(([s]) => s.includes('INSERT INTO'));
+    expect(inserts).toHaveLength(2);
+    // Lot 11 moved half its 2000 cost + 20 fees → 1000 amount, 10 fees, account 2, 5 units.
+    expect(inserts.some(([, p]) => p.includes(1000) && p.includes(10) && p.includes(2) && p.includes(5))).toBe(true);
+  });
+
   it('rejects moving more units than held', async () => {
     route({ lots: [{ id: 10, type: 'buy', date: '2020-01-01', amount: 1000, units: 10, fees: 0, taxes: 0, currency: 'EUR', fx_rate_to_eur: 1 }] });
     await expect(moveHolding({ investmentId: 1, fromAccountId: 1, toAccountId: 2, units: 50 })).rejects.toThrow(ValidationError);

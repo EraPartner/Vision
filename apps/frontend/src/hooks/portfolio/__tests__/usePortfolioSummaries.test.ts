@@ -1,8 +1,23 @@
 // @vitest-environment jsdom
 import { describe, it, expect } from 'vitest';
+import React, { type ReactNode } from 'react';
 import { renderHook } from '@testing-library/react';
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { usePortfolioSummaries } from '@/hooks/portfolio/usePortfolioSummaries';
 import type { Investment, PortfolioTransaction } from '@/types/api';
+
+// usePortfolioSummaries pulls FX rates via useExchangeRates (useQuery), so the
+// hook needs a QueryClientProvider. The query is left unresolved on purpose: the
+// rate map degrades to EUR-only (multiplier 1), which is correct for the all-EUR
+// fixtures below.
+function makeWrapper() {
+  const qc = new QueryClient({
+    defaultOptions: { queries: { retry: false, gcTime: 0, staleTime: 0 } },
+  });
+  return function Wrapper({ children }: { children: ReactNode }) {
+    return React.createElement(QueryClientProvider, { client: qc }, children);
+  };
+}
 
 const inv = (overrides: Partial<Investment>): Investment =>
   ({
@@ -31,7 +46,9 @@ const txn = (overrides: Partial<PortfolioTransaction>): PortfolioTransaction =>
   }) as unknown as PortfolioTransaction;
 
 function gainLossOf(investments: Investment[], transactions: PortfolioTransaction[]) {
-  const { result } = renderHook(() => usePortfolioSummaries({ investments, transactions }));
+  const { result } = renderHook(() => usePortfolioSummaries({ investments, transactions }), {
+    wrapper: makeWrapper(),
+  });
   return result.current.summaries[0].gainLoss;
 }
 

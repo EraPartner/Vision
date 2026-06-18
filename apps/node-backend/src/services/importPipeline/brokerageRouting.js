@@ -13,7 +13,15 @@
 //  - buy/sell/dividend/interest/fee/tax: a portfolio_transaction whose ADR-090
 //    cash leg IS the cash effect — so the importer never also emits a standalone
 //    cash row for these (the double-count guard).
-const CASH_ONLY_KINDS = new Set(['deposit', 'withdrawal']);
+// Lowercased external-cash kinds (+ common EN/NL/DE brokerage synonyms) → a plain
+// cash transaction on the sleeve. Everything else cash-affecting (dividend, fee, …)
+// rides on a trade's ADR-090 leg, so it is NOT listed here (that is the double-count guard).
+const CASH_ONLY_KINDS = new Set([
+  'deposit', 'withdrawal', 'deposits', 'withdrawals',
+  'cash deposit', 'cash withdrawal', 'transfer in', 'transfer out',
+  'storting', 'opname', 'inleg', 'terugbetaling',
+  'einzahlung', 'auszahlung',
+]);
 const PORTFOLIO_KINDS = new Set(['buy', 'sell', 'dividend', 'interest', 'fee', 'tax']);
 
 /**

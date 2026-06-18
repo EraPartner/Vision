@@ -2,10 +2,10 @@
 title: Net Worth Feature
 type: feature
 status: active
-date: 2026-04-16
-updated: 2026-05-31
-tags: [feature, net-worth, portfolio, chart, zoom, frontend, performance, snapshots, fixed-income, valuation-parity, accrued-interest, appreciation, live-overlay, valuation-freshness, daily-granularity, gap-fill, price-history]
-description: Daily net worth tracking with zoomable/scrollable charts, series toggling, LTTB downsampling, and daily breakdown tables. Powered by pre-computed snapshots whose non-unit asset valuation mirrors live portfolio summary formulas (ADR-061); the latest point is overlaid with the live summary at read time so the headline stays in sync across hourly price refreshes (ADR-064). Historical price series are kept dense at daily granularity via a daily gap-detecting backfill that heals interior holes in asset_price_history and re-triggers computeAndStoreSnapshots when new rows are added (ADR-065).
+date: 2026-06-18
+updated: 2026-06-18
+tags: [feature, net-worth, portfolio, chart, zoom, frontend, performance, snapshots, fixed-income, valuation-parity, accrued-interest, appreciation, live-overlay, valuation-freshness, daily-granularity, gap-fill, price-history, per-account, adr-093, adr-100]
+description: Daily net worth tracking with zoomable/scrollable charts, series toggling, LTTB downsampling, and daily breakdown tables. Powered by pre-computed snapshots whose non-unit asset valuation mirrors live portfolio summary formulas (ADR-061); the latest point is overlaid with the live summary at read time so the headline stays in sync across hourly price refreshes (ADR-064). Historical price series are kept dense at daily granularity via a daily gap-detecting backfill. Per-account breakdown table (ADR-093/ADR-100) shows cash + holdings + total per in_net_worth account.
 aliases: [net worth, networth, wealth tracking, financial health]
 related_code:
   - apps/frontend/src/pages/portfolio/net-worth/NetWorthPage.tsx
@@ -263,8 +263,30 @@ A `VirtualDataTable` showing daily snapshots in reverse chronological order:
 6. **LTTB downsampling**: Reduces thousands of points to hundreds for smooth rendering
 7. **Animation disabled**: Recharts animations are disabled (`isAnimationActive={false}`)
 
+## Per-Account Net-Worth Breakdown (2026-06-18, ADR-093 / ADR-100)
+
+`NetWorthPage` now includes a **"By Account"** table below the main chart. Each row shows one
+`in_net_worth=true` account's:
+
+| Column | Source |
+|--------|--------|
+| Cash | Computed ledger balance (ADR-094 reconciliation) |
+| Holdings | `byAccount[account_id].currentValue` from `getPortfolioSummary` |
+| Total | Cash + Holdings |
+
+Unassigned lots (`account_id: null`) are surfaced as a single "Unassigned" row.
+
+Frontend hook: `apps/frontend/src/hooks/portfolio/useAccountNetWorth.ts` — fetches accounts, the
+per-account cash balances, and the `byAccount` array from the portfolio summary in parallel and
+merges them.
+
+The historical time-series chart is unchanged — it remains a single-aggregate series. Per-account
+historical series require per-account daily snapshots, which are not yet built. See
+[[docs/adr/100-net-worth-account-native-holdings|ADR-100]] for the deliberate scoping of this.
+
 ## Related Features
 
-- [[docs/features/portfolio|Portfolio]] — Investment-specific performance tracking
+- [[docs/features/portfolio|Portfolio]] — Investment-specific performance tracking and per-account holdings
 - [[docs/features/exchange-rates|Exchange Rates]] — Currency normalization for multi-currency portfolios
-- [[docs/features/portfolio|Portfolio]] — Overall portfolio management
+- [[docs/adr/100-net-worth-account-native-holdings|ADR-100]] — Per-account holdings parity decision
+- [[docs/adr/093-net-worth-sum-of-accounts|ADR-093]] — Net worth = Σ accounts definition

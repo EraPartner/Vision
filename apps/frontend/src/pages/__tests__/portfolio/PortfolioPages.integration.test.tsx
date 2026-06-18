@@ -194,7 +194,7 @@ describe("Portfolio pages (integration)", () => {
     it("NetWorthPage renders heading", async () => {
         renderWithApp(<NetWorthPage />);
         expect(
-            await screen.findByRole("heading", { name: /net worth/i }),
+            await screen.findByRole("heading", { name: /net worth/i, level: 1 }),
         ).toBeInTheDocument();
     });
 

@@ -148,6 +148,13 @@ export default function WatchlistPage() {
             const currentPrice = quote?.price ?? null;
             const priceDiff = currentPrice != null ? ((currentPrice - item.target_price) / item.target_price) * 100 : null;
             const isBelowTarget = currentPrice != null && currentPrice <= item.target_price;
+            // What-if backtest (ADR-097): return since the day it was added, using the
+            // price snapshotted at add time. Only when both prices are known.
+            const addedPrice = item.added_price ?? null;
+            const sinceAddedPct = addedPrice != null && addedPrice > 0 && currentPrice != null
+              ? ((currentPrice - addedPrice) / addedPrice) * 100
+              : null;
+            const addedDate = new Date(item.created_at).toLocaleDateString(locale);
 
             return (
               <Card
@@ -219,6 +226,15 @@ export default function WatchlistPage() {
                   {isBelowTarget && (
                     <div className="bg-success/10 text-success text-xs px-2 py-1 rounded text-center font-medium">
                       {t('watchlist.atTarget')}
+                    </div>
+                  )}
+
+                  {sinceAddedPct != null && (
+                    <div className="flex items-center justify-between rounded-md bg-muted/40 px-2 py-1.5 text-xs">
+                      <span className="text-muted-foreground">{t('watchlist.sinceAdded', { date: addedDate })}</span>
+                      <span className={cn('font-medium tabular-nums', sinceAddedPct >= 0 ? 'text-success' : 'text-destructive')}>
+                        {sinceAddedPct >= 0 ? '+' : ''}{sinceAddedPct.toFixed(1)}%
+                      </span>
                     </div>
                   )}
 

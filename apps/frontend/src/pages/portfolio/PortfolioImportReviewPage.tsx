@@ -11,7 +11,10 @@ import { useLanguage } from "@/contexts/LanguageContext";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
+import { Label } from "@/components/ui/label";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { InvestmentCombobox } from "@/components/portfolio/InvestmentCombobox";
+import { useAccounts } from "@/hooks/useAccounts";
 import { toast } from "sonner";
 import { AlertTriangle, CheckCircle2, Loader2, PlusCircle } from "lucide-react";
 import { apiClient } from "@/lib/api";
@@ -24,6 +27,9 @@ export function PortfolioImportReviewPage() {
   const { batchId: batchIdParam } = useParams<{ batchId: string }>();
   const batchId = Number(batchIdParam);
   const [busyGroup, setBusyGroup] = useState<string | null>(null);
+  // Batch-level brokerage account (ADR-095): committed lots inherit it (ADR-091).
+  const [accountId, setAccountId] = useState<string>("");
+  const { data: accountsData } = useAccounts({ active: "true" });
 
   const queryKey = ["portfolio-import-preview", batchId];
   const { data, isLoading, error } = useQuery({
@@ -33,7 +39,7 @@ export function PortfolioImportReviewPage() {
   });
 
   const commit = useMutation({
-    mutationFn: () => apiClient.commitPortfolioImportBatch(batchId),
+    mutationFn: () => apiClient.commitPortfolioImportBatch(batchId, accountId ? Number(accountId) : undefined),
     onSuccess: (res) => {
       toast.success(t("portfolioImport.toast.importSuccess", { n: res.imported, dups: res.duplicates }), {
         icon: <CheckCircle2 className="h-4 w-4" />,
@@ -112,7 +118,9 @@ export function PortfolioImportReviewPage() {
 
       {data.groups.map((g) => {
         const key = groupKey(g);
-        const resolved = g.investment_id != null;
+        // Brokerage cash group (ADR-095): no instrument to resolve — it commits as
+        // plain cash transactions on the batch's sleeve.
+        const resolved = g.is_cash || g.investment_id != null;
         const busy = busyGroup === key;
         return (
           <Card key={key} className={resolved ? "" : "border-warning/40"}>
@@ -120,14 +128,17 @@ export function PortfolioImportReviewPage() {
               <CardTitle className="flex flex-wrap items-center justify-between gap-2 text-sm">
                 <span className="flex items-center gap-2">
                   {!resolved && <AlertTriangle className="h-4 w-4 text-warning" />}
-                  {resolved
-                    ? (g.investment_symbol ? `${g.investment_name} (${g.investment_symbol})` : g.investment_name)
-                    : (g.raw_symbol || g.raw_name || t("portfolioImport.review.unknownInstrument"))}
+                  {g.is_cash
+                    ? t("portfolioImport.review.cashMovements")
+                    : resolved
+                      ? (g.investment_symbol ? `${g.investment_name} (${g.investment_symbol})` : g.investment_name)
+                      : (g.raw_symbol || g.raw_name || t("portfolioImport.review.unknownInstrument"))}
                   <Badge variant="secondary" className="font-normal">{g.row_count}</Badge>
                 </span>
               </CardTitle>
             </CardHeader>
             <CardContent className="space-y-3">
+              {!g.is_cash && (
               <div className="flex flex-wrap items-center gap-2">
                 <span className="text-xs text-muted-foreground">{t("portfolioImport.review.holding")}</span>
                 <InvestmentCombobox
@@ -142,6 +153,7 @@ export function PortfolioImportReviewPage() {
                   </Button>
                 )}
               </div>
+              )}
 
               <div className="divide-y rounded-md border text-xs">
                 {g.rows.map((row) => (
@@ -160,6 +172,20 @@ export function PortfolioImportReviewPage() {
           </Card>
         );
       })}
+
+      <div className="space-y-1.5 rounded-md border p-3">
+        <Label htmlFor="import-account">{t("portfolioImport.review.account")}</Label>
+        <Select value={accountId || "none"} onValueChange={(v) => setAccountId(v === "none" ? "" : v)}>
+          <SelectTrigger id="import-account"><SelectValue /></SelectTrigger>
+          <SelectContent>
+            <SelectItem value="none">{t("accounts.unassigned")}</SelectItem>
+            {(accountsData?.items ?? []).map((a) => (
+              <SelectItem key={a.id} value={String(a.id)}>{a.display_name || a.name}</SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+        <p className="text-xs text-muted-foreground">{t("portfolioImport.review.accountHint")}</p>
+      </div>
 
       <div className="flex gap-2">
         <Button onClick={() => commit.mutate()} disabled={commit.isPending} className="flex-1 h-11" size="lg">

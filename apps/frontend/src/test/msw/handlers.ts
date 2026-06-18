@@ -135,6 +135,30 @@ export const PLANNED_TRANSACTION_STUB = {
     links: [],
 };
 
+export const ACCOUNT_STUB = {
+    id: 1,
+    name: "Main Checking",
+    display_name: "Main Checking",
+    institution: "Test Bank",
+    currency: "EUR",
+    type: "checking",
+    liquidity_class: "liquid",
+    spendable: true,
+    in_net_worth: true,
+    tax_wrapper: "none",
+    owner: "me",
+    multi_currency_cash: false,
+    has_cash_sleeve: false,
+    funding_account_id: null,
+    statement_balance: null,
+    statement_balance_date: null,
+    computed_balance: 0,
+    drift: null,
+    is_active: true,
+    created_at: "2025-01-01T00:00:00.000Z",
+    updated_at: null,
+};
+
 /**
  * Default handlers cover the chatty boot-time endpoints so any page can render
  * without crashing. Tests override per-flow handlers via `server.use(...)`.
@@ -155,6 +179,11 @@ export const defaultHandlers = [
     http.get(`${API_BASE}/api/recipients`, () =>
         ok({ items: [], total: 0, limit: 200, offset: 0, links: [] }),
     ),
+    // Accounts API (ADR-088) — account pickers/filters now mount across the
+    // transactions, portfolio, and net-worth surfaces. An empty list keeps those
+    // fetches from leaking past teardown or tripping the unhandled-request guard.
+    http.get(`${API_BASE}/api/accounts`, () => ok({ items: [], total: 0, links: [] })),
+    http.get(`${API_BASE}/api/accounts/:id`, () => ok(ACCOUNT_STUB)),
     // Tags API — used by TagPicker inside dialogs/forms across the app.
     // Returning an empty list keeps async fetches from leaking past test
     // teardown and avoids "intercepted a request without a matching request
@@ -414,6 +443,15 @@ export const defaultHandlers = [
     http.patch(`${API_BASE}/api/investments/:id`, () => ok(INVESTMENT_STUB)),
     http.delete(`${API_BASE}/api/investments/:id`, () =>
         ok({ message: "Investment 1 deleted permanently", links: [] }),
+    ),
+
+    http.post(`${API_BASE}/api/accounts`, () => ok(ACCOUNT_STUB)),
+    http.patch(`${API_BASE}/api/accounts/:id`, () => ok(ACCOUNT_STUB)),
+    http.delete(`${API_BASE}/api/accounts/:id`, () =>
+        ok({ message: "Account 1 archived", links: [] }),
+    ),
+    http.post(`${API_BASE}/api/accounts/:id/merge`, () =>
+        ok({ into: 1, merged: [2], reassigned: { transactions: 0, planned: 0, portfolio: 0, funding: 0 } }),
     ),
 
     http.post(`${API_BASE}/api/planned-transactions`, () => ok(PLANNED_TRANSACTION_STUB)),

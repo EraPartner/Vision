@@ -21,6 +21,7 @@ export {
   getBatch,
   getPreviewRows,
   overrideInvestment,
+  setBatchAccount,
 } from '../repositories/portfolioImportBatchRepository.js';
 
 /**

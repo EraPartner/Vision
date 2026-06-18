@@ -113,7 +113,7 @@ describe("Language switch (integration)", () => {
         renderWithApp(<CategoriesPage />);
         // Dutch: categories.title = "Categorieën"
         expect(
-            await screen.findByRole("heading", { name: /categorieën/i }),
+            await screen.findByRole("heading", { name: /^categorieën$/i }),
         ).toBeInTheDocument();
     });
 

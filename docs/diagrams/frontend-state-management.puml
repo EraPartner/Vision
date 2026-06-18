@@ -117,6 +117,20 @@ package "Custom Hooks (Business Logic)" {
     +createPortfolioTransaction(data): Promise<PortfolioTransaction>
   }
 
+  class useAccountPositions <<ADR-091, ADR-100>> {
+    ' hooks/portfolio/useAccountPositions.ts
+    +byAccount: AccountPositionRow[]
+    ' AccountPositionRow: { account_id, currentValue, totalInvested, gainLoss }
+    +isLoading: boolean
+  }
+
+  class useAccountNetWorth <<ADR-093, ADR-100>> {
+    ' hooks/portfolio/useAccountNetWorth.ts
+    +rows: AccountNetWorthRow[]
+    ' AccountNetWorthRow: { account, cash, holdings, total }
+    +isLoading: boolean
+  }
+
   class useStatistics {
     +data: StatisticsData
     +unfilteredData: StatisticsData

@@ -22,7 +22,9 @@ import {
   overrideInvestment,
   createInvestmentForRow,
   rollbackBatch,
+  setBatchAccount,
 } from '../services/portfolioImportBatchService.js';
+import accountService from '../services/accountService.js';
 import customParserConfigRepository from '../services/customParserConfigService.js';
 import { VALID_ASSET_CLASSES } from '../lib/assetClasses.js';
 import { parseParserId, normalizeParserName, PARSER_NAME_CONSTRAINT } from '../lib/parserConfigRoutes.js';
@@ -41,6 +43,23 @@ function parseTypeMapping(raw) {
   } catch {
     return {};
   }
+}
+
+// Brokerage import (ADR-095): a flag + the sleeve account every row lands on.
+// Multipart fields arrive as strings; coerce them. The account is required when
+// brokerage is on (cash rows + trade legs need a sleeve).
+function parseBrokerageParams(data) {
+  const isBrokerage = data.is_brokerage === true || data.is_brokerage === 'true';
+  const rawAccount = data.account_id;
+  let accountId;
+  if (rawAccount != null && rawAccount !== '') {
+    accountId = Number(rawAccount);
+    if (!Number.isInteger(accountId) || accountId <= 0) throw new ValidationError('account_id must be a positive integer');
+  }
+  if (isBrokerage && accountId == null) {
+    throw new ValidationError('A brokerage import requires account_id (the sleeve cash + trades land on)');
+  }
+  return { isBrokerage, accountId };
 }
 
 // Build the backend customConfig + batch defaults from flattened request fields.
@@ -117,6 +136,8 @@ router.post('/csv/custom', csvUpload.single('file'), async (req, res) => {
     throw err;
   }
 
+  const brokerage = parseBrokerageParams({ ...req.query, ...req.body });
+
   try {
     const result = await runPortfolioImportPipeline({
       filePath: req.file.path,
@@ -126,6 +147,8 @@ router.post('/csv/custom', csvUpload.single('file'), async (req, res) => {
       defaultType: built.defaultType,
       filename: req.file.originalname,
       sizeBytes: req.file.size,
+      isBrokerage: brokerage.isBrokerage,
+      accountId: brokerage.accountId,
     });
 
     if (result.requiresReview) {
@@ -164,6 +187,7 @@ router.post('/csv/stream', csvUpload.single('file'), async (req, res) => {
     'X-Accel-Buffering': 'no',
   });
   const writer = createSseWriter(req, res);
+  const brokerage = parseBrokerageParams({ ...req.query, ...req.body });
 
   try {
     const result = await runPortfolioImportPipeline({
@@ -174,6 +198,8 @@ router.post('/csv/stream', csvUpload.single('file'), async (req, res) => {
       defaultType: built.defaultType,
       filename: req.file.originalname,
       sizeBytes: req.file.size,
+      isBrokerage: brokerage.isBrokerage,
+      accountId: brokerage.accountId,
       onProgress: async (ev) => { await writer.write('progress', progressToPercent(ev)); },
     });
 
@@ -318,17 +344,22 @@ router.get('/batches/:id/preview', async (req, res) => {
   // — never lump different unmatched instruments together.
   const groupMap = new Map();
   for (const row of rows) {
-    const key = row.effective_investment_id != null
-      ? `inv:${row.effective_investment_id}`
-      : `raw:${(row.symbol_raw || row.name_raw || '?').toLowerCase()}`;
+    // Brokerage cash rows (ADR-095) carry no instrument — collect them in one
+    // dedicated cash group so the review never prompts to resolve a holding for them.
+    const key = row.route === 'cash'
+      ? 'cash'
+      : (row.effective_investment_id != null
+        ? `inv:${row.effective_investment_id}`
+        : `raw:${(row.symbol_raw || row.name_raw || '?').toLowerCase()}`);
     if (!groupMap.has(key)) {
       groupMap.set(key, {
+        is_cash: row.route === 'cash',
         investment_id: row.effective_investment_id,
         investment_name: row.investment_name,
         investment_symbol: row.investment_symbol,
         investment_asset_class: row.investment_asset_class,
-        raw_symbol: row.symbol_raw,
-        raw_name: row.name_raw,
+        raw_symbol: row.route === 'cash' ? null : row.symbol_raw,
+        raw_name: row.route === 'cash' ? null : row.name_raw,
         rows: [],
       });
     }
@@ -336,6 +367,7 @@ router.get('/batches/:id/preview', async (req, res) => {
       id: row.id,
       row_index: row.row_index,
       status: row.status,
+      route: row.route,
       tx_date: row.tx_date,
       type: row.type,
       type_raw: row.type_raw,
@@ -404,6 +436,18 @@ router.post('/batches/:id/commit', async (req, res) => {
   if (!batch) throw new NotFoundError(`Import batch ${batchId} not found`);
   if (!['awaiting_review', 'matching'].includes(batch.status)) {
     throw new ValidationError(`Batch ${batchId} is not in a reviewable state (status: ${batch.status})`);
+  }
+
+  // Optional batch-level brokerage account (ADR-095): committed lots inherit it
+  // (ADR-091). Validate it exists, then store on the batch so commit stamps it.
+  const { account_id } = req.body ?? {};
+  if (account_id !== undefined && account_id !== null) {
+    const accountId = Number(account_id);
+    if (!Number.isInteger(accountId) || accountId <= 0) {
+      throw new ValidationError('account_id must be a positive integer');
+    }
+    await accountService.get(accountId); // throws NotFoundError if missing
+    await setBatchAccount(batchId, accountId);
   }
 
   const { imported, duplicates, errors } = await commitPortfolioImport({ batchId });

@@ -72,7 +72,8 @@ export async function getPortfolioSummary(targetCurrency = 'EUR') {
              COALESCE(pt.taxes, 0) AS taxes,
              to_char(pt.date::date, 'YYYY-MM-DD') AS date,
              COALESCE(pt.currency, i.currency, 'EUR') AS currency,
-             pt.fx_rate_to_eur
+             pt.fx_rate_to_eur,
+             pt.account_id
       FROM portfolio_transactions pt
       JOIN investments i ON i.id = pt.investment_id
       WHERE i.is_active = true
@@ -121,13 +122,63 @@ export async function getPortfolioSummary(targetCurrency = 'EUR') {
   );
 
   const totals = aggregateTotals(summaries);
+  const byAccount = aggregateByAccount(
+    investmentsResult.rows,
+    txnsByInvestment,
+    target,
+    multiplierByCurrency,
+    { costBasisMethod, todayYmd },
+  );
 
   return {
     currency: target,
     computed_at: new Date().toISOString(),
     totals,
     summaries,
+    byAccount,
   };
+}
+
+/**
+ * Per-account holdings breakdown (ADR-091 / ADR-093 supersession): split each
+ * investment's lots by account_id, run the SAME per-investment math per group,
+ * and aggregate market value / cost / gain per account. By construction Σ byAccount
+ * equals the per-investment totals (locked by a parity test). Unassigned lots
+ * (account_id NULL) collapse into a single { account_id: null } row. Names are
+ * resolved by the caller (the accounts list) — this returns ids only.
+ */
+function aggregateByAccount(investmentRows, txnsByInvestment, target, multiplierByCurrency, opts) {
+  const acc = new Map(); // account_id (or null) → aggregate
+  for (const inv of investmentRows) {
+    const txns = txnsByInvestment.get(Number(inv.id)) ?? [];
+    const groups = new Map();
+    for (const txn of txns) {
+      const key = txn.account_id == null ? null : Number(txn.account_id);
+      if (!groups.has(key)) groups.set(key, []);
+      groups.get(key).push(txn);
+    }
+    for (const [accountId, groupTxns] of groups) {
+      const s = buildInvestmentSummary(inv, groupTxns, target, multiplierByCurrency, opts);
+      const cur = acc.get(accountId) ?? {
+        account_id: accountId,
+        currentValue: toDecimal(0),
+        totalInvested: toDecimal(0),
+        gainLoss: toDecimal(0),
+      };
+      cur.currentValue = cur.currentValue.plus(s.currentValue);
+      cur.totalInvested = cur.totalInvested.plus(s.totalBuyCost);
+      cur.gainLoss = cur.gainLoss.plus(s.gainLoss);
+      acc.set(accountId, cur);
+    }
+  }
+  return [...acc.values()]
+    .map((a) => ({
+      account_id: a.account_id,
+      currentValue: round2(a.currentValue),
+      totalInvested: round2(a.totalInvested),
+      gainLoss: round2(a.gainLoss),
+    }))
+    .sort((x, y) => y.currentValue - x.currentValue);
 }
 
 /**

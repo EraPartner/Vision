@@ -10,7 +10,7 @@ aliases: [watchlist backtest, allocation drift, classic portfolios, benchmark co
 # ADR-097: Portfolio × Research — Watchlist Backtest & Allocation Drift
 
 ## Status
-Proposed
+Partially implemented — 2026-06-18 (watchlist backtest shipped; allocation drift deferred)
 
 ## Date
 2026-06-18
@@ -55,8 +55,21 @@ Both are descriptive: no writes, no forecast coupling.
   rather than a wrong number.
 - *Weights not summing to 100%* → normalize before diffing; surface unclassified holdings.
 
+## Implementation status (2026-06-18)
+
+**Watchlist backtest — shipped.** Rather than deriving the add-date price from `asset_price_history`
+at query time (which requires history coverage), the implementation snapshots the live quote at add
+time. Migration 0058 (authored, not applied) adds `added_price NUMERIC(18,6) NULLABLE` to the
+`watchlist` table. `POST /api/watchlist` accepts `added_price`; the backend sets it from the live
+quote at add time when not explicitly provided. `WatchlistPage` shows "Since added {date} +X%"
+using `(current_price - added_price) / added_price`.
+
+**Allocation drift + classic benchmarks — deferred.** Not built in this epic. Tracked in TODO.md.
+
 ## Related
 - [[docs/adr/index|All ADRs]]
 - [[docs/adr/065-daily-gap-fill-dense-asset-history|ADR-065: Price history]]
 - [[docs/adr/079-multi-provider-research-aggregation|ADR-079: Research providers]]
 - [[docs/adr/044-portfolio-summary-single-source-of-truth|ADR-044: Holdings weights]]
+- [[docs/features/watchlist|Watchlist Feature]] — added_price display + backtest UI
+- [[docs/api/watchlist|Watchlist API]] — added_price field details

@@ -30,22 +30,29 @@ function makeTxn(
   };
 }
 
+// Money in Vision is cent-precise (the cost-basis result rounds totals to cents).
+// Generating sub-cent amounts only surfaces rounding artifacts, not real bugs, so
+// monetary fields are drawn as exact cents while units stay fractional (real for
+// fractional shares / crypto).
+const arbCents = (minCents: number, maxCents: number) =>
+  fc.integer({ min: minCents, max: maxCents }).map((c) => c / 100);
+
 // fast-check arbitrary for a buy transaction with positive units
 const arbBuy = fc.record({
-  amount: fc.double({ min: 1, max: 100_000, noNaN: true }),
+  amount: arbCents(100, 10_000_000),
   units: fc.double({ min: 0.000001, max: 100_000, noNaN: true }),
-  fees: fc.double({ min: 0, max: 100, noNaN: true }),
-  taxes: fc.double({ min: 0, max: 100, noNaN: true }),
+  fees: arbCents(0, 10_000),
+  taxes: arbCents(0, 10_000),
   date: fc.constantFrom('2020-01-01', '2021-06-15', '2022-03-10', '2023-11-01'),
 }).map(({ amount, units, fees, taxes, date }) =>
   makeTxn({ type: 'buy', amount, units, fees, taxes, date })
 );
 
 const arbSell = fc.record({
-  amount: fc.double({ min: 1, max: 100_000, noNaN: true }),
+  amount: arbCents(100, 10_000_000),
   units: fc.double({ min: 0.000001, max: 100_000, noNaN: true }),
-  fees: fc.double({ min: 0, max: 100, noNaN: true }),
-  taxes: fc.double({ min: 0, max: 100, noNaN: true }),
+  fees: arbCents(0, 10_000),
+  taxes: arbCents(0, 10_000),
   date: fc.constantFrom('2020-06-01', '2021-12-31', '2022-09-20', '2024-01-01'),
 }).map(({ amount, units, fees, taxes, date }) =>
   makeTxn({ type: 'sell', amount, units, fees, taxes, date })

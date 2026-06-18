@@ -11,7 +11,7 @@ vi.mock('../src/services/currency/currencyConversionService.js', () => ({
 
 vi.mock('../src/repositories/infoRepositoryHelpers.js', async () => {
   const actual = await vi.importActual('../src/repositories/infoRepositoryHelpers.js');
-  return { ...actual, mvAvailable: vi.fn() };
+  return { ...actual, mvAvailable: vi.fn(), getIncludeTransfers: vi.fn().mockResolvedValue(false) };
 });
 
 import { query, queryPrepared } from '../src/database/connection.js';

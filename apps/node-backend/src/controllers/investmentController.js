@@ -449,12 +449,13 @@ export async function moveHolding(req, res) {
   const inv = await investmentRepository.getById(investmentId);
   if (!inv) throw new NotFoundError('Investment not found');
 
-  const { from_account_id, to_account_id, units } = req.body || {};
+  const { from_account_id, to_account_id, units, strategy } = req.body || {};
   const result = await moveHoldingSvc({
     investmentId,
     fromAccountId: from_account_id != null ? Number(from_account_id) : NaN,
     toAccountId: to_account_id != null ? Number(to_account_id) : NaN,
     units: units != null ? Number(units) : null,
+    strategy: typeof strategy === 'string' ? strategy : undefined,
   });
   clearInvestmentsCaches();
   res.ok(result);

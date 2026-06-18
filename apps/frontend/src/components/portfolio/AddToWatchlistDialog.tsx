@@ -147,6 +147,10 @@ export function AddToWatchlistDialog({ open, onOpenChange, prefill }: AddToWatch
         currency,
         notes: notes || undefined,
         price_provider_id: selectedAsset.symbol,
+        // Snapshot the live price so we can later show "had I bought when I added it".
+        added_price: quoteData && Number.isFinite(quoteData.price) && quoteData.price > 0
+          ? quoteData.price
+          : undefined,
       });
 
       queryClient.invalidateQueries({ queryKey: ["watchlist"] });

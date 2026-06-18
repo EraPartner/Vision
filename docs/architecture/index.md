@@ -52,7 +52,7 @@ Located in `docs/diagrams/`:
 
 ## Interactive Flow Visualizer
 
-For an interactive companion to these diagrams, open `docs/flow-visualizer.html` — a single-page HTML map of all packages (55 components) and 23 end-to-end flows. Click a flow to highlight the path, step through it, and inspect the payload at every hop. Data lives in an embedded JSON block; extending it is a copy-paste.
+For an interactive companion to these diagrams, open `docs/flow-visualizer.html` — a single-page HTML map of all packages (55 components) and 24 end-to-end flows. Click a flow to highlight the path, step through it, and inspect the payload at every hop. Data lives in an embedded JSON block; extending it is a copy-paste.
 
 ## Frontend Diagrams
 

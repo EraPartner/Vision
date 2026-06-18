@@ -9,9 +9,20 @@
 import { query } from '../database/connection.js';
 
 const BATCH_COLUMNS = `id, adapter_name, source_filename, source_size_bytes,
-  default_asset_class, default_type, status,
+  default_asset_class, default_type, status, account_id,
   rows_total, rows_imported, rows_duplicate, rows_error,
   error_summary, started_at, completed_at`;
+
+/**
+ * Set the batch-level brokerage account (ADR-095). Lots committed from this batch
+ * inherit it as their account_id (ADR-091). Pass null to clear.
+ */
+export async function setBatchAccount(batchId, accountId) {
+  await query(
+    `UPDATE portfolio_import_batches SET account_id = $2 WHERE id = $1`,
+    [batchId, accountId ?? null],
+  );
+}
 
 /**
  * @param {{ limit?: number, offset?: number }} opts
@@ -48,6 +59,7 @@ export async function getPreviewRows(batchId) {
     `SELECT isr.id,
             isr.row_index,
             isr.status,
+            isr.route,
             to_char(isr.tx_date, 'YYYY-MM-DD') AS tx_date,
             isr.type,
             isr.type_raw,

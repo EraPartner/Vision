@@ -14,6 +14,7 @@ import { logger } from '../../config/logger.js';
 import { parsedDateToYmd } from '../../lib/importDates.js';
 import { UNIT_BASED_ASSET_CLASSES } from '../../repositories/portfolioTxRepo.common.js';
 import { normalizeType } from './portfolioTypeNormalizer.js';
+import { classifyBrokerageRow } from '../importPipeline/brokerageRouting.js';
 
 const VALIDATE_CHUNK = 500;
 
@@ -21,12 +22,13 @@ export async function validateBatch({ batchId, onProgress }) {
   await query(`UPDATE portfolio_import_batches SET status = 'validating' WHERE id = $1`, [batchId]);
 
   const { rows: batchRows } = await query(
-    `SELECT default_asset_class, default_type, custom_config FROM portfolio_import_batches WHERE id = $1`,
+    `SELECT default_asset_class, default_type, custom_config, is_brokerage FROM portfolio_import_batches WHERE id = $1`,
     [batchId],
   );
   const batch = batchRows[0] || {};
   const defaultAssetClass = batch.default_asset_class || undefined;
   const defaultType = batch.default_type || undefined;
+  const isBrokerage = batch.is_brokerage === true;
   const config = typeof batch.custom_config === 'string'
     ? JSON.parse(batch.custom_config)
     : (batch.custom_config || {});
@@ -54,31 +56,35 @@ export async function validateBatch({ batchId, onProgress }) {
     const ids = [];
     const statuses = [];
     const types = [];
+    const routes = [];
     const txHashes = [];
     const errorMessages = [];
 
     for (const row of chunk) {
       ids.push(row.id);
-      const { type, error } = resolveAndCheck(row, { typeMapping, defaultType, unitBased });
+      const { type, route, error } = resolveAndCheck(row, { typeMapping, defaultType, unitBased, isBrokerage });
       if (error) {
         errors++;
         statuses.push('error');
         types.push(null);
+        routes.push(null);
         txHashes.push(null);
         errorMessages.push(error);
         continue;
       }
-      const hash = computeRowHash(row, type);
+      const hash = computeRowHash(row, type, route);
       if (seenHashes.has(hash)) {
         duplicates++;
         statuses.push('duplicate');
         types.push(type);
+        routes.push(route);
         txHashes.push(hash);
         errorMessages.push(null);
       } else {
         seenHashes.add(hash);
         statuses.push('validated');
         types.push(type);
+        routes.push(route);
         txHashes.push(hash);
         errorMessages.push(null);
       }
@@ -88,12 +94,13 @@ export async function validateBatch({ batchId, onProgress }) {
       `UPDATE portfolio_import_staging_rows s
           SET status        = v.status,
               type          = v.type::portfolio_txn_type,
+              route         = v.route,
               tx_hash       = v.tx_hash,
               error_message = v.error_message
-         FROM unnest($1::bigint[], $2::text[], $3::text[], $4::text[], $5::text[])
-              AS v(id, status, type, tx_hash, error_message)
+         FROM unnest($1::bigint[], $2::text[], $3::text[], $4::text[], $5::text[], $6::text[])
+              AS v(id, status, type, route, tx_hash, error_message)
         WHERE s.id = v.id`,
-      [ids, statuses, types, txHashes, errorMessages],
+      [ids, statuses, types, routes, txHashes, errorMessages],
     );
     seen += chunk.length;
     if (onProgress) onProgress({ phase: 'validating', current: seen, total });
@@ -118,10 +125,23 @@ export async function validateBatch({ batchId, onProgress }) {
   return { validated, duplicates, errors };
 }
 
-function resolveAndCheck(row, { typeMapping, defaultType, unitBased }) {
+function resolveAndCheck(row, { typeMapping, defaultType, unitBased, isBrokerage }) {
   if (!row.tx_date) return { error: 'missing date' };
+
+  // Try the portfolio type first (handles aliases + the user's type_mapping). A
+  // brokerage statement's dividend/interest/fee/tax resolve here and ride a trade
+  // cash leg — only true external cash (deposit/withdrawal) takes the cash route.
   const { type, error } = normalizeType(row.type_raw, { typeMapping, defaultType });
-  if (error) return { error };
+  if (error) {
+    if (isBrokerage) {
+      const { target } = classifyBrokerageRow({ kind: row.type_raw });
+      if (target === 'cash') {
+        if (row.amount == null) return { error: 'cash row requires an amount' };
+        return { type: undefined, route: 'cash' };
+      }
+    }
+    return { error };
+  }
 
   const hasUnits = row.units != null;
   const hasPrice = row.price_per_unit != null;
@@ -137,16 +157,16 @@ function resolveAndCheck(row, { typeMapping, defaultType, unitBased }) {
     return { error: 'missing amount' };
   }
 
-  return { type };
+  return { type, route: isBrokerage ? 'portfolio' : undefined };
 }
 
-function computeRowHash(row, type) {
+function computeRowHash(row, type, route) {
   let raw;
   if (row.raw_data) {
-    raw = `${type}|${row.raw_data}`;
+    raw = `${route || 'portfolio'}|${type || ''}|${row.raw_data}`;
   } else {
     const dateStr = parsedDateToYmd(row.tx_date);
-    raw = `${dateStr}|${type}|${row.amount ?? ''}|${row.units ?? ''}`;
+    raw = `${route || 'portfolio'}|${dateStr}|${type || ''}|${row.amount ?? ''}|${row.units ?? ''}`;
   }
   return crypto.createHash('sha256').update(raw, 'utf-8').digest('hex');
 }

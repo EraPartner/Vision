@@ -10,7 +10,7 @@ aliases: [net worth sum of accounts, net worth redefinition]
 # ADR-093: Net Worth = Σ Accounts
 
 ## Status
-Proposed
+Accepted — 2026-06-18 (analytics follow-on realized; see note below)
 
 ## Date
 2026-06-18
@@ -68,8 +68,16 @@ verification):**
 - *Double-counting cash vs a "savings" investment* → prevented by ADR-090's single-source-of-truth
   sleeve (cash is the ledger, never also an investment).
 
+## Analytics follow-on realized (2026-06-18)
+
+The two deferred items are now shipped via [[docs/adr/100-net-worth-account-native-holdings|ADR-100]]:
+
+- **Per-account net-worth breakdown:** each `in_net_worth` account's cash (computed ledger balance via ADR-094) is combined with its holdings from the `byAccount` split of `getPortfolioSummary` (ADR-091 + ADR-100). `NetWorthPage` renders a "By Account" table (cash + holdings + total per account). Frontend hook: `useAccountNetWorth`.
+- **Snapshot-engine supersession (partial):** the *live* aggregate and the current-day per-account breakdown are now expressed natively as Σ accounts. Historical snapshot series is **deliberately retained** — no per-account daily history exists yet; the ADR-061 parity risk of shifting the series was avoided. See ADR-100 for the full decision.
+
 ## Related
 - [[docs/adr/index|All ADRs]]
+- [[docs/adr/100-net-worth-account-native-holdings|ADR-100]] (realizes the per-account + parity follow-ons)
 - [[docs/adr/064-net-worth-current-value-live-overlay|ADR-064: Net Worth composition]] (superseded composition)
 - [[docs/adr/061-snapshot-valuation-parity|ADR-061: Snapshot parity]] (parity discipline for the cutover)
 - [[docs/adr/092-liabilities-as-negative-accounts|ADR-092]] · [[docs/adr/090-cash-sleeve-trades-as-transfers|ADR-090]] · [[docs/adr/089-account-typed-model|ADR-089]]

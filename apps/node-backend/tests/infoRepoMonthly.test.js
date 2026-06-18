@@ -14,7 +14,12 @@ vi.mock('../src/config/logger.js', () => ({
 
 vi.mock('../src/repositories/infoRepositoryHelpers.js', async () => {
   const actual = await vi.importActual('../src/repositories/infoRepositoryHelpers.js');
-  return { ...actual, mvAvailable: vi.fn(), clearMvCache: actual.clearMvCache };
+  return {
+    ...actual,
+    mvAvailable: vi.fn(),
+    getIncludeTransfers: vi.fn().mockResolvedValue(false),
+    clearMvCache: actual.clearMvCache,
+  };
 });
 
 import { query } from '../src/database/connection.js';

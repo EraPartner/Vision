@@ -5,7 +5,7 @@ import userEvent from "@testing-library/user-event";
 import { http } from "msw";
 import { renderWithApp } from "@/test/renderWithApp";
 import { server } from "@/test/msw/server";
-import { ok, err } from "@/test/msw/handlers";
+import { ok, err, ACCOUNT_STUB } from "@/test/msw/handlers";
 import { EditPortfolioTxnDialog } from "@/components/portfolio/EditPortfolioTxnDialog";
 import type { InvestmentSummary } from "@/types/portfolio";
 import type { PortfolioTransaction } from "@/types/api";
@@ -300,6 +300,34 @@ describe("EditPortfolioTxnDialog", () => {
         await waitFor(() =>
             expect(screen.queryByRole("dialog")).not.toBeInTheDocument(),
         );
+    });
+
+    it("includes the lot's account_id in the PATCH payload (ADR-091)", async () => {
+        // Arrange — a lot already assigned to account 5, surfaced by the picker.
+        const assignedTxn: PortfolioTransaction = { ...TRANSACTION, account_id: 5 };
+        let capturedBody: Record<string, unknown> | undefined;
+        server.use(
+            http.get(`${API_BASE}/api/accounts`, () =>
+                ok({ items: [{ ...ACCOUNT_STUB, id: 5, name: "IBKR", display_name: "IBKR" }], total: 1 }),
+            ),
+            http.patch(`${API_BASE}/api/investments/transactions/101`, async ({ request }) => {
+                capturedBody = (await request.json()) as Record<string, unknown>;
+                return ok({ ...PORTFOLIO_TXN_STUB, account_id: 5 });
+            }),
+        );
+        const user = userEvent.setup();
+        renderWithApp(
+            <EditPortfolioTxnDialog investment={INVESTMENT} transaction={assignedTxn} />,
+        );
+
+        // Act — open and save without touching the account selector.
+        await user.click(await screen.findByRole("button", { name: /^edit$/i }));
+        await screen.findByRole("dialog");
+        await user.click(screen.getByRole("button", { name: /save/i }));
+
+        // Assert — the pre-populated account_id is sent through.
+        await waitFor(() => expect(capturedBody).toBeDefined());
+        expect(capturedBody?.account_id).toBe(5);
     });
 
     // ─── Edge cases ────────────────────────────────────────────────────────

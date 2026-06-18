@@ -2,11 +2,11 @@
 title: Watchlist Feature
 type: feature
 status: active
-date: 2026-04-17
-last_modified: 2026-06-16
-updated: 2026-06-16
-tags: [feature, watchlist, investments, tracking, alerts, phase-3.6, offline-resilience, online-status-detection, api-client-migration, validation, june-2026]
-description: Investment watchlist for tracking securities not yet in the portfolio with target price alerts. June 2026: POST/PATCH now return 400 ValidationError for invalid target_price, asset_class, or currency, instead of DB-level 500.
+date: 2026-06-18
+last_modified: 2026-06-18
+updated: 2026-06-18
+tags: [feature, watchlist, investments, tracking, alerts, phase-3.6, offline-resilience, online-status-detection, api-client-migration, validation, june-2026, backtest, added-price, adr-097]
+description: Investment watchlist for tracking securities not yet in the portfolio with target price alerts. June 2026: POST/PATCH return 400 ValidationError for invalid fields; what-if backtest shows return since add date using added_price (migration 0058, ADR-097).
 aliases: [watch list, price alerts, investment tracking]
 related_code:
   - apps/frontend/src/pages/portfolio/WatchlistPage.tsx
@@ -174,6 +174,35 @@ Code links: [[apps/frontend/src/pages/portfolio/WatchlistPage.tsx]], [[apps/fron
   previously displayed English text in the Dutch locale are now fully translated in
   `i18n/source/nl.json`. No remaining `*FailedTitle` gap.
 
+## What-If Backtest (2026-06-18, ADR-097)
+
+`WatchlistPage` shows a **"Since added {date} +X%"** label for each item that has an `added_price`:
+
+```
+return = (current_price − added_price) / added_price × 100
+```
+
+`added_price` is snapshotted from the live quote at the moment the item is added. This gives a concrete "had I bought when I added it" answer without requiring price-history coverage back to the add date.
+
+### Database column
+
+Migration 0058 (authored, not applied — `bun run db:upgrade`) adds `added_price NUMERIC(18,6) NULLABLE` to the `watchlist` table.
+
+### API behavior
+
+`POST /api/watchlist` now accepts `added_price` as an optional field. If not supplied, the backend
+attempts to set it from the live quote returned by the market-lookup provider at add time. If no
+live quote is available, `added_price` is stored as `null` and the "Since added" label is omitted.
+
+`PATCH /api/watchlist/:id` can update `added_price` (e.g., to reset the baseline).
+
+See [[docs/api/watchlist|Watchlist API]] for the updated request/response shape.
+
+> [!info] Migration required
+> The "Since added" UI is gated on `added_price` being non-null, so existing watchlist items will
+> not show the backtest label until `added_price` is set. After applying migration 0058 and
+> re-adding items (or manually PATCHing `added_price`), the label appears automatically.
+
 ## Adding from Watchlist
 
 Users can promote a watchlist item to a full portfolio investment with one click, which:
@@ -186,3 +215,5 @@ Users can promote a watchlist item to a full portfolio investment with one click
 - [[docs/features/portfolio|Portfolio]] — Full investment tracking
 - [[docs/features/market-lookup|Market Lookup]] — Finding securities to add to watchlist or portfolio
 - [[docs/integrations/price-providers|Price Providers]] — Live price fetching
+- [[docs/adr/097-portfolio-research-analytics|ADR-097]] — Watchlist backtest decision (added_price approach)
+- [[docs/api/watchlist|Watchlist API]] — added_price field and updated POST/PATCH contract

@@ -3,8 +3,8 @@ title: Vision Project Knowledge Base
 type: index
 status: active
 date: 2026-04-27
-updated: 2026-06-16
-last_modified: 2026-06-16
+updated: 2026-06-18
+last_modified: 2026-06-18
 tags: [knowledge-base, index, project, overview, phase-8, phase-5a, phase-6, phase-7, phase-4, phase-3, phase-9, phase-13, aead, backup-v2, security-hardening, offline-resilience, export-filters, multi-select, bug-hunt-2026-04-29, bug-hunt-2026-05-05, startup-optimization, network-reachability, tailwind-v4, dependencies, css-architecture, mount-guard, react-keys, decimal-safety, date-safety, electron-hardening, belgian-tax, as-filed-snapshots, audit-log, comparison, trend-strip, dev-observability, devtools, api-inspector, devcontainer, claude-code-permissions]
 description: Main entry point to the Vision project documentation - financial transaction management application. May 19 2026: Devcontainer added — isolated Debian 12 environment with native PostgreSQL 18, bun, and default-deny egress firewall for safe claude --dangerously-skip-permissions use. May 12 2026 (ADR-059): Belgian Tax historical year extensions — frozen "as-filed" calculations, filed soft-lock, snapshot audit log, year-over-year comparison, multi-year trend strip, CSV export. Phase 9 complete with aggregation shadow cutover; all aggregations now served via `/api/aggregations/*`. Phase 8 complete with portfolio and tax PDF report export (6 + 7 sections). Phase 13 (2026-04-28): Multi-select export filters with CategoryMultiCombobox and BankAccountMultiCombobox components; pivot table drillthrough to filtered transaction lists. Bug-hunt (2026-04-29): Trivy exit-code hardening, release workflow concurrency + setup-bun action, docker-compose volume fix, graceful shutdown timer cleanup (3 intervals + debounce), import cleanup logging, watchlist dialog API client, install.sh interactive checksum gate. May 3 2026: Tailwind CSS v4 migration (3.4.19 → 4.2.4) with unified postcss plugin, sonner 2.0.7, recharts 3.8.1. May 3 2026: Offline-aware startup optimization — backend detects network unavailability early and skips 5-15s external data fetches, reducing readiness time ~15s when offline. **May 5 2026 Bug Hunt:** Comprehensive correctness hardening — frontend mount guards (usePlannedPayments), stable React keys (SplitTransactionDialog, TaxProfileDialog), queryKey fixes (usePortfolioPrefetch), UTC-safe date parsing (dateUtils), pagination stale-response guards (RecipientsPage), decimal arithmetic correctness, backend robustness (recipientPatternService, recurringDetectionService, belgianInflationService), Electron hardening (window/navigation/backup restrictions), and release workflow version sync (3-way check: git tag + root package.json + electron/package.json).
 aliases: [KB, docs, documentation, knowledge base, home]
@@ -123,7 +123,7 @@ LIMIT 20
 **View all diagrams:** [[docs/diagrams/index|Diagrams Index]] | [[docs/architecture/index|Architecture Overview]] | [Interactive Flow Visualizer](flow-visualizer.html)
 
 > [!tip] Interactive Flow Visualizer
-> `docs/flow-visualizer.html` is a single-page, interactive map of all packages (55 components) + 23 end-to-end flows (create-transaction, CSV import, AI chat, AES-256-GCM backup, ToDesktop release, macro-series-fetch, …). Open it directly in any browser — click a flow on the left, watch the path light up, and read the payload at each hop. Add new flows by editing the JSON block at the bottom of the file.
+> `docs/flow-visualizer.html` is a single-page, interactive map of all packages (56 components) + 25 end-to-end flows (create-transaction, CSV import, AI chat, AES-256-GCM backup, ToDesktop release, macro-series-fetch, close-account, db-data-edit, …). Open it directly in any browser — click a flow on the left, watch the path light up, and read the payload at each hop. Add new flows by editing the JSON block at the bottom of the file.
 
 | Resource | Description |
 |----------|-------------|

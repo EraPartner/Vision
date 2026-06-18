@@ -4,10 +4,10 @@ type: endpoint
 method: POST, GET, PATCH, DELETE
 path: /api/portfolio/import
 description: CSV import of brokerage/exchange trades into portfolio_transactions; instrument matching with review step; CRUD for saved portfolio parser configs (kind=portfolio)
-date: 2026-06-15
-updated: 2026-06-15
-last_modified: 2026-06-15
-tags: [api, portfolio, import, csv, portfolio-import, portfolio-parser, brokerage, trades, review, adr-078]
+date: 2026-06-18
+updated: 2026-06-18
+last_modified: 2026-06-18
+tags: [api, portfolio, import, csv, portfolio-import, portfolio-parser, brokerage, trades, review, adr-078, account-id, adr-091, migration-0057]
 status: active
 aliases: [portfolio-imports-api, portfolio-csv-import, brokerage-import]
 related_code:
@@ -318,6 +318,16 @@ When `create_new: true`, a new investment record is created from the row's `symb
 ### POST /api/portfolio/import/batches/:id/commit
 
 Commit a reviewed batch. Honours all investment overrides. Runs FX resolution for non-EUR rows without an explicit rate (ADR-074 semantics). Per-row errors (oversell, unresolved) are recorded without aborting the batch.
+
+**Optional request body:**
+
+```json
+{ "account_id": 7 }
+```
+
+When `account_id` is provided, all committed `portfolio_transactions` inherit it — they belong to
+the specified brokerage account. Omit to leave lots unassigned (legacy behaviour).
+Requires migration 0057 (`portfolio_import_batches.account_id`; authored, not yet applied).
 
 > [!warning] Unresolved rows are skipped
 > Any row still unresolved at commit time is recorded as an error row and is not inserted into `portfolio_transactions`. The batch completes with non-zero `rows_error`.

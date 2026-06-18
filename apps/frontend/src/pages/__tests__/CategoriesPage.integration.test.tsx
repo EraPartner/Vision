@@ -13,12 +13,12 @@ const API_BASE = "http://localhost:3002";
 describe("CategoriesPage (integration)", () => {
     it("renders page heading", async () => {
         renderWithApp(<CategoriesPage />);
-        await screen.findByRole("heading", { name: /categories/i });
+        await screen.findByRole("heading", { name: /^categories$/i });
     });
 
     it("renders without crashing when category list is empty", async () => {
         renderWithApp(<CategoriesPage />);
-        await screen.findByRole("heading", { name: /categories/i });
+        await screen.findByRole("heading", { name: /^categories$/i });
     });
 
     it("shows error state when the categories API fails", async () => {
@@ -50,7 +50,7 @@ describe("CategoriesPage (integration)", () => {
         renderWithApp(<CategoriesPage />);
 
         // Page must be out of loading state first
-        await screen.findByRole("heading", { name: /categories/i });
+        await screen.findByRole("heading", { name: /^categories$/i });
 
         // Open the Add Category dialog via the trigger button
         const triggerBtn = await screen.findByRole("button", { name: /add category/i });
@@ -79,7 +79,7 @@ describe("CategoriesPage (integration)", () => {
         const user = userEvent.setup();
         renderWithApp(<CategoriesPage />);
 
-        await screen.findByRole("heading", { name: /categories/i });
+        await screen.findByRole("heading", { name: /^categories$/i });
 
         const triggerBtn = await screen.findByRole("button", { name: /add category/i });
         await user.click(triggerBtn);
@@ -89,7 +89,7 @@ describe("CategoriesPage (integration)", () => {
         await user.click(screen.getByRole("button", { name: /cancel/i }));
 
         // Dialog should close
-        await screen.findByRole("heading", { name: /categories/i });
+        await screen.findByRole("heading", { name: /^categories$/i });
         expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
     });
 
@@ -97,7 +97,7 @@ describe("CategoriesPage (integration)", () => {
         const user = userEvent.setup();
         renderWithApp(<CategoriesPage />);
 
-        await screen.findByRole("heading", { name: /categories/i });
+        await screen.findByRole("heading", { name: /^categories$/i });
 
         const triggerBtn = await screen.findByRole("button", { name: /add category/i });
         await user.click(triggerBtn);
@@ -359,7 +359,7 @@ describe("CategoriesPage (integration)", () => {
         );
         const user = userEvent.setup();
         renderWithApp(<CategoriesPage />);
-        await screen.findByRole("heading", { name: /categories/i });
+        await screen.findByRole("heading", { name: /^categories$/i });
         const initial = getCalls;
 
         const triggerBtn = await screen.findByRole("button", { name: /add category/i });

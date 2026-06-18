@@ -4,6 +4,10 @@
 
 import { query } from '../database/connection.js';
 import { logger } from '../config/logger.js';
+import { computeDailySnapshots } from '../services/portfolio/snapshotBuilder.js';
+import { accountRepository } from './accountRepository.js';
+import { convertToCurrency } from '../services/currency/currencyConversionService.js';
+import { toNumber } from '../lib/money.js';
 import {
   roundToCents,
   formatDateToYmd,
@@ -260,5 +264,73 @@ export const netWorthRepository = {
       monthlyChangePercent: roundToCents(monthlyChangePercent),
       snapshots: sanitizedSnapshots,
     };
+  },
+
+  /**
+   * Net worth expressed natively as Σ accounts (ADR-100): per in-net-worth account,
+   * the rebuilt daily HOLDINGS series (from the snapshot builder's per-account split,
+   * Σ accounts == the aggregate value by construction) plus current cash (ADR-094).
+   * Legacy lots with no account collapse into one `accountId: null` ("unassigned") row.
+   *
+   * @param {string} [targetCurrency]
+   */
+  async getNetWorthByAccount(targetCurrency = 'EUR') {
+    const target = (targetCurrency || 'EUR').toUpperCase();
+    const [snapshots, accounts] = await Promise.all([
+      computeDailySnapshots(target),
+      accountRepository.getAll({ active: null }),
+    ]);
+
+    // Per-account daily holdings from the builder's value_by_account split.
+    const holdingsSeriesByAcct = new Map();
+    for (const s of snapshots) {
+      for (const [acctKey, value] of Object.entries(s.value_by_account || {})) {
+        if (!holdingsSeriesByAcct.has(acctKey)) holdingsSeriesByAcct.set(acctKey, []);
+        holdingsSeriesByAcct.get(acctKey).push({ date: s.snapshot_date, holdings: roundToCents(value) });
+      }
+    }
+    const lastHoldings = (key) => {
+      const series = holdingsSeriesByAcct.get(key);
+      return series && series.length ? series[series.length - 1].holdings : 0;
+    };
+
+    const rows = [];
+    for (const a of accounts) {
+      if (!a.in_net_worth) continue;
+      const key = String(a.id);
+      const acctCur = (a.currency || 'EUR').toUpperCase();
+      const cashNative = Number(a.computed_balance) || 0;
+      const cash = roundToCents(
+        acctCur === target ? cashNative : toNumber(await convertToCurrency(cashNative, acctCur, target)),
+      );
+      const currentHoldings = lastHoldings(key);
+      rows.push({
+        accountId: a.id,
+        name: a.display_name || a.name,
+        currency: acctCur,
+        cash,
+        currentHoldings,
+        currentTotal: roundToCents(cash + currentHoldings),
+        holdingsSeries: holdingsSeriesByAcct.get(key) || [],
+      });
+    }
+
+    // Unassigned holdings (legacy lots, no account) — holdings only, no cash sleeve.
+    const unassigned = holdingsSeriesByAcct.get('unassigned');
+    if (unassigned && unassigned.length) {
+      const currentHoldings = unassigned[unassigned.length - 1].holdings;
+      rows.push({
+        accountId: null,
+        name: null,
+        currency: target,
+        cash: 0,
+        currentHoldings,
+        currentTotal: currentHoldings,
+        holdingsSeries: unassigned,
+      });
+    }
+
+    rows.sort((a, b) => b.currentTotal - a.currentTotal);
+    return { currency: target, accounts: rows };
   },
 };

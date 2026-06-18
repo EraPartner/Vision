@@ -113,10 +113,11 @@ package "Portfolio Pages" {
     +Benchmark Comparison
   }
 
-  class NetWorthPage {
+  class NetWorthPage <<ADR-093, ADR-100>> {
     +Net Worth Chart
     +Assets vs Liabilities
     +Time Series
+    +By Account Table (cash + holdings + total per in_net_worth account)
   }
 
   class PortfolioTaxPage {
@@ -125,11 +126,12 @@ package "Portfolio Pages" {
     +Withholding Tax
   }
 
-  class PortfolioImportPage <<ADR-078>> {
+  class PortfolioImportPage <<ADR-078, ADR-091>> {
     +Column Mapper (PortfolioCsvColumnMapper)
     +File Upload + Saved Parser Picker
     +SSE Progress
     +FileHeadersPanel preview
+    +Brokerage Account Picker (account_id for committed lots)
   }
 
   class PortfolioImportReviewPage <<ADR-078>> {
@@ -159,9 +161,10 @@ package "Research Pages (ADR-079)" {
     +deep-link: ?symbol= query param
   }
 
-  class WatchlistPage {
+  class WatchlistPage <<ADR-097>> {
     +Watchlist Items
     +Price Alerts
+    +"Since added +X%" backtest label (added_price, migration 0058)
   }
 
   class ResearchComparePage {
@@ -213,6 +216,17 @@ package "Admin Pages (Workspace-Agnostic)" {
   class DbMaintenancePage {
     +Table Stats
     +VACUUM Operations
+    +Table list (double-click → TableDataEditorPage)
+  }
+
+  class TableDataEditorPage <<ADR-101>> {
+    +Column grid (ui/table primitives)
+    +Click-to-edit cells; NULL toggle; boolean checkboxes
+    +Per-column filters + raw WHERE box
+    +Sort / paginate (paused while dirty)
+    +Add row / mark-delete affordances
+    +SQL Preview dialog (dry-run)
+    +Commit (all-or-nothing batch)
   }
 
   class ProviderHealthPage {
@@ -292,6 +306,7 @@ ResearchHomePage --> MarketOverviewPage : "/research/markets"
 
 AppLayout --> AdminOverviewPage : "/admin"
 AdminOverviewPage --> DbMaintenancePage : "/admin/db"
+DbMaintenancePage --> TableDataEditorPage : "/admin/db/:table"
 AdminOverviewPage --> ProviderHealthPage : "/admin/providers"
 AdminOverviewPage --> EndpointLivenessPage : "/admin/endpoints"
 AdminOverviewPage --> ExchangeRatesPage : "/admin/exchange-rates"

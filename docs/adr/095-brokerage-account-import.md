@@ -10,7 +10,7 @@ aliases: [brokerage import, unified statement import, trade + cash import]
 # ADR-095: Brokerage Account Import
 
 ## Status
-Proposed
+Partially implemented — 2026-06-18 (fan-out core built; parser/staging/review UI not yet built — see below)
 
 ## Date
 2026-06-18
@@ -65,6 +65,24 @@ A brokerage importer that, for a chosen brokerage **account**, splits one parsed
 - *Mis-routing* (a fee read as a trade) → staged review; unresolved rows block commit.
 - *Duplicate on re-import* → `tx_hash` (cash) + trade dedup key; both checked at commit.
 - *Partial commit* → fan-out in one DB transaction; all-or-nothing per row group.
+
+## Implementation status (2026-06-18)
+
+**Built:** the previously-dead `brokerageRouting.js` is now wired into a tested fan-out service at
+`apps/node-backend/src/services/importPipeline/brokerageFanout.js`, exporting `planBrokerageFanout`
+and `commitBrokerageFanout`. The core correctly routes one statement into the cash ledger + trades +
+ADR-090 cash legs, deduplicates both sides, and enforces the double-count guard (a trade's only cash
+movement is its leg; no standalone cash row is emitted for a buy).
+
+`portfolio_import_batches.account_id` (migration 0057, authored, not applied) wires the destination
+brokerage account through to committed lots.
+
+**Not yet built (remaining surface):**
+- The brokerage **parser kind** — the mixed-row CSV parser that classifies rows as cash vs trade
+- **Mixed-row staging** — the staging schema changes to hold both row kinds in one batch
+- **Review UI integration** — the portfolio import review page does not yet show per-row cash/trade routing choices
+
+Until those are built, the fan-out service is wired and tested but is not reachable from the import UI.
 
 ## Related
 - [[docs/adr/index|All ADRs]]

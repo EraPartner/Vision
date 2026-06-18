@@ -2,10 +2,10 @@
 title: Feature - Portfolio CSV Import
 type: feature
 status: active
-date: 2026-06-15
-updated: 2026-06-15
-last_modified: 2026-06-15
-tags: [feature, portfolio, import, csv, brokerage, trades, portfolio-import, instrument-matching, review, type-normalizer, deduplication, fx, adr-078, adr-074, adr-066, migration-0040, migration-0041]
+date: 2026-06-18
+updated: 2026-06-18
+last_modified: 2026-06-18
+tags: [feature, portfolio, import, csv, brokerage, trades, portfolio-import, instrument-matching, review, type-normalizer, deduplication, fx, adr-078, adr-074, adr-066, migration-0040, migration-0041, migration-0057, account-id, adr-091]
 aliases: [portfolio-import, portfolio-csv-import, brokerage-import]
 description: CSV import of brokerage and exchange trades into portfolio_transactions. Parallel pipeline (stage → validate → matchInvestments → review/autoCommit → commit) with symbol→name exact matching, conservative auto-commit policy, type normalization, FX auto-resolution, field-based+intra-batch deduplication, and saved portfolio parser configs (kind=portfolio on custom_parser_configs).
 related_code:
@@ -109,6 +109,7 @@ When all rows are resolved, the user clicks **Commit** → `POST /api/portfolio/
 
 For each valid, resolved staged row:
 - Calls `portfolioTransactionRepository.create` (shared with the manual transaction entry path), which enforces 2-of-3 unit math (units × price ≈ amount), oversell prevention, and asset-class routing.
+- **Account assignment:** if the batch has `account_id` set (migration 0057), each committed `portfolio_transaction` inherits that `account_id` so all lots from this import belong to the specified brokerage account.
 - **FX auto-resolution**: if the trade currency is not EUR and no `fx_rate` was mapped or present in the row, calls `fxResolve` ([[apps/node-backend/src/services/portfolio/fxResolve.js]]) to look up the historical EUR rate for the trade date (ADR-074 semantics).
 - **Intra-batch deduplication**: a Set tracks `(date,symbol,units,amount,currency)` hashes committed so far in the batch; a duplicate row within the same upload is counted as `duplicate` and not inserted.
 - Per-row errors (oversell, missing investment after override, FX failure) are recorded as `rows_error` without aborting the batch.
@@ -186,7 +187,7 @@ Portfolio CSV Import is accessible under **Portfolio → Tools → Import portfo
 
 | Page | Route | Purpose |
 |------|-------|---------|
-| `PortfolioImportPage` | `/portfolio/import` | Column mapper, file upload, parser picker |
+| `PortfolioImportPage` | `/portfolio/import` | Column mapper, file upload, parser picker, brokerage account picker |
 | `PortfolioImportReviewPage` | `/portfolio/import/review/:batchId` | Investment resolution for unmatched rows |
 
 ### Components
@@ -215,6 +216,7 @@ Two new tables, authored in migration 0040 (not yet applied — user must run `b
 **`portfolio_import_batches`** — mirrors `import_batches` with portfolio-specific defaults:
 - Standard status lifecycle (`pending → staging → … → complete | failed | aborted | awaiting_review`)
 - `default_asset_class` and `default_type` columns store batch-level config defaults
+- `account_id` FK → `accounts` (nullable) — destination brokerage account; committed lots inherit this value (**migration 0057, authored, not applied**)
 - Included in `BACKUP_COVERED_TABLES`
 
 **`portfolio_import_staging_rows`** — mirrors `import_staging_rows` with portfolio-shaped columns:

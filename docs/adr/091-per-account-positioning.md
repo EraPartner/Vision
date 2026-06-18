@@ -10,7 +10,7 @@ aliases: [per-account positions, account_id on lots, per-account cost basis]
 # ADR-091: Per-Account Positioning (account_id on lots)
 
 ## Status
-Proposed
+Accepted — 2026-06-18 (follow-ons realized in the same epic, see below)
 
 ## Date
 2026-06-18
@@ -71,9 +71,22 @@ trade's account sleeve, which requires the trade to *have* an account — i.e. t
   the per-investment total.
 - Migrations not auto-run → ship the revision + rollback; user applies.
 
+## Follow-on implementation (realized 2026-06-18)
+
+All four follow-ons from this ADR shipped in the account-entity epic:
+
+- **Per-account holdings breakdown in `getPortfolioSummary`** — service now returns a top-level `byAccount: [{account_id, currentValue, totalInvested, gainLoss}]` array. Lots grouped by `account_id` run through the same cost-basis math; `account_id: null` = unassigned. Σ byAccount == per-investment totals (parity locked by test). See [[docs/adr/100-net-worth-account-native-holdings|ADR-100]].
+- **Edit-trade account picker** — `EditPortfolioTxnDialog` has an account selector. `PATCH /api/investments/transactions/:id` accepts `account_id` (number to reassign, `null` to unassign).
+- **Partial-move cost-basis strategy** — `POST /api/investments/:id/move` now accepts `strategy: 'fifo' | 'proportional'`. `proportional` (average-cost) splits every lot by the same fraction rather than peeling oldest lots first. `MoveHoldingDialog` exposes the selector for partial moves.
+- **Close-account workflow** — `CloseAccountDialog` lists an account's holdings, transfers them in-specie to another account (calls the move endpoint), then archives the account (`is_active=false`). Wired into `AccountsPage`.
+- **Portfolio import batch account assignment** — `portfolio_import_batches.account_id` added (migration 0057, authored, not applied). `POST /api/portfolio/import/batches/:id/commit` accepts optional `account_id`; committed lots inherit it.
+
+Frontend hooks added: `useAccountPositions.ts` (per-account holdings breakdown), `useAccountNetWorth.ts` (per-account net-worth breakdown — ADR-093/ADR-100).
+
 ## Related
 - [[docs/adr/index|All ADRs]]
 - [[docs/adr/088-account-entity|ADR-088: Account Entity]]
+- [[docs/adr/100-net-worth-account-native-holdings|ADR-100]] (realizes the per-account parity step)
 - [[docs/adr/073-shared-portfolio-math|ADR-073: Shared Portfolio Math]] (cost-basis calculators, unchanged)
 - [[docs/adr/044-portfolio-summary-single-source-of-truth|ADR-044: Portfolio Summary]] (extended, not replaced)
 - [[docs/adr/090-cash-sleeve-trades-as-transfers|ADR-090: Cash Sleeve & Trades = Transfers]] (depends on this)

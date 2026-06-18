@@ -59,8 +59,13 @@ Partial update (`AccountUpdate`). `404` if not found, `409` on name collision.
 ### DELETE /api/accounts/:id
 
 Delete an account. Because the `account_id` FKs are `ON DELETE RESTRICT`, an account that still
-has transactions or planned transactions cannot be deleted — the API returns `409` with a
-message to **archive** it instead (set `is_active=false` via PATCH). `404` if not found.
+has transactions, planned transactions, or portfolio lots cannot be deleted — the API returns `409`
+with a message to **archive** it instead (set `is_active=false` via PATCH). `404` if not found.
+
+> [!tip] Close-account workflow
+> Use `CloseAccountDialog` (wired into `AccountsPage`) to transfer all portfolio lots in-specie to
+> another account via `POST /api/investments/:id/move`, then archive with `PATCH /api/accounts/:id`
+> `{ is_active: false }`. This is the recommended path for a brokerage account you are closing.
 
 ### POST /api/accounts/:id/merge
 

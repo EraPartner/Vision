@@ -207,9 +207,17 @@ package "Feature Components - Portfolio" {
   class PortfolioOverview
   class PortfolioTaxAdjustmentsDialog
   class PortfolioNewsFeed
-  class InvestmentDetailDialog
+  class InvestmentDetailDialog <<ADR-091>> {
+    ' Shows "Holdings by Account" card (byAccount from useAccountPositions)
+  }
   class WatchlistChartDialog
   class MetalsHoldingsCard
+  class MoveHoldingDialog <<ADR-091>> {
+    ' strategy selector (fifo | proportional) for partial moves
+  }
+  class CloseAccountDialog <<ADR-091>> {
+    ' Lists account holdings, transfers in-specie, then archives account
+  }
 }
 
 package "Feature Components - Statistics" {

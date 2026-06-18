@@ -12,6 +12,7 @@ import { isUnitBased, isFixedIncome, isRealEstate } from '@/utils/assetClass';
 import { onActivateKeyDown } from '@/utils/a11y';
 import { usePortfolio } from '@/hooks/usePortfolio';
 import { usePortfolioSummaryQuery } from '@/hooks/portfolio/usePortfolioSummary';
+import { useAccountPositions } from '@/hooks/portfolio/useAccountPositions';
 import { AddPortfolioTxnDialog } from './AddPortfolioTxnDialog';
 import { EditInvestmentDialog } from './EditInvestmentDialog';
 import { MoveHoldingDialog } from '@/features/portfolio/MoveHoldingDialog';
@@ -102,6 +103,13 @@ export function InvestmentDetailDialog({
   const fxSummary = (investment.currency || 'EUR').toUpperCase() !== targetCurrency.toUpperCase()
     ? apiSummary?.summaries.find((s) => s.id === investment.id)
     : undefined;
+
+  // Per-account positioning (ADR-091): where this holding is custodied. Only
+  // shown once an account is actually involved (a lone unassigned group is noise).
+  const accountPositions = useAccountPositions(investment);
+  const showAccountBreakdown =
+    accountPositions.length > 1 ||
+    (accountPositions.length === 1 && accountPositions[0].accountId != null);
 
   const handleDeleteTxn = async (txnId: number, txnType: string) => {
     const ok = await confirm({
@@ -352,6 +360,41 @@ export function InvestmentDetailDialog({
                   </div>
                 </CardContent>
               </Card>
+
+              {/* Per-account positioning (ADR-091): "AAPL 150 → IBKR 100 · Degiro 50" */}
+              {showAccountBreakdown && (
+                <Card>
+                  <CardHeader className="pb-2">
+                    <CardTitle className="text-sm font-medium">{t('invDetail.byAccount')}</CardTitle>
+                  </CardHeader>
+                  <CardContent className="space-y-1.5">
+                    {accountPositions.map((pos) => (
+                      <div
+                        key={pos.accountId ?? 'unassigned'}
+                        className="flex items-center justify-between py-1.5 border-b border-border/50 last:border-0 text-sm"
+                      >
+                        <span className="text-muted-foreground truncate">
+                          {pos.accountName ?? t('accounts.unassigned')}
+                        </span>
+                        <div className="flex items-center gap-4 tabular-nums shrink-0">
+                          {unitBased && (
+                            <span className="text-muted-foreground">{fmtNum(pos.totalUnits, 4)}</span>
+                          )}
+                          <span className="font-medium">{fmt(pos.currentValue, investment.currency)}</span>
+                          <span
+                            className={cn(
+                              'w-20 text-right',
+                              pos.gainLoss >= 0 ? 'text-accent' : 'text-destructive',
+                            )}
+                          >
+                            {pos.gainLoss >= 0 ? '+' : ''}{fmt(pos.gainLoss, investment.currency)}
+                          </span>
+                        </div>
+                      </div>
+                    ))}
+                  </CardContent>
+                </Card>
+              )}
 
               {/* FX attribution — invested at purchase-date rates, gain split
                   into asset performance vs currency effect */}

@@ -7,10 +7,12 @@ import { Button } from "@/components/ui/button";
 import {
     DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { Landmark, MoreVertical, Pencil, Archive, ArchiveRestore, Trash2, Loader2, GitMerge } from "lucide-react";
+import { Landmark, MoreVertical, Pencil, Archive, ArchiveRestore, Trash2, Loader2, GitMerge, DoorClosed } from "lucide-react";
 import { useAccounts, useUpdateAccount, useDeleteAccount } from "@/hooks/useAccounts";
 import { AddAccountDialog, type AccountFormValues } from "@/features/accounts/AddAccountDialog";
 import { MergeAccountDialog } from "@/features/accounts/MergeAccountDialog";
+import { CloseAccountDialog } from "@/features/accounts/CloseAccountDialog";
+import { usePortfolio } from "@/hooks/usePortfolio";
 import { useLanguage } from "@/contexts/LanguageContext";
 import type { Account } from "@/types/api";
 
@@ -23,6 +25,8 @@ export default function AccountsPage() {
 
     const [editing, setEditing] = useState<Account | undefined>(undefined);
     const [merging, setMerging] = useState<Account | undefined>(undefined);
+    const [closing, setClosing] = useState<Account | undefined>(undefined);
+    const { summaries } = usePortfolio();
 
     const accounts = useMemo(() => data?.items ?? [], [data]);
 
@@ -130,6 +134,11 @@ export default function AccountsPage() {
                                                 <GitMerge className="mr-2 h-4 w-4" /> {t('accounts.merge')}
                                             </DropdownMenuItem>
                                         )}
+                                        {a.is_active && (
+                                            <DropdownMenuItem onClick={() => setClosing(a)}>
+                                                <DoorClosed className="mr-2 h-4 w-4" /> {t('accounts.close.action')}
+                                            </DropdownMenuItem>
+                                        )}
                                         <DropdownMenuItem onClick={() => toggleArchive(a)}>
                                             {a.is_active
                                                 ? <><Archive className="mr-2 h-4 w-4" /> {t('accounts.archive')}</>
@@ -181,6 +190,16 @@ export default function AccountsPage() {
                     accounts={accounts}
                     open={!!merging}
                     onOpenChange={(o) => { if (!o) setMerging(undefined); }}
+                />
+            )}
+
+            {closing && (
+                <CloseAccountDialog
+                    account={closing}
+                    accounts={accounts}
+                    summaries={summaries}
+                    open={!!closing}
+                    onOpenChange={(o) => { if (!o) setClosing(undefined); }}
                 />
             )}
         </div>
