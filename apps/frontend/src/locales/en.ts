@@ -3093,6 +3093,8 @@ const en: Record<string, string> = {
   'transactions.updateFailed': 'Failed to update transaction: {msg}',
   'transactions.updateFailedTitle': 'Failed to update transaction',
   'transactions.updated': 'Transaction updated',
+  'transfers.includeTransfers': 'Include transfers',
+  'transfers.includeTransfersHint': 'Count transfers between your own accounts as income and spending',
   'txPage.activeOnly': 'Active Only',
   'txPage.attachments': 'Attachments',
   'txPage.attachmentsError': 'Could not load attachments',

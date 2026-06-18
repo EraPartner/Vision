@@ -3093,6 +3093,8 @@ const nl: Record<string, string> = {
   'transactions.updateFailed': 'Bijwerken van transactie mislukt: {msg}',
   'transactions.updateFailedTitle': 'Bijwerken van transactie mislukt',
   'transactions.updated': 'Transactie bijgewerkt',
+  'transfers.includeTransfers': 'Overschrijvingen meetellen',
+  'transfers.includeTransfersHint': 'Tel overschrijvingen tussen je eigen rekeningen mee als inkomsten en uitgaven',
   'txPage.activeOnly': 'Alleen actief',
   'txPage.attachments': 'Bijlagen',
   'txPage.attachmentsError': 'Bijlagen konden niet worden geladen',
