@@ -13,7 +13,12 @@ import { normalizeForMatching } from '../services/textNormalization.js';
 import { logger } from '../config/logger.js';
 import { validateIdParam, assertYmd } from '../middleware/validation.js';
 import { rateLimiter } from '../middleware/rateLimiter.js';
-import { scheduleReconcile } from '../services/transferReconciliationService.js';
+import {
+  scheduleReconcile,
+  getTransferSuggestions,
+  markTransfer,
+  unmarkTransfer,
+} from '../services/transferReconciliationService.js';
 import { autoLinkTransactions } from '../services/plannedMatchService.js';
 import {
   ValidationError,
@@ -177,6 +182,34 @@ async function resolveCategoryNameToId(fields) {
 
   delete fields.category_name;
 }
+
+// ── Internal transfers (ADR-083) ───────────────────────────────────────────
+// Defined before the `/:id` routes; all have 2 path segments or a literal first
+// segment so they never collide with the single-segment `/:id` handlers.
+
+// GET /api/transactions/transfer-suggestions — ambiguous transfer matches
+router.get('/transfer-suggestions', async (req, res) => {
+  res.ok({ items: await getTransferSuggestions() });
+});
+
+// POST /api/transactions/transfers — manually confirm a transfer pair (sticky)
+router.post('/transfers', async (req, res) => {
+  const aId = parseInt(req.body?.aId, 10);
+  const bId = parseInt(req.body?.bId, 10);
+  if (!Number.isInteger(aId) || !Number.isInteger(bId) || aId === bId) {
+    throw new ValidationError('aId and bId must be two distinct transaction ids');
+  }
+  await markTransfer(aId, bId);
+  scheduleReconcile();
+  res.ok({ ok: true });
+});
+
+// DELETE /api/transactions/transfers/:id — clear a transfer mark and its peer
+router.delete('/transfers/:id', validateIdParam, async (req, res) => {
+  await unmarkTransfer(parseInt(req.params.id, 10));
+  scheduleReconcile();
+  res.ok({ ok: true });
+});
 
 // GET /api/transactions
 router.get('/', async (req, res) => {

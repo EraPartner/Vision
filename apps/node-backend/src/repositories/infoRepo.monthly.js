@@ -14,6 +14,7 @@ import {
   formatYearMonthKey,
   buildMonthlySummary,
   mapRowsForAmountConversion,
+  getIncludeTransfers,
 } from './infoRepositoryHelpers.js';
 
 export async function getMonthlyFinancialSummary(
@@ -25,6 +26,7 @@ export async function getMonthlyFinancialSummary(
   const validIds = excludedCategoryIds.filter(id => Number.isInteger(id) && id > 0 && id < 2147483647);
   const validRecipientIds = (excludedRecipientIds || []).filter(id => Number.isInteger(id) && id > 0 && id < 2147483647);
   logger.debug('getMonthlyFinancialSummary called', { excludedCategoryIds, validIds, validRecipientIds });
+  const includeTransfers = await getIncludeTransfers();
 
   // The MV is grained month×currency, so its fast path converts a whole month's
   // total at the 1st-of-month rate. That only matches the live per-(date,currency)
@@ -34,7 +36,7 @@ export async function getMonthlyFinancialSummary(
   // history visibly shifting when an unrelated exclusion toggles the path.
   const mvTarget = (targetCurrency || 'EUR').toUpperCase();
   let mvCurrencyHomogeneous = false;
-  const mvUsable = !allTime && validIds.length === 0 && validRecipientIds.length === 0 && await mvAvailable('mv_monthly_summary');
+  const mvUsable = !includeTransfers && !allTime && validIds.length === 0 && validRecipientIds.length === 0 && await mvAvailable('mv_monthly_summary');
   if (mvUsable) {
     const hetero = await query(
       `SELECT 1 FROM mv_monthly_summary WHERE UPPER(currency) <> $1 LIMIT 1`,
@@ -162,7 +164,7 @@ export async function getMonthlyFinancialSummary(
       LEFT JOIN recipients r ON t.recipient_id = r.id
       LEFT JOIN recipients pr ON r.primary_recipient_id = pr.id
       WHERE t.is_active = true
-      AND t.is_transfer = false
+      ${includeTransfers ? '' : 'AND t.is_transfer = false'}
       ${categoryExcludeClause}
       ${recipientExcludeClause}
     ),

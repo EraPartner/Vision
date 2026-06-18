@@ -10,6 +10,7 @@ import {
   roundToCents,
   mapRowsForAmountConversion,
   buildCategoryFromConvertedRows,
+  getIncludeTransfers,
 } from './infoRepositoryHelpers.js';
 
 export const statisticsRepository = {
@@ -73,6 +74,7 @@ export const statisticsRepository = {
     const validRecIds = (excludedRecipientIds || []).filter(id => Number.isInteger(id) && id > 0 && id < 2147483647);
 
     const params = [];
+    const includeTransfers = await getIncludeTransfers();
     // Canonical exclusion semantics (match services/filterBuilder.buildExclusionClauses
     // and every other money surface): 3-level category COALESCE and ALIAS-AWARE
     // recipient exclusion. The bare `t.recipient_id NOT IN` here previously kept
@@ -106,7 +108,7 @@ export const statisticsRepository = {
       LEFT JOIN recipients pr ON r.primary_recipient_id = pr.id
       LEFT JOIN categories c ON COALESCE(t.category_id, r.default_category_id) = c.id
       WHERE t.is_active = true
-        AND t.is_transfer = false
+        ${includeTransfers ? '' : 'AND t.is_transfer = false'}
         AND COALESCE(t.category_id, r.default_category_id) IS NOT NULL
         ${catExclude}
         ${recExclude}
