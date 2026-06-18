@@ -14,7 +14,6 @@ import { useWidgetVisibility } from "@/hooks/useWidgetVisibility";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { ChartCard } from "@/components/statistics/ChartCard";
 import { SummaryCards } from "@/components/statistics/SummaryCards";
-import { IncludeTransfersToggle } from "@/components/statistics/IncludeTransfersToggle";
 import { STATISTICS_WIDGETS } from "@/components/statistics/statisticsUtils";
 
 const RecipientInsightsTab = lazy(() =>
@@ -144,7 +143,6 @@ export default function StatisticsPage() {
       <div className="flex items-center justify-between">
         <PageHeader title={t("statsPage.title")} subtitle={t("statsPage.subtitle")} icon={BarChart3} />
         <div className="flex items-center gap-2">
-          <IncludeTransfersToggle />
           <ExportDialog />
           <WidgetVisibilityDialog
             widgets={widgets}

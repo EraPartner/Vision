@@ -6,6 +6,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Separator } from '@/components/ui/separator';
+import { Switch } from '@/components/ui/switch';
 import {
     Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from '@/components/ui/select';
@@ -25,6 +26,8 @@ interface DashboardTabProps {
     setExcludeHidden: (v: boolean) => void;
     exclusionScope: ExclusionScope;
     setExclusionScope: (scope: ExclusionScope) => void;
+    includeTransfers: boolean;
+    setIncludeTransfers: (v: boolean) => void;
 }
 
 export const DashboardTab = memo(function DashboardTab({
@@ -39,6 +42,8 @@ export const DashboardTab = memo(function DashboardTab({
     setExcludeHidden,
     exclusionScope,
     setExclusionScope,
+    includeTransfers,
+    setIncludeTransfers,
 }: DashboardTabProps) {
     const { t } = useLanguage();
     const [categorySearch, setCategorySearch] = useState('');
@@ -114,6 +119,28 @@ export const DashboardTab = memo(function DashboardTab({
                                 {t('settings.dashboard.excludeHiddenHint')}
                             </p>
                         </div>
+                    </div>
+                </div>
+
+                <Separator />
+
+                {/* Internal transfers (ADR-083) */}
+                <div className="space-y-3">
+                    <h3 className="text-sm font-semibold text-foreground">{t('settings.dashboard.transfersTitle')}</h3>
+                    <div className="flex items-center justify-between gap-3 rounded-lg border p-4">
+                        <div className="flex-1">
+                            <Label htmlFor="include-transfers" className="text-sm font-medium cursor-pointer">
+                                {t('transfers.includeTransfers')}
+                            </Label>
+                            <p className="text-xs text-muted-foreground mt-1">
+                                {t('transfers.includeTransfersHint')}
+                            </p>
+                        </div>
+                        <Switch
+                            id="include-transfers"
+                            checked={includeTransfers}
+                            onCheckedChange={setIncludeTransfers}
+                        />
                     </div>
                 </div>
 

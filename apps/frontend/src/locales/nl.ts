@@ -2286,6 +2286,7 @@ const nl: Record<string, string> = {
   'settings.dashboard.scope.statistics': 'Alleen statistieken',
   'settings.dashboard.searchCategories': 'Zoek categorieën...',
   'settings.dashboard.searchRecipients': 'Zoek ontvangers...',
+  'settings.dashboard.transfersTitle': 'Overschrijvingen',
   'settings.dateFormat.ddmmyyyy': 'DD/MM/JJJJ (31/12/2024)',
   'settings.dateFormat.ddmmyyyy2': 'DD.MM.JJJJ (31.12.2024)',
   'settings.dateFormat.ddmmyyyy3': 'DD-MM-JJJJ (31-12-2024)',

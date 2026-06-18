@@ -4,7 +4,7 @@ import { useAppSettings, defaultAppSettings } from '@/contexts/AppSettingsContex
 import { useSettingsStore, type VisualEffectsTier } from '@/stores/settingsStore';
 import { currentDisplayIsLarge } from '@/lib/visualEffects';
 import { useLanguage } from '@/contexts/LanguageContext';
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { apiClient } from '@/lib/api';
 import {
     Dialog,
@@ -35,6 +35,7 @@ export function DashboardSettingsDialog({ open, onOpenChange, defaultTab = 'gene
     const { settings, updateSettings, resetSettings } = useSettings();
     const { appSettings, updateAppSettings, resetAppSettings } = useAppSettings();
     const { t } = useLanguage();
+    const queryClient = useQueryClient();
 
     const [activeTab, setActiveTab] = useState(defaultTab);
     useEffect(() => { setActiveTab(defaultTab); }, [defaultTab]);
@@ -44,6 +45,8 @@ export function DashboardSettingsDialog({ open, onOpenChange, defaultTab = 'gene
     const [localExcludedRecipients, setLocalExcludedRecipients] = useState<number[]>([]);
     const [localExcludeHidden, setLocalExcludeHidden] = useState(true);
     const [localExclusionScope, setLocalExclusionScope] = useState<ExclusionScope>('everywhere');
+    // Internal-transfer exclusion (ADR-083) — standalone global setting.
+    const [localIncludeTransfers, setLocalIncludeTransfers] = useState(false);
 
     // General settings (needed for save)
     const [localAppSettings, setLocalAppSettings] = useState(appSettings);
@@ -108,6 +111,13 @@ export function DashboardSettingsDialog({ open, onOpenChange, defaultTab = 'gene
         staleTime: 60000,
     });
 
+    const { data: includeTransfersSetting } = useQuery({
+        queryKey: ['setting', 'includeTransfers'],
+        queryFn: () => apiClient.getSetting('includeTransfers'),
+        staleTime: 60000,
+        enabled: open,
+    });
+
     const categories = categoriesData?.items ?? [];
     const recipients = recipientsData?.items ?? [];
     const isLoading = categoriesLoading || recipientsLoading;
@@ -122,6 +132,12 @@ export function DashboardSettingsDialog({ open, onOpenChange, defaultTab = 'gene
         setTierSelection(null);
         // Backup settings are loaded by the dedicated [open] effect above.
     }, [open, settings, appSettings]);
+
+    // Seed the include-transfers toggle from its freshly-queried value (separate
+    // effect so a late query resolve doesn't reset the other locals).
+    useEffect(() => {
+        if (open) setLocalIncludeTransfers(includeTransfersSetting?.value === true);
+    }, [open, includeTransfersSetting]);
 
     const handleAiModelChange = useCallback(
         (v: string) => setLocalAppSettings((prev) => ({ ...prev, aiDefaultModel: v })),
@@ -157,6 +173,9 @@ export function DashboardSettingsDialog({ open, onOpenChange, defaultTab = 'gene
             setSessionTierOverride(undefined);
         }
         updateAppSettings(next);
+        // Persist the standalone include-transfers setting + refresh cash-flow data.
+        apiClient.saveSetting('includeTransfers', localIncludeTransfers).catch(() => { /* non-fatal */ });
+        queryClient.invalidateQueries();
         if (apiClient.isElectron() && backupSettingsTrusted) {
             apiClient.saveBackupSettings({ backupDir, backupOnQuit });
         }
@@ -172,6 +191,7 @@ export function DashboardSettingsDialog({ open, onOpenChange, defaultTab = 'gene
         setLocalExcludedRecipients([]);
         setLocalExcludeHidden(true);
         setLocalExclusionScope('everywhere');
+        setLocalIncludeTransfers(false);
         setLocalAppSettings(defaultAppSettings);
         toast.info(t('settings.resetToDefaults'));
     };
@@ -224,6 +244,8 @@ export function DashboardSettingsDialog({ open, onOpenChange, defaultTab = 'gene
                             setExcludeHidden={setLocalExcludeHidden}
                             exclusionScope={localExclusionScope}
                             setExclusionScope={setLocalExclusionScope}
+                            includeTransfers={localIncludeTransfers}
+                            setIncludeTransfers={setLocalIncludeTransfers}
                         />
                     </TabsContent>
 
