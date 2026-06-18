@@ -1,0 +1,129 @@
+import type { ReactNode } from 'react';
+import { cn } from '@/lib/utils';
+import { Label } from '@/components/ui/label';
+
+/**
+ * Shared layout primitives for the Settings dialog. One visual language for
+ * every setting: a section (title + optional description) holds one or more
+ * cards; each card is a bordered, row-divided group of SettingRows.
+ *
+ * These replace the previous per-tab mix of bare rows, full-width separators,
+ * and ad-hoc bordered cards.
+ */
+
+interface SettingsSectionProps {
+    title: ReactNode;
+    description?: ReactNode;
+    /** Optional trailing element rendered on the title row (e.g. a status pill). */
+    aside?: ReactNode;
+    children: ReactNode;
+}
+
+export function SettingsSection({ title, description, aside, children }: SettingsSectionProps) {
+    return (
+        <section className="space-y-4">
+            <div className="flex items-start justify-between gap-4">
+                <div className="space-y-1">
+                    <h2 className="text-base font-semibold text-foreground">{title}</h2>
+                    {description && (
+                        <p className="text-sm text-muted-foreground">{description}</p>
+                    )}
+                </div>
+                {aside && <div className="shrink-0">{aside}</div>}
+            </div>
+            <div className="space-y-5">{children}</div>
+        </section>
+    );
+}
+
+interface SettingsGroupProps {
+    /** Optional small label above the card grouping a cluster of rows. */
+    label?: ReactNode;
+    children: ReactNode;
+    className?: string;
+}
+
+/**
+ * A bordered card that groups related SettingRows, dividing them with hairlines
+ * instead of full-width separators. Pass `label` for a small caption above it.
+ */
+export function SettingsGroup({ label, children, className }: SettingsGroupProps) {
+    return (
+        <div className="space-y-2">
+            {label && (
+                <div className="px-1 text-xs font-medium uppercase tracking-wide text-muted-foreground">
+                    {label}
+                </div>
+            )}
+            <div
+                className={cn(
+                    'overflow-hidden rounded-xl border border-border bg-card/40 divide-y divide-border/60',
+                    className,
+                )}
+            >
+                {children}
+            </div>
+        </div>
+    );
+}
+
+interface SettingRowProps {
+    title: ReactNode;
+    description?: ReactNode;
+    /** Associates the title <Label> with a control's id for click-to-focus. */
+    htmlFor?: string;
+    /**
+     * 'row' (default): title/description left, control right — for switches and
+     * compact selects. 'stack': control sits full-width below the title — for
+     * search inputs, lists, and anything that needs the full width.
+     */
+    layout?: 'row' | 'stack';
+    /** Tone the row for destructive actions (danger zone). */
+    destructive?: boolean;
+    children: ReactNode;
+    className?: string;
+}
+
+export function SettingRow({
+    title,
+    description,
+    htmlFor,
+    layout = 'row',
+    destructive,
+    children,
+    className,
+}: SettingRowProps) {
+    const heading = (
+        <div className="space-y-0.5">
+            <Label
+                htmlFor={htmlFor}
+                className={cn(
+                    'text-sm font-medium',
+                    htmlFor && 'cursor-pointer',
+                    destructive && 'text-destructive',
+                )}
+            >
+                {title}
+            </Label>
+            {description && (
+                <p className="text-xs text-muted-foreground">{description}</p>
+            )}
+        </div>
+    );
+
+    if (layout === 'stack') {
+        return (
+            <div className={cn('space-y-3 px-4 py-3.5', className)}>
+                {heading}
+                <div>{children}</div>
+            </div>
+        );
+    }
+
+    return (
+        <div className={cn('flex items-center justify-between gap-4 px-4 py-3.5', className)}>
+            {heading}
+            <div className="shrink-0">{children}</div>
+        </div>
+    );
+}
