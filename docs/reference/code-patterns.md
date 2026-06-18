@@ -3508,22 +3508,32 @@ const { data } = useQuery({
 // Observability: automatically tracked in inspector
 ```
 
-### Pattern: Zero-Cost Dev-Only Activation
+### Pattern: Lazy-Chunk Gated Activation
 
-DevtoolsRoot mounts only in dev builds:
+DevtoolsRoot ships in a lazy chunk and mounts when a dev build flag is set OR the
+runtime Admin Mode toggle is on:
 
 ```tsx
 // In App.tsx
-{import.meta.env.DEV && (
-  <Suspense fallback={null}>
-    <DevtoolsRoot />
-  </Suspense>
-)}
+const isDevtoolsBuildEnabled =
+  import.meta.env.DEV || import.meta.env.VITE_DEVTOOLS === 'true';
+
+function DevtoolsGate() {
+  const adminMode = useSettingsStore((s) => s.appSettings.adminMode);
+  if (!isDevtoolsBuildEnabled && !adminMode) return null;
+  return (
+    <Suspense fallback={null}>
+      <DevtoolsRoot />
+    </Suspense>
+  );
+}
 ```
 
-- `import.meta.env.DEV` is **statically replaced by Vite** (evaluated at build time)
-- Production build: Entire devtools chunk tree-shaken (zero bytes added)
-- Verified: `grep -r "devtools" dist/` returns no matches
+- Build flags (`import.meta.env.DEV` / `VITE_DEVTOOLS`) keep it always-on in dev
+- `adminMode` exposes it at runtime in any build — the only path that works in the
+  packaged Electron app and public release image (normally-built bundle)
+- The devtools chunk is **lazy**: only fetched when the gate first renders it, so
+  users who never enable Admin Mode pay no load cost
 
 ### Pattern: Querying Request Log
 
@@ -3565,7 +3575,7 @@ const metrics = useQueryMetrics();
 
 ### When NOT to Use
 
-- **Production builds** — Inspector code is tree-shaken; no overhead
+- **Default user experience** — Stays dormant unless Admin Mode is enabled; the lazy chunk isn't fetched, so there's no load cost for ordinary users
 - **User-facing observability** — Use [[docs/features/admin-observability|Admin Observability API]] instead (backend-provided system health)
 
 ---

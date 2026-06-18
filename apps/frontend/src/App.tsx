@@ -11,11 +11,13 @@ import { ThemeProvider } from "@/contexts/ThemeContext";
 import { LanguageProvider, type Language } from "@/contexts/LanguageContext";
 import { configureCurrencyFormatDefaults, numberFormatToLocale } from "@/utils/currency";
 
-import { lazy, Suspense, useEffect, type ComponentType, type ReactNode } from "react";
+import { lazy, Suspense, useEffect, type ReactNode } from "react";
 import { ErrorBoundary } from "@/components/shared/ErrorBoundary";
 import { ScrollToTop } from "@/components/shared/ScrollToTop";
 import { StartupRedirect } from "@/components/shared/StartupRedirect";
 import { RequireAdmin } from "@/components/auth/RequireAdmin";
+
+import { useSettingsStore } from "@/stores/settingsStore";
 
 // Lazy-loaded pages for code splitting. Loaders live in lib/routePreload so
 // sidebar hover can warm the same chunks the router requests on click.
@@ -58,17 +60,33 @@ const PortfolioForecastPage = lazy(routeLoaders["/research/forecast"]);
 const ChartBuilderPage = lazy(routeLoaders["/research/charts"]);
 const NotFound = lazy(() => import("./pages/NotFound"));
 
-// Dev-only devtools — tree-shaken from production builds.
-// Enabled by: local Vite dev server (import.meta.env.DEV) OR Docker dev build
-// (VITE_DEVTOOLS=true injected via docker-compose.dev.yml build arg).
-const isDevtoolsEnabled = import.meta.env.DEV || import.meta.env.VITE_DEVTOOLS === 'true';
-const DevtoolsRoot: ComponentType | null = isDevtoolsEnabled
-    ? lazy(() =>
-          import("@/components/devtools/DevtoolsRoot").then((m) => ({
-              default: m.DevtoolsRoot,
-          })),
-      )
-    : null;
+// Devtools (API Inspector). Lazily loaded as a separate chunk that is only
+// fetched when actually rendered, so it costs normal users nothing on load.
+// Shown when ANY of:
+//   • local Vite dev server (import.meta.env.DEV), or
+//   • Docker dev build (VITE_DEVTOOLS=true via docker-compose.dev.yml), or
+//   • the user enables Admin Mode at runtime — which is the only path that
+//     works in the packaged Electron app and public release image, since those
+//     run a normally-built bundle with no VITE_DEVTOOLS build arg.
+const isDevtoolsBuildEnabled = import.meta.env.DEV || import.meta.env.VITE_DEVTOOLS === 'true';
+const DevtoolsRoot = lazy(() =>
+    import("@/components/devtools/DevtoolsRoot").then((m) => ({
+        default: m.DevtoolsRoot,
+    })),
+);
+
+// Renders the devtools when build-enabled or when Admin Mode is on. Reads the
+// Zustand store directly (no provider needed) so it works above the settings
+// context providers where the devtools mount.
+function DevtoolsGate() {
+    const adminMode = useSettingsStore((s) => s.appSettings.adminMode);
+    if (!isDevtoolsBuildEnabled && !adminMode) return null;
+    return (
+        <Suspense fallback={null}>
+            <DevtoolsRoot />
+        </Suspense>
+    );
+}
 
 const queryClient = new QueryClient({
     defaultOptions: {
@@ -144,11 +162,7 @@ function RedirectSymbolToMarket() {
 const App = () => {
     return (
         <QueryClientProvider client={queryClient}>
-            {DevtoolsRoot && (
-                <Suspense fallback={null}>
-                    <DevtoolsRoot />
-                </Suspense>
-            )}
+            <DevtoolsGate />
             <SettingsPreloadProvider>
                 <ThemeProvider>
                     <SettingsProvider>

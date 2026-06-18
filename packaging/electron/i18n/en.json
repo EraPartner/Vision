@@ -2232,7 +2232,7 @@
   "settings.aiChat.statusReady": "Ready",
   "settings.aiChat.statusUnreachable": "Unreachable",
   "settings.app.adminMode": "Admin Mode",
-  "settings.app.adminModeHint": "Show the Admin section in the sidebar with database, provider health, endpoint liveness, and feature flag tools.",
+  "settings.app.adminModeHint": "Show the Admin section in the sidebar with database, provider health, endpoint liveness, and feature flag tools, plus the floating API inspector for viewing live API traffic.",
   "settings.app.alreadyLatest": "Already on the latest version",
   "settings.app.appRestarted": "App restarted. You may need to reload the page.",
   "settings.app.checkForUpdates": "Check for updates",

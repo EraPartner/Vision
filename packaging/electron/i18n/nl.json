@@ -2232,7 +2232,7 @@
   "settings.aiChat.statusReady": "Gereed",
   "settings.aiChat.statusUnreachable": "Niet bereikbaar",
   "settings.app.adminMode": "Beheerdersmodus",
-  "settings.app.adminModeHint": "Toon de beheerdersectie in de zijbalk met database-, providersgezondheid, eindpuntactiviteit en functievlaggen.",
+  "settings.app.adminModeHint": "Toon de beheerdersectie in de zijbalk met database-, providersgezondheid, eindpuntactiviteit en functievlaggen, plus de zwevende API-inspector voor het bekijken van live API-verkeer.",
   "settings.app.alreadyLatest": "Al op de nieuwste versie",
   "settings.app.appRestarted": "App hergestart. Mogelijk moet u de pagina herladen.",
   "settings.app.checkForUpdates": "Controleren op updates",
