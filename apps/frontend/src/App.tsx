@@ -25,7 +25,6 @@ import { routeLoaders } from "@/lib/routePreload";
 
 const TaxOverviewPage = lazy(routeLoaders["/tax"]);
 const PortfolioTaxPage = lazy(routeLoaders["/portfolio/tax"]);
-const UnifiedTaxPage = lazy(routeLoaders["/tax/unified"]);
 const RebalancePage = lazy(routeLoaders["/portfolio/rebalance"]);
 const DashboardPage = lazy(routeLoaders["/"]);
 const TransactionsPage = lazy(routeLoaders["/transactions"]);
@@ -194,7 +193,6 @@ const App = () => {
                                                     <Route path="/import/:batchId/review" element={<ImportReviewPage />} />
                                                     <Route path="/owes" element={<OwesPage />} />
                                                     <Route path="/tax" element={<TaxOverviewPage />} />
-                                                    <Route path="/tax/unified" element={<UnifiedTaxPage />} />
                                                     <Route path="/admin" element={<RequireAdmin><AdminOverviewPage /></RequireAdmin>} />
                                                     <Route path="/admin/db" element={<RequireAdmin><DbMaintenancePage /></RequireAdmin>} />
                                                     <Route path="/admin/db/:table" element={<RequireAdmin><TableDataEditorPage /></RequireAdmin>} />

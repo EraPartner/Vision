@@ -7,13 +7,6 @@
  *  - assembleRebalanceInputs: actual sleeve values (portfolio, rolled up to the
  *    allocation-sleeve vocabulary) + available cash (Σ spendable account computed
  *    balances, FX-converted).
- *  - assembleUnifiedTaxItems: owner-allocated portfolio dividends/interest +
- *    realized gains for a tax year; the caller supplies earned income (the
- *    frontend already holds the authoritative tax-profile gross).
- *
- * The realized-gain figure is INDICATIVE — it values each in-year sale at the
- * holding's current weighted-average cost basis, not the basis at sale time
- * (ADR-098: this is a composed *view*, not a tax re-derivation).
  */
 
 import { query } from '../database/connection.js';
@@ -91,84 +84,4 @@ export async function assembleRebalanceInputs({ currency = 'EUR' } = {}) {
   };
 }
 
-/**
- * Owner-allocated tax items for `year`. Portfolio dividends/interest and realized
- * gains are sourced from `portfolio_transactions` and attributed to the owner of
- * the holding's account (`me` | `partner` | `joint`; unassigned → `me`). The
- * caller passes earned income (kind `earned_income`) since the tax-profile gross
- * lives in the frontend.
- *
- * @param {{ year: number, currency?: string, earnedIncome?: number, earnedIncomeOwner?: string }} args
- * @returns {Promise<Array<{ amount:number, owner:string, kind:string }>>}
- */
-export async function assembleUnifiedTaxItems({ year, currency = 'EUR', earnedIncome = 0, earnedIncomeOwner = 'me' }) {
-  const target = (currency || 'EUR').toUpperCase();
-  const items = [];
-
-  const earned = Number(earnedIncome) || 0;
-  if (earned > 0) {
-    items.push({ amount: toNumber(roundToCents(toDecimal(earned))), owner: normalizeOwner(earnedIncomeOwner), kind: 'earned_income' });
-  }
-
-  // Dividend + interest income recorded in the year, per owning account.
-  const incomeRows = await query(
-    `SELECT COALESCE(a.owner, 'me') AS owner,
-            COALESCE(pt.currency, i.currency, 'EUR') AS currency,
-            COALESCE(SUM(pt.amount), 0) AS total
-       FROM portfolio_transactions pt
-       JOIN investments i ON i.id = pt.investment_id
-       LEFT JOIN accounts a ON a.id = pt.account_id
-      WHERE pt.type IN ('dividend', 'interest')
-        AND EXTRACT(YEAR FROM pt.date::date) = $1
-      GROUP BY a.owner, COALESCE(pt.currency, i.currency, 'EUR')`,
-    [year],
-  );
-  for (const r of incomeRows.rows) {
-    const cur = (r.currency || 'EUR').toUpperCase();
-    const native = Number(r.total) || 0;
-    if (native === 0) continue;
-    const converted = cur === target ? native : await convertToCurrency(native, cur, target);
-    items.push({ amount: toNumber(roundToCents(toDecimal(converted))), owner: normalizeOwner(r.owner), kind: 'dividend_income' });
-  }
-
-  // Realized gains: value each in-year sale at the holding's CURRENT weighted-avg
-  // cost basis (indicative; see file header). avgCostBasis from the summary is
-  // already in the target currency, so the whole computation stays in `target`.
-  const { summaries } = await getPortfolioSummary(target);
-  const avgCostByInvestment = new Map(summaries.map((s) => [Number(s.id), Number(s.avgCostBasis) || 0]));
-
-  const sellRows = await query(
-    `SELECT pt.investment_id,
-            COALESCE(a.owner, 'me') AS owner,
-            COALESCE(pt.currency, i.currency, 'EUR') AS currency,
-            COALESCE(pt.amount, 0) AS amount,
-            COALESCE(pt.units, 0) AS units
-       FROM portfolio_transactions pt
-       JOIN investments i ON i.id = pt.investment_id
-       LEFT JOIN accounts a ON a.id = pt.account_id
-      WHERE pt.type = 'sell'
-        AND EXTRACT(YEAR FROM pt.date::date) = $1`,
-    [year],
-  );
-  const gainByOwner = new Map();
-  for (const r of sellRows.rows) {
-    const cur = (r.currency || 'EUR').toUpperCase();
-    const proceedsNative = Number(r.amount) || 0;
-    const proceeds = cur === target ? proceedsNative : await convertToCurrency(proceedsNative, cur, target);
-    const cost = (Number(r.units) || 0) * (avgCostByInvestment.get(Number(r.investment_id)) ?? 0);
-    const owner = normalizeOwner(r.owner);
-    gainByOwner.set(owner, toDecimal(gainByOwner.get(owner) ?? 0).plus(toDecimal(proceeds)).minus(toDecimal(cost)));
-  }
-  for (const [owner, gain] of gainByOwner) {
-    const value = toNumber(roundToCents(gain));
-    if (value !== 0) items.push({ amount: value, owner, kind: 'realized_gains' });
-  }
-
-  return items;
-}
-
-function normalizeOwner(owner) {
-  return owner === 'partner' || owner === 'joint' ? owner : 'me';
-}
-
-export default { assembleRebalanceInputs, assembleUnifiedTaxItems };
+export default { assembleRebalanceInputs };

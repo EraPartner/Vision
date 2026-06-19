@@ -1416,38 +1416,6 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/Envelope"
-  /api/cross-workspace/unified-tax:
-    get:
-      summary: Unified tax view (ADR-098)
-      description: >-
-        Owner-allocated earned income + portfolio dividends + realized gains for a
-        tax year (indicative; feeds the Belgian marital quotient).
-      operationId: getUnifiedTax
-      tags: [CrossWorkspace]
-      parameters:
-        - in: query
-          name: year
-          required: true
-          schema: { type: integer }
-        - in: query
-          name: currency
-          schema: { type: string }
-        - in: query
-          name: earnedIncome
-          schema: { type: number }
-          description: Authoritative earned income (tax-profile gross), supplied by the client.
-        - in: query
-          name: earnedIncomeOwner
-          schema:
-            type: string
-            enum: [me, partner, joint]
-      responses:
-        "200":
-          description: Unified tax breakdown
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/Envelope"
 
   /api/accounts:
     get:

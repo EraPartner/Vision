@@ -83,6 +83,15 @@ Format: Obsidian Tasks plugin emoji. Priority 🔺 highest / ⏫ high / 🔼 med
       frontend typecheck + lint + locale validation green. **Still a pure, unwired core:** the
       ADR-098 net-worth/FI **projection cone** (`projectNetWorth`) — separate follow-up.
 
+      ❌ **2026-06-19 — Unified tax view removed (ADR-102).** Reverses the "built" note above for the
+      tax surface only. No clear use case beyond the two existing tax pages (`/tax` PIT, `/portfolio/tax`);
+      its sole distinctive axis (owner split for the marital quotient) matters only for joint filers, and
+      the figure was indicative, not authoritative. Removed end-to-end: page/route/preloader/nav (`Layers`
+      icon), client types, pure cores `unifiedTax` + `allocateByOwner`, assembler `assembleUnifiedTaxItems`
+      + `normalizeOwner`, `unifiedTax.*`/`nav.unifiedTax` i18n keys, and `GET /api/cross-workspace/unified-tax`
+      (openapi + matrix 211 → 210). **Cash-aware rebalancing is untouched.** Reintroducible from ADR-098 +
+      git history (e.g. gated to `filingStatus === 'married_joint'`) if a concrete couples use case emerges.
+
 - [x] 🔽 **Accounts hub → account transactions.** ✅ 2026-06-19 — double-clicking an account card on
       the accounts hub navigates to `/transactions?bank_account=<account.name>&filter_label=<display>`
       (the dual-write trigger keeps `transactions.bank_account` = `accounts.name`, so the name is the

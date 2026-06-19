@@ -3,7 +3,6 @@
  * view, both composing Budgeting + Portfolio data.
  */
 import { apiRequest } from '@/lib/api/client';
-import { requestWithQuery } from '@/lib/api/helpers';
 
 export type ModelPortfolio = 'sixty_forty' | 'all_weather' | 'three_fund';
 
@@ -40,35 +39,9 @@ export interface RebalanceResponse {
     deployment: Record<string, number>;
 }
 
-export interface UnifiedTaxRequest {
-    year: number;
-    currency?: string;
-    /** Authoritative earned income (the frontend holds the tax-profile gross). */
-    earnedIncome?: number;
-    earnedIncomeOwner?: 'me' | 'partner' | 'joint';
-}
-
-export interface UnifiedTaxResponse {
-    year: number;
-    currency: string;
-    total: number;
-    byOwner: { me: number; partner: number };
-    byKind: Record<string, number>;
-    items: Array<{ amount: number; owner: string; kind: string }>;
-}
-
 export function computeRebalance(req: RebalanceRequest): Promise<RebalanceResponse> {
     return apiRequest('/api/cross-workspace/rebalance', {
         method: 'POST',
         body: JSON.stringify(req),
-    });
-}
-
-export function getUnifiedTax(req: UnifiedTaxRequest): Promise<UnifiedTaxResponse> {
-    return requestWithQuery('/api/cross-workspace/unified-tax', {
-        year: req.year,
-        currency: req.currency,
-        earnedIncome: req.earnedIncome,
-        earnedIncomeOwner: req.earnedIncomeOwner,
     });
 }

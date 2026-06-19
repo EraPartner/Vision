@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import {
-  projectNetWorth, rebalanceDeployment, allocateByOwner, unifiedTax,
+  projectNetWorth, rebalanceDeployment,
 } from '../src/services/crossWorkspaceAnalytics.js';
 
 describe('projectNetWorth (ADR-098)', () => {
@@ -37,23 +37,5 @@ describe('rebalanceDeployment (ADR-098)', () => {
 
   it('deploys idle cash into a single under-target sleeve', () => {
     expect(rebalanceDeployment({ actualValues: { a: 100 }, targetWeights: { a: 1 }, availableCash: 50 })).toEqual({ a: 50 });
-  });
-});
-
-describe('allocateByOwner / unifiedTax (ADR-098)', () => {
-  it('joint splits 50/50; me/partner go fully to that owner', () => {
-    expect(allocateByOwner(100, 'me')).toEqual({ me: 100, partner: 0 });
-    expect(allocateByOwner(100, 'partner')).toEqual({ me: 0, partner: 100 });
-    expect(allocateByOwner(100, 'joint')).toEqual({ me: 50, partner: 50 });
-  });
-  it('aggregates a unified tax view by owner and kind', () => {
-    const r = unifiedTax([
-      { amount: 50000, owner: 'me', kind: 'earned' },
-      { amount: 4000, owner: 'joint', kind: 'realized_gains' },
-      { amount: 1200, owner: 'partner', kind: 'dividend' },
-    ]);
-    expect(r.total).toBe(55200);
-    expect(r.byOwner).toEqual({ me: 52000, partner: 3200 });
-    expect(r.byKind).toEqual({ earned: 50000, realized_gains: 4000, dividend: 1200 });
   });
 });

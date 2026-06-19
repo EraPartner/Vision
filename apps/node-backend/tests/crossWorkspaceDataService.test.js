@@ -15,7 +15,7 @@ vi.mock('../src/services/currency/currencyConversionService.js', () => ({
 import { query } from '../src/database/connection.js';
 import { getPortfolioSummary } from '../src/services/portfolio/portfolioSummaryService.js';
 import { convertToCurrency } from '../src/services/currency/currencyConversionService.js';
-import { assembleRebalanceInputs, assembleUnifiedTaxItems } from '../src/services/crossWorkspaceDataService.js';
+import { assembleRebalanceInputs } from '../src/services/crossWorkspaceDataService.js';
 
 beforeEach(() => {
   vi.clearAllMocks();
@@ -56,38 +56,5 @@ describe('assembleRebalanceInputs (ADR-098)', () => {
     await assembleRebalanceInputs({ currency: 'EUR' });
 
     expect(convertToCurrency).toHaveBeenCalledWith(100, 'USD', 'EUR');
-  });
-});
-
-describe('assembleUnifiedTaxItems (ADR-098)', () => {
-  it('owner-allocates earned income, dividends, and realized gains', async () => {
-    getPortfolioSummary.mockResolvedValue({
-      summaries: [{ id: 1, asset_class: 'stock', currentValue: 0, avgCostBasis: 10 }],
-    });
-    // 1st query → dividend/interest rows; 2nd query → sell rows.
-    query
-      .mockResolvedValueOnce({ rows: [{ owner: 'partner', currency: 'EUR', total: 300 }] })
-      .mockResolvedValueOnce({ rows: [{ investment_id: 1, owner: 'me', currency: 'EUR', amount: 250, units: 10 }] });
-
-    const items = await assembleUnifiedTaxItems({
-      year: 2026, currency: 'EUR', earnedIncome: 50000, earnedIncomeOwner: 'me',
-    });
-
-    expect(items).toContainEqual({ amount: 50000, owner: 'me', kind: 'earned_income' });
-    expect(items).toContainEqual({ amount: 300, owner: 'partner', kind: 'dividend_income' });
-    // realized gain = proceeds 250 − units 10 × avgCostBasis 10 = 150
-    expect(items).toContainEqual({ amount: 150, owner: 'me', kind: 'realized_gains' });
-  });
-
-  it('omits earned income when zero and drops zero-value gain rows', async () => {
-    getPortfolioSummary.mockResolvedValue({ summaries: [{ id: 1, avgCostBasis: 25 }] });
-    query
-      .mockResolvedValueOnce({ rows: [] })
-      .mockResolvedValueOnce({ rows: [{ investment_id: 1, owner: 'me', currency: 'EUR', amount: 250, units: 10 }] });
-
-    const items = await assembleUnifiedTaxItems({ year: 2026, currency: 'EUR', earnedIncome: 0 });
-
-    // gain = 250 − 10×25 = 0 → dropped; no earned income → only an empty set.
-    expect(items).toEqual([]);
   });
 });

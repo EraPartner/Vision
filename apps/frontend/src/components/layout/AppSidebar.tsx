@@ -43,7 +43,6 @@ import {
   GitCompareArrows,
   CandlestickChart,
   Scale,
-  Layers,
 } from "lucide-react";
 import { motion, useReducedMotion } from "framer-motion";
 import { useWorkspace } from "@/contexts/WorkspaceContext";
@@ -124,7 +123,6 @@ export function AppSidebar() {
         { title: t('nav.plannedPayments'), url: "/planned", icon: CalendarClock },
         { title: t('nav.whoOwesYou'), url: "/owes", icon: HandCoins },
         { title: t('nav.taxOverview'), url: "/tax", icon: Landmark },
-        { title: t('nav.unifiedTax'), url: "/tax/unified", icon: Layers },
       ],
     },
     {

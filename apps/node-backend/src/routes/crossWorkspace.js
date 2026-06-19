@@ -4,8 +4,6 @@
  *
  * POST /api/cross-workspace/rebalance     — cash-aware rebalancing: deploy
  *   spendable cash into underweight sleeves toward a target allocation, no sells.
- * GET  /api/cross-workspace/unified-tax   — owner-allocated income + dividends +
- *   realized gains for a tax year (indicative; feeds the marital-quotient view).
  *
  * The math is the pure core in services/crossWorkspaceAnalytics.js; the DB
  * assembly is services/crossWorkspaceDataService.js. Routes only orchestrate.
@@ -13,13 +11,11 @@
 
 import { Router } from 'express';
 import { ValidationError } from '../middleware/errorHandler.js';
-import { rebalanceDeployment, unifiedTax } from '../services/crossWorkspaceAnalytics.js';
+import { rebalanceDeployment } from '../services/crossWorkspaceAnalytics.js';
 import { CLASSIC_PORTFOLIOS, normalizeWeights } from '../services/portfolio/allocationAnalytics.js';
-import { assembleRebalanceInputs, assembleUnifiedTaxItems } from '../services/crossWorkspaceDataService.js';
+import { assembleRebalanceInputs } from '../services/crossWorkspaceDataService.js';
 
 const router = Router();
-
-const OWNERS = new Set(['me', 'partner', 'joint']);
 
 /**
  * Cash-aware rebalancing. Body:
@@ -63,30 +59,6 @@ router.post('/rebalance', async (req, res) => {
     deployment,
     links: [],
   });
-});
-
-/**
- * Unified tax view for ?year=YYYY. The caller passes the authoritative earned
- * income (tax-profile gross) it already holds; the server adds owner-allocated
- * portfolio dividends + realized gains.
- *   ?year=YYYY (required) &currency=EUR &earnedIncome=NNN &earnedIncomeOwner=me
- */
-router.get('/unified-tax', async (req, res) => {
-  const year = parseInt(req.query.year, 10);
-  if (!Number.isInteger(year) || year < 1900 || year > 3000) {
-    throw new ValidationError('`year` must be a 4-digit year');
-  }
-  const currency = typeof req.query.currency === 'string' ? req.query.currency.toUpperCase() : 'EUR';
-  const earnedIncome = req.query.earnedIncome != null ? Number(req.query.earnedIncome) : 0;
-  if (req.query.earnedIncome != null && !Number.isFinite(earnedIncome)) {
-    throw new ValidationError('`earnedIncome` must be a number');
-  }
-  const earnedIncomeOwner = OWNERS.has(req.query.earnedIncomeOwner) ? req.query.earnedIncomeOwner : 'me';
-
-  const items = await assembleUnifiedTaxItems({ year, currency, earnedIncome, earnedIncomeOwner });
-  const result = unifiedTax(items);
-
-  res.ok({ year, currency, ...result, items, links: [] });
 });
 
 export default router;

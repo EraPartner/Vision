@@ -62,26 +62,6 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/cross-workspace/unified-tax": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /**
-         * Unified tax view (ADR-098)
-         * @description Owner-allocated earned income + portfolio dividends + realized gains for a tax year (indicative; feeds the Belgian marital quotient).
-         */
-        get: operations["getUnifiedTax"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
     "/api/accounts": {
         parameters: {
             query?: never;
@@ -3738,32 +3718,6 @@ export interface operations {
         };
         responses: {
             /** @description Rebalancing plan */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Envelope"];
-                };
-            };
-        };
-    };
-    getUnifiedTax: {
-        parameters: {
-            query: {
-                year: number;
-                currency?: string;
-                /** @description Authoritative earned income (tax-profile gross), supplied by the client. */
-                earnedIncome?: number;
-                earnedIncomeOwner?: "me" | "partner" | "joint";
-            };
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Unified tax breakdown */
             200: {
                 headers: {
                     [name: string]: unknown;
