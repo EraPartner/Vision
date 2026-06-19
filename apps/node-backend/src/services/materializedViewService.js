@@ -183,11 +183,17 @@ export async function refreshMaterializedViews() {
     await Promise.all(
       MATERIALIZED_VIEWS.map(view =>
         query(`REFRESH MATERIALIZED VIEW CONCURRENTLY ${view}`).catch(err => {
-          // Fall back to non-concurrent if the view has no unique index or was never populated
+          // Fall back to non-concurrent if the view has no unique index or was never
+          // populated. Match case-insensitively: Postgres phrases the unpopulated case as
+          // "CONCURRENTLY cannot be used when the materialized view is not populated"
+          // (uppercase CONCURRENTLY, "is not populated") — a case-sensitive substring check
+          // missed it, so the first refresh after an initdb-loaded dump kept failing.
+          const msg = (err.message || '').toLowerCase();
           if (
-            err.message?.includes('has not been populated') ||
-            err.message?.includes('cannot refresh materialized view') ||
-            err.message?.includes('concurrently')
+            msg.includes('not populated') ||
+            msg.includes('has not been populated') ||
+            msg.includes('cannot refresh materialized view') ||
+            msg.includes('concurrently')
           ) {
             logger.warn(`Falling back to non-concurrent refresh for ${view}`);
             return query(`REFRESH MATERIALIZED VIEW ${view}`);

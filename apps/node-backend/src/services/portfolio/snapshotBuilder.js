@@ -92,7 +92,7 @@ export async function computeDailySnapshots(targetCurrency = 'EUR') {
              COALESCE(created_at::date, $1::date)::text AS active_from
       FROM investments
       WHERE is_active = true
-        AND asset_class = ANY($2::text[])
+        AND asset_class::text = ANY($2::text[])
     `, [firstDateYmd, NON_UNIT_ASSET_CLASSES]),
     query(`
       SELECT investment_id, to_char(price_date, 'YYYY-MM-DD') AS day, close_price

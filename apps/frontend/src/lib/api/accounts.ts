@@ -2,14 +2,28 @@ import type { Account, AccountCreate, AccountUpdate, AccountsListResponse } from
 import { apiRequest } from '@/lib/api/client';
 import { requestWithQuery } from '@/lib/api/helpers';
 
-export function getAccounts(params?: {
-    active?: 'true' | 'false' | 'all';
-}): Promise<AccountsListResponse> {
-    return requestWithQuery<AccountsListResponse>('/api/accounts', params);
+// PostgreSQL NUMERIC columns arrive over the wire as strings (computed_balance,
+// statement_balance, and the derived drift). The Account type declares them as
+// numbers, so coerce here — at the single fetch boundary — to keep the runtime
+// shape honest for every consumer (e.g. AccountsPage's drift.toFixed()).
+function normalizeAccount(a: Account): Account {
+    return {
+        ...a,
+        statement_balance: a.statement_balance == null ? undefined : Number(a.statement_balance),
+        computed_balance: a.computed_balance == null ? undefined : Number(a.computed_balance),
+        drift: a.drift == null ? undefined : Number(a.drift),
+    };
 }
 
-export function getAccount(id: number): Promise<Account> {
-    return apiRequest<Account>(`/api/accounts/${id}`);
+export async function getAccounts(params?: {
+    active?: 'true' | 'false' | 'all';
+}): Promise<AccountsListResponse> {
+    const res = await requestWithQuery<AccountsListResponse>('/api/accounts', params);
+    return { ...res, items: res.items.map(normalizeAccount) };
+}
+
+export async function getAccount(id: number): Promise<Account> {
+    return normalizeAccount(await apiRequest<Account>(`/api/accounts/${id}`));
 }
 
 export function createAccount(account: AccountCreate): Promise<Account> {
