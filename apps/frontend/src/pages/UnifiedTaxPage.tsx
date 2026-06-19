@@ -16,6 +16,7 @@ import { Layers, Info, Loader2 } from "lucide-react";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { useAppSettings } from "@/contexts/AppSettingsContext";
 import { useBelgianTaxProfile } from "@/contexts/BelgianTaxProfileContext";
+import { TaxYearSwitcher } from "@/components/tax/TaxYearSwitcher";
 import { apiClient } from "@/lib/api";
 
 type Owner = "me" | "partner" | "joint";
@@ -37,6 +38,22 @@ export default function UnifiedTaxPage() {
     queryFn: () => apiClient.getUnifiedTax({ year: viewedYear, currency, earnedIncome, earnedIncomeOwner }),
   });
 
+  // Round to whole euros for the headline cards, then reconcile so Me + Partner
+  // always equals the displayed Combined total. The residual (≤ €1 of rounding)
+  // lands on the larger party, so the smaller share stays accurate.
+  const ownerCards = useMemo(() => {
+    if (!data) return { total: 0, me: 0, partner: 0 };
+    const total = Math.round(data.total);
+    let me = Math.round(data.byOwner.me);
+    let partner = Math.round(data.byOwner.partner);
+    const residual = total - me - partner;
+    if (residual !== 0) {
+      if (Math.abs(data.byOwner.me) >= Math.abs(data.byOwner.partner)) me += residual;
+      else partner += residual;
+    }
+    return { total, me, partner };
+  }, [data]);
+
   const KIND_LABELS: Record<string, string> = {
     earned_income: t("unifiedTax.kind.earned_income"),
     dividend_income: t("unifiedTax.kind.dividend_income"),
@@ -50,6 +67,7 @@ export default function UnifiedTaxPage() {
         title={t("unifiedTax.title")}
         subtitle={t("unifiedTax.subtitle", { year: String(viewedYear) })}
         icon={Layers}
+        actions={<TaxYearSwitcher />}
       />
 
       <Card className="!border-primary/50 bg-primary/5">
@@ -89,15 +107,15 @@ export default function UnifiedTaxPage() {
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
             <Card className="glass-regular">
               <CardHeader className="pb-2"><CardTitle className="text-sm text-muted-foreground">{t("unifiedTax.total")}</CardTitle></CardHeader>
-              <CardContent><p className="text-2xl font-bold text-primary tabular-nums">{fmt.format(data.total)}</p></CardContent>
+              <CardContent><p className="text-2xl font-bold text-primary tabular-nums">{fmt.format(ownerCards.total)}</p></CardContent>
             </Card>
             <Card className="glass-regular">
               <CardHeader className="pb-2"><CardTitle className="text-sm text-muted-foreground">{t("accounts.owner.me")}</CardTitle></CardHeader>
-              <CardContent><p className="text-2xl font-bold tabular-nums">{fmt.format(data.byOwner.me)}</p></CardContent>
+              <CardContent><p className="text-2xl font-bold tabular-nums">{fmt.format(ownerCards.me)}</p></CardContent>
             </Card>
             <Card className="glass-regular">
               <CardHeader className="pb-2"><CardTitle className="text-sm text-muted-foreground">{t("accounts.owner.partner")}</CardTitle></CardHeader>
-              <CardContent><p className="text-2xl font-bold tabular-nums">{fmt.format(data.byOwner.partner)}</p></CardContent>
+              <CardContent><p className="text-2xl font-bold tabular-nums">{fmt.format(ownerCards.partner)}</p></CardContent>
             </Card>
           </div>
 

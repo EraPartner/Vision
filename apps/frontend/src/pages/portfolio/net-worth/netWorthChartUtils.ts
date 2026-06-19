@@ -4,6 +4,7 @@ export type NetWorthSnapshot = {
   date: string;
   netWorth: number;
   liquid: number;
+  liabilities: number;
   investments: number;
 };
 

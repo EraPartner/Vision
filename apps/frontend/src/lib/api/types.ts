@@ -84,6 +84,8 @@ export interface ImportPreviewResponse {
 export interface NetWorthSnapshot {
     date: string;
     liquid: number;
+    /** Σ liability-account balances (negative); split out of `liquid` (ADR-092). */
+    liabilities: number;
     investments: number;
     netWorth: number;
 }
@@ -91,6 +93,7 @@ export interface NetWorthSnapshot {
 export interface NetWorthResponse {
     current: {
         liquid: number;
+        liabilities: number;
         investments: number;
         netWorth: number;
     };

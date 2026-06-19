@@ -24,6 +24,8 @@ export interface AccountNetWorthRow {
   accountId: number | null;
   name: string | null;
   cash: number;
+  /** Liability-account balance (negative); kept out of `cash` so debt is not shown as liquid (ADR-092). */
+  liabilities: number;
   holdings: number;
   total: number;
 }
@@ -58,14 +60,18 @@ export function useAccountNetWorth(summaries: InvestmentSummary[]): AccountNetWo
     const rows: AccountNetWorthRow[] = [];
     for (const a of accounts) {
       if (!a.in_net_worth) continue;
-      const cash = toNumber(multiply(a.computed_balance ?? 0, multiplierFor(a.currency || 'EUR', target)));
+      const balance = toNumber(multiply(a.computed_balance ?? 0, multiplierFor(a.currency || 'EUR', target)));
+      // Liability balances are debt, not liquid cash — surface them separately.
+      const isLiability = a.type === 'liability';
+      const cash = isLiability ? 0 : balance;
+      const liabilities = isLiability ? balance : 0;
       const holdings = holdingsByAccount.get(a.id) ?? 0;
-      rows.push({ accountId: a.id, name: a.display_name || a.name, cash, holdings, total: cash + holdings });
+      rows.push({ accountId: a.id, name: a.display_name || a.name, cash, liabilities, holdings, total: cash + liabilities + holdings });
     }
 
     const unassignedHoldings = holdingsByAccount.get(null) ?? 0;
     if (Math.abs(unassignedHoldings) > 0.005) {
-      rows.push({ accountId: null, name: null, cash: 0, holdings: unassignedHoldings, total: unassignedHoldings });
+      rows.push({ accountId: null, name: null, cash: 0, liabilities: 0, holdings: unassignedHoldings, total: unassignedHoldings });
     }
 
     return rows.sort((x, y) => y.total - x.total);

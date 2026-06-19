@@ -7,7 +7,7 @@ import { numberFormatToLocale } from "@/utils/currency";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
-import { TrendingUp, TrendingDown, Wallet, Landmark, PiggyBank } from "lucide-react";
+import { TrendingUp, TrendingDown, Wallet, Landmark, PiggyBank, CreditCard } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { PageHeader } from "@/components/shared/PageHeader";
 import { EmptyState } from "@/components/shared/EmptyState";
@@ -72,7 +72,8 @@ export default function NetWorthPage() {
       const s = raw[i];
       const date = normalizeYmd(s.date);
       if (date && Number.isFinite(s.netWorth) && Number.isFinite(s.liquid) && Number.isFinite(s.investments)) {
-        result.push(date !== s.date ? { date, netWorth: s.netWorth, liquid: s.liquid, investments: s.investments } : s);
+        const liabilities = Number.isFinite(s.liabilities) ? s.liabilities : 0;
+        result.push(date !== s.date ? { date, netWorth: s.netWorth, liquid: s.liquid, liabilities, investments: s.investments } : s);
       }
     }
     return result;
@@ -112,7 +113,7 @@ export default function NetWorthPage() {
     'all': t('performance.period.all'),
   }), [t]);
 
-  const current = data?.current ?? { liquid: 0, investments: 0, netWorth: 0 };
+  const current = data?.current ?? { liquid: 0, liabilities: 0, investments: 0, netWorth: 0 };
 
   const tooltipLabelFormatter = useCallback(
     (v: string) => fmtDay(v, appSettings.dateFormat),
@@ -195,6 +196,12 @@ export default function NetWorthPage() {
 
   const liquidPct = current.netWorth > 0 ? ((current.liquid / current.netWorth) * 100).toFixed(0) : '0';
   const investmentsPct = current.netWorth > 0 ? ((current.investments / current.netWorth) * 100).toFixed(0) : '0';
+  const liabilitiesPct = current.netWorth > 0 ? ((current.liabilities / current.netWorth) * 100).toFixed(0) : '0';
+  const hasLiabilities = Math.abs(current.liabilities) > 0.005;
+  const accountsHaveLiabilities = accountRows.some((r) => Math.abs(r.liabilities) > 0.005);
+  const byAccountGrid = accountsHaveLiabilities
+    ? "grid-cols-[1fr_auto_auto_auto_auto]"
+    : "grid-cols-[1fr_auto_auto_auto]";
 
   return (
     <div className="space-y-6">
@@ -218,9 +225,9 @@ export default function NetWorthPage() {
         isRefreshing={isRefreshingPrices}
       />
 
-      {/* Summary — bento: featured Net Worth + liquid/investments split */}
+      {/* Summary — bento: featured Net Worth + liquid/investments/liabilities split */}
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-6 animate-stagger">
-        <div className="lg:col-span-3 lg:row-span-2 [&>*]:h-full">
+        <div className={cn("lg:col-span-3 [&>*]:h-full", hasLiabilities ? "lg:row-span-3" : "lg:row-span-2")}>
           <StatCard
             title={t('networth.title')}
             value={fmt(current.netWorth)}
@@ -253,6 +260,19 @@ export default function NetWorthPage() {
             subtitle={`${investmentsPct} ${t('networth.ofNetWorth')}`}
           />
         </div>
+        {hasLiabilities && (
+          <div className="lg:col-span-3">
+            <StatCard
+              title={t('networth.liabilities')}
+              value={fmt(current.liabilities)}
+              numericValue={current.liabilities}
+              formatValue={fmt}
+              icon={CreditCard}
+              trend="expense"
+              subtitle={`${liabilitiesPct} ${t('networth.ofNetWorth')}`}
+            />
+          </div>
+        )}
       </div>
 
       <NetWorthChart
@@ -274,19 +294,21 @@ export default function NetWorthPage() {
             <CardTitle className="text-sm font-medium">{t('networth.byAccount')}</CardTitle>
           </CardHeader>
           <CardContent className="space-y-1">
-            <div className="grid grid-cols-[1fr_auto_auto_auto] gap-x-4 sm:gap-x-8 text-xs uppercase tracking-wider text-muted-foreground pb-2 border-b border-border/50">
+            <div className={cn("grid gap-x-4 sm:gap-x-8 text-xs uppercase tracking-wider text-muted-foreground pb-2 border-b border-border/50", byAccountGrid)}>
               <span>{t('networth.account')}</span>
               <span className="text-right">{t('networth.liquid')}</span>
+              {accountsHaveLiabilities && <span className="text-right">{t('networth.liabilities')}</span>}
               <span className="text-right">{t('networth.investments')}</span>
               <span className="text-right">{t('networth.title')}</span>
             </div>
             {accountRows.map((row) => (
               <div
                 key={row.accountId ?? 'unassigned'}
-                className="grid grid-cols-[1fr_auto_auto_auto] gap-x-4 sm:gap-x-8 py-1.5 text-sm border-b border-border/30 last:border-0"
+                className={cn("grid gap-x-4 sm:gap-x-8 py-1.5 text-sm border-b border-border/30 last:border-0", byAccountGrid)}
               >
                 <span className="truncate text-foreground">{row.name ?? t('accounts.unassigned')}</span>
                 <span className="text-right tabular-nums text-muted-foreground">{fmt(row.cash)}</span>
+                {accountsHaveLiabilities && <span className="text-right tabular-nums text-muted-foreground">{fmt(row.liabilities)}</span>}
                 <span className="text-right tabular-nums text-muted-foreground">{fmt(row.holdings)}</span>
                 <span className="text-right tabular-nums font-medium">{fmt(row.total)}</span>
               </div>

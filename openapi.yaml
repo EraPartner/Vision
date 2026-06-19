@@ -985,13 +985,16 @@ components:
     # ─── Net Worth ───────────────────────────────────────────────────────────
     NetWorthSnapshot:
       type: object
-      required: [date, liquid, investments, netWorth]
+      required: [date, liquid, liabilities, investments, netWorth]
       properties:
         date:
           type: string
           format: date
         liquid:
           type: number
+        liabilities:
+          type: number
+          description: Σ liability-account balances (negative); split out of liquid so debt is not counted as a liquid asset (ADR-092).
         investments:
           type: number
         netWorth:
@@ -1003,9 +1006,11 @@ components:
       properties:
         current:
           type: object
-          required: [liquid, investments, netWorth, currency]
+          required: [liquid, liabilities, investments, netWorth, currency]
           properties:
             liquid:
+              type: number
+            liabilities:
               type: number
             investments:
               type: number

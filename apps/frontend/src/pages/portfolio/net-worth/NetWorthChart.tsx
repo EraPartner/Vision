@@ -26,6 +26,7 @@ interface NetWorthChartProps {
 const TOTAL_COLOR = 'hsl(var(--primary))';
 const LIQUID_COLOR = 'hsl(var(--chart-2))';
 const INVESTMENTS_COLOR = 'hsl(var(--chart-4))';
+const LIABILITIES_COLOR = 'hsl(var(--destructive))';
 
 export function NetWorthChart({
   snapshots,
@@ -38,17 +39,28 @@ export function NetWorthChart({
   tooltipLabelFormatter,
   t,
 }: NetWorthChartProps) {
+  // Only plot the liabilities line when there is debt to show, so debt-free
+  // portfolios keep the original three-line chart.
+  const hasLiabilities = useMemo(
+    () => snapshots.some((s) => Math.abs(s.liabilities ?? 0) > 0.005),
+    [snapshots],
+  );
+
   const series = useMemo((): AreaSeries<NetWorthSnapshot>[] => [
     { key: 'liquid', label: t('networth.liquid'), accessor: (d) => d.liquid, color: LIQUID_COLOR, fillOpacity: 0, strokeWidth: 2 },
     { key: 'investments', label: t('networth.investments'), accessor: (d) => d.investments, color: INVESTMENTS_COLOR, fillOpacity: 0, strokeWidth: 2 },
+    ...(hasLiabilities
+      ? [{ key: 'liabilities', label: t('networth.liabilities'), accessor: (d: NetWorthSnapshot) => d.liabilities, color: LIABILITIES_COLOR, fillOpacity: 0, strokeWidth: 2 }]
+      : []),
     { key: 'netWorth', label: t('networth.seriesTotal'), accessor: (d) => d.netWorth, color: TOTAL_COLOR, strokeWidth: 2.5 },
-  ], [t]);
+  ], [t, hasLiabilities]);
 
   const legend = useMemo((): ChartLegendItem[] => [
     { label: t('networth.seriesTotal'), color: TOTAL_COLOR },
     { label: t('networth.liquid'), color: LIQUID_COLOR },
     { label: t('networth.investments'), color: INVESTMENTS_COLOR },
-  ], [t]);
+    ...(hasLiabilities ? [{ label: t('networth.liabilities'), color: LIABILITIES_COLOR }] : []),
+  ], [t, hasLiabilities]);
 
   return (
     <ChartCard

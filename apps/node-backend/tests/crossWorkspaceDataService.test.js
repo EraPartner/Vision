@@ -22,12 +22,14 @@ beforeEach(() => {
 });
 
 describe('assembleRebalanceInputs (ADR-098)', () => {
-  it('groups portfolio current value by asset class and sums spendable cash', async () => {
+  it('rolls asset classes up to allocation sleeves and sums spendable cash', async () => {
     getPortfolioSummary.mockResolvedValue({
       summaries: [
         { id: 1, asset_class: 'stock', currentValue: 1000, avgCostBasis: 0 },
-        { id: 2, asset_class: 'stock', currentValue: 500, avgCostBasis: 0 },
-        { id: 3, asset_class: 'crypto', currentValue: 250, avgCostBasis: 0 },
+        { id: 2, asset_class: 'etf', currentValue: 500, avgCostBasis: 0 },
+        { id: 3, asset_class: 'bond', currentValue: 400, avgCostBasis: 0 },
+        { id: 4, asset_class: 'metals', currentValue: 300, avgCostBasis: 0 },
+        { id: 5, asset_class: 'crypto', currentValue: 250, avgCostBasis: 0 },
       ],
     });
     query.mockResolvedValue({
@@ -39,7 +41,8 @@ describe('assembleRebalanceInputs (ADR-098)', () => {
 
     const out = await assembleRebalanceInputs({ currency: 'EUR' });
 
-    expect(out.actualValues).toEqual({ stock: 1500, crypto: 250 });
+    // stock + etf → stocks; bond → bonds; metals → gold; crypto keeps its key.
+    expect(out.actualValues).toEqual({ stocks: 1500, bonds: 400, gold: 300, crypto: 250 });
     expect(out.availableCash).toBe(2000);
     expect(out.cashAccounts).toHaveLength(2);
     // Same-currency balances must NOT hit FX conversion.

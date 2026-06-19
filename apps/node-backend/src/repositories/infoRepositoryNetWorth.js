@@ -56,7 +56,7 @@ export const netWorthRepository = {
     if (!firstDataDateYmd) {
       logger.info('Net worth has no source records', { targetCurrency });
       return {
-        current: { liquid: 0, investments: 0, netWorth: 0 },
+        current: { liquid: 0, liabilities: 0, investments: 0, netWorth: 0 },
         monthlyChange: 0,
         monthlyChangePercent: 0,
         snapshots: [],
@@ -86,7 +86,10 @@ export const netWorthRepository = {
       account_list AS (
         -- in_net_worth gates the bank/cash side of net worth (ADR-089): a
         -- tracking-only account (in_net_worth=false) does not contribute.
-        SELECT a.id AS account_id, a.name AS bank_account
+        -- is_liability splits negative debt balances (ADR-092) out of the
+        -- "liquid assets" bucket so a mortgage is not counted as liquid cash.
+        SELECT a.id AS account_id, a.name AS bank_account,
+               (a.type = 'liability') AS is_liability
         FROM accounts a
         WHERE a.in_net_worth = true
           AND a.id IN (
@@ -97,6 +100,7 @@ export const netWorthRepository = {
       SELECT
         to_char(d.day, 'YYYY-MM-DD') AS day,
         a.bank_account,
+        a.is_liability,
         COALESCE(lb.currency, 'EUR') AS currency,
         lb.balance
       FROM days d
@@ -184,10 +188,15 @@ export const netWorthRepository = {
       );
     }
 
+    // Split each in-net-worth account's daily balance into liquid assets vs
+    // liabilities (ADR-092): debt balances are negative and must not drag the
+    // "liquid assets" headline negative. netWorth = liquid + liabilities + investments.
     const liquidByDay = {};
+    const liabilitiesByDay = {};
     for (const row of bankHistoryConverted) {
-      if (!liquidByDay[row.day]) liquidByDay[row.day] = 0;
-      liquidByDay[row.day] += row.amount_eur;
+      const bucket = row.is_liability ? liabilitiesByDay : liquidByDay;
+      if (!bucket[row.day]) bucket[row.day] = 0;
+      bucket[row.day] += row.amount_eur;
     }
 
     const start = new Date(`${firstDataDateYmd}T00:00:00Z`);
@@ -203,6 +212,7 @@ export const netWorthRepository = {
     for (let day = new Date(start); day <= end; day = addDaysUtc(day)) {
       const dayKey = getDayKeyUtc(day);
       const liquid = roundToCents(liquidByDay[dayKey] || 0);
+      const liabilities = roundToCents(liabilitiesByDay[dayKey] || 0);
       if (Object.prototype.hasOwnProperty.call(investmentsByDay, dayKey)) {
         lastInvestments = investmentsByDay[dayKey];
       }
@@ -210,8 +220,9 @@ export const netWorthRepository = {
       snapshots.push({
         date: dayKey,
         liquid,
+        liabilities,
         investments,
-        netWorth: roundToCents(liquid + investments),
+        netWorth: roundToCents(liquid + liabilities + investments),
       });
     }
 
@@ -229,10 +240,10 @@ export const netWorthRepository = {
       const last = sanitizedSnapshots[sanitizedSnapshots.length - 1];
       const investments = roundToCents(liveInvestments);
       last.investments = investments;
-      last.netWorth = roundToCents(last.liquid + investments);
+      last.netWorth = roundToCents(last.liquid + (last.liabilities || 0) + investments);
     }
 
-    const latest = sanitizedSnapshots[sanitizedSnapshots.length - 1] || { liquid: 0, investments: 0, netWorth: 0 };
+    const latest = sanitizedSnapshots[sanitizedSnapshots.length - 1] || { liquid: 0, liabilities: 0, investments: 0, netWorth: 0 };
     const currentMonthPrefix = latest.date ? extractYearMonth(latest.date) : null;
     const firstCurrentMonthIdx = currentMonthPrefix
       ? sanitizedSnapshots.findIndex(s => s.date.startsWith(currentMonthPrefix))
@@ -257,6 +268,7 @@ export const netWorthRepository = {
     return {
       current: {
         liquid: latest.liquid,
+        liabilities: latest.liabilities ?? 0,
         investments: latest.investments,
         netWorth: latest.netWorth,
       },

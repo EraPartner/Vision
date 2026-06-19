@@ -15,6 +15,7 @@ import { MergeAccountDialog } from "@/features/accounts/MergeAccountDialog";
 import { CloseAccountDialog } from "@/features/accounts/CloseAccountDialog";
 import { usePortfolio } from "@/hooks/usePortfolio";
 import { useLanguage } from "@/contexts/LanguageContext";
+import { useConfirmDialog } from "@/hooks/useConfirmDialog";
 import type { Account } from "@/types/api";
 
 export default function AccountsPage() {
@@ -24,6 +25,17 @@ export default function AccountsPage() {
     const { data, isLoading, isError, error } = useAccounts({ active: showArchived ? "all" : "true" });
     const updateMutation = useUpdateAccount();
     const deleteMutation = useDeleteAccount();
+    const { confirm, ConfirmDialog } = useConfirmDialog();
+
+    const requestDelete = async (a: Account) => {
+        const ok = await confirm({
+            title: t('accounts.delete.title'),
+            description: t('accounts.delete.description', { name: a.display_name || a.name }),
+            confirmLabel: t('common.delete'),
+            variant: 'destructive',
+        });
+        if (ok) deleteMutation.mutate(a.id);
+    };
 
     const [editing, setEditing] = useState<Account | undefined>(undefined);
     const [merging, setMerging] = useState<Account | undefined>(undefined);
@@ -168,7 +180,7 @@ export default function AccountsPage() {
                                         </DropdownMenuItem>
                                         <DropdownMenuItem
                                             className="text-destructive focus:text-destructive"
-                                            onClick={() => deleteMutation.mutate(a.id)}
+                                            onClick={() => requestDelete(a)}
                                         >
                                             <Trash2 className="mr-2 h-4 w-4" /> {t('common.delete')}
                                         </DropdownMenuItem>
@@ -200,7 +212,9 @@ export default function AccountsPage() {
                         multi_currency_cash: editing.multi_currency_cash,
                         has_cash_sleeve: editing.has_cash_sleeve,
                         statementBalance: editing.statement_balance != null ? String(editing.statement_balance) : "",
-                        statementBalanceDate: editing.statement_balance_date ?? "",
+                        // The API serialises the DATE as a full ISO timestamp; the
+                        // <input type="date"> and the server both want YYYY-MM-DD.
+                        statementBalanceDate: editing.statement_balance_date ? editing.statement_balance_date.slice(0, 10) : "",
                     }}
                     onSave={handleSave}
                 />
@@ -224,6 +238,8 @@ export default function AccountsPage() {
                     onOpenChange={(o) => { if (!o) setClosing(undefined); }}
                 />
             )}
+
+            <ConfirmDialog />
         </div>
     );
 }

@@ -4,8 +4,9 @@
  * consume. Kept separate from those cores so the math stays pure/unit-tested and
  * only this file touches the DB.
  *
- *  - assembleRebalanceInputs: actual sleeve values (portfolio, by asset class) +
- *    available cash (Σ spendable account ledger balances, FX-converted).
+ *  - assembleRebalanceInputs: actual sleeve values (portfolio, rolled up to the
+ *    allocation-sleeve vocabulary) + available cash (Σ spendable account computed
+ *    balances, FX-converted).
  *  - assembleUnifiedTaxItems: owner-allocated portfolio dividends/interest +
  *    realized gains for a tax year; the caller supplies earned income (the
  *    frontend already holds the authoritative tax-profile gross).
@@ -20,10 +21,24 @@ import { convertToCurrency } from './currency/currencyConversionService.js';
 import { getPortfolioSummary } from './portfolio/portfolioSummaryService.js';
 import { toDecimal, toNumber, roundToCents } from '../lib/money.js';
 
+// Roll the fine-grained `asset_class` taxonomy up into the coarse allocation
+// sleeves the classic-portfolio presets target (CLASSIC_PORTFOLIOS uses
+// stocks/bonds/gold/...). Without this the preset keys never match a real asset
+// class, so every plan deploys cash into phantom €0 sleeves. Equity ETFs roll
+// into `stocks` and precious metals into `gold`; unmapped classes (crypto,
+// real_estate, savings) keep their own key and simply carry a 0% target.
+const SLEEVE_ROLLUP = Object.freeze({
+  stock: 'stocks',
+  etf: 'stocks',
+  bond: 'bonds',
+  metals: 'gold',
+});
+
 /**
- * Actual sleeve values keyed by `asset_class` (Σ current value, target currency)
- * plus the deployable cash from spendable accounts. The frontend supplies target
- * weights over the same asset-class keys, so `rebalanceDeployment` is exact.
+ * Actual sleeve values (Σ current value, target currency) keyed by the coarse
+ * allocation sleeve (asset_class rolled up via SLEEVE_ROLLUP to match the
+ * classic-portfolio target vocabulary), plus the deployable cash from spendable
+ * accounts, so `rebalanceDeployment` lines actuals up against the target weights.
  *
  * @param {{ currency?: string }} args
  * @returns {Promise<{ currency: string, actualValues: Record<string, number>, availableCash: number, cashAccounts: Array<{ id:number, name:string, currency:string, balance:number }> }>}
@@ -34,20 +49,27 @@ export async function assembleRebalanceInputs({ currency = 'EUR' } = {}) {
   const { summaries } = await getPortfolioSummary(target);
   const actualValues = /** @type {Record<string, number>} */ ({});
   for (const s of summaries) {
-    const key = s.asset_class || 'other';
+    const assetClass = s.asset_class || 'other';
+    const key = SLEEVE_ROLLUP[assetClass] ?? assetClass;
     actualValues[key] = toNumber(roundToCents(toDecimal(actualValues[key] ?? 0).plus(toDecimal(s.currentValue ?? 0))));
   }
 
-  // Available cash = ledger balance (Σ active transaction amounts) of every
-  // spendable, active account (ADR-089 `spendable` flag), each converted from
-  // its own currency to the target.
+  // Available cash = the deployable balance of every spendable, active account
+  // (ADR-089 `spendable` flag), each converted to the target currency. Uses the
+  // account's computed balance (ADR-094: the latest active transaction's running
+  // balance, which includes the opening balance) — the same figure the accounts
+  // hub and dashboard show — not Σ(amount), which omits the opening balance.
   const { rows } = await query(
     `SELECT a.id, a.name, a.currency,
-            COALESCE(SUM(t.amount), 0) AS balance
+            COALESCE(lb.balance, 0) AS balance
        FROM accounts a
-       LEFT JOIN transactions t ON t.account_id = a.id AND t.is_active = true
+       LEFT JOIN LATERAL (
+         SELECT t.balance FROM transactions t
+         WHERE t.account_id = a.id AND t.is_active = true AND t.balance IS NOT NULL
+         ORDER BY t.date DESC, t.id DESC
+         LIMIT 1
+       ) lb ON true
       WHERE a.spendable = true AND a.is_active = true
-      GROUP BY a.id, a.name, a.currency
       ORDER BY a.name`,
   );
 
