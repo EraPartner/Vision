@@ -3,7 +3,7 @@ import { useParams, useNavigate } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import {
     ArrowLeft, Plus, Trash2, RotateCcw, Eye, AlertTriangle, ChevronUp, ChevronDown,
-    ChevronLeft, ChevronRight, Ban, RefreshCw,
+    ChevronsUpDown, ChevronLeft, ChevronRight, Ban, RefreshCw, Search, KeyRound,
 } from 'lucide-react';
 import { toast } from 'sonner';
 
@@ -341,34 +341,51 @@ export default function TableDataEditorPage() {
             <Card className="glass-chrome overflow-hidden">
                 <div className="overflow-x-auto">
                     <Table>
-                        <TableHeader>
-                            <TableRow>
-                                <TableHead className="w-10" />
+                        <TableHeader className="bg-foreground/[0.015]">
+                            {/* Column titles + sort */}
+                            <TableRow className="!border-b-0 hover:bg-transparent">
+                                <TableHead className="h-9 w-10" />
                                 {columns.map((col) => {
                                     const active = sort?.column === col.name;
+                                    const isPk = primaryKey.includes(col.name);
                                     return (
-                                        <TableHead key={col.name} className="whitespace-nowrap">
+                                        <TableHead key={col.name} className="h-9 whitespace-nowrap pb-0 pt-2.5">
                                             <button
                                                 type="button"
-                                                className="flex items-center gap-1 font-mono text-xs disabled:opacity-100"
+                                                className="group/sort -mx-1.5 flex items-center gap-1.5 rounded-md px-1.5 py-1 font-mono text-xs lowercase tracking-normal text-foreground/75 transition-colors hover:bg-foreground/[0.05] hover:text-foreground disabled:pointer-events-none disabled:opacity-100"
                                                 onClick={() => toggleSort(col.name)}
                                                 disabled={hasPending}
                                             >
-                                                {col.name}
-                                                {primaryKey.includes(col.name) && <span className="text-amber-500" title="PK">★</span>}
-                                                {active && (sort!.dir === 'asc' ? <ChevronUp className="h-3 w-3" /> : <ChevronDown className="h-3 w-3" />)}
+                                                {isPk && <KeyRound className="h-3 w-3 shrink-0 text-amber-500" aria-label="PK" />}
+                                                <span>{col.name}</span>
+                                                {active
+                                                    ? (sort!.dir === 'asc'
+                                                        ? <ChevronUp className="h-3 w-3 shrink-0 text-primary" />
+                                                        : <ChevronDown className="h-3 w-3 shrink-0 text-primary" />)
+                                                    : <ChevronsUpDown className="h-3 w-3 shrink-0 text-muted-foreground/0 transition-colors group-hover/sort:text-muted-foreground/50" />}
                                             </button>
+                                        </TableHead>
+                                    );
+                                })}
+                            </TableRow>
+                            {/* Per-column filters */}
+                            <TableRow className="hover:bg-transparent">
+                                <TableHead className="h-10 w-10" />
+                                {columns.map((col) => (
+                                    <TableHead key={col.name} className="h-10 pb-2.5 pt-0">
+                                        <div className="relative min-w-[7rem]">
+                                            <Search className="pointer-events-none absolute left-2 top-1/2 h-3 w-3 -translate-y-1/2 text-muted-foreground/40" />
                                             <Input
                                                 value={draftFilters[col.name] ?? ''}
                                                 placeholder={t('dbEditor.filterPlaceholder')}
-                                                className="mt-1 h-6 font-mono text-[10px]"
+                                                className="h-7 rounded-md border-border/40 bg-background/40 pl-7 pr-2 font-mono text-[11px] shadow-none placeholder:text-muted-foreground/40 focus-visible:bg-background/80 focus-visible:ring-offset-0"
                                                 onChange={(e) => setDraftFilters((p) => ({ ...p, [col.name]: e.target.value }))}
                                                 onKeyDown={(e) => { if (e.key === 'Enter') applyFilters(); }}
                                                 disabled={hasPending}
                                             />
-                                        </TableHead>
-                                    );
-                                })}
+                                        </div>
+                                    </TableHead>
+                                ))}
                             </TableRow>
                         </TableHeader>
                         <TableBody>
