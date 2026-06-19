@@ -120,12 +120,17 @@ export default function AccountsPage() {
 
             {accounts.length > 0 && (
                 <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-                    {accounts.map((a) => (
+                    {accounts.map((a) => {
+                        // Portfolio accounts (brokerage/crypto/pension) keep their activity in
+                        // portfolio_transactions, not the ledger — only offer "view transactions"
+                        // when there actually are ledger rows to show.
+                        const canViewTransactions = a.has_transactions !== false;
+                        return (
                         <Card
                             key={a.id}
-                            className={`glass-regular cursor-pointer transition-shadow hover:shadow-md ${a.is_active ? "" : "opacity-60"}`}
-                            onDoubleClick={() => openAccountTransactions(a)}
-                            title={t('accounts.openTransactions')}
+                            className={`glass-regular transition-shadow ${a.is_active ? "" : "opacity-60"} ${canViewTransactions ? "cursor-pointer hover:shadow-md" : ""}`}
+                            onDoubleClick={canViewTransactions ? () => openAccountTransactions(a) : undefined}
+                            title={canViewTransactions ? t('accounts.openTransactions') : undefined}
                         >
                             <CardContent className="flex items-start justify-between gap-3 p-4">
                                 <div className="min-w-0">
@@ -188,7 +193,8 @@ export default function AccountsPage() {
                                 </DropdownMenu>
                             </CardContent>
                         </Card>
-                    ))}
+                        );
+                    })}
                 </div>
             )}
 

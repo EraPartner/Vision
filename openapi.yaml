@@ -310,6 +310,9 @@ components:
           type: number
           nullable: true
           description: statement_balance − computed_balance; null if no statement balance (ADR-094)
+        has_transactions:
+          type: boolean
+          description: Whether the account has any active ledger rows; only returned by the list endpoint.
         is_active:
           type: boolean
         created_at:
@@ -2223,7 +2226,7 @@ paths:
           name: currency
           schema:
             type: string
-          description: Target currency for conversion (alias: target_currency; default EUR)
+          description: "Target currency for conversion (alias: target_currency; default EUR)"
       responses:
         "200":
           description: Per-account net-worth breakdown with holdings history

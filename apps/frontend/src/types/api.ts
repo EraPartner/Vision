@@ -88,6 +88,8 @@ export interface Account {
     computed_balance?: number;
     /** statement_balance − computed_balance; null when no statement balance (ADR-094). */
     drift?: number;
+    /** Whether the account has any active ledger rows; only set by the list endpoint. */
+    has_transactions?: boolean;
     is_active: boolean;
     created_at: string;
     updated_at?: string;

@@ -42,6 +42,46 @@ export interface paths {
         patch: operations["updateTag"];
         trace?: never;
     };
+    "/api/cross-workspace/rebalance": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Cash-aware rebalancing plan (ADR-098)
+         * @description Deploy spendable account cash into underweight portfolio sleeves toward a target allocation, without selling. Composes Budgeting + Portfolio.
+         */
+        post: operations["computeRebalance"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/cross-workspace/unified-tax": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Unified tax view (ADR-098)
+         * @description Owner-allocated earned income + portfolio dividends + realized gains for a tax year (indicative; feeds the Belgian marital quotient).
+         */
+        get: operations["getUnifiedTax"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/accounts": {
         parameters: {
             query?: never;
@@ -72,17 +112,36 @@ export interface paths {
         /** Get one account */
         get: operations["getAccount"];
         put?: never;
-        /**
-         * Merge source accounts into this account
-         * @description Repoints all references (transactions, planned, portfolio lots, funding_account_id) from each source account to this (survivor) account, then deletes the sources (ADR-088).
-         */
-        post: operations["mergeAccounts"];
+        post?: never;
         /** Delete account (409 if still referenced — archive instead) */
         delete: operations["deleteAccount"];
         options?: never;
         head?: never;
         /** Update account */
         patch: operations["updateAccount"];
+        trace?: never;
+    };
+    "/api/accounts/{id}/merge": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Survivor account id (sources merge into this one) */
+                id: number;
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Merge source accounts into this (survivor) account
+         * @description Repoints all references (transactions, planned, portfolio lots, funding_account_id) from each source account to this (survivor) account, then deletes the sources (ADR-088).
+         */
+        post: operations["mergeAccounts"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
         trace?: never;
     };
     "/api/transactions": {
@@ -268,6 +327,26 @@ export interface paths {
         };
         /** Get net worth summary */
         get: operations["getNetWorth"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/info/net-worth/by-account": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Net worth split by account (Σ-accounts, ADR-100)
+         * @description Per-account current cash + holdings plus the rebuilt daily holdings history; the Σ over accounts equals the aggregate net worth by construction.
+         */
+        get: operations["getNetWorthByAccount"];
         put?: never;
         post?: never;
         delete?: never;
@@ -2423,6 +2502,67 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/admin/database/tables/{table}/schema": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Table name (validated against the live catalog) */
+                table: string;
+            };
+            cookie?: never;
+        };
+        /** Get a table's column metadata (Data Editor, ADR-101) */
+        get: operations["adminGetTableSchema"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/admin/database/tables/{table}/rows": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                table: string;
+            };
+            cookie?: never;
+        };
+        /** Read paginated rows from a table (Data Editor, ADR-101) */
+        get: operations["adminGetTableRows"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/admin/database/tables/{table}/mutate": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                table: string;
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Apply row mutations to a table (Data Editor, ADR-101)
+         * @description Rate-limited (adminMutateLimiter). Identifiers are validated against the live catalog and double-quoted; values are parameterised. Updates/deletes are optimistic-locked on xmin. Pass dryRun to preview statements without applying.
+         */
+        post: operations["adminMutateTableRows"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/admin/update/check": {
         parameters: {
             query?: never;
@@ -2985,6 +3125,8 @@ export interface components {
             computed_balance?: number | null;
             /** @description statement_balance − computed_balance; null if no statement balance (ADR-094) */
             drift?: number | null;
+            /** @description Whether the account has any active ledger rows; only returned by the list endpoint. */
+            has_transactions?: boolean;
             is_active: boolean;
             /** Format: date-time */
             created_at: string;
@@ -3305,12 +3447,15 @@ export interface components {
             /** Format: date */
             date: string;
             liquid: number;
+            /** @description Σ liability-account balances (negative); split out of liquid so debt is not counted as a liquid asset (ADR-092). */
+            liabilities: number;
             investments: number;
             netWorth: number;
         };
         NetWorthResponse: {
             current: {
                 liquid: number;
+                liabilities: number;
                 investments: number;
                 netWorth: number;
                 currency: string;
@@ -3571,6 +3716,64 @@ export interface operations {
             };
         };
     };
+    computeRebalance: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    currency?: string;
+                    /** @enum {string} */
+                    model?: "sixty_forty" | "all_weather" | "three_fund";
+                    targetWeights?: {
+                        [key: string]: number;
+                    };
+                    availableCash?: number;
+                };
+            };
+        };
+        responses: {
+            /** @description Rebalancing plan */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Envelope"];
+                };
+            };
+        };
+    };
+    getUnifiedTax: {
+        parameters: {
+            query: {
+                year: number;
+                currency?: string;
+                /** @description Authoritative earned income (tax-profile gross), supplied by the client. */
+                earnedIncome?: number;
+                earnedIncomeOwner?: "me" | "partner" | "joint";
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Unified tax breakdown */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Envelope"];
+                };
+            };
+        };
+    };
     getAccounts: {
         parameters: {
             query?: {
@@ -3660,42 +3863,6 @@ export interface operations {
             };
         };
     };
-    mergeAccounts: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                id: number;
-            };
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": {
-                    /** @description Account ids to merge into this account and delete */
-                    source_ids: number[];
-                };
-            };
-        };
-        responses: {
-            /** @description Merge result (survivor id, merged ids, reassigned counts) */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Envelope"];
-                };
-            };
-            /** @description Target or a source account not found */
-            404: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-        };
-    };
     deleteAccount: {
         parameters: {
             query?: never;
@@ -3767,6 +3934,43 @@ export interface operations {
             };
             /** @description An account with that name already exists */
             409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    mergeAccounts: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Survivor account id (sources merge into this one) */
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    /** @description Account ids to merge into this account and delete */
+                    source_ids: number[];
+                };
+            };
+        };
+        responses: {
+            /** @description Merge result (survivor id, merged ids, reassigned counts) */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Envelope"];
+                };
+            };
+            /** @description Target or a source account not found */
+            404: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -4422,6 +4626,31 @@ export interface operations {
                 content: {
                     "application/json": components["schemas"]["Envelope"] & {
                         data?: components["schemas"]["NetWorthResponse"];
+                    };
+                };
+            };
+        };
+    };
+    getNetWorthByAccount: {
+        parameters: {
+            query?: {
+                /** @description Target currency for conversion (alias: target_currency; default EUR) */
+                currency?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Per-account net-worth breakdown with holdings history */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Envelope"] & {
+                        data?: Record<string, never>;
                     };
                 };
             };
@@ -8270,6 +8499,167 @@ export interface operations {
                 content: {
                     "application/json": components["schemas"]["Envelope"];
                 };
+            };
+        };
+    };
+    adminGetTableSchema: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Table name (validated against the live catalog) */
+                table: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Column metadata and primary key */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Envelope"] & {
+                        data?: {
+                            table?: string;
+                            primaryKey?: string[];
+                            columns?: {
+                                name?: string;
+                                dataType?: string;
+                                udtName?: string;
+                                nullable?: boolean;
+                                hasDefault?: boolean;
+                                generated?: boolean;
+                                writable?: boolean;
+                            }[];
+                        };
+                    };
+                };
+            };
+            /** @description Unknown table */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    adminGetTableRows: {
+        parameters: {
+            query?: {
+                limit?: number;
+                offset?: number;
+                orderBy?: string;
+                dir?: "asc" | "desc";
+                /** @description Raw SQL WHERE fragment (validated and parameterised server-side) */
+                where?: string;
+                /** @description JSON-encoded array of structured column filters */
+                filters?: string;
+            };
+            header?: never;
+            path: {
+                table: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Page of rows with column metadata and total count */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Envelope"] & {
+                        data?: {
+                            table?: string;
+                            columns?: Record<string, never>[];
+                            primaryKey?: string[];
+                            rows?: Record<string, never>[];
+                            total?: number;
+                            limit?: number;
+                            offset?: number;
+                        };
+                    };
+                };
+            };
+            /** @description Invalid filters or query parameter */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Unknown table */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    adminMutateTableRows: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                table: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    /** @description Preview the SQL statements without applying them */
+                    dryRun?: boolean;
+                    changes: {
+                        /** @enum {string} */
+                        op: "insert" | "update" | "delete";
+                        /** @description Primary-key column values (required for update/delete) */
+                        pk?: Record<string, never>;
+                        /** @description Column values for an insert */
+                        values?: Record<string, never>;
+                        /** @description Column values to write for an update */
+                        set?: Record<string, never>;
+                        /** @description Optimistic-concurrency token captured at read time */
+                        xmin?: string;
+                    }[];
+                };
+            };
+        };
+        responses: {
+            /** @description Mutation result (dry-run preview or applied results) */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Envelope"];
+                };
+            };
+            /** @description Malformed change set */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Unknown table */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Row changed or was deleted since it was loaded */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
         };
     };
