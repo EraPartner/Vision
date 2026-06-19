@@ -52,6 +52,7 @@ const en: Record<string, string> = {
   'accounts.mergeTitle': 'Merge account',
   'accounts.mergeWarning': '\'{source}\' will be merged into \'{target}\' and deleted -- its transactions and holdings move to \'{target}\'. This can\'t be undone.',
   'accounts.merged': 'Accounts merged',
+  'accounts.openTransactions': 'Double-click to view this account\'s transactions',
   'accounts.owner.joint': 'Joint',
   'accounts.owner.me': 'Me',
   'accounts.owner.partner': 'Partner',

@@ -14,6 +14,7 @@ interface FilterBannerProps {
     transactionTypeFilter?: 'income' | 'expense';
     searchFilter?: string;
     filterLabel?: string;
+    bankAccountFilter?: string;
     tagsFilter?: string[];
     onClear: () => void;
     onClearTags?: () => void;
@@ -29,6 +30,7 @@ export function FilterBanner({
     transactionTypeFilter,
     searchFilter,
     filterLabel,
+    bankAccountFilter,
     tagsFilter,
     onClear,
     onClearTags,
@@ -36,7 +38,8 @@ export function FilterBanner({
     const { t } = useLanguage();
 
     const hasMainFilter = transactionIdFilter || recipientIdFilter || categoryIdFilter ||
-        categoryIdsFilter?.length || startDateFilter || endDateFilter || transactionTypeFilter;
+        categoryIdsFilter?.length || startDateFilter || endDateFilter || transactionTypeFilter ||
+        bankAccountFilter;
     const hasTagFilter = tagsFilter && tagsFilter.length > 0;
 
     if (!hasMainFilter && !hasTagFilter) {
@@ -49,7 +52,9 @@ export function FilterBanner({
             ? `transaction #${transactionIdFilter}`
             : recipientIdFilter
                 ? `recipient #${recipientIdFilter}`
-                : `category #${categoryIdFilter}`);
+                : categoryIdFilter
+                    ? `category #${categoryIdFilter}`
+                    : bankAccountFilter ?? '');
 
     return (
         <div className="flex flex-wrap items-center gap-2 px-3 py-2 rounded-md bg-primary/10 border border-primary/20">
@@ -90,6 +95,7 @@ export function FilterBanner({
                     transactionTypeFilter={transactionTypeFilter}
                     searchFilter={searchFilter}
                     filterLabel={filterLabel}
+                    bankAccountFilter={bankAccountFilter}
                 />
                 {hasMainFilter && (
                     <Button variant="ghost" size="icon" className="icon-touch-target" onClick={onClear} aria-label={t('aria.clearFilter')}>

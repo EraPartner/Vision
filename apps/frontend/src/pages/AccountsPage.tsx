@@ -1,4 +1,5 @@
 import { useMemo, useState } from "react";
+import { useNavigate } from "react-router-dom";
 import { PageHeader } from "@/components/shared/PageHeader";
 import { EmptyState } from "@/components/shared/EmptyState";
 import { Card, CardContent } from "@/components/ui/card";
@@ -18,6 +19,7 @@ import type { Account } from "@/types/api";
 
 export default function AccountsPage() {
     const { t } = useLanguage();
+    const navigate = useNavigate();
     const [showArchived, setShowArchived] = useState(false);
     const { data, isLoading, isError, error } = useAccounts({ active: showArchived ? "all" : "true" });
     const updateMutation = useUpdateAccount();
@@ -59,6 +61,16 @@ export default function AccountsPage() {
     const toggleArchive = (a: Account) =>
         updateMutation.mutate({ id: a.id, data: { is_active: !a.is_active } });
 
+    // The dual-write trigger (migration 0051) keeps `transactions.bank_account`
+    // equal to `accounts.name`, so the account name is the transaction filter key.
+    const openAccountTransactions = (a: Account) => {
+        const params = new URLSearchParams({
+            bank_account: a.name,
+            filter_label: a.display_name || a.name,
+        });
+        navigate(`/transactions?${params.toString()}`);
+    };
+
     return (
         <div className="space-y-6">
             <PageHeader
@@ -97,7 +109,12 @@ export default function AccountsPage() {
             {accounts.length > 0 && (
                 <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
                     {accounts.map((a) => (
-                        <Card key={a.id} className={`glass-regular ${a.is_active ? "" : "opacity-60"}`}>
+                        <Card
+                            key={a.id}
+                            className={`glass-regular cursor-pointer transition-shadow hover:shadow-md ${a.is_active ? "" : "opacity-60"}`}
+                            onDoubleClick={() => openAccountTransactions(a)}
+                            title={t('accounts.openTransactions')}
+                        >
                             <CardContent className="flex items-start justify-between gap-3 p-4">
                                 <div className="min-w-0">
                                     <div className="flex items-center gap-2">
@@ -121,7 +138,12 @@ export default function AccountsPage() {
                                 </div>
                                 <DropdownMenu>
                                     <DropdownMenuTrigger asChild>
-                                        <Button variant="ghost" size="icon" className="h-8 w-8 shrink-0">
+                                        <Button
+                                            variant="ghost"
+                                            size="icon"
+                                            className="h-8 w-8 shrink-0"
+                                            onDoubleClick={(e) => e.stopPropagation()}
+                                        >
                                             <MoreVertical className="h-4 w-4" />
                                         </Button>
                                     </DropdownMenuTrigger>

@@ -50,6 +50,7 @@
   "accounts.mergeTitle": "Rekening samenvoegen",
   "accounts.mergeWarning": "'{source}' wordt samengevoegd met '{target}' en verwijderd -- de transacties en posities verhuizen naar '{target}'. Dit kan niet ongedaan worden gemaakt.",
   "accounts.merged": "Rekeningen samengevoegd",
+  "accounts.openTransactions": "Dubbelklik om de transacties van deze rekening te bekijken",
   "accounts.owner.joint": "Gezamenlijk",
   "accounts.owner.me": "Ik",
   "accounts.owner.partner": "Partner",

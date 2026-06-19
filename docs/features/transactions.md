@@ -3,7 +3,7 @@ title: Transactions
 type: feature
 status: active
 date: 2026-04-16
-updated: 2026-06-11
+updated: 2026-06-19
 tags: [feature, transactions, finance, phase-q, recipient-groups, bulk-actions, optimistic-updates, optimistic-create, june-2026, context-menu, quick-look, keyboard-nav, duplicate, filter-by-recipient, deep-link, electron-native, new-transaction, render-loop-fix, category-ids-filter, multi-value-filter]
 aliases: [transactions-feature, income, expenses, financial-records, money-tracking]
 description: Core transaction management - income, expenses, and tracking financial activities. Phase Q adds recipient-group filtering for linked-recipient transaction discovery. Bulk operations enable atomic multi-row delete, recategorize, reassign, activate/deactivate, export, and tag. June 2026 (ADR-070): useUpdateTransaction/useDeleteTransaction are now optimistic. June 2026 Premium v3 (ADR-071): useCreateTransaction is now optimistic (temp negative-id row → server-row swap → onSettled invalidate; virtual list excluded; 6 tests). June 2026 Premium v3 V5-V7: per-row context menu, Quick Look dialog (Space), keyboard row navigation (↑/↓/Enter), Duplicate, and Filter-by-recipient actions. June 2026 V12 (ADR-072): /transactions?new=1 deep link opens AddTransactionDialog (used by native menu and dock menu).
@@ -112,6 +112,19 @@ Transactions support rich filtering:
 - Amount range (min/max)
 - Bank account
 - Currency
+
+#### Filter by Account (deep link, 2026-06-19)
+
+The list reads a `bank_account` URL search param (single value) and threads it through
+`TransactionsPage` → `useTransactionListData` → the list/export queries (the backend already accepted
+`bank_account` on `GET /api/transactions` and the export endpoints). The active filter shows in the
+`FilterBanner` (using `filter_label`) and is honoured by CSV/JSON export.
+
+This powers **double-click navigation from the accounts hub**: double-clicking an account card in
+`AccountsPage` navigates to `/transactions?bank_account=<account.name>&filter_label=<display>`. The
+account *name* is the filter key because the ADR-088 dual-write trigger (migration `0051`) keeps
+`transactions.bank_account` equal to `accounts.name`. Strings shown via the `accounts.openTransactions`
+hint (en/nl).
 
 Implementation note:
 - Backend route parsing/normalization for list filters is centralized in `parseTransactionListQuery`, preserving existing defaults and coercion behavior while reducing duplicate parsing logic ([[apps/node-backend/src/routes/transactions.js]]).

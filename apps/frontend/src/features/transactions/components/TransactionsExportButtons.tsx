@@ -19,6 +19,7 @@ interface TransactionsExportButtonsProps {
     transactionTypeFilter?: 'income' | 'expense';
     searchFilter?: string;
     filterLabel?: string;
+    bankAccountFilter?: string;
 }
 
 function buildQueryString(props: TransactionsExportButtonsProps): string {
@@ -33,6 +34,7 @@ function buildQueryString(props: TransactionsExportButtonsProps): string {
     if (props.endDateFilter) params.append('end_date', props.endDateFilter);
     if (props.transactionTypeFilter) params.append('transaction_type', props.transactionTypeFilter);
     if (props.searchFilter) params.append('search', props.searchFilter);
+    if (props.bankAccountFilter) params.append('bank_account', props.bankAccountFilter);
     return params.toString();
 }
 

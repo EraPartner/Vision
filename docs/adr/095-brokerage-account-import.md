@@ -10,7 +10,9 @@ aliases: [brokerage import, unified statement import, trade + cash import]
 # ADR-095: Brokerage Account Import
 
 ## Status
-Partially implemented — 2026-06-18 (fan-out core built; parser/staging/review UI not yet built — see below)
+Implemented — 2026-06-19 (fan-out core + mixed-row staging + review UI all built and tested; see the
+2026-06-19 update at the end of "Implementation status"). Originally logged Partially implemented
+2026-06-18.
 
 ## Date
 2026-06-18
@@ -83,6 +85,29 @@ brokerage account through to committed lots.
 - **Review UI integration** — the portfolio import review page does not yet show per-row cash/trade routing choices
 
 Until those are built, the fan-out service is wired and tested but is not reachable from the import UI.
+
+### Update 2026-06-19 — remaining surface is now built (and was already, when this was re-checked)
+
+All three "not yet built" items above are in fact implemented; the 2026-06-18 note was superseded by
+migrations `0057`/`0060` and the import UI work that landed afterward:
+
+- **Mixed-row staging** — migration `0060_brokerage_import_routing` adds
+  `portfolio_import_batches.is_brokerage` + `portfolio_import_staging_rows.route`; `0057` adds the
+  batch `account_id`. `validate.js` sets `route` ('cash' | 'portfolio') per row via
+  `classifyBrokerageRow`; `commit.js` fans cash rows + ADR-090 trade legs out inline within the
+  staged flow (it does NOT call the standalone `brokerageFanout.js` — that service is an equivalent,
+  separately-tested implementation of the same algorithm).
+- **Parser kind** — satisfied by the generic adapter emitting `type_raw`, classified at validate
+  time. No dedicated "brokerage parser kind" was needed; the design moved classification one stage
+  later (validate) than the original sketch (parse).
+- **Review UI** — `PortfolioImportPage` exposes the brokerage toggle + sleeve-account picker;
+  `PortfolioImportReviewPage` renders the cash group separately and commits with the chosen account;
+  `prepareImport` forces every `is_brokerage` batch through staged review before any fan-out.
+
+Tested by `brokerageRouting`, `brokerageFanout`, `portfolioImportCommit`, and `tradeCashLegService`
+(39 passing). One deliberate non-feature: the review UI shows the per-row cash/trade routing
+read-only (it is deterministic from the row kind; unknown kinds error and block commit) — there is
+no user-facing override to flip a row's route. That would be a separate, optional enhancement.
 
 ## Related
 - [[docs/adr/index|All ADRs]]

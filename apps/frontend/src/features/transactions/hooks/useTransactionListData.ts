@@ -18,6 +18,7 @@ export interface UseTransactionListDataOptions {
     endDateFilter?: string;
     transactionTypeFilter?: 'income' | 'expense';
     tagsFilter?: string[];
+    bankAccountFilter?: string;
 }
 
 export interface UseTransactionListDataResult {
@@ -48,6 +49,7 @@ export function useTransactionListData({
     endDateFilter,
     transactionTypeFilter,
     tagsFilter,
+    bankAccountFilter,
 }: UseTransactionListDataOptions): UseTransactionListDataResult {
     const [sortKey, setSortKey] = useState<string | null>(null);
     const [sortDir, setSortDir] = useState<SortDir>(null);
@@ -82,6 +84,7 @@ export function useTransactionListData({
                 endDateFilter,
                 transactionTypeFilter,
                 tagsFilter,
+                bankAccountFilter,
                 sortKey,
                 sortDir,
                 pageSize,
@@ -100,6 +103,7 @@ export function useTransactionListData({
             end_date: endDateFilter,
             transaction_type: transactionTypeFilter,
             tags: tagsFilter?.length ? tagsFilter.join(',') : undefined,
+            bank_account: bankAccountFilter,
             sort_by: sortKey || undefined,
             sort_dir: sortDir || undefined,
         }),
@@ -122,7 +126,7 @@ export function useTransactionListData({
     // Previously only handleSortChange bumped it, so filter/search changes raced.
     useEffect(() => {
         requestIdRef.current += 1;
-    }, [showAll, search, transactionIdFilter, recipientIdFilter, categoryIdFilter, categoryIdsFilter, startDateFilter, endDateFilter, transactionTypeFilter, tagsFilter, sortKey, sortDir, pageSize]);
+    }, [showAll, search, transactionIdFilter, recipientIdFilter, categoryIdFilter, categoryIdsFilter, startDateFilter, endDateFilter, transactionTypeFilter, tagsFilter, bankAccountFilter, sortKey, sortDir, pageSize]);
 
     const loadMore = useCallback(async () => {
         if (loadingRef.current || !hasMoreRef.current) return;
@@ -143,6 +147,7 @@ export function useTransactionListData({
                 end_date: endDateFilter,
                 transaction_type: transactionTypeFilter,
                 tags: tagsFilter?.length ? tagsFilter.join(',') : undefined,
+                bank_account: bankAccountFilter,
                 sort_by: sortKey || undefined,
                 sort_dir: sortDir || undefined,
             });
@@ -166,7 +171,7 @@ export function useTransactionListData({
             }
             loadingRef.current = false;
         }
-    }, [showAll, search, transactionIdFilter, recipientIdFilter, categoryIdFilter, categoryIdsFilter, startDateFilter, endDateFilter, transactionTypeFilter, tagsFilter, sortKey, sortDir, pageSize]);
+    }, [showAll, search, transactionIdFilter, recipientIdFilter, categoryIdFilter, categoryIdsFilter, startDateFilter, endDateFilter, transactionTypeFilter, tagsFilter, bankAccountFilter, sortKey, sortDir, pageSize]);
 
     const handleSortChange = useCallback((key: string | null, dir: SortDir) => {
         setSortKey(key);

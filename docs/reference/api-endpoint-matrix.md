@@ -46,7 +46,7 @@ aliases: [api matrix, endpoint matrix, all endpoints, api overview, endpoint lis
 
 | Method | Path | Description | Rate Limit | Doc |
 |--------|------|-------------|------------|-----|
-| GET | `/api/transactions` | List with filtering/pagination (Phase 13: supports `transaction_id`, `recipient_id`, `recipient_name`, `search`, `transaction_type`, `category_ids`, `bank_accounts`) | — | [[docs/api/transactions\|Transactions]] |
+| GET | `/api/transactions` | List with filtering/pagination (Phase 13: supports `transaction_id`, `recipient_id`, `recipient_name`, `search`, `transaction_type`, `category_ids`, `bank_accounts`; also single `bank_account` — used by the accounts-hub double-click deep link, 2026-06-19) | — | [[docs/api/transactions\|Transactions]] |
 | GET | `/api/transactions/export/csv` | Export as CSV (streaming, chunked); accepts same filters as `GET /api/transactions` (Phase 13) | 30 req/min | [[docs/api/transactions\|Transactions]] |
 | GET | `/api/transactions/export/json` | Export as NDJSON (streaming, chunked); accepts same filters as `GET /api/transactions` (Phase 13) | 30 req/min | [[docs/api/transactions\|Transactions]] |
 | GET | `/api/transactions/:id` | Get single | — | [[docs/api/transactions\|Transactions]] |
