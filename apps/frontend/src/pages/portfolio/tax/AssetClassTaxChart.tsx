@@ -1,5 +1,4 @@
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { BarChart, type BarSeries } from "@/components/charts";
+import { BarChart, ChartCard, type BarSeries } from "@/components/charts";
 
 interface AssetClassTaxDatum {
   name: string;
@@ -31,21 +30,19 @@ export function AssetClassTaxChart({ data, fmt, t }: AssetClassTaxChartProps) {
   ];
 
   return (
-    <Card className="glass-regular">
-      <CardHeader>
-        <CardTitle>{t("tax.widget.taxByAssetClass")}</CardTitle>
-        <CardDescription>{t("tax.taxByAssetClassDesc")}</CardDescription>
-      </CardHeader>
-      <CardContent>
-        <BarChart
-          data={data}
-          categoryAccessor={(d) => d.name}
-          series={series}
-          height={280}
-          valueTickFormat={fmt}
-          tooltipValueFormat={(v) => fmt(v)}
-        />
-      </CardContent>
-    </Card>
+    <ChartCard
+      title={t("tax.widget.taxByAssetClass")}
+      description={t("tax.taxByAssetClassDesc")}
+      legend={series.map((s) => ({ label: s.label ?? s.key, color: s.color ?? "hsl(var(--chart-1))" }))}
+    >
+      <BarChart
+        data={data}
+        categoryAccessor={(d) => d.name}
+        series={series}
+        height={280}
+        valueTickFormat={fmt}
+        tooltipValueFormat={(v) => fmt(v)}
+      />
+    </ChartCard>
   );
 }

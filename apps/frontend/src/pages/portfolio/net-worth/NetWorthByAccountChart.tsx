@@ -5,8 +5,8 @@
  */
 
 import { useMemo } from "react";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { AreaChart, type AreaSeries } from "@/components/charts";
+import { Layers } from "lucide-react";
+import { AreaChart, ChartCard, type AreaSeries, type ChartLegendItem } from "@/components/charts";
 import { getChartColor } from "@/components/charts/palette";
 import { parseLocalDateFromYmd } from "@/components/shared/dateUtils";
 import type { NetWorthByAccountRow } from "@/lib/api/info";
@@ -33,7 +33,7 @@ export function NetWorthByAccountChart({
   description,
   unassignedLabel,
 }: NetWorthByAccountChartProps) {
-  const { data, series } = useMemo(() => {
+  const { data, series, legend } = useMemo(() => {
     const active = accounts.filter((a) => a.holdingsSeries && a.holdingsSeries.length > 0);
 
     // Align every account on the union of dates; a missing day means the account
@@ -69,31 +69,30 @@ export function NetWorthByAccountChart({
       };
     });
 
-    return { data: builtData, series: builtSeries };
+    const legendItems: ChartLegendItem[] = builtSeries.map((s) => ({
+      label: s.label ?? s.key,
+      color: s.color ?? getChartColor(0),
+    }));
+
+    return { data: builtData, series: builtSeries, legend: legendItems };
   }, [accounts, unassignedLabel]);
 
   // Need at least two points and one account to draw a meaningful history.
   if (data.length < 2 || series.length === 0) return null;
 
   return (
-    <Card className="glass-regular">
-      <CardHeader className="pb-2">
-        <CardTitle className="text-sm font-medium">{title}</CardTitle>
-        <p className="text-xs text-muted-foreground">{description}</p>
-      </CardHeader>
-      <CardContent>
-        <AreaChart
-          data={data}
-          xAccessor={(d) => d.date}
-          xIsDate
-          series={series}
-          stacked
-          height={300}
-          yTickFormat={fmt}
-          tooltipValueFormat={(value) => fmt(value)}
-          ariaLabel={title}
-        />
-      </CardContent>
-    </Card>
+    <ChartCard title={title} description={description} icon={Layers} legend={legend}>
+      <AreaChart
+        data={data}
+        xAccessor={(d) => d.date}
+        xIsDate
+        series={series}
+        stacked
+        height={320}
+        yTickFormat={fmt}
+        tooltipValueFormat={(value) => fmt(value)}
+        ariaLabel={title}
+      />
+    </ChartCard>
   );
 }

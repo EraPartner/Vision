@@ -1,5 +1,5 @@
 import type { ReactNode } from "react";
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
+import { ChartCard as BaseChartCard } from "@/components/charts";
 import { ExclusionToggle } from "@/components/shared/ExclusionToggle";
 import type { StatisticsData } from "@/hooks/useStatistics";
 
@@ -29,20 +29,19 @@ export function ChartCard({
   const isFiltered = graphExclusions[graphKey] ?? true;
 
   return (
-    <Card className="glass-regular">
-      <CardHeader className="flex flex-row items-center justify-between">
-        <div>
-          <CardTitle>{title}</CardTitle>
-          <CardDescription>{description}</CardDescription>
-        </div>
+    <BaseChartCard
+      title={title}
+      description={description}
+      actions={(
         <ExclusionToggle
           graphKey={graphKey}
           isFiltered={isFiltered}
           onToggle={toggleGraphExclusion}
           exclusionsApply={exclusionsApply}
         />
-      </CardHeader>
-      <CardContent>{children(data)}</CardContent>
-    </Card>
+      )}
+    >
+      {children(data)}
+    </BaseChartCard>
   );
 }

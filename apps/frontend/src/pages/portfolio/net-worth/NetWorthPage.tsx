@@ -9,22 +9,15 @@ import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import { TrendingUp, TrendingDown, Wallet, Landmark, PiggyBank } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { downsampleLTTB } from "@/utils/downsample";
 import { PageHeader } from "@/components/shared/PageHeader";
 import { EmptyState } from "@/components/shared/EmptyState";
 import { StatCard } from "@/components/dashboard/StatCard";
+import { CHART_PERIODS, filterByPeriod, type ChartPeriod } from "@/components/charts";
 import {
   EMPTY_SNAPSHOTS,
-  DAY_WIDTH_OPTIONS,
-  MIN_CHART_WIDTH,
-  NetWorthSeries,
   normalizeYmd,
   fmtDay,
-  computeNiceYDomain,
-  computeYDomain,
-  decimateTicks,
 } from "./netWorthChartUtils";
-import { useNetWorthChartScroll } from "./useNetWorthChartScroll";
 import { NetWorthChart } from "./NetWorthChart";
 import { SnapshotDataTable } from "./SnapshotDataTable";
 import { useNetWorthTableData } from "./useNetWorthTableData";
@@ -35,8 +28,6 @@ import { usePortfolio } from "@/hooks/usePortfolio";
 import { useOnlineStatus } from "@/hooks/useOnlineStatus";
 import { useAccountNetWorth } from "@/hooks/portfolio/useAccountNetWorth";
 import { NetWorthByAccountChart } from "./NetWorthByAccountChart";
-
-const MONTH_LABEL_MIN_PX = 60;
 
 export default function NetWorthPage() {
   const { t, language } = useLanguage();
@@ -72,9 +63,7 @@ export default function NetWorthPage() {
     pageSize: appSettings.defaultPageSize,
   });
 
-  const [zoomStep, setZoomStep] = useState(0);
-  const [selectedSeries, setSelectedSeries] = useState<NetWorthSeries>('netWorth');
-  const dayWidth = DAY_WIDTH_OPTIONS[zoomStep] ?? DAY_WIDTH_OPTIONS[0];
+  const [period, setPeriod] = useState<ChartPeriod>('all');
 
   const snapshots = useMemo(() => {
     const raw = data?.snapshots ?? EMPTY_SNAPSHOTS;
@@ -89,12 +78,12 @@ export default function NetWorthPage() {
     return result;
   }, [data?.snapshots]);
 
-  const chartSnapshots = useMemo(() => {
-    const maxPointsForZoom = Math.max(150, Math.min(500, Math.round(800 / dayWidth)));
-    const threshold = Math.min(maxPointsForZoom, 400);
-    if (snapshots.length <= threshold) return snapshots;
-    return downsampleLTTB(snapshots, threshold, (_item, i) => i, (item) => item[selectedSeries]);
-  }, [snapshots, selectedSeries, dayWidth]);
+  // Full daily resolution — no downsampling — so the chart and drag-to-compare
+  // scrubbing stay day-granular. Period only scopes the visible window.
+  const displaySnapshots = useMemo(
+    () => filterByPeriod(snapshots, (s) => s.date, period),
+    [snapshots, period],
+  );
 
   const currencyFormatter = useMemo(() => new Intl.NumberFormat(locale, {
     style: "currency",
@@ -106,44 +95,28 @@ export default function NetWorthPage() {
   const fmt = useCallback((val: number) => currencyFormatter.format(val), [currencyFormatter]);
 
   const monthLabelLocale = useMemo(() => (language === 'nl' ? 'nl-NL' : 'en-US'), [language]);
-  const monthTickFormatter = useMemo(
-    () => new Intl.DateTimeFormat(monthLabelLocale, { month: 'short', year: '2-digit' }),
-    [monthLabelLocale],
-  );
+  const xTickFormatter = useMemo(() => {
+    if (period === '1m' || period === '3m' || period === '6m') {
+      return new Intl.DateTimeFormat(monthLabelLocale, { day: 'numeric', month: 'short' });
+    }
+    return new Intl.DateTimeFormat(monthLabelLocale, { month: 'short', year: '2-digit' });
+  }, [monthLabelLocale, period]);
+  const xTickFormat = useCallback((d: Date) => xTickFormatter.format(d), [xTickFormatter]);
+
+  const periodLabels = useMemo((): Record<ChartPeriod, string> => ({
+    '1m': t('performance.period.1m'),
+    '3m': t('performance.period.3m'),
+    '6m': t('performance.period.6m'),
+    '1y': t('performance.period.1y'),
+    '3y': t('performance.period.3y'),
+    'all': t('performance.period.all'),
+  }), [t]);
 
   const current = data?.current ?? { liquid: 0, investments: 0, netWorth: 0 };
-  const displaySnapshots = chartSnapshots;
-
-  const chartWidth = useMemo(() => {
-    return Math.max(MIN_CHART_WIDTH, Math.max(displaySnapshots.length, 1) * dayWidth);
-  }, [displaySnapshots.length, dayWidth]);
-
-  const fallbackYDomain = useMemo(
-    () => computeNiceYDomain(computeYDomain(displaySnapshots, [selectedSeries])),
-    [displaySnapshots, selectedSeries],
-  );
-
-  const monthlyTicks = useMemo(() => {
-    const allMonthFirsts = displaySnapshots
-      .filter((s, idx) => idx === 0 || s.date.slice(0, 7) !== displaySnapshots[idx - 1].date.slice(0, 7))
-      .map((s) => s.date);
-    return decimateTicks(allMonthFirsts, chartWidth, MONTH_LABEL_MIN_PX);
-  }, [displaySnapshots, chartWidth]);
-
-  const { chartScrollRef, yDomain, isAtLatest, scrollToLatest, captureZoomAnchor } = useNetWorthChartScroll({
-    chartWidth,
-    displaySnapshots,
-    selectedSeries,
-    zoomStep,
-  });
 
   const tooltipLabelFormatter = useCallback(
     (v: string) => fmtDay(v, appSettings.dateFormat),
     [appSettings.dateFormat],
-  );
-  const tooltipValueFormatter = useCallback(
-    (value: number, name: string): [string, string] => [fmt(value), name],
-    [fmt],
   );
 
   if (isLoading) {
@@ -283,24 +256,14 @@ export default function NetWorthPage() {
       </div>
 
       <NetWorthChart
-        chartScrollRef={chartScrollRef}
-        displaySnapshots={displaySnapshots}
-        chartWidth={chartWidth}
-        yDomain={yDomain}
-        fallbackYDomain={fallbackYDomain}
-        selectedSeries={selectedSeries}
-        onSeriesChange={setSelectedSeries}
-        zoomStep={zoomStep}
-        onZoomIn={() => { captureZoomAnchor(); setZoomStep((prev) => Math.max(0, prev - 1)); }}
-        onZoomOut={() => { captureZoomAnchor(); setZoomStep((prev) => Math.min(DAY_WIDTH_OPTIONS.length - 1, prev + 1)); }}
-        isAtLatest={isAtLatest}
-        onScrollToLatest={scrollToLatest}
-        current={current}
-        monthlyTicks={monthlyTicks}
-        monthTickFormatter={monthTickFormatter}
+        snapshots={displaySnapshots}
+        period={period}
+        periods={CHART_PERIODS}
+        periodLabels={periodLabels}
+        onPeriodChange={setPeriod}
         fmt={fmt}
+        xTickFormat={xTickFormat}
         tooltipLabelFormatter={tooltipLabelFormatter}
-        tooltipValueFormatter={tooltipValueFormatter}
         t={t}
       />
 

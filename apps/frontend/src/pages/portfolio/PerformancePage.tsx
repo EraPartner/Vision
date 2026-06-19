@@ -2,10 +2,17 @@ import { useMemo, useState } from "react";
 import { Money } from "@/components/shared/Money";
 import { useQuery, keepPreviousData } from "@tanstack/react-query";
 import { apiClient } from "@/lib/api";
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { formatCurrency, numberFormatToLocale } from "@/utils/currency";
 import { useLanguage } from "@/contexts/LanguageContext";
-import { AreaChart as VisxAreaChart, ChartLegend, Sparkline } from "@/components/charts";
+import {
+    AreaChart as VisxAreaChart,
+    ChartCard,
+    ChartPeriodSelector,
+    CHART_PERIODS,
+    Sparkline,
+    type ChartPeriod,
+} from "@/components/charts";
 import {
     TrendingUp, TrendingDown, BarChart3, Loader2, Percent,
     DollarSign, Activity,
@@ -18,10 +25,6 @@ import { Button } from "@/components/ui/button";
 import { RefreshCw } from "lucide-react";
 import { usePortfolio } from "@/hooks/usePortfolio";
 import { useOnlineStatus } from "@/hooks/useOnlineStatus";
-
-type Period = "1m" | "3m" | "6m" | "1y" | "3y" | "all";
-
-const PERIOD_KEYS = ["1m", "3m", "6m", "1y", "3y", "all"] as const;
 
 const CHART_KEYS = {
     invested: 'invested',
@@ -81,7 +84,7 @@ export default function PerformancePage() {
     const { appSettings } = useAppSettings();
     const locale = numberFormatToLocale(appSettings.numberFormat);
     const defaultCurrency = appSettings.defaultCurrency || "EUR";
-    const [selectedPeriod, setSelectedPeriod] = useState<Period>("all");
+    const [selectedPeriod, setSelectedPeriod] = useState<ChartPeriod>("all");
     const [showFxNeutral, setShowFxNeutral] = useState(false);
 
     const { data: portfolioPerformanceData, isLoading } = useQuery({
@@ -99,7 +102,7 @@ export default function PerformancePage() {
         gcTime: 10 * 60_000,
     });
 
-    const PERIOD_LABELS: Record<Period, string> = {
+    const PERIOD_LABELS: Record<ChartPeriod, string> = {
         "1m": t('performance.period.1m'),
         "3m": t('performance.period.3m'),
         "6m": t('performance.period.6m'),
@@ -205,21 +208,12 @@ export default function PerformancePage() {
             />
 
             {/* Period selector */}
-            <div className="flex gap-1 p-1 bg-muted rounded-lg w-fit">
-                {PERIOD_KEYS.map((p) => (
-                    <button
-                        key={p}
-                        onClick={() => setSelectedPeriod(p)}
-                        className={`px-3 py-1.5 text-xs font-medium rounded-md transition-all ${
-                            selectedPeriod === p
-                                ? "bg-background text-foreground shadow-sm"
-                                : "text-muted-foreground hover:text-foreground"
-                        }`}
-                    >
-                        {PERIOD_LABELS[p]}
-                    </button>
-                ))}
-            </div>
+            <ChartPeriodSelector
+                periods={CHART_PERIODS}
+                value={selectedPeriod}
+                onChange={setSelectedPeriod}
+                labels={PERIOD_LABELS}
+            />
 
             {/* Key metrics cards */}
             {overallMetrics && (
@@ -278,119 +272,95 @@ export default function PerformancePage() {
 
             {/* Portfolio Value Over Time chart */}
             {chartData.length > 1 && (
-                <Card className="glass-regular">
-                    <CardHeader>
-                        <div className="flex items-start justify-between gap-3">
-                            <div>
-                                <CardTitle className="flex items-center gap-2">
-                                    <BarChart3 className="h-5 w-5 text-primary" />
-                                    {t('performance.valueOverTime')}
-                                </CardTitle>
-                                <CardDescription>
-                                    {t('performance.chartDesc', { period: PERIOD_LABELS[selectedPeriod] })}
-                                </CardDescription>
-                            </div>
-                            {hasFxNeutralSeries && (
-                                <button
-                                    onClick={() => setShowFxNeutral((v) => !v)}
-                                    title={t('performance.fxNeutralDesc')}
-                                    className={`px-3 py-1.5 text-xs font-medium rounded-md border transition-all shrink-0 ${
-                                        showFxNeutral
-                                            ? "bg-background text-foreground shadow-sm border-border"
-                                            : "text-muted-foreground hover:text-foreground border-transparent"
-                                    }`}
-                                >
-                                    {t('performance.fxNeutral')}
-                                </button>
-                            )}
-                        </div>
-                    </CardHeader>
-                    <CardContent>
-                        <VisxAreaChart
-                            scrubbable
-                            data={chartData}
-                            xAccessor={(d) => parseISO(d.day)}
-                            series={[
-                                { key: CHART_KEYS.invested, label: t('portfolio.totalInvested'), accessor: (d) => d.invested, color: 'hsl(var(--muted-foreground))', dashed: true, strokeWidth: 1.5 },
-                                { key: CHART_KEYS.inflationAdjusted, label: t('performance.inflationAdjusted'), accessor: (d) => d.inflationAdjusted, color: 'hsl(30, 80%, 55%)', strokeWidth: 2 },
-                                { key: CHART_KEYS.stocksEtfs, label: t('performance.relativeStocksEtfs'), accessor: (d) => d.stocksEtfs, color: 'hsl(0, 72%, 51%)', fillOpacity: 0, strokeWidth: 2 },
-                                { key: CHART_KEYS.crypto, label: t('performance.crypto'), accessor: (d) => d.crypto, color: 'hsl(142, 76%, 36%)', fillOpacity: 0, strokeWidth: 2 },
-                                { key: CHART_KEYS.metals, label: t('performance.metals'), accessor: (d) => d.metals, color: 'hsl(45, 93%, 47%)', fillOpacity: 0, strokeWidth: 2 },
-                                ...(showFxNeutral && hasFxNeutralSeries ? [
-                                    { key: CHART_KEYS.fxNeutral, label: t('performance.fxNeutral'), accessor: (d: typeof chartData[number]) => d.fxNeutral, color: FX_NEUTRAL_COLOR, fillOpacity: 0, dashed: true, strokeWidth: 2 },
-                                ] : []),
-                                { key: CHART_KEYS.value, label: t('portfolio.portfolioValue'), accessor: (d) => d.value, color: 'hsl(var(--primary))', strokeWidth: 2.5 },
-                            ]}
-                            xIsDate={true}
-                            xTickFormat={(v) => xTickFormatter.format(v as Date)}
-                            yTickFormat={(v) => formatCurrency(v as number, defaultCurrency, locale)}
-                            tooltipTitle={(d) => formatDate(parseISO(d.day), "dd MMM yyyy")}
-                            tooltipValueFormat={(v) => formatCurrency(v, defaultCurrency, locale)}
-                            height={360}
-                            margin={{ top: 16, right: 24, bottom: 28, left: 110 }}
-                        />
-                        <ChartLegend
-                            className="mt-3"
-                            items={[
-                                { label: t('portfolio.totalInvested'), color: 'hsl(var(--muted-foreground))', dashed: true },
-                                { label: t('performance.inflationAdjusted'), color: 'hsl(30, 80%, 55%)' },
-                                { label: t('performance.relativeStocksEtfs'), color: 'hsl(0, 72%, 51%)' },
-                                { label: t('performance.crypto'), color: 'hsl(142, 76%, 36%)' },
-                                { label: t('performance.metals'), color: 'hsl(45, 93%, 47%)' },
-                                ...(showFxNeutral && hasFxNeutralSeries
-                                    ? [{ label: t('performance.fxNeutral'), color: FX_NEUTRAL_COLOR, dashed: true }]
-                                    : []),
-                                { label: t('portfolio.portfolioValue'), color: 'hsl(var(--primary))' },
-                            ]}
-                        />
-                    </CardContent>
-                </Card>
+                <ChartCard
+                    title={t('performance.valueOverTime')}
+                    description={t('performance.chartDesc', { period: PERIOD_LABELS[selectedPeriod] })}
+                    icon={BarChart3}
+                    actions={hasFxNeutralSeries ? (
+                        <button
+                            onClick={() => setShowFxNeutral((v) => !v)}
+                            title={t('performance.fxNeutralDesc')}
+                            className={`px-3 py-1.5 text-xs font-medium rounded-md border transition-all shrink-0 ${
+                                showFxNeutral
+                                    ? "bg-background text-foreground shadow-sm border-border"
+                                    : "text-muted-foreground hover:text-foreground border-transparent"
+                            }`}
+                        >
+                            {t('performance.fxNeutral')}
+                        </button>
+                    ) : undefined}
+                    legend={[
+                        { label: t('portfolio.totalInvested'), color: 'hsl(var(--muted-foreground))', dashed: true },
+                        { label: t('performance.inflationAdjusted'), color: 'hsl(30, 80%, 55%)' },
+                        { label: t('performance.relativeStocksEtfs'), color: 'hsl(0, 72%, 51%)' },
+                        { label: t('performance.crypto'), color: 'hsl(142, 76%, 36%)' },
+                        { label: t('performance.metals'), color: 'hsl(45, 93%, 47%)' },
+                        ...(showFxNeutral && hasFxNeutralSeries
+                            ? [{ label: t('performance.fxNeutral'), color: FX_NEUTRAL_COLOR, dashed: true }]
+                            : []),
+                        { label: t('portfolio.portfolioValue'), color: 'hsl(var(--primary))' },
+                    ]}
+                >
+                    <VisxAreaChart
+                        scrubbable
+                        data={chartData}
+                        xAccessor={(d) => parseISO(d.day)}
+                        series={[
+                            { key: CHART_KEYS.invested, label: t('portfolio.totalInvested'), accessor: (d) => d.invested, color: 'hsl(var(--muted-foreground))', dashed: true, strokeWidth: 1.5 },
+                            { key: CHART_KEYS.inflationAdjusted, label: t('performance.inflationAdjusted'), accessor: (d) => d.inflationAdjusted, color: 'hsl(30, 80%, 55%)', strokeWidth: 2 },
+                            { key: CHART_KEYS.stocksEtfs, label: t('performance.relativeStocksEtfs'), accessor: (d) => d.stocksEtfs, color: 'hsl(0, 72%, 51%)', fillOpacity: 0, strokeWidth: 2 },
+                            { key: CHART_KEYS.crypto, label: t('performance.crypto'), accessor: (d) => d.crypto, color: 'hsl(142, 76%, 36%)', fillOpacity: 0, strokeWidth: 2 },
+                            { key: CHART_KEYS.metals, label: t('performance.metals'), accessor: (d) => d.metals, color: 'hsl(45, 93%, 47%)', fillOpacity: 0, strokeWidth: 2 },
+                            ...(showFxNeutral && hasFxNeutralSeries ? [
+                                { key: CHART_KEYS.fxNeutral, label: t('performance.fxNeutral'), accessor: (d: typeof chartData[number]) => d.fxNeutral, color: FX_NEUTRAL_COLOR, fillOpacity: 0, dashed: true, strokeWidth: 2 },
+                            ] : []),
+                            { key: CHART_KEYS.value, label: t('portfolio.portfolioValue'), accessor: (d) => d.value, color: 'hsl(var(--primary))', strokeWidth: 2.5 },
+                        ]}
+                        xIsDate={true}
+                        xTickFormat={(v) => xTickFormatter.format(v as Date)}
+                        yTickFormat={(v) => formatCurrency(v as number, defaultCurrency, locale)}
+                        tooltipTitle={(d) => formatDate(parseISO(d.day), "dd MMM yyyy")}
+                        tooltipValueFormat={(v) => formatCurrency(v, defaultCurrency, locale)}
+                        height={360}
+                        margin={{ top: 16, right: 24, bottom: 28, left: 110 }}
+                    />
+                </ChartCard>
             )}
 
             {/* Relative Performance chart */}
             {relativePerformanceData.length > 1 && (
-                <Card className="glass-regular">
-                    <CardHeader>
-                        <CardTitle className="flex items-center gap-2">
-                            <Activity className="h-5 w-5 text-primary" />
-                            {t('performance.relativeTitle')}
-                        </CardTitle>
-                        <CardDescription>
-                            {t('performance.relativeDesc', { period: PERIOD_LABELS[selectedPeriod] })}
-                        </CardDescription>
-                    </CardHeader>
-                    <CardContent>
-                        <VisxAreaChart
-                            scrubbable
-                            data={relativePerformanceData}
-                            xAccessor={(d) => parseISO(d.day)}
-                            series={[
-                                { key: CHART_KEYS.relativePortfolio, label: t('performance.relativePortfolio'), accessor: (d) => d.relativePortfolio, color: 'hsl(var(--primary))', strokeWidth: 2.5 },
-                                { key: CHART_KEYS.relativeStocksEtfs, label: t('performance.relativeStocksEtfs'), accessor: (d) => d.relativeStocksEtfs, color: 'hsl(0, 72%, 51%)', fillOpacity: 0, strokeWidth: 2 },
-                                { key: CHART_KEYS.relativeCrypto, label: t('performance.crypto'), accessor: (d) => d.relativeCrypto, color: 'hsl(142, 76%, 36%)', fillOpacity: 0, strokeWidth: 2 },
-                                { key: CHART_KEYS.relativeMetals, label: t('performance.metals'), accessor: (d) => d.relativeMetals, color: 'hsl(45, 93%, 47%)', fillOpacity: 0, strokeWidth: 2 },
-                                { key: CHART_KEYS.relativeInflationAdjusted, label: t('performance.inflationAdjusted'), accessor: (d) => d.relativeInflationAdjusted, color: 'hsl(30, 80%, 55%)', fillOpacity: 0, dashed: true, strokeWidth: 2 },
-                            ]}
-                            xIsDate={true}
-                            xTickFormat={(v) => xTickFormatter.format(v as Date)}
-                            yTickFormat={(v) => `${(v as number) > 0 ? '+' : ''}${(v as number).toFixed(0)}%`}
-                            tooltipTitle={(d) => formatDate(parseISO(d.day), "dd MMM yyyy")}
-                            tooltipValueFormat={(v) => `${v > 0 ? '+' : ''}${v.toFixed(2)}%`}
-                            height={320}
-                            margin={{ top: 16, right: 24, bottom: 28, left: 72 }}
-                        />
-                        <ChartLegend
-                            className="mt-3"
-                            items={[
-                                { label: t('performance.relativePortfolio'), color: 'hsl(var(--primary))' },
-                                { label: t('performance.relativeStocksEtfs'), color: 'hsl(0, 72%, 51%)' },
-                                { label: t('performance.crypto'), color: 'hsl(142, 76%, 36%)' },
-                                { label: t('performance.metals'), color: 'hsl(45, 93%, 47%)' },
-                                { label: t('performance.inflationAdjusted'), color: 'hsl(30, 80%, 55%)', dashed: true },
-                            ]}
-                        />
-                    </CardContent>
-                </Card>
+                <ChartCard
+                    title={t('performance.relativeTitle')}
+                    description={t('performance.relativeDesc', { period: PERIOD_LABELS[selectedPeriod] })}
+                    icon={Activity}
+                    legend={[
+                        { label: t('performance.relativePortfolio'), color: 'hsl(var(--primary))' },
+                        { label: t('performance.relativeStocksEtfs'), color: 'hsl(0, 72%, 51%)' },
+                        { label: t('performance.crypto'), color: 'hsl(142, 76%, 36%)' },
+                        { label: t('performance.metals'), color: 'hsl(45, 93%, 47%)' },
+                        { label: t('performance.inflationAdjusted'), color: 'hsl(30, 80%, 55%)', dashed: true },
+                    ]}
+                >
+                    <VisxAreaChart
+                        scrubbable
+                        data={relativePerformanceData}
+                        xAccessor={(d) => parseISO(d.day)}
+                        series={[
+                            { key: CHART_KEYS.relativePortfolio, label: t('performance.relativePortfolio'), accessor: (d) => d.relativePortfolio, color: 'hsl(var(--primary))', strokeWidth: 2.5 },
+                            { key: CHART_KEYS.relativeStocksEtfs, label: t('performance.relativeStocksEtfs'), accessor: (d) => d.relativeStocksEtfs, color: 'hsl(0, 72%, 51%)', fillOpacity: 0, strokeWidth: 2 },
+                            { key: CHART_KEYS.relativeCrypto, label: t('performance.crypto'), accessor: (d) => d.relativeCrypto, color: 'hsl(142, 76%, 36%)', fillOpacity: 0, strokeWidth: 2 },
+                            { key: CHART_KEYS.relativeMetals, label: t('performance.metals'), accessor: (d) => d.relativeMetals, color: 'hsl(45, 93%, 47%)', fillOpacity: 0, strokeWidth: 2 },
+                            { key: CHART_KEYS.relativeInflationAdjusted, label: t('performance.inflationAdjusted'), accessor: (d) => d.relativeInflationAdjusted, color: 'hsl(30, 80%, 55%)', fillOpacity: 0, dashed: true, strokeWidth: 2 },
+                        ]}
+                        xIsDate={true}
+                        xTickFormat={(v) => xTickFormatter.format(v as Date)}
+                        yTickFormat={(v) => `${(v as number) > 0 ? '+' : ''}${(v as number).toFixed(0)}%`}
+                        tooltipTitle={(d) => formatDate(parseISO(d.day), "dd MMM yyyy")}
+                        tooltipValueFormat={(v) => `${v > 0 ? '+' : ''}${v.toFixed(2)}%`}
+                        height={320}
+                        margin={{ top: 16, right: 24, bottom: 28, left: 72 }}
+                    />
+                </ChartCard>
             )}
 
             <PerformanceBreakdown heatmapData={heatmapData} breakdownSummary={breakdownSummary} />

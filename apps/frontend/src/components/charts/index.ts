@@ -34,6 +34,15 @@ export type { ChartTooltipDatum, ChartTooltipProps } from "./ChartTooltip";
 export { ChartLegend } from "./ChartLegend";
 export type { ChartLegendItem, ChartLegendProps } from "./ChartLegend";
 
+export { ChartCard } from "./ChartCard";
+export type { ChartCardProps } from "./ChartCard";
+
+export { ChartPeriodSelector } from "./ChartPeriodSelector";
+export type { ChartPeriodSelectorProps } from "./ChartPeriodSelector";
+
+export { CHART_PERIODS, CHART_PERIOD_OFFSET_DAYS, filterByPeriod } from "./chartPeriods";
+export type { ChartPeriod } from "./chartPeriods";
+
 export { BottomAxis, LeftAxis, RightAxis } from "./ChartAxis";
 export type { ChartAxisProps } from "./ChartAxis";
 

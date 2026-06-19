@@ -276,17 +276,27 @@ let loanSchedId=0;
 
 // ===== Investments + portfolio txns + price history + FX =====
 let invId=0, ptxId=0, aphId=0;
+// Daily price history so charts (net worth, performance) and drag-to-compare
+// scrubbing are day-granular. vol/bias are calibrated for a weekly walk; rescale
+// to PRICE_STEP_DAYS so total drift and spread over the window stay the same when
+// the step shrinks (7× more steps would otherwise widen the random walk ~√7×).
+const PRICE_STEP_DAYS = 1;
+const STEP_K = Math.sqrt(7 / PRICE_STEP_DAYS);
 function priceSeries(startDate,basePrice,vol,bias){
+  const stepVol = vol / STEP_K;
+  const stepBias = 0.5 - (0.5 - bias) / STEP_K;
   const pts=[]; let p=basePrice*(0.72+rand()*0.12); let cur=new Date(startDate);
-  while(cur<=TODAY){p=Math.max(basePrice*0.3,p*(1+(rand()-bias)*vol));pts.push([new Date(cur),p]);cur=addDaysUTC(cur,7);}
+  while(cur<=TODAY){p=Math.max(basePrice*0.3,p*(1+(rand()-stepBias)*stepVol));pts.push([new Date(cur),p]);cur=addDaysUTC(cur,PRICE_STEP_DAYS);}
   return pts;
 }
 function priceAt(series,date){let v=series[0][1];for(const [d,p] of series){if(d<=date)v=p;else break;}return v;}
 function emitHistory(series,investmentId){for(const [d,p] of series){aphId++;S(`INSERT INTO asset_price_history (id,investment_id,price_date,close_price,source) VALUES (${aphId},${investmentId},'${fmt(d)}',${num(p,6)},'manual');`);}}
 
-// USD→EUR weekly series into exchange_rates (rate_to_eur = EUR per 1 USD). The whole
+// USD→EUR daily series into exchange_rates (rate_to_eur = EUR per 1 USD). The whole
 // series gives point-in-time FX (ADR-085); only the most recent row is is_latest=true.
-let ercId=0; const fxSeries=[]; {let cur=ymd(2024,1,1);let r=0.92;const rows=[];while(cur<=TODAY){r=Math.max(0.84,Math.min(0.98,r*(1+(rand()-0.5)*0.02)));fxSeries.push([new Date(cur),r]);rows.push([new Date(cur),r]);cur=addDaysUTC(cur,7);}rows.forEach(([d,rate],i)=>{ercId++;S(`INSERT INTO exchange_rates (id,currency_code,rate_to_eur,rate_date,is_latest) VALUES (${ercId},'USD',${num(rate,10)},'${fmt(d)}',${i===rows.length-1?'true':'false'});`);});}
+// Daily so FX-converted holdings move smoothly; per-step vol scaled by STEP_K to
+// keep the same overall spread the weekly walk had.
+let ercId=0; const fxSeries=[]; {const fxVol=0.02/STEP_K;let cur=ymd(2024,1,1);let r=0.92;const rows=[];while(cur<=TODAY){r=Math.max(0.84,Math.min(0.98,r*(1+(rand()-0.5)*fxVol)));fxSeries.push([new Date(cur),r]);rows.push([new Date(cur),r]);cur=addDaysUTC(cur,PRICE_STEP_DAYS);}rows.forEach(([d,rate],i)=>{ercId++;S(`INSERT INTO exchange_rates (id,currency_code,rate_to_eur,rate_date,is_latest) VALUES (${ercId},'USD',${num(rate,10)},'${fmt(d)}',${i===rows.length-1?'true':'false'});`);});}
 const fxAt=(date)=>{let v=fxSeries[0][1];for(const[d,r]of fxSeries){if(d<=date)v=r;else break;}return v;};
 
 function unitInv(cls,name,sym,ccy,basePrice,vol,bias,accountId){
