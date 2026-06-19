@@ -33,6 +33,7 @@ import * as research from '@/lib/api/research';
 import * as agg from '@/lib/api/aggregations';
 import * as ai from '@/lib/api/ai';
 import * as tags from '@/lib/api/tags';
+import * as crossWorkspace from '@/lib/api/crossWorkspace';
 
 export const apiClient = {
     cancelAll: cancelAllRequests,
@@ -245,6 +246,10 @@ export const apiClient = {
     deleteTag: tags.deleteTag,
     bulkTagTransactions: tags.bulkTagTransactions,
 
+    // Cross-workspace (ADR-098)
+    computeRebalance: crossWorkspace.computeRebalance,
+    getUnifiedTax: crossWorkspace.getUnifiedTax,
+
     // AI chat
     getOllamaStatus: ai.getOllamaStatus,
     getOllamaModels: ai.getOllamaModels,
@@ -307,4 +312,5 @@ export type { SavedParserConfig, CustomParserConfigPayload } from '@/lib/api/imp
 export type { SplitItem, SplitPayment } from '@/lib/api/splits';
 export type { RecipientPattern, RecipientPatternCreate, RecipientPatternUpdate, RecipientCluster, PatternSuggestion } from '@/lib/api/recipients';
 export type { ExchangeRate, ExchangeRatesData, PortfolioSummaryItem, PortfolioSummaryResponse, PortfolioSummaryTotals } from '@/lib/api/info';
+export type { RebalanceRequest, RebalanceResponse, UnifiedTaxRequest, UnifiedTaxResponse, ModelPortfolio } from '@/lib/api/crossWorkspace';
 export type { WatchlistItem, WatchlistCreate, WatchlistUpdate, WatchlistListResponse } from '@/types/watchlist';

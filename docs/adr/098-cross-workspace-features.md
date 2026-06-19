@@ -10,10 +10,12 @@ aliases: [net worth projection, FI projection, cash-aware rebalancing, unified t
 # ADR-098: Cross-Workspace Features
 
 ## Status
-Proposed
+Accepted — partially implemented 2026-06-19. Cash-aware rebalancing and the unified tax view are
+wired end-to-end (routes + pages + nav); the net-worth/FI projection cone remains a pure, unwired
+core (`projectNetWorth`). See the 2026-06-19 implementation note below.
 
 ## Date
-2026-06-18
+2026-06-18 (proposed) · 2026-06-19 (rebalancing + unified tax implemented)
 
 ## Context
 
@@ -56,6 +58,27 @@ Three composed surfaces, each a pure computation over inputs the workspaces alre
   sells (a separate concern).
 - *Owner mis-allocation* → joint = 50/50 by rule; default owner `me` so single filers are
   unaffected.
+
+## Implementation note (2026-06-19)
+
+Two of the three surfaces are now reachable in the app; the third stays a tested pure core.
+
+- **Cash-aware rebalancing** — `POST /api/cross-workspace/rebalance` (`routes/crossWorkspace.js`)
+  composes actual sleeve values (portfolio summary grouped by asset class) + available cash
+  (Σ `spendable` account ledger balances, FX-converted, in `services/crossWorkspaceDataService.js`)
+  and runs the pure `rebalanceDeployment`. UI: `/portfolio/rebalance` (`pages/portfolio/RebalancePage.tsx`),
+  nav under Portfolio → Analysis.
+- **Unified tax view** — `GET /api/cross-workspace/unified-tax?year=` composes the client-supplied
+  earned income (tax-profile gross) with owner-allocated portfolio dividends/interest + realized
+  gains for the year, via the pure `unifiedTax`. Realized gains are **indicative** — each in-year
+  sale is valued at the holding's current weighted-average cost basis, not the basis at sale time
+  (consistent with this ADR: a composed *view*, not a tax re-derivation). UI: `/tax/unified`
+  (`pages/UnifiedTaxPage.tsx`), nav under Budgeting → Analysis.
+- **Net-worth / FI projection cone** — `projectNetWorth` remains pure + unit-tested but is not yet
+  wired to a route/page. Follow-up.
+
+Tested by `crossWorkspaceAnalytics.test.js` (cores) + `crossWorkspaceDataService.test.js` (assembly,
+mocked DB/FX). Endpoints registered in `openapi.yaml` + the endpoint matrix (count 209 → 211).
 
 ## Related
 - [[docs/adr/index|All ADRs]]

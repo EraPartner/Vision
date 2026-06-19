@@ -1378,6 +1378,69 @@ paths:
         "404":
           description: Tag not found
 
+  /api/cross-workspace/rebalance:
+    post:
+      summary: Cash-aware rebalancing plan (ADR-098)
+      description: >-
+        Deploy spendable account cash into underweight portfolio sleeves toward a
+        target allocation, without selling. Composes Budgeting + Portfolio.
+      operationId: computeRebalance
+      tags: [CrossWorkspace]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                currency: { type: string }
+                model:
+                  type: string
+                  enum: [sixty_forty, all_weather, three_fund]
+                targetWeights:
+                  type: object
+                  additionalProperties: { type: number }
+                availableCash: { type: number }
+      responses:
+        "200":
+          description: Rebalancing plan
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Envelope"
+  /api/cross-workspace/unified-tax:
+    get:
+      summary: Unified tax view (ADR-098)
+      description: >-
+        Owner-allocated earned income + portfolio dividends + realized gains for a
+        tax year (indicative; feeds the Belgian marital quotient).
+      operationId: getUnifiedTax
+      tags: [CrossWorkspace]
+      parameters:
+        - in: query
+          name: year
+          required: true
+          schema: { type: integer }
+        - in: query
+          name: currency
+          schema: { type: string }
+        - in: query
+          name: earnedIncome
+          schema: { type: number }
+          description: Authoritative earned income (tax-profile gross), supplied by the client.
+        - in: query
+          name: earnedIncomeOwner
+          schema:
+            type: string
+            enum: [me, partner, joint]
+      responses:
+        "200":
+          description: Unified tax breakdown
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Envelope"
+
   /api/accounts:
     get:
       summary: List accounts

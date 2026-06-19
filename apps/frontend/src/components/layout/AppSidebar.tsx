@@ -42,6 +42,8 @@ import {
   Telescope,
   GitCompareArrows,
   CandlestickChart,
+  Scale,
+  Layers,
 } from "lucide-react";
 import { motion, useReducedMotion } from "framer-motion";
 import { useWorkspace } from "@/contexts/WorkspaceContext";
@@ -122,6 +124,7 @@ export function AppSidebar() {
         { title: t('nav.plannedPayments'), url: "/planned", icon: CalendarClock },
         { title: t('nav.whoOwesYou'), url: "/owes", icon: HandCoins },
         { title: t('nav.taxOverview'), url: "/tax", icon: Landmark },
+        { title: t('nav.unifiedTax'), url: "/tax/unified", icon: Layers },
       ],
     },
     {
@@ -167,6 +170,7 @@ export function AppSidebar() {
       label: t('nav.analysis'),
       items: [
         { title: t('nav.performance'), url: "/portfolio/performance", icon: BarChart3 },
+        { title: t('nav.rebalance'), url: "/portfolio/rebalance", icon: Scale },
         { title: t('nav.taxOverview'), url: "/portfolio/tax", icon: Landmark },
       ],
     },
