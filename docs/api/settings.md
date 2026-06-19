@@ -4,8 +4,8 @@ type: endpoint
 method: GET, PUT, DELETE
 path: /api/settings
 description: User preferences and application settings
-date: 2026-04-23
-updated: 2026-06-17
+date: 2026-06-19
+updated: 2026-06-19
 tags: [api, settings, preferences, phase-3, auto-link, planned-match, june-2026]
 status: active
 aliases: [settings-api, preferences-api, user-settings, app-settings]
@@ -124,6 +124,54 @@ Response semantics:
 | widget_visibility | object | Per-page widget visibility state |
 | onboarding_complete | boolean | First-run onboarding completion state |
 | dismissed_recurring_patterns | array | IDs/patterns dismissed from recurring suggestions |
+| rebalance_plans | array | Saved custom portfolio rebalancing plans (max 50 entries) |
+
+### `rebalance_plans` shape (2026-06-19)
+
+Array of saved custom portfolio rebalancing plans. Stored and retrieved via `GET/PUT /api/settings/rebalance_plans`.
+
+**Default:** `[]`
+
+**Element schema:**
+
+```json
+{
+  "id": "string (UUID or user-generated, required)",
+  "name": "string (1–80 chars, required)",
+  "targetWeights": {
+    "stocks": 40,
+    "intl_stocks": 20,
+    "bonds": 20,
+    "gold": 5,
+    "commodities": 5,
+    "crypto": 5,
+    "real_estate": 3,
+    "savings": 2
+  },
+  "cashCap": 5000
+}
+```
+
+**Fields:**
+
+- **`id`** (string, required): Unique plan identifier.
+- **`name`** (string, 1–80 chars, required): Human-readable label.
+- **`targetWeights`** (object, required): Sleeve → non-negative target percentage. Values need not sum to 100%; the server's `normalizeWeights` function normalises them before deployment math runs. Valid sleeve keys match `crossWorkspaceDataService.js` `SLEEVE_ROLLUP`: `stocks`, `intl_stocks`, `bonds`, `gold`, `commodities`, `crypto`, `real_estate`, `savings`.
+- **`cashCap`** (number ≥ 0, optional): Maximum spendable cash to deploy in a single rebalance run. Omit or pass `undefined` to deploy all available liquid cash.
+
+**Validation errors** (`PUT /api/settings/rebalance_plans`):
+
+| Condition | Response |
+|-----------|----------|
+| Value is not an array | `400` |
+| Array has more than 50 elements | `400` |
+| Any element missing `id` or `name` | `400` |
+| `name` empty or longer than 80 chars | `400` |
+| `targetWeights` missing or not a plain object | `400` |
+| Any weight value is negative | `400` |
+| `cashCap` present and negative | `400` |
+
+Code links: [[apps/node-backend/src/routes/settings.js]] (`assertRebalancePlansValue`), [[apps/node-backend/tests/settingsStorage.test.js]], [[apps/frontend/src/hooks/useRebalancePlans.ts]], [[apps/frontend/src/lib/api/crossWorkspace.ts]]
 
 ### `app_settings` shape (frontend)
 

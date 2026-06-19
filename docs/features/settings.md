@@ -2,8 +2,8 @@
 title: Settings Feature
 type: feature
 status: active
-date: 2026-04-23
-updated: 2026-06-18
+date: 2026-06-19
+updated: 2026-06-19
 tags: [feature, settings, configuration, preferences, frontend, backend, refactor, phase-3, phase-4, zustand, store, backup, encrypt, passphrase, phase-2, auto-link, planned-match, june-2026, instant-apply, sidebar]
 description: Application settings system with JSONB storage, preload optimization, propagation across all pages, and sidebar-navigated instant-apply DashboardSettingsDialog UI (ADR-084).
 aliases: [preferences, configuration, app settings, user settings]
@@ -93,6 +93,7 @@ SettingsPreloadContext → SettingsContext/AppSettingsContext/ThemeContext
 | `widget_visibility` | object | `{}` | Per-page widget visibility |
 | `portfolio_tax_adjustments_v1` | object | `{}` | Manual tax adjustments |
 | `backup_settings` | object | `{}` | Backup configuration |
+| `rebalance_plans` | array | `[]` | Saved custom rebalancing plans (max 50); each entry `{ id, name, targetWeights, cashCap? }` — see [[docs/adr/098-cross-workspace-features\|ADR-098]] |
 | `startupSection` | `StartupSection` | `'budgeting'` | Section the app navigates to at launch (field within the `app_settings` JSONB blob) |
 | `autoClearPlannedOnMatch` | boolean | `true` | When `true`, automatically links and executes a planned payment when an ingested transaction unambiguously matches it. When `false`, auto-link is disabled entirely (no suggestions surface either). See [[docs/features/plannedTransactions#auto-link--auto-clear-on-ingest-june-2026\|Planned Transactions: Auto-Link on Ingest]]. |
 

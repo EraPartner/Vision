@@ -1,37 +1,119 @@
 /**
- * RebalancePage (ADR-098) — cash-aware rebalancing. Picks a target allocation
- * (a preset model or the current mix as a starting point), then asks the server
+ * RebalancePage (ADR-098) — cash-aware rebalancing. Pick a built-in preset, a
+ * saved custom plan, or build a new custom target allocation, then ask the server
  * how to deploy spendable budgeting cash into underweight sleeves without selling.
+ * Custom plans are persisted via useRebalancePlans (the `rebalance_plans` setting).
  */
 import { useMemo, useState } from "react";
-import { useMutation } from "@tanstack/react-query";
+import { useMutation, useQuery } from "@tanstack/react-query";
+import { toast } from "sonner";
 import { PageHeader } from "@/components/shared/PageHeader";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import {
+  Select, SelectContent, SelectGroup, SelectItem, SelectLabel, SelectSeparator, SelectTrigger, SelectValue,
+} from "@/components/ui/select";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { Scale, Loader2, ArrowDownToLine } from "lucide-react";
+import {
+  AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription,
+  AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger,
+} from "@/components/ui/alert-dialog";
+import { Scale, Loader2, ArrowDownToLine, Plus, Trash2, Save } from "lucide-react";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { useAppSettings } from "@/contexts/AppSettingsContext";
 import { apiClient } from "@/lib/api";
+import { useRebalancePlans } from "@/hooks/useRebalancePlans";
 import type { ModelPortfolio, RebalanceResponse } from "@/lib/api/crossWorkspace";
 
 const MODELS: ModelPortfolio[] = ["sixty_forty", "all_weather", "three_fund"];
+
+// Allocation sleeves offered in the custom editor. Mirrors the rolled-up sleeve
+// vocabulary the server reports actuals in (crossWorkspaceDataService SLEEVE_ROLLUP)
+// plus the preset-only sleeves, so custom target keys line up with actual values.
+const SLEEVES = ["stocks", "intl_stocks", "bonds", "gold", "commodities", "crypto", "real_estate", "savings"];
+
+// Preset weights for seeding the editor from a preset ("load from preset"). Mirrors
+// CLASSIC_PORTFOLIOS in services/portfolio/allocationAnalytics.js — keep in sync.
+const PRESET_WEIGHTS: Record<ModelPortfolio, Record<string, number>> = {
+  sixty_forty: { stocks: 0.6, bonds: 0.4 },
+  all_weather: { stocks: 0.3, bonds: 0.55, gold: 0.075, commodities: 0.075 },
+  three_fund: { stocks: 0.48, intl_stocks: 0.12, bonds: 0.4 },
+};
+
+interface Row { sleeve: string; pct: string; }
+
+const clamp = (v: number, lo: number, hi: number) => Math.max(lo, Math.min(hi, v));
+// A cap value only counts when entered and finite; blank/invalid means "deploy all".
+const resolveCap = (raw: string, available: number): number | undefined => {
+  if (raw.trim() === "") return undefined;
+  const n = Number(raw);
+  return Number.isFinite(n) ? clamp(n, 0, available) : undefined;
+};
+const fractionToPct = (w: number) => String(+(w * 100).toFixed(2));
+
+function weightsToRows(weights: Record<string, number>): Row[] {
+  const rows = Object.entries(weights).map(([sleeve, w]) => ({ sleeve, pct: fractionToPct(w) }));
+  return rows.length ? rows : [{ sleeve: "stocks", pct: "" }];
+}
+
+function actualsToRows(actuals: Record<string, number>): Row[] {
+  const entries = Object.entries(actuals).filter(([, v]) => v > 0);
+  const total = entries.reduce((s, [, v]) => s + v, 0);
+  if (total <= 0) return [{ sleeve: "stocks", pct: "60" }, { sleeve: "bonds", pct: "40" }];
+  return entries.map(([sleeve, v]) => ({ sleeve, pct: fractionToPct(v / total) }));
+}
 
 export default function RebalancePage() {
   const { t } = useLanguage();
   const { appSettings } = useAppSettings();
   const currency = appSettings.defaultCurrency || "EUR";
-  const [model, setModel] = useState<ModelPortfolio>("sixty_forty");
+
+  const { plans, upsertPlan, deletePlan, isSaving } = useRebalancePlans();
+
+  // Source select value: `model:<preset>` | `plan:<id>` | `custom`.
+  const [source, setSource] = useState<string>("model:sixty_forty");
+  const isPreset = source.startsWith("model:");
+  const presetModel = isPreset ? (source.slice(6) as ModelPortfolio) : undefined;
+  const editingPlanId = source.startsWith("plan:") ? source.slice(5) : undefined;
+
+  const [rows, setRows] = useState<Row[]>([{ sleeve: "stocks", pct: "60" }, { sleeve: "bonds", pct: "40" }]);
+  const [planName, setPlanName] = useState("");
+  const [useCashCap, setUseCashCap] = useState(false);
+  const [cashCapInput, setCashCapInput] = useState("");
 
   const fmt = useMemo(() => new Intl.NumberFormat(undefined, {
     style: "currency", currency, maximumFractionDigits: 0,
   }), [currency]);
   const pct = (v: number) => `${(v * 100).toFixed(0)}%`;
+  // t() returns the key itself when a translation is missing; fall back to the
+  // raw sleeve key for asset classes outside the labelled set (e.g. `other`).
+  const sleeveLabel = (sleeve: string) => {
+    const key = `rebalance.sleeve.${sleeve}`;
+    const label = t(key);
+    return label === key ? sleeve : label;
+  };
+
+  // Lightweight inputs read: the rebalance endpoint returns available cash + actual
+  // sleeve values regardless of target, so a throwaway preset call gives us the
+  // figures needed to show available cash, default the cap, and seed "current mix".
+  const inputs = useQuery({
+    queryKey: ["rebalance-inputs", currency],
+    queryFn: () => apiClient.computeRebalance({ model: "sixty_forty", currency }),
+    staleTime: 60_000,
+  });
+  const availableCash = inputs.data?.availableCash ?? 0;
+  const currentActuals = inputs.data?.actualValues ?? {};
 
   const compute = useMutation({
-    mutationFn: () => apiClient.computeRebalance({ model, currency }),
+    mutationFn: () => {
+      if (isPreset && presetModel) return apiClient.computeRebalance({ model: presetModel, currency });
+      const targetWeights = rowsToWeights(rows);
+      const availableCashArg = useCashCap ? resolveCap(cashCapInput, availableCash) : undefined;
+      return apiClient.computeRebalance({ targetWeights, currency, availableCash: availableCashArg });
+    },
   });
   const result: RebalanceResponse | undefined = compute.data;
 
@@ -39,35 +121,226 @@ export default function RebalancePage() {
     ? Object.values(result.deployment).reduce((s, v) => s + v, 0)
     : 0;
 
+  const weightTotalPct = rows.reduce((s, r) => s + (Number(r.pct) || 0), 0);
+  const hasValidRows = rows.some((r) => r.sleeve && Number(r.pct) > 0);
+
+  function rowsToWeights(rs: Row[]): Record<string, number> {
+    const out: Record<string, number> = {};
+    for (const r of rs) {
+      if (!r.sleeve) continue;
+      const n = Number(r.pct);
+      if (!Number.isFinite(n) || n <= 0) continue;
+      out[r.sleeve] = (out[r.sleeve] ?? 0) + n / 100;
+    }
+    return out;
+  }
+
+  function handleSourceChange(value: string) {
+    setSource(value);
+    compute.reset();
+    if (value.startsWith("model:")) return;
+    if (value === "custom") {
+      setRows(Object.keys(currentActuals).length ? actualsToRows(currentActuals) : [{ sleeve: "stocks", pct: "60" }, { sleeve: "bonds", pct: "40" }]);
+      setPlanName("");
+      setUseCashCap(false);
+      setCashCapInput("");
+      return;
+    }
+    const plan = plans.find((p) => `plan:${p.id}` === value);
+    if (plan) {
+      setRows(weightsToRows(plan.targetWeights));
+      setPlanName(plan.name);
+      setUseCashCap(plan.cashCap != null);
+      setCashCapInput(plan.cashCap != null ? String(plan.cashCap) : "");
+    }
+  }
+
+  const updateRow = (i: number, patch: Partial<Row>) =>
+    setRows((rs) => rs.map((r, idx) => (idx === i ? { ...r, ...patch } : r)));
+  const addRow = () => {
+    const used = new Set(rows.map((r) => r.sleeve));
+    const next = SLEEVES.find((s) => !used.has(s)) ?? "";
+    setRows((rs) => [...rs, { sleeve: next, pct: "" }]);
+  };
+  const removeRow = (i: number) => setRows((rs) => rs.filter((_, idx) => idx !== i));
+
+  const seedFromCurrent = () => setRows(actualsToRows(currentActuals));
+  const seedFromPreset = (m: ModelPortfolio) => setRows(weightsToRows(PRESET_WEIGHTS[m]));
+
+  const onSave = async () => {
+    const name = planName.trim();
+    if (!name) { toast.error(t("rebalance.plan.nameRequired")); return; }
+    const targetWeights = rowsToWeights(rows);
+    if (!Object.keys(targetWeights).length) { toast.error(t("rebalance.editor.needSleeve")); return; }
+    const id = editingPlanId ?? crypto.randomUUID();
+    const cashCap = useCashCap ? resolveCap(cashCapInput, availableCash) : undefined;
+    await upsertPlan({ id, name, targetWeights, ...(cashCap != null ? { cashCap } : {}) });
+    setSource(`plan:${id}`);
+  };
+
+  const onDelete = async () => {
+    if (!editingPlanId) return;
+    await deletePlan(editingPlanId);
+    setSource("model:sixty_forty");
+    compute.reset();
+  };
+
+  const showEditor = !isPreset;
+
   return (
     <div className="space-y-6">
-      <PageHeader
-        title={t("rebalance.title")}
-        subtitle={t("rebalance.subtitle")}
-        icon={Scale}
-      />
+      <PageHeader title={t("rebalance.title")} subtitle={t("rebalance.subtitle")} icon={Scale} />
 
       <Card className="glass-regular">
         <CardContent className="flex flex-wrap items-end gap-3 p-4">
           <div className="space-y-1.5">
-            <label className="text-xs text-muted-foreground" htmlFor="rebalance-model">
+            <label className="text-xs text-muted-foreground" htmlFor="rebalance-source">
               {t("rebalance.targetModel")}
             </label>
-            <Select value={model} onValueChange={(v) => setModel(v as ModelPortfolio)}>
-              <SelectTrigger id="rebalance-model" className="w-56"><SelectValue /></SelectTrigger>
+            <Select value={source} onValueChange={handleSourceChange}>
+              <SelectTrigger id="rebalance-source" className="w-64"><SelectValue /></SelectTrigger>
               <SelectContent>
-                {MODELS.map((m) => (
-                  <SelectItem key={m} value={m}>{t(`rebalance.model.${m}`)}</SelectItem>
-                ))}
+                <SelectGroup>
+                  <SelectLabel>{t("rebalance.presets")}</SelectLabel>
+                  {MODELS.map((m) => (
+                    <SelectItem key={m} value={`model:${m}`}>{t(`rebalance.model.${m}`)}</SelectItem>
+                  ))}
+                </SelectGroup>
+                {plans.length > 0 && (
+                  <>
+                    <SelectSeparator />
+                    <SelectGroup>
+                      <SelectLabel>{t("rebalance.savedPlans")}</SelectLabel>
+                      {plans.map((p) => (
+                        <SelectItem key={p.id} value={`plan:${p.id}`}>{p.name}</SelectItem>
+                      ))}
+                    </SelectGroup>
+                  </>
+                )}
+                <SelectSeparator />
+                <SelectItem value="custom">{t("rebalance.customNew")}</SelectItem>
               </SelectContent>
             </Select>
           </div>
-          <Button onClick={() => compute.mutate()} disabled={compute.isPending} className="gap-2">
+          <Button onClick={() => compute.mutate()} disabled={compute.isPending || (showEditor && !hasValidRows)} className="gap-2">
             {compute.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Scale className="h-4 w-4" />}
             {t("rebalance.compute")}
           </Button>
         </CardContent>
       </Card>
+
+      {showEditor && (
+        <Card className="glass-regular">
+          <CardHeader className="pb-2">
+            <CardTitle className="text-base">{t("rebalance.editor.title")}</CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <div className="flex flex-wrap gap-2">
+              <Button variant="outline" size="sm" onClick={seedFromCurrent}>{t("rebalance.editor.loadCurrent")}</Button>
+              <Select onValueChange={(v) => seedFromPreset(v as ModelPortfolio)}>
+                <SelectTrigger className="h-8 w-48 text-sm"><SelectValue placeholder={t("rebalance.editor.loadPreset")} /></SelectTrigger>
+                <SelectContent>
+                  {MODELS.map((m) => (
+                    <SelectItem key={m} value={m}>{t(`rebalance.model.${m}`)}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+
+            <div className="space-y-2">
+              {rows.map((row, i) => (
+                <div key={i} className="flex items-center gap-2">
+                  <Select value={row.sleeve} onValueChange={(v) => updateRow(i, { sleeve: v })}>
+                    <SelectTrigger className="w-44"><SelectValue placeholder={t("rebalance.editor.sleevePlaceholder")} /></SelectTrigger>
+                    <SelectContent>
+                      {SLEEVES.map((s) => (
+                        <SelectItem key={s} value={s}>{t(`rebalance.sleeve.${s}`)}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  <div className="relative w-28">
+                    <Input
+                      type="number" min={0} max={100} step="any" inputMode="decimal"
+                      value={row.pct}
+                      onChange={(e) => updateRow(i, { pct: e.target.value })}
+                      className="pr-6 text-right tabular-nums"
+                      aria-label={t("rebalance.target")}
+                    />
+                    <span className="absolute right-2 top-1/2 -translate-y-1/2 text-xs text-muted-foreground">%</span>
+                  </div>
+                  <Button variant="ghost" size="icon" onClick={() => removeRow(i)} aria-label={t("rebalance.editor.removeSleeve")}>
+                    <Trash2 className="h-4 w-4" />
+                  </Button>
+                </div>
+              ))}
+              <div className="flex items-center justify-between pt-1">
+                <Button variant="outline" size="sm" className="gap-1" onClick={addRow} disabled={rows.length >= SLEEVES.length}>
+                  <Plus className="h-4 w-4" />{t("rebalance.editor.addSleeve")}
+                </Button>
+                <span className={`text-sm tabular-nums ${Math.round(weightTotalPct) === 100 ? "text-muted-foreground" : "text-amber-600 dark:text-amber-500"}`}>
+                  {t("rebalance.editor.total")}: {weightTotalPct.toFixed(0)}%
+                </span>
+              </div>
+              {Math.round(weightTotalPct) !== 100 && weightTotalPct > 0 && (
+                <p className="text-xs text-muted-foreground">{t("rebalance.editor.normalizeNote")}</p>
+              )}
+            </div>
+
+            <div className="space-y-2 border-t pt-4">
+              <label className="flex items-center gap-2 text-sm">
+                <input type="checkbox" checked={useCashCap} onChange={(e) => setUseCashCap(e.target.checked)} className="h-4 w-4" />
+                {t("rebalance.editor.capCash")}
+              </label>
+              {useCashCap && (
+                <div className="space-y-1">
+                  <Input
+                    type="number" min={0} max={availableCash} step="any" inputMode="decimal"
+                    value={cashCapInput}
+                    onChange={(e) => setCashCapInput(e.target.value)}
+                    placeholder={String(Math.round(availableCash))}
+                    className="w-40 text-right tabular-nums"
+                    aria-label={t("rebalance.editor.capCash")}
+                  />
+                  <p className="text-xs text-muted-foreground">{t("rebalance.editor.capHint", { amount: fmt.format(availableCash) })}</p>
+                </div>
+              )}
+            </div>
+
+            <div className="flex flex-wrap items-end gap-2 border-t pt-4">
+              <div className="space-y-1.5">
+                <Label htmlFor="plan-name" className="text-xs text-muted-foreground">{t("rebalance.plan.name")}</Label>
+                <Input
+                  id="plan-name" value={planName} onChange={(e) => setPlanName(e.target.value)}
+                  placeholder={t("rebalance.plan.namePlaceholder")} className="w-56" maxLength={80}
+                />
+              </div>
+              <Button onClick={onSave} disabled={isSaving || !hasValidRows} className="gap-2">
+                {isSaving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
+                {editingPlanId ? t("rebalance.plan.update") : t("rebalance.plan.save")}
+              </Button>
+              {editingPlanId && (
+                <AlertDialog>
+                  <AlertDialogTrigger asChild>
+                    <Button variant="outline" className="gap-2 text-destructive">
+                      <Trash2 className="h-4 w-4" />{t("rebalance.plan.delete")}
+                    </Button>
+                  </AlertDialogTrigger>
+                  <AlertDialogContent>
+                    <AlertDialogHeader>
+                      <AlertDialogTitle>{t("rebalance.plan.deleteTitle")}</AlertDialogTitle>
+                      <AlertDialogDescription>{t("rebalance.plan.deleteConfirm", { name: planName })}</AlertDialogDescription>
+                    </AlertDialogHeader>
+                    <AlertDialogFooter>
+                      <AlertDialogCancel>{t("common.cancel")}</AlertDialogCancel>
+                      <AlertDialogAction onClick={onDelete}>{t("rebalance.plan.delete")}</AlertDialogAction>
+                    </AlertDialogFooter>
+                  </AlertDialogContent>
+                </AlertDialog>
+              )}
+            </div>
+          </CardContent>
+        </Card>
+      )}
 
       {compute.isError && (
         <p className="text-sm text-destructive">{(compute.error as Error)?.message}</p>
@@ -89,7 +362,7 @@ export default function RebalancePage() {
           </div>
 
           <Card>
-            <CardHeader><CardTitle className="flex items-center gap-2 text-base"><ArrowDownToLine className="h-4 w-4" />{t("rebalance.plan")}</CardTitle></CardHeader>
+            <CardHeader><CardTitle className="flex items-center gap-2 text-base"><ArrowDownToLine className="h-4 w-4" />{t("rebalance.deploymentPlan")}</CardTitle></CardHeader>
             <CardContent>
               <Table>
                 <TableHeader>
@@ -108,7 +381,7 @@ export default function RebalancePage() {
                     const deploy = result.deployment[sleeve] ?? 0;
                     return (
                       <TableRow key={sleeve}>
-                        <TableCell className="font-medium">{sleeve}</TableCell>
+                        <TableCell className="font-medium">{sleeveLabel(sleeve)}</TableCell>
                         <TableCell className="text-right tabular-nums">{fmt.format(result.actualValues[sleeve] ?? 0)}</TableCell>
                         <TableCell className="text-right tabular-nums">{pct(result.targetWeights[sleeve] ?? 0)}</TableCell>
                         <TableCell className="text-right tabular-nums">

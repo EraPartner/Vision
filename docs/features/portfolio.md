@@ -2,10 +2,10 @@
 title: Feature - Portfolio & Investments
 type: feature
 status: active
-date: 2026-06-18
-last_modified: 2026-06-18
-updated: 2026-06-18
-tags: [feature, portfolio, investments, stocks, crypto, metals, phase-1, phase-3.5, phase-3.6, phase-9, phase-8, phase-14, pdf-export, offline-resilience, stale-prices, online-status-detection, graceful-degradation, portfolio-summary, realtime-totals, decimal-precision, monetary-math, snapshot-valuation-parity, fixed-income-accrual, real-estate-appreciation, net-worth-reconciliation, historical-fx, snapshot-fx, loading-states, error-states, page-error, skeleton, portfolio-unit-math, shared-utils, splits-event, return-of-capital, banker-rounding, fx-attribution, asset-gain, fx-gain, purchase-date-rates, value-fx-neutral, adr-074, adr-091, adr-100, per-account, move-holding, close-account, brokerage-fanout]
+date: 2026-06-19
+last_modified: 2026-06-19
+updated: 2026-06-19
+tags: [feature, portfolio, investments, stocks, crypto, metals, phase-1, phase-3.5, phase-3.6, phase-9, phase-8, phase-14, pdf-export, offline-resilience, stale-prices, online-status-detection, graceful-degradation, portfolio-summary, realtime-totals, decimal-precision, monetary-math, snapshot-valuation-parity, fixed-income-accrual, real-estate-appreciation, net-worth-reconciliation, historical-fx, snapshot-fx, loading-states, error-states, page-error, skeleton, portfolio-unit-math, shared-utils, splits-event, return-of-capital, banker-rounding, fx-attribution, asset-gain, fx-gain, purchase-date-rates, value-fx-neutral, adr-074, adr-091, adr-100, per-account, move-holding, close-account, brokerage-fanout, rebalancing, saved-plans, cash-aware, cross-workspace, adr-098]
 aliases: [portfolio-feature, investments-feature, holdings, net-worth, stocks, crypto, real-estate, savings, bonds, metals, performance, watchlist]
 description: Track stocks, ETFs, crypto, metals, real estate, savings, and bonds; includes Phase 8 PDF report export with 6 portfolio sections. 2026-05-29 adds historical FX in snapshots and loading/error states on all asset pages. June 2026 adds snapshotBuilder split/return_of_capital events, APP_TIMEZONE day-boundary fix, shared portfolioUnitMath.ts, and FX attribution UI (ADR-074): asset gain / FX effect decomposition on overview, performance, asset pages, and investment detail.
 related_code: ["apps/node-backend/src/routes/investments.js", "apps/node-backend/src/services/priceProviderService.js", "apps/node-backend/src/services/portfolioPerformanceSnapshotService.js", "apps/node-backend/src/services/portfolio/portfolioSummaryService.js", "apps/node-backend/src/routes/info/portfolioSummary.js", "apps/frontend/src/pages/portfolio/PerformancePage.tsx", "apps/frontend/src/pages/portfolio/MetalsPage.tsx", "apps/frontend/src/pages/portfolio/PortfolioOverviewPage.tsx", "apps/frontend/src/hooks/portfolio/usePortfolioSummary.ts", "apps/frontend/src/hooks/usePortfolio.ts", "apps/frontend/src/lib/api.ts"]
@@ -720,6 +720,72 @@ Before ADR-074, `totalInvested` was restated at today's FX on every request. Aft
 - The live portfolio totals and the snapshot series now agree on semantics (both use purchase-date rates for invested capital), closing the contradiction that existed before.
 
 Code links: [[apps/node-backend/src/services/portfolio/portfolioSummaryService.js]], [[apps/node-backend/src/routes/info/_performanceHelpers.js]], [[apps/node-backend/src/controllers/investmentController.js]], [[packages/shared-utils/src/portfolio.js]], [[docs/adr/074-fx-attribution-historical-rates|ADR-074]]
+
+## Cash-Aware Rebalancing (ADR-098, updated 2026-06-19)
+
+The Rebalance page (`/portfolio/rebalance`, nav: Portfolio → Analysis → Rebalance) runs a
+cash-deploy-only rebalancing calculation: given target sleeve weights and the user's available
+spendable cash, it computes how much to put into each underweight sleeve without proposing any
+sells. It calls `POST /api/cross-workspace/rebalance` (see [[docs/adr/098-cross-workspace-features|ADR-098]]).
+
+### Allocation source
+
+The page offers three mutually exclusive source modes:
+
+| Mode | Description |
+|------|-------------|
+| **Presets** | Three built-in plans: `sixty_forty`, `all_weather`, `three_fund` |
+| **Saved plans** | User-named custom allocations persisted across sessions (see below) |
+| **Custom (new)** | Editable per-sleeve target-% rows; unsaved until explicitly named and saved |
+
+### Sleeve vocabulary
+
+Sleeve names match the `SLEEVE_ROLLUP` grouping in `crossWorkspaceDataService.js`:
+
+`stocks` · `intl_stocks` · `bonds` · `gold` · `commodities` · `crypto` · `real_estate` · `savings`
+
+### Optional cash cap
+
+A numeric input limits how much spendable cash to deploy in a run. Blank = deploy all available
+liquid cash. The UI clamps user input to `[0, availableCash]` before sending it as the existing
+`availableCash` parameter on the route.
+
+### Weight normalization
+
+Target weights do not need to sum to 100%. The server's `normalizeWeights` function scales them
+proportionally before running deployment math, so a user can enter rough ratios and get correct
+allocation splits.
+
+### Saved named plans
+
+Custom allocations can be named, saved, updated, and deleted. They persist as a JSON array under
+the `rebalance_plans` key in the settings store — no DB migration required.
+
+**Plan shape:**
+
+```typescript
+interface RebalancePlan {
+  id: string;
+  name: string;              // 1–80 chars
+  targetWeights: Record<string, number>;  // sleeve → non-negative %
+  cashCap?: number;          // optional cap ≥ 0
+}
+```
+
+- Max 50 saved plans per user. Enforced server-side with a 400 response on excess.
+- Backend validation is in `assertRebalancePlansValue` inside `apps/node-backend/src/routes/settings.js`.
+- The `rebalance_plans` key returns `[]` by default (same pattern as `backup_settings`).
+
+### i18n keys (2026-06-19)
+
+New keys in `rebalance.*` namespace (en + nl). Notable renames: `rebalance.plan` →
+`rebalance.deploymentPlan` (the deployment-result card). New: `rebalance.plan.*` (saved-plan
+management UI), `rebalance.editor.*` (custom editor rows), `rebalance.sleeve.*` (sleeve labels),
+`rebalance.customNew`, `rebalance.presets`, `rebalance.savedPlans`.
+
+Code links: [[apps/frontend/src/pages/portfolio/RebalancePage.tsx]], [[apps/frontend/src/hooks/useRebalancePlans.ts]], [[apps/frontend/src/lib/api/crossWorkspace.ts]], [[apps/node-backend/src/routes/settings.js]], [[apps/node-backend/src/routes/crossWorkspace.js]], [[apps/node-backend/tests/settingsStorage.test.js]]
+
+See also: [[docs/api/settings|Settings API — `rebalance_plans` key]], [[docs/adr/098-cross-workspace-features|ADR-098]]
 
 ## Related
 

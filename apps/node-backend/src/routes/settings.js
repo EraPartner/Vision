@@ -83,6 +83,51 @@ function assertDashboardSettingsValue(value, { validateExcludeHiddenCategories =
   }
 }
 
+// Saved cash-aware rebalancing plans (ADR-098): a list of user-defined target
+// allocations the rebalance page deploys spendable cash toward. Stored here (not
+// a dedicated table) since they are small, per-install config — same key-value
+// store as the other settings.
+const MAX_REBALANCE_PLANS = 50;
+function assertRebalancePlansValue(value) {
+  if (!Array.isArray(value)) {
+    throw new ValidationError('rebalance_plans must be an array');
+  }
+  if (value.length > MAX_REBALANCE_PLANS) {
+    throw new ValidationError(`rebalance_plans may contain at most ${MAX_REBALANCE_PLANS} plans`);
+  }
+  for (const plan of value) {
+    if (typeof plan !== 'object' || plan === null || Array.isArray(plan)) {
+      throw new ValidationError('each rebalance plan must be an object');
+    }
+    if (typeof plan.id !== 'string' || plan.id.length === 0 || plan.id.length > 100) {
+      throw new ValidationError('rebalance plan id must be a non-empty string (max 100 chars)');
+    }
+    if (typeof plan.name !== 'string' || plan.name.trim().length === 0 || plan.name.length > 80) {
+      throw new ValidationError('rebalance plan name must be a string of 1-80 chars');
+    }
+    const weights = plan.targetWeights;
+    if (typeof weights !== 'object' || weights === null || Array.isArray(weights)) {
+      throw new ValidationError('rebalance plan targetWeights must be an object');
+    }
+    const keys = Object.keys(weights);
+    if (keys.length === 0) {
+      throw new ValidationError('rebalance plan targetWeights must have at least one sleeve');
+    }
+    for (const [sleeve, weight] of Object.entries(weights)) {
+      const n = Number(weight);
+      if (!Number.isFinite(n) || n < 0) {
+        throw new ValidationError(`rebalance plan targetWeights.${sleeve} must be a non-negative number`);
+      }
+    }
+    if (plan.cashCap !== undefined) {
+      const cap = Number(plan.cashCap);
+      if (!Number.isFinite(cap) || cap < 0) {
+        throw new ValidationError('rebalance plan cashCap must be a non-negative number');
+      }
+    }
+  }
+}
+
 router.get('/', async (req, res) => {
   const settings = await settingsRepository.getAll();
   res.ok(settings);
@@ -117,6 +162,7 @@ const SETTING_DEFAULTS = {
   },
   widget_visibility: {},
   cost_basis_method: 'weighted_avg',
+  rebalance_plans: [],
 };
 
 router.get('/:key', async (req, res) => {
@@ -150,6 +196,7 @@ function validateSettingValue(key, value) {
   if (key === 'includeTransfers' && typeof value !== 'boolean') {
     throw new ValidationError('includeTransfers must be a boolean');
   }
+  if (key === 'rebalance_plans') assertRebalancePlansValue(value);
 }
 
 router.put('/:key', async (req, res) => {

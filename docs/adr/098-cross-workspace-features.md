@@ -1,8 +1,8 @@
 ---
 title: ADR-098 Cross-Workspace Features — NW Projection, Cash-Aware Rebalancing, Unified Tax
 type: adr
-date: 2026-06-18
-tags: [adr, net-worth, projection, rebalancing, tax, marital-quotient, cross-workspace, adr-081, adr-085, adr-089]
+date: 2026-06-19
+tags: [adr, net-worth, projection, rebalancing, tax, marital-quotient, cross-workspace, adr-081, adr-085, adr-089, saved-plans, rebalance-plans]
 description: Three features that compose all three workspaces — a net-worth/FI projection cone (cash-flow forecast + holdings + research forecast), cash-aware rebalancing (research targets + actual weights + available budgeting cash), and a unified tax view (earned income + realized gains + dividend income, owner-allocated for the marital quotient).
 aliases: [net worth projection, FI projection, cash-aware rebalancing, unified tax view]
 ---
@@ -79,6 +79,64 @@ Two of the three surfaces are now reachable in the app; the third stays a tested
 
 Tested by `crossWorkspaceAnalytics.test.js` (cores) + `crossWorkspaceDataService.test.js` (assembly,
 mocked DB/FX). Endpoints registered in `openapi.yaml` + the endpoint matrix (count 209 → 211).
+
+## Implementation note (2026-06-19) — Custom saved plans + cash cap for rebalancing
+
+Extends the 2026-06-19 rebalancing implementation above. No new API operations were added; all changes
+use existing infrastructure.
+
+### What changed
+
+**Custom target allocations (UI-exposed `targetWeights`)**
+
+`RebalancePage.tsx` now renders a three-mode source picker:
+- **Presets** — the three original hard-coded plans (`sixty_forty`, `all_weather`, `three_fund`)
+- **Saved plans** — user-named custom allocations loaded from the `rebalance_plans` settings key
+- **Custom (new)** — an editable per-sleeve target-% table; weights need not sum to 100% because
+  the existing `normalizeWeights` function on the server normalises them before deployment math runs
+
+The custom allocation is sent as the existing `targetWeights` field on `POST /api/cross-workspace/rebalance`
+— the route accepted it from day one but the UI never surfaced it.
+
+Sleeve vocabulary matches `crossWorkspaceDataService.js` `SLEEVE_ROLLUP`:
+`stocks`, `intl_stocks`, `bonds`, `gold`, `commodities`, `crypto`, `real_estate`, `savings`.
+
+**Optional cash cap (UI-exposed `availableCash` override)**
+
+A numeric input lets the user cap how much spendable cash to deploy (blank = deploy all). The value
+is clamped to `[0, availableCash]` client-side before being sent as the existing `availableCash`
+override parameter on the route.
+
+**Saved named plans (`rebalance_plans` settings key)**
+
+Custom allocations can be named, saved, updated, and deleted. They persist across sessions without
+a DB migration: the backend stores them as a JSON array under the new key `rebalance_plans` in the
+existing key-value settings store (`GET/PUT /api/settings/:key`) — the same mechanism `backup_settings`
+uses.
+
+Backend validation (`apps/node-backend/src/routes/settings.js`):
+- Key default: `[]`
+- Max 50 plans per array
+- Each plan: `{ id: string, name: string (1–80 chars), targetWeights: Record<string, number≥0>, cashCap?: number≥0 }`
+- Enforced by a new `assertRebalancePlansValue` helper and a `validateSettingValue` branch
+
+Frontend hook: `apps/frontend/src/hooks/useRebalancePlans.ts` — React Query wrapper over
+`getSetting` / `saveSetting('rebalance_plans')`.
+
+Frontend type: `RebalancePlan` interface in `apps/frontend/src/lib/api/crossWorkspace.ts`.
+
+**i18n** — new keys under `rebalance.*` namespace (en + nl validated). Renamed
+`rebalance.plan` → `rebalance.deploymentPlan`; added `rebalance.plan.*` (saved-plan management),
+`rebalance.editor.*` (custom editor), `rebalance.sleeve.*` (sleeve labels),
+`rebalance.customNew`, `rebalance.presets`, `rebalance.savedPlans`.
+
+**Tests** — `apps/node-backend/tests/settingsStorage.test.js` has new cases covering
+`rebalance_plans` validation and the `[]` default.
+
+### Endpoint matrix
+
+No rows changed. `POST /api/cross-workspace/rebalance` and `GET/PUT /api/settings/:key` already existed;
+the only change is that `rebalance_plans` is now a recognized settings key with server-side validation.
 
 ## Related
 - [[docs/adr/index|All ADRs]]

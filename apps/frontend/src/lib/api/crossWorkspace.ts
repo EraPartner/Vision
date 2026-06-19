@@ -7,6 +7,18 @@ import { requestWithQuery } from '@/lib/api/helpers';
 
 export type ModelPortfolio = 'sixty_forty' | 'all_weather' | 'three_fund';
 
+/**
+ * A user-defined custom rebalancing target, persisted under the `rebalance_plans`
+ * setting. `targetWeights` are keyed by allocation sleeve (need not sum to 1 — the
+ * server normalizes); `cashCap`, when set, limits how much spendable cash to deploy.
+ */
+export interface RebalancePlan {
+    id: string;
+    name: string;
+    targetWeights: Record<string, number>;
+    cashCap?: number;
+}
+
 export interface RebalanceRequest {
     /** Display/computation currency. Defaults to EUR server-side. */
     currency?: string;
