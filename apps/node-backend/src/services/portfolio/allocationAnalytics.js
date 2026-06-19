@@ -31,7 +31,7 @@ export function backtestReturn(priceAtAdd, currentPrice) {
  */
 export function allocationDrift(actual, target) {
   const keys = new Set([...Object.keys(actual ?? {}), ...Object.keys(target ?? {})]);
-  const out = {};
+  const out = /** @type {Record<string, number>} */ ({});
   for (const k of keys) out[k] = (Number(actual?.[k]) || 0) - (Number(target?.[k]) || 0);
   return out;
 }

@@ -84,7 +84,7 @@ export async function commitPortfolioImport({ batchId, onProgress }) {
 }
 
 /**
- * @param {{ filePath: string, adapterName: string, customConfig: object, defaultAssetClass?: string, defaultType?: string, filename?: string, sizeBytes?: number, onProgress?: Function }} args
+ * @param {{ filePath: string, adapterName: string, customConfig: object, defaultAssetClass?: string, defaultType?: string, filename?: string, sizeBytes?: number, isBrokerage?: boolean, accountId?: number, onProgress?: Function }} args
  */
 export async function runPortfolioImportPipeline({ filePath, adapterName, customConfig, defaultAssetClass, defaultType, filename, sizeBytes, isBrokerage, accountId, onProgress }) {
   const batchId = await createBatch({ adapterName, filename, sizeBytes, customConfig, defaultAssetClass, defaultType, isBrokerage, accountId });

@@ -1493,8 +1493,17 @@ paths:
           description: Account not found
         "409":
           description: Account still has transactions; archive it instead
+
+  /api/accounts/{id}/merge:
+    parameters:
+      - in: path
+        name: id
+        required: true
+        schema:
+          type: integer
+        description: Survivor account id (sources merge into this one)
     post:
-      summary: Merge source accounts into this account
+      summary: Merge source accounts into this (survivor) account
       description: Repoints all references (transactions, planned, portfolio lots, funding_account_id) from each source account to this (survivor) account, then deletes the sources (ADR-088).
       operationId: mergeAccounts
       tags: [Accounts]
@@ -2134,6 +2143,31 @@ paths:
                     properties:
                       data:
                         $ref: "#/components/schemas/NetWorthResponse"
+
+  /api/info/net-worth/by-account:
+    get:
+      summary: Net worth split by account (Σ-accounts, ADR-100)
+      description: Per-account current cash + holdings plus the rebuilt daily holdings history; the Σ over accounts equals the aggregate net worth by construction.
+      operationId: getNetWorthByAccount
+      tags: [Info]
+      parameters:
+        - in: query
+          name: currency
+          schema:
+            type: string
+          description: Target currency for conversion (alias: target_currency; default EUR)
+      responses:
+        "200":
+          description: Per-account net-worth breakdown with holdings history
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/Envelope"
+                  - type: object
+                    properties:
+                      data:
+                        type: object
 
   /api/saved-charts:
     get:
@@ -5680,6 +5714,169 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/Envelope"
+
+  /api/admin/database/tables/{table}/schema:
+    parameters:
+      - in: path
+        name: table
+        required: true
+        schema:
+          type: string
+        description: Table name (validated against the live catalog)
+    get:
+      summary: Get a table's column metadata (Data Editor, ADR-101)
+      operationId: adminGetTableSchema
+      tags: [Admin]
+      responses:
+        "200":
+          description: Column metadata and primary key
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/Envelope"
+                  - type: object
+                    properties:
+                      data:
+                        type: object
+                        properties:
+                          table:
+                            type: string
+                          primaryKey:
+                            type: array
+                            items:
+                              type: string
+                          columns:
+                            type: array
+                            items:
+                              type: object
+                              properties:
+                                name: { type: string }
+                                dataType: { type: string }
+                                udtName: { type: string }
+                                nullable: { type: boolean }
+                                hasDefault: { type: boolean }
+                                generated: { type: boolean }
+                                writable: { type: boolean }
+        "404":
+          description: Unknown table
+
+  /api/admin/database/tables/{table}/rows:
+    parameters:
+      - in: path
+        name: table
+        required: true
+        schema:
+          type: string
+    get:
+      summary: Read paginated rows from a table (Data Editor, ADR-101)
+      operationId: adminGetTableRows
+      tags: [Admin]
+      parameters:
+        - in: query
+          name: limit
+          schema: { type: integer }
+        - in: query
+          name: offset
+          schema: { type: integer }
+        - in: query
+          name: orderBy
+          schema: { type: string }
+        - in: query
+          name: dir
+          schema:
+            type: string
+            enum: [asc, desc]
+        - in: query
+          name: where
+          schema: { type: string }
+          description: Raw SQL WHERE fragment (validated and parameterised server-side)
+        - in: query
+          name: filters
+          schema: { type: string }
+          description: JSON-encoded array of structured column filters
+      responses:
+        "200":
+          description: Page of rows with column metadata and total count
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/Envelope"
+                  - type: object
+                    properties:
+                      data:
+                        type: object
+                        properties:
+                          table: { type: string }
+                          columns: { type: array, items: { type: object } }
+                          primaryKey: { type: array, items: { type: string } }
+                          rows: { type: array, items: { type: object } }
+                          total: { type: integer }
+                          limit: { type: integer }
+                          offset: { type: integer }
+        "400":
+          description: Invalid filters or query parameter
+        "404":
+          description: Unknown table
+
+  /api/admin/database/tables/{table}/mutate:
+    parameters:
+      - in: path
+        name: table
+        required: true
+        schema:
+          type: string
+    post:
+      summary: Apply row mutations to a table (Data Editor, ADR-101)
+      description: Rate-limited (adminMutateLimiter). Identifiers are validated against the live catalog and double-quoted; values are parameterised. Updates/deletes are optimistic-locked on xmin. Pass dryRun to preview statements without applying.
+      operationId: adminMutateTableRows
+      tags: [Admin]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [changes]
+              properties:
+                dryRun:
+                  type: boolean
+                  description: Preview the SQL statements without applying them
+                changes:
+                  type: array
+                  items:
+                    type: object
+                    required: [op]
+                    properties:
+                      op:
+                        type: string
+                        enum: [insert, update, delete]
+                      pk:
+                        type: object
+                        description: Primary-key column values (required for update/delete)
+                      values:
+                        type: object
+                        description: Column values for an insert
+                      set:
+                        type: object
+                        description: Column values to write for an update
+                      xmin:
+                        type: string
+                        description: Optimistic-concurrency token captured at read time
+      responses:
+        "200":
+          description: Mutation result (dry-run preview or applied results)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Envelope"
+        "400":
+          description: Malformed change set
+        "404":
+          description: Unknown table
+        "409":
+          description: Row changed or was deleted since it was loaded
 
   /api/admin/update/check:
     get:

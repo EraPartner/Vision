@@ -67,7 +67,7 @@ export function rebalanceDeployment({ actualValues, targetWeights, availableCash
   // Deploy all the cash, split across underweight sleeves in proportion to
   // shortfall (capped at total shortfall when cash exceeds it).
   const deployable = cash.gt(shortfallSum) ? shortfallSum : cash;
-  const out = {};
+  const out = /** @type {Record<string, number>} */ ({});
   for (const [sleeve, short] of Object.entries(shortfalls)) {
     out[sleeve] = toNumber(roundToCents(deployable.times(short).dividedBy(shortfallSum)));
   }
@@ -103,11 +103,11 @@ export function unifiedTax(items) {
   let total = toDecimal(0);
   let me = toDecimal(0);
   let partner = toDecimal(0);
-  const byKind = {};
+  const byKind = /** @type {Record<string, number>} */ ({});
   for (const it of items ?? []) {
     const amt = toDecimal(it.amount ?? 0);
     total = total.plus(amt);
-    const split = allocateByOwner(it.amount ?? 0, it.owner ?? 'me');
+    const split = allocateByOwner(it.amount ?? 0, /** @type {'me'|'partner'|'joint'} */ (it.owner ?? 'me'));
     me = me.plus(toDecimal(split.me));
     partner = partner.plus(toDecimal(split.partner));
     const kind = it.kind ?? 'other';

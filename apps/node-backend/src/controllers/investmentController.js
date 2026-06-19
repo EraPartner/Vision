@@ -455,7 +455,7 @@ export async function moveHolding(req, res) {
     fromAccountId: from_account_id != null ? Number(from_account_id) : NaN,
     toAccountId: to_account_id != null ? Number(to_account_id) : NaN,
     units: units != null ? Number(units) : null,
-    strategy: typeof strategy === 'string' ? strategy : undefined,
+    strategy: strategy === 'fifo' || strategy === 'proportional' ? strategy : undefined,
   });
   clearInvestmentsCaches();
   res.ok(result);

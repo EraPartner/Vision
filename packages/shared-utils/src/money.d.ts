@@ -10,5 +10,10 @@ export function multiply(a: DecimalInput, b: DecimalInput): Decimal;
 export function divide(a: DecimalInput, b: DecimalInput): Decimal;
 export function roundMoney(v: DecimalInput, places?: number): number;
 export function toNumber(v: DecimalInput): number;
+export function numericColumn(v: DecimalInput): number | null | undefined;
+export function coerceNumericFields<T extends Record<string, any>>(
+  row: T | null | undefined,
+  fields: readonly string[],
+): T;
 
 export { Decimal };

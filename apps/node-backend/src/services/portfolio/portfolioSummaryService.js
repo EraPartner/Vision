@@ -46,7 +46,7 @@ async function resolveCostBasisMethod() {
  * summaries plus aggregated totals — all pre-converted to targetCurrency.
  *
  * @param {string} targetCurrency
- * @returns {Promise<{ currency: string, computed_at: string, totals: object, summaries: object[] }>}
+ * @returns {Promise<{ currency: string, computed_at: string, totals: object, summaries: object[], byAccount: object[] }>}
  */
 export async function getPortfolioSummary(targetCurrency = 'EUR') {
   const target = (targetCurrency || 'EUR').toUpperCase();

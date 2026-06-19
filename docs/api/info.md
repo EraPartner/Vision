@@ -3,7 +3,7 @@ title: Info & Analytics API
 type: endpoint
 status: active
 date: 2026-04-25
-updated: 2026-06-13
+updated: 2026-06-19
 tags: [api, analytics, statistics, dashboard, phase-g-deprecation, ing, bnp, supported-adapters]
 description: API endpoints for statistics, analytics, and dashboard data. Phase G removed 6 overlapping endpoints; see aggregations API for their replacements. May 2026: Added ING and BNP Paribas Fortis adapters (8 total banks supported).
 aliases: [info-api, analytics-api, statistics-api, dashboard-api]
@@ -371,6 +371,40 @@ Notes:
       "liquid": 24000.0,
       "investments": 120000.0,
       "netWorth": 144000.0
+    }
+  ]
+}
+```
+
+---
+
+### GET /api/info/net-worth/by-account
+
+Net worth split per account (Σ-accounts, ADR-100): each account's current cash + holdings and its rebuilt daily holdings history. The Σ over accounts equals the aggregate net worth by construction. Only accounts with `in_net_worth = true` contribute the cash side (ADR-089); legacy holdings with no account collapse into a single unassigned row (`accountId: null`, holdings only).
+
+**Query parameters:** `currency` (alias `target_currency`, default `EUR`) — all amounts are converted to this currency.
+
+**Notes:**
+
+- Route uses a modest per-route rate limiter (`30 requests / 60s` per key prefix) shared with the net-worth cache.
+- Per-account current cash is converted from each account's native currency at the latest rate; holdings come from the daily value-by-account split rebuilt by the holdings-history builder.
+
+**Response:** `200 OK`
+
+```json
+{
+  "currency": "EUR",
+  "accounts": [
+    {
+      "accountId": 1,
+      "name": "Brokerage",
+      "currency": "USD",
+      "cash": 1500.0,
+      "currentHoldings": 84000.0,
+      "currentTotal": 85500.0,
+      "holdingsSeries": [
+        { "date": "2026-06-18", "holdings": 84000.0 }
+      ]
     }
   ]
 }
