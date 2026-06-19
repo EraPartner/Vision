@@ -98,7 +98,7 @@ function mockSnapshotQueries({
     if (sql.includes('FROM investments i') && sql.includes('asset_class IN')) {
       return { rows: investments };
     }
-    if (sql.includes('FROM investments') && sql.includes('asset_class = ANY')) {
+    if (sql.includes('FROM investments') && sql.includes('asset_class::text = ANY')) {
       return { rows: nonUnitInvestments };
     }
     if (sql.includes('FROM portfolio_transactions pt') && sql.includes('ORDER BY pt.date::date, pt.id')) {
