@@ -16,13 +16,23 @@ Format: Obsidian Tasks plugin emoji. Priority 🔺 highest / ⏫ high / 🔼 med
 > dual-write-soak verification that can't be performed from a coding session. Left for a manual,
 > supervised run.
 
-- [ ] ⏫ **Contract phase — drop the `bank_account` string.** Currently dual-written (string +
+- [~] ⏫ **Contract phase — drop the `bank_account` string.** Currently dual-written (string +
       `account_id` via the migration-0051 trigger). Removing the string is **out-of-band, manual,
       and irreversible** — do it only after a dual-write soak confirms
       `count(*) WHERE bank_account IS NOT NULL AND account_id IS NULL = 0`, the coupled read/write
       code is off the string, **and `mv_bank_balances` is redefined on `account_id`** (it still
       groups by `bank_account` today). Migration `0055` is intentionally a no-op; `0056` is the
       recovery. Not a chain migration (the app auto-runs `upgrade head`).
+
+      ⚙️ **2026-06-19 — gated drop AUTHORED (not applied), per user decision (author-only):**
+      `alembic/manual/contract_drop_bank_account/` — `up.sql` (soak guard that aborts the txn unless
+      the invariant holds → mv_bank_balances redefined on account_id → drop trigger/function → drop
+      columns + indexes), `down.sql` (lossless rollback: re-derives the string from `accounts.name`,
+      restores the trigger + MV), and `README.md` (runbook + a **precise code-decouple checklist**
+      categorizing the ~31 coupled files: reads to derive from `account_id`, writes to set
+      `account_id`, the MV switch, and the separate `recipient_bank_accounts` concept that STAYS).
+      Nothing executed. **Remaining (the actual work, a dedicated verified pass):** perform the code
+      decouple per the checklist, then the user runs `up.sql` after the production soak.
 
 - [x] 🔼 **Full ADR-095 fan-out.** ✅ 2026-06-19 — verified the "remaining surface" is in fact built
       (this note was stale, logged before migrations 0057/0060 landed):
@@ -60,6 +70,18 @@ Format: Obsidian Tasks plugin emoji. Priority 🔺 highest / ⏫ high / 🔼 med
         `unifiedTax` core) is unwired. No single cross-workspace tax surface exists.
       **Real follow-up (a build, not a validation):** promote ADR-098 from Proposed and wire the two
       cores to routes + pages + sidebar placement. Needs user sign-off (was out of the approved scope).
+
+      ✅ **2026-06-19 — built (both surfaces now first-class):** ADR-098 promoted to Accepted (partial).
+      - **Cash-aware rebalancing** → `POST /api/cross-workspace/rebalance` + `/portfolio/rebalance`
+        page, nav under Portfolio → Analysis (1-click). Composes portfolio sleeve values + spendable
+        cash; runs the pure `rebalanceDeployment`.
+      - **Unified tax view** → `GET /api/cross-workspace/unified-tax` + `/tax/unified` page, nav under
+        Budgeting → Analysis (1-click). Owner-allocated earned income + dividends + realized gains
+        (realized gains indicative — current avg cost basis). Client supplies the tax-profile gross.
+      New backend `crossWorkspaceDataService.js` + `routes/crossWorkspace.js` (registered);
+      `crossWorkspaceDataService.test.js` added; openapi + endpoint matrix 209 → 211 (in sync);
+      frontend typecheck + lint + locale validation green. **Still a pure, unwired core:** the
+      ADR-098 net-worth/FI **projection cone** (`projectNetWorth`) — separate follow-up.
 
 - [x] 🔽 **Accounts hub → account transactions.** ✅ 2026-06-19 — double-clicking an account card on
       the accounts hub navigates to `/transactions?bank_account=<account.name>&filter_label=<display>`
