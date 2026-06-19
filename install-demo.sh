@@ -22,16 +22,23 @@ if ! docker info >/dev/null 2>&1; then
 fi
 command -v bun >/dev/null 2>&1 || { echo "ERROR: bun not found (brew install bun)."; exit 1; }
 
-# ── 1) Demo DB image (postgres + synthetic data baked in) ────────────────────
+# ── 1) Regenerate the synthetic dataset, then bake it into the demo DB image ──
+# Keeps the demo data in sync with the current schema/features. Skip with
+# SKIP_DEMO_DATA_REGEN=1 to just re-bake the existing demo-db/01-demo.sql.
+if [ "${SKIP_DEMO_DATA_REGEN:-0}" != "1" ]; then
+  echo "==> Regenerating synthetic dataset (demo-db/01-demo.sql) against the head schema..."
+  "$ELECTRON_DIR/demo-db/regenerate.sh" || echo "    WARN: regen failed — baking the existing 01-demo.sql instead."
+fi
 echo "==> Building vision-demo-db:latest (synthetic data preloaded)..."
 docker build -t vision-demo-db:latest "$ELECTRON_DIR/demo-db"
 
-# ── 2) Ensure the app image exists locally (demo compose uses pull_policy: never)
-if ! docker image inspect vision-app:latest >/dev/null 2>&1; then
-  echo "==> vision-app:latest not found; building from repo (one-time)..."
-  docker compose -f "$REPO_PATH/docker-compose.yml" build app
-  docker image inspect vision-app:latest >/dev/null 2>&1 || { echo "ERROR: failed to produce vision-app:latest"; exit 1; }
-fi
+# ── 2) App image — ALWAYS rebuild from current source ─────────────────────────
+# The demo compose uses pull_policy: never, so it serves this locally-built image.
+# Rebuilding every run is what makes a re-run actually pick up your code changes
+# (mirrors how the real install.sh app rebuilds from source on each launch).
+echo "==> Building vision-app:latest from current source..."
+docker compose -f "$REPO_PATH/docker-compose.yml" build app
+docker image inspect vision-app:latest >/dev/null 2>&1 || { echo "ERROR: failed to produce vision-app:latest"; exit 1; }
 
 # ── 3) Build Vision Demo.app ─────────────────────────────────────────────────
 echo "==> Installing Electron deps..."
@@ -56,6 +63,18 @@ xattr -cr "$APP_DEST" 2>/dev/null || true
 # electron-builder skips signing (identity:null); arm64 needs at least an ad-hoc
 # signature or macOS refuses to launch it. Sign locally.
 codesign --force --deep -s - "$APP_DEST" 2>/dev/null || true
+
+# ── 5) Refresh a running demo stack so the new images + data take effect now ───
+# A fresh volume makes the demo DB re-run initdb and reload 01-demo.sql. The
+# embedded compose dir only exists once the app has been launched at least once;
+# on a first install it isn't here yet, so the app creates the stack on launch.
+DEMO_COMPOSE_DIR="$HOME/Library/Application Support/$APP_NAME/embedded_compose"
+if [ -f "$DEMO_COMPOSE_DIR/docker-compose.yml" ]; then
+  echo "==> Refreshing the running demo stack (new images + fresh synthetic data)..."
+  ( cd "$DEMO_COMPOSE_DIR" && docker compose down -v --remove-orphans && docker compose up -d )
+else
+  echo "==> No existing demo stack yet — launch \"$APP_NAME.app\" to start it."
+fi
 
 echo ""
 echo "  Vision Demo installed — synthetic data only; your real Vision.app is untouched."

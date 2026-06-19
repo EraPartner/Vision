@@ -29,12 +29,18 @@ S('-- Vision demo data (synthetic). Generated deterministically.');
 // Stamp Alembic at the schema head so the app treats the DB as fully migrated
 // (otherwise startup runs every migration against the already-built schema and
 // crashes on "cannot create index on relation investments" — it is a view).
-// Must match the head the schema was dumped at.
-S("INSERT INTO alembic_version (version_num) VALUES ('0043_add_provider_api_keys') ON CONFLICT DO NOTHING;");
+// Must match the head the schema was dumped at (regenerate against `alembic upgrade head`).
+S("INSERT INTO alembic_version (version_num) VALUES ('0060_brokerage_import_routing') ON CONFLICT DO NOTHING;");
 
-// ---- Accounts ----
-const ACCT = { CHECKING: 'BE76 7340 1234 5678', SAVINGS: 'BE12 0688 1947 5532' };
-const START_BAL = { [ACCT.CHECKING]: 4200, [ACCT.SAVINGS]: 8000 };
+// ---- Accounts (ADR-088: real account entities) ----
+// `bank_account` strings double as the account `name`: the dual-write trigger (migration 0051)
+// links each transaction to the account whose name == btrim(bank_account), and its
+// ON CONFLICT(name) DO NOTHING leaves the rich typed rows we pre-create here untouched.
+const ACCT = { CHECKING: 'BE76 7340 1234 5678', SAVINGS: 'BE12 0688 1947 5532', MORTGAGE: 'KBC Woonkrediet' };
+const START_BAL = { [ACCT.CHECKING]: 4200, [ACCT.SAVINGS]: 8000, [ACCT.MORTGAGE]: -205000 };
+// Stable account ids — referenced by portfolio holdings for per-account positioning (ADR-091).
+// Brokerage/exchange accounts (3,4,6) are linked to lots by id, not via a bank_account string.
+const AID = { CHECKING: 1, SAVINGS: 2, DEGIRO: 3, IBKR: 4, MORTGAGE: 5, BITVAVO: 6 };
 
 // Mortgage on the owned home (bought 2018 -> Flemish woonbonus eligible).
 const MORTGAGE = { principal: 220000, annual: 2.0, termM: 300, start: ymd(2018,5,1) };
@@ -103,10 +109,11 @@ let txId=0;
 const txns=[];
 const tagLinks=[];
 const splitCands=[];
-function tx(date,amount,recip,catKey,memo,comment=null,account=ACCT.CHECKING){
+function tx(date,amount,recip,catKey,memo,comment=null,account=ACCT.CHECKING,opts={}){
   txId++;
   const cid = catKey ? (catId[catKey] ?? null) : null;
-  txns.push({ id:txId, date, amount, recip, cid, memo, comment, account });
+  txns.push({ id:txId, date, amount, recip, cid, memo, comment, account,
+    isTransfer:opts.isTransfer||false, transferSource:opts.transferSource||null });
   return txId;
 }
 function on(y,m,day,fn){const md=daysInMonth(y,m);let d=Math.min(day,md);const dt=ymd(y,m,d);if(dt<=TODAY)fn(dt);}
@@ -175,6 +182,18 @@ for(let y=2024;y<=2026;y++){
   }
 }
 
+// ===== Liability ledger (ADR-092: liabilities as negative accounts) =====
+// The mortgage is its own account (type=liability), surfacing in net worth as a negative
+// balance. Quarterly principal-paydown entries lift the balance from -205 000 toward ~-185 250.
+// Marked is_transfer so they never inflate income/spending (the cash leg is the monthly
+// mortgage payment already on the checking account).
+for(let y=2024;y<=2026;y++){
+  for(let m=1;m<=12;m+=3){
+    if(y===2026&&m>6)break;
+    on(y,m,1,(d)=>tx(d,1975,'KBC Woonkrediet','HOUSING:MORTGAGE','Kapitaalaflossing hypotheek',null,ACCT.MORTGAGE,{isTransfer:true,transferSource:'manual'}));
+  }
+}
+
 // running balance per account, then emit
 const byAcct={};
 for(const t of txns){(byAcct[t.account]=byAcct[t.account]||[]).push(t);}
@@ -183,8 +202,20 @@ for(const acct of Object.keys(byAcct)){
   let bal=START_BAL[acct]||0;
   for(const t of list){ bal+=t.amount; t.balance=bal; }
 }
+
+// ===== Accounts (typed entities) — emitted before the transaction rows so the dual-write
+// trigger (0051) resolves each transaction's account_id onto these rich rows. statement_balance
+// drives the reconciliation-drift feature (ADR-094): checking drifts +€15.50, savings reconciles.
+const finalBal=(a)=>{const l=byAcct[a]; return l&&l.length?l[l.length-1].balance:0;};
+S(`INSERT INTO accounts (id,name,display_name,institution,type,liquidity_class,owner,currency,statement_balance,statement_balance_date) VALUES (${AID.CHECKING},${q(ACCT.CHECKING)},'KBC Zichtrekening','KBC','checking','liquid','joint','EUR',${num(finalBal(ACCT.CHECKING)+15.50,2)},'${fmt(TODAY)}');`);
+S(`INSERT INTO accounts (id,name,display_name,institution,type,liquidity_class,owner,currency,statement_balance,statement_balance_date) VALUES (${AID.SAVINGS},${q(ACCT.SAVINGS)},'KBC Spaarrekening','KBC','savings','semi_liquid','joint','EUR',${num(finalBal(ACCT.SAVINGS),2)},'${fmt(TODAY)}');`);
+S(`INSERT INTO accounts (id,name,display_name,institution,type,liquidity_class,owner,currency,has_cash_sleeve) VALUES (${AID.DEGIRO},'DEGIRO Beleggingsrekening','DEGIRO','DEGIRO','brokerage','liquid','me','EUR',true);`);
+S(`INSERT INTO accounts (id,name,display_name,institution,type,liquidity_class,owner,currency,has_cash_sleeve) VALUES (${AID.IBKR},'Interactive Brokers','IBKR','Interactive Brokers','brokerage','liquid','partner','EUR',true);`);
+S(`INSERT INTO accounts (id,name,display_name,institution,type,liquidity_class,owner,currency,spendable,has_cash_sleeve) VALUES (${AID.MORTGAGE},${q(ACCT.MORTGAGE)},'Hypotheek woning Gent','KBC','liability','illiquid','joint','EUR',false,false);`);
+S(`INSERT INTO accounts (id,name,display_name,institution,type,liquidity_class,owner,currency,has_cash_sleeve) VALUES (${AID.BITVAVO},'Bitvavo','Bitvavo','Bitvavo','crypto_exchange','liquid','me','EUR',true);`);
+
 for(const t of txns.slice().sort((a,b)=>a.id-b.id)){
-  S(`INSERT INTO transactions (id,date,amount,currency,bank_account,recipient_id,category_id,is_active,memo,comment,balance) VALUES (${t.id},'${fmt(t.date)}',${num(t.amount,4)},'EUR',${q(t.account)},${recId[t.recip]},${t.cid??'NULL'},true,${q(t.memo)},${q(t.comment)},${num(t.balance,2)});`);
+  S(`INSERT INTO transactions (id,date,amount,currency,bank_account,recipient_id,category_id,is_active,memo,comment,balance,is_transfer,transfer_source) VALUES (${t.id},'${fmt(t.date)}',${num(t.amount,4)},'EUR',${q(t.account)},${recId[t.recip]},${t.cid??'NULL'},true,${q(t.memo)},${q(t.comment)},${num(t.balance,2)},${t.isTransfer?'true':'false'},${t.transferSource?q(t.transferSource):'NULL'});`);
 }
 
 // ===== Tags =====
@@ -253,42 +284,50 @@ function priceSeries(startDate,basePrice,vol,bias){
 function priceAt(series,date){let v=series[0][1];for(const [d,p] of series){if(d<=date)v=p;else break;}return v;}
 function emitHistory(series,investmentId){for(const [d,p] of series){aphId++;S(`INSERT INTO asset_price_history (id,investment_id,price_date,close_price,source) VALUES (${aphId},${investmentId},'${fmt(d)}',${num(p,6)},'manual');`);}}
 
-let ercId=0; const fxSeries=[]; {let cur=ymd(2024,1,1);let r=0.92;while(cur<=TODAY){r=Math.max(0.84,Math.min(0.98,r*(1+(rand()-0.5)*0.02)));fxSeries.push([new Date(cur),r]);ercId++;S(`INSERT INTO exchange_rate_cache (id,from_ccy,to_ccy,rate_date,rate) VALUES (${ercId},'USD','EUR','${fmt(cur)}',${num(r,10)});`);ercId++;S(`INSERT INTO exchange_rate_cache (id,from_ccy,to_ccy,rate_date,rate) VALUES (${ercId},'EUR','USD','${fmt(cur)}',${num(1/r,10)});`);cur=addDaysUTC(cur,7);}}
+// USD→EUR weekly series into exchange_rates (rate_to_eur = EUR per 1 USD). The whole
+// series gives point-in-time FX (ADR-085); only the most recent row is is_latest=true.
+let ercId=0; const fxSeries=[]; {let cur=ymd(2024,1,1);let r=0.92;const rows=[];while(cur<=TODAY){r=Math.max(0.84,Math.min(0.98,r*(1+(rand()-0.5)*0.02)));fxSeries.push([new Date(cur),r]);rows.push([new Date(cur),r]);cur=addDaysUTC(cur,7);}rows.forEach(([d,rate],i)=>{ercId++;S(`INSERT INTO exchange_rates (id,currency_code,rate_to_eur,rate_date,is_latest) VALUES (${ercId},'USD',${num(rate,10)},'${fmt(d)}',${i===rows.length-1?'true':'false'});`);});}
 const fxAt=(date)=>{let v=fxSeries[0][1];for(const[d,r]of fxSeries){if(d<=date)v=r;else break;}return v;};
-S(`INSERT INTO exchange_rates (id,currency_code,rate_to_eur,rate_date,is_latest) VALUES (1,'USD',${num(fxSeries[fxSeries.length-1][1],10)},'${fmt(TODAY)}',true);`);
 
-function unitInv(cls,name,sym,ccy,basePrice,vol,bias){
+function unitInv(cls,name,sym,ccy,basePrice,vol,bias,accountId){
   invId++; const id=invId;
   const series=priceSeries(ymd(2024,1,1),basePrice,vol,bias);
   const cur=series[series.length-1][1];
-  S(`INSERT INTO ${cls}_investments (id,name,currency,is_active,price_provider,symbol,current_price) VALUES (${id},${q(name)},${q(ccy)},true,'manual',${q(sym)},${num(cur,6)});`);
+  S(`INSERT INTO investments (id,name,symbol,asset_class,currency,is_active,price_provider,current_price) VALUES (${id},${q(name)},${q(sym)},'${cls}',${q(ccy)},true,'manual',${num(cur,6)});`);
   emitHistory(series,id);
-  return {id,ccy,series,basePrice,cls};
+  return {id,ccy,series,basePrice,cls,accountId};
 }
-function buy(inv,date,units){
+// `acctId` defaults to the holding's custody account (ADR-091 per-account positioning); pass an
+// override to split one security's lots across accounts ("AAPL at IBKR + a slice at Degiro").
+function buy(inv,date,units,acctId=inv.accountId){
   const ppu=priceAt(inv.series,date); const amount=units*ppu; const fx=inv.ccy==='USD'?fxAt(date):1;
   ptxId++;
-  S(`INSERT INTO ${inv.cls}_transactions (id,investment_id,type,date,amount,fees,taxes,currency,units,price_per_unit,fx_rate_to_eur) VALUES (${ptxId},${inv.id},'buy','${fmt(date)}',${num(amount,4)},${num(rf(0,4),4)},0,${q(inv.ccy)},${num(units,8)},${num(ppu,6)},${num(fx,10)});`);
+  S(`INSERT INTO portfolio_transactions (id,investment_id,type,date,amount,fees,taxes,currency,units,price_per_unit,fx_rate_to_eur,account_id) VALUES (${ptxId},${inv.id},'buy','${fmt(date)}',${num(amount,4)},${num(rf(0,4),4)},0,${q(inv.ccy)},${num(units,8)},${num(ppu,6)},${num(fx,10)},${acctId??'NULL'});`);
 }
-function dividend(inv,date,amount){ptxId++;S(`INSERT INTO ${inv.cls}_transactions (id,investment_id,type,date,amount,fees,taxes,currency,fx_rate_to_eur) VALUES (${ptxId},${inv.id},'dividend','${fmt(date)}',${num(amount,4)},0,${num(amount*0.3,4)},${q(inv.ccy)},${inv.ccy==='USD'?num(fxAt(date),10):1});`);}
+function dividend(inv,date,amount,acctId=inv.accountId){ptxId++;S(`INSERT INTO portfolio_transactions (id,investment_id,type,date,amount,fees,taxes,currency,fx_rate_to_eur,account_id) VALUES (${ptxId},${inv.id},'dividend','${fmt(date)}',${num(amount,4)},0,${num(amount*0.3,4)},${q(inv.ccy)},${inv.ccy==='USD'?num(fxAt(date),10):1},${acctId??'NULL'});`);}
 
-function dcaUnit(cls,name,sym,ccy,basePrice,vol,bias,unitsRange){const inv=unitInv(cls,name,sym,ccy,basePrice,vol,bias);for(let y=2024;y<=2026;y++){for(let m=1;m<=12;m++){if(y===2024&&m===1)continue;if(y===2026&&m>6)break;const d=ymd(y,m,Math.min(21,daysInMonth(y,m)));if(d>TODAY)continue;buy(inv,d,rf(unitsRange[0],unitsRange[1]));}}return inv;}
-function lumpUnit(cls,name,sym,ccy,basePrice,vol,bias,unitsRange,nBuys){const inv=unitInv(cls,name,sym,ccy,basePrice,vol,bias);for(let i=0;i<nBuys;i++){const y=ri(2024,2025);const m=ri(1,12);const d=ymd(y,m,ri(1,28));if(d>TODAY)continue;buy(inv,d,rf(unitsRange[0],unitsRange[1]));}return inv;}
+function dcaUnit(cls,name,sym,ccy,basePrice,vol,bias,unitsRange,accountId){const inv=unitInv(cls,name,sym,ccy,basePrice,vol,bias,accountId);for(let y=2024;y<=2026;y++){for(let m=1;m<=12;m++){if(y===2024&&m===1)continue;if(y===2026&&m>6)break;const d=ymd(y,m,Math.min(21,daysInMonth(y,m)));if(d>TODAY)continue;buy(inv,d,rf(unitsRange[0],unitsRange[1]));}}return inv;}
+function lumpUnit(cls,name,sym,ccy,basePrice,vol,bias,unitsRange,nBuys,accountId){const inv=unitInv(cls,name,sym,ccy,basePrice,vol,bias,accountId);for(let i=0;i<nBuys;i++){const y=ri(2024,2025);const m=ri(1,12);const d=ymd(y,m,ri(1,28));if(d>TODAY)continue;buy(inv,d,rf(unitsRange[0],unitsRange[1]));}return inv;}
 
-const iwda=dcaUnit('etf','iShares Core MSCI World UCITS ETF','IWDA','EUR',96.5,0.035,0.46,[3,6]);
-dcaUnit('etf','Vanguard FTSE All-World UCITS ETF','VWCE','EUR',118.2,0.035,0.46,[1.5,3.5]);
-const aapl=lumpUnit('stock','Apple Inc.','AAPL','USD',212,0.05,0.47,[2,6],6);
-lumpUnit('stock','ASML Holding NV','ASML','EUR',905,0.06,0.46,[0.5,1.5],4);
-lumpUnit('crypto','Bitcoin','BTC','EUR',61500,0.10,0.45,[0.01,0.05],6);
-lumpUnit('crypto','Ethereum','ETH','EUR',3050,0.11,0.45,[0.1,0.7],6);
-lumpUnit('metals','Physical Gold (XAU)','XAU','EUR',2280,0.03,0.46,[1,4],3);
+const iwda=dcaUnit('etf','iShares Core MSCI World UCITS ETF','IWDA','EUR',96.5,0.035,0.46,[3,6],AID.DEGIRO);
+dcaUnit('etf','Vanguard FTSE All-World UCITS ETF','VWCE','EUR',118.2,0.035,0.46,[1.5,3.5],AID.DEGIRO);
+const aapl=lumpUnit('stock','Apple Inc.','AAPL','USD',212,0.05,0.47,[2,6],6,AID.IBKR);
+buy(aapl,ymd(2024,5,10),3,AID.DEGIRO);   // a slice of AAPL custodied at Degiro -> split position (ADR-091)
+buy(aapl,ymd(2025,3,12),2.5,AID.DEGIRO);
+lumpUnit('stock','ASML Holding NV','ASML','EUR',905,0.06,0.46,[0.5,1.5],4,AID.IBKR);
+lumpUnit('crypto','Bitcoin','BTC','EUR',61500,0.10,0.45,[0.01,0.05],6,AID.BITVAVO);
+lumpUnit('crypto','Ethereum','ETH','EUR',3050,0.11,0.45,[0.1,0.7],6,AID.BITVAVO);
+lumpUnit('metals','Physical Gold (XAU)','XAU','EUR',2280,0.03,0.46,[1,4],3,AID.IBKR);
 dividend(aapl,ymd(2025,2,13),22.5);
 dividend(aapl,ymd(2025,8,14),24.1);
 dividend(iwda,ymd(2025,6,20),68.0);
 
-invId++;{const id=invId;S(`INSERT INTO savings_investments (id,name,currency,is_active,price_provider,current_price,interest_rate) VALUES (${id},'KBC Termijnrekening','EUR',true,'manual',15250.00,2.5000);`);ptxId++;S(`INSERT INTO savings_transactions (id,investment_id,type,date,amount,currency) VALUES (${ptxId},${id},'buy','2024-01-15',12000.0000,'EUR');`);ptxId++;S(`INSERT INTO savings_transactions (id,investment_id,type,date,amount,currency) VALUES (${ptxId},${id},'interest','2025-01-02',180.0000,'EUR');`);ptxId++;S(`INSERT INTO savings_transactions (id,investment_id,type,date,amount,currency) VALUES (${ptxId},${id},'buy','2025-06-10',3000.0000,'EUR');`);}
-invId++;{const id=invId;S(`INSERT INTO bond_investments (id,name,currency,is_active,price_provider,current_price,interest_rate,maturity_date) VALUES (${id},'Belgische Staatsbon 2027','EUR',true,'manual',5000.000000,2.8500,'2027-09-04');`);ptxId++;S(`INSERT INTO bond_transactions (id,investment_id,type,date,amount,currency) VALUES (${ptxId},${id},'buy','2024-09-04',5000.0000,'EUR');`);ptxId++;S(`INSERT INTO bond_transactions (id,investment_id,type,date,amount,currency) VALUES (${ptxId},${id},'interest','2025-09-04',142.5000,'EUR');`);}
-invId++;{const id=invId;S(`INSERT INTO real_estate_investments (id,name,currency,is_active,price_provider,current_price,location,municipality,cadastral_income,municipality_tax_rate) VALUES (${id},'Appartement Gent','EUR',true,'manual',325000.000000,'Korenmarkt, Gent','Gent',1450.00,7.5000);`);ptxId++;S(`INSERT INTO real_estate_transactions (id,investment_id,type,date,amount,currency) VALUES (${ptxId},${id},'buy','2018-05-01',298000.0000,'EUR');`);ptxId++;S(`INSERT INTO real_estate_transactions (id,investment_id,type,date,amount,currency) VALUES (${ptxId},${id},'appreciation','2025-12-31',27000.0000,'EUR');`);}
+// Cash-like / illiquid holdings — flat investments table, asset_class distinguishes them.
+// The term deposit sits at the savings account; the state bond at Degiro; the home is
+// unassigned (not held inside a financial account) -> shows as the "unassigned" net-worth row.
+invId++;{const id=invId;S(`INSERT INTO investments (id,name,asset_class,currency,is_active,price_provider,current_price,interest_rate) VALUES (${id},'KBC Termijnrekening','savings','EUR',true,'manual',15250.00,2.5000);`);ptxId++;S(`INSERT INTO portfolio_transactions (id,investment_id,type,date,amount,currency,account_id) VALUES (${ptxId},${id},'buy','2024-01-15',12000.0000,'EUR',${AID.SAVINGS});`);ptxId++;S(`INSERT INTO portfolio_transactions (id,investment_id,type,date,amount,currency,account_id) VALUES (${ptxId},${id},'interest','2025-01-02',180.0000,'EUR',${AID.SAVINGS});`);ptxId++;S(`INSERT INTO portfolio_transactions (id,investment_id,type,date,amount,currency,account_id) VALUES (${ptxId},${id},'buy','2025-06-10',3000.0000,'EUR',${AID.SAVINGS});`);}
+invId++;{const id=invId;S(`INSERT INTO investments (id,name,asset_class,currency,is_active,price_provider,current_price,interest_rate,maturity_date) VALUES (${id},'Belgische Staatsbon 2027','bond','EUR',true,'manual',5000.000000,2.8500,'2027-09-04');`);ptxId++;S(`INSERT INTO portfolio_transactions (id,investment_id,type,date,amount,currency,account_id) VALUES (${ptxId},${id},'buy','2024-09-04',5000.0000,'EUR',${AID.DEGIRO});`);ptxId++;S(`INSERT INTO portfolio_transactions (id,investment_id,type,date,amount,currency,account_id) VALUES (${ptxId},${id},'interest','2025-09-04',142.5000,'EUR',${AID.DEGIRO});`);}
+invId++;{const id=invId;S(`INSERT INTO investments (id,name,asset_class,currency,is_active,price_provider,current_price,location,municipality,cadastral_income,municipality_tax_rate) VALUES (${id},'Appartement Gent','real_estate','EUR',true,'manual',325000.000000,'Korenmarkt, Gent','Gent',1450.00,7.5000);`);ptxId++;S(`INSERT INTO portfolio_transactions (id,investment_id,type,date,amount,currency) VALUES (${ptxId},${id},'buy','2018-05-01',298000.0000,'EUR');`);ptxId++;S(`INSERT INTO portfolio_transactions (id,investment_id,type,date,amount,currency) VALUES (${ptxId},${id},'appreciation','2025-12-31',27000.0000,'EUR');`);}
 
 // ===== Watchlist =====
 let wlId=0;
@@ -317,8 +356,8 @@ const taxProfile = {
 S(`INSERT INTO user_settings (key,value) VALUES ('belgian_tax_profile', '${JSON.stringify(taxProfile).replace(/'/g,"''")}'::jsonb);`);
 
 // ===== Reset sequences =====
-const seqs=[['categories_id_seq',CATS.length],['recipients_id_seq',RECIPS.length],['recipient_bank_accounts_id_seq',3],['recipient_match_patterns_id_seq',2],['transactions_id_seq',txId],['tags_id_seq',TAGS.length],['transaction_splits_id_seq',splitId],['split_payments_id_seq',payId],['planned_transactions_id_seq',planId],['planned_transaction_loan_schedule_id_seq',loanSchedId],['investments_base_id_seq',invId],['portfolio_transactions_base_id_seq',ptxId],['asset_price_history_id_seq',aphId],['exchange_rate_cache_id_seq',ercId],['exchange_rates_id_seq',1],['watchlist_id_seq',wlId]];
+const seqs=[['accounts_id_seq',6],['categories_id_seq',CATS.length],['recipients_id_seq',RECIPS.length],['recipient_bank_accounts_id_seq',3],['recipient_match_patterns_id_seq',2],['transactions_id_seq',txId],['tags_id_seq',TAGS.length],['transaction_splits_id_seq',splitId],['split_payments_id_seq',payId],['planned_transactions_id_seq',planId],['planned_transaction_loan_schedule_id_seq',loanSchedId],['investments_id_seq',invId],['portfolio_transactions_id_seq',ptxId],['asset_price_history_id_seq',aphId],['exchange_rates_id_seq',ercId],['watchlist_id_seq',wlId]];
 for(const [s,v] of seqs){if(v>0)S(`SELECT setval('public.${s}',${v},true);`);}
 
 process.stdout.write(out.join('\n')+'\n');
-process.stderr.write(`generated: ${txId} transactions across 2 accounts, ${RECIPS.length} recipients, ${invId} investments, ${ptxId} portfolio txns, ${aphId} price points, ${planId} planned, ${splitId} splits\n`);
+process.stderr.write(`generated: ${txId} transactions across 6 accounts (checking·savings·2 brokerage·crypto-exchange·liability), ${RECIPS.length} recipients, ${invId} investments, ${ptxId} portfolio txns, ${aphId} price points, ${planId} planned, ${splitId} splits\n`);
