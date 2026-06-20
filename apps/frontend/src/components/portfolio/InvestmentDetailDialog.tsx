@@ -16,6 +16,7 @@ import { useAccountPositions } from '@/hooks/portfolio/useAccountPositions';
 import { AddPortfolioTxnDialog } from './AddPortfolioTxnDialog';
 import { EditInvestmentDialog } from './EditInvestmentDialog';
 import { MoveHoldingDialog } from '@/features/portfolio/MoveHoldingDialog';
+import { isPerAccountHoldingsEnabled } from '@/lib/env';
 import { EditPortfolioTxnDialog } from './EditPortfolioTxnDialog';
 import { useLanguage } from '@/contexts/LanguageContext';
 import { useAppSettings } from '@/contexts/AppSettingsContext';
@@ -108,8 +109,9 @@ export function InvestmentDetailDialog({
   // shown once an account is actually involved (a lone unassigned group is noise).
   const accountPositions = useAccountPositions(investment);
   const showAccountBreakdown =
-    accountPositions.length > 1 ||
-    (accountPositions.length === 1 && accountPositions[0].accountId != null);
+    isPerAccountHoldingsEnabled && (
+      accountPositions.length > 1 ||
+      (accountPositions.length === 1 && accountPositions[0].accountId != null));
 
   const handleDeleteTxn = async (txnId: number, txnType: string) => {
     const ok = await confirm({
@@ -158,9 +160,11 @@ export function InvestmentDetailDialog({
               </DialogTitle>
               <Badge variant="secondary">{getAssetClassLabel(t, investment.assetClass)}</Badge>
               <div className="ml-auto flex items-center gap-1.5">
-                <Button size="sm" variant="outline" className="gap-1.5" onClick={() => setMoving(true)}>
-                  <ArrowLeftRight className="h-4 w-4" /> {t('portfolio.move.action')}
-                </Button>
+                {isPerAccountHoldingsEnabled && (
+                  <Button size="sm" variant="outline" className="gap-1.5" onClick={() => setMoving(true)}>
+                    <ArrowLeftRight className="h-4 w-4" /> {t('portfolio.move.action')}
+                  </Button>
+                )}
                 {onEditInvestment ? (
                   <Button size="sm" variant="outline" className="gap-1.5" onClick={() => onEditInvestment(investment)}>
                     <Pencil className="h-4 w-4" /> {t('common.edit')}
@@ -616,12 +620,14 @@ export function InvestmentDetailDialog({
         </DialogContent>
       </Dialog>
       <ConfirmDialog />
-      <MoveHoldingDialog
-        investmentId={investment.id}
-        investmentLabel={investment.name}
-        open={moving}
-        onOpenChange={setMoving}
-      />
+      {isPerAccountHoldingsEnabled && (
+        <MoveHoldingDialog
+          investmentId={investment.id}
+          investmentLabel={investment.name}
+          open={moving}
+          onOpenChange={setMoving}
+        />
+      )}
     </>
   );
 }

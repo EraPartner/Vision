@@ -13,6 +13,7 @@ import { DatePicker } from '@/components/shared/DatePicker';
 import { parseLocalDateFromYmd, toYmd } from '@/components/shared/dateUtils';
 import { usePortfolio } from '@/hooks/usePortfolio';
 import { useAccounts } from '@/hooks/useAccounts';
+import { isPerAccountHoldingsEnabled } from '@/lib/env';
 import { isUnitBased } from '@/utils/assetClass';
 import { toast } from 'sonner';
 import type { InvestmentSummary, PortfolioTxnType, RecurrenceInterval } from '@/types/portfolio';
@@ -192,21 +193,23 @@ export function EditPortfolioTxnDialog({ investment, transaction, trigger }: Pro
               />
             </div>
 
-            <div className="space-y-2 col-span-2">
-              <Label>{t('nav.accounts')}</Label>
-              <Select
-                value={form.accountId || 'none'}
-                onValueChange={(v) => setForm((f) => ({ ...f, accountId: v === 'none' ? '' : v }))}
-              >
-                <SelectTrigger><SelectValue /></SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="none">{t('accounts.unassigned')}</SelectItem>
-                  {(accountsData?.items ?? []).map((a) => (
-                    <SelectItem key={a.id} value={String(a.id)}>{a.display_name || a.name}</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
+            {isPerAccountHoldingsEnabled && (
+              <div className="space-y-2 col-span-2">
+                <Label>{t('nav.accounts')}</Label>
+                <Select
+                  value={form.accountId || 'none'}
+                  onValueChange={(v) => setForm((f) => ({ ...f, accountId: v === 'none' ? '' : v }))}
+                >
+                  <SelectTrigger><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="none">{t('accounts.unassigned')}</SelectItem>
+                    {(accountsData?.items ?? []).map((a) => (
+                      <SelectItem key={a.id} value={String(a.id)}>{a.display_name || a.name}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            )}
 
             {showUnits && (
               <>

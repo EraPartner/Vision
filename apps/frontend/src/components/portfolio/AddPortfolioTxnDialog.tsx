@@ -13,6 +13,7 @@ import { Plus } from 'lucide-react';
 import { isUnitBased, isFixedIncome, isRealEstate } from '@/utils/assetClass';
 import { usePortfolio } from '@/hooks/usePortfolio';
 import { useAccounts } from '@/hooks/useAccounts';
+import { isPerAccountHoldingsEnabled } from '@/lib/env';
 import type { PortfolioTxnType, RecurrenceInterval, InvestmentSummary } from '@/types/portfolio';
 import { getTxnTypeLabel } from '@/types/portfolio';
 import { toast } from 'sonner';
@@ -186,21 +187,23 @@ export function AddPortfolioTxnDialog({ investment, trigger }: Props) {
                   placeholder={t('plannedPage.link.pickDate')}
                 />
               </div>
-              <div className="space-y-2 col-span-2">
-                <Label>{t('nav.accounts')}</Label>
-                <Select
-                  value={form.accountId || 'none'}
-                  onValueChange={(v) => setForm(f => ({ ...f, accountId: v === 'none' ? '' : v }))}
-                >
-                  <SelectTrigger><SelectValue /></SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="none">{t('accounts.unassigned')}</SelectItem>
-                    {(accountsData?.items ?? []).map((a) => (
-                      <SelectItem key={a.id} value={String(a.id)}>{a.display_name || a.name}</SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
+              {isPerAccountHoldingsEnabled && (
+                <div className="space-y-2 col-span-2">
+                  <Label>{t('nav.accounts')}</Label>
+                  <Select
+                    value={form.accountId || 'none'}
+                    onValueChange={(v) => setForm(f => ({ ...f, accountId: v === 'none' ? '' : v }))}
+                  >
+                    <SelectTrigger><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="none">{t('accounts.unassigned')}</SelectItem>
+                      {(accountsData?.items ?? []).map((a) => (
+                        <SelectItem key={a.id} value={String(a.id)}>{a.display_name || a.name}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+              )}
 
             {showUnits && (
               <>

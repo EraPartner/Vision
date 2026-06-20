@@ -15,6 +15,7 @@ import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { InvestmentCombobox } from "@/components/portfolio/InvestmentCombobox";
 import { useAccounts } from "@/hooks/useAccounts";
+import { isPerAccountHoldingsEnabled } from "@/lib/env";
 import { toast } from "sonner";
 import { AlertTriangle, CheckCircle2, Loader2, PlusCircle } from "lucide-react";
 import { apiClient } from "@/lib/api";
@@ -173,6 +174,8 @@ export function PortfolioImportReviewPage() {
         );
       })}
 
+      {/* Batch account picker (ADR-095) — gated with per-account holdings (ADR-103) */}
+      {isPerAccountHoldingsEnabled && (
       <div className="space-y-1.5 rounded-md border p-3">
         <Label htmlFor="import-account">{t("portfolioImport.review.account")}</Label>
         <Select value={accountId || "none"} onValueChange={(v) => setAccountId(v === "none" ? "" : v)}>
@@ -186,6 +189,7 @@ export function PortfolioImportReviewPage() {
         </Select>
         <p className="text-xs text-muted-foreground">{t("portfolioImport.review.accountHint")}</p>
       </div>
+      )}
 
       <div className="flex gap-2">
         <Button onClick={() => commit.mutate()} disabled={commit.isPending} className="flex-1 h-11" size="lg">

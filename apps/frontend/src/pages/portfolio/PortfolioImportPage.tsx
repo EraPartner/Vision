@@ -20,6 +20,7 @@ import { Label } from "@/components/ui/label";
 import { Progress } from "@/components/ui/progress";
 import { Switch } from "@/components/ui/switch";
 import { useAccounts } from "@/hooks/useAccounts";
+import { isPerAccountHoldingsEnabled } from "@/lib/env";
 import { PortfolioCsvColumnMapper } from "@/features/imports/PortfolioCsvColumnMapper";
 import { portfolioMappedColumns } from "@/features/imports/portfolioColumnFields";
 import { CsvDropzone } from "@/features/imports/CsvDropzone";
@@ -257,7 +258,8 @@ export function PortfolioImportPage() {
             defaultCollapsed
           />
 
-          {/* Brokerage fan-out (ADR-095): one statement → cash ledger + trades */}
+          {/* Brokerage fan-out (ADR-095) — gated with per-account holdings (ADR-103) */}
+          {isPerAccountHoldingsEnabled && (
           <div className="rounded-lg border p-3 space-y-3">
             <div className="flex items-center justify-between">
               <div className="space-y-0.5">
@@ -280,6 +282,7 @@ export function PortfolioImportPage() {
               </div>
             )}
           </div>
+          )}
 
           {/* Progress */}
           {progress && loading && (

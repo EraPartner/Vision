@@ -28,6 +28,7 @@ import { usePortfolio } from "@/hooks/usePortfolio";
 import { useOnlineStatus } from "@/hooks/useOnlineStatus";
 import { useAccountNetWorth } from "@/hooks/portfolio/useAccountNetWorth";
 import { NetWorthByAccountChart } from "./NetWorthByAccountChart";
+import { isPerAccountHoldingsEnabled } from "@/lib/env";
 
 export default function NetWorthPage() {
   const { t, language } = useLanguage();
@@ -46,6 +47,7 @@ export default function NetWorthPage() {
     queryKey: ["net-worth-by-account", targetCurrency],
     queryFn: () => apiClient.getNetWorthByAccount({ currency: targetCurrency }),
     staleTime: 120_000,
+    enabled: isPerAccountHoldingsEnabled,
   });
 
   const { investments, summaries, refreshPrices, isRefreshingPrices } = usePortfolio();
@@ -287,8 +289,8 @@ export default function NetWorthPage() {
         t={t}
       />
 
-      {/* Per-account breakdown (ADR-093): cash + holdings at market per account */}
-      {accountRows.length > 0 && (
+      {/* Per-account breakdown (ADR-093/100) — gated off with per-account holdings (ADR-103) */}
+      {isPerAccountHoldingsEnabled && accountRows.length > 0 && (
         <Card className="glass-regular">
           <CardHeader className="pb-2">
             <CardTitle className="text-sm font-medium">{t('networth.byAccount')}</CardTitle>
@@ -317,14 +319,16 @@ export default function NetWorthPage() {
         </Card>
       )}
 
-      {/* Per-account holdings history (ADR-100): stacked daily series, Σ accounts */}
-      <NetWorthByAccountChart
-        accounts={byAccountData?.accounts ?? []}
-        fmt={fmt}
-        title={t('networth.byAccountHistory')}
-        description={t('networth.byAccountHistoryDesc')}
-        unassignedLabel={t('accounts.unassigned')}
-      />
+      {/* Per-account holdings history (ADR-100) — gated off with per-account holdings (ADR-103) */}
+      {isPerAccountHoldingsEnabled && (
+        <NetWorthByAccountChart
+          accounts={byAccountData?.accounts ?? []}
+          fmt={fmt}
+          title={t('networth.byAccountHistory')}
+          description={t('networth.byAccountHistoryDesc')}
+          unassignedLabel={t('accounts.unassigned')}
+        />
+      )}
 
       {/* Historical extremes */}
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">

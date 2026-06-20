@@ -21,6 +21,7 @@ import { useLanguage } from '@/contexts/LanguageContext';
 import { useAppSettings } from '@/contexts/AppSettingsContext';
 import { useExchangeRates } from '@/hooks/useExchangeRates';
 import { accountPositionsFor } from '@/hooks/portfolio/useAccountPositions';
+import { isPerAccountHoldingsEnabled } from '@/lib/env';
 import { numberFormatToLocale } from '@/utils/currency';
 import { toast } from 'sonner';
 import type { Account, Investment } from '@/types/api';
@@ -54,7 +55,10 @@ export function CloseAccountDialog({ account, accounts, summaries, open, onOpenC
   }).format(v);
 
   // Investments still holding a non-empty position in this account.
+  // With per-account holdings off (ADR-103), there is no holdings transfer — the
+  // account simply archives — so skip the per-account position computation.
   const holdings = useMemo<AccountHolding[]>(() => {
+    if (!isPerAccountHoldingsEnabled) return [];
     const out: AccountHolding[] = [];
     for (const summary of summaries) {
       const native = (summary.originalCurrency || summary.currency || 'EUR').toUpperCase();

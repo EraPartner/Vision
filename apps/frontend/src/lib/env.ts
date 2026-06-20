@@ -61,6 +61,8 @@ const envSchema = z
         VITE_API_URL: optionalUrl,
         VITE_LOG_LEVEL: logLevelEnv,
         VITE_ENABLE_LOGGING: booleanEnv(true),
+        // Per-account portfolio HOLDINGS UI (ADR-091/100). Default OFF (ADR-103).
+        VITE_ENABLE_PER_ACCOUNT_HOLDINGS: booleanEnv(false),
     })
     .passthrough();
 
@@ -78,5 +80,12 @@ function parseEnv(): FrontendEnv {
 }
 
 export const env: Readonly<FrontendEnv> = Object.freeze(parseEnv());
+
+/**
+ * Per-account portfolio HOLDINGS feature (ADR-091/100). Default OFF (ADR-103):
+ * the holdings-per-account UI is hidden while budgeting/cash accounts stay on.
+ * Flip the default to `true` (or set VITE_ENABLE_PER_ACCOUNT_HOLDINGS=true) to restore.
+ */
+export const isPerAccountHoldingsEnabled = env.VITE_ENABLE_PER_ACCOUNT_HOLDINGS as boolean;
 
 export default env;
