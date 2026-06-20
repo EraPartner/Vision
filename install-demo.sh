@@ -64,14 +64,20 @@ xattr -cr "$APP_DEST" 2>/dev/null || true
 # signature or macOS refuses to launch it. Sign locally.
 codesign --force --deep -s - "$APP_DEST" 2>/dev/null || true
 
-# ── 5) Refresh a running demo stack so the new images + data take effect now ───
-# A fresh volume makes the demo DB re-run initdb and reload 01-demo.sql. The
-# embedded compose dir only exists once the app has been launched at least once;
-# on a first install it isn't here yet, so the app creates the stack on launch.
+# ── 5) Tear down any old demo stack so the new images + data take effect ───────
+# A fresh volume makes the demo DB re-run initdb and reload 01-demo.sql on the
+# next start. We deliberately do NOT `up` here: the Electron app is the single
+# owner of host-port resolution (findFreePort + PORT injection). If this script
+# started the stack directly it would bind ${PORT:-3002}=3002 with no injection,
+# and then the app's findFreePort(3002) would pick 3003 (3002 now taken by this
+# very stack) and poll a port the container isn't on — hanging forever on
+# "Almost ready…". Leaving the stack DOWN lets the app create it on launch with a
+# matching port. The embedded compose dir only exists after the app's first
+# launch; on a first install it isn't here yet.
 DEMO_COMPOSE_DIR="$HOME/Library/Application Support/$APP_NAME/embedded_compose"
 if [ -f "$DEMO_COMPOSE_DIR/docker-compose.yml" ]; then
-  echo "==> Refreshing the running demo stack (new images + fresh synthetic data)..."
-  ( cd "$DEMO_COMPOSE_DIR" && docker compose down -v --remove-orphans && docker compose up -d )
+  echo "==> Tearing down old demo stack (fresh synthetic data loads on next launch)..."
+  ( cd "$DEMO_COMPOSE_DIR" && docker compose down -v --remove-orphans )
 else
   echo "==> No existing demo stack yet — launch \"$APP_NAME.app\" to start it."
 fi

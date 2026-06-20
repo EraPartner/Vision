@@ -28,6 +28,14 @@ services:
     image: vision-app:latest
     pull_policy: never
     restart: unless-stopped
+    # Gate startup on a healthy db. Without this, a rebuild of vision-demo-db
+    # recreates the db container (new IP) while the app burns its bounded
+    # ~37s connect-retry against the torn-down endpoint, crash-loops, and the
+    # Electron splash hangs on "Almost ready…". The db healthcheck already
+    # exists below; service_healthy makes compose wait for it.
+    depends_on:
+      db:
+        condition: service_healthy
     env_file: .env
     ports:
       - "127.0.0.1:${PORT:-3002}:3002"

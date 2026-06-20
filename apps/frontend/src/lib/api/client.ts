@@ -21,7 +21,17 @@ import logger from '@/lib/logger';
 import { apiEventBus } from '@/lib/devtools/apiEventBus';
 import { getAdminToken } from '@/lib/adminToken';
 
-export const API_BASE_URL = env.VITE_API_URL || 'http://localhost:3002';
+// In a production build the frontend is served by the backend on the SAME origin
+// (Electron resolves a random host port per app — see packaging/electron/main.js
+// resolveAppPort), so API calls must target that origin, not a hardcoded port.
+// A hardcoded localhost:3002 made every app on a non-3002 port read an empty/wrong
+// backend and fall into the onboarding wizard. Dev (Vite proxy) and tests (MSW on
+// :3002) keep the explicit fallback so their behaviour is unchanged.
+export const API_BASE_URL =
+    env.VITE_API_URL ||
+    (import.meta.env.PROD && typeof window !== 'undefined'
+        ? window.location.origin
+        : 'http://localhost:3002');
 
 /** Default request timeout in milliseconds */
 export const DEFAULT_TIMEOUT_MS = 30_000;

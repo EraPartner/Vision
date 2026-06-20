@@ -114,6 +114,9 @@ app.setName(__IS_DEMO ? 'Vision Demo' : 'Vision');
 
 // ── Constants ─────────────────────────────────────────────────────────────────
 const APP_NAME = __IS_DEMO ? 'Vision Demo' : 'Vision';
+// Last-resort fallback only. The real port is a truly-random free port chosen
+// once per app and persisted (settings.appPort) — see resolveAppPort(). Random
+// per-app ports mean the demo and the real app never fight over a fixed port.
 const DEFAULT_APP_PORT = 3002;
 const HEALTH_POLL_ATTEMPTS = Number(process.env.VISION_HEALTH_POLL_ATTEMPTS) || 200;  // 200 × 300ms = 60s max
 const HEALTH_POLL_INTERVAL_MS = Number(process.env.VISION_HEALTH_POLL_INTERVAL_MS) || 300;
@@ -205,29 +208,12 @@ function registerSecurityHeaders() {
   });
 }
 
-// Resolved at launch — see findFreePort() below
+// Resolved at launch by resolveAppPort() — a persisted random free port.
 let appPort = DEFAULT_APP_PORT;
 let APP_URL = `http://localhost:${appPort}`;
 let HEALTH_URL = `http://localhost:${appPort}/health`;
 const GITHUB_OWNER = 'EraPartner';
 const GITHUB_REPO = 'Vision';
-
-// ── Port detection ────────────────────────────────────────────────────────────
-// Try the preferred port; if it's in use, walk up until a free one is found.
-function findFreePort(preferred) {
-  return new Promise((resolve) => {
-    const net = require('net');
-    const tryPort = (port) => {
-      const server = net.createServer();
-      server.unref();
-      server.on('error', () => tryPort(port + 1));
-      server.listen(port, '127.0.0.1', () => {
-        server.close(() => resolve(port));
-      });
-    };
-    tryPort(preferred);
-  });
-}
 
 // ── Settings (persisted across launches) ─────────────────────────────────────
 const settingsPath = path.join(app.getPath('userData'), 'settings.json');
@@ -256,6 +242,68 @@ async function loadSettings() {
 async function saveSettings(data) {
   await fs.promises.mkdir(path.dirname(settingsPath), { recursive: true });
   await fs.promises.writeFile(settingsPath, JSON.stringify(data, null, 2));
+}
+
+// ── Backend host-port resolution ───────────────────────────────────────────────
+// The backend container always listens on 3002 internally; we publish it on a
+// host port that Electron both maps (PORT injected into compose) and polls
+// (APP_URL/HEALTH_URL). Those two MUST agree or the splash hangs on "Almost
+// ready…" forever. We pick a truly-random free port ONCE per app and persist it
+// (settings.appPort): random so the demo and the real app never collide on a
+// shared default; persisted so every relaunch reuses the same port, keeping the
+// running container's published port valid (and the warm `compose start` fast
+// path correct). composeStartOrUp() recreates the container if its published
+// port ever drifts from this value.
+
+// Resolve true if `port` can be bound on loopback right now (i.e. nothing else
+// holds it). A port held by our own *running* container reads as not-free, which
+// is fine: we never re-pick a persisted port, only validate freshly-chosen ones.
+function isPortFree(port) {
+  return new Promise((resolve) => {
+    const net = require('net');
+    const server = net.createServer();
+    server.unref();
+    server.once('error', () => resolve(false));
+    server.listen(port, '127.0.0.1', () => server.close(() => resolve(true)));
+  });
+}
+
+// Pick a random free host port in a stable, non-ephemeral range (avoids the OS
+// ephemeral range used for outbound sockets). Falls back to DEFAULT_APP_PORT if,
+// improbably, no candidate is free after several tries.
+async function pickRandomFreePort(attempts = 64) {
+  for (let i = 0; i < attempts; i++) {
+    const candidate = 20000 + Math.floor(Math.random() * 40000); // 20000–59999
+    if (await isPortFree(candidate)) return candidate;
+  }
+  return DEFAULT_APP_PORT;
+}
+
+// The persisted random port if present, else a freshly-picked one (persisted for
+// next time). Stable across relaunches for a given app/userData.
+async function resolveAppPort() {
+  const s = await loadSettings();
+  const persisted = Number(s.appPort);
+  if (Number.isInteger(persisted) && persisted >= 1024 && persisted <= 65535) {
+    return persisted;
+  }
+  const port = await pickRandomFreePort();
+  try { await saveSettings({ ...s, appPort: port }); }
+  catch (err) { console.warn('[port] failed to persist appPort:', err && err.message ? err.message : err); }
+  return port;
+}
+
+// Extract the host port an existing compose `app` service is published on, from
+// a `docker compose ps --format json` service object. The container's internal
+// target port is always 3002. Returns undefined when not published/parseable.
+function publishedHostPort(service) {
+  const pubs = service?.Publishers || service?.publishers || [];
+  for (const p of Array.isArray(pubs) ? pubs : []) {
+    const target = Number(p.TargetPort ?? p.targetPort);
+    const published = Number(p.PublishedPort ?? p.publishedPort);
+    if (target === 3002 && Number.isInteger(published) && published > 0) return published;
+  }
+  return undefined;
 }
 
 // ── Repo/workDir resolution ───────────────────────────────────────────────────
@@ -1205,15 +1253,23 @@ async function composeStartOrUp(cwd, extraFiles = [], skipBuild = false) {
     const services = parseComposePsOutput(psOut);
     if (services.length > 0) {
       const getState = s => String(s?.State || s?.state || '').toLowerCase();
+      // The `start` fast paths reuse the existing container AS-IS, and
+      // `docker compose start` cannot remap a published port. If the existing app
+      // container is published on a different host port than the one we resolved
+      // (and will poll), reusing it would leave Electron polling a dead port and
+      // hanging on "Almost ready…". Only take a fast path when the ports agree;
+      // otherwise fall through to `up`, which recreates the container on appPort.
+      const appSvc = services.find(s => (s.Service || s.service) === 'app');
+      const portMatches = !appSvc || publishedHostPort(appSvc) === appPort;
       // All already running — skip if packaged (no build possible) or if the
       // skip-build cache confirmed the running image matches the current source.
       // In dev mode without a cache hit, fall through so `compose up --build`
       // can detect whether the running containers have stale code.
-      if (services.every(s => getState(s) === 'running') && ((app.isPackaged && !useRepoMode) || skipBuild)) return { built: false };
+      if (portMatches && services.every(s => getState(s) === 'running') && ((app.isPackaged && !useRepoMode) || skipBuild)) return { built: false };
       // All in a known stopped state + not a forced dev rebuild → compose start.
       const knownStates = new Set(['running', 'exited', 'created', 'paused']);
       const canUseStart = (app.isPackaged && !useRepoMode) || skipBuild;
-      if (canUseStart && services.every(s => knownStates.has(getState(s)))) {
+      if (portMatches && canUseStart && services.every(s => knownStates.has(getState(s)))) {
         const env = { ...dockerEnv, PORT: String(appPort) };
         await run(
           'docker',
@@ -3087,10 +3143,11 @@ async function launch() {
   setSplashStatus('splash.checkingDocker');
   const endParallelInit = bootMark('parallel_init');
   await Promise.all([
-    // Find a free host port for the backend (default 3002, auto-increment if taken)
+    // Resolve the backend host port: a random free port chosen once per app and
+    // persisted, so the demo and real app never fight over a shared default.
     (() => {
       const end = bootMark('find_free_port');
-      return findFreePort(DEFAULT_APP_PORT).then(port => {
+      return resolveAppPort().then(port => {
         appPort = port;
         APP_URL = `http://localhost:${appPort}`;
         HEALTH_URL = `http://localhost:${appPort}/health`;
