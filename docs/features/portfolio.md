@@ -2,9 +2,9 @@
 title: Feature - Portfolio & Investments
 type: feature
 status: active
-date: 2026-06-19
-last_modified: 2026-06-19
-updated: 2026-06-19
+date: 2026-06-20
+last_modified: 2026-06-20
+updated: 2026-06-20
 tags: [feature, portfolio, investments, stocks, crypto, metals, phase-1, phase-3.5, phase-3.6, phase-9, phase-8, phase-14, pdf-export, offline-resilience, stale-prices, online-status-detection, graceful-degradation, portfolio-summary, realtime-totals, decimal-precision, monetary-math, snapshot-valuation-parity, fixed-income-accrual, real-estate-appreciation, net-worth-reconciliation, historical-fx, snapshot-fx, loading-states, error-states, page-error, skeleton, portfolio-unit-math, shared-utils, splits-event, return-of-capital, banker-rounding, fx-attribution, asset-gain, fx-gain, purchase-date-rates, value-fx-neutral, adr-074, adr-091, adr-100, per-account, move-holding, close-account, brokerage-fanout, rebalancing, saved-plans, cash-aware, cross-workspace, adr-098]
 aliases: [portfolio-feature, investments-feature, holdings, net-worth, stocks, crypto, real-estate, savings, bonds, metals, performance, watchlist]
 description: Track stocks, ETFs, crypto, metals, real estate, savings, and bonds; includes Phase 8 PDF report export with 6 portfolio sections. 2026-05-29 adds historical FX in snapshots and loading/error states on all asset pages. June 2026 adds snapshotBuilder split/return_of_capital events, APP_TIMEZONE day-boundary fix, shared portfolioUnitMath.ts, and FX attribution UI (ADR-074): asset gain / FX effect decomposition on overview, performance, asset pages, and investment detail.
@@ -645,6 +645,21 @@ See [[docs/api/reports#post-apireportsportfolio|Reports API: Portfolio Endpoint]
 
 ## Per-Account Holdings (2026-06-18, ADR-091 / ADR-100)
 
+> [!warning] Holdings UI flag-gated — default OFF (ADR-103, 2026-06-20)
+> The per-account **holdings** surfaces in this section are hidden when
+> `VITE_ENABLE_PER_ACCOUNT_HOLDINGS` is `false` (the default). Specifically gated off:
+> - Account pickers on `AddPortfolioTxnDialog` and `EditPortfolioTxnDialog` (new trades stay
+>   global; no `account_id` / `cash_account_id` → no cash leg created).
+> - The "Move Holdings" button, `MoveHoldingDialog`, and the per-investment per-account breakdown
+>   card in `InvestmentDetailDialog`.
+> - The holdings-transfer block inside `CloseAccountDialog` (the cash-account archive path stays).
+>
+> **Unaffected by the flag:** `AccountsPage` CRUD, the bank-balances widget (per-account cash),
+> `bank_account` on transaction forms, liabilities, and statement-balance reconciliation. The
+> backend `byAccount` data is still computed; it simply goes unused on the frontend.
+> Set `VITE_ENABLE_PER_ACCOUNT_HOLDINGS=true` to restore the full surface. See
+> [[docs/adr/103-per-account-holdings-ui-flag|ADR-103]].
+
 ### Per-account breakdown in portfolio summary
 
 `getPortfolioSummary` is extended (additively — the per-investment contract and its golden tests are untouched) with a top-level `byAccount` array. Each element is:
@@ -795,8 +810,9 @@ See also: [[docs/api/settings|Settings API — `rebalance_plans` key]], [[docs/a
 - [[docs/integrations/price-providers|Price Providers]] — Live and historical price data
 - [[docs/integrations/kinesis-price-provider|Kinesis Price Provider]] — Metals and commodities
 - [[docs/integrations/currency-conversion|Currency Conversion]] — ECB full-history tier, startup backfill
-- [[docs/adr/100-net-worth-account-native-holdings|ADR-100]] — Per-account holdings parity (Σ byAccount)
-- [[docs/adr/091-per-account-positioning|ADR-091]] — Per-account lots, move-holding, close-account
+- [[docs/adr/103-per-account-holdings-ui-flag|ADR-103]] — Flag-gate for per-account holdings UI (default off)
+- [[docs/adr/100-net-worth-account-native-holdings|ADR-100]] — Per-account holdings parity (Σ byAccount); UI scope narrowed by ADR-103
+- [[docs/adr/091-per-account-positioning|ADR-091]] — Per-account lots, move-holding, close-account; UI scope narrowed by ADR-103
 - [[docs/adr/095-brokerage-account-import|ADR-095]] — Brokerage fan-out (core built; parser/UI deferred)
 - [[docs/adr/074-fx-attribution-historical-rates|ADR-074]] — FX attribution with purchase-date rates
 - [[docs/adr/073-shared-portfolio-math-package|ADR-073]] — Shared portfolio math (converted track)

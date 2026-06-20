@@ -3,7 +3,7 @@ title: Environment Variables Reference
 type: reference
 status: active
 date: 2026-05-23
-updated: 2026-06-16
+updated: 2026-06-20
 tags: [reference, environment, configuration, deployment, docker, admin-auth, rate-limiting, trusted-proxies, dev-mode, ollama, streaming, research-providers, twelve-data, finnhub, fmp, alpha-vantage]
 description: Complete reference of all environment variables used by the Vision application
 aliases: [env vars, environment variables, .env, configuration, env]
@@ -114,6 +114,7 @@ keyed — Yahoo needs no key). See
 | `VITE_LOG_LEVEL` | `debug` (dev), `warn` (prod) | No | One of `debug`, `info`, `warn`, `error`, `silent` or empty; validated by Zod on boot | Frontend log level | [[apps/frontend/src/lib/env.ts\|env.ts]] |
 | `VITE_ENABLE_LOGGING` | `true` | No | String coerced to boolean (`'true'` → true, empty → default); validated by Zod on boot | Enable frontend logging | [[apps/frontend/src/lib/env.ts\|env.ts]] |
 | `VITE_DEVTOOLS` | _(unset)_ | No | — | When `"true"`, enables React Query Devtools in production builds. On the local Vite dev server, devtools are always enabled via `import.meta.env.DEV` regardless of this variable. Injected as a Docker build arg in `docker-compose.dev.yml`. Do **not** set in production. | [[apps/frontend/src/App.tsx\|App.tsx]] |
+| `VITE_ENABLE_PER_ACCOUNT_HOLDINGS` | `false` | No | String coerced to boolean; validated by the ADR-030 Zod env-schema | When `"true"`, restores the full per-account **holdings** UI surfaces that are hidden by default since ADR-103 (2026-06-20): account pickers on `AddPortfolioTxnDialog`/`EditPortfolioTxnDialog`, the "Move Holdings" button + `MoveHoldingDialog`, the per-account breakdown card in `InvestmentDetailDialog`, the per-account holdings grid + `NetWorthByAccountChart` on the Net Worth page (and re-enables the by-account net-worth query), and the brokerage toggle + sleeve-account picker on `PortfolioImportPage`/`PortfolioImportReviewPage`. Budgeting/cash accounts, bank-balances widget, and liabilities are unaffected by this flag. The backend is unchanged regardless of this setting. Set in `apps/frontend/.env.local` for local dev; inject as a build arg for Docker builds. See [[docs/adr/103-per-account-holdings-ui-flag\|ADR-103]]. | [[apps/frontend/src/lib/env.ts\|env.ts]] |
 
 > [!info] Frontend Env Validation (ADR-030)
 > All three `VITE_*` variables are validated at boot time by Zod schema in `apps/frontend/src/lib/env.ts`. Misconfiguration fails immediately on app startup with an aggregated error message. See [[docs/adr/030-frontend-environment-schema|ADR-030]] for details.

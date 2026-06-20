@@ -90,3 +90,6 @@ Frontend hooks added: `useAccountPositions.ts` (per-account holdings breakdown),
 - [[docs/adr/073-shared-portfolio-math|ADR-073: Shared Portfolio Math]] (cost-basis calculators, unchanged)
 - [[docs/adr/044-portfolio-summary-single-source-of-truth|ADR-044: Portfolio Summary]] (extended, not replaced)
 - [[docs/adr/090-cash-sleeve-trades-as-transfers|ADR-090: Cash Sleeve & Trades = Transfers]] (depends on this)
+
+> [!note] 2026-06-20 — UI scope narrowed by ADR-103
+> The per-account holdings **frontend surfaces** introduced by this ADR (account pickers on trade dialogs, "Move Holdings" button + `MoveHoldingDialog`, per-account breakdown card in `InvestmentDetailDialog`, holdings-transfer block in `CloseAccountDialog`) are hidden by default behind `VITE_ENABLE_PER_ACCOUNT_HOLDINGS=false` (ADR-103). The data model and backend capability described here are fully retained. See [[docs/adr/103-per-account-holdings-ui-flag|ADR-103]] for the flag details.

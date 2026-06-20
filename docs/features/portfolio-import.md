@@ -2,9 +2,9 @@
 title: Feature - Portfolio CSV Import
 type: feature
 status: active
-date: 2026-06-18
-updated: 2026-06-18
-last_modified: 2026-06-18
+date: 2026-06-20
+updated: 2026-06-20
+last_modified: 2026-06-20
 tags: [feature, portfolio, import, csv, brokerage, trades, portfolio-import, instrument-matching, review, type-normalizer, deduplication, fx, adr-078, adr-074, adr-066, migration-0040, migration-0041, migration-0057, account-id, adr-091]
 aliases: [portfolio-import, portfolio-csv-import, brokerage-import]
 description: CSV import of brokerage and exchange trades into portfolio_transactions. Parallel pipeline (stage → validate → matchInvestments → review/autoCommit → commit) with symbol→name exact matching, conservative auto-commit policy, type normalization, FX auto-resolution, field-based+intra-batch deduplication, and saved portfolio parser configs (kind=portfolio on custom_parser_configs).
@@ -190,6 +190,16 @@ Portfolio CSV Import is accessible under **Portfolio → Tools → Import portfo
 | `PortfolioImportPage` | `/portfolio/import` | Column mapper, file upload, parser picker, brokerage account picker |
 | `PortfolioImportReviewPage` | `/portfolio/import/review/:batchId` | Investment resolution for unmatched rows |
 
+> [!warning] Brokerage routing UI flag-gated — default OFF (ADR-103, 2026-06-20)
+> The **brokerage toggle** (marks a batch as `is_brokerage=true`) and the **sleeve-account picker**
+> on `PortfolioImportPage` are hidden when `VITE_ENABLE_PER_ACCOUNT_HOLDINGS` is `false` (the
+> default). Similarly, the per-row cash/trade routing display and the account picker on
+> `PortfolioImportReviewPage` are hidden. Standard portfolio CSV import (without brokerage routing)
+> continues to work regardless of the flag — it is only the per-account brokerage fan-out path that
+> is gated. Set `VITE_ENABLE_PER_ACCOUNT_HOLDINGS=true` to restore the full brokerage import UI.
+> See [[docs/adr/103-per-account-holdings-ui-flag|ADR-103]] and
+> [[docs/adr/095-brokerage-account-import|ADR-095]].
+
 ### Components
 
 | Component | Purpose |
@@ -236,6 +246,8 @@ See [[docs/reference/data-model|Data Model Reference]] for field-level schema.
 - [[docs/adr/078-portfolio-csv-import|ADR-078: Portfolio CSV Import Architecture]]
 - [[docs/features/import|Import Feature]] — budgeting import pipeline (parallel)
 - [[docs/features/portfolio|Portfolio Feature]]
+- [[docs/adr/103-per-account-holdings-ui-flag|ADR-103: Per-account holdings UI flag]] — gates the brokerage toggle + account picker (default off)
+- [[docs/adr/095-brokerage-account-import|ADR-095: Brokerage Account Import]] — fan-out core; brokerage routing UI gated by ADR-103
 - [[docs/adr/066-saved-named-custom-csv-parsers|ADR-066: Saved Named Custom CSV Parsers]] — original parser-config design
 - [[docs/adr/074-fx-attribution-historical-rates|ADR-074: FX Attribution]] — fxResolve semantics used by commit phase
 - [[docs/reference/data-model|Data Model Reference]] — `portfolio_import_batches`, `portfolio_import_staging_rows`, `custom_parser_configs`

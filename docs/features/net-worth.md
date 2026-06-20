@@ -2,8 +2,8 @@
 title: Net Worth Feature
 type: feature
 status: active
-date: 2026-06-18
-updated: 2026-06-19
+date: 2026-06-20
+updated: 2026-06-20
 tags: [feature, net-worth, portfolio, chart, frontend, performance, snapshots, fixed-income, valuation-parity, accrued-interest, appreciation, live-overlay, valuation-freshness, daily-granularity, gap-fill, price-history, per-account, period-selector, scrub, shared-chart-card, adr-093, adr-100]
 description: Daily net worth tracking with a responsive, period-scoped area chart at full daily resolution (no downsampling), all three series (total/liquid/investments) shown together with a legend, drag-to-compare scrubbing, and daily breakdown tables. The chart shares the app-wide ChartCard / ChartPeriodSelector chrome with the Performance page. Powered by pre-computed snapshots whose non-unit asset valuation mirrors live portfolio summary formulas (ADR-061); the latest point is overlaid with the live summary at read time so the headline stays in sync across hourly price refreshes (ADR-064). Historical price series are kept dense at daily granularity via a daily gap-detecting backfill. Per-account breakdown table (ADR-093/ADR-100) shows cash + holdings + total per in_net_worth account.
 aliases: [net worth, networth, wealth tracking, financial health]
@@ -222,6 +222,14 @@ A `VirtualDataTable` showing daily snapshots in reverse chronological order:
 
 ## Per-Account Net-Worth Breakdown (2026-06-18, ADR-093 / ADR-100)
 
+> [!warning] Flag-gated — default OFF (ADR-103, 2026-06-20)
+> The per-account holdings breakdown grid and the `NetWorthByAccountChart` on this page are hidden
+> when `VITE_ENABLE_PER_ACCOUNT_HOLDINGS` is `false` (the default). The by-account net-worth query
+> (`GET /api/info/net-worth/by-account`) is also disabled when the flag is off. The headline net
+> worth total and the per-account **cash** balances (bank-balances widget) are unaffected and always
+> shown. Set `VITE_ENABLE_PER_ACCOUNT_HOLDINGS=true` in `apps/frontend/.env.local` to restore the
+> full per-account holdings breakdown. See [[docs/adr/103-per-account-holdings-ui-flag|ADR-103]].
+
 `NetWorthPage` now includes a **"By Account"** table below the main chart. Each row shows one
 `in_net_worth=true` account's:
 
@@ -245,5 +253,6 @@ historical series require per-account daily snapshots, which are not yet built. 
 
 - [[docs/features/portfolio|Portfolio]] — Investment-specific performance tracking and per-account holdings
 - [[docs/features/exchange-rates|Exchange Rates]] — Currency normalization for multi-currency portfolios
-- [[docs/adr/100-net-worth-account-native-holdings|ADR-100]] — Per-account holdings parity decision
+- [[docs/adr/103-per-account-holdings-ui-flag|ADR-103]] — Flag-gate for per-account holdings UI (default off)
+- [[docs/adr/100-net-worth-account-native-holdings|ADR-100]] — Per-account holdings parity decision (UI scope narrowed by ADR-103)
 - [[docs/adr/093-net-worth-sum-of-accounts|ADR-093]] — Net worth = Σ accounts definition

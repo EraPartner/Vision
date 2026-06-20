@@ -92,3 +92,6 @@ double-count.
 - [[docs/adr/088-account-entity|ADR-088: Account Entity]] (has_cash_sleeve)
 - [[docs/adr/091-per-account-positioning|ADR-091: Per-Account Positioning]] (trade account_id)
 - [[docs/adr/095-brokerage-account-import|ADR-095: Brokerage Import]] (depends on this)
+
+> [!note] 2026-06-20 — Cash-leg creation gated by ADR-103
+> The auto-created `transactions` cash leg described by this ADR (the `createTradeCashLeg` path) goes dormant when `VITE_ENABLE_PER_ACCOUNT_HOLDINGS=false` (the default, ADR-103): since the account picker on trade dialogs is hidden, new trades are created without `account_id`, and `createTradeCashLeg` skips leg creation for unassigned trades. The backend service is retained intact. See [[docs/adr/103-per-account-holdings-ui-flag|ADR-103]].

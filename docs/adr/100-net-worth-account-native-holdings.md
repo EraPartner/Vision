@@ -65,3 +65,6 @@ but not holdings per account.
 - [[docs/adr/091-per-account-positioning|ADR-091: Per-account positioning]]
 - [[docs/adr/064-net-worth-snapshots|ADR-064]] (composition superseded)
 - [[docs/adr/061-snapshot-valuation-parity|ADR-061: Snapshot valuation parity]] (parity-test approach)
+
+> [!note] 2026-06-20 — UI scope narrowed by ADR-103
+> The per-account holdings **frontend surfaces** introduced by this ADR (the by-account breakdown table + `NetWorthByAccountChart` on the Net Worth page; the by-account net-worth query `GET /api/info/net-worth/by-account`) are hidden by default behind `VITE_ENABLE_PER_ACCOUNT_HOLDINGS=false` (ADR-103). The backend `byAccount` array in `getPortfolioSummary` and the parity tests described here are fully retained. See [[docs/adr/103-per-account-holdings-ui-flag|ADR-103]] for the flag details.
