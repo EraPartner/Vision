@@ -280,7 +280,7 @@ export function AddAccountDialog(props: AddAccountDialogProps = {}) {
                     <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
                         {t('common.cancel')}
                     </Button>
-                    <Button type="submit" disabled={isPending}>
+                    <Button type="submit" disabled={isPending || !form.name.trim()}>
                         {isPending && <Loader2 className="h-4 w-4 animate-spin mr-1" />}
                         {isEditMode ? t('common.save') : t('common.create')}
                     </Button>

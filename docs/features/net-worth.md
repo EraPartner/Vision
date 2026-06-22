@@ -3,7 +3,7 @@ title: Net Worth Feature
 type: feature
 status: active
 date: 2026-06-20
-updated: 2026-06-20
+updated: 2026-06-21
 tags: [feature, net-worth, portfolio, chart, frontend, performance, snapshots, fixed-income, valuation-parity, accrued-interest, appreciation, live-overlay, valuation-freshness, daily-granularity, gap-fill, price-history, per-account, period-selector, scrub, shared-chart-card, adr-093, adr-100]
 description: Daily net worth tracking with a responsive, period-scoped area chart at full daily resolution (no downsampling), all three series (total/liquid/investments) shown together with a legend, drag-to-compare scrubbing, and daily breakdown tables. The chart shares the app-wide ChartCard / ChartPeriodSelector chrome with the Performance page. Powered by pre-computed snapshots whose non-unit asset valuation mirrors live portfolio summary formulas (ADR-061); the latest point is overlaid with the live summary at read time so the headline stays in sync across hourly price refreshes (ADR-064). Historical price series are kept dense at daily granularity via a daily gap-detecting backfill. Per-account breakdown table (ADR-093/ADR-100) shows cash + holdings + total per in_net_worth account.
 aliases: [net worth, networth, wealth tracking, financial health]
@@ -200,11 +200,17 @@ Three KPI cards at the top:
 ### Statistics Row
 
 Three additional cards below the chart:
-- **Peak**: Highest net worth recorded (seeded with current net worth to prevent invalid display when snapshots are empty)
-- **Lowest**: Lowest net worth recorded (seeded with current net worth to prevent invalid display when snapshots are empty)
-- **Days Tracked**: Total number of daily snapshots
+- **Peak Net Worth**: Highest net worth within the **currently selected chart period** (derived from `displaySnapshots`, the period-scoped snapshot window)
+- **Lowest Point**: Lowest net worth within the **currently selected chart period**
+- **Days Tracked**: Number of daily snapshots in the **currently selected chart period**
 
-Implementation note: When a brand-new user has no historical snapshots (or all data is filtered out), the peak and trough calculations are seeded with `current.netWorth` instead of `±Infinity` to avoid displaying "€-∞" and "€∞" in the cards.
+These cards follow the period selector (1M/3M/6M/1Y/3Y/All) so the figures reflect the same
+date window as the chart. The **"ALL TIME" change badge** in the page header is unaffected -- it
+always compares the first and last snapshot in the full series.
+
+Implementation note: When a brand-new user has no historical snapshots (or all data is filtered
+out by the period), the peak and trough calculations are seeded with `current.netWorth` instead
+of `±Infinity` to avoid displaying "€-∞" and "€∞" in the cards.
 
 ### Daily Breakdown Table
 

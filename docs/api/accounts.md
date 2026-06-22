@@ -4,7 +4,7 @@ type: endpoint
 method: GET, POST, PATCH, DELETE
 path: /api/accounts
 description: Account entity management (ADR-088) — the user's own accounts spanning budgeting cash, portfolio holdings, and liabilities
-date: 2026-06-18
+date: 2026-06-21
 tags: [api, accounts, account-entity, adr-088, net-worth, cash-sleeve]
 status: active
 aliases: [accounts-api, account-management, account-entity]
@@ -79,6 +79,45 @@ survivor's name so the dual-write trigger keeps it merged), `planned_transaction
 survivor or any source is missing. Irreversible (the source rows are gone; identity lives on
 `account_id`). Used to unify e.g. an old literal `'KBC'` account into its IBAN account after the
 ADR-088 adapter change.
+
+## UI Behaviors (AccountsPage)
+
+### Account cards — balance display
+
+Each account card in `AccountsPage` (`apps/frontend/src/pages/AccountsPage.tsx`) now shows
+`computed_balance` (the account's ledger balance) formatted in the account's native currency when
+the field is present in the API response. The balance label carries a `title` tooltip
+(i18n key `accounts.balanceTooltip`).
+
+### Drift badge — signed, currency-formatted
+
+When `statement_balance` is set and `drift` is non-zero, the drift badge on the account card
+displays a signed, currency-formatted amount -- for example "Drift: +€15.50" or "Drift: −€3.00".
+The badge has a `title` tooltip (i18n key `accounts.driftTooltip`) explaining what the figure
+represents. See [[docs/adr/094-balance-reconciliation-drift|ADR-094]] for the drift semantics.
+
+### AddAccountDialog — name-required guard
+
+The Create/Save button in `AddAccountDialog`
+(`apps/frontend/src/features/accounts/AddAccountDialog.tsx`) is now `disabled` while the Name
+field is blank. Previously submitting with a blank name was a silent no-op; the guard makes the
+required-field constraint visible at the button level.
+
+### MergeAccountDialog — type-mismatch note
+
+When the user selects a merge target whose `type` differs from the source account's `type`, an
+amber non-blocking note appears in `MergeAccountDialog`
+(`apps/frontend/src/features/accounts/MergeAccountDialog.tsx`) using i18n key
+`accounts.mergeTypeMismatch` (params: `{sourceType}`, `{targetType}`). The merge is still
+allowed -- the note is informational only.
+
+### i18n keys (2026-06-21)
+
+| Key | Purpose |
+|-----|---------|
+| `accounts.balanceTooltip` | Tooltip on the balance figure in the account card |
+| `accounts.driftTooltip` | Tooltip on the drift badge in the account card |
+| `accounts.mergeTypeMismatch` | Amber note in MergeAccountDialog when target type differs from source |
 
 ## Data model
 

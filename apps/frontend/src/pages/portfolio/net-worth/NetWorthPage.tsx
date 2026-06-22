@@ -184,9 +184,11 @@ export default function NetWorthPage() {
     );
   }
 
+  // Peak/trough/days-tracked reflect the selected period (the visible window),
+  // matching the chart below; the "all time" change badge stays on the full series.
   let peak = current.netWorth;
   let trough = current.netWorth;
-  for (const s of snapshots) {
+  for (const s of displaySnapshots) {
     if (s.netWorth > peak) peak = s.netWorth;
     if (s.netWorth < trough) trough = s.netWorth;
   }
@@ -356,7 +358,7 @@ export default function NetWorthPage() {
             <Wallet className="h-4 w-4 text-primary" />
           </CardHeader>
           <CardContent>
-            <p className="text-2xl font-bold text-foreground tabular-nums">{snapshots.length}</p>
+            <p className="text-2xl font-bold text-foreground tabular-nums">{displaySnapshots.length}</p>
           </CardContent>
         </Card>
       </div>

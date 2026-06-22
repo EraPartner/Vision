@@ -3,8 +3,8 @@ title: Feature - Portfolio & Investments
 type: feature
 status: active
 date: 2026-06-20
-last_modified: 2026-06-20
-updated: 2026-06-20
+last_modified: 2026-06-21
+updated: 2026-06-21
 tags: [feature, portfolio, investments, stocks, crypto, metals, phase-1, phase-3.5, phase-3.6, phase-9, phase-8, phase-14, pdf-export, offline-resilience, stale-prices, online-status-detection, graceful-degradation, portfolio-summary, realtime-totals, decimal-precision, monetary-math, snapshot-valuation-parity, fixed-income-accrual, real-estate-appreciation, net-worth-reconciliation, historical-fx, snapshot-fx, loading-states, error-states, page-error, skeleton, portfolio-unit-math, shared-utils, splits-event, return-of-capital, banker-rounding, fx-attribution, asset-gain, fx-gain, purchase-date-rates, value-fx-neutral, adr-074, adr-091, adr-100, per-account, move-holding, close-account, brokerage-fanout, rebalancing, saved-plans, cash-aware, cross-workspace, adr-098]
 aliases: [portfolio-feature, investments-feature, holdings, net-worth, stocks, crypto, real-estate, savings, bonds, metals, performance, watchlist]
 description: Track stocks, ETFs, crypto, metals, real estate, savings, and bonds; includes Phase 8 PDF report export with 6 portfolio sections. 2026-05-29 adds historical FX in snapshots and loading/error states on all asset pages. June 2026 adds snapshotBuilder split/return_of_capital events, APP_TIMEZONE day-boundary fix, shared portfolioUnitMath.ts, and FX attribution UI (ADR-074): asset gain / FX effect decomposition on overview, performance, asset pages, and investment detail.
@@ -765,6 +765,10 @@ A numeric input limits how much spendable cash to deploy in a run. Blank = deplo
 liquid cash. The UI clamps user input to `[0, availableCash]` before sending it as the existing
 `availableCash` parameter on the route.
 
+The **"Available cash"** summary card always shows the true spendable-balance sum drawn from
+the uncapped inputs query, not the capped value. This means the card stays accurate regardless
+of whether a cash cap is active -- the cap only limits deployment, not the displayed balance.
+
 ### Weight normalization
 
 Target weights do not need to sum to 100%. The server's `normalizeWeights` function scales them
@@ -790,6 +794,12 @@ interface RebalancePlan {
 - Max 50 saved plans per user. Enforced server-side with a 400 response on excess.
 - Backend validation is in `assertRebalancePlansValue` inside `apps/node-backend/src/routes/settings.js`.
 - The `rebalance_plans` key returns `[]` by default (same pattern as `backup_settings`).
+
+### Deployment plan Target column
+
+The **Target** column in the deployment-plan result table renders target percentages to **1 decimal
+place** (e.g. 7.5% instead of 8%). This ensures fractional preset weights such as All Weather's
+7.5% sleeves display accurately and the column no longer visually sums to 101% due to rounding.
 
 ### i18n keys (2026-06-19)
 

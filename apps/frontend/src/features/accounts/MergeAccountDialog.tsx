@@ -62,6 +62,14 @@ export function MergeAccountDialog({ source, accounts, open, onOpenChange }: {
                             {t('accounts.mergeWarning', { source: label(source), target: label(target) })}
                         </p>
                     )}
+                    {target && target.type !== source.type && (
+                        <p className="text-sm text-amber-600 dark:text-amber-500">
+                            {t('accounts.mergeTypeMismatch', {
+                                sourceType: t(`accounts.type.${source.type}`),
+                                targetType: t(`accounts.type.${target.type}`),
+                            })}
+                        </p>
+                    )}
                 </div>
                 <DialogFooter className="pt-2">
                     <Button variant="outline" onClick={() => onOpenChange(false)}>{t('common.cancel')}</Button>

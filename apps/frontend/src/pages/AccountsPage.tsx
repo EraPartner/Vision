@@ -10,6 +10,7 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { Landmark, MoreVertical, Pencil, Archive, ArchiveRestore, Trash2, Loader2, GitMerge, DoorClosed } from "lucide-react";
 import { useAccounts, useUpdateAccount, useDeleteAccount } from "@/hooks/useAccounts";
+import { useCurrencyFormatter } from "@/hooks/useCurrencyFormatter";
 import { AddAccountDialog, type AccountFormValues } from "@/features/accounts/AddAccountDialog";
 import { MergeAccountDialog } from "@/features/accounts/MergeAccountDialog";
 import { CloseAccountDialog } from "@/features/accounts/CloseAccountDialog";
@@ -26,6 +27,7 @@ export default function AccountsPage() {
     const updateMutation = useUpdateAccount();
     const deleteMutation = useDeleteAccount();
     const { confirm, ConfirmDialog } = useConfirmDialog();
+    const fmtCur = useCurrencyFormatter();
 
     const requestDelete = async (a: Account) => {
         const ok = await confirm({
@@ -147,11 +149,23 @@ export default function AccountsPage() {
                                         <span>{a.currency}</span>
                                         {a.institution && <span>· {a.institution}</span>}
                                         {a.drift != null && a.drift !== 0 && (
-                                            <Badge variant="destructive" className="text-xs">
-                                                {t('accounts.drift')}: {a.drift.toFixed(2)}
+                                            <Badge
+                                                variant="destructive"
+                                                className="text-xs"
+                                                title={t('accounts.driftTooltip')}
+                                            >
+                                                {t('accounts.drift')}: {a.drift > 0 ? "+" : ""}{fmtCur(a.drift, a.currency)}
                                             </Badge>
                                         )}
                                     </div>
+                                    {a.computed_balance != null && (
+                                        <div
+                                            className="mt-2 text-lg font-semibold tabular-nums"
+                                            title={t('accounts.balanceTooltip')}
+                                        >
+                                            {fmtCur(a.computed_balance, a.currency)}
+                                        </div>
+                                    )}
                                 </div>
                                 <DropdownMenu>
                                     <DropdownMenuTrigger asChild>

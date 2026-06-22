@@ -87,7 +87,9 @@ export default function RebalancePage() {
   const fmt = useMemo(() => new Intl.NumberFormat(undefined, {
     style: "currency", currency, maximumFractionDigits: 0,
   }), [currency]);
-  const pct = (v: number) => `${(v * 100).toFixed(0)}%`;
+  // Show up to one decimal so fractional targets (e.g. All Weather's 7.5%) read
+  // accurately and the column doesn't visibly sum to 101% from rounding.
+  const pct = (v: number) => `${(v * 100).toLocaleString(undefined, { maximumFractionDigits: 1 })}%`;
   // t() returns the key itself when a translation is missing; fall back to the
   // raw sleeve key for asset classes outside the labelled set (e.g. `other`).
   const sleeveLabel = (sleeve: string) => {
@@ -351,7 +353,7 @@ export default function RebalancePage() {
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <Card className="glass-regular">
               <CardHeader className="pb-2"><CardTitle className="text-sm text-muted-foreground">{t("rebalance.availableCash")}</CardTitle></CardHeader>
-              <CardContent><p className="text-2xl font-bold text-primary">{fmt.format(result.availableCash)}</p>
+              <CardContent><p className="text-2xl font-bold text-primary">{fmt.format(availableCash || result.availableCash)}</p>
                 <p className="text-xs text-muted-foreground mt-1">{t("rebalance.availableCashHint")}</p></CardContent>
             </Card>
             <Card className="glass-regular">
