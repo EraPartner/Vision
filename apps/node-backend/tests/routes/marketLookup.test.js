@@ -38,7 +38,7 @@ vi.mock('../../src/config/logger.js', () => ({
 }));
 
 import { ValidationError, AppError } from '../../src/middleware/errorHandler.js';
-await import('../../src/routes/marketLookup.js');
+const { __clearQuoteCacheForTests } = await import('../../src/routes/marketLookup.js');
 
 function mockResponse() {
   const res = {
@@ -58,6 +58,9 @@ function mockResponse() {
 describe('Market Lookup Routes', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    // The /quote route caches per symbol; clear it so cases don't see each
+    // other's cached quotes.
+    __clearQuoteCacheForTests();
   });
 
   describe('GET /quote', () => {
