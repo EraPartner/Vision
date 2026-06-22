@@ -13,6 +13,14 @@ vi.mock('../src/services/currency/currencyConversionService.js', () => ({
   convertRowsToEur: vi.fn(async (rows) => rows.map(r => ({ ...r, amount_eur: Number(r.amount || 0) }))),
 }));
 
+// getIncludeTransfers() reads the `includeTransfers` setting; stub it so the
+// transfer-exclusion lookup (ADR-083) doesn't consume the order-dependent
+// `query` mocks below. Default null → transfers excluded.
+vi.mock('../src/repositories/settingsRepository.js', () => ({
+  settingsRepository: { get: vi.fn(async () => null), getAll: vi.fn(async () => ({})) },
+  default: { get: vi.fn(async () => null), getAll: vi.fn(async () => ({})) },
+}));
+
 import { query, queryPrepared } from '../src/database/connection.js';
 import { convertRowsToEur } from '../src/services/currency/currencyConversionService.js';
 import infoRepository from '../src/repositories/infoRepository.js';
@@ -668,6 +676,10 @@ describe('InfoRepository', () => {
         expect(result.current_month.days_elapsed).toBe(15);
         // 5 spent over 15 calendar days, projected across March's 31 days.
         expect(result.comparison.projected_monthly_total).toBeCloseTo((5 / 15) * 31, 2);
+        // ADR-083: both the 6-month and current-month queries must exclude
+        // internal transfers when includeTransfers is off (the default).
+        expect(query.mock.calls[0][0]).toContain('is_transfer = false');
+        expect(query.mock.calls[1][0]).toContain('is_transfer = false');
       } finally {
         vi.useRealTimers();
       }

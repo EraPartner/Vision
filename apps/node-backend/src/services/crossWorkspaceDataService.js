@@ -13,6 +13,7 @@ import { query } from '../database/connection.js';
 import { convertToCurrency } from './currency/currencyConversionService.js';
 import { getPortfolioSummary } from './portfolio/portfolioSummaryService.js';
 import { toDecimal, toNumber, roundToCents } from '../lib/money.js';
+import { COMPUTED_BALANCE_LATERAL } from '../repositories/accountBalanceSql.js';
 
 // Roll the fine-grained `asset_class` taxonomy up into the coarse allocation
 // sleeves the classic-portfolio presets target (CLASSIC_PORTFOLIOS uses
@@ -49,19 +50,15 @@ export async function assembleRebalanceInputs({ currency = 'EUR' } = {}) {
 
   // Available cash = the deployable balance of every spendable, active account
   // (ADR-089 `spendable` flag), each converted to the target currency. Uses the
-  // account's computed balance (ADR-094: the latest active transaction's running
-  // balance, which includes the opening balance) — the same figure the accounts
-  // hub and dashboard show — not Σ(amount), which omits the opening balance.
+  // account's computed balance (ADR-094) — the same anchored running balance the
+  // accounts hub and dashboard show (latest stamped statement balance, which
+  // embeds the opening balance, advanced by subsequent unstamped activity) —
+  // via the shared COMPUTED_BALANCE_LATERAL helper.
   const { rows } = await query(
     `SELECT a.id, a.name, a.currency,
             COALESCE(lb.balance, 0) AS balance
        FROM accounts a
-       LEFT JOIN LATERAL (
-         SELECT t.balance FROM transactions t
-         WHERE t.account_id = a.id AND t.is_active = true AND t.balance IS NOT NULL
-         ORDER BY t.date DESC, t.id DESC
-         LIMIT 1
-       ) lb ON true
+       ${COMPUTED_BALANCE_LATERAL}
       WHERE a.spendable = true AND a.is_active = true
       ORDER BY a.name`,
   );

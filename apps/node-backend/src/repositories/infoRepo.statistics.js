@@ -9,13 +9,21 @@ import {
   formatDateToYmd,
   extractYearMonth,
   mapRowsForAmountConversion,
+  getIncludeTransfers,
 } from './infoRepositoryHelpers.js';
 
 export async function getAverageVsCurrentSpending(targetCurrency = 'EUR') {
+  // Exclude internal transfers (ADR-083) from spending aggregates unless the
+  // user has explicitly opted in. Without this, a checking->savings transfer's
+  // outflow leg inflates avg/daily/projected spending — the exact thing ADR-083
+  // (and the dropping of mv_cashflow_daily) set out to prevent.
+  const includeTransfers = await getIncludeTransfers();
+  const transferFilter = includeTransfers ? '' : 'AND t.is_transfer = false';
   const sql6m = `
     SELECT t.amount, t.currency, t.date
     FROM transactions t
     WHERE t.is_active = true
+      ${transferFilter}
       AND t.date >= date_trunc('month', CURRENT_DATE) - interval '6 months'
       AND t.date < date_trunc('month', CURRENT_DATE)
     LIMIT 10000
@@ -24,6 +32,7 @@ export async function getAverageVsCurrentSpending(targetCurrency = 'EUR') {
     SELECT t.amount, t.currency, t.date
     FROM transactions t
     WHERE t.is_active = true
+      ${transferFilter}
       AND t.date >= date_trunc('month', CURRENT_DATE)
       AND t.date <= CURRENT_DATE
     LIMIT 5000

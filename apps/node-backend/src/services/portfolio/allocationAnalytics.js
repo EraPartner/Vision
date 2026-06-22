@@ -56,3 +56,32 @@ export const CLASSIC_PORTFOLIOS = Object.freeze({
   all_weather: Object.freeze({ stocks: 0.30, bonds: 0.55, gold: 0.075, commodities: 0.075 }),
   three_fund: Object.freeze({ stocks: 0.48, intl_stocks: 0.12, bonds: 0.40 }),
 });
+
+/**
+ * Map target-sleeve names that no real asset_class rolls up to (see
+ * crossWorkspaceDataService.SLEEVE_ROLLUP) onto the nearest representable sleeve,
+ * so a preset's cash deploys into a bucket the user can actually hold instead of
+ * a phantom sleeve that absorbs cash forever. `commodities` folds into `gold`
+ * (the precious-metals sleeve) and `intl_stocks` into `stocks`. Left here next to
+ * CLASSIC_PORTFOLIOS so the canonical models stay intact for drift comparison.
+ */
+export const REBALANCE_TARGET_ALIASES = Object.freeze({
+  commodities: 'gold',
+  intl_stocks: 'stocks',
+});
+
+/**
+ * Collapse a target-weight map into the representable sleeve vocabulary, summing
+ * weights that alias to the same sleeve. Used only by the rebalance path.
+ *
+ * @param {Record<string, number>} weights
+ * @returns {Record<string, number>}
+ */
+export function foldTargetSleeves(weights) {
+  const out = /** @type {Record<string, number>} */ ({});
+  for (const [k, v] of Object.entries(weights ?? {})) {
+    const key = REBALANCE_TARGET_ALIASES[k] ?? k;
+    out[key] = (Number(out[key]) || 0) + (Number(v) || 0);
+  }
+  return out;
+}

@@ -37,9 +37,30 @@ export function projectNetWorth({ current, monthlyContribution, annualReturn, an
 }
 
 /**
+ * Resolve the cash a rebalance may actually deploy. Negative available cash is
+ * floored at 0; an optional user `cap` (e.g. "only deploy €X of my idle cash")
+ * is clamped to [0, availableCash] so a stale or hostile cap can never instruct
+ * the planner to deploy money that does not exist. `cap` null/non-finite means
+ * "no cap" (use the full available cash).
+ *
+ * @param {{ availableCash:number, cap?:number|null }} p
+ * @returns {number}
+ */
+export function resolveDeployableCash({ availableCash, cap }) {
+  const avail = toDecimal(availableCash ?? 0);
+  const base = avail.lt(0) ? toDecimal(0) : avail;
+  if (cap == null || !Number.isFinite(Number(cap))) return toNumber(roundToCents(base));
+  let c = toDecimal(Number(cap));
+  if (c.lt(0)) c = toDecimal(0);
+  if (c.gt(base)) c = base;
+  return toNumber(roundToCents(c));
+}
+
+/**
  * Cash-aware rebalancing: deploy `availableCash` into underweight sleeves to move
  * toward `targetWeights`, without selling. Returns per-sleeve deploy amounts that
- * sum to the cash actually deployable (≤ availableCash), weighted by shortfall.
+ * sum EXACTLY to the cash actually deployable (≤ availableCash), weighted by
+ * shortfall.
  *
  * @param {{ actualValues:Record<string,number>, targetWeights:Record<string,number>, availableCash:number }} p
  * @returns {Record<string, number>}
@@ -67,9 +88,25 @@ export function rebalanceDeployment({ actualValues, targetWeights, availableCash
   // Deploy all the cash, split across underweight sleeves in proportion to
   // shortfall (capped at total shortfall when cash exceeds it).
   const deployable = cash.gt(shortfallSum) ? shortfallSum : cash;
+
+  // Independently rounding each sleeve to cents leaves the parts a cent or two
+  // off `deployable` (e.g. 33.33×3 = 99.99 of 100.00), and the UI sums them as
+  // "total deployed". Largest-remainder reconciliation: round each sleeve, then
+  // push the residual cents onto the largest-shortfall sleeve so the parts sum
+  // to `deployable` exactly.
   const out = /** @type {Record<string, number>} */ ({});
+  let allocated = toDecimal(0);
+  let topSleeve = null;
+  let topShort = toDecimal(-1);
   for (const [sleeve, short] of Object.entries(shortfalls)) {
-    out[sleeve] = toNumber(roundToCents(deployable.times(short).dividedBy(shortfallSum)));
+    const amount = roundToCents(deployable.times(short).dividedBy(shortfallSum));
+    out[sleeve] = toNumber(amount);
+    allocated = allocated.plus(amount);
+    if (short.gt(topShort)) { topShort = short; topSleeve = sleeve; }
+  }
+  if (topSleeve != null) {
+    const residual = roundToCents(deployable.minus(allocated));
+    if (!residual.eq(0)) out[topSleeve] = toNumber(roundToCents(toDecimal(out[topSleeve]).plus(residual)));
   }
   return out;
 }

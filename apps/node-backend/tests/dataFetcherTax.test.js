@@ -84,4 +84,18 @@ describe('fetchTaxData — Belgian tax FX uses transaction-date rates (ADR-085)'
     // Only the transactions query runs — no exchange_rates query for an all-EUR set.
     expect(query).toHaveBeenCalledTimes(1);
   });
+
+  it('flags currencies summed 1:1 when no rate (historical or current) is available', async () => {
+    // KRW has neither a stored historical rate nor a current rate.
+    query
+      .mockResolvedValueOnce({ rows: [dividendRow({ currency: 'KRW', amount: 1000, taxes: 0 })] })
+      .mockResolvedValueOnce({ rows: [] }); // no historical rate stored for KRW
+
+    const data = await fetchTaxData('EUR', { kind: 'year', year: 2024 }, {});
+
+    // Summed at an unconverted 1:1 rate (1000 KRW → 1000), and surfaced so the
+    // report can annotate it as approximate (ADR-085) instead of silently lying.
+    expect(data.dividendsReceived).toBeCloseTo(1000, 6);
+    expect(data.unconvertedCurrencies).toEqual(['KRW']);
+  });
 });
