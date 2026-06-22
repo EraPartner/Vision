@@ -42,7 +42,11 @@ export default function NetWorthPage() {
   });
 
   // Per-account holdings history (ADR-100) — the rebuilt daily series, served Σ accounts.
-  const { data: byAccountData } = useQuery({
+  const {
+    data: byAccountData,
+    isLoading: byAccountLoading,
+    error: byAccountError,
+  } = useQuery({
     queryKey: ["net-worth-by-account", targetCurrency],
     queryFn: () => apiClient.getNetWorthByAccount({ currency: targetCurrency }),
     staleTime: 120_000,
@@ -317,14 +321,29 @@ export default function NetWorthPage() {
         </Card>
       )}
 
-      {/* Per-account holdings history (ADR-100): stacked daily series, Σ accounts */}
-      <NetWorthByAccountChart
-        accounts={byAccountData?.accounts ?? []}
-        fmt={fmt}
-        title={t('networth.byAccountHistory')}
-        description={t('networth.byAccountHistoryDesc')}
-        unassignedLabel={t('accounts.unassigned')}
-      />
+      {/* Per-account holdings history (ADR-100): stacked daily series, Σ accounts.
+          Surface load/error explicitly so a failed fetch (e.g. the per-account
+          500 this endpoint regressed on) doesn't silently render a blank chart. */}
+      {byAccountError ? (
+        <Card className="glass-regular">
+          <CardContent className="py-10 text-center">
+            <p className="text-sm font-medium text-foreground">{t('networth.unableToLoad')}</p>
+            <p className="text-xs text-muted-foreground mt-1">
+              {byAccountError instanceof Error ? byAccountError.message : t('networth.tryAgain')}
+            </p>
+          </CardContent>
+        </Card>
+      ) : byAccountLoading ? (
+        <Card className="glass-regular"><CardContent className="pt-6"><Skeleton className="h-[300px] w-full" /></CardContent></Card>
+      ) : (
+        <NetWorthByAccountChart
+          accounts={byAccountData?.accounts ?? []}
+          fmt={fmt}
+          title={t('networth.byAccountHistory')}
+          description={t('networth.byAccountHistoryDesc')}
+          unassignedLabel={t('accounts.unassigned')}
+        />
+      )}
 
       {/* Historical extremes */}
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
