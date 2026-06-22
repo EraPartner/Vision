@@ -42,6 +42,9 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           GITLEAKS_CONFIG: config/gitleaks.toml
+          # The scan result gates via exit code; skip the report-artifact upload so
+          # a hit Actions artifact-storage quota can't fail an otherwise-clean scan.
+          GITLEAKS_ENABLE_UPLOAD_ARTIFACT: false
 
   # ─────────────────────────────────────────────────────────────────────────────
   # Deps audit — bun audit fails on HIGH or CRITICAL vulnerabilities
