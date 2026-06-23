@@ -70,6 +70,36 @@ describe('researchAggregator.fetch', () => {
     expect(governor.spend).toHaveBeenCalledTimes(1);
   });
 
+  it('coalesces concurrent identical fetches into a single provider call (single-flight)', async () => {
+    let resolveQuote;
+    const adapters = makeAdapters({
+      yahoo: { quote: vi.fn(() => new Promise((r) => { resolveQuote = () => r({ price: 2, src: 'yahoo' }); })) },
+    });
+    const governor = makeGovernor();
+    const agg = build({ adapters, governor });
+
+    // Fire three concurrent identical requests before the first resolves.
+    const p1 = agg.fetch('quote', { symbol: 'AAPL', assetClass: 'stock' });
+    const p2 = agg.fetch('quote', { symbol: 'AAPL', assetClass: 'stock' });
+    const p3 = agg.fetch('quote', { symbol: 'AAPL', assetClass: 'stock' });
+    // Let the first fetch reach the (pending) adapter call before resolving it.
+    await new Promise((r) => setTimeout(r, 0));
+    resolveQuote();
+    const [r1, r2, r3] = await Promise.all([p1, p2, p3]);
+
+    // One outbound call and one quota spend, shared by all three callers.
+    expect(adapters.yahoo.quote).toHaveBeenCalledTimes(1);
+    expect(governor.spend).toHaveBeenCalledTimes(1);
+    expect(r1.data).toEqual({ price: 2, src: 'yahoo' });
+    expect(r2.data).toEqual({ price: 2, src: 'yahoo' });
+    expect(r3.data).toEqual({ price: 2, src: 'yahoo' });
+
+    // After settling, the in-flight entry is cleared and the next call is a cache hit.
+    const fourth = await agg.fetch('quote', { symbol: 'AAPL', assetClass: 'stock' });
+    expect(fourth.source).toBe('cache');
+    expect(adapters.yahoo.quote).toHaveBeenCalledTimes(1);
+  });
+
   it('skips a quota-exhausted provider and falls through to the next', async () => {
     const adapters = makeAdapters();
     const governor = makeGovernor((p) => p !== 'yahoo'); // yahoo tapped out

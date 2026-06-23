@@ -10,9 +10,10 @@ aliases: [net worth projection, FI projection, cash-aware rebalancing, unified t
 # ADR-098: Cross-Workspace Features
 
 ## Status
-Accepted — partially implemented 2026-06-19. Cash-aware rebalancing and the unified tax view are
-wired end-to-end (routes + pages + nav); the net-worth/FI projection cone remains a pure, unwired
-core (`projectNetWorth`). See the 2026-06-19 implementation note below.
+Accepted — partially implemented 2026-06-19. Cash-aware rebalancing is wired end-to-end
+(routes + pages + nav). The unified tax view was wired then **removed** by ADR-102 (see the
+superseded note below). The net-worth/FI projection cone remains a pure, unwired core
+(`projectNetWorth`). See the 2026-06-19 implementation note below.
 
 **Superseded in part (2026-06-19):** the **Unified Tax view** described below was removed end-to-end
 by [[docs/adr/102-remove-unified-tax-view|ADR-102]] (no clear use case beyond the two existing tax

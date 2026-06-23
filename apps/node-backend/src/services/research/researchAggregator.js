@@ -49,6 +49,12 @@ export function createResearchAggregator({
   recordSuccess = providerHealth.recordSuccess,
   recordError = providerHealth.recordError,
 } = {}) {
+  // Coalesce concurrent identical fetches: without this, N requests for the same
+  // cold key all miss the cache and all fan out to providers (and all spend
+  // quota). Keyed by the same cache key; cleared in `finally`.
+  /** @type {Map<string, Promise<any>>} */
+  const inFlight = new Map();
+
   function supports(provider, dataType) {
     return adapterSupports(provider, METHOD_BY_TYPE[dataType], adapters);
   }
@@ -75,26 +81,34 @@ export function createResearchAggregator({
     const cached = /** @type {{ provider?: string, data?: unknown } | undefined} */ (cache.get(key));
     if (cached !== undefined) return { ...cached, source: 'cache' };
 
-    const attempted = [];
-    for (const provider of usableChain(dataType, assetClass)) {
-      if (!(await governor.canSpend(provider))) {
-        attempted.push({ provider, skipped: 'quota' });
-        continue;
-      }
-      try {
-        const data = await adapters[provider][method](symbol, { range, count });
-        await governor.spend(provider);
-        Promise.resolve(recordSuccess(provider)).catch(() => {});
-        const result = { provider, data };
-        cache.set(key, result, ttlForType(dataType));
-        return { ...result, source: 'live' };
-      } catch (err) {
-        Promise.resolve(recordError(provider, err)).catch(() => {});
-        attempted.push({ provider, error: err instanceof Error ? err.message : String(err) });
-      }
-    }
+    const existing = inFlight.get(key);
+    if (existing) return existing;
 
-    return { source: 'unavailable', attempted };
+    const work = /** @type {Promise<{ provider?: string, data?: unknown, source: 'live'|'cache'|'unavailable', attempted?: any[] }>} */ ((async () => {
+      const attempted = [];
+      for (const provider of usableChain(dataType, assetClass)) {
+        if (!(await governor.canSpend(provider))) {
+          attempted.push({ provider, skipped: 'quota' });
+          continue;
+        }
+        try {
+          const data = await adapters[provider][method](symbol, { range, count });
+          await governor.spend(provider);
+          Promise.resolve(recordSuccess(provider)).catch(() => {});
+          const result = { provider, data };
+          cache.set(key, result, ttlForType(dataType));
+          return { ...result, source: 'live' };
+        } catch (err) {
+          Promise.resolve(recordError(provider, err)).catch(() => {});
+          attempted.push({ provider, error: err instanceof Error ? err.message : String(err) });
+        }
+      }
+
+      return { source: 'unavailable', attempted };
+    })().finally(() => inFlight.delete(key)));
+
+    inFlight.set(key, work);
+    return work;
   }
 
   /**

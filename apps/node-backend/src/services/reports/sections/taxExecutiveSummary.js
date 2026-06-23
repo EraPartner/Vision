@@ -47,6 +47,14 @@ export function renderTaxExecutiveSummary(data, { currency }) {
     ? `<p style="color:hsl(var(--muted));font-size:11px;margin:0 0 12px;">${periodNote}</p>`
     : '';
 
+  // Flag any foreign currency that had no FX rate available and was therefore
+  // summed at an unconverted 1:1 rate, so the totals above are not mistaken for
+  // exact figures (ADR-085).
+  const unconverted = Array.isArray(data?.unconvertedCurrencies) ? data.unconvertedCurrencies : [];
+  const fxWarningHtml = unconverted.length > 0
+    ? `<p style="color:hsl(var(--warning, 38 92% 50%));font-size:11px;margin:0 0 12px;"><strong>Approximate:</strong> no exchange rate was available for ${unconverted.join(', ')}; ${unconverted.length > 1 ? 'these amounts were' : 'this amount was'} included at a 1:1 rate.</p>`
+    : '';
+
   const profileHtml = taxProfile
     ? `<p style="color:hsl(var(--muted));font-size:11px;margin:0 0 12px;">Tax profile: ${taxProfile.filingStatus ?? ''} · ${taxProfile.region ?? ''}</p>`
     : '';
@@ -56,7 +64,7 @@ export function renderTaxExecutiveSummary(data, { currency }) {
       <div class="section-title">Tax Summary</div>
       <div class="section-subtitle">Taxes and fees for tax year ${taxYear}</div>
       <hr class="section-divider">
-      ${noteHtml}${profileHtml}
+      ${noteHtml}${profileHtml}${fxWarningHtml}
       <div class="kpi-grid">
         <div class="kpi-card">
           <div class="kpi-label">Total Taxes Paid</div>

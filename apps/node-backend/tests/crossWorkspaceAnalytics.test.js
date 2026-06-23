@@ -1,7 +1,8 @@
 import { describe, expect, it } from 'vitest';
 import {
-  projectNetWorth, rebalanceDeployment,
+  projectNetWorth, rebalanceDeployment, resolveDeployableCash,
 } from '../src/services/crossWorkspaceAnalytics.js';
+import { foldTargetSleeves } from '../src/services/portfolio/allocationAnalytics.js';
 
 describe('projectNetWorth (ADR-098)', () => {
   it('compounds the median path and widens bands with time', () => {
@@ -37,5 +38,43 @@ describe('rebalanceDeployment (ADR-098)', () => {
 
   it('deploys idle cash into a single under-target sleeve', () => {
     expect(rebalanceDeployment({ actualValues: { a: 100 }, targetWeights: { a: 1 }, availableCash: 50 })).toEqual({ a: 50 });
+  });
+
+  it('deployed parts sum EXACTLY to the deployable cash (largest-remainder)', () => {
+    // Three equally-underweight sleeves splitting 100: naive rounding gives
+    // 33.33×3 = 99.99; the residual cent must land on a sleeve so the parts total 100.
+    const d = rebalanceDeployment({
+      actualValues: { a: 0, b: 0, c: 0 },
+      targetWeights: { a: 1 / 3, b: 1 / 3, c: 1 / 3 },
+      availableCash: 100,
+    });
+    const sum = Object.values(d).reduce((s, v) => s + v, 0);
+    expect(sum).toBeCloseTo(100, 10);
+  });
+});
+
+describe('resolveDeployableCash (cash-cap, ADR-098)', () => {
+  it('returns full available cash when no cap is given', () => {
+    expect(resolveDeployableCash({ availableCash: 1000 })).toBe(1000);
+    expect(resolveDeployableCash({ availableCash: 1000, cap: null })).toBe(1000);
+  });
+  it('clamps a cap to [0, availableCash]', () => {
+    expect(resolveDeployableCash({ availableCash: 1000, cap: 400 })).toBe(400);
+    // A stale/hostile cap above available cash can never deploy money that doesn't exist.
+    expect(resolveDeployableCash({ availableCash: 1000, cap: 99999 })).toBe(1000);
+    expect(resolveDeployableCash({ availableCash: 1000, cap: -50 })).toBe(0);
+  });
+  it('floors negative available cash at 0', () => {
+    expect(resolveDeployableCash({ availableCash: -200 })).toBe(0);
+  });
+});
+
+describe('foldTargetSleeves (rebalance, ADR-098)', () => {
+  it('folds unrepresentable preset sleeves into holdable ones', () => {
+    // all_weather targets commodities (→gold); three_fund targets intl_stocks (→stocks).
+    expect(foldTargetSleeves({ stocks: 0.3, bonds: 0.55, gold: 0.075, commodities: 0.075 }))
+      .toEqual({ stocks: 0.3, bonds: 0.55, gold: 0.15 });
+    expect(foldTargetSleeves({ stocks: 0.48, intl_stocks: 0.12, bonds: 0.4 }))
+      .toEqual({ stocks: 0.6, bonds: 0.4 });
   });
 });

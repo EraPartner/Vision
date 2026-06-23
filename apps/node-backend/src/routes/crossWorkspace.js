@@ -11,8 +11,8 @@
 
 import { Router } from 'express';
 import { ValidationError } from '../middleware/errorHandler.js';
-import { rebalanceDeployment } from '../services/crossWorkspaceAnalytics.js';
-import { CLASSIC_PORTFOLIOS, normalizeWeights } from '../services/portfolio/allocationAnalytics.js';
+import { rebalanceDeployment, resolveDeployableCash } from '../services/crossWorkspaceAnalytics.js';
+import { CLASSIC_PORTFOLIOS, normalizeWeights, foldTargetSleeves } from '../services/portfolio/allocationAnalytics.js';
 import { assembleRebalanceInputs } from '../services/crossWorkspaceDataService.js';
 
 const router = Router();
@@ -42,11 +42,20 @@ router.post('/rebalance', async (req, res) => {
   } else {
     throw new ValidationError('Provide either `model` or `targetWeights`');
   }
-  const targetWeights = normalizeWeights(rawTarget);
+
+  // All-zero weights would otherwise normalize to themselves and silently
+  // "deploy nothing" with no explanation. Reject up front.
+  const targetSum = Object.values(rawTarget).reduce((s, v) => s + (Number(v) || 0), 0);
+  if (!(targetSum > 0)) throw new ValidationError('targetWeights must include at least one positive weight');
+
+  // Fold unrepresentable preset sleeves (commodities, intl_stocks) into the
+  // sleeves the user can actually hold, then normalize to sum to 1.
+  const targetWeights = normalizeWeights(foldTargetSleeves(rawTarget));
 
   const { actualValues, availableCash, cashAccounts } = await assembleRebalanceInputs({ currency });
-  const overrideCash = body.availableCash;
-  const cash = overrideCash != null && Number.isFinite(Number(overrideCash)) ? Number(overrideCash) : availableCash;
+  // Clamp any user cash cap to [0, availableCash] in the pure core so an API
+  // caller can never deploy more than actually exists.
+  const cash = resolveDeployableCash({ availableCash, cap: body.availableCash });
 
   const deployment = rebalanceDeployment({ actualValues, targetWeights, availableCash: cash });
 

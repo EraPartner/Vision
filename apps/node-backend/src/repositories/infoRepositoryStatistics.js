@@ -15,7 +15,11 @@ import {
 
 export const statisticsRepository = {
   async getCategoryBreakdown(targetCurrency = 'EUR') {
-    if (await mvAvailable('mv_category_totals')) {
+    const includeTransfers = await getIncludeTransfers();
+
+    // The MV (mv_category_totals) is built transfer-excluding, so it is only a
+    // valid fast path when the caller also wants transfers excluded.
+    if (!includeTransfers && await mvAvailable('mv_category_totals')) {
       const catResult = await query('SELECT * FROM mv_category_totals ORDER BY count DESC LIMIT 500');
       const convertedRows = await convertRowsToEur(
         mapRowsForAmountConversion(catResult.rows, 'total', true),
@@ -24,6 +28,8 @@ export const statisticsRepository = {
       return buildCategoryFromConvertedRows(convertedRows);
     }
 
+    // Live fallback path. Mirror the MV's transfer exclusion (ADR-083) so totals
+    // do not silently change depending on whether the MV is populated.
     const categoryAmountResult = await query(`
       SELECT COALESCE(c.id, -1) AS category_id,
              COALESCE(c.general || ':' || c.detail, 'UNCATEGORISED') AS name,
@@ -34,6 +40,7 @@ export const statisticsRepository = {
       LEFT JOIN recipients r ON t.recipient_id = r.id
       LEFT JOIN categories c ON COALESCE(t.category_id, r.default_category_id) = c.id
       WHERE t.is_active = true
+        ${includeTransfers ? '' : 'AND t.is_transfer = false'}
     `);
 
     const catConverted = await convertRowsToEur(

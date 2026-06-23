@@ -1,5 +1,11 @@
 /**
  * Info sub-repository: recipient / merchant insights.
+ *
+ * Internal transfers (ADR-083) are ALWAYS excluded here (`is_transfer = false`),
+ * independent of the `includeTransfers` cash-flow toggle. These surfaces are a
+ * merchant-spend lens — a checking->savings move has no merchant and would only
+ * be noise in "top merchants" / month-over-month, so the toggle (which governs
+ * income/spending cash-flow aggregates) deliberately does not apply.
  */
 
 import { query } from '../database/connection.js';

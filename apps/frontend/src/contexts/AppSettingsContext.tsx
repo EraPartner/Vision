@@ -11,8 +11,10 @@
 
 import { useEffect, useRef, type ReactNode } from 'react';
 import { useShallow } from 'zustand/react/shallow';
+import { toast } from 'sonner';
 import { apiClient } from '@/lib/api';
 import logger from '@/lib/logger';
+import { useLanguage } from '@/contexts/LanguageContext';
 import { usePreloadedSetting } from '@/contexts/SettingsPreloadContext';
 import { useSettingsStore, DEFAULT_APP_SETTINGS, migrateAppSettings } from '@/stores/settingsStore';
 import type { AppSettings } from '@/stores/settingsStore';
@@ -40,6 +42,7 @@ export function AppSettingsProvider({ children }: { children: ReactNode }) {
         usePreloadedSetting<AppSettings>(SETTINGS_KEY);
 
     const _hydrateAppSettings = useSettingsStore((s) => s._hydrateAppSettings);
+    const _markAppSettingsSaveError = useSettingsStore((s) => s._markAppSettingsSaveError);
     const appSettings = useSettingsStore((s) => s.appSettings);
     const isLoading = useSettingsStore((s) => s.isAppSettingsLoading);
 
@@ -68,15 +71,40 @@ export function AppSettingsProvider({ children }: { children: ReactNode }) {
         saveTimerRef.current = setTimeout(() => {
             apiClient.saveSetting(SETTINGS_KEY, appSettings).catch((err) => {
                 logger.error('Failed to save app settings:', err);
+                // Instant-apply has no Save button, so a silent failure means the
+                // user believes a change persisted when it didn't. Signal it so the
+                // toaster (under LanguageProvider) can surface a translated message.
+                _markAppSettingsSaveError();
             });
         }, 500);
 
         return () => {
             if (saveTimerRef.current) clearTimeout(saveTimerRef.current);
         };
-    }, [appSettings, isLoading]);
+    }, [appSettings, isLoading, _markAppSettingsSaveError]);
 
     return <>{children}</>;
+}
+
+// ─── Save-error toaster ────────────────────────────────────────────────────────
+
+/**
+ * Surfaces a translated toast when a debounced app-settings persist fails.
+ * Mounted UNDER LanguageProvider (the provider above it cannot translate), it
+ * watches the store's save-error nonce and toasts on each new failure.
+ */
+ 
+export function AppSettingsSaveErrorToaster() {
+    const { t } = useLanguage();
+    const nonce = useSettingsStore((s) => s.appSettingsSaveErrorNonce);
+    const lastSeen = useRef(nonce);
+    useEffect(() => {
+        if (nonce !== lastSeen.current) {
+            lastSeen.current = nonce;
+            if (nonce > 0) toast.error(t('settings.saveFailed'));
+        }
+    }, [nonce, t]);
+    return null;
 }
 
 // ─── Hook ─────────────────────────────────────────────────────────────────────
