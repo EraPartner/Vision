@@ -108,7 +108,7 @@ export function MergeRecipientsDialog({open, onOpenChange}: MergeRecipientsDialo
                                     <Check className="h-3 w-3" />
                                     {primary.name}
                                 </Badge>
-                                <Button variant="ghost" size="icon" className="icon-touch-target ml-auto [&_svg]:size-3" aria-label="Clear selection" onClick={() => { setPrimaryId(null); setAliasIds([]); }}>
+                                <Button variant="ghost" size="icon" className="icon-touch-target ml-auto [&_svg]:size-3" aria-label={t('aria.clearSelection')} onClick={() => { setPrimaryId(null); setAliasIds([]); }}>
                                     <X className="h-3 w-3" />
                                 </Button>
                             </div>

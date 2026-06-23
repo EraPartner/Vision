@@ -7,13 +7,14 @@ import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { PageHeader } from "@/components/shared/PageHeader";
 import { PageError } from "@/components/shared/PageError";
-import { useUpdateTransaction, useDeleteTransaction } from "@/hooks/useTransactions";
+import { useCreateTransaction, useUpdateTransaction, useDeleteTransaction } from "@/hooks/useTransactions";
 import { useConfirmDialog } from "@/hooks/useConfirmDialog";
 import { useTransactionListData } from "@/features/transactions/hooks/useTransactionListData";
 import { FilterBanner } from "@/features/transactions/components/FilterBanner";
 import { TableActions } from "@/features/transactions/components/TableActions";
 import { TransactionsTable } from "@/features/transactions/components/TransactionsTable";
 import { TransactionInfoDialog } from "@/features/transactions/components/TransactionInfoDialog";
+import { TransactionQuickLook } from "@/features/transactions/components/TransactionQuickLook";
 import { BulkActionsBar, type BulkSelectionMode } from "@/features/transactions/components/bulk/BulkActionsBar";
 import type { TableTransaction, InfoEditableField } from "@/features/transactions/types";
 import type { BulkTransactionFilter } from "@/types/api";
@@ -25,8 +26,15 @@ export default function TransactionsPage() {
     const loadMoreOffset = Math.min(50, Math.max(15, Math.floor(pageSize / 5)));
     const [searchParams, setSearchParams] = useSearchParams();
     const [showAll, setShowAll] = useState(false);
-    const [search, setSearch] = useState("");
+    const [search, setSearch] = useState(() => searchParams.get('search') || "");
+    // Palette-driven searches land as ?search= while already mounted (same
+    // pathname → no remount), so mirror later param changes into state.
+    const searchParam = searchParams.get('search');
+    useEffect(() => {
+        if (searchParam !== null) setSearch(searchParam);
+    }, [searchParam]);
     const [infoTransaction, setInfoTransaction] = useState<TableTransaction | null>(null);
+    const [quickLookTransaction, setQuickLookTransaction] = useState<TableTransaction | null>(null);
 
     const recipientIdFilter = searchParams.get('recipient_id') ? Number(searchParams.get('recipient_id')) : undefined;
     const categoryIdFilter = searchParams.get('category_id') ? Number(searchParams.get('category_id')) : undefined;
@@ -34,14 +42,22 @@ export default function TransactionsPage() {
     const filterLabel = searchParams.get('filter_label') || undefined;
     const startDateFilter = searchParams.get('start_date') || undefined;
     const endDateFilter = searchParams.get('end_date') || undefined;
+    const bankAccountFilter = searchParams.get('bank_account') || undefined;
     const transactionTypeRaw = searchParams.get('transaction_type');
     const transactionTypeFilter = (transactionTypeRaw === 'income' || transactionTypeRaw === 'expense') ? transactionTypeRaw : undefined;
+    // Memoized on the raw param strings: a fresh array identity per render
+    // would ripple through the currentFilter memo into the selection-clear
+    // effect below, which setStates — an unconditional render→effect→render
+    // loop ("Maximum update depth exceeded") for any multi-value filter URL
+    // (general-category pivot drills, tag filters).
     const categoryIdsRaw = searchParams.get('category_ids');
-    const categoryIdsFilter = categoryIdsRaw
+    const categoryIdsFilter = useMemo(() => categoryIdsRaw
         ? categoryIdsRaw.split(',').map(Number).filter((n) => Number.isFinite(n) && n > 0)
-        : undefined;
+        : undefined, [categoryIdsRaw]);
     const tagsRaw = searchParams.get('tags');
-    const tagsFilter = tagsRaw ? tagsRaw.split(',').filter(Boolean) : undefined;
+    const tagsFilter = useMemo(() => tagsRaw
+        ? tagsRaw.split(',').filter(Boolean)
+        : undefined, [tagsRaw]);
 
     const {
         allItems,
@@ -69,8 +85,10 @@ export default function TransactionsPage() {
         endDateFilter,
         transactionTypeFilter,
         tagsFilter,
+        bankAccountFilter,
     });
 
+    const createMutation = useCreateTransaction();
     const updateMutation = useUpdateTransaction();
     const deleteMutation = useDeleteTransaction();
     const { confirm, ConfirmDialog } = useConfirmDialog();
@@ -87,6 +105,7 @@ export default function TransactionsPage() {
         end_date: endDateFilter,
         transaction_type: transactionTypeFilter,
         tags: tagsFilter,
+        bank_account: bankAccountFilter,
         search: search || undefined,
         active: !showAll,
     }), [
@@ -98,6 +117,7 @@ export default function TransactionsPage() {
         endDateFilter,
         transactionTypeFilter,
         tagsFilter,
+        bankAccountFilter,
         search,
         showAll,
     ]);
@@ -133,20 +153,22 @@ export default function TransactionsPage() {
         setAllItems(prev => prev.map((item) => {
             if (item.id !== transactionId) return item;
             switch (field) {
-                case 'date':
-                    return { ...item, transaction_date: value, date: value };
+                case 'date': {
+                    const date = value === undefined ? undefined : String(value);
+                    return { ...item, transaction_date: date, date };
+                }
                 case 'memo':
-                    return { ...item, memo: value };
+                    return { ...item, memo: value === undefined ? undefined : String(value) };
                 case 'amount':
-                    return { ...item, amount: value };
+                    return { ...item, amount: typeof value === 'number' ? value : item.amount };
                 case 'currency':
-                    return { ...item, currency: value };
+                    return { ...item, currency: value === undefined ? undefined : String(value) };
                 case 'bank':
-                    return { ...item, bank_account: value };
+                    return { ...item, bank: value === undefined ? undefined : String(value) };
                 case 'balance':
-                    return { ...item, balance: value };
+                    return { ...item, balance: typeof value === 'number' ? value : item.balance };
                 case 'comment':
-                    return { ...item, comment: value };
+                    return { ...item, comment: value === undefined ? undefined : String(value) };
                 default:
                     return item;
             }
@@ -188,6 +210,36 @@ export default function TransactionsPage() {
     const toggleActive = (id: number, currentActive: boolean) => {
         updateMutation.mutate({ id, data: { is_active: !currentActive } });
     };
+
+    const handleDuplicate = useCallback((row: TableTransaction) => {
+        const raw = allItems.find((item) => item.id === row.id);
+        const transactionDate = (((raw?.transaction_date as string | undefined) || row.date) ?? '').split('T')[0];
+        const bankAccount = (raw?.bank_account as string | undefined) || row.bank;
+        const recipientId = raw?.recipient_id ?? (row.recipientId || undefined);
+        // Create contract: recipient_id, date and bank_account are required.
+        if (recipientId == null || !transactionDate || !bankAccount) return;
+        createMutation.mutate({
+            transaction_date: transactionDate,
+            bank_account: bankAccount,
+            recipient_id: recipientId,
+            memo: raw?.memo ?? (row.memo || undefined),
+            amount: raw?.amount ?? row.amount,
+            currency: raw?.currency || row.currency,
+            category_id: raw?.category_id ?? undefined,
+            comment: raw?.comment ?? undefined,
+            tags: row.tags?.length ? row.tags.map((tag) => tag.slug) : undefined,
+            // balance deliberately not copied — the running balance belongs to
+            // the original row, not a new transaction.
+        });
+    }, [allItems, createMutation]);
+
+    const handleFilterByRecipient = useCallback((row: TableTransaction) => {
+        if (!row.recipientId) return;
+        // Fresh filter set: "show all from X" replaces every active filter,
+        // including the text search (kept in local state, so clear it too).
+        setSearch("");
+        setSearchParams({ recipient_id: String(row.recipientId), filter_label: row.recipient });
+    }, [setSearchParams]);
 
     const handleUpdate = (sourceIndex: number, updated: TableTransaction) => {
         const originalTransaction = allItems[sourceIndex];
@@ -326,6 +378,7 @@ export default function TransactionsPage() {
                     transactionTypeFilter={transactionTypeFilter}
                     searchFilter={search || undefined}
                     filterLabel={filterLabel}
+                    bankAccountFilter={bankAccountFilter}
                     tagsFilter={tagsFilter}
                     onClear={() => setSearchParams({})}
                     onClearTags={() => {
@@ -352,6 +405,9 @@ export default function TransactionsPage() {
                     onLoadMore={loadMore}
                     onRowUpdate={handleUpdate}
                     onOpenInfo={setInfoTransaction}
+                    onQuickLook={setQuickLookTransaction}
+                    onDuplicate={handleDuplicate}
+                    onFilterByRecipient={handleFilterByRecipient}
                     onToggleActive={toggleActive}
                     onDelete={handleDelete}
                     onSelectCategory={handleSelectCategory}
@@ -383,6 +439,10 @@ export default function TransactionsPage() {
                 infoTransaction={infoTransaction}
                 onClose={() => setInfoTransaction(null)}
                 onApplyLocal={applyInfoFieldLocally}
+            />
+            <TransactionQuickLook
+                transaction={quickLookTransaction}
+                onClose={() => setQuickLookTransaction(null)}
             />
         </>
     );

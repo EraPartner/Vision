@@ -59,7 +59,7 @@ export function BulkActionsBar({
     onClearSelection,
     onPromoteToFilterMode,
 }: BulkActionsBarProps) {
-    const { t } = useLanguage();
+    const { t, tc } = useLanguage();
     const { confirm, ConfirmDialog } = useConfirmDialog();
 
     const bulkDelete = useBulkDeleteTransactions();
@@ -91,8 +91,8 @@ export function BulkActionsBar({
 
     async function handleDelete() {
         const ok = await confirm({
-            title: t('txPage.bulk.confirmDeleteTitle', { n: effectiveCount }),
-            description: t('txPage.bulk.confirmDeleteBody', { n: effectiveCount }),
+            title: tc('txPage.bulk.confirmDeleteTitle', effectiveCount),
+            description: tc('txPage.bulk.confirmDeleteBody', effectiveCount),
             confirmLabel: t('txPage.bulk.delete'),
             variant: "destructive",
         });

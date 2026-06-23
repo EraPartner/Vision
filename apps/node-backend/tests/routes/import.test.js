@@ -8,6 +8,7 @@ const routeHandlers = {};
 const mockRouter = {
   get: vi.fn((path, ...args) => { routeHandlers[`get:${path}`] = args[args.length - 1]; }),
   post: vi.fn((path, ...args) => { routeHandlers[`post:${path}`] = args[args.length - 1]; }),
+  patch: vi.fn((path, ...args) => { routeHandlers[`patch:${path}`] = args[args.length - 1]; }),
   delete: vi.fn((path, ...args) => { routeHandlers[`delete:${path}`] = args[args.length - 1]; }),
   use: vi.fn((...args) => {
     routeHandlers.use = routeHandlers.use || [];
@@ -92,6 +93,17 @@ vi.mock('../../src/services/aggregationRefresh.js', () => ({
   refreshAggregations: vi.fn().mockResolvedValue(undefined),
 }));
 
+vi.mock('../../src/repositories/customParserConfigRepository.js', () => ({
+  default: {
+    getAll: vi.fn(),
+    getById: vi.fn(),
+    getByName: vi.fn(),
+    create: vi.fn(),
+    update: vi.fn(),
+    delete: vi.fn(),
+  },
+}));
+
 vi.mock('../../src/database/connection.js', () => ({
   query: vi.fn(),
   withTransaction: vi.fn(),
@@ -111,7 +123,8 @@ import {
 } from '../../src/repositories/importBatchRepository.js';
 import { query } from '../../src/database/connection.js';
 import multer from 'multer';
-import { ValidationError, NotFoundError } from '../../src/middleware/errorHandler.js';
+import { ValidationError, NotFoundError, ConflictError } from '../../src/middleware/errorHandler.js';
+import customParserConfigRepository from '../../src/repositories/customParserConfigRepository.js';
 await import('../../src/routes/importRoutes.js');
 
 describe('Import Routes', () => {
@@ -880,20 +893,104 @@ describe('Import Routes', () => {
   });
 
   // ──────────────────────────────────────────
-  // GET /api/import/supported-banks
-  // ──────────────────────────────────────────
-  describe('GET /supported-banks', () => {
-    it('should return supported banks', async () => {
-      const req = {};
-      const res = mockResponse();
-      await routeHandlers['get:/supported-banks'](req, res);
+  // GET /api/import/supported-banks was removed (dead route; adapter catalog is
+  // served from /api/info/supported-adapters, registry-derived — see info.test.js).
+});
 
-      const body = res.json.mock.calls[0][0];
-      expect(body.data.banks).toBeDefined();
-      expect(body.data.total).toBe(3);
-      expect(body.data.banks).toContain('Belfius');
-      expect(body.data.banks).toContain('Kbc');
-      expect(body.data.banks).toContain('Revolut');
+describe('Saved custom parser routes', () => {
+  beforeEach(() => vi.clearAllMocks());
+
+  const validConfig = { dateColumn: 'Date', recipientColumn: 'Name', amountColumn: 'Amount' };
+
+  describe('GET /parsers', () => {
+    it('returns the list of saved parsers', async () => {
+      const items = [{ id: 1, name: 'My Bank', config: validConfig }];
+      customParserConfigRepository.getAll.mockResolvedValue(items);
+      const res = mockResponse();
+      await routeHandlers['get:/parsers']({ query: {} }, res);
+      expect(res.json.mock.calls[0][0].data).toEqual(items);
+    });
+  });
+
+  describe('POST /parsers', () => {
+    it('creates a parser and returns 201', async () => {
+      customParserConfigRepository.create.mockResolvedValue({ id: 7, name: 'My Bank', config: validConfig });
+      const res = mockResponse();
+      await routeHandlers['post:/parsers']({ body: { name: 'My Bank', config: validConfig } }, res);
+      expect(res.status).toHaveBeenCalledWith(201);
+      expect(res.json.mock.calls[0][0].data.id).toBe(7);
+      expect(customParserConfigRepository.create).toHaveBeenCalledWith({
+        name: 'My Bank',
+        config: expect.objectContaining({ dateColumn: 'Date', dateFormat: '%Y-%m-%d', separator: ',', encoding: 'utf-8', skipRows: 0 }),
+        kind: 'transaction',
+      });
+    });
+
+    it('rejects a missing name', async () => {
+      const res = mockResponse();
+      await expect(
+        routeHandlers['post:/parsers']({ body: { config: validConfig } }, res),
+      ).rejects.toBeInstanceOf(ValidationError);
+    });
+
+    it('rejects a config missing required columns', async () => {
+      const res = mockResponse();
+      await expect(
+        routeHandlers['post:/parsers']({ body: { name: 'X', config: { dateColumn: 'Date' } } }, res),
+      ).rejects.toBeInstanceOf(ValidationError);
+    });
+
+    it('maps a unique-violation to ConflictError', async () => {
+      const err = Object.assign(new Error('dup'), { code: '23505', constraint: 'uq_custom_parser_configs_name_kind' });
+      customParserConfigRepository.create.mockRejectedValue(err);
+      const res = mockResponse();
+      await expect(
+        routeHandlers['post:/parsers']({ body: { name: 'My Bank', config: validConfig } }, res),
+      ).rejects.toBeInstanceOf(ConflictError);
+    });
+  });
+
+  describe('PATCH /parsers/:id', () => {
+    it('returns 404 when the parser does not exist', async () => {
+      customParserConfigRepository.update.mockResolvedValue(undefined);
+      const res = mockResponse();
+      await expect(
+        routeHandlers['patch:/parsers/:id']({ params: { id: '5' }, body: { name: 'New' } }, res),
+      ).rejects.toBeInstanceOf(NotFoundError);
+    });
+
+    it('maps a unique-violation to ConflictError', async () => {
+      const err = Object.assign(new Error('dup'), { code: '23505', constraint: 'uq_custom_parser_configs_name_kind' });
+      customParserConfigRepository.update.mockRejectedValue(err);
+      const res = mockResponse();
+      await expect(
+        routeHandlers['patch:/parsers/:id']({ params: { id: '5' }, body: { name: 'Taken' } }, res),
+      ).rejects.toBeInstanceOf(ConflictError);
+    });
+
+    it('rejects an invalid id', async () => {
+      const res = mockResponse();
+      await expect(
+        routeHandlers['patch:/parsers/:id']({ params: { id: 'abc' }, body: { name: 'X' } }, res),
+      ).rejects.toBeInstanceOf(ValidationError);
+    });
+  });
+
+  describe('DELETE /parsers/:id', () => {
+    it('returns 204 when deleted', async () => {
+      customParserConfigRepository.delete.mockResolvedValue(true);
+      const res = mockResponse();
+      await routeHandlers['delete:/parsers/:id']({ params: { id: '3' } }, res);
+      expect(res.status).toHaveBeenCalledWith(204);
+      expect(res.send).toHaveBeenCalled();
+    });
+
+    it('returns 404 when nothing was deleted', async () => {
+      customParserConfigRepository.delete.mockResolvedValue(false);
+      const res = mockResponse();
+      await expect(
+        routeHandlers['delete:/parsers/:id']({ params: { id: '3' } }, res),
+      ).rejects.toBeInstanceOf(NotFoundError);
     });
   });
 });

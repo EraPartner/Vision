@@ -137,6 +137,75 @@ describe('Settings storage and retrieval', () => {
   });
 });
 
+describe('rebalance_plans setting (ADR-098 custom rebalancing plans)', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  const validPlan = {
+    id: 'plan-1',
+    name: 'My Custom Mix',
+    targetWeights: { stocks: 0.7, bonds: 0.3 },
+    cashCap: 5000,
+  };
+
+  it('accepts a valid list of plans and upserts it', async () => {
+    query.mockResolvedValue({});
+    const req = { params: { key: 'rebalance_plans' }, body: { value: [validPlan] } };
+    const res = mockResponse();
+
+    await routeHandlers['put:/:key'](req, res);
+
+    expect(res.json).toHaveBeenCalledWith({ ok: true, data: { key: 'rebalance_plans', value: [validPlan] } });
+  });
+
+  it('accepts a plan without a cashCap', async () => {
+    query.mockResolvedValue({});
+    const { cashCap: _cashCap, ...noCap } = validPlan;
+    const req = { params: { key: 'rebalance_plans' }, body: { value: [noCap] } };
+    const res = mockResponse();
+
+    await routeHandlers['put:/:key'](req, res);
+
+    expect(res.json).toHaveBeenCalledWith({ ok: true, data: { key: 'rebalance_plans', value: [noCap] } });
+  });
+
+  it('rejects a non-array value', async () => {
+    const req = { params: { key: 'rebalance_plans' }, body: { value: { not: 'an array' } } };
+    await expect(routeHandlers['put:/:key'](req, mockResponse())).rejects.toThrow(/must be an array/);
+  });
+
+  it('rejects a plan with a blank name', async () => {
+    const req = { params: { key: 'rebalance_plans' }, body: { value: [{ ...validPlan, name: '   ' }] } };
+    await expect(routeHandlers['put:/:key'](req, mockResponse())).rejects.toThrow(/name must be a string/);
+  });
+
+  it('rejects a plan with empty targetWeights', async () => {
+    const req = { params: { key: 'rebalance_plans' }, body: { value: [{ ...validPlan, targetWeights: {} }] } };
+    await expect(routeHandlers['put:/:key'](req, mockResponse())).rejects.toThrow(/at least one sleeve/);
+  });
+
+  it('rejects a negative target weight', async () => {
+    const req = { params: { key: 'rebalance_plans' }, body: { value: [{ ...validPlan, targetWeights: { stocks: -0.1 } }] } };
+    await expect(routeHandlers['put:/:key'](req, mockResponse())).rejects.toThrow(/non-negative number/);
+  });
+
+  it('rejects a negative cashCap', async () => {
+    const req = { params: { key: 'rebalance_plans' }, body: { value: [{ ...validPlan, cashCap: -1 }] } };
+    await expect(routeHandlers['put:/:key'](req, mockResponse())).rejects.toThrow(/cashCap must be a non-negative number/);
+  });
+
+  it('returns an empty list as the default when unset', async () => {
+    query.mockResolvedValue({ rows: [] });
+    const req = { params: { key: 'rebalance_plans' } };
+    const res = mockResponse();
+
+    await routeHandlers['get:/:key'](req, res);
+
+    expect(res.json).toHaveBeenCalledWith({ ok: true, data: { key: 'rebalance_plans', value: [] } });
+  });
+});
+
 function mockResponse() {
   const res = { json: vi.fn(), status: vi.fn(), send: vi.fn() };
   res.status.mockReturnValue(res);

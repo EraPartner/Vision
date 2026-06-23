@@ -6,7 +6,7 @@ import { useLanguage } from '@/contexts/LanguageContext';
 export interface BankAdapter {
   key: string;
   name: string;
-  adapter_class: string;
+  adapter_class?: string;
 }
 
 export function useAdapters() {

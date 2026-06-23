@@ -42,6 +42,88 @@ export interface paths {
         patch: operations["updateTag"];
         trace?: never;
     };
+    "/api/cross-workspace/rebalance": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Cash-aware rebalancing plan (ADR-098)
+         * @description Deploy spendable account cash into underweight portfolio sleeves toward a target allocation, without selling. Composes Budgeting + Portfolio.
+         */
+        post: operations["computeRebalance"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/accounts": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List accounts */
+        get: operations["getAccounts"];
+        put?: never;
+        /** Create account */
+        post: operations["createAccount"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/accounts/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: number;
+            };
+            cookie?: never;
+        };
+        /** Get one account */
+        get: operations["getAccount"];
+        put?: never;
+        post?: never;
+        /** Delete account (409 if still referenced — archive instead) */
+        delete: operations["deleteAccount"];
+        options?: never;
+        head?: never;
+        /** Update account */
+        patch: operations["updateAccount"];
+        trace?: never;
+    };
+    "/api/accounts/{id}/merge": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Survivor account id (sources merge into this one) */
+                id: number;
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Merge source accounts into this (survivor) account
+         * @description Repoints all references (transactions, planned, portfolio lots, funding_account_id) from each source account to this (survivor) account, then deletes the sources (ADR-088).
+         */
+        post: operations["mergeAccounts"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/transactions": {
         parameters: {
             query?: never;
@@ -168,7 +250,8 @@ export interface paths {
         };
         /** Get all settings */
         get: operations["getSettings"];
-        put?: never;
+        /** Bulk save settings (key→value map) */
+        put: operations["saveSettings"];
         post?: never;
         delete?: never;
         options?: never;
@@ -207,7 +290,8 @@ export interface paths {
         /** List investments */
         get: operations["getInvestments"];
         put?: never;
-        post?: never;
+        /** Create an investment */
+        post: operations["createInvestment"];
         delete?: never;
         options?: never;
         head?: never;
@@ -223,6 +307,26 @@ export interface paths {
         };
         /** Get net worth summary */
         get: operations["getNetWorth"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/info/net-worth/by-account": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Net worth split by account (Σ-accounts, ADR-100)
+         * @description Per-account current cash + holdings plus the rebuilt daily holdings history; the Σ over accounts equals the aggregate net worth by construction.
+         */
+        get: operations["getNetWorthByAccount"];
         put?: never;
         post?: never;
         delete?: never;
@@ -269,6 +373,57 @@ export interface paths {
         patch: operations["updateSavedChart"];
         trace?: never;
     };
+    "/api/transactions/bulk-delete": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Bulk-delete transactions selected by ids or filter */
+        post: operations["bulkDeleteTransactions"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/transactions/bulk-update": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Apply a shared field update to transactions selected by ids or filter */
+        post: operations["bulkUpdateTransactions"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/transactions/bulk-export": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Export transactions selected by ids or filter (CSV or NDJSON stream) */
+        post: operations["bulkExportTransactions"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/transactions/bulk-tag": {
         parameters: {
             query?: never;
@@ -281,6 +436,57 @@ export interface paths {
         /** Bulk add/remove tags across multiple transactions */
         post: operations["bulkTagTransactions"];
         delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/transactions/transfer-suggestions": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Ambiguous internal-transfer matches awaiting confirmation (ADR-083) */
+        get: operations["getTransferSuggestions"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/transactions/transfers": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Manually confirm an internal-transfer pair (ADR-083) */
+        post: operations["markTransfer"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/transactions/transfers/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /** Clear a transfer mark on a transaction and its peer (ADR-083) */
+        delete: operations["unmarkTransfer"];
         options?: never;
         head?: never;
         patch?: never;
@@ -586,6 +792,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/planned-transactions/match-suggestions": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List planned payments with likely-matching unlinked transactions
+         * @description Active, unexecuted planned payments that have one or more recent unlinked transactions within match tolerance (same recipient cluster, sign, ±5% amount, ±5 days) but were not auto-cleared — ambiguous matches or auto-clear disabled. Each entry carries its candidate transactions for the user to confirm.
+         */
+        get: operations["getPlannedMatchSuggestions"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/planned-transactions/{id}": {
         parameters: {
             query?: never;
@@ -620,23 +846,6 @@ export interface paths {
         put?: never;
         /** Execute planned transaction (creates real transaction) */
         post: operations["executePlannedTransaction"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/info": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /** Global statistics overview */
-        get: operations["getInfoStats"];
-        put?: never;
-        post?: never;
         delete?: never;
         options?: never;
         head?: never;
@@ -686,23 +895,6 @@ export interface paths {
         };
         /** Get transaction count */
         get: operations["getTransactionCount"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/info/transaction-summary": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /** Get transaction amount summary (income/expenses) */
-        get: operations["getTransactionSummary"];
         put?: never;
         post?: never;
         delete?: never;
@@ -1233,6 +1425,28 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/investments/{id}/move": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: number;
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Move this holding between accounts (in-specie, cost-basis-preserving)
+         * @description Moves the investment's lots from `from_account_id` to `to_account_id` (ADR-091). Omit `units` (or pass ≥ net) for a whole move (re-points all lots incl. history); pass `units` for a partial move (unit-based only — FIFO lot re-point + pro-rata boundary split). No sell/buy, no realized gain, no cash leg.
+         */
+        post: operations["moveHolding"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/investments/{id}/summary": {
         parameters: {
             query?: never;
@@ -1562,23 +1776,6 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/attachments": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /** Upload attachment for a transaction */
-        post: operations["uploadAttachment"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
     "/api/attachments/transaction/{id}": {
         parameters: {
             query?: never;
@@ -1591,7 +1788,8 @@ export interface paths {
         /** List attachments for a transaction */
         get: operations["getTransactionAttachments"];
         put?: never;
-        post?: never;
+        /** Upload an attachment for a transaction */
+        post: operations["uploadAttachment"];
         delete?: never;
         options?: never;
         head?: never;
@@ -1845,23 +2043,6 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/import/supported-banks": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /** List supported bank CSV adapters */
-        get: operations["importSupportedBanks"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
     "/api/import/recipients": {
         parameters: {
             query?: never;
@@ -1894,6 +2075,44 @@ export interface paths {
         options?: never;
         head?: never;
         patch?: never;
+        trace?: never;
+    };
+    "/api/import/parsers": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List saved custom CSV parser configs */
+        get: operations["getCustomParsers"];
+        put?: never;
+        /** Create a saved custom CSV parser config */
+        post: operations["createCustomParser"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/import/parsers/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: number;
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /** Delete a saved custom CSV parser config */
+        delete: operations["deleteCustomParser"];
+        options?: never;
+        head?: never;
+        /** Update a saved custom CSV parser config */
+        patch: operations["updateCustomParser"];
         trace?: never;
     };
     "/api/import/batches": {
@@ -2011,6 +2230,173 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/portfolio/import/csv/custom": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** One-shot portfolio CSV import with custom column mapping */
+        post: operations["portfolioImportCsvCustom"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/portfolio/import/csv/stream": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** SSE-streaming portfolio CSV import */
+        post: operations["portfolioImportCsvStream"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/portfolio/import/parsers": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List saved portfolio parser configs (kind=portfolio) */
+        get: operations["getPortfolioParsers"];
+        put?: never;
+        /** Create a saved portfolio parser config; 409 on duplicate name */
+        post: operations["createPortfolioParser"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/portfolio/import/parsers/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: number;
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /** Delete a saved portfolio parser config */
+        delete: operations["deletePortfolioParser"];
+        options?: never;
+        head?: never;
+        /** Update a saved portfolio parser config */
+        patch: operations["updatePortfolioParser"];
+        trace?: never;
+    };
+    "/api/portfolio/import/batches": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List portfolio import batches */
+        get: operations["getPortfolioImportBatches"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/portfolio/import/batches/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        /** Get portfolio import batch */
+        get: operations["getPortfolioImportBatch"];
+        put?: never;
+        post?: never;
+        /** Rollback portfolio import batch (deletes committed portfolio_transactions, marks batch aborted) */
+        delete: operations["deletePortfolioImportBatch"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/portfolio/import/batches/{id}/preview": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        /** Preview portfolio import batch rows grouped by investment */
+        get: operations["previewPortfolioImportBatch"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/portfolio/import/batches/{id}/rows/{rowId}/investment-override": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+                rowId: string;
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Resolve an unmatched portfolio import row to an existing investment or request a new one be created */
+        post: operations["portfolioImportRowInvestmentOverride"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/portfolio/import/batches/{id}/commit": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Commit a reviewed portfolio import batch — writes portfolio_transactions to DB */
+        post: operations["commitPortfolioImportBatch"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/admin": {
         parameters: {
             query?: never;
@@ -2090,6 +2476,67 @@ export interface paths {
         put?: never;
         /** Run VACUUM ANALYZE on database */
         post: operations["adminDatabaseVacuum"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/admin/database/tables/{table}/schema": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Table name (validated against the live catalog) */
+                table: string;
+            };
+            cookie?: never;
+        };
+        /** Get a table's column metadata (Data Editor, ADR-101) */
+        get: operations["adminGetTableSchema"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/admin/database/tables/{table}/rows": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                table: string;
+            };
+            cookie?: never;
+        };
+        /** Read paginated rows from a table (Data Editor, ADR-101) */
+        get: operations["adminGetTableRows"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/admin/database/tables/{table}/mutate": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                table: string;
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Apply row mutations to a table (Data Editor, ADR-101)
+         * @description Rate-limited (adminMutateLimiter). Identifiers are validated against the live catalog and double-quoted; values are parameterised. Updates/deletes are optimistic-locked on xmin. Pass dryRun to preview statements without applying.
+         */
+        post: operations["adminMutateTableRows"];
         delete?: never;
         options?: never;
         head?: never;
@@ -2251,6 +2698,280 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/research/search": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Search tickers / securities across research providers */
+        get: operations["researchSearch"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/research/quote": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Current quote for a symbol */
+        get: operations["researchQuote"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/research/chart": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Historical chart points for a symbol */
+        get: operations["researchChart"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/research/fundamentals": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Fundamentals snapshot for a symbol */
+        get: operations["researchFundamentals"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/research/analyst": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Analyst consensus, price targets, and recent actions for a symbol */
+        get: operations["researchAnalyst"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/research/news": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** News articles for a symbol */
+        get: operations["researchNews"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/research/macro/search": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Search macroeconomic series (CPI, rates, unemployment, …) across macro providers */
+        get: operations["researchMacroSearch"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/research/macro/series": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Observations for one provider-pinned macro series (value→close chart points) */
+        get: operations["researchMacroSeries"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/research/scorecard": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Fundamentals heuristic scorecard (health score + flags) for a symbol */
+        get: operations["researchScorecard"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/research/portfolio-forecast": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Monte-Carlo projection of portfolio value (on-demand, not persisted) */
+        post: operations["researchPortfolioForecast"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/research/mappings": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List stored cross-provider symbol mappings for an instrument */
+        get: operations["researchListMappings"];
+        put?: never;
+        /** Persist user-confirmed cross-provider mappings (upsert per provider) */
+        post: operations["researchSaveMappings"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/research/mappings/resolve": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Auto-propose per-provider symbols for an instrument (does not persist) */
+        post: operations["researchResolveMappings"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/research/mappings/audit": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Cross-provider self-audit of an instrument's mappings (currency/price agreement) */
+        post: operations["researchAuditMappings"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/research/mappings/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /** Delete a stored mapping by id */
+        delete: operations["researchDeleteMapping"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/research/provider-keys": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List keyed-provider API-key statuses (masked; never the full key) */
+        get: operations["researchListProviderKeys"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/research/provider-keys/{provider}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /** Set or replace a provider's API key (takes effect immediately) */
+        put: operations["researchSetProviderKey"];
+        post?: never;
+        /** Clear a provider's stored API key (env fallback then applies) */
+        delete: operations["researchClearProviderKey"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
@@ -2357,6 +3078,89 @@ export interface components {
             color?: string | null;
             is_active?: boolean;
         };
+        Account: {
+            id: number;
+            name: string;
+            display_name?: string | null;
+            institution?: string | null;
+            /** @description ISO 4217 currency code */
+            currency: string;
+            /** @enum {string} */
+            type: "checking" | "savings" | "brokerage" | "crypto_exchange" | "wallet" | "pension" | "liability";
+            /** @enum {string} */
+            liquidity_class: "liquid" | "semi_liquid" | "illiquid";
+            spendable: boolean;
+            in_net_worth: boolean;
+            /** @enum {string} */
+            tax_wrapper: "none" | "pension" | "tax_advantaged";
+            /** @enum {string} */
+            owner: "me" | "partner" | "joint";
+            multi_currency_cash: boolean;
+            has_cash_sleeve: boolean;
+            funding_account_id?: number | null;
+            statement_balance?: number | null;
+            /** Format: date */
+            statement_balance_date?: string | null;
+            /** @description Latest active transaction balance for the account (ADR-094) */
+            computed_balance?: number | null;
+            /** @description statement_balance − computed_balance; null if no statement balance (ADR-094) */
+            drift?: number | null;
+            /** @description Whether the account has any active ledger rows; only returned by the list endpoint. */
+            has_transactions?: boolean;
+            is_active: boolean;
+            /** Format: date-time */
+            created_at: string;
+            /** Format: date-time */
+            updated_at: string;
+        };
+        AccountList: components["schemas"]["PaginationMeta"] & {
+            items: components["schemas"]["Account"][];
+        };
+        AccountCreate: {
+            name: string;
+            display_name?: string | null;
+            institution?: string | null;
+            currency?: string;
+            /** @enum {string} */
+            type?: "checking" | "savings" | "brokerage" | "crypto_exchange" | "wallet" | "pension" | "liability";
+            /** @enum {string} */
+            liquidity_class?: "liquid" | "semi_liquid" | "illiquid";
+            spendable?: boolean;
+            in_net_worth?: boolean;
+            /** @enum {string} */
+            tax_wrapper?: "none" | "pension" | "tax_advantaged";
+            /** @enum {string} */
+            owner?: "me" | "partner" | "joint";
+            multi_currency_cash?: boolean;
+            has_cash_sleeve?: boolean;
+            funding_account_id?: number | null;
+            statement_balance?: number | null;
+            /** Format: date */
+            statement_balance_date?: string | null;
+        };
+        AccountUpdate: {
+            name?: string;
+            display_name?: string | null;
+            institution?: string | null;
+            currency?: string;
+            /** @enum {string} */
+            type?: "checking" | "savings" | "brokerage" | "crypto_exchange" | "wallet" | "pension" | "liability";
+            /** @enum {string} */
+            liquidity_class?: "liquid" | "semi_liquid" | "illiquid";
+            spendable?: boolean;
+            in_net_worth?: boolean;
+            /** @enum {string} */
+            tax_wrapper?: "none" | "pension" | "tax_advantaged";
+            /** @enum {string} */
+            owner?: "me" | "partner" | "joint";
+            multi_currency_cash?: boolean;
+            has_cash_sleeve?: boolean;
+            funding_account_id?: number | null;
+            statement_balance?: number | null;
+            /** Format: date */
+            statement_balance_date?: string | null;
+            is_active?: boolean;
+        };
         BulkTagRequest: {
             transaction_ids: number[];
             add_slugs?: string[];
@@ -2366,6 +3170,24 @@ export interface components {
             added: number;
             removed: number;
             transactions_affected: number;
+        };
+        /** @description Selects transactions to act on. Provide an explicit `ids` array or a `filter` object (same shape as GET /api/transactions query filters); exactly one is resolved server-side. */
+        BulkSelection: {
+            ids?: number[];
+            filter?: {
+                [key: string]: unknown;
+            };
+        };
+        CustomParserConfig: {
+            id: number;
+            name: string;
+            config: {
+                [key: string]: unknown;
+            };
+            /** Format: date-time */
+            created_at?: string;
+            /** Format: date-time */
+            updated_at?: string;
         };
         Transaction: {
             id: number;
@@ -2579,6 +3401,8 @@ export interface components {
             taxes?: number;
             currency: string;
             fx_rate_to_eur?: number;
+            /** @description Owning account for the lot (ADR-091); null = unassigned/global */
+            account_id?: number | null;
             note?: string;
             is_recurring: boolean;
             recurrence_interval?: components["schemas"]["RecurrenceInterval"];
@@ -2603,12 +3427,15 @@ export interface components {
             /** Format: date */
             date: string;
             liquid: number;
+            /** @description Σ liability-account balances (negative); split out of liquid so debt is not counted as a liquid asset (ADR-092). */
+            liabilities: number;
             investments: number;
             netWorth: number;
         };
         NetWorthResponse: {
             current: {
                 liquid: number;
+                liabilities: number;
                 investments: number;
                 netWorth: number;
                 currency: string;
@@ -2683,6 +3510,34 @@ export interface components {
             /** @enum {string} */
             role: "user" | "assistant" | "system";
             content: string;
+        };
+        PortfolioImportBatch: {
+            id: string;
+            adapter_name: string;
+            source_filename?: string;
+            source_size_bytes?: number;
+            /** @enum {string} */
+            status: "pending" | "staging" | "validating" | "matching" | "committing" | "complete" | "failed" | "aborted" | "awaiting_review";
+            rows_total: number;
+            rows_imported: number;
+            rows_duplicate: number;
+            rows_error: number;
+            error_summary?: string;
+            /** Format: date-time */
+            started_at: string;
+            /** Format: date-time */
+            completed_at?: string;
+        };
+        PortfolioParserConfig: {
+            id: number;
+            name: string;
+            config: {
+                [key: string]: unknown;
+            };
+            /** Format: date-time */
+            created_at?: string;
+            /** Format: date-time */
+            updated_at?: string;
         };
         ImportBatch: {
             id: string;
@@ -2833,6 +3688,242 @@ export interface operations {
                 };
             };
             /** @description Tag not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    computeRebalance: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    currency?: string;
+                    /** @enum {string} */
+                    model?: "sixty_forty" | "all_weather" | "three_fund";
+                    targetWeights?: {
+                        [key: string]: number;
+                    };
+                    availableCash?: number;
+                };
+            };
+        };
+        responses: {
+            /** @description Rebalancing plan */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Envelope"];
+                };
+            };
+        };
+    };
+    getAccounts: {
+        parameters: {
+            query?: {
+                /** @description Filter by active status (default true) */
+                active?: "true" | "false" | "all";
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Account list */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Envelope"] & {
+                        data?: components["schemas"]["AccountList"];
+                    };
+                };
+            };
+        };
+    };
+    createAccount: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AccountCreate"];
+            };
+        };
+        responses: {
+            /** @description Created account */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Envelope"] & {
+                        data?: components["schemas"]["Account"];
+                    };
+                };
+            };
+            /** @description An account with that name already exists */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    getAccount: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Account */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Envelope"] & {
+                        data?: components["schemas"]["Account"];
+                    };
+                };
+            };
+            /** @description Account not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    deleteAccount: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Deleted account */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Envelope"];
+                };
+            };
+            /** @description Account not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Account still has transactions; archive it instead */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    updateAccount: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AccountUpdate"];
+            };
+        };
+        responses: {
+            /** @description Updated account */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Envelope"] & {
+                        data?: components["schemas"]["Account"];
+                    };
+                };
+            };
+            /** @description Account not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description An account with that name already exists */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    mergeAccounts: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Survivor account id (sources merge into this one) */
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    /** @description Account ids to merge into this account and delete */
+                    source_ids: number[];
+                };
+            };
+        };
+        responses: {
+            /** @description Merge result (survivor id, merged ids, reassigned counts) */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Envelope"];
+                };
+            };
+            /** @description Target or a source account not found */
             404: {
                 headers: {
                     [name: string]: unknown;
@@ -3285,6 +4376,43 @@ export interface operations {
             };
         };
     };
+    saveSettings: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    [key: string]: unknown;
+                };
+            };
+        };
+        responses: {
+            /** @description Number of settings saved */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Envelope"] & {
+                        data?: {
+                            saved?: number;
+                        };
+                    };
+                };
+            };
+            /** @description Body must be a JSON object of key→value pairs */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
     getSetting: {
         parameters: {
             query?: never;
@@ -3383,6 +4511,55 @@ export interface operations {
             };
         };
     };
+    createInvestment: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    name: string;
+                    symbol?: string;
+                    asset_class: string;
+                    currency?: string;
+                    current_price?: number;
+                    interest_rate?: number;
+                    /** Format: date */
+                    maturity_date?: string;
+                    location?: string;
+                    municipality?: string;
+                    cadastral_income?: number;
+                    municipality_tax_rate?: number;
+                    notes?: string;
+                    price_provider?: string;
+                    price_provider_id?: string;
+                };
+            };
+        };
+        responses: {
+            /** @description Created investment */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Envelope"] & {
+                        data?: components["schemas"]["Investment"];
+                    };
+                };
+            };
+            /** @description name and asset_class are required */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
     getNetWorth: {
         parameters: {
             query?: {
@@ -3403,6 +4580,31 @@ export interface operations {
                 content: {
                     "application/json": components["schemas"]["Envelope"] & {
                         data?: components["schemas"]["NetWorthResponse"];
+                    };
+                };
+            };
+        };
+    };
+    getNetWorthByAccount: {
+        parameters: {
+            query?: {
+                /** @description Target currency for conversion (alias: target_currency; default EUR) */
+                currency?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Per-account net-worth breakdown with holdings history */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Envelope"] & {
+                        data?: Record<string, never>;
                     };
                 };
             };
@@ -3515,6 +4717,137 @@ export interface operations {
             };
         };
     };
+    bulkDeleteTransactions: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["BulkSelection"];
+            };
+        };
+        responses: {
+            /** @description Number of transactions deleted */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Envelope"] & {
+                        data?: {
+                            deleted?: number;
+                        };
+                    };
+                };
+            };
+            /** @description Rate limit exceeded */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    bulkUpdateTransactions: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["BulkSelection"] & {
+                    /** @description At least one of the updatable properties */
+                    fields: {
+                        category_id?: number | null;
+                        recipient_id?: number;
+                        is_active?: boolean;
+                    };
+                };
+            };
+        };
+        responses: {
+            /** @description Number of transactions updated */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Envelope"] & {
+                        data?: {
+                            updated?: number;
+                        };
+                    };
+                };
+            };
+            /** @description Invalid or missing fields, or invalid FK reference */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Rate limit exceeded */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    bulkExportTransactions: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["BulkSelection"] & {
+                    /**
+                     * @default csv
+                     * @enum {string}
+                     */
+                    format?: "csv" | "json";
+                    /** @default false */
+                    include_balance?: boolean;
+                };
+            };
+        };
+        responses: {
+            /** @description Streamed export */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "text/csv": string;
+                    "application/x-ndjson": string;
+                };
+            };
+            /** @description Invalid format */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Rate limit exceeded */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
     bulkTagTransactions: {
         parameters: {
             query?: never;
@@ -3552,6 +4885,86 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content?: never;
+            };
+        };
+    };
+    getTransferSuggestions: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Suggested transfer pairs (each an outflow + candidate inflows) */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Envelope"] & {
+                        data?: {
+                            items?: Record<string, never>[];
+                        };
+                    };
+                };
+            };
+        };
+    };
+    markTransfer: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    aId: number;
+                    bId: number;
+                };
+            };
+        };
+        responses: {
+            /** @description Pair marked as a transfer */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Envelope"];
+                };
+            };
+            /** @description aId and bId must be two distinct transaction ids */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    unmarkTransfer: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Transfer mark cleared */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Envelope"];
+                };
             };
         };
     };
@@ -4102,6 +5515,46 @@ export interface operations {
             };
         };
     };
+    getPlannedMatchSuggestions: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Match suggestions */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Envelope"] & {
+                        data?: {
+                            planned?: {
+                                id?: number;
+                                recipient_id?: number | null;
+                                recipient_name?: string | null;
+                                amount?: number;
+                                planned_date?: string;
+                                currency?: string | null;
+                                is_recurring?: boolean;
+                            };
+                            candidates?: {
+                                id?: number;
+                                recipient_name?: string | null;
+                                amount?: number;
+                                transaction_date?: string;
+                                currency?: string | null;
+                                memo?: string | null;
+                            }[];
+                        }[];
+                    };
+                };
+            };
+        };
+    };
     getPlannedTransaction: {
         parameters: {
             query?: never;
@@ -4221,26 +5674,6 @@ export interface operations {
             };
         };
     };
-    getInfoStats: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Statistics summary */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Envelope"];
-                };
-            };
-        };
-    };
     getInfoBanks: {
         parameters: {
             query?: never;
@@ -4293,30 +5726,6 @@ export interface operations {
         requestBody?: never;
         responses: {
             /** @description Count */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Envelope"];
-                };
-            };
-        };
-    };
-    getTransactionSummary: {
-        parameters: {
-            query?: {
-                start_date?: string;
-                end_date?: string;
-                currency?: string;
-            };
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Income/expense totals */
             200: {
                 headers: {
                     [name: string]: unknown;
@@ -5137,6 +6546,44 @@ export interface operations {
             };
         };
     };
+    moveHolding: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    from_account_id: number;
+                    to_account_id: number;
+                    /** @description Units to move; omit for the whole position */
+                    units?: number | null;
+                };
+            };
+        };
+        responses: {
+            /** @description Move result (mode, movedUnits, lotsMoved, lotsSplit) */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Envelope"];
+                };
+            };
+            /** @description Investment or an account not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
     getInvestmentSummary: {
         parameters: {
             query?: {
@@ -5647,36 +7094,6 @@ export interface operations {
             };
         };
     };
-    uploadAttachment: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "multipart/form-data": {
-                    /** Format: binary */
-                    file: string;
-                    transaction_id: number;
-                };
-            };
-        };
-        responses: {
-            /** @description Uploaded attachment */
-            201: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Envelope"] & {
-                        data?: components["schemas"]["Attachment"];
-                    };
-                };
-            };
-        };
-    };
     getTransactionAttachments: {
         parameters: {
             query?: never;
@@ -5698,6 +7115,44 @@ export interface operations {
                         data?: components["schemas"]["Attachment"][];
                     };
                 };
+            };
+        };
+    };
+    uploadAttachment: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "multipart/form-data": {
+                    /** Format: binary */
+                    file: string;
+                };
+            };
+        };
+        responses: {
+            /** @description Uploaded attachment */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Envelope"] & {
+                        data?: components["schemas"]["Attachment"];
+                    };
+                };
+            };
+            /** @description Upload error or no file provided */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
         };
     };
@@ -6133,26 +7588,6 @@ export interface operations {
             };
         };
     };
-    importSupportedBanks: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Supported bank list */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Envelope"];
-                };
-            };
-        };
-    };
     importRecipients: {
         parameters: {
             query?: never;
@@ -6204,6 +7639,140 @@ export interface operations {
                 content: {
                     "application/json": components["schemas"]["Envelope"];
                 };
+            };
+        };
+    };
+    getCustomParsers: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Parser config list */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Envelope"] & {
+                        data?: components["schemas"]["CustomParserConfig"][];
+                    };
+                };
+            };
+        };
+    };
+    createCustomParser: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    name: string;
+                    config: {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+        };
+        responses: {
+            /** @description Created parser config */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Envelope"] & {
+                        data?: components["schemas"]["CustomParserConfig"];
+                    };
+                };
+            };
+            /** @description A parser with that name already exists */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    deleteCustomParser: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Deleted (no content) */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Parser config not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    updateCustomParser: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    name?: string;
+                    config?: {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+        };
+        responses: {
+            /** @description Updated parser config */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Envelope"] & {
+                        data?: components["schemas"]["CustomParserConfig"];
+                    };
+                };
+            };
+            /** @description Parser config not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description A parser with that name already exists */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
         };
     };
@@ -6378,6 +7947,415 @@ export interface operations {
             };
         };
     };
+    portfolioImportCsvCustom: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "multipart/form-data": {
+                    /** Format: binary */
+                    file: string;
+                    /** @description Display label for the import source */
+                    adapter_name?: string;
+                    /** @description Python strptime format, default: %Y-%m-%d */
+                    date_format?: string;
+                    /** @description Single-character CSV delimiter, default ',' */
+                    separator?: string;
+                    /** @default utf-8 */
+                    encoding?: string;
+                    /** @default 0 */
+                    skip_rows?: number;
+                    date_column: string;
+                    type_column?: string;
+                    symbol_column?: string;
+                    name_column?: string;
+                    units_column?: string;
+                    price_column?: string;
+                    amount_column?: string;
+                    fees_column?: string;
+                    taxes_column?: string;
+                    currency_column?: string;
+                    fx_rate_column?: string;
+                    note_column?: string;
+                    /** @enum {string} */
+                    default_asset_class: "stock" | "etf" | "crypto" | "metals" | "real_estate" | "savings" | "bond";
+                    /** @enum {string} */
+                    default_type?: "buy" | "sell" | "dividend" | "fee" | "tax" | "interest";
+                    /** @description JSON object mapping raw CSV type strings to canonical portfolio_txn_type values */
+                    type_mapping?: string;
+                };
+            };
+        };
+        responses: {
+            /** @description All rows matched — batch committed immediately */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Envelope"] & {
+                        data?: {
+                            batch_id?: string;
+                            total?: number;
+                            imported?: number;
+                            duplicates?: number;
+                            errors?: number;
+                        };
+                    };
+                };
+            };
+            /** @description Some rows unresolved — batch left in awaiting_review; client must use review endpoints then POST commit */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Envelope"] & {
+                        data?: {
+                            batch_id?: string;
+                            requires_review?: boolean;
+                            match_source_counts?: {
+                                [key: string]: number;
+                            };
+                        };
+                    };
+                };
+            };
+        };
+    };
+    portfolioImportCsvStream: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "multipart/form-data": {
+                    /** Format: binary */
+                    file: string;
+                };
+            };
+        };
+        responses: {
+            /** @description Server-Sent Events stream; events are progress / review_required / complete / error */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "text/event-stream": string;
+                };
+            };
+        };
+    };
+    getPortfolioParsers: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Parser config list */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Envelope"] & {
+                        data?: components["schemas"]["PortfolioParserConfig"][];
+                    };
+                };
+            };
+        };
+    };
+    createPortfolioParser: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    name: string;
+                    config: {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+        };
+        responses: {
+            /** @description Created parser config */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Envelope"] & {
+                        data?: components["schemas"]["PortfolioParserConfig"];
+                    };
+                };
+            };
+            /** @description A portfolio parser with that name already exists */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    deletePortfolioParser: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Deleted (no content) */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Parser config not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    updatePortfolioParser: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    name?: string;
+                    config?: {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+        };
+        responses: {
+            /** @description Updated parser config */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Envelope"] & {
+                        data?: components["schemas"]["PortfolioParserConfig"];
+                    };
+                };
+            };
+            /** @description Parser config not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description A portfolio parser with that name already exists */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    getPortfolioImportBatches: {
+        parameters: {
+            query?: {
+                limit?: number;
+                offset?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Batch list */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Envelope"] & {
+                        data?: components["schemas"]["PortfolioImportBatch"][];
+                    };
+                };
+            };
+        };
+    };
+    getPortfolioImportBatch: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Batch detail */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Envelope"] & {
+                        data?: components["schemas"]["PortfolioImportBatch"];
+                    };
+                };
+            };
+        };
+    };
+    deletePortfolioImportBatch: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Rollback result */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Envelope"];
+                };
+            };
+        };
+    };
+    previewPortfolioImportBatch: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Rows grouped by investment with unresolved symbol/name groups and per-group totals */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Envelope"];
+                };
+            };
+        };
+    };
+    portfolioImportRowInvestmentOverride: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+                rowId: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    /** @description ID of an existing investment to link this row to */
+                    investment_id?: number;
+                    /** @description When true, a new investment record is created from the row's symbol/name/asset_class and linked */
+                    create_new?: boolean;
+                };
+            };
+        };
+        responses: {
+            /** @description Override applied */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Envelope"];
+                };
+            };
+            /** @description Neither investment_id nor create_new supplied, or create_new validation failed */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Batch or staging row not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    commitPortfolioImportBatch: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Commit result with row counts */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Envelope"];
+                };
+            };
+            /** @description Batch is not in awaiting_review or matched status */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
     adminOverview: {
         parameters: {
             query?: never;
@@ -6475,6 +8453,167 @@ export interface operations {
                 content: {
                     "application/json": components["schemas"]["Envelope"];
                 };
+            };
+        };
+    };
+    adminGetTableSchema: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Table name (validated against the live catalog) */
+                table: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Column metadata and primary key */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Envelope"] & {
+                        data?: {
+                            table?: string;
+                            primaryKey?: string[];
+                            columns?: {
+                                name?: string;
+                                dataType?: string;
+                                udtName?: string;
+                                nullable?: boolean;
+                                hasDefault?: boolean;
+                                generated?: boolean;
+                                writable?: boolean;
+                            }[];
+                        };
+                    };
+                };
+            };
+            /** @description Unknown table */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    adminGetTableRows: {
+        parameters: {
+            query?: {
+                limit?: number;
+                offset?: number;
+                orderBy?: string;
+                dir?: "asc" | "desc";
+                /** @description Raw SQL WHERE fragment (validated and parameterised server-side) */
+                where?: string;
+                /** @description JSON-encoded array of structured column filters */
+                filters?: string;
+            };
+            header?: never;
+            path: {
+                table: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Page of rows with column metadata and total count */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Envelope"] & {
+                        data?: {
+                            table?: string;
+                            columns?: Record<string, never>[];
+                            primaryKey?: string[];
+                            rows?: Record<string, never>[];
+                            total?: number;
+                            limit?: number;
+                            offset?: number;
+                        };
+                    };
+                };
+            };
+            /** @description Invalid filters or query parameter */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Unknown table */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    adminMutateTableRows: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                table: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    /** @description Preview the SQL statements without applying them */
+                    dryRun?: boolean;
+                    changes: {
+                        /** @enum {string} */
+                        op: "insert" | "update" | "delete";
+                        /** @description Primary-key column values (required for update/delete) */
+                        pk?: Record<string, never>;
+                        /** @description Column values for an insert */
+                        values?: Record<string, never>;
+                        /** @description Column values to write for an update */
+                        set?: Record<string, never>;
+                        /** @description Optimistic-concurrency token captured at read time */
+                        xmin?: string;
+                    }[];
+                };
+            };
+        };
+        responses: {
+            /** @description Mutation result (dry-run preview or applied results) */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Envelope"];
+                };
+            };
+            /** @description Malformed change set */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Unknown table */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Row changed or was deleted since it was loaded */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
         };
     };
@@ -6657,6 +8796,564 @@ export interface operations {
                 content: {
                     "application/json": components["schemas"]["Envelope"];
                 };
+            };
+        };
+    };
+    researchSearch: {
+        parameters: {
+            query: {
+                /** @description Search query (ticker or company name) */
+                q: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Search results with provenance meta (provider, source) */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Envelope"];
+                };
+            };
+        };
+    };
+    researchQuote: {
+        parameters: {
+            query: {
+                symbol: string;
+                /** @description Asset class hint for provider routing (e.g. stock, crypto, metals) */
+                asset_class?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Quote data with provenance meta (provider, source) */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Envelope"];
+                };
+            };
+            /** @description symbol parameter required */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    researchChart: {
+        parameters: {
+            query: {
+                symbol: string;
+                asset_class?: string;
+                /** @description Time range: 1d, 5d, 1mo, 3mo, 6mo, 1y, 2y, 5y, max */
+                range?: string;
+                /** @description Optional preferred provider (pinned to front of the capability chain; still falls through if unkeyed/failing). ADR-081 */
+                provider?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Chart points with provenance meta (provider, source) */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Envelope"];
+                };
+            };
+            /** @description symbol parameter required */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    researchFundamentals: {
+        parameters: {
+            query: {
+                symbol: string;
+                asset_class?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Fundamentals data with provenance meta (provider, source) */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Envelope"];
+                };
+            };
+            /** @description symbol parameter required */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    researchAnalyst: {
+        parameters: {
+            query: {
+                symbol: string;
+                asset_class?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Analyst data with provenance meta (provider, source) */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Envelope"];
+                };
+            };
+            /** @description symbol parameter required */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    researchNews: {
+        parameters: {
+            query: {
+                symbol: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description News articles with provenance meta (provider, source) */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Envelope"];
+                };
+            };
+            /** @description symbol parameter required */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    researchMacroSearch: {
+        parameters: {
+            query: {
+                q: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Union of macro series across FRED (open search) + Eurostat/DBnomics (curated catalog); each item carries { provider, seriesId, title, region, units, frequency, source }. Returns { items: [] } when blank. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Envelope"];
+                };
+            };
+        };
+    };
+    researchMacroSeries: {
+        parameters: {
+            query: {
+                provider: "fred" | "eurostat" | "dbnomics";
+                /** @description Provider-native id (FRED CPIAUCSL; Eurostat `<dataset>?<dims>`; DBnomics `provider/dataset/series`) */
+                series_id: string;
+                range?: "1d" | "5d" | "1mo" | "3mo" | "6mo" | "1y" | "2y" | "5y" | "max";
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description { provider, seriesId, title, units, frequency, points: [{time, close}] } with provenance meta */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Envelope"];
+                };
+            };
+            /** @description invalid provider or series_id */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    researchScorecard: {
+        parameters: {
+            query: {
+                symbol: string;
+                asset_class?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description { symbol, fundamentals, scorecard } with provenance meta, or unavailable */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Envelope"];
+                };
+            };
+            /** @description symbol parameter required */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    researchPortfolioForecast: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: {
+            content: {
+                "application/json": {
+                    horizon_months?: number;
+                    monthly_contribution?: number;
+                    paths?: number;
+                    /** @description 0 = historical drift, 1 = forward */
+                    forward_blend?: number;
+                    /** @enum {string} */
+                    method?: "parametric" | "block_bootstrap";
+                    target_value?: number;
+                    currency?: string;
+                    seed?: string;
+                };
+            };
+        };
+        responses: {
+            /** @description Projection with percentile bands, summary stats, and forward-input provenance */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Envelope"];
+                };
+            };
+        };
+    };
+    researchListMappings: {
+        parameters: {
+            query: {
+                instrument_key: string;
+                key_type?: "isin" | "internal";
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Stored mappings ({ mappings: [...] }) */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Envelope"];
+                };
+            };
+            /** @description instrument_key required or invalid key_type */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    researchSaveMappings: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    instrument_key: string;
+                    /**
+                     * @default isin
+                     * @enum {string}
+                     */
+                    key_type?: "isin" | "internal";
+                    mappings: Record<string, never>[];
+                };
+            };
+        };
+        responses: {
+            /** @description Updated mapping set */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Envelope"];
+                };
+            };
+            /** @description instrument_key required or mappings must be a non-empty array */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    researchResolveMappings: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    instrument_key: string;
+                    /**
+                     * @default isin
+                     * @enum {string}
+                     */
+                    key_type?: "isin" | "internal";
+                    asset_class?: string;
+                    query: string;
+                    /** @description Optional held-investment id. When set, that holding's already-configured provider (price_provider + price_provider_id) is pre-seeded as a confirmed proposal (fromHolding) and its live search is skipped. */
+                    investment_id?: number;
+                };
+            };
+        };
+        responses: {
+            /** @description Per-provider proposals + existing mappings */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Envelope"];
+                };
+            };
+            /** @description instrument_key and query required */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    researchAuditMappings: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    instrument_key: string;
+                    /**
+                     * @default isin
+                     * @enum {string}
+                     */
+                    key_type?: "isin" | "internal";
+                };
+            };
+        };
+        responses: {
+            /** @description Audit result (ok, quotes, discrepancies); stamps verified_at */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Envelope"];
+                };
+            };
+            /** @description instrument_key required */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    researchDeleteMapping: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description { removed: boolean } */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Envelope"];
+                };
+            };
+            /** @description valid mapping id required */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    researchListProviderKeys: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description { providers: [{ provider, label, envVar, configured, source, masked }] } */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Envelope"];
+                };
+            };
+        };
+    };
+    researchSetProviderKey: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                provider: "twelve_data" | "finnhub" | "fmp" | "alpha_vantage";
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    api_key: string;
+                };
+            };
+        };
+        responses: {
+            /** @description Updated masked statuses */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Envelope"];
+                };
+            };
+            /** @description unknown provider or empty api_key */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    researchClearProviderKey: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                provider: "twelve_data" | "finnhub" | "fmp" | "alpha_vantage";
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description { removed, providers } */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Envelope"];
+                };
+            };
+            /** @description unknown provider */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
         };
     };

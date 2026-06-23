@@ -4,9 +4,9 @@ type: endpoint
 method: GET, POST, PATCH, DELETE
 path: /api/investments
 description: Investment portfolio management (stocks, crypto, real estate, savings)
-date: 2026-04-23
-last_modified: 2026-04-29
-tags: [api, investments, portfolio, stocks, crypto, metals, phase-9, decimal, money, offline-fallback]
+date: 2026-06-18
+last_modified: 2026-06-18
+tags: [api, investments, portfolio, stocks, crypto, metals, phase-9, decimal, money, offline-fallback, per-account, move-holding, adr-091]
 status: active
 aliases: [investments-api, portfolio-api, holdings, stocks, crypto, real-estate, savings, bonds, metals]
 related_code: [[apps/node-backend/src/routes/investments.js]], [[apps/node-backend/src/repositories/investmentRepository.js]]
@@ -15,6 +15,9 @@ related_code: [[apps/node-backend/src/routes/investments.js]], [[apps/node-backe
 # Investments API
 
 ## Overview
+
+> [!info] Rate Limiting
+> All `/api/investments/*` endpoints are subject to a 300 req/min route-group limiter (`investmentRateLimiter`). The limiter is bypassed in development. See [[docs/security/rate-limiting|Rate Limiting]] for details.
 
 The Investments API manages investment holdings across various asset classes: stocks, ETFs, crypto, metals, real estate, savings, and bonds. It supports live price feeds from multiple providers.
 
@@ -382,6 +385,40 @@ Create-path compatibility:
 - Add/Edit portfolio transaction dialogs expose an optional `fx_rate_to_eur` field and pass it through to create payloads when set ([[apps/frontend/src/components/portfolio/AddPortfolioTxnDialog.tsx]], [[apps/frontend/src/components/portfolio/EditPortfolioTxnDialog.tsx]], [[apps/frontend/src/hooks/usePortfolio.ts]]).
 - If `fx_rate_to_eur` is omitted, FX conversion uses historical rates from `exchange_rates` for transaction dates; missing rows are auto-backfilled from ECB historical data at startup, with nearest DB historical-rate fallback when exact dates are unavailable ([[apps/node-backend/src/services/currency/currencyConversionService.js]], [[apps/node-backend/src/main.js]]).
 
+### POST /api/investments/:id/move
+
+Move this holding between accounts — an **in-specie transfer that preserves cost basis** (no
+sell/buy, no realized gain, **no cash leg**), per ADR-091. Body:
+
+```json
+{
+  "from_account_id": 3,
+  "to_account_id": 7,
+  "units": 25,
+  "strategy": "fifo"
+}
+```
+
+**Fields:**
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `from_account_id` | integer | Yes | Source account |
+| `to_account_id` | integer | Yes | Destination account |
+| `units` | number | No | Units to move; omit for a whole move |
+| `strategy` | `'fifo'` \| `'proportional'` | No | Partial-move cost-basis strategy (default `'fifo'`) |
+
+**Move modes:**
+
+- **Whole move** (omit `units`, or `units` ≥ net, or non-unit-based asset): re-points every lot of `(investment, from_account)` — including history — to the target. One UPDATE.
+- **Partial move, FIFO (default)**: moves buy/gift lots oldest-first; the boundary lot is split pro-rata. Sells stay with the source.
+- **Partial move, proportional**: splits *every* lot by the same fraction (`units / net`), yielding an average-cost split. Useful for mutual fund–style holdings where FIFO lot identity is not meaningful.
+
+Inheritance-aware (`portfolio_transactions_base.account_id` + child-table `units`, or the flat
+table). Returns `{ investmentId, from, to, mode, strategy, movedUnits, lotsMoved, lotsSplit }`. `404` if the
+investment or either account is missing; `400` if `units` exceeds the holding or the investment has
+no lots in the source account. Implemented by `services/portfolio/moveHoldingService.js`.
+
 ### PATCH /api/investments/transactions/:txnId
 
 Update a portfolio transaction by transaction ID.
@@ -390,6 +427,7 @@ Update endpoint notes:
 - Route is available at `PATCH /api/investments/transactions/:txnId` ([[apps/node-backend/src/routes/investments.js]]).
 - Repository update logic keeps inheritance compatibility fallback behavior for non-updatable `portfolio_transactions` views ([[apps/node-backend/src/repositories/portfolioTransactionRepository.js]]).
 - Transaction `type` is immutable on edit; attempts to change it return `400` with `VALIDATION_ERROR`.
+- **Account reassignment:** `account_id` (integer) or `null` can be included in the PATCH body to reassign or unassign a lot's account without changing any other fields. This is how `EditPortfolioTxnDialog`'s account selector persists its change.
 - Unit-based buy/sell updates enforce the same 2-of-3 pricing rule as create: when changing pricing fields, client must send at least 2 of `amount`, `units`, `price_per_unit`, and backend computes the missing value.
 - If all 3 pricing fields are sent on update and inconsistent, request is rejected with `400` (with the same precision normalization and compatibility tolerance handling as create).
 - Optional `fx_rate_to_eur` is supported on update payloads as well, including UI edit flow ([[apps/frontend/src/components/portfolio/EditPortfolioTxnDialog.tsx]], [[apps/node-backend/src/routes/investments.js]], [[apps/node-backend/src/repositories/portfolioTransactionRepository.js]]).

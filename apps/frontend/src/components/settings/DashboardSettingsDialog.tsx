@@ -1,27 +1,56 @@
-import { useState, useEffect, useCallback } from 'react';
-import { useSettings, type ExclusionScope } from '@/contexts/SettingsContext';
-import { useAppSettings, defaultAppSettings } from '@/contexts/AppSettingsContext';
-import { useLanguage } from '@/contexts/LanguageContext';
-import { useQuery } from '@tanstack/react-query';
-import { apiClient } from '@/lib/api';
+import { useState, useEffect } from 'react';
 import {
-    Dialog,
-    DialogContent,
-    DialogDescription,
-    DialogFooter,
-    DialogHeader,
-    DialogTitle,
+    SlidersHorizontal, Palette, BarChart3, Workflow, Bot, DatabaseBackup, Info,
+    type LucideIcon,
+} from 'lucide-react';
+import { useLanguage } from '@/contexts/LanguageContext';
+import { cn } from '@/lib/utils';
+import {
+    Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle,
 } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
-import {
-    Tabs, TabsContent, TabsList, TabsTrigger,
-} from '@/components/ui/tabs';
-import { toast } from 'sonner';
-import { AppearanceTab } from './AppearanceTab';
-import { GeneralTab } from './tabs/GeneralTab';
-import { DashboardTab } from './tabs/DashboardTab';
-import { AppTab } from './tabs/AppTab';
-import { BackupTab } from './tabs/BackupTab';
+import { ScrollArea } from '@/components/ui/scroll-area';
+import { GeneralSection } from './sections/GeneralSection';
+import { AppearanceSection } from './sections/AppearanceSection';
+import { StatisticsSection } from './sections/StatisticsSection';
+import { BehaviorSection } from './sections/BehaviorSection';
+import { AiSection } from './sections/AiSection';
+import { BackupSection } from './sections/BackupSection';
+import { AboutSection } from './sections/AboutSection';
+
+type SectionId = 'general' | 'appearance' | 'statistics' | 'behavior' | 'ai' | 'backup' | 'about';
+
+interface SectionDef {
+    id: SectionId;
+    labelKey: string;
+    icon: LucideIcon;
+}
+
+const SECTIONS: SectionDef[] = [
+    { id: 'general', labelKey: 'settings.tab.general', icon: SlidersHorizontal },
+    { id: 'appearance', labelKey: 'settings.tab.appearance', icon: Palette },
+    { id: 'statistics', labelKey: 'settings.section.statistics', icon: BarChart3 },
+    { id: 'behavior', labelKey: 'settings.section.behavior', icon: Workflow },
+    { id: 'ai', labelKey: 'settings.section.ai', icon: Bot },
+    { id: 'backup', labelKey: 'settings.tab.backup', icon: DatabaseBackup },
+    { id: 'about', labelKey: 'settings.section.about', icon: Info },
+];
+
+// Map the legacy deep-link tab keys (used by the Electron menu bridge and
+// onboarding) onto the new section ids so existing callers keep working.
+const LEGACY_TAB_MAP: Record<string, SectionId> = {
+    general: 'general',
+    appearance: 'appearance',
+    dashboard: 'statistics',
+    app: 'about',
+    backup: 'backup',
+};
+
+function resolveSection(tab: string | undefined): SectionId {
+    if (tab && tab in LEGACY_TAB_MAP) return LEGACY_TAB_MAP[tab];
+    if (SECTIONS.some((s) => s.id === tab)) return tab as SectionId;
+    return 'general';
+}
 
 interface DashboardSettingsDialogProps {
     open: boolean;
@@ -30,164 +59,69 @@ interface DashboardSettingsDialogProps {
 }
 
 export function DashboardSettingsDialog({ open, onOpenChange, defaultTab = 'general' }: DashboardSettingsDialogProps) {
-    const { settings, updateSettings, resetSettings } = useSettings();
-    const { appSettings, updateAppSettings, resetAppSettings } = useAppSettings();
     const { t } = useLanguage();
-
-    const [activeTab, setActiveTab] = useState(defaultTab);
-    useEffect(() => { setActiveTab(defaultTab); }, [defaultTab]);
-
-    // Exclusion state (needed for save)
-    const [localExcludedCategories, setLocalExcludedCategories] = useState<number[]>([]);
-    const [localExcludedRecipients, setLocalExcludedRecipients] = useState<number[]>([]);
-    const [localExcludeHidden, setLocalExcludeHidden] = useState(true);
-    const [localExclusionScope, setLocalExclusionScope] = useState<ExclusionScope>('everywhere');
-
-    // General settings (needed for save)
-    const [localAppSettings, setLocalAppSettings] = useState(appSettings);
-
-    // Backup dir/quit (needed for save — BackupTab initializes these via setters)
-    const [backupDir, setBackupDir] = useState('');
-    const [backupOnQuit, setBackupOnQuit] = useState(false);
-
-    const { data: categoriesData, isLoading: categoriesLoading } = useQuery({
-        queryKey: ['categories', 'all'],
-        queryFn: () => apiClient.getCategories({ limit: 1000 }),
-        staleTime: 60000,
-    });
-
-    const { data: recipientsData, isLoading: recipientsLoading } = useQuery({
-        queryKey: ['recipients', 'all'],
-        queryFn: () => apiClient.getRecipients({ limit: 1000 }),
-        staleTime: 60000,
-    });
-
-    const categories = categoriesData?.items ?? [];
-    const recipients = recipientsData?.items ?? [];
-    const isLoading = categoriesLoading || recipientsLoading;
+    const [activeSection, setActiveSection] = useState<SectionId>(() => resolveSection(defaultTab));
 
     useEffect(() => {
-        if (!open) return;
-        setLocalExcludedCategories(settings.excludedCategoryIds);
-        setLocalExcludedRecipients(settings.excludedRecipientIds);
-        setLocalExcludeHidden(settings.excludeHiddenCategories);
-        setLocalExclusionScope(settings.exclusionScope);
-        setLocalAppSettings(appSettings);
-        // BackupTab handles its own initialization via the open prop
-    }, [open, settings, appSettings]);
+        if (open) setActiveSection(resolveSection(defaultTab));
+    }, [open, defaultTab]);
 
-    const handleAiModelChange = useCallback(
-        (v: string) => setLocalAppSettings((prev) => ({ ...prev, aiDefaultModel: v })),
-        [],
-    );
-    const handleAdminModeChange = useCallback(
-        (enabled: boolean) => setLocalAppSettings((prev) => ({ ...prev, adminMode: enabled })),
-        [],
-    );
-
-    const handleSave = () => {
-        updateSettings({
-            excludedCategoryIds: localExcludedCategories,
-            excludedRecipientIds: localExcludedRecipients,
-            excludeHiddenCategories: localExcludeHidden,
-            exclusionScope: localExclusionScope,
-        });
-        updateAppSettings(localAppSettings);
-        if (apiClient.isElectron()) {
-            apiClient.saveBackupSettings({ backupDir, backupOnQuit });
+    const renderSection = () => {
+        switch (activeSection) {
+            case 'general': return <GeneralSection />;
+            case 'appearance': return <AppearanceSection />;
+            case 'statistics': return <StatisticsSection />;
+            case 'behavior': return <BehaviorSection />;
+            case 'ai': return <AiSection />;
+            case 'backup': return <BackupSection />;
+            case 'about': return <AboutSection onOpenChange={onOpenChange} />;
         }
-        onOpenChange(false);
-        toast.success(t('settings.saved'));
-    };
-
-    const handleReset = () => {
-        resetSettings();
-        resetAppSettings();
-        setLocalExcludedCategories([]);
-        setLocalExcludedRecipients([]);
-        setLocalExcludeHidden(true);
-        setLocalExclusionScope('everywhere');
-        setLocalAppSettings(defaultAppSettings);
-        toast.info(t('settings.resetToDefaults'));
     };
 
     return (
         <Dialog open={open} onOpenChange={onOpenChange}>
-            <DialogContent className="max-w-2xl h-[80vh] flex flex-col">
-                <DialogHeader>
+            <DialogContent className="flex h-[82vh] w-full max-w-3xl flex-col gap-0 overflow-hidden p-0">
+                <DialogHeader className="border-b border-border/60 px-6 py-4 text-left">
                     <DialogTitle>{t('settings.title')}</DialogTitle>
-                    <DialogDescription>
-                        {t('settings.description')}
-                    </DialogDescription>
+                    <DialogDescription>{t('settings.description')}</DialogDescription>
                 </DialogHeader>
 
-                <Tabs value={activeTab} onValueChange={setActiveTab} className="flex-1 flex flex-col min-h-0">
-                    <TabsList className="grid w-full grid-cols-5">
-                        <TabsTrigger value="general">{t('settings.tab.general')}</TabsTrigger>
-                        <TabsTrigger value="appearance">{t('settings.tab.appearance')}</TabsTrigger>
-                        <TabsTrigger value="dashboard">{t('settings.tab.dashboard')}</TabsTrigger>
-                        <TabsTrigger value="app">{t('settings.tab.app')}</TabsTrigger>
-                        <TabsTrigger value="backup">{t('settings.tab.backup')}</TabsTrigger>
-                    </TabsList>
+                <div className="flex min-h-0 flex-1">
+                    {/* Sidebar nav */}
+                    <nav className="flex w-52 shrink-0 flex-col gap-0.5 overflow-y-auto border-r border-border/60 p-2">
+                        {SECTIONS.map(({ id, labelKey, icon: Icon }) => {
+                            const active = activeSection === id;
+                            return (
+                                <button
+                                    key={id}
+                                    type="button"
+                                    onClick={() => setActiveSection(id)}
+                                    aria-current={active ? 'page' : undefined}
+                                    className={cn(
+                                        'flex items-center gap-2.5 rounded-lg px-3 py-2 text-left text-sm font-medium transition-colors',
+                                        active
+                                            ? 'bg-primary/10 text-primary'
+                                            : 'text-muted-foreground hover:bg-muted/60 hover:text-foreground',
+                                    )}
+                                >
+                                    <Icon className="h-4 w-4 shrink-0" />
+                                    <span className="truncate">{t(labelKey)}</span>
+                                </button>
+                            );
+                        })}
+                    </nav>
 
-                    <TabsContent value="general" className="flex-1 min-h-0">
-                        <GeneralTab
-                            localAppSettings={localAppSettings}
-                            onUpdate={setLocalAppSettings}
-                        />
-                    </TabsContent>
+                    {/* Content */}
+                    <ScrollArea className="min-h-0 flex-1">
+                        <div className="px-6 py-6">
+                            {renderSection()}
+                        </div>
+                    </ScrollArea>
+                </div>
 
-                    <TabsContent value="appearance" className="flex-1 min-h-0">
-                        <AppearanceTab />
-                    </TabsContent>
-
-                    <TabsContent value="dashboard" className="flex-1 min-h-0">
-                        <DashboardTab
-                            categories={categories}
-                            recipients={recipients}
-                            isLoading={isLoading}
-                            excludedCategories={localExcludedCategories}
-                            setExcludedCategories={setLocalExcludedCategories}
-                            excludedRecipients={localExcludedRecipients}
-                            setExcludedRecipients={setLocalExcludedRecipients}
-                            excludeHidden={localExcludeHidden}
-                            setExcludeHidden={setLocalExcludeHidden}
-                            exclusionScope={localExclusionScope}
-                            setExclusionScope={setLocalExclusionScope}
-                        />
-                    </TabsContent>
-
-                    <TabsContent value="app" className="flex-1 min-h-0">
-                        <AppTab
-                            aiDefaultModel={localAppSettings.aiDefaultModel}
-                            onAiModelChange={handleAiModelChange}
-                            onReset={handleReset}
-                            onOpenChange={onOpenChange}
-                            dateFormat={localAppSettings.dateFormat}
-                            adminMode={localAppSettings.adminMode ?? false}
-                            onAdminModeChange={handleAdminModeChange}
-                        />
-                    </TabsContent>
-
-                    <TabsContent value="backup" className="flex-1 min-h-0">
-                        <BackupTab
-                            open={open}
-                            backupDir={backupDir}
-                            setBackupDir={setBackupDir}
-                            backupOnQuit={backupOnQuit}
-                            setBackupOnQuit={setBackupOnQuit}
-                        />
-                    </TabsContent>
-                </Tabs>
-
-                <DialogFooter className="gap-2">
-                    <Button variant="outline" onClick={() => onOpenChange(false)}>
-                        {t('settings.cancel')}
-                    </Button>
-                    <Button onClick={handleSave}>
-                        {t('settings.save')}
-                    </Button>
-                </DialogFooter>
+                <div className="flex shrink-0 items-center justify-end border-t border-border/60 px-6 py-3.5">
+                    <Button onClick={() => onOpenChange(false)}>{t('settings.done')}</Button>
+                </div>
             </DialogContent>
         </Dialog>
     );

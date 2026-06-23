@@ -3,8 +3,9 @@ title: Feature - Belgian Tax
 type: feature
 status: active
 date: 2026-05-11
-tags: [feature, tax, belgian, cadastral-income, deductions, phase-8, pdf-export, regional-own-home-credit, exemption-brackets, taxable-income-sources, audit-2026-05-11, disabled-dependents, regional-autonomy-factor, property-tax-centimes, etf-tob, reynders-routing]
-description: Belgian tax profile management with PIT calculator using exemption-bracket method (CIR-92 art. 134 §3), regional own-home credits (Flemish woonbonus, Walloon chèque habitat), taxable income source filtering, cadastral income tracking, deduction management, PDF tax report export, and May 2026 PwC audit fixes (disabled-dependent doubling, child-under-3 forfeiture, regional autonomy factor, property-tax centimes calibration)
+updated: 2026-06-18
+tags: [feature, tax, belgian, cadastral-income, deductions, phase-8, pdf-export, regional-own-home-credit, exemption-brackets, taxable-income-sources, audit-2026-05-11, disabled-dependents, regional-autonomy-factor, property-tax-centimes, etf-tob, reynders-routing, portfolio-tax-pure-module, decimal-migration, point-in-time-fx]
+description: Belgian tax profile management with PIT calculator using exemption-bracket method (CIR-92 art. 134 §3), regional own-home credits (Flemish woonbonus, Walloon chèque habitat), taxable income source filtering, cadastral income tracking, deduction management, PDF tax report export, and May 2026 PwC audit fixes (disabled-dependent doubling, child-under-3 forfeiture, regional autonomy factor, property-tax centimes calibration). May 2026: Portfolio-tax estimators extracted to a pure, tested module with Decimal.js accumulation.
 aliases: [belgian-tax, tax-feature, cadastral, deductions, belgium]
 related_code:
   - apps/frontend/src/pages/TaxOverviewPage.tsx
@@ -15,6 +16,8 @@ related_code:
   - apps/frontend/src/lib/belgianTax/constants.ts
   - apps/frontend/src/lib/belgianTax/socialSecurity.ts
   - apps/frontend/src/lib/belgianTax/propertyTax.ts
+  - apps/frontend/src/lib/belgianTax/portfolioTax.ts
+  - apps/frontend/src/lib/belgianTax/__tests__/portfolioTax.test.ts
   - apps/node-backend/src/services/belgianInflationService.js
 ---
 
@@ -40,7 +43,35 @@ Pure tax logic lives in [[apps/frontend/src/lib/belgianTax]] and is split by con
 | `pit.ts` | `computeBelgianPIT(profile)` — composes deductions, credits, surcharge |
 | `socialSecurity.ts` | Employee SS + step-function special social security contribution (CSSS) |
 | `propertyTax.ts` | Indexed cadastral × regional rate × centimes additionnels |
+| `portfolioTax.ts` | Pure portfolio-tax estimators (see below) |
 | `index.ts` | Public re-exports |
+
+### `portfolioTax.ts` — Pure Portfolio-Tax Estimators (2026-05-29)
+
+`apps/frontend/src/lib/belgianTax/portfolioTax.ts` contains the portfolio-tax computation functions that were previously inlined in `PortfolioTaxPage.tsx`. Extracting them to a pure, side-effect-free module enables independent golden-fixture testing and de-duplication between pages.
+
+**Exported functions:**
+
+| Function | Inputs | Returns |
+|----------|--------|---------|
+| `recordedTaxesForYear(transactions, year, convert)` | Portfolio transactions for a year + `ConvertFn` | `{ total, byType }` — sum of recorded taxes grouped by tax type |
+| `recordedFeesForYear(transactions, year, convert)` | Portfolio transactions for a year + `ConvertFn` | `{ total, byType }` — sum of recorded fees grouped by fee type |
+| `enrichInvestmentCosts(investments, transactions, year, convert)` | All investments + transactions + `ConvertFn` | Per-investment cost summary (taxes, fees, realized gain) |
+| `computeTobRecorded(transactions, year, convert)` | Buy-type transactions + `ConvertFn` | Total TOB (transaction tax on securities) recorded from buy taxes |
+| `computeTobAutoEstimate(transactions, classifications, year, convert)` | Transactions + per-investment ETF metadata + `ConvertFn` | Auto-estimated TOB using rate-banded caps (0.12%/0.35%/1.32%) |
+| `computeTacrEstimate(portfolio, year)` | Portfolio summary + income year | TACR (securities-account tax) estimate for accounts ≥ €1M |
+| `computeRealizedGainSplit(transactions, classifications, year, convert)` | Sell transactions + ETF metadata + `ConvertFn` | Realized gain split into Reynders and CGT pools |
+| `computeReyndersEstimate(gainSplit, year)` | Output of `computeRealizedGainSplit` | Reynders tax estimate at 30% on interest-attributable portion |
+| `computeCgtEstimate(gainSplit, profile, year)` | Gain split + Belgian profile + year | Arizona CGT (10%) estimate after annual exemption |
+| `computeDividendWht(transactions, year, convert)` | Dividend transactions + `ConvertFn` | `{ tracked, whtPaid, reclaimable, netCost }` using Belgian WHT reclaim rules |
+
+**Currency injection:** all functions accept a `ConvertFn = (amount: number, fromCurrency?: string) => number` parameter rather than accessing exchange-rate state directly. This keeps the module dependency-free and fully testable without React context.
+
+**Decimal accumulation:** monetary sums and products inside these functions accumulate via `decimal.js` internally and return `number`. This eliminates float-accumulation drift across many transactions while leaving the public API type-stable (`number` in, `number` out).
+
+**De-duplication:** `recordedTaxesForYear` is now the single implementation shared by both `PortfolioTaxPage` and `TaxOverviewPage`. Each page's `useMemo` calls the shared function instead of duplicating the per-transaction accumulation loop.
+
+**Tests:** `apps/frontend/src/lib/belgianTax/__tests__/portfolioTax.test.ts` — 13 golden-output cases locking all estimators to 8 decimal places. Integrated into the frontend Vitest suite (94 tax-unit + 88 portfolio-integration tests pass; see [[docs/testing/test-inventory|Test Inventory]]).
 
 The React provider [[apps/frontend/src/contexts/BelgianTaxProfileContext]] only owns persistence + state; it re-exports the public surface so existing consumers keep working.
 
@@ -129,7 +160,7 @@ Investments of type `real_estate` include Belgian-specific fields:
 1. Gross = salary + other taxable income.
 2. Employee social security: 13.07% (employee) / 11.07% (civil servant), salary only.
 3. Professional expenses: lump-sum forfait (employee/director) or actual.
-4. Deductions from taxable basis: alimony 80%, union dues, medical expenses.
+4. Deductions from taxable basis: alimony 80%. (2026-06-11 correction: union dues now deduct only inside the *actual* professional-expense method — they are professional expenses, not a separate deduction — and medical expenses no longer deduct at all; Belgian PIT has no general medical deduction. The breakdown also gained a 'Property Tax (estimate)' row so the visible rows reconcile to Net Take-Home.)
 5. Personal exemption (`quotité du revenu exempté`): basic + dependents (with disabled count doubling per CIR-92 art. 132 4° / 136) + under-3 (forfeited if childcare claimed per CIR-92 art. 132bis) + other dependents + disability + single-parent supplements; applied at the **lowest brackets first** via a dedicated exemption-bracket rate table (CIR-92 art. 134 §3). The exemption amount is taxed from bracket 1 upward using reduced rates (25% on bracket-1 portion, 30% on bracket-2 overflow, then main rates above), and the result is subtracted from gross PIT and reported as `personalExemptionBenefit`. Disabled dependents count as TWO heads each; `dependentChildrenDisabled` and `dependentOtherPersonsDisabled` are clamped to their respective head counts.
 6. Regional own-home credit (optional): Applies to mortgages on the taxpayer's primary residence.
    - **Flemish woonbonus (pre-2020 loans)** — two sub-regimes by origination year:
@@ -301,7 +332,7 @@ Each entry exposes `{ year, isCurrent, hasSnapshot, hasTransactions }` for the s
 ### Known limits
 
 - **Engine drift.** When no calculation is frozen for a year (see ADR-059), past displayed numbers reflect today's `computeBelgianPIT` — engine bug fixes propagate retroactively. Freezing or filing a year captures the calculation verbatim and blocks drift for that year.
-- **Exchange rates.** Multi-currency conversion still uses today's rates, not point-in-time rates. Out of scope for ADR-058 and ADR-059.
+- **Exchange rates.** The tax report (`dataFetcherTax.js`) converts foreign-currency tax, fee, and dividend amounts at the exchange rate **on each transaction's date** (point-in-time), not today's rate — matching the Belgian rules for the TOB ("ECB rate of the day the transaction took place") and for foreign movable income (taxable at its date of collection). See ADR-085. The frontend tax-overview's live portfolio figures still display at current rates (a current-value concern, not the tax computation).
 - **Soft lock.** Past snapshots remain editable behind a warning banner; filing upgrades the warning to an explicit "Amend this filed year" confirmation (ADR-059) but does not hard-freeze.
 
 ## Historical Year Extensions (ADR-059)
@@ -373,6 +404,8 @@ See [[docs/api/reports#post-apireportstax|Reports API: Tax Endpoint]] for reques
 
 ## Related
 
+- [[docs/adr/021-decimal-arithmetic-for-monetary-values|ADR-021]] — Decimal.js adoption for monetary arithmetic (Phase 9); `portfolioTax.ts` follows the same pattern for frontend accumulation
+- [[docs/adr/060-may-2026-monetary-precision-and-deduplication-audit|ADR-060]] — May 2026 audit that established the `apps/frontend/src/lib/decimal.ts` frontend Decimal module; `portfolioTax.ts` Decimal accumulation is consistent with this pattern
 - [[docs/adr/053-belgian-pit-exemption-bracket-correction|ADR-053]] — Exemption-bracket calculation correction (May 2026)
 - [[docs/adr/054-belgian-regional-own-home-credits|ADR-054]] — Regional own-home credits implementation (May 2026)
 - [[docs/adr/055-belgian-tax-income-source-filtering|ADR-055]] — Taxable income source filtering (May 2026)

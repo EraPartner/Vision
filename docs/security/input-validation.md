@@ -3,11 +3,11 @@ title: Input Validation
 type: security
 status: active
 date: 2026-04-26
-updated: 2026-04-29
-tags: [security, validation, sanitization, csv, formula-injection, cwe-1236, path-injection, redos]
-description: Input validation and sanitization mechanisms to prevent SQL injection, XSS, formula injection in CSV exports, path injection, ReDoS, and malformed data
-aliases: [input validation, sanitization, sql injection, xss, validation middleware, csv formula injection, cwe-1236]
-related_code: ["apps/node-backend/src/middleware/validation.js", "apps/node-backend/src/lib/csv.js"]
+updated: 2026-05-29
+tags: [security, validation, sanitization, csv, formula-injection, cwe-1236, path-injection, redos, ssrf, outbound-request, url-safety]
+description: Input validation and sanitization mechanisms to prevent SQL injection, XSS, formula injection in CSV exports, path injection, ReDoS, malformed data, and SSRF via user-controlled outbound URLs
+aliases: [input validation, sanitization, sql injection, xss, validation middleware, csv formula injection, cwe-1236, ssrf, url safety]
+related_code: ["apps/node-backend/src/middleware/validation.js", "apps/node-backend/src/lib/csv.js", "apps/node-backend/src/lib/urlSafety.js", "apps/node-backend/src/controllers/investmentController.js", "apps/node-backend/src/services/prices/priceProviderRegistry.js"]
 ---
 
 # Input Validation
@@ -275,6 +275,69 @@ const csv = cols.map(escapeCsvValue).join(',');
 
 - [[apps/node-backend/src/routes/transactions.js]] — `GET /api/transactions/export/csv` ✓
 - [[apps/node-backend/src/routes/splits.js]] — `GET /api/splits/owed/:id/export/csv` ✓
+
+---
+
+## Outbound Request Guard — SSRF (2026-05-29)
+
+Custom price-provider investments may carry user-supplied URLs (`price_provider_url`, `price_provider_latest_url`, `price_provider_history_url`) that the backend fetches server-side at price-refresh time. Without a guard, an attacker can point the server at internal services (cloud metadata endpoint `169.254.169.254`, Docker bridge siblings, loopback ports).
+
+### Module
+
+**[[apps/node-backend/src/lib/urlSafety.js]]** exports:
+
+| Export | Description |
+|--------|-------------|
+| `assertPublicHttpUrl(url, opts)` | Validates a URL is safe to fetch. Throws `BlockedUrlError` on violation; returns parsed `URL` on success. Accepts `resolveDns` (default `true`) and injectable `lookup` for tests. |
+| `isBlockedIpv4(ip)` | Returns `true` for private/loopback/link-local/CGNAT/unspecified IPv4 ranges |
+| `isBlockedIpv6(ip)` | Returns `true` for loopback (`::1`, `::`), IPv4-mapped (`::ffff:`), ULA (`fc00::/7`), and link-local (`fe80::/10`) |
+| `isBlockedAddress(ip)` | Dispatch to the above by address family; fails closed on unrecognized format |
+| `BlockedUrlError` | Error subclass thrown on any violation |
+
+**Blocked ranges (IPv4):** `0.0.0.0/8`, `10.0.0.0/8`, `127.0.0.0/8`, `169.254.0.0/16`, `172.16.0.0/12`, `192.168.0.0/16`, `100.64.0.0/10` (CGNAT)
+
+**Blocked ranges (IPv6):** `::1`, `::`, `::ffff:<blocked-ipv4>`, `fc00::/7`, `fe80::/10`
+
+Non-`http`/`https` schemes (e.g. `file:`, `gopher:`, `data:`) are always rejected.
+
+### Application Points
+
+**Write boundary** (`investmentController.js` — `createInvestment` / `updateInvestment`):
+- All three URL fields validated via `assertPublicHttpUrl(value, { resolveDns: false })` before the row is persisted.
+- DNS is deliberately _not_ resolved at write time — that would couple investment writes to DNS availability. The scheme + IP-literal check is sufficient at the boundary.
+- A failed check throws `ValidationError` → 400 response.
+
+**Fetch boundary** (`priceProviderRegistry.js` — custom provider `_fetchJson`):
+- `assertPublicHttpUrl` is called with full DNS resolution (`resolveDns: true`) before each fetch and again for every redirect hop (`redirect: 'manual'`).
+- Response bodies are capped at **5 MB** to prevent memory exhaustion from a malicious server.
+- This is the defense-in-depth layer that catches DNS-rebinding attacks and redirect chains to private hosts.
+
+### Residual Risk
+
+TOCTOU DNS rebinding (address changes between our lookup and Node's own TCP connection) is not fully closed by this guard. Pinning to a resolved IP via a custom `undici` dispatcher is the planned follow-up hardening if the custom-URL surface grows. See the module comment in `urlSafety.js` for details.
+
+### Related
+
+- [[docs/integrations/price-providers#custom-provider-url-constraints-2026-05-29|Price Providers — Custom URL constraints]]
+- [[docs/reference/codebase-audit-2026-05|Codebase Audit 2026-05]] — SSRF finding that drove this fix
+
+---
+
+## CSS Injection Prevention (2026-05-29)
+
+Report theme tokens are interpolated into a Puppeteer-rendered `:root {}` CSS block. Without constraints, a crafted value could inject arbitrary CSS or trigger a `url()`-based SSRF.
+
+**Protection:** Each theme token is validated against `HSL_COMPONENT_RE` at both the Zod route boundary and the `themeCss.js` sink (defense-in-depth). Invalid tokens fall back to the mode default; the raw value is never interpolated.
+
+```
+HSL_COMPONENT_RE = /^\d{1,3}(?:\.\d+)?\s+\d{1,3}(?:\.\d+)?%\s+\d{1,3}(?:\.\d+)?%$/
+```
+
+Valid example: `"250 84% 60%"` (bare HSL components without `hsl()` wrapper).
+
+**Test coverage:** [[apps/node-backend/tests/themeCss.test.js]]
+
+**Related:** [[docs/api/reports#css-injection-hardening-2026-05-29|Reports API — CSS Injection Hardening]]
 
 ---
 

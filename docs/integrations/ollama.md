@@ -3,8 +3,9 @@ title: Ollama Integration
 type: integration
 status: active
 date: 2026-04-19
-tags: [integration, ollama, llm, local-ai, streaming, tool-calling]
-description: HTTP client wrapper around local Ollama for AI chat — health, model discovery, chat/stream, abort support
+updated: 2026-06-11
+tags: [integration, ollama, llm, local-ai, streaming, tool-calling, idle-timeout, tool-call-accumulation]
+description: HTTP client wrapper around local Ollama for AI chat — health, model discovery, chat/stream, abort support. June 2026: per-chunk idle timeout replaces single total budget; tool calls accumulated and deduped across NDJSON chunks; request/response logs downgraded to debug.
 aliases: [ollama, ollama-client, local-llm]
 related_code: ["apps/node-backend/src/integrations/ollama/client.js", "apps/node-backend/src/integrations/ollama/prompts.js", "apps/node-backend/src/services/aiChatService.js"]
 ---
@@ -49,8 +50,30 @@ Hits `GET /` (Ollama's banner endpoint) with a 2s timeout. Returns:
 Sends `POST /api/chat` with `stream: true`. Parses NDJSON chunks into:
 
 - Text chunks → `onToken(delta)` per line
-- Tool-call chunks → `onToolCall({ name, args })` once args finalize
+- Tool-call chunks → accumulated into a deduped array across all NDJSON chunks (see below)
 - Final chunk → resolves promise with aggregated `{ message, usage, toolCalls }`
+
+#### Streaming timeout model (June 2026)
+
+Two separate budgets apply:
+
+1. **`requestTimeoutMs`** (`OLLAMA_REQUEST_TIMEOUT_MS`, default 600 000 ms) — deadline for the connect + prompt-eval phase, i.e. receiving the first chunk. If no chunk arrives in this window the request is aborted with `TIMEOUT`.
+2. **`streamIdleTimeoutMs`** (`OLLAMA_STREAM_IDLE_TIMEOUT_MS`, default 120 000 ms) — inactivity window between chunks. The timer re-arms on every received chunk. A stream that is actively generating tokens can run for as long as the model needs; only a genuine gap of 2 minutes without a chunk triggers `TIMEOUT`.
+
+This means total generation time is unbounded: a large model on CPU finishing a long context will not be cut off mid-generation.
+
+#### Tool-call accumulation and deduplication (June 2026)
+
+`chatStream` accumulates `tool_calls` from **all** NDJSON chunks into a single array. Some Ollama builds emit the complete list again on the final `done` chunk; the client deduplicates by `(id, function.name, function.arguments)` signature using a `Set<string>` of `JSON.stringify([id, name, args])`. This ensures:
+
+- Multiple tool calls spread across separate chunks are all captured.
+- Re-emissions on the final chunk do not produce duplicates.
+
+Prior behavior (replacing `toolCalls` on each chunk) silently dropped all but the last chunk's calls when a model emitted them incrementally.
+
+#### Logging (June 2026)
+
+Request and response log lines inside `chatStream` were downgraded from `info` to `debug` to match the request-logging convention used elsewhere in the backend. They remain fully available when `LOG_LEVEL=debug`.
 
 ## Error Model
 
@@ -97,7 +120,9 @@ See [[docs/security/ai-data-access|AI Data Access]] for the allowlist policy and
 |-----|---------|---------|
 | `OLLAMA_URL` | `http://localhost:11434` | Base URL |
 | `OLLAMA_DEFAULT_MODEL` | `llama3.2:3b` | Fallback model |
-| `OLLAMA_REQUEST_TIMEOUT_MS` | 600000 | Per-chat deadline |
+| `OLLAMA_REQUEST_TIMEOUT_MS` | `600000` | Time-to-first-chunk budget (connect + prompt-eval phase) |
+| `OLLAMA_STREAM_IDLE_TIMEOUT_MS` | `120000` | Max inactivity between chunks; timer re-arms per chunk; total generation time is unbounded |
+| `OLLAMA_HEALTH_TIMEOUT_MS` | `3000` | `healthCheck()` connection timeout |
 
 ## Offline Handling
 

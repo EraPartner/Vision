@@ -4,8 +4,9 @@ type: endpoint
 method: GET, POST, PATCH, DELETE
 path: /api/watchlist
 description: Investment watchlist management
-date: 2026-04-10
-tags: [api, watchlist, investments]
+date: 2026-06-18
+updated: 2026-06-18
+tags: [api, watchlist, investments, validation, backtest, added-price, adr-097, migration-0058]
 status: active
 aliases: [watchlist-api, tracked-symbols, watch list]
 related_code:
@@ -31,7 +32,7 @@ Retrieve all watchlist items.
 |-----------|------|---------|-------------|
 | limit | integer | 50 | Max items to return |
 | offset | integer | 0 | Items to skip |
-| asset_class | string | null | Filter by asset class (stock, etf, crypto) |
+| asset_class | string | null | Filter by asset class (stock, etf, crypto, metals) |
 
 Notes:
 - `limit` is normalized to a safe range of `1..5000` (default `50`).
@@ -49,6 +50,7 @@ Notes:
       "symbol": "TSLA",
       "asset_class": "stock",
       "target_price": 250.00,
+      "added_price": 212.50,
       "currency": "USD",
       "notes": "Watch for drop",
       "price_provider_id": "TSLA",
@@ -73,13 +75,38 @@ Add item to watchlist.
   "symbol": "TSLA",
   "asset_class": "stock",
   "target_price": 250.00,
+  "added_price": 212.50,
   "currency": "USD",
   "notes": "Watch for drop",
   "price_provider_id": "TSLA"
 }
 ```
 
-**Required Fields:** name, asset_class, target_price
+**Required Fields:** `name`, `asset_class`, `target_price`
+
+**`added_price` (June 2026, ADR-097, migration 0058):**
+
+Optional field. When omitted, the backend attempts to snapshot the live quote for `symbol` at add time and set `added_price` automatically. If no quote is available, `added_price` is stored as `null`. The frontend displays "Since added {date} +X%" only when `added_price` is non-null.
+
+`PATCH /api/watchlist/:id` can update `added_price` to reset the baseline.
+
+> [!info] Migration required
+> `added_price` is added by migration 0058 (authored, not applied). Until the migration runs, the column does not exist and the backtest display is suppressed.
+
+**Field Validation (June 2026):**
+
+POST and PATCH now validate typed fields before reaching the database, returning `400 ValidationError` instead of a DB-level 500 on bad input:
+
+| Field | Rule | Error message |
+|-------|------|---------------|
+| `target_price` | Finite number ≥ 0 | `target_price must be a non-negative number` |
+| `asset_class` | One of `stock`, `etf`, `crypto`, `metals` | `asset_class must be one of: stock, etf, crypto, metals` |
+| `currency` | Exactly 3 letters (`/^[A-Za-z]{3}$/`) | `currency must be a 3-letter code` |
+
+For PATCH, validation applies only to fields that are present in the request body (partial update semantics are preserved). The repository's column allowlist continues to prevent injection regardless of validation.
+
+> [!info] Non-breaking change
+> This tightening only affects requests that would have previously surfaced as opaque 500 errors. Callers sending well-formed data are unaffected.
 
 ### GET /api/watchlist/:id
 
@@ -87,7 +114,7 @@ Get single watchlist item.
 
 ### PATCH /api/watchlist/:id
 
-Update watchlist item.
+Update watchlist item. Accepts any subset of writable fields. See field validation rules above.
 
 ### DELETE /api/watchlist/:id
 

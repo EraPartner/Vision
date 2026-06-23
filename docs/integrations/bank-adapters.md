@@ -26,10 +26,10 @@ Each bank adapter:
 ## Supported Banks
 
 ### Belfius
-- **Fields**: transaction_date, amount, recipient_name, recipient_account, balance
+- **Fields**: own_account (col 0, IBAN), transaction_date, amount, recipient_name, recipient_account, balance
 - **Date Format**: DD/MM/YYYY
 - **Separator**: ;
-- **Features**: Full transaction details including BIC and location
+- **Features**: Full transaction details including BIC and location; account = own IBAN (col 0), canonicalized (ADR-088)
 
 ### Revolut
 - **Fields**: completed_date, amount, fee, currency, state
@@ -46,10 +46,10 @@ Each bank adapter:
 - **Features**: Counterparty IBAN, transaction reference, free-text message field
 
 ### KBC
-- **Fields**: transaction_date, amount, counterparty_name, structured_communication
+- **Fields**: own_account (col 0, `Rekeningnummer`, IBAN), transaction_date, amount, counterparty_name, structured_communication
 - **Date Format**: DD/MM/YYYY
 - **Separator**: ;
-- **Features**: Belgian structured communications (OCR)
+- **Features**: Belgian structured communications (OCR); account = own IBAN (col 0), canonicalized (ADR-088)
 
 ### BNP Paribas Fortis
 - **Fields**: sequence_number, execution_date, amount, transaction_type, counterparty_iban, counterparty_name, memo, details, status
@@ -95,11 +95,44 @@ Each adapter maps to standard transaction:
   amount: Number,
   recipient: String,
   memo: String,
-  bankAccount: String,
+  bankAccount: String, // the OWN account identifier — see "Account Identification" below
   currency: String,
   balance: Number
 }
 ```
+
+## Account Identification (ADR-088)
+
+`bankAccount` is the parsed string that becomes the transaction's **owning account**: at import,
+`importPipeline/commit.js` writes it to `transactions.bank_account`, and the dual-write trigger
+(migration 0051) resolves it to `account_id` (resolve-or-create an `accounts` row whose `name` is
+the trimmed string). So the value each adapter emits *is* the account identity.
+
+**Per-adapter identifier:**
+
+| Adapter | `bankAccount` source | Example |
+|---|---|---|
+| Belfius | own IBAN — column 0 (`Rekening`), canonicalized | `BE81063756944024` |
+| KBC | own IBAN — column 0 (`Rekeningnummer`), canonicalized | `BE61734041478017` |
+| BNP Paribas Fortis | own IBAN — `Rekeningnummer` column, canonicalized | `BE…` |
+| ING | own IBAN — `Rekeningnummer` column, canonicalized | `BE…`/`NL…` |
+| Revolut | `REVOLUT <PRODUCT>` (per product) | `REVOLUT CURRENT` |
+| Wise | `WISE <CURRENCY>` (per currency) | `WISE EUR` |
+| Vision | the `Bank Account` column, UPPER+trim | `MAIN` |
+| Generic/Custom | `bank_name` (+ ` <ACCOUNT_TYPE>`), UPPER+trim | `MYBANK CHECKING` |
+
+**IBAN canonicalization (`canonicalIban` in `adapters/_shared.js`):** IBAN-based adapters (Belfius,
+KBC, BNP, ING) strip all whitespace and uppercase the account number, so a Belgian IBAN exported
+space-grouped (`BE81 0637 5694 4024`) and one entered without spaces resolve to the **same** account
+— no duplicate accounts from spacing/case. A CSV that spans multiple of your own accounts therefore
+splits correctly into one account per IBAN. Non-IBAN adapters use `normalizeToUppercase` (UPPER+trim,
+spaces preserved), matching the manual-entry path (`transactionRepository.create` uppercases too).
+
+> [!note] Account labels changed 2026-06-18 (ADR-088)
+> Belfius/KBC previously emitted the literals `'BELFIUS'`/`'KBC'`; they now emit the own IBAN.
+> Transactions imported under the old literals keep their `'BELFIUS'`/`'KBC'` account; **merge** the
+> old literal account into the IBAN account in the Accounts hub to unify history (see
+> [[docs/api/accounts|Accounts API]] — `POST /api/accounts/:id/merge`).
 
 ## Related
 

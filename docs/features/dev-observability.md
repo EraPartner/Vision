@@ -1,17 +1,17 @@
 ---
-title: Dev-Only Observability Layer
+title: Observability Layer (API Inspector)
 type: feature
 status: active
-date: 2026-05-12
-tags: [feature, frontend, observability, devtools, dev-only, api-inspector, metrics, performance-monitoring, phase-x]
-description: Dev-only observability layer providing real-time API request tracking, query metrics, and request inspector panel. Built on module-level pub-sub bus with zero-cost when inactive (tree-shaken in production). Includes Inspector hotkey (Cmd+Shift+A), RequestList, RequestDetail, MetricsPanel, and TanStack React Query DevTools integration.
+date: 2026-06-18
+tags: [feature, frontend, observability, devtools, api-inspector, admin-mode, metrics, performance-monitoring, phase-x]
+description: Observability layer providing real-time API request tracking, query metrics, and request inspector panel. Built on a module-level pub-sub bus, shipped as a lazy chunk that loads only when activated. Enabled in dev builds (import.meta.env.DEV / VITE_DEVTOOLS) or at runtime via the Admin Mode toggle (works in the packaged Electron app and release image). Includes Inspector hotkey (Cmd+Shift+A), RequestList, RequestDetail, MetricsPanel, and TanStack React Query DevTools integration.
 aliases: [devtools, dev observability, api inspector, request log, query metrics, observability]
 ---
 
-# Dev-Only Observability Layer
+# Observability Layer (API Inspector)
 
 > [!abstract] Purpose
-> A comprehensive dev-only observability layer for monitoring API requests, query performance metrics, and system health in real-time. Fully tree-shaken in production builds via `import.meta.env.DEV` guards.
+> A comprehensive observability layer for monitoring API requests, query performance metrics, and system health in real-time. Available in dev builds and — via the **Admin Mode** runtime toggle — in any build including the packaged Electron app. Shipped as a lazy chunk that is only fetched once activated, so it costs nothing until enabled.
 
 ## Overview
 
@@ -161,31 +161,47 @@ The single `apiRequest()` chokepoint now:
 
 This ensures all 38 domain hooks (`useTransactions`, `usePortfolio`, etc.) automatically participate in observability without any changes to their implementations.
 
-## Dev-Only Activation
+## Activation
 
 **File:** `[[apps/frontend/src/App.tsx]]`
 
-```tsx
-import DevtoolsRoot from '@/components/devtools/DevtoolsRoot';
+The devtools are always built as a lazily-loaded chunk and gated at render time.
+They appear when **any** of these is true:
 
-export function App() {
+- `import.meta.env.DEV` — local Vite dev server
+- `import.meta.env.VITE_DEVTOOLS === 'true'` — Docker dev build (build arg from
+  `docker-compose.dev.yml`)
+- `appSettings.adminMode` — the user's **Admin Mode** toggle (Settings → About),
+  evaluated at runtime. This is the only path that works in the packaged Electron
+  app and the public release image, which run a normally-built bundle with no
+  `VITE_DEVTOOLS` build arg.
+
+```tsx
+const isDevtoolsBuildEnabled =
+  import.meta.env.DEV || import.meta.env.VITE_DEVTOOLS === 'true';
+
+const DevtoolsRoot = lazy(() =>
+  import('@/components/devtools/DevtoolsRoot').then((m) => ({ default: m.DevtoolsRoot })),
+);
+
+function DevtoolsGate() {
+  // Reads the Zustand store directly — no provider needed, so it works above the
+  // settings context providers where the devtools mount.
+  const adminMode = useSettingsStore((s) => s.appSettings.adminMode);
+  if (!isDevtoolsBuildEnabled && !adminMode) return null;
   return (
-    <QueryClientProvider client={queryClient}>
-      {/* Production build: Vite tree-shakes entire devtools chunk */}
-      {import.meta.env.DEV && (
-        <Suspense fallback={null}>
-          <DevtoolsRoot />
-        </Suspense>
-      )}
-      {/* Rest of app... */}
-    </QueryClientProvider>
+    <Suspense fallback={null}>
+      <DevtoolsRoot />
+    </Suspense>
   );
 }
 ```
 
-- `import.meta.env.DEV` is **statically replaced by Vite** during build
-- Production bundles contain **zero devtools references** (verified: `grep -r "devtools" dist/` returns nothing)
-- Dev bundles load DevtoolsRoot lazily via `React.lazy()` + `Suspense`
+- The devtools live in a **separate lazy chunk** (`React.lazy()` + `Suspense`)
+  that is only fetched the first time the gate renders it — so users who never
+  enable Admin Mode pay no load cost.
+- The build-flag paths (`import.meta.env.DEV` / `VITE_DEVTOOLS`) keep the
+  inspector always-on for local and Docker dev work.
 
 ## Design Decisions
 
@@ -196,9 +212,9 @@ export function App() {
 | **X-Request-Id header** | Correlates frontend request lifecycle with backend logs |
 | **@tanstack/react-virtual** | Efficient rendering of hundreds of requests without lag |
 | **Cmd+Shift+A hotkey** | Avoids conflicts with `Cmd+Shift+I` (browser DevTools) on all platforms |
-| **No state persistence** | Inspector state lost on reload (suitable for dev-only tool) |
-| **Static tree-shaking** | `import.meta.env.DEV` eliminated by Vite, not runtime checked |
-| **Lazy DevtoolsRoot** | Reduces initial bundle size; loaded only when needed in dev |
+| **No state persistence** | Inspector state lost on reload (suitable for an opt-in observability tool) |
+| **Runtime + build gating** | Build flags (`import.meta.env.DEV` / `VITE_DEVTOOLS`) keep it always-on in dev; the runtime `adminMode` toggle exposes it in any build, including the packaged Electron app |
+| **Lazy DevtoolsRoot** | Separate chunk fetched only when the gate renders it — zero load cost until dev build or Admin Mode is on |
 | **shadcn tokens** | Inspector automatically inherits theme (dark/light) from app settings |
 
 ## Related Documentation
@@ -211,7 +227,9 @@ export function App() {
 ## Troubleshooting
 
 ### Inspector won't open
-- Verify `import.meta.env.DEV` is true (dev server, not production build)
+- In a production/Electron build, enable **Admin Mode** (Settings → About) — the
+  floating "API" toggle appears bottom-right once it is on
+- In dev, verify `import.meta.env.DEV` is true (dev server) or `VITE_DEVTOOLS=true`
 - Check browser console for errors in DevtoolsRoot component
 - Ensure app is inside `<QueryClientProvider>`
 
@@ -226,7 +244,9 @@ export function App() {
 
 ## Performance Impact
 
-- **Zero cost in production** — Entire devtools chunk tree-shaken
+- **Zero cost until activated** — The devtools live in a separate lazy chunk that
+  is only fetched when the gate renders it (dev build or Admin Mode on); users who
+  never enable Admin Mode never download it
 - **Dev server overhead** — ~2-5ms per request for event bus dispatch (negligible)
 - **Memory footprint** — ~200 request objects (~100KB max) in ring buffer
 - **Inspector panel rendering** — Virtualized list ensures smooth 60fps even with hundreds of entries

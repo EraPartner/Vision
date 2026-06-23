@@ -1,63 +1,94 @@
 import { Toaster as Sonner } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { BrowserRouter, Route, Routes } from "react-router-dom";
+import { BrowserRouter, Navigate, Route, Routes, useLocation, useParams } from "react-router-dom";
 import { AppLayout } from "@/components/layout/AppLayout";
 import { SettingsProvider } from "@/contexts/SettingsContext";
 import { SettingsPreloadProvider } from "@/contexts/SettingsPreloadContext";
-import { AppSettingsProvider, useAppSettings } from "@/contexts/AppSettingsContext";
+import { AppSettingsProvider, AppSettingsSaveErrorToaster, useAppSettings } from "@/contexts/AppSettingsContext";
 import { BelgianTaxProfileProvider } from "@/contexts/BelgianTaxProfileContext";
 import { ThemeProvider } from "@/contexts/ThemeContext";
 import { LanguageProvider, type Language } from "@/contexts/LanguageContext";
 import { configureCurrencyFormatDefaults, numberFormatToLocale } from "@/utils/currency";
 
-import { lazy, Suspense, useEffect, type ComponentType } from "react";
-import { Loader2 } from "lucide-react";
+import { lazy, Suspense, useEffect, type ReactNode } from "react";
 import { ErrorBoundary } from "@/components/shared/ErrorBoundary";
 import { ScrollToTop } from "@/components/shared/ScrollToTop";
+import { StartupRedirect } from "@/components/shared/StartupRedirect";
 import { RequireAdmin } from "@/components/auth/RequireAdmin";
 
-// Lazy-loaded pages for code splitting
-const TaxOverviewPage = lazy(() => import("./pages/TaxOverviewPage"));
-const PortfolioTaxPage = lazy(() => import("./pages/portfolio/tax/PortfolioTaxPage"));
-const DashboardPage = lazy(() => import("./pages/DashboardPage"));
-const TransactionsPage = lazy(() => import("./pages/TransactionsPage"));
-const CategoriesPage = lazy(() => import("./pages/CategoriesPage"));
-const RecipientsPage = lazy(() => import("./pages/RecipientsPage"));
-const ImportPage = lazy(() => import("./pages/ImportPage"));
-const ImportReviewPage = lazy(() => import("./pages/ImportReviewPage"));
-const PlannedPaymentsPage = lazy(() => import("./pages/PlannedPaymentsPage"));
-const StatisticsPage = lazy(() => import("./pages/StatisticsPage"));
-const OwesPage = lazy(() => import("./pages/OwesPage"));
-const PortfolioOverviewPage = lazy(() => import("./pages/portfolio/PortfolioOverviewPage"));
-const MarketLookupPage = lazy(() => import("./pages/MarketLookupPage"));
-const StocksPage = lazy(() => import("./pages/portfolio/StocksPage"));
-const CryptoPage = lazy(() => import("./pages/portfolio/CryptoPage"));
-const MetalsPage = lazy(() => import("./pages/portfolio/MetalsPage"));
-const RealEstatePage = lazy(() => import("./pages/portfolio/RealEstatePage"));
-const SavingsPage = lazy(() => import("./pages/portfolio/SavingsPage"));
-const PerformancePage = lazy(() => import("./pages/portfolio/PerformancePage"));
-const NetWorthPage = lazy(() => import("./pages/portfolio/net-worth/NetWorthPage"));
-const ExchangeRatesPage = lazy(() => import("./pages/portfolio/ExchangeRatesPage"));
-const WatchlistPage = lazy(() => import("./pages/portfolio/WatchlistPage"));
-const DbMaintenancePage = lazy(() => import("./pages/DbMaintenancePage"));
-const AdminOverviewPage = lazy(() => import("./pages/admin/AdminOverviewPage"));
-const ProviderHealthPage = lazy(() => import("./pages/admin/ProviderHealthPage"));
-const EndpointLivenessPage = lazy(() => import("./pages/admin/EndpointLivenessPage"));
-const AIChatPage = lazy(() => import("./pages/AIChatPage"));
+import { useSettingsStore } from "@/stores/settingsStore";
+
+// Lazy-loaded pages for code splitting. Loaders live in lib/routePreload so
+// sidebar hover can warm the same chunks the router requests on click.
+import { routeLoaders } from "@/lib/routePreload";
+
+const TaxOverviewPage = lazy(routeLoaders["/tax"]);
+const PortfolioTaxPage = lazy(routeLoaders["/portfolio/tax"]);
+const RebalancePage = lazy(routeLoaders["/portfolio/rebalance"]);
+const DashboardPage = lazy(routeLoaders["/"]);
+const TransactionsPage = lazy(routeLoaders["/transactions"]);
+const CategoriesPage = lazy(routeLoaders["/categories"]);
+const AccountsPage = lazy(routeLoaders["/accounts"]);
+const RecipientsPage = lazy(routeLoaders["/recipients"]);
+const ImportPage = lazy(routeLoaders["/import"]);
+const ImportReviewPage = lazy(routeLoaders["/import/:batchId/review"]);
+const PlannedPaymentsPage = lazy(routeLoaders["/planned"]);
+const StatisticsPage = lazy(routeLoaders["/statistics"]);
+const OwesPage = lazy(routeLoaders["/owes"]);
+const PortfolioOverviewPage = lazy(routeLoaders["/portfolio"]);
+const StocksPage = lazy(routeLoaders["/portfolio/stocks"]);
+const CryptoPage = lazy(routeLoaders["/portfolio/crypto"]);
+const MetalsPage = lazy(routeLoaders["/portfolio/metals"]);
+const RealEstatePage = lazy(routeLoaders["/portfolio/real-estate"]);
+const SavingsPage = lazy(routeLoaders["/portfolio/savings"]);
+const PerformancePage = lazy(routeLoaders["/portfolio/performance"]);
+const NetWorthPage = lazy(routeLoaders["/portfolio/net-worth"]);
+const ExchangeRatesPage = lazy(routeLoaders["/admin/exchange-rates"]);
+const PortfolioImportPage = lazy(routeLoaders["/portfolio/import"]);
+const PortfolioImportReviewPage = lazy(routeLoaders["/portfolio/import/:batchId/review"]);
+const DbMaintenancePage = lazy(routeLoaders["/admin/db"]);
+const TableDataEditorPage = lazy(routeLoaders["/admin/db/:table"]);
+const AdminOverviewPage = lazy(routeLoaders["/admin"]);
+const ProviderHealthPage = lazy(routeLoaders["/admin/providers"]);
+const EndpointLivenessPage = lazy(routeLoaders["/admin/endpoints"]);
+const AIChatPage = lazy(routeLoaders["/ai-chat"]);
+const ResearchHomePage = lazy(routeLoaders["/research"]);
+const MarketOverviewPage = lazy(routeLoaders["/research/markets"]);
+const MarketLookupPage = lazy(routeLoaders["/research/market"]);
+const WatchlistPage = lazy(routeLoaders["/research/watchlist"]);
+const ResearchComparePage = lazy(routeLoaders["/research/compare"]);
+const PortfolioForecastPage = lazy(routeLoaders["/research/forecast"]);
+const ChartBuilderPage = lazy(routeLoaders["/research/charts"]);
 const NotFound = lazy(() => import("./pages/NotFound"));
 
-// Dev-only devtools — tree-shaken from production builds.
-// Enabled by: local Vite dev server (import.meta.env.DEV) OR Docker dev build
-// (VITE_DEVTOOLS=true injected via docker-compose.dev.yml build arg).
-const isDevtoolsEnabled = import.meta.env.DEV || import.meta.env.VITE_DEVTOOLS === 'true';
-const DevtoolsRoot: ComponentType | null = isDevtoolsEnabled
-    ? lazy(() =>
-          import("@/components/devtools/DevtoolsRoot").then((m) => ({
-              default: m.DevtoolsRoot,
-          })),
-      )
-    : null;
+// Devtools (API Inspector). Lazily loaded as a separate chunk that is only
+// fetched when actually rendered, so it costs normal users nothing on load.
+// Shown when ANY of:
+//   • local Vite dev server (import.meta.env.DEV), or
+//   • Docker dev build (VITE_DEVTOOLS=true via docker-compose.dev.yml), or
+//   • the user enables Admin Mode at runtime — which is the only path that
+//     works in the packaged Electron app and public release image, since those
+//     run a normally-built bundle with no VITE_DEVTOOLS build arg.
+const isDevtoolsBuildEnabled = import.meta.env.DEV || import.meta.env.VITE_DEVTOOLS === 'true';
+const DevtoolsRoot = lazy(() =>
+    import("@/components/devtools/DevtoolsRoot").then((m) => ({
+        default: m.DevtoolsRoot,
+    })),
+);
+
+// Renders the devtools when build-enabled or when Admin Mode is on. Reads the
+// Zustand store directly (no provider needed) so it works above the settings
+// context providers where the devtools mount.
+function DevtoolsGate() {
+    const adminMode = useSettingsStore((s) => s.appSettings.adminMode);
+    if (!isDevtoolsBuildEnabled && !adminMode) return null;
+    return (
+        <Suspense fallback={null}>
+            <DevtoolsRoot />
+        </Suspense>
+    );
+}
 
 const queryClient = new QueryClient({
     defaultOptions: {
@@ -70,17 +101,12 @@ const queryClient = new QueryClient({
     },
 });
 
+// Route-chunk loading indicator: a hairline progress shimmer pinned to the
+// top edge instead of a content-area spinner, so navigation never "flashes".
 function PageLoader() {
     return (
-        <div className="flex items-center justify-center h-96">
-            <div className="flex flex-col items-center gap-4">
-                <div className="relative">
-                    <div className="h-12 w-12 rounded-xl bg-gradient-to-br from-primary/20 to-primary/5 flex items-center justify-center">
-                        <Loader2 className="h-6 w-6 animate-spin text-primary" />
-                    </div>
-                </div>
-                <p className="text-sm text-muted-foreground animate-pulse">Loading…</p>
-            </div>
+        <div aria-busy="true" className="fixed inset-x-0 top-0 z-50 h-[2px] overflow-hidden">
+            <div className="h-full w-full animate-shimmer bg-[linear-gradient(90deg,transparent_0%,hsl(var(--primary))_35%,hsl(var(--accent))_65%,transparent_100%)] bg-[length:200%_100%] motion-reduce:animate-none motion-reduce:bg-primary/60" />
         </div>
     );
 }
@@ -106,14 +132,39 @@ function LanguageBridge({ children }: { children: React.ReactNode }) {
     );
 }
 
+// Per-route error boundary, keyed by pathname. Keying remounts the boundary on
+// every navigation, so (a) a crash on one page is automatically cleared when the
+// user navigates elsewhere, and (b) being nested inside AppLayout, a page crash
+// replaces only the content area — the nav shell stays interactive. The outer
+// app-level <ErrorBoundary> remains the last-resort catch for the shell itself.
+function RoutedErrorBoundary({ children }: { children: ReactNode }) {
+    const { pathname } = useLocation();
+    return <ErrorBoundary key={pathname}>{children}</ErrorBoundary>;
+}
+
+// Redirect a relocated route to its new path, preserving the query string so
+// deep-links (e.g. /portfolio/market?symbol=AAPL&investmentId=3) survive the
+// ADR-079 Research move.
+function RedirectWithQuery({ to }: { to: string }) {
+    const { search } = useLocation();
+    return <Navigate to={`${to}${search}`} replace />;
+}
+
+// The standalone research symbol page was retired in favour of Market Lookup as
+// the single security-detail surface. Old /research/symbol/:symbol links (and
+// holding deep-links carrying ?investmentId=) redirect into the ?symbol= form.
+function RedirectSymbolToMarket() {
+    const { symbol } = useParams<{ symbol: string }>();
+    const { search } = useLocation();
+    const params = new URLSearchParams(search);
+    if (symbol) params.set("symbol", symbol);
+    return <Navigate to={`/research/market?${params.toString()}`} replace />;
+}
+
 const App = () => {
     return (
         <QueryClientProvider client={queryClient}>
-            {DevtoolsRoot && (
-                <Suspense fallback={null}>
-                    <DevtoolsRoot />
-                </Suspense>
-            )}
+            <DevtoolsGate />
             <SettingsPreloadProvider>
                 <ThemeProvider>
                     <SettingsProvider>
@@ -123,20 +174,19 @@ const App = () => {
                                     <TooltipProvider>
                                     <ErrorBoundary>
                                         <Sonner />
-                                        <BrowserRouter
-                                            future={{
-                                                v7_startTransition: true,
-                                                v7_relativeSplatPath: true,
-                                            }}
-                                        >
+                                        <AppSettingsSaveErrorToaster />
+                                        <BrowserRouter>
                                             <ScrollToTop />
+                                            <StartupRedirect />
                                             <AppLayout>
+                                                <RoutedErrorBoundary>
                                                 <Suspense fallback={<PageLoader />}>
                                                     <Routes>
                                                     {/* Budgeting */}
                                                     <Route path="/" element={<DashboardPage />} />
                                                     <Route path="/transactions" element={<TransactionsPage />} />
                                                     <Route path="/categories" element={<CategoriesPage />} />
+                                                    <Route path="/accounts" element={<AccountsPage />} />
                                                     <Route path="/recipients" element={<RecipientsPage />} />
                                                     <Route path="/planned" element={<PlannedPaymentsPage />} />
                                                     <Route path="/statistics" element={<StatisticsPage />} />
@@ -146,26 +196,42 @@ const App = () => {
                                                     <Route path="/tax" element={<TaxOverviewPage />} />
                                                     <Route path="/admin" element={<RequireAdmin><AdminOverviewPage /></RequireAdmin>} />
                                                     <Route path="/admin/db" element={<RequireAdmin><DbMaintenancePage /></RequireAdmin>} />
+                                                    <Route path="/admin/db/:table" element={<RequireAdmin><TableDataEditorPage /></RequireAdmin>} />
                                                     <Route path="/admin/providers" element={<RequireAdmin><ProviderHealthPage /></RequireAdmin>} />
                                                     <Route path="/admin/endpoints" element={<RequireAdmin><EndpointLivenessPage /></RequireAdmin>} />
+                                                    <Route path="/admin/exchange-rates" element={<RequireAdmin><ExchangeRatesPage /></RequireAdmin>} />
                                                     {/* Portfolio */}
                                                     <Route path="/portfolio" element={<PortfolioOverviewPage />} />
-                                                    <Route path="/portfolio/market" element={<MarketLookupPage />} />
                                                     <Route path="/portfolio/stocks" element={<StocksPage />} />
                                                     <Route path="/portfolio/crypto" element={<CryptoPage />} />
                                                     <Route path="/portfolio/metals" element={<MetalsPage />} />
                                                     <Route path="/portfolio/real-estate" element={<RealEstatePage />} />
                                                     <Route path="/portfolio/savings" element={<SavingsPage />} />
                                                     <Route path="/portfolio/performance" element={<PerformancePage />} />
+                                                    <Route path="/portfolio/rebalance" element={<RebalancePage />} />
                                                     <Route path="/portfolio/net-worth" element={<NetWorthPage />} />
-                                                    <Route path="/portfolio/exchange-rates" element={<ExchangeRatesPage />} />
-                                                    <Route path="/portfolio/watchlist" element={<WatchlistPage />} />
+                                                    <Route path="/portfolio/exchange-rates" element={<Navigate to="/admin/exchange-rates" replace />} />
+                                                    <Route path="/portfolio/import" element={<PortfolioImportPage />} />
+                                                    <Route path="/portfolio/import/:batchId/review" element={<PortfolioImportReviewPage />} />
                                                     <Route path="/portfolio/tax" element={<PortfolioTaxPage />} />
+                                                    {/* Research (ADR-079) — Market Lookup & Watchlist relocated here */}
+                                                    <Route path="/research" element={<ResearchHomePage />} />
+                                                    <Route path="/research/markets" element={<MarketOverviewPage />} />
+                                                    <Route path="/research/market" element={<MarketLookupPage />} />
+                                                    <Route path="/research/watchlist" element={<WatchlistPage />} />
+                                                    <Route path="/research/symbol/:symbol" element={<RedirectSymbolToMarket />} />
+                                                    <Route path="/research/compare" element={<ResearchComparePage />} />
+                                                    <Route path="/research/forecast" element={<PortfolioForecastPage />} />
+                                                    <Route path="/research/charts" element={<ChartBuilderPage />} />
+                                                    {/* Redirects from the pre-ADR-079 portfolio paths (query string preserved) */}
+                                                    <Route path="/portfolio/market" element={<RedirectWithQuery to="/research/market" />} />
+                                                    <Route path="/portfolio/watchlist" element={<RedirectWithQuery to="/research/watchlist" />} />
                                                     {/* AI Chat (workspace-agnostic) */}
                                                     <Route path="/ai-chat" element={<AIChatPage />} />
                                                     <Route path="*" element={<NotFound />} />
                                                     </Routes>
                                                 </Suspense>
+                                                </RoutedErrorBoundary>
                                             </AppLayout>
                                         </BrowserRouter>
                                     </ErrorBoundary>

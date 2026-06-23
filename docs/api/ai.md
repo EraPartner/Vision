@@ -3,9 +3,9 @@ title: AI Chat API
 type: api
 status: active
 date: 2026-05-03
-updated: 2026-05-04
-tags: [api, ai, chat, ollama, sse, streaming, llm, phase-1]
-description: Local AI chat endpoints — Ollama status, model discovery, conversation CRUD, chat turn (JSON + SSE) with tools opt-out toggle and 30 tool-calling tools. All responses use camelCase field names.
+updated: 2026-06-11
+tags: [api, ai, chat, ollama, sse, streaming, llm, phase-1, idle-timeout, tool-call-accumulation]
+description: Local AI chat endpoints — Ollama status, model discovery, conversation CRUD, chat turn (JSON + SSE) with tools opt-out toggle and 30 tool-calling tools. All responses use camelCase field names. June 2026: streaming uses per-chunk idle timeout (OLLAMA_STREAM_IDLE_TIMEOUT_MS) instead of a fixed total budget; tool calls accumulated across all NDJSON chunks and deduped.
 aliases: [ai api, chat api, ollama api, ai endpoints]
 ---
 
@@ -252,8 +252,10 @@ Chat endpoints are per-IP rate-limited because each request fans out to Ollama +
 |-----|---------|---------|
 | `AI_CHAT_ENABLED` | `true` | Kill switch — disables all endpoints |
 | `OLLAMA_URL` | `http://localhost:11434` | Base URL for Ollama |
-| `OLLAMA_DEFAULT_MODEL` | `llama3.2:3b` | Fallback when the request omits `model` |
-| `AI_CHAT_MAX_HISTORY` | 20 | Messages retained when building prompt context |
+| `OLLAMA_DEFAULT_MODEL` | `llama3.1:8b` | Fallback when the request omits `model` |
+| `OLLAMA_REQUEST_TIMEOUT_MS` | `600000` | Time-to-first-chunk budget (connect + prompt-eval phase only) |
+| `OLLAMA_STREAM_IDLE_TIMEOUT_MS` | `120000` | Per-chunk inactivity window for streaming; re-arms on every chunk; total generation time is unbounded |
+| `AI_CHAT_MAX_HISTORY` | `30` | Messages retained when building prompt context |
 
 See [[docs/reference/environment-variables|Environment Variables]].
 

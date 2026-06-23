@@ -6,12 +6,16 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import {
   TrendingUp, TrendingDown, Eye, Trash2, Calendar,
-  DollarSign, Percent, ArrowUpRight, Clock, Pencil,
+  DollarSign, Percent, ArrowUpRight, Clock, Pencil, ArrowLeftRight,
 } from 'lucide-react';
 import { isUnitBased, isFixedIncome, isRealEstate } from '@/utils/assetClass';
+import { onActivateKeyDown } from '@/utils/a11y';
 import { usePortfolio } from '@/hooks/usePortfolio';
+import { usePortfolioSummaryQuery } from '@/hooks/portfolio/usePortfolioSummary';
+import { useAccountPositions } from '@/hooks/portfolio/useAccountPositions';
 import { AddPortfolioTxnDialog } from './AddPortfolioTxnDialog';
 import { EditInvestmentDialog } from './EditInvestmentDialog';
+import { MoveHoldingDialog } from '@/features/portfolio/MoveHoldingDialog';
 import { EditPortfolioTxnDialog } from './EditPortfolioTxnDialog';
 import { useLanguage } from '@/contexts/LanguageContext';
 import { useAppSettings } from '@/contexts/AppSettingsContext';
@@ -48,6 +52,7 @@ const TXN_TYPE_COLORS: Record<PortfolioTxnType, string> = {
   dividend: 'bg-primary/10 text-primary border-primary/20',
   interest: 'bg-primary/10 text-primary border-primary/20',
   rent_income: 'bg-accent/10 text-accent border-accent/20',
+  gift: 'bg-primary/10 text-primary border-primary/20',
   fee: 'bg-muted text-muted-foreground border-border',
   tax: 'bg-muted text-muted-foreground border-border',
   appreciation: 'bg-accent/10 text-accent border-accent/20',
@@ -58,6 +63,7 @@ export function InvestmentDetailDialog({
   onAddTransaction, onEditInvestment, onEditTransaction,
 }: Props) {
   const [open, setOpen] = useState(false);
+  const [moving, setMoving] = useState(false);
   const navigate = useNavigate();
   const { deleteTransaction } = usePortfolio();
   const { confirm, ConfirmDialog } = useConfirmDialog();
@@ -89,6 +95,22 @@ export function InvestmentDetailDialog({
   const fixedIncome = isFixedIncome(investment.assetClass);
   const realEstate = isRealEstate(investment.assetClass);
 
+  // FX attribution from the backend summary (it owns the historical-rate
+  // machinery) — only shown for foreign-currency holdings. The query is shared
+  // with the overview/performance pages, so this is usually a cache hit.
+  const targetCurrency = appSettings.defaultCurrency || 'EUR';
+  const { data: apiSummary } = usePortfolioSummaryQuery(targetCurrency);
+  const fxSummary = (investment.currency || 'EUR').toUpperCase() !== targetCurrency.toUpperCase()
+    ? apiSummary?.summaries.find((s) => s.id === investment.id)
+    : undefined;
+
+  // Per-account positioning (ADR-091): where this holding is custodied. Only
+  // shown once an account is actually involved (a lone unassigned group is noise).
+  const accountPositions = useAccountPositions(investment);
+  const showAccountBreakdown =
+    accountPositions.length > 1 ||
+    (accountPositions.length === 1 && accountPositions[0].accountId != null);
+
   const handleDeleteTxn = async (txnId: number, txnType: string) => {
     const ok = await confirm({
       title: t('invDetail.delete.title'),
@@ -101,7 +123,10 @@ export function InvestmentDetailDialog({
 
   const openMarketLookup = () => {
     if (!investment.symbol) return;
-    navigate(`/portfolio/market?symbol=${encodeURIComponent(investment.symbol)}`);
+    // Pass the investment id so the market page can serve the chart from this
+    // holding's own price provider (Kinesis/custom/binance) when Yahoo has no
+    // data for the symbol; Yahoo holdings are unaffected.
+    navigate(`/research/market?symbol=${encodeURIComponent(investment.symbol)}&investmentId=${investment.id}`);
   };
 
   return (
@@ -125,13 +150,17 @@ export function InvestmentDetailDialog({
                   type="button"
                   className="hover:underline cursor-pointer"
                   onDoubleClick={openMarketLookup}
+                  onKeyDown={onActivateKeyDown(openMarketLookup)}
                   title={investment.symbol ? t('watchlist.doubleClickChart') : undefined}
                 >
                   {investment.name}
                 </button>
               </DialogTitle>
               <Badge variant="secondary">{getAssetClassLabel(t, investment.assetClass)}</Badge>
-              <div className="ml-auto">
+              <div className="ml-auto flex items-center gap-1.5">
+                <Button size="sm" variant="outline" className="gap-1.5" onClick={() => setMoving(true)}>
+                  <ArrowLeftRight className="h-4 w-4" /> {t('portfolio.move.action')}
+                </Button>
                 {onEditInvestment ? (
                   <Button size="sm" variant="outline" className="gap-1.5" onClick={() => onEditInvestment(investment)}>
                     <Pencil className="h-4 w-4" /> {t('common.edit')}
@@ -332,9 +361,77 @@ export function InvestmentDetailDialog({
                 </CardContent>
               </Card>
 
+              {/* Per-account positioning (ADR-091): "AAPL 150 → IBKR 100 · Degiro 50" */}
+              {showAccountBreakdown && (
+                <Card>
+                  <CardHeader className="pb-2">
+                    <CardTitle className="text-sm font-medium">{t('invDetail.byAccount')}</CardTitle>
+                  </CardHeader>
+                  <CardContent className="space-y-1.5">
+                    {accountPositions.map((pos) => (
+                      <div
+                        key={pos.accountId ?? 'unassigned'}
+                        className="flex items-center justify-between py-1.5 border-b border-border/50 last:border-0 text-sm"
+                      >
+                        <span className="text-muted-foreground truncate">
+                          {pos.accountName ?? t('accounts.unassigned')}
+                        </span>
+                        <div className="flex items-center gap-4 tabular-nums shrink-0">
+                          {unitBased && (
+                            <span className="text-muted-foreground">{fmtNum(pos.totalUnits, 4)}</span>
+                          )}
+                          <span className="font-medium">{fmt(pos.currentValue, investment.currency)}</span>
+                          <span
+                            className={cn(
+                              'w-20 text-right',
+                              pos.gainLoss >= 0 ? 'text-accent' : 'text-destructive',
+                            )}
+                          >
+                            {pos.gainLoss >= 0 ? '+' : ''}{fmt(pos.gainLoss, investment.currency)}
+                          </span>
+                        </div>
+                      </div>
+                    ))}
+                  </CardContent>
+                </Card>
+              )}
+
+              {/* FX attribution — invested at purchase-date rates, gain split
+                  into asset performance vs currency effect */}
+              {fxSummary && typeof fxSummary.fxGain === 'number' && (
+                <Card className="!border-primary/50 bg-primary/5">
+                  <CardContent className="pt-4 space-y-2">
+                    <p className="text-sm font-semibold text-muted-foreground">{t('invDetail.fxAttribution')}</p>
+                    <div className="flex justify-between py-1 border-b border-border/50 text-sm">
+                      <span className="text-muted-foreground">{t('portfolio.nativeValue', { currency: investment.currency })}</span>
+                      <span className="font-medium tabular-nums">{fmt(fxSummary.nativeCurrentValue ?? investment.currentValue, investment.currency)}</span>
+                    </div>
+                    <div className="flex justify-between py-1 border-b border-border/50 text-sm">
+                      <span className="text-muted-foreground">{t('invDetail.investedAtHistoricalRates', { currency: targetCurrency })}</span>
+                      <span className="font-medium tabular-nums">{fmt(fxSummary.totalInvested, targetCurrency)}</span>
+                    </div>
+                    <div className="flex justify-between py-1 border-b border-border/50 text-sm">
+                      <span className="text-muted-foreground">{t('portfolio.assetGain')}</span>
+                      <span className={cn("font-medium tabular-nums", (fxSummary.assetGain ?? 0) >= 0 ? "text-accent" : "text-destructive")}>
+                        {(fxSummary.assetGain ?? 0) >= 0 ? '+' : ''}{fmt(fxSummary.assetGain ?? 0, targetCurrency)}
+                      </span>
+                    </div>
+                    <div className="flex justify-between py-1 text-sm">
+                      <span className="text-muted-foreground">{t('portfolio.fxEffect')}</span>
+                      <span className={cn("font-medium tabular-nums", fxSummary.fxGain >= 0 ? "text-accent" : "text-destructive")}>
+                        {fxSummary.fxGain >= 0 ? '+' : ''}{fmt(fxSummary.fxGain, targetCurrency)}
+                      </span>
+                    </div>
+                    {fxSummary.usedFallbackRate && (
+                      <p className="text-xs text-warning">{t('portfolio.fxFallbackNote')}</p>
+                    )}
+                  </CardContent>
+                </Card>
+              )}
+
               {/* Fixed Income Projections */}
               {fixedIncome && investment.projectedAnnualInterest > 0 && (
-                <Card className="border-primary/20 bg-primary/5">
+                <Card className="!border-primary/50 bg-primary/5">
                   <CardContent className="pt-4">
                     <div className="flex items-center justify-between">
                       <div>
@@ -361,7 +458,7 @@ export function InvestmentDetailDialog({
 
               {/* Real Estate Appreciation */}
               {realEstate && investment.totalAppreciation !== 0 && (
-                <Card className="border-accent/20 bg-accent/5">
+                <Card className="!border-accent/50 bg-accent/5">
                   <CardContent className="pt-4 flex items-center justify-between">
                     <div>
                        <p className="text-sm text-muted-foreground">{t('invDetail.totalAppreciation')}</p>
@@ -452,11 +549,11 @@ export function InvestmentDetailDialog({
                           {['buy', 'fee', 'tax'].includes(txn.type) ? '-' : '+'}{fmt(txn.amount, investment.currency)}
                         </p>
                         
-                        {(txn.fees > 0 || txn.taxes > 0) && (
+                        {((txn.fees ?? 0) > 0 || (txn.taxes ?? 0) > 0) && (
                           <p className="text-xs text-muted-foreground">
-                             {txn.fees > 0 && t('invDetail.fee', { amount: fmt(txn.fees, investment.currency) })}
-                            {txn.fees > 0 && txn.taxes > 0 && ' · '}
-                            {txn.taxes > 0 && t('invDetail.tax', { amount: fmt(txn.taxes, investment.currency) })}
+                             {(txn.fees ?? 0) > 0 && t('invDetail.fee', { amount: fmt(txn.fees ?? 0, investment.currency) })}
+                            {(txn.fees ?? 0) > 0 && (txn.taxes ?? 0) > 0 && ' · '}
+                            {(txn.taxes ?? 0) > 0 && t('invDetail.tax', { amount: fmt(txn.taxes ?? 0, investment.currency) })}
                           </p>
                         )}
                       </div>
@@ -468,7 +565,7 @@ export function InvestmentDetailDialog({
                             variant="ghost"
                             className="icon-touch-target shrink-0 text-muted-foreground hover:text-foreground"
                             onClick={() => onEditTransaction(txn, investment)}
-                            aria-label="Edit transaction"
+                            aria-label={t('aria.editTransaction')}
                           >
                             <Pencil className="h-4 w-4" />
                           </Button>
@@ -481,7 +578,7 @@ export function InvestmentDetailDialog({
                                 size="icon"
                                 variant="ghost"
                                 className="icon-touch-target shrink-0 text-muted-foreground hover:text-foreground"
-                                aria-label="Edit transaction"
+                                aria-label={t('aria.editTransaction')}
                               >
                                 <Pencil className="h-4 w-4" />
                               </Button>
@@ -493,7 +590,7 @@ export function InvestmentDetailDialog({
                           variant="ghost"
                           className="icon-touch-target shrink-0 text-muted-foreground hover:text-destructive hover:bg-destructive/10"
                           onClick={() => handleDeleteTxn(txn.id, getTxnTypeLabel(t, txn.type as PortfolioTxnType))}
-                          aria-label="Delete transaction"
+                          aria-label={t('aria.deleteTransaction')}
                         >
                           <Trash2 className="h-4 w-4" />
                         </Button>
@@ -519,6 +616,12 @@ export function InvestmentDetailDialog({
         </DialogContent>
       </Dialog>
       <ConfirmDialog />
+      <MoveHoldingDialog
+        investmentId={investment.id}
+        investmentLabel={investment.name}
+        open={moving}
+        onOpenChange={setMoving}
+      />
     </>
   );
 }

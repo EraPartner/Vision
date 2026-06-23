@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
-import { Sparkles } from 'lucide-react';
+import { Menu, Sparkles } from 'lucide-react';
 import { useLanguage } from '@/contexts/LanguageContext';
 import { useAppSettings } from '@/contexts/AppSettingsContext';
 import { useOllamaStatus } from '@/hooks/useOllamaStatus';
@@ -15,6 +15,8 @@ import { ChatConversationList } from '@/features/ai-chat/ChatConversationList';
 import { ChatMessageList } from '@/features/ai-chat/ChatMessageList';
 import { ChatComposer } from '@/features/ai-chat/ChatComposer';
 import { OllamaStatusBanner } from '@/features/ai-chat/OllamaStatusBanner';
+import { Button } from '@/components/ui/button';
+import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from '@/components/ui/sheet';
 import type { ChatMessage } from '@/types/aiChat';
 
 const SELECTED_PARAM = 'c';
@@ -27,6 +29,8 @@ export default function AIChatPage() {
     const selectedId = searchParams.get(SELECTED_PARAM);
     const [modelOverride, setModelOverride] = useState<string | null>(null);
     const [useTools, setUseTools] = useState<boolean>(true);
+    // Mobile: the conversation rail is hidden and opened as a drawer instead.
+    const [railOpen, setRailOpen] = useState(false);
 
     const setSelectedId = useCallback(
         (next: string | null) => {
@@ -115,11 +119,11 @@ export default function AIChatPage() {
     const statusDotClass = statusLoading
         ? 'bg-muted-foreground/50'
         : status?.ok
-            ? 'bg-emerald-500'
+            ? 'bg-success'
             : 'bg-destructive';
 
     const emptyState = (
-        <div className="mx-auto max-w-2xl rounded-2xl border border-dashed border-border/50 bg-background/30 px-6 py-10 text-center">
+        <div className="glass-regular mx-auto max-w-2xl rounded-2xl border !border-dashed border-border/50 px-6 py-10 text-center">
             <Sparkles className="mx-auto h-6 w-6 text-primary" />
             <h3 className="mt-3 text-sm font-semibold tracking-tight">
                 {t('aiChat.emptyTitle')}
@@ -134,16 +138,43 @@ export default function AIChatPage() {
 
     return (
         <div className="flex h-[calc(100vh-8rem)] gap-4 p-4">
-            <aside className="w-72 shrink-0 rounded-2xl border border-border/50 bg-card/60 backdrop-blur-sm">
+            {/* Desktop: persistent rail. Mobile (<md): hidden — opened via the
+                header menu button as a left drawer below. */}
+            <aside className="hidden w-72 shrink-0 rounded-2xl glass-regular md:block">
                 <ChatConversationList
                     selectedId={selectedId}
                     onSelect={setSelectedId}
                 />
             </aside>
 
-            <main className="flex flex-1 flex-col overflow-hidden rounded-2xl border border-border/50 bg-card/60 backdrop-blur-sm">
+            <main className="flex flex-1 flex-col overflow-hidden rounded-2xl glass-regular">
                 <header className="flex items-center justify-between border-b border-border/50 px-5 py-4">
-                    <div className="min-w-0">
+                    <div className="flex min-w-0 items-center gap-3">
+                        <Sheet open={railOpen} onOpenChange={setRailOpen}>
+                            <SheetTrigger asChild>
+                                <Button
+                                    variant="ghost"
+                                    size="icon"
+                                    className="md:hidden"
+                                    aria-label={t('aiChat.conversations')}
+                                >
+                                    <Menu className="h-5 w-5" />
+                                </Button>
+                            </SheetTrigger>
+                            <SheetContent side="left" className="w-72 p-0">
+                                <SheetHeader className="sr-only">
+                                    <SheetTitle>{t('aiChat.conversations')}</SheetTitle>
+                                </SheetHeader>
+                                <ChatConversationList
+                                    selectedId={selectedId}
+                                    onSelect={(id) => {
+                                        setSelectedId(id);
+                                        setRailOpen(false);
+                                    }}
+                                />
+                            </SheetContent>
+                        </Sheet>
+                        <div className="min-w-0">
                         <h1 className="truncate text-base font-semibold tracking-tight">
                             {detail?.conversation.title || t('aiChat.title')}
                         </h1>
@@ -151,6 +182,7 @@ export default function AIChatPage() {
                             <span className={`inline-block h-1.5 w-1.5 rounded-full ${statusDotClass}`} />
                             {statusLabel}
                         </p>
+                        </div>
                     </div>
                 </header>
 

@@ -5,20 +5,28 @@
  * POST /api/reports/portfolio  — Puppeteer-rendered portfolio report.
  * POST /api/reports/tax        — Puppeteer-rendered tax report.
  *
- * All POST bodies are validated with Zod. Theme tokens (HSL component strings)
- * are forwarded by the frontend so the PDF matches the active app theme.
+ * All POST bodies are validated with Zod. Theme tokens are forwarded by the
+ * frontend so the PDF matches the active app theme; each is constrained to the
+ * HSL-component shape ("H S% L%") because it is interpolated verbatim into a
+ * `:root {}` block the renderer evaluates — see themeCss.js for the sink-side
+ * guard and the CSS-injection rationale.
  */
 
 import { Router } from 'express';
 import { z } from 'zod';
 import { generateReport } from '../services/reports/index.js';
+import { HSL_COMPONENT_RE } from '../services/reports/themeCss.js';
 import { ValidationError } from '../middleware/errorHandler.js';
 
 const router = Router();
 
 /* ── Zod schemas ─────────────────────────────────────────────────────────── */
 
-const hslToken = z.string().min(1);
+// Theme tokens are NOT free strings: they land inside rendered CSS. Pin them to
+// an HSL-component triple ("158 62% 32%") to prevent CSS injection / url()-SSRF.
+const hslToken = z
+  .string()
+  .regex(HSL_COMPONENT_RE, 'theme token must be an HSL component triple like "158 62% 32%"');
 
 const themeSchema = z.object({
   primary:  hslToken.optional(),
@@ -43,7 +51,13 @@ const themeSchema = z.object({
 const periodSchema = z.discriminatedUnion('kind', [
   z.object({ kind: z.literal('ytd') }),
   z.object({ kind: z.literal('rolling'), months: z.number().int().min(1).max(60) }),
-  z.object({ kind: z.literal('custom'), from: z.string().min(1), to: z.string().min(1) }),
+  // Strict YYYY-MM-DD: from/to land in SQL date casts — malformed values were
+  // a 500 (pg cast error) instead of a 400.
+  z.object({
+    kind: z.literal('custom'),
+    from: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'from must be YYYY-MM-DD'),
+    to: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'to must be YYYY-MM-DD'),
+  }),
   z.object({ kind: z.literal('year'), year: z.number().int().min(2000).max(2100) }),
 ]).default({ kind: 'rolling', months: 12 });
 

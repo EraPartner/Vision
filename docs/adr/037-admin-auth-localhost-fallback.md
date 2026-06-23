@@ -1,11 +1,11 @@
 ---
 title: Admin Auth Localhost Fallback
 type: adr
-status: accepted
+status: superseded
 date: 2026-04-25
-updated: 2026-04-25
-tags: [adr, security, admin-auth, localhost, private-network, docker, backward-compatibility, phase-sweep-12-fixes]
-description: When ADMIN_AUTH_TOKEN is unset, restrict admin routes to loopback and private network addresses (RFC 1918 + IPv6 ULA) in combination with docker-compose port binding to 127.0.0.1. Maintains backward compatibility while improving default security posture.
+updated: 2026-05-29
+tags: [adr, security, admin-auth, localhost, private-network, docker, backward-compatibility, phase-sweep-12-fixes, superseded]
+description: SUPERSEDED by ADR-063. When ADMIN_AUTH_TOKEN is unset, restrict admin routes to loopback and private network addresses (RFC 1918 + IPv6 ULA) in combination with docker-compose port binding to 127.0.0.1. Replaced by token-or-open + CSRF guard (ADR-063) which removes the over-broad RFC1918 trust.
 aliases: [admin localhost bind, admin auth fallback, localhost restriction, private-ip trust]
 ---
 
@@ -13,7 +13,15 @@ aliases: [admin localhost bind, admin auth fallback, localhost restriction, priv
 
 ## Status
 
-**Accepted** — 2026-04-25
+**Superseded** — 2026-05-29 by [[docs/adr/063-admin-auth-csrf-guard|ADR-063: Admin Auth Token-or-Open + CSRF Guard]]
+
+> [!warning] This ADR is superseded
+> The RFC1918 IP-allowlist fallback described here has been replaced. `adminAuth.js` no longer performs any IP check; it is now token-or-open. Cross-site browser requests are blocked by the new `csrfGuard.js` middleware (`Sec-Fetch-Site` + `Origin` allowlist). See [[docs/adr/063-admin-auth-csrf-guard|ADR-063]] for the current behaviour.
+
+**Originally Accepted** — 2026-04-25
+
+## Date
+2026-04-25
 
 ## Context
 

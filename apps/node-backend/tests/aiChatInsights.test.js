@@ -73,9 +73,12 @@ describe('getBankBalances', () => {
     expect(r.meta.totalNetPosition).toBe(100);
   });
 
-  it('formats Date instances to YYYY-MM-DD', async () => {
+  it('formats pg DATE-shaped Date instances to their stored calendar day', async () => {
+    // pg returns DATE columns as local-midnight Dates; new Date(y, m, d) mirrors
+    // that shape. toYmd's local getters recover the stored day in any server TZ —
+    // the old toISOString() formatting shifted it one day back east of UTC.
     infoRepository.getBankBalances.mockResolvedValueOnce({
-      accounts: [{ bank_account: 'B', balance: 0, transaction_count: 0, first_transaction: new Date('2024-12-31T05:00:00Z'), last_transaction: new Date('2025-06-15T22:00:00Z') }],
+      accounts: [{ bank_account: 'B', balance: 0, transaction_count: 0, first_transaction: new Date(2024, 11, 31), last_transaction: new Date(2025, 5, 15) }],
       total_net_position: 0,
     });
     const r = await getBankBalances.run({});

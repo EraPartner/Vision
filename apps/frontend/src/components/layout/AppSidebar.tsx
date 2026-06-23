@@ -39,17 +39,51 @@ import {
   Activity,
   Globe,
   PanelLeftClose,
+  Telescope,
+  GitCompareArrows,
+  CandlestickChart,
+  Scale,
 } from "lucide-react";
+import { motion, useReducedMotion } from "framer-motion";
 import { useWorkspace } from "@/contexts/WorkspaceContext";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { usePortfolioPrefetch } from "@/hooks/usePortfolioPrefetch";
 import { useAppSettings } from "@/contexts/AppSettingsContext";
+import { springs } from "@/lib/motion";
+import { preloadRoute } from "@/lib/routePreload";
+import { GO_TO_ROUTES } from "@/hooks/useGoToShortcuts";
+
+/**
+ * The active-route accent rail as a shared layout element: framer-motion
+ * glides it between nav items on navigation instead of blinking it on/off.
+ */
+function ActiveRail() {
+  const reducedMotion = useReducedMotion();
+  return (
+    <motion.span
+      layoutId="sidebar-active-rail"
+      aria-hidden="true"
+      className="absolute left-0 top-[15%] bottom-[15%] w-[3px] rounded-r-[2px] bg-gradient-to-b from-primary to-accent shadow-[0_0_14px_hsl(var(--primary)/0.6)]"
+      transition={reducedMotion ? { duration: 0 } : springs.snappy}
+    />
+  );
+}
+
+// Collapsed-rail tooltips double as shortcut teachers: "Transactions · G T".
+const GO_TO_BY_URL = new Map(GO_TO_ROUTES.map((r) => [r.url, r.key]));
+
+function withGoToHint(title: string, url: string): string {
+  const key = GO_TO_BY_URL.get(url);
+  return key ? `${title} · G ${key.toUpperCase()}` : title;
+}
 
 function isActiveRoute(itemUrl: string, pathname: string) {
-  if (itemUrl === "/" && pathname === "/") return true;
-  if (itemUrl === "/portfolio" && pathname === "/portfolio") return true;
-  if (itemUrl !== "/" && itemUrl !== "/portfolio") return pathname.startsWith(itemUrl);
-  return false;
+  // Workspace roots are active only on an exact match (they have children).
+  if (itemUrl === "/" || itemUrl === "/portfolio" || itemUrl === "/research") return pathname === itemUrl;
+  // Boundary-aware prefix match so a route whose path is a string prefix of
+  // another (e.g. /research/market vs /research/markets) doesn't light up its
+  // sibling. Child routes (/import/:id) still highlight their parent nav item.
+  return pathname === itemUrl || pathname.startsWith(itemUrl + "/");
 }
 
 export function AppSidebar() {
@@ -62,6 +96,7 @@ export function AppSidebar() {
   const { appSettings } = useAppSettings();
 
   const handleNavHover = useCallback((url: string) => {
+    preloadRoute(url);
     if (url === "/portfolio/net-worth") prefetchNetWorth();
     else if (url === "/portfolio/performance") prefetchPerformance();
   }, [prefetchNetWorth, prefetchPerformance]);
@@ -91,7 +126,7 @@ export function AppSidebar() {
       ],
     },
     {
-      label: t('nav.data'),
+      label: t('nav.tools'),
       items: [
         { title: t('nav.importExport'), url: "/import", icon: Import },
       ],
@@ -103,6 +138,7 @@ export function AppSidebar() {
     { title: t('nav.dbMaintenance'), url: "/admin/db", icon: Database },
     { title: t('nav.adminProviders'), url: "/admin/providers", icon: Globe },
     { title: t('nav.adminEndpoints'), url: "/admin/endpoints", icon: Activity },
+    { title: t('nav.exchangeRates'), url: "/admin/exchange-rates", icon: ArrowLeftRight },
   ], [t]);
 
   const portfolioGroups = useMemo(() => [
@@ -111,7 +147,6 @@ export function AppSidebar() {
       items: [
         { title: t('nav.dashboard'), url: "/portfolio", icon: LayoutDashboard },
         { title: t('nav.netWorth'), url: "/portfolio/net-worth", icon: Wallet },
-        { title: t('nav.performance'), url: "/portfolio/performance", icon: BarChart3 },
       ],
     },
     {
@@ -130,17 +165,45 @@ export function AppSidebar() {
       ],
     },
     {
+      label: t('nav.analysis'),
+      items: [
+        { title: t('nav.performance'), url: "/portfolio/performance", icon: BarChart3 },
+        { title: t('nav.rebalance'), url: "/portfolio/rebalance", icon: Scale },
+        { title: t('nav.taxOverview'), url: "/portfolio/tax", icon: Landmark },
+      ],
+    },
+    {
       label: t('nav.tools'),
       items: [
-        { title: t('nav.marketLookup'), url: "/portfolio/market", icon: LineChart },
-        { title: t('nav.watchlist'), url: "/portfolio/watchlist", icon: Target },
-        { title: t('nav.exchangeRates'), url: "/portfolio/exchange-rates", icon: ArrowLeftRight },
-        { title: t('nav.taxOverview'), url: "/portfolio/tax", icon: Landmark },
+        { title: t('nav.portfolioImport'), url: "/portfolio/import", icon: Import },
       ],
     },
   ], [t]);
 
-  const groups = workspace === "budgeting" ? budgetingGroups : portfolioGroups;
+  const researchGroups = useMemo(() => [
+    {
+      label: t('nav.overview'),
+      items: [
+        { title: t('nav.researchHome'), url: "/research", icon: Telescope },
+        { title: t('nav.markets'), url: "/research/markets", icon: Globe },
+        { title: t('nav.marketLookup'), url: "/research/market", icon: LineChart },
+      ],
+    },
+    {
+      label: t('nav.analysis'),
+      items: [
+        { title: t('nav.compare'), url: "/research/compare", icon: GitCompareArrows },
+        { title: t('nav.chartBuilder'), url: "/research/charts", icon: CandlestickChart },
+        { title: t('nav.forecast'), url: "/research/forecast", icon: TrendingUp },
+        { title: t('nav.watchlist'), url: "/research/watchlist", icon: Target },
+      ],
+    },
+  ], [t]);
+
+  const groups =
+    workspace === "budgeting" ? budgetingGroups
+      : workspace === "research" ? researchGroups
+        : portfolioGroups;
 
   return (
     <Sidebar collapsible="icon" className="glass-chrome border-r border-sidebar-border/60">
@@ -149,7 +212,7 @@ export function AppSidebar() {
           <button
             type="button"
             onClick={() => toggleSidebar()}
-            aria-label="Toggle sidebar"
+            aria-label={t('aria.toggleSidebar')}
             className="h-8 w-8 shrink-0 rounded-xl bg-gradient-to-br from-primary via-primary/85 to-accent/70 flex items-center justify-center shadow-[0_10px_30px_-10px_hsl(var(--primary)/0.55)] ring-1 ring-primary/20 transition-transform duration-300 hover:scale-[1.04] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
           >
             <Wallet className="h-4 w-4 text-primary-foreground" />
@@ -167,7 +230,7 @@ export function AppSidebar() {
               <button
                 type="button"
                 onClick={() => toggleSidebar()}
-                aria-label="Collapse sidebar"
+                aria-label={t('aria.collapseSidebar')}
                 className="h-7 w-7 shrink-0 rounded-md flex items-center justify-center text-muted-foreground hover:text-foreground hover:bg-foreground/[0.06] transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
               >
                 <PanelLeftClose className="h-4 w-4" />
@@ -186,16 +249,39 @@ export function AppSidebar() {
                 <SidebarMenuButton
                   asChild
                   isActive={isActiveRoute("/ai-chat", location.pathname)}
-                  tooltip={t('nav.aiChat')}
+                  tooltip={withGoToHint(t('nav.aiChat'), "/ai-chat")}
                 >
                   <NavLink
                     to="/ai-chat"
-                    className={isActiveRoute("/ai-chat", location.pathname) ? "accent-rail" : ""}
+                    onMouseEnter={() => handleNavHover("/ai-chat")}
+                    className="relative"
                     aria-label={t('nav.aiChat')}
                   >
+                    {isActiveRoute("/ai-chat", location.pathname) && <ActiveRail />}
                     <Sparkles className={`h-4 w-4 transition-colors duration-[var(--duration-normal)] ${isActiveRoute("/ai-chat", location.pathname) ? "text-primary" : ""}`} />
                     <span className={isActiveRoute("/ai-chat", location.pathname) ? "font-semibold tracking-tight" : "tracking-tight"}>
                       {t('nav.aiChat')}
+                    </span>
+                  </NavLink>
+                </SidebarMenuButton>
+              </SidebarMenuItem>
+              {/* Accounts — workspace-agnostic hub (ADR-088) */}
+              <SidebarMenuItem>
+                <SidebarMenuButton
+                  asChild
+                  isActive={isActiveRoute("/accounts", location.pathname)}
+                  tooltip={withGoToHint(t('nav.accounts'), "/accounts")}
+                >
+                  <NavLink
+                    to="/accounts"
+                    onMouseEnter={() => handleNavHover("/accounts")}
+                    className="relative"
+                    aria-label={t('nav.accounts')}
+                  >
+                    {isActiveRoute("/accounts", location.pathname) && <ActiveRail />}
+                    <Landmark className={`h-4 w-4 transition-colors duration-[var(--duration-normal)] ${isActiveRoute("/accounts", location.pathname) ? "text-primary" : ""}`} />
+                    <span className={isActiveRoute("/accounts", location.pathname) ? "font-semibold tracking-tight" : "tracking-tight"}>
+                      {t('nav.accounts')}
                     </span>
                   </NavLink>
                 </SidebarMenuButton>
@@ -220,17 +306,27 @@ export function AppSidebar() {
                 icon={<Briefcase className="h-3.5 w-3.5" />}
                 label={t('nav.portfolio')}
               />
+              <WorkspaceTab
+                active={workspace === "research"}
+                onClick={() => setWorkspace("research")}
+                icon={<Telescope className="h-3.5 w-3.5" />}
+                label={t('nav.research')}
+              />
             </div>
           </div>
         )}
         {collapsed && (
           <div className="flex justify-center pt-3 px-1.5">
             <button
-              onClick={() => setWorkspace(workspace === "budgeting" ? "portfolio" : "budgeting")}
+              onClick={() => setWorkspace(
+                workspace === "budgeting" ? "portfolio"
+                  : workspace === "portfolio" ? "research"
+                    : "budgeting",
+              )}
               className="w-9 h-9 flex items-center justify-center rounded-lg bg-primary/10 text-primary hover:bg-primary/20 transition-colors"
-              title={workspace === "budgeting" ? t('nav.budgeting') : t('nav.portfolio')}
+              title={workspace === "budgeting" ? t('nav.budgeting') : workspace === "portfolio" ? t('nav.portfolio') : t('nav.research')}
             >
-              {workspace === "budgeting" ? <Receipt className="h-4 w-4" /> : <Briefcase className="h-4 w-4" />}
+              {workspace === "budgeting" ? <Receipt className="h-4 w-4" /> : workspace === "portfolio" ? <Briefcase className="h-4 w-4" /> : <Telescope className="h-4 w-4" />}
             </button>
           </div>
         )}
@@ -244,13 +340,14 @@ export function AppSidebar() {
                   const isActive = isActiveRoute(item.url, location.pathname);
                   return (
                     <SidebarMenuItem key={item.url}>
-                      <SidebarMenuButton asChild isActive={isActive} tooltip={item.title}>
+                      <SidebarMenuButton asChild isActive={isActive} tooltip={withGoToHint(item.title, item.url)}>
                         <NavLink
                           to={item.url}
                           onMouseEnter={() => handleNavHover(item.url)}
-                          className={isActive ? "accent-rail" : ""}
+                          className="relative"
                           aria-label={item.title}
                         >
+                          {isActive && <ActiveRail />}
                           <item.icon className={`h-4 w-4 transition-colors duration-[var(--duration-normal)] ${isActive ? "text-primary" : ""}`} />
                           <span className={isActive ? "font-semibold tracking-tight" : "tracking-tight"}>{item.title}</span>
                         </NavLink>
@@ -274,12 +371,14 @@ export function AppSidebar() {
                     : isActiveRoute(item.url, location.pathname);
                   return (
                     <SidebarMenuItem key={item.url}>
-                      <SidebarMenuButton asChild isActive={isActive} tooltip={item.title}>
+                      <SidebarMenuButton asChild isActive={isActive} tooltip={withGoToHint(item.title, item.url)}>
                         <NavLink
                           to={item.url}
-                          className={isActive ? "accent-rail" : ""}
+                          onMouseEnter={() => handleNavHover(item.url)}
+                          className="relative"
                           aria-label={item.title}
                         >
+                          {isActive && <ActiveRail />}
                           <item.icon className={`h-4 w-4 transition-colors duration-[var(--duration-normal)] ${isActive ? "text-primary" : ""}`} />
                           <span className={isActive ? "font-semibold tracking-tight" : "tracking-tight"}>{item.title}</span>
                         </NavLink>
@@ -321,13 +420,14 @@ function WorkspaceTab({
   return (
     <button
       onClick={onClick}
-      className={`flex-1 flex items-center justify-center gap-1.5 rounded-lg px-2 py-1.5 text-xs font-medium tracking-tight transition-all duration-[var(--duration-normal)] ease-[var(--ease-out-expo)] ${active
+      title={label}
+      className={`min-w-0 flex-1 flex items-center justify-center gap-1 rounded-lg px-1.5 py-1.5 text-xs font-medium tracking-tight transition-all duration-[var(--duration-normal)] ease-[var(--ease-out-expo)] ${active
           ? "bg-background/90 text-foreground shadow-[0_6px_18px_-8px_hsl(var(--primary)/0.35)] ring-1 ring-primary/25 scale-[1.02]"
           : "text-muted-foreground hover:text-foreground hover:bg-background/40"
         }`}
     >
-      <span className={`transition-colors duration-200 ${active ? "text-primary" : ""}`}>{icon}</span>
-      {label}
+      <span className={`shrink-0 transition-colors duration-200 ${active ? "text-primary" : ""}`}>{icon}</span>
+      <span className="truncate">{label}</span>
     </button>
   );
 }

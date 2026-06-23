@@ -1,6 +1,6 @@
 'use strict';
 
-const { app, BrowserWindow, dialog, Notification, shell, ipcMain, safeStorage, session } = require('electron');
+const { app, BrowserWindow, dialog, Menu, Notification, screen, shell, ipcMain, safeStorage, session, systemPreferences } = require('electron');
 const { execFile, spawn } = require('child_process');
 const crypto = require('crypto');
 const fs = require('fs');
@@ -73,7 +73,15 @@ function t(key, vars) {
 //      "embedded_compose") is shared and keeps the OLD password — backend
 //      auth fails, frontend loads empty.
 // MUST run before any `app.getPath('userData')` (e.g. settingsPath below).
-app.setName('Vision');
+//
+// Demo builds ship a `resources/DEMO` marker (electron-builder-demo.json). When
+// present, the app runs as a fully separate "Vision Demo" — its own userData dir,
+// its own embedded stack/volumes — and can never reach the real app's data.
+const __IS_DEMO = (() => {
+  try { return fs.existsSync(path.join(process.resourcesPath || '', 'resources', 'DEMO')); }
+  catch { return false; }
+})();
+app.setName(__IS_DEMO ? 'Vision Demo' : 'Vision');
 
 // One-shot migration from the legacy "vision-desktop" userData dir to the
 // canonical "Vision" dir. Preserves existing settings.json + embedded_compose
@@ -81,6 +89,7 @@ app.setName('Vision');
 // volume keeps authenticating after the rename.
 (function migrateLegacyUserData() {
   try {
+    if (__IS_DEMO) return; // demo build never adopts the real app's legacy data
     const target = app.getPath('userData');
     const legacy = path.join(path.dirname(target), 'vision-desktop');
     if (legacy === target) return;
@@ -104,10 +113,15 @@ app.setName('Vision');
 })();
 
 // ── Constants ─────────────────────────────────────────────────────────────────
-const APP_NAME = 'Vision';
+const APP_NAME = __IS_DEMO ? 'Vision Demo' : 'Vision';
 const DEFAULT_APP_PORT = 3002;
 const HEALTH_POLL_ATTEMPTS = Number(process.env.VISION_HEALTH_POLL_ATTEMPTS) || 200;  // 200 × 300ms = 60s max
 const HEALTH_POLL_INTERVAL_MS = Number(process.env.VISION_HEALTH_POLL_INTERVAL_MS) || 300;
+// After a cold/dev build the image finishes building, then the backend still has to
+// boot from scratch (deps + migrations + server) — that routinely overshoots the
+// warm-boot budget above. Give the post-build poll a much larger budget so a first
+// launch or `docker:dev:rebuild` doesn't trip the slow-start warning. 600 × 300ms ≈ 3 min.
+const HEALTH_POLL_BUILD_ATTEMPTS = Number(process.env.VISION_HEALTH_POLL_BUILD_ATTEMPTS) || 600;
 const HEALTH_WATCHDOG_INTERVAL_MS = 10_000;
 const HEALTH_WATCHDOG_FAILURE_THRESHOLD = 3;
 
@@ -350,6 +364,48 @@ function generateFreshEnvContents() {
   ].join('\n') + '\n';
 }
 
+// Research provider API keys (ADR-079) are not part of the generated baseline, but
+// the embedded stack (Vision.app) should pick up the same keys configured for dev
+// or Docker (which live in the repo-root .env per ADR-080). These helpers merge any
+// such keys into the canonical .env so `env_file: .env` injects them into the app
+// container — without that, the desktop app's keyed providers stay unconfigured.
+// MUST stay in sync with ENV_VAR_BY_PROVIDER in
+// apps/node-backend/src/services/research/providerKeys.js. A key missing here is
+// not merged into the canonical .env AND is stripped from the repo-root .env on
+// the write-back below — so an unlisted key silently disappears on every launch.
+const PROVIDER_KEY_VARS = [
+  'TWELVE_DATA_API_KEY', 'FINNHUB_API_KEY', 'FMP_API_KEY', 'ALPHA_VANTAGE_API_KEY',
+  'FRED_API_KEY', // macro vertical (ADR-082)
+];
+
+function parseEnvKeys(contents) {
+  const map = new Map();
+  for (const line of (contents || '').split('\n')) {
+    const trimmed = line.trim();
+    if (!trimmed || trimmed.startsWith('#')) continue;
+    const eq = trimmed.indexOf('=');
+    if (eq === -1) continue;
+    map.set(trimmed.slice(0, eq).trim(), trimmed.slice(eq + 1).trim());
+  }
+  return map;
+}
+
+// Append provider keys present in `workContents` (e.g. the repo-root .env) or, as a
+// fallback, process.env — but only those not already in `truth`. Existing values are
+// never overwritten, so a key set in the canonical .env is stable across launches.
+function mergeProviderKeys(truth, workContents) {
+  const present = parseEnvKeys(truth);
+  const fromWork = parseEnvKeys(workContents);
+  const additions = [];
+  for (const key of PROVIDER_KEY_VARS) {
+    if (present.has(key)) continue;
+    const value = fromWork.get(key) ?? process.env[key];
+    if (value !== undefined && value !== '') additions.push(`${key}=${value}`);
+  }
+  if (additions.length === 0) return truth;
+  return `${truth}${truth.endsWith('\n') ? '' : '\n'}${additions.join('\n')}\n`;
+}
+
 async function ensureEnv(workDir) {
   const canonicalEnv = canonicalEnvPath();
   const workEnv = path.join(workDir, '.env');
@@ -369,6 +425,11 @@ async function ensureEnv(workDir) {
   if (truth === null) {
     truth = generateFreshEnvContents();
   }
+
+  // Carry research provider API keys (ADR-079/080) into the embedded stack so the
+  // desktop app gets the same keys as dev/Docker. Merged from the work .env (dev's
+  // repo-root .env) or process.env; never overwrites values already in the .env.
+  truth = mergeProviderKeys(truth, workContents);
 
   if (canonicalContents !== truth) {
     await fs.promises.writeFile(canonicalEnv, truth, { encoding: 'utf8', mode: 0o600 });
@@ -501,13 +562,16 @@ async function getBackupDeviceId() {
 async function getBackupPassphrase() {
   const envPassphrase = process.env.VISION_BACKUP_PASSPHRASE;
   if (envPassphrase) return envPassphrase;
+  // Read the stored blob BEFORE touching safeStorage. On an unsigned/ad-hoc macOS
+  // build every safeStorage call hits the keychain and triggers a password prompt,
+  // so we never reach for it unless an encrypted passphrase actually exists.
+  const settings = await loadSettings();
+  const encoded = settings.backupPassphraseEncrypted;
+  if (!encoded || typeof encoded !== 'string') return null;
   if (!safeStorage || typeof safeStorage.isEncryptionAvailable !== 'function' || !safeStorage.isEncryptionAvailable()) {
     return null;
   }
   try {
-    const settings = await loadSettings();
-    const encoded = settings.backupPassphraseEncrypted;
-    if (!encoded || typeof encoded !== 'string') return null;
     const raw = Buffer.from(encoded, 'base64');
     return safeStorage.decryptString(raw);
   } catch {
@@ -538,10 +602,19 @@ async function setBackupPassphrase(passphrase) {
 
 async function getBackupPassphraseStatus() {
   const settings = await loadSettings();
+  const hasStoredPassphrase = typeof settings.backupPassphraseEncrypted === 'string' && settings.backupPassphraseEncrypted.length > 0;
+  // Only probe isEncryptionAvailable() — which can trigger a keychain prompt on an
+  // unsigned macOS build — when a passphrase is already stored (we need the key to
+  // decrypt it anyway). With nothing stored, report availability from the API's mere
+  // presence; setBackupPassphrase runs the real check when the user actually opts in.
+  const hasSafeStorageApi = Boolean(safeStorage && typeof safeStorage.isEncryptionAvailable === 'function');
+  const secureStorageAvailable = hasStoredPassphrase
+    ? hasSafeStorageApi && safeStorage.isEncryptionAvailable()
+    : hasSafeStorageApi;
   return {
     hasEnvPassphrase: Boolean(process.env.VISION_BACKUP_PASSPHRASE),
-    hasStoredPassphrase: typeof settings.backupPassphraseEncrypted === 'string' && settings.backupPassphraseEncrypted.length > 0,
-    secureStorageAvailable: Boolean(safeStorage && typeof safeStorage.isEncryptionAvailable === 'function' && safeStorage.isEncryptionAvailable()),
+    hasStoredPassphrase,
+    secureStorageAvailable,
   };
 }
 
@@ -875,13 +948,65 @@ function pingHealth(timeoutMs = 1500) {
 // standard interval. Total budget unchanged.
 const HEALTH_POLL_FAST_INTERVAL_MS = 100;
 const HEALTH_POLL_FAST_ATTEMPTS = 20;
-function pollHealth() {
+function pollHealth(maxAttempts = HEALTH_POLL_ATTEMPTS) {
   return new Promise((resolve, reject) => {
     let tries = 0;
     const attempt = async () => {
       if (await pingHealth()) return resolve();
       tries += 1;
-      if (tries >= HEALTH_POLL_ATTEMPTS) return reject(new Error('timeout'));
+      if (tries >= maxAttempts) return reject(new Error('timeout'));
+      const interval = tries < HEALTH_POLL_FAST_ATTEMPTS
+        ? HEALTH_POLL_FAST_INTERVAL_MS
+        : HEALTH_POLL_INTERVAL_MS;
+      setTimeout(attempt, interval);
+    };
+    attempt();
+  });
+}
+
+// Single /health/detailed probe used to gate the FIRST navigation on warmup
+// readiness — the plain /health (above) flips to 200 the moment Express listens,
+// which is before the dashboard's materialized views are refreshed, so navigating
+// on it paints an empty dashboard on cold starts. Resolves { ready } when the
+// dashboard-relevant data is populated, or undefined when the server isn't up yet.
+// Falls back to ready on a missing endpoint (older backend) or unparseable 2xx so
+// we never block longer than the liveness check would have.
+function pingReady(timeoutMs = 2000) {
+  return new Promise((resolve) => {
+    const req = http.get(`${APP_URL}/health/detailed`, { agent: healthAgent }, (res) => {
+      const code = res.statusCode;
+      if (code === 404) { res.resume(); return resolve({ ready: true }); }
+      if (code < 200 || code >= 400) { res.resume(); return resolve(undefined); }
+      let body = '';
+      res.setEncoding('utf8');
+      res.on('data', (c) => { body += c; });
+      res.on('end', () => {
+        try {
+          const d = JSON.parse(body);
+          // `materializedViews` backs the dashboard aggregations; gate on it rather
+          // than full `ready` so a slow/offline network warmup can't stall startup.
+          resolve({ ready: d.status === 'ready' || d?.caches?.materializedViews === true });
+        } catch {
+          resolve({ ready: true });
+        }
+      });
+    });
+    req.on('error', () => resolve(undefined));
+    req.setTimeout(timeoutMs, () => { req.destroy(); resolve(undefined); });
+  });
+}
+
+// Same cadence/budget as pollHealth, but waits for warmup readiness, not just
+// liveness. Used only for the initial navigation; restart/update flows keep using
+// the lighter pollHealth liveness probe.
+function pollReady(maxAttempts = HEALTH_POLL_ATTEMPTS) {
+  return new Promise((resolve, reject) => {
+    let tries = 0;
+    const attempt = async () => {
+      const status = await pingReady();
+      if (status && status.ready) return resolve();
+      tries += 1;
+      if (tries >= maxAttempts) return reject(new Error('timeout'));
       const interval = tries < HEALTH_POLL_FAST_ATTEMPTS
         ? HEALTH_POLL_FAST_INTERVAL_MS
         : HEALTH_POLL_INTERVAL_MS;
@@ -945,9 +1070,9 @@ function startHealthWatchdog() {
   }, HEALTH_WATCHDOG_INTERVAL_MS);
 }
 
-function pollAndLoad() {
-  const endPollHealth = bootMark('poll_health');
-  pollHealth()
+function pollAndLoad({ building = false } = {}) {
+  const endPollHealth = bootMark('poll_ready');
+  pollReady(building ? HEALTH_POLL_BUILD_ATTEMPTS : HEALTH_POLL_ATTEMPTS)
     .then(() => {
       endPollHealth();
       if (mainWindow) mainWindow.loadURL(APP_URL);
@@ -958,6 +1083,11 @@ function pollAndLoad() {
     .catch(() => {
       endPollHealth();
       loadErrorPage();
+      // A cold build already got the longer budget that covers backend boot; if it
+      // still isn't up, drop to the error page (with Retry) but skip the blocking
+      // "taking longer than expected" modal — that warning is meant for warm boots
+      // where a slow start is genuinely unexpected, not a first/dev rebuild.
+      if (building) return;
       dialog.showMessageBox({
         type: 'warning',
         buttons: [t('common.ok')],
@@ -1101,8 +1231,14 @@ async function composeStartOrUp(cwd, extraFiles = [], skipBuild = false) {
   return { built: !skipBuild && (!app.isPackaged || useRepoMode) };
 }
 
+// `stop`, not `down`: keeping the stopped containers + network around is what
+// lets composeStartOrUp()'s `compose start` fast path fire on the next launch
+// (a `down` here forced full container/network recreation on every boot).
+// The clean-run flow does its own `down --volumes` at launch, and
+// `restart: unless-stopped` treats user-stopped containers as stopped, so
+// nothing auto-revives them when the Docker daemon restarts.
 function stopContainers(cwd, extraFiles = []) {
-  const args = ['compose', ...composeArgs(cwd, extraFiles), 'down'];
+  const args = ['compose', ...composeArgs(cwd, extraFiles), 'stop'];
   return run('docker', args, cwd, { timeout: 60000 });
 }
 
@@ -1128,11 +1264,186 @@ async function restartAppContainer(cwd, extraFiles = []) {
 // ── Main window ───────────────────────────────────────────────────────────────
 let mainWindow = null;
 
+// ── Boot splash ───────────────────────────────────────────────────────────────
+// Localized, theme-aware splash shown before any Docker I/O. The renderer mirrors
+// the active palette's primary colors into settings.json (theme:persist-splash),
+// so the splash paints in the chosen theme (emerald on default, purple on
+// dracula, …). Falls back to neutral slate (light/dark via prefers-color-scheme)
+// when nothing has been persisted yet — e.g. the very first launch.
+// setSplashStatus() narrates the slow boot phases (image pull, service start).
+const SPLASH_THEME_KEY = 'splashTheme';
+
+// HSL component strings only ("158 64% 52%"): digits, spaces, %, dots. The value
+// is interpolated into the splash HTML/CSS, so this guards against CSS/HTML
+// injection — anything outside the pattern is rejected and the slate fallback wins.
+const HSL_COMPONENTS_RE = /^\d{1,3}(?:\.\d+)?\s+\d{1,3}(?:\.\d+)?%\s+\d{1,3}(?:\.\d+)?%$/;
+function isValidHslComponents(value) {
+  return typeof value === 'string' && value.length <= 32 && HSL_COMPONENTS_RE.test(value);
+}
+
+function readSplashTheme() {
+  try {
+    const data = JSON.parse(fs.readFileSync(settingsPath, 'utf8'));
+    const theme = data?.[SPLASH_THEME_KEY];
+    if (!theme || !isValidHslComponents(theme.background) || !isValidHslComponents(theme.foreground)) {
+      return undefined;
+    }
+    return { background: theme.background, foreground: theme.foreground };
+  } catch {
+    return undefined;
+  }
+}
+
+// Derive the splash colors from the persisted primary (e.g. "158 64% 52%").
+// The raw primary is a vivid accent — full-screen it reads as a neon block — so
+// instead we mirror the app's own backdrop: a near-black base carrying just the
+// primary's hue, lifted by a soft radial glow of the bright accent behind the
+// logo ("pretty much black with a light emerald shine"). The persisted
+// `foreground` (primary-foreground, meant for ink *on* the bright accent) is
+// intentionally ignored — on a near-black fill we want light text.
+function deriveSplashPalette(primary) {
+  const m = /^(\d{1,3}(?:\.\d+)?)\s+(\d{1,3}(?:\.\d+)?)%\s+\d{1,3}(?:\.\d+)?%$/.exec(primary);
+  if (!m) return undefined;
+  const hue = m[1];
+  const sat = Number(m[2]);
+  return {
+    base: `${hue} ${Math.round(Math.min(sat, 45))}% 6%`,   // near-black, faintly hued
+    glow: primary,                                          // bright accent → the "shine"
+    foreground: `${hue} ${Math.round(Math.min(sat, 24))}% 88%`,
+  };
+}
+
+function splashDataUrl() {
+  const theme = readSplashTheme();
+  const derived = theme ? deriveSplashPalette(theme.background) : undefined;
+  const palette = derived
+    ? `body {
+    background:
+      radial-gradient(85% 60% at 50% 38%, hsl(${derived.glow} / 0.16), transparent 70%),
+      hsl(${derived.base});
+    color: hsl(${derived.foreground} / 0.82);
+  }
+  .name { color: hsl(${derived.foreground}); }`
+    : `body { background: #0f172a; color: #94a3b8; }
+  .name { color: #e2e8f0; }
+  @media (prefers-color-scheme: light) {
+    body { background: #f8fafc; color: #475569; }
+    .name { color: #1e293b; }
+  }`;
+  const html = `<!doctype html>
+<html><head><meta charset="utf-8"><style>
+  :root { color-scheme: light dark; }
+  body {
+    margin: 0; height: 100vh; display: flex; flex-direction: column;
+    align-items: center; justify-content: center; gap: 14px;
+    font-family: -apple-system, BlinkMacSystemFont, system-ui, sans-serif;
+    -webkit-font-smoothing: antialiased; user-select: none; cursor: default;
+  }
+  ${palette}
+  .spinner {
+    width: 26px; height: 26px; border-radius: 50%;
+    border: 2.5px solid currentColor; border-top-color: transparent;
+    opacity: 0.55; animation: spin 0.9s linear infinite;
+  }
+  @keyframes spin { to { transform: rotate(360deg); } }
+  @media (prefers-reduced-motion: reduce) { .spinner { display: none; } }
+  .name { font-size: 15px; font-weight: 600; letter-spacing: 0.01em; }
+  .status { font-size: 13px; font-variant-numeric: tabular-nums; }
+</style></head><body>
+  <div class="spinner"></div>
+  <div class="name">${APP_NAME}</div>
+  <div class="status" id="splash-status">${t('splash.starting')}</div>
+</body></html>`;
+  return `data:text/html;charset=utf-8,${encodeURIComponent(html)}`;
+}
+
+function setSplashStatus(key) {
+  if (!mainWindow || mainWindow.isDestroyed()) return;
+  // Only while the splash is still showing — never poke the real app.
+  if (!mainWindow.webContents.getURL().startsWith('data:')) return;
+  mainWindow.webContents
+    .executeJavaScript(
+      `(() => { const el = document.getElementById('splash-status'); if (el) el.textContent = ${JSON.stringify(t(key))}; })()`,
+      true,
+    )
+    .catch(() => { /* splash already navigated away */ });
+}
+
+// ── Window-state persistence ──────────────────────────────────────────────────
+// Restore frame across launches (baseline macOS behavior). Bounds live in the
+// existing settings.json mirror under `windowBounds`; saved debounced on
+// resize/move, restored clamped to the matching display's workArea so an
+// unplugged monitor can't strand the window off-screen.
+const WINDOW_BOUNDS_KEY = 'windowBounds';
+const WINDOW_MIN_WIDTH = 800;
+const WINDOW_MIN_HEIGHT = 600;
+const WINDOW_BOUNDS_SAVE_DEBOUNCE_MS = 500;
+
+// Sync read: createWindow() runs once, before any window exists, and the
+// splash must not wait on async settings I/O ordering.
+function readSavedWindowBounds() {
+  try {
+    const data = JSON.parse(fs.readFileSync(settingsPath, 'utf8'));
+    const b = data?.[WINDOW_BOUNDS_KEY];
+    if (!b || ![b.x, b.y, b.width, b.height].every(Number.isFinite)) return undefined;
+    return b;
+  } catch {
+    return undefined;
+  }
+}
+
+function clampBoundsToWorkArea(bounds) {
+  const wa = (screen.getDisplayMatching(bounds) || screen.getPrimaryDisplay()).workArea;
+  const width = Math.max(WINDOW_MIN_WIDTH, Math.min(bounds.width, wa.width));
+  const height = Math.max(WINDOW_MIN_HEIGHT, Math.min(bounds.height, wa.height));
+  const clamp = (v, lo, hi) => Math.min(Math.max(v, lo), hi);
+  return {
+    width,
+    height,
+    x: clamp(bounds.x, wa.x, wa.x + wa.width - width),
+    y: clamp(bounds.y, wa.y, wa.y + wa.height - height),
+  };
+}
+
+let windowBoundsSaveTimer = null;
+function scheduleWindowBoundsSave(win) {
+  if (windowBoundsSaveTimer) clearTimeout(windowBoundsSaveTimer);
+  windowBoundsSaveTimer = setTimeout(async () => {
+    windowBoundsSaveTimer = null;
+    if (!win || win.isDestroyed()) return;
+    try {
+      // getNormalBounds: a maximized/fullscreen window records its restored
+      // frame, not the screen size.
+      const bounds = win.getNormalBounds();
+      const settings = await loadSettings();
+      settings[WINDOW_BOUNDS_KEY] = bounds;
+      await saveSettings(settings);
+    } catch (err) {
+      console.warn('window-bounds save failed (non-fatal):', err.message || err);
+    }
+  }, WINDOW_BOUNDS_SAVE_DEBOUNCE_MS);
+}
+
 function createWindow() {
+  const savedBounds = readSavedWindowBounds();
   mainWindow = new BrowserWindow({
-    width: 1280,
-    height: 800,
+    ...(savedBounds
+      ? clampBoundsToWorkArea(savedBounds)
+      : { width: 1280, height: 800 }),
+    minWidth: WINDOW_MIN_WIDTH,
+    minHeight: WINDOW_MIN_HEIGHT,
     title: APP_NAME,
+    // macOS-native chrome: frameless content with inset traffic lights. The
+    // renderer adds a drag region + left inset to its topbar when it detects
+    // electronAPI.platform === 'darwin' (see ElectronBridge in the frontend).
+    // Vibrancy is a no-op while the page paints opaque backgrounds — the
+    // renderer only goes translucent behind the enhancedEffects toggle.
+    ...(process.platform === 'darwin' ? {
+      titleBarStyle: 'hiddenInset',
+      trafficLightPosition: { x: 20, y: 20 },
+      vibrancy: 'under-window',
+      visualEffectState: 'followWindow',
+    } : {}),
     webPreferences: {
       nodeIntegration: false,
       contextIsolation: true,
@@ -1140,6 +1451,14 @@ function createWindow() {
       // Preload exposes a minimal update API to the renderer
       preload: path.join(__dirname, 'preload.js'),
     },
+  });
+  // Renderer drops the traffic-light inset while in native fullscreen
+  // (the lights auto-hide there).
+  mainWindow.on('enter-full-screen', () => {
+    if (mainWindow && !mainWindow.isDestroyed()) mainWindow.webContents.send('window:fullscreen', true);
+  });
+  mainWindow.on('leave-full-screen', () => {
+    if (mainWindow && !mainWindow.isDestroyed()) mainWindow.webContents.send('window:fullscreen', false);
   });
   // Block all new-window spawns (target="_blank", window.open, etc.)
   mainWindow.webContents.setWindowOpenHandler(() => ({ action: 'deny' }));
@@ -1158,8 +1477,32 @@ function createWindow() {
     }
   });
 
+  // Menu accelerators with click handlers (⌘1-9, ⌘N, ⇧⌘I, ⌃⌘S) are matched
+  // here instead of relying on AppKit key-equivalent dispatch: with the
+  // sandboxed renderer focused, the unhandled-keystroke → menu redispatch is
+  // unreliable, so accelerator-only items silently do nothing from the
+  // keyboard (menu *clicks* were always fine). before-input-event sees every
+  // real keystroke first, and preventDefault() suppresses any late menu
+  // dispatch, so an item can never fire twice. Roles (reload, zoom, copy…)
+  // stay on the native path.
+  mainWindow.webContents.on('before-input-event', handleMenuAccelerator);
+
+  // Renderer readiness is per-document: a real navigation/reload invalidates
+  // the previous document's app:renderer-ready signal. This must NOT listen to
+  // did-start-loading — that also fires for same-document navigations (React
+  // Router pushState), and since the renderer only calls ready() once per
+  // document, resetting there permanently jams sendToApp()'s queue after the
+  // first client-side route change (menu, dock and CSV actions all go silent).
+  mainWindow.webContents.on('did-start-navigation', (details) => {
+    if (details.isMainFrame && !details.isSameDocument) rendererReady = false;
+  });
+
+  // Persist the window frame across launches (debounced).
+  mainWindow.on('resize', () => scheduleWindowBoundsSave(mainWindow));
+  mainWindow.on('move', () => scheduleWindowBoundsSave(mainWindow));
+
   // Caller is responsible for loading the initial URL.
-  mainWindow.on('closed', () => { mainWindow = null; });
+  mainWindow.on('closed', () => { mainWindow = null; rendererReady = false; });
 }
 
 // ── Manual shell updater (.zip-only, no blockmaps) ───────────────────────────
@@ -2349,11 +2692,19 @@ ipcMain.handle('backup:load-settings', async () => {
   // Prefer reading from the database; fall back to settings.json if the backend
   // is not yet available (e.g. during very early startup).
   try {
-    const data = await httpGet(`http://localhost:${appPort}/api/settings/backup_settings`);
-    if (data && data.value) {
-      const v = resolveBackupSettingsWithDefaults(data.value);
-      // Mirror back to local settings.json so will-quit always has a fresh copy.
-      await saveSettings({ ...(await loadSettings()), backupDir: v.backupDir || '', backupOnQuit: v.backupOnQuit === true });
+    // The API wraps responses as { ok, data: { key, value } } (ADR-026).
+    const body = await httpGet(`http://localhost:${appPort}/api/settings/backup_settings`);
+    const stored = body && body.data ? body.data.value : undefined;
+    if (stored && typeof stored === 'object') {
+      // Mirror the RAW stored value (not the default-resolved one) back to
+      // settings.json so the will-quit fallback matches the DB instead of
+      // baking display defaults into the stored config.
+      await saveSettings({
+        ...(await loadSettings()),
+        backupDir: typeof stored.backupDir === 'string' ? stored.backupDir : '',
+        backupOnQuit: stored.backupOnQuit === true,
+      });
+      const v = resolveBackupSettingsWithDefaults(stored);
       return { backupDir: v.backupDir || '', backupOnQuit: v.backupOnQuit === true };
     }
   } catch (err) {
@@ -2378,6 +2729,300 @@ ipcMain.handle('recovery:open-logs', async () => {
     return { success: true, path: logsDir };
   } catch (err) {
     return { success: false, error: err && err.message ? err.message : String(err) };
+  }
+});
+
+// ── macOS-native integration (menu bar, dock, open-file, accent color) ───────
+// All renderer-bound messages funnel through sendToApp() so actions fired
+// before React mounts (dock menu on a closed window, Finder open-file at
+// launch) are queued and flushed when the renderer signals readiness via
+// app:renderer-ready. The renderer side lives in ElectronBridge.
+
+let rendererReady = false;
+const pendingAppMessages = [];
+
+function sendToApp(channel, payload) {
+  if (!mainWindow || mainWindow.isDestroyed()) {
+    pendingAppMessages.push([channel, payload]);
+    createWindow();
+    mainWindow.loadURL(APP_URL);
+    return;
+  }
+  if (mainWindow.isMinimized()) mainWindow.restore();
+  mainWindow.show();
+  mainWindow.focus();
+  if (rendererReady) {
+    mainWindow.webContents.send(channel, payload);
+  } else {
+    pendingAppMessages.push([channel, payload]);
+  }
+}
+
+ipcMain.handle('app:renderer-ready', (event) => {
+  if (!mainWindow || event.sender !== mainWindow.webContents) return { success: false };
+  rendererReady = true;
+  while (pendingAppMessages.length > 0) {
+    const [channel, payload] = pendingAppMessages.shift();
+    mainWindow.webContents.send(channel, payload);
+  }
+  return { success: true };
+});
+
+function menuAction(action, payload) {
+  sendToApp('menu:action', { action, payload });
+}
+
+// Mirrors GO_TO_ROUTES in apps/frontend/src/hooks/useGoToShortcuts.ts — keep
+// both lists in sync when adding a destination.
+const GO_MENU_ROUTES = [
+  { url: '/', titleKey: 'nav.dashboard' },
+  { url: '/transactions', titleKey: 'nav.transactions' },
+  { url: '/statistics', titleKey: 'nav.statistics' },
+  { url: '/categories', titleKey: 'nav.categories' },
+  { url: '/recipients', titleKey: 'nav.recipients' },
+  { url: '/import', titleKey: 'nav.importExport' },
+  { url: '/portfolio', titleKey: 'nav.portfolio' },
+  { url: '/portfolio/net-worth', titleKey: 'nav.netWorth' },
+  { url: '/ai-chat', titleKey: 'nav.aiChat' },
+];
+
+// Keyboard matcher for the accelerator-only menu items (see the
+// before-input-event comment in createWindow). Mirrors the accelerators
+// declared in setupApplicationMenu() — keep both in sync. Digits match on
+// input.code (physical key) so ⌘1-9 stay positional on non-QWERTY layouts
+// (AZERTY digits would otherwise need Shift); letters match on input.key.
+function handleMenuAccelerator(event, input) {
+  if (input.type !== 'keyDown' || input.isAutoRepeat) return;
+  const isMac = process.platform === 'darwin';
+  const primary = isMac ? input.meta : input.control;   // CmdOrCtrl
+  const crossMod = isMac ? input.control : input.meta;  // the other platform's primary
+  if (!primary) return;
+
+  // Go menu: ⌘1 … ⌘9
+  const digit = /^Digit([1-9])$/.exec(input.code || '');
+  if (digit && !input.shift && !input.alt && !crossMod) {
+    const route = GO_MENU_ROUTES[Number(digit[1]) - 1];
+    if (!route) return;
+    event.preventDefault();
+    menuAction('navigate', route.url);
+    return;
+  }
+
+  const key = typeof input.key === 'string' ? input.key.toLowerCase() : '';
+  // File → New Transaction: ⌘N
+  if (key === 'n' && !input.shift && !input.alt && !crossMod) {
+    event.preventDefault();
+    menuAction('new-transaction');
+    return;
+  }
+  // File → Import CSV…: ⇧⌘I
+  if (key === 'i' && input.shift && !input.alt && !crossMod) {
+    event.preventDefault();
+    menuAction('navigate', '/import');
+    return;
+  }
+  // View → Toggle Sidebar: ⌃⌘S on macOS, Ctrl+Shift+S elsewhere
+  const sidebarChord = isMac
+    ? (key === 's' && input.control && !input.shift && !input.alt)
+    : (key === 's' && input.shift && !input.alt && !input.meta);
+  if (sidebarChord) {
+    event.preventDefault();
+    menuAction('toggle-sidebar');
+  }
+}
+
+function setupApplicationMenu() {
+  const template = [
+    ...(process.platform === 'darwin' ? [{
+      label: APP_NAME,
+      submenu: [
+        { role: 'about' },
+        { type: 'separator' },
+        {
+          label: t('menu.settings'),
+          accelerator: 'CmdOrCtrl+,',
+          click: () => menuAction('open-settings'),
+        },
+        { type: 'separator' },
+        { role: 'services' },
+        { type: 'separator' },
+        { role: 'hide' },
+        { role: 'hideOthers' },
+        { role: 'unhide' },
+        { type: 'separator' },
+        { role: 'quit' },
+      ],
+    }] : []),
+    {
+      label: t('menu.file'),
+      submenu: [
+        {
+          label: t('menu.newTransaction'),
+          accelerator: 'CmdOrCtrl+N',
+          click: () => menuAction('new-transaction'),
+        },
+        {
+          label: t('menu.importCsv'),
+          accelerator: 'Shift+CmdOrCtrl+I',
+          click: () => menuAction('navigate', '/import'),
+        },
+        { type: 'separator' },
+        { role: process.platform === 'darwin' ? 'close' : 'quit' },
+      ],
+    },
+    {
+      label: t('menu.edit'),
+      submenu: [
+        { role: 'undo' },
+        { role: 'redo' },
+        { type: 'separator' },
+        { role: 'cut' },
+        { role: 'copy' },
+        { role: 'paste' },
+        { role: 'selectAll' },
+      ],
+    },
+    {
+      label: t('menu.view'),
+      submenu: [
+        {
+          label: t('menu.toggleSidebar'),
+          // ⌃⌘S mirrors Finder/Mail "Show/Hide Sidebar" on macOS.
+          accelerator: process.platform === 'darwin' ? 'Ctrl+Cmd+S' : 'Ctrl+Shift+S',
+          click: () => menuAction('toggle-sidebar'),
+        },
+        { type: 'separator' },
+        { role: 'reload' },
+        ...(app.isPackaged ? [] : [{ role: 'toggleDevTools' }]),
+        { type: 'separator' },
+        { role: 'resetZoom' },
+        { role: 'zoomIn' },
+        { role: 'zoomOut' },
+        { type: 'separator' },
+        { role: 'togglefullscreen' },
+      ],
+    },
+    {
+      label: t('menu.go'),
+      submenu: GO_MENU_ROUTES.map((route, i) => ({
+        label: t(route.titleKey),
+        accelerator: `CmdOrCtrl+${i + 1}`,
+        click: () => menuAction('navigate', route.url),
+      })),
+    },
+    { role: 'windowMenu' },
+    {
+      role: 'help',
+      submenu: [
+        {
+          label: t('menu.keyboardShortcuts'),
+          click: () => menuAction('open-shortcuts'),
+        },
+      ],
+    },
+  ];
+  Menu.setApplicationMenu(Menu.buildFromTemplate(template));
+}
+
+function setupDockMenu() {
+  if (process.platform !== 'darwin' || !app.dock) return;
+  app.dock.setMenu(Menu.buildFromTemplate([
+    {
+      label: t('menu.newTransaction'),
+      click: () => menuAction('new-transaction'),
+    },
+    {
+      label: t('nav.dashboard'),
+      click: () => menuAction('navigate', '/'),
+    },
+  ]));
+}
+
+// Dock badge — count of planned payments due, pushed by the renderer (it owns
+// the query + the user's dismissals). Input is clamped server-side so a
+// compromised renderer can at most show a number.
+ipcMain.handle('app:set-badge', (event, count) => {
+  if (!mainWindow || event.sender !== mainWindow.webContents) return { success: false };
+  if (process.platform !== 'darwin' || !app.dock) return { success: false };
+  const n = Number(count);
+  if (!Number.isFinite(n)) return { success: false };
+  const clamped = Math.max(0, Math.min(999, Math.floor(n)));
+  app.dock.setBadge(clamped > 0 ? String(clamped) : '');
+  return { success: true };
+});
+
+// System accent color — RRGGBBAA hex from macOS, or null when unavailable.
+function readSystemAccentColor() {
+  if (process.platform !== 'darwin') return null;
+  try {
+    const color = systemPreferences.getAccentColor();
+    return typeof color === 'string' && color ? color : null;
+  } catch {
+    return null;
+  }
+}
+
+ipcMain.handle('app:get-accent-color', (event) => {
+  if (!mainWindow || event.sender !== mainWindow.webContents) return null;
+  return readSystemAccentColor();
+});
+
+// Renderer mirrors the active theme's primary colors here so the next boot
+// splash matches the chosen palette (see splashDataUrl / readSplashTheme).
+// Validated on write and again on read — the values land in splash HTML/CSS.
+ipcMain.handle('theme:persist-splash', async (event, colors) => {
+  if (!mainWindow || event.sender !== mainWindow.webContents) return { success: false };
+  if (!colors || !isValidHslComponents(colors.background) || !isValidHslComponents(colors.foreground)) {
+    return { success: false };
+  }
+  try {
+    const data = await loadSettings();
+    data[SPLASH_THEME_KEY] = { background: colors.background, foreground: colors.foreground };
+    await saveSettings(data);
+    return { success: true };
+  } catch (err) {
+    console.warn('theme:persist-splash failed (non-fatal):', err && err.message ? err.message : err);
+    return { success: false };
+  }
+});
+
+function subscribeAccentColorChanges() {
+  if (process.platform !== 'darwin') return;
+  try {
+    systemPreferences.subscribeNotification('AppleColorPreferencesChangedNotification', () => {
+      if (mainWindow && !mainWindow.isDestroyed() && rendererReady) {
+        mainWindow.webContents.send('app:accent-color-changed', readSystemAccentColor());
+      }
+    });
+  } catch (err) {
+    console.warn('accent-color subscription failed (non-fatal):', err && err.message ? err.message : err);
+  }
+}
+
+// Finder/dock "open with Vision" for CSVs → forwarded to the renderer as file
+// contents (the sandboxed renderer cannot read arbitrary paths, and we do not
+// widen its filesystem access for this). Extension + size checked here; the
+// import flow re-validates and previews before anything is written.
+const CSV_OPEN_MAX_BYTES = 25 * 1024 * 1024;
+
+async function forwardCsvOpen(filePath) {
+  try {
+    if (!/\.csv$/i.test(filePath)) return;
+    const stat = await fs.promises.stat(filePath);
+    if (!stat.isFile() || stat.size > CSV_OPEN_MAX_BYTES) return;
+    const content = await fs.promises.readFile(filePath, 'utf8');
+    sendToApp('app:csv-opened', { name: path.basename(filePath), content });
+  } catch (err) {
+    console.warn('open-file forward failed (non-fatal):', err && err.message ? err.message : err);
+  }
+}
+
+app.on('open-file', (event, filePath) => {
+  event.preventDefault();
+  if (app.isReady()) {
+    forwardCsvOpen(filePath);
+  } else {
+    app.whenReady().then(() => forwardCsvOpen(filePath));
   }
 });
 
@@ -2412,15 +3057,18 @@ async function launch() {
   await initI18n();
   endI18n();
 
+  // 0a-bis. Native menu bar + dock menu need localized labels, so they follow
+  // initI18n. Accent-color push subscription is darwin-only and inert otherwise.
+  setupApplicationMenu();
+  setupDockMenu();
+  subscribeAccentColorChanges();
+
   // 0b. Open the loading window IMMEDIATELY so the user sees something straight
   //    away — before any Docker I/O, which can take seconds or even minutes on
   //    a cold start. The window will navigate to APP_URL once the backend is ready.
   const endWindow = bootMark('create_window');
   createWindow();
-  mainWindow.loadURL(
-    'data:text/html,<html><body style="margin:0;background:#0f172a;display:flex;align-items:center;justify-content:center;height:100vh">' +
-    '<p style="color:#94a3b8;font-family:system-ui,sans-serif;font-size:1rem">Starting Vision\u2026</p></body></html>'
-  );
+  mainWindow.loadURL(splashDataUrl());
   endWindow();
 
   // 1. Resolve project folder
@@ -2436,6 +3084,7 @@ async function launch() {
   //        if the app image already exists — all are independent so run in parallel.
   let skipBuild = false;
   let dockerStatus = 'ok';
+  setSplashStatus('splash.checkingDocker');
   const endParallelInit = bootMark('parallel_init');
   await Promise.all([
     // Find a free host port for the backend (default 3002, auto-increment if taken)
@@ -2480,6 +3129,7 @@ async function launch() {
               { timeout: 10000, env: dockerEnv }
             ).then(r => r.trim()).catch(() => '');
             if (ids) { end(); return; }
+            setSplashStatus('splash.downloading');
             await run(
               'docker',
               ['compose', ...composeArgs(workDir, overrideFiles), 'pull', '--quiet', 'app'],
@@ -2577,6 +3227,7 @@ async function launch() {
   }
 
   // 7. docker compose start (fast path) or up (cold/dev rebuild)
+  setSplashStatus('splash.startingServices');
   const endComposeUp = bootMark('compose_up');
   let composeDidBuild = false;
   try {
@@ -2619,7 +3270,10 @@ async function launch() {
   }
 
   // 8. Backend is being polled — poll /health in the background; navigate once ready.
-  pollAndLoad();
+  //    A cold/dev build (composeDidBuild) gets the extended budget and skips the
+  //    slow-start modal, since first-launch boot is expected to be slow.
+  setSplashStatus('splash.waitingApp');
+  pollAndLoad({ building: composeDidBuild });
 
   // 10. Set up manual shell updater (source/dev mode only — not in embedded .app mode)
   if (!app.isPackaged || useRepoMode) {
@@ -2633,7 +3287,15 @@ async function launch() {
     try {
       let fileChangeTimer = null;
       let activeBuildChild = null;
-      const watchTargets = ['apps/frontend', 'apps/node-backend', 'package.json', 'bun.lock', 'bun.lockb'];
+      // Keep in sync with DOCKER_PATHS: anything that triggers a rebuild on the
+      // next launch should also hot-rebuild while the dev shell is running.
+      const watchTargets = ['apps/frontend', 'apps/node-backend', 'packages', 'i18n/source', 'package.json', 'bun.lock', 'bun.lockb'];
+
+      // Paths whose churn is not source changes: dependency installs, build
+      // output, VCS/dot dirs. Without this, any `bun install` fires a rebuild.
+      const isIgnoredWatchPath = (fname) =>
+        fname.split(path.sep).some((seg) =>
+          seg === 'node_modules' || seg === 'dist' || seg.startsWith('.'));
 
       const runCancellableBuild = () => new Promise((resolve, reject) => {
         const args = ['compose', ...composeArgs(workDir, overrideFiles), 'build', 'app'];
@@ -2688,7 +3350,10 @@ async function launch() {
         try {
           const w = fs.watch(full, { recursive: true }, (evt, fname) => {
             // Ignore temporary editor swap files
-            if (fname && /(^\.|~$|\.swp$|\.swx$)/.test(fname)) return;
+            if (fname && /(~$|\.swp$|\.swx$)/.test(fname)) return;
+            // Ignore dependency/build/dot-dir churn (covers nested paths,
+            // which the old `^\.` anchor missed).
+            if (fname && isIgnoredWatchPath(fname)) return;
             scheduleRebuild();
           });
           // Do not keep the watcher references — they live for the app lifetime
@@ -2723,8 +3388,10 @@ app.on('will-quit', (e) => {
   // settings.json mirror that is kept in sync by backup:save-settings / backup:load-settings.
   async function resolveBackupSettings() {
     try {
-      const data = await httpGet(`http://localhost:${appPort}/api/settings/backup_settings`);
-      if (data && data.value) return data.value;
+      // The API wraps responses as { ok, data: { key, value } } (ADR-026).
+      const body = await httpGet(`http://localhost:${appPort}/api/settings/backup_settings`);
+      const stored = body && body.data ? body.data.value : undefined;
+      if (stored && typeof stored === 'object') return stored;
     } catch { /* backend may already be down, use local mirror */ }
     return loadSettings();
   }
@@ -2747,7 +3414,13 @@ app.on('will-quit', (e) => {
       : Promise.resolve();
 
     doBackup
-      .then(() => stopContainers(workDir, overrideFiles))
+      .then(() => {
+        // Drop the watchdog's idle keep-alive socket so the backend's
+        // graceful shutdown isn't held open waiting on it.
+        stopHealthWatchdog();
+        try { healthAgent.destroy(); } catch { /* already gone */ }
+        return stopContainers(workDir, overrideFiles);
+      })
       .catch((err) => console.error('docker compose down failed:', err))
       .finally(() => {
         clearTimeout(forceQuitTimer);

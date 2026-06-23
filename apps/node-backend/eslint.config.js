@@ -120,8 +120,8 @@ export default [
       'vision-local': { rules: { 'no-repo-direct-from-route': noRepoDirectFromRoute } },
     },
     rules: {
-      // warn: existing violations surface without blocking; treat as tech-debt
-      'vision-local/no-repo-direct-from-route': 'warn',
+      // All routes now go through the services layer; enforce the boundary.
+      'vision-local/no-repo-direct-from-route': 'error',
     },
   },
 

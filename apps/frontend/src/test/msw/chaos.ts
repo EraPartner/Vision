@@ -12,7 +12,7 @@
 //   VISION_CHAOS_ERROR_RATE=0.3   -- 30% of calls fail with 5xx
 //   VISION_CHAOS_LATENCY_MS=200   -- max added latency
 
-import { HttpResponse, type HttpHandler } from "msw";
+import { HttpResponse, type HttpHandler, type HttpResponseResolver } from "msw";
 
 interface ChaosConfig {
     errorRate: number;
@@ -21,7 +21,7 @@ interface ChaosConfig {
 }
 
 function readConfig(): ChaosConfig {
-    const env = (typeof process !== "undefined" ? process.env : {}) ?? {};
+    const env = (globalThis as { process?: { env?: Record<string, string | undefined> } }).process?.env ?? {};
     return {
         errorRate: Number(env.VISION_CHAOS_ERROR_RATE ?? "0.2"),
         maxLatencyMs: Number(env.VISION_CHAOS_LATENCY_MS ?? "100"),
@@ -50,8 +50,9 @@ const rng = mulberry32(cfg.seed);
  * `maxLatencyMs` of added latency.
  */
 export function chaos(handler: HttpHandler): HttpHandler {
-    const original = handler.resolver;
-    handler.resolver = async (info) => {
+    const mutable = handler as unknown as { resolver: HttpResponseResolver };
+    const original = mutable.resolver;
+    mutable.resolver = async (info) => {
         await new Promise((r) => setTimeout(r, rng() * cfg.maxLatencyMs));
         if (rng() < cfg.errorRate) {
             return HttpResponse.json(

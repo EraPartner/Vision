@@ -3,6 +3,7 @@ import { useLanguage } from "@/contexts/LanguageContext";
 import { useAppSettings } from "@/contexts/AppSettingsContext";
 import { useBelgianTaxProfile } from "@/contexts/BelgianTaxProfileContext";
 import { computeBelgianPIT } from "@/lib/belgianTax";
+import { recordedTaxesForYear, type PortfolioTaxInvestment } from "@/lib/belgianTax/portfolioTax";
 import { TaxYearSwitcher } from "@/components/tax/TaxYearSwitcher";
 import { HistoricalYearBanner } from "@/components/tax/HistoricalYearBanner";
 import { YearActionsMenu } from "@/components/tax/YearActionsMenu";
@@ -134,24 +135,16 @@ export default function TaxOverviewPage() {
     return result;
   }, [taxableIncomeByMonth]);
 
-  const portfolioTaxesForYear = useMemo(() => {
-    const year = viewedYear;
-    return summaries.reduce((sum, inv) => {
-      const yearlyInvestmentTaxes = inv.transactions.reduce((txnSum: number, txn: { date?: string; type?: string; amount?: number; taxes?: number; currency?: string }) => {
-        const date = txn.date;
-        if (!date) return txnSum;
-
-        const txnYear = Number.parseInt(date.slice(0, 4), 10);
-        if (Number.isNaN(txnYear) || txnYear !== year) return txnSum;
-
-        const explicitTaxTxn = txn.type === "tax" ? convertToTarget(Number(txn.amount) || 0, txn.currency) : 0;
-        const taxField = convertToTarget(Number(txn.taxes) || 0, txn.currency);
-        return txnSum + explicitTaxTxn + taxField;
-      }, 0);
-
-      return sum + yearlyInvestmentTaxes;
-    }, 0);
-  }, [summaries, viewedYear, convertToTarget]);
+  // Shared with PortfolioTaxPage via the pure recordedTaxesForYear helper so both
+  // pages accumulate recorded portfolio taxes identically (see lib/belgianTax/portfolioTax.ts).
+  const portfolioTaxesForYear = useMemo(
+    () =>
+      summaries.reduce(
+        (sum, inv) => sum + recordedTaxesForYear(inv as PortfolioTaxInvestment, viewedYear, convertToTarget),
+        0,
+      ),
+    [summaries, viewedYear, convertToTarget],
+  );
 
   const totalTaxIncludingPortfolio = calculation.totalPIT + portfolioTaxesForYear;
   // include estimated property tax in an alternate total (informational)
@@ -423,7 +416,7 @@ export default function TaxOverviewPage() {
 
         {isVisible("trendStrip") && <MultiYearTrendStrip />}
 
-        <Card className="border-primary/20 bg-primary/5">
+        <Card className="!border-primary/50 bg-primary/5">
                     <CardContent className="flex items-start gap-3 py-4">
                       <Info className="h-5 w-5 text-primary shrink-0 mt-0.5" />
                       <div>
@@ -434,14 +427,14 @@ export default function TaxOverviewPage() {
             </Card>
 
         {isProfileLoading ? (
-          <Card>
+          <Card className="glass-regular">
             <CardContent className="flex flex-col items-center justify-center py-16 text-center">
               <Loader2 className="h-8 w-8 text-muted-foreground/60 animate-spin mb-3" />
               <p className="text-sm text-muted-foreground">{t('common.loading')}</p>
             </CardContent>
           </Card>
         ) : isEmpty ? (
-          <Card>
+          <Card className="glass-regular">
             <CardContent className="flex flex-col items-center justify-center py-16 text-center">
               <Landmark className="h-12 w-12 text-muted-foreground/40 mb-4" />
                 <h3 className="text-lg font-semibold text-foreground mb-1">{t('tax.noProfile.title')}</h3>
@@ -461,7 +454,7 @@ export default function TaxOverviewPage() {
             {isVisible("summaryCards") && (
               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
                 {cards.map((c) => (
-                  <Card key={c.title} className="surface-elevated premium-frame">
+                  <Card key={c.title} className="glass-regular premium-frame">
                     <CardHeader className="flex flex-row items-center justify-between pb-2">
                       <CardTitle className="text-sm font-medium text-muted-foreground">{c.title}</CardTitle>
                       <c.icon className={`h-4 w-4 ${c.cls}`} />
@@ -533,7 +526,7 @@ export default function TaxOverviewPage() {
               )}
 
               {isVisible("taxRules") && (
-                <Card>
+                <Card className="glass-regular">
                   <CardHeader>
                       <CardTitle className="flex items-center gap-2">
                        {t('tax.rules.title')}
@@ -561,7 +554,7 @@ export default function TaxOverviewPage() {
 
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
               {isVisible("incomeBreakdown") && (
-                <Card>
+                <Card className="glass-regular">
                     <CardHeader>
                     <CardTitle>{t('tax.incomeBreakdown.title')}</CardTitle>
                     <CardDescription>{t('tax.incomeBreakdown.description')}</CardDescription>
@@ -609,7 +602,7 @@ export default function TaxOverviewPage() {
                 </Card>
               )}
 
-              <Card>
+              <Card className="glass-regular">
                 <CardHeader>
                       <CardTitle>{t('tax.profile.currentInputs')}</CardTitle>
                    <CardDescription>{t('tax.profile.currentInputs.desc')}</CardDescription>
@@ -688,7 +681,7 @@ export default function TaxOverviewPage() {
             {isVisible("yearComparison") && <YearComparisonCard />}
 
             {isVisible("yearlyOverview") && (
-              <Card>
+              <Card className="glass-regular">
                 <CardHeader>
                    <CardTitle>{t('tax.yearly.title')}</CardTitle>
                    <CardDescription>{t('tax.yearly.description')}</CardDescription>
@@ -742,7 +735,7 @@ export default function TaxOverviewPage() {
                 </CardContent>
               </Card>
             )}
-            <Card className="border-border/70">
+            <Card className="glass-regular border-border/70">
                 <CardHeader>
                 <CardTitle className="text-base">{t('tax.automation.title')}</CardTitle>
                 </CardHeader>

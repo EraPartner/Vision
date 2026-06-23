@@ -14,7 +14,7 @@ import { describe, it, beforeAll, afterAll } from "vitest";
 import { z } from "zod";
 import { server } from "@/test/msw/server";
 
-const LIVE_BASE = process.env.LIVE_API_BASE ?? "";
+const LIVE_BASE = (globalThis as { process?: { env?: Record<string, string | undefined> } }).process?.env?.LIVE_API_BASE ?? "";
 const enabled = Boolean(LIVE_BASE);
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
@@ -196,7 +196,7 @@ describe.skipIf(!enabled)("Live backend API contracts (E5)", () => {
 
     it("GET /api/settings returns object", async () => {
         const data = await get("/api/settings");
-        validate(z.record(z.unknown()), data, "GET /api/settings");
+        validate(z.record(z.string(), z.unknown()), data, "GET /api/settings");
     });
 
     it("GET /api/watchlist returns paginated shape", async () => {
@@ -283,7 +283,7 @@ describe.skipIf(!enabled)("Live backend API contracts (E5)", () => {
                 data: z.object({
                     accounts: z.array(z.unknown()),
                     total_net_position: z.number(),
-                    history: z.record(z.array(z.unknown())),
+                    history: z.record(z.string(), z.array(z.unknown())),
                     total_history: z.array(z.unknown()),
                 }),
                 meta: z.object({ source: MetaSourceSchema }).passthrough(),
@@ -436,10 +436,7 @@ describe.skipIf(!enabled)("Live backend API contracts (E5)", () => {
         validate(z.object({ items: z.array(z.unknown()) }), data, "GET /api/recipients/clusters");
     });
 
-    it("GET /api/info/transaction-summary returns null or summary", async () => {
-        const data = await get("/api/info/transaction-summary");
-        validate(z.unknown(), data, "GET /api/info/transaction-summary");
-    });
+    // (GET /api/info/transaction-summary removed — Phase 9 cutover deleted the route.)
 
     it("GET /api/market/news returns articles array", async () => {
         const data = await get("/api/market/news");

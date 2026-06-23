@@ -3,12 +3,12 @@ title: Backup Coverage Audit
 type: feature
 status: active
 date: 2026-04-27
-updated: 2026-05-05
-last_modified: 2026-05-05
-tags: [feature, backup, restore, database, filesystem, localStorage, bundle, encryption, schema-migration, phase-1, phase-2, phase-7, passphrase-modal, ux, aead, aes-256-gcm, rolling-cache, concurrent-backup-guard, pre-restore-confirmation, watchdog-pause]
-description: Authoritative audit of every persistence surface in Vision and its backup/restore coverage status. Phase 1+2 implements .visionbak bundle format with optional AES-256-CBC encryption (v1) or AES-256-GCM (v2, 2026-04-28), schema-safe restore, and localStorage hydration. Phase 7 (May 2026) hardens restore with user confirmation, concurrent-backup guard, and health watchdog pause.
+updated: 2026-06-11
+last_modified: 2026-06-11
+tags: [feature, backup, restore, database, filesystem, localStorage, bundle, encryption, schema-migration, phase-1, phase-2, phase-7, passphrase-modal, ux, aead, aes-256-gcm, rolling-cache, concurrent-backup-guard, pre-restore-confirmation, watchdog-pause, safe-storage, keychain, lazy-safeStorage, settings-dialog-fix, backup-path-revert-fix]
+description: Authoritative audit of every persistence surface in Vision and its backup/restore coverage status. Phase 1+2 implements .visionbak bundle format with optional AES-256-CBC encryption (v1) or AES-256-GCM (v2, 2026-04-28), schema-safe restore, and localStorage hydration. Phase 7 (May 2026) hardens restore with user confirmation, concurrent-backup guard, and health watchdog pause. safeStorage is now accessed lazily to avoid macOS Keychain prompts for users without a stored passphrase. 2026-06-11: fixes "backup path keeps reverting to default" — settings dialog now loads backup settings on open; Electron IPC handlers correctly unwrap the response envelope.
 aliases: [backup audit, coverage audit, backup coverage, visionbak, bundle format]
-related_code: ["packaging/electron/backup/bundle.js", "packaging/electron/main.js", "apps/node-backend/src/backup/coverage.js", "apps/frontend/src/lib/api/electron.ts", "apps/frontend/src/lib/localStorage-keys.ts", "apps/frontend/src/components/settings/tabs/BackupTab.tsx"]
+related_code: ["packaging/electron/backup/bundle.js", "packaging/electron/main.js", "apps/node-backend/src/backup/coverage.js", "apps/frontend/src/lib/api/electron.ts", "apps/frontend/src/lib/localStorage-keys.ts", "apps/frontend/src/components/settings/tabs/BackupTab.tsx", "apps/frontend/src/components/settings/DashboardSettingsDialog.tsx"]
 ---
 
 # Backup Coverage Audit
@@ -35,59 +35,18 @@ related_code: ["packaging/electron/backup/bundle.js", "packaging/electron/main.j
 
 ### 1. Postgres Database Tables
 
-All 31 user-data tables are included in the `pg_dump` SQL artifact inside every `.visionbak` bundle.
+All 44 user-data tables are included in the `pg_dump` SQL artifact inside every `.visionbak` bundle.
 
 **Source of truth:** `apps/node-backend/src/backup/coverage.js` → `BACKUP_COVERED_TABLES`
 
 **Enforced by:** `apps/node-backend/tests/backup-coverage.test.js`
 
-#### Core Transactional Data
+#### Aggregates
 
 | Table | Domain | Backup | Notes |
 |-------|--------|--------|-------|
-| `transactions` | Transactions | ✅ Included | Primary ledger |
-| `categories` | Categorisation | ✅ Included | |
-| `recipients` | Recipients | ✅ Included | |
-| `recipient_bank_accounts` | Recipients | ✅ Included | |
-| `recipient_match_patterns` | Recipients | ✅ Included | Auto-match rules |
-| `transaction_raw_references` | Import | ✅ Included | Raw↔canonical links |
-
-#### Planning & Recurring
-
-| Table | Domain | Backup | Notes |
-|-------|--------|--------|-------|
-| `planned_transactions` | Planning | ✅ Included | Recurring rules |
-| `planned_transaction_executions` | Planning | ✅ Included | Execution history |
-| `planned_transaction_loan_schedule` | Planning | ✅ Included | Loan amortisation |
-
-#### Raw Bank Import Tables
-
-| Table | Domain | Backup | Notes |
-|-------|--------|--------|-------|
-| `belfius_raw_transactions` | Import | ✅ Included | |
-| `revolut_raw_transactions` | Import | ✅ Included | |
-| `kbc_raw_transactions` | Import | ✅ Included | |
-| `sabb_raw_transactions` | Import | ✅ Included | |
-| `wise_raw_transactions` | Import | ✅ Included | |
-| `vision_raw_transactions` | Import | ✅ Included | |
-| `custom_raw_transactions` | Import | ✅ Included | |
-| `manual_raw_transactions` | Import | ✅ Included | |
-
-#### Portfolio & Investments
-
-| Table | Domain | Backup | Notes |
-|-------|--------|--------|-------|
-| `investments` | Portfolio | ✅ Included | Holdings |
-| `portfolio_transactions` | Portfolio | ✅ Included | Buy/sell history |
-| `asset_price_history` | Portfolio | ✅ Included | Price cache |
-| `watchlist` | Portfolio | ✅ Included | |
-
-#### Settings & Personalisation
-
-| Table | Domain | Backup | Notes |
-|-------|--------|--------|-------|
-| `user_settings` | Settings | ✅ Included | All app settings |
-| `saved_charts` | Charts | ✅ Included | Chart configurations |
+| `agg_recipient_totals` | Aggregates | ✅ Included | |
+| `agg_split_outstanding` | Aggregates | ✅ Included | |
 
 #### AI & Conversations
 
@@ -96,27 +55,65 @@ All 31 user-data tables are included in the `pg_dump` SQL artifact inside every 
 | `ai_conversations` | AI Chat | ✅ Included | |
 | `ai_messages` | AI Chat | ✅ Included | |
 
-#### Attachments
+#### Attachments & Reference
 
 | Table | Domain | Backup | Notes |
 |-------|--------|--------|-------|
+| `asset_price_history` | Portfolio | ✅ Included | Price cache |
 | `attachments` | Attachments | ✅ Included | Metadata rows |
 
-#### Reference / Cache Data
+#### Raw Bank Import Tables
 
 | Table | Domain | Backup | Notes |
 |-------|--------|--------|-------|
-| `exchange_rates` | FX | ✅ Included | Rate cache |
+| `belfius_raw_transactions` | Import | ✅ Included | |
 | `belgian_inflation_rates` | Tax | ✅ Included | |
 | `cashflow_forecast_accuracy` | Forecasting | ✅ Included | Backtest metrics |
 | `cashflow_forecast_mc` | Forecasting | ✅ Included | Month-view Monte Carlo cache |
 | `cashflow_forecast_mc_rolling` | Forecasting | ✅ Included | Rolling-window Monte Carlo cache |
+| `categories` | Categorisation | ✅ Included | |
+| `custom_parser_configs` | Import | ✅ Included | Custom bank parser configs |
+| `custom_raw_transactions` | Import | ✅ Included | |
+| `exchange_rates` | FX | ✅ Included | Rate cache |
+| `import_batches` | Import | ✅ Included | Import batch records |
+| `import_staging_rows` | Import | ✅ Included | Staging rows before commit |
+| `investments` | Portfolio | ✅ Included | Holdings |
+| `kbc_raw_transactions` | Import | ✅ Included | |
+| `manual_raw_transactions` | Import | ✅ Included | |
 
-#### Operational
+#### Planning & Recurring
 
 | Table | Domain | Backup | Notes |
 |-------|--------|--------|-------|
+| `planned_transaction_executions` | Planning | ✅ Included | Execution history |
+| `planned_transaction_loan_schedule` | Planning | ✅ Included | Loan amortisation |
+| `planned_transaction_tags` | Planning | ✅ Included | |
+| `planned_transactions` | Planning | ✅ Included | Recurring rules |
+| `portfolio_performance_snapshots` | Portfolio | ✅ Included | Performance snapshots |
+| `portfolio_transactions` | Portfolio | ✅ Included | Buy/sell history |
 | `provider_health` | Observability | ✅ Included | Provider status history |
+
+#### Core Transactional Data
+
+| Table | Domain | Backup | Notes |
+|-------|--------|--------|-------|
+| `recipient_bank_accounts` | Recipients | ✅ Included | |
+| `recipient_match_patterns` | Recipients | ✅ Included | Auto-match rules |
+| `recipients` | Recipients | ✅ Included | |
+| `revolut_raw_transactions` | Import | ✅ Included | |
+| `sabb_raw_transactions` | Import | ✅ Included | |
+| `saved_charts` | Charts | ✅ Included | Chart configurations |
+| `split_audit` | Splits | ✅ Included | Split change audit log |
+| `split_payments` | Splits | ✅ Included | |
+| `tags` | Tags | ✅ Included | |
+| `transaction_raw_references` | Import | ✅ Included | Raw↔canonical links |
+| `transaction_splits` | Splits | ✅ Included | |
+| `transaction_tags` | Tags | ✅ Included | |
+| `transactions` | Transactions | ✅ Included | Primary ledger |
+| `user_settings` | Settings | ✅ Included | All app settings |
+| `vision_raw_transactions` | Import | ✅ Included | |
+| `watchlist` | Portfolio | ✅ Included | |
+| `wise_raw_transactions` | Import | ✅ Included | |
 
 #### Excluded Tables
 
@@ -158,6 +155,7 @@ Captured as `frontend-state.json` in the bundle. Restored after DB load triggers
 | `dismissed_upcoming_planned_payments` | Dismissed upcoming-payment IDs | ✅ Included |
 | `dismissed_recurring_patterns` | Dismissed recurring-pattern keys | ✅ Included |
 | `vision_dashboardSettings` | Legacy dashboard layout | ❌ Excluded — SettingsContext migrates to DB and removes on read; no live value to back up |
+| `vision.palette.recents` | Command palette recent routes (last ~5 visited) | ❌ Excluded — Ephemeral navigation state; registered in `LOCAL_STORAGE_EXCLUDED_KEYS` (Premium v3, ADR-071) |
 
 ---
 
@@ -167,8 +165,36 @@ Captured as `frontend-state.json` in the bundle. Restored after DB load triggers
 |---------|--------|-------|
 | Materialised views | ❌ Excluded | Re-built at runtime by `materializedViewService.js` |
 | Price provider caches (HTTP) | ❌ Excluded | Re-fetched on demand |
-| Electron `safeStorage` passphrase | ❌ Excluded | User re-enters passphrase post-restore |
+| Electron `safeStorage` passphrase | ❌ Excluded | User re-enters passphrase post-restore. safeStorage is accessed lazily — only when a passphrase blob is already stored — to avoid macOS Keychain prompts for users who have not configured backup encryption. |
 | `settings.json` (Electron-local) | ❌ Excluded | Contains backup dir config + deviceId; meaningless on new machine |
+
+---
+
+## Passphrase Storage & OS Keychain
+
+When the user configures backup encryption, the passphrase is encrypted via Electron's `safeStorage` API and stored as `backupPassphraseEncrypted` in `settings.json`. On macOS, `safeStorage` delegates to the system Keychain under the entry **"Vision Safe Storage"**.
+
+### Lazy Keychain Access
+
+Because Vision ships ad-hoc unsigned (no Developer ID certificate), macOS treats the code identity as unstable. Accessing `safeStorage` at every launch would trigger a login-password prompt even for users who have never configured a passphrase. The Electron main process avoids this:
+
+- **`getBackupPassphrase()`** reads `backupPassphraseEncrypted` from `settings.json` *before* calling any `safeStorage` API. If no blob is present and the `VISION_BACKUP_PASSPHRASE` env var is absent, it returns `undefined` without touching the keychain. Backup-on-quit therefore never prompts for users who have not configured encryption.
+- **`getBackupPassphraseStatus()`** (IPC: `backup:get-encryption-status`, used by the Backup settings tab) only calls `safeStorage.isEncryptionAvailable()` when a passphrase blob is already stored. With nothing stored, it reports availability from the API's mere presence (no actual keychain probe). The real check runs inside `setBackupPassphrase()` when the user actively opts in.
+
+### Keychain Prompts on Unsigned Builds
+
+Users who **do** store a passphrase will see macOS password prompts on an unsigned build because macOS re-challenges an unstable code identity on each access.
+
+**Workarounds:**
+
+| Option | Description |
+|--------|-------------|
+| **Always Allow** | In the Keychain dialog, click "Always Allow" to suppress future challenges for Vision Safe Storage |
+| `VISION_BACKUP_PASSPHRASE` env var | Bypasses `safeStorage` entirely; the shell reads the passphrase from the environment variable instead. Useful for automation, CI, or users who want no Keychain involvement |
+| No stored passphrase | If you do not configure backup encryption, no Keychain prompts occur at all |
+
+> [!note]
+> `safeStorage` only stores and retrieves the *passphrase text*. The backup encryption key itself is always derived via scrypt from the passphrase; the Keychain never holds the raw key.
 
 ---
 
@@ -287,6 +313,27 @@ vision_backup_{deviceId}_{timestamp}.visionbak.enc ← Encrypted archive (v1 or 
 2. **localStorage coverage** — asserts all keys in `LOCAL_STORAGE_KEYS` are referenced in the bundle snapshot logic.
 
 Adding a table or localStorage key without updating the registries causes a CI failure.
+
+---
+
+## Bug Fix: Backup Path Keeps Reverting to Default (2026-06-11)
+
+**Symptom:** After setting a custom backup directory and closing then reopening the Settings dialog, the backup path would revert to the default. Scheduled backups therefore ran to the wrong location.
+
+**Root cause (two independent defects):**
+
+1. **Settings dialog clobber.** `DashboardSettingsDialog.tsx` persisted the Backup tab's values (path, schedule, enabled flag) on every Save click, even when the Backup tab had never been opened in that dialog session. The tab's default React state (empty string / false) overwrote the saved settings.
+
+2. **Electron IPC envelope unwrap.** The `backup:load-settings` and `will-quit` IPC handlers in `packaging/electron/main.js` read the backup settings from the API response as `data.value`, but the API returns the standard `{ ok: true, data: { key, value } }` envelope — so the handlers were reading `undefined` instead of the actual stored value. This meant the in-memory settings object was never populated from the DB, and the DB branch of the load path was effectively a no-op.
+
+**Fix:**
+
+- `DashboardSettingsDialog.tsx` now loads backup settings from the backend when the dialog opens, using a `trusted` flag to prevent a stale in-flight response from overwriting user edits made after open.
+- `BackupTab.tsx` initialises from the loaded values rather than empty state.
+- `packaging/electron/main.js` IPC handlers unwrap `response.data.value` correctly (matching the `{ ok, data: { key, value } }` envelope shape).
+- `settings.json` (Electron-local) mirrors the raw stored values rather than the unwrapped result, so the file accurately reflects what the backend returned.
+
+**Sources:** [[apps/frontend/src/components/settings/DashboardSettingsDialog.tsx]], [[apps/frontend/src/components/settings/tabs/BackupTab.tsx]], [[packaging/electron/main.js]]
 
 ---
 

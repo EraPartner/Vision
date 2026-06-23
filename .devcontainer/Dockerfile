@@ -1,4 +1,4 @@
-# Vision sandbox image — devcontainer-FREE (built by docker compose).
+# Vision sandbox image — devcontainer-FREE (built by `container build`).
 #
 # Self-contained twin of ./Dockerfile. The devcontainer build relied on
 # devcontainer FEATURES (node:1, python:1, anthropics/claude-code:1.0) layered by
@@ -7,7 +7,7 @@
 # hardening, egress proxy, baked scripts) is identical to Dockerfile.
 #
 # Hardened for Claude CLI in --dangerously-skip-permissions mode:
-#   - --security-opt=no-new-privileges (no sudo, no setuid escalation)
+#   - no privilege escalation: setuid/setgid bits stripped, no sudo (apple/container has no --security-opt)
 #   - a root ENTRYPOINT does all privileged setup (perms, Postgres, proxy,
 #     firewall), then drops to a keep-alive
 #   - all egress forced through an in-container squid proxy (hostname allowlist)
@@ -68,6 +68,10 @@ ARG NODE_VERSION=24.15.0
 RUN set -eux; \
     case "$(dpkg --print-architecture)" in amd64) na=x64 ;; arm64) na=arm64 ;; *) exit 1 ;; esac; \
     curl -fsSLo /tmp/node.tar.xz "https://nodejs.org/dist/v${NODE_VERSION}/node-v${NODE_VERSION}-linux-${na}.tar.xz"; \
+    curl -fsSLo /tmp/node-SHASUMS256.txt "https://nodejs.org/dist/v${NODE_VERSION}/SHASUMS256.txt"; \
+    want="$(grep " node-v${NODE_VERSION}-linux-${na}.tar.xz\$" /tmp/node-SHASUMS256.txt | cut -d' ' -f1)"; \
+    echo "${want}  /tmp/node.tar.xz" | sha256sum -c -; \
+    rm /tmp/node-SHASUMS256.txt; \
     tar -xJf /tmp/node.tar.xz -C /usr/local --strip-components=1 --no-same-owner \
       --exclude='*/CHANGELOG.md' --exclude='*/LICENSE' --exclude='*/README.md'; \
     rm /tmp/node.tar.xz; \
@@ -88,6 +92,10 @@ RUN set -eux; \
     url="https://github.com/astral-sh/python-build-standalone/releases/download/${PY_RELEASE}/cpython-${PY_VERSION}+${PY_RELEASE}-${pa}-unknown-linux-gnu-install_only.tar.gz"; \
     echo "python-build-standalone: $url"; \
     curl -fsSLo /tmp/py.tar.gz "$url"; \
+    curl -fsSLo /tmp/py-SHA256SUMS "https://github.com/astral-sh/python-build-standalone/releases/download/${PY_RELEASE}/SHA256SUMS"; \
+    want="$(grep " cpython-${PY_VERSION}+${PY_RELEASE}-${pa}-unknown-linux-gnu-install_only.tar.gz\$" /tmp/py-SHA256SUMS | cut -d' ' -f1)"; \
+    echo "${want}  /tmp/py.tar.gz" | sha256sum -c -; \
+    rm /tmp/py-SHA256SUMS; \
     mkdir -p /opt/python; \
     tar -xzf /tmp/py.tar.gz --strip-components=1 -C /opt/python; \
     rm /tmp/py.tar.gz; \
@@ -102,17 +110,28 @@ RUN set -eux; \
 # ~/.claude, and Claude starts unconfigured. Covers mid-session pip builds too.
 ENV CC=gcc CXX=g++
 
-# Global npm prefix -> a dev-owned dir so runtime `npm i -g` (safe-chain) works.
+# Build-time global prefix for the agent CLI (claude). Kept ROOT-owned (see the
+# claude install below): the unprivileged dev user must NOT be able to overwrite
+# the pinned claude/npm binaries post-launch, or the verify-pins launch gate is
+# bypassable (it fingerprints exactly these paths). Runtime `npm i -g` (safe-chain)
+# uses a SEPARATE dev-owned prefix, /home/dev/.npm-global, set after the install.
+# Root prefix is FIRST on PATH so claude always resolves to the pinned copy.
 ENV NPM_CONFIG_PREFIX=/usr/local/share/npm-global
-ENV PATH=/usr/local/share/npm-global/bin:/opt/python/bin:/usr/local/bin:$PATH
+ENV PATH=/usr/local/share/npm-global/bin:/home/dev/.npm-global/bin:/opt/python/bin:/usr/local/bin:$PATH
 # Login shells reset PATH via /etc/profile; re-add the tool dirs for them too.
-RUN printf 'export PATH="/usr/local/share/npm-global/bin:/opt/python/bin:/usr/local/bin:$PATH"\n' \
+RUN printf 'export PATH="/usr/local/share/npm-global/bin:/home/dev/.npm-global/bin:/opt/python/bin:/usr/local/bin:$PATH"\n' \
       > /etc/profile.d/00-sandbox-path.sh
 
 # --- Claude Code CLI (replaces the `anthropics/claude-code:1.0` feature) -----
-RUN npm install -g @anthropic-ai/claude-code \
-  && claude --version \
-  && chown -R dev:dev /usr/local/share/npm-global
+# Installed as root into the root-owned global prefix and deliberately NOT chown'd
+# to dev — so the pinned claude/npm cannot be replaced by the dev user.
+RUN npm install -g @anthropic-ai/claude-code@2.1.173 \
+  && claude --version
+
+# Runtime global installs (safe-chain in post-create) go to a SEPARATE dev-owned
+# prefix, so they never need write access to the pinned root prefix above.
+RUN install -d -o dev -g dev -m 0755 /home/dev/.npm-global
+ENV NPM_CONFIG_PREFIX=/home/dev/.npm-global
 
 # Bake privileged scripts into the image (root-owned, source-only repo copies).
 COPY init-firewall.sh /usr/local/sbin/egress-firewall
@@ -122,6 +141,10 @@ COPY squid.conf       /etc/squid/squid.conf
 COPY allowlist.txt    /etc/squid/allowlist.txt
 RUN chmod 0755 /usr/local/sbin/egress-firewall /usr/local/sbin/vision-perms-fix /usr/local/sbin/vision-entrypoint \
   && chown root:root /usr/local/sbin/egress-firewall /usr/local/sbin/vision-perms-fix /usr/local/sbin/vision-entrypoint
+
+# Launch-integrity check (the binary fingerprint manifest is baked below).
+COPY bin/verify-pins /usr/local/bin/vision-verify-pins
+RUN chmod 0755 /usr/local/bin/vision-verify-pins
 
 # Inbound ports this project publishes (read by egress-firewall for INPUT ACCEPT).
 RUN mkdir -p /etc/egress && printf '8080\n3002\n' > /etc/egress/inbound-ports
@@ -143,12 +166,29 @@ RUN mkdir -p /var/lib/postgresql && chown postgres:postgres /var/lib/postgresql
 RUN install -d -o dev -g dev -m 0700 /home/dev/.claude \
  && install -d -o dev -g dev -m 0755 /home/dev/.config /home/dev/.config/gh
 
+# Pin the agent's executables: record SHA-256 so vision-verify-pins can
+# fail-closed on drift at launch. A legit tool upgrade changes these — rebuild.
+RUN set -eux; \
+    pinfile=/usr/local/share/vision/binary-pins.txt; \
+    mkdir -p /usr/local/share/vision; \
+    : > "$pinfile"; \
+    for b in node npm claude gh git python3; do \
+      p="$(command -v "$b")"; \
+      h="$(sha256sum "$p" | awk '{print $1}')"; \
+      printf '%s\t%s\t%s\n' "$b" "$p" "$h" >> "$pinfile"; \
+    done; \
+    chmod 0644 "$pinfile"; \
+    cat "$pinfile"
+
 # Strip ALL setuid/setgid bits image-wide (defense-in-depth).
 RUN find / -xdev -type f -perm /6000 -exec chmod -s {} + 2>/dev/null || true
 
 WORKDIR /workspaces/Vision
 
 # Health: proxy running, firewall default-deny, Postgres accepting connections.
+# NOTE: docker-only. apple/container 1.0.0 has no healthcheck runner, so this
+#   HEALTHCHECK is a no-op under the current runtime; real supervision is the
+#   entrypoint keep-alive loop (squid auto-restart). Kept for parity / docker use.
 HEALTHCHECK --interval=30s --timeout=5s --start-period=90s --retries=3 \
   CMD bash -c 'pgrep -x squid >/dev/null && /usr/sbin/iptables -S OUTPUT 2>/dev/null | grep -q "^-P OUTPUT DROP" && pg_isready -h 127.0.0.1 -p 5432 -q'
 

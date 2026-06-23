@@ -169,8 +169,8 @@ export function TaxProfileDialog({ trigger, initialStep, targetYear }: TaxProfil
                 </div>
 
                 {editingHistorical && !isFiled && (
-                    <Alert className="mb-4 border-amber-500/40 bg-amber-500/5">
-                        <History className="h-4 w-4 text-amber-600" />
+                    <Alert className="mb-4 border-warning/40 bg-warning/5">
+                        <History className="h-4 w-4 text-warning" />
                         <AlertTitle>{t('tax.historical.editWarning.title')}</AlertTitle>
                         <AlertDescription>
                             {t('tax.historical.editWarning.desc', { year: String(effectiveTargetYear) })}
@@ -179,8 +179,8 @@ export function TaxProfileDialog({ trigger, initialStep, targetYear }: TaxProfil
                 )}
 
                 {isFiled && (
-                    <Alert className="mb-4 border-amber-500/60 bg-amber-500/10">
-                        <Lock className="h-4 w-4 text-amber-700" />
+                    <Alert className="mb-4 border-warning/60 bg-warning/10">
+                        <Lock className="h-4 w-4 text-warning" />
                         <AlertTitle>{t('tax.historical.filedLock.title')}</AlertTitle>
                         <AlertDescription className="flex flex-col gap-3">
                             <span className="text-xs text-muted-foreground">
@@ -198,7 +198,7 @@ export function TaxProfileDialog({ trigger, initialStep, targetYear }: TaxProfil
                                         {t('tax.historical.filedLock.amendCta')}
                                     </Button>
                                 ) : (
-                                    <span className="text-xs font-medium text-amber-700">
+                                    <span className="text-xs font-medium text-warning">
                                         {t('tax.historical.filedLock.amendActive')}
                                     </span>
                                 )}

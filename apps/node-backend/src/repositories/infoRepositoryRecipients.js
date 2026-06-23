@@ -1,5 +1,11 @@
 /**
  * Info sub-repository: recipient / merchant insights.
+ *
+ * Internal transfers (ADR-083) are ALWAYS excluded here (`is_transfer = false`),
+ * independent of the `includeTransfers` cash-flow toggle. These surfaces are a
+ * merchant-spend lens — a checking->savings move has no merchant and would only
+ * be noise in "top merchants" / month-over-month, so the toggle (which governs
+ * income/spending cash-flow aggregates) deliberately does not apply.
  */
 
 import { query } from '../database/connection.js';
@@ -18,7 +24,21 @@ export const recipientInsightsRepository = {
    * - spending frequency & average per recipient
    * - month-over-month comparison alerts ("You spent X% more at …")
    */
-  async getRecipientInsights(targetCurrency = 'EUR') {
+  async getRecipientInsights(targetCurrency = 'EUR', { excludedCategoryIds = [], excludedRecipientIds = [] } = {}) {
+    // Same exclusion semantics as the dashboard / statistics endpoints: drop
+    // hidden categories (by effective category) and excluded recipients (rolled
+    // up to the primary recipient). Built once and reused by both queries below
+    // since neither carries any other bound parameters.
+    const validCatIds = (excludedCategoryIds || []).filter(id => Number.isInteger(id) && id > 0 && id < 2147483647);
+    const validRecIds = (excludedRecipientIds || []).filter(id => Number.isInteger(id) && id > 0 && id < 2147483647);
+    const params = [];
+    const catExclude = validCatIds.length > 0
+      ? `AND COALESCE(t.category_id, r.default_category_id, pr.default_category_id) NOT IN (${validCatIds.map(id => { params.push(id); return `$${params.length}`; }).join(',')})`
+      : '';
+    const recExclude = validRecIds.length > 0
+      ? `AND COALESCE(pr.id, r.id) NOT IN (${validRecIds.map(id => { params.push(id); return `$${params.length}`; }).join(',')})`
+      : '';
+
     const topRawResult = await query(`
       SELECT
         COALESCE(pr.name, r.name)   AS recipient_name,
@@ -33,8 +53,11 @@ export const recipientInsightsRepository = {
       LEFT JOIN recipients pr ON r.primary_recipient_id = pr.id
       WHERE t.amount < 0
         AND t.is_active = true
+        AND t.is_transfer = false
+        ${catExclude}
+        ${recExclude}
       GROUP BY COALESCE(pr.id, r.id), COALESCE(pr.name, r.name), t.currency
-    `);
+    `, params);
 
     const topConverted = await convertRowsToEur(
       mapRowsForAmountConversion(topRawResult.rows, 'total_abs_amount', false),
@@ -83,9 +106,20 @@ export const recipientInsightsRepository = {
       LEFT JOIN recipients pr ON r.primary_recipient_id = pr.id
       WHERE t.amount < 0
         AND t.is_active = true
+        AND t.is_transfer = false
         AND t.date >= (DATE_TRUNC('month', CURRENT_DATE) - INTERVAL '1 month')
+        -- Like-for-like windows: the current month is month-to-date, so cap the
+        -- previous month at the SAME day-of-month. Otherwise (partial current vs
+        -- full previous) every recipient shows a spurious decrease early in the month.
+        AND (
+          t.date >= DATE_TRUNC('month', CURRENT_DATE)
+          OR t.date <= (DATE_TRUNC('month', CURRENT_DATE) - INTERVAL '1 month')::date
+                       + (CURRENT_DATE - DATE_TRUNC('month', CURRENT_DATE)::date)
+        )
+        ${catExclude}
+        ${recExclude}
       GROUP BY COALESCE(pr.id, r.id), COALESCE(pr.name, r.name), TO_CHAR(t.date, 'YYYY-MM'), t.currency
-    `);
+    `, params);
 
     const momConverted = await convertRowsToEur(
       mapRowsForAmountConversion(momRawResult.rows, 'abs_amount', false),
@@ -127,33 +161,48 @@ export const recipientInsightsRepository = {
     return { topMerchants, monthOverMonth };
   },
 
-  async getRecipientByYear(targetCurrency = 'EUR', excludedRecipientIds = []) {
+  async getRecipientByYear(targetCurrency = 'EUR', excludedRecipientIds = [], excludedCategoryIds = []) {
     const validRecIds = (excludedRecipientIds || []).filter(id => Number.isInteger(id) && id > 0 && id < 2147483647);
+    const validCatIds = (excludedCategoryIds || []).filter(id => Number.isInteger(id) && id > 0 && id < 2147483647);
 
     const params = [];
     const recExclude = validRecIds.length > 0
       ? `AND COALESCE(r.primary_recipient_id, t.recipient_id) NOT IN (${validRecIds.map(id => { params.push(id); return `$${params.length}`; }).join(',')})`
       : '';
+    // Category exclusion (incl. hidden categories) must apply here too, or the
+    // year-filtered Top Recipients view contradicts the "All years" view (which
+    // does exclude them). 3-level alias-aware COALESCE matches the canonical resolver.
+    const catExclude = validCatIds.length > 0
+      ? `AND COALESCE(t.category_id, r.default_category_id, pr.default_category_id) NOT IN (${validCatIds.map(id => { params.push(id); return `$${params.length}`; }).join(',')})`
+      : '';
 
+    // Aggregate in SQL per (recipient, year, date, currency) instead of streaming
+    // every expense row to JS. amount < 0 is pinned, so ABS distributes over the
+    // same-sign SUM and converting at each row's date rate is identical to the
+    // old per-transaction loop; cnt preserves transactionCount.
     const sql = `
       SELECT
         EXTRACT(YEAR FROM t.date)::int AS year,
         COALESCE(pr.id, r.id) AS recipient_id,
         COALESCE(pr.name, r.name) AS name,
-        t.amount, t.currency, t.date
+        t.date, t.currency,
+        SUM(ABS(t.amount)) AS abs_amount,
+        COUNT(*) AS cnt
       FROM transactions t
       LEFT JOIN recipients r ON t.recipient_id = r.id
       LEFT JOIN recipients pr ON r.primary_recipient_id = pr.id
       WHERE t.is_active = true
         AND t.amount < 0
+        AND t.is_transfer = false
         ${recExclude}
-      ORDER BY t.date
+        ${catExclude}
+      GROUP BY EXTRACT(YEAR FROM t.date)::int, COALESCE(pr.id, r.id), COALESCE(pr.name, r.name), t.date, t.currency
     `;
 
     const result = await query(sql, params);
 
     const converted = await convertRowsToEur(
-      mapRowsForAmountConversion(result.rows, 'amount', false),
+      mapRowsForAmountConversion(result.rows, 'abs_amount', false),
       targetCurrency,
       { useHistoricalRatesByDate: true, dateField: 'date' }
     );
@@ -162,14 +211,15 @@ export const recipientInsightsRepository = {
     for (const row of converted) {
       const year = String(row.year);
       const rid = row.recipient_id;
-      const absEur = Math.abs(row.amount_eur);
+      const eur = Math.abs(row.amount_eur);
+      const cnt = parseInt(row.cnt, 10) || 0;
 
       if (!yearRecMap[year]) yearRecMap[year] = {};
       if (!yearRecMap[year][rid]) {
         yearRecMap[year][rid] = { recipientId: rid, name: row.name, totalSpend: 0, transactionCount: 0 };
       }
-      yearRecMap[year][rid].totalSpend += absEur;
-      yearRecMap[year][rid].transactionCount++;
+      yearRecMap[year][rid].totalSpend += eur;
+      yearRecMap[year][rid].transactionCount += cnt;
     }
 
     const recipientsByYear = {};
@@ -183,7 +233,7 @@ export const recipientInsightsRepository = {
     return { recipientsByYear };
   },
 
-  async getRecipientPivot(excludedRecipientIds = [], targetCurrency = 'EUR', { bucket = 'monthly', startDate = null, endDate = null } = {}) {
+  async getRecipientPivot(excludedRecipientIds = [], targetCurrency = 'EUR', { bucket = 'monthly', startDate = null, endDate = null, recipientIds = null } = {}) {
     const validRecIds = (excludedRecipientIds || []).filter(id => Number.isInteger(id) && id > 0 && id < 2147483647);
 
     const params = [];
@@ -198,26 +248,53 @@ export const recipientInsightsRepository = {
     if (endDate) { params.push(endDate); dateFilters.push(`t.date <= $${params.length}`); }
     const dateWhere = dateFilters.length > 0 ? dateFilters.join(' AND ') : '';
 
+    // Optional inclusion narrowing: the only consumer (saved CustomChart) renders
+    // a handful of selected recipients, so resolve their alias members and scan
+    // ONLY those rows (hits idx_transactions_recipient_date_active) instead of
+    // every active expense row for all recipients. See ADR-041 amendment.
+    let recipientInclude = '';
+    const validIncludeIds = Array.isArray(recipientIds)
+      ? recipientIds.filter(id => Number.isInteger(id) && id > 0 && id < 2147483647)
+      : [];
+    if (validIncludeIds.length > 0) {
+      const memberRes = await query(
+        `SELECT id FROM recipients WHERE id = ANY($1::int[]) OR primary_recipient_id = ANY($1::int[])`,
+        [validIncludeIds],
+      );
+      const memberIds = memberRes.rows.map((row) => Number(row.id));
+      if (memberIds.length === 0) return { recipientPivot: {} };
+      params.push(memberIds);
+      recipientInclude = `AND t.recipient_id = ANY($${params.length}::int[])`;
+    }
+
+    // Aggregate per (recipient, period, date, currency) in SQL. amount < 0 is
+    // pinned so ABS distributes over the same-sign SUM; per-date conversion is
+    // identical to the old per-row loop while collapsing same-day repeat
+    // purchases at one merchant. cnt preserves transactionCount.
     const sql = `
       SELECT
         COALESCE(pr.id, r.id)       AS recipient_id,
         COALESCE(pr.name, r.name)   AS recipient_name,
         ${periodExpr}               AS period,
-        t.amount, t.currency, t.date
+        t.date, t.currency,
+        SUM(ABS(t.amount))          AS abs_amount,
+        COUNT(*)                    AS cnt
       FROM transactions t
       JOIN recipients r ON t.recipient_id = r.id
       LEFT JOIN recipients pr ON r.primary_recipient_id = pr.id
       WHERE t.is_active = true
         AND t.amount < 0
+        AND t.is_transfer = false
         ${recExclude}
+        ${recipientInclude}
         ${dateWhere ? `AND ${dateWhere}` : ''}
-      ORDER BY t.date
+      GROUP BY COALESCE(pr.id, r.id), COALESCE(pr.name, r.name), ${periodExpr}, t.date, t.currency
     `;
 
     const result = await query(sql, params);
 
     const converted = await convertRowsToEur(
-      mapRowsForAmountConversion(result.rows, 'amount', false),
+      mapRowsForAmountConversion(result.rows, 'abs_amount', false),
       targetCurrency,
       { useHistoricalRatesByDate: true, dateField: 'date' }
     );
@@ -226,14 +303,15 @@ export const recipientInsightsRepository = {
     for (const row of converted) {
       const period = row.period;
       const rid = parseInt(row.recipient_id, 10);
-      const absEur = Math.abs(row.amount_eur);
+      const eur = Math.abs(row.amount_eur);
+      const cnt = parseInt(row.cnt, 10) || 0;
 
       if (!periodRecMap[period]) periodRecMap[period] = {};
       if (!periodRecMap[period][rid]) {
         periodRecMap[period][rid] = { recipientId: rid, name: row.recipient_name, total: 0, transactionCount: 0 };
       }
-      periodRecMap[period][rid].total += absEur;
-      periodRecMap[period][rid].transactionCount++;
+      periodRecMap[period][rid].total += eur;
+      periodRecMap[period][rid].transactionCount += cnt;
     }
 
     const recipientPivot = {};

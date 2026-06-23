@@ -3,10 +3,10 @@ title: Custom Hooks
 type: component
 status: active
 date: 2026-04-23
-updated: 2026-05-08
-last_modified: 2026-05-08
-tags: [components, hooks, react-query, zustand, form-state, data-table, phase-4, phase-13, phase-c, phase-d, i18n, notifications, export-filters, bug-hunt-2026-05-05, bug-hunt-2026-05-06, bug-hunt-2026-05-08, mount-guard, query-key-fix, prefetch, memoization, useCallback, parseLocaleNumber, currency-utilities]
-description: Custom React hooks for data fetching and state management. Includes toast notifications for mutations via i18n keys. Phase 13 adds useBankAccounts hook for export filtering. May 2026 bug hunt adds mount guard to usePlannedPayments, fixes queryKey mismatch in usePortfolioPrefetch, and documents parseLocaleNumber utility for locale-aware number parsing.
+updated: 2026-06-10
+last_modified: 2026-06-10
+tags: [components, hooks, react-query, zustand, form-state, data-table, phase-4, phase-13, phase-c, phase-d, i18n, notifications, export-filters, bug-hunt-2026-05-05, bug-hunt-2026-05-06, bug-hunt-2026-05-08, mount-guard, query-key-fix, prefetch, memoization, useCallback, parseLocaleNumber, currency-utilities, exclusion-ids, ssrf-correctness, loading-states, error-states, isError, refetch, recipient-insights-filter, optimistic-updates, optimistic-create, liquid-glass-v2, premium-v3, june-2026]
+description: Custom React hooks for data fetching and state management. Includes toast notifications for mutations via i18n keys. Phase 13 adds useBankAccounts hook for export filtering. May 2026 bug hunt adds mount guard to usePlannedPayments, fixes queryKey mismatch in usePortfolioPrefetch, and documents parseLocaleNumber utility for locale-aware number parsing. 2026-05-29 adds useExcludedIds as a shared exclusion-resolution hook and exposes isLoading/isError/error/refetch from usePortfolio so asset pages can distinguish loading/error from empty. 2026-06-01: useStatistics adds recipientInsightsFilteredQuery so the all-years Top Recipients chart reacts to exclusion toggles. 2026-06-10: useUpdateTransaction/useDeleteTransaction made optimistic (ADR-070 Tier 5). 2026-06-10 Premium v3 (ADR-071): useCreateTransaction made optimistic (temp negative-id row, server swap, rollback, onSettled invalidate; 6 tests total). 2026-06-10 V11: useUpcomingPlannedPayments — shared "due in next 7 days" query + module-level dismissed-ID store (useSyncExternalStore, persists to localStorage).
 related_code: ["apps/frontend/src/hooks"]
 ---
 
@@ -35,6 +35,7 @@ Vision uses custom hooks for data fetching, state management, and reusable logic
 | `useBankAccounts()` | Distinct bank account IBANs (Phase 13) | [[apps/frontend/src/hooks/useBankAccounts.ts\|useBankAccounts.ts]] |
 | `usePortfolio()` | Investment portfolio | [[apps/frontend/src/hooks/usePortfolio.ts\|usePortfolio.ts]] |
 | `usePlannedPayments()` | Planned transactions | [[apps/frontend/src/hooks/usePlannedPayments.ts\|usePlannedPayments.ts]] |
+| `useUpcomingPlannedPayments()` | Shared "due next 7 days" query + dismissed-ID store (V11) | [[apps/frontend/src/hooks/useUpcomingPlannedPayments.ts\|useUpcomingPlannedPayments.ts]] |
 | `useStatistics()` | Analytics data | [[apps/frontend/src/hooks/useStatistics.ts\|useStatistics.ts]] |
 | `useSplits()` | Debt tracking | [[apps/frontend/src/hooks/useSplits.ts\|useSplits.ts]] |
 | `useSavedCharts()` | Saved chart configs | [[apps/frontend/src/hooks/useSavedCharts.ts\|useSavedCharts.ts]] |
@@ -45,6 +46,7 @@ Vision uses custom hooks for data fetching, state management, and reusable logic
 |------|-------------|------|
 | `useWidgetVisibility()` | Widget visibility | [[apps/frontend/src/hooks/useWidgetVisibility.ts\|useWidgetVisibility.ts]] |
 | `useFilteredDashboardStats()` | Filtered dashboard data | [[apps/frontend/src/hooks/useFilteredDashboardStats.ts\|useFilteredDashboardStats.ts]] |
+| `useExcludedIds(scope)` | Single source of truth for excluded category/recipient IDs (2026-05-29) | [[apps/frontend/src/hooks/useExcludedIds.ts\|useExcludedIds.ts]] |
 | `useConfirmDialog()` | Confirmation dialogs | [[apps/frontend/src/hooks/useConfirmDialog.tsx\|useConfirmDialog.tsx]] |
 | `useFormState()` | Generic typed form state with dirty tracking (Phase 4) | [[apps/frontend/src/hooks/useFormState.ts\|useFormState.ts]] |
 
@@ -75,6 +77,34 @@ Vision uses custom hooks for data fetching, state management, and reusable logic
 
 Hook for managing transactions.
 
+### Optimistic Create (Premium v3, June 2026, ADR-071)
+
+`useCreateTransaction` is now optimistic as of the Premium v3 batch (ADR-071):
+
+- **Pattern**: insert temp row → swap on success → remove + rollback on error → `onSettled` invalidate.
+- `onMutate`: generates a temp id (`-Date.now()`) and inserts the new row at the head of all plain `['transactions', params]` caches via `queryClient.setQueriesData`.
+- `onSuccess`: swaps the temp row with the server-returned row (matching on the temp id).
+- `onError`: removes the temp row and restores the snapshot.
+- `onSettled`: invalidates `['transactions']` so server truth (correct ordering, filters, derived fields) wins.
+- **`['transactions-virtual']` deliberately not patched**: same rationale as update/delete — the virtual list mirrors cached first-page data into local React state; patching mid-scroll would collapse the list.
+- **Derived fields**: the optimistically inserted row may lack `category_name` and `recipient_name` (only ids are in the payload). The `onSettled` refetch corrects this within one round-trip.
+- 6 tests total in `hooks/__tests__/useOptimisticTransactions.test.tsx`.
+
+### Optimistic Update / Delete (June 2026, ADR-070)
+
+`useUpdateTransaction` and `useDeleteTransaction` are now optimistic as of June 2026 (ADR-070 Tier 5):
+
+- **Pattern**: snapshot-all → optimistic-patch-all → rollback-on-error → `onSettled` invalidate.
+- `onMutate`: calls `queryClient.setQueriesData` across all `['transactions', params]` cache entries to apply the change immediately before the network request returns.
+- `onError`: restores the snapshot so every patched cache key reverts to its previous value.
+- `onSettled`: calls `queryClient.invalidateQueries(['transactions'])` so server truth always wins after settlement.
+- **`['transactions-virtual']` deliberately not patched**: `useTransactionListData` mirrors the virtual list's first page into local state; patching that cache key while the user is scrolled would collapse the list. It is invalidated by `onSettled` like the rest.
+- **`tags` excluded from merge**: the mutation payload carries `string[]` tag slugs but the cached row holds `Tag[]` objects; merging them would produce wrong shapes. Tags are corrected by the `onSettled` refetch.
+- 4 new tests in `hooks/__tests__/useOptimisticTransactions.test.tsx`.
+
+> [!note] Stale category/recipient name
+> An optimistic update can briefly show a stale `category_name` or `recipient_name` when only the id changed (the id is in the payload but the joined name is not). The `onSettled` invalidation corrects this within one round-trip. Amounts always come from user input, never derived.
+
 ### API
 
 ```typescript
@@ -87,8 +117,8 @@ const {
 
 // Mutations
 const createMutation = useCreateTransaction();
-const updateMutation = useUpdateTransaction();
-const deleteMutation = useDeleteTransaction();
+const updateMutation = useUpdateTransaction();   // optimistic since ADR-070
+const deleteMutation = useDeleteTransaction();   // optimistic since ADR-070
 ```
 
 ### Options
@@ -178,12 +208,23 @@ const {
   totalUnrealizedGain,   // Unrealized gains
   refreshPrices,         // Refresh all prices
   isRefreshingPrices,    // Refreshing state
+  // Query state (2026-05-29) — allows pages to distinguish loading/error from empty
+  isLoading,             // boolean — true while initial fetch is in flight
+  isError,               // boolean — true when the fetch has failed
+  error,                 // Error | null
+  refetch,               // () => void — re-trigger the failed query
 } = usePortfolio();
 
 // Mutations
 const deleteInvestment = useDeleteInvestment();
 const createInvestment = useCreateInvestment();
 ```
+
+### Loading / Error State Exposure (2026-05-29)
+
+Prior to this change, a failed investments fetch resolved to an empty `investments` array, causing asset pages to silently render the "no holdings" empty state. `usePortfolio` now forwards `isLoading`, `isError`, `error`, and `refetch` from the underlying `useInvestmentsQuery` so callers can render a skeleton while loading and a `PageError` with retry on failure.
+
+All four asset pages (Stocks, Crypto, Savings, Real Estate; Metals via `StocksPage`) use this to gate their rendering. See [[docs/features/portfolio#portfolio-asset-page-loading-and-error-states-2026-05-29|Portfolio — Loading/Error States]] for the full state table.
 
 ### Investment Summary
 
@@ -246,6 +287,52 @@ interface UsePlannedPaymentsOptions {
 
 ---
 
+## useUpcomingPlannedPayments (V11)
+
+Shared hook for "planned payments due in the next 7 days" that is consumed by both `SuggestionCard` (dashboard widget) and `UpcomingPaymentsNotification` (app-level banner).
+
+**File:** [[apps/frontend/src/hooks/useUpcomingPlannedPayments.ts]]
+
+### Problem it solves
+
+Previously, `UpcomingPaymentsNotification` owned its own `useQuery` call for upcoming payments and its own dismissed-ID state. `SuggestionCard` (new in V11) would have created a second independent fetch and a second dismissed-ID state, causing both surfaces to disagree on which items are dismissed.
+
+`useUpcomingPlannedPayments` centralizes both concerns:
+
+- **Shared query**: Uses the same React Query key (`"upcomingPlannedPayments"`) as before — zero additional network requests.
+- **Shared dismissed-ID store**: A module-level `Set<number>` subscribed to via `useSyncExternalStore`. Both the banner and the suggestion card read from and write to the same store instance; a dismiss on one surface is immediately reflected on the other.
+- **Persistence**: The dismissed set is persisted to `LOCAL_STORAGE_KEYS.DISMISSED_UPCOMING_PAYMENTS` and restored on mount.
+
+### API
+
+```typescript
+const {
+  upcoming,        // PlannedPayment[] — all non-dismissed payments due within 7 days
+  allUpcoming,     // PlannedPayment[] — all (including dismissed) due within 7 days
+  dismissedIds,    // Set<number>
+  dismiss,         // (id: number) => void — dismiss a single payment
+  dismissAll,      // () => void — dismiss all currently visible IDs
+  isLoading,       // boolean
+  countSingle,     // string — i18n'd "1 upcoming payment"
+  countPlural,     // string — i18n'd "N upcoming payments"
+} = useUpcomingPlannedPayments();
+```
+
+### Consumers
+
+| Consumer | How it uses the hook |
+|----------|---------------------|
+| `SuggestionCard` | Reads `upcoming` (non-dismissed), calls `dismissAll` on the X button |
+| `UpcomingPaymentsNotification` | Reads `upcoming`, calls `dismiss(id)` per item, `dismissAll` for the banner; also checks `useWidgetVisibility` to stand down on `/` when `suggestions` widget is visible |
+
+### Query Key
+
+`["upcomingPlannedPayments"]` — unchanged from the previous `UpcomingPaymentsNotification`-owned query. Existing server-state cache entries are reused.
+
+Code links: [[apps/frontend/src/hooks/useUpcomingPlannedPayments.ts]], [[apps/frontend/src/components/dashboard/SuggestionCard.tsx]], [[apps/frontend/src/components/notifications/UpcomingPaymentsNotification.tsx]]
+
+---
+
 ## useStatistics
 
 Hook for analytics/statistics data with per-graph exclusion support.
@@ -293,7 +380,9 @@ interface CategoryPivot {
 
 ### Features
 
+- **Shared exclusion resolution**: Delegates exclusion-ID resolution to `useExcludedIds('statistics')` (2026-05-29) — no longer owns a separate category-list fetch; ensures exclusion set is identical to the Dashboard surface
 - **Per-graph exclusion toggle**: Each chart can independently toggle category/recipient exclusions
+- **Filtered recipient-insights query (2026-06-01)**: Issues a separate `recipientInsightsFilteredQuery` (keyed on `effectiveExcludedCategoryIds` + `settingsExcludedRecIds`) when exclusions are active. The filtered payload is used for `topRecipients` in `mapToStatisticsData` so the "all years" Top Recipients chart reacts to exclusion toggles. Previously only the per-year view was filtered; the all-years aggregate silently ignored exclusions.
 - **Category normalization**: Ensures consistent `GENERAL: DETAIL` formatting across all charts
 - **Automatic query invalidation**: Reacts to settings changes
 - **Currency-aware stats fetching**: Uses `appSettings.defaultCurrency` as target currency for normalized transaction pulls (`normalize_to_eur=true` + `target_currency`)
@@ -403,13 +492,57 @@ const {
 
 ### Features
 
-- Respects exclusion settings
+- Delegates exclusion-ID resolution to `useExcludedIds('dashboard')` (2026-05-29) — no longer owns a separate category-list fetch
 - Applies category/recipient filters
 - Requests monthly summary in selected app currency via `currency` query param
 - Includes selected app currency in query key for cache isolation
 - Uses the **latest month with data** for dashboard income/spending cards
 - Computes card totals from live transactions for that month to avoid stale materialized-view lag
 - Fetches month transactions in pages so totals remain complete on large datasets
+
+---
+
+## useExcludedIds (2026-05-29)
+
+Single source of truth for "which category/recipient IDs are excluded from money totals" across the dashboard and statistics surfaces.
+
+**File:** [[apps/frontend/src/hooks/useExcludedIds.ts]]
+
+### Problem it solves
+
+Previously, exclusion ID resolution was duplicated across three call sites (`useFilteredDashboardStats`, `useStatistics`, `DashboardPage`). Each call fetched the full category list under a different React Query cache key and a different `limit` (500 vs 1000). A deployment with more than 500 categories would get a different hidden-category set on the Dashboard vs Statistics, silently producing different income/spending/net totals across screens.
+
+### API
+
+```typescript
+const {
+  excludedCategoryIds,   // number[] — settings exclusions + hidden categories, sorted asc
+  excludedRecipientIds,  // number[] — settings recipient exclusions, sorted asc
+  exclusionsApply,       // boolean — false when scope doesn't include this surface
+  isReady,               // boolean — true once category data resolved (or not needed)
+} = useExcludedIds(scope);  // scope: 'dashboard' | 'statistics'
+```
+
+### Behavior
+
+- Calls `apiClient.getCategories({ limit: CATEGORY_FETCH_LIMIT })` (limit: 1000) under the stable cache key `['categories', 'all-for-exclusions']`. One shared query instance — no duplication.
+- The category fetch is skipped entirely when `settings.excludeHiddenCategories` is false or when `exclusionsApply` is false (no wasted request).
+- If the category list hits the 1000-item cap, a `console.warn` is emitted rather than silently truncating (the exclusion set is still uniform across screens).
+- Returned arrays are de-duplicated and sorted ascending; a stable `EMPTY` reference (`[]`) is reused when exclusions do not apply, maintaining memoization stability for downstream `useMemo`/`useCallback` dependencies.
+
+### Consumers
+
+| Consumer | Before | After |
+|----------|--------|-------|
+| `useFilteredDashboardStats` | Fetched categories with limit 500, own cache key | Calls `useExcludedIds('dashboard')` |
+| `useStatistics` | Fetched categories with limit 1000, own cache key | Calls `useExcludedIds('statistics')` |
+| `DashboardPage` | Inline `useMemo` over `categoriesData` from separate query | Calls `useExcludedIds('dashboard')` |
+
+### Constants
+
+```typescript
+export const CATEGORY_FETCH_LIMIT = 1000;  // shared across all consumers
+```
 
 ---
 
@@ -861,6 +994,7 @@ Code link: [[apps/frontend/src/hooks/usePortfolioPrefetch.ts]]
 - [[docs/components/index]] - Components Index
 - [[docs/api/index]] - API documentation
 - [[docs/components/statistics]] - Statistics components
+- [[docs/components/dashboard]] - Dashboard components (DashboardPage exclusion flow)
 - [[docs/features/settings]] - Settings feature architecture
 - [[docs/reference/code-patterns#zustand-store-pattern-phase-4]] - Zustand pattern reference
 - [React Query Docs](https://tanstack.com/query)

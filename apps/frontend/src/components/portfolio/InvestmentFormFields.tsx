@@ -51,7 +51,7 @@ interface InvestmentFormFieldsProps {
   computedPricePerUnit: string;
   priceProviders: PriceProviderOption[];
   selectedProvider: PriceProviderOption | undefined;
-  t: (key: string) => string;
+  t: (key: string, params?: Record<string, string | number>) => string;
 }
 
 export function InvestmentFormFields({

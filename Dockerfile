@@ -1,13 +1,16 @@
 # ============================================================
 # Stage 1: Build the React frontend
 # ============================================================
-FROM oven/bun:1-alpine AS frontend-builder
+FROM oven/bun:1-alpine@sha256:5acc90a93e91ff07bf72aa90a7c9f0fa189765aec90b47bdbf2152d2196383c0 AS frontend-builder
 
 WORKDIR /app
 
 # Copy workspace manifests so bun can resolve the workspace graph.
 # bun.lock* matches both text (bun.lock) and binary (bun.lockb) lockfile formats.
-# packages/ must be copied before install so workspace:* deps (@vision/types) resolve.
+# Only MANIFESTS go before `bun install` — workspace:* deps resolve from
+# package.json files alone (bun symlinks node_modules/@vision/* to packages/*,
+# whose sources land after the install layer). Copying full packages/ or
+# i18n/source here would bust the dependency layer on every source/locale edit.
 COPY package.json bun.lock* ./
 COPY apps/frontend/package.json ./apps/frontend/
 # node-backend manifest is required here: bun workspaces resolve all members
@@ -15,10 +18,19 @@ COPY apps/frontend/package.json ./apps/frontend/
 # package.json declared in the root is missing — even though stage 1 only
 # builds the frontend.
 COPY apps/node-backend/package.json ./apps/node-backend/
+COPY packages/shared-utils/package.json ./packages/shared-utils/
+COPY packages/types/package.json ./packages/types/
+# The root `prepare` lifecycle script runs on `bun install` and invokes this
+# file; it must exist or the install fails. It self-no-ops when there is no git
+# work tree (the case here — .git is excluded by .dockerignore). Stable file, so
+# copying it before install does not meaningfully churn the cache layer.
+COPY scripts/setup-git-hooks.js ./scripts/setup-git-hooks.js
+RUN bun install --frozen-lockfile
+
+# Workspace sources + locale inputs after the install layer (cache-friendly).
 COPY packages ./packages
 COPY i18n/source ./i18n/source
 COPY scripts/generate-locales.js ./scripts/generate-locales.js
-RUN bun install --frozen-lockfile
 
 # Copy frontend source and build
 COPY apps/frontend/ ./apps/frontend/
@@ -33,7 +45,7 @@ RUN bun run --filter vision-frontend build
 # ============================================================
 # Stage 2: Production backend
 # ============================================================
-FROM oven/bun:1-alpine
+FROM oven/bun:1-alpine@sha256:5acc90a93e91ff07bf72aa90a7c9f0fa189765aec90b47bdbf2152d2196383c0
 
 WORKDIR /app
 
@@ -56,13 +68,23 @@ RUN chmod +x /entrypoint.sh
 
 # Install backend production dependencies. Backend depends on @vision/types
 # (workspace:*), so install from the monorepo root with the full workspace graph.
+# Manifests only before install (see stage 1 note); package sources follow.
 COPY package.json bun.lock* ./
 COPY apps/frontend/package.json ./apps/frontend/
 COPY apps/node-backend/package.json ./apps/node-backend/
-COPY packages ./packages
+COPY packages/shared-utils/package.json ./packages/shared-utils/
+COPY packages/types/package.json ./packages/types/
+# The root `prepare` lifecycle script runs on `bun install` and invokes this
+# file; it must exist or the install fails. It self-no-ops without a git work
+# tree (the case here — .git is excluded by .dockerignore).
+COPY scripts/setup-git-hooks.js ./scripts/setup-git-hooks.js
 # Skip Puppeteer's bundled Chromium download — we use the Alpine system package.
 ENV PUPPETEER_SKIP_CHROMIUM_DOWNLOAD=true
 RUN bun install --frozen-lockfile --production
+
+# Workspace package sources — the node_modules/@vision/* symlinks created by
+# the install above resolve into these paths at runtime.
+COPY packages ./packages
 
 # Copy backend source and built frontend
 COPY apps/node-backend/src/ ./apps/node-backend/src/

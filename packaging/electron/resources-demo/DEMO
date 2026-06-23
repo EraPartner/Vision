@@ -1,0 +1,2 @@
+This marker tells main.js to run as the isolated "Vision Demo" app
+(separate userData dir, separate embedded stack, synthetic data only).

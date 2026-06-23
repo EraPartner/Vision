@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { parseDecimal } from '@/lib/decimal';
+import { deriveUnitMath } from '@/lib/portfolioUnitMath';
 import { useLanguage } from '@/contexts/LanguageContext';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
@@ -11,6 +12,7 @@ import { Switch } from '@/components/ui/switch';
 import { Plus } from 'lucide-react';
 import { isUnitBased, isFixedIncome, isRealEstate } from '@/utils/assetClass';
 import { usePortfolio } from '@/hooks/usePortfolio';
+import { useAccounts } from '@/hooks/useAccounts';
 import type { PortfolioTxnType, RecurrenceInterval, InvestmentSummary } from '@/types/portfolio';
 import { getTxnTypeLabel } from '@/types/portfolio';
 import { toast } from 'sonner';
@@ -24,10 +26,6 @@ function parsePositive(value: string): number | undefined {
   return n;
 }
 
-function roundTo(value: number, decimals: number): number {
-  const factor = 10 ** decimals;
-  return Math.round(value * factor) / factor;
-}
 
 interface Props {
   investment: InvestmentSummary;
@@ -71,6 +69,7 @@ export function AddPortfolioTxnDialog({ investment, trigger }: Props) {
     taxes: '',
     fxRateToEur: '',
     note: '',
+    accountId: '',
     isRecurring: false,
     recurrenceInterval: 'monthly' as RecurrenceInterval,
     recurrenceEndDate: '',
@@ -78,9 +77,16 @@ export function AddPortfolioTxnDialog({ investment, trigger }: Props) {
 
   const reset = () => setForm({
     type: 'buy', date: toYmd(new Date()),
-    amount: '', units: '', pricePerUnit: '', fees: '', taxes: '', fxRateToEur: '', note: '',
+    amount: '', units: '', pricePerUnit: '', fees: '', taxes: '', fxRateToEur: '', note: '', accountId: '',
     isRecurring: false, recurrenceInterval: 'monthly', recurrenceEndDate: '',
   });
+
+  // Per-account positioning (ADR-091): tag the lot to an account (optional).
+  const { data: accountsData } = useAccounts({ active: 'true' });
+  // Trades = transfers (ADR-090): when the chosen account has a cash sleeve, the
+  // trade's cash leg settles in that account. (Sleeve-less wallets need a funding
+  // account chosen at entry — a follow-on; no auto cash leg for now.)
+  const selectedTradeAccount = (accountsData?.items ?? []).find((a) => String(a.id) === form.accountId);
 
   const amountInput = parsePositive(form.amount);
   const unitsInput = parsePositive(form.units);
@@ -88,34 +94,14 @@ export function AddPortfolioTxnDialog({ investment, trigger }: Props) {
   const isBuySell = ['buy', 'sell'].includes(form.type);
   const isGift = form.type === 'gift';
 
-  let derivedAmount: number | undefined;
-  let derivedUnits: number | undefined;
-  let derivedPrice: number | undefined;
-  if (isBuySell) {
-    const provided = Number(amountInput !== undefined) + Number(unitsInput !== undefined) + Number(priceInput !== undefined);
-    if (provided >= 2) {
-      if (amountInput === undefined && unitsInput !== undefined && priceInput !== undefined) {
-        derivedAmount = roundTo(unitsInput * priceInput, 4);
-      }
-      if (unitsInput === undefined && amountInput !== undefined && priceInput !== undefined) {
-        derivedUnits = roundTo(amountInput / priceInput, 8);
-      }
-      if (priceInput === undefined && amountInput !== undefined && unitsInput !== undefined) {
-        derivedPrice = roundTo(amountInput / unitsInput, 6);
-      }
-    }
-  }
+  const unitMath = deriveUnitMath({ amount: amountInput, units: unitsInput, price: priceInput, derive: isBuySell });
+  const { derivedAmount } = unitMath;
 
-  const effectiveAmount = isGift ? 0 : (amountInput ?? derivedAmount);
-  const effectiveUnits = unitsInput ?? derivedUnits;
-  const effectivePrice = priceInput ?? derivedPrice;
+  const effectiveAmount = isGift ? 0 : unitMath.effectiveAmount;
+  const effectiveUnits = unitMath.effectiveUnits;
+  const effectivePrice = unitMath.effectivePrice;
 
-  const buySellIsValid = !isBuySell
-    || ((Number(amountInput !== undefined) + Number(unitsInput !== undefined) + Number(priceInput !== undefined)) >= 2
-      && effectiveAmount !== undefined
-      && effectiveUnits !== undefined
-      && effectivePrice !== undefined
-      && Math.abs(roundTo(effectiveUnits * effectivePrice, 4) - roundTo(effectiveAmount, 4)) <= 0.0001);
+  const buySellIsValid = !isBuySell || unitMath.isConsistent;
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -147,6 +133,8 @@ export function AddPortfolioTxnDialog({ investment, trigger }: Props) {
         fx_rate_to_eur: form.fxRateToEur ? parseDecimal(form.fxRateToEur) : undefined,
         currency: investment.currency,
         note: form.note.trim() || undefined,
+        ...(form.accountId ? { account_id: Number(form.accountId) } : {}),
+        ...(selectedTradeAccount?.has_cash_sleeve ? { cash_account_id: Number(form.accountId) } : {}),
         is_recurring: form.isRecurring,
         recurrence_interval: form.isRecurring ? form.recurrenceInterval : undefined,
         recurrence_end_date: form.isRecurring && form.recurrenceEndDate ? form.recurrenceEndDate : undefined,
@@ -197,6 +185,21 @@ export function AddPortfolioTxnDialog({ investment, trigger }: Props) {
                   onChange={(date) => setForm(f => ({ ...f, date: date ? toYmd(date) : '' }))}
                   placeholder={t('plannedPage.link.pickDate')}
                 />
+              </div>
+              <div className="space-y-2 col-span-2">
+                <Label>{t('nav.accounts')}</Label>
+                <Select
+                  value={form.accountId || 'none'}
+                  onValueChange={(v) => setForm(f => ({ ...f, accountId: v === 'none' ? '' : v }))}
+                >
+                  <SelectTrigger><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="none">{t('accounts.unassigned')}</SelectItem>
+                    {(accountsData?.items ?? []).map((a) => (
+                      <SelectItem key={a.id} value={String(a.id)}>{a.display_name || a.name}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
               </div>
 
             {showUnits && (

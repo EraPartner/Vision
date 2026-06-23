@@ -3,16 +3,34 @@ title: TypeScript Types Reference
 type: reference
 status: active
 date: 2026-04-02
-tags: [reference, typescript, types, interfaces, frontend]
-description: Complete reference of all TypeScript types and interfaces used in the Vision frontend
+updated: 2026-06-18
+tags: [reference, typescript, types, interfaces, frontend, contract-guard, openapi, generated-types, type-safety]
+description: Complete reference of all TypeScript types and interfaces used in the Vision frontend. June 2026 — generated.ts is now load-bearing via contract-guard.ts; api.ts header corrected to point at the Node backend contract.
 aliases: [typescript types, type definitions, interfaces, type reference]
-related_code: ["apps/frontend/src/types/api.ts", "apps/frontend/src/types/portfolio.ts", "apps/frontend/src/types/watchlist.ts", "apps/frontend/src/types/splits.ts"]
+related_code: ["apps/frontend/src/types/api.ts", "apps/frontend/src/types/generated.ts", "apps/frontend/src/types/contract-guard.ts", "apps/frontend/src/types/portfolio.ts", "apps/frontend/src/types/watchlist.ts", "apps/frontend/src/types/splits.ts"]
 ---
 
 # TypeScript Types Reference
 
 > [!abstract] Purpose
 > Complete reference of all TypeScript types and interfaces in the Vision frontend. Use this for understanding data shapes, API contracts, and type-safe development.
+
+---
+
+## Contract Architecture (June 2026)
+
+> [!info] generated.ts is now load-bearing
+> The authoritative contract is `openapi.yaml`. From it, `bun run generate:types` produces [[apps/frontend/src/types/generated.ts|generated.ts]] (CI drift-checked). The hand-written, ergonomic types consumed by the ~36 app modules live in [[apps/frontend/src/types/api.ts|api.ts]]. Prior to June 2026, `generated.ts` was imported by **zero** modules — so drift between the two sources was invisible.
+
+**[[apps/frontend/src/types/contract-guard.ts|contract-guard.ts]]** closes that gap with compile-time assertions:
+
+- Imports `components['schemas']` from `generated.ts` and the hand-written types from `api.ts`
+- **Key coverage check:** every field the app consumes (`Transaction`, `Category`, `Recipient`, `Tag`, `PlannedTransaction`, `Investment`, `PortfolioTransaction`) must exist as a key in the corresponding generated schema — `bun run typecheck` fails if a field is renamed or removed in the contract
+- **Money/quantity check:** money fields (`amount`, `balance`, `amount_eur`, `loan_principal`, `current_price`, `units`, `price_per_unit`, `fees`, `taxes`) must remain `number` (or `number | null`) in the contract — fails if the OpenAPI spec re-types an amount as a string
+- **One-directional and optionality-tolerant:** additive contract changes (new fields) and `required`/`| null` nuances do not cause failures — only consumed-field removals/renames and money-type regressions are caught
+
+> [!note] Money coercion is a separate concern
+> `api.ts` types money fields as `number`, but node-postgres returns NUMERIC columns as strings. The repository layer coerces them on emit via `numericColumn` / `coerceNumericFields` (see [[docs/reference/repository-layer|Repository Layer]] and [[docs/reference/code-patterns#money-utility-pattern-phase-9--june-2026|Money Utility Pattern]]). `contract-guard.ts` does not address this runtime conversion — it only enforces that the OpenAPI schema declares them as numeric.
 
 ---
 
@@ -366,6 +384,7 @@ interface CreateInvestmentRequest {
 
 ## Related
 
-- [[docs/reference/code-patterns]] — Code patterns
+- [[docs/reference/code-patterns]] — Code patterns (Money Utility Pattern)
+- [[docs/reference/repository-layer]] — Repository layer (NUMERIC coercion on emit)
 - [[docs/api/index]] — API documentation
 - [[docs/reference/react-query-keys]] — React Query keys

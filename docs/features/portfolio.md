@@ -2,13 +2,13 @@
 title: Feature - Portfolio & Investments
 type: feature
 status: active
-date: 2026-04-27
-last_modified: 2026-05-18
-updated: 2026-05-18
-tags: [feature, portfolio, investments, stocks, crypto, metals, phase-1, phase-3.5, phase-3.6, phase-9, phase-8, phase-14, pdf-export, offline-resilience, stale-prices, online-status-detection, graceful-degradation, portfolio-summary, realtime-totals, decimal-precision, monetary-math, snapshot-valuation-parity, fixed-income-accrual, real-estate-appreciation, net-worth-reconciliation]
+date: 2026-06-19
+last_modified: 2026-06-19
+updated: 2026-06-19
+tags: [feature, portfolio, investments, stocks, crypto, metals, phase-1, phase-3.5, phase-3.6, phase-9, phase-8, phase-14, pdf-export, offline-resilience, stale-prices, online-status-detection, graceful-degradation, portfolio-summary, realtime-totals, decimal-precision, monetary-math, snapshot-valuation-parity, fixed-income-accrual, real-estate-appreciation, net-worth-reconciliation, historical-fx, snapshot-fx, loading-states, error-states, page-error, skeleton, portfolio-unit-math, shared-utils, splits-event, return-of-capital, banker-rounding, fx-attribution, asset-gain, fx-gain, purchase-date-rates, value-fx-neutral, adr-074, adr-091, adr-100, per-account, move-holding, close-account, brokerage-fanout, rebalancing, saved-plans, cash-aware, cross-workspace, adr-098]
 aliases: [portfolio-feature, investments-feature, holdings, net-worth, stocks, crypto, real-estate, savings, bonds, metals, performance, watchlist]
-description: Track stocks, ETFs, crypto, metals, real estate, savings, and bonds; includes Phase 8 PDF report export with 6 portfolio sections
-related_code: ["apps/node-backend/src/routes/investments.js", "apps/node-backend/src/services/priceProviderService.js", "apps/node-backend/src/services/portfolioPerformanceSnapshotService.js", "apps/node-backend/src/services/portfolio/portfolioSummaryService.js", "apps/node-backend/src/routes/info/portfolioSummary.js", "apps/frontend/src/pages/portfolio/PerformancePage.tsx", "apps/frontend/src/pages/portfolio/MetalsPage.tsx", "apps/frontend/src/pages/portfolio/PortfolioOverviewPage.tsx", "apps/frontend/src/hooks/portfolio/usePortfolioSummary.ts", "apps/frontend/src/lib/api.ts"]
+description: Track stocks, ETFs, crypto, metals, real estate, savings, and bonds; includes Phase 8 PDF report export with 6 portfolio sections. 2026-05-29 adds historical FX in snapshots and loading/error states on all asset pages. June 2026 adds snapshotBuilder split/return_of_capital events, APP_TIMEZONE day-boundary fix, shared portfolioUnitMath.ts, and FX attribution UI (ADR-074): asset gain / FX effect decomposition on overview, performance, asset pages, and investment detail.
+related_code: ["apps/node-backend/src/routes/investments.js", "apps/node-backend/src/services/priceProviderService.js", "apps/node-backend/src/services/portfolioPerformanceSnapshotService.js", "apps/node-backend/src/services/portfolio/portfolioSummaryService.js", "apps/node-backend/src/routes/info/portfolioSummary.js", "apps/frontend/src/pages/portfolio/PerformancePage.tsx", "apps/frontend/src/pages/portfolio/MetalsPage.tsx", "apps/frontend/src/pages/portfolio/PortfolioOverviewPage.tsx", "apps/frontend/src/hooks/portfolio/usePortfolioSummary.ts", "apps/frontend/src/hooks/usePortfolio.ts", "apps/frontend/src/lib/api.ts"]
 ---
 
 # Feature: Portfolio & Investments
@@ -142,6 +142,7 @@ POST /api/investments/:id/transactions
 ```
 
 - `fx_rate_to_eur` is optional and persisted per transaction to preserve the effective FX used at booking time.
+- **Auto-resolve (2026-06-11, ADR-074):** On `POST /api/investments/:id/transactions` and `PATCH /api/investments/transactions/:txnId`, when `currency ≠ EUR` and `fx_rate_to_eur` is not supplied, the backend resolves the on-or-before stored rate from `exchange_rates` (≤7-day lookback, DB-only — no outbound HTTP). On PATCH, a date or currency change also recomputes `fx_rate_to_eur` unless the field is explicitly provided in the request.
 - Add/Edit portfolio transaction dialogs now expose an optional `fx_rate_to_eur` input so users can lock a manual booking FX per transaction.
 - Backend create path reuses preloaded investment metadata by passing `preloaded_asset_class` from investments route into `portfolioTransactionRepository.create(...)`, removing a duplicate asset-class lookup query while preserving validation and response behavior.
 - Investment live price refresh now applies bounded write concurrency (batched updates) instead of an unbounded all-at-once write fan-out, reducing pool contention risk while preserving refresh result payload semantics.
@@ -182,6 +183,51 @@ Oversell safety behavior:
 - Metals listing explicitly uses base (non-FX-aware) realized/unrealized calculations.
 
 Code links: [[apps/frontend/src/pages/portfolio/StocksPage.tsx]], [[apps/frontend/src/types/api.ts]], [[apps/node-backend/src/routes/investments.js]], [[alembic/versions/0016_add_fx_rate_to_portfolio_transactions.py]]
+
+### Portfolio Unit Math — Shared Frontend Library (June 2026)
+
+`apps/frontend/src/lib/portfolioUnitMath.ts` is a new shared module consumed by both the **Add** and **Edit** portfolio transaction dialogs:
+
+```typescript
+// Named precision constants (4 DP for units, 8 DP for price, 6 DP for FX)
+export const UNIT_PRECISION = 4;
+export const PRICE_PRECISION = 8;
+export const FX_PRECISION = 6;
+export const TOLERANCE = 0.0001;
+
+// Derive the third field when two of amount/units/price are filled
+export function deriveUnitMath(
+  amount: number | null,
+  units: number | null,
+  price: number | null,
+): { amount: number; units: number; price: number } | null
+```
+
+`deriveUnitMath` fills the missing field (whichever of amount/units/price is null) using the other two and rounds to the appropriate precision. It returns `null` when fewer than two inputs are non-null (nothing can be derived).
+
+This eliminates the prior copy-paste inconsistency where Add and Edit dialogs used different rounding constants and tolerance checks.
+
+### snapshotBuilder Improvements (June 2026)
+
+`apps/node-backend/src/services/portfolio/snapshotBuilder.js` received three correctness fixes that make the historical Net Worth chart consistent with the live portfolio summary:
+
+**1. Timezone-correct day-walk boundary**
+
+The end-of-day boundary for the forward-simulation loop is now derived via `toAppDateString(new Date(), APP_TIMEZONE)` rather than UTC date. Portfolios with transactions close to midnight (in the user's timezone) were previously misattributed to the wrong day.
+
+**2. `split` event type handling**
+
+The day-loop now processes `split` transaction types. A stock split resets the per-investment unit count to the post-split total (rather than adding units as if it were a buy). This mirrors the live `calculateCostBasis` function and fixes Net Worth chart values for portfolios with historic splits.
+
+**3. `return_of_capital` event type handling**
+
+`return_of_capital` transactions now reduce the `runningInvested` cost basis by the returned amount, matching accounting convention and the live summary calculation.
+
+**4. Buy/sell unit math uses Decimal**
+
+`repositories/portfolioTxRepo.common.js` buy/sell/gift calculations now use Decimal `roundMoney()`, `multiply()`, and `divide()` instead of `roundTo()` with native float arithmetic. This eliminates the remaining FP drift in portfolio transaction math.
+
+Code links: [[apps/node-backend/src/services/portfolio/snapshotBuilder.js]], [[apps/node-backend/src/repositories/portfolioTxRepo.common.js]], [[apps/frontend/src/lib/portfolioUnitMath.ts]]
 
 ### Portfolio Decimal Precision (May 2026 Audit)
 
@@ -291,6 +337,14 @@ Current behavior:
 - Portfolio summaries now pre-group transactions by `investment_id` before per-investment calculations, reducing repeated global scans during render/memo recompute.
 - **Snapshot atomicity (2026-04-29)**: `computeAndStoreSnapshots()` now wraps DELETE + batched INSERTs in a single PostgreSQL transaction. This guarantees concurrent readers (e.g., `/api/info/net-worth` requests during startup warmup) see either fully-old or fully-new snapshots via MVCC, never a torn/partial table. Fixes a race condition where concurrent reads could trigger cache of zero portfolio value. See [[docs/adr/043-portfolio-snapshot-atomicity|ADR-043]].
 - **Snapshot valuation parity (2026-05-18)**: `snapshotBuilder` non-unit asset formulas were rewritten to mirror `portfolioSummaryService` exactly, eliminating a 2,142.24 € divergence between Net Worth "Investments" and Portfolio Overview / Performance "Portfolio Value". Fixed-income (savings/bond): `value = runningInvested + accruedInterest` where accrual walks `interest`/`buy`/`gift`/`sell` transactions day-by-day. Real-estate: `value = runningInvested + cumulativeAppreciation` via explicit `appreciation` transactions. Unit-based assets: the latest-day snapshot uses `investments.current_price` directly, so Net Worth always reconciles with the live summary even after a price refresh. All three pages (Dashboard, Performance, Net Worth) now show the same value for the same day. Historical chart will redraw on next snapshot run as accrued interest and appreciation are applied retroactively. See [[docs/adr/061-snapshot-valuation-parity|ADR-061]].
+
+- **Historical FX in snapshots (2026-05-29)**: `snapshotBuilder.js` now loads a full historical `exchange_rates` index (per currency, sorted day arrays) alongside the existing `is_latest` rates. A binary-search `rateToEurOnOrBefore(currency, day)` lookup finds the most recent stored rate on or before each day. `convertAmount(amount, currency, fxRateToEur, asOfDay)` uses this to convert values at the rate that applied at the time:
+  - **Market value** (unit-based assets): converted at the rate on the snapshot day, not today's.
+  - **Invested capital** (transaction amounts): converted at the rate on the transaction date, or at the stored `fx_rate_to_eur` when present.
+  - **Latest day**: always uses the `is_latest` rate so the headline snapshot value reconciles with `/portfolio-summary` (and the Net Worth "Investments" total remains consistent with Portfolio Overview).
+
+  > [!info] Invested cost-basis — resolved by ADR-074 (2026-06-11)
+  > The snapshot `invested` column uses transaction-date FX rates. As of ADR-074, the live Portfolio Summary endpoint also converts invested capital at transaction-date rates (no longer at today's rate). Performance page "Total Invested" and Portfolio Overview "Total Invested" now use the same semantics — the prior divergence is closed.
 
 Code links: [[apps/node-backend/src/repositories/infoRepository.js]], [[apps/node-backend/tests/infoRepository.test.js]], [[apps/frontend/src/pages/portfolio/net-worth/NetWorthPage.tsx]], [[apps/frontend/src/lib/api.ts]], [[apps/node-backend/src/services/portfolio/snapshotBuilder.js]], [[apps/node-backend/tests/portfolioPerformanceSnapshotService.test.js]]
 
@@ -489,7 +543,14 @@ Code links: [[apps/node-backend/src/services/priceProviderService.js]], [[apps/n
 
 ## Cost Basis Methods (Phase 6)
 
-Portfolio tax calculations now support multiple cost basis accounting methods, configurable as a user preference in Settings.
+Portfolio tax calculations support multiple cost basis accounting methods, configurable as a user preference in Settings.
+
+> [!info] Wired end-to-end since 2026-06-11 (ADR-073)
+> Until Audit Round 7 the setting was persisted but never read — both the backend summary
+> service and the frontend hooks hard-called weighted average. The calculators now live in
+> `@vision/shared-utils/portfolio` ([[docs/adr/073-shared-portfolio-math-package|ADR-073]]) and
+> `portfolioSummaryService` / `usePortfolioSummaries` both dispatch on the stored
+> `cost_basis_method` (invalid/missing values fall back to `weighted_avg`).
 
 **Available methods:**
 
@@ -501,10 +562,12 @@ Portfolio tax calculations now support multiple cost basis accounting methods, c
 
 **Implementation:**
 
-- Backend calculation functions in `[[apps/node-backend/src/utils/portfolioMath.js]]`:
+- Shared calculation functions in `@vision/shared-utils/portfolio` (re-exported by `[[apps/node-backend/src/utils/portfolioMath.js]]` and `apps/frontend/src/hooks/portfolio/usePortfolioCalculations.ts`):
   - `calculateCostBasis()` — Weighted average method
   - `calculateCostBasisFIFO()` — FIFO method (immutable-safe: uses spread operations, returns immutable lot copies)
   - `calculateCostBasisLIFO()` — LIFO method (immutable-safe: uses spread operations, returns immutable lot copies)
+  - All calculators accept optional `opts.fxMultiplier` (per-transaction FX multiplier array) and `opts.defaultFxMultiplier` (fallback when a transaction has no stamped rate); they return a parallel **converted track** (`totalCostConv`, `avgCostBasisConv`, `realizedGainConv`, `totalBuyCostConv`, `totalSellProceedsConv`) — added in ADR-074 so both sides compute lot-accurate converted realized gains
+  - `buildInvestmentSummaryCore(inv, txns, opts)` accepts `opts.fxMultiplierNow` (today's rate for current-value conversion) and returns a `converted` block alongside the native block; with no FX inputs it degrades to native numbers (previous behaviour)
   - All support `buy`, `sell`, `gift`, `split`, `return_of_capital`, `merger`, `spinoff` transaction types
   - `applyEventToLots()` helper handles corporate actions (splits, return_of_capital) with immutable lot transformations
 - Frontend types in `[[apps/frontend/src/stores/settingsStore.ts]]`: `type CostBasisMethod = 'weighted_avg' | 'fifo' | 'lifo'`
@@ -527,6 +590,44 @@ Portfolio info cards (Crypto, Savings, Real Estate, Stocks) previously rendered 
 
 Code links: [[apps/frontend/src/pages/portfolio/CryptoPage.tsx]], [[apps/frontend/src/pages/portfolio/SavingsPage.tsx]], [[apps/frontend/src/pages/portfolio/RealEstatePage.tsx]], [[apps/frontend/src/pages/portfolio/StocksPage.tsx]], [[docs/security/data-protection#xss-prevention]]
 
+## Portfolio Asset Page Loading and Error States (2026-05-29)
+
+The four portfolio asset pages — Stocks & ETFs, Crypto, Savings, and Real Estate (Metals renders via `StocksPage` with `assetClasses={["metals"]}`) — now handle loading and error conditions explicitly rather than falling through to the empty state.
+
+### `usePortfolio` hook surface
+
+`usePortfolio()` now surfaces the underlying React Query state from `useInvestmentsQuery`:
+
+```typescript
+const {
+  isLoading,   // true while the initial investments fetch is in flight
+  isError,     // true when the fetch has failed
+  error,       // Error object (or null)
+  refetch,     // () => void — re-trigger the failed query
+  ...
+} = usePortfolio();
+```
+
+Previously a failed fetch would resolve to an empty `investments` array, silently rendering the "no holdings yet" empty state and masking the error from the user.
+
+### Page-level states
+
+Each asset page checks these values before rendering the holdings list:
+
+| State | Rendered | Trigger |
+|---|---|---|
+| Loading | Skeleton placeholder | `isLoading === true` |
+| Error | `PageError` component with "Retry" button | `isError === true` |
+| Empty | Asset-class-specific empty state | Fetch succeeded; zero holdings |
+| Populated | Holdings table / cards | Fetch succeeded; holdings present |
+
+The "Retry" button on the error state calls `refetch()` so users can recover from transient network failures without a full page reload.
+
+> [!tip]
+> The `PageError` component is shared across portfolio pages. It accepts an `onRetry` callback prop and renders a localized error message with the underlying error detail.
+
+Code links: [[apps/frontend/src/hooks/usePortfolio.ts]], [[apps/frontend/src/pages/portfolio/StocksPage.tsx]], [[apps/frontend/src/pages/portfolio/CryptoPage.tsx]], [[apps/frontend/src/pages/portfolio/SavingsPage.tsx]], [[apps/frontend/src/pages/portfolio/RealEstatePage.tsx]], [[apps/frontend/src/pages/portfolio/MetalsPage.tsx]]
+
 ## PDF Report Export (Phase 8)
 
 Portfolio data can be exported as a comprehensive PDF report via the [[docs/features/pdf-report-export|PDF Report Export]] feature. The portfolio report includes:
@@ -542,12 +643,163 @@ Portfolio report is available from the Portfolio Overview page (`/portfolio`) an
 
 See [[docs/api/reports#post-apireportsportfolio|Reports API: Portfolio Endpoint]] for request/response details.
 
+## Per-Account Holdings (2026-06-18, ADR-091 / ADR-100)
+
+### Per-account breakdown in portfolio summary
+
+`getPortfolioSummary` is extended (additively — the per-investment contract and its golden tests are untouched) with a top-level `byAccount` array. Each element is:
+
+```typescript
+{ account_id: number | null, currentValue: number, totalInvested: number, gainLoss: number }
+```
+
+`account_id: null` means unassigned lots (no account set). Callers resolve names from the accounts list. The parity invariant `Σ byAccount.currentValue == totals.totalPortfolioValue` is locked by a test (ADR-061 discipline). See [[docs/api/portfolio-summary|Portfolio Summary API]] for the updated response shape.
+
+Frontend hook: `apps/frontend/src/hooks/portfolio/useAccountPositions.ts`. `InvestmentDetailDialog` shows a "Holdings by Account" card.
+
+### Edit-trade account picker
+
+`EditPortfolioTxnDialog` has an account selector. `PATCH /api/investments/transactions/:id` accepts `account_id` (integer to reassign a lot to a different account, or `null` to unassign it). No other transaction fields are required alongside it.
+
+### Partial-move cost-basis strategy
+
+`POST /api/investments/:id/move` accepts an optional `strategy` field:
+
+| `strategy` | Behavior |
+|------------|----------|
+| `'fifo'` | Default. Move oldest buy lots first; boundary lot split pro-rata. |
+| `'proportional'` | Average-cost: split *every* lot by the same fraction. Useful for mutual fund–style holdings. |
+
+The strategy selector is shown in `MoveHoldingDialog` only for partial moves (`units < net`). `MoveHoldingService` implements both paths.
+
+### Close-account workflow
+
+`CloseAccountDialog` (wired into `AccountsPage`) lists all of an account's holdings, lets the user pick a destination account, transfers all lots in-specie (calls `POST /api/investments/:id/move` per holding), then archives the account (`PATCH /api/accounts/:id` with `{ is_active: false }`). This is a UI-level workflow with no dedicated backend endpoint; the `ON DELETE RESTRICT` FK on `portfolio_transactions_base.account_id` prevents hard-deletion of an account that still has lots.
+
+Code links: [[apps/frontend/src/components/portfolio/CloseAccountDialog.tsx]], [[apps/node-backend/src/services/portfolio/moveHoldingService.js]]
+
+### Brokerage fan-out core (ADR-095)
+
+`apps/node-backend/src/services/importPipeline/brokerageFanout.js` is now wired and tested. It exports `planBrokerageFanout(rows, accountId)` and `commitBrokerageFanout(plan, db)`, which route one parsed brokerage statement into:
+- cash ledger rows (deposits, withdrawals, fees, dividends, taxes, interest) → `transactions`
+- trade rows (buys, sells) → `portfolio_transactions` with an ADR-090 cash leg
+
+The double-count guard is enforced: a trade emits exactly one cash movement (its leg); no standalone cash row is also created for the same buy/sell.
+
+> [!warning] Remaining surface
+> The brokerage **parser kind** (mixed-row CSV classifier), the **staging schema** for mixed-row batches, and the **review UI integration** for per-row routing decisions are **not yet built**. The fan-out service is correct and tested but is not reachable through the import UI. See [[docs/adr/095-brokerage-account-import|ADR-095]] for the full status.
+
+## FX Attribution (2026-06-11, ADR-074)
+
+Multi-currency portfolios now expose a decomposition of total gain into **asset gain** (pure performance in the investment's native currency) and **FX gain** (currency movement). The identity `gainLoss = assetGain + fxGain` holds per investment and in totals.
+
+### Where it appears in the UI
+
+| Surface | What is shown |
+|---------|--------------|
+| **Portfolio Overview — Total Gain/Loss card** | Subline: "Asset gain: X · FX effect: Y" beneath the headline gain/loss |
+| **Stocks & ETFs / Metals tables** | FX P/L column — shown only when at least one holding is in a foreign currency |
+| **Crypto table** | FX P/L column — same condition |
+| **Performance page — headline metrics** | FX attribution line below Total Gain/Loss |
+| **Performance page — value-over-time chart** | Optional FX-neutral toggle (dashed series) showing `value_fx_neutral` when migration 0039 has been applied and snapshots recomputed |
+| **Investment detail dialog** | FX Attribution card: shows `assetGain`, `fxGain`, `nativeCurrentValue` |
+
+### Fallback rate disclosure
+
+When a transaction lacked a transaction-date rate and the backend fell back to today's rate, the `usedFallbackRate` flag is `true` in the API response. The UI surfaces this as a small warning callout on the relevant card or row, indicating that the FX attribution figures may be approximate for that investment.
+
+> [!warning]
+> The FX-neutral chart toggle on the Performance page requires migration `0039_add_value_fx_neutral_to_snapshots` to be applied (`bun run db:upgrade`) and snapshots to be recomputed (happens automatically on next startup after migration). Until then, the toggle is hidden.
+
+### Semantics of invested/gainLoss after ADR-074
+
+Before ADR-074, `totalInvested` was restated at today's FX on every request. After ADR-074:
+
+- **`totalInvested`** reflects what was actually paid in EUR-equivalent at the time of purchase. It does not move with the FX market.
+- **`gainLoss`** includes the FX component. A USD holding that gained 0% in USD terms but whose currency strengthened 5% vs EUR will show a positive `gainLoss` driven entirely by `fxGain`.
+- The live portfolio totals and the snapshot series now agree on semantics (both use purchase-date rates for invested capital), closing the contradiction that existed before.
+
+Code links: [[apps/node-backend/src/services/portfolio/portfolioSummaryService.js]], [[apps/node-backend/src/routes/info/_performanceHelpers.js]], [[apps/node-backend/src/controllers/investmentController.js]], [[packages/shared-utils/src/portfolio.js]], [[docs/adr/074-fx-attribution-historical-rates|ADR-074]]
+
+## Cash-Aware Rebalancing (ADR-098, updated 2026-06-19)
+
+The Rebalance page (`/portfolio/rebalance`, nav: Portfolio → Analysis → Rebalance) runs a
+cash-deploy-only rebalancing calculation: given target sleeve weights and the user's available
+spendable cash, it computes how much to put into each underweight sleeve without proposing any
+sells. It calls `POST /api/cross-workspace/rebalance` (see [[docs/adr/098-cross-workspace-features|ADR-098]]).
+
+### Allocation source
+
+The page offers three mutually exclusive source modes:
+
+| Mode | Description |
+|------|-------------|
+| **Presets** | Three built-in plans: `sixty_forty`, `all_weather`, `three_fund` |
+| **Saved plans** | User-named custom allocations persisted across sessions (see below) |
+| **Custom (new)** | Editable per-sleeve target-% rows; unsaved until explicitly named and saved |
+
+### Sleeve vocabulary
+
+Sleeve names match the `SLEEVE_ROLLUP` grouping in `crossWorkspaceDataService.js`:
+
+`stocks` · `intl_stocks` · `bonds` · `gold` · `commodities` · `crypto` · `real_estate` · `savings`
+
+### Optional cash cap
+
+A numeric input limits how much spendable cash to deploy in a run. Blank = deploy all available
+liquid cash. The UI clamps user input to `[0, availableCash]` before sending it as the existing
+`availableCash` parameter on the route.
+
+### Weight normalization
+
+Target weights do not need to sum to 100%. The server's `normalizeWeights` function scales them
+proportionally before running deployment math, so a user can enter rough ratios and get correct
+allocation splits.
+
+### Saved named plans
+
+Custom allocations can be named, saved, updated, and deleted. They persist as a JSON array under
+the `rebalance_plans` key in the settings store — no DB migration required.
+
+**Plan shape:**
+
+```typescript
+interface RebalancePlan {
+  id: string;
+  name: string;              // 1–80 chars
+  targetWeights: Record<string, number>;  // sleeve → non-negative %
+  cashCap?: number;          // optional cap ≥ 0
+}
+```
+
+- Max 50 saved plans per user. Enforced server-side with a 400 response on excess.
+- Backend validation is in `assertRebalancePlansValue` inside `apps/node-backend/src/routes/settings.js`.
+- The `rebalance_plans` key returns `[]` by default (same pattern as `backup_settings`).
+
+### i18n keys (2026-06-19)
+
+New keys in `rebalance.*` namespace (en + nl). Notable renames: `rebalance.plan` →
+`rebalance.deploymentPlan` (the deployment-result card). New: `rebalance.plan.*` (saved-plan
+management UI), `rebalance.editor.*` (custom editor rows), `rebalance.sleeve.*` (sleeve labels),
+`rebalance.customNew`, `rebalance.presets`, `rebalance.savedPlans`.
+
+Code links: [[apps/frontend/src/pages/portfolio/RebalancePage.tsx]], [[apps/frontend/src/hooks/useRebalancePlans.ts]], [[apps/frontend/src/lib/api/crossWorkspace.ts]], [[apps/node-backend/src/routes/settings.js]], [[apps/node-backend/src/routes/crossWorkspace.js]], [[apps/node-backend/tests/settingsStorage.test.js]]
+
+See also: [[docs/api/settings|Settings API — `rebalance_plans` key]], [[docs/adr/098-cross-workspace-features|ADR-098]]
+
 ## Related
 
 - [[docs/api/investments|API: Investments]]
 - [[docs/api/watchlist|API: Watchlist]]
+- [[docs/api/portfolio-summary|Portfolio Summary API]] — FX attribution response fields; `byAccount` breakdown
 - [[docs/integrations/price-providers|Price Providers]] — Live and historical price data
 - [[docs/integrations/kinesis-price-provider|Kinesis Price Provider]] — Metals and commodities
+- [[docs/integrations/currency-conversion|Currency Conversion]] — ECB full-history tier, startup backfill
+- [[docs/adr/100-net-worth-account-native-holdings|ADR-100]] — Per-account holdings parity (Σ byAccount)
+- [[docs/adr/091-per-account-positioning|ADR-091]] — Per-account lots, move-holding, close-account
+- [[docs/adr/095-brokerage-account-import|ADR-095]] — Brokerage fan-out (core built; parser/UI deferred)
+- [[docs/adr/074-fx-attribution-historical-rates|ADR-074]] — FX attribution with purchase-date rates
+- [[docs/adr/073-shared-portfolio-math-package|ADR-073]] — Shared portfolio math (converted track)
 - [[docs/adr/002-database-schema|Database Schema]]
 
 ## Migrations
@@ -567,3 +819,6 @@ See [[docs/api/reports#post-apireportsportfolio|Reports API: Portfolio Endpoint]
 - `0022_add_kinesis_price_provider_enum.py` — Added `kinesis` to `price_provider` enum
 - `0023_portfolio_performance_snapshots.py` — Added `portfolio_performance_snapshots` table for daily performance caching
 - `0024_per_class_invested_columns.py` — Added per-class invested columns (`stocks_etfs_invested`, `crypto_invested`, `metals_invested`) to performance snapshots
+- `0039_add_value_fx_neutral_to_snapshots.py` — Added nullable `value_fx_neutral NUMERIC(18,2)` to `portfolio_performance_snapshots`; writer detects column presence and degrades gracefully (ADR-074)
+- `0057_portfolio_import_batches_account_id.py` — Adds `account_id` FK to `portfolio_import_batches` so committed lots inherit the destination account (**authored, not applied** — run `bun run db:upgrade`)
+- `0058_watchlist_added_price.py` — Adds `added_price NUMERIC(18,6) NULLABLE` to `watchlist` for the what-if backtest (**authored, not applied** — run `bun run db:upgrade`)

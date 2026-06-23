@@ -1,6 +1,15 @@
 /**
- * TypeScript types for the FastAPI backend
- * Based on the backend API schemas (apps/backend/api/api_schemas.py)
+ * Hand-written, ergonomic TypeScript types for the Vision REST API, consumed
+ * across the frontend. The authoritative contract lives in `openapi.yaml`; the
+ * machine-generated mirror is `./generated.ts` (regenerated + drift-checked in
+ * CI via `bun run generate:types`). These hand types are kept assignable to the
+ * generated contract by the compile-time assertions in `./contract-guard.ts`,
+ * which fail `bun run typecheck` if the two drift apart.
+ *
+ * Note: money/quantity fields are typed `number` here, but pg returns NUMERIC
+ * columns as strings — the backend repository layer coerces them on emit (see
+ * packages/shared-utils/src/money.js). Do not assume raw repository rows are
+ * already numeric.
  */
 
 export interface Link {
@@ -41,6 +50,76 @@ export interface CategoryUpdate {
     general?: string;
     detail?: string;
     description?: string;
+    is_active?: boolean;
+}
+
+// ==================== Account Types (ADR-088) ====================
+
+export type AccountType =
+    | 'checking'
+    | 'savings'
+    | 'brokerage'
+    | 'crypto_exchange'
+    | 'wallet'
+    | 'pension'
+    | 'liability';
+export type AccountLiquidityClass = 'liquid' | 'semi_liquid' | 'illiquid';
+export type AccountTaxWrapper = 'none' | 'pension' | 'tax_advantaged';
+export type AccountOwner = 'me' | 'partner' | 'joint';
+
+export interface Account {
+    id: number;
+    name: string;
+    display_name?: string;
+    institution?: string;
+    currency: string;
+    type: AccountType;
+    liquidity_class: AccountLiquidityClass;
+    spendable: boolean;
+    in_net_worth: boolean;
+    tax_wrapper: AccountTaxWrapper;
+    owner: AccountOwner;
+    multi_currency_cash: boolean;
+    has_cash_sleeve: boolean;
+    funding_account_id?: number;
+    statement_balance?: number;
+    statement_balance_date?: string;
+    /** Latest active transaction balance (ADR-094); computed, read-only. */
+    computed_balance?: number;
+    /** statement_balance − computed_balance; null when no statement balance (ADR-094). */
+    drift?: number;
+    /** Whether the account has any active ledger rows; only set by the list endpoint. */
+    has_transactions?: boolean;
+    is_active: boolean;
+    created_at: string;
+    updated_at?: string;
+}
+
+export interface AccountsListResponse {
+    items: Account[];
+    total: number;
+    links?: Link[];
+}
+
+export interface AccountCreate {
+    name: string;
+    display_name?: string;
+    institution?: string;
+    currency?: string;
+    type?: AccountType;
+    liquidity_class?: AccountLiquidityClass;
+    spendable?: boolean;
+    in_net_worth?: boolean;
+    tax_wrapper?: AccountTaxWrapper;
+    owner?: AccountOwner;
+    multi_currency_cash?: boolean;
+    has_cash_sleeve?: boolean;
+    funding_account_id?: number;
+    statement_balance?: number;
+    statement_balance_date?: string;
+}
+
+export interface AccountUpdate extends Partial<AccountCreate> {
     is_active?: boolean;
 }
 
@@ -211,8 +290,8 @@ export interface PlannedTransactionsListResponse {
 
 export interface PlannedTransactionCreate {
     planned_date: string; // YYYY-MM-DD format
-    bank_account: string;
-    recipient_id: number;
+    bank_account?: string;
+    recipient_id?: number;
     memo?: string;
     amount: number;
     currency?: string;
@@ -265,7 +344,7 @@ export interface PlannedTransactionExecuteRequest {
 // ==================== Portfolio Types ====================
 
 export type AssetClass = 'stock' | 'etf' | 'crypto' | 'metals' | 'real_estate' | 'savings' | 'bond';
-export type PortfolioTxnType = 'buy' | 'sell' | 'dividend' | 'fee' | 'tax' | 'interest' | 'rent_income' | 'appreciation' | 'gift';
+export type PortfolioTxnType = 'buy' | 'sell' | 'dividend' | 'fee' | 'tax' | 'interest' | 'rent_income' | 'appreciation' | 'gift' | 'split' | 'merger' | 'spinoff' | 'return_of_capital';
 export type RecurrenceInterval = 'daily' | 'weekly' | 'bi-weekly' | 'monthly' | 'quarterly' | 'yearly';
 export type PriceProvider = 'manual' | 'binance' | 'yahoo' | 'custom' | 'kinesis';
 
@@ -371,6 +450,7 @@ export interface PortfolioTransaction {
     taxes?: number;
     currency: string;
     fx_rate_to_eur?: number;
+    account_id?: number;
     note?: string;
     is_recurring: boolean;
     recurrence_interval?: RecurrenceInterval;
@@ -397,6 +477,9 @@ export interface PortfolioTransactionCreate {
     taxes?: number;
     currency?: string;
     fx_rate_to_eur?: number;
+    account_id?: number;
+    /** Cash account whose sleeve the trade's cash leg posts to (ADR-090); create-only. */
+    cash_account_id?: number;
     note?: string;
     is_recurring?: boolean;
     recurrence_interval?: RecurrenceInterval;

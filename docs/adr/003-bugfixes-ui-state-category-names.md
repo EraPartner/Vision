@@ -36,6 +36,9 @@ related_code:
 
 Accepted - 2026-03-23
 
+## Date
+2026-03-23
+
 ## Context
 
 Multiple bugs were identified in the Vision application:

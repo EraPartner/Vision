@@ -11,7 +11,7 @@ aliases: [adr-021, decimal arithmetic, monetary precision, float drift fix]
 # ADR-021: Decimal Arithmetic for Monetary Values
 
 ## Status
-Implemented
+Accepted
 
 ## Date
 2026-04-19 (Accepted)

@@ -2,6 +2,8 @@
  * Query-string helpers shared by /api/info sub-routers.
  */
 
+import { todayAppDateString } from '../../lib/timezone.js';
+
 export function getTargetCurrency(req) {
   const raw = req.query.currency ?? req.query.target_currency;
   if (raw == null || raw === '') return 'EUR';
@@ -27,6 +29,9 @@ export function isTruthyQueryParam(raw) {
   return false;
 }
 
+// Kept as the import point for the /api/info sub-routers; the implementation
+// is the shared APP_TIMEZONE "today" (UTC read here was yesterday until
+// 01:00/02:00 local in UTC+ zones).
 export function getCurrentDateString() {
-  return new Date().toISOString().split('T')[0];
+  return todayAppDateString();
 }

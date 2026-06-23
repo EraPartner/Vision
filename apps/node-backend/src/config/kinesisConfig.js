@@ -6,7 +6,7 @@
  *
  * Environment Variables:
  *   - KINESIS_BASE_URL: Base API endpoint (default: provided below)
- *   - KINESIS_DEFAULT_TIMEFRAME: Default timeframe in minutes (default: 60)
+ *   - KINESIS_DEFAULT_TIMEFRAME: Default trendline timeframe in minutes (default: 60).
  *   - KINESIS_DEFAULT_FROM_DATE: Default start date ISO8601 (default: 2019-01-01T08:47:55.843Z)
  */
 

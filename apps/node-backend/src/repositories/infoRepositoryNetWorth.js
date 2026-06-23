@@ -4,6 +4,10 @@
 
 import { query } from '../database/connection.js';
 import { logger } from '../config/logger.js';
+import { computeDailySnapshots } from '../services/portfolio/snapshotBuilder.js';
+import { accountRepository } from './accountRepository.js';
+import { convertToCurrency } from '../services/currency/currencyConversionService.js';
+import { toNumber } from '../lib/money.js';
 import {
   roundToCents,
   formatDateToYmd,
@@ -21,8 +25,11 @@ export const netWorthRepository = {
    * portfolio_performance_snapshots (populated by portfolioPerformanceSnapshotService).
    * Bank balances are still derived live from the transactions table.
    * No network calls — all data from the database.
+   *
+   * @param {string} [targetCurrency]
+   * @param {{ liveInvestments?: number }} [opts]
    */
-  async getNetWorthFromSnapshots(targetCurrency = 'EUR') {
+  async getNetWorthFromSnapshots(targetCurrency = 'EUR', { liveInvestments } = {}) {
     const firstDateResult = await query(`
       SELECT LEAST(
         (SELECT MIN(snapshot_date) FROM portfolio_performance_snapshots WHERE currency = $1),
@@ -49,7 +56,7 @@ export const netWorthRepository = {
     if (!firstDataDateYmd) {
       logger.info('Net worth has no source records', { targetCurrency });
       return {
-        current: { liquid: 0, investments: 0, netWorth: 0 },
+        current: { liquid: 0, liabilities: 0, investments: 0, netWorth: 0 },
         monthlyChange: 0,
         monthlyChangePercent: 0,
         snapshots: [],
@@ -77,14 +84,23 @@ export const netWorthRepository = {
         FROM bounds
       ),
       account_list AS (
-        SELECT DISTINCT bank_account
-        FROM transactions
-        WHERE is_active = true
-          AND bank_account IS NOT NULL
+        -- in_net_worth gates the bank/cash side of net worth (ADR-089): a
+        -- tracking-only account (in_net_worth=false) does not contribute.
+        -- is_liability splits negative debt balances (ADR-092) out of the
+        -- "liquid assets" bucket so a mortgage is not counted as liquid cash.
+        SELECT a.id AS account_id, a.name AS bank_account,
+               (a.type = 'liability') AS is_liability
+        FROM accounts a
+        WHERE a.in_net_worth = true
+          AND a.id IN (
+            SELECT t.account_id FROM transactions t
+             WHERE t.is_active = true AND t.account_id IS NOT NULL
+          )
       )
       SELECT
         to_char(d.day, 'YYYY-MM-DD') AS day,
         a.bank_account,
+        a.is_liability,
         COALESCE(lb.currency, 'EUR') AS currency,
         lb.balance
       FROM days d
@@ -93,14 +109,14 @@ export const netWorthRepository = {
         SELECT t.currency, t.balance
         FROM transactions t
         WHERE t.is_active = true
-          AND t.bank_account = a.bank_account
+          AND t.account_id = a.account_id
           AND t.balance IS NOT NULL
           AND t.date <= d.day
         ORDER BY t.date DESC, t.id DESC
         LIMIT 1
       ) lb ON true
       WHERE lb.balance IS NOT NULL
-      ORDER BY d.day, a.bank_account
+      ORDER BY d.day, a.account_id
     `, [firstDataDateYmd]);
 
     let bankHistoryConverted = await convertRowsWithHistoricalRateFallback(
@@ -172,10 +188,15 @@ export const netWorthRepository = {
       );
     }
 
+    // Split each in-net-worth account's daily balance into liquid assets vs
+    // liabilities (ADR-092): debt balances are negative and must not drag the
+    // "liquid assets" headline negative. netWorth = liquid + liabilities + investments.
     const liquidByDay = {};
+    const liabilitiesByDay = {};
     for (const row of bankHistoryConverted) {
-      if (!liquidByDay[row.day]) liquidByDay[row.day] = 0;
-      liquidByDay[row.day] += row.amount_eur;
+      const bucket = row.is_liability ? liabilitiesByDay : liquidByDay;
+      if (!bucket[row.day]) bucket[row.day] = 0;
+      bucket[row.day] += row.amount_eur;
     }
 
     const start = new Date(`${firstDataDateYmd}T00:00:00Z`);
@@ -191,6 +212,7 @@ export const netWorthRepository = {
     for (let day = new Date(start); day <= end; day = addDaysUtc(day)) {
       const dayKey = getDayKeyUtc(day);
       const liquid = roundToCents(liquidByDay[dayKey] || 0);
+      const liabilities = roundToCents(liabilitiesByDay[dayKey] || 0);
       if (Object.prototype.hasOwnProperty.call(investmentsByDay, dayKey)) {
         lastInvestments = investmentsByDay[dayKey];
       }
@@ -198,14 +220,30 @@ export const netWorthRepository = {
       snapshots.push({
         date: dayKey,
         liquid,
+        liabilities,
         investments,
-        netWorth: roundToCents(liquid + investments),
+        netWorth: roundToCents(liquid + liabilities + investments),
       });
     }
 
     const sanitizedSnapshots = sanitizeIsolatedDailyInvestmentSpikes(snapshots);
 
-    const latest = sanitizedSnapshots[sanitizedSnapshots.length - 1] || { liquid: 0, investments: 0, netWorth: 0 };
+    // Reconcile the most-recent point with the live portfolio summary. The
+    // stored snapshot value is only rebuilt at startup (snapshotBuilder runs
+    // once in warmup), so on its own the Net Worth "Investments" headline
+    // freezes at the boot-time price while the Dashboard/Performance cards —
+    // served live from portfolioSummaryService — keep moving with each hourly
+    // price refresh. The caller passes the live total so the latest snapshot
+    // (headline, last chart point, and latest table row) always matches those
+    // two surfaces. See ADR-064.
+    if (Number.isFinite(liveInvestments) && sanitizedSnapshots.length > 0) {
+      const last = sanitizedSnapshots[sanitizedSnapshots.length - 1];
+      const investments = roundToCents(liveInvestments);
+      last.investments = investments;
+      last.netWorth = roundToCents(last.liquid + (last.liabilities || 0) + investments);
+    }
+
+    const latest = sanitizedSnapshots[sanitizedSnapshots.length - 1] || { liquid: 0, liabilities: 0, investments: 0, netWorth: 0 };
     const currentMonthPrefix = latest.date ? extractYearMonth(latest.date) : null;
     const firstCurrentMonthIdx = currentMonthPrefix
       ? sanitizedSnapshots.findIndex(s => s.date.startsWith(currentMonthPrefix))
@@ -230,6 +268,7 @@ export const netWorthRepository = {
     return {
       current: {
         liquid: latest.liquid,
+        liabilities: latest.liabilities ?? 0,
         investments: latest.investments,
         netWorth: latest.netWorth,
       },
@@ -237,5 +276,73 @@ export const netWorthRepository = {
       monthlyChangePercent: roundToCents(monthlyChangePercent),
       snapshots: sanitizedSnapshots,
     };
+  },
+
+  /**
+   * Net worth expressed natively as Σ accounts (ADR-100): per in-net-worth account,
+   * the rebuilt daily HOLDINGS series (from the snapshot builder's per-account split,
+   * Σ accounts == the aggregate value by construction) plus current cash (ADR-094).
+   * Legacy lots with no account collapse into one `accountId: null` ("unassigned") row.
+   *
+   * @param {string} [targetCurrency]
+   */
+  async getNetWorthByAccount(targetCurrency = 'EUR') {
+    const target = (targetCurrency || 'EUR').toUpperCase();
+    const [snapshots, accounts] = await Promise.all([
+      computeDailySnapshots(target),
+      accountRepository.getAll({ active: null }),
+    ]);
+
+    // Per-account daily holdings from the builder's value_by_account split.
+    const holdingsSeriesByAcct = new Map();
+    for (const s of snapshots) {
+      for (const [acctKey, value] of Object.entries(s.value_by_account || {})) {
+        if (!holdingsSeriesByAcct.has(acctKey)) holdingsSeriesByAcct.set(acctKey, []);
+        holdingsSeriesByAcct.get(acctKey).push({ date: s.snapshot_date, holdings: roundToCents(value) });
+      }
+    }
+    const lastHoldings = (key) => {
+      const series = holdingsSeriesByAcct.get(key);
+      return series && series.length ? series[series.length - 1].holdings : 0;
+    };
+
+    const rows = [];
+    for (const a of accounts) {
+      if (!a.in_net_worth) continue;
+      const key = String(a.id);
+      const acctCur = (a.currency || 'EUR').toUpperCase();
+      const cashNative = Number(a.computed_balance) || 0;
+      const cash = roundToCents(
+        acctCur === target ? cashNative : toNumber(await convertToCurrency(cashNative, acctCur, target)),
+      );
+      const currentHoldings = lastHoldings(key);
+      rows.push({
+        accountId: a.id,
+        name: a.display_name || a.name,
+        currency: acctCur,
+        cash,
+        currentHoldings,
+        currentTotal: roundToCents(cash + currentHoldings),
+        holdingsSeries: holdingsSeriesByAcct.get(key) || [],
+      });
+    }
+
+    // Unassigned holdings (legacy lots, no account) — holdings only, no cash sleeve.
+    const unassigned = holdingsSeriesByAcct.get('unassigned');
+    if (unassigned && unassigned.length) {
+      const currentHoldings = unassigned[unassigned.length - 1].holdings;
+      rows.push({
+        accountId: null,
+        name: null,
+        currency: target,
+        cash: 0,
+        currentHoldings,
+        currentTotal: currentHoldings,
+        holdingsSeries: unassigned,
+      });
+    }
+
+    rows.sort((a, b) => b.currentTotal - a.currentTotal);
+    return { currency: target, accounts: rows };
   },
 };

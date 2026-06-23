@@ -1,7 +1,7 @@
 import { useQuery } from '@tanstack/react-query';
 import { apiClient } from '@/lib/api';
-import { useSettings } from '@/contexts/SettingsContext';
 import { useAppSettings } from '@/contexts/AppSettingsContext';
+import { useExcludedIds } from '@/hooks/useExcludedIds';
 
 export interface NetHistoryPoint {
   year: number;
@@ -28,54 +28,41 @@ const NET_HISTORY_MONTHS = 12;
  * have been removed.
  */
 export function useFilteredDashboardStats() {
-  const { settings } = useSettings();
   const { appSettings } = useAppSettings();
   const targetCurrency = appSettings.defaultCurrency || 'EUR';
 
-  // Check if exclusions should apply to dashboard
-  const exclusionsApply =
-    settings.exclusionScope === 'everywhere' || settings.exclusionScope === 'dashboard';
+  // Shared resolution of excluded category/recipient IDs (incl. hidden categories)
+  // so the dashboard, statistics page, and net-summary card all exclude the same
+  // set — see useExcludedIds for why this was centralized.
+  const { excludedCategoryIds, excludedRecipientIds, isReady } = useExcludedIds('dashboard');
 
-  // Derive a stable, minimal cache key that only includes the settings fields that
-  // actually affect this query's output.  Using the entire `settings` object caused
-  // cache misses on every unrelated setting change (language, theme, etc.).
+  // Derive a stable, minimal cache key from the *resolved* exclusion set so the
+  // query refetches when the effective exclusions change (hidden categories
+  // included) but not on unrelated settings (language, theme, …).
   const queryKey = [
     'filteredDashboardStats',
     targetCurrency,
-    exclusionsApply,
-    exclusionsApply ? settings.excludedCategoryIds : [],
-    exclusionsApply ? settings.excludedRecipientIds : [],
-    exclusionsApply ? settings.excludeHiddenCategories : false,
+    excludedCategoryIds,
+    excludedRecipientIds,
   ] as const;
 
   return useQuery<FilteredDashboardStats>({
     queryKey,
+    // Wait until hidden-category resolution has settled, otherwise the first
+    // run would omit hidden categories and momentarily show wrong totals.
+    enabled: isReady,
     queryFn: async () => {
-      // Fetch total transaction count from the transaction-count endpoint.
-      // This card reflects the DB total independent of dashboard filtering.
-      const countData = await apiClient.getTransactionCount();
-
-      // Resolve hidden category IDs if needed
-      let hiddenCategoryIds: number[] = [];
-      if (exclusionsApply && settings.excludeHiddenCategories) {
-        const categoriesData = await apiClient.getCategories({ limit: 1000 });
-        hiddenCategoryIds = categoriesData.items
-          .filter((cat) => !cat.is_active)
-          .map((cat) => cat.id);
-      }
-
-      const allExcludedCategoryIds = exclusionsApply
-        ? [...settings.excludedCategoryIds, ...hiddenCategoryIds]
-        : [];
-      const allExcludedRecipientIds = exclusionsApply ? settings.excludedRecipientIds : [];
-
-      const envelope = await apiClient.getAggregationMonthlySummary({
-        excluded_category_ids:
-          allExcludedCategoryIds.length > 0 ? allExcludedCategoryIds : undefined,
-        excluded_recipient_ids:
-          allExcludedRecipientIds.length > 0 ? allExcludedRecipientIds : undefined,
-        currency: targetCurrency,
-      });
+      // The count (DB total, filter-independent) and the monthly summary have no
+      // data dependency — fetch concurrently so this hook (which gates the whole
+      // dashboard skeleton) doesn't pay an extra serial round-trip on every mount.
+      const [countData, envelope] = await Promise.all([
+        apiClient.getTransactionCount(),
+        apiClient.getAggregationMonthlySummary({
+          excluded_category_ids: excludedCategoryIds.length > 0 ? excludedCategoryIds : undefined,
+          excluded_recipient_ids: excludedRecipientIds.length > 0 ? excludedRecipientIds : undefined,
+          currency: targetCurrency,
+        }),
+      ]);
 
       // Use the most recent month with data to keep cards aligned with actual latest activity.
       const monthsWithData = envelope.data.months

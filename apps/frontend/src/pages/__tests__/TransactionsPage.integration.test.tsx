@@ -34,6 +34,37 @@ describe("TransactionsPage (integration)", () => {
         errorSpy.mockRestore();
     });
 
+    it("does not render-loop on a multi-value category_ids filter URL (general-category pivot drill)", async () => {
+        // Regression: category_ids/tags produced a fresh array identity every
+        // render; the currentFilter memo then changed every render and the
+        // selection-clear effect setState'd unconditionally — an infinite
+        // update loop ("Maximum update depth exceeded") that wedged the app
+        // until a hard refresh.
+        const errorSpy = vi.spyOn(console, "error").mockImplementation(() => {});
+
+        renderWithApp(
+            <Routes>
+                <Route path="/transactions" element={<TransactionsPage />} />
+            </Routes>,
+            {
+                initialEntries: [
+                    "/transactions?category_ids=6%2C53%2C22&start_date=2016-03-01&end_date=2016-03-31&filter_label=OVERSCHRIJVING",
+                ],
+            },
+        );
+
+        await screen.findByRole("heading", { name: /^transactions$/i, level: 1 });
+        // Give a pending loop a couple of frames to manifest before asserting.
+        await new Promise((r) => setTimeout(r, 250));
+
+        const loopErrors = errorSpy.mock.calls.filter((args) =>
+            args.some((a) => String(a).includes("Maximum update depth")),
+        );
+        expect(loopErrors).toHaveLength(0);
+
+        errorSpy.mockRestore();
+    });
+
     it("surfaces an error state when the transactions endpoint fails", async () => {
         const errorSpy = vi.spyOn(console, "error").mockImplementation(() => {});
         server.use(

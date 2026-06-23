@@ -3,10 +3,10 @@ title: Code Patterns Reference
 type: reference
 status: active
 date: 2026-04-26
-updated: 2026-05-14
-tags: [reference, patterns, conventions, code-style, backend, frontend, phase-0, phase-1, phase-2, phase-3, phase-4, phase-5, phase-6, phase-9, phase-12, phase-14, phase-q, phase-c, phase-d, motion, liquid-glass, design-system, decimal, money, timezone, openapi, domain-split, import, import-pipeline, concurrency, batching, decimal-enforcement, zustand, slice-selection, typescript, error-handling, type-safety, csv, formula-injection, cwe-1236, csv-record-splitter, csv-parsing, multi-line-fields, date-utilities, immutability, aggregation-optimization, recipient-groups, portfolio-totals, query-parameter-filtering, buildquery, bug-hunt-2026-05-05, bug-hunt-2026-05-06, bug-hunt-2026-05-08, react-keys, stable-keys, mount-guard, memory-leak-prevention, parseLocaleNumber, number-parsing, locale-number, settings-backed-hook, portfolio-tax-classifications, audit-2026-05-11, belgian-tax, freeze-display-pattern, adr-059, dev-observability, devtools, api-inspector, observability, postgres-locking, for-update-group-by]
-description: Standard code patterns used throughout the Vision project — repositories, routes, hooks, API client, Express setup, error handling, type safety, filter builders, aggregation envelopes, aggregation refresh, trigger-maintained tables, golden fixtures, database fixtures, pure calculation services, atomic multi-step transactions, streaming CSV exports with formula injection prevention, import batch concurrency, motion consumers, surface shells, gradient icon tiles, money utilities, decimal utilities, shared date utilities with input validation and locale support, timezone boundary handling, TypeScript type annotations, type-safe error handling, domain-split API client, Zustand store with useShallow slice selection, immutable PATCH field sanitization, aggregation query optimization with Map-based single-pass accumulation, recipient group resolution via scalar subqueries (Phase Q), portfolio totals single-source-of-truth pattern (Phase 14), Belgian Tax freeze/display pattern for engine-drift protection (ADR-059, May 2026), dev-only observability integration pattern (May 2026 devtools: module-level pub-sub event bus with zero-cost tree-shaking in production). May 2026 bug hunt adds React key generation pattern (use UUID instead of index), mount guard pattern (prevent setState after unmount), and documents parseLocaleNumber heuristic with single-comma thousands separator fix.
-aliases: [code patterns, coding patterns, conventions, patterns, how to write code, repository pattern, route pattern, hook pattern, error handling, type-safe error handling, type annotations, filter builder, golden fixture, aggregation envelope, calculation services, import concurrency, motion pattern, surface shell pattern, gradient icon pattern, money pattern, decimal pattern, timezone pattern, domain split, openapi, typescript types, csv export, safe csv, formula injection, cwe-1236, date utilities, immutability, aggregation optimization, Map pattern, recipient group filter, recipientGroupId, portfolio totals, single source of truth, parseLocaleNumber, number parsing, locale-aware number parsing, thousands separator, decimal separator, belgian-tax-pattern, freeze-display-pattern, as-filed-calculation, engine-drift-protection]
+updated: 2026-06-18
+tags: [reference, patterns, conventions, code-style, backend, frontend, phase-0, phase-1, phase-2, phase-3, phase-4, phase-5, phase-6, phase-9, phase-12, phase-14, phase-q, phase-c, phase-d, motion, liquid-glass, design-system, decimal, money, timezone, openapi, domain-split, import, import-pipeline, concurrency, batching, decimal-enforcement, zustand, slice-selection, typescript, error-handling, type-safety, csv, formula-injection, cwe-1236, csv-record-splitter, csv-parsing, multi-line-fields, date-utilities, immutability, aggregation-optimization, recipient-groups, portfolio-totals, query-parameter-filtering, buildquery, bug-hunt-2026-05-05, bug-hunt-2026-05-06, bug-hunt-2026-05-08, react-keys, stable-keys, mount-guard, memory-leak-prevention, parseLocaleNumber, number-parsing, locale-number, settings-backed-hook, portfolio-tax-classifications, audit-2026-05-11, belgian-tax, freeze-display-pattern, adr-059, dev-observability, devtools, api-inspector, observability, postgres-locking, for-update-group-by, accessibility, a11y, keyboard-operability, aria, onActivateKeyDown, shared-utils, monorepo, workspace, banker-rounding, plural, tc, portfolio-unit-math, premium-v3, optimistic-create, chart-scrub, chart-sync, context-menu, dialog-interplay, radix, role-based-glass, june-2026]
+description: Standard code patterns used throughout the Vision project — repositories, routes, hooks, API client, Express setup, error handling, type safety, filter builders, aggregation envelopes, aggregation refresh, trigger-maintained tables, golden fixtures, database fixtures, pure calculation services, atomic multi-step transactions, streaming CSV exports with formula injection prevention, import batch concurrency, motion consumers, surface shells, gradient icon tiles, money utilities, decimal utilities, shared date utilities with input validation and locale support, timezone boundary handling, TypeScript type annotations, type-safe error handling, domain-split API client, Zustand store with useShallow slice selection, immutable PATCH field sanitization, aggregation query optimization with Map-based single-pass accumulation, recipient group resolution via scalar subqueries (Phase Q), portfolio totals single-source-of-truth pattern (Phase 14), Belgian Tax freeze/display pattern for engine-drift protection (ADR-059, May 2026), dev-only observability integration pattern (May 2026 devtools: module-level pub-sub event bus with zero-cost tree-shaking in production). May 2026 bug hunt adds React key generation pattern (use UUID instead of index), mount guard pattern (prevent setState after unmount), and documents parseLocaleNumber heuristic with single-comma thousands separator fix. May 2026 a11y pass adds onActivateKeyDown keyboard-activation helper pattern. June 2026: shared-utils monorepo package (@vision/shared-utils) consolidates money/slugify/downsample; banker's rounding is now the canonical roundMoney mode; tc() plural pattern documented. June 2026 (ADR-070): optimistic mutation pattern (snapshot/patch/rollback via setQueriesData); surface shell updated with glass-regular/glass-elevated/opaque-table canonical rules; motion consumer updated for PageTransition re-addition and dialog keyframe animation. June 2026 Premium v3 (ADR-071): optimistic-create pattern (temp negative-id row, server swap, rollback, onSettled invalidate); chart scrub pattern (useChartScrub, pointer capture, glass Δ pill); chart sync pattern (ChartSyncProvider, syncId prop, domain guard). June 2026 Premium v3 V5 (ADR-071): Radix ContextMenu + Dialog interplay pattern — modal={false} prevents body pointer-events race when menu items spawn Dialogs. June 2026 (role-based glass): surface shell canonical rule broadened — glass-regular now applied to ALL content/chart/stat/state cards; old ~6-surface-per-viewport limit superseded; tables/forms/placeholders/callouts/dialog-nested cards remain opaque as role-based exceptions.
+aliases: [code patterns, coding patterns, conventions, patterns, how to write code, repository pattern, route pattern, hook pattern, error handling, type-safe error handling, type annotations, filter builder, golden fixture, aggregation envelope, calculation services, import concurrency, motion pattern, surface shell pattern, gradient icon pattern, money pattern, decimal pattern, timezone pattern, domain split, openapi, typescript types, csv export, safe csv, formula injection, cwe-1236, date utilities, immutability, aggregation optimization, Map pattern, recipient group filter, recipientGroupId, portfolio totals, single source of truth, parseLocaleNumber, number parsing, locale-aware number parsing, thousands separator, decimal separator, belgian-tax-pattern, freeze-display-pattern, as-filed-calculation, engine-drift-protection, shared-utils, workspace, plural, tc]
 ---
 
 # Code Patterns Reference
@@ -14,11 +14,36 @@ aliases: [code patterns, coding patterns, conventions, patterns, how to write co
 > [!abstract] Purpose
 > This document captures the standard code patterns used throughout the Vision project. AI agents should follow these patterns when writing new code. Developers can use this as a quick reference.
 
-## Money Utility Pattern (Phase 9)
+## Shared Utilities Monorepo Package (June 2026, ADR-069)
 
-**Source:** [[apps/node-backend/src/lib/money.js|money.js]]
+**Package:** `@vision/shared-utils` at [[packages/shared-utils/]]
+
+Pure helpers that are needed on both the frontend and backend now live in a dedicated Bun workspace package rather than being duplicated in each app.
+
+**Shared modules:**
+
+| Module | Exports | Previous location |
+|--------|---------|-------------------|
+| `money` | `toDecimal`, `addAll`, `subtract`, `multiply`, `divide`, `roundMoney`, `toNumber` | `apps/node-backend/src/lib/money.js` |
+| `slugify` | `slugify` | duplicated in both apps |
+| `downsample` | `downsample` | `apps/frontend/src/lib/downsample.ts` |
+
+Both apps add `"@vision/shared-utils": "workspace:*"` to their `package.json` dependencies and re-export from `@vision/shared-utils/money` (and equivalents) so existing import paths continue to work as thin shims.
+
+> [!important] Do not import from `apps/node-backend/src/lib/money.js` directly in the frontend, or vice-versa. Always import from `@vision/shared-utils/money` (or the per-app re-export shim at `src/lib/money.js` / `src/lib/money.ts`).
+
+This eliminates the prior frontend/backend money-rounding drift that was caused by each app carrying its own copy of `roundMoney`.
+
+---
+
+## Money Utility Pattern (Phase 9 + June 2026)
+
+**Source:** [[packages/shared-utils/src/money.js]] (re-exported via [[apps/node-backend/src/lib/money.js]] and [[apps/frontend/src/lib/money.ts]])
 
 All monetary calculations must use Decimal.js to eliminate IEEE 754 floating-point drift. JavaScript's native `number` type cannot exactly represent 0.1 + 0.2 (results in 0.30000000000000004). Vision uses banker's rounding (HALF_EVEN) to match PostgreSQL NUMERIC semantics.
+
+> [!note] Banker's Rounding is Now Canonical (June 2026)
+> `roundMoney` uses `ROUND_HALF_EVEN` (banker's rounding). This was `ROUND_HALF_UP` prior to June 2026. Banker's rounding is the PostgreSQL `NUMERIC` default and eliminates systematic bias in large datasets (e.g., half-cent amounts always round up accumulated ~0.5¢/transaction errors over thousands of rows). Any code relying on HALF_UP semantics must be audited.
 
 > [!note] Hot-Path Enforcement (Phase 12 Bugfix Sweep)
 > ESLint custom rule `no-raw-money-arithmetic` now warns on raw `+`, `-`, `*`, `÷` operators on identifiers matching money-like names (e.g., `amount`, `balance`, `cost`). This helps prevent drift in hot paths like split allocation and portfolio math. Not all warnings are errors — context matters — but all should be reviewed before merge.
@@ -51,6 +76,15 @@ const scaled = toNumber(roundMoney('0.123456', 4)); // 0.1235 (to 4 DP)
 
 // Database NUMERIC strings
 const dbAmount = toNumber(toDecimal('100.00')); // Safe from string precision loss
+
+// Repository read boundary: coerce a single DB NUMERIC column, preserving SQL NULL
+import { numericColumn, coerceNumericFields } from '../lib/money.js';
+
+const price = numericColumn(row.current_price); // '31.20' → 31.2; null → null; '' → undefined
+
+// Coerce multiple columns at once (shallow copy, does not mutate input)
+const NUMERIC_FIELDS = ['amount', 'fees', 'fx_rate_to_eur'];
+const normalized = coerceNumericFields(row, NUMERIC_FIELDS);
 ```
 
 ### Key Rules
@@ -66,6 +100,8 @@ const dbAmount = toNumber(toDecimal('100.00')); // Safe from string precision lo
 | Null/undefined | Treated as 0 by `toDecimal()` |
 | Database NUMERIC | Convert string to `toDecimal(string)` for safe math |
 | Banker's rounding | HALF_EVEN default; 0.005 rounds to 0, 0.015 to 0.02 |
+| Single column coercion | `numericColumn(v)` — converts NUMERIC string to number; `null`/`undefined` pass through unchanged; `''` → `undefined` |
+| Multi-column coercion | `coerceNumericFields(row, fields)` — returns shallow copy with named columns coerced; no-op on nullish row |
 
 ### Mandatory Scopes (Phase 9 Complete + May 2026 Audit)
 
@@ -74,11 +110,12 @@ As of 2026-05-14, decimal enforcement is **mandatory** for all monetary API outp
 | Scope | Files | Enforcement |
 |-------|-------|-----------|
 | **Repository reads** | splitRepository, infoRepositoryBanks/Helpers/Monthly, portfolioTransactionRepository, rawTransactionRepository | `toNumber(toDecimal(value))` on all NUMERIC/DECIMAL DB columns |
+| **Repository reads (June 2026 stragglers)** | investmentRepository, watchlistRepository, portfolioTxRepo.reads.js (+ writes via `mapPortfolioTxRow`) | `coerceNumericFields(row, NUMERIC_FIELDS)` via `numericColumn` — covers current_price, interest_rate, cadastral_income, municipality_tax_rate, target_price, amount, units, price_per_unit, fees, taxes, fx_rate_to_eur, getSummary aggregation totals; `null`/`undefined` preserved so response shapes are unchanged |
 | **Route responses** | transactions, plannedTransactions, info, aggregations | `toDecimal()` → math → `toNumber()` before JSON serialization |
 | **Service calculations** | recurringDetectionService, currencyConversionService, portfolioMath, snapshotBuilder, portfolioSummaryService | Decimal.js throughout; `toNumber()` for output |
 | **Portfolio aggregation** | portfolioSummaryService.js, portfolio/snapshotBuilder.js, portfolioMath.js | Per-investment accumulators + FX multipliers routed through Decimal; `multiply()` for conversion factors; `toNumber()` final aggregate |
 | **CSV/XML parsing** | Bank import adapters (_shared.js, belfius.js, revolut.js, sabb.js, vision.js) | parseFloat only; streaming running balances held as Decimal throughout import; DB writes go through repositories |
-| **Imports** | streamingImportService.js, rawTransactionImportService.js, importPipeline/commit.js | Amount parsers → Decimal; running balance accumulation via Decimal; `roundMoney()` before persistence |
+| **Imports** | importPipeline/commit.js | Amount parsers → Decimal; running balance accumulation via Decimal; `roundMoney()` before persistence (`streamingImportService.js` and `rawTransactionImportService.js` deleted 2026-05-29) |
 | **Exports** | transactionExport.js, calculations/aggregation/cashflowForecast.js, calculations/recurrence.js | All accumulations (running balance, cumulative flows) via Decimal; `divide()` for per-row allocation |
 
 ### When to Use
@@ -332,6 +369,9 @@ const ymdString = toYmd(new Date());                // → "2026-04-22"
 ## Backend Repository Pattern
 
 **Source:** [[apps/node-backend/src/repositories/transactionRepository.js|transactionRepository.js]], [[apps/node-backend/src/repositories/categoryRepository.js|categoryRepository.js]]
+
+> [!note] `null` at the repository boundary
+> Repository methods return `null` (not `undefined`) when a row is not found — this is a deliberate exception to the project-wide "use `undefined` for optional values" convention. `null` preserves the semantics of a DB query that returns zero rows, signalling "row does not exist" to callers that need to distinguish it from a missing argument.
 
 ```js
 import { query } from '../database/connection.js';
@@ -2385,14 +2425,17 @@ Both queries execute within the same transaction, so atomicity is preserved: the
 
 ---
 
-## Motion Consumer Pattern (Phase 9)
+## Motion Consumer Pattern (Phase 9 + June 2026)
 
 **Source:** [[apps/frontend/src/lib/motion.ts|motion.ts]]
 
 All Framer Motion-enabled components must check `useReducedMotion()` and conditionally apply animations to respect OS accessibility settings.
 
-> [!note] PageTransition Removed (2026-04-17)
-> The `PageTransition` component was removed as part of Electron M1 performance optimization. See [[docs/adr/020-glass-system-downgrade-liquid-canvas-removal|ADR-020]] for details. Motion consumers remain relevant for modal/dialog entry animations and chart effects.
+> [!info] PageTransition Re-added (June 2026 — ADR-070)
+> `PageTransition.tsx` was removed in 2026-04-17 (ADR-020) and re-added in 2026-06-10 (ADR-070) as an enter-only spring keyed on `location.pathname`. There is no `AnimatePresence` exit — that caused double-renders of React Suspense boundaries around lazy routes. Under `prefers-reduced-motion`, the transition is instant.
+
+> [!info] Dialog Animation Changed (June 2026 — ADR-070)
+> Dialog and AlertDialog no longer use framer-motion for their enter/exit. They use CSS `dialog-in`/`dialog-out` keyframes with an overshoot bezier (`cubic-bezier(0.34, 1.45, 0.64, 1)`). `motion-reduce` disables both keyframes. This fixes the Tailwind v4 `translate`-property double-offset bug from the prior `slide-in-from-left-1/2` recipe.
 
 ### Pattern
 
@@ -2441,28 +2484,62 @@ export function MyAnimatedComponent() {
 
 ---
 
-## Surface Shell Pattern (Phase 9)
+## Surface Shell Pattern (Phase 9 + June 2026)
 
 **Source:** [[apps/frontend/src/components/ui/card.tsx|card.tsx]], [[apps/frontend/src/components/dashboard/StatCard.tsx|StatCard.tsx]], [[apps/frontend/src/components/layout/AppLayout.tsx|AppLayout.tsx]]
 
 Standard card and surface shell for consistent material hierarchy and visual cohesion.
 
+> [!info] Updated June 2026 — ADR-070 + role-based glass broadening (June 2026, no ADR yet)
+> The canonical card material rule changed in two steps. Step 1 (ADR-070): `surface-elevated … bg-card backdrop-blur-sm` replaced by the glass vocabulary below; `premium-frame` baked into base `Card`. Step 2 (June 2026): the narrow "only ~6 KPI/hero/chart surfaces" rule was broadened to role-based glass — ALL content/chart/stat/state cards now carry `glass-regular`. See the note in [[docs/components/ui-components#surface-styling-liquid-glass-v2-june-2026|UI Components — Surface Styling]] for full rationale. A future ADR may formalize this.
+
+### Canonical Card Material Rule (June 2026, role-based)
+
+| Surface type | Class | Notes |
+|---|---|---|
+| Content / chart / stat / state card | `glass-regular` | ALL cards in these roles — peers must shine consistently (role-based glass, June 2026) |
+| Dashboard hero card | `glass-elevated` | 32px blur + saturate; trend tint in overlay child |
+| Table container (DataTable / VirtualDataTable / Watchlist / pivot/summary/RatesTable) | opaque (no glass class) | Dense row rendering; GPU budget exemption |
+| Dense form/import card | opaque | Intentional flat surface |
+| Dashed "add" placeholder card | opaque | `bg-muted/30 border-dashed` — flat by design |
+| Accent/danger callout card | opaque | `bg-primary/5` / `bg-destructive/5` — colored tint defeats glass |
+| Card nested inside a glass dialog | opaque | Avoids double-blur (e.g., `InvestmentDetailDialog` inner cards) |
+| Modal dialog | `glass-thick` | Handled by the base Dialog component |
+| Toast | `glass-thick` | Handled by Sonner |
+| Navigation chrome | `glass-chrome` | Handled by AppLayout/AppSidebar |
+
+`premium-frame` is baked into the base `Card` component — you no longer need to add it as a className. Both `premium-frame` and `micro-lift` declare identical full `transition` lists (border-color, box-shadow, transform) so whichever class wins the cascade still animates all three properties.
+
+> [!warning] GPU trade-off (card-dense pages)
+> Card-dense pages (e.g., PortfolioOverviewPage, StatisticsPage) now have more active `backdrop-filter` surfaces per viewport than the old ~6-surface budget. This is mitigated by ADR-075 tier auto-adapt: glass auto-degrades to near-opaque on large displays (`fx-reduced` class via `VisualEffectsController`) and under `prefers-reduced-transparency`. Profile the packaged Electron app on Apple Silicon before each release to catch regression.
+
 ### Pattern
 
 ```tsx
-// Standard elevated card (most common)
-<div className="group relative overflow-hidden surface-elevated premium-frame micro-lift bg-card backdrop-blur-sm">
-  {/* Content */}
-</div>
+// Content / chart / stat card (most common — role-based glass)
+<Card className="glass-regular micro-lift">
+  {/* Content — premium-frame hover outline included automatically from Card base */}
+</Card>
 
-// Glass surface (dialogs, overlays)
+// State cards (loading/empty/error) also get glass-regular for peer consistency
+<Card className="glass-regular">
+  <EmptyState ... />
+</Card>
+
+// Dashboard hero card (income/net summary)
+<Card className="glass-elevated micro-lift">
+  {/* Trend tint as overlay child, not on the card itself */}
+  <div className="absolute inset-0 opacity-30 bg-gradient-to-br from-primary/20 to-transparent pointer-events-none" />
+  {/* Content */}
+</Card>
+
+// Opaque table container (role-based exception — dense rows)
+<Card>
+  <DataTable ... />  {/* No glass class — tables stay opaque */}
+</Card>
+
+// Glass surface (dialogs, overlays — handled by Dialog component)
 <div className="relative overflow-hidden glass-thick rounded-lg border border-white/10">
-  {/* Content */}
-</div>
-
-// Premium stat card (hero emphasis)
-<div className="group relative overflow-hidden glass-regular rounded-lg border border-white/10 micro-lift">
-  <div className="absolute inset-0 opacity-40 bg-gradient-to-br from-primary/20 to-transparent" />
   {/* Content */}
 </div>
 
@@ -2476,24 +2553,28 @@ Standard card and surface shell for consistent material hierarchy and visual coh
 
 | Utility | Purpose |
 |---------|---------|
-| `surface-elevated` | Elevated non-glass card background (default for most cards) |
-| `premium-frame` | Elevated depth + subtle shadow (works with or without glass) |
-| `micro-lift` | Hover transform: very small `translateY(-2px)` + shadow increase |
-| `glass-*` | Glass variants (thin, regular, thick, chrome, elevated) |
+| `glass-regular` | Content/chart/stat/state cards — 20px blur + saturate |
+| `glass-elevated` | Hero cards — 32px blur + saturate + lensing edges |
+| `glass-thick` | Modal dialogs, toasts — 28px blur + saturate |
+| `glass-chrome` | Sidebar/topbar navigation — 24px blur + saturate |
+| `glass-thin` | Subtle elements — 12px blur + saturate |
+| `premium-frame` | Primary-tinted hover outline (baked into Card base since ADR-070) |
+| `micro-lift` | Hover transform: `translateY(-2px)` + shadow increase |
 | `group` | Parent selector for hover states affecting children |
 | `overflow-hidden` | Clip rounded corners (important for glass + grain texture) |
-| `backdrop-blur-sm` | Subtle blur fallback for browsers without full glass support |
 | `border border-white/10` | Subtle highlight rim at 10% white opacity |
 
-### Gradient Icon Tile Pattern (Phase 9)
+### Gradient Icon Tile Pattern (Phase 9 + June 2026)
 
 **Source:** [[apps/frontend/src/pages/DashboardPage.tsx|DashboardPage.tsx]], [[apps/frontend/src/components/dashboard/StatCard.tsx|StatCard.tsx]]
 
-Summary cards and stat tiles use a semi-transparent gradient background with an icon inside for visual interest:
+Summary cards and stat tiles use a glass-elevated or glass-regular card with a tint overlay child for hero emphasis. The gradient lives in an overlay child (not on the card background) so it survives the `backdrop-filter` cascade:
 
 ```tsx
-<div className="surface-elevated premium-frame micro-lift rounded-lg p-4">
-  <div className="flex items-center gap-3">
+<Card className="glass-elevated micro-lift relative">
+  {/* Tint overlay as child — not on the card background itself */}
+  <div className="absolute inset-0 opacity-30 bg-gradient-to-br from-primary/20 to-transparent pointer-events-none rounded-[inherit]" />
+  <CardContent className="relative flex items-center gap-3">
     <div className="h-12 w-12 rounded-lg bg-gradient-to-br from-emerald-400/30 via-transparent to-primary/20 flex items-center justify-center">
       <TrendingUpIcon className="h-6 w-6 text-emerald-400" />
     </div>
@@ -2501,8 +2582,8 @@ Summary cards and stat tiles use a semi-transparent gradient background with an 
       <p className="text-sm text-muted-foreground">Monthly Income</p>
       <p className="text-2xl font-semibold">€4,250</p>
     </div>
-  </div>
-</div>
+  </CardContent>
+</Card>
 ```
 
 ### Key Rules
@@ -2510,11 +2591,151 @@ Summary cards and stat tiles use a semi-transparent gradient background with an 
 | Rule | Rationale |
 |------|-----------|
 | Always use `overflow-hidden` with rounded corners | Prevents gradient overflow; clips grain texture properly |
-| Pair `surface-elevated` with `premium-frame` | Consistent depth signal across all cards |
-| Use `micro-lift` on interactive containers | Hover feedback without changing layout |
-| Gradient icons 12×12–16×16 max | Avoid visual clutter; icon should be supplementary |
-| Mute gradient opacity (20-40%) | Ensure text contrast and readability |
-| Apply in card shell, not direct wrapping | Compose surfaces from these utilities, don't mix |
+| Do NOT put `premium-frame` on `<Card>` manually | It is now baked into the Card base class |
+| Use `glass-regular` for ALL content/chart/stat/state cards | Role-based glass (June 2026) — peer cards must shine consistently; the old "~6 surfaces" limit is superseded |
+| Use `glass-elevated` for hero/summary cards | Max-tier material for dashboard emphasis |
+| Tables, forms, placeholders, and callout cards stay opaque | Role-based exceptions — see table above |
+| Cards nested in glass dialogs stay opaque | Avoid double-blur |
+| Tint overlay as child, not on card bg | `backdrop-filter` shorthand resets `background`, silently defeating tints set on the card itself |
+| Gradient icons muted opacity (20-40%) | Ensure text contrast and readability |
+
+---
+
+## Optimistic Mutation Pattern (Frontend, June 2026 — ADR-070)
+
+**Source:** [[apps/frontend/src/hooks/useTransactions.ts|useTransactions.ts]], [[apps/frontend/src/hooks/__tests__/useOptimisticTransactions.test.tsx|useOptimisticTransactions.test.tsx]]
+
+Use this pattern for mutations where instant perceived feedback matters and rollback on error is required. Implemented for `useUpdateTransaction` and `useDeleteTransaction` in ADR-070 Tier 5.
+
+### Pattern
+
+```typescript
+export function useUpdateTransaction() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: ({ id, data }: { id: number; data: TransactionUpdate }) =>
+      apiClient.updateTransaction(id, data),
+
+    onMutate: async ({ id, data }) => {
+      // 1. Cancel any in-flight refetches so they don't overwrite optimistic data
+      await queryClient.cancelQueries({ queryKey: ['transactions'] });
+
+      // 2. Snapshot all matching cache entries
+      const snapshots = queryClient.getQueriesData<TransactionListResponse>({
+        queryKey: ['transactions'],
+      });
+
+      // 3. Apply optimistic update across all ['transactions', params] caches
+      //    NOTE: ['transactions-virtual'] is intentionally NOT patched here
+      queryClient.setQueriesData<TransactionListResponse>(
+        { queryKey: ['transactions'], exact: false },
+        (old) => {
+          if (!old) return old;
+          return {
+            ...old,
+            items: old.items.map((tx) =>
+              tx.id === id
+                ? { ...tx, ...data, tags: tx.tags }  // tags excluded from merge
+                : tx,
+            ),
+          };
+        },
+      );
+
+      return { snapshots };  // context passed to onError
+    },
+
+    onError: (_err, _vars, context) => {
+      // 4. Roll back all patched caches on error
+      if (context?.snapshots) {
+        for (const [queryKey, data] of context.snapshots) {
+          queryClient.setQueryData(queryKey, data);
+        }
+      }
+    },
+
+    onSettled: () => {
+      // 5. Always invalidate so server truth wins after settlement
+      queryClient.invalidateQueries({ queryKey: ['transactions'] });
+    },
+  });
+}
+```
+
+### Key Rules
+
+| Rule | Rationale |
+|------|-----------|
+| `cancelQueries` before `setQueriesData` | Prevents an in-flight refetch from overwriting the optimistic state |
+| Snapshot with `getQueriesData` | Returns all matching cache entries (not just the most recent) |
+| `setQueriesData` with `exact: false` | Patches all `['transactions', params]` variants (different pages, filters) |
+| Exclude `['transactions-virtual']` | `useTransactionListData` mirrors its first page to local state; patching would collapse the scrolled list |
+| Exclude `tags` from merge | Payload carries `string[]` slugs; cache holds `Tag[]` objects; shapes differ |
+| Rollback via snapshot | Restore every key from the snapshot in `onError` |
+| Invalidate in `onSettled` | Always refetch after success OR error so server truth wins |
+
+### When to Use
+
+- **Mutations that change values the user just edited** — amount, category, memo on a visible list row.
+- **Deletions** — row should disappear instantly; if the request fails, it reappears.
+- **Any mutation where a ~200–500ms network delay would produce visible "lag"** on a live list.
+
+### When NOT to Use
+
+- **Bulk mutations** — diff against large snapshots is expensive; invalidate after settle instead.
+- **Mutations with derived fields** — e.g., `category_name` / `recipient_name` (only the id is in the payload). The optimistic row will show the stale name until `onSettled` refetches. This is acceptable when the amount/date/memo are correct.
+
+> [!note] Optimistic Creates are supported (Premium v3)
+> `useCreateTransaction` now performs optimistic inserts using a temp negative id (`-Date.now()`). The pattern is: `onMutate` inserts the temp row at head of `['transactions']` caches; `onSuccess` swaps temp→server row; `onError` removes temp row + rollback; `onSettled` invalidates. The `['transactions-virtual']` exclusion still applies. See [[docs/components/hooks#optimistic-create-premium-v3-june-2026-adr-071|useTransactions — Optimistic Create]].
+
+### Virtual List Exception
+
+`['transactions-virtual']` is not patched optimistically. `useTransactionListData` keeps the virtual list's first-page cache entry mirrored into local React state. Patching the cache key mid-scroll would cause the list to collapse. The `onSettled` invalidation corrects it.
+
+---
+
+## Chart Scrub and Sync Pattern (Premium v3, June 2026)
+
+### Scrub-to-Compare
+
+`AreaChart` and `LineChart` accept a `scrubbable?: boolean` prop. To add scrub to a new chart:
+
+```tsx
+import { useChartScrub, formatScrubDelta } from '@/components/charts/scrub';
+
+// Inside chart component
+const { scrubRange, handlePointerDown, handlePointerMove, handlePointerUp } = useChartScrub(data, xScale);
+
+// The hook suppresses tooltip while scrubbing
+// A glass Δ pill div is rendered over the chart when scrubRange is non-null
+```
+
+Key rules:
+- Use pointer events (not mouse events) — works on desktop and touch.
+- Use `setPointerCapture` on pointer-down so drags work even when the pointer leaves the SVG.
+- Suppress `ChartTooltip` while `scrubRange !== null`.
+- Render the Δ pill with `formatScrubDelta(start, end)` — returns `{ abs, percent }`.
+
+**Enabled on:** CashFlowComparisonChart, ForecastInner, ForecastInnerRolling, BankBalancesWidget, PerformancePage, NetWorthChart.
+
+### Synced Crosshairs
+
+Wrap a group of time-series charts in `ChartSyncProvider` and give each chart the same `syncId`:
+
+```tsx
+import { ChartSyncProvider } from '@/components/charts/ChartSyncContext';
+
+// In DashboardPage
+<ChartSyncProvider>
+  <CashFlowComparisonChart syncId="dashboard-timeline" ... />
+  <BankBalancesWidget syncId="dashboard-timeline" ... />
+</ChartSyncProvider>
+```
+
+Inside each chart, `useChartSync(syncId)` provides the shared hovered x-key and a setter. Charts must implement a **domain guard**: if the hovered x-key falls outside the chart's own domain, show no crosshair (prevents edge-pinning across disjoint timelines).
+
+**BarChart (categorical):** Excluded — band scale is not compatible with this mechanism.
 
 ---
 
@@ -3287,22 +3508,32 @@ const { data } = useQuery({
 // Observability: automatically tracked in inspector
 ```
 
-### Pattern: Zero-Cost Dev-Only Activation
+### Pattern: Lazy-Chunk Gated Activation
 
-DevtoolsRoot mounts only in dev builds:
+DevtoolsRoot ships in a lazy chunk and mounts when a dev build flag is set OR the
+runtime Admin Mode toggle is on:
 
 ```tsx
 // In App.tsx
-{import.meta.env.DEV && (
-  <Suspense fallback={null}>
-    <DevtoolsRoot />
-  </Suspense>
-)}
+const isDevtoolsBuildEnabled =
+  import.meta.env.DEV || import.meta.env.VITE_DEVTOOLS === 'true';
+
+function DevtoolsGate() {
+  const adminMode = useSettingsStore((s) => s.appSettings.adminMode);
+  if (!isDevtoolsBuildEnabled && !adminMode) return null;
+  return (
+    <Suspense fallback={null}>
+      <DevtoolsRoot />
+    </Suspense>
+  );
+}
 ```
 
-- `import.meta.env.DEV` is **statically replaced by Vite** (evaluated at build time)
-- Production build: Entire devtools chunk tree-shaken (zero bytes added)
-- Verified: `grep -r "devtools" dist/` returns no matches
+- Build flags (`import.meta.env.DEV` / `VITE_DEVTOOLS`) keep it always-on in dev
+- `adminMode` exposes it at runtime in any build — the only path that works in the
+  packaged Electron app and public release image (normally-built bundle)
+- The devtools chunk is **lazy**: only fetched when the gate first renders it, so
+  users who never enable Admin Mode pay no load cost
 
 ### Pattern: Querying Request Log
 
@@ -3344,8 +3575,101 @@ const metrics = useQueryMetrics();
 
 ### When NOT to Use
 
-- **Production builds** — Inspector code is tree-shaken; no overhead
+- **Default user experience** — Stays dormant unless Admin Mode is enabled; the lazy chunk isn't fetched, so there's no load cost for ordinary users
 - **User-facing observability** — Use [[docs/features/admin-observability|Admin Observability API]] instead (backend-provided system health)
+
+---
+
+## Keyboard Activation Helper — `onActivateKeyDown` (Frontend, 2026-05-29)
+
+**Source:** [[apps/frontend/src/utils/a11y.ts|a11y.ts]]
+
+Use `onActivateKeyDown` to give keyboard users an activation path for surfaces that were previously reachable only via mouse click or double-click.
+
+```typescript
+import { onActivateKeyDown } from "@/utils/a11y";
+
+// Non-interactive element that must become keyboard-operable:
+<div
+  role="button"
+  tabIndex={0}
+  onClick={handleOpen}
+  onKeyDown={onActivateKeyDown(handleOpen)}
+>
+  ...
+</div>
+
+// Native <button> that had only onDoubleClick — add keyboard path:
+<button
+  type="button"
+  onDoubleClick={handleOpen}
+  onKeyDown={onActivateKeyDown(handleOpen)}
+>
+  ...
+</button>
+```
+
+The helper fires the handler on **Enter** or **Space** and ignores events that bubbled from a nested focusable child (`e.target !== e.currentTarget`), preventing double-firing when an inner control is operated.
+
+### Key Rules
+
+| Rule | Rationale |
+|------|-----------|
+| Pair with `role="button"` + `tabIndex={0}` | Required on non-interactive elements; omit on native `<button>` |
+| `e.preventDefault()` is called inside | Prevents Space from scrolling the page |
+| Do not fire on bubbled events | Inner `<input>`, `<select>`, or `<button>` key events must not trigger the outer handler |
+| Keep `onDoubleClick` / `onClick` as-is | Keyboard path supplements, does not replace, the mouse binding |
+
+### When to Use
+
+- A `<div>` or `<Card>` has `onClick`/`onDoubleClick` but no `role`/`tabIndex`/`onKeyDown`.
+- A native `<button>` has `onDoubleClick` only (pressing Enter/Space fires `click`, not `dblclick`).
+- Any non-interactive container that acts as a primary navigation target.
+
+### When NOT to Use
+
+- Elements that are already fully keyboard-operable via native semantics (links, standard buttons with `onClick`).
+- Forms — use `onSubmit` on `<form>` instead.
+- Elements inside a `VirtualDataTable` row — the table's own inline `onKeyDown` covers row activation.
+
+See [[docs/components/shared-components#onActivateKeyDown (a11y utility)|onActivateKeyDown component doc]] for the list of surfaces where it is applied.
+
+---
+
+## Radix ContextMenu + Dialog Interplay — `modal={false}` (Premium v3 V5, June 2026)
+
+**Source:** [[apps/frontend/src/components/shared/VirtualDataTable.tsx]], [[apps/frontend/src/features/transactions/components/TransactionsTable.tsx]]
+
+When a Radix `ContextMenu` has items that open a page-level `Dialog`, the menu **must** be mounted with `modal={false}`.
+
+### Why
+
+A modal Radix overlay (`modal={true}`, the default) sets `pointer-events: none` on `document.body` while it is open. The `Dialog` component does the same when it opens. If the menu closes at the same moment the dialog opens, the two locks race: the menu's cleanup removes the `pointer-events` override while the dialog has already set its own. Depending on timing, the result is a page stuck in an inert state where no pointer events reach any element until the dialog closes.
+
+`modal={false}` skips the body pointer-event lock entirely. The menu still dismisses on item selection and on outside clicks — all expected Radix ContextMenu behavior is preserved.
+
+### Pattern
+
+```tsx
+// Inside VirtualDataTable render (per row):
+<ContextMenu modal={false}>
+    <ContextMenuTrigger asChild>{rowEl}</ContextMenuTrigger>
+    {rowContextMenu(row, sourceIndex, { startEditing: () => startEditing(sourceIndex, row) })}
+</ContextMenu>
+```
+
+### Rules
+
+| Rule | Rationale |
+|------|-----------|
+| Use `modal={false}` when any menu item opens a `Dialog` or `AlertDialog` | Prevents the body pointer-events race described above |
+| Do not use `modal={false}` on standalone menus with no dialog children | The default modal=true is safer (traps focus correctly for pure menus) |
+| Verify with both mouse and keyboard (Tab + Space/Enter) | Keyboard-only users open dialogs from menu items too |
+
+### When to Apply
+
+- Any `ContextMenu` or `DropdownMenu` whose items conditionally open a `Dialog`, `AlertDialog`, or `Sheet`.
+- Per-row menus in virtual tables (the most common case — each row context menu spawns the edit, delete-confirm, or quick-look dialog).
 
 ---
 

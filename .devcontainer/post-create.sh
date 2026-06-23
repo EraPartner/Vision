@@ -10,10 +10,13 @@ cd /workspaces/Vision
 # Seed the container's ~/.claude + ~/.claude.json from the SANITIZED staging dir
 # the host wrapper produced at /home/dev/.claude-stage (bind RO). Done FIRST,
 # before any network install: it needs only the local bind mount, so a later dep
-# failure (pip/bun) can never leave Claude unconfigured. The wrapper strips
-# secrets (.credentials.json) and active code-exec config
-# (hooks/mcpServers/enabledPlugins), so a compromised host config can't silently
-# propagate executable config into the container.
+# failure (pip/bun) can never leave Claude unconfigured. The host staging
+# (launcher-common.sh) copies only a curated item allowlist (so .credentials.json
+# never enters), strips .hooks from settings.json and
+# .oauthAccount/.projects/.installMethod from .claude.json. NOTE: mcpServers and
+# enabledPlugins ARE propagated by design (user-enabled servers/plugins — see the
+# post-start KEEP note); the PreToolUse guard reaches the box out-of-band via the
+# root-owned managed-settings.json bind, not through this staged config.
 STAGE=/home/dev/.claude-stage
 if [[ ! -f /home/dev/.claude/settings.json && -d "$STAGE/dot-claude" ]]; then
   echo "[post-create] Seeding ~/.claude from sanitized stage..."
@@ -38,7 +41,7 @@ done
 
 # Supply-chain protection: install Aikido safe-chain so package installs are
 # screened against its malware list (malware-list.aikido.dev, allowlisted in
-# squid). `safe-chain setup` writes shell wrappers; BASH_ENV (devcontainer.json)
+# squid). `safe-chain setup` writes shell wrappers; BASH_ENV (set at container run)
 # sources them into every bash session so npm/bun/pip installs Claude runs
 # mid-session are screened. The project's own pinned deps below are installed
 # plain (already vetted via the lockfile) to avoid first-boot fragility.

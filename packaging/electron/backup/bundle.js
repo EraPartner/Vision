@@ -57,6 +57,18 @@ const BUNDLE_ENC_V2_IV_BYTES = 12;
 /** GCM auth tag length. */
 const BUNDLE_ENC_V2_TAG_BYTES = 16;
 
+// --- Zip-bomb guards for restore (extractZip) ---
+// A legitimate bundle is a DB dump + attachments (each attachment ≤ 10 MB).
+// These caps stop a crafted .visionbak whose entries decompress to far more
+// than the host can hold. Tracked against the *actual* bytes written, not just
+// the header-declared uncompressedSize (which a malicious bundle can lie about).
+
+/** Max total uncompressed bytes written across all entries (10 GiB). */
+const MAX_RESTORE_BYTES = 10 * 1024 * 1024 * 1024;
+
+/** Max number of entries (files + dirs) in a restore bundle. */
+const MAX_RESTORE_ENTRIES = 100_000;
+
 /** scrypt cost parameters for v2 (OWASP-aligned). */
 const BUNDLE_KDF_N = 1 << 15;
 const BUNDLE_KDF_R = 8;
@@ -210,8 +222,11 @@ async function encryptBundle(bundlePath, passphrase) {
       output.write(salt);
       output.write(iv);
 
-      input.pipe(cipher);
-      cipher.on('data', (chunk) => output.write(chunk));
+      // pipe() honours stream backpressure (the manual cipher.on('data') →
+      // output.write() loop ignored write()===false and could balloon memory on
+      // a multi-GB bundle). end:false keeps `output` open so we can append the
+      // GCM auth tag, which is only available after the cipher finishes.
+      input.pipe(cipher).pipe(output, { end: false });
       cipher.on('end', () => {
         try {
           const tag = cipher.getAuthTag();
@@ -416,42 +431,78 @@ function extractZip(zipPath, destDir) {
     yauzl.open(zipPath, { lazyEntries: true, autoClose: true }, (err, zipfile) => {
       if (err) return reject(err);
 
+      let entryCount = 0;
+      let totalBytes = 0;
+      let settled = false;
+
+      // Reject once and stop reading further entries. zipfile autoCloses.
+      const fail = (message) => {
+        if (settled) return;
+        settled = true;
+        reject(message instanceof Error ? message : new Error(message));
+      };
+
       zipfile.readEntry();
 
       zipfile.on('entry', (entry) => {
+        if (settled) return;
+
+        if (++entryCount > MAX_RESTORE_ENTRIES) {
+          return fail(`Restore bundle has too many entries (> ${MAX_RESTORE_ENTRIES}) — refusing to extract.`);
+        }
+
         const entryPath = path.join(destDir, entry.fileName);
 
         // Guard against path traversal
         if (!entryPath.startsWith(destDir + path.sep) && entryPath !== destDir) {
-          return reject(new Error(`Unsafe zip entry path: ${entry.fileName}`));
+          return fail(`Unsafe zip entry path: ${entry.fileName}`);
         }
 
         if (/\/$/.test(entry.fileName)) {
           // Directory entry
           fs.mkdir(entryPath, { recursive: true }, (mkdirErr) => {
-            if (mkdirErr && mkdirErr.code !== 'EEXIST') return reject(mkdirErr);
+            if (mkdirErr && mkdirErr.code !== 'EEXIST') return fail(mkdirErr);
             zipfile.readEntry();
           });
           return;
         }
 
+        // Reject implausible header-declared sizes up front (cheap pre-check).
+        const declared = Number(entry.uncompressedSize);
+        if (Number.isFinite(declared) && (declared < 0 || totalBytes + declared > MAX_RESTORE_BYTES)) {
+          return fail(`Restore bundle exceeds the maximum uncompressed size (${MAX_RESTORE_BYTES} bytes) — possible zip bomb.`);
+        }
+
         // File entry
         fs.mkdir(path.dirname(entryPath), { recursive: true }, (mkdirErr) => {
-          if (mkdirErr && mkdirErr.code !== 'EEXIST') return reject(mkdirErr);
+          if (mkdirErr && mkdirErr.code !== 'EEXIST') return fail(mkdirErr);
 
           zipfile.openReadStream(entry, (rsErr, readStream) => {
-            if (rsErr) return reject(rsErr);
+            if (rsErr) return fail(rsErr);
             const writeStream = fs.createWriteStream(entryPath);
+
+            // Enforce the cap against bytes actually written — a crafted bundle
+            // can understate uncompressedSize, so the header check isn't enough.
+            readStream.on('data', (chunk) => {
+              totalBytes += chunk.length;
+              if (totalBytes > MAX_RESTORE_BYTES) {
+                readStream.unpipe(writeStream);
+                readStream.destroy();
+                writeStream.destroy();
+                fail(`Restore bundle exceeds the maximum uncompressed size (${MAX_RESTORE_BYTES} bytes) — possible zip bomb.`);
+              }
+            });
+
             readStream.pipe(writeStream);
-            writeStream.on('finish', () => zipfile.readEntry());
-            writeStream.on('error', reject);
-            readStream.on('error', reject);
+            writeStream.on('finish', () => { if (!settled) zipfile.readEntry(); });
+            writeStream.on('error', fail);
+            readStream.on('error', fail);
           });
         });
       });
 
-      zipfile.on('end', resolve);
-      zipfile.on('error', reject);
+      zipfile.on('end', () => { if (!settled) { settled = true; resolve(); } });
+      zipfile.on('error', fail);
     });
   });
 }

@@ -30,7 +30,7 @@ export function StalePriceIndicator({
 
   return (
     <span
-      className={`inline-flex items-center gap-1 text-amber-500 ${className ?? ""}`}
+      className={`inline-flex items-center gap-1 text-warning ${className ?? ""}`}
       title={t("portfolio.stalePriceTooltip", { date: formatted })}
       aria-label={t("portfolio.stalePriceTooltip", { date: formatted })}
     >

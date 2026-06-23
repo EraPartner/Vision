@@ -11,10 +11,10 @@ function StatusBadge({ status }: { status?: number }) {
     if (!status) return <span className="text-muted-foreground">—</span>;
     const cls =
         status < 300
-            ? 'text-emerald-500'
+            ? 'text-success'
             : status < 400
-            ? 'text-amber-500'
-            : 'text-red-500';
+            ? 'text-warning'
+            : 'text-destructive';
     return <span className={cn('font-mono font-semibold', cls)}>{status}</span>;
 }
 
@@ -51,7 +51,7 @@ export function RequestDetail({ event, onClose }: Props) {
                 </Row>
                 <Row label="Duration">
                     {event.durationMs !== undefined ? (
-                        <span className={event.durationMs >= 1000 ? 'text-amber-500' : ''}>
+                        <span className={event.durationMs >= 1000 ? 'text-warning' : ''}>
                             {event.durationMs.toFixed(1)} ms
                         </span>
                     ) : (
@@ -62,7 +62,7 @@ export function RequestDetail({ event, onClose }: Props) {
                 {event.errorCode && <Row label="Error code">{event.errorCode}</Row>}
                 {event.errorMessage && (
                     <Row label="Error message">
-                        <span className="text-red-500">{event.errorMessage}</span>
+                        <span className="text-destructive">{event.errorMessage}</span>
                     </Row>
                 )}
             </div>

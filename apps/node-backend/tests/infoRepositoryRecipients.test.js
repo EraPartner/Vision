@@ -84,6 +84,10 @@ describe('recipientInsightsRepository.getRecipientInsights', () => {
         changePercent: 50,
       },
     ]);
+    // The MoM query (2nd call) must window the previous month to the same
+    // day-of-month so a partial current month isn't compared to a full prior one.
+    const momSql = query.mock.calls[1][0];
+    expect(momSql).toContain("(CURRENT_DATE - DATE_TRUNC('month', CURRENT_DATE)::date)");
   });
 
   it('caps month-over-month list to top-10 by current spend', async () => {
@@ -104,16 +108,33 @@ describe('recipientInsightsRepository.getRecipientInsights', () => {
     expect(r.monthOverMonth).toHaveLength(10);
     expect(r.monthOverMonth[0].currentSpend).toBe(100);
   });
+
+  it('applies the canonical 3-level category exclusion to both queries', async () => {
+    query.mockResolvedValueOnce({ rows: [] });
+    query.mockResolvedValueOnce({ rows: [] });
+    query.mockResolvedValueOnce({ rows: [{ current_period: '2025-04', prev_period: '2025-03' }] });
+    convertRowsToEur.mockResolvedValueOnce([]).mockResolvedValueOnce([]);
+
+    await recipientInsightsRepository.getRecipientInsights('EUR', { excludedCategoryIds: [5, 7] });
+
+    const [topSql, topParams] = query.mock.calls[0];
+    const [momSql] = query.mock.calls[1];
+    for (const sql of [topSql, momSql]) {
+      expect(sql).toContain('COALESCE(t.category_id, r.default_category_id, pr.default_category_id) NOT IN');
+    }
+    expect(topParams).toEqual([5, 7]);
+  });
 });
 
 describe('recipientInsightsRepository.getRecipientByYear', () => {
   it('groups by year and recipient with absolute EUR sums', async () => {
     query.mockResolvedValueOnce({ rows: [] });
+    // cnt is the grouped row's transaction count (SQL now aggregates per group).
     convertRowsToEur.mockResolvedValueOnce([
-      { year: 2024, recipient_id: 1, name: 'Alice', amount_eur: -100 },
-      { year: 2024, recipient_id: 1, name: 'Alice', amount_eur: -25 },
-      { year: 2024, recipient_id: 2, name: 'Bob', amount_eur: -50 },
-      { year: 2025, recipient_id: 1, name: 'Alice', amount_eur: -10 },
+      { year: 2024, recipient_id: 1, name: 'Alice', amount_eur: -100, cnt: 1 },
+      { year: 2024, recipient_id: 1, name: 'Alice', amount_eur: -25, cnt: 1 },
+      { year: 2024, recipient_id: 2, name: 'Bob', amount_eur: -50, cnt: 1 },
+      { year: 2025, recipient_id: 1, name: 'Alice', amount_eur: -10, cnt: 1 },
     ]);
 
     const r = await recipientInsightsRepository.getRecipientByYear('EUR');
@@ -157,6 +178,15 @@ describe('recipientInsightsRepository.getRecipientByYear', () => {
     const [sql] = query.mock.calls[0];
     expect(sql).not.toContain('NOT IN');
   });
+
+  it('applies category exclusions (3-level alias-aware COALESCE) when provided', async () => {
+    query.mockResolvedValueOnce({ rows: [] });
+    convertRowsToEur.mockResolvedValueOnce([]);
+    await recipientInsightsRepository.getRecipientByYear('EUR', [], [5, 7]);
+    const [sql, params] = query.mock.calls[0];
+    expect(sql).toContain('COALESCE(t.category_id, r.default_category_id, pr.default_category_id) NOT IN');
+    expect(params).toEqual([5, 7]);
+  });
 });
 
 describe('recipientInsightsRepository.getRecipientPivot', () => {
@@ -176,6 +206,22 @@ describe('recipientInsightsRepository.getRecipientPivot', () => {
     expect(sql).toContain("TO_CHAR(t.date, 'YYYY')");
   });
 
+  it('narrows the scan to the selected recipients (alias-resolved) when recipientIds given', async () => {
+    query
+      .mockResolvedValueOnce({ rows: [{ id: 5 }, { id: 9 }] }) // alias-member resolution
+      .mockResolvedValueOnce({ rows: [] }); // pivot
+    convertRowsToEur.mockResolvedValueOnce([]);
+
+    await recipientInsightsRepository.getRecipientPivot([], 'EUR', { recipientIds: [5] });
+
+    // First query resolves the selected ids' alias members…
+    expect(query.mock.calls[0][0]).toContain('primary_recipient_id = ANY');
+    expect(query.mock.calls[0][1]).toEqual([[5]]);
+    // …then the pivot scans only those recipients' rows (index-friendly).
+    expect(query.mock.calls[1][0]).toContain('t.recipient_id = ANY');
+    expect(query.mock.calls[1][1]).toContainEqual([5, 9]);
+  });
+
   it('applies start and end date filters', async () => {
     query.mockResolvedValueOnce({ rows: [] });
     convertRowsToEur.mockResolvedValueOnce([]);
@@ -190,9 +236,9 @@ describe('recipientInsightsRepository.getRecipientPivot', () => {
   it('groups by period+recipient and sorts ascending by total', async () => {
     query.mockResolvedValueOnce({ rows: [] });
     convertRowsToEur.mockResolvedValueOnce([
-      { period: '2025-04', recipient_id: 1, recipient_name: 'A', amount_eur: -100 },
-      { period: '2025-04', recipient_id: 2, recipient_name: 'B', amount_eur: -50 },
-      { period: '2025-04', recipient_id: 1, recipient_name: 'A', amount_eur: -25 },
+      { period: '2025-04', recipient_id: 1, recipient_name: 'A', amount_eur: -100, cnt: 1 },
+      { period: '2025-04', recipient_id: 2, recipient_name: 'B', amount_eur: -50, cnt: 1 },
+      { period: '2025-04', recipient_id: 1, recipient_name: 'A', amount_eur: -25, cnt: 1 },
     ]);
 
     const r = await recipientInsightsRepository.getRecipientPivot([], 'EUR');

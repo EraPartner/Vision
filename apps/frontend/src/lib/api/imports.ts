@@ -125,6 +125,53 @@ export function importCSVCustom(
     return postMultipartImport('/api/import/csv/custom', file, queryParams);
 }
 
+export interface CustomParserConfigPayload {
+    dateColumn: string;
+    dateFormat: string;
+    recipientColumn: string;
+    amountColumn: string;
+    memoColumn: string;
+    separator: string;
+    encoding: string;
+    skipRows: number;
+}
+
+export interface SavedParserConfig {
+    id: number;
+    name: string;
+    config: CustomParserConfigPayload;
+    created_at: string;
+    updated_at: string;
+}
+
+export function listCustomParserConfigs(): Promise<SavedParserConfig[]> {
+    return apiRequest<SavedParserConfig[]>('/api/import/parsers');
+}
+
+export function createCustomParserConfig(
+    name: string,
+    config: CustomParserConfigPayload,
+): Promise<SavedParserConfig> {
+    return apiRequest<SavedParserConfig>('/api/import/parsers', {
+        method: 'POST',
+        body: JSON.stringify({ name, config }),
+    });
+}
+
+export function updateCustomParserConfig(
+    id: number,
+    patch: { name?: string; config?: CustomParserConfigPayload },
+): Promise<SavedParserConfig> {
+    return apiRequest<SavedParserConfig>(`/api/import/parsers/${id}`, {
+        method: 'PATCH',
+        body: JSON.stringify(patch),
+    });
+}
+
+export function deleteCustomParserConfig(id: number): Promise<void> {
+    return apiRequest<void>(`/api/import/parsers/${id}`, { method: 'DELETE' });
+}
+
 export function importRecipients(
     file: File,
     separator: string = ',',
@@ -176,6 +223,6 @@ export function overrideImportRowCategory(batchId: number, rowId: number, catego
     });
 }
 
-export function commitImportBatch(batchId: number): Promise<{ batch_id: number; imported: number; duplicates: number; errors: number }> {
+export function commitImportBatch(batchId: number): Promise<{ batch_id: number; imported: number; duplicates: number; errors: number; auto_linked_count?: number }> {
     return apiRequest(`/api/import/batches/${batchId}/commit`, { method: 'POST' });
 }

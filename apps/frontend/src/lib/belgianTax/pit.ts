@@ -5,8 +5,9 @@
  *  - Federal progressive brackets (year-aware)
  *  - Personal exemption ("quotité du revenu exempté") applied at the lowest brackets first
  *    via a dedicated exemption-bracket table (CIR-92 art. 134 §3).
- *  - Professional expense deduction (lump-sum or actual)
- *  - Deductions: alimony (80%), union dues, medical
+ *  - Professional expense deduction (lump-sum or actual; union dues count as actual
+ *    professional expenses, so they only deduct under the 'actual' method)
+ *  - Deductions: alimony (80%)
  *  - Tax credits ("réductions d'impôt"): pension savings, life insurance, group insurance,
  *    charitable donations, childcare, domestic personnel, all with statutory caps
  *  - Regional own-home credit (Flemish woonbonus pre-2020 / Walloon chèque habitat post-2016).
@@ -17,6 +18,10 @@
  *  - Investment income side calc: dividend WHT reclaim + savings interest tax
  *
  * Limitations / not modeled:
+ *  - Medical expenses: NOT deductible in Belgian PIT (no general medical deduction
+ *    exists); the profile field is kept for record-keeping/export only.
+ *  - Group-insurance credit (30%) is applied without a statutory ceiling — the
+ *    80%-rule interaction is not modeled, so large contributions overstate the credit.
  *  - Marital quotient / married joint filing income split
  *  - Brussels post-2017 stamp-duty rebate (one-time, not annual)
  *  - Flemish post-2020 mortgages (no successor regime — capital owners only)
@@ -76,7 +81,12 @@ function computeExemptionBenefit(exemptionAmount: number, brackets: ReadonlyArra
 
 function computeProfessionalExpenses(profile: BelgianTaxProfile, table: BelgianTaxYearTable): number {
     if (profile.professionalExpenseMethod === 'actual') {
-        return Math.max(profile.actualProfessionalExpenses || 0, 0);
+        // Union dues are professional expenses (CIR-92 art. 49) — deductible only
+        // when itemizing actual expenses, never on top of the lump-sum forfait.
+        // Users who already counted them inside actualProfessionalExpenses should
+        // leave the dedicated field at 0 (see the profile-step hint).
+        return Math.max(profile.actualProfessionalExpenses || 0, 0)
+            + Math.max(profile.unionDues || 0, 0);
     }
     // PwC: only employees and civil servants get the 30% / EUR-cap forfait.
     // Directors get 3% / lower cap. Self-employed (zelfstandigen / indépendants) only deduct
@@ -357,14 +367,18 @@ export function computeBelgianPIT(profile: BelgianTaxProfile): BelgianTaxCalcula
     // 3. Professional expense deduction
     const profExpenses = computeProfessionalExpenses(profile, table);
 
-    // 4. True deductions from taxable basis (alimony 80%, union dues, medical).
+    // 4. True deductions from taxable basis: alimony (80%, CIR-92 art. 104).
     //    Pension, life insurance, donations, childcare, domestic help, group insurance =
     //    tax credits, applied below — NOT subtracted from taxable basis.
+    //    Union dues deduct only inside ACTUAL professional expenses (handled in
+    //    computeProfessionalExpenses); medical expenses are not deductible at all
+    //    in Belgian PIT — both previously deducted here and understated the tax.
     const cappedAlimony = Math.max(profile.alimonyPaid || 0, 0) * table.alimonyDeductibleFraction;
-    const cappedUnion = Math.max(profile.unionDues || 0, 0);
-    const cappedMedical = Math.max(profile.medicalExpenses || 0, 0);
+    const appliedUnionDues = profile.professionalExpenseMethod === 'actual'
+        ? Math.max(profile.unionDues || 0, 0)
+        : 0;
 
-    const otherDeductions = cappedAlimony + cappedUnion + cappedMedical;
+    const otherDeductions = cappedAlimony;
 
     const taxableIncome = clampAtZero(netAfterSS - profExpenses - otherDeductions);
 
@@ -510,8 +524,9 @@ export function computeBelgianPIT(profile: BelgianTaxProfile): BelgianTaxCalcula
         { label: 'Net after Social Security', amount: netAfterSS },
         { label: 'Professional Expenses Deduction', amount: -profExpenses },
         ...(profile.alimonyPaid ? [{ label: 'Alimony paid (80% deductible)', amount: -cappedAlimony }] : []),
-        ...(profile.unionDues ? [{ label: 'Union / professional dues', amount: -cappedUnion }] : []),
-        ...(profile.medicalExpenses ? [{ label: 'Medical expenses', amount: -cappedMedical }] : []),
+        ...(appliedUnionDues > 0
+            ? [{ label: 'Union dues (within actual professional expenses)', amount: -appliedUnionDues }]
+            : []),
         { label: 'Taxable Income', amount: taxableIncome },
         ...(pitBeforeExemption.b1 > 0
             ? [{ label: `Bracket 1 (${table.brackets[0].rate * 100}%)`, amount: -pitBeforeExemption.b1, rate: table.brackets[0].rate * 100, bracket: `€${table.brackets[0].from} – €${table.brackets[0].to}` }]
@@ -541,10 +556,16 @@ export function computeBelgianPIT(profile: BelgianTaxProfile): BelgianTaxCalcula
             ? [{ label: 'Service-voucher credit (dienstencheques)', amount: -serviceVoucherCredit }]
             : []),
         ...(appliedTaxCredits > 0 ? [{ label: 'Tax Credits (reductions)', amount: -appliedTaxCredits }] : []),
-        { label: 'Federal PIT (before credits)', amount: -federalPITBeforeExemption },
+        // Position total, not a deduction step: gross PIT before the exemption
+        // benefit and credits listed above. (Was mislabeled "before credits".)
+        { label: 'Federal PIT (before exemption)', amount: -federalPITBeforeExemption },
         { label: 'Federal PIT (after credits)', amount: -federalPITAfterReductions },
         { label: `Communal Surcharge (${profile.communalSurchargePercent}%)`, amount: -communalSurcharge, rate: profile.communalSurchargePercent },
         ...(specialSS > 0 ? [{ label: 'Special Social Security Contribution', amount: -specialSS }] : []),
+        // Property tax is informational for PIT but part of totalTaxBurden, so it
+        // must appear as a row — without it the visible rows missed Net Take-Home
+        // by exactly this amount.
+        ...(propertyTaxEstimate > 0 ? [{ label: 'Property Tax (estimate)', amount: -propertyTaxEstimate }] : []),
         { label: 'Net Take-Home', amount: netTakeHome },
     ];
 
@@ -563,8 +584,10 @@ export function computeBelgianPIT(profile: BelgianTaxProfile): BelgianTaxCalcula
             mortgageInterestPaid: Math.max(profile.mortgageInterestPaid || 0, 0),
             charitableDonations: 0,
             childcareCosts: 0,
-            unionDues: cappedUnion,
-            medicalExpenses: cappedMedical,
+            // Applied amounts, not raw profile inputs: union dues only deduct under
+            // the actual-expense method; medical expenses are never deductible.
+            unionDues: appliedUnionDues,
+            medicalExpenses: 0,
         },
         taxableIncome,
         federalPITBracket1: pitBeforeExemption.b1,

@@ -3,12 +3,12 @@ title: Feature - CSV Import, Export, Attachments & Deduplication
 type: feature
 status: active
 date: 2026-04-24
-updated: 2026-05-14
-last_modified: 2026-05-14
-tags: [feature, import, export, csv, json, deduplication, phase-5a, attachments, phase-c, phase-e, phase-1, phase-12, phase-13, performance, concurrency, import-pipeline, component-split, error-handling, recipient-clusters, multi-select, export-filters, adr-046, category-review, bigserial-fix, staging-rows, tx-hash-dedup, race-safe-dedup, decimal-precision, ing, bnp]
+updated: 2026-06-17
+last_modified: 2026-06-17
+tags: [feature, import, export, csv, json, deduplication, phase-5a, attachments, phase-c, phase-e, phase-1, phase-12, phase-13, performance, concurrency, import-pipeline, component-split, error-handling, recipient-clusters, multi-select, export-filters, adr-046, category-review, bigserial-fix, staging-rows, tx-hash-dedup, race-safe-dedup, decimal-precision, ing, bnp, saved-custom-parsers, custom-parser-configs, named-parsers, adr-066, electron-native, csv-open-with, import-handoff, drag-drop, june-2026, file-headers-panel, csv-separator, adr-078, auto-link, planned-match]
 aliases: [csv-import, bank-import, bank-statement, deduplication, data-import, streaming-import]
-description: Import transactions from bank CSV files with automatic deduplication, fuzzy/pattern recipient matching, per-row category review (ADR-046), and May 2026 BIGSERIAL fix for staging row ID validation.
-related_code: ["apps/node-backend/src/services/importPipeline/index.js", "apps/node-backend/src/services/importPipeline/stage.js", "apps/node-backend/src/services/importPipeline/validate.js", "apps/node-backend/src/services/importPipeline/match.js", "apps/node-backend/src/services/importPipeline/commit.js", "apps/node-backend/src/services/dataImportService.js", "apps/node-backend/src/services/deduplication.js", "apps/node-backend/src/services/textNormalization.js", "apps/node-backend/src/routes/importRoutes.js", "apps/node-backend/src/lib/sse.js", "apps/node-backend/src/repositories/importBatchRepository.js", "apps/frontend/src/features/imports/TransactionImportCard.tsx", "apps/frontend/src/features/imports/RecipientsImportCard.tsx", "apps/frontend/src/features/imports/CategoriesImportCard.tsx", "apps/frontend/src/features/imports/ExportCard.tsx", "apps/frontend/src/features/imports/SupportedBanksCard.tsx", "apps/frontend/src/features/imports/useAdapters.ts", "apps/frontend/src/pages/ImportPage.tsx", "apps/frontend/src/pages/ImportReviewPage.tsx"]
+description: Import transactions from bank CSV files with automatic deduplication, fuzzy/pattern recipient matching, per-row category review (ADR-046), May 2026 BIGSERIAL fix for staging row ID validation, saved named custom CSV parsers (ADR-066), June 2026 V12 (ADR-072) window-wide CSV drag-drop + Finder/dock open-with handoff, and June 2026 always-on FileHeadersPanel (header chip preview + sample-rows table shown for all adapters in TransactionImportCard).
+related_code: ["apps/node-backend/src/services/importPipeline/index.js", "apps/node-backend/src/services/importPipeline/stage.js", "apps/node-backend/src/services/importPipeline/validate.js", "apps/node-backend/src/services/importPipeline/match.js", "apps/node-backend/src/services/importPipeline/commit.js", "apps/node-backend/src/services/dataImportService.js", "apps/node-backend/src/services/deduplication.js", "apps/node-backend/src/services/textNormalization.js", "apps/node-backend/src/routes/importRoutes.js", "apps/node-backend/src/lib/sse.js", "apps/node-backend/src/repositories/importBatchRepository.js", "apps/node-backend/src/repositories/customParserConfigRepository.js", "apps/frontend/src/features/imports/TransactionImportCard.tsx", "apps/frontend/src/features/imports/FileHeadersPanel.tsx", "apps/frontend/src/features/imports/RecipientsImportCard.tsx", "apps/frontend/src/features/imports/CategoriesImportCard.tsx", "apps/frontend/src/features/imports/ExportCard.tsx", "apps/frontend/src/features/imports/SupportedBanksCard.tsx", "apps/frontend/src/features/imports/useAdapters.ts", "apps/frontend/src/hooks/useCustomParserConfigs.ts", "apps/frontend/src/lib/importHandoff.ts", "apps/frontend/src/lib/csvSeparator.ts", "apps/frontend/src/pages/ImportPage.tsx", "apps/frontend/src/pages/ImportReviewPage.tsx"]
 ---
 
 # Feature: CSV Import & Deduplication
@@ -57,9 +57,10 @@ The monolithic `ImportPage.tsx` was decomposed into `apps/frontend/src/features/
 - Callback increments `historyKey`, forcing `ImportHistoryCard` to refetch history
 - Avoids exposing `setHistoryKey` to child components
 
-**Existing Imports:**
-- `ImportHistoryCard` remains in `@/components/import/ImportHistoryCard` (not moved to features folder)
-- Re-imported by `ImportPage` and composed alongside feature components
+**Existing Imports (June 2026 update):**
+- `ImportHistoryCard` and `CsvColumnMapper` have been moved from `@/components/import/` to `apps/frontend/src/features/imports/` to co-locate all import-related UI within the feature module.
+- `ImportPage` imports both from `@/features/imports/`.
+- `components/import/` no longer exists as a source directory.
 
 ### Benefits
 
@@ -67,6 +68,50 @@ The monolithic `ImportPage.tsx` was decomposed into `apps/frontend/src/features/
 2. **Reusability:** Components can be imported independently in other contexts
 3. **Testability:** Each card can be tested in isolation without mocking the entire page
 4. **Scalability:** New import card types can be added without growing page size
+
+## Electron CSV Import Handoff (V12, June 2026 — ADR-072)
+
+> [!info] Added in ADR-072
+> Two new paths for opening a CSV file directly from the OS into the import UI without requiring the user to navigate to `/import` first.
+
+### Path 1 — Window-Wide Drag-and-Drop (renderer)
+
+`ElectronBridge` (`apps/frontend/src/components/layout/ElectronBridge.tsx`) attaches a `dragover`/`drop` listener to `window`. Any file dropped anywhere on the application window is intercepted:
+
+- **Non-CSV files** are silently discarded.
+- **CSV files** are read as text via the `File` API (no filesystem permission required in the sandboxed renderer) and pushed into `lib/importHandoff.ts`. The app then navigates to `/import`.
+- **`[data-dropzone]` ancestors** are exempted: the in-card dropzone on `TransactionImportCard` has `data-dropzone` on its root element, so drops inside the card still reach the card's own handler normally.
+- This also closes the Chromium default behavior of *navigating to* a dropped file, which would have produced a blank page.
+
+### Path 2 — Finder "Open With" / Dock Drop (main process)
+
+When the OS fires `app.on('open-file')` (macOS Finder "Open With" or dock drop):
+
+1. Main process validates the file extension (`.csv` only) and size (≤ 25 MB).
+2. Main reads the file itself — the renderer is sandboxed and **never receives the filesystem path**.
+3. Main forwards `{name: string, content: string}` over IPC channel `app:csv-opened`.
+4. `ElectronBridge` receives the payload, reconstructs a `File` object, and pushes it into `lib/importHandoff.ts`. The app navigates to `/import`.
+
+### `lib/importHandoff.ts` — One-Slot TTL Registry
+
+**File:** `apps/frontend/src/lib/importHandoff.ts`
+
+Provides two functions:
+
+| Function | Description |
+|----------|-------------|
+| `registerPendingImportFile(file: File)` | Stores the file in a module-level slot with a 30-second TTL. Overwrites any previous pending slot. |
+| `consumePendingImportFile(): File \| undefined` | Returns and clears the pending slot. Returns `undefined` if empty or expired. |
+
+Pattern mirrors `lib/undo.ts` (same one-slot, TTL design). `TransactionImportCard` calls `consumePendingImportFile()` on mount; if a slot is waiting, the card pre-fills its dropzone with that file and begins the import flow automatically.
+
+The 30-second TTL prevents a stale file from being auto-applied if the user navigates to `/import` later for a different reason.
+
+### `data-dropzone` Convention
+
+The root element of the dropzone region in `TransactionImportCard` carries the attribute `data-dropzone`. `ElectronBridge`'s window-level drop handler walks `event.target` ancestors and skips interception when a `[data-dropzone]` ancestor is found, so in-card drops are not double-handled.
+
+---
 
 ## Recipient Match Patterns and Cluster Analysis
 
@@ -194,15 +239,25 @@ Each phase is idempotent at its boundary. On error, the batch is marked `failed`
 - Ensures `/api/aggregations/*` endpoints see new data immediately in the response
 - Previously fire-and-forget; now blocking to guarantee consistency
 
-### Legacy Services (Deprecated)
+#### 6. **Auto-Link Planned Payments** (post-commit, June 2026)
 
-> [!warning] Deprecated
-> The following services are no longer used by routes as of Phase C:
-> - `importService.js`
-> - `streamingImportService.js`
-> - `rawTransactionImportService.js`
-> 
-> Routes now call `runImportPipeline()` directly. Legacy services remain in codebase for backwards compatibility but are not part of the active code path.
+After committed rows are inserted and aggregations refreshed, `commit.js` calls `autoLinkTransactions(insertedRows)` from [[apps/node-backend/src/services/plannedMatchService.js]]:
+
+- Runs only when `app_settings.autoClearPlannedOnMatch` is `true` (default).
+- Checks each newly committed transaction against active, unexecuted planned payments using the moderate tolerance rule (same recipient cluster, same sign, ±5 % amount, ±5 calendar days). See [[docs/features/plannedTransactions#auto-link--auto-clear-on-ingest-june-2026|Auto-Link on Ingest]] for the full matching spec.
+- **Never fails the import**: any error in the auto-link step is caught and logged; the import result is still returned as successful.
+- **Mutually-unambiguous rule**: if two imported rows match the same planned payment, or one row matches two planned payments, neither is auto-linked.
+- The commit result and the upload summary both include `auto_linked_count` (integer, 0 when none matched or when the setting is off).
+- `ImportReviewPage` shows a toast when `auto_linked_count > 0` (i18n key `importReview.toast.autoLinked`) and invalidates the `["plannedMatchSuggestions"]` React Query cache so the suggestions banner on `PlannedPaymentsPage` refreshes.
+
+### Legacy Services (Removed)
+
+> [!warning] Deleted (2026-05-29)
+> The following services were removed from the codebase (zero importers after Phase C consolidation):
+> - `streamingImportService.js` — deleted
+> - `rawTransactionImportService.js` — deleted
+>
+> `importService.js` was superseded by routes calling `runImportPipeline()` directly.
 
 ### Data Import Service (Recipients & Categories)
 **File:** [[apps/node-backend/src/services/dataImportService.js]]
@@ -339,9 +394,69 @@ AND is_active = true
 - **Skipped**: Duplicate transactions are counted but not imported
 - **Status**: Import result includes `duplicates_skipped` count
 
-## Custom CSV Configuration
+## Saved Named Custom CSV Parsers (ADR-066)
 
-For unsupported banks, use custom import:
+**Status:** Complete (June 2026)
+
+Users can now save a custom CSV column-mapping configuration under a unique name and reuse it across import sessions without re-entering the column mapping each time. Saved parsers appear in the bank-source dropdown alongside pre-configured bank adapters, marked with a Bookmark icon.
+
+### Database Storage
+
+Saved parsers are persisted in the `custom_parser_configs` table (migration `0037_add_custom_parser_configs`):
+
+| Column | Type | Notes |
+|--------|------|-------|
+| `id` | SERIAL PK | |
+| `name` | TEXT NOT NULL | Unique (index `uq_custom_parser_configs_name`); also used as `bank_account` label on imported transactions |
+| `config_json` | JSONB NOT NULL | Column mapping: `{ dateColumn, dateFormat, recipientColumn, amountColumn, memoColumn, separator, encoding, skipRows }` |
+| `created_at` | TIMESTAMPTZ | |
+| `updated_at` | TIMESTAMPTZ | Maintained by the shared `update_updated_at_column()` trigger |
+
+**Repository**: [[apps/node-backend/src/repositories/customParserConfigRepository.js]] — `getAll`, `getById`, `getByName`, `create`, `update`, `delete`; maps `config_json` → `config` for callers.
+
+**Backup**: `custom_parser_configs` is registered in `apps/node-backend/src/backup/coverage.js` and travels with `.visionbak` exports.
+
+### CRUD Endpoints
+
+Four new endpoints under `/api/import/parsers` (see [[docs/api/imports|Imports API]] for full contracts):
+
+| Method | Path | Description |
+|--------|------|-------------|
+| GET | `/api/import/parsers` | List all saved parsers |
+| POST | `/api/import/parsers` | Create; 409 on duplicate name; 400 if required columns missing |
+| PATCH | `/api/import/parsers/:id` | Update name and/or config; 404 if missing; 409 on name conflict |
+| DELETE | `/api/import/parsers/:id` | Delete; 204 on success; 404 if missing |
+
+### Parser Name as Bank/Account Label
+
+The name the user assigns (e.g. `"My Savings Bank"`) is used as `adapterName` in the import pipeline. It is stored as the `bank_account` field on every imported transaction, providing the same stable label that a pre-configured adapter (e.g. `"belfius"`) provides. This ensures consistent grouping in Analytics, filters, and exports.
+
+> [!warning] Rename impact
+> Renaming a saved parser via PATCH does not retroactively update `bank_account` on existing transactions. Users who rename a parser will see a split in bank-account groupings between old and new imports.
+
+### Frontend UX
+
+- **Dropdown**: Saved parsers appear in the bank-source dropdown with a Bookmark icon; selecting one loads its config automatically.
+- **Read-only summary**: Shows the loaded parser's name and config with Edit and "Delete this parser" (confirmation dialog) buttons.
+- **Create**: In custom-config mode a name field and "Save parser" button create a new saved parser.
+- **Edit**: Editing a saved parser shows "Save changes" / "Cancel".
+- **Hook**: [[apps/frontend/src/hooks/useCustomParserConfigs.ts]] — React Query list + mutations under cache key `['custom-parser-configs']`.
+- **API client**: [[apps/frontend/src/lib/api/imports.ts]] — `listCustomParserConfigs`, `createCustomParserConfig`, `updateCustomParserConfig`, `deleteCustomParserConfig`; types `SavedParserConfig`, `CustomParserConfigPayload`.
+- **i18n**: `importPage.customParser.*` keys added to `en.json` / `nl.json`.
+
+### `stageBatch` Generic-Adapter Fallback (Latent Bug Fix)
+
+`apps/node-backend/src/services/importPipeline/stage.js` previously threw `Unknown adapter` when `adapterName` was not in the static adapter registry, even when a `customConfig` was present. The fix mirrors `createAdapter()` in `adapters/index.js`: if `getAdapter(adapterName)` returns `null` and `customConfig` is present, fall back to the `generic` adapter. Callers with an unrecognised name but no `customConfig` still receive the error (intentional — a missing mapping is a programming error).
+
+This fix applies to all callers, not only the saved-parser path, and closes a latent failure mode for any typed free-form bank name passed with a custom config.
+
+See [[docs/adr/066-saved-named-custom-csv-parsers|ADR-066]] for full decision context.
+
+---
+
+## Custom CSV Configuration (Ad-hoc, Non-Saved)
+
+For a one-off import from an unsupported bank without saving the configuration:
 
 ```
 POST /api/import/csv/custom
@@ -371,7 +486,7 @@ The Import Page now features an interactive visual CSV column mapper for flexibl
 
 ### Implementation
 - **Hook**: [[apps/frontend/src/hooks/useCsvPreview.ts]] — handles CSV parsing, header extraction, preview row generation
-- **Component**: [[apps/frontend/src/components/import/CsvColumnMapper.tsx]] — UI for dropdown mapping and preview display
+- **Component**: [[apps/frontend/src/features/imports/CsvColumnMapper.tsx]] — UI for dropdown mapping and preview display (moved from `components/import/` in June 2026)
 - **Integration**: Replaces 4 inline text inputs in [[apps/frontend/src/pages/ImportPage.tsx]]; separator field moved above mapper
 - **i18n**: New keys: `csvParsing`, `csvParseError`, `csvPreviewTitle`, `noMapping` (en + nl translations)
 
@@ -381,6 +496,35 @@ The Import Page now features an interactive visual CSV column mapper for flexibl
 3. Preview table shows detected headers and sample data
 4. Map each required field using dropdown
 5. Click import when ready
+
+## File Headers Preview Panel (June 2026) {#file-headers-preview-panel}
+
+**Component:** [[apps/frontend/src/features/imports/FileHeadersPanel.tsx]]  
+**Helper:** [[apps/frontend/src/lib/csvSeparator.ts]] — `detectSeparator(rawText: string): string`
+
+The `FileHeadersPanel` is a shared component that renders a column-name chip row and a collapsible sample-rows table as soon as a file is selected, regardless of which bank adapter is chosen. It is independent of the column-mapper UI and appears under the dropzone in both the budgeting and portfolio import paths.
+
+### Behaviour
+
+- **Triggers on file selection**: The panel renders immediately when the user selects (or drops) a CSV file, before any import action.
+- **Separator auto-detection**: `detectSeparator` scans the first line of the raw file text for common delimiters (`;`, `,`, `\t`) and picks the one that produces the most fields. Falls back to `,`.
+- **Header chips**: Each detected column name is shown as a chip. Non-CSV files produce no chips (graceful degradation).
+- **Sample rows table**: Up to 5 data rows displayed in a collapsible `<details>` element, matching the column order from the header chip row.
+- **Built on `useCsvPreview`**: Reuses the existing hook ([[apps/frontend/src/hooks/useCsvPreview.ts]]) — no new CSV-parsing logic.
+
+### Retrofit into TransactionImportCard
+
+Before this change, column-name previews appeared only in the custom-parser path (inside `CsvColumnMapper`). The `FileHeadersPanel` is now placed under the dropzone in [[apps/frontend/src/features/imports/TransactionImportCard.tsx]], so all adapter imports (Belfius, Revolut, ING, KBC, BNP, SABB, Wise, Vision, Custom) show a header preview as soon as a file is chosen.
+
+### i18n
+
+New `csvHeaders.*` keys added to `i18n/source/en.json` and `i18n/source/nl.json`.
+
+### Also used in Portfolio Import
+
+`PortfolioCsvColumnMapper` embeds the same `FileHeadersPanel`. See [[docs/features/portfolio-import#fileheaderspanel-integration|Portfolio Import — FileHeadersPanel Integration]].
+
+---
 
 ## Streaming Import with Server-Sent Events (SSE)
 
@@ -580,6 +724,8 @@ See [[docs/api/attachments|Attachments API]] for endpoint contracts and examples
 - [[docs/api/transactions|API: Transactions]]
 - [[docs/api/recipients|API: Recipients]]
 - [[docs/api/attachments|API: Attachments]]
+- [[docs/adr/066-saved-named-custom-csv-parsers|ADR-066: Saved Named Custom CSV Parsers]]
+- [[docs/adr/046-import-review-category-assignment|ADR-046: Import Review Category Assignment]]
 
 ## Testing References
 

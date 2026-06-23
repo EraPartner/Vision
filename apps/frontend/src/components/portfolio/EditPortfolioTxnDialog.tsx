@@ -1,5 +1,6 @@
 import { useMemo, useState } from 'react';
 import { parseDecimal } from '@/lib/decimal';
+import { deriveUnitMath } from '@/lib/portfolioUnitMath';
 import { useLanguage } from '@/contexts/LanguageContext';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
@@ -11,16 +12,13 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { DatePicker } from '@/components/shared/DatePicker';
 import { parseLocalDateFromYmd, toYmd } from '@/components/shared/dateUtils';
 import { usePortfolio } from '@/hooks/usePortfolio';
+import { useAccounts } from '@/hooks/useAccounts';
 import { isUnitBased } from '@/utils/assetClass';
 import { toast } from 'sonner';
 import type { InvestmentSummary, PortfolioTxnType, RecurrenceInterval } from '@/types/portfolio';
-import type { PortfolioTransaction } from '@/types/api';
+import type { PortfolioTransaction, PortfolioTransactionCreate } from '@/types/api';
 import { getTxnTypeLabel } from '@/types/portfolio';
 
-function roundTo(value: number, decimals: number): number {
-  const factor = 10 ** decimals;
-  return Math.round(value * factor) / factor;
-}
 
 function parsePositive(value: string): number | undefined {
   if (!value.trim()) return undefined;
@@ -65,7 +63,11 @@ export function EditPortfolioTxnDialog({ investment, transaction, trigger }: Pro
 
   const unitBased = isUnitBased(investment.assetClass);
 
-  const [form, setForm] = useState({
+  // Per-account positioning (ADR-091): a lot's owning account is editable here so
+  // it no longer requires a raw API call to move a single lot between accounts.
+  const { data: accountsData } = useAccounts({ active: 'true' });
+
+  const initialForm = () => ({
     date: normalizeYmdInput(transaction.date),
     amount: String(transaction.amount ?? ''),
     units: transaction.units !== undefined ? String(transaction.units) : '',
@@ -74,26 +76,15 @@ export function EditPortfolioTxnDialog({ investment, transaction, trigger }: Pro
     taxes: transaction.taxes !== undefined ? String(transaction.taxes) : '',
     fxRateToEur: transaction.fx_rate_to_eur !== undefined ? String(transaction.fx_rate_to_eur) : '',
     note: transaction.note || '',
+    accountId: transaction.account_id != null ? String(transaction.account_id) : '',
     isRecurring: Boolean(transaction.is_recurring),
     recurrenceInterval: (transaction.recurrence_interval || 'monthly') as RecurrenceInterval,
     recurrenceEndDate: normalizeYmdInput(transaction.recurrence_end_date),
   });
 
-  const reset = () => {
-    setForm({
-      date: normalizeYmdInput(transaction.date),
-      amount: String(transaction.amount ?? ''),
-      units: transaction.units !== undefined ? String(transaction.units) : '',
-      pricePerUnit: transaction.price_per_unit !== undefined ? String(transaction.price_per_unit) : '',
-      fees: transaction.fees !== undefined ? String(transaction.fees) : '',
-      taxes: transaction.taxes !== undefined ? String(transaction.taxes) : '',
-      fxRateToEur: transaction.fx_rate_to_eur !== undefined ? String(transaction.fx_rate_to_eur) : '',
-      note: transaction.note || '',
-      isRecurring: Boolean(transaction.is_recurring),
-      recurrenceInterval: (transaction.recurrence_interval || 'monthly') as RecurrenceInterval,
-      recurrenceEndDate: normalizeYmdInput(transaction.recurrence_end_date),
-    });
-  };
+  const [form, setForm] = useState(initialForm);
+
+  const reset = () => setForm(initialForm());
 
   const isBuySell = transaction.type === 'buy' || transaction.type === 'sell';
   const isGift = transaction.type === 'gift';
@@ -103,34 +94,14 @@ export function EditPortfolioTxnDialog({ investment, transaction, trigger }: Pro
   const unitsInput = parsePositive(form.units);
   const priceInput = parsePositive(form.pricePerUnit);
 
-  let derivedAmount: number | undefined;
-  let derivedUnits: number | undefined;
-  let derivedPrice: number | undefined;
-  if (isUnitMathTxn) {
-    const provided = Number(amountInput !== undefined) + Number(unitsInput !== undefined) + Number(priceInput !== undefined);
-    if (provided >= 2) {
-      if (amountInput === undefined && unitsInput !== undefined && priceInput !== undefined) {
-        derivedAmount = roundTo(unitsInput * priceInput, 4);
-      }
-      if (unitsInput === undefined && amountInput !== undefined && priceInput !== undefined) {
-        derivedUnits = roundTo(amountInput / priceInput, 8);
-      }
-      if (priceInput === undefined && amountInput !== undefined && unitsInput !== undefined) {
-        derivedPrice = roundTo(amountInput / unitsInput, 6);
-      }
-    }
-  }
+  const unitMath = deriveUnitMath({ amount: amountInput, units: unitsInput, price: priceInput, derive: isUnitMathTxn });
+  const { derivedAmount } = unitMath;
 
-  const effectiveAmount = amountInput ?? derivedAmount;
-  const effectiveUnits = unitsInput ?? derivedUnits;
-  const effectivePrice = priceInput ?? derivedPrice;
+  const effectiveAmount = unitMath.effectiveAmount;
+  const effectiveUnits = unitMath.effectiveUnits;
+  const effectivePrice = unitMath.effectivePrice;
 
-  const buySellIsValid = !isBuySell
-    || ((Number(amountInput !== undefined) + Number(unitsInput !== undefined) + Number(priceInput !== undefined)) >= 2
-      && effectiveAmount !== undefined
-      && effectiveUnits !== undefined
-      && effectivePrice !== undefined
-      && Math.abs(roundTo(effectiveUnits * effectivePrice, 4) - roundTo(effectiveAmount, 4)) <= 0.0001);
+  const buySellIsValid = !isBuySell || unitMath.isConsistent;
 
   const showUnits = unitBased && ['buy', 'sell', 'gift'].includes(transaction.type);
   const showFeesTaxes = ['buy', 'sell', 'dividend'].includes(transaction.type);
@@ -166,6 +137,8 @@ export function EditPortfolioTxnDialog({ investment, transaction, trigger }: Pro
     }
 
     try {
+      // account_id: a number reassigns the lot, explicit null clears it back to
+      // unassigned (the PATCH endpoint maps null → SQL NULL, undefined → unchanged).
       await updateTransaction(transaction.id, {
         date: form.date,
         amount: effectiveAmount,
@@ -175,10 +148,11 @@ export function EditPortfolioTxnDialog({ investment, transaction, trigger }: Pro
         taxes: isGift ? 0 : (form.taxes ? parseDecimal(form.taxes) : undefined),
         fx_rate_to_eur: form.fxRateToEur ? parseDecimal(form.fxRateToEur) : undefined,
         note: form.note.trim() || undefined,
+        account_id: form.accountId ? Number(form.accountId) : null,
         is_recurring: form.isRecurring,
         recurrence_interval: form.isRecurring ? form.recurrenceInterval : undefined,
         recurrence_end_date: form.isRecurring && form.recurrenceEndDate ? form.recurrenceEndDate : undefined,
-      });
+      } as Partial<PortfolioTransactionCreate>);
       toast.success(t('txnEdit.toast.updated', { type: getTxnTypeLabel(t, transaction.type as PortfolioTxnType) }));
       setOpen(false);
     } catch {
@@ -216,6 +190,22 @@ export function EditPortfolioTxnDialog({ investment, transaction, trigger }: Pro
                 onChange={(date) => setForm((f) => ({ ...f, date: date ? toYmd(date) : '' }))}
                 placeholder={t('plannedPage.link.pickDate')}
               />
+            </div>
+
+            <div className="space-y-2 col-span-2">
+              <Label>{t('nav.accounts')}</Label>
+              <Select
+                value={form.accountId || 'none'}
+                onValueChange={(v) => setForm((f) => ({ ...f, accountId: v === 'none' ? '' : v }))}
+              >
+                <SelectTrigger><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="none">{t('accounts.unassigned')}</SelectItem>
+                  {(accountsData?.items ?? []).map((a) => (
+                    <SelectItem key={a.id} value={String(a.id)}>{a.display_name || a.name}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
             </div>
 
             {showUnits && (

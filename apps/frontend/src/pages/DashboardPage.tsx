@@ -6,6 +6,7 @@ import { MonthlyTrendsChart } from "@/components/dashboard/MonthlyTrendsChart";
 import { CashFlowForecastChart } from "@/components/dashboard/CashFlowForecastChart";
 import { CategoryPieChart } from "@/components/dashboard/CategoryPieChart";
 import { BankBalancesWidget } from "@/components/dashboard/BankBalancesWidget";
+import { SuggestionCard } from "@/components/dashboard/SuggestionCard";
 import { DataTable } from "@/components/shared/DataTable";
 import { ExclusionToggle } from "@/components/shared/ExclusionToggle";
 import { PageHeader } from "@/components/shared/PageHeader";
@@ -15,11 +16,14 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { ArrowUpRight, LayoutDashboard, Receipt, TrendingDown, Tags, AlertTriangle } from "lucide-react";
 import { useTransactions } from "@/hooks/useTransactions";
 import { useFilteredDashboardStats } from "@/hooks/useFilteredDashboardStats";
-import { useSettings } from "@/contexts/SettingsContext";
+import { useExcludedIds } from "@/hooks/useExcludedIds";
 import { useQuery } from "@tanstack/react-query";
 import { apiClient } from "@/lib/api";
 import { getCategoryColor } from "@/utils/categoryColors";
-import { formatCurrency, formatCurrencyCompact, numberFormatToLocale } from "@/utils/currency";
+import { formatCurrencyCompact, numberFormatToLocale } from "@/utils/currency";
+import { Money } from "@/components/shared/Money";
+import { ChartSyncProvider } from "@/components/charts/ChartSyncContext";
+import { ChartSkeleton } from "@/components/charts/ChartSkeleton";
 import { WidgetVisibilityDialog } from "@/components/shared/WidgetVisibilityDialog";
 import { useWidgetVisibility, type WidgetDefinition } from "@/hooks/useWidgetVisibility";
 import { useLanguage } from "@/contexts/LanguageContext";
@@ -37,6 +41,7 @@ export default function DashboardPage() {
     const integerLocaleFormatter = useMemo(() => new Intl.NumberFormat(locale), [locale]);
 
     const DASHBOARD_WIDGETS: WidgetDefinition[] = useMemo(() => [
+        { id: 'suggestions', label: t('dashboard.suggestions'), description: t('dashboard.widgetDescriptions.suggestions') },
         { id: 'statCards', label: t('dashboard.statCards'), description: t('dashboard.widgetDescriptions.statCards') },
         { id: 'bankBalances', label: t('dashboard.bankBalances'), description: t('dashboard.widgetDescriptions.bankBalances') },
         { id: 'monthlyTrends', label: t('dashboard.monthlyTrends'), description: t('dashboard.widgetDescriptions.monthlyTrends') },
@@ -46,7 +51,6 @@ export default function DashboardPage() {
     ], [t]);
 
     const { isVisible, setWidgetVisible, setAllVisible, resetToDefaults, widgets: widgetDefs } = useWidgetVisibility('dashboard', DASHBOARD_WIDGETS);
-    const { settings } = useSettings();
 
     // Per-graph exclusion override state
     const [graphExclusions, setGraphExclusions] = useState<GraphExclusions>({});
@@ -57,54 +61,24 @@ export default function DashboardPage() {
         }));
     }, []);
 
-    // Check if exclusions should apply to dashboard
-    const exclusionsApply = (settings.exclusionScope === 'everywhere' || settings.exclusionScope === 'dashboard') &&
-        (settings.excludedCategoryIds.length > 0 || settings.excludedRecipientIds.length > 0 || settings.excludeHiddenCategories);
+    // Excluded category/recipient IDs (settings + hidden categories) from the
+    // shared resolver, so the dashboard and statistics exclude exactly the same set.
+    const {
+        excludedCategoryIds: allExcludedCategoryIds,
+        excludedRecipientIds,
+        exclusionsApply: exclusionScopeApplies,
+    } = useExcludedIds('dashboard');
+
+    // Switch to the *filtered* aggregation queries only when there is actually
+    // something to exclude (preserves prior enable behavior).
+    const exclusionsApply = exclusionScopeApplies &&
+        (allExcludedCategoryIds.length > 0 || excludedRecipientIds.length > 0);
 
     // Fetch real-time statistics from /api/info endpoints with applied filters
     const { data: statsData, isLoading: statsLoading, error: statsError } = useFilteredDashboardStats();
 
     // Fetch transactions for charts and recent transactions table
     const { data: transactionsData, isLoading: transactionsLoading, error: transactionsError } = useTransactions({ limit: 50 });
-
-    // Fetch categories (needed to resolve hidden category exclusions)
-    const { data: categoriesData } = useQuery({
-        queryKey: ['categories', 'all'],
-        queryFn: () => apiClient.getCategories({ limit: 1000 }),
-        staleTime: 60000,
-    });
-
-    // Build complete excluded category IDs list (including hidden categories)
-    // Memoized — only recomputes when the relevant settings or categories change.
-    const allExcludedCategoryIds = useMemo(() => {
-        if (settings.exclusionScope !== 'everywhere' && settings.exclusionScope !== 'dashboard') {
-            return [];
-        }
-        const ids = [...settings.excludedCategoryIds];
-        if (settings.excludeHiddenCategories && categoriesData) {
-            const hiddenIds = categoriesData.items
-                .filter((cat) => !cat.is_active)
-                .map((cat) => cat.id);
-            ids.push(...hiddenIds);
-        }
-        const seen = new Set<number>();
-        const ordered: number[] = [];
-        for (const id of ids) {
-            if (!seen.has(id)) {
-                seen.add(id);
-                ordered.push(id);
-            }
-        }
-        return ordered;
-    }, [settings.exclusionScope, settings.excludedCategoryIds, settings.excludeHiddenCategories, categoriesData]);
-
-    // Recipient exclusions
-    const excludedRecipientIds = useMemo(
-        () => ((settings.exclusionScope === 'everywhere' || settings.exclusionScope === 'dashboard')
-            ? settings.excludedRecipientIds
-            : []),
-        [settings.exclusionScope, settings.excludedRecipientIds],
-    );
 
     // Stable exclusion params (don't change with toggle)
     const filteredExclusionParams = useMemo(() => ({
@@ -190,39 +164,21 @@ export default function DashboardPage() {
 
     const allTransactions = useMemo(() => transactionsData?.items || [], [transactionsData]);
 
-    // Apply settings filters to transactions
+    // Apply settings filters to transactions, using the shared resolved exclusion set.
     const transactions = useMemo(() => {
-        if (settings.exclusionScope !== 'everywhere' && settings.exclusionScope !== 'dashboard') {
+        if (!exclusionScopeApplies) {
             return allTransactions;
         }
 
-        let hiddenCategoryIds: number[] = [];
-        if (settings.excludeHiddenCategories && categoriesData) {
-            hiddenCategoryIds = categoriesData.items
-                .filter((cat) => !cat.is_active)
-                .map((cat) => cat.id);
-        }
-
-        const excludedCategoryIdSet = new Set([
-            ...settings.excludedCategoryIds,
-            ...hiddenCategoryIds,
-        ]);
-
-        const excludedRecipientIdSet = new Set(settings.excludedRecipientIds);
+        const excludedCategoryIdSet = new Set(allExcludedCategoryIds);
+        const excludedRecipientIdSet = new Set(excludedRecipientIds);
 
         return allTransactions.filter((tx) => {
             if (tx.category_id && excludedCategoryIdSet.has(tx.category_id)) return false;
             if (tx.recipient_id && excludedRecipientIdSet.has(tx.recipient_id)) return false;
             return true;
         });
-    }, [
-        allTransactions,
-        settings.exclusionScope,
-        settings.excludedCategoryIds,
-        settings.excludedRecipientIds,
-        settings.excludeHiddenCategories,
-        categoriesData,
-    ]);
+    }, [allTransactions, exclusionScopeApplies, allExcludedCategoryIds, excludedRecipientIds]);
 
     // Use real-time statistics from API (last month with data)
     const totalTransactions = statsData?.totalTransactions ?? 0;
@@ -339,53 +295,45 @@ export default function DashboardPage() {
             className: "text-right",
             render: (row: (typeof recentTransactions)[0]) => (
                 <span className={`font-semibold ${row.amount >= 0 ? "text-accent" : "text-destructive"}`}>
-                    {row.amount >= 0 ? "+" : ""}{formatCurrency(Math.abs(row.amount), row.currency, locale)}
+                    {row.amount >= 0 ? "+" : "-"}<Money amount={Math.abs(row.amount)} currency={row.currency} />
                 </span>
             ),
         },
-    ], [t, appSettings.dateFormat, locale]);
+    ], [t, appSettings.dateFormat]);
 
-    if (statsLoading || transactionsLoading || monthlyLoading || recentTransactionsLoading) {
-        return (
-            <div className="space-y-8 animate-in">
-                <PageHeader title={t('dashboard.title')} subtitle={t('dashboard.loadingData')} icon={LayoutDashboard} />
-                {/* Stat cards skeleton */}
-                <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-                    {[...Array(4)].map((_, i) => (
-                        <Card key={i} className="surface-elevated premium-frame micro-lift">
-                            <CardHeader className="pb-3 flex flex-row items-center justify-between space-y-0">
-                                <Skeleton className="h-4 w-28" />
-                                <Skeleton className="h-10 w-10 rounded-xl" />
-                            </CardHeader>
-                            <CardContent>
-                                <Skeleton className="h-8 w-32 mb-2" />
-                                <Skeleton className="h-3 w-20" />
-                            </CardContent>
-                        </Card>
-                    ))}
-                </div>
-                {/* Bank balances skeleton */}
-                <Skeleton className="h-64 w-full rounded-xl" />
-                {/* Charts skeleton */}
-                <div className="grid gap-6 lg:grid-cols-2">
-                    <Skeleton className="h-80 w-full rounded-xl" />
-                    <Skeleton className="h-80 w-full rounded-xl" />
-                </div>
-                {/* Recent transactions skeleton */}
-                <Card>
-                    <CardHeader>
-                        <Skeleton className="h-6 w-44" />
-                        <Skeleton className="h-4 w-32 mt-1" />
+    // Per-widget hydration: each section renders its own skeleton while its
+    // queries load, so the hero stats appear the moment they arrive instead
+    // of gating the whole page on the slowest query.
+    const statSkeleton = (
+        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+            {[...Array(4)].map((_, i) => (
+                <Card key={i} className="glass-regular micro-lift">
+                    <CardHeader className="pb-3 flex flex-row items-center justify-between space-y-0">
+                        <Skeleton className="h-4 w-28" />
+                        <Skeleton className="h-10 w-10 rounded-xl" />
                     </CardHeader>
-                    <CardContent className="space-y-2">
-                        {[...Array(5)].map((_, i) => (
-                            <Skeleton key={i} className="h-10 w-full" />
-                        ))}
+                    <CardContent>
+                        <Skeleton className="h-8 w-32 mb-2" />
+                        <Skeleton className="h-3 w-20" />
                     </CardContent>
                 </Card>
-            </div>
-        );
-    }
+            ))}
+        </div>
+    );
+
+    const recentSkeleton = (
+        <Card>
+            <CardHeader>
+                <Skeleton className="h-6 w-44" />
+                <Skeleton className="h-4 w-32 mt-1" />
+            </CardHeader>
+            <CardContent className="space-y-2">
+                {[...Array(5)].map((_, i) => (
+                    <Skeleton key={i} className="h-10 w-full" />
+                ))}
+            </CardContent>
+        </Card>
+    );
 
     // Show an inline banner for failed queries instead of replacing the whole
     // page. Cached data from any successful query still renders so the user
@@ -415,6 +363,7 @@ export default function DashboardPage() {
     const compactCurrencyFormatter = (n: number) => formatCurrencyCompact(n, appSettings.defaultCurrency, locale).display;
 
     return (
+        <ChartSyncProvider>
         <div className="space-y-8 animate-in">
             {/* Page header */}
             <PageHeader
@@ -433,8 +382,8 @@ export default function DashboardPage() {
             />
 
             {partialError && (
-                <div className="flex items-start gap-2 rounded-md border border-amber-500/40 bg-amber-500/10 p-3 text-sm">
-                    <AlertTriangle className="h-4 w-4 mt-0.5 text-amber-500 shrink-0" />
+                <div className="flex items-start gap-2 rounded-md border border-warning/40 bg-warning/10 p-3 text-sm">
+                    <AlertTriangle className="h-4 w-4 mt-0.5 text-warning shrink-0" />
                     <div className="text-foreground/80">
                         {allFromCache
                             ? t('dashboard.staleDataWarning', { msg: String(partialErrorMessage) })
@@ -444,8 +393,12 @@ export default function DashboardPage() {
                 </div>
             )}
 
+            {/* Contextual suggestion — only renders when planned payments are due */}
+            {isVisible('suggestions') && <SuggestionCard />}
+
             {/* Stats — bento: featured net-balance tile + secondary metrics */}
-            {isVisible('statCards') && (
+            {isVisible('statCards') && statsLoading && statSkeleton}
+            {isVisible('statCards') && !statsLoading && (
             <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-6 lg:grid-rows-2 animate-stagger">
                 <div className="sm:col-span-2 lg:col-span-3 lg:row-span-2">
                     <NetSummaryCard
@@ -472,8 +425,11 @@ export default function DashboardPage() {
 
             {/* Charts — asymmetric bento: trends span 3 of 5 cols, category pie spans 2 */}
             <div className="grid gap-6 lg:grid-cols-5">
-                {isVisible('monthlyTrends') && monthlyData.length > 0 && (
-                    <Card className="group relative overflow-hidden surface-elevated premium-frame micro-lift bg-card backdrop-blur-sm lg:col-span-3">
+                {isVisible('monthlyTrends') && monthlyLoading && (
+                    <Card className="glass-regular lg:col-span-3"><CardContent className="pt-6"><ChartSkeleton height={300} /></CardContent></Card>
+                )}
+                {isVisible('monthlyTrends') && !monthlyLoading && monthlyData.length > 0 && (
+                    <Card className="group relative overflow-hidden glass-regular premium-frame micro-lift lg:col-span-3">
                         <CardHeader className="flex flex-row items-center justify-between">
                             <div className="flex items-center gap-3">
                                 <div className="h-11 w-11 rounded-xl bg-gradient-to-br from-primary/20 to-primary/5 flex items-center justify-center shadow-sm text-primary transition-transform duration-300 group-hover:scale-105">
@@ -496,8 +452,11 @@ export default function DashboardPage() {
                         </CardContent>
                     </Card>
                 )}
-                {isVisible('categoryPie') && (
-                <Card className="group relative overflow-hidden surface-elevated premium-frame micro-lift bg-card backdrop-blur-sm lg:col-span-2">
+                {isVisible('categoryPie') && transactionsLoading && (
+                    <Card className="glass-regular lg:col-span-2"><CardContent className="pt-6"><ChartSkeleton height={300} /></CardContent></Card>
+                )}
+                {isVisible('categoryPie') && !transactionsLoading && (
+                <Card className="group relative overflow-hidden glass-regular premium-frame micro-lift lg:col-span-2">
                     <CardHeader className="flex flex-row items-center justify-between">
                         <div className="flex items-center gap-3">
                             <div className="h-11 w-11 rounded-xl bg-gradient-to-br from-chart-4/20 to-chart-4/5 flex items-center justify-center shadow-sm text-chart-4 transition-transform duration-300 group-hover:scale-105">
@@ -532,7 +491,8 @@ export default function DashboardPage() {
             )}
 
             {/* Recent transactions */}
-            {isVisible('recentTransactions') && (
+            {isVisible('recentTransactions') && (transactionsLoading || recentTransactionsLoading) && recentSkeleton}
+            {isVisible('recentTransactions') && !(transactionsLoading || recentTransactionsLoading) && (
             <DataTable
                 title={t('dashboard.recentTransactions')}
                 subtitle={t('dashboard.recentTransactionsSubtitle', { n: recentTransactions.length })}
@@ -550,5 +510,6 @@ export default function DashboardPage() {
             />
             )}
         </div>
+        </ChartSyncProvider>
     );
 }

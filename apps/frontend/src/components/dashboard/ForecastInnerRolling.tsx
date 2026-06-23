@@ -31,7 +31,10 @@ function ForecastInnerRollingImpl({
 }: ForecastInnerRollingProps) {
     const { appSettings } = useAppSettings();
     const locale = numberFormatToLocale(appSettings.numberFormat);
-    const { t } = useLanguage();
+    const { t, language } = useLanguage();
+    // Month abbreviations follow the app language, not the number-format locale
+    // (numberFormatToLocale maps 'eu' -> 'de-DE', which would yield German months).
+    const monthLabelLocale = language === "nl" ? "nl-NL" : "en-US";
     const actualLabel = t("cashflow.actualToDate") ?? t("cashflow.actualThisMonth");
 
     const { rows, series } = useMemo(
@@ -47,9 +50,9 @@ function ForecastInnerRollingImpl({
     const xTickFormat = useMemo(
         () => (v: Date | number) => {
             const d = v instanceof Date ? v : new Date(v);
-            return formatDate(d, "MMM d", locale);
+            return formatDate(d, "MMM d", monthLabelLocale);
         },
-        [locale],
+        [monthLabelLocale],
     );
 
     const referenceLines = useMemo(
@@ -67,6 +70,8 @@ function ForecastInnerRollingImpl({
 
     return (
         <LineChart<MergedDayDate>
+            syncId="dashboard-timeline"
+            scrubbable
             data={rows}
             xAccessor={(d) => d.t}
             xIsDate

@@ -6,14 +6,16 @@
 
 import { Router } from 'express';
 import { query as dbQuery } from '../database/connection.js';
-// eslint-disable-next-line vision-local/no-repo-direct-from-route
-import plannedTransactionRepository from '../repositories/plannedTransactionRepository.js';
-import { validateIdParam } from '../middleware/validation.js';
+import plannedTransactionRepository from '../services/plannedTransactionService.js';
+import { validateIdParam, assertYmd, validateId } from '../middleware/validation.js';
 import { rateLimiter } from '../middleware/rateLimiter.js';
 import { generateLoanRepaymentSchedule } from '../services/calculations/loanSchedule.js';
-import { calculateNextDate } from '../services/calculations/recurrence.js';
+import { isValidPattern } from '../services/calculations/recurrence.js';
+import { executePlanned } from '../services/plannedExecutionService.js';
+import { getMatchSuggestions } from '../services/plannedMatchService.js';
 import { NotFoundError, ValidationError } from '../middleware/errorHandler.js';
 import { toDecimal, toNumber } from '../lib/money.js';
+import { parsePagination } from '../lib/pagination.js';
 
 const router = Router();
 
@@ -127,35 +129,31 @@ function applyLoanPatchDefaults(fields, existing) {
   return generatedLoanSchedule;
 }
 
-function getCurrentDateString() {
-  return new Date().toISOString().split('T')[0];
-}
 
-async function updateLoanScheduleForPatch(id, generatedLoanSchedule, fields, existing) {
-  if (generatedLoanSchedule) {
-    await plannedTransactionRepository.replaceLoanSchedule(id, generatedLoanSchedule.schedule);
-    return true;
-  } else if (fields.is_loan === false && existing.is_loan) {
-    await plannedTransactionRepository.replaceLoanSchedule(id, []);
-    return true;
-  }
-
-  return false;
+/**
+ * Decide whether this PATCH must rewrite the loan schedule, and to what.
+ * Returns the installment array to write, [] to clear it, or undefined to leave
+ * the existing schedule untouched.
+ */
+function resolveLoanScheduleDirective(generatedLoanSchedule, fields, existing) {
+  if (generatedLoanSchedule) return generatedLoanSchedule.schedule;
+  if (fields.is_loan === false && existing.is_loan) return []; // loan turned off → clear
+  return undefined;
 }
 
 router.get('/', async (req, res) => {
   const {
-    limit = 50, offset = 0,
     start_date, end_date, bank_account,
     category_id, recipient_id,
     is_recurring, is_executed, active = 'true', search,
   } = req.query;
 
+  const { limit, offset } = parsePagination(req.query, { maxLimit: 5000 });
   const opts = {
-    limit: Math.min(parseInt(limit, 10) || 50, 5000),
-    offset: parseInt(offset, 10) || 0,
-    startDate: start_date || null,
-    endDate: end_date || null,
+    limit,
+    offset,
+    startDate: assertYmd(start_date, 'start_date'),
+    endDate: assertYmd(end_date, 'end_date'),
     bankAccount: bank_account || null,
     categoryId: category_id ? parseInt(category_id, 10) : null,
     recipientId: recipient_id ? parseInt(recipient_id, 10) : null,
@@ -197,11 +195,21 @@ router.post('/', async (req, res) => {
     data.planned_date = generated.first_due_date;
 
     data.is_recurring = true;
-    if (data.recurrence_pattern) delete data.recurrence_pattern;
+    // Loans advance monthly (see plannedTransactionRepository.create). Set it
+    // explicitly so the created row + /execute advance are consistent and the
+    // recurrence_pattern validation below sees a valid pattern.
+    data.recurrence_pattern = 'monthly';
     if (data.frequency) delete data.frequency;
     if (data.custom_interval_days) delete data.custom_interval_days;
     if (data.end_date) delete data.end_date;
     if (data.max_occurrences) delete data.max_occurrences;
+  }
+
+  // Reject patterns calculateNextDate can't advance (e.g. "fortnightly"): they
+  // store fine but on /execute leave the row stuck as perpetually-due. Loans
+  // set recurrence_pattern='monthly' above, so this never trips loan creation.
+  if (data.is_recurring && data.recurrence_pattern && !isValidPattern(data.recurrence_pattern)) {
+    throw new ValidationError(`Invalid recurrence_pattern: ${data.recurrence_pattern}`);
   }
 
   const created = await plannedTransactionRepository.create(data);
@@ -221,6 +229,20 @@ router.get('/due-soon', async (req, res) => {
   const rows = await plannedTransactionRepository.getDueSoon(days);
   const items = rows.map(formatPlannedTransaction);
   res.ok(items, { days, total: items.length });
+});
+
+/**
+ * GET /api/planned-transactions/match-suggestions
+ *
+ * Active, unexecuted planned payments that have one or more recent unlinked
+ * transactions within match tolerance but were not auto-cleared (ambiguous
+ * matches, or auto-clear disabled). Each entry carries its candidate
+ * transactions for the user to confirm. Registered before /:id so the literal
+ * segment is not captured by the id param.
+ */
+router.get('/match-suggestions', async (req, res) => {
+  const suggestions = await getMatchSuggestions();
+  res.ok(suggestions, { total: suggestions.length });
 });
 
 router.get('/:id', validateIdParam, async (req, res) => {
@@ -247,16 +269,23 @@ router.patch(
     ]);
 
     const generatedLoanSchedule = applyLoanPatchDefaults(fields, existing);
+    const loanScheduleDirective = resolveLoanScheduleDirective(generatedLoanSchedule, fields, existing);
 
-    const updated = await plannedTransactionRepository.update(id, fields);
-
-    const loanScheduleChanged = await updateLoanScheduleForPatch(id, generatedLoanSchedule, fields, existing);
-
-    if (loanScheduleChanged) {
-      const withSchedule = await plannedTransactionRepository.getById(id);
-      res.ok(formatPlannedTransaction(withSchedule || updated));
-      return;
+    // Same guard as POST: a recurrence_pattern calculateNextDate can't advance
+    // leaves the row perpetually due. applyLoanPatchDefaults already set a valid
+    // 'monthly' for loans by here, so this only rejects genuine typos.
+    if (fields.recurrence_pattern && !isValidPattern(fields.recurrence_pattern)) {
+      throw new ValidationError(`Invalid recurrence_pattern: ${fields.recurrence_pattern}`);
     }
+
+    // When the loan schedule must change, the field update and the schedule
+    // rewrite MUST happen in one transaction — otherwise a crash between them
+    // leaves the planned row's loan params disagreeing with the installment rows.
+    const updated = loanScheduleDirective !== undefined
+      ? await plannedTransactionRepository.updateWithLoanSchedule(id, fields, loanScheduleDirective)
+      : await plannedTransactionRepository.update(id, fields);
+
+    if (!updated) throw new NotFoundError(`Planned transaction ${id} not found`);
 
     res.ok(formatPlannedTransaction(updated));
   },
@@ -269,35 +298,18 @@ router.post('/:id/execute', validateIdParam, async (req, res) => {
   if (!executed_transaction_id) {
     throw new ValidationError('Missing required field: executed_transaction_id');
   }
+  // Validate body inputs up front: malformed values otherwise surface as
+  // Postgres cast errors → 500 instead of a 400.
+  const idCheck = validateId(executed_transaction_id, 'executed_transaction_id');
+  if (!idCheck.valid) throw new ValidationError(idCheck.error);
+  assertYmd(execution_date, 'execution_date');
 
-  const existing = await plannedTransactionRepository.getById(id);
-  if (!existing) throw new NotFoundError(`Planned transaction ${id} not found`);
-
-  const execDate = execution_date || getCurrentDateString();
-  const updateFields = {
-    is_executed: !existing.is_recurring,
-    last_executed_date: execDate,
-  };
-
-  if (existing.is_recurring && existing.recurrence_pattern) {
-    const baseDate = new Date(existing.planned_date);
-    const nextDate = calculateNextDate(baseDate, existing.recurrence_pattern);
-    if (nextDate) {
-      updateFields.planned_date = nextDate.toISOString().split('T')[0];
-      updateFields.is_executed = false;
-    }
-  }
-
-  const tagIdsToInherit = (existing.tags || []).map((t) => t.id);
-  const { duplicate } = await plannedTransactionRepository.executeAndAdvance(
+  const { current, duplicate } = await executePlanned({
     id,
-    executed_transaction_id,
-    execDate,
-    updateFields,
-    tagIdsToInherit,
-  );
+    executedTransactionId: executed_transaction_id,
+    executionDate: execution_date,
+  });
 
-  const current = await plannedTransactionRepository.getById(id);
   if (duplicate) res.set('Idempotent-Replay', 'true');
   res.ok(formatPlannedTransaction(current));
 });

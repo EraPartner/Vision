@@ -69,7 +69,10 @@ export interface InvestmentSummary {
   symbol?: string;
   assetClass: AssetClass;
   asset_class: AssetClass;
+  /** Display currency of every monetary field below (the app's target currency). */
   currency: string;
+  /** The investment's native currency, preserved for labelling (mirrors backend). */
+  originalCurrency?: string;
   currentPrice?: number;
   current_price?: number;
   interestRate?: number;
@@ -98,8 +101,14 @@ export interface InvestmentSummary {
   // Computed - Core
   totalUnits: number;
   totalInvested: number;       // Net capital deployed (buys - sells principal)
-  totalFees: number;
-  totalTaxes: number;
+  totalFees: number;           // fee tx-type rows + per-row fees columns
+  totalTaxes: number;          // tax tx-type rows + per-row taxes columns
+  // Standalone fee/tax *transaction-type* totals only (NOT the per-row
+  // fees/taxes columns, which buys/sells already fold into cost basis). Net-gain
+  // cards must subtract these, never totalFees/totalTaxes, to avoid double-count.
+  // Optional so existing test fixtures stay valid; production always sets them.
+  feeTransactions?: number;
+  taxTransactions?: number;
   totalDividends: number;
   totalIncome: number;         // All income: dividends + interest + rent
   currentValue: number;

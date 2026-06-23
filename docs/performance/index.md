@@ -3,7 +3,7 @@ title: Performance Documentation Index
 type: performance-index
 status: active
 date: 2026-04-25
-last_modified: 2026-05-03
+last_modified: 2026-05-29
 tags: [performance, index, optimization, startup, offline-resilience]
 description: Performance optimization strategies including caching, materialized views, chart downsampling, and offline-aware startup optimization.
 aliases: [performance, optimization, speed]
@@ -24,6 +24,10 @@ SORT title ASC
 ```
 
 ## Recent Optimizations
+
+**2026-05-29: recharts no longer eagerly preloaded** — Removed the `recharts → 'charts'` `manualChunks` rule from `[[apps/frontend/vite.config.ts]]`. Previously, forcing recharts into a named chunk caused Rollup to drag it (114 kB gzip) into the initial `modulepreload` graph via a shared module imported by `AppSettingsContext`. Recharts is used exclusively by `ToolResultCard.tsx`, which is only reachable through the lazy-loaded `AIChatPage`. Without the manual chunk rule, Rollup keeps recharts inside the `AIChatPage` async bundle and it no longer appears in `dist/index.html` as a `modulepreload`. Verified via production build. Remediates [[docs/reference/codebase-audit-2026-05#performance.5|performance.5]].
+
+**2026-05-29: Yahoo Finance Batched Quote Fetch** — `PROVIDERS.yahoo` in [[apps/node-backend/src/services/prices/priceProviderRegistry.js]] now issues a single `yahooFinance.quote([symbols])` batch call for all Yahoo-backed investments instead of N per-symbol `Promise.all` calls. A ~30-holding portfolio drops from ~30 outbound HTTP requests to 1, reducing latency and Yahoo API pressure. The per-symbol chart-close fallback is retained for symbols unresolved by the batch and for whole-batch failure. See [[docs/integrations/price-providers#yahoo-finance|Yahoo Finance Provider]].
 
 **2026-05-03: Offline-Aware Startup Optimization** — Backend now probes internet reachability at startup via new [[apps/node-backend/src/lib/network.js]] module (TCP to 1.1.1.1:443, 1.5s timeout, 30s cache). When offline is detected, skips all external data fetches (ECB rates, Yahoo quotes, Kinesis trendlines, historical backfills) that would each burn 5–15s on per-call timeouts. Result: `/health/detailed` ready status reached ~15 seconds sooner when offline; graceful degradation via cached/DB data. Scheduled hourly/12h refreshes also force-probe connectivity before fetching, avoiding unnecessary waits. See [[docs/architecture/backend-architecture#Network Reachability Module|Network Reachability Module]], [[docs/integrations/price-providers#Startup Behavior When Offline|Price Providers - Startup Offline]], [[docs/integrations/currency-conversion#Error Handling|Currency Conversion - Startup Offline]].
 

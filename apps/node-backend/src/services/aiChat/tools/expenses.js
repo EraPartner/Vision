@@ -8,6 +8,7 @@
 import { transactionRepository } from '../../../repositories/transactionRepository.js';
 import settings from '../../../config/config.js';
 import { toDecimal, roundToCents } from '../../../lib/money.js';
+import { toYmd } from '../../../utils/portfolioMath.js';
 import {
   requireDate,
   parsePositiveInt,
@@ -121,14 +122,16 @@ export const getMonthlySpend = {
     const rows = await fetchTransactionsInRange({ from, to });
 
     function bucketKey(dateValue) {
-      const d = dateValue instanceof Date ? dateValue : new Date(dateValue);
-      const y = d.getUTCFullYear();
-      const m = d.getUTCMonth(); // 0-indexed
+      // toYmd uses local getters for pg's local-midnight Dates — getUTC* here
+      // shifted 1st-of-month rows into the previous bucket in UTC+ zones.
+      const ymd = toYmd(dateValue);
+      const y = ymd.slice(0, 4);
+      const m = Number(ymd.slice(5, 7)); // 1-indexed
       if (groupBy === 'quarter') {
-        const q = Math.floor(m / 3) + 1;
+        const q = Math.ceil(m / 3);
         return `${y}-Q${q}`;
       }
-      return `${y}-${String(m + 1).padStart(2, '0')}`;
+      return `${y}-${ymd.slice(5, 7)}`;
     }
 
     const buckets = new Map();
@@ -268,7 +271,7 @@ export const getTransactionsInRange = {
 
     const shaped = rows.slice(0, limit).map((row) => ({
       id: row.id,
-      date: row.date instanceof Date ? row.date.toISOString().slice(0, 10) : String(row.date).slice(0, 10),
+      date: toYmd(row.date),
       amount: roundToCents(toDecimal(row.amount)).toNumber(),
       recipient: row.recipient_name || UNKNOWN_RECIPIENT_LABEL,
       category: row.category_name || UNCATEGORISED_LABEL,
@@ -305,8 +308,10 @@ function aggregateByMonthCategory(rows, { topN }) {
     const amount = toDecimal(row.amount);
     if (amount.gte(0)) continue;
 
-    const d = row.date instanceof Date ? row.date : new Date(row.date);
-    const month = `${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, '0')}`;
+    // pg returns DATE columns as a local-midnight Date; getUTC* then reported
+    // the previous day in a UTC+ zone, landing the 1st of a month in the prior
+    // month's bucket. toYmd uses local getters for Dates and slices strings.
+    const month = toYmd(row.date).slice(0, 7);
     const category = categoryLabel(row);
 
     const monthMap = byMonth.get(month) || new Map();
@@ -403,7 +408,7 @@ export const searchTransactions = {
 
     const shaped = rows.slice(0, limit).map((row) => ({
       id: row.id,
-      date: row.date instanceof Date ? row.date.toISOString().slice(0, 10) : String(row.date).slice(0, 10),
+      date: toYmd(row.date),
       amount: roundToCents(toDecimal(row.amount)).toNumber(),
       recipient: row.recipient_name || UNKNOWN_RECIPIENT_LABEL,
       category: row.category_name || UNCATEGORISED_LABEL,
@@ -452,7 +457,7 @@ export const getLargestTransactions = {
       })
       .map((row) => ({
         id: row.id,
-        date: row.date instanceof Date ? row.date.toISOString().slice(0, 10) : String(row.date).slice(0, 10),
+        date: toYmd(row.date),
         amount: roundToCents(toDecimal(row.amount)).toNumber(),
         absAmount: toDecimal(row.amount).abs().toNumber(),
         recipient: row.recipient_name || UNKNOWN_RECIPIENT_LABEL,
@@ -504,8 +509,9 @@ export const getSpendTrendForCategory = {
       const amount = toDecimal(row.amount);
       if (amount.gte(0)) continue;
 
-      const d = row.date instanceof Date ? row.date : new Date(row.date);
-      const key = `${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, '0')}`;
+      // toYmd uses local getters for pg's local-midnight Date (getUTC* shifted
+      // a UTC+ zone's 1st-of-month into the previous month) and slices strings.
+      const key = toYmd(row.date).slice(0, 7);
       const entry = byMonth.get(key) || { bucket: key, total: toDecimal(0), count: 0 };
       entry.total = entry.total.plus(amount.abs());
       entry.count += 1;
@@ -604,7 +610,7 @@ export const getUncategorisedTransactions = {
 
     const shaped = rows.map((row) => ({
       id: row.id,
-      date: row.date instanceof Date ? row.date.toISOString().slice(0, 10) : String(row.date).slice(0, 10),
+      date: toYmd(row.date),
       amount: roundToCents(toDecimal(row.amount)).toNumber(),
       recipient: row.recipient_name || UNKNOWN_RECIPIENT_LABEL,
       memo: row.memo || '',
@@ -654,12 +660,14 @@ export const getNetCashflow = {
     const buckets = new Map();
 
     for (const row of rows) {
-      const d = row.date instanceof Date ? row.date : new Date(row.date);
-      const year = d.getUTCFullYear();
-      const month = d.getUTCMonth() + 1;
+      // toYmd uses local getters for pg's local-midnight Dates — getUTC* here
+      // shifted 1st-of-month rows into the previous bucket in UTC+ zones.
+      const ymd = toYmd(row.date);
+      const year = ymd.slice(0, 4);
+      const month = Number(ymd.slice(5, 7));
       const key = groupBy === 'quarter'
         ? `${year}-Q${Math.ceil(month / 3)}`
-        : `${year}-${String(month).padStart(2, '0')}`;
+        : `${year}-${ymd.slice(5, 7)}`;
 
       const amount = toDecimal(row.amount ?? 0);
       const bucket = buckets.get(key) || { period: key, income: toDecimal(0), expenses: toDecimal(0) };

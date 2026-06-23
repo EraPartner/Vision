@@ -1,0 +1,46 @@
+name: Feature request
+description: Suggest a new feature or improvement
+labels: ["enhancement", "triage"]
+body:
+  - type: markdown
+    attributes:
+      value: Thanks for the idea! Please check the [TODO backlog](../../blob/main/TODO.md) and existing issues first.
+  - type: textarea
+    id: problem
+    attributes:
+      label: Problem / use case
+      description: What are you trying to do, and where does Vision fall short today?
+      placeholder: I track multiple currencies and need…
+    validations:
+      required: true
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Proposed solution
+      description: What would you like to happen?
+    validations:
+      required: true
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternatives considered
+      description: Other approaches or workarounds you've thought about.
+    validations:
+      required: false
+  - type: dropdown
+    id: area
+    attributes:
+      label: Area
+      options:
+        - Transactions / Categorization
+        - Bank CSV import (adapter)
+        - Portfolio / Investments
+        - Belgian tax
+        - Planned / recurring transactions
+        - Dashboard / Statistics
+        - Electron desktop app
+        - Backend / API
+        - i18n (en/nl)
+        - Other
+    validations:
+      required: true

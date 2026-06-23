@@ -3,6 +3,7 @@ title: ADR-022 Electron Sandbox Hardening and Recovery
 type: adr
 status: Accepted
 date: 2026-04-19
+updated: 2026-06-11
 tags: [adr, electron, security, sandbox, defense-in-depth, error-recovery, phase-9]
 description: Enable renderer sandbox + single-instance lock, add health-polling and backend-loss watchdog, recover via error page with recovery IPC surface
 aliases: [adr-022, electron sandbox, renderer sandbox, single-instance lock, backend watchdog]
@@ -218,6 +219,23 @@ Backend (`packaging/electron/i18n/en.json` + `nl.json`):
 # Corrupt settings.json, launch app
 # App should start with defaults, quarantine file
 ```
+
+## Correction — 2026-06-11: i18n keys never landed until today
+
+> [!warning] Implementation gap — keys were documented but not shipped
+> Section 6 ("New i18n Keys") above records the intent at ADR acceptance time. However, `git log -S "errorPageTitle" -- i18n/source/en.json` across the full history returns empty: the five keys were never actually added to `i18n/source/en.json` or `i18n/source/nl.json`. As a result, from the time ADR-022 shipped until 2026-06-11, the Electron error page rendered the raw key names verbatim — e.g. the page title appeared as `"app.errorPageTitle"` rather than a human-readable string. The backend-lost watchdog toast similarly showed `"app.backendLost"` as the literal message. Neither symptom was noticed in practice because the error page only appears when the startup health poll times out, which is uncommon under normal operating conditions.
+
+**Additional note on the example strings in Section 6:** The values documented in the ADR above ("Backend Service Unavailable", "Vision's backend service is not responding…", "Retry", "Open Logs", "Backend service lost. Click retry or check logs.") differ from the strings actually shipped today. The actual values added to `i18n/source/en.json` on 2026-06-11 are:
+
+| Key | Actual EN value |
+|-----|----------------|
+| `app.errorPageTitle` | "Vision couldn't start" |
+| `app.errorPageMessage` | "Vision couldn't reach its backend. Try again, or check the logs to see what happened." |
+| `app.errorPageRetry` | "Try again" |
+| `app.errorPageOpenLogs` | "Open logs" |
+| `app.backendLost` | "Connection to the Vision backend was lost. Reconnecting…" |
+
+Dutch (`nl`) equivalents added in the same commit. `bun run generate-locales` and `bun run validate-locales` both pass clean. Keys flow to `packaging/electron/i18n/en.json` + `nl.json` via `generate-locales`.
 
 ## Related
 

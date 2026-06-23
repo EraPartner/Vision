@@ -2,16 +2,16 @@
 title: Devtools Components
 type: component
 status: active
-date: 2026-05-12
-tags: [components, frontend, devtools, observability, dev-only, request-tracking, metrics, inspector]
-description: Dev-only observability UI components for API request tracking and query metrics. Includes ApiInspector floating panel, RequestList with virtualization, RequestDetail pane, MetricsPanel with aggregates, and InspectorToggle button. All tree-shaken in production builds.
+date: 2026-06-18
+tags: [components, frontend, devtools, observability, admin-mode, request-tracking, metrics, inspector]
+description: Observability UI components for API request tracking and query metrics. Includes ApiInspector floating panel, RequestList with virtualization, RequestDetail pane, MetricsPanel with aggregates, and InspectorToggle button. Shipped as a lazy chunk, gated by dev build flags or the runtime Admin Mode toggle.
 aliases: [devtools components, inspector, api inspector, request inspector]
 ---
 
 # Devtools Components
 
 > [!abstract] Overview
-> React components for the dev-only observability layer, providing real-time API request tracking, query metrics visualization, and interactive inspector panel.
+> React components for the observability layer, providing real-time API request tracking, query metrics visualization, and interactive inspector panel. Activated in dev builds or via the runtime Admin Mode toggle.
 
 ## Root Component: DevtoolsRoot
 
@@ -300,7 +300,7 @@ useEffect(() => {
 | **Virtualization lag** | @tanstack/react-virtual renders only visible rows |
 | **Event bus overhead** | Zero cost when inspector closed (no subscribers) |
 | **Metrics computation** | Incremental updates on each event |
-| **Tree-shaking** | Entire devtools chunk removed in production via `import.meta.env.DEV` |
+| **Lazy chunk** | Devtools ship in a separate chunk fetched only when the gate renders it (dev build or Admin Mode on) — no load cost until activated |
 
 ---
 

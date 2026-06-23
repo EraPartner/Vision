@@ -9,13 +9,21 @@ import {
   formatDateToYmd,
   extractYearMonth,
   mapRowsForAmountConversion,
+  getIncludeTransfers,
 } from './infoRepositoryHelpers.js';
 
 export async function getAverageVsCurrentSpending(targetCurrency = 'EUR') {
+  // Exclude internal transfers (ADR-083) from spending aggregates unless the
+  // user has explicitly opted in. Without this, a checking->savings transfer's
+  // outflow leg inflates avg/daily/projected spending — the exact thing ADR-083
+  // (and the dropping of mv_cashflow_daily) set out to prevent.
+  const includeTransfers = await getIncludeTransfers();
+  const transferFilter = includeTransfers ? '' : 'AND t.is_transfer = false';
   const sql6m = `
     SELECT t.amount, t.currency, t.date
     FROM transactions t
     WHERE t.is_active = true
+      ${transferFilter}
       AND t.date >= date_trunc('month', CURRENT_DATE) - interval '6 months'
       AND t.date < date_trunc('month', CURRENT_DATE)
     LIMIT 10000
@@ -24,6 +32,7 @@ export async function getAverageVsCurrentSpending(targetCurrency = 'EUR') {
     SELECT t.amount, t.currency, t.date
     FROM transactions t
     WHERE t.is_active = true
+      ${transferFilter}
       AND t.date >= date_trunc('month', CURRENT_DATE)
       AND t.date <= CURRENT_DATE
     LIMIT 5000
@@ -40,22 +49,28 @@ export async function getAverageVsCurrentSpending(targetCurrency = 'EUR') {
   );
 
   const monthlySpending = {};
-  const monthlyDays = {};
   for (const row of past6Converted) {
     const dateStr = row.date instanceof Date ? formatDateToYmd(row.date) : row.date;
     const eur = row.amount_eur;
     const monthKey = extractYearMonth(dateStr);
-    if (!monthlySpending[monthKey]) { monthlySpending[monthKey] = 0; monthlyDays[monthKey] = new Set(); }
+    if (!monthlySpending[monthKey]) monthlySpending[monthKey] = 0;
     if (eur < 0) monthlySpending[monthKey] += Math.abs(eur);
-    monthlyDays[monthKey].add(dateStr);
   }
 
   const monthKeys = Object.keys(monthlySpending);
   const monthsCount = monthKeys.length || 1;
   const totalMonthlySpending = monthKeys.reduce((s, k) => s + monthlySpending[k], 0);
   const avgMonthlySpending = totalMonthlySpending / monthsCount;
-  const totalDays = monthKeys.reduce((s, k) => s + monthlyDays[k].size, 0) || 1;
-  const avgDailySpending = totalMonthlySpending / totalDays;
+
+  const now = new Date();
+  // Calendar-day denominators, NOT counts of days that happened to have a
+  // transaction. The 6-month window is 6 complete prior months; dividing by
+  // transaction-day counts overstated the per-day rate (and the projection
+  // below multiplied a per-active-day rate by full calendar days).
+  const sixMonthStart = new Date(now.getFullYear(), now.getMonth() - 6, 1);
+  const currentMonthStart = new Date(now.getFullYear(), now.getMonth(), 1);
+  const calendarDays6m = Math.max(1, Math.round((currentMonthStart.getTime() - sixMonthStart.getTime()) / 86400000));
+  const avgDailySpending = totalMonthlySpending / calendarDays6m;
 
   const currentConverted = await convertRowsToEur(
     mapRowsForAmountConversion(currentResult.rows, 'amount', false),
@@ -80,8 +95,8 @@ export async function getAverageVsCurrentSpending(targetCurrency = 'EUR') {
     }));
 
   const totalCurrentSpending = dailyData.reduce((s, d) => s + d.spending, 0);
-  const daysElapsed = dailyData.length || 1;
-  const now = new Date();
+  // Calendar days elapsed this month (not the number of days with a transaction).
+  const daysElapsed = now.getDate();
   const daysInMonth = new Date(now.getFullYear(), now.getMonth() + 1, 0).getDate();
   const projectedTotal = (totalCurrentSpending / daysElapsed) * daysInMonth;
 

@@ -1,4 +1,4 @@
-import { useCallback, useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useLanguage } from "@/contexts/LanguageContext";
 import {
@@ -19,21 +19,34 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Progress } from "@/components/ui/progress";
-import { CsvColumnMapper } from "@/components/import/CsvColumnMapper";
+import { CsvColumnMapper } from "@/features/imports/CsvColumnMapper";
+import { CsvDropzone } from "@/features/imports/CsvDropzone";
+import { FileHeadersPanel } from "@/features/imports/FileHeadersPanel";
+import { SeparatorSelect, EncodingSelect, DateFormatSelect } from "@/features/imports/CsvFormatSelects";
+import { isCsvFile } from "@/features/imports/csvFile";
 import { apiClient } from "@/lib/api";
 import { toast } from "sonner";
 import {
+  Bookmark,
   CheckCircle2,
-  CloudUpload,
-  File,
   Landmark,
   Loader2,
+  Pencil,
   PencilLine,
+  Save,
   Trash2,
   Upload,
   XCircle,
 } from "lucide-react";
 import { useAdapters } from "./useAdapters";
+import {
+  useCustomParserConfigs,
+  useCreateCustomParserConfig,
+  useUpdateCustomParserConfig,
+  useDeleteCustomParserConfig,
+} from "@/hooks/useCustomParserConfigs";
+import { useConfirmDialog } from "@/hooks/useConfirmDialog";
+import { consumePendingImportFile } from "@/lib/importHandoff";
 import type { ImportProgress } from "@/lib/api/types";
 
 interface CustomConfig {
@@ -70,40 +83,91 @@ export function TransactionImportCard({ onImportSuccess }: TransactionImportCard
   const [bankSource, setBankSource] = useState("");
   const [customBank, setCustomBank] = useState("");
   const [loading, setLoading] = useState(false);
-  const [dragOver, setDragOver] = useState(false);
   const [progress, setProgress] = useState<ImportProgress | null>(null);
   const [customConfig, setCustomConfig] = useState<CustomConfig>(DEFAULT_CUSTOM_CONFIG);
+  const [editingSaved, setEditingSaved] = useState(false);
   const abortRef = useRef<(() => void) | null>(null);
-  const fileInputRef = useRef<HTMLInputElement>(null);
 
-  const handleFile = useCallback((f: File | null) => {
-    if (f && f.type !== "text/csv" && !f.name.endsWith(".csv")) {
-      toast.error(t('importPage.toast.noFile'));
-      return;
+  const { data: savedParsers } = useCustomParserConfigs();
+  const createParser = useCreateCustomParserConfig();
+  const updateParser = useUpdateCustomParserConfig();
+  const deleteParser = useDeleteCustomParserConfig();
+  const { confirm, ConfirmDialog } = useConfirmDialog();
+
+  const isSaved = bankSource.startsWith("saved:");
+  const selectedParser = isSaved
+    ? savedParsers?.find((p) => p.id === Number(bankSource.slice(6)))
+    : undefined;
+  const isCustomLike = isSaved || bankSource === "custom";
+  // Editable config form shows for new custom imports, or when editing a saved parser.
+  const showConfigEditor = bankSource === "custom" || (isSaved && editingSaved);
+
+  const handleBankChange = (val: string) => {
+    setBankSource(val);
+    setProgress(null);
+    setEditingSaved(false);
+    if (val.startsWith("saved:")) {
+      const parser = savedParsers?.find((p) => p.id === Number(val.slice(6)));
+      if (parser) {
+        setCustomConfig({ ...DEFAULT_CUSTOM_CONFIG, ...parser.config });
+        setCustomBank(parser.name);
+      }
+    } else if (val === "custom") {
+      setCustomConfig(DEFAULT_CUSTOM_CONFIG);
+      setCustomBank("");
     }
-    setFile(f);
-  }, [t]);
+  };
 
-  const onDrop = useCallback((e: React.DragEvent) => {
-    e.preventDefault();
-    setDragOver(false);
-    handleFile(e.dataTransfer.files?.[0] ?? null);
-  }, [handleFile]);
+  const hasRequiredMapping = Boolean(
+    customConfig.dateColumn && customConfig.recipientColumn && customConfig.amountColumn,
+  );
 
-  const onDragOver = useCallback((e: React.DragEvent) => {
-    e.preventDefault();
-    setDragOver(true);
+  const handleSaveParser = async () => {
+    const name = customBank.trim();
+    if (!name) { toast.error(t('importPage.customParser.nameRequired')); return; }
+    if (!hasRequiredMapping) { toast.error(t('importPage.toast.noConfig')); return; }
+    const config = { ...customConfig };
+    if (isSaved && selectedParser) {
+      await updateParser.mutateAsync({ id: selectedParser.id, name, config });
+      setEditingSaved(false);
+    } else {
+      const created = await createParser.mutateAsync({ name, config });
+      setBankSource(`saved:${created.id}`);
+    }
+  };
+
+  const handleDeleteParser = async () => {
+    if (!selectedParser) return;
+    const ok = await confirm({
+      title: t('importPage.customParser.deleteTitle'),
+      description: t('importPage.customParser.deleteConfirm', { name: selectedParser.name }),
+      variant: "destructive",
+    });
+    if (!ok) return;
+    await deleteParser.mutateAsync(selectedParser.id);
+    setBankSource("");
+    setCustomBank("");
+    setCustomConfig(DEFAULT_CUSTOM_CONFIG);
+  };
+
+  // CSV dropped on the window / opened via Finder before this card mounted
+  // (see lib/importHandoff.ts + ElectronBridge).
+  useEffect(() => {
+    const pending = consumePendingImportFile();
+    if (pending && isCsvFile(pending)) setFile(pending);
   }, []);
 
-  const onDragLeave = useCallback(() => setDragOver(false), []);
-
-  const resolvedBank = () => bankSource === "custom" ? (customBank || "generic") : bankSource;
+  const resolvedBank = () => {
+    if (isSaved) return selectedParser?.name || "generic";
+    if (bankSource === "custom") return customBank || "generic";
+    return bankSource;
+  };
 
   const handleImport = async () => {
     if (!file) { toast.error(t('importPage.toast.noFileSel')); return; }
     const bank = resolvedBank();
     if (!bank) { toast.error(t('importPage.toast.noBank')); return; }
-    if (bankSource === "custom" && (!customConfig.dateColumn || !customConfig.recipientColumn || !customConfig.amountColumn)) {
+    if (isCustomLike && !hasRequiredMapping) {
       toast.error(t('importPage.toast.noConfig'));
       return;
     }
@@ -113,7 +177,7 @@ export function TransactionImportCard({ onImportSuccess }: TransactionImportCard
 
     try {
       let data;
-      if (bankSource === "custom") {
+      if (isCustomLike) {
         data = await apiClient.importCSVCustom(
           file, bank,
           customConfig.dateFormat, customConfig.dateColumn,
@@ -121,7 +185,7 @@ export function TransactionImportCard({ onImportSuccess }: TransactionImportCard
           customConfig.memoColumn || undefined,
           customConfig.separator, customConfig.encoding, customConfig.skipRows,
         );
-        setProgress({ phase: 'complete', current: data.total_processed, total: data.total_processed, imported: data.imported, duplicates: data.duplicates, errors: data.errors || 0, percent: 100 });
+        setProgress({ phase: 'complete', current: data.total_processed, total: data.total_processed, imported: data.imported, duplicates: data.duplicates, errors: (data as { errors?: number }).errors || 0, percent: 100 });
       } else {
         const { abort, result } = apiClient.importCSVWithProgress(file, bank, (p) => setProgress(p));
         abortRef.current = abort;
@@ -129,7 +193,7 @@ export function TransactionImportCard({ onImportSuccess }: TransactionImportCard
         abortRef.current = null;
       }
 
-      if (data.requires_review && data.batch_id != null) {
+      if ('requires_review' in data && data.requires_review && data.batch_id != null) {
         navigate(`/import/${data.batch_id}/review`);
         return;
       }
@@ -174,7 +238,7 @@ export function TransactionImportCard({ onImportSuccess }: TransactionImportCard
         {/* Bank selector */}
         <div className="space-y-2">
           <Label htmlFor="bank-select" className="font-semibold">{t('importPage.bankSource')}</Label>
-          <Select value={bankSource} onValueChange={setBankSource}>
+          <Select value={bankSource} onValueChange={handleBankChange}>
             <SelectTrigger id="bank-select">
               <SelectValue placeholder={t('importPage.bankSourcePlaceholder')} />
             </SelectTrigger>
@@ -195,6 +259,14 @@ export function TransactionImportCard({ onImportSuccess }: TransactionImportCard
               ) : (
                 <SelectItem value="none" disabled>{t('importPage.noParsers')}</SelectItem>
               )}
+              {savedParsers && savedParsers.length > 0 && savedParsers.map((parser) => (
+                <SelectItem key={parser.id} value={`saved:${parser.id}`}>
+                  <span className="inline-flex items-center gap-2">
+                    <Bookmark className="h-3.5 w-3.5 text-primary" />
+                    {parser.name}
+                  </span>
+                </SelectItem>
+              ))}
               <SelectItem value="custom">
                 <span className="inline-flex items-center gap-2">
                   <PencilLine className="h-3.5 w-3.5 text-muted-foreground" />
@@ -203,64 +275,63 @@ export function TransactionImportCard({ onImportSuccess }: TransactionImportCard
               </SelectItem>
             </SelectContent>
           </Select>
-
-          {bankSource === "custom" && (
-            <Input
-              placeholder={t('importPage.customBankName')}
-              value={customBank}
-              onChange={(e) => setCustomBank(e.target.value)}
-              className="mt-2"
-            />
-          )}
           <p className="text-xs text-muted-foreground">{t('importPage.bankHint')}</p>
         </div>
 
         {/* Custom CSV configuration */}
-        {bankSource === "custom" && (
+        {isCustomLike && (
           <div className="space-y-4 p-4 border rounded-lg bg-muted/30">
-            <p className="text-sm font-semibold text-foreground">{t('importPage.customConfig')}</p>
+            <div className="flex items-center justify-between gap-2">
+              <p className="text-sm font-semibold text-foreground">{t('importPage.customConfig')}</p>
+              {isSaved && !editingSaved && (
+                <div className="flex gap-2">
+                  <Button variant="outline" size="sm" onClick={() => setEditingSaved(true)}>
+                    <Pencil className="h-4 w-4 mr-1" /> {t('importPage.customParser.edit')}
+                  </Button>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    className="text-destructive hover:text-destructive"
+                    onClick={handleDeleteParser}
+                    disabled={deleteParser.isPending}
+                  >
+                    <Trash2 className="h-4 w-4 mr-1" /> {t('importPage.customParser.delete')}
+                  </Button>
+                </div>
+              )}
+            </div>
 
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-              <div className="space-y-2">
-                <Label htmlFor="separator">{t('importPage.separator')}</Label>
-                <Select value={customConfig.separator} onValueChange={(val) => setCustomConfig({ ...customConfig, separator: val })}>
-                  <SelectTrigger id="separator"><SelectValue /></SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value=",">, (Comma)</SelectItem>
-                    <SelectItem value=";">; (Semicolon)</SelectItem>
-                    <SelectItem value="\t">⇥ (Tab)</SelectItem>
-                    <SelectItem value="|">| (Pipe)</SelectItem>
-                  </SelectContent>
-                </Select>
+            {/* Read-only summary for a selected saved parser */}
+            {isSaved && !editingSaved && (
+              <div className="grid grid-cols-2 gap-x-4 gap-y-1 text-xs text-muted-foreground">
+                <div><span className="font-medium text-foreground">{t('importPage.dateCol')}:</span> {customConfig.dateColumn}</div>
+                <div><span className="font-medium text-foreground">{t('importPage.recipientCol')}:</span> {customConfig.recipientColumn}</div>
+                <div><span className="font-medium text-foreground">{t('importPage.amountCol')}:</span> {customConfig.amountColumn}</div>
+                <div><span className="font-medium text-foreground">{t('importPage.memoCol')}:</span> {customConfig.memoColumn || "—"}</div>
+                <div><span className="font-medium text-foreground">{t('importPage.separator')}:</span> {customConfig.separator}</div>
+                <div><span className="font-medium text-foreground">{t('importPage.dateFormat')}:</span> {customConfig.dateFormat}</div>
               </div>
-              <div className="space-y-2">
-                <Label htmlFor="date-format">{t('importPage.dateFormat')}</Label>
-                <Select value={customConfig.dateFormat} onValueChange={(val) => setCustomConfig({ ...customConfig, dateFormat: val })}>
-                  <SelectTrigger id="date-format"><SelectValue /></SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="%Y-%m-%d">YYYY-MM-DD (2024-12-31)</SelectItem>
-                    <SelectItem value="%d/%m/%Y">DD/MM/YYYY (31/12/2024)</SelectItem>
-                    <SelectItem value="%m/%d/%Y">MM/DD/YYYY (12/31/2024)</SelectItem>
-                    <SelectItem value="%d-%m-%Y">DD-MM-YYYY (31-12-2024)</SelectItem>
-                    <SelectItem value="%Y-%m-%d %H:%M:%S">YYYY-MM-DD HH:MM:SS</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
+            )}
+
+            {showConfigEditor && (
+            <>
+            <div className="space-y-2">
+              <Label htmlFor="parser-name">{t('importPage.customParser.name')}</Label>
+              <Input
+                id="parser-name"
+                placeholder={t('importPage.customBankName')}
+                value={customBank}
+                onChange={(e) => setCustomBank(e.target.value)}
+              />
             </div>
 
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-              <div className="space-y-2">
-                <Label htmlFor="encoding">{t('importPage.encoding')}</Label>
-                <Select value={customConfig.encoding} onValueChange={(val) => setCustomConfig({ ...customConfig, encoding: val })}>
-                  <SelectTrigger id="encoding"><SelectValue /></SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="utf-8">UTF-8</SelectItem>
-                    <SelectItem value="latin-1">Latin-1</SelectItem>
-                    <SelectItem value="iso-8859-1">ISO-8859-1</SelectItem>
-                    <SelectItem value="windows-1252">Windows-1252</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
+              <SeparatorSelect id="separator" value={customConfig.separator} onChange={(val) => setCustomConfig({ ...customConfig, separator: val })} />
+              <DateFormatSelect id="date-format" value={customConfig.dateFormat} onChange={(val) => setCustomConfig({ ...customConfig, dateFormat: val })} />
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <EncodingSelect id="encoding" value={customConfig.encoding} onChange={(val) => setCustomConfig({ ...customConfig, encoding: val })} />
               <div className="space-y-2">
                 <Label htmlFor="skip-rows">{t('importPage.skipRows')}</Label>
                 <Input
@@ -286,55 +357,55 @@ export function TransactionImportCard({ onImportSuccess }: TransactionImportCard
               onChange={(cols) => setCustomConfig({ ...customConfig, ...cols })}
             />
             <p className="text-xs text-muted-foreground">{t('importPage.requiredNote')}</p>
+            <div className="flex gap-2">
+              <Button
+                size="sm"
+                onClick={handleSaveParser}
+                disabled={createParser.isPending || updateParser.isPending || !hasRequiredMapping || !customBank.trim()}
+              >
+                <Save className="h-4 w-4 mr-1" />
+                {isSaved ? t('importPage.customParser.saveChanges') : t('importPage.customParser.save')}
+              </Button>
+              {isSaved && (
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => {
+                    setEditingSaved(false);
+                    if (selectedParser) {
+                      setCustomConfig({ ...DEFAULT_CUSTOM_CONFIG, ...selectedParser.config });
+                      setCustomBank(selectedParser.name);
+                    }
+                  }}
+                >
+                  {t('common.cancel')}
+                </Button>
+              )}
+            </div>
+            </>
+            )}
           </div>
         )}
 
         {/* Drag-and-drop file picker */}
-        <div className="space-y-2">
-          <Label className="font-semibold">{t('importPage.csvFile')}</Label>
-          <div
-            onClick={() => fileInputRef.current?.click()}
-            onDrop={onDrop}
-            onDragOver={onDragOver}
-            onDragLeave={onDragLeave}
-            className={`relative flex flex-col items-center justify-center gap-3 rounded-xl border-2 border-dashed p-10 cursor-pointer transition-colors duration-200 ${
-              dragOver ? "border-primary bg-primary/5" : "border-border hover:border-primary/50 hover:bg-muted/50"
-            }`}
-          >
-            <input
-              ref={fileInputRef}
-              type="file"
-              accept=".csv"
-              className="hidden"
-              onChange={(e) => handleFile(e.target.files?.[0] ?? null)}
-            />
-            {file ? (
-              <>
-                <File className="h-10 w-10 text-primary" />
-                <div className="text-center">
-                  <p className="font-medium text-foreground">{file.name}</p>
-                  <p className="text-xs text-muted-foreground">{(file.size / 1024).toFixed(1)} {t('common.kb')}</p>
-                </div>
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  className="text-destructive hover:text-destructive"
-                  onClick={(e) => { e.stopPropagation(); setFile(null); }}
-                >
-                  <Trash2 className="h-4 w-4 mr-1" /> {t('importPage.remove')}
-                </Button>
-              </>
-            ) : (
-              <>
-                <CloudUpload className="h-10 w-10 text-muted-foreground" />
-                <div className="text-center">
-                  <p className="font-medium text-foreground">{t('importPage.dropzone')}</p>
-                  <p className="text-sm text-muted-foreground">{t('importPage.dropzoneOr')}</p>
-                </div>
-              </>
-            )}
-          </div>
-        </div>
+        <CsvDropzone file={file} onFileSelect={setFile} label={t('importPage.csvFile')} />
+
+        {/* Detected columns of the selected file (always shown once a file is chosen) */}
+        <FileHeadersPanel
+          file={file}
+          separator={isCustomLike ? customConfig.separator : undefined}
+          highlightedHeaders={
+            isCustomLike
+              ? [
+                  customConfig.dateColumn,
+                  customConfig.recipientColumn,
+                  customConfig.amountColumn,
+                  customConfig.memoColumn,
+                ]
+              : []
+          }
+          defaultCollapsed={isCustomLike}
+        />
 
         {/* Progress indicator */}
         {progress && loading && (
@@ -352,8 +423,8 @@ export function TransactionImportCard({ onImportSuccess }: TransactionImportCard
             {progress.phase === 'importing' && progress.total > 0 && (
               <div className="flex gap-4 text-xs text-muted-foreground">
                 <span>{t('importPage.rows', { current: progress.current, total: progress.total })}</span>
-                <span className="text-green-600 dark:text-green-400">{t('importPage.imported', { n: progress.imported })}</span>
-                <span className="text-amber-600 dark:text-amber-400">{t('importPage.duplicates', { n: progress.duplicates })}</span>
+                <span className="text-success">{t('importPage.imported', { n: progress.imported })}</span>
+                <span className="text-warning">{t('importPage.duplicates', { n: progress.duplicates })}</span>
                 {progress.errors > 0 && <span className="text-destructive">{t('importPage.errors', { n: progress.errors })}</span>}
               </div>
             )}
@@ -362,11 +433,11 @@ export function TransactionImportCard({ onImportSuccess }: TransactionImportCard
 
         {/* Import complete summary */}
         {progress && !loading && progress.phase === 'complete' && (
-          <div className="flex items-center gap-3 p-4 rounded-lg border border-green-200 bg-green-50 dark:border-green-900 dark:bg-green-950/30">
-            <CheckCircle2 className="h-5 w-5 text-green-600 dark:text-green-400 shrink-0" />
+          <div className="flex items-center gap-3 p-4 rounded-lg border border-success/30 bg-success/10">
+            <CheckCircle2 className="icon-success-bounce h-5 w-5 text-success shrink-0" />
             <div className="text-sm">
-              <p className="font-medium text-green-800 dark:text-green-300">{t('importPage.complete')}</p>
-              <p className="text-green-700 dark:text-green-400">
+              <p className="font-medium text-success">{t('importPage.complete')}</p>
+              <p className="text-success">
                 {t('importPage.progressSummary', { imported: progress.imported, duplicates: progress.duplicates, errors: progress.errors })}
               </p>
             </div>
@@ -395,6 +466,7 @@ export function TransactionImportCard({ onImportSuccess }: TransactionImportCard
             </Button>
           )}
         </div>
+        <ConfirmDialog />
       </CardContent>
     </Card>
   );

@@ -68,3 +68,52 @@ The original `saved_charts` table (introduced April 2026) only supported categor
 - [[docs/adr/index|All ADRs]]
 - [[docs/features/saved-charts|Saved Charts Feature]]
 - [[docs/api/savedCharts|Saved Charts API]]
+
+## Addendum (2026-06-11, recipient-pivot query-key narrowing)
+
+**Original decision (above):** `useRecipientPivot` keyed the React Query cache on `(currency, bucket, start, end)` only, so different charts that share those four parameters would share one cached network response containing the full all-recipients pivot. The frontend then filtered the response client-side to the chart's `recipient_ids`.
+
+**Amendment:** The query key now includes `recipient_ids`:
+
+```typescript
+queryKey: [
+  'aggregations', 'recipient-pivot',
+  targetCurrency,
+  chart?.time_bucket ?? 'monthly',
+  chart?.date_range_start ?? null,
+  chart?.date_range_end ?? null,
+  chart?.recipient_ids ?? [],   // ← added 2026-06-11
+],
+```
+
+The API call also passes `recipient_ids` to the backend:
+
+```typescript
+queryFn: () => getAggregationRecipientPivot({
+  currency: targetCurrency,
+  bucket: chart!.time_bucket,
+  start: chart!.date_range_start ?? undefined,
+  end: chart!.date_range_end ?? undefined,
+  recipient_ids: chart!.recipient_ids,   // ← added
+}),
+```
+
+**Motivation (performance):** The original approach fetched the pivot for *all* recipients and discarded most of the payload. For workspaces with many recipients this was wasteful. With the narrowed request the backend executes:
+
+```sql
+SELECT id FROM recipients WHERE id = ANY($1) OR primary_recipient_id = ANY($1)
+```
+
+to resolve alias members of the requested recipient IDs, then filters transactions to that resolved set before aggregating. The response payload is proportionally smaller.
+
+**Cache-sharing trade-off:** Two charts that happen to request the same `recipient_ids` set (same elements, same order preserved by `JSON.stringify`) still share one cached response. Charts with different recipient selections get independent cache entries, which is correct — a narrowed payload for chart A must not be served to chart B with different recipients.
+
+**Code:** [[apps/frontend/src/hooks/useRecipientPivot.ts]], [[apps/node-backend/src/routes/aggregations.js]]
+
+## Addendum (2026-06-16, follow-up closed: CustomCategoryChart removed)
+
+The Neutral consequence above noted `CustomCategoryChart.tsx` would remain alongside
+`CustomChart.tsx` "until the tax page is migrated." That follow-up is **done**:
+`CustomCategoryChart.tsx` no longer exists in the tree (only `CustomChart.tsx` and
+`CustomChartBuilderModal.tsx` remain, with zero references to the old component). No coexistence
+remains.

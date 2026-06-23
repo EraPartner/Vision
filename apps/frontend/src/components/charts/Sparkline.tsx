@@ -2,6 +2,7 @@
  * Sparkline — tiny trend line with draw-in motion.
  */
 import { curveMonotoneX } from "@visx/curve";
+import { summarizeSparkline } from "./chartAria";
 import { ParentSize } from "@visx/responsive";
 import { scaleLinear } from "@visx/scale";
 import { Area, LinePath } from "@visx/shape";
@@ -10,6 +11,7 @@ import { useMemo } from "react";
 
 import { CHART_NEUTRAL } from "./palette";
 import { durations, easings } from "@/lib/motion";
+import { useLanguage } from "@/contexts/LanguageContext";
 
 export interface SparklineProps {
     readonly data: ReadonlyArray<number>;
@@ -18,6 +20,8 @@ export interface SparklineProps {
     readonly strokeWidth?: number;
     readonly fillArea?: boolean;
     readonly ariaLabel?: string;
+    /** Highlight the point at this index (scrub indicator: hairline + dot). */
+    readonly activeIndex?: number;
 }
 
 export function Sparkline(props: SparklineProps) {
@@ -41,7 +45,9 @@ function Inner({
     width,
     height,
     ariaLabel,
+    activeIndex,
 }: SparklineProps & { width: number; height: number }) {
+    const { t } = useLanguage();
     const reduce = useReducedMotion();
 
     const xScale = useMemo(
@@ -60,7 +66,7 @@ function Inner({
     }, [data, height]);
 
     return (
-        <svg width={width} height={height} role="img" aria-label={ariaLabel ?? "Sparkline"}>
+        <svg width={width} height={height} role="img" aria-label={ariaLabel ?? summarizeSparkline(t, data)}>
             {fillArea ? (
                 <motion.g
                     initial={reduce ? { opacity: 1 } : { opacity: 0 }}
@@ -99,6 +105,27 @@ function Inner({
                     fill="none"
                 />
             </motion.g>
+            {activeIndex !== undefined && activeIndex >= 0 && activeIndex < data.length && (
+                <g aria-hidden="true">
+                    <line
+                        x1={xScale(activeIndex)}
+                        x2={xScale(activeIndex)}
+                        y1={0}
+                        y2={height}
+                        stroke={color}
+                        strokeOpacity={0.35}
+                        strokeWidth={1}
+                    />
+                    <circle
+                        cx={xScale(activeIndex)}
+                        cy={yScale(data[activeIndex])}
+                        r={3.5}
+                        fill={color}
+                        stroke="hsl(var(--background))"
+                        strokeWidth={1.5}
+                    />
+                </g>
+            )}
         </svg>
     );
 }

@@ -15,11 +15,12 @@ export async function computeRecipientPivot({
   bucket = 'monthly',
   startDate = null,
   endDate = null,
+  recipientIds = null,
 } = {}) {
   const data = await recipientInsightsRepository.getRecipientPivot(
     excludedRecipientIds,
     targetCurrency,
-    { bucket, startDate, endDate }
+    { bucket, startDate, endDate, recipientIds }
   );
   return buildEnvelope(data, { source: 'live' });
 }

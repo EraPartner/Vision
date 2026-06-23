@@ -21,7 +21,6 @@ const ACCOUNT_COLORS = [
 ];
 
 interface BankChartDatum {
-    month: string;
     date: Date;
     values: Record<string, number>;
     total: number;
@@ -49,7 +48,7 @@ export function BankBalancesWidget() {
 
     if (isLoading) {
         return (
-            <Card>
+            <Card className="glass-regular">
                 <CardHeader className="flex flex-row items-center gap-2 pb-3">
                     <Landmark className="h-5 w-5 text-primary" />
                     <CardTitle>{t('bankWidget.title')}</CardTitle>
@@ -69,7 +68,7 @@ export function BankBalancesWidget() {
 
     if (error || !data) {
         return (
-            <Card>
+            <Card className="glass-regular">
                 <CardHeader>
                     <CardTitle className="flex items-center gap-2">
                         <Landmark className="h-5 w-5 text-primary" />
@@ -85,26 +84,43 @@ export function BankBalancesWidget() {
 
     const { accounts, total_net_position, history, total_history } = data;
 
-    // Do not present accounts with a zero balance on the dashboard.
+    // Balance CARDS: only accounts with a non-zero *current* balance.
     const visibleAccounts = accounts.filter((acct) => Math.abs(acct.balance) > 0.000001);
 
-    // Build chart data from total_history
+    // CHART: include any account with a non-zero balance anywhere in history, not
+    // just a non-zero current balance — an account closed last month (current 0,
+    // large past balances) must still appear in the 12-month chart.
+    const chartAccounts = accounts.filter((acct) => {
+        if (Math.abs(acct.balance) > 0.000001) return true;
+        return (history[acct.bank_account] || []).some((h) => Math.abs(h.balance) > 0.000001);
+    });
+
+    // Build chart data from total_history (daily points). Index each account's
+    // history by date first — a per-entry .find() would be O(days²) at ~365 points.
+    const balancesByAccount = new Map<string, Map<string, number>>(
+        chartAccounts.map((acct) => [
+            acct.bank_account,
+            new Map((history[acct.bank_account] || []).map((h) => [h.date, h.balance])),
+        ]),
+    );
     const chartData: BankChartDatum[] = total_history.map((entry) => {
         const values: Record<string, number> = {};
-        for (const acct of visibleAccounts) {
-            const acctHistory = history[acct.bank_account] || [];
-            const match = acctHistory.find((h) => h.month === entry.month);
-            values[acct.bank_account] = match?.balance ?? 0;
+        for (const acct of chartAccounts) {
+            values[acct.bank_account] = balancesByAccount.get(acct.bank_account)?.get(entry.date) ?? 0;
         }
         return {
-            month: entry.month,
-            date: parseISO(entry.month + "-01"),
+            date: parseISO(entry.date),
             values,
             total: entry.balance,
         };
     });
 
-    const accountSeries: AreaSeries<BankChartDatum>[] = visibleAccounts.map((acct, idx) => ({
+    // visx AreaStack cumulates band edges, which is meaningless/overlapping once a
+    // series goes negative (overdraft/credit line). Stack only when every value is
+    // ≥ 0; otherwise render truthful unstacked multi-lines.
+    const hasNegativeBalances = chartData.some((d) => Object.values(d.values).some((v) => v < 0));
+
+    const accountSeries: AreaSeries<BankChartDatum>[] = chartAccounts.map((acct, idx) => ({
         key: acct.bank_account,
         label: shortAccountName(acct.bank_account),
         accessor: (d) => d.values[acct.bank_account] ?? 0,
@@ -122,7 +138,7 @@ export function BankBalancesWidget() {
     return (
         <div className="space-y-4">
             {/* Total Net Position Card */}
-            <Card className="premium-frame micro-lift group relative overflow-hidden border shadow-lg bg-gradient-to-br from-primary/10 to-primary/5">
+            <Card className="glass-regular premium-frame micro-lift group relative overflow-hidden">
                 <div className="absolute top-0 right-0 w-32 h-32 bg-gradient-to-br from-primary/10 to-transparent rounded-full -mr-16 -mt-16" />
                 <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-3">
                     <CardTitle className="text-sm font-semibold text-muted-foreground">
@@ -150,13 +166,13 @@ export function BankBalancesWidget() {
                         const color = ACCOUNT_COLORS[idx % ACCOUNT_COLORS.length];
                         const acctPositive = acct.balance >= 0;
                         return (
-                            <Card key={acct.bank_account} className="premium-frame group">
+                            <Card key={acct.bank_account} className="glass-regular premium-frame group">
                                 <CardContent className="pt-4 pb-4 px-4">
                                     <div className="flex items-start justify-between mb-2">
                                         <div className="flex items-center gap-2 min-w-0">
                                             <div
                                                 className="h-3 w-3 rounded-full shrink-0 ring-2 ring-offset-1 ring-offset-card transition-transform duration-300 group-hover:scale-125"
-                                                style={{ backgroundColor: color, ringColor: color }}
+                                                style={{ backgroundColor: color, ['--tw-ring-color']: color } as React.CSSProperties}
                                             />
                                             <span className="text-xs font-mono text-muted-foreground truncate" title={acct.bank_account}>
                                                 {shortAccountName(acct.bank_account)}
@@ -178,8 +194,8 @@ export function BankBalancesWidget() {
             )}
 
             {/* Historical Balance Chart */}
-            {visibleAccounts.length > 0 && chartData.length > 1 && (
-                <Card>
+            {chartAccounts.length > 0 && chartData.length > 1 && (
+                <Card className="glass-regular">
                     <CardHeader>
                         <CardTitle className="flex items-center gap-2">
                             <Landmark className="h-5 w-5 text-primary" />
@@ -189,14 +205,19 @@ export function BankBalancesWidget() {
                     </CardHeader>
                     <CardContent className="space-y-3">
                         <AreaChart<BankChartDatum>
+                            syncId="dashboard-timeline"
+                            scrubbable
                             data={chartData}
                             xAccessor={(d) => d.date}
                             series={accountSeries}
-                            stacked
+                            stacked={!hasNegativeBalances}
                             height={320}
+                            // Daily datapoints (~365) now outnumber the time-scale
+                            // auto-ticks, so the width-derived tick spacing is fine —
+                            // no more duplicated "MMM yy" labels between sparse points.
                             xTickFormat={(v) => formatDate(v as Date, "MMM yy")}
                             yTickFormat={(v) => formatCurrency(v, defaultCurrency, locale)}
-                            tooltipTitle={(d) => formatDate(d.date, "MMM yy")}
+                            tooltipTitle={(d) => formatDate(d.date, "d MMM yy")}
                             tooltipValueFormat={(v) => formatCurrency(v, defaultCurrency, locale)}
                         />
                         <ChartLegend items={legendItems} align="center" />

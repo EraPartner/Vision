@@ -3,8 +3,9 @@ title: Views & Pages
 type: feature
 status: active
 date: 2026-04-10
-tags: [feature, views, pages, frontend, ui]
-description: Complete overview of all views and pages in the Vision application
+updated: 2026-06-17
+tags: [feature, views, pages, frontend, ui, liquid-glass-v2, june-2026]
+description: Complete overview of all views and pages in the Vision application. June 2026 Liquid Glass v2 — KPI/chart cards migrated to glass-regular, hero cards to glass-elevated, tables stay opaque, surface-elevated recipe superseded.
 aliases: [views, pages, frontend views, application pages, ui views]
 related_code: ["apps/frontend/src/App.tsx", "apps/frontend/src/pages"]
 ---
@@ -54,6 +55,7 @@ The main landing page providing a quick overview of your finances.
 
 | Widget | Description |
 |--------|-------------|
+| **Suggestions** | Contextual suggestion card — appears only when planned payments are due within 7 days (replaces the global upcoming-payments banner on the dashboard) |
 | **Stat Cards** | Total income, expenses, net worth summary |
 | **Bank Balances** | Current balance per bank account |
 | **Monthly Trends** | Income vs expenses over time (bar chart) |
@@ -430,7 +432,7 @@ Investment portfolio management across multiple asset classes.
 | **Metals** | `/portfolio/metals` | Precious metals holdings |
 | **Performance** | `/portfolio/performance` | Performance analytics |
 | **Net Worth** | `/portfolio/net-worth` | Total net worth |
-| **Exchange Rates** | `/portfolio/exchange-rates` | Currency rates |
+| **Exchange Rates** (admin mode) | `/admin/exchange-rates` | Currency rates |
 | **Watchlist** | `/portfolio/watchlist` | Track symbols |
 | **Market Lookup** | `/portfolio/market` | Search & lookup |
 | **Tax** | `/portfolio/tax` | Investment tax info |
@@ -447,7 +449,7 @@ Investment portfolio management across multiple asset classes.
 - **Refresh Prices**: Update all prices
 - **Default/Reset Currency Source**: Add investment dialog default/reset currency follows `appSettings.defaultCurrency`
 
-Code links: [[apps/frontend/src/components/portfolio/AddInvestmentDialog.tsx]], [[apps/frontend/src/pages/portfolio/PortfolioOverviewPage.tsx]], [[apps/frontend/src/pages/portfolio/StocksPage.tsx]], [[apps/frontend/src/pages/portfolio/CryptoPage.tsx]], [[apps/frontend/src/pages/portfolio/RealEstatePage.tsx]], [[apps/frontend/src/pages/portfolio/SavingsPage.tsx]], [[apps/frontend/src/pages/portfolio/PerformancePage.tsx]], [[apps/frontend/src/pages/portfolio/net-worth/NetWorthPage.tsx]], [[apps/frontend/src/pages/portfolio/ExchangeRatesPage.tsx]], [[apps/frontend/src/pages/portfolio/WatchlistPage.tsx]], [[apps/frontend/src/pages/MarketLookupPage.tsx]], [[apps/frontend/src/pages/portfolio/tax/PortfolioTaxPage.tsx]], [[apps/frontend/src/components/portfolio/InvestmentDetailDialog.tsx]], [[apps/frontend/src/components/shared/PageHeader.tsx]], [[apps/frontend/src/components/shared/EmptyState.tsx]], [[apps/frontend/src/index.css]]
+Code links: [[apps/frontend/src/components/portfolio/AddInvestmentDialog.tsx]], [[apps/frontend/src/pages/portfolio/PortfolioOverviewPage.tsx]], [[apps/frontend/src/pages/portfolio/StocksPage.tsx]], [[apps/frontend/src/pages/portfolio/CryptoPage.tsx]], [[apps/frontend/src/pages/portfolio/RealEstatePage.tsx]], [[apps/frontend/src/pages/portfolio/SavingsPage.tsx]], [[apps/frontend/src/pages/portfolio/PerformancePage.tsx]], [[apps/frontend/src/pages/portfolio/net-worth/NetWorthPage.tsx]], [[apps/frontend/src/pages/admin/ExchangeRatesPage.tsx]], [[apps/frontend/src/pages/portfolio/WatchlistPage.tsx]], [[apps/frontend/src/pages/MarketLookupPage.tsx]], [[apps/frontend/src/pages/portfolio/tax/PortfolioTaxPage.tsx]], [[apps/frontend/src/components/portfolio/InvestmentDetailDialog.tsx]], [[apps/frontend/src/components/shared/PageHeader.tsx]], [[apps/frontend/src/components/shared/EmptyState.tsx]], [[apps/frontend/src/index.css]]
 
 ### Asset Classes
 
@@ -568,7 +570,7 @@ While not a separate view, settings are accessible via the sidebar/settings dial
 - **Grep verification snapshot**: no `toLocaleDateString(` or `toLocaleString(` in `apps/frontend/src`; no `form.currency || 'EUR'`; no persisted `defaultBankAccount` (removed — was unused)
 - **Locale/language undefined-name sweep**: post-patch type/grep validation shows no `Cannot find name 'locale'` or `Cannot find name 'language'`; frontend build passes after watchlist formatter scoping fix in [[apps/frontend/src/components/portfolio/WatchlistChartDialog.tsx]]
 
-Code links: [[apps/frontend/src/components/settings/DashboardSettingsDialog.tsx]], [[apps/frontend/src/components/notifications/UpdateNotification.tsx]], [[apps/frontend/src/contexts/AppSettingsContext.tsx]], [[apps/frontend/src/contexts/SettingsContext.tsx]], [[apps/frontend/src/components/shared/DatePicker.tsx]], [[apps/frontend/src/components/shared/dateUtils.ts]], [[apps/frontend/src/pages/TransactionsPage.tsx]], [[apps/frontend/src/pages/RecipientsPage.tsx]], [[apps/frontend/src/components/statistics/RecipientInsightsTab.tsx]], [[apps/frontend/src/pages/RecipientInsightsPage.tsx]], [[apps/frontend/src/pages/PlannedPaymentsPage.tsx]], [[apps/frontend/src/components/planned/PlannedPaymentForm.tsx]], [[apps/frontend/src/hooks/usePlannedPayments.ts]], [[apps/frontend/src/components/planned/RecurringDetectionPanel.tsx]], [[apps/frontend/src/pages/OwesPage.tsx]], [[apps/frontend/src/pages/DashboardPage.tsx]], [[apps/frontend/src/components/dashboard/BankBalancesWidget.tsx]], [[apps/frontend/src/components/dashboard/CashFlowComparisonChart.tsx]], [[apps/frontend/src/components/dashboard/MonthlyTrendsChart.tsx]], [[apps/frontend/src/pages/StatisticsPage.tsx]], [[apps/frontend/src/pages/TaxOverviewPage.tsx]], [[apps/frontend/src/components/tax/SuggestedDeductionsCard.tsx]], [[apps/frontend/src/components/portfolio/PortfolioTaxAdjustmentsDialog.tsx]], [[apps/frontend/src/components/portfolio/AddInvestmentDialog.tsx]], [[apps/frontend/src/components/portfolio/InvestmentDetailDialog.tsx]], [[apps/frontend/src/pages/portfolio/SavingsPage.tsx]], [[apps/frontend/src/pages/portfolio/ExchangeRatesPage.tsx]], [[apps/frontend/src/pages/portfolio/net-worth/NetWorthPage.tsx]], [[apps/frontend/src/pages/portfolio/PerformancePage.tsx]], [[apps/frontend/src/pages/MarketLookupPage.tsx]], [[apps/frontend/src/components/portfolio/WatchlistChartDialog.tsx]], [[apps/frontend/src/pages/portfolio/WatchlistPage.tsx]], [[apps/frontend/src/components/portfolio/AddInvestmentFromMarketDialog.tsx]], `apps/frontend/src/components/charts/` (chart.tsx removed in ADR-018 visx/d3 migration)
+Code links: [[apps/frontend/src/components/settings/DashboardSettingsDialog.tsx]], [[apps/frontend/src/components/notifications/UpdateNotification.tsx]], [[apps/frontend/src/contexts/AppSettingsContext.tsx]], [[apps/frontend/src/contexts/SettingsContext.tsx]], [[apps/frontend/src/components/shared/DatePicker.tsx]], [[apps/frontend/src/components/shared/dateUtils.ts]], [[apps/frontend/src/pages/TransactionsPage.tsx]], [[apps/frontend/src/pages/RecipientsPage.tsx]], [[apps/frontend/src/components/statistics/RecipientInsightsTab.tsx]], [[apps/frontend/src/pages/RecipientInsightsPage.tsx]], [[apps/frontend/src/pages/PlannedPaymentsPage.tsx]], [[apps/frontend/src/components/planned/PlannedPaymentForm.tsx]], [[apps/frontend/src/hooks/usePlannedPayments.ts]], [[apps/frontend/src/components/planned/RecurringDetectionPanel.tsx]], [[apps/frontend/src/pages/OwesPage.tsx]], [[apps/frontend/src/pages/DashboardPage.tsx]], [[apps/frontend/src/components/dashboard/BankBalancesWidget.tsx]], [[apps/frontend/src/components/dashboard/CashFlowComparisonChart.tsx]], [[apps/frontend/src/components/dashboard/MonthlyTrendsChart.tsx]], [[apps/frontend/src/pages/StatisticsPage.tsx]], [[apps/frontend/src/pages/TaxOverviewPage.tsx]], [[apps/frontend/src/components/tax/SuggestedDeductionsCard.tsx]], [[apps/frontend/src/components/portfolio/PortfolioTaxAdjustmentsDialog.tsx]], [[apps/frontend/src/components/portfolio/AddInvestmentDialog.tsx]], [[apps/frontend/src/components/portfolio/InvestmentDetailDialog.tsx]], [[apps/frontend/src/pages/portfolio/SavingsPage.tsx]], [[apps/frontend/src/pages/admin/ExchangeRatesPage.tsx]], [[apps/frontend/src/pages/portfolio/net-worth/NetWorthPage.tsx]], [[apps/frontend/src/pages/portfolio/PerformancePage.tsx]], [[apps/frontend/src/pages/MarketLookupPage.tsx]], [[apps/frontend/src/components/portfolio/WatchlistChartDialog.tsx]], [[apps/frontend/src/pages/portfolio/WatchlistPage.tsx]], [[apps/frontend/src/components/portfolio/AddInvestmentFromMarketDialog.tsx]], `apps/frontend/src/components/charts/` (chart.tsx removed in ADR-018 visx/d3 migration)
 
 ---
 
@@ -587,20 +589,22 @@ Simple 404 page displayed when no route matches.
 
 ---
 
-## Premium UI Consistency Sweep (April 2026)
+## Premium UI Consistency Sweep (April 2026) + Liquid Glass v2 (June 2026)
 
-Cross-page premium polish now follows shared UI primitives and utility classes for consistent hierarchy, interaction ergonomics, and surface depth.
+Cross-page premium polish follows shared UI primitives and utility classes for consistent hierarchy, interaction ergonomics, and surface depth.
 
-### What was standardized
+> [!info] June 2026 update — Liquid Glass v2 (ADR-070)
+> The canonical card surface recipe changed. `surface-elevated premium-frame micro-lift` is superseded by `glass-regular premium-frame micro-lift` for KPI/chart cards and `glass-elevated` for hero cards. Tables stay opaque. See [[docs/adr/070-liquid-glass-v2-premium-frontend|ADR-070]] and [[docs/reference/code-patterns#surface-shell-pattern-phase-9|Surface Shell Pattern]] for the updated rules.
+
+### What was standardized (April 2026)
 
 - **Page headers**: Top-level page title rows are standardized via `PageHeader` across budgeting and portfolio pages, including key detail subviews where appropriate.
-- **Empty/error states**: Shared `EmptyState` and `PageError` are used in place of bespoke ad-hoc empty/error blocks on high-traffic pages.
+- **Empty/error states**: Shared `EmptyState` and `PageError` are used in place of bespoke ad-hoc empty/error blocks on high-traffic pages. `EmptyState` upgraded in June 2026 (glass icon tile, display-serif title).
 - **Touch ergonomics**: Icon-only actions now use `icon-touch-target` (`2.5rem` hit area) across table rows, dialogs, and detail action bars.
-- **Surface recipes**: Ad-hoc elevated card class chains are replaced in key summary/KPI surfaces by sanctioned recipes (`surface-elevated premium-frame micro-lift`).
+- **Surface recipes**: Ad-hoc elevated card class chains replaced with sanctioned recipes. As of June 2026 the canonical recipe is `glass-regular` (not `surface-elevated`) for KPI/chart cards.
 - **Responsive forms**: Remaining narrow fixed two-column filter grids were upgraded to `grid-cols-1 sm:grid-cols-2` in Planned Payments link flow and related import/filter touchpoints.
-- **Toast consistency**: App shell mounts Sonner as the active toaster; watchlist flows were migrated to Sonner toast API.
+- **Toast consistency**: App shell mounts Sonner as the active toaster; watchlist flows were migrated to Sonner toast API. Toasts use `glass-thick` material as of June 2026.
 - **Toast cleanup completion**: Legacy Radix toast bridge/hook wrappers were removed; Sonner is now the only toast stack in frontend code.
-- **Dashboard surface sweep**: Dashboard page and dashboard chart/stat card wrappers now use sanctioned surface recipes (`surface-elevated premium-frame micro-lift`) for visual consistency with the rest of the app.
 
 ### Coverage highlights
 
@@ -610,7 +614,7 @@ Cross-page premium polish now follows shared UI primitives and utility classes f
 
 ### Core code links
 
-[[apps/frontend/src/components/shared/PageHeader.tsx]], [[apps/frontend/src/components/shared/EmptyState.tsx]], [[apps/frontend/src/components/shared/PageError.tsx]], [[apps/frontend/src/index.css]], [[apps/frontend/src/components/shared/DataTable.tsx]], [[apps/frontend/src/components/shared/VirtualDataTable.tsx]], [[apps/frontend/src/pages/DashboardPage.tsx]], [[apps/frontend/src/components/dashboard/StatCard.tsx]], [[apps/frontend/src/components/dashboard/CategoryPieChart.tsx]], [[apps/frontend/src/components/dashboard/MonthlyTrendsChart.tsx]], [[apps/frontend/src/components/dashboard/CashFlowComparisonChart.tsx]], [[apps/frontend/src/pages/TransactionsPage.tsx]], [[apps/frontend/src/pages/RecipientsPage.tsx]], [[apps/frontend/src/pages/CategoriesPage.tsx]], [[apps/frontend/src/pages/ImportPage.tsx]], [[apps/frontend/src/pages/PlannedPaymentsPage.tsx]], [[apps/frontend/src/pages/OwesPage.tsx]], [[apps/frontend/src/pages/TaxOverviewPage.tsx]], [[apps/frontend/src/pages/RecipientInsightsPage.tsx]], [[apps/frontend/src/pages/portfolio/PortfolioOverviewPage.tsx]], [[apps/frontend/src/pages/portfolio/StocksPage.tsx]], [[apps/frontend/src/pages/portfolio/CryptoPage.tsx]], [[apps/frontend/src/pages/portfolio/RealEstatePage.tsx]], [[apps/frontend/src/pages/portfolio/SavingsPage.tsx]], [[apps/frontend/src/pages/portfolio/PerformancePage.tsx]], [[apps/frontend/src/pages/portfolio/net-worth/NetWorthPage.tsx]], [[apps/frontend/src/pages/portfolio/ExchangeRatesPage.tsx]], [[apps/frontend/src/pages/portfolio/WatchlistPage.tsx]], [[apps/frontend/src/pages/MarketLookupPage.tsx]], [[apps/frontend/src/pages/portfolio/tax/PortfolioTaxPage.tsx]], [[apps/frontend/src/components/portfolio/AddToWatchlistDialog.tsx]], [[apps/frontend/src/components/portfolio/WatchlistChartDialog.tsx]], [[apps/frontend/src/components/portfolio/InvestmentDetailDialog.tsx]], [[apps/frontend/src/features/recipients/MergeRecipientsDialog.tsx]], [[apps/frontend/src/components/splits/SplitTransactionDialog.tsx]], [[apps/frontend/src/components/planned/RecurringDetectionPanel.tsx]], [[apps/frontend/src/components/onboarding/OnboardingWizard.tsx]], [[apps/frontend/src/App.tsx]], [[apps/frontend/src/components/ui/sonner.tsx]], [[apps/frontend/package.json]]
+[[apps/frontend/src/components/shared/PageHeader.tsx]], [[apps/frontend/src/components/shared/EmptyState.tsx]], [[apps/frontend/src/components/shared/PageError.tsx]], [[apps/frontend/src/index.css]], [[apps/frontend/src/components/shared/DataTable.tsx]], [[apps/frontend/src/components/shared/VirtualDataTable.tsx]], [[apps/frontend/src/pages/DashboardPage.tsx]], [[apps/frontend/src/components/dashboard/StatCard.tsx]], [[apps/frontend/src/components/dashboard/CategoryPieChart.tsx]], [[apps/frontend/src/components/dashboard/MonthlyTrendsChart.tsx]], [[apps/frontend/src/components/dashboard/CashFlowComparisonChart.tsx]], [[apps/frontend/src/pages/TransactionsPage.tsx]], [[apps/frontend/src/pages/RecipientsPage.tsx]], [[apps/frontend/src/pages/CategoriesPage.tsx]], [[apps/frontend/src/pages/ImportPage.tsx]], [[apps/frontend/src/pages/PlannedPaymentsPage.tsx]], [[apps/frontend/src/pages/OwesPage.tsx]], [[apps/frontend/src/pages/TaxOverviewPage.tsx]], [[apps/frontend/src/pages/RecipientInsightsPage.tsx]], [[apps/frontend/src/pages/portfolio/PortfolioOverviewPage.tsx]], [[apps/frontend/src/pages/portfolio/StocksPage.tsx]], [[apps/frontend/src/pages/portfolio/CryptoPage.tsx]], [[apps/frontend/src/pages/portfolio/RealEstatePage.tsx]], [[apps/frontend/src/pages/portfolio/SavingsPage.tsx]], [[apps/frontend/src/pages/portfolio/PerformancePage.tsx]], [[apps/frontend/src/pages/portfolio/net-worth/NetWorthPage.tsx]], [[apps/frontend/src/pages/admin/ExchangeRatesPage.tsx]], [[apps/frontend/src/pages/portfolio/WatchlistPage.tsx]], [[apps/frontend/src/pages/MarketLookupPage.tsx]], [[apps/frontend/src/pages/portfolio/tax/PortfolioTaxPage.tsx]], [[apps/frontend/src/components/portfolio/AddToWatchlistDialog.tsx]], [[apps/frontend/src/components/portfolio/WatchlistChartDialog.tsx]], [[apps/frontend/src/components/portfolio/InvestmentDetailDialog.tsx]], [[apps/frontend/src/features/recipients/MergeRecipientsDialog.tsx]], [[apps/frontend/src/components/splits/SplitTransactionDialog.tsx]], [[apps/frontend/src/components/planned/RecurringDetectionPanel.tsx]], [[apps/frontend/src/components/onboarding/OnboardingWizard.tsx]], [[apps/frontend/src/App.tsx]], [[apps/frontend/src/components/ui/sonner.tsx]], [[apps/frontend/package.json]]
 
 ---
 
@@ -649,11 +653,41 @@ This is available on:
 
 ## Keyboard Shortcuts
 
+The in-app help sheet (`?`) lists all active shortcuts. The table below mirrors what `ShortcutsOverlay` shows at runtime.
+
+### General
+
 | Shortcut | Action |
 |----------|--------|
-| `Ctrl/Cmd + K` | Search/command palette |
-| `Ctrl/Cmd + N` | New transaction |
-| `Escape` | Close dialogs |
+| `Ctrl/Cmd + K` | Open command palette |
+| `Ctrl/Cmd + ,` | Open Settings |
+| `Ctrl/Cmd + B` | Toggle sidebar |
+| `[` / `]` | Cycle backward / forward through the three workspace sections (Budgeting → Portfolio → Research); wraps around; inert while typing or with modifier keys held |
+| `Ctrl/Cmd + Z` | Undo last delete |
+| `↑` / `↓` | Navigate table rows |
+| `↵` | Open selected row |
+| `Space` | Quick-look selected row |
+| `?` | Show keyboard shortcuts help |
+| `Esc` | Close dialog |
+
+### Go-to sequences (`g`, then destination key)
+
+| Shortcut | Destination |
+|----------|-------------|
+| `g d` | Dashboard (`/`) |
+| `g t` | Transactions (`/transactions`) |
+| `g s` | Statistics (`/statistics`) |
+| `g c` | Categories (`/categories`) |
+| `g r` | Recipients (`/recipients`) |
+| `g i` | Import (`/import`) |
+| `g p` | Portfolio (`/portfolio`) |
+| `g n` | Net Worth (`/portfolio/net-worth`) |
+| `g m` | Markets Overview (`/research/markets`) |
+| `g a` | AI Chat (`/ai-chat`) |
+
+### Command palette ticker lookup
+
+Typing a bare ticker symbol (`AAPL`, `BRK-B`, `ASML.AS`, `BTC-USD`) or a `$`-cashtag (`$AAPL`) into the command palette triggers a debounced (250 ms) price-only quote via `GET /api/market/quote?...&detail=basic`. When a live quote returns, a **Market** group appears at the top of the palette showing the symbol, company name, current price, and percent change (green/red). Pressing **Enter** navigates to Market Lookup (`/research/market?symbol=<symbol>`). The card is hidden when no quote returns, so ordinary words that happen to match the ticker shape produce no false positives.
 
 ---
 

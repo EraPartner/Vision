@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { parseDecimal } from "@/lib/decimal";
 import { useQueryClient } from "@tanstack/react-query";
 import {
@@ -21,6 +21,7 @@ import {
 } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
 import { Search, Loader2 } from "lucide-react";
+import { SymbolSearchResultItem } from "@/components/shared/SymbolSearchResultItem";
 import { useDebounce } from "@/hooks/useDebounce";
 import { useLanguage } from '@/contexts/LanguageContext';
 import { useQuery } from "@tanstack/react-query";
@@ -34,13 +35,36 @@ import {
 } from "@/lib/api/market";
 
 type SearchResult = MarketSearchResult;
+type AssetClass = "stock" | "etf" | "crypto" | "metals";
+
+/**
+ * An already-known security to seed the dialog with, skipping the search step.
+ * Used by callers like Market Lookup where the user is already viewing a symbol.
+ */
+export interface WatchlistPrefill {
+  symbol: string;
+  name: string;
+  type?: string;
+  currency?: string;
+  /** Current price — used as the default target so the add is one confirm away. */
+  price?: number;
+}
+
+function detectAssetClass(type: string | undefined): AssetClass {
+  const t = type?.toLowerCase() ?? "";
+  if (t.includes("etf")) return "etf";
+  if (t.includes("crypto") || t.includes("cryptocurrency")) return "crypto";
+  return "stock";
+}
 
 interface AddToWatchlistDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
+  /** When set, the dialog opens pre-filled with this asset instead of a search. */
+  prefill?: WatchlistPrefill;
 }
 
-export function AddToWatchlistDialog({ open, onOpenChange }: AddToWatchlistDialogProps) {
+export function AddToWatchlistDialog({ open, onOpenChange, prefill }: AddToWatchlistDialogProps) {
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedAsset, setSelectedAsset] = useState<SearchResult | null>(null);
   const [assetClass, setAssetClass] = useState<"stock" | "etf" | "crypto" | "metals">("stock");
@@ -73,7 +97,7 @@ export function AddToWatchlistDialog({ open, onOpenChange }: AddToWatchlistDialo
     queryFn: async () => {
       if (!selectedAsset?.symbol) return null;
       try {
-        const data = await getMarketQuotes(selectedAsset.symbol);
+        const data = await getMarketQuotes(selectedAsset.symbol, { detail: "basic" });
         return data.quotes?.[0] ?? null;
       } catch {
         return null;
@@ -84,14 +108,30 @@ export function AddToWatchlistDialog({ open, onOpenChange }: AddToWatchlistDialo
     refetchOnWindowFocus: false,
   });
 
+  // Seed from a prefill when the dialog opens that way (e.g. from Market
+  // Lookup), so the user lands straight on the target-price step.
+  useEffect(() => {
+    if (!open || !prefill) return;
+    setSelectedAsset({
+      symbol: prefill.symbol,
+      name: prefill.name,
+      type: prefill.type ?? "",
+      exchange: "",
+    });
+    setAssetClass(detectAssetClass(prefill.type));
+    if (prefill.currency) setCurrency(prefill.currency);
+    setTargetPrice(
+      prefill.price != null && Number.isFinite(prefill.price) ? String(prefill.price) : "",
+    );
+    setSearchQuery("");
+    // Re-seed only when a new prefilled asset opens, not on every keystroke.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open, prefill?.symbol]);
+
   const handleSelectAsset = (result: SearchResult) => {
     setSelectedAsset(result);
     setSearchQuery("");
-    // Auto-detect asset class
-    const type = result.type?.toLowerCase() || "";
-    if (type.includes("etf")) setAssetClass("etf");
-    else if (type.includes("crypto") || type.includes("cryptocurrency")) setAssetClass("crypto");
-    else setAssetClass("stock");
+    setAssetClass(detectAssetClass(result.type));
   };
 
   const handleSubmit = async () => {
@@ -107,6 +147,10 @@ export function AddToWatchlistDialog({ open, onOpenChange }: AddToWatchlistDialo
         currency,
         notes: notes || undefined,
         price_provider_id: selectedAsset.symbol,
+        // Snapshot the live price so we can later show "had I bought when I added it".
+        added_price: quoteData && Number.isFinite(quoteData.price) && quoteData.price > 0
+          ? quoteData.price
+          : undefined,
       });
 
       queryClient.invalidateQueries({ queryKey: ["watchlist"] });
@@ -164,24 +208,13 @@ export function AddToWatchlistDialog({ open, onOpenChange }: AddToWatchlistDialo
               )}
 
               {searchResults?.items && searchResults.items.length > 0 && (
-                <div className="border rounded-md max-h-60 overflow-y-auto">
+                <div className="max-h-60 overflow-y-auto rounded-md border border-border p-1">
                   {searchResults.items.map((result) => (
-                    <button
+                    <SymbolSearchResultItem
                       key={result.symbol}
-                      onClick={() => handleSelectAsset(result)}
-                      className="w-full text-left px-3 py-2 hover:bg-muted transition-colors border-b last:border-b-0"
-                    >
-                      <div className="flex items-center justify-between">
-                        <div>
-                          <span className="font-medium">{result.symbol}</span>
-                          <span className="text-muted-foreground ml-2 text-sm">{result.name}</span>
-                        </div>
-                        <Badge variant="outline" className="text-xs">
-                          {result.type}
-                        </Badge>
-                      </div>
-                      <p className="text-xs text-muted-foreground">{result.exchange}</p>
-                    </button>
+                      item={result}
+                      onSelect={handleSelectAsset}
+                    />
                   ))}
                 </div>
               )}

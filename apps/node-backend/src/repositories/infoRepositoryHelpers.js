@@ -6,6 +6,18 @@
 import { query } from '../database/connection.js';
 import { convertRowsToEur } from '../services/currency/currencyConversionService.js';
 import { toDecimal, toNumber, roundMoney } from '../lib/money.js';
+import { formatDateToYmd } from '../lib/dateFormat.js';
+import settingsRepository from './settingsRepository.js';
+
+/**
+ * Whether internal transfers (ADR-083) should be counted in cash-flow
+ * aggregates. Default false (exclude); user-toggleable via the
+ * `includeTransfers` setting. When true, callers should also bypass the
+ * transfer-excluding materialized views and use the base-table path.
+ */
+export async function getIncludeTransfers() {
+  return (await settingsRepository.get('includeTransfers')) === true;
+}
 
 // ── Materialized-view cache ────────────────────────────────────────────────
 // Keyed by view name; cleared via clearMvCache() after bulk import.
@@ -77,9 +89,9 @@ export function roundToCents(value) {
 
 // ── Date helpers ───────────────────────────────────────────────────────────
 
-export function formatDateToYmd(date) {
-  return date.toISOString().split('T')[0];
-}
+// Re-exported from lib/dateFormat so the existing repository importers keep
+// working while routes import the canonical helper from lib directly.
+export { formatDateToYmd };
 
 export function formatDateToYm(date) {
   return date.toISOString().substring(0, 7);

@@ -39,13 +39,13 @@ afterEach(() => {
 describe('PROVIDER_DEFINITIONS', () => {
   it('exposes the canonical provider keys', () => {
     expect(Object.keys(PROVIDER_DEFINITIONS).sort()).toEqual(
-      ['binance', 'ecb', 'eurostat', 'kinesis', 'open.er-api', 'statbel', 'yahoo'].sort(),
+      ['alpha_vantage', 'binance', 'ecb', 'eurostat', 'finnhub', 'fmp', 'kinesis', 'open.er-api', 'statbel', 'twelve_data', 'yahoo'].sort(),
     );
   });
 
   it('tags each provider with a kind and label', () => {
     for (const [, def] of Object.entries(PROVIDER_DEFINITIONS)) {
-      expect(def.kind).toMatch(/^(price|fx|inflation)$/);
+      expect(def.kind).toMatch(/^(price|fx|inflation|research)$/);
       expect(def.label).toBeTruthy();
       expect(typeof def.probe).toBe('function');
     }
@@ -62,6 +62,12 @@ describe('recordSuccess', () => {
   it('is a no-op for unknown providers', async () => {
     await recordSuccess('mystery');
     expect(providerHealthRepository.recordSuccess).not.toHaveBeenCalled();
+  });
+
+  it('records research providers under the research kind (no longer a no-op)', async () => {
+    providerHealthRepository.recordSuccess.mockResolvedValueOnce(undefined);
+    await recordSuccess('fmp');
+    expect(providerHealthRepository.recordSuccess).toHaveBeenCalledWith('fmp', 'research');
   });
 
   it('swallows repository errors and logs at debug', async () => {

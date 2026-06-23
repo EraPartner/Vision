@@ -6,7 +6,7 @@ import { http } from "msw";
 import { renderWithApp } from "@/test/renderWithApp";
 import { server } from "@/test/msw/server";
 import { ok, err } from "@/test/msw/handlers";
-import MarketLookupPage from "@/pages/MarketLookupPage";
+import MarketLookupPage from "@/pages/research/MarketLookupPage";
 
 const API_BASE = "http://localhost:3002";
 
@@ -199,16 +199,24 @@ describe("MarketLookupPage (integration)", () => {
         expect(await screen.findByText(/latest news/i)).toBeInTheDocument();
     });
 
-    it("shows No news message when articles are empty", async () => {
+    it("shows No news message when the news tab has no articles", async () => {
+        const user = userEvent.setup({ delay: null });
         server.use(
             http.get(`${API_BASE}/api/market/quote`, () => ok({ quotes: [appleQuote] })),
             http.get(`${API_BASE}/api/market/chart`, () =>
                 ok({ symbol: "AAPL", currency: "USD", points: [] }),
             ),
-            http.get(`${API_BASE}/api/market/news`, () => ok({ articles: [] })),
+            // News now comes from the research aggregator in the Details card's
+            // News tab. Empty articles (source live) → "No news available".
+            http.get(`${API_BASE}/api/research/news`, () =>
+                ok({ articles: [] }, { provider: "yahoo", source: "live" }),
+            ),
         );
 
         renderWithApp(<MarketLookupPage />, { initialEntries: ["/?symbol=AAPL"] });
+
+        // Default Details tab is Fundamentals; switch to News.
+        await user.click(await screen.findByRole("tab", { name: /latest news/i }));
 
         // market.noNews = "No news available"
         expect(await screen.findByText(/no news available/i)).toBeInTheDocument();

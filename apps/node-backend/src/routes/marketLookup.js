@@ -6,8 +6,20 @@ import { Router } from 'express';
 import YahooFinance from 'yahoo-finance2';
 import { ApiErrorCode } from '@vision/types/errors';
 import { AppError, ValidationError } from '../middleware/errorHandler.js';
+import { createResearchCache } from '../services/research/researchCache.js';
 
 const router = Router();
+
+// Per-symbol quote cache + in-flight coalescing. The Markets Overview polls this
+// route for the whole active group (tens of symbols) every 60s, which otherwise
+// became one uncached outbound Yahoo call per symbol per poll per open tab. A
+// short TTL keeps the snapshot live while collapsing those into at most one call
+// per symbol per window; the in-flight map coalesces concurrent identical fetches
+// (e.g. overlapping symbol sets) so a cold symbol is fetched once, not N times.
+const QUOTE_CACHE_TTL_MS = 60_000;
+const quoteCache = createResearchCache();
+/** @type {Map<string, Promise<any|null>>} */
+const inFlightQuotes = new Map();
 
 /**
  * Coerce a query-string param to a single trimmed string. Express parses a
@@ -44,6 +56,14 @@ function pickBestThumbnail(thumbnail) {
 }
 const yahooFinance = new YahooFinance({ suppressNotices: ['yahooSurvey'] });
 
+// yahoo-finance2 validates every upstream payload against its own schema and
+// THROWS on any mismatch. Yahoo's responses drift (new quoteTypes, non-Yahoo
+// entries missing fields, null meta) and vary by IP/geo, so an otherwise fine
+// request intermittently 502s — search dropdowns go empty, charts break. We only
+// read a small subset of well-known fields, so opt out of the throw: degrade to
+// whatever data came back instead of failing the whole request.
+const NO_VALIDATE = /** @type {{ validateResult: false }} */ ({ validateResult: false });
+
 function upstreamError(message, cause) {
   return new AppError(message, { status: 502, code: ApiErrorCode.BAD_GATEWAY, cause });
 }
@@ -72,9 +92,10 @@ router.get('/search', async (req, res) => {
   const { q } = req.query;
   if (!q || q.length < 1) return res.ok({ items: [] });
 
+  /** @type {any} */
   let results;
   try {
-    results = await yahooFinance.search(q, { quotesCount: 8, newsCount: 0 });
+    results = await yahooFinance.search(q, { quotesCount: 8, newsCount: 0 }, NO_VALIDATE);
   } catch (err) {
     throw upstreamError('Market search unavailable', err);
   }
@@ -91,109 +112,168 @@ router.get('/search', async (req, res) => {
   res.ok({ items });
 });
 
-// GET /api/market/quote?symbols=AAPL,MSFT
+/**
+ * Core price fields available from a single `yahooFinance.quote()` call — no
+ * `quoteSummary` needed. This is everything the benchmark strip, watchlist, and
+ * dialogs render.
+ * @param {any} q
+ */
+function mapQuoteCore(q) {
+  return {
+    symbol: q.symbol,
+    name: q.shortName || q.longName || q.symbol,
+    price: q.regularMarketPrice,
+    change: q.regularMarketChange,
+    changePercent: q.regularMarketChangePercent,
+    currency: q.currency || 'USD',
+    exchange: q.fullExchangeName || q.exchange,
+    type: q.quoteType,
+    open: q.regularMarketOpen,
+    dayHigh: q.regularMarketDayHigh,
+    dayLow: q.regularMarketDayLow,
+    prevClose: q.regularMarketPreviousClose,
+    volume: q.regularMarketVolume,
+    avgVolume: q.averageDailyVolume3Month,
+    high52w: q.fiftyTwoWeekHigh,
+    low52w: q.fiftyTwoWeekLow,
+  };
+}
+
+/**
+ * Fetch and map a single symbol's quote from Yahoo. `basic` returns price fields
+ * only (one quote() call); the default (full) additionally fetches quoteSummary
+ * for fundamentals/analyst data — roughly 2× the outbound calls. Returns null
+ * when the upstream quote is unavailable.
+ */
+async function buildQuote(sym, basic) {
+  if (basic) {
+    const q = /** @type {any} */ (await yahooFinance.quote(sym, {}, NO_VALIDATE));
+    return mapQuoteCore(q);
+  }
+
+  const [quote, summary] = await Promise.allSettled([
+    yahooFinance.quote(sym, {}, NO_VALIDATE),
+    yahooFinance.quoteSummary(sym, {
+      modules: [
+        'summaryDetail',
+        'defaultKeyStatistics',
+        'price',
+        'financialData',
+        'recommendationTrend',
+        'upgradeDowngradeHistory',
+      ],
+    }, NO_VALIDATE),
+  ]);
+
+  if (quote.status === 'rejected') return null;
+
+  const q = /** @type {any} */ (quote.value);
+  const s = /** @type {any} */ (summary.status === 'fulfilled' ? summary.value : null);
+
+  /** @type {any} */
+  const sd = s?.summaryDetail || {};
+  /** @type {any} */
+  const ks = s?.defaultKeyStatistics || {};
+  /** @type {any} */
+  const pr = s?.price || {};
+
+  const marketCap = sd.marketCap ?? pr.marketCap ?? q.marketCap;
+  const trailingPE = sd.trailingPE ?? ks.trailingPE ?? q.trailingPE;
+  const forwardPE = sd.forwardPE ?? ks.forwardPE ?? q.forwardPE;
+  const dividendYield = sd.dividendYield ?? pr.dividendYield ?? q.dividendYield;
+  const eps = pr.epsTrailingTwelveMonths ?? ks.trailingEps ?? q.epsTrailingTwelveMonths;
+  const beta = sd.beta ?? ks.beta ?? q.beta;
+  const priceToBook = ks.priceToBook ?? q.priceToBook;
+
+  const trendBuckets = s?.recommendationTrend?.trend || [];
+  const currentTrend = trendBuckets.find((t) => t.period === '0m') || trendBuckets[0] || null;
+  const analystConsensus = currentTrend
+    ? {
+      strongBuy: currentTrend.strongBuy ?? 0,
+      buy: currentTrend.buy ?? 0,
+      hold: currentTrend.hold ?? 0,
+      sell: currentTrend.sell ?? 0,
+      strongSell: currentTrend.strongSell ?? 0,
+    }
+    : null;
+
+  const recentAnalystActions = (s?.upgradeDowngradeHistory?.history || [])
+    .slice(0, 10)
+    .map((h) => ({
+      date: h.epochGradeDate,
+      firm: h.firm,
+      toGrade: h.toGrade,
+      fromGrade: h.fromGrade || null,
+      action: h.action,
+      priceTarget: h.currentPriceTarget ?? null,
+    }));
+
+  return {
+    ...mapQuoteCore(q),
+    marketCap,
+    pe: trailingPE,
+    forwardPE,
+    dividendYield,
+    eps,
+    beta,
+    priceToBook,
+    analystConsensus,
+    recentAnalystActions,
+  };
+}
+
+/**
+ * Cached, single-flight wrapper around {@link buildQuote}. A cache hit avoids the
+ * outbound call; concurrent identical fetches share one in-flight promise. Only
+ * successful (non-null) quotes are cached. Never throws — returns null so one bad
+ * symbol can't fail a multi-symbol request.
+ */
+async function getCachedQuote(sym, basic) {
+  const key = `${basic ? 'basic' : 'full'}:${sym}`;
+  const cached = quoteCache.get(key);
+  if (cached !== undefined) return cached;
+
+  const existing = inFlightQuotes.get(key);
+  if (existing) return existing;
+
+  const promise = (async () => {
+    try {
+      const result = await buildQuote(sym, basic);
+      if (result !== null && result !== undefined) quoteCache.set(key, result, QUOTE_CACHE_TTL_MS);
+      return result;
+    } catch {
+      return null;
+    } finally {
+      inFlightQuotes.delete(key);
+    }
+  })();
+  inFlightQuotes.set(key, promise);
+  return promise;
+}
+
+/** Test-only: clear the per-symbol quote cache and in-flight map between cases. */
+export function __clearQuoteCacheForTests() {
+  quoteCache.clear();
+  inFlightQuotes.clear();
+}
+
+// GET /api/market/quote?symbols=AAPL,MSFT[&detail=basic]
+// `detail=basic` returns price fields only; the default (full) additionally
+// fetches quoteSummary for fundamentals/analyst data. Results are per-symbol
+// cached (QUOTE_CACHE_TTL_MS) and concurrent identical fetches are coalesced.
 router.get('/quote', async (req, res) => {
   const symbols = coerceQueryString(req.query.symbols);
   if (!symbols) throw new ValidationError('symbols parameter required');
+  const basic = coerceQueryString(req.query.detail).trim() === 'basic';
 
-  let quoteResults;
-  try {
-    const symbolList = symbols.split(',').map((s) => s.trim()).filter(Boolean);
-    quoteResults = await Promise.allSettled(
-      symbolList.map(async (sym) => {
-        const [quote, summary] = await Promise.allSettled([
-          yahooFinance.quote(sym),
-          yahooFinance.quoteSummary(sym, {
-            modules: [
-              'summaryDetail',
-              'defaultKeyStatistics',
-              'price',
-              'financialData',
-              'recommendationTrend',
-              'upgradeDowngradeHistory',
-            ],
-          }),
-        ]);
-
-        if (quote.status === 'rejected') return null;
-
-        const q = /** @type {any} */ (quote.value);
-        const s = /** @type {any} */ (summary.status === 'fulfilled' ? summary.value : null);
-
-        /** @type {any} */
-        const sd = s?.summaryDetail || {};
-        /** @type {any} */
-        const ks = s?.defaultKeyStatistics || {};
-        /** @type {any} */
-        const pr = s?.price || {};
-
-        const marketCap = sd.marketCap ?? pr.marketCap ?? q.marketCap;
-        const trailingPE = sd.trailingPE ?? ks.trailingPE ?? q.trailingPE;
-        const forwardPE = sd.forwardPE ?? ks.forwardPE ?? q.forwardPE;
-        const dividendYield = sd.dividendYield ?? pr.dividendYield ?? q.dividendYield;
-        const eps = pr.epsTrailingTwelveMonths ?? ks.trailingEps ?? q.epsTrailingTwelveMonths;
-        const beta = sd.beta ?? ks.beta ?? q.beta;
-        const priceToBook = ks.priceToBook ?? q.priceToBook;
-
-        const trendBuckets = s?.recommendationTrend?.trend || [];
-        const currentTrend = trendBuckets.find((t) => t.period === '0m') || trendBuckets[0] || null;
-        const analystConsensus = currentTrend
-          ? {
-            strongBuy: currentTrend.strongBuy ?? 0,
-            buy: currentTrend.buy ?? 0,
-            hold: currentTrend.hold ?? 0,
-            sell: currentTrend.sell ?? 0,
-            strongSell: currentTrend.strongSell ?? 0,
-          }
-          : null;
-
-        const recentAnalystActions = (s?.upgradeDowngradeHistory?.history || [])
-          .slice(0, 10)
-          .map((h) => ({
-            date: h.epochGradeDate,
-            firm: h.firm,
-            toGrade: h.toGrade,
-            fromGrade: h.fromGrade || null,
-            action: h.action,
-            priceTarget: h.currentPriceTarget ?? null,
-          }));
-
-        return {
-          symbol: q.symbol,
-          name: q.shortName || q.longName || q.symbol,
-          price: q.regularMarketPrice,
-          change: q.regularMarketChange,
-          changePercent: q.regularMarketChangePercent,
-          currency: q.currency || 'USD',
-          exchange: q.fullExchangeName || q.exchange,
-          type: q.quoteType,
-          open: q.regularMarketOpen,
-          dayHigh: q.regularMarketDayHigh,
-          dayLow: q.regularMarketDayLow,
-          prevClose: q.regularMarketPreviousClose,
-          volume: q.regularMarketVolume,
-          avgVolume: q.averageDailyVolume3Month,
-          high52w: q.fiftyTwoWeekHigh,
-          low52w: q.fiftyTwoWeekLow,
-          marketCap,
-          pe: trailingPE,
-          forwardPE,
-          dividendYield,
-          eps,
-          beta,
-          priceToBook,
-          analystConsensus,
-          recentAnalystActions,
-        };
-      }),
-    );
-  } catch (err) {
-    throw upstreamError('Market quote unavailable', err);
-  }
+  const symbolList = symbols.split(',').map((s) => s.trim()).filter(Boolean);
+  const quoteResults = await Promise.allSettled(
+    symbolList.map((sym) => getCachedQuote(sym, basic)),
+  );
 
   const mapped = quoteResults
     .filter(/** @type {(r: PromiseSettledResult<any>) => r is PromiseFulfilledResult<any>} */
-      (r) => r.status === 'fulfilled' && r.value !== null)
+      (r) => r.status === 'fulfilled' && r.value !== null && r.value !== undefined)
     .map((r) => r.value);
 
   res.ok({ quotes: mapped });
@@ -207,13 +287,17 @@ router.get('/chart', async (req, res) => {
   const { range = '1mo', interval = '1d' } = req.query;
   if (!symbol) throw new ValidationError('symbol parameter required');
 
+  /** @type {any} */
   let result;
   try {
+    // NO_VALIDATE: Yahoo intermittently returns an incomplete `meta` block (null
+    // currency/regularMarketTime, missing regularMarketPrice); the time-series
+    // `quotes` we render are still present, so degrade instead of 502-ing.
     result = await yahooFinance.chart(symbol, {
       period1: rangeToDate(range),
       interval,
       includePrePost: false,
-    });
+    }, NO_VALIDATE);
   } catch (err) {
     throw upstreamError('Market chart unavailable', err);
   }
@@ -251,8 +335,8 @@ router.get('/news', async (req, res) => {
         const results = await yahooFinance.search(sym.trim(), {
           quotesCount: 0,
           newsCount,
-        });
-        return (results.news || []).map((n) => ({
+        }, NO_VALIDATE);
+        return ((/** @type {any} */ (results)).news || []).map((n) => ({
           title: n.title,
           link: n.link,
           publisher: n.publisher,

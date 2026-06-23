@@ -2,10 +2,10 @@
 title: Backend Architecture
 type: architecture
 status: active
-description: Node.js backend architecture and diagrams. Phase 3: infoRepository split into 7 domain-specific sub-modules. Phase 9: Decimal.js enforcement on all monetary paths. Phase E: Forecast cache materialization with 6-hour TTL and nightly job. May 2026: Transaction tags as orthogonal dimension (ADR-052) with global slug registry and bulk-tag endpoint. Startup sequence fixed to order FX cache warmup before snapshots (2026-04-25); backend now owns DB readiness polling (2026-04-27); offline-aware startup that skips external fetches when network unavailable (2026-05-03).
+description: Node.js backend architecture and diagrams. Phase 3: infoRepository split into 7 domain-specific sub-modules. Phase 9: Decimal.js enforcement on all monetary paths. Phase E: Forecast cache materialization with 6-hour TTL and nightly job. May 2026: Transaction tags as orthogonal dimension (ADR-052). June 2026: Route→service boundary enforced (ADR-067, 14 new thin seams); global API rate limiter + trusted-proxy XFF + VISION_DEV fail-safe (ADR security); mv_recipient_monthly dropped (ADR-068); @vision/shared-utils package + banker's rounding canonical (ADR-069).
 date: 2026-04-23
-last_modified: 2026-05-08
-tags: [architecture, backend, uml, plantuml, phase-3, phase-6, phase-9, phase-e, decimal, money, precision, caching, materialization, nightly-job, startup, dependency-ordering, db-polling, graceful-shutdown, signal-handling, offline-resilience, network-reachability, tags, tagging, orthogonal-dimension]
+last_modified: 2026-06-01
+tags: [architecture, backend, uml, plantuml, phase-3, phase-6, phase-9, phase-e, decimal, money, precision, caching, materialization, nightly-job, startup, dependency-ordering, db-polling, graceful-shutdown, signal-handling, offline-resilience, network-reachability, tags, tagging, orthogonal-dimension, route-service-boundary, thin-seams, global-rate-limiter, trusted-proxies, vision-dev, mv-recipient-monthly-drop, shared-utils, banker-rounding]
 aliases: [backend architecture, node architecture, server design]
 ---
 
@@ -82,6 +82,27 @@ All external APIs fall back to cached or database data:
 - **Info endpoints**: Aggregated from database only, no external calls
 
 Users see no errors; data is simply older.
+
+## Process Crash Handlers (2026-05-29)
+
+`apps/node-backend/src/main.js` now registers process-level handlers for unhandled async and synchronous errors. Previously only `SIGINT`/`SIGTERM` were caught; unhandled rejections and thrown exceptions caused silent Docker container restarts with no log trace.
+
+```javascript
+process.on('unhandledRejection', (reason, promise) => {
+  logger.error({ reason, requestId: reason?.requestId }, 'Unhandled rejection');
+  process.exit(1);
+});
+
+process.on('uncaughtException', (err) => {
+  logger.error({ err, stack: err.stack }, 'Uncaught exception');
+  process.exit(1);
+});
+```
+
+**Behavior:**
+- Both handlers log via the structured logger (message + stack + `requestId` when attached to the error object) before exiting non-zero.
+- Non-zero exit triggers Docker's restart policy, so the container recovers automatically.
+- The structured log entry is captured by the container log collector, making the crash traceable from `docker logs` or the admin observability hub.
 
 ## Graceful Shutdown (2026-04-29)
 
@@ -953,7 +974,7 @@ actor "User" as User
 
 package "Client" {
   rectangle "Browser (React App)" {
-    node "React 18 + TypeScript" as ReactApp
+    node "React 19 + TypeScript" as ReactApp
     node "Vite" as Vite
     node "Tailwind CSS + Radix UI" as UI
     node "React Router v7" as Router

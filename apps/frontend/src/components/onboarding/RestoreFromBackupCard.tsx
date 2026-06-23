@@ -69,10 +69,10 @@ export function RestoreFromBackupCard({ onDismiss, compact = false }: RestoreFro
                 }
             >
                 <div
-                    className={`${compact ? 'h-8 w-8' : 'h-10 w-10'} rounded-md bg-emerald-500/10 flex items-center justify-center shrink-0`}
+                    className={`${compact ? 'h-8 w-8' : 'h-10 w-10'} rounded-md bg-success/10 flex items-center justify-center shrink-0`}
                 >
                     <Database
-                        className={`${compact ? 'h-4 w-4' : 'h-5 w-5'} text-emerald-600 dark:text-emerald-400`}
+                        className={`${compact ? 'h-4 w-4' : 'h-5 w-5'} text-success`}
                     />
                 </div>
 

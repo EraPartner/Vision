@@ -30,22 +30,29 @@ function makeTxn(
   };
 }
 
+// Money in Vision is cent-precise (the cost-basis result rounds totals to cents).
+// Generating sub-cent amounts only surfaces rounding artifacts, not real bugs, so
+// monetary fields are drawn as exact cents while units stay fractional (real for
+// fractional shares / crypto).
+const arbCents = (minCents: number, maxCents: number) =>
+  fc.integer({ min: minCents, max: maxCents }).map((c) => c / 100);
+
 // fast-check arbitrary for a buy transaction with positive units
 const arbBuy = fc.record({
-  amount: fc.double({ min: 1, max: 100_000, noNaN: true }),
+  amount: arbCents(100, 10_000_000),
   units: fc.double({ min: 0.000001, max: 100_000, noNaN: true }),
-  fees: fc.double({ min: 0, max: 100, noNaN: true }),
-  taxes: fc.double({ min: 0, max: 100, noNaN: true }),
+  fees: arbCents(0, 10_000),
+  taxes: arbCents(0, 10_000),
   date: fc.constantFrom('2020-01-01', '2021-06-15', '2022-03-10', '2023-11-01'),
 }).map(({ amount, units, fees, taxes, date }) =>
   makeTxn({ type: 'buy', amount, units, fees, taxes, date })
 );
 
 const arbSell = fc.record({
-  amount: fc.double({ min: 1, max: 100_000, noNaN: true }),
+  amount: arbCents(100, 10_000_000),
   units: fc.double({ min: 0.000001, max: 100_000, noNaN: true }),
-  fees: fc.double({ min: 0, max: 100, noNaN: true }),
-  taxes: fc.double({ min: 0, max: 100, noNaN: true }),
+  fees: arbCents(0, 10_000),
+  taxes: arbCents(0, 10_000),
   date: fc.constantFrom('2020-06-01', '2021-12-31', '2022-09-20', '2024-01-01'),
 }).map(({ amount, units, fees, taxes, date }) =>
   makeTxn({ type: 'sell', amount, units, fees, taxes, date })
@@ -60,6 +67,28 @@ describe('calculateCostBasis', () => {
     expect(result.totalCost).toBe(0);
     expect(result.avgCostBasis).toBe(0);
     expect(result.realizedGain).toBe(0);
+  });
+
+  it('applies a split: units = new post-split total, cost basis unchanged', () => {
+    // buy 10 @100, 2:1 split (units=20). Before the fix, totalUnits stayed 10.
+    const txns = [
+      { type: 'buy', units: 10, amount: 1000, fees: 0, taxes: 0, date: '2026-01-01' },
+      { type: 'split', units: 20, amount: 0, fees: 0, taxes: 0, date: '2026-02-01' },
+    ] as unknown as Parameters<typeof calculateCostBasis>[0];
+    const r = calculateCostBasis(txns);
+    expect(r.totalUnits).toBe(20);
+    expect(r.totalCost).toBe(1000); // unchanged
+    expect(r.avgCostBasis).toBe(50); // 1000 / 20
+  });
+
+  it('return_of_capital reduces cost basis without changing units', () => {
+    const txns = [
+      { type: 'buy', units: 10, amount: 1000, fees: 0, taxes: 0, date: '2026-01-01' },
+      { type: 'return_of_capital', units: 0, amount: 100, fees: 0, taxes: 0, date: '2026-02-01' },
+    ] as unknown as Parameters<typeof calculateCostBasis>[0];
+    const r = calculateCostBasis(txns);
+    expect(r.totalUnits).toBe(10);
+    expect(r.totalCost).toBe(900); // 1000 − 100
   });
 
   it('avgCostBasis >= 0 whenever totalUnits > 0', () => {

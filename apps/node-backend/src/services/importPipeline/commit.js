@@ -13,6 +13,7 @@
 import { query, withTransaction } from '../../database/connection.js';
 import { logger } from '../../config/logger.js';
 import { refreshAggregations } from '../aggregationRefresh.js';
+import { autoLinkTransactions } from '../plannedMatchService.js';
 
 const COMMIT_CHUNK = 1000;
 
@@ -22,7 +23,7 @@ export async function commitBatch({ batchId, onProgress }) {
   const { rows: matched } = await query(
     `SELECT isr.id,
             isr.row_index,
-            isr.tx_date,
+            to_char(isr.tx_date, 'YYYY-MM-DD') AS tx_date,
             isr.bank_account,
             isr.recipient_raw,
             isr.memo,
@@ -53,6 +54,9 @@ export async function commitBatch({ batchId, onProgress }) {
   // two identical rows inside the same CSV both passing the field-based dup
   // check (neither is in `transactions` yet when the first is processed).
   const committedHashes = new Set();
+  // Inserted rows fed to planned-payment auto-link after the whole batch
+  // commits (so matching sees the full import — both ambiguity directions).
+  const insertedRows = [];
 
   if (onProgress) onProgress({ phase: 'committing', current: 0, total });
 
@@ -65,14 +69,20 @@ export async function commitBatch({ batchId, onProgress }) {
     let chunkImported = 0;
     let chunkDuplicates = 0;
     let chunkErrors = 0;
+    let chunkInserted = [];
     await withTransaction(async (client) => {
       // Reset inside the callback so a withTransaction retry recounts cleanly.
       chunkImported = 0;
       chunkDuplicates = 0;
       chunkErrors = 0;
+      chunkInserted = [];
       for (const row of chunk) {
+        // tx_date arrives as a 'YYYY-MM-DD' string (the SELECT uses to_char).
+        // The Date branch is defensive only: node-postgres parses DATE columns
+        // into a server-local-midnight Date, so use LOCAL getters — toISOString()
+        // would roll back a day for any TZ east of UTC.
         const dateStr = row.tx_date instanceof Date
-          ? row.tx_date.toISOString().slice(0, 10)
+          ? `${row.tx_date.getFullYear()}-${String(row.tx_date.getMonth() + 1).padStart(2, '0')}-${String(row.tx_date.getDate()).padStart(2, '0')}`
           : String(row.tx_date).slice(0, 10);
 
         const effectiveRecipientId = row.user_override_recipient_id ?? row.resolved_recipient_id ?? null;
@@ -157,7 +167,9 @@ export async function commitBatch({ batchId, onProgress }) {
               effectiveCategoryId,
               row.amount,
               row.memo || '',
-              row.currency || null,
+              // currency is NOT NULL at the DB level (migration 0046); default
+              // a missing import currency to EUR rather than writing NULL.
+              row.currency || 'EUR',
               row.balance != null ? row.balance : null,
               row.comment || null,
               batchId,
@@ -178,6 +190,12 @@ export async function commitBatch({ batchId, onProgress }) {
           }
 
           chunkImported++;
+          chunkInserted.push({
+            id: insertResult.rows[0].id,
+            recipient_id: effectiveRecipientId,
+            amount: row.amount,
+            transaction_date: dateStr,
+          });
           if (row.tx_hash) committedHashes.add(row.tx_hash);
           await client.query(
             `UPDATE import_staging_rows SET status = 'committed' WHERE id = $1`,
@@ -200,6 +218,7 @@ export async function commitBatch({ batchId, onProgress }) {
     imported += chunkImported;
     duplicates += chunkDuplicates;
     errors += chunkErrors;
+    insertedRows.push(...chunkInserted);
     seen += chunk.length;
 
     // Checkpoint counters per chunk so a crash mid-import leaves recoverable
@@ -232,5 +251,20 @@ export async function commitBatch({ batchId, onProgress }) {
     }
   }
 
-  return { imported, duplicates, errors };
+  // Auto-clear matching planned payments for the just-imported transactions.
+  // Runs after commit (rows are durable) and never fails the import.
+  let autoLinkedCount = 0;
+  if (insertedRows.length > 0) {
+    try {
+      const auto = await autoLinkTransactions(insertedRows);
+      autoLinkedCount = auto.autoLinkedCount;
+      if (autoLinkedCount > 0) {
+        logger.info('[pipeline:commit] auto-linked planned payments', { batchId, autoLinkedCount });
+      }
+    } catch (err) {
+      logger.warn('[pipeline:commit] planned auto-link failed', { batchId, error: err?.message });
+    }
+  }
+
+  return { imported, duplicates, errors, autoLinkedCount };
 }

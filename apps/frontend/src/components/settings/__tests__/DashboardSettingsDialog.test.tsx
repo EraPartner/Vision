@@ -6,8 +6,6 @@ import { renderWithApp } from "@/test/renderWithApp";
 import { server } from "@/test/msw/server";
 import { DashboardSettingsDialog } from "@/components/settings/DashboardSettingsDialog";
 
-const API_BASE = "http://localhost:3002";
-
 beforeEach(() => {
     server.resetHandlers();
 });
@@ -26,107 +24,53 @@ function renderDialog(open = true, defaultTab = "general") {
 
 describe("DashboardSettingsDialog", () => {
     it("renders dialog when open=true", async () => {
-        // Arrange + Act
         renderDialog(true);
-
-        // Assert
         expect(await screen.findByRole("dialog")).toBeInTheDocument();
     });
 
     it("does not render dialog when open=false", () => {
-        // Arrange + Act
         renderDialog(false);
-
-        // Assert
         expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
     });
 
-    it("shows all 5 tabs", async () => {
-        // Arrange + Act
+    it("shows the sidebar nav sections", async () => {
         renderDialog(true);
-
-        // Assert — wait for dialog to appear first
         await screen.findByRole("dialog");
-        expect(await screen.findByRole("tab", { name: /^general$/i })).toBeInTheDocument();
-        expect(await screen.findByRole("tab", { name: /^appearance$/i })).toBeInTheDocument();
-        expect(await screen.findByRole("tab", { name: /^dashboard$/i })).toBeInTheDocument();
-        expect(await screen.findByRole("tab", { name: /^app$/i })).toBeInTheDocument();
-        expect(await screen.findByRole("tab", { name: /^backup$/i })).toBeInTheDocument();
+
+        for (const name of [/^general$/i, /^appearance$/i, /^statistics$/i, /^behavior$/i, /AI & Research/i, /^backup$/i, /About & Maintenance/i]) {
+            expect(await screen.findByRole("button", { name })).toBeInTheDocument();
+        }
     });
 
-    it("switching to Appearance tab shows appearance content", async () => {
-        // Arrange
+    it("switching to Appearance shows appearance content", async () => {
         const user = userEvent.setup();
         renderDialog(true, "general");
         await screen.findByRole("dialog");
 
-        // Act
-        const appearanceTab = await screen.findByRole("tab", { name: /^appearance$/i });
-        await user.click(appearanceTab);
+        await user.click(await screen.findByRole("button", { name: /^appearance$/i }));
 
-        // Assert — Appearance tab shows theme variant content (unique to this tab)
         expect(await screen.findByText(/theme variant/i)).toBeInTheDocument();
     });
 
-    it("switching to Dashboard tab shows exclusion filters content", async () => {
-        // Arrange
+    it("switching to Statistics shows exclusion content", async () => {
         const user = userEvent.setup();
         renderDialog(true, "general");
         await screen.findByRole("dialog");
 
-        // Act
-        const dashboardTab = await screen.findByRole("tab", { name: /^dashboard$/i });
-        await user.click(dashboardTab);
+        await user.click(await screen.findByRole("button", { name: /^statistics$/i }));
 
-        // Assert — Dashboard tab renders exclusion settings section
-        expect(await screen.findByText(/exclusion settings/i)).toBeInTheDocument();
+        expect(await screen.findAllByText(/exclusion scope/i)).not.toHaveLength(0);
     });
 
-    it("Save button closes dialog and shows success toast", async () => {
-        // Arrange
+    it("Done button closes the dialog", async () => {
         const user = userEvent.setup();
         const { onOpenChange } = renderDialog(true);
         await screen.findByRole("dialog");
 
-        // Act
-        const saveBtn = await screen.findByRole("button", { name: /save changes/i });
-        await user.click(saveBtn);
+        await user.click(await screen.findByRole("button", { name: /^done$/i }));
 
-        // Assert
-        await waitFor(() => {
-            expect(onOpenChange).toHaveBeenCalledWith(false);
-        });
+        await waitFor(() => expect(onOpenChange).toHaveBeenCalledWith(false));
     });
-
-    it("Cancel button closes dialog", async () => {
-        // Arrange
-        const user = userEvent.setup();
-        const { onOpenChange } = renderDialog(true);
-        await screen.findByRole("dialog");
-
-        // Act
-        const cancelBtn = await screen.findByRole("button", { name: /cancel/i });
-        await user.click(cancelBtn);
-
-        // Assert
-        await waitFor(() => {
-            expect(onOpenChange).toHaveBeenCalledWith(false);
-        });
-    });
-
-    it("defaultTab prop controls initial tab", async () => {
-        // Arrange + Act — render with appearance as default
-        renderDialog(true, "appearance");
-        await screen.findByRole("dialog");
-
-        // Assert — Appearance content is immediately visible (unique to Appearance tab)
-        expect(await screen.findByText(/theme variant/i)).toBeInTheDocument();
-        // Appearance tab trigger should be selected
-        const appearanceTab = await screen.findByRole("tab", { name: /^appearance$/i });
-        expect(appearanceTab).toHaveAttribute("data-state", "active");
-    });
-
-    // ─── Edge cases ────────────────────────────────────────────────────────
 
     it("Escape key calls onOpenChange(false)", async () => {
         const user = userEvent.setup();
@@ -136,16 +80,36 @@ describe("DashboardSettingsDialog", () => {
         await waitFor(() => expect(onOpenChange).toHaveBeenCalledWith(false));
     });
 
+    it("defaultTab=appearance opens on the Appearance section", async () => {
+        renderDialog(true, "appearance");
+        await screen.findByRole("dialog");
+
+        expect(await screen.findByText(/theme variant/i)).toBeInTheDocument();
+        const navBtn = await screen.findByRole("button", { name: /^appearance$/i });
+        expect(navBtn).toHaveAttribute("aria-current", "page");
+    });
+
+    it("legacy 'dashboard' deep-link maps to the Statistics section", async () => {
+        renderDialog(true, "dashboard");
+        await screen.findByRole("dialog");
+
+        const navBtn = await screen.findByRole("button", { name: /^statistics$/i });
+        expect(navBtn).toHaveAttribute("aria-current", "page");
+        expect(await screen.findAllByText(/exclusion scope/i)).not.toHaveLength(0);
+    });
+
+    it("legacy 'app' deep-link maps to the About section", async () => {
+        renderDialog(true, "app");
+        await screen.findByRole("dialog");
+
+        const navBtn = await screen.findByRole("button", { name: /About & Maintenance/i });
+        expect(navBtn).toHaveAttribute("aria-current", "page");
+        expect(await screen.findByText(/reset all settings/i)).toBeInTheDocument();
+    });
+
     it("dialog renders in open state (a11y / backdrop guard)", async () => {
         renderDialog(true);
         const dialog = await screen.findByRole("dialog");
         expect(dialog).toHaveAttribute("data-state", "open");
-    });
-
-    it("first focusable element exists for Tab navigation (keyboard nav)", async () => {
-        renderDialog(true);
-        await screen.findByRole("dialog");
-        const focusables = screen.getAllByRole("button");
-        expect(focusables.length).toBeGreaterThan(0);
     });
 });

@@ -98,48 +98,24 @@ describe('Info Routes', () => {
     expect(routeHandlers['post:/inflation-rates/refresh']).toBeTypeOf('function');
   });
 
-  describe('GET /', () => {
-    it('should return statistics', async () => {
-      infoRepository.getStatistics.mockResolvedValue({
-        total_transactions: 5, categories: [{ name: 'FOOD', count: 3 }],
-      });
-
+  describe('GET /supported-adapters', () => {
+    it('serves the registry-derived adapter list (no hardcoded drift)', async () => {
       const req = { query: {} };
       const res = mockResponse();
-      await routeHandlers['get:/'](req, res);
+      await routeHandlers['get:/supported-adapters'](req, res);
+      const { data } = res.json.mock.calls[0][0];
 
-      expect(res.json.mock.calls[0][0].data.total_transactions).toBe(5);
-      expect(infoRepository.getStatistics).toHaveBeenCalledWith('EUR');
-    });
-
-    it('should pass selected currency to repository', async () => {
-      infoRepository.getStatistics.mockResolvedValue({ total_transactions: 0, categories: [] });
-
-      const req = { query: { currency: 'HUF' } };
-      const res = mockResponse();
-      await routeHandlers['get:/'](req, res);
-
-      expect(infoRepository.getStatistics).toHaveBeenCalledWith('HUF');
-    });
-
-    it('should return empty for empty database', async () => {
-      infoRepository.getStatistics.mockResolvedValue({ total_transactions: 0, categories: [] });
-
-      const req = { query: {} };
-      const res = mockResponse();
-      await routeHandlers['get:/'](req, res);
-
-      expect(res.json.mock.calls[0][0].data.total_transactions).toBe(0);
-    });
-
-    it('should handle database errors', async () => {
-      infoRepository.getStatistics.mockRejectedValue(new Error('DB error'));
-
-      const req = { query: {} };
-      const res = mockResponse();
-      await callHandler(routeHandlers['get:/'], req, res);
-
-      expect(res.status).toHaveBeenCalledWith(500);
+      // Registry-derived: one entry per non-generic adapter, keyed by name with
+      // the adapter's bankName label. Adding an adapter exposes it automatically.
+      const keys = data.adapters.map((a) => a.key);
+      expect(keys).toContain('bnp');
+      expect(keys).toContain('wise');
+      expect(keys).not.toContain('generic');
+      expect(data.total_count).toBe(data.adapters.length);
+      // bankName label, not a hardcoded display string / nonexistent class name.
+      const bnp = data.adapters.find((a) => a.key === 'bnp');
+      expect(bnp.name).toBe('BNP Paribas Fortis');
+      expect(bnp.adapter_class).toBeUndefined();
     });
   });
 
@@ -202,55 +178,6 @@ describe('Info Routes', () => {
       const req = { query: {} };
       const res = mockResponse();
       await callHandler(routeHandlers['get:/transaction-count'], req, res);
-
-      expect(res.status).toHaveBeenCalledWith(500);
-    });
-  });
-
-  describe('GET /transaction-summary', () => {
-    it('should return summary', async () => {
-      infoRepository.getTransactionSummary.mockResolvedValue({ total: 100 });
-
-      const req = { query: {} };
-      const res = mockResponse();
-      await routeHandlers['get:/transaction-summary'](req, res);
-
-      expect(res.json).toHaveBeenCalled();
-    });
-
-    it('should pass filters', async () => {
-      infoRepository.getTransactionSummary.mockResolvedValue({ total: 50 });
-
-      const req = { query: { bank_account: 'Chase', start_date: '2026-01-01', end_date: '2026-12-31' } };
-      const res = mockResponse();
-      await routeHandlers['get:/transaction-summary'](req, res);
-
-      expect(infoRepository.getTransactionSummary).toHaveBeenCalledWith({
-        bankAccount: 'Chase', startDate: '2026-01-01', endDate: '2026-12-31', targetCurrency: 'EUR',
-      });
-    });
-
-    it('should pass selected currency for transaction summary', async () => {
-      infoRepository.getTransactionSummary.mockResolvedValue({ total: 50 });
-
-      const req = { query: { currency: 'AED', bank_account: 'Revolut' } };
-      const res = mockResponse();
-      await routeHandlers['get:/transaction-summary'](req, res);
-
-      expect(infoRepository.getTransactionSummary).toHaveBeenCalledWith({
-        bankAccount: 'Revolut',
-        startDate: null,
-        endDate: null,
-        targetCurrency: 'AED',
-      });
-    });
-
-    it('should handle errors', async () => {
-      infoRepository.getTransactionSummary.mockRejectedValue(new Error('DB error'));
-
-      const req = { query: {} };
-      const res = mockResponse();
-      await callHandler(routeHandlers['get:/transaction-summary'], req, res);
 
       expect(res.status).toHaveBeenCalledWith(500);
     });

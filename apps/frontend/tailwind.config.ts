@@ -153,6 +153,20 @@ export default {
                     "0%": { backgroundPosition: "-200% 0" },
                     "100%": { backgroundPosition: "200% 0" },
                 },
+                // Dialog enter/exit. Centering lives on the standalone CSS
+                // `translate` property (Tailwind v4), so `transform` is free
+                // to animate without disturbing position.
+                "dialog-in": {
+                    from: { opacity: "0", transform: "scale(0.95) translateY(12px)" },
+                    to: { opacity: "1", transform: "scale(1) translateY(0)" },
+                },
+                // Exit reads per-element genie vars (lib/dialogGenie.ts) so a
+                // pointer-opened dialog shrinks toward its trigger; the
+                // fallbacks reproduce the neutral fade-down for keyboard opens.
+                "dialog-out": {
+                    from: { opacity: "1", transform: "scale(1) translateY(0)" },
+                    to: { opacity: "0", transform: "scale(var(--genie-scale, 0.97)) translateY(var(--genie-y, 6px))" },
+                },
             },
             animation: {
                 "accordion-down": "accordion-down 0.2s ease-out",
@@ -161,6 +175,9 @@ export default {
                 "fade-in": "fade-in 260ms var(--ease-out-expo) both",
                 "scale-in": "scale-in 260ms var(--ease-out-expo) both",
                 shimmer: "shimmer 2.4s linear infinite",
+                // Overshooting bezier gives the spring feel without JS.
+                "dialog-in": "dialog-in 420ms cubic-bezier(0.34, 1.45, 0.64, 1) both",
+                "dialog-out": "dialog-out 200ms var(--ease-out-quint) both",
             },
         },
     },

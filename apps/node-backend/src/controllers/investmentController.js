@@ -18,6 +18,28 @@ import { logger } from '../config/logger.js';
 import { getKinesisAssetConfig } from '../config/kinesisConfig.js';
 import { NotFoundError, ValidationError } from '../middleware/errorHandler.js';
 import { invalidatePortfolioCaches } from '../routes/info/_cache.js';
+import { assertPublicHttpUrl } from '../lib/urlSafety.js';
+import { autoResolveFxRateToEur } from '../services/portfolio/fxResolve.js';
+import { createTradeCashLeg, deleteTradeCashLegs } from '../services/portfolio/tradeCashLegService.js';
+import { moveHolding as moveHoldingSvc } from '../services/portfolio/moveHoldingService.js';
+
+// Custom price-provider URLs are fetched server-side at refresh time, so reject
+// non-public targets at the write boundary too (SSRF defense-in-depth). DNS is
+// not resolved here — that would couple investment writes to DNS availability;
+// the full DNS-resolved check runs at fetch time in priceProviderRegistry.
+const PROVIDER_URL_FIELDS = ['price_provider_url', 'price_provider_latest_url', 'price_provider_history_url'];
+
+async function validateProviderUrls(body) {
+  for (const field of PROVIDER_URL_FIELDS) {
+    const value = body?.[field];
+    if (value === undefined || value === null || value === '') continue;
+    try {
+      await assertPublicHttpUrl(value, { resolveDns: false });
+    } catch (err) {
+      throw new ValidationError(`Invalid ${field}: ${err.message}`);
+    }
+  }
+}
 
 // ── In-memory response caches ────────────────────────────────────────────────
 
@@ -208,6 +230,8 @@ export async function createInvestment(req, res) {
     throw new ValidationError('name and asset_class are required');
   }
 
+  await validateProviderUrls(req.body);
+
   let inv;
   try {
     inv = await investmentRepository.create({
@@ -333,6 +357,8 @@ export async function getInvestment(req, res) {
 }
 
 export async function updateInvestment(req, res) {
+  await validateProviderUrls(req.body);
+
   let inv;
   try {
     inv = await investmentRepository.update(parseRequestId(req), req.body);
@@ -371,30 +397,68 @@ export async function createTransaction(req, res) {
   const {
     type, date, amount, units, price_per_unit, fees, taxes,
     currency, note, is_recurring, recurrence_interval,
-    recurrence_end_date, fx_rate_to_eur,
+    recurrence_end_date, account_id, cash_account_id,
   } = req.body;
+  let { fx_rate_to_eur } = req.body;
 
   if (!type || !date) {
     throw new ValidationError('type and date are required');
+  }
+
+  const effectiveCurrency = currency || inv.currency;
+  if (fx_rate_to_eur === undefined || fx_rate_to_eur === null) {
+    fx_rate_to_eur = await autoResolveFxRateToEur(effectiveCurrency, date);
   }
 
   let txn;
   try {
     txn = await portfolioTransactionRepository.create({
       investment_id, type, date, amount, units, price_per_unit, fees, taxes,
-      currency: currency || inv.currency, note, is_recurring,
+      currency: effectiveCurrency, note, is_recurring,
       recurrence_interval, recurrence_end_date, fx_rate_to_eur,
+      account_id: account_id != null ? Number(account_id) : undefined,
       preloaded_asset_class: inv.asset_class,
     });
   } catch (err) {
     translateRepoError(err);
   }
+
+  // Trades = transfers (ADR-090): when a cash account is designated, post the
+  // paired cash leg on its sleeve. NOTE: not yet in one DB transaction with the
+  // trade insert — a leg failure leaves the trade without its leg (follow-up:
+  // thread a shared client through the repo create path).
+  if (txn && cash_account_id != null) {
+    try {
+      await createTradeCashLeg({ portfolioTxn: txn, cashAccountId: Number(cash_account_id) });
+    } catch (err) {
+      logger.error('Trade cash-leg creation failed', { txnId: txn.id, error: err.message });
+      throw err;
+    }
+  }
+
   clearInvestmentsCaches();
   refreshQuotesForInvestment(investment_id).catch((err) => {
     logger.error('Transaction-triggered quote refresh failed', { investmentId: investment_id, error: err.message });
   });
   res.status(201);
   res.ok(txn);
+}
+
+export async function moveHolding(req, res) {
+  const investmentId = parseRequestId(req);
+  const inv = await investmentRepository.getById(investmentId);
+  if (!inv) throw new NotFoundError('Investment not found');
+
+  const { from_account_id, to_account_id, units, strategy } = req.body || {};
+  const result = await moveHoldingSvc({
+    investmentId,
+    fromAccountId: from_account_id != null ? Number(from_account_id) : NaN,
+    toAccountId: to_account_id != null ? Number(to_account_id) : NaN,
+    units: units != null ? Number(units) : null,
+    strategy: strategy === 'fifo' || strategy === 'proportional' ? strategy : undefined,
+  });
+  clearInvestmentsCaches();
+  res.ok(result);
 }
 
 export async function deleteTransaction(req, res) {
@@ -406,6 +470,12 @@ export async function deleteTransaction(req, res) {
   const ok = await portfolioTransactionRepository.hardDelete(txnId);
   if (!ok) throw new NotFoundError('Portfolio transaction not found');
 
+  // App-side cascade for the trade cash leg (ADR-090): portfolio_transaction_id is not a FK
+  // (inheritance/view schema), so remove any linked cash legs here.
+  await deleteTradeCashLegs(txnId).catch((err) => {
+    logger.error('Trade cash-leg cleanup failed', { txnId, error: err.message });
+  });
+
   clearInvestmentsCaches();
   refreshQuotesForInvestment(existingTxn.investment_id).catch((err) => {
     logger.error('Transaction-triggered quote refresh failed', { investmentId: existingTxn.investment_id, error: err.message });
@@ -415,10 +485,26 @@ export async function deleteTransaction(req, res) {
 
 export async function updateTransaction(req, res) {
   const txnId = requireTxnId(req);
+  const fields = { ...(req.body || {}) };
+
+  // A date or currency change invalidates the stamped FX rate — recompute it
+  // unless the client supplied one explicitly.
+  if (
+    fields.fx_rate_to_eur === undefined
+    && (fields.date !== undefined || fields.currency !== undefined)
+  ) {
+    const existing = await portfolioTransactionRepository.getById(txnId);
+    if (existing) {
+      const effCurrency = fields.currency ?? existing.currency;
+      const effDate = fields.date ?? existing.date;
+      const rate = await autoResolveFxRateToEur(effCurrency, effDate);
+      if (rate !== undefined) fields.fx_rate_to_eur = rate;
+    }
+  }
 
   let txn;
   try {
-    txn = await portfolioTransactionRepository.update(txnId, req.body || {});
+    txn = await portfolioTransactionRepository.update(txnId, fields);
   } catch (err) {
     translateRepoError(err);
   }

@@ -52,6 +52,30 @@ export async function deleteInvestment(id: number): Promise<void> {
     await apiRequest<void>(`/api/investments/${id}`, { method: 'DELETE' });
 }
 
+export type MoveHoldingStrategy = 'fifo' | 'proportional';
+
+export interface MoveHoldingResult {
+    investmentId: number;
+    from: number;
+    to: number;
+    mode: 'whole' | 'partial';
+    strategy: MoveHoldingStrategy;
+    movedUnits: number;
+    lotsMoved: number;
+    lotsSplit: number;
+}
+
+/** Move a holding's lots between accounts (in-specie, cost-basis-preserving). Omit units for a whole move. */
+export function moveHolding(
+    investmentId: number,
+    body: { from_account_id: number; to_account_id: number; units?: number | null; strategy?: MoveHoldingStrategy },
+): Promise<MoveHoldingResult> {
+    return apiRequest<MoveHoldingResult>(`/api/investments/${investmentId}/move`, {
+        method: 'POST',
+        body: JSON.stringify(body),
+    });
+}
+
 export function getInvestmentPriceHistory(
     investmentId: number,
     params?: { from_ms?: number; to_ms?: number; db_only?: boolean },

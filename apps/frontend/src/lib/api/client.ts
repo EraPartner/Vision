@@ -19,6 +19,7 @@ import {
 import { env } from '@/lib/env';
 import logger from '@/lib/logger';
 import { apiEventBus } from '@/lib/devtools/apiEventBus';
+import { getAdminToken } from '@/lib/adminToken';
 
 export const API_BASE_URL = env.VITE_API_URL || 'http://localhost:3002';
 
@@ -260,9 +261,15 @@ export async function apiRequest<T>(
     retries: number = MAX_RETRIES,
 ): Promise<T> {
     const requestId = generateRequestId();
+    // Attach the admin Bearer token only when one is stored. With no token the
+    // header is omitted and the backend's loopback/private-network allowlist
+    // applies — identical to prior behaviour. The backend ignores the header on
+    // non-admin routes, so attaching it globally is safe.
+    const adminToken = getAdminToken();
     const headers: HeadersInit = {
         'Content-Type': 'application/json',
         'X-Request-Id': requestId,
+        ...(adminToken ? { Authorization: `Bearer ${adminToken}` } : {}),
         ...options.headers,
     };
 

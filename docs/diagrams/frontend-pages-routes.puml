@@ -72,12 +72,6 @@ package "Budgeting Pages" {
     +Owes detail
     +Tag breakdown
   }
-
-  class AIChatPage <<ADR-024>> {
-    +Local Ollama chat
-    +Tool-augmented result cards
-    +Conversation history
-  }
 }
 
 package "Portfolio Pages" {
@@ -85,11 +79,6 @@ package "Portfolio Pages" {
     +Asset Allocation
     +Total Value
     +Performance Summary
-  }
-
-  class MarketLookupPage {
-    +Search
-    +Price Display
   }
 
   class StocksPage {
@@ -124,26 +113,89 @@ package "Portfolio Pages" {
     +Benchmark Comparison
   }
 
-  class NetWorthPage {
+  class NetWorthPage <<ADR-093, ADR-100>> {
     +Net Worth Chart
     +Assets vs Liabilities
     +Time Series
-  }
-
-  class ExchangeRatesPage {
-    +Current Rates
-    +Historical Chart
-  }
-
-  class WatchlistPage {
-    +Watchlist Items
-    +Price Alerts
+    +By Account Table (cash + holdings + total per in_net_worth account)
   }
 
   class PortfolioTaxPage {
     +Tax Lots
     +Capital Gains
     +Withholding Tax
+  }
+
+  class PortfolioImportPage <<ADR-078, ADR-091>> {
+    +Column Mapper (PortfolioCsvColumnMapper)
+    +File Upload + Saved Parser Picker
+    +SSE Progress
+    +FileHeadersPanel preview
+    +Brokerage Account Picker (account_id for committed lots)
+  }
+
+  class PortfolioImportReviewPage <<ADR-078>> {
+    +Groups by investment (unresolved/resolved)
+    +InvestmentCombobox per unresolved group
+    +Commit / abort batch
+  }
+}
+
+package "Research Pages (ADR-079)" {
+  class ResearchHomePage {
+    +Aggregated Provider Data
+    +Quick Symbol Search
+    +Market Snapshot Strip
+    +Six-Tool Entry Grid
+    +Live Watchlist Tiles
+    +Market News Feed
+  }
+
+  class MarketLookupPage {
+    +Search
+    +Quote Header (price, actions)
+    +Price Chart + Volume
+    +Tabbed Details (Fundamentals/Analyst/News)
+    +Trading Info Card
+    +Map-provider Dialog
+    +deep-link: ?symbol= query param
+  }
+
+  class WatchlistPage <<ADR-097>> {
+    +Watchlist Items
+    +Price Alerts
+    +"Since added +X%" backtest label (added_price, migration 0058)
+  }
+
+  class ResearchComparePage {
+    +Multi-symbol Compare
+    +Performance Tab
+    +Fundamentals Tab
+  }
+
+  class ChartBuilderPage <<ADR-081, ADR-082>> {
+    +Multi-symbol Overlay
+    +Dual-axis / Candlesticks
+    +SMA/EMA/Bollinger/RSI/MACD
+    +localStorage Layout Persistence
+    +Unified search: Markets + Economic data groups
+    +Macro series support (provider-pinned, ADR-082)
+  }
+
+  class PortfolioForecastPage <<ADR-081>> {
+    +Monte Carlo Projection
+    +Confidence Bands P10-P90
+    +Horizon / Blend / Model Controls
+  }
+
+  class MarketOverviewPage {
+    +Region Axis (Worldwide/USA/Europe/China·Asia)
+    +Sector Axis (Overview + 10 sectors)
+    +Overview mode: Indices + Top Stocks grids
+    +Sector mode: region-filtered basket grid
+    +Empty-state when combo has no symbols
+    +Heat-map tiles (changePercent, em-dash fallback)
+    +60s poll via GET /api/market/quote (detail=basic)
   }
 }
 
@@ -164,6 +216,17 @@ package "Admin Pages (Workspace-Agnostic)" {
   class DbMaintenancePage {
     +Table Stats
     +VACUUM Operations
+    +Table list (double-click → TableDataEditorPage)
+  }
+
+  class TableDataEditorPage <<ADR-101>> {
+    +Column grid (ui/table primitives)
+    +Click-to-edit cells; NULL toggle; boolean checkboxes
+    +Per-column filters + raw WHERE box
+    +Sort / paginate (paused while dirty)
+    +Add row / mark-delete affordances
+    +SQL Preview dialog (dry-run)
+    +Commit (all-or-nothing batch)
   }
 
   class ProviderHealthPage {
@@ -174,6 +237,19 @@ package "Admin Pages (Workspace-Agnostic)" {
   class EndpointLivenessPage {
     +Route Liveness Matrix
     +Rolling Metrics
+  }
+
+  class ExchangeRatesPage {
+    +Current Rates
+    +Historical Chart
+  }
+}
+
+package "Workspace-Agnostic Pages" {
+  class AIChatPage <<ADR-024>> {
+    +Local Ollama chat
+    +Tool-augmented result cards
+    +Conversation history
   }
 }
 
@@ -202,14 +278,13 @@ AppLayout --> RecipientsPage : "/recipients"
 AppLayout --> PlannedPaymentsPage : "/planned"
 AppLayout --> StatisticsPage : "/statistics"
 AppLayout --> ImportPage : "/import"
-ImportPage --> ImportReviewPage : "/import/review/:batchId"
+ImportPage --> ImportReviewPage : "/import/:batchId/review"
 AppLayout --> OwesPage : "/owes"
 AppLayout --> TaxOverviewPage : "/tax"
 AppLayout --> AIChatPage : "/ai-chat"
 RecipientsPage --> RecipientInsightsPage : "/recipients/:id/insights"
 
 AppLayout --> PortfolioOverviewPage : "/portfolio"
-PortfolioOverviewPage --> MarketLookupPage : "/portfolio/market"
 PortfolioOverviewPage --> StocksPage : "/portfolio/stocks"
 PortfolioOverviewPage --> CryptoPage : "/portfolio/crypto"
 PortfolioOverviewPage --> MetalsPage : "/portfolio/metals"
@@ -217,28 +292,46 @@ PortfolioOverviewPage --> RealEstatePage : "/portfolio/real-estate"
 PortfolioOverviewPage --> SavingsPage : "/portfolio/savings"
 PortfolioOverviewPage --> PerformancePage : "/portfolio/performance"
 PortfolioOverviewPage --> NetWorthPage : "/portfolio/net-worth"
-PortfolioOverviewPage --> ExchangeRatesPage : "/portfolio/exchange-rates"
-PortfolioOverviewPage --> WatchlistPage : "/portfolio/watchlist"
 PortfolioOverviewPage --> PortfolioTaxPage : "/portfolio/tax"
+PortfolioOverviewPage --> PortfolioImportPage : "/portfolio/import"
+PortfolioImportPage --> PortfolioImportReviewPage : "/portfolio/import/:batchId/review"
+
+AppLayout --> ResearchHomePage : "/research"
+ResearchHomePage --> MarketLookupPage : "/research/market"
+ResearchHomePage --> WatchlistPage : "/research/watchlist"
+ResearchHomePage --> ResearchComparePage : "/research/compare"
+ResearchHomePage --> ChartBuilderPage : "/research/charts"
+ResearchHomePage --> PortfolioForecastPage : "/research/forecast"
+ResearchHomePage --> MarketOverviewPage : "/research/markets"
 
 AppLayout --> AdminOverviewPage : "/admin"
 AdminOverviewPage --> DbMaintenancePage : "/admin/db"
+DbMaintenancePage --> TableDataEditorPage : "/admin/db/:table"
 AdminOverviewPage --> ProviderHealthPage : "/admin/providers"
 AdminOverviewPage --> EndpointLivenessPage : "/admin/endpoints"
+AdminOverviewPage --> ExchangeRatesPage : "/admin/exchange-rates"
 
-note right of TaxOverviewPage
-  Not lazy-loaded
-  Imported directly
-end note
-
-note right of PortfolioTaxPage
-  Not lazy-loaded
-  Imported directly
-end note
+AppLayout --> NotFound : "*"
 
 note right of AdminOverviewPage
   Workspace-agnostic routes
   Preserve last active workspace
+end note
+
+note bottom of ResearchHomePage
+  Market Lookup & Watchlist moved here from
+  Portfolio (ADR-079). Legacy /portfolio/market
+  and /portfolio/watchlist redirect here;
+  /portfolio/exchange-rates redirects to
+  /admin/exchange-rates.
+  7 active routes: /research, /research/market,
+  /research/watchlist, /research/compare,
+  /research/charts, /research/forecast,
+  /research/markets.
+  /research/symbol/:symbol is a redirect-only
+  route (RedirectSymbolToMarket in App.tsx)
+  that forwards to /research/market?symbol=.
+  ResearchSymbolPage retired 2026-06-17.
 end note
 
 @enduml

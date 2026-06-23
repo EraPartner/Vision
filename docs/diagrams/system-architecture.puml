@@ -130,7 +130,9 @@ cloud "External Services" as External {
   node "Yahoo Finance (stocks)" as Yahoo
   node "Kinesis (metals)" as Kinesis
   node "Statbel (inflation)" as Statbel
-  node "Eurostat HICP (inflation fallback)" as Eurostat
+  node "Eurostat HICP (inflation fallback + macro, ADR-082)" as Eurostat
+  node "FRED / St. Louis Fed (macro series, ADR-082)" as FRED
+  node "DBnomics (ECB/OECD/IMF macro, keyless, ADR-082)" as DBnomics
   node "Local Ollama (LLM, 127.0.0.1:11434)" as Ollama
 }
 
@@ -175,6 +177,9 @@ note right of External
   - Price providers run in parallel (Promise.allSettled)
     with AbortSignal.timeout(8s)
   - Inflation: Statbel primary, Eurostat HICP fallback
+  - Macro (ADR-082): FRED (keyed), Eurostat (keyless),
+    DBnomics (keyless) — provider-pinned, in-memory cache,
+    never persisted to asset_price_history
   - Ollama is local-only (privacy non-negotiable)
 end note
 
