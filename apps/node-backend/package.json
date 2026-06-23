@@ -30,8 +30,8 @@
     "decimal.js": "^10.4.3",
     "express": "^5.2.1",
     "multer": "^2.2.0",
-    "pg": "^8.13.0",
-    "puppeteer": "^25.0.2",
+    "pg": "^8.21.0",
+    "puppeteer": "^25.0.4",
     "yahoo-finance2": "^3.14.0",
     "zod": "^4.4.3"
   }
