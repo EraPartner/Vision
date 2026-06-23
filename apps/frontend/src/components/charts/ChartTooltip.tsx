@@ -107,6 +107,12 @@ export function ChartTooltip({
         if (open) setPos((p) => (p.ready ? { ...p, ready: false } : p));
     }, [open]);
 
+    // Intentionally no dependency array: measure-after-render. The tooltip's
+    // size depends on its rendered content, so the reposition must run after
+    // EVERY render; the 0.5px delta guard below prevents the set-state loop
+    // the exhaustive-deps rule warns about. Pinning the suggested deps would
+    // skip repositioning when only the content (items/title) changes.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
     useLayoutEffect(() => {
         if (!open) return;
         const tip = tooltipRef.current;

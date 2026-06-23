@@ -45,11 +45,22 @@ function toMonthKey(d) {
 }
 
 /**
- * @param {string} isoDateStr  e.g. '2026-05-15'
+ * @param {string|Date} value  e.g. '2026-05-15', or a pg-returned DATE column
  * @returns {Date} UTC Date for start-of-day in APP_TIMEZONE
  */
-function parseDate(isoDateStr) {
-  return appDateStringToUtc(String(isoDateStr).slice(0, 10));
+function parseDate(value) {
+  // node-postgres parses DATE columns into a JS Date at server-local midnight
+  // (no custom type parser is registered). `String(date)` then yields e.g.
+  // 'Mon Jun 08 ...', which appDateStringToUtc rejects — crashing the forecast
+  // whenever a planned transaction exists. Recover the stored calendar day with
+  // local getters before re-parsing in APP_TIMEZONE.
+  if (value instanceof Date) {
+    const y = value.getFullYear();
+    const m = String(value.getMonth() + 1).padStart(2, '0');
+    const d = String(value.getDate()).padStart(2, '0');
+    return appDateStringToUtc(`${y}-${m}-${d}`);
+  }
+  return appDateStringToUtc(String(value).slice(0, 10));
 }
 
 /**

@@ -300,6 +300,32 @@ describe('ensemble', () => {
     expect(w.get('ewma')).toBeGreaterThan(w.get('simple_avg'));
   });
 
+  it('computeWeights (v2) trusts a low-RMSE method less when it has few backtest samples', () => {
+    const ids = ['a', 'b'];
+    const fewSamples = ensemble.computeWeights(
+      [{ methodId: 'a', rmse: 1, sampleDays: 2 }, { methodId: 'b', rmse: 3, sampleDays: 300 }],
+      ids,
+    );
+    const manySamples = ensemble.computeWeights(
+      [{ methodId: 'a', rmse: 1, sampleDays: 300 }, { methodId: 'b', rmse: 3, sampleDays: 300 }],
+      ids,
+    );
+    // 'a' has the better RMSE in both, but with only 2 sample days its low RMSE
+    // is shrunk toward the mean, so it earns less weight than when well-sampled.
+    expect(manySamples.get('a')).toBeGreaterThan(fewSamples.get('a'));
+  });
+
+  it('computeWeights (v2) blends toward uniform so the best method never takes all the weight', () => {
+    const w = ensemble.computeWeights(
+      [{ methodId: 'a', rmse: 0.001, sampleDays: 300 }, { methodId: 'b', rmse: 100, sampleDays: 300 }],
+      ['a', 'b'],
+    );
+    const total = [...w.values()].reduce((s, v) => s + v, 0);
+    expect(total).toBeCloseTo(1, 6);
+    expect(w.get('a')).toBeLessThan(1);   // dominance capped by the uniform floor
+    expect(w.get('b')).toBeGreaterThan(0); // weakest method still contributes
+  });
+
   it('forecast equal-weights all methods when weights map is empty', () => {
     const outputs = makeOutputs(['simple_avg', 'ewma'], [10, 20]);
     const result = ensemble.forecast({ forecastDates: dates, methodOutputs: outputs, weights: new Map() });
@@ -473,14 +499,34 @@ describe('reconcileCategoryForecasts', () => {
     expect(result[1].series[1].value).toBeCloseTo(12); // 6 * 2
   });
 
-  it('uses scale=1 when category sum is zero', () => {
+  it('splits the residual equally when all category magnitudes are zero', () => {
     const refByDate = new Map([['2026-04-26', 5]]);
     const categoryForecasts = [
       { cat: { key: 'a', category_id: null, general: 'G', detail: 'D' }, series: [{ date: '2026-04-26', value: 0 }] },
     ];
     const result = reconcileCategoryForecasts(categoryForecasts, ['2026-04-26'], refByDate);
-    // sum=0 → scale=1 fallback → value stays 0
-    expect(result[0].series[0].value).toBe(0);
+    // totalAbs=0 → split diff (5) equally → the single category absorbs it so Σ===ref.
+    expect(result[0].series[0].value).toBe(5);
+  });
+
+  it('does not explode when mixed-sign categories nearly cancel', () => {
+    // income +3000, expenses −2990 → sum=+10; aggregate reference 200.
+    // Old ref/sum scaling = 20 → +60000 / −59800 (absurd). Additive stays bounded.
+    const refByDate = new Map([['2026-04-26', 200]]);
+    const categoryForecasts = [
+      { cat: { key: 'inc', category_id: 1, general: 'Income', detail: 'Salary' }, series: [{ date: '2026-04-26', value: 3000 }] },
+      { cat: { key: 'exp', category_id: 2, general: 'Food', detail: 'Groceries' }, series: [{ date: '2026-04-26', value: -2990 }] },
+    ];
+
+    const result = reconcileCategoryForecasts(categoryForecasts, ['2026-04-26'], refByDate);
+    const inc = result[0].series[0].value;
+    const exp = result[1].series[0].value;
+
+    expect(inc + exp).toBeCloseTo(200);        // Σ === ref
+    expect(Math.abs(inc - 3000)).toBeLessThanOrEqual(190); // |adjustment| ≤ |diff|
+    expect(Math.abs(exp - (-2990))).toBeLessThanOrEqual(190);
+    expect(inc).toBeGreaterThan(0);            // dominant sign preserved
+    expect(exp).toBeLessThan(0);
   });
 
   it('preserves cat metadata', () => {

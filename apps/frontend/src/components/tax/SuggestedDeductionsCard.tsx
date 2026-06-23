@@ -1,4 +1,4 @@
-import React, { useMemo } from 'react';
+import { useMemo } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { useBelgianTaxProfile, getTaxTable } from '@/contexts/BelgianTaxProfileContext';
@@ -62,11 +62,11 @@ export function SuggestedDeductionsCard() {
         }
 
         // Group insurance
-        if (profile.employeeGroupInsuranceEligible && !(profile.employeeGroupInsuranceContributions > 0)) {
+        if (profile.employeeGroupInsuranceEligible && !((profile.employeeGroupInsuranceContributions ?? 0) > 0)) {
             items.push({ id: 'group.no_amount', title: 'Employee group insurance', desc: t('tax.suggestions.group.noAmount'), estimate: 0 });
-        } else if (!profile.employeeGroupInsuranceEligible && profile.employeeGroupInsuranceContributions > 0) {
-            items.push({ id: 'group.not_marked', title: 'Employee group insurance', desc: t('tax.suggestions.group.notMarked'), estimate: profile.employeeGroupInsuranceContributions * groupInsuranceRate });
-        } else if (!profile.employeeGroupInsuranceEligible && profile.employmentType === 'employee' && !(profile.employeeGroupInsuranceContributions > 0)) {
+        } else if (!profile.employeeGroupInsuranceEligible && (profile.employeeGroupInsuranceContributions ?? 0) > 0) {
+            items.push({ id: 'group.not_marked', title: 'Employee group insurance', desc: t('tax.suggestions.group.notMarked'), estimate: (profile.employeeGroupInsuranceContributions ?? 0) * groupInsuranceRate });
+        } else if (!profile.employeeGroupInsuranceEligible && profile.employmentType === 'employee' && !((profile.employeeGroupInsuranceContributions ?? 0) > 0)) {
             items.push({ id: 'group.suggest', title: 'Employee group insurance', desc: t('tax.suggestions.group.suggest'), estimate: 0 });
         }
 
@@ -93,10 +93,10 @@ export function SuggestedDeductionsCard() {
         }
 
         // Domestic help
-        if (profile.domesticHelpEligible && !(profile.domesticHelpCosts > 0)) {
+        if (profile.domesticHelpEligible && !((profile.domesticHelpCosts ?? 0) > 0)) {
             items.push({ id: 'domestic.no_amount', title: 'Domestic help', desc: t('tax.suggestions.domestic.noAmount'), estimate: 0 });
-        } else if (!profile.domesticHelpEligible && profile.domesticHelpCosts > 0) {
-            const est = domesticHelpRate * profile.domesticHelpCosts;
+        } else if (!profile.domesticHelpEligible && (profile.domesticHelpCosts ?? 0) > 0) {
+            const est = domesticHelpRate * (profile.domesticHelpCosts ?? 0);
             items.push({ id: 'domestic.not_marked', title: 'Domestic help', desc: t('tax.suggestions.domestic.notMarked'), estimate: est });
         }
 
@@ -113,7 +113,7 @@ export function SuggestedDeductionsCard() {
 
     if (!suggestions || suggestions.length === 0) {
         return (
-            <Card>
+            <Card className="glass-regular">
                 <CardHeader>
                     <CardTitle>{t('tax.suggestions.title')}</CardTitle>
                 </CardHeader>
@@ -127,7 +127,7 @@ export function SuggestedDeductionsCard() {
     }
 
     return (
-        <Card>
+        <Card className="glass-regular">
             <CardHeader>
                 <CardTitle>{t('tax.suggestions.title')}</CardTitle>
             </CardHeader>

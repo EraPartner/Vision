@@ -218,10 +218,12 @@ describe("DashboardPage (integration)", () => {
 
     // ─── Edge cases ────────────────────────────────────────────────────────
 
-    it("does not crash when transaction-summary API returns 4xx", async () => {
+    it("does not crash when the monthly-summary API returns 4xx", async () => {
         const errSpy = vi.spyOn(console, "error").mockImplementation(() => {});
+        // (Was transaction-summary, a route Phase 9 deleted and the dashboard
+        // never called. The dashboard's stat cards read monthly-summary.)
         server.use(
-            http.get(`${API_BASE}/api/info/transaction-summary`, () => err(404, "Not found")),
+            http.get(`${API_BASE}/api/aggregations/monthly-summary`, () => err(404, "Not found")),
         );
         const { container } = renderWithApp(<DashboardPage />);
         await new Promise((r) => setTimeout(r, 200));

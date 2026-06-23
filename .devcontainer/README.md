@@ -9,7 +9,7 @@ Docker-in-Docker.
 
 | Component | Where it runs | Port |
 | --- | --- | --- |
-| PostgreSQL 18 | Native (apt) — same major as `docker-compose.yml` | `5432` (in-container only) |
+| PostgreSQL 18 | Native (apt) | `5432` (in-container only) |
 | Backend (bun + Express) | `bun run dev` | `3002` published to `127.0.0.1` |
 | Frontend (Vite) | `bun run dev` | `8080` published to `127.0.0.1` |
 | Alembic migrations | Python venv at `./venv` | — |
@@ -21,17 +21,19 @@ The base image is plain `debian:bookworm-slim`. The container user is
 
 ## How to use — CLI only
 
-This sandbox runs on **Docker Compose** (no devcontainer CLI). Prerequisite:
-Docker Desktop with Compose v2 (`docker compose version`).
+This sandbox runs on **apple/container** (no devcontainer CLI, no Docker).
+Prerequisite: [apple/container](https://github.com/apple/container) installed and
+the system VM started (`container system start`).
 
 A host launcher at `.devcontainer/bin/claude` forwards every invocation into the
-container: it stages a sanitized `~/.claude`, runs an idempotent `docker compose
-up -d --build`, replays the post-create (once) / post-start (every start)
+container: it stages a sanitized `~/.claude`, runs an idempotent
+`container build` + `container run` (reuses an existing container if already
+running), replays the post-create (once) / post-start (every start)
 lifecycle as `dev`, forwards the Claude token from the Keychain, and auto-syncs
 `~/.claude` back to the host on session exit.
 
 The fish function `vision-claude` (in `~/.config/fish/functions/`) walks up from
-`$PWD` to the repo (matching `.devcontainer/compose.yaml`), falls back to
+`$PWD` to the repo (matching `.devcontainer/Dockerfile`), falls back to
 `$VISION_HOME`, then runs that launcher. Use it anywhere:
 
 ```sh
@@ -40,12 +42,17 @@ vision-claude --dangerously-skip-permissions
 
 To drop into a shell instead of Claude:
 ```sh
-docker compose -f .devcontainer/compose.yaml exec -u dev app bash
+container exec -it --user dev vision-dev bash
+```
+
+To force a full rebuild (e.g. after changing the Dockerfile or allowlist):
+```sh
+VISION_REBUILD=1 vision-claude --dangerously-skip-permissions
 ```
 
 ## Browser access from the host
 
-`compose.yaml` publishes `127.0.0.1:8080:8080` and
+The container publishes `127.0.0.1:8080:8080` and
 `127.0.0.1:3002:3002`. Once Claude (or you) runs `bun run dev`
 inside the container, the host can reach:
 
@@ -100,8 +107,8 @@ proxy. ECH (encrypted SNI) destinations fail closed (no SNI → terminated).
 DAC_OVERRIDE, FOWNER, SETUID, SETGID, SETPCAP` (entrypoint iptables/perms/
 Postgres + squid privilege-drops). Add to `runArgs` if new tooling needs more.
 
-**Prereqs / portability:** Docker Desktop VM needs ≥4 GB. **macOS/Docker-Desktop
-only** — the Keychain auth doesn't exist on Linux/Colima/OrbStack; export
+**Prereqs / portability:** The container is allocated 4 GB RAM (`-m 4g`).
+**macOS/apple-container only** — the Keychain auth doesn't exist on Linux; export
 `CLAUDE_CODE_OAUTH_TOKEN` there instead. No git credential or ssh-agent is
 forwarded (see "Git" below), so `~/.ssh` and a `*-gh-token` are no longer needed.
 
@@ -110,10 +117,10 @@ forwarded (see "Git" below), so `~/.ssh` and a `*-gh-token` are no longer needed
 | Source | Container path | Type | Holds |
 | --- | --- | --- | --- |
 | `.devcontainer` (host) | `/workspaces/Vision/.devcontainer` | bind **RO** | Overlay on the rw workspace so the sandbox config + host launcher can't be rewritten from inside (see Safety note) |
-| `vision-claude-<id>` | `/home/dev/.claude` | named volume | Container's writable Claude config — seeded from the sanitized stage on first create |
-| `~/.claude-vision-stage` (host) | `/home/dev/.claude-stage` | bind **RO** | Sanitized staging copy the wrapper produces (secrets + `hooks`/`mcpServers`/`enabledPlugins` stripped). Raw host `~/.claude` is **never** mounted. |
+| `vision-claude` | `/home/dev/.claude` | named volume | Container's writable Claude config — seeded from the sanitized stage on first create |
+| `~/.claude-sandbox/stage/vision` (host) | `/home/dev/.claude-stage` | bind **RO** | Sanitized staging copy the wrapper produces (secrets + `hooks`/`mcpServers`/`enabledPlugins` stripped). Raw host `~/.claude` is **never** mounted. |
 | (container fs) | `/home/dev/.claude.json` | regular file | Container's writable global config, seeded from `…/claude.json` in the stage |
-| `vision-pgdata-<id>` | `/var/lib/postgresql` | named volume | Postgres data dir |
+| `vision-pgdata` | `/var/lib/postgresql` | named volume | Postgres data dir |
 
 The Vision repo is bind-mounted at `/workspaces/Vision`, so edits appear
 on the host immediately. The Claude config is **not** live-shared (that
@@ -146,7 +153,7 @@ removed on one side stay on the other until manually cleaned up.
 ### Auto-pull on container start
 
 The `vision-claude` wrapper re-stages a sanitized copy of host
-`~/.claude` into `~/.claude-vision-stage` on every invocation, and
+`~/.claude` into `~/.claude-sandbox/stage/vision` on every invocation, and
 `post-start.sh` runs `rsync --update` from `/home/dev/.claude-stage` into
 `/home/dev/.claude` on every container start. So host-side config changes
 (new agents, edited rules) are picked up automatically. Note: `hooks`,
@@ -207,7 +214,7 @@ security add-generic-password \
 That's it. The `vision-claude` wrapper now does
 `security find-generic-password -s vision-claude-code-token -w` on every
 invocation and forwards the result to the container via
-`docker compose exec -e CLAUDE_CODE_OAUTH_TOKEN=…`. No plaintext
+`container exec -e CLAUDE_CODE_OAUTH_TOKEN=…`. No plaintext
 file, no fish universal var, no `.credentials.json` in `~/.claude`.
 
 **The Keychain "Always Allow" decision.** The first time `security` reads
@@ -271,8 +278,8 @@ set up.
   run on the host, not in this container.
 - **Changing the egress allowlist** — edit `squid.conf` and rebuild
   (it's baked into the image, not read from the workspace).
-- **Host Ollama via `host.docker.internal`** — blocked; add it to the
-  `squid.conf` allowlist and rebuild if you want it through.
+- **Host Ollama** — blocked; add the host's address to the `squid.conf`
+  allowlist and rebuild if you want it through.
 
 ## Verified isolation + functionality
 
@@ -303,15 +310,14 @@ for trusted repositories.
 **Why `.devcontainer` is mounted read-only.** The repo is bind-mounted
 read-write at `/workspaces/Vision` so the agent can edit source — but that
 same mount would otherwise expose the sandbox's own definition
-(`compose.yaml`, `Dockerfile`) and the **host-side launcher**
+(`Dockerfile`) and the **host-side launcher**
 (`bin/claude`, `bin/doctor`), which run on your **Mac** with your shell and
-Keychain. A compromised in-container agent could add a privileged option or a
-`docker.sock` mount to `compose.yaml`, or just edit `bin/claude`,
-and the next `claude` invocation (which calls `docker compose up` and re-execs
-the launcher) would run it on the host — a trivial full escape. To close that,
-`.devcontainer` is re-mounted **read-only on top of** the read-write workspace,
-so it is immutable from inside. The container cannot lift this: it has
-`cap-drop=ALL` (no `CAP_SYS_ADMIN`, so no remount/unmount), `no-new-privileges`,
-and `.devcontainer` is a busy mountpoint that can't be replaced — the protection
-re-applies on every `docker compose up`. **Edit `.devcontainer` on the host only,**
+Keychain. A compromised in-container agent could edit `bin/claude` or the
+`Dockerfile`, and the next `claude` invocation (which calls `container build`
+and re-execs the launcher) would run it on the host — a trivial full escape.
+To close that, `.devcontainer` is re-mounted **read-only on top of** the
+read-write workspace, so it is immutable from inside. The container cannot lift
+this: it has `cap-drop=ALL` (no `CAP_SYS_ADMIN`, so no remount/unmount), and
+`.devcontainer` is a busy mountpoint that can't be replaced — the protection
+re-applies on every `container run`. **Edit `.devcontainer` on the host only,**
 then rebuild.

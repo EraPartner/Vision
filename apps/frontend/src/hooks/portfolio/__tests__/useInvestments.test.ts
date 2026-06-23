@@ -67,7 +67,7 @@ afterEach(() => vi.restoreAllMocks());
 describe("useInvestmentsQuery", () => {
     it("fetches investments on success", async () => {
         vi.spyOn(apiClient, "getInvestments").mockResolvedValue({
-            items: [INVESTMENT_STUB],
+            items: [INVESTMENT_STUB as never],
             total: 1,
             limit: 500,
             offset: 0,
@@ -210,7 +210,7 @@ describe("usePortfolioTransactionsQuery", () => {
 
 describe("useInvestmentMutations — addInvestment", () => {
     it("calls apiClient.createInvestment with payload", async () => {
-        const spy = vi.spyOn(apiClient, "createInvestment").mockResolvedValue(INVESTMENT_STUB);
+        const spy = vi.spyOn(apiClient, "createInvestment").mockResolvedValue(INVESTMENT_STUB as never);
         const { result } = renderHook(() => useInvestmentMutations(), { wrapper: makeWrapper() });
         await act(async () => {
             await result.current.addInvestment({ name: "Test ETF", asset_class: "etf" });
@@ -231,7 +231,7 @@ describe("useInvestmentMutations — addInvestment", () => {
 
 describe("useInvestmentMutations — updateInvestment", () => {
     it("calls apiClient.updateInvestment with id and payload", async () => {
-        const spy = vi.spyOn(apiClient, "updateInvestment").mockResolvedValue(INVESTMENT_STUB);
+        const spy = vi.spyOn(apiClient, "updateInvestment").mockResolvedValue(INVESTMENT_STUB as never);
         const { result } = renderHook(() => useInvestmentMutations(), { wrapper: makeWrapper() });
         await act(async () => {
             await result.current.updateInvestment(1, { name: "Updated ETF" });

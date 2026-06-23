@@ -46,7 +46,7 @@ function mapeLabel(mape: number): string {
 }
 
 function RankBadge({ rank }: { rank: number }) {
-    if (rank === 1) return <Badge className="text-[10px] px-1.5 py-0 h-4 bg-amber-500/20 text-amber-700 dark:text-amber-400 border-0">#{rank}</Badge>;
+    if (rank === 1) return <Badge className="text-[10px] px-1.5 py-0 h-4 bg-warning/20 text-warning border-0">#{rank}</Badge>;
     if (rank === 2) return <Badge className="text-[10px] px-1.5 py-0 h-4 bg-slate-400/20 text-slate-600 dark:text-slate-400 border-0">#{rank}</Badge>;
     if (rank === 3) return <Badge className="text-[10px] px-1.5 py-0 h-4 bg-orange-400/20 text-orange-700 dark:text-orange-400 border-0">#{rank}</Badge>;
     return <span className="text-xs text-muted-foreground">#{rank}</span>;
@@ -143,11 +143,35 @@ export function CashFlowForecastDiagnostics({
         return sorted.map((e, i) => ({ ...e, rank: i + 1 }));
     }, [diagnostics.backtest]);
 
+    // Mirror the backend ensemble (services/calculations/forecast/methods/
+    // ensemble.js#computeWeights) EXACTLY: shrunk inverse-RMSE² + a uniform
+    // floor. Previously this panel showed unshrunk 1/MAE² with no floor, so its
+    // "weights" could differ wildly from the weights the ensemble actually used.
     const inverseWeights = useMemo(() => {
-        const validEntries = ranked.filter((e) => Number.isFinite(e.mae) && e.mae > 0);
-        const totalInvMSE = validEntries.reduce((s, e) => s + 1 / (e.mae * e.mae), 0);
-        if (totalInvMSE === 0) return new Map<string, number>();
-        return new Map(validEntries.map((e) => [e.method_id, (1 / (e.mae * e.mae)) / totalInvMSE]));
+        // Keep in sync with ensemble.js constants.
+        const MIN_RMSE = 1e-6;
+        const SHRINKAGE_PRIOR_DAYS = 30;
+        const DEFAULT_SAMPLE_DAYS = SHRINKAGE_PRIOR_DAYS;
+        const UNIFORM_FLOOR = 0.05;
+
+        const rows = ranked
+            .filter((e) => Number.isFinite(e.rmse) && e.rmse > 0)
+            .map((e) => ({
+                methodId: e.method_id,
+                rmse: e.rmse,
+                // Approximate the per-method sample size from the backtest months.
+                sampleDays: e.per_month.reduce((s, p) => s + (p.sample_days || 0), 0) || DEFAULT_SAMPLE_DAYS,
+            }));
+        if (rows.length === 0) return new Map<string, number>();
+
+        const meanRmse = rows.reduce((s, r) => s + r.rmse, 0) / rows.length;
+        const raw = rows.map((r) => {
+            const shrunkRmse = (r.sampleDays * r.rmse + SHRINKAGE_PRIOR_DAYS * meanRmse) / (r.sampleDays + SHRINKAGE_PRIOR_DAYS);
+            return { methodId: r.methodId, w: 1 / Math.max(shrunkRmse, MIN_RMSE) ** 2 };
+        });
+        const total = raw.reduce((s, r) => s + r.w, 0);
+        const m = raw.length;
+        return new Map(raw.map((r) => [r.methodId, (1 - UNIFORM_FLOOR) * (r.w / total) + UNIFORM_FLOOR / m]));
     }, [ranked]);
 
     const topWeight = Math.max(...Array.from(inverseWeights.values(), (v) => v), 0);
@@ -249,9 +273,6 @@ export function CashFlowForecastDiagnostics({
                                     );
                                 })}
                         </div>
-                        <p className="mt-3 text-[11px] text-muted-foreground italic">
-                            {t("cashflow.diagnostics.weightsReadOnly")}
-                        </p>
                     </section>
                 )}
             </SheetContent>

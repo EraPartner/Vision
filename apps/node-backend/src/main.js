@@ -12,7 +12,7 @@ import { dirname, resolve } from 'path';
 import { fileURLToPath } from 'url';
 import { getSettings } from './config/config.js';
 import { logger } from './config/logger.js';
-import { checkConnection, closePool } from './database/connection.js';
+import { checkConnection, closePool, getPoolStats } from './database/connection.js';
 import { runMigrations } from './database/migrate.js';
 import {
   createMaterializedViews,
@@ -20,6 +20,7 @@ import {
 } from './services/materializedViewService.js';
 import { createErrorHandler, NotFoundError } from './middleware/errorHandler.js';
 import { createAdminAuthMiddleware } from './middleware/adminAuth.js';
+import { createCsrfGuard } from './middleware/csrfGuard.js';
 import { closeBrowser as closePuppeteerBrowser } from './services/reports/puppeteerRenderer.js';
 import { wrapResponse } from './middleware/envelope.js';
 import { requestId } from './middleware/requestId.js';
@@ -28,6 +29,9 @@ import { cancelPendingAggregationRefresh } from './services/aggregationRefresh.j
 import { runWarmupTasks } from './startup/warmup.js';
 
 const adminAuthMiddleware = createAdminAuthMiddleware(() => settings.admin.authToken);
+// Blocks cross-site state-changing requests (browser CSRF) to destructive admin
+// routes, which the loopback binding alone cannot stop.
+const adminCsrfGuard = createCsrfGuard(() => settings.api.corsOrigins);
 
 // Import route modules
 import transactionsRouter from './routes/transactions.js';
@@ -38,10 +42,12 @@ import infoRouter from './routes/info.js';
 import aggregationsRouter from './routes/aggregations.js';
 import adminRouter from './routes/admin.js';
 import importRouter from './routes/importRoutes.js';
+import portfolioImportRouter from './routes/portfolioImportRoutes.js';
 import investmentsRouter from './routes/investments.js';
 import recipientBankAccountsRouter from './routes/recipientBankAccounts.js';
 import settingsRouter from './routes/settings.js';
 import marketLookupRouter from './routes/marketLookup.js';
+import researchRouter from './routes/research.js';
 import watchlistRouter from './routes/watchlist.js';
 import splitsRouter from './routes/splits.js';
 import savedChartsRouter from './routes/savedCharts.js';
@@ -49,12 +55,19 @@ import aiRouter from './routes/ai.js';
 import attachmentsRouter from './routes/attachments.js';
 import reportsRouter from './routes/reports.js';
 import tagsRouter from './routes/tags.js';
+import accountsRouter from './routes/accounts.js';
+import crossWorkspaceRouter from './routes/crossWorkspace.js';
 import {
   rateLimiter,
+  globalRateLimiter,
   adminRateLimiter,
   importRateLimiter,
   attachmentRateLimiter,
   spaRateLimiter,
+  reportRateLimiter,
+  marketRateLimiter,
+  investmentRateLimiter,
+  aggregationRateLimiter,
 } from './middleware/rateLimiter.js';
 import { buildRouteManifest, mountRouter } from './services/routeManifest.js';
 
@@ -93,8 +106,9 @@ app.use((req, res, next) => {
     res.setHeader('Access-Control-Allow-Methods', CORS_METHODS);
     res.setHeader('Access-Control-Allow-Headers', CORS_ALLOWED_HEADERS);
     res.setHeader('Access-Control-Expose-Headers', CORS_EXPOSED_HEADERS);
-  } else if (isWildcard && settings.isDevelopment()) {
-    // Dev convenience only: wildcard origin without credentials.
+  } else if (isWildcard && settings.security.devBypass) {
+    // Dev convenience only: wildcard origin without credentials. Gated on the
+    // explicit VISION_DEV opt-in so an unset env never reflects a wildcard.
     res.setHeader('Access-Control-Allow-Origin', '*');
     res.setHeader('Access-Control-Allow-Methods', CORS_METHODS);
     res.setHeader('Access-Control-Allow-Headers', CORS_ALLOWED_HEADERS);
@@ -210,13 +224,13 @@ app.use(wrapResponse);
 
 // ==================== Health Check ====================
 
-const warmupStatus = {
-  exchangeRates: false,
-  inflation: false,
-  portfolioSnapshots: false,
-  infoCaches: false,
-  materializedViews: false,
-};
+// Tri-state warmup tracking: each task is 'pending' until it settles, then
+// 'ready' (success) or 'failed' (best-effort task errored). runWarmupTasks
+// mutates these. The wire format below keeps a backward-compatible boolean
+// `caches` map (the Electron shell gates first navigation on
+// `caches.materializedViews === true`) and adds `warmup` (tri-state) + `degraded`.
+const WARMUP_KEYS = ['exchangeRates', 'inflation', 'portfolioSnapshots', 'infoCaches', 'materializedViews'];
+const warmupStatus = Object.fromEntries(WARMUP_KEYS.map((k) => [k, 'pending']));
 
 app.get('/health', (req, res) => {
   res.json({
@@ -227,14 +241,40 @@ app.get('/health', (req, res) => {
   });
 });
 
-app.get('/health/detailed', (req, res) => {
-  const ready = Object.values(warmupStatus).every(Boolean);
+// /health/* sits outside /api, so the global rate limiter doesn't apply — and
+// the detailed probe costs a DB round-trip. Cache the probe result briefly so
+// a hammering client (or an exposed port) can't turn health checks into a DB
+// DoS; 1s staleness is irrelevant for a liveness signal.
+const DB_PROBE_TTL_MS = 1000;
+let dbProbeCache = { value: false, expiresAt: 0 };
+async function checkConnectionCached() {
+  const now = Date.now();
+  if (now < dbProbeCache.expiresAt) return dbProbeCache.value;
+  const value = await checkConnection();
+  dbProbeCache = { value, expiresAt: now + DB_PROBE_TTL_MS };
+  return value;
+}
+
+app.get('/health/detailed', async (req, res) => {
+  const states = Object.values(warmupStatus);
+  const warming = states.includes('pending');
+  const degraded = states.includes('failed');
+
+  // Real liveness probe — a SELECT 1 round-trip catches a wedged pool that a
+  // process-level "I'm listening" check would miss. checkConnection never throws.
+  const dbConnected = await checkConnectionCached();
+
   res.json({
-    status: ready ? 'ready' : 'warming',
+    status: warming ? 'warming' : 'ready', // unchanged contract: 'ready' once warmup settles (pass or fail)
+    degraded, // a best-effort warmup task failed; app is serving but missing some warm data
     service: 'financial-transaction-manager-node',
     version: settings.api.version,
     timestamp: new Date().toISOString(),
-    caches: { ...warmupStatus },
+    database: { connected: dbConnected, pool: getPoolStats() },
+    warmup: { ...warmupStatus }, // tri-state: pending | ready | failed
+    // Backward-compatible boolean map (true once a task settles, pass or fail) —
+    // consumed by the Electron readiness gate. Prefer `warmup` for new code.
+    caches: Object.fromEntries(WARMUP_KEYS.map((k) => [k, warmupStatus[k] !== 'pending'])),
   });
 });
 
@@ -252,6 +292,10 @@ app.get('/api/', (req, res) => {
 
 // ==================== Route Registration ====================
 
+// Baseline rate limiting across the whole data plane. Mounted before every
+// router so previously-unthrottled routes (/api/transactions, /api/settings, …)
+// get a DoS backstop; stricter per-route limiters below stack on top.
+app.use('/api', globalRateLimiter);
 
 mountRouter(app, '/api/transactions', transactionsRouter);
 mountRouter(app, '/api/categories', categoriesRouter);
@@ -259,18 +303,22 @@ mountRouter(app, '/api/recipients', recipientsRouter);
 mountRouter(app, '/api/recipients', recipientBankAccountsRouter);
 mountRouter(app, '/api/planned-transactions', plannedTransactionsRouter);
 mountRouter(app, '/api/info', infoRouter);
-mountRouter(app, '/api/aggregations', aggregationsRouter);
-mountRouter(app, '/api/admin', adminRateLimiter, adminAuthMiddleware, adminRouter);
+mountRouter(app, '/api/aggregations', aggregationRateLimiter, aggregationsRouter);
+mountRouter(app, '/api/admin', adminRateLimiter, adminCsrfGuard, adminAuthMiddleware, adminRouter);
 mountRouter(app, '/api/import', importRateLimiter, importRouter);
-mountRouter(app, '/api/investments', investmentsRouter);
+mountRouter(app, '/api/portfolio/import', importRateLimiter, portfolioImportRouter);
+mountRouter(app, '/api/investments', investmentRateLimiter, investmentsRouter);
 mountRouter(app, '/api/settings', settingsRouter);
-mountRouter(app, '/api/market', marketLookupRouter);
+mountRouter(app, '/api/market', marketRateLimiter, marketLookupRouter);
+mountRouter(app, '/api/research', marketRateLimiter, researchRouter);
 mountRouter(app, '/api/watchlist', watchlistRouter);
 mountRouter(app, '/api/splits', splitsRouter);
 mountRouter(app, '/api/saved-charts', savedChartsRouter);
 mountRouter(app, '/api/attachments', attachmentRateLimiter, attachmentsRouter);
-mountRouter(app, '/api/reports', reportsRouter);
+mountRouter(app, '/api/reports', reportRateLimiter, reportsRouter);
 mountRouter(app, '/api/tags', tagsRouter);
+mountRouter(app, '/api/accounts', accountsRouter);
+mountRouter(app, '/api/cross-workspace', crossWorkspaceRouter);
 
 // AI chat: dedicated per-minute limit on /chat (Ollama calls are expensive);
 // other /api/ai/* endpoints fall back to the global limiter.
@@ -328,6 +376,7 @@ const HOST = settings.server.host;
 let exchangeRateRefreshInterval = null;
 let quotesRefreshInterval = null;
 let cashflowForecastRefreshInterval = null;
+let holdingGapBackfillInterval = null;
 
 // HTTP server handle — module-scoped so shutdown() can drain in-flight requests.
 let httpServer = null;
@@ -359,8 +408,10 @@ function bootSummary(extraPhase = 'backend_total') {
 async function start() {
   if (!settings.admin.authToken) {
     logger.warn(
-      'ADMIN_AUTH_TOKEN is not set — admin endpoints are accessible from local/private network addresses only. ' +
-      'Set ADMIN_AUTH_TOKEN to enforce token-based auth.'
+      'ADMIN_AUTH_TOKEN is not set — admin endpoints have no per-request token check. ' +
+      'This is safe only because the port is published on 127.0.0.1 (loopback) and the ' +
+      'CSRF guard blocks cross-site browser requests. If you publish the port on 0.0.0.0 ' +
+      'or behind a proxy, SET ADMIN_AUTH_TOKEN to enforce token-based auth.'
     );
   }
 
@@ -431,6 +482,7 @@ async function start() {
         exchangeRateRefreshInterval = intervals.exchangeRateRefreshInterval;
         quotesRefreshInterval = intervals.quotesRefreshInterval;
         cashflowForecastRefreshInterval = intervals.cashflowForecastRefreshInterval;
+        holdingGapBackfillInterval = intervals.holdingGapBackfillInterval;
       } catch (err) {
         logger.error('Warmup tasks failed', { error: err.message });
       }
@@ -472,12 +524,20 @@ async function shutdown(signal) {
   if (exchangeRateRefreshInterval) clearInterval(exchangeRateRefreshInterval);
   if (quotesRefreshInterval) clearInterval(quotesRefreshInterval);
   if (cashflowForecastRefreshInterval) clearInterval(cashflowForecastRefreshInterval);
+  if (holdingGapBackfillInterval) clearInterval(holdingGapBackfillInterval);
   cancelPendingAggregationRefresh();
 
   // Stop accepting new connections and let in-flight requests finish before
   // tearing down the pool — closePool() mid-request would error live handlers.
   if (httpServer) {
-    await new Promise((resolve) => httpServer.close(() => resolve()));
+    await new Promise((resolve) => {
+      httpServer.close(() => resolve());
+      // close() alone leaves idle keep-alive sockets (browser tabs, the
+      // Electron health watchdog's keepAlive agent) holding the server open
+      // until the 10s force-exit. Drop them explicitly; in-flight requests
+      // are untouched. Optional-chained: not every runtime implements it.
+      httpServer.closeIdleConnections?.();
+    });
   }
 
   await Promise.allSettled([closePool(), closePuppeteerBrowser()]);
@@ -487,6 +547,33 @@ async function shutdown(signal) {
 
 process.on('SIGINT', () => shutdown('SIGINT'));
 process.on('SIGTERM', () => shutdown('SIGTERM'));
+
+// Last-resort handlers. Node terminates the process on an unhandled rejection
+// or uncaught exception anyway — but with no structured log line, so under a
+// supervisor (Docker `restart: unless-stopped`, Electron) the only visible
+// symptom is a container that silently bounced. Log with stack + requestId
+// (when the error carries one) so the crash leaves a trace, then exit non-zero
+// to hand control back to the supervisor for a clean restart. Many of the
+// fire-and-forget chains here (warmup, deferred refresh, SSE) are exactly where
+// a stray rejection would otherwise escape unseen.
+function logFatal(kind, err) {
+  const error = err instanceof Error ? err : new Error(String(err));
+  logger.error(`${kind} — exiting`, {
+    error: error.message,
+    stack: error.stack,
+    requestId: /** @type {any} */ (error).requestId,
+  });
+}
+
+process.on('unhandledRejection', (reason) => {
+  logFatal('Unhandled promise rejection', reason);
+  process.exit(1);
+});
+
+process.on('uncaughtException', (err) => {
+  logFatal('Uncaught exception', err);
+  process.exit(1);
+});
 
 start().catch((err) => {
   logger.error('Failed to start application', { error: err.message });

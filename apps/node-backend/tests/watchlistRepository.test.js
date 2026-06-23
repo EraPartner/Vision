@@ -135,7 +135,7 @@ describe('watchlistRepository.create', () => {
     query.mockResolvedValue({ rows: [{ id: 1 }] });
     await watchlistRepository.create({ name: 'Tesla', asset_class: 'stock', target_price: 100 });
     const [, params] = query.mock.calls[0];
-    expect(params).toEqual(['Tesla', null, 'stock', 100, 'EUR', null, null]);
+    expect(params).toEqual(['Tesla', null, 'stock', 100, 'EUR', null, null, null]);
   });
 
   it('passes through provided symbol, currency, notes, price_provider_id', async () => {
@@ -148,9 +148,10 @@ describe('watchlistRepository.create', () => {
       currency: 'USD',
       notes: 'wait for dip',
       price_provider_id: 7,
+      added_price: 48000,
     });
     const [, params] = query.mock.calls[0];
-    expect(params).toEqual(['BTC', 'BTC-EUR', 'crypto', 50000, 'USD', 'wait for dip', 7]);
+    expect(params).toEqual(['BTC', 'BTC-EUR', 'crypto', 50000, 'USD', 'wait for dip', 7, 48000]);
   });
 
   it('returns the inserted row', async () => {

@@ -3,13 +3,16 @@ title: Appearance Feature
 type: feature
 status: active
 date: 2026-04-21
-tags: [feature, appearance, theming, personalization, frontend, settings, phase-1]
-description: Per-user theme variant selection with five color palettes, light/dark mode switching, and schedule-based mode transitions
-aliases: [appearance, theming, theme variants, color palettes, dark mode, light mode]
+updated: 2026-06-12
+tags: [feature, appearance, theming, personalization, frontend, settings, phase-1, visual-effects-tiers, auto-adapt-display, fx-reduced, shader-aurora, webgl, premium-v3, system-accent, vibrancy, electron-native, macos, june-2026, canvas-text, aurora-legibility, liquid-glass-sidebar]
+description: Per-user theme variant selection with five color palettes, light/dark mode switching, and schedule-based mode transitions. June 2026 (ADR-075): Visual-effects tier model (reduced/standard/enhanced) + autoAdaptDisplay replaces the ADR-071 enhancedEffects boolean; large-display heuristic auto-drops to reduced on 4K-class screens. June 2026 V12 (ADR-072): system accent color overlay (Electron/macOS only, persisted in theme_settings.systemAccent) and vibrancy gated on effective tier.
+aliases: [appearance, theming, theme variants, color palettes, dark mode, light mode, system accent, vibrancy]
 related_code:
   - apps/frontend/src/styles/themes.ts
   - apps/frontend/src/contexts/ThemeContext.tsx
   - apps/frontend/src/components/settings/AppearanceTab.tsx
+  - apps/frontend/src/lib/accentColor.ts
+  - apps/frontend/src/stores/settingsStore.ts
   - apps/node-backend/src/routes/settings.js
 ---
 
@@ -139,9 +142,12 @@ User preferences are stored in the `theme_settings` JSONB key:
   "schedule": {
     "lightFrom": "HH:MM",
     "darkFrom": "HH:MM"
-  }
+  },
+  "systemAccent": true
 }
 ```
+
+`systemAccent` is optional. Payloads that omit it hydrate fine (treated as `false`).
 
 ### Defaults
 
@@ -302,17 +308,160 @@ Meets WCAG AAA accessibility standards:
 - Navy (`hsl(240, 100%, 20%)`) primary on light backgrounds exceeds 7:1 contrast ratio
 - Neon green accent is distinguishable for colorblind users
 
+### Theme Crossfade (June 2026)
+
+`ThemeContext` now wraps the dark-class flip in `document.startViewTransition` (where supported by the browser) to produce a smooth crossfade between light and dark mode. Falls back to instant flip on unsupported browsers and when `prefers-reduced-motion: reduce` is active.
+
 ### Reduced Motion
 
 All theme transitions respect `prefers-reduced-motion`:
-- If `prefers-reduced-motion: reduce`, variant changes apply instantly without fade effects
+- If `prefers-reduced-motion: reduce`, variant changes apply instantly without fade effects; `startViewTransition` is skipped
 - Schedule mode does not animate between light/dark; transitions are instant
+
+## Visual Effects Tier Model (ADR-075, June 2026)
+
+> [!info] ADR-075 (2026-06-12) — supersedes the ADR-071 enhancedEffects boolean
+> The single `AppSettings.enhancedEffects: boolean` introduced in ADR-071 is replaced by a **tier model** that also auto-adapts based on display size. See [[docs/adr/075-visual-effects-tiers-display-adaptation|ADR-075]] for the full decision record and rationale (per-display GPU budget, 4K TV docking workflow).
+
+### Tier model
+
+`AppSettings.visualEffects: 'reduced' | 'standard' | 'enhanced'` (default `'standard'`) and `AppSettings.autoAdaptDisplay: boolean` (default `true`), both persisted in the Zustand settings store (`stores/settingsStore.ts`) and applied on dialog Save in Settings → Appearance.
+
+| Tier | Effect |
+|------|--------|
+| `reduced` | No backdrop-filter glass (near-opaque surfaces), liquid canvas hidden. Mirrors the pre-existing `prefers-reduced-transparency` fallback look. |
+| `standard` | CSS aurora blobs + glass materials. Unchanged default look. |
+| `enhanced` | Adds WebGL `ShaderAurora` + Electron vibrancy. |
+
+**Effective tier**: `reduced` while `autoAdaptDisplay` is on and the window sits on a large display; otherwise the chosen tier. Turning `autoAdaptDisplay` off is the explicit "don't touch my effects" override.
+
+#### Select shows the effective tier (addendum, 2026-06-12)
+
+The Appearance-tab tier Select always shows the **currently in-use tier on this display** (the effective tier), not the synced preference. This makes the control unambiguous: what you see is what is running.
+
+#### Session-scoped manual override (`sessionTierOverride`)
+
+`settingsStore` carries `sessionTierOverride` and `setSessionTierOverride` outside `appSettings` — it is never serialised or synced, only in-memory for this device and this session. `resolveEffectiveTier(pref, auto, large, sessionOverride?)` accepts it as an optional 4th argument: the override **replaces the auto-adapt cap**, so it only has effect while `autoAdaptDisplay && isLargeDisplay`; on a small display, or when auto-adapt is off, the synced preference governs. An app restart returns large displays to pure auto mode.
+
+**Save routing in `DashboardSettingsDialog`**: the dialog stages a `tierSelection` value (`null` = untouched) and routes it on Save:
+
+- **Capped display** (`autoAdaptDisplay && isLargeDisplay`): changed tier pick → session override (picking `'reduced'` clears the override rather than setting it; synced `visualEffects` is not written).
+- **Uncapped display**: changed tier pick → normal synced preference + override cleared.
+- **Toggling auto-adapt without touching the tier** → override cleared (auto takes back control).
+
+`resetAppSettings` also clears the session override.
+
+#### Contextual notes under the Select
+
+When the display is auto-capped, a note styled `text-primary` explains the situation (`settings.appearance.visualEffectsAutoNote`). When a session override is active, a note styled `text-warning` informs the user that the override is device-local and will be reclaimed by auto mode after the next app launch (`settings.appearance.visualEffectsOverrideNote`). Both keys are translated in en + nl.
+
+### Large-display detection (`isLargeDisplay`)
+
+`screen.width × screen.height × devicePixelRatio² > 6,000,000` physical px. The threshold sits between the MacBook Air M1 built-in panel (~5.2M px) and 4K outputs (~8.3M px); 1080p/QHD externals at 1× stay below it. Re-evaluated by `useVisualEffectsTier` on `resize` plus a 5-second property-read poll (no DOM event fires reliably on display drag).
+
+### Application points
+
+**`VisualEffectsController`** (`components/layout/VisualEffectsController.tsx`) — renders null, mounted in `AppLayout`. Tags `<html>`:
+- `fx-reduced` — effective tier is `reduced`. `index.css` carries a class-selector mirror of the `prefers-reduced-transparency` block (both blocks are deliberately duplicated; the media block must work before React mounts).
+- `fx-static-atmosphere` — large display but user kept a higher tier: aurora blobs stop drifting (`animation: none`) so the compositor can idle.
+
+**`AppLayout`** — mounts `ShaderAurora` only when effective tier is `enhanced`.
+
+**`ElectronBridge`** — gates the `vibrancy` html class on the *effective* tier (so vibrancy also drops on large displays when auto-adapt is on).
+
+**`ShaderAurora`** — backing store additionally capped at 640px wide (`MAX_CANVAS_WIDTH`) on top of the 0.25× resolution factor.
+
+### Key files
+
+| File | Role |
+|------|------|
+| `apps/frontend/src/lib/visualEffects.ts` | `isLargeDisplay()`, `resolveEffectiveTier()` (4-arg, incl. session override) |
+| `apps/frontend/src/hooks/useVisualEffectsTier.ts` | Resize + 5s poll hook; reads `sessionTierOverride` from store |
+| `apps/frontend/src/components/layout/VisualEffectsController.tsx` | `<html>` class manager |
+| `apps/frontend/src/stores/settingsStore.ts` | Persisted state + `migrateAppSettings`; `sessionTierOverride` (non-persisted) |
+| `apps/frontend/src/lib/__tests__/visualEffects.test.ts` | 17 unit tests (13 original + 4 override cases) |
+
+### Migration from enhancedEffects boolean
+
+`migrateAppSettings` (applied at hydration in `AppSettingsContext`) converts legacy stored blobs: `enhancedEffects: true → visualEffects: 'enhanced'`; `enhancedEffects: false → visualEffects: 'standard'`. An explicitly stored `visualEffects` value wins without remapping. The legacy key is stripped so the next debounced persist writes the new shape. No backend change — `app_settings` is an opaque JSON blob.
+
+### ShaderAurora technical details
+
+- Raw WebGL (no external dependency) — one fullscreen triangle, 4-octave value-noise fbm.
+- Colors tinted from `--primary` and `--accent` CSS vars; re-resolved on theme change via `MutationObserver`.
+- Renders at 0.25× resolution, upscaled to full viewport; additionally capped at 640px wide.
+- ~30 fps cap (rAF-throttled).
+- Single static frame when `prefers-reduced-motion: reduce` is active.
+- rAF paused when `document.hidden` (tab not visible).
+- Any WebGL context creation failure → silently falls back to CSS blobs only (no error shown).
+- **Dark-mode canvas opacity**: `dark:opacity-50`. Reduces peak brightness so the text legibility halo can do its job without excessive shadow values.
+
+**Aurora blob alpha tokens (CSS fallback, dark mode)**: `--aurora-primary-alpha: 0.13`, `--aurora-accent-alpha: 0.10`, `--aurora-wash-alpha: 0.08`. This reduces the brightness ceiling the text legibility halo has to overcome.
+
+**Canvas-text legibility guarantee (dark mode)**: A background-colored text-shadow halo is applied globally in dark mode to `h1/h2/h3/.font-display` and to any subtree marked `.canvas-text`. `PageHeader` applies `canvas-text`, so every page's title/subtitle area is covered automatically. Muted text (`.text-muted-foreground`) inside `.canvas-text` subtrees is lifted to `foreground/0.72` in dark mode. All three measures are `.dark`-scoped; light mode is structurally unaffected.
+
+See [[docs/components/ui-components#canvas-text-legibility-guarantee-june-2026|Canvas-Text Legibility Guarantee]] for full details.
+
+**Liquid-glass sidebar**: `.glass-chrome` background alphas were lowered to 0.55→0.72 (light) / 0.55→0.74 (dark), allowing the aurora and Electron vibrancy to glow through the sidebar blur. A `@supports not (backdrop-filter)` rule keeps a near-opaque fallback for browsers without blur support. See [[docs/components/ui-components#glass-chrome-sidebar-transparency-june-2026|glass-chrome entry]] for token values.
+
+**Vibrancy gate**: `ElectronBridge` gates the `vibrancy` html class on the *effective* tier. The window is always created with `vibrancy: 'under-window'` + `visualEffectState: 'followWindow'`; body becomes translucent (`hsl(var(--background) / 0.72)`) only when the effective tier is `enhanced`. This means vibrancy is automatically disabled on large displays even if the chosen tier is `enhanced`. See [[docs/architecture/electron|Electron Architecture — Under-Window Vibrancy]].
+
+**i18n keys** (en + nl):
+- Added (ADR-075 original): `settings.appearance.visualEffects`, `settings.appearance.visualEffects.reduced`, `settings.appearance.visualEffects.standard`, `settings.appearance.visualEffects.enhanced`, `settings.appearance.visualEffectsHint`, `settings.appearance.autoAdaptDisplay`, `settings.appearance.autoAdaptDisplayHint`
+- Added (addendum 2026-06-12): `settings.appearance.visualEffectsAutoNote`, `settings.appearance.visualEffectsOverrideNote`
+- Removed: `settings.general.enhancedEffects`, `settings.general.enhancedEffectsHint`
+
+Code links: [[apps/frontend/src/lib/visualEffects.ts]], [[apps/frontend/src/hooks/useVisualEffectsTier.ts]], [[apps/frontend/src/components/layout/VisualEffectsController.tsx]], [[apps/frontend/src/components/layout/ShaderAurora.tsx]], [[apps/frontend/src/stores/settingsStore.ts]], [[apps/frontend/src/components/settings/AppearanceTab.tsx]]
+
+---
+
+## System Accent Color (Electron/macOS Only, V12 June 2026 — ADR-072)
+
+> [!info] Added in ADR-072
+> **"Use system accent color"** Switch in **Settings → Appearance**, rendered only when `isElectronMac()` returns true.
+
+### What it does
+
+When enabled, `ThemeContext` re-applies `applyThemePalette` (resets all variant tokens) and then **overlays** the macOS system accent color onto five CSS custom properties:
+
+| Property | Role |
+|----------|------|
+| `--primary` / `--primary-foreground` | Buttons, links, active indicators |
+| `--ring` | Focus rings |
+| `--sidebar-primary` / `--sidebar-primary-foreground` | Sidebar active-item highlight |
+| `--sidebar-ring` | Sidebar focus ring |
+
+Because `applyThemePalette` runs first, the overlay **composes with all five theme variants and both light/dark modes** — it is not a sixth variant.
+
+### Implementation details
+
+- **`lib/accentColor.ts`** — `hexToHslComponents(rrggbbaa)` converts Electron's RRGGBBAA hex string to `"h s% l%"` component form. `accentForegroundComponents(h, s, l)` picks a WCAG-contrast foreground: ink for yellow/green accents, white for blue/purple.
+- **`settingsStore.ts`** — adds `themeSystemAccent: boolean` + `setThemeSystemAccent` with hydration support. The flag is persisted inside the existing `theme_settings` blob under the key `systemAccent`.
+- **`ThemeContext.tsx`** — An **epoch counter** ensures that stale async accent-color fetches arriving out-of-order do not overwrite a more recent apply. Live re-tint on `AppleColorPreferencesChangedNotification` (pushed via `electronAPI.onAccentColorChanged`).
+- Toggling off self-heals: `applyThemePalette` resets every token back to the active variant's values.
+
+### Degradation
+
+- On non-Electron / non-macOS builds the Switch is hidden entirely.
+- If `getAccentColor()` fails (permissions, OS version), the overlay is silently skipped; the active variant is left unchanged.
+
+**i18n keys**: `settings.appearance.systemAccent`, `settings.appearance.systemAccentHint` (en + nl, +2 keys from ADR-072).
+
+Code links: [[apps/frontend/src/lib/accentColor.ts]], [[apps/frontend/src/contexts/ThemeContext.tsx]], [[apps/frontend/src/stores/settingsStore.ts]], [[apps/frontend/src/components/settings/AppearanceTab.tsx]]
+
+---
 
 ## Related Features
 
 - [[docs/features/settings|Settings Feature]] — Settings system overview
+- [[docs/adr/075-visual-effects-tiers-display-adaptation|ADR-075: Visual-Effects Tiers and Per-Display Auto-Adaptation]] — Tier model + large-display heuristic (2026-06-12)
+- [[docs/adr/072-electron-native-desktop-integration|ADR-072: Electron-Native Desktop Integration]] — System accent overlay, vibrancy opt-in (June 2026)
+- [[docs/adr/071-premium-v3-effects-toggle|ADR-071: Premium v3]] — Original effects toggle + full Premium v3 batch; enhancedEffects boolean superseded by ADR-075 (June 2026)
+- [[docs/adr/070-liquid-glass-v2-premium-frontend|ADR-070: Liquid Glass v2]] — Theme crossfade via `startViewTransition` (June 2026)
+- [[docs/adr/020-glass-system-downgrade-liquid-canvas-removal|ADR-020: Glass System Downgrade]] — GPU budget rationale (Electron M1)
 - [[docs/adr/017-liquid-glass-aesthetic-design-system|ADR-017: Liquid Glass Aesthetic]] — Design system foundation
 - [[docs/adr/025-theme-variant-system|ADR-025: Theme Variant System]] — Architectural decision and token details
+- [[docs/architecture/electron|Electron Architecture]] — Under-window vibrancy, system accent IPC
 - [[docs/api/settings|Settings API]] — Backend API contracts
 - [[docs/i18n/translations|Translations & i18n]] — Localization system
 - [[apps/frontend/src/styles/themes.ts|Theme Variants Source Code]] — Palette definitions and `applyThemePalette()` function

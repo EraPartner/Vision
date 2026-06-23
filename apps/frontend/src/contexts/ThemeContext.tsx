@@ -12,11 +12,13 @@
  * re-renders in theme consumers.
  */
 
-import React, { useCallback, useEffect, useRef, type ReactNode } from 'react';
+import { useCallback, useEffect, useRef, type ReactNode } from 'react';
 import { useShallow } from 'zustand/react/shallow';
 import { apiClient } from '@/lib/api';
 import { usePreloadedSetting } from '@/contexts/SettingsPreloadContext';
-import { applyThemePalette, isThemeVariant, type ThemeVariant } from '@/styles/themes';
+import { applyThemePalette, isThemeVariant, themes, type ThemeVariant } from '@/styles/themes';
+import { getElectronAPI, getSystemAccentColor, isElectronMac, persistSplashTheme } from '@/lib/api/electron';
+import { accentForegroundComponents, hexToHslComponents } from '@/lib/accentColor';
 import {
     useSettingsStore,
     type Theme,
@@ -32,9 +34,12 @@ interface ThemeContextType {
     mode: ThemeMode;
     schedule: ThemeSchedule;
     variant: ThemeVariant;
+    /** macOS/Electron only: tint primary/ring with the system accent color. */
+    systemAccent: boolean;
     setMode: (m: ThemeMode) => void;
     setSchedule: (s: ThemeSchedule) => void;
     setVariant: (v: ThemeVariant) => void;
+    setSystemAccent: (on: boolean) => void;
     toggleTheme: () => void;
     setTheme: (t: Theme) => void;
 }
@@ -73,6 +78,7 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
         mode?: ThemeMode;
         schedule?: ThemeSchedule;
         variant?: ThemeVariant;
+        systemAccent?: boolean;
     }>(SETTINGS_KEY);
 
     const _hydrateTheme = useSettingsStore((s) => s._hydrateTheme);
@@ -82,16 +88,17 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
     const mode = useSettingsStore((s) => s.themeMode);
     const schedule = useSettingsStore((s) => s.themeSchedule);
     const variant = useSettingsStore((s) => s.themeVariant);
+    const systemAccent = useSettingsStore((s) => s.themeSystemAccent);
     const theme = useSettingsStore((s) => s.theme);
     const isLoaded = useSettingsStore((s) => s.isThemeLoaded);
 
     const saveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
     const isFirstPersist = useRef(true);
 
-    const persist = useCallback((m: ThemeMode, s: ThemeSchedule, v: ThemeVariant) => {
+    const persist = useCallback((m: ThemeMode, s: ThemeSchedule, v: ThemeVariant, sa: boolean) => {
         if (saveTimerRef.current) clearTimeout(saveTimerRef.current);
         saveTimerRef.current = setTimeout(() => {
-            apiClient.saveSetting(SETTINGS_KEY, { mode: m, schedule: s, variant: v })
+            apiClient.saveSetting(SETTINGS_KEY, { mode: m, schedule: s, variant: v, systemAccent: sa })
                 .catch(() => { /* ignore persistence failures silently */ });
         }, 500);
     }, []);
@@ -105,6 +112,7 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
                 mode: preloaded.mode,
                 schedule: preloaded.schedule,
                 variant: isThemeVariant(preloaded.variant) ? preloaded.variant : undefined,
+                systemAccent: typeof preloaded.systemAccent === 'boolean' ? preloaded.systemAccent : undefined,
             });
         } else {
             // Fallback: localStorage migration from older app versions
@@ -129,15 +137,15 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
         _setResolvedTheme(resolveTheme(mode, schedule));
     }, [mode, schedule, isLoaded, _setResolvedTheme]);
 
-    // Persist mode/schedule/variant when they change after initial load
+    // Persist mode/schedule/variant/systemAccent when they change after initial load
     useEffect(() => {
         if (!isLoaded) return;
         if (isFirstPersist.current) {
             isFirstPersist.current = false;
             return;
         }
-        persist(mode, schedule, variant);
-    }, [mode, schedule, variant, isLoaded, persist]);
+        persist(mode, schedule, variant, systemAccent);
+    }, [mode, schedule, variant, systemAccent, isLoaded, persist]);
 
     // Re-check every minute in schedule mode
     useEffect(() => {
@@ -157,22 +165,80 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
         return () => mq.removeEventListener('change', handler);
     }, [mode, _setResolvedTheme]);
 
-    // Apply CSS class to <html> and mirror to localStorage (FOUC prevention)
+    // Apply CSS class to <html> and mirror to localStorage (FOUC prevention).
+    // Wrapped in a View Transition (where supported) so light↔dark crossfades
+    // instead of hard-cutting; skipped under prefers-reduced-motion.
     useEffect(() => {
-        if (theme === 'dark') {
-            document.documentElement.classList.add('dark');
+        const apply = () => {
+            if (theme === 'dark') {
+                document.documentElement.classList.add('dark');
+            } else {
+                document.documentElement.classList.remove('dark');
+            }
+        };
+
+        const alreadyApplied = document.documentElement.classList.contains('dark') === (theme === 'dark');
+        const prefersReducedMotion =
+            typeof window.matchMedia === 'function' &&
+            window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+        const startViewTransition = (
+            document as Document & { startViewTransition?: (cb: () => void) => unknown }
+        ).startViewTransition;
+
+        if (!alreadyApplied && !prefersReducedMotion && typeof startViewTransition === 'function') {
+            startViewTransition.call(document, apply);
         } else {
-            document.documentElement.classList.remove('dark');
+            apply();
         }
+
         try { localStorage.setItem(THEME_STORAGE_KEY, theme); } catch { /* ignore */ }
     }, [theme]);
 
-    // Apply variant palette as CSS custom properties on :root
+    // Apply variant palette as CSS custom properties on :root. With the
+    // macOS system-accent override on, layer the accent over the variant's
+    // primary/ring tokens afterwards (applyThemePalette resets every token,
+    // so toggling off self-heals on the next run).
+    const accentEpoch = useRef(0);
+    const applyPalette = useCallback((v: ThemeVariant, t: Theme, useAccent: boolean) => {
+        applyThemePalette(v, t);
+        const epoch = ++accentEpoch.current;
+        if (!useAccent || !isElectronMac()) return;
+        getSystemAccentColor().then((hex) => {
+            if (epoch !== accentEpoch.current || !hex) return;
+            const hsl = hexToHslComponents(hex);
+            if (!hsl) return;
+            const fg = accentForegroundComponents(hex);
+            const root = document.documentElement;
+            root.style.setProperty('--primary', hsl);
+            root.style.setProperty('--primary-foreground', fg);
+            root.style.setProperty('--ring', hsl);
+            root.style.setProperty('--sidebar-primary', hsl);
+            root.style.setProperty('--sidebar-primary-foreground', fg);
+            root.style.setProperty('--sidebar-ring', hsl);
+        });
+    }, []);
+
     useEffect(() => {
         if (!isLoaded) return;
-        applyThemePalette(variant, theme);
+        applyPalette(variant, theme, systemAccent);
         try { localStorage.setItem(VARIANT_STORAGE_KEY, variant); } catch { /* ignore */ }
+    }, [variant, theme, systemAccent, isLoaded, applyPalette]);
+
+    // Mirror the resolved palette's primary colors to the Electron shell so the
+    // next boot splash paints in the active theme. No-op outside Electron.
+    useEffect(() => {
+        if (!isLoaded) return;
+        const palette = themes[variant][theme];
+        persistSplashTheme({ background: palette.primary, foreground: palette['primary-foreground'] });
     }, [variant, theme, isLoaded]);
+
+    // Re-tint live when the user changes the accent in System Settings.
+    useEffect(() => {
+        if (!isLoaded || !systemAccent || !isElectronMac()) return;
+        const api = getElectronAPI();
+        if (!api) return;
+        return api.onAccentColorChanged(() => applyPalette(variant, theme, true));
+    }, [variant, theme, systemAccent, isLoaded, applyPalette]);
 
     return <>{children}</>;
 }
@@ -187,9 +253,11 @@ export function useTheme(): ThemeContextType {
             mode: s.themeMode,
             schedule: s.themeSchedule,
             variant: s.themeVariant,
+            systemAccent: s.themeSystemAccent,
             setMode: s.setThemeMode,
             setSchedule: s.setThemeSchedule,
             setVariant: s.setThemeVariant,
+            setSystemAccent: s.setThemeSystemAccent,
             toggleTheme: s.toggleTheme,
             setTheme: s.setTheme,
         }))

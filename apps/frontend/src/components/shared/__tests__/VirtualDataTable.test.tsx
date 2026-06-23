@@ -4,6 +4,7 @@ import { screen, fireEvent, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { renderWithApp } from "@/test/renderWithApp";
 import { VirtualDataTable } from "@/components/shared/VirtualDataTable";
+import { ContextMenuContent, ContextMenuItem } from "@/components/ui/context-menu";
 import type { Column } from "@/types/dataTable";
 
 // Provide synchronous translations so tests don't depend on async locale loading.
@@ -40,6 +41,7 @@ vi.mock("@tanstack/react-virtual", () => ({
             })),
         getTotalSize: () => count * estimateSize(),
         measureElement: vi.fn(),
+        scrollToIndex: vi.fn(),
     }),
 }));
 
@@ -314,6 +316,104 @@ describe("VirtualDataTable — inline editing", () => {
                 expect.objectContaining({ name: "Updated" }),
             ),
         );
+    });
+});
+
+// ---------------------------------------------------------------------------
+// Keyboard navigation & quick look (V7/V6)
+// ---------------------------------------------------------------------------
+
+function getRow(cellText: string): HTMLElement {
+    return screen.getByText(cellText).closest('[role="row"]') as HTMLElement;
+}
+
+describe("VirtualDataTable — keyboard navigation", () => {
+    it("Enter on a focused row calls onRowOpen with row and index", () => {
+        const onRowOpen = vi.fn();
+        renderTable({ onRowOpen });
+        const row = getRow("Alpha");
+        row.focus();
+        fireEvent.keyDown(row, { key: "Enter" });
+        expect(onRowOpen).toHaveBeenCalledWith(DATA[0], 0);
+    });
+
+    it("Space on a focused row calls onRowQuickLook", () => {
+        const onRowQuickLook = vi.fn();
+        renderTable({ onRowQuickLook });
+        const row = getRow("Beta");
+        row.focus();
+        fireEvent.keyDown(row, { key: " " });
+        expect(onRowQuickLook).toHaveBeenCalledWith(DATA[1], 1);
+    });
+
+    it("Enter and Space fall back to onRowDoubleClick when no dedicated handlers", () => {
+        const onRowDoubleClick = vi.fn();
+        renderTable({ onRowDoubleClick });
+        const row = getRow("Alpha");
+        row.focus();
+        fireEvent.keyDown(row, { key: "Enter" });
+        fireEvent.keyDown(row, { key: " " });
+        expect(onRowDoubleClick).toHaveBeenCalledTimes(2);
+    });
+
+    it("ArrowDown / ArrowUp move focus between rows", async () => {
+        renderTable({ onRowOpen: vi.fn() });
+        const first = getRow("Alpha");
+        const second = getRow("Beta");
+        first.focus();
+        fireEvent.keyDown(first, { key: "ArrowDown" });
+        await waitFor(() => expect(second).toHaveFocus());
+        fireEvent.keyDown(second, { key: "ArrowUp" });
+        await waitFor(() => expect(first).toHaveFocus());
+    });
+
+    it("ArrowUp on the first row keeps focus clamped to it", async () => {
+        renderTable({ onRowOpen: vi.fn() });
+        const first = getRow("Alpha");
+        first.focus();
+        fireEvent.keyDown(first, { key: "ArrowUp" });
+        await waitFor(() => expect(first).toHaveFocus());
+    });
+
+    it("rows are not focusable when no row handlers are provided", () => {
+        renderTable();
+        expect(getRow("Alpha")).not.toHaveAttribute("tabindex");
+    });
+});
+
+// ---------------------------------------------------------------------------
+// Row context menu (V5)
+// ---------------------------------------------------------------------------
+
+describe("VirtualDataTable — row context menu", () => {
+    it("right-click opens the menu and onSelect receives the row", async () => {
+        const onAction = vi.fn();
+        renderTable({
+            rowContextMenu: (row) => (
+                <ContextMenuContent>
+                    <ContextMenuItem onSelect={() => onAction(row.id)}>Row action</ContextMenuItem>
+                </ContextMenuContent>
+            ),
+        });
+        fireEvent.contextMenu(getRow("Gamma"));
+        const item = await screen.findByText("Row action");
+        fireEvent.click(item);
+        await waitFor(() => expect(onAction).toHaveBeenCalledWith(3));
+    });
+
+    it("startEditing helper begins the inline edit for that row", async () => {
+        renderTable({
+            columns: EDITABLE_COLUMNS,
+            rowContextMenu: (_row, _index, helpers) => (
+                <ContextMenuContent>
+                    <ContextMenuItem onSelect={helpers.startEditing}>Edit row</ContextMenuItem>
+                </ContextMenuContent>
+            ),
+        });
+        fireEvent.contextMenu(getRow("Alpha"));
+        fireEvent.click(await screen.findByText("Edit row"));
+        // Row edit inputs appear in addition to the always-present search input.
+        await waitFor(() => expect(screen.getAllByRole("textbox").length).toBeGreaterThan(1));
     });
 });
 

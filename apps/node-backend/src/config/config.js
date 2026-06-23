@@ -78,11 +78,24 @@ const settings = deepFreeze({
     authToken: env.ADMIN_AUTH_TOKEN,
   },
 
+  security: {
+    // Explicit opt-in for dev-only bypasses (fail-safe when unset — see env.js).
+    devBypass: env.VISION_DEV,
+    // Reverse-proxy IPs/CIDRs whose X-Forwarded-For is trusted. Empty = none.
+    trustedProxies: env.TRUSTED_PROXIES,
+  },
+
+  rateLimit: {
+    globalMax: env.RATE_LIMIT_GLOBAL_MAX,
+    globalWindowMs: env.RATE_LIMIT_GLOBAL_WINDOW_MS,
+  },
+
   ollama: {
     url: (env.OLLAMA_URL || defaultOllamaUrl()).replace(/\/+$/, ''),
     defaultModel: env.OLLAMA_DEFAULT_MODEL,
     requestTimeoutMs: env.OLLAMA_REQUEST_TIMEOUT_MS,
     healthTimeoutMs: env.OLLAMA_HEALTH_TIMEOUT_MS,
+    streamIdleTimeoutMs: env.OLLAMA_STREAM_IDLE_TIMEOUT_MS,
   },
 
   aiChat: {

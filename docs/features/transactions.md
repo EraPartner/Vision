@@ -3,10 +3,10 @@ title: Transactions
 type: feature
 status: active
 date: 2026-04-16
-updated: 2026-05-08
-tags: [feature, transactions, finance, phase-q, recipient-groups, bulk-actions]
+updated: 2026-06-19
+tags: [feature, transactions, finance, phase-q, recipient-groups, bulk-actions, optimistic-updates, optimistic-create, june-2026, context-menu, quick-look, keyboard-nav, duplicate, filter-by-recipient, deep-link, electron-native, new-transaction, render-loop-fix, category-ids-filter, multi-value-filter]
 aliases: [transactions-feature, income, expenses, financial-records, money-tracking]
-description: Core transaction management - income, expenses, and tracking financial activities. Phase Q adds recipient-group filtering for linked-recipient transaction discovery. Bulk operations enable atomic multi-row delete, recategorize, reassign, activate/deactivate, export, and tag.
+description: Core transaction management - income, expenses, and tracking financial activities. Phase Q adds recipient-group filtering for linked-recipient transaction discovery. Bulk operations enable atomic multi-row delete, recategorize, reassign, activate/deactivate, export, and tag. June 2026 (ADR-070): useUpdateTransaction/useDeleteTransaction are now optimistic. June 2026 Premium v3 (ADR-071): useCreateTransaction is now optimistic (temp negative-id row → server-row swap → onSettled invalidate; virtual list excluded; 6 tests). June 2026 Premium v3 V5-V7: per-row context menu, Quick Look dialog (Space), keyboard row navigation (↑/↓/Enter), Duplicate, and Filter-by-recipient actions. June 2026 V12 (ADR-072): /transactions?new=1 deep link opens AddTransactionDialog (used by native menu and dock menu).
 related_code: ["apps/node-backend/src/routes/transactions.js", "apps/node-backend/src/repositories/transactionRepository.js", "apps/node-backend/src/services/filterBuilder.js", "apps/node-backend/src/services/bulkSelection.js", "apps/frontend/src/features/transactions/", "apps/frontend/src/pages/TransactionsPage.tsx"]
 ---
 
@@ -113,6 +113,19 @@ Transactions support rich filtering:
 - Bank account
 - Currency
 
+#### Filter by Account (deep link, 2026-06-19)
+
+The list reads a `bank_account` URL search param (single value) and threads it through
+`TransactionsPage` → `useTransactionListData` → the list/export queries (the backend already accepted
+`bank_account` on `GET /api/transactions` and the export endpoints). The active filter shows in the
+`FilterBanner` (using `filter_label`) and is honoured by CSV/JSON export.
+
+This powers **double-click navigation from the accounts hub**: double-clicking an account card in
+`AccountsPage` navigates to `/transactions?bank_account=<account.name>&filter_label=<display>`. The
+account *name* is the filter key because the ADR-088 dual-write trigger (migration `0051`) keeps
+`transactions.bank_account` equal to `accounts.name`. Strings shown via the `accounts.openTransactions`
+hint (en/nl).
+
 Implementation note:
 - Backend route parsing/normalization for list filters is centralized in `parseTransactionListQuery`, preserving existing defaults and coercion behavior while reducing duplicate parsing logic ([[apps/node-backend/src/routes/transactions.js]]).
 - Backend non-`uncategorised` list path now uses repository one-query pagination (`getAllWithCount`) instead of separate list and count queries, reducing DB round-trips while preserving filters/totals/response shape ([[apps/node-backend/src/routes/transactions.js]], [[apps/node-backend/src/repositories/transactionRepository.js]]).
@@ -133,6 +146,18 @@ Implementation note:
 
 Code links: [[apps/frontend/src/components/shared/VirtualDataTable.tsx]], [[apps/frontend/src/components/shared/DataTable.tsx]], [[apps/frontend/src/components/shared/ColumnFilter.tsx]], [[apps/frontend/src/pages/TransactionsPage.tsx]], [[apps/frontend/src/pages/RecipientsPage.tsx]]
 
+#### Multi-Value Filter Memoization (June 2026)
+
+`categoryIdsFilter` and `tagsFilter` in `TransactionsPage` are memoized on their raw comma-separated search-param strings (`categoryIdsRaw`, `tagsRaw`) rather than computed inline. This matters because pivot-table drillthrough from the Statistics page generates multi-value URLs such as `?category_ids=1,2,3`, and inline array construction (e.g. `str.split(',')`) produces a new array reference on every render. That fresh reference invalidated the `currentFilter` memo on every render, which in turn triggered the selection-clear effect unconditionally, reaching React's "Maximum update depth exceeded" limit and wedging the page until a hard refresh.
+
+Detail-cell drills (scalar `category_id`) were immune because they produce a simple scalar comparison, not an array. General-category group header drills and tag drills were affected.
+
+**Fix**: Both arrays are wrapped in `useMemo` keyed on the raw string. The `currentFilter` memo dependency stays stable as long as the URL does not change, breaking the loop.
+
+**Regression test**: `apps/frontend/src/pages/__tests__/TransactionsPage.integration.test.tsx` — test case verified to trip on unfixed code.
+
+Code link: [[apps/frontend/src/pages/TransactionsPage.tsx]]
+
 #### Frontend Page Decomposition (Phase 5)
 
 TransactionsPage has been decomposed into feature-scoped modules under [[apps/frontend/src/features/transactions/]] to improve maintainability and code organization:
@@ -143,9 +168,64 @@ TransactionsPage has been decomposed into feature-scoped modules under [[apps/fr
 - `components/TableActions.tsx` — Toolbar actions: CSV export button and "show inactive" toggle
 - `components/TransactionsTable.tsx` — `VirtualDataTable` wrapper with column renderers (category/recipient comboboxes, inline date/amount edit, row toggle/delete, info/split dialogs)
 - `components/TransactionInfoDialog.tsx` — Per-row info display and inline field editor
-- `pages/TransactionsPage.tsx` — Slim composer (~280 LOC) that wires the hook to components and owns mutation handlers (`applyTransactionLocalPatch`, `applyInfoFieldLocally`) and `useConfirmDialog`
+- `components/TransactionQuickLook.tsx` — Read-only Space-toggled glance dialog (NEW, premium v3 V6)
+- `pages/TransactionsPage.tsx` — Slim composer that wires the hook to components and owns mutation handlers (`applyTransactionLocalPatch`, `applyInfoFieldLocally`, `handleDuplicate`, `handleFilterByRecipient`) and `useConfirmDialog`
 
 This structure keeps related code together, makes each module focused and testable, and makes the page composition logic clear at a glance.
+
+---
+
+### Row Interactions — Context Menu, Quick Look & Keyboard Navigation (Premium v3 V5-V7, June 2026)
+
+The transaction table rows gained a full interaction layer in the premium-v3 V5-V7 batch.
+
+#### Per-Row Context Menu (right-click)
+
+Right-clicking a transaction row opens a Radix `ContextMenu` (`modal={false}` — see [[docs/components/ui-components#per-row-context-menu|VirtualDataTable context-menu gotcha]]) with these actions:
+
+| Action | Key hint | Condition |
+|--------|----------|-----------|
+| Show details | ↵ | Always |
+| Quick Look | ␣ | Always |
+| Edit in row | — | Always |
+| Duplicate | — | `recipient_id` + `date` + `bank_account` all present |
+| Show all from {recipient} | — | Recipient known |
+| Mark active / inactive | — | Always |
+| Delete… | — | Always (destructive style) |
+
+#### Keyboard Row Navigation
+
+Rows are focusable when any row handler is wired. Shortcuts while a row is focused:
+
+- **↑ / ↓** — move focus to adjacent row (virtual scroll aware; up to 5 rAF retries until the target DOM node is mounted).
+- **Enter** — open the transaction details dialog (`TransactionInfoDialog`).
+- **Space** — open the Quick Look dialog (`TransactionQuickLook`).
+
+These shortcuts are shown in `ShortcutsOverlay` (`?` key).
+
+#### Quick Look Dialog
+
+`TransactionQuickLook` is a read-only glance dialog (Space to open, Space or Esc to close):
+
+- Displays: big money amount with sign color, recipient, date · bank, category badge, inactive badge, tag chips, memo/comment.
+- Intentionally read-only — editing lives in `TransactionInfoDialog`.
+- Focus returns to the source row on close so keyboard navigation continues.
+
+#### Duplicate
+
+`handleDuplicate` in `TransactionsPage` copies the focused row into a new transaction via `useCreateTransaction`. Fields copied: `transaction_date`, `bank_account`, `recipient_id`, `memo`, `amount`, `currency`, `category_id`, `comment`, `tags`. Field deliberately **not** copied: `balance` (running balance belongs to the original row).
+
+Gate: `recipient_id`, `transaction_date`, and `bank_account` must all be present (same contract as the create endpoint).
+
+#### Filter by Recipient
+
+"Show all from {recipient}" in the context menu calls `handleFilterByRecipient`, which:
+1. Clears the local search string.
+2. Sets `?recipient_id=<id>&filter_label=<name>` in `searchParams`, replacing all previously active URL filters.
+
+This replaces the entire filter set with a single-recipient view, consistent with how pivot-table drilldowns work throughout the app.
+
+Code links: [[apps/frontend/src/features/transactions/components/TransactionsTable.tsx]], [[apps/frontend/src/features/transactions/components/TransactionQuickLook.tsx]], [[apps/frontend/src/pages/TransactionsPage.tsx]], [[apps/frontend/src/components/shared/VirtualDataTable.tsx]], [[apps/frontend/src/components/shared/ShortcutsOverlay.tsx]]
 
 ---
 
@@ -156,6 +236,22 @@ This structure keeps related code together, makes each module focused and testab
 - Inline row editing provides save/cancel controls and persists through the existing transaction update flow (`PATCH /api/transactions/:id`).
 
 Code link: [[apps/frontend/src/pages/TransactionsPage.tsx]]
+
+---
+
+### Deep Links / Query-Param Triggers (V12, June 2026)
+
+#### `/transactions?new=1` — Open Add Transaction Dialog
+
+Navigating to `/transactions?new=1` immediately opens `AddTransactionDialog`. The dialog's mounting hook reads the `new` search param and, if present, opens the dialog and then strips the param from the URL (using `replace` navigation so the browser Back button does not re-trigger it).
+
+This deep link is used by:
+- The **native macOS menu** (File → New Transaction ⌘N via `ElectronBridge` `menu:action` dispatch)
+- The **dock menu** (New Transaction item)
+
+The param is safe to include in any navigation: navigating to `/transactions` without `?new=1` is unaffected.
+
+Code link: [[apps/frontend/src/components/forms/AddTransactionDialog.tsx]]
 
 ---
 
@@ -259,6 +355,26 @@ Transactions support multi-row selection and bulk operations for efficiency:
 - **Bulk tag** — Apply or remove tags from many rows simultaneously
 
 See [[docs/features/bulk-actions]] for full details on selection modes (IDs vs. filter), UI patterns, and atomic guarantees.
+
+---
+
+## Optimistic Create (Premium v3, June 2026)
+
+`useCreateTransaction` is now optimistic (ADR-071). On mutation start, a temp row with a negative id (`-Date.now()`) is inserted at the head of all plain `['transactions', params]` React Query caches. On success, the temp row is swapped with the server-returned row. On error, the temp row is removed and the snapshot is restored. On settlement, `['transactions']` is invalidated.
+
+**Derived fields**: the optimistic row may briefly show stale or missing `category_name` / `recipient_name` until the `onSettled` refetch completes (only ids are in the mutation payload). Amounts and dates from user input are always correct.
+
+**Virtual list excluded**: `['transactions-virtual']` is deliberately not patched — same rationale as update/delete.
+
+6 tests total in `hooks/__tests__/useOptimisticTransactions.test.tsx`.
+
+## Optimistic Update / Delete (June 2026)
+
+`useUpdateTransaction` and `useDeleteTransaction` are now optimistic (ADR-070 Tier 5). On mutation start, the change is applied immediately to all `['transactions', params]` React Query cache entries via `setQueriesData`, giving the user instant feedback. On error, all entries are rolled back to their snapshot. On settlement (success or error), `['transactions']` is invalidated so server truth wins.
+
+**Important constraint**: `['transactions-virtual']` is deliberately not patched optimistically — `useTransactionListData` mirrors the virtual list's cached first page into local component state, and patching that key while the user has scrolled would collapse the list. It is corrected by the `onSettled` invalidation.
+
+See [[docs/components/hooks#useTransactions|useTransactions hook]], [[docs/adr/071-premium-v3-effects-toggle|ADR-071]] (optimistic create), and [[docs/adr/070-liquid-glass-v2-premium-frontend|ADR-070]] (optimistic update/delete) for full details and test coverage.
 
 ---
 

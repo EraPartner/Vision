@@ -2,14 +2,15 @@
 title: Watchlist Feature
 type: feature
 status: active
-date: 2026-04-17
-last_modified: 2026-04-29
-updated: 2026-04-29
-tags: [feature, watchlist, investments, tracking, alerts, phase-3.6, offline-resilience, online-status-detection, api-client-migration]
-description: Investment watchlist for tracking securities not yet in the portfolio with target price alerts
+date: 2026-06-18
+last_modified: 2026-06-18
+updated: 2026-06-18
+tags: [feature, watchlist, investments, tracking, alerts, phase-3.6, offline-resilience, online-status-detection, api-client-migration, validation, june-2026, backtest, added-price, adr-097]
+description: Investment watchlist for tracking securities not yet in the portfolio with target price alerts. June 2026: POST/PATCH return 400 ValidationError for invalid fields; what-if backtest shows return since add date using added_price (migration 0058, ADR-097).
 aliases: [watch list, price alerts, investment tracking]
 related_code:
   - apps/frontend/src/pages/portfolio/WatchlistPage.tsx
+  - apps/frontend/src/components/portfolio/AddToWatchlistDialog.tsx
   - apps/frontend/src/hooks/usePortfolio.ts
   - apps/frontend/src/types/watchlist.ts
   - apps/frontend/src/lib/api.ts
@@ -65,11 +66,23 @@ Implementation note:
 
 ### POST /api/watchlist
 
-Adds a security to the watchlist.
+Adds a security to the watchlist. Required fields: `name`, `asset_class`, `target_price`.
 
 ### PATCH /api/watchlist/:id
 
-Updates a watchlist item (e.g., set target price).
+Updates a watchlist item (e.g., set target price). All fields are optional (partial update).
+
+### Input Validation (June 2026)
+
+POST and PATCH now validate typed fields before the database layer, returning `400 ValidationError` for:
+
+- `target_price` that is not a finite number ≥ 0
+- `asset_class` outside `{stock, etf, crypto, metals}`
+- `currency` that is not a 3-letter alphabetic code
+
+Previously these reached the typed DB column and surfaced as opaque 500 errors. Callers sending valid data are unaffected.
+
+See [[docs/api/watchlist|Watchlist API]] for the full error-response table.
 
 ### DELETE /api/watchlist/:id
 
@@ -116,6 +129,24 @@ Watchlist prices are updated when:
 - Added `MarketSearchResult` type export from `[[apps/frontend/src/lib/api/market.ts]]`
 - Dialog now benefits from shared error handling, retry logic, and timeout controls
 
+### Prefill from Market Lookup (2026-06-16)
+
+`AddToWatchlistDialog` accepts an optional `prefill?: WatchlistPrefill` prop:
+
+```typescript
+interface WatchlistPrefill {
+  symbol: string;
+  name: string;
+  type?: string;      // maps to asset class auto-detection
+  currency?: string;
+  price?: number;     // seeds the target price field
+}
+```
+
+When `prefill` is provided the dialog **skips its internal search step**: it seeds the selected asset, auto-detects asset class from `type`, sets currency, and defaults the target price to the current price. The user is one confirm away from adding the item. Search-based usage (no `prefill`) is completely unchanged.
+
+The primary caller of the prefill path is `[[apps/frontend/src/pages/research/MarketLookupPage.tsx]]`: when a Yahoo symbol's detail view is open, an "Add to Watchlist" outline button in the quote header opens this dialog pre-populated from the current live quote. See [[docs/features/market-lookup|Market Lookup]] for the full quote-header action context.
+
 ## Offline Resilience
 
 The watchlist page gracefully degrades when offline:
@@ -138,9 +169,39 @@ Code links: [[apps/frontend/src/pages/portfolio/WatchlistPage.tsx]], [[apps/fron
 - Translated `portfolio.refreshPricesFailedTitle` from English "Refresh prices failed" to Dutch "Bijwerken van koersen mislukt"
 - Translated `portfolio.recordTxnFailedTitle` from English "Record transaction failed" to Dutch "Registreren van portfoliotransactie mislukt"
 
-**Known Dutch Translation Gap:**
-- Multiple `*FailedTitle` keys remain untranslated in Dutch: `categories.FailedTitle`, `recipients.FailedTitle`, `transactions.FailedTitle`, and additional portfolio error keys
-- These keys currently display English text in Dutch locale; flagged as follow-up work to complete Dutch coverage
+**Dutch Translation Gap — RESOLVED (2026-06-16):**
+- The `*FailedTitle` keys (categories/recipients/transactions/portfolio — 18 keys total) that
+  previously displayed English text in the Dutch locale are now fully translated in
+  `i18n/source/nl.json`. No remaining `*FailedTitle` gap.
+
+## What-If Backtest (2026-06-18, ADR-097)
+
+`WatchlistPage` shows a **"Since added {date} +X%"** label for each item that has an `added_price`:
+
+```
+return = (current_price − added_price) / added_price × 100
+```
+
+`added_price` is snapshotted from the live quote at the moment the item is added. This gives a concrete "had I bought when I added it" answer without requiring price-history coverage back to the add date.
+
+### Database column
+
+Migration 0058 (authored, not applied — `bun run db:upgrade`) adds `added_price NUMERIC(18,6) NULLABLE` to the `watchlist` table.
+
+### API behavior
+
+`POST /api/watchlist` now accepts `added_price` as an optional field. If not supplied, the backend
+attempts to set it from the live quote returned by the market-lookup provider at add time. If no
+live quote is available, `added_price` is stored as `null` and the "Since added" label is omitted.
+
+`PATCH /api/watchlist/:id` can update `added_price` (e.g., to reset the baseline).
+
+See [[docs/api/watchlist|Watchlist API]] for the updated request/response shape.
+
+> [!info] Migration required
+> The "Since added" UI is gated on `added_price` being non-null, so existing watchlist items will
+> not show the backtest label until `added_price` is set. After applying migration 0058 and
+> re-adding items (or manually PATCHing `added_price`), the label appears automatically.
 
 ## Adding from Watchlist
 
@@ -154,3 +215,5 @@ Users can promote a watchlist item to a full portfolio investment with one click
 - [[docs/features/portfolio|Portfolio]] — Full investment tracking
 - [[docs/features/market-lookup|Market Lookup]] — Finding securities to add to watchlist or portfolio
 - [[docs/integrations/price-providers|Price Providers]] — Live price fetching
+- [[docs/adr/097-portfolio-research-analytics|ADR-097]] — Watchlist backtest decision (added_price approach)
+- [[docs/api/watchlist|Watchlist API]] — added_price field and updated POST/PATCH contract

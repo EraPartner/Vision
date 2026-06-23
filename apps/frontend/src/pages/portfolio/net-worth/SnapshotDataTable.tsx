@@ -17,6 +17,7 @@ interface SnapshotDataTableProps {
 type BreakdownRow = {
   date: string;
   liquid: number;
+  liabilities: number;
   investments: number;
   netWorth: number;
   change: number | undefined;
@@ -42,6 +43,7 @@ export function SnapshotDataTable({
       result.push({
         date: s.date,
         liquid: s.liquid,
+        liabilities: s.liabilities ?? 0,
         investments: s.investments,
         netWorth: s.netWorth,
         change: older ? s.netWorth - older.netWorth : undefined,
@@ -49,6 +51,13 @@ export function SnapshotDataTable({
     }
     return result;
   }, [snapshots]);
+
+  // Only show the liabilities column when some day carries debt, so debt-free
+  // portfolios keep the original column set.
+  const hasLiabilities = useMemo(
+    () => snapshots.some((s) => Math.abs(s.liabilities ?? 0) > 0.005),
+    [snapshots],
+  );
 
   const columns = useMemo(() => [
     {
@@ -64,6 +73,12 @@ export function SnapshotDataTable({
       className: 'text-right tabular-nums',
       render: (row: BreakdownRow) => fmt(row.liquid),
     },
+    ...(hasLiabilities ? [{
+      key: 'liabilities',
+      header: t('networth.liabilities'),
+      className: 'text-right tabular-nums',
+      render: (row: BreakdownRow) => fmt(row.liabilities),
+    }] : []),
     {
       key: 'investments',
       header: t('networth.investments'),
@@ -89,7 +104,7 @@ export function SnapshotDataTable({
         );
       },
     },
-  ], [dateFormat, fmt, t]);
+  ], [dateFormat, fmt, t, hasLiabilities]);
 
   if (snapshots.length === 0) return null;
 

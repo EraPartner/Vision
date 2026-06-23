@@ -41,8 +41,11 @@ vi.mock('../../src/config/logger.js', () => ({
   logger: { info: vi.fn(), error: vi.fn(), warn: vi.fn(), debug: vi.fn() },
 }));
 
-vi.mock('../../src/services/materializedViewService.js', () => ({
-  scheduleRefresh: vi.fn(),
+vi.mock('../../src/services/transferReconciliationService.js', () => ({
+  scheduleReconcile: vi.fn(),
+  getTransferSuggestions: vi.fn(),
+  markTransfer: vi.fn(),
+  unmarkTransfer: vi.fn(),
 }));
 
 vi.mock('../../src/services/currency/currencyConversionService.js', () => ({
@@ -74,7 +77,7 @@ vi.mock('../../src/database/connection.js', () => {
 await import('../../src/routes/transactions.js');
 
 import { getClient, query as dbQuery } from '../../src/database/connection.js';
-import { scheduleRefresh } from '../../src/services/materializedViewService.js';
+import { scheduleReconcile } from '../../src/services/transferReconciliationService.js';
 
 describe('POST /bulk-tag — input validation', () => {
   beforeEach(() => vi.clearAllMocks());
@@ -158,7 +161,7 @@ describe('POST /bulk-tag — success paths', () => {
     expect(data.added).toBe(2);
     expect(data.removed).toBe(0);
     expect(data.transactions_affected).toBe(2);
-    expect(scheduleRefresh).toHaveBeenCalledTimes(1);
+    expect(scheduleReconcile).toHaveBeenCalledTimes(1);
   });
 
   it('removes tags and returns correct counts', async () => {
@@ -204,7 +207,7 @@ describe('POST /bulk-tag — success paths', () => {
 describe('POST /bulk-tag — atomicity', () => {
   beforeEach(() => vi.clearAllMocks());
 
-  it('rolls back and does not call scheduleRefresh when transaction fails', async () => {
+  it('rolls back and does not call scheduleReconcile when transaction fails', async () => {
     dbQuery.mockResolvedValueOnce({ rows: [{ id: 10, slug: 'rome-2020' }] });
     const clientQuery = vi.fn()
       .mockResolvedValueOnce({}) // BEGIN
@@ -217,7 +220,7 @@ describe('POST /bulk-tag — atomicity', () => {
     const res = mockResponse();
     await callHandler(routeHandlers['post:/bulk-tag'], req, res);
 
-    expect(scheduleRefresh).not.toHaveBeenCalled();
+    expect(scheduleReconcile).not.toHaveBeenCalled();
     expect(res.status).toHaveBeenCalledWith(500);
     const rollbackCall = clientQuery.mock.calls.find(([sql]) => sql === 'ROLLBACK');
     expect(rollbackCall).toBeDefined();

@@ -17,14 +17,14 @@ import { getProviderHealth, probeProvider } from '@/lib/api/admin';
 import type { ProviderHealth } from '@/lib/api/admin';
 
 function StatusIcon({ failures }: { failures: number }) {
-    if (failures === 0) return <CheckCircle2 className="h-4 w-4 text-green-500" />;
-    if (failures <= 2) return <AlertTriangle className="h-4 w-4 text-amber-500" />;
+    if (failures === 0) return <CheckCircle2 className="h-4 w-4 text-success" />;
+    if (failures <= 2) return <AlertTriangle className="h-4 w-4 text-warning" />;
     return <XCircle className="h-4 w-4 text-destructive" />;
 }
 
 function statusBadgeClass(failures: number) {
-    if (failures === 0) return 'bg-green-500/10 text-green-700 dark:text-green-400';
-    if (failures <= 2) return 'bg-amber-500/10 text-amber-700 dark:text-amber-400';
+    if (failures === 0) return 'bg-success/10 text-success';
+    if (failures <= 2) return 'bg-warning/10 text-warning';
     return 'bg-destructive/10 text-destructive';
 }
 

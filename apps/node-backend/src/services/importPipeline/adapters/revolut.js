@@ -4,22 +4,16 @@
 
 import { cleanRecipientName, normalizeToUppercase } from '../../textNormalization.js';
 import { logger } from '../../../config/logger.js';
-import { parseCsvFile, buildOptionalComment, parseDecimalSafe } from './_shared.js';
+import { parseCsvFile, buildOptionalComment, parseDecimalSafe, parseDateFlexibleUtc } from './_shared.js';
 
 const NAME = 'revolut';
 const BANK_LABEL = 'Revolut';
 const MIN_FIELDS = 10;
 
 function parseRevolutDate(completedDateStr) {
-  for (const fmt of [
-    /^(\d{4})-(\d{2})-(\d{2})\s/,
-    /^(\d{4})-(\d{2})-(\d{2})$/,
-  ]) {
-    const m = completedDateStr.match(fmt);
-    if (m) return new Date(`${m[1]}-${m[2]}-${m[3]}`);
-  }
-  const generic = new Date(completedDateStr);
-  return isNaN(generic.getTime()) ? null : generic;
+  // "YYYY-MM-DD HH:MM:SS" and plain ISO are both handled by the shared parser;
+  // any other shape is rebuilt at UTC midnight rather than local (day-shift).
+  return parseDateFlexibleUtc(completedDateStr);
 }
 
 function buildBankAccount(product) {
@@ -104,16 +98,19 @@ export async function parse(filePath) {
     skip_empty_lines: true,
     relax_column_count: true,
   });
-  const transactions = [];
+  const transactions = /** @type {any[] & { skipped?: number }} */ ([]);
+  let skipped = 0;
 
   for (let i = 0; i < records.length; i++) {
     const parts = records[i];
     if (i === 0 && parts[0] && parts[0].trim() === 'Type') continue;
     const tx = parseRow(parts);
     if (tx) transactions.push(tx);
+    else skipped++;
   }
 
-  logger.info(`Revolut CSV parsed: ${transactions.length} transactions`);
+  transactions.skipped = skipped;
+  logger.info(`Revolut CSV parsed: ${transactions.length} transactions, ${skipped} skipped`);
   return transactions;
 }
 

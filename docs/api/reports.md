@@ -3,6 +3,7 @@ title: Reports API
 type: endpoint
 status: active
 date: 2026-04-27
+updated: 2026-05-29
 tags:
   - api
   - reports
@@ -129,6 +130,26 @@ Server-side PDF generation via **Puppeteer headless Chrome** (Phase 3 redesign).
   - Actions: `export.{currency,download,downloading,comingSoon}`
 - **Generated Artifacts**: Keys regenerated into `apps/frontend/src/locales/en.ts` and `nl.ts` via build system
 - **Validation**: All keys pass parity checks, placeholder consistency, type safety, and drift detection
+
+## Rate Limiting
+
+All `/api/reports/*` endpoints are subject to a 30 req/min route-group limiter (`reportRateLimiter`; bypassed in development). The low limit prevents fork-bombing: every POST request forks a headless Chromium process. See [[docs/security/rate-limiting|Rate Limiting]] for details.
+
+## CSS Injection Hardening (2026-05-29)
+
+Report theme tokens (e.g. `primary`, `surface`, `text`) are passed from the frontend as HSL component strings and interpolated verbatim into a `:root {}` CSS block rendered by Puppeteer. An unconstrained string at this point is a CSS injection / `url()`-SSRF vector.
+
+**Current protection (defense-in-depth):**
+
+1. **Route boundary (Zod):** Each theme token field is validated against `HSL_COMPONENT_RE` before the request body is accepted:
+   ```
+   ^\d{1,3}(?:\.\d+)?\s+\d{1,3}(?:\.\d+)?%\s+\d{1,3}(?:\.\d+)?%$
+   ```
+   Example of a valid value: `"250 84% 60%"` (hue degrees, saturation %, lightness %).
+
+2. **Sink-level guard (`themeCss.js`):** The same regex is re-applied in `buildThemeCss()` before interpolation. Invalid tokens silently fall back to the mode default (light or dark) rather than propagating the raw value.
+
+Both guards are exported (`HSL_COMPONENT_RE`) and covered by [[apps/node-backend/tests/themeCss.test.js]].
 
 ## Base URL
 

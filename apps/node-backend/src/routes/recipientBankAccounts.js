@@ -3,8 +3,7 @@
  */
 
 import { Router } from 'express';
-// eslint-disable-next-line vision-local/no-repo-direct-from-route
-import recipientBankAccountRepository from '../repositories/recipientBankAccountRepository.js';
+import recipientBankAccountRepository from '../services/recipientBankAccountService.js';
 import { NotFoundError, ValidationError } from '../middleware/errorHandler.js';
 import { validateIdParam } from '../middleware/validation.js';
 

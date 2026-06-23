@@ -1,5 +1,5 @@
 // @refresh reset
-import { useState, useEffect, useCallback, useRef } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { useNavigate } from "react-router-dom";
 import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
 import { VisuallyHidden } from "@radix-ui/react-visually-hidden";
@@ -8,8 +8,8 @@ import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
 import {
     Wallet, Upload, Tags, Sparkles, ArrowRight, ArrowLeft,
-    CheckCircle2, CloudUpload, Loader2, BarChart3, Receipt,
-    CalendarClock, TrendingUp, LineChart, File, X,
+    CheckCircle2, Loader2, BarChart3, Receipt,
+    CalendarClock, TrendingUp, LineChart, X,
     HardDrive, ShieldCheck, FolderOpen, PiggyBank, CreditCard,
     LayoutDashboard,
 } from "lucide-react";
@@ -17,6 +17,7 @@ import { apiClient } from "@/lib/api";
 import { toast } from "sonner";
 import { useLanguage } from "@/contexts/LanguageContext";
 import logger from "@/lib/logger";
+import { CsvDropzone } from "@/features/imports/CsvDropzone";
 import { RestoreFromBackupCard } from "./RestoreFromBackupCard";
 
 const ONBOARDING_KEY = "onboarding_complete";
@@ -115,7 +116,7 @@ export function OnboardingWizard({ open, onComplete, onOpenSettings }: Onboardin
         { icon: CalendarClock,title: t('onboarding.feature.planned.title'),      desc: t('onboarding.feature.planned.desc'),      path: "/planned" },
         { icon: BarChart3,    title: t('onboarding.feature.statistics.title'),   desc: t('onboarding.feature.statistics.desc'),   path: "/statistics" },
         { icon: TrendingUp,   title: t('onboarding.feature.portfolio.title'),    desc: t('onboarding.feature.portfolio.desc'),    path: "/portfolio" },
-        { icon: LineChart,    title: t('onboarding.feature.market.title'),       desc: t('onboarding.feature.market.desc'),       path: "/portfolio/market" },
+        { icon: LineChart,    title: t('onboarding.feature.market.title'),       desc: t('onboarding.feature.market.desc'),       path: "/research/market" },
     ];
 
     const OVERVIEW_SECTIONS = [
@@ -148,7 +149,6 @@ export function OnboardingWizard({ open, onComplete, onOpenSettings }: Onboardin
     const [file, setFile] = useState<File | null>(null);
     const [importing, setImporting] = useState(false);
     const [importResult, setImportResult] = useState<{ imported: number; duplicates: number } | null>(null);
-    const fileInputRef = useRef<HTMLInputElement>(null);
 
     const [selectedCategories, setSelectedCategories] = useState<Set<number>>(
         new Set(SUGGESTED_CATEGORIES.map((_, i) => i))
@@ -222,7 +222,7 @@ export function OnboardingWizard({ open, onComplete, onOpenSettings }: Onboardin
                             </div>
                             <span className="font-bold text-foreground">Vision</span>
                         </div>
-                        <Button variant="ghost" size="icon" className="icon-touch-target" aria-label="Close" onClick={onComplete}>
+                        <Button variant="ghost" size="icon" className="icon-touch-target" aria-label={t('aria.close')} onClick={onComplete}>
                             <X className="h-4 w-4" />
                         </Button>
                     </div>
@@ -365,33 +365,7 @@ export function OnboardingWizard({ open, onComplete, onOpenSettings }: Onboardin
                                 </div>
                             ) : (
                                 <>
-                                    <input
-                                        ref={fileInputRef}
-                                        type="file"
-                                        accept=".csv,.CSV"
-                                        className="hidden"
-                                        onChange={(e) => setFile(e.target.files?.[0] || null)}
-                                    />
-                                    <button
-                                        onClick={() => fileInputRef.current?.click()}
-                                        className={cn(
-                                            "flex-1 flex flex-col items-center justify-center gap-3 rounded-xl border-2 border-dashed transition-colors cursor-pointer min-h-[160px]",
-                                            file ? "border-primary bg-primary/5" : "border-border hover:border-primary/40"
-                                        )}
-                                    >
-                                        {file ? (
-                                            <>
-                                                <File className="h-8 w-8 text-primary" />
-                                                <span className="text-sm font-medium text-foreground">{file.name}</span>
-                                                <span className="text-xs text-muted-foreground">{(file.size / 1024).toFixed(1)} {t('common.kb')}</span>
-                                            </>
-                                        ) : (
-                                            <>
-                                                <CloudUpload className="h-8 w-8 text-muted-foreground" />
-                                                <span className="text-sm text-muted-foreground">{t('onboarding.import.dropHint')}</span>
-                                            </>
-                                        )}
-                                    </button>
+                                    <CsvDropzone file={file} onFileSelect={setFile} compact />
 
                                     {file && (
                                         <Button onClick={handleImport} disabled={importing || !selectedBank} className="gap-2">

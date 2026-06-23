@@ -16,6 +16,7 @@ import {
 import { toNumber, isValidPrice } from './priceCache.js';
 import { median } from '../../lib/math.js';
 import { convertToCurrency } from '../currency/currencyConversionService.js';
+import { assertPublicHttpUrl } from '../../lib/urlSafety.js';
 
 const yahooFinance = new YahooFinance({ suppressNotices: ['yahooSurvey'] });
 
@@ -99,13 +100,56 @@ export function resolveKinesisConfig(inv) {
 
 // ─── HTTP helper ──────────────────────────────────────────────────────────────
 
+const CUSTOM_FETCH_MAX_REDIRECTS = 3;
+const CUSTOM_FETCH_MAX_BYTES = 5 * 1024 * 1024; // 5 MB — provider JSON is tiny; cap guards against memory-exhaustion responses.
+
+/**
+ * Reject a response whose declared Content-Length exceeds the size cap, before
+ * buffering the body. Applies to every provider fetch (custom + hardcoded
+ * Binance/Kinesis) so a hostile or wedged upstream can't exhaust memory.
+ *
+ * @param {Response} res
+ * @param {string} provider - label for the error message
+ */
+function _assertResponseWithinCap(res, provider) {
+  const declaredLength = Number(res.headers?.get?.('content-length') || 0);
+  if (declaredLength > CUSTOM_FETCH_MAX_BYTES) {
+    throw new Error(`${provider} response too large: ${declaredLength} bytes`);
+  }
+}
+
+/**
+ * Fetch JSON from a user-controlled custom-provider URL.
+ *
+ * Custom provider URLs come from the investment record (price_provider_*_url),
+ * so this is an SSRF sink: every hop is validated against the public-URL guard
+ * (scheme + private/loopback/link-local block, DNS-resolved). Redirects are
+ * followed manually so a public host cannot 302 the request to an internal
+ * address, and the response body is size-capped.
+ */
 async function _fetchJson(url) {
-  const res = await fetch(url, {
-    headers: { Accept: 'application/json' },
-    signal: AbortSignal.timeout(10_000),
-  });
-  if (!res.ok) throw new Error(`HTTP ${res.status}`);
-  return res.json();
+  let current = String(url);
+  for (let hop = 0; hop <= CUSTOM_FETCH_MAX_REDIRECTS; hop += 1) {
+    await assertPublicHttpUrl(current); // throws BlockedUrlError on private/loopback/non-http
+    const res = await fetch(current, {
+      headers: { Accept: 'application/json' },
+      redirect: 'manual',
+      signal: AbortSignal.timeout(10_000),
+    });
+
+    if (res.status >= 300 && res.status < 400) {
+      const location = res.headers.get('location');
+      if (!location) throw new Error(`HTTP ${res.status} redirect without Location`);
+      current = new URL(location, current).toString(); // re-validated at top of next loop
+      continue;
+    }
+
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+
+    _assertResponseWithinCap(res, 'Custom provider');
+    return res.json();
+  }
+  throw new Error('Too many redirects');
 }
 
 // ─── Custom endpoint parsing ──────────────────────────────────────────────────
@@ -312,6 +356,7 @@ export const PROVIDERS = {
         signal: AbortSignal.timeout(8_000),
       });
       if (!res.ok) throw new Error(`Binance API error: ${res.status}`);
+      _assertResponseWithinCap(res, 'Binance');
       const data = await res.json();
 
       const priceMap = {};
@@ -339,17 +384,22 @@ export const PROVIDERS = {
   async yahoo(providerIds) {
     const prices = {};
     const resolved = new Set();
-    await Promise.all(providerIds.map(async (providerId) => {
-      const symbol = (providerId || '').toUpperCase();
-      if (!symbol) return;
 
-      try {
-        // yahoo-finance2 overloads `.quote(string)` to return Quote, but its
-        // typings collapse to QuoteResponseArray; cast to a structural shape
-        // to access fields without losing runtime safety.
-        const quote = /** @type {{ regularMarketPrice?: number, regularMarketPreviousClose?: number, currency?: string }} */ (
-          await yahooFinance.quote(symbol)
-        );
+    const symbols = [...new Set(providerIds.map((s) => (s || '').toUpperCase()).filter(Boolean))];
+    if (symbols.length === 0) return prices;
+
+    try {
+      // Single batched request. yahoo-finance2 `.quote()` accepts an array and
+      // returns one Quote per resolvable symbol — collapsing what used to be N
+      // separate `quote()` round-trips into one call (a 30-holding portfolio
+      // went from ~30 outbound requests to 1). Normalise to an array so a
+      // single-symbol response (object) is handled the same way.
+      const raw = /** @type {any} */ (await yahooFinance.quote(symbols));
+      const quotes = Array.isArray(raw) ? raw : (raw ? [raw] : []);
+
+      for (const quote of quotes) {
+        const symbol = (quote?.symbol || '').toUpperCase();
+        if (!symbol) continue;
         const livePrice = toNumber(quote?.regularMarketPrice);
         const previousClose = toNumber(quote?.regularMarketPreviousClose);
 
@@ -360,15 +410,14 @@ export const PROVIDERS = {
           resolved.add(symbol);
           prices[symbol] = { price: previousClose, currency: quote?.currency || 'USD', source: 'close' };
         }
-      } catch (err) {
-        logger.warn(`Yahoo quote failed for ${symbol}`, { error: err.message });
       }
-    }));
+    } catch (err) {
+      // Whole-batch failure (network/validation): leave every symbol unresolved
+      // so the per-symbol chart fallback below recovers each independently.
+      logger.warn('Yahoo batch quote failed; falling back per-symbol', { error: err.message });
+    }
 
-    const unresolved = providerIds
-      .map(s => (s || '').toUpperCase())
-      .filter(Boolean)
-      .filter(symbol => !resolved.has(symbol));
+    const unresolved = symbols.filter((symbol) => !resolved.has(symbol));
 
     if (unresolved.length) {
       await Promise.all(unresolved.map(async (symbol) => {
@@ -451,6 +500,7 @@ export const PROVIDERS = {
           continue;
         }
 
+        _assertResponseWithinCap(res, 'Kinesis');
         const data = await res.json();
         const rawPoints = data?.[symbol];
 

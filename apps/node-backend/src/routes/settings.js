@@ -9,8 +9,7 @@
  */
 
 import { Router } from 'express';
-// eslint-disable-next-line vision-local/no-repo-direct-from-route
-import settingsRepository from '../repositories/settingsRepository.js';
+import settingsRepository from '../services/settingsService.js';
 import { validateIntArray } from '../middleware/validation.js';
 import { NotFoundError, ValidationError } from '../middleware/errorHandler.js';
 
@@ -84,6 +83,58 @@ function assertDashboardSettingsValue(value, { validateExcludeHiddenCategories =
   }
 }
 
+// Saved cash-aware rebalancing plans (ADR-098): a list of user-defined target
+// allocations the rebalance page deploys spendable cash toward. Stored here (not
+// a dedicated table) since they are small, per-install config — same key-value
+// store as the other settings.
+const MAX_REBALANCE_PLANS = 50;
+function assertRebalancePlansValue(value) {
+  if (!Array.isArray(value)) {
+    throw new ValidationError('rebalance_plans must be an array');
+  }
+  if (value.length > MAX_REBALANCE_PLANS) {
+    throw new ValidationError(`rebalance_plans may contain at most ${MAX_REBALANCE_PLANS} plans`);
+  }
+  for (const plan of value) {
+    if (typeof plan !== 'object' || plan === null || Array.isArray(plan)) {
+      throw new ValidationError('each rebalance plan must be an object');
+    }
+    if (typeof plan.id !== 'string' || plan.id.length === 0 || plan.id.length > 100) {
+      throw new ValidationError('rebalance plan id must be a non-empty string (max 100 chars)');
+    }
+    if (typeof plan.name !== 'string' || plan.name.trim().length === 0 || plan.name.length > 80) {
+      throw new ValidationError('rebalance plan name must be a string of 1-80 chars');
+    }
+    const weights = plan.targetWeights;
+    if (typeof weights !== 'object' || weights === null || Array.isArray(weights)) {
+      throw new ValidationError('rebalance plan targetWeights must be an object');
+    }
+    const keys = Object.keys(weights);
+    if (keys.length === 0) {
+      throw new ValidationError('rebalance plan targetWeights must have at least one sleeve');
+    }
+    let weightSum = 0;
+    for (const [sleeve, weight] of Object.entries(weights)) {
+      const n = Number(weight);
+      if (!Number.isFinite(n) || n < 0) {
+        throw new ValidationError(`rebalance plan targetWeights.${sleeve} must be a non-negative number`);
+      }
+      weightSum += n;
+    }
+    // An all-zero plan would silently deploy nothing when applied. Reject it at
+    // save time so the user gets immediate feedback rather than a dead plan.
+    if (!(weightSum > 0)) {
+      throw new ValidationError('rebalance plan targetWeights must include at least one positive weight');
+    }
+    if (plan.cashCap !== undefined) {
+      const cap = Number(plan.cashCap);
+      if (!Number.isFinite(cap) || cap < 0) {
+        throw new ValidationError('rebalance plan cashCap must be a non-negative number');
+      }
+    }
+  }
+}
+
 router.get('/', async (req, res) => {
   const settings = await settingsRepository.getAll();
   res.ok(settings);
@@ -100,6 +151,7 @@ const SETTING_DEFAULTS = {
     startOfWeek: 'monday',
     showDecimalPlaces: 2,
     language: 'en',
+    autoClearPlannedOnMatch: true,
   },
   dashboard_settings: {
     excludedCategoryIds: [],
@@ -117,6 +169,7 @@ const SETTING_DEFAULTS = {
   },
   widget_visibility: {},
   cost_basis_method: 'weighted_avg',
+  rebalance_plans: [],
 };
 
 router.get('/:key', async (req, res) => {
@@ -132,13 +185,9 @@ router.get('/:key', async (req, res) => {
   res.ok({ key, value });
 });
 
-router.put('/:key', async (req, res) => {
-  const { key } = req.params;
-  const { value } = req.body;
-
-  assertSettingKeyLength(key);
-  if (value === undefined) throw new ValidationError('Missing "value" in request body');
-
+// Per-key value validation shared by the single-key and bulk handlers so the
+// bulk endpoint can't bypass the rules the single-key endpoint enforces.
+function validateSettingValue(key, value) {
   if (key === 'dashboard_settings') {
     assertDashboardSettingsValue(value, {
       validateExcludeHiddenCategories: true,
@@ -151,6 +200,20 @@ router.put('/:key', async (req, res) => {
       throw new ValidationError(`Invalid cost_basis_method. Allowed: ${ALLOWED_COST_BASIS_METHODS.join(', ')}`);
     }
   }
+  if (key === 'includeTransfers' && typeof value !== 'boolean') {
+    throw new ValidationError('includeTransfers must be a boolean');
+  }
+  if (key === 'rebalance_plans') assertRebalancePlansValue(value);
+}
+
+router.put('/:key', async (req, res) => {
+  const { key } = req.params;
+  const { value } = req.body;
+
+  assertSettingKeyLength(key);
+  if (value === undefined) throw new ValidationError('Missing "value" in request body');
+
+  validateSettingValue(key, value);
 
   const result = await settingsRepository.set(key, value);
   res.ok(result);
@@ -165,8 +228,7 @@ router.put('/', async (req, res) => {
   for (const key of Object.keys(settings)) assertSettingKeyLength(key, true);
 
   for (const [key, value] of Object.entries(settings)) {
-    if (key === 'dashboard_settings') assertDashboardSettingsValue(value);
-    if (key === 'theme_settings') assertThemeSettingsValue(value);
+    validateSettingValue(key, value);
   }
 
   await settingsRepository.setMany(settings);

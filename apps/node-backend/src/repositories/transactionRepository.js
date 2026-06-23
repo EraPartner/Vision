@@ -104,18 +104,22 @@ export const transactionRepository = {
     // Build ORDER BY — fall back to default date DESC when no valid sort supplied
     const sortCol = TRANSACTION_SORT_COLUMNS[sortBy] || 't.date';
     const sortDirection = sortDir === 'asc' ? 'ASC' : 'DESC';
-    // Secondary sort by date DESC keeps rows stable when primary column has ties
+    // Secondary sort by date DESC keeps rows stable when primary column has
+    // ties; t.id DESC is the unique final tiebreaker so LIMIT/OFFSET pages can't
+    // duplicate or skip same-date rows across separate query executions.
     const orderBy = sortBy && TRANSACTION_SORT_COLUMNS[sortBy]
-      ? `${sortCol} ${sortDirection}, t.date DESC`
-      : `t.date DESC`;
+      ? `${sortCol} ${sortDirection}, t.date DESC, t.id DESC`
+      : `t.date DESC, t.id DESC`;
 
-    // Partition by bank_account: a running balance is a per-account ledger
+    // Partition by account_id (ADR-088): a running balance is a per-account ledger
     // figure. Without the partition, a list spanning multiple accounts summed
-    // them into one meaningless cross-account total. (The window itself is
-    // evaluated over the full filtered set, before LIMIT/OFFSET, so the value
+    // them into one meaningless cross-account total. account_id is the real
+    // account identity (the bank_account string is being retired); it is kept in
+    // sync on every write by the dual-write trigger (migration 0051). (The window
+    // is evaluated over the full filtered set, before LIMIT/OFFSET, so the value
     // is still correct across pages.)
     const runningBalanceCol = includeBalance
-      ? `, SUM(t.amount) OVER (PARTITION BY t.bank_account ORDER BY t.date ASC, t.id ASC) AS running_balance`
+      ? `, SUM(t.amount) OVER (PARTITION BY t.account_id ORDER BY t.date ASC, t.id ASC) AS running_balance`
       : '';
 
     const sql = `
@@ -192,7 +196,7 @@ export const transactionRepository = {
     if (recipientId != null) { sql += ` AND t.recipient_id = $${paramIdx++}`; params.push(recipientId); }
     if (recipientName) { sql += ` AND r.name ILIKE $${paramIdx++}`; params.push(`%${recipientName}%`); }
 
-    sql += ` ORDER BY t.date DESC LIMIT $${paramIdx} OFFSET $${paramIdx + 1}`;
+    sql += ` ORDER BY t.date DESC, t.id DESC LIMIT $${paramIdx} OFFSET $${paramIdx + 1}`;
     params.push(limit, offset);
 
     const result = await query(sql, params);
@@ -284,7 +288,7 @@ export const transactionRepository = {
         FROM transactions t
         LEFT JOIN recipients r ON t.recipient_id = r.id
         WHERE ${uncategorisedWhere}
-        ORDER BY t.date DESC
+        ORDER BY t.date DESC, t.id DESC
         LIMIT $${limitParam} OFFSET $${offsetParam}
       )
       SELECT u.*,
@@ -359,7 +363,9 @@ export const transactionRepository = {
       recipient_id,
       amount,
       memo ? memo.toUpperCase() : null,
-      currency ? currency.toUpperCase() : null,
+      // Default to EUR rather than NULL: currency is NOT NULL at the DB level
+      // (migration 0046) and the read layer already coalesces missing → EUR.
+      currency ? currency.toUpperCase() : 'EUR',
       balance,
       category_id,
       comment,
@@ -416,17 +422,16 @@ export const transactionRepository = {
 
     const sortCol = TRANSACTION_SORT_COLUMNS[sortBy] || 't.date';
     const sortDirection = sortDir === 'asc' ? 'ASC' : 'DESC';
+    // t.id DESC is the unique final tiebreaker — without it LIMIT/OFFSET pages
+    // can duplicate or skip same-date rows across separate query executions.
     const orderBy = sortBy && TRANSACTION_SORT_COLUMNS[sortBy]
-      ? `${sortCol} ${sortDirection}, t.date DESC`
-      : `t.date DESC`;
+      ? `${sortCol} ${sortDirection}, t.date DESC, t.id DESC`
+      : `t.date DESC, t.id DESC`;
 
-    // Partition by bank_account: a running balance is a per-account ledger
-    // figure. Without the partition, a list spanning multiple accounts summed
-    // them into one meaningless cross-account total. (The window itself is
-    // evaluated over the full filtered set, before LIMIT/OFFSET, so the value
-    // is still correct across pages.)
+    // Partition by account_id (ADR-088) — see getAll for the rationale; account_id
+    // is kept in sync with bank_account by the dual-write trigger (migration 0051).
     const runningBalanceCol = includeBalance
-      ? `, SUM(t.amount) OVER (PARTITION BY t.bank_account ORDER BY t.date ASC, t.id ASC) AS running_balance`
+      ? `, SUM(t.amount) OVER (PARTITION BY t.account_id ORDER BY t.date ASC, t.id ASC) AS running_balance`
       : '';
 
     const sql = `
@@ -502,6 +507,12 @@ export const transactionRepository = {
           `;
           const res = await client.query(updateSql, updateParams);
           if (!res.rows[0]) return null;
+        } else {
+          // Tags-only PATCH: probe existence first. Otherwise setTransactionTags'
+          // junction INSERT hits the transaction_id FK for a missing row → a raw
+          // 23503 surfaces as a 500 instead of the standard 404.
+          const exists = await client.query('SELECT 1 FROM transactions WHERE id = $1', [id]);
+          if (!exists.rows[0]) return null;
         }
         await setTransactionTags(client, id, tags ?? []);
         const res = await client.query(fetchSql, [id]);
@@ -550,6 +561,35 @@ export const transactionRepository = {
   async hardDelete(id) {
     const result = await queryPrepared('tx_hard_delete', 'DELETE FROM transactions WHERE id = $1', [id]);
     return result.rowCount > 0;
+  },
+
+  // Recent active transactions not yet linked to any planned-transaction
+  // execution. Feeds the match-suggestions read endpoint so already-cleared
+  // transactions never resurface as candidates. Returns the cluster root so the
+  // matcher can compare against planned-payment clusters directly.
+  async listRecentUnlinked({ sinceDate }) {
+    const result = await query(
+      `SELECT t.id,
+              t.recipient_id,
+              COALESCE(r.primary_recipient_id, t.recipient_id) AS recipient_cluster_id,
+              t.amount,
+              t.date AS transaction_date,
+              t.currency,
+              t.memo,
+              r.name AS recipient_name
+         FROM transactions t
+         LEFT JOIN recipients r ON t.recipient_id = r.id
+        WHERE t.is_active = true
+          AND t.recipient_id IS NOT NULL
+          AND t.date >= $1
+          AND NOT EXISTS (
+            SELECT 1 FROM planned_transaction_executions pte
+             WHERE pte.executed_transaction_id = t.id
+          )
+        ORDER BY t.date DESC, t.id DESC`,
+      [sinceDate]
+    );
+    return result.rows;
   },
 };
 

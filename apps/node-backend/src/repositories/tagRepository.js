@@ -5,7 +5,7 @@
  * while preserving junction row history.
  */
 
-import { query, withTransaction } from '../database/connection.js';
+import { query } from '../database/connection.js';
 
 export const tagRepository = {
   /**
@@ -15,7 +15,6 @@ export const tagRepository = {
   async getAll({ active = null } = {}) {
     let sql = 'SELECT * FROM tags WHERE 1=1';
     const params = [];
-    let idx = 1;
 
     if (active === true) {
       sql += ` AND is_active = true`;

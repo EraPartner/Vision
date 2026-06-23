@@ -3,6 +3,7 @@ title: Market Lookup API
 type: endpoint
 status: active
 date: 2026-04-10
+updated: 2026-06-16
 tags:
   - api
   - market
@@ -61,15 +62,25 @@ Search for stock tickers and companies.
 
 ### GET /api/market/quote
 
-Get detailed quotes and fundamentals for one or more symbols.
+Get quotes (and optionally fundamentals) for one or more symbols. Supports a `detail` mode to trade response richness for fewer upstream Yahoo Finance calls.
 
 **Query Parameters:**
 
-| Parameter | Type | Required | Description |
-|-----------|------|----------|-------------|
-| `symbols` | string | Yes | Comma-separated list of symbols (e.g., "AAPL,MSFT") |
+| Parameter | Type | Required | Default | Description |
+|-----------|------|----------|---------|-------------|
+| `symbols` | string | Yes | — | Comma-separated list of symbols (e.g., `"AAPL,MSFT"`) |
+| `detail` | string | No | `"full"` | Response mode: `"basic"` or `"full"`. See below. |
 
-**Response:** `200 OK`
+**Detail modes:**
+
+| Mode | Yahoo calls per symbol | Fields returned |
+|------|------------------------|-----------------|
+| `"full"` (default) | 2 — `quote()` + `quoteSummary()` | All fields: core price fields + fundamentals/analyst fields |
+| `"basic"` | 1 — `quote()` only | Core price fields only (no fundamentals/analyst fields) |
+
+Use `detail=basic` for price-only views such as benchmark strips, watchlist previews, and chart dialogs. This roughly halves outbound Yahoo Finance calls for those surfaces. The Market Lookup detail page uses the default `full` mode to render fundamentals and analyst data.
+
+**Response — `detail=full` (default):** `200 OK`
 
 ```json
 {
@@ -120,10 +131,51 @@ Get detailed quotes and fundamentals for one or more symbols.
 }
 ```
 
+**Response — `detail=basic`:** `200 OK`
+
+Same envelope shape (`{ "quotes": [ … ] }`), but each quote object contains only the core price fields. The fundamentals/analyst fields (`marketCap`, `pe`, `forwardPE`, `dividendYield`, `eps`, `beta`, `priceToBook`, `analystConsensus`, `recentAnalystActions`) are **omitted**.
+
+```json
+{
+  "quotes": [
+    {
+      "symbol": "AAPL",
+      "name": "Apple Inc.",
+      "price": 175.43,
+      "change": 2.15,
+      "changePercent": 1.24,
+      "currency": "USD",
+      "exchange": "NASDAQ",
+      "type": "EQUITY",
+      "open": 173.50,
+      "dayHigh": 176.20,
+      "dayLow": 173.00,
+      "prevClose": 173.28,
+      "volume": 52436789,
+      "avgVolume": 61234567,
+      "high52w": 199.62,
+      "low52w": 164.08
+    }
+  ]
+}
+```
+
 **Error Response:** `502 Bad Gateway` - Market quote unavailable
 
 **Validation Notes:**
 - The `symbols` parameter must be a non-empty string. If `symbols` is missing or not a string, returns `400 Bad Request` with `ValidationError`. If the string cannot be split (malformed), returns `502 Bad Gateway` with `AppError`.
+- An unrecognised `detail` value is treated as `"full"` (permissive fallback).
+
+**Frontend callers and detail mode:**
+
+| Caller | Mode |
+|---|---|
+| Research home benchmark strip (`^GSPC`, `^STOXX50E`, `^FTSE`, `^BFX`, `BTC-USD`) | `basic` |
+| Research home watchlist preview tiles | `basic` |
+| Watchlist page quote rows | `basic` |
+| Watchlist chart dialog | `basic` |
+| Add-to-watchlist dialog | `basic` |
+| Market Lookup detail page (`MarketLookupPage`) | `full` (default) |
 
 ---
 
@@ -206,7 +258,7 @@ Code links: [[apps/node-backend/src/main.js]], [[apps/node-backend/src/routes/ma
 
 ## Rate Limiting
 
-Market lookup endpoints are subject to [[docs/security/rate-limiting]] due to external API dependencies.
+All `/api/market/*` endpoints are subject to a 90 req/min route-group limiter (`marketRateLimiter`; bypassed in development). This bounds upstream Yahoo Finance API hammering. See [[docs/security/rate-limiting|Rate Limiting]] for details.
 
 ## Data Source
 
@@ -219,6 +271,10 @@ Data is provided by Yahoo Finance via the `yahoo-finance2` library. Some data ma
 - [[docs/api/watchlist]] - Watchlist API
 
 ## Test Coverage Notes
+
+### `detail=basic` mode (2026-06-16)
+
+`GET /api/market/quote` gained an optional `detail` query parameter (`"basic"` | `"full"`, default `"full"`). When `detail=basic`, the handler issues a single `yahooFinance.quote()` call per symbol and skips the per-symbol `quoteSummary` fetch, returning only the core price fields. This halves outbound Yahoo Finance calls for price-only views. The test suite (`apps/node-backend/tests/routes/marketLookup.test.js`) has a new basic-mode case; the suite is 22 route tests total.
 
 ### Error Handling Improvements (2026-04-22)
 

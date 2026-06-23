@@ -11,12 +11,16 @@ import { formatCurrency, numberFormatToLocale } from "@/utils/currency";
 import { parseDecimal } from "@/lib/decimal";
 import { ArrowLeft, Check, DollarSign, HandCoins, Trash2, Users } from "lucide-react";
 import { PageHeader } from "@/components/shared/PageHeader";
+import { EmptyState } from "@/components/shared/EmptyState";
+import { Money } from "@/components/shared/Money";
 import { Progress } from "@/components/ui/progress";
 import { useConfirmDialog } from "@/hooks/useConfirmDialog";
 import { useNavigate } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
 import { apiClient } from "@/lib/api";
 import { downloadBlob } from "@/lib/downloadBlob";
+import { todayYmd } from "@/lib/timezone";
+import { onActivateKeyDown } from "@/utils/a11y";
 import { VirtualDataTable } from "@/components/shared/VirtualDataTable";
 import type { Transaction } from "@/types/api";
 import { toast } from "sonner";
@@ -57,12 +61,12 @@ export default function OwesPage() {
             <PageHeader title={t('owesPage.title')} subtitle={t('owesPage.subtitle')} icon={HandCoins} />
 
             {totalOwed > 0 && (
-                <Card className="bg-primary/5 border-primary/20">
+                <Card className="bg-primary/5 !border-primary/50">
                     <CardContent className="pt-6">
                         <div className="text-center">
                             <p className="text-sm text-muted-foreground">{t('owesPage.totalOutstanding')}</p>
                             <p className="text-3xl font-bold text-primary mt-1">
-                                {formatCurrency(totalOwed, defaultCurrency, locale)}
+                                <Money amount={totalOwed} currency={defaultCurrency} />
                             </p>
                             <p className="text-sm text-muted-foreground mt-1">
                                 {items.length === 1 ? t('owesPage.fromPerson', { n: items.length }) : t('owesPage.fromPeople', { n: items.length })}
@@ -73,15 +77,7 @@ export default function OwesPage() {
             )}
 
             {items.length === 0 ? (
-                <Card>
-                    <CardContent className="py-12 text-center">
-                        <Users className="h-10 w-10 text-muted-foreground/40 mx-auto mb-3" />
-                        <p className="text-sm font-medium text-foreground mb-1">{t('owesPage.noDebts')}</p>
-                        <p className="text-xs text-muted-foreground">
-                            {t('owesPage.splitToTrack')}
-                        </p>
-                    </CardContent>
-                </Card>
+                <EmptyState icon={Users} title={t('owesPage.noDebts')} description={t('owesPage.splitToTrack')} />
             ) : (
                 <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
                     {items.map((item) => {
@@ -89,8 +85,12 @@ export default function OwesPage() {
                         return (
                             <Card
                                 key={item.recipient_id}
-                                className="cursor-pointer hover:border-primary/40 transition-colors"
+                                role="button"
+                                tabIndex={0}
+                                aria-label={item.recipient_name}
+                                className="cursor-pointer hover:border-primary/40 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50"
                                 onClick={() => setSelectedRecipient({ id: item.recipient_id, name: item.recipient_name })}
+                                onKeyDown={onActivateKeyDown(() => setSelectedRecipient({ id: item.recipient_id, name: item.recipient_name }))}
                             >
                                 <CardHeader className="pb-2">
                                     <CardTitle className="text-base flex items-center justify-between">
@@ -104,7 +104,7 @@ export default function OwesPage() {
                                     <div className="flex justify-between text-sm">
                                         <span className="text-muted-foreground">{t('owesPage.remaining')}</span>
                                         <span className="font-semibold text-primary">
-                                            {formatCurrency(item.remaining, defaultCurrency, locale)}
+                                            <Money amount={item.remaining} currency={defaultCurrency} />
                                         </span>
                                     </div>
                                     <Progress value={progress} className="h-2" />
@@ -172,7 +172,7 @@ function RecipientOwesDetail({ recipient, onBack }: { recipient: { id: number; n
         try {
             const blob = await apiClient.exportOwedByRecipientCsv(recipient.id);
             const safeName = recipient.name.replace(/[^a-zA-Z0-9\s-]/g, '').replace(/\s+/g, '_').toLowerCase().slice(0, 64);
-            const filename = `owed_${safeName}_${new Date().toISOString().slice(0, 10)}.csv`;
+            const filename = `owed_${safeName}_${todayYmd()}.csv`;
             downloadBlob(blob, filename);
             toast.success(t('owesPage.export.success'));
         } catch (error) {
@@ -217,11 +217,7 @@ function RecipientOwesDetail({ recipient, onBack }: { recipient: { id: number; n
                     {[...Array(3)].map((_, i) => <Skeleton key={i} className="h-24" />)}
                 </div>
             ) : items.length === 0 ? (
-                <Card>
-                    <CardContent className="py-8 text-center">
-                        <p className="text-sm text-muted-foreground">{t('owesPage.allSettled')}</p>
-                    </CardContent>
-                </Card>
+                <EmptyState icon={Check} title={t('owesPage.allSettled')} />
             ) : (
                 <>
                     <div className="space-y-3">
@@ -257,13 +253,13 @@ function RecipientOwesDetail({ recipient, onBack }: { recipient: { id: number; n
                                                 <div className="flex items-center gap-3 mt-2">
                                                     <Progress value={progress} className="h-1.5 flex-1" />
                                                     <span className="text-xs text-muted-foreground whitespace-nowrap">
-                                                        {formatCurrency(split.amount_paid, defaultCurrency, locale)} / {formatCurrency(split.amount, defaultCurrency, locale)}
+                                                        <Money amount={split.amount_paid} currency={defaultCurrency} /> / <Money amount={split.amount} currency={defaultCurrency} />
                                                     </span>
                                                 </div>
                                             </div>
                                             <div className="flex items-center gap-1 shrink-0">
                                                 <span className="text-sm font-semibold text-primary mr-2">
-                                                    {formatCurrency(split.remaining, defaultCurrency, locale)}
+                                                    <Money amount={split.remaining} currency={defaultCurrency} />
                                                 </span>
                                                 <Button
                                                     variant="ghost" size="icon" className="icon-touch-target text-accent hover:text-accent"
@@ -282,7 +278,15 @@ function RecipientOwesDetail({ recipient, onBack }: { recipient: { id: number; n
                                                 <Button
                                                     variant="ghost" size="icon" className="icon-touch-target text-muted-foreground hover:text-destructive"
                                                     title={t('owesPage.deleteSplit')}
-                                                    onClick={() => deleteSplit.mutate(split.id)}
+                                                    onClick={async () => {
+                                                        const ok = await confirm({
+                                                            title: t('owesPage.deleteSplitConfirmTitle'),
+                                                            description: t('owesPage.deleteSplitConfirmDescription'),
+                                                            confirmLabel: t('common.delete'),
+                                                            variant: "destructive",
+                                                        });
+                                                        if (ok) deleteSplit.mutate(split.id);
+                                                    }}
                                                 >
                                                     <Trash2 className="h-4 w-4" />
                                                 </Button>
@@ -347,7 +351,6 @@ function RecentRecipientTransactionsTable({ recipientId, recipientName }: { reci
     const navigate = useNavigate();
     const { t } = useLanguage();
     const { appSettings } = useAppSettings();
-    const locale = numberFormatToLocale(appSettings.numberFormat);
     const [allItems, setAllItems] = useState<Transaction[]>([]);
     const [totalItems, setTotalItems] = useState(0);
     const [isFetchingMore, setIsFetchingMore] = useState(false);
@@ -404,7 +407,7 @@ function RecentRecipientTransactionsTable({ recipientId, recipientName }: { reci
 
     const transactions: RecentRecipientTransactionRow[] = useMemo(() => allItems.map((tx) => ({
         id: tx.id,
-        date: tx.transaction_date || tx.date || '',
+        date: tx.transaction_date || '',
         description: tx.memo || t('owesPage.transaction'),
         category: tx.category_name || t('txPage.field.uncategorized'),
         amount: tx.amount,
@@ -439,7 +442,7 @@ function RecentRecipientTransactionsTable({ recipientId, recipientName }: { reci
             minWidth: 100,
             render: (row: RecentRecipientTransactionRow) => (
                 <span className={`font-mono whitespace-nowrap ${row.amount >= 0 ? 'text-accent' : 'text-destructive'}`}>
-                    {row.amount >= 0 ? '+' : '-'}{formatCurrency(Math.abs(row.amount), row.currency, locale)}
+                    {row.amount >= 0 ? '+' : '-'}<Money amount={Math.abs(row.amount)} currency={row.currency} />
                 </span>
             ),
         },
@@ -448,7 +451,7 @@ function RecentRecipientTransactionsTable({ recipientId, recipientName }: { reci
             header: t('txPage.field.bankAccount'),
             minWidth: 160,
         },
-    ], [t, appSettings.dateFormat, locale]);
+    ], [t, appSettings.dateFormat]);
 
     if (isLoading) {
         return <Skeleton className="h-[320px]" />;

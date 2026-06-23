@@ -1,4 +1,6 @@
-import { useState, useMemo } from "react";
+import { useState, useMemo, useCallback } from "react";
+import { useQueryClient } from "@tanstack/react-query";
+import { Money } from "@/components/shared/Money";
 import logger from "@/lib/logger";
 import { Plus, CalendarClock, Repeat, Trash2, Pencil, ToggleLeft, ToggleRight, AlertCircle, CheckCircle2, Circle, Eye, EyeOff, History } from "lucide-react";
 import { PageHeader } from "@/components/shared/PageHeader";
@@ -7,18 +9,20 @@ import { RecurringDetectionPanel } from "@/components/planned/RecurringDetection
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { DataTable } from "@/components/shared/DataTable";
+import { VirtualDataTable } from "@/components/shared/VirtualDataTable";
+import { toast } from "sonner";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import PlannedPaymentForm from "@/components/planned/PlannedPaymentForm";
 import { LinkTransactionDialog } from "@/components/planned/LinkTransactionDialog";
+import { MatchSuggestionsBanner } from "@/components/planned/MatchSuggestionsBanner";
+import { PLANNED_MATCH_SUGGESTIONS_KEY } from "@/hooks/usePlannedMatchSuggestions";
 import { ExecutionHistoryDialog } from "@/components/planned/ExecutionHistoryDialog";
 import { differenceInDays, formatDateStringWithAppSettings, toYmd } from "@/components/shared/dateUtils";
 import { usePlannedPayments, type PlannedPayment } from "@/hooks/usePlannedPayments";
 import { useLanguage } from '@/contexts/LanguageContext';
 import { useAppSettings } from "@/contexts/AppSettingsContext";
+import { useCurrencyConverter } from "@/hooks/useCurrencyConverter";
 import { useConfirmDialog } from "@/hooks/useConfirmDialog";
-import { formatCurrency } from "@/utils/currency";
-import { numberFormatToLocale } from "@/utils/currency";
 
 const FREQ_LABEL_KEYS: Record<string, string> = {
   daily: 'plannedPage.freq.daily',
@@ -31,7 +35,7 @@ const FREQ_LABEL_KEYS: Record<string, string> = {
 };
 
 
-type TranslateFn = (key: string, params?: Record<string, unknown>) => string;
+type TranslateFn = (key: string, params?: Record<string, string | number>) => string;
 
 function dueBadge(t: TranslateFn, dateFormat: string, dateStr?: string | null) {
   if (!dateStr || typeof dateStr !== "string") {
@@ -64,14 +68,12 @@ function dueBadge(t: TranslateFn, dateFormat: string, dateStr?: string | null) {
   return <Badge variant="secondary">{formatDateStringWithAppSettings(toYmd(normalizedDue), dateFormat)}</Badge>;
 }
 
-type TableRow = PlannedPayment & { _idx: number };
+type TableRow = PlannedPayment & { _idx: number } & Record<string, unknown>;
 
 export default function PlannedPaymentsPage() {
   const { t } = useLanguage();
   const { appSettings } = useAppSettings();
-  const locale = numberFormatToLocale(appSettings.numberFormat);
-  const formatDisplayCurrency = (amount: number, currency?: string) =>
-    formatCurrency(amount, currency || appSettings.defaultCurrency, locale);
+  const { convertToTarget } = useCurrencyConverter(appSettings.defaultCurrency || "EUR");
 
   const [showAll, setShowAll] = useState(false);
   const { payments, addPayment, updatePayment, deletePayment, toggleActive, executePayment, loading, error } = usePlannedPayments(showAll);
@@ -82,6 +84,23 @@ export default function PlannedPaymentsPage() {
   const [linkDialogOpen, setLinkDialogOpen] = useState(false);
   const [paymentToLink, setPaymentToLink] = useState<PlannedPayment | null>(null);
   const [historyOpen, setHistoryOpen] = useState(false);
+  const queryClient = useQueryClient();
+
+  // Open the link dialog for a suggested planned payment so the user can
+  // confirm which transaction clears it.
+  const handleReviewSuggestion = useCallback((plannedId: number) => {
+    const payment = payments.find((p) => p.id === plannedId);
+    if (!payment) return;
+    setPaymentToLink(payment);
+    setLinkDialogOpen(true);
+  }, [payments]);
+
+  // After a manual/confirmed execute, refresh both the payments list and the
+  // match suggestions (the cleared pair must drop off the suggestions banner).
+  const handleExecute = useCallback(async (id: number, transactionId: number, executionDate?: string) => {
+    await executePayment(id, transactionId, executionDate);
+    await queryClient.invalidateQueries({ queryKey: PLANNED_MATCH_SUGGESTIONS_KEY });
+  }, [executePayment, queryClient]);
 
   const filteredPayments = useMemo(() => {
     if (showAll) return payments;
@@ -92,6 +111,9 @@ export default function PlannedPaymentsPage() {
 
   const totalMonthly = useMemo(() => {
     return payments
+      // "Est. monthly" = net monthly impact of recurring rows: incoming
+      // (amount > 0) and outgoing (amount < 0) both counted, signed, so e.g.
+      // +70 income and -100 expense net to -30.
       .filter((p) => p.is_active && p.is_recurring)
       .reduce((sum, p) => {
         const mult =
@@ -102,9 +124,11 @@ export default function PlannedPaymentsPage() {
                   p.frequency === "quarterly" ? 1 / 3 :
                     p.frequency === "yearly" ? 1 / 12 :
                       p.frequency === "custom" && p.custom_interval_days ? 30 / p.custom_interval_days : 1;
-        return sum + Math.abs(p.amount) * mult;
+        // Convert each row's amount to the display currency before summing —
+        // raw summation counted a 500 USD subscription as 500 in the default currency.
+        return sum + convertToTarget(p.amount, p.currency) * mult;
       }, 0);
-  }, [payments]);
+  }, [payments, convertToTarget]);
 
   const upcoming = useMemo(() => {
     const today = new Date();
@@ -131,7 +155,7 @@ export default function PlannedPaymentsPage() {
       key: "is_executed",
       header: "",
       editable: false,
-      className: "w-12",
+      defaultWidth: 52,
       render: (row: TableRow) => (
         <Button
           variant="ghost"
@@ -145,7 +169,7 @@ export default function PlannedPaymentsPage() {
             }
           }}
           disabled={actionLoading || !row.is_active || row.is_executed}
-          title={row.is_executed ? t('plannedPage.execute.linked', { n: row.executed_transaction_id }) : t('plannedPage.execute.button')}
+          title={row.is_executed ? t('plannedPage.execute.linked', { n: row.executed_transaction_id ?? 0 }) : t('plannedPage.execute.button')}
         >
           {row.is_executed ? <CheckCircle2 className="h-5 w-5" /> : <Circle className="h-5 w-5" />}
         </Button>
@@ -153,9 +177,11 @@ export default function PlannedPaymentsPage() {
     },
     {
       key: "name",
+      // Flexible like the category column: name + category share the leftover
+      // width so neither is cramped while the rest stay sized to their content.
       header: t('plannedPage.col.payment'),
       editable: false,
-      defaultWidth: 180,
+      minWidth: 180,
       render: (row: TableRow) => (
         <div className="flex flex-col gap-0.5">
           <div className={`font-medium flex items-center gap-2 ${!row.is_active ? "text-muted-foreground line-through" :
@@ -189,7 +215,7 @@ export default function PlannedPaymentsPage() {
       defaultWidth: 120,
       render: (row: TableRow) => (
         <span className={`font-semibold tabular-nums ${row.amount < 0 ? "text-destructive" : "text-accent"}`}>
-          {row.amount < 0 ? "−" : "+"}{formatDisplayCurrency(Math.abs(row.amount), row.currency)}
+          {row.amount < 0 ? "−" : "+"}<Money amount={Math.abs(row.amount)} currency={row.currency} />
         </span>
       ),
     },
@@ -213,8 +239,8 @@ export default function PlannedPaymentsPage() {
                 <Repeat className="h-3.5 w-3.5 text-primary" />
                 <span className="text-sm">{`loan(${row.loan_term_months} months)`}</span>
               </div>
-              {row.execution_count > 0 && (
-                <span className="text-xs text-muted-foreground">{t('plannedPage.executedCount', { n: row.execution_count })}</span>
+              {(row.execution_count ?? 0) > 0 && (
+                <span className="text-xs text-muted-foreground">{t('plannedPage.executedCount', { n: row.execution_count ?? 0 })}</span>
               )}
             </div>
           );
@@ -230,9 +256,9 @@ export default function PlannedPaymentsPage() {
                   : t(FREQ_LABEL_KEYS[row.frequency ?? "monthly"])}
               </span>
             </div>
-            {row.execution_count > 0 && (
+            {(row.execution_count ?? 0) > 0 && (
               <span className="text-xs text-muted-foreground">
-                {t('plannedPage.executedCount', { n: row.execution_count })}
+                {t('plannedPage.executedCount', { n: row.execution_count ?? 0 })}
               </span>
             )}
           </div>
@@ -243,9 +269,12 @@ export default function PlannedPaymentsPage() {
     },
     {
       key: "category",
+      // No defaultWidth: this is the flexible column, so it absorbs the
+      // remaining table width (auto-fit) — category labels are the longest cell
+      // and were overflowing the old fixed 120px.
       header: t('plannedPage.col.category'),
       editable: false,
-      defaultWidth: 120,
+      minWidth: 140,
       render: (row: TableRow) => {
         const categoryLabel = typeof row.category === "string"
           ? row.category
@@ -264,7 +293,7 @@ export default function PlannedPaymentsPage() {
       key: "is_active",
       header: t('plannedPage.col.status'),
       editable: false,
-      defaultWidth: 100,
+      defaultWidth: 130,
       render: (row: TableRow) => (
         <Button
           variant="ghost"
@@ -277,6 +306,7 @@ export default function PlannedPaymentsPage() {
               await toggleActive(row.id);
             } catch (err) {
               logger.error("Failed to toggle status:", err);
+              toast.error(t('plannedPage.toggleFailed'));
             } finally {
               setActionLoading(false);
             }
@@ -292,7 +322,7 @@ export default function PlannedPaymentsPage() {
       key: "actions",
       header: "",
       editable: false,
-      className: "w-20",
+      defaultWidth: 96,
       render: (row: TableRow) => (
         <div className="flex items-center gap-1">
           <Button
@@ -301,7 +331,7 @@ export default function PlannedPaymentsPage() {
             className="icon-touch-target text-muted-foreground hover:text-primary hover:bg-primary/10"
             onClick={(e) => { e.stopPropagation(); setEditing(row); setFormOpen(true); }}
             disabled={actionLoading}
-            aria-label="Edit planned payment"
+            aria-label={t('aria.editPlannedPayment')}
           >
             <Pencil className="h-4 w-4" />
           </Button>
@@ -309,7 +339,7 @@ export default function PlannedPaymentsPage() {
             variant="ghost"
             size="icon"
             className="icon-touch-target text-muted-foreground hover:text-destructive hover:bg-destructive/10"
-            aria-label="Delete planned payment"
+            aria-label={t('aria.deletePlannedPayment')}
             onClick={async (e) => {
               e.stopPropagation();
               const ok = await confirm({
@@ -324,6 +354,7 @@ export default function PlannedPaymentsPage() {
                   await deletePayment(row.id);
                 } catch (err) {
                   logger.error("Failed to delete payment:", err);
+                  toast.error(t('plannedPage.deleteFailed'));
                 } finally {
                   setActionLoading(false);
                 }
@@ -350,7 +381,7 @@ export default function PlannedPaymentsPage() {
       setFormOpen(false);
     } catch (err) {
       logger.error("Failed to save payment:", err);
-      alert(t('plannedPage.saveFailed'));
+      toast.error(t('plannedPage.saveFailed'));
     } finally {
       setActionLoading(false);
     }
@@ -362,7 +393,7 @@ export default function PlannedPaymentsPage() {
         <PageHeader title={t('plannedPage.title')} subtitle={t('plannedPage.subtitle')} icon={CalendarClock} />
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
           {[...Array(4)].map((_, i) => (
-            <Card key={i} className="border-none shadow-md">
+            <Card key={i} className="glass-regular border-none shadow-md">
               <CardHeader className="pb-2"><Skeleton className="h-4 w-24" /></CardHeader>
               <CardContent><Skeleton className="h-8 w-20" /></CardContent>
             </Card>
@@ -412,7 +443,7 @@ export default function PlannedPaymentsPage() {
         )}
 
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-          <Card className="group relative overflow-hidden surface-elevated premium-frame micro-lift bg-card backdrop-blur-sm">
+          <Card className="group relative overflow-hidden glass-regular premium-frame micro-lift">
             <CardHeader className="pb-2">
               <CardTitle className="text-sm font-medium text-muted-foreground">{t('plannedPage.pending')}</CardTitle>
             </CardHeader>
@@ -420,7 +451,7 @@ export default function PlannedPaymentsPage() {
               <p className="text-2xl font-bold">{pending}</p>
             </CardContent>
           </Card>
-          <Card className="group relative overflow-hidden surface-elevated premium-frame micro-lift bg-card backdrop-blur-sm">
+          <Card className="group relative overflow-hidden glass-regular premium-frame micro-lift">
             <CardHeader className="pb-2">
               <CardTitle className="text-sm font-medium text-muted-foreground flex items-center gap-2">
                 <span className="inline-flex h-6 w-6 items-center justify-center rounded-md bg-gradient-to-br from-accent/20 to-accent/5 text-accent ring-1 ring-accent/15">
@@ -433,7 +464,7 @@ export default function PlannedPaymentsPage() {
               <p className="text-2xl font-bold text-accent">{executed}</p>
             </CardContent>
           </Card>
-          <Card className="group relative overflow-hidden surface-elevated premium-frame micro-lift bg-card backdrop-blur-sm">
+          <Card className="group relative overflow-hidden glass-regular premium-frame micro-lift">
             <CardHeader className="pb-2">
               <CardTitle className="text-sm font-medium text-muted-foreground flex items-center gap-2">
                 <span className="inline-flex h-6 w-6 items-center justify-center rounded-md bg-gradient-to-br from-primary/20 to-primary/5 text-primary ring-1 ring-primary/15">
@@ -443,10 +474,10 @@ export default function PlannedPaymentsPage() {
               </CardTitle>
             </CardHeader>
             <CardContent>
-              <p className="text-2xl font-bold tabular-nums">{formatDisplayCurrency(totalMonthly)}</p>
+              <p className="text-2xl font-bold tabular-nums"><Money amount={totalMonthly} signed /></p>
             </CardContent>
           </Card>
-          <Card className="group relative overflow-hidden surface-elevated premium-frame micro-lift bg-card backdrop-blur-sm">
+          <Card className="group relative overflow-hidden glass-regular premium-frame micro-lift">
             <CardHeader className="pb-2">
               <CardTitle className="text-sm font-medium text-muted-foreground flex items-center gap-2">
                 <span className="inline-flex h-6 w-6 items-center justify-center rounded-md bg-gradient-to-br from-accent/20 to-accent/5 text-accent ring-1 ring-accent/15">
@@ -461,9 +492,11 @@ export default function PlannedPaymentsPage() {
           </Card>
         </div>
 
+        <MatchSuggestionsBanner onReview={handleReviewSuggestion} />
+
         <RecurringDetectionPanel />
 
-        <DataTable
+        <VirtualDataTable
           title={t('plannedPage.tableTitle')}
           subtitle={t('plannedPage.tableSubtitle', { n: payments.length })}
           columns={columns}
@@ -483,7 +516,7 @@ export default function PlannedPaymentsPage() {
           open={linkDialogOpen}
           onOpenChange={(open) => { setLinkDialogOpen(open); if (!open) setPaymentToLink(null); }}
           payment={paymentToLink}
-          onExecute={executePayment}
+          onExecute={handleExecute}
         />
 
         <ExecutionHistoryDialog

@@ -26,6 +26,14 @@ vi.mock('../src/database/connection.js', () => ({
   query: vi.fn(),
 }));
 
+// The SSRF guard (lib/urlSafety) resolves custom-provider hostnames before fetch.
+// Stub DNS to a public address so these hermetic tests don't hit the network;
+// the guard's private-IP/scheme logic is unit-tested in tests/urlSafety.test.js.
+vi.mock('node:dns/promises', () => {
+  const lookup = vi.fn(async () => [{ address: '93.184.216.34', family: 4 }]);
+  return { default: { lookup }, lookup };
+});
+
 import {
   fetchLivePrices,
   fetchLivePricesDetailed,
@@ -273,6 +281,26 @@ describe('Price Provider Service', () => {
       ]);
 
       expect(result[1]).toEqual({ price: 173.22, source: 'close' });
+    });
+
+    it('should batch multiple Yahoo symbols into a single quote() call', async () => {
+      // yahoo-finance2 `.quote([symbols])` returns one Quote per symbol; the
+      // provider must issue ONE request for the whole portfolio, not one each.
+      mockYahooQuote.mockResolvedValue([
+        { symbol: 'AAPL', regularMarketPrice: 175.5, regularMarketPreviousClose: 174.2, currency: 'USD' },
+        { symbol: 'MSFT', regularMarketPrice: 420.1, regularMarketPreviousClose: 418.9, currency: 'USD' },
+      ]);
+
+      const result = await fetchLivePricesDetailed([
+        { id: 1, price_provider: 'yahoo', price_provider_id: 'AAPL', currency: 'USD' },
+        { id: 2, price_provider: 'yahoo', price_provider_id: 'MSFT', currency: 'USD' },
+      ]);
+
+      expect(result[1]).toEqual({ price: 175.5, source: 'live' });
+      expect(result[2]).toEqual({ price: 420.1, source: 'live' });
+      // The whole point of the change: exactly one upstream request.
+      expect(mockYahooQuote).toHaveBeenCalledTimes(1);
+      expect(mockYahooChart).not.toHaveBeenCalled();
     });
 
     it('should use yahoo-finance2 quote path for Yahoo provider', async () => {
@@ -721,6 +749,39 @@ describe('Price Provider Service', () => {
 
       expect(points).toHaveLength(1);
       expect(points[0].price).toBe(100);
+    });
+
+    it('paginates binance history beyond a single 1000-row page', async () => {
+      const DAY = 24 * 60 * 60 * 1000;
+      const base = Date.UTC(2020, 0, 1);
+      const fromMs = base;
+      const toMs = base + 1001 * DAY;
+
+      // cachedDbPoints empty, save upsert, persisted-load empty (forces in-memory resolution)
+      query
+        .mockResolvedValueOnce({ rows: [] })
+        .mockResolvedValueOnce({ rows: [] })
+        .mockResolvedValueOnce({ rows: [] });
+
+      const page1 = Array.from({ length: 1000 }, (_, i) => [
+        base + i * DAY, '0', '0', '0', String(100 + i), '0',
+      ]);
+      const page2 = [[base + 1000 * DAY, '0', '0', '0', '2000', '0']];
+
+      const fetchSpy = vi.spyOn(globalThis, 'fetch')
+        .mockResolvedValueOnce({ ok: true, json: () => Promise.resolve(page1) })
+        .mockResolvedValueOnce({ ok: true, json: () => Promise.resolve(page2) });
+
+      const points = await fetchHistoricalPrices(
+        { id: 21, price_provider: 'binance', price_provider_id: 'BTCUSDT' },
+        { fromMs, toMs },
+      );
+
+      // Two pages fetched; the second request advances startTime past the first page.
+      expect(fetchSpy).toHaveBeenCalledTimes(2);
+      expect(String(fetchSpy.mock.calls[1][0])).toContain(`startTime=${base + 1000 * DAY}`);
+      // All 1001 daily points survive into the merged series (old 365-day cap would drop most).
+      expect(points).toHaveLength(1001);
     });
 
     it('falls back to cached db points when kinesis has no symbol', async () => {

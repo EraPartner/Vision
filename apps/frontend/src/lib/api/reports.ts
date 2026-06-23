@@ -7,6 +7,8 @@
  */
 
 import { resolveActiveThemeTokens, type ReportThemeTokens } from '@/lib/themeTokens';
+import { downloadBlob } from '@/lib/downloadBlob';
+import { todayYmd } from '@/lib/timezone';
 
 export type PeriodKind = 'ytd' | 'rolling' | 'custom' | 'year';
 
@@ -76,21 +78,11 @@ async function postReportDownload(
   }
 
   const blob = await response.blob();
-  const objectUrl = URL.createObjectURL(blob);
-  try {
-    const anchor = document.createElement('a');
-    anchor.href = objectUrl;
-    anchor.download = filename;
-    document.body.appendChild(anchor);
-    anchor.click();
-    document.body.removeChild(anchor);
-  } finally {
-    URL.revokeObjectURL(objectUrl);
-  }
+  downloadBlob(blob, filename);
 }
 
 function reportFilename(type: string): string {
-  return `vision-${type}-${new Date().toISOString().slice(0, 10)}.pdf`;
+  return `vision-${type}-${todayYmd()}.pdf`;
 }
 
 export async function downloadFinancialReport(options: ReportOptions = {}): Promise<void> {

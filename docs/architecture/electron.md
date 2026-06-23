@@ -3,11 +3,11 @@ title: Electron Desktop Architecture
 type: architecture-doc
 status: active
 date: 2026-04-27
-updated: 2026-05-05
-tags: [architecture, electron, desktop, packaging, security, sandbox, health-monitoring, async-io, csp-headers, dev-rebuild, phase-0, phase-1, phase-2, phase-6, phase-7, backup, restore, bundle, ipc, encryption, schema-migration, npm-vs-bun, docker-compose, pre-pull, startup, troubleshooting, alembic-migration-fixes, deployment-modes, shell-installer, docker-pull, update-system, checksum-verification, backup-before-update, cicd, april-2026, bug-hunt, recovery-hardening, concurrent-backup-guard, timeout, watchdog-pause]
-description: Electron desktop application architecture, IPC communication, sandbox hardening, health monitoring, Docker image pre-pull optimization, backup/restore bundle system (Phase 1+2), three-mode application update system with checksum verification (April 2026), and Phase 7 backup/restore hardening with concurrent-backup guard, HTTP timeout, and watchdog pause (May 2026)
-aliases: [electron, desktop app, packaging, IPC, main process, sandbox, watchdog, backup, bundle, update system, deployment modes]
-related_code: ["packaging/electron/", "packaging/electron/backup/bundle.js", "packaging/electron/main.js", "packaging/electron/preload.js", "apps/frontend/src/lib/api/electron.ts", "apps/frontend/src/components/notifications/UpdateNotification.tsx", "apps/frontend/src/components/settings/tabs/AppTab.tsx", "apps/node-backend/src/main.js", "alembic/versions/0001_initial_database_schema.py", ".github/workflows/ci.yml", ".github/workflows/release.yml"]
+updated: 2026-06-11
+tags: [architecture, electron, desktop, packaging, security, sandbox, health-monitoring, async-io, csp-headers, dev-rebuild, phase-0, phase-1, phase-2, phase-6, phase-7, backup, restore, bundle, ipc, encryption, schema-migration, npm-vs-bun, docker-compose, pre-pull, startup, troubleshooting, alembic-migration-fixes, deployment-modes, shell-installer, docker-pull, update-system, checksum-verification, backup-before-update, cicd, april-2026, bug-hunt, recovery-hardening, concurrent-backup-guard, timeout, watchdog-pause, electron-native, macos, hiddeninset, vibrancy, system-accent, native-menu, dock-badge, csv-open-with, electronapi, renderer-ready-queue, compose-stop, window-bounds, splash-localized, shutdown-idle-connections, accelerator-hardening, before-input-event, did-start-navigation, june-2026]
+description: Electron desktop application architecture, IPC communication, sandbox hardening, health monitoring, Docker image pre-pull optimization, backup/restore bundle system (Phase 1+2), three-mode application update system with checksum verification (April 2026), Phase 7 backup/restore hardening with concurrent-backup guard, HTTP timeout, and watchdog pause (May 2026), and June 2026 V12 native macOS integration (ADR-072) — hiddenInset chrome, native menu/dock, CSV open-with handoff, system accent overlay, under-window vibrancy. June 2026 (startup fixes): quit uses compose stop (preserves warm-boot fast path), window bounds persisted/restored, localized theme-aware splash with phase narration, graceful shutdown closes idle keep-alive sockets, dev watcher covers packages/ and i18n/source. June 2026 (accelerator fixes): renderer-ready reset moved from did-start-loading to did-start-navigation+isSameDocument guard (eliminates sendToApp queue jam on React Router navigations); handleMenuAccelerator on before-input-event bypasses unreliable sandboxed-renderer→native-menu key-equivalent redispatch.
+aliases: [electron, desktop app, packaging, IPC, main process, sandbox, watchdog, backup, bundle, update system, deployment modes, electronAPI, native menu, dock badge, system accent, vibrancy]
+related_code: ["packaging/electron/", "packaging/electron/backup/bundle.js", "packaging/electron/main.js", "packaging/electron/preload.js", "apps/frontend/src/lib/api/electron.ts", "apps/frontend/src/components/layout/ElectronBridge.tsx", "apps/frontend/src/lib/importHandoff.ts", "apps/frontend/src/lib/accentColor.ts", "apps/frontend/src/components/notifications/UpdateNotification.tsx", "apps/frontend/src/components/settings/tabs/AppTab.tsx", "apps/node-backend/src/main.js", "alembic/versions/0001_initial_database_schema.py", ".github/workflows/ci.yml", ".github/workflows/release.yml"]
 ---
 
 # Electron Desktop Architecture
@@ -145,11 +145,18 @@ Migration is non-fatal; any error is logged and app continues.
 
 ### Frontend Initialization
 
-7. **Health Poll** — `pollHealth()` loops:
-   - Polls `GET /health` every 300ms (`VISION_HEALTH_POLL_INTERVAL_MS`)
-   - Max 200 attempts (`VISION_HEALTH_POLL_ATTEMPTS`)
+7. **Readiness Poll** — `pollAndLoad({ building })` uses a build-aware budget and gates the FIRST navigation on `/health/detailed` readiness:
+   - Polls `GET /health/detailed` every 300ms (`VISION_HEALTH_POLL_INTERVAL_MS`) via `pingReady()` + `pollReady()`
+   - **Readiness predicate:** navigate when `/health/detailed` returns `status === 'ready'` OR `caches.materializedViews === true`. The materialized-views flag is DB-only and fast; network-bound warmup tasks (exchange rates, portfolio snapshots) cannot stall startup.
+   - **Fallback:** if the `/health/detailed` endpoint returns 404 (older backend) or an unparseable 2xx, the shell treats the response as ready and navigates — ensuring it never blocks longer than the previous shallow liveness check.
+   - **Warm boot** (no build): max `VISION_HEALTH_POLL_ATTEMPTS` attempts (default 200, ≈56s). On timeout the "taking longer than expected" modal fires and then the error page loads with Retry/OpenLogs.
+   - **Cold/build launch** (image was pulled or built during this launch): max `VISION_HEALTH_POLL_BUILD_ATTEMPTS` attempts (default 600, ≈3 min). The slow-start modal is suppressed; on timeout the app falls through directly to the recoverable error page.
+   - `pollReady(maxAttempts)` replaces `pollHealth` inside `pollAndLoad` for the initial navigation path. The boot mark was renamed `poll_health` → `poll_ready`.
+   - The `recovery:retry` IPC handler calls `pollAndLoad()` with no arguments (warm budget + modal), because a manual retry means the image already exists. Restart/update/dev-rebuild flows still use the lighter `pollHealth` liveness probe (unchanged).
    - On success: proceed to step 8
-   - On timeout (~60s): load error page, enable Retry/OpenLogs buttons
+
+> [!info] Why `/health/detailed` for initial navigation only
+> `GET /health` (shallow liveness) returns 200 the moment Express listens — before `refreshMaterializedViews()` and other warmup tasks finish. Navigating on that caused a cold-start blank dashboard until a restart. The health watchdog and restart/update flows still use the shallow `/health` probe because "is the backend process alive?" is the right question for those paths. See [[docs/api/health|Health API]] for the distinction between `status: warming` and `status: ready`.
 
 8. **Create BrowserWindow** with sandbox enabled + loading frontend
 
@@ -272,6 +279,151 @@ This forces npm and electron-builder to include them at the correct depth inside
 
 ## Native Features
 
+### macOS Native Integration (V12, June 2026 — ADR-072)
+
+> [!info] Added in ADR-072
+> This section documents the third contextBridge surface (`window.electronAPI`), native menu bar / dock, window chrome, CSV import handoff, and system accent color. See [[docs/adr/072-electron-native-desktop-integration|ADR-072]] for the full decision record.
+
+#### `window.electronAPI` contextBridge Surface (preload.js)
+
+The new surface sits alongside the existing `window.electronUpdater` and `window.electronBackup`. All subscriptions return an unsubscribe function for clean teardown.
+
+| Method | Description |
+|--------|-------------|
+| `platform` | `'darwin'` or other platform string |
+| `ready()` | Invoke `app:renderer-ready` — drains the pending send queue |
+| `setDockBadge(count)` | Push integer badge count (0 clears); clamped 0–999 in main |
+| `getAccentColor()` | Return current macOS system accent color as RRGGBBAA hex |
+| `onAccentColorChanged(cb)` | Subscribe to `AppleColorPreferencesChangedNotification` pushes |
+| `onMenuAction(cb)` | Subscribe to `menu:action` — receives `{action, payload}` objects |
+| `onCsvOpen(cb)` | Subscribe to `app:csv-opened` — receives `{name, content}` (no path) |
+| `onFullScreenChange(cb)` | Subscribe to `window:fullscreen` with `{isFullScreen: boolean}` |
+
+Frontend helpers in `lib/api/electron.ts`: `getElectronAPI()`, `isElectronMac()`, `setDockBadge()`, `getSystemAccentColor()`. Types: `ElectronMenuAction`, `ElectronCsvFile`.
+
+**IPC hygiene**: every `ipcMain.handle` that renderer can invoke validates `event.sender === mainWindow.webContents`. `app:set-badge` clamps the count to an integer 0–999. No handler ever accepts a filesystem path from the renderer.
+
+#### Renderer-Ready Queue Protocol
+
+`sendToApp(channel, payload)` in main queues messages until the renderer has mounted its listeners. The queue drains the moment the renderer calls `electronAPI.ready()` (via `ipcMain.handle('app:renderer-ready')`). The `rendererReady` flag resets on window close and on **real document navigations/reloads** — detected via the `did-start-navigation` event filtered to `details.isMainFrame && !details.isSameDocument`.
+
+This prevents lost IPC messages when the OS fires an `open-file` event (Finder "Open With" or dock drop) before the React app has mounted.
+
+> [!warning] `did-start-loading` must NOT be used here (fixed 2026-06-11)
+> `did-start-loading` fires for same-document navigations (React Router `pushState` calls) as well as real page loads. The renderer only calls `app:renderer-ready` once per document, so resetting `rendererReady` on a same-document navigation permanently jams `pendingAppMessages` — every subsequent menu bar action, dock menu click, and CSV open-file handoff silently queues forever and never reaches the renderer. The fix is `did-start-navigation` with the `isSameDocument` guard, which only resets on actual document loads and reloads.
+
+#### Accelerator Dispatch Hardening (2026-06-11)
+
+The accelerators declared in `setupApplicationMenu()` (⌘1–⌘9, ⌘N, ⇧⌘I, ⌃⌘S) are also matched by a `handleMenuAccelerator(event, input)` function attached to `mainWindow.webContents.on('before-input-event')` in `createWindow()`.
+
+**Why this is necessary:** macOS dispatches unhandled keystrokes from the renderer to the application menu for key-equivalent matching. With the sandboxed renderer focused, this renderer→native-menu redispatch path is unreliable — accelerators assigned to click-handler items (i.e., non-role items) silently do nothing when pressed via keyboard, even though menu-bar mouse clicks work correctly.
+
+**How `handleMenuAccelerator` works:**
+
+- Receives every real keydown before the renderer processes it.
+- Matches ⌘1–⌘9 on `input.code` (`Digit1`…`Digit9`) — the physical-key code rather than `input.key` — so the shortcuts remain positional on non-QWERTY layouts (AZERTY, Dvorak) without requiring `Shift`.
+- Matches ⌘N, ⇧⌘I, and ⌃⌘S on `input.key` (layout-agnostic for letter keys).
+- ⌃⌘S is macOS-specific; on other platforms the chord is Ctrl+Shift+S.
+- Calls `menuAction()` → `sendToApp('menu:action', …)` on match.
+- Calls `event.preventDefault()` to suppress any duplicate native-menu dispatch, ensuring each chord fires at most once.
+- Auto-repeat events (`input.isAutoRepeat`) are ignored.
+- Role items (Reload, Zoom, Copy, Paste, …) are unchanged — they use Electron/AppKit's native path.
+
+> [!warning] Manual sync point — accelerators and routes
+> `handleMenuAccelerator` must mirror the accelerators declared in `setupApplicationMenu()`. `GO_MENU_ROUTES` in `packaging/electron/main.js` must stay in sync with `GO_TO_ROUTES` in `apps/frontend/src/hooks/useGoToShortcuts.ts`. Both files carry a comment flagging the dependency.
+
+> [!info] AZERTY/non-QWERTY confirmation pending
+> End-to-end tests on the real stack confirmed ⌘7 → /portfolio and ⌘1 → / after a client-side navigation. Real-keyboard validation on a built `.app` (including AZERTY layout) is still pending (logged in TODO.md).
+
+#### Window Chrome (darwin-only)
+
+`createWindow()` applies these options only on macOS:
+
+| Option | Value | Effect |
+|--------|-------|--------|
+| `titleBarStyle` | `'hiddenInset'` | Hides the title bar; traffic lights stay in the frame |
+| `trafficLightPosition` | `{x:20, y:20}` | Centers traffic lights in the 56px topbar |
+| `vibrancy` | `'under-window'` | NSVisualEffectView behind the window content |
+| `visualEffectState` | `'followWindow'` | Active/inactive vibrancy follows window focus |
+
+`enter-full-screen` and `leave-full-screen` Electron events push `{isFullScreen: boolean}` over `window:fullscreen`. `ElectronBridge` adds/removes the `electron-fullscreen` html class so CSS can drop the 88px left inset when the traffic lights disappear in fullscreen mode.
+
+The same lights also overlap the **sidebar's** top-left corner (the rail reaches the top of the window). `index.css` reserves a Finder-style strip above the sidebar header — `html.electron-mac:not(.electron-fullscreen) [data-sidebar="header"] { margin-top: 28px; }` — so the logo clears the buttons; the strip collapses in fullscreen along with the lights (fixed 2026-06-11, user-reported logo/close-button collision).
+
+#### Native Application Menu
+
+Built via `Menu.setApplicationMenu` **after** `await initI18n()` inside `launch()`, so all labels come from the same flat JSON the shell dialogs use (`menu.*` i18n keys, en + nl).
+
+**Menu structure:**
+
+| Menu | Items |
+|------|-------|
+| App | Settings… (⌘,) |
+| File | New Transaction (⌘N), Import CSV… (⇧⌘I) |
+| Edit | System role (undo, cut, copy, paste, …) |
+| View | Toggle Sidebar (⌃⌘S), Reload (dev-only), Zoom In/Out/Reset, Enter Full Screen, Toggle DevTools (dev-only) |
+| Go | ⌘1–⌘9 routes from `GO_MENU_ROUTES` (manually mirrors `GO_TO_ROUTES` in `hooks/useGoToShortcuts.ts`) |
+| Window | System role (minimise, zoom, …) |
+| Help | Keyboard Shortcuts (opens overlay via `menu:action`) |
+
+> [!warning] Manual sync point
+> `GO_MENU_ROUTES` in `packaging/electron/main.js` must be kept in sync by hand with `GO_TO_ROUTES` in `apps/frontend/src/hooks/useGoToShortcuts.ts`. Both files carry a comment flagging this dependency.
+
+Menu and dock items dispatch `{action, payload}` over `menu:action`. `ElectronBridge` maps actions to: `navigate` (React Router push), `open-settings`, `open-shortcuts` (ShortcutsOverlay), `new-transaction` (navigate to `/transactions?new=1`), `toggle-sidebar`.
+
+#### Dock Menu and Dock Badge
+
+The dock menu is set once on startup: **New Transaction** and **Dashboard**. Both dispatch the same `menu:action` channel.
+
+The **dock badge** reflects the visible (non-dismissed) count of upcoming planned payments. `UpcomingPaymentsNotification` owns the due-payments query and dismissal state; it calls `setDockBadge(count)` whenever the count changes and clears it on unmount. The badge is entirely renderer-driven — main has no knowledge of upcoming payments.
+
+#### CSV Import Handoff — Two Paths
+
+**Path 1 — Window-wide drag-and-drop (renderer handles)**
+
+`ElectronBridge` attaches a `dragover`/`drop` listener to `window`. All file drops are swallowed (closes the Chromium "navigate-to-dropped-file" hole). `.csv` files are read as text via the `File` API and pushed into `lib/importHandoff.ts`; non-CSV files are silently ignored. `data-dropzone` descendants of the dropzone div in `TransactionImportCard` are exempted via ancestor-check so in-card drops still work normally.
+
+**Path 2 — Finder "Open With" / dock drop (main handles)**
+
+`app.on('open-file')` in main applies an extension whitelist (`.csv` only) and a 25 MB cap, reads the file content itself, and forwards `{name, content}` over `app:csv-opened`. The renderer reconstructs a `File` object. The OS-chosen filesystem path never crosses into the renderer.
+
+**`lib/importHandoff.ts`**: a one-slot, 30-second TTL registry (`registerPendingImportFile` / `consumePendingImportFile`) in the same style as `lib/undo.ts`. `TransactionImportCard` calls `consumePendingImportFile()` on mount; if a slot is waiting it pre-fills the import dropzone. Both paths converge on this slot, then navigate to `/import`.
+
+#### System Accent Color Overlay
+
+The system accent is a **runtime token overlay**, not a sixth theme variant, so it composes with all five variants and both light/dark modes.
+
+- `settingsStore.ts` adds `themeSystemAccent: boolean` + `setThemeSystemAccent` + hydration support.
+- `theme_settings` JSONB gains an optional `systemAccent` key; older payloads hydrate fine.
+- Switch rendered in `AppearanceTab` only when `isElectronMac()` returns true.
+- When enabled, `ThemeContext` calls `applyThemePalette` (resets all tokens) then overrides `--primary`, `--primary-foreground`, `--ring`, `--sidebar-primary`, `--sidebar-primary-foreground`, `--sidebar-ring` with the converted accent.
+- `lib/accentColor.ts`: `hexToHslComponents` converts Electron's RRGGBBAA hex to `"h s% l%"`; `accentForegroundComponents` picks WCAG-contrast foreground (ink for yellow/green accents, white for blue/purple).
+- Live updates arrive via `onAccentColorChanged`. An **epoch counter** in `ThemeContext` discards stale async applies that arrive out-of-order.
+- Toggling off self-heals: `applyThemePalette` resets every token back to the variant default.
+
+#### Under-Window Vibrancy
+
+The window is always created with `vibrancy: 'under-window'` + `visualEffectState: 'followWindow'`. While the page paints opaque pixels the glass effect is invisible — default rendering is unchanged.
+
+Only when `AppSettings.enhancedEffects` (ADR-071) is `true` does `ElectronBridge` add the `vibrancy` html class. One CSS rule in `index.css` then makes `body` translucent (`hsl(var(--background) / 0.72)`). Since body background propagates to the root canvas, a single rule controls the entire backdrop.
+
+> [!warning] Requires visual pass on-device
+> The 0.72 alpha and traffic-light/topbar geometry are tuned without a display. The user must validate contrast and positioning in the built `.app` before shipping.
+
+#### Frontend Component: `ElectronBridge.tsx`
+
+**File:** `apps/frontend/src/components/layout/ElectronBridge.tsx`
+
+Mounted once in `AppLayout`, inside `SidebarProvider`. Responsibilities:
+
+- Calls `electronAPI.ready()` on mount (drains the send queue).
+- Attaches `onMenuAction`, `onCsvOpen`, `onFullScreenChange` listeners via stable refs so React re-renders never tear down IPC subscriptions.
+- Routes menu actions: `navigate` → React Router; `open-settings` / `open-shortcuts` / `toggle-sidebar` → dispatch to UI state; `new-transaction` → navigate to `/transactions?new=1`.
+- Manages `electron-mac`, `electron-fullscreen`, and `vibrancy` html classes.
+- Attaches window-level `dragover`/`drop` for CSV handoff (exempts `[data-dropzone]` ancestors).
+
+---
+
 ### Backup/Restore (Phase 1+2)
 
 **IPC Handlers** for bundle-based backup/restore:
@@ -294,6 +446,23 @@ This forces npm and electron-builder to include them at the correct depth inside
   - `restoreBackup(filePath)` — Invokes `backup:restore`, writes frontend state back to localStorage
 - `apps/frontend/src/components/settings/tabs/BackupTab.tsx` — UI for backup/restore, passphrases, directory selection
   - Handles `BUNDLE_SCHEMA_NEWER` error with user-friendly toast
+
+**Passphrase Storage & OS Keychain (Lazy safeStorage):**
+
+The backup encryption passphrase (when set by the user) is stored encrypted in `settings.json` using Electron's `safeStorage` API, which on macOS delegates to the system Keychain under the entry "Vision Safe Storage".
+
+Vision is ad-hoc unsigned (no Developer ID certificate), so macOS treats the code identity as unstable. Normally, accessing `safeStorage` on every launch would trigger a login-password prompt even for users who have never configured a passphrase. The shell avoids this with lazy access:
+
+- `getBackupPassphrase()` reads the stored `backupPassphraseEncrypted` blob from `settings.json` **before** calling `safeStorage.isEncryptionAvailable()` or `decryptString()`. If no blob is stored and the `VISION_BACKUP_PASSPHRASE` env var is absent, it returns without touching the keychain — zero prompts.
+- `getBackupPassphraseStatus()` (IPC: `backup:get-encryption-status`, used by the Backup settings tab) only calls `isEncryptionAvailable()` when a passphrase is already stored. With nothing stored it reports availability from the mere presence of the `safeStorage` API object (no keychain probe). The real availability check happens in `setBackupPassphrase()` when the user actually opts in.
+
+> [!info] Keychain prompts on unsigned builds
+> Users who store a passphrase will still see macOS password prompts on an unsigned build because macOS re-challenges an unstable code identity each time. Workarounds:
+> - Click **Always Allow** in the Keychain prompt to suppress future challenges for this app.
+> - Set the `VISION_BACKUP_PASSPHRASE` environment variable — this bypasses `safeStorage` entirely and is useful for automation or CI.
+> - Do not configure a backup passphrase if prompts are unwanted; unencrypted backups work without keychain access.
+>
+> Note: `safeStorage` only *stores/retrieves the passphrase*. The backup encryption key itself is always scrypt-derived from the passphrase and never touches the keychain.
 
 **Bundle Format:**
 
@@ -526,7 +695,7 @@ bun run electron:prod
 In dev mode, a file watcher monitors source files and triggers automatic Docker rebuild+restart on code changes:
 
 ```javascript
-// Watches frontend, backend, migrations directories
+// Watches frontend, backend, packages/, i18n/source and bun lockfiles
 fs.watch(sourceDir, { recursive: true }, (eventType, filename) => {
   // Kill in-flight build with SIGTERM to signal cancellation
   if (activeBuildChild) {
@@ -536,6 +705,10 @@ fs.watch(sourceDir, { recursive: true }, (eventType, filename) => {
 });
 ```
 
+**Watch targets (June 2026):** `apps/frontend`, `apps/node-backend`, `packages/`, `i18n/source`, `package.json`, `bun.lock[b]`. The watch callback ignores `node_modules/`, `dist/`, and dot-directory churn.
+
+Previously only the two `apps/` directories were watched, so edits to `packages/shared-utils` or locale strings in `i18n/source` never triggered an auto-rebuild in dev mode — the container kept serving stale code until the next manual relaunch. This was confusing because `DOCKER_PATHS` (the skip-build cache check) already tracked those paths.
+
 **Behavior:**
 - File edit detected → signal SIGTERM to any in-flight build
 - In-flight build catches SIGTERM, marks error as `.cancelled = true`, rejects promise
@@ -544,26 +717,81 @@ fs.watch(sourceDir, { recursive: true }, (eventType, filename) => {
 
 **Rationale:** Eliminates stale builds when multiple edits occur in quick succession. Prevents cascading Docker builds while preserving the most recent change for execution.
 
+### Dockerfile Dependency-Layer Cache (June 2026 — P2 fix)
+
+**Problem:** Both Dockerfile stages previously copied the full `packages/` directory and `i18n/source/` before running `bun install --frozen-lockfile`. Any change to `packages/shared-utils/src/*` or a locale string invalidated the install layer, triggering a full dependency reinstall in every image build (CI and Electron dev-mode auto-rebuilds).
+
+**Fix:** Only workspace manifests (`packages/*/package.json`) are copied before `bun install`. The full `packages/` tree and `i18n/source/` are copied after the install layer, before the build steps that require them. Stage 2 also adds a post-install `COPY packages/` so symlink targets for the shared-utils workspace are in place at runtime.
+
+**Verify:** `docker build` twice with a one-line change in `packages/shared-utils/src/money.js` between runs — the second build should show `CACHED` on the install layer.
+
+### Quit and Container Lifecycle (June 2026)
+
+The `will-quit` handler runs `docker compose stop` (not `down`) to stop containers on quit.
+
+**Why this matters:** `compose down` removes containers and the Docker network on every quit. The launcher's warm-boot fast path (`compose start`) requires containers to exist in a stopped state — if they were removed, every boot pays full container/network recreation. With `compose stop`, containers survive in the `exited` state and the next launch completes the `compose start` sub-second path rather than a full `compose up`.
+
+`compose down` is still used by:
+- The explicit clean-slate rebuild path (`docker-compose.clean.yml`)
+- Manual maintenance flows
+
+`restart: unless-stopped` semantics are preserved: user-stopped containers do not auto-start when the Docker daemon relaunches.
+
+### Window Bounds Persistence (June 2026 — U2 fix)
+
+Window size and position are persisted to `settings.json` under the `windowBounds` key and restored on the next launch.
+
+**Behavior:**
+- On `resize` and `move` events, `getNormalBounds()` is written via a debounced handler.
+- On quit, bounds are written synchronously before the process exits.
+- On `createWindow()`, stored bounds are read and clamped to the active display's `workArea` (handles unplugged external monitors). Minimum enforced size: 800×600.
+- If no stored bounds exist, the window opens at the prior default (1280×800, centered).
+
+This is baseline macOS window-state behavior and removes the most visible "not a real Mac app" tell alongside the V12 native-chrome work.
+
+### Boot Splash — Localized and Theme-Aware (June 2026 — P5/U3 fix)
+
+The boot splash (`setSplashStatus()`) is now:
+
+- **Localized** — uses the `splash.*` i18n keys loaded at startup via `initI18n()` (available before the window opens).
+- **Theme-aware** — reads `prefers-color-scheme` to pick between the dark/light background color, rather than hardcoding `#0f172a`.
+- **Phase-narrating** — calls `setSplashStatus(text)` at four boot checkpoints:
+  - `splash.checkingDocker` — Docker socket probe
+  - `splash.downloading` — image pre-pull / build phase
+  - `splash.startingServices` — `compose start`/`up` in progress
+  - `splash.waitingApp` — backend health-poll underway
+
+**i18n keys (en/nl):** `splash.checkingDocker`, `splash.downloading`, `splash.starting`, `splash.startingServices`, `splash.waitingApp`. Keys flow through `i18n/source/*.json` → `apps/frontend/src/locales/*.ts` → `packaging/electron/i18n/*.json` via `generate-locales`.
+
+### Graceful Shutdown — Idle Keep-Alive Sockets (June 2026 — P4 fix)
+
+The backend shutdown path (`httpServer.close()`) now immediately follows with `httpServer.closeIdleConnections?.()`. The Electron health watchdog uses a `keepAlive: true` agent, so an idle keep-alive socket from the shell to the backend is the norm. Without `closeIdleConnections`, `server.close()` could hang for up to the 10-second force-exit backstop waiting for the socket to time out.
+
+Additionally, the shell destroys its health-poll `keepAlive` agent on quit before sending `SIGTERM` to the containers, so the agent socket is already gone by the time the backend initiates shutdown.
+
 ---
 
 ## Error Recovery
 
 ### Error Page
 
-If backend is unavailable at startup, `error.html` displays:
+If backend is unavailable at startup, `error.html` displays (strings localized via `app.*` i18n keys since 2026-06-11):
 
 ```
 ┌───────────────────────────────────────────────────┐
-│  Backend Service Unavailable                      │
-│  Vision's backend service is not responding.       │
-│  Check logs or try restarting.                     │
+│  Vision couldn't start                            │
+│  Vision couldn't reach its backend. Try again,    │
+│  or check the logs to see what happened.          │
 │                                                   │
-│  [Retry]      [Open Logs]                         │
+│  [Try again]      [Open logs]                     │
 └───────────────────────────────────────────────────┘
 ```
 
-**Retry** → Re-runs health poll from current state
-**Open Logs** → Opens app logs directory
+**Try again** → Re-runs health poll from current state (`recovery:retry` IPC)
+**Open logs** → Opens app logs directory (`recovery:open-logs` IPC)
+
+> [!info] Localization status
+> The error page has been fully localized since 2026-06-11. Prior to that date, `packaging/electron/main.js` passed the i18n key names as the query-param values (e.g. `?title=app.errorPageTitle`) because the keys were absent from `i18n/source/` — see the correction note in [[docs/adr/022-electron-sandbox-hardening-and-recovery|ADR-022]] and the batch entry in [[docs/i18n/translations|translations]] for details.
 
 ### Runtime Watchdog
 
@@ -584,20 +812,32 @@ If `settings.json` is unparsable:
 
 ## Health Monitoring
 
-### Startup Health Poll
+### Poll Functions
+
+Two poll functions cover distinct use cases:
+
+| Function | Endpoint | Purpose |
+|----------|----------|---------|
+| `pollReady(maxAttempts)` | `GET /health/detailed` | Gates the **initial page navigation** on materialized-view warmup. Navigate when `status === 'ready'` OR `caches.materializedViews === true`. 404/unparseable responses fall back to ready. Boot mark: `poll_ready`. |
+| `pollHealth(maxAttempts)` | `GET /health` | Used by watchdog, restart, update, and dev-rebuild flows. Only tests that Express is listening. |
+
+### Startup Readiness Poll
 
 **Env vars:**
-- `VISION_HEALTH_POLL_ATTEMPTS` (default: 200)
-- `VISION_HEALTH_POLL_INTERVAL_MS` (default: 300)
+- `VISION_HEALTH_POLL_ATTEMPTS` (default: 200) — warm-boot budget; triggers the slow-start modal on expiry
+- `VISION_HEALTH_POLL_BUILD_ATTEMPTS` (default: 600) — cold/build-launch budget; ≈3 min, no modal on expiry
+- `VISION_HEALTH_POLL_INTERVAL_MS` (default: 300) — poll cadence in ms
 
-**Example:** 200 attempts × 300ms = 60-second startup timeout
+**Examples:**
+- Warm boot: 200 attempts × 300ms ≈ 56-second timeout (modal fires)
+- Cold/build launch: 600 attempts × 300ms ≈ 3-minute timeout (no modal; falls to error page)
 
 ### Endpoints
 
-- `GET /health` — Simple liveness check (empty body OK)
-- `GET /health/detailed` — Includes warmup status (caches loading?)
+- `GET /health` — Shallow liveness check: returns 200 as soon as Express is listening. Used by the runtime watchdog and restart/update flows.
+- `GET /health/detailed` — Warmup readiness: returns `status: 'warming' | 'ready'` plus per-cache boolean flags (including `materializedViews`). Used by `pollReady()` for initial navigation.
 
-See [[docs/api/health|Health API]] for details.
+See [[docs/api/health|Health API]] for full field semantics and the `caches.materializedViews` gate.
 
 ---
 
@@ -710,10 +950,15 @@ With automatic pre-pull + `pull_policy: missing`, Docker Compose finds the local
 
 ## Related
 
+- [[docs/adr/072-electron-native-desktop-integration|ADR-072: Electron-Native Desktop Integration]] — hiddenInset chrome, native menu/dock, CSV handoff, system accent, vibrancy (June 2026)
+- [[docs/adr/071-premium-v3-effects-toggle|ADR-071: Premium v3]] — `enhancedEffects` toggle that gates vibrancy
 - [[docs/adr/045-electron-app-name-userData-migration|ADR-045: App Name & userData Migration]] — macOS TCC prompt fix + legacy dir migration
 - [[docs/adr/022-electron-sandbox-hardening-and-recovery|ADR-022: Electron Sandbox Hardening]] — Security + recovery design
 - [[docs/adr/023-update-installer-checksum-verification|ADR-023: Installer Checksum Verification]] — Supply-chain security
+- [[docs/adr/020-glass-system-downgrade-liquid-canvas-removal|ADR-020: Glass System Downgrade]] — Electron M1 GPU budget history (vibrancy context)
 - [[docs/api/health|Health API]] — Backend readiness endpoints
+- [[docs/features/appearance|Appearance]] — System accent toggle, enhancedEffects, vibrancy
+- [[docs/features/import|Import Feature]] — CSV drag-and-drop + Finder handoff
 - [[docs/guides/deployment]] — Deployment guide
 - [[docs/reference/scripts]] — Build scripts
 - [[docs/security/index]] — Security documentation

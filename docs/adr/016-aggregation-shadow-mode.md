@@ -1,7 +1,7 @@
 ---
 title: ADR-016 Aggregation Shadow Mode
 type: adr
-status: Retired
+status: Superseded
 date: 2026-04-17
 updated: 2026-04-25
 tags: [adr, aggregation, migration, observability, phase-8, phase-9-complete]
@@ -12,7 +12,7 @@ aliases: [adr-016, aggregation shadow, shadow mode]
 # ADR-016: Aggregation Shadow Mode
 
 ## Status
-Retired (Phase 9 Cutover Complete)
+Superseded — shadow mode removed in Phase 9 cutover
 
 ## Date
 2026-04-17

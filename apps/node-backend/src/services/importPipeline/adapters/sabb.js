@@ -4,7 +4,7 @@
 
 import { cleanRecipientName, normalizeToUppercase } from '../../textNormalization.js';
 import { logger } from '../../../config/logger.js';
-import { parseCsvFile, buildOptionalComment, buildRawRowString, parseAmountField } from './_shared.js';
+import { parseCsvFile, buildOptionalComment, buildRawRowString, parseAmountField, parseDayMonthYear, parseDateFlexibleUtc } from './_shared.js';
 
 const NAME = 'sabb';
 const BANK_LABEL = 'SABB';
@@ -13,8 +13,17 @@ function rowToTransaction(row) {
   const dateStr = (row['Transaction date'] || '').trim();
   if (!dateStr) return null;
 
-  const date = new Date(dateStr);
-  if (isNaN(date.getTime())) return null;
+  // The SABB export's date format isn't pinned, so parse DD/MM/YYYY explicitly
+  // (V8's new Date() would read DD/MM as MM/DD → silent month/day swap, or
+  // Invalid Date for days > 12); everything else goes through the shared
+  // UTC-normalizing parser.
+  let date;
+  if (/^\d{2}\/\d{2}\/\d{4}/.test(dateStr)) {
+    date = parseDayMonthYear(dateStr.slice(0, 10));
+  } else {
+    date = parseDateFlexibleUtc(dateStr);
+  }
+  if (!date) return null;
 
   const amountRaw = (row['Amount(SAR)'] || '').trim();
   if (!amountRaw) return null;
@@ -69,17 +78,20 @@ export async function parse(filePath) {
     trim: true,
   });
 
-  const transactions = [];
+  const transactions = /** @type {any[] & { skipped?: number }} */ ([]);
+  let skipped = 0;
   for (const row of records) {
     try {
       const tx = rowToTransaction(row);
       if (tx) transactions.push(tx);
+      else skipped++;
     } catch {
-      continue;
+      skipped++;
     }
   }
+  transactions.skipped = skipped;
 
-  logger.info(`SABB CSV parsed: ${transactions.length} transactions`);
+  logger.info(`SABB CSV parsed: ${transactions.length} transactions, ${skipped} skipped`);
   return transactions;
 }
 

@@ -57,7 +57,7 @@ describe('BelfiusAdapter', () => {
     tmpPath = writeTempCSV(SAMPLE_BELFIUS_CSV);
     const txns = await parse(tmpPath);
     const txn1 = txns[0];
-    expect(txn1.bankAccount).toBe('BELFIUS');
+    expect(txn1.bankAccount).toBe('BE81063756944024'); // own IBAN (col 0), canonicalized
     expect(txn1.amount).toBe(-67.90);
     expect(txn1.currency).toBe('EUR');
     expect(txn1.recipient).toContain('BANCONTACT PAYCONIQ CO');

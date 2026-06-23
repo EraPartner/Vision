@@ -14,10 +14,10 @@ import RealEstatePage from "@/pages/portfolio/RealEstatePage";
 import SavingsPage from "@/pages/portfolio/SavingsPage";
 import PerformancePage from "@/pages/portfolio/PerformancePage";
 import NetWorthPage from "@/pages/portfolio/net-worth/NetWorthPage";
-import ExchangeRatesPage from "@/pages/portfolio/ExchangeRatesPage";
-import WatchlistPage from "@/pages/portfolio/WatchlistPage";
+import ExchangeRatesPage from "@/pages/admin/ExchangeRatesPage";
+import WatchlistPage from "@/pages/research/WatchlistPage";
 import PortfolioTaxPage from "@/pages/portfolio/tax/PortfolioTaxPage";
-import MarketLookupPage from "@/pages/MarketLookupPage";
+import MarketLookupPage from "@/pages/research/MarketLookupPage";
 import { AddPortfolioTxnDialog } from "@/components/portfolio/AddPortfolioTxnDialog";
 import { InvestmentDetailDialog } from "@/components/portfolio/InvestmentDetailDialog";
 import type { InvestmentSummary } from "@/types/portfolio";
@@ -194,7 +194,7 @@ describe("Portfolio pages (integration)", () => {
     it("NetWorthPage renders heading", async () => {
         renderWithApp(<NetWorthPage />);
         expect(
-            await screen.findByRole("heading", { name: /net worth/i }),
+            await screen.findByRole("heading", { name: /net worth/i, level: 1 }),
         ).toBeInTheDocument();
     });
 

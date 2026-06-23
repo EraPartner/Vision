@@ -111,6 +111,64 @@ contextBridge.exposeInMainWorld('electronBackup', {
 });
 
 /**
+ * Expose the macOS-native integration surface (menu bar actions, dock badge,
+ * CSV open-with handoff, system accent color, fullscreen state). Subscription
+ * helpers return an unsubscribe function. The renderer must call ready() once
+ * its listeners are mounted — main queues messages until then.
+ */
+contextBridge.exposeInMainWorld('electronAPI', {
+  /** 'darwin' | 'win32' | 'linux' — used to gate traffic-light inset CSS. */
+  platform: process.platform,
+
+  /** Signal that renderer listeners are mounted; main flushes queued messages. */
+  ready: () => ipcRenderer.invoke('app:renderer-ready'),
+
+  /**
+   * Set the dock badge to a count of due planned payments (0 clears it).
+   * @param {number} count
+   */
+  setDockBadge: (count) => ipcRenderer.invoke('app:set-badge', count),
+
+  /** macOS accent color as RRGGBBAA hex, or null when unavailable. */
+  getAccentColor: () => ipcRenderer.invoke('app:get-accent-color'),
+
+  /**
+   * Persist the active theme's primary colors (HSL component strings) so the
+   * next boot splash matches the chosen palette.
+   * @param {{ background: string, foreground: string }} colors
+   */
+  persistSplashTheme: (colors) => ipcRenderer.invoke('theme:persist-splash', colors),
+
+  /** Fires with the new RRGGBBAA hex (or null) when the user changes the system accent. */
+  onAccentColorChanged: (cb) => {
+    const listener = (_event, color) => cb(color);
+    ipcRenderer.on('app:accent-color-changed', listener);
+    return () => ipcRenderer.removeListener('app:accent-color-changed', listener);
+  },
+
+  /** Native menu / dock menu actions: { action: string, payload?: unknown }. */
+  onMenuAction: (cb) => {
+    const listener = (_event, message) => cb(message);
+    ipcRenderer.on('menu:action', listener);
+    return () => ipcRenderer.removeListener('menu:action', listener);
+  },
+
+  /** Finder/dock "open with Vision" CSV handoff: { name: string, content: string }. */
+  onCsvOpen: (cb) => {
+    const listener = (_event, file) => cb(file);
+    ipcRenderer.on('app:csv-opened', listener);
+    return () => ipcRenderer.removeListener('app:csv-opened', listener);
+  },
+
+  /** Native fullscreen enter/leave (traffic lights auto-hide in fullscreen). */
+  onFullScreenChange: (cb) => {
+    const listener = (_event, isFullScreen) => cb(isFullScreen);
+    ipcRenderer.on('window:fullscreen', listener);
+    return () => ipcRenderer.removeListener('window:fullscreen', listener);
+  },
+});
+
+/**
  * Expose startup-recovery controls used by error.html when backend health
  * polling fails. Renderer is sandboxed, so only the narrow ipc surface is available.
  */

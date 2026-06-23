@@ -15,9 +15,19 @@ package "Express Application" {
 
 package "Middleware" {
   class RateLimiter {
-    +rateLimiter(opts): middleware
-    +adminRateLimiter(opts): middleware
-    +importRateLimiter(opts): middleware
+    +globalRateLimiter: mounted on /api before all routers\n  (RATE_LIMIT_GLOBAL_MAX=1000/min, RATE_LIMIT_GLOBAL_WINDOW_MS=60000)\n  per-route limiters stack on top — June 2026
+    +resolveClientIp(req): trusts XFF only from TRUSTED_PROXIES — June 2026
+    +adminRateLimiter: 500/min observability reads
+    +adminMutateLimiter: 30/min destructive ops
+    +importRateLimiter: 20/min
+    +reportRateLimiter: 30/min (Puppeteer)
+    +marketRateLimiter: 90/min (Yahoo Finance proxy)
+    +investmentRateLimiter: 300/min
+    +aggregationRateLimiter: 600/min
+    +attachmentRateLimiter: 60/min
+    +spaRateLimiter: 600/min (SPA fallback)
+    +ipMatchesRule(ip, rule): CIDR/IP matching for TRUSTED_PROXIES
+    note: dev bypasses gated on VISION_DEV=true (fail-safe) — June 2026
   }
 
   class Validation {
@@ -36,7 +46,8 @@ package "Middleware" {
     +compression: custom inline middleware via node:zlib (Phase 5, replaces compression package)
     +securityHeaders: middleware (inline in main.js)
     +requestLogger: middleware (inline in main.js)
-    +adminAuth middleware (optional bearer token)
+    +adminAuth middleware (token-or-open: timing-safe Bearer when ADMIN_AUTH_TOKEN set, open otherwise — ADR-063)
+    +csrfGuard middleware (Sec-Fetch-Site / Origin allowlist; blocks cross-site state-changing requests to /api/admin)
   }
 }
 
@@ -111,6 +122,21 @@ package "Routes" {
     +GET /supported-banks : list supported banks
     +POST /recipients : bulk import recipients
     +POST /categories : bulk import categories
+  }
+
+  class PortfolioImportRouter <<ADR-078>> {
+    +POST /csv/custom : one-shot portfolio CSV import (201|202)
+    +POST /csv/stream : SSE streaming portfolio CSV import
+    +GET /parsers : list portfolio parser configs
+    +POST /parsers : create portfolio parser config
+    +PATCH /parsers/:id : update portfolio parser config
+    +DELETE /parsers/:id : delete portfolio parser config
+    +GET /batches : list portfolio import batches
+    +GET /batches/:id : get portfolio import batch
+    +DELETE /batches/:id : rollback portfolio import batch
+    +GET /batches/:id/preview : preview rows grouped by investment
+    +POST /batches/:id/rows/:rowId/investment-override : resolve unmatched row
+    +POST /batches/:id/commit : commit reviewed batch
   }
 
   class SettingsRouter {
@@ -191,6 +217,9 @@ package "Routes" {
     +POST /investments/kinesis/sanitize-history : sanitize Kinesis spikes
     +GET /db/stats : database table statistics (Phase 7)
     +POST /db/vacuum : run VACUUM ANALYZE (Phase 7)
+    +GET /database/tables/:table/schema : column schema + PK discovery (ADR-101)
+    +GET /database/tables/:table/rows : paginated/filtered/sorted read; READ ONLY txn (ADR-101)
+    +POST /database/tables/:table/mutate : batch insert/update/delete; dryRun; xmin OCC (ADR-101)
     +GET /providers/health : provider health summary (Phase F, ADR-034)
     +POST /providers/:provider/probe : synthetic probe
     +GET /metrics/requests : in-memory rolling p50/p95 (Phase F)
@@ -279,6 +308,8 @@ package "Services" {
   class RawTransactionImportService
   class StreamingImportService
   class DataImportService
+  class PortfolioImportPipelineService <<ADR-078>>
+  class PortfolioImportBatchService <<ADR-078>>
   class LoanRepaymentService
   class CurrencyConversionService
   class PriceProviderService
@@ -299,6 +330,7 @@ Main --> RecipientBankAccountsRouter
 Main --> PlannedTransactionsRouter
 Main --> InvestmentsRouter
 Main --> ImportRouter
+Main --> PortfolioImportRouter
 Main --> SettingsRouter
 Main --> WatchlistRouter
 Main --> SavedChartsRouter
@@ -327,6 +359,8 @@ ImportRouter --> ImportService
 ImportRouter --> RawTransactionImportService
 ImportRouter --> StreamingImportService
 ImportRouter --> DataImportService
+PortfolioImportRouter --> PortfolioImportPipelineService
+PortfolioImportRouter --> PortfolioImportBatchService
 SettingsRouter --> SR2
 WatchlistRouter --> WR
 SavedChartsRouter --> SCR

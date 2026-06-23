@@ -3,8 +3,7 @@
  */
 
 import { Router } from 'express';
-// eslint-disable-next-line vision-local/no-repo-direct-from-route
-import savedChartsRepository from '../repositories/savedChartsRepository.js';
+import savedChartsRepository from '../services/savedChartsService.js';
 import { validateIntArray } from '../middleware/validation.js';
 import { NotFoundError, ValidationError } from '../middleware/errorHandler.js';
 
@@ -57,7 +56,12 @@ function parseIntIds(raw, fieldName) {
 }
 
 function parseDateOrNull(value, fieldName) {
-  if (value === undefined || value === null || value === '') return undefined;
+  // Distinguish "absent" (leave the stored value untouched) from "clear"
+  // (write NULL). The edit modal sends null to clear a chart's date range; the
+  // old code mapped null/'' to undefined, which the repository skips, so a
+  // cleared range silently kept its old value.
+  if (value === undefined) return undefined;
+  if (value === null || value === '') return null;
   const d = new Date(value);
   if (Number.isNaN(d.getTime())) throw new ValidationError(`Invalid date for "${fieldName}"`);
   return value;

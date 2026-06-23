@@ -40,4 +40,12 @@ export async function upsert({ userId, todayIso, daysBack, daysForward, filterHa
   );
 }
 
-export default { get, isFresh, upsert };
+/**
+ * Drop all cached rolling forecasts — invalidated alongside the monthly cache
+ * when transactions change so diagnostics recompute against fresh data.
+ */
+export async function clearAll() {
+  await query('DELETE FROM cashflow_forecast_mc_rolling');
+}
+
+export default { get, isFresh, upsert, clearAll };

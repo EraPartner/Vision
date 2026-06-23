@@ -45,6 +45,8 @@ function ForecastInnerImpl({
 
     return (
         <LineChart<MergedDay>
+            syncId="dashboard-timeline"
+            scrubbable
             data={rows}
             xAccessor={(d) => d.dayNum as number}
             xIsDate={false}

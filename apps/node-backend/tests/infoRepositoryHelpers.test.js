@@ -6,6 +6,23 @@ vi.mock('../src/database/connection.js', () => ({
 
 import { query } from '../src/database/connection.js';
 import { mvAvailable, clearMvCache } from '../src/repositories/infoRepositoryHelpers.js';
+import { sanitizeIsolatedValueSpikes } from '../src/utils/portfolioMath.js';
+
+describe('sanitizeIsolatedValueSpikes', () => {
+  it('smooths an isolated one-day needle to the geometric mean of its neighbors', () => {
+    const rows = [{ value: 1000 }, { value: 2000 }, { value: 1010 }];
+    const out = sanitizeIsolatedValueSpikes(rows, 'value');
+    expect(out[1].value).toBeCloseTo(Math.sqrt(1000 * 1010), 0); // ~1005, not 2000
+    expect(out[0].value).toBe(1000);
+    expect(out[2].value).toBe(1010);
+  });
+
+  it('leaves a genuine sustained move untouched', () => {
+    const rows = [{ value: 1000 }, { value: 2000 }, { value: 2010 }];
+    const out = sanitizeIsolatedValueSpikes(rows, 'value');
+    expect(out[1].value).toBe(2000); // next does not revert → not a needle
+  });
+});
 
 describe('mvAvailable', () => {
   beforeEach(() => {

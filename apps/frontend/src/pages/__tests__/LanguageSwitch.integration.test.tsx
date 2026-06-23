@@ -20,7 +20,7 @@ import RecipientInsightsPage from "@/pages/RecipientInsightsPage";
 import PortfolioOverviewPage from "@/pages/portfolio/PortfolioOverviewPage";
 import AdminOverviewPage from "@/pages/admin/AdminOverviewPage";
 import DbMaintenancePage from "@/pages/DbMaintenancePage";
-import MarketLookupPage from "@/pages/MarketLookupPage";
+import MarketLookupPage from "@/pages/research/MarketLookupPage";
 import NotFound from "@/pages/NotFound";
 
 const API_BASE = "http://localhost:3002";
@@ -113,7 +113,7 @@ describe("Language switch (integration)", () => {
         renderWithApp(<CategoriesPage />);
         // Dutch: categories.title = "Categorieën"
         expect(
-            await screen.findByRole("heading", { name: /categorieën/i }),
+            await screen.findByRole("heading", { name: /^categorieën$/i }),
         ).toBeInTheDocument();
     });
 

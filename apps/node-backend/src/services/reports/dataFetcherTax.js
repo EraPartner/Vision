@@ -7,7 +7,9 @@
 
 import { query } from '../../database/connection.js';
 import { convertWithRates, loadCurrentRates } from '../currency/currencyConversionService.js';
+import { buildHistoricalRateIndex, findRateOnOrBeforeInIndex } from '../currency/rateFetcher.js';
 import { getTaxTable } from './belgianTaxTables.js';
+import { todayAppDateString, firstOfMonthYmd } from '../../lib/timezone.js';
 import { logger } from '../../config/logger.js';
 
 /**
@@ -39,29 +41,31 @@ function unwrap(result, label) {
  * @returns {{ taxYear: number; startDate: string; endDate: string; periodNote: string | null }}
  */
 export function periodToTaxContext(period) {
-  const now = new Date();
-  const currentYear = now.getFullYear();
+  // APP_TIMEZONE calendar day + pure string math (see periodToDateRange in
+  // dataFetcherPortfolio.js — same day-shift class).
+  const today = todayAppDateString();
+  const currentYear = Number(today.slice(0, 4));
 
   switch (period.kind) {
     case 'ytd':
-      return { taxYear: currentYear, startDate: `${currentYear}-01-01`, endDate: now.toISOString().slice(0, 10), periodNote: null };
+      return { taxYear: currentYear, startDate: `${currentYear}-01-01`, endDate: today, periodNote: null };
 
     case 'year':
       return { taxYear: period.year, startDate: `${period.year}-01-01`, endDate: `${period.year}-12-31`, periodNote: null };
 
     case 'rolling': {
       // Use current year; add note that period may span two calendar years
-      const start = new Date(now.getFullYear(), now.getMonth() - period.months + 1, 1);
-      const startYear = start.getFullYear();
+      const startDate = firstOfMonthYmd(today, -(period.months - 1));
+      const startYear = Number(startDate.slice(0, 4));
       const note = startYear !== currentYear
         ? `Rolling ${period.months}-month window spans ${startYear}–${currentYear}; brackets use ${currentYear} rates.`
         : null;
-      return { taxYear: currentYear, startDate: start.toISOString().slice(0, 10), endDate: now.toISOString().slice(0, 10), periodNote: note };
+      return { taxYear: currentYear, startDate, endDate: today, periodNote: note };
     }
 
     case 'custom': {
-      const fromYear = new Date(period.from).getFullYear();
-      const toYear   = new Date(period.to).getFullYear();
+      const fromYear = Number(String(period.from).slice(0, 4));
+      const toYear   = Number(String(period.to).slice(0, 4));
       const taxYear  = fromYear;
       const note = fromYear !== toYear
         ? `Custom date range spans ${fromYear}–${toYear}; brackets use ${fromYear} rates.`
@@ -95,6 +99,7 @@ async function fetchTaxTransactions(targetCurrency, startDate, endDate) {
       COALESCE(pt.taxes,  0)  AS taxes,
       COALESCE(pt.fees,   0)  AS fees,
       COALESCE(pt.currency, i.currency, 'EUR') AS currency,
+      to_char(pt.date::date, 'YYYY-MM-DD') AS rate_date,
       EXTRACT(YEAR  FROM pt.date::date)::int AS year,
       EXTRACT(MONTH FROM pt.date::date)::int AS month
     FROM portfolio_transactions pt
@@ -116,12 +121,71 @@ async function fetchTaxTransactions(targetCurrency, startDate, endDate) {
   const byAssetClass    = new Map();
   const byInvestment    = new Map();
 
-  const rates = await loadCurrentRates();
+  // Currencies for which no rate (historical or current) could be resolved, so a
+  // row was summed into the target total at an unconverted 1:1 rate. Surfaced so
+  // the PDF can annotate the figure as approximate instead of silently reporting
+  // e.g. 1000 KRW as 1000 EUR. (ADR-085.)
+  const missingRateCurrencies = new Set();
+
+  // Belgian tax values foreign-currency income and transactions at the exchange rate
+  // on the date the income was collected / the transaction took place — not today's
+  // rate. The TOB (stock-exchange tax) guidance is explicit ("the ECB rate of the day
+  // the transaction took place") and foreign movable income (dividends/interest) is
+  // taxable at its date of collection. So each row converts at its transaction-date
+  // rate, falling back to the current rate only when no historical rate is stored on or
+  // before that date (e.g. a brand-new transaction before the FX backfill runs). See
+  // ADR-085.
+  const currentRates = await loadCurrentRates();
+  const toCur = String(targetCurrency || 'EUR').toUpperCase().trim();
+
+  const relevantCurrencies = [...new Set([
+    ...result.rows.map((r) => String(r.currency || 'EUR').toUpperCase().trim()),
+    toCur,
+  ])].filter((c) => c && c !== 'EUR');
+
+  let historicalIndex = new Map();
+  if (relevantCurrencies.length > 0) {
+    const ratesResult = await query(
+      `SELECT currency_code, rate_date, rate_to_eur
+       FROM exchange_rates
+       WHERE currency_code = ANY($1::text[])
+       ORDER BY currency_code ASC, rate_date ASC`,
+      [relevantCurrencies]
+    );
+    historicalIndex = buildHistoricalRateIndex(ratesResult.rows || []);
+  }
+
+  // Rate-to-EUR for a currency on a given date: the stored historical rate on or
+  // before the date when available, else the current rate. EUR is always 1.
+  const rateToEurForDate = (code, dateStr) => {
+    const c = String(code || 'EUR').toUpperCase().trim();
+    if (c === 'EUR') return 1;
+    const historical = findRateOnOrBeforeInIndex(historicalIndex, c, dateStr);
+    if (historical !== undefined) return historical;
+    return currentRates[c];
+  };
 
   for (const row of result.rows) {
-    const cur = row.currency;
+    // Normalize the source currency ONCE so the skip-guard and the rowRates keys
+    // can't disagree for mixed-case/whitespace currency strings.
+    const cur = String(row.currency || 'EUR').toUpperCase().trim();
+    const rowDate = row.rate_date;
+    // Per-row rate table built from the transaction-date rates, so convertWithRates
+    // applies the same conversion math and unsupported-currency handling as the live
+    // path — only the rate source (historical vs current) differs.
+    const fromRate = rateToEurForDate(cur, rowDate);
+    const rowRates = {
+      EUR: 1,
+      [cur]: fromRate,
+      [toCur]: rateToEurForDate(toCur, rowDate),
+    };
+    // No rate resolved for a non-target foreign currency → convertWithRates will
+    // sum it 1:1. Record it so the report can flag the total as approximate.
+    if (cur !== toCur && cur !== 'EUR' && (fromRate === undefined || fromRate === null)) {
+      missingRateCurrencies.add(cur);
+    }
     const convert = (v) =>
-      cur !== targetCurrency ? convertWithRates(Number(v), cur, targetCurrency, rates) : Number(v);
+      cur !== toCur ? convertWithRates(Number(v), cur, toCur, rowRates) : Number(v);
 
     const taxes    = convert(row.taxes);
     const fees     = convert(row.fees);
@@ -200,6 +264,9 @@ async function fetchTaxTransactions(targetCurrency, startDate, endDate) {
     byMonth: [...byMonthMap.values()].sort((a, b) => a.year !== b.year ? a.year - b.year : a.month - b.month),
     byAssetClass: [...byAssetClass.values()].sort((a, b) => (b.taxes + b.fees) - (a.taxes + a.fees)),
     byInvestment: [...byInvestment.values()].sort((a, b) => b.total - a.total),
+    // Foreign currencies that were summed at an unconverted 1:1 rate (no FX rate
+    // available). Empty when every row converted cleanly.
+    unconvertedCurrencies: [...missingRateCurrencies].sort(),
   };
 }
 
@@ -240,5 +307,6 @@ export async function fetchTaxData(currency, period, { taxProfile, precomputedPI
     byMonth:           txns?.byMonth           ?? [],
     byAssetClass:      txns?.byAssetClass      ?? [],
     byInvestment:      txns?.byInvestment      ?? [],
+    unconvertedCurrencies: txns?.unconvertedCurrencies ?? [],
   };
 }

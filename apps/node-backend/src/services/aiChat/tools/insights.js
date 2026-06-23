@@ -11,6 +11,7 @@ import { categoryRepository } from '../../../repositories/categoryRepository.js'
 import { transactionRepository } from '../../../repositories/transactionRepository.js';
 import settings from '../../../config/config.js';
 import { toDecimal, roundToCents } from '../../../lib/money.js';
+import { toYmd } from '../../../utils/portfolioMath.js';
 import { parseEnum, parsePositiveInt } from './_validate.js';
 import { detectRecurringPatterns } from '../../recurringDetectionService.js';
 
@@ -34,12 +35,10 @@ export const getBankBalances = {
       balance: typeof a.balance === 'number' ? a.balance : roundToCents(toDecimal(a.balance ?? 0)).toNumber(),
       currency: 'EUR',
       transactionCount: a.transaction_count ?? null,
-      firstTransaction: a.first_transaction
-        ? (a.first_transaction instanceof Date ? a.first_transaction.toISOString().slice(0, 10) : String(a.first_transaction).slice(0, 10))
-        : null,
-      lastTransaction: a.last_transaction
-        ? (a.last_transaction instanceof Date ? a.last_transaction.toISOString().slice(0, 10) : String(a.last_transaction).slice(0, 10))
-        : null,
+      // toYmd uses local getters for pg's local-midnight DATE values —
+      // toISOString() shifted these one day back on a UTC+ server.
+      firstTransaction: a.first_transaction ? toYmd(a.first_transaction) : null,
+      lastTransaction: a.last_transaction ? toYmd(a.last_transaction) : null,
     }));
 
     return {

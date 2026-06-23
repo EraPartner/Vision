@@ -255,6 +255,175 @@ components:
         is_active:
           type: boolean
 
+    Account:
+      type: object
+      required: [id, name, currency, type, liquidity_class, spendable, in_net_worth, tax_wrapper, owner, multi_currency_cash, has_cash_sleeve, is_active, created_at, updated_at]
+      properties:
+        id:
+          type: integer
+        name:
+          type: string
+        display_name:
+          type: string
+          nullable: true
+        institution:
+          type: string
+          nullable: true
+        currency:
+          type: string
+          description: ISO 4217 currency code
+        type:
+          type: string
+          enum: [checking, savings, brokerage, crypto_exchange, wallet, pension, liability]
+        liquidity_class:
+          type: string
+          enum: [liquid, semi_liquid, illiquid]
+        spendable:
+          type: boolean
+        in_net_worth:
+          type: boolean
+        tax_wrapper:
+          type: string
+          enum: [none, pension, tax_advantaged]
+        owner:
+          type: string
+          enum: [me, partner, joint]
+        multi_currency_cash:
+          type: boolean
+        has_cash_sleeve:
+          type: boolean
+        funding_account_id:
+          type: integer
+          nullable: true
+        statement_balance:
+          type: number
+          nullable: true
+        statement_balance_date:
+          type: string
+          format: date
+          nullable: true
+        computed_balance:
+          type: number
+          nullable: true
+          description: Latest active transaction balance for the account (ADR-094)
+        drift:
+          type: number
+          nullable: true
+          description: statement_balance − computed_balance; null if no statement balance (ADR-094)
+        has_transactions:
+          type: boolean
+          description: Whether the account has any active ledger rows; only returned by the list endpoint.
+        is_active:
+          type: boolean
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+
+    AccountList:
+      allOf:
+        - $ref: "#/components/schemas/PaginationMeta"
+        - type: object
+          required: [items]
+          properties:
+            items:
+              type: array
+              items:
+                $ref: "#/components/schemas/Account"
+
+    AccountCreate:
+      type: object
+      required: [name]
+      properties:
+        name:
+          type: string
+        display_name:
+          type: string
+          nullable: true
+        institution:
+          type: string
+          nullable: true
+        currency:
+          type: string
+        type:
+          type: string
+          enum: [checking, savings, brokerage, crypto_exchange, wallet, pension, liability]
+        liquidity_class:
+          type: string
+          enum: [liquid, semi_liquid, illiquid]
+        spendable:
+          type: boolean
+        in_net_worth:
+          type: boolean
+        tax_wrapper:
+          type: string
+          enum: [none, pension, tax_advantaged]
+        owner:
+          type: string
+          enum: [me, partner, joint]
+        multi_currency_cash:
+          type: boolean
+        has_cash_sleeve:
+          type: boolean
+        funding_account_id:
+          type: integer
+          nullable: true
+        statement_balance:
+          type: number
+          nullable: true
+        statement_balance_date:
+          type: string
+          format: date
+          nullable: true
+
+    AccountUpdate:
+      type: object
+      properties:
+        name:
+          type: string
+        display_name:
+          type: string
+          nullable: true
+        institution:
+          type: string
+          nullable: true
+        currency:
+          type: string
+        type:
+          type: string
+          enum: [checking, savings, brokerage, crypto_exchange, wallet, pension, liability]
+        liquidity_class:
+          type: string
+          enum: [liquid, semi_liquid, illiquid]
+        spendable:
+          type: boolean
+        in_net_worth:
+          type: boolean
+        tax_wrapper:
+          type: string
+          enum: [none, pension, tax_advantaged]
+        owner:
+          type: string
+          enum: [me, partner, joint]
+        multi_currency_cash:
+          type: boolean
+        has_cash_sleeve:
+          type: boolean
+        funding_account_id:
+          type: integer
+          nullable: true
+        statement_balance:
+          type: number
+          nullable: true
+        statement_balance_date:
+          type: string
+          format: date
+          nullable: true
+        is_active:
+          type: boolean
+
     BulkTagRequest:
       type: object
       required: [transaction_ids]
@@ -286,6 +455,39 @@ components:
           type: integer
         transactions_affected:
           type: integer
+
+    BulkSelection:
+      type: object
+      description: >-
+        Selects transactions to act on. Provide an explicit `ids` array or a
+        `filter` object (same shape as GET /api/transactions query filters);
+        exactly one is resolved server-side.
+      properties:
+        ids:
+          type: array
+          items:
+            type: integer
+        filter:
+          type: object
+          additionalProperties: true
+
+    CustomParserConfig:
+      type: object
+      required: [id, name, config]
+      properties:
+        id:
+          type: integer
+        name:
+          type: string
+        config:
+          type: object
+          additionalProperties: true
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
 
     # ─── Transactions ────────────────────────────────────────────────────────
     Transaction:
@@ -735,6 +937,10 @@ components:
           type: string
         fx_rate_to_eur:
           type: number
+        account_id:
+          type: integer
+          nullable: true
+          description: Owning account for the lot (ADR-091); null = unassigned/global
         note:
           type: string
         is_recurring:
@@ -782,13 +988,16 @@ components:
     # ─── Net Worth ───────────────────────────────────────────────────────────
     NetWorthSnapshot:
       type: object
-      required: [date, liquid, investments, netWorth]
+      required: [date, liquid, liabilities, investments, netWorth]
       properties:
         date:
           type: string
           format: date
         liquid:
           type: number
+        liabilities:
+          type: number
+          description: Σ liability-account balances (negative); split out of liquid so debt is not counted as a liquid asset (ADR-092).
         investments:
           type: number
         netWorth:
@@ -800,9 +1009,11 @@ components:
       properties:
         current:
           type: object
-          required: [liquid, investments, netWorth, currency]
+          required: [liquid, liabilities, investments, netWorth, currency]
           properties:
             liquid:
+              type: number
+            liabilities:
               type: number
             investments:
               type: number
@@ -958,6 +1169,57 @@ components:
           enum: [user, assistant, system]
         content:
           type: string
+
+    # ─── Portfolio Import ─────────────────────────────────────────────────────
+    PortfolioImportBatch:
+      type: object
+      required: [id, adapter_name, status, rows_total, rows_imported, rows_duplicate, rows_error, started_at]
+      properties:
+        id:
+          type: string
+        adapter_name:
+          type: string
+        source_filename:
+          type: string
+        source_size_bytes:
+          type: integer
+        status:
+          type: string
+          enum: [pending, staging, validating, matching, committing, complete, failed, aborted, awaiting_review]
+        rows_total:
+          type: integer
+        rows_imported:
+          type: integer
+        rows_duplicate:
+          type: integer
+        rows_error:
+          type: integer
+        error_summary:
+          type: string
+        started_at:
+          type: string
+          format: date-time
+        completed_at:
+          type: string
+          format: date-time
+
+    PortfolioParserConfig:
+      type: object
+      required: [id, name, config]
+      properties:
+        id:
+          type: integer
+        name:
+          type: string
+        config:
+          type: object
+          additionalProperties: true
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
 
     # ─── Import ───────────────────────────────────────────────────────────────
     ImportBatch:
@@ -1123,6 +1385,189 @@ paths:
                 $ref: "#/components/schemas/Envelope"
         "404":
           description: Tag not found
+
+  /api/cross-workspace/rebalance:
+    post:
+      summary: Cash-aware rebalancing plan (ADR-098)
+      description: >-
+        Deploy spendable account cash into underweight portfolio sleeves toward a
+        target allocation, without selling. Composes Budgeting + Portfolio.
+      operationId: computeRebalance
+      tags: [CrossWorkspace]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                currency: { type: string }
+                model:
+                  type: string
+                  enum: [sixty_forty, all_weather, three_fund]
+                targetWeights:
+                  type: object
+                  additionalProperties: { type: number }
+                availableCash: { type: number }
+      responses:
+        "200":
+          description: Rebalancing plan
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Envelope"
+
+  /api/accounts:
+    get:
+      summary: List accounts
+      operationId: getAccounts
+      tags: [Accounts]
+      parameters:
+        - in: query
+          name: active
+          schema:
+            type: string
+            enum: ["true", "false", "all"]
+          description: Filter by active status (default true)
+      responses:
+        "200":
+          description: Account list
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/Envelope"
+                  - type: object
+                    properties:
+                      data:
+                        $ref: "#/components/schemas/AccountList"
+    post:
+      summary: Create account
+      operationId: createAccount
+      tags: [Accounts]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AccountCreate"
+      responses:
+        "201":
+          description: Created account
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/Envelope"
+                  - type: object
+                    properties:
+                      data:
+                        $ref: "#/components/schemas/Account"
+        "409":
+          description: An account with that name already exists
+
+  /api/accounts/{id}:
+    parameters:
+      - in: path
+        name: id
+        required: true
+        schema:
+          type: integer
+    get:
+      summary: Get one account
+      operationId: getAccount
+      tags: [Accounts]
+      responses:
+        "200":
+          description: Account
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/Envelope"
+                  - type: object
+                    properties:
+                      data:
+                        $ref: "#/components/schemas/Account"
+        "404":
+          description: Account not found
+    patch:
+      summary: Update account
+      operationId: updateAccount
+      tags: [Accounts]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AccountUpdate"
+      responses:
+        "200":
+          description: Updated account
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/Envelope"
+                  - type: object
+                    properties:
+                      data:
+                        $ref: "#/components/schemas/Account"
+        "404":
+          description: Account not found
+        "409":
+          description: An account with that name already exists
+    delete:
+      summary: Delete account (409 if still referenced — archive instead)
+      operationId: deleteAccount
+      tags: [Accounts]
+      responses:
+        "200":
+          description: Deleted account
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Envelope"
+        "404":
+          description: Account not found
+        "409":
+          description: Account still has transactions; archive it instead
+
+  /api/accounts/{id}/merge:
+    parameters:
+      - in: path
+        name: id
+        required: true
+        schema:
+          type: integer
+        description: Survivor account id (sources merge into this one)
+    post:
+      summary: Merge source accounts into this (survivor) account
+      description: Repoints all references (transactions, planned, portfolio lots, funding_account_id) from each source account to this (survivor) account, then deletes the sources (ADR-088).
+      operationId: mergeAccounts
+      tags: [Accounts]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [source_ids]
+              properties:
+                source_ids:
+                  type: array
+                  items:
+                    type: integer
+                  description: Account ids to merge into this account and delete
+      responses:
+        "200":
+          description: Merge result (survivor id, merged ids, reassigned counts)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Envelope"
+        "404":
+          description: Target or a source account not found
 
   # ─── Transactions ────────────────────────────────────────────────────────────
 
@@ -1548,6 +1993,35 @@ paths:
                       data:
                         type: object
                         additionalProperties: true
+    put:
+      summary: Bulk save settings (key→value map)
+      operationId: saveSettings
+      tags: [Settings]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: true
+              description: Map of setting key → value pairs to persist
+      responses:
+        "200":
+          description: Number of settings saved
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/Envelope"
+                  - type: object
+                    properties:
+                      data:
+                        type: object
+                        properties:
+                          saved:
+                            type: integer
+        "400":
+          description: Body must be a JSON object of key→value pairs
 
   /api/settings/{key}:
     parameters:
@@ -1626,6 +2100,61 @@ paths:
                     properties:
                       data:
                         $ref: "#/components/schemas/InvestmentList"
+    post:
+      summary: Create an investment
+      operationId: createInvestment
+      tags: [Portfolio]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [name, asset_class]
+              properties:
+                name:
+                  type: string
+                symbol:
+                  type: string
+                asset_class:
+                  type: string
+                currency:
+                  type: string
+                current_price:
+                  type: number
+                interest_rate:
+                  type: number
+                maturity_date:
+                  type: string
+                  format: date
+                location:
+                  type: string
+                municipality:
+                  type: string
+                cadastral_income:
+                  type: number
+                municipality_tax_rate:
+                  type: number
+                notes:
+                  type: string
+                price_provider:
+                  type: string
+                price_provider_id:
+                  type: string
+      responses:
+        "201":
+          description: Created investment
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/Envelope"
+                  - type: object
+                    properties:
+                      data:
+                        $ref: "#/components/schemas/Investment"
+        "400":
+          description: name and asset_class are required
 
   /api/info/net-worth:
     get:
@@ -1653,6 +2182,31 @@ paths:
                     properties:
                       data:
                         $ref: "#/components/schemas/NetWorthResponse"
+
+  /api/info/net-worth/by-account:
+    get:
+      summary: Net worth split by account (Σ-accounts, ADR-100)
+      description: Per-account current cash + holdings plus the rebuilt daily holdings history; the Σ over accounts equals the aggregate net worth by construction.
+      operationId: getNetWorthByAccount
+      tags: [Info]
+      parameters:
+        - in: query
+          name: currency
+          schema:
+            type: string
+          description: "Target currency for conversion (alias: target_currency; default EUR)"
+      responses:
+        "200":
+          description: Per-account net-worth breakdown with holdings history
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/Envelope"
+                  - type: object
+                    properties:
+                      data:
+                        type: object
 
   /api/saved-charts:
     get:
@@ -1756,6 +2310,117 @@ paths:
                 $ref: "#/components/schemas/Envelope"
 
   # ─── Transactions extra ──────────────────────────────────────────────────────
+  /api/transactions/bulk-delete:
+    post:
+      summary: Bulk-delete transactions selected by ids or filter
+      operationId: bulkDeleteTransactions
+      tags: [Transactions]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/BulkSelection"
+      responses:
+        "200":
+          description: Number of transactions deleted
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/Envelope"
+                  - type: object
+                    properties:
+                      data:
+                        type: object
+                        properties:
+                          deleted:
+                            type: integer
+        "429":
+          description: Rate limit exceeded
+
+  /api/transactions/bulk-update:
+    post:
+      summary: Apply a shared field update to transactions selected by ids or filter
+      operationId: bulkUpdateTransactions
+      tags: [Transactions]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              allOf:
+                - $ref: "#/components/schemas/BulkSelection"
+                - type: object
+                  required: [fields]
+                  properties:
+                    fields:
+                      type: object
+                      description: At least one of the updatable properties
+                      properties:
+                        category_id:
+                          type: integer
+                          nullable: true
+                        recipient_id:
+                          type: integer
+                        is_active:
+                          type: boolean
+      responses:
+        "200":
+          description: Number of transactions updated
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/Envelope"
+                  - type: object
+                    properties:
+                      data:
+                        type: object
+                        properties:
+                          updated:
+                            type: integer
+        "400":
+          description: Invalid or missing fields, or invalid FK reference
+        "429":
+          description: Rate limit exceeded
+
+  /api/transactions/bulk-export:
+    post:
+      summary: Export transactions selected by ids or filter (CSV or NDJSON stream)
+      operationId: bulkExportTransactions
+      tags: [Transactions]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              allOf:
+                - $ref: "#/components/schemas/BulkSelection"
+                - type: object
+                  properties:
+                    format:
+                      type: string
+                      enum: [csv, json]
+                      default: csv
+                    include_balance:
+                      type: boolean
+                      default: false
+      responses:
+        "200":
+          description: Streamed export
+          content:
+            text/csv:
+              schema:
+                type: string
+            application/x-ndjson:
+              schema:
+                type: string
+        "400":
+          description: Invalid format
+        "429":
+          description: Rate limit exceeded
+
   /api/transactions/bulk-tag:
     post:
       summary: Bulk add/remove tags across multiple transactions
@@ -1783,6 +2448,72 @@ paths:
           description: Unknown tags or invalid input
         "429":
           description: Rate limit exceeded
+
+  /api/transactions/transfer-suggestions:
+    get:
+      summary: Ambiguous internal-transfer matches awaiting confirmation (ADR-083)
+      operationId: getTransferSuggestions
+      tags: [Transactions]
+      responses:
+        "200":
+          description: Suggested transfer pairs (each an outflow + candidate inflows)
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/Envelope"
+                  - type: object
+                    properties:
+                      data:
+                        type: object
+                        properties:
+                          items:
+                            type: array
+                            items:
+                              type: object
+
+  /api/transactions/transfers:
+    post:
+      summary: Manually confirm an internal-transfer pair (ADR-083)
+      operationId: markTransfer
+      tags: [Transactions]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [aId, bId]
+              properties:
+                aId: { type: integer }
+                bId: { type: integer }
+      responses:
+        "200":
+          description: Pair marked as a transfer
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Envelope"
+        "400":
+          description: aId and bId must be two distinct transaction ids
+
+  /api/transactions/transfers/{id}:
+    delete:
+      summary: Clear a transfer mark on a transaction and its peer (ADR-083)
+      operationId: unmarkTransfer
+      tags: [Transactions]
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: integer }
+      responses:
+        "200":
+          description: Transfer mark cleared
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Envelope"
 
   /api/transactions/export/csv:
     get:
@@ -2337,6 +3068,54 @@ paths:
                         items:
                           $ref: "#/components/schemas/PlannedTransaction"
 
+  /api/planned-transactions/match-suggestions:
+    get:
+      summary: List planned payments with likely-matching unlinked transactions
+      description: >
+        Active, unexecuted planned payments that have one or more recent unlinked
+        transactions within match tolerance (same recipient cluster, sign, ±5%
+        amount, ±5 days) but were not auto-cleared — ambiguous matches or
+        auto-clear disabled. Each entry carries its candidate transactions for
+        the user to confirm.
+      operationId: getPlannedMatchSuggestions
+      tags: [PlannedTransactions]
+      responses:
+        "200":
+          description: Match suggestions
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/Envelope"
+                  - type: object
+                    properties:
+                      data:
+                        type: array
+                        items:
+                          type: object
+                          properties:
+                            planned:
+                              type: object
+                              properties:
+                                id: { type: integer }
+                                recipient_id: { type: integer, nullable: true }
+                                recipient_name: { type: string, nullable: true }
+                                amount: { type: number }
+                                planned_date: { type: string }
+                                currency: { type: string, nullable: true }
+                                is_recurring: { type: boolean }
+                            candidates:
+                              type: array
+                              items:
+                                type: object
+                                properties:
+                                  id: { type: integer }
+                                  recipient_name: { type: string, nullable: true }
+                                  amount: { type: number }
+                                  transaction_date: { type: string }
+                                  currency: { type: string, nullable: true }
+                                  memo: { type: string, nullable: true }
+
   /api/planned-transactions/{id}:
     parameters:
       - in: path
@@ -2454,19 +3233,6 @@ paths:
                         $ref: "#/components/schemas/Transaction"
 
   # ─── Info ─────────────────────────────────────────────────────────────────────
-  /api/info:
-    get:
-      summary: Global statistics overview
-      operationId: getInfoStats
-      tags: [Info]
-      responses:
-        "200":
-          description: Statistics summary
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/Envelope"
-
   /api/info/banks:
     get:
       summary: List distinct bank accounts
@@ -2506,34 +3272,6 @@ paths:
       responses:
         "200":
           description: Count
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/Envelope"
-
-  /api/info/transaction-summary:
-    get:
-      summary: Get transaction amount summary (income/expenses)
-      operationId: getTransactionSummary
-      tags: [Info]
-      parameters:
-        - in: query
-          name: start_date
-          schema:
-            type: string
-            format: date
-        - in: query
-          name: end_date
-          schema:
-            type: string
-            format: date
-        - in: query
-          name: currency
-          schema:
-            type: string
-      responses:
-        "200":
-          description: Income/expense totals
           content:
             application/json:
               schema:
@@ -3303,6 +4041,44 @@ paths:
                       data:
                         $ref: "#/components/schemas/PortfolioTransaction"
 
+  /api/investments/{id}/move:
+    parameters:
+      - in: path
+        name: id
+        required: true
+        schema:
+          type: integer
+    post:
+      summary: Move this holding between accounts (in-specie, cost-basis-preserving)
+      description: Moves the investment's lots from `from_account_id` to `to_account_id` (ADR-091). Omit `units` (or pass ≥ net) for a whole move (re-points all lots incl. history); pass `units` for a partial move (unit-based only — FIFO lot re-point + pro-rata boundary split). No sell/buy, no realized gain, no cash leg.
+      operationId: moveHolding
+      tags: [Investments]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [from_account_id, to_account_id]
+              properties:
+                from_account_id:
+                  type: integer
+                to_account_id:
+                  type: integer
+                units:
+                  type: number
+                  nullable: true
+                  description: Units to move; omit for the whole position
+      responses:
+        "200":
+          description: Move result (mode, movedUnits, lotsMoved, lotsSplit)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Envelope"
+        "404":
+          description: Investment or an account not found
+
   /api/investments/{id}/summary:
     parameters:
       - in: path
@@ -3788,37 +4564,6 @@ paths:
                 $ref: "#/components/schemas/Envelope"
 
   # ─── Attachments ─────────────────────────────────────────────────────────────
-  /api/attachments:
-    post:
-      summary: Upload attachment for a transaction
-      operationId: uploadAttachment
-      tags: [Attachments]
-      requestBody:
-        required: true
-        content:
-          multipart/form-data:
-            schema:
-              type: object
-              required: [file, transaction_id]
-              properties:
-                file:
-                  type: string
-                  format: binary
-                transaction_id:
-                  type: integer
-      responses:
-        "201":
-          description: Uploaded attachment
-          content:
-            application/json:
-              schema:
-                allOf:
-                  - $ref: "#/components/schemas/Envelope"
-                  - type: object
-                    properties:
-                      data:
-                        $ref: "#/components/schemas/Attachment"
-
   /api/attachments/transaction/{id}:
     parameters:
       - in: path
@@ -3844,6 +4589,35 @@ paths:
                         type: array
                         items:
                           $ref: "#/components/schemas/Attachment"
+    post:
+      summary: Upload an attachment for a transaction
+      operationId: uploadAttachment
+      tags: [Attachments]
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              required: [file]
+              properties:
+                file:
+                  type: string
+                  format: binary
+      responses:
+        "201":
+          description: Uploaded attachment
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/Envelope"
+                  - type: object
+                    properties:
+                      data:
+                        $ref: "#/components/schemas/Attachment"
+        "400":
+          description: Upload error or no file provided
 
   /api/attachments/{id}/download:
     parameters:
@@ -4221,19 +4995,6 @@ paths:
               schema:
                 $ref: "#/components/schemas/Envelope"
 
-  /api/import/supported-banks:
-    get:
-      summary: List supported bank CSV adapters
-      operationId: importSupportedBanks
-      tags: [Import]
-      responses:
-        "200":
-          description: Supported bank list
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/Envelope"
-
   /api/import/recipients:
     post:
       summary: Bulk-import recipients from CSV
@@ -4281,6 +5042,106 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/Envelope"
+
+  /api/import/parsers:
+    get:
+      summary: List saved custom CSV parser configs
+      operationId: getCustomParsers
+      tags: [Import]
+      responses:
+        "200":
+          description: Parser config list
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/Envelope"
+                  - type: object
+                    properties:
+                      data:
+                        type: array
+                        items:
+                          $ref: "#/components/schemas/CustomParserConfig"
+    post:
+      summary: Create a saved custom CSV parser config
+      operationId: createCustomParser
+      tags: [Import]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [name, config]
+              properties:
+                name:
+                  type: string
+                config:
+                  type: object
+                  additionalProperties: true
+      responses:
+        "201":
+          description: Created parser config
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/Envelope"
+                  - type: object
+                    properties:
+                      data:
+                        $ref: "#/components/schemas/CustomParserConfig"
+        "409":
+          description: A parser with that name already exists
+
+  /api/import/parsers/{id}:
+    parameters:
+      - in: path
+        name: id
+        required: true
+        schema:
+          type: integer
+    patch:
+      summary: Update a saved custom CSV parser config
+      operationId: updateCustomParser
+      tags: [Import]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                name:
+                  type: string
+                config:
+                  type: object
+                  additionalProperties: true
+      responses:
+        "200":
+          description: Updated parser config
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/Envelope"
+                  - type: object
+                    properties:
+                      data:
+                        $ref: "#/components/schemas/CustomParserConfig"
+        "404":
+          description: Parser config not found
+        "409":
+          description: A parser with that name already exists
+    delete:
+      summary: Delete a saved custom CSV parser config
+      operationId: deleteCustomParser
+      tags: [Import]
+      responses:
+        "204":
+          description: Deleted (no content)
+        "404":
+          description: Parser config not found
 
   /api/import/batches:
     get:
@@ -4448,6 +5309,385 @@ paths:
               schema:
                 $ref: "#/components/schemas/Envelope"
 
+  # ─── Portfolio Import ─────────────────────────────────────────────────────────
+  /api/portfolio/import/csv/custom:
+    post:
+      summary: One-shot portfolio CSV import with custom column mapping
+      operationId: portfolioImportCsvCustom
+      tags: [PortfolioImport]
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              required: [file, date_column, default_asset_class]
+              properties:
+                file:
+                  type: string
+                  format: binary
+                adapter_name:
+                  type: string
+                  description: Display label for the import source
+                date_format:
+                  type: string
+                  description: "Python strptime format, default: %Y-%m-%d"
+                separator:
+                  type: string
+                  description: Single-character CSV delimiter, default ','
+                encoding:
+                  type: string
+                  default: utf-8
+                skip_rows:
+                  type: integer
+                  default: 0
+                date_column:
+                  type: string
+                type_column:
+                  type: string
+                symbol_column:
+                  type: string
+                name_column:
+                  type: string
+                units_column:
+                  type: string
+                price_column:
+                  type: string
+                amount_column:
+                  type: string
+                fees_column:
+                  type: string
+                taxes_column:
+                  type: string
+                currency_column:
+                  type: string
+                fx_rate_column:
+                  type: string
+                note_column:
+                  type: string
+                default_asset_class:
+                  type: string
+                  enum: [stock, etf, crypto, metals, real_estate, savings, bond]
+                default_type:
+                  type: string
+                  enum: [buy, sell, dividend, fee, tax, interest]
+                type_mapping:
+                  type: string
+                  description: JSON object mapping raw CSV type strings to canonical portfolio_txn_type values
+      responses:
+        "201":
+          description: All rows matched — batch committed immediately
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/Envelope"
+                  - type: object
+                    properties:
+                      data:
+                        type: object
+                        properties:
+                          batch_id:
+                            type: string
+                          total:
+                            type: integer
+                          imported:
+                            type: integer
+                          duplicates:
+                            type: integer
+                          errors:
+                            type: integer
+        "202":
+          description: Some rows unresolved — batch left in awaiting_review; client must use review endpoints then POST commit
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/Envelope"
+                  - type: object
+                    properties:
+                      data:
+                        type: object
+                        properties:
+                          batch_id:
+                            type: string
+                          requires_review:
+                            type: boolean
+                          match_source_counts:
+                            type: object
+                            additionalProperties:
+                              type: integer
+
+  /api/portfolio/import/csv/stream:
+    post:
+      summary: SSE-streaming portfolio CSV import
+      operationId: portfolioImportCsvStream
+      tags: [PortfolioImport]
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              description: Same fields as POST /api/portfolio/import/csv/custom
+              required: [file, date_column, default_asset_class]
+              properties:
+                file:
+                  type: string
+                  format: binary
+      responses:
+        "200":
+          description: Server-Sent Events stream; events are progress / review_required / complete / error
+          content:
+            text/event-stream:
+              schema:
+                type: string
+
+  /api/portfolio/import/parsers:
+    get:
+      summary: List saved portfolio parser configs (kind=portfolio)
+      operationId: getPortfolioParsers
+      tags: [PortfolioImport]
+      responses:
+        "200":
+          description: Parser config list
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/Envelope"
+                  - type: object
+                    properties:
+                      data:
+                        type: array
+                        items:
+                          $ref: "#/components/schemas/PortfolioParserConfig"
+    post:
+      summary: Create a saved portfolio parser config; 409 on duplicate name
+      operationId: createPortfolioParser
+      tags: [PortfolioImport]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [name, config]
+              properties:
+                name:
+                  type: string
+                config:
+                  type: object
+                  additionalProperties: true
+      responses:
+        "201":
+          description: Created parser config
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/Envelope"
+                  - type: object
+                    properties:
+                      data:
+                        $ref: "#/components/schemas/PortfolioParserConfig"
+        "409":
+          description: A portfolio parser with that name already exists
+
+  /api/portfolio/import/parsers/{id}:
+    parameters:
+      - in: path
+        name: id
+        required: true
+        schema:
+          type: integer
+    patch:
+      summary: Update a saved portfolio parser config
+      operationId: updatePortfolioParser
+      tags: [PortfolioImport]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                name:
+                  type: string
+                config:
+                  type: object
+                  additionalProperties: true
+      responses:
+        "200":
+          description: Updated parser config
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/Envelope"
+                  - type: object
+                    properties:
+                      data:
+                        $ref: "#/components/schemas/PortfolioParserConfig"
+        "404":
+          description: Parser config not found
+        "409":
+          description: A portfolio parser with that name already exists
+    delete:
+      summary: Delete a saved portfolio parser config
+      operationId: deletePortfolioParser
+      tags: [PortfolioImport]
+      responses:
+        "204":
+          description: Deleted (no content)
+        "404":
+          description: Parser config not found
+
+  /api/portfolio/import/batches:
+    get:
+      summary: List portfolio import batches
+      operationId: getPortfolioImportBatches
+      tags: [PortfolioImport]
+      parameters:
+        - in: query
+          name: limit
+          schema:
+            type: integer
+        - in: query
+          name: offset
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Batch list
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/Envelope"
+                  - type: object
+                    properties:
+                      data:
+                        type: array
+                        items:
+                          $ref: "#/components/schemas/PortfolioImportBatch"
+
+  /api/portfolio/import/batches/{id}:
+    parameters:
+      - in: path
+        name: id
+        required: true
+        schema:
+          type: string
+    get:
+      summary: Get portfolio import batch
+      operationId: getPortfolioImportBatch
+      tags: [PortfolioImport]
+      responses:
+        "200":
+          description: Batch detail
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/Envelope"
+                  - type: object
+                    properties:
+                      data:
+                        $ref: "#/components/schemas/PortfolioImportBatch"
+    delete:
+      summary: Rollback portfolio import batch (deletes committed portfolio_transactions, marks batch aborted)
+      operationId: deletePortfolioImportBatch
+      tags: [PortfolioImport]
+      responses:
+        "200":
+          description: Rollback result
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Envelope"
+
+  /api/portfolio/import/batches/{id}/preview:
+    parameters:
+      - in: path
+        name: id
+        required: true
+        schema:
+          type: string
+    get:
+      summary: Preview portfolio import batch rows grouped by investment
+      operationId: previewPortfolioImportBatch
+      tags: [PortfolioImport]
+      responses:
+        "200":
+          description: Rows grouped by investment with unresolved symbol/name groups and per-group totals
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Envelope"
+
+  /api/portfolio/import/batches/{id}/rows/{rowId}/investment-override:
+    parameters:
+      - in: path
+        name: id
+        required: true
+        schema:
+          type: string
+      - in: path
+        name: rowId
+        required: true
+        schema:
+          type: string
+    post:
+      summary: Resolve an unmatched portfolio import row to an existing investment or request a new one be created
+      operationId: portfolioImportRowInvestmentOverride
+      tags: [PortfolioImport]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                investment_id:
+                  type: integer
+                  description: ID of an existing investment to link this row to
+                create_new:
+                  type: boolean
+                  description: When true, a new investment record is created from the row's symbol/name/asset_class and linked
+      responses:
+        "200":
+          description: Override applied
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Envelope"
+        "400":
+          description: Neither investment_id nor create_new supplied, or create_new validation failed
+        "404":
+          description: Batch or staging row not found
+
+  /api/portfolio/import/batches/{id}/commit:
+    parameters:
+      - in: path
+        name: id
+        required: true
+        schema:
+          type: string
+    post:
+      summary: Commit a reviewed portfolio import batch — writes portfolio_transactions to DB
+      operationId: commitPortfolioImportBatch
+      tags: [PortfolioImport]
+      responses:
+        "200":
+          description: Commit result with row counts
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Envelope"
+        "409":
+          description: Batch is not in awaiting_review or matched status
+
   # ─── Admin ────────────────────────────────────────────────────────────────────
   /api/admin:
     get:
@@ -4513,6 +5753,169 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/Envelope"
+
+  /api/admin/database/tables/{table}/schema:
+    parameters:
+      - in: path
+        name: table
+        required: true
+        schema:
+          type: string
+        description: Table name (validated against the live catalog)
+    get:
+      summary: Get a table's column metadata (Data Editor, ADR-101)
+      operationId: adminGetTableSchema
+      tags: [Admin]
+      responses:
+        "200":
+          description: Column metadata and primary key
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/Envelope"
+                  - type: object
+                    properties:
+                      data:
+                        type: object
+                        properties:
+                          table:
+                            type: string
+                          primaryKey:
+                            type: array
+                            items:
+                              type: string
+                          columns:
+                            type: array
+                            items:
+                              type: object
+                              properties:
+                                name: { type: string }
+                                dataType: { type: string }
+                                udtName: { type: string }
+                                nullable: { type: boolean }
+                                hasDefault: { type: boolean }
+                                generated: { type: boolean }
+                                writable: { type: boolean }
+        "404":
+          description: Unknown table
+
+  /api/admin/database/tables/{table}/rows:
+    parameters:
+      - in: path
+        name: table
+        required: true
+        schema:
+          type: string
+    get:
+      summary: Read paginated rows from a table (Data Editor, ADR-101)
+      operationId: adminGetTableRows
+      tags: [Admin]
+      parameters:
+        - in: query
+          name: limit
+          schema: { type: integer }
+        - in: query
+          name: offset
+          schema: { type: integer }
+        - in: query
+          name: orderBy
+          schema: { type: string }
+        - in: query
+          name: dir
+          schema:
+            type: string
+            enum: [asc, desc]
+        - in: query
+          name: where
+          schema: { type: string }
+          description: Raw SQL WHERE fragment (validated and parameterised server-side)
+        - in: query
+          name: filters
+          schema: { type: string }
+          description: JSON-encoded array of structured column filters
+      responses:
+        "200":
+          description: Page of rows with column metadata and total count
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/Envelope"
+                  - type: object
+                    properties:
+                      data:
+                        type: object
+                        properties:
+                          table: { type: string }
+                          columns: { type: array, items: { type: object } }
+                          primaryKey: { type: array, items: { type: string } }
+                          rows: { type: array, items: { type: object } }
+                          total: { type: integer }
+                          limit: { type: integer }
+                          offset: { type: integer }
+        "400":
+          description: Invalid filters or query parameter
+        "404":
+          description: Unknown table
+
+  /api/admin/database/tables/{table}/mutate:
+    parameters:
+      - in: path
+        name: table
+        required: true
+        schema:
+          type: string
+    post:
+      summary: Apply row mutations to a table (Data Editor, ADR-101)
+      description: Rate-limited (adminMutateLimiter). Identifiers are validated against the live catalog and double-quoted; values are parameterised. Updates/deletes are optimistic-locked on xmin. Pass dryRun to preview statements without applying.
+      operationId: adminMutateTableRows
+      tags: [Admin]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [changes]
+              properties:
+                dryRun:
+                  type: boolean
+                  description: Preview the SQL statements without applying them
+                changes:
+                  type: array
+                  items:
+                    type: object
+                    required: [op]
+                    properties:
+                      op:
+                        type: string
+                        enum: [insert, update, delete]
+                      pk:
+                        type: object
+                        description: Primary-key column values (required for update/delete)
+                      values:
+                        type: object
+                        description: Column values for an insert
+                      set:
+                        type: object
+                        description: Column values to write for an update
+                      xmin:
+                        type: string
+                        description: Optimistic-concurrency token captured at read time
+      responses:
+        "200":
+          description: Mutation result (dry-run preview or applied results)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Envelope"
+        "400":
+          description: Malformed change set
+        "404":
+          description: Unknown table
+        "409":
+          description: Row changed or was deleted since it was loaded
 
   /api/admin/update/check:
     get:
@@ -4636,3 +6039,475 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/Envelope"
+
+  # ─── Research (ADR-079) ───────────────────────────────────────────────────────
+  /api/research/search:
+    get:
+      summary: Search tickers / securities across research providers
+      operationId: researchSearch
+      tags: [Research]
+      parameters:
+        - in: query
+          name: q
+          required: true
+          schema:
+            type: string
+          description: Search query (ticker or company name)
+      responses:
+        "200":
+          description: Search results with provenance meta (provider, source)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Envelope"
+
+  /api/research/quote:
+    get:
+      summary: Current quote for a symbol
+      operationId: researchQuote
+      tags: [Research]
+      parameters:
+        - in: query
+          name: symbol
+          required: true
+          schema:
+            type: string
+        - in: query
+          name: asset_class
+          schema:
+            type: string
+          description: "Asset class hint for provider routing (e.g. stock, crypto, metals)"
+      responses:
+        "200":
+          description: Quote data with provenance meta (provider, source)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Envelope"
+        "400":
+          description: symbol parameter required
+
+  /api/research/chart:
+    get:
+      summary: Historical chart points for a symbol
+      operationId: researchChart
+      tags: [Research]
+      parameters:
+        - in: query
+          name: symbol
+          required: true
+          schema:
+            type: string
+        - in: query
+          name: asset_class
+          schema:
+            type: string
+        - in: query
+          name: range
+          schema:
+            type: string
+            default: 1mo
+          description: "Time range: 1d, 5d, 1mo, 3mo, 6mo, 1y, 2y, 5y, max"
+        - in: query
+          name: provider
+          schema:
+            type: string
+          description: "Optional preferred provider (pinned to front of the capability chain; still falls through if unkeyed/failing). ADR-081"
+      responses:
+        "200":
+          description: Chart points with provenance meta (provider, source)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Envelope"
+        "400":
+          description: symbol parameter required
+
+  /api/research/fundamentals:
+    get:
+      summary: Fundamentals snapshot for a symbol
+      operationId: researchFundamentals
+      tags: [Research]
+      parameters:
+        - in: query
+          name: symbol
+          required: true
+          schema:
+            type: string
+        - in: query
+          name: asset_class
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Fundamentals data with provenance meta (provider, source)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Envelope"
+        "400":
+          description: symbol parameter required
+
+  /api/research/analyst:
+    get:
+      summary: Analyst consensus, price targets, and recent actions for a symbol
+      operationId: researchAnalyst
+      tags: [Research]
+      parameters:
+        - in: query
+          name: symbol
+          required: true
+          schema:
+            type: string
+        - in: query
+          name: asset_class
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Analyst data with provenance meta (provider, source)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Envelope"
+        "400":
+          description: symbol parameter required
+
+  /api/research/news:
+    get:
+      summary: News articles for a symbol
+      operationId: researchNews
+      tags: [Research]
+      parameters:
+        - in: query
+          name: symbol
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: News articles with provenance meta (provider, source)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Envelope"
+        "400":
+          description: symbol parameter required
+  # Macro economic indicators (ADR-082) — provider-pinned (FRED/Eurostat/DBnomics)
+  /api/research/macro/search:
+    get:
+      summary: Search macroeconomic series (CPI, rates, unemployment, …) across macro providers
+      operationId: researchMacroSearch
+      tags: [Research]
+      parameters:
+        - in: query
+          name: q
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: >-
+            Union of macro series across FRED (open search) + Eurostat/DBnomics
+            (curated catalog); each item carries { provider, seriesId, title,
+            region, units, frequency, source }. Returns { items: [] } when blank.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Envelope"
+  /api/research/macro/series:
+    get:
+      summary: Observations for one provider-pinned macro series (value→close chart points)
+      operationId: researchMacroSeries
+      tags: [Research]
+      parameters:
+        - in: query
+          name: provider
+          required: true
+          schema:
+            type: string
+            enum: [fred, eurostat, dbnomics]
+        - in: query
+          name: series_id
+          required: true
+          description: Provider-native id (FRED CPIAUCSL; Eurostat `<dataset>?<dims>`; DBnomics `provider/dataset/series`)
+          schema:
+            type: string
+        - in: query
+          name: range
+          required: false
+          schema:
+            type: string
+            enum: [1d, 5d, 1mo, 3mo, 6mo, 1y, 2y, 5y, max]
+            default: 5y
+      responses:
+        "200":
+          description: "{ provider, seriesId, title, units, frequency, points: [{time, close}] } with provenance meta"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Envelope"
+        "400":
+          description: invalid provider or series_id
+  # Research analytics (ADR-081)
+  /api/research/scorecard:
+    get:
+      summary: Fundamentals heuristic scorecard (health score + flags) for a symbol
+      operationId: researchScorecard
+      tags: [Research]
+      parameters:
+        - in: query
+          name: symbol
+          required: true
+          schema:
+            type: string
+        - in: query
+          name: asset_class
+          schema:
+            type: string
+      responses:
+        "200":
+          description: "{ symbol, fundamentals, scorecard } with provenance meta, or unavailable"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Envelope"
+        "400":
+          description: symbol parameter required
+  /api/research/portfolio-forecast:
+    post:
+      summary: Monte-Carlo projection of portfolio value (on-demand, not persisted)
+      operationId: researchPortfolioForecast
+      tags: [Research]
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                horizon_months: { type: integer }
+                monthly_contribution: { type: number }
+                paths: { type: integer }
+                forward_blend: { type: number, description: "0 = historical drift, 1 = forward" }
+                method: { type: string, enum: [parametric, block_bootstrap] }
+                target_value: { type: number }
+                currency: { type: string }
+                seed: { type: string }
+      responses:
+        "200":
+          description: Projection with percentile bands, summary stats, and forward-input provenance
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Envelope"
+  # Research symbol mapping (ADR-079)
+  /api/research/mappings:
+    get:
+      summary: List stored cross-provider symbol mappings for an instrument
+      operationId: researchListMappings
+      tags: [Research]
+      parameters:
+        - in: query
+          name: instrument_key
+          required: true
+          schema:
+            type: string
+        - in: query
+          name: key_type
+          required: false
+          schema:
+            type: string
+            enum: [isin, internal]
+            default: isin
+      responses:
+        "200":
+          description: "Stored mappings ({ mappings: [...] })"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Envelope"
+        "400":
+          description: instrument_key required or invalid key_type
+    post:
+      summary: Persist user-confirmed cross-provider mappings (upsert per provider)
+      operationId: researchSaveMappings
+      tags: [Research]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [instrument_key, mappings]
+              properties:
+                instrument_key:
+                  type: string
+                key_type:
+                  type: string
+                  enum: [isin, internal]
+                  default: isin
+                mappings:
+                  type: array
+                  items:
+                    type: object
+      responses:
+        "200":
+          description: Updated mapping set
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Envelope"
+        "400":
+          description: instrument_key required or mappings must be a non-empty array
+  /api/research/mappings/resolve:
+    post:
+      summary: Auto-propose per-provider symbols for an instrument (does not persist)
+      operationId: researchResolveMappings
+      tags: [Research]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [instrument_key, query]
+              properties:
+                instrument_key:
+                  type: string
+                key_type:
+                  type: string
+                  enum: [isin, internal]
+                  default: isin
+                asset_class:
+                  type: string
+                query:
+                  type: string
+                investment_id:
+                  type: integer
+                  description: >-
+                    Optional held-investment id. When set, that holding's
+                    already-configured provider (price_provider +
+                    price_provider_id) is pre-seeded as a confirmed proposal
+                    (fromHolding) and its live search is skipped.
+      responses:
+        "200":
+          description: Per-provider proposals + existing mappings
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Envelope"
+        "400":
+          description: instrument_key and query required
+  /api/research/mappings/audit:
+    post:
+      summary: Cross-provider self-audit of an instrument's mappings (currency/price agreement)
+      operationId: researchAuditMappings
+      tags: [Research]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [instrument_key]
+              properties:
+                instrument_key:
+                  type: string
+                key_type:
+                  type: string
+                  enum: [isin, internal]
+                  default: isin
+      responses:
+        "200":
+          description: Audit result (ok, quotes, discrepancies); stamps verified_at
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Envelope"
+        "400":
+          description: instrument_key required
+  /api/research/mappings/{id}:
+    delete:
+      summary: Delete a stored mapping by id
+      operationId: researchDeleteMapping
+      tags: [Research]
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: "{ removed: boolean }"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Envelope"
+        "400":
+          description: valid mapping id required
+  # Research provider API keys (Settings, ADR-079)
+  /api/research/provider-keys:
+    get:
+      summary: List keyed-provider API-key statuses (masked; never the full key)
+      operationId: researchListProviderKeys
+      tags: [Research]
+      responses:
+        "200":
+          description: "{ providers: [{ provider, label, envVar, configured, source, masked }] }"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Envelope"
+  /api/research/provider-keys/{provider}:
+    put:
+      summary: Set or replace a provider's API key (takes effect immediately)
+      operationId: researchSetProviderKey
+      tags: [Research]
+      parameters:
+        - in: path
+          name: provider
+          required: true
+          schema:
+            type: string
+            enum: [twelve_data, finnhub, fmp, alpha_vantage]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [api_key]
+              properties:
+                api_key:
+                  type: string
+      responses:
+        "200":
+          description: Updated masked statuses
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Envelope"
+        "400":
+          description: unknown provider or empty api_key
+    delete:
+      summary: Clear a provider's stored API key (env fallback then applies)
+      operationId: researchClearProviderKey
+      tags: [Research]
+      parameters:
+        - in: path
+          name: provider
+          required: true
+          schema:
+            type: string
+            enum: [twelve_data, finnhub, fmp, alpha_vantage]
+      responses:
+        "200":
+          description: "{ removed, providers }"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Envelope"
+        "400":
+          description: unknown provider

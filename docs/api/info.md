@@ -3,7 +3,7 @@ title: Info & Analytics API
 type: endpoint
 status: active
 date: 2026-04-25
-updated: 2026-05-12
+updated: 2026-06-19
 tags: [api, analytics, statistics, dashboard, phase-g-deprecation, ing, bnp, supported-adapters]
 description: API endpoints for statistics, analytics, and dashboard data. Phase G removed 6 overlapping endpoints; see aggregations API for their replacements. May 2026: Added ING and BNP Paribas Fortis adapters (8 total banks supported).
 aliases: [info-api, analytics-api, statistics-api, dashboard-api]
@@ -34,31 +34,6 @@ Comprehensive analytics and statistics endpoints for dashboards and financial in
 All monetary values in responses use **Decimal.js** for precision to eliminate IEEE 754 floating-point drift. Values are serialized as JSON `number` type, safe to 2 decimal places (cents). This enforcement is applied at the repository layer; see [[docs/adr/021-decimal-arithmetic-for-monetary-values|ADR-021]] and [[docs/reference/code-patterns#money-utility-pattern-phase-9|Money Utility Pattern]] for implementation details.
 
 ## Endpoints
-
-### GET /api/info
-
-Get general statistics about the workspace.
-
-**Query Parameters:**
-
-| Parameter | Type | Description |
-|-----------|------|-------------|
-| `currency` | string | Target 3-letter currency code for converted totals (default: EUR) |
-| `target_currency` | string | Alias for `currency` |
-
-**Response:** `200 OK`
-
-```json
-{
-  "total_transactions": 1250,
-  "total_recipients": 45,
-  "total_categories": 28,
-  "total_investments": 15,
-  "categories": [...]
-}
-```
-
----
 
 ### GET /api/info/banks
 
@@ -109,33 +84,6 @@ Get total number of transactions.
 ```json
 {
   "total_transactions": 1250
-}
-```
-
----
-
-### GET /api/info/transaction-summary
-
-Get transaction summary with optional filters.
-
-**Query Parameters:**
-
-| Parameter | Type | Description |
-|-----------|------|-------------|
-| `bank_account` | string | Filter by bank account |
-| `start_date` | date | Start date (YYYY-MM-DD) |
-| `end_date` | date | End date (YYYY-MM-DD) |
-| `currency` | string | Target 3-letter currency code for converted totals (default: EUR) |
-| `target_currency` | string | Alias for `currency` |
-
-**Response:** `200 OK`
-
-```json
-{
-  "total_count": 150,
-  "total_income": 5000.00,
-  "total_expenses": -3200.00,
-  "net": 1800.00
 }
 ```
 
@@ -430,6 +378,40 @@ Notes:
 
 ---
 
+### GET /api/info/net-worth/by-account
+
+Net worth split per account (Σ-accounts, ADR-100): each account's current cash + holdings and its rebuilt daily holdings history. The Σ over accounts equals the aggregate net worth by construction. Only accounts with `in_net_worth = true` contribute the cash side (ADR-089); legacy holdings with no account collapse into a single unassigned row (`accountId: null`, holdings only).
+
+**Query parameters:** `currency` (alias `target_currency`, default `EUR`) — all amounts are converted to this currency.
+
+**Notes:**
+
+- Route uses a modest per-route rate limiter (`30 requests / 60s` per key prefix) shared with the net-worth cache.
+- Per-account current cash is converted from each account's native currency at the latest rate; holdings come from the daily value-by-account split rebuilt by the holdings-history builder.
+
+**Response:** `200 OK`
+
+```json
+{
+  "currency": "EUR",
+  "accounts": [
+    {
+      "accountId": 1,
+      "name": "Brokerage",
+      "currency": "USD",
+      "cash": 1500.0,
+      "currentHoldings": 84000.0,
+      "currentTotal": 85500.0,
+      "holdingsSeries": [
+        { "date": "2026-06-18", "holdings": 84000.0 }
+      ]
+    }
+  ]
+}
+```
+
+---
+
 ### ~~GET /api/info/recipient-insights~~ *(removed — use `/api/aggregations/recipient-insights`)*
 
 > **Removed in Phase G.** Use [[docs/api/aggregations|`GET /api/aggregations/recipient-insights`]] instead.
@@ -703,6 +685,13 @@ The following endpoints were removed in Phase G (April 2026) as they are now han
 **Frontend impact:** Four of these have `apiClient` method equivalents (`getMonthlyFinancialSummary()`, `getCashflowComparison()`, `getBankBalances()`, `getRecipientInsights()`) which now proxy to aggregations and unwrap the response envelope transparently. See [[docs/reference/api-client-methods#info--statistics-phase-g-aggregation-migration|API Client Methods]] for details.
 
 **Historical note:** Earlier sections still document the deprecated endpoints with their response schema for reference. These routes return 404 in production after Phase G.
+
+## Removed Endpoints (Phase 9)
+
+The following endpoints were removed during Phase 9 cutover as they were superseded or no longer in use:
+
+1. **`GET /api/info`** — General workspace statistics (total transactions, recipients, categories, investments). Removed; use targeted endpoints or `/api/aggregations/*` for similar aggregated data.
+2. **`GET /api/info/transaction-summary`** — Transaction summary with bank/date/currency filters. Removed; use `GET /api/transactions` with filtering params for equivalent data.
 
 ---
 

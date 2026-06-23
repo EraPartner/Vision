@@ -38,7 +38,7 @@ async function getEnvelope(path: string): Promise<unknown> {
 }
 
 async function mutateEnvelope(
-    method: "POST" | "PATCH" | "DELETE",
+    method: "POST" | "PATCH" | "PUT" | "DELETE",
     path: string,
     body?: Record<string, unknown>,
 ): Promise<unknown> {
@@ -209,7 +209,7 @@ const TransactionDeleteResponseSchema = DeleteResponseSchema.extend({
 
 // ── Other endpoint schemas ────────────────────────────────────────────────────
 
-const SettingsSchema = z.record(z.unknown());
+const SettingsSchema = z.record(z.string(), z.unknown());
 const SettingValueSchema = z.unknown();
 
 const InfoSchema = z.object({
@@ -228,7 +228,7 @@ const ExchangeRateItemSchema = z.object({
 });
 const ExchangeRatesSchema = z.object({
     rates: z.array(ExchangeRateItemSchema),
-    fallback_rates: z.record(z.unknown()),
+    fallback_rates: z.record(z.string(), z.unknown()),
     base: z.string(),
     date: z.string(),
 });
@@ -723,29 +723,28 @@ describe("Missing GET endpoint contracts (E4)", () => {
         );
     });
 
-    it("GET /api/info/transaction-summary returns null when no data", async () => {
-        const data = await getEnvelope("/api/info/transaction-summary");
-        validate(z.null(), data, "GET /api/info/transaction-summary");
-    });
-
-    it("GET /api/info/transaction-count returns a number", async () => {
+    // These routes return OBJECTS, not bare scalars/arrays — schemas match the
+    // backend (routes/info/statistics.js) and the live-contracts suite so the two
+    // contract suites can no longer assert contradictory shapes.
+    // (transaction-summary case removed — Phase 9 deleted that route.)
+    it("GET /api/info/transaction-count returns { total_transactions }", async () => {
         const data = await getEnvelope("/api/info/transaction-count");
-        validate(z.number(), data, "GET /api/info/transaction-count");
+        validate(z.object({ total_transactions: z.number() }), data, "GET /api/info/transaction-count");
     });
 
-    it("GET /api/info/recurring-patterns returns array", async () => {
+    it("GET /api/info/recurring-patterns returns { patterns, total }", async () => {
         const data = await getEnvelope("/api/info/recurring-patterns");
-        validate(z.array(z.unknown()), data, "GET /api/info/recurring-patterns");
+        validate(z.object({ patterns: z.array(z.unknown()), total: z.number() }), data, "GET /api/info/recurring-patterns");
     });
 
-    it("GET /api/info/banks returns array", async () => {
+    it("GET /api/info/banks returns { banks }", async () => {
         const data = await getEnvelope("/api/info/banks");
-        validate(z.array(z.unknown()), data, "GET /api/info/banks");
+        validate(z.object({ banks: z.array(z.unknown()) }), data, "GET /api/info/banks");
     });
 
-    it("GET /api/info/supported-adapters returns array", async () => {
+    it("GET /api/info/supported-adapters returns { adapters, total_count }", async () => {
         const data = await getEnvelope("/api/info/supported-adapters");
-        validate(z.array(z.unknown()), data, "GET /api/info/supported-adapters");
+        validate(z.object({ adapters: z.array(z.unknown()), total_count: z.number() }), data, "GET /api/info/supported-adapters");
     });
 
     it("GET /api/info/inflation-rates returns array", async () => {
@@ -889,7 +888,7 @@ describe("Phase F1: extended GET endpoint contracts", () => {
     it("GET /api/aggregations/category-pivot returns expected shape", async () => {
         const data = await getEnvelope("/api/aggregations/category-pivot");
         validate(
-            aggregationsEnvelope(z.object({ categoryPivot: z.record(z.unknown()) })),
+            aggregationsEnvelope(z.object({ categoryPivot: z.record(z.string(), z.unknown()) })),
             data,
             "GET /api/aggregations/category-pivot",
         );
@@ -898,7 +897,7 @@ describe("Phase F1: extended GET endpoint contracts", () => {
     it("GET /api/aggregations/recipient-by-year returns expected shape", async () => {
         const data = await getEnvelope("/api/aggregations/recipient-by-year");
         validate(
-            aggregationsEnvelope(z.object({ recipientsByYear: z.record(z.unknown()) })),
+            aggregationsEnvelope(z.object({ recipientsByYear: z.record(z.string(), z.unknown()) })),
             data,
             "GET /api/aggregations/recipient-by-year",
         );
@@ -907,7 +906,7 @@ describe("Phase F1: extended GET endpoint contracts", () => {
     it("GET /api/aggregations/recipient-pivot returns expected shape", async () => {
         const data = await getEnvelope("/api/aggregations/recipient-pivot");
         validate(
-            aggregationsEnvelope(z.object({ recipientPivot: z.record(z.unknown()) })),
+            aggregationsEnvelope(z.object({ recipientPivot: z.record(z.string(), z.unknown()) })),
             data,
             "GET /api/aggregations/recipient-pivot",
         );
@@ -944,7 +943,7 @@ describe("Phase F1: extended GET endpoint contracts", () => {
                 z.object({
                     accounts: z.array(z.unknown()),
                     total_net_position: z.number(),
-                    history: z.record(z.array(z.unknown())),
+                    history: z.record(z.string(), z.array(z.unknown())),
                     total_history: z.array(z.unknown()),
                 }),
             ),

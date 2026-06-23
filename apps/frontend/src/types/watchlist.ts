@@ -7,6 +7,8 @@ export interface WatchlistItem {
   currency: string;
   notes: string | null;
   price_provider_id: string | null;
+  /** Live price snapshotted when the item was added — powers the what-if backtest (ADR-097). */
+  added_price?: number | null;
   created_at: string;
   updated_at: string;
 }
@@ -19,6 +21,8 @@ export interface WatchlistCreate {
   currency?: string;
   notes?: string;
   price_provider_id?: string;
+  /** Live price at add time, for the what-if backtest (ADR-097). */
+  added_price?: number;
 }
 
 export interface WatchlistUpdate {

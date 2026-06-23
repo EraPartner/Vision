@@ -26,7 +26,7 @@ Vision requires a desktop only financial transaction management application with
 ## Decision
 
 ### Frontend
-- **React 18** with TypeScript for UI
+- **React 19** with TypeScript for UI
 - **Vite** for build tooling (fast dev, optimized production builds)
 - **Tailwind CSS** for styling
 - **Radix UI** for accessible primitive components

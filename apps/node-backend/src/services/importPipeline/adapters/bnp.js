@@ -23,7 +23,7 @@
 import fs from 'fs';
 import { cleanRecipientName, normalizeToUppercase } from '../../textNormalization.js';
 import { logger } from '../../../config/logger.js';
-import { parseDayMonthYear, parseAmountField, buildOptionalComment, splitCsvLines } from './_shared.js';
+import { parseDayMonthYear, parseAmountField, buildOptionalComment, splitCsvLines, canonicalIban } from './_shared.js';
 
 const NAME = 'bnp';
 const BANK_LABEL = 'BNP Paribas Fortis';
@@ -69,7 +69,7 @@ function parseLine(line) {
 
   return {
     date,
-    bankAccount: accountNumber || 'BNP',
+    bankAccount: canonicalIban(accountNumber) || 'BNP',
     recipient,
     memo,
     amount,
@@ -96,7 +96,8 @@ export function detect(csvSample) {
 export async function parse(filePath) {
   const content = await fs.promises.readFile(filePath, 'utf-8');
   const lines = splitCsvLines(content);
-  const transactions = [];
+  const transactions = /** @type {any[] & { skipped?: number }} */ ([]);
+  let skipped = 0;
   let headerSeen = false;
 
   for (const rawLine of lines) {
@@ -109,9 +110,11 @@ export async function parse(filePath) {
     if (!headerSeen) continue;
     const tx = parseLine(line);
     if (tx) transactions.push(tx);
+    else skipped++;
   }
 
-  logger.info(`BNP CSV parsed: ${transactions.length} transactions`);
+  transactions.skipped = skipped;
+  logger.info(`BNP CSV parsed: ${transactions.length} transactions, ${skipped} skipped`);
   return transactions;
 }
 

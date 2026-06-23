@@ -18,6 +18,7 @@ export interface UseTransactionListDataOptions {
     endDateFilter?: string;
     transactionTypeFilter?: 'income' | 'expense';
     tagsFilter?: string[];
+    bankAccountFilter?: string;
 }
 
 export interface UseTransactionListDataResult {
@@ -48,6 +49,7 @@ export function useTransactionListData({
     endDateFilter,
     transactionTypeFilter,
     tagsFilter,
+    bankAccountFilter,
 }: UseTransactionListDataOptions): UseTransactionListDataResult {
     const [sortKey, setSortKey] = useState<string | null>(null);
     const [sortDir, setSortDir] = useState<SortDir>(null);
@@ -82,6 +84,7 @@ export function useTransactionListData({
                 endDateFilter,
                 transactionTypeFilter,
                 tagsFilter,
+                bankAccountFilter,
                 sortKey,
                 sortDir,
                 pageSize,
@@ -100,6 +103,7 @@ export function useTransactionListData({
             end_date: endDateFilter,
             transaction_type: transactionTypeFilter,
             tags: tagsFilter?.length ? tagsFilter.join(',') : undefined,
+            bank_account: bankAccountFilter,
             sort_by: sortKey || undefined,
             sort_dir: sortDir || undefined,
         }),
@@ -108,12 +112,21 @@ export function useTransactionListData({
 
     useEffect(() => {
         if (initialData && !isEditingRef.current) {
-            setAllItems(initialData.items);
+            setAllItems(initialData.items as unknown as RawApiTransaction[]);
             setTotalItems(initialData.total ?? initialData.items.length);
             offsetRef.current = initialData.items.length;
             hasMoreRef.current = initialData.items.length < (initialData.total ?? initialData.items.length);
         }
     }, [initialData]);
+
+    // Any change to the query inputs starts a new logical query. Bump the
+    // request id so an in-flight loadMore from the *previous* inputs fails its
+    // `myRequestId !== requestIdRef.current` check and can't append stale rows
+    // (e.g. rows from a now-cleared category filter) into the reset list.
+    // Previously only handleSortChange bumped it, so filter/search changes raced.
+    useEffect(() => {
+        requestIdRef.current += 1;
+    }, [showAll, search, transactionIdFilter, recipientIdFilter, categoryIdFilter, categoryIdsFilter, startDateFilter, endDateFilter, transactionTypeFilter, tagsFilter, bankAccountFilter, sortKey, sortDir, pageSize]);
 
     const loadMore = useCallback(async () => {
         if (loadingRef.current || !hasMoreRef.current) return;
@@ -134,6 +147,7 @@ export function useTransactionListData({
                 end_date: endDateFilter,
                 transaction_type: transactionTypeFilter,
                 tags: tagsFilter?.length ? tagsFilter.join(',') : undefined,
+                bank_account: bankAccountFilter,
                 sort_by: sortKey || undefined,
                 sort_dir: sortDir || undefined,
             });
@@ -142,7 +156,7 @@ export function useTransactionListData({
             if (myRequestId !== requestIdRef.current) return;
             setAllItems(prev => {
                 const existingIds = new Set(prev.map((t) => t.id));
-                const newItems = (result.items as RawApiTransaction[]).filter((t) => !existingIds.has(t.id));
+                const newItems = (result.items as unknown as RawApiTransaction[]).filter((t) => !existingIds.has(t.id));
                 return [...prev, ...newItems];
             });
             offsetRef.current += result.items.length;
@@ -157,7 +171,7 @@ export function useTransactionListData({
             }
             loadingRef.current = false;
         }
-    }, [showAll, search, transactionIdFilter, recipientIdFilter, categoryIdFilter, categoryIdsFilter, startDateFilter, endDateFilter, transactionTypeFilter, tagsFilter, sortKey, sortDir, pageSize]);
+    }, [showAll, search, transactionIdFilter, recipientIdFilter, categoryIdFilter, categoryIdsFilter, startDateFilter, endDateFilter, transactionTypeFilter, tagsFilter, bankAccountFilter, sortKey, sortDir, pageSize]);
 
     const handleSortChange = useCallback((key: string | null, dir: SortDir) => {
         setSortKey(key);

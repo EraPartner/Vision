@@ -78,6 +78,35 @@ describe("useCountUp", () => {
         const { result } = renderHook(() => useCountUp(100, 100));
         await waitFor(() => expect(result.current).toBe(100), { timeout: 2000 });
     });
+
+    it("snaps straight to target when prefers-reduced-motion is set", () => {
+        const original = window.matchMedia;
+        Object.defineProperty(window, "matchMedia", {
+            writable: true,
+            configurable: true,
+            value: vi.fn().mockImplementation((query: string) => ({
+                matches: query.includes("reduce"),
+                media: query,
+                addEventListener: vi.fn(),
+                removeEventListener: vi.fn(),
+            })),
+        });
+        try {
+            const { result } = renderHook(() => useCountUp(100, 600));
+            // No animation frames: the effect applies the target synchronously.
+            expect(result.current).toBe(100);
+        } finally {
+            if (original) {
+                Object.defineProperty(window, "matchMedia", {
+                    writable: true,
+                    configurable: true,
+                    value: original,
+                });
+            } else {
+                delete (window as unknown as { matchMedia?: unknown }).matchMedia;
+            }
+        }
+    });
 });
 
 describe("useOnlineStatus", () => {

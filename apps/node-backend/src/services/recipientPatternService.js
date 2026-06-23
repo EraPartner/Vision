@@ -12,6 +12,7 @@
 
 import { query } from '../database/connection.js';
 import { logger } from '../config/logger.js';
+import { ValidationError, NotFoundError } from '../middleware/errorHandler.js';
 
 const MIN_LCP_LENGTH = 8;
 
@@ -271,14 +272,14 @@ const PREVIEW_REGEX_SCAN_CAP = 10_000;
 export async function previewPatternMatches(patternRow) {
   const validation = validatePattern(patternRow);
   if (!validation.valid) {
-    throw new Error(validation.error);
+    throw new ValidationError(validation.error);
   }
 
   // Validate pattern compiles before hitting the DB.
   try {
     compilePattern({ id: 0, updated_at: '0', ...patternRow });
   } catch (err) {
-    throw new Error(`Pattern compilation failed: ${err.message}`, { cause: err });
+    throw new ValidationError(`Pattern compilation failed: ${err.message}`);
   }
 
   // For `regex` patterns use JS matching (same engine as runtime) because
@@ -318,7 +319,7 @@ export async function previewPatternMatches(patternRow) {
  */
 export async function createPattern(opts) {
   const validation = validatePattern(opts);
-  if (!validation.valid) throw new Error(validation.error);
+  if (!validation.valid) throw new ValidationError(validation.error);
 
   const { rows } = await query(
     `INSERT INTO recipient_match_patterns
@@ -347,12 +348,22 @@ export async function createPattern(opts) {
  */
 export async function updatePattern(patternId, updates) {
   if (updates.pattern !== undefined || updates.pattern_kind !== undefined || updates.case_sensitive !== undefined) {
-    const validation = validatePattern({
-      pattern: updates.pattern ?? '',
-      pattern_kind: updates.pattern_kind ?? 'literal_prefix',
-      case_sensitive: updates.case_sensitive ?? false,
-    });
-    if (!validation.valid) throw new Error(validation.error);
+    // Validate the row MERGED with its stored values, not hardcoded fallbacks:
+    // a partial PATCH like {case_sensitive:true} must keep the stored pattern
+    // (else it fails "must not be empty"), and a pattern-only edit on a regex
+    // row must still run the ReDoS guard against the stored kind.
+    const { rows } = await query(
+      `SELECT pattern, pattern_kind, case_sensitive FROM recipient_match_patterns WHERE id = $1`,
+      [patternId],
+    );
+    if (!rows[0]) throw new NotFoundError(`Pattern ${patternId} not found`);
+    const merged = {
+      pattern: updates.pattern ?? rows[0].pattern,
+      pattern_kind: updates.pattern_kind ?? rows[0].pattern_kind,
+      case_sensitive: updates.case_sensitive ?? rows[0].case_sensitive,
+    };
+    const validation = validatePattern(merged);
+    if (!validation.valid) throw new ValidationError(validation.error);
   }
 
   const fields = [];

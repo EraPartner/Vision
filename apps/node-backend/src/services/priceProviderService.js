@@ -207,6 +207,51 @@ export async function fetchLivePricesDetailed(investments, { cachedPricesByInves
 
 // ─── Historical price fetching ────────────────────────────────────────────────
 
+const BINANCE_DAY_MS = 24 * 60 * 60 * 1000;
+const BINANCE_PAGE_LIMIT = 1000;
+const BINANCE_MAX_PAGES = 30; // 30 × 1000 daily candles ≈ 82 years — a runaway guard, not a real bound
+
+function _dayKey(ms) {
+  return Math.floor(Number(ms) / BINANCE_DAY_MS);
+}
+
+/**
+ * Fetch daily Binance klines across an arbitrary window, paginating past the 1000-row
+ * per-request limit via startTime/endTime. Returns the raw kline rows (caller maps/normalizes).
+ *
+ * @param {string} binanceSymbol
+ * @param {number} startMs
+ * @param {number} endMs
+ * @returns {Promise<Array<Array<number|string>>>}
+ */
+async function _fetchBinanceKlines(binanceSymbol, startMs, endMs) {
+  const collected = [];
+  let cursor = Number(startMs);
+  const end = Number(endMs);
+
+  for (let page = 0; page < BINANCE_MAX_PAGES; page += 1) {
+    const url = 'https://data-api.binance.vision/api/v3/klines'
+      + `?symbol=${encodeURIComponent(binanceSymbol)}`
+      + `&interval=1d&startTime=${cursor}&endTime=${end}&limit=${BINANCE_PAGE_LIMIT}`;
+    const res = await fetch(url, { headers: { Accept: 'application/json' } });
+    if (!res.ok) throw new Error(`Binance API error: ${res.status}`);
+    const data = await res.json();
+    if (!Array.isArray(data) || data.length === 0) return collected;
+
+    collected.push(...data);
+    if (data.length < BINANCE_PAGE_LIMIT) return collected;
+
+    const lastOpen = Number(data[data.length - 1][0]);
+    if (!Number.isFinite(lastOpen)) return collected;
+    const next = lastOpen + BINANCE_DAY_MS;
+    if (next > end) return collected;
+    cursor = next;
+  }
+
+  logger.warn(`Binance history pagination hit page cap (${BINANCE_MAX_PAGES}) for ${binanceSymbol}; series may be truncated`);
+  return collected;
+}
+
 function _filterHistoricalPoints(points, fromMs, toMs) {
   return filterPointsByRange(points, { fromMs, toMs });
 }
@@ -238,9 +283,13 @@ async function _persistAndResolve(investmentId, points, source, cachedDbPoints, 
 
 /**
  * @param {{ id: number, price_provider?: string, price_provider_id?: string|null, asset_class?: string, currency?: string, symbol?: string }} investment
- * @param {{ fromMs?: number, toMs?: number, dbOnly?: boolean|string|number }} [opts]
+ * @param {{ fromMs?: number, toMs?: number, dbOnly?: boolean|string|number, force?: boolean }} [opts]
+ *   force: bypass the endpoint-coverage freshness short-circuit and re-query the provider.
+ *   needsHistoryRefresh only inspects the series' first/last point vs the window bounds, so a
+ *   sparse-but-endpoint-spanning series would otherwise never be re-fetched. The gap-fill /
+ *   densify paths set force to repopulate interior gaps.
  */
-export async function fetchHistoricalPrices(investment, { fromMs, toMs, dbOnly = false } = {}) {
+export async function fetchHistoricalPrices(investment, { fromMs, toMs, dbOnly = false, force = false } = {}) {
   if (!investment) return [];
   const provider = investment.price_provider || 'manual';
   const from = Number.isFinite(Number(fromMs)) ? Number(fromMs) : undefined;
@@ -256,7 +305,7 @@ export async function fetchHistoricalPrices(investment, { fromMs, toMs, dbOnly =
     return _filterHistoricalPoints(cachedDbPoints, from, to);
   }
 
-  if (!needsHistoryRefresh(cachedDbPoints, { fromMs: from, toMs: to })) {
+  if (!force && !needsHistoryRefresh(cachedDbPoints, { fromMs: from, toMs: to })) {
     if (provider === 'kinesis') {
       const sanitized = sanitizeKinesisIsolatedSpikes(cachedDbPoints);
       const changed = countChangedPointPrices(cachedDbPoints, sanitized);
@@ -306,27 +355,23 @@ export async function fetchHistoricalPrices(investment, { fromMs, toMs, dbOnly =
     const symbol = (investment.price_provider_id || '').trim().toUpperCase();
     if (!symbol) return [];
 
-    let days = 365;
-    if (from) {
-      const daysDiff = Math.ceil((Date.now() - from) / (24 * 60 * 60 * 1000));
-      if (daysDiff > 0) days = Math.min(daysDiff, 365);
-    }
-
     const KNOWN_QUOTE_SUFFIXES = ['EUR', 'USDT', 'USDC', 'BUSD', 'BTC', 'ETH'];
     const hasKnownQuote = KNOWN_QUOTE_SUFFIXES.some((suffix) => symbol.endsWith(suffix));
     const binanceSymbol = hasKnownQuote ? symbol : `${symbol}USDT`;
-    const cacheKey = `binance-history:${symbol}:${days}`;
+
+    // Walk the full window in daily candles. Binance klines return at most 1000 rows per
+    // request, so paginate via startTime/endTime instead of the old limit=min(days,365) cap,
+    // which silently dropped every point older than a year.
+    const startMs = from !== undefined ? from : Date.now() - 365 * BINANCE_DAY_MS;
+    const endMs = to !== undefined ? to : Date.now();
+    const cacheKey = `binance-history:${symbol}:${_dayKey(startMs)}:${_dayKey(endMs)}`;
     const cached = cacheGet(cacheKey);
     let points = Array.isArray(cached?.points) ? cached.points : undefined;
 
     if (!points) {
       try {
-        const url = `https://data-api.binance.vision/api/v3/klines?symbol=${encodeURIComponent(binanceSymbol)}&interval=1d&limit=${days}`;
-        const res = await fetch(url, { headers: { Accept: 'application/json' } });
-        if (!res.ok) throw new Error(`Binance API error: ${res.status}`);
-        const data = await res.json();
-
-        points = normalizeHistoryPoints((Array.isArray(data) ? data : [])
+        const klines = await _fetchBinanceKlines(binanceSymbol, startMs, endMs);
+        points = normalizeHistoryPoints(klines
           .map((kline) => ({
             timestampMs: Number(kline[0]),
             price: toNumber(kline[4]),

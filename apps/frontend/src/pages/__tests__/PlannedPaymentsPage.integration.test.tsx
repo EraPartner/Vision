@@ -8,6 +8,25 @@ import { server } from "@/test/msw/server";
 import { err, ok } from "@/test/msw/handlers";
 import PlannedPaymentsPage from "@/pages/PlannedPaymentsPage";
 
+// The table virtualizes rows via @tanstack/react-virtual, which renders nothing
+// in jsdom's zero-height scroll container. Mock the virtualizer to materialise
+// every row so row-content assertions work (the windowing itself is covered by
+// VirtualDataTable's unit test). In a real browser the container has height and
+// rows render normally.
+vi.mock("@tanstack/react-virtual", () => ({
+    useVirtualizer: ({ count, estimateSize }: { count: number; estimateSize: () => number }) => ({
+        getVirtualItems: () =>
+            Array.from({ length: count }, (_, i) => ({
+                key: i,
+                index: i,
+                start: i * estimateSize(),
+                size: estimateSize(),
+            })),
+        getTotalSize: () => count * estimateSize(),
+        measureElement: vi.fn(),
+    }),
+}));
+
 /** Minimal backend PlannedTransaction fixture (active, recurring) */
 const rentPayment = {
     id: 1,

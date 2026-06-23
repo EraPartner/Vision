@@ -1,7 +1,7 @@
 ---
 title: ADR-020 Glass System Downgrade & Liquid Canvas Removal
 type: adr
-status: Accepted
+status: Partially superseded by ADR-070
 date: 2026-04-17
 tags: [adr, performance, frontend, optimization, glassmorphism, electron, gpu]
 description: Performance optimization reducing glass-system blur tiers and removing liquid-canvas animated background and page transitions due to Electron M1 GPU regression
@@ -11,7 +11,7 @@ aliases: [adr-020, glass downgrade, liquid canvas removal, performance refactor]
 # ADR-020: Glass System Downgrade & Liquid Canvas Removal
 
 ## Status
-Accepted
+Accepted · Partially superseded by [[docs/adr/070-liquid-glass-v2-premium-frontend|ADR-070]] (June 2026): atmosphere layer, page transitions, blur tiers, and `saturate()` restored under a bounded GPU budget; the opaque-dense-surface rule from this ADR remains in force.
 
 ## Date
 2026-04-17

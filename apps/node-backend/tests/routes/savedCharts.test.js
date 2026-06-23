@@ -155,6 +155,19 @@ describe('Saved Charts Routes', () => {
       });
       expect(res.json).toHaveBeenCalledWith({ ok: true, data: { id: 9, name: 'Updated' } });
     });
+
+    it('passes null through to CLEAR a date range (was silently coerced to undefined)', async () => {
+      savedChartsRepository.update.mockResolvedValue({ id: 9 });
+
+      const req = { params: { id: '9' }, body: { dateRangeStart: null } };
+      const res = mockResponse();
+      await routeHandlers['patch:/:id'](req, res);
+
+      expect(savedChartsRepository.update).toHaveBeenCalledWith(
+        9,
+        expect.objectContaining({ dateRangeStart: null }),
+      );
+    });
   });
 
   describe('DELETE /:id', () => {

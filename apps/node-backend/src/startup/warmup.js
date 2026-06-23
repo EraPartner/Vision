@@ -5,8 +5,10 @@
  * Runs after the HTTP server is listening; populates exchange-rate / inflation
  * / portfolio-snapshot / info caches, then schedules recurring refreshes.
  *
- * All tasks are best-effort: failures are logged and `warmupStatus` flags are
- * still set to true so /health/detailed eventually reports "ready".
+ * All tasks are best-effort: failures are logged and the task is marked
+ * 'failed' (not left 'pending'), so /health/detailed still settles out of
+ * "warming" — reporting `degraded: true` rather than masking the failure.
+ * Each `warmupStatus` flag is tri-state: 'pending' | 'ready' | 'failed'.
  */
 
 import { logger } from '../config/logger.js';
@@ -29,9 +31,12 @@ import { computeAndStoreSnapshots } from '../services/portfolioPerformanceSnapsh
 import {
   backfillHistoricalAssetQuotes,
   refreshActiveHoldingQuotes,
+  backfillHoldingGaps,
 } from '../services/quoteBackfillService.js';
 import { warmInfoCaches } from '../routes/info.js';
+import { backfillTransfersOnce } from '../services/transferReconciliationService.js';
 import { refreshCashflowForecastMc } from '../jobs/refreshCashflowForecastMc.js';
+import * as researchProviderKeyService from '../services/research/researchProviderKeyService.js';
 import { isInternetReachable } from '../lib/network.js';
 import investmentRepository from '../repositories/investmentRepository.js';
 
@@ -171,13 +176,33 @@ async function refreshInvestmentPricesOnStartup() {
  *  4. Schedule recurring intervals (12h FX, 1h quotes, 24h cashflow MC).
  *
  * @param {{ warmupStatus: object }} args
- * @returns {Promise<{ exchangeRateRefreshInterval: NodeJS.Timeout, quotesRefreshInterval: NodeJS.Timeout, cashflowForecastRefreshInterval: NodeJS.Timeout }>}
+ * @returns {Promise<{ exchangeRateRefreshInterval: NodeJS.Timeout, quotesRefreshInterval: NodeJS.Timeout, cashflowForecastRefreshInterval: NodeJS.Timeout, holdingGapBackfillInterval: NodeJS.Timeout }>}
  */
 export async function runWarmupTasks({ warmupStatus }) {
-  refreshMaterializedViews()
-    .then(() => { warmupStatus.materializedViews = true; })
+  // Load Settings-managed research provider API keys into the in-memory override
+  // map so keyed providers reflect Settings on boot. Defensive: a missing table
+  // (migration 0043 not applied) or DB hiccup must not break warmup — the env-var
+  // fallback still applies.
+  try {
+    const hydrated = await researchProviderKeyService.hydrate();
+    logger.info(`Hydrated ${hydrated} research provider API key override(s) from settings`);
+  } catch (err) {
+    logger.warn('Could not hydrate research provider API keys; using env fallback', { error: err.message });
+  }
+
+  // One-time internal-transfer backfill on upgrade (ADR-083). Best-effort and
+  // DB-only; refreshes the MVs afterwards so the exclusion is reflected. Runs
+  // before the MV refresh below kicks off; both are idempotent.
+  backfillTransfersOnce()
+    .then((r) => { if (!r.skipped) return refreshMaterializedViews(); })
     .catch((err) => {
-      warmupStatus.materializedViews = true;
+      logger.error('Internal-transfer backfill failed on startup', { error: err.message });
+    });
+
+  refreshMaterializedViews()
+    .then(() => { warmupStatus.materializedViews = 'ready'; })
+    .catch((err) => {
+      warmupStatus.materializedViews = 'failed';
       logger.error('Failed to refresh materialized views on startup', { error: err.message });
     });
 
@@ -189,16 +214,16 @@ export async function runWarmupTasks({ warmupStatus }) {
   const exchangeRateWarmPromise = (online
     ? warmExchangeRateCache()
     : Promise.resolve())
-    .then(() => { warmupStatus.exchangeRates = true; })
+    .then(() => { warmupStatus.exchangeRates = 'ready'; })
     .catch((err) => {
-      warmupStatus.exchangeRates = true;
+      warmupStatus.exchangeRates = 'failed';
       logger.error('Failed to warm exchange rate cache on startup', { error: err.message });
     });
 
   warmInflationCache()
-    .then(() => { warmupStatus.inflation = true; })
+    .then(() => { warmupStatus.inflation = 'ready'; })
     .catch((err) => {
-      warmupStatus.inflation = true;
+      warmupStatus.inflation = 'failed';
       logger.error('Failed to warm Belgian inflation cache on startup', { error: err.message });
     });
 
@@ -224,17 +249,17 @@ export async function runWarmupTasks({ warmupStatus }) {
   Promise.all([exchangeRateWarmPromise, fxBackfillPromise])
     .then(() => computeAndStoreSnapshots())
     .then(() => {
-      warmupStatus.portfolioSnapshots = true;
+      warmupStatus.portfolioSnapshots = 'ready';
       return warmInfoCaches()
-        .then(() => { warmupStatus.infoCaches = true; })
+        .then(() => { warmupStatus.infoCaches = 'ready'; })
         .catch((err) => {
-          warmupStatus.infoCaches = true;
+          warmupStatus.infoCaches = 'failed';
           logger.error('Failed to warm info caches on startup', { error: err.message });
         });
     })
     .catch((err) => {
-      warmupStatus.portfolioSnapshots = true;
-      warmupStatus.infoCaches = true;
+      warmupStatus.portfolioSnapshots = 'failed';
+      warmupStatus.infoCaches = 'failed';
       logger.error('Failed to compute portfolio performance snapshots on startup', { error: err.message });
     });
 
@@ -288,9 +313,32 @@ export async function runWarmupTasks({ warmupStatus }) {
     ONE_DAY_MS,
   );
 
+  // Daily gap-fill: densify any holding window whose stored daily series has grown sparse
+  // (provider outages, the old Binance 365-day cap, etc). Recompute snapshots only when new
+  // rows were actually written, so the Performance page reflects the denser history.
+  const holdingGapBackfillInterval = setInterval(
+    withInFlightGuard('holding-gap backfill', async () => {
+      if (!(await isInternetReachable({ force: true }))) {
+        logger.debug('Skipping scheduled holding-gap backfill — offline');
+        return;
+      }
+      const result = await backfillHoldingGaps().catch((err) => {
+        logger.error('Scheduled holding-gap backfill failed', { error: err.message });
+        return undefined;
+      });
+      if (result && result.filled > 0) {
+        await computeAndStoreSnapshots().catch((err) => {
+          logger.error('Snapshot recompute after holding-gap backfill failed', { error: err.message });
+        });
+      }
+    }),
+    ONE_DAY_MS,
+  );
+
   return {
     exchangeRateRefreshInterval,
     quotesRefreshInterval,
     cashflowForecastRefreshInterval,
+    holdingGapBackfillInterval,
   };
 }

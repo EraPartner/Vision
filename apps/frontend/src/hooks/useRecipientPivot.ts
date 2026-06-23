@@ -47,6 +47,10 @@ export function useRecipientPivot(chart: SavedChart | null | undefined) {
             chart?.time_bucket ?? 'monthly',
             chart?.date_range_start ?? null,
             chart?.date_range_end ?? null,
+            // Narrowed per chart now, so the selected recipients MUST key the cache
+            // (ADR-041 amendment) — else one chart's narrowed payload would be
+            // served to a different chart with different recipients.
+            chart?.recipient_ids ?? [],
         ],
         queryFn: () =>
             getAggregationRecipientPivot({
@@ -54,6 +58,9 @@ export function useRecipientPivot(chart: SavedChart | null | undefined) {
                 bucket: chart!.time_bucket,
                 start: chart!.date_range_start ?? undefined,
                 end: chart!.date_range_end ?? undefined,
+                // Fetch only the chart's selected recipients instead of the full
+                // all-recipients pivot the client then discarded.
+                recipient_ids: chart!.recipient_ids,
             }),
         enabled,
         staleTime: 60_000,

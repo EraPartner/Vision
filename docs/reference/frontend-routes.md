@@ -40,7 +40,7 @@ aliases: [routes, pages, navigation, url paths, frontend routes, admin routes]
 | `/portfolio/savings` | `SavingsPage` | AppLayout | Savings accounts | [[apps/frontend/src/pages/portfolio/SavingsPage.tsx\|SavingsPage.tsx]] |
 | `/portfolio/performance` | `PerformancePage` | AppLayout | Portfolio performance charts | [[apps/frontend/src/pages/portfolio/PerformancePage.tsx\|PerformancePage.tsx]] |
 | `/portfolio/net-worth` | `NetWorthPage` | AppLayout | Net worth tracking | [[apps/frontend/src/pages/portfolio/net-worth/NetWorthPage.tsx\|NetWorthPage.tsx]] |
-| `/portfolio/exchange-rates` | `ExchangeRatesPage` | AppLayout | Exchange rate management | [[apps/frontend/src/pages/portfolio/ExchangeRatesPage.tsx\|ExchangeRatesPage.tsx]] |
+| `/admin/exchange-rates` | `ExchangeRatesPage` | AppLayout + RequireAdmin | Exchange rate management (admin mode; old `/portfolio/exchange-rates` redirects) | [[apps/frontend/src/pages/admin/ExchangeRatesPage.tsx\|ExchangeRatesPage.tsx]] |
 | `/portfolio/watchlist` | `WatchlistPage` | AppLayout | Investment watchlist | [[apps/frontend/src/pages/portfolio/WatchlistPage.tsx\|WatchlistPage.tsx]] |
 | `/portfolio/market` | `MarketLookupPage` | AppLayout | Market data lookup | [[apps/frontend/src/pages/MarketLookupPage.tsx\|MarketLookupPage.tsx]] |
 | `/portfolio/tax` | `PortfolioTaxPage` | AppLayout | Portfolio tax calculations | [[apps/frontend/src/pages/portfolio/tax/PortfolioTaxPage.tsx\|PortfolioTaxPage.tsx]] |

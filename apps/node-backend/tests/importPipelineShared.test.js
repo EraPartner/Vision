@@ -1,5 +1,20 @@
 import { describe, it, expect } from 'vitest';
-import { splitCsvLines } from '../src/services/importPipeline/adapters/_shared.js';
+import { splitCsvLines, parseCommaDecimal } from '../src/services/importPipeline/adapters/_shared.js';
+
+describe('parseCommaDecimal', () => {
+  it('parses EU dot-thousands + comma-decimal (was NaN → row silently dropped)', () => {
+    expect(parseCommaDecimal('1.234,56')).toBe(1234.56);
+    expect(parseCommaDecimal('1.234.567,89')).toBe(1234567.89);
+  });
+
+  it('parses a plain comma decimal', () => {
+    expect(parseCommaDecimal('12,5')).toBe(12.5);
+  });
+
+  it('leaves a dot-decimal without a comma untouched', () => {
+    expect(parseCommaDecimal('12.5')).toBe(12.5);
+  });
+});
 
 describe('splitCsvLines', () => {
   it('splits LF-terminated content', () => {

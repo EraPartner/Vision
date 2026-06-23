@@ -42,7 +42,8 @@ export function computeSpecialSocialSecurityContribution(
         profile.filingStatus === 'married_joint' ? table.csssTableJoint : table.csssTable;
 
     for (const tier of tiers) {
-        // Tier bounds are [from, to] inclusive on the lower bound, exclusive on the upper.
+        // Tier bounds are [from, to], inclusive on BOTH ends — the year tables
+        // leave a cent gap between consecutive tiers (…18,592.02 / 18,592.03…).
         // Earlier code used `<= tier.from`, which skipped income equal to a tier boundary.
         if (netTaxableIncome < tier.from) continue;
         if (netTaxableIncome > tier.to) continue;

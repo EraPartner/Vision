@@ -7,15 +7,14 @@
 
 import { computeMetrics, computeHeatmap } from '../../services/portfolioPerformanceSnapshotService.js';
 import { getPortfolioSummary } from '../../services/portfolio/portfolioSummaryService.js';
-import { downsampleLTTB } from '../../utils/downsample.js';
+import { todayAppDateString, addDaysYmd } from '../../lib/timezone.js';
+import { toYmd, sanitizeIsolatedValueSpikes } from '../../utils/portfolioMath.js';
 import { toDecimal, toNumber } from '../../lib/money.js';
 import {
   portfolioSummaryCache,
   PORTFOLIO_SUMMARY_CACHE_TTL_MS,
   resolveCacheWithInflight,
 } from './_cache.js';
-
-const DOWNSAMPLE_THRESHOLD = 400;
 
 const PERIOD_OFFSETS = {
   '1m': 30,
@@ -44,33 +43,39 @@ export function mapPortfolioPerformanceSnapshot(snapshot) {
       parseSnapshotNumber(snapshot.inflation_adjusted_value) || parseSnapshotNumber(snapshot.value) || 0,
     gain_loss: parseSnapshotNumber(snapshot.gain_loss),
     return_pct: parseSnapshotNumber(snapshot.return_pct),
+    // Omitted (not 0) when the FX-neutral series isn't available — predates
+    // migration 0039 or the snapshot recompute that fills it.
+    ...(snapshot.value_fx_neutral != null
+      ? { value_fx_neutral: parseSnapshotNumber(snapshot.value_fx_neutral) }
+      : {}),
   };
 }
 
 function filterSnapshotsByPeriod(snapshots, period) {
   if (!period || period === 'all' || !PERIOD_OFFSETS[period]) return snapshots;
   const daysBack = PERIOD_OFFSETS[period];
-  const cutoff = new Date();
-  cutoff.setDate(cutoff.getDate() - daysBack);
-  const cutoffStr = cutoff.toISOString().slice(0, 10);
+  const cutoffStr = addDaysYmd(todayAppDateString(), -daysBack);
   return snapshots.filter(s => {
-    const date = typeof s.snapshot_date === 'string' ? s.snapshot_date : s.snapshot_date.toISOString().slice(0, 10);
+    const date = toYmd(s.snapshot_date);
     return date >= cutoffStr;
   });
 }
 
 export async function buildPortfolioPerformancePayload(targetCurrency, startDate, endDate, allSnapshots, period) {
-  const snapshotMetrics = computeMetrics(allSnapshots);
-  const heatmap = computeHeatmap(allSnapshots);
+  // Smooth isolated one-day price needles (kinesis data-quality issue) BEFORE
+  // metrics/heatmap/series, mirroring the protection the net-worth path already
+  // has. The chart, heatmap month-ends, and metrics all consumed raw needles.
+  const cleanSnapshots = /** @type {any} */ (sanitizeIsolatedValueSpikes(allSnapshots, 'value'));
 
-  const periodFiltered = filterSnapshotsByPeriod(allSnapshots, period);
-  const periodMapped = periodFiltered.map(mapPortfolioPerformanceSnapshot);
-  const snapshots = downsampleLTTB(
-    periodMapped,
-    DOWNSAMPLE_THRESHOLD,
-    (_item, i) => i,
-    (item) => item.value,
-  );
+  const snapshotMetrics = computeMetrics(cleanSnapshots);
+  const heatmap = computeHeatmap(cleanSnapshots);
+
+  const periodFiltered = filterSnapshotsByPeriod(cleanSnapshots, period);
+  // No LTTB downsample: at daily granularity even 10y ≈ 3.6k points render as a
+  // single SVG path fine, and LTTB *amplified* needles (it keeps max-area
+  // points). Removing it also closes the shared-downsampler correctness bug's
+  // backend impact. Full-resolution series instead.
+  const snapshots = periodFiltered.map(mapPortfolioPerformanceSnapshot);
 
   // Realtime summary is the source of truth for current totals so the
   // performance headline cards always reconcile with the dashboard. The
@@ -113,6 +118,10 @@ export async function buildPortfolioPerformancePayload(targetCurrency, startDate
       totalInvested: s.totalInvested,
       gainLoss: s.gainLoss,
       gainLossPercent: s.gainLossPercent,
+      assetGain: s.assetGain,
+      fxGain: s.fxGain,
+      nativeCurrentValue: s.nativeCurrentValue,
+      usedFallbackRate: s.usedFallbackRate,
     })),
     totals: liveSummary.totals,
   };

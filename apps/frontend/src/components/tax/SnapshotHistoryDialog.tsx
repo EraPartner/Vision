@@ -32,10 +32,10 @@ interface SnapshotHistoryDialogProps {
 
 const KIND_VARIANT: Record<SnapshotAuditEntryKind, string> = {
     created: 'bg-primary/15 text-primary border-primary/30',
-    patched: 'bg-amber-500/10 text-amber-700 border-amber-500/30',
+    patched: 'bg-warning/10 text-warning border-warning/30',
     frozen: 'bg-sky-500/10 text-sky-700 border-sky-500/30',
     unfrozen: 'bg-muted text-muted-foreground border-border',
-    filed: 'bg-emerald-500/10 text-emerald-700 border-emerald-500/30',
+    filed: 'bg-success/10 text-success border-success/30',
     unfiled: 'bg-muted text-muted-foreground border-border',
 };
 
@@ -114,7 +114,7 @@ export function SnapshotHistoryDialog({ trigger, year }: SnapshotHistoryDialogPr
                                             {formatTimestamp(entry.at, language)}
                                         </span>
                                         {entry.reference && (
-                                            <span className="text-xs font-medium text-amber-700">
+                                            <span className="text-xs font-medium text-warning">
                                                 ({entry.reference})
                                             </span>
                                         )}

@@ -179,32 +179,3 @@ export function formatCurrencyCompact(
   return { display: compact, full, isCompact: true };
 }
 
-/**
- * Format amount with currency symbol (simpler version)
- * @param amount The amount to format
- * @param currencyCode ISO 4217 currency code
- * @returns Formatted string with currency symbol
- */
-export function formatAmountWithSymbol(
-  amount: number,
-  currencyCode: string = 'EUR'
-): string {
-  const symbol = getCurrencySymbol(currencyCode);
-  const sign = amount < 0 ? '-' : '';
-  // Honour the user's decimal-places + number-format settings rather than a
-  // hardcoded `.toFixed(2)` (which also dropped locale digit grouping).
-  const fractionDigits = currencyFormatDefaults.fractionDigits;
-  const formattedAmount = new Intl.NumberFormat(currencyFormatDefaults.locale, {
-    minimumFractionDigits: fractionDigits,
-    maximumFractionDigits: fractionDigits,
-  }).format(Math.abs(amount));
-
-  // For currencies that typically show symbol after the amount
-  const symbolAfter = ['SEK', 'NOK', 'DKK', 'PLN', 'CZK', 'HUF'];
-
-  if (symbolAfter.includes(currencyCode.toUpperCase())) {
-    return `${sign}${formattedAmount} ${symbol}`;
-  }
-
-  return `${sign}${symbol}${formattedAmount}`;
-}

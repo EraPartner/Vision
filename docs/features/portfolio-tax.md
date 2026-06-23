@@ -3,14 +3,17 @@ title: Portfolio Tax Feature
 type: feature
 status: active
 date: 2026-05-11
-tags: [feature, portfolio, tax, belgian, frontend, investments, audit-2026-05-11, etf-structure, reynders-override, tax-classifications]
-description: Portfolio-level tax tracking with recorded taxes, manual adjustments, per-investment breakdowns, and Belgian tax rule integration. May 2026: Added per-investment ETF structure (accumulating/distributing) and Reynders routing override metadata.
+updated: 2026-05-29
+tags: [feature, portfolio, tax, belgian, frontend, investments, audit-2026-05-11, etf-structure, reynders-override, tax-classifications, portfolio-tax-pure-module, decimal-migration]
+description: Portfolio-level tax tracking with recorded taxes, manual adjustments, per-investment breakdowns, and Belgian tax rule integration. May 2026: Added per-investment ETF structure (accumulating/distributing) and Reynders routing override metadata. 2026-05-29: Portfolio-tax estimators extracted to portfolioTax.ts (pure, tested, Decimal-accumulating); PortfolioTaxPage now calls shared functions instead of inlining math.
 aliases: [portfolio taxation, investment tax, capital gains tax, TOB]
 related_code:
   - apps/frontend/src/pages/portfolio/tax/PortfolioTaxPage.tsx
   - apps/frontend/src/hooks/usePortfolioTaxAdjustments.ts
   - apps/frontend/src/components/portfolio/PortfolioTaxAdjustmentsDialog.tsx
   - apps/frontend/src/contexts/BelgianTaxProfileContext.tsx
+  - apps/frontend/src/lib/belgianTax/portfolioTax.ts
+  - apps/frontend/src/lib/belgianTax/__tests__/portfolioTax.test.ts
 ---
 
 # Portfolio Tax Feature
@@ -44,9 +47,22 @@ totalFees = recordedFees + manualFees
 totalCosts = totalTaxes + totalFees
 ```
 
+## Pure Estimator Module (2026-05-29)
+
+All portfolio-tax math previously inlined in `PortfolioTaxPage.tsx` has been extracted to `apps/frontend/src/lib/belgianTax/portfolioTax.ts`. This module is:
+
+- **Pure** — no React context imports, no side effects. Currency conversion is injected via a `ConvertFn` parameter.
+- **Tested** — 12 golden-output cases in `apps/frontend/src/lib/belgianTax/__tests__/portfolioTax.test.ts` lock all estimator outputs to 8 decimal places.
+- **Decimal-accumulating** — monetary sums and products run through `decimal.js` internally to eliminate float-accumulation drift across many transactions; the public surface returns `number`.
+- **De-duplicated** — `recordedTaxesForYear` is now shared between `PortfolioTaxPage` and `TaxOverviewPage`. Both pages call the same function rather than each maintaining a separate per-transaction accumulation loop.
+
+`PortfolioTaxPage` calls these pure functions inside its `useMemo` hooks. The page itself is now responsible only for fetching, filtering by `taxYear`, and passing `convert` — all math lives in the library.
+
+See [[docs/features/belgian-tax#portfoliotaxts--pure-portfolio-tax-estimators-2026-05-29|Belgian Tax: portfolioTax.ts]] for the full function reference.
+
 ## Frontend Page
 
-Located at `[[apps/frontend/src/pages/portfolio/tax/PortfolioTaxPage.tsx]]` (636 lines).
+Located at `[[apps/frontend/src/pages/portfolio/tax/PortfolioTaxPage.tsx]]`.
 
 ### Widgets
 
@@ -204,6 +220,7 @@ The page relies on `usePortfolio()` for investment summaries rather than a dedic
 
 ## Related Features
 
+- [[docs/features/belgian-tax#portfoliotaxts--pure-portfolio-tax-estimators-2026-05-29|Belgian Tax: portfolioTax.ts]] — Pure estimator module extracted from this page; function reference and Decimal accumulation notes
 - [[docs/features/belgian-tax|Belgian Tax]] — Budget-side tax tracking (personal income tax)
 - [[docs/features/portfolio|Portfolio]] — Investment management and tracking
 - [[docs/features/exchange-rates|Exchange Rates]] — Currency conversion for multi-currency investments
@@ -211,3 +228,5 @@ The page relies on `usePortfolio()` for investment summaries rather than a dedic
 - [[docs/adr/057-belgian-tax-audit-followup-pwc-may-2026|ADR-057]] — Follow-up audit: TOB shares cap fix, CGT date docs, direct-bond CGT routing, Reynders interest-portion split, year-aware suggestions, per-residence centimes override
 - [[docs/adr/058-belgian-tax-historical-year-snapshots|ADR-058]] — Historical year viewer shared with `/tax`; `TaxYearSwitcher` + `HistoricalYearBanner` drive a transient `viewedYear` state. Existing per-year `portfolio_tax_adjustments_v1` and `portfolio_tax_classifications_v1` storage keys are reused unchanged.
 - [[docs/adr/059-belgian-tax-historical-year-extensions|ADR-059]] — Extends ADR-058 with `YearActionsMenu` (freeze/file/history/export) and `HistoricalYearBanner` filed/frozen modes shared with `/tax`. Portfolio Tax now reads via `displayCalculationForYear`, so filed years surface their as-filed numbers rather than today's live recompute.
+- [[docs/adr/021-decimal-arithmetic-for-monetary-values|ADR-021]] — Decimal.js monetary arithmetic pattern that `portfolioTax.ts` follows for frontend accumulation
+- [[docs/adr/060-may-2026-monetary-precision-and-deduplication-audit|ADR-060]] — Established `apps/frontend/src/lib/decimal.ts`; `portfolioTax.ts` Decimal usage is consistent with this frontend pattern

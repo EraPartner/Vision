@@ -224,6 +224,34 @@ export const plannedTransactionRepository = {
     return { items: rows, total };
   },
 
+  // Lightweight candidate list for auto-link / match suggestions. Returns only
+  // the fields the matcher needs (recipient cluster root, amount, planned_date)
+  // for active, not-yet-executed rows. Loans are excluded: their installments
+  // carry amortization semantics that a fuzzy recipient+amount match must not
+  // silently advance. Recurring rows are always eligible (they never stay
+  // is_executed=true), one-off rows only while is_executed=false.
+  async listActiveUnexecuted() {
+    const result = await query(
+      `SELECT pt.id,
+              pt.recipient_id,
+              COALESCE(r.primary_recipient_id, pt.recipient_id) AS recipient_cluster_id,
+              pt.amount,
+              pt.planned_date,
+              pt.currency,
+              pt.is_recurring,
+              pt.recurrence_pattern,
+              pt.memo,
+              r.name AS recipient_name
+         FROM planned_transactions pt
+         LEFT JOIN recipients r ON pt.recipient_id = r.id
+        WHERE pt.is_active = true
+          AND pt.is_executed = false
+          AND pt.recipient_id IS NOT NULL
+          AND (pt.is_loan = false OR pt.is_loan IS NULL)`
+    );
+    return result.rows;
+  },
+
   async getById(id) {
     const sql = `
       SELECT pt.*,
@@ -319,9 +347,12 @@ export const plannedTransactionRepository = {
       )
       RETURNING *
     `;
-    // sanitize recurrence data: loans should not store recurrence_pattern or related fields
+    // Loans are monthly by construction (generateLoanSchedule walks months via
+    // addMonthsAtDay), so they advance like a monthly recurrence on /execute.
+    // Storing 'monthly' (not null) lets executeAndAdvance roll planned_date
+    // forward — a null left the loan row perpetually due and re-executable.
     if (is_loan) {
-      recurrence_pattern = null;
+      recurrence_pattern = 'monthly';
     }
 
     const params = [
@@ -329,7 +360,9 @@ export const plannedTransactionRepository = {
       bank_account ? bank_account.toUpperCase() : null,
       recipient_id, amount,
       memo ? memo.toUpperCase() : null,
-      currency ? currency.toUpperCase() : null,
+      // Default to EUR rather than NULL (currency is NOT NULL at the DB level —
+      // migration 0046 — and reads already coalesce missing → EUR).
+      currency ? currency.toUpperCase() : 'EUR',
       category_id, comment, url || null,
       is_recurring || false,
       recurrence_pattern || null,
@@ -456,6 +489,65 @@ export const plannedTransactionRepository = {
     row.tags = tagResult.rows;
 
     return row;
+  },
+
+  /**
+   * Atomic counterpart to update(): applies the field update AND replaces the
+   * loan amortization schedule inside ONE transaction. The PATCH route uses this
+   * whenever a loan parameter changed (or a loan was turned off) so the planned
+   * row (loan_regular_payment_amount / loan_first_payment_date / is_loan) and the
+   * planned_transaction_loan_schedule rows can never disagree after a partial
+   * failure. `scheduleEntries` of [] clears the schedule.
+   *
+   * @param {number} id
+   * @param {object} fields  sanitized update fields (may include `tags`)
+   * @param {Array}  scheduleEntries  installments to write ([] clears)
+   * @returns {Promise<object|null>} the hydrated row, or null if the row is gone
+   */
+  async updateWithLoanSchedule(id, fields, scheduleEntries = []) {
+    const { tags, ...txFields } = fields;
+    const sanitized = sanitizeUpdateFields('planned_transactions', txFields);
+
+    const found = await withTransaction(async (client) => {
+      const setClauses = [];
+      const params = [];
+      let paramIdx = 1;
+      for (const [key, value] of Object.entries(sanitized)) {
+        if (value === undefined) continue;
+        setClauses.push(`"${key}" = $${paramIdx++}`);
+        params.push(value);
+      }
+
+      if (setClauses.length > 0) {
+        setClauses.push('updated_at = NOW()');
+        params.push(id);
+        const r = await client.query(
+          `UPDATE planned_transactions SET ${setClauses.join(', ')} WHERE id = $${paramIdx} RETURNING id`,
+          params,
+        );
+        if (r.rowCount === 0) return false;
+      } else {
+        const r = await client.query('SELECT id FROM planned_transactions WHERE id = $1', [id]);
+        if (r.rowCount === 0) return false;
+      }
+
+      if (tags !== undefined) {
+        await setPlannedTransactionTags(client, id, tags);
+      }
+
+      // Replace the amortization schedule in the SAME transaction as the field
+      // update so loan params and per-installment rows commit (or roll back) together.
+      await client.query(
+        'DELETE FROM planned_transaction_loan_schedule WHERE planned_transaction_id = $1',
+        [id],
+      );
+      await insertLoanScheduleBatch(client, id, scheduleEntries);
+
+      return true;
+    });
+
+    if (!found) return null;
+    return this.getById(id);
   },
 
   /**

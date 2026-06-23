@@ -12,14 +12,17 @@ import { useAppSettings } from "@/contexts/AppSettingsContext";
 import { numberFormatToLocale } from "@/utils/currency";
 import { useCurrencyConverter } from "@/hooks/useCurrencyConverter";
 import { PageHeader } from "@/components/shared/PageHeader";
+import { PageError } from "@/components/shared/PageError";
+import { Skeleton } from "@/components/ui/skeleton";
 import { EmptyState } from "@/components/shared/EmptyState";
+import { DeltaPill } from "@/components/shared/DeltaPill";
 
 export default function RealEstatePage() {
   const { t } = useLanguage();
   const { appSettings } = useAppSettings();
   const locale = numberFormatToLocale(appSettings.numberFormat);
   const targetCurrency = appSettings.defaultCurrency || 'EUR';
-  const { byAssetClass, deleteInvestment } = usePortfolio();
+  const { byAssetClass, deleteInvestment, isLoading, isError, error, refetch } = usePortfolio();
   const { confirm, ConfirmDialog } = useConfirmDialog();
   const properties = byAssetClass('real_estate');
 
@@ -56,6 +59,24 @@ export default function RealEstatePage() {
   const totalReturn = totalAppreciation + totalRentIncome - totalFees - totalTaxes;
   const roi = totalCost > 0 ? (totalReturn / totalCost) * 100 : 0;
 
+  if (isLoading) {
+    return (
+      <div className="space-y-6">
+        <PageHeader title={t('realestate.title')} icon={Building2} />
+        <Skeleton className="h-24 w-full" />
+        <Skeleton className="h-64 w-full" />
+      </div>
+    );
+  }
+  if (isError) {
+    return (
+      <div className="space-y-6">
+        <PageHeader title={t('realestate.title')} icon={Building2} />
+        <PageError message={error?.message ?? t('common.error')} onRetry={() => refetch()} />
+      </div>
+    );
+  }
+
   if (properties.length === 0) {
     return (
       <div className="space-y-6">
@@ -64,7 +85,7 @@ export default function RealEstatePage() {
           icon={Building2}
           actions={<AddInvestmentDialog allowedAssetClasses={[ 'real_estate' ]} />}
         />
-        <Card className="group relative overflow-hidden surface-elevated premium-frame bg-card backdrop-blur-sm">
+        <Card className="group relative overflow-hidden glass-regular premium-frame">
           <CardContent className="pt-0">
             <EmptyState
               icon={Building2}
@@ -89,7 +110,7 @@ export default function RealEstatePage() {
 
       {/* Summary Cards */}
       <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
-        <Card className="group relative overflow-hidden surface-elevated premium-frame micro-lift bg-card backdrop-blur-sm">
+        <Card className="group relative overflow-hidden glass-regular premium-frame micro-lift">
           <CardHeader className="pb-1 pt-3 px-4">
             <CardTitle className="text-xs font-medium text-muted-foreground flex items-center gap-2">
               <span className="inline-flex h-6 w-6 items-center justify-center rounded-md bg-gradient-to-br from-primary/20 to-primary/5 text-primary ring-1 ring-primary/15">
@@ -103,7 +124,7 @@ export default function RealEstatePage() {
           </CardContent>
         </Card>
 
-        <Card className="group relative overflow-hidden surface-elevated premium-frame micro-lift bg-card backdrop-blur-sm">
+        <Card className="group relative overflow-hidden glass-regular premium-frame micro-lift">
           <CardHeader className="pb-1 pt-3 px-4">
             <CardTitle className="text-xs font-medium text-muted-foreground flex items-center gap-2">
               <span className="inline-flex h-6 w-6 items-center justify-center rounded-md bg-gradient-to-br from-muted-foreground/20 to-muted-foreground/5 text-muted-foreground ring-1 ring-muted-foreground/15">
@@ -117,7 +138,7 @@ export default function RealEstatePage() {
           </CardContent>
         </Card>
 
-        <Card className="group relative overflow-hidden surface-elevated premium-frame micro-lift bg-card backdrop-blur-sm">
+        <Card className="group relative overflow-hidden glass-regular premium-frame micro-lift">
           <CardHeader className="pb-1 pt-3 px-4">
             <CardTitle className="text-xs font-medium text-muted-foreground flex items-center gap-2">
               <span className={cn(
@@ -138,7 +159,7 @@ export default function RealEstatePage() {
           </CardContent>
         </Card>
 
-        <Card className="group relative overflow-hidden surface-elevated premium-frame micro-lift bg-card backdrop-blur-sm">
+        <Card className="group relative overflow-hidden glass-regular premium-frame micro-lift">
           <CardHeader className="pb-1 pt-3 px-4">
             <CardTitle className="text-xs font-medium text-muted-foreground">{t('portfolio.rentalIncome')}</CardTitle>
           </CardHeader>
@@ -148,7 +169,7 @@ export default function RealEstatePage() {
           </CardContent>
         </Card>
 
-        <Card className="group relative overflow-hidden surface-elevated premium-frame micro-lift bg-card backdrop-blur-sm">
+        <Card className="group relative overflow-hidden glass-regular premium-frame micro-lift">
           <CardHeader className="pb-1 pt-3 px-4">
             <CardTitle className="text-xs font-medium text-muted-foreground flex items-center gap-2">
               <span className="inline-flex h-6 w-6 items-center justify-center rounded-md bg-gradient-to-br from-foreground/15 to-foreground/5 text-foreground ring-1 ring-foreground/10">
@@ -163,7 +184,11 @@ export default function RealEstatePage() {
           </CardContent>
         </Card>
 
-        <Card className={cn("group relative overflow-hidden surface-elevated premium-frame micro-lift bg-card backdrop-blur-sm border-l-4", totalReturn >= 0 ? "border-l-accent" : "border-l-destructive")}>
+        <Card className="group relative overflow-hidden glass-regular premium-frame micro-lift">
+          <div aria-hidden className={cn(
+            "pointer-events-none absolute inset-0 rounded-[inherit] bg-gradient-to-br",
+            totalReturn >= 0 ? "from-accent/15 to-accent/5" : "from-destructive/15 to-destructive/5",
+          )} />
           <CardHeader className="pb-1 pt-3 px-4">
             <CardTitle className="text-xs font-medium text-muted-foreground">{t('portfolio.totalReturn')}</CardTitle>
           </CardHeader>
@@ -171,7 +196,10 @@ export default function RealEstatePage() {
             <p className={cn("text-xl font-bold tabular-nums", totalReturn >= 0 ? "text-accent" : "text-destructive")}>
               {totalReturn >= 0 ? "+" : ""}{fmt(totalReturn)}
             </p>
-            <p className="text-xs text-muted-foreground mt-0.5">{roi >= 0 ? "+" : ""}{roi.toFixed(1)}% {t('portfolio.totalROI')}</p>
+            <div className="mt-1 flex items-center gap-1.5">
+              <DeltaPill value={roi} label={`${roi >= 0 ? "+" : ""}${roi.toFixed(1)}%`} />
+              <span className="text-xs text-muted-foreground">{t('portfolio.totalROI')}</span>
+            </div>
           </CardContent>
         </Card>
       </div>
@@ -189,7 +217,7 @@ export default function RealEstatePage() {
           const propertyYield = currentValueInTarget > 0 ? (monthlyRent * 12) / currentValueInTarget * 100 : 0;
           
           return (
-            <Card key={p.id} className="overflow-hidden">
+            <Card key={p.id} className="glass-regular overflow-hidden">
               <CardHeader className="bg-muted/30">
                 <div className="flex items-start justify-between">
                   <div className="flex items-center gap-3">
@@ -209,14 +237,15 @@ export default function RealEstatePage() {
                     <InvestmentDetailDialog 
                       investment={p} 
                       trigger={
-                        <Button variant="ghost" size="icon" className="icon-touch-target">
+                        <Button variant="ghost" size="icon" className="icon-touch-target" aria-label={t('portfolio.viewDetails')} title={t('portfolio.viewDetails')}>
                           <Eye className="h-4 w-4" />
                         </Button>
                       }
                     />
                     <AddPortfolioTxnDialog investment={p} />
                      <Button variant="ghost" size="icon" className="icon-touch-target text-muted-foreground hover:text-destructive"
-                      onClick={async () => { 
+                      aria-label={t('realestate.deleteProperty')} title={t('realestate.deleteProperty')}
+                      onClick={async () => {
                         const ok = await confirm({ 
                           title: t('realestate.deleteProperty'), 
                           description: t('realestate.deletePropertyDesc', { name: p.name }), 
@@ -298,14 +327,9 @@ export default function RealEstatePage() {
                      <p className="text-xs text-muted-foreground">{t('portfolio.yield')}</p>
                      <p className="text-sm font-medium">{propertyYield.toFixed(1)}% {t('portfolio.annual')}</p>
                    </div>
-                   <div className="text-right">
+                   <div className="flex flex-col items-end gap-1">
                      <p className="text-xs text-muted-foreground">{t('portfolio.totalROI')}</p>
-                     <p className={cn(
-                       "text-sm font-bold",
-                       propertyROI >= 0 ? "text-accent" : "text-destructive"
-                     )}>
-                       {propertyROI >= 0 ? "+" : ""}{propertyROI.toFixed(1)}%
-                     </p>
+                     <DeltaPill value={propertyROI} label={`${propertyROI >= 0 ? "+" : ""}${propertyROI.toFixed(1)}%`} />
                    </div>
                  </div>
 
@@ -323,7 +347,7 @@ export default function RealEstatePage() {
       </div>
 
       {/* Info Card */}
-      <Card className="bg-muted/30 border-dashed">
+      <Card className="bg-muted/30 !border-dashed">
         <CardContent className="py-4">
           <p className="text-sm text-muted-foreground">{t('realestate.howItWorks')}</p>
         </CardContent>

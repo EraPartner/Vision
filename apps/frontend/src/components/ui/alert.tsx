@@ -15,7 +15,7 @@ const alertVariants = cva(
                 warning:
                     "border border-accent/30 bg-accent/10 text-accent-foreground [&>svg]:text-accent",
                 success:
-                    "border border-emerald-500/30 bg-emerald-500/10 text-emerald-500 [&>svg]:text-emerald-500",
+                    "border border-success/30 bg-success/10 text-success [&>svg]:text-success",
             },
         },
         defaultVariants: {

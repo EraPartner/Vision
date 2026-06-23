@@ -1,0 +1,60 @@
+# Embedded compose for the DEMO build (Vision Demo.app).
+# Fully isolated from the real app: distinct project name -> distinct volumes
+# (visiondemoapp_*), and synthetic data baked into a local custom Postgres image.
+# Uses locally-built images only (no GHCR pull).
+name: visiondemoapp
+
+services:
+  db:
+    # Built locally by install-demo.sh: postgres + the synthetic dataset auto-loaded
+    # on first init (no host-path mount needed).
+    image: vision-demo-db:latest
+    pull_policy: never
+    restart: unless-stopped
+    env_file: .env
+    environment:
+      POSTGRES_USER: ftm_user
+      POSTGRES_DB: financial_transactions
+    volumes:
+      - postgres_data:/var/lib/postgresql
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ftm_user -d financial_transactions"]
+      interval: 3s
+      timeout: 3s
+      retries: 10
+      start_period: 5s
+
+  app:
+    image: vision-app:latest
+    pull_policy: never
+    restart: unless-stopped
+    env_file: .env
+    ports:
+      - "127.0.0.1:${PORT:-3002}:3002"
+    user: "1000:1000"
+    read_only: true
+    tmpfs:
+      - /tmp:size=512m,mode=1777
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    mem_limit: 4g
+    cpus: 4.0
+    environment:
+      SERVER_HOST: "0.0.0.0"
+      CORS_ORIGINS: "http://localhost:${PORT:-3002}"
+      DB_HOST: db
+      DB_PORT: "5432"
+      DB_USER: ftm_user
+      DB_NAME: financial_transactions
+    volumes:
+      - attachments_data:/app/data/attachments
+      - vision_cache_data:/app/.vision-cache
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+
+volumes:
+  postgres_data:
+  attachments_data:
+  vision_cache_data:

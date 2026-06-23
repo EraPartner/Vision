@@ -3,10 +3,10 @@ title: Container Hardening
 type: security
 status: active
 date: 2026-04-25
-updated: 2026-04-29
-tags: [security, docker, containers, hardening, defense-in-depth, trivy-scan]
-description: Docker container hardening posture — non-root, dropped capabilities, read-only filesystem, resource ceilings, healthcheck, CI image scanning.
-aliases: [container security, docker hardening, container posture]
+updated: 2026-05-29
+tags: [security, docker, containers, hardening, defense-in-depth, trivy-scan, supply-chain, electron, npm-scripts]
+description: Docker container hardening posture — non-root, dropped capabilities, read-only filesystem, resource ceilings, healthcheck, CI image scanning. Also covers Electron release build supply-chain hardening (npm ci --ignore-scripts).
+aliases: [container security, docker hardening, container posture, electron supply chain]
 ---
 
 # Container Hardening
@@ -55,6 +55,23 @@ vuln-type: os,library
 - `aquasecurity/trivy-action@0.28.0` — Pinned version (not floating `@master`) to prevent supply-chain risk
 
 This ensures no images with known critical/high vulnerabilities reach production.
+
+## Electron Release Build — Supply-Chain Hardening (2026-05-29)
+
+The `.github/workflows/release.yml` Electron packaging step now installs dependencies with:
+
+```bash
+npm ci --ignore-scripts
+```
+
+`npm ci` provides a clean, lock-file-reproducible install (no version drift). `--ignore-scripts` blocks all `preinstall`, `install`, `postinstall`, and similar lifecycle hooks in the dependency tree from running during the packaging phase. This prevents a compromised transitive dependency from executing arbitrary code on the CI runner that builds and signs the distributed `.dmg`.
+
+**Scope:** Applies to the `packaging/electron` workspace in the release job only. The intermediate "install electron workspace dependencies for backend tests" step that runs earlier in the workflow also passes `--ignore-scripts` (line 125 in `release.yml`).
+
+**`@electron/get`:** The Electron binary itself is downloaded by `electron-builder` via `@electron/get` independently of the npm install lifecycle, so `--ignore-scripts` does not affect binary fetching.
+
+> [!info] Related
+> The `ci.yml` workflow already runs Trivy image scanning (blocking on CRITICAL/HIGH) and `bun audit` for dependency vulnerability checks. The `--ignore-scripts` change closes a complementary gap: transitive npm lifecycle scripts that run _before_ scanning.
 
 ## Out of Scope (Today)
 

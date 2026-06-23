@@ -3,8 +3,8 @@ title: Vision Project Knowledge Base
 type: index
 status: active
 date: 2026-04-27
-updated: 2026-05-19
-last_modified: 2026-05-19
+updated: 2026-06-18
+last_modified: 2026-06-18
 tags: [knowledge-base, index, project, overview, phase-8, phase-5a, phase-6, phase-7, phase-4, phase-3, phase-9, phase-13, aead, backup-v2, security-hardening, offline-resilience, export-filters, multi-select, bug-hunt-2026-04-29, bug-hunt-2026-05-05, startup-optimization, network-reachability, tailwind-v4, dependencies, css-architecture, mount-guard, react-keys, decimal-safety, date-safety, electron-hardening, belgian-tax, as-filed-snapshots, audit-log, comparison, trend-strip, dev-observability, devtools, api-inspector, devcontainer, claude-code-permissions]
 description: Main entry point to the Vision project documentation - financial transaction management application. May 19 2026: Devcontainer added — isolated Debian 12 environment with native PostgreSQL 18, bun, and default-deny egress firewall for safe claude --dangerously-skip-permissions use. May 12 2026 (ADR-059): Belgian Tax historical year extensions — frozen "as-filed" calculations, filed soft-lock, snapshot audit log, year-over-year comparison, multi-year trend strip, CSV export. Phase 9 complete with aggregation shadow cutover; all aggregations now served via `/api/aggregations/*`. Phase 8 complete with portfolio and tax PDF report export (6 + 7 sections). Phase 13 (2026-04-28): Multi-select export filters with CategoryMultiCombobox and BankAccountMultiCombobox components; pivot table drillthrough to filtered transaction lists. Bug-hunt (2026-04-29): Trivy exit-code hardening, release workflow concurrency + setup-bun action, docker-compose volume fix, graceful shutdown timer cleanup (3 intervals + debounce), import cleanup logging, watchlist dialog API client, install.sh interactive checksum gate. May 3 2026: Tailwind CSS v4 migration (3.4.19 → 4.2.4) with unified postcss plugin, sonner 2.0.7, recharts 3.8.1. May 3 2026: Offline-aware startup optimization — backend detects network unavailability early and skips 5-15s external data fetches, reducing readiness time ~15s when offline. **May 5 2026 Bug Hunt:** Comprehensive correctness hardening — frontend mount guards (usePlannedPayments), stable React keys (SplitTransactionDialog, TaxProfileDialog), queryKey fixes (usePortfolioPrefetch), UTC-safe date parsing (dateUtils), pagination stale-response guards (RecipientsPage), decimal arithmetic correctness, backend robustness (recipientPatternService, recurringDetectionService, belgianInflationService), Electron hardening (window/navigation/backup restrictions), and release workflow version sync (3-way check: git tag + root package.json + electron/package.json).
 aliases: [KB, docs, documentation, knowledge base, home]
@@ -123,7 +123,7 @@ LIMIT 20
 **View all diagrams:** [[docs/diagrams/index|Diagrams Index]] | [[docs/architecture/index|Architecture Overview]] | [Interactive Flow Visualizer](flow-visualizer.html)
 
 > [!tip] Interactive Flow Visualizer
-> `docs/flow-visualizer.html` is a single-page, interactive map of all packages + 15 end-to-end flows (create-transaction, CSV import, AI chat, AES-256-GCM backup, ToDesktop release, …). Open it directly in any browser — click a flow on the left, watch the path light up, and read the payload at each hop. Add new flows by editing the JSON block at the bottom of the file.
+> `docs/flow-visualizer.html` is a single-page, interactive map of all packages (56 components) + 25 end-to-end flows (create-transaction, CSV import, AI chat, AES-256-GCM backup, ToDesktop release, macro-series-fetch, close-account, db-data-edit, …). Open it directly in any browser — click a flow on the left, watch the path light up, and read the payload at each hop. Add new flows by editing the JSON block at the bottom of the file.
 
 | Resource | Description |
 |----------|-------------|
@@ -160,6 +160,51 @@ WHERE date AND date >= date(today) - dur(7 days)
 SORT date DESC
 LIMIT 10
 ```
+
+### 2026-06-10 V12 — Electron-Native Desktop Integration (ADR-072)
+
+**Full macOS shell integration** — the app now behaves like a native Mac application:
+
+- **Window chrome**: `titleBarStyle: 'hiddenInset'`, traffic lights at `{x:20,y:20}`, topbar with `-webkit-app-region: drag`, `electron-fullscreen` class on enter/leave fullscreen.
+- **Native menu bar**: App (Settings… ⌘,), File (New Transaction ⌘N, Import CSV… ⇧⌘I), Edit/View (Toggle Sidebar ⌃⌘S) / Window / Help roles, Go ⌘1–⌘9 mirroring in-app shortcuts — all labels from the shared i18n JSON.
+- **Dock menu + badge**: dock menu has New Transaction and Dashboard; badge driven by `UpcomingPaymentsNotification` (visible upcoming payment count).
+- **CSV import handoff**: window-wide drag-and-drop (renderer reads `File` directly, closes Chromium navigate-to-file hole); Finder "Open With" / dock drop (main reads file, sends `{name, content}` — path never crosses sandbox boundary). Both paths feed `lib/importHandoff.ts` (one-slot 30s-TTL, same pattern as `lib/undo.ts`).
+- **`/transactions?new=1` deep link**: opens `AddTransactionDialog`, strips param on open (used by menu and dock).
+- **System accent overlay**: `systemAccent` boolean in `theme_settings`; `ThemeContext` overlays `--primary`/`--ring`/`--sidebar-primary` (+ foregrounds) via `lib/accentColor.ts` HSL; composes with all five variants; live via `AppleColorPreferencesChangedNotification`. Switch in Settings → Appearance (Electron/macOS only).
+- **Vibrancy opt-in**: window always created with `vibrancy: 'under-window'`; `body` turns translucent (`/0.72`) only when the effective visual-effects tier is `enhanced` (ADR-075).
+- **`window.electronAPI` bridge**: new minimal contextBridge surface (`platform`, `ready()`, `setDockBadge`, `getAccentColor`, `onAccentColorChanged`, `onMenuAction`, `onCsvOpen`, `onFullScreenChange`). Sandbox posture unchanged.
+- **`ElectronBridge.tsx`**: side-effect component mounted in `AppLayout` — routes all of the above, attaches listeners via stable refs.
+- **i18n**: +11 keys (`menu.*`, `settings.appearance.systemAccent*`); source total: 2898 keys.
+
+See [[docs/adr/072-electron-native-desktop-integration|ADR-072]], [[docs/architecture/electron|Electron Architecture — macOS Native Integration]], [[docs/features/appearance|Appearance — System Accent]], [[docs/features/import|Import — Electron CSV Handoff]], [[docs/components/layout|Layout — ElectronBridge]]
+
+### 2026-06-10 Premium v3 — Numbers, Chart Interactions, and Enhanced-Effects Toggle (ADR-071)
+
+**18-item Premium v3 batch** adding hero numbers, chart interactivity, and a GPU effects gate:
+
+- **Numbers as hero**: `RollingNumber` (odometer digit reels, reduced-motion → plain span) replaces count-up in StatCard/NetSummaryCard. `Money` micro-typography (raised symbol, de-emphasized decimals) in transactions table + dashboard. `DeltaPill` standardized tinted chip in StatCard.
+- **Chart interactions**: `scrubbable` prop + `scrub.tsx` (`useChartScrub`) — pointer-drag range shows glass Δ pill, suppresses tooltip. `syncId` prop + `ChartSyncContext.tsx` — dashboard time-series share `syncId="dashboard-timeline"`. Sweep reveal on AreaChart clipPath. `ChartSkeleton` ghost waveform replaces rectangle skeletons.
+- **Navigation**: `PageTitleContext` large-title collapse (topbar shows page title past 96px scroll). Palette v2 — recents (`vision.palette.recents`, excluded from backups), debounced recipient search deep-link, "search transactions for X". `ShortcutsOverlay` (`?` key). Animated `tabs.tsx` framer `layoutId` pill indicator.
+- **Materials**: Workspace-aware aurora (`data-workspace` hue swap). Light-mode paper & ink token pass. (A cursor-specular sheen was tried and removed same-day at user request.)
+- **Visual-effects gate** (originally an `enhancedEffects` boolean; superseded by the ADR-075 tier model on 2026-06-12): `AppSettings.visualEffects: 'reduced' | 'standard' | 'enhanced'` + `autoAdaptDisplay: boolean` in **Settings → Appearance**. Gates `ShaderAurora` at `enhanced`; auto-adapt drops to `reduced` on large displays. See [[docs/adr/075-visual-effects-tiers-display-adaptation|ADR-075]].
+- **Perceived speed**: Per-widget dashboard hydration — global loading gate removed, per-section skeletons. Optimistic CREATE (`useCreateTransaction`: temp negative-id, server swap, rollback; virtual list excluded; 6 tests).
+- **i18n**: 8 new keys at ADR-071 (en + nl); total 2854. ADR-075 later replaced `settings.general.enhancedEffects*` with `settings.appearance.visualEffects*` / `autoAdaptDisplay*`.
+
+See [[docs/adr/071-premium-v3-effects-toggle|ADR-071]], [[docs/adr/075-visual-effects-tiers-display-adaptation|ADR-075]], [[docs/architecture/frontend-architecture|Frontend Architecture]], [[docs/features/appearance|Appearance — Visual Effects]], [[docs/components/charts|Chart Primitives — Premium v3]], [[docs/components/dashboard|Dashboard Components — Premium v3]]
+
+### 2026-06-10 Liquid Glass v2 — Premium Frontend Overhaul (ADR-070)
+
+**Five-tier frontend overhaul** restoring and completing the ADR-017 liquid-glass system:
+
+- **Atmosphere layer**: `AppLayout` now renders a fixed `liquid-canvas` layer (two slow-drifting aurora blobs + radial wash + SVG grain). Glass surfaces have real background content to refract.
+- **Saturated materials**: blur tiers raised to 12/20/24/28/32px (thin/regular/chrome/thick/elevated) + `saturate(180%/150%)`. A11y: `prefers-reduced-transparency` now strips `backdrop-filter`.
+- **Material vocabulary simplified**: `surface-elevated … bg-card backdrop-blur-sm` across ~45 KPI/chart cards replaced with `glass-regular` (KPI/chart) or `glass-elevated` (hero). `premium-frame` baked into base `Card`. Tables stay opaque.
+- **Motion**: `PageTransition.tsx` (enter-only spring, re-added); 2px hairline shimmer replaces `PageLoader`; dialogs use `dialog-in`/`dialog-out` CSS keyframes with overshoot bezier; sidebar `ActiveRail` is a framer `layoutId` element.
+- **CommandPalette**: ⌘K palette covering all pages, theme/settings, workspace sync. Topbar trigger button. 5 new i18n keys.
+- **Optimistic mutations**: `useUpdateTransaction`/`useDeleteTransaction` are now optimistic (snapshot → patch → rollback via `setQueriesData`; `['transactions-virtual']` deliberately excluded; 4 new tests).
+- **Route preload**: `lib/routePreload.ts` shared by `App.tsx` lazy() and `AppSidebar` hover prefetch.
+
+See [[docs/adr/070-liquid-glass-v2-premium-frontend|ADR-070]], [[docs/architecture/frontend-architecture|Frontend Architecture]], [[docs/reference/code-patterns#surface-shell-pattern-phase-9|Surface Shell Pattern]], [[docs/components/layout|Layout Components]]
 
 ### 2026-05-19 Devcontainer: Isolated Dev Environment for Claude Code
 
@@ -341,7 +386,7 @@ See [[docs/api/transactions|Transactions API]], [[docs/features/statistics|Stati
 **i18n Dutch Fixes:**
 - Fixed corrupted `watchlist.empty`: contained ~80 escaped backslashes instead of `\n`
 - Added missing Dutch translations: `portfolio.refreshPricesFailedTitle` → "Bijwerken van koersen mislukt", `portfolio.recordTxnFailedTitle` → "Registreren van portfoliotransactie mislukt"
-- Flagged remaining untranslated `*FailedTitle` keys (categories/recipients/transactions/portfolio) as follow-up work
+- Flagged remaining untranslated `*FailedTitle` keys (categories/recipients/transactions/portfolio) as follow-up work — **resolved 2026-06-16**: all 18 `*FailedTitle` keys are now translated in `nl.json`
 
 **Verification:** `bun run validate-locales` passed; `npx vitest run` 1333 passed; `bun run build` clean; `bunx tsc --noEmit` clean.
 
@@ -518,7 +563,7 @@ See [[docs/features/pdf-report-export|PDF Report Feature]] (Phase 3-8), [[docs/a
 - **Database Maintenance UI** (`GET /api/admin/db/stats`, `POST /api/admin/db/vacuum`): Real-time table statistics display and per-table/bulk VACUUM ANALYZE operations. Uses raw database client (not pool) because VACUUM cannot run in transactions. Frontend page at `/admin/db`.
 - **Sankey Flow Visualization** (`GET /api/aggregations/sankey`): Interactive income→category flow diagram via d3-sankey showing top 12 categories + Savings node. New "Flow" tab in Statistics page with year selector. Backend service in `aggregation/sankey.js` with top-12 category aggregation and savings calculation.
 - **Rolling Average Overlays**: New utility `computeRollingAverage()` (window-based moving average with null-handling) + BarChart overlay support. MonthlyChart toggle displays 3-month rolling average line overlay. Helps identify trends beneath seasonal noise.
-- **PDF Financial Report Export** (`GET /api/reports/financial`): Server-side PDF generation via `pdfkit@0.18.0` with streaming response. Includes summary cards, monthly breakdown table, top 10 categories. "Export PDF" button added to StatisticsPage header. API client method `downloadFinancialReport()` handles browser download flow.
+- **PDF Financial Report Export** (`POST /api/reports/financial`): Server-side PDF generation via Puppeteer (headless Chrome). `pdfkit` removed (ADR-038). Supports theme-aware styling, modular sections, period filtering, and filter-exclusion dual-chart comparison. "Export PDF" button in StatisticsPage header. API client method `downloadFinancialReport()` handles browser download flow.
 - **Endpoint Matrix Updated**: All 150 endpoints now documented including Phase 7 additions.
 
 See [[docs/features/database-maintenance|DB Maintenance]], [[docs/features/sankey-flow|Sankey Flow]], [[docs/features/rolling-averages|Rolling Averages]], [[docs/features/pdf-report-export|PDF Reports]], [[docs/api/aggregations|Aggregations API]], [[docs/api/admin|Admin API]]

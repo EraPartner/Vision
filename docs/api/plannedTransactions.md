@@ -5,10 +5,11 @@ method: GET, POST, PATCH, DELETE
 path: /api/planned-transactions
 description: Scheduled and recurring payment management
 date: 2026-04-23
-tags: [api, planned, recurring, schedule, phase-3, idempotency, phase-9, decimal, money]
+updated: 2026-06-17
+tags: [api, planned, recurring, schedule, phase-3, idempotency, phase-9, decimal, money, auto-link, planned-match, june-2026]
 status: active
 aliases: [planned-transactions-api, planned-payments, scheduled-payments, recurring-payments, bills, subscriptions, loans]
-related_code: [[apps/node-backend/src/routes/plannedTransactions.js]], [[apps/node-backend/src/repositories/plannedTransactionRepository.js]]
+related_code: [[apps/node-backend/src/routes/plannedTransactions.js]], [[apps/node-backend/src/repositories/plannedTransactionRepository.js]], [[apps/node-backend/src/services/plannedMatchService.js]], [[apps/node-backend/src/services/plannedExecutionService.js]]
 ---
 
 # Planned Transactions API
@@ -211,6 +212,57 @@ Implementation note (Phase 3 — verified Phase 5):
 ### DELETE /api/planned-transactions/:id
 
 Permanently delete a planned transaction.
+
+### GET /api/planned-transactions/match-suggestions
+
+> [!info] Registered before `/:id` in the router to prevent route-parameter capture.
+
+Returns active, unexecuted planned payments that have at least one recent unlinked transaction that meets the moderate-tolerance match criteria **but** cannot be auto-linked because the match is ambiguous (0 candidates, or ≥2 planned payments matching the same transaction, or ≥2 transactions matching the same planned payment in a batch).
+
+This endpoint is read-only and never mutates any state. The caller (frontend `MatchSuggestionsBanner`) uses it to surface candidates that the user can then confirm via the existing `POST /:id/execute` flow (opened through `LinkTransactionDialog`).
+
+**Query Parameters:** none
+
+**Response:**
+```json
+{
+  "suggestions": [
+    {
+      "planned": {
+        "id": 42,
+        "memo": "Rent",
+        "amount": -950.00,
+        "planned_date": "2026-06-01",
+        "recipient_id": 7,
+        "recipient_name": "Landlord BV"
+      },
+      "candidates": [
+        {
+          "transaction_id": 1234,
+          "amount": -940.50,
+          "date": "2026-06-03",
+          "recipient_name": "Landlord BV"
+        }
+      ]
+    }
+  ]
+}
+```
+
+**Behavior:**
+- Only active, unexecuted planned payments are considered.
+- Transaction lookback is 45 days (sourced from `transactionRepository.listRecentUnlinked({ sinceDate })`).
+- Loan-type planned payments (`is_loan = true`) are excluded.
+- Returns an empty `suggestions` array when `autoClearPlannedOnMatch` is `false`.
+- Recipient cluster roots are resolved via `recipientRepository.getClusterRootMap` so clustered aliases are compared correctly.
+
+**Response Status Codes:**
+| Code | Condition |
+|------|-----------|
+| 200 | Success (may be empty array) |
+| 500 | Database error |
+
+See [[docs/features/plannedTransactions#auto-link--auto-clear-on-ingest-june-2026|Feature: Auto-Link on Ingest]] for the full matching spec and tolerance rules.
 
 ## Loan Schedule
 

@@ -573,125 +573,711 @@
       kind ∈ client | frontend | shared | backend | service | data | external | build
     flows[]: { id, name, category, summary, steps: [ { from, to, payload?, annotation } ] }
 -->
-<script type="application/json" id="flow-data">
-{
+<script type="application/json" id="flow-data">{
   "layers": [
-    { "y": 28,  "label": "Clients" },
-    { "y": 132, "label": "Frontend  ·  apps/frontend" },
-    { "y": 244, "label": "Shared" },
-    { "y": 332, "label": "Backend boundary  ·  apps/node-backend" },
-    { "y": 432, "label": "Services" },
-    { "y": 632, "label": "Integrations & Repository layer" },
-    { "y": 736, "label": "Data" },
-    { "y": 836, "label": "Packaging / build / external" }
+    {
+      "y": 28,
+      "label": "Clients"
+    },
+    {
+      "y": 132,
+      "label": "Frontend  \u00b7  apps/frontend"
+    },
+    {
+      "y": 244,
+      "label": "Shared"
+    },
+    {
+      "y": 332,
+      "label": "Backend boundary  \u00b7  apps/node-backend"
+    },
+    {
+      "y": 432,
+      "label": "Services"
+    },
+    {
+      "y": 632,
+      "label": "Integrations & Repository layer"
+    },
+    {
+      "y": 736,
+      "label": "Data"
+    },
+    {
+      "y": 836,
+      "label": "Packaging / build / external"
+    }
   ],
   "components": [
-    { "id": "browser",          "label": "Web Browser",         "sub": "user",                                      "kind": "client",   "x": 380, "y": 44 },
-    { "id": "electron",         "label": "Electron Shell",      "sub": "packaging/electron",                        "kind": "client",   "x": 580, "y": 44 },
-
-    { "id": "fe.pages",         "label": "Pages",               "sub": "apps/frontend/src/pages",                   "kind": "frontend", "x": 40,   "y": 148 },
-    { "id": "fe.features",      "label": "Feature modules",     "sub": "apps/frontend/src/features",                "kind": "frontend", "x": 220,  "y": 148 },
-    { "id": "fe.hooks",         "label": "Hooks + React Query", "sub": "apps/frontend/src/hooks",                   "kind": "frontend", "x": 400,  "y": 148 },
-    { "id": "fe.stores",        "label": "Zustand stores",      "sub": "apps/frontend/src/stores",                  "kind": "frontend", "x": 580,  "y": 148 },
-    { "id": "fe.apiclient",     "label": "API Client",          "sub": "lib/api/*",                                 "kind": "frontend", "x": 760,  "y": 148 },
-    { "id": "fe.devtools",      "label": "DevTools Inspector",  "sub": "components/devtools",                       "kind": "frontend", "x": 940,  "y": 148 },
-    { "id": "fe.locales",       "label": "Locales  (en, nl)",   "sub": "apps/frontend/src/locales",                 "kind": "frontend", "x": 1120, "y": 148 },
-
-    { "id": "pkg.types",        "label": "packages/types",      "sub": "openapi-generated TS",                      "kind": "shared",   "x": 760,  "y": 260 },
-    { "id": "pkg.openapi",      "label": "openapi.yaml",        "sub": "API contract  ·  source of truth",          "kind": "shared",   "x": 940,  "y": 260 },
-
-    { "id": "be.middleware",    "label": "Middleware chain",    "sub": "adminAuth · rateLimit · errorHandler",      "kind": "backend",  "x": 220,  "y": 348 },
-    { "id": "be.routes",        "label": "Express routes",      "sub": "20 route files  ·  148 endpoints",          "kind": "backend",  "x": 460,  "y": 348 },
-    { "id": "be.envelope",      "label": "Envelope mw",         "sub": "{ data, error, meta }",                     "kind": "backend",  "x": 700,  "y": 348 },
-    { "id": "be.requestmetrics","label": "Request metrics",     "sub": "middleware/requestMetrics",                 "kind": "backend",  "x": 880,  "y": 348 },
-    { "id": "be.jobs",          "label": "Background jobs",     "sub": "jobs/refreshCashflowForecastMc",            "kind": "backend",  "x": 1060, "y": 348 },
-
-    { "id": "sv.import",        "label": "Import pipeline",     "sub": "services/importPipeline",                   "kind": "service",  "x": 40,   "y": 448 },
-    { "id": "sv.price",         "label": "Price provider",      "sub": "services/priceProviderService",             "kind": "service",  "x": 220,  "y": 448 },
-    { "id": "sv.currency",      "label": "Currency conversion", "sub": "services/currency/*",                       "kind": "service",  "x": 400,  "y": 448 },
-    { "id": "sv.matview",       "label": "Materialized views",  "sub": "services/materializedViewService",          "kind": "service",  "x": 580,  "y": 448 },
-    { "id": "sv.backup",        "label": "Backup service",      "sub": "backup/  · AES-256-GCM",                    "kind": "service",  "x": 760,  "y": 448 },
-    { "id": "sv.aichat",        "label": "AI Chat service",     "sub": "services/aiChat  · tool loop",              "kind": "service",  "x": 940,  "y": 448 },
-    { "id": "sv.recurring",     "label": "Recurring detection", "sub": "services/recurringDetectionService",        "kind": "service",  "x": 1120, "y": 448 },
-
-    { "id": "sv.merge",         "label": "Recipient merge",     "sub": "services/recipientMergeService",            "kind": "service",  "x": 40,   "y": 540 },
-    { "id": "sv.snapshot",      "label": "Portfolio snapshot",  "sub": "portfolioPerformanceSnapshotService",       "kind": "service",  "x": 220,  "y": 540 },
-    { "id": "sv.providerhealth","label": "Provider health",     "sub": "services/providerHealthService",            "kind": "service",  "x": 400,  "y": 540 },
-    { "id": "sv.aggrefresh",    "label": "Aggregation refresh", "sub": "services/aggregationRefresh",               "kind": "service",  "x": 580,  "y": 540 },
-    { "id": "sv.belgian",       "label": "Belgian tax / HICP",  "sub": "belgianInflationService + tax reports",     "kind": "service",  "x": 760,  "y": 540 },
-    { "id": "sv.reports",       "label": "Report builder",      "sub": "services/reports  · pdfkit",                "kind": "service",  "x": 940,  "y": 540 },
-    { "id": "sv.routemanifest", "label": "Route manifest",      "sub": "services/routeManifest",                    "kind": "service",  "x": 1120, "y": 540 },
-
-    { "id": "be.bankadapters",  "label": "Bank adapters",       "sub": "Belfius · ING · KBC · Revolut · ...",       "kind": "backend",  "x": 40,   "y": 648 },
-    { "id": "be.ollamaclient",  "label": "Ollama client",       "sub": "integrations/ollama",                       "kind": "backend",  "x": 220,  "y": 648 },
-    { "id": "sv.attachments",   "label": "Attachment service",  "sub": "services/attachmentService",                "kind": "service",  "x": 400,  "y": 648 },
-    { "id": "be.repos",         "label": "Repository layer",    "sub": "34 repositories  ·  data access",           "kind": "backend",  "x": 580,  "y": 648 },
-    { "id": "sv.forecast",      "label": "Cashflow forecast",   "sub": "services/calculations/forecast",            "kind": "service",  "x": 760,  "y": 648 },
-    { "id": "sv.update",        "label": "App update service",  "sub": "routes/admin · 3-mode updates",             "kind": "service",  "x": 940,  "y": 648 },
-    { "id": "sv.bulkselection", "label": "Bulk selection",      "sub": "services/bulkSelection",                    "kind": "service",  "x": 1120, "y": 648 },
-
-    { "id": "db.postgres",      "label": "PostgreSQL",          "sub": "tables + materialized views",               "kind": "data",     "x": 580,  "y": 752 },
-    { "id": "db.alembic",       "label": "Alembic migrations",  "sub": "alembic/  · schema evolution",              "kind": "data",     "x": 400,  "y": 752 },
-    { "id": "db.attachments",   "label": "Attachments volume",  "sub": "$ATTACHMENTS_DIR  · receipt files",         "kind": "data",     "x": 760,  "y": 752 },
-
-    { "id": "ex.yahoo",         "label": "Yahoo Finance",       "sub": "stocks · ETFs",                             "kind": "external", "x": 1320, "y": 448 },
-    { "id": "ex.binance",       "label": "Binance",             "sub": "crypto spot",                               "kind": "external", "x": 1320, "y": 540 },
-    { "id": "ex.ecb",           "label": "ECB / open.er-api",   "sub": "FX rates",                                  "kind": "external", "x": 1320, "y": 648 },
-    { "id": "ex.kinesis",       "label": "Kinesis",             "sub": "precious metals",                           "kind": "external", "x": 1320, "y": 752 },
-    { "id": "ex.statbel",       "label": "Statbel · Eurostat",  "sub": "Belgian HICP inflation",                    "kind": "external", "x": 1320, "y": 856 },
-    { "id": "ex.ollama",        "label": "Local Ollama",        "sub": "127.0.0.1:11434  · local LLM",              "kind": "external", "x": 1320, "y": 944 },
-
-    { "id": "build.docker",     "label": "Docker Compose",      "sub": "postgres + app container",                  "kind": "build",    "x": 40,   "y": 852 },
-    { "id": "build.electron",   "label": "Electron main + IPC", "sub": "packaging/electron/main.js",                "kind": "build",    "x": 220,  "y": 852 },
-    { "id": "build.release",    "label": "Release workflow",    "sub": ".github/workflows  · GH Actions",           "kind": "build",    "x": 400,  "y": 852 },
-    { "id": "build.todesktop",  "label": "ToDesktop CDN",       "sub": "macOS .app / .dmg distribution",            "kind": "build",    "x": 580,  "y": 852 }
+    {
+      "id": "browser",
+      "label": "Web Browser",
+      "sub": "user",
+      "kind": "client",
+      "x": 380,
+      "y": 44
+    },
+    {
+      "id": "electron",
+      "label": "Electron Shell",
+      "sub": "packaging/electron",
+      "kind": "client",
+      "x": 580,
+      "y": 44
+    },
+    {
+      "id": "fe.pages",
+      "label": "Pages",
+      "sub": "apps/frontend/src/pages",
+      "kind": "frontend",
+      "x": 40,
+      "y": 148
+    },
+    {
+      "id": "fe.features",
+      "label": "Feature modules",
+      "sub": "apps/frontend/src/features",
+      "kind": "frontend",
+      "x": 220,
+      "y": 148
+    },
+    {
+      "id": "fe.hooks",
+      "label": "Hooks + React Query",
+      "sub": "apps/frontend/src/hooks",
+      "kind": "frontend",
+      "x": 400,
+      "y": 148
+    },
+    {
+      "id": "fe.stores",
+      "label": "Zustand stores",
+      "sub": "apps/frontend/src/stores",
+      "kind": "frontend",
+      "x": 580,
+      "y": 148
+    },
+    {
+      "id": "fe.apiclient",
+      "label": "API Client",
+      "sub": "lib/api/*",
+      "kind": "frontend",
+      "x": 760,
+      "y": 148
+    },
+    {
+      "id": "fe.devtools",
+      "label": "DevTools Inspector",
+      "sub": "components/devtools",
+      "kind": "frontend",
+      "x": 940,
+      "y": 148
+    },
+    {
+      "id": "fe.locales",
+      "label": "Locales  (en, nl)",
+      "sub": "apps/frontend/src/locales",
+      "kind": "frontend",
+      "x": 1120,
+      "y": 148
+    },
+    {
+      "id": "pkg.types",
+      "label": "packages/types",
+      "sub": "openapi-generated TS",
+      "kind": "shared",
+      "x": 760,
+      "y": 260
+    },
+    {
+      "id": "pkg.openapi",
+      "label": "openapi.yaml",
+      "sub": "API contract  \u00b7  source of truth",
+      "kind": "shared",
+      "x": 940,
+      "y": 260
+    },
+    {
+      "id": "be.middleware",
+      "label": "Middleware chain",
+      "sub": "adminAuth \u00b7 csrfGuard \u00b7 rateLimit \u00b7 errorHandler",
+      "kind": "backend",
+      "x": 220,
+      "y": 348
+    },
+    {
+      "id": "be.routes",
+      "label": "Express routes",
+      "sub": "20 route files  \u00b7  176 endpoints",
+      "kind": "backend",
+      "x": 460,
+      "y": 348
+    },
+    {
+      "id": "be.envelope",
+      "label": "Envelope mw",
+      "sub": "{ data, error, meta }",
+      "kind": "backend",
+      "x": 700,
+      "y": 348
+    },
+    {
+      "id": "be.requestmetrics",
+      "label": "Request metrics",
+      "sub": "middleware/requestMetrics",
+      "kind": "backend",
+      "x": 880,
+      "y": 348
+    },
+    {
+      "id": "be.jobs",
+      "label": "Background jobs",
+      "sub": "jobs/refreshCashflowForecastMc",
+      "kind": "backend",
+      "x": 1060,
+      "y": 348
+    },
+    {
+      "id": "sv.import",
+      "label": "Import pipeline",
+      "sub": "services/importPipeline",
+      "kind": "service",
+      "x": 40,
+      "y": 448
+    },
+    {
+      "id": "sv.price",
+      "label": "Price provider",
+      "sub": "services/priceProviderService",
+      "kind": "service",
+      "x": 220,
+      "y": 448
+    },
+    {
+      "id": "sv.currency",
+      "label": "Currency conversion",
+      "sub": "services/currency/*",
+      "kind": "service",
+      "x": 400,
+      "y": 448
+    },
+    {
+      "id": "sv.matview",
+      "label": "Materialized views",
+      "sub": "services/materializedViewService",
+      "kind": "service",
+      "x": 580,
+      "y": 448
+    },
+    {
+      "id": "sv.backup",
+      "label": "Backup service",
+      "sub": "backup/  \u00b7 AES-256-GCM",
+      "kind": "service",
+      "x": 760,
+      "y": 448
+    },
+    {
+      "id": "sv.aichat",
+      "label": "AI Chat service",
+      "sub": "services/aiChat  \u00b7 tool loop",
+      "kind": "service",
+      "x": 940,
+      "y": 448
+    },
+    {
+      "id": "sv.recurring",
+      "label": "Recurring detection",
+      "sub": "services/recurringDetectionService",
+      "kind": "service",
+      "x": 1120,
+      "y": 448
+    },
+    {
+      "id": "sv.merge",
+      "label": "Recipient merge",
+      "sub": "services/recipientMergeService",
+      "kind": "service",
+      "x": 40,
+      "y": 540
+    },
+    {
+      "id": "sv.snapshot",
+      "label": "Portfolio snapshot",
+      "sub": "portfolioPerformanceSnapshotService",
+      "kind": "service",
+      "x": 220,
+      "y": 540
+    },
+    {
+      "id": "sv.providerhealth",
+      "label": "Provider health",
+      "sub": "services/providerHealthService",
+      "kind": "service",
+      "x": 400,
+      "y": 540
+    },
+    {
+      "id": "sv.aggrefresh",
+      "label": "Aggregation refresh",
+      "sub": "services/aggregationRefresh",
+      "kind": "service",
+      "x": 580,
+      "y": 540
+    },
+    {
+      "id": "sv.belgian",
+      "label": "Belgian tax / HICP",
+      "sub": "belgianInflationService + tax reports",
+      "kind": "service",
+      "x": 760,
+      "y": 540
+    },
+    {
+      "id": "sv.reports",
+      "label": "Report builder",
+      "sub": "services/reports  \u00b7 puppeteer",
+      "kind": "service",
+      "x": 940,
+      "y": 540
+    },
+    {
+      "id": "sv.routemanifest",
+      "label": "Route manifest",
+      "sub": "services/routeManifest",
+      "kind": "service",
+      "x": 1120,
+      "y": 540
+    },
+    {
+      "id": "be.bankadapters",
+      "label": "Bank adapters",
+      "sub": "Belfius \u00b7 ING \u00b7 KBC \u00b7 BNP \u00b7 Revolut \u00b7 Wise \u00b7 ...",
+      "kind": "backend",
+      "x": 40,
+      "y": 648
+    },
+    {
+      "id": "be.ollamaclient",
+      "label": "Ollama client",
+      "sub": "integrations/ollama",
+      "kind": "backend",
+      "x": 220,
+      "y": 648
+    },
+    {
+      "id": "sv.attachments",
+      "label": "Attachment service",
+      "sub": "services/attachmentService",
+      "kind": "service",
+      "x": 400,
+      "y": 648
+    },
+    {
+      "id": "be.repos",
+      "label": "Repository layer",
+      "sub": "35 repositories  \u00b7  data access",
+      "kind": "backend",
+      "x": 580,
+      "y": 648
+    },
+    {
+      "id": "sv.forecast",
+      "label": "Cashflow forecast",
+      "sub": "services/calculations/forecast",
+      "kind": "service",
+      "x": 760,
+      "y": 648
+    },
+    {
+      "id": "sv.update",
+      "label": "App update service",
+      "sub": "routes/admin \u00b7 3-mode updates",
+      "kind": "service",
+      "x": 940,
+      "y": 648
+    },
+    {
+      "id": "sv.bulkselection",
+      "label": "Bulk selection",
+      "sub": "services/bulkSelection",
+      "kind": "service",
+      "x": 1120,
+      "y": 648
+    },
+    {
+      "id": "db.postgres",
+      "label": "PostgreSQL",
+      "sub": "tables + materialized views",
+      "kind": "data",
+      "x": 580,
+      "y": 752
+    },
+    {
+      "id": "db.alembic",
+      "label": "Alembic migrations",
+      "sub": "alembic/  \u00b7 schema evolution",
+      "kind": "data",
+      "x": 400,
+      "y": 752
+    },
+    {
+      "id": "db.attachments",
+      "label": "Attachments volume",
+      "sub": "$ATTACHMENTS_DIR  \u00b7 receipt files",
+      "kind": "data",
+      "x": 760,
+      "y": 752
+    },
+    {
+      "id": "ex.yahoo",
+      "label": "Yahoo Finance",
+      "sub": "stocks \u00b7 ETFs",
+      "kind": "external",
+      "x": 1320,
+      "y": 448
+    },
+    {
+      "id": "ex.binance",
+      "label": "Binance",
+      "sub": "crypto spot",
+      "kind": "external",
+      "x": 1320,
+      "y": 540
+    },
+    {
+      "id": "ex.ecb",
+      "label": "ECB / open.er-api",
+      "sub": "FX rates",
+      "kind": "external",
+      "x": 1320,
+      "y": 648
+    },
+    {
+      "id": "ex.kinesis",
+      "label": "Kinesis",
+      "sub": "precious metals",
+      "kind": "external",
+      "x": 1320,
+      "y": 752
+    },
+    {
+      "id": "ex.statbel",
+      "label": "Statbel \u00b7 Eurostat",
+      "sub": "Belgian HICP inflation",
+      "kind": "external",
+      "x": 1320,
+      "y": 856
+    },
+    {
+      "id": "ex.ollama",
+      "label": "Local Ollama",
+      "sub": "127.0.0.1:11434  \u00b7 local LLM",
+      "kind": "external",
+      "x": 1320,
+      "y": 944
+    },
+    {
+      "id": "build.docker",
+      "label": "Docker Compose",
+      "sub": "postgres + app container",
+      "kind": "build",
+      "x": 40,
+      "y": 852
+    },
+    {
+      "id": "build.electron",
+      "label": "Electron main + IPC",
+      "sub": "packaging/electron/main.js",
+      "kind": "build",
+      "x": 220,
+      "y": 852
+    },
+    {
+      "id": "build.release",
+      "label": "Release workflow",
+      "sub": ".github/workflows  \u00b7 GH Actions",
+      "kind": "build",
+      "x": 400,
+      "y": 852
+    },
+    {
+      "id": "build.todesktop",
+      "label": "ToDesktop CDN",
+      "sub": "macOS .app / .dmg distribution",
+      "kind": "build",
+      "x": 580,
+      "y": 852
+    },
+    {
+      "id": "pkg.shared-utils",
+      "label": "@vision/shared-utils",
+      "sub": "money \u00b7 slugify \u00b7 downsample",
+      "kind": "shared",
+      "path": "packages/shared-utils/",
+      "desc": "Bun workspace package for pure helpers shared between frontend and backend. money.js uses ROUND_HALF_EVEN (banker's rounding). Both apps re-export via shims.",
+      "x": 1120,
+      "y": 260
+    },
+    {
+      "id": "sv.portfolioimport",
+      "label": "Portfolio import pipeline",
+      "sub": "services/portfolioImportPipeline",
+      "kind": "service",
+      "path": "apps/node-backend/src/services/portfolioImportPipeline/",
+      "desc": "Parallel import pipeline for brokerage/exchange CSV trades (ADR-078). Phases: stage \u2192 validate \u2192 matchInvestments \u2192 commit. Reuses portfolioTransactionRepository.create for 2-of-3 unit math and oversell prevention. FX auto-resolved via fxResolve (ADR-074). Saved parsers stored in custom_parser_configs with kind='portfolio' (migration 0041). Batches tracked in portfolio_import_batches + portfolio_import_staging_rows (migration 0040).",
+      "x": 40,
+      "y": 740
+    },
+    {
+      "id": "sv.research",
+      "label": "Research aggregation",
+      "sub": "services/research/researchAggregator.js",
+      "kind": "service",
+      "path": "apps/node-backend/src/services/research/",
+      "desc": "Provider-agnostic research surface (ADR-079 + ADR-081 + ADR-082). Capability map routes (dataType, assetClass) to ordered provider preference chains; quota governor token-buckets guard free-tier limits; type-aware TTL cache. Fundamentals: merged FMP+Yahoo in parallel. Macro vertical (ADR-082): searchMacro() fans out across FRED+Eurostat in parallel; fetchMacroSeries() is provider-pinned. All research data in-memory only, never persisted to asset_price_history.",
+      "x": 220,
+      "y": 740
+    },
+    {
+      "id": "ex.fred",
+      "label": "FRED \u00b7 St. Louis Fed",
+      "sub": "Keyed (FRED_API_KEY) \u00b7 macro series \u00b7 ADR-082",
+      "kind": "external",
+      "x": 1320,
+      "y": 1040
+    },
+    {
+      "id": "ex.dbnomics",
+      "label": "DBnomics",
+      "sub": "Keyless \u00b7 ECB/OECD/IMF via SDMX \u00b7 ADR-082",
+      "kind": "external",
+      "x": 1320,
+      "y": 1128
+    },
+    {
+      "id": "sv.dbeditor",
+      "label": "DB data editor",
+      "kind": "service",
+      "x": 400,
+      "y": 740,
+      "path": "apps/node-backend/src/services/dbEditor.js",
+      "desc": "JetBrains-style table browser/editor: schema discovery, paginated filtered reads (READ ONLY txn), batch insert/update/delete with xmin OCC; writes to db_editor_audit; debounces matview refresh for base tables (ADR-101)"
+    }
   ],
   "baseEdges": [
-    ["browser",       "fe.pages"],
-    ["browser",       "fe.apiclient"],
-    ["electron",      "fe.pages"],
-    ["electron",      "build.electron"],
-    ["fe.apiclient",  "be.middleware"],
-    ["pkg.openapi",   "pkg.types"],
-    ["pkg.types",     "fe.apiclient"],
-    ["be.middleware", "be.routes"],
-    ["be.routes",     "be.envelope"],
-    ["be.routes",     "sv.import"],
-    ["be.routes",     "sv.price"],
-    ["be.routes",     "sv.backup"],
-    ["be.routes",     "sv.aichat"],
-    ["be.routes",     "sv.reports"],
-    ["sv.import",     "be.bankadapters"],
-    ["sv.import",     "be.repos"],
-    ["sv.price",      "ex.yahoo"],
-    ["sv.price",      "ex.binance"],
-    ["sv.price",      "ex.kinesis"],
-    ["sv.currency",   "ex.ecb"],
-    ["sv.belgian",    "ex.statbel"],
-    ["sv.aichat",     "be.ollamaclient"],
-    ["be.ollamaclient","ex.ollama"],
-    ["sv.matview",    "db.postgres"],
-    ["sv.aggrefresh", "db.postgres"],
-    ["sv.attachments","db.attachments"],
-    ["sv.attachments","be.repos"],
-    ["sv.forecast",   "be.repos"],
-    ["sv.bulkselection","be.repos"],
-    ["sv.update",     "build.electron"],
-    ["sv.update",     "build.docker"],
-    ["be.routes",     "sv.attachments"],
-    ["be.routes",     "sv.forecast"],
-    ["be.routes",     "sv.update"],
-    ["be.routes",     "sv.bulkselection"],
-    ["be.repos",      "db.postgres"],
-    ["db.alembic",    "db.postgres"],
-    ["sv.backup",     "db.postgres"],
-    ["sv.backup",     "db.attachments"],
-    ["be.jobs",       "sv.recurring"],
-    ["sv.recurring",  "be.repos"],
-    ["build.docker",  "db.postgres"],
-    ["build.electron","build.todesktop"],
-    ["build.release", "build.todesktop"],
-    ["build.release", "build.docker"]
+    [
+      "browser",
+      "fe.pages"
+    ],
+    [
+      "browser",
+      "fe.apiclient"
+    ],
+    [
+      "electron",
+      "fe.pages"
+    ],
+    [
+      "electron",
+      "build.electron"
+    ],
+    [
+      "fe.apiclient",
+      "be.middleware"
+    ],
+    [
+      "pkg.openapi",
+      "pkg.types"
+    ],
+    [
+      "pkg.types",
+      "fe.apiclient"
+    ],
+    [
+      "be.middleware",
+      "be.routes"
+    ],
+    [
+      "be.routes",
+      "be.envelope"
+    ],
+    [
+      "be.routes",
+      "sv.import"
+    ],
+    [
+      "be.routes",
+      "sv.price"
+    ],
+    [
+      "be.routes",
+      "sv.backup"
+    ],
+    [
+      "be.routes",
+      "sv.aichat"
+    ],
+    [
+      "be.routes",
+      "sv.reports"
+    ],
+    [
+      "sv.import",
+      "be.bankadapters"
+    ],
+    [
+      "sv.import",
+      "be.repos"
+    ],
+    [
+      "sv.price",
+      "ex.yahoo"
+    ],
+    [
+      "sv.price",
+      "ex.binance"
+    ],
+    [
+      "sv.price",
+      "ex.kinesis"
+    ],
+    [
+      "sv.currency",
+      "ex.ecb"
+    ],
+    [
+      "sv.belgian",
+      "ex.statbel"
+    ],
+    [
+      "sv.aichat",
+      "be.ollamaclient"
+    ],
+    [
+      "be.ollamaclient",
+      "ex.ollama"
+    ],
+    [
+      "sv.matview",
+      "db.postgres"
+    ],
+    [
+      "sv.aggrefresh",
+      "db.postgres"
+    ],
+    [
+      "sv.attachments",
+      "db.attachments"
+    ],
+    [
+      "sv.attachments",
+      "be.repos"
+    ],
+    [
+      "sv.forecast",
+      "be.repos"
+    ],
+    [
+      "sv.bulkselection",
+      "be.repos"
+    ],
+    [
+      "sv.update",
+      "build.electron"
+    ],
+    [
+      "sv.update",
+      "build.docker"
+    ],
+    [
+      "be.routes",
+      "sv.attachments"
+    ],
+    [
+      "be.routes",
+      "sv.forecast"
+    ],
+    [
+      "be.routes",
+      "sv.update"
+    ],
+    [
+      "be.routes",
+      "sv.bulkselection"
+    ],
+    [
+      "be.repos",
+      "db.postgres"
+    ],
+    [
+      "db.alembic",
+      "db.postgres"
+    ],
+    [
+      "sv.backup",
+      "db.postgres"
+    ],
+    [
+      "sv.backup",
+      "db.attachments"
+    ],
+    [
+      "be.jobs",
+      "sv.recurring"
+    ],
+    [
+      "sv.recurring",
+      "be.repos"
+    ],
+    [
+      "build.docker",
+      "db.postgres"
+    ],
+    [
+      "build.electron",
+      "build.todesktop"
+    ],
+    [
+      "build.release",
+      "build.todesktop"
+    ],
+    [
+      "build.release",
+      "build.docker"
+    ],
+    [
+      "fe.hooks",
+      "pkg.shared-utils"
+    ],
+    [
+      "be.routes",
+      "pkg.shared-utils"
+    ],
+    [
+      "be.repos",
+      "pkg.shared-utils"
+    ],
+    [
+      "be.routes",
+      "sv.research"
+    ],
+    [
+      "sv.research",
+      "ex.yahoo"
+    ],
+    [
+      "sv.research",
+      "ex.fred"
+    ],
+    [
+      "sv.research",
+      "ex.dbnomics"
+    ],
+    [
+      "sv.research",
+      "sv.providerhealth"
+    ]
   ],
   "flows": [
     {
@@ -700,47 +1286,116 @@
       "category": "Transactions",
       "summary": "User adds a transaction from the UI; backend persists and asynchronously refreshes aggregations.",
       "steps": [
-        { "from": "browser",       "to": "fe.features",     "payload": "click 'Add transaction' → AddTransactionDialog submit",
-          "annotation": "User fills the dialog inside the transactions feature module and hits Save." },
-        { "from": "fe.features",   "to": "fe.apiclient",    "payload": "useCreateTransaction() · React Query mutation",
-          "annotation": "The feature calls a typed hook; types come from packages/types (OpenAPI codegen)." },
-        { "from": "fe.apiclient",  "to": "be.middleware",   "payload": "POST /api/transactions  ·  Bearer ADMIN_AUTH_TOKEN",
-          "annotation": "lib/api/transactions.ts uses the shared transport; adminAuth uses timingSafeEqual." },
-        { "from": "be.middleware", "to": "be.routes",       "payload": "validated request body",
-          "annotation": "Middleware chain attaches requestId, validates the envelope, and forwards to routes/transactions.js." },
-        { "from": "be.routes",     "to": "be.repos",        "payload": "transactionRepository.create({...})",
-          "annotation": "Route delegates to the repository layer (Repository pattern enforced by ADR-006)." },
-        { "from": "be.repos",      "to": "db.postgres",     "payload": "INSERT INTO transactions (...) RETURNING *",
-          "annotation": "Single parameterised insert; triggers maintain `agg_*` tables atomically." },
-        { "from": "be.repos",      "to": "sv.aggrefresh",   "payload": "scheduleAggregationRefresh(rowIds)",
-          "annotation": "Fire-and-forget debounced refresh; keeps statistics warm without blocking the response." },
-        { "from": "sv.aggrefresh", "to": "sv.matview",      "payload": "REFRESH MATERIALIZED VIEW CONCURRENTLY mv_*",
-          "annotation": "Materialized views are refreshed concurrently so reads stay unblocked." },
-        { "from": "be.routes",     "to": "fe.apiclient",    "payload": "{ data: Transaction, error: null }",
-          "annotation": "Unified envelope (ADR-026). React Query updates the cache and the UI rerenders." }
+        {
+          "from": "browser",
+          "to": "fe.features",
+          "payload": "click 'Add transaction' \u2192 AddTransactionDialog submit",
+          "annotation": "User fills the dialog inside the transactions feature module and hits Save."
+        },
+        {
+          "from": "fe.features",
+          "to": "fe.apiclient",
+          "payload": "useCreateTransaction() \u00b7 React Query mutation",
+          "annotation": "The feature calls a typed hook; types come from packages/types (OpenAPI codegen)."
+        },
+        {
+          "from": "fe.apiclient",
+          "to": "be.middleware",
+          "payload": "POST /api/transactions  \u00b7  Bearer ADMIN_AUTH_TOKEN",
+          "annotation": "lib/api/transactions.ts uses the shared transport; adminAuth is token-or-open (timingSafeEqual when ADMIN_AUTH_TOKEN set, see ADR-063); csrfGuard blocks cross-site POSTs via Sec-Fetch-Site."
+        },
+        {
+          "from": "be.middleware",
+          "to": "be.routes",
+          "payload": "validated request body",
+          "annotation": "Middleware chain attaches requestId, validates the envelope, and forwards to routes/transactions.js."
+        },
+        {
+          "from": "be.routes",
+          "to": "be.repos",
+          "payload": "transactionRepository.create({...})",
+          "annotation": "Route delegates to the repository layer (Repository pattern enforced by ADR-006)."
+        },
+        {
+          "from": "be.repos",
+          "to": "db.postgres",
+          "payload": "INSERT INTO transactions (...) RETURNING *",
+          "annotation": "Single parameterised insert; triggers maintain `agg_*` tables atomically."
+        },
+        {
+          "from": "be.repos",
+          "to": "sv.aggrefresh",
+          "payload": "scheduleAggregationRefresh(rowIds)",
+          "annotation": "Fire-and-forget debounced refresh; keeps statistics warm without blocking the response."
+        },
+        {
+          "from": "sv.aggrefresh",
+          "to": "sv.matview",
+          "payload": "REFRESH MATERIALIZED VIEW CONCURRENTLY mv_*",
+          "annotation": "Materialized views are refreshed concurrently so reads stay unblocked."
+        },
+        {
+          "from": "be.routes",
+          "to": "fe.apiclient",
+          "payload": "{ data: Transaction, error: null }",
+          "annotation": "Unified envelope (ADR-026). React Query updates the cache and the UI rerenders."
+        }
       ]
     },
     {
       "id": "csv-import",
       "name": "Import a Belfius CSV",
       "category": "Imports",
-      "summary": "Streaming upload → adapter detection → stage / validate / match → review or auto-commit.",
+      "summary": "Streaming upload \u2192 adapter detection \u2192 stage / validate / match \u2192 review or auto-commit.",
       "steps": [
-        { "from": "browser",        "to": "fe.features",    "payload": "drop file in ImportPage", "annotation": "User drags the .csv into TransactionImportCard." },
-        { "from": "fe.features",    "to": "fe.apiclient",   "payload": "POST /api/import/upload  ·  multipart",
-          "annotation": "useCsvPreview pre-detects columns client-side; the actual upload still streams server-side." },
-        { "from": "fe.apiclient",   "to": "be.routes",      "payload": "multipart body  ·  adapter='belfius'",
-          "annotation": "routes/importRoutes.js parses the upload and constructs a Batch." },
-        { "from": "be.routes",      "to": "sv.import",      "payload": "createBatch(csvStream, adapter)",
-          "annotation": "Pipeline orchestrator (services/importPipeline/index.js) runs the four phases." },
-        { "from": "sv.import",      "to": "be.bankadapters","payload": "adapter.parseRow(line)",
-          "annotation": "Belfius adapter normalises EU decimals, CRLF, and DD/MM/YYYY dates." },
-        { "from": "sv.import",      "to": "be.repos",       "payload": "importBatchRepository.insertStaged(rows)",
-          "annotation": "stage.js writes raw rows; validate.js + match.js run dedup (SHA-256) and recipient clustering." },
-        { "from": "be.repos",       "to": "db.postgres",    "payload": "INSERT INTO import_batches, import_rows",
-          "annotation": "Raw rows persisted so the user can review or rollback later." },
-        { "from": "be.routes",      "to": "fe.apiclient",   "payload": "{ batchId, requiresReview, autoCommittedCount }",
-          "annotation": "If every row matched uniquely the pipeline auto-commits; otherwise the user is sent to review." }
+        {
+          "from": "browser",
+          "to": "fe.features",
+          "payload": "drop file in ImportPage",
+          "annotation": "User drags the .csv into TransactionImportCard."
+        },
+        {
+          "from": "fe.features",
+          "to": "fe.apiclient",
+          "payload": "POST /api/import/upload  \u00b7  multipart",
+          "annotation": "useCsvPreview pre-detects columns client-side; the actual upload still streams server-side."
+        },
+        {
+          "from": "fe.apiclient",
+          "to": "be.routes",
+          "payload": "multipart body  \u00b7  adapter='belfius'",
+          "annotation": "routes/importRoutes.js parses the upload and constructs a Batch."
+        },
+        {
+          "from": "be.routes",
+          "to": "sv.import",
+          "payload": "createBatch(csvStream, adapter)",
+          "annotation": "Pipeline orchestrator (services/importPipeline/index.js) runs the four phases."
+        },
+        {
+          "from": "sv.import",
+          "to": "be.bankadapters",
+          "payload": "adapter.parseRow(line)",
+          "annotation": "Belfius adapter normalises EU decimals, CRLF, and DD/MM/YYYY dates."
+        },
+        {
+          "from": "sv.import",
+          "to": "be.repos",
+          "payload": "importBatchRepository.insertStaged(rows)",
+          "annotation": "stage.js writes raw rows; validate.js + match.js run dedup (SHA-256) and recipient clustering."
+        },
+        {
+          "from": "be.repos",
+          "to": "db.postgres",
+          "payload": "INSERT INTO import_batches, import_rows",
+          "annotation": "Raw rows persisted so the user can review or rollback later."
+        },
+        {
+          "from": "be.routes",
+          "to": "fe.apiclient",
+          "payload": "{ batchId, requiresReview, autoCommittedCount }",
+          "annotation": "If every row matched uniquely the pipeline auto-commits; otherwise the user is sent to review."
+        }
       ]
     },
     {
@@ -749,14 +1404,54 @@
       "category": "Imports",
       "summary": "User confirms recipient overrides; pipeline writes final transactions and warms aggregations.",
       "steps": [
-        { "from": "browser",       "to": "fe.features",   "payload": "ImportReviewPage  ·  user picks overrides", "annotation": "Each ambiguous row gets a chosen recipient." },
-        { "from": "fe.features",   "to": "fe.apiclient",  "payload": "PATCH /api/import/batches/:id/commit",      "annotation": "Sends the override map keyed by row id." },
-        { "from": "fe.apiclient",  "to": "be.routes",     "payload": "{ user_override_recipient_id: { rowId: id } }", "annotation": "Routes hand to the commit phase of the pipeline." },
-        { "from": "be.routes",     "to": "sv.import",     "payload": "commitBatch(batchId, overrides)",          "annotation": "commit.js applies overrides, then runs insertMany." },
-        { "from": "sv.import",     "to": "be.repos",      "payload": "transactionRepository.insertMany(rows)",   "annotation": "Bulk insert; recipientRepository / categoryRepository upserts run in parallel." },
-        { "from": "be.repos",      "to": "db.postgres",   "payload": "COPY-like batch insert",                    "annotation": "Single transaction; rollback on any conflict." },
-        { "from": "sv.import",     "to": "sv.matview",    "payload": "refreshMaterializedViews()",                "annotation": ">100 rows → synchronous refresh, else fire-and-forget." },
-        { "from": "be.routes",     "to": "fe.apiclient",  "payload": "{ imported, skipped, totals }",            "annotation": "Toast in the UI summarises the commit." }
+        {
+          "from": "browser",
+          "to": "fe.features",
+          "payload": "ImportReviewPage  \u00b7  user picks overrides",
+          "annotation": "Each ambiguous row gets a chosen recipient."
+        },
+        {
+          "from": "fe.features",
+          "to": "fe.apiclient",
+          "payload": "PATCH /api/import/batches/:id/commit",
+          "annotation": "Sends the override map keyed by row id."
+        },
+        {
+          "from": "fe.apiclient",
+          "to": "be.routes",
+          "payload": "{ user_override_recipient_id: { rowId: id } }",
+          "annotation": "Routes hand to the commit phase of the pipeline."
+        },
+        {
+          "from": "be.routes",
+          "to": "sv.import",
+          "payload": "commitBatch(batchId, overrides)",
+          "annotation": "commit.js applies overrides, then runs insertMany."
+        },
+        {
+          "from": "sv.import",
+          "to": "be.repos",
+          "payload": "transactionRepository.insertMany(rows)",
+          "annotation": "Bulk insert; recipientRepository / categoryRepository upserts run in parallel."
+        },
+        {
+          "from": "be.repos",
+          "to": "db.postgres",
+          "payload": "COPY-like batch insert",
+          "annotation": "Single transaction; rollback on any conflict."
+        },
+        {
+          "from": "sv.import",
+          "to": "sv.matview",
+          "payload": "refreshMaterializedViews()",
+          "annotation": ">100 rows \u2192 synchronous refresh, else fire-and-forget."
+        },
+        {
+          "from": "be.routes",
+          "to": "fe.apiclient",
+          "payload": "{ imported, skipped, totals }",
+          "annotation": "Toast in the UI summarises the commit."
+        }
       ]
     },
     {
@@ -765,32 +1460,122 @@
       "category": "Portfolio",
       "summary": "Portfolio page asks for live prices; provider service fans out in parallel and falls back per investment.",
       "steps": [
-        { "from": "browser",       "to": "fe.pages",      "payload": "PortfolioPage mount / refresh button", "annotation": "useQuery gated by useOnlineStatus()." },
-        { "from": "fe.pages",      "to": "fe.apiclient",  "payload": "GET /api/market-lookup/prices?ids=...", "annotation": "Lives in lib/api/market.ts." },
-        { "from": "fe.apiclient",  "to": "be.routes",     "payload": "investment ids",                       "annotation": "routes/marketLookup.js." },
-        { "from": "be.routes",     "to": "sv.price",      "payload": "fetchLivePricesDetailed(investments)", "annotation": "priceProviderService groups investments into 4 buckets." },
-        { "from": "sv.price",      "to": "ex.yahoo",      "payload": "yahoo-finance2 quote(symbols)",        "annotation": "Stocks / ETFs.  Runs in parallel with the other buckets via Promise.allSettled." },
-        { "from": "sv.price",      "to": "ex.binance",    "payload": "GET /api/v3/ticker/price?symbol=BTCUSDT", "annotation": "AbortSignal.timeout(8s); ticker validated with Number.isFinite()." },
-        { "from": "sv.price",      "to": "ex.kinesis",    "payload": "Kinesis REST  ·  metals price",        "annotation": "Optional bucket; failures don't block the others." },
-        { "from": "sv.price",      "to": "be.repos",      "payload": "providerHealthRepository.record(success|error)", "annotation": "Health metrics feed the admin observability hub." },
-        { "from": "be.routes",     "to": "fe.apiclient",  "payload": "{ data: { [id]: { price, source } } }", "annotation": "UI tags stale prices via StalePricesBanner when sources fail." }
+        {
+          "from": "browser",
+          "to": "fe.pages",
+          "payload": "PortfolioPage mount / refresh button",
+          "annotation": "useQuery gated by useOnlineStatus()."
+        },
+        {
+          "from": "fe.pages",
+          "to": "fe.apiclient",
+          "payload": "GET /api/market-lookup/prices?ids=...",
+          "annotation": "Lives in lib/api/market.ts."
+        },
+        {
+          "from": "fe.apiclient",
+          "to": "be.routes",
+          "payload": "investment ids",
+          "annotation": "routes/marketLookup.js."
+        },
+        {
+          "from": "be.routes",
+          "to": "sv.price",
+          "payload": "fetchLivePricesDetailed(investments)",
+          "annotation": "priceProviderService groups investments into 4 buckets."
+        },
+        {
+          "from": "sv.price",
+          "to": "ex.yahoo",
+          "payload": "yahoo-finance2 quote(symbols)",
+          "annotation": "Stocks / ETFs.  Runs in parallel with the other buckets via Promise.allSettled."
+        },
+        {
+          "from": "sv.price",
+          "to": "ex.binance",
+          "payload": "GET /api/v3/ticker/price?symbol=BTCUSDT",
+          "annotation": "AbortSignal.timeout(8s); ticker validated with Number.isFinite()."
+        },
+        {
+          "from": "sv.price",
+          "to": "ex.kinesis",
+          "payload": "Kinesis REST  \u00b7  metals price",
+          "annotation": "Optional bucket; failures don't block the others."
+        },
+        {
+          "from": "sv.price",
+          "to": "be.repos",
+          "payload": "providerHealthRepository.record(success|error)",
+          "annotation": "Health metrics feed the admin observability hub."
+        },
+        {
+          "from": "be.routes",
+          "to": "fe.apiclient",
+          "payload": "{ data: { [id]: { price, source } } }",
+          "annotation": "UI tags stale prices via StalePricesBanner when sources fail."
+        }
       ]
     },
     {
       "id": "portfolio-valuation",
       "name": "Recompute portfolio valuation",
       "category": "Portfolio",
-      "summary": "Aggregate units × price across asset classes, convert to base currency, snapshot for trend charts.",
+      "summary": "Aggregate units \u00d7 price across asset classes, convert to base currency, snapshot for trend charts.",
       "steps": [
-        { "from": "browser",       "to": "fe.pages",      "payload": "PortfolioOverviewPage", "annotation": "Heatmap + per-class breakdown." },
-        { "from": "fe.pages",      "to": "fe.apiclient",  "payload": "GET /api/info/portfolio-performance?period=1y", "annotation": "Single call replaces 4 historical legacy calls (ADR-008)." },
-        { "from": "fe.apiclient",  "to": "be.routes",     "payload": "period query param",   "annotation": "routes/info.js." },
-        { "from": "be.routes",     "to": "be.repos",      "payload": "infoRepositoryNetWorth.getNetWorthFromSnapshots(period)", "annotation": "Reads snapshot rows with spike sanitisation (geometric mean)." },
-        { "from": "be.repos",      "to": "sv.currency",   "payload": "convertRowsToEur(snapshots)",   "annotation": "Batch FX conversion with historical-rate fallback." },
-        { "from": "sv.currency",   "to": "db.postgres",   "payload": "SELECT * FROM exchange_rate_cache", "annotation": "Cache-first; falls through to providers when stale." },
-        { "from": "be.repos",      "to": "sv.snapshot",   "payload": "computeMetrics + computeHeatmap (LTTB downsample)", "annotation": "Server-side LTTB cuts payload 30-40× for filtered periods." },
-        { "from": "sv.snapshot",   "to": "db.postgres",   "payload": "INSERT INTO portfolio_performance_snapshots", "annotation": "Daily snapshot rows with per-class invested/value columns." },
-        { "from": "be.routes",     "to": "fe.apiclient",  "payload": "{ metrics, heatmap, breakdown, snapshots[~400] }", "annotation": "Single payload powers the whole Performance page." }
+        {
+          "from": "browser",
+          "to": "fe.pages",
+          "payload": "PortfolioOverviewPage",
+          "annotation": "Heatmap + per-class breakdown."
+        },
+        {
+          "from": "fe.pages",
+          "to": "fe.apiclient",
+          "payload": "GET /api/info/portfolio-performance?period=1y",
+          "annotation": "Single call replaces 4 historical legacy calls (ADR-008)."
+        },
+        {
+          "from": "fe.apiclient",
+          "to": "be.routes",
+          "payload": "period query param",
+          "annotation": "routes/info.js."
+        },
+        {
+          "from": "be.routes",
+          "to": "be.repos",
+          "payload": "infoRepositoryNetWorth.getNetWorthFromSnapshots(period)",
+          "annotation": "Reads snapshot rows with spike sanitisation (geometric mean)."
+        },
+        {
+          "from": "be.repos",
+          "to": "sv.currency",
+          "payload": "convertRowsToEur(snapshots)",
+          "annotation": "Batch FX conversion with historical-rate fallback."
+        },
+        {
+          "from": "sv.currency",
+          "to": "db.postgres",
+          "payload": "SELECT * FROM exchange_rate_cache",
+          "annotation": "Cache-first; falls through to providers when stale."
+        },
+        {
+          "from": "be.repos",
+          "to": "sv.snapshot",
+          "payload": "computeMetrics + computeHeatmap (LTTB downsample)",
+          "annotation": "Server-side LTTB cuts payload 30-40\u00d7 for filtered periods."
+        },
+        {
+          "from": "sv.snapshot",
+          "to": "db.postgres",
+          "payload": "INSERT INTO portfolio_performance_snapshots",
+          "annotation": "Daily snapshot rows with per-class invested/value columns."
+        },
+        {
+          "from": "be.routes",
+          "to": "fe.apiclient",
+          "payload": "{ metrics, heatmap, breakdown, snapshots[~400] }",
+          "annotation": "Single payload powers the whole Performance page."
+        }
       ]
     },
     {
@@ -799,18 +1584,78 @@
       "category": "AI",
       "summary": "User asks a question; aiChat orchestrates an Ollama tool-loop against transaction repositories.",
       "steps": [
-        { "from": "browser",         "to": "fe.pages",       "payload": "AIChatPage  ·  user types prompt", "annotation": "Renders previous turns from aiChatRepository." },
-        { "from": "fe.pages",        "to": "fe.apiclient",   "payload": "POST /api/ai/chat  · { message, conversationId }", "annotation": "Stream subscriber on the client." },
-        { "from": "fe.apiclient",    "to": "be.routes",      "payload": "envelope-wrapped prompt", "annotation": "routes/ai.js." },
-        { "from": "be.routes",       "to": "sv.aichat",      "payload": "aiChatService.respond(messages, tools)", "annotation": "Loads history; builds tool schema (query_transactions, query_categories, ...)." },
-        { "from": "sv.aichat",       "to": "be.ollamaclient","payload": "client.chat({ messages, tools })", "annotation": "HTTP call against the local Ollama daemon." },
-        { "from": "be.ollamaclient", "to": "ex.ollama",      "payload": "POST http://127.0.0.1:11434/api/chat", "annotation": "Local-only; no data leaves the machine (privacy non-negotiable)." },
-        { "from": "ex.ollama",       "to": "sv.aichat",      "payload": "{ tool_calls: [{ name, arguments }] }", "annotation": "Model decides which tools to dispatch." },
-        { "from": "sv.aichat",       "to": "be.repos",       "payload": "dispatchTool(name, args)  →  transactionRepository.search(...)", "annotation": "Tools resolve against the repository layer with the same auth scope." },
-        { "from": "be.repos",        "to": "db.postgres",    "payload": "SELECT … FROM transactions WHERE …", "annotation": "Parameterised queries; no LLM-supplied SQL ever runs raw." },
-        { "from": "sv.aichat",       "to": "ex.ollama",      "payload": "second call with tool results in context", "annotation": "Loop until the model returns a pure assistant message." },
-        { "from": "sv.aichat",       "to": "be.repos",       "payload": "aiChatRepository.persistTurn(...)", "annotation": "Conversation + tool transcript stored for the next turn." },
-        { "from": "be.routes",       "to": "fe.apiclient",   "payload": "streamed assistant tokens", "annotation": "Streamed back into the AIChatPage; structured result cards render inline." }
+        {
+          "from": "browser",
+          "to": "fe.pages",
+          "payload": "AIChatPage  \u00b7  user types prompt",
+          "annotation": "Renders previous turns from aiChatRepository."
+        },
+        {
+          "from": "fe.pages",
+          "to": "fe.apiclient",
+          "payload": "POST /api/ai/chat  \u00b7 { message, conversationId }",
+          "annotation": "Stream subscriber on the client."
+        },
+        {
+          "from": "fe.apiclient",
+          "to": "be.routes",
+          "payload": "envelope-wrapped prompt",
+          "annotation": "routes/ai.js."
+        },
+        {
+          "from": "be.routes",
+          "to": "sv.aichat",
+          "payload": "aiChatService.respond(messages, tools)",
+          "annotation": "Loads history; builds tool schema (query_transactions, query_categories, ...)."
+        },
+        {
+          "from": "sv.aichat",
+          "to": "be.ollamaclient",
+          "payload": "client.chat({ messages, tools })",
+          "annotation": "HTTP call against the local Ollama daemon."
+        },
+        {
+          "from": "be.ollamaclient",
+          "to": "ex.ollama",
+          "payload": "POST http://127.0.0.1:11434/api/chat",
+          "annotation": "Local-only; no data leaves the machine (privacy non-negotiable)."
+        },
+        {
+          "from": "ex.ollama",
+          "to": "sv.aichat",
+          "payload": "{ tool_calls: [{ name, arguments }] }",
+          "annotation": "Model decides which tools to dispatch."
+        },
+        {
+          "from": "sv.aichat",
+          "to": "be.repos",
+          "payload": "dispatchTool(name, args)  \u2192  transactionRepository.search(...)",
+          "annotation": "Tools resolve against the repository layer with the same auth scope."
+        },
+        {
+          "from": "be.repos",
+          "to": "db.postgres",
+          "payload": "SELECT \u2026 FROM transactions WHERE \u2026",
+          "annotation": "Parameterised queries; no LLM-supplied SQL ever runs raw."
+        },
+        {
+          "from": "sv.aichat",
+          "to": "ex.ollama",
+          "payload": "second call with tool results in context",
+          "annotation": "Loop until the model returns a pure assistant message."
+        },
+        {
+          "from": "sv.aichat",
+          "to": "be.repos",
+          "payload": "aiChatRepository.persistTurn(...)",
+          "annotation": "Conversation + tool transcript stored for the next turn."
+        },
+        {
+          "from": "be.routes",
+          "to": "fe.apiclient",
+          "payload": "streamed assistant tokens",
+          "annotation": "Streamed back into the AIChatPage; structured result cards render inline."
+        }
       ]
     },
     {
@@ -819,28 +1664,98 @@
       "category": "Backup",
       "summary": "Electron bundles DB + attachments + UI state, encrypts with AES-256-GCM (v2), writes .visionbak.enc.",
       "steps": [
-        { "from": "electron",       "to": "fe.pages",       "payload": "BackupTab  ·  user clicks 'Create backup'", "annotation": "Optional passphrase input; modal collects it." },
-        { "from": "fe.pages",       "to": "build.electron", "payload": "ipcRenderer.invoke('backup:run', opts)", "annotation": "Renderer→main IPC; never crosses the network." },
-        { "from": "build.electron", "to": "db.postgres",    "payload": "pg_dump  ·  schema + data", "annotation": "Streams into the bundle." },
-        { "from": "build.electron", "to": "db.attachments", "payload": "copy $ATTACHMENTS_DIR/*  →  bundle/attachments/", "annotation": "Mirrors the receipts volume." },
-        { "from": "build.electron", "to": "sv.backup",      "payload": "AEAD encrypt(bundle, passphrase)", "annotation": "v2 format: per-backup random salt, scrypt N=2^15, AES-256-GCM auth tag (ADR-040)." },
-        { "from": "sv.backup",      "to": "db.attachments", "payload": "fs.writeFile vision_…visionbak.enc", "annotation": "Written next to the existing attachments volume (or chosen folder)." },
-        { "from": "build.electron", "to": "fe.pages",       "payload": "{ ok, sha256, bytes, path }", "annotation": "UI shows checksum + size; toast confirms success." }
+        {
+          "from": "electron",
+          "to": "fe.pages",
+          "payload": "BackupTab  \u00b7  user clicks 'Create backup'",
+          "annotation": "Optional passphrase input; modal collects it."
+        },
+        {
+          "from": "fe.pages",
+          "to": "build.electron",
+          "payload": "ipcRenderer.invoke('backup:run', opts)",
+          "annotation": "Renderer\u2192main IPC; never crosses the network."
+        },
+        {
+          "from": "build.electron",
+          "to": "db.postgres",
+          "payload": "pg_dump  \u00b7  schema + data",
+          "annotation": "Streams into the bundle."
+        },
+        {
+          "from": "build.electron",
+          "to": "db.attachments",
+          "payload": "copy $ATTACHMENTS_DIR/*  \u2192  bundle/attachments/",
+          "annotation": "Mirrors the receipts volume."
+        },
+        {
+          "from": "build.electron",
+          "to": "sv.backup",
+          "payload": "AEAD encrypt(bundle, passphrase)",
+          "annotation": "v2 format: per-backup random salt, scrypt N=2^15, AES-256-GCM auth tag (ADR-040)."
+        },
+        {
+          "from": "sv.backup",
+          "to": "db.attachments",
+          "payload": "fs.writeFile vision_\u2026visionbak.enc",
+          "annotation": "Written next to the existing attachments volume (or chosen folder)."
+        },
+        {
+          "from": "build.electron",
+          "to": "fe.pages",
+          "payload": "{ ok, sha256, bytes, path }",
+          "annotation": "UI shows checksum + size; toast confirms success."
+        }
       ]
     },
     {
       "id": "backup-restore",
       "name": "Restore an encrypted backup",
       "category": "Backup",
-      "summary": "Detect format via magic header → prompt for passphrase → schema-check → decrypt → swap state.",
+      "summary": "Detect format via magic header \u2192 prompt for passphrase \u2192 schema-check \u2192 decrypt \u2192 swap state.",
       "steps": [
-        { "from": "electron",       "to": "fe.pages",       "payload": "user picks .visionbak.enc", "annotation": "useRestoreBackup hook drives the flow consistently." },
-        { "from": "fe.pages",       "to": "build.electron", "payload": "ipcRenderer.invoke('backup:restore', file)", "annotation": "Renderer→main IPC." },
-        { "from": "build.electron", "to": "sv.backup",      "payload": "detect magic header → require passphrase", "annotation": "If encrypted but no passphrase yet, return PASSPHRASE_REQUIRED so the UI can show the modal." },
-        { "from": "sv.backup",      "to": "build.electron", "payload": "AEAD decrypt(bundle, passphrase)", "annotation": "AES-256-GCM auth tag check detects tampering; wrong passphrase throws cleanly." },
-        { "from": "build.electron", "to": "db.postgres",    "payload": "DROP / pg_restore  ·  schema-checked", "annotation": "Aborts with BUNDLE_SCHEMA_NEWER if the bundle is from a newer Vision than what's installed." },
-        { "from": "build.electron", "to": "db.attachments", "payload": "swap attachments/  ·  hydrate localStorage", "annotation": "31 user-data tables + receipts + frontend-state.json all restored." },
-        { "from": "fe.pages",       "to": "browser",        "payload": "window.location.reload()", "annotation": "Tracked via ref so the timer cleans up on unmount." }
+        {
+          "from": "electron",
+          "to": "fe.pages",
+          "payload": "user picks .visionbak.enc",
+          "annotation": "useRestoreBackup hook drives the flow consistently."
+        },
+        {
+          "from": "fe.pages",
+          "to": "build.electron",
+          "payload": "ipcRenderer.invoke('backup:restore', file)",
+          "annotation": "Renderer\u2192main IPC."
+        },
+        {
+          "from": "build.electron",
+          "to": "sv.backup",
+          "payload": "detect magic header \u2192 require passphrase",
+          "annotation": "If encrypted but no passphrase yet, return PASSPHRASE_REQUIRED so the UI can show the modal."
+        },
+        {
+          "from": "sv.backup",
+          "to": "build.electron",
+          "payload": "AEAD decrypt(bundle, passphrase)",
+          "annotation": "AES-256-GCM auth tag check detects tampering; wrong passphrase throws cleanly."
+        },
+        {
+          "from": "build.electron",
+          "to": "db.postgres",
+          "payload": "DROP / pg_restore  \u00b7  schema-checked",
+          "annotation": "Aborts with BUNDLE_SCHEMA_NEWER if the bundle is from a newer Vision than what's installed."
+        },
+        {
+          "from": "build.electron",
+          "to": "db.attachments",
+          "payload": "swap attachments/  \u00b7  hydrate localStorage",
+          "annotation": "31 user-data tables + receipts + frontend-state.json all restored."
+        },
+        {
+          "from": "fe.pages",
+          "to": "browser",
+          "payload": "window.location.reload()",
+          "annotation": "Tracked via ref so the timer cleans up on unmount."
+        }
       ]
     },
     {
@@ -849,14 +1764,54 @@
       "category": "Transactions",
       "summary": "Pick a primary recipient; merge service rewrites foreign keys and warms aggregations.",
       "steps": [
-        { "from": "browser",      "to": "fe.pages",     "payload": "RecipientsPage  ·  select duplicates", "annotation": "Cluster suggestions come from recipientPatternService." },
-        { "from": "fe.pages",     "to": "fe.apiclient", "payload": "PUT /api/recipients/:id/merge",        "annotation": "lib/api/recipients.ts." },
-        { "from": "fe.apiclient", "to": "be.routes",    "payload": "{ duplicate_ids: [...] }",            "annotation": "routes/recipients.js." },
-        { "from": "be.routes",    "to": "sv.merge",     "payload": "mergeRecipients(primary, duplicates)", "annotation": "Service ensures the primary is canonical." },
-        { "from": "sv.merge",     "to": "be.repos",     "payload": "recipientRepository.merge + transactionRepository.rewriteFk", "annotation": "Single SQL transaction." },
-        { "from": "be.repos",     "to": "db.postgres",  "payload": "UPDATE transactions SET recipient_id = :primary WHERE recipient_id = ANY(:dups)", "annotation": "All FKs rewritten atomically." },
-        { "from": "sv.merge",     "to": "sv.matview",   "payload": "scheduleRefresh()", "annotation": "Aggregations re-warm; recipient list cache invalidated." },
-        { "from": "be.routes",    "to": "fe.apiclient", "payload": "{ data: { mergedInto, affectedRows } }", "annotation": "UI removes the duplicates from the list." }
+        {
+          "from": "browser",
+          "to": "fe.pages",
+          "payload": "RecipientsPage  \u00b7  select duplicates",
+          "annotation": "Cluster suggestions come from recipientPatternService."
+        },
+        {
+          "from": "fe.pages",
+          "to": "fe.apiclient",
+          "payload": "PUT /api/recipients/:id/merge",
+          "annotation": "lib/api/recipients.ts."
+        },
+        {
+          "from": "fe.apiclient",
+          "to": "be.routes",
+          "payload": "{ duplicate_ids: [...] }",
+          "annotation": "routes/recipients.js."
+        },
+        {
+          "from": "be.routes",
+          "to": "sv.merge",
+          "payload": "mergeRecipients(primary, duplicates)",
+          "annotation": "Service ensures the primary is canonical."
+        },
+        {
+          "from": "sv.merge",
+          "to": "be.repos",
+          "payload": "recipientRepository.merge + transactionRepository.rewriteFk",
+          "annotation": "Single SQL transaction."
+        },
+        {
+          "from": "be.repos",
+          "to": "db.postgres",
+          "payload": "UPDATE transactions SET recipient_id = :primary WHERE recipient_id = ANY(:dups)",
+          "annotation": "All FKs rewritten atomically."
+        },
+        {
+          "from": "sv.merge",
+          "to": "sv.matview",
+          "payload": "scheduleRefresh()",
+          "annotation": "Aggregations re-warm; recipient list cache invalidated."
+        },
+        {
+          "from": "be.routes",
+          "to": "fe.apiclient",
+          "payload": "{ data: { mergedInto, affectedRows } }",
+          "annotation": "UI removes the duplicates from the list."
+        }
       ]
     },
     {
@@ -865,11 +1820,36 @@
       "category": "Background jobs",
       "summary": "Scheduled job scans for repeating patterns and materialises planned transactions.",
       "steps": [
-        { "from": "be.jobs",      "to": "sv.recurring", "payload": "tick(now)", "annotation": "Job loop wakes periodically; respects graceful shutdown." },
-        { "from": "sv.recurring", "to": "be.repos",     "payload": "transactionRepository.recentByRecipient(window)", "annotation": "Read-only scan over the recent window." },
-        { "from": "be.repos",     "to": "db.postgres",  "payload": "SELECT … window function partition by recipient", "annotation": "Detects cadence (monthly, weekly, biweekly) per cluster." },
-        { "from": "sv.recurring", "to": "be.repos",     "payload": "plannedTransactionRepository.upsertPattern(...)", "annotation": "Idempotent — re-running the job won't duplicate." },
-        { "from": "be.repos",     "to": "db.postgres",  "payload": "INSERT INTO planned_transactions ON CONFLICT DO UPDATE", "annotation": "Pattern stored with next_date + interval." }
+        {
+          "from": "be.jobs",
+          "to": "sv.recurring",
+          "payload": "tick(now)",
+          "annotation": "Job loop wakes periodically; respects graceful shutdown."
+        },
+        {
+          "from": "sv.recurring",
+          "to": "be.repos",
+          "payload": "transactionRepository.recentByRecipient(window)",
+          "annotation": "Read-only scan over the recent window."
+        },
+        {
+          "from": "be.repos",
+          "to": "db.postgres",
+          "payload": "SELECT \u2026 window function partition by recipient",
+          "annotation": "Detects cadence (monthly, weekly, biweekly) per cluster."
+        },
+        {
+          "from": "sv.recurring",
+          "to": "be.repos",
+          "payload": "plannedTransactionRepository.upsertPattern(...)",
+          "annotation": "Idempotent \u2014 re-running the job won't duplicate."
+        },
+        {
+          "from": "be.repos",
+          "to": "db.postgres",
+          "payload": "INSERT INTO planned_transactions ON CONFLICT DO UPDATE",
+          "annotation": "Pattern stored with next_date + interval."
+        }
       ]
     },
     {
@@ -878,30 +1858,110 @@
       "category": "Admin",
       "summary": "Admin presses a probe button; backend fires a synthetic request and records the outcome.",
       "steps": [
-        { "from": "browser",      "to": "fe.pages",     "payload": "/admin/providers  ·  click 'Probe Yahoo'", "annotation": "Behind the admin-mode toggle (ADR-034)." },
-        { "from": "fe.pages",     "to": "fe.apiclient", "payload": "POST /api/admin/providers/yahoo/probe",   "annotation": "lib/api/admin.ts  ·  probeProvider('yahoo')." },
-        { "from": "fe.apiclient", "to": "be.routes",    "payload": "provider key",                            "annotation": "routes/admin.js." },
-        { "from": "be.routes",    "to": "sv.providerhealth","payload": "probe(providerKey)",                  "annotation": "Synthetic request with a known good symbol." },
-        { "from": "sv.providerhealth", "to": "ex.yahoo","payload": "GET …",                                   "annotation": "Same code path as production calls." },
-        { "from": "sv.providerhealth", "to": "be.repos","payload": "providerHealthRepository.record({...})",  "annotation": "Latency + status stored in rolling buckets." },
-        { "from": "be.repos",     "to": "db.postgres",  "payload": "INSERT INTO provider_health (...)",       "annotation": "Feeds the admin observability hub." },
-        { "from": "be.routes",    "to": "fe.apiclient", "payload": "{ ok, latencyMs, statusCode }",           "annotation": "Status pill updates inline." }
+        {
+          "from": "browser",
+          "to": "fe.pages",
+          "payload": "/admin/providers  \u00b7  click 'Probe Yahoo'",
+          "annotation": "Behind the admin-mode toggle (ADR-034)."
+        },
+        {
+          "from": "fe.pages",
+          "to": "fe.apiclient",
+          "payload": "POST /api/admin/providers/yahoo/probe",
+          "annotation": "lib/api/admin.ts  \u00b7  probeProvider('yahoo')."
+        },
+        {
+          "from": "fe.apiclient",
+          "to": "be.routes",
+          "payload": "provider key",
+          "annotation": "routes/admin.js."
+        },
+        {
+          "from": "be.routes",
+          "to": "sv.providerhealth",
+          "payload": "probe(providerKey)",
+          "annotation": "Synthetic request with a known good symbol."
+        },
+        {
+          "from": "sv.providerhealth",
+          "to": "ex.yahoo",
+          "payload": "GET \u2026",
+          "annotation": "Same code path as production calls."
+        },
+        {
+          "from": "sv.providerhealth",
+          "to": "be.repos",
+          "payload": "providerHealthRepository.record({...})",
+          "annotation": "Latency + status stored in rolling buckets."
+        },
+        {
+          "from": "be.repos",
+          "to": "db.postgres",
+          "payload": "INSERT INTO provider_health (...)",
+          "annotation": "Feeds the admin observability hub."
+        },
+        {
+          "from": "be.routes",
+          "to": "fe.apiclient",
+          "payload": "{ ok, latencyMs, statusCode }",
+          "annotation": "Status pill updates inline."
+        }
       ]
     },
     {
       "id": "tax-pdf-report",
       "name": "Export a Belgian tax PDF report",
       "category": "Reports",
-      "summary": "Statistics page → reports route → streamed PDF using pdfkit + frozen tax snapshots.",
+      "summary": "Statistics page \u2192 reports route \u2192 streamed PDF rendered from themed HTML via Puppeteer + frozen tax snapshots.",
       "steps": [
-        { "from": "browser",      "to": "fe.pages",     "payload": "StatisticsPage  ·  'Export PDF' (tax)", "annotation": "Dialog lets the user pick year, sections, currency." },
-        { "from": "fe.pages",     "to": "fe.apiclient", "payload": "GET /api/reports/tax?year=2025&sections=...", "annotation": "Browser-driven download via createObjectURL." },
-        { "from": "fe.apiclient", "to": "be.routes",    "payload": "report params",                          "annotation": "routes/reports.js." },
-        { "from": "be.routes",    "to": "sv.reports",   "payload": "buildTaxReport(params)",                 "annotation": "Locks against the as-filed snapshot (ADR-058)." },
-        { "from": "sv.reports",   "to": "sv.belgian",   "payload": "computeBelgianPit(snapshot)",            "annotation": "Uses regional autonomy + Reynders split + per-residence centimes (ADR-053..057)." },
-        { "from": "sv.belgian",   "to": "be.repos",     "payload": "fetch frozen profile + HICP rates",      "annotation": "Statbel data accessed through belgianInflationService." },
-        { "from": "be.repos",     "to": "db.postgres",  "payload": "SELECT … historical year snapshots",     "annotation": "Year-pinned; never recomputed from live profile." },
-        { "from": "sv.reports",   "to": "fe.apiclient", "payload": "application/pdf stream",                 "annotation": "pdfkit streams pages with paginated footer + break-inside rules." }
+        {
+          "from": "browser",
+          "to": "fe.pages",
+          "payload": "StatisticsPage  \u00b7  'Export PDF' (tax)",
+          "annotation": "Dialog lets the user pick year, sections, currency."
+        },
+        {
+          "from": "fe.pages",
+          "to": "fe.apiclient",
+          "payload": "GET /api/reports/tax?year=2025&sections=...",
+          "annotation": "Browser-driven download via createObjectURL."
+        },
+        {
+          "from": "fe.apiclient",
+          "to": "be.routes",
+          "payload": "report params",
+          "annotation": "routes/reports.js."
+        },
+        {
+          "from": "be.routes",
+          "to": "sv.reports",
+          "payload": "buildTaxReport(params)",
+          "annotation": "Locks against the as-filed snapshot (ADR-058)."
+        },
+        {
+          "from": "sv.reports",
+          "to": "sv.belgian",
+          "payload": "computeBelgianPit(snapshot)",
+          "annotation": "Uses regional autonomy + Reynders split + per-residence centimes (ADR-053..057)."
+        },
+        {
+          "from": "sv.belgian",
+          "to": "be.repos",
+          "payload": "fetch frozen profile + HICP rates",
+          "annotation": "Statbel data accessed through belgianInflationService."
+        },
+        {
+          "from": "be.repos",
+          "to": "db.postgres",
+          "payload": "SELECT \u2026 historical year snapshots",
+          "annotation": "Year-pinned; never recomputed from live profile."
+        },
+        {
+          "from": "sv.reports",
+          "to": "fe.apiclient",
+          "payload": "application/pdf stream",
+          "annotation": "Puppeteer renders themed HTML to a streamed PDF with paginated footer + break-inside rules."
+        }
       ]
     },
     {
@@ -910,11 +1970,36 @@
       "category": "Frontend internals",
       "summary": "Dev-only inspector subscribes to the API event bus; zero cost in production builds.",
       "steps": [
-        { "from": "browser",     "to": "fe.apiclient", "payload": "apiRequest()  ·  any domain hook",     "annotation": "Chokepoint emits start/success/error events." },
-        { "from": "fe.apiclient","to": "fe.hooks",     "payload": "apiEventBus.emit(ApiRequestEvent)",    "annotation": "Module-level pub-sub; ring buffer of 200 entries." },
-        { "from": "fe.hooks",    "to": "fe.devtools",  "payload": "useApiRequestLog() + useQueryMetrics()", "annotation": "Inspector subscribes only when opened — zero cost otherwise." },
-        { "from": "browser",     "to": "fe.devtools",  "payload": "keydown Cmd+Shift+A",                   "annotation": "devtoolsHotkey.ts; entire panel is React.lazy + Suspense behind import.meta.env.DEV." },
-        { "from": "fe.devtools", "to": "browser",      "payload": "rendered ApiInspector (virtualised)",   "annotation": "Filter, request detail, metrics, top endpoints, slow requests, TanStack devtools." }
+        {
+          "from": "browser",
+          "to": "fe.apiclient",
+          "payload": "apiRequest()  \u00b7  any domain hook",
+          "annotation": "Chokepoint emits start/success/error events."
+        },
+        {
+          "from": "fe.apiclient",
+          "to": "fe.hooks",
+          "payload": "apiEventBus.emit(ApiRequestEvent)",
+          "annotation": "Module-level pub-sub; ring buffer of 200 entries."
+        },
+        {
+          "from": "fe.hooks",
+          "to": "fe.devtools",
+          "payload": "useApiRequestLog() + useQueryMetrics()",
+          "annotation": "Inspector subscribes only when opened \u2014 zero cost otherwise."
+        },
+        {
+          "from": "browser",
+          "to": "fe.devtools",
+          "payload": "keydown Cmd+Shift+A",
+          "annotation": "devtoolsHotkey.ts; entire panel is React.lazy + Suspense behind import.meta.env.DEV."
+        },
+        {
+          "from": "fe.devtools",
+          "to": "browser",
+          "payload": "rendered ApiInspector (virtualised)",
+          "annotation": "Filter, request detail, metrics, top endpoints, slow requests, TanStack devtools."
+        }
       ]
     },
     {
@@ -923,13 +2008,48 @@
       "category": "Admin",
       "summary": "First request after launch confirms the admin token before anything else runs.",
       "steps": [
-        { "from": "browser",      "to": "fe.pages",      "payload": "AppLayout mount",                       "annotation": "Reads stored token from secure storage." },
-        { "from": "fe.pages",     "to": "fe.apiclient",  "payload": "GET /api/settings/identity",            "annotation": "Initial bootstrap call." },
-        { "from": "fe.apiclient", "to": "be.middleware", "payload": "Authorization: Bearer …",              "annotation": "Header attached by the transport layer." },
-        { "from": "be.middleware","to": "be.repos",      "payload": "settingsRepository.matchToken(token)",  "annotation": "timingSafeEqual against ADMIN_AUTH_TOKEN (2026-04-28 hardening)." },
-        { "from": "be.repos",     "to": "db.postgres",   "payload": "SELECT … FROM settings WHERE key=…",   "annotation": "Single indexed lookup." },
-        { "from": "be.middleware","to": "fe.apiclient",  "payload": "{ data: { ok, identity } }",            "annotation": "On failure, 401 → frontend kicks user to onboarding." },
-        { "from": "fe.apiclient", "to": "fe.stores",     "payload": "useAppSettings.set(identity)",          "annotation": "Zustand store hydrates; gated routes unlock." }
+        {
+          "from": "browser",
+          "to": "fe.pages",
+          "payload": "AppLayout mount",
+          "annotation": "Reads stored token from secure storage."
+        },
+        {
+          "from": "fe.pages",
+          "to": "fe.apiclient",
+          "payload": "GET /api/settings/identity",
+          "annotation": "Initial bootstrap call."
+        },
+        {
+          "from": "fe.apiclient",
+          "to": "be.middleware",
+          "payload": "Authorization: Bearer \u2026",
+          "annotation": "Header attached by the transport layer."
+        },
+        {
+          "from": "be.middleware",
+          "to": "be.repos",
+          "payload": "settingsRepository.matchToken(token)",
+          "annotation": "timingSafeEqual against ADMIN_AUTH_TOKEN (2026-04-28 hardening)."
+        },
+        {
+          "from": "be.repos",
+          "to": "db.postgres",
+          "payload": "SELECT \u2026 FROM settings WHERE key=\u2026",
+          "annotation": "Single indexed lookup."
+        },
+        {
+          "from": "be.middleware",
+          "to": "fe.apiclient",
+          "payload": "{ data: { ok, identity } }",
+          "annotation": "On failure, 401 \u2192 frontend kicks user to onboarding."
+        },
+        {
+          "from": "fe.apiclient",
+          "to": "fe.stores",
+          "payload": "useAppSettings.set(identity)",
+          "annotation": "Zustand store hydrates; gated routes unlock."
+        }
       ]
     },
     {
@@ -938,11 +2058,36 @@
       "category": "Build",
       "summary": "GitHub Actions builds the Docker image, signs the Electron bundle, and publishes via ToDesktop.",
       "steps": [
-        { "from": "build.release", "to": "build.docker",   "payload": "docker build  ·  pinned base",  "annotation": "Trivy scan blocks CRITICAL/HIGH CVEs (ADR-039)." },
-        { "from": "build.release", "to": "build.electron", "payload": "electron-builder  ·  notarise", "annotation": "macOS signing + Apple notarisation step." },
-        { "from": "build.electron","to": "db.postgres",    "payload": "embed migration bundle",        "annotation": "Alembic migrations packaged so the app can self-upgrade on first launch." },
-        { "from": "build.release", "to": "build.todesktop","payload": "publish artefact + version manifest", "annotation": "3-way version check: git tag ↔ root package.json ↔ electron/package.json." },
-        { "from": "build.todesktop","to": "electron",      "payload": "auto-update → user gets new .dmg", "annotation": "ToDesktop CDN serves the update channel." }
+        {
+          "from": "build.release",
+          "to": "build.docker",
+          "payload": "docker build  \u00b7  pinned base",
+          "annotation": "Trivy scan blocks CRITICAL/HIGH CVEs (ADR-039)."
+        },
+        {
+          "from": "build.release",
+          "to": "build.electron",
+          "payload": "electron-builder  \u00b7  notarise",
+          "annotation": "macOS signing + Apple notarisation step."
+        },
+        {
+          "from": "build.electron",
+          "to": "db.postgres",
+          "payload": "embed migration bundle",
+          "annotation": "Alembic migrations packaged so the app can self-upgrade on first launch."
+        },
+        {
+          "from": "build.release",
+          "to": "build.todesktop",
+          "payload": "publish artefact + version manifest",
+          "annotation": "3-way version check: git tag \u2194 root package.json \u2194 electron/package.json."
+        },
+        {
+          "from": "build.todesktop",
+          "to": "electron",
+          "payload": "auto-update \u2192 user gets new .dmg",
+          "annotation": "ToDesktop CDN serves the update channel."
+        }
       ]
     },
     {
@@ -951,15 +2096,60 @@
       "category": "Bulk actions",
       "summary": "User selects many rows in the transactions table and applies a single category change atomically.",
       "steps": [
-        { "from": "browser",         "to": "fe.features",      "payload": "BulkActionsBar  ·  click 'Recategorize'",         "annotation": "Selection is either an explicit id-list (≤500) or a saved filter snapshot (≤5000 matches)." },
-        { "from": "fe.features",     "to": "fe.apiclient",     "payload": "useBulkUpdateTransactions().mutate({ ids? | filter, category_id })", "annotation": "lib/api/transactions.ts bulkUpdateTransactions()." },
-        { "from": "fe.apiclient",    "to": "be.middleware",    "payload": "POST /api/transactions/bulk-update  ·  30 req/min", "annotation": "Bulk endpoints share a dedicated rate-limit bucket." },
-        { "from": "be.middleware",   "to": "be.routes",        "payload": "validated body",                                  "annotation": "routes/transactions.js dispatches to the bulk handler." },
-        { "from": "be.routes",       "to": "sv.bulkselection", "payload": "resolveSelection({ ids?, filter? })",             "annotation": "services/bulkSelection.js  ·  collapses ids ∪ filter → concrete id set (truncated to caps)." },
-        { "from": "sv.bulkselection","to": "be.repos",         "payload": "transactionRepository.bulkUpdate(ids, fields)",   "annotation": "Single UPDATE … WHERE id = ANY($1) inside a transaction." },
-        { "from": "be.repos",        "to": "db.postgres",      "payload": "UPDATE transactions SET category_id = $2 WHERE id = ANY($1)", "annotation": "Triggers maintain agg_recipient_totals atomically." },
-        { "from": "be.routes",       "to": "sv.aggrefresh",    "payload": "scheduleAggregationRefresh()",                    "annotation": "Debounced refresh; statistics page rehydrates within ~1s." },
-        { "from": "be.routes",       "to": "fe.apiclient",     "payload": "{ ok: true, data: { updated, truncated } }",     "annotation": "React Query invalidates ['transactions'] / ['monthlySummary'] caches." }
+        {
+          "from": "browser",
+          "to": "fe.features",
+          "payload": "BulkActionsBar  \u00b7  click 'Recategorize'",
+          "annotation": "Selection is either an explicit id-list (\u2264500) or a saved filter snapshot (\u22645000 matches)."
+        },
+        {
+          "from": "fe.features",
+          "to": "fe.apiclient",
+          "payload": "useBulkUpdateTransactions().mutate({ ids? | filter, category_id })",
+          "annotation": "lib/api/transactions.ts bulkUpdateTransactions()."
+        },
+        {
+          "from": "fe.apiclient",
+          "to": "be.middleware",
+          "payload": "POST /api/transactions/bulk-update  \u00b7  30 req/min",
+          "annotation": "Bulk endpoints share a dedicated rate-limit bucket."
+        },
+        {
+          "from": "be.middleware",
+          "to": "be.routes",
+          "payload": "validated body",
+          "annotation": "routes/transactions.js dispatches to the bulk handler."
+        },
+        {
+          "from": "be.routes",
+          "to": "sv.bulkselection",
+          "payload": "resolveSelection({ ids?, filter? })",
+          "annotation": "services/bulkSelection.js  \u00b7  collapses ids \u222a filter \u2192 concrete id set (truncated to caps)."
+        },
+        {
+          "from": "sv.bulkselection",
+          "to": "be.repos",
+          "payload": "transactionRepository.bulkUpdate(ids, fields)",
+          "annotation": "Single UPDATE \u2026 WHERE id = ANY($1) inside a transaction."
+        },
+        {
+          "from": "be.repos",
+          "to": "db.postgres",
+          "payload": "UPDATE transactions SET category_id = $2 WHERE id = ANY($1)",
+          "annotation": "Triggers maintain agg_recipient_totals atomically."
+        },
+        {
+          "from": "be.routes",
+          "to": "sv.aggrefresh",
+          "payload": "scheduleAggregationRefresh()",
+          "annotation": "Debounced refresh; statistics page rehydrates within ~1s."
+        },
+        {
+          "from": "be.routes",
+          "to": "fe.apiclient",
+          "payload": "{ ok: true, data: { updated, truncated } }",
+          "annotation": "React Query invalidates ['transactions'] / ['monthlySummary'] caches."
+        }
       ]
     },
     {
@@ -968,15 +2158,60 @@
       "category": "Attachments",
       "summary": "User uploads a receipt image / PDF from a transaction's detail view; file lands on disk, metadata in Postgres.",
       "steps": [
-        { "from": "browser",       "to": "fe.features",     "payload": "TransactionInfoDialog  ·  drag-and-drop file",     "annotation": "AttachmentPanel inside the transaction details." },
-        { "from": "fe.features",   "to": "fe.apiclient",    "payload": "POST /api/attachments/transaction/:id (multipart)", "annotation": "lib/api/attachments.ts  ·  uploadAttachment()." },
-        { "from": "fe.apiclient",  "to": "be.middleware",   "payload": "Authorization + attachmentRateLimiter (60/min)",    "annotation": "Dedicated limiter — tighter than the 200/min global (ADR-042)." },
-        { "from": "be.middleware", "to": "be.routes",       "payload": "validated multipart  ·  size ≤ ATTACHMENT_MAX_SIZE_MB", "annotation": "routes/attachments.js." },
-        { "from": "be.routes",     "to": "sv.attachments",  "payload": "storeAttachment(txId, file)",                       "annotation": "services/attachmentService.js  ·  hashes the file + chooses storage path." },
-        { "from": "sv.attachments","to": "db.attachments",  "payload": "fs.writeFile $ATTACHMENTS_DIR/{txId}/{uuid}.{ext}", "annotation": "Receipts volume; survives container rebuilds (named volume — ADR-051)." },
-        { "from": "sv.attachments","to": "be.repos",        "payload": "attachmentRepository.insert(metadata)",            "annotation": "Stores stored_path, mime_type, size_bytes." },
-        { "from": "be.repos",      "to": "db.postgres",     "payload": "INSERT INTO attachments (...) RETURNING *",         "annotation": "FK to transactions ON DELETE CASCADE — clean delete on tx removal." },
-        { "from": "be.routes",     "to": "fe.apiclient",    "payload": "{ ok: true, data: Attachment }",                     "annotation": "AttachmentPanel shows the new thumbnail via React Query refetch." }
+        {
+          "from": "browser",
+          "to": "fe.features",
+          "payload": "TransactionInfoDialog  \u00b7  drag-and-drop file",
+          "annotation": "AttachmentPanel inside the transaction details."
+        },
+        {
+          "from": "fe.features",
+          "to": "fe.apiclient",
+          "payload": "POST /api/attachments/transaction/:id (multipart)",
+          "annotation": "lib/api/attachments.ts  \u00b7  uploadAttachment()."
+        },
+        {
+          "from": "fe.apiclient",
+          "to": "be.middleware",
+          "payload": "Authorization + attachmentRateLimiter (60/min)",
+          "annotation": "Dedicated limiter \u2014 tighter than the 200/min global (ADR-042)."
+        },
+        {
+          "from": "be.middleware",
+          "to": "be.routes",
+          "payload": "validated multipart  \u00b7  size \u2264 ATTACHMENT_MAX_SIZE_MB",
+          "annotation": "routes/attachments.js."
+        },
+        {
+          "from": "be.routes",
+          "to": "sv.attachments",
+          "payload": "storeAttachment(txId, file)",
+          "annotation": "services/attachmentService.js  \u00b7  hashes the file + chooses storage path."
+        },
+        {
+          "from": "sv.attachments",
+          "to": "db.attachments",
+          "payload": "fs.writeFile $ATTACHMENTS_DIR/{txId}/{uuid}.{ext}",
+          "annotation": "Receipts volume; survives container rebuilds (named volume \u2014 ADR-051)."
+        },
+        {
+          "from": "sv.attachments",
+          "to": "be.repos",
+          "payload": "attachmentRepository.insert(metadata)",
+          "annotation": "Stores stored_path, mime_type, size_bytes."
+        },
+        {
+          "from": "be.repos",
+          "to": "db.postgres",
+          "payload": "INSERT INTO attachments (...) RETURNING *",
+          "annotation": "FK to transactions ON DELETE CASCADE \u2014 clean delete on tx removal."
+        },
+        {
+          "from": "be.routes",
+          "to": "fe.apiclient",
+          "payload": "{ ok: true, data: Attachment }",
+          "annotation": "AttachmentPanel shows the new thumbnail via React Query refetch."
+        }
       ]
     },
     {
@@ -985,16 +2220,66 @@
       "category": "Bulk actions",
       "summary": "User picks tags in the bulk toolbar; backend resolves slugs, then applies tag add/remove atomically.",
       "steps": [
-        { "from": "browser",        "to": "fe.features",     "payload": "BulkTagDialog  ·  picks 'Subscription' + 'Recurring'", "annotation": "TagInput component drives find-or-create UX with debounce." },
-        { "from": "fe.features",    "to": "fe.apiclient",    "payload": "POST /api/tags  (per new slug)  ·  find-or-create",  "annotation": "Existing slugs are reactivated rather than re-created (idempotent upsert)." },
-        { "from": "fe.apiclient",   "to": "be.routes",       "payload": "{ name, color? }",                                   "annotation": "routes/tags.js." },
-        { "from": "be.routes",      "to": "be.repos",        "payload": "tagRepository.findOrCreateBySlug(slug, color)",     "annotation": "Slug computed via lib/slugify.js  ·  unique constraint." },
-        { "from": "be.repos",       "to": "db.postgres",     "payload": "INSERT INTO tags (slug, name, color) ON CONFLICT (slug) DO UPDATE …", "annotation": "Returns the tag id whether created or reactivated." },
-        { "from": "fe.apiclient",   "to": "be.routes",       "payload": "POST /api/transactions/bulk-tag  ·  { transaction_ids, add_tag_ids, remove_tag_ids }", "annotation": "Single atomic call once tag ids are resolved." },
-        { "from": "be.routes",      "to": "sv.bulkselection","payload": "resolveSelection({ ids: transaction_ids })",         "annotation": "Same shared resolver used by every bulk endpoint." },
-        { "from": "sv.bulkselection","to": "be.repos",       "payload": "tagRepository.attachToTransactions / detachFromTransactions", "annotation": "Two upserts/deletes inside a single transaction." },
-        { "from": "be.repos",       "to": "db.postgres",     "payload": "INSERT INTO transaction_tags ON CONFLICT DO NOTHING  ·  DELETE WHERE …", "annotation": "Composite PK (transaction_id, tag_id) guarantees idempotency." },
-        { "from": "be.routes",      "to": "fe.apiclient",    "payload": "{ ok: true, data: { applied, transactions: N } }",  "annotation": "Toolbar clears selection; transactions table refetches with the new tag pills." }
+        {
+          "from": "browser",
+          "to": "fe.features",
+          "payload": "BulkTagDialog  \u00b7  picks 'Subscription' + 'Recurring'",
+          "annotation": "TagInput component drives find-or-create UX with debounce."
+        },
+        {
+          "from": "fe.features",
+          "to": "fe.apiclient",
+          "payload": "POST /api/tags  (per new slug)  \u00b7  find-or-create",
+          "annotation": "Existing slugs are reactivated rather than re-created (idempotent upsert)."
+        },
+        {
+          "from": "fe.apiclient",
+          "to": "be.routes",
+          "payload": "{ name, color? }",
+          "annotation": "routes/tags.js."
+        },
+        {
+          "from": "be.routes",
+          "to": "be.repos",
+          "payload": "tagRepository.findOrCreateBySlug(slug, color)",
+          "annotation": "Slug computed via lib/slugify.js  \u00b7  unique constraint."
+        },
+        {
+          "from": "be.repos",
+          "to": "db.postgres",
+          "payload": "INSERT INTO tags (slug, name, color) ON CONFLICT (slug) DO UPDATE \u2026",
+          "annotation": "Returns the tag id whether created or reactivated."
+        },
+        {
+          "from": "fe.apiclient",
+          "to": "be.routes",
+          "payload": "POST /api/transactions/bulk-tag  \u00b7  { transaction_ids, add_tag_ids, remove_tag_ids }",
+          "annotation": "Single atomic call once tag ids are resolved."
+        },
+        {
+          "from": "be.routes",
+          "to": "sv.bulkselection",
+          "payload": "resolveSelection({ ids: transaction_ids })",
+          "annotation": "Same shared resolver used by every bulk endpoint."
+        },
+        {
+          "from": "sv.bulkselection",
+          "to": "be.repos",
+          "payload": "tagRepository.attachToTransactions / detachFromTransactions",
+          "annotation": "Two upserts/deletes inside a single transaction."
+        },
+        {
+          "from": "be.repos",
+          "to": "db.postgres",
+          "payload": "INSERT INTO transaction_tags ON CONFLICT DO NOTHING  \u00b7  DELETE WHERE \u2026",
+          "annotation": "Composite PK (transaction_id, tag_id) guarantees idempotency."
+        },
+        {
+          "from": "be.routes",
+          "to": "fe.apiclient",
+          "payload": "{ ok: true, data: { applied, transactions: N } }",
+          "annotation": "Toolbar clears selection; transactions table refetches with the new tag pills."
+        }
       ]
     },
     {
@@ -1003,14 +2288,54 @@
       "category": "Updates",
       "summary": "User accepts the update prompt; backend chooses the deployment-appropriate mode (dev / source / docker) and restarts.",
       "steps": [
-        { "from": "electron",      "to": "fe.pages",       "payload": "UpdateNotification  ·  user clicks 'Update now'",  "annotation": "Notification only shows when a newer version is published to ToDesktop." },
-        { "from": "fe.pages",      "to": "fe.apiclient",   "payload": "POST /api/admin/update/apply-and-restart",         "annotation": "Backup-before-update guard runs the AES-256-GCM backup first (Phase 7)." },
-        { "from": "fe.apiclient",  "to": "be.routes",      "payload": "{ acceptedVersion, sha256 }",                      "annotation": "routes/admin.js  ·  ADR-023 enforces installer checksum verification." },
-        { "from": "be.routes",     "to": "sv.update",      "payload": "applyUpdate({ mode, version })",                   "annotation": "Modes: 'dev' (no-op), 'source' (git pull + bun install), 'docker' (compose pull + restart)." },
-        { "from": "sv.update",     "to": "sv.backup",      "payload": "createBackup({ reason: 'pre-update' })",           "annotation": "Concurrent-backup guard (Phase 7) blocks two backups racing." },
-        { "from": "sv.update",     "to": "build.docker",   "payload": "docker compose pull && docker compose up -d",      "annotation": "Docker mode only.  Healthcheck + watchdog pause prevent restart loops." },
-        { "from": "sv.update",     "to": "build.electron", "payload": "ipc 'update:restart'",                              "annotation": "Electron main relaunches the shell once the backend reports ready." },
-        { "from": "be.routes",     "to": "fe.apiclient",   "payload": "{ ok: true, data: { restartedAt, newVersion } }", "annotation": "Frontend reloads from cache once /health/detailed returns ready." }
+        {
+          "from": "electron",
+          "to": "fe.pages",
+          "payload": "UpdateNotification  \u00b7  user clicks 'Update now'",
+          "annotation": "Notification only shows when a newer version is published to ToDesktop."
+        },
+        {
+          "from": "fe.pages",
+          "to": "fe.apiclient",
+          "payload": "POST /api/admin/update/apply-and-restart",
+          "annotation": "Backup-before-update guard runs the AES-256-GCM backup first (Phase 7)."
+        },
+        {
+          "from": "fe.apiclient",
+          "to": "be.routes",
+          "payload": "{ acceptedVersion, sha256 }",
+          "annotation": "routes/admin.js  \u00b7  ADR-023 enforces installer checksum verification."
+        },
+        {
+          "from": "be.routes",
+          "to": "sv.update",
+          "payload": "applyUpdate({ mode, version })",
+          "annotation": "Modes: 'dev' (no-op), 'source' (git pull + bun install), 'docker' (compose pull + restart)."
+        },
+        {
+          "from": "sv.update",
+          "to": "sv.backup",
+          "payload": "createBackup({ reason: 'pre-update' })",
+          "annotation": "Concurrent-backup guard (Phase 7) blocks two backups racing."
+        },
+        {
+          "from": "sv.update",
+          "to": "build.docker",
+          "payload": "docker compose pull && docker compose up -d",
+          "annotation": "Docker mode only.  Healthcheck + watchdog pause prevent restart loops."
+        },
+        {
+          "from": "sv.update",
+          "to": "build.electron",
+          "payload": "ipc 'update:restart'",
+          "annotation": "Electron main relaunches the shell once the backend reports ready."
+        },
+        {
+          "from": "be.routes",
+          "to": "fe.apiclient",
+          "payload": "{ ok: true, data: { restartedAt, newVersion } }",
+          "annotation": "Frontend reloads from cache once /health/detailed returns ready."
+        }
       ]
     },
     {
@@ -1019,21 +2344,464 @@
       "category": "Forecasting",
       "summary": "Dashboard requests the N-month outlook; the forecast service either serves the materialised cache or runs an 8-method MC ensemble.",
       "steps": [
-        { "from": "browser",       "to": "fe.pages",      "payload": "DashboardPage  ·  CashflowForecastWidget", "annotation": "Widget defaults to 12-month horizon, 500 Monte-Carlo paths, P25/P50/P75." },
-        { "from": "fe.pages",      "to": "fe.apiclient",  "payload": "GET /api/aggregations/cashflow-forecast?months=12&mc_paths=500", "annotation": "lib/api/aggregations.ts." },
-        { "from": "fe.apiclient",  "to": "be.routes",     "payload": "validated query  ·  cache-aware endpoint (Phase E)", "annotation": "routes/aggregations.js  ·  parseIntClamped() guards every numeric param." },
-        { "from": "be.routes",     "to": "sv.forecast",   "payload": "forecast({ months, paths, method? })",     "annotation": "services/calculations/forecast/index.js." },
-        { "from": "sv.forecast",   "to": "be.repos",      "payload": "cashflowForecastMcRepository.getCached(paramsHash, ttl: 6h)", "annotation": "6-hour materialised cache (Phase E); nightly job re-materialises off the critical path." },
-        { "from": "be.repos",      "to": "db.postgres",   "payload": "SELECT * FROM cashflow_forecast_mc WHERE params_hash = $1", "annotation": "Hit → return immediately; miss → continue to compute." },
-        { "from": "sv.forecast",   "to": "sv.forecast",   "payload": "ensemble: holtWinters + prophetLite + weightedAverage + … (inverse-MSE blend)", "annotation": "Phase 10+F: 7 base methods + inverse-MSE ensemble (8th).  Backtest accuracy persisted." },
-        { "from": "sv.forecast",   "to": "be.repos",      "payload": "cashflowForecastMcRepository.upsertSnapshot + accuracyRepo.recordAccuracy", "annotation": "Writes both the snapshot and the per-method accuracy metrics." },
-        { "from": "be.repos",      "to": "db.postgres",   "payload": "INSERT INTO cashflow_forecast_mc  ·  INSERT INTO cashflow_forecast_accuracy", "annotation": "Both rows linked by snapshot_id for the Phase D trend history." },
-        { "from": "be.routes",     "to": "fe.apiclient",  "payload": "{ paths: { p25, p50, p75 }, methods: [...], accuracy: {...} }", "annotation": "Widget renders the fan chart + diagnostics panel." }
+        {
+          "from": "browser",
+          "to": "fe.pages",
+          "payload": "DashboardPage  \u00b7  CashflowForecastWidget",
+          "annotation": "Widget defaults to 12-month horizon, 500 Monte-Carlo paths, P25/P50/P75."
+        },
+        {
+          "from": "fe.pages",
+          "to": "fe.apiclient",
+          "payload": "GET /api/aggregations/cashflow-forecast?months=12&mc_paths=500",
+          "annotation": "lib/api/aggregations.ts."
+        },
+        {
+          "from": "fe.apiclient",
+          "to": "be.routes",
+          "payload": "validated query  \u00b7  cache-aware endpoint (Phase E)",
+          "annotation": "routes/aggregations.js  \u00b7  parseIntClamped() guards every numeric param."
+        },
+        {
+          "from": "be.routes",
+          "to": "sv.forecast",
+          "payload": "forecast({ months, paths, method? })",
+          "annotation": "services/calculations/forecast/index.js."
+        },
+        {
+          "from": "sv.forecast",
+          "to": "be.repos",
+          "payload": "cashflowForecastMcRepository.getCached(paramsHash, ttl: 6h)",
+          "annotation": "6-hour materialised cache (Phase E); nightly job re-materialises off the critical path."
+        },
+        {
+          "from": "be.repos",
+          "to": "db.postgres",
+          "payload": "SELECT * FROM cashflow_forecast_mc WHERE params_hash = $1",
+          "annotation": "Hit \u2192 return immediately; miss \u2192 continue to compute."
+        },
+        {
+          "from": "sv.forecast",
+          "to": "sv.forecast",
+          "payload": "ensemble (v2): holtWinters + prophetLite + weightedAverage + \u2026 (shrunk-RMSE inverse-MSE + 5% uniform floor)",
+          "annotation": "Phase 10+F+v2: 7 base methods + Ensemble (v2) as 8th. Weights use empirical-Bayes shrinkage (K=30 days) + uniform floor so no method dominates. Backtest accuracy persisted."
+        },
+        {
+          "from": "sv.forecast",
+          "to": "be.repos",
+          "payload": "cashflowForecastMcRepository.upsertSnapshot + accuracyRepo.recordAccuracy",
+          "annotation": "Writes both the snapshot and the per-method accuracy metrics."
+        },
+        {
+          "from": "be.repos",
+          "to": "db.postgres",
+          "payload": "INSERT INTO cashflow_forecast_mc  \u00b7  INSERT INTO cashflow_forecast_accuracy",
+          "annotation": "Both rows linked by snapshot_id for the Phase D trend history."
+        },
+        {
+          "from": "be.routes",
+          "to": "fe.apiclient",
+          "payload": "{ paths: { p25, p50, p75 }, methods: [...], accuracy: {...} }",
+          "annotation": "Widget renders the fan chart + diagnostics panel."
+        }
+      ]
+    },
+    {
+      "id": "save-custom-parser",
+      "name": "Save / reuse a custom CSV parser",
+      "category": "Imports",
+      "summary": "User saves a custom column-mapping config under a name, then selects it from the import dropdown on future sessions.",
+      "steps": [
+        {
+          "from": "browser",
+          "to": "fe.features",
+          "payload": "fill column-mapping UI + enter parser name",
+          "annotation": "User completes the custom-config form in TransactionImportCard.tsx and clicks \"Save parser\"."
+        },
+        {
+          "from": "fe.features",
+          "to": "fe.hooks",
+          "payload": "createCustomParserConfig({ name, config })",
+          "annotation": "useCustomParserConfigs (hooks/useCustomParserConfigs.ts) mutation fires; cache key [\"custom-parser-configs\"] will be invalidated on success."
+        },
+        {
+          "from": "fe.hooks",
+          "to": "fe.apiclient",
+          "payload": "POST /api/import/parsers  \u00b7  { name, config }",
+          "annotation": "api/imports.ts createCustomParserConfig method encodes the request; 409 on duplicate name, 400 on missing required columns."
+        },
+        {
+          "from": "fe.apiclient",
+          "to": "be.routes",
+          "payload": "POST /api/import/parsers  \u00b7  body: { name, config }",
+          "annotation": "importRoutes.js validates name presence and required config columns (dateColumn, recipientColumn, amountColumn)."
+        },
+        {
+          "from": "be.routes",
+          "to": "be.repos",
+          "payload": "customParserConfigRepository.create({ name, config })",
+          "annotation": "repositories/customParserConfigRepository.js maps config -> config_json JSONB and calls INSERT."
+        },
+        {
+          "from": "be.repos",
+          "to": "db.postgres",
+          "payload": "INSERT INTO custom_parser_configs (name, config_json)",
+          "annotation": "Unique index uq_custom_parser_configs_name enforces name uniqueness; updated_at maintained by the shared trigger."
+        },
+        {
+          "from": "db.postgres",
+          "to": "be.repos",
+          "payload": "{ id, name, config_json, created_at, updated_at }",
+          "annotation": "Row returned; repository maps config_json -> config before returning to the route."
+        },
+        {
+          "from": "be.routes",
+          "to": "fe.apiclient",
+          "payload": "201 { ok: true, data: { id, name, config, created_at, updated_at } }",
+          "annotation": "Route wraps result in unified envelope (ADR-026) and returns HTTP 201."
+        },
+        {
+          "from": "fe.apiclient",
+          "to": "fe.hooks",
+          "payload": "SavedParserConfig record",
+          "annotation": "React Query mutation onSuccess invalidates [\"custom-parser-configs\"] cache, triggering refetch of the dropdown list."
+        },
+        {
+          "from": "fe.hooks",
+          "to": "fe.features",
+          "payload": "updated parsers list with Bookmark icon entries",
+          "annotation": "On next import session the saved parser appears in the bank-source dropdown; selecting it sets adapterName to the parser name and loads its config into the form."
+        }
+      ]
+    },
+    {
+      "id": "portfolio-csv-import",
+      "name": "Portfolio CSV import (brokerage trades)",
+      "category": "Import",
+      "summary": "User uploads a brokerage CSV; backend runs a stage\u2192validate\u2192matchInvestments pipeline and either auto-commits all rows or sends the batch to awaiting_review for instrument resolution.",
+      "steps": [
+        {
+          "from": "browser",
+          "to": "fe.pages",
+          "payload": "navigate to /portfolio/import; select or drop CSV file",
+          "annotation": "PortfolioImportPage (apps/frontend/src/pages/portfolio/PortfolioImportPage.tsx) renders immediately; FileHeadersPanel shows column-name chips and sample rows as soon as the file is chosen, independent of adapter selection."
+        },
+        {
+          "from": "fe.pages",
+          "to": "fe.features",
+          "payload": "file + PortfolioCsvColumnMapper config: date_column, symbol_column, default_asset_class, type_mapping, \u2026",
+          "annotation": "PortfolioCsvColumnMapper (apps/frontend/src/features/imports/PortfolioCsvColumnMapper.tsx) builds the flattened multipart form fields from the user's column mapping and optional saved portfolio parser (usePortfolioParserConfigs hook, cache key ['portfolio-parser-configs'])."
+        },
+        {
+          "from": "fe.features",
+          "to": "fe.apiclient",
+          "payload": "portfolioImports.uploadPortfolioCsv(formData)  or  portfolioImports.uploadPortfolioCsvStream(formData)",
+          "annotation": "lib/api/portfolioImports.ts \u2014 one-shot (POST /api/portfolio/import/csv/custom) or SSE stream (POST /api/portfolio/import/csv/stream). SSE path opens an EventSource and relays progress/review_required/complete/error events to the UI."
+        },
+        {
+          "from": "fe.apiclient",
+          "to": "be.middleware",
+          "payload": "multipart/form-data  \u00b7  file + flattened config fields  \u00b7  importRateLimiter",
+          "annotation": "importRateLimiter (20 req/min) applied at route mount in main.js before portfolioImportRoutes; csvUpload multer middleware (lib/csvUpload.js) writes the temp file and enforces 50 MB limit."
+        },
+        {
+          "from": "be.middleware",
+          "to": "be.routes",
+          "payload": "req.file path + buildPortfolioConfig(req.body) customConfig",
+          "annotation": "portfolioImportRoutes.js (apps/node-backend/src/routes/portfolioImportRoutes.js) validates required fields (date_column, at least one of symbol_column/name_column, valid default_asset_class) via buildPortfolioConfig(), then delegates to the pipeline."
+        },
+        {
+          "from": "be.routes",
+          "to": "sv.portfolioimport",
+          "payload": "runPortfolioImportPipeline({ filePath, customConfig, onProgress })",
+          "annotation": "services/portfolioImportPipeline/index.js orchestrates stage\u2192validate\u2192matchInvestments. The onProgress callback either logs or writes SSE events (via createSseWriter from lib/sse.js) for the streaming path."
+        },
+        {
+          "from": "sv.portfolioimport",
+          "to": "db.postgres",
+          "payload": "INSERT INTO portfolio_import_batches; INSERT INTO portfolio_import_staging_rows (migration 0040)",
+          "annotation": "stage.js parses the CSV via portfolioGenericAdapter and bulk-inserts raw rows into portfolio_import_staging_rows. validate.js resolves types via portfolioTypeNormalizer (type_mapping \u2192 built-in aliases \u2192 error if unknown), parses numerics, and marks duplicates against portfolio_transactions."
+        },
+        {
+          "from": "sv.portfolioimport",
+          "to": "be.repos",
+          "payload": "SELECT FROM investments WHERE LOWER(symbol)=\u2026 OR LOWER(name)=\u2026 ",
+          "annotation": "matchInvestments.js (apps/node-backend/src/services/portfolioImportPipeline/matchInvestments.js) queries investments by symbol (exact, case-insensitive) then by name. Sets resolved_investment_id and match_source on staging rows. No ISIN, no fuzzy (ADR-078 \u00a7B)."
+        },
+        {
+          "from": "sv.portfolioimport",
+          "to": "be.routes",
+          "payload": "{ batchId, requires_review, match_source_counts }  OR  { batchId, total, imported, duplicates, errors }",
+          "annotation": "If all rows matched (unresolved==0) and errors==0 \u2192 auto-commit path calls commitPortfolioImport() directly and returns 201. Otherwise batch status is set to awaiting_review and 202 is returned; SSE stream emits review_required event."
+        },
+        {
+          "from": "be.routes",
+          "to": "fe.pages",
+          "payload": "202 { batch_id, requires_review: true }  \u2192  navigate to /portfolio/import/review/:batchId",
+          "annotation": "Frontend receives review_required SSE event (or 202 response) and navigates to PortfolioImportReviewPage (apps/frontend/src/pages/portfolio/PortfolioImportReviewPage.tsx). GET /api/portfolio/import/batches/:id/preview returns groups by investment; unresolved groups listed first."
+        },
+        {
+          "from": "fe.pages",
+          "to": "fe.apiclient",
+          "payload": "POST /api/portfolio/import/batches/:id/rows/:rowId/investment-override  { investment_id } or { create_new: true }",
+          "annotation": "User resolves each unresolved group via InvestmentCombobox (apps/frontend/src/components/portfolio/InvestmentCombobox.tsx); the override endpoint (portfolioImportBatchService.overrideInvestment) updates resolved_investment_id and propagates to all rows sharing the same raw symbol+name in the batch."
+        },
+        {
+          "from": "fe.apiclient",
+          "to": "sv.portfolioimport",
+          "payload": "POST /api/portfolio/import/batches/:id/commit",
+          "annotation": "commitPortfolioImport() in services/portfolioImportPipeline/index.js iterates resolved staging rows, calls portfolioTransactionRepository.create() per row (2-of-3 unit math, oversell check), calls fxResolve (services/portfolio/fxResolve.js) for non-EUR rows without an explicit rate, and records per-row errors without aborting."
+        },
+        {
+          "from": "sv.portfolioimport",
+          "to": "db.postgres",
+          "payload": "INSERT INTO portfolio_transactions_base (via portfolioTransactionRepository.create)",
+          "annotation": "Commit reuses the same repository path as manual portfolio transaction entry, ensuring 2-of-3 math (units \u00d7 price \u2248 amount) and oversell prevention apply. Intra-batch dedup tracks (date,symbol,units,amount,currency) hashes to skip duplicates within the same upload."
+        }
+      ]
+    },
+    {
+      "id": "macro-series-fetch",
+      "name": "Fetch a macroeconomic series (Chart Builder)",
+      "category": "Research",
+      "summary": "Chart Builder adds a macro series; the request routes through the research aggregator to a provider-pinned macro adapter and returns ResearchChartPoint[] \u2014 never persisted.",
+      "steps": [
+        {
+          "from": "browser",
+          "to": "fe.pages",
+          "payload": "User types in unified search box on /research/charts",
+          "annotation": "ChartBuilderPage.tsx fires both searchResearch() and searchMacro() debounced at 300 ms from a single input."
+        },
+        {
+          "from": "fe.pages",
+          "to": "fe.apiclient",
+          "payload": "GET /api/research/macro/search?q=cpi",
+          "annotation": "searchMacro() in apps/frontend/src/lib/api/research.ts, surfaced on apiClient in lib/api.ts alongside existing searchResearch."
+        },
+        {
+          "from": "fe.apiclient",
+          "to": "be.routes",
+          "payload": "q=cpi (query string)",
+          "annotation": "apps/node-backend/src/routes/research.js GET /api/research/macro/search under marketRateLimiter."
+        },
+        {
+          "from": "be.routes",
+          "to": "sv.research",
+          "payload": "researchAggregator.searchMacro('cpi')",
+          "annotation": "Fan-out: fires fredAdapter.macroSearch() + keyless Eurostat catalog (macroCatalog.js) in parallel. A provider that errors or is unkeyed is absent from the union. Cached 1 h (macro_search TTL)."
+        },
+        {
+          "from": "sv.research",
+          "to": "ex.fred",
+          "payload": "GET https://api.stlouisfed.org/fred/series/search?search_text=cpi&api_key=...&file_type=json",
+          "annotation": "fredAdapter.js. Quota-governed at 120 req/min. Returns MacroSeriesItem[] with provider='fred'. Skipped when FRED_API_KEY is absent."
+        },
+        {
+          "from": "be.routes",
+          "to": "fe.apiclient",
+          "payload": "{ data: { items: [{ provider, seriesId, title, frequency, units }] } }",
+          "annotation": "Merged union across all usable adapters; results grouped under 'Economic data' header in the Chart Builder dropdown alongside ticker results under 'Markets'."
+        },
+        {
+          "from": "fe.pages",
+          "to": "fe.apiclient",
+          "payload": "GET /api/research/macro/series?provider=fred&series_id=CPIAUCSL&range=5y",
+          "annotation": "User picks a macro row \u2014 ChartBuilderPage calls getMacroSeries(). apps/frontend/src/lib/api/research.ts."
+        },
+        {
+          "from": "fe.apiclient",
+          "to": "be.routes",
+          "payload": "provider=fred&series_id=CPIAUCSL&range=5y",
+          "annotation": "GET /api/research/macro/series. Validates provider enum and isValidSeriesId shape guard in fredAdapter before dispatching."
+        },
+        {
+          "from": "be.routes",
+          "to": "sv.research",
+          "payload": "researchAggregator.fetchMacroSeries({ provider: 'fred', seriesId: 'CPIAUCSL', range: '5y' })",
+          "annotation": "Provider-pinned path \u2014 no capability-map chain, no fallback. macroRange.trimToRange anchors on last available observation (not wall clock) to avoid empty charts when data lags publication."
+        },
+        {
+          "from": "sv.research",
+          "to": "ex.fred",
+          "payload": "GET .../fred/series/observations?series_id=CPIAUCSL&observation_start=...&api_key=...&file_type=json",
+          "annotation": "fredAdapter.js macroSeries(). FRED returns value as string; '.' = missing observation, skipped. Result cached 12 h (macro_series TTL). Never written to asset_price_history."
+        },
+        {
+          "from": "be.routes",
+          "to": "fe.apiclient",
+          "payload": "{ data: { provider, seriesId, title, units, frequency, points: [{ time, close }] } }",
+          "annotation": "ResearchChartPoint[] with observation value mapped to close; high/low/volume undefined. Storage boundary from ADR-079 is preserved: in-memory cache only."
+        },
+        {
+          "from": "fe.pages",
+          "to": "browser",
+          "payload": "Macro series rendered as a line in the ComposedChart alongside equities",
+          "annotation": "Provider dropdown hidden (pinned); candlestick disabled. Rebase-to-100 works across macro + equity series. Monthly macro data plots at month boundaries with null gaps between when overlaid with daily equity data."
+        }
+      ]
+    },
+    {
+      "id": "close-account",
+      "name": "Close a brokerage account",
+      "category": "Portfolio",
+      "summary": "Transfer all holdings in-specie to another account then archive the source account via CloseAccountDialog.",
+      "steps": [
+        {
+          "from": "browser",
+          "to": "fe.pages",
+          "payload": "AccountsPage -> CloseAccountDialog open",
+          "annotation": "User selects 'Close account' from the account context menu; CloseAccountDialog lists the account's current holdings from useAccountPositions."
+        },
+        {
+          "from": "fe.pages",
+          "to": "fe.hooks",
+          "payload": "useAccountPositions(accountId)",
+          "annotation": "apps/frontend/src/hooks/portfolio/useAccountPositions.ts \u2014 reads byAccount from the portfolio-summary response."
+        },
+        {
+          "from": "fe.hooks",
+          "to": "fe.apiclient",
+          "payload": "GET /api/info/portfolio-summary",
+          "annotation": "byAccount array provides per-account holdings list for the dialog."
+        },
+        {
+          "from": "fe.pages",
+          "to": "fe.apiclient",
+          "payload": "POST /api/investments/:id/move { from_account_id, to_account_id, strategy }",
+          "annotation": "One call per holding; strategy defaults to 'fifo'. apps/node-backend/src/services/portfolio/moveHoldingService.js."
+        },
+        {
+          "from": "fe.apiclient",
+          "to": "be.routes",
+          "payload": "POST /api/investments/:id/move body",
+          "annotation": "routes/investments.js dispatches to moveHoldingService."
+        },
+        {
+          "from": "be.routes",
+          "to": "be.repos",
+          "payload": "UPDATE portfolio_transactions_base SET account_id = to WHERE account_id = from",
+          "annotation": "Whole move: one UPDATE. Partial (fifo/proportional): split boundary lot then UPDATE selected lots. Inheritance-aware."
+        },
+        {
+          "from": "be.repos",
+          "to": "db.postgres",
+          "payload": "UPDATE / INSERT portfolio_transactions_base + child table",
+          "annotation": "Lot split writes new row for the fraction moving; updates source row units in-place. ON DELETE RESTRICT FK means account with lots cannot be hard-deleted."
+        },
+        {
+          "from": "fe.pages",
+          "to": "fe.apiclient",
+          "payload": "PATCH /api/accounts/:id { is_active: false }",
+          "annotation": "Archive step \u2014 marks the source account inactive after all lots are transferred."
+        },
+        {
+          "from": "fe.apiclient",
+          "to": "be.routes",
+          "payload": "PATCH /api/accounts/:id body",
+          "annotation": "routes/accounts.js -> accountService -> accountRepository.update."
+        },
+        {
+          "from": "be.routes",
+          "to": "db.postgres",
+          "payload": "UPDATE accounts SET is_active=false WHERE id=?",
+          "annotation": "Account is soft-deleted; retained for FK integrity. portfolioSummaryCache is invalidated so byAccount reflects the emptied account on next read."
+        }
+      ]
+    },
+    {
+      "id": "db-data-edit",
+      "name": "Browse and edit a DB table (admin data editor)",
+      "category": "Admin",
+      "summary": "Admin opens a table in the data editor, browses/filters rows, edits cells, previews the SQL dry-run, then commits the batch \u2014 all under admin auth with xmin optimistic concurrency and a committed-SQL audit trail.",
+      "steps": [
+        {
+          "from": "browser",
+          "to": "fe.pages",
+          "payload": "Double-click table row on /admin/db \u2192 navigate to /admin/db/:table",
+          "annotation": "TableDataEditorPage mounts at /admin/db/:table. The page first fetches the table schema to build column headers and identify PK columns."
+        },
+        {
+          "from": "fe.pages",
+          "to": "fe.apiclient",
+          "payload": "GET /api/admin/database/tables/:table/schema",
+          "annotation": "React Query fetches schema via the api client. Response: {table, columns[], primaryKey[]}. Column writable flag gates edit affordances."
+        },
+        {
+          "from": "fe.apiclient",
+          "to": "be.routes",
+          "payload": "GET /api/admin/database/tables/:table/schema \u2014 Bearer + CSRF headers",
+          "annotation": "Admin middleware stack: csrfGuard \u2192 adminAuth (timing-safe Bearer when ADMIN_AUTH_TOKEN set) \u2192 adminRateLimiter \u2192 handler in admin.js."
+        },
+        {
+          "from": "be.routes",
+          "to": "sv.dbeditor",
+          "payload": "getTableSchema(table)",
+          "annotation": "dbEditor.js validates table name against pg_stat_user_tables, then queries information_schema.columns for column metadata and pg_index for primary key composition."
+        },
+        {
+          "from": "sv.dbeditor",
+          "to": "db.postgres",
+          "payload": "SELECT column_name, data_type, udt_name, is_nullable, column_default, is_generated FROM information_schema.columns WHERE table_name = $1",
+          "annotation": "Identifiers parameterized; table name validated before query. PK columns marked writable:false so the UI skips them in edit forms."
+        },
+        {
+          "from": "fe.pages",
+          "to": "fe.apiclient",
+          "payload": "GET /api/admin/database/tables/:table/rows?limit=100&offset=0&orderBy=id&dir=asc&filters=[]",
+          "annotation": "After schema loads, the page fetches the first page of rows. Filter/sort params come from UI state; query is paused while uncommitted dirty rows exist."
+        },
+        {
+          "from": "fe.apiclient",
+          "to": "be.routes",
+          "payload": "GET /api/admin/database/tables/:table/rows \u2014 query params for limit/offset/orderBy/dir/filters/where",
+          "annotation": "adminRateLimiter. Handler delegates to dbEditor.getTableRows(). Raw WHERE clause has semicolon rejected before reaching the service."
+        },
+        {
+          "from": "be.routes",
+          "to": "sv.dbeditor",
+          "payload": "getTableRows(table, { limit, offset, orderBy, dir, filters, where })",
+          "annotation": "dbEditor.js builds parameterized SELECT inside BEGIN; SET TRANSACTION READ ONLY; SET LOCAL statement_timeout='10s'. Rows include __xmin column (PostgreSQL row version)."
+        },
+        {
+          "from": "sv.dbeditor",
+          "to": "db.postgres",
+          "payload": "BEGIN; SET TRANSACTION READ ONLY; SET LOCAL statement_timeout='10s'; SELECT *, xmin FROM \"table\" WHERE \u2026 ORDER BY \u2026 LIMIT $n OFFSET $m; COMMIT",
+          "annotation": "READ ONLY transaction makes mutation structurally impossible. xmin is a system column exposed as __xmin in the response for optimistic-concurrency use at commit time."
+        },
+        {
+          "from": "fe.pages",
+          "to": "fe.apiclient",
+          "payload": "POST /api/admin/database/tables/:table/mutate \u2014 body: { changes:[\u2026], dryRun:true }",
+          "annotation": "User clicks Preview. The dirty change set is sent as a dry-run; no DB write occurs. Server returns generated SQL statements for review in the dialog."
+        },
+        {
+          "from": "fe.apiclient",
+          "to": "be.routes",
+          "payload": "POST /api/admin/database/tables/:table/mutate \u2014 adminMutateLimiter (30 req/min)",
+          "annotation": "Stricter rate limit than reads. Handler calls dbEditor.mutateTable(). Tables without a PK are rejected with 400 before reaching the service."
+        },
+        {
+          "from": "be.routes",
+          "to": "sv.dbeditor",
+          "payload": "mutateTable(table, changes, dryRun=false)",
+          "annotation": "dbEditor.js generates parameterized INSERT/UPDATE/DELETE statements. For updates/deletes with xmin supplied: locks row FOR UPDATE, compares xmin \u2192 409 Conflict on mismatch. Constraint SQLSTATEs (23502/23503/23505/23514/22P02) mapped to friendly 400/409 messages."
+        },
+        {
+          "from": "sv.dbeditor",
+          "to": "db.postgres",
+          "payload": "BEGIN; SELECT \u2026 FOR UPDATE (xmin check); INSERT/UPDATE/DELETE \u2026; INSERT INTO db_editor_audit \u2026; COMMIT",
+          "annotation": "All-or-nothing batch. Audit row written inside the same transaction so a rollback also removes the audit entry. Materialized-view base tables (transactions/recipients/categories) trigger scheduleRefresh() after commit."
+        },
+        {
+          "from": "sv.dbeditor",
+          "to": "sv.matview",
+          "payload": "scheduleRefresh() \u2014 debounced 2 s",
+          "annotation": "Only triggered when the committed table is a materialized-view base table (transactions, recipients, categories). Keeps dashboard MVs fresh after raw edits without synchronous overhead."
+        }
       ]
     }
   ]
-}
-</script>
+}</script>
 
 <script>
 (() => {

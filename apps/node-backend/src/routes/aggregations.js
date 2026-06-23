@@ -10,9 +10,10 @@
  * unwrapEnvelope strips the outer `{ok, data}` layer.
  * See docs/adr/026-unified-api-response-envelope.md.
  *
- * Mounted in parallel with legacy /api/info/* behind the AGGREGATIONS_V2_ENABLED
- * feature flag during Phase 2–8; legacy routes are removed in Phase 9 after
- * shadow-mode parity is proven.
+ * These are the canonical aggregation routes (ADR-010 Phase 9 cutover complete).
+ * The legacy GET /api/info and GET /api/info/transaction-summary they replaced
+ * have been removed. There is no AGGREGATIONS_V2_ENABLED runtime flag — the
+ * cutover is permanent (the flag was only ever a planning concept).
  */
 
 import { Router } from 'express';
@@ -33,6 +34,7 @@ import { computeCategoryPivot } from '../services/calculations/aggregation/categ
 import { computeRecipientByYear } from '../services/calculations/aggregation/recipientByYear.js';
 import { computeRecipientPivot } from '../services/calculations/aggregation/recipientPivot.js';
 import { getTargetCurrency } from './info/_queryParams.js';
+import { parseIntClamped } from '../lib/pagination.js';
 
 const router = Router();
 
@@ -42,12 +44,6 @@ function parseNumericArrayQueryParam(raw) {
   return values
     .map((v) => Number(v))
     .filter((n) => Number.isFinite(n));
-}
-
-function parseIntClamped(raw, { min = 1, max, fallback }) {
-  const parsed = parseInt(raw, 10);
-  if (!Number.isFinite(parsed) || parsed < min) return fallback;
-  return max != null ? Math.min(parsed, max) : parsed;
 }
 
 router.get('/monthly-summary', async (req, res) => {
@@ -71,6 +67,8 @@ router.get('/category-breakdown', async (req, res) => {
 router.get('/recipient-insights', async (req, res) => {
   const { data, meta } = await computeRecipientInsights({
     targetCurrency: getTargetCurrency(req),
+    excludedCategoryIds: parseNumericArrayQueryParam(req.query.excluded_category_ids),
+    excludedRecipientIds: parseNumericArrayQueryParam(req.query.excluded_recipient_ids),
   });
   res.ok({ data, meta });
 });
@@ -216,6 +214,7 @@ router.get('/recipient-by-year', async (req, res) => {
   const { data, meta } = await computeRecipientByYear({
     targetCurrency: getTargetCurrency(req),
     excludedRecipientIds: parseNumericArrayQueryParam(req.query.excluded_recipient_ids),
+    excludedCategoryIds: parseNumericArrayQueryParam(req.query.excluded_category_ids),
   });
   res.ok({ data, meta });
 });
@@ -224,12 +223,14 @@ router.get('/recipient-pivot', async (req, res) => {
   const bucket = ['monthly', 'yearly'].includes(req.query.bucket) ? req.query.bucket : 'monthly';
   const startDate = req.query.start || null;
   const endDate = req.query.end || null;
+  const recipientIds = parseNumericArrayQueryParam(req.query.recipient_ids);
   const { data, meta } = await computeRecipientPivot({
     targetCurrency: getTargetCurrency(req),
     excludedRecipientIds: parseNumericArrayQueryParam(req.query.excluded_recipient_ids),
     bucket,
     startDate,
     endDate,
+    recipientIds: recipientIds.length > 0 ? recipientIds : null,
   });
   res.ok({ data, meta });
 });

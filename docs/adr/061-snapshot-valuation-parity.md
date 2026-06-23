@@ -139,6 +139,7 @@ Historical days are unchanged (still use `asset_price_history` forward-fill). Th
 
 ## Related Decisions
 
+- [[docs/adr/074-fx-attribution-historical-rates|ADR-074]] — Extends this ADR by locking invested capital at purchase-date FX rates and adding the `value_fx_neutral` column to `portfolio_performance_snapshots` (migration 0039); the FX-neutral chart series shows `value − value_fx_neutral` as the cumulative currency effect
 - [[docs/adr/043-portfolio-snapshot-atomicity|ADR-043]] — Atomic snapshot replace (DELETE + INSERT in one transaction)
 - [[docs/adr/044-portfolio-summary-single-source-of-truth|ADR-044]] — Live summary as single source of truth for dashboard + performance totals
 - [[docs/adr/009-timezone-policy|ADR-009]] — `calendarDaysBetween` uses `APP_TIMEZONE` for exact integer day counts

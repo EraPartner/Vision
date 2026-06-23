@@ -3,9 +3,9 @@ title: API Documentation Index
 type: api-index
 status: active
 date: 2026-04-24
-updated: 2026-05-12
-tags: [api, index, rest, endpoints, openapi, phase-5a, attachments, phase-2, phase-9, phase-f, admin, observability, ing, bnp, supported-adapters]
-description: Complete REST API documentation for the Vision backend; authoritative spec in openapi.yaml (Phase 2.4); JSON export and attachments added in Phase 5A; Phase F adds 4 admin endpoints for provider health, endpoint liveness, and metrics; Phase 9 aggregation shadow cutover complete; May 12 2026: ING and BNP Paribas Fortis adapters added (8 total banks supported)
+updated: 2026-06-16
+tags: [api, index, rest, endpoints, openapi, phase-5a, attachments, phase-2, phase-9, phase-f, admin, observability, ing, bnp, supported-adapters, portfolio-import, adr-078, research, adr-079, multi-provider]
+description: Complete REST API documentation for the Vision backend; authoritative spec in openapi.yaml (Phase 2.4); JSON export and attachments added in Phase 5A; Phase F adds 4 admin endpoints for provider health, endpoint liveness, and metrics; Phase 9 aggregation shadow cutover complete; May 12 2026: ING and BNP Paribas Fortis adapters added (8 total banks supported); June 15 2026: Portfolio CSV Import (ADR-078) adds 12 endpoints under /api/portfolio/import; June 16 2026: Research aggregation (ADR-079) adds 6 endpoints under /api/research
 aliases: [API, endpoints, REST]
 ---
 
@@ -47,8 +47,10 @@ SORT path ASC
 | Planned Transactions | `/api/planned-transactions` | GET, POST, PATCH, DELETE | [[docs/api/plannedTransactions\|Planned Transactions API]] |
 | Investments | `/api/investments` | GET, POST, PATCH, DELETE | [[docs/api/investments\|Investments API]] |
 | Watchlist | `/api/watchlist` | GET, POST, PATCH, DELETE | [[docs/api/watchlist\|Watchlist API]] |
-| Market Lookup | `/api/market-lookup` | GET | [[docs/api/marketLookup\|Market Lookup API]] |
+| Market Lookup | `/api/market` | GET | [[docs/api/marketLookup\|Market Lookup API]] |
+| Research (ADR-079) | `/api/research` | GET | [[docs/api/research\|Research API]] |
 | Imports | `/api/import` | GET, POST | [[docs/api/imports\|Imports API]] |
+| Portfolio Imports (ADR-078) | `/api/portfolio/import` | GET, POST, PATCH, DELETE | [[docs/api/portfolio-imports\|Portfolio Imports API]] |
 | Attachments (Phase 5A) | `/api/attachments` | GET, POST, DELETE | [[docs/api/attachments\|Attachments API]] |
 | Saved Charts | `/api/saved-charts` | GET, POST, PATCH, DELETE | [[docs/api/savedCharts\|Saved Charts API]] |
 | Settings | `/api/settings` | GET, PUT, DELETE | [[docs/api/settings\|Settings API]] |

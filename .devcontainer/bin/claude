@@ -1,67 +1,117 @@
 #!/usr/bin/env bash
-# Compose launcher: route `claude` into the Vision sandbox WITHOUT devcontainers.
-# The devcontainer-free equivalent of bin/claude — uses `docker compose` +
-# .devcontainer/compose.yaml instead of `devcontainer up`/`exec`. bin/claude
-# (devcontainer) stays as the fallback during the migration.
+# apple/container launcher: route `claude` into the Vision sandbox.
+#
+# Native `container build/run/exec` flow — Docker-free successor to the Compose
+# launcher. Same hardened image, egress lock, mounts,
+# in-container Postgres, lifecycle, credential forwarding.
+#
+# apple/container deltas: `--init` = compose init:true; `--tmpfs` bare path only;
+# no `--security-opt` (setuid stripped + VM boundary). vision-claude AND
+# vision-pgdata are NATIVE named volumes — root perms-fix can chown
+# /var/lib/postgresql so Postgres initializes (a host bind mount cannot: #333).
 set -euo pipefail
 
 find_project_root() {
   local d="$PWD"
   while [[ "$d" != "/" ]]; do
-    [[ -f "$d/.devcontainer/compose.yaml" ]] && { echo "$d"; return 0; }
+    [[ -f "$d/.devcontainer/Dockerfile" ]] && { echo "$d"; return 0; }
     d="$(dirname "$d")"
   done
   return 1
 }
-
-if [[ -n "${VISION_PROJECT_ROOT:-}" && -f "${VISION_PROJECT_ROOT}/.devcontainer/compose.yaml" ]]; then
+if [[ -n "${VISION_PROJECT_ROOT:-}" && -d "${VISION_PROJECT_ROOT}/.devcontainer" ]]; then
   PROJECT_ROOT="$VISION_PROJECT_ROOT"
 else
-  PROJECT_ROOT="$(find_project_root || true)"
+  PROJECT_ROOT="$(cd "$(dirname "$0")/../.." 2>/dev/null && pwd -P || true)"
+  [[ -d "$PROJECT_ROOT/.devcontainer" ]] || PROJECT_ROOT="$(find_project_root || true)"
 fi
-[[ -z "$PROJECT_ROOT" ]] && { echo "claude (vision-compose): no .devcontainer/compose.yaml above $PWD." >&2; exit 1; }
+[[ -z "$PROJECT_ROOT" || ! -d "$PROJECT_ROOT/.devcontainer" ]] && {
+  echo "claude (vision): cannot locate the Vision project root." >&2; exit 1; }
+PROJECT_ROOT="$(cd "$PROJECT_ROOT" && pwd -P)"
+DC="$PROJECT_ROOT/.devcontainer"
 
-command -v docker >/dev/null 2>&1 || { echo "claude (vision-compose): docker not installed." >&2; exit 1; }
-docker compose version >/dev/null 2>&1 || { echo "claude (vision-compose): docker compose v2 required." >&2; exit 1; }
+command -v container >/dev/null 2>&1 || { echo "claude (vision): apple/container not installed." >&2; exit 1; }
+container system status >/dev/null 2>&1 || { echo "claude (vision): container system not started — run: container system start" >&2; exit 1; }
 
-COMPOSE=(docker compose -f "$PROJECT_ROOT/.devcontainer/compose.yaml")
-SVC=app
+NAME=vision-dev
+IMAGE=vision-dev:latest
+SVC_USER=dev
 
 # --- 1) Stage a sanitized ~/.claude for the read-only bind mount -------------
-stage_claude_config() {
-  local src dst item jf f
-  src="$(cd "$HOME/.claude" 2>/dev/null && pwd -P || true)"
-  dst="$HOME/.claude-vision-stage"
-  rm -rf "$dst/dot-claude"; mkdir -p "$dst/dot-claude"
-  if [[ -n "$src" && -d "$src" ]]; then
-    for item in settings.json keybindings.json CLAUDE.md agents rules commands statusline status-line.sh plugins; do
-      [[ -e "$src/$item" ]] && cp -a "$src/$item" "$dst/dot-claude/" 2>/dev/null || true
-    done
-    find "$dst/dot-claude/statusline" "$dst/dot-claude/plugins" -name .git -type d -prune -exec rm -rf {} + 2>/dev/null || true
-    for jf in known_marketplaces.json installed_plugins.json; do
-      f="$dst/dot-claude/plugins/$jf"
-      [[ -f "$f" ]] && sed -i '' -e "s#$HOME/.claude#/home/dev/.claude#g" -e "s#$src#/home/dev/.claude#g" "$f" 2>/dev/null || true
-    done
-    find "$dst/dot-claude" -name '.DS_Store' -delete 2>/dev/null || true
-    # The PreToolUse safety guard reaches the sandbox out-of-band via the
-    # root-owned /etc/claude-code/managed-settings.json policy (see compose.yaml).
-    # Strip hooks from the staged USER settings so the host's host-path hook
-    # entry can't dangle here or duplicate the managed one. Mirrors the sync pull.
-    if [[ -f "$dst/dot-claude/settings.json" ]] && command -v jq >/dev/null 2>&1; then
-      local hjt; hjt="$(mktemp)"
-      jq 'del(.hooks)' "$dst/dot-claude/settings.json" >"$hjt" 2>/dev/null && mv "$hjt" "$dst/dot-claude/settings.json" || rm -f "$hjt"
-    fi
-  fi
-  [[ -f "$HOME/.claude.json" ]] && cp "$HOME/.claude.json" "$dst/claude.json" 2>/dev/null || true
-}
-stage_claude_config
+LIB="$DC/launcher-common.sh"
+[[ -f "$LIB" ]] || { echo "claude (vision): missing $LIB (run devcontainer-egress/sync.sh)." >&2; exit 1; }
+# shellcheck source=/dev/null
+source "$LIB"
+sandbox_stage_claude_config vision
 
-# --- 2) Build + start (idempotent) -------------------------------------------
-"${COMPOSE[@]}" up -d --build >/dev/null
-CID="$("${COMPOSE[@]}" ps -q "$SVC" 2>/dev/null | head -1 || true)"
+# --- 2) Build (cached) -------------------------------------------------------
+container build -t "$IMAGE" "$DC" >/dev/null
+# Free the ~2GB build-shim RAM now the image is built; it auto-restarts on the next
+# `container build`. Set SANDBOX_KEEP_BUILDER=1 to leave it up (rapid rebuilds).
+[[ -n "${SANDBOX_KEEP_BUILDER:-}" ]] || container builder stop >/dev/null 2>&1 || true
 
-# --- 3) Replay lifecycle as dev (post-create once, post-start every start) ----
-"${COMPOSE[@]}" exec -u dev -T "$SVC" bash -lc '
+# --- 3) Idempotent run: reuse running / start stopped / else create ----------
+if [[ "${VISION_REBUILD:-0}" == 1 ]]; then
+  container rm -f "$NAME" >/dev/null 2>&1 || true
+fi
+if container ls -q 2>/dev/null | grep -qx "$NAME"; then
+  :
+elif container ls -aq 2>/dev/null | grep -qx "$NAME"; then
+  container start "$NAME" >/dev/null
+else
+  container run -d --name "$NAME" \
+    --init \
+    --cap-drop ALL \
+    --cap-add NET_ADMIN --cap-add CHOWN --cap-add DAC_OVERRIDE \
+    --cap-add FOWNER --cap-add SETUID --cap-add SETGID \
+    -m 4g -c 4 \
+    --tmpfs /tmp --tmpfs /var/tmp \
+    -p 127.0.0.1:8080:8080 -p 127.0.0.1:3002:3002 \
+    -e DEVCONTAINER=true \
+    -e PUPPETEER_SKIP_CHROMIUM_DOWNLOAD=true \
+    -e DATABASE_URL=postgresql://ftm_user:localdev@127.0.0.1:5432/financial_transactions \
+    -e DB_HOST=127.0.0.1 \
+    -e DB_PORT=5432 \
+    -e DB_USER=ftm_user \
+    -e DB_NAME=financial_transactions \
+    -e POSTGRES_PASSWORD=localdev \
+    -e SERVER_HOST=0.0.0.0 \
+    -e PORT=3002 \
+    -e CORS_ORIGINS=http://localhost:8080,http://localhost:3002 \
+    -e VITE_API_URL=http://localhost:3002 \
+    -e ALEMBIC_BIN=/workspaces/Vision/venv/bin/alembic \
+    -e DISABLE_TELEMETRY=1 \
+    -e DISABLE_ERROR_REPORTING=1 \
+    -e BASH_ENV=/home/dev/.safe-chain/scripts/init-posix.sh \
+    -e NODE_USE_ENV_PROXY=1 \
+    -e HTTP_PROXY=http://127.0.0.1:3128 \
+    -e HTTPS_PROXY=http://127.0.0.1:3128 \
+    -e http_proxy=http://127.0.0.1:3128 \
+    -e https_proxy=http://127.0.0.1:3128 \
+    -e NO_PROXY=localhost,127.0.0.1,::1 \
+    -e no_proxy=localhost,127.0.0.1,::1 \
+    -v "$PROJECT_ROOT:/workspaces/Vision" \
+    -v "$PROJECT_ROOT/.git:/workspaces/Vision/.git:ro" \
+    -v "$DC:/workspaces/Vision/.devcontainer:ro" \
+    -v vision-claude:/home/dev/.claude \
+    -v vision-pgdata:/var/lib/postgresql \
+    -v "$HOME/.claude-sandbox/stage/vision:/home/dev/.claude-stage:ro" \
+    -v "$HOME/.claude/hooks/guard.mjs:/usr/local/share/claude-guard/guard.mjs:ro" \
+    -v "$HOME/.claude/hooks/managed-settings.json:/etc/claude-code/managed-settings.json:ro" \
+    -v "$HOME/.claude/projects/-Users-computer-Code-Vision/memory:/home/dev/.claude-memory-seed:ro" \
+    "$IMAGE" >/dev/null
+fi
+CID="$NAME"
+
+# Wait for the egress proxy (entrypoint: perms → firewall → Postgres → squid).
+container exec "$NAME" bash -lc 'for i in $(seq 1 40); do (exec 3<>/dev/tcp/127.0.0.1/3128) 2>/dev/null && break; sleep 1; done' || true
+
+# F14: the egress allowlist is baked into the image; on the reuse/start paths the
+# running container can be enforcing a stale baked copy after a sync.sh change.
+sandbox_warn_stale_allowlist "$NAME" "$DC/allowlist.txt" "VISION_REBUILD=1 $0"
+
+# --- 4) Replay lifecycle as dev (post-create once, post-start every start) ----
+container exec --user "$SVC_USER" "$NAME" bash -lc '
   set -e
   cd /workspaces/Vision
   if [[ ! -f /home/dev/.postcreate-done ]]; then
@@ -69,36 +119,52 @@ CID="$("${COMPOSE[@]}" ps -q "$SVC" 2>/dev/null | head -1 || true)"
   fi
   bash .devcontainer/post-start.sh'
 
-# --- 4) Forward the Claude OAuth token from the macOS Keychain at exec time ---
-kc() { security find-generic-password -s "$1" -w 2>/dev/null || true; }
+# --- 5) Forward the Claude OAuth token from the macOS Keychain at exec time ---
 EXEC_ENV=()
-if command -v security >/dev/null 2>&1; then
-  tok="$(kc 'vision-claude-code-token')"
-  [[ -n "$tok" ]] && EXEC_ENV+=(-e "CLAUDE_CODE_OAUTH_TOKEN=$tok")
+sandbox_forward_llm_creds vision-claude-code-token
+
+# --- 6) Launch-integrity gate (mandatory; fail closed) -----------------------
+# A missing checker is NOT a soft warning: the current Dockerfile always bakes
+# vision-verify-pins, so its absence means a stale pre-pin image is running
+# UNVERIFIED. Hard-abort and tell the operator to rebuild (matches bin/dev).
+if ! container exec --user "$SVC_USER" "$NAME" bash -lc 'command -v vision-verify-pins >/dev/null 2>&1'; then
+  echo "claude (vision): ABORT — vision-verify-pins is not baked into this image (stale pre-pin image)." >&2
+  echo "  The launch-integrity gate is mandatory; rebuild to bake it in: VISION_REBUILD=1 $0" >&2
+  exit 1
 fi
-have_claude=0
-for a in ${EXEC_ENV[@]+"${EXEC_ENV[@]}"}; do [[ "$a" == "CLAUDE_CODE_OAUTH_TOKEN="* ]] && have_claude=1; done
-if (( ! have_claude )); then
-  for var in CLAUDE_CODE_OAUTH_TOKEN ANTHROPIC_API_KEY ANTHROPIC_AUTH_TOKEN; do
-    val="${!var:-}"; [[ -n "$val" ]] && EXEC_ENV+=(-e "${var}=${val}")
-  done
+if ! container exec --user "$SVC_USER" -e BASH_ENV= "$NAME" vision-verify-pins --quiet; then
+  echo "claude (vision): ABORT — binary fingerprint drift (see above)." >&2
+  echo "  If you intentionally upgraded a tool, rebuild to re-pin: VISION_REBUILD=1 $0" >&2
+  exit 1
 fi
 
-# --- 5) Auto config-sync: push container changes back on exit -----------------
-AUTOSYNC="${VISION_AUTOSYNC:-1}"
-_autosync_done=0
-autosync_push() {
-  if [[ "$_autosync_done" == 1 ]]; then return 0; fi
-  _autosync_done=1
-  if [[ "$AUTOSYNC" != 1 || -z "$CID" ]]; then return 0; fi
-  command -v fish >/dev/null 2>&1 || return 0
-  fish -c "vision-claude-sync push $CID" \
-    || echo "claude (vision-compose): auto config-sync push failed — run 'vision-claude-sync push' to retry." >&2
-}
-trap autosync_push EXIT
+# --- 7) Auto config-sync on exit (OPT-IN; default off) -----------------------
+# Pushing container config back to the host is a code-exec persistence channel (a
+# prompt-injected agent could push hooks/plugins the host Claude later runs). The
+# push path is sanitized AND this is opt-in: enable per session with VISION_AUTOSYNC=1.
+sandbox_install_autosync_trap vision "$CID" "${VISION_AUTOSYNC:-0}"
 
+# --- 8) Open an interactive claude session -----------------------------------
+TTY_FLAGS=()
+[[ -t 0 && -t 1 ]] && TTY_FLAGS=(-i -t)
 set +e
-"${COMPOSE[@]}" exec -u dev ${EXEC_ENV[@]+"${EXEC_ENV[@]}"} "$SVC" claude "$@"
+container exec --user "$SVC_USER" ${TTY_FLAGS[@]+"${TTY_FLAGS[@]}"} ${EXEC_ENV[@]+"${EXEC_ENV[@]}"} "$NAME" claude "$@"
 _rc=$?
+
+# --- 9) Push project memory back to the host (interactive sessions only) ------
+# Host memory is mounted RO and mirrored (--delete) into the container every start
+# (post-start.sh), so a headless / prompt-injected run's memory writes are wiped.
+# Only an interactive operator session's edits — layered on the clean host seed —
+# are pushed back (additive tar, mirroring Brain's bin/agent). (F10/F27)
+if [[ ${#TTY_FLAGS[@]} -gt 0 ]]; then
+  host_mem="$HOME/.claude/projects/-Users-computer-Code-Vision/memory"
+  if mkdir -p "$host_mem" 2>/dev/null; then
+    if container exec --user "$SVC_USER" "$NAME" \
+         bash -lc 'd=/home/dev/.claude/projects/-workspaces-Vision/memory; [[ -d "$d" ]] && cd "$d" && tar -cf - . 2>/dev/null' 2>/dev/null \
+       | tar -C "$host_mem" -xf - 2>/dev/null; then
+      echo "claude (vision): project memory synced back to the host (interactive session)." >&2
+    fi
+  fi
+fi
 set -e
 exit "$_rc"

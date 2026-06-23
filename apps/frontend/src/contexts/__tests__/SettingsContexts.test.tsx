@@ -1,10 +1,10 @@
 // @vitest-environment jsdom
 import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
-import React, { type ReactNode } from "react";
+import { type ReactNode } from "react";
 import { renderHook, act, waitFor } from "@testing-library/react";
 import { http } from "msw";
 import { server } from "@/test/msw/server";
-import { ok, err } from "@/test/msw/handlers";
+import { ok } from "@/test/msw/handlers";
 import { apiClient } from "@/lib/api";
 import {
     useSettingsStore,

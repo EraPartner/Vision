@@ -3,18 +3,21 @@ title: Aggregations API
 type: endpoint
 status: active
 date: 2026-04-25
-updated: 2026-04-28
-last_modified: 2026-04-28
+updated: 2026-06-13
+last_modified: 2026-06-13
 recipient_pivot_added: 2026-04-28
-tags: [endpoint, api, aggregations, backend, phase-2, phase-6, phase-9, phase-10, phase-d, phase-e, phase-f, phase-g, phase-h, phase-h-v2, decimal, money, cashflow-forecast, multi-method-forecast, statistical-forecasting, ensemble-methods, accuracy-persistence, materialized-cache, nightly-job, category-breakdown, fallback-resilience, rolling-window, url-persistence, rolling-cache, rolling-diagnostics, recipient-pivot, saved-charts]
-description: Server-computed transaction aggregations with materialized-view source distinction; includes planned cash flow forecast (Phase 6), 8-method statistical forecast with inverse-MSE ensemble (Phase 10 + F), persisted accuracy metrics with fallback-to-memory resilience (Phase D), nightly cache materialization (Phase E), per-category breakdown with reconciliation (Phase G), rolling-window cash flow forecast (Phase H), and per-recipient spending pivot for custom charts (April 2026)
+tags: [endpoint, api, aggregations, backend, phase-2, phase-6, phase-9, phase-10, phase-d, phase-e, phase-f, phase-g, phase-h, phase-h-v2, decimal, money, cashflow-forecast, multi-method-forecast, statistical-forecasting, ensemble-methods, accuracy-persistence, materialized-cache, nightly-job, category-breakdown, fallback-resilience, rolling-window, url-persistence, rolling-cache, rolling-diagnostics, recipient-pivot, saved-charts, exclusion-filters, ensemble-v2]
+description: Server-computed transaction aggregations with materialized-view source distinction; includes planned cash flow forecast (Phase 6), 8-method statistical forecast with empirical-Bayes ensemble v2 (Phase 10 + F), persisted accuracy metrics with fallback-to-memory resilience (Phase D), nightly cache materialization (Phase E), per-category breakdown with reconciliation (Phase G), rolling-window cash flow forecast (Phase H), and per-recipient spending pivot for custom charts (April 2026). June 2026: recipient-insights endpoint accepts exclusion params; ensemble weighting upgraded to v2 (sample-size-shrunk RMSE + uniform-blend floor); bank-balances history changed from monthly to daily points (YYYY-MM-DD date field replaces month field).
 aliases: [aggregations, stats aggregation, computed stats, aggregation endpoints, cashflow-forecast, cash-flow-forecast, multi-method-forecast]
 related_code:
   - apps/node-backend/src/routes/aggregations.js
   - apps/node-backend/src/services/calculations/aggregation/
+  - apps/node-backend/src/services/calculations/aggregation/recipient.js
   - apps/node-backend/src/services/calculations/aggregation/recipientPivot.js
   - apps/node-backend/src/services/calculations/forecast/index.js
+  - apps/node-backend/src/services/calculations/forecast/methods/ensemble.js
   - apps/node-backend/src/services/calculations/forecast/categoryBreakdown.js
+  - apps/node-backend/src/repositories/infoRepositoryRecipients.js
   - apps/node-backend/src/repositories/infoRepositoryMonthly.js
   - apps/node-backend/src/repositories/infoRepo.forecast.js
   - apps/node-backend/src/repositories/cashflowForecastAccuracyRepository.js
@@ -23,6 +26,7 @@ related_code:
   - apps/node-backend/src/jobs/refreshCashflowForecastMc.js
   - apps/frontend/src/lib/api.ts
   - apps/frontend/src/lib/api/aggregations.ts
+  - apps/frontend/src/hooks/useStatistics.ts
   - apps/frontend/src/hooks/useRecipientPivot.ts
   - apps/frontend/src/utils/forecastMerge.ts
   - apps/frontend/src/hooks/useFilteredDashboardStats.ts
@@ -52,7 +56,7 @@ related_code:
 | **Base Path** | `/api/aggregations` |
 | **Methods** | GET (read-only) |
 | **Authentication** | None |
-| **Rate Limit** | None |
+| **Rate Limit** | 600 req/min (`aggregationRateLimiter`; bypassed in development) |
 
 ## Response Envelope
 
@@ -197,15 +201,20 @@ Spending totals by category.
 
 ### Recipient Insights
 
-Top merchants and month-over-month spending changes.
+Top merchants and month-over-month spending changes. Supports the same exclusion parameters as other aggregation endpoints so the "all years" Top Recipients chart on the Statistics page reacts to active filter toggles.
 
 **Path:** `GET /api/aggregations/recipient-insights`
+
+> [!info] June 2026 — Exclusion Support Added
+> `excluded_category_ids[]` and `excluded_recipient_ids[]` are now accepted (same repeatable-param style as `/monthly-summary`, `/cashflow-forecast-rolling`, etc.). The "all years" Top Recipients chart was previously unaffected by exclusion toggles; this is now fixed. Non-breaking — all params remain optional, no path or response-shape change.
 
 **Query Parameters:**
 
 | Parameter | Type | Default | Description |
 |-----------|------|---------|-------------|
 | `currency` | string | EUR | Target currency |
+| `excluded_category_ids[]` | integer[] | [] | Categories to exclude (applied via `COALESCE(t.category_id, r.default_category_id)`) |
+| `excluded_recipient_ids[]` | integer[] | [] | Recipients to exclude (applied via `COALESCE(pr.id, r.id)` to resolve cluster roots) |
 
 **Response (data field):**
 
@@ -302,7 +311,7 @@ Average metrics vs. current period (always computed live in Phase 2).
 
 ### Bank Balances
 
-Account balances and historical balance data.
+Account balances and daily historical balance data over the last 12 months.
 
 **Path:** `GET /api/aggregations/bank-balances`
 
@@ -311,6 +320,11 @@ Account balances and historical balance data.
 | Parameter | Type | Default | Description |
 |-----------|------|---------|-------------|
 | `currency` | string | EUR | Target currency |
+
+> [!info] History granularity changed to daily (2026-06-11)
+> The `history` and `total_history` arrays previously used monthly `{ month: 'YYYY-MM' }` points. They now emit one point per calendar day (`{ date: 'YYYY-MM-DD' }`) over the last 12 months, using a `LATERAL` probe to find the latest recorded balance ≤ each day. **The `month` field is gone; use `date` instead.**
+>
+> Motivation: the dashboard Balance History chart uses a time-scale axis that auto-generates tick marks based on available data density. With ~12 monthly points the auto-ticks had wider spacing than the data, causing duplicate month labels. ~365 daily points match or exceed the tick density and eliminate the duplication. The `LATERAL` index scan (`idx_transactions_bank_date_active`) keeps each daily probe cheap.
 
 **Response (data field):**
 
@@ -328,15 +342,15 @@ Account balances and historical balance data.
   "total_net_position": 12450.75,
   "history": {
     "IBAN:BE12345678901234": [
-      { "month": "2026-01", "balance": 4800.00 },
-      { "month": "2026-02", "balance": 5100.00 },
-      { "month": "2026-03", "balance": 5230.50 }
+      { "date": "2026-04-08", "balance": 4800.00 },
+      { "date": "2026-04-09", "balance": 4800.00 },
+      { "date": "2026-04-10", "balance": 5230.50 }
     ]
   },
   "total_history": [
-    { "month": "2026-01", "balance": 9500.00 },
-    { "month": "2026-02", "balance": 10200.00 },
-    { "month": "2026-03", "balance": 12450.75 }
+    { "date": "2026-04-08", "balance": 9500.00 },
+    { "date": "2026-04-09", "balance": 9500.00 },
+    { "date": "2026-04-10", "balance": 12450.75 }
   ]
 }
 ```
@@ -438,6 +452,80 @@ const envelope = await apiClient.getAggregationRecipientPivot({
 **Use Case:**
 
 The Recipient Pivot endpoint powers the **Custom Charts** feature's ability to render charts with recipients (merchants) as independent series alongside categories. When a user saves a chart with `recipient_ids` populated, the frontend calls this endpoint with the chart's filters and renders the result as a multi-series chart.
+
+---
+
+### Category Pivot
+
+Aggregated spending data pivoted by category with support for exclusion filters.
+
+**Path:** `GET /api/aggregations/category-pivot`
+
+**Query Parameters:**
+
+| Parameter | Type | Default | Description |
+|-----------|------|---------|-------------|
+| `currency` | string | EUR | Target currency (3-letter code, case-insensitive) |
+| `excluded_category_ids[]` | integer[] | [] | Categories to exclude |
+| `excluded_recipient_ids[]` | integer[] | [] | Recipients to exclude |
+
+**Response (data field):**
+
+```json
+{
+  "categories": [
+    {
+      "category_id": 5,
+      "name": "FOOD:GROCERIES",
+      "total": 1250.75,
+      "count": 42
+    }
+  ]
+}
+```
+
+**Notes:**
+- Serves as an alternative category-level pivot, supporting exclusion filters for filtered dashboard views
+- `meta.source` is `'live'` when exclusion filters are present, `'mv'` otherwise
+
+---
+
+### Recipient by Year
+
+Aggregated per-recipient spending broken out by calendar year, with support for exclusion filters.
+
+**Path:** `GET /api/aggregations/recipient-by-year`
+
+**Query Parameters:**
+
+| Parameter | Type | Default | Description |
+|-----------|------|---------|-------------|
+| `currency` | string | EUR | Target currency (3-letter code, case-insensitive) |
+| `excluded_recipient_ids[]` | integer[] | [] | Recipients to exclude |
+| `excluded_category_ids[]` | integer[] | [] | Categories to exclude |
+
+**Response (data field):**
+
+```json
+{
+  "recipients": [
+    {
+      "recipient_id": 10,
+      "recipient_name": "SuperMart",
+      "years": [
+        { "year": 2025, "total": 1850.00, "count": 32 },
+        { "year": 2026, "total": 980.50, "count": 17 }
+      ],
+      "total": 2830.50,
+      "count": 49
+    }
+  ]
+}
+```
+
+**Notes:**
+- Powers year-over-year recipient spending views
+- `meta.source` is `'live'` when exclusion filters are present, `'mv'` otherwise
 
 ---
 
@@ -921,7 +1009,7 @@ Real-time cash flow forecast for the current month using eight forecasting metho
 | `prophet_lite` | Prophet Lite | Point | Piecewise-linear trend + Fourier (K=3 weekly, K=10 yearly) + Belgian holiday dummies; needs ≥60 days or returns zeros |
 | `monte_carlo_parametric` | Monte Carlo (Parametric) | Distribution | Gaussian sampling per (day-of-week, day-of-month) bucket; includes confidence bands |
 | `monte_carlo_block_bootstrap` | Monte Carlo (Block Bootstrap) | Distribution | Stationary block bootstrap over detrended residuals (L=7 block length); includes confidence bands |
-| `ensemble_imse` | Ensemble (inv-MSE) | Combination | Weighted average of 5 point methods using inverse-MSE (1/RMSE²) weights from historical accuracy; falls back to equal weights when accuracy data unavailable |
+| `ensemble_imse` | Ensemble (v2) | Combination | Weighted average of 5 point methods using sample-size-shrunk inverse-MSE weights (empirical Bayes: `(n·rmse + K·meanRmse)/(n+K)`, K=30 days) blended toward a uniform 5% floor; falls back to equal weights when accuracy data unavailable. Label changed from "Ensemble (inv-MSE)" to "Ensemble (v2)" in June 2026. |
 
 **Determinism & Reproducibility:**
 
@@ -940,15 +1028,18 @@ When using default parameters (mc_paths=1000, mc_percentiles=[10,50,90]), respon
 - Nightly job (`refreshCashflowForecastMc`) precomputes forecasts for all active users at ~02:00 UTC
 - Cache lookup is O(1) DB query (~5ms); live computation with 1000 paths ≈ 300-500ms
 
-**Ensemble Method (Phase F):**
+**Ensemble Method (Phase F + v2, June 2026):**
 
-The 8th method (`ensemble_imse`) is a weighted combination of the 5 point-forecast methods:
-- Weights derived from inverse-MSE (1/RMSE²) of historical accuracy metrics in `cashflow_forecast_accuracy` table
-- Higher-performing methods (lower RMSE) receive higher weights; weights always sum to 1.0
+The 8th method (`ensemble_imse`, label "Ensemble (v2)") is a weighted combination of the 5 point-forecast methods. v2 improves on the original plain inverse-MSE weighting with two refinements:
+
+1. **Sample-size shrinkage (empirical Bayes):** Each method's RMSE is shrunk toward the cross-method mean RMSE proportionally to how few sample days backed its backtest — `(n·rmse + K·meanRmse) / (n + K)` where K=30 days. A method with few backtest days is pulled toward the average (trusted less); as `sampleDays` grows, shrinkage vanishes and we recover plain inverse-MSE.
+2. **Uniform-blend floor:** The normalized inverse-MSE weights are mixed with a 5% equal-weight floor so no single method dominates on noisy backtest accuracy and every method retains a minimum contribution.
+
+Other characteristics (unchanged from Phase F):
 - Falls back to equal weights (0.2 per method) on first run or when accuracy data is unavailable (e.g., after migration)
 - Runs after all 7 base methods; excludes MC methods and any errored methods from the combination
 - Provides a data-driven forecast without requiring manual tuning
-- Ensemble diagnostics available in response: `diagnostics.ensemble_weights` shows per-method inverse-MSE weights
+- `sampleDays` is read from the accuracy row in `cashflow_forecast_accuracy` to drive shrinkage strength
 
 **Frontend Integration (Phase C):**
 
@@ -1152,7 +1243,11 @@ const envelope = await apiClient.getAggregationMonthlySummary({
 const catEnvelope = await apiClient.getAggregationCategoryBreakdown({ currency: 'EUR' });
 
 // Other endpoints
-await apiClient.getAggregationRecipientInsights({ currency: 'EUR' });
+await apiClient.getAggregationRecipientInsights({
+  currency: 'EUR',
+  excluded_category_ids: [5, 10],   // optional — June 2026
+  excluded_recipient_ids: [3],       // optional — June 2026
+});
 await apiClient.getAggregationCashflowComparison({ currency: 'EUR' });
 await apiClient.getAggregationAverageVsCurrent({ currency: 'EUR' });
 await apiClient.getAggregationBankBalances({ currency: 'EUR' });

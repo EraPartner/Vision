@@ -16,7 +16,7 @@ import { buildPortfolioPerformancePayload } from './_performanceHelpers.js';
 
 const router = Router();
 
-router.get('/portfolio-performance', rateLimiter({ windowMs: 60_000, maxRequests: 30 }), async (req, res) => {
+router.get('/portfolio-performance', rateLimiter({ windowMs: 60_000, maxRequests: 30, keyPrefix: 'portfolio-performance' }), async (req, res) => {
   const targetCurrency = getTargetCurrency(req);
   const period = req.query.period || 'all';
   const startDate = '2000-01-01';

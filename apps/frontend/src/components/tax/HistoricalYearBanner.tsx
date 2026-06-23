@@ -33,14 +33,14 @@ interface HistoricalYearBannerProps {
 }
 
 const MODE_CLASS: Record<HistoricalYearBannerMode, string> = {
-    filed: 'border-amber-500/40 bg-amber-500/5',
+    filed: 'border-warning/40 bg-warning/5',
     frozen: 'border-sky-500/40 bg-sky-500/5',
     snapshot: 'border-primary/30 bg-primary/5',
     estimate: 'border-primary/30 bg-primary/5',
 };
 
 const MODE_ICON_CLASS: Record<HistoricalYearBannerMode, string> = {
-    filed: 'text-amber-600',
+    filed: 'text-warning',
     frozen: 'text-sky-600',
     snapshot: 'text-primary',
     estimate: 'text-primary',
@@ -69,7 +69,7 @@ export function HistoricalYearBanner({
                 <span className="text-xs text-muted-foreground">
                     {t(descKey, { year: String(viewedYear) })}
                     {mode === 'filed' && filingReference && (
-                        <span className="ml-1 font-medium text-amber-700">
+                        <span className="ml-1 font-medium text-warning">
                             ({t('tax.historical.banner.filedReferencePrefix')}: {filingReference})
                         </span>
                     )}

@@ -15,8 +15,8 @@ import type { RouteMetric, EndpointEntry } from '@/lib/api/admin';
 function methodBadgeClass(method: string) {
     switch (method) {
         case 'GET': return 'bg-blue-500/10 text-blue-700 dark:text-blue-400';
-        case 'POST': return 'bg-green-500/10 text-green-700 dark:text-green-400';
-        case 'PATCH': case 'PUT': return 'bg-amber-500/10 text-amber-700 dark:text-amber-400';
+        case 'POST': return 'bg-success/10 text-success';
+        case 'PATCH': case 'PUT': return 'bg-warning/10 text-warning';
         case 'DELETE': return 'bg-destructive/10 text-destructive';
         default: return 'bg-muted text-muted-foreground';
     }
@@ -24,7 +24,7 @@ function methodBadgeClass(method: string) {
 
 function errorRateBadgeClass(rate: number) {
     if (rate >= 10) return 'text-destructive font-semibold';
-    if (rate > 2) return 'text-amber-600 dark:text-amber-400';
+    if (rate > 2) return 'text-warning';
     return 'text-muted-foreground';
 }
 

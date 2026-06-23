@@ -23,7 +23,7 @@ aliases: [architecture deep dive, system design, design patterns, architectural 
 │                        Electron Shell                        │
 │  ┌──────────────────────┐    ┌───────────────────────────┐  │
 │  │   Chromium Renderer   │    │   Node.js Backend          │  │
-│  │   (React 18 + Vite)   │◄──►│   (Express + Bun)          │  │
+│  │   (React 19 + Vite)   │◄──►│   (Express + Bun)          │  │
 │  │                      │ IPC│                            │  │
 │  │  ┌────────────────┐  │    │  ┌──────────────────────┐  │  │
 │  │  │ React Contexts │  │    │  │  Routes (Express)    │  │  │
@@ -204,7 +204,7 @@ User Action
 
 ```
 Frontend Dependencies:
-├── React 18 (UI framework)
+├── React 19 (UI framework)
 ├── TypeScript (type safety)
 ├── Vite (build tool)
 ├── Tailwind CSS (styling)

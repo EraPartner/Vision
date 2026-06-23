@@ -37,8 +37,11 @@ vi.mock('../../src/config/logger.js', () => ({
   logger: { info: vi.fn(), error: vi.fn(), warn: vi.fn(), debug: vi.fn() },
 }));
 
-vi.mock('../../src/services/materializedViewService.js', () => ({
-  scheduleRefresh: vi.fn(),
+vi.mock('../../src/services/transferReconciliationService.js', () => ({
+  scheduleReconcile: vi.fn(),
+  getTransferSuggestions: vi.fn(),
+  markTransfer: vi.fn(),
+  unmarkTransfer: vi.fn(),
 }));
 
 vi.mock('../../src/services/currency/currencyConversionService.js', () => ({
@@ -70,7 +73,7 @@ vi.mock('../../src/database/connection.js', () => {
 await import('../../src/routes/transactions.js');
 
 import { getClient, query as dbQuery } from '../../src/database/connection.js';
-import { scheduleRefresh } from '../../src/services/materializedViewService.js';
+import { scheduleReconcile } from '../../src/services/transferReconciliationService.js';
 
 const handler = routeHandlers['post:/bulk-delete'];
 
@@ -128,7 +131,7 @@ describe('POST /bulk-delete — id-mode success', () => {
 
     const data = res.json.mock.calls[0][0].data;
     expect(data.deleted).toBe(3);
-    expect(scheduleRefresh).toHaveBeenCalledTimes(1);
+    expect(scheduleReconcile).toHaveBeenCalledTimes(1);
 
     const deleteCall = clientQuery.mock.calls.find(([sql]) => sql.includes('DELETE FROM transactions'));
     expect(deleteCall).toBeDefined();
@@ -147,7 +150,7 @@ describe('POST /bulk-delete — id-mode success', () => {
     await callHandler({ body: { ids: [9999] } }, res);
 
     expect(res.json.mock.calls[0][0].data.deleted).toBe(0);
-    expect(scheduleRefresh).not.toHaveBeenCalled();
+    expect(scheduleReconcile).not.toHaveBeenCalled();
   });
 });
 
@@ -197,7 +200,7 @@ describe('POST /bulk-delete — atomicity', () => {
     const res = mockResponse();
     await callHandler({ body: { ids: [1] } }, res);
 
-    expect(scheduleRefresh).not.toHaveBeenCalled();
+    expect(scheduleReconcile).not.toHaveBeenCalled();
     expect(res.status).toHaveBeenCalledWith(500);
     const rollback = clientQuery.mock.calls.find(([sql]) => sql === 'ROLLBACK');
     expect(rollback).toBeDefined();

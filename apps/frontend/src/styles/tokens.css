@@ -8,10 +8,10 @@
 
 @layer base {
     :root {
-        /* -------- Surface & text (light polished) -------- */
-        --background: 42 30% 97%;
-        /* warm ivory */
-        --foreground: 200 18% 10%;
+        /* -------- Surface & text (light polished: paper & ink) -------- */
+        --background: 40 36% 96%;
+        /* warm paper ivory */
+        --foreground: 200 20% 9%;
         /* deep ink */
 
         --card: 0 0% 100%;
@@ -20,14 +20,14 @@
         --popover: 0 0% 100%;
         --popover-foreground: 200 18% 10%;
 
-        --muted: 42 18% 93%;
-        --muted-foreground: 200 10% 36%;
+        --muted: 40 22% 92%;
+        --muted-foreground: 200 12% 34%;
 
         --secondary: 42 18% 93%;
         --secondary-foreground: 200 18% 10%;
 
-        --border: 42 15% 87%;
-        --input: 42 15% 87%;
+        --border: 40 18% 85%;
+        --input: 40 18% 85%;
 
         /* -------- Brand -------- */
         --primary: 158 62% 32%;
@@ -87,12 +87,18 @@
         --glass-tint: 158 40% 40%;
 
         /* Blur + saturation per material */
-        --glass-thin-blur: 6px;
-        --glass-regular-blur: 8px;
-        --glass-thick-blur: 10px;
-        --glass-chrome-blur: 8px;
-        --glass-elevated-blur: 12px;
-        --glass-saturate: 110%;
+        --glass-thin-blur: 12px;
+        --glass-regular-blur: 20px;
+        --glass-thick-blur: 28px;
+        --glass-chrome-blur: 24px;
+        --glass-elevated-blur: 32px;
+        --glass-saturate: 180%;
+
+        /* -------- Atmosphere (liquid canvas) -------- */
+        --aurora-primary-alpha: 0.1;
+        --aurora-accent-alpha: 0.08;
+        --aurora-wash-alpha: 0.06;
+        --grain-alpha: 0.018;
 
         /* -------- Motion -------- */
         --duration-fast: 150ms;
@@ -185,5 +191,14 @@
         --glass-highlight: 42 40% 94%;
         --glass-shadow: 0 0% 0%;
         --glass-tint: 158 50% 45%;
+        --glass-saturate: 150%;
+
+        /* -------- Atmosphere (dark: more luminous aurora) --------
+           Peaks tuned down 2026-06-11: light foreground text sits directly on
+           this canvas (page headers), and brighter washes cost legibility. */
+        --aurora-primary-alpha: 0.13;
+        --aurora-accent-alpha: 0.1;
+        --aurora-wash-alpha: 0.08;
+        --grain-alpha: 0.028;
     }
 }
