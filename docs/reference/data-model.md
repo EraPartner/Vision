@@ -3,9 +3,10 @@ title: Data Model Reference
 type: reference
 status: active
 date: 2026-04-24
-updated: 2026-05-12
-tags: [reference, data-model, entities, database, schema, phase-5a, phase-0, phase-1, may-2026, tags, tagging, orthogonal-dimension, aggregations, migration-0035]
-description: Complete reference for all data entities in Vision — core, portfolio, planning, supporting, and aggregation entities. Includes exchange_rate_cache (Phase 0), aggregation tables (Phase 1, consolidated in 0035), attachment entity (Phase 5A), and transaction tags (May 2026).
+updated: 2026-06-18
+last_modified: 2026-06-18
+tags: [reference, data-model, entities, database, schema, phase-5a, phase-0, phase-1, may-2026, tags, tagging, orthogonal-dimension, aggregations, migration-0035, saved-custom-parsers, custom-parser-configs, adr-066, fx-attribution, value-fx-neutral, adr-074, migration-0039, portfolio-import, portfolio-import-batches, portfolio-import-staging-rows, kind-discriminator, migration-0040, migration-0041, adr-078]
+description: Complete reference for all data entities in Vision — core, portfolio, planning, supporting, and aggregation entities. Includes exchange_rate_cache (Phase 0), aggregation tables (Phase 1, consolidated in 0035), attachment entity (Phase 5A), transaction tags (May 2026), custom_parser_configs (June 2026, ADR-066) with kind discriminator (June 2026, ADR-078 migration 0041), value_fx_neutral snapshot column (June 2026, ADR-074 migration 0039), portfolio_import_batches and portfolio_import_staging_rows (June 2026, ADR-078 migration 0040), watchlist.added_price (June 2026, ADR-097 migration 0058), portfolio_import_batches.account_id (June 2026, ADR-091 migration 0057), and supporting entities transaction_splits, split_payments, split_audit, import_batches, provider_health, recipient_match_patterns, asset_price_history (June 2026).
 aliases: [data model, entities, domain model, schema entities]
 related_code: ["apps/node-backend/src/repositories/", "alembic/versions/"]
 ---
@@ -28,19 +29,64 @@ related_code: ["apps/node-backend/src/repositories/", "alembic/versions/"]
 | `id` | SERIAL | PK | Unique identifier |
 | `date` | DATE | NOT NULL | Transaction date |
 | `amount` | NUMERIC(15,2) | NOT NULL | Amount (negative=expense, positive=income) |
-| `currency` | VARCHAR(3) | DEFAULT 'EUR' | Currency code |
+| `currency` | VARCHAR(3) | NOT NULL, DEFAULT 'EUR', CHECK (`currency ~ '^[A-Z]{3}$'`) NOT VALID | Currency code (migration 0046 — see note below) |
 | `balance` | NUMERIC(15,2) | NULLABLE | Running balance after transaction |
 | `memo` | TEXT | NULLABLE | Original bank description |
 | `comment` | TEXT | NULLABLE | User-added note |
-| `bank_account` | TEXT | NULLABLE | Source bank account |
+| `bank_account` | TEXT | NULLABLE | Source bank account (string; being retired in favour of `account_id` — ADR-088) |
+| `account_id` | INTEGER | FK → accounts ON DELETE RESTRICT, NULLABLE | Owning account (ADR-088, migration 0050); kept in sync with `bank_account` by the dual-write trigger (migration 0051) |
 | `recipient_id` | INTEGER | FK → recipients | Associated recipient |
 | `recipient_bank_account_id` | INTEGER | FK → recipient_bank_accounts | Specific bank account |
-| `category_id` | INTEGER | FK → categories | Associated category |
+| `category_id` | INTEGER | FK → categories ON DELETE SET NULL, NULLABLE | Associated category; FK updated to ON DELETE SET NULL by migration 0048 — deleting a category un-categorizes affected rows |
 | `is_active` | BOOLEAN | DEFAULT true | Soft delete |
+| `import_batch_id` | BIGINT | FK → import_batches ON DELETE SET NULL, NULLABLE | Import batch that created this transaction; NULL for manual entries and pre-pipeline rows (migration 0003) |
+| `updated_at` | TIMESTAMPTZ | NOT NULL, DEFAULT NOW() | Last modification timestamp; NOT NULL enforced by migration 0022 |
+| `tx_hash` | TEXT | UNIQUE (partial, WHERE NOT NULL), NULLABLE | Import-pipeline deduplication hash; NULL for manually-entered transactions; enables race-safe `ON CONFLICT (tx_hash) DO NOTHING` (migration 0036) |
+| `is_transfer` | BOOLEAN | NOT NULL, DEFAULT false | Internal transfer between own accounts — excluded from cash-flow aggregates by default (ADR-083, migration 0044) |
+| `transfer_peer_id` | INTEGER | FK → transactions ON DELETE SET NULL, NULLABLE | The matched transfer leg (self-referential pairing) |
+| `transfer_source` | TEXT | NULLABLE, CHECK `auto` \| `manual` | How the transfer was marked; `manual` is sticky and never overwritten by auto-detection |
 
-**Indexes:** `idx_transactions_date`, `idx_transactions_recipient`, `idx_transactions_category`
+**Indexes:** `idx_transactions_date`, `idx_transactions_recipient`, `idx_transactions_category`, `idx_transactions_amount_date` (transfer matching), `idx_transactions_transfer_peer` (partial, peer lookups)
+
+> [!warning] Pending migrations (AUTHORED, NOT YET APPLIED)
+> - **0046**: backfills `currency` NULL → `'EUR'`; adds ISO format CHECK (`^[A-Z]{3}$`) NOT VALID; sets `DEFAULT 'EUR' NOT NULL`. Three INSERT paths now write `'EUR'` instead of NULL (`transactionRepository.create`, `plannedTransactionRepository.create`, `importPipeline/commit.js`).
+> - **0048**: changes `category_id` FK to `ON DELETE SET NULL` (previously implicit RESTRICT, which surfaced as 500 on category delete).
+> - **0047**: adds partial unique index `uq_recipient_primary_account ON recipient_bank_accounts (recipient_id) WHERE is_primary` (see RecipientBankAccount below).
+> - **0050** (ADR-088): creates the `accounts` table + nullable `account_id` FKs (`ON DELETE RESTRICT`) on transactions/planned_transactions, backfilled one account per distinct `bank_account` string.
+> - **0051** (ADR-088): `BEFORE INSERT/UPDATE` trigger that keeps `account_id` in sync with `bank_account` (dual-write phase).
 
 **Related:** [[docs/features/transactions|Transactions Feature]], [[docs/api/transactions|Transactions API]]
+
+---
+
+### Account
+
+**Purpose:** The user's own account (ADR-088) — the spine tying budgeting cash, portfolio
+holdings, and liabilities together. Distinct from `recipient_bank_accounts` (counterparty IBANs).
+
+| Field | Type | Constraints | Description |
+|-------|------|-------------|-------------|
+| `id` | SERIAL | PK | Unique identifier |
+| `name` | TEXT | NOT NULL, UNIQUE | Canonical account name (backfilled from `bank_account`) |
+| `display_name` | TEXT | NULLABLE | Friendly label |
+| `institution` | TEXT | NULLABLE | Bank / broker |
+| `currency` | VARCHAR(3) | NOT NULL, DEFAULT 'EUR', CHECK (`^[A-Z]{3}$`) | ISO-4217 (ADR-086 convention) |
+| `type` | account_type | NOT NULL, DEFAULT 'checking' | checking/savings/brokerage/crypto_exchange/wallet/pension/liability |
+| `liquidity_class` | account_liquidity_class | NOT NULL, DEFAULT 'liquid' | liquid/semi_liquid/illiquid |
+| `spendable` | BOOLEAN | NOT NULL, DEFAULT true | Spendable vs earmarked |
+| `in_net_worth` | BOOLEAN | NOT NULL, DEFAULT true | Counts toward net worth |
+| `tax_wrapper` | account_tax_wrapper | NOT NULL, DEFAULT 'none' | none/pension/tax_advantaged |
+| `owner` | account_owner | NOT NULL, DEFAULT 'me' | me/partner/joint (feeds marital quotient) |
+| `multi_currency_cash` | BOOLEAN | NOT NULL, DEFAULT false | Holds cash in multiple currencies |
+| `has_cash_sleeve` | BOOLEAN | NOT NULL, DEFAULT true | Holds a spendable cash balance (false for holding-only wallets) |
+| `funding_account_id` | INTEGER | FK → accounts ON DELETE SET NULL, NULLABLE | Settlement account for sleeve-less trades |
+| `is_active` | BOOLEAN | NOT NULL, DEFAULT true | Archived when false |
+| `created_at` / `updated_at` | TIMESTAMPTZ | NOT NULL, DEFAULT NOW() | Timestamps (`updated_at` trigger) |
+
+The flag columns exist from migration 0050; their semantics are activated in ADR-089. Flag enum
+types: `account_type`, `account_liquidity_class`, `account_tax_wrapper`, `account_owner`.
+
+**Related:** [[docs/api/accounts|Accounts API]], [[docs/adr/088-account-entity|ADR-088]]
 
 ---
 
@@ -53,7 +99,7 @@ related_code: ["apps/node-backend/src/repositories/", "alembic/versions/"]
 | `id` | SERIAL | PK | Unique identifier |
 | `name` | TEXT | NOT NULL | Display name |
 | `normalized_name` | TEXT | UNIQUE | Canonical form for matching |
-| `default_category_id` | INTEGER | FK → categories | Suggested category |
+| `default_category_id` | INTEGER | FK → categories ON DELETE SET NULL, NULLABLE | Suggested category; FK updated to ON DELETE SET NULL by migration 0048 |
 | `primary_recipient_id` | INTEGER | FK → recipients | Merge target (self-referencing) |
 | `notes` | TEXT | NULLABLE | User notes |
 | `is_active` | BOOLEAN | DEFAULT true | Soft delete |
@@ -142,6 +188,11 @@ related_code: ["apps/node-backend/src/repositories/", "alembic/versions/"]
 | `is_primary` | BOOLEAN | DEFAULT false | Primary payment account |
 | `is_active` | BOOLEAN | DEFAULT true | Soft delete |
 
+**Indexes:** Partial unique index `uq_recipient_primary_account ON recipient_bank_accounts (recipient_id) WHERE is_primary` — enforces at most one primary account per recipient at the DB level (migration 0047, AUTHORED NOT YET APPLIED; previously enforced at application level only).
+
+> [!warning] Pending migration 0047 (AUTHORED, NOT YET APPLIED)
+> Pre-existing duplicate primaries are demoted (lowest `id` wins) before the index is built. Downgrade drops the index but does not restore the prior duplicates.
+
 **Related:** [[docs/api/recipientBankAccounts|Recipient Bank Accounts API]]
 
 ---
@@ -158,7 +209,8 @@ related_code: ["apps/node-backend/src/repositories/", "alembic/versions/"]
 | `planned_date` | DATE | NOT NULL | Scheduled date |
 | `amount` | NUMERIC(15,2) | NOT NULL | Planned amount |
 | `recipient_id` | INTEGER | FK → recipients | Payee |
-| `category_id` | INTEGER | FK → categories | Category |
+| `category_id` | INTEGER | FK → categories ON DELETE SET NULL, NULLABLE | Category; FK updated to ON DELETE SET NULL by migration 0048 |
+| `currency` | VARCHAR(3) | NOT NULL, DEFAULT 'EUR', CHECK (`currency ~ '^[A-Z]{3}$'`) NOT VALID | Currency code (migration 0046, AUTHORED NOT YET APPLIED) |
 | `is_recurring` | BOOLEAN | DEFAULT false | Recurring flag |
 | `recurrence_pattern` | TEXT | NULLABLE | Pattern (daily, weekly, monthly, etc.) |
 | `reminder_days_before` | INTEGER | NULLABLE | Days before planned_date to show reminder (Phase 6) |
@@ -262,9 +314,14 @@ related_code: ["apps/node-backend/src/repositories/", "alembic/versions/"]
 | `symbol` | VARCHAR(20) | NOT NULL | Trading symbol |
 | `asset_class` | asset_class | NOT NULL | Asset type |
 | `target_price` | NUMERIC(18,6) | NOT NULL | Target price |
+| `added_price` | NUMERIC(18,6) | NULLABLE | **New (ADR-097, migration 0058 — authored, not applied).** Live quote snapshotted at add time; used for the "Since added +X%" what-if backtest. `null` when no live quote was available at add time or migration not yet applied. |
 | `currency` | VARCHAR(10) | NULLABLE | Currency |
 
-**Related:** [[docs/features/watchlist|Watchlist Feature]], [[docs/api/watchlist|API]]
+> [!info] Migration 0058 required
+> `added_price` is added by migration `0058_watchlist_added_price` (authored, not applied). Existing
+> rows will have `added_price = null` until set manually via `PATCH /api/watchlist/:id`.
+
+**Related:** [[docs/features/watchlist|Watchlist Feature]], [[docs/api/watchlist|API]], [[docs/adr/097-portfolio-research-analytics|ADR-097]]
 
 ---
 
@@ -288,12 +345,16 @@ related_code: ["apps/node-backend/src/repositories/", "alembic/versions/"]
 | `gain_loss` | NUMERIC(18,2) | Absolute gain/loss (`value - invested`) |
 | `return_pct` | NUMERIC(8,4) | Percentage gain/loss |
 | `inflation_adjusted_value` | NUMERIC(18,2) | Value adjusted for Belgian inflation |
+| `value_fx_neutral` | NUMERIC(18,2) NULLABLE | **New (ADR-074, migration 0039).** Portfolio value at each investment's cost-weighted average purchase-date rate. `value − value_fx_neutral` = cumulative FX effect. Absent (NULL) until migration 0039 is applied and snapshots are recomputed. Writer detects column presence and degrades gracefully on un-migrated databases. |
 | `computed_at` | TIMESTAMPTZ | When this row was last computed |
 
 > [!info] Valuation parity (2026-05-18)
 > `cash_value` (and by extension `value`) now mirrors `portfolioSummaryService` formulas exactly. The latest snapshot's `value` reconciles with `GET /api/info/portfolio-summary`. See [[docs/adr/061-snapshot-valuation-parity|ADR-061]].
 
-**Related:** [[docs/performance/caching-strategies|Caching Strategies]], [[docs/adr/043-portfolio-snapshot-atomicity|ADR-043]], [[docs/adr/061-snapshot-valuation-parity|ADR-061]]
+> [!info] FX-neutral series (2026-06-11)
+> `value_fx_neutral` is added by migration `0039_add_value_fx_neutral_to_snapshots`. Until the migration is applied and snapshots are recomputed (next startup after `bun run db:upgrade`), the column is absent and the FX-neutral performance chart toggle shows no data. See [[docs/adr/074-fx-attribution-historical-rates|ADR-074]].
+
+**Related:** [[docs/performance/caching-strategies|Caching Strategies]], [[docs/adr/043-portfolio-snapshot-atomicity|ADR-043]], [[docs/adr/061-snapshot-valuation-parity|ADR-061]], [[docs/adr/074-fx-attribution-historical-rates|ADR-074]]
 
 ---
 
@@ -377,6 +438,157 @@ related_code: ["apps/node-backend/src/repositories/", "alembic/versions/"]
 - `ATTACHMENT_MAX_SIZE_MB` configurable via environment (default 10)
 
 **Related:** [[docs/api/attachments|Attachments API]], [[docs/features/import|Import Feature (Phase 5A)]], migration [[alembic/versions/0004_attachments.py|0004]]
+
+---
+
+### ImportBatch
+
+**Purpose:** Tracks each CSV import run through the pipeline from staging to completion. Each committed batch links its transactions via `transactions.import_batch_id`, enabling per-batch rollback and history.
+
+| Field | Type | Constraints | Description |
+|-------|------|-------------|-------------|
+| `id` | BIGSERIAL | PK | Unique batch identifier |
+| `adapter_name` | TEXT | NOT NULL | Bank adapter used (e.g., `belfius`, `revolut`) |
+| `source_filename` | TEXT | NULLABLE | Original uploaded filename |
+| `source_size_bytes` | BIGINT | NULLABLE | File size in bytes |
+| `custom_config` | JSONB | NULLABLE | Custom parser config snapshot at import time |
+| `status` | TEXT | NOT NULL, DEFAULT 'pending' | Pipeline status: `pending`, `staging`, `validating`, `matching`, `committing`, `complete`, `failed`, `aborted`, `awaiting_review` |
+| `rows_total` | INTEGER | NOT NULL, DEFAULT 0 | Total rows parsed |
+| `rows_imported` | INTEGER | NOT NULL, DEFAULT 0 | Rows committed to `transactions` |
+| `rows_duplicate` | INTEGER | NOT NULL, DEFAULT 0 | Rows skipped as duplicates |
+| `rows_error` | INTEGER | NOT NULL, DEFAULT 0 | Rows that failed processing |
+| `error_summary` | TEXT | NULLABLE | Human-readable error description |
+| `started_at` | TIMESTAMPTZ | NOT NULL, DEFAULT NOW() | When the batch was created |
+| `completed_at` | TIMESTAMPTZ | NULLABLE | When the batch reached a terminal state |
+
+**Indexes:** `idx_import_batches_status` (partial, non-terminal only), `idx_import_batches_started_at`
+
+**Related:** [[docs/features/import|Import Feature]], [[docs/api/imports|Imports API]], migration [[alembic/versions/0001_initial_database_schema.py|0001]], [[alembic/versions/0003_import_batch_id_on_transactions.py|0003]]
+
+---
+
+### TransactionSplit
+
+**Purpose:** Tracks money owed by a recipient from a shared expense transaction. Each split records a portion of a transaction that a specific person owes back.
+
+| Field | Type | Constraints | Description |
+|-------|------|-------------|-------------|
+| `id` | SERIAL | PK | Unique identifier |
+| `transaction_id` | INTEGER | NOT NULL, FK → transactions ON DELETE CASCADE | Parent transaction |
+| `recipient_id` | INTEGER | NOT NULL, FK → recipients ON DELETE CASCADE | Person who owes this amount |
+| `amount` | NUMERIC(15,2) | NOT NULL | Amount owed |
+| `note` | TEXT | NULLABLE | Optional note |
+| `is_settled` | BOOLEAN | NOT NULL, DEFAULT false | Whether the split is fully settled |
+| `created_at` | TIMESTAMPTZ | NOT NULL, DEFAULT NOW() | Creation timestamp |
+| `updated_at` | TIMESTAMPTZ | NOT NULL, DEFAULT NOW() | Last modification timestamp; auto-bumped by trigger |
+
+**Indexes:** `idx_splits_transaction`, `idx_splits_recipient`, `idx_splits_unsettled` (partial, `is_settled = false`)
+
+**Related:** [[docs/features/splits|Splits Feature]], migration [[alembic/versions/0019_transaction_splits_and_agg.py|0019]]
+
+---
+
+### SplitPayment
+
+**Purpose:** Records an individual payment toward a split. Multiple payments can partially settle a split over time.
+
+| Field | Type | Constraints | Description |
+|-------|------|-------------|-------------|
+| `id` | SERIAL | PK | Unique identifier |
+| `split_id` | INTEGER | NOT NULL, FK → transaction_splits ON DELETE CASCADE | Parent split |
+| `amount` | NUMERIC(15,2) | NOT NULL | Payment amount |
+| `paid_at` | DATE | NOT NULL, DEFAULT CURRENT_DATE | Date payment was made |
+| `note` | TEXT | NULLABLE | Optional note |
+| `created_at` | TIMESTAMPTZ | NOT NULL, DEFAULT NOW() | Creation timestamp |
+
+**Indexes:** `idx_split_payments_split`
+
+**Related:** [[docs/features/splits|Splits Feature]], migration [[alembic/versions/0019_transaction_splits_and_agg.py|0019]]
+
+---
+
+### SplitAudit
+
+**Purpose:** Audit log for split-related operations (create, update, payment, settle). Written by `splitRepository.writeAudit()`.
+
+| Field | Type | Constraints | Description |
+|-------|------|-------------|-------------|
+| `id` | BIGSERIAL | PK | Unique audit entry identifier |
+| `split_id` | INTEGER | FK → transaction_splits ON DELETE SET NULL, NULLABLE | Split being audited (SET NULL if split is deleted) |
+| `action` | VARCHAR(50) | NOT NULL | Action name (e.g., `create`, `payment`, `settle`) |
+| `actor` | TEXT | NULLABLE | Who performed the action |
+| `payload` | JSONB | NULLABLE | Action-specific data |
+| `created_at` | TIMESTAMPTZ | NOT NULL, DEFAULT NOW() | When the action occurred |
+
+**Indexes:** `idx_split_audit_split_id`
+
+**Related:** migration [[alembic/versions/0021_split_audit.py|0021]]
+
+---
+
+### ProviderHealth
+
+**Purpose:** Tracks per-provider health state for the admin observability hub. Stores last success/error timestamps and consecutive failure count.
+
+| Field | Type | Constraints | Description |
+|-------|------|-------------|-------------|
+| `provider` | TEXT | PK | Provider identifier (e.g., `binance`, `yahoo`) |
+| `kind` | TEXT | NOT NULL | Provider kind (e.g., `price`, `exchange_rate`) |
+| `last_success_at` | TIMESTAMPTZ | NULLABLE | Timestamp of last successful call |
+| `last_error_at` | TIMESTAMPTZ | NULLABLE | Timestamp of last error |
+| `last_error` | TEXT | NULLABLE | Last error message |
+| `consecutive_failures` | INTEGER | NOT NULL, DEFAULT 0 | Count of consecutive failures since last success |
+| `updated_at` | TIMESTAMPTZ | NOT NULL, DEFAULT NOW() | Last update timestamp |
+
+**Indexes:** `idx_ph_kind`
+
+**Related:** [[docs/architecture/backend-architecture|Backend Architecture]], migration [[alembic/versions/0010_add_provider_health.py|0010]]
+
+---
+
+### RecipientMatchPattern
+
+**Purpose:** User-editable patterns bound to a recipient for import pipeline matching. The pattern phase runs before fuzzy matching, normalizing variable bank descriptions (embedded dates, references) to a canonical recipient.
+
+| Field | Type | Constraints | Description |
+|-------|------|-------------|-------------|
+| `id` | SERIAL | PK | Unique identifier |
+| `recipient_id` | INTEGER | NOT NULL, FK → recipients ON DELETE CASCADE | Recipient this pattern resolves to |
+| `pattern` | TEXT | NOT NULL | The pattern string |
+| `pattern_kind` | TEXT | NOT NULL, DEFAULT 'literal_prefix' | One of: `regex`, `glob`, `literal_prefix` |
+| `case_sensitive` | BOOLEAN | NOT NULL, DEFAULT false | Whether matching is case-sensitive |
+| `priority` | INTEGER | NOT NULL, DEFAULT 100 | Lower number = higher priority |
+| `is_active` | BOOLEAN | NOT NULL, DEFAULT true | Soft delete |
+| `source` | TEXT | NOT NULL, DEFAULT 'user' | One of: `user`, `suggested`, `system` |
+| `notes` | TEXT | NULLABLE | Optional notes |
+| `created_at` | TIMESTAMPTZ | NOT NULL, DEFAULT NOW() | Creation timestamp |
+| `updated_at` | TIMESTAMPTZ | NOT NULL, DEFAULT NOW() | Last modification timestamp; auto-bumped by trigger |
+
+**Indexes:** `idx_rmp_active_priority` (partial, `is_active = true`), `idx_rmp_recipient`
+
+**Related:** [[docs/features/import|Import Feature]], migration [[alembic/versions/0015_recipient_match_patterns.py|0015]]
+
+---
+
+### AssetPriceHistory
+
+**Purpose:** Historical daily close prices for investments, sourced from price providers or entered manually.
+
+| Field | Type | Constraints | Description |
+|-------|------|-------------|-------------|
+| `id` | SERIAL | PK | Unique identifier |
+| `investment_id` | INTEGER | NOT NULL, FK → investments ON DELETE CASCADE (added migration 0026) | Parent investment |
+| `price_date` | DATE | NOT NULL | Date the price applies |
+| `close_price` | NUMERIC(18,6) | NOT NULL | Closing price on that date |
+| `source` | VARCHAR(50) | NOT NULL, DEFAULT 'provider' | Source of the price data |
+| `fetched_at` | TIMESTAMPTZ | NOT NULL, DEFAULT NOW() | When the price was fetched |
+| `updated_at` | TIMESTAMPTZ | NOT NULL, DEFAULT NOW() | Last modification timestamp; enforced NOT NULL by migration 0022 |
+
+**Constraints:** `UNIQUE(investment_id, price_date)`
+
+**Indexes:** `idx_asset_price_history_investment_date`, `idx_asset_price_history_date`
+
+**Related:** [[docs/features/portfolio|Portfolio Feature]], migration [[alembic/versions/0001_initial_database_schema.py|0001]], FK added [[alembic/versions/0026_asset_price_history_fk.py|0026]]
 
 ---
 
@@ -559,6 +771,103 @@ related_code: ["apps/node-backend/src/repositories/", "alembic/versions/"]
 | `import_id` | INTEGER | FK → imports |
 
 **Related:** [[docs/features/import|Import Feature]]
+
+---
+
+### CustomParserConfig (June 2026, ADR-066; extended ADR-078 migration 0041)
+
+**Purpose:** Persisted named custom CSV parser configurations. Each record stores a complete column-mapping setup that a user can select from the import bank-source dropdown. The `name` doubles as the `bank_account` / source label written onto imported transactions or portfolio_transactions. The `kind` discriminator separates transaction parsers from portfolio parsers.
+
+| Field | Type | Constraints | Description |
+|-------|------|-------------|-------------|
+| `id` | SERIAL | PK | Unique identifier |
+| `name` | TEXT | NOT NULL | User-assigned display name; unique within the same `kind` |
+| `kind` | TEXT | NOT NULL, DEFAULT `'transaction'` | `'transaction'` — budgeting import; `'portfolio'` — portfolio import (ADR-078, migration 0041) |
+| `config_json` | JSONB | NOT NULL | Column mapping JSONB; shape differs by kind (transaction: `{ dateColumn, dateFormat, recipientColumn, amountColumn, memoColumn, separator, encoding, skipRows }`; portfolio: `{ date_format, separator, encoding, skip_rows, default_asset_class, default_type, type_mapping, column_mapping }`) |
+| `created_at` | TIMESTAMPTZ | NOT NULL, DEFAULT NOW() | Creation timestamp |
+| `updated_at` | TIMESTAMPTZ | NOT NULL, DEFAULT NOW() | Last modification timestamp; maintained by shared `update_updated_at_column()` trigger |
+
+**Indexes:**
+- Unique: `uq_custom_parser_configs_name_kind` on `(name, kind)` — enforces per-kind uniqueness; replaced `uq_custom_parser_configs_name` on `(name)` via migration 0041. A parser named "My Broker" may exist independently as both kind=`'transaction'` and kind=`'portfolio'`.
+
+**Migrations:**
+- [[alembic/versions/0037_add_custom_parser_configs.py]] — original table (down_revision `0036_add_transactions_tx_hash`)
+- [[alembic/versions/0041_add_parser_config_kind.py]] — adds `kind` column; drops `uq_custom_parser_configs_name`; creates `uq_custom_parser_configs_name_kind`
+
+**Repository:** [[apps/node-backend/src/repositories/customParserConfigRepository.js]] — maps `config_json` → `config` for application callers; `kind` passed as filter parameter
+
+**Backup:** Included in `.visionbak` exports (registered in `apps/node-backend/src/backup/coverage.js`)
+
+**Related:** [[docs/features/import#saved-named-custom-csv-parsers-adr-066|Import Feature — Saved Parsers]], [[docs/api/imports|Imports API]], [[docs/adr/066-saved-named-custom-csv-parsers|ADR-066]], [[docs/features/portfolio-import#saved-portfolio-parser-configs|Portfolio Import — Saved Parser Configs]], [[docs/api/portfolio-imports|Portfolio Imports API]], [[docs/adr/078-portfolio-csv-import|ADR-078]]
+
+---
+
+### PortfolioImportBatch (June 2026, ADR-078, migration 0040; account_id added migration 0057)
+
+**Purpose:** Tracks each portfolio CSV import run through the pipeline. Mirrors `import_batches` but with portfolio-specific columns for batch defaults and instrument resolution.
+
+| Field | Type | Constraints | Description |
+|-------|------|-------------|-------------|
+| `id` | BIGSERIAL | PK | Unique batch identifier |
+| `adapter_name` | TEXT | NOT NULL | Display name for the import source (written as identifier on portfolio_transactions) |
+| `source_filename` | TEXT | NULLABLE | Original uploaded filename |
+| `source_size_bytes` | BIGINT | NULLABLE | File size in bytes |
+| `custom_config` | JSONB | NULLABLE | Column mapping config snapshot at import time |
+| `account_id` | INTEGER | FK → accounts ON DELETE SET NULL, NULLABLE | **New (migration 0057 — authored, not applied).** Destination brokerage account; committed `portfolio_transactions` inherit this value (ADR-091 per-account lots). `null` = unassigned. |
+| `default_asset_class` | TEXT | NOT NULL | Batch-level fallback asset class for rows without explicit asset class |
+| `default_type` | TEXT | NOT NULL, DEFAULT `'buy'` | Batch-level fallback transaction type when no type column is mapped |
+| `status` | TEXT | NOT NULL, DEFAULT `'pending'` | Pipeline status: `pending`, `staging`, `validating`, `matching`, `committing`, `complete`, `failed`, `aborted`, `awaiting_review` |
+| `rows_total` | INTEGER | NOT NULL, DEFAULT 0 | Total rows parsed |
+| `rows_imported` | INTEGER | NOT NULL, DEFAULT 0 | Rows committed to `portfolio_transactions` |
+| `rows_duplicate` | INTEGER | NOT NULL, DEFAULT 0 | Rows skipped as duplicates |
+| `rows_error` | INTEGER | NOT NULL, DEFAULT 0 | Rows that failed processing |
+| `error_summary` | TEXT | NULLABLE | Human-readable error description |
+| `started_at` | TIMESTAMPTZ | NOT NULL, DEFAULT NOW() | When the batch was created |
+| `completed_at` | TIMESTAMPTZ | NULLABLE | When the batch reached a terminal state |
+
+**Backup:** Included in `BACKUP_COVERED_TABLES`.
+
+**Migrations:** [[alembic/versions/0040_add_portfolio_import_staging.py]] (base); `0057_portfolio_import_batches_account_id` (authored, not applied — adds `account_id`)
+
+**Related:** [[docs/features/portfolio-import|Portfolio Import Feature]], [[docs/api/portfolio-imports|Portfolio Imports API]], [[docs/adr/078-portfolio-csv-import|ADR-078]], [[docs/adr/091-per-account-positioning|ADR-091]]
+
+---
+
+### PortfolioImportStagingRow (June 2026, ADR-078, migration 0040)
+
+**Purpose:** Holds one CSV row during the portfolio import pipeline (staging through commit). After commit, rows remain for audit; rolling back the batch deletes the committed `portfolio_transactions` but retains staging rows marked `aborted`.
+
+| Field | Type | Constraints | Description |
+|-------|------|-------------|-------------|
+| `id` | BIGSERIAL | PK | Unique row identifier |
+| `batch_id` | BIGINT | NOT NULL, FK → portfolio_import_batches ON DELETE CASCADE | Parent batch |
+| `row_index` | INTEGER | NOT NULL | 0-based position in the source CSV |
+| `raw_date` | TEXT | NULLABLE | Raw date string as read from CSV |
+| `type` | TEXT | NULLABLE | Normalized portfolio_txn_type after type normalization |
+| `symbol` | TEXT | NULLABLE | Raw ticker symbol from CSV |
+| `name` | TEXT | NULLABLE | Raw instrument name from CSV |
+| `units` | NUMERIC(20,8) | NULLABLE | Number of units traded |
+| `price` | NUMERIC(20,8) | NULLABLE | Unit price |
+| `amount` | NUMERIC(15,4) | NULLABLE | Total trade amount |
+| `fees` | NUMERIC(15,4) | NULLABLE | Transaction fees |
+| `taxes` | NUMERIC(15,4) | NULLABLE | Taxes / withholding |
+| `currency` | VARCHAR(3) | NULLABLE | Trade currency code |
+| `fx_rate` | NUMERIC(20,8) | NULLABLE | EUR FX rate (from CSV or auto-resolved via fxResolve) |
+| `note` | TEXT | NULLABLE | Free-text note from CSV |
+| `resolved_investment_id` | INTEGER | NULLABLE, FK → investments | Set by matchInvestments phase (symbol or name match) |
+| `user_override_investment_id` | INTEGER | NULLABLE, FK → investments | Set by `POST .../rows/:rowId/investment-override`; takes precedence over `resolved_investment_id` |
+| `match_source` | TEXT | NULLABLE | `symbol_exact` \| `name_exact` \| `unresolved` |
+| `status` | TEXT | NOT NULL, DEFAULT `'pending'` | Row status: `pending`, `valid`, `duplicate`, `error`, `committed` |
+| `error_detail` | TEXT | NULLABLE | Validation or commit error message |
+| `committed_txn_id` | INTEGER | NULLABLE, FK → portfolio_transactions | ID of the created portfolio_transaction after commit |
+
+**Indexes:** `idx_portfolio_staging_batch_id`, `idx_portfolio_staging_status` (partial, non-terminal only)
+
+**Backup:** Included in `BACKUP_COVERED_TABLES`.
+
+**Migration:** [[alembic/versions/0040_add_portfolio_import_staging.py]]
+
+**Related:** [[docs/features/portfolio-import|Portfolio Import Feature]], [[docs/api/portfolio-imports|Portfolio Imports API]], [[docs/adr/078-portfolio-csv-import|ADR-078]]
 
 ---
 

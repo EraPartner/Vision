@@ -64,7 +64,7 @@ export function DataTable<T extends Record<string, unknown>>({
     onSearchChange,
     searchValue,
 }: DataTableProps<T>) {
-    const { t } = useLanguage();
+    const { t, tc } = useLanguage();
     const [editingRow, setEditingRow] = useState<number | null>(null);
     const [editValues, setEditValues] = useState<Record<string, unknown>>({});
     const [localSearchQuery, setLocalSearchQuery] = useState(searchValue ?? "");
@@ -304,7 +304,7 @@ export function DataTable<T extends Record<string, unknown>>({
     };
 
     return (
-        <Card className="surface-elevated premium-frame micro-lift relative overflow-hidden">
+        <Card className="premium-frame micro-lift relative overflow-hidden">
             <div className="absolute top-0 right-0 w-32 h-32 bg-gradient-to-br from-white/50 to-transparent dark:from-white/10 rounded-full -mr-16 -mt-16"></div>
             <CardHeader className="flex flex-row items-start justify-between space-y-0 pb-4">
                 <div>
@@ -330,7 +330,7 @@ export function DataTable<T extends Record<string, unknown>>({
                         <Button
                             variant="ghost"
                             size="icon"
-                            aria-label="Clear search"
+                            aria-label={t('aria.clearSearch')}
                             className="absolute right-1 top-1/2 -translate-y-1/2 icon-touch-target text-muted-foreground"
                             onClick={() => {
                                 if (debounceRef.current) {
@@ -439,7 +439,7 @@ export function DataTable<T extends Record<string, unknown>>({
                                                         </PopoverTrigger>
                                                         <PopoverContent className="w-56 p-2" align="start">
                                                             <ColumnFilter
-                                                                header={col.header}
+                                                                header={typeof col.header === "string" ? col.header : ""}
                                                                 value={columnFilters[col.key] || ""}
                                                                 onChange={(v) => setColumnFilter(col.key, v)}
                                                                 uniqueValues={openFilter === col.key ? openFilterUniqueValues : []}
@@ -496,7 +496,7 @@ export function DataTable<T extends Record<string, unknown>>({
                                                     {isEditing && col.editable ? (
                                                         <Input
                                                             type={col.type || "text"}
-                                                            value={editValues[col.key] ?? ""}
+                                                            value={String(editValues[col.key] ?? "")}
                                                             onChange={(e) =>
                                                                 setEditValues((prev) => ({
                                                                     ...prev,
@@ -531,7 +531,7 @@ export function DataTable<T extends Record<string, unknown>>({
                                                             <Button
                                                                 variant="ghost"
                                                                 size="icon"
-                                                                aria-label="Save"
+                                                                aria-label={t('aria.save')}
                                                                 className="icon-touch-target text-accent hover:text-accent hover:bg-accent/10"
                                                                 onClick={() => saveEditing(sourceIndex, row)}
                                                             >
@@ -540,7 +540,7 @@ export function DataTable<T extends Record<string, unknown>>({
                                                             <Button
                                                                 variant="ghost"
                                                                 size="icon"
-                                                                aria-label="Cancel"
+                                                                aria-label={t('aria.cancel')}
                                                                 className="icon-touch-target text-muted-foreground hover:text-destructive hover:bg-destructive/10"
                                                                 onClick={cancelEditing}
                                                             >
@@ -551,7 +551,7 @@ export function DataTable<T extends Record<string, unknown>>({
                                                         <Button
                                                             variant="ghost"
                                                             size="icon"
-                                                            aria-label="Edit"
+                                                            aria-label={t('aria.edit')}
                                                             className="icon-touch-target text-muted-foreground hover:text-primary hover:bg-primary/10"
                                                             onClick={() => startEditing(sourceIndex, row)}
                                                         >
@@ -575,7 +575,7 @@ export function DataTable<T extends Record<string, unknown>>({
                             ? t('table.shownOf', { shown: processedRows.length.toString(), total: (hasPagination ? totalItems! : data.length).toString() })
                             : hasPagination && totalItems! > 0
                                 ? t('table.showingRange', { from: (currentPage * pageSize + 1).toString(), to: Math.min((currentPage + 1) * pageSize, totalItems!).toString(), total: totalItems!.toString() })
-                                : t('table.items', { count: data.length.toString() })
+                                : tc('table.items', data.length)
                         }
                     </p>
                     {hasPagination && totalItems! > 0 && (

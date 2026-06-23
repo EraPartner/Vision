@@ -99,6 +99,50 @@ export function toAppDateString(utcDate, zone = APP_TIMEZONE) {
 }
 
 /**
+ * Today's calendar date (YYYY-MM-DD) in APP_TIMEZONE.
+ *
+ * The single sanctioned source of "today" for business logic. Building it via
+ * `new Date().toISOString()` reads the UTC calendar day, which is yesterday
+ * between local midnight and 01:00/02:00 in UTC+ zones (ADR-009).
+ */
+export function todayAppDateString(zone = APP_TIMEZONE) {
+  return toAppDateString(new Date(), zone);
+}
+
+const YMD_RE = /^(\d{4})-(\d{2})-(\d{2})$/;
+
+function parseYmdParts(yyyyMmDd) {
+  const match = YMD_RE.exec(yyyyMmDd);
+  if (!match) throw new TypeError(`Expected YYYY-MM-DD, got: ${yyyyMmDd}`);
+  return { year: Number(match[1]), month: Number(match[2]), day: Number(match[3]) };
+}
+
+/**
+ * Add `days` (may be negative) to a YYYY-MM-DD string. Pure calendar math —
+ * no timezone involved, so the result is identical on every host.
+ */
+export function addDaysYmd(yyyyMmDd, days) {
+  const { year, month, day } = parseYmdParts(yyyyMmDd);
+  const shifted = new Date(Date.UTC(year, month - 1, day + days));
+  const y = shifted.getUTCFullYear();
+  const m = String(shifted.getUTCMonth() + 1).padStart(2, '0');
+  const d = String(shifted.getUTCDate()).padStart(2, '0');
+  return `${String(y).padStart(4, '0')}-${m}-${d}`;
+}
+
+/**
+ * First day of the month `monthOffset` months relative to a YYYY-MM-DD string
+ * (0 = same month, -11 = eleven months back). Pure calendar math.
+ */
+export function firstOfMonthYmd(yyyyMmDd, monthOffset = 0) {
+  const { year, month } = parseYmdParts(yyyyMmDd);
+  const shifted = new Date(Date.UTC(year, month - 1 + monthOffset, 1));
+  const y = shifted.getUTCFullYear();
+  const m = String(shifted.getUTCMonth() + 1).padStart(2, '0');
+  return `${String(y).padStart(4, '0')}-${m}-01`;
+}
+
+/**
  * Parse a YYYY-MM-DD string into a UTC Date representing start-of-day in APP_TIMEZONE.
  */
 export function appDateStringToUtc(yyyyMmDd, zone = APP_TIMEZONE) {

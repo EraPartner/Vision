@@ -24,6 +24,7 @@ vi.mock('../../src/repositories/plannedTransactionRepository.js', () => ({
     getById: vi.fn(),
     create: vi.fn(),
     update: vi.fn(),
+    updateWithLoanSchedule: vi.fn(),
     hardDelete: vi.fn(),
     addExecution: vi.fn(),
     replaceLoanSchedule: vi.fn(),
@@ -52,7 +53,9 @@ vi.mock('../../src/services/loanRepaymentService.js', () => ({
   })),
 }));
 
-vi.mock('../../src/middleware/validation.js', () => ({
+vi.mock('../../src/middleware/validation.js', async (importOriginal) => ({
+  // Keep the real helpers (assertYmd, validateId, …); only stub the middleware.
+  ...(await importOriginal()),
   validateIdParam: (_req, _res, next) => next(),
 }));
 
@@ -213,6 +216,58 @@ describe('Planned Transaction Routes', () => {
       );
     });
 
+    it('rejects an invalid recurrence_pattern (fortnightly) with ValidationError', async () => {
+      const req = {
+        body: {
+          planned_date: '2026-03-15', bank_account: 'Chase', amount: 50,
+          is_recurring: true, recurrence_pattern: 'fortnightly',
+        },
+      };
+      const res = mockResponse();
+      await expect(routeHandlers['post:/'](req, res)).rejects.toBeInstanceOf(ValidationError);
+      expect(plannedTransactionRepository.create).not.toHaveBeenCalled();
+    });
+
+    it('accepts an "every N days" recurrence_pattern', async () => {
+      plannedTransactionRepository.create.mockResolvedValue({
+        id: 9, planned_date: '2026-03-15', amount: '50.00', bank_account: 'Chase',
+        is_recurring: true, is_executed: false,
+      });
+      const req = {
+        body: {
+          planned_date: '2026-03-15', bank_account: 'Chase', amount: 50,
+          is_recurring: true, recurrence_pattern: 'every 10 days',
+        },
+      };
+      const res = mockResponse();
+      await routeHandlers['post:/'](req, res);
+      expect(res.status).toHaveBeenCalledWith(201);
+    });
+
+    it('stores a loan as a monthly recurrence so /execute advances it', async () => {
+      plannedTransactionRepository.create.mockResolvedValue({
+        id: 3, planned_date: '2026-04-01', amount: '850.00', bank_account: 'Mortgage',
+        is_loan: true, is_recurring: true, recurrence_pattern: 'monthly', is_executed: false,
+      });
+
+      const req = {
+        body: {
+          bank_account: 'Mortgage', is_loan: true, loan_type: 'amortizing',
+          loan_principal: 10000, loan_annual_interest_rate: 6, loan_term_months: 12,
+          loan_start_date: '2026-04-01', loan_payment_day: 1,
+          // The frontend may inject a display string; the route must replace it.
+          recurrence_pattern: 'loan(12 months)',
+        },
+      };
+      const res = mockResponse();
+      await routeHandlers['post:/'](req, res);
+
+      expect(res.status).toHaveBeenCalledWith(201);
+      expect(plannedTransactionRepository.create).toHaveBeenCalledWith(
+        expect.objectContaining({ is_loan: true, is_recurring: true, recurrence_pattern: 'monthly' }),
+      );
+    });
+
     it('should throw ValidationError when loan_term_months is out of bounds', async () => {
       const req = {
         body: {
@@ -300,21 +355,18 @@ describe('Planned Transaction Routes', () => {
       expect(res.json).toHaveBeenCalled();
     });
 
-    it('should clear loan fields and loan schedule when toggled off', async () => {
-      plannedTransactionRepository.getById
-        .mockResolvedValueOnce({
-          id: 1,
-          is_loan: true,
-          loan_type: 'amortizing',
-          loan_principal: 10000,
-          loan_annual_interest_rate: 6,
-          loan_term_months: 12,
-          loan_start_date: '2026-04-01',
-          loan_payment_day: 1,
-        })
-        .mockResolvedValueOnce({ id: 1, is_loan: false, loan_schedule: [] });
-      plannedTransactionRepository.update.mockResolvedValue({ id: 1, is_loan: false });
-      plannedTransactionRepository.replaceLoanSchedule.mockResolvedValue(undefined);
+    it('should clear loan fields and loan schedule atomically when toggled off', async () => {
+      plannedTransactionRepository.getById.mockResolvedValueOnce({
+        id: 1,
+        is_loan: true,
+        loan_type: 'amortizing',
+        loan_principal: 10000,
+        loan_annual_interest_rate: 6,
+        loan_term_months: 12,
+        loan_start_date: '2026-04-01',
+        loan_payment_day: 1,
+      });
+      plannedTransactionRepository.updateWithLoanSchedule.mockResolvedValue({ id: 1, is_loan: false, loan_schedule: [] });
 
       const req = {
         params: { id: '1' },
@@ -323,7 +375,9 @@ describe('Planned Transaction Routes', () => {
       const res = mockResponse();
       await routeHandlers['patch:/:id'](req, res);
 
-      expect(plannedTransactionRepository.update).toHaveBeenCalledWith(
+      // Field update + schedule clear must go through ONE atomic method ([] clears
+      // the schedule) — not a separate update() + replaceLoanSchedule() pair.
+      expect(plannedTransactionRepository.updateWithLoanSchedule).toHaveBeenCalledWith(
         1,
         expect.objectContaining({
           is_loan: false,
@@ -335,9 +389,10 @@ describe('Planned Transaction Routes', () => {
           loan_payment_day: null,
           loan_regular_payment_amount: null,
           loan_first_payment_date: null,
-        })
+        }),
+        [],
       );
-      expect(plannedTransactionRepository.replaceLoanSchedule).toHaveBeenCalledWith(1, []);
+      expect(plannedTransactionRepository.update).not.toHaveBeenCalled();
       expect(res.json).toHaveBeenCalled();
     });
   });
@@ -374,6 +429,40 @@ describe('Planned Transaction Routes', () => {
 
       const call = plannedTransactionRepository.executeAndAdvance.mock.calls[0];
       expect(call[3].is_executed).toBe(false);
+    });
+
+    it('advances a monthly recurrence in APP_TIMEZONE without a UTC day-shift', async () => {
+      // planned_date is Brussels-midnight 2026-01-31 (= 2026-01-30T23:00Z), the
+      // shape node-postgres returns for a DATE column on the Brussels dev host.
+      plannedTransactionRepository.getById
+        .mockResolvedValueOnce({
+          id: 1, is_recurring: true, recurrence_pattern: 'monthly',
+          planned_date: new Date('2026-01-30T23:00:00Z'), is_executed: false,
+        })
+        .mockResolvedValueOnce({ id: 1 });
+      plannedTransactionRepository.executeAndAdvance.mockResolvedValue({ duplicate: false });
+
+      const req = { params: { id: '1' }, body: { executed_transaction_id: 10 } };
+      await routeHandlers['post:/:id/execute'](req, mockResponse());
+
+      const updateFields = plannedTransactionRepository.executeAndAdvance.mock.calls[0][3];
+      expect(updateFields.planned_date).toBe('2026-02-28'); // not 2026-02-27 (the UTC day)
+    });
+
+    it('keeps the clamped day on subsequent monthly advances (sticky clamp)', async () => {
+      plannedTransactionRepository.getById
+        .mockResolvedValueOnce({
+          id: 1, is_recurring: true, recurrence_pattern: 'monthly',
+          planned_date: new Date('2026-02-27T23:00:00Z'), is_executed: false, // Brussels 2026-02-28
+        })
+        .mockResolvedValueOnce({ id: 1 });
+      plannedTransactionRepository.executeAndAdvance.mockResolvedValue({ duplicate: false });
+
+      const req = { params: { id: '1' }, body: { executed_transaction_id: 11 } };
+      await routeHandlers['post:/:id/execute'](req, mockResponse());
+
+      const updateFields = plannedTransactionRepository.executeAndAdvance.mock.calls[0][3];
+      expect(updateFields.planned_date).toBe('2026-03-28');
     });
 
     it('should throw ValidationError without executed_transaction_id', async () => {

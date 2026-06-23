@@ -5,7 +5,7 @@
 import fs from 'fs';
 import { cleanKbcRecipientName, normalizeToUppercase } from '../../textNormalization.js';
 import { logger } from '../../../config/logger.js';
-import { parseDayMonthYear, parseCommaDecimal, buildOptionalComment, splitCsvLines } from './_shared.js';
+import { parseDayMonthYear, parseCommaDecimal, buildOptionalComment, splitCsvLines, canonicalIban } from './_shared.js';
 
 const NAME = 'kbc';
 const BANK_LABEL = 'KBC';
@@ -27,6 +27,7 @@ function parseLine(line) {
   const parts = line.split(';');
   if (parts.length < MIN_FIELDS) return null;
 
+  const ownAccount = parts[0].trim(); // "Rekeningnummer" — the account holder's own IBAN
   const currency = parts[3].trim();
   const statementNumber = parts[4].trim();
   const transactionDateStr = parts[5].trim();
@@ -66,7 +67,7 @@ function parseLine(line) {
 
   return {
     date,
-    bankAccount: 'KBC',
+    bankAccount: canonicalIban(ownAccount) || 'KBC',
     recipient: fullRecipient,
     memo,
     amount,
@@ -96,7 +97,8 @@ export function detect(csvSample) {
 export async function parse(filePath) {
   const content = await fs.promises.readFile(filePath, 'utf-8');
   const lines = splitCsvLines(content);
-  const transactions = [];
+  const transactions = /** @type {any[] & { skipped?: number }} */ ([]);
+  let skipped = 0;
 
   for (const rawLine of lines) {
     const line = rawLine.trim();
@@ -104,9 +106,11 @@ export async function parse(filePath) {
     if (isNonDataLine(line)) continue;
     const tx = parseLine(line);
     if (tx) transactions.push(tx);
+    else skipped++;
   }
 
-  logger.info(`KBC CSV parsed: ${transactions.length} transactions`);
+  transactions.skipped = skipped;
+  logger.info(`KBC CSV parsed: ${transactions.length} transactions, ${skipped} skipped`);
   return transactions;
 }
 

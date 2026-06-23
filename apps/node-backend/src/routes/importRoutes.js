@@ -4,17 +4,13 @@
  */
 
 import { Router } from 'express';
-import multer from 'multer';
-import fs from 'fs';
-import os from 'os';
-import path from 'path';
-import { getSupportedBanks } from '../services/bankAdapters.js';
 import { importRecipientsCSV, importCategoriesCSV } from '../services/dataImportService.js';
 import { logger } from '../config/logger.js';
 import { runImportPipeline, commitImport } from '../services/importPipeline/index.js';
-import { ValidationError, NotFoundError } from '../middleware/errorHandler.js';
+import { ValidationError, NotFoundError, ConflictError } from '../middleware/errorHandler.js';
 import { createSseWriter } from '../lib/sse.js';
-// eslint-disable-next-line vision-local/no-repo-direct-from-route
+import { csvUpload, cleanup, csvUploadErrorTranslator } from '../lib/csvUpload.js';
+import { progressToPercent } from '../lib/importProgress.js';
 import {
   listBatches,
   getBatch,
@@ -23,70 +19,13 @@ import {
   overrideRecipient,
   overrideCategory,
   categoryExists,
-} from '../repositories/importBatchRepository.js';
+} from '../services/importBatchService.js';
+import customParserConfigRepository from '../services/customParserConfigService.js';
 import { refreshAggregations } from '../services/aggregationRefresh.js';
+import { parseParserId, normalizeParserName, PARSER_NAME_CONSTRAINT } from '../lib/parserConfigRoutes.js';
+import { parsePagination } from '../lib/pagination.js';
 
 const router = Router();
-
-/* eslint-disable vision-local-money/no-raw-money-arithmetic */
-function v2ProgressToLegacy(ev) {
-  const { phase, current = 0, total = 0, imported = 0, duplicates = 0, errors = 0 } = ev;
-  const frac = total > 0 ? current / total : 0;
-  let percent = 0;
-  if (phase === 'staging') percent = Math.round(frac * 40);
-  else if (phase === 'validating') percent = 40 + Math.round(frac * 15);
-  else if (phase === 'matching') percent = 55 + Math.round(frac * 15);
-  else if (phase === 'committing') percent = 70 + Math.round(frac * 30);
-  else if (phase === 'complete') percent = 100;
-  return { phase, current, total, imported, duplicates, errors, percent };
-}
-/* eslint-enable vision-local-money/no-raw-money-arithmetic */
-
-function isLikelyCsvFile(file) {
-  const originalName = file?.originalname?.toLowerCase() || '';
-  const mimeType = file?.mimetype?.toLowerCase() || '';
-  const hasCsvExtension = originalName.endsWith('.csv');
-  const hasLikelyCsvMimeType = mimeType.includes('csv')
-    || mimeType.includes('text/plain')
-    || mimeType.includes('application/vnd.ms-excel')
-    || mimeType === 'application/octet-stream'
-    || mimeType === '';
-  return hasCsvExtension && hasLikelyCsvMimeType;
-}
-
-const upload = multer({
-  dest: os.tmpdir(),
-  limits: { fileSize: 50 * 1024 * 1024 },
-  fileFilter: (req, file, cb) => {
-    if (!isLikelyCsvFile(file)) {
-      cb(new Error('File must be a CSV'));
-    } else {
-      cb(null, true);
-    }
-  },
-});
-
-// Multer writes uploads to os.tmpdir() with a generated alphanumeric filename.
-// We rebuild the path from the basename + os.tmpdir() (a constant) so a tampered
-// req.file.path can't escape the tmp directory, and validate the basename
-// against a strict allowlist to break any taint flow into the unlink call.
-const SAFE_BASENAME_RE = /^[A-Za-z0-9._-]+$/;
-
-function cleanup(filePath) {
-  if (!filePath) return;
-  const basename = path.basename(filePath);
-  if (!SAFE_BASENAME_RE.test(basename)) return;
-  const target = path.join(os.tmpdir(), basename);
-  void fs.promises.unlink(target).catch((err) => {
-    // ENOENT means already removed (e.g. by another handler) — silent OK.
-    if (err && err.code !== 'ENOENT') {
-      logger.warn('Failed to clean up uploaded CSV temp file', {
-        path: target,
-        error: err.message,
-      });
-    }
-  });
-}
 
 function buildImportResult(result) {
   return {
@@ -98,7 +37,7 @@ function buildImportResult(result) {
 }
 
 // POST /api/import/csv
-router.post('/csv', upload.single('file'), async (req, res) => {
+router.post('/csv', csvUpload.single('file'), async (req, res) => {
   if (!req.file) {
     throw new ValidationError('No file uploaded. Send a CSV file as multipart form-data with field name "file".');
   }
@@ -133,6 +72,7 @@ router.post('/csv', upload.single('file'), async (req, res) => {
       duplicates: pipelineResult.duplicates,
       errors: pipelineResult.errors,
       batch_id: pipelineResult.batchId,
+      auto_linked_count: pipelineResult.autoLinkedCount || 0,
     };
 
     logger.info('CSV import completed', { bankName, fileName: req.file.originalname, ...result });
@@ -149,7 +89,7 @@ router.post('/csv', upload.single('file'), async (req, res) => {
 });
 
 // POST /api/import/csv/custom
-router.post('/csv/custom', upload.single('file'), async (req, res) => {
+router.post('/csv/custom', csvUpload.single('file'), async (req, res) => {
   if (!req.file) {
     throw new ValidationError('No file uploaded. Send a CSV file as multipart form-data with field name "file".');
   }
@@ -211,6 +151,7 @@ router.post('/csv/custom', upload.single('file'), async (req, res) => {
       duplicates: pipelineResult.duplicates,
       errors: pipelineResult.errors,
       batch_id: pipelineResult.batchId,
+      auto_linked_count: pipelineResult.autoLinkedCount || 0,
     };
     res.status(201);
     res.ok(buildImportResult(result));
@@ -219,8 +160,82 @@ router.post('/csv/custom', upload.single('file'), async (req, res) => {
   }
 });
 
+// --- Saved custom parser configs (CRUD) ---------------------------------
+
+// Validates and normalizes the column-mapping config to the frontend's
+// CustomConfig shape. Required: dateColumn, recipientColumn, amountColumn.
+function normalizeParserConfig(config) {
+  if (!config || typeof config !== 'object' || Array.isArray(config)) {
+    throw new ValidationError('Missing or invalid "config"');
+  }
+  const required = ['dateColumn', 'recipientColumn', 'amountColumn'];
+  for (const key of required) {
+    if (!config[key] || typeof config[key] !== 'string' || config[key].trim().length === 0) {
+      throw new ValidationError(`config.${key} is required`);
+    }
+  }
+  const skipRows = parseInt(config.skipRows, 10);
+  return {
+    dateColumn: config.dateColumn.trim(),
+    recipientColumn: config.recipientColumn.trim(),
+    amountColumn: config.amountColumn.trim(),
+    memoColumn: typeof config.memoColumn === 'string' ? config.memoColumn.trim() : '',
+    dateFormat: typeof config.dateFormat === 'string' && config.dateFormat.trim() ? config.dateFormat.trim() : '%Y-%m-%d',
+    separator: typeof config.separator === 'string' && config.separator.length ? config.separator : ',',
+    encoding: typeof config.encoding === 'string' && config.encoding.trim() ? config.encoding.trim() : 'utf-8',
+    skipRows: Number.isFinite(skipRows) && skipRows > 0 ? skipRows : 0,
+  };
+}
+
+// GET /api/import/parsers
+router.get('/parsers', async (req, res) => {
+  const configs = await customParserConfigRepository.getAll('transaction');
+  res.ok(configs);
+});
+
+// POST /api/import/parsers
+router.post('/parsers', async (req, res) => {
+  const name = normalizeParserName(req.body.name);
+  const config = normalizeParserConfig(req.body.config);
+  try {
+    const created = await customParserConfigRepository.create({ name, config, kind: 'transaction' });
+    res.status(201);
+    res.ok(created);
+  } catch (err) {
+    if (err.code === '23505' && err.constraint === PARSER_NAME_CONSTRAINT) {
+      throw new ConflictError(`A parser named "${name}" already exists`);
+    }
+    throw err;
+  }
+});
+
+// PATCH /api/import/parsers/:id
+router.patch('/parsers/:id', async (req, res) => {
+  const id = parseParserId(req);
+  const name = req.body.name !== undefined ? normalizeParserName(req.body.name) : undefined;
+  const config = req.body.config !== undefined ? normalizeParserConfig(req.body.config) : undefined;
+  try {
+    const updated = await customParserConfigRepository.update(id, { name, config });
+    if (!updated) throw new NotFoundError('Parser config not found');
+    res.ok(updated);
+  } catch (err) {
+    if (err.code === '23505' && err.constraint === PARSER_NAME_CONSTRAINT) {
+      throw new ConflictError(`A parser named "${name}" already exists`);
+    }
+    throw err;
+  }
+});
+
+// DELETE /api/import/parsers/:id
+router.delete('/parsers/:id', async (req, res) => {
+  const id = parseParserId(req);
+  const deleted = await customParserConfigRepository.delete(id);
+  if (!deleted) throw new NotFoundError('Parser config not found');
+  res.status(204).send();
+});
+
 // POST /api/import/csv/stream — SSE, preserves raw event protocol
-router.post('/csv/stream', upload.single('file'), async (req, res) => {
+router.post('/csv/stream', csvUpload.single('file'), async (req, res) => {
   if (!req.file) {
     throw new ValidationError('No file uploaded.');
   }
@@ -246,7 +261,7 @@ router.post('/csv/stream', upload.single('file'), async (req, res) => {
       adapterName: bankName,
       filename: req.file.originalname,
       sizeBytes: req.file.size,
-      onProgress: async (ev) => { await writer.write('progress', v2ProgressToLegacy(ev)); },
+      onProgress: async (ev) => { await writer.write('progress', progressToPercent(ev)); },
     });
 
     if (pipelineResult.requiresReview) {
@@ -265,6 +280,7 @@ router.post('/csv/stream', upload.single('file'), async (req, res) => {
         duplicates: pipelineResult.duplicates,
         errors: pipelineResult.errors,
         batch_id: pipelineResult.batchId,
+        auto_linked_count: pipelineResult.autoLinkedCount || 0,
       };
       await writer.write('complete', {
         ...result,
@@ -284,17 +300,13 @@ router.post('/csv/stream', upload.single('file'), async (req, res) => {
   }
 });
 
-// GET /api/import/supported-banks
-router.get('/supported-banks', (req, res) => {
-  const banks = getSupportedBanks();
-  res.ok({
-    banks: banks.map(b => b.charAt(0).toUpperCase() + b.slice(1)),
-    total: banks.length,
-  });
-});
+// (Removed dead GET /api/import/supported-banks — it had zero frontend callers
+// and returned capitalized internal names that never matched the display list.
+// The adapter catalog is served from /api/info/supported-adapters, derived from
+// the registry, which is the single source of truth.)
 
 // POST /api/import/recipients
-router.post('/recipients', upload.single('file'), async (req, res) => {
+router.post('/recipients', csvUpload.single('file'), async (req, res) => {
   if (!req.file) {
     throw new ValidationError('No file uploaded. Send a CSV file as multipart form-data with field name "file".');
   }
@@ -318,7 +330,7 @@ router.post('/recipients', upload.single('file'), async (req, res) => {
 });
 
 // POST /api/import/categories
-router.post('/categories', upload.single('file'), async (req, res) => {
+router.post('/categories', csvUpload.single('file'), async (req, res) => {
   if (!req.file) {
     throw new ValidationError('No file uploaded. Send a CSV file as multipart form-data with field name "file".');
   }
@@ -345,8 +357,7 @@ router.post('/categories', upload.single('file'), async (req, res) => {
 
 // GET /api/import/batches
 router.get('/batches', async (req, res) => {
-  const limit = Math.min(parseInt(req.query.limit ?? '50', 10), 200);
-  const offset = parseInt(req.query.offset ?? '0', 10);
+  const { limit, offset } = parsePagination(req.query, { maxLimit: 200 });
   const { batches, total } = await listBatches({ limit, offset });
   res.ok({ batches, total, limit, offset });
 });
@@ -372,10 +383,10 @@ router.delete('/batches/:id', async (req, res) => {
     throw new ValidationError('Cannot rollback a batch that is still in progress');
   }
 
-  const { deleted } = await rollbackBatch(id);
-  logger.info('[import] batch rolled back', { batchId: id, deleted });
+  const { deleted, recipientsRemoved } = await rollbackBatch(id);
+  logger.info('[import] batch rolled back', { batchId: id, deleted, recipientsRemoved });
 
-  if (deleted > 0) {
+  if (deleted > 0 || recipientsRemoved > 0) {
     try {
       await refreshAggregations();
     } catch (err) {
@@ -383,7 +394,7 @@ router.delete('/batches/:id', async (req, res) => {
     }
   }
 
-  res.ok({ deleted });
+  res.ok({ deleted, recipientsRemoved });
 });
 
 // ─── Import review endpoints ──────────────────────────────────────────────────
@@ -541,24 +552,20 @@ router.post('/batches/:id/commit', async (req, res) => {
     throw new ValidationError(`Batch ${batchId} is not in a reviewable state (status: ${batch.status})`);
   }
 
-  const { imported, duplicates, errors } = await commitImport({ batchId });
+  const { imported, duplicates, errors, autoLinkedCount } = await commitImport({ batchId });
 
-  logger.info('[import] batch committed after review', { batchId, imported, duplicates, errors });
-  res.ok(buildImportResult({ batch_id: batchId, total: imported + duplicates + errors, imported, duplicates, errors }));
+  logger.info('[import] batch committed after review', { batchId, imported, duplicates, errors, autoLinkedCount });
+  res.ok(buildImportResult({
+    batch_id: batchId,
+    total: imported + duplicates + errors,
+    imported,
+    duplicates,
+    errors,
+    auto_linked_count: autoLinkedCount || 0,
+  }));
 });
 
 // Multer error translator — convert to typed errors so global handler emits envelope.
-router.use((err, req, res, next) => {
-  if (err instanceof multer.MulterError) {
-    if (err.code === 'LIMIT_FILE_SIZE') {
-      return next(new ValidationError('File size exceeds maximum of 50MB'));
-    }
-    return next(new ValidationError(`Upload error: ${err.message}`));
-  }
-  if (err.message === 'File must be a CSV') {
-    return next(new ValidationError('File must be a CSV'));
-  }
-  next(err);
-});
+router.use(csvUploadErrorTranslator);
 
 export default router;

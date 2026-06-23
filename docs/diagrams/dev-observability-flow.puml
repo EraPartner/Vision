@@ -44,8 +44,9 @@ note right of Inspector
 end note
 
 note right of Root
-  Tree-shaken in production:
-  dist/ contains zero devtools refs.
+  Lazy chunk: fetched only when the gate
+  renders it (dev build flag or Admin Mode).
+  No load cost until activated.
   Zero cost when inspector is closed
   (no subscribers on the event bus).
 end note

@@ -6,15 +6,20 @@
 
 import { Router } from 'express';
 import { query as dbQuery, withTransaction } from '../database/connection.js';
-// eslint-disable-next-line vision-local/no-repo-direct-from-route
-import transactionRepository from '../repositories/transactionRepository.js';
+import transactionRepository from '../services/transactionService.js';
 import { isManualDuplicate, recordManualRawTransaction } from '../services/deduplication.js';
 import { convertRowsToEur } from '../services/currency/currencyConversionService.js';
 import { normalizeForMatching } from '../services/textNormalization.js';
 import { logger } from '../config/logger.js';
-import { validateIdParam } from '../middleware/validation.js';
+import { validateIdParam, assertYmd } from '../middleware/validation.js';
 import { rateLimiter } from '../middleware/rateLimiter.js';
-import { scheduleRefresh } from '../services/materializedViewService.js';
+import {
+  scheduleReconcile,
+  getTransferSuggestions,
+  markTransfer,
+  unmarkTransfer,
+} from '../services/transferReconciliationService.js';
+import { autoLinkTransactions } from '../services/plannedMatchService.js';
 import {
   ValidationError,
   NotFoundError,
@@ -29,6 +34,7 @@ import {
   buildIdListWhere,
 } from '../services/transactionExport.js';
 import { resolveBulkSelection } from '../services/bulkSelection.js';
+import { parsePagination } from '../lib/pagination.js';
 
 const router = Router();
 
@@ -38,7 +44,6 @@ function parseRouteId(req) {
 
 function parseTransactionListQuery(query) {
   const {
-    limit = 50, offset = 0,
     transaction_id,
     start_date, end_date, bank_account,
     category_id, category_ids, recipient_id, recipient_group_id, recipient_name,
@@ -48,6 +53,7 @@ function parseTransactionListQuery(query) {
     transaction_type,
     tags,
   } = query;
+  const { limit, offset } = parsePagination(query, { maxLimit: 5000 });
 
   const parsedCategoryIds = category_ids
     ? String(category_ids).split(',').map((id) => parseInt(id, 10)).filter((id) => Number.isFinite(id) && id > 0)
@@ -58,11 +64,11 @@ function parseTransactionListQuery(query) {
     : null;
 
   return {
-    limit: Math.max(1, Math.min(parseInt(limit, 10) || 50, 5000)),
-    offset: Math.max(0, parseInt(offset, 10) || 0),
+    limit,
+    offset,
     transactionId: transaction_id ? parseInt(transaction_id, 10) : null,
-    startDate: start_date || null,
-    endDate: end_date || null,
+    startDate: assertYmd(start_date, 'start_date'),
+    endDate: assertYmd(end_date, 'end_date'),
     bankAccount: bank_account || null,
     categoryId: category_id ? parseInt(category_id, 10) : null,
     categoryIds: parsedCategoryIds?.length ? parsedCategoryIds : null,
@@ -176,6 +182,34 @@ async function resolveCategoryNameToId(fields) {
 
   delete fields.category_name;
 }
+
+// ── Internal transfers (ADR-083) ───────────────────────────────────────────
+// Defined before the `/:id` routes; all have 2 path segments or a literal first
+// segment so they never collide with the single-segment `/:id` handlers.
+
+// GET /api/transactions/transfer-suggestions — ambiguous transfer matches
+router.get('/transfer-suggestions', async (req, res) => {
+  res.ok({ items: await getTransferSuggestions() });
+});
+
+// POST /api/transactions/transfers — manually confirm a transfer pair (sticky)
+router.post('/transfers', async (req, res) => {
+  const aId = parseInt(req.body?.aId, 10);
+  const bId = parseInt(req.body?.bId, 10);
+  if (!Number.isInteger(aId) || !Number.isInteger(bId) || aId === bId) {
+    throw new ValidationError('aId and bId must be two distinct transaction ids');
+  }
+  await markTransfer(aId, bId);
+  scheduleReconcile();
+  res.ok({ ok: true });
+});
+
+// DELETE /api/transactions/transfers/:id — clear a transfer mark and its peer
+router.delete('/transfers/:id', validateIdParam, async (req, res) => {
+  await unmarkTransfer(parseInt(req.params.id, 10));
+  scheduleReconcile();
+  res.ok({ ok: true });
+});
 
 // GET /api/transactions
 router.get('/', async (req, res) => {
@@ -319,7 +353,7 @@ router.post(
       return { added, removed, transactions_affected: affectedTxIds.size };
     });
 
-    scheduleRefresh();
+    scheduleReconcile();
     res.ok(result);
   },
 );
@@ -343,7 +377,7 @@ router.post(
       return r.rows.length;
     });
 
-    if (deleted > 0) scheduleRefresh();
+    if (deleted > 0) scheduleReconcile();
     res.ok({ deleted });
   },
 );
@@ -434,7 +468,7 @@ router.post(
       return r.rows.length;
     });
 
-    if (updated > 0) scheduleRefresh();
+    if (updated > 0) scheduleReconcile();
     res.ok({ updated });
   },
 );
@@ -531,10 +565,22 @@ router.post('/', async (req, res) => {
     transactionId: transaction.id,
   });
 
+  // Auto-clear a matching planned payment if this transaction unambiguously
+  // matches one. Never let an auto-link failure fail the create.
+  let autoLink = { autoLinkedCount: 0, links: [] };
+  try {
+    autoLink = await autoLinkTransactions([transaction]);
+  } catch (err) {
+    logger.warn('Auto-link after manual create failed', { id: transaction.id, error: err?.message });
+  }
+
   logger.info('Transaction created', { id: transaction.id });
-  scheduleRefresh();
+  scheduleReconcile();
   res.status(201);
-  res.ok(formatTransaction(transaction));
+  res.ok({
+    ...formatTransaction(transaction),
+    auto_linked: autoLink.links[0]?.plannedTransactionId ?? null,
+  });
 });
 
 // PATCH /api/transactions/:id
@@ -561,7 +607,7 @@ router.patch(
       throw new NotFoundError(`Transaction with ID ${id} not found`);
     }
 
-    scheduleRefresh();
+    scheduleReconcile();
     res.ok(formatTransaction(updated));
   },
 );
@@ -573,7 +619,7 @@ router.delete('/:id', validateIdParam, async (req, res) => {
   if (!deleted) {
     throw new NotFoundError(`Transaction with ID ${id} not found`);
   }
-  scheduleRefresh();
+  scheduleReconcile();
   res.ok({ message: 'Transaction deleted permanently', details: { method: 'hard delete' }, links: [] });
 });
 

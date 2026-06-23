@@ -22,8 +22,11 @@ export const CategoryPieChart = memo(function CategoryPieChart({ data }: Categor
   const pieData: PieDatum[] = useMemo(() => {
     const totals = data.categoryPivot
       .map((category) => {
+        // "Spending by Category" — sum EXPENSE only. Using months (Σ|net|) let
+        // income categories (salary) dominate the donut and netted mixed-sign
+        // months. expenseMonths holds Σ|amount<0| per period.
         const totalForPeriods = filteredPeriods.reduce(
-          (sum, period) => sum + (category.months[period] || 0),
+          (sum, period) => sum + (category.expenseMonths[period] || 0),
           0
         );
         return { name: category.categoryName, value: Math.round(totalForPeriods) };

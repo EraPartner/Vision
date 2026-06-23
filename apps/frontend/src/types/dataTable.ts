@@ -11,8 +11,8 @@ import type React from "react";
 export interface Column<T> {
   /** Unique key — used for sort state, filter state, and column width tracking. */
   key: string;
-  /** Column header label. */
-  header: string;
+  /** Column header label — a string, or rich content (e.g. a select-all checkbox). */
+  header: React.ReactNode;
   /** Whether the cell is inline-editable. */
   editable?: boolean;
   /** Hint for the inline editor input type. */

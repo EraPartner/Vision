@@ -1,8 +1,7 @@
 import { useQuery } from '@tanstack/react-query';
 import { useMemo, useState, useCallback } from 'react';
-import { useSettings } from '@/contexts/SettingsContext';
 import { useAppSettings } from '@/contexts/AppSettingsContext';
-import { apiClient } from '@/lib/api';
+import { useExcludedIds } from '@/hooks/useExcludedIds';
 import {
   getAggregationMonthlySummary,
   getAggregationCategoryPivot,
@@ -127,8 +126,13 @@ export function mapToStatisticsData(
       }
       const cd = catMap.get(key)!;
       const absTotal = Math.abs(item.total);
-      const expenseAmount = item.total < 0 ? absTotal : 0;
-      const incomeAmount = item.total > 0 ? item.total : 0;
+      // Use the backend's explicit sign-split (income = Σ amount≥0, expense =
+      // Σ amount<0) instead of classifying by the sign of the NET total — a
+      // mixed-sign month (e.g. −300 purchases + 500 refund) was wholly counted
+      // as income or expense and the drill-through contradicted the cell. Fall
+      // back to the old heuristic only for pre-upgrade cached payloads.
+      const incomeAmount = item.income ?? (item.total > 0 ? item.total : 0);
+      const expenseAmount = item.expense != null ? Math.abs(item.expense) : (item.total < 0 ? absTotal : 0);
       cd.months[period] = (cd.months[period] ?? 0) + absTotal;
       cd.expenseMonths[period] = (cd.expenseMonths[period] ?? 0) + expenseAmount;
       cd.incomeMonths[period] = (cd.incomeMonths[period] ?? 0) + incomeAmount;
@@ -180,7 +184,6 @@ export function mapToStatisticsData(
 // ── Hook ──────────────────────────────────────────────────────────────────────
 
 export function useStatistics() {
-  const { settings } = useSettings();
   const { appSettings } = useAppSettings();
   const targetCurrency = appSettings.defaultCurrency || 'EUR';
 
@@ -193,44 +196,21 @@ export function useStatistics() {
     }));
   }, []);
 
-  const exclusionsApply =
-    settings.exclusionScope === 'everywhere' || settings.exclusionScope === 'statistics';
-
-  const settingsExcludedCatIds = useMemo(
-    () => [...settings.excludedCategoryIds].sort((a, b) => a - b),
-    [settings.excludedCategoryIds],
-  );
-
-  const settingsExcludedRecIds = useMemo(
-    () => [...settings.excludedRecipientIds].sort((a, b) => a - b),
-    [settings.excludedRecipientIds],
-  );
-
-  const categoriesQuery = useQuery({
-    queryKey: ['categories', 'all-for-stats'],
-    queryFn: async () => {
-      const res = await apiClient.getCategories({ limit: 500 });
-      return res.items;
-    },
-    // Only needed to resolve hidden-category IDs; skip the fetch otherwise.
-    enabled: settings.excludeHiddenCategories,
-    staleTime: 60_000,
-  });
-
-  const hiddenCategoryIds = useMemo(() => {
-    if (!settings.excludeHiddenCategories || !categoriesQuery.data) return [] as number[];
-    return categoriesQuery.data.filter((c) => !c.is_active).map((c) => c.id);
-  }, [settings.excludeHiddenCategories, categoriesQuery.data]);
-
-  const effectiveExcludedCategoryIds = useMemo(
-    () => [...new Set([...settingsExcludedCatIds, ...hiddenCategoryIds])].sort((a, b) => a - b),
-    [settingsExcludedCatIds, hiddenCategoryIds],
-  );
+  // Excluded IDs (settings + hidden categories) resolved by the shared hook so
+  // statistics and the dashboard exclude exactly the same set — see useExcludedIds.
+  const {
+    excludedCategoryIds: effectiveExcludedCategoryIds,
+    excludedRecipientIds: settingsExcludedRecIds,
+    exclusionsApply,
+    isReady,
+  } = useExcludedIds('statistics');
 
   const hasExclusions =
     effectiveExcludedCategoryIds.length > 0 || settingsExcludedRecIds.length > 0;
 
-  const filteredEnabled = exclusionsApply && hasExclusions;
+  // Gate on isReady so the filtered queries don't fire with an incomplete
+  // hidden-category set on the first render.
+  const filteredEnabled = exclusionsApply && hasExclusions && isReady;
 
   // ── Unfiltered queries ────────────────────────────────────────────────────
 
@@ -294,14 +274,35 @@ export function useStatistics() {
   const recipientByYearFilteredQuery = useQuery({
     queryKey: [
       'aggregations', 'recipient-by-year', 'filtered',
-      targetCurrency, settingsExcludedRecIds,
+      targetCurrency, effectiveExcludedCategoryIds, settingsExcludedRecIds,
     ],
     queryFn: () =>
       getAggregationRecipientByYear({
         currency: targetCurrency,
         excluded_recipient_ids: settingsExcludedRecIds,
+        excluded_category_ids: effectiveExcludedCategoryIds,
       }),
-    enabled: filteredEnabled && settingsExcludedRecIds.length > 0,
+    // Gate on filteredEnabled (not recipient-only) so a category-only exclusion
+    // set — the common "hide transfers/rent" case — still fires the filtered
+    // query instead of silently falling back to the unfiltered payload.
+    enabled: filteredEnabled,
+    staleTime: 60_000,
+  });
+
+  // Recipient insights (the "all years" Top Recipients chart) must honour the
+  // same exclusions as the other charts — both category and recipient.
+  const recipientInsightsFilteredQuery = useQuery({
+    queryKey: [
+      'aggregations', 'recipient-insights', 'filtered',
+      targetCurrency, effectiveExcludedCategoryIds, settingsExcludedRecIds,
+    ],
+    queryFn: () =>
+      getAggregationRecipientInsights({
+        currency: targetCurrency,
+        excluded_category_ids: effectiveExcludedCategoryIds,
+        excluded_recipient_ids: settingsExcludedRecIds,
+      }),
+    enabled: filteredEnabled,
     staleTime: 60_000,
   });
 
@@ -330,7 +331,7 @@ export function useStatistics() {
     const filteredData = mapToStatisticsData(
       monthlySummaryFilteredQuery.data.data,
       categoryPivotFilteredQuery.data.data,
-      recipientInsightsQuery.data!.data,
+      (recipientInsightsFilteredQuery.data ?? recipientInsightsQuery.data!).data,
       (recipientByYearFilteredQuery.data ?? recipientByYearUnfilteredQuery.data!).data,
     );
 
@@ -345,6 +346,7 @@ export function useStatistics() {
     monthlySummaryFilteredQuery.data,
     categoryPivotFilteredQuery.data,
     recipientByYearFilteredQuery.data,
+    recipientInsightsFilteredQuery.data,
   ]);
 
   const getGraphData = useCallback(

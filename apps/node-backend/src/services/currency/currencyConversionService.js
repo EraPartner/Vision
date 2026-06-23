@@ -21,6 +21,8 @@ import {
   normalizeDateInput,
   fetchFromEcb,
   fetchFromErApi,
+  fetchHistoricalFromEcbFull,
+  rateOnOrBeforeFromMap,
   loadFromDatabase,
   saveToDatabase,
   saveHistoricalRate,
@@ -29,6 +31,7 @@ import {
   getRateToEurForDate,
   clearHistoricalCache,
 } from './rateFetcher.js';
+import { settingsRepository } from '../../repositories/settingsRepository.js';
 
 // In-memory cache: { rates: {...}, timestamp: number } | null
 let memoryCache = null;
@@ -154,9 +157,11 @@ export async function warmCache() {
     };
 
     const ecbCount  = ecbRates  ? Object.keys(ecbRates).length  - 1 : 0;
-    const erarCount = erarRates ? Object.keys(erarRates).length - 1 : 0;
     const totalCount = Object.keys(mergedRates).length - 1;
-    logger.info(`Merged exchange rates: ${ecbCount} from ECB + ${erarCount - ecbCount} supplementary = ${totalCount} total`);
+    // Supplementary = er-api currencies that survived the ECB-priority merge,
+    // i.e. total minus ECB (not erarCount − ecbCount, which miscounted when
+    // the two sources didn't fully overlap).
+    logger.info(`Merged exchange rates: ${ecbCount} from ECB + ${totalCount - ecbCount} supplementary = ${totalCount} total`);
 
     liveFallbackRates = mergedRates;
     await saveToDatabase(mergedRates);
@@ -343,12 +348,119 @@ export function convertWithRates(amount, fromCurrency, toCurrency, rates) {
 
 // ─── Historical backfill ──────────────────────────────────────────────────────
 
+// One-time repair marker: before the full-history tier existed, the backfill
+// saved nearest-known rates under old transaction dates (fabricated history).
+// The repair overwrites those rows with true ECB rates; the flag is only set
+// once the full-history download succeeded so offline starts retry later.
+const FX_FULL_HISTORY_REPAIR_FLAG = 'fx_full_history_repair_done';
+
+/**
+ * Bulk writes must target the inheritance base table when the legacy layout is
+ * present — `portfolio_transactions` is a non-updatable view there.
+ */
+async function portfolioTxTableForBulkWrites() {
+  const result = await query(
+    "SELECT to_regclass('public.portfolio_transactions_base') AS base_table"
+  );
+  return result.rows[0]?.base_table ? 'portfolio_transactions_base' : 'portfolio_transactions';
+}
+
+/**
+ * Overwrite stored txn-date rates with true ECB full-history values (one-time).
+ *
+ * @param {Array<{currency_code: string, rate_date: string|Date}>} pairs distinct non-EUR (currency, date) pairs
+ * @returns {Promise<number|undefined>} rows repaired, or undefined when the repair could not run (offline)
+ */
+async function repairHistoricalRatesFromFullHistory(pairs) {
+  if ((await settingsRepository.get(FX_FULL_HISTORY_REPAIR_FLAG)) === true) return 0;
+
+  const fullByDate = await fetchHistoricalFromEcbFull();
+  if (fullByDate.size === 0) return undefined;
+
+  const currencies = [...new Set(pairs.map((p) => String(p.currency_code || '').toUpperCase().trim()))].filter(Boolean);
+  const storedResult = await query(
+    `SELECT currency_code, to_char(rate_date, 'YYYY-MM-DD') AS rate_date, rate_to_eur
+     FROM exchange_rates
+     WHERE currency_code = ANY($1::text[])`,
+    [currencies]
+  );
+  const storedByKey = new Map(
+    storedResult.rows.map((r) => [`${r.currency_code}:${r.rate_date}`, toNumber(toDecimal(r.rate_to_eur))])
+  );
+
+  let repaired = 0;
+  for (const pair of pairs) {
+    const code = String(pair.currency_code || '').toUpperCase().trim();
+    const dateStr = normalizeDateInput(pair.rate_date);
+    if (!code || !dateStr) continue;
+
+    const truth = rateOnOrBeforeFromMap(fullByDate, code, dateStr);
+    if (truth === undefined) continue; // currency not published by ECB
+
+    const stored = storedByKey.get(`${code}:${dateStr}`);
+    if (stored !== undefined && Math.abs(stored - truth) <= Math.abs(truth) * 1e-9) continue;
+
+    await saveHistoricalRate(code, dateStr, truth);
+    repaired += 1;
+  }
+
+  await settingsRepository.set(FX_FULL_HISTORY_REPAIR_FLAG, true);
+  return repaired;
+}
+
+/**
+ * Stamp `fx_rate_to_eur` onto non-EUR transactions that lack it, using the
+ * stored rate on-or-before the transaction date (≤ 7 days back — the standard
+ * weekend/holiday convention). Distant nearest rates are never stamped; those
+ * rows stay NULL and read paths keep resolving them per-date with a fallback flag.
+ */
+async function stampTransactionFxRates() {
+  const table = await portfolioTxTableForBulkWrites();
+  const result = await query(
+    `UPDATE ${table} pt
+     SET fx_rate_to_eur = sub.rate
+     FROM (
+       SELECT pt2.id,
+              (SELECT er.rate_to_eur
+               FROM exchange_rates er
+               WHERE er.currency_code = UPPER(pt2.currency::text)
+                 AND er.rate_date <= pt2.date::date
+                 AND er.rate_date >= pt2.date::date - INTERVAL '7 days'
+               ORDER BY er.rate_date DESC
+               LIMIT 1) AS rate
+       FROM ${table} pt2
+       WHERE pt2.fx_rate_to_eur IS NULL
+         AND pt2.currency IS NOT NULL
+         AND UPPER(pt2.currency::text) <> 'EUR'
+     ) sub
+     WHERE pt.id = sub.id AND sub.rate IS NOT NULL`
+  );
+  return result.rowCount ?? 0;
+}
+
 export async function backfillPortfolioHistoricalRates() {
+  const pairsResult = await query(
+    `SELECT pt.currency::text AS currency_code, pt.date::date AS rate_date
+     FROM portfolio_transactions pt
+     WHERE pt.currency IS NOT NULL
+       AND UPPER(pt.currency::text) <> 'EUR'
+     GROUP BY pt.currency::text, pt.date::date
+     ORDER BY pt.date::date ASC`
+  );
+  if (pairsResult.rows.length === 0) return { inserted: 0, missing: 0, repaired: 0, stamped: 0 };
+
+  let repaired = 0;
+  try {
+    repaired = (await repairHistoricalRatesFromFullHistory(pairsResult.rows)) ?? 0;
+  } catch (err) {
+    logger.warn('Full-history FX repair failed — will retry next startup', { error: err.message });
+  }
+
   const missingResult = await query(
     `SELECT pt.currency::text AS currency_code, pt.date::date AS rate_date
      FROM portfolio_transactions pt
      LEFT JOIN exchange_rates er
-       ON er.currency_code = pt.currency::text
+       ON er.currency_code = UPPER(pt.currency::text)
       AND er.rate_date = pt.date::date
      WHERE pt.currency IS NOT NULL
        AND UPPER(pt.currency::text) <> 'EUR'
@@ -356,8 +468,6 @@ export async function backfillPortfolioHistoricalRates() {
      GROUP BY pt.currency::text, pt.date::date
      ORDER BY pt.date::date ASC`
   );
-
-  if (missingResult.rows.length === 0) return { inserted: 0, missing: 0 };
 
   let inserted = 0;
   let unresolved = 0;
@@ -367,32 +477,38 @@ export async function backfillPortfolioHistoricalRates() {
     const rateDate = normalizeDateInput(row.rate_date);
     if (!currencyCode || !rateDate) continue;
 
-    const rate = await getRateToEurForDate(currencyCode, rateDate, { saveFetchedHistoricalRate: true });
-    if (rate === undefined) {
-      unresolved += 1;
-      continue;
-    }
+    // getRateToEurForDate persists rates it sources from ECB (90d or full
+    // history). When it falls through to a nearest-stored rate no exact row
+    // appears — count those as unresolved rather than fabricating history.
+    await getRateToEurForDate(currencyCode, rateDate, { saveFetchedHistoricalRate: true });
 
     const exactCheck = await query(
       `SELECT 1 FROM exchange_rates WHERE currency_code = $1 AND rate_date = $2::date LIMIT 1`,
       [currencyCode, rateDate]
     );
-    if (exactCheck.rows.length === 0) {
-      await saveHistoricalRate(currencyCode, rateDate, rate);
+    if (exactCheck.rows.length > 0) {
       inserted += 1;
+    } else {
+      unresolved += 1;
     }
   }
 
-  if (inserted > 0 || unresolved > 0) {
-    logger.info('Portfolio historical FX backfill complete', { inserted, unresolved });
+  let stamped = 0;
+  try {
+    stamped = await stampTransactionFxRates();
+  } catch (err) {
+    logger.warn('Stamping fx_rate_to_eur onto transactions failed', { error: err.message });
   }
 
-  if (inserted > 0) {
+  if (inserted > 0 || unresolved > 0 || repaired > 0 || stamped > 0) {
+    logger.info('Portfolio historical FX backfill complete', { inserted, unresolved, repaired, stamped });
+  }
+
+  if (inserted > 0 || repaired > 0) {
     clearHistoricalCache();
-    logger.debug('Historical FX cache invalidated after backfill', { inserted });
   }
 
-  return { inserted, missing: unresolved };
+  return { inserted, missing: unresolved, repaired, stamped };
 }
 
 export default {

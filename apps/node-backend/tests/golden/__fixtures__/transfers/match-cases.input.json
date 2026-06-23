@@ -1,0 +1,29 @@
+{
+  "options": { "windowDays": 3 },
+  "transactions": [
+    { "id": 1, "date": "2026-06-28", "amount": -1100, "currency": "EUR", "bank_account": "CHK", "is_active": true, "is_transfer": false, "transfer_source": null },
+    { "id": 2, "date": "2026-06-28", "amount": 1100, "currency": "EUR", "bank_account": "SAV", "is_active": true, "is_transfer": false, "transfer_source": null },
+
+    { "id": 3, "date": "2026-05-01", "amount": -500, "currency": "EUR", "bank_account": "CHK", "is_active": true, "is_transfer": false, "transfer_source": null },
+    { "id": 4, "date": "2026-05-03", "amount": 500, "currency": "EUR", "bank_account": "SAV", "is_active": true, "is_transfer": false, "transfer_source": null },
+
+    { "id": 5, "date": "2026-06-27", "amount": -750, "currency": "EUR", "bank_account": "CHK", "is_active": true, "is_transfer": false, "transfer_source": null },
+
+    { "id": 6, "date": "2026-06-10", "amount": -60, "currency": "EUR", "bank_account": "CHK", "is_active": true, "is_transfer": false, "transfer_source": null },
+    { "id": 7, "date": "2026-06-10", "amount": 60, "currency": "EUR", "bank_account": "CHK", "is_active": true, "is_transfer": false, "transfer_source": null },
+
+    { "id": 8, "date": "2026-04-15", "amount": -200, "currency": "EUR", "bank_account": "CHK", "is_active": true, "is_transfer": false, "transfer_source": null },
+    { "id": 9, "date": "2026-04-15", "amount": -200, "currency": "EUR", "bank_account": "CHK", "is_active": true, "is_transfer": false, "transfer_source": null },
+    { "id": 10, "date": "2026-04-15", "amount": 200, "currency": "EUR", "bank_account": "SAV", "is_active": true, "is_transfer": false, "transfer_source": null },
+    { "id": 11, "date": "2026-04-16", "amount": 200, "currency": "EUR", "bank_account": "SAV", "is_active": true, "is_transfer": false, "transfer_source": null },
+
+    { "id": 12, "date": "2026-03-01", "amount": -300, "currency": "EUR", "bank_account": "CHK", "is_active": true, "is_transfer": false, "transfer_source": null },
+    { "id": 13, "date": "2026-03-10", "amount": 300, "currency": "EUR", "bank_account": "SAV", "is_active": true, "is_transfer": false, "transfer_source": null },
+
+    { "id": 14, "date": "2026-02-01", "amount": -100, "currency": "EUR", "bank_account": "CHK", "is_active": true, "is_transfer": false, "transfer_source": null },
+    { "id": 15, "date": "2026-02-01", "amount": 100, "currency": "USD", "bank_account": "SAV", "is_active": true, "is_transfer": false, "transfer_source": null },
+
+    { "id": 16, "date": "2026-01-28", "amount": -1100, "currency": "EUR", "bank_account": "CHK", "is_active": true, "is_transfer": true, "transfer_source": "auto" },
+    { "id": 17, "date": "2026-01-28", "amount": 1100, "currency": "EUR", "bank_account": "SAV", "is_active": true, "is_transfer": false, "transfer_source": "manual" }
+  ]
+}

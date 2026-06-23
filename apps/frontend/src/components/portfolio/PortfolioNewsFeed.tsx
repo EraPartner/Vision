@@ -30,7 +30,7 @@ export function PortfolioNewsFeed({ symbols }: PortfolioNewsFeedProps) {
   const articles = data?.articles ?? [];
 
   return (
-    <Card className="h-full flex flex-col">
+    <Card className="glass-regular h-full flex flex-col">
       <CardHeader className="pb-3">
         <div className="flex items-center gap-2">
           <Newspaper className="h-5 w-5 text-primary" />

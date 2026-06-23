@@ -37,8 +37,11 @@ vi.mock('../../src/config/logger.js', () => ({
   logger: { info: vi.fn(), error: vi.fn(), warn: vi.fn(), debug: vi.fn() },
 }));
 
-vi.mock('../../src/services/materializedViewService.js', () => ({
-  scheduleRefresh: vi.fn(),
+vi.mock('../../src/services/transferReconciliationService.js', () => ({
+  scheduleReconcile: vi.fn(),
+  getTransferSuggestions: vi.fn(),
+  markTransfer: vi.fn(),
+  unmarkTransfer: vi.fn(),
 }));
 
 vi.mock('../../src/services/currency/currencyConversionService.js', () => ({
@@ -70,7 +73,7 @@ vi.mock('../../src/database/connection.js', () => {
 await import('../../src/routes/transactions.js');
 
 import { getClient, query as dbQuery } from '../../src/database/connection.js';
-import { scheduleRefresh } from '../../src/services/materializedViewService.js';
+import { scheduleReconcile } from '../../src/services/transferReconciliationService.js';
 
 const handler = routeHandlers['post:/bulk-update'];
 
@@ -178,7 +181,7 @@ describe('POST /bulk-update — success paths', () => {
     await callHandler({ body: { ids: [1, 2], fields: { category_id: 7 } } }, res);
 
     expect(res.json.mock.calls[0][0].data.updated).toBe(2);
-    expect(scheduleRefresh).toHaveBeenCalledTimes(1);
+    expect(scheduleReconcile).toHaveBeenCalledTimes(1);
   });
 
   it('updates multiple fields in one statement', async () => {
@@ -218,7 +221,7 @@ describe('POST /bulk-update — success paths', () => {
     await callHandler({ body: { ids: [12345], fields: { is_active: true } } }, res);
 
     expect(res.json.mock.calls[0][0].data.updated).toBe(0);
-    expect(scheduleRefresh).not.toHaveBeenCalled();
+    expect(scheduleReconcile).not.toHaveBeenCalled();
   });
 });
 
@@ -236,7 +239,7 @@ describe('POST /bulk-update — atomicity', () => {
     const res = mockResponse();
     await callHandler({ body: { ids: [1], fields: { is_active: false } } }, res);
 
-    expect(scheduleRefresh).not.toHaveBeenCalled();
+    expect(scheduleReconcile).not.toHaveBeenCalled();
     expect(res.status).toHaveBeenCalledWith(500);
     expect(release).toHaveBeenCalledTimes(1);
   });

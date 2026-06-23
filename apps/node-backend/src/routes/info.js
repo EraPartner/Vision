@@ -15,8 +15,7 @@
  */
 
 import { Router } from 'express';
-// eslint-disable-next-line vision-local/no-repo-direct-from-route
-import infoRepository from '../repositories/infoRepository.js';
+import infoRepository from '../services/infoService.js';
 import { logger } from '../config/logger.js';
 import { getSnapshots } from '../services/portfolioPerformanceSnapshotService.js';
 import { getPortfolioSummary } from '../services/portfolio/portfolioSummaryService.js';
@@ -30,6 +29,7 @@ import {
   setCachedData,
 } from './info/_cache.js';
 import { buildPortfolioPerformancePayload } from './info/_performanceHelpers.js';
+import { resolveLivePortfolioValue } from './info/_liveSummary.js';
 import { getCurrentDateString } from './info/_queryParams.js';
 
 import statisticsRouter from './info/statistics.js';
@@ -50,7 +50,8 @@ router.use('/', maintenanceRouter);
 
 async function warmNetWorthCache(targetCurrency) {
   try {
-    const nwData = await infoRepository.getNetWorthFromSnapshots(targetCurrency);
+    const liveInvestments = await resolveLivePortfolioValue(targetCurrency);
+    const nwData = await infoRepository.getNetWorthFromSnapshots(targetCurrency, { liveInvestments });
     setCachedData(netWorthResponseCache, targetCurrency, nwData, NET_WORTH_CACHE_TTL_MS);
     logger.info('Net-worth cache warmed', { targetCurrency, snapshots: nwData?.snapshots?.length });
   } catch (err) {

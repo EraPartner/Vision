@@ -9,12 +9,14 @@ import { InvestmentDetailDialog } from "@/components/portfolio/InvestmentDetailD
 import { useConfirmDialog } from "@/hooks/useConfirmDialog";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { useAppSettings } from "@/contexts/AppSettingsContext";
-import { numberFormatToLocale } from "@/utils/currency";
+import { useCurrencyFormatter } from "@/hooks/useCurrencyFormatter";
 import { formatDateStringWithAppSettings } from "@/components/shared/dateUtils";
 import { parseYmd, daysBetween } from "@/lib/timezone";
 import { cn } from "@/lib/utils";
 import { useCurrencyConverter } from "@/hooks/useCurrencyConverter";
 import { PageHeader } from "@/components/shared/PageHeader";
+import { PageError } from "@/components/shared/PageError";
+import { Skeleton } from "@/components/ui/skeleton";
 import { EmptyState } from "@/components/shared/EmptyState";
 
 function daysUntil(dateStr?: string) {
@@ -25,21 +27,14 @@ function daysUntil(dateStr?: string) {
 export default function SavingsPage() {
   const { t } = useLanguage();
   const { appSettings } = useAppSettings();
-  const locale = numberFormatToLocale(appSettings.numberFormat);
   const targetCurrency = appSettings.defaultCurrency || 'EUR';
-  const { byAssetClass, deleteInvestment } = usePortfolio();
+  const { byAssetClass, deleteInvestment, isLoading, isError, error, refetch } = usePortfolio();
   const { confirm, ConfirmDialog } = useConfirmDialog();
   const accounts = byAssetClass(['savings', 'bond']);
 
   const { convertToTarget } = useCurrencyConverter(targetCurrency);
 
-  function fmt(
-    val: number,
-    currency = targetCurrency,
-    decimals = appSettings.showDecimalPlaces
-  ) {
-    return new Intl.NumberFormat(locale, { style: "currency", currency, minimumFractionDigits: decimals, maximumFractionDigits: decimals }).format(val);
-  }
+  const fmt = useCurrencyFormatter(targetCurrency);
 
   const totalBalance = accounts.reduce((s, a) => s + convertToTarget(a.currentValue, a.currency), 0);
   const totalInterestEarned = accounts.reduce((s, a) => s + convertToTarget(a.totalIncome, a.currency), 0);
@@ -49,6 +44,24 @@ export default function SavingsPage() {
     ? accounts.reduce((s, a) => s + (a.interestRate ?? 0) * convertToTarget(a.currentValue, a.currency), 0) / totalBalance
     : 0;
 
+  if (isLoading) {
+    return (
+      <div className="space-y-6">
+        <PageHeader title={t('savings.title')} icon={PiggyBank} />
+        <Skeleton className="h-24 w-full" />
+        <Skeleton className="h-64 w-full" />
+      </div>
+    );
+  }
+  if (isError) {
+    return (
+      <div className="space-y-6">
+        <PageHeader title={t('savings.title')} icon={PiggyBank} />
+        <PageError message={error?.message ?? t('common.error')} onRetry={() => refetch()} />
+      </div>
+    );
+  }
+
   if (accounts.length === 0) {
     return (
       <div className="space-y-6">
@@ -57,7 +70,7 @@ export default function SavingsPage() {
           icon={PiggyBank}
           actions={<AddInvestmentDialog allowedAssetClasses={[ 'savings', 'bond' ]} />}
         />
-        <Card className="group relative overflow-hidden surface-elevated premium-frame bg-card backdrop-blur-sm">
+        <Card className="group relative overflow-hidden glass-regular premium-frame">
           <CardContent className="pt-0">
             <EmptyState
               icon={PiggyBank}
@@ -82,7 +95,7 @@ export default function SavingsPage() {
 
       {/* Summary Cards */}
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-        <Card className="group relative overflow-hidden surface-elevated premium-frame micro-lift bg-card backdrop-blur-sm">
+        <Card className="group relative overflow-hidden glass-regular premium-frame micro-lift">
           <CardHeader className="pb-1 pt-3 px-4">
             <CardTitle className="text-xs font-medium text-muted-foreground flex items-center gap-2">
               <span className="inline-flex h-6 w-6 items-center justify-center rounded-md bg-gradient-to-br from-primary/20 to-primary/5 text-primary ring-1 ring-primary/15">
@@ -96,7 +109,7 @@ export default function SavingsPage() {
           </CardContent>
         </Card>
 
-        <Card className="group relative overflow-hidden surface-elevated premium-frame micro-lift bg-card backdrop-blur-sm">
+        <Card className="group relative overflow-hidden glass-regular premium-frame micro-lift">
           <CardHeader className="pb-1 pt-3 px-4">
             <CardTitle className="text-xs font-medium text-muted-foreground flex items-center gap-2">
               <span className="inline-flex h-6 w-6 items-center justify-center rounded-md bg-gradient-to-br from-accent/20 to-accent/5 text-accent ring-1 ring-accent/15">
@@ -110,7 +123,7 @@ export default function SavingsPage() {
           </CardContent>
         </Card>
 
-        <Card className="group relative overflow-hidden surface-elevated premium-frame micro-lift bg-card backdrop-blur-sm">
+        <Card className="group relative overflow-hidden glass-regular premium-frame micro-lift">
           <CardHeader className="pb-1 pt-3 px-4">
             <CardTitle className="text-xs font-medium text-muted-foreground flex items-center gap-2">
               <span className="inline-flex h-6 w-6 items-center justify-center rounded-md bg-gradient-to-br from-accent/20 to-accent/5 text-accent ring-1 ring-accent/15">
@@ -124,7 +137,8 @@ export default function SavingsPage() {
           </CardContent>
         </Card>
 
-        <Card className="group relative overflow-hidden surface-elevated premium-frame micro-lift bg-card backdrop-blur-sm border-l-4 border-l-primary">
+        <Card className="group relative overflow-hidden glass-regular premium-frame micro-lift">
+          <div aria-hidden className="pointer-events-none absolute inset-0 rounded-[inherit] bg-gradient-to-br from-primary/15 to-primary/5" />
           <CardHeader className="pb-1 pt-3 px-4">
             <CardTitle className="text-xs font-medium text-muted-foreground">{t('portfolio.projectedAnnual')}</CardTitle>
           </CardHeader>
@@ -178,14 +192,15 @@ export default function SavingsPage() {
                     <InvestmentDetailDialog 
                       investment={a} 
                       trigger={
-                        <Button variant="ghost" size="icon" className="icon-touch-target">
+                        <Button variant="ghost" size="icon" className="icon-touch-target" aria-label={t('portfolio.viewDetails')} title={t('portfolio.viewDetails')}>
                           <Eye className="h-4 w-4" />
                         </Button>
                       }
                     />
                     <AddPortfolioTxnDialog investment={a} />
                     <Button variant="ghost" size="icon" className="icon-touch-target text-muted-foreground hover:text-destructive"
-                      onClick={async () => { 
+                      aria-label={t('savings.deleteAccount')} title={t('savings.deleteAccount')}
+                      onClick={async () => {
                         const ok = await confirm({ 
                           title: t('savings.deleteAccount'), 
                           description: t('savings.deleteAccountDesc', { name: a.name }), 
@@ -271,7 +286,7 @@ export default function SavingsPage() {
       </div>
 
       {/* Info Card */}
-      <Card className="bg-muted/30 border-dashed">
+      <Card className="bg-muted/30 !border-dashed">
         <CardContent className="py-4">
           <p className="text-sm text-muted-foreground">{t('savings.howItWorks')}</p>
         </CardContent>

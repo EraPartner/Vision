@@ -13,6 +13,8 @@ async function loadAggregationRefresh() {
 
   const refreshLegacyMaterializedViews = vi.fn().mockResolvedValue(undefined);
   const scheduleLegacyRefresh = vi.fn();
+  const clearMcCache = vi.fn().mockResolvedValue(undefined);
+  const clearRollingMcCache = vi.fn().mockResolvedValue(undefined);
 
   vi.doMock('../src/database/connection.js', () => ({ query }));
   vi.doMock('../src/config/logger.js', () => ({ logger }));
@@ -20,9 +22,18 @@ async function loadAggregationRefresh() {
     refreshMaterializedViews: refreshLegacyMaterializedViews,
     scheduleRefresh: scheduleLegacyRefresh,
   }));
+  vi.doMock('../src/repositories/cashflowForecastMcRepository.js', () => ({
+    default: { clearAll: clearMcCache },
+  }));
+  vi.doMock('../src/repositories/cashflowForecastMcRollingRepository.js', () => ({
+    default: { clearAll: clearRollingMcCache },
+  }));
 
   const service = await import('../src/services/aggregationRefresh.js');
-  return { ...service, query, logger, refreshLegacyMaterializedViews, scheduleLegacyRefresh };
+  return {
+    ...service, query, logger, refreshLegacyMaterializedViews, scheduleLegacyRefresh,
+    clearMcCache, clearRollingMcCache,
+  };
 }
 
 describe('aggregationRefresh', () => {
@@ -39,130 +50,48 @@ describe('aggregationRefresh', () => {
     expect(Object.isFrozen(TRIGGER_MAINTAINED_TABLES)).toBe(true);
   });
 
-  it('refreshes Phase-1 view via CONCURRENTLY by default', async () => {
-    const { refreshAggregations, query, refreshLegacyMaterializedViews } = await loadAggregationRefresh();
+  it('refreshes the legacy materialized views', async () => {
+    const { refreshAggregations, refreshLegacyMaterializedViews } = await loadAggregationRefresh();
+
+    await refreshAggregations();
+
+    expect(refreshLegacyMaterializedViews).toHaveBeenCalledTimes(1);
+  });
+
+  it('no longer refreshes mv_recipient_monthly (write-amplification removed)', async () => {
+    const { refreshAggregations, query } = await loadAggregationRefresh();
     query.mockResolvedValue({ rows: [] });
 
     await refreshAggregations();
 
-    expect(refreshLegacyMaterializedViews).toHaveBeenCalledTimes(1);
-    expect(query).toHaveBeenCalledWith('REFRESH MATERIALIZED VIEW CONCURRENTLY mv_recipient_monthly');
-  });
-
-  it('runs legacy and Phase-1 refreshes in parallel', async () => {
-    const { refreshAggregations, query, refreshLegacyMaterializedViews } = await loadAggregationRefresh();
-
-    let resolveLegacy;
-    refreshLegacyMaterializedViews.mockReturnValue(new Promise((r) => { resolveLegacy = r; }));
-    let resolveQuery;
-    query.mockReturnValue(new Promise((r) => { resolveQuery = r; }));
-
-    const p = refreshAggregations();
-    // Both calls should fire before either settles — parallel, not serial.
-    expect(refreshLegacyMaterializedViews).toHaveBeenCalledTimes(1);
-    expect(query).toHaveBeenCalledTimes(1);
-
-    resolveLegacy();
-    resolveQuery({ rows: [] });
-    await p;
-  });
-
-  it('falls back to non-concurrent refresh when view is unpopulated', async () => {
-    const { refreshAggregations, query, logger } = await loadAggregationRefresh();
-    query.mockImplementation((sql) => {
-      if (sql.includes('CONCURRENTLY')) {
-        return Promise.reject(new Error('REFRESH MATERIALIZED VIEW CONCURRENTLY ... has not been populated'));
-      }
-      return Promise.resolve({ rows: [] });
-    });
-
-    await refreshAggregations();
-
+    // The view is no longer in the refresh set — no REFRESH should be issued.
     const sqlCalls = query.mock.calls.map(([sql]) => sql);
-    expect(sqlCalls).toContain('REFRESH MATERIALIZED VIEW CONCURRENTLY mv_recipient_monthly');
-    expect(sqlCalls).toContain('REFRESH MATERIALIZED VIEW mv_recipient_monthly');
-    expect(logger.warn).toHaveBeenCalledWith('Falling back to non-concurrent refresh for mv_recipient_monthly');
+    expect(sqlCalls.some((sql) => typeof sql === 'string' && sql.includes('mv_recipient_monthly'))).toBe(false);
   });
 
-  it('logs warning but does not retry when refresh fails for unrelated reason', async () => {
-    const { refreshAggregations, query, logger } = await loadAggregationRefresh();
-    query.mockRejectedValueOnce(new Error('permission denied'));
+  it('invalidates the cashflow-forecast caches so diagnostics recompute on fresh data', async () => {
+    const { refreshAggregations, clearMcCache, clearRollingMcCache } = await loadAggregationRefresh();
 
     await refreshAggregations();
 
-    expect(query).toHaveBeenCalledTimes(1); // no retry
-    expect(logger.warn).toHaveBeenCalledWith(
-      'Failed to refresh mv_recipient_monthly',
-      { error: 'permission denied' },
-    );
+    expect(clearMcCache).toHaveBeenCalledTimes(1);
+    expect(clearRollingMcCache).toHaveBeenCalledTimes(1);
   });
 
-  it('coalesces concurrent Phase-1 refreshes — second call queues, runs once after first finishes', async () => {
-    vi.useFakeTimers();
-    const { refreshAggregations, query, refreshLegacyMaterializedViews } = await loadAggregationRefresh();
-
-    let resolveFirst;
-    query.mockImplementationOnce(() => new Promise((r) => { resolveFirst = r; }));
-    query.mockResolvedValue({ rows: [] });
-    refreshLegacyMaterializedViews.mockResolvedValue(undefined);
-
-    const p1 = refreshAggregations();
-    const p2 = refreshAggregations();
-
-    // Second call should not invoke query yet — first is in-flight.
-    expect(query).toHaveBeenCalledTimes(1);
-
-    resolveFirst({ rows: [] });
-    await p1;
-    await p2;
-
-    // Deferred Phase-1 refresh runs after 500 ms.
-    await vi.advanceTimersByTimeAsync(500);
-    expect(query).toHaveBeenCalledTimes(2);
-  });
-
-  it('scheduleAggregationRefresh debounces calls into one Phase-1 refresh', async () => {
-    vi.useFakeTimers();
-    const { scheduleAggregationRefresh, query, scheduleLegacyRefresh } = await loadAggregationRefresh();
-    query.mockResolvedValue({ rows: [] });
+  it('scheduleAggregationRefresh delegates to the legacy debounce', async () => {
+    const { scheduleAggregationRefresh, scheduleLegacyRefresh, query } = await loadAggregationRefresh();
 
     scheduleAggregationRefresh();
     scheduleAggregationRefresh();
     scheduleAggregationRefresh();
 
-    expect(scheduleLegacyRefresh).toHaveBeenCalledTimes(3); // legacy delegates each time
-
-    await vi.advanceTimersByTimeAsync(999);
-    expect(query).not.toHaveBeenCalled();
-
-    await vi.advanceTimersByTimeAsync(1);
-    expect(query).toHaveBeenCalledTimes(1);
+    expect(scheduleLegacyRefresh).toHaveBeenCalledTimes(3);
+    expect(query).not.toHaveBeenCalled(); // no app-side MV refresh anymore
   });
 
-  it('cancelPendingAggregationRefresh cancels the debounced timer', async () => {
-    vi.useFakeTimers();
-    const { scheduleAggregationRefresh, cancelPendingAggregationRefresh, query } = await loadAggregationRefresh();
-    query.mockResolvedValue({ rows: [] });
-
-    scheduleAggregationRefresh();
-    cancelPendingAggregationRefresh();
-
-    await vi.advanceTimersByTimeAsync(2000);
-    expect(query).not.toHaveBeenCalled();
-  });
-
-  it('cancelPendingAggregationRefresh is a no-op when nothing is scheduled', async () => {
+  it('cancelPendingAggregationRefresh is a no-op and never throws', async () => {
     const { cancelPendingAggregationRefresh } = await loadAggregationRefresh();
     expect(() => cancelPendingAggregationRefresh()).not.toThrow();
-  });
-
-  it('logs duration after a successful Phase-1 refresh', async () => {
-    const { refreshAggregations, query, logger } = await loadAggregationRefresh();
-    query.mockResolvedValue({ rows: [] });
-
-    await refreshAggregations();
-
-    expect(logger.info).toHaveBeenCalledWith(expect.stringMatching(/^Phase-1 aggregations refreshed in \d+ms$/));
   });
 
   it('default export exposes the public API', async () => {

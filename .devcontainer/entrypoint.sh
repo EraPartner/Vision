@@ -1,10 +1,11 @@
 #!/usr/bin/env bash
 # /usr/local/sbin/vision-entrypoint
 #
-# Runs as root (containerUser=root in devcontainer.json) on every container
-# start, BEFORE any dev session. Does all privileged setup here so the
-# container can run with --security-opt=no-new-privileges (dev sessions then
-# have no path to root — no sudo, no setuid).
+# Runs as root (the image's default user) on every container start, BEFORE any
+# dev session. Does all privileged setup here so dev sessions have no path to
+# root: the image strips all setuid/setgid bits, there's no sudo, and the
+# per-container VM boundary contains escalation (apple/container has no
+# --security-opt=no-new-privileges equivalent — this is the documented delta).
 #
 # Order: perms repair -> LOCK EGRESS (firewall, fail-closed) -> start Postgres
 # -> start the egress proxy -> keep-alive PID 1. The firewall goes up before
@@ -27,7 +28,7 @@ PG_CONF_DIR="/etc/postgresql/${PG_VERSION}/${PG_CLUSTER}"
 #    (chowns pgdata->postgres, .claude/.config->dev).
 /usr/local/sbin/vision-perms-fix || log "WARN: perms-fix returned non-zero."
 
-# Network pre-flight: if Docker Desktop detached us from the bridge, the proxy
+# Network pre-flight: if the container lost its external interface, the proxy
 # can't resolve upstreams. Warn with the fix; still lock the firewall.
 has_iface=0
 for iface in /sys/class/net/eth*; do [[ -e "$iface" ]] && has_iface=1; done
@@ -36,7 +37,7 @@ if (( ! has_iface )) || [[ -z "$default_route" ]]; then
   cat >&2 <<EOF
 [entrypoint] ⚠  No external network interface / default route.
 [entrypoint]    The proxy won't resolve upstreams until this is fixed.
-[entrypoint]    On your HOST shell:  docker network connect bridge $HOSTNAME
+[entrypoint]    Restart the container:  container stop $HOSTNAME; <launcher>
 [entrypoint]    Then restart the container.
 EOF
 fi
@@ -47,14 +48,26 @@ fi
 
 # 3) Postgres: start the cluster (init/adopt/create), then ensure role + db.
 #    runuser drops to postgres without setuid (works because we are root).
-if [[ -f "${PG_CONF_DIR}/postgresql.conf" ]]; then
-  log "Registered Postgres cluster found, starting..."
-  pg_ctlcluster "${PG_VERSION}" "${PG_CLUSTER}" start || true
-elif runuser -u postgres -- test -s "${PG_DATA}/PG_VERSION"; then
-  log "Adopting existing Postgres data dir..."
-  pg_createcluster "${PG_VERSION}" "${PG_CLUSTER}" --datadir="${PG_DATA}" --start || true
+#
+#    apple/container note: a fresh named volume mounts EMPTY — unlike Docker, the
+#    image's content at /var/lib/postgresql is NOT seeded into the volume, it's
+#    shadowed. So the DATA dir is the source of truth, not the registered conf
+#    (/etc/postgresql/... lives in the image and is always present). Check the data
+#    dir FIRST: a registered cluster whose data dir is empty must be recreated, or
+#    `pg_ctlcluster start` fails with "data dir not accessible".
+if runuser -u postgres -- test -s "${PG_DATA}/PG_VERSION"; then
+  if [[ -f "${PG_CONF_DIR}/postgresql.conf" ]]; then
+    log "Registered Postgres cluster with data, starting..."
+    pg_ctlcluster "${PG_VERSION}" "${PG_CLUSTER}" start || true
+  else
+    log "Adopting existing Postgres data dir..."
+    pg_createcluster "${PG_VERSION}" "${PG_CLUSTER}" --datadir="${PG_DATA}" --start || true
+  fi
 else
-  log "Creating fresh Postgres cluster..."
+  # Empty/fresh data volume. Drop any stale image-baked registration whose data
+  # the volume shadowed, then create a fresh cluster on the volume.
+  log "Creating fresh Postgres cluster (empty data volume)..."
+  [[ -f "${PG_CONF_DIR}/postgresql.conf" ]] && pg_dropcluster "${PG_VERSION}" "${PG_CLUSTER}" 2>/dev/null || true
   pg_createcluster "${PG_VERSION}" "${PG_CLUSTER}" --start || true
 fi
 
@@ -107,9 +120,9 @@ for _ in $(seq 1 20); do
   sleep 1
 done
 
-# Graceful shutdown on `docker stop` (SIGTERM): stop Postgres (fast) and squid
-# cleanly so the next start doesn't trigger crash recovery. (With "init": true
-# in devcontainer.json, tini reaps zombies and forwards this signal here.)
+# Graceful shutdown on `container stop` (SIGTERM): stop Postgres (fast) and squid
+# cleanly so the next start doesn't trigger crash recovery. (The launcher's
+# `container run --init` runs an init that reaps zombies and forwards SIGTERM here.)
 shutdown() {
   log "shutting down..."
   pg_ctlcluster "${PG_VERSION}" "${PG_CLUSTER}" stop -m fast 2>/dev/null || true
@@ -118,7 +131,7 @@ shutdown() {
 }
 trap shutdown TERM INT
 
-log "Setup complete. Container ready (dev sessions via 'devcontainer exec')."
+log "Setup complete. Container ready (dev sessions via 'container exec')."
 
 # 5) Keep PID 1 alive AND supervise the egress proxy. If squid dies mid-session
 #    all egress stops (fail-closed) — restart it so it self-heals. The firewall
@@ -143,5 +156,8 @@ while true; do
   # Keep the audit log world-readable so `dev` (no longer in the proxy group)
   # can inspect it; squid recreates it 0640 on start/rotate.
   chmod o+r /var/log/squid/access.log* 2>/dev/null || true
-  sleep 30
+  # Background + wait so the TERM trap fires immediately on `container stop`; a bare
+  # `sleep 30` would defer graceful Postgres/squid shutdown up to 30s (risking the
+  # kill timeout, skipping a clean shutdown). (F15)
+  sleep 30 & wait $!
 done

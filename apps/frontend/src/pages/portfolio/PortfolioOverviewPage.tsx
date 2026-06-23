@@ -1,10 +1,10 @@
 import { useLanguage } from "@/contexts/LanguageContext";
 import { useAppSettings } from "@/contexts/AppSettingsContext";
-import { numberFormatToLocale } from "@/utils/currency";
+import { useCurrencyFormatter } from "@/hooks/useCurrencyFormatter";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { TrendingUp, TrendingDown, PieChart as PieChartIcon, Trash2, RefreshCw, Loader2, ArrowUpRight, Clock } from "lucide-react";
+import { TrendingUp, TrendingDown, PieChart as PieChartIcon, Trash2, RefreshCw, Loader2, ArrowUpRight, Clock, AlertTriangle } from "lucide-react";
 import { DonutChart, ChartLegend, type ChartLegendItem } from "@/components/charts";
 import { usePortfolio } from "@/hooks/usePortfolio";
 import { usePortfolioSummaryQuery } from "@/hooks/portfolio/usePortfolioSummary";
@@ -18,7 +18,7 @@ import { ASSET_CLASS_LABELS, getAssetClassGroups } from "@/types/portfolio";
 import { isUnitBased } from "@/utils/assetClass";
 import { cn } from "@/lib/utils";
 import { useConfirmDialog } from "@/hooks/useConfirmDialog";
-import { useCallback, useMemo } from "react";
+import { useMemo } from "react";
 import { useCurrencyConverter } from "@/hooks/useCurrencyConverter";
 import { useOnlineStatus } from "@/hooks/useOnlineStatus";
 import { WidgetVisibilityDialog } from "@/components/shared/WidgetVisibilityDialog";
@@ -44,10 +44,9 @@ const COLORS = [
 ];
 
 export default function PortfolioOverviewPage() {
-  const { t } = useLanguage();
+  const { t, tc } = useLanguage();
   const { appSettings } = useAppSettings();
   const targetCurrency = appSettings.defaultCurrency || 'EUR';
-  const locale = numberFormatToLocale(appSettings.numberFormat);
   const {
     summaries, transactions,
     deleteInvestment, refreshPrices, isRefreshingPrices
@@ -60,26 +59,7 @@ export default function PortfolioOverviewPage() {
 
   const { convertToTarget } = useCurrencyConverter(targetCurrency);
 
-  const formatterCache = useMemo(() => new Map<string, Intl.NumberFormat>(), []);
-
-  const fmt = useCallback((
-    val: number,
-    currency = targetCurrency,
-    decimals = appSettings.showDecimalPlaces
-  ) => {
-    const key = `${locale}:${currency}:${decimals}`;
-    let formatter = formatterCache.get(key);
-    if (!formatter) {
-      formatter = new Intl.NumberFormat(locale, {
-        style: "currency",
-        currency,
-        minimumFractionDigits: decimals,
-        maximumFractionDigits: decimals,
-      });
-      formatterCache.set(key, formatter);
-    }
-    return formatter.format(val);
-  }, [targetCurrency, appSettings.showDecimalPlaces, formatterCache, locale]);
+  const fmt = useCurrencyFormatter(targetCurrency);
 
   const assetClassGroups = useMemo(() => getAssetClassGroups(t), [t]);
 
@@ -96,6 +76,14 @@ export default function PortfolioOverviewPage() {
   const totalFeesInTarget = totals?.totalFees ?? 0;
   const totalTaxesInTarget = totals?.totalTaxes ?? 0;
   const totalIncome = totals?.totalIncome ?? 0;
+  const totalAssetGainInTarget = totals?.totalAssetGain ?? 0;
+  const totalFxGainInTarget = totals?.totalFxGain ?? 0;
+  const fxRateFellBack = totals?.usedFallbackRate === true;
+  // Only surface FX attribution when some holding is in a foreign currency —
+  // an all-EUR portfolio would just show a noisy "FX effect: €0.00" line.
+  const hasFxExposure = (portfolioSummary?.summaries ?? []).some(
+    (s) => s.originalCurrency && s.originalCurrency !== portfolioSummary?.currency,
+  );
 
   const allocationAndNews = useMemo(() => {
     const classToGroup = new Map<string, string>();
@@ -200,7 +188,12 @@ export default function PortfolioOverviewPage() {
       value: `${totalGainLossInTarget >= 0 ? '+' : ''}${fmt(totalGainLossInTarget)}`,
       icon: totalGainLossInTarget >= 0 ? TrendingUp : TrendingDown,
       desc: `${gainPercent >= 0 ? '+' : ''}${gainPercent.toFixed(1)}% ${t('networth.allTime')}`,
-      cls: totalGainLossInTarget >= 0 ? "text-accent" : "text-destructive"
+      cls: totalGainLossInTarget >= 0 ? "text-accent" : "text-destructive",
+      // Attribution: gain = asset performance + currency effect (FX feature).
+      subline: hasFxExposure
+        ? `${t('portfolio.assetGain')} ${totalAssetGainInTarget >= 0 ? '+' : ''}${fmt(totalAssetGainInTarget)} · ${t('portfolio.fxEffect')} ${totalFxGainInTarget >= 0 ? '+' : ''}${fmt(totalFxGainInTarget)}`
+        : undefined,
+      sublineWarning: hasFxExposure && fxRateFellBack ? t('portfolio.fxFallbackNote') : undefined,
     },
     {
       title: t('portfolio.realizedGains'),
@@ -252,7 +245,7 @@ export default function PortfolioOverviewPage() {
       />
 
       {isEmpty ? (
-        <Card>
+        <Card className="glass-regular">
           <CardContent className="pt-0">
             <EmptyState
               icon={PieChartIcon}
@@ -278,16 +271,19 @@ export default function PortfolioOverviewPage() {
                   totalValue={totalPortfolioValueInTarget}
                   labels={{
                     title: t('portfolio.totalValue'),
-                    investments: t('portfolio.investments', { count: String(summaries.length) }),
+                    investments: tc('portfolio.investments', summaries.length),
                     assetSplit: t('portfolio.allocationByClass'),
                     bestPerformer: t('portfolio.bestPerformer'),
                     worstPerformer: t('portfolio.worstPerformer'),
-                    sparkline: t('portfolio.last30Days'),
+                    // This series is cumulative net contributions (buys+gifts−sells),
+                    // not 30-day performance — label and colour it as such.
+                    sparkline: t('portfolio.netContributions30d'),
                   }}
                   allocation={allocationData}
                   bestPerformer={performers.best}
                   worstPerformer={performers.worst}
                   sparkline={sparkline}
+                  neutralSparkline
                   formatCurrency={fmt}
                 />
               </div>
@@ -301,6 +297,16 @@ export default function PortfolioOverviewPage() {
                     <CardContent>
                       <p className={`text-2xl font-bold ${c.cls}`}>{c.value}</p>
                       <p className="text-xs text-muted-foreground mt-1">{c.desc}</p>
+                      {c.subline && (
+                        <p className="text-xs text-muted-foreground mt-1 tabular-nums">
+                          {c.subline}
+                          {c.sublineWarning && (
+                            <span title={c.sublineWarning} aria-label={c.sublineWarning}>
+                              <AlertTriangle className="inline h-3 w-3 ml-1 text-warning align-[-1px]" />
+                            </span>
+                          )}
+                        </p>
+                      )}
                     </CardContent>
                   </Card>
                 ))}
@@ -310,7 +316,7 @@ export default function PortfolioOverviewPage() {
 
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
             {isVisible('allocation') && allocationData.length > 0 && (
-              <Card>
+              <Card className="glass-regular">
                 <CardHeader><CardTitle>{t('portfolio.widget.allocation')}</CardTitle><CardDescription>{t('portfolio.allocationByClass')}</CardDescription></CardHeader>
                 <CardContent>
                   <DonutChart
@@ -335,7 +341,7 @@ export default function PortfolioOverviewPage() {
             )}
 
             {isVisible('performance') && (
-              <Card>
+              <Card className="glass-regular">
                 <CardHeader><CardTitle>{t('portfolio.widget.performance')}</CardTitle><CardDescription>{t('portfolio.gainsIncomeAndCosts')}</CardDescription></CardHeader>
                 <CardContent>
                   <div className="space-y-3">
@@ -344,6 +350,10 @@ export default function PortfolioOverviewPage() {
                        { label: t('portfolio.currentValue'), value: totalPortfolioValueInTarget, cls: 'text-foreground' },
                        { label: t('portfolio.realizedGains'), value: totalRealizedGainInTarget, cls: totalRealizedGainInTarget >= 0 ? 'text-accent' : 'text-destructive', showSign: true },
                        { label: t('portfolio.unrealizedGains'), value: totalUnrealizedGainInTarget, cls: totalUnrealizedGainInTarget >= 0 ? 'text-accent' : 'text-destructive', showSign: true },
+                      ...(hasFxExposure ? [
+                        { label: t('portfolio.assetGain'), value: totalAssetGainInTarget, cls: totalAssetGainInTarget >= 0 ? 'text-accent' : 'text-destructive', showSign: true },
+                        { label: t('portfolio.fxEffect'), value: totalFxGainInTarget, cls: totalFxGainInTarget >= 0 ? 'text-accent' : 'text-destructive', showSign: true },
+                      ] : []),
                       { label: t('portfolio.totalIncome'), value: totalIncome, cls: 'text-accent', showSign: true },
                        { label: t('portfolio.totalFees'), value: -totalFeesInTarget, cls: 'text-destructive' },
                         { label: t('portfolio.totalTaxes'), value: -totalTaxesInTarget, cls: 'text-destructive' },
@@ -364,7 +374,7 @@ export default function PortfolioOverviewPage() {
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 lg:items-stretch">
             {isVisible('investments') && (
               <div className={cn(isVisible('news') && newsSymbols.length > 0 ? "lg:col-span-2" : "lg:col-span-3", "h-full min-h-0")}>
-                <Card className="h-full flex flex-col">
+                <Card className="glass-regular h-full flex flex-col">
                   <CardHeader><CardTitle>{t('portfolio.widget.investments')}</CardTitle></CardHeader>
                   <CardContent className="min-h-0">
                     <div className="space-y-2">
@@ -397,7 +407,7 @@ export default function PortfolioOverviewPage() {
                               <AddPortfolioTxnDialog investment={inv} />
                               <Button
                                 variant="ghost" size="icon" className="icon-touch-target text-muted-foreground hover:text-destructive hover:bg-destructive/10"
-                                aria-label="Delete investment"
+                                aria-label={t('aria.deleteInvestment')}
                                 onClick={async () => {
                                    const ok = await confirm({
                                     title: t('portfolio.deleteInvestment'),

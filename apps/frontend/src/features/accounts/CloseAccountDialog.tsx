@@ -1,0 +1,150 @@
+/**
+ * Close-account workflow (ADR-091): a guided "deal with the holdings, then archive"
+ * flow. An account that still owns lots can't be hard-deleted (ON DELETE RESTRICT),
+ * and leaving positions in an archived account hides them — so this lists the
+ * account's holdings and offers to transfer them all (in-specie, cost-basis
+ * preserving) to another account before archiving (is_active=false).
+ */
+
+import { useMemo, useState } from 'react';
+import { useMutation, useQueryClient } from '@tanstack/react-query';
+import {
+  Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle,
+} from '@/components/ui/dialog';
+import { Button } from '@/components/ui/button';
+import { Label } from '@/components/ui/label';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Archive, ArrowRight, Loader2 } from 'lucide-react';
+import { apiClient } from '@/lib/api';
+import { toNumber } from '@/lib/money';
+import { useLanguage } from '@/contexts/LanguageContext';
+import { useAppSettings } from '@/contexts/AppSettingsContext';
+import { useExchangeRates } from '@/hooks/useExchangeRates';
+import { accountPositionsFor } from '@/hooks/portfolio/useAccountPositions';
+import { numberFormatToLocale } from '@/utils/currency';
+import { toast } from 'sonner';
+import type { Account, Investment } from '@/types/api';
+import type { InvestmentSummary } from '@/types/portfolio';
+
+interface AccountHolding {
+  investmentId: number;
+  name: string;
+  units: number;
+  currentValue: number;
+}
+
+export function CloseAccountDialog({ account, accounts, summaries, open, onOpenChange }: {
+  account: Account;
+  accounts: Account[];
+  summaries: InvestmentSummary[];
+  open: boolean;
+  onOpenChange: (o: boolean) => void;
+}) {
+  const { t } = useLanguage();
+  const { appSettings } = useAppSettings();
+  const { multiplierFor } = useExchangeRates();
+  const queryClient = useQueryClient();
+  const [destId, setDestId] = useState('');
+
+  const locale = numberFormatToLocale(appSettings.numberFormat);
+  const target = (appSettings.defaultCurrency || 'EUR').toUpperCase();
+  const fmt = (v: number) => new Intl.NumberFormat(locale, {
+    style: 'currency', currency: target,
+    minimumFractionDigits: appSettings.showDecimalPlaces, maximumFractionDigits: appSettings.showDecimalPlaces,
+  }).format(v);
+
+  // Investments still holding a non-empty position in this account.
+  const holdings = useMemo<AccountHolding[]>(() => {
+    const out: AccountHolding[] = [];
+    for (const summary of summaries) {
+      const native = (summary.originalCurrency || summary.currency || 'EUR').toUpperCase();
+      const positions = accountPositionsFor(summary as unknown as Investment, summary.transactions, {
+        costBasisMethod: appSettings.costBasisMethod ?? 'weighted_avg',
+        multiplier: multiplierFor(native, target),
+        today: '',
+        accountName: () => null,
+      });
+      const here = positions.find((p) => p.accountId === account.id);
+      if (here && (Math.abs(here.totalUnits) > 1e-9 || Math.abs(here.currentValue) > 0.005)) {
+        out.push({ investmentId: summary.id, name: summary.name, units: toNumber(here.totalUnits), currentValue: here.currentValue });
+      }
+    }
+    return out;
+  }, [summaries, account.id, appSettings.costBasisMethod, multiplierFor, target]);
+
+  const destinations = accounts.filter((a) => a.id !== account.id && a.is_active);
+  const needsDestination = holdings.length > 0;
+
+  const close = useMutation({
+    mutationFn: async () => {
+      // Transfer every holding whole to the destination first (in-specie), then archive.
+      if (needsDestination) {
+        const to = Number(destId);
+        for (const h of holdings) {
+          await apiClient.moveHolding(h.investmentId, { from_account_id: account.id, to_account_id: to });
+        }
+      }
+      await apiClient.updateAccount(account.id, { is_active: false });
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries();
+      toast.success(t('accounts.close.done', { name: account.display_name || account.name }));
+      onOpenChange(false);
+    },
+    onError: (e: Error) => toast.error(t('accounts.close.failed'), { description: e.message }),
+  });
+
+  const canSubmit = !close.isPending && (!needsDestination || !!destId);
+
+  return (
+    <Dialog open={open} onOpenChange={(o) => { if (!o) setDestId(''); onOpenChange(o); }}>
+      <DialogContent className="sm:max-w-md">
+        <DialogHeader>
+          <DialogTitle>{t('accounts.close.title', { name: account.display_name || account.name })}</DialogTitle>
+          <DialogDescription>{t('accounts.close.description')}</DialogDescription>
+        </DialogHeader>
+
+        <div className="space-y-3">
+          {holdings.length === 0 ? (
+            <p className="text-sm text-muted-foreground">{t('accounts.close.noHoldings')}</p>
+          ) : (
+            <>
+              <div className="rounded-md border divide-y text-sm">
+                {holdings.map((h) => (
+                  <div key={h.investmentId} className="flex items-center justify-between p-2">
+                    <span className="truncate">{h.name}</span>
+                    <span className="tabular-nums text-muted-foreground">{fmt(h.currentValue)}</span>
+                  </div>
+                ))}
+              </div>
+              <div className="space-y-1.5">
+                <Label htmlFor="close-dest" className="flex items-center gap-1.5">
+                  <ArrowRight className="h-3.5 w-3.5" /> {t('accounts.close.transferTo')}
+                </Label>
+                <Select value={destId} onValueChange={setDestId}>
+                  <SelectTrigger id="close-dest"><SelectValue placeholder={t('portfolio.move.selectAccount')} /></SelectTrigger>
+                  <SelectContent>
+                    {destinations.map((a) => (
+                      <SelectItem key={a.id} value={String(a.id)}>{a.display_name || a.name}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                {destinations.length === 0 && (
+                  <p className="text-xs text-destructive">{t('accounts.close.noDestination')}</p>
+                )}
+              </div>
+            </>
+          )}
+        </div>
+
+        <DialogFooter className="pt-2">
+          <Button variant="outline" onClick={() => onOpenChange(false)}>{t('common.cancel')}</Button>
+          <Button disabled={!canSubmit} onClick={() => close.mutate()}>
+            {close.isPending ? <Loader2 className="h-4 w-4 animate-spin mr-1" /> : <Archive className="h-4 w-4 mr-1" />}
+            {needsDestination ? t('accounts.close.transferAndArchive') : t('accounts.close.archive')}
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}

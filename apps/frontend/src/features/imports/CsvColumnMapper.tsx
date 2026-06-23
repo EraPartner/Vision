@@ -1,0 +1,127 @@
+/**
+ * CsvColumnMapper — visual column-mapping UI for custom CSV imports.
+ *
+ * When a CSV file is provided it parses the header row client-side and
+ * renders dropdown selects so users can pick which column maps to which
+ * transaction field.  Falls back to plain text inputs when no file is
+ * loaded yet. The file's columns + sample rows are shown by the shared
+ * FileHeadersPanel (rendered alongside this component), not here.
+ */
+
+import { useLanguage } from "@/contexts/LanguageContext";
+import { useCsvPreview } from "@/hooks/useCsvPreview";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { ColumnSelect } from "./ColumnSelect";
+
+export interface CsvColumnConfig {
+  dateColumn: string;
+  recipientColumn: string;
+  amountColumn: string;
+  memoColumn: string;
+}
+
+interface Props {
+  file: File | null;
+  separator: string;
+  config: CsvColumnConfig;
+  onChange: (next: CsvColumnConfig) => void;
+}
+
+export function CsvColumnMapper({ file, separator, config, onChange }: Props) {
+  const { t } = useLanguage();
+  const { preview } = useCsvPreview(file, separator);
+
+  const hasHeaders = preview && preview.headers.length > 0;
+
+  const set = (key: keyof CsvColumnConfig) => (val: string) =>
+    onChange({ ...config, [key]: val });
+
+  const noMappingLabel = t("importPage.noMapping");
+
+  return (
+    <div className="space-y-4">
+      {/* Column selects or text inputs */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+        {hasHeaders ? (
+          <>
+            <ColumnSelect
+              id="date-column"
+              label={t("importPage.dateCol")}
+              value={config.dateColumn}
+              headers={preview.headers}
+              required
+              onChange={set("dateColumn")}
+              noMappingLabel={noMappingLabel}
+            />
+            <ColumnSelect
+              id="recipient-column"
+              label={t("importPage.recipientCol")}
+              value={config.recipientColumn}
+              headers={preview.headers}
+              required
+              onChange={set("recipientColumn")}
+              noMappingLabel={noMappingLabel}
+            />
+            <ColumnSelect
+              id="amount-column"
+              label={t("importPage.amountCol")}
+              value={config.amountColumn}
+              headers={preview.headers}
+              required
+              onChange={set("amountColumn")}
+              noMappingLabel={noMappingLabel}
+            />
+            <ColumnSelect
+              id="memo-column"
+              label={t("importPage.memoCol")}
+              value={config.memoColumn}
+              headers={preview.headers}
+              onChange={set("memoColumn")}
+              noMappingLabel={noMappingLabel}
+            />
+          </>
+        ) : (
+          <>
+            <div className="space-y-2">
+              <Label htmlFor="date-column">{t("importPage.dateCol")}</Label>
+              <Input
+                id="date-column"
+                placeholder={t("importPage.dateColPlaceholder")}
+                value={config.dateColumn}
+                onChange={(e) => set("dateColumn")(e.target.value)}
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="recipient-column">{t("importPage.recipientCol")}</Label>
+              <Input
+                id="recipient-column"
+                placeholder={t("importPage.recipientColPlaceholder")}
+                value={config.recipientColumn}
+                onChange={(e) => set("recipientColumn")(e.target.value)}
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="amount-column">{t("importPage.amountCol")}</Label>
+              <Input
+                id="amount-column"
+                placeholder={t("importPage.amountColPlaceholder")}
+                value={config.amountColumn}
+                onChange={(e) => set("amountColumn")(e.target.value)}
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="memo-column">{t("importPage.memoCol")}</Label>
+              <Input
+                id="memo-column"
+                placeholder={t("importPage.memoColPlaceholder")}
+                value={config.memoColumn}
+                onChange={(e) => set("memoColumn")(e.target.value)}
+              />
+            </div>
+          </>
+        )}
+      </div>
+    </div>
+  );
+}

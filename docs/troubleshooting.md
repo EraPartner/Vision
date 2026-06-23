@@ -3,9 +3,9 @@ title: Troubleshooting & FAQ
 type: reference
 status: active
 date: 2026-04-21
-updated: 2026-05-02
-tags: [troubleshooting, faq, reference, debugging, phase-1, electron, app-naming, password-mismatch]
-description: Common issues, error messages, and their solutions for the Vision project including Electron desktop app password authentication failures
+updated: 2026-05-23
+tags: [troubleshooting, faq, reference, debugging, phase-1, electron, app-naming, password-mismatch, keychain, safe-storage, macOS, backup-passphrase]
+description: Common issues, error messages, and their solutions for the Vision project including Electron desktop app password authentication failures and macOS Keychain prompts
 aliases: [troubleshooting, FAQ, common issues, errors, debugging, problems]
 ---
 
@@ -163,6 +163,30 @@ If you're seeing this error and cannot wait for an app update:
    - Backend authentication should now succeed
 
 **Prevention:** Ensure you update to version 2026-05-02 or later. The migration helper automatically detects and renames legacy userData directories on first launch.
+
+### macOS repeatedly asks for a password for "Vision Safe Storage"
+
+**Symptom:** A macOS login-password dialog appears on Vision launch asking to allow access to "Vision Safe Storage" in the Keychain. Clicking Allow still prompts on subsequent launches.
+
+**Root cause:** Vision ships ad-hoc unsigned (no Developer ID certificate — see [[docs/architecture/electron#code-signing-status|Code Signing Status]]). macOS treats the code identity as unstable and re-challenges Electron's `safeStorage` API every time, because the stored Keychain entry appears to belong to a different identity after each launch. `safeStorage` stores the backup encryption passphrase in the Keychain; Vision only touches it when a passphrase is configured.
+
+**Workarounds (in order of preference):**
+
+1. **Always Allow** — In the Keychain dialog, click **Always Allow** instead of Allow. This creates a permanent Keychain access exception for Vision Safe Storage and suppresses future prompts.
+
+2. **Use the `VISION_BACKUP_PASSPHRASE` environment variable** — Set the passphrase as an env var instead of storing it in the Keychain. Vision reads this variable first and skips `safeStorage` entirely:
+   ```bash
+   # In a launcher script or launchd plist:
+   export VISION_BACKUP_PASSPHRASE="your-passphrase-here"
+   ```
+   This is especially useful for automation or when the unsigned-app prompt is unacceptable.
+
+3. **Remove the stored passphrase** — Open Settings → Backup, clear the encryption passphrase. Vision's lazy safeStorage access means it will not touch the Keychain at all when no passphrase is stored.
+
+> [!note]
+> If you never configured a backup passphrase, you should not see this prompt. The fix in Vision 2026-05-23 ensures `safeStorage` is only accessed when a passphrase blob exists in `settings.json`. If you're seeing this without having set a passphrase, try clearing the stored passphrase in Settings → Backup and restarting.
+
+**For developers:** A signed/notarized build eliminates this entirely. See [[docs/architecture/electron#code-signing-status|Code Signing Status]] for how to configure a Developer ID build.
 
 ## Docker & Deployment
 

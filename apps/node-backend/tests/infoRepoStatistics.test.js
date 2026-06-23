@@ -11,7 +11,7 @@ vi.mock('../src/services/currency/currencyConversionService.js', () => ({
 
 vi.mock('../src/repositories/infoRepositoryHelpers.js', async () => {
   const actual = await vi.importActual('../src/repositories/infoRepositoryHelpers.js');
-  return { ...actual, mvAvailable: vi.fn() };
+  return { ...actual, mvAvailable: vi.fn(), getIncludeTransfers: vi.fn().mockResolvedValue(false) };
 });
 
 import { query, queryPrepared } from '../src/database/connection.js';
@@ -21,49 +21,6 @@ import { statisticsRepository } from '../src/repositories/infoRepositoryStatisti
 
 beforeEach(() => vi.clearAllMocks());
 
-describe('statisticsRepository.getStatistics', () => {
-  it('uses materialized view when available', async () => {
-    mvAvailable.mockResolvedValueOnce(true);
-    query
-      .mockResolvedValueOnce({ rows: [{ count: '42' }] })
-      .mockResolvedValueOnce({ rows: [{ category_id: 1, name: 'Food', count: 5, total: '100' }] });
-    convertRowsToEur.mockResolvedValueOnce([
-      { category_id: 1, name: 'Food', count: 5, amount_eur: 100 },
-    ]);
-
-    const r = await statisticsRepository.getStatistics();
-    expect(r.total_transactions).toBe(42);
-    expect(r.categories).toHaveLength(1);
-    expect(query.mock.calls[1][0]).toContain('FROM mv_category_totals');
-  });
-
-  it('falls back to live query when MV unavailable', async () => {
-    mvAvailable.mockResolvedValueOnce(false);
-    query
-      .mockResolvedValueOnce({ rows: [{ count: '10' }] })
-      .mockResolvedValueOnce({
-        rows: [
-          { category_id: 1, name: 'Food', amount: '-50', currency: 'EUR', date: '2025-04-01' },
-          { category_id: 1, name: 'Food', amount: '-30', currency: 'EUR', date: '2025-04-02' },
-          { category_id: -1, name: 'UNCATEGORISED', amount: '-10', currency: 'EUR', date: '2025-04-03' },
-        ],
-      });
-    convertRowsToEur.mockResolvedValueOnce([
-      { category_id: 1, name: 'Food', amount_eur: -50 },
-      { category_id: 1, name: 'Food', amount_eur: -30 },
-      { category_id: -1, name: 'UNCATEGORISED', amount_eur: -10 },
-    ]);
-
-    const r = await statisticsRepository.getStatistics();
-    expect(r.total_transactions).toBe(10);
-    // total_amount is derived from the same converted category rows: -50 + -30 + -10
-    expect(r.total_amount).toBe(-90);
-    const food = r.categories.find((c) => c.id === 1);
-    expect(food).toMatchObject({ id: 1, name: 'Food', count: 2, total: -80 });
-    const uncat = r.categories.find((c) => c.id === null);
-    expect(uncat).toMatchObject({ id: null, count: 1, total: -10 });
-  });
-});
 
 describe('statisticsRepository.getCategoryBreakdown', () => {
   it('uses MV when available', async () => {
@@ -107,7 +64,7 @@ describe('statisticsRepository.getBanks', () => {
     expect(r).toEqual(['BANK_A', 'BANK_B']);
     expect(queryPrepared).toHaveBeenCalledWith(
       'info_get_banks',
-      expect.stringContaining('SELECT DISTINCT bank_account'),
+      expect.stringContaining('SELECT a.name AS bank_account'),
       [],
     );
   });
@@ -123,17 +80,36 @@ describe('statisticsRepository.getTransactionCount', () => {
 describe('statisticsRepository.getCategoryPivot', () => {
   it('groups by period and category, sorts ascending by total', async () => {
     query.mockResolvedValueOnce({ rows: [] });
+    // The repo now converts two legs (income/expense) per grouped row; cnt is the
+    // group's transaction count, counted once on the income leg.
     convertRowsToEur.mockResolvedValueOnce([
-      { period: '2025-04', category_id: 1, category_name: 'Food', amount_eur: -100 },
-      { period: '2025-04', category_id: 2, category_name: 'Bills', amount_eur: -500 },
-      { period: '2025-04', category_id: 1, category_name: 'Food', amount_eur: -50 },
+      { period: '2025-04', category_id: 1, category_name: 'Food', _leg: 'income', cnt: 1, amount_eur: 0 },
+      { period: '2025-04', category_id: 1, category_name: 'Food', _leg: 'expense', cnt: 1, amount_eur: -100 },
+      { period: '2025-04', category_id: 2, category_name: 'Bills', _leg: 'income', cnt: 1, amount_eur: 0 },
+      { period: '2025-04', category_id: 2, category_name: 'Bills', _leg: 'expense', cnt: 1, amount_eur: -500 },
+      { period: '2025-04', category_id: 1, category_name: 'Food', _leg: 'income', cnt: 1, amount_eur: 0 },
+      { period: '2025-04', category_id: 1, category_name: 'Food', _leg: 'expense', cnt: 1, amount_eur: -50 },
     ]);
 
     const r = await statisticsRepository.getCategoryPivot();
     expect(r.categoryPivot['2025-04']).toEqual([
-      { categoryId: 2, categoryName: 'Bills', total: -500, transactionCount: 1 },
-      { categoryId: 1, categoryName: 'Food', total: -150, transactionCount: 2 },
+      { categoryId: 2, categoryName: 'Bills', total: -500, income: 0, expense: -500, transactionCount: 1 },
+      { categoryId: 1, categoryName: 'Food', total: -150, income: 0, expense: -150, transactionCount: 2 },
     ]);
+  });
+
+  it('reports explicit income/expense for a mixed-sign category-month', async () => {
+    query.mockResolvedValueOnce({ rows: [] });
+    convertRowsToEur.mockResolvedValueOnce([
+      { period: '2025-04', category_id: 1, category_name: 'Food', _leg: 'income', cnt: 2, amount_eur: 500 },
+      { period: '2025-04', category_id: 1, category_name: 'Food', _leg: 'expense', cnt: 2, amount_eur: -300 },
+    ]);
+    const r = await statisticsRepository.getCategoryPivot();
+    // Net +200, but income (500) and expense (-300) are reported separately so
+    // consumers don't have to misclassify by the sign of the net.
+    expect(r.categoryPivot['2025-04'][0]).toEqual({
+      categoryId: 1, categoryName: 'Food', total: 200, income: 500, expense: -300, transactionCount: 2,
+    });
   });
 
   it('binds category and recipient exclusions', async () => {
@@ -144,6 +120,11 @@ describe('statisticsRepository.getCategoryPivot', () => {
     expect(sql).toContain('NOT IN ($1,$2)');
     expect(sql).toContain('NOT IN ($3)');
     expect(params).toEqual([1, 2, 9]);
+    // Canonical semantics: 3-level category COALESCE + alias-aware recipient
+    // exclusion (was 2-level category + bare t.recipient_id NOT IN, which
+    // disagreed with the dashboard/forecast on merged recipients).
+    expect(sql).toContain('COALESCE(t.category_id, r.default_category_id, pr.default_category_id) NOT IN');
+    expect(sql).toContain('COALESCE(r.primary_recipient_id, t.recipient_id) NOT IN');
   });
 
   it('drops invalid IDs from exclusion lists', async () => {
@@ -161,7 +142,8 @@ describe('statisticsRepository.getCategoryPivot', () => {
   it('treats missing category_id as Uncategorised', async () => {
     query.mockResolvedValueOnce({ rows: [] });
     convertRowsToEur.mockResolvedValueOnce([
-      { period: '2025-04', category_id: null, category_name: null, amount_eur: -10 },
+      { period: '2025-04', category_id: null, category_name: null, _leg: 'income', cnt: 1, amount_eur: 0 },
+      { period: '2025-04', category_id: null, category_name: null, _leg: 'expense', cnt: 1, amount_eur: -10 },
     ]);
     const r = await statisticsRepository.getCategoryPivot();
     expect(r.categoryPivot['2025-04'][0]).toMatchObject({
@@ -171,62 +153,3 @@ describe('statisticsRepository.getCategoryPivot', () => {
   });
 });
 
-describe('statisticsRepository.getTransactionSummary', () => {
-  it('returns zeros when no rows match filters', async () => {
-    query.mockResolvedValueOnce({ rows: [] });
-    const r = await statisticsRepository.getTransactionSummary({ bankAccount: 'XYZ' });
-    expect(r).toEqual({
-      total_count: 0,
-      total_amount: 0,
-      average: 0,
-      min: null,
-      max: null,
-    });
-    expect(convertRowsToEur).not.toHaveBeenCalled();
-  });
-
-  it('computes total/avg/min/max from converted amounts', async () => {
-    query.mockResolvedValueOnce({
-      rows: [
-        { amount: '100', currency: 'EUR', date: '2025-04-01' },
-        { amount: '-50', currency: 'EUR', date: '2025-04-02' },
-        { amount: '200', currency: 'EUR', date: '2025-04-03' },
-      ],
-    });
-    convertRowsToEur.mockResolvedValueOnce([
-      { amount_eur: 100 },
-      { amount_eur: -50 },
-      { amount_eur: 200 },
-    ]);
-
-    const r = await statisticsRepository.getTransactionSummary();
-    expect(r).toEqual({
-      total_count: 3,
-      total_amount: 250,
-      average: 83.33,
-      min: -50,
-      max: 200,
-    });
-  });
-
-  it('applies bankAccount, startDate, endDate filters in SQL', async () => {
-    query.mockResolvedValueOnce({ rows: [] });
-    await statisticsRepository.getTransactionSummary({
-      bankAccount: 'A1',
-      startDate: '2025-01-01',
-      endDate: '2025-12-31',
-    });
-    const [sql, params] = query.mock.calls[0];
-    expect(sql).toContain('bank_account ILIKE $1');
-    expect(sql).toContain('t.date >= $2');
-    expect(sql).toContain('t.date <= $3');
-    expect(params).toEqual(['%A1%', '2025-01-01', '2025-12-31']);
-  });
-
-  it('handles only some filters', async () => {
-    query.mockResolvedValueOnce({ rows: [] });
-    await statisticsRepository.getTransactionSummary({ startDate: '2025-04-01' });
-    const params = query.mock.calls[0][1];
-    expect(params).toEqual(['2025-04-01']);
-  });
-});

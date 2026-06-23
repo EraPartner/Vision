@@ -9,6 +9,7 @@ import { query as dbQuery } from '../database/connection.js';
 import { logger } from '../config/logger.js';
 import { NotFoundError } from '../middleware/errorHandler.js';
 import { toDecimal } from '../lib/money.js';
+import { toYmd } from '../utils/portfolioMath.js';
 import { escapeCsvValue } from '../lib/csv.js';
 
 export const EXPORT_CHUNK_SIZE = 1000;
@@ -58,7 +59,15 @@ function writeWithBackpressure(res, chunk) {
   return new Promise((resolve) => res.once('drain', resolve));
 }
 
-function buildExportChunkSql(whereSql, limitParamIdx, offsetParamIdx) {
+function buildExportChunkSql(whereSql, limitParamIdx, cursorDateParamIdx, cursorIdParamIdx) {
+  // Keyset pagination: each chunk continues strictly after the previous chunk's
+  // last (date, id) instead of OFFSET. OFFSET across separate pool queries (new
+  // snapshot each time) silently dropped/duplicated rows when a concurrent
+  // insert/delete shifted the result set mid-export. (date, id) is unique
+  // (t.id) so the cursor is exact and the scan is index-friendly.
+  const keyset = cursorDateParamIdx != null
+    ? `AND (t.date, t.id) > ($${cursorDateParamIdx}::date, $${cursorIdParamIdx}::bigint)`
+    : '';
   return `
     SELECT t.id, t.date, t.bank_account,
            COALESCE(pr.name, r.name) AS recipient_name, t.memo,
@@ -79,8 +88,9 @@ function buildExportChunkSql(whereSql, limitParamIdx, offsetParamIdx) {
            ) AS tags
     ${EXPORT_JOINS_SQL}
     WHERE ${whereSql}
+      ${keyset}
     ORDER BY t.date ASC, t.id ASC
-    LIMIT $${limitParamIdx} OFFSET $${offsetParamIdx}
+    LIMIT $${limitParamIdx}
   `;
 }
 
@@ -144,19 +154,29 @@ async function streamExport(res, { whereSql, params, nextParamIdx, contentType, 
 
   if (writeHeader) writeHeader(res);
 
-  const chunkSql = buildExportChunkSql(whereSql, nextParamIdx, nextParamIdx + 1);
-  let chunkOffset = 0;
+  // Keyset cursor (last streamed (date, id)). First chunk has no cursor.
+  let cursorDate = null;
+  let cursorId = null;
   let rowCount = 0;
   try {
     while (true) {
-      const chunk = await dbQuery(chunkSql, [...params, EXPORT_CHUNK_SIZE, chunkOffset]);
+      const chunk = cursorDate == null
+        ? await dbQuery(buildExportChunkSql(whereSql, nextParamIdx), [...params, EXPORT_CHUNK_SIZE])
+        : await dbQuery(
+            buildExportChunkSql(whereSql, nextParamIdx, nextParamIdx + 1, nextParamIdx + 2),
+            [...params, EXPORT_CHUNK_SIZE, cursorDate, cursorId],
+          );
       if (chunk.rows.length === 0) break;
       for (const row of chunk.rows) {
         await writeWithBackpressure(res, formatRow(row, rowCount));
         rowCount++;
       }
+      const last = chunk.rows[chunk.rows.length - 1];
+      // toYmd recovers the local calendar day from pg's local-midnight Date so
+      // the ::date cursor never shifts a day in a UTC+ zone.
+      cursorDate = toYmd(last.date);
+      cursorId = last.id;
       if (chunk.rows.length < EXPORT_CHUNK_SIZE) break;
-      chunkOffset += EXPORT_CHUNK_SIZE;
     }
     res.end();
     return { rowCount };

@@ -8,7 +8,7 @@
  */
 
 import { query, withTransaction } from '../database/connection.js';
-import { toDecimal, toNumber } from '../lib/money.js';
+import { toDecimal, toNumber, roundMoney, multiply, divide } from '../lib/money.js';
 
 let _hasPortfolioTransactionInheritanceSchema;
 
@@ -113,11 +113,6 @@ function parseOptionalNumber(value, fieldName) {
   return parsed;
 }
 
-function roundTo(value, decimals) {
-  const factor = 10 ** decimals;
-  return Math.round(value * factor) / factor;
-}
-
 function normalizeBuySellMath({ amount, units, pricePerUnit }) {
   const hasAmount = amount !== undefined;
   const hasUnits = units !== undefined;
@@ -136,20 +131,20 @@ function normalizeBuySellMath({ amount, units, pricePerUnit }) {
   let nextUnits = units;
   let nextPrice = pricePerUnit;
 
-  if (!hasAmount) nextAmount = roundTo(nextUnits * nextPrice, 4);
-  if (!hasUnits) nextUnits = roundTo(nextAmount / nextPrice, 8);
-  if (!hasPrice) nextPrice = roundTo(nextAmount / nextUnits, 6);
+  if (!hasAmount) nextAmount = roundMoney(multiply(nextUnits, nextPrice), 4);
+  if (!hasUnits) nextUnits = roundMoney(divide(nextAmount, nextPrice), 8);
+  if (!hasPrice) nextPrice = roundMoney(divide(nextAmount, nextUnits), 6);
 
-  const expectedAmount = roundTo(nextUnits * nextPrice, 4);
-  const comparableAmount = roundTo(nextAmount, 4);
+  const expectedAmount = roundMoney(multiply(nextUnits, nextPrice), 4);
+  const comparableAmount = roundMoney(nextAmount, 4);
   if (Math.abs(expectedAmount - comparableAmount) > 0.01) {
     throw makeValidationError('amount must equal units * price_per_unit for buy/sell transactions');
   }
 
   return {
     amount: comparableAmount,
-    units: roundTo(nextUnits, 8),
-    price_per_unit: roundTo(nextPrice, 6),
+    units: roundMoney(nextUnits, 8),
+    price_per_unit: roundMoney(nextPrice, 6),
   };
 }
 
@@ -215,8 +210,8 @@ export function normalizeTransactionPayload(payload, { assetClass } = {}) {
     return {
       ...payload,
       amount: amount ?? 0,
-      units: roundTo(units, 8),
-      price_per_unit: pricePerUnit !== undefined ? roundTo(pricePerUnit, 6) : undefined,
+      units: roundMoney(units, 8),
+      price_per_unit: pricePerUnit !== undefined ? roundMoney(pricePerUnit, 6) : undefined,
       fees: 0,
       taxes: 0,
       fx_rate_to_eur: fxRateToEur,
@@ -305,6 +300,7 @@ export const BASE_ALLOWED_FIELDS = [
   'recurrence_interval',
   'recurrence_end_date',
   'fx_rate_to_eur',
+  'account_id', // owning account for the lot (ADR-091)
 ];
 
 export const CHILD_ALLOWED_FIELDS_BY_ASSET_CLASS = {
@@ -354,6 +350,7 @@ export async function createThroughInheritanceTables(fields, getByIdFn, preloade
     recurrence_interval,
     recurrence_end_date,
     fx_rate_to_eur,
+    account_id,
   } = fields;
 
   const assetClass = preloadedAssetClass;
@@ -374,6 +371,7 @@ export async function createThroughInheritanceTables(fields, getByIdFn, preloade
     'recurrence_interval',
     'recurrence_end_date',
     'fx_rate_to_eur',
+    'account_id',
   ];
   const baseValues = [
     investment_id,
@@ -388,6 +386,7 @@ export async function createThroughInheritanceTables(fields, getByIdFn, preloade
     recurrence_interval || null,
     recurrence_end_date || null,
     fx_rate_to_eur ?? null,
+    account_id ?? null,
   ];
 
   const childColumns = [];

@@ -15,6 +15,7 @@ import { TXN_TYPE_LABELS } from '@/types/portfolio';
 import { toast } from 'sonner';
 import { DatePicker } from '@/components/shared/DatePicker';
 import { formatDateWithAppSettings, parseLocalDateFromYmd, toYmd } from '@/components/shared/dateUtils';
+import { todayYmd } from '@/lib/timezone';
 import { useAppSettings } from '@/contexts/AppSettingsContext';
 
 interface Quote {
@@ -41,7 +42,7 @@ export function AddInvestmentFromMarketDialog({ quote, existingInvestment }: Pro
   const { appSettings } = useAppSettings();
   const { addInvestment, addTransaction } = usePortfolio();
 
-  const todayYmd = toYmd(new Date());
+  const today = todayYmd();
   const todayLabel = formatDateWithAppSettings(new Date(), appSettings.dateFormat);
 
   // Determine asset class from quote type
@@ -65,7 +66,7 @@ export function AddInvestmentFromMarketDialog({ quote, existingInvestment }: Pro
 
   const [transactionForm, setTransactionForm] = useState({
     type: 'buy' as PortfolioTxnType,
-    date: todayYmd,
+    date: today,
     amount: '',
     units: '',
     pricePerUnit: quote.price.toString(),
@@ -88,7 +89,7 @@ export function AddInvestmentFromMarketDialog({ quote, existingInvestment }: Pro
     });
     setTransactionForm({
       type: 'buy',
-      date: todayYmd,
+      date: today,
       amount: '',
       units: '',
       pricePerUnit: quote.price.toString(),
@@ -168,7 +169,6 @@ export function AddInvestmentFromMarketDialog({ quote, existingInvestment }: Pro
 
   const showUnits = unitBased && ['buy', 'sell'].includes(transactionForm.type);
   const showFeesTaxes = ['buy', 'sell'].includes(transactionForm.type);
-  const _showRecurring = ['buy', 'sell', 'dividend', 'interest', 'rent_income'].includes(transactionForm.type);
 
   return (
     <Dialog open={open} onOpenChange={(v) => { setOpen(v); if (!v) reset(); }}>

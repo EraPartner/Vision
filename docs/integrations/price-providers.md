@@ -3,9 +3,9 @@ title: Integration - Price Providers
 type: integration
 description: Live and historical price feeds for stocks, crypto, and other investments. Startup price refresh is skipped when the host is offline (2026-05-03).
 date: 2026-04-21
-last_modified: 2026-05-03
-updated: 2026-05-03
-tags: [integration, price, stocks, crypto, api, historical-quotes, quote-backfill, phase-1, eur-to-usd-mapping, data-sanitization, kinesis, offline-resilience, price-history-default, provider-timeout, parallel-fetching, startup-optimization, network-reachability]
+last_modified: 2026-06-17
+updated: 2026-06-17
+tags: [integration, price, stocks, crypto, api, historical-quotes, quote-backfill, phase-1, eur-to-usd-mapping, data-sanitization, kinesis, offline-resilience, price-history-default, provider-timeout, parallel-fetching, startup-optimization, network-reachability, ssrf, url-safety, binance-pagination, gap-fill, daily-granularity, densify, research, adr-079, adr-082, capability-map, quota-governor, macro, macroeconomic, fred, dbnomics, eurostat, provider-pinned]
 aliases: [price providers, market data, Binance, Kinesis, Yahoo Finance, live prices]
 status: active
 related_code: [[apps/node-backend/src/services/priceProviderService.js], [apps/node-backend/src/services/quoteBackfillService.js], [apps/node-backend/src/services/prices/priceProviderRegistry.js], [apps/node-backend/tests/priceProviderRegistry.test.js], [apps/node-backend/src/lib/network.js]]
@@ -30,10 +30,11 @@ Price providers fetch live and historical market prices for investments, support
 ### Binance
 - **Asset Classes**: Crypto
 - **API**: Binance market data API
-- **Endpoint**: `https://api.binance.com/api/v3/ticker/price`
-- **Features**: 
+- **Endpoint**: `https://api.binance.com/api/v3/ticker/price` (live); `/api/v3/klines` (historical)
+- **Features**:
   - Real-time crypto quote data
   - Broad pair coverage
+  - **Full-window paginated history (2026-05-31):** Historical fetch uses `/api/v3/klines` with `startTime`/`endTime`/`limit=1000` (BINANCE_PAGE_LIMIT) across the full holding window. A runaway guard of 30 pages maximum (BINANCE_MAX_PAGES) logs a `WARN` if hit. The old `days = Math.min(daysDiff, 365)` cap that silently discarded all history older than ~1 year has been removed. A crypto position held since 2023 now receives 3+ years of daily closes on first backfill. Cache key is window-aware: `binance-history:${symbol}:${dayKey(start)}:${dayKey(end)}`.
 
 ### Kinesis
 - **Asset Classes**: Metals, commodities
@@ -49,11 +50,16 @@ Price providers fetch live and historical market prices for investments, support
   - **Edge-point anomalies (2026-04-26):** Year-boundary rollover bugs cause first/last points at ~50% of real price (Jan 1, 2025 artifact on KAU observed). Edge sanitizer checks first and last points using local needle ratio `1.8x`, replacing anomalies with neighbor value
   - Isolated needle-spike sanitization (up/down) replaces only confirmed single-point anomalies using geometric interpolation from neighboring points, preserving non-spike detail; thresholds are tuned for moderate one-day needles (robust `6σ`, bridge `4σ`, min jump `18%`, local needle ratio `1.8x`)
 
+> [!warning] Kinesis `timeFrame` unit ambiguity (open follow-up)
+> The Kinesis provider's default `timeFrame=60` parameter has an unresolved unit ambiguity: `kinesisConfig.js` comments say "minutes"; `docs/reference/environment-variables.md` says "days"; `providerHealthService` probes using 60. The value was deliberately **not changed** in the 2026-05-31 daily gap-fill work. Changing it without first running an empirical diagnostic (fetching with different values and inspecting returned point density) risks breaking Kinesis history coverage. Resolve via a targeted diagnostic before any change. Tracked in `TODO.md`.
+> Note: `normalizeHistoryPoints` deduplicates by date, so finer-than-daily provider cadence does not itself cause sparsity — only missing date rows do.
+
 ### Yahoo Finance
 - **Asset Classes**: Stocks, ETFs, Metals
 - **Implementation**: Web scraping / Yahoo Finance API
 - **Features**:
   - Real-time quotes
+  - **Batched quote requests (2026-05-29):** `PROVIDERS.yahoo` in `priceProviderRegistry.js` now issues a single `yahooFinance.quote([symbols])` call for all Yahoo-backed investments, normalizing the result to an array. A portfolio of ~30 holdings drops from ~30 outbound requests to 1. The per-symbol chart-close fallback (`_fetchYahooLatestClose`) is retained for symbols unresolved by the batch and for whole-batch failure.
   - Previous close fallback when real-time quote is unavailable/zero
   - Historical data
   - Wide coverage
@@ -63,6 +69,15 @@ Price providers fetch live and historical market prices for investments, support
 - **Asset Classes**: All
 - **Configuration**: Custom latest/history URLs and JSON paths
 - **Usage**: For proprietary or unsupported APIs
+
+#### Custom Provider URL Constraints (2026-05-29)
+
+Custom provider URLs (`price_provider_url`, `price_provider_latest_url`, `price_provider_history_url`) are validated at two points to prevent SSRF:
+
+1. **Write time** (`investmentController.js`): scheme and IP-literal check (no DNS resolution) — rejects non-http(s) schemes and IP-literal private/loopback/link-local addresses with a 400 before the row is stored.
+2. **Fetch time** (`priceProviderRegistry.js`): full DNS resolution via `assertPublicHttpUrl` (with `resolveDns: true`), repeated for every redirect hop. Responses are capped at 5 MB.
+
+URLs that target private networks (RFC 1918, loopback, CGNAT `100.64/10`, cloud metadata `169.254.169.254`, IPv6 ULA/link-local) are blocked at both boundaries. See [[docs/security/input-validation#outbound-request-guard-ssrf-2026-05-29|Input Validation — SSRF guard]] for the full range list and module reference.
 
 ## Historical Quote Cache
 
@@ -75,7 +90,13 @@ Price providers fetch live and historical market prices for investments, support
   - Cleans up stale quotes outside windows after backfill
   - Ignores `is_active` flag — all investments with transaction history get quotes
 - Lightweight hourly refresh via `refreshActiveHoldingQuotes()` updates currently-held investments (7-day lookback, open windows only)
+- **Daily gap-detecting backfill (2026-05-31, ADR-065):** `backfillHoldingGaps({ thresholdDays })` runs on a daily `setInterval` in `warmup.js` (wrapped in `withInFlightGuard` + offline guard). It detects interior gaps in `asset_price_history` that `needsHistoryRefresh` cannot catch (endpoint-only check), then re-fetches with `force=true` to bypass the short-circuit:
+  - `holdingWindowsNeedBackfill(holdingWindows, storedDates, { thresholdDays=9, todayUtc })` — pure fn; walks `[windowStart, ...storedDatesInWindow, windowEnd]` per holding window; returns `true` if any consecutive-date gap exceeds the threshold (`GAP_THRESHOLD_DAYS=9` — above weekend/holiday gaps, below ~14-day biweekly cadence).
+  - Covers **all** holding windows including closed positions, unlike the hourly refresh.
+  - If `result.filled > 0`, `computeAndStoreSnapshots()` is called so Performance and Net Worth charts reflect the denser history.
+  - Idempotent: `filled` increments only when the stored row count actually grows; a run against an already-dense series makes one DB read per investment and no provider calls.
 - Transaction-triggered refresh via `refreshQuotesForInvestment()` (fire-and-forget) handles single-investment updates on buy/sell/edit
+- **`force` option on `fetchHistoricalPrices` (2026-05-31):** `fetchHistoricalPrices(investment, { fromMs, toMs, dbOnly, force })` accepts `force=true` to bypass the `needsHistoryRefresh` short-circuit unconditionally. The gap-fill path uses this to re-populate interior holes in series that already span the window endpoints.
 - Startup live refresh now prioritizes fast availability for Kinesis-backed investments: when a valid persisted `current_price` exists, it is used immediately and the external Kinesis refresh is deferred to background execution.
 - If provider fetch fails, history requests fall back to persisted DB rows.
 - `fetchLivePricesDetailed` uses provider-consistent cache keys, including investment-scoped keys for `custom`/`kinesis` to keep cache reads and writes aligned.
@@ -199,11 +220,44 @@ Code links: [[apps/node-backend/src/services/prices/priceProviderRegistry.js]], 
 - Backend provides `getLatestPriceUpdatedAt()` helper returning `MAX(price_updated_at)` across active non-manual investments for report provenance.
 - Portfolio PDF reports include a "Prices as of <date>" meta row on the cover page. If prices are >1 day old, age in days is shown. If no live prices ever recorded, shows "No live prices recorded".
 
+## Research Aggregation Layer (ADR-079)
+
+The research aggregation layer (`apps/node-backend/src/services/research/`) builds on this provider infrastructure to serve a provider-agnostic `/api/research/*` surface for arbitrary-symbol market research. It reuses `providerHealthService` for health-signal routing and adds three new mechanisms:
+
+- **Capability map** — routes each data type (quote/chart/fundamentals/analyst/news) to an ordered provider preference per asset class.
+- **Quota governor** — per-minute in-memory + per-day persisted token buckets (via the `provider_quota` table) guard against free-tier 429s.
+- **Type-aware TTL cache** — research data for arbitrary symbols is cached in memory only and is **never written to `asset_price_history`**.
+
+All five adapters are wired (Yahoo needs no key; Twelve Data, Finnhub, FMP, and Alpha Vantage activate when their API key is set in the root `.env` — see [[docs/adr/080-layered-env-loading-shared-secrets|ADR-080]]). See [[docs/features/research|Research Feature]] and [[docs/adr/079-multi-provider-research-aggregation|ADR-079]] for full details.
+
+> [!info] FMP base URL (2026-06-16)
+> FMP retired its legacy `/api/v3` base URL for accounts not subscribed before 2025-08-31. The FMP adapter now uses the current **stable API** at `https://financialmodelingprep.com/stable` with symbol passed as a query param. `FMP_API_KEY` is unchanged. See [[docs/adr/079-multi-provider-research-aggregation#follow-up-note--fmp-stable-api-migration-2026-06-16|ADR-079 follow-up note]] for details.
+
+> [!info] Quote / chart / news provider ordering — Yahoo-first (2026-06-16)
+> The capability map (`capabilityMap.js`) was reordered so that **Yahoo leads the `quote`, `chart`, and `news` default chains**, with paid providers (Twelve Data, Finnhub, FMP, Alpha Vantage) as fallbacks. Yahoo is keyless and carries no contractual per-day cap, so routing it first avoids burning paid-tier quota on the highest-frequency data types. The aggregator's fall-through semantics are unchanged — a Yahoo failure still routes to Twelve Data → Finnhub → …. `fundamentals.default` remains FMP-first (Yahoo's fundamentals depth is shallower). See [[docs/adr/079-multi-provider-research-aggregation#follow-up-note--yahoo-first-provider-ordering-for-quote--chart--news-2026-06-16|ADR-079 follow-up note (2026-06-16)]] for the full change table and rationale.
+
+> [!info] Fundamentals: one composed data type, not raced (2026-06-16)
+> **Fundamentals is the only data type that is composed rather than raced.** `GET /api/research/fundamentals` and `GET /api/research/scorecard` call `researchAggregator.fetchFundamentals()`, which fetches **FMP and Yahoo in parallel** and merges their fields with FMP preferred. FMP-only fields (e.g. `interestCoverage`) and Yahoo-only fields (e.g. `forwardPE`, `freeCashFlow`) both appear in every response — the result is the union. `meta.provider` is `"fmp+yahoo"` when both contribute, or the single provider name when only one responds. All other research data types (quote, chart, news, analyst, search) continue to use the race-to-first capability-map chain unchanged. See [[docs/adr/079-multi-provider-research-aggregation#follow-up-note--fundamentals-merged-across-fmp--yahoo-2026-06-16|ADR-079 follow-up note (2026-06-16)]].
+
+> [!info] Macro vertical (ADR-082, 2026-06-17) — provider-pinned, never persisted
+> The macroeconomic data vertical adds **three new adapters** to the research aggregation layer: `fredAdapter` (keyed via `FRED_API_KEY`), `eurostatAdapter` (keyless, first-party), and `dbnomicsAdapter` (keyless). Unlike the equity data types above, **macro series are provider-pinned, not raced** — a series code (e.g. `CPIAUCSL` on FRED) identifies exactly one provider. Two aggregator functions handle this: `searchMacro(query)` fans out across all usable macro adapters in parallel (union, not race), and `fetchMacroSeries({ provider, seriesId, range })` routes to exactly one provider with no fallback chain.
+>
+> Two new endpoints are exposed under the existing `/api/research` surface: `GET /api/research/macro/search?q=` and `GET /api/research/macro/series?provider=&series_id=&range=`. Both carry the standard `meta.provider`/`meta.source` provenance envelope.
+>
+> **Storage boundary:** macro observations are cached in memory only (TTLs: `macro_search` 1 h, `macro_series` 12 h) and are **never written to `asset_price_history`** — the ADR-079 storage boundary is preserved. FRED is quota-governed (`{ perMinute: 120 }`); Eurostat and DBnomics are unmetered. No DB migration is required — macro reuses the existing `provider_quota` table and the `provider_api_keys` table (migration 0043) for the FRED key.
+>
+> With no `FRED_API_KEY`, the surface degrades gracefully to the keyless Eurostat catalog and DBnomics fetch-by-id (ECB rates, OECD CLI). See [[docs/adr/082-macroeconomic-indicators-data-vertical|ADR-082]] and [[docs/features/research#macroeconomic-indicators-adr-082|Research Feature — Macro section]] for full details.
+
 ## Related
 
 - [[docs/api/investments|API: Investments]]
 - [[docs/api/admin|API: Admin]] (Kinesis history sanitization endpoint)
+- [[docs/api/research|Research API]] — provider-agnostic research surface
 - [[docs/features/portfolio|Feature: Portfolio]]
+- [[docs/features/research|Research Feature]] — capability map, quota governor, cache TTLs
 - [[docs/performance/chart-downsampling|Chart Data Downsampling]]
+- [[docs/adr/065-daily-gap-fill-dense-asset-history|ADR-065]] — Daily gap-fill decision record (Binance pagination, force-refetch, gap-threshold rationale)
+- [[docs/adr/079-multi-provider-research-aggregation|ADR-079]] — Research aggregation architectural decision
+- [[docs/adr/082-macroeconomic-indicators-data-vertical|ADR-082]] — Macro data vertical (FRED + Eurostat + DBnomics, provider-pinned, in-memory only)
 
 Code links: [[apps/node-backend/src/services/priceProviderService.js]], [[apps/node-backend/src/config/kinesisConfig.js]], [[apps/node-backend/src/main.js]], [[apps/node-backend/src/routes/admin.js]], [[alembic/versions/0019_asset_price_history_cache.py]]

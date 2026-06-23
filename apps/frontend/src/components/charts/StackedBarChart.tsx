@@ -2,6 +2,7 @@
  * StackedBarChart — visx + framer-motion stacked bar chart (vertical).
  */
 import { Group } from "@visx/group";
+import { summarizeSeriesChart } from "./chartAria";
 import { ParentSize } from "@visx/responsive";
 import { scaleBand, scaleLinear } from "@visx/scale";
 import { BarStack } from "@visx/shape";
@@ -12,6 +13,7 @@ import { BottomAxis, LeftAxis } from "./ChartAxis";
 import { ChartTooltip, type ChartTooltipDatum } from "./ChartTooltip";
 import { CHART_NEUTRAL, getChartColor } from "./palette";
 import { durations, easings } from "@/lib/motion";
+import { useLanguage } from "@/contexts/LanguageContext";
 
 export interface StackedBarSeries<Datum> {
     readonly key: string;
@@ -65,6 +67,7 @@ function Inner<Datum>({
     height,
     ariaLabel,
 }: StackedBarChartProps<Datum> & { width: number; height: number }) {
+    const { t } = useLanguage();
     const reduce = useReducedMotion();
 
     const innerWidth = Math.max(0, width - margin.left - margin.right);
@@ -146,7 +149,7 @@ function Inner<Datum>({
 
     return (
         <div style={{ position: "relative", width, height }}>
-            <svg width={width} height={height} role="img" aria-label={ariaLabel ?? "Stacked bar chart"}>
+            <svg width={width} height={height} role="img" aria-label={ariaLabel ?? summarizeSeriesChart(t, 'chart.aria.kind.stackedBar', data.length, series.map((s) => s.label))}>
                 <Group left={margin.left} top={margin.top}>
                     {valueScale.ticks(5).map((tick) => (
                         <line

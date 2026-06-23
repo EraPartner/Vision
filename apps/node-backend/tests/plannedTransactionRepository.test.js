@@ -216,7 +216,7 @@ describe('plannedTransactionRepository.create', () => {
       comment: 'loan payment',
       url: null,
       is_recurring: true,
-      recurrence_pattern: 'monthly',
+      recurrence_pattern: null, // repo must force 'monthly' for loans
       is_loan: true,
       loan_type: 'mortgage',
       loan_principal: 10000,
@@ -263,6 +263,9 @@ describe('plannedTransactionRepository.create', () => {
     expect(clientQuery).toHaveBeenNthCalledWith(4, 'COMMIT');
     expect(release).toHaveBeenCalledTimes(1);
     expect(result).toEqual(expect.objectContaining({ id: 51, is_loan: true, execution_count: 0 }));
+    // recurrence_pattern (param 11, index 10) is forced to 'monthly' for loans
+    // so executeAndAdvance rolls planned_date forward instead of leaving it due.
+    expect(clientQuery.mock.calls[1][1][10]).toBe('monthly');
   });
 
   it('rolls back and rethrows when loan schedule insert fails', async () => {
@@ -534,6 +537,56 @@ describe('plannedTransactionRepository.small mutations', () => {
       [13]
     );
     expect(clientQuery).toHaveBeenNthCalledWith(3, 'ROLLBACK');
+    expect(release).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe('plannedTransactionRepository.updateWithLoanSchedule', () => {
+  beforeEach(() => vi.clearAllMocks());
+
+  it('applies the field update and the schedule replace in ONE transaction, then re-fetches', async () => {
+    const clientQuery = vi.fn().mockResolvedValue({ rowCount: 1 });
+    const release = vi.fn();
+    getClient.mockResolvedValue({ query: clientQuery, release });
+
+    // getById re-fetch after commit (standalone query): row, executions, schedule, tags
+    query
+      .mockResolvedValueOnce({ rows: [{ id: 70, is_loan: true, recipient_name: 'Bank', category_name: 'LOAN:CAR' }] })
+      .mockResolvedValueOnce({ rows: [] })
+      .mockResolvedValueOnce({ rows: [{ installment_number: 1, due_date: '2026-10-01', payment_amount: '300.00', principal_amount: '250.00', interest_amount: '50.00', remaining_principal: '4700.00' }] })
+      .mockResolvedValueOnce({ rows: [] });
+
+    const result = await plannedTransactionRepository.updateWithLoanSchedule(
+      70,
+      { loan_regular_payment_amount: 300, loan_first_payment_date: '2026-10-01' },
+      [{ installment_number: 1, due_date: '2026-10-01', payment_amount: 300, principal_amount: 250, interest_amount: 50, remaining_principal: 4700 }],
+    );
+
+    // Single BEGIN/COMMIT around UPDATE + DELETE + INSERT — no second transaction.
+    expect(clientQuery).toHaveBeenNthCalledWith(1, 'BEGIN');
+    expect(clientQuery).toHaveBeenNthCalledWith(2, expect.stringContaining('UPDATE planned_transactions SET'), expect.any(Array));
+    expect(clientQuery).toHaveBeenNthCalledWith(3, 'DELETE FROM planned_transaction_loan_schedule WHERE planned_transaction_id = $1', [70]);
+    expect(clientQuery).toHaveBeenNthCalledWith(4, expect.stringContaining('INSERT INTO planned_transaction_loan_schedule'), expect.arrayContaining([70]));
+    expect(clientQuery).toHaveBeenNthCalledWith(5, 'COMMIT');
+    expect(release).toHaveBeenCalledTimes(1);
+    expect(result).toEqual(expect.objectContaining({ id: 70, loan_schedule: expect.any(Array) }));
+  });
+
+  it('returns null and never touches the schedule when the row is gone (rolls into a no-op commit)', async () => {
+    const clientQuery = vi.fn()
+      .mockResolvedValueOnce({}) // BEGIN
+      .mockResolvedValueOnce({ rowCount: 0 }); // UPDATE affects 0 rows → bail before schedule writes
+    const release = vi.fn();
+    getClient.mockResolvedValue({ query: clientQuery, release });
+
+    const result = await plannedTransactionRepository.updateWithLoanSchedule(999, { memo: 'x' }, []);
+
+    expect(result).toBeNull();
+    expect(clientQuery).not.toHaveBeenCalledWith(
+      'DELETE FROM planned_transaction_loan_schedule WHERE planned_transaction_id = $1',
+      [999],
+    );
+    expect(query).not.toHaveBeenCalled(); // getById re-fetch never runs
     expect(release).toHaveBeenCalledTimes(1);
   });
 });

@@ -27,6 +27,10 @@
         color: hsl(var(--foreground));
         font-family: var(--font-body);
         letter-spacing: -0.005em;
+        /* No page-level rubber-banding: in the Electron shell the bounce
+           exposes the body edge over the vibrancy/aurora backdrop (visible
+           seam). Inner scrollers keep their native overscroll feel. */
+        overscroll-behavior-y: none;
     }
 
     h1,
@@ -36,6 +40,36 @@
         font-family: var(--font-display);
         font-feature-settings: "ss01", "calt", "dlig", "liga";
         letter-spacing: -0.02em;
+    }
+
+    /* ------------------------------------------------------------------
+     * Canvas-text legibility guarantee.
+     *
+     * Bare text (page headers, section titles) sits directly on the aurora
+     * canvas, whose bright drifts can wash out light dark-mode text. A
+     * background-colored halo restores local contrast exactly where a blob
+     * passes behind a glyph — and is invisible over surfaces that already
+     * match the background. Light mode needs none: its text is darker than
+     * any canvas peak. `.canvas-text` extends the same guarantee to a whole
+     * subtree (PageHeader applies it, covering every page's title/subtitle).
+     * ------------------------------------------------------------------ */
+    .dark h1,
+    .dark h2,
+    .dark h3,
+    .dark .font-display,
+    .dark .canvas-text,
+    .dark .canvas-text :is(h1, h2, h3, p, span, div) {
+        text-shadow:
+            0 1px 2px hsl(var(--background) / 0.6),
+            0 2px 14px hsl(var(--background) / 0.45);
+    }
+
+    /* Secondary text on the canvas gets a small lift: muted-foreground is
+       tuned for card surfaces and dips below comfort at aurora peaks.
+       !important because this lives in @layer base and must outrank the
+       .text-muted-foreground utility (utilities layer wins over base). */
+    .dark .canvas-text .text-muted-foreground {
+        color: hsl(var(--foreground) / 0.72) !important;
     }
 
     /* Focus ring — emerald, glass-aware */
@@ -57,6 +91,12 @@
     }
 
     ::-webkit-scrollbar-track {
+        background: transparent;
+    }
+
+    /* Corner where vertical + horizontal scrollbars meet — transparent so it
+       inherits the surface behind it instead of WebKit's default white square. */
+    ::-webkit-scrollbar-corner {
         background: transparent;
     }
 
@@ -233,7 +273,11 @@
                 hsl(var(--glass-surface-deep) / 0.7) 100%
             );
         border: 1px solid hsl(var(--glass-border) / 0.14);
-        box-shadow: 0 8px 16px hsl(var(--glass-shadow) / 0.14);
+        box-shadow:
+            0 1px 0 hsl(var(--glass-highlight) / 0.5) inset,
+            0 -1px 0 hsl(var(--glass-shadow) / 0.1) inset,
+            0 8px 16px hsl(var(--glass-shadow) / 0.14),
+            0 24px 64px -24px hsl(var(--glass-shadow) / 0.25);
     }
 
     .dark .glass-thick {
@@ -245,16 +289,25 @@
                 hsl(var(--glass-surface-deep) / 0.94) 100%
             );
         border: 1px solid hsl(var(--glass-border) / 0.1);
-        box-shadow: 0 8px 16px hsl(0 0% 0% / 0.42);
+        box-shadow:
+            0 1px 0 hsl(var(--glass-highlight) / 0.1) inset,
+            0 -1px 0 hsl(0 0% 0% / 0.35) inset,
+            0 8px 16px hsl(0 0% 0% / 0.42),
+            0 32px 80px -28px hsl(0 0% 0% / 0.55);
     }
 
-    /* Chrome — sidebar rail, persistent toolbars */
+    /* Chrome — sidebar rail, persistent toolbars.
+       Alphas low enough that the aurora (and Electron vibrancy desktop) glow
+       through the blur — at the old 0.88/0.96 the material read as solid and
+       the sidebar looked flat next to the glassed content. Readability holds
+       because the chrome blur + saturate veil averages whatever drifts behind;
+       prefers-reduced-transparency falls back to near-opaque below. */
     .glass-chrome {
         background:
             linear-gradient(
                 180deg,
-                hsl(var(--sidebar-background) / 0.72) 0%,
-                hsl(var(--sidebar-background) / 0.88) 100%
+                hsl(var(--sidebar-background) / 0.55) 0%,
+                hsl(var(--sidebar-background) / 0.72) 100%
             );
         border: 1px solid hsl(var(--sidebar-border) / 0.5);
         box-shadow:
@@ -266,13 +319,26 @@
         background:
             linear-gradient(
                 180deg,
-                hsl(var(--sidebar-background) / 0.82) 0%,
-                hsl(var(--sidebar-background) / 0.96) 100%
+                hsl(var(--sidebar-background) / 0.55) 0%,
+                hsl(var(--sidebar-background) / 0.74) 100%
             );
         border: 1px solid hsl(var(--sidebar-border) / 0.6);
         box-shadow:
             0 1px 0 hsl(var(--glass-highlight) / 0.06) inset,
             0 20px 56px hsl(0 0% 0% / 0.45);
+    }
+
+    /* No backdrop-filter support → translucency would show raw page behind
+       the rail; keep the old near-opaque ramp there. */
+    @supports not ((-webkit-backdrop-filter: blur(1px)) or (backdrop-filter: blur(1px))) {
+        .glass-chrome {
+            background:
+                linear-gradient(
+                    180deg,
+                    hsl(var(--sidebar-background) / 0.92) 0%,
+                    hsl(var(--sidebar-background) / 0.98) 100%
+                );
+        }
     }
 
     /* Elevated — hero tiles and featured KPIs */
@@ -286,7 +352,11 @@
                 hsl(var(--glass-tint) / 0.08) 100%
             );
         border: 1px solid hsl(var(--glass-border) / 0.16);
-        box-shadow: 0 8px 16px hsl(var(--glass-shadow) / 0.14);
+        box-shadow:
+            0 1px 0 hsl(var(--glass-highlight) / 0.55) inset,
+            0 -1px 0 hsl(var(--glass-shadow) / 0.1) inset,
+            0 8px 16px hsl(var(--glass-shadow) / 0.14),
+            0 28px 72px -24px hsl(var(--glass-shadow) / 0.28);
     }
 
     .dark .glass-elevated,
@@ -299,7 +369,11 @@
                 hsl(var(--glass-tint) / 0.22) 100%
             );
         border: 1px solid hsl(var(--glass-border) / 0.12);
-        box-shadow: 0 8px 16px hsl(0 0% 0% / 0.42);
+        box-shadow:
+            0 1px 0 hsl(var(--glass-highlight) / 0.12) inset,
+            0 -1px 0 hsl(0 0% 0% / 0.35) inset,
+            0 8px 16px hsl(0 0% 0% / 0.42),
+            0 36px 88px -28px hsl(0 0% 0% / 0.6);
     }
 
     /* Trend accents — layered on top of glass-regular */
@@ -351,32 +425,76 @@
         border-color: hsl(var(--destructive) / 0.44);
     }
 
-    /* Apply backdrop filters where supported, with saturation per material */
+    /* Frozen first column inside a glass card (e.g. the Category Pivot Table).
+       A plain bg-card here reads as a flat matte slab against the translucent
+       card. This keeps the column on the same glass: a FLAT tint (never a
+       per-cell gradient — that bands row-to-row down a stack of cells) that
+       blends into the card material, plus a frosted backdrop blur that occludes
+       the value cells scrolling beneath it. The freeze edge is marked by a soft
+       drop shadow (a depth cue), NOT a hairline border. Translucency and blur
+       scale with the visual-effects tier (ADR-075): this base is the opaque
+       fallback (no backdrop-filter support, and the reduced tier); @supports
+       adds the standard frost; fx-enhanced is the most translucent. */
+    .glass-sticky-col {
+        background: hsl(var(--card));
+        box-shadow: 7px 0 12px -9px hsl(0 0% 0% / 0.5);
+    }
+
+    /* Apply backdrop filters where supported, with saturation per material.
+       Saturation is what makes blurred content glow through the material —
+       blur alone reads as fog. */
     @supports ((-webkit-backdrop-filter: blur(1px)) or (backdrop-filter: blur(1px))) {
         .glass,
-        .glass-regular {
-            -webkit-backdrop-filter: blur(var(--glass-regular-blur));
-            backdrop-filter: blur(var(--glass-regular-blur));
+        .glass-regular,
+        .liquid-glass,
+        .surface-glass,
+        .glass-effect {
+            -webkit-backdrop-filter: blur(var(--glass-regular-blur)) saturate(var(--glass-saturate));
+            backdrop-filter: blur(var(--glass-regular-blur)) saturate(var(--glass-saturate));
         }
 
-        .glass-thin {
-            -webkit-backdrop-filter: blur(var(--glass-thin-blur));
-            backdrop-filter: blur(var(--glass-thin-blur));
+        .glass-thin,
+        .liquid-glass-soft {
+            -webkit-backdrop-filter: blur(var(--glass-thin-blur)) saturate(var(--glass-saturate));
+            backdrop-filter: blur(var(--glass-thin-blur)) saturate(var(--glass-saturate));
         }
 
         .glass-thick {
-            -webkit-backdrop-filter: blur(var(--glass-thick-blur));
-            backdrop-filter: blur(var(--glass-thick-blur));
+            -webkit-backdrop-filter: blur(var(--glass-thick-blur)) saturate(var(--glass-saturate));
+            backdrop-filter: blur(var(--glass-thick-blur)) saturate(var(--glass-saturate));
         }
 
         .glass-chrome {
-            -webkit-backdrop-filter: blur(var(--glass-chrome-blur));
-            backdrop-filter: blur(var(--glass-chrome-blur));
+            -webkit-backdrop-filter: blur(var(--glass-chrome-blur)) saturate(var(--glass-saturate));
+            backdrop-filter: blur(var(--glass-chrome-blur)) saturate(var(--glass-saturate));
         }
 
-        .glass-elevated {
-            -webkit-backdrop-filter: blur(var(--glass-elevated-blur));
-            backdrop-filter: blur(var(--glass-elevated-blur));
+        .glass-elevated,
+        .liquid-glass-hero {
+            -webkit-backdrop-filter: blur(var(--glass-elevated-blur)) saturate(var(--glass-saturate));
+            backdrop-filter: blur(var(--glass-elevated-blur)) saturate(var(--glass-saturate));
+        }
+
+        /* Standard tier — translucent enough to blend into the card glass,
+           opaque enough to occlude scrolled cells. Deliberately NO saturate:
+           saturate amplifies the aurora behind the card into a muddy tint over
+           the narrow column. */
+        .glass-sticky-col {
+            background: hsl(var(--card) / 0.72);
+            -webkit-backdrop-filter: blur(12px);
+            backdrop-filter: blur(12px);
+        }
+
+        /* Enhanced tier — more translucent and a wider blur so the card glass
+           and aurora read softly through the frozen column. Gated to
+           no-preference so it yields to prefers-reduced-transparency (whose
+           opaque fallback would otherwise lose this selector's specificity). */
+        @media (prefers-reduced-transparency: no-preference) {
+            :root.fx-enhanced .glass-sticky-col {
+                background: hsl(var(--card) / 0.55);
+                -webkit-backdrop-filter: blur(16px);
+                backdrop-filter: blur(16px);
+            }
         }
     }
 
@@ -384,7 +502,13 @@
      * Shell surfaces
      * ------------------------------------------------------------------ */
 
-    .app-topbar {
+    /* Visuals live on ::before so the whole material can fade with scroll
+       position (gradient backgrounds cannot be transitioned directly). */
+    .app-topbar::before {
+        content: "";
+        position: absolute;
+        inset: 0;
+        z-index: -1;
         background:
             linear-gradient(
                 180deg,
@@ -395,9 +519,15 @@
         box-shadow:
             0 1px 0 hsl(var(--glass-highlight) / 0.3) inset,
             0 12px 28px hsl(var(--glass-shadow) / 0.05);
+        opacity: 1;
+        transition: opacity var(--duration-normal) var(--ease-out-quint);
     }
 
-    .dark .app-topbar {
+    .app-topbar[data-scrolled="false"]::before {
+        opacity: 0;
+    }
+
+    .dark .app-topbar::before {
         background:
             linear-gradient(
                 180deg,
@@ -412,9 +542,166 @@
 
     @supports ((-webkit-backdrop-filter: blur(1px)) or (backdrop-filter: blur(1px))) {
         .app-topbar {
-            -webkit-backdrop-filter: blur(8px);
-            backdrop-filter: blur(8px);
+            -webkit-backdrop-filter: blur(16px) saturate(var(--glass-saturate));
+            backdrop-filter: blur(16px) saturate(var(--glass-saturate));
         }
+
+        /* At scroll-top the veil is hidden, so the filter must go too:
+           saturate() over the bare aurora otherwise renders the bar region
+           brighter than the page below it (visible seam). */
+        .app-topbar[data-scrolled="false"] {
+            -webkit-backdrop-filter: none;
+            backdrop-filter: none;
+        }
+    }
+
+    /* ------------------------------------------------------------------
+     * Electron shell on macOS (html classes set by ElectronBridge).
+     *
+     * hiddenInset traffic lights overlap the topbar's left edge, so inset
+     * its content and make the bar itself the window drag region. Lights
+     * auto-hide in native fullscreen → inset drops with them.
+     * ------------------------------------------------------------------ */
+
+    html.electron-mac .app-topbar {
+        -webkit-app-region: drag;
+    }
+
+    html.electron-mac .app-topbar :is(button, a, input, [role="button"], [role="combobox"]) {
+        -webkit-app-region: no-drag;
+    }
+
+    html.electron-mac:not(.electron-fullscreen) .app-topbar {
+        padding-left: 88px;
+    }
+
+    /* The hiddenInset traffic lights (x:20, y:20, ~12px buttons) also overlap
+       the sidebar's top-left, colliding with the logo in its header. Reserve
+       the native strip above the header content, Finder-style. margin (not
+       padding) so the header's own py-* utility keeps winning the cascade —
+       utilities layer beats this base layer. Fullscreen auto-hides the lights,
+       so the strip collapses with them. */
+    html.electron-mac:not(.electron-fullscreen) [data-sidebar="header"] {
+        margin-top: 28px;
+    }
+
+    /* Vibrancy prototype — only at the 'enhanced' effective tier
+       (ElectronBridge adds .vibrancy). The window carries an under-window material; a
+       translucent body lets the blurred desktop glow through while the
+       liquid-canvas wash keeps contrast usable. body background propagates
+       to the root canvas, so this one rule controls the whole backdrop. */
+    html.electron-mac.vibrancy body {
+        background-color: hsl(var(--background) / 0.72);
+    }
+
+    /* ------------------------------------------------------------------
+     * Liquid canvas — fixed atmosphere layer behind the app.
+     *
+     * Two slow-drifting aurora blobs (compositor-only transforms) over a
+     * static radial wash, plus a film-grain child. This is what the glass
+     * materials blur; without it backdrop-filter is invisible.
+     * Colors derive from --primary/--accent so all theme variants work.
+     * ------------------------------------------------------------------ */
+
+    .liquid-canvas {
+        position: fixed;
+        inset: 0;
+        z-index: -1;
+        overflow: hidden;
+        pointer-events: none;
+        background:
+            radial-gradient(
+                120rem 60rem at 70% -20%,
+                hsl(var(--primary) / var(--aurora-wash-alpha)),
+                transparent 60%
+            );
+    }
+
+    .liquid-canvas::before,
+    .liquid-canvas::after {
+        content: "";
+        position: absolute;
+        border-radius: 9999px;
+        will-change: transform;
+    }
+
+    /* Emerald aurora — upper left, drifts right and breathes */
+    .liquid-canvas::before {
+        width: 55vw;
+        height: 55vw;
+        min-width: 34rem;
+        min-height: 34rem;
+        top: -18%;
+        left: -12%;
+        background: radial-gradient(
+            closest-side,
+            hsl(var(--primary) / var(--aurora-primary-alpha)),
+            transparent 72%
+        );
+        animation: aurora-drift-a 64s var(--ease-in-out-quart) infinite alternate;
+    }
+
+    /* Champagne aurora — lower right, counter-drifts */
+    .liquid-canvas::after {
+        width: 48vw;
+        height: 48vw;
+        min-width: 30rem;
+        min-height: 30rem;
+        bottom: -22%;
+        right: -10%;
+        background: radial-gradient(
+            closest-side,
+            hsl(var(--accent) / var(--aurora-accent-alpha)),
+            transparent 72%
+        );
+        animation: aurora-drift-b 76s var(--ease-in-out-quart) infinite alternate;
+    }
+
+    @keyframes aurora-drift-a {
+        from {
+            transform: translate3d(0, 0, 0) scale(1);
+        }
+
+        to {
+            transform: translate3d(14vw, 9vh, 0) scale(1.18);
+        }
+    }
+
+    @keyframes aurora-drift-b {
+        from {
+            transform: translate3d(0, 0, 0) scale(1.12);
+        }
+
+        to {
+            transform: translate3d(-11vw, -7vh, 0) scale(0.96);
+        }
+    }
+
+    /* Workspace-aware hue: portfolio leads with champagne gold, budgeting
+       with emerald. Same alphas, swapped hues. */
+    .liquid-canvas[data-workspace="portfolio"]::before {
+        background: radial-gradient(
+            closest-side,
+            hsl(var(--accent) / var(--aurora-primary-alpha)),
+            transparent 72%
+        );
+    }
+
+    .liquid-canvas[data-workspace="portfolio"]::after {
+        background: radial-gradient(
+            closest-side,
+            hsl(var(--primary) / var(--aurora-accent-alpha)),
+            transparent 72%
+        );
+    }
+
+    /* Film grain — tactile richness over the gradients */
+    .liquid-canvas-grain {
+        position: absolute;
+        inset: 0;
+        opacity: var(--grain-alpha);
+        background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.8' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+        background-size: 160px 160px;
     }
 
     /* ------------------------------------------------------------------
@@ -443,14 +730,21 @@
      * Interaction feedback
      * ------------------------------------------------------------------ */
 
+    /* premium-frame and micro-lift are frequently combined (and premium-frame
+       is baked into the Card base): both declare the same full transition
+       list so whichever wins the cascade still animates border, shadow, and
+       transform together. */
     .premium-frame {
         border: 1px solid hsl(var(--border) / 0.7);
+        /* Light mode reads as embossed paper: top highlight + bottom hairline. */
         box-shadow:
             0 1px 0 hsl(var(--glass-highlight) / 0.16) inset,
+            0 -1px 0 hsl(var(--glass-shadow) / 0.05) inset,
             0 8px 24px hsl(var(--glass-shadow) / 0.06);
         transition:
             border-color var(--duration-normal) var(--ease-out-quint),
-            box-shadow var(--duration-normal) var(--ease-out-quint);
+            box-shadow var(--duration-normal) var(--ease-out-quint),
+            transform var(--duration-fast) var(--ease-out-quint);
     }
 
     .premium-frame:hover {
@@ -476,7 +770,8 @@
     .micro-lift {
         transition:
             transform var(--duration-fast) var(--ease-out-quint),
-            box-shadow var(--duration-normal) var(--ease-out-quint);
+            box-shadow var(--duration-normal) var(--ease-out-quint),
+            border-color var(--duration-normal) var(--ease-out-quint);
     }
 
     .micro-lift:hover {
@@ -580,6 +875,42 @@
     .animate-stagger > *:nth-child(6) { animation-delay: 300ms; }
     .animate-stagger > *:nth-child(7) { animation-delay: 360ms; }
     .animate-stagger > *:nth-child(8) { animation-delay: 420ms; }
+    .animate-stagger > *:nth-child(9) { animation-delay: 480ms; }
+    .animate-stagger > *:nth-child(10) { animation-delay: 540ms; }
+    .animate-stagger > *:nth-child(11) { animation-delay: 600ms; }
+    .animate-stagger > *:nth-child(12) { animation-delay: 660ms; }
+
+    /* SF-Symbols-style success bounce: icon pops past full size and settles.
+       Applied to inline success icons on mount and, globally below, to the
+       icon slot of sonner success toasts (covers every toast.success). */
+    .icon-success-bounce {
+        animation: icon-success-bounce 600ms var(--ease-out-quint) 100ms both;
+    }
+
+    @keyframes icon-success-bounce {
+        0% {
+            transform: scale(0.4);
+            opacity: 0;
+        }
+
+        45% {
+            transform: scale(1.22);
+            opacity: 1;
+        }
+
+        70% {
+            transform: scale(0.92);
+        }
+
+        100% {
+            transform: scale(1);
+            opacity: 1;
+        }
+    }
+
+    [data-sonner-toast][data-type="success"] [data-icon] {
+        animation: icon-success-bounce 600ms var(--ease-out-quint) 150ms both;
+    }
 
     .gradient-bg {
         background: linear-gradient(
@@ -620,7 +951,14 @@
 
     @media (prefers-reduced-motion: reduce) {
         .animate-in,
-        .animate-stagger > * {
+        .animate-stagger > *,
+        .icon-success-bounce,
+        [data-sonner-toast][data-type="success"] [data-icon] {
+            animation: none;
+        }
+
+        .liquid-canvas::before,
+        .liquid-canvas::after {
             animation: none;
         }
 
@@ -644,15 +982,116 @@
         .press-feedback:active {
             transform: none;
         }
+    }
 
+    /* High-contrast preference: strengthen hairlines and focus affordances.
+       Property-level (not token swaps) so theme-variant inline styles on
+       :root cannot override it. */
+    @media (prefers-contrast: more) {
         .glass,
         .glass-thin,
         .glass-regular,
         .glass-thick,
         .glass-chrome,
-        .glass-elevated {
+        .glass-elevated,
+        .liquid-glass,
+        .liquid-glass-soft,
+        .liquid-glass-hero,
+        .premium-frame,
+        .surface-default,
+        .surface-elevated {
+            border-color: hsl(var(--foreground) / 0.45);
+        }
+
+        :focus-visible {
+            outline-width: 3px;
+            outline-color: hsl(var(--ring));
+        }
+
+        .liquid-canvas {
+            display: none;
+        }
+    }
+
+    /* Blur is static, so it belongs under reduced-transparency, not
+       reduced-motion. Fall back to near-opaque surfaces. */
+    @media (prefers-reduced-transparency: reduce) {
+        .glass,
+        .glass-thin,
+        .glass-regular,
+        .glass-thick,
+        .glass-chrome,
+        .glass-elevated,
+        .liquid-glass,
+        .liquid-glass-soft,
+        .liquid-glass-hero,
+        .surface-glass,
+        .glass-effect,
+        .app-topbar {
             backdrop-filter: none;
             -webkit-backdrop-filter: none;
+            background: hsl(var(--card) / 0.97);
         }
+
+        /* Frozen column must stay fully opaque (it occludes scrolling cells). */
+        .glass-sticky-col {
+            backdrop-filter: none;
+            -webkit-backdrop-filter: none;
+            background: hsl(var(--card));
+        }
+
+        .liquid-canvas {
+            display: none;
+        }
+    }
+
+    /* ------------------------------------------------------------------
+     * Visual-effects tiers (ADR-075) — classes set by VisualEffectsController.
+     *
+     * fx-reduced mirrors the prefers-reduced-transparency fallback above
+     * (keep the two rule bodies in sync): it is the 'reduced' tier and the
+     * auto-adapt cap on large displays. Kept as a separate block — a media
+     * query and a class selector cannot share one rule without a JS-only
+     * source of truth, and the OS preference must keep working from first
+     * paint, before React mounts.
+     * ------------------------------------------------------------------ */
+
+    :root.fx-reduced .glass,
+    :root.fx-reduced .glass-thin,
+    :root.fx-reduced .glass-regular,
+    :root.fx-reduced .glass-thick,
+    :root.fx-reduced .glass-chrome,
+    :root.fx-reduced .glass-elevated,
+    :root.fx-reduced .liquid-glass,
+    :root.fx-reduced .liquid-glass-soft,
+    :root.fx-reduced .liquid-glass-hero,
+    :root.fx-reduced .surface-glass,
+    :root.fx-reduced .glass-effect,
+    :root.fx-reduced .app-topbar {
+        backdrop-filter: none;
+        -webkit-backdrop-filter: none;
+        background: hsl(var(--card) / 0.97);
+    }
+
+    :root.fx-reduced .liquid-canvas {
+        display: none;
+    }
+
+    /* Reduced tier — frozen column goes fully opaque and unblurred. It must
+       stay opaque: with no blur to hide them, the value cells scrolling under
+       the column would otherwise ghost through. */
+    :root.fx-reduced .glass-sticky-col {
+        background: hsl(var(--card));
+        -webkit-backdrop-filter: none;
+        backdrop-filter: none;
+    }
+
+    /* Large display while the user kept a higher tier (auto-adapt off):
+       the aurora blobs stay visible but stop drifting, so the compositor
+       can go idle between frames instead of recompositing a 4K backdrop
+       on every vsync. */
+    :root.fx-static-atmosphere .liquid-canvas::before,
+    :root.fx-static-atmosphere .liquid-canvas::after {
+        animation: none;
     }
 }

@@ -3,11 +3,12 @@ title: Exchange Rates Feature
 type: feature
 status: active
 date: 2026-04-02
-tags: [feature, exchange-rates, currency, frontend, backend, ECB]
-description: Exchange rate viewing and management with live ECB rates, fallback rates, and manual refresh capability
+updated: 2026-06-16
+tags: [feature, exchange-rates, currency, frontend, backend, ECB, admin]
+description: Exchange rate viewing and management with live ECB rates, fallback rates, and manual refresh capability. 2026-06-16 — moved from /portfolio/exchange-rates to /admin/exchange-rates (admin-mode section; it inspects the FX rate feed rather than being a per-user task). Old path redirects.
 aliases: [FX rates, currency rates, exchange rates page]
 related_code:
-  - apps/frontend/src/pages/portfolio/ExchangeRatesPage.tsx
+  - apps/frontend/src/pages/admin/ExchangeRatesPage.tsx
   - apps/node-backend/src/routes/info.js
   - apps/node-backend/src/services/currency/currencyConversionService.js
 ---
@@ -16,13 +17,13 @@ related_code:
 
 ## Overview
 
-The Exchange Rates page (`/portfolio/exchange-rates`) displays current exchange rates from the European Central Bank (ECB) and hardcoded fallback rates. It allows users to view, compare, and manually refresh exchange rates used throughout the application for currency normalization.
+The Exchange Rates page (`/admin/exchange-rates`, in the admin-mode section — the old `/portfolio/exchange-rates` path redirects) displays current exchange rates from the European Central Bank (ECB) and hardcoded fallback rates. It allows viewing, comparing, and manually refreshing the exchange rates used throughout the application for currency normalization. It lives under admin mode because it inspects/manages the FX rate feed rather than being a per-user portfolio task (conversion itself happens automatically everywhere).
 
 ## Architecture
 
 ### Frontend Page
 
-Located at `[[apps/frontend/src/pages/portfolio/ExchangeRatesPage.tsx]]`, the page displays:
+Located at `[[apps/frontend/src/pages/admin/ExchangeRatesPage.tsx]]` (gated by `RequireAdmin`), the page displays:
 
 #### Summary Cards
 1. **Stored Rates**: Total number of rates in the database

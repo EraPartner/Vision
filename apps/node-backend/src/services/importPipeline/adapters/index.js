@@ -34,6 +34,17 @@ export function getSupportedBanks() {
 }
 
 /**
+ * Single source of truth for the frontend adapter catalog: { key, name } per
+ * non-generic adapter, derived from the registry so adding an adapter exposes it
+ * in the UI automatically (no separate hardcoded list to drift).
+ */
+export function listAdapters() {
+  return ADAPTERS
+    .filter((adapter) => adapter.name !== 'generic')
+    .map((adapter) => ({ key: adapter.name, name: adapter.bankName }));
+}
+
+/**
  * @param {string | null | undefined} csvSample
  * @returns {string | null} adapter name or null if none detected
  */

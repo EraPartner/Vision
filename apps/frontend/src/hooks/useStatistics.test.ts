@@ -24,7 +24,7 @@ function monthlySummary(
   };
 }
 
-function categoryPivot(entries: Record<string, Array<{ categoryId: number | null; categoryName: string; total: number; transactionCount?: number }>>) {
+function categoryPivot(entries: Record<string, Array<{ categoryId: number | null; categoryName: string; total: number; income?: number; expense?: number; transactionCount?: number }>>) {
   return {
     categoryPivot: Object.fromEntries(
       Object.entries(entries).map(([period, items]) => [
@@ -167,6 +167,23 @@ describe('mapToStatisticsData', () => {
       expect(food.incomeTotal).toBe(100);
       expect(food.expenseTotal).toBe(70);
       expect(food.netTotal).toBe(30);     // 100 - 40 - 30
+    });
+
+    it('uses explicit income/expense for a mixed-sign month (not the net sign)', () => {
+      const result = mapToStatisticsData(
+        monthlySummary([]),
+        categoryPivot({
+          // −300 purchases + 500 refund: net +200, but income 500 / expense 300.
+          '2026-01': [{ categoryId: 1, categoryName: 'Food: Groceries', total: 200, income: 500, expense: -300 }],
+        }),
+        recipientInsights([]),
+        recipientByYear({}),
+      );
+      const food = result.categoryPivot.find((c) => c.categoryId === 1)!;
+      expect(food.incomeMonths['2026-01']).toBe(500); // not 200 (the net)
+      expect(food.expenseMonths['2026-01']).toBe(300); // not 0
+      expect(food.netMonths['2026-01']).toBe(200);
+      expect(food.months['2026-01']).toBe(200); // absolute column = |net|
     });
 
     it('tracks per-period income, expense, net, and abs months', () => {

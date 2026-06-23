@@ -162,7 +162,7 @@ export function YearComparisonCard({ className }: YearComparisonCardProps) {
                                             <span className="flex items-center gap-1.5">
                                                 <span className="tabular-nums">{y.year}</span>
                                                 {y.isFiled && (
-                                                    <Lock className="h-2.5 w-2.5 text-amber-600" />
+                                                    <Lock className="h-2.5 w-2.5 text-warning" />
                                                 )}
                                                 {!y.isFiled && y.hasFrozenCalculation && (
                                                     <Snowflake className="h-2.5 w-2.5 text-sky-600" />
@@ -192,7 +192,7 @@ export function YearComparisonCard({ className }: YearComparisonCardProps) {
                                     <span className="flex items-center justify-end gap-1.5">
                                         {compareYear}
                                         {compareEntry?.isFiled && (
-                                            <Lock className="h-3 w-3 text-amber-600" />
+                                            <Lock className="h-3 w-3 text-warning" />
                                         )}
                                         {!compareEntry?.isFiled && compareEntry?.hasFrozenCalculation && (
                                             <Snowflake className="h-3 w-3 text-sky-600" />

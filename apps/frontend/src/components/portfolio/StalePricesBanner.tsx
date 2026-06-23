@@ -27,8 +27,8 @@ export function StalePricesBanner({
   if (staleCount === 0) return null;
 
   return (
-    <div className="mb-4 flex items-start gap-2 rounded-md border border-amber-500/40 bg-amber-500/10 p-3 text-sm">
-      <AlertTriangle className="h-4 w-4 mt-0.5 text-amber-500 shrink-0" />
+    <div className="mb-4 flex items-start gap-2 rounded-md border border-warning/40 bg-warning/10 p-3 text-sm">
+      <AlertTriangle className="h-4 w-4 mt-0.5 text-warning shrink-0" />
       <div className="flex-1 text-foreground/80">
         {t("portfolio.stalePricesBanner", { n: String(staleCount) })}
         {!isOnline && (

@@ -107,23 +107,44 @@ function extractCategories(historyRows, actualRows) {
 
 export function reconcileCategoryForecasts(categoryForecasts, future, refByDate) {
   const sumByDate = new Map();
+  const totalAbsByDate = new Map();
   for (const date of future) {
     let s = 0;
+    let absSum = 0;
     for (const { series } of categoryForecasts) {
       const p = series.find((x) => x.date === date);
-      s += p?.value ?? 0;
+      const v = p?.value ?? 0;
+      s += v;
+      absSum += Math.abs(v);
     }
     sumByDate.set(date, s);
+    totalAbsByDate.set(date, absSum);
   }
 
+  const catCount = categoryForecasts.length || 1;
+
+  // Additive residual distribution instead of multiplicative ref/sum scaling.
+  // Scaling is only valid when components share a sign; category daily nets are
+  // mixed-sign (income +, expenses −), so `sum` is a small difference of large
+  // numbers and ref/sum is unbounded (and flips sign when sum and ref disagree).
+  // Spreading the residual diff = ref − sum proportionally to each category's
+  // magnitude keeps Σ categories === ref exactly while bounding each adjustment
+  // by |diff| and preserving each component's sign.
   return categoryForecasts.map(({ cat, series }) => ({
     cat,
     series: series.map((p) => {
-      const sum = sumByDate.get(p.date) ?? 0;
       const ref = refByDate.get(p.date) ?? 0;
+      const sum = sumByDate.get(p.date) ?? 0;
+      const totalAbs = totalAbsByDate.get(p.date) ?? 0;
       // eslint-disable-next-line vision-local-money/no-raw-money-arithmetic
-      const scale = sum !== 0 ? ref / sum : 1;
-      return { date: p.date, value: p.value * scale };
+      const diff = ref - sum;
+      let adjustment;
+      if (totalAbs > 0) {
+        adjustment = diff * (Math.abs(p.value) / totalAbs);
+      } else {
+        adjustment = diff / catCount;
+      }
+      return { date: p.date, value: p.value + adjustment };
     }),
   }));
 }

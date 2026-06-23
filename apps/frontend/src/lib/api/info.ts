@@ -3,16 +3,11 @@ import { apiRequest } from '@/lib/api/client';
 import { requestWithQuery } from '@/lib/api/helpers';
 import type { NetWorthResponse } from '@/lib/api/types';
 
-export async function getStatistics(params?: { currency?: string }): Promise<{
-    total_transactions: number;
-    total_amount: number;
-    categories: Array<{ name: string; count: number }>;
-}> {
-    return requestWithQuery('/api/info', params);
-}
+// (Removed getStatistics — legacy GET /api/info was deleted in the Phase 9
+// cutover; it had no callers. Use the aggregations endpoints instead.)
 
 export function getSupportedParsers(): Promise<{
-    adapters: Array<{ key: string; name: string; adapter_class: string }>;
+    adapters: Array<{ key: string; name: string; adapter_class?: string }>;
     total_count: number;
 }> {
     return apiRequest('/api/info/supported-adapters');
@@ -28,20 +23,8 @@ export function getDistinctBankAccounts(): Promise<{ banks: string[] }> {
     return apiRequest('/api/info/banks');
 }
 
-export function getTransactionSummary(params?: {
-    bank_account?: string;
-    start_date?: string;
-    end_date?: string;
-    currency?: string;
-}): Promise<{
-    total_count: number;
-    total_amount: number;
-    average: number;
-    min: number | null;
-    max: number | null;
-}> {
-    return requestWithQuery('/api/info/transaction-summary', params);
-}
+// (Removed getTransactionSummary — legacy GET /api/info/transaction-summary was
+// deleted in the Phase 9 cutover; it had no callers.)
 
 export function getTransactionCount(): Promise<{ total_transactions: number }> {
     return apiRequest('/api/info/transaction-count');
@@ -117,6 +100,8 @@ export function getPortfolioPerformance(params?: {
         inflation_adjusted_value: number;
         gain_loss: number;
         return_pct: number;
+        /** Value at cost-weighted purchase-date FX rates. Absent until migration 0039 + a snapshot recompute. */
+        value_fx_neutral?: number;
     }>;
     metrics: {
         currentValue: number;
@@ -142,6 +127,10 @@ export function getPortfolioPerformance(params?: {
         totalInvested: number;
         gainLoss: number;
         gainLossPercent: number;
+        assetGain?: number;
+        fxGain?: number;
+        nativeCurrentValue?: number;
+        usedFallbackRate?: boolean;
     }>;
     totals?: PortfolioSummaryTotals;
 }> {
@@ -158,7 +147,13 @@ export interface PortfolioSummaryTotals {
     totalIncome: number;
     totalFees: number;
     totalTaxes: number;
+    /** Portion of totalGainLoss from native asset performance (at today's rates). */
+    totalAssetGain: number;
+    /** Portion of totalGainLoss from currency moves (totalGainLoss − totalAssetGain). */
+    totalFxGain: number;
     totalReturnPct: number;
+    /** True when some historical FX rate was missing and today's rate was used instead. */
+    usedFallbackRate: boolean;
 }
 
 export interface PortfolioSummaryItem {
@@ -204,6 +199,13 @@ export interface PortfolioSummaryItem {
     totalGain: number;
     gainLoss: number;
     gainLossPercent: number;
+    /** gainLoss = assetGain (native performance at today's rate) + fxGain (currency effect). */
+    assetGain: number;
+    fxGain: number;
+    /** Current value in the investment's own currency, untouched by FX. */
+    nativeCurrentValue: number;
+    /** True when a historical FX rate was missing and today's rate was used instead. */
+    usedFallbackRate: boolean;
     accruedInterest: number;
     projectedAnnualInterest: number;
     totalAppreciation: number;
@@ -226,6 +228,24 @@ export function getNetWorth(params?: {
     offset?: number;
 }): Promise<NetWorthResponse> {
     return requestWithQuery('/api/info/net-worth', params);
+}
+
+/** Net worth as Σ accounts (ADR-100): per-account current cash + holdings and the rebuilt daily holdings history. */
+export interface NetWorthByAccountRow {
+    accountId: number | null;
+    name: string | null;
+    currency: string;
+    cash: number;
+    currentHoldings: number;
+    currentTotal: number;
+    holdingsSeries: { date: string; holdings: number }[];
+}
+export interface NetWorthByAccountResponse {
+    currency: string;
+    accounts: NetWorthByAccountRow[];
+}
+export function getNetWorthByAccount(params?: { currency?: string }): Promise<NetWorthByAccountResponse> {
+    return requestWithQuery('/api/info/net-worth/by-account', params);
 }
 
 export function refreshMaterializedViews(): Promise<{ message: string; duration_ms: number }> {

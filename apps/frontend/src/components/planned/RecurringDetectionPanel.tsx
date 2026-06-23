@@ -175,7 +175,7 @@ export function RecurringDetectionPanel({ onCreatePlanned }: Props) {
 
     if (isLoading) {
         return (
-            <Card>
+            <Card className="glass-regular">
                 <CardHeader className="pb-3">
                     <CardTitle className="flex items-center gap-2 text-base">
                         <Sparkles className="h-4 w-4 text-primary" />
@@ -193,7 +193,7 @@ export function RecurringDetectionPanel({ onCreatePlanned }: Props) {
 
     if (patterns.length === 0 && amountAlerts.length === 0) {
         return (
-            <Card className="border-dashed">
+            <Card className="!border-dashed">
                 <CardContent className="flex items-center gap-3 py-4">
                     <CheckCircle2 className="h-5 w-5 text-accent shrink-0" />
                     <div>
@@ -211,7 +211,7 @@ export function RecurringDetectionPanel({ onCreatePlanned }: Props) {
         <div className="space-y-4">
             {/* Amount Change Alerts */}
             {amountAlerts.length > 0 && (
-                <Card className="border-destructive/30 bg-destructive/5">
+                <Card className="!border-destructive/60 bg-destructive/5">
                     <CardHeader className="pb-2">
                         <CardTitle className="flex items-center gap-2 text-base text-destructive">
                             <AlertTriangle className="h-4 w-4" />
@@ -255,7 +255,7 @@ export function RecurringDetectionPanel({ onCreatePlanned }: Props) {
                                             variant="ghost"
                                             size="icon"
                                             className="icon-touch-target shrink-0 text-muted-foreground hover:text-foreground"
-                                            aria-label="Dismiss"
+                                            aria-label={t('aria.dismiss')}
                                             onClick={() => dismiss(pattern.recipientId)}
                                         >
                                             <X className="h-3.5 w-3.5" />
@@ -270,7 +270,7 @@ export function RecurringDetectionPanel({ onCreatePlanned }: Props) {
 
             {/* Suggested Recurring Patterns */}
             {patterns.length > 0 && (
-                <Card>
+                <Card className="glass-regular">
                     <CardHeader className="pb-2">
                         <div className="flex items-center justify-between">
                             <div>

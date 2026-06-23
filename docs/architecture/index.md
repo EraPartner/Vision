@@ -3,9 +3,9 @@ title: Architecture Diagrams
 type: architecture-index
 status: active
 date: 2026-04-27
-updated: 2026-05-11
-tags: [architecture, index, uml, plantuml, diagrams, phase-1, phase-2, phase-3, phase-e, frontend, api-client, openapi, domain-split, repository-split, statistics-refactoring, component-decomposition, refactoring, bug-fixes, csv, formula-injection, parallelization, deployment, container-hardening, backup, restore, bundle, electron, tags, tagging, orthogonal-dimension, may-2026]
-description: Index of all UML diagrams for the Vision project - backend, frontend, system, and sequence diagrams; includes Phase 1+2 backup bundle format and IPC handlers, Phase 2 API client domain split, OpenAPI architecture, April 2026 Statistics page refactoring, Phase E component decomposition, April 25 CSV security & parallelization improvements, container hardening, and May 2026 transaction tags orthogonal dimension
+updated: 2026-06-10
+tags: [architecture, index, uml, plantuml, diagrams, phase-1, phase-2, phase-3, phase-e, frontend, api-client, openapi, domain-split, repository-split, statistics-refactoring, component-decomposition, refactoring, bug-fixes, csv, formula-injection, parallelization, deployment, container-hardening, backup, restore, bundle, electron, tags, tagging, orthogonal-dimension, may-2026, june-2026, route-service-boundary, thin-seams, global-rate-limiter, shared-utils, mv-recipient-monthly-drop]
+description: Index of all UML diagrams for the Vision project - backend, frontend, system, and sequence diagrams. June 2026 updates: backend-service-layer.puml adds 14 thin route-seam services (ADR-067); backend-api-layer.puml adds globalRateLimiter on /api + TRUSTED_PROXIES XFF handling + VISION_DEV dev-bypass flag.
 aliases: [architecture, diagrams, UML, system design, backup architecture, electron IPC]
 ---
 
@@ -52,7 +52,7 @@ Located in `docs/diagrams/`:
 
 ## Interactive Flow Visualizer
 
-For an interactive companion to these diagrams, open `docs/flow-visualizer.html` — a single-page HTML map of all packages and 15 end-to-end flows. Click a flow to highlight the path, step through it, and inspect the payload at every hop. Data lives in an embedded JSON block; extending it is a copy-paste.
+For an interactive companion to these diagrams, open `docs/flow-visualizer.html` — a single-page HTML map of all packages (55 components) and 24 end-to-end flows. Click a flow to highlight the path, step through it, and inspect the payload at every hop. Data lives in an embedded JSON block; extending it is a copy-paste.
 
 ## Frontend Diagrams
 
@@ -272,13 +272,33 @@ Documentation:
 - [[docs/architecture/electron|Electron Architecture]] — IPC handlers, security model
 - [[docs/reference/api-endpoint-matrix#ipc-handlers--electron-desktop-phase-12|API Endpoint Matrix — IPC Section]]
 
+## Frontend Design System — Liquid Glass v2 (June 2026, ADR-070)
+
+[[docs/adr/070-liquid-glass-v2-premium-frontend|ADR-070]] completed a five-tier frontend overhaul in June 2026, restoring and extending the ADR-017 liquid-glass design system:
+
+- **Atmosphere layer**: `AppLayout` renders a fixed `liquid-canvas` layer — two slow-drifting aurora blobs (compositor-only transforms, 64s/76s alternate) over a radial wash + SVG grain; aurora pauses under `prefers-reduced-motion`.
+- **Saturated materials**: `backdrop-filter` now includes `saturate(var(--glass-saturate))` (180% light / 150% dark); blur tiers raised to 12/20/24/28/32px (thin/regular/chrome/thick/elevated). A11y: `prefers-reduced-transparency` now strips `backdrop-filter` (was incorrectly under `prefers-reduced-motion`).
+- **Card vocabulary**: `surface-elevated … bg-card backdrop-blur-sm` replaced across ~45 KPI/chart cards with `glass-regular` (KPI/chart) or `glass-elevated` (hero). `premium-frame` baked into base `Card` — universal hover outline. Tables stay opaque (perf budget).
+- **Motion**: `PageTransition.tsx` (new, enter-only spring, keyed on pathname); 2px hairline shimmer replaces `PageLoader`; dialog/alert-dialog use `dialog-in`/`dialog-out` keyframes with overshoot bezier; sidebar active rail is a framer `layoutId` element (`ActiveRail`); theme crossfade via `document.startViewTransition`.
+- **CommandPalette**: ⌘K palette (`components/shared/CommandPalette.tsx`) covers all pages + theme/settings; topbar trigger button; 5 new i18n keys (en/nl).
+- **Optimistic mutations**: `useUpdateTransaction` / `useDeleteTransaction` snapshot → patch → rollback via `setQueriesData`; `['transactions-virtual']` deliberately excluded; 4 new tests.
+- **Route preload**: `lib/routePreload.ts` shared by `App.tsx` lazy() and `AppSidebar` hover prefetch.
+
+Documentation:
+- [[docs/adr/070-liquid-glass-v2-premium-frontend|ADR-070: Liquid Glass v2]] (June 2026)
+- [[docs/architecture/frontend-architecture|Frontend Architecture — Design System section]]
+- [[docs/reference/code-patterns#surface-shell-pattern-phase-9|Surface Shell Pattern]] (updated)
+- [[docs/reference/code-patterns#motion-consumer-pattern-phase-9|Motion Consumer Pattern]] (updated)
+- [[docs/components/ui-components|UI Components]] (Card, Dialog, Sonner, CommandPalette)
+- [[docs/components/layout|Layout Components]] (AppLayout, AppSidebar, PageTransition)
+
 ## Frontend Design System (Phase 9) & CSS Architecture (Tailwind v4, May 2026)
 
-The frontend implements a premium liquid-glass aesthetic with:
+The baseline liquid-glass aesthetic (ADR-017) was further tuned in the Tailwind v4 migration (ADR-047). June 2026 ADR-070 is the authoritative current state; the items below document the Tailwind v4 infrastructure that remains in place:
 
 - **Color Palette**: Emerald + champagne-gold with deep charcoal base
 - **Typography**: Fraunces (display, serif) + Inter (body, geometric sans-serif) — static weights (400/500/600) via `@fontsource`
-- **Material System**: Five-tier glass hierarchy + premium surface utilities
+- **Material System**: Five-tier glass hierarchy + premium surface utilities (see ADR-070 for current blur tiers)
 - **Motion**: Framer Motion with centralized motion system + reduced-motion compliance
 - **Charts**: visx + d3 primitives (primary); Recharts 3.8.1 (retained for compatibility, inactive)
 - **CSS Architecture**: Tailwind CSS v4 (4.2.4) with unified `@tailwindcss/postcss` plugin
@@ -293,10 +313,32 @@ Documentation:
 - [[docs/adr/017-liquid-glass-aesthetic-design-system|ADR-017: Liquid Glass Aesthetic]]
 - [[docs/adr/018-visx-d3-chart-migration|ADR-018: visx/d3 Migration]]
 - [[docs/adr/019-framer-motion-adoption|ADR-019: Framer Motion Adoption]]
-- [[docs/adr/047-tailwind-v4-migration-dependency-upgrades|ADR-047: Tailwind v4 Migration & Dependency Upgrades]] (NEW)
+- [[docs/adr/047-tailwind-v4-migration-dependency-upgrades|ADR-047: Tailwind v4 Migration & Dependency Upgrades]]
 - [[docs/architecture/frontend-architecture#css-architecture-tailwind-v4-may-2026|Frontend Architecture — CSS Architecture]]
 - [[docs/reference/code-patterns#motion-consumer-pattern-phase-9|Motion Consumer Pattern]]
 - [[docs/reference/code-patterns#surface-shell-pattern-phase-9|Surface Shell Pattern]]
+
+## June 2026 Remediation Pass (ADRs 067–069)
+
+### Enforced Route → Service Boundary (ADR-067)
+
+[[docs/adr/067-enforce-route-service-boundary|ADR-067]] — All 15 route files now import exclusively from thin `services/<domain>Service.js` seams. ESLint rule `vision-local/no-repo-direct-from-route` promoted to ERROR. 14 new service modules added. Diagram updated: `backend-service-layer.puml` has a new "Thin Route Seams" package.
+
+### Drop mv_recipient_monthly (ADR-068)
+
+[[docs/adr/068-drop-mv-recipient-monthly|ADR-068]] — The `mv_recipient_monthly` materialized view was never read after `agg_recipient_totals` became the live source. Migration `0038` drops it. `aggregationRefresh.js` no longer schedules its refresh. See [[docs/performance/materialized-views|Materialized Views]] for updated strategy.
+
+### @vision/shared-utils Monorepo Package (ADR-069)
+
+[[docs/adr/069-shared-utils-monorepo-package|ADR-069]] — New Bun workspace package `packages/shared-utils/` holds `money`, `slugify`, and `downsample`. Both apps re-export from it. `roundMoney` is now canonically `ROUND_HALF_EVEN` (banker's rounding) everywhere. Eliminates frontend/backend money-rounding drift.
+
+### Other June 2026 Security & Correctness
+
+- **Global rate limiter on `/api`** — `globalRateLimiter` mounted before all routers; configurable via `RATE_LIMIT_GLOBAL_MAX` / `RATE_LIMIT_GLOBAL_WINDOW_MS`. See `backend-api-layer.puml`.
+- **Trusted-proxy XFF gating** — `TRUSTED_PROXIES` env var controls when `X-Forwarded-For` is trusted for IP keying.
+- **VISION_DEV fail-safe** — dev bypasses (rate-limit skip, wildcard CORS) now require explicit `VISION_DEV=true`.
+- **Zip-bomb guard** — `extractZip` in Electron backup restore enforces `MAX_RESTORE_BYTES` (10 GiB) and `MAX_RESTORE_ENTRIES` (100,000).
+- **5 MB response cap** — `_assertResponseWithinCap` applied to Binance and Kinesis fetches.
 
 ## May 2026 Recent Decisions (ADRs 053–058)
 

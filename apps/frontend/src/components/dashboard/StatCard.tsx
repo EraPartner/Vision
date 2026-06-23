@@ -1,5 +1,6 @@
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { useCountUp } from "@/hooks/useCountUp";
+import { RollingNumber } from "@/components/shared/RollingNumber";
+import { DeltaPill } from "@/components/shared/DeltaPill";
 import { LucideIcon } from "lucide-react";
 
 interface StatCardProps {
@@ -19,12 +20,6 @@ interface StatCardProps {
 }
 
 export function StatCard({ title, value, numericValue, change, changeType = "neutral", subtitle, icon: Icon, trend = "neutral", formatValue, titleValue }: StatCardProps) {
-    const changeColor = {
-        positive: "text-accent dark:text-accent",
-        negative: "text-destructive dark:text-destructive",
-        neutral: "text-muted-foreground",
-    }[changeType];
-
     const normalisedTrend = trend === "up" ? "income" : trend === "down" ? "expense" : trend;
 
     const trendGradient = {
@@ -39,14 +34,14 @@ export function StatCard({ title, value, numericValue, change, changeType = "neu
         neutral: "bg-gradient-to-br from-primary/20 to-primary/10 text-primary",
     }[normalisedTrend] ?? "bg-gradient-to-br from-primary/20 to-primary/10 text-primary";
 
-    const animatedNumber = useCountUp(numericValue ?? 0);
     const displayValue = numericValue !== undefined && formatValue
-        ? formatValue(animatedNumber)
+        ? formatValue(numericValue)
         : value;
 
     return (
         <Card
-            className={`liquid-glass-hero surface-elevated premium-frame micro-lift group relative overflow-hidden bg-gradient-to-br ${trendGradient} h-full`}>
+            className="glass-elevated premium-frame micro-lift group relative overflow-hidden h-full">
+            <div className={`absolute inset-0 pointer-events-none rounded-[inherit] bg-gradient-to-br ${trendGradient}`} />
             <div
                 className="absolute top-0 right-0 w-32 h-32 bg-gradient-to-br from-background/40 to-transparent rounded-full -mr-16 -mt-16 transition-transform duration-500 group-hover:scale-110" />
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-3">
@@ -57,14 +52,17 @@ export function StatCard({ title, value, numericValue, change, changeType = "neu
             </CardHeader>
             <CardContent>
                 <div className="text-3xl font-bold text-foreground tabular-nums">
-                    <span title={titleValue}>{displayValue}</span>
+                    <span title={titleValue}>
+                        <RollingNumber value={displayValue} />
+                    </span>
                 </div>
                 {change && (
-                    <p className={`text-xs font-medium ${changeColor} mt-2 flex items-center gap-1`}>
-                        {changeType === "positive" && "↗"}
-                        {changeType === "negative" && "↘"}
-                        {change}
-                    </p>
+                    <div className="mt-2">
+                        <DeltaPill
+                            value={changeType === "positive" ? 1 : changeType === "negative" ? -1 : 0}
+                            label={change}
+                        />
+                    </div>
                 )}
                 {!change && subtitle && (
                     <p className="text-xs text-muted-foreground mt-2">{subtitle}</p>

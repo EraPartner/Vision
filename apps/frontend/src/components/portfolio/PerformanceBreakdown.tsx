@@ -1,4 +1,5 @@
 import { useMemo } from "react";
+import { Money } from "@/components/shared/Money";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { formatCurrency, numberFormatToLocale } from "@/utils/currency";
 import { useLanguage } from "@/contexts/LanguageContext";
@@ -17,6 +18,10 @@ interface BreakdownItem {
     totalInvested: number;
     gainLoss: number;
     gainLossPercent: number;
+    assetGain?: number;
+    fxGain?: number;
+    nativeCurrentValue?: number;
+    usedFallbackRate?: boolean;
 }
 
 interface Props {
@@ -46,7 +51,7 @@ function getHeatColor(val: number | null, maxAbsPct: number): string {
 }
 
 export default function PerformanceBreakdown({ heatmapData, breakdownSummary }: Props) {
-    const { t, language } = useLanguage();
+    const { t, tc, language } = useLanguage();
     const { appSettings } = useAppSettings();
     const locale = numberFormatToLocale(appSettings.numberFormat);
     const defaultCurrency = appSettings.defaultCurrency || "EUR";
@@ -103,21 +108,19 @@ export default function PerformanceBreakdown({ heatmapData, breakdownSummary }: 
             {/* Per-asset class breakdown */}
             <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
                 {assetClassBreakdown.map(({ assetClass, label, count, classValue, classInvested, classGain, classPct }) => (
-                    <Card key={assetClass} className="border shadow-sm">
+                    <Card key={assetClass} className="glass-regular border shadow-sm">
                         <CardContent className="pt-4 pb-4">
                             <div className="flex items-center justify-between mb-2">
                                 <span className="text-sm font-semibold text-muted-foreground">{label}</span>
                                 <span className="text-xs text-muted-foreground">
-                                    {count === 1
-                                        ? t('performance.holdings', { count: String(count) })
-                                        : t('performance.holdingsPlural', { count: String(count) })}
+                                    {tc('performance.holdings', count)}
                                 </span>
                             </div>
                             <div className="text-xl font-bold text-foreground">
-                                {formatCurrency(classValue, defaultCurrency, locale)}
+                                <Money amount={classValue} currency={defaultCurrency} />
                             </div>
                             <div className={`text-sm font-medium mt-1 ${classGain >= 0 ? "text-accent" : "text-destructive"}`}>
-                                {classGain >= 0 ? "+" : ""}{formatCurrency(classGain, defaultCurrency, locale)} ({classPct >= 0 ? "+" : ""}{classPct.toFixed(1)}%)
+                                {classGain >= 0 ? "+" : ""}<Money amount={classGain} currency={defaultCurrency} /> ({classPct >= 0 ? "+" : ""}{classPct.toFixed(1)}%)
                             </div>
                             <div className="text-xs text-muted-foreground mt-1">
                                 {t('portfolio.invested', { amount: formatCurrency(classInvested, defaultCurrency, locale) })}
@@ -203,7 +206,7 @@ export default function PerformanceBreakdown({ heatmapData, breakdownSummary }: 
 
             {/* Top/Bottom performers */}
             <div className="grid gap-4 lg:grid-cols-2">
-                <Card>
+                <Card className="glass-regular">
                     <CardHeader>
                         <CardTitle className="flex items-center gap-2 text-accent">
                             <TrendingUp className="h-5 w-5" />
@@ -223,7 +226,12 @@ export default function PerformanceBreakdown({ heatmapData, breakdownSummary }: 
                                             {inv.gainLossPercent >= 0 ? "+" : ""}{inv.gainLossPercent.toFixed(1)}%
                                         </p>
                                         <p className="text-xs text-muted-foreground">
-                                            {formatCurrency(inv.gainLoss, defaultCurrency, locale)}
+                                            <Money amount={inv.gainLoss} currency={defaultCurrency} />
+                                            {typeof inv.fxGain === 'number' && inv.currency !== defaultCurrency && (
+                                                <span className="ml-1.5" title={t('portfolio.fxEffect')}>
+                                                    {t('portfolio.fxShort')} {inv.fxGain >= 0 ? "+" : ""}<Money amount={inv.fxGain} currency={defaultCurrency} />
+                                                </span>
+                                            )}
                                         </p>
                                     </div>
                                 </div>
@@ -232,7 +240,7 @@ export default function PerformanceBreakdown({ heatmapData, breakdownSummary }: 
                     </CardContent>
                 </Card>
 
-                <Card>
+                <Card className="glass-regular">
                     <CardHeader>
                         <CardTitle className="flex items-center gap-2 text-destructive">
                             <TrendingDown className="h-5 w-5" />
@@ -252,7 +260,12 @@ export default function PerformanceBreakdown({ heatmapData, breakdownSummary }: 
                                             {inv.gainLossPercent >= 0 ? "+" : ""}{inv.gainLossPercent.toFixed(1)}%
                                         </p>
                                         <p className="text-xs text-muted-foreground">
-                                            {formatCurrency(inv.gainLoss, defaultCurrency, locale)}
+                                            <Money amount={inv.gainLoss} currency={defaultCurrency} />
+                                            {typeof inv.fxGain === 'number' && inv.currency !== defaultCurrency && (
+                                                <span className="ml-1.5" title={t('portfolio.fxEffect')}>
+                                                    {t('portfolio.fxShort')} {inv.fxGain >= 0 ? "+" : ""}<Money amount={inv.fxGain} currency={defaultCurrency} />
+                                                </span>
+                                            )}
                                         </p>
                                     </div>
                                 </div>

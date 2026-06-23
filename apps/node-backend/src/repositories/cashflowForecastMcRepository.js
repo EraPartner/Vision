@@ -39,6 +39,16 @@ export async function upsert({ userId, month, filterHash, mcPaths, payload }) {
 }
 
 /**
+ * Drop all cached forecasts. Called when transactions change so the next
+ * forecast (and its walk-forward backtest diagnostics) recomputes against the
+ * new data instead of serving a stale 6-hour cache entry. Single-user app, so
+ * clearing the whole (tiny) table is fine.
+ */
+export async function clearAll() {
+  await query('DELETE FROM cashflow_forecast_mc');
+}
+
+/**
  * Returns distinct user_ids that have ever triggered a forecast (via accuracy records).
  * Used by the nightly job to know which users to pre-warm.
  */
@@ -55,4 +65,4 @@ export async function getActiveUserIds() {
   }
 }
 
-export default { get, isFresh, upsert, getActiveUserIds };
+export default { get, isFresh, upsert, getActiveUserIds, clearAll };

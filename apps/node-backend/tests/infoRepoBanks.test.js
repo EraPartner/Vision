@@ -53,72 +53,74 @@ describe('banksRepository.getBankBalances', () => {
     expect(r.total_net_position).toBe(1187.5);
   });
 
-  it('groups historical balances by bank account, sorted by month asc', async () => {
+  it('groups historical balances by bank account, sorted by date asc', async () => {
     query
       .mockResolvedValueOnce({ rows: [] })
       .mockResolvedValueOnce({
         rows: [
-          { bank_account: 'A', month_start: '2025-03-01', currency: 'EUR', balance: '900', date: '2025-03-15' },
-          { bank_account: 'A', month_start: '2025-04-01', currency: 'EUR', balance: '1000', date: '2025-04-15' },
-          { bank_account: 'B', month_start: '2025-04-01', currency: 'EUR', balance: '500', date: '2025-04-15' },
+          { bank_account: 'A', day: '2025-03-14', currency: 'EUR', balance: '900', date: '2025-03-14' },
+          { bank_account: 'A', day: '2025-03-15', currency: 'EUR', balance: '1000', date: '2025-03-15' },
+          { bank_account: 'B', day: '2025-03-15', currency: 'EUR', balance: '500', date: '2025-03-15' },
         ],
       });
 
     batchConvertGroupsWithHistoricalRateFallback.mockResolvedValueOnce([
       [],
       [
-        { bank_account: 'A', month_start: '2025-04-01', amount_eur: 1000 },
-        { bank_account: 'A', month_start: '2025-03-01', amount_eur: 900 },
-        { bank_account: 'B', month_start: '2025-04-01', amount_eur: 500 },
+        { bank_account: 'A', day: '2025-03-15', amount_eur: 1000 },
+        { bank_account: 'A', day: '2025-03-14', amount_eur: 900 },
+        { bank_account: 'B', day: '2025-03-15', amount_eur: 500 },
       ],
     ]);
 
     const r = await banksRepository.getBankBalances();
     expect(r.history.A).toEqual([
-      { month: '2025-03', balance: 900 },
-      { month: '2025-04', balance: 1000 },
+      { date: '2025-03-14', balance: 900 },
+      { date: '2025-03-15', balance: 1000 },
     ]);
-    expect(r.history.B).toEqual([{ month: '2025-04', balance: 500 }]);
+    expect(r.history.B).toEqual([{ date: '2025-03-15', balance: 500 }]);
   });
 
-  it('aggregates total_history by summing balances across all banks per month', async () => {
+  it('aggregates total_history by summing balances across all banks per day', async () => {
     query
       .mockResolvedValueOnce({ rows: [] })
       .mockResolvedValueOnce({ rows: [] });
     batchConvertGroupsWithHistoricalRateFallback.mockResolvedValueOnce([
       [],
       [
-        { bank_account: 'A', month_start: '2025-04-01', amount_eur: 1000 },
-        { bank_account: 'B', month_start: '2025-04-01', amount_eur: 500 },
-        { bank_account: 'A', month_start: '2025-03-01', amount_eur: 900 },
+        { bank_account: 'A', day: '2025-03-15', amount_eur: 1000 },
+        { bank_account: 'B', day: '2025-03-15', amount_eur: 500 },
+        { bank_account: 'A', day: '2025-03-14', amount_eur: 900 },
       ],
     ]);
 
     const r = await banksRepository.getBankBalances();
     expect(r.total_history).toEqual([
-      { month: '2025-03', balance: 900 },
-      { month: '2025-04', balance: 1500 },
+      { date: '2025-03-14', balance: 900 },
+      { date: '2025-03-15', balance: 1500 },
     ]);
   });
 
-  it('formats Date month_start as YYYY-MM-DD then truncates to YYYY-MM', async () => {
+  it('formats a Date-shaped day defensively as YYYY-MM-DD', async () => {
+    // The SQL emits day via to_char so it always arrives as a string; the Date
+    // branch is defensive (local getters — not toISOString) for pg-DATE shapes.
     query
       .mockResolvedValueOnce({ rows: [] })
       .mockResolvedValueOnce({ rows: [] });
     batchConvertGroupsWithHistoricalRateFallback.mockResolvedValueOnce([
       [],
-      [{ bank_account: 'A', month_start: new Date('2025-04-01T00:00:00Z'), amount_eur: 100 }],
+      [{ bank_account: 'A', day: new Date(2025, 3, 1), amount_eur: 100 }],
     ]);
 
     const r = await banksRepository.getBankBalances();
-    expect(r.history.A[0].month).toBe('2025-04');
+    expect(r.history.A[0].date).toBe('2025-04-01');
   });
 
   it('drops history rows missing a bank_account', async () => {
     query
       .mockResolvedValueOnce({ rows: [] })
       .mockResolvedValueOnce({
-        rows: [{ bank_account: null, month_start: '2025-04-01', currency: 'EUR', balance: '100' }],
+        rows: [{ bank_account: null, day: '2025-04-01', currency: 'EUR', balance: '100' }],
       });
     batchConvertGroupsWithHistoricalRateFallback.mockResolvedValueOnce([[], []]);
 

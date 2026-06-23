@@ -4,28 +4,20 @@
  */
 
 import { logger } from '../../../config/logger.js';
-import { parseCsvFile, buildRawRowString, parseAmountField } from './_shared.js';
+import { normalizeToUppercase } from '../../textNormalization.js';
+import { parseCsvFile, buildRawRowString, parseAmountField, SUPPORTED_DATE_FORMATS, parseDateWithFormat } from './_shared.js';
 
 const NAME = 'generic';
 const BANK_LABEL = 'Generic';
 
-function parseDate(dateStr, fmt) {
-  if (fmt.includes('%d/%m/%Y') || fmt === '%d/%m/%Y') {
-    const [d, m, y] = dateStr.split('/').map((s) => parseInt(s, 10));
-    return new Date(Date.UTC(y, m - 1, d));
-  }
-  if (fmt.includes('%m/%d/%Y') || fmt === '%m/%d/%Y') {
-    const [m, d, y] = dateStr.split('/').map((s) => parseInt(s, 10));
-    return new Date(Date.UTC(y, m - 1, d));
-  }
-  return new Date(dateStr);
-}
-
-
+// Normalize to UPPER+trim so the custom/generic adapter matches every built-in adapter and the
+// manual-entry path (transactionRepository.create uppercases bank_account) — otherwise the same
+// bank reached two ways resolves to two different accounts (ADR-088 account identity).
 function buildBankAccount(config) {
   const bankName = config.bank_name || 'CUSTOM';
   const accountType = config.account_type;
-  return accountType ? `${bankName} ${accountType.toUpperCase()}` : bankName;
+  const label = accountType ? `${bankName} ${accountType.toUpperCase()}` : bankName;
+  return normalizeToUppercase(label);
 }
 
 function rowToTransaction(row, config) {
@@ -33,8 +25,8 @@ function rowToTransaction(row, config) {
   const dateStr = String(row[colMap.date] || '').trim();
   if (!dateStr) return null;
 
-  const date = parseDate(dateStr, config.date_format || '');
-  if (isNaN(date.getTime())) return null;
+  const date = parseDateWithFormat(dateStr, config.date_format || '');
+  if (!date || isNaN(date.getTime())) return null;
 
   const amount = parseAmountField(row[colMap.amount]);
   if (isNaN(amount)) return null;
@@ -68,6 +60,16 @@ function rowToTransaction(row, config) {
 }
 
 export async function parseWithConfig(filePath, config) {
+  const dateFormat = config.date_format || '';
+  if (!SUPPORTED_DATE_FORMATS.includes(dateFormat)) {
+    // Fail fast and loudly: a chosen-but-unimplemented format previously fell
+    // through to `new Date(string)`, producing Invalid Date for every row and a
+    // silent zero-row "successful" import.
+    throw new Error(
+      `Unsupported date_format "${dateFormat}". Supported: ${SUPPORTED_DATE_FORMATS.join(', ')}`,
+    );
+  }
+
   const records = await parseCsvFile(
     filePath,
     {
@@ -80,17 +82,22 @@ export async function parseWithConfig(filePath, config) {
     config.encoding || 'utf-8',
   );
 
-  const transactions = [];
+  const transactions = /** @type {any[] & { skipped?: number }} */ ([]);
+  let skipped = 0;
   for (const row of records) {
     try {
       const tx = rowToTransaction(row, config);
       if (tx) transactions.push(tx);
+      else skipped++;
     } catch {
-      continue;
+      skipped++;
     }
   }
 
-  logger.info(`Generic CSV parsed: ${transactions.length} transactions`);
+  // Surface unparseable rows instead of silently dropping them (an all-rows-
+  // skipped import otherwise "succeeds" with 0 transactions and no signal).
+  transactions.skipped = skipped;
+  logger.info(`Generic CSV parsed: ${transactions.length} transactions, ${skipped} skipped`);
   return transactions;
 }
 

@@ -8,6 +8,10 @@
 
 import { logger } from '../config/logger.js';
 import providerHealthRepository from '../repositories/providerHealthRepository.js';
+import twelveDataAdapter from './research/adapters/twelveDataAdapter.js';
+import finnhubAdapter from './research/adapters/finnhubAdapter.js';
+import fmpAdapter from './research/adapters/fmpAdapter.js';
+import alphaVantageAdapter from './research/adapters/alphaVantageAdapter.js';
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
@@ -53,6 +57,33 @@ const PROVIDER_DEFINITIONS = {
     probe: () => probeUrl(
       'https://ec.europa.eu/eurostat/api/dissemination/statistics/1.0/data/prc_hicp_midx?geo=BE&coicop=CP00&unit=I15',
     ),
+  },
+  // Research providers (ADR-079). Health is recorded by the research aggregator's
+  // recordSuccess/recordError calls (no longer no-ops now they're defined here).
+  // The probe uses the adapter's own quote so it accurately reports a missing or
+  // invalid key — each keyed adapter self-throws. Note: a probe consumes one real
+  // API call against the provider's quota.
+  twelve_data: {
+    kind: 'research',
+    label: 'Twelve Data',
+    probe: () => twelveDataAdapter.quote('AAPL'),
+  },
+  finnhub: {
+    kind: 'research',
+    label: 'Finnhub',
+    probe: () => finnhubAdapter.quote('AAPL'),
+  },
+  fmp: {
+    kind: 'research',
+    label: 'FMP',
+    // FMP's role in the capability chain is primary fundamentals (it is only 4th
+    // for quotes, so a quote probe never reflects how the app actually uses it).
+    probe: () => fmpAdapter.fundamentals('AAPL'),
+  },
+  alpha_vantage: {
+    kind: 'research',
+    label: 'Alpha Vantage',
+    probe: () => alphaVantageAdapter.quote('AAPL'),
   },
 };
 

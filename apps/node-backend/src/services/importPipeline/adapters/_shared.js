@@ -52,8 +52,82 @@ export function parseDayMonthYear(dateStr) {
   return date;
 }
 
+const ISO_DATE_RE = /^(\d{4})-(\d{2})-(\d{2})(?:[T\s]|$)/;
+
+/**
+ * Parse a date string of unknown format into a UTC-midnight Date.
+ *
+ * ISO dates are constructed directly via Date.UTC. Anything else falls back to
+ * the engine parser, then **rebuilds the parsed local calendar day at UTC
+ * midnight** — `new Date(string)` alone yields local midnight for non-ISO
+ * formats, which `toISOString()` in stage/dedup then shifts to the previous
+ * day in UTC+ zones (and changes the dedup hash with it).
+ *
+ * @param {string} dateStr
+ * @returns {Date|null} UTC-midnight Date, or null when unparseable
+ */
+export function parseDateFlexibleUtc(dateStr) {
+  const s = String(dateStr ?? '').trim();
+  if (!s) return null;
+  const iso = ISO_DATE_RE.exec(s);
+  if (iso) {
+    const date = new Date(Date.UTC(Number(iso[1]), Number(iso[2]) - 1, Number(iso[3])));
+    return isNaN(date.getTime()) ? null : date;
+  }
+  const parsed = new Date(s);
+  if (isNaN(parsed.getTime())) return null;
+  return new Date(Date.UTC(parsed.getFullYear(), parsed.getMonth(), parsed.getDate()));
+}
+
+// Date formats offered by the import UI and used by the custom-config adapters
+// (generic.js transactions + portfolioGenericAdapter.js). Single source of
+// truth so the two adapters can't drift. Each is parsed via Date.UTC so a row
+// never shifts a calendar day under a server TZ east of UTC; callers reject an
+// unsupported format up front rather than silently importing zero rows.
+export const SUPPORTED_DATE_FORMATS = ['%Y-%m-%d', '%d/%m/%Y', '%m/%d/%Y', '%d-%m-%Y', '%Y-%m-%d %H:%M:%S'];
+
+/**
+ * Parse a date string against one of SUPPORTED_DATE_FORMATS into a UTC-midnight
+ * Date. Unknown tokens fall back to parseDateFlexibleUtc.
+ *
+ * @param {string} dateStr
+ * @param {string} fmt
+ * @returns {Date|null}
+ */
+export function parseDateWithFormat(dateStr, fmt) {
+  if (fmt.includes('%d/%m/%Y')) {
+    const [d, m, y] = dateStr.split('/').map((s) => parseInt(s, 10));
+    return new Date(Date.UTC(y, m - 1, d));
+  }
+  if (fmt.includes('%m/%d/%Y')) {
+    const [m, d, y] = dateStr.split('/').map((s) => parseInt(s, 10));
+    return new Date(Date.UTC(y, m - 1, d));
+  }
+  if (fmt.includes('%d-%m-%Y')) {
+    const [d, m, y] = dateStr.split('-').map((s) => parseInt(s, 10));
+    return new Date(Date.UTC(y, m - 1, d));
+  }
+  if (fmt.includes('%Y-%m-%d')) {
+    // Covers both '%Y-%m-%d' and '%Y-%m-%d %H:%M:%S' — parse the date part only,
+    // as UTC, so an early-morning timestamp can't roll back a day.
+    const [y, m, d] = dateStr.slice(0, 10).split('-').map((s) => parseInt(s, 10));
+    return new Date(Date.UTC(y, m - 1, d));
+  }
+  // Unknown format token: shared parser rebuilds the parsed calendar day at
+  // UTC midnight (plain new Date() was local → day-shift on serialization).
+  return parseDateFlexibleUtc(dateStr);
+}
+
 export function parseCommaDecimal(value) {
-  return parseDecimalSafe(String(value).replace(/\s/g, '').replace(',', '.'));
+  const s = String(value).replace(/\s/g, '');
+  // EU format: comma is the decimal separator and dots are thousands separators.
+  // "1.234,56" must become "1234.56" — the old code only swapped the comma,
+  // leaving "1.234.56" which Decimal rejects (NaN), silently dropping the row.
+  // Only strip dots when a comma is present so a dot-decimal "12.5" is untouched.
+  if (s.includes(',')) {
+    return parseDecimalSafe(s.replace(/\./g, '').replace(',', '.'));
+  }
+  return parseDecimalSafe(s);
 }
 
 /**
@@ -108,6 +182,20 @@ export function splitCsvLines(content) {
 
 export function buildOptionalComment(commentParts) {
   return commentParts.length ? commentParts.join(' | ') : null;
+}
+
+/**
+ * Canonicalize an account identifier (IBAN/account number) for use as the
+ * account label: strip all whitespace and uppercase, so the same account never
+ * splits on spacing/case across imports or a manual entry (ADR-088). Empty in →
+ * empty out (callers fall back to the bank literal). Belgian IBANs arrive
+ * space-grouped (e.g. "BE81 0637 5694 4024") → "BE81063756944024".
+ * @param {string|null|undefined} value
+ * @returns {string}
+ */
+export function canonicalIban(value) {
+  if (!value) return '';
+  return String(value).replace(/\s+/g, '').toUpperCase();
 }
 
 /**

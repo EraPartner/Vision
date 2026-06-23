@@ -1,10 +1,18 @@
 import { useMemo, useState } from "react";
+import { Money } from "@/components/shared/Money";
 import { useQuery, keepPreviousData } from "@tanstack/react-query";
 import { apiClient } from "@/lib/api";
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { formatCurrency, numberFormatToLocale } from "@/utils/currency";
 import { useLanguage } from "@/contexts/LanguageContext";
-import { AreaChart as VisxAreaChart, ChartLegend, Sparkline } from "@/components/charts";
+import {
+    AreaChart as VisxAreaChart,
+    ChartCard,
+    ChartPeriodSelector,
+    CHART_PERIODS,
+    Sparkline,
+    type ChartPeriod,
+} from "@/components/charts";
 import {
     TrendingUp, TrendingDown, BarChart3, Loader2, Percent,
     DollarSign, Activity,
@@ -18,14 +26,11 @@ import { RefreshCw } from "lucide-react";
 import { usePortfolio } from "@/hooks/usePortfolio";
 import { useOnlineStatus } from "@/hooks/useOnlineStatus";
 
-type Period = "1m" | "3m" | "6m" | "1y" | "3y" | "all";
-
-const PERIOD_KEYS = ["1m", "3m", "6m", "1y", "3y", "all"] as const;
-
 const CHART_KEYS = {
     invested: 'invested',
     inflationAdjusted: 'inflationAdjusted',
     value: 'value',
+    fxNeutral: 'fxNeutral',
     stocksEtfs: 'stocksEtfs',
     crypto: 'crypto',
     metals: 'metals',
@@ -36,6 +41,8 @@ const CHART_KEYS = {
     relativeInflationAdjusted: 'relativeInflationAdjusted',
 } as const;
 
+const FX_NEUTRAL_COLOR = 'hsl(280, 87%, 65%)';
+
 function PerformanceEmptyState() {
     const { t } = useLanguage();
     const { refreshPrices, isRefreshingPrices } = usePortfolio();
@@ -43,7 +50,7 @@ function PerformanceEmptyState() {
     return (
         <div className="space-y-6">
             <PageHeader title={t('performance.title')} icon={BarChart3} />
-            <Card>
+            <Card className="glass-regular">
                 <CardContent className="flex flex-col items-center justify-center gap-3 py-12 text-center">
                     <BarChart3 className="h-10 w-10 text-muted-foreground" />
                     <div>
@@ -77,7 +84,8 @@ export default function PerformancePage() {
     const { appSettings } = useAppSettings();
     const locale = numberFormatToLocale(appSettings.numberFormat);
     const defaultCurrency = appSettings.defaultCurrency || "EUR";
-    const [selectedPeriod, setSelectedPeriod] = useState<Period>("all");
+    const [selectedPeriod, setSelectedPeriod] = useState<ChartPeriod>("all");
+    const [showFxNeutral, setShowFxNeutral] = useState(false);
 
     const { data: portfolioPerformanceData, isLoading } = useQuery({
         queryKey: ["portfolio-performance", defaultCurrency, selectedPeriod],
@@ -94,7 +102,7 @@ export default function PerformancePage() {
         gcTime: 10 * 60_000,
     });
 
-    const PERIOD_LABELS: Record<Period, string> = {
+    const PERIOD_LABELS: Record<ChartPeriod, string> = {
         "1m": t('performance.period.1m'),
         "3m": t('performance.period.3m'),
         "6m": t('performance.period.6m'),
@@ -116,6 +124,17 @@ export default function PerformancePage() {
     const overallMetrics = portfolioPerformanceData?.metrics ?? null;
     const heatmapData = portfolioPerformanceData?.heatmap ?? { years: [] as number[], data: {} as Record<number, (number | null)[]>, maxAbsPct: 0 };
     const breakdownSummary = portfolioPerformanceData?.breakdownSummary ?? [];
+    const liveTotals = portfolioPerformanceData?.totals;
+
+    // FX attribution is only meaningful when some holding is in a foreign
+    // currency AND the snapshots carry the FX-neutral series (migration 0039
+    // applied + snapshots recomputed). All-EUR portfolios see neither.
+    const hasFxNeutralSeries = useMemo(
+        () => snapshots.some((s) => typeof s.value_fx_neutral === 'number'
+            && Math.abs((s.value_fx_neutral ?? 0) - s.value) > 0.01),
+        [snapshots],
+    );
+    const hasFxExposure = breakdownSummary.some((b) => b.currency && b.currency !== defaultCurrency);
 
     // Lightweight mapping of already-downsampled snapshots to chart format
     const chartData = useMemo(() => snapshots.map((s) => ({
@@ -123,6 +142,7 @@ export default function PerformancePage() {
         [CHART_KEYS.invested]: Math.round(s.invested * 100) / 100,
         [CHART_KEYS.inflationAdjusted]: Math.round(s.inflation_adjusted_value * 100) / 100,
         [CHART_KEYS.value]: Math.round(s.value * 100) / 100,
+        [CHART_KEYS.fxNeutral]: typeof s.value_fx_neutral === 'number' ? Math.round(s.value_fx_neutral * 100) / 100 : undefined,
         [CHART_KEYS.stocksEtfs]: Math.round(s.stocks_etfs_value * 100) / 100,
         [CHART_KEYS.crypto]: Math.round(s.crypto_value * 100) / 100,
         [CHART_KEYS.metals]: Math.round(s.metals_value * 100) / 100,
@@ -166,7 +186,7 @@ export default function PerformancePage() {
         return (
             <div className="space-y-6">
                 <PageHeader title={t('performance.title')} icon={BarChart3} />
-                <Card>
+                <Card className="glass-regular">
                     <CardContent className="flex items-center justify-center h-48">
                         <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
                     </CardContent>
@@ -188,21 +208,12 @@ export default function PerformancePage() {
             />
 
             {/* Period selector */}
-            <div className="flex gap-1 p-1 bg-muted rounded-lg w-fit">
-                {PERIOD_KEYS.map((p) => (
-                    <button
-                        key={p}
-                        onClick={() => setSelectedPeriod(p)}
-                        className={`px-3 py-1.5 text-xs font-medium rounded-md transition-all ${
-                            selectedPeriod === p
-                                ? "bg-background text-foreground shadow-sm"
-                                : "text-muted-foreground hover:text-foreground"
-                        }`}
-                    >
-                        {PERIOD_LABELS[p]}
-                    </button>
-                ))}
-            </div>
+            <ChartPeriodSelector
+                periods={CHART_PERIODS}
+                value={selectedPeriod}
+                onChange={setSelectedPeriod}
+                labels={PERIOD_LABELS}
+            />
 
             {/* Key metrics cards */}
             {overallMetrics && (
@@ -216,6 +227,11 @@ export default function PerformancePage() {
                         locale={locale}
                         assetSplit={latestAssetSplit}
                         sparklineData={sparklineData}
+                        fxAttribution={hasFxExposure && liveTotals ? {
+                            assetGain: liveTotals.totalAssetGain ?? 0,
+                            fxGain: liveTotals.totalFxGain ?? 0,
+                            fellBack: liveTotals.usedFallbackRate === true,
+                        } : null}
                         labels={{
                             title: t('portfolio.portfolioValue'),
                             invested: t('portfolio.totalInvested'),
@@ -225,6 +241,9 @@ export default function PerformancePage() {
                             stocksEtfs: t('performance.relativeStocksEtfs'),
                             crypto: t('performance.crypto'),
                             metals: t('performance.metals'),
+                            assetGain: t('portfolio.assetGain'),
+                            fxEffect: t('portfolio.fxEffect'),
+                            fxFallbackNote: t('portfolio.fxFallbackNote'),
                         }}
                     />
                     <CompactReturnCard
@@ -253,94 +272,95 @@ export default function PerformancePage() {
 
             {/* Portfolio Value Over Time chart */}
             {chartData.length > 1 && (
-                <Card>
-                    <CardHeader>
-                        <CardTitle className="flex items-center gap-2">
-                            <BarChart3 className="h-5 w-5 text-primary" />
-                            {t('performance.valueOverTime')}
-                        </CardTitle>
-                        <CardDescription>
-                            {t('performance.chartDesc', { period: PERIOD_LABELS[selectedPeriod] })}
-                        </CardDescription>
-                    </CardHeader>
-                    <CardContent>
-                        <VisxAreaChart
-                            data={chartData}
-                            xAccessor={(d) => parseISO(d.day)}
-                            series={[
-                                { key: CHART_KEYS.invested, label: t('portfolio.totalInvested'), accessor: (d) => d.invested, color: 'hsl(var(--muted-foreground))', dashed: true, strokeWidth: 1.5 },
-                                { key: CHART_KEYS.inflationAdjusted, label: t('performance.inflationAdjusted'), accessor: (d) => d.inflationAdjusted, color: 'hsl(30, 80%, 55%)', strokeWidth: 2 },
-                                { key: CHART_KEYS.stocksEtfs, label: t('performance.relativeStocksEtfs'), accessor: (d) => d.stocksEtfs, color: 'hsl(0, 72%, 51%)', fillOpacity: 0, strokeWidth: 2 },
-                                { key: CHART_KEYS.crypto, label: t('performance.crypto'), accessor: (d) => d.crypto, color: 'hsl(142, 76%, 36%)', fillOpacity: 0, strokeWidth: 2 },
-                                { key: CHART_KEYS.metals, label: t('performance.metals'), accessor: (d) => d.metals, color: 'hsl(45, 93%, 47%)', fillOpacity: 0, strokeWidth: 2 },
-                                { key: CHART_KEYS.value, label: t('portfolio.portfolioValue'), accessor: (d) => d.value, color: 'hsl(var(--primary))', strokeWidth: 2.5 },
-                            ]}
-                            xIsDate={true}
-                            xTickFormat={(v) => xTickFormatter.format(v as Date)}
-                            yTickFormat={(v) => formatCurrency(v as number, defaultCurrency, locale)}
-                            tooltipTitle={(d) => formatDate(parseISO(d.day), "dd MMM yyyy")}
-                            tooltipValueFormat={(v) => formatCurrency(v, defaultCurrency, locale)}
-                            height={360}
-                            margin={{ top: 16, right: 24, bottom: 28, left: 110 }}
-                        />
-                        <ChartLegend
-                            className="mt-3"
-                            items={[
-                                { label: t('portfolio.totalInvested'), color: 'hsl(var(--muted-foreground))', dashed: true },
-                                { label: t('performance.inflationAdjusted'), color: 'hsl(30, 80%, 55%)' },
-                                { label: t('performance.relativeStocksEtfs'), color: 'hsl(0, 72%, 51%)' },
-                                { label: t('performance.crypto'), color: 'hsl(142, 76%, 36%)' },
-                                { label: t('performance.metals'), color: 'hsl(45, 93%, 47%)' },
-                                { label: t('portfolio.portfolioValue'), color: 'hsl(var(--primary))' },
-                            ]}
-                        />
-                    </CardContent>
-                </Card>
+                <ChartCard
+                    title={t('performance.valueOverTime')}
+                    description={t('performance.chartDesc', { period: PERIOD_LABELS[selectedPeriod] })}
+                    icon={BarChart3}
+                    actions={hasFxNeutralSeries ? (
+                        <button
+                            onClick={() => setShowFxNeutral((v) => !v)}
+                            title={t('performance.fxNeutralDesc')}
+                            className={`px-3 py-1.5 text-xs font-medium rounded-md border transition-all shrink-0 ${
+                                showFxNeutral
+                                    ? "bg-background text-foreground shadow-sm border-border"
+                                    : "text-muted-foreground hover:text-foreground border-transparent"
+                            }`}
+                        >
+                            {t('performance.fxNeutral')}
+                        </button>
+                    ) : undefined}
+                    legend={[
+                        { label: t('portfolio.totalInvested'), color: 'hsl(var(--muted-foreground))', dashed: true },
+                        { label: t('performance.inflationAdjusted'), color: 'hsl(30, 80%, 55%)' },
+                        { label: t('performance.relativeStocksEtfs'), color: 'hsl(0, 72%, 51%)' },
+                        { label: t('performance.crypto'), color: 'hsl(142, 76%, 36%)' },
+                        { label: t('performance.metals'), color: 'hsl(45, 93%, 47%)' },
+                        ...(showFxNeutral && hasFxNeutralSeries
+                            ? [{ label: t('performance.fxNeutral'), color: FX_NEUTRAL_COLOR, dashed: true }]
+                            : []),
+                        { label: t('portfolio.portfolioValue'), color: 'hsl(var(--primary))' },
+                    ]}
+                >
+                    <VisxAreaChart
+                        scrubbable
+                        data={chartData}
+                        xAccessor={(d) => parseISO(d.day)}
+                        series={[
+                            { key: CHART_KEYS.invested, label: t('portfolio.totalInvested'), accessor: (d) => d.invested, color: 'hsl(var(--muted-foreground))', dashed: true, strokeWidth: 1.5 },
+                            { key: CHART_KEYS.inflationAdjusted, label: t('performance.inflationAdjusted'), accessor: (d) => d.inflationAdjusted, color: 'hsl(30, 80%, 55%)', strokeWidth: 2 },
+                            { key: CHART_KEYS.stocksEtfs, label: t('performance.relativeStocksEtfs'), accessor: (d) => d.stocksEtfs, color: 'hsl(0, 72%, 51%)', fillOpacity: 0, strokeWidth: 2 },
+                            { key: CHART_KEYS.crypto, label: t('performance.crypto'), accessor: (d) => d.crypto, color: 'hsl(142, 76%, 36%)', fillOpacity: 0, strokeWidth: 2 },
+                            { key: CHART_KEYS.metals, label: t('performance.metals'), accessor: (d) => d.metals, color: 'hsl(45, 93%, 47%)', fillOpacity: 0, strokeWidth: 2 },
+                            ...(showFxNeutral && hasFxNeutralSeries ? [
+                                { key: CHART_KEYS.fxNeutral, label: t('performance.fxNeutral'), accessor: (d: typeof chartData[number]) => d.fxNeutral, color: FX_NEUTRAL_COLOR, fillOpacity: 0, dashed: true, strokeWidth: 2 },
+                            ] : []),
+                            { key: CHART_KEYS.value, label: t('portfolio.portfolioValue'), accessor: (d) => d.value, color: 'hsl(var(--primary))', strokeWidth: 2.5 },
+                        ]}
+                        xIsDate={true}
+                        xTickFormat={(v) => xTickFormatter.format(v as Date)}
+                        yTickFormat={(v) => formatCurrency(v as number, defaultCurrency, locale)}
+                        tooltipTitle={(d) => formatDate(parseISO(d.day), "dd MMM yyyy")}
+                        tooltipValueFormat={(v) => formatCurrency(v, defaultCurrency, locale)}
+                        height={360}
+                        margin={{ top: 16, right: 24, bottom: 28, left: 110 }}
+                    />
+                </ChartCard>
             )}
 
             {/* Relative Performance chart */}
             {relativePerformanceData.length > 1 && (
-                <Card>
-                    <CardHeader>
-                        <CardTitle className="flex items-center gap-2">
-                            <Activity className="h-5 w-5 text-primary" />
-                            {t('performance.relativeTitle')}
-                        </CardTitle>
-                        <CardDescription>
-                            {t('performance.relativeDesc', { period: PERIOD_LABELS[selectedPeriod] })}
-                        </CardDescription>
-                    </CardHeader>
-                    <CardContent>
-                        <VisxAreaChart
-                            data={relativePerformanceData}
-                            xAccessor={(d) => parseISO(d.day)}
-                            series={[
-                                { key: CHART_KEYS.relativePortfolio, label: t('performance.relativePortfolio'), accessor: (d) => d.relativePortfolio, color: 'hsl(var(--primary))', strokeWidth: 2.5 },
-                                { key: CHART_KEYS.relativeStocksEtfs, label: t('performance.relativeStocksEtfs'), accessor: (d) => d.relativeStocksEtfs, color: 'hsl(0, 72%, 51%)', fillOpacity: 0, strokeWidth: 2 },
-                                { key: CHART_KEYS.relativeCrypto, label: t('performance.crypto'), accessor: (d) => d.relativeCrypto, color: 'hsl(142, 76%, 36%)', fillOpacity: 0, strokeWidth: 2 },
-                                { key: CHART_KEYS.relativeMetals, label: t('performance.metals'), accessor: (d) => d.relativeMetals, color: 'hsl(45, 93%, 47%)', fillOpacity: 0, strokeWidth: 2 },
-                                { key: CHART_KEYS.relativeInflationAdjusted, label: t('performance.inflationAdjusted'), accessor: (d) => d.relativeInflationAdjusted, color: 'hsl(30, 80%, 55%)', fillOpacity: 0, dashed: true, strokeWidth: 2 },
-                            ]}
-                            xIsDate={true}
-                            xTickFormat={(v) => xTickFormatter.format(v as Date)}
-                            yTickFormat={(v) => `${(v as number) > 0 ? '+' : ''}${(v as number).toFixed(0)}%`}
-                            tooltipTitle={(d) => formatDate(parseISO(d.day), "dd MMM yyyy")}
-                            tooltipValueFormat={(v) => `${v > 0 ? '+' : ''}${v.toFixed(2)}%`}
-                            height={320}
-                            margin={{ top: 16, right: 24, bottom: 28, left: 72 }}
-                        />
-                        <ChartLegend
-                            className="mt-3"
-                            items={[
-                                { label: t('performance.relativePortfolio'), color: 'hsl(var(--primary))' },
-                                { label: t('performance.relativeStocksEtfs'), color: 'hsl(0, 72%, 51%)' },
-                                { label: t('performance.crypto'), color: 'hsl(142, 76%, 36%)' },
-                                { label: t('performance.metals'), color: 'hsl(45, 93%, 47%)' },
-                                { label: t('performance.inflationAdjusted'), color: 'hsl(30, 80%, 55%)', dashed: true },
-                            ]}
-                        />
-                    </CardContent>
-                </Card>
+                <ChartCard
+                    title={t('performance.relativeTitle')}
+                    description={t('performance.relativeDesc', { period: PERIOD_LABELS[selectedPeriod] })}
+                    icon={Activity}
+                    legend={[
+                        { label: t('performance.relativePortfolio'), color: 'hsl(var(--primary))' },
+                        { label: t('performance.relativeStocksEtfs'), color: 'hsl(0, 72%, 51%)' },
+                        { label: t('performance.crypto'), color: 'hsl(142, 76%, 36%)' },
+                        { label: t('performance.metals'), color: 'hsl(45, 93%, 47%)' },
+                        { label: t('performance.inflationAdjusted'), color: 'hsl(30, 80%, 55%)', dashed: true },
+                    ]}
+                >
+                    <VisxAreaChart
+                        scrubbable
+                        data={relativePerformanceData}
+                        xAccessor={(d) => parseISO(d.day)}
+                        series={[
+                            { key: CHART_KEYS.relativePortfolio, label: t('performance.relativePortfolio'), accessor: (d) => d.relativePortfolio, color: 'hsl(var(--primary))', strokeWidth: 2.5 },
+                            { key: CHART_KEYS.relativeStocksEtfs, label: t('performance.relativeStocksEtfs'), accessor: (d) => d.relativeStocksEtfs, color: 'hsl(0, 72%, 51%)', fillOpacity: 0, strokeWidth: 2 },
+                            { key: CHART_KEYS.relativeCrypto, label: t('performance.crypto'), accessor: (d) => d.relativeCrypto, color: 'hsl(142, 76%, 36%)', fillOpacity: 0, strokeWidth: 2 },
+                            { key: CHART_KEYS.relativeMetals, label: t('performance.metals'), accessor: (d) => d.relativeMetals, color: 'hsl(45, 93%, 47%)', fillOpacity: 0, strokeWidth: 2 },
+                            { key: CHART_KEYS.relativeInflationAdjusted, label: t('performance.inflationAdjusted'), accessor: (d) => d.relativeInflationAdjusted, color: 'hsl(30, 80%, 55%)', fillOpacity: 0, dashed: true, strokeWidth: 2 },
+                        ]}
+                        xIsDate={true}
+                        xTickFormat={(v) => xTickFormatter.format(v as Date)}
+                        yTickFormat={(v) => `${(v as number) > 0 ? '+' : ''}${(v as number).toFixed(0)}%`}
+                        tooltipTitle={(d) => formatDate(parseISO(d.day), "dd MMM yyyy")}
+                        tooltipValueFormat={(v) => `${v > 0 ? '+' : ''}${v.toFixed(2)}%`}
+                        height={320}
+                        margin={{ top: 16, right: 24, bottom: 28, left: 72 }}
+                    />
+                </ChartCard>
             )}
 
             <PerformanceBreakdown heatmapData={heatmapData} breakdownSummary={breakdownSummary} />
@@ -356,8 +376,8 @@ function CompactReturnCard({
     title: string; value: string; subtitle: string; icon: IconType; trend: boolean;
 }) {
     const iconBg = trend
-        ? "bg-gradient-to-br from-emerald-500/20 to-green-500/20 text-emerald-600 dark:text-emerald-400"
-        : "bg-gradient-to-br from-rose-500/20 to-red-500/20 text-rose-600 dark:text-rose-300";
+        ? "bg-gradient-to-br from-success/20 to-success/10 text-success"
+        : "bg-gradient-to-br from-destructive/20 to-destructive/10 text-destructive";
     const trendGlassClass = trend ? "liquid-glass-trend-up" : "liquid-glass-trend-down";
 
     return (
@@ -393,6 +413,8 @@ interface TotalValueCardProps {
     locale: string;
     assetSplit: AssetSplit;
     sparklineData: Array<{ day: string; value: number }>;
+    /** Gain decomposition (asset performance vs currency effect); null hides the line. */
+    fxAttribution: { assetGain: number; fxGain: number; fellBack: boolean } | null;
     labels: {
         title: string;
         invested: string;
@@ -402,19 +424,22 @@ interface TotalValueCardProps {
         stocksEtfs: string;
         crypto: string;
         metals: string;
+        assetGain: string;
+        fxEffect: string;
+        fxFallbackNote: string;
     };
 }
 
 function TotalValueCard({
     currentValue, totalInvested, totalGainLoss, totalReturnPct,
-    currency, locale, assetSplit, sparklineData, labels,
+    currency, locale, assetSplit, sparklineData, fxAttribution, labels,
 }: TotalValueCardProps) {
     const isGain = totalGainLoss >= 0;
     const trendGlassClass = isGain ? "liquid-glass-trend-up" : "liquid-glass-trend-down";
     const iconBg = isGain
-        ? "bg-gradient-to-br from-emerald-500/20 to-green-500/20 text-emerald-600 dark:text-emerald-400"
-        : "bg-gradient-to-br from-rose-500/20 to-red-500/20 text-rose-600 dark:text-rose-300";
-    const gainToneClass = isGain ? "text-emerald-600 dark:text-emerald-400" : "text-rose-600 dark:text-rose-400";
+        ? "bg-gradient-to-br from-success/20 to-success/10 text-success"
+        : "bg-gradient-to-br from-destructive/20 to-destructive/10 text-destructive";
+    const gainToneClass = isGain ? "text-success" : "text-destructive";
 
     return (
         <Card
@@ -430,22 +455,37 @@ function TotalValueCard({
             <CardContent className="space-y-4">
                 <div>
                     <div className="text-3xl font-bold text-foreground leading-tight">
-                        {formatCurrency(currentValue, currency, locale)}
+                        <Money amount={currentValue} currency={currency} />
                     </div>
                     <div className="mt-2 flex flex-wrap items-baseline gap-x-4 gap-y-1 text-xs">
                         <span className="text-muted-foreground">
-                            {labels.invested}: <span className="font-medium text-foreground">{formatCurrency(totalInvested, currency, locale)}</span>
+                            {labels.invested}: <span className="font-medium text-foreground"><Money amount={totalInvested} currency={currency} /></span>
                         </span>
                         <span className="text-muted-foreground">
                             {labels.netPL}:{" "}
                             <span className={`font-semibold ${gainToneClass}`}>
-                                {isGain ? "+" : ""}{formatCurrency(totalGainLoss, currency, locale)}
+                                {isGain ? "+" : ""}<Money amount={totalGainLoss} currency={currency} />
                             </span>{" "}
                             <span className={`font-medium ${gainToneClass}`}>
                                 ({isGain ? "+" : ""}{totalReturnPct.toFixed(2)}%)
                             </span>
                         </span>
                     </div>
+                    {fxAttribution && (
+                        <div className="mt-1 text-xs text-muted-foreground tabular-nums">
+                            {labels.assetGain}:{" "}
+                            <span className={fxAttribution.assetGain >= 0 ? "text-success font-medium" : "text-destructive font-medium"}>
+                                {fxAttribution.assetGain >= 0 ? "+" : ""}<Money amount={fxAttribution.assetGain} currency={currency} />
+                            </span>
+                            {" · "}{labels.fxEffect}:{" "}
+                            <span className={fxAttribution.fxGain >= 0 ? "text-success font-medium" : "text-destructive font-medium"}>
+                                {fxAttribution.fxGain >= 0 ? "+" : ""}<Money amount={fxAttribution.fxGain} currency={currency} />
+                            </span>
+                            {fxAttribution.fellBack && (
+                                <span title={labels.fxFallbackNote} aria-label={labels.fxFallbackNote}> ⚠</span>
+                            )}
+                        </div>
+                    )}
                 </div>
 
                 {sparklineData.length > 1 && (
@@ -482,7 +522,7 @@ interface AssetAllocationBarProps {
     labels: { allocation: string; stocksEtfs: string; crypto: string; metals: string };
 }
 
-function AssetAllocationBar({ split, currency, locale, labels }: AssetAllocationBarProps) {
+function AssetAllocationBar({ split, currency, labels }: AssetAllocationBarProps) {
     const rows = [
         { key: "stocksEtfs", label: labels.stocksEtfs, pct: split.stocksEtfs.pct, value: split.stocksEtfs.value, color: "bg-rose-500" },
         { key: "crypto", label: labels.crypto, pct: split.crypto.pct, value: split.crypto.value, color: "bg-emerald-500" },
@@ -512,7 +552,7 @@ function AssetAllocationBar({ split, currency, locale, labels }: AssetAllocation
                             {r.label}
                         </span>
                         <span className="text-foreground font-medium tabular-nums">
-                            {formatCurrency(r.value, currency, locale)}{" "}
+                            <Money amount={r.value} currency={currency} />{" "}
                             <span className="text-muted-foreground font-normal">({r.pct.toFixed(1)}%)</span>
                         </span>
                     </li>

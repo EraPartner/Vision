@@ -1,11 +1,16 @@
+import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { Activity, Database, Globe } from 'lucide-react';
+import { Activity, Database, Globe, KeyRound } from 'lucide-react';
 import { Link } from 'react-router-dom';
+import { toast } from 'sonner';
 import { Card, CardContent } from '@/components/ui/card';
 import { Skeleton } from '@/components/ui/skeleton';
+import { Input } from '@/components/ui/input';
+import { Button } from '@/components/ui/button';
 import { PageHeader } from '@/components/shared/PageHeader';
 import { useLanguage } from '@/contexts/LanguageContext';
 import { getDbStats, getProviderHealth, getRequestMetrics } from '@/lib/api/admin';
+import { setAdminToken, clearAdminToken, hasAdminToken } from '@/lib/adminToken';
 
 function OverviewCard({
     label,
@@ -24,7 +29,7 @@ function OverviewCard({
 }) {
     const statusRing =
         status === 'error' ? 'ring-1 ring-destructive/40' :
-        status === 'warn' ? 'ring-1 ring-amber-500/40' :
+        status === 'warn' ? 'ring-1 ring-warning/40' :
         '';
 
     return (
@@ -44,6 +49,62 @@ function OverviewCard({
                 </CardContent>
             </Card>
         </Link>
+    );
+}
+
+// Lets a self-hoster who set ADMIN_AUTH_TOKEN on the server authenticate the
+// admin UI. Renders regardless of whether the admin data queries succeed, so a
+// 401'd admin page can still be unlocked. Token is held in sessionStorage only.
+function AdminTokenCard() {
+    const { t } = useLanguage();
+    const [value, setValue] = useState('');
+    const [active, setActive] = useState<boolean>(hasAdminToken());
+
+    const save = () => {
+        setAdminToken(value);
+        setActive(hasAdminToken());
+        setValue('');
+        toast.success(t('admin.token.saved'));
+    };
+
+    const clear = () => {
+        clearAdminToken();
+        setActive(false);
+        toast.success(t('admin.token.cleared'));
+    };
+
+    return (
+        <Card className="glass-chrome">
+            <CardContent className="space-y-3 pt-6">
+                <div className="flex items-center gap-3">
+                    <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-gradient-to-br from-primary/20 to-primary/5">
+                        <KeyRound className="h-5 w-5 text-primary" />
+                    </div>
+                    <div>
+                        <p className="text-sm font-semibold">{t('admin.token.title')}</p>
+                        <p className="text-xs text-muted-foreground">{t('admin.token.description')}</p>
+                    </div>
+                </div>
+                <div className="flex flex-wrap items-center gap-2">
+                    <Input
+                        type="password"
+                        autoComplete="off"
+                        value={value}
+                        onChange={(e) => setValue(e.target.value)}
+                        placeholder={t('admin.token.placeholder')}
+                        aria-label={t('admin.token.title')}
+                        className="max-w-xs flex-1"
+                    />
+                    <Button onClick={save} disabled={!value.trim()}>
+                        {t('admin.token.save')}
+                    </Button>
+                    <Button variant="outline" onClick={clear} disabled={!active}>
+                        {t('admin.token.clear')}
+                    </Button>
+                </div>
+                {active && <p className="text-xs text-success">{t('admin.token.active')}</p>}
+            </CardContent>
+        </Card>
     );
 }
 
@@ -127,6 +188,8 @@ export default function AdminOverviewPage() {
                     </>
                 )}
             </div>
+
+            <AdminTokenCard />
         </div>
     );
 }

@@ -1,6 +1,6 @@
-import { describe, it } from 'vitest';
+import { describe, it, expect } from 'vitest';
 import { runGolden } from '../golden/runGolden.js';
-import { calculateNextDate } from '../../src/services/calculations/recurrence.js';
+import { calculateNextDate, isValidPattern } from '../../src/services/calculations/recurrence.js';
 
 /**
  * Golden-fixture regression suite for services/calculations/recurrence.
@@ -51,5 +51,25 @@ describe('recurrence golden', () => {
 
   it('invalid pattern returns null', async () => {
     await runGolden('recurrence/invalid-pattern', runPattern);
+  });
+});
+
+describe('isValidPattern', () => {
+  it('accepts the named patterns', () => {
+    for (const p of ['daily', 'weekly', 'biweekly', 'monthly', 'quarterly', 'yearly']) {
+      expect(isValidPattern(p)).toBe(true);
+    }
+  });
+
+  it('accepts "every N days" with N >= 1 (matches calculateNextDate grammar)', () => {
+    expect(isValidPattern('every 10 days')).toBe(true);
+    expect(isValidPattern('every 1 day')).toBe(true);
+    expect(isValidPattern('every 0 days')).toBe(false); // no forward progress
+  });
+
+  it('rejects typos and empty values', () => {
+    expect(isValidPattern('fortnightly')).toBe(false);
+    expect(isValidPattern('')).toBe(false);
+    expect(isValidPattern(undefined)).toBe(false);
   });
 });

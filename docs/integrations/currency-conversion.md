@@ -3,10 +3,10 @@ title: Currency Conversion
 type: integration
 status: active
 date: 2026-04-25
-updated: 2026-05-03
-tags: [integration, currency, exchange-rates, phase-0, phase-1, phase-3-1, offline-resilience, network-reachability, startup-optimization]
-description: Multi-currency support with automatic conversion to target currencies using ECB and supplementary exchange rates, including date-aware historical conversion and batch grouped conversion (Phase 3.1+). Startup FX warmup is skipped when offline (2026-05-03).
-related_code: ["apps/node-backend/src/services/currency/currencyConversionService.js", "apps/node-backend/src/repositories/infoRepositoryHelpers.js", "apps/node-backend/src/lib/network.js"]
+updated: 2026-06-11
+tags: [integration, currency, exchange-rates, phase-0, phase-1, phase-3-1, offline-resilience, network-reachability, startup-optimization, historical-rates, ecb-full-history, purchase-date-rates, fx-attribution, adr-074]
+description: Multi-currency support with automatic conversion to target currencies using ECB and supplementary exchange rates, including date-aware historical conversion and batch grouped conversion (Phase 3.1+). Startup FX warmup is skipped when offline (2026-05-03). 2026-06-11 (ADR-074): ECB full-history tier (daily since 1999), on-or-before weekend convention, one-time repair of fabricated old rates, and bulk-stamp of fx_rate_to_eur on non-EUR portfolio transactions.
+related_code: ["apps/node-backend/src/services/currency/rateFetcher.js", "apps/node-backend/src/services/currency/currencyConversionService.js", "apps/node-backend/src/repositories/infoRepositoryHelpers.js", "apps/node-backend/src/lib/network.js"]
 ---
 
 # Currency Conversion
@@ -24,13 +24,25 @@ The currency conversion service handles all currency-related operations, includi
 
 ## Data Sources
 
-### Primary: ECB (European Central Bank)
+### Tier 1: ECB Daily Feed (Primary, live rates)
 
 - **URL**: `https://www.ecb.europa.eu/stats/eurofxref/eurofxref-daily.xml`
 - **Update frequency**: Daily (~16:00 CET)
 - **Currencies**: ~30 major currencies
+- **Cache TTL**: 24 hours in-memory
 
-### Supplementary: Open Exchange Rates API
+### Tier 2: ECB Full History Feed (Historical, 2026-06-11 — ADR-074)
+
+- **URL**: `https://www.ecb.europa.eu/stats/eurofxref/eurofxref-hist.xml`
+- **Coverage**: Daily rates since 1999-01-04
+- **Cache TTL**: 24 hours in-memory
+- **Lookup convention**: **on-or-before** — a Saturday or Sunday uses Friday's close; lookups never advance to a future trading day
+- **Role**: Provides transaction-date rates for `getRateToEurForDate` when the target date is older than the 90-day feed window; results are persisted to `exchange_rates` and never re-fetched once stored
+
+> [!info] Weekend and holiday convention
+> The on-or-before convention applies throughout: if the exact date is missing (weekend, bank holiday, ECB closure), the most recent prior trading day's rate is used. This matches how the ECB's own API behaves and avoids look-ahead bias.
+
+### Tier 3: Supplementary — Open Exchange Rates API
 
 - **URL**: `https://open.er-api.com/v6/latest/EUR`
 - **Coverage**: ~150 currencies
@@ -300,6 +312,22 @@ Callers (e.g. portfolio history aggregator) can expose these fields to the front
 - Existing historical rows are preserved
 - Backfill favors exact-date ECB data when available, then falls back to nearest local rate
 
+### Full History Startup Backfill (ADR-074, 2026-06-11)
+
+Three new startup phases run once (guarded by flags in `user_settings`):
+
+| Phase | What it does | Guard flag |
+|-------|-------------|------------|
+| **One-time repair** | Identifies rows in `exchange_rates` that were previously written as nearest-rate guesses (before ADR-074) and overwrites them with correct ECB full-history values. Safe because no manual rate-entry path exists. | `fx_full_history_repair_done` |
+| **Gap fill** | Fills any (currency, date) pairs missing from `exchange_rates` using the ECB full-history feed. Does **not** persist guessed/nearest rates — only exact-date or on-or-before confirmed ECB values. | Internal per-run tracking |
+| **Bulk stamp** | Iterates all `portfolio_transactions` (including legacy `portfolio_transactions_base` layout) that have `currency ≠ EUR` and no `fx_rate_to_eur` set, and writes the on-or-before stored rate (≤7-day lookback). Never blocks on HTTP — uses only already-stored `exchange_rates` rows. | None (idempotent upsert) |
+
+If the app starts offline, the repair and gap-fill phases are skipped (the `fx_full_history_repair_done` flag is not set), so they will retry on the next online startup.
+
+### Transaction Write-Time Stamping (ADR-074)
+
+When a portfolio transaction is created or edited without an explicit `fx_rate_to_eur` and `currency ≠ EUR`, the backend controller resolves the rate from the stored `exchange_rates` table using the on-or-before convention (≤7-day lookback) and stamps it on the row. The write path never makes an outbound HTTP call — it uses only already-persisted rows. If no suitable stored rate exists within 7 days, the field is left unset and `usedFallbackRate` will be `true` in summary responses.
+
 Generic amount conversion:
 
 ```javascript
@@ -352,12 +380,30 @@ Scheduled 12h exchange rate refreshes also skip themselves when `isInternetReach
 > [!info] Locked contracts (Phase 8)
 > Currency round-trip correctness is pinned by [[apps/node-backend/tests/property/currencyRoundTrip.property.test.js]]. Bounded random amount + rate pairs must satisfy `convert(convert(x, A→B), B→A) ≈ x` within cent tolerance, and cross-rate composition `A→B→C` must equal the direct `A→C` conversion within the same tolerance. See [[docs/testing/testing#property-test-pattern-phase-8|Property Test Pattern]] and [[apps/node-backend/tests/golden/INVENTORY.md|Calculation Inventory]].
 
+## Historical FX in Portfolio Snapshots (2026-05-29)
+
+The portfolio snapshot builder (`snapshotBuilder.js`) owns a separate, lightweight historical FX lookup that it loads in bulk directly from the `exchange_rates` table (not through `currencyConversionService`). This is intentional: the snapshot builder walks every day from first transaction to today in a single pass, so it pre-loads the full rate history once per snapshot run rather than making per-row service calls.
+
+Key differences from `currencyConversionService`:
+
+| Concern | `currencyConversionService` | `snapshotBuilder` internal lookup |
+|---|---|---|
+| Data source | ECB + Open Exchange Rates → DB + in-memory cache | `exchange_rates` table only (bulk preload) |
+| Lookup granularity | Per-conversion call | Binary-search in pre-sorted per-currency day arrays |
+| Fallback | In-memory cache → hardcoded constants | Latest `is_latest` rate |
+| Scope | All backend services | Snapshot day-walk only |
+
+The `is_latest` rows in `exchange_rates` are the same rows consumed by `currencyConversionService`'s `warmCache()`, so the latest-day snapshot always uses the same rate as the live portfolio summary endpoint, ensuring the headline portfolio value reconciles between Net Worth and Portfolio Overview.
+
+See [[docs/features/portfolio#historical-fx-in-snapshots-2026-05-29|Portfolio — Historical FX in Snapshots]] for the correctness implications on the invested cost-basis column.
+
 ## See Also
 
+- [[docs/adr/074-fx-attribution-historical-rates|ADR-074: FX attribution with purchase-date rates]] — Decision record for full-history backfill and transaction-date semantics
 - [[docs/reference/data-model#ExchangeRateCache]] - Database schema
 - [[docs/performance/caching-strategies]] - Caching implementation
 - [[docs/api/settings]] - Settings API
 - [[docs/integrations/index]] - Integrations Index
 - [[docs/reference/code-patterns#Filter Builder Pattern]] - Related Phase 0 patterns
 
-Code links: [[apps/node-backend/src/services/currency/currencyConversionService.js|Canonical implementation]], [[apps/node-backend/src/repositories/infoRepositoryHelpers.js|Batch grouped conversion (Phase 3.1)]], [[apps/node-backend/src/main.js]]
+Code links: [[apps/node-backend/src/services/currency/rateFetcher.js|Rate fetcher (ECB tiers)]], [[apps/node-backend/src/services/currency/currencyConversionService.js|Canonical implementation]], [[apps/node-backend/src/repositories/infoRepositoryHelpers.js|Batch grouped conversion (Phase 3.1)]], [[apps/node-backend/src/main.js]]

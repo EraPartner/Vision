@@ -6,7 +6,7 @@
 import fs from 'fs';
 import { cleanRecipientName, normalizeToUppercase } from '../../textNormalization.js';
 import { logger } from '../../../config/logger.js';
-import { parseDayMonthYear, parseCommaDecimal, parseDecimalSafe, buildOptionalComment, splitCsvLines } from './_shared.js';
+import { parseDayMonthYear, parseCommaDecimal, parseDecimalSafe, buildOptionalComment, splitCsvLines, canonicalIban } from './_shared.js';
 import { toDecimal, roundMoney } from '../../../lib/money.js';
 
 const NAME = 'belfius';
@@ -81,7 +81,7 @@ function parseTransactionLine(line) {
 
   return {
     date,
-    bankAccount: 'BELFIUS',
+    bankAccount: canonicalIban(accountNumber) || 'BELFIUS',
     recipient: fullRecipient,
     memo,
     amount,
@@ -92,7 +92,6 @@ function parseTransactionLine(line) {
     recipientBankName: recipientAccount ? 'BELFIUS' : null,
     comment: buildOptionalComment(commentParts),
     rawData: line,
-    _accountNumber: accountNumber,
   };
 }
 
@@ -106,23 +105,26 @@ export function detect(csvSample) {
 export async function parse(filePath) {
   const content = await fs.promises.readFile(filePath, 'utf-8');
   const lines = splitCsvLines(content);
-  const transactions = [];
+  const transactions = /** @type {any[] & { skipped?: number }} */ ([]);
   const lastBalance = lines.length > BALANCE_LINE_INDEX
     ? parseLastBalance(lines[BALANCE_LINE_INDEX].trim())
     : null;
 
+  let skipped = 0;
   for (let i = HEADER_ROWS; i < lines.length; i++) {
     const line = lines[i].trim();
     if (!line) continue;
     const tx = parseTransactionLine(line);
     if (tx) {
-      delete tx._accountNumber;
       transactions.push(tx);
+    } else {
+      skipped++;
     }
   }
 
   applyRunningBalances(transactions, lastBalance);
-  logger.info(`Belfius CSV parsed: ${transactions.length} transactions`);
+  transactions.skipped = skipped;
+  logger.info(`Belfius CSV parsed: ${transactions.length} transactions, ${skipped} skipped`);
   return transactions;
 }
 

@@ -5,13 +5,19 @@ export { AreaChart } from "./AreaChart";
 export type { AreaChartProps, AreaReferenceLine, AreaSeries } from "./AreaChart";
 
 export { BarChart } from "./BarChart";
-export type { BarChartProps, BarSeries } from "./BarChart";
+export type { BarChartProps, BarSeries, BarOverlay } from "./BarChart";
 
 export { StackedBarChart } from "./StackedBarChart";
 export type { StackedBarChartProps, StackedBarSeries } from "./StackedBarChart";
 
 export { LineChart } from "./LineChart";
 export type { LineChartProps, LineReferenceLine, LineSeries } from "./LineChart";
+
+export { ComposedChart } from "./ComposedChart";
+export type { ComposedChartProps, ComposedSeries, ComposedSeriesType } from "./ComposedChart";
+
+export { CandlestickChart } from "./CandlestickChart";
+export type { CandlestickChartProps, CandlePoint } from "./CandlestickChart";
 
 export { PieChart } from "./PieChart";
 export type { PieChartProps, PieDatum } from "./PieChart";
@@ -27,6 +33,15 @@ export type { ChartTooltipDatum, ChartTooltipProps } from "./ChartTooltip";
 
 export { ChartLegend } from "./ChartLegend";
 export type { ChartLegendItem, ChartLegendProps } from "./ChartLegend";
+
+export { ChartCard } from "./ChartCard";
+export type { ChartCardProps } from "./ChartCard";
+
+export { ChartPeriodSelector } from "./ChartPeriodSelector";
+export type { ChartPeriodSelectorProps } from "./ChartPeriodSelector";
+
+export { CHART_PERIODS, CHART_PERIOD_OFFSET_DAYS, filterByPeriod } from "./chartPeriods";
+export type { ChartPeriod } from "./chartPeriods";
 
 export { BottomAxis, LeftAxis, RightAxis } from "./ChartAxis";
 export type { ChartAxisProps } from "./ChartAxis";

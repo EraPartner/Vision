@@ -3,8 +3,8 @@ title: Components Documentation Index
 type: components-index
 status: active
 date: 2026-04-23
-updated: 2026-05-12
-last_modified: 2026-05-12
+updated: 2026-06-16
+last_modified: 2026-06-16
 tags: [components, index, frontend, react, design-system, phase-9, phase-13, phase-c, performance, refactor, phase-3, phase-4, export-dialog, admin, observability, dev-observability, devtools, phase-f, lazy-loading, memoization, useCallback, multi-select, export-filters, debounce, accessibility, aria-label]
 description: Documentation for all frontend React components, hooks, and utilities with emerald + gold aesthetic and performance-optimized design tokens. Phase F adds 4 admin pages with observability dashboards. Phase 13 adds CategoryMultiCombobox and BankAccountMultiCombobox for multi-select export filtering.
 aliases: [components, UI, frontend components, chart components, visx charts]
@@ -81,6 +81,8 @@ SORT title ASC
 - `CategoryCombobox` - Searchable single-select category picker
 - `CategoryMultiCombobox` - Multi-select category picker (Phase 13, export filters)
 - `BankAccountMultiCombobox` - Multi-select bank account picker (Phase 13, export filters)
+- `SymbolSearchBox` - Canonical tall-glass search input + floating dropdown chrome for all Research symbol pickers
+- `SymbolSearchResultItem` - Canonical result row (ticker, name, type badge, exchange) used by all Research symbol pickers and `AddToWatchlistDialog`
 
 ## Guidelines
 

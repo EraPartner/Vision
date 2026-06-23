@@ -8,8 +8,8 @@ import * as reportsApi from "@/lib/api/reports";
 
 // jsdom does not implement these blob URL APIs
 beforeEach(() => {
-    global.URL.createObjectURL = vi.fn().mockReturnValue("blob:fake");
-    global.URL.revokeObjectURL = vi.fn();
+    globalThis.URL.createObjectURL = vi.fn().mockReturnValue("blob:fake");
+    globalThis.URL.revokeObjectURL = vi.fn();
     vi.restoreAllMocks();
 });
 

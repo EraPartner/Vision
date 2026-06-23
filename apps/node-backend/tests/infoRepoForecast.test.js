@@ -44,6 +44,10 @@ describe('getCashflowComparison', () => {
     expect(query.mock.calls[1][0]).toContain('CURRENT_DATE');
     expect(query.mock.calls[2][0]).toContain('FROM planned_transactions');
     expect(query.mock.calls[3][0]).toContain('month_key');
+    // Executed planned transactions must be excluded from the overlays, or an
+    // executed non-recurring row double-counts against its real transaction.
+    expect(query.mock.calls[2][0]).toContain('is_executed = false');
+    expect(query.mock.calls[3][0]).toContain('is_executed = false');
   });
 
   it('returns days_in_month, current_day, month, year aligned to the system clock', async () => {

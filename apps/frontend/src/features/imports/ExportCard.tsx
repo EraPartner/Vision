@@ -1,7 +1,8 @@
 import { useState } from "react";
 import { useLanguage } from "@/contexts/LanguageContext";
-import { API_BASE_URL } from "@/lib/api";
+import { requestBlob } from "@/lib/api/helpers";
 import { downloadBlob } from "@/lib/downloadBlob";
+import { todayYmd } from "@/lib/timezone";
 import {
   Card,
   CardContent,
@@ -47,13 +48,8 @@ export function ExportCard() {
       if (filters.bankAccounts.length > 0) queryParams.append('bank_accounts', filters.bankAccounts.join(','));
       if (filters.categoryIds.length > 0) queryParams.append('category_ids', filters.categoryIds.join(','));
 
-      const url = `${API_BASE_URL}/api/transactions/export/${format}?${queryParams.toString()}`;
-      const response = await fetch(url, { method: 'GET' });
-
-      if (!response.ok) throw new Error(t('importPage.toast.exportFailed'));
-
-      const blob = await response.blob();
-      const date = new Date().toISOString().slice(0, 10);
+      const blob = await requestBlob(`/api/transactions/export/${format}?${queryParams.toString()}`);
+      const date = todayYmd();
       const filename = format === 'json' ? `transactions_${date}.ndjson` : `transactions_${date}.csv`;
       downloadBlob(blob, filename);
 

@@ -13,6 +13,14 @@ vi.mock('../src/services/currency/currencyConversionService.js', () => ({
   convertRowsToEur: vi.fn(async (rows) => rows.map(r => ({ ...r, amount_eur: Number(r.amount || 0) }))),
 }));
 
+// getIncludeTransfers() reads the `includeTransfers` setting; stub it so the
+// transfer-exclusion lookup (ADR-083) doesn't consume the order-dependent
+// `query` mocks below. Default null → transfers excluded.
+vi.mock('../src/repositories/settingsRepository.js', () => ({
+  settingsRepository: { get: vi.fn(async () => null), getAll: vi.fn(async () => ({})) },
+  default: { get: vi.fn(async () => null), getAll: vi.fn(async () => ({})) },
+}));
+
 import { query, queryPrepared } from '../src/database/connection.js';
 import { convertRowsToEur } from '../src/services/currency/currencyConversionService.js';
 import infoRepository from '../src/repositories/infoRepository.js';
@@ -28,6 +36,16 @@ vi.mock('../src/config/logger.js', () => ({
 }));
 
 import { logger } from '../src/config/logger.js';
+
+// YYYY-MM period helpers. Derive the previous month from the first-of-month in
+// UTC so end-of-month run dates (the 29th–31st) don't roll `setMonth(-1)` into
+// the wrong month and collapse current==prev — which made these MoM tests
+// fail only on certain calendar days.
+const currentPeriod = () => new Date().toISOString().substring(0, 7);
+const prevPeriod = () => {
+  const now = new Date();
+  return new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth() - 1, 1)).toISOString().substring(0, 7);
+};
 
 describe('InfoRepository', () => {
   beforeEach(() => {
@@ -85,6 +103,46 @@ describe('InfoRepository', () => {
         'EUR',
         { useHistoricalRatesByDate: true, dateField: 'day' }
       );
+    });
+
+    it('should overlay the latest point with the live portfolio value when provided', async () => {
+      const now = new Date();
+      const todayKey = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
+      query.mockImplementation(async (sql) => {
+        if (sql.includes('SELECT 1 FROM')) return { rows: [] };
+        if (sql.includes('first_data_date')) return { rows: [{ first_data_date: '2026-02-01' }] };
+        if (sql.includes('portfolio_performance_snapshots') && sql.includes('value AS investments')) {
+          return {
+            rows: [
+              { day: '2026-02-01', investments: '3235' },
+              { day: todayKey, investments: '4470' },
+            ],
+          };
+        }
+        if (sql.includes('account_list') && sql.includes('LEFT JOIN LATERAL')) {
+          return {
+            rows: [
+              { day: '2026-02-01', bank_account: 'Chase', balance: '4500', currency: 'EUR' },
+              { day: todayKey, bank_account: 'Chase', balance: '5000', currency: 'EUR' },
+            ],
+          };
+        }
+        return { rows: [] };
+      });
+
+      convertRowsToEur.mockImplementation(async (rows) => rows.map(r => ({ ...r, amount_eur: Number(r.amount || 0) })));
+
+      const result = await infoRepository.getNetWorthFromSnapshots('EUR', { liveInvestments: 5123.45 });
+
+      // Headline "investments" comes from the live summary (5123.45), not the
+      // stored snapshot value (4470) — this is the parity fix.
+      expect(result.current.investments).toBe(5123.45);
+      expect(result.current.netWorth).toBe(10123.45);
+      // The latest chart point / table row reflects the same overlay so the
+      // page is internally consistent with its own headline.
+      const lastSnapshot = result.snapshots[result.snapshots.length - 1];
+      expect(lastSnapshot.investments).toBe(5123.45);
+      expect(lastSnapshot.netWorth).toBe(10123.45);
     });
 
     it('should pass target currency through conversion calls', async () => {
@@ -283,9 +341,9 @@ describe('InfoRepository', () => {
           // MoM comparison query
           return {
             rows: [
-              { recipient_id: 1, recipient_name: 'Amazon', period: new Date().toISOString().substring(0, 7), currency: 'EUR', abs_amount: '120.00' },
-              { recipient_id: 1, recipient_name: 'Amazon', period: (() => { const d = new Date(); d.setMonth(d.getMonth() - 1); return d.toISOString().substring(0, 7); })(), currency: 'EUR', abs_amount: '80.00' },
-              { recipient_id: 2, recipient_name: 'Walmart', period: new Date().toISOString().substring(0, 7), currency: 'EUR', abs_amount: '60.00' },
+              { recipient_id: 1, recipient_name: 'Amazon', period: currentPeriod(), currency: 'EUR', abs_amount: '120.00' },
+              { recipient_id: 1, recipient_name: 'Amazon', period: prevPeriod(), currency: 'EUR', abs_amount: '80.00' },
+              { recipient_id: 2, recipient_name: 'Walmart', period: currentPeriod(), currency: 'EUR', abs_amount: '60.00' },
             ]
           };
         }
@@ -293,8 +351,8 @@ describe('InfoRepository', () => {
           // Current/previous month keys derived in-DB.
           return {
             rows: [{
-              current_period: new Date().toISOString().substring(0, 7),
-              prev_period: (() => { const d = new Date(); d.setMonth(d.getMonth() - 1); return d.toISOString().substring(0, 7); })(),
+              current_period: currentPeriod(),
+              prev_period: prevPeriod(),
             }],
           };
         }
@@ -338,13 +396,13 @@ describe('InfoRepository', () => {
         if (callIdx === 1) return { rows: [{ recipient_id: 1, recipient_name: 'Shop', tx_count: 5, total_abs_amount: '200', first_seen: '2025-01-01', last_seen: '2026-03-01', currency: 'EUR' }] };
         if (callIdx === 2) return {
           rows: [
-            { recipient_id: 1, recipient_name: 'Shop', period: new Date().toISOString().substring(0, 7), currency: 'EUR', abs_amount: '50' },
+            { recipient_id: 1, recipient_name: 'Shop', period: currentPeriod(), currency: 'EUR', abs_amount: '50' },
           ]
         };
         if (callIdx === 3) return {
           rows: [{
-            current_period: new Date().toISOString().substring(0, 7),
-            prev_period: (() => { const d = new Date(); d.setMonth(d.getMonth() - 1); return d.toISOString().substring(0, 7); })(),
+            current_period: currentPeriod(),
+            prev_period: prevPeriod(),
           }],
         };
         return { rows: [] };
@@ -380,7 +438,7 @@ describe('InfoRepository', () => {
     it('should return account balances with history', async () => {
       query.mockImplementation(async (sql) => {
         if (sql.includes('SELECT 1 FROM')) return { rows: [] };
-        if (sql.includes('DISTINCT ON (bank_account)')) {
+        if (sql.includes('DISTINCT ON (t.account_id)')) {
           return {
             rows: [
               {
@@ -437,7 +495,10 @@ describe('InfoRepository', () => {
 
       const result = await infoRepository.getMonthlyFinancialSummary([]);
 
-      expect(result.months).toEqual([]);
+      // MV path now zero-fills the 6-month window (matches the live path), so an
+      // empty MV yields 6 zeroed months rather than [].
+      expect(result.months).toHaveLength(6);
+      expect(result.months.every(m => m.total_income === 0 && m.total_spending === 0 && m.transaction_count === 0)).toBe(true);
       expect(result.summary.transaction_count).toBe(0);
 
       const mvSql = calls.find(
@@ -475,40 +536,16 @@ describe('InfoRepository', () => {
       expect(fallbackSql).toBeTruthy();
       expect(fallbackSql).toContain('filtered_transactions AS');
       expect(fallbackSql).toContain('LEFT JOIN recipients r ON t.recipient_id = r.id');
-      expect(fallbackSql).toContain('COALESCE(t.category_id, r.default_category_id) NOT IN ($1,$2)');
-      expect(fallbackSql).toContain('LEFT JOIN filtered_transactions t ON t.date >= m.month_start');
+      expect(fallbackSql).toContain('LEFT JOIN recipients pr ON r.primary_recipient_id = pr.id');
+      // Canonical exclusion semantics: 3-level category COALESCE (alias-aware).
+      expect(fallbackSql).toContain('COALESCE(t.category_id, r.default_category_id, pr.default_category_id) NOT IN ($1,$2)');
+      // Aggregated per (date,currency) in the `daily` CTE, then joined by month.
+      expect(fallbackSql).toContain('LEFT JOIN daily d ON d.date >= m.month_start');
     });
   });
 
   describe('general infoRepository methods', () => {
-    it('should compute statistics from materialized view fast path', async () => {
-      query.mockImplementation(async (sql) => {
-        if (sql.includes('SELECT 1 FROM mv_category_totals LIMIT 1')) return { rows: [{ '?column?': 1 }] };
-        if (sql.includes('SELECT count(*) FROM transactions')) return { rows: [{ count: '3' }] };
-        if (sql.includes('SELECT * FROM mv_category_totals')) {
-          return {
-            rows: [
-              { category_id: 1, name: 'FOOD:GROCERIES', count: '2', total: '-10', currency: 'EUR' },
-              { category_id: 1, name: 'FOOD:GROCERIES', count: '1', total: '-5', currency: 'USD' },
-            ],
-          };
-        }
-        return { rows: [] };
-      });
-
-      convertRowsToEur.mockResolvedValue([
-        { category_id: 1, name: 'FOOD:GROCERIES', count: '2', amount_eur: -10 },
-        { category_id: 1, name: 'FOOD:GROCERIES', count: '1', amount_eur: -4 },
-      ]);
-
-      const result = await infoRepository.getStatistics('EUR');
-      expect(result.total_transactions).toBe(3);
-      expect(result.total_amount).toBe(-14);
-      expect(result.categories).toHaveLength(1);
-      expect(result.categories[0]).toMatchObject({ id: 1, count: 3, total: -14 });
-    });
-
-    it('should compute statistics and category breakdown from fallback queries', async () => {
+    it('should compute category breakdown from fallback queries', async () => {
       convertRowsToEur.mockImplementation(async (rows) => rows.map((row) => ({
         ...row,
         amount_eur: Number(row.amount ?? 0),
@@ -531,10 +568,6 @@ describe('InfoRepository', () => {
         return { rows: [] };
       });
 
-      const stats = await infoRepository.getStatistics('EUR');
-      expect(stats.total_transactions).toBe(2);
-      expect(stats.total_amount).toBe(-5);
-      expect(stats.categories).toHaveLength(2);
 
       const breakdown = await infoRepository.getCategoryBreakdown('EUR');
       expect(breakdown).toHaveLength(2);
@@ -552,43 +585,64 @@ describe('InfoRepository', () => {
       expect(count).toBe(42);
     });
 
-    it('should summarize transactions with filters and empty fallback', async () => {
-      convertRowsToEur.mockImplementation(async (rows) => rows.map((row) => ({
-        ...row,
-        amount_eur: Number(row.amount ?? 0),
-      })));
-
-      query
-        .mockResolvedValueOnce({ rows: [] })
-        .mockResolvedValueOnce({ rows: [{ amount: '-4', currency: 'EUR', date: '2026-01-01' }, { amount: '2', currency: 'EUR', date: '2026-01-02' }] });
-
-      const empty = await infoRepository.getTransactionSummary({ bankAccount: 'REV' });
-      expect(empty).toEqual({ total_count: 0, total_amount: 0, average: 0, min: null, max: null });
-
-      const result = await infoRepository.getTransactionSummary({ startDate: '2026-01-01', endDate: '2026-01-02', targetCurrency: 'EUR' });
-      expect(result).toMatchObject({ total_count: 2, total_amount: -2, average: -1, min: -4, max: 2 });
-    });
-
     it('should build planned expenses summary grouped by day', async () => {
       convertRowsToEur.mockImplementation(async (rows) => rows.map((row) => ({
         ...row,
         amount_eur: Number(row.amount ?? 0),
       })));
 
-      query.mockResolvedValueOnce({
-        rows: [
-          { id: 1, planned_date: '2026-02-01', amount: '-20', currency: 'EUR', recipient_name: 'Rent', category_name: 'HOME:RENT', is_recurring: true, recurrence_pattern: 'monthly' },
-          { id: 2, planned_date: '2026-02-01', amount: '50', currency: 'EUR', recipient_name: 'Salary', category_name: null, is_recurring: false, recurrence_pattern: null },
-        ],
-      });
+      // Pin the clock so the next-month window is deterministic (July 2026).
+      vi.useFakeTimers();
+      vi.setSystemTime(new Date('2026-06-15T12:00:00Z'));
+      try {
+        query.mockResolvedValueOnce({
+          rows: [
+            { id: 1, planned_date: '2026-07-05', amount: '-20', currency: 'EUR', recipient_name: 'Rent', category_name: 'HOME:RENT', is_recurring: true, recurrence_pattern: 'monthly' },
+            { id: 2, planned_date: '2026-07-05', amount: '50', currency: 'EUR', recipient_name: 'Salary', category_name: null, is_recurring: false, recurrence_pattern: null },
+          ],
+        });
 
-      const result = await infoRepository.getPlannedExpensesNextMonth('EUR');
-      expect(result.daily_data).toHaveLength(1);
-      expect(result.summary.net_amount).toBe(30);
-      expect(result.summary.transaction_count).toBe(2);
+        const result = await infoRepository.getPlannedExpensesNextMonth('EUR');
+        expect(result.daily_data).toHaveLength(1);
+        expect(result.summary.net_amount).toBe(30);
+        expect(result.summary.transaction_count).toBe(2);
+        // The SQL must exclude already-executed planned transactions.
+        expect(query.mock.calls[0][0]).toContain('is_executed = false');
+      } finally {
+        vi.useRealTimers();
+      }
     });
 
-    it('should compute average-vs-current spending projections', async () => {
+    it('expands a recurring planned tx into its next-month occurrences', async () => {
+      convertRowsToEur.mockImplementation(async (rows) => rows.map((row) => ({
+        ...row,
+        amount_eur: Number(row.amount ?? 0),
+      })));
+
+      vi.useFakeTimers();
+      vi.setSystemTime(new Date('2026-06-15T12:00:00Z'));
+      try {
+        // Weekly recurring dated mid-CURRENT month — old code counted it once at
+        // 2026-06-10 (outside next month); now it expands into July occurrences.
+        query.mockResolvedValueOnce({
+          rows: [
+            { id: 1, planned_date: '2026-06-10', amount: '-50', currency: 'EUR', recipient_name: 'Gym', category_name: null, is_recurring: true, recurrence_pattern: 'weekly' },
+          ],
+        });
+
+        const result = await infoRepository.getPlannedExpensesNextMonth('EUR');
+        // July weekly occurrences: 07-01, 07-08, 07-15, 07-22, 07-29 = 5.
+        expect(result.summary.transaction_count).toBe(5);
+        expect(result.summary.total_expenses).toBe(-250);
+        for (const d of result.daily_data) {
+          expect(d.date >= '2026-07-01' && d.date < '2026-08-01').toBe(true);
+        }
+      } finally {
+        vi.useRealTimers();
+      }
+    });
+
+    it('should compute average-vs-current spending projections on calendar-day denominators', async () => {
       convertRowsToEur.mockImplementation(async (rows) => rows.map((row) => ({
         ...row,
         amount_eur: Number(row.amount ?? 0),
@@ -603,16 +657,32 @@ describe('InfoRepository', () => {
         })
         .mockResolvedValueOnce({
           rows: [
-            { amount: '-5', currency: 'EUR', date: '2026-01-03' },
-            { amount: '1', currency: 'EUR', date: '2026-01-03' },
+            { amount: '-5', currency: 'EUR', date: '2026-03-03' },
+            { amount: '1', currency: 'EUR', date: '2026-03-03' },
           ],
         });
 
-      const result = await infoRepository.getAverageVsCurrentSpending('EUR');
-      // Two transaction days, total spending 30 => 15/day
-      expect(result.past_6_months.avg_daily_spending).toBe(15);
-      expect(result.current_month.total_spending).toBe(5);
-      expect(result.comparison).toHaveProperty('projected_monthly_total');
+      // Pin the clock so the calendar-day denominators are deterministic.
+      vi.useFakeTimers();
+      vi.setSystemTime(new Date('2026-03-15T12:00:00Z'));
+      try {
+        const result = await infoRepository.getAverageVsCurrentSpending('EUR');
+
+        // 6-month window = 2025-09-01 → 2026-03-01 = 181 calendar days; spend 30.
+        // Old (buggy) code divided by 2 transaction days → 15.
+        expect(result.past_6_months.avg_daily_spending).toBeCloseTo(30 / 181, 2);
+        expect(result.current_month.total_spending).toBe(5);
+        // daysElapsed is the calendar day (15), not the 1 day that had a txn.
+        expect(result.current_month.days_elapsed).toBe(15);
+        // 5 spent over 15 calendar days, projected across March's 31 days.
+        expect(result.comparison.projected_monthly_total).toBeCloseTo((5 / 15) * 31, 2);
+        // ADR-083: both the 6-month and current-month queries must exclude
+        // internal transfers when includeTransfers is off (the default).
+        expect(query.mock.calls[0][0]).toContain('is_transfer = false');
+        expect(query.mock.calls[1][0]).toContain('is_transfer = false');
+      } finally {
+        vi.useRealTimers();
+      }
     });
   });
 });

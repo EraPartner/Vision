@@ -83,3 +83,21 @@ export async function postMultipartImport<T>(
     const body = await response.json();
     return unwrapEnvelope<T>(body);
 }
+
+/**
+ * Fetch a binary/text export as a `Blob`. Shares the tracked transport
+ * (timeout, abort registration, correlation id) and the unified envelope error
+ * parsing with the rest of the API layer, but returns the raw `Blob` instead of
+ * unwrapping a JSON envelope — used by CSV/NDJSON/PDF export endpoints. Pair with
+ * `downloadBlob` to trigger the browser download.
+ */
+export async function requestBlob(endpoint: string, options: RequestInit = {}): Promise<Blob> {
+    const url = endpoint.startsWith('http') ? endpoint : `${API_BASE_URL}${endpoint}`;
+    const response = await rawFetch(url, options);
+
+    if (!response.ok) {
+        throw await parseEnvelopeError(response, 'Export failed');
+    }
+
+    return response.blob();
+}

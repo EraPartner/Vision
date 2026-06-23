@@ -3,11 +3,11 @@ title: CI/CD Pipelines
 type: guide
 status: active
 date: 2026-04-28
-updated: 2026-05-07
+updated: 2026-06-17
 tags: [guide, cicd, github-actions, testing, linting, docker, release, packaging, automation, april-2026, may-2026, security, secrets-scan, deps-audit, trivy-scan, quality-gate, verify-compose-sync, ci-complete, live-api-contracts, branch-protection]
 description: GitHub Actions CI/CD pipelines including continuous integration checks, supply chain security scanning (secrets, dependencies, container images), quality gates, Docker Compose sync verification, and release automation with checksums
 aliases: [github-actions, ci-cd, pipelines, release-workflow, testing-automation, security-scanning, quality-gates, branch-protection]
-related_code: [".github/workflows/ci.yml", ".github/workflows/release.yml", ".gitleaks.toml", ".githooks/pre-commit", "packaging/electron/main.js", "packaging/electron/assets/error.html", "packaging/electron/resources/docker-compose.yml", "docker-compose.yml"]
+related_code: [".github/workflows/ci.yml", ".github/workflows/release.yml", "config/gitleaks.toml", ".githooks/pre-commit", "packaging/electron/main.js", "packaging/electron/assets/error.html", "packaging/electron/resources/docker-compose.yml", "docker-compose.yml"]
 ---
 
 # CI/CD Pipelines
@@ -69,7 +69,7 @@ secrets-scan:
 - Slack webhooks, Discord tokens
 - Any pattern matching known secret formats
 
-**Config:** `.gitleaks.toml` allowlists documentation placeholders and Obsidian plugin artifacts
+**Config:** `config/gitleaks.toml` allowlists documentation placeholders and Obsidian plugin artifacts
 
 **Policy:** Blocks merge if secrets found; must rewrite history or rotate exposed credentials immediately
 
@@ -117,53 +117,27 @@ deps-audit:
 
 ---
 
-#### 2. **trivy-scan** — Container Image CVE Scan
+#### 2. **pip-audit** — Python Dependency Vulnerability Check
 
-Scans the Docker image for operating system and system library vulnerabilities.
+Audits the Python dependencies used by the Alembic migration tooling
+(`config/requirements.txt`) for known CVEs. (Container-image scanning is a
+separate Docker-tier job — see **trivy-scan** below.)
 
 ```yaml
-trivy-scan:
-  runs-on: ubuntu-latest
-  permissions:
-    contents: read
+pip-audit:
+  name: Deps Audit (Python)
+  runs-on: ubuntu-24.04
   steps:
     - uses: actions/checkout@v4
-    - uses: docker/setup-buildx-action@v3
-    - uses: docker/build-push-action@v6
+    - uses: actions/setup-python@v5
       with:
-        context: .
-        load: true
-        tags: vision:ci
-        cache-from: type=gha
-        cache-to: type=gha,mode=max
-    - uses: aquasecurity/trivy-action@master
-      with:
-        image-ref: vision:ci
-        format: table
-        severity: HIGH,CRITICAL
-        exit-code: '1'
+        python-version: '3.12'
+    - run: pip install pip-audit && pip-audit -r config/requirements.txt
 ```
 
-**What it scans:**
-- Base image OS packages (Ubuntu)
-- System libraries (glibc, curl, ssl)
-- Layered packages from Dockerfile
-- Reports HIGH and CRITICAL severity only
+**Policy:** Blocks the quality gate if a vulnerable Python dependency is found.
 
-**Policy:**
-- Scans actual release image (same as pushed to GHCR)
-- Blocks merge if vulnerabilities found
-- Requires base-image upgrade or package patch before shipping
-
-**Example failure reason:**
-```
-HIGH: CVE-2024-XXXXX (openssl)
-  Fix available: Install openssl 3.2.1+
-```
-
-**Mitigation:** Update `FROM ubuntu:X.Y` in Dockerfile or add package update step
-
-**Related:** [[docs/adr/039-docker-container-hardening|ADR-039 Container Hardening]], [[docs/adr/050-ci-supply-chain-security-tooling|ADR-050 CI Security Tooling]]
+**Related:** [[docs/adr/050-ci-supply-chain-security-tooling|ADR-050 CI Security Tooling]]
 
 ---
 
@@ -219,73 +193,165 @@ lint:
 
 **Failure:** Blocks further checks; must be fixed before merging.
 
-#### 2. **typecheck** — TypeScript Validation
+#### 5. **typecheck** — Frontend TypeScript Validation
 
-Checks TypeScript types without emitting code.
+Checks frontend TypeScript types without emitting code (`bun run typecheck`,
+which runs `tsc` over `tsconfig.app.json` + `tsconfig.node.json`).
 
 ```yaml
 typecheck:
-  runs-on: ubuntu-latest
+  runs-on: ubuntu-24.04
   steps:
     - uses: actions/checkout@v4
-    - name: TypeScript check
-      run: bun run typecheck
+    - run: bun run typecheck
 ```
 
-**What it checks:**
-- Type mismatches in frontend (React, Electron, API client)
-- Type mismatches in backend (Express routes, services)
-- Missing or incorrect type annotations
+**Failure:** Blocks the quality gate; must be resolved before merging.
 
-**Failure:** Blocks further checks; must be resolved before merging.
+#### 6. **typecheck-backend** — Backend Type Validation
 
-#### 3. **test-frontend** — Frontend Unit Tests
+Type-checks the backend (`apps/node-backend`), which is JS-with-JSDoc checked by
+`tsc` in `checkJs` mode. Separate job so a backend type regression is reported
+independently from the frontend.
 
-Runs Vitest on frontend components, hooks, and utilities.
+**Failure:** Blocks the quality gate.
+
+#### 7. **verify-generated** — Generated-Artifact Drift Guard
+
+Guards the two classes of generated files that can silently drift from their
+source of truth:
+
+```yaml
+verify-generated:
+  name: Verify Generated Artifacts
+  runs-on: ubuntu-24.04
+  steps:
+    - uses: actions/checkout@v4
+    # Locale TS is generated from i18n/source — en/nl key parity must hold.
+    - run: bun run validate-locales
+    # OpenAPI → TS types: regenerate and fail if the committed file differs.
+    - run: |
+        bun run generate:types
+        git diff --exit-code -- apps/frontend/src/types/generated.ts
+```
+
+**Why it matters:** `apps/frontend/src/types/generated.ts` is derived from
+`openapi.yaml`. If a route changes the contract but the committed types aren't
+regenerated, the frontend compiles against a stale shape. This job makes that a
+hard failure rather than a latent bug. (See also the endpoint-matrix drift note
+in [[docs/reference/api-endpoint-matrix]].)
+
+**Failure:** Blocks the quality gate — run `bun run generate:types` and
+`bun run validate-locales` locally and commit the result.
+
+#### 8. **build-frontend** — Production Bundle Compile
+
+Verifies the frontend production bundle actually compiles (`CI=1 bun run build`)
+— a green typecheck does not guarantee Vite/Rollup will bundle cleanly.
+
+**Failure:** Blocks the quality gate.
+
+#### 9. **test-frontend** — Frontend Unit Tests
+
+Runs Vitest (with coverage) on frontend components, hooks, and utilities, then
+posts a coverage report comment on the PR.
 
 ```yaml
 test-frontend:
-  runs-on: ubuntu-latest
+  runs-on: ubuntu-24.04
   steps:
     - uses: actions/checkout@v4
-    - name: Vitest
-      run: bun run test:frontend
+    - run: bun run generate-locales
+    - run: bun run test:coverage   # enforces the ratchet gate
 ```
 
-**What it tests:**
-- React component rendering
-- Custom hooks logic
-- Utility functions
-- API client behavior
+**Coverage gate (NOT a flat 80%):** the frontend uses a **ratchet** configured
+in `apps/frontend/vite.config.ts` — thresholds track the *current measured*
+coverage with a small buffer (as of 2026-05-29: `statements 50 / branches 41 /
+functions 42 / lines 52`, against ~52/44/44/55 actual) and are only ever
+raised. The job fails if coverage drops below the ratchet, catching regressions
+even though absolute coverage is below 80%. See [[docs/guides/testing|Testing Guide]].
 
-**Coverage target:** 80% minimum (see [[docs/guides/testing|Testing Guide]] for strategies)
+**Failure:** Coverage fell below the ratchet, or a test failed — fix before merging.
 
-**Failure:** Must achieve 80%+ coverage; may merge with lower coverage if justified in PR description.
+#### 10. **test-backend** — Backend Unit & Integration Tests
 
-#### 4. **test-backend** — Backend Unit & Integration Tests
-
-Runs Bun test on backend services, repositories, and routes.
+Runs Vitest on backend services, repositories, and routes against a Postgres
+service container.
 
 ```yaml
 test-backend:
-  runs-on: ubuntu-latest
+  runs-on: ubuntu-24.04
   steps:
     - uses: actions/checkout@v4
-    - name: Bun test
-      run: bun run test:backend
+    - run: bun run test          # vitest, backend workspace
 ```
 
-**What it tests:**
-- Service layer logic (transactions, categories, portfolio)
-- Repository data access
-- Express route handlers
-- Middleware and error handling
+**What it tests:** service-layer logic, repository data access, Express route
+handlers, middleware, and error handling.
 
-**Coverage target:** 80% minimum
+**Coverage gate:** backend thresholds are fixed in
+`apps/node-backend/vitest.config.js` (`statements 85 / branches 75 /
+functions 85 / lines 88`) over the files tests actually reach.
 
-**Failure:** Must achieve 80%+ coverage or justify in PR.
+**Failure:** A test failed or backend coverage dropped below threshold.
 
-#### 5. **docker-verify** — Container Health Check
+---
+
+### Docker-Tier Jobs
+
+These run only after `quality-gate` is green. `build-image` builds the release
+image **once** and the rest consume it as an artifact, so the expensive build
+happens a single time per run.
+
+#### 11. **build-image** — Build the Release Docker Image (once)
+
+```yaml
+build-image:
+  name: Build Docker Image
+  needs: [quality-gate]
+  steps:
+    - uses: actions/checkout@v4
+    - uses: docker/setup-buildx-action@v3
+    - uses: docker/build-push-action@v7
+      with:
+        context: .
+        outputs: type=docker,dest=/tmp/vision-ci.tar
+        tags: vision:ci
+        cache-from: type=gha
+        cache-to: type=gha,mode=max
+    - uses: actions/upload-artifact@v4
+      with: { name: docker-image, path: /tmp/vision-ci.tar }
+```
+
+The image tarball is uploaded as an artifact reused by `trivy-scan`,
+`docker-verify`, and `test-live-api-contracts`.
+
+#### 12. **trivy-scan** — Container Image CVE Scan
+
+Loads the `build-image` artifact and scans it for OS/system-library
+vulnerabilities (HIGH/CRITICAL), uploading SARIF to the GitHub Security tab.
+
+```yaml
+trivy-scan:
+  needs: [build-image]
+  permissions:
+    contents: read
+    security-events: write
+  steps:
+    - uses: actions/download-artifact@v4
+      with: { name: docker-image, path: /tmp }
+    - run: docker load < /tmp/vision-ci.tar
+    - uses: aquasecurity/trivy-action@v0.36.0
+      with: { image-ref: vision:ci, severity: HIGH,CRITICAL, exit-code: '1' }
+```
+
+**Policy:** scans the same image that ships to GHCR; blocks if HIGH/CRITICAL
+found. **Mitigation:** upgrade the `FROM` base image or patch the package.
+
+**Related:** [[docs/adr/039-docker-container-hardening|ADR-039 Container Hardening]], [[docs/adr/050-ci-supply-chain-security-tooling|ADR-050 CI Security Tooling]]
+
+#### 13. **docker-verify** — Container Health Check
 
 Builds the Docker image and verifies the backend starts successfully.
 
@@ -321,7 +387,7 @@ docker-verify:
 
 **Failure:** Indicates a runtime issue; must be resolved before merging.
 
-#### 6. **test-live-api-contracts** — Live API Contract Tests
+#### 14. **test-live-api-contracts** — Live API Contract Tests
 
 Validates that MSW (Mock Service Worker) fixture schemas match actual backend responses. Catches divergence between frontend test stubs and production API contracts.
 
@@ -352,73 +418,17 @@ test-live-api-contracts:
 
 **Failure:** Indicates API contract mismatch; either update backend or update frontend fixtures accordingly.
 
-#### 7. **test-e2e-visual** — Visual Regression (Main Pushes Only)
-
-Captures and compares full-page screenshots of critical pages. Runs **only on push to main**, never on PRs.
-
-```yaml
-test-e2e-visual:
-  name: Test (Visual)
-  runs-on: ubuntu-latest
-  if: github.event_name == 'push'
-  steps:
-    - uses: actions/checkout@v4
-    - name: Build Docker image
-      # ... (same Docker Compose setup as test-e2e) ...
-    - name: Capture visual baselines
-      run: cd apps/frontend && bun run test:e2e:visual
-      continue-on-error: true  # Visual failures don't block merge
-      env:
-        CI: true
-        PLAYWRIGHT_BASE_URL: http://localhost:3002
-    - name: Upload visual snapshots
-      uses: actions/upload-artifact@v4
-      if: always()
-      with:
-        name: visual-snapshots
-        path: apps/frontend/e2e/__screenshots__/
-        retention-days: 30
-```
-
-**Rationale for `continue-on-error`:**
-- Visual regression tests check for unintended style changes but are inherently environment-dependent (OS rendering, font rasterization, timing)
-- Failures often stem from transient factors (browser timing, network latency affecting paint) rather than true bugs
-- Tagged with `continue-on-error: true` to allow the merge while still capturing visual artifacts for human review
-- Snapshots are automatically updated on main pushes, establishing the visual baseline for subsequent PR comparisons
-
-#### 8. **security-scan** — Vulnerability Scanning
-
-Uses Trivy to scan the codebase and dependencies for known vulnerabilities.
-
-```yaml
-security-scan:
-  runs-on: ubuntu-latest
-  steps:
-    - uses: actions/checkout@v4
-    - name: Trivy scan
-      uses: aquasecurity/trivy-action@master
-      with:
-        scan-type: 'fs'
-        scan-ref: '.'
-        format: 'sarif'
-        output: 'trivy-results.sarif'
-    - name: Upload to GitHub Security
-      uses: github/codeql-action/upload-sarif@v2
-      with:
-        sarif_file: 'trivy-results.sarif'
-```
-
-**What it scans:**
-- Frontend dependencies (npm packages in `package.json`)
-- Backend dependencies (Bun packages)
-- System packages in Dockerfile
-- Known CVEs in third-party libraries
-
-**Results:** Uploaded to GitHub Security tab for visibility. High-severity vulns should be patched immediately.
+> [!warning] Not run in CI
+> Playwright **end-to-end** (`bun run test:e2e`), **visual regression**
+> (`bun run test:e2e:visual`), and **mutation testing** (`bun run test:mutation` /
+> Stryker) are **not** part of `ci.yml`. There is no `test-e2e` or
+> `test-e2e-visual` job (an earlier pair was removed). These suites are run
+> locally and/or via the scheduled `e2e.yml` workflow — do not assume a PR's
+> green check exercised the browser flows.
 
 ---
 
-#### 9. **quality-gate** — Pre-Docker Quality Checkpoint
+#### 15. **quality-gate** — Pre-Docker Quality Checkpoint
 
 Aggregates all pre-Docker quality checks to prevent wasting expensive Docker build cycles on broken commits.
 
@@ -430,6 +440,8 @@ quality-gate:
     - pip-audit
     - lint
     - typecheck
+    - typecheck-backend
+    - verify-generated
     - build-frontend
     - test-frontend
     - test-backend
@@ -446,7 +458,7 @@ quality-gate:
 ```
 
 **Checks:**
-- All nine prerequisite jobs must pass
+- All eleven prerequisite jobs must pass: `secrets-scan`, `deps-audit`, `pip-audit`, `lint`, `typecheck`, `typecheck-backend`, `verify-generated`, `build-frontend`, `test-frontend`, `test-backend`, `verify-compose-sync`
 - Runs regardless of individual failures (`if: always()`) but fails if any needed job failed
 - Blocks expensive Docker image build until quality gates are green
 
@@ -454,7 +466,7 @@ quality-gate:
 
 **Design:** Gating expensive Docker build after cheap linting/testing prevents CI resource waste on broken code.
 
-#### 10. **ci-complete** — Docker-Tier Aggregation
+#### 16. **ci-complete** — Docker-Tier Aggregation
 
 Final aggregation gate that combines all Docker-intensive CI stages (image scanning, container health, live API contracts). This job should be set as the **single required status check** in GitHub branch protection settings.
 

@@ -117,6 +117,62 @@ describe('Watchlist Routes', () => {
     });
   });
 
+  describe('POST / field validation', () => {
+    const validBody = {
+      name: 'NVIDIA', symbol: 'NVDA', asset_class: 'stock', target_price: 100, currency: 'USD',
+    };
+
+    it('rejects non-numeric target_price with ValidationError (not a DB 500)', async () => {
+      const req = { body: { ...validBody, target_price: 'abc' } };
+      await expect(routeHandlers['post:/'](req, mockResponse())).rejects.toBeInstanceOf(ValidationError);
+      expect(watchlistRepository.create).not.toHaveBeenCalled();
+    });
+
+    it('rejects negative target_price', async () => {
+      const req = { body: { ...validBody, target_price: -5 } };
+      await expect(routeHandlers['post:/'](req, mockResponse())).rejects.toBeInstanceOf(ValidationError);
+    });
+
+    it('rejects unknown asset_class', async () => {
+      const req = { body: { ...validBody, asset_class: 'beanie-babies' } };
+      await expect(routeHandlers['post:/'](req, mockResponse())).rejects.toBeInstanceOf(ValidationError);
+    });
+
+    it('rejects malformed currency', async () => {
+      const req = { body: { ...validBody, currency: 'EURO' } };
+      await expect(routeHandlers['post:/'](req, mockResponse())).rejects.toBeInstanceOf(ValidationError);
+    });
+
+    it('coerces numeric-string target_price before reaching the repository', async () => {
+      watchlistRepository.create.mockResolvedValue({ id: 1 });
+      const req = { body: { ...validBody, target_price: '123.45' } };
+      await routeHandlers['post:/'](req, mockResponse());
+      expect(watchlistRepository.create).toHaveBeenCalledWith(
+        expect.objectContaining({ target_price: 123.45 }),
+      );
+    });
+  });
+
+  describe('PATCH /:id field validation', () => {
+    it('rejects non-numeric target_price before hitting the repository', async () => {
+      const req = { params: { id: '1' }, body: { target_price: 'abc' } };
+      await expect(routeHandlers['patch:/:id'](req, mockResponse())).rejects.toBeInstanceOf(ValidationError);
+      expect(watchlistRepository.update).not.toHaveBeenCalled();
+    });
+
+    it('rejects unknown asset_class on partial update', async () => {
+      const req = { params: { id: '1' }, body: { asset_class: 'nft' } };
+      await expect(routeHandlers['patch:/:id'](req, mockResponse())).rejects.toBeInstanceOf(ValidationError);
+    });
+
+    it('allows partial updates that omit typed fields', async () => {
+      watchlistRepository.update.mockResolvedValue({ id: 1, notes: 'watch earnings' });
+      const req = { params: { id: '1' }, body: { notes: 'watch earnings' } };
+      await routeHandlers['patch:/:id'](req, mockResponse());
+      expect(watchlistRepository.update).toHaveBeenCalledWith(1, { notes: 'watch earnings' });
+    });
+  });
+
   describe('PATCH /:id', () => {
     it('throws NotFoundError when updating a missing item', async () => {
       watchlistRepository.update.mockResolvedValue(null);

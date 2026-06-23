@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
+import { Money } from "@/components/shared/Money";
 import { useQuery } from "@tanstack/react-query";
 import { apiClient } from "@/lib/api";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -6,7 +7,7 @@ import { VirtualDataTable } from "@/components/shared/VirtualDataTable";
 import { Skeleton } from "@/components/ui/skeleton";
 import { TrendingUp, TrendingDown, ArrowRight, Store, Hash, DollarSign, Filter } from "lucide-react";
 import { parseISO } from "@/components/shared/dateUtils";
-import { useSettings } from "@/contexts/SettingsContext";
+import { useExcludedIds } from "@/hooks/useExcludedIds";
 import { Badge } from "@/components/ui/badge";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { useAppSettings } from "@/contexts/AppSettingsContext";
@@ -29,7 +30,13 @@ interface RecipientInsightsTabProps {
 }
 
 export function RecipientInsightsTab({ statisticsTopRecipientsChart }: RecipientInsightsTabProps) {
-  const { settings } = useSettings();
+  // Resolve exclusions (settings + hidden categories, alias-aware) and pass them
+  // to the SERVER. The old client-side filter compared raw settings ids against
+  // the server's alias-rolled-up primary ids, so excluding an alias filtered
+  // nothing, and category/hidden-category exclusions never applied at all.
+  const { excludedCategoryIds, excludedRecipientIds, exclusionsApply } = useExcludedIds('statistics');
+  const effectiveExcludedCatIds = exclusionsApply ? excludedCategoryIds : [];
+  const effectiveExcludedRecIds = exclusionsApply ? excludedRecipientIds : [];
   const { t } = useLanguage();
   const { appSettings } = useAppSettings();
   const locale = numberFormatToLocale(appSettings.numberFormat);
@@ -58,25 +65,17 @@ export function RecipientInsightsTab({ statisticsTopRecipientsChart }: Recipient
     }).format(val);
   }, [defaultCurrencyFormatter, locale, appSettings.defaultCurrency, appSettings.showDecimalPlaces]);
   const { data, isLoading, isError } = useQuery({
-    queryKey: ["recipient-insights", targetCurrency],
-    queryFn: () => apiClient.getRecipientInsights({ currency: targetCurrency }),
+    queryKey: ["recipient-insights", targetCurrency, effectiveExcludedCatIds, effectiveExcludedRecIds],
+    queryFn: () => apiClient.getRecipientInsights({
+      currency: targetCurrency,
+      excluded_category_ids: effectiveExcludedCatIds,
+      excluded_recipient_ids: effectiveExcludedRecIds,
+    }),
     staleTime: 60000,
   });
 
-  const exclusionsApply = settings.exclusionScope === 'everywhere' || settings.exclusionScope === 'statistics';
-  const excludedRecipientIds = useMemo(
-    () => new Set(exclusionsApply ? settings.excludedRecipientIds : []),
-    [exclusionsApply, settings.excludedRecipientIds]
-  );
-
-  const filteredData = useMemo(() => {
-    if (!data) return null;
-    if (excludedRecipientIds.size === 0) return data;
-    return {
-      topMerchants: data.topMerchants.filter(m => !excludedRecipientIds.has(m.recipientId)),
-      monthOverMonth: data.monthOverMonth.filter(m => !excludedRecipientIds.has(m.recipientId)),
-    };
-  }, [data, excludedRecipientIds]);
+  // Server already applied exclusions (alias-aware) — no client-side post-filter.
+  const filteredData = data;
 
   const PAGE_SIZE = appSettings.defaultPageSize;
   const [displayCount, setDisplayCount] = useState(PAGE_SIZE);
@@ -117,7 +116,7 @@ export function RecipientInsightsTab({ statisticsTopRecipientsChart }: Recipient
       key: "totalSpend",
       header: t('insights.col.totalSpend'),
       className: "text-right",
-      render: (row: RecipientDetailRow) => <span className="font-mono">{formatCurrency(row.totalSpend)}</span>,
+      render: (row: RecipientDetailRow) => <span className="font-mono"><Money amount={row.totalSpend} /></span>,
     },
     {
       key: "transactionCount",
@@ -128,7 +127,7 @@ export function RecipientInsightsTab({ statisticsTopRecipientsChart }: Recipient
       key: "avgAmount",
       header: t('insights.col.avgAmount'),
       className: "text-right",
-      render: (row: RecipientDetailRow) => <span className="font-mono">{formatCurrency(row.avgAmount)}</span>,
+      render: (row: RecipientDetailRow) => <span className="font-mono"><Money amount={row.avgAmount} /></span>,
     },
     {
       key: "firstSeen",
@@ -146,7 +145,7 @@ export function RecipientInsightsTab({ statisticsTopRecipientsChart }: Recipient
         <span className="text-muted-foreground text-sm">{formatDateWithAppSettings(parseISO(row.lastSeen), appSettings.dateFormat)}</span>
       ),
     },
-  ], [t, appSettings.dateFormat, formatCurrency]);
+  ], [t, appSettings.dateFormat]);
 
   if (isLoading) {
     return (
@@ -173,16 +172,16 @@ export function RecipientInsightsTab({ statisticsTopRecipientsChart }: Recipient
 
   return (
     <div className="space-y-6">
-      {excludedRecipientIds.size > 0 && (
+      {effectiveExcludedRecIds.length > 0 && (
         <Badge variant="secondary" className="gap-1.5">
           <Filter className="h-3 w-3" />
-          {t('insights.excluded', { n: excludedRecipientIds.size })}
+          {t('insights.excluded', { n: effectiveExcludedRecIds.length })}
         </Badge>
       )}
 
       {/* KPI cards */}
       <div className="grid gap-4 md:grid-cols-3">
-        <Card>
+        <Card className="glass-regular">
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
             <CardTitle className="text-sm font-medium">{t('insights.topRecipient')}</CardTitle>
             <Store className="h-4 w-4 text-muted-foreground" />
@@ -194,23 +193,23 @@ export function RecipientInsightsTab({ statisticsTopRecipientsChart }: Recipient
             </p>
           </CardContent>
         </Card>
-        <Card>
+        <Card className="glass-regular">
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
             <CardTitle className="text-sm font-medium">{t('insights.top10Total')}</CardTitle>
             <DollarSign className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">{formatCurrency(totalTopSpend)}</div>
+            <div className="text-2xl font-bold"><Money amount={totalTopSpend} /></div>
             <p className="text-xs text-muted-foreground">{totalTopTx} {t('insights.transactionCount').toLowerCase()}</p>
           </CardContent>
         </Card>
-        <Card>
+        <Card className="glass-regular">
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
             <CardTitle className="text-sm font-medium">{t('insights.avgTransaction')}</CardTitle>
             <Hash className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">{formatCurrency(avgTopAmount)}</div>
+            <div className="text-2xl font-bold"><Money amount={avgTopAmount} /></div>
             <p className="text-xs text-muted-foreground">{t('insights.acrossTop10')}</p>
           </CardContent>
         </Card>
@@ -221,7 +220,7 @@ export function RecipientInsightsTab({ statisticsTopRecipientsChart }: Recipient
 
       {/* Month over month alerts */}
       {filteredData.monthOverMonth.length > 0 && (
-        <Card>
+        <Card className="glass-regular">
           <CardHeader>
             <CardTitle>{t('insights.momChanges')}</CardTitle>
             <CardDescription>{t('insights.momDesc')}</CardDescription>

@@ -12,10 +12,10 @@ interface Props {
 
 const METHOD_COLOR: Record<string, string> = {
     GET: 'text-sky-500',
-    POST: 'text-emerald-500',
-    PUT: 'text-amber-500',
+    POST: 'text-success',
+    PUT: 'text-warning',
     PATCH: 'text-orange-500',
-    DELETE: 'text-red-500',
+    DELETE: 'text-destructive',
 };
 
 function RequestRow({
@@ -51,20 +51,20 @@ function RequestRow({
             <span
                 className={cn(
                     'flex-1 text-[10px] font-mono truncate',
-                    isError ? 'text-red-500' : 'text-foreground',
+                    isError ? 'text-destructive' : 'text-foreground',
                 )}
             >
                 {event.endpoint}
             </span>
             {isInFlight ? (
-                <span className="shrink-0 text-[10px] text-amber-500 animate-pulse">…</span>
+                <span className="shrink-0 text-[10px] text-warning animate-pulse">…</span>
             ) : (
                 <>
                     {event.status && (
                         <span
                             className={cn(
                                 'shrink-0 text-[10px] font-mono tabular-nums',
-                                isError ? 'text-red-500' : 'text-emerald-500',
+                                isError ? 'text-destructive' : 'text-success',
                             )}
                         >
                             {event.status}
@@ -74,7 +74,7 @@ function RequestRow({
                         <span
                             className={cn(
                                 'shrink-0 text-[10px] tabular-nums',
-                                event.durationMs >= 1000 ? 'text-amber-500' : 'text-muted-foreground',
+                                event.durationMs >= 1000 ? 'text-warning' : 'text-muted-foreground',
                             )}
                         >
                             {event.durationMs < 1000
@@ -121,7 +121,7 @@ export function RequestList({ events, inFlight, onSelect, selectedId }: Props) {
                     value={filter}
                     onChange={(e) => setFilter(e.target.value)}
                     placeholder="Filter by endpoint or method…"
-                    className="w-full text-xs font-mono bg-muted/40 border border-border rounded px-2 py-1 text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-1 focus:ring-primary/50"
+                    className="w-full text-xs font-mono bg-muted/40 border border-border rounded px-2 py-1 text-foreground placeholder:text-muted-foreground focus:outline-none focus-visible:ring-1 focus-visible:ring-primary/50"
                 />
             </div>
             {filtered.length === 0 ? (

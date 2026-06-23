@@ -1,0 +1,11 @@
+blank_issues_enabled: false
+contact_links:
+  - name: Security vulnerability
+    url: https://github.com/EraPartner/Vision/security/advisories/new
+    about: Please report security issues privately — do not open a public issue.
+  - name: Documentation & knowledge base
+    url: https://github.com/EraPartner/Vision/tree/main/docs
+    about: Architecture decisions, API contracts, feature specs, and guides.
+  - name: Questions & ideas (Discussions)
+    url: https://github.com/EraPartner/Vision/discussions
+    about: Ask questions or float ideas before filing an issue.

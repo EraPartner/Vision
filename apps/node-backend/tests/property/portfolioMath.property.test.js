@@ -367,8 +367,9 @@ describe('property: sanitizeSnapshotSpikes', () => {
       { value: 1020, stocks_etfs_value: 510, crypto_value: 204, metals_value: 102 },
     ];
     const result = sanitizeSnapshotSpikes(snapshots);
+    // Replacement is rounded to cents (shared sanitizer implementation).
     const expected = Math.sqrt(1000 * 1020);
-    expect(result[1].value).toBeCloseTo(expected, 4);
+    expect(result[1].value).toBeCloseTo(expected, 2);
     // Endpoints unchanged
     expect(result[0].value).toBe(1000);
     expect(result[2].value).toBe(1020);

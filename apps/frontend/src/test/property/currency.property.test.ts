@@ -12,7 +12,7 @@
 //   - parseLocaleNumber on a number passes through unchanged.
 //   - Negative parens "(123,45)" parses to a negative.
 
-import { describe, expect, it } from "vitest";
+import { describe, it } from "vitest";
 import fc from "fast-check";
 import { parseLocaleNumber } from "@/utils/currency";
 

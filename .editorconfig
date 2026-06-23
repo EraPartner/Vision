@@ -1,0 +1,30 @@
+# EditorConfig — https://editorconfig.org
+# Codifies the whitespace conventions Vision relies on. There is intentionally no
+# Prettier in this repo (ESLint-only), so this file is the source of truth for
+# indentation across editors. Keep it in sync with how the code is actually written.
+root = true
+
+[*]
+charset = utf-8
+end_of_line = lf
+insert_final_newline = true
+trim_trailing_whitespace = true
+indent_style = space
+indent_size = 2
+
+# Frontend (React + TypeScript, under apps/frontend/src) is 4-space indented.
+[apps/frontend/src/**.{ts,tsx,js,jsx,css}]
+indent_size = 4
+
+# Python (Alembic migrations + tooling config) — 4-space, ruff-formatted.
+[*.py]
+indent_size = 4
+
+# Markdown may use trailing spaces as hard line breaks; leave them alone.
+[*.md]
+trim_trailing_whitespace = false
+
+# Generated / vendored — don't fight their formatting.
+[{bun.lock,*.min.js,*.min.css}]
+trim_trailing_whitespace = false
+insert_final_newline = ignore

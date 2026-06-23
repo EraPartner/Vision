@@ -25,6 +25,7 @@ import { getMetrics } from '../middleware/requestMetrics.js';
 import { getRouteManifest } from '../services/routeManifest.js';
 import { adminMutateLimiter } from '../middleware/rateLimiter.js';
 import { isAccuracyTableHealthy } from '../services/calculations/forecast/accuracyStore.js';
+import { getTableMeta, readRows, applyMutations } from '../services/dbEditor.js';
 
 const GITHUB_OWNER = 'EraPartner';
 const GITHUB_REPO = 'Vision';
@@ -246,6 +247,44 @@ router.post('/database/vacuum', adminMutateLimiter, async (req, res) => {
   }
 
   res.ok({ vacuumed: table ?? 'all' });
+});
+
+// ── Data Editor (JetBrains-style table browser/editor) ─────────────────────────
+
+router.get('/database/tables/:table/schema', async (req, res) => {
+  const meta = await getTableMeta(req.params.table);
+  res.ok(meta);
+});
+
+router.get('/database/tables/:table/rows', async (req, res) => {
+  let filters = [];
+  if (req.query.filters !== undefined) {
+    try {
+      const parsed = JSON.parse(req.query.filters);
+      if (!Array.isArray(parsed)) throw new Error('filters must be an array');
+      filters = parsed;
+    } catch (err) {
+      throw new ValidationError(`Invalid filters parameter: ${err.message}`);
+    }
+  }
+  const result = await readRows(req.params.table, {
+    limit: req.query.limit,
+    offset: req.query.offset,
+    orderBy: req.query.orderBy,
+    dir: req.query.dir,
+    where: req.query.where,
+    filters,
+  });
+  res.ok(result);
+});
+
+// codeql[js/missing-rate-limiting]: adminMutateLimiter is applied as middleware
+// on this exact route. Identifiers are validated against the live catalog and
+// double-quoted in dbEditor.js; values are parameterized.
+router.post('/database/tables/:table/mutate', adminMutateLimiter, async (req, res) => {
+  const { changes, dryRun } = req.body ?? {};
+  const result = await applyMutations(req.params.table, changes, { dryRun: dryRun === true });
+  res.ok(result);
 });
 
 // ── Provider Health ───────────────────────────────────────────────────────────

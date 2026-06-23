@@ -173,6 +173,41 @@ package "Supporting" {
   }
 }
 
+package "Thin Route Seams (ADR-067, June 2026)" {
+  note "14 new thin seam services created to enforce\nroute→service boundary (no-repo-direct-from-route ERROR).\nEach delegates to the matching repository; exists to\nprovide a stable extension point." as SeamNote
+  class CategoryService { +list() +create() +update() +delete() }
+  class TransactionService { +list() +create() +update() +delete() }
+  class RecipientService { +list() +create() +update() +merge() }
+  class RecipientBankAccountService { +list() +create() +delete() }
+  class SavedChartsService { +list() +create() +update() +delete() }
+  class InfoService { +getSummary() +getNetWorth() +getMonthly() }
+  class PlannedTransactionService { +list() +create() +update() +execute() }
+  class SettingsService { +get() +set() }
+  class SplitService { +list() +create() +settle() }
+  class WatchlistService { +list() +create() +update() +delete() }
+  class AttachmentRecordService { +list() +delete() }
+  class ImportBatchService { +list() +get() +rollback() }
+  class CustomParserConfigService { +list(kind) +create(kind) +update() +delete() }
+  class PortfolioTxService { +create() +update() +delete() }
+  class PortfolioImportPipelineService <<ADR-078>> { +runPortfolioImportPipeline(opts) +commitPortfolioImport(batchId, accountId?) }
+  class PortfolioImportBatchService <<ADR-078>> { +listBatches() +getBatch() +getPreviewRows() +overrideInvestment() +rollbackBatch() }
+  class FxResolveService <<ADR-074, ADR-078>> { +resolveRate(currency, date): Promise<number> }
+  class PortfolioSummaryService <<ADR-044, ADR-091, ADR-100>> {
+    +getPortfolioSummary(currency): Promise<Summary>
+    ' Returns totals + summaries[] + byAccount[] (per-account holdings, parity-locked)
+  }
+  class MoveHoldingService <<ADR-091>> {
+    +move(investmentId, fromAccountId, toAccountId, units?, strategy?): Promise<MoveResult>
+    ' strategy: 'fifo' (default) | 'proportional'
+  }
+  class BrokerageFanoutService <<ADR-095>> {
+    +planBrokerageFanout(rows, accountId): FanoutPlan
+    +commitBrokerageFanout(plan, db): Promise<CommitResult>
+    ' Core built; parser/staging/review UI not yet wired
+  }
+  class AccountMergeService <<ADR-088>> { +merge(survivorId, sourceIds): Promise<MergeResult> }
+}
+
 ' Relationships
 ImportPipeline --> BankAdapters
 ImportPipeline --> DeduplicationService

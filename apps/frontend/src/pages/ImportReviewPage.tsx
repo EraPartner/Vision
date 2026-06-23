@@ -6,6 +6,7 @@ import { toast } from "sonner";
 import { apiClient } from "@/lib/api";
 import type { ImportStagingRow, ImportPreviewGroup } from "@/lib/api";
 import { useLanguage } from "@/contexts/LanguageContext";
+import { invalidateTransactionLists } from "@/hooks/useTransactions";
 import { PageHeader } from "@/components/shared/PageHeader";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -44,7 +45,7 @@ function matchSourceBadge(source: MatchSource, similarity?: number | null) {
       );
     case "fuzzy":
       return (
-        <Badge variant="outline" className="text-xs border-amber-400 text-amber-600 dark:text-amber-400">
+        <Badge variant="outline" className="text-xs border-warning/60 text-warning">
           fuzzy {similarity != null ? (similarity * 100).toFixed(0) + "%" : ""}
         </Badge>
       );
@@ -56,7 +57,7 @@ function matchSourceBadge(source: MatchSource, similarity?: number | null) {
       );
     case "new":
       return (
-        <Badge variant="outline" className="text-xs border-emerald-400 text-emerald-600 dark:text-emerald-400">
+        <Badge variant="outline" className="text-xs border-success/60 text-success">
           new
         </Badge>
       );
@@ -123,7 +124,17 @@ export default function ImportReviewPage() {
         }),
         { icon: <CheckCircle2 className="h-4 w-4" /> }
       );
+      if (data.auto_linked_count && data.auto_linked_count > 0) {
+        toast.success(t("importReview.toast.autoLinked", { n: data.auto_linked_count }));
+        queryClient.invalidateQueries({ queryKey: ["plannedMatchSuggestions"] });
+        queryClient.invalidateQueries({ queryKey: ["upcomingPlannedPayments"] });
+      }
       queryClient.invalidateQueries({ queryKey: ["import-batches"] });
+      // A commit inserts the staged rows into `transactions`; refresh the
+      // transactions list, dashboard stat cards, monthly summary and
+      // aggregations so the imported rows appear immediately instead of after
+      // staleTime expires (window-focus refetch is disabled globally).
+      invalidateTransactionLists(queryClient);
       navigate("/import");
     },
     onError: (err: Error) => {
@@ -281,7 +292,7 @@ export default function ImportReviewPage() {
         )}
         {preview.totals.fuzzy > 0 && (
           <span className="text-muted-foreground">
-            <Badge variant="outline" className="text-xs border-amber-400 text-amber-600 dark:text-amber-400 mr-1">fuzzy</Badge>
+            <Badge variant="outline" className="text-xs border-warning/60 text-warning mr-1">fuzzy</Badge>
             {preview.totals.fuzzy}
           </span>
         )}
@@ -293,7 +304,7 @@ export default function ImportReviewPage() {
         )}
         {preview.totals.new > 0 && (
           <span className="text-muted-foreground">
-            <Badge variant="outline" className="text-xs border-emerald-400 text-emerald-600 dark:text-emerald-400 mr-1">new</Badge>
+            <Badge variant="outline" className="text-xs border-success/60 text-success mr-1">new</Badge>
             {preview.totals.new}
           </span>
         )}
@@ -408,7 +419,7 @@ export default function ImportReviewPage() {
                       {row.memo && (
                         <span className="truncate min-w-0 text-muted-foreground/60 hidden sm:block">{row.memo}</span>
                       )}
-                      <span className={`ml-auto shrink-0 tabular-nums font-medium ${Number(row.amount) < 0 ? "text-destructive" : "text-emerald-600 dark:text-emerald-400"}`}>
+                      <span className={`ml-auto shrink-0 tabular-nums font-medium ${Number(row.amount) < 0 ? "text-destructive" : "text-success"}`}>
                         {formatCurrency(Number(row.amount), row.currency ?? "EUR", locale)}
                       </span>
                     </div>

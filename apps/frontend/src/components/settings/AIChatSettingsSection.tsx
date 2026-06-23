@@ -17,7 +17,7 @@ export function AIChatSettingsSection({ value, onChange }: AIChatSettingsSection
     const statusDotClass = statusLoading
         ? 'bg-muted-foreground/50'
         : status?.ok
-            ? 'bg-emerald-500'
+            ? 'bg-success'
             : 'bg-destructive';
 
     const statusLabel = statusLoading

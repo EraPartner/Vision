@@ -4,7 +4,7 @@
 
 import { cleanRecipientName, normalizeToUppercase } from '../../textNormalization.js';
 import { logger } from '../../../config/logger.js';
-import { parseCsvFile, buildOptionalComment, buildRawRowString, parseDecimalSafe } from './_shared.js';
+import { parseCsvFile, buildOptionalComment, buildRawRowString, parseDecimalSafe, parseDateFlexibleUtc } from './_shared.js';
 
 const NAME = 'vision';
 const BANK_LABEL = 'Vision';
@@ -13,8 +13,8 @@ function rowToTransaction(row) {
   const dateStr = (row['Date'] || '').trim();
   if (!dateStr) return null;
 
-  const date = new Date(dateStr);
-  if (isNaN(date.getTime())) return null;
+  const date = parseDateFlexibleUtc(dateStr);
+  if (!date) return null;
 
   const amountStr = (row['Amount'] || '').replace(/[€$£,\s]/g, '').trim();
   const amount = parseDecimalSafe(amountStr);
@@ -67,17 +67,20 @@ export async function parse(filePath) {
     trim: true,
   });
 
-  const transactions = [];
+  const transactions = /** @type {any[] & { skipped?: number }} */ ([]);
+  let skipped = 0;
   for (const row of records) {
     try {
       const tx = rowToTransaction(row);
       if (tx) transactions.push(tx);
+      else skipped++;
     } catch {
-      continue;
+      skipped++;
     }
   }
+  transactions.skipped = skipped;
 
-  logger.info(`Vision CSV parsed: ${transactions.length} transactions`);
+  logger.info(`Vision CSV parsed: ${transactions.length} transactions, ${skipped} skipped`);
   return transactions;
 }
 

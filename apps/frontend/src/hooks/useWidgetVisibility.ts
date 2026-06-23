@@ -4,7 +4,8 @@ import logger from '@/lib/logger';
 const SETTINGS_KEY = 'widget_visibility';
 export interface WidgetDefinition {
     id: string;
-    label: string;
+    label?: string;
+    labelKey?: string;
     description?: string;
     defaultVisible?: boolean; // defaults to true
 }

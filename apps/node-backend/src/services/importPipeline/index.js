@@ -26,6 +26,7 @@ import { createBatch, stageBatch } from './stage.js';
 import { validateBatch } from './validate.js';
 import { matchBatch } from './match.js';
 import { commitBatch } from './commit.js';
+import { reconcileTransfers } from '../transferReconciliationService.js';
 
 export { createBatch, stageBatch, validateBatch, matchBatch, commitBatch };
 
@@ -71,10 +72,10 @@ export async function prepareImport({ batchId, filePath, adapterName, customConf
  * Applies user_override_recipient_id before writing transactions.
  *
  * @param {{ batchId: number, onProgress?: Function }} args
- * @returns {Promise<{ imported: number, duplicates: number, errors: number }>}
+ * @returns {Promise<{ imported: number, duplicates: number, errors: number, autoLinkedCount: number }>}
  */
 export async function commitImport({ batchId, onProgress }) {
-  const { imported, duplicates, errors } = await commitBatch({ batchId, onProgress });
+  const { imported, duplicates, errors, autoLinkedCount } = await commitBatch({ batchId, onProgress });
 
   await query(
     `UPDATE import_batches
@@ -84,6 +85,13 @@ export async function commitImport({ batchId, onProgress }) {
     [batchId]
   );
 
+  // Detect internal transfers across the whole corpus (not just this batch) so
+  // cross-bank pairs whose legs arrived in separate imports get matched (ADR-083).
+  // Runs before the MV refresh so the views reflect the exclusion immediately.
+  await reconcileTransfers().catch((err) => {
+    logger.warn('[pipeline] transfer reconcile failed (non-fatal)', { err: err?.message });
+  });
+
   if (imported > 100) {
     await refreshMaterializedViews().catch((err) => {
       logger.warn('[pipeline] MV refresh failed (non-fatal)', { err: err?.message });
@@ -92,8 +100,8 @@ export async function commitImport({ batchId, onProgress }) {
     scheduleRefresh();
   }
 
-  logger.info('[pipeline] committed', { batchId, imported, duplicates, errors });
-  return { imported, duplicates, errors };
+  logger.info('[pipeline] committed', { batchId, imported, duplicates, errors, autoLinkedCount });
+  return { imported, duplicates, errors, autoLinkedCount };
 }
 
 /**
@@ -104,7 +112,7 @@ export async function commitImport({ batchId, onProgress }) {
  * for the frontend to present the ImportReviewPage.
  *
  * @param {{ filePath: string, adapterName: string, customConfig?: object, filename?: string, sizeBytes?: number, onProgress?: Function }} args
- * @returns {Promise<{ batchId: number, total: number, requiresReview: boolean, imported?: number, duplicates?: number, errors?: number, matchSourceCounts?: object }>}
+ * @returns {Promise<{ batchId: number, total: number, requiresReview: boolean, imported?: number, duplicates?: number, errors?: number, matchSourceCounts?: object, autoLinkedCount?: number }>}
  */
 export async function runImportPipeline({ filePath, adapterName, customConfig, filename, sizeBytes, onProgress }) {
   const batchId = await createBatch({ adapterName, filename, sizeBytes, customConfig });
@@ -126,7 +134,7 @@ export async function runImportPipeline({ filePath, adapterName, customConfig, f
     }
 
     // All rows resolved exactly — auto-commit without review.
-    const { imported, duplicates, errors: commitErrors } = await commitImport({ batchId, onProgress });
+    const { imported, duplicates, errors: commitErrors, autoLinkedCount } = await commitImport({ batchId, onProgress });
 
     const totalErrors = (validateErrors || 0) + (commitErrors || 0);
     await query(
@@ -134,8 +142,8 @@ export async function runImportPipeline({ filePath, adapterName, customConfig, f
       [batchId, totalErrors]
     );
 
-    logger.info('[pipeline] complete', { batchId, total: rowsTotal, imported, duplicates, errors: totalErrors });
-    return { batchId, total: rowsTotal, requiresReview: false, imported, duplicates, errors: totalErrors };
+    logger.info('[pipeline] complete', { batchId, total: rowsTotal, imported, duplicates, errors: totalErrors, autoLinkedCount });
+    return { batchId, total: rowsTotal, requiresReview: false, imported, duplicates, errors: totalErrors, autoLinkedCount };
   } catch (err) {
     await query(
       `UPDATE import_batches

@@ -260,29 +260,48 @@ describe('Currency Conversion Service', () => {
     expect(nearestLookups).toHaveLength(1);
   });
 
-  it('should backfill only missing portfolio date-currency rates', async () => {
-    // Block ECB 90d fetch so backfill falls through to the DB nearest lookup deterministically.
+  /**
+   * Route the mocked DB by SQL shape — the backfill flow now spans the pairs
+   * scan, the repair flag in user_settings, rate lookups/saves and the
+   * fx_rate_to_eur stamping, so positional mocks are unreadable.
+   */
+  function dispatchQueries(handlers) {
+    query.mockImplementation(async (sql, params) => {
+      const s = String(sql);
+      for (const [pattern, result] of handlers) {
+        if (s.includes(pattern)) {
+          return typeof result === 'function' ? result(params, s) : result;
+        }
+      }
+      return { rows: [], rowCount: 0 };
+    });
+  }
+
+  it('does not fabricate exchange-rate history for unresolvable old dates', async () => {
+    // Block every external fetch so neither the 90d nor the full feed resolves.
     global.fetch = vi.fn().mockResolvedValue({
       ok: false,
       status: 503,
       text: async () => '',
     });
 
-    query
-      // missing pairs scan
-      .mockResolvedValueOnce({ rows: [{ currency_code: 'USD', rate_date: '2024-01-01' }] })
-      // exact lookup in getRateToEurForDate -> none
-      .mockResolvedValueOnce({ rows: [] })
-      // ECB 90d fetch won't include this old date, so nearest lookup
-      .mockResolvedValueOnce({ rows: [{ rate_to_eur: 0.91 }] })
-      // exactCheck before insert -> none
-      .mockResolvedValueOnce({ rows: [] })
-      // saveHistoricalRate insert
-      .mockResolvedValueOnce({ rows: [] });
+    dispatchQueries([
+      ['FROM user_settings', { rows: [{ value: true }] }], // repair already done
+      ['LEFT JOIN exchange_rates', { rows: [{ currency_code: 'USD', rate_date: '2024-01-01' }] }],
+      ['GROUP BY pt.currency', { rows: [{ currency_code: 'USD', rate_date: '2024-01-01' }] }],
+      ['SELECT rate_to_eur\n     FROM exchange_rates\n     WHERE currency_code = $1 AND rate_date = $2::date', { rows: [] }],
+      ['ORDER BY ABS(rate_date - $2::date)', { rows: [{ rate_to_eur: 0.91 }] }], // nearest — must NOT be saved
+      ['SELECT 1 FROM exchange_rates', { rows: [] }],
+      ['to_regclass', { rows: [{ base_table: null }] }],
+      ['SET fx_rate_to_eur', { rows: [], rowCount: 0 }],
+    ]);
 
     const result = await backfillPortfolioHistoricalRates();
-    expect(result.inserted).toBeGreaterThanOrEqual(0);
-    expect(result.missing).toBeGreaterThanOrEqual(0);
+
+    // The nearest-rate fallback is reported as unresolved, not inserted as history.
+    expect(result).toEqual({ inserted: 0, missing: 1, repaired: 0, stamped: 0 });
+    const inserts = query.mock.calls.filter(([sql]) => String(sql).includes('INSERT INTO exchange_rates'));
+    expect(inserts).toHaveLength(0);
   });
 
   it('should use ECB historical feed during backfill when exact date exists in 90d feed', async () => {
@@ -294,24 +313,71 @@ describe('Currency Conversion Service', () => {
       text: async () => "<Cube><Cube time='2026-02-01'><Cube currency='USD' rate='2.0000'/></Cube></Cube>",
     });
 
-    query
-      // missing pairs scan
-      .mockResolvedValueOnce({ rows: [{ currency_code: 'USD', rate_date: '2026-02-01' }] })
-      // exact lookup in getRateToEurForDate -> none
-      .mockResolvedValueOnce({ rows: [] })
-      // saveHistoricalRate from getRateToEurForDate
-      .mockResolvedValueOnce({ rows: [] })
-      // exactCheck before insert -> none
-      .mockResolvedValueOnce({ rows: [] })
-      // saveHistoricalRate from backfill insert path
-      .mockResolvedValueOnce({ rows: [] });
+    let savedRate = false;
+    dispatchQueries([
+      ['FROM user_settings', { rows: [{ value: true }] }], // repair already done
+      ['LEFT JOIN exchange_rates', { rows: [{ currency_code: 'USD', rate_date: '2026-02-01' }] }],
+      ['GROUP BY pt.currency', { rows: [{ currency_code: 'USD', rate_date: '2026-02-01' }] }],
+      ['INSERT INTO exchange_rates', () => { savedRate = true; return { rows: [] }; }],
+      ['SELECT rate_to_eur\n     FROM exchange_rates\n     WHERE currency_code = $1 AND rate_date = $2::date', { rows: [] }],
+      ['SELECT 1 FROM exchange_rates', () => ({ rows: savedRate ? [{ ok: 1 }] : [] })],
+      ['to_regclass', { rows: [{ base_table: null }] }],
+      ['SET fx_rate_to_eur', { rows: [], rowCount: 1 }],
+    ]);
 
     const result = await backfillPortfolioHistoricalRates();
 
-    expect(result).toEqual({ inserted: 1, missing: 0 });
+    expect(result).toEqual({ inserted: 1, missing: 0, repaired: 0, stamped: 1 });
     expect(global.fetch).toHaveBeenCalledTimes(1);
     expect(global.fetch).toHaveBeenCalledWith(
       expect.stringContaining('eurofxref-hist-90d.xml'),
+      expect.any(Object)
+    );
+  });
+
+  it('repairs previously fabricated old rates from the full ECB history (one-time)', async () => {
+    query.mockReset();
+    clearMemoryCache();
+
+    // 90d feed empty; full-history feed carries the true old rate (1/2 = 0.5).
+    global.fetch = vi.fn().mockImplementation(async (url) => {
+      if (String(url).includes('eurofxref-hist.xml')) {
+        return {
+          ok: true,
+          text: async () => "<Cube><Cube time='2020-03-02'><Cube currency='USD' rate='2.0000'/></Cube></Cube>",
+        };
+      }
+      return { ok: false, status: 503, text: async () => '' };
+    });
+
+    let repairFlagSet = false;
+    const savedRates = [];
+    dispatchQueries([
+      ['FROM user_settings', () => ({ rows: repairFlagSet ? [{ value: true }] : [] })],
+      ['INSERT INTO user_settings', () => { repairFlagSet = true; return { rows: [] }; }],
+      ['LEFT JOIN exchange_rates', { rows: [] }], // nothing missing after repair
+      // weekend txn date 2020-03-07 → stored fabricated rate differs from truth
+      ['GROUP BY pt.currency', { rows: [{ currency_code: 'USD', rate_date: '2020-03-07' }] }],
+      ['WHERE currency_code = ANY', { rows: [{ currency_code: 'USD', rate_date: '2020-03-07', rate_to_eur: 0.91 }] }],
+      ['INSERT INTO exchange_rates', (params) => { savedRates.push(params); return { rows: [] }; }],
+      ['to_regclass', { rows: [{ base_table: null }] }],
+      ['SET fx_rate_to_eur', { rows: [], rowCount: 1 }],
+    ]);
+
+    const result = await backfillPortfolioHistoricalRates();
+
+    expect(result).toEqual({ inserted: 0, missing: 0, repaired: 1, stamped: 1 });
+    // The Saturday date resolves to the preceding business day's rate
+    // (2020-03-02 in this fixture) per the on-or-before convention, and is
+    // saved under the transaction's own date. saveHistoricalRate binds
+    // (currency, rate, date).
+    expect(savedRates).toHaveLength(1);
+    expect(savedRates[0][0]).toBe('USD');
+    expect(savedRates[0][1]).toBeCloseTo(0.5, 10);
+    expect(savedRates[0][2]).toBe('2020-03-07');
+    expect(repairFlagSet).toBe(true);
+    expect(global.fetch).toHaveBeenCalledWith(
+      expect.stringContaining('eurofxref-hist.xml'),
       expect.any(Object)
     );
   });

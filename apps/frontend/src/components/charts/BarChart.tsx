@@ -4,6 +4,7 @@
  * Per-datum color override via optional colorForIndex prop.
  */
 import { Group } from "@visx/group";
+import { summarizeSeriesChart } from "./chartAria";
 import { ParentSize } from "@visx/responsive";
 import { scaleBand, scaleLinear } from "@visx/scale";
 import { motion, useReducedMotion } from "framer-motion";
@@ -13,6 +14,7 @@ import { BottomAxis, LeftAxis } from "./ChartAxis";
 import { ChartTooltip, type ChartTooltipDatum } from "./ChartTooltip";
 import { CHART_NEUTRAL, getChartColor } from "./palette";
 import { durations, easings } from "@/lib/motion";
+import { useLanguage } from "@/contexts/LanguageContext";
 
 export interface BarSeries<Datum> {
     readonly key: string;
@@ -71,7 +73,7 @@ function buildOverlayPath<Datum>(
     data: ReadonlyArray<Datum>,
     accessor: (d: Datum) => number | null,
     categoryAccessor: (d: Datum) => string,
-    categoryScale: ReturnType<typeof scaleBand>,
+    categoryScale: { (value: string): number | undefined; bandwidth(): number },
     valueScale: ReturnType<typeof scaleLinear>,
 ): string {
     let path = "";
@@ -110,6 +112,7 @@ function Inner<Datum>({
     width,
     height,
 }: BarChartProps<Datum> & { width: number; height: number }) {
+    const { t } = useLanguage();
     const reduce = useReducedMotion();
 
     const effMargin =
@@ -205,7 +208,7 @@ function Inner<Datum>({
 
     return (
         <div style={{ position: "relative", width, height }}>
-            <svg width={width} height={height} role="img" aria-label={ariaLabel ?? "Bar chart"}>
+            <svg width={width} height={height} role="img" aria-label={ariaLabel ?? summarizeSeriesChart(t, 'chart.aria.kind.bar', data.length, series.map((s) => s.label))}>
                 <Group left={effMargin.left} top={effMargin.top}>
                     {valueScale.ticks(5).map((tick) =>
                         layout === "vertical" ? (

@@ -314,7 +314,7 @@ describe('investmentRepository.update', () => {
       [31.2, 1]
     );
     expect(query).toHaveBeenNthCalledWith(7, 'SELECT * FROM investments WHERE id = $1', [1]);
-    expect(result).toEqual({ id: 1, asset_class: 'stock', current_price: '31.20', price_provider_id: 'IONQ' });
+    expect(result).toEqual({ id: 1, asset_class: 'stock', current_price: 31.2, price_provider_id: 'IONQ' });
   });
 
   it('updates price via inheritance tables without touching investments view', async () => {
@@ -348,7 +348,7 @@ describe('investmentRepository.update', () => {
       [90.5, 1]
     );
     expect(query).toHaveBeenNthCalledWith(5, 'SELECT * FROM investments WHERE id = $1', [1]);
-    expect(result).toEqual({ id: 1, asset_class: 'etf', current_price: '90.50' });
+    expect(result).toEqual({ id: 1, asset_class: 'etf', current_price: 90.5 });
   });
 
   it('updates generic fields via inheritance tables when schema exists', async () => {

@@ -3,7 +3,7 @@ title: Admin API
 type: endpoint
 status: active
 date: 2026-04-26
-updated: 2026-04-24
+updated: 2026-06-18
 tags:
   - api
   - admin
@@ -13,7 +13,9 @@ tags:
   - provider-health
   - endpoint-liveness
   - phase-f
-description: API endpoints for system administration, database management, provider health, and endpoint liveness
+  - db-data-editor
+  - adr-101
+description: API endpoints for system administration, database management (including the DB data editor), provider health, and endpoint liveness
 aliases:
   - admin
   - system admin
@@ -21,16 +23,18 @@ aliases:
   - initialization
 related_code:
   - apps/node-backend/src/routes/admin.js
+  - apps/node-backend/src/services/dbEditor.js
   - apps/node-backend/src/main.js
   - apps/node-backend/src/config/config.js
   - apps/node-backend/src/services/providerHealth/providerHealthService.js
   - apps/node-backend/src/middleware/requestMetrics.js
   - apps/frontend/src/lib/api/admin.ts
+  - apps/frontend/src/pages/admin/TableDataEditorPage.tsx
 ---
 
 # Admin API
 
-System administration endpoints for database management, health checks, provider health tracking, and endpoint liveness metrics.
+System administration endpoints for database management, health checks, provider health tracking, and endpoint liveness metrics. Includes the [[docs/features/database-maintenance|DB data editor]] (ADR-101) for raw table inspection and editing.
 
 ## Base URL
 
@@ -38,7 +42,7 @@ System administration endpoints for database management, health checks, provider
 /api/admin
 ```
 
-## Endpoints (13 total)
+## Endpoints (17 total)
 
 ### GET /api/admin
 
@@ -156,7 +160,7 @@ Run persisted Kinesis history sanitization for all investments where `price_prov
 
 ---
 
-### GET /api/admin/db/stats (Phase 7)
+### GET /api/admin/database/stats (Phase 7)
 
 Retrieve current database table statistics.
 
@@ -210,7 +214,7 @@ See [[docs/features/database-maintenance|Database Maintenance Feature]] for deta
 
 ---
 
-### POST /api/admin/db/vacuum (Phase 7)
+### POST /api/admin/database/vacuum (Phase 7)
 
 Run `VACUUM ANALYZE` on one or all tables.
 
@@ -252,6 +256,209 @@ Run `VACUUM ANALYZE` on one or all tables.
 **Implementation note:**
 - Uses raw database client (not connection pool) because VACUUM cannot run inside a transaction
 - See [[docs/features/database-maintenance|Database Maintenance Feature]] for architectural details
+
+---
+
+### GET /api/admin/database/tables/:table/schema (ADR-101)
+
+Retrieve the column schema and primary key for a single table. Used by the data editor to build the column header row and know which columns are part of the primary key.
+
+**Auth:** admin Bearer + CSRF guard (same middleware stack as all `/api/admin` routes).
+
+**Rate limit:** `adminRateLimiter`.
+
+**Path Parameters:**
+
+| Parameter | Description |
+|-----------|-------------|
+| `table` | Table name (validated against `pg_stat_user_tables`; 400 if unknown) |
+
+**Response:** `200 OK` — envelope `{ ok: true, data: { table, columns, primaryKey } }`
+
+```json
+{
+  "ok": true,
+  "data": {
+    "table": "transactions",
+    "columns": [
+      {
+        "name": "id",
+        "dataType": "integer",
+        "udtName": "int4",
+        "nullable": false,
+        "hasDefault": true,
+        "generated": false,
+        "writable": false
+      },
+      {
+        "name": "amount",
+        "dataType": "numeric",
+        "udtName": "numeric",
+        "nullable": false,
+        "hasDefault": false,
+        "generated": false,
+        "writable": true
+      }
+    ],
+    "primaryKey": ["id"]
+  }
+}
+```
+
+**Column fields:**
+
+| Field | Description |
+|-------|-------------|
+| `name` | Column name |
+| `dataType` | PostgreSQL `data_type` from `information_schema.columns` |
+| `udtName` | `udt_name` (useful for arrays, domains, enums) |
+| `nullable` | True when column allows NULL |
+| `hasDefault` | True when column has a DEFAULT expression |
+| `generated` | True when column is a generated/computed column |
+| `writable` | False for PK columns and generated columns — the UI skips these in edit forms |
+
+**Response:** `400 Bad Request` (unknown or system table)
+
+```json
+{ "ok": false, "error": { "code": "APP_ERROR", "message": "Unknown table: pg_secret" } }
+```
+
+---
+
+### GET /api/admin/database/tables/:table/rows (ADR-101)
+
+Paginated, filterable, sortable read of table rows. Runs inside a `BEGIN; SET TRANSACTION READ ONLY; SET LOCAL statement_timeout = '10s'` block so it can neither mutate nor hang the database. Each row includes a hidden `__xmin` field (PostgreSQL row version) used by the mutate endpoint for optimistic concurrency.
+
+**Auth:** admin Bearer + CSRF guard. **Rate limit:** `adminRateLimiter`.
+
+**Path Parameters:**
+
+| Parameter | Description |
+|-----------|-------------|
+| `table` | Table name (validated against `pg_stat_user_tables`) |
+
+**Query Parameters:**
+
+| Parameter | Type | Default | Description |
+|-----------|------|---------|-------------|
+| `limit` | integer | 100 | Rows per page (max 500) |
+| `offset` | integer | 0 | Row offset for pagination |
+| `orderBy` | string | primary key | Column to sort by (validated against `information_schema.columns`) |
+| `dir` | `asc` \| `desc` | `asc` | Sort direction |
+| `where` | string | — | Raw WHERE clause appended to the query; `;` is rejected to prevent statement chaining |
+| `filters` | JSON string | — | JSON array of `{column, op, value}` filter objects (see ops below) |
+
+**Supported filter `op` values:** `eq`, `ne`, `lt`, `lte`, `gt`, `gte`, `contains` (ILIKE `%value%`), `startsWith` (ILIKE `value%`), `isnull`, `notnull`.
+
+**Response:** `200 OK`
+
+```json
+{
+  "ok": true,
+  "data": {
+    "table": "transactions",
+    "columns": ["id", "amount", "description", "date", "category_id"],
+    "primaryKey": ["id"],
+    "rows": [
+      { "id": 1, "amount": "-42.50", "description": "Groceries", "date": "2026-06-15", "category_id": 3, "__xmin": "7421836" }
+    ],
+    "total": 2453,
+    "limit": 100,
+    "offset": 0
+  }
+}
+```
+
+> [!warning] Raw WHERE clause
+> The `where` parameter is appended directly to the SQL (after parameterized filter conditions). Semicolons are rejected, and the query runs inside a READ ONLY transaction, so mutation is structurally impossible. However, a crafted `where` clause can still trigger expensive seq-scans. The `statement_timeout` of 10 s caps the blast radius.
+
+---
+
+### POST /api/admin/database/tables/:table/mutate (ADR-101)
+
+Execute a batch of insert/update/delete operations against a single table. Supports a `dryRun` mode that returns the generated SQL without touching the database. All changes execute in one transaction (all-or-nothing). Tables with no primary key are rejected for writes.
+
+**Auth:** admin Bearer + CSRF guard. **Rate limit:** `adminMutateLimiter` (30 req/min — stricter than reads).
+
+**Path Parameters:**
+
+| Parameter | Description |
+|-----------|-------------|
+| `table` | Table name (validated against `pg_stat_user_tables`) |
+
+**Request Body:**
+
+```json
+{
+  "changes": [
+    { "op": "insert", "values": { "amount": "-15.00", "description": "Coffee", "date": "2026-06-18" } },
+    { "op": "update", "pk": { "id": 42 }, "xmin": "7421836", "set": { "description": "Updated desc" } },
+    { "op": "delete", "pk": { "id": 99 }, "xmin": "7310022" }
+  ],
+  "dryRun": false
+}
+```
+
+**Change shapes:**
+
+| Field | `insert` | `update` | `delete` |
+|-------|----------|----------|----------|
+| `op` | `"insert"` | `"update"` | `"delete"` |
+| `values` | Required — column/value map | — | — |
+| `pk` | — | Required — primary key map | Required — primary key map |
+| `xmin` | — | Optional — optimistic-concurrency token from `/rows` response | Optional — optimistic-concurrency token |
+| `set` | — | Required — columns to change | — |
+
+**Optimistic concurrency (`xmin`):** When supplied, the row is locked `FOR UPDATE` and its current PostgreSQL `xmin` compared to the client's token. A mismatch (row was modified by another write since the client loaded it) or a missing row returns `409 Conflict`. Omitting `xmin` skips the check (last-write-wins).
+
+**Dry-run response (`dryRun: true`):** `200 OK` — returns generated SQL without executing it.
+
+```json
+{
+  "ok": true,
+  "data": {
+    "dryRun": true,
+    "count": 2,
+    "statements": [
+      { "op": "insert", "preview": "INSERT INTO \"transactions\" (\"amount\", \"description\") VALUES ($1, $2)" },
+      { "op": "update", "preview": "UPDATE \"transactions\" SET \"description\" = $1 WHERE \"id\" = $2" }
+    ]
+  }
+}
+```
+
+**Commit response (`dryRun: false` or omitted):** `200 OK`
+
+```json
+{
+  "ok": true,
+  "data": {
+    "dryRun": false,
+    "applied": 2,
+    "results": [
+      { "op": "insert", "ok": true },
+      { "op": "update", "ok": true }
+    ],
+    "refreshScheduled": true
+  }
+}
+```
+
+`refreshScheduled: true` means the committed table (`transactions`, `recipients`, or `categories`) is a materialized-view base table and a debounced `scheduleRefresh()` was triggered, so dashboard views stay fresh.
+
+**Error responses:**
+
+| Status | Scenario |
+|--------|----------|
+| `400` | Unknown table, missing PK for update/delete, constraint violation (NOT NULL, CHECK, invalid type) |
+| `409` | `xmin` mismatch (optimistic concurrency conflict) or UNIQUE constraint violation |
+| `500` | Unexpected database error (rolled back) |
+
+Constraint SQLSTATEs (`23502` NOT NULL, `23503` FK violation, `23505` UNIQUE, `23514` CHECK, `22P02` invalid type) are mapped to human-readable messages before the `400`/`409` response is sent.
+
+**Audit trail:** Every committed statement is written to `db_editor_audit` (table `db_editor_audit(id, table_name, op, pk_json, before_json, after_json, statement, created_at)`; index `db_editor_audit_table_time_idx`) inside the same transaction, and also emitted on the structured logger. The audit record is created even if the change targets the `db_editor_audit` table itself. Migration: `alembic/versions/0059_db_editor_audit.py`.
+
+See [[docs/features/database-maintenance|Database Maintenance Feature]] and [[docs/adr/101-db-data-editor|ADR-101]] for full safety model.
 
 ---
 
@@ -325,87 +532,6 @@ Apply update and restart the application (backwards compatibility endpoint).
   "success": true,
   "note": "Updates are managed by the Vision desktop app via Docker image pulls and the desktop shell updater. No manual action is required."
 }
-```
-
----
-
-### GET /api/admin/shadow-divergences/summary (Phase F)
-
-Get a per-endpoint summary of aggregation shadow divergences. Returns divergence counts, maximum divergence count per endpoint, and the most recent timestamp.
-
-**Response:** `200 OK`
-
-```json
-{
-  "endpoints": [
-    {
-      "endpoint": "/api/aggregations/monthly-summary",
-      "count": 3,
-      "last_seen": "2026-04-25T14:32:10.123Z",
-      "max_divergence_count": 2
-    },
-    {
-      "endpoint": "/api/aggregations/category-breakdown",
-      "count": 1,
-      "last_seen": "2026-04-24T09:15:00.000Z",
-      "max_divergence_count": 1
-    }
-  ],
-  "total": 4
-}
-```
-
-**Implementation notes:**
-- Queries `agg_shadow_divergences` table grouped by endpoint
-- Returns results ordered by divergence count (descending)
-- Used by frontend admin dashboard to display summary card and endpoint filter options
-
----
-
-### GET /api/admin/shadow-divergences (Phase F)
-
-Retrieve a paginated list of aggregation shadow divergences from the `agg_shadow_divergences` materialized log.
-
-**Query Parameters:**
-
-| Parameter | Type | Default | Description |
-|-----------|------|---------|-------------|
-| `limit` | integer | 50 | Results per page (capped at 200) |
-| `offset` | integer | 0 | Pagination offset |
-| `endpoint` | string | null | Filter by endpoint path; omit for all |
-
-**Response:** `200 OK`
-
-```json
-{
-  "rows": [
-    {
-      "id": 1,
-      "endpoint": "/api/aggregations/monthly-summary",
-      "request_params": { "start_date": "2026-04-01", "end_date": "2026-04-30" },
-      "divergences": [
-        { "path": "data.total_income", "next": "5000.00", "legacy": "4999.99", "delta": 0.01 }
-      ],
-      "divergence_count": 1,
-      "created_at": "2026-04-25T14:32:10.123Z"
-    }
-  ],
-  "total": 42,
-  "limit": 50,
-  "offset": 0
-}
-```
-
-**Implementation notes:**
-- Returns rows ordered by `created_at DESC` (most recent first)
-- Each row includes up to 20 divergences (capped to manage log volume)
-- Request parameters stored as JSONB for filter reconstruction
-- See [[docs/adr/016-aggregation-shadow-mode|ADR-016: Aggregation Shadow Mode]] for divergence detection behavior
-
-**Response:** `500 Internal Server Error`
-
-```json
-{ "ok": false, "error": { "code": "APP_ERROR", "message": "Failed to retrieve shadow divergences" } }
 ```
 
 ---
@@ -555,6 +681,26 @@ Return a static manifest of all registered Express routes.
 
 ---
 
+### GET /api/admin/endpoint-liveness
+
+Return the static route manifest annotated with a `live: true` flag for each entry, confirming that all registered endpoints are reachable.
+
+**Response:** `200 OK`
+
+```json
+[
+  { "method": "GET", "path": "/api/transactions", "live": true },
+  { "method": "POST", "path": "/api/transactions", "live": true },
+  { "method": "PATCH", "path": "/api/transactions/:id", "live": true }
+]
+```
+
+**Notes:**
+- Identical source data as `GET /api/admin/endpoints` (same `getRouteManifest()` call), with each entry extended by `live: true`
+- Intended for health/monitoring tooling that needs a single endpoint confirming the route manifest is served and all entries are live
+
+---
+
 ## Environment Variables
 
 | Variable | Description |
@@ -567,9 +713,10 @@ Return a static manifest of all registered Express routes.
 
 - Database reset is disabled by default (`admin.enableResetDb` setting)
 - Update checks are read-only operations
-- Admin auth middleware enforces per [[docs/adr/037-admin-auth-localhost-fallback|ADR-036]]:
-  - **When `ADMIN_AUTH_TOKEN` is configured:** Requests must include `Authorization: Bearer <token>`
-  - **When `ADMIN_AUTH_TOKEN` is unset:** Requests must originate from a local network address — loopback (`127.0.0.1`, `::1`, `::ffff:127.0.0.1`) or RFC 1918 private ranges (`10.x.x.x`, `172.16–31.x.x`, `192.168.x.x`) including IPv4-mapped and IPv6 ULA (`fc00::/7`). All other origins receive `401 Unauthorized`.
+- Admin auth follows the **token-or-open + CSRF guard** model per [[docs/adr/063-admin-auth-csrf-guard|ADR-063]] (supersedes the RFC 1918 IP allowlist of ADR-037):
+  - **When `ADMIN_AUTH_TOKEN` is configured:** Requests must include `Authorization: Bearer <token>` (timing-safe compare); otherwise `401 Unauthorized`.
+  - **When `ADMIN_AUTH_TOKEN` is unset:** Admin routes are open at the auth layer — protection is the loopback-only host port binding plus the CSRF guard.
+  - **CSRF guard (all `/api/admin` state-changing requests):** cross-site requests are rejected via `Sec-Fetch-Site` (allow `same-origin`/`none`, reject `cross-site`/`same-site`) with an `Origin`-allowlist fallback for older/non-browser clients. This blocks a malicious page from POSTing to destructive routes (e.g. `database/reset`) — which the loopback binding alone cannot stop.
 - Error responses for admin operations are sanitized to generic `Administrative operation failed` to avoid leaking internals.
 
 ### Docker Deployment — LAN Isolation and Admin Access
@@ -581,9 +728,9 @@ ports:
   - "127.0.0.1:${PORT:-3002}:3002"
 ```
 
-This means only the host machine can reach the backend — devices on the same Wi-Fi or LAN cannot. Inside the container, the host browser's request arrives via docker-proxy with a Docker bridge source IP (e.g. `172.17.0.1`). The admin middleware trusts RFC 1918 ranges, so admin endpoints work without a token.
+This means only the host machine can reach the backend — devices on the same Wi-Fi or LAN cannot. Because admin auth no longer relies on an IP allowlist, the docker-proxy bridge source IP (e.g. `172.17.0.1`) is irrelevant: with no token set, admin routes are reachable from any client that can hit the loopback-bound port, and the CSRF guard blocks cross-site browser requests.
 
-> **Warning:** If you change the port mapping back to `"${PORT:-3002}:3002"` (binding `0.0.0.0`), LAN devices will also pass the private-IP check because their source IPs fall in RFC 1918 ranges. Set `ADMIN_AUTH_TOKEN` and consider adding auth to non-admin routes in that case.
+> **Warning:** If you change the port mapping back to `"${PORT:-3002}:3002"` (binding `0.0.0.0`), the loopback isolation is gone — **set `ADMIN_AUTH_TOKEN`** so admin routes require a Bearer token, and consider adding auth/CSRF protection to non-admin routes too.
 
 ### Rate Limits
 

@@ -20,8 +20,8 @@ const EMPTY_INVESTMENTS: never[] = [];
 const EMPTY_TRANSACTIONS: never[] = [];
 
 export function usePortfolio() {
-  const { data: invData } = useInvestmentsQuery();
-  const investments = invData?.items ?? EMPTY_INVESTMENTS;
+  const investmentsQuery = useInvestmentsQuery();
+  const investments = investmentsQuery.data?.items ?? EMPTY_INVESTMENTS;
   const investmentIds = useMemo(
     () => investments.map((i) => i.id).sort((a, b) => a - b),
     [investments]
@@ -37,6 +37,13 @@ export function usePortfolio() {
     summaries,
     byAssetClass,
     ...mutations,
+    // Surface the investments query state so pages can distinguish loading /
+    // error from genuinely-empty — otherwise a failed fetch silently renders the
+    // "no holdings" empty state and masks the error.
+    isLoading: investmentsQuery.isLoading,
+    isError: investmentsQuery.isError,
+    error: investmentsQuery.error,
+    refetch: investmentsQuery.refetch,
     totalPortfolioValue: totals.totalPortfolioValue,
     totalGainLoss: totals.totalGainLoss,
     totalRealizedGain: totals.totalRealizedGain,

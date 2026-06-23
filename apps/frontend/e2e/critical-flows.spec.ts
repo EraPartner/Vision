@@ -94,7 +94,7 @@ test.describe("Page load smoke (catches backend ↔ frontend drift)", () => {
     test("Exchange rates page renders without runtime errors", async ({ page }) => {
         const errors: string[] = [];
         page.on("pageerror", (e) => errors.push(e.message));
-        await page.goto("/portfolio/exchange-rates");
+        await page.goto("/admin/exchange-rates");
         await expect(page.getByRole("heading", { level: 1, name: /exchange rates/i })).toBeVisible();
         expect(errors).toHaveLength(0);
     });

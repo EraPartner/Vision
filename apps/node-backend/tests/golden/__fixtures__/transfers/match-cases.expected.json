@@ -1,0 +1,28 @@
+{
+  "autoPairs": [
+    {
+      "outId": 1,
+      "inId": 2
+    },
+    {
+      "outId": 3,
+      "inId": 4
+    }
+  ],
+  "suggestions": [
+    {
+      "outId": 8,
+      "candidateInIds": [
+        10,
+        11
+      ]
+    },
+    {
+      "outId": 9,
+      "candidateInIds": [
+        10,
+        11
+      ]
+    }
+  ]
+}

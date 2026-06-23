@@ -10,6 +10,7 @@
  */
 
 import { Sparkline as ChartSparkline } from '@/components/charts';
+import { Money } from "@/components/shared/Money";
 import { ArrowDownRight, ArrowUpRight, DollarSign, TrendingDown, TrendingUp } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { cn } from '@/lib/utils';
@@ -57,6 +58,9 @@ export interface TotalValueCardProps {
   worstPerformer?: PerformerEntry;
   /** Sparkline points, chronological. Omit/empty to hide. */
   sparkline?: SparklinePoint[];
+  /** When the sparkline series is net contributions (no win/lose valence),
+   *  render the trend badge + line in a neutral colour, not green/red. */
+  neutralSparkline?: boolean;
   /** Format numeric value as currency. */
   formatCurrency: (value: number) => string;
 }
@@ -121,7 +125,6 @@ function PerformerRow({
   entry,
   label,
   kind,
-  formatCurrency,
 }: {
   entry?: PerformerEntry;
   label: string;
@@ -154,20 +157,24 @@ function PerformerRow({
         </p>
         <p className="text-[10px] leading-tight mt-0.5">
           {entry.gainLossInTarget >= 0 ? '+' : ''}
-          {formatCurrency(entry.gainLossInTarget)}
+          <Money amount={entry.gainLossInTarget} />
         </p>
       </div>
     </div>
   );
 }
 
-function Sparkline({ points, label }: { points: SparklinePoint[]; label: string }) {
+function Sparkline({ points, label, neutral = false }: { points: SparklinePoint[]; label: string; neutral?: boolean }) {
   if (points.length < 2) return null;
   const first = points[0].v;
   const last = points[points.length - 1].v;
   const delta = last - first;
-  const color =
-    delta > 0 ? SPARK_COLOR_POSITIVE : delta < 0 ? SPARK_COLOR_NEGATIVE : SPARK_COLOR_NEUTRAL;
+  // `neutral` = the series is net contributions (cost-basis flow), which has no
+  // win/lose valence — buying more isn't a "gain". Render it in a neutral colour
+  // so it isn't misread as 30-day performance (the Performance page uses value).
+  const color = neutral
+    ? SPARK_COLOR_NEUTRAL
+    : delta > 0 ? SPARK_COLOR_POSITIVE : delta < 0 ? SPARK_COLOR_NEGATIVE : SPARK_COLOR_NEUTRAL;
   const Trend = delta >= 0 ? TrendingUp : TrendingDown;
   const pct = first > 0 ? (delta / first) * 100 : 0;
   return (
@@ -177,7 +184,7 @@ function Sparkline({ points, label }: { points: SparklinePoint[]; label: string 
         <span
           className={cn(
             'flex items-center gap-1 tabular-nums',
-            delta >= 0 ? 'text-accent' : 'text-destructive'
+            neutral ? 'text-muted-foreground' : delta >= 0 ? 'text-accent' : 'text-destructive'
           )}
         >
           <Trend className="h-3 w-3" aria-hidden />
@@ -197,6 +204,7 @@ export function TotalValueCard({
   bestPerformer,
   worstPerformer,
   sparkline = [],
+  neutralSparkline = false,
   formatCurrency,
 }: TotalValueCardProps) {
   const hasSparkline = sparkline.length >= 2;
@@ -217,7 +225,7 @@ export function TotalValueCard({
       </CardHeader>
 
       <CardContent className="space-y-4 pt-0">
-        {hasSparkline && <Sparkline points={sparkline} label={labels.sparkline} />}
+        {hasSparkline && <Sparkline points={sparkline} label={labels.sparkline} neutral={neutralSparkline} />}
 
         {hasAllocation && (
           <div className="space-y-2">

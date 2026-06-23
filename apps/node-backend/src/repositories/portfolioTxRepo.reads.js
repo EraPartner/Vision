@@ -3,7 +3,13 @@
  */
 
 import { query } from '../database/connection.js';
+import { coerceNumericFields } from '../lib/money.js';
 import { buildListWhereClause } from './portfolioTxRepo.common.js';
+
+// NUMERIC columns node-postgres returns as strings; coerce to numbers on emit
+// so portfolio transaction rows match their `number` API/TS types.
+const PORTFOLIO_TX_NUMERIC_FIELDS = ['amount', 'units', 'price_per_unit', 'fees', 'taxes', 'fx_rate_to_eur'];
+export const mapPortfolioTxRow = (row) => coerceNumericFields(row, PORTFOLIO_TX_NUMERIC_FIELDS);
 
 export async function getAll({ investmentId = null, type = null, limit = 200, offset = 0 } = {}) {
   const { where, params, nextParam } = buildListWhereClause({ investmentId, type });
@@ -14,7 +20,7 @@ export async function getAll({ investmentId = null, type = null, limit = 200, of
   params.push(limit, offset);
 
   const result = await query(sql, params);
-  return result.rows;
+  return result.rows.map(mapPortfolioTxRow);
 }
 
 export async function getAllWithCount({ investmentId = null, type = null, limit = 200, offset = 0 } = {}) {
@@ -32,7 +38,7 @@ export async function getAllWithCount({ investmentId = null, type = null, limit 
   const queryParams = [...params, limit, offset];
   const result = await query(sql, queryParams);
   const total = result.rows.length > 0 ? parseInt(result.rows[0].total_count, 10) : 0;
-  const rows = result.rows.map(({ total_count: _total_count, ...row }) => row);
+  const rows = result.rows.map(({ total_count: _total_count, ...row }) => mapPortfolioTxRow(row));
   return { rows, total };
 }
 
@@ -91,7 +97,7 @@ export async function getAllByInvestmentIds({
   params.push(safeOffset);
 
   const result = await query(sql, params);
-  return result.rows;
+  return result.rows.map(mapPortfolioTxRow);
 }
 
 export async function getCount({ investmentId = null, investmentIds = null, type = null } = {}) {
@@ -119,8 +125,10 @@ export async function getCount({ investmentId = null, investmentIds = null, type
 
 export async function getById(id) {
   const result = await query('SELECT * FROM portfolio_transactions WHERE id = $1', [id]);
-  return result.rows[0] || null;
+  return result.rows[0] ? mapPortfolioTxRow(result.rows[0]) : null;
 }
+
+const PORTFOLIO_SUMMARY_NUMERIC_FIELDS = ['total_amount', 'total_units', 'total_fees', 'total_taxes'];
 
 export async function getSummary(investmentId) {
   const result = await query(`
@@ -135,5 +143,8 @@ export async function getSummary(investmentId) {
     WHERE investment_id = $1
     GROUP BY type
   `, [investmentId]);
-  return result.rows;
+  return result.rows.map((row) => ({
+    ...coerceNumericFields(row, PORTFOLIO_SUMMARY_NUMERIC_FIELDS),
+    count: parseInt(row.count, 10),
+  }));
 }

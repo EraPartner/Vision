@@ -1,5 +1,6 @@
 // @vitest-environment jsdom
 import { describe, expect, it, vi } from "vitest";
+import { Routes, Route, useParams } from "react-router-dom";
 import { screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { http } from "msw";
@@ -7,6 +8,11 @@ import { renderWithApp } from "@/test/renderWithApp";
 import { server } from "@/test/msw/server";
 import { err, ok } from "@/test/msw/handlers";
 import DbMaintenancePage from "@/pages/DbMaintenancePage";
+
+function EditorRouteStub() {
+    const { table } = useParams();
+    return <div data-testid="editor-route">{table}</div>;
+}
 
 const API_BASE = "http://localhost:3002";
 
@@ -155,6 +161,24 @@ describe("DbMaintenancePage (integration)", () => {
         renderWithApp(<DbMaintenancePage />);
         // dbMaintenance.tableCount = "Tables"
         expect(await screen.findByText(/^tables$/i)).toBeInTheDocument();
+    });
+
+    it("navigates to the table data editor when a row is double-clicked", async () => {
+        const user = userEvent.setup();
+        server.use(http.get(`${API_BASE}/api/admin/database/stats`, () => ok(statsWithTable)));
+
+        renderWithApp(
+            <Routes>
+                <Route path="/" element={<DbMaintenancePage />} />
+                <Route path="/admin/db/:table" element={<EditorRouteStub />} />
+            </Routes>,
+        );
+
+        const cell = await screen.findByText("transactions");
+        await user.dblClick(cell);
+
+        const editor = await screen.findByTestId("editor-route");
+        expect(editor).toHaveTextContent("transactions");
     });
 
     // ─── Edge cases ────────────────────────────────────────────────────────

@@ -50,6 +50,8 @@ export function getAggregationCategoryBreakdown(params?: {
 
 export function getAggregationRecipientInsights(params?: {
     currency?: string;
+    excluded_category_ids?: number[];
+    excluded_recipient_ids?: number[];
 }): Promise<AggregationEnvelope<{
     topMerchants: Array<{
         recipientId: number;
@@ -68,7 +70,8 @@ export function getAggregationRecipientInsights(params?: {
         changePercent: number;
     }>;
 }>> {
-    return requestWithQuery('/api/aggregations/recipient-insights', params);
+    const q = buildExclusionQuery(params);
+    return apiRequest(`/api/aggregations/recipient-insights${q ? `?${q}` : ''}`);
 }
 
 export function getAggregationCashflowComparison(params?: {
@@ -104,8 +107,9 @@ export function getAggregationBankBalances(params?: {
         last_transaction: string;
     }>;
     total_net_position: number;
-    history: Record<string, Array<{ month: string; balance: number }>>;
-    total_history: Array<{ month: string; balance: number }>;
+    // Daily balance points (YYYY-MM-DD) over the last 12 months.
+    history: Record<string, Array<{ date: string; balance: number }>>;
+    total_history: Array<{ date: string; balance: number }>;
 }>> {
     return requestWithQuery('/api/aggregations/bank-balances', params);
 }
@@ -113,7 +117,9 @@ export function getAggregationBankBalances(params?: {
 export interface CategoryPivotItem {
     categoryId: number | null;
     categoryName: string;
-    total: number;
+    total: number;          // net (income + expense)
+    income?: number;        // sum of amount >= 0 (explicit, not sign-of-net)
+    expense?: number;       // sum of amount < 0 (negative)
     transactionCount: number;
 }
 
@@ -144,11 +150,15 @@ export function getAggregationCategoryPivot(params?: {
 export function getAggregationRecipientByYear(params?: {
     currency?: string;
     excluded_recipient_ids?: number[];
+    excluded_category_ids?: number[];
 }): Promise<AggregationEnvelope<{ recipientsByYear: Record<string, RecipientYearlySpending[]> }>> {
     const qp = new URLSearchParams();
     if (params?.currency) qp.set('currency', params.currency);
     if (params?.excluded_recipient_ids?.length) {
         params.excluded_recipient_ids.forEach((id) => qp.append('excluded_recipient_ids', String(id)));
+    }
+    if (params?.excluded_category_ids?.length) {
+        params.excluded_category_ids.forEach((id) => qp.append('excluded_category_ids', String(id)));
     }
     const q = qp.toString();
     return apiRequest(`/api/aggregations/recipient-by-year${q ? `?${q}` : ''}`);
@@ -164,6 +174,7 @@ export interface RecipientPivotItem {
 export function getAggregationRecipientPivot(params?: {
     currency?: string;
     excluded_recipient_ids?: number[];
+    recipient_ids?: number[];
     bucket?: 'monthly' | 'yearly';
     start?: string | null;
     end?: string | null;
@@ -175,6 +186,9 @@ export function getAggregationRecipientPivot(params?: {
     if (params?.end) qp.set('end', params.end);
     if (params?.excluded_recipient_ids?.length) {
         params.excluded_recipient_ids.forEach((id) => qp.append('excluded_recipient_ids', String(id)));
+    }
+    if (params?.recipient_ids?.length) {
+        params.recipient_ids.forEach((id) => qp.append('recipient_ids', String(id)));
     }
     const q = qp.toString();
     return apiRequest(`/api/aggregations/recipient-pivot${q ? `?${q}` : ''}`);

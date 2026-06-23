@@ -3,10 +3,10 @@ title: Shared Components Reference
 type: component
 status: active
 date: 2026-04-26
-updated: 2026-05-06
-last_modified: 2026-05-06
-tags: [component, shared, utility, frontend, reference, phase-13, phase-c, phase-d, multi-select, export-filters, bug-hunt-2026-05-05, bug-hunt-2026-05-06, dateutils, utc-safe-dates, date-formatting, debounce, accessibility, aria-label, useCallback]
-description: Reference documentation for shared utility components used across the application. May 2026 adds UTC-safe date parsing and expanded dateUtils documentation.
+updated: 2026-06-16
+last_modified: 2026-06-16
+tags: [component, shared, utility, frontend, reference, phase-13, phase-c, phase-d, multi-select, export-filters, bug-hunt-2026-05-05, bug-hunt-2026-05-06, dateutils, utc-safe-dates, date-formatting, debounce, accessibility, aria-label, useCallback, aria-grid, keyboard-operability, a11y, performance, memoization, selection-toggle, upcoming-payments-hook, june-2026, symbol-search, research, ui-consistency, glass-consistency, popover-glass-thick]
+description: Reference documentation for shared utility components used across the application. May 2026 adds UTC-safe date parsing, ARIA grid semantics on VirtualDataTable, the onActivateKeyDown keyboard helper, and the columnKeySignature selection-toggle reprocessing fix. June 2026 V11: UpcomingPaymentsNotification refactored onto shared useUpcomingPlannedPayments hook; stands down on dashboard when suggestions widget is visible. June 2026 V12: SymbolSearchBox and SymbolSearchResultItem added — canonical chrome and result row for all research symbol pickers. June 2026 (glass consistency): SymbolSearchBox dropdown material changed from glass-elevated to glass-thick to match the rest of the floating-overlay system.
 aliases: [shared components, utility components, common components]
 related_code:
   - apps/frontend/src/components/shared/VirtualDataTable.tsx
@@ -21,8 +21,11 @@ related_code:
   - apps/frontend/src/components/shared/ExclusionToggle.tsx
   - apps/frontend/src/components/shared/WidgetVisibilityDialog.tsx
   - apps/frontend/src/components/shared/RemoteNewsImage.tsx
+  - apps/frontend/src/components/shared/SymbolSearchBox.tsx
+  - apps/frontend/src/components/shared/SymbolSearchResultItem.tsx
   - apps/frontend/src/components/notifications/UpdateNotification.tsx
   - apps/frontend/src/components/notifications/UpcomingPaymentsNotification.tsx
+  - apps/frontend/src/utils/a11y.ts
 ---
 
 # Shared Components Reference
@@ -47,6 +50,54 @@ The most complex shared component — a high-performance virtualized data table 
 - **Infinite scroll**: `onLoadMore` callback for pagination
 - **Deferred rendering**: Uses `useDeferredValue` to avoid blocking during search
 - **Edit cancellation** — `cancelEditing` wrapped in `useCallback` with proper dependency tracking (Phase C fix) to prevent memory leaks during unmount
+- **ARIA grid semantics** (2026-05-29) — full screen-reader table structure; see section below
+- **Keyboard row activation** (2026-05-29) — rows are focusable and Enter/Space-operable when `onRowDoubleClick` is set
+
+### Performance: Selection-Toggle Reprocessing Fix (2026-05-29)
+
+Remediates audit finding [[docs/reference/codebase-audit-2026-05#performance.4|performance.4]].
+
+`processedRows` and the column-width re-seed effect previously depended on the `columns` array reference. `TransactionsTable` rebuilds the `columns` array on every checkbox toggle (new `Set` identity → new column array identity), causing `processedRows` to re-map and re-filter the entire loaded dataset on each selection change.
+
+**Fix applied in `VirtualDataTable.tsx`:**
+
+- A `columnsRef` (`useRef`) is kept current on every render, giving the body of `processedRows` and the width-seed effect access to the live column definitions without needing the array in their deps.
+- A `columnKeySignature` string (`columns.map(c => c.key).join(",")`) replaces the `columns` array as the dependency. `columnKeySignature` is value-stable across selection toggles (column keys do not change when selection state changes), so neither `processedRows` nor the width-seed effect is invalidated by checkbox ticks.
+
+```tsx
+// Stable string dep — value-equal across selection toggles
+const columnKeySignature = columns.map((c) => c.key).join(",");
+const columnsRef = useRef(columns);
+columnsRef.current = columns; // keep live reference current
+
+// processedRows and the width-seed effect now depend on columnKeySignature
+// and read columnsRef.current instead of listing `columns` directly.
+```
+
+### ARIA Grid Semantics (2026-05-29)
+
+Resolves audit finding [[docs/reference/codebase-audit-2026-05#ux.1|ux.1]]. The `div`-based layout now carries a complete ARIA table role tree:
+
+| Element | Role / Attribute | Notes |
+|---|---|---|
+| `CardContent` outer container | `role="table"` + `aria-rowcount` + `aria-colcount` | Row count = processed (filtered/sorted) rows; col count includes optional edit column |
+| Header scroll wrapper | `role="rowgroup"` | Groups the single header row |
+| Header row `div` | `role="row"` | |
+| Each header cell | `role="columnheader"` + `aria-sort` | `aria-sort` reflects current sort: `"ascending"`, `"descending"`, or `"none"` |
+| Body scroll wrapper | `role="rowgroup"` | Groups all body rows |
+| Virtualizer sizing `div` | `role="presentation"` | Suppresses the layout-only container from the accessibility tree |
+| Each body row | `role="row"` + `aria-rowindex` | `aria-rowindex` = virtual row index + 2 (1-based, +1 for header row) |
+| Each body cell | `role="cell"` | |
+
+### Keyboard Row Activation (2026-05-29)
+
+Resolves audit finding [[docs/reference/codebase-audit-2026-05#ux.2|ux.2]] for VirtualDataTable rows. When `onRowDoubleClick` is provided:
+
+- Rows receive `tabIndex={0}` — they enter the tab order.
+- `onKeyDown` fires `onRowDoubleClick(row, sourceIndex)` on **Enter** or **Space** (same handler as double-click), giving keyboard users the same activation path as mouse users.
+- Rows display a `focus-visible` ring for sighted keyboard users.
+
+> [!info] The `onActivateKeyDown` helper in `[[apps/frontend/src/utils/a11y.ts]]` is used for similar keyboard activation on non-table interactive surfaces (CategoriesPage, OwesPage, WatchlistPage, StocksPage, CryptoPage). VirtualDataTable uses an inline handler with the same semantics.
 
 ### Props Interface
 
@@ -313,11 +364,128 @@ Toggle button for per-graph exclusion control in the Statistics page. Shows whet
 
 Dialog for toggling widget visibility on pages that support configurable layouts (Statistics, Portfolio Tax).
 
+## onActivateKeyDown (a11y utility)
+
+**Path:** `[[apps/frontend/src/utils/a11y.ts]]`
+
+A small keyboard-activation helper that makes previously mouse-only surfaces operable by keyboard users. Resolves audit finding [[docs/reference/codebase-audit-2026-05#ux.2|ux.2]] across non-table interactive elements.
+
+```typescript
+import { onActivateKeyDown } from "@/utils/a11y";
+
+// Non-interactive div or Card that had only onClick/onDoubleClick:
+<div
+  role="button"
+  tabIndex={0}
+  onClick={handleOpen}
+  onKeyDown={onActivateKeyDown(handleOpen)}
+>
+  ...
+</div>
+
+// Native button that previously had only onDoubleClick:
+<button
+  type="button"
+  onKeyDown={onActivateKeyDown(() => openMarketLookup(symbol))}
+>
+  ...
+</button>
+```
+
+`onActivateKeyDown(handler)` returns an `onKeyDown` callback that:
+- Fires `handler` on **Enter** or **Space**.
+- Calls `e.preventDefault()` to suppress page scrolling on Space.
+- **Ignores events that bubbled from a nested focusable child** (`e.target !== e.currentTarget`) — prevents double-firing when the user operates an inner control.
+
+### Usage in the codebase
+
+| Surface | Pattern | Notes |
+|---|---|---|
+| `CategoriesPage` rows | `role="button"` + `tabIndex` + `onKeyDown` | Opens category detail on Enter/Space |
+| `OwesPage` debtor cards | `role="button"` + `tabIndex` + `onKeyDown` | Selects recipient on Enter/Space |
+| `WatchlistPage` holding cards | `role="button"` + `tabIndex` + `onKeyDown` | Opens detail dialog on Enter/Space |
+| `StocksPage` name buttons | Native `<button>` + `onKeyDown` | Opens market lookup on Enter/Space |
+| `CryptoPage` name buttons | Native `<button>` + `onKeyDown` | Opens market lookup on Enter/Space |
+| `InvestmentDetailDialog` title button | Native `<button>` + `onKeyDown` | Opens market lookup on Enter/Space |
+
+> [!tip] Pair `role="button"` + `tabIndex={0}` + `onActivateKeyDown` only on elements that cannot be refactored to a real `<button>`. When the element is already a native button, omit `role` and `tabIndex` — just add `onKeyDown`.
+
 ## RemoteNewsImage
 
 **Path:** `[[apps/frontend/src/components/shared/RemoteNewsImage.tsx]]`
 
 Image component for loading remote news thumbnails with fallback handling. Used in the portfolio news feed.
+
+## SymbolSearchBox
+
+**Path:** `[[apps/frontend/src/components/shared/SymbolSearchBox.tsx]]`
+
+Canonical ticker/company search box chrome shared across every symbol picker in the Research section. Introduced in a June 2026 UI-consistency pass that brought `MarketLookupPage`, `ResearchComparePage`, and `ChartBuilderPage` in line with `ResearchHomePage`'s reference look.
+
+**Responsibility split:** `SymbolSearchBox` owns only the visual chrome (tall glass input, leading `Search` icon, optional trailing loading spinner, `glass-thick` floating dropdown). Each page retains its own query logic and passes result rows as `children`. Rows inside the dropdown should use `SymbolSearchResultItem`.
+
+### Props
+
+```typescript
+interface SymbolSearchBoxProps {
+  value: string;
+  onChange: (value: string) => void;
+  placeholder: string;
+  /** Whether the results dropdown should be shown. */
+  open: boolean;
+  /** Result rows plus any empty / unavailable / no-results states. */
+  children: ReactNode;
+  autoFocus?: boolean;
+  /** Shows a spinner on the trailing edge of the input while fetching. */
+  loading?: boolean;
+  /** Defaults to `placeholder` when omitted. */
+  ariaLabel?: string;
+  /** Layout/width class for the outer wrapper (e.g. `max-w-2xl`). */
+  className?: string;
+}
+```
+
+### Visual spec
+
+- Outer wrapper: `relative` + caller-supplied `className` (all four research pickers use `max-w-2xl`).
+- Input: `h-14 pl-12 text-base glass-regular` with a `Search` icon pinned `left-4 top-1/2`.
+- Loading spinner: `h-4 w-4 animate-spin rounded-full border-2 border-primary border-t-transparent`, pinned `right-4 top-1/2`; only rendered when `loading` is `true`.
+- Dropdown: `Card` with `glass-thick border border-border shadow-lg z-50`, opening `top-full mt-2`; `CardContent` has `p-1` padding.
+
+### Pages using SymbolSearchBox
+
+| Page | Notes |
+|---|---|
+| `ResearchHomePage` | No `loading` prop; autoFocus; was the reference implementation |
+| `MarketLookupPage` | `loading` prop passed (shows spinner during fetch) |
+| `ResearchComparePage` | `loading` prop passed; result rows use `leadingIcon={<Plus />}` on `SymbolSearchResultItem` |
+| `ChartBuilderPage` | `loading` prop passed; result rows use `leadingIcon={<Plus />}` on `SymbolSearchResultItem` |
+
+> [!info] `AddToWatchlistDialog` was deliberately **not** migrated to `SymbolSearchBox`. It renders results as an inline scrollable list inside a modal (with a `Label`), which is a different UX context from the floating-dropdown pattern.
+
+## SymbolSearchResultItem
+
+**Path:** `[[apps/frontend/src/components/shared/SymbolSearchResultItem.tsx]]`
+
+Canonical company/ticker search-result row, shared across every symbol picker (Research home, Market Lookup, Compare, Chart Builder, Add-to-Watchlist). Ensures consistent row layout: monospaced ticker, company name, asset-type badge, and exchange label.
+
+### Props
+
+```typescript
+interface SymbolSearchResultItemProps {
+  item: SymbolSearchResult;           // { symbol, name, type, exchange }
+  onSelect: (item: SymbolSearchResult) => void;
+  /** Optional leading affordance for add-to-list pickers (e.g. a Plus icon). */
+  leadingIcon?: ReactNode;
+  className?: string;
+}
+```
+
+The exported `SymbolSearchResult` interface (`{ symbol, name, type, exchange }`) is the shared shape across both `searchResearch` and `searchMarket` API responses.
+
+- **Navigate-style pickers** (Research home, Market Lookup): omit `leadingIcon`.
+- **Add-style pickers** (Compare, Chart Builder): pass `leadingIcon={<Plus className="..." />}`.
+- `AddToWatchlistDialog` also uses this component for its inline scrollable results list.
 
 ## Notification Components
 
@@ -332,6 +500,15 @@ Displays app update notifications in the Electron desktop app. Checks for new ve
 **Path:** `[[apps/frontend/src/components/notifications/UpcomingPaymentsNotification.tsx]]`
 
 Shows notifications for upcoming planned/recurring payments.
+
+#### V11 Refactor (June 2026)
+
+`UpcomingPaymentsNotification` was refactored onto the shared `useUpcomingPlannedPayments` hook:
+
+- Data fetch and dismissed-ID state moved to `hooks/useUpcomingPlannedPayments.ts` (shared with `SuggestionCard`).
+- **Dashboard stand-down**: On the `/` route, the component returns `null` while `useWidgetVisibility('dashboard', []).isVisible('suggestions')` is `true` (the suggestion card is visible). Hiding the widget brings the banner back.
+- **macOS dock badge**: Set to non-dismissed upcoming count; cleared on unmount. Logic unchanged.
+- Dismissal store is now module-level (shared), so dismissing from `SuggestionCard` is immediately reflected here and vice versa.
 
 ### Accessibility (Phase C)
 
@@ -354,3 +531,6 @@ Shows notifications for upcoming planned/recurring payments.
 | ExclusionToggle | Statistics page (per-graph toggles) |
 | WidgetVisibilityDialog | Statistics, Portfolio Tax |
 | ErrorBoundary | App root (wraps entire application) |
+| onActivateKeyDown | CategoriesPage, OwesPage, WatchlistPage, StocksPage, CryptoPage, InvestmentDetailDialog |
+| SymbolSearchBox | ResearchHomePage, MarketLookupPage, ResearchComparePage, ChartBuilderPage |
+| SymbolSearchResultItem | ResearchHomePage, MarketLookupPage, ResearchComparePage, ChartBuilderPage, AddToWatchlistDialog |

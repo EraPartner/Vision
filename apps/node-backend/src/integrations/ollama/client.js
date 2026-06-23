@@ -31,10 +31,11 @@ export class OllamaError extends Error {
 function withTimeout(signal, timeoutMs) {
   const controller = new AbortController();
   let timedOut = false;
-  const timer = setTimeout(() => {
+  const onTimeout = () => {
     timedOut = true;
     controller.abort();
-  }, timeoutMs);
+  };
+  let timer = setTimeout(onTimeout, timeoutMs);
 
   if (signal) {
     if (signal.aborted) {
@@ -48,6 +49,11 @@ function withTimeout(signal, timeoutMs) {
     signal: controller.signal,
     cancel: () => clearTimeout(timer),
     isTimeout: () => timedOut,
+    /** Restart the timer with a new window (used per streamed chunk). */
+    rearm: (ms) => {
+      clearTimeout(timer);
+      timer = setTimeout(onTimeout, ms);
+    },
   };
 }
 
@@ -69,6 +75,7 @@ export function createOllamaClient({
   baseUrl = settings.ollama.url,
   requestTimeoutMs = settings.ollama.requestTimeoutMs,
   healthTimeoutMs = settings.ollama.healthTimeoutMs,
+  streamIdleTimeoutMs = settings.ollama.streamIdleTimeoutMs,
   fetchImpl = globalThis.fetch,
 } = {}) {
   if (!fetchImpl) {
@@ -222,13 +229,18 @@ export function createOllamaClient({
     if (tools && tools.length > 0) body.tools = tools;
     if (options) body.options = options;
 
-    const { signal: composedSignal, cancel, isTimeout } = withTimeout(signal, requestTimeoutMs);
-    logger.info('[ollama] chatStream request', {
+    // requestTimeoutMs bounds the connect + prompt-eval phase (no chunks flow
+    // until the first token, which on a cold model can take minutes). Once
+    // chunks arrive, the window is re-armed per chunk (idle timeout) so a
+    // healthy long generation is never cut off mid-stream.
+    const { signal: composedSignal, cancel, isTimeout, rearm } = withTimeout(signal, requestTimeoutMs);
+    logger.debug('[ollama] chatStream request', {
       url: url('/api/chat'),
       model,
       messageCount: messages.length,
       toolCount: tools?.length ?? 0,
       timeoutMs: requestTimeoutMs,
+      idleTimeoutMs: streamIdleTimeoutMs,
     });
     let response;
     try {
@@ -238,7 +250,7 @@ export function createOllamaClient({
         body: JSON.stringify(body),
         signal: composedSignal,
       });
-      logger.info('[ollama] chatStream response received', {
+      logger.debug('[ollama] chatStream response received', {
         status: response.status,
         contentType: response.headers?.get?.('content-type') ?? null,
       });
@@ -276,7 +288,23 @@ export function createOllamaClient({
     const decoder = new TextDecoder('utf-8');
     let buffer = '';
     let accumulatedContent = '';
-    let toolCalls = [];
+    // Tool calls can arrive spread across several NDJSON chunks; accumulate
+    // them all. Some Ollama builds re-emit the complete list on the final
+    // done chunk, so dedupe by call signature rather than trusting order.
+    const toolCalls = [];
+    const seenToolCallSigs = new Set();
+    const addToolCalls = (calls) => {
+      for (const call of calls) {
+        const sig = JSON.stringify([
+          call?.id ?? null,
+          call?.function?.name ?? null,
+          call?.function?.arguments ?? null,
+        ]);
+        if (seenToolCallSigs.has(sig)) continue;
+        seenToolCallSigs.add(sig);
+        toolCalls.push(call);
+      }
+    };
     let modelName = model;
     let evalCount = null;
     let promptEvalCount = null;
@@ -309,7 +337,7 @@ export function createOllamaClient({
         }
       }
       if (Array.isArray(msg.tool_calls) && msg.tool_calls.length > 0) {
-        toolCalls = msg.tool_calls;
+        addToolCalls(msg.tool_calls);
       }
 
       if (parsed.done) {
@@ -325,6 +353,9 @@ export function createOllamaClient({
       while (!isDone) {
         const { value, done } = await reader.read();
         if (done) break;
+        // A chunk arrived — the stream is alive. Re-arm the abort window so
+        // only inactivity (not total generation time) can time the stream out.
+        rearm(streamIdleTimeoutMs);
         buffer += decoder.decode(value, { stream: true });
         let newlineIndex;
         while ((newlineIndex = buffer.indexOf('\n')) !== -1) {
@@ -338,7 +369,10 @@ export function createOllamaClient({
     } catch (err) {
       if (err instanceof OllamaError) throw err;
       if (isTimeout()) {
-        throw new OllamaError(`Ollama stream timed out after ${requestTimeoutMs}ms`, { code: 'TIMEOUT', cause: err });
+        throw new OllamaError(
+          `Ollama stream timed out (${requestTimeoutMs}ms to first chunk, then ${streamIdleTimeoutMs}ms idle between chunks)`,
+          { code: 'TIMEOUT', cause: err },
+        );
       }
       if (err?.name === 'AbortError' || composedSignal.aborted) {
         throw new OllamaError('Ollama stream aborted', { code: 'ABORTED', cause: err });

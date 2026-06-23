@@ -5,8 +5,7 @@
  */
 
 import { Router } from 'express';
-// eslint-disable-next-line vision-local/no-repo-direct-from-route
-import infoRepository from '../../repositories/infoRepository.js';
+import infoRepository from '../../services/infoService.js';
 import { rateLimiter } from '../../middleware/rateLimiter.js';
 import { getTargetCurrency } from './_queryParams.js';
 import {
@@ -14,6 +13,8 @@ import {
   NET_WORTH_CACHE_TTL_MS,
   resolveCacheWithInflight,
 } from './_cache.js';
+import { resolveLivePortfolioValue } from './_liveSummary.js';
+import { parsePagination } from '../../lib/pagination.js';
 
 const router = Router();
 
@@ -28,7 +29,10 @@ router.get(
       ttlMs: NET_WORTH_CACHE_TTL_MS,
       requireData: true,
       keepPreviousData: true,
-      loader: () => infoRepository.getNetWorthFromSnapshots(targetCurrency),
+      loader: async () => {
+        const liveInvestments = await resolveLivePortfolioValue(targetCurrency);
+        return infoRepository.getNetWorthFromSnapshots(targetCurrency, { liveInvestments });
+      },
     });
 
     const hasLimit = Object.prototype.hasOwnProperty.call(req.query, 'limit');
@@ -39,10 +43,7 @@ router.get(
       return;
     }
 
-    const limitRaw = parseInt(req.query.limit, 10);
-    const offsetRaw = parseInt(req.query.offset, 10);
-    const limit = Number.isFinite(limitRaw) && limitRaw > 0 ? Math.min(limitRaw, 5000) : 50;
-    const offset = Number.isFinite(offsetRaw) && offsetRaw >= 0 ? offsetRaw : 0;
+    const { limit, offset } = parsePagination(req.query, { maxLimit: 5000 });
 
     const allSnapshots = Array.isArray(data?.snapshots) ? data.snapshots : [];
     // Page newest-first by indexing from the end — avoids copying and
@@ -59,6 +60,23 @@ router.get(
       { ...data, snapshots: page, snapshotsTotal: allSnapshots.length },
       { pagination: { total: allSnapshots.length, limit, offset } },
     );
+  },
+);
+
+// Net worth as Σ accounts (ADR-100): per-account current cash + holdings and the
+// rebuilt daily holdings history. Σ accounts == the aggregate by construction.
+router.get(
+  '/net-worth/by-account',
+  rateLimiter({ windowMs: 60_000, maxRequests: 30, keyPrefix: 'net-worth-by-account' }),
+  async (req, res) => {
+    const targetCurrency = getTargetCurrency(req);
+    const data = await resolveCacheWithInflight(netWorthResponseCache, `by-account:${targetCurrency}`, {
+      ttlMs: NET_WORTH_CACHE_TTL_MS,
+      requireData: true,
+      keepPreviousData: true,
+      loader: () => infoRepository.getNetWorthByAccount(targetCurrency),
+    });
+    res.ok(data);
   },
 );
 

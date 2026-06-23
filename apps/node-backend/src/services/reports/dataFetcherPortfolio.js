@@ -9,6 +9,7 @@
 import { query } from '../../database/connection.js';
 import { getSnapshots, getBreakdownSummary } from '../portfolioPerformanceSnapshotService.js';
 import { convertWithRates, loadCurrentRates } from '../currency/currencyConversionService.js';
+import { todayAppDateString, firstOfMonthYmd } from '../../lib/timezone.js';
 import { logger } from '../../config/logger.js';
 
 /**
@@ -40,24 +41,23 @@ function unwrap(result, label) {
  * @returns {{ startDate: string; endDate: string }}
  */
 export function periodToDateRange(period) {
-  const now = new Date();
-  const today = now.toISOString().slice(0, 10);
+  // All boundaries derive from the APP_TIMEZONE calendar day via pure string
+  // math — local-Date + toISOString() shifted rolling starts to the last day
+  // of the previous month in UTC+ zones.
+  const today = todayAppDateString();
+  const year = Number(today.slice(0, 4));
 
   switch (period.kind) {
-    case 'ytd': {
-      const year = now.getFullYear();
+    case 'ytd':
       return { startDate: `${year}-01-01`, endDate: today };
-    }
-    case 'rolling': {
-      const start = new Date(now.getFullYear(), now.getMonth() - period.months + 1, 1);
-      return { startDate: start.toISOString().slice(0, 10), endDate: today };
-    }
+    case 'rolling':
+      return { startDate: firstOfMonthYmd(today, -(period.months - 1)), endDate: today };
     case 'custom':
       return { startDate: period.from, endDate: period.to };
     case 'year':
       return { startDate: `${period.year}-01-01`, endDate: `${period.year}-12-31` };
     default:
-      return { startDate: `${now.getFullYear() - 1}-01-01`, endDate: today };
+      return { startDate: `${year - 1}-01-01`, endDate: today };
   }
 }
 

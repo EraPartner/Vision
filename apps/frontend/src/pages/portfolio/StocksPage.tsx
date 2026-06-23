@@ -3,7 +3,9 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { TrendingUp, Trash2, Eye, DollarSign, ArrowUpRight } from "lucide-react";
 import { usePortfolio } from "@/hooks/usePortfolio";
+import { usePortfolioSummaryQuery } from "@/hooks/portfolio/usePortfolioSummary";
 import { useCurrencyConverter } from "@/hooks/useCurrencyConverter";
+import { useCurrencyFormatter } from "@/hooks/useCurrencyFormatter";
 import { AddInvestmentDialog } from "@/components/portfolio/AddInvestmentDialog";
 import { AddPortfolioTxnDialog } from "@/components/portfolio/AddPortfolioTxnDialog";
 import { InvestmentDetailDialog } from "@/components/portfolio/InvestmentDetailDialog";
@@ -14,13 +16,16 @@ import type { InvestmentSummary } from "@/types/portfolio";
 import { useConfirmDialog } from "@/hooks/useConfirmDialog";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { useAppSettings } from "@/contexts/AppSettingsContext";
-import { numberFormatToLocale } from "@/utils/currency";
 import type { AssetClass } from "@/types/portfolio";
 import { useCallback, useMemo } from "react";
 import { useNavigate } from "react-router-dom";
 import { PageHeader } from "@/components/shared/PageHeader";
+import { PageError } from "@/components/shared/PageError";
+import { Skeleton } from "@/components/ui/skeleton";
+import { onActivateKeyDown } from "@/utils/a11y";
 import { EmptyState } from "@/components/shared/EmptyState";
 import { ExportDialog } from "@/components/reports/ExportDialog";
+import { DeltaPill } from "@/components/shared/DeltaPill";
 
 function fmtPct(val: number) {
   return `${val >= 0 ? '+' : ''}${val.toFixed(2)}%`;
@@ -49,34 +54,26 @@ export default function StocksPage({
   const { t } = useLanguage();
   const navigate = useNavigate();
   const { appSettings } = useAppSettings();
-  const locale = numberFormatToLocale(appSettings.numberFormat);
-  const { byAssetClass, deleteInvestment, refreshPrices, isRefreshingPrices } = usePortfolio();
+  const { byAssetClass, deleteInvestment, refreshPrices, isRefreshingPrices, isLoading, isError, error, refetch } = usePortfolio();
   const { confirm, ConfirmDialog } = useConfirmDialog();
   const holdings = useMemo(() => byAssetClass(assetClasses), [byAssetClass, assetClasses]);
   const targetCurrency = appSettings.defaultCurrency || 'EUR';
 
   const { convertToTarget, ratesToEur } = useCurrencyConverter(targetCurrency);
 
-  const formatterCache = useMemo(() => new Map<string, Intl.NumberFormat>(), []);
+  // Per-investment FX attribution comes from the backend summary (it has the
+  // historical-rate machinery); only shown when a holding is in a foreign currency.
+  const { data: apiSummary } = usePortfolioSummaryQuery(targetCurrency);
+  const fxInfoById = useMemo(
+    () => new Map((apiSummary?.summaries ?? []).map((s) => [s.id, s])),
+    [apiSummary],
+  );
+  const pageHasFxExposure = useMemo(
+    () => holdings.some((h) => (h.currency || 'EUR').toUpperCase() !== targetCurrency.toUpperCase()),
+    [holdings, targetCurrency],
+  );
 
-  const fmt = useCallback((
-    val: number,
-    currency = targetCurrency,
-    decimals = appSettings.showDecimalPlaces
-  ) => {
-    const key = `${locale}:${currency}:${decimals}`;
-    let formatter = formatterCache.get(key);
-    if (!formatter) {
-      formatter = new Intl.NumberFormat(locale, {
-        style: "currency",
-        currency,
-        minimumFractionDigits: decimals,
-        maximumFractionDigits: decimals,
-      });
-      formatterCache.set(key, formatter);
-    }
-    return formatter.format(val);
-  }, [targetCurrency, appSettings.showDecimalPlaces, locale, formatterCache]);
+  const fmt = useCurrencyFormatter(targetCurrency);
 
   const getRateToEur = useCallback((currency?: string) => {
     const code = (currency || 'EUR').toUpperCase();
@@ -88,9 +85,12 @@ export default function StocksPage({
     return rateTo ? amountEur / rateTo : amountEur;
   }, [getRateToEur, targetCurrency]);
 
-  const openMarketLookup = useCallback((symbol?: string) => {
+  const openMarketLookup = useCallback((symbol?: string, investmentId?: number) => {
     if (!symbol) return;
-    navigate(`/portfolio/market?symbol=${encodeURIComponent(symbol)}`);
+    // Pass the holding id so the market page can chart non-Yahoo providers
+    // (custom/kinesis) from this holding's own price history.
+    const suffix = investmentId != null ? `&investmentId=${investmentId}` : "";
+    navigate(`/research/market?symbol=${encodeURIComponent(symbol)}${suffix}`);
   }, [navigate]);
 
   const calculateFxAwarePnl = useCallback((holding: InvestmentSummary) => {
@@ -121,7 +121,14 @@ export default function StocksPage({
 
         poolUnits -= sellUnits;
         poolCostEur -= costOfSoldEur;
+      } else if (txn.type === 'split' && units > 0 && poolUnits > 0) {
+        // units = new TOTAL post-split; EUR cost pool is unchanged (mirrors the
+        // backend). Scaling only the unit count keeps avg-cost-per-unit correct.
+        poolUnits = units;
+      } else if (txn.type === 'return_of_capital' && poolUnits > 0) {
+        poolCostEur = Math.max(0, poolCostEur - amount * txnRateToEur);
       }
+      // merger/spinoff are cost-basis-neutral — no change to pool.
     }
 
     poolCostEur = Math.max(0, poolCostEur);
@@ -145,10 +152,16 @@ export default function StocksPage({
         continue;
       }
 
+      // True unrealized % = unrealizedGain / cost-of-held-units (a currency-free
+      // ratio). Previously used gainLossPercent, which is total-return (incl.
+      // dividends + realized) — wrong label for an "unrealized %" column. This
+      // branch is currently unreachable (enableFxAwarePnl defaults true) but kept
+      // correct in case a caller ever opts out.
+      const heldCost = (Number(holding.avgCostBasis) || 0) * (Number(holding.totalUnits) || 0);
       map[holding.id] = {
         realizedTarget: convertToTarget(holding.realizedGain, holding.currency),
         unrealizedTarget: convertToTarget(holding.unrealizedGain, holding.currency),
-        unrealizedPercent: Number(holding.gainLossPercent) || 0,
+        unrealizedPercent: heldCost > 0 ? ((Number(holding.unrealizedGain) || 0) / heldCost) * 100 : 0,
       };
     }
     return map;
@@ -162,6 +175,8 @@ export default function StocksPage({
       acc.totalDividends += convertToTarget(holding.totalDividends, holding.currency);
       acc.totalFees += convertToTarget(holding.totalFees, holding.currency);
       acc.totalTaxes += convertToTarget(holding.totalTaxes, holding.currency);
+      acc.feeTransactions += convertToTarget(holding.feeTransactions ?? 0, holding.currency);
+      acc.taxTransactions += convertToTarget(holding.taxTransactions ?? 0, holding.currency);
       return acc;
     }, {
       totalValue: 0,
@@ -170,6 +185,8 @@ export default function StocksPage({
       totalDividends: 0,
       totalFees: 0,
       totalTaxes: 0,
+      feeTransactions: 0,
+      taxTransactions: 0,
     });
   }, [holdings, displayedPnlByHoldingId, convertToTarget]);
 
@@ -180,8 +197,32 @@ export default function StocksPage({
     totalDividends,
     totalFees,
     totalTaxes,
+    feeTransactions,
+    taxTransactions,
   } = totals;
-  const netGain = totalRealizedGain + totalUnrealizedGain + totalDividends - totalFees - totalTaxes;
+  // realized/unrealized (from the FX-aware pool) already net the per-row
+  // fees/taxes columns into cost/proceeds, so net gain subtracts ONLY standalone
+  // fee/tax transaction rows. Subtracting totalFees/totalTaxes double-counted the
+  // per-row columns. (totalFees/totalTaxes remain for the fees-&-taxes display card.)
+  const netGain = totalRealizedGain + totalUnrealizedGain + totalDividends - feeTransactions - taxTransactions;
+
+  if (isLoading) {
+    return (
+      <div className="space-y-6">
+        <PageHeader title={t(titleKey)} icon={TrendingUp} />
+        <Skeleton className="h-24 w-full" />
+        <Skeleton className="h-64 w-full" />
+      </div>
+    );
+  }
+  if (isError) {
+    return (
+      <div className="space-y-6">
+        <PageHeader title={t(titleKey)} icon={TrendingUp} />
+        <PageError message={error?.message ?? t('common.error')} onRetry={() => refetch()} />
+      </div>
+    );
+  }
 
   if (holdings.length === 0) {
     return (
@@ -191,7 +232,7 @@ export default function StocksPage({
           icon={TrendingUp}
           actions={<><ExportDialog defaultType="portfolio" /><AddInvestmentDialog allowedAssetClasses={allowedAddAssetClasses} /></>}
         />
-        <Card className="group relative overflow-hidden surface-elevated premium-frame bg-card backdrop-blur-sm">
+        <Card className="group relative overflow-hidden glass-regular premium-frame">
           <CardContent className="pt-0">
             <EmptyState
               icon={TrendingUp}
@@ -222,7 +263,7 @@ export default function StocksPage({
 
       {/* Summary Cards */}
       <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
-        <Card className="group relative overflow-hidden surface-elevated premium-frame micro-lift bg-card backdrop-blur-sm">
+        <Card className="group relative overflow-hidden glass-regular premium-frame micro-lift">
           <CardHeader className="pb-1 pt-3 px-4">
             <CardTitle className="text-xs font-medium text-muted-foreground flex items-center gap-1.5">
               <span className="inline-flex h-6 w-6 items-center justify-center rounded-md bg-gradient-to-br from-primary/20 to-primary/5 text-primary ring-1 ring-primary/15">
@@ -236,7 +277,7 @@ export default function StocksPage({
           </CardContent>
         </Card>
 
-        <Card className="group relative overflow-hidden surface-elevated premium-frame micro-lift bg-card backdrop-blur-sm">
+        <Card className="group relative overflow-hidden glass-regular premium-frame micro-lift">
           <CardHeader className="pb-1 pt-3 px-4">
             <CardTitle className="text-xs font-medium text-muted-foreground flex items-center gap-1.5">
               <span className={cn(
@@ -257,7 +298,7 @@ export default function StocksPage({
           </CardContent>
         </Card>
 
-        <Card className="group relative overflow-hidden surface-elevated premium-frame micro-lift bg-card backdrop-blur-sm">
+        <Card className="group relative overflow-hidden glass-regular premium-frame micro-lift">
           <CardHeader className="pb-1 pt-3 px-4">
             <CardTitle className="text-xs font-medium text-muted-foreground flex items-center gap-1.5">
               <span className={cn(
@@ -278,7 +319,7 @@ export default function StocksPage({
           </CardContent>
         </Card>
 
-        <Card className="group relative overflow-hidden surface-elevated premium-frame micro-lift bg-card backdrop-blur-sm">
+        <Card className="group relative overflow-hidden glass-regular premium-frame micro-lift">
           <CardHeader className="pb-1 pt-3 px-4">
             <CardTitle className="text-xs font-medium text-muted-foreground">{t('portfolio.dividends')}</CardTitle>
           </CardHeader>
@@ -287,7 +328,7 @@ export default function StocksPage({
           </CardContent>
         </Card>
 
-        <Card className="group relative overflow-hidden surface-elevated premium-frame micro-lift bg-card backdrop-blur-sm">
+        <Card className="group relative overflow-hidden glass-regular premium-frame micro-lift">
           <CardHeader className="pb-1 pt-3 px-4">
             <CardTitle className="text-xs font-medium text-muted-foreground">{t('portfolio.feesAndTaxes')}</CardTitle>
           </CardHeader>
@@ -296,10 +337,11 @@ export default function StocksPage({
           </CardContent>
         </Card>
 
-        <Card className={cn(
-          "group relative overflow-hidden surface-elevated premium-frame micro-lift bg-card backdrop-blur-sm border-l-4",
-          netGain >= 0 ? "border-l-accent" : "border-l-destructive"
-        )}>
+        <Card className="group relative overflow-hidden glass-regular premium-frame micro-lift">
+          <div aria-hidden className={cn(
+            "pointer-events-none absolute inset-0 rounded-[inherit] bg-gradient-to-br",
+            netGain >= 0 ? "from-accent/15 to-accent/5" : "from-destructive/15 to-destructive/5",
+          )} />
           <CardHeader className="pb-1 pt-3 px-4">
             <CardTitle className="text-xs font-medium text-muted-foreground">{t('portfolio.netReturn')}</CardTitle>
           </CardHeader>
@@ -327,6 +369,9 @@ export default function StocksPage({
                   <th className="py-2 px-3 text-right font-medium text-muted-foreground">{t('portfolio.value')}</th>
                   <th className="py-2 px-3 text-right font-medium text-muted-foreground">{t('portfolio.unrealized')}</th>
                   <th className="py-2 px-3 text-right font-medium text-muted-foreground">{t('portfolio.realized')}</th>
+                  {pageHasFxExposure && (
+                    <th className="py-2 px-3 text-right font-medium text-muted-foreground" title={t('portfolio.fxEffect')}>{t('portfolio.fxPnl')}</th>
+                  )}
                   <th className="py-2 px-3 text-right font-medium text-muted-foreground">{t('portfolio.dividends')}</th>
                   <th className="py-2 px-3"></th>
                 </tr>
@@ -339,7 +384,8 @@ export default function StocksPage({
                       <button
                         type="button"
                         className="font-medium text-left hover:underline cursor-pointer"
-                        onDoubleClick={() => openMarketLookup(h.symbol)}
+                        onDoubleClick={() => openMarketLookup(h.symbol, h.id)}
+                        onKeyDown={onActivateKeyDown(() => openMarketLookup(h.symbol, h.id))}
                         title={h.symbol ? t('watchlist.doubleClickChart') : undefined}
                       >
                         {h.name}
@@ -362,11 +408,31 @@ export default function StocksPage({
                     <td className="text-right py-2 px-3 tabular-nums font-medium">{fmt(h.currentValue, h.currency)}</td>
                     <td className={cn("text-right py-2 px-3 tabular-nums font-medium", (displayedPnlByHoldingId[h.id]?.unrealizedTarget || 0) >= 0 ? "text-accent" : "text-destructive")}>
                       {(displayedPnlByHoldingId[h.id]?.unrealizedTarget || 0) >= 0 ? "+" : ""}{fmt(displayedPnlByHoldingId[h.id]?.unrealizedTarget || 0)}
-                      <span className="text-xs ml-1 opacity-70">{fmtPct(displayedPnlByHoldingId[h.id]?.unrealizedPercent || 0)}</span>
+                      <DeltaPill
+                        value={displayedPnlByHoldingId[h.id]?.unrealizedPercent || 0}
+                        label={fmtPct(displayedPnlByHoldingId[h.id]?.unrealizedPercent || 0)}
+                        className="ml-1.5"
+                      />
                     </td>
                     <td className={cn("text-right py-2 px-3 tabular-nums", (displayedPnlByHoldingId[h.id]?.realizedTarget || 0) !== 0 ? ((displayedPnlByHoldingId[h.id]?.realizedTarget || 0) >= 0 ? "text-accent" : "text-destructive") : "text-muted-foreground")}>
                       {(displayedPnlByHoldingId[h.id]?.realizedTarget || 0) !== 0 ? `${(displayedPnlByHoldingId[h.id]?.realizedTarget || 0) >= 0 ? "+" : ""}${fmt(displayedPnlByHoldingId[h.id]?.realizedTarget || 0)}` : '—'}
                     </td>
+                    {pageHasFxExposure && (() => {
+                      const fxInfo = fxInfoById.get(h.id);
+                      const isForeign = (h.currency || 'EUR').toUpperCase() !== targetCurrency.toUpperCase();
+                      const fxGain = fxInfo?.fxGain;
+                      if (!isForeign || typeof fxGain !== 'number') {
+                        return <td className="text-right py-2 px-3 tabular-nums text-muted-foreground">—</td>;
+                      }
+                      return (
+                        <td
+                          className={cn("text-right py-2 px-3 tabular-nums", fxGain >= 0 ? "text-accent" : "text-destructive")}
+                          title={fxInfo?.usedFallbackRate ? t('portfolio.fxFallbackNote') : undefined}
+                        >
+                          {fxGain >= 0 ? "+" : ""}{fmt(fxGain)}{fxInfo?.usedFallbackRate ? " ⚠" : ""}
+                        </td>
+                      );
+                    })()}
                     <td className="text-right py-2 px-3 tabular-nums text-accent">
                       {h.totalDividends > 0 ? `+${fmt(convertToTarget(h.totalDividends, h.currency))}` : '—'}
                     </td>
@@ -377,15 +443,16 @@ export default function StocksPage({
                           fxAwarePnl={enableFxAwarePnl ? displayedPnlByHoldingId[h.id] : undefined}
                           fxAwareCurrency={enableFxAwarePnl ? targetCurrency : undefined}
                           trigger={
-                            <Button variant="ghost" size="icon" className="icon-touch-target">
+                            <Button variant="ghost" size="icon" className="icon-touch-target" aria-label={t('portfolio.viewDetails')} title={t('portfolio.viewDetails')}>
                               <Eye className="h-3.5 w-3.5" />
                             </Button>
                           }
                         />
                         <AddPortfolioTxnDialog investment={h} />
                         <Button variant="ghost" size="icon" className="icon-touch-target text-muted-foreground hover:text-destructive"
-                          onClick={async () => { 
-                            const ok = await confirm({ 
+                          aria-label={t('portfolio.deleteInvestment')} title={t('portfolio.deleteInvestment')}
+                          onClick={async () => {
+                            const ok = await confirm({
                               title: t('portfolio.deleteInvestment'), 
                               description: t('portfolio.deleteInvestmentDesc', { name: h.name }), 
                               confirmLabel: t('common.delete'), 
@@ -406,7 +473,7 @@ export default function StocksPage({
       </Card>
 
       {/* Info Card */}
-      <Card className="bg-muted/30 border-dashed">
+      <Card className="bg-muted/30 !border-dashed">
         <CardContent className="py-4">
           <p className="text-sm text-muted-foreground">{t('stocks.howItWorks')}</p>
         </CardContent>

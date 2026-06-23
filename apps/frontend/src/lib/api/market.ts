@@ -15,10 +15,51 @@ export function getMarketNews(
     return requestWithQuery('/api/market/news', params);
 }
 
-export function getMarketQuotes(
+export interface MarketQuote {
+    symbol: string;
+    price: number;
+    change: number;
+    changePercent: number;
+}
+
+/**
+ * Fetch quotes for one or more comma-separated symbols. The default `Q` covers
+ * the fields every caller relies on; pass a richer type parameter (e.g. the
+ * market-lookup page's full `Quote`) when the endpoint's extra fields are needed.
+ *
+ * `detail: 'basic'` skips the per-symbol fundamentals/analyst `quoteSummary`
+ * fetch (~half the outbound Yahoo calls) — use it for price-only views like the
+ * benchmark strip and watchlist; omit it (default 'full') when the rich
+ * fundamentals/analyst fields are rendered.
+ */
+export function getMarketQuotes<Q = MarketQuote>(
     symbols: string,
-): Promise<{ quotes: Array<{ symbol: string; price: number; change: number; changePercent: number }> }> {
-    return apiRequest(`/api/market/quote?symbols=${encodeURIComponent(symbols)}`);
+    opts?: { detail?: 'basic' | 'full' },
+): Promise<{ quotes: Q[] }> {
+    const detail = opts?.detail === 'basic' ? '&detail=basic' : '';
+    return apiRequest(`/api/market/quote?symbols=${encodeURIComponent(symbols)}${detail}`);
+}
+
+export interface MarketChartPoint {
+    time: number;
+    close: number;
+    high: number;
+    low: number;
+    volume: number;
+}
+
+export interface MarketChartResponse<P = MarketChartPoint> {
+    symbol?: string;
+    currency?: string;
+    points: P[];
+}
+
+export function getMarketChart<P = MarketChartPoint>(
+    symbol: string,
+    range: string,
+    interval: string,
+): Promise<MarketChartResponse<P>> {
+    return requestWithQuery('/api/market/chart', { symbol, range, interval });
 }
 
 export interface MarketSearchResult {

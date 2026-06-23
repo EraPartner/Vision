@@ -29,6 +29,19 @@ describe('downsampleLTTB', () => {
     expect(result).toHaveLength(20);
   });
 
+  it('samples a first-bucket spike and never duplicates the last point', () => {
+    // Regression: the windows were shifted one bucket forward, so the first
+    // bucket after data[0] was unselectable (a spike there was dropped) and the
+    // tail iteration collapsed onto data[len-1], duplicating the final point.
+    const data = Array.from({ length: 10 }, (_, i) => ({ i, v: i === 2 ? 100 : 1 }));
+    const result = downsampleLTTB(data, 5, (x) => x.i, (x) => x.v);
+    const indices = result.map((x) => x.i);
+
+    expect(indices).toContain(2); // first-bucket spike survives
+    expect(indices[indices.length - 1]).toBe(9); // last point present
+    expect(indices[indices.length - 2]).not.toBe(9); // …and not duplicated
+  });
+
   it('preserves visual shape — keeps peak and trough', () => {
     // Flat data with one big peak and one big trough
     const data = Array.from({ length: 50 }, (_, i) => {

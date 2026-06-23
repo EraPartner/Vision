@@ -3,18 +3,21 @@ title: API Endpoint Matrix
 type: reference
 status: active
 date: 2026-04-27
-updated: 2026-05-12
-last_modified: 2026-05-12
+updated: 2026-06-19
+last_modified: 2026-06-19
 adr-reference: 026
-tags: [reference, api, endpoints, matrix, overview, openapi, phase-1, phase-2, phase-3, phase-4, phase-5a, phase-5, phase-6, phase-7, phase-8, phase-g, phase-9, phase-13, phase-c, phase-d, phase-e, phase-f, cashflow-forecast, bill-reminders, sankey, pdf-report, db-maintenance, puppeteer, reports, multi-method-forecast, accuracy-persistence, materialized-cache, ensemble-methods, dependency-slim-down, backup, ipc, electron, drillthrough, export-filters, multi-select, ing, bnp, supported-adapters]
-description: Complete matrix of all 163 API endpoints across 28 route files + 8 IPC handlers, organized by resource for quick lookup. Phase 1+2 adds 8 IPC handlers for bundle-based backup/restore with AES-256-CBC encryption and schema-safe restore. Phase 3 adds three new POST report endpoints with Puppeteer rendering. Phase 5A adds JSON export and attachments. Phase 6 adds cash flow forecast. Phase 7 adds Sankey flow and DB maintenance. Phase 8 completes portfolio and tax report generation (6 + 7 sections respectively). Phase F adds 4 admin endpoints. Phase 10 adds multi-method cash flow forecast. Phase C adds dashboard frontend visualization for Phase 10 forecast. Phase D adds persisted accuracy metrics endpoint. Phase E adds cache-aware forecast endpoint with materialized MC cache. Phase H adds rolling-window forecast with rolling-specific MC defaults (500 paths, P25/P75) and lazy-loaded diagnostics. Phase G removes 6 overlapping info endpoints in favor of aggregations. Phase 9 completes aggregation shadow cutover. Phase 13 adds multi-select export filters (`bank_accounts`, `category_ids` params); May 12 2026: ING and BNP Paribas Fortis adapters added (8 banks total); see openapi.yaml for authoritative spec.
+# Authoritative HTTP-operation count, derived from openapi.yaml and enforced by
+# scripts/check-endpoint-matrix.js (CI verify-generated). Bump when routes change.
+api_operation_count: 210
+tags: [reference, api, endpoints, matrix, overview, openapi, phase-1, phase-2, phase-3, phase-4, phase-5a, phase-5, phase-6, phase-7, phase-8, phase-g, phase-9, phase-13, phase-c, phase-d, phase-e, phase-f, cashflow-forecast, bill-reminders, sankey, pdf-report, db-maintenance, db-data-editor, puppeteer, reports, multi-method-forecast, accuracy-persistence, materialized-cache, ensemble-methods, dependency-slim-down, backup, ipc, electron, drillthrough, export-filters, multi-select, ing, bnp, supported-adapters, portfolio-import, portfolio-csv-import, adr-078, adr-101, research, adr-079, adr-081, multi-provider, capability-map, quota-governor, monte-carlo, portfolio-projection, fundamentals-scorecard, chart-builder, auto-link, planned-match]
+description: Complete matrix of all 210 HTTP API operations (authoritative count from openapi.yaml) across the route files, plus 8 Electron IPC handlers, organized by resource for quick lookup. 2026-06-19: removed GET /api/cross-workspace/unified-tax (Unified Tax view retired — feature removed end-to-end across page, route, pure cores, types, and i18n; ADR-102 supersedes the unified-tax part of ADR-098); api_operation_count 211 → 210; Cross-Workspace group now 1 endpoint. 2026-06-19: openapi.yaml reconciled to the implemented routes — documented GET /api/info/net-worth/by-account (Σ-accounts, ADR-100) and the 3 DB Data Editor admin endpoints (ADR-101: tables/:table/schema, /rows, /mutate), and corrected the accounts merge operation that was mis-pathed under POST /api/accounts/{id} to POST /api/accounts/{id}/merge; api_operation_count 208 → 209. 2026-06-18 (ADR-101): DB Data Editor adds 3 admin endpoints — GET /api/admin/database/tables/:table/schema, GET /api/admin/database/tables/:table/rows, POST /api/admin/database/tables/:table/mutate; Admin group total: 17 endpoints. 2026-06-18 (ADR-088): Account entity adds 6 endpoints under /api/accounts (GET list, POST create, GET/PATCH/DELETE by id, POST :id/merge); Accounts group total: 6 endpoints. 2026-06-17 (ADR-082): Macroeconomic Indicators data vertical adds 2 endpoints to the Research group — GET /api/research/macro/search (fan-out catalog search across FRED/Eurostat/DBnomics) and GET /api/research/macro/series (provider-pinned observations: CPI, rates, unemployment, …); Research group total: 18 endpoints. 2026-06-17: Auto-link planned payments on match adds GET /api/planned-transactions/match-suggestions; Planned Transactions total: 8 endpoints. 2026-06-16 (ADR-081): Research Analytics & Forecasting Expansion adds 2 endpoints to the Research group — GET /api/research/scorecard (heuristic fundamentals scorecard, 0-100 grade, per-metric flags) and POST /api/research/portfolio-forecast (Monte Carlo portfolio value projection, parametric/block-bootstrap, P10–P90 bands, non-persisted); also adds optional provider query param to GET /api/research/chart. Research group total: 16 endpoints. 2026-06-16 (ADR-079): Research aggregation layer adds 14 endpoints under /api/research — 6 data (search, quote, chart, fundamentals, analyst, news) with provider-agnostic envelope (meta.provider, meta.source) + 5 cross-provider symbol-mapping (GET/POST/DELETE /api/research/mappings, POST /mappings/resolve, POST /mappings/audit) + 3 provider-key Settings endpoints (GET /provider-keys, PUT/DELETE /provider-keys/:provider). 2026-06-15 (ADR-078): Portfolio CSV Import adds 12 endpoints under /api/portfolio/import (2 upload, 2 SSE, 4 parser CRUD, 4 batch/review). 2026-06-01 (ADR-066): Saved Named Custom CSV Parsers adds 4 Import endpoints (GET/POST /api/import/parsers, PATCH/DELETE /api/import/parsers/:id). Phase 1+2 adds 8 IPC handlers for bundle-based backup/restore with AES-256-CBC encryption and schema-safe restore. Phase 3 adds three new POST report endpoints with Puppeteer rendering. Phase 5A adds JSON export and attachments. Phase 6 adds cash flow forecast. Phase 7 adds Sankey flow and DB maintenance. Phase 8 completes portfolio and tax report generation (6 + 7 sections respectively). Phase F adds 4 admin endpoints. Phase 10 adds multi-method cash flow forecast. Phase C adds dashboard frontend visualization for Phase 10 forecast. Phase D adds persisted accuracy metrics endpoint. Phase E adds cache-aware forecast endpoint with materialized MC cache. Phase H adds rolling-window forecast with rolling-specific MC defaults (500 paths, P25/P75) and lazy-loaded diagnostics. Phase G removes 6 overlapping info endpoints in favor of aggregations. Phase 9 completes aggregation shadow cutover. Phase 13 adds multi-select export filters (`bank_accounts`, `category_ids` params); May 12 2026: ING and BNP Paribas Fortis adapters added (8 banks total); see openapi.yaml for authoritative spec.
 aliases: [api matrix, endpoint matrix, all endpoints, api overview, endpoint list]
 ---
 
 # API Endpoint Matrix
 
 > [!abstract] Overview
-> All 163 API endpoints across 28 route files (updated 2026-05-16 — Bulk Actions feature adds `POST /api/transactions/bulk-delete`, `POST /api/transactions/bulk-update`, and `POST /api/transactions/bulk-export`; Tags feature adds `GET/POST /api/tags`, `PATCH/DELETE /api/tags/:id`, `POST /api/transactions/bulk-tag`, and `tags` query param on `GET /api/transactions` and both export endpoints; prior: 2026-04-29 — Phase 14 adds portfolio-summary realtime totals endpoint; Phase 13 adds `category_ids` and `transaction_type` query params to `GET /api/transactions` for pivot table drillthrough; unifies export endpoint filters with `GET /api/transactions` by delegating to shared `buildTransactionWhere`, enabling `transaction_id`, `recipient_id`, `recipient_name`, `search`, and `transaction_type` on export endpoints; adds `bank_accounts` and `category_ids` multi-select params to both list and export for flexible filtering via UI pickers; Phase 7 adds filter exclusions (`excludedCategoryIds`, `excludedRecipientIds`) to report endpoints with filter impact comparison view; adds `GET /api/recipients/clusters` for merge candidate identification; Phase E adds cache-aware forecast endpoint with 6-hour TTL materialized cache; Phase D adds persisted accuracy metrics endpoint; Phase 9 — aggregation shadow cutover complete; Phase F adds 4 admin endpoints for provider health, endpoint liveness, and metrics; Phase 10 adds multi-method cash flow forecast endpoint; Phase C adds dashboard frontend visualization for Phase 10 forecast; Phase 5 slim-down removes legacy GET `/api/reports/financial` endpoint; bank reconciliation removed). Use this as a quick reference to find any endpoint.
+> **210 HTTP API operations** (authoritative count = operations in `openapi.yaml`, enforced by `scripts/check-endpoint-matrix.js` in CI) plus 2 unversioned `/health` endpoints and 8 Electron IPC handlers, across the route files. The per-resource tables below are a navigational index — `openapi.yaml` is the source of truth. (updated 2026-06-19 — reconciled `openapi.yaml` to the implemented routes: documented `GET /api/info/net-worth/by-account` (Σ-accounts, ADR-100) and the 3 DB Data Editor admin endpoints (ADR-101), and moved the accounts merge operation from the mis-pathed `POST /api/accounts/{id}` to `POST /api/accounts/{id}/merge`; count 208 → 209; updated 2026-06-18 — DB Data Editor (ADR-101) adds 3 admin endpoints: `GET /api/admin/database/tables/:table/schema`, `GET /api/admin/database/tables/:table/rows`, `POST /api/admin/database/tables/:table/mutate` (Admin total: 14→17); Account entity (ADR-088) adds 6 endpoints under `/api/accounts`: `GET/POST /api/accounts`, `GET/PATCH/DELETE /api/accounts/:id`, `POST /api/accounts/:id/merge` (Accounts total: 6); 2026-06-17 — Macroeconomic Indicators (ADR-082) add `GET /api/research/macro/search` + `GET /api/research/macro/series` (Research total: 18); Auto-link planned payments on match adds `GET /api/planned-transactions/match-suggestions` (Planned total: 8); 2026-06-16 — Research Analytics & Forecasting Expansion (ADR-081) adds 2 endpoints to the Research group: `GET /api/research/scorecard` and `POST /api/research/portfolio-forecast` (Research total: 16→18); also adds optional `provider` param to `GET /api/research/chart`; 2026-06-16 — Research aggregation (ADR-079) adds 14 endpoints under `/api/research` (6 data + 5 symbol-mapping + 3 provider-key); 2026-06-15 — Portfolio CSV Import (ADR-078) adds 12 endpoints under `/api/portfolio/import`; 2026-06-01 — Saved Named Custom CSV Parsers (ADR-066) adds 4 endpoints: `GET/POST /api/import/parsers` and `PATCH/DELETE /api/import/parsers/:id`; prior: 2026-05-16 — Bulk Actions feature adds `POST /api/transactions/bulk-delete`, `POST /api/transactions/bulk-update`, and `POST /api/transactions/bulk-export`; Tags feature adds `GET/POST /api/tags`, `PATCH/DELETE /api/tags/:id`, `POST /api/transactions/bulk-tag`, and `tags` query param on `GET /api/transactions` and both export endpoints; prior: 2026-04-29 — Phase 14 adds portfolio-summary realtime totals endpoint; Phase 13 adds `category_ids` and `transaction_type` query params to `GET /api/transactions` for pivot table drillthrough; unifies export endpoint filters with `GET /api/transactions` by delegating to shared `buildTransactionWhere`, enabling `transaction_id`, `recipient_id`, `recipient_name`, `search`, and `transaction_type` on export endpoints; adds `bank_accounts` and `category_ids` multi-select params to both list and export for flexible filtering via UI pickers; Phase 7 adds filter exclusions (`excludedCategoryIds`, `excludedRecipientIds`) to report endpoints with filter impact comparison view; adds `GET /api/recipients/clusters` for merge candidate identification; Phase E adds cache-aware forecast endpoint with 6-hour TTL materialized cache; Phase D adds persisted accuracy metrics endpoint; Phase 9 — aggregation shadow cutover complete; Phase F adds 4 admin endpoints for provider health, endpoint liveness, and metrics; Phase 10 adds multi-method cash flow forecast endpoint; Phase C adds dashboard frontend visualization for Phase 10 forecast; Phase 5 slim-down removes legacy GET `/api/reports/financial` endpoint; bank reconciliation removed). Use this as a quick reference to find any endpoint.
 > 
 > **Note:** As of Phase 2.4, `openapi.yaml` is the authoritative API specification. This matrix provides a quick lookup; see the OpenAPI spec for formal schemas and examples.
 >
@@ -28,11 +31,28 @@ aliases: [api matrix, endpoint matrix, all endpoints, api overview, endpoint lis
 >
 > **2026-04-29 Security Update:** CodeQL + Dependabot remediation (ADR-042): `attachmentRateLimiter` (60 req/min) added to all attachment endpoints; `spaRateLimiter` (600 req/min) added to SPA fallback route. See [[docs/adr/042-codeql-dependabot-remediation-2026-04|ADR-042]] for full details.
 
-## Transactions (11 endpoints)
+## Accounts (6 endpoints)
 
 | Method | Path | Description | Rate Limit | Doc |
 |--------|------|-------------|------------|-----|
-| GET | `/api/transactions` | List with filtering/pagination (Phase 13: supports `transaction_id`, `recipient_id`, `recipient_name`, `search`, `transaction_type`, `category_ids`, `bank_accounts`) | — | [[docs/api/transactions\|Transactions]] |
+| GET | `/api/accounts` | List accounts (`?active=true\|false\|all`, default true) (ADR-088) | — | [[docs/api/accounts\|Accounts]] |
+| POST | `/api/accounts` | Create account | — | [[docs/api/accounts\|Accounts]] |
+| GET | `/api/accounts/:id` | Get single account | — | [[docs/api/accounts\|Accounts]] |
+| PATCH | `/api/accounts/:id` | Update account (partial) | — | [[docs/api/accounts\|Accounts]] |
+| DELETE | `/api/accounts/:id` | Delete account (409 if still referenced — archive instead) | — | [[docs/api/accounts\|Accounts]] |
+| POST | `/api/accounts/:id/merge` | Merge source accounts into this survivor; repoints all references + deletes sources (ADR-088) | — | [[docs/api/accounts\|Accounts]] |
+
+## Cross-Workspace (1 endpoint — ADR-098)
+
+| Method | Path | Description | Rate Limit | Doc |
+|--------|------|-------------|------------|-----|
+| POST | `/api/cross-workspace/rebalance` | Cash-aware rebalancing: deploy spendable cash into underweight sleeves toward a target allocation, no sells (ADR-098) | — | — |
+
+## Transactions (18 endpoints — incl. 4 Tags endpoints)
+
+| Method | Path | Description | Rate Limit | Doc |
+|--------|------|-------------|------------|-----|
+| GET | `/api/transactions` | List with filtering/pagination (Phase 13: supports `transaction_id`, `recipient_id`, `recipient_name`, `search`, `transaction_type`, `category_ids`, `bank_accounts`; also single `bank_account` — used by the accounts-hub double-click deep link, 2026-06-19) | — | [[docs/api/transactions\|Transactions]] |
 | GET | `/api/transactions/export/csv` | Export as CSV (streaming, chunked); accepts same filters as `GET /api/transactions` (Phase 13) | 30 req/min | [[docs/api/transactions\|Transactions]] |
 | GET | `/api/transactions/export/json` | Export as NDJSON (streaming, chunked); accepts same filters as `GET /api/transactions` (Phase 13) | 30 req/min | [[docs/api/transactions\|Transactions]] |
 | GET | `/api/transactions/:id` | Get single | — | [[docs/api/transactions\|Transactions]] |
@@ -43,6 +63,9 @@ aliases: [api matrix, endpoint matrix, all endpoints, api overview, endpoint lis
 | POST | `/api/transactions/bulk-delete` | Hard-delete by `ids` (≤500) or `filter` (≤5000 matches) | 30 req/min | [[docs/features/bulk-actions\|Bulk Actions]] |
 | POST | `/api/transactions/bulk-update` | Apply category/recipient/active update to a selection | 30 req/min | [[docs/features/bulk-actions\|Bulk Actions]] |
 | POST | `/api/transactions/bulk-export` | Stream CSV/NDJSON for an ids- or filter-resolved selection | 30 req/min | [[docs/features/bulk-actions\|Bulk Actions]] |
+| GET | `/api/transactions/transfer-suggestions` | Ambiguous internal-transfer matches awaiting confirmation (ADR-083) | — | [[docs/features/transfers\|Transfers]] |
+| POST | `/api/transactions/transfers` | Manually confirm a transfer pair `{aId,bId}` | — | [[docs/features/transfers\|Transfers]] |
+| DELETE | `/api/transactions/transfers/:id` | Clear a transfer mark (and its peer) | — | [[docs/features/transfers\|Transfers]] |
 | GET | `/api/tags` | List tags; `?is_active=true\|false` | — | [[docs/features/tags\|Tags]] |
 | POST | `/api/tags` | Find-or-create tag by slug (upsert) | — | [[docs/features/tags\|Tags]] |
 | PATCH | `/api/tags/:id` | Update tag color or is_active | — | [[docs/features/tags\|Tags]] |
@@ -60,7 +83,7 @@ aliases: [api matrix, endpoint matrix, all endpoints, api overview, endpoint lis
 | DELETE | `/api/categories/:id` | Hard delete | — | [[docs/api/categories\|Categories]] |
 | POST | `/api/categories/:id/assign` | Assign to recipients by ID | — | [[docs/api/categories\|Categories]] |
 
-## Recipients (9 endpoints)
+## Recipients (14 endpoints)
 
 | Method | Path | Description | Rate Limit | Doc |
 |--------|------|-------------|------------|-----|
@@ -73,8 +96,13 @@ aliases: [api matrix, endpoint matrix, all endpoints, api overview, endpoint lis
 | POST | `/api/recipients/:id/unmerge` | Unmerge from primary | — | [[docs/api/recipients\|Recipients]] |
 | GET | `/api/recipients/:id/aliases` | Get aliases | — | [[docs/api/recipients\|Recipients]] |
 | GET | `/api/recipients/clusters` | Identify merge-candidate clusters | — | [[docs/api/recipients\|Recipients]] |
+| GET | `/api/recipients/:id/patterns` | List matching patterns for recipient | — | [[docs/api/recipients\|Recipients]] |
+| POST | `/api/recipients/:id/patterns` | Create matching pattern | — | [[docs/api/recipients\|Recipients]] |
+| POST | `/api/recipients/:id/patterns/preview` | Preview transactions matched by a pattern | — | [[docs/api/recipients\|Recipients]] |
+| PATCH | `/api/recipients/:id/patterns/:patternId` | Update pattern | — | [[docs/api/recipients\|Recipients]] |
+| DELETE | `/api/recipients/:id/patterns/:patternId` | Delete pattern | — | [[docs/api/recipients\|Recipients]] |
 
-## Planned Transactions (7 endpoints) — Phase 3 / Phase 6
+## Planned Transactions (8 endpoints) — Phase 3 / Phase 6 / June 2026
 
 | Method | Path | Description | Rate Limit | Doc |
 |--------|------|-------------|------------|-----|
@@ -85,8 +113,9 @@ aliases: [api matrix, endpoint matrix, all endpoints, api overview, endpoint lis
 | POST | `/api/planned-transactions/:id/execute` | Execute (atomic, idempotent — Phase 3) | — | [[docs/api/plannedTransactions\|Planned Transactions]] |
 | DELETE | `/api/planned-transactions/:id` | Hard delete | — | [[docs/api/plannedTransactions\|Planned Transactions]] |
 | GET | `/api/planned-transactions/due-soon` | Upcoming bills within N days (Phase 6) | — | [[docs/api/plannedTransactions\|Planned Transactions]] |
+| GET | `/api/planned-transactions/match-suggestions` | Ambiguous auto-link candidates for user confirmation (June 2026; registered before `/:id`) | — | [[docs/api/plannedTransactions\|Planned Transactions]] |
 
-## Investments (14 endpoints)
+## Investments (15 endpoints)
 
 | Method | Path | Description | Rate Limit | Doc |
 |--------|------|-------------|------------|-----|
@@ -101,6 +130,7 @@ aliases: [api matrix, endpoint matrix, all endpoints, api overview, endpoint lis
 | DELETE | `/api/investments/:id` | Hard delete | — | [[docs/api/investments\|Investments]] |
 | GET | `/api/investments/:id/transactions` | Portfolio transactions | — | [[docs/api/investments\|Investments]] |
 | POST | `/api/investments/:id/transactions` | Create portfolio transaction | — | [[docs/api/investments\|Investments]] |
+| POST | `/api/investments/:id/move` | Move holding between accounts (in-specie, cost-basis-preserving; whole or partial-units) (ADR-091) | — | [[docs/api/investments\|Investments]] |
 | DELETE | `/api/investments/transactions/:txnId` | Delete portfolio transaction | — | [[docs/api/investments\|Investments]] |
 | PATCH | `/api/investments/transactions/:txnId` | Update portfolio transaction | — | [[docs/api/investments\|Investments]] |
 | GET | `/api/investments/:id/summary` | Investment summary | — | [[docs/api/investments\|Investments]] |
@@ -120,18 +150,42 @@ aliases: [api matrix, endpoint matrix, all endpoints, api overview, endpoint lis
 | Method | Path | Description | Rate Limit | Doc |
 |--------|------|-------------|------------|-----|
 | GET | `/api/market/search` | Search tickers | — | [[docs/api/marketLookup\|Market Lookup]] |
-| GET | `/api/market/quote` | Get quotes | — | [[docs/api/marketLookup\|Market Lookup]] |
+| GET | `/api/market/quote` | Get quotes; optional `detail=basic\|full` (default `full`) — `basic` skips `quoteSummary` fetch, returns price-only fields, halves Yahoo calls for benchmark strip / watchlist / chart-dialog callers | — | [[docs/api/marketLookup\|Market Lookup]] |
 | GET | `/api/market/chart` | Historical chart data | — | [[docs/api/marketLookup\|Market Lookup]] |
 | GET | `/api/market/news` | News articles | — | [[docs/api/marketLookup\|Market Lookup]] |
 
-## Import (6 endpoints)
+## Research (18 endpoints) — ADR-079, ADR-081, ADR-082
+
+Provider-agnostic research surface mounted at `/api/research` under `marketRateLimiter`. Six data endpoints route through the capability map → quota governor → cache → race-to-first provider, **except `fundamentals`** which fetches FMP + Yahoo in parallel and merges field-by-field (FMP preferred) via `researchAggregator.fetchFundamentals()`. Two analytics endpoints (`scorecard`, `portfolio-forecast`) compute derived outputs from aggregated data; the projection endpoint is non-persisted (ADR-079 / ADR-065 storage boundary). All data-endpoint responses carry `meta.provider` (which provider answered, or `null`; may be `"fmp+yahoo"` composite for fundamentals/scorecard) and `meta.source` (`'cache'` | `'live'` | `'unavailable'`). All five symbol adapters are wired; the keyed four (Twelve Data / Finnhub / FMP / Alpha Vantage) light up when their API key is set via Settings (`/provider-keys`) or the root `.env` (ADR-080). The **macro vertical** (ADR-082) adds three more adapters — FRED (keyed `FRED_API_KEY`), Eurostat and DBnomics (keyless) — behind two **provider-pinned** endpoints (`macro/search` fans out + unions a catalog; `macro/series` fetches one provider's observations); macro data is never raced and never persisted to `asset_price_history`. See [[docs/api/research|Research API]] and [[docs/features/research|Research Feature]].
+
+| Method | Path | Description | Rate Limit | Doc |
+|--------|------|-------------|------------|-----|
+| GET | `/api/research/search` | Search tickers / securities by name or symbol; returns `{ items: [] }` when query is blank | — | [[docs/api/research\|Research]] |
+| GET | `/api/research/quote` | Current quote for `symbol` (+ optional `asset_class` hint for provider routing) | — | [[docs/api/research\|Research]] |
+| GET | `/api/research/chart` | Historical chart points; `range` default `1mo` (1d/5d/1mo/3mo/6mo/1y/2y/5y/max); optional `provider` param pins preferred provider (ADR-081) | — | [[docs/api/research\|Research]] |
+| GET | `/api/research/fundamentals` | Extended fundamentals snapshot merged from FMP + Yahoo in parallel (FMP preferred per field, Yahoo fills gaps; `meta.provider` may be `"fmp+yahoo"`); fields: P/E, EPS, market cap + ADR-081: sector, pegRatio, payoutRatio, grossMargin, operatingMargin, debtToEquity, currentRatio, revenueGrowth, freeCashFlow, fcfYield, …; 12 h cache | — | [[docs/api/research\|Research]] |
+| GET | `/api/research/analyst` | Analyst consensus + price targets + recent rating actions; 24 h cache | — | [[docs/api/research\|Research]] |
+| GET | `/api/research/news` | News articles for a symbol; 2 h cache | — | [[docs/api/research\|Research]] |
+| GET | `/api/research/macro/search` | Search macroeconomic series (CPI, rates, unemployment, …); fan-out union across FRED (open) + Eurostat/DBnomics (curated catalog); items carry `{ provider, seriesId, title, region, units, source }` (ADR-082); 1 h cache | — | [[docs/api/research\|Research]] |
+| GET | `/api/research/macro/series` | Observations for one provider-pinned macro series; params `provider` (fred/eurostat/dbnomics), `series_id`, `range`; value→close chart points (ADR-082); 12 h cache | — | [[docs/api/research\|Research]] |
+| GET | `/api/research/scorecard` | Heuristic fundamentals scorecard: 0–100 score, A–F grade, per-metric flags with severity (ok/caution/warn/risk); missing fields skipped not penalized (ADR-081); fundamentals sourced via merged FMP + Yahoo (same as `/fundamentals`); `meta.provider` may be `"fmp+yahoo"` | — | [[docs/api/research\|Research]] |
+| POST | `/api/research/portfolio-forecast` | Monte Carlo projection of aggregate portfolio value; body: horizon_months, monthly_contribution, paths, forward_blend, method (parametric/block_bootstrap), target_value, currency, seed; returns P10–P90 bands + summary + forward-input provenance; non-persisted (ADR-081) | — | [[docs/api/research\|Research]] |
+| GET | `/api/research/mappings` | List stored cross-provider mappings for `instrument_key`/`key_type` | — | [[docs/api/research\|Research]] |
+| POST | `/api/research/mappings/resolve` | Auto-propose per-provider symbols (provider searches; user confirms resolved instrument) | — | [[docs/api/research\|Research]] |
+| POST | `/api/research/mappings` | Persist user-confirmed mappings (upsert per provider) | — | [[docs/api/research\|Research]] |
+| DELETE | `/api/research/mappings/:id` | Delete a stored mapping | — | [[docs/api/research\|Research]] |
+| POST | `/api/research/mappings/audit` | Cross-provider self-audit (currency/price agreement); stamps `verified_at` | — | [[docs/api/research\|Research]] |
+| GET | `/api/research/provider-keys` | List keyed-provider API-key statuses (masked) | — | [[docs/api/research\|Research]] |
+| PUT | `/api/research/provider-keys/:provider` | Set/replace a provider's API key (Settings) | — | [[docs/api/research\|Research]] |
+| DELETE | `/api/research/provider-keys/:provider` | Clear a provider's stored API key | — | [[docs/api/research\|Research]] |
+
+## Import (16 endpoints)
 
 | Method | Path | Description | Rate Limit | Doc |
 |--------|------|-------------|------------|-----|
 | POST | `/api/import/csv` | Import CSV | — | [[docs/api/imports\|Imports]] |
 | POST | `/api/import/csv/custom` | Import with custom mapping | — | [[docs/api/imports\|Imports]] |
 | POST | `/api/import/csv/stream` | SSE streaming import | — | [[docs/api/imports\|Imports]] |
-| GET | `/api/import/supported-banks` | List supported banks | — | [[docs/api/imports\|Imports]] |
 | POST | `/api/import/recipients` | Bulk import recipients | — | [[docs/api/imports\|Imports]] |
 | POST | `/api/import/categories` | Bulk import categories | — | [[docs/api/imports\|Imports]] |
 | GET | `/api/import/batches` | List import batches | — | [[docs/api/imports\|Imports]] |
@@ -141,6 +195,29 @@ aliases: [api matrix, endpoint matrix, all endpoints, api overview, endpoint lis
 | POST | `/api/import/batches/:id/rows/:rowId/override` | Override recipient on staged row | — | [[docs/api/imports\|Imports]] |
 | POST | `/api/import/batches/:id/rows/:rowId/category-override` | Override category on staged row | ADR-046 | [[docs/api/imports\|Imports]] |
 | POST | `/api/import/batches/:id/commit` | Commit reviewed batch | — | [[docs/api/imports\|Imports]] |
+| GET | `/api/import/parsers` | List saved custom parser configs (ADR-066) | — | [[docs/api/imports\|Imports]] |
+| POST | `/api/import/parsers` | Create saved parser; 409 on duplicate name; 400 if required columns missing | — | [[docs/api/imports\|Imports]] |
+| PATCH | `/api/import/parsers/:id` | Update saved parser name and/or config; 404 if missing; 409 on name conflict | — | [[docs/api/imports\|Imports]] |
+| DELETE | `/api/import/parsers/:id` | Delete saved parser; 204 on success; 404 if missing | — | [[docs/api/imports\|Imports]] |
+
+## Portfolio Import (12 endpoints) — ADR-078
+
+All routes mounted at `/api/portfolio/import` with `importRateLimiter`. Parallel pipeline to the budgeting import: stage → validate → matchInvestments → (review|autoCommit) → commit. Auto-commit only when all rows matched by exact symbol with zero errors; otherwise batch goes to `awaiting_review`. See [[docs/api/portfolio-imports|Portfolio Imports API]] and [[docs/features/portfolio-import|Portfolio Import Feature]].
+
+| Method | Path | Description | Rate Limit | Doc |
+|--------|------|-------------|------------|-----|
+| POST | `/api/portfolio/import/csv/custom` | One-shot portfolio CSV import; returns 201 (committed) or 202 (awaiting_review) | importRateLimiter | [[docs/api/portfolio-imports\|Portfolio Imports]] |
+| POST | `/api/portfolio/import/csv/stream` | SSE-streaming portfolio CSV import; events: progress / review_required / complete / error | importRateLimiter | [[docs/api/portfolio-imports\|Portfolio Imports]] |
+| GET | `/api/portfolio/import/parsers` | List saved portfolio parser configs (kind=portfolio) | — | [[docs/api/portfolio-imports\|Portfolio Imports]] |
+| POST | `/api/portfolio/import/parsers` | Create saved portfolio parser; 409 on duplicate name | — | [[docs/api/portfolio-imports\|Portfolio Imports]] |
+| PATCH | `/api/portfolio/import/parsers/:id` | Update saved portfolio parser name/config | — | [[docs/api/portfolio-imports\|Portfolio Imports]] |
+| DELETE | `/api/portfolio/import/parsers/:id` | Delete saved portfolio parser; 204 on success | — | [[docs/api/portfolio-imports\|Portfolio Imports]] |
+| GET | `/api/portfolio/import/batches` | List portfolio import batches (limit/offset) | — | [[docs/api/portfolio-imports\|Portfolio Imports]] |
+| GET | `/api/portfolio/import/batches/:id` | Get portfolio import batch detail | — | [[docs/api/portfolio-imports\|Portfolio Imports]] |
+| DELETE | `/api/portfolio/import/batches/:id` | Rollback batch (deletes committed portfolio_transactions, marks aborted) | — | [[docs/api/portfolio-imports\|Portfolio Imports]] |
+| GET | `/api/portfolio/import/batches/:id/preview` | Rows grouped by investment; unresolved rows per distinct raw symbol/name | — | [[docs/api/portfolio-imports\|Portfolio Imports]] |
+| POST | `/api/portfolio/import/batches/:id/rows/:rowId/investment-override` | Resolve unmatched row: pick existing investment or create new | — | [[docs/api/portfolio-imports\|Portfolio Imports]] |
+| POST | `/api/portfolio/import/batches/:id/commit` | Commit reviewed batch to portfolio_transactions | — | [[docs/api/portfolio-imports\|Portfolio Imports]] |
 
 ## Attachments (4 endpoints) — Phase 5A
 
@@ -203,7 +280,7 @@ aliases: [api matrix, endpoint matrix, all endpoints, api overview, endpoint lis
 | GET | `/health` | Health check (backend ready) | — | [[docs/api/health\|Health]] |
 | GET | `/health/detailed` | Detailed health with cache warmup status | — | [[docs/api/health\|Health]] |
 
-## Admin (13 endpoints)
+## Admin (17 endpoints)
 
 | Method | Path | Description | Rate Limit | Doc |
 |--------|------|-------------|------------|-----|
@@ -214,12 +291,16 @@ aliases: [api matrix, endpoint matrix, all endpoints, api overview, endpoint lis
 | POST | `/api/admin/update/apply` | Acknowledge update | — | [[docs/api/admin\|Admin]] |
 | POST | `/api/admin/update/apply-and-restart` | Apply and restart | — | [[docs/api/admin\|Admin]] |
 | POST | `/api/admin/investments/kinesis/sanitize-history` | Sanitize Kinesis spikes | — | [[docs/api/admin\|Admin]] |
-| GET | `/api/admin/db/stats` | Per-table live/dead row counts and size (Phase 7) | admin | [[docs/api/admin\|Admin]] |
-| POST | `/api/admin/db/vacuum` | Run VACUUM ANALYZE on one or all tables (Phase 7) | admin | [[docs/api/admin\|Admin]] |
+| GET | `/api/admin/database/stats` | Per-table live/dead row counts and size (Phase 7) | admin | [[docs/api/admin\|Admin]] |
+| POST | `/api/admin/database/vacuum` | Run VACUUM ANALYZE on one or all tables (Phase 7) | admin | [[docs/api/admin\|Admin]] |
+| GET | `/api/admin/database/tables/:table/schema` | Table column schema + primary key discovery; composite-PK aware (ADR-101) | adminRateLimiter | [[docs/api/admin\|Admin]] |
+| GET | `/api/admin/database/tables/:table/rows` | Paginated/filtered/sorted table read; runs inside READ ONLY transaction with statement timeout (ADR-101) | adminRateLimiter | [[docs/api/admin\|Admin]] |
+| POST | `/api/admin/database/tables/:table/mutate` | Batch insert/update/delete with xmin optimistic concurrency, dry-run preview, audit trail, matview auto-refresh (ADR-101) | adminMutateLimiter | [[docs/api/admin\|Admin]] |
 | GET | `/api/admin/providers/health` | List all provider health records | — | [[docs/api/admin\|Admin]] |
 | POST | `/api/admin/providers/:provider/probe` | Active on-demand probe for one provider | — | [[docs/api/admin\|Admin]] |
 | GET | `/api/admin/metrics/requests` | Rolling request metrics per route (in-memory, 15 min) | — | [[docs/api/admin\|Admin]] |
 | GET | `/api/admin/endpoints` | Static endpoint manifest from Express router | — | [[docs/api/admin\|Admin]] |
+| GET | `/api/admin/endpoint-liveness` | Route manifest annotated with `live: true` per entry | — | [[docs/api/admin\|Admin]] |
 
 ## Reports (3 endpoints) — Phase 3 / Phase 5 / Phase 7
 
@@ -231,7 +312,7 @@ Server-side PDF generation via Puppeteer headless Chrome (Phase 3). Modular sect
 | POST | `/api/reports/portfolio` | Generate portfolio PDF (6 sections: executive summary, allocation, top holdings, performance trend, asset class detail, dividend income); Phase 8 complete | — | [[docs/features/pdf-report-export\|PDF Report Export]] |
 | POST | `/api/reports/tax` | Generate tax PDF (7 sections: executive summary, type breakdown, by asset class, monthly trend, top investments, fee breakdown, Belgian rules); accepts optional `taxProfile` and `precomputedPIT`; Phase 8 complete | — | [[docs/features/pdf-report-export\|PDF Report Export]] |
 
-## Aggregations (10 endpoints) — Phase 2 / Phase 6 / Phase 7 / Phase 10 / Phase D / Phase E / Phase 9 / Phase C / Phase G
+## Aggregations (14 endpoints) — Phase 2 / Phase 6 / Phase 7 / Phase 10 / Phase D / Phase E / Phase 9 / Phase C / Phase G
 
 Server-computed aggregations with materialized-view/live/cache distinction. Production path as of Phase 9 (shadow mode validation complete). Cash flow forecast added in Phase 6. Sankey flow added in Phase 7. Multi-method forecast added in Phase 10. Phase C adds dashboard frontend visualization with controls and diagnostics panel. Phase D adds persisted accuracy metrics and trend analysis. Phase E adds 6-hour TTL cache materialization with nightly job precompute. Phase G adds per-category breakdown with hierarchical reconciliation.
 
@@ -249,28 +330,29 @@ Server-computed aggregations with materialized-view/live/cache distinction. Prod
 | GET | `/api/aggregations/cashflow-forecast-rolling` | Rolling-window forecast: past `days_back` days actuals + next `days_forward` days statistical projection on a date axis (defaults 90/90, max 365 each, sum ≤ 730). Reuses 8-method engine with date-keyed payload, window-relative cumulative anchor; rolling-specific MC defaults (500 paths, P25/P75 percentiles) lower cost for broad horizons; accepts `include_backtest` param for lazy-loaded walk-forward backtest diagnostics (only enabled when user opens diagnostics sheet); uses MC rolling cache with 6-hour TTL. | — | [[docs/api/aggregations\|Aggregations]] |
 | GET | `/api/aggregations/cashflow-forecast-accuracy` | Persisted monthly backtest accuracy per method, with trend history (Phase D) | — | [[docs/api/aggregations\|Aggregations]] |
 | GET | `/api/aggregations/recipient-pivot` | Per-recipient spending keyed by period (monthly/yearly), supports date-range filter; powers custom saved-chart recipient series | — | [[docs/api/aggregations\|Aggregations]] |
+| GET | `/api/aggregations/category-pivot` | Spending by category with exclusion filter support | — | [[docs/api/aggregations\|Aggregations]] |
+| GET | `/api/aggregations/recipient-by-year` | Per-recipient spending broken out by calendar year with exclusion filter support | — | [[docs/api/aggregations\|Aggregations]] |
 
-## Info/Statistics (15 endpoints — Phase 9 Aggregation Cutover, Phase 14+ Portfolio Totals)
+## Info/Statistics (14 endpoints — Phase 9 Aggregation Cutover, Phase 14+ Portfolio Totals, ADR-100 Σ-accounts)
 
-Aggregation routes removed in Phase 9 as migration to `/api/aggregations/*` is complete. These endpoints remain for non-aggregation queries only: portfolio-performance, portfolio-summary (realtime totals, Phase 14), net-worth, exchange-rates, inflation-rates, and supporting refresh endpoints. Portfolio-summary endpoint added 2026-04-29 as single source of truth for dashboard and performance page headline metrics.
+Aggregation routes removed in Phase 9 as migration to `/api/aggregations/*` is complete. These endpoints remain for non-aggregation queries only: portfolio-performance, portfolio-summary (realtime totals, Phase 14), net-worth, exchange-rates, inflation-rates, and supporting refresh endpoints. Portfolio-summary endpoint added 2026-04-29 as single source of truth for dashboard and performance page headline metrics. 2026-06-11 (ADR-074): both portfolio-performance and portfolio-summary gain FX attribution fields (assetGain, fxGain, nativeCurrentValue, usedFallbackRate); flows now converted at transaction-date FX rates; no new endpoints added. Phase 9 cutover also removed `GET /api/info` (general statistics) and `GET /api/info/transaction-summary` (summary with filters).
 
 | Method | Path | Description | Rate Limit | Doc |
 |--------|------|-------------|------------|-----|
-| GET | `/api/info` | General statistics | — | [[docs/api/info\|Info]] |
 | GET | `/api/info/banks` | List bank accounts | — | [[docs/api/info\|Info]] |
 | GET | `/api/info/supported-adapters` | List supported banks | — | [[docs/api/info\|Info]] |
 | GET | `/api/info/transaction-count` | Total count | — | [[docs/api/info\|Info]] |
-| GET | `/api/info/transaction-summary` | Summary with filters | — | [[docs/api/info\|Info]] |
 | GET | `/api/info/planned-expenses-next-month` | Next month expenses | — | [[docs/api/info\|Info]] |
 | GET | `/api/info/recurring-patterns` | Recurring detection | — | [[docs/api/info\|Info]] |
 | GET | `/api/info/net-worth` | Net worth (optional `limit`/`offset` paginate snapshots newest-first; omit both for full history) | 30 req/min | [[docs/api/info\|Info]] |
+| GET | `/api/info/net-worth/by-account` | Net worth as Σ-accounts: per-account current cash + holdings and rebuilt daily holdings history (ADR-100) | 30 req/min | [[docs/api/info\|Info]] |
 | GET | `/api/info/exchange-rates` | Exchange rates | 30 req/min | [[docs/api/info\|Info]] |
 | POST | `/api/info/exchange-rates/refresh` | Refresh exchange rates | admin | [[docs/api/info\|Info]] |
 | GET | `/api/info/inflation-rates` | Inflation rates | 30 req/min | [[docs/api/info\|Info]] |
 | POST | `/api/info/inflation-rates/refresh` | Refresh inflation | admin | [[docs/api/info\|Info]] |
 | POST | `/api/info/refresh-views` | Refresh materialized views | — | [[docs/api/info\|Info]] |
-| GET | `/api/info/portfolio-performance` | Performance snapshots, metrics, heatmap | 30 req/min | [[docs/api/info\|Info]] |
-| GET | `/api/info/portfolio-summary` | Realtime portfolio totals (single source of truth for dashboard + performance) | 60 req/min | [[docs/api/portfolio-summary\|Portfolio Summary]] |
+| GET | `/api/info/portfolio-performance` | Performance snapshots, metrics, heatmap, breakdownSummary. 2026-06-11 (ADR-074): snapshots gain optional `value_fx_neutral`; breakdownSummary entries gain `assetGain`, `fxGain`, `nativeCurrentValue`, `usedFallbackRate` | 30 req/min | [[docs/api/info\|Info]] |
+| GET | `/api/info/portfolio-summary` | Realtime portfolio totals (single source of truth for dashboard + performance). 2026-06-11 (ADR-074): flows converted at transaction-date FX; new `totalAssetGain`, `totalFxGain`, `usedFallbackRate` totals; per-investment `assetGain`, `fxGain`, `nativeCurrentValue`, `usedFallbackRate`; gainLoss = assetGain + fxGain | 60 req/min | [[docs/api/portfolio-summary\|Portfolio Summary]] |
 
 ## AI Chat (9 endpoints + 30 tool-calling tools)
 
@@ -315,27 +397,32 @@ Electron-specific inter-process communication for desktop features (backup, rest
 
 | Resource | Endpoints | Rate-Limited |
 |----------|-----------|--------------|
-| Transactions | 7 | 2 |
+| Accounts (ADR-088) | 6 | 0 |
+| Transactions (incl. Tags) | 18 | 2 |
 | Categories | 7 | 0 |
-| Recipients | 9 | 0 |
-| Planned Transactions | 7 | 1 |
-| Investments | 14 | 0 |
+| Recipients | 14 | 0 |
+| Planned Transactions | 8 | 1 |
+| Investments | 15 | 0 |
 | Watchlist | 5 | 0 |
 | Market Lookup | 4 | 0 |
-| Import | 6 | 0 |
+| Research (ADR-079/081/082) | 18 | 0 |
+| Import | 16 | 0 |
+| Portfolio Import (ADR-078) | 12 | 2 |
 | Attachments (Phase 5A) | 4 | 0 |
 | Saved Charts | 4 | 0 |
 | Settings | 5 | 0 |
 | Recipient Bank Accounts | 5 | 0 |
-| Admin | 13 | 0 |
+| Admin (incl. DB Data Editor ADR-101) | 17 | 3 |
 | Splits | 11 | 0 |
 | Health | 2 | 0 |
-| Aggregations (Phase 2/6/10/D) | 10 | 0 |
+| Aggregations (Phase 2/6/10/D) | 14 | 0 |
 | Reports (Phase 3/7) | 3 | 0 |
-| Info/Statistics (Phase 14) | 15 | 5 |
+| Info/Statistics (Phase 14, ADR-100) | 14 | 5 |
 | AI Chat | 9 | 2 |
 | IPC Handlers (Phase 1+2) | 8 | 0 |
-| **Total** | **150** | **10** |
+| **Total** | **219** | **15** |
+
+> **210** of these are versioned `/api` HTTP operations — the authoritative count enforced against `openapi.yaml` by `scripts/check-endpoint-matrix.js`. The remaining 10 are 2 unversioned `/health` endpoints and 8 Electron IPC handlers, which sit outside the OpenAPI spec. (The Rate-Limited column is an approximate per-section tally, not gate-checked.)
 
 ## Phase G Endpoint Consolidation (April 2026)
 

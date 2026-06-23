@@ -8,6 +8,7 @@
 import { infoRepository } from '../../../repositories/infoRepository.js';
 import { buildEnvelope } from '../aggregation/_envelope.js';
 import { fnv1aHash } from './prng.js';
+import { densifyDailyHistory } from './_densify.js';
 
 import * as simpleAverage from './methods/simpleAverage.js';
 import * as weightedAverage from './methods/weightedAverage.js';
@@ -107,9 +108,12 @@ async function runForecastEngine({
   const actualDaily = actualCumulativeDaily(currentActual, all, todayIndex);
   const plannedMap = plannedDailyMap(plannedCurrent);
 
-  // Methods see all confirmed actuals (history + currentActual on/before today).
-  const trainHistory = history.concat(
-    currentActual.filter((r) => r.date <= todayIso),
+  // Methods see all confirmed actuals (history + currentActual on/before today),
+  // zero-filled to a dense daily grid through today so per-DOM means divide by
+  // month count, not by the count of days that happened to have a transaction.
+  const trainHistory = densifyDailyHistory(
+    history.concat(currentActual.filter((r) => r.date <= todayIso)),
+    todayIso,
   );
 
   const methodOutputs = [];

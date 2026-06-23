@@ -23,7 +23,15 @@ export function useCountUp(target: number, duration = 600): number {
             setCurrent(value);
         };
 
-        if (from === target) {
+        // Honor prefers-reduced-motion: snap straight to the target instead of
+        // animating. Guarded so environments without matchMedia (jsdom) fall
+        // through to the normal animation path.
+        const prefersReducedMotion =
+            typeof window !== "undefined" &&
+            typeof window.matchMedia === "function" &&
+            window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+
+        if (from === target || prefersReducedMotion) {
             apply(target);
             return;
         }

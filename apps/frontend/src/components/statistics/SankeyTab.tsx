@@ -7,7 +7,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Skeleton } from "@/components/ui/skeleton";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { useChartCurrencyFormatter } from "@/hooks/useChartCurrencyFormatter";
-import { useSettings } from "@/contexts/SettingsContext";
+import { useExcludedIds } from "@/hooks/useExcludedIds";
 import { getSankeyFlow } from "@/lib/api/aggregations";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { ExclusionToggle } from "@/components/shared/ExclusionToggle";
@@ -25,7 +25,10 @@ const GRAPH_KEY = "sankey";
 export function SankeyTab({ graphExclusions, onToggleExclusion, exclusionsApply, availableYears }: SankeyTabProps) {
   const { t } = useLanguage();
   const { currency } = useChartCurrencyFormatter();
-  const { settings } = useSettings();
+  // Resolved exclusion set (settings + hidden categories) — using raw
+  // settings.excluded* leaked hidden-category transactions into the flow diagram
+  // while every other statistics chart dropped them.
+  const { excludedCategoryIds: resolvedCatIds, excludedRecipientIds: resolvedRecIds } = useExcludedIds('statistics');
   const currentYear = useMemo(() => new Date().getFullYear(), []);
   const yearOptions = availableYears?.length
     ? [...availableYears].sort((a, b) => b - a)
@@ -35,8 +38,8 @@ export function SankeyTab({ graphExclusions, onToggleExclusion, exclusionsApply,
   const isFiltered = graphExclusions[GRAPH_KEY] ?? true;
   const applyExclusions = exclusionsApply && isFiltered;
 
-  const excludedCategoryIds = applyExclusions ? settings.excludedCategoryIds : [];
-  const excludedRecipientIds = applyExclusions ? settings.excludedRecipientIds : [];
+  const excludedCategoryIds = applyExclusions ? resolvedCatIds : [];
+  const excludedRecipientIds = applyExclusions ? resolvedRecIds : [];
 
   const { data, isLoading, isError } = useQuery({
     queryKey: [
@@ -60,7 +63,7 @@ export function SankeyTab({ graphExclusions, onToggleExclusion, exclusionsApply,
   const flowData = data?.data;
 
   return (
-    <Card>
+    <Card className="glass-regular">
       <CardHeader>
         <div className="flex items-start justify-between gap-4">
           <div>

@@ -61,14 +61,48 @@ package "UI Components (Radix + Tailwind)" {
 
 package "Layout Components" {
   class AppLayout {
+    +LiquidCanvas: atmosphere layer
+    +ShaderAurora: WebGL (enhancedEffects only)
+    +Topbar: scroll-linked + title collapse
     +Sidebar: AppSidebar
-    +Header: header
+    +CommandPalette: ⌘K palette
+    +ShortcutsOverlay: ? key
+    +PageTransition: enter-only spring
     +Content: Outlet
   }
 
   class AppSidebar {
     +Navigation: nav items
+    +ActiveRail: framer layoutId
     +Collapsible: boolean
+    +RoutePreload: hover prefetch
+  }
+
+  class PageTransition {
+    +spring: enter-only
+    +pathname: key
+    +reducedMotion: instant
+  }
+
+  class CommandPalette {
+    +trigger: ⌘K / Ctrl+K
+    +pages: all budgeting/portfolio
+    +theme: variant switch
+    +workspaceSync: boolean
+    +recents: localStorage
+    +recipientSearch: debounced
+  }
+
+  class ShaderAurora {
+    +webgl: raw (no deps)
+    +fbm: 4-octave noise
+    +resolution: 0.25x
+    +gate: enhancedEffects
+  }
+
+  class ShortcutsOverlay {
+    +trigger: ? key
+    +dialog: glass
   }
 }
 
@@ -94,6 +128,10 @@ package "Shared Components" {
     +sourceIndex row mapping
     +inline editing
     +cancelEditingRef
+    +rowContextMenu (Radix ContextMenu, modal=false)
+    +onRowOpen (Enter key)
+    +onRowQuickLook (Space key)
+    +↑/↓ keyboard row navigation
   }
 
   class DataTable {
@@ -114,10 +152,39 @@ package "Shared Components" {
   class WidgetVisibilityDialog {
     +manage widget visibility
   }
+
+  class RollingNumber {
+    +odometer digit reels
+    +keyed from right
+    +reducedMotion: plain span
+  }
+
+  class Money {
+    +formatToParts micro-typography
+    +raised symbol
+    +de-emphasized decimals
+  }
+
+  class DeltaPill {
+    +tinted change chip
+    +invert prop
+  }
 }
 
 package "Feature Components - Dashboard" {
   class StatCard
+  class NetSummaryCard {
+    +sparkline scrub (V9)
+    +activeIndex: pointer-driven
+    +RollingNumber hero
+  }
+  class SuggestionCard {
+    +kicker + count title
+    +up to 3 payment rows (Money)
+    +Review → /planned
+    +dismiss-all X
+    +useUpcomingPlannedPayments
+  }
   class MonthlyTrendsChart
   class MonthlySpendingChart
   class CategoryPieChart
@@ -140,9 +207,17 @@ package "Feature Components - Portfolio" {
   class PortfolioOverview
   class PortfolioTaxAdjustmentsDialog
   class PortfolioNewsFeed
-  class InvestmentDetailDialog
+  class InvestmentDetailDialog <<ADR-091>> {
+    ' Shows "Holdings by Account" card (byAccount from useAccountPositions)
+  }
   class WatchlistChartDialog
   class MetalsHoldingsCard
+  class MoveHoldingDialog <<ADR-091>> {
+    ' strategy selector (fifo | proportional) for partial moves
+  }
+  class CloseAccountDialog <<ADR-091>> {
+    ' Lists account holdings, transfers in-specie, then archives account
+  }
 }
 
 package "Feature Components - Statistics" {
@@ -157,6 +232,14 @@ package "Feature Components - Planning" {
 package "Feature Components - Recipients" {
   class MergeRecipientsDialog
   class SplitTransactionDialog
+}
+
+package "Feature Components - Transactions" {
+  class TransactionQuickLook {
+    +read-only glance dialog
+    +Space to open/close
+    +returns focus to source row
+  }
 }
 
 package "Feature Components - Settings" {
@@ -214,7 +297,20 @@ package "Feature Components - Import" {
 
 package "Feature Components - Notifications" {
   class UpdateNotification
-  class UpcomingPaymentsNotification
+  class UpcomingPaymentsNotification {
+    +stands down on / when suggestions widget visible
+    +dock badge (non-dismissed count)
+    +useUpcomingPlannedPayments
+  }
+}
+
+package "Hooks - Upcoming Payments" {
+  class useUpcomingPlannedPayments {
+    +queryKey: "upcomingPlannedPayments"
+    +module-level dismissed Set
+    +useSyncExternalStore
+    +persists: DISMISSED_UPCOMING_PAYMENTS
+  }
 }
 
 package "Feature Components - Onboarding" {
@@ -229,11 +325,18 @@ App --> SettingsProvider
 App --> ErrorBoundary
 
 AppLayout --> AppSidebar
+AppLayout --> CommandPalette
+AppLayout --> ShortcutsOverlay
+AppLayout --> PageTransition
+AppLayout --> ShaderAurora
 
 AddTransactionDialog --> CategoryCombobox
 AddTransactionDialog --> RecipientCombobox
 VirtualDataTable --> ColumnFilter
 DataTable --> ColumnFilter
+VirtualDataTable --> TransactionQuickLook : onRowQuickLook (Space)
+SuggestionCard --> useUpcomingPlannedPayments
+UpcomingPaymentsNotification --> useUpcomingPlannedPayments
 
 note right of ImportPage
   Import wizard integrated

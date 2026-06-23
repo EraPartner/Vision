@@ -3,11 +3,11 @@ title: Security - Data Protection & CSP
 type: security
 status: active
 date: 2026-04-19
-updated: 2026-05-06
-tags: [security, csp, cors, data-protection, privacy, content-security-policy, xss, dangerouslySetInnerHTML, path-traversal, rfc-5987, backup-encryption, passphrase, phase-7, phase-c, pre-restore-confirmation, concurrent-backup-guard, watchdog-pause, bug-hunt-2026-05-05, bug-hunt-2026-05-06, electron-hardening, window-open-handler, will-navigate, checksum-verification, backup-directory-restrictions, csv-filename-sanitization]
-description: Content Security Policy, CORS, data protection, path traversal prevention, backup security, and privacy considerations for Vision. Phase 7 adds pre-restore confirmation dialog and concurrent-backup guard. May 2026 bug hunt hardens Electron with setWindowOpenHandler denial, will-navigate whitelist, mandatory installer checksum verification, and backup directory restrictions.
+updated: 2026-06-01
+tags: [security, csp, cors, data-protection, privacy, content-security-policy, xss, dangerouslySetInnerHTML, path-traversal, rfc-5987, backup-encryption, passphrase, phase-7, phase-c, pre-restore-confirmation, concurrent-backup-guard, watchdog-pause, bug-hunt-2026-05-05, bug-hunt-2026-05-06, electron-hardening, window-open-handler, will-navigate, checksum-verification, backup-directory-restrictions, csv-filename-sanitization, safe-storage, keychain, lazy-safeStorage, csrf-guard, sec-fetch-site, admin-auth, token-or-open, zip-bomb, response-cap, content-length]
+description: Content Security Policy, CORS, data protection, path traversal prevention, backup security, and privacy considerations for Vision. Phase 7 adds pre-restore confirmation dialog and concurrent-backup guard. May 2026 bug hunt hardens Electron with setWindowOpenHandler denial, will-navigate whitelist, mandatory installer checksum verification, and backup directory restrictions. safeStorage is now accessed lazily to avoid macOS Keychain prompts when no passphrase is configured. 2026-05-29: admin auth replaced with token-or-open + CSRF guard (ADR-063). June 2026: zip-bomb guard on restore, 5 MB Content-Length response cap on external fetches.
 aliases: [CSP, data protection, privacy, content security policy, security headers, XSS prevention, path traversal]
-related_code: ["apps/node-backend/src/main.js", "apps/frontend/src/lib/api.ts", "apps/node-backend/src/services/attachmentService.js"]
+related_code: ["apps/node-backend/src/main.js", "apps/frontend/src/lib/api.ts", "apps/node-backend/src/services/attachmentService.js", "apps/node-backend/src/middleware/adminAuth.js", "apps/node-backend/src/middleware/csrfGuard.js"]
 ---
 
 # Security: Data Protection & CSP
@@ -329,14 +329,65 @@ Limited IPC channel exposure through preload scripts. Only validated functions a
 - Implementation: `BLOCKED_BACKUP_PREFIXES.some(p => resolvedDest === p || resolvedDest.startsWith(p + '/'))`
 - Impact: Prevents accidental (or malicious) restore to system directories that could break macOS, corrupt system libraries, or escalate privileges
 
-### Admin Bearer Token Authentication (2026-04-28)
+### Zip-Bomb Guard on Backup Restore (June 2026)
 
-Admin endpoints protected by optional `ADMIN_AUTH_TOKEN` environment variable now use timing-safe comparison:
+The backup restore `extractZip()` function now enforces hard limits to prevent decompression-bomb attacks:
 
-- **Timing Attack Prevention**: Bearer token comparison uses `crypto.timingSafeEqual()` instead of `!==` operator
-- **Impact**: Prevents side-channel timing attacks where response time leaks information about token validity (e.g., attacker can time how many characters of the token match, reducing brute-force search space)
-- **Implementation**: In `middleware/adminAuth.js`, token comparison wraps both bearer value and configured token with equal-length padding before `timingSafeEqual()` call
-- **Fallback**: If `ADMIN_AUTH_TOKEN` not set, localhost-only access is allowed (see [[docs/adr/037-admin-auth-localhost-fallback|ADR-037]])
+| Guard | Limit | Description |
+|-------|-------|-------------|
+| `MAX_RESTORE_BYTES` | 10 GiB | Total bytes written across all extracted files; abort if exceeded |
+| `MAX_RESTORE_ENTRIES` | 100,000 | Maximum number of files in the archive |
+| Implausible declared size | > 10 GiB per entry | Reject before extraction begins |
+
+Bytes are tracked against **actual written bytes** (not the declared uncompressed size in the zip metadata, which an attacker can set to any value). On violation the extraction is aborted and the partial output directory is cleaned up.
+
+Code: [[packaging/electron/backup/bundle.js]]
+
+### Content-Length Response Cap on External Fetches (June 2026)
+
+The backend's `_assertResponseWithinCap()` helper enforces a **5 MB** per-response limit on external HTTP calls. This prevents a misbehaving or compromised price provider from streaming arbitrarily large payloads into memory.
+
+**Coverage:**
+- Binance price/history fetches — explicitly capped
+- Kinesis trendline fetches — explicitly capped
+- Yahoo Finance — uses `yahoo-finance2` npm library; the library controls response handling, so no `Response` object is available for direct capping. Rate-limiting still applies.
+
+> [!info] External currency/inflation endpoints (ECB, open.er-api, Statbel, Eurostat) have their own timeout guards and are separate from the price-provider fetch path.
+
+Code: [[apps/node-backend/src/services/prices/priceProviderRegistry.js]]
+
+---
+
+### Admin Auth: Token-or-Open + CSRF Guard (2026-05-29)
+
+Admin endpoints (`/api/admin/*`) are protected by two co-operating guards. See [[docs/adr/063-admin-auth-csrf-guard|ADR-063]] for the full decision record.
+
+**`adminAuth.js` — Token-or-Open**
+
+- When `ADMIN_AUTH_TOKEN` is set: every admin request must carry `Authorization: Bearer <token>`. Comparison uses `crypto.timingSafeEqual()` on equal-length buffers to prevent timing side-channels.
+- When `ADMIN_AUTH_TOKEN` is unset: the middleware calls `next()` immediately. No IP check is performed. Protection is then provided entirely by (a) the docker-compose loopback binding (`127.0.0.1:PORT`) and (b) the CSRF guard below.
+- A startup warning is logged when the token is absent, instructing operators to set it if the port is published on `0.0.0.0`.
+
+> [!warning] This supersedes the RFC1918 IP-allowlist fallback from ADR-037. The middleware no longer trusts the entire private address space — `10.x`, `172.16.x`, `192.168.x`, IPv6 ULA are no longer implicitly trusted.
+
+**`csrfGuard.js` — `createCsrfGuard` (mounted before `adminAuthMiddleware`)**
+
+Blocks cross-site state-changing browser requests. Strategy (zero-config, no tokens/cookies):
+
+- `GET`/`HEAD`/`OPTIONS` are always allowed.
+- `Sec-Fetch-Site` header (sent by Chrome 76+, Firefox 90+, Safari 16.4+) is authoritative:
+  - `same-origin` or `none` (typed URL, curl, Electron IPC): allow.
+  - `same-site` or `cross-site`: reject with 403.
+- Fallback when `Sec-Fetch-Site` absent: if `Origin` is present it must be in `settings.api.corsOrigins`; if `Origin` is absent the request is treated as a non-browser client and allowed.
+
+CORS alone does not stop cross-site requests from executing — it only hides the response. The CSRF guard prevents the request body from reaching the route handler.
+
+Mount order in `main.js`:
+```
+mountRouter(app, '/api/admin', adminRateLimiter, adminCsrfGuard, adminAuthMiddleware, adminRouter);
+```
+
+Code links: [[apps/node-backend/src/middleware/adminAuth.js]], [[apps/node-backend/src/middleware/csrfGuard.js]]
 
 ### CSV Download Filename Sanitization (Phase C)
 
@@ -390,6 +441,15 @@ Encrypted backup restore (`.visionbak.enc`) is fully implemented with passphrase
 - **Auth Tag**: 16 bytes appended; tampering detected immediately on decryption
 - **Confidentiality**: ✅ Provided | **Authenticity**: ✅ Provided | **Per-backup Entropy**: ✅ Yes
 - **Status**: Default for new backups as of 2026-04-28; see [[docs/adr/040-backup-format-v2-aead-encryption|ADR-040]] for full rationale
+
+### Lazy safeStorage Access (May 2026)
+
+`safeStorage` is now only accessed when a passphrase blob is actually present in `settings.json`:
+
+- **`getBackupPassphrase()`** — reads the stored `backupPassphraseEncrypted` blob first. If absent (and `VISION_BACKUP_PASSPHRASE` env var is not set), returns without calling any `safeStorage` API. This eliminates macOS Keychain prompts for users who have not configured backup encryption.
+- **`getBackupPassphraseStatus()`** — reports `secureStorageAvailable` from the API object's presence alone (no keychain probe) when no passphrase is stored. The actual availability check is deferred to `setBackupPassphrase()` at opt-in time.
+
+Users who do store a passphrase may still see macOS Keychain prompts on unsigned builds (macOS re-challenges an unstable code identity). The `VISION_BACKUP_PASSPHRASE` environment variable bypasses `safeStorage` entirely as an escape hatch.
 
 ### Restore Process
 - **Passphrase modal**: When restoring an encrypted backup, users are prompted via modal to enter the passphrase before decryption attempts
@@ -461,6 +521,8 @@ Homebrew installation script now prevents pipe-to-bash vulnerabilities:
 
 ## Related
 
+- [[docs/adr/063-admin-auth-csrf-guard|ADR-063: Admin Auth Token-or-Open + CSRF Guard]] — Current admin auth model (supersedes ADR-037)
+- [[docs/adr/037-admin-auth-localhost-fallback|ADR-037: Admin Auth Localhost Fallback]] — Superseded RFC1918 IP-allowlist model
 - [[docs/adr/050-ci-supply-chain-security-tooling|ADR-050: CI Supply Chain Security Tooling]] — Secrets scanning, dependency audit, container image scanning, Electron permission handler, error-page strict CSP
 - [[docs/adr/049-phase-6-7-bug-hunt-recovery-hardening|ADR-049: Phase 6.1–7 Bug Hunt Recovery Hardening]] — Database schema fixes, Electron backup/restore safety
 - [[docs/adr/040-backup-format-v2-aead-encryption|ADR-040: Backup Format v2 AEAD Encryption]] — Backup encryption scheme (v1 legacy, v2 current)

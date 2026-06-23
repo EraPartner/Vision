@@ -3,25 +3,32 @@ title: Layout Components
 type: component
 status: active
 date: 2026-04-25
-tags: [components, layout, navigation, design-system, phase-9, performance, workspace]
-description: Core layout components including sidebar, header, and app structure with emerald + gold aesthetic, optimized for Electron M1 performance
-aliases: [layout, app layout, sidebar, navigation]
-related_code: ["apps/frontend/src/components/layout"]
+updated: 2026-06-16
+tags: [components, layout, navigation, design-system, phase-9, performance, workspace, liquid-glass-v2, command-palette, route-preload, electron-native, electron-bridge, ipc, macos, june-2026]
+description: Core layout components including sidebar, header, and app structure with emerald + gold aesthetic. June 2026 Liquid Glass v2 — atmosphere layer restored, PageTransition re-added as enter-only spring, sidebar ActiveRail is a framer layoutId element, CommandPalette wired, scroll-linked topbar, route-chunk hover prefetch. June 2026 V12 (ADR-072) — ElectronBridge mounted in AppLayout handles native menu actions, CSV drag-drop, fullscreen class toggling, and dock badge via window.electronAPI.
+aliases: [layout, app layout, sidebar, navigation, ElectronBridge]
+related_code: ["apps/frontend/src/components/layout", "apps/frontend/src/components/layout/ElectronBridge.tsx"]
 ---
 
 # Layout Components
 
-Core layout components that structure the application shell, optimized for performance on Electron M1.
+Core layout components that structure the application shell.
 
-> [!note] Performance Optimization (2026-04-17)
-> Layout components were updated to remove liquid-canvas animated background and PageTransition wrapper in response to Electron M1 GPU regression. See [[docs/adr/020-glass-system-downgrade-liquid-canvas-removal|ADR-020]] for details.
+> [!info] June 2026 — Liquid Glass v2 (ADR-070)
+> Layout components were significantly updated in June 2026. The liquid canvas atmosphere layer was restored, `PageTransition` re-added as an enter-only spring, `CommandPalette` wired to the topbar, sidebar `ActiveRail` converted to a framer `layoutId` element, and the topbar made scroll-linked. See [[docs/adr/070-liquid-glass-v2-premium-frontend|ADR-070]] for full details.
+
+> [!note] Prior Performance Optimization (2026-04-17)
+> Layout components originally removed the liquid-canvas background and PageTransition in response to Electron M1 GPU regression ([[docs/adr/020-glass-system-downgrade-liquid-canvas-removal|ADR-020]]). The June 2026 pass restored them in a more targeted form — atmosphere layer is compositor-only transforms, page transition is enter-only (no exit double-render).
 
 ## Component List
 
 | Component | Description | File |
 |-----------|-------------|------|
-| AppLayout | Main app wrapper with sidebar | [[apps/frontend/src/components/layout/AppLayout.tsx\|AppLayout.tsx]] |
-| AppSidebar | Navigation sidebar | [[apps/frontend/src/components/layout/AppSidebar.tsx\|AppSidebar.tsx]] |
+| AppLayout | Main app wrapper with sidebar, atmosphere, topbar, CommandPalette, ElectronBridge | [[apps/frontend/src/components/layout/AppLayout.tsx\|AppLayout.tsx]] |
+| AppSidebar | Navigation sidebar with ActiveRail + route prefetch | [[apps/frontend/src/components/layout/AppSidebar.tsx\|AppSidebar.tsx]] |
+| ElectronBridge | Electron IPC bridge — menu actions, CSV handoff, fullscreen, dock badge (Electron-only, mounted in AppLayout inside SidebarProvider) | [[apps/frontend/src/components/layout/ElectronBridge.tsx\|ElectronBridge.tsx]] |
+| PageTransition | Enter-only spring route wrapper (re-added June 2026) | [[apps/frontend/src/components/layout/PageTransition.tsx\|PageTransition.tsx]] |
+| CommandPalette | ⌘K global command palette | [[apps/frontend/src/components/shared/CommandPalette.tsx\|CommandPalette.tsx]] |
 
 ---
 
@@ -54,14 +61,17 @@ function App() {
 </AppLayout>
 ```
 
-### Features
+### Features (Liquid Glass v2)
 
-- **Responsive sidebar integration**: Full collapsible sidebar with workspace switching
-- **Workspace context provider**: Workspace detection via route path
-- **Notification system integration**: Sonner toast notifications
-- **Dark/light theme support**: Full theme switching
-- **Optimized background**: Static grain texture overlay (animated liquid-canvas removed for M1 GPU optimization)
-- **Glass chrome sidebar**: `glass-chrome` (8px blur) navigation with emerald accent rail on active route
+- **Atmosphere layer**: Fixed `liquid-canvas` layer with two slow-drifting aurora blobs (compositor-only `transform`, 64s/76s alternate) + radial wash + SVG grain. Drift pauses under `prefers-reduced-motion`. Colors derive from `--primary`/`--accent`.
+- **Scroll-linked topbar**: `::before` pseudo-element fades with `[data-scrolled]` attribute; passive scroll listener; gradients cannot `transition` directly so the material lives in the pseudo-element.
+- **CommandPalette**: Mounted here, triggered by topbar ⌘K button or keyboard shortcut.
+- **PageTransition**: Wraps children in an enter-only spring (pathname-keyed `motion.div`).
+- **Responsive sidebar integration**: Full collapsible sidebar with workspace switching.
+- **Workspace context provider**: Workspace detection via route path.
+- **Notification system integration**: Sonner toast notifications.
+- **Dark/light theme support**: Full theme switching via `ThemeContext` + `document.startViewTransition`.
+- **Glass chrome sidebar**: `.glass-chrome` (24px blur + saturate) navigation with `ActiveRail` framer `layoutId` element. Background alphas lowered to 0.55→0.72 (light) / 0.55→0.74 (dark) so the aurora and Electron vibrancy glow through; a `@supports not (backdrop-filter)` rule keeps a near-opaque ramp for unsupported browsers.
 
 ### Props
 
@@ -81,6 +91,8 @@ Navigation sidebar with workspace-aware navigation.
 
 The sidebar adapts based on the active workspace:
 
+All three workspaces share one group skeleton — `Overview → [section content groups] → Analysis → Tools` — so equivalent pages sit in the same place everywhere: **Tax** always lives under **Analysis** (alongside the other report/analytics pages), and the data-import bucket is always named **Tools**.
+
 ### Budgeting Workspace
 
 ```
@@ -95,7 +107,7 @@ The sidebar adapts based on the active workspace:
 │   ├── Planned Payments
 │   ├── Who Owes You
 │   └── Tax
-└── Data
+└── Tools
     └── Import
 ```
 
@@ -104,20 +116,33 @@ The sidebar adapts based on the active workspace:
 ```
 ├── Overview
 │   ├── Dashboard
-│   ├── Net Worth
-│   └── Performance
+│   └── Net Worth
 ├── Investments
 │   ├── Stocks/ETFs
-│   └── Crypto
+│   ├── Crypto
+│   └── Metals
 ├── Assets
 │   ├── Real Estate
 │   └── Savings/Bonds
+├── Analysis
+│   ├── Performance
+│   └── Tax
 └── Tools
-    ├── Market Lookup
-    ├── Watchlist
-    ├── Exchange Rates
-    └── Tax
+    └── Import
 ```
+
+### Research Workspace
+
+```
+├── Overview
+│   ├── Research Home
+│   └── Market Lookup
+└── Analysis
+    ├── Compare
+    └── Watchlist
+```
+
+Market Lookup and Watchlist live in Research (moved from Portfolio by [[docs/adr/079-multi-provider-research-aggregation|ADR-079]]); Exchange Rates lives under the workspace-agnostic Admin group (admin mode only), not Portfolio.
 
 ### Usage
 
@@ -141,11 +166,12 @@ function Layout() {
 }
 ```
 
-### Features
+### Features (Liquid Glass v2)
 
 - **Collapsible**: Toggle between expanded and icon-only modes
 - **Workspace-aware**: Changes navigation based on workspace
-- **Active state**: Highlights current route
+- **ActiveRail**: Active-route indicator is a framer-motion `layoutId="active-rail"` element that animates (glides) between nav items on route change; instant under `prefers-reduced-motion`
+- **Route prefetch**: `onMouseEnter` on each nav item calls `routePreload(path)` via `lib/routePreload.ts`, warming the lazy chunk before the user clicks
 - **Responsive**: Adapts to screen size
 - **Keyboard accessible**: Full keyboard navigation
 
@@ -272,15 +298,62 @@ function WorkspaceSwitcher() {
 
 ---
 
-## PageTransition (Removed)
+## PageTransition
 
-**Status**: Deleted in 2026-04-17 performance optimization
+**Status**: Re-added in June 2026 (ADR-070) as enter-only spring.
 
-The `PageTransition` wrapper component was removed to improve Electron M1 GPU performance. Previously, it applied spring-based route-change animations (spring entrance + fade exit). Route transitions now use instant/CSS-based transitions instead.
+`components/layout/PageTransition.tsx` wraps routed children in a `motion.div` keyed on `location.pathname`. It is enter-only (no `AnimatePresence` exit) to avoid double-rendering React Suspense boundaries around lazy-loaded routes.
 
-**Rationale**: Spring physics on route transitions added GPU complexity for marginal UX benefit. Framer Motion retained for modal/dialog entry animations and chart effects, which have higher UX impact with lower GPU cost.
+**Spring parameters**: uses `SPRING_SMOOTH` from `lib/motion.ts`; under `prefers-reduced-motion`, transition is instant (empty initial/animate props).
 
-See [[docs/adr/020-glass-system-downgrade-liquid-canvas-removal|ADR-020: Glass System Downgrade & Liquid Canvas Removal]] for details.
+**History**:
+- Added in ADR-017 (April 2026) as full enter + exit spring.
+- Removed in ADR-020 (April 2026) due to Electron M1 GPU regression.
+- Re-added in ADR-070 (June 2026) as enter-only — resolves the Suspense double-render issue that made full AnimatePresence unworkable.
+
+Code link: [[apps/frontend/src/components/layout/PageTransition.tsx]]
+
+## CommandPalette
+
+**Status**: Added June 2026 (ADR-070).
+
+`components/shared/CommandPalette.tsx` provides a ⌘K / Ctrl+K global command palette built on the `cmdk` library. Mounted by `AppLayout` with a topbar button trigger.
+
+**Coverage**:
+- All budgeting pages (Dashboard, Transactions, Categories, Recipients, Statistics, Planned, Import, Owes, Tax)
+- All portfolio pages (Overview, Stocks, Crypto, Metals, Real Estate, Savings, Performance, Net Worth, Exchange Rates, Watchlist, Portfolio Tax)
+- Admin pages when `adminMode` is enabled
+- Theme variant switcher
+- Settings navigation
+
+**Workspace sync**: jumping to a cross-workspace page calls `setWorkspace` so the sidebar updates to match the destination page's workspace.
+
+**i18n**: 5 new keys under `commandPalette.*` (en + nl).
+
+Code link: [[apps/frontend/src/components/shared/CommandPalette.tsx]]
+
+---
+
+## ElectronBridge
+
+**Status**: Added June 2026 (ADR-072).
+
+`components/layout/ElectronBridge.tsx` is a side-effect-only component mounted once in `AppLayout` inside `SidebarProvider`. It is a no-op in browser (non-Electron) builds — every call is gated on `isElectronMac()` or `getElectronAPI()`.
+
+**Responsibilities:**
+
+| Responsibility | Detail |
+|----------------|--------|
+| Ready handshake | Calls `electronAPI.ready()` on mount — drains the pending IPC send queue in main |
+| Menu action routing | Subscribes to `onMenuAction`; maps `{action, payload}` to React Router navigation, settings/shortcuts dialog dispatch, sidebar toggle, or `/transactions?new=1` navigate |
+| CSV drag-drop | Window-level `dragover`/`drop` intercept; `.csv` → `importHandoff`; exempts `[data-dropzone]` ancestors |
+| CSV open-with | Subscribes to `onCsvOpen`; receives `{name, content}` from main; pushes to `importHandoff` and navigates to `/import` |
+| Fullscreen class | Subscribes to `onFullScreenChange`; adds/removes `electron-fullscreen` on `<html>` |
+| html class management | Adds `electron-mac` on mount; adds/removes `vibrancy` based on `appSettings.enhancedEffects` |
+
+All IPC subscriptions are attached via stable refs (`useRef`) so React re-renders do not tear down and re-attach listeners. Unsubscribe functions are called in the effect cleanup.
+
+Code link: [[apps/frontend/src/components/layout/ElectronBridge.tsx]]
 
 ---
 
@@ -290,16 +363,17 @@ See [[docs/adr/020-glass-system-downgrade-liquid-canvas-removal|ADR-020: Glass S
 - [[docs/features/views]] - All views
 - [[docs/i18n/index]] - Internationalization
 - [[docs/components/state-management|State Management]] - Context providers
+- [[docs/adr/072-electron-native-desktop-integration|ADR-072: Electron-Native Desktop Integration]] (June 2026 — ElectronBridge, native menu, CSV handoff, system accent)
+- [[docs/adr/070-liquid-glass-v2-premium-frontend|ADR-070: Liquid Glass v2]] (June 2026 — atmosphere, PageTransition, CommandPalette, ActiveRail)
 - [[docs/adr/017-liquid-glass-aesthetic-design-system|ADR-017: Liquid Glass Aesthetic]]
 - [[docs/adr/019-framer-motion-adoption|ADR-019: Framer Motion Adoption]]
 - [[docs/adr/020-glass-system-downgrade-liquid-canvas-removal|ADR-020: Glass System Downgrade & Liquid Canvas Removal]]
+- [[docs/architecture/electron|Electron Architecture]] — Full IPC surface and native integration docs
 - [[docs/reference/code-patterns#motion-consumer-pattern-phase-9|Motion Consumer Pattern]]
 - [[docs/reference/code-patterns#surface-shell-pattern-phase-9|Surface Shell Pattern]]
 
 ## Visual Surface Notes
 
-`AppLayout` uses a static grain texture overlay for visual richness without animation overhead. Sidebar navigation uses `.glass-chrome` (8px blur, GPU-safe) with emerald accent rail on active route.
+`AppLayout` renders a fixed `liquid-canvas` atmosphere layer (two aurora blobs + radial wash + SVG grain) behind all page content. This gives glass surfaces real background content to refract. Sidebar navigation uses `.glass-chrome` (24px blur + saturate) with the `ActiveRail` framer `layoutId` element gliding between active nav items.
 
-Previous animated `liquid-canvas` gradient backdrop removed in 2026-04-17 optimization to eliminate Electron M1 GPU regression from sustained background animation.
-
-Code links: [[apps/frontend/src/components/layout/AppLayout.tsx]], [[apps/frontend/src/index.css]]
+Code links: [[apps/frontend/src/components/layout/AppLayout.tsx]], [[apps/frontend/src/components/layout/AppSidebar.tsx]], [[apps/frontend/src/index.css]], [[apps/frontend/src/styles/tokens.css]]

@@ -18,7 +18,7 @@ const itemBase =
     "relative flex cursor-default select-none items-center rounded-md px-2 py-1.5 text-sm tracking-tight outline-none transition-colors duration-[var(--duration-fast)] data-[disabled]:pointer-events-none data-[disabled]:opacity-50 focus:bg-primary/10 focus:text-foreground data-[state=open]:bg-primary/10";
 
 const contentBase =
-    "z-50 min-w-[12rem] overflow-hidden rounded-xl border border-border/50 bg-popover p-1.5 text-popover-foreground shadow-lg data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 data-[state=closed]:zoom-out-95 data-[state=open]:zoom-in-95 data-[side=bottom]:slide-in-from-top-2 data-[side=left]:slide-in-from-right-2 data-[side=right]:slide-in-from-left-2 data-[side=top]:slide-in-from-bottom-2";
+    "z-50 min-w-[12rem] overflow-hidden rounded-xl glass-thick p-1.5 text-popover-foreground data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 data-[state=closed]:zoom-out-95 data-[state=open]:zoom-in-95 data-[side=bottom]:slide-in-from-top-2 data-[side=left]:slide-in-from-right-2 data-[side=right]:slide-in-from-left-2 data-[side=top]:slide-in-from-bottom-2";
 
 const Menubar = React.forwardRef<
     React.ElementRef<typeof MenubarPrimitive.Root>,

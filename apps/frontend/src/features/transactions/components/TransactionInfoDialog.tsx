@@ -6,6 +6,7 @@ import { Info, Pencil, Check, X } from "lucide-react";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { useAppSettings } from "@/contexts/AppSettingsContext";
 import { useUpdateTransaction } from "@/hooks/useTransactions";
+import { useAccounts } from "@/hooks/useAccounts";
 import { formatCurrency, numberFormatToLocale, parseLocaleNumber } from "@/utils/currency";
 import { formatDateStringWithAppSettings, parseLocalDateFromYmd, toYmd } from "@/components/shared/dateUtils";
 import { DatePicker } from "@/components/shared/DatePicker";
@@ -29,6 +30,9 @@ export function TransactionInfoDialog({
     const { appSettings } = useAppSettings();
     const locale = numberFormatToLocale(appSettings.numberFormat);
     const updateMutation = useUpdateTransaction();
+    // Account-name suggestions for the bank field (ADR-088). Writing the name keeps
+    // the dual-write trigger's account_id link intact; free entry still creates new.
+    const { data: accountsData } = useAccounts({ active: "all" });
 
     const [editingInfoField, setEditingInfoField] = useState<InfoEditableField | null>(null);
     const [editingInfoValue, setEditingInfoValue] = useState("");
@@ -196,12 +200,24 @@ export function TransactionInfoDialog({
                                                         buttonClassName="h-8 w-40 text-sm"
                                                     />
                                                 ) : (
-                                                    <Input
-                                                        type={editType ?? 'text'}
-                                                        value={editingInfoValue}
-                                                        onChange={(e) => setEditingInfoValue(e.target.value)}
-                                                        className="h-8 w-40"
-                                                    />
+                                                    <>
+                                                        <Input
+                                                            type={editType ?? 'text'}
+                                                            value={editingInfoValue}
+                                                            onChange={(e) => setEditingInfoValue(e.target.value)}
+                                                            className="h-8 w-40"
+                                                            list={editField === 'bank' ? 'account-name-suggestions' : undefined}
+                                                        />
+                                                        {editField === 'bank' && (
+                                                            <datalist id="account-name-suggestions">
+                                                                {(accountsData?.items ?? []).map((a) => (
+                                                                    <option key={a.id} value={a.name}>
+                                                                        {a.display_name || a.name}
+                                                                    </option>
+                                                                ))}
+                                                            </datalist>
+                                                        )}
+                                                    </>
                                                 )}
                                                 <Button
                                                     variant="ghost"

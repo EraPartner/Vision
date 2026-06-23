@@ -8,20 +8,36 @@
 import { query, withTransaction } from '../../database/connection.js';
 import { logger } from '../../config/logger.js';
 import { toDecimal, toNumber } from '../../lib/money.js';
+import { todayAppDateString } from '../../lib/timezone.js';
 
-const ECB_LATEST_URL      = 'https://www.ecb.europa.eu/stats/eurofxref/eurofxref-daily.xml';
-const ERAR_LATEST_URL     = 'https://open.er-api.com/v6/latest/EUR';
-const ECB_HISTORY_90D_URL = 'https://www.ecb.europa.eu/stats/eurofxref/eurofxref-hist-90d.xml';
+const ECB_LATEST_URL       = 'https://www.ecb.europa.eu/stats/eurofxref/eurofxref-daily.xml';
+const ERAR_LATEST_URL      = 'https://open.er-api.com/v6/latest/EUR';
+const ECB_HISTORY_90D_URL  = 'https://www.ecb.europa.eu/stats/eurofxref/eurofxref-hist-90d.xml';
+// Full ECB reference-rate history (one ~6 MB XML, daily back to 1999). Only
+// fetched when a rate older than the 90-day window is actually needed.
+const ECB_HISTORY_FULL_URL = 'https://www.ecb.europa.eu/stats/eurofxref/eurofxref-hist.xml';
 
 export const CACHE_LIFETIME_MS = 24 * 60 * 60 * 1000; // 24 hours
 
 // { byDate: Map<YYYY-MM-DD, ratesMap>, timestamp }
 let historicalEcb90dCache = null;
+let historicalEcbFullCache = null;
 
 // ─── Date helpers ─────────────────────────────────────────────────────────────
 
 export function normalizeDateInput(dateValue) {
   if (!dateValue) return null;
+  // pg returns DATE columns as a local-midnight JS Date, whose String() form is
+  // "Sun Jun 01 2025 …" — the regex below never matched it, so historical-FX
+  // conversion silently fell back to today's rate at every DB-row call site.
+  // Recover the local calendar day (mirrors toYmd in utils/portfolioMath.js).
+  if (dateValue instanceof Date) {
+    if (isNaN(dateValue.getTime())) return null;
+    const y = dateValue.getFullYear();
+    const mo = String(dateValue.getMonth() + 1).padStart(2, '0');
+    const d = String(dateValue.getDate()).padStart(2, '0');
+    return `${y}-${mo}-${d}`;
+  }
   const str = String(dateValue);
   const m = str.match(/^\d{4}-\d{2}-\d{2}/);
   return m ? m[0] : null;
@@ -140,8 +156,53 @@ export async function fetchHistoricalFromEcb90d() {
   }
 }
 
+export async function fetchHistoricalFromEcbFull() {
+  if (historicalEcbFullCache && Date.now() - historicalEcbFullCache.timestamp < CACHE_LIFETIME_MS) {
+    return historicalEcbFullCache.byDate;
+  }
+  try {
+    const response = await fetch(ECB_HISTORY_FULL_URL, { signal: AbortSignal.timeout(30000) });
+    if (!response.ok) return new Map();
+    const xmlText = await response.text();
+    const byDate = parseEcbHistoricalXml(xmlText);
+    if (byDate.size > 0) {
+      historicalEcbFullCache = { byDate, timestamp: Date.now() };
+      logger.info(`Fetched full ECB rate history: ${byDate.size} days`);
+    }
+    return byDate;
+  } catch (err) {
+    logger.warn('Failed to fetch full ECB rate history', { error: err.message });
+    return new Map();
+  }
+}
+
 export function clearHistoricalCache() {
   historicalEcb90dCache = null;
+  historicalEcbFullCache = null;
+}
+
+/**
+ * Resolve a rate from an ECB by-date map using the standard FX convention for
+ * non-business days: the most recent published rate ON or BEFORE the date,
+ * looking back at most `maxLookbackDays`.
+ *
+ * @param {Map<string, Record<string, number>>} byDate
+ * @param {string} currencyCode
+ * @param {string} dateStr YYYY-MM-DD
+ * @param {number} [maxLookbackDays]
+ * @returns {number|undefined}
+ */
+export function rateOnOrBeforeFromMap(byDate, currencyCode, dateStr, maxLookbackDays = 7) {
+  if (!byDate || byDate.size === 0) return undefined;
+  const [y, m, d] = dateStr.split('-').map(Number);
+  let ts = Date.UTC(y, m - 1, d);
+  for (let back = 0; back <= maxLookbackDays; back += 1) {
+    const day = new Date(ts).toISOString().slice(0, 10);
+    const rates = byDate.get(day);
+    if (rates && rates[currencyCode] !== undefined) return rates[currencyCode];
+    ts -= 86_400_000;
+  }
+  return undefined;
 }
 
 // ─── Database ─────────────────────────────────────────────────────────────────
@@ -175,7 +236,9 @@ export async function loadFromDatabase() {
  */
 export async function saveToDatabase(rates) {
   try {
-    const today = new Date().toISOString().split('T')[0];
+    // rate_date is compared against APP_TIMEZONE calendar days throughout the
+    // calc layer (historical lookups, snapshot day-walk) — stamp in the same zone.
+    const today = todayAppDateString();
     const entries = Object.entries(rates).filter(([c]) => c !== 'EUR');
     if (entries.length === 0) return;
 
@@ -232,6 +295,36 @@ export async function getNearestRateFromDatabase(currencyCode, dateStr) {
   return toNumber(toDecimal(result.rows[0].rate_to_eur));
 }
 
+/**
+ * DB-only lookup of the most recent stored rate ON or BEFORE a date, looking
+ * back at most `maxLookbackDays`. Cheap and offline-safe — used on transaction
+ * write paths to stamp `fx_rate_to_eur` without ever blocking on HTTP.
+ *
+ * @param {string} currencyCode
+ * @param {string|Date} dateValue
+ * @param {number} [maxLookbackDays]
+ * @returns {Promise<number|undefined>}
+ */
+export async function getStoredRateToEurOnOrBefore(currencyCode, dateValue, maxLookbackDays = 7) {
+  const code = String(currencyCode || '').toUpperCase().trim();
+  if (!code) return undefined;
+  if (code === 'EUR') return 1.0;
+  const dateStr = normalizeDateInput(dateValue);
+  if (!dateStr) return undefined;
+  const result = await query(
+    `SELECT rate_to_eur
+     FROM exchange_rates
+     WHERE currency_code = $1
+       AND rate_date <= $2::date
+       AND rate_date >= $2::date - make_interval(days => $3)
+     ORDER BY rate_date DESC
+     LIMIT 1`,
+    [code, dateStr, maxLookbackDays]
+  );
+  if (result.rows.length === 0) return undefined;
+  return toNumber(toDecimal(result.rows[0].rate_to_eur));
+}
+
 // ─── Historical rate index (in-memory binary search) ─────────────────────────
 
 export function buildHistoricalRateIndex(rows) {
@@ -275,6 +368,28 @@ export function findNearestRateInIndex(index, currencyCode, dateStr) {
   return prevDist <= nextDist ? prev.rate : next.rate;
 }
 
+/**
+ * Like {@link findNearestRateInIndex} but strictly ON-or-BEFORE the date —
+ * the standard FX convention (a Saturday uses Friday's close, never Monday's).
+ * Returns undefined when no rate exists on or before the date.
+ */
+export function findRateOnOrBeforeInIndex(index, currencyCode, dateStr) {
+  if (currencyCode === 'EUR') return 1.0;
+  const entries = index.get(currencyCode);
+  if (!entries || entries.length === 0) return undefined;
+
+  let lo = 0;
+  let hi = entries.length - 1;
+  while (lo <= hi) {
+    const mid = (lo + hi) >> 1;
+    const midDate = entries[mid].date;
+    if (midDate === dateStr) return entries[mid].rate;
+    if (midDate < dateStr) lo = mid + 1;
+    else hi = mid - 1;
+  }
+  return hi >= 0 ? entries[hi].rate : undefined;
+}
+
 // ─── Historical rate point lookup ─────────────────────────────────────────────
 
 export async function getRateToEurForDate(currencyCode, dateValue, { saveFetchedHistoricalRate = true } = {}) {
@@ -293,15 +408,27 @@ export async function getRateToEurForDate(currencyCode, dateValue, { saveFetched
     return toNumber(toDecimal(exact.rows[0].rate_to_eur));
   }
 
+  // Recent dates: 90-day ECB feed (small download), on-or-before for weekends.
   const ecbByDate = await fetchHistoricalFromEcb90d();
-  const ecbRatesForDate = ecbByDate.get(dateStr);
-  if (ecbRatesForDate && ecbRatesForDate[currencyCode]) {
-    const ecbRate = ecbRatesForDate[currencyCode];
+  const recentRate = rateOnOrBeforeFromMap(ecbByDate, currencyCode, dateStr);
+  if (recentRate !== undefined) {
     if (saveFetchedHistoricalRate) {
-      await saveHistoricalRate(currencyCode, dateStr, ecbRate);
+      await saveHistoricalRate(currencyCode, dateStr, recentRate);
     }
-    return ecbRate;
+    return recentRate;
   }
 
+  // Older dates: full ECB history (back to 1999). Cached for 24h, and every
+  // resolved rate is persisted, so the big download happens at most rarely.
+  const fullByDate = await fetchHistoricalFromEcbFull();
+  const historicalRate = rateOnOrBeforeFromMap(fullByDate, currencyCode, dateStr);
+  if (historicalRate !== undefined) {
+    if (saveFetchedHistoricalRate) {
+      await saveHistoricalRate(currencyCode, dateStr, historicalRate);
+    }
+    return historicalRate;
+  }
+
+  // Last resort (e.g. non-ECB currencies): nearest stored rate, any distance.
   return getNearestRateFromDatabase(currencyCode, dateStr);
 }

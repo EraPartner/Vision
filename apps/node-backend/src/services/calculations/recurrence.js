@@ -76,7 +76,13 @@ export function calculateNextDate(currentDate, recurrencePattern) {
 
 export function isValidPattern(pattern) {
   if (!pattern) return false;
-  return SUPPORTED_PATTERNS.includes(pattern.toLowerCase().trim());
+  const normalized = pattern.toLowerCase().trim();
+  if (SUPPORTED_PATTERNS.includes(normalized)) return true;
+  // Must mirror calculateNextDate's custom grammar: "every N days", N >= 1.
+  // (The old version rejected this, so it was useless as a guard and no caller
+  // used it — a typo like "fortnightly" stored fine and then never advanced.)
+  const match = normalized.match(/^every\s+(\d+)\s+days?$/);
+  return match ? parseInt(match[1], 10) >= 1 : false;
 }
 
 export function getSupportedPatterns() {

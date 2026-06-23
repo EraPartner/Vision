@@ -5,7 +5,9 @@ import reactRefresh from "eslint-plugin-react-refresh";
 import tseslint from "typescript-eslint";
 
 export default tseslint.config(
-    { ignores: ["../../dist"] },
+    // coverage/ is an istanbul build artifact — linting it produced six
+    // "unused eslint-disable" warnings from generated files.
+    { ignores: ["../../dist", "coverage"] },
     {
         extends: [js.configs.recommended, ...tseslint.configs.recommended],
         files: ["**/*.{ts,tsx}"],
@@ -40,5 +42,11 @@ export default tseslint.config(
             // Warn on unused vars/imports; prefix with _ to intentionally suppress (e.g. _unused)
             "@typescript-eslint/no-unused-vars": ["warn", { argsIgnorePattern: "^_", varsIgnorePattern: "^_" }],
         },
+    },
+    {
+        // Test harness helpers legitimately export non-component utilities next
+        // to wrapper components; fast refresh never applies under vitest.
+        files: ["src/test/**/*.{ts,tsx}"],
+        rules: { "react-refresh/only-export-components": "off" },
     },
 );

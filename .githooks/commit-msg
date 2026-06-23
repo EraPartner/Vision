@@ -1,0 +1,29 @@
+#!/usr/bin/env sh
+#
+# Vision commit-msg -- enforce Conventional Commits. .github/CONTRIBUTING.md documents the
+# policy ("type(scope): subject"); this hook makes it real. Runs commitlint with
+# @commitlint/config-conventional (config: config/commitlint.config.mjs).
+#
+# Wiring:   git config core.hooksPath .githooks   (done by scripts/setup-git-hooks.js)
+# Bypass:   git commit --no-verify        or       SKIP_HOOKS=1 git commit ...
+#
+# Output is ASCII-only on purpose (see the note in pre-commit).
+
+set -u
+
+if [ "${SKIP_HOOKS:-}" = "1" ]; then
+  echo "[commit-msg] SKIP_HOOKS=1 -- skipping."
+  exit 0
+fi
+
+REPO_ROOT=$(git rev-parse --show-toplevel) || exit 0
+CL="$REPO_ROOT/node_modules/.bin/commitlint"
+
+# Skip (don't fail) if deps aren't installed yet -- mirrors how pre-commit treats
+# a missing gitleaks/eslint, so a fresh clone can still commit before 'bun install'.
+if [ ! -x "$CL" ]; then
+  echo "[commit-msg] commitlint not installed (run 'bun install') -- skipping commit-message lint."
+  exit 0
+fi
+
+"$CL" --config "$REPO_ROOT/config/commitlint.config.mjs" --edit "$1"

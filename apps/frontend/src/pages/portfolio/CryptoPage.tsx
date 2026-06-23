@@ -2,6 +2,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { TrendingUp, TrendingDown, Trash2, Bitcoin, Eye, DollarSign, ArrowUpRight } from "lucide-react";
 import { usePortfolio } from "@/hooks/usePortfolio";
+import { usePortfolioSummaryQuery } from "@/hooks/portfolio/usePortfolioSummary";
 import { useCurrencyConverter } from "@/hooks/useCurrencyConverter";
 import { AddInvestmentDialog } from "@/components/portfolio/AddInvestmentDialog";
 import { AddPortfolioTxnDialog } from "@/components/portfolio/AddPortfolioTxnDialog";
@@ -12,10 +13,14 @@ import { cn } from "@/lib/utils";
 import { useConfirmDialog } from "@/hooks/useConfirmDialog";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { useAppSettings } from "@/contexts/AppSettingsContext";
-import { numberFormatToLocale } from "@/utils/currency";
+import { useCurrencyFormatter } from "@/hooks/useCurrencyFormatter";
 import { useNavigate } from "react-router-dom";
 import { PageHeader } from "@/components/shared/PageHeader";
+import { PageError } from "@/components/shared/PageError";
+import { Skeleton } from "@/components/ui/skeleton";
 import { EmptyState } from "@/components/shared/EmptyState";
+import { onActivateKeyDown } from "@/utils/a11y";
+import { DeltaPill } from "@/components/shared/DeltaPill";
 
 function fmtPct(val: number) {
   return `${val >= 0 ? '+' : ''}${val.toFixed(2)}%`;
@@ -25,25 +30,27 @@ export default function CryptoPage() {
   const { t } = useLanguage();
   const navigate = useNavigate();
   const { appSettings } = useAppSettings();
-  const locale = numberFormatToLocale(appSettings.numberFormat);
   const targetCurrency = appSettings.defaultCurrency || 'EUR';
-  const { byAssetClass, deleteInvestment, refreshPrices, isRefreshingPrices } = usePortfolio();
+  const { byAssetClass, deleteInvestment, refreshPrices, isRefreshingPrices, isLoading, isError, error, refetch } = usePortfolio();
   const { confirm, ConfirmDialog } = useConfirmDialog();
   const holdings = byAssetClass('crypto');
 
   const { convertToTarget } = useCurrencyConverter(targetCurrency);
 
-  function fmt(
-    val: number,
-    currency = targetCurrency,
-    decimals = appSettings.showDecimalPlaces
-  ) {
-    return new Intl.NumberFormat(locale, { style: "currency", currency, minimumFractionDigits: decimals, maximumFractionDigits: decimals }).format(val);
-  }
+  // Per-investment FX attribution from the backend summary (historical rates);
+  // only rendered when a holding is denominated in a foreign currency.
+  const { data: apiSummary } = usePortfolioSummaryQuery(targetCurrency);
+  const fxInfoById = new Map((apiSummary?.summaries ?? []).map((s) => [s.id, s]));
+  const pageHasFxExposure = holdings.some((h) => (h.currency || 'EUR').toUpperCase() !== targetCurrency.toUpperCase());
 
-  function openMarketLookup(symbol?: string) {
+  const fmt = useCurrencyFormatter(targetCurrency);
+
+  function openMarketLookup(symbol?: string, investmentId?: number) {
     if (!symbol) return;
-    navigate(`/portfolio/market?symbol=${encodeURIComponent(symbol)}`);
+    // Pass the holding id so the market page can chart non-Yahoo providers
+    // (binance/custom) from this holding's own price history.
+    const suffix = investmentId != null ? `&investmentId=${investmentId}` : "";
+    navigate(`/research/market?symbol=${encodeURIComponent(symbol)}${suffix}`);
   }
 
   const totalValue = holdings.reduce((s, h) => s + convertToTarget(h.currentValue, h.currency), 0);
@@ -51,7 +58,30 @@ export default function CryptoPage() {
   const totalUnrealizedGain = holdings.reduce((s, h) => s + convertToTarget(h.unrealizedGain, h.currency), 0);
   const totalFees = holdings.reduce((s, h) => s + convertToTarget(h.totalFees, h.currency), 0);
   const totalTaxes = holdings.reduce((s, h) => s + convertToTarget(h.totalTaxes, h.currency), 0);
-  const netGain = totalRealizedGain + totalUnrealizedGain - totalFees - totalTaxes;
+  // realizedGain/unrealizedGain already fold the per-row fees/taxes columns into
+  // cost basis (calculateCostBasis), so net gain subtracts ONLY standalone
+  // fee/tax transaction rows — totalFees/totalTaxes would double-count the columns.
+  const feeTxns = holdings.reduce((s, h) => s + convertToTarget(h.feeTransactions ?? 0, h.currency), 0);
+  const taxTxns = holdings.reduce((s, h) => s + convertToTarget(h.taxTransactions ?? 0, h.currency), 0);
+  const netGain = totalRealizedGain + totalUnrealizedGain - feeTxns - taxTxns;
+
+  if (isLoading) {
+    return (
+      <div className="space-y-6">
+        <PageHeader title={t('crypto.title')} icon={Bitcoin} />
+        <Skeleton className="h-24 w-full" />
+        <Skeleton className="h-64 w-full" />
+      </div>
+    );
+  }
+  if (isError) {
+    return (
+      <div className="space-y-6">
+        <PageHeader title={t('crypto.title')} icon={Bitcoin} />
+        <PageError message={error?.message ?? t('common.error')} onRetry={() => refetch()} />
+      </div>
+    );
+  }
 
   if (holdings.length === 0) {
     return (
@@ -61,7 +91,7 @@ export default function CryptoPage() {
           icon={Bitcoin}
           actions={<AddInvestmentDialog allowedAssetClasses={[ 'crypto' ]} />}
         />
-        <Card className="group relative overflow-hidden surface-elevated premium-frame bg-card backdrop-blur-sm">
+        <Card className="group relative overflow-hidden glass-regular premium-frame">
           <CardContent className="pt-0">
             <EmptyState
               icon={Bitcoin}
@@ -92,7 +122,7 @@ export default function CryptoPage() {
 
       {/* Summary Cards */}
       <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
-        <Card className="group relative overflow-hidden surface-elevated premium-frame micro-lift bg-card backdrop-blur-sm">
+        <Card className="group relative overflow-hidden glass-regular premium-frame micro-lift">
           <CardHeader className="pb-1 pt-3 px-4">
             <CardTitle className="text-xs font-medium text-muted-foreground flex items-center gap-1.5">
               <span className="inline-flex h-6 w-6 items-center justify-center rounded-md bg-gradient-to-br from-primary/20 to-primary/5 text-primary ring-1 ring-primary/15">
@@ -106,7 +136,7 @@ export default function CryptoPage() {
           </CardContent>
         </Card>
 
-        <Card className="group relative overflow-hidden surface-elevated premium-frame micro-lift bg-card backdrop-blur-sm">
+        <Card className="group relative overflow-hidden glass-regular premium-frame micro-lift">
           <CardHeader className="pb-1 pt-3 px-4">
             <CardTitle className="text-xs font-medium text-muted-foreground flex items-center gap-1.5">
               <span className={cn(
@@ -127,7 +157,7 @@ export default function CryptoPage() {
           </CardContent>
         </Card>
 
-        <Card className="group relative overflow-hidden surface-elevated premium-frame micro-lift bg-card backdrop-blur-sm">
+        <Card className="group relative overflow-hidden glass-regular premium-frame micro-lift">
           <CardHeader className="pb-1 pt-3 px-4">
             <CardTitle className="text-xs font-medium text-muted-foreground flex items-center gap-1.5">
               <span className={cn(
@@ -148,7 +178,7 @@ export default function CryptoPage() {
           </CardContent>
         </Card>
 
-        <Card className="group relative overflow-hidden surface-elevated premium-frame micro-lift bg-card backdrop-blur-sm">
+        <Card className="group relative overflow-hidden glass-regular premium-frame micro-lift">
           <CardHeader className="pb-1 pt-3 px-4">
             <CardTitle className="text-xs font-medium text-muted-foreground">{t('portfolio.feesAndTaxes')}</CardTitle>
           </CardHeader>
@@ -157,10 +187,11 @@ export default function CryptoPage() {
           </CardContent>
         </Card>
 
-        <Card className={cn(
-          "group relative overflow-hidden surface-elevated premium-frame micro-lift bg-card backdrop-blur-sm border-l-4",
-          netGain >= 0 ? "border-l-accent" : "border-l-destructive"
-        )}>
+        <Card className="group relative overflow-hidden glass-regular premium-frame micro-lift">
+          <div aria-hidden className={cn(
+            "pointer-events-none absolute inset-0 rounded-[inherit] bg-gradient-to-br",
+            netGain >= 0 ? "from-accent/15 to-accent/5" : "from-destructive/15 to-destructive/5",
+          )} />
           <CardHeader className="pb-1 pt-3 px-4">
             <CardTitle className="text-xs font-medium text-muted-foreground">{t('portfolio.netReturn')}</CardTitle>
           </CardHeader>
@@ -187,6 +218,9 @@ export default function CryptoPage() {
                   <th className="py-2 px-3 text-right font-medium text-muted-foreground">{t('portfolio.value')}</th>
                   <th className="py-2 px-3 text-right font-medium text-muted-foreground">{t('portfolio.unrealized')}</th>
                   <th className="py-2 px-3 text-right font-medium text-muted-foreground">{t('portfolio.realized')}</th>
+                  {pageHasFxExposure && (
+                    <th className="py-2 px-3 text-right font-medium text-muted-foreground" title={t('portfolio.fxEffect')}>{t('portfolio.fxPnl')}</th>
+                  )}
                   <th className="py-2 px-3"></th>
                 </tr>
               </thead>
@@ -203,7 +237,8 @@ export default function CryptoPage() {
                           <button
                             type="button"
                             className="block text-xs text-muted-foreground hover:underline cursor-pointer"
-                            onDoubleClick={() => openMarketLookup(h.symbol)}
+                            onDoubleClick={() => openMarketLookup(h.symbol, h.id)}
+                            onKeyDown={onActivateKeyDown(() => openMarketLookup(h.symbol, h.id))}
                             title={h.symbol ? t('watchlist.doubleClickChart') : undefined}
                           >
                             {h.name}
@@ -225,24 +260,41 @@ export default function CryptoPage() {
                     <td className="text-right py-2 px-3 tabular-nums font-medium">{fmt(convertToTarget(h.currentValue, h.currency))}</td>
                     <td className={cn("text-right py-2 px-3 tabular-nums font-medium", h.unrealizedGain >= 0 ? "text-accent" : "text-destructive")}>
                       {h.unrealizedGain >= 0 ? "+" : ""}{fmt(convertToTarget(h.unrealizedGain, h.currency))}
-                      <span className="text-xs ml-1 opacity-70">{fmtPct(h.gainLossPercent)}</span>
+                      <DeltaPill value={h.gainLossPercent} label={fmtPct(h.gainLossPercent)} className="ml-1.5" />
                     </td>
                     <td className={cn("text-right py-2 px-3 tabular-nums", h.realizedGain !== 0 ? (h.realizedGain >= 0 ? "text-accent" : "text-destructive") : "text-muted-foreground")}>
                       {h.realizedGain !== 0 ? `${h.realizedGain >= 0 ? "+" : ""}${fmt(convertToTarget(h.realizedGain, h.currency))}` : '—'}
                     </td>
+                    {pageHasFxExposure && (() => {
+                      const fxInfo = fxInfoById.get(h.id);
+                      const isForeign = (h.currency || 'EUR').toUpperCase() !== targetCurrency.toUpperCase();
+                      const fxGain = fxInfo?.fxGain;
+                      if (!isForeign || typeof fxGain !== 'number') {
+                        return <td className="text-right py-2 px-3 tabular-nums text-muted-foreground">—</td>;
+                      }
+                      return (
+                        <td
+                          className={cn("text-right py-2 px-3 tabular-nums", fxGain >= 0 ? "text-accent" : "text-destructive")}
+                          title={fxInfo?.usedFallbackRate ? t('portfolio.fxFallbackNote') : undefined}
+                        >
+                          {fxGain >= 0 ? "+" : ""}{fmt(fxGain)}{fxInfo?.usedFallbackRate ? " ⚠" : ""}
+                        </td>
+                      );
+                    })()}
                     <td className="py-2 px-3">
                       <div className="flex items-center gap-1 justify-end opacity-0 group-hover:opacity-100 transition-opacity">
                         <InvestmentDetailDialog 
                           investment={h} 
                           trigger={
-                            <Button variant="ghost" size="icon" className="icon-touch-target">
+                            <Button variant="ghost" size="icon" className="icon-touch-target" aria-label={t('portfolio.viewDetails')} title={t('portfolio.viewDetails')}>
                               <Eye className="h-3.5 w-3.5" />
                             </Button>
                           }
                         />
                         <AddPortfolioTxnDialog investment={h} />
                         <Button variant="ghost" size="icon" className="icon-touch-target text-muted-foreground hover:text-destructive"
-                          onClick={async () => { 
+                          aria-label={t('crypto.deleteAsset')} title={t('crypto.deleteAsset')}
+                          onClick={async () => {
                             const ok = await confirm({ 
                               title: t('crypto.deleteAsset'), 
                               description: t('crypto.deleteAssetDesc', { name: h.name }), 
@@ -264,7 +316,7 @@ export default function CryptoPage() {
       </Card>
 
       {/* Info Card */}
-      <Card className="bg-muted/30 border-dashed">
+      <Card className="bg-muted/30 !border-dashed">
         <CardContent className="py-4">
           <p className="text-sm text-muted-foreground">{t('crypto.howItWorks')}</p>
         </CardContent>

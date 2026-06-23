@@ -18,7 +18,7 @@ const badgeVariants = cva(
                 accent:
                     "border-transparent bg-accent/20 text-accent-foreground shadow-[inset_0_0_0_1px_hsl(var(--accent)/0.35)] hover:bg-accent/25",
                 success:
-                    "border-transparent bg-emerald-500/15 text-emerald-500 shadow-[inset_0_0_0_1px_hsl(152_60%_45%/0.3)]",
+                    "border-transparent bg-success/15 text-success shadow-[inset_0_0_0_1px_hsl(var(--success)/0.3)]",
             },
         },
         defaultVariants: {

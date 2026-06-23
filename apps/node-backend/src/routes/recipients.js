@@ -3,8 +3,7 @@
  */
 
 import { Router } from 'express';
-// eslint-disable-next-line vision-local/no-repo-direct-from-route
-import recipientRepository from '../repositories/recipientRepository.js';
+import recipientRepository from '../services/recipientService.js';
 import { mergeRecipients as mergeRecipientsAtomic } from '../services/recipientMergeService.js';
 import {
   listPatternsForRecipient,
@@ -17,6 +16,7 @@ import {
 import { findRecipientClusters } from '../services/recipientClusterService.js';
 import { NotFoundError, ValidationError } from '../middleware/errorHandler.js';
 import { validateIdParam } from '../middleware/validation.js';
+import { parsePagination } from '../lib/pagination.js';
 
 const router = Router();
 
@@ -28,13 +28,14 @@ router.get('/clusters', async (req, res) => {
 
 router.get('/', async (req, res) => {
   const {
-    limit = 50, offset = 0, name, default_category_id,
+    name, default_category_id,
     active = 'true', search, uncategorized = 'false', sort_by, sort_dir,
   } = req.query;
 
+  const { limit, offset } = parsePagination(req.query, { maxLimit: 1000 });
   const opts = {
-    limit: Math.max(1, Math.min(parseInt(limit, 10) || 50, 1000)),
-    offset: Math.max(0, parseInt(offset, 10) || 0),
+    limit,
+    offset,
     name: name || null,
     defaultCategoryId: default_category_id ? parseInt(default_category_id, 10) : null,
     search: search ? String(search).slice(0, 200) : null,

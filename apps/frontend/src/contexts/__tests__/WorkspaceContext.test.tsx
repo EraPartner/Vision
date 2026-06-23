@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
-import React, { type ReactNode } from "react";
+import { type ReactNode } from "react";
 import { renderHook, act } from "@testing-library/react";
 import { MemoryRouter } from "react-router-dom";
 import { useWorkspace } from "@/contexts/WorkspaceContext";

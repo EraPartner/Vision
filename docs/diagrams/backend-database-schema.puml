@@ -539,6 +539,59 @@ entity "import_rows" as import_rows {
   decision : text
 }
 
+entity "custom_parser_configs" as custom_parser_configs {
+  * id : serial <<PK>>
+  * name : text
+  * kind : text DEFAULT 'transaction'
+  * config_json : jsonb
+  created_at : timestamptz
+  updated_at : timestamptz
+  ---
+  UNIQUE (name, kind)
+}
+
+entity "portfolio_import_batches" as portfolio_import_batches {
+  * id : bigserial <<PK>>
+  * adapter_name : text
+  source_filename : text
+  source_size_bytes : bigint
+  custom_config : jsonb
+  default_asset_class : text
+  default_type : text DEFAULT 'buy'
+  * status : text DEFAULT 'pending'
+  rows_total : integer
+  rows_imported : integer
+  rows_duplicate : integer
+  rows_error : integer
+  error_summary : text
+  started_at : timestamptz
+  completed_at : timestamptz
+}
+
+entity "portfolio_import_staging_rows" as portfolio_import_staging_rows {
+  * id : bigserial <<PK>>
+  * batch_id : bigint <<FK>>
+  * row_index : integer
+  raw_date : text
+  type : text
+  symbol : text
+  name : text
+  units : numeric
+  price : numeric
+  amount : numeric
+  fees : numeric
+  taxes : numeric
+  currency : varchar(3)
+  fx_rate : numeric
+  note : text
+  resolved_investment_id : integer <<FK>>
+  user_override_investment_id : integer <<FK>>
+  match_source : text
+  * status : text DEFAULT 'pending'
+  error_detail : text
+  committed_txn_id : integer <<FK>>
+}
+
 entity "exchange_rate_cache" as exchange_rate_cache {
   * id : serial <<PK>>
   * base : text
@@ -596,6 +649,17 @@ entity "ing_raw_transactions" as ing_raw_transactions {
   imported_at : timestamptz
 }
 
+entity "db_editor_audit" as db_editor_audit {
+  * id : bigserial <<PK>>
+  * table_name : text
+  * op : text
+  pk_json : jsonb
+  before_json : jsonb
+  after_json : jsonb
+  * statement : text
+  * created_at : timestamptz
+}
+
 note bottom of provider_health
   Rolling-window admin observability hub (ADR-034).
   See providerHealthRepository.js for query patterns.
@@ -609,6 +673,25 @@ end note
 note bottom of import_batches
   Drives the staging / validate / match / commit pipeline
   in services/importPipeline.
+end note
+
+note bottom of custom_parser_configs
+  Saved named custom CSV parser configs (ADR-066, ADR-078).
+  kind='transaction' — budgeting import; kind='portfolio' — portfolio import.
+  name doubles as bank_account/source label on imported transactions.
+  UNIQUE (name, kind) added by migration 0041.
+end note
+
+note bottom of portfolio_import_batches
+  Portfolio CSV import batches (ADR-078, migration 0040).
+  Mirrors import_batches but portfolio-shaped.
+  Included in BACKUP_COVERED_TABLES.
+end note
+
+note bottom of db_editor_audit
+  Committed-SQL audit trail for the admin DB data editor (ADR-101, migration 0059).
+  One row per committed statement; written inside the same transaction as the change.
+  Indexed on (table_name, created_at DESC).
 end note
 
 ' Materialized views (read-only projections — listed for reference)
@@ -626,6 +709,9 @@ transaction_tags }o--|| transactions
 transaction_tags }o--|| tags
 provider_health ..> "external\nproviders" : observes
 import_rows }o--|| import_batches
+portfolio_import_staging_rows }o--|| portfolio_import_batches
+portfolio_import_staging_rows }o--o| investments : resolved_investment_id
+portfolio_import_staging_rows }o--o| investments : user_override_investment_id
 cashflow_forecast_accuracy }o--|| cashflow_forecast_mc
 agg_recipient_totals }o--|| recipients
 agg_split_outstanding }o--|| recipients

@@ -1,0 +1,276 @@
+/**
+ * Transaction Repository behavioral tests. Mocks the DB layer (query /
+ * queryPrepared / withTransaction) and asserts row enrichment (tag attachment),
+ * filter branches, and the create/update tag paths. buildTransactionWhere and
+ * sanitizeUpdateFields run for real.
+ */
+import { describe, it, expect, vi, beforeEach } from 'vitest';
+
+vi.mock('../src/database/connection.js', () => ({
+  query: vi.fn().mockResolvedValue({ rows: [] }),
+  queryPrepared: vi.fn().mockResolvedValue({ rows: [] }),
+  withTransaction: vi.fn(),
+}));
+
+import { query, queryPrepared, withTransaction } from '../src/database/connection.js';
+import transactionRepository from '../src/repositories/transactionRepository.js';
+
+beforeEach(() => {
+  query.mockReset();
+  query.mockResolvedValue({ rows: [] });
+  queryPrepared.mockReset();
+  queryPrepared.mockResolvedValue({ rows: [] });
+  withTransaction.mockReset();
+});
+
+describe('tag attachment', () => {
+  it('getAll attaches tags grouped by transaction and empty arrays otherwise', async () => {
+    // First call: main SELECT returns two rows. Second call: the tag lookup.
+    query
+      .mockResolvedValueOnce({ rows: [{ id: 1 }, { id: 2 }] })
+      .mockResolvedValueOnce({
+        rows: [
+          { transaction_id: 1, id: 10, slug: 'food', color: '#fff', is_active: true },
+          { transaction_id: 1, id: 11, slug: 'bill', color: '#000', is_active: true },
+        ],
+      });
+    const rows = await transactionRepository.getAll({ limit: 10, offset: 0 });
+    expect(rows[0].tags).toHaveLength(2);
+    expect(rows[0].tags[0]).toEqual({ id: 10, slug: 'food', color: '#fff', is_active: true });
+    expect(rows[1].tags).toEqual([]); // no tags for tx 2
+    // tag lookup queried against the row ids
+    expect(query.mock.calls[1][1]).toEqual([[1, 2]]);
+  });
+
+  it('skips the tag query entirely when there are no rows', async () => {
+    query.mockResolvedValueOnce({ rows: [] });
+    const rows = await transactionRepository.getAll({});
+    expect(rows).toEqual([]);
+    expect(query).toHaveBeenCalledTimes(1); // only the main SELECT
+  });
+});
+
+describe('getCount', () => {
+  it('parses the scalar count', async () => {
+    query.mockResolvedValueOnce({ rows: [{ count: '123' }] });
+    expect(await transactionRepository.getCount({})).toBe(123);
+  });
+});
+
+describe('getUncategorised', () => {
+  it('appends each optional filter clause and param in order', async () => {
+    query.mockResolvedValueOnce({ rows: [] });
+    await transactionRepository.getUncategorised({
+      startDate: '2024-01-01',
+      endDate: '2024-12-31',
+      bankAccount: 'kbc',
+      recipientId: 5,
+      recipientName: 'aldi',
+      limit: 25,
+      offset: 5,
+    });
+    const [sql, params] = query.mock.calls[0];
+    expect(sql).toContain('t.category_id IS NULL');
+    expect(sql).toContain('t.date >= $1');
+    expect(sql).toContain('t.date <= $2');
+    expect(sql).toContain('t.bank_account ILIKE $3');
+    expect(sql).toContain('t.recipient_id = $4');
+    expect(sql).toContain('r.name ILIKE $5');
+    expect(params).toEqual(['2024-01-01', '2024-12-31', '%kbc%', 5, '%aldi%', 25, 5]);
+  });
+});
+
+describe('getUncategorisedWithCount', () => {
+  it('returns total 0 and empty rows when CTE yields only the null-joined total row', async () => {
+    query.mockResolvedValueOnce({ rows: [{ id: null, total_count: '0' }] });
+    const res = await transactionRepository.getUncategorisedWithCount({});
+    expect(res.total).toBe(0); // first row total_count parsed
+    expect(res.rows).toEqual([]); // id null filtered out
+  });
+
+  it('parses total and strips total_count from rows', async () => {
+    query
+      .mockResolvedValueOnce({ rows: [{ id: 1, total_count: '7' }] }) // main CTE
+      .mockResolvedValueOnce({ rows: [] }); // tag lookup
+    const res = await transactionRepository.getUncategorisedWithCount({ startDate: '2024-01-01' });
+    expect(res.total).toBe(7);
+    expect(res.rows[0]).not.toHaveProperty('total_count');
+  });
+});
+
+describe('getById', () => {
+  it('returns the enriched row', async () => {
+    queryPrepared.mockResolvedValueOnce({ rows: [{ id: 9, recipient_name: 'X' }] });
+    query.mockResolvedValueOnce({ rows: [] }); // tag lookup
+    const row = await transactionRepository.getById(9);
+    expect(row.id).toBe(9);
+    expect(row.tags).toEqual([]);
+  });
+
+  it('returns null when not found', async () => {
+    queryPrepared.mockResolvedValueOnce({ rows: [] });
+    expect(await transactionRepository.getById(99)).toBeNull();
+  });
+});
+
+describe('create', () => {
+  it('uppercases bank_account/memo/currency and uses queryPrepared without tags', async () => {
+    queryPrepared.mockResolvedValueOnce({ rows: [{ id: 3 }] });
+    query.mockResolvedValueOnce({ rows: [] }); // tag lookup
+    const row = await transactionRepository.create({
+      transaction_date: '2024-05-01',
+      bank_account: 'kbc',
+      recipient_id: 1,
+      amount: -10,
+      memo: 'coffee',
+      currency: 'usd',
+      balance: 100,
+      category_id: 2,
+      comment: 'c',
+    });
+    expect(row.id).toBe(3);
+    const params = queryPrepared.mock.calls[0][2];
+    expect(params[1]).toBe('KBC');
+    expect(params[4]).toBe('COFFEE');
+    expect(params[5]).toBe('USD');
+  });
+
+  it('defaults currency to EUR and nulls bank/memo when absent', async () => {
+    queryPrepared.mockResolvedValueOnce({ rows: [{ id: 4 }] });
+    query.mockResolvedValueOnce({ rows: [] });
+    await transactionRepository.create({
+      transaction_date: '2024-05-01',
+      recipient_id: 1,
+      amount: 5,
+      balance: 0,
+      category_id: null,
+      comment: null,
+    });
+    const params = queryPrepared.mock.calls[0][2];
+    expect(params[1]).toBeNull(); // bank_account
+    expect(params[4]).toBeNull(); // memo
+    expect(params[5]).toBe('EUR');
+  });
+
+  it('runs inside a transaction and sets tags when tags supplied', async () => {
+    const client = { query: vi.fn() };
+    // CTE insert -> inserted row
+    client.query.mockImplementation(async (sql) => {
+      if (typeof sql === 'string' && sql.includes('INSERT INTO transactions')) {
+        return { rows: [{ id: 50 }] };
+      }
+      if (typeof sql === 'string' && sql.startsWith('DELETE FROM transaction_tags')) return { rows: [] };
+      if (typeof sql === 'string' && sql.includes('SELECT id FROM tags')) return { rows: [{ id: 99 }] };
+      return { rows: [] };
+    });
+    withTransaction.mockImplementation(async (fn) => fn(client));
+    query.mockResolvedValueOnce({ rows: [] }); // final attachTagsToRows tag lookup
+    const row = await transactionRepository.create({
+      transaction_date: '2024-05-01',
+      recipient_id: 1,
+      amount: 5,
+      balance: 0,
+      category_id: null,
+      comment: null,
+      tags: ['food'],
+    });
+    expect(row.id).toBe(50);
+    expect(withTransaction).toHaveBeenCalled();
+    // tag junction insert performed
+    expect(client.query).toHaveBeenCalledWith(expect.stringContaining('INSERT INTO transaction_tags'), [50, [99]]);
+  });
+
+  it('returns null when the transactional insert yields no row', async () => {
+    const client = { query: vi.fn().mockResolvedValue({ rows: [] }) };
+    withTransaction.mockImplementation(async (fn) => fn(client));
+    const row = await transactionRepository.create({
+      transaction_date: '2024-05-01',
+      recipient_id: 1,
+      amount: 5,
+      balance: 0,
+      category_id: null,
+      comment: null,
+      tags: [],
+    });
+    expect(row).toBeNull();
+  });
+});
+
+describe('update', () => {
+  it('falls back to getById when there are no writable fields and no tags', async () => {
+    queryPrepared.mockResolvedValueOnce({ rows: [{ id: 1 }] }); // getById
+    query.mockResolvedValueOnce({ rows: [] }); // tag lookup
+    const row = await transactionRepository.update(1, {});
+    expect(row.id).toBe(1);
+  });
+
+  it('maps transaction_date to date and returns enriched row', async () => {
+    query
+      .mockResolvedValueOnce({ rows: [{ id: 2, recipient_name: 'r' }] }) // update CTE
+      .mockResolvedValueOnce({ rows: [] }); // tag lookup
+    const row = await transactionRepository.update(2, { transaction_date: '2024-06-01', amount: 9 });
+    expect(row.id).toBe(2);
+    const sql = query.mock.calls[0][0];
+    expect(sql).toContain('"date" = $1');
+    expect(sql).toContain('updated_at = NOW()');
+  });
+
+  it('returns null when the update matches no row', async () => {
+    query.mockResolvedValueOnce({ rows: [] });
+    expect(await transactionRepository.update(2, { amount: 1 })).toBeNull();
+  });
+
+  it('tags-only update probes existence then sets tags', async () => {
+    const client = { query: vi.fn() };
+    client.query.mockImplementation(async (sql) => {
+      if (typeof sql === 'string' && sql.startsWith('SELECT 1 FROM transactions')) return { rows: [{ '?column?': 1 }] };
+      if (typeof sql === 'string' && sql.startsWith('DELETE FROM transaction_tags')) return { rows: [] };
+      if (typeof sql === 'string' && sql.includes('SELECT id FROM tags')) return { rows: [] }; // no matching tags -> early return
+      if (typeof sql === 'string' && sql.includes('SELECT t.*')) return { rows: [{ id: 7 }] }; // fetchSql
+      return { rows: [] };
+    });
+    withTransaction.mockImplementation(async (fn) => fn(client));
+    query.mockResolvedValueOnce({ rows: [] }); // attachTagsToRows
+    const row = await transactionRepository.update(7, { tags: ['nope'] });
+    expect(row.id).toBe(7);
+    expect(client.query).toHaveBeenCalledWith('SELECT 1 FROM transactions WHERE id = $1', [7]);
+  });
+
+  it('tags-only update returns null when the transaction does not exist', async () => {
+    const client = { query: vi.fn().mockResolvedValue({ rows: [] }) };
+    withTransaction.mockImplementation(async (fn) => fn(client));
+    expect(await transactionRepository.update(123, { tags: [] })).toBeNull();
+  });
+
+  it('update with both fields and tags performs the UPDATE then tags', async () => {
+    const client = { query: vi.fn() };
+    client.query.mockImplementation(async (sql) => {
+      if (typeof sql === 'string' && sql.includes('UPDATE transactions SET')) return { rows: [{ id: 8 }] };
+      if (typeof sql === 'string' && sql.includes('SELECT t.*')) return { rows: [{ id: 8 }] };
+      return { rows: [] };
+    });
+    withTransaction.mockImplementation(async (fn) => fn(client));
+    query.mockResolvedValueOnce({ rows: [] });
+    const row = await transactionRepository.update(8, { amount: 3, tags: [] });
+    expect(row.id).toBe(8);
+  });
+});
+
+describe('hardDelete', () => {
+  it('reflects rowCount', async () => {
+    queryPrepared.mockResolvedValueOnce({ rowCount: 1 });
+    expect(await transactionRepository.hardDelete(1)).toBe(true);
+    queryPrepared.mockResolvedValueOnce({ rowCount: 0 });
+    expect(await transactionRepository.hardDelete(1)).toBe(false);
+  });
+});
+
+describe('listRecentUnlinked', () => {
+  it('queries from the since date and returns rows', async () => {
+    query.mockResolvedValueOnce({ rows: [{ id: 1, recipient_cluster_id: 3 }] });
+    const rows = await transactionRepository.listRecentUnlinked({ sinceDate: '2024-01-01' });
+    expect(rows).toEqual([{ id: 1, recipient_cluster_id: 3 }]);
+    expect(query.mock.calls[0][1]).toEqual(['2024-01-01']);
+    expect(query.mock.calls[0][0]).toContain('NOT EXISTS');
+  });
+});

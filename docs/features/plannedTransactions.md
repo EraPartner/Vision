@@ -3,11 +3,11 @@ title: Planned Transactions
 type: feature
 status: active
 date: 2026-04-26
-updated: 2026-04-26
-tags: [feature, planned, recurring, bills, loans, phase-3, phase-12, calculations, immutability, error-handling, toast]
+updated: 2026-06-17
+tags: [feature, planned, recurring, bills, loans, phase-3, phase-12, calculations, immutability, error-handling, toast, atomic-patch, virtual-data-table, i18n-toasts, suggestion-card, upcoming-payments-hook, occurrence-key-dismissal, june-2026, auto-link, planned-match]
 aliases: [planned-payments, scheduled-payments, recurring-payments, bills, subscriptions, loan-amortization]
-description: Scheduled and recurring payment tracking - manage bills, subscriptions, and future expenses
-related_code: ["apps/node-backend/src/routes/plannedTransactions.js", "apps/node-backend/src/repositories/plannedTransactionRepository.js", "apps/node-backend/src/services/calculations/loanSchedule.js", "apps/node-backend/src/services/calculations/recurrence.js", "apps/node-backend/src/services/recurringDetectionService.js", "apps/frontend/src/components/planned/PlannedPaymentForm.tsx", "apps/frontend/src/components/planned/LinkTransactionDialog.tsx", "apps/frontend/src/components/planned/ExecutionHistoryDialog.tsx", "apps/frontend/src/components/notifications/UpcomingPaymentsNotification.tsx", "apps/frontend/src/components/shared/DatePicker.tsx", "apps/frontend/src/components/shared/dateUtils.ts"]
+description: Scheduled and recurring payment tracking - manage bills, subscriptions, and future expenses. June 2026: auto-link & auto-clear planned payments on match — ingested transactions are automatically linked to matching planned payments (same recipient cluster, same sign, ±5% amount, ±5 days); ambiguous matches surface as confirmable suggestions. PlannedPaymentsPage migrated from DataTable to VirtualDataTable; native alert() replaced with toast.error (new i18n keys plannedPage.toggleFailed/deleteFailed). V11: useUpcomingPlannedPayments shared hook (single fetch + shared dismissed-ID store); SuggestionCard dashboard widget; UpcomingPaymentsNotification stands down on dashboard route when suggestions widget is visible. June 2026 (B1 fix): dismissals now keyed per occurrence (id:YYYY-MM-DD) so recurring reminders re-surface each cycle; past-dated keys pruned on load; legacy id-only entries silently dropped on next load.
+related_code: ["apps/node-backend/src/routes/plannedTransactions.js", "apps/node-backend/src/repositories/plannedTransactionRepository.js", "apps/node-backend/src/services/plannedExecutionService.js", "apps/node-backend/src/services/plannedMatchService.js", "apps/node-backend/src/services/calculations/loanSchedule.js", "apps/node-backend/src/services/calculations/recurrence.js", "apps/node-backend/src/services/recurringDetectionService.js", "apps/frontend/src/pages/PlannedPaymentsPage.tsx", "apps/frontend/src/components/planned/PlannedPaymentForm.tsx", "apps/frontend/src/components/planned/LinkTransactionDialog.tsx", "apps/frontend/src/components/planned/MatchSuggestionsBanner.tsx", "apps/frontend/src/components/planned/ExecutionHistoryDialog.tsx", "apps/frontend/src/components/notifications/UpcomingPaymentsNotification.tsx", "apps/frontend/src/components/shared/DatePicker.tsx", "apps/frontend/src/components/shared/dateUtils.ts", "apps/frontend/src/hooks/useUpcomingPlannedPayments.ts", "apps/frontend/src/hooks/usePlannedMatchSuggestions.ts"]
 ---
 
 # Planned Transactions
@@ -38,7 +38,7 @@ Regular payments following a recurrence pattern:
 {
   "is_recurring": true,
   "recurrence_pattern": {
-    "interval": "monthly",  // daily, weekly, monthly, yearly
+    "interval": "monthly",  // daily, weekly, biweekly, monthly, quarterly, yearly
     "day_of_month": 15,    // for monthly
     "day_of_week": 1,       // for weekly (0=Sunday)
   }
@@ -48,7 +48,9 @@ Regular payments following a recurrence pattern:
 **Supported Intervals:**
 - Daily
 - Weekly
+- Biweekly
 - Monthly
+- Quarterly
 - Yearly
 
 ---
@@ -76,6 +78,13 @@ Special handling for loans with amortization:
 - Personal loan
 - Car loan
 - Other
+
+**Interest convention (whole-month):** the schedule charges interest per whole
+month on the remaining principal — installment 1 carries a full month of
+interest even when the loan starts mid-month (e.g. start on the 5th, payment
+day on the 20th). There is no day-count proration; this is the standard
+simplification used by `loanSchedule.js` and matches how most consumer loan
+tables are quoted.
 
 ---
 
@@ -106,9 +115,11 @@ Code links: [[apps/frontend/src/components/planned/PlannedPaymentForm.tsx]], [[a
 
 Track when planned transactions become real transactions:
 
-- Mark as **executed** when paid
-- **Auto-create** transactions on due date
+- Mark as **executed** when paid (manual tick via `POST /:id/execute`, or automatic via auto-link on ingest — see [[#auto-link--auto-clear-on-ingest-june-2026|Auto-Link on Ingest]])
 - Track **last executed date**
+
+> [!warning] No scheduler — no auto-create on due date
+> There is no background scheduler and no mechanism that automatically creates a transaction when a planned payment's due date arrives. The only automated path is **auto-link on ingest** (below), which links an already-ingested real transaction back to its matching planned payment. Planned payments that are not matched by an incoming transaction must be executed manually.
 
 ---
 
@@ -119,11 +130,43 @@ Vision can alert users about upcoming payments:
 - Overdue payments
 - Monthly bill summary
 
+#### Shared hook and dismissed-occurrence store (V11 + June 2026 fix)
+
+Both the app-level banner (`UpcomingPaymentsNotification`) and the dashboard suggestion card (`SuggestionCard`) use the shared `useUpcomingPlannedPayments` hook. This ensures:
+
+- **Single network fetch**: One React Query instance keyed on `"upcomingPlannedPayments"` shared across both surfaces.
+- **Consistent dismissal**: A module-level dismissed-occurrence `Set` backed by `useSyncExternalStore` persists to `LOCAL_STORAGE_KEYS.DISMISSED_UPCOMING_PAYMENTS`. Dismissing from either surface is immediately reflected on the other.
+
+#### Dismissal key format (June 2026 fix — F1)
+
+Dismissals are keyed by **occurrence**, not by row id:
+
+```
+key = `${pt.id}:${pt.planned_date.slice(0, 10)}`
+// e.g. "42:2026-07-01"
+```
+
+**Why this matters for recurring payments:** Recurring planned transactions keep their `id` while `planned_date` advances each cycle. Under the previous id-only scheme, dismissing one month's rent reminder would silence every future occurrence permanently. With occurrence keys, only the specific `id:date` pair is suppressed — the next cycle surfaces as a new occurrence.
+
+**Pruning and migration:**
+- On load, entries whose date portion is strictly before today are dropped (bounds growth and removes stale dismissals).
+- Legacy entries that are purely numeric (e.g. `"42"`, the old id-only format) do not match `DISMISS_KEY_RE = /^\d+:\d{4}-\d{2}-\d{2}$/` and are silently dropped. This causes a one-time re-surfacing of previously dismissed reminders — intentional, because the prior data was semantically wrong.
+
+**`dismiss()` signature change:** The function now takes `DismissTarget | DismissTarget[]` (objects with `id` and `planned_date`), not bare ids. Both banner and SuggestionCard pass the planned-transaction object(s) directly.
+
+#### Dashboard stand-down
+
+`UpcomingPaymentsNotification` stands down on the `/` route while the `suggestions` widget is visible (`useWidgetVisibility('dashboard', []).isVisible('suggestions')` returns `true`). This prevents showing both the banner and the card simultaneously. Hiding the widget from the widget-visibility dialog re-enables the banner on the dashboard.
+
+#### macOS dock badge
+
+The dock badge count is driven by `UpcomingPaymentsNotification` (non-dismissed due items count) and cleared on unmount — this logic is unaffected by the V11 refactor.
+
 The top-level upcoming-planned-payments notification is dismissible with persistence:
 
-- Dismissal state is stored in browser local storage by planned payment ID
-- Dismissing an item hides it on subsequent page loads/sessions
-- Dismissing the banner hides all currently visible upcoming planned payments
+- Dismissal state is stored in browser local storage keyed by `id:YYYY-MM-DD` (occurrence key — see above)
+- Dismissing an occurrence hides it for that cycle only; recurring reminders re-surface when `planned_date` advances
+- Dismissing the banner hides all currently visible upcoming planned payments for their respective occurrences
 
 ### Recurring Detection Dismissals
 
@@ -137,6 +180,91 @@ Dismissals in the recurring-pattern detection panel are persistent and do not re
 - Backend settings persistence now stores dismissal arrays as explicit JSONB (`JSON.stringify` + `::jsonb`) to prevent invalid JSON writes when dismissing suggestions
 
 Code links: [[apps/frontend/src/components/planned/RecurringDetectionPanel.tsx]], [[apps/frontend/src/components/shared/dateUtils.ts]], [[apps/node-backend/src/repositories/settingsRepository.js]]
+
+---
+
+---
+
+## Auto-Link & Auto-Clear on Ingest (June 2026)
+
+When a real transaction enters the system — either via CSV import commit or manual `POST /api/transactions` — the backend automatically checks it against active, unexecuted planned payments and links/executes any unambiguous match.
+
+### Trigger surfaces
+
+| Trigger | Auto-link behavior |
+|---|---|
+| CSV import commit (`POST /api/import/batches/:id/commit`) | Runs after all rows are committed; never fails the import if matching errors. Returns `auto_linked_count` in the commit/upload result. |
+| Manual transaction create (`POST /api/transactions`) | Runs immediately after create; response includes `auto_linked` (cleared planned payment id, or `null`). |
+
+### Match tolerance (moderate)
+
+A planned payment matches a transaction when **all four criteria** are met:
+
+| Criterion | Rule |
+|---|---|
+| Recipient cluster | `primary_recipient_id ?? id` must be the same cluster root on both sides (`getClusterRootMap` in `recipientRepository`) |
+| Sign | Amount signs must match (both income or both expense) |
+| Amount | Within ±5 % of the larger amount; minimum floor of ±1 (mirrors `LinkTransactionDialog` tolerance) |
+| Date | Transaction date within ±5 calendar days of `planned_date` |
+
+Loan-type planned payments (`is_loan = true`) are **excluded** from auto-match; their amortization semantics require explicit execution.
+
+### Unambiguous-only rule
+
+Auto-link only fires when exactly one planned payment matches exactly one transaction in the same batch (or create call). Any of the following blocks auto-link and instead surfaces the candidate as a suggestion:
+
+- Zero planned payments match the transaction
+- Two or more planned payments match the same transaction
+- Two transactions in the same import batch match the same planned payment
+
+This prevents incorrect auto-execution and leaves the user in control for any ambiguous case.
+
+### Auto-link execution path
+
+A successful auto-link follows the same execution path as a manual tick:
+
+1. Calls `plannedExecutionService.executePlanned({ id, executedTransactionId, executionDate })` (extracted from `POST /:id/execute`)
+2. Records a row in `planned_transaction_executions`
+3. Inherits tags from the planned payment
+4. For recurring rows: advances `planned_date` one recurrence cycle
+
+### Setting: `autoClearPlannedOnMatch`
+
+Auto-link is gated by the `autoClearPlannedOnMatch` field in the `app_settings` JSONB blob. Default: `true` (on).
+
+| Value | Effect |
+|---|---|
+| `true` (default) | Auto-link runs on ingest and import commit |
+| `false` | Auto-link is skipped; matches are not surfaced as suggestions either |
+
+Users control this toggle via **Settings → General → Auto-clear planned payments** (Switch in `GeneralTab.tsx`).
+
+### Service files
+
+| File | Purpose |
+|---|---|
+| [[apps/node-backend/src/services/plannedExecutionService.js]] | `executePlanned({id, executedTransactionId, executionDate})` — shared execution logic extracted from `POST /:id/execute` route |
+| [[apps/node-backend/src/services/plannedMatchService.js]] | `matchesTolerance`, `findAutoLinkTarget`, `autoLinkTransactions` (batch + mutual-unambiguity rule), `getMatchSuggestions` |
+| [[apps/node-backend/src/repositories/plannedTransactionRepository.js]] | New `listActiveUnexecuted()` method |
+| [[apps/node-backend/src/repositories/transactionRepository.js]] | New `listRecentUnlinked({ sinceDate })` (45-day lookback, NOT EXISTS against executions table) |
+| [[apps/node-backend/src/repositories/recipientRepository.js]] | New `getClusterRootMap(ids)` |
+
+### Match Suggestions surface
+
+When auto-link is on but a match is ambiguous, the backend exposes candidates via `GET /api/planned-transactions/match-suggestions`. The frontend surfaces these in `MatchSuggestionsBanner` on `PlannedPaymentsPage`. Each entry opens the existing `LinkTransactionDialog` so the user can confirm the link.
+
+After the user confirms, `PlannedPaymentsPage` invalidates the `["plannedMatchSuggestions"]` React Query cache key.
+
+**Frontend files:**
+- [[apps/frontend/src/lib/api/planned.ts]] — `getPlannedMatchSuggestions()` + types `PlannedMatchSuggestion`, `PlannedMatchCandidate`
+- [[apps/frontend/src/hooks/usePlannedMatchSuggestions.ts]] — React Query hook, cache key `["plannedMatchSuggestions"]`
+- [[apps/frontend/src/components/planned/MatchSuggestionsBanner.tsx]] — UI banner on PlannedPaymentsPage
+
+**i18n keys added:**
+- `settings.general.autoClearPlanned` — toggle label
+- `settings.general.autoClearPlannedHint` — toggle hint
+- `plannedPage.suggestions.*` — suggestions banner strings
+- `importReview.toast.autoLinked` — toast shown on ImportReviewPage when `auto_linked_count > 0`
 
 ---
 
@@ -156,6 +284,21 @@ Useful for:
 - Account portals
 
 ---
+
+## Atomic Loan PATCH (2026-05-29)
+
+`PATCH /api/planned-transactions/:id` for loan-type planned transactions now applies the field update and the loan-schedule replacement in a **single database transaction** via `plannedTransactionRepository.updateWithLoanSchedule(id, fields, scheduleEntries)`.
+
+**Before:** the route issued two separate calls — `repository.update()` followed by `repository.replaceLoanSchedule()`. A failure between the two left the row's header fields updated but the schedule stale (or vice versa), producing inconsistent amortization data.
+
+**After:** `updateWithLoanSchedule` wraps both operations in `withTransaction(client => …)`:
+1. `UPDATE planned_transactions SET … WHERE id = $n RETURNING id`
+2. `DELETE FROM planned_transaction_loan_schedule WHERE planned_transaction_id = $1`
+3. Batch `INSERT` of the new schedule rows
+
+All three steps commit or roll back together. If the row no longer exists, `null` is returned and no schedule mutation occurs.
+
+**Scope:** Only the PATCH path for loan-bearing rows uses this method. Non-loan PATCHes continue through the standard `repository.update()` path. The standalone `replaceLoanSchedule()` method remains for any direct schedule-reset calls.
 
 ## Execution Atomicity and Idempotency (Phase 3)
 
@@ -212,6 +355,29 @@ Calculates next occurrence dates for recurring planned transactions. Pure calcul
 | `getSupportedPatterns()` | Returns array of supported pattern names |
 
 **Implementation Details (2026-04-25):** Month-end clamping uses a double-modulo pattern `((targetMonthIndex % 12) + 12) % 12` to normalize negative month indices to their zero-based month equivalents (e.g., `-1` → `11` for December). This ensures that month arithmetic in TZ-aware contexts correctly handles month overflow/underflow before converting back to UTC.
+
+#### Recurrence advancement: sticky month-end clamp (2026-06-11)
+
+When `POST /:id/execute` advances a recurring planned transaction it calls `calculateNextDate(baseDate, recurrence_pattern)` where `baseDate` is the row's current `planned_date`. The next date is then stored via `toAppDateString(nextDate)`.
+
+`addMonthsClampedInAppTz` clamps the day-of-month to the last valid day of the *target* month:
+
+```
+Jan 31  --[+1 month]--> Feb 28   (28 stored; Feb has no 31st)
+Feb 28  --[+1 month]--> Mar 28   (advance chains from 28, not from the original 31)
+Mar 28  --[+1 month]--> Apr 28   (stays at 28 forever)
+```
+
+**This "sticky clamp" is intentional, documented behavior.** The alternative — storing the user's original day-of-month as a `preferred_day` anchor and restoring it each cycle (the pattern used in `loanSchedule.js#addMonthsAtDay`) — was considered and deliberately not implemented. Reasons:
+
+- Planned transactions are created with a single `planned_date` field; there is no separate anchor column.
+- The sticky behavior is transparent and deterministic: the stored `planned_date` is always the actual next due date, with no hidden state.
+- Adding a `preferred_day` column is a possible future enhancement but requires a migration and a UI affordance for users to understand the gap.
+
+> [!info] Scope of this note
+> The 2026-04-25 note above this section describes the *double-modulo math* for normalizing month indices (a low-level arithmetic detail). This section describes the *anchor semantics*: that after a clamp the chain advances from the clamped date, not from a remembered original day-of-month. These are separate concerns.
+
+The code comment in `routes/plannedTransactions.js` at the `updateFields.planned_date` assignment points to this section: `(Day-of-month anchor is intentionally sticky-clamped — see docs/features planned-transactions.)`
 
 ### `services/calculations/loanSchedule.js`
 **File:** [[apps/node-backend/src/services/calculations/loanSchedule.js]]
@@ -307,6 +473,7 @@ Returns bills due in the next 14 days (common use: dashboard notification banner
 | DELETE | `/api/planned-transactions/:id` | Delete planned transaction |
 | POST | `/api/planned-transactions/:id/execute` | Execute as transaction |
 | GET | `/api/planned-transactions/due-soon` | Upcoming bills within N days (Phase 6) |
+| GET | `/api/planned-transactions/match-suggestions` | Ambiguous auto-link candidates for user confirmation (June 2026) |
 
 ---
 
@@ -470,6 +637,58 @@ The `PlannedPaymentsPage` was refactored from 914 lines to 503 lines by extracti
 - Dialog state management and logic moved to respective dialog components
 - Main page now focuses on list display, form submission, and deletions
 - Performance improvement: `loadExecutionHistory` wrapped in `useCallback` to prevent function recreation
+
+### PlannedPaymentsPage — VirtualDataTable + Toast Errors (June 2026)
+
+- **DataTable → VirtualDataTable:** `PlannedPaymentsPage` now uses `VirtualDataTable` for row rendering. This enables consistent virtualized list behavior with the rest of the app and handles large planned-payment lists without DOM bloat.
+- **alert() → toast.error:** Native `window.alert()` calls for toggle and delete failures have been replaced with `toast.error(t('plannedPage.toggleFailed'))` and `toast.error(t('plannedPage.deleteFailed'))`. These are new i18n keys added to `en.json` and `nl.json` in June 2026. See [[docs/i18n/translations|Translations]] for key values.
+
+**Column sizing (follow-up polish, June 2026):**
+
+After the VirtualDataTable migration the column widths were adjusted so the table fills its container correctly without overflow:
+
+| Column | `defaultWidth` | `minWidth` | Notes |
+|--------|---------------|-----------|-------|
+| `is_executed` | 52 (fixed) | — | Icon column; fixed so it does not expand as a flex column |
+| `category` | _none_ (auto-fit) | 140 | **Flexible column** — no `defaultWidth`; absorbs all remaining table width after fixed/semi-fixed columns are placed. Category labels are typically the longest cells. Previously had a fixed 120px width that caused overflow. |
+| `status` | 130 | — | Widened from 100 to fit status badge + toggle |
+| `actions` | 96 (fixed) | — | Action buttons column; fixed to prevent greedy flex growth |
+
+The category column's absence of `defaultWidth` is intentional — VirtualDataTable treats columns without a `defaultWidth` as the auto-fill column.
+
+### PlannedPaymentsPage — "Est. Monthly" Summary Card (June 2026)
+
+The summary bar at the top of `PlannedPaymentsPage` contains an **Est. Monthly** card whose value is computed by the `totalMonthly` `useMemo` in [[apps/frontend/src/pages/PlannedPaymentsPage.tsx]].
+
+**Semantics (current, as of 2026-06-17): net monthly figure.**
+
+The card shows the **net** monthly impact of all active recurring planned payments across both income and expense rows. Incoming (positive `amount`) and outgoing (negative `amount`) are both included with their original sign, so the result can be positive (net inflow), negative (net outflow), or zero.
+
+> [!info] Previous behavior (before 2026-06-17)
+> "Est. Monthly" previously summed only outgoing recurring rows (`amount < 0`) using `Math.abs`, so it displayed a positive cost figure and silently excluded recurring income. A user with a +70 monthly income and a −100 monthly expense would have seen 100 (outgoings only). Now they see −30 (net).
+
+**Calculation:**
+
+```
+totalMonthly = Σ ( convertToTarget(p.amount, p.currency) × frequencyMultiplier(p.frequency) )
+               for each p where p.is_active && p.is_recurring
+```
+
+Frequency-to-monthly multipliers:
+
+| Frequency | Multiplier |
+|-----------|-----------|
+| daily | 30 |
+| weekly | 4.33 |
+| biweekly | 2.17 |
+| monthly | 1 |
+| quarterly | 1/3 |
+| yearly | 1/12 |
+| custom | 30 / `custom_interval_days` |
+
+Each row's amount is converted to the display currency via `convertToTarget(amount, currency)` before being multiplied — this prevents raw multi-currency amounts from being summed in mismatched units.
+
+**Display:** The `<Money>` component for this card is rendered with the `signed` prop, so a net inflow displays an explicit leading `+` and a net outflow displays `−`. One-time (non-recurring) planned payments are excluded entirely; only rows where `is_recurring` is true contribute.
 
 ---
 

@@ -47,6 +47,14 @@ describe('normalizeDateInput', () => {
     expect(normalizeDateInput('')).toBeNull();
     expect(normalizeDateInput('not-a-date')).toBeNull();
   });
+
+  it('handles a pg local-midnight Date via local getters (was silently null)', () => {
+    // Previously String(Date) = "Sun Jun 01 2025 …" failed the regex → null →
+    // historical conversion fell back to today's rate at every DB-row call site.
+    expect(normalizeDateInput(new Date(2025, 5, 1))).toBe('2025-06-01');
+    expect(normalizeDateInput(new Date(2026, 0, 31))).toBe('2026-01-31');
+    expect(normalizeDateInput(new Date('invalid'))).toBeNull();
+  });
 });
 
 describe('fetchFromEcb', () => {

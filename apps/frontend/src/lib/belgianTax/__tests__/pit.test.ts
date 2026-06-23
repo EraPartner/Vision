@@ -974,3 +974,57 @@ describe('getTaxTable — nearest-year fallback (F2)', () => {
         expect(isApproximatedTaxYear(2030)).toBe(true);
     });
 });
+
+describe('union dues / medical expenses — base-deduction fix (R7-10)', () => {
+    test('medical expenses never reduce taxable income', () => {
+        const without = computeBelgianPIT({ ...baseProfile });
+        const withMedical = computeBelgianPIT({ ...baseProfile, medicalExpenses: 2000 });
+        expect(withMedical.taxableIncome).toBe(without.taxableIncome);
+        expect(withMedical.totalPIT).toBe(without.totalPIT);
+        expect(withMedical.deductions.medicalExpenses).toBe(0);
+    });
+
+    test('union dues do NOT deduct under the lump-sum forfait', () => {
+        const without = computeBelgianPIT({ ...baseProfile, professionalExpenseMethod: 'lump_sum' });
+        const withDues = computeBelgianPIT({ ...baseProfile, professionalExpenseMethod: 'lump_sum', unionDues: 300 });
+        expect(withDues.taxableIncome).toBe(without.taxableIncome);
+        expect(withDues.deductions.unionDues).toBe(0);
+    });
+
+    test('union dues deduct as actual professional expenses under the actual method', () => {
+        const without = computeBelgianPIT({
+            ...baseProfile,
+            professionalExpenseMethod: 'actual',
+            actualProfessionalExpenses: 1000,
+        });
+        const withDues = computeBelgianPIT({
+            ...baseProfile,
+            professionalExpenseMethod: 'actual',
+            actualProfessionalExpenses: 1000,
+            unionDues: 300,
+        });
+        expect(withDues.professionalExpenses).toBe(without.professionalExpenses + 300);
+        expect(withDues.taxableIncome).toBe(without.taxableIncome - 300);
+        expect(withDues.deductions.unionDues).toBe(300);
+    });
+});
+
+describe('breakdown reconciliation — property tax row (R7-12)', () => {
+    test('property tax appears as a breakdown row when estimated', () => {
+        const result = computeBelgianPIT({
+            ...baseProfile,
+            cadastralIncome: 1200,
+        });
+        if (result.propertyTaxEstimate > 0) {
+            const row = result.breakdown.find((r) => r.label === 'Property Tax (estimate)');
+            expect(row).toBeDefined();
+            expect(row?.amount).toBeCloseTo(-result.propertyTaxEstimate, 2);
+        }
+    });
+
+    test('gross PIT position row is labeled "before exemption", not "before credits"', () => {
+        const result = computeBelgianPIT({ ...baseProfile });
+        expect(result.breakdown.some((r) => r.label === 'Federal PIT (before exemption)')).toBe(true);
+        expect(result.breakdown.some((r) => r.label === 'Federal PIT (before credits)')).toBe(false);
+    });
+});
