@@ -1,4 +1,5 @@
 import { AlertTriangle, RefreshCw } from "lucide-react";
+import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { useOnlineStatus } from "@/hooks/useOnlineStatus";
@@ -27,30 +28,32 @@ export function StalePricesBanner({
   if (staleCount === 0) return null;
 
   return (
-    <div className="mb-4 flex items-start gap-2 rounded-md border border-warning/40 bg-warning/10 p-3 text-sm">
-      <AlertTriangle className="h-4 w-4 mt-0.5 text-warning shrink-0" />
-      <div className="flex-1 text-foreground/80">
-        {t("portfolio.stalePricesBanner", { n: String(staleCount) })}
-        {!isOnline && (
-          <span className="ml-1 text-muted-foreground">
-            {t("portfolio.refreshPricesOffline")}
-          </span>
+    <Alert variant="warning" className="mb-4">
+      <AlertTriangle className="h-4 w-4" />
+      <div className="flex items-start justify-between gap-3">
+        <AlertDescription>
+          {t("portfolio.stalePricesBanner", { n: String(staleCount) })}
+          {!isOnline && (
+            <span className="ml-1 text-muted-foreground">
+              {t("portfolio.refreshPricesOffline")}
+            </span>
+          )}
+        </AlertDescription>
+        {onRefresh && (
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            onClick={onRefresh}
+            disabled={isRefreshing || !isOnline}
+            title={!isOnline ? t("portfolio.refreshPricesOffline") : undefined}
+            className="h-7 shrink-0"
+          >
+            <RefreshCw className={`h-3.5 w-3.5 mr-1 ${isRefreshing ? "animate-spin" : ""}`} />
+            {t("portfolio.refreshPrices")}
+          </Button>
         )}
       </div>
-      {onRefresh && (
-        <Button
-          type="button"
-          variant="outline"
-          size="sm"
-          onClick={onRefresh}
-          disabled={isRefreshing || !isOnline}
-          title={!isOnline ? t("portfolio.refreshPricesOffline") : undefined}
-          className="h-7"
-        >
-          <RefreshCw className={`h-3.5 w-3.5 mr-1 ${isRefreshing ? "animate-spin" : ""}`} />
-          {t("portfolio.refreshPrices")}
-        </Button>
-      )}
-    </div>
+    </Alert>
   );
 }

@@ -63,10 +63,10 @@ const envSchema = z
         VITE_ENABLE_LOGGING: booleanEnv(true),
         // Per-account portfolio HOLDINGS UI (ADR-091/100). Default OFF (ADR-103).
         VITE_ENABLE_PER_ACCOUNT_HOLDINGS: booleanEnv(false),
-        // Dense-fintech visual skin ("skin-v2"). Default OFF — toggles the
-        // `.skin-v2` root class that the redesign CSS (styles/skin-v2.css) is
-        // scoped under. See lib/skin.ts.
-        VITE_SKIN_V2: booleanEnv(false),
+        // Colorblind-safe gain/loss recoloring ("skin-v2"). Default ON — toggles
+        // the `.skin-v2` root class (styles/skin-v2.css). Set false to opt out
+        // (legacy champagne-gold / red gain-loss). See lib/skin.ts.
+        VITE_SKIN_V2: booleanEnv(true),
     })
     .passthrough();
 
@@ -93,9 +93,9 @@ export const env: Readonly<FrontendEnv> = Object.freeze(parseEnv());
 export const isPerAccountHoldingsEnabled = env.VITE_ENABLE_PER_ACCOUNT_HOLDINGS as boolean;
 
 /**
- * Build-time default for the dense-fintech visual skin (skin-v2). A
- * localStorage override can flip it at runtime for before/after comparison —
- * see `lib/skin.ts`.
+ * Build-time default for the colorblind-safe gain/loss recoloring (skin-v2),
+ * now ON by default. A localStorage override can flip it at runtime — see
+ * `lib/skin.ts`. Set VITE_SKIN_V2=false to ship the legacy gold/red gain-loss.
  */
 export const isSkinV2Default = env.VITE_SKIN_V2 as boolean;
 

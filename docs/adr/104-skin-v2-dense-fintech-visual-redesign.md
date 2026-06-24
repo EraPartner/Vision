@@ -12,7 +12,7 @@ aliases: [skin-v2, dense fintech skin, visual redesign, fintech skin flag]
 
 ## Status
 
-Revised — 2026-06-23. The flattening redesign described below (atmosphere, glass, typography, motion, hover) was implemented behind the flag, reviewed, and **reverted** at the user's direction: the aurora, WebGL `ShaderAurora`, hybrid glass, and hover glow are all retained in the base design. The only surviving change is the **colorblind-safe gain/loss recoloring** (`.amount-gain`/`.amount-loss` + `--gain`/`--loss` tokens), still gated by `VITE_SKIN_V2`. The original goal — reducing the "AI-generated" feel while **preserving** the rich aesthetic — is reopened and unresolved. The decision detail below is retained as a record of the explored (and mostly reverted) direction.
+Revised — 2026-06-23. The flattening redesign described below (atmosphere, glass, typography, motion, hover) was implemented behind the flag, reviewed, and **reverted** at the user's direction: the aurora, WebGL `ShaderAurora`, hybrid glass, and hover glow are all retained in the base design. The only surviving change is the **colorblind-safe gain/loss recoloring** (`.amount-gain`/`.amount-loss` + `--gain`/`--loss` tokens), gated by `VITE_SKIN_V2` — **now ON by default** as of 2026-06-24 (set `VITE_SKIN_V2=false` to ship the legacy gold/red gain-loss). The original goal — reducing the "AI-generated" feel while **preserving** the rich aesthetic — is reopened and unresolved. The decision detail below is retained as a record of the explored (and mostly reverted) direction.
 
 ## Context
 

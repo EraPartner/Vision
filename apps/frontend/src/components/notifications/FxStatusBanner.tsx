@@ -1,6 +1,7 @@
 import { useQuery } from "@tanstack/react-query";
 import { AlertTriangle, X } from "lucide-react";
 import { useState } from "react";
+import { Alert, AlertDescription } from "@/components/ui/alert";
 import { apiClient } from "@/lib/api";
 import type { ExchangeRatesData } from "@/lib/api/info";
 import { useLanguage } from "@/contexts/LanguageContext";
@@ -57,17 +58,17 @@ export function FxStatusBanner() {
     };
 
     return (
-        <div className="mb-4 flex items-start gap-2 rounded-md border border-warning/40 bg-warning/10 p-3 text-sm">
-            <AlertTriangle className="h-4 w-4 mt-0.5 text-warning shrink-0" />
-            <div className="flex-1 text-foreground/80">{message}</div>
+        <Alert variant="warning" className="mb-4 pr-10">
+            <AlertTriangle className="h-4 w-4" />
+            <AlertDescription>{message}</AlertDescription>
             <button
                 type="button"
                 onClick={handleDismiss}
-                className="text-muted-foreground hover:text-foreground"
+                className="absolute right-3 top-3 text-foreground/50 transition-colors hover:text-foreground"
                 aria-label={t("layout.dismiss")}
             >
                 <X className="h-4 w-4" />
             </button>
-        </div>
+        </Alert>
     );
 }
