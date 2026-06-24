@@ -14,7 +14,7 @@
 services:
   db:
     volumes:
-      - postgres_data_clean:/var/lib/postgresql/data
+      - postgres_data_clean:/var/lib/postgresql
 
   app:
     build:
