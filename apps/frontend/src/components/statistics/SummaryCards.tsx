@@ -43,7 +43,7 @@ export function SummaryCards({ data }: SummaryCardsProps) {
       fullValue: netCompact.isCompact ? netCompact.full : undefined,
       icon: DollarSign,
       description: t("statsPage.overMonths", { n: data.monthlyData.length }),
-      className: net >= 0 ? "text-accent" : "text-destructive",
+      className: net >= 0 ? "amount-gain" : "amount-loss",
     },
     {
       title: t("statsPage.monthsTracked"),

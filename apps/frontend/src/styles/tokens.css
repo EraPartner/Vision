@@ -30,7 +30,7 @@
         --input: 40 18% 85%;
 
         /* -------- Brand -------- */
-        --primary: 158 62% 32%;
+        --primary: 164 78% 26%;
         /* emerald */
         --primary-foreground: 42 30% 97%;
 
@@ -38,7 +38,7 @@
         /* champagne gold */
         --accent-foreground: 200 18% 10%;
 
-        --ring: 158 62% 32%;
+        --ring: 164 78% 26%;
 
         /* -------- Semantic -------- */
         --destructive: 358 74% 48%;
@@ -47,7 +47,7 @@
         --warning: 38 80% 50%;
         --expense: 358 74% 44%;
 
-        --radius: 0.875rem;
+        --radius: 0.625rem;
 
         /* -------- Charts (glass-tuned palette) -------- */
         --chart-1: 158 62% 38%;
@@ -70,12 +70,12 @@
         /* -------- Sidebar -------- */
         --sidebar-background: 42 24% 96%;
         --sidebar-foreground: 200 14% 22%;
-        --sidebar-primary: 158 62% 32%;
+        --sidebar-primary: 164 78% 26%;
         --sidebar-primary-foreground: 42 30% 97%;
         --sidebar-accent: 42 18% 90%;
         --sidebar-accent-foreground: 200 18% 10%;
         --sidebar-border: 42 15% 85%;
-        --sidebar-ring: 158 62% 32%;
+        --sidebar-ring: 164 78% 26%;
 
         /* -------- Glass materials (Apple hierarchy) -------- */
         --glass-surface: 42 30% 99%;
@@ -104,8 +104,8 @@
         --duration-fast: 150ms;
         --duration-normal: 260ms;
         --duration-slow: 420ms;
-        --ease-out-expo: cubic-bezier(0.16, 1, 0.3, 1);
-        --ease-out-quint: cubic-bezier(0.22, 1, 0.36, 1);
+        --ease-out-expo: cubic-bezier(0.32, 0.72, 0, 1);
+        --ease-out-quint: cubic-bezier(0.32, 0.72, 0, 1);
         --ease-in-out-quart: cubic-bezier(0.77, 0, 0.175, 1);
 
         /* -------- Typography -------- */
@@ -138,7 +138,7 @@
         --input: 200 14% 18%;
 
         /* -------- Brand -------- */
-        --primary: 158 64% 52%;
+        --primary: 160 74% 52%;
         /* luminous emerald */
         --primary-foreground: 200 20% 6%;
 
@@ -146,7 +146,7 @@
         /* luminous gold */
         --accent-foreground: 200 20% 6%;
 
-        --ring: 158 64% 52%;
+        --ring: 160 74% 52%;
 
         /* -------- Semantic -------- */
         --destructive: 358 82% 62%;
@@ -176,12 +176,12 @@
         /* -------- Sidebar -------- */
         --sidebar-background: 200 22% 6%;
         --sidebar-foreground: 42 18% 82%;
-        --sidebar-primary: 158 64% 52%;
+        --sidebar-primary: 160 74% 52%;
         --sidebar-primary-foreground: 200 20% 6%;
         --sidebar-accent: 200 18% 12%;
         --sidebar-accent-foreground: 42 25% 96%;
         --sidebar-border: 200 14% 16%;
-        --sidebar-ring: 158 64% 52%;
+        --sidebar-ring: 160 74% 52%;
 
         /* -------- Glass (dark materials) -------- */
         --glass-surface: 200 22% 12%;

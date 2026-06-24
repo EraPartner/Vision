@@ -188,7 +188,7 @@ export default function PortfolioOverviewPage() {
       value: `${totalGainLossInTarget >= 0 ? '+' : ''}${fmt(totalGainLossInTarget)}`,
       icon: totalGainLossInTarget >= 0 ? TrendingUp : TrendingDown,
       desc: `${gainPercent >= 0 ? '+' : ''}${gainPercent.toFixed(1)}% ${t('networth.allTime')}`,
-      cls: totalGainLossInTarget >= 0 ? "text-accent" : "text-destructive",
+      cls: totalGainLossInTarget >= 0 ? "amount-gain" : "amount-loss",
       // Attribution: gain = asset performance + currency effect (FX feature).
       subline: hasFxExposure
         ? `${t('portfolio.assetGain')} ${totalAssetGainInTarget >= 0 ? '+' : ''}${fmt(totalAssetGainInTarget)} · ${t('portfolio.fxEffect')} ${totalFxGainInTarget >= 0 ? '+' : ''}${fmt(totalFxGainInTarget)}`
@@ -200,14 +200,14 @@ export default function PortfolioOverviewPage() {
       value: `${totalRealizedGainInTarget >= 0 ? '+' : ''}${fmt(totalRealizedGainInTarget)}`,
       icon: ArrowUpRight,
       desc: t('portfolio.fromClosedPositions'),
-      cls: totalRealizedGainInTarget >= 0 ? "text-accent" : "text-destructive"
+      cls: totalRealizedGainInTarget >= 0 ? "amount-gain" : "amount-loss"
     },
     {
       title: t('portfolio.unrealizedGains'),
       value: `${totalUnrealizedGainInTarget >= 0 ? '+' : ''}${fmt(totalUnrealizedGainInTarget)}`,
       icon: Clock,
       desc: t('portfolio.paperProfitLoss'),
-      cls: totalUnrealizedGainInTarget >= 0 ? "text-accent" : "text-destructive"
+      cls: totalUnrealizedGainInTarget >= 0 ? "amount-gain" : "amount-loss"
     },
   ];
 
@@ -348,11 +348,11 @@ export default function PortfolioOverviewPage() {
                     {[
                       { label: t('portfolio.totalInvested'), value: totalInvested, cls: 'text-foreground' },
                        { label: t('portfolio.currentValue'), value: totalPortfolioValueInTarget, cls: 'text-foreground' },
-                       { label: t('portfolio.realizedGains'), value: totalRealizedGainInTarget, cls: totalRealizedGainInTarget >= 0 ? 'text-accent' : 'text-destructive', showSign: true },
-                       { label: t('portfolio.unrealizedGains'), value: totalUnrealizedGainInTarget, cls: totalUnrealizedGainInTarget >= 0 ? 'text-accent' : 'text-destructive', showSign: true },
+                       { label: t('portfolio.realizedGains'), value: totalRealizedGainInTarget, cls: totalRealizedGainInTarget >= 0 ? 'amount-gain' : 'amount-loss', showSign: true },
+                       { label: t('portfolio.unrealizedGains'), value: totalUnrealizedGainInTarget, cls: totalUnrealizedGainInTarget >= 0 ? 'amount-gain' : 'amount-loss', showSign: true },
                       ...(hasFxExposure ? [
-                        { label: t('portfolio.assetGain'), value: totalAssetGainInTarget, cls: totalAssetGainInTarget >= 0 ? 'text-accent' : 'text-destructive', showSign: true },
-                        { label: t('portfolio.fxEffect'), value: totalFxGainInTarget, cls: totalFxGainInTarget >= 0 ? 'text-accent' : 'text-destructive', showSign: true },
+                        { label: t('portfolio.assetGain'), value: totalAssetGainInTarget, cls: totalAssetGainInTarget >= 0 ? 'amount-gain' : 'amount-loss', showSign: true },
+                        { label: t('portfolio.fxEffect'), value: totalFxGainInTarget, cls: totalFxGainInTarget >= 0 ? 'amount-gain' : 'amount-loss', showSign: true },
                       ] : []),
                       { label: t('portfolio.totalIncome'), value: totalIncome, cls: 'text-accent', showSign: true },
                        { label: t('portfolio.totalFees'), value: -totalFeesInTarget, cls: 'text-destructive' },
@@ -398,7 +398,7 @@ export default function PortfolioOverviewPage() {
                             </div>
                             <div className="text-right shrink-0">
                               <p className="font-bold text-sm tabular-nums">{fmt(convertToTarget(inv.currentValue, inv.currency))}</p>
-                              <p className={cn("text-xs tabular-nums font-medium", inv.totalGain >= 0 ? "text-accent" : "text-destructive")}>
+                              <p className={cn("text-xs tabular-nums font-medium", inv.totalGain >= 0 ? "amount-gain" : "amount-loss")}>
                                 {inv.totalGain >= 0 ? '+' : ''}{fmt(convertToTarget(inv.totalGain, inv.currency))} ({inv.gainLossPercent >= 0 ? '+' : ''}{inv.gainLossPercent.toFixed(1)}%)
                               </p>
                             </div>

@@ -2,13 +2,14 @@ import { useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { PageHeader } from "@/components/shared/PageHeader";
 import { EmptyState } from "@/components/shared/EmptyState";
+import { SectionLoader } from "@/components/shared/SectionLoader";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
     DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { Landmark, MoreVertical, Pencil, Archive, ArchiveRestore, Trash2, Loader2, GitMerge, DoorClosed } from "lucide-react";
+import { Landmark, MoreVertical, Pencil, Archive, ArchiveRestore, Trash2, GitMerge, DoorClosed } from "lucide-react";
 import { useAccounts, useUpdateAccount, useDeleteAccount } from "@/hooks/useAccounts";
 import { useCurrencyFormatter } from "@/hooks/useCurrencyFormatter";
 import { AddAccountDialog, type AccountFormValues } from "@/features/accounts/AddAccountDialog";
@@ -102,9 +103,7 @@ export default function AccountsPage() {
             />
 
             {isLoading && (
-                <div className="flex justify-center py-16 text-muted-foreground">
-                    <Loader2 className="h-6 w-6 animate-spin" />
-                </div>
+                <SectionLoader />
             )}
 
             {isError && (
@@ -130,7 +129,7 @@ export default function AccountsPage() {
                         return (
                         <Card
                             key={a.id}
-                            className={`glass-regular transition-shadow ${a.is_active ? "" : "opacity-60"} ${canViewTransactions ? "cursor-pointer hover:shadow-md" : ""}`}
+                            className={`glass-regular transition-shadow ${a.is_active ? "" : "opacity-60"} ${canViewTransactions ? "cursor-pointer hover:shadow-glass-soft" : ""}`}
                             onDoubleClick={canViewTransactions ? () => openAccountTransactions(a) : undefined}
                             title={canViewTransactions ? t('accounts.openTransactions') : undefined}
                         >

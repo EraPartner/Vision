@@ -46,7 +46,7 @@ export function StatCard({ title, value, numericValue, change, changeType = "neu
                 className="absolute top-0 right-0 w-32 h-32 bg-gradient-to-br from-background/40 to-transparent rounded-full -mr-16 -mt-16 transition-transform duration-500 group-hover:scale-110" />
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-3">
                 <CardTitle className="text-sm font-semibold text-muted-foreground">{title}</CardTitle>
-                <div className={`h-10 w-10 rounded-xl flex items-center justify-center ${iconBg} shadow-sm`}>
+                <div className={`h-10 w-10 rounded-xl flex items-center justify-center ${iconBg} shadow-[0_2px_8px_-2px_hsl(var(--primary)/0.25)]`}>
                     <Icon className="h-5 w-5" />
                 </div>
             </CardHeader>

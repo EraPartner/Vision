@@ -18,6 +18,7 @@ import { useAccounts } from "@/hooks/useAccounts";
 import { isPerAccountHoldingsEnabled } from "@/lib/env";
 import { toast } from "sonner";
 import { AlertTriangle, CheckCircle2, Loader2, PlusCircle } from "lucide-react";
+import { SectionLoader } from "@/components/shared/SectionLoader";
 import { apiClient } from "@/lib/api";
 import type { PortfolioPreviewGroup } from "@/lib/api/portfolioImports";
 
@@ -92,7 +93,7 @@ export function PortfolioImportReviewPage() {
   };
 
   if (isLoading) {
-    return <div className="flex justify-center p-12"><Loader2 className="h-6 w-6 animate-spin text-muted-foreground" /></div>;
+    return <SectionLoader />;
   }
   if (error || !data) {
     return <div className="p-6 text-destructive">{t("importPage.failed")}</div>;

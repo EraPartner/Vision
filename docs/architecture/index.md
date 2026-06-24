@@ -3,9 +3,9 @@ title: Architecture Diagrams
 type: architecture-index
 status: active
 date: 2026-04-27
-updated: 2026-06-10
-tags: [architecture, index, uml, plantuml, diagrams, phase-1, phase-2, phase-3, phase-e, frontend, api-client, openapi, domain-split, repository-split, statistics-refactoring, component-decomposition, refactoring, bug-fixes, csv, formula-injection, parallelization, deployment, container-hardening, backup, restore, bundle, electron, tags, tagging, orthogonal-dimension, may-2026, june-2026, route-service-boundary, thin-seams, global-rate-limiter, shared-utils, mv-recipient-monthly-drop]
-description: Index of all UML diagrams for the Vision project - backend, frontend, system, and sequence diagrams. June 2026 updates: backend-service-layer.puml adds 14 thin route-seam services (ADR-067); backend-api-layer.puml adds globalRateLimiter on /api + TRUSTED_PROXIES XFF handling + VISION_DEV dev-bypass flag.
+updated: 2026-06-23
+tags: [architecture, index, uml, plantuml, diagrams, phase-1, phase-2, phase-3, phase-e, frontend, api-client, openapi, domain-split, repository-split, statistics-refactoring, component-decomposition, refactoring, bug-fixes, csv, formula-injection, parallelization, deployment, container-hardening, backup, restore, bundle, electron, tags, tagging, orthogonal-dimension, may-2026, june-2026, route-service-boundary, thin-seams, global-rate-limiter, shared-utils, mv-recipient-monthly-drop, skin-v2, dense-fintech, css-scoping, inline-token-constraint, feature-flag, apple-refined, jewel-emerald, glass-differentiation, refined-geometry, hairlines, motion-spring]
+description: Index of all UML diagrams for the Vision project - backend, frontend, system, and sequence diagrams. June 2026 updates: ADR-105 Apple-refined visual pass baked into base design (--radius 0.625rem; Card rounded-[0.75rem]; differentiated glass-regular/glass-elevated shadows; jewel emerald primary 164 78% 26% light / 160 74% 52% dark; ease-out-quint/expo → cubic-bezier(0.32,0.72,0,1); press-feedback:active scale 0.97; tabular-nums letter-spacing -0.006em; 0.5px hairlines on hi-dpi; aurora/glass/hover retained). VITE_SKIN_V2 (ADR-104) now gates only colorblind-safe gain/loss recoloring; flatten direction abandoned. backend-service-layer.puml adds 14 thin route-seam services (ADR-067); backend-api-layer.puml adds globalRateLimiter on /api + TRUSTED_PROXIES XFF handling + VISION_DEV dev-bypass flag.
 aliases: [architecture, diagrams, UML, system design, backup architecture, electron IPC]
 ---
 
@@ -271,6 +271,66 @@ Documentation:
 - [[docs/features/backup-coverage-audit|Backup Coverage Audit]] — Coverage matrix, bundle format, restore process
 - [[docs/architecture/electron|Electron Architecture]] — IPC handlers, security model
 - [[docs/reference/api-endpoint-matrix#ipc-handlers--electron-desktop-phase-12|API Endpoint Matrix — IPC Section]]
+
+## Apple-Refined Visual Pass — base design (June 2026, ADR-105)
+
+[[docs/adr/105-apple-refined-visual-pass|ADR-105]] bakes an Apple-craft-inspired refinement pass into the base design. **These values apply at all times — they are not behind a flag.**
+
+The diagnosis: the "AI-generated" look is sameness (one shadow depth, one radius, one spacing step everywhere — the Tailwind/shadcn statistical mean), not richness. The fix is optical resolution within richness: differentiated elevation, tuned geometry, spring motion, bespoke accent.
+
+**Current base design token values** (verified from source):
+
+| Token / class | Value |
+|---|---|
+| `--radius` | `0.625rem` |
+| `Card` base radius | `rounded-[0.75rem]` |
+| `--ease-out-quint` | `cubic-bezier(0.32, 0.72, 0, 1)` |
+| `--ease-out-expo` | `cubic-bezier(0.32, 0.72, 0, 1)` |
+| `.press-feedback:active` | `scale(0.97)` |
+| `.tabular-nums` letter-spacing | `-0.006em` |
+| `--primary` (light) | `164 78% 26%` (jewel emerald) |
+| `--primary` (dark) | `160 74% 52%` (jewel emerald) |
+| `--ring` / `--sidebar-primary` / `--sidebar-ring` | mirror `--primary` per mode |
+
+**Glass elevation differentiation** — `glass-regular` (cards) vs `glass-elevated` (hero tiles) now have distinct shadow signatures. The previous state had nearly identical parameters on both tiers:
+
+- `glass-regular` specular: `inset 0 1px 0 hsl(--glass-highlight / 0.60)` light / `0.12` dark; exterior `0 6px 20px -8px`
+- `glass-elevated` specular: `inset 0 1px 0 hsl(--glass-highlight / 0.72)` light / `0.18` dark; exterior `0 18px 46px -16px`
+
+Glass backgrounds, blur levels, border, and `backdrop-filter` are untouched.
+
+**Hairlines**: `@media (min-resolution: 2dppx)` sets `border-width: 0.5px` on `.glass-regular`, `.premium-frame`, and `.glass-thin` for sub-pixel card borders on Retina displays.
+
+**What is retained (explicitly not changed)**: aurora CSS blobs, film grain, `liquid-canvas`, WebGL `ShaderAurora` (ADR-071), all glass material backgrounds/blur/border, `.micro-lift:hover` translate, `.premium-frame` hover glow, Fraunces/Inter font stack.
+
+**Deferred**: Apple's label-opacity text hierarchy (1.0/0.6/0.3/0.18) — needs a token-level change to avoid inconsistency with existing `muted-foreground` opacity variants.
+
+Documentation:
+- [[docs/adr/105-apple-refined-visual-pass|ADR-105: Apple-refined visual pass]]
+
+## Dense-Fintech Visual Skin — VITE_SKIN_V2 flag (June 2026, ADR-104)
+
+> [!info] Scope after ADR-105
+> The flatten direction explored in ADR-104 (atmosphere removal, flat glass, Inter headings, tight radius, calmed motion) was **abandoned**. `VITE_SKIN_V2` now gates **only** the colorblind-safe gain/loss recoloring (`.amount-gain`/`.amount-loss` → Okabe-Ito `--gain`/`--loss` tokens). The geometry, glass, typography, motion, and accent are now governed by the base design (ADR-105 above), not this flag.
+
+[[docs/adr/104-skin-v2-dense-fintech-visual-redesign|ADR-104]] ships `apps/frontend/src/styles/skin-v2.css` as a CSS layer that sits **outside every `@layer` block**, scoped under `:root.skin-v2`. The class is applied synchronously before the first React render by `applySkinV2Class()` (`lib/skin.ts`) from `main.tsx`.
+
+**Activation**: build-time `VITE_SKIN_V2=true` env flag (ADR-030 `booleanEnv`, **default `false`**) or `localStorage` override `vision_skin_v2`. Dev console helper: `window.__setSkinV2(true | false | undefined)`.
+
+**What skin-v2 currently changes** (surviving scope after the revert):
+- `.amount-gain` → `hsl(var(--gain))` — Okabe-Ito green `162 84% 30%` (light) / `160 65% 52%` (dark)
+- `.amount-loss` → `hsl(var(--loss))` — Okabe-Ito vermillion `24 85% 45%` (light) / `24 90% 62%` (dark)
+
+These are always paired with explicit +/− signs and directional arrows in component markup.
+
+**Critical inline-token constraint** (retained from ADR-104): `applyThemePalette()` in `themes.ts` writes all color tokens as `element.style.setProperty()` inline styles on `document.documentElement`. Skin-v2 CSS cannot override these tokens. Only structural tokens (`--radius`, blur sizes, aurora alphas, motion durations/easings) are freely overridable from CSS — but those are now governed by the base design, not by this flag.
+
+> [!note] ADR-075 compatibility
+> The ADR-075 visual-effects tier system (`fx-reduced`, `fx-static-atmosphere`) composes correctly with both ADR-104 and ADR-105. Tier system operates on `backdrop-filter` presence and aurora animation; neither this flag nor the base-design changes touch those mechanisms.
+
+Documentation:
+- [[docs/adr/104-skin-v2-dense-fintech-visual-redesign|ADR-104: Dense-fintech skin (revised)]]
+- [[docs/reference/code-patterns#scoped-skin-behind-a-flag-pattern-adr-104|Code Patterns — Scoped-skin flag pattern]]
 
 ## Frontend Design System — Liquid Glass v2 (June 2026, ADR-070)
 

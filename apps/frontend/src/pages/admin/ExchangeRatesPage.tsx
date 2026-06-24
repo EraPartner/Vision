@@ -1,7 +1,7 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { RefreshCw, Database, Globe, Loader2, AlertTriangle } from "lucide-react";
+import { RefreshCw, Database, Globe, AlertTriangle } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { apiClient } from "@/lib/api";
 import type { ExchangeRatesData } from "@/lib/api/info";
@@ -11,6 +11,7 @@ import { useLanguage } from '@/contexts/LanguageContext';
 import { useAppSettings } from "@/contexts/AppSettingsContext";
 import { formatDateTimeStringWithAppSettings } from "@/components/shared/dateUtils";
 import { PageHeader } from "@/components/shared/PageHeader";
+import { SectionLoader } from "@/components/shared/SectionLoader";
 
 export default function ExchangeRatesPage() {
     const { t } = useLanguage();
@@ -40,9 +41,7 @@ export default function ExchangeRatesPage() {
 
     if (isLoading) {
         return (
-            <div className="flex items-center justify-center h-64">
-                <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
-            </div>
+            <SectionLoader />
         );
     }
 

@@ -134,7 +134,7 @@ function PerformerRow({
   if (!entry) return null;
   const positive = entry.gainLossPercent >= 0;
   const Icon = kind === 'best' ? ArrowUpRight : ArrowDownRight;
-  const tone = positive ? 'text-accent' : 'text-destructive';
+  const tone = positive ? 'amount-gain' : 'amount-loss';
   return (
     <div className="flex items-center justify-between gap-2 py-1.5">
       <div className="flex items-center gap-2 min-w-0">
@@ -184,7 +184,7 @@ function Sparkline({ points, label, neutral = false }: { points: SparklinePoint[
         <span
           className={cn(
             'flex items-center gap-1 tabular-nums',
-            neutral ? 'text-muted-foreground' : delta >= 0 ? 'text-accent' : 'text-destructive'
+            neutral ? 'text-muted-foreground' : delta >= 0 ? 'amount-gain' : 'amount-loss'
           )}
         >
           <Trend className="h-3 w-3" aria-hidden />

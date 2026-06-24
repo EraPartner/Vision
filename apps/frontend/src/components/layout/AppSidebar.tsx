@@ -63,7 +63,7 @@ function ActiveRail() {
     <motion.span
       layoutId="sidebar-active-rail"
       aria-hidden="true"
-      className="absolute left-0 top-[15%] bottom-[15%] w-[3px] rounded-r-[2px] bg-gradient-to-b from-primary to-accent shadow-[0_0_14px_hsl(var(--primary)/0.6)]"
+      className="absolute left-0 top-[18%] bottom-[18%] w-[3px] rounded-r-full bg-primary"
       transition={reducedMotion ? { duration: 0 } : springs.snappy}
     />
   );

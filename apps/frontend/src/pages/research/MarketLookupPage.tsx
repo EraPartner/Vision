@@ -344,7 +344,7 @@ export default function MarketLookupPage() {
                       </span>
                       <span className={cn(
                         "text-lg font-semibold tabular-nums flex items-center gap-1",
-                        isPositive ? "text-accent" : "text-destructive"
+                        isPositive ? "amount-gain" : "amount-loss"
                       )}>
                         {isPositive ? <TrendingUp className="h-4 w-4" /> : <TrendingDown className="h-4 w-4" />}
                         {isPositive ? "+" : ""}{fmtPrice(quote.change, quote.currency)}

@@ -170,7 +170,7 @@ export default function ResearchHomePage() {
                   {quote ? (
                     <>
                       <p className="mt-2 text-lg font-bold tabular-nums">{numberFmt.format(quote.price)}</p>
-                      <p className={cn("text-xs font-medium tabular-nums", up ? "text-accent" : "text-destructive")}>
+                      <p className={cn("text-xs font-medium tabular-nums", up ? "amount-gain" : "amount-loss")}>
                         {up ? '+' : ''}{numberFmt.format(quote.change)} ({up ? '+' : ''}{pct!.toFixed(2)}%)
                       </p>
                     </>
@@ -259,7 +259,7 @@ export default function ResearchHomePage() {
                             ? <span className="font-mono text-sm font-bold">{item.symbol}</span>
                             : <span className="text-sm font-semibold truncate">{item.name}</span>}
                           {pct != null && (
-                            <span className={cn("ml-auto text-xs font-medium tabular-nums", up ? "text-accent" : "text-destructive")}>
+                            <span className={cn("ml-auto text-xs font-medium tabular-nums", up ? "amount-gain" : "amount-loss")}>
                               {up ? '+' : ''}{pct.toFixed(2)}%
                             </span>
                           )}
@@ -305,7 +305,7 @@ function EntryCard({ icon: Icon, title, desc, onClick }: EntryCardProps) {
   return (
     <button
       onClick={onClick}
-      className="text-left rounded-xl border border-border glass-regular p-4 hover:border-primary/50 hover:shadow-md transition-all group"
+      className="text-left rounded-xl border border-border glass-regular p-4 hover:border-primary/50 hover:shadow-glass-soft transition-all group"
     >
       <div className="flex items-center gap-3 mb-2">
         <div className="h-9 w-9 rounded-lg bg-primary/10 text-primary flex items-center justify-center">

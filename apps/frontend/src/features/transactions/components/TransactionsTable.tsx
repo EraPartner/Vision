@@ -223,7 +223,7 @@ export function TransactionsTable({
             defaultWidth: 90,
             minWidth: 70,
             render: (row: TableTransaction) => (
-                <span className={`font-mono font-medium whitespace-nowrap ${row.amount >= 0 ? 'text-accent' : 'text-destructive'
+                <span className={`font-mono font-medium whitespace-nowrap ${row.amount >= 0 ? 'amount-gain' : 'amount-loss'
                     } ${!row.is_active ? 'opacity-50 line-through' : ''}`}>
                     {row.amount >= 0 ? '+' : '-'}<Money amount={Math.abs(row.amount)} currency={row.currency} />
                 </span>

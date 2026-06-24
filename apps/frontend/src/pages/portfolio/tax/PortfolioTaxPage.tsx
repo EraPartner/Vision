@@ -479,13 +479,13 @@ export default function PortfolioTaxPage() {
                     <div className="space-y-2">
                       <div className="flex justify-between items-center py-1.5">
                         <span className="text-sm text-muted-foreground">{t("portfolio.realizedGains")}</span>
-                        <span className={cn("text-sm font-semibold tabular-nums", totalRealizedGain >= 0 ? "text-accent" : "text-destructive")}>
+                        <span className={cn("text-sm font-semibold tabular-nums", totalRealizedGain >= 0 ? "amount-gain" : "amount-loss")}>
                           {totalRealizedGain >= 0 ? "+" : ""}{fmt(totalRealizedGain)}
                         </span>
                       </div>
                       <div className="flex justify-between items-center py-1.5">
                         <span className="text-sm text-muted-foreground">{t("portfolio.unrealizedGains")}</span>
-                        <span className={cn("text-sm font-semibold tabular-nums", totalUnrealizedGain >= 0 ? "text-accent" : "text-destructive")}>
+                        <span className={cn("text-sm font-semibold tabular-nums", totalUnrealizedGain >= 0 ? "amount-gain" : "amount-loss")}>
                           {totalUnrealizedGain >= 0 ? "+" : ""}{fmt(totalUnrealizedGain)}
                         </span>
                       </div>

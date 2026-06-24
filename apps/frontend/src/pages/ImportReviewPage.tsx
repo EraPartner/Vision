@@ -19,6 +19,7 @@ import {
 } from "@/components/ui/accordion";
 import { RecipientCombobox } from "@/components/shared/RecipientCombobox";
 import { CategoryCombobox } from "@/components/shared/CategoryCombobox";
+import { SectionLoader } from "@/components/shared/SectionLoader";
 import { formatCurrency } from "@/utils/currency";
 import { useAppSettings } from "@/contexts/AppSettingsContext";
 import { numberFormatToLocale } from "@/utils/currency";
@@ -248,9 +249,7 @@ export default function ImportReviewPage() {
 
   if (isLoading) {
     return (
-      <div className="flex items-center justify-center min-h-[300px]">
-        <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
-      </div>
+      <SectionLoader />
     );
   }
 

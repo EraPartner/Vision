@@ -441,7 +441,7 @@ function RecentRecipientTransactionsTable({ recipientId, recipientName }: { reci
             defaultWidth: 120,
             minWidth: 100,
             render: (row: RecentRecipientTransactionRow) => (
-                <span className={`font-mono whitespace-nowrap ${row.amount >= 0 ? 'text-accent' : 'text-destructive'}`}>
+                <span className={`font-mono whitespace-nowrap ${row.amount >= 0 ? 'amount-gain' : 'amount-loss'}`}>
                     {row.amount >= 0 ? '+' : '-'}<Money amount={Math.abs(row.amount)} currency={row.currency} />
                 </span>
             ),

@@ -153,7 +153,7 @@ export default function RealEstatePage() {
             </CardTitle>
           </CardHeader>
           <CardContent className="pb-3 px-4">
-            <p className={cn("text-xl font-bold tabular-nums", totalAppreciation >= 0 ? "text-accent" : "text-destructive")}>
+            <p className={cn("text-xl font-bold tabular-nums", totalAppreciation >= 0 ? "amount-gain" : "amount-loss")}>
               {totalAppreciation >= 0 ? "+" : ""}{fmt(totalAppreciation)}
             </p>
           </CardContent>
@@ -193,7 +193,7 @@ export default function RealEstatePage() {
             <CardTitle className="text-xs font-medium text-muted-foreground">{t('portfolio.totalReturn')}</CardTitle>
           </CardHeader>
           <CardContent className="pb-3 px-4">
-            <p className={cn("text-xl font-bold tabular-nums", totalReturn >= 0 ? "text-accent" : "text-destructive")}>
+            <p className={cn("text-xl font-bold tabular-nums", totalReturn >= 0 ? "amount-gain" : "amount-loss")}>
               {totalReturn >= 0 ? "+" : ""}{fmt(totalReturn)}
             </p>
             <div className="mt-1 flex items-center gap-1.5">
@@ -279,7 +279,7 @@ export default function RealEstatePage() {
                      <p className="text-xs text-muted-foreground mb-1">{t('portfolio.appreciation')}</p>
                      <p className={cn(
                        "text-lg font-bold tabular-nums",
-                       p.totalAppreciation >= 0 ? "text-accent" : "text-destructive"
+                       p.totalAppreciation >= 0 ? "amount-gain" : "amount-loss"
                      )}>
                         {p.totalAppreciation >= 0 ? "+" : ""}{fmt(convertToTarget(p.totalAppreciation, p.currency))}
                      </p>

@@ -42,12 +42,12 @@ function getHeatColor(val: number | null, maxAbsPct: number): string {
     const ratio = absPct / scale;
     const strongMove = absPct >= 2.5 || ratio > 0.72;
     const mediumMove = absPct >= 1.0 || ratio > 0.42;
-    if (val > 0 && strongMove) return "bg-emerald-600 text-white";
-    if (val > 0 && mediumMove) return "bg-emerald-500 text-white";
-    if (val > 0) return "bg-emerald-400/80 text-emerald-950";
-    if (strongMove) return "bg-rose-600 text-white";
-    if (mediumMove) return "bg-rose-500 text-white";
-    return "bg-rose-400/80 text-rose-950";
+    if (val > 0 && strongMove) return "bg-success/70 text-foreground";
+    if (val > 0 && mediumMove) return "bg-success/40 text-foreground";
+    if (val > 0) return "bg-success/20 text-foreground";
+    if (strongMove) return "bg-destructive/70 text-foreground";
+    if (mediumMove) return "bg-destructive/45 text-foreground";
+    return "bg-destructive/20 text-foreground";
 }
 
 export default function PerformanceBreakdown({ heatmapData, breakdownSummary }: Props) {
@@ -119,7 +119,7 @@ export default function PerformanceBreakdown({ heatmapData, breakdownSummary }: 
                             <div className="text-xl font-bold text-foreground">
                                 <Money amount={classValue} currency={defaultCurrency} />
                             </div>
-                            <div className={`text-sm font-medium mt-1 ${classGain >= 0 ? "text-accent" : "text-destructive"}`}>
+                            <div className={`text-sm font-medium mt-1 ${classGain >= 0 ? "amount-gain" : "amount-loss"}`}>
                                 {classGain >= 0 ? "+" : ""}<Money amount={classGain} currency={defaultCurrency} /> ({classPct >= 0 ? "+" : ""}{classPct.toFixed(1)}%)
                             </div>
                             <div className="text-xs text-muted-foreground mt-1">
@@ -190,13 +190,13 @@ export default function PerformanceBreakdown({ heatmapData, breakdownSummary }: 
                         <div className="flex items-center justify-center gap-2 mt-4 text-xs text-muted-foreground">
                             <span>{t('performance.loss')}</span>
                             <div className="flex gap-0.5">
-                                <div className="w-6 h-4 rounded-sm bg-rose-600" />
-                                <div className="w-6 h-4 rounded-sm bg-rose-500" />
-                                <div className="w-6 h-4 rounded-sm bg-rose-400/80" />
+                                <div className="w-6 h-4 rounded-sm bg-destructive/70" />
+                                <div className="w-6 h-4 rounded-sm bg-destructive/45" />
+                                <div className="w-6 h-4 rounded-sm bg-destructive/20" />
                                 <div className="w-6 h-4 rounded-sm bg-muted" />
-                                <div className="w-6 h-4 rounded-sm bg-emerald-400/80" />
-                                <div className="w-6 h-4 rounded-sm bg-emerald-500" />
-                                <div className="w-6 h-4 rounded-sm bg-emerald-600" />
+                                <div className="w-6 h-4 rounded-sm bg-success/20" />
+                                <div className="w-6 h-4 rounded-sm bg-success/40" />
+                                <div className="w-6 h-4 rounded-sm bg-success/70" />
                             </div>
                             <span>{t('performance.gain')}</span>
                         </div>
@@ -222,7 +222,7 @@ export default function PerformanceBreakdown({ heatmapData, breakdownSummary }: 
                                         <p className="text-xs text-muted-foreground">{inv.symbol || inv.assetClass}</p>
                                     </div>
                                     <div className="text-right shrink-0">
-                                        <p className={`text-sm font-bold ${inv.gainLossPercent >= 0 ? "text-accent" : "text-destructive"}`}>
+                                        <p className={`text-sm font-bold ${inv.gainLossPercent >= 0 ? "amount-gain" : "amount-loss"}`}>
                                             {inv.gainLossPercent >= 0 ? "+" : ""}{inv.gainLossPercent.toFixed(1)}%
                                         </p>
                                         <p className="text-xs text-muted-foreground">
@@ -256,7 +256,7 @@ export default function PerformanceBreakdown({ heatmapData, breakdownSummary }: 
                                         <p className="text-xs text-muted-foreground">{inv.symbol || inv.assetClass}</p>
                                     </div>
                                     <div className="text-right shrink-0">
-                                        <p className={`text-sm font-bold ${inv.gainLossPercent >= 0 ? "text-accent" : "text-destructive"}`}>
+                                        <p className={`text-sm font-bold ${inv.gainLossPercent >= 0 ? "amount-gain" : "amount-loss"}`}>
                                             {inv.gainLossPercent >= 0 ? "+" : ""}{inv.gainLossPercent.toFixed(1)}%
                                         </p>
                                         <p className="text-xs text-muted-foreground">

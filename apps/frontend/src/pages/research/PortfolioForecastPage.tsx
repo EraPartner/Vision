@@ -295,7 +295,7 @@ export default function PortfolioForecastPage() {
                 {forecast.forwardHoldings.map((h) => (
                   <Badge key={h.symbol} variant="secondary" className="gap-1.5 py-1">
                     <span className="font-mono">{h.symbol}</span>
-                    <span className={cn("tabular-nums", h.expectedAnnual >= 0 ? "text-accent" : "text-destructive")}>
+                    <span className={cn("tabular-nums", h.expectedAnnual >= 0 ? "amount-gain" : "amount-loss")}>
                       {fmtPct(h.expectedAnnual, true)}
                     </span>
                   </Badge>

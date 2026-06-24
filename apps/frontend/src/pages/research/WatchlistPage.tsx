@@ -22,9 +22,9 @@ import { toast } from "sonner";
 import { apiClient } from "@/lib/api";
 
 const ASSET_CLASS_COLORS: Record<string, string> = {
-  stock: "bg-blue-500/10 text-blue-500 border-blue-500/20",
-  etf: "bg-emerald-500/10 text-emerald-500 border-emerald-500/20",
-  crypto: "bg-amber-500/10 text-warning border-amber-500/20",
+  stock: "bg-chart-3/10 text-chart-3 border-chart-3/20",
+  etf: "bg-chart-1/10 text-chart-1 border-chart-1/20",
+  crypto: "bg-warning/10 text-warning border-warning/20",
 };
 
 export default function WatchlistPage() {
@@ -163,7 +163,7 @@ export default function WatchlistPage() {
                 tabIndex={0}
                 aria-label={item.name}
                 className={cn(
-                  "glass-regular premium-frame micro-lift cursor-pointer transition-all hover:shadow-md hover:border-primary/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50",
+                  "glass-regular premium-frame micro-lift cursor-pointer transition-all hover:shadow-glass-soft hover:border-primary/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50",
                   isBelowTarget && "ring-2 ring-success/50"
                 )}
                 onDoubleClick={() => handleDoubleClick(item)}
@@ -232,7 +232,7 @@ export default function WatchlistPage() {
                   {sinceAddedPct != null && (
                     <div className="flex items-center justify-between rounded-md bg-muted/40 px-2 py-1.5 text-xs">
                       <span className="text-muted-foreground">{t('watchlist.sinceAdded', { date: addedDate })}</span>
-                      <span className={cn('font-medium tabular-nums', sinceAddedPct >= 0 ? 'text-success' : 'text-destructive')}>
+                      <span className={cn('font-medium tabular-nums', sinceAddedPct >= 0 ? 'amount-gain' : 'amount-loss')}>
                         {sinceAddedPct >= 0 ? '+' : ''}{sinceAddedPct.toFixed(1)}%
                       </span>
                     </div>

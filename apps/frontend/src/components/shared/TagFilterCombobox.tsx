@@ -53,7 +53,7 @@ export function TagFilterCombobox({ value, onChange, disabled, className }: TagF
                     <ChevronsUpDown className="ml-1 h-3 w-3 shrink-0 opacity-50" />
                 </Button>
             </PopoverTrigger>
-            <PopoverContent className="w-[260px] p-0 bg-popover border border-border shadow-lg z-50" align="start">
+            <PopoverContent className="w-[260px] p-0 z-50" align="start">
                 <Command>
                     <CommandInput placeholder={t('combobox.tags.search')} />
                     <CommandList>

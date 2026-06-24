@@ -49,7 +49,7 @@ export function InvestmentTaxBreakdownTable({ investments, fmt, convertToTarget,
                     {t("tax.fees")}: {fmt(inv.recordedFees)} + {fmt(inv.manualFees)}
                   </span>
                   {inv.realizedGain !== 0 && (
-                    <span className={inv.realizedGain >= 0 ? "text-accent" : "text-destructive"}>
+                    <span className={inv.realizedGain >= 0 ? "amount-gain" : "amount-loss"}>
                       {t("tax.realized")}: {inv.realizedGain >= 0 ? "+" : ""}{fmt(convertToTarget(inv.realizedGain, inv.currency))}
                     </span>
                   )}

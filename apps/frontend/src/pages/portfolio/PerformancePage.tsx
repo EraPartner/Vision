@@ -14,12 +14,13 @@ import {
     type ChartPeriod,
 } from "@/components/charts";
 import {
-    TrendingUp, TrendingDown, BarChart3, Loader2, Percent,
+    TrendingUp, TrendingDown, BarChart3, Percent,
     DollarSign, Activity,
 } from "lucide-react";
 import { formatDate, parseISO } from "@/components/shared/dateUtils";
 import { useAppSettings } from "@/contexts/AppSettingsContext";
 import { PageHeader } from "@/components/shared/PageHeader";
+import { SectionLoader } from "@/components/shared/SectionLoader";
 import PerformanceBreakdown from "@/components/portfolio/PerformanceBreakdown";
 import { Button } from "@/components/ui/button";
 import { RefreshCw } from "lucide-react";
@@ -186,11 +187,7 @@ export default function PerformancePage() {
         return (
             <div className="space-y-6">
                 <PageHeader title={t('performance.title')} icon={BarChart3} />
-                <Card className="glass-regular">
-                    <CardContent className="flex items-center justify-center h-48">
-                        <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
-                    </CardContent>
-                </Card>
+                <SectionLoader />
             </div>
         );
     }
@@ -439,7 +436,7 @@ function TotalValueCard({
     const iconBg = isGain
         ? "bg-gradient-to-br from-success/20 to-success/10 text-success"
         : "bg-gradient-to-br from-destructive/20 to-destructive/10 text-destructive";
-    const gainToneClass = isGain ? "text-success" : "text-destructive";
+    const gainToneClass = isGain ? "amount-gain" : "amount-loss";
 
     return (
         <Card
@@ -524,9 +521,9 @@ interface AssetAllocationBarProps {
 
 function AssetAllocationBar({ split, currency, labels }: AssetAllocationBarProps) {
     const rows = [
-        { key: "stocksEtfs", label: labels.stocksEtfs, pct: split.stocksEtfs.pct, value: split.stocksEtfs.value, color: "bg-rose-500" },
-        { key: "crypto", label: labels.crypto, pct: split.crypto.pct, value: split.crypto.value, color: "bg-emerald-500" },
-        { key: "metals", label: labels.metals, pct: split.metals.pct, value: split.metals.value, color: "bg-amber-500" },
+        { key: "stocksEtfs", label: labels.stocksEtfs, pct: split.stocksEtfs.pct, value: split.stocksEtfs.value, color: "bg-chart-1" },
+        { key: "crypto", label: labels.crypto, pct: split.crypto.pct, value: split.crypto.value, color: "bg-chart-2" },
+        { key: "metals", label: labels.metals, pct: split.metals.pct, value: split.metals.value, color: "bg-chart-3" },
     ].filter((r) => r.pct > 0);
 
     if (rows.length === 0) return null;

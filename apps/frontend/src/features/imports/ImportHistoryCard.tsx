@@ -7,6 +7,7 @@ import { apiClient } from "@/lib/api";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { toast } from "sonner";
 import { formatDate, parseISO } from "@/components/shared/dateUtils";
+import { SectionLoader } from "@/components/shared/SectionLoader";
 import {
   Card,
   CardContent,
@@ -238,9 +239,7 @@ export function ImportHistoryCard({ refreshKey }: { refreshKey?: number }) {
       </CardHeader>
       <CardContent>
         {loading && batches.length === 0 ? (
-          <div className="flex items-center justify-center py-8">
-            <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
-          </div>
+          <SectionLoader />
         ) : batches.length === 0 ? (
           <p className="text-sm text-muted-foreground text-center py-8">
             {t("importHistory.empty")}

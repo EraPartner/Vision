@@ -1,0 +1,36 @@
+/* ==================================================================
+ * skin-v2 — flag-gated visual layer (ADR-104)
+ *
+ * SCOPE (narrowed 2026-06-23 per user direction): an earlier iteration used
+ * this layer to flatten the glass/aurora and calm motion/hover — that whole
+ * direction was reverted. The aurora, WebGL ShaderAurora, hybrid glass, and
+ * hover glow all remain part of the base design, untouched.
+ *
+ * What remains here is ONLY the colorblind-safe gain/loss recoloring, still
+ * behind the .skin-v2 flag. Every rule is scoped under :root.skin-v2 and lives
+ * outside any @layer, so it is inert when the class is absent (flag off →
+ * legacy champagne-gold / red) and wins over Tailwind's layers when present.
+ * ================================================================== */
+
+/* Okabe-Ito colorblind-safe gain/loss tokens (light + dark). */
+:root.skin-v2 {
+    --gain: 162 84% 30%;
+    --loss: 24 85% 45%;
+}
+
+:root.skin-v2.dark {
+    --gain: 160 65% 52%;
+    --loss: 24 90% 62%;
+}
+
+/* Remap the semantic gain/loss classes to the colorblind-safe tokens. The
+   legacy skin keeps gold/red (index.css). Pure CSS, reactive, no per-component
+   branch. The +/- sign shown alongside the value is the non-color cue that
+   satisfies "never rely on color alone". */
+:root.skin-v2 .amount-gain {
+    color: hsl(var(--gain));
+}
+
+:root.skin-v2 .amount-loss {
+    color: hsl(var(--loss));
+}

@@ -46,7 +46,7 @@ export function RecipientCombobox({ value, onSelect, disabled, className, portal
                     <ChevronsUpDown className="ml-1 h-3 w-3 shrink-0 opacity-50" />
                 </Button>
             </PopoverTrigger>
-            <PopoverContent container={portalContainer} className="w-[280px] p-0 bg-popover border border-border shadow-lg z-[200]" align="start">
+            <PopoverContent container={portalContainer} className="w-[280px] p-0 z-[200]" align="start">
                 <Command>
                     <CommandInput
                         placeholder={t('combobox.recipient.search')}

@@ -47,8 +47,8 @@ function mapeLabel(mape: number): string {
 
 function RankBadge({ rank }: { rank: number }) {
     if (rank === 1) return <Badge className="text-[10px] px-1.5 py-0 h-4 bg-warning/20 text-warning border-0">#{rank}</Badge>;
-    if (rank === 2) return <Badge className="text-[10px] px-1.5 py-0 h-4 bg-slate-400/20 text-slate-600 dark:text-slate-400 border-0">#{rank}</Badge>;
-    if (rank === 3) return <Badge className="text-[10px] px-1.5 py-0 h-4 bg-orange-400/20 text-orange-700 dark:text-orange-400 border-0">#{rank}</Badge>;
+    if (rank === 2) return <Badge className="text-[10px] px-1.5 py-0 h-4 bg-muted-foreground/20 text-muted-foreground border-0">#{rank}</Badge>;
+    if (rank === 3) return <Badge className="text-[10px] px-1.5 py-0 h-4 bg-chart-5/20 text-chart-5 border-0">#{rank}</Badge>;
     return <span className="text-xs text-muted-foreground">#{rank}</span>;
 }
 

@@ -25,6 +25,7 @@ import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
 import { toast } from "sonner";
 import { Loader2, Plus, Trash2, Eye } from "lucide-react";
+import { SectionLoader } from "@/components/shared/SectionLoader";
 import { useConfirmDialog } from "@/hooks/useConfirmDialog";
 
 type PatternKind = "literal_prefix" | "glob" | "regex";
@@ -187,9 +188,9 @@ export function RecipientPatternsDialog({
     const showForm = addingNew || editingId != null;
 
     const kindBadgeColor: Record<PatternKind, string> = {
-        literal_prefix: "bg-blue-100 text-blue-700 dark:bg-blue-900/40 dark:text-blue-300",
-        glob: "bg-purple-100 text-purple-700 dark:bg-purple-900/40 dark:text-purple-300",
-        regex: "bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-300",
+        literal_prefix: "bg-chart-3/15 text-chart-3",
+        glob: "bg-chart-4/15 text-chart-4",
+        regex: "bg-chart-8/15 text-chart-8",
     };
 
     const kindLabel: Record<PatternKind, string> = {
@@ -214,9 +215,7 @@ export function RecipientPatternsDialog({
                     <div className="space-y-4">
                         {/* Pattern list */}
                         {isLoading ? (
-                            <div className="flex items-center justify-center py-8">
-                                <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
-                            </div>
+                            <SectionLoader />
                         ) : patterns.length === 0 && !showForm ? (
                             <p className="text-sm text-muted-foreground py-4 text-center">
                                 {t("recipientPatterns.empty")}

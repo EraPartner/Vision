@@ -30,7 +30,7 @@ export function SuggestionCard() {
     <Card className="glass-elevated premium-frame relative overflow-hidden animate-in">
       <div className="absolute inset-0 pointer-events-none rounded-[inherit] bg-gradient-to-br from-primary/10 to-primary/5" />
       <CardContent className="relative flex flex-col gap-3 p-4 sm:flex-row sm:items-center sm:gap-4">
-        <div className="h-11 w-11 shrink-0 rounded-xl bg-gradient-to-br from-primary/20 to-primary/10 flex items-center justify-center shadow-sm text-primary">
+        <div className="h-11 w-11 shrink-0 rounded-xl bg-gradient-to-br from-primary/20 to-primary/10 flex items-center justify-center shadow-[0_2px_8px_-2px_hsl(var(--primary)/0.25)] text-primary">
           <CalendarClock className="h-5 w-5" />
         </div>
 

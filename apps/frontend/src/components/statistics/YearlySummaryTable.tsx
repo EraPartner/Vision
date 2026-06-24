@@ -53,7 +53,7 @@ export function YearlySummaryTable({ data }: YearlySummaryTableProps) {
                   </td>
                   <td
                     className={`text-right py-2 px-3 font-bold tabular-nums ${
-                      y.net >= 0 ? "text-accent" : "text-destructive"
+                      y.net >= 0 ? "amount-gain" : "amount-loss"
                     }`}
                   >
                     <span title={netR.isCompact ? netR.full : undefined}>{netR.display}</span>

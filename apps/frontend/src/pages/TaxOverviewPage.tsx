@@ -28,7 +28,6 @@ import {
   Calculator,
   CircleHelp,
   BadgePercent,
-  Loader2,
   ListChecks,
 } from "lucide-react";
 import { BarChart, type BarSeries } from "@/components/charts";
@@ -41,6 +40,7 @@ import { WidgetVisibilityDialog } from "@/components/shared/WidgetVisibilityDial
 import { useWidgetVisibility, type WidgetDefinition } from "@/hooks/useWidgetVisibility";
 import { cn } from "@/lib/utils";
 import { PageHeader } from "@/components/shared/PageHeader";
+import { SectionLoader } from "@/components/shared/SectionLoader";
 import { ExportDialog } from "@/components/reports/ExportDialog";
 
 function getBudgetTaxWidgets(t: (key: string) => string): WidgetDefinition[] {
@@ -273,7 +273,7 @@ export default function TaxOverviewPage() {
       value: fmt(calculation.netTakeHome),
       icon: TrendingDown,
       desc: t("tax.card.netTakeHome.desc"),
-      cls: calculation.netTakeHome >= 0 ? "text-accent" : "text-destructive",
+      cls: calculation.netTakeHome >= 0 ? "amount-gain" : "amount-loss",
     },
     {
       title: t("tax.card.monthlyTaxReserve"),
@@ -427,12 +427,7 @@ export default function TaxOverviewPage() {
             </Card>
 
         {isProfileLoading ? (
-          <Card className="glass-regular">
-            <CardContent className="flex flex-col items-center justify-center py-16 text-center">
-              <Loader2 className="h-8 w-8 text-muted-foreground/60 animate-spin mb-3" />
-              <p className="text-sm text-muted-foreground">{t('common.loading')}</p>
-            </CardContent>
-          </Card>
+          <SectionLoader />
         ) : isEmpty ? (
           <Card className="glass-regular">
             <CardContent className="flex flex-col items-center justify-center py-16 text-center">

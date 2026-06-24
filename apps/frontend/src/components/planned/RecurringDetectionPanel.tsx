@@ -7,12 +7,13 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import {
     Repeat, AlertTriangle, CheckCircle2, TrendingUp, TrendingDown,
-    Calendar, Loader2, Sparkles, ChevronDown, ChevronUp, Plus, X,
+    Calendar, Sparkles, ChevronDown, ChevronUp, Plus, X,
 } from "lucide-react";
 import { toast } from "sonner";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { useAppSettings } from "@/contexts/AppSettingsContext";
 import { formatDateStringWithAppSettings } from "@/components/shared/dateUtils";
+import { SectionLoader } from "@/components/shared/SectionLoader";
 
 const DISMISSED_PATTERNS_STORAGE_KEY = "dismissed_recurring_patterns";
 
@@ -182,8 +183,8 @@ export function RecurringDetectionPanel({ onCreatePlanned }: Props) {
                         {t('recurring.loading')}
                     </CardTitle>
                 </CardHeader>
-                <CardContent className="flex items-center justify-center py-6">
-                    <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
+                <CardContent>
+                    <SectionLoader />
                 </CardContent>
             </Card>
         );

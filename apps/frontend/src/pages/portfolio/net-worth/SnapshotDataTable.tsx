@@ -98,7 +98,7 @@ export function SnapshotDataTable({
       render: (row: BreakdownRow) => {
         if (row.change === undefined) return '—';
         return (
-          <span className={cn("font-medium", row.change >= 0 ? "text-accent" : "text-destructive")}>
+          <span className={cn("font-medium", row.change >= 0 ? "amount-gain" : "amount-loss")}>
             {row.change >= 0 ? "+" : ""}{fmt(row.change)}
           </span>
         );

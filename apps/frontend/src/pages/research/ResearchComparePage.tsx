@@ -458,7 +458,7 @@ export default function ResearchComparePage() {
                           </span>
                         </TableCell>
                         <TableCell className={cn("text-right tabular-nums",
-                          row.totalReturn == null ? "" : row.totalReturn >= 0 ? "text-accent" : "text-destructive")}>
+                          row.totalReturn == null ? "" : row.totalReturn >= 0 ? "amount-gain" : "amount-loss")}>
                           {fmtPct(row.totalReturn)}
                         </TableCell>
                         <TableCell className="text-right tabular-nums">{fmtPct(row.volatility)}</TableCell>

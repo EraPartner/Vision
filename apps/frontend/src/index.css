@@ -4,6 +4,9 @@
 @import "./styles/tokens.css";
 
 @import "tailwindcss";
+/* Flag-gated gain/loss recoloring — scoped under `.skin-v2`, unlayered so it
+   wins over Tailwind's layers. Inert unless the class is present (lib/skin.ts). */
+@import "./styles/skin-v2.css";
 @config '../tailwind.config.ts';
 
 /* ------------------------------------------------------------------
@@ -240,9 +243,8 @@
             );
         border: 1px solid hsl(var(--glass-border) / 0.1);
         box-shadow:
-            0 1px 0 hsl(var(--glass-highlight) / 0.42) inset,
-            0 -1px 0 hsl(var(--glass-shadow) / 0.08) inset,
-            0 8px 28px hsl(var(--glass-shadow) / 0.08);
+            inset 0 1px 0 hsl(var(--glass-highlight) / 0.6),
+            0 6px 20px -8px hsl(var(--glass-shadow) / 0.14);
     }
 
     .dark .glass-regular,
@@ -258,9 +260,8 @@
             );
         border: 1px solid hsl(var(--glass-border) / 0.08);
         box-shadow:
-            0 1px 0 hsl(var(--glass-highlight) / 0.08) inset,
-            0 -1px 0 hsl(0 0% 0% / 0.3) inset,
-            0 12px 36px hsl(0 0% 0% / 0.38);
+            inset 0 1px 0 hsl(var(--glass-highlight) / 0.12),
+            0 8px 24px -8px hsl(0 0% 0% / 0.5);
     }
 
     /* Thick — dialogs, popovers, important overlays */
@@ -353,10 +354,8 @@
             );
         border: 1px solid hsl(var(--glass-border) / 0.16);
         box-shadow:
-            0 1px 0 hsl(var(--glass-highlight) / 0.55) inset,
-            0 -1px 0 hsl(var(--glass-shadow) / 0.1) inset,
-            0 8px 16px hsl(var(--glass-shadow) / 0.14),
-            0 28px 72px -24px hsl(var(--glass-shadow) / 0.28);
+            inset 0 1px 0 hsl(var(--glass-highlight) / 0.72),
+            0 18px 46px -16px hsl(var(--glass-shadow) / 0.30);
     }
 
     .dark .glass-elevated,
@@ -370,10 +369,8 @@
             );
         border: 1px solid hsl(var(--glass-border) / 0.12);
         box-shadow:
-            0 1px 0 hsl(var(--glass-highlight) / 0.12) inset,
-            0 -1px 0 hsl(0 0% 0% / 0.35) inset,
-            0 8px 16px hsl(0 0% 0% / 0.42),
-            0 36px 88px -28px hsl(0 0% 0% / 0.6);
+            inset 0 1px 0 hsl(var(--glass-highlight) / 0.18),
+            0 22px 56px -18px hsl(0 0% 0% / 0.72);
     }
 
     /* Trend accents — layered on top of glass-regular */
@@ -784,7 +781,7 @@
     }
 
     .press-feedback:active {
-        transform: scale(0.98);
+        transform: scale(0.97);
     }
 
     .premium-icon-action {
@@ -930,6 +927,30 @@
 
     .tabular-nums {
         font-variant-numeric: tabular-nums;
+        letter-spacing: -0.006em;
+    }
+
+    /* True 0.5px hairlines on hi-dpi displays (Apple-grade crispness). */
+    @media (min-resolution: 2dppx) {
+        .glass-regular,
+        .premium-frame,
+        .glass-thin {
+            border-width: 0.5px;
+        }
+    }
+
+    /* Semantic gain/loss colors. The legacy skin keeps the existing mapping
+       (champagne-gold gain / red loss); skin-v2 remaps these to colorblind-safe
+       Okabe-Ito tokens (styles/skin-v2.css). Routing gain/loss through a
+       semantic class — instead of text-accent/text-destructive directly — lets
+       the skin swap the hue without recoloring unrelated accent or destructive
+       (delete/error) UI, and with no per-component skin branch. */
+    .amount-gain {
+        color: hsl(var(--accent));
+    }
+
+    .amount-loss {
+        color: hsl(var(--destructive));
     }
 
     /* Expense color override — preserved for compat */

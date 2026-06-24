@@ -58,7 +58,7 @@ export function NetSummaryCard({ netBalance, income, spending, history }: NetSum
   const areaStroke = isPositive ? "var(--color-accent, oklch(72% 0.15 160))" : "var(--color-destructive, oklch(65% 0.2 25))";
 
   const shownNet = scrubPoint ? scrubPoint.net : netBalance;
-  const netColor = shownNet >= 0 ? "text-accent" : "text-destructive";
+  const netColor = shownNet >= 0 ? "amount-gain" : "amount-loss";
   const netCompact = formatCompact(shownNet);
   const incomeCompact = formatCompact(incomeTotal);
   const spendingCompact = formatCompact(spendingTotal);
@@ -79,7 +79,7 @@ export function NetSummaryCard({ netBalance, income, spending, history }: NetSum
             {isPositive ? t('dashboard.stat.positiveCashFlow') : t('dashboard.stat.negativeCashFlow')}
           </p>
         </div>
-        <div className={`h-11 w-11 rounded-xl flex items-center justify-center shadow-sm transition-transform duration-300 group-hover:scale-105 bg-gradient-to-br ${isPositive ? 'from-accent/20 to-accent/10 text-accent' : 'from-destructive/20 to-destructive/10 text-destructive'}`}>
+        <div className={`h-11 w-11 rounded-xl flex items-center justify-center shadow-[0_2px_8px_-2px_hsl(var(--primary)/0.25)] transition-transform duration-300 group-hover:scale-105 bg-gradient-to-br ${isPositive ? 'from-accent/20 to-accent/10 text-accent' : 'from-destructive/20 to-destructive/10 text-destructive'}`}>
           <DollarSign className="h-5 w-5" />
         </div>
       </CardHeader>

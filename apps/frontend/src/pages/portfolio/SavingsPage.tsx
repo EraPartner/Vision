@@ -160,7 +160,7 @@ export default function SavingsPage() {
           
           return (
             <Card key={a.id} className={cn(
-              "transition-all hover:shadow-md",
+              "transition-all hover:shadow-glass-soft",
               isMatured && "border-accent",
               isMaturingSoon && "border-primary"
             )}>

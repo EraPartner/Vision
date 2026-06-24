@@ -341,7 +341,7 @@ export function CommandPalette({ open, onOpenChange, onOpenSettings, onOpenShort
                                         </span>
                                         <span className={cn(
                                             "text-xs font-semibold",
-                                            tickerQuote.change >= 0 ? "text-accent" : "text-destructive",
+                                            tickerQuote.change >= 0 ? "amount-gain" : "amount-loss",
                                         )}>
                                             {tickerQuote.change >= 0 ? "+" : "−"}{Math.abs(tickerQuote.changePercent).toFixed(2)}%
                                         </span>

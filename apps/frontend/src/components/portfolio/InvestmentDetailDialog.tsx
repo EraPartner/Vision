@@ -219,13 +219,13 @@ export function InvestmentDetailDialog({
                     </div>
                     <p className={cn(
                       "text-2xl font-bold tabular-nums",
-                      investment.totalGain >= 0 ? "text-accent" : "text-destructive"
+                      investment.totalGain >= 0 ? "amount-gain" : "amount-loss"
                     )}>
                       {investment.totalGain >= 0 ? '+' : ''}{fmt(investment.totalGain, investment.currency)}
                     </p>
                     <p className={cn(
                       "text-sm tabular-nums",
-                      investment.gainLossPercent >= 0 ? "text-accent" : "text-destructive"
+                      investment.gainLossPercent >= 0 ? "amount-gain" : "amount-loss"
                     )}>
                       {investment.gainLossPercent >= 0 ? '+' : ''}{fmtNum(investment.gainLossPercent)}%
                     </p>
@@ -302,7 +302,7 @@ export function InvestmentDetailDialog({
                           </span>
                         <span className={cn(
                           "font-medium tabular-nums",
-                          investment.realizedGain >= 0 ? "text-accent" : "text-destructive"
+                          investment.realizedGain >= 0 ? "amount-gain" : "amount-loss"
                         )}>
                           {investment.realizedGain >= 0 ? '+' : ''}{fmt(investment.realizedGain, investment.currency)}
                         </span>
@@ -312,7 +312,7 @@ export function InvestmentDetailDialog({
                           <span className="text-muted-foreground text-xs">FX-aware {t('invDetail.realizedGain')} ({fxAwareCurrency})</span>
                           <span className={cn(
                             "font-medium tabular-nums",
-                            fxAwarePnl.realizedTarget >= 0 ? "text-accent" : "text-destructive"
+                            fxAwarePnl.realizedTarget >= 0 ? "amount-gain" : "amount-loss"
                           )}>
                             {fxAwarePnl.realizedTarget >= 0 ? '+' : ''}{fmt(fxAwarePnl.realizedTarget, fxAwareCurrency)}
                           </span>
@@ -325,7 +325,7 @@ export function InvestmentDetailDialog({
                           </span>
                         <span className={cn(
                           "font-medium tabular-nums",
-                          investment.unrealizedGain >= 0 ? "text-accent" : "text-destructive"
+                          investment.unrealizedGain >= 0 ? "amount-gain" : "amount-loss"
                         )}>
                           {investment.unrealizedGain >= 0 ? '+' : ''}{fmt(investment.unrealizedGain, investment.currency)}
                         </span>
@@ -335,7 +335,7 @@ export function InvestmentDetailDialog({
                           <span className="text-muted-foreground text-xs">FX-aware {t('invDetail.unrealizedGain')} ({fxAwareCurrency})</span>
                           <span className={cn(
                             "font-medium tabular-nums",
-                            fxAwarePnl.unrealizedTarget >= 0 ? "text-accent" : "text-destructive"
+                            fxAwarePnl.unrealizedTarget >= 0 ? "amount-gain" : "amount-loss"
                           )}>
                             {fxAwarePnl.unrealizedTarget >= 0 ? '+' : ''}{fmt(fxAwarePnl.unrealizedTarget, fxAwareCurrency)}
                             <span className="text-xs ml-1 opacity-70">{fxAwarePnl.unrealizedPercent >= 0 ? '+' : ''}{fmtNum(fxAwarePnl.unrealizedPercent)}%</span>
@@ -388,7 +388,7 @@ export function InvestmentDetailDialog({
                           <span
                             className={cn(
                               'w-20 text-right',
-                              pos.gainLoss >= 0 ? 'text-accent' : 'text-destructive',
+                              pos.gainLoss >= 0 ? 'amount-gain' : 'amount-loss',
                             )}
                           >
                             {pos.gainLoss >= 0 ? '+' : ''}{fmt(pos.gainLoss, investment.currency)}
@@ -416,13 +416,13 @@ export function InvestmentDetailDialog({
                     </div>
                     <div className="flex justify-between py-1 border-b border-border/50 text-sm">
                       <span className="text-muted-foreground">{t('portfolio.assetGain')}</span>
-                      <span className={cn("font-medium tabular-nums", (fxSummary.assetGain ?? 0) >= 0 ? "text-accent" : "text-destructive")}>
+                      <span className={cn("font-medium tabular-nums", (fxSummary.assetGain ?? 0) >= 0 ? "amount-gain" : "amount-loss")}>
                         {(fxSummary.assetGain ?? 0) >= 0 ? '+' : ''}{fmt(fxSummary.assetGain ?? 0, targetCurrency)}
                       </span>
                     </div>
                     <div className="flex justify-between py-1 text-sm">
                       <span className="text-muted-foreground">{t('portfolio.fxEffect')}</span>
-                      <span className={cn("font-medium tabular-nums", fxSummary.fxGain >= 0 ? "text-accent" : "text-destructive")}>
+                      <span className={cn("font-medium tabular-nums", fxSummary.fxGain >= 0 ? "amount-gain" : "amount-loss")}>
                         {fxSummary.fxGain >= 0 ? '+' : ''}{fmt(fxSummary.fxGain, targetCurrency)}
                       </span>
                     </div>
@@ -468,7 +468,7 @@ export function InvestmentDetailDialog({
                        <p className="text-sm text-muted-foreground">{t('invDetail.totalAppreciation')}</p>
                       <p className={cn(
                         "text-lg font-bold tabular-nums",
-                        investment.totalAppreciation >= 0 ? "text-accent" : "text-destructive"
+                        investment.totalAppreciation >= 0 ? "amount-gain" : "amount-loss"
                       )}>
                         {investment.totalAppreciation >= 0 ? '+' : ''}{fmt(investment.totalAppreciation, investment.currency)}
                       </p>

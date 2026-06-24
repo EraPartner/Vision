@@ -155,7 +155,7 @@ export function TagInput({ value, onChange, disabled, className, maxTags = 20 }:
                     )}
                 </div>
             </PopoverTrigger>
-            <PopoverContent className="w-72 p-0 bg-popover border border-border shadow-lg z-50" align="start">
+            <PopoverContent className="w-72 p-0 z-50" align="start">
                 <Command shouldFilter={false}>
                     <CommandInput
                         ref={inputRef}

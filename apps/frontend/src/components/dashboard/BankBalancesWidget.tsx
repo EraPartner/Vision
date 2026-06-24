@@ -144,7 +144,7 @@ export function BankBalancesWidget() {
                     <CardTitle className="text-sm font-semibold text-muted-foreground">
                         {t('bankWidget.netPosition')}
                     </CardTitle>
-                    <div className="h-10 w-10 rounded-xl flex items-center justify-center bg-gradient-to-br from-primary/20 to-primary/10 shadow-sm">
+                    <div className="h-10 w-10 rounded-xl flex items-center justify-center bg-gradient-to-br from-primary/20 to-primary/10 shadow-[0_2px_8px_-2px_hsl(var(--primary)/0.25)]">
                         <Wallet className="h-5 w-5 text-primary" />
                     </div>
                 </CardHeader>
@@ -152,7 +152,7 @@ export function BankBalancesWidget() {
                     <div className="text-3xl font-bold tabular-nums bg-gradient-to-br from-foreground to-muted-foreground bg-clip-text text-transparent">
                         {(() => { const r = formatCurrencyCompact(total_net_position, defaultCurrency, locale); return <span title={r.isCompact ? r.full : undefined}>{r.display}</span>; })()}
                     </div>
-                    <p className={`text-xs font-medium mt-2 flex items-center gap-1 ${isPositive ? "text-accent" : "text-destructive"}`}>
+                    <p className={`text-xs font-medium mt-2 flex items-center gap-1 ${isPositive ? "amount-gain" : "amount-loss"}`}>
                         {isPositive ? <TrendingUp className="h-3 w-3" /> : <TrendingDown className="h-3 w-3" />}
                         {t('bankWidget.acrossAccounts', { n: visibleAccounts.length.toString() })}
                     </p>

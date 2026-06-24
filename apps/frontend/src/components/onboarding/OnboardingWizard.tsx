@@ -13,6 +13,7 @@ import {
     HardDrive, ShieldCheck, FolderOpen, PiggyBank, CreditCard,
     LayoutDashboard,
 } from "lucide-react";
+import { SectionLoader } from "@/components/shared/SectionLoader";
 import { apiClient } from "@/lib/api";
 import { toast } from "sonner";
 import { useLanguage } from "@/contexts/LanguageContext";
@@ -122,8 +123,8 @@ export function OnboardingWizard({ open, onComplete, onOpenSettings }: Onboardin
     const OVERVIEW_SECTIONS = [
         {
             label: t('onboarding.overview.budgeting.label'),
-            color: "from-blue-500/20 to-blue-500/5 border-blue-500/20",
-            iconColor: "text-blue-500",
+            color: "from-chart-3/20 to-chart-3/5 border-chart-3/20",
+            iconColor: "text-chart-3",
             items: [
                 { icon: CreditCard,     title: t('onboarding.feature.transactions.title'), desc: t('onboarding.feature.transactions.desc') },
                 { icon: Tags,           title: t('onboarding.feature.categories.title'),   desc: t('onboarding.feature.categories.desc') },
@@ -133,8 +134,8 @@ export function OnboardingWizard({ open, onComplete, onOpenSettings }: Onboardin
         },
         {
             label: t('onboarding.overview.portfolio.label'),
-            color: "from-emerald-500/20 to-emerald-500/5 border-emerald-500/20",
-            iconColor: "text-emerald-500",
+            color: "from-primary/20 to-primary/5 border-primary/20",
+            iconColor: "text-primary",
             items: [
                 { icon: TrendingUp, title: t('onboarding.feature.portfolio.title'), desc: t('onboarding.feature.portfolio.desc') },
                 { icon: LineChart,  title: t('onboarding.feature.market.title'),    desc: t('onboarding.feature.market.desc') },
@@ -311,9 +312,7 @@ export function OnboardingWizard({ open, onComplete, onOpenSettings }: Onboardin
                                 <p className="text-sm text-muted-foreground mt-1">{t('onboarding.bank.desc')}</p>
                             </div>
                             {adaptersLoading ? (
-                                <div className="flex-1 flex items-center justify-center">
-                                    <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
-                                </div>
+                                <SectionLoader className="flex-1" />
                             ) : (
                                 <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
                                     {adapters.map((adapter) => (

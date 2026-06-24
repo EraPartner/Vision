@@ -3,10 +3,10 @@ title: Code Patterns Reference
 type: reference
 status: active
 date: 2026-04-26
-updated: 2026-06-18
-tags: [reference, patterns, conventions, code-style, backend, frontend, phase-0, phase-1, phase-2, phase-3, phase-4, phase-5, phase-6, phase-9, phase-12, phase-14, phase-q, phase-c, phase-d, motion, liquid-glass, design-system, decimal, money, timezone, openapi, domain-split, import, import-pipeline, concurrency, batching, decimal-enforcement, zustand, slice-selection, typescript, error-handling, type-safety, csv, formula-injection, cwe-1236, csv-record-splitter, csv-parsing, multi-line-fields, date-utilities, immutability, aggregation-optimization, recipient-groups, portfolio-totals, query-parameter-filtering, buildquery, bug-hunt-2026-05-05, bug-hunt-2026-05-06, bug-hunt-2026-05-08, react-keys, stable-keys, mount-guard, memory-leak-prevention, parseLocaleNumber, number-parsing, locale-number, settings-backed-hook, portfolio-tax-classifications, audit-2026-05-11, belgian-tax, freeze-display-pattern, adr-059, dev-observability, devtools, api-inspector, observability, postgres-locking, for-update-group-by, accessibility, a11y, keyboard-operability, aria, onActivateKeyDown, shared-utils, monorepo, workspace, banker-rounding, plural, tc, portfolio-unit-math, premium-v3, optimistic-create, chart-scrub, chart-sync, context-menu, dialog-interplay, radix, role-based-glass, june-2026]
-description: Standard code patterns used throughout the Vision project — repositories, routes, hooks, API client, Express setup, error handling, type safety, filter builders, aggregation envelopes, aggregation refresh, trigger-maintained tables, golden fixtures, database fixtures, pure calculation services, atomic multi-step transactions, streaming CSV exports with formula injection prevention, import batch concurrency, motion consumers, surface shells, gradient icon tiles, money utilities, decimal utilities, shared date utilities with input validation and locale support, timezone boundary handling, TypeScript type annotations, type-safe error handling, domain-split API client, Zustand store with useShallow slice selection, immutable PATCH field sanitization, aggregation query optimization with Map-based single-pass accumulation, recipient group resolution via scalar subqueries (Phase Q), portfolio totals single-source-of-truth pattern (Phase 14), Belgian Tax freeze/display pattern for engine-drift protection (ADR-059, May 2026), dev-only observability integration pattern (May 2026 devtools: module-level pub-sub event bus with zero-cost tree-shaking in production). May 2026 bug hunt adds React key generation pattern (use UUID instead of index), mount guard pattern (prevent setState after unmount), and documents parseLocaleNumber heuristic with single-comma thousands separator fix. May 2026 a11y pass adds onActivateKeyDown keyboard-activation helper pattern. June 2026: shared-utils monorepo package (@vision/shared-utils) consolidates money/slugify/downsample; banker's rounding is now the canonical roundMoney mode; tc() plural pattern documented. June 2026 (ADR-070): optimistic mutation pattern (snapshot/patch/rollback via setQueriesData); surface shell updated with glass-regular/glass-elevated/opaque-table canonical rules; motion consumer updated for PageTransition re-addition and dialog keyframe animation. June 2026 Premium v3 (ADR-071): optimistic-create pattern (temp negative-id row, server swap, rollback, onSettled invalidate); chart scrub pattern (useChartScrub, pointer capture, glass Δ pill); chart sync pattern (ChartSyncProvider, syncId prop, domain guard). June 2026 Premium v3 V5 (ADR-071): Radix ContextMenu + Dialog interplay pattern — modal={false} prevents body pointer-events race when menu items spawn Dialogs. June 2026 (role-based glass): surface shell canonical rule broadened — glass-regular now applied to ALL content/chart/stat/state cards; old ~6-surface-per-viewport limit superseded; tables/forms/placeholders/callouts/dialog-nested cards remain opaque as role-based exceptions.
-aliases: [code patterns, coding patterns, conventions, patterns, how to write code, repository pattern, route pattern, hook pattern, error handling, type-safe error handling, type annotations, filter builder, golden fixture, aggregation envelope, calculation services, import concurrency, motion pattern, surface shell pattern, gradient icon pattern, money pattern, decimal pattern, timezone pattern, domain split, openapi, typescript types, csv export, safe csv, formula injection, cwe-1236, date utilities, immutability, aggregation optimization, Map pattern, recipient group filter, recipientGroupId, portfolio totals, single source of truth, parseLocaleNumber, number parsing, locale-aware number parsing, thousands separator, decimal separator, belgian-tax-pattern, freeze-display-pattern, as-filed-calculation, engine-drift-protection, shared-utils, workspace, plural, tc]
+updated: 2026-06-23
+tags: [reference, patterns, conventions, code-style, backend, frontend, phase-0, phase-1, phase-2, phase-3, phase-4, phase-5, phase-6, phase-9, phase-12, phase-14, phase-q, phase-c, phase-d, motion, liquid-glass, design-system, decimal, money, timezone, openapi, domain-split, import, import-pipeline, concurrency, batching, decimal-enforcement, zustand, slice-selection, typescript, error-handling, type-safety, csv, formula-injection, cwe-1236, csv-record-splitter, csv-parsing, multi-line-fields, date-utilities, immutability, aggregation-optimization, recipient-groups, portfolio-totals, query-parameter-filtering, buildquery, bug-hunt-2026-05-05, bug-hunt-2026-05-06, bug-hunt-2026-05-08, react-keys, stable-keys, mount-guard, memory-leak-prevention, parseLocaleNumber, number-parsing, locale-number, settings-backed-hook, portfolio-tax-classifications, audit-2026-05-11, belgian-tax, freeze-display-pattern, adr-059, dev-observability, devtools, api-inspector, observability, postgres-locking, for-update-group-by, accessibility, a11y, keyboard-operability, aria, onActivateKeyDown, shared-utils, monorepo, workspace, banker-rounding, plural, tc, portfolio-unit-math, premium-v3, optimistic-create, chart-scrub, chart-sync, context-menu, dialog-interplay, radix, role-based-glass, june-2026, skin-v2, feature-flag, css-scoping, unlayered-css, visual-skin, theming, inline-token-constraint, adr-104]
+description: Standard code patterns used throughout the Vision project — repositories, routes, hooks, API client, Express setup, error handling, type safety, filter builders, aggregation envelopes, aggregation refresh, trigger-maintained tables, golden fixtures, database fixtures, pure calculation services, atomic multi-step transactions, streaming CSV exports with formula injection prevention, import batch concurrency, motion consumers, surface shells, gradient icon tiles, money utilities, decimal utilities, shared date utilities with input validation and locale support, timezone boundary handling, TypeScript type annotations, type-safe error handling, domain-split API client, Zustand store with useShallow slice selection, immutable PATCH field sanitization, aggregation query optimization with Map-based single-pass accumulation, recipient group resolution via scalar subqueries (Phase Q), portfolio totals single-source-of-truth pattern (Phase 14), Belgian Tax freeze/display pattern for engine-drift protection (ADR-059, May 2026), dev-only observability integration pattern (May 2026 devtools: module-level pub-sub event bus with zero-cost tree-shaking in production). May 2026 bug hunt adds React key generation pattern (use UUID instead of index), mount guard pattern (prevent setState after unmount), and documents parseLocaleNumber heuristic with single-comma thousands separator fix. May 2026 a11y pass adds onActivateKeyDown keyboard-activation helper pattern. June 2026: shared-utils monorepo package (@vision/shared-utils) consolidates money/slugify/downsample; banker's rounding is now the canonical roundMoney mode; tc() plural pattern documented. June 2026 (ADR-070): optimistic mutation pattern (snapshot/patch/rollback via setQueriesData); surface shell updated with glass-regular/glass-elevated/opaque-table canonical rules; motion consumer updated for PageTransition re-addition and dialog keyframe animation. June 2026 Premium v3 (ADR-071): optimistic-create pattern (temp negative-id row, server swap, rollback, onSettled invalidate); chart scrub pattern (useChartScrub, pointer capture, glass Δ pill); chart sync pattern (ChartSyncProvider, syncId prop, domain guard). June 2026 Premium v3 V5 (ADR-071): Radix ContextMenu + Dialog interplay pattern — modal={false} prevents body pointer-events race when menu items spawn Dialogs. June 2026 (role-based glass): surface shell canonical rule broadened — glass-regular now applied to ALL content/chart/stat/state cards; old ~6-surface-per-viewport limit superseded; tables/forms/placeholders/callouts/dialog-nested cards remain opaque as role-based exceptions. June 2026 (ADR-104): scoped-skin-behind-a-flag pattern — alternative visual skin shipped as UNLAYERED CSS under :root.skin-v2 toggled by VITE_SKIN_V2 booleanEnv flag (default OFF); localStorage runtime override + window.__setSkinV2 dev helper; critical inline-token constraint: applyThemePalette() writes color tokens as inline styles which beat any stylesheet rule.
+aliases: [code patterns, coding patterns, conventions, patterns, how to write code, repository pattern, route pattern, hook pattern, error handling, type-safe error handling, type annotations, filter builder, golden fixture, aggregation envelope, calculation services, import concurrency, motion pattern, surface shell pattern, gradient icon pattern, money pattern, decimal pattern, timezone pattern, domain split, openapi, typescript types, csv export, safe csv, formula injection, cwe-1236, date utilities, immutability, aggregation optimization, Map pattern, recipient group filter, recipientGroupId, portfolio totals, single source of truth, parseLocaleNumber, number parsing, locale-aware number parsing, thousands separator, decimal separator, belgian-tax-pattern, freeze-display-pattern, as-filed-calculation, engine-drift-protection, shared-utils, workspace, plural, tc, scoped-skin-behind-a-flag-pattern-adr-104, skin-v2 pattern, visual skin flag, unlayered css pattern, inline token constraint]
 ---
 
 # Code Patterns Reference
@@ -2829,6 +2829,130 @@ const slice = useAppStore(
 **Migration Path:** Alembic migration `0011_drop_feature_flags` drops the table while preserving the creation migration (`0002_feature_flags.py`) in the history for audit/compliance purposes.
 
 **For New Features:** If you need to control feature availability, use environment variables or configuration instead of database-backed toggles. See [[docs/adr/035-remove-feature-flags|ADR-035]] for rationale.
+
+---
+
+## Scoped-Skin Behind a Flag Pattern (ADR-104)
+
+**Source files:**
+- `[[apps/frontend/src/lib/env.ts]]` — flag declaration via `booleanEnv`
+- `[[apps/frontend/src/lib/skin.ts]]` — activation logic
+- `[[apps/frontend/src/main.tsx]]` — pre-render call
+- `[[apps/frontend/src/styles/skin-v2.css]]` — scoped overrides
+
+This pattern ships an **alternative visual skin** as a CSS file that is completely inert when a root class is absent, toggled by a build-time env flag with a `localStorage` runtime override. Implemented for the "dense-fintech" skin-v2 redesign (ADR-104).
+
+### When to use
+
+Use this pattern when a visual redesign is large enough to ship incrementally, needs side-by-side comparison with the production aesthetic, and must have a guaranteed rollback path that does not require a code change.
+
+### Parts
+
+**1. Register the flag (ADR-030 env schema)**
+
+```ts
+// apps/frontend/src/lib/env.ts
+VITE_SKIN_V2: booleanEnv(false),   // default OFF
+```
+
+Export a named constant:
+
+```ts
+export const isSkinV2Default = env.VITE_SKIN_V2 as boolean;
+```
+
+**2. Activation module**
+
+```ts
+// apps/frontend/src/lib/skin.ts
+const STORAGE_KEY = 'vision_skin_v2';
+const ROOT_CLASS  = 'skin-v2';
+
+export function isSkinV2Active(): boolean {
+    try {
+        const override = localStorage.getItem(STORAGE_KEY);
+        if (override === 'true')  return true;
+        if (override === 'false') return false;
+    } catch { /* SSR / private mode */ }
+    return isSkinV2Default;   // build-time flag
+}
+
+export function applySkinV2Class(): void {
+    document.documentElement.classList.toggle(ROOT_CLASS, isSkinV2Active());
+}
+
+export function setSkinV2(on: boolean | undefined): void {
+    try {
+        if (on === undefined) localStorage.removeItem(STORAGE_KEY);
+        else localStorage.setItem(STORAGE_KEY, String(on));
+    } catch {}
+    applySkinV2Class();
+}
+
+// Dev-mode escape hatch — never ships in production
+if (import.meta.env.DEV) {
+    (window as any).__setSkinV2 = setSkinV2;
+}
+```
+
+**3. Call before first render**
+
+```ts
+// apps/frontend/src/main.tsx
+import { applySkinV2Class } from './lib/skin';
+applySkinV2Class();   // must run before createRoot / render
+```
+
+**4. UNLAYERED CSS scoped under the root class**
+
+```css
+/* apps/frontend/src/styles/skin-v2.css  — imported AFTER `@import "tailwindcss"` */
+/* No @layer wrapper — unlayered rules win over all Tailwind layers by cascade order. */
+
+:root.skin-v2 {
+    --radius: 0.5rem;
+    /* structural token overrides ... */
+}
+
+:root.skin-v2 .glass-regular {
+    background: hsl(var(--card));
+    /* override Tailwind utilities without specificity tricks */
+}
+```
+
+> [!warning] Cannot override color tokens from CSS
+> `applyThemePalette()` in `apps/frontend/src/styles/themes.ts` writes all color tokens (`--background`, `--card`, `--primary`, `--accent`, and every key in `ThemeTokens`) as **inline styles** on `document.documentElement` via `element.style.setProperty()`. Inline styles always win over external stylesheet rules. Any skin CSS that tries to change a color token will be silently ignored. Only structural tokens that `applyThemePalette()` does not touch (radius, blur sizes, aurora alphas, motion durations/easings) can be overridden from CSS.
+
+**5. Gating component branches (Phase 3+)**
+
+When a skin change requires JSX changes (not pure CSS), gate it behind `isSkinV2Active()` so the flag-off path is byte-identical to the legacy code:
+
+```tsx
+import { isSkinV2Active } from '@/lib/skin';
+
+function AmountCell({ value }: { value: number }) {
+    const sign = value >= 0 ? '+' : '−';
+    if (isSkinV2Active()) {
+        // skin-v2: always show +/− and arrow, use --gain/--loss tokens
+        return <span className="gain-loss" data-positive={value >= 0}>{sign}{format(value)}</span>;
+    }
+    // legacy: unchanged
+    return <span>{format(value)}</span>;
+}
+```
+
+### Rollback
+
+- **Per-user (dev)**: `window.__setSkinV2(false)` or clear `vision_skin_v2` from localStorage.
+- **Build-level**: set `VITE_SKIN_V2=false` (or remove the env var; default is `false`).
+- **Emergency**: with Phases 0–2 CSS-only, removing the `.skin-v2` class from `<html>` restores the production aesthetic with zero JS change.
+
+### Related
+
+- [[docs/adr/104-skin-v2-dense-fintech-visual-redesign|ADR-104]] — decision and design constraints
+- [[docs/adr/030-frontend-env-schema|ADR-030]] — `booleanEnv` and the env-schema pattern
+- [[docs/adr/103-per-account-holdings-ui-flag|ADR-103]] — precedent for `booleanEnv` feature flags
+- [[docs/adr/035-remove-feature-flags|ADR-035]] — why database-backed flags were removed
 
 ---
 

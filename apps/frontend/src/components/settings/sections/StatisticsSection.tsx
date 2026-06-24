@@ -1,5 +1,5 @@
 import { useState, memo } from 'react';
-import { Loader2 } from 'lucide-react';
+import { SectionLoader } from "@/components/shared/SectionLoader";
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { Badge } from '@/components/ui/badge';
 import { Checkbox } from '@/components/ui/checkbox';
@@ -112,9 +112,7 @@ export const StatisticsSection = memo(function StatisticsSection() {
             </SettingsGroup>
 
             {isLoading ? (
-                <div className="flex items-center justify-center py-12">
-                    <Loader2 className="h-8 w-8 animate-spin text-primary" />
-                </div>
+                <SectionLoader />
             ) : (
                 <>
                     {/* Excluded categories */}

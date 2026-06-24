@@ -153,7 +153,7 @@ export function MonthlyTrendsChart({ data, embedded = false }: MonthlyTrendsChar
             <div className="absolute top-0 right-0 w-32 h-32 bg-gradient-to-br from-white/50 to-transparent dark:from-white/10 rounded-full -mr-16 -mt-16"></div>
             <CardHeader className="space-y-3">
                 <div className="flex items-center gap-3">
-                    <div className="h-12 w-12 rounded-xl bg-gradient-to-br from-primary/20 to-primary/5 flex items-center justify-center shadow-sm text-primary">
+                    <div className="h-12 w-12 rounded-xl bg-gradient-to-br from-primary/20 to-primary/5 flex items-center justify-center shadow-[0_2px_8px_-2px_hsl(var(--primary)/0.25)] text-primary">
                         <TrendingUp className="h-6 w-6" />
                     </div>
                     <div className="flex-1">

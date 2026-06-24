@@ -63,6 +63,10 @@ const envSchema = z
         VITE_ENABLE_LOGGING: booleanEnv(true),
         // Per-account portfolio HOLDINGS UI (ADR-091/100). Default OFF (ADR-103).
         VITE_ENABLE_PER_ACCOUNT_HOLDINGS: booleanEnv(false),
+        // Dense-fintech visual skin ("skin-v2"). Default OFF — toggles the
+        // `.skin-v2` root class that the redesign CSS (styles/skin-v2.css) is
+        // scoped under. See lib/skin.ts.
+        VITE_SKIN_V2: booleanEnv(false),
     })
     .passthrough();
 
@@ -87,5 +91,12 @@ export const env: Readonly<FrontendEnv> = Object.freeze(parseEnv());
  * Flip the default to `true` (or set VITE_ENABLE_PER_ACCOUNT_HOLDINGS=true) to restore.
  */
 export const isPerAccountHoldingsEnabled = env.VITE_ENABLE_PER_ACCOUNT_HOLDINGS as boolean;
+
+/**
+ * Build-time default for the dense-fintech visual skin (skin-v2). A
+ * localStorage override can flip it at runtime for before/after comparison —
+ * see `lib/skin.ts`.
+ */
+export const isSkinV2Default = env.VITE_SKIN_V2 as boolean;
 
 export default env;

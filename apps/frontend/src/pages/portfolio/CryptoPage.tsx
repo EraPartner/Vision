@@ -151,7 +151,7 @@ export default function CryptoPage() {
             </CardTitle>
           </CardHeader>
           <CardContent className="pb-3 px-4">
-            <p className={cn("text-xl font-bold tabular-nums", totalRealizedGain >= 0 ? "text-accent" : "text-destructive")}>
+            <p className={cn("text-xl font-bold tabular-nums", totalRealizedGain >= 0 ? "amount-gain" : "amount-loss")}>
               {totalRealizedGain >= 0 ? "+" : ""}{fmt(totalRealizedGain)}
             </p>
           </CardContent>
@@ -172,7 +172,7 @@ export default function CryptoPage() {
             </CardTitle>
           </CardHeader>
           <CardContent className="pb-3 px-4">
-            <p className={cn("text-xl font-bold tabular-nums", totalUnrealizedGain >= 0 ? "text-accent" : "text-destructive")}>
+            <p className={cn("text-xl font-bold tabular-nums", totalUnrealizedGain >= 0 ? "amount-gain" : "amount-loss")}>
               {totalUnrealizedGain >= 0 ? "+" : ""}{fmt(totalUnrealizedGain)}
             </p>
           </CardContent>
@@ -196,7 +196,7 @@ export default function CryptoPage() {
             <CardTitle className="text-xs font-medium text-muted-foreground">{t('portfolio.netReturn')}</CardTitle>
           </CardHeader>
           <CardContent className="pb-3 px-4">
-            <p className={cn("text-xl font-bold tabular-nums", netGain >= 0 ? "text-accent" : "text-destructive")}>
+            <p className={cn("text-xl font-bold tabular-nums", netGain >= 0 ? "amount-gain" : "amount-loss")}>
               {netGain >= 0 ? "+" : ""}{fmt(netGain)}
             </p>
           </CardContent>
@@ -258,11 +258,11 @@ export default function CryptoPage() {
                       </span>
                     </td>
                     <td className="text-right py-2 px-3 tabular-nums font-medium">{fmt(convertToTarget(h.currentValue, h.currency))}</td>
-                    <td className={cn("text-right py-2 px-3 tabular-nums font-medium", h.unrealizedGain >= 0 ? "text-accent" : "text-destructive")}>
+                    <td className={cn("text-right py-2 px-3 tabular-nums font-medium", h.unrealizedGain >= 0 ? "amount-gain" : "amount-loss")}>
                       {h.unrealizedGain >= 0 ? "+" : ""}{fmt(convertToTarget(h.unrealizedGain, h.currency))}
                       <DeltaPill value={h.gainLossPercent} label={fmtPct(h.gainLossPercent)} className="ml-1.5" />
                     </td>
-                    <td className={cn("text-right py-2 px-3 tabular-nums", h.realizedGain !== 0 ? (h.realizedGain >= 0 ? "text-accent" : "text-destructive") : "text-muted-foreground")}>
+                    <td className={cn("text-right py-2 px-3 tabular-nums", h.realizedGain !== 0 ? (h.realizedGain >= 0 ? "amount-gain" : "amount-loss") : "text-muted-foreground")}>
                       {h.realizedGain !== 0 ? `${h.realizedGain >= 0 ? "+" : ""}${fmt(convertToTarget(h.realizedGain, h.currency))}` : '—'}
                     </td>
                     {pageHasFxExposure && (() => {
@@ -274,7 +274,7 @@ export default function CryptoPage() {
                       }
                       return (
                         <td
-                          className={cn("text-right py-2 px-3 tabular-nums", fxGain >= 0 ? "text-accent" : "text-destructive")}
+                          className={cn("text-right py-2 px-3 tabular-nums", fxGain >= 0 ? "amount-gain" : "amount-loss")}
                           title={fxInfo?.usedFallbackRate ? t('portfolio.fxFallbackNote') : undefined}
                         >
                           {fxGain >= 0 ? "+" : ""}{fmt(fxGain)}{fxInfo?.usedFallbackRate ? " ⚠" : ""}

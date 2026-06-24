@@ -248,7 +248,7 @@ export function LinkTransactionDialog({ open, onOpenChange, payment, onExecute }
               <div className="text-sm text-muted-foreground">{t('plannedPage.link.empty')}</div>
             ) : (
               filteredCandidates.map((tx) => (
-                <label key={tx.id} className="flex items-center justify-between gap-3 p-2 rounded hover:bg-slate-50 dark:hover:bg-slate-800 cursor-pointer">
+                <label key={tx.id} className="flex items-center justify-between gap-3 p-2 rounded-md hover:bg-muted/50 cursor-pointer">
                   <div className="flex items-center gap-3">
                     <input type="radio" name="selectedTx" checked={selectedTxId === tx.id} onChange={() => { setSelectedTxId(tx.id); const d = tx.transaction_date; setExecutionDate(d?.includes("T") ? d.split("T")[0] : (d ?? "")); }} />
                     <div className="flex flex-col">
