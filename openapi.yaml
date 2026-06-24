@@ -836,7 +836,7 @@ components:
 
     Investment:
       type: object
-      required: [id, name, asset_class, currency, price_provider, is_active, created_at, updated_at]
+      required: [id, name, asset_class, currency, price_provider, is_active, show_in_ticker, created_at, updated_at]
       properties:
         id:
           type: integer
@@ -887,6 +887,8 @@ components:
           type: string
           format: date-time
         is_active:
+          type: boolean
+        show_in_ticker:
           type: boolean
         created_at:
           type: string

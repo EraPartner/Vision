@@ -3379,6 +3379,7 @@ export interface components {
             /** Format: date-time */
             price_updated_at?: string;
             is_active: boolean;
+            show_in_ticker: boolean;
             /** Format: date-time */
             created_at: string;
             /** Format: date-time */
