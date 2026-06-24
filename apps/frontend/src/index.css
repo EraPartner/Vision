@@ -373,55 +373,6 @@
             0 22px 56px -18px hsl(0 0% 0% / 0.72);
     }
 
-    /* Trend accents — layered on top of glass-regular */
-    .glass-trend-up,
-    .liquid-glass-trend-up {
-        background:
-            linear-gradient(
-                138deg,
-                hsl(var(--gain) / 0.18) 0%,
-                hsl(var(--glass-surface) / 0.7) 46%,
-                hsl(var(--glass-surface) / 0.5) 100%
-            );
-        border: 1px solid hsl(var(--gain) / 0.36);
-    }
-
-    .glass-trend-down,
-    .liquid-glass-trend-down {
-        background:
-            linear-gradient(
-                138deg,
-                hsl(var(--loss) / 0.16) 0%,
-                hsl(var(--glass-surface) / 0.7) 46%,
-                hsl(var(--glass-surface) / 0.5) 100%
-            );
-        border: 1px solid hsl(var(--loss) / 0.36);
-    }
-
-    .dark .glass-trend-up,
-    .dark .liquid-glass-trend-up {
-        background:
-            linear-gradient(
-                138deg,
-                hsl(var(--gain) / 0.18) 0%,
-                hsl(var(--glass-surface) / 0.8) 46%,
-                hsl(var(--glass-surface-deep) / 0.92) 100%
-            );
-        border-color: hsl(var(--gain) / 0.44);
-    }
-
-    .dark .glass-trend-down,
-    .dark .liquid-glass-trend-down {
-        background:
-            linear-gradient(
-                138deg,
-                hsl(var(--loss) / 0.16) 0%,
-                hsl(var(--glass-surface) / 0.8) 46%,
-                hsl(var(--glass-surface-deep) / 0.92) 100%
-            );
-        border-color: hsl(var(--loss) / 0.44);
-    }
-
     /* Frozen first column inside a glass card (e.g. the Category Pivot Table).
        A plain bg-card here reads as a flat matte slab against the translucent
        card. This keeps the column on the same glass: a FLAT tint (never a

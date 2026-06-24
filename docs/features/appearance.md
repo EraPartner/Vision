@@ -505,7 +505,11 @@ The gain/loss palette is now surfaced as two always-defined CSS custom propertie
 .amount-loss { color: hsl(var(--loss)); }
 ```
 
-The `.glass-trend-up` / `.glass-trend-down` (and `.liquid-glass-trend-*`) classes are re-pointed from `--success`/`--destructive` to `--gain`/`--loss`, so trend indicators in glass surfaces follow the toggle.
+The `.glass-trend-up` / `.glass-trend-down` (and `.liquid-glass-trend-*`) classes were re-pointed from `--success`/`--destructive` to `--gain`/`--loss` in the initial pass.
+
+> [!info] 2026-06-24 gain/loss consistency pass: `.glass-trend-up`, `.glass-trend-down`, `.liquid-glass-trend-up`, and `.liquid-glass-trend-down` have since been **deleted** from `index.css` — they became orphaned once `PerformancePage` migrated to `<TrendHue>` and no component referenced these classes anymore. Card hues are now delivered exclusively via the shared `TrendHue` component (see [[docs/components/shared-components#trendhue|TrendHue]]).
+
+New cards that need a gain/loss hue must use `<TrendHue variant="gain|loss|neutral" />` — not these deleted classes.
 
 ### `gain` / `loss` Tailwind Color Utilities
 
@@ -546,7 +550,7 @@ This enables opacity-aware utilities that follow the toggle automatically:
 - `AppearanceSection.tsx` — new `SettingsGroup` with `id="accessibility"`, containing a `SettingRow` stack wrapping a Select.
 - `styles/tokens.css` — adds `--gain: var(--accent)` and `--loss: var(--destructive)` at `:root` (always-defined legacy values).
 - `styles/skin-v2.css` — overrides only `--gain` and `--loss` tokens (Okabe-Ito values, light + dark); old per-class `.amount-gain`/`.amount-loss` rules removed as redundant.
-- `index.css` — `.amount-gain`/`.amount-loss` read `hsl(var(--gain))`/`hsl(var(--loss))`; `.glass-trend-up`/`.glass-trend-down` re-pointed from `--success`/`--destructive` to `--gain`/`--loss`.
+- `index.css` — `.amount-gain`/`.amount-loss` read `hsl(var(--gain))`/`hsl(var(--loss))`; `.glass-trend-up`/`.glass-trend-down` re-pointed from `--success`/`--destructive` to `--gain`/`--loss` (subsequently deleted in the 2026-06-24 gain/loss consistency pass — see TrendHue).
 - `tailwind.config.ts` — `gain` and `loss` color entries added.
 
 ### Relationship to `VITE_SKIN_V2` build flag

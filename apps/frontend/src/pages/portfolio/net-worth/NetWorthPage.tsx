@@ -242,6 +242,7 @@ export default function NetWorthPage() {
             numericValue={current.netWorth}
             formatValue={fmt}
             icon={Wallet}
+            valueClassName="text-primary"
             trend={monthlyChange >= 0 ? "income" : "expense"}
             subtitle={`${monthlyChange >= 0 ? "+" : ""}${fmt(monthlyChange)} (${monthlyChangePercent >= 0 ? "+" : ""}${monthlyChangePercent.toFixed(1)}%) ${t('networth.thisMonth')}`}
           />

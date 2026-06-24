@@ -26,6 +26,7 @@ import { WidgetVisibilityDialog } from "@/components/shared/WidgetVisibilityDial
 import { useWidgetVisibility, type WidgetDefinition } from "@/hooks/useWidgetVisibility";
 import { PageHeader } from "@/components/shared/PageHeader";
 import { EmptyState } from "@/components/shared/EmptyState";
+import { TrendHue } from "@/components/shared/TrendHue";
 import { parseYmd } from "@/lib/timezone";
 import { ExportDialog } from "@/components/reports/ExportDialog";
 
@@ -191,6 +192,7 @@ export default function PortfolioOverviewPage() {
       icon: totalGainLossInTarget >= 0 ? TrendingUp : TrendingDown,
       desc: `${gainPercent >= 0 ? '+' : ''}${gainPercent.toFixed(1)}% ${t('networth.allTime')}`,
       cls: totalGainLossInTarget >= 0 ? "amount-gain" : "amount-loss",
+      gain: totalGainLossInTarget >= 0,
       // Attribution: gain = asset performance + currency effect (FX feature).
       subline: hasFxExposure
         ? `${t('portfolio.assetGain')} ${totalAssetGainInTarget >= 0 ? '+' : ''}${fmt(totalAssetGainInTarget)} · ${t('portfolio.fxEffect')} ${totalFxGainInTarget >= 0 ? '+' : ''}${fmt(totalFxGainInTarget)}`
@@ -202,14 +204,16 @@ export default function PortfolioOverviewPage() {
       value: `${totalRealizedGainInTarget >= 0 ? '+' : ''}${fmt(totalRealizedGainInTarget)}`,
       icon: ArrowUpRight,
       desc: t('portfolio.fromClosedPositions'),
-      cls: totalRealizedGainInTarget >= 0 ? "amount-gain" : "amount-loss"
+      cls: totalRealizedGainInTarget >= 0 ? "amount-gain" : "amount-loss",
+      gain: totalRealizedGainInTarget >= 0,
     },
     {
       title: t('portfolio.unrealizedGains'),
       value: `${totalUnrealizedGainInTarget >= 0 ? '+' : ''}${fmt(totalUnrealizedGainInTarget)}`,
       icon: Clock,
       desc: t('portfolio.paperProfitLoss'),
-      cls: totalUnrealizedGainInTarget >= 0 ? "amount-gain" : "amount-loss"
+      cls: totalUnrealizedGainInTarget >= 0 ? "amount-gain" : "amount-loss",
+      gain: totalUnrealizedGainInTarget >= 0,
     },
   ];
 
@@ -273,6 +277,7 @@ export default function PortfolioOverviewPage() {
                 <TotalValueCard
                   formattedTotal={fmt(totalPortfolioValueInTarget)}
                   totalValue={totalPortfolioValueInTarget}
+                  isGain={totalGainLossInTarget >= 0}
                   labels={{
                     title: t('portfolio.totalValue'),
                     investments: tc('portfolio.investments', summaries.length),
@@ -293,7 +298,8 @@ export default function PortfolioOverviewPage() {
               </div>
               <div className="sm:col-span-2 lg:col-span-3 lg:row-span-2 grid grid-cols-1 grid-rows-3 gap-4">
                 {cards.map((c) => (
-                  <Card key={c.title} className="liquid-glass micro-lift border">
+                  <Card key={c.title} className="liquid-glass micro-lift border relative overflow-hidden">
+                    <TrendHue tone={c.gain ? "gain" : "loss"} />
                     <CardHeader className="flex flex-row items-center justify-between pb-2">
                       <CardTitle className="text-sm font-medium text-muted-foreground">{c.title}</CardTitle>
                       <c.icon className={`h-4 w-4 ${c.cls}`} />

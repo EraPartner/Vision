@@ -4,8 +4,8 @@ type: component
 status: active
 date: 2026-04-17
 updated: 2026-06-24
-tags: [components, dashboard, charts, widgets, liquid-glass, liquid-glass-v2, premium-v3, design-system, phase-9, phase-d, phase-f, phase-h, phase-h-v2, ensemble, visx, url-persistence, rolling-cache, rolling-diagnostics, chart-scrub, chart-sync, per-widget-hydration, stat-scrub, june-2026]
-description: Dashboard-specific components for financial overview and visualization with liquid-glass aesthetic and visx charts, including dual-mode cash flow forecast with URL state persistence and rolling window diagnostics. June 2026 Liquid Glass v2 — StatCard/NetSummaryCard upgraded to glass-elevated; KPI/chart cards migrated from surface-elevated to glass-regular. June 2026 Premium v3 (ADR-071) — per-widget hydration (no global loading gate), synced dashboard-timeline charts, ChartSkeleton, RollingNumber/DeltaPill adoption. V9: NetSummaryCard sparkline scrub surface.
+tags: [components, dashboard, charts, widgets, liquid-glass, liquid-glass-v2, premium-v3, design-system, phase-9, phase-d, phase-f, phase-h, phase-h-v2, ensemble, visx, url-persistence, rolling-cache, rolling-diagnostics, chart-scrub, chart-sync, per-widget-hydration, stat-scrub, june-2026, trend-hue, gain-loss]
+description: Dashboard-specific components for financial overview and visualization with liquid-glass aesthetic and visx charts, including dual-mode cash flow forecast with URL state persistence and rolling window diagnostics. June 2026 Liquid Glass v2 — StatCard/NetSummaryCard upgraded to glass-elevated; KPI/chart cards migrated from surface-elevated to glass-regular. June 2026 Premium v3 (ADR-071) — per-widget hydration (no global loading gate), synced dashboard-timeline charts, ChartSkeleton, RollingNumber/DeltaPill adoption. V9: NetSummaryCard sparkline scrub surface. 2026-06-24 (gain/loss consistency pass): StatCard now renders TrendHue for the card background tint; gained valueClassName prop to override the headline value colour.
 aliases: [dashboard-widgets, dashboard-charts, overview-components, stat-cards]
 related_code: ["apps/frontend/src/components/dashboard"]
 ---
@@ -65,6 +65,8 @@ interface StatCardProps {
   subtitle?: string;       // Subtitle when no change
   icon: LucideIcon;        // Icon component
   trend?: "income" | "expense" | "up" | "down" | "neutral";
+  /** Override the headline value colour class. Defaults to "text-foreground". Pass "text-primary" for featured-total cards. */
+  valueClassName?: string;
 }
 ```
 
@@ -94,11 +96,11 @@ function MyCard() {
 
 ### Visual Features
 
-- Gradient background based on trend type
-- Hero glass treatment (`.liquid-glass-hero`) for stronger emphasis over standard cards
+- **TrendHue overlay** (2026-06-24) — card background tint rendered via `<TrendHue>` (see [[docs/components/shared-components#trendhue|TrendHue]]). The `trend` prop drives the variant: `"income"/"up"` → `gain`; `"expense"/"down"` → `loss`; `"neutral"` → `neutral`. The overlay is a child element so it survives the `backdrop-filter` cascade.
+- `valueClassName` prop (default `"text-foreground"`) — pass `"text-primary"` on featured-total cards (e.g., the net-worth StatCard on `NetWorthPage`) to give the headline a coloured tint.
 - Animated hover effect (lift + shadow)
-- Color-coded change indicator
-- Large formatted value with gradient text
+- Color-coded change indicator via `DeltaPill`
+- Large formatted value via `RollingNumber` (odometer reels; plain span under `prefers-reduced-motion`)
 - **Compact currency display** — Optional `titleValue` prop enables tooltip showing full value when display is compacted (e.g., "€5.2K" with "€5,234.56" on hover)
 
 ### Surface Consistency (April 2026)

@@ -2568,7 +2568,27 @@ Standard card and surface shell for consistent material hierarchy and visual coh
 
 **Source:** [[apps/frontend/src/pages/DashboardPage.tsx|DashboardPage.tsx]], [[apps/frontend/src/components/dashboard/StatCard.tsx|StatCard.tsx]]
 
-Summary cards and stat tiles use a glass-elevated or glass-regular card with a tint overlay child for hero emphasis. The gradient lives in an overlay child (not on the card background) so it survives the `backdrop-filter` cascade:
+Summary cards and stat tiles use a glass-elevated or glass-regular card with a tint overlay child for hero emphasis. The gradient lives in an overlay child (not on the card background) so it survives the `backdrop-filter` cascade.
+
+#### Canonical approach: `<TrendHue>` (2026-06-24)
+
+The shared `TrendHue` component (see [[docs/components/shared-components#trendhue|TrendHue]]) is the single source of truth for the diagonal card-hue wash on all summary/stat cards. Use it instead of inlining a gradient div:
+
+```tsx
+import { TrendHue } from "@/components/shared/TrendHue";
+
+// Summary/stat card with gain/loss/neutral tint
+<Card className="glass-elevated micro-lift relative overflow-hidden">
+  <TrendHue variant="gain" />   {/* or "loss" or "neutral" */}
+  <CardContent className="relative flex items-center gap-3">
+    {/* ... */}
+  </CardContent>
+</Card>
+```
+
+`TrendHue` renders `bg-gradient-to-br from-{gain|loss|primary}/10 to-.../5` as an `absolute inset-0 pointer-events-none rounded-[inherit]` overlay — structurally identical to the manual div pattern below, but token-reactive and DRY.
+
+**Do not inline a gradient div on new summary cards.** Use `<TrendHue>` instead. The old inline pattern is shown only for reference:
 
 ```tsx
 <Card className="glass-elevated micro-lift relative">
@@ -2586,6 +2606,17 @@ Summary cards and stat tiles use a glass-elevated or glass-regular card with a t
 </Card>
 ```
 
+#### Colour-role rule for summary/stat cards (2026-06-24)
+
+| Surface | Rule |
+|---|---|
+| Card background tint | `<TrendHue variant="gain|loss|neutral" />` — gain/loss/neutral at 0.10 opacity; **neutral border always** (no gain/loss border) |
+| Featured total headline (net worth, portfolio total, total value) | `text-primary` |
+| Directional figures (return %, gain/loss amounts) | `amount-gain` / `amount-loss` |
+| Component figures (cost basis, unrealized, realized) | `text-foreground` (neutral) |
+
+> [!info] The gain/loss coloured BORDER on `PerformancePage` CompactReturnCard and TotalValueCard (previously via `liquid-glass-trend-up/down`) was removed in the 2026-06-24 consistency pass. The card hue is retained via `<TrendHue>`; the coloured border is gone everywhere for consistency. The `glass-trend-up`, `glass-trend-down`, `liquid-glass-trend-up`, and `liquid-glass-trend-down` CSS classes have been deleted from `index.css`.
+
 ### Key Rules
 
 | Rule | Rationale |
@@ -2596,8 +2627,9 @@ Summary cards and stat tiles use a glass-elevated or glass-regular card with a t
 | Use `glass-elevated` for hero/summary cards | Max-tier material for dashboard emphasis |
 | Tables, forms, placeholders, and callout cards stay opaque | Role-based exceptions — see table above |
 | Cards nested in glass dialogs stay opaque | Avoid double-blur |
-| Tint overlay as child, not on card bg | `backdrop-filter` shorthand resets `background`, silently defeating tints set on the card itself |
+| Tint overlay as child, not on card bg (`<TrendHue>` or manual div) | `backdrop-filter` shorthand resets `background`, silently defeating tints set on the card itself |
 | Gradient icons muted opacity (20-40%) | Ensure text contrast and readability |
+| Summary card tint via `<TrendHue>`, not inline divs | Single source of truth; token-reactive with `--gain`/`--loss` toggle |
 
 ---
 

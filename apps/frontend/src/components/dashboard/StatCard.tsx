@@ -1,6 +1,7 @@
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { RollingNumber } from "@/components/shared/RollingNumber";
 import { DeltaPill } from "@/components/shared/DeltaPill";
+import { TrendHue, type TrendTone } from "@/components/shared/TrendHue";
 import { LucideIcon } from "lucide-react";
 
 interface StatCardProps {
@@ -17,16 +18,14 @@ interface StatCardProps {
     formatValue?: (n: number) => string;
     /** Full unabbreviated value shown as tooltip when the displayed value is compact */
     titleValue?: string;
+    /** Override the headline value colour (e.g. "text-primary" for a featured total). Defaults to neutral foreground. */
+    valueClassName?: string;
 }
 
-export function StatCard({ title, value, numericValue, change, changeType = "neutral", subtitle, icon: Icon, trend = "neutral", formatValue, titleValue }: StatCardProps) {
+export function StatCard({ title, value, numericValue, change, changeType = "neutral", subtitle, icon: Icon, trend = "neutral", formatValue, titleValue, valueClassName = "text-foreground" }: StatCardProps) {
     const normalisedTrend = trend === "up" ? "income" : trend === "down" ? "expense" : trend;
 
-    const trendGradient = {
-        income: "from-gain/10 to-gain/5",
-        expense: "from-loss/10 to-loss/5",
-        neutral: "from-primary/10 to-primary/5",
-    }[normalisedTrend] ?? "from-primary/10 to-primary/5";
+    const tone: TrendTone = normalisedTrend === "income" ? "gain" : normalisedTrend === "expense" ? "loss" : "neutral";
 
     const iconBg = {
         income: "bg-gradient-to-br from-gain/20 to-gain/10 text-gain",
@@ -41,7 +40,7 @@ export function StatCard({ title, value, numericValue, change, changeType = "neu
     return (
         <Card
             className="glass-elevated premium-frame micro-lift group relative overflow-hidden h-full">
-            <div className={`absolute inset-0 pointer-events-none rounded-[inherit] bg-gradient-to-br ${trendGradient}`} />
+            <TrendHue tone={tone} />
             <div
                 className="absolute top-0 right-0 w-32 h-32 bg-gradient-to-br from-background/40 to-transparent rounded-full -mr-16 -mt-16 transition-transform duration-500 group-hover:scale-110" />
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-3">
@@ -51,7 +50,7 @@ export function StatCard({ title, value, numericValue, change, changeType = "neu
                 </div>
             </CardHeader>
             <CardContent>
-                <div className="text-3xl font-bold text-foreground tabular-nums">
+                <div className={`text-3xl font-bold tabular-nums ${valueClassName}`}>
                     <span title={titleValue}>
                         <RollingNumber value={displayValue} />
                     </span>

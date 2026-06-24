@@ -5,8 +5,8 @@ status: active
 date: 2026-04-26
 updated: 2026-06-24
 last_modified: 2026-06-24
-tags: [component, shared, utility, frontend, reference, phase-13, phase-c, phase-d, multi-select, export-filters, bug-hunt-2026-05-05, bug-hunt-2026-05-06, dateutils, utc-safe-dates, date-formatting, debounce, accessibility, aria-label, useCallback, aria-grid, keyboard-operability, a11y, performance, memoization, selection-toggle, upcoming-payments-hook, june-2026, symbol-search, research, ui-consistency, glass-consistency, popover-glass-thick]
-description: Reference documentation for shared utility components used across the application. May 2026 adds UTC-safe date parsing, ARIA grid semantics on VirtualDataTable, the onActivateKeyDown keyboard helper, and the columnKeySignature selection-toggle reprocessing fix. June 2026 V11: UpcomingPaymentsNotification refactored onto shared useUpcomingPlannedPayments hook; rendered by AppLayout on all pages (no per-route stand-down). 2026-06-24: SuggestionCard dashboard widget removed; UpcomingPaymentsNotification is now the sole upcoming-payments notification surface. June 2026 V12: SymbolSearchBox and SymbolSearchResultItem added — canonical chrome and result row for all research symbol pickers. June 2026 (glass consistency): SymbolSearchBox dropdown material changed from glass-elevated to glass-thick to match the rest of the floating-overlay system.
+tags: [component, shared, utility, frontend, reference, phase-13, phase-c, phase-d, multi-select, export-filters, bug-hunt-2026-05-05, bug-hunt-2026-05-06, dateutils, utc-safe-dates, date-formatting, debounce, accessibility, aria-label, useCallback, aria-grid, keyboard-operability, a11y, performance, memoization, selection-toggle, upcoming-payments-hook, june-2026, symbol-search, research, ui-consistency, glass-consistency, popover-glass-thick, trend-hue, gain-loss, design-system]
+description: Reference documentation for shared utility components used across the application. May 2026 adds UTC-safe date parsing, ARIA grid semantics on VirtualDataTable, the onActivateKeyDown keyboard helper, and the columnKeySignature selection-toggle reprocessing fix. June 2026 V11: UpcomingPaymentsNotification refactored onto shared useUpcomingPlannedPayments hook; rendered by AppLayout on all pages (no per-route stand-down). 2026-06-24: SuggestionCard dashboard widget removed; UpcomingPaymentsNotification is now the sole upcoming-payments notification surface. June 2026 V12: SymbolSearchBox and SymbolSearchResultItem added — canonical chrome and result row for all research symbol pickers. June 2026 (glass consistency): SymbolSearchBox dropdown material changed from glass-elevated to glass-thick to match the rest of the floating-overlay system. 2026-06-24 (gain/loss consistency pass): TrendHue added — single shared overlay component for the faint diagonal card hue on all summary/stat cards.
 aliases: [shared components, utility components, common components]
 related_code:
   - apps/frontend/src/components/shared/VirtualDataTable.tsx
@@ -23,6 +23,7 @@ related_code:
   - apps/frontend/src/components/shared/RemoteNewsImage.tsx
   - apps/frontend/src/components/shared/SymbolSearchBox.tsx
   - apps/frontend/src/components/shared/SymbolSearchResultItem.tsx
+  - apps/frontend/src/components/shared/TrendHue.tsx
   - apps/frontend/src/components/notifications/UpdateNotification.tsx
   - apps/frontend/src/components/notifications/UpcomingPaymentsNotification.tsx
   - apps/frontend/src/utils/a11y.ts
@@ -487,6 +488,60 @@ The exported `SymbolSearchResult` interface (`{ symbol, name, type, exchange }`)
 - **Add-style pickers** (Compare, Chart Builder): pass `leadingIcon={<Plus className="..." />}`.
 - `AddToWatchlistDialog` also uses this component for its inline scrollable results list.
 
+## TrendHue
+
+**Path:** `[[apps/frontend/src/components/shared/TrendHue.tsx]]`
+
+Single shared overlay component that renders the faint diagonal gain/loss/neutral card tint on summary and stat cards. Introduced in the 2026-06-24 gain/loss colour-consistency pass to eliminate divergent per-page inline gradient divs.
+
+`TrendHue` is the single source of truth for the "trend hue" wash pattern: a `bg-gradient-to-br from-{gain|loss|primary}/10 to-.../5` tint rendered as an `absolute inset-0 pointer-events-none rounded-[inherit]` overlay child. Placing the tint in a child (not on the card background) is required so it survives the `backdrop-filter` cascade — see [[docs/reference/code-patterns#gradient-icon-tile-pattern-phase-9--june-2026|Gradient Icon Tile Pattern]].
+
+### Props
+
+```typescript
+interface TrendHueProps {
+  /** "gain" tints the card with the --gain token; "loss" with --loss; "neutral" uses --primary. */
+  variant: "gain" | "loss" | "neutral";
+  className?: string;
+}
+```
+
+### Visual spec
+
+| `variant` | Gradient classes |
+|---|---|
+| `gain` | `from-gain/10 to-gain/5` |
+| `loss` | `from-loss/10 to-loss/5` |
+| `neutral` | `from-primary/10 to-primary/5` |
+
+The colours are toggle-reactive: they resolve from `--gain` and `--loss` tokens (classic gold/red by default; Okabe-Ito green/orange when `colorblindGainLoss` is on — see [[docs/features/appearance#gain--loss-colors--accessibility-setting-2026-06-24|Appearance — Gain & Loss Colors]]).
+
+### Consumers
+
+| Component | `variant` logic |
+|---|---|
+| `StatCard` (dashboard) | Derived from the existing `trend` prop: `"income"/"up"` → `gain`; `"expense"/"down"` → `loss`; `"neutral"` → `neutral` |
+| `TotalValueCard` (portfolio overview) | `isGain` prop: `true` → `gain`, `false` → `loss` |
+| `PortfolioOverviewPage` summary cards (gain/loss, realized, unrealized) | Sign of the card's value |
+| `PerformancePage` CompactReturnCard and TotalValueCard | Sign of the return value |
+
+### Colour-role convention (2026-06-24)
+
+The following rule applies across all summary/stat cards:
+
+| Surface | Colour rule |
+|---|---|
+| Card background tint | `<TrendHue variant={…} />` — gain/loss/neutral at opacity 0.10; neutral border always |
+| Featured total headline (net worth, portfolio total, total value) | `text-primary` |
+| Directional figures (return %, gain/loss amount) | `amount-gain` / `amount-loss` |
+| Component figures (cost basis, unrealized, realized) | `text-foreground` (neutral) |
+
+> [!info] The gain/loss BORDER that previously appeared on `PerformancePage` CompactReturnCard and TotalValueCard (via `liquid-glass-trend-up/down` CSS classes) was removed in this pass. The hue is retained via `<TrendHue>`; the border is gone for cross-app consistency. The `glass-trend-up / glass-trend-down / liquid-glass-trend-up / liquid-glass-trend-down` classes have been deleted from `index.css` as they are now orphaned.
+
+Code links: [[apps/frontend/src/components/shared/TrendHue.tsx]], [[apps/frontend/src/components/dashboard/StatCard.tsx]], [[apps/frontend/src/components/portfolio/TotalValueCard.tsx]], [[apps/frontend/src/pages/portfolio/PortfolioOverviewPage.tsx]], [[apps/frontend/src/pages/portfolio/PerformancePage.tsx]], [[apps/frontend/src/pages/portfolio/net-worth/NetWorthPage.tsx]]
+
+---
+
 ## Notification Components
 
 ### UpdateNotification
@@ -537,3 +592,4 @@ The former `SuggestionCard` dashboard widget (a Siri-suggestion-style card betwe
 | onActivateKeyDown | CategoriesPage, OwesPage, WatchlistPage, StocksPage, CryptoPage, InvestmentDetailDialog |
 | SymbolSearchBox | ResearchHomePage, MarketLookupPage, ResearchComparePage, ChartBuilderPage |
 | SymbolSearchResultItem | ResearchHomePage, MarketLookupPage, ResearchComparePage, ChartBuilderPage, AddToWatchlistDialog |
+| TrendHue | StatCard, TotalValueCard, PortfolioOverviewPage summary cards, PerformancePage cards, NetWorthPage StatCard |

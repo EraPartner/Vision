@@ -13,6 +13,7 @@ import { Sparkline as ChartSparkline } from '@/components/charts';
 import { Money } from "@/components/shared/Money";
 import { ArrowDownRight, ArrowUpRight, DollarSign, TrendingDown, TrendingUp } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { TrendHue, type TrendTone } from '@/components/shared/TrendHue';
 import { cn } from '@/lib/utils';
 
 const SPARK_COLOR_POSITIVE = 'hsl(var(--gain))';
@@ -63,6 +64,8 @@ export interface TotalValueCardProps {
   neutralSparkline?: boolean;
   /** Format numeric value as currency. */
   formatCurrency: (value: number) => string;
+  /** Overall gain/loss sign — drives the card's gain/loss tint. Omit for a neutral wash. */
+  isGain?: boolean;
 }
 
 function formatPercent(pct: number, digits = 1): string {
@@ -206,13 +209,16 @@ export function TotalValueCard({
   sparkline = [],
   neutralSparkline = false,
   formatCurrency,
+  isGain,
 }: TotalValueCardProps) {
   const hasSparkline = sparkline.length >= 2;
   const hasAllocation = allocation.length > 0 && totalValue > 0;
   const hasPerformers = Boolean(bestPerformer || worstPerformer);
+  const tone: TrendTone = isGain === undefined ? "neutral" : isGain ? "gain" : "loss";
 
   return (
-    <Card className="liquid-glass micro-lift border h-full">
+    <Card className="liquid-glass micro-lift border relative overflow-hidden h-full">
+      <TrendHue tone={tone} />
       <CardHeader className="flex flex-row items-start justify-between pb-3 space-y-0">
         <div className="space-y-1">
           <CardTitle className="text-sm font-medium text-muted-foreground">

@@ -5,7 +5,7 @@ status: accepted
 date: 2026-06-23
 updated: 2026-06-24
 tags: [adr, design-system, css, feature-flag, skin-v2, visual-redesign, tailwind, theming, accessibility, adr-030, adr-075, adr-103, june-2026, gain-loss, css-tokens, tailwind-colors]
-description: Ships a "dense-fintech" visual redesign (Monarch/Copilot spirit) as CSS scoped entirely under a `.skin-v2` root class on <html>, toggled by a build-time env flag VITE_SKIN_V2 (default OFF). Legacy skin renders byte-for-byte unchanged when the class is absent. The flattening redesign (atmosphere/glass/typography/motion/hover) was implemented behind the flag, then reverted at the user's direction; only the colorblind-safe gain/loss recoloring remains behind VITE_SKIN_V2. The aurora, WebGL shader, glass, and hover are retained in the base design. Documents the critical inline-token constraint: applyThemePalette() in themes.ts writes all color tokens as inline styles, defeating any stylesheet override — only structural tokens (radius, blur, motion, aurora alphas) are freely changed from CSS. Addendum 2026-06-24 (initial): colorblind palette promoted to persisted user setting (colorblindGainLoss). Addendum 2026-06-24 (follow-up): default changed to OFF/classic (colorblindGainLoss false, VITE_SKIN_V2 false); --gain/--loss tokens unified app-wide via tokens.css + skin-v2.css overrides; gain/loss Tailwind color utilities added; glass-trend classes re-pointed; ~35 components swept to use gain/loss tokens.
+description: Ships a "dense-fintech" visual redesign (Monarch/Copilot spirit) as CSS scoped entirely under a `.skin-v2` root class on <html>, toggled by a build-time env flag VITE_SKIN_V2 (default OFF). Legacy skin renders byte-for-byte unchanged when the class is absent. The flattening redesign (atmosphere/glass/typography/motion/hover) was implemented behind the flag, then reverted at the user's direction; only the colorblind-safe gain/loss recoloring remains behind VITE_SKIN_V2. The aurora, WebGL shader, glass, and hover are retained in the base design. Documents the critical inline-token constraint: applyThemePalette() in themes.ts writes all color tokens as inline styles, defeating any stylesheet override — only structural tokens (radius, blur, motion, aurora alphas) are freely changed from CSS. Addendum 2026-06-24 (initial): colorblind palette promoted to persisted user setting (colorblindGainLoss). Addendum 2026-06-24 (follow-up): default changed to OFF/classic (colorblindGainLoss false, VITE_SKIN_V2 false); --gain/--loss tokens unified app-wide via tokens.css + skin-v2.css overrides; gain/loss Tailwind color utilities added; glass-trend classes re-pointed then deleted in gain/loss consistency pass; ~35 components swept to use gain/loss tokens. Addendum 2026-06-24 (gain/loss consistency pass): .glass-trend-up/.glass-trend-down/.liquid-glass-trend-* deleted from index.css; TrendHue shared component introduced as sole card-hue delivery mechanism.
 aliases: [skin-v2, dense fintech skin, visual redesign, fintech skin flag]
 ---
 
@@ -168,3 +168,39 @@ Stored colorblindGainLoss setting (post-hydration)
 - `apps/frontend/src/styles/skin-v2.css` — overrides `--gain`/`--loss` only; removed old `.amount-gain`/`.amount-loss` per-class rules
 - `apps/frontend/src/index.css` — `.amount-gain`/`.amount-loss` re-pointed; `.glass-trend-*` re-pointed
 - `apps/frontend/tailwind.config.ts` — `gain`, `loss` color entries added
+
+---
+
+## Addendum — 2026-06-24 (gain/loss colour consistency pass): Orphaned glass-trend classes deleted; TrendHue introduced
+
+**What changed:**
+
+A cross-app gain/loss colour-consistency sweep consolidated all card-hue tint rendering into a single shared component.
+
+1. **New `TrendHue` component** (`apps/frontend/src/components/shared/TrendHue.tsx`) — renders the `bg-gradient-to-br from-{gain|loss|primary}/10 to-.../5` diagonal wash as an `absolute inset-0 pointer-events-none rounded-[inherit]` overlay. Props: `variant: "gain" | "loss" | "neutral"`. This is now the sole mechanism for delivering the card background hue across all summary/stat cards.
+
+2. **Orphaned `.glass-trend-*` classes deleted** — `.glass-trend-up`, `.glass-trend-down`, `.liquid-glass-trend-up`, `.liquid-glass-trend-down` (light + dark) have been removed from `apps/frontend/src/index.css`. After `PerformancePage` migrated off them to `<TrendHue>`, no consumer remained.
+
+3. **Performance page gain/loss border removed** — `PerformancePage` CompactReturnCard and TotalValueCard previously used the `liquid-glass-trend-up/down` classes which added a coloured border. That border is removed for cross-app consistency. The hue wash is preserved via `<TrendHue>`.
+
+4. **`TotalValueCard` (portfolio overview)** gained an `isGain` prop and now renders `<TrendHue>` (previously had no hue at all).
+
+5. **`StatCard` (dashboard)** renders `<TrendHue>` instead of an inline gradient div; gained `valueClassName` prop (default `"text-foreground"`) for featured-total headline colour override.
+
+**Unified colour-role rule (established by this pass):**
+
+| Surface | Rule |
+|---|---|
+| Card background tint | `<TrendHue variant="gain|loss|neutral" />` — 0.10 opacity; neutral border everywhere |
+| Featured total headline | `text-primary` |
+| Directional figures | `amount-gain` / `amount-loss` |
+| Component figures | `text-foreground` (neutral) |
+
+**Files changed:**
+- `apps/frontend/src/components/shared/TrendHue.tsx` — new component
+- `apps/frontend/src/components/dashboard/StatCard.tsx` — uses `<TrendHue>`; `valueClassName` prop added
+- `apps/frontend/src/components/portfolio/TotalValueCard.tsx` — `isGain` prop; uses `<TrendHue>`
+- `apps/frontend/src/pages/portfolio/PerformancePage.tsx` — CompactReturnCard + TotalValueCard off `liquid-glass-trend-*`; compact returns coloured `amount-gain`/`amount-loss`; total value headline `text-primary`
+- `apps/frontend/src/pages/portfolio/PortfolioOverviewPage.tsx` — passes `isGain` to TotalValueCard; 3 summary cards use `<TrendHue>`
+- `apps/frontend/src/pages/portfolio/net-worth/NetWorthPage.tsx` — featured StatCard passes `valueClassName="text-primary"`
+- `apps/frontend/src/index.css` — `.glass-trend-up`, `.glass-trend-down`, `.liquid-glass-trend-up`, `.liquid-glass-trend-down` deleted

@@ -26,6 +26,7 @@ import { Button } from "@/components/ui/button";
 import { RefreshCw } from "lucide-react";
 import { usePortfolio } from "@/hooks/usePortfolio";
 import { useOnlineStatus } from "@/hooks/useOnlineStatus";
+import { TrendHue } from "@/components/shared/TrendHue";
 
 const CHART_KEYS = {
     invested: 'invested',
@@ -375,16 +376,15 @@ function CompactReturnCard({
     const iconBg = trend
         ? "bg-gradient-to-br from-gain/20 to-gain/10 text-gain"
         : "bg-gradient-to-br from-loss/20 to-loss/10 text-loss";
-    const trendGlassClass = trend ? "liquid-glass-trend-up" : "liquid-glass-trend-down";
-
     return (
         <Card
-            className={`liquid-glass micro-lift ${trendGlassClass} relative overflow-hidden border shadow-md lg:col-span-2 lg:row-span-1`}
+            className="liquid-glass micro-lift relative overflow-hidden border shadow-md lg:col-span-2 lg:row-span-1"
         >
+            <TrendHue tone={trend ? "gain" : "loss"} />
             <CardContent className="flex items-center justify-between gap-3 py-3 px-4">
                 <div className="min-w-0">
                     <p className="text-xs font-medium text-muted-foreground truncate">{title}</p>
-                    <div className="text-xl font-bold text-foreground leading-tight">{value}</div>
+                    <div className={`text-xl font-bold leading-tight ${trend ? "amount-gain" : "amount-loss"}`}>{value}</div>
                     <p className="text-[11px] text-muted-foreground mt-0.5 truncate">{subtitle}</p>
                 </div>
                 <div className={`h-9 w-9 shrink-0 rounded-xl flex items-center justify-center ${iconBg} shadow-sm`}>
@@ -432,7 +432,6 @@ function TotalValueCard({
     currency, locale, assetSplit, sparklineData, fxAttribution, labels,
 }: TotalValueCardProps) {
     const isGain = totalGainLoss >= 0;
-    const trendGlassClass = isGain ? "liquid-glass-trend-up" : "liquid-glass-trend-down";
     const iconBg = isGain
         ? "bg-gradient-to-br from-gain/20 to-gain/10 text-gain"
         : "bg-gradient-to-br from-loss/20 to-loss/10 text-loss";
@@ -440,8 +439,9 @@ function TotalValueCard({
 
     return (
         <Card
-            className={`liquid-glass micro-lift ${trendGlassClass} relative overflow-hidden border shadow-lg lg:col-span-2 lg:row-span-3`}
+            className="liquid-glass micro-lift relative overflow-hidden border shadow-lg lg:col-span-2 lg:row-span-3"
         >
+            <TrendHue tone={isGain ? "gain" : "loss"} />
             <div className="absolute top-0 right-0 w-40 h-40 bg-gradient-to-br from-white/50 to-transparent dark:from-white/10 rounded-full -mr-20 -mt-20 pointer-events-none" />
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
                 <CardTitle className="text-sm font-semibold text-muted-foreground">{labels.title}</CardTitle>
@@ -451,7 +451,7 @@ function TotalValueCard({
             </CardHeader>
             <CardContent className="space-y-4">
                 <div>
-                    <div className="text-3xl font-bold text-foreground leading-tight">
+                    <div className="text-3xl font-bold text-primary leading-tight">
                         <Money amount={currentValue} currency={currency} />
                     </div>
                     <div className="mt-2 flex flex-wrap items-baseline gap-x-4 gap-y-1 text-xs">
