@@ -3,7 +3,7 @@ title: DashboardSettingsDialog
 type: component
 status: active
 date: 2026-04-23
-updated: 2026-06-18
+updated: 2026-06-24
 tags: [components, forms, dialogs, settings, refactor, sidebar, instant-apply, phase-3, memoization, backup, encrypt, passphrase-modal, phase-2, visual-effects-tiers, auto-adapt-display, adr-084]
 description: Sidebar-navigated instant-apply settings dialog. Left rail of seven sections; each section is a self-contained component reading from hooks and writing directly to the store/API. Single "Done" close button replaces the old Save/Cancel footer. Shared SettingsPrimitives (SettingsSection, SettingsGroup, SettingRow) enforce a uniform visual language. (ADR-084)
 aliases: [settings-dialog, dashboard-settings, DashboardSettingsDialog]
@@ -164,7 +164,7 @@ Currency, number format, decimal places, date format, language, start of week, p
 
 ### Contents
 
-Theme variant, color mode (system / light / dark / schedule), schedule start/end times, macOS system accent, visual-effects tier, auto-adapt display toggle. Reads from `useTheme` / `useAppSettings`; writes through store actions.
+Theme variant, color mode (system / light / dark / schedule), schedule start/end times, macOS system accent, visual-effects tier, auto-adapt display toggle. **Accessibility** group (2026-06-24): Gain & loss colors Select (`colorblindGainLoss` setting — colorblind-safe Okabe-Ito vs classic gold/red). Reads from `useTheme` / `useAppSettings`; writes through store actions.
 
 ### Visual-Effects Tier (ADR-075 addendum)
 
@@ -349,6 +349,7 @@ The old `settings.save` / `settings.cancel` strings remain in locale files (unus
 | April 25 | 2026-04-25 | `useCallback` + functional updater pattern for stable callbacks; `React.memo()` on all tabs |
 | ADR-075 addendum | 2026-06-12 | Visual-effects tier Select + auto-adapt Switch added to AppearanceTab; `tierSelection` staged state in orchestrator |
 | ADR-084 | 2026-06-18 | 5-tab Save/Cancel form → sidebar + instant-apply; `SettingsPrimitives`; section taxonomy rework; `tabs/` directory removed |
+| ADR-104 addendum | 2026-06-24 | Accessibility group added to AppearanceSection: Gain & loss colors Select (`colorblindGainLoss`) |
 
 ---
 

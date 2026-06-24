@@ -58,6 +58,14 @@ export interface AppSettings {
     startupSection: StartupSection;
     /** Auto-clear a planned payment when an imported/created transaction unambiguously matches it. */
     autoClearPlannedOnMatch: boolean;
+    /**
+     * Gain/loss color palette (accessibility). `true` = colorblind-safe
+     * Okabe-Ito green/orange (loss is orange); `false` = classic gold/red
+     * (loss is red). Drives the `.skin-v2` root class via lib/skin.ts —
+     * pure CSS, applied by AppSettingsProvider. Default off / classic red
+     * (ADR-104 addendum 2026-06-24); opt-in for colorblind accessibility.
+     */
+    colorblindGainLoss: boolean;
 }
 
 // ─── Dashboard settings types ─────────────────────────────────────────────────
@@ -96,6 +104,7 @@ export const DEFAULT_APP_SETTINGS: AppSettings = {
     autoAdaptDisplay: true,
     startupSection: 'budgeting',
     autoClearPlannedOnMatch: true,
+    colorblindGainLoss: false,
 };
 
 /**

@@ -295,7 +295,7 @@ export function CategoryPivotTable({
                                 valueMode,
                                 label: `${group.general} — ${formatPeriodShort(p)}`,
                               })) : undefined}
-                              className={`text-right py-2 px-3 tabular-nums font-semibold ${val === 0 ? "text-muted-foreground/40" : ""} ${val < 0 ? "text-destructive" : ""} ${canClick ? clickableCell : ""}`}
+                              className={`text-right py-2 px-3 tabular-nums font-semibold ${val === 0 ? "text-muted-foreground/40" : ""} ${val < 0 ? "text-loss" : ""} ${canClick ? clickableCell : ""}`}
                             >
                               {val === 0 ? "—" : formatCurrency(val)}
                             </td>
@@ -307,7 +307,7 @@ export function CategoryPivotTable({
                             valueMode,
                             label: group.general,
                           })) : undefined}
-                          className={`text-right py-2 px-3 font-bold tabular-nums ${group.total < 0 ? "text-destructive" : ""} ${groupCategoryIds.length > 0 ? clickableCell : ""}`}
+                          className={`text-right py-2 px-3 font-bold tabular-nums ${group.total < 0 ? "text-loss" : ""} ${groupCategoryIds.length > 0 ? clickableCell : ""}`}
                         >
                           {(() => { const r = formatCompact(group.total); return <span title={r.isCompact ? r.full : undefined}>{r.display}</span>; })()}
                         </td>
@@ -329,7 +329,7 @@ export function CategoryPivotTable({
                                   valueMode,
                                   label: `${cat.categoryName} — ${formatPeriodShort(p)}`,
                                 })) : undefined}
-                                className={`text-right py-2 px-3 tabular-nums ${val === 0 ? "text-muted-foreground/40" : ""} ${val < 0 ? "text-destructive" : ""} ${canClick ? clickableCell : ""}`}
+                                className={`text-right py-2 px-3 tabular-nums ${val === 0 ? "text-muted-foreground/40" : ""} ${val < 0 ? "text-loss" : ""} ${canClick ? clickableCell : ""}`}
                               >
                                 {val === 0 ? "—" : formatCurrency(val)}
                               </td>
@@ -341,7 +341,7 @@ export function CategoryPivotTable({
                               valueMode,
                               label: String(cat.categoryName || ''),
                             })) : undefined}
-                            className={`text-right py-2 px-3 font-medium tabular-nums ${cat.filteredTotal < 0 ? "text-destructive" : ""} ${cat.categoryId != null ? clickableCell : ""}`}
+                            className={`text-right py-2 px-3 font-medium tabular-nums ${cat.filteredTotal < 0 ? "text-loss" : ""} ${cat.categoryId != null ? clickableCell : ""}`}
                           >
                             {formatCurrency(cat.filteredTotal)}
                           </td>

@@ -7,10 +7,9 @@ import type { PlannedTransaction } from "@/types/api";
 
 /**
  * Shared source for "planned payments due in the next 7 days" plus the
- * dismissed-occurrence set. Used by both the global UpcomingPaymentsNotification
- * banner and the dashboard SuggestionCard; the dismissed set lives in a
- * module-level store (persisted to localStorage) so dismissing in one
- * surface immediately hides the payment in the other.
+ * dismissed-occurrence set. Backs the global UpcomingPaymentsNotification
+ * banner (shown above every page); the dismissed set lives in a module-level
+ * store (persisted to localStorage) so a dismissal sticks across navigations.
  *
  * Dismissals are keyed per OCCURRENCE (`id:planned_date`), not per row id:
  * recurring payments keep their id while planned_date advances each cycle,

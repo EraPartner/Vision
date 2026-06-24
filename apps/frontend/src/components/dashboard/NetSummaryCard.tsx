@@ -54,8 +54,8 @@ export function NetSummaryCard({ netBalance, income, spending, history }: NetSum
     net: p.net,
   }));
 
-  const trendGradient = isPositive ? "from-accent/10 to-accent/5" : "from-destructive/10 to-destructive/5";
-  const areaStroke = isPositive ? "var(--color-accent, oklch(72% 0.15 160))" : "var(--color-destructive, oklch(65% 0.2 25))";
+  const trendGradient = isPositive ? "from-gain/10 to-gain/5" : "from-loss/10 to-loss/5";
+  const areaStroke = isPositive ? "hsl(var(--gain))" : "hsl(var(--loss))";
 
   const shownNet = scrubPoint ? scrubPoint.net : netBalance;
   const netColor = shownNet >= 0 ? "amount-gain" : "amount-loss";
@@ -79,7 +79,7 @@ export function NetSummaryCard({ netBalance, income, spending, history }: NetSum
             {isPositive ? t('dashboard.stat.positiveCashFlow') : t('dashboard.stat.negativeCashFlow')}
           </p>
         </div>
-        <div className={`h-11 w-11 rounded-xl flex items-center justify-center shadow-[0_2px_8px_-2px_hsl(var(--primary)/0.25)] transition-transform duration-300 group-hover:scale-105 bg-gradient-to-br ${isPositive ? 'from-accent/20 to-accent/10 text-accent' : 'from-destructive/20 to-destructive/10 text-destructive'}`}>
+        <div className={`h-11 w-11 rounded-xl flex items-center justify-center shadow-[0_2px_8px_-2px_hsl(var(--primary)/0.25)] transition-transform duration-300 group-hover:scale-105 bg-gradient-to-br ${isPositive ? 'from-gain/20 to-gain/10 text-gain' : 'from-loss/20 to-loss/10 text-loss'}`}>
           <DollarSign className="h-5 w-5" />
         </div>
       </CardHeader>
@@ -104,24 +104,24 @@ export function NetSummaryCard({ netBalance, income, spending, history }: NetSum
           </div>
           <div className="h-2.5 w-full overflow-hidden rounded-full bg-muted/50 flex">
             <div
-              className="h-full bg-accent transition-[width] duration-700"
+              className="h-full bg-gain transition-[width] duration-700"
               style={{ width: `${incomePct}%` }}
               aria-label={t('dashboard.stat.income')}
             />
             <div
-              className="h-full bg-destructive transition-[width] duration-700"
+              className="h-full bg-loss transition-[width] duration-700"
               style={{ width: `${spendingPct}%` }}
               aria-label={t('dashboard.stat.spending')}
             />
           </div>
           <div className="flex items-center justify-between text-xs">
             <span className="inline-flex items-center gap-1.5 text-muted-foreground">
-              <ArrowUpRight className="h-3.5 w-3.5 text-accent" />
+              <ArrowUpRight className="h-3.5 w-3.5 text-gain" />
               <span className="tabular-nums text-foreground" title={incomeCompact.isCompact ? incomeCompact.full : undefined}>{incomeCompact.display}</span>
             </span>
             <span className="inline-flex items-center gap-1.5 text-muted-foreground">
               <span className="tabular-nums text-foreground" title={spendingCompact.isCompact ? spendingCompact.full : undefined}>{spendingCompact.display}</span>
-              <TrendingDown className="h-3.5 w-3.5 text-destructive" />
+              <TrendingDown className="h-3.5 w-3.5 text-loss" />
             </span>
           </div>
         </div>

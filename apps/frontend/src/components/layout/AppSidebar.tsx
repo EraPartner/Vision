@@ -56,6 +56,11 @@ import { GO_TO_ROUTES } from "@/hooks/useGoToShortcuts";
 /**
  * The active-route accent rail as a shared layout element: framer-motion
  * glides it between nav items on navigation instead of blinking it on/off.
+ *
+ * Sized as a flush full-height 2px bar (not a rounded inset pill) so it reads
+ * as one continuous edge with the item's rounded-lg corner clip — no bulge.
+ * This is the sole active indicator; the menu button's old inset box-shadow
+ * was removed (ui/sidebar.tsx) to avoid doubling it.
  */
 function ActiveRail() {
   const reducedMotion = useReducedMotion();
@@ -63,7 +68,7 @@ function ActiveRail() {
     <motion.span
       layoutId="sidebar-active-rail"
       aria-hidden="true"
-      className="absolute left-0 top-[18%] bottom-[18%] w-[3px] rounded-r-full bg-primary"
+      className="absolute inset-y-0 left-0 w-[2px] bg-primary"
       transition={reducedMotion ? { duration: 0 } : springs.snappy}
     />
   );

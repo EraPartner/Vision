@@ -3,8 +3,8 @@ title: Settings Feature
 type: feature
 status: active
 date: 2026-06-19
-updated: 2026-06-19
-tags: [feature, settings, configuration, preferences, frontend, backend, refactor, phase-3, phase-4, zustand, store, backup, encrypt, passphrase, phase-2, auto-link, planned-match, june-2026, instant-apply, sidebar]
+updated: 2026-06-24
+tags: [feature, settings, configuration, preferences, frontend, backend, refactor, phase-3, phase-4, zustand, store, backup, encrypt, passphrase, phase-2, auto-link, planned-match, june-2026, instant-apply, sidebar, accessibility, colorblind, gain-loss]
 description: Application settings system with JSONB storage, preload optimization, propagation across all pages, and sidebar-navigated instant-apply DashboardSettingsDialog UI (ADR-084).
 aliases: [preferences, configuration, app settings, user settings]
 related_code:
@@ -96,6 +96,7 @@ SettingsPreloadContext → SettingsContext/AppSettingsContext/ThemeContext
 | `rebalance_plans` | array | `[]` | Saved custom rebalancing plans (max 50); each entry `{ id, name, targetWeights, cashCap? }` — see [[docs/adr/098-cross-workspace-features\|ADR-098]] |
 | `startupSection` | `StartupSection` | `'budgeting'` | Section the app navigates to at launch (field within the `app_settings` JSONB blob) |
 | `autoClearPlannedOnMatch` | boolean | `true` | When `true`, automatically links and executes a planned payment when an ingested transaction unambiguously matches it. When `false`, auto-link is disabled entirely (no suggestions surface either). See [[docs/features/plannedTransactions#auto-link--auto-clear-on-ingest-june-2026\|Planned Transactions: Auto-Link on Ingest]]. |
+| `colorblindGainLoss` | boolean | `false` | When `true`, applies the Okabe-Ito colorblind-safe gain/loss palette (green gain / orange loss, `.skin-v2` root class). When `false` (default), uses the classic gold gain (`--gain: var(--accent)`) / red loss (`--loss: var(--destructive)`) palette. Controlled via **Settings → Appearance → Accessibility → Gain & loss colors**. Persisted in the `app_settings` JSONB blob; `AppSettingsProvider` calls `setSkinV2(appSettings.colorblindGainLoss)` on hydration and on change. See [[docs/adr/104-skin-v2-dense-fintech-visual-redesign\|ADR-104 addendum]]. |
 
 ## Startup Section
 
@@ -268,7 +269,7 @@ The primary UI is `[[apps/frontend/src/components/settings/DashboardSettingsDial
 | Section | File | Contents |
 |---------|------|---------|
 | General | `sections/GeneralSection.tsx` | Currency, number/decimal/date format, language, start of week, page size |
-| Appearance | `sections/AppearanceSection.tsx` | Theme variant, color mode + schedule, macOS system accent, visual-effects tier, auto-adapt |
+| Appearance | `sections/AppearanceSection.tsx` | Theme variant, color mode + schedule, macOS system accent, visual-effects tier, auto-adapt; **Accessibility** group: gain & loss colors (colorblind-safe vs classic) |
 | Statistics | `sections/StatisticsSection.tsx` | Exclusion scope, exclude-hidden, internal transfers toggle, excluded categories/recipients (was "Dashboard" tab) |
 | Behavior | `sections/BehaviorSection.tsx` | Startup section, cost-basis method, auto-clear planned, reset recurring dismissals |
 | AI & Research | `sections/AiSection.tsx` | Ollama AI chat model, research provider keys (composes `AIChatSettingsSection` + `ResearchKeysSection`) |
@@ -305,6 +306,18 @@ New keys added (en + nl); no existing keys removed:
 - `settings.group.{formatting,localeDisplay,colorMode,visualEffects}` — group card labels
 
 The old `settings.save` / `settings.cancel` strings remain in locale files (unused).
+
+#### i18n Keys — Accessibility group (2026-06-24)
+
+New keys added in en + nl (Appearance section):
+
+| Key | EN value |
+|-----|---------|
+| `settings.group.accessibility` | "Accessibility" |
+| `settings.appearance.gainLossColors` | "Gain & loss colors" |
+| `settings.appearance.gainLossColorsHint` | Hint text explaining the two options |
+| `settings.appearance.gainLossColors.colorblind` | "Colorblind-safe (orange loss)" |
+| `settings.appearance.gainLossColors.classic` | "Classic (red loss)" |
 
 **Full Documentation**: See [[docs/components/dashboard-settings-dialog|DashboardSettingsDialog Documentation]]
 

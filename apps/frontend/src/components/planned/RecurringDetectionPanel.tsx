@@ -240,10 +240,10 @@ export function RecurringDetectionPanel({ onCreatePlanned }: Props) {
                                                     {formatCurrency(lastChange.previousAmount, pattern.currency)}
                                                 </span>
                                                 <span className="text-xs">→</span>
-                                                <span className={`text-xs font-bold ${lastChange.direction === "increased" ? "text-destructive" : "text-accent"}`}>
+                                                <span className={`text-xs font-bold ${lastChange.direction === "increased" ? "text-loss" : "text-gain"}`}>
                                                     {formatCurrency(lastChange.newAmount, pattern.currency)}
                                                 </span>
-                                                <Badge variant="outline" className={`text-xs ${lastChange.direction === "increased" ? "text-destructive border-destructive/30" : "text-accent border-accent/30"}`}>
+                                                <Badge variant="outline" className={`text-xs ${lastChange.direction === "increased" ? "text-loss border-loss/30" : "text-gain border-gain/30"}`}>
                                                     {lastChange.direction === "increased" ? <TrendingUp className="h-3 w-3 mr-1" /> : <TrendingDown className="h-3 w-3 mr-1" />}
                                                     {lastChange.percentChange > 0 ? "+" : ""}{lastChange.percentChange.toFixed(1)}%
                                                 </Badge>

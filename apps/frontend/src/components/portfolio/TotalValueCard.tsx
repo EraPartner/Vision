@@ -15,8 +15,8 @@ import { ArrowDownRight, ArrowUpRight, DollarSign, TrendingDown, TrendingUp } fr
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { cn } from '@/lib/utils';
 
-const SPARK_COLOR_POSITIVE = 'hsl(142, 76%, 36%)';
-const SPARK_COLOR_NEGATIVE = 'hsl(0, 84%, 60%)';
+const SPARK_COLOR_POSITIVE = 'hsl(var(--gain))';
+const SPARK_COLOR_NEGATIVE = 'hsl(var(--loss))';
 const SPARK_COLOR_NEUTRAL = 'hsl(217, 91%, 60%)';
 
 export interface AllocationSlice {

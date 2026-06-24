@@ -200,7 +200,7 @@ export function WatchlistChartDialog({ item, open, onOpenChange }: WatchlistChar
                   {priceDiff != null && (
                     <div className={cn(
                       "flex items-center gap-1 text-sm mt-1",
-                      priceDiff > 0 ? "text-destructive" : "text-success"
+                      priceDiff > 0 ? "text-loss" : "text-gain"
                     )}>
                       {priceDiff > 0 ? <TrendingUp className="h-4 w-4" /> : <TrendingDown className="h-4 w-4" />}
                       {Math.abs(priceDiff).toFixed(2)}% {priceDiff > 0 ? t('watchlistChart.aboveTarget', { n: Math.abs(priceDiff).toFixed(0) }) : t('watchlistChart.belowTarget', { n: Math.abs(priceDiff).toFixed(0) })}

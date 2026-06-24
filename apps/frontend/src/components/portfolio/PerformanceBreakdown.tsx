@@ -42,12 +42,12 @@ function getHeatColor(val: number | null, maxAbsPct: number): string {
     const ratio = absPct / scale;
     const strongMove = absPct >= 2.5 || ratio > 0.72;
     const mediumMove = absPct >= 1.0 || ratio > 0.42;
-    if (val > 0 && strongMove) return "bg-success/70 text-foreground";
-    if (val > 0 && mediumMove) return "bg-success/40 text-foreground";
-    if (val > 0) return "bg-success/20 text-foreground";
-    if (strongMove) return "bg-destructive/70 text-foreground";
-    if (mediumMove) return "bg-destructive/45 text-foreground";
-    return "bg-destructive/20 text-foreground";
+    if (val > 0 && strongMove) return "bg-gain/70 text-foreground";
+    if (val > 0 && mediumMove) return "bg-gain/40 text-foreground";
+    if (val > 0) return "bg-gain/20 text-foreground";
+    if (strongMove) return "bg-loss/70 text-foreground";
+    if (mediumMove) return "bg-loss/45 text-foreground";
+    return "bg-loss/20 text-foreground";
 }
 
 export default function PerformanceBreakdown({ heatmapData, breakdownSummary }: Props) {
@@ -190,13 +190,13 @@ export default function PerformanceBreakdown({ heatmapData, breakdownSummary }: 
                         <div className="flex items-center justify-center gap-2 mt-4 text-xs text-muted-foreground">
                             <span>{t('performance.loss')}</span>
                             <div className="flex gap-0.5">
-                                <div className="w-6 h-4 rounded-sm bg-destructive/70" />
-                                <div className="w-6 h-4 rounded-sm bg-destructive/45" />
-                                <div className="w-6 h-4 rounded-sm bg-destructive/20" />
+                                <div className="w-6 h-4 rounded-sm bg-loss/70" />
+                                <div className="w-6 h-4 rounded-sm bg-loss/45" />
+                                <div className="w-6 h-4 rounded-sm bg-loss/20" />
                                 <div className="w-6 h-4 rounded-sm bg-muted" />
-                                <div className="w-6 h-4 rounded-sm bg-success/20" />
-                                <div className="w-6 h-4 rounded-sm bg-success/40" />
-                                <div className="w-6 h-4 rounded-sm bg-success/70" />
+                                <div className="w-6 h-4 rounded-sm bg-gain/20" />
+                                <div className="w-6 h-4 rounded-sm bg-gain/40" />
+                                <div className="w-6 h-4 rounded-sm bg-gain/70" />
                             </div>
                             <span>{t('performance.gain')}</span>
                         </div>

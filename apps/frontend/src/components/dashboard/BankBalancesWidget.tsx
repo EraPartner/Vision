@@ -180,7 +180,7 @@ export function BankBalancesWidget() {
                                         </div>
                                         <Landmark className="h-4 w-4 text-muted-foreground/40 shrink-0" />
                                     </div>
-                                    <div className={`text-xl font-bold tabular-nums ${acctPositive ? "text-foreground" : "text-destructive"}`}>
+                                    <div className={`text-xl font-bold tabular-nums ${acctPositive ? "text-foreground" : "text-loss"}`}>
                                         {(() => { const r = formatCurrencyCompact(acct.balance, defaultCurrency, locale); return <span title={r.isCompact ? r.full : undefined}>{r.display}</span>; })()}
                                     </div>
                                     <div className="text-xs text-muted-foreground mt-1">

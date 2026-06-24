@@ -259,7 +259,7 @@ export function LinkTransactionDialog({ open, onOpenChange, payment, onExecute }
                     </div>
                   </div>
                   <div className="text-right">
-                    <div className={`font-semibold ${tx.amount < 0 ? 'text-destructive' : 'text-accent'}`}>{tx.amount < 0 ? '−' : '+'}<Money amount={Math.abs(tx.amount)} currency={tx.currency} /></div>
+                    <div className={`font-semibold ${tx.amount < 0 ? 'text-loss' : 'text-gain'}`}>{tx.amount < 0 ? '−' : '+'}<Money amount={Math.abs(tx.amount)} currency={tx.currency} /></div>
                     <div className="text-xs text-muted-foreground">#{tx.id}</div>
                   </div>
                 </label>

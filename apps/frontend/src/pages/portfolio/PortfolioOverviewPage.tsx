@@ -358,9 +358,9 @@ export default function PortfolioOverviewPage() {
                         { label: t('portfolio.assetGain'), value: totalAssetGainInTarget, cls: totalAssetGainInTarget >= 0 ? 'amount-gain' : 'amount-loss', showSign: true },
                         { label: t('portfolio.fxEffect'), value: totalFxGainInTarget, cls: totalFxGainInTarget >= 0 ? 'amount-gain' : 'amount-loss', showSign: true },
                       ] : []),
-                      { label: t('portfolio.totalIncome'), value: totalIncome, cls: 'text-accent', showSign: true },
-                       { label: t('portfolio.totalFees'), value: -totalFeesInTarget, cls: 'text-destructive' },
-                        { label: t('portfolio.totalTaxes'), value: -totalTaxesInTarget, cls: 'text-destructive' },
+                      { label: t('portfolio.totalIncome'), value: totalIncome, cls: 'text-gain', showSign: true },
+                       { label: t('portfolio.totalFees'), value: -totalFeesInTarget, cls: 'text-loss' },
+                        { label: t('portfolio.totalTaxes'), value: -totalTaxesInTarget, cls: 'text-loss' },
                     ].map(({ label, value, cls, showSign }) => (
                       <div key={label} className="flex justify-between items-center py-2 border-b border-border/50 last:border-0">
                         <span className="text-sm text-muted-foreground">{label}</span>
@@ -397,7 +397,7 @@ export default function PortfolioOverviewPage() {
                                 {unitBased && inv.totalUnits > 0 && (
                                   <span>{t('portfolio.units.label', { units: inv.totalUnits.toFixed(4), price: fmt(convertToTarget(inv.avgCostBasis, inv.currency)) })}</span>
                                 )}
-                                {inv.totalIncome > 0 && <span className="text-accent">{t('portfolio.income.label', { amount: fmt(convertToTarget(inv.totalIncome, inv.currency)) })}</span>}
+                                {inv.totalIncome > 0 && <span className="text-gain">{t('portfolio.income.label', { amount: fmt(convertToTarget(inv.totalIncome, inv.currency)) })}</span>}
                               </div>
                             </div>
                             <div className="text-right shrink-0">

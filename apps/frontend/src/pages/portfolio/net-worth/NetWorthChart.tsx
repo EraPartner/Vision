@@ -26,7 +26,7 @@ interface NetWorthChartProps {
 const TOTAL_COLOR = 'hsl(var(--primary))';
 const LIQUID_COLOR = 'hsl(var(--chart-2))';
 const INVESTMENTS_COLOR = 'hsl(var(--chart-4))';
-const LIABILITIES_COLOR = 'hsl(var(--destructive))';
+const LIABILITIES_COLOR = 'hsl(var(--loss))';
 
 export function NetWorthChart({
   snapshots,

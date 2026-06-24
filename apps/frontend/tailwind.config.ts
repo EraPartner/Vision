@@ -68,6 +68,12 @@ export default {
                 success: "hsl(var(--success))",
                 warning: "hsl(var(--warning))",
                 expense: "hsl(var(--expense))",
+                // Gain/loss palette — follows the colorblind accessibility
+                // toggle (tokens.css --gain/--loss, overridden by skin-v2.css).
+                // <alpha-value> so bg-/from-/ring-/border- opacity modifiers
+                // work on tinted badges, gradients and card fills.
+                gain: "hsl(var(--gain) / <alpha-value>)",
+                loss: "hsl(var(--loss) / <alpha-value>)",
                 muted: {
                     DEFAULT: "hsl(var(--muted))",
                     foreground: "hsl(var(--muted-foreground))",

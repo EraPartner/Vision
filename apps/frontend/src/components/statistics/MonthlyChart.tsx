@@ -43,8 +43,8 @@ export const MonthlyChart = memo(function MonthlyChart({ data }: MonthlyChartPro
   }, [data.monthlyData]);
 
   const series: BarSeries<IncomeSpendingDatum>[] = useMemo(() => [
-    { key: "income", label: t("statsPage.income"), accessor: (d) => d.income, color: "hsl(var(--primary))" },
-    { key: "spending", label: t("statsPage.spending"), accessor: (d) => d.spending, color: "hsl(var(--destructive))" },
+    { key: "income", label: t("statsPage.income"), accessor: (d) => d.income, color: "hsl(var(--gain))" },
+    { key: "spending", label: t("statsPage.spending"), accessor: (d) => d.spending, color: "hsl(var(--loss))" },
   ], [t]);
 
   const overlays: BarOverlay<IncomeSpendingDatum>[] = useMemo(() => {
@@ -54,7 +54,7 @@ export const MonthlyChart = memo(function MonthlyChart({ data }: MonthlyChartPro
         key: "incomeAvg",
         label: t("statsPage.incomeAvg"),
         accessor: (d) => d.incomeAvg,
-        color: "hsl(var(--primary) / 0.7)",
+        color: "hsl(var(--gain) / 0.7)",
         strokeWidth: 2,
         strokeDasharray: "4 3",
       },
@@ -62,7 +62,7 @@ export const MonthlyChart = memo(function MonthlyChart({ data }: MonthlyChartPro
         key: "spendingAvg",
         label: t("statsPage.spendingAvg"),
         accessor: (d) => d.spendingAvg,
-        color: "hsl(var(--destructive) / 0.7)",
+        color: "hsl(var(--loss) / 0.7)",
         strokeWidth: 2,
         strokeDasharray: "4 3",
       },

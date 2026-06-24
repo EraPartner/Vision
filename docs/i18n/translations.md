@@ -3,9 +3,9 @@ title: Translations & i18n
 type: i18n
 status: active
 date: 2026-04-27
-updated: 2026-06-12
-tags: [i18n, translations, localization, internationalization, phase-6, phase-8, phase-f, phase-9, phase-c, phase-d, phase-2, splits, settlement, admin, observability, cash-flow-forecast, pdf-export, portfolio, tax, backup, encrypt, passphrase-modal, accessibility, aria-label, bug-hunt-2026-05-06, chart-aria, screen-reader, plural, tc, intl-plural-rules, planned-page, toast, electron-native, menu, system-accent, suggestion-card, splash, upcoming-count, electron-error-page, backend-watchdog, visual-effects-tiers, auto-adapt-display, june-2026]
-description: Internationalization system including supported languages, translation workflow, and usage patterns. Phase 6 adds 32 export keys for PDF report localization. Phase 8 adds 11 additional export.section.* keys for portfolio (6) and tax (7) report sections. Phase C adds 15 cash flow forecast keys. Phase F adds 60 admin observability keys. 2026-05-29 adds 16 chart.aria.* keys (localized chart screen-reader summaries) and 21 aria.* keys (localized icon-button aria-labels). June 2026 adds tc() plural mechanism and plannedPage error-toast keys. June 2026 (ADR-070) adds 5 commandPalette.* keys (en + nl) for the new ⌘K command palette. June 2026 Premium v3 (ADR-071) adds 8 keys: settings.general.enhancedEffects/Hint, shortcuts.title/showHelp/closeDialog/chartScrub, commandPalette.recent/searchTransactions. June 2026 Premium v3 V5-V7 adds 14 keys: contextMenu.* (8 keys), quickLook.* (2 keys), shortcuts table-interaction additions (4 keys). June 2026 V12 (ADR-072) adds 11 keys: menu.edit/file/go/importCsv/keyboardShortcuts/newTransaction/settings/toggleSidebar/view, settings.appearance.systemAccent/systemAccentHint. June 2026 V11 adds 4 keys: dashboard.suggestions, dashboard.widgetDescriptions.suggestions, suggestions.kicker, suggestions.review. June 2026 (startup/UI fixes) adds 5 splash.* keys (en + nl, Electron boot splash narration) + tc()-plural upcoming.count.one/.other; removes upcoming.countSingle/countPlural. 2026-06-11 adds 5 app.* keys (Electron error page + backend-lost watchdog, en + nl). 2026-06-12 (ADR-075) adds 7 settings.appearance.visualEffects*/autoAdaptDisplay* keys; removes settings.general.enhancedEffects + settings.general.enhancedEffectsHint. ADR-075 addendum (same day) adds 2 more contextual-note keys (visualEffectsAutoNote + visualEffectsOverrideNote). Total: 2913 keys (per validate-locales after addendum).
+updated: 2026-06-24
+tags: [i18n, translations, localization, internationalization, phase-6, phase-8, phase-f, phase-9, phase-c, phase-d, phase-2, splits, settlement, admin, observability, cash-flow-forecast, pdf-export, portfolio, tax, backup, encrypt, passphrase-modal, accessibility, aria-label, bug-hunt-2026-05-06, chart-aria, screen-reader, plural, tc, intl-plural-rules, planned-page, toast, electron-native, menu, system-accent, splash, upcoming-count, electron-error-page, backend-watchdog, visual-effects-tiers, auto-adapt-display, colorblind, gain-loss, june-2026]
+description: Internationalization system including supported languages, translation workflow, and usage patterns. Phase 6 adds 32 export keys for PDF report localization. Phase 8 adds 11 additional export.section.* keys for portfolio (6) and tax (7) report sections. Phase C adds 15 cash flow forecast keys. Phase F adds 60 admin observability keys. 2026-05-29 adds 16 chart.aria.* keys (localized chart screen-reader summaries) and 21 aria.* keys (localized icon-button aria-labels). June 2026 adds tc() plural mechanism and plannedPage error-toast keys. June 2026 (ADR-070) adds 5 commandPalette.* keys (en + nl) for the new ⌘K command palette. June 2026 Premium v3 (ADR-071) adds 8 keys: settings.general.enhancedEffects/Hint, shortcuts.title/showHelp/closeDialog/chartScrub, commandPalette.recent/searchTransactions. June 2026 Premium v3 V5-V7 adds 14 keys: contextMenu.* (8 keys), quickLook.* (2 keys), shortcuts table-interaction additions (4 keys). June 2026 V12 (ADR-072) adds 11 keys: menu.edit/file/go/importCsv/keyboardShortcuts/newTransaction/settings/toggleSidebar/view, settings.appearance.systemAccent/systemAccentHint. June 2026 V11 adds 4 keys: dashboard.suggestions, dashboard.widgetDescriptions.suggestions, suggestions.kicker, suggestions.review. June 2026 (startup/UI fixes) adds 5 splash.* keys (en + nl, Electron boot splash narration) + tc()-plural upcoming.count.one/.other; removes upcoming.countSingle/countPlural. 2026-06-11 adds 5 app.* keys (Electron error page + backend-lost watchdog, en + nl). 2026-06-12 (ADR-075) adds 7 settings.appearance.visualEffects*/autoAdaptDisplay* keys; removes settings.general.enhancedEffects + settings.general.enhancedEffectsHint. ADR-075 addendum (same day) adds 2 more contextual-note keys (visualEffectsAutoNote + visualEffectsOverrideNote). 2026-06-24 adds 5 Accessibility group keys (settings.group.accessibility, settings.appearance.gainLossColors, settings.appearance.gainLossColorsHint, settings.appearance.gainLossColors.colorblind, settings.appearance.gainLossColors.classic). Total: 2918 keys.
 aliases: [i18n, translations, localization, language, nl, en, dutch, english]
 related_code: ["apps/frontend/src/locales", "apps/frontend/src/contexts/LanguageContext.tsx", "apps/frontend/src/hooks/useSplits.ts"]
 ---
@@ -129,7 +129,7 @@ tc('table.items', 5)  // EN: "5 items"   / NL: "5 artikelen"
 | `upcoming.countSingle` | `tc('upcoming.count', 1)` |
 | `upcoming.countPlural` | `tc('upcoming.count', count)` |
 
-`upcoming.countSingle`/`countPlural` were replaced in June 2026 when `SuggestionCard`'s hand-rolled singular/plural logic was migrated to `tc()` for consistency with the rest of the app.
+`upcoming.countSingle`/`countPlural` were replaced in June 2026 when the upcoming-payments banner's hand-rolled singular/plural logic was migrated to `tc()` for consistency with the rest of the app (at the time this was used by `SuggestionCard`, which has since been deleted; the `tc()` migration is retained).
 
 ## Translation Keys
 
@@ -239,6 +239,26 @@ Code links: [[apps/frontend/src/stores/settingsStore.ts]], [[apps/frontend/src/c
 
 ---
 
+#### Accessibility group — Gain & loss colors (2026-06-24, ADR-104 addendum)
+
+5 new keys added to `i18n/source/en.json` + `nl.json`; `bun run generate-locales` + `validate-locales` clean. Total after this batch: **2918 keys**.
+
+**5 new `settings.group.*` / `settings.appearance.*` keys** — Accessibility group in AppearanceSection:
+
+| Key | EN |
+|-----|----|
+| `settings.group.accessibility` | "Accessibility" |
+| `settings.appearance.gainLossColors` | "Gain & loss colors" |
+| `settings.appearance.gainLossColorsHint` | Hint describing colorblind-safe vs classic modes |
+| `settings.appearance.gainLossColors.colorblind` | "Colorblind-safe (orange loss)" |
+| `settings.appearance.gainLossColors.classic` | "Classic (red loss)" |
+
+These keys back the Select in the new **Accessibility** `SettingsGroup` inside `AppearanceSection`. The setting it drives (`colorblindGainLoss`) toggles `.skin-v2` on `<html>` via `AppSettingsProvider`. See [[docs/features/appearance#gain--loss-colors--accessibility-setting-2026-06-24|Appearance — Gain & Loss Colors]] and [[docs/adr/104-skin-v2-dense-fintech-visual-redesign#addendum--2026-06-24-colorblind-palette-promoted-to-user-setting|ADR-104 addendum]].
+
+Code links: [[apps/frontend/src/components/settings/sections/AppearanceSection.tsx]], [[apps/frontend/src/stores/settingsStore.ts]], [[apps/frontend/src/contexts/AppSettingsContext.tsx]], [[i18n/source/en.json]], [[i18n/source/nl.json]]
+
+---
+
 #### Startup/UI fix batch (June 2026)
 
 7 new keys, 2 removed. `bun run generate-locales` + `validate-locales` clean. Keys also flow to `packaging/electron/i18n/` via `generate-locales`.
@@ -291,7 +311,7 @@ Code links: [[packaging/electron/main.js]], [[i18n/source/en.json]], [[i18n/sour
 
 4 new keys added to `i18n/source/en.json` + `nl.json`; `bun run generate-locales` + `validate-locales` clean. Total after this batch: **2891 keys**.
 
-**4 new `dashboard.*` / `suggestions.*` keys** — SuggestionCard widget (V11):
+**4 `dashboard.*` / `suggestions.*` keys** — added by the SuggestionCard widget (V11):
 
 | Key | EN |
 |-----|----|
@@ -300,10 +320,13 @@ Code links: [[packaging/electron/main.js]], [[i18n/source/en.json]], [[i18n/sour
 | `suggestions.kicker` | "Suggested for you" |
 | `suggestions.review` | "Review" |
 
-> [!note] No new keys for V8, V9, V10
-> V8 (icon bounce) and V9 (sparkline scrub) are purely CSS/JS with no user-visible new strings. V10 (genie dialog exit) is also CSS/JS-only. Only V11's `SuggestionCard` introduced new i18n keys.
+> [!warning] 2026-06-24 — SuggestionCard deleted; these keys are now unused
+> `SuggestionCard` was removed as part of the upcoming-payments banner unification. The four keys above remain in the locale files but are no longer referenced by any component. They can be pruned in a future locale cleanup pass (`bun run validate-locales` still passes because unused keys are not an error).
 
-Code links: [[apps/frontend/src/components/dashboard/SuggestionCard.tsx]], [[apps/frontend/src/hooks/useUpcomingPlannedPayments.ts]], [[apps/frontend/src/pages/DashboardPage.tsx]], [[i18n/source/en.json]], [[i18n/source/nl.json]]
+> [!note] No new keys for V8, V9, V10
+> V8 (icon bounce) and V9 (sparkline scrub) are purely CSS/JS with no user-visible new strings. V10 (genie dialog exit) is also CSS/JS-only.
+
+Code links: [[apps/frontend/src/hooks/useUpcomingPlannedPayments.ts]], [[apps/frontend/src/pages/DashboardPage.tsx]], [[i18n/source/en.json]], [[i18n/source/nl.json]]
 
 ---
 

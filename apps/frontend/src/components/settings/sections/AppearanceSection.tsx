@@ -200,6 +200,36 @@ export const AppearanceSection = memo(function AppearanceSection() {
                     />
                 </SettingRow>
             </SettingsGroup>
+
+            {/* Accessibility — colorblind-safe gain/loss palette (loss: orange vs red) */}
+            <SettingsGroup label={t('settings.group.accessibility')}>
+                <SettingRow
+                    title={t('settings.appearance.gainLossColors')}
+                    description={t('settings.appearance.gainLossColorsHint')}
+                    layout="stack"
+                >
+                    <Select
+                        value={(appSettings.colorblindGainLoss ?? true) ? 'colorblind' : 'classic'}
+                        onValueChange={(v) => updateAppSettings({ colorblindGainLoss: v === 'colorblind' })}
+                    >
+                        <SelectTrigger><SelectValue /></SelectTrigger>
+                        <SelectContent>
+                            <SelectItem value="colorblind">
+                                <span className="flex items-center gap-2">
+                                    <span className="h-3 w-3 rounded-full" style={{ backgroundColor: 'hsl(24 90% 62%)' }} aria-hidden />
+                                    {t('settings.appearance.gainLossColors.colorblind')}
+                                </span>
+                            </SelectItem>
+                            <SelectItem value="classic">
+                                <span className="flex items-center gap-2">
+                                    <span className="h-3 w-3 rounded-full" style={{ backgroundColor: 'hsl(358 82% 62%)' }} aria-hidden />
+                                    {t('settings.appearance.gainLossColors.classic')}
+                                </span>
+                            </SelectItem>
+                        </SelectContent>
+                    </Select>
+                </SettingRow>
+            </SettingsGroup>
         </SettingsSection>
     );
 });

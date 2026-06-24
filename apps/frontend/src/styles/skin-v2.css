@@ -12,7 +12,14 @@
  * legacy champagne-gold / red) and wins over Tailwind's layers when present.
  * ================================================================== */
 
-/* Okabe-Ito colorblind-safe gain/loss tokens (light + dark). */
+/* Okabe-Ito colorblind-safe gain/loss tokens (light + dark). Overriding only
+   the --gain/--loss tokens is enough: every gain/loss surface (the .amount-gain
+   / .amount-loss text classes in index.css, gain/loss badges, and charts via
+   useGainLossColors) reads these tokens, so the whole app recolors from this
+   one override with no per-component branch. The legacy palette (gold/red)
+   lives in tokens.css and applies whenever this class is absent. The +/- sign
+   and directional arrows alongside values are the non-color cues that satisfy
+   "never rely on color alone". */
 :root.skin-v2 {
     --gain: 162 84% 30%;
     --loss: 24 85% 45%;
@@ -21,16 +28,4 @@
 :root.skin-v2.dark {
     --gain: 160 65% 52%;
     --loss: 24 90% 62%;
-}
-
-/* Remap the semantic gain/loss classes to the colorblind-safe tokens. The
-   legacy skin keeps gold/red (index.css). Pure CSS, reactive, no per-component
-   branch. The +/- sign shown alongside the value is the non-color cue that
-   satisfies "never rely on color alone". */
-:root.skin-v2 .amount-gain {
-    color: hsl(var(--gain));
-}
-
-:root.skin-v2 .amount-loss {
-    color: hsl(var(--loss));
 }

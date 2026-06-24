@@ -3,10 +3,10 @@ title: Shared Components Reference
 type: component
 status: active
 date: 2026-04-26
-updated: 2026-06-16
-last_modified: 2026-06-16
+updated: 2026-06-24
+last_modified: 2026-06-24
 tags: [component, shared, utility, frontend, reference, phase-13, phase-c, phase-d, multi-select, export-filters, bug-hunt-2026-05-05, bug-hunt-2026-05-06, dateutils, utc-safe-dates, date-formatting, debounce, accessibility, aria-label, useCallback, aria-grid, keyboard-operability, a11y, performance, memoization, selection-toggle, upcoming-payments-hook, june-2026, symbol-search, research, ui-consistency, glass-consistency, popover-glass-thick]
-description: Reference documentation for shared utility components used across the application. May 2026 adds UTC-safe date parsing, ARIA grid semantics on VirtualDataTable, the onActivateKeyDown keyboard helper, and the columnKeySignature selection-toggle reprocessing fix. June 2026 V11: UpcomingPaymentsNotification refactored onto shared useUpcomingPlannedPayments hook; stands down on dashboard when suggestions widget is visible. June 2026 V12: SymbolSearchBox and SymbolSearchResultItem added — canonical chrome and result row for all research symbol pickers. June 2026 (glass consistency): SymbolSearchBox dropdown material changed from glass-elevated to glass-thick to match the rest of the floating-overlay system.
+description: Reference documentation for shared utility components used across the application. May 2026 adds UTC-safe date parsing, ARIA grid semantics on VirtualDataTable, the onActivateKeyDown keyboard helper, and the columnKeySignature selection-toggle reprocessing fix. June 2026 V11: UpcomingPaymentsNotification refactored onto shared useUpcomingPlannedPayments hook; rendered by AppLayout on all pages (no per-route stand-down). 2026-06-24: SuggestionCard dashboard widget removed; UpcomingPaymentsNotification is now the sole upcoming-payments notification surface. June 2026 V12: SymbolSearchBox and SymbolSearchResultItem added — canonical chrome and result row for all research symbol pickers. June 2026 (glass consistency): SymbolSearchBox dropdown material changed from glass-elevated to glass-thick to match the rest of the floating-overlay system.
 aliases: [shared components, utility components, common components]
 related_code:
   - apps/frontend/src/components/shared/VirtualDataTable.tsx
@@ -505,10 +505,13 @@ Shows notifications for upcoming planned/recurring payments.
 
 `UpcomingPaymentsNotification` was refactored onto the shared `useUpcomingPlannedPayments` hook:
 
-- Data fetch and dismissed-ID state moved to `hooks/useUpcomingPlannedPayments.ts` (shared with `SuggestionCard`).
-- **Dashboard stand-down**: On the `/` route, the component returns `null` while `useWidgetVisibility('dashboard', []).isVisible('suggestions')` is `true` (the suggestion card is visible). Hiding the widget brings the banner back.
+- Data fetch and dismissed-ID state moved to `hooks/useUpcomingPlannedPayments.ts`.
 - **macOS dock badge**: Set to non-dismissed upcoming count; cleared on unmount. Logic unchanged.
-- Dismissal store is now module-level (shared), so dismissing from `SuggestionCard` is immediately reflected here and vice versa.
+- Dismissal store is module-level, backed by `useSyncExternalStore`.
+
+#### 2026-06-24: Unified banner, SuggestionCard removed
+
+The former `SuggestionCard` dashboard widget (a Siri-suggestion-style card between the error banner and stat cards) has been deleted. `UpcomingPaymentsNotification` is now rendered by `AppLayout` above all pages with no per-route stand-down — reminders look identical on the dashboard and every other page. The `suggestions` widget entry was also removed from `DASHBOARD_WIDGETS` in `DashboardPage`.
 
 ### Accessibility (Phase C)
 

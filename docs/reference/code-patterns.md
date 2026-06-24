@@ -2923,6 +2923,11 @@ applySkinV2Class();   // must run before createRoot / render
 > [!warning] Cannot override color tokens from CSS
 > `applyThemePalette()` in `apps/frontend/src/styles/themes.ts` writes all color tokens (`--background`, `--card`, `--primary`, `--accent`, and every key in `ThemeTokens`) as **inline styles** on `document.documentElement` via `element.style.setProperty()`. Inline styles always win over external stylesheet rules. Any skin CSS that tries to change a color token will be silently ignored. Only structural tokens that `applyThemePalette()` does not touch (radius, blur sizes, aurora alphas, motion durations/easings) can be overridden from CSS.
 
+> [!info] Exception: `--gain` and `--loss` are CSS-overridable (2026-06-24)
+> `--gain` and `--loss` are defined in `tokens.css` (not by `applyThemePalette()`), so `skin-v2.css` **can** override them. These are the only color-bearing tokens that are safely overridable from CSS. `skin-v2.css` overrides only these two tokens to apply the Okabe-Ito colorblind-safe palette; all other color overrides still require `themes.ts` changes.
+>
+> **Gain/loss contributor rule**: any gain/loss-semantic color must use `.amount-gain`/`.amount-loss`, the `gain`/`loss` Tailwind utilities (`text-gain`, `bg-loss/12`, etc.), or `hsl(var(--gain))`/`hsl(var(--loss))` — never raw `text-success`/`text-destructive`/`text-accent`.
+
 **5. Gating component branches (Phase 3+)**
 
 When a skin change requires JSX changes (not pure CSS), gate it behind `isSkinV2Active()` so the flag-off path is byte-identical to the legacy code:

@@ -56,7 +56,7 @@ export function InvestmentTaxBreakdownTable({ investments, fmt, convertToTarget,
                 </div>
               </div>
               <div className="text-right shrink-0">
-                <p className="font-bold text-sm tabular-nums text-destructive">{fmt(inv.total)}</p>
+                <p className="font-bold text-sm tabular-nums text-loss">{fmt(inv.total)}</p>
                 <p className="text-xs text-muted-foreground">{t("tax.totalCosts")}</p>
               </div>
             </div>

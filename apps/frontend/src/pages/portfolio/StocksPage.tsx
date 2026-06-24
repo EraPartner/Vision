@@ -283,8 +283,8 @@ export default function StocksPage({
               <span className={cn(
                 "inline-flex h-6 w-6 items-center justify-center rounded-md ring-1",
                 totalRealizedGain >= 0
-                  ? "bg-gradient-to-br from-accent/20 to-accent/5 text-accent ring-accent/15"
-                  : "bg-gradient-to-br from-destructive/20 to-destructive/5 text-destructive ring-destructive/15"
+                  ? "bg-gradient-to-br from-gain/20 to-gain/5 text-gain ring-gain/15"
+                  : "bg-gradient-to-br from-loss/20 to-loss/5 text-loss ring-loss/15"
               )}>
                 <ArrowUpRight className="h-3 w-3" />
               </span>
@@ -304,8 +304,8 @@ export default function StocksPage({
               <span className={cn(
                 "inline-flex h-6 w-6 items-center justify-center rounded-md ring-1",
                 totalUnrealizedGain >= 0
-                  ? "bg-gradient-to-br from-accent/20 to-accent/5 text-accent ring-accent/15"
-                  : "bg-gradient-to-br from-destructive/20 to-destructive/5 text-destructive ring-destructive/15"
+                  ? "bg-gradient-to-br from-gain/20 to-gain/5 text-gain ring-gain/15"
+                  : "bg-gradient-to-br from-loss/20 to-loss/5 text-loss ring-loss/15"
               )}>
                 <TrendingUp className="h-3 w-3" />
               </span>
@@ -324,7 +324,7 @@ export default function StocksPage({
             <CardTitle className="text-xs font-medium text-muted-foreground">{t('portfolio.dividends')}</CardTitle>
           </CardHeader>
           <CardContent className="pb-3 px-4">
-            <p className="text-xl font-bold text-accent tabular-nums">+{fmt(totalDividends)}</p>
+            <p className="text-xl font-bold text-gain tabular-nums">+{fmt(totalDividends)}</p>
           </CardContent>
         </Card>
 
@@ -333,7 +333,7 @@ export default function StocksPage({
             <CardTitle className="text-xs font-medium text-muted-foreground">{t('portfolio.feesAndTaxes')}</CardTitle>
           </CardHeader>
           <CardContent className="pb-3 px-4">
-            <p className="text-xl font-bold text-destructive tabular-nums">-{fmt(totalFees + totalTaxes)}</p>
+            <p className="text-xl font-bold text-loss tabular-nums">-{fmt(totalFees + totalTaxes)}</p>
           </CardContent>
         </Card>
 
@@ -433,7 +433,7 @@ export default function StocksPage({
                         </td>
                       );
                     })()}
-                    <td className="text-right py-2 px-3 tabular-nums text-accent">
+                    <td className="text-right py-2 px-3 tabular-nums text-gain">
                       {h.totalDividends > 0 ? `+${fmt(convertToTarget(h.totalDividends, h.currency))}` : '—'}
                     </td>
                     <td className="py-2 px-3">

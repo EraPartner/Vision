@@ -133,7 +133,7 @@ export default function SavingsPage() {
             </CardTitle>
           </CardHeader>
           <CardContent className="pb-3 px-4">
-            <p className="text-xl font-bold text-accent tabular-nums">+{fmt(totalInterestEarned)}</p>
+            <p className="text-xl font-bold text-gain tabular-nums">+{fmt(totalInterestEarned)}</p>
           </CardContent>
         </Card>
 
@@ -224,7 +224,7 @@ export default function SavingsPage() {
                   </div>
                   <div className="text-right">
                     <p className="text-xs text-muted-foreground mb-1">{t('portfolio.interestEarned')}</p>
-                    <p className="text-2xl font-bold text-accent tabular-nums">+{fmt(convertToTarget(a.totalIncome, a.currency))}</p>
+                    <p className="text-2xl font-bold text-gain tabular-nums">+{fmt(convertToTarget(a.totalIncome, a.currency))}</p>
                   </div>
                 </div>
                 
@@ -238,7 +238,7 @@ export default function SavingsPage() {
                     {a.accruedInterest > 0 && (
                       <div className="flex justify-between text-sm">
                         <span className="text-muted-foreground">{t('portfolio.accruedUnpaid')}</span>
-                        <span className="font-medium text-accent">+{fmt(convertToTarget(a.accruedInterest, a.currency))}</span>
+                        <span className="font-medium text-gain">+{fmt(convertToTarget(a.accruedInterest, a.currency))}</span>
                       </div>
                     )}
                   </div>
@@ -276,7 +276,7 @@ export default function SavingsPage() {
                 {(a.totalFees > 0 || a.totalTaxes > 0) && (
                   <div className="flex justify-between text-sm border-t border-border pt-3">
                     <span className="text-muted-foreground">{t('portfolio.feesAndTaxesPaid')}</span>
-                    <span className="font-medium text-destructive">-{fmt(convertToTarget(a.totalFees + a.totalTaxes, a.currency))}</span>
+                    <span className="font-medium text-loss">-{fmt(convertToTarget(a.totalFees + a.totalTaxes, a.currency))}</span>
                   </div>
                 )}
               </CardContent>

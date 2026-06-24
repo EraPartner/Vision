@@ -211,9 +211,9 @@ export function InvestmentDetailDialog({
                   <CardContent className="pt-4">
                     <div className="flex items-center gap-2 text-sm text-muted-foreground mb-1">
                       {investment.totalGain >= 0 ? (
-                        <TrendingUp className="h-4 w-4 text-accent" />
+                        <TrendingUp className="h-4 w-4 text-gain" />
                       ) : (
-                        <TrendingDown className="h-4 w-4 text-destructive" />
+                        <TrendingDown className="h-4 w-4 text-loss" />
                       )}
                        {t('invDetail.totalGainLoss')}
                     </div>
@@ -297,7 +297,7 @@ export function InvestmentDetailDialog({
                     <div className="space-y-2">
                       <div className="flex justify-between py-1.5 border-b border-border/50">
                           <span className="text-muted-foreground flex items-center gap-1">
-                            <ArrowUpRight className="h-3 w-3 text-accent" />
+                            <ArrowUpRight className="h-3 w-3 text-gain" />
                             {t('invDetail.realizedGain')}
                           </span>
                         <span className={cn(
@@ -346,7 +346,7 @@ export function InvestmentDetailDialog({
                       {investment.totalIncome > 0 && (
                         <div className="flex justify-between py-1.5 border-b border-border/50">
                            <span className="text-muted-foreground">{t('invDetail.totalIncome')}</span>
-                          <span className="font-medium tabular-nums text-accent">
+                          <span className="font-medium tabular-nums text-gain">
                             +{fmt(investment.totalIncome, investment.currency)}
                           </span>
                         </div>
@@ -355,7 +355,7 @@ export function InvestmentDetailDialog({
                       {(investment.totalFees > 0 || investment.totalTaxes > 0) && (
                         <div className="flex justify-between py-1.5 border-b border-border/50">
                            <span className="text-muted-foreground">{t('invDetail.feesAndTaxes')}</span>
-                          <span className="font-medium tabular-nums text-destructive">
+                          <span className="font-medium tabular-nums text-loss">
                             -{fmt(investment.totalFees + investment.totalTaxes, investment.currency)}
                           </span>
                         </div>
@@ -450,7 +450,7 @@ export function InvestmentDetailDialog({
                       {investment.accruedInterest > 0 && (
                         <div className="text-right">
                            <p className="text-sm text-muted-foreground">{t('portfolio.accruedUnpaid')}</p>
-                          <p className="text-lg font-bold text-accent tabular-nums">
+                          <p className="text-lg font-bold text-gain tabular-nums">
                             +{fmt(investment.accruedInterest, investment.currency)}
                           </p>
                         </div>
@@ -476,7 +476,7 @@ export function InvestmentDetailDialog({
                     {investment.totalIncome > 0 && (
                       <div className="text-right">
                          <p className="text-sm text-muted-foreground">{t('portfolio.rentalIncome')}</p>
-                        <p className="text-lg font-bold text-accent tabular-nums">
+                        <p className="text-lg font-bold text-gain tabular-nums">
                           +{fmt(investment.totalIncome, investment.currency)}
                         </p>
                       </div>
@@ -548,7 +548,7 @@ export function InvestmentDetailDialog({
                       <div className="text-right shrink-0">
                         <p className={cn(
                           "font-bold tabular-nums",
-                          ['buy', 'fee', 'tax'].includes(txn.type) ? 'text-destructive' : 'text-accent'
+                          ['buy', 'fee', 'tax'].includes(txn.type) ? 'text-loss' : 'text-gain'
                         )}>
                           {['buy', 'fee', 'tax'].includes(txn.type) ? '-' : '+'}{fmt(txn.amount, investment.currency)}
                         </p>

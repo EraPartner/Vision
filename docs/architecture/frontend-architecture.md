@@ -2,10 +2,10 @@
 title: Frontend Architecture
 type: architecture
 status: active
-description: React frontend architecture, design system, and diagrams with liquid-glass aesthetic, visx charts, Framer Motion, and Zustand store. May 2026 Tailwind v4 migration with unified CSS architecture. June 2026 Liquid Glass v2 — atmosphere layer, saturated blur tiers, CommandPalette, optimistic mutations, route preload. June 2026 Premium v3 — RollingNumber/Money/DeltaPill, chart scrub+sync, ChartSkeleton, PageTitleContext, palette v2, ShortcutsOverlay + go-to sequences, animated tabs, workspace aurora, ShaderAurora behind visual-effects tier model (ADR-075), per-widget dashboard hydration, optimistic create.
+description: React frontend architecture, design system, and diagrams with liquid-glass aesthetic, visx charts, Framer Motion, and Zustand store. May 2026 Tailwind v4 migration with unified CSS architecture. June 2026 Liquid Glass v2 — atmosphere layer, saturated blur tiers, CommandPalette, optimistic mutations, route preload. June 2026 Premium v3 — RollingNumber/Money/DeltaPill, chart scrub+sync, ChartSkeleton, PageTitleContext, palette v2, ShortcutsOverlay + go-to sequences, animated tabs, workspace aurora, ShaderAurora behind visual-effects tier model (ADR-075), per-widget dashboard hydration, optimistic create. 2026-06-24: --gain/--loss CSS semantic tokens unified app-wide (tokens.css baseline, skin-v2.css Okabe-Ito overrides); gain/loss Tailwind color utilities added; colorblindGainLoss default OFF/classic.
 date: 2026-04-23
-updated: 2026-06-16
-tags: [architecture, frontend, uml, plantuml, react, phase-4, phase-6, phase-9, liquid-glass, liquid-glass-v2, premium-v3, visx, framer-motion, statistics-refactoring, zustand, state-management, tailwind-v4, css-architecture, command-palette, optimistic-updates, route-preload, chart-scrub, chart-sync, shader-aurora, visual-effects-tiers, auto-adapt-display, fx-reduced, role-based-glass, glass-by-default, june-2026]
+updated: 2026-06-24
+tags: [architecture, frontend, uml, plantuml, react, phase-4, phase-6, phase-9, liquid-glass, liquid-glass-v2, premium-v3, visx, framer-motion, statistics-refactoring, zustand, state-management, tailwind-v4, css-architecture, command-palette, optimistic-updates, route-preload, chart-scrub, chart-sync, shader-aurora, visual-effects-tiers, auto-adapt-display, fx-reduced, role-based-glass, glass-by-default, june-2026, gain-loss, css-tokens, skin-v2, tailwind-colors]
 aliases: [frontend architecture, react architecture, frontend design, design system]
 ---
 
@@ -966,7 +966,7 @@ The frontend uses a token-based theming system with runtime color palette swappi
 
 **Location**: `apps/frontend/src/styles/` with `themes.ts` as the source of truth for color values.
 
-- **tokens.css**: HSL-component CSS variables (`--primary-h`, `--primary-s`, `--primary-l`, etc.)
+- **tokens.css**: HSL-component CSS variables (`--primary-h`, `--primary-s`, `--primary-l`, etc.). Also defines always-present **gain/loss semantic tokens**: `--gain: var(--accent)` (classic gold) and `--loss: var(--destructive)` (classic red). These are the baseline values; `skin-v2.css` overrides them to Okabe-Ito green/orange when colorblind mode is active.
 - **themes.ts**: Five variant definitions with light/dark sub-palettes
   - `default` (emerald + gold) — Apple liquid glass
   - `dracula` (purple + pink) — Dark-optimized moody
@@ -974,9 +974,35 @@ The frontend uses a token-based theming system with runtime color palette swappi
   - `nord` (frost blue + aurora) — Arctic-inspired calm
   - `high-contrast` (navy + neon green) — WCAG AAA accessibility
 
+### Gain / Loss Semantic Tokens (2026-06-24)
+
+`--gain` and `--loss` are app-wide semantic CSS tokens for financial positive/negative values. They live in `tokens.css` and are the single source of truth for all gain/loss coloring — text, backgrounds, gradients, borders, charts, and glass trend indicators all consume them.
+
+| Mode | `--gain` resolves to | `--loss` resolves to |
+|------|---------------------|---------------------|
+| Classic (default, `.skin-v2` absent) | `var(--accent)` — variant-aware gold | `var(--destructive)` — variant-aware red |
+| Colorblind-safe (`.skin-v2` on `<html>`) | Okabe-Ito green `#009E73` | Okabe-Ito orange/vermillion `#D55E00` |
+
+The toggle is controlled by `AppSettings.colorblindGainLoss` (default `false`) via **Settings → Appearance → Accessibility → Gain & loss colors**. See [[docs/features/appearance#gain--loss-colors--accessibility-setting-2026-06-24|Appearance — Gain & Loss Colors]].
+
+**Tailwind color utilities** (registered in `tailwind.config.ts`):
+
+```ts
+gain: 'hsl(var(--gain) / <alpha-value>)',
+loss: 'hsl(var(--loss) / <alpha-value>)',
+```
+
+Enables utilities such as `text-gain`, `text-loss`, `bg-gain/12`, `bg-loss/12`, `from-gain/20`, `ring-loss/25`, `border-loss/30`. All follow the toggle automatically.
+
+> [!warning] Contributor rule
+> Any gain/loss-semantic color must use `.amount-gain`/`.amount-loss`, the `gain`/`loss` Tailwind utilities, or `hsl(var(--gain))`/`hsl(var(--loss))` in CSS/inline styles. Never use raw `text-success`, `text-destructive`, `text-accent`, or hardcoded hex values for gain/loss meaning. Generic status/error/delete UI is unaffected and continues to use `--destructive`/`--success`.
+
 ### Runtime Palette Application
 
 `applyThemePalette(variant, mode, root)` in `themes.ts` updates all CSS variables on the document root, enabling instant theme switching without CSS rebuilding.
+
+> [!info] Inline-token constraint
+> `applyThemePalette()` writes color tokens (`--background`, `--card`, `--primary`, `--accent`, `--destructive`, etc.) as **inline styles** on `document.documentElement`. Inline styles beat any external stylesheet. `skin-v2.css` therefore overrides only `--gain` and `--loss`, which `applyThemePalette()` does NOT set — those two tokens are safe to override from CSS.
 
 ### FOUC Prevention
 
@@ -988,8 +1014,12 @@ The frontend uses a token-based theming system with runtime color palette swappi
 
 **Related Diagrams & Code**:
 - [[apps/frontend/src/styles/themes.ts|Theme Variants Source]]
+- [[apps/frontend/src/styles/tokens.css|CSS Tokens]]
+- [[apps/frontend/src/styles/skin-v2.css|skin-v2 overrides]]
+- [[apps/frontend/tailwind.config.ts|Tailwind Config]]
 - [[apps/frontend/src/contexts/ThemeContext.tsx|ThemeContext Implementation]]
 - [[docs/adr/025-theme-variant-system|ADR-025: Theme Variant System]]
+- [[docs/adr/104-skin-v2-dense-fintech-visual-redesign|ADR-104: skin-v2 / gain-loss tokens]]
 - [[docs/features/appearance|Appearance Feature]]
 
 ---

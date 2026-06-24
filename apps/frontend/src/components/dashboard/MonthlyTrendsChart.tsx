@@ -79,8 +79,8 @@ export function MonthlyTrendsChart({ data, embedded = false }: MonthlyTrendsChar
         return { totalIncome: income, totalSpending: Math.abs(spending) };
     }, [data]);
 
-    const incomeColor = "hsl(var(--accent))";
-    const spendingColor = "hsl(var(--destructive))";
+    const incomeColor = "hsl(var(--gain))";
+    const spendingColor = "hsl(var(--loss))";
 
     const chartContent = (
         <>
@@ -118,24 +118,24 @@ export function MonthlyTrendsChart({ data, embedded = false }: MonthlyTrendsChar
             </div>
 
             <div className="mt-6 grid grid-cols-2 gap-3">
-                <div className="flex items-center gap-2 p-3 rounded-lg bg-accent/10 border border-accent/30">
-                    <div className="w-3 h-3 rounded-full flex-shrink-0 bg-accent"></div>
+                <div className="flex items-center gap-2 p-3 rounded-lg bg-gain/10 border border-gain/30">
+                    <div className="w-3 h-3 rounded-full flex-shrink-0 bg-gain"></div>
                     <div className="flex-1 min-w-0">
-                        <p className="text-xs font-medium text-accent">
+                        <p className="text-xs font-medium text-gain">
                             {t("monthlyTrends.totalIncome")}
                         </p>
-                        <p className="text-sm font-bold text-accent">
+                        <p className="text-sm font-bold text-gain">
                             {formatCurrency(totalIncome, defaultCurrency, locale)}
                         </p>
                     </div>
                 </div>
-                <div className="flex items-center gap-2 p-3 rounded-lg bg-destructive/10 border border-destructive/30">
-                    <div className="w-3 h-3 rounded-full flex-shrink-0 bg-destructive"></div>
+                <div className="flex items-center gap-2 p-3 rounded-lg bg-loss/10 border border-loss/30">
+                    <div className="w-3 h-3 rounded-full flex-shrink-0 bg-loss"></div>
                     <div className="flex-1 min-w-0">
-                        <p className="text-xs font-medium text-destructive">
+                        <p className="text-xs font-medium text-loss">
                             {t("monthlyTrends.totalSpending")}
                         </p>
-                        <p className="text-sm font-bold text-destructive">
+                        <p className="text-sm font-bold text-loss">
                             {formatCurrency(totalSpending, defaultCurrency, locale)}
                         </p>
                     </div>

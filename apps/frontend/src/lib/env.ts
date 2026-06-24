@@ -63,10 +63,13 @@ const envSchema = z
         VITE_ENABLE_LOGGING: booleanEnv(true),
         // Per-account portfolio HOLDINGS UI (ADR-091/100). Default OFF (ADR-103).
         VITE_ENABLE_PER_ACCOUNT_HOLDINGS: booleanEnv(false),
-        // Colorblind-safe gain/loss recoloring ("skin-v2"). Default ON — toggles
-        // the `.skin-v2` root class (styles/skin-v2.css). Set false to opt out
-        // (legacy champagne-gold / red gain-loss). See lib/skin.ts.
-        VITE_SKIN_V2: booleanEnv(true),
+        // Colorblind-safe gain/loss recoloring ("skin-v2"). Default OFF —
+        // classic gold/red gain-loss. The persisted `colorblindGainLoss` user
+        // setting (Settings → Appearance → Accessibility) drives the `.skin-v2`
+        // root class at runtime; this flag is only the first-paint fallback
+        // before settings hydrate. See lib/skin.ts. Set true to opt the whole
+        // build into colorblind-safe colors by default.
+        VITE_SKIN_V2: booleanEnv(false),
     })
     .passthrough();
 
@@ -93,9 +96,11 @@ export const env: Readonly<FrontendEnv> = Object.freeze(parseEnv());
 export const isPerAccountHoldingsEnabled = env.VITE_ENABLE_PER_ACCOUNT_HOLDINGS as boolean;
 
 /**
- * Build-time default for the colorblind-safe gain/loss recoloring (skin-v2),
- * now ON by default. A localStorage override can flip it at runtime — see
- * `lib/skin.ts`. Set VITE_SKIN_V2=false to ship the legacy gold/red gain-loss.
+ * Build-time first-paint default for the colorblind-safe gain/loss recoloring
+ * (skin-v2), OFF by default (classic gold/red). The persisted user setting
+ * `colorblindGainLoss` is the source of truth and overrides this once settings
+ * hydrate (it writes a localStorage cache for the next boot's first paint) —
+ * see `lib/skin.ts`. Set VITE_SKIN_V2=true to default the build to colorblind.
  */
 export const isSkinV2Default = env.VITE_SKIN_V2 as boolean;
 

@@ -205,7 +205,7 @@ export default function WatchlistPage() {
                         {priceDiff! > 0 ? (
                           // Above target: show percentage
                           <div className={cn(
-                            "flex items-center text-sm gap-1 text-destructive"
+                            "flex items-center text-sm gap-1 text-loss"
                           )}>
                             <TrendingUp className="h-4 w-4" />
                             {Math.abs(priceDiff!).toFixed(1)}% {t('watchlist.aboveTarget')}

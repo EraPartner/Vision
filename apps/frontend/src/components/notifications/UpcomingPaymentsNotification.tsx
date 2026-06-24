@@ -2,27 +2,19 @@ import { Alert, AlertTitle, AlertDescription } from "@/components/ui/alert";
 import { Bell, X, CalendarClock } from "lucide-react";
 import { useEffect } from "react";
 import { formatCurrency } from "@/utils/currency";
-import { Link, useLocation } from "react-router-dom";
+import { Link } from "react-router-dom";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { useAppSettings } from "@/contexts/AppSettingsContext";
 import { numberFormatToLocale } from "@/utils/currency";
 import { formatDateStringWithAppSettings } from "@/components/shared/dateUtils";
 import { isElectronMac, setDockBadge } from "@/lib/api/electron";
 import { useUpcomingPlannedPayments } from "@/hooks/useUpcomingPlannedPayments";
-import { useWidgetVisibility } from "@/hooks/useWidgetVisibility";
 
 export function UpcomingPaymentsNotification() {
   const { t, tc } = useLanguage();
   const { appSettings } = useAppSettings();
   const locale = numberFormatToLocale(appSettings.numberFormat);
   const { upcoming, visibleUpcoming, dismiss } = useUpcomingPlannedPayments();
-
-  // The dashboard renders the same payments as a contextual SuggestionCard,
-  // so the banner stands down there — unless the user hid that widget, in
-  // which case the banner remains the fallback surface.
-  const { pathname } = useLocation();
-  const { isVisible } = useWidgetVisibility("dashboard", []);
-  const suppressedByDashboardCard = pathname === "/" && isVisible("suggestions");
 
   // macOS dock badge mirrors the visible (non-dismissed) due count.
   const badgeCount = upcoming !== undefined ? visibleUpcoming.length : null;
@@ -34,7 +26,7 @@ export function UpcomingPaymentsNotification() {
     return () => { if (isElectronMac()) setDockBadge(0); };
   }, []);
 
-  if (suppressedByDashboardCard || visibleUpcoming.length === 0) return null;
+  if (visibleUpcoming.length === 0) return null;
 
   return (
     <Alert className="relative border-primary/30 bg-primary/5 mb-4">

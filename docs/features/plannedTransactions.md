@@ -3,11 +3,11 @@ title: Planned Transactions
 type: feature
 status: active
 date: 2026-04-26
-updated: 2026-06-17
-tags: [feature, planned, recurring, bills, loans, phase-3, phase-12, calculations, immutability, error-handling, toast, atomic-patch, virtual-data-table, i18n-toasts, suggestion-card, upcoming-payments-hook, occurrence-key-dismissal, june-2026, auto-link, planned-match]
+updated: 2026-06-24
+tags: [feature, planned, recurring, bills, loans, phase-3, phase-12, calculations, immutability, error-handling, toast, atomic-patch, virtual-data-table, i18n-toasts, upcoming-payments-hook, occurrence-key-dismissal, june-2026, auto-link, planned-match]
 aliases: [planned-payments, scheduled-payments, recurring-payments, bills, subscriptions, loan-amortization]
-description: Scheduled and recurring payment tracking - manage bills, subscriptions, and future expenses. June 2026: auto-link & auto-clear planned payments on match — ingested transactions are automatically linked to matching planned payments (same recipient cluster, same sign, ±5% amount, ±5 days); ambiguous matches surface as confirmable suggestions. PlannedPaymentsPage migrated from DataTable to VirtualDataTable; native alert() replaced with toast.error (new i18n keys plannedPage.toggleFailed/deleteFailed). V11: useUpcomingPlannedPayments shared hook (single fetch + shared dismissed-ID store); SuggestionCard dashboard widget; UpcomingPaymentsNotification stands down on dashboard route when suggestions widget is visible. June 2026 (B1 fix): dismissals now keyed per occurrence (id:YYYY-MM-DD) so recurring reminders re-surface each cycle; past-dated keys pruned on load; legacy id-only entries silently dropped on next load.
-related_code: ["apps/node-backend/src/routes/plannedTransactions.js", "apps/node-backend/src/repositories/plannedTransactionRepository.js", "apps/node-backend/src/services/plannedExecutionService.js", "apps/node-backend/src/services/plannedMatchService.js", "apps/node-backend/src/services/calculations/loanSchedule.js", "apps/node-backend/src/services/calculations/recurrence.js", "apps/node-backend/src/services/recurringDetectionService.js", "apps/frontend/src/pages/PlannedPaymentsPage.tsx", "apps/frontend/src/components/planned/PlannedPaymentForm.tsx", "apps/frontend/src/components/planned/LinkTransactionDialog.tsx", "apps/frontend/src/components/planned/MatchSuggestionsBanner.tsx", "apps/frontend/src/components/planned/ExecutionHistoryDialog.tsx", "apps/frontend/src/components/notifications/UpcomingPaymentsNotification.tsx", "apps/frontend/src/components/shared/DatePicker.tsx", "apps/frontend/src/components/shared/dateUtils.ts", "apps/frontend/src/hooks/useUpcomingPlannedPayments.ts", "apps/frontend/src/hooks/usePlannedMatchSuggestions.ts"]
+description: Scheduled and recurring payment tracking - manage bills, subscriptions, and future expenses. June 2026: auto-link & auto-clear planned payments on match — ingested transactions are automatically linked to matching planned payments (same recipient cluster, same sign, ±5% amount, ±5 days); ambiguous matches surface as confirmable suggestions. PlannedPaymentsPage migrated from DataTable to VirtualDataTable; native alert() replaced with toast.error (new i18n keys plannedPage.toggleFailed/deleteFailed). V11: useUpcomingPlannedPayments shared hook (single fetch + shared dismissed-ID store); UpcomingPaymentsNotification renders on all pages including the dashboard (no per-route stand-down). June 2026 (B1 fix): dismissals now keyed per occurrence (id:YYYY-MM-DD) so recurring reminders re-surface each cycle; past-dated keys pruned on load; legacy id-only entries silently dropped on next load.
+related_code: ["apps/node-backend/src/routes/plannedTransactions.js", "apps/node-backend/src/repositories/plannedTransactionRepository.js", "apps/node-backend/src/services/plannedExecutionService.js", "apps/node-backend/src/services/plannedMatchService.js", "apps/node-backend/src/services/calculations/loanSchedule.js", "apps/node-backend/src/services/calculations/recurrence.js", "apps/node-backend/src/services/recurringDetectionService.js", "apps/frontend/src/pages/PlannedPaymentsPage.tsx", "apps/frontend/src/components/planned/PlannedPaymentForm.tsx", "apps/frontend/src/components/planned/LinkTransactionDialog.tsx", "apps/frontend/src/components/planned/MatchSuggestionsBanner.tsx", "apps/frontend/src/components/planned/ExecutionHistoryDialog.tsx", "apps/frontend/src/components/notifications/UpcomingPaymentsNotification.tsx", "apps/frontend/src/components/shared/DatePicker.tsx", "apps/frontend/src/components/shared/dateUtils.ts", "apps/frontend/src/hooks/useUpcomingPlannedPayments.ts", "apps/frontend/src/hooks/usePlannedMatchSuggestions.ts", "apps/frontend/src/components/layout/AppLayout.tsx"]
 ---
 
 # Planned Transactions
@@ -132,10 +132,10 @@ Vision can alert users about upcoming payments:
 
 #### Shared hook and dismissed-occurrence store (V11 + June 2026 fix)
 
-Both the app-level banner (`UpcomingPaymentsNotification`) and the dashboard suggestion card (`SuggestionCard`) use the shared `useUpcomingPlannedPayments` hook. This ensures:
+The app-level banner (`UpcomingPaymentsNotification`) uses the shared `useUpcomingPlannedPayments` hook. It is rendered by `AppLayout` above every page and no longer suppresses itself on any route — reminders look identical on the dashboard and all other pages.
 
-- **Single network fetch**: One React Query instance keyed on `"upcomingPlannedPayments"` shared across both surfaces.
-- **Consistent dismissal**: A module-level dismissed-occurrence `Set` backed by `useSyncExternalStore` persists to `LOCAL_STORAGE_KEYS.DISMISSED_UPCOMING_PAYMENTS`. Dismissing from either surface is immediately reflected on the other.
+- **Single network fetch**: One React Query instance keyed on `"upcomingPlannedPayments"`.
+- **Consistent dismissal**: A module-level dismissed-occurrence `Set` backed by `useSyncExternalStore` persists to `LOCAL_STORAGE_KEYS.DISMISSED_UPCOMING_PAYMENTS`.
 
 #### Dismissal key format (June 2026 fix — F1)
 
@@ -152,11 +152,7 @@ key = `${pt.id}:${pt.planned_date.slice(0, 10)}`
 - On load, entries whose date portion is strictly before today are dropped (bounds growth and removes stale dismissals).
 - Legacy entries that are purely numeric (e.g. `"42"`, the old id-only format) do not match `DISMISS_KEY_RE = /^\d+:\d{4}-\d{2}-\d{2}$/` and are silently dropped. This causes a one-time re-surfacing of previously dismissed reminders — intentional, because the prior data was semantically wrong.
 
-**`dismiss()` signature change:** The function now takes `DismissTarget | DismissTarget[]` (objects with `id` and `planned_date`), not bare ids. Both banner and SuggestionCard pass the planned-transaction object(s) directly.
-
-#### Dashboard stand-down
-
-`UpcomingPaymentsNotification` stands down on the `/` route while the `suggestions` widget is visible (`useWidgetVisibility('dashboard', []).isVisible('suggestions')` returns `true`). This prevents showing both the banner and the card simultaneously. Hiding the widget from the widget-visibility dialog re-enables the banner on the dashboard.
+**`dismiss()` signature change:** The function now takes `DismissTarget | DismissTarget[]` (objects with `id` and `planned_date`), not bare ids. The banner passes the planned-transaction object(s) directly.
 
 #### macOS dock badge
 

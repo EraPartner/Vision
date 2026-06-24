@@ -3,8 +3,9 @@ title: "ADR-104: Dense-fintech visual skin (skin-v2) behind a flag"
 type: adr
 status: accepted
 date: 2026-06-23
-tags: [adr, design-system, css, feature-flag, skin-v2, visual-redesign, tailwind, theming, accessibility, adr-030, adr-075, adr-103, june-2026]
-description: Ships a "dense-fintech" visual redesign (Monarch/Copilot spirit) as CSS scoped entirely under a `.skin-v2` root class on <html>, toggled by a build-time env flag VITE_SKIN_V2 (default OFF). Legacy skin renders byte-for-byte unchanged when the class is absent. The flattening redesign (atmosphere/glass/typography/motion/hover) was implemented behind the flag, then reverted at the user's direction; only the colorblind-safe gain/loss recoloring remains behind VITE_SKIN_V2. The aurora, WebGL shader, glass, and hover are retained in the base design. Documents the critical inline-token constraint: applyThemePalette() in themes.ts writes all color tokens as inline styles, defeating any stylesheet override — only structural tokens (radius, blur, motion, aurora alphas) are freely changed from CSS.
+updated: 2026-06-24
+tags: [adr, design-system, css, feature-flag, skin-v2, visual-redesign, tailwind, theming, accessibility, adr-030, adr-075, adr-103, june-2026, gain-loss, css-tokens, tailwind-colors]
+description: Ships a "dense-fintech" visual redesign (Monarch/Copilot spirit) as CSS scoped entirely under a `.skin-v2` root class on <html>, toggled by a build-time env flag VITE_SKIN_V2 (default OFF). Legacy skin renders byte-for-byte unchanged when the class is absent. The flattening redesign (atmosphere/glass/typography/motion/hover) was implemented behind the flag, then reverted at the user's direction; only the colorblind-safe gain/loss recoloring remains behind VITE_SKIN_V2. The aurora, WebGL shader, glass, and hover are retained in the base design. Documents the critical inline-token constraint: applyThemePalette() in themes.ts writes all color tokens as inline styles, defeating any stylesheet override — only structural tokens (radius, blur, motion, aurora alphas) are freely changed from CSS. Addendum 2026-06-24 (initial): colorblind palette promoted to persisted user setting (colorblindGainLoss). Addendum 2026-06-24 (follow-up): default changed to OFF/classic (colorblindGainLoss false, VITE_SKIN_V2 false); --gain/--loss tokens unified app-wide via tokens.css + skin-v2.css overrides; gain/loss Tailwind color utilities added; glass-trend classes re-pointed; ~35 components swept to use gain/loss tokens.
 aliases: [skin-v2, dense fintech skin, visual redesign, fintech skin flag]
 ---
 
@@ -111,3 +112,59 @@ Phase 3 is the first phase that touches component code. Each skin-v2 branch must
 - [[docs/adr/070-liquid-glass-v2-premium-frontend|ADR-070: Liquid Glass v2]] — current production glass vocabulary
 - [[docs/adr/071-premium-v3-effects-toggle|ADR-071: Premium v3]] — typography system that skin-v2 overrides for headings
 - [[docs/reference/code-patterns#scoped-skin-behind-a-flag-pattern-adr-104|Code Patterns — Scoped-skin flag pattern]]
+- [[docs/features/appearance|Appearance Feature]] — gain & loss colors UI in Settings → Appearance → Accessibility
+
+---
+
+## Addendum — 2026-06-24: Colorblind palette promoted to user setting
+
+**What changed:** The colorblind-safe gain/loss palette (`.skin-v2` class, green gain / orange loss) was previously controlled exclusively by the `VITE_SKIN_V2` build flag with a `localStorage` dev override. As of 2026-06-24, it is additionally exposed as a **persisted user setting** (`colorblindGainLoss: boolean`, default `true`) in `AppSettings`.
+
+**Mechanism:**
+- `AppSettingsProvider` (`contexts/AppSettingsContext.tsx`) calls `setSkinV2(appSettings.colorblindGainLoss)` on hydration and on change. This means the stored setting governs the `.skin-v2` class for logged-in users, regardless of the build flag.
+- Default is `true` — the colorblind-safe palette is on by default for all users, even when `VITE_SKIN_V2=false` at build time. Users who prefer the classic gold/red palette can switch via **Settings → Appearance → Accessibility → Gain & loss colors → Classic (red loss)**.
+- The build flag retains its role as the pre-React FOUC-prevention default (applied synchronously in `main.tsx` before first render). Once settings hydrate, the stored `colorblindGainLoss` value takes over.
+
+**Priority order (updated):**
+```
+Stored colorblindGainLoss setting (post-hydration)
+  > localStorage override vision_skin_v2 (dev/QA)
+  > VITE_SKIN_V2 build flag (pre-hydration default)
+```
+
+**This decision does not alter the scoping, encoding, or CSS of the colorblind palette.** The gain/loss token values (`--gain`, `--loss`), the `.skin-v2` class mechanism, and the unlayered cascade strategy are unchanged. This is purely an upgrade in *who controls the toggle* — from build-time-only to also user-time.
+
+**Files changed:**
+- `apps/frontend/src/stores/settingsStore.ts` — `colorblindGainLoss: boolean` field, default `true`
+- `apps/frontend/src/contexts/AppSettingsContext.tsx` — `setSkinV2(appSettings.colorblindGainLoss)` effect
+- `apps/frontend/src/components/settings/sections/AppearanceSection.tsx` — Accessibility group + Select
+- `i18n/source/en.json`, `i18n/source/nl.json` — 5 new keys (`settings.group.accessibility`, `settings.appearance.gainLossColors`, `settings.appearance.gainLossColorsHint`, `settings.appearance.gainLossColors.colorblind`, `settings.appearance.gainLossColors.classic`)
+
+---
+
+## Addendum — 2026-06-24 (follow-up): Default flipped to OFF/classic; `--gain`/`--loss` tokens unified app-wide
+
+**What changed:**
+
+1. **Default flipped to OFF (classic red/gold).**
+   - `stores/settingsStore.ts`: `DEFAULT_APP_SETTINGS.colorblindGainLoss` changed from `true` to `false`.
+   - `lib/env.ts`: `VITE_SKIN_V2` build-flag default changed from `true` to `false`. This flag is only the first-paint FOUC fallback before the persisted setting hydrates; the user setting is the source of truth for logged-in users.
+   - The app now ships with classic gold-gain (`--gain: var(--accent)`) / red-loss (`--loss: var(--destructive)`) by default. The colorblind-safe Okabe-Ito palette (green/orange) is opt-in via **Settings → Appearance → Accessibility → Gain & loss colors → Colorblind-safe (orange loss)**.
+
+2. **`--gain` / `--loss` tokens unified app-wide.**
+   - `styles/tokens.css` now defines `--gain: var(--accent)` and `--loss: var(--destructive)` at `:root` as always-present legacy values. These act as the classic-mode baseline.
+   - `styles/skin-v2.css` overrides **only** these two tokens (Okabe-Ito values, light + dark), replacing the old per-class `.amount-gain`/`.amount-loss` rules that were removed as redundant.
+   - `index.css`: `.amount-gain`/`.amount-loss` now read `hsl(var(--gain))`/`hsl(var(--loss))`; `.glass-trend-up`/`.glass-trend-down` (and `.liquid-glass-trend-*`) re-pointed from `--success`/`--destructive` to `--gain`/`--loss`.
+   - `apps/frontend/tailwind.config.ts`: `gain` and `loss` semantic Tailwind colors registered (`hsl(var(--gain) / <alpha-value>)` etc.), enabling `text-gain`, `bg-loss/12`, `from-gain/20`, `ring-loss/25`, `border-loss/30`, etc. — all toggle-reactive with opacity support.
+   - Charts: gain/loss fills/strokes use `hsl(var(--gain))` / `hsl(var(--loss))` strings (reactive via CSS; no JS hook). `DeltaPill` and ~35 component/page files swept from raw `text-success`/`text-destructive`/`text-accent`/`--primary` to these tokens/utilities.
+   - Generic destructive/success/status UI (delete, errors, import-complete, health badges) intentionally left unchanged on `--destructive`/`--success`.
+
+**Contributor rule established:** Any gain/loss-semantic color must use `.amount-gain`/`.amount-loss`, the `gain`/`loss` Tailwind utilities, or `hsl(var(--gain))`/`hsl(var(--loss))` — never raw success/destructive/accent.
+
+**Files changed (this follow-up):**
+- `apps/frontend/src/stores/settingsStore.ts` — `colorblindGainLoss` default `false`
+- `apps/frontend/src/lib/env.ts` — `VITE_SKIN_V2` default `false`
+- `apps/frontend/src/styles/tokens.css` — added `--gain`, `--loss` at `:root`
+- `apps/frontend/src/styles/skin-v2.css` — overrides `--gain`/`--loss` only; removed old `.amount-gain`/`.amount-loss` per-class rules
+- `apps/frontend/src/index.css` — `.amount-gain`/`.amount-loss` re-pointed; `.glass-trend-*` re-pointed
+- `apps/frontend/tailwind.config.ts` — `gain`, `loss` color entries added

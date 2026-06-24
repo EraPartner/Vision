@@ -3,9 +3,9 @@ title: Layout Components
 type: component
 status: active
 date: 2026-04-25
-updated: 2026-06-16
+updated: 2026-06-24
 tags: [components, layout, navigation, design-system, phase-9, performance, workspace, liquid-glass-v2, command-palette, route-preload, electron-native, electron-bridge, ipc, macos, june-2026]
-description: Core layout components including sidebar, header, and app structure with emerald + gold aesthetic. June 2026 Liquid Glass v2 — atmosphere layer restored, PageTransition re-added as enter-only spring, sidebar ActiveRail is a framer layoutId element, CommandPalette wired, scroll-linked topbar, route-chunk hover prefetch. June 2026 V12 (ADR-072) — ElectronBridge mounted in AppLayout handles native menu actions, CSV drag-drop, fullscreen class toggling, and dock badge via window.electronAPI.
+description: Core layout components including sidebar, header, and app structure with emerald + gold aesthetic. June 2026 Liquid Glass v2 — atmosphere layer restored, PageTransition re-added as enter-only spring, sidebar ActiveRail is a framer layoutId element, CommandPalette wired, scroll-linked topbar, route-chunk hover prefetch. June 2026 V12 (ADR-072) — ElectronBridge mounted in AppLayout handles native menu actions, CSV drag-drop, fullscreen class toggling, and dock badge via window.electronAPI. 2026-06-24 — ActiveRail shape changed to flush full-height 2px bar; inset box-shadow removed from sidebar.tsx.
 aliases: [layout, app layout, sidebar, navigation, ElectronBridge]
 related_code: ["apps/frontend/src/components/layout", "apps/frontend/src/components/layout/ElectronBridge.tsx"]
 ---
@@ -71,7 +71,7 @@ function App() {
 - **Workspace context provider**: Workspace detection via route path.
 - **Notification system integration**: Sonner toast notifications.
 - **Dark/light theme support**: Full theme switching via `ThemeContext` + `document.startViewTransition`.
-- **Glass chrome sidebar**: `.glass-chrome` (24px blur + saturate) navigation with `ActiveRail` framer `layoutId` element. Background alphas lowered to 0.55→0.72 (light) / 0.55→0.74 (dark) so the aurora and Electron vibrancy glow through; a `@supports not (backdrop-filter)` rule keeps a near-opaque ramp for unsupported browsers.
+- **Glass chrome sidebar**: `.glass-chrome` (24px blur + saturate) navigation with `ActiveRail` framer `layoutId` element (flush 2px bar, sole active indicator). Background alphas lowered to 0.55→0.72 (light) / 0.55→0.74 (dark) so the aurora and Electron vibrancy glow through; a `@supports not (backdrop-filter)` rule keeps a near-opaque ramp for unsupported browsers.
 
 ### Props
 
@@ -170,7 +170,7 @@ function Layout() {
 
 - **Collapsible**: Toggle between expanded and icon-only modes
 - **Workspace-aware**: Changes navigation based on workspace
-- **ActiveRail**: Active-route indicator is a framer-motion `layoutId="active-rail"` element that animates (glides) between nav items on route change; instant under `prefers-reduced-motion`
+- **ActiveRail**: Active-route indicator is a framer-motion `layoutId="active-rail"` element that animates (glides) between nav items on route change; instant under `prefers-reduced-motion`. The rail renders as a flush full-height 2px bar (`inset-y-0 left-0 w-[2px]`) — the nav item's `rounded-lg` clip turns the straight bar into a clean curving line. The previous inset-pill shape (3px, `top-[18%] bottom-[18%]`, `rounded-r-full`) and the redundant `data-[active=true]:shadow-[inset_2px_0_0_0_...]` box-shadow in `sidebar.tsx` were removed; the `ActiveRail` element is the sole active indicator.
 - **Route prefetch**: `onMouseEnter` on each nav item calls `routePreload(path)` via `lib/routePreload.ts`, warming the lazy chunk before the user clicks
 - **Responsive**: Adapts to screen size
 - **Keyboard accessible**: Full keyboard navigation

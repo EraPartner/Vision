@@ -379,11 +379,11 @@
         background:
             linear-gradient(
                 138deg,
-                hsl(var(--success) / 0.18) 0%,
+                hsl(var(--gain) / 0.18) 0%,
                 hsl(var(--glass-surface) / 0.7) 46%,
                 hsl(var(--glass-surface) / 0.5) 100%
             );
-        border: 1px solid hsl(var(--success) / 0.36);
+        border: 1px solid hsl(var(--gain) / 0.36);
     }
 
     .glass-trend-down,
@@ -391,11 +391,11 @@
         background:
             linear-gradient(
                 138deg,
-                hsl(var(--destructive) / 0.16) 0%,
+                hsl(var(--loss) / 0.16) 0%,
                 hsl(var(--glass-surface) / 0.7) 46%,
                 hsl(var(--glass-surface) / 0.5) 100%
             );
-        border: 1px solid hsl(var(--destructive) / 0.36);
+        border: 1px solid hsl(var(--loss) / 0.36);
     }
 
     .dark .glass-trend-up,
@@ -403,11 +403,11 @@
         background:
             linear-gradient(
                 138deg,
-                hsl(var(--success) / 0.18) 0%,
+                hsl(var(--gain) / 0.18) 0%,
                 hsl(var(--glass-surface) / 0.8) 46%,
                 hsl(var(--glass-surface-deep) / 0.92) 100%
             );
-        border-color: hsl(var(--success) / 0.44);
+        border-color: hsl(var(--gain) / 0.44);
     }
 
     .dark .glass-trend-down,
@@ -415,11 +415,11 @@
         background:
             linear-gradient(
                 138deg,
-                hsl(var(--destructive) / 0.16) 0%,
+                hsl(var(--loss) / 0.16) 0%,
                 hsl(var(--glass-surface) / 0.8) 46%,
                 hsl(var(--glass-surface-deep) / 0.92) 100%
             );
-        border-color: hsl(var(--destructive) / 0.44);
+        border-color: hsl(var(--loss) / 0.44);
     }
 
     /* Frozen first column inside a glass card (e.g. the Category Pivot Table).
@@ -939,18 +939,19 @@
         }
     }
 
-    /* Semantic gain/loss colors. The legacy skin keeps the existing mapping
-       (champagne-gold gain / red loss); skin-v2 remaps these to colorblind-safe
-       Okabe-Ito tokens (styles/skin-v2.css). Routing gain/loss through a
-       semantic class — instead of text-accent/text-destructive directly — lets
-       the skin swap the hue without recoloring unrelated accent or destructive
-       (delete/error) UI, and with no per-component skin branch. */
+    /* Semantic gain/loss colors. Read the --gain/--loss tokens (tokens.css):
+       legacy = variant-aware champagne-gold / red, skin-v2 = Okabe-Ito
+       colorblind-safe (styles/skin-v2.css overrides the tokens). Routing
+       gain/loss through these semantic classes/tokens — instead of
+       text-accent/text-destructive directly — lets the accessibility toggle
+       swap the hue everywhere without recoloring unrelated accent or
+       destructive (delete/error) UI, and with no per-component skin branch. */
     .amount-gain {
-        color: hsl(var(--accent));
+        color: hsl(var(--gain));
     }
 
     .amount-loss {
-        color: hsl(var(--destructive));
+        color: hsl(var(--loss));
     }
 
     /* Expense color override — preserved for compat */

@@ -23,14 +23,14 @@ export function StatCard({ title, value, numericValue, change, changeType = "neu
     const normalisedTrend = trend === "up" ? "income" : trend === "down" ? "expense" : trend;
 
     const trendGradient = {
-        income: "from-accent/10 to-accent/5",
-        expense: "from-destructive/10 to-destructive/5",
+        income: "from-gain/10 to-gain/5",
+        expense: "from-loss/10 to-loss/5",
         neutral: "from-primary/10 to-primary/5",
     }[normalisedTrend] ?? "from-primary/10 to-primary/5";
 
     const iconBg = {
-        income: "bg-gradient-to-br from-accent/20 to-accent/10 text-accent",
-        expense: "bg-gradient-to-br from-destructive/20 to-destructive/10 text-destructive",
+        income: "bg-gradient-to-br from-gain/20 to-gain/10 text-gain",
+        expense: "bg-gradient-to-br from-loss/20 to-loss/10 text-loss",
         neutral: "bg-gradient-to-br from-primary/20 to-primary/10 text-primary",
     }[normalisedTrend] ?? "bg-gradient-to-br from-primary/20 to-primary/10 text-primary";
 

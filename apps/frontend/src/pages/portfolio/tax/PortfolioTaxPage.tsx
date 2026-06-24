@@ -320,28 +320,28 @@ export default function PortfolioTaxPage() {
       value: fmt(totalTaxes),
       icon: Landmark,
       desc: t("tax.acrossAllInvestmentsYear", { year: String(txYear) }),
-      cls: "text-destructive",
+      cls: "text-loss",
     },
     {
       title: t("tax.totalFeesPaid"),
       value: fmt(totalFees),
       icon: Receipt,
       desc: t("tax.brokerAndMgmtFeesYear", { year: String(txYear) }),
-      cls: "text-destructive",
+      cls: "text-loss",
     },
     {
       title: t("tax.totalCosts"),
       value: fmt(totalTaxesAndFees),
       icon: TrendingDown,
       desc: t("tax.combinedTaxesAndFeesYear", { year: String(txYear) }),
-      cls: "text-destructive",
+      cls: "text-loss",
     },
     {
       title: t("tax.effectiveTaxRate"),
       value: `${effectiveTaxRate.toFixed(1)}%`,
       icon: AlertTriangle,
       desc: t("tax.onRealizedGains"),
-      cls: effectiveTaxRate > 25 ? "text-destructive" : "text-muted-foreground",
+      cls: effectiveTaxRate > 25 ? "text-loss" : "text-muted-foreground",
     },
     {
       title: t("tax.totalWithPIT"),
@@ -455,7 +455,7 @@ export default function PortfolioTaxPage() {
                         {taxBreakdown.map(({ name, value }) => (
                           <div key={name} className="flex justify-between items-center py-1.5 border-b border-border/50 last:border-0">
                             <span className="text-sm text-muted-foreground">{name}</span>
-                            <span className="text-sm font-semibold tabular-nums text-destructive">{fmt(value)}</span>
+                            <span className="text-sm font-semibold tabular-nums text-loss">{fmt(value)}</span>
                           </div>
                         ))}
                       </div>
@@ -468,7 +468,7 @@ export default function PortfolioTaxPage() {
                         {feeBreakdown.map(({ name, value }) => (
                           <div key={name} className="flex justify-between items-center py-1.5 border-b border-border/50 last:border-0">
                             <span className="text-sm text-muted-foreground">{name}</span>
-                            <span className="text-sm font-semibold tabular-nums text-destructive">{fmt(value)}</span>
+                            <span className="text-sm font-semibold tabular-nums text-loss">{fmt(value)}</span>
                           </div>
                         ))}
                       </div>
@@ -564,11 +564,11 @@ export default function PortfolioTaxPage() {
               <CardContent className="space-y-2">
                 <div className="flex justify-between text-sm">
                   <span className="text-muted-foreground">{t("tax.recordedTaxes")}</span>
-                  <span className="font-semibold tabular-nums text-destructive">{fmt(totalRecordedTaxes)}</span>
+                  <span className="font-semibold tabular-nums text-loss">{fmt(totalRecordedTaxes)}</span>
                 </div>
                 <div className="flex justify-between text-sm">
                   <span className="text-muted-foreground">{t("tax.recordedFees")}</span>
-                  <span className="font-semibold tabular-nums text-destructive">{fmt(totalRecordedFees)}</span>
+                  <span className="font-semibold tabular-nums text-loss">{fmt(totalRecordedFees)}</span>
                 </div>
                 <div className="flex justify-between text-sm">
                   <span className="text-muted-foreground">{t("tax.manualTaxAdjustments")}</span>
@@ -593,11 +593,11 @@ export default function PortfolioTaxPage() {
               <CardContent className="space-y-2">
                 <div className="flex items-center justify-between text-sm">
                   <span className="text-muted-foreground">{t("tax.card.totalPIT")}</span>
-                  <span className="font-semibold tabular-nums text-destructive">{fmt(calculation.totalPIT)}</span>
+                  <span className="font-semibold tabular-nums text-loss">{fmt(calculation.totalPIT)}</span>
                 </div>
                 <div className="flex items-center justify-between text-sm">
                   <span className="text-muted-foreground">{t("tax.totalTaxesPaid")}</span>
-                  <span className="font-semibold tabular-nums text-destructive">{fmt(totalTaxes)}</span>
+                  <span className="font-semibold tabular-nums text-loss">{fmt(totalTaxes)}</span>
                 </div>
                 <div className="flex items-center justify-between text-sm">
                   <span className="text-muted-foreground">{t("tax.totalWithPIT")}</span>
@@ -631,17 +631,17 @@ export default function PortfolioTaxPage() {
                   </div>
                   <div className="rounded-lg border border-border p-3">
                     <p className="text-xs text-muted-foreground mb-1">{t("tax.dividendWhtPaid")}</p>
-                    <p className="text-lg font-bold tabular-nums text-destructive">{fmt(grossDividendWht)}</p>
+                    <p className="text-lg font-bold tabular-nums text-loss">{fmt(grossDividendWht)}</p>
                     <p className="text-xs text-muted-foreground mt-1">{t("tax.witheldAtSource")}</p>
                   </div>
                   <div className="rounded-lg border border-border p-3">
                     <p className="text-xs text-muted-foreground mb-1">{t("tax.dividendWhtReclaim")}</p>
-                    <p className="text-lg font-bold tabular-nums text-accent">{fmt(dividendWhtReclaim)}</p>
+                    <p className="text-lg font-bold tabular-nums text-gain">{fmt(dividendWhtReclaim)}</p>
                     <p className="text-xs text-muted-foreground mt-1">{t("tax.firstExemptBelgianDividends")} ({fmt(dividendExemption)})</p>
                   </div>
                   <div className="rounded-lg border border-border p-3">
                     <p className="text-xs text-muted-foreground mb-1">{t("tax.dividendWhtNetCost")}</p>
-                    <p className="text-lg font-bold tabular-nums text-destructive">{fmt(dividendWhtNetCost)}</p>
+                    <p className="text-lg font-bold tabular-nums text-loss">{fmt(dividendWhtNetCost)}</p>
                     <p className="text-xs text-muted-foreground mt-1">{t("tax.afterReclaim")}</p>
                   </div>
                 </div>
@@ -653,7 +653,7 @@ export default function PortfolioTaxPage() {
                       <Badge variant="outline">{t("tax.transactionTax")}</Badge>
                     </div>
                     <p className="text-xs text-muted-foreground mt-1">{t("tax.tobTrackedFromBuyTaxes")}</p>
-                    <p className="text-base font-bold tabular-nums mt-2 text-destructive">{fmt(tobRecorded)}</p>
+                    <p className="text-base font-bold tabular-nums mt-2 text-loss">{fmt(tobRecorded)}</p>
                   </div>
                   <div className="rounded-lg border border-border p-3">
                     <div className="flex items-center justify-between gap-2 flex-wrap">
@@ -661,7 +661,7 @@ export default function PortfolioTaxPage() {
                       <Badge variant="outline">{t("tax.estimated")}</Badge>
                     </div>
                     <p className="text-xs text-muted-foreground mt-1">{t("tax.tobAutoEstimateDesc")}</p>
-                    <p className="text-base font-bold tabular-nums mt-2 text-destructive">{fmt(tobAutoEstimate)}</p>
+                    <p className="text-base font-bold tabular-nums mt-2 text-loss">{fmt(tobAutoEstimate)}</p>
                   </div>
                 </div>
 
@@ -672,7 +672,7 @@ export default function PortfolioTaxPage() {
                       <Badge variant="outline">{`${(taxTable.securitiesAccountTaxRate * 100).toFixed(2)}%`}</Badge>
                     </div>
                     <p className="text-xs text-muted-foreground mt-1">{t("tax.tacrEstimateDesc")}</p>
-                    <p className="text-base font-bold tabular-nums mt-2 text-destructive">{fmt(tacrEstimate)}</p>
+                    <p className="text-base font-bold tabular-nums mt-2 text-loss">{fmt(tacrEstimate)}</p>
                   </div>
                 )}
 
@@ -683,7 +683,7 @@ export default function PortfolioTaxPage() {
                       <Badge variant="outline">{`${(taxTable.capitalGainsTaxRate * 100).toFixed(0)}%`}</Badge>
                     </div>
                     <p className="text-xs text-muted-foreground mt-1">{t("tax.cgtEstimateDesc")}</p>
-                    <p className="text-base font-bold tabular-nums mt-2 text-destructive">{fmt(cgtEstimate)}</p>
+                    <p className="text-base font-bold tabular-nums mt-2 text-loss">{fmt(cgtEstimate)}</p>
                   </div>
                 )}
 
@@ -694,7 +694,7 @@ export default function PortfolioTaxPage() {
                       <Badge variant="outline">{`${(taxTable.reyndersTaxRate * 100).toFixed(0)}%`}</Badge>
                     </div>
                     <p className="text-xs text-muted-foreground mt-1">{t("tax.reyndersEstimateDesc")}</p>
-                    <p className="text-base font-bold tabular-nums mt-2 text-destructive">{fmt(reyndersEstimate)}</p>
+                    <p className="text-base font-bold tabular-nums mt-2 text-loss">{fmt(reyndersEstimate)}</p>
                   </div>
                 )}
 

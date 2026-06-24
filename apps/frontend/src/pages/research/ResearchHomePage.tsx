@@ -163,8 +163,8 @@ export default function ResearchHomePage() {
                     <span className="truncate text-xs font-medium text-muted-foreground">{b.label}</span>
                     {pct != null && (
                       up
-                        ? <TrendingUp className="h-3.5 w-3.5 shrink-0 text-accent" />
-                        : <TrendingDown className="h-3.5 w-3.5 shrink-0 text-destructive" />
+                        ? <TrendingUp className="h-3.5 w-3.5 shrink-0 text-gain" />
+                        : <TrendingDown className="h-3.5 w-3.5 shrink-0 text-loss" />
                     )}
                   </div>
                   {quote ? (

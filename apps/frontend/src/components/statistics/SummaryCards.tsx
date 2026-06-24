@@ -27,7 +27,7 @@ export function SummaryCards({ data }: SummaryCardsProps) {
       fullValue: incomeCompact.isCompact ? incomeCompact.full : undefined,
       icon: TrendingUp,
       description: t("statsPage.avgPerMonth", { amount: avgIncomeCompact.display }),
-      className: "text-accent",
+      className: "text-gain",
     },
     {
       title: t("statsPage.totalSpending"),
@@ -35,7 +35,7 @@ export function SummaryCards({ data }: SummaryCardsProps) {
       fullValue: spendingCompact.isCompact ? spendingCompact.full : undefined,
       icon: TrendingDown,
       description: t("statsPage.avgPerMonth", { amount: avgSpendingCompact.display }),
-      className: "text-destructive",
+      className: "text-loss",
     },
     {
       title: t("statsPage.netBalance"),
@@ -63,10 +63,10 @@ export function SummaryCards({ data }: SummaryCardsProps) {
             <CardTitle className="text-sm font-medium text-muted-foreground">{card.title}</CardTitle>
             <span className={cn(
               "inline-flex h-7 w-7 items-center justify-center rounded-md ring-1",
-              card.className.includes("accent")
-                ? "bg-gradient-to-br from-accent/20 to-accent/5 ring-accent/15"
-                : card.className.includes("destructive")
-                ? "bg-gradient-to-br from-destructive/20 to-destructive/5 ring-destructive/15"
+              card.className.includes("text-gain")
+                ? "bg-gradient-to-br from-gain/20 to-gain/5 ring-gain/15"
+                : card.className.includes("text-loss")
+                ? "bg-gradient-to-br from-loss/20 to-loss/5 ring-loss/15"
                 : "bg-gradient-to-br from-primary/20 to-primary/5 ring-primary/15"
             )}>
               <card.icon className={`h-4 w-4 ${card.className}`} />

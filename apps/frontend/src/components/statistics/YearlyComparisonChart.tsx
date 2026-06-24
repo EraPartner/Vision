@@ -25,8 +25,8 @@ export const YearlyComparisonChart = memo(function YearlyComparisonChart({ data 
   }));
 
   const series: BarSeries<YearlyDatum>[] = [
-    { key: "income", label: t("statsPage.income"), accessor: (d) => d.income, color: "hsl(var(--primary))" },
-    { key: "spending", label: t("statsPage.spending"), accessor: (d) => d.spending, color: "hsl(var(--destructive))" },
+    { key: "income", label: t("statsPage.income"), accessor: (d) => d.income, color: "hsl(var(--gain))" },
+    { key: "spending", label: t("statsPage.spending"), accessor: (d) => d.spending, color: "hsl(var(--loss))" },
   ];
 
   return (

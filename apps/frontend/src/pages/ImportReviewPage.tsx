@@ -418,7 +418,7 @@ export default function ImportReviewPage() {
                       {row.memo && (
                         <span className="truncate min-w-0 text-muted-foreground/60 hidden sm:block">{row.memo}</span>
                       )}
-                      <span className={`ml-auto shrink-0 tabular-nums font-medium ${Number(row.amount) < 0 ? "text-destructive" : "text-success"}`}>
+                      <span className={`ml-auto shrink-0 tabular-nums font-medium ${Number(row.amount) < 0 ? "text-loss" : "text-gain"}`}>
                         {formatCurrency(Number(row.amount), row.currency ?? "EUR", locale)}
                       </span>
                     </div>

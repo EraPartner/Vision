@@ -373,8 +373,8 @@ function CompactReturnCard({
     title: string; value: string; subtitle: string; icon: IconType; trend: boolean;
 }) {
     const iconBg = trend
-        ? "bg-gradient-to-br from-success/20 to-success/10 text-success"
-        : "bg-gradient-to-br from-destructive/20 to-destructive/10 text-destructive";
+        ? "bg-gradient-to-br from-gain/20 to-gain/10 text-gain"
+        : "bg-gradient-to-br from-loss/20 to-loss/10 text-loss";
     const trendGlassClass = trend ? "liquid-glass-trend-up" : "liquid-glass-trend-down";
 
     return (
@@ -434,8 +434,8 @@ function TotalValueCard({
     const isGain = totalGainLoss >= 0;
     const trendGlassClass = isGain ? "liquid-glass-trend-up" : "liquid-glass-trend-down";
     const iconBg = isGain
-        ? "bg-gradient-to-br from-success/20 to-success/10 text-success"
-        : "bg-gradient-to-br from-destructive/20 to-destructive/10 text-destructive";
+        ? "bg-gradient-to-br from-gain/20 to-gain/10 text-gain"
+        : "bg-gradient-to-br from-loss/20 to-loss/10 text-loss";
     const gainToneClass = isGain ? "amount-gain" : "amount-loss";
 
     return (
@@ -471,11 +471,11 @@ function TotalValueCard({
                     {fxAttribution && (
                         <div className="mt-1 text-xs text-muted-foreground tabular-nums">
                             {labels.assetGain}:{" "}
-                            <span className={fxAttribution.assetGain >= 0 ? "text-success font-medium" : "text-destructive font-medium"}>
+                            <span className={fxAttribution.assetGain >= 0 ? "text-gain font-medium" : "text-loss font-medium"}>
                                 {fxAttribution.assetGain >= 0 ? "+" : ""}<Money amount={fxAttribution.assetGain} currency={currency} />
                             </span>
                             {" · "}{labels.fxEffect}:{" "}
-                            <span className={fxAttribution.fxGain >= 0 ? "text-success font-medium" : "text-destructive font-medium"}>
+                            <span className={fxAttribution.fxGain >= 0 ? "text-gain font-medium" : "text-loss font-medium"}>
                                 {fxAttribution.fxGain >= 0 ? "+" : ""}<Money amount={fxAttribution.fxGain} currency={currency} />
                             </span>
                             {fxAttribution.fellBack && (

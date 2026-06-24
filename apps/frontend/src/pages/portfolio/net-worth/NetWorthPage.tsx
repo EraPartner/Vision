@@ -215,7 +215,7 @@ export default function NetWorthPage() {
         actions={(
           <Badge variant="outline" className={cn(
             "text-sm px-3 py-1",
-            allTimeChange >= 0 ? "border-accent/30 text-accent" : "border-destructive/30 text-destructive"
+            allTimeChange >= 0 ? "border-gain/30 text-gain" : "border-loss/30 text-loss"
           )}>
             {allTimeChange >= 0 ? <TrendingUp className="h-3.5 w-3.5 mr-1" /> : <TrendingDown className="h-3.5 w-3.5 mr-1" />}
             {allTimeChange >= 0 ? "+" : ""}{fmt(allTimeChange)} {t('networth.allTime')} ({allTimePercent >= 0 ? "+" : ""}{allTimePercent.toFixed(1)}%)
@@ -337,7 +337,7 @@ export default function NetWorthPage() {
         <Card className="group relative overflow-hidden glass-regular premium-frame micro-lift">
           <CardHeader className="flex flex-row items-center justify-between pb-2">
             <CardTitle className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">{t('networth.peak')}</CardTitle>
-            <TrendingUp className="h-4 w-4 text-accent" />
+            <TrendingUp className="h-4 w-4 text-gain" />
           </CardHeader>
           <CardContent>
             <p className="text-2xl font-bold text-foreground tabular-nums">{fmt(peak)}</p>
@@ -346,7 +346,7 @@ export default function NetWorthPage() {
         <Card className="group relative overflow-hidden glass-regular premium-frame micro-lift">
           <CardHeader className="flex flex-row items-center justify-between pb-2">
             <CardTitle className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">{t('networth.lowest')}</CardTitle>
-            <TrendingDown className="h-4 w-4 text-destructive" />
+            <TrendingDown className="h-4 w-4 text-loss" />
           </CardHeader>
           <CardContent>
             <p className="text-2xl font-bold text-foreground tabular-nums">{fmt(trough)}</p>

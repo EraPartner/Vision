@@ -6,7 +6,6 @@ import { MonthlyTrendsChart } from "@/components/dashboard/MonthlyTrendsChart";
 import { CashFlowForecastChart } from "@/components/dashboard/CashFlowForecastChart";
 import { CategoryPieChart } from "@/components/dashboard/CategoryPieChart";
 import { BankBalancesWidget } from "@/components/dashboard/BankBalancesWidget";
-import { SuggestionCard } from "@/components/dashboard/SuggestionCard";
 import { DataTable } from "@/components/shared/DataTable";
 import { ExclusionToggle } from "@/components/shared/ExclusionToggle";
 import { PageHeader } from "@/components/shared/PageHeader";
@@ -41,7 +40,6 @@ export default function DashboardPage() {
     const integerLocaleFormatter = useMemo(() => new Intl.NumberFormat(locale), [locale]);
 
     const DASHBOARD_WIDGETS: WidgetDefinition[] = useMemo(() => [
-        { id: 'suggestions', label: t('dashboard.suggestions'), description: t('dashboard.widgetDescriptions.suggestions') },
         { id: 'statCards', label: t('dashboard.statCards'), description: t('dashboard.widgetDescriptions.statCards') },
         { id: 'bankBalances', label: t('dashboard.bankBalances'), description: t('dashboard.widgetDescriptions.bankBalances') },
         { id: 'monthlyTrends', label: t('dashboard.monthlyTrends'), description: t('dashboard.widgetDescriptions.monthlyTrends') },
@@ -393,8 +391,9 @@ export default function DashboardPage() {
                 </div>
             )}
 
-            {/* Contextual suggestion — only renders when planned payments are due */}
-            {isVisible('suggestions') && <SuggestionCard />}
+            {/* Upcoming-payment reminders render as the shared banner above the
+                page (AppLayout → UpcomingPaymentsNotification), consistent with
+                every other page — no dashboard-specific card. */}
 
             {/* Stats — bento: featured net-balance tile + secondary metrics */}
             {isVisible('statCards') && statsLoading && statSkeleton}

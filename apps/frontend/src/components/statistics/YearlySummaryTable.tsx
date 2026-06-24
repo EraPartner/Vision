@@ -45,10 +45,10 @@ export function YearlySummaryTable({ data }: YearlySummaryTableProps) {
               return (
                 <tr key={y.year} className="border-b border-border/50 hover:bg-muted/50">
                   <td className="py-2 px-3 font-medium">{y.year}</td>
-                  <td className="text-right py-2 px-3 text-accent tabular-nums">
+                  <td className="text-right py-2 px-3 text-gain tabular-nums">
                     <span title={incomeR.isCompact ? incomeR.full : undefined}>{incomeR.display}</span>
                   </td>
-                  <td className="text-right py-2 px-3 text-destructive tabular-nums">
+                  <td className="text-right py-2 px-3 text-loss tabular-nums">
                     <span title={spendingR.isCompact ? spendingR.full : undefined}>{spendingR.display}</span>
                   </td>
                   <td

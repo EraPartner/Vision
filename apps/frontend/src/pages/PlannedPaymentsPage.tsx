@@ -214,7 +214,7 @@ export default function PlannedPaymentsPage() {
       editable: false,
       defaultWidth: 120,
       render: (row: TableRow) => (
-        <span className={`font-semibold tabular-nums ${row.amount < 0 ? "text-destructive" : "text-accent"}`}>
+        <span className={`font-semibold tabular-nums ${row.amount < 0 ? "text-loss" : "text-gain"}`}>
           {row.amount < 0 ? "−" : "+"}<Money amount={Math.abs(row.amount)} currency={row.currency} />
         </span>
       ),

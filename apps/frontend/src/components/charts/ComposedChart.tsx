@@ -53,8 +53,8 @@ export interface ComposedChartProps<Datum> {
 }
 
 const MARGIN = { top: 16, right: 64, bottom: 28, left: 72 };
-const UP = "hsl(var(--accent))";
-const DOWN = "hsl(var(--destructive))";
+const UP = "hsl(var(--gain))";
+const DOWN = "hsl(var(--loss))";
 
 /** The representative scalar of a series at a datum (close for candlesticks). */
 function repValue<Datum>(s: ComposedSeries<Datum>, d: Datum): number | null {

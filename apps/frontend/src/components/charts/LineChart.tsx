@@ -452,7 +452,7 @@ function Inner<Datum>({
                 const rising = b - a > 0;
                 return (
                     <div
-                        className={`glass-thick pointer-events-none absolute z-10 -translate-x-1/2 whitespace-nowrap rounded-full px-2.5 py-1 text-xs font-semibold tabular-nums ${rising ? "text-success" : b - a < 0 ? "text-destructive" : "text-foreground"}`}
+                        className={`glass-thick pointer-events-none absolute z-10 -translate-x-1/2 whitespace-nowrap rounded-full px-2.5 py-1 text-xs font-semibold tabular-nums ${rising ? "text-gain" : b - a < 0 ? "text-loss" : "text-foreground"}`}
                         style={{ left: mid, top: 2 }}
                     >
                         {formatScrubDelta(a, b, fmt)}

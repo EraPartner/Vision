@@ -148,7 +148,7 @@ export function ExecutionHistoryDialog({ open, onOpenChange, payments }: Executi
                     </div>
                   </div>
                   <div className="col-span-2 flex items-center justify-end gap-2">
-                    <span className={`tabular-nums font-semibold ${item.amount < 0 ? 'text-destructive' : 'text-accent'}`}>
+                    <span className={`tabular-nums font-semibold ${item.amount < 0 ? 'text-loss' : 'text-gain'}`}>
                       {item.amount < 0 ? '−' : '+'}<Money amount={Math.abs(item.amount)} currency={item.currency} />
                     </span>
                     <Button

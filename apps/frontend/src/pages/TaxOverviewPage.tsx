@@ -259,14 +259,14 @@ export default function TaxOverviewPage() {
       value: fmt(calculation.grossIncome),
       icon: TrendingUp,
       desc: t("tax.card.profileGrossIncome.desc"),
-      cls: "text-accent",
+      cls: "text-gain",
     },
     {
       title: t("tax.card.totalPIT"),
       value: fmt(calculation.totalPIT),
       icon: Landmark,
       desc: t("tax.card.totalPIT.desc",),
-      cls: "text-destructive",
+      cls: "text-loss",
     },
     {
       title: t("tax.card.netTakeHome"),
@@ -287,7 +287,7 @@ export default function TaxOverviewPage() {
       value: fmt(portfolioTaxesForYear),
       icon: Landmark,
       desc: t("tax.card.portfolioTaxesYear.desc"),
-      cls: "text-destructive",
+      cls: "text-loss",
     },
     {
       title: t("tax.card.totalWithPortfolio"),
@@ -504,8 +504,8 @@ export default function TaxOverviewPage() {
                             <TableCell
                               className={cn(
                                 "text-right font-medium tabular-nums",
-                                row.type === "tax" && "text-destructive",
-                                row.type === "reduction" && "text-accent",
+                                row.type === "tax" && "text-loss",
+                                row.type === "reduction" && "text-gain",
                                 row.type === "grand" && "text-primary font-bold"
                               )}
                             >
@@ -642,23 +642,23 @@ export default function TaxOverviewPage() {
                   <Separator />
                   <div className="flex items-center justify-between text-sm">
                     <span className="text-muted-foreground">{t('tax.pit.row.federalAfter')}</span>
-                    <span className="font-semibold tabular-nums text-destructive">
+                    <span className="font-semibold tabular-nums text-loss">
                       {fmt(calculation.federalPITAfterReductions)}
                     </span>
                   </div>
                   <div className="flex items-center justify-between text-sm">
                     <span className="text-muted-foreground">{t('tax.pit.row.communalSurcharge')}</span>
-                    <span className="font-semibold tabular-nums text-destructive">{fmt(calculation.communalSurcharge)}</span>
+                    <span className="font-semibold tabular-nums text-loss">{fmt(calculation.communalSurcharge)}</span>
                   </div>
                   <div className="flex items-center justify-between text-sm">
                     <span className="text-muted-foreground">{t('tax.pit.row.employeeSS')}</span>
-                    <span className="font-semibold tabular-nums text-destructive">
+                    <span className="font-semibold tabular-nums text-loss">
                       {fmt(calculation.employeeSocialSecurity)}
                     </span>
                   </div>
                   <div className="flex items-center justify-between text-sm">
                     <span className="text-muted-foreground">{t('tax.pit.row.specialSS')}</span>
-                    <span className="font-semibold tabular-nums text-destructive">
+                    <span className="font-semibold tabular-nums text-loss">
                       {fmt(calculation.specialSocialSecurityContribution)}
                     </span>
                   </div>

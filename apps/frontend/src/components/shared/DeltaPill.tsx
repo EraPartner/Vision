@@ -22,9 +22,9 @@ export function DeltaPill({ value, label, invert = false, className }: DeltaPill
 
     const Icon = direction === "up" ? ArrowUpRight : direction === "down" ? ArrowDownRight : ArrowRight;
     const tone = positive
-        ? "bg-success/12 text-success ring-success/25"
+        ? "bg-gain/12 text-gain ring-gain/25"
         : negative
-            ? "bg-destructive/12 text-destructive ring-destructive/25"
+            ? "bg-loss/12 text-loss ring-loss/25"
             : "bg-muted-foreground/10 text-muted-foreground ring-border/40";
 
     return (

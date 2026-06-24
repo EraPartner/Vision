@@ -144,8 +144,8 @@ export default function RealEstatePage() {
               <span className={cn(
                 "inline-flex h-6 w-6 items-center justify-center rounded-md bg-gradient-to-br ring-1",
                 totalAppreciation >= 0
-                  ? "from-accent/20 to-accent/5 text-accent ring-accent/15"
-                  : "from-destructive/20 to-destructive/5 text-destructive ring-destructive/15"
+                  ? "from-gain/20 to-gain/5 text-gain ring-gain/15"
+                  : "from-loss/20 to-loss/5 text-loss ring-loss/15"
               )}>
                 <TrendingUp className="h-3 w-3" />
               </span>
@@ -164,7 +164,7 @@ export default function RealEstatePage() {
             <CardTitle className="text-xs font-medium text-muted-foreground">{t('portfolio.rentalIncome')}</CardTitle>
           </CardHeader>
           <CardContent className="pb-3 px-4">
-            <p className="text-xl font-bold text-accent tabular-nums">+{fmt(totalRentIncome)}</p>
+            <p className="text-xl font-bold text-gain tabular-nums">+{fmt(totalRentIncome)}</p>
             <p className="text-xs text-muted-foreground mt-0.5">~{fmt(estimatedMonthlyRent)}{t('realestate.perMonth')}</p>
           </CardContent>
         </Card>
@@ -187,7 +187,7 @@ export default function RealEstatePage() {
         <Card className="group relative overflow-hidden glass-regular premium-frame micro-lift">
           <div aria-hidden className={cn(
             "pointer-events-none absolute inset-0 rounded-[inherit] bg-gradient-to-br",
-            totalReturn >= 0 ? "from-accent/15 to-accent/5" : "from-destructive/15 to-destructive/5",
+            totalReturn >= 0 ? "from-gain/15 to-gain/5" : "from-loss/15 to-loss/5",
           )} />
           <CardHeader className="pb-1 pt-3 px-4">
             <CardTitle className="text-xs font-medium text-muted-foreground">{t('portfolio.totalReturn')}</CardTitle>
@@ -312,7 +312,7 @@ export default function RealEstatePage() {
                   )}
                    <div className="p-3 rounded-lg bg-muted/50">
                      <p className="text-xs text-muted-foreground mb-1">{t('portfolio.rentalIncome')}</p>
-                     <p className="text-lg font-bold text-accent tabular-nums">
+                     <p className="text-lg font-bold text-gain tabular-nums">
                        +{fmt(convertToTarget(p.totalIncome, p.currency))}
                      </p>
                      {monthlyRent > 0 && (
@@ -337,7 +337,7 @@ export default function RealEstatePage() {
                  {(p.totalFees > 0 || p.totalTaxes > 0) && (
                    <div className="flex justify-between text-sm border-t border-border pt-3">
                      <span className="text-muted-foreground">{t('portfolio.feesAndTaxes')}</span>
-                      <span className="font-medium text-destructive">-{fmt(convertToTarget(p.totalFees + p.totalTaxes, p.currency))}</span>
+                      <span className="font-medium text-loss">-{fmt(convertToTarget(p.totalFees + p.totalTaxes, p.currency))}</span>
                    </div>
                  )}
               </CardContent>

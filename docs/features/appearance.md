@@ -3,9 +3,9 @@ title: Appearance Feature
 type: feature
 status: active
 date: 2026-04-21
-updated: 2026-06-12
-tags: [feature, appearance, theming, personalization, frontend, settings, phase-1, visual-effects-tiers, auto-adapt-display, fx-reduced, shader-aurora, webgl, premium-v3, system-accent, vibrancy, electron-native, macos, june-2026, canvas-text, aurora-legibility, liquid-glass-sidebar]
-description: Per-user theme variant selection with five color palettes, light/dark mode switching, and schedule-based mode transitions. June 2026 (ADR-075): Visual-effects tier model (reduced/standard/enhanced) + autoAdaptDisplay replaces the ADR-071 enhancedEffects boolean; large-display heuristic auto-drops to reduced on 4K-class screens. June 2026 V12 (ADR-072): system accent color overlay (Electron/macOS only, persisted in theme_settings.systemAccent) and vibrancy gated on effective tier.
+updated: 2026-06-24
+tags: [feature, appearance, theming, personalization, frontend, settings, phase-1, visual-effects-tiers, auto-adapt-display, fx-reduced, shader-aurora, webgl, premium-v3, system-accent, vibrancy, electron-native, macos, june-2026, canvas-text, aurora-legibility, liquid-glass-sidebar, accessibility, colorblind, gain-loss, skin-v2]
+description: Per-user theme variant selection with five color palettes, light/dark mode switching, and schedule-based mode transitions. June 2026 (ADR-075): Visual-effects tier model (reduced/standard/enhanced) + autoAdaptDisplay replaces the ADR-071 enhancedEffects boolean; large-display heuristic auto-drops to reduced on 4K-class screens. June 2026 V12 (ADR-072): system accent color overlay (Electron/macOS only, persisted in theme_settings.systemAccent) and vibrancy gated on effective tier. 2026-06-24: colorblind gain/loss palette promoted to a persisted user setting (colorblindGainLoss, default false/classic); --gain/--loss CSS tokens unified app-wide; gain/loss Tailwind color utilities added.
 aliases: [appearance, theming, theme variants, color palettes, dark mode, light mode, system accent, vibrancy]
 related_code:
   - apps/frontend/src/styles/themes.ts
@@ -451,9 +451,133 @@ Code links: [[apps/frontend/src/lib/accentColor.ts]], [[apps/frontend/src/contex
 
 ---
 
+## Gain & Loss Colors — Accessibility Setting (2026-06-24)
+
+> [!info] ADR-104 addendum (2026-06-24, updated)
+> The colorblind-safe Okabe-Ito palette, previously controlled only by the build flag `VITE_SKIN_V2`, is now a **persisted user setting** (`colorblindGainLoss: boolean`). The build flag is retained for environments that want to lock the palette at build time, but the in-app setting takes precedence for individual users. As of the follow-up pass (2026-06-24), the **default is `false` (classic red/gold)** and the `--gain`/`--loss` CSS token system has been extended app-wide.
+
+### What it does
+
+`AppSettings.colorblindGainLoss: boolean` (default `false`) controls whether the `.skin-v2` root class is applied to `<html>`:
+
+| Value | Palette | CSS class on `<html>` |
+|-------|---------|----------------------|
+| `false` (default) | Classic: gold gain (`--accent`), red loss (`--destructive`) | `.skin-v2` absent |
+| `true` | Okabe-Ito colorblind-safe: green gain `#009E73`, orange/vermillion loss `#D55E00` | `.skin-v2` applied |
+
+`AppSettingsProvider` (`contexts/AppSettingsContext.tsx`) calls `setSkinV2(appSettings.colorblindGainLoss)` immediately on settings hydration and again whenever the value changes, keeping the DOM class in sync with the stored preference.
+
+### Settings UI
+
+A new **Accessibility** group appears in **Settings → Appearance** (`AppearanceSection.tsx`), below the visual-effects group. It contains a single **"Gain & loss colors"** Select with two options:
+
+- **Classic (red loss)** — sets `colorblindGainLoss: false` (default)
+- **Colorblind-safe (orange loss)** — sets `colorblindGainLoss: true`
+
+The change is instant-apply (writes through `updateAppSettings`); no page reload is required.
+
+### `--gain` / `--loss` Unified Token System
+
+The gain/loss palette is now surfaced as two always-defined CSS custom properties that the toggle recolors app-wide:
+
+```css
+/* tokens.css — base (classic/legacy) */
+:root {
+  --gain: var(--accent);       /* variant-aware gold in default theme */
+  --loss: var(--destructive);  /* variant-aware red */
+}
+
+/* skin-v2.css — Okabe-Ito overrides (active when .skin-v2 is on <html>) */
+:root.skin-v2 {
+  --gain: 162 84% 30%;   /* #009E73 green (light) */
+  --loss: 24 85% 45%;    /* #D55E00 orange/vermillion (light) */
+}
+.dark:root.skin-v2 {
+  --gain: 160 65% 52%;
+  --loss: 24 90% 62%;
+}
+```
+
+`index.css` routes the amount classes through these tokens:
+
+```css
+.amount-gain { color: hsl(var(--gain)); }
+.amount-loss { color: hsl(var(--loss)); }
+```
+
+The `.glass-trend-up` / `.glass-trend-down` (and `.liquid-glass-trend-*`) classes are re-pointed from `--success`/`--destructive` to `--gain`/`--loss`, so trend indicators in glass surfaces follow the toggle.
+
+### `gain` / `loss` Tailwind Color Utilities
+
+`apps/frontend/tailwind.config.ts` registers two Tailwind semantic colors:
+
+```ts
+gain: 'hsl(var(--gain) / <alpha-value>)',
+loss: 'hsl(var(--loss) / <alpha-value>)',
+```
+
+This enables opacity-aware utilities that follow the toggle automatically:
+
+| Utility example | Use case |
+|----------------|---------|
+| `text-gain` / `text-loss` | Text color for positive/negative numbers |
+| `bg-gain/12` / `bg-loss/12` | Subtle background tint on stat cards |
+| `from-gain/20` / `from-loss/20` | Gradient starts for trend tiles |
+| `ring-gain/25` / `ring-loss/25` | Focus rings on gain/loss-colored controls |
+| `border-loss/30` | Loss-colored border at low opacity |
+
+**Charts**: gain/loss fills and strokes now use `hsl(var(--gain))` / `hsl(var(--loss))` strings (reactive via CSS; no JS hook required). `DeltaPill` and approximately 35 component/page files were swept to route gain/loss-semantic colors through these tokens instead of raw `text-success` / `text-destructive` / `text-accent` / `--primary`.
+
+### Contributor rule
+
+> [!warning] Gain/loss color rule for contributors
+> Any gain/loss-semantic color MUST use one of:
+> - `.amount-gain` / `.amount-loss` CSS classes
+> - `text-gain` / `text-loss` (or other `gain`/`loss` Tailwind utilities with opacity variants)
+> - `hsl(var(--gain))` / `hsl(var(--loss))` inline/in CSS
+>
+> Never use raw `text-success`, `text-destructive`, `text-accent`, `--primary`, or hardcoded hex values for gain/loss meaning. Generic destructive/success/status UI (delete buttons, error alerts, import-complete banners, health badges) is intentionally unchanged and continues to use `--destructive` / `--success`.
+
+### Implementation
+
+- `settingsStore.ts` — `colorblindGainLoss` field on `AppSettings`, default `false`.
+- `AppSettingsContext.tsx` — calls `setSkinV2(appSettings.colorblindGainLoss)` in a `useEffect` on `[appSettings.colorblindGainLoss]`.
+- `lib/skin.ts` — `setSkinV2(flag: boolean)` toggles `.skin-v2` on `document.documentElement`; unchanged in behavior.
+- `AppearanceSection.tsx` — new `SettingsGroup` with `id="accessibility"`, containing a `SettingRow` stack wrapping a Select.
+- `styles/tokens.css` — adds `--gain: var(--accent)` and `--loss: var(--destructive)` at `:root` (always-defined legacy values).
+- `styles/skin-v2.css` — overrides only `--gain` and `--loss` tokens (Okabe-Ito values, light + dark); old per-class `.amount-gain`/`.amount-loss` rules removed as redundant.
+- `index.css` — `.amount-gain`/`.amount-loss` read `hsl(var(--gain))`/`hsl(var(--loss))`; `.glass-trend-up`/`.glass-trend-down` re-pointed from `--success`/`--destructive` to `--gain`/`--loss`.
+- `tailwind.config.ts` — `gain` and `loss` color entries added.
+
+### Relationship to `VITE_SKIN_V2` build flag
+
+The build flag (`VITE_SKIN_V2`, default `false`) sets the initial `.skin-v2` class state before React mounts (FOUC prevention). Once the user's stored `colorblindGainLoss` setting hydrates, it overrides the build-flag value via `AppSettingsProvider`. The default setting is `false` (classic), matching the build flag default; users opt in to colorblind-safe via **Settings → Appearance → Accessibility → Gain & loss colors → Colorblind-safe (orange loss)**.
+
+**Priority order:**
+```
+Stored colorblindGainLoss setting (post-hydration)
+  > localStorage override vision_skin_v2 (dev/QA)
+  > VITE_SKIN_V2 build flag (pre-hydration / FOUC default)
+```
+
+### i18n keys
+
+| Key | EN value |
+|-----|---------|
+| `settings.group.accessibility` | "Accessibility" |
+| `settings.appearance.gainLossColors` | "Gain & loss colors" |
+| `settings.appearance.gainLossColorsHint` | Hint describing the difference between modes |
+| `settings.appearance.gainLossColors.colorblind` | "Colorblind-safe (orange loss)" |
+| `settings.appearance.gainLossColors.classic` | "Classic (red loss)" |
+
+Code links: [[apps/frontend/src/stores/settingsStore.ts]], [[apps/frontend/src/contexts/AppSettingsContext.tsx]], [[apps/frontend/src/components/settings/sections/AppearanceSection.tsx]], [[apps/frontend/src/lib/skin.ts]], [[apps/frontend/src/styles/tokens.css]], [[apps/frontend/src/styles/skin-v2.css]], [[apps/frontend/src/index.css]], [[apps/frontend/tailwind.config.ts]]
+
+---
+
 ## Related Features
 
 - [[docs/features/settings|Settings Feature]] — Settings system overview
+- [[docs/adr/104-skin-v2-dense-fintech-visual-redesign|ADR-104: skin-v2 / colorblind gain-loss palette]] — colorblind gain/loss encoding design decision and 2026-06-24 addendum
 - [[docs/adr/075-visual-effects-tiers-display-adaptation|ADR-075: Visual-Effects Tiers and Per-Display Auto-Adaptation]] — Tier model + large-display heuristic (2026-06-12)
 - [[docs/adr/072-electron-native-desktop-integration|ADR-072: Electron-Native Desktop Integration]] — System accent overlay, vibrancy opt-in (June 2026)
 - [[docs/adr/071-premium-v3-effects-toggle|ADR-071: Premium v3]] — Original effects toggle + full Premium v3 batch; enhancedEffects boolean superseded by ADR-075 (June 2026)

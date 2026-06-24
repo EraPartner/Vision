@@ -462,7 +462,7 @@ export default function ResearchComparePage() {
                           {fmtPct(row.totalReturn)}
                         </TableCell>
                         <TableCell className="text-right tabular-nums">{fmtPct(row.volatility)}</TableCell>
-                        <TableCell className="text-right tabular-nums text-destructive">{fmtPct(row.maxDrawdown)}</TableCell>
+                        <TableCell className="text-right tabular-nums text-loss">{fmtPct(row.maxDrawdown)}</TableCell>
                       </TableRow>
                     ))}
                   </TableBody>

@@ -47,6 +47,14 @@
         --warning: 38 80% 50%;
         --expense: 358 74% 44%;
 
+        /* Gain/loss palette — the single source every gain/loss surface (text,
+           badges, icons, charts) reads. Legacy (no .skin-v2): variant-aware
+           champagne-gold gain / red loss via the accent & destructive tokens.
+           styles/skin-v2.css overrides these with fixed Okabe-Ito colorblind-
+           safe hues, so the accessibility toggle recolors everything at once. */
+        --gain: var(--accent);
+        --loss: var(--destructive);
+
         --radius: 0.625rem;
 
         /* -------- Charts (glass-tuned palette) -------- */

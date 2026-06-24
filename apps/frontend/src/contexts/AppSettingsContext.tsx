@@ -16,6 +16,7 @@ import logger from '@/lib/logger';
 import { usePreloadedSetting } from '@/contexts/SettingsPreloadContext';
 import { useSettingsStore, DEFAULT_APP_SETTINGS, migrateAppSettings } from '@/stores/settingsStore';
 import type { AppSettings } from '@/stores/settingsStore';
+import { setSkinV2 } from '@/lib/skin';
 
 // Re-export so existing consumers don't need to change their imports
 export type { AppSettings };
@@ -54,9 +55,21 @@ export function AppSettingsProvider({ children }: { children: ReactNode }) {
     // still carry the legacy enhancedEffects boolean)
     useEffect(() => {
         if (preloadLoading) return;
-        _hydrateAppSettings(migrateAppSettings(preloaded ?? undefined), false);
+        const migrated = migrateAppSettings(preloaded ?? undefined);
+        _hydrateAppSettings(migrated, false);
         hasHydrated.current = true;
+        // Sync the colorblind-safe gain/loss skin to the (server) preference,
+        // overriding the boot-time localStorage cache so the synced choice wins.
+        setSkinV2(migrated.colorblindGainLoss);
     }, [preloaded, preloadLoading, _hydrateAppSettings]);
+
+    // Apply runtime toggles of the gain/loss palette (pure CSS — toggles the
+    // `.skin-v2` root class and caches the choice for next boot's first paint).
+    const colorblindGainLoss = appSettings.colorblindGainLoss;
+    useEffect(() => {
+        if (!hasHydrated.current) return;
+        setSkinV2(colorblindGainLoss);
+    }, [colorblindGainLoss]);
 
     // Debounced persist to API when settings change (only after hydration)
     useEffect(() => {
