@@ -138,11 +138,14 @@ if ! container exec --user "$SVC_USER" -e BASH_ENV= "$NAME" vision-verify-pins -
   exit 1
 fi
 
-# --- 7) Auto config-sync on exit (OPT-IN; default off) -----------------------
+# --- 7) On-exit hooks: config-sync push (OPT-IN) + power-down ------------------
 # Pushing container config back to the host is a code-exec persistence channel (a
 # prompt-injected agent could push hooks/plugins the host Claude later runs). The
 # push path is sanitized AND this is opt-in: enable per session with VISION_AUTOSYNC=1.
-sandbox_install_autosync_trap vision "$CID" "${VISION_AUTOSYNC:-0}"
+# Power-down: stop the VM when your session ends so it stops pinning its 4 GB — a
+# container you start cleans up after itself. Set VISION_STOP_ON_EXIT=0 to keep it
+# WARM for instant reuse across sessions.
+sandbox_install_autosync_trap vision "$CID" "${VISION_AUTOSYNC:-0}" "${VISION_STOP_ON_EXIT:-1}"
 
 # --- 8) Open an interactive claude session -----------------------------------
 TTY_FLAGS=()
