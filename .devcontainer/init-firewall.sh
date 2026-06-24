@@ -77,9 +77,9 @@ if [[ -r "$INBOUND_FILE" ]]; then
   done < "$INBOUND_FILE"
 fi
 
-# Project-specific extra OUTPUT allows (e.g. Brain's host-Ollama hole), run AFTER
-# the base allows and BEFORE the catch-all deny. Optional, project-owned file —
-# each rule it adds is a deliberate exception.
+# Project-specific extra OUTPUT allows (optional, via an executable extra-rules.sh
+# in the image), run AFTER the base allows and BEFORE the catch-all deny. Optional,
+# project-owned file — each rule it adds is a deliberate exception.
 [[ -x "$EXTRA_RULES" ]] && "$EXTRA_RULES" || true
 
 # Logged-DROP for everything else, rate-limited. Visible via `dmesg | grep egress-deny`.
