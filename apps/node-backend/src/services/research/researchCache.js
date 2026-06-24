@@ -61,7 +61,11 @@ export function createResearchCache({ now = () => Date.now() } = {}) {
     }
   }
 
-  return { get, set, sweep, size: () => store.size };
+  function clear() {
+    store.clear();
+  }
+
+  return { get, set, sweep, clear, size: () => store.size };
 }
 
 /** Process-wide singleton used by the aggregator. */

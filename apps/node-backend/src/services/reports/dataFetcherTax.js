@@ -121,6 +121,12 @@ async function fetchTaxTransactions(targetCurrency, startDate, endDate) {
   const byAssetClass    = new Map();
   const byInvestment    = new Map();
 
+  // Currencies for which no rate (historical or current) could be resolved, so a
+  // row was summed into the target total at an unconverted 1:1 rate. Surfaced so
+  // the PDF can annotate the figure as approximate instead of silently reporting
+  // e.g. 1000 KRW as 1000 EUR. (ADR-085.)
+  const missingRateCurrencies = new Set();
+
   // Belgian tax values foreign-currency income and transactions at the exchange rate
   // on the date the income was collected / the transaction took place — not today's
   // rate. The TOB (stock-exchange tax) guidance is explicit ("the ECB rate of the day
@@ -160,18 +166,26 @@ async function fetchTaxTransactions(targetCurrency, startDate, endDate) {
   };
 
   for (const row of result.rows) {
-    const cur = row.currency;
+    // Normalize the source currency ONCE so the skip-guard and the rowRates keys
+    // can't disagree for mixed-case/whitespace currency strings.
+    const cur = String(row.currency || 'EUR').toUpperCase().trim();
     const rowDate = row.rate_date;
     // Per-row rate table built from the transaction-date rates, so convertWithRates
     // applies the same conversion math and unsupported-currency handling as the live
     // path — only the rate source (historical vs current) differs.
+    const fromRate = rateToEurForDate(cur, rowDate);
     const rowRates = {
       EUR: 1,
-      [String(cur || 'EUR').toUpperCase().trim()]: rateToEurForDate(cur, rowDate),
+      [cur]: fromRate,
       [toCur]: rateToEurForDate(toCur, rowDate),
     };
+    // No rate resolved for a non-target foreign currency → convertWithRates will
+    // sum it 1:1. Record it so the report can flag the total as approximate.
+    if (cur !== toCur && cur !== 'EUR' && (fromRate === undefined || fromRate === null)) {
+      missingRateCurrencies.add(cur);
+    }
     const convert = (v) =>
-      cur !== targetCurrency ? convertWithRates(Number(v), cur, targetCurrency, rowRates) : Number(v);
+      cur !== toCur ? convertWithRates(Number(v), cur, toCur, rowRates) : Number(v);
 
     const taxes    = convert(row.taxes);
     const fees     = convert(row.fees);
@@ -250,6 +264,9 @@ async function fetchTaxTransactions(targetCurrency, startDate, endDate) {
     byMonth: [...byMonthMap.values()].sort((a, b) => a.year !== b.year ? a.year - b.year : a.month - b.month),
     byAssetClass: [...byAssetClass.values()].sort((a, b) => (b.taxes + b.fees) - (a.taxes + a.fees)),
     byInvestment: [...byInvestment.values()].sort((a, b) => b.total - a.total),
+    // Foreign currencies that were summed at an unconverted 1:1 rate (no FX rate
+    // available). Empty when every row converted cleanly.
+    unconvertedCurrencies: [...missingRateCurrencies].sort(),
   };
 }
 
@@ -290,5 +307,6 @@ export async function fetchTaxData(currency, period, { taxProfile, precomputedPI
     byMonth:           txns?.byMonth           ?? [],
     byAssetClass:      txns?.byAssetClass      ?? [],
     byInvestment:      txns?.byInvestment      ?? [],
+    unconvertedCurrencies: txns?.unconvertedCurrencies ?? [],
   };
 }

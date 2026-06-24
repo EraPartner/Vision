@@ -1,0 +1,41 @@
+# CodeQL configuration for the Vision monorepo.
+#
+# This is the SINGLE, project-tailored CodeQL configuration, consumed by the
+# advanced workflow at .github/workflows/codeql.yml. It intentionally replaces
+# GitHub's "default" code-scanning setup — the default setup must be disabled in
+# repository settings (Settings → Code security → Code scanning → switch from
+# "Default" to "Advanced") so that only this advanced configuration runs.
+# Running both at once produces a configuration error on the Analyze check.
+
+name: "Vision CodeQL"
+
+# security-extended: broader security coverage than the default suite, without
+# the maintainability/"quality" queries (which generate a lot of style noise on
+# first adoption). Swap to security-and-quality if you also want those findings.
+queries:
+  - uses: security-extended
+
+# Deny-list only (no allow-list) so newly added source roots are scanned by
+# default. We exclude code that is either not shipped (tests/fixtures),
+# generated, vendored, or pure build output — scanning it adds noise and false
+# positives without covering anything we author. (Python is not scanned, so its
+# Alembic migrations need no entry here.)
+paths-ignore:
+  # Tests, mocks & fixtures
+  - "**/__tests__/**"
+  - "**/__mocks__/**"
+  - "**/*.test.ts"
+  - "**/*.test.tsx"
+  - "**/*.spec.ts"
+  - "**/*.spec.tsx"
+  - "**/test/**"
+  - "**/tests/**"
+  # Build output, coverage & dependencies
+  - "**/dist/**"
+  - "**/build/**"
+  - "**/coverage/**"
+  - "**/node_modules/**"
+  - "**/*.min.js"
+  # Generated / vendored sources
+  - "apps/frontend/src/locales/**"   # generated i18n bundles (en.ts, nl.ts)
+  - "docs/**"

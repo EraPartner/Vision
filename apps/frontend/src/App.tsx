@@ -5,7 +5,7 @@ import { BrowserRouter, Navigate, Route, Routes, useLocation, useParams } from "
 import { AppLayout } from "@/components/layout/AppLayout";
 import { SettingsProvider } from "@/contexts/SettingsContext";
 import { SettingsPreloadProvider } from "@/contexts/SettingsPreloadContext";
-import { AppSettingsProvider, useAppSettings } from "@/contexts/AppSettingsContext";
+import { AppSettingsProvider, AppSettingsSaveErrorToaster, useAppSettings } from "@/contexts/AppSettingsContext";
 import { BelgianTaxProfileProvider } from "@/contexts/BelgianTaxProfileContext";
 import { ThemeProvider } from "@/contexts/ThemeContext";
 import { LanguageProvider, type Language } from "@/contexts/LanguageContext";
@@ -174,6 +174,7 @@ const App = () => {
                                     <TooltipProvider>
                                     <ErrorBoundary>
                                         <Sonner />
+                                        <AppSettingsSaveErrorToaster />
                                         <BrowserRouter>
                                             <ScrollToTop />
                                             <StartupRedirect />

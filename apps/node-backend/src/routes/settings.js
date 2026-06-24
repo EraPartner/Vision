@@ -113,11 +113,18 @@ function assertRebalancePlansValue(value) {
     if (keys.length === 0) {
       throw new ValidationError('rebalance plan targetWeights must have at least one sleeve');
     }
+    let weightSum = 0;
     for (const [sleeve, weight] of Object.entries(weights)) {
       const n = Number(weight);
       if (!Number.isFinite(n) || n < 0) {
         throw new ValidationError(`rebalance plan targetWeights.${sleeve} must be a non-negative number`);
       }
+      weightSum += n;
+    }
+    // An all-zero plan would silently deploy nothing when applied. Reject it at
+    // save time so the user gets immediate feedback rather than a dead plan.
+    if (!(weightSum > 0)) {
+      throw new ValidationError('rebalance plan targetWeights must include at least one positive weight');
     }
     if (plan.cashCap !== undefined) {
       const cap = Number(plan.cashCap);

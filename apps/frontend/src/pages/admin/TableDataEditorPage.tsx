@@ -65,31 +65,35 @@ function display(value: unknown): { text: string; isNull: boolean } {
 // ── editable cell ───────────────────────────────────────────────────────────
 
 function EditableCell({
-    column, value, dirty, disabled, onChange, t,
+    column, value, dirty, disabled, lockEdit, onChange, t,
 }: {
     column: DbColumn;
     value: unknown;
     dirty: boolean;
     disabled: boolean;
+    lockEdit?: boolean;
     onChange: (next: unknown) => void;
     t: (k: string) => string;
 }) {
     const [editing, setEditing] = useState(false);
     const dirtyCls = dirty ? 'bg-amber-500/10 ring-1 ring-inset ring-amber-500/40' : '';
+    // A column may be writable in the schema but locked for editing here (e.g.
+    // primary keys on existing rows, which must not be repointed in place).
+    const canEdit = column.writable && !disabled && !lockEdit;
 
     if (isBoolean(column)) {
         return (
             <TableCell className={`${dirtyCls}`}>
                 <Checkbox
                     checked={value === true}
-                    disabled={disabled || !column.writable}
+                    disabled={disabled || !column.writable || lockEdit}
                     onCheckedChange={(c) => onChange(c === true)}
                 />
             </TableCell>
         );
     }
 
-    if (editing && !disabled && column.writable) {
+    if (editing && canEdit) {
         const shown = value === null || value === undefined ? '' : typeof value === 'object' ? JSON.stringify(value) : String(value);
         return (
             <TableCell className={dirtyCls}>
@@ -110,13 +114,13 @@ function EditableCell({
     const { text, isNull } = display(value);
     return (
         <TableCell
-            className={`font-mono text-xs ${dirtyCls} ${column.writable && !disabled ? 'cursor-text' : ''}`}
-            onClick={() => column.writable && !disabled && setEditing(true)}
-            title={column.writable ? t('dbEditor.clickToEdit') : t('dbEditor.readOnlyCol')}
+            className={`font-mono text-xs ${dirtyCls} ${canEdit ? 'cursor-text' : ''}`}
+            onClick={() => canEdit && setEditing(true)}
+            title={lockEdit ? t('dbEditor.readOnlyCol') : column.writable ? t('dbEditor.clickToEdit') : t('dbEditor.readOnlyCol')}
         >
             <div className="flex items-center justify-between gap-2 max-w-[28rem] truncate">
                 <span className={`truncate ${isNull ? 'text-muted-foreground italic' : ''}`}>{text}</span>
-                {column.nullable && column.writable && !disabled && !isNull && (
+                {column.nullable && canEdit && !isNull && (
                     <button
                         type="button"
                         className="shrink-0 text-muted-foreground hover:text-foreground"
@@ -200,6 +204,19 @@ export default function TableDataEditorPage() {
 
     const pendingCount = changes.length;
     const hasPending = pendingCount > 0;
+
+    // Per-op counts for the commit confirmation summary; deletes drive the
+    // destructive styling on the commit button.
+    const opCounts = useMemo(() => {
+        let inserts = 0, updates = 0, deletes_ = 0;
+        for (const c of changes) {
+            if (c.op === 'insert') inserts += 1;
+            else if (c.op === 'update') updates += 1;
+            else deletes_ += 1;
+        }
+        return { inserts, updates, deletes: deletes_ };
+    }, [changes]);
+    const hasDeletes = opCounts.deletes > 0;
 
     function setCell(key: string, col: string, value: unknown) {
         setEdits((prev) => ({ ...prev, [key]: { ...prev[key], [col]: value } }));
@@ -442,6 +459,10 @@ export default function TableDataEditorPage() {
                                                     value={value}
                                                     dirty={hasEdit && !valuesEqual(row[col.name], value)}
                                                     disabled={isDeleted}
+                                                    // Primary keys identify the row in the UPDATE/DELETE WHERE
+                                                    // clause; editing them in place would silently retarget a
+                                                    // different row. Lock them on existing rows.
+                                                    lockEdit={primaryKey.includes(col.name)}
                                                     onChange={(v) => setCell(key, col.name, v)}
                                                     t={t}
                                                 />
@@ -486,6 +507,16 @@ export default function TableDataEditorPage() {
                         <DialogTitle>{t('dbEditor.previewTitle')}</DialogTitle>
                         <DialogDescription>{t('dbEditor.previewDescription')}</DialogDescription>
                     </DialogHeader>
+                    {/* Operation summary so the user confirms exactly what will run. */}
+                    <p className="text-sm font-medium">
+                        {t('dbEditor.commitSummary', { inserts: opCounts.inserts, updates: opCounts.updates, deletes: opCounts.deletes })}
+                    </p>
+                    {hasDeletes && (
+                        <div className="flex items-start gap-2 rounded-md border border-destructive/40 bg-destructive/5 px-3 py-2 text-xs text-destructive">
+                            <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
+                            <span>{t('dbEditor.deleteWarning')}</span>
+                        </div>
+                    )}
                     <div className="max-h-[50vh] space-y-2 overflow-y-auto rounded-md bg-muted/40 p-3">
                         {previewStatements.map((s, i) => (
                             <pre key={i} className="whitespace-pre-wrap break-all font-mono text-xs">
@@ -498,7 +529,11 @@ export default function TableDataEditorPage() {
                     </div>
                     <DialogFooter>
                         <Button variant="outline" onClick={() => setPreviewOpen(false)}>{t('dbEditor.cancel')}</Button>
-                        <Button onClick={() => commitMutation.mutate()} disabled={commitMutation.isPending || previewStatements.length === 0}>
+                        <Button
+                            variant={hasDeletes ? 'destructive' : 'default'}
+                            onClick={() => commitMutation.mutate()}
+                            disabled={commitMutation.isPending || previewStatements.length === 0}
+                        >
                             {commitMutation.isPending ? t('dbEditor.committing') : t('dbEditor.commit')}
                         </Button>
                     </DialogFooter>

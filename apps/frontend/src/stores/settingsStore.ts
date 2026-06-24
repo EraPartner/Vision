@@ -144,6 +144,12 @@ interface SettingsState {
     appSettings: AppSettings;
     isAppSettingsLoading: boolean;
     /**
+     * Bumped whenever a debounced persist of app settings fails. A component
+     * rendered under LanguageProvider watches this to surface a translated toast
+     * (the provider itself sits above LanguageProvider and can't translate).
+     */
+    appSettingsSaveErrorNonce: number;
+    /**
      * Session-only manual tier pick for the auto-adapt cap (ADR-075 addendum):
      * lives outside appSettings so it is never persisted — in-memory by
      * design, so a restart returns large displays to auto mode. Only applied
@@ -172,6 +178,8 @@ interface SettingsActions {
     setSessionTierOverride: (tier: VisualEffectsTier | undefined) => void;
     /** Called by AppSettingsProvider once preloaded data arrives. */
     _hydrateAppSettings: (settings: AppSettings, isLoading: boolean) => void;
+    /** Called by AppSettingsProvider when a debounced persist fails. */
+    _markAppSettingsSaveError: () => void;
 
     // Dashboard settings
     updateDashboardSettings: (updates: Partial<DashboardSettings>) => void;
@@ -206,6 +214,7 @@ export const useSettingsStore = create<SettingsStore>((set, get) => ({
     // ── App settings ──────────────────────────────────────────────────────────
     appSettings: DEFAULT_APP_SETTINGS,
     isAppSettingsLoading: true,
+    appSettingsSaveErrorNonce: 0,
     sessionTierOverride: undefined,
 
     updateAppSettings: (updates) =>
@@ -219,6 +228,9 @@ export const useSettingsStore = create<SettingsStore>((set, get) => ({
 
     _hydrateAppSettings: (settings, isLoading) =>
         set({ appSettings: settings, isAppSettingsLoading: isLoading }),
+
+    _markAppSettingsSaveError: () =>
+        set((s) => ({ appSettingsSaveErrorNonce: s.appSettingsSaveErrorNonce + 1 })),
 
     // ── Dashboard settings ────────────────────────────────────────────────────
     dashboardSettings: DEFAULT_DASHBOARD_SETTINGS,

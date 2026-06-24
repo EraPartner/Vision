@@ -9,6 +9,7 @@
  */
 
 import { query } from '../database/connection.js';
+import { COMPUTED_BALANCE_LATERAL } from './accountBalanceSql.js';
 
 const COLUMNS = `id, name, display_name, institution, currency, type, liquidity_class,
   spendable, in_net_worth, tax_wrapper, owner, multi_currency_cash, has_cash_sleeve,
@@ -25,10 +26,10 @@ const WRITABLE = new Set([
 export const accountRepository = {
   /**
    * List accounts (optionally filtered by active status), each with its computed
-   * balance (latest active transaction's balance), drift vs the stored statement
-   * balance (ADR-094, null when no statement balance), and has_transactions —
-   * whether the account has any active ledger rows (portfolio accounts whose
-   * activity lives in portfolio_transactions have none).
+   * balance (the anchored running balance — see COMPUTED_BALANCE_LATERAL), drift
+   * vs the stored statement balance (ADR-094, null when no statement balance),
+   * and has_transactions — whether the account has any active ledger rows
+   * (portfolio accounts whose activity lives in portfolio_transactions have none).
    */
   async getAll({ active = null } = {}) {
     let sql = `
@@ -42,12 +43,7 @@ export const accountRepository = {
                WHERE t2.account_id = a.id AND t2.is_active = true
              ) AS has_transactions
       FROM accounts a
-      LEFT JOIN LATERAL (
-        SELECT t.balance FROM transactions t
-        WHERE t.account_id = a.id AND t.is_active = true AND t.balance IS NOT NULL
-        ORDER BY t.date DESC, t.id DESC
-        LIMIT 1
-      ) lb ON true
+      ${COMPUTED_BALANCE_LATERAL}
       WHERE 1=1`;
     if (active === true) sql += ` AND a.is_active = true`;
     else if (active === false) sql += ` AND a.is_active = false`;

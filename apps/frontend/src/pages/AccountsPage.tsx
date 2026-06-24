@@ -9,7 +9,7 @@ import { Button } from "@/components/ui/button";
 import {
     DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { Landmark, MoreVertical, Pencil, Archive, ArchiveRestore, Trash2, GitMerge, DoorClosed } from "lucide-react";
+import { Landmark, MoreVertical, Pencil, Archive, ArchiveRestore, Trash2, GitMerge, DoorClosed, Receipt } from "lucide-react";
 import { useAccounts, useUpdateAccount, useDeleteAccount } from "@/hooks/useAccounts";
 import { useCurrencyFormatter } from "@/hooks/useCurrencyFormatter";
 import { AddAccountDialog, type AccountFormValues } from "@/features/accounts/AddAccountDialog";
@@ -178,6 +178,13 @@ export default function AccountsPage() {
                                         </Button>
                                     </DropdownMenuTrigger>
                                     <DropdownMenuContent align="end">
+                                        {/* Keyboard/touch-accessible equivalent of the card's
+                                            double-click-to-open shortcut. */}
+                                        {canViewTransactions && (
+                                            <DropdownMenuItem onClick={() => openAccountTransactions(a)}>
+                                                <Receipt className="mr-2 h-4 w-4" /> {t('accounts.openTransactions')}
+                                            </DropdownMenuItem>
+                                        )}
                                         <DropdownMenuItem onClick={() => setEditing(a)}>
                                             <Pencil className="mr-2 h-4 w-4" /> {t('common.edit')}
                                         </DropdownMenuItem>
