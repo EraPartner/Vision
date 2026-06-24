@@ -14,6 +14,7 @@ import { InvestmentDetailDialog } from "@/components/portfolio/InvestmentDetailD
 import { PortfolioNewsFeed } from "@/components/portfolio/PortfolioNewsFeed";
 import { StalePricesBanner } from "@/components/portfolio/StalePricesBanner";
 import { TotalValueCard, type SparklinePoint } from "@/components/portfolio/TotalValueCard";
+import { PortfolioTicker } from "@/components/portfolio/PortfolioTicker";
 import { ASSET_CLASS_LABELS, getAssetClassGroups } from "@/types/portfolio";
 import { isUnitBased } from "@/utils/assetClass";
 import { cn } from "@/lib/utils";
@@ -30,6 +31,7 @@ import { ExportDialog } from "@/components/reports/ExportDialog";
 
 function getPortfolioWidgets(t: (key: string) => string): WidgetDefinition[] {
   return [
+    { id: "ticker",          label: t('portfolio.widget.ticker'),       defaultVisible: true },
     { id: "summaryCards",    label: t('portfolio.widget.summaryCards'), defaultVisible: true },
     { id: "allocation",      label: t('portfolio.widget.allocation'),   defaultVisible: true },
     { id: "performance",     label: t('portfolio.widget.performance'),  defaultVisible: true },
@@ -262,6 +264,8 @@ export default function PortfolioOverviewPage() {
             onRefresh={refreshPrices}
             isRefreshing={isRefreshingPrices}
           />
+
+          {isVisible('ticker') && <PortfolioTicker items={summaries} />}
 
           {isVisible('summaryCards') && (
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-6 gap-4">

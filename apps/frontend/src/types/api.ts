@@ -373,6 +373,8 @@ export interface Investment {
     price_provider_history_price_path?: string;
     price_updated_at?: string;
     is_active: boolean;
+    /** Whether this holding appears in the portfolio price ticker (default true). */
+    show_in_ticker: boolean;
     created_at: string;
     updated_at: string;
 }
@@ -422,6 +424,7 @@ export interface InvestmentUpdate {
     municipality_tax_rate?: number;
     notes?: string;
     is_active?: boolean;
+    show_in_ticker?: boolean;
     price_provider?: PriceProvider;
     price_provider_id?: string;
     price_provider_url?: string;

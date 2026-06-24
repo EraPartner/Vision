@@ -42,6 +42,7 @@ export const BACKUP_COVERED_TABLES = Object.freeze([
   'import_batches',
   'import_staging_rows',
   'instrument_provider_map',
+  'investment_ticker_prefs',
   'investments',
   'kbc_raw_transactions',
   'manual_raw_transactions',

@@ -967,6 +967,58 @@
     }
 
     /* ------------------------------------------------------------------
+     * Ticker tape (portfolio price ticker — Wall-Street-style marquee)
+     * ------------------------------------------------------------------ */
+
+    /* Content is rendered twice; translating one full copy width (-50%) loops
+       seamlessly. Duration is set per-instance via --ticker-duration so pixel
+       speed stays constant as the holding count changes. */
+    @keyframes ticker-scroll {
+        from { transform: translateX(0); }
+        to   { transform: translateX(-50%); }
+    }
+
+    .ticker-track {
+        animation: ticker-scroll var(--ticker-duration, 40s) linear infinite;
+    }
+
+    /* Promote to a compositor layer only while actually animating on-screen;
+       when paused/off-screen (data-active=false) the hint is dropped so no idle
+       GPU layer is retained. */
+    .ticker-mask[data-active="true"] .ticker-track {
+        will-change: transform;
+    }
+
+    /* Hover-to-read, like a real trading terminal. */
+    .ticker-mask:hover .ticker-track {
+        animation-play-state: paused;
+    }
+
+    /* Freeze when off-screen or the tab is hidden (JS toggles data-active) so
+       no compositor cycles are spent animating a tape nobody can see. */
+    .ticker-mask[data-active="false"] .ticker-track {
+        animation-play-state: paused;
+    }
+
+    /* Soft fade at both edges so symbols slide in/out instead of hard-clipping. */
+    .ticker-mask {
+        -webkit-mask-image: linear-gradient(
+            to right,
+            transparent,
+            #000 4%,
+            #000 96%,
+            transparent
+        );
+        mask-image: linear-gradient(
+            to right,
+            transparent,
+            #000 4%,
+            #000 96%,
+            transparent
+        );
+    }
+
+    /* ------------------------------------------------------------------
      * Reduced motion
      * ------------------------------------------------------------------ */
 
@@ -974,6 +1026,7 @@
         .animate-in,
         .animate-stagger > *,
         .icon-success-bounce,
+        .ticker-track,
         [data-sonner-toast][data-type="success"] [data-icon] {
             animation: none;
         }

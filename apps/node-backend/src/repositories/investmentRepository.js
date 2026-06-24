@@ -334,19 +334,35 @@ async function hardDeleteThroughInheritanceTables(id) {
   }
 }
 
+// Per-investment ticker visibility lives in a side table (migration 0061) so the
+// preference works whether `investments` is a plain table or the legacy
+// inheritance VIEW — neither of which we have to alter. Reads LEFT JOIN it
+// (absent row = visible); the toggle UPSERTs it via update() below.
+const TICKER_PREF_SELECT = 'COALESCE(tp.show_in_ticker, true) AS show_in_ticker';
+const TICKER_PREF_JOIN = 'LEFT JOIN investment_ticker_prefs tp ON tp.investment_id = i.id';
+
+async function setTickerPreference(id, show) {
+  await query(
+    `INSERT INTO investment_ticker_prefs (investment_id, show_in_ticker)
+       VALUES ($1, $2)
+       ON CONFLICT (investment_id) DO UPDATE SET show_in_ticker = EXCLUDED.show_in_ticker`,
+    [id, show]
+  );
+}
+
 export const investmentRepository = {
   async getAll({ limit = 50, offset = 0, assetClass = null, active = true } = {}) {
-    let sql = `SELECT * FROM investments WHERE 1=1`;
+    let sql = `SELECT i.*, ${TICKER_PREF_SELECT} FROM investments i ${TICKER_PREF_JOIN} WHERE 1=1`;
     const params = [];
     let idx = 1;
 
-    if (active) sql += ` AND is_active = true`;
+    if (active) sql += ` AND i.is_active = true`;
     if (assetClass) {
-      sql += ` AND asset_class = $${idx++}`;
+      sql += ` AND i.asset_class = $${idx++}`;
       params.push(assetClass);
     }
 
-    sql += ` ORDER BY name LIMIT $${idx} OFFSET $${idx + 1}`;
+    sql += ` ORDER BY i.name LIMIT $${idx} OFFSET $${idx + 1}`;
     params.push(limit, offset);
 
     const result = await query(sql, params);
@@ -367,8 +383,9 @@ export const investmentRepository = {
 
   async getAllWithCount({ limit = 50, offset = 0, assetClass = null, active = true } = {}) {
     let sql = `
-      SELECT i.*, COUNT(*) OVER () AS total_count
+      SELECT i.*, ${TICKER_PREF_SELECT}, COUNT(*) OVER () AS total_count
       FROM investments i
+      ${TICKER_PREF_JOIN}
       WHERE 1=1
     `;
     const params = [];
@@ -390,7 +407,10 @@ export const investmentRepository = {
   },
 
   async getById(id) {
-    const result = await query('SELECT * FROM investments WHERE id = $1', [id]);
+    const result = await query(
+      `SELECT i.*, ${TICKER_PREF_SELECT} FROM investments i ${TICKER_PREF_JOIN} WHERE i.id = $1`,
+      [id]
+    );
     return result.rows[0] ? mapInvestmentRow(result.rows[0]) : null;
   },
 
@@ -507,7 +527,12 @@ export const investmentRepository = {
       throw makeValidationError('asset_class cannot be changed');
     }
 
-    const normalizedFields = { ...fields };
+    // show_in_ticker is not an investments column — it's a side-table preference
+    // (migration 0061). Peel it off; UPSERT it after the field validations below
+    // so an invalid symbol can't leave a stray preference behind.
+    const { show_in_ticker: showInTicker, ...rest } = fields;
+
+    const normalizedFields = { ...rest };
     if (Object.prototype.hasOwnProperty.call(normalizedFields, 'symbol')) {
       const symbol = normalizeSymbol(normalizedFields.symbol);
       if (!symbol) {
@@ -515,6 +540,10 @@ export const investmentRepository = {
       }
       await ensureSymbolIsUnique(symbol, id);
       normalizedFields.symbol = symbol;
+    }
+
+    if (showInTicker !== undefined) {
+      await setTickerPreference(id, showInTicker);
     }
 
     const setClauses = [];
@@ -528,7 +557,10 @@ export const investmentRepository = {
       }
     }
 
-    if (setClauses.length === 0) return existing;
+    // Nothing else changed — re-read only if the ticker pref moved (to reflect it).
+    if (setClauses.length === 0) {
+      return showInTicker !== undefined ? this.getById(id) : existing;
+    }
 
     if (await hasInvestmentInheritanceSchema()) {
       return updateThroughInheritanceTables(id, normalizedFields, this.getById.bind(this));
@@ -538,11 +570,13 @@ export const investmentRepository = {
     const sql = `UPDATE investments SET ${setClauses.join(', ')} WHERE id = $${idx} RETURNING *`;
     try {
       const result = await query(sql, params);
-      return result.rows[0] ? mapInvestmentRow(result.rows[0]) : null;
+      if (!result.rows[0]) return null;
+      // Re-read when the ticker pref changed so the joined value is in the response.
+      return showInTicker !== undefined ? this.getById(id) : mapInvestmentRow(result.rows[0]);
     } catch (err) {
       if (!isNonUpdatableInvestmentsViewError(err)) throw err;
       _hasInvestmentInheritanceSchema = true;
-      return updateThroughInheritanceTables(id, fields, this.getById.bind(this));
+      return updateThroughInheritanceTables(id, normalizedFields, this.getById.bind(this));
     }
   },
 

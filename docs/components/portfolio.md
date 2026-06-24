@@ -2,8 +2,8 @@
 title: Portfolio Components
 type: component
 status: active
-date: 2026-04-26
-tags: [components, portfolio, investments, phase-1, phase-3.6]
+date: 2026-06-24
+tags: [components, portfolio, investments, phase-1, phase-3.6, portfolio-ticker, ticker-manager, show-in-ticker, migration-0061]
 description: Components for investment portfolio management
 aliases: [portfolio-components, investment-components, holdings-components]
 related_code: ["apps/frontend/src/components/portfolio", "apps/frontend/src/pages/portfolio/WatchlistPage.tsx"]
@@ -27,6 +27,7 @@ Components for managing investment portfolios, including stocks, crypto, metals,
 | WatchlistChartDialog | Chart for watchlist symbol | [[apps/frontend/src/components/portfolio/WatchlistChartDialog.tsx\|WatchlistChartDialog.tsx]] |
 | AddInvestmentFromMarketDialog | Add investment from market search | [[apps/frontend/src/components/portfolio/AddInvestmentFromMarketDialog.tsx\|AddInvestmentFromMarketDialog.tsx]] |
 | PortfolioTaxAdjustmentsDialog | Tax adjustments for investments | [[apps/frontend/src/components/portfolio/PortfolioTaxAdjustmentsDialog.tsx\|PortfolioTaxAdjustmentsDialog.tsx]] |
+| PortfolioTicker | Live day-change scrolling ticker tape for the Portfolio Overview | [[apps/frontend/src/components/portfolio/PortfolioTicker.tsx\|PortfolioTicker.tsx]] |
 
 ---
 
@@ -300,6 +301,59 @@ Code links: [[apps/frontend/src/components/portfolio/AddInvestmentFromMarketDial
 - Unit-based behavior now includes metals for add transaction, detail valuation, and performance/overview calculations.
 
 Code links: [[apps/frontend/src/components/portfolio/AddInvestmentDialog.tsx]], [[apps/frontend/src/components/portfolio/AddPortfolioTxnDialog.tsx]], [[apps/frontend/src/components/portfolio/InvestmentDetailDialog.tsx]], [[apps/frontend/src/components/portfolio/AddInvestmentFromMarketDialog.tsx]], [[apps/frontend/src/hooks/usePortfolio.ts]], [[apps/frontend/src/pages/portfolio/PortfolioOverviewPage.tsx]], [[apps/frontend/src/pages/portfolio/PerformancePage.tsx]], [[apps/frontend/src/components/portfolio/AddToWatchlistDialog.tsx]]
+
+---
+
+---
+
+## PortfolioTicker
+
+Wall-Street-style horizontally scrolling ticker tape shown at the top of the Portfolio Overview page. Displays each owned stock's live day-change: symbol, current price, and today's % change.
+
+### Props
+
+```typescript
+interface PortfolioTickerProps {
+  /** Holdings to surface — only those with a ticker symbol Yahoo can quote appear. */
+  items: InvestmentSummary[];
+}
+```
+
+`InvestmentSummary` carries the `show_in_ticker?: boolean` field (from `apps/frontend/src/types/portfolio.ts`). The component splits the full prop set into a *manageable universe* (holdings with a quotable symbol) and an *included set* (`show_in_ticker !== false`). Only the included set is passed to the Yahoo batch quote call.
+
+### Behaviour summary
+
+- **Manageable universe**: `items` filtered to holdings where `quoteSymbolFor(inv)` resolves to a non-empty string (prefers `price_provider_id` when `price_provider === 'yahoo'`, falls back to `symbol`). Non-symbol holdings (real estate, savings) are excluded here.
+- **Included set**: manageable universe further filtered to `show_in_ticker !== false`. Excluded holdings make no Yahoo quote requests.
+- Fetches batch day-change quotes via `apiClient.getMarketQuotes<TickerQuote>(symbols, { detail: 'basic' })` — the same `/api/market/quote` endpoint used by Market Overview and the command palette. No new endpoint is introduced.
+- React Query: `staleTime` 60 s, `refetchInterval` 60 s (online-gated via `useOnlineStatus`), `retry: 1`, query key `["portfolio-ticker", symbols]`.
+- Content is duplicated twice in `.ticker-track` for a seamless CSS loop. Animation speed: `max(24s, items.length × 4.5s)`.
+- Pauses on hover (`.ticker-mask:hover .ticker-track`); animation disabled under `prefers-reduced-motion`.
+- Gain/loss colour via `text-gain` / `text-loss` (colorblind-aware tokens).
+- **Empty tape**: the bar persists even when the included set is empty. Shows `portfolio.ticker.allHidden` placeholder when all manageable holdings are excluded, `portfolio.ticker.offline` when offline. Returns `null` only when the manageable universe itself is empty (no quotable holdings at all).
+
+### TickerManager Popover (2026-06-24)
+
+A sliders icon at the tape's right edge (outside the edge-fade mask) opens a `TickerManager` popover listing every holding in the manageable universe. Each row has a Radix `Switch` bound to `show_in_ticker`.
+
+**Toggle behaviour:**
+1. Optimistically updates the `INVESTMENTS_QUERY_KEY` React Query cache to flip `show_in_ticker` on the target investment.
+2. Calls `apiClient.updateInvestment(id, { show_in_ticker })` (`PATCH /api/investments/:id`).
+3. On error: rolls back the optimistic cache update.
+4. On settle: invalidates `investments` and `portfolio-summary` queries.
+
+The popover header shows a count badge: `portfolio.ticker.manageCount` with `{shown}` / `{total}` placeholders. The backend persists the value in the **`investment_ticker_prefs` side table** via an UPSERT in `investmentRepository.update()` (migration `0061_investments_show_in_ticker` creates this table; **not auto-applied** — run `bun run db:upgrade`). There is no `investments.show_in_ticker` column; reads `LEFT JOIN` the side table with `COALESCE(tp.show_in_ticker, true)`.
+
+### Usage
+
+```tsx
+import { PortfolioTicker } from "@/components/portfolio/PortfolioTicker";
+
+// In PortfolioOverviewPage — rendered when isVisible('ticker') is true:
+<PortfolioTicker items={summaries} />
+```
+
+Code links: [[apps/frontend/src/components/portfolio/PortfolioTicker.tsx]], [[apps/frontend/src/pages/portfolio/PortfolioOverviewPage.tsx]], [[apps/frontend/src/index.css]], [[apps/frontend/src/hooks/useOnlineStatus.ts]], [[apps/frontend/src/types/api.ts]], [[apps/frontend/src/types/portfolio.ts]]
 
 ---
 

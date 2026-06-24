@@ -72,7 +72,7 @@ describe('investmentRepository.create', () => {
       'INSERT INTO stock_investments (name, currency, notes, price_provider, price_provider_id, price_provider_url, price_provider_latest_url, price_provider_latest_path, price_provider_history_url, price_provider_history_path, price_provider_history_ts_path, price_provider_history_price_path, symbol, current_price) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14) RETURNING id',
       ['AAPL', 'USD', 'Tech stock', 'yahoo', 'AAPL', null, null, null, null, null, null, null, 'AAPL', 180.5]
     );
-    expect(query).toHaveBeenNthCalledWith(4, 'SELECT * FROM investments WHERE id = $1', [17]);
+    expect(query).toHaveBeenNthCalledWith(4, 'SELECT i.*, COALESCE(tp.show_in_ticker, true) AS show_in_ticker FROM investments i LEFT JOIN investment_ticker_prefs tp ON tp.investment_id = i.id WHERE i.id = $1', [17]);
     expect(result).toEqual({ id: 17, asset_class: 'stock', name: 'AAPL' });
   });
 
@@ -140,7 +140,7 @@ describe('investmentRepository.create', () => {
       'INSERT INTO stock_investments (name, currency, notes, price_provider, price_provider_id, price_provider_url, price_provider_latest_url, price_provider_latest_path, price_provider_history_url, price_provider_history_path, price_provider_history_ts_path, price_provider_history_price_path, symbol, current_price) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14) RETURNING id',
       ['Napoleon 20F', 'EUR', null, 'custom', null, null, 'https://example.com/latest', 'napoleon.price', 'https://example.com/history', 'points', 'timestamp_ms', 'price', 'NAPOLEON', 706.5]
     );
-    expect(query).toHaveBeenNthCalledWith(6, 'SELECT * FROM investments WHERE id = $1', [99]);
+    expect(query).toHaveBeenNthCalledWith(6, 'SELECT i.*, COALESCE(tp.show_in_ticker, true) AS show_in_ticker FROM investments i LEFT JOIN investment_ticker_prefs tp ON tp.investment_id = i.id WHERE i.id = $1', [99]);
     expect(result).toEqual({ id: 99, asset_class: 'metals', name: 'Napoleon 20F' });
   });
 
@@ -166,7 +166,7 @@ describe('investmentRepository.create', () => {
       'INSERT INTO real_estate_investments (name, currency, notes, price_provider, price_provider_id, price_provider_url, price_provider_latest_url, price_provider_latest_path, price_provider_history_url, price_provider_history_path, price_provider_history_ts_path, price_provider_history_price_path, current_price, location, municipality, cadastral_income, municipality_tax_rate) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17) RETURNING id',
       ['Apartment', 'EUR', null, 'manual', null, null, null, null, null, null, null, null, 220000, 'Brussels', 'Brussels', 1200, 7.5]
     );
-    expect(query).toHaveBeenNthCalledWith(3, 'SELECT * FROM investments WHERE id = $1', [25]);
+    expect(query).toHaveBeenNthCalledWith(3, 'SELECT i.*, COALESCE(tp.show_in_ticker, true) AS show_in_ticker FROM investments i LEFT JOIN investment_ticker_prefs tp ON tp.investment_id = i.id WHERE i.id = $1', [25]);
     expect(result).toEqual({ id: 25, asset_class: 'real_estate', name: 'Apartment' });
   });
 
@@ -197,7 +197,7 @@ describe('investmentRepository.create', () => {
       'INSERT INTO stock_investments (name, currency, notes, price_provider, price_provider_id, price_provider_url, symbol, current_price) VALUES ($1, $2, $3, $4, $5, $6, $7, $8) RETURNING id',
       ['Napoleon 20F', 'EUR', null, 'custom', 'napoleon.price', 'https://example.com/latest', 'NAPOLEON', 705.2]
     );
-    expect(query).toHaveBeenNthCalledWith(5, 'SELECT * FROM investments WHERE id = $1', [44]);
+    expect(query).toHaveBeenNthCalledWith(5, 'SELECT i.*, COALESCE(tp.show_in_ticker, true) AS show_in_ticker FROM investments i LEFT JOIN investment_ticker_prefs tp ON tp.investment_id = i.id WHERE i.id = $1', [44]);
     expect(result).toEqual({ id: 44, asset_class: 'metals', name: 'Napoleon 20F' });
   });
 
@@ -236,7 +236,7 @@ describe('investmentRepository.create', () => {
       'INSERT INTO stock_investments (name, currency, notes, price_provider, price_provider_id, price_provider_url, price_provider_latest_url, price_provider_latest_path, price_provider_history_url, price_provider_history_path, price_provider_history_ts_path, price_provider_history_price_path, symbol, current_price) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14) RETURNING id',
       ['AAPL', 'USD', null, 'manual', null, null, null, null, null, null, null, null, 'AAPL', 180.5]
     );
-    expect(query).toHaveBeenNthCalledWith(5, 'SELECT * FROM investments WHERE id = $1', [42]);
+    expect(query).toHaveBeenNthCalledWith(5, 'SELECT i.*, COALESCE(tp.show_in_ticker, true) AS show_in_ticker FROM investments i LEFT JOIN investment_ticker_prefs tp ON tp.investment_id = i.id WHERE i.id = $1', [42]);
     expect(result).toEqual({ id: 42, asset_class: 'stock', name: 'AAPL' });
   });
 });
@@ -258,7 +258,7 @@ describe('investmentRepository.update', () => {
     expect(query).toHaveBeenCalledTimes(3);
     expect(query).toHaveBeenNthCalledWith(
       1,
-      'SELECT * FROM investments WHERE id = $1',
+      'SELECT i.*, COALESCE(tp.show_in_ticker, true) AS show_in_ticker FROM investments i LEFT JOIN investment_ticker_prefs tp ON tp.investment_id = i.id WHERE i.id = $1',
       [1]
     );
     expect(query).toHaveBeenNthCalledWith(
@@ -290,7 +290,7 @@ describe('investmentRepository.update', () => {
 
     expect(query).toHaveBeenNthCalledWith(
       1,
-      'SELECT * FROM investments WHERE id = $1',
+      'SELECT i.*, COALESCE(tp.show_in_ticker, true) AS show_in_ticker FROM investments i LEFT JOIN investment_ticker_prefs tp ON tp.investment_id = i.id WHERE i.id = $1',
       [1]
     );
     expect(query).toHaveBeenNthCalledWith(
@@ -302,7 +302,7 @@ describe('investmentRepository.update', () => {
       'UPDATE investments SET current_price = $1, price_updated_at = $2 WHERE id = $3 RETURNING *',
       [31.2, '2026-03-23T11:34:56.000Z', 1]
     );
-    expect(query).toHaveBeenNthCalledWith(4, 'SELECT * FROM investments WHERE id = $1', [1]);
+    expect(query).toHaveBeenNthCalledWith(4, 'SELECT i.*, COALESCE(tp.show_in_ticker, true) AS show_in_ticker FROM investments i LEFT JOIN investment_ticker_prefs tp ON tp.investment_id = i.id WHERE i.id = $1', [1]);
     expect(query).toHaveBeenNthCalledWith(
       5,
       'UPDATE investments_base SET price_updated_at = $1 WHERE id = $2',
@@ -313,7 +313,7 @@ describe('investmentRepository.update', () => {
       'UPDATE stock_investments SET current_price = $1 WHERE id = $2',
       [31.2, 1]
     );
-    expect(query).toHaveBeenNthCalledWith(7, 'SELECT * FROM investments WHERE id = $1', [1]);
+    expect(query).toHaveBeenNthCalledWith(7, 'SELECT i.*, COALESCE(tp.show_in_ticker, true) AS show_in_ticker FROM investments i LEFT JOIN investment_ticker_prefs tp ON tp.investment_id = i.id WHERE i.id = $1', [1]);
     expect(result).toEqual({ id: 1, asset_class: 'stock', current_price: 31.2, price_provider_id: 'IONQ' });
   });
 
@@ -336,7 +336,7 @@ describe('investmentRepository.update', () => {
       1,
       "SELECT to_regclass('public.investments_base') AS investments_base"
     );
-    expect(query).toHaveBeenNthCalledWith(2, 'SELECT * FROM investments WHERE id = $1', [1]);
+    expect(query).toHaveBeenNthCalledWith(2, 'SELECT i.*, COALESCE(tp.show_in_ticker, true) AS show_in_ticker FROM investments i LEFT JOIN investment_ticker_prefs tp ON tp.investment_id = i.id WHERE i.id = $1', [1]);
     expect(query).toHaveBeenNthCalledWith(
       3,
       'UPDATE investments_base SET price_updated_at = $1 WHERE id = $2',
@@ -347,7 +347,7 @@ describe('investmentRepository.update', () => {
       'UPDATE etf_investments SET current_price = $1 WHERE id = $2',
       [90.5, 1]
     );
-    expect(query).toHaveBeenNthCalledWith(5, 'SELECT * FROM investments WHERE id = $1', [1]);
+    expect(query).toHaveBeenNthCalledWith(5, 'SELECT i.*, COALESCE(tp.show_in_ticker, true) AS show_in_ticker FROM investments i LEFT JOIN investment_ticker_prefs tp ON tp.investment_id = i.id WHERE i.id = $1', [1]);
     expect(result).toEqual({ id: 1, asset_class: 'etf', current_price: 90.5 });
   });
 
@@ -363,7 +363,7 @@ describe('investmentRepository.update', () => {
 
     expect(query).toHaveBeenNthCalledWith(
       1,
-      'SELECT * FROM investments WHERE id = $1',
+      'SELECT i.*, COALESCE(tp.show_in_ticker, true) AS show_in_ticker FROM investments i LEFT JOIN investment_ticker_prefs tp ON tp.investment_id = i.id WHERE i.id = $1',
       [7]
     );
     expect(query).toHaveBeenNthCalledWith(
@@ -372,7 +372,7 @@ describe('investmentRepository.update', () => {
     );
     expect(query).toHaveBeenNthCalledWith(
       3,
-      'SELECT * FROM investments WHERE id = $1',
+      'SELECT i.*, COALESCE(tp.show_in_ticker, true) AS show_in_ticker FROM investments i LEFT JOIN investment_ticker_prefs tp ON tp.investment_id = i.id WHERE i.id = $1',
       [7]
     );
     expect(query).toHaveBeenNthCalledWith(
@@ -380,7 +380,7 @@ describe('investmentRepository.update', () => {
       'UPDATE investments_base SET name = $1 WHERE id = $2',
       ['New Name', 7]
     );
-    expect(query).toHaveBeenNthCalledWith(5, 'SELECT * FROM investments WHERE id = $1', [7]);
+    expect(query).toHaveBeenNthCalledWith(5, 'SELECT i.*, COALESCE(tp.show_in_ticker, true) AS show_in_ticker FROM investments i LEFT JOIN investment_ticker_prefs tp ON tp.investment_id = i.id WHERE i.id = $1', [7]);
     expect(result).toEqual({ id: 7, asset_class: 'stock', name: 'New Name' });
   });
 
@@ -414,6 +414,24 @@ describe('investmentRepository.update', () => {
       'SELECT id FROM investments WHERE LOWER(symbol) = LOWER($1) AND id <> $2 LIMIT 1',
       ['AAPL', 4]
     );
+  });
+
+  it('upserts show_in_ticker into the side table and returns the joined value', async () => {
+    query
+      .mockResolvedValueOnce({ rows: [{ id: 5, asset_class: 'stock', name: 'AAPL' }] }) // getById (existing)
+      .mockResolvedValueOnce({ rowCount: 1 })                                            // UPSERT preference
+      .mockResolvedValueOnce({ rows: [{ id: 5, asset_class: 'stock', name: 'AAPL', show_in_ticker: false }] }); // getById (joined)
+
+    const result = await investmentRepository.update(5, { show_in_ticker: false });
+
+    // No column UPDATE and no schema probe — only getById, the upsert, then getById.
+    expect(query).toHaveBeenCalledTimes(3);
+    expect(query).toHaveBeenNthCalledWith(
+      2,
+      expect.stringContaining('INSERT INTO investment_ticker_prefs'),
+      [5, false]
+    );
+    expect(result).toMatchObject({ id: 5, show_in_ticker: false });
   });
 });
 

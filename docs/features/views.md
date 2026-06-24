@@ -3,8 +3,8 @@ title: Views & Pages
 type: feature
 status: active
 date: 2026-04-10
-updated: 2026-06-17
-tags: [feature, views, pages, frontend, ui, liquid-glass-v2, june-2026]
+updated: 2026-06-24
+tags: [feature, views, pages, frontend, ui, liquid-glass-v2, june-2026, portfolio-ticker]
 description: Complete overview of all views and pages in the Vision application. June 2026 Liquid Glass v2 — KPI/chart cards migrated to glass-regular, hero cards to glass-elevated, tables stay opaque, surface-elevated recipe superseded.
 aliases: [views, pages, frontend views, application pages, ui views]
 related_code: ["apps/frontend/src/App.tsx", "apps/frontend/src/pages"]
@@ -439,6 +439,7 @@ Investment portfolio management across multiple asset classes.
 
 ### Portfolio Overview Features
 
+- **Price Ticker**: Wall-Street-style scrolling marquee at the top of the overview showing each owned stock's live day-change (symbol · current price · today's % change). Fetches batch quotes from `/api/market/quote?detail=basic` on a 60 s interval; pauses on hover; respects `prefers-reduced-motion`; hidden offline. Toggleable via widget visibility dialog (id `ticker`, default visible). See [[docs/features/portfolio#portfolio-overview-ticker-widget-2026-06-24|Portfolio Ticker]].
 - **Summary Cards**: Total value, gain/loss
 - **Currency-normalized totals**: Summary cards, allocation chart values, and investment list amounts are converted to `appSettings.defaultCurrency` via `/api/info/exchange-rates`
 - **Allocation Chart**: Asset class distribution

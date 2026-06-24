@@ -3,9 +3,9 @@ title: Feature - Portfolio & Investments
 type: feature
 status: active
 date: 2026-06-20
-last_modified: 2026-06-21
-updated: 2026-06-21
-tags: [feature, portfolio, investments, stocks, crypto, metals, phase-1, phase-3.5, phase-3.6, phase-9, phase-8, phase-14, pdf-export, offline-resilience, stale-prices, online-status-detection, graceful-degradation, portfolio-summary, realtime-totals, decimal-precision, monetary-math, snapshot-valuation-parity, fixed-income-accrual, real-estate-appreciation, net-worth-reconciliation, historical-fx, snapshot-fx, loading-states, error-states, page-error, skeleton, portfolio-unit-math, shared-utils, splits-event, return-of-capital, banker-rounding, fx-attribution, asset-gain, fx-gain, purchase-date-rates, value-fx-neutral, adr-074, adr-091, adr-100, per-account, move-holding, close-account, brokerage-fanout, rebalancing, saved-plans, cash-aware, cross-workspace, adr-098]
+last_modified: 2026-06-24
+updated: 2026-06-24
+tags: [feature, portfolio, investments, stocks, crypto, metals, phase-1, phase-3.5, phase-3.6, phase-9, phase-8, phase-14, pdf-export, offline-resilience, stale-prices, online-status-detection, graceful-degradation, portfolio-summary, realtime-totals, decimal-precision, monetary-math, snapshot-valuation-parity, fixed-income-accrual, real-estate-appreciation, net-worth-reconciliation, historical-fx, snapshot-fx, loading-states, error-states, page-error, skeleton, portfolio-unit-math, shared-utils, splits-event, return-of-capital, banker-rounding, fx-attribution, asset-gain, fx-gain, purchase-date-rates, value-fx-neutral, adr-074, adr-091, adr-100, per-account, move-holding, close-account, brokerage-fanout, rebalancing, saved-plans, cash-aware, cross-workspace, adr-098, portfolio-ticker, marquee, live-quotes, ticker-manager, show-in-ticker, migration-0061]
 aliases: [portfolio-feature, investments-feature, holdings, net-worth, stocks, crypto, real-estate, savings, bonds, metals, performance, watchlist]
 description: Track stocks, ETFs, crypto, metals, real estate, savings, and bonds; includes Phase 8 PDF report export with 6 portfolio sections. 2026-05-29 adds historical FX in snapshots and loading/error states on all asset pages. June 2026 adds snapshotBuilder split/return_of_capital events, APP_TIMEZONE day-boundary fix, shared portfolioUnitMath.ts, and FX attribution UI (ADR-074): asset gain / FX effect decomposition on overview, performance, asset pages, and investment detail.
 related_code: ["apps/node-backend/src/routes/investments.js", "apps/node-backend/src/services/priceProviderService.js", "apps/node-backend/src/services/portfolioPerformanceSnapshotService.js", "apps/node-backend/src/services/portfolio/portfolioSummaryService.js", "apps/node-backend/src/routes/info/portfolioSummary.js", "apps/frontend/src/pages/portfolio/PerformancePage.tsx", "apps/frontend/src/pages/portfolio/MetalsPage.tsx", "apps/frontend/src/pages/portfolio/PortfolioOverviewPage.tsx", "apps/frontend/src/hooks/portfolio/usePortfolioSummary.ts", "apps/frontend/src/hooks/usePortfolio.ts", "apps/frontend/src/lib/api.ts"]
@@ -643,6 +643,72 @@ Portfolio report is available from the Portfolio Overview page (`/portfolio`) an
 
 See [[docs/api/reports#post-apireportsportfolio|Reports API: Portfolio Endpoint]] for request/response details.
 
+## Portfolio Overview Ticker Widget (2026-06-24)
+
+A Wall-Street-style horizontally scrolling ticker tape was added to the Portfolio Overview page (`/portfolio`). It displays each owned stock's live day-change data — symbol, current price, and today's % change — in a continuous marquee.
+
+### Behaviour
+
+- **Source**: From the full set of holdings with a ticker symbol quotable by Yahoo Finance (the *manageable universe*), only those where `show_in_ticker !== false` are actually quoted and displayed (the *included* set). Non-symbol holdings such as real estate and savings are excluded from the manageable universe automatically.
+- **Excluded holdings make no network requests**: symbols filtered out by `show_in_ticker === false` are not passed to the Yahoo batch quote call — a deliberate network saving.
+- **Symbol resolution**: Prefers `price_provider_id` when `price_provider === 'yahoo'`; falls back to the bare `symbol`. This mirrors how the rest of the codebase requests Yahoo quotes (e.g. a holding named "Apple" priced via provider id `AAPL` quotes as `AAPL`).
+- **Live data**: Fetches batch day-change quotes from `GET /api/market/quote` with `detail=basic` (same endpoint as the Market Overview research page and the command palette ticker lookup). Returns `price`, `change`, `changePercent`, `currency` per symbol.
+- **React Query cadence**: `staleTime` 60 s, `refetchInterval` 60 s, `retry: 1`, query key `["portfolio-ticker", symbols]`. The query is disabled when offline (`useOnlineStatus`). Polling is gated on visibility — `refetchInterval` is `false` whenever the tape is off-screen or the tab is hidden, so a backgrounded Portfolio page makes no quote requests; a stale tape refreshes the moment it reappears.
+- **Rendering**: Content is duplicated twice inside `.ticker-track` for a seamless CSS loop (`@keyframes ticker-scroll`: `translateX(0) → translateX(-50%)`). Animation speed scales linearly with item count (`4.5 s / item`, minimum 24 s total).
+- **Visibility pause (perf)**: An `IntersectionObserver` (120 px root margin) plus the Page Visibility API drive a `data-active` attribute on `.ticker-mask`. When the tape scrolls off-screen or the tab is hidden, `.ticker-mask[data-active="false"] .ticker-track` sets `animation-play-state: paused`, so no compositor cycles are spent animating a tape nobody can see. It resumes seamlessly from the same offset on return.
+- **Interactivity**: Marquee pauses on hover (`.ticker-mask:hover .ticker-track`). Respects `prefers-reduced-motion` — animation is disabled via the `animation: none` rule in `@layer utilities`.
+- **Gain/loss colour**: Uses `text-gain` / `text-loss` tokens, which are the colorblind-aware gain/loss CSS variables (orange/blue by default, toggleable in Settings → Appearance → Accessibility).
+- **Empty-tape persistence**: The bar renders even when the included set is empty (i.e. the user has hidden all holdings) — the tape shows a muted placeholder instead. `portfolio.ticker.allHidden` is shown when everything in the manageable universe is excluded; `portfolio.ticker.offline` is shown when offline with no cached quotes. The component returns `null` only when there are no quotable holdings at all (the manageable universe itself is empty).
+
+### Per-Stock Ticker Toggle (2026-06-24, migration 0061)
+
+Each investment can be individually included in or excluded from the ticker. The preference is persisted in a **side table** `investment_ticker_prefs` (not a column on `investments`) and managed from a `TickerManager` popover on the ticker bar itself.
+
+**TickerManager popover**
+
+- Opened via a sliders icon at the tape's right edge, outside the edge-fade mask.
+- Lists every holding in the manageable universe (has a quotable ticker symbol) with a Radix `Switch` per row.
+- Toggling a switch calls `apiClient.updateInvestment(id, { show_in_ticker })` (`PATCH /api/investments/:id`) with an **optimistic cache update** on `INVESTMENTS_QUERY_KEY`; the update rolls back on error and invalidates `investments` + `portfolio-summary` queries on settle.
+
+**Side table** (`investment_ticker_prefs`):
+- Schema: `investment_ticker_prefs(investment_id INTEGER PRIMARY KEY, show_in_ticker BOOLEAN NOT NULL DEFAULT true)`.
+- Created by migration `0061_investments_show_in_ticker` (revision `0061_investments_show_in_ticker`, down_revision `0060_brokerage_import_routing`) via `CREATE TABLE IF NOT EXISTS`. Downgrade: `DROP TABLE IF EXISTS investment_ticker_prefs`.
+- No FK on `investment_id` — `investments` may be a VIEW on legacy inheritance-schema installs; an orphaned pref row is harmless (it simply never joins). There is **no `investments.show_in_ticker` column**.
+- An absent row means visible (`COALESCE(tp.show_in_ticker, true)`); only explicit opt-outs need storing — no backfill required for existing holdings.
+- **Read path**: `investmentRepository` reads (`getById`, `getAll`, `getAllWithCount`) each `LEFT JOIN investment_ticker_prefs tp ON tp.investment_id = i.id` and select `COALESCE(tp.show_in_ticker, true) AS show_in_ticker`.
+- **Write path**: `investmentRepository.update()` peels `show_in_ticker` out of the PATCH body — it is **not** in `allowed` / `BASE_ALLOWED_FIELDS` — and UPSERTs it via `INSERT ... ON CONFLICT (investment_id) DO UPDATE`, then returns the joined read.
+- **Backup**: `investment_ticker_prefs` is registered in `BACKUP_COVERED_TABLES` in `apps/node-backend/src/backup/coverage.js` and is included in `.visionbak` exports.
+- **NOT auto-applied** — the user runs `bun run db:upgrade`.
+
+> [!warning] Apply migration 0061 before deploying the ticker manager
+> Until `bun run db:upgrade` is run, the `investment_ticker_prefs` table does not exist. The `PATCH /api/investments/:id` call for `show_in_ticker` will be accepted by the Express route but the upsert into the side table will fail with a "relation does not exist" error. Apply the migration first.
+
+### i18n keys
+
+### Placement in PortfolioOverviewPage
+
+The ticker is the **first widget** in `getPortfolioWidgets()` (id `ticker`, `defaultVisible: true`). It renders between `<StalePricesBanner>` and the summary cards grid — at the top of the overview content area, below the page header.
+
+Users can hide it from the widget visibility dialog (`portfolio.widget.ticker` i18n key).
+
+### i18n keys
+
+| Key | en | nl |
+|-----|----|----|
+| `portfolio.widget.ticker` | "Price Ticker" | "Koersticker" |
+| `portfolio.ticker.aria` | "Live price ticker for your holdings" | "Live koersticker van je posities" |
+| `portfolio.ticker.manage` | "Manage Ticker" | "Ticker beheren" |
+| `portfolio.ticker.manageTitle` | "Manage Price Ticker" | "Koersticker beheren" |
+| `portfolio.ticker.manageCount` | "{shown} of {total} shown" | "{shown} van {total} zichtbaar" |
+| `portfolio.ticker.allHidden` | "All holdings hidden from ticker" | "Alle posities verborgen uit ticker" |
+| `portfolio.ticker.offline` | "Ticker offline" | "Ticker offline" |
+
+### No new API endpoint
+
+The ticker reuses the existing `/api/market/quote` batch endpoint and the existing `PATCH /api/investments/:id` endpoint (with the new `show_in_ticker` field). The `docs/reference/api-endpoint-matrix.md` count is unchanged.
+
+Code links: [[apps/frontend/src/components/portfolio/PortfolioTicker.tsx]], [[apps/frontend/src/pages/portfolio/PortfolioOverviewPage.tsx]], [[apps/frontend/src/index.css]], [[apps/frontend/src/hooks/useOnlineStatus.ts]], [[apps/frontend/src/lib/api.ts]]
+
 ## Per-Account Holdings (2026-06-18, ADR-091 / ADR-100)
 
 > [!warning] Holdings UI flag-gated — default OFF (ADR-103, 2026-06-20)
@@ -848,3 +914,4 @@ See also: [[docs/api/settings|Settings API — `rebalance_plans` key]], [[docs/a
 - `0039_add_value_fx_neutral_to_snapshots.py` — Added nullable `value_fx_neutral NUMERIC(18,2)` to `portfolio_performance_snapshots`; writer detects column presence and degrades gracefully (ADR-074)
 - `0057_portfolio_import_batches_account_id.py` — Adds `account_id` FK to `portfolio_import_batches` so committed lots inherit the destination account (**authored, not applied** — run `bun run db:upgrade`)
 - `0058_watchlist_added_price.py` — Adds `added_price NUMERIC(18,6) NULLABLE` to `watchlist` for the what-if backtest (**authored, not applied** — run `bun run db:upgrade`)
+- `0061_investments_show_in_ticker.py` — Creates the `investment_ticker_prefs` side table (`investment_ticker_prefs(investment_id INTEGER PRIMARY KEY, show_in_ticker BOOLEAN NOT NULL DEFAULT true)`). Enables per-investment opt-out from the portfolio ticker tape without touching the `investments` table/view (which may be a VIEW on legacy inheritance-schema installs). Absent row = visible. Downgrade drops the table. (**authored, not applied** — run `bun run db:upgrade`)

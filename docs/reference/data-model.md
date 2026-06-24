@@ -3,10 +3,10 @@ title: Data Model Reference
 type: reference
 status: active
 date: 2026-04-24
-updated: 2026-06-18
-last_modified: 2026-06-18
-tags: [reference, data-model, entities, database, schema, phase-5a, phase-0, phase-1, may-2026, tags, tagging, orthogonal-dimension, aggregations, migration-0035, saved-custom-parsers, custom-parser-configs, adr-066, fx-attribution, value-fx-neutral, adr-074, migration-0039, portfolio-import, portfolio-import-batches, portfolio-import-staging-rows, kind-discriminator, migration-0040, migration-0041, adr-078]
-description: Complete reference for all data entities in Vision — core, portfolio, planning, supporting, and aggregation entities. Includes exchange_rate_cache (Phase 0), aggregation tables (Phase 1, consolidated in 0035), attachment entity (Phase 5A), transaction tags (May 2026), custom_parser_configs (June 2026, ADR-066) with kind discriminator (June 2026, ADR-078 migration 0041), value_fx_neutral snapshot column (June 2026, ADR-074 migration 0039), portfolio_import_batches and portfolio_import_staging_rows (June 2026, ADR-078 migration 0040), watchlist.added_price (June 2026, ADR-097 migration 0058), portfolio_import_batches.account_id (June 2026, ADR-091 migration 0057), and supporting entities transaction_splits, split_payments, split_audit, import_batches, provider_health, recipient_match_patterns, asset_price_history (June 2026).
+updated: 2026-06-24
+last_modified: 2026-06-24
+tags: [reference, data-model, entities, database, schema, phase-5a, phase-0, phase-1, may-2026, tags, tagging, orthogonal-dimension, aggregations, migration-0035, saved-custom-parsers, custom-parser-configs, adr-066, fx-attribution, value-fx-neutral, adr-074, migration-0039, portfolio-import, portfolio-import-batches, portfolio-import-staging-rows, kind-discriminator, migration-0040, migration-0041, adr-078, show-in-ticker, investment-ticker-prefs, migration-0061, portfolio-ticker]
+description: Complete reference for all data entities in Vision — core, portfolio, planning, supporting, and aggregation entities. Includes exchange_rate_cache (Phase 0), aggregation tables (Phase 1, consolidated in 0035), attachment entity (Phase 5A), transaction tags (May 2026), custom_parser_configs (June 2026, ADR-066) with kind discriminator (June 2026, ADR-078 migration 0041), value_fx_neutral snapshot column (June 2026, ADR-074 migration 0039), portfolio_import_batches and portfolio_import_staging_rows (June 2026, ADR-078 migration 0040), watchlist.added_price (June 2026, ADR-097 migration 0058), portfolio_import_batches.account_id (June 2026, ADR-091 migration 0057), investment_ticker_prefs side table (June 2026, migration 0061), and supporting entities transaction_splits, split_payments, split_audit, import_batches, provider_health, recipient_match_patterns, asset_price_history (June 2026).
 aliases: [data model, entities, domain model, schema entities]
 related_code: ["apps/node-backend/src/repositories/", "alembic/versions/"]
 ---
@@ -278,6 +278,30 @@ types: `account_type`, `account_liquidity_class`, `account_tax_wrapper`, `accoun
 - `bond_investments` — Bonds (interest_rate, maturity_date)
 
 **Related:** [[docs/features/portfolio|Portfolio Feature]], [[docs/adr/004-postgresql-table-inheritance|ADR-004]]
+
+---
+
+### investment_ticker_prefs (June 2026, migration 0061)
+
+**Purpose:** Side table that persists per-investment opt-out preferences for the Portfolio Overview ticker tape. An absent row means the holding is visible (default `true`); only explicit `false` rows need to be stored.
+
+| Field | Type | Constraints | Description |
+|-------|------|-------------|-------------|
+| `investment_id` | INTEGER | PRIMARY KEY | References an investment by id (no FK — `investments` may be a view on legacy installs; orphaned rows are harmless) |
+| `show_in_ticker` | BOOLEAN | NOT NULL, DEFAULT true | `false` = excluded from ticker tape and not quoted from Yahoo. Absent row = `true`. |
+
+> [!info] Migration 0061 creates this table
+> `investment_ticker_prefs` is created by migration `0061_investments_show_in_ticker` (down_revision `0060_brokerage_import_routing`) via a plain `CREATE TABLE IF NOT EXISTS`. Downgrade drops the table. Apply with `bun run db:upgrade`.
+>
+> A side table was chosen because `investments` is a plain table on fresh installs (0001 schema) but a **VIEW** over `investments_base` on legacy inheritance installs — `ALTER TABLE investments ADD COLUMN` fails on those. A separate table is the only schema-shape-agnostic, cleanly reversible option. There is no `investments.show_in_ticker` column.
+
+**Read path:** `investmentRepository` `getById`, `getAll`, and `getAllWithCount` each do a `LEFT JOIN investment_ticker_prefs tp ON tp.investment_id = i.id` and select `COALESCE(tp.show_in_ticker, true) AS show_in_ticker`.
+
+**Write path:** `investmentRepository.update()` peels `show_in_ticker` out of the update body (it is **not** in the column allow-lists `allowed` / `BASE_ALLOWED_FIELDS`) and performs an `INSERT ... ON CONFLICT (investment_id) DO UPDATE` upsert into `investment_ticker_prefs`, then returns the joined read.
+
+**Backup:** Registered in `BACKUP_COVERED_TABLES` (`apps/node-backend/src/backup/coverage.js`) so it is included in `.visionbak` exports.
+
+**Related:** [[docs/features/portfolio|Portfolio Feature — Portfolio Overview Ticker Widget]], [[docs/api/investments|Investments API — PATCH /api/investments/:id]]
 
 ---
 

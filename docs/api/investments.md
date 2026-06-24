@@ -5,8 +5,8 @@ method: GET, POST, PATCH, DELETE
 path: /api/investments
 description: Investment portfolio management (stocks, crypto, real estate, savings)
 date: 2026-06-18
-last_modified: 2026-06-18
-tags: [api, investments, portfolio, stocks, crypto, metals, phase-9, decimal, money, offline-fallback, per-account, move-holding, adr-091]
+last_modified: 2026-06-24
+tags: [api, investments, portfolio, stocks, crypto, metals, phase-9, decimal, money, offline-fallback, per-account, move-holding, adr-091, show-in-ticker, portfolio-ticker]
 status: active
 aliases: [investments-api, portfolio-api, holdings, stocks, crypto, real-estate, savings, bonds, metals]
 related_code: [[apps/node-backend/src/routes/investments.js]], [[apps/node-backend/src/repositories/investmentRepository.js]]
@@ -72,6 +72,7 @@ Retrieve a list of investments.
       "price_provider_history_ts_path": null,
       "price_provider_history_price_path": null,
       "price_updated_at": "2026-03-18T10:00:00Z",
+      "show_in_ticker": true,
       "created_at": "2026-01-01T00:00:00Z",
       "updated_at": "2026-03-18T10:00:00Z"
     }
@@ -241,6 +242,14 @@ Validation and mutability rules:
 - `symbol` (ticker) is editable for unit-based investments but must be non-empty when provided and globally unique (case-insensitive).
 - Route-level update now maps repository validation failures to `400` instead of generic `500` for business-rule violations.
 - Existing DB `updated_at` triggers keep timestamp-only edit history (no previous-value history required).
+
+**Accepted body field — `show_in_ticker`** (boolean, optional):
+- Controls whether this investment appears in the Portfolio Overview ticker tape.
+- `true` (default): the holding is included in the ticker and its symbol is quoted from Yahoo.
+- `false`: the holding is excluded; no Yahoo quote request is made for it.
+- Persisted in the **`investment_ticker_prefs` side table** (not a column on `investments`). The repository `update()` method peels `show_in_ticker` out of the body — it is **not** in the `allowed` / `BASE_ALLOWED_FIELDS` column allow-lists — and UPSERTs into `investment_ticker_prefs` via `INSERT ... ON CONFLICT (investment_id) DO UPDATE`. Reads use `LEFT JOIN investment_ticker_prefs tp ON tp.investment_id = i.id` and return `COALESCE(tp.show_in_ticker, true) AS show_in_ticker`. Migration `0061_investments_show_in_ticker` **creates this table** (not adds a column); **not auto-applied** — run `bun run db:upgrade`. There is no `investments.show_in_ticker` column.
+- The response includes `show_in_ticker` once migration 0061 has been applied (via the joined read path described above).
+- The frontend `PortfolioTicker` `TickerManager` popover uses this field via an optimistic `PATCH` + React Query cache update (rolls back on error, invalidates investments + portfolio-summary on settle).
 
 Code links: [[apps/node-backend/src/routes/investments.js]], [[apps/node-backend/src/repositories/investmentRepository.js]]
 
