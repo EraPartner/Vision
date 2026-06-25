@@ -338,11 +338,14 @@ export const transactionRepository = {
    * Uses a CTE to INSERT the row and immediately JOIN with recipients/categories so
    * callers get the complete representation without a second SELECT (getById) call.
    */
-  async create({ transaction_date, bank_account, recipient_id, amount, memo, currency, balance, category_id, comment, tags = null }) {
+  async create({ transaction_date, bank_account, recipient_id, amount, memo, currency, category_id, comment, tags = null }) {
+    // `balance` is intentionally absent: manual transactions leave it NULL so the
+    // account balance (ADR-094) only ever anchors on imported, bank-stamped rows.
+    // The CSV import pipeline writes `balance` via its own INSERT (commit.js).
     const sql = `
       WITH inserted AS (
-        INSERT INTO transactions (date, bank_account, recipient_id, amount, memo, currency, balance, category_id, comment, is_active)
-        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, true)
+        INSERT INTO transactions (date, bank_account, recipient_id, amount, memo, currency, category_id, comment, is_active)
+        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, true)
         RETURNING *
       )
       SELECT t.*,
@@ -366,7 +369,6 @@ export const transactionRepository = {
       // Default to EUR rather than NULL: currency is NOT NULL at the DB level
       // (migration 0046) and the read layer already coalesces missing → EUR.
       currency ? currency.toUpperCase() : 'EUR',
-      balance,
       category_id,
       comment,
     ];

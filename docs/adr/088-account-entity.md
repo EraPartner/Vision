@@ -2,8 +2,8 @@
 title: ADR-088 Account Entity (replace the bank_account string)
 type: adr
 date: 2026-06-18
-tags: [adr, accounts, account-entity, data-model, migration, expand-contract, running-balance, transfers, import, net-worth, portfolio]
-description: Replace the implicit free-text bank_account column with a real accounts table via an expand/contract migration, giving accounts a stable identity that cash, holdings, liabilities, reconciliation, and owner/tax allocation can all hang off.
+tags: [adr, accounts, account-entity, data-model, migration, expand-contract, running-balance, transfers, import, net-worth, portfolio, trigger-lookup-only, phantom-account, split-guard, rename-propagation, migration-0062]
+description: Replace the implicit free-text bank_account column with a real accounts table via an expand/contract migration, giving accounts a stable identity that cash, holdings, liabilities, reconciliation, and owner/tax allocation can all hang off. 2026-06-25 addendum: migration 0062 hardens the dual-write trigger (lookup-only on UPDATE), adds a split-total guard trigger, and wires account rename propagation.
 aliases: [account entity, accounts table, account_id, bank_account replacement]
 ---
 
@@ -133,3 +133,98 @@ ADR-091, not a hard delete).
 - [[docs/adr/086-currency-integrity|ADR-086: Currency Integrity]] (currency NOT NULL + ISO CHECK)
 - [[docs/adr/087-db-constraint-hardening|ADR-087: DB Constraint Hardening]] (history-protecting FKs stay RESTRICT)
 - [[docs/reference/api-endpoint-matrix|API Endpoint Matrix]]
+
+---
+
+## Addendum (2026-06-25): Migration 0062 — trigger hardening, split guard, rename propagation
+
+### Context
+
+Three latent bugs discovered during a data-integrity audit of the ADR-088 dual-write phase:
+
+1. **Phantom accounts on UPDATE.** The dual-write trigger `sync_account_id_from_bank_account()`
+   ran `INSERT INTO accounts … ON CONFLICT DO NOTHING` on both INSERT and UPDATE. Editing a row's
+   `bank_account` to a stale, typo, or renamed label via the DB editor, the transaction info
+   dialog's bank field, or any other writer therefore silently created a brand-new account row.
+   This is how historical institution-name labels (`'KBC'`, `'BELFIUS'`) could resurrect as
+   stray accounts on the next edit, poisoning the accounts hub and net worth totals.
+
+2. **Split total could exceed parent amount.** `splitRepository.createSplitAtomic` validates that
+   a new split's amount does not exceed `ABS(transaction.amount)` at creation time. But editing
+   the parent transaction's `amount` downward (via `PATCH /api/transactions/:id` or the DB data
+   editor introduced by ADR-101) was not guarded — the splits could silently exceed the parent
+   amount, with no constraint to catch it.
+
+3. **Account rename did not propagate to the denormalized string.** `accountRepository.update()`
+   patched `accounts.name` but left `transactions.bank_account` and
+   `planned_transactions.bank_account` pointing to the old name. Because the dual-write trigger
+   reads the `bank_account` string to resolve `account_id` (on INSERT) and the bank-balances
+   widget uses the string for display labels, the mismatch caused the renamed account to appear
+   as if it had reverted to the old name.
+
+### Decision
+
+#### Migration 0062 — `0062_trigger_lookup_only_on_update.py` (authored 2026-06-25)
+
+**a) `sync_account_id_from_bank_account()` is now LOOKUP-ONLY on UPDATE**
+
+The function is replaced in place with `CREATE OR REPLACE`:
+
+| `TG_OP` | Behaviour |
+|---------|-----------|
+| `INSERT` | Unchanged: `INSERT INTO accounts ON CONFLICT DO NOTHING`, then resolve `account_id`. Import pipeline relies on this for first-seen accounts. |
+| `UPDATE` | Lookup-only: `SELECT id FROM accounts WHERE name = acct_name`. If a match exists, set `NEW.account_id`; if not, leave `account_id` unchanged. **Never creates.** |
+
+The two trigger bindings on `transactions` and `planned_transactions` require no change — the
+trigger function replacement takes effect immediately via `CREATE OR REPLACE`.
+
+> [!info] Down-revision is `0061_investments_show_in_ticker`
+> Migration 0062 chains directly after 0061. Downgrade restores the prior resolve-or-create-on-update
+> function verbatim and drops the split-guard trigger and function.
+
+**b) New `trg_enforce_split_within_amount` BEFORE UPDATE trigger on `transactions`**
+
+```sql
+CREATE TRIGGER trg_enforce_split_within_amount
+    BEFORE UPDATE ON transactions
+    FOR EACH ROW EXECUTE FUNCTION enforce_split_within_amount();
+```
+
+`enforce_split_within_amount()` fires only when `NEW.amount IS DISTINCT FROM OLD.amount`. It
+sums `transaction_splits.amount` for the parent row and raises a `check_violation` if the sum
+exceeds `ABS(NEW.amount) + 0.005` (0.5 cent tolerance for rounding). This makes the constraint
+database-level — it covers `PATCH /api/transactions/:id`, the DB data editor (ADR-101), and any
+direct SQL.
+
+**c) `accountRepository.update()` propagates account renames**
+
+When `name` appears in the update body, `accountRepository.update()` now atomically updates the
+denormalized string on all owned rows in a single transaction:
+
+```sql
+UPDATE transactions SET bank_account = $newName WHERE account_id = $accountId;
+UPDATE planned_transactions SET bank_account = $newName WHERE account_id = $accountId;
+```
+
+This keeps `accounts.name`, `transactions.bank_account`, and `planned_transactions.bank_account`
+in sync so that the dual-write trigger (which uses the string for INSERT resolution) and any
+string-based display code always see the current label.
+
+**Related code:** [[alembic/versions/0062_trigger_lookup_only_on_update.py]],
+[[apps/node-backend/src/repositories/accountRepository.js]]
+
+### Consequences
+
+**Positive**
+- Stale or mistyped `bank_account` edits can no longer spawn phantom accounts.
+- Splitting a transaction and then shrinking its `amount` below the split total is now caught at
+  the DB level, not silently accepted.
+- Renaming an account propagates atomically to all owned transaction strings — the accounts hub,
+  bank-balances widget, and any string-based filter show the new name immediately.
+
+**Negative / cost**
+- Existing phantom accounts already created by the pre-0062 trigger are not auto-cleaned; users
+  may need to merge them via `POST /api/accounts/:id/merge` (see [[docs/api/accounts|Accounts API]]).
+- The rename propagation updates every `bank_account` string on all owned transactions in one
+  query — on large accounts this is a brief write-amplification on the `PATCH /api/accounts/:id`
+  path. Still atomic and bounded.

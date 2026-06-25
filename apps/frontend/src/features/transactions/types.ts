@@ -35,11 +35,13 @@ export interface RawApiTransaction {
     [key: string]: unknown;
 }
 
+// `balance` is intentionally NOT editable: the running balance is bank-stamped
+// import data and the account total anchors on it (ADR-094). It is shown
+// read-only in the info dialog but never user-editable.
 export type InfoEditableField =
     | 'date'
     | 'memo'
     | 'amount'
     | 'currency'
     | 'bank'
-    | 'balance'
     | 'comment';

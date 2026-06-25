@@ -8,8 +8,14 @@ import { ValidationError } from './errorHandler.js';
 // Whitelist of allowed DB columns per resource type
 const ALLOWED_COLUMNS = {
   transactions: new Set([
+    // `balance` is deliberately NOT editable here. The running balance is the
+    // bank's stamped figure and is only written by the CSV import pipeline
+    // (services/importPipeline/commit.js). The account's displayed balance
+    // anchors on the most-recent stamped row (ADR-094, accountBalanceSql.js),
+    // so letting a manual create/PATCH stamp `balance` lets one hand-typed
+    // value poison the whole account total. Reserve it for imports.
     'date', 'transaction_date', 'bank_account', 'recipient_id', 'amount',
-    'memo', 'currency', 'balance', 'category_id', 'comment', 'is_active',
+    'memo', 'currency', 'category_id', 'comment', 'is_active',
   ]),
   categories: new Set([
     'general', 'detail', 'description', 'is_active',

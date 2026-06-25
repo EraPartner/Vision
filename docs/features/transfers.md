@@ -3,8 +3,9 @@ title: Feature - Internal Transfers
 type: feature
 status: active
 date: 2026-06-18
-tags: [feature, transfers, internal-transfer, cash-flow, reconciliation, detection, statistics, aggregations, adr-083, migration-0044, migration-0045]
-description: Automatic detection of transfers between a user's own accounts via a windowed cross-batch reconciliation pass, persisted as a transfer_peer_id pairing, and excluded from cash-flow aggregates by default with a global includeTransfers toggle.
+updated: 2026-06-25
+tags: [feature, transfers, internal-transfer, cash-flow, reconciliation, detection, statistics, aggregations, adr-083, migration-0044, migration-0045, mark-transfer-validation, release-orphans-manual]
+description: Automatic detection of transfers between a user's own accounts via a windowed cross-batch reconciliation pass, persisted as a transfer_peer_id pairing, and excluded from cash-flow aggregates by default with a global includeTransfers toggle. 2026-06-25: markTransfer() now validates both rows exist, are active, are on different accounts, and have opposite signs; releaseOrphans() now covers MANUAL transfers.
 aliases: [internal transfers, transfer detection, transfer exclusion]
 ---
 
@@ -77,13 +78,49 @@ breakdown remain exclude-only.
 
 The toggle is read/written through the generic settings API (`includeTransfers` key).
 
+## Manual `markTransfer()` — Pre-flight Validation (2026-06-25)
+
+`transferReconciliationService.markTransfer(aId, bId)` now enforces the following before
+stamping either row:
+
+| Guard | Error if violated |
+|-------|------------------|
+| Both rows exist | 404 |
+| Both rows are active (`is_active = true`) | 422 |
+| Rows are on **different** accounts | 422 |
+| Rows have **opposite signs** (one ≥ 0, one < 0) | 422 |
+
+Note that equal/opposite amounts and matching currencies are **not** required for manual marks.
+Cross-currency and FX-fee transfers (which auto-detection rejects because it requires exact
+amount matching) are the primary use case for manual marking. The validation guards only
+structural sanity.
+
+**Related code:** [[apps/node-backend/src/services/transferReconciliationService.js]]
+
+## `releaseOrphans()` — Now Covers MANUAL Transfers (2026-06-25)
+
+`releaseOrphans()` previously cleared only peerless `transfer_source = 'auto'` rows. A peerless
+MANUAL transfer (where the peer was deleted or deactivated) remained permanently excluded from
+income/spending — a silent aggregate error.
+
+The fix: `releaseOrphans()` now clears all rows where `is_transfer = true AND transfer_peer_id
+IS NULL`, regardless of `transfer_source`. A peerless transfer is invalid regardless of how it
+was marked. The clearing runs on every reconcile pass (after each import commit and after manual
+transaction mutations).
+
+> [!info] Existing peerless manual transfers
+> Any existing peerless MANUAL transfer rows will be released (re-included in cash-flow
+> aggregates) the next time `releaseOrphans()` runs. If the intention was a single-sided manual
+> mark (the escape hatch for a never-imported counterpart), re-mark the row after ensuring a
+> counterpart exists.
+
 ## Out of scope
 
-- **Cross-currency** transfers (amounts differ) — manual marking only.
-- **Never-imported counterpart** (only one bank tracked) — stays counted; manual single-leg mark is the escape hatch.
+- **Cross-currency** transfers (amounts differ) — manual marking only (now validated to require opposite signs but not equal amounts or same currency).
+- **Never-imported counterpart** (only one bank tracked) — stays counted; manual marking requires a peer to avoid being released as an orphan.
 
 ## Related
-- [[docs/adr/083-internal-transfer-detection|ADR-083]]
+- [[docs/adr/083-internal-transfer-detection|ADR-083]] (including 2026-06-25 addendum)
 - [[docs/reference/data-model|Data Model Reference]]
 - [[docs/features/import|Import Feature]]
 - [[docs/adr/010-phase1-aggregation-strategy|ADR-010: Aggregation Strategy]]

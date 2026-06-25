@@ -5,7 +5,8 @@ method: GET, POST, PATCH, DELETE
 path: /api/accounts
 description: Account entity management (ADR-088) — the user's own accounts spanning budgeting cash, portfolio holdings, and liabilities
 date: 2026-06-21
-tags: [api, accounts, account-entity, adr-088, net-worth, cash-sleeve]
+updated: 2026-06-25
+tags: [api, accounts, account-entity, adr-088, net-worth, cash-sleeve, rename-propagation]
 status: active
 aliases: [accounts-api, account-management, account-entity]
 related_code: [[apps/node-backend/src/routes/accounts.js]], [[apps/node-backend/src/services/accountService.js]], [[apps/node-backend/src/repositories/accountRepository.js]]
@@ -55,6 +56,17 @@ DB defaults — `type='checking'`, `owner='me'`, `in_net_worth=true`, `has_cash_
 ### PATCH /api/accounts/:id
 
 Partial update (`AccountUpdate`). `404` if not found, `409` on name collision.
+
+> [!info] Account rename propagates to transactions (2026-06-25)
+> When the `name` field is included in the update body, `accountRepository.update()` atomically
+> propagates the new name to the denormalized `bank_account` string on all owned rows:
+> ```sql
+> UPDATE transactions SET bank_account = $newName WHERE account_id = $accountId;
+> UPDATE planned_transactions SET bank_account = $newName WHERE account_id = $accountId;
+> ```
+> This keeps the display label in the bank-balances widget, transaction filters, and the
+> dual-write trigger lookup consistent with `accounts.name`. The propagation is part of the same
+> database transaction as the accounts row update. See [[docs/adr/088-account-entity|ADR-088 addendum]].
 
 ### DELETE /api/accounts/:id
 

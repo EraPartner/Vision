@@ -2,8 +2,8 @@
 title: ADR-083 Internal Transfer Detection and Exclusion
 type: adr
 date: 2026-06-18
-tags: [adr, transfers, internal-transfer, cash-flow, statistics, aggregations, import-pipeline, transfer-detection, migration, reconciliation]
-description: Auto-detect transfers between a user's own accounts via a windowed, cross-batch reconciliation pass, persist the pairing as transfer_peer_id, and exclude marked transfers from cash-flow aggregates by default with a global toggle.
+tags: [adr, transfers, internal-transfer, cash-flow, statistics, aggregations, import-pipeline, transfer-detection, migration, reconciliation, mark-transfer-validation, release-orphans]
+description: Auto-detect transfers between a user's own accounts via a windowed, cross-batch reconciliation pass, persist the pairing as transfer_peer_id, and exclude marked transfers from cash-flow aggregates by default with a global toggle. 2026-06-25 addendum: markTransfer() pre-flight validation; releaseOrphans() now covers MANUAL transfers.
 aliases: [internal transfers, transfer detection, transfer exclusion, transfer_peer_id]
 ---
 
@@ -114,3 +114,72 @@ aggregates by default.
 - [[docs/features/import|Import Feature]] (pipeline stages, dedup, recurring detection)
 - [[docs/reference/api-endpoint-matrix|API Endpoint Matrix]]
 - [[docs/adr/010-phase1-aggregation-strategy|ADR-010: Aggregation Strategy]] (`mv_monthly_summary`, `agg_recipient_totals`)
+
+---
+
+## Addendum (2026-06-25): `markTransfer()` pre-flight validation + `releaseOrphans()` covers MANUAL transfers
+
+### Context
+
+Two latent correctness gaps were identified during a data-integrity audit of the transfer service
+(`apps/node-backend/src/services/transferReconciliationService.js`):
+
+1. **`markTransfer()` performed no pre-flight checks** before stamping a pair. A caller could
+   pass two transaction IDs that were on the same account, had the same sign, or were inactive —
+   none of which constitute a valid transfer — and the mark would succeed, contaminating
+   cash-flow aggregates.
+
+2. **`releaseOrphans()` only released `transfer_source = 'auto'` pairs**. If the peer of a
+   MANUAL-marked transfer was deleted or deactivated, the remaining leg stayed permanently marked
+   as a transfer (`is_transfer = true`) with `transfer_peer_id IS NULL`, silently excluding it
+   from income/spending forever. A peerless transfer is invalid regardless of how it was marked.
+
+### Decision
+
+#### `markTransfer()` pre-flight validation
+
+Before stamping either leg, `markTransfer(aId, bId)` now enforces:
+
+| Guard | Rule |
+|-------|------|
+| Both rows exist | 404 if either ID is not found |
+| Both rows are active | 422 if either row has `is_active = false` |
+| Different accounts | 422 if `account_id` (or `bank_account` fallback) is identical |
+| Opposite signs | 422 if both amounts have the same sign |
+
+The service deliberately does **NOT** require equal/opposite amounts or the same currency. Manual
+marks exist precisely to confirm cross-currency and FX-fee transfers that auto-detection rejects
+(because auto-detection requires equal amounts, same currency — see the original ADR above). A
+cross-currency transfer is still a valid transfer; the validation only guards structural sanity.
+
+#### `releaseOrphans()` covers MANUAL transfers
+
+`releaseOrphans()` now clears all peerless transfer marks regardless of `transfer_source`:
+
+```sql
+-- before: WHERE is_transfer AND transfer_peer_id IS NULL AND transfer_source = 'auto'
+-- after:  WHERE is_transfer AND transfer_peer_id IS NULL
+```
+
+A peerless transfer — whether auto-marked or manually marked — is an invalid pair. Keeping the
+lone leg excluded from income/spending is incorrect. The fix ensures the orphan is re-included
+in cash-flow aggregates on the next reconciliation pass.
+
+### Consequences
+
+**Positive**
+- Invalid transfer marks (same account, same sign, inactive rows) are now caught at the API
+  boundary with a descriptive 422 rather than silently corrupting aggregates.
+- Orphaned manual transfer legs no longer create permanent aggregate exclusions; they are
+  released on the next reconcile pass (triggered after each import commit and manual edit).
+- The contract for "a valid transfer pair" is now enforced at a single point rather than assumed
+  by callers.
+
+**Negative / cost**
+- Any existing peerless MANUAL transfers will be released the next time `releaseOrphans()` runs
+  (i.e., on the next import commit or transaction edit). For users who intentionally created a
+  single-sided manual transfer (the escape hatch mentioned in the main ADR's Out-of-scope
+  section), the mark will be cleared. They must re-mark if desired and ensure a counterpart
+  exists.
+
+**Related code:** [[apps/node-backend/src/services/transferReconciliationService.js]]

@@ -58,16 +58,6 @@ export function TransactionInfoDialog({
             if (Number.isNaN(parsed)) return;
             payload.amount = parsed;
             localValue = parsed;
-        } else if (editingInfoField === 'balance') {
-            if (trimmed.length === 0) {
-                payload.balance = undefined;
-                localValue = undefined;
-            } else {
-                const parsed = parseLocaleNumber(trimmed);
-                if (Number.isNaN(parsed)) return;
-                payload.balance = parsed;
-                localValue = parsed;
-            }
         } else if (editingInfoField === 'date') {
             if (!trimmed) return;
             payload.transaction_date = trimmed;
@@ -166,13 +156,11 @@ export function TransactionInfoDialog({
                                 editType: 'text',
                             },
                             {
+                                // Read-only: balance is bank-stamped import data (ADR-094),
+                                // never user-editable. Shown for imported rows only.
                                 key: 'balance',
                                 label: t('txPage.field.balance'),
                                 value: txn.balance != null ? formatCurrency(txn.balance, txn.currency, locale) : undefined,
-                                editable: true,
-                                editField: 'balance',
-                                editValue: txn.balance != null ? String(txn.balance) : '',
-                                editType: 'number',
                             },
                             {
                                 key: 'comment',

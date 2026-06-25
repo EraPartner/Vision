@@ -149,7 +149,8 @@ describe("TransactionInfoDialog", () => {
 
         await screen.findByRole("dialog");
 
-        // Edit buttons in DOM order: date (index 0), memo (index 1), amount, currency, bank, balance, comment
+        // Edit buttons in DOM order: date (index 0), memo (index 1), amount, currency, bank, comment
+        // (balance is read-only — bank-stamped import data, ADR-094 — so it has no edit button)
         const editButtons = await screen.findAllByRole("button", { name: /^edit$/i });
         await user.click(editButtons[1]); // memo field uses editType="text"
 
@@ -310,7 +311,8 @@ describe("TransactionInfoDialog", () => {
         await screen.findByRole("dialog");
 
         const editButtons = await screen.findAllByRole("button", { name: /^edit$/i });
-        // index order: date(0), memo(1), amount(2), currency(3), bank(4), balance(5), comment(6)
+        // index order: date(0), memo(1), amount(2), currency(3), bank(4), comment(5)
+        // (balance is read-only — no edit button — see ADR-094)
         await user.click(editButtons[2]);
 
         const input = screen.getByRole("spinbutton") as HTMLInputElement;

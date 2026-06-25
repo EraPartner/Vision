@@ -3,10 +3,10 @@ title: Transactions
 type: feature
 status: active
 date: 2026-04-16
-updated: 2026-06-19
-tags: [feature, transactions, finance, phase-q, recipient-groups, bulk-actions, optimistic-updates, optimistic-create, june-2026, context-menu, quick-look, keyboard-nav, duplicate, filter-by-recipient, deep-link, electron-native, new-transaction, render-loop-fix, category-ids-filter, multi-value-filter]
+updated: 2026-06-25
+tags: [feature, transactions, finance, phase-q, recipient-groups, bulk-actions, optimistic-updates, optimistic-create, june-2026, context-menu, quick-look, keyboard-nav, duplicate, filter-by-recipient, deep-link, electron-native, new-transaction, render-loop-fix, category-ids-filter, multi-value-filter, balance-write-protection]
 aliases: [transactions-feature, income, expenses, financial-records, money-tracking]
-description: Core transaction management - income, expenses, and tracking financial activities. Phase Q adds recipient-group filtering for linked-recipient transaction discovery. Bulk operations enable atomic multi-row delete, recategorize, reassign, activate/deactivate, export, and tag. June 2026 (ADR-070): useUpdateTransaction/useDeleteTransaction are now optimistic. June 2026 Premium v3 (ADR-071): useCreateTransaction is now optimistic (temp negative-id row → server-row swap → onSettled invalidate; virtual list excluded; 6 tests). June 2026 Premium v3 V5-V7: per-row context menu, Quick Look dialog (Space), keyboard row navigation (↑/↓/Enter), Duplicate, and Filter-by-recipient actions. June 2026 V12 (ADR-072): /transactions?new=1 deep link opens AddTransactionDialog (used by native menu and dock menu).
+description: Core transaction management - income, expenses, and tracking financial activities. Phase Q adds recipient-group filtering for linked-recipient transaction discovery. Bulk operations enable atomic multi-row delete, recategorize, reassign, activate/deactivate, export, and tag. June 2026 (ADR-070): useUpdateTransaction/useDeleteTransaction are now optimistic. June 2026 Premium v3 (ADR-071): useCreateTransaction is now optimistic (temp negative-id row → server-row swap → onSettled invalidate; virtual list excluded; 6 tests). June 2026 Premium v3 V5-V7: per-row context menu, Quick Look dialog (Space), keyboard row navigation (↑/↓/Enter), Duplicate, and Filter-by-recipient actions. June 2026 V12 (ADR-072): /transactions?new=1 deep link opens AddTransactionDialog (used by native menu and dock menu). 2026-06-25: balance field is now write-protected (import pipeline only); PATCH and manual create can no longer set it; TransactionInfoDialog renders it read-only.
 related_code: ["apps/node-backend/src/routes/transactions.js", "apps/node-backend/src/repositories/transactionRepository.js", "apps/node-backend/src/services/filterBuilder.js", "apps/node-backend/src/services/bulkSelection.js", "apps/frontend/src/features/transactions/", "apps/frontend/src/pages/TransactionsPage.tsx"]
 ---
 
@@ -30,7 +30,7 @@ Transactions represent any financial movement - from grocery shopping to salary 
 | `amount` | number | Transaction amount |
 | `memo` | string | Transaction description |
 | `currency` | string | Currency code (ISO 4217) |
-| `balance` | number | Running balance after transaction |
+| `balance` | number | Running balance after transaction (**read-only** — written exclusively by the import pipeline; `NULL` on manual rows; see note below) |
 | `category_id` | number | Assigned category |
 | `comment` | user_note | User-added comment |
 
@@ -46,6 +46,23 @@ Transactions represent any financial movement - from grocery shopping to salary 
 // Income  
 { amount: 2500.00 }
 ```
+
+### Balance Field — Write-Protected (2026-06-25)
+
+> [!warning] `balance` is written exclusively by the import pipeline
+> `transactions.balance` is now a **read-only** field from the perspective of the API and the UI.
+> It is stamped by `services/importPipeline/commit.js` as a running balance when rows are imported
+> from a bank CSV. Manually-created transactions leave `balance = NULL`, which is correct and
+> intentional.
+>
+> **What changed:**
+> - `PATCH /api/transactions/:id` rejects any body that contains `balance` (`ALLOWED_COLUMNS.transactions` no longer includes it).
+> - `POST /api/transactions` (create) does not accept or forward `balance`; the repository `create()` method ignores it.
+> - `TransactionInfoDialog` renders the `balance` field as a read-only display value; the edit affordance is removed (`'balance'` removed from `InfoEditableField` in `types.ts`).
+>
+> **Why:** The account's computed balance (used by the bank-balances widget and reconciliation) anchors on the `balance` column of the most-recent active transaction. A hand-typed value could corrupt the entire account total. See [[docs/adr/094-balance-reconciliation-drift|ADR-094 addendum]].
+>
+> The `include_balance=true` export flag and the running-balance accumulator in the CSV export are unaffected — they compute balance from amounts at export time.
 
 ---
 
@@ -213,7 +230,7 @@ These shortcuts are shown in `ShortcutsOverlay` (`?` key).
 
 #### Duplicate
 
-`handleDuplicate` in `TransactionsPage` copies the focused row into a new transaction via `useCreateTransaction`. Fields copied: `transaction_date`, `bank_account`, `recipient_id`, `memo`, `amount`, `currency`, `category_id`, `comment`, `tags`. Field deliberately **not** copied: `balance` (running balance belongs to the original row).
+`handleDuplicate` in `TransactionsPage` copies the focused row into a new transaction via `useCreateTransaction`. Fields copied: `transaction_date`, `bank_account`, `recipient_id`, `memo`, `amount`, `currency`, `category_id`, `comment`, `tags`. Field deliberately **not** copied: `balance` (running balance is write-protected and import-pipeline-only; the `create()` path ignores it regardless).
 
 Gate: `recipient_id`, `transaction_date`, and `bank_account` must all be present (same contract as the create endpoint).
 

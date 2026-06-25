@@ -8,7 +8,7 @@
  * semantics are activated in ADR-089.
  */
 
-import { query } from '../database/connection.js';
+import { query, withTransaction } from '../database/connection.js';
 import { COMPUTED_BALANCE_LATERAL } from './accountBalanceSql.js';
 
 const COLUMNS = `id, name, display_name, institution, currency, type, liquidity_class,
@@ -99,11 +99,36 @@ export const accountRepository = {
     if (setClauses.length === 0) return this.getById(id);
     setClauses.push(`updated_at = NOW()`);
     params.push(id);
-    const result = await query(
-      `UPDATE accounts SET ${setClauses.join(', ')} WHERE id = $${i} RETURNING ${COLUMNS}`,
-      params,
-    );
-    return result.rows[0] ?? undefined;
+
+    const renaming = Object.prototype.hasOwnProperty.call(fields, 'name') && fields.name !== undefined;
+    if (!renaming) {
+      const result = await query(
+        `UPDATE accounts SET ${setClauses.join(', ')} WHERE id = $${i} RETURNING ${COLUMNS}`,
+        params,
+      );
+      return result.rows[0] ?? undefined;
+    }
+
+    // Rename: propagate the new name to the denormalized `bank_account` string on
+    // this account's transactions / planned_transactions, so the label stays in
+    // sync with accounts.name (the sync trigger keys account_id off that string).
+    // Without this the old name lingered and a later edit could resurrect it as a
+    // stray account. Atomic so a half-rename can't leave the two out of sync.
+    return withTransaction(async (client) => {
+      const prev = await client.query('SELECT name FROM accounts WHERE id = $1 FOR UPDATE', [id]);
+      if (!prev.rows[0]) return undefined;
+      const result = await client.query(
+        `UPDATE accounts SET ${setClauses.join(', ')} WHERE id = $${i} RETURNING ${COLUMNS}`,
+        params,
+      );
+      const updated = result.rows[0];
+      if (!updated) return undefined;
+      if (updated.name !== prev.rows[0].name) {
+        await client.query('UPDATE transactions SET bank_account = $1 WHERE account_id = $2', [updated.name, id]);
+        await client.query('UPDATE planned_transactions SET bank_account = $1 WHERE account_id = $2', [updated.name, id]);
+      }
+      return updated;
+    });
   },
 
   /**

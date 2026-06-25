@@ -165,8 +165,6 @@ export default function TransactionsPage() {
                     return { ...item, currency: value === undefined ? undefined : String(value) };
                 case 'bank':
                     return { ...item, bank: value === undefined ? undefined : String(value) };
-                case 'balance':
-                    return { ...item, balance: typeof value === 'number' ? value : item.balance };
                 case 'comment':
                     return { ...item, comment: value === undefined ? undefined : String(value) };
                 default:
@@ -187,8 +185,6 @@ export default function TransactionsPage() {
                     return { ...prev, currency: String(value ?? '') };
                 case 'bank':
                     return { ...prev, bank: String(value ?? '') };
-                case 'balance':
-                    return { ...prev, balance: typeof value === 'number' ? value : undefined };
                 case 'comment':
                     return { ...prev, comment: String(value ?? '') };
                 default:

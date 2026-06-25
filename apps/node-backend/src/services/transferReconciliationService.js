@@ -16,6 +16,7 @@ import { query, withTransaction } from '../database/connection.js';
 import { resolveTransferMatches } from './calculations/transfers.js';
 import { scheduleRefresh } from './materializedViewService.js';
 import { logger } from '../config/logger.js';
+import { ValidationError, NotFoundError } from '../middleware/errorHandler.js';
 
 const DEFAULT_WINDOW_DAYS = 3;
 
@@ -42,14 +43,18 @@ async function loadCandidatePairs(windowDays) {
   return rows;
 }
 
-// Auto-transfers whose peer was deleted (the FK set transfer_peer_id NULL) are
-// no longer valid pairs — release them so they re-enter income/spending and can
-// be re-matched. Manual marks are left untouched (the user's explicit choice).
+// Transfers whose peer was deleted (the FK set transfer_peer_id NULL) are no
+// longer valid pairs — a peerless transfer cannot be a transfer — so release
+// them back into income/spending. This now covers MANUAL marks too: the sticky
+// guarantee is about surviving auto re-matching, not about surviving the
+// deletion of the very counterpart that made it a transfer. Without this an
+// orphaned manual leg stayed is_transfer=true forever, silently excluded from
+// every cash-flow aggregate.
 async function releaseOrphans() {
   await query(
     `UPDATE transactions
         SET is_transfer = false, transfer_source = NULL
-      WHERE is_transfer = true AND transfer_source = 'auto' AND transfer_peer_id IS NULL`,
+      WHERE is_transfer = true AND transfer_peer_id IS NULL`,
   );
 }
 
@@ -132,9 +137,39 @@ export async function getTransferSuggestions({ windowDays = DEFAULT_WINDOW_DAYS 
 
 /**
  * Manually confirm a transfer pair (sticky — survives auto-reconciliation).
+ *
+ * Validates the real invariants of a transfer before marking, so a stray manual
+ * mark can't create a nonsensical pair (the route only checked aId !== bId).
+ * Unlike auto-detection it does NOT require equal-and-opposite amounts or the
+ * same currency — manual marks exist precisely to confirm cross-currency / FX
+ * transfers that auto-detection rejects. What it does enforce:
+ *   - both rows exist and are active
+ *   - the two legs sit on different accounts (a transfer moves money between
+ *     accounts; same-account is meaningless)
+ *   - opposite signs (one outflow, one inflow)
  */
 export async function markTransfer(aId, bId) {
   await withTransaction(async (client) => {
+    const { rows } = await client.query(
+      `SELECT id, amount, account_id, is_active FROM transactions WHERE id = ANY($1) FOR UPDATE`,
+      [[aId, bId]],
+    );
+    const a = rows.find((r) => r.id === aId);
+    const b = rows.find((r) => r.id === bId);
+    if (!a || !b) {
+      throw new NotFoundError('Both transactions must exist to mark a transfer');
+    }
+    if (!a.is_active || !b.is_active) {
+      throw new ValidationError('Both transactions must be active to mark a transfer');
+    }
+    if (a.account_id === null || b.account_id === null || a.account_id === b.account_id) {
+      throw new ValidationError('A transfer must link two different accounts');
+    }
+    const aAmt = Number(a.amount);
+    const bAmt = Number(b.amount);
+    if (!((aAmt < 0 && bAmt > 0) || (aAmt > 0 && bAmt < 0))) {
+      throw new ValidationError('A transfer needs one outflow and one inflow (opposite signs)');
+    }
     await client.query(
       `UPDATE transactions SET is_transfer = true, transfer_peer_id = $2, transfer_source = 'manual' WHERE id = $1`,
       [aId, bId],

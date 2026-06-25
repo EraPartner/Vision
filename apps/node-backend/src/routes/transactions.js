@@ -548,7 +548,8 @@ router.post('/', async (req, res) => {
     amount: data.amount,
     memo: data.memo,
     currency: data.currency,
-    balance: data.balance,
+    // `balance` intentionally not accepted: manual entries leave it NULL so the
+    // account balance (ADR-094) anchors only on imported, bank-stamped rows.
     category_id: data.category_id,
     comment: data.comment,
     tags: Array.isArray(data.tags) ? data.tags : null,
