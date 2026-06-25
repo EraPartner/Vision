@@ -1,4 +1,5 @@
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
+import { useNavigate } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
 import { apiClient } from "@/lib/api";
 import { formatCurrency, formatCurrencyCompact, numberFormatToLocale } from "@/utils/currency";
@@ -36,7 +37,19 @@ function shortAccountName(account: string): string {
 
 export function BankBalancesWidget() {
     const { t } = useLanguage();
+    const navigate = useNavigate();
     const { appSettings } = useAppSettings();
+
+    // Double-clicking a per-account card opens the transactions list filtered to
+    // that account — same mechanism as AccountsPage. The dual-write trigger keeps
+    // transactions.bank_account equal to the account name, so it is the filter key.
+    const openAccountTransactions = (bankAccount: string) => {
+        const params = new URLSearchParams({
+            bank_account: bankAccount,
+            filter_label: shortAccountName(bankAccount),
+        });
+        navigate(`/transactions?${params.toString()}`);
+    };
     const locale = numberFormatToLocale(appSettings.numberFormat);
     const integerLocaleFormatter = new Intl.NumberFormat(locale);
     const defaultCurrency = appSettings.defaultCurrency || "EUR";
@@ -166,7 +179,12 @@ export function BankBalancesWidget() {
                         const color = ACCOUNT_COLORS[idx % ACCOUNT_COLORS.length];
                         const acctPositive = acct.balance >= 0;
                         return (
-                            <Card key={acct.bank_account} className="glass-regular premium-frame group">
+                            <Card
+                                key={acct.bank_account}
+                                className="glass-regular premium-frame group cursor-pointer transition-shadow hover:shadow-glass-soft"
+                                onDoubleClick={() => openAccountTransactions(acct.bank_account)}
+                                title={t('accounts.openTransactions')}
+                            >
                                 <CardContent className="pt-4 pb-4 px-4">
                                     <div className="flex items-start justify-between mb-2">
                                         <div className="flex items-center gap-2 min-w-0">

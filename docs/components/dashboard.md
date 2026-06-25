@@ -3,7 +3,7 @@ title: Dashboard Components
 type: component
 status: active
 date: 2026-04-17
-updated: 2026-06-24
+updated: 2026-06-25
 tags: [components, dashboard, charts, widgets, liquid-glass, liquid-glass-v2, premium-v3, design-system, phase-9, phase-d, phase-f, phase-h, phase-h-v2, ensemble, visx, url-persistence, rolling-cache, rolling-diagnostics, chart-scrub, chart-sync, per-widget-hydration, stat-scrub, june-2026, trend-hue, gain-loss]
 description: Dashboard-specific components for financial overview and visualization with liquid-glass aesthetic and visx charts, including dual-mode cash flow forecast with URL state persistence and rolling window diagnostics. June 2026 Liquid Glass v2 — StatCard/NetSummaryCard upgraded to glass-elevated; KPI/chart cards migrated from surface-elevated to glass-regular. June 2026 Premium v3 (ADR-071) — per-widget hydration (no global loading gate), synced dashboard-timeline charts, ChartSkeleton, RollingNumber/DeltaPill adoption. V9: NetSummaryCard sparkline scrub surface. 2026-06-24 (gain/loss consistency pass): StatCard now renders TrendHue for the card background tint; gained valueClassName prop to override the headline value colour.
 aliases: [dashboard-widgets, dashboard-charts, overview-components, stat-cards]
@@ -578,6 +578,7 @@ The component fetches from `GET /api/aggregations/bank-balances` via React Query
 
 - Total net-position hero card
 - Per-account balance cards (accounts with a current non-zero balance)
+- **Double-click to filter transactions (2026-06-25):** Double-clicking any per-account card navigates to `/transactions?bank_account=<account name>&filter_label=<short account name>`, opening the transactions list pre-filtered to that account. This mirrors the identical affordance on `AccountsPage`. Cards carry `cursor-pointer` and `hover:shadow-glass-soft` styling to signal interactivity; the tooltip text reuses the `accounts.openTransactions` i18n key.
 - Balance History chart: stacked area when all balances are non-negative, multi-line when any account carries a negative balance (overdraft)
 - Currency formatting — large balances use compact notation (`formatCurrencyCompact`) with full value in `title` tooltip
 - Integer transaction counts use app locale formatter for consistent separators/grouping
