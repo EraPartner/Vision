@@ -230,12 +230,13 @@ describe("LinkTransactionDialog", () => {
         const linkBtn = screen.getByRole("button", { name: "Link & Execute" });
         await user.click(linkBtn);
 
-        // Assert — onExecute called with payment id and transaction id
+        // Assert — onExecute called with payment id, transaction id, and the
+        // selected transaction's own date as the execution date (when it was paid).
         await waitFor(() => {
             expect(onExecute).toHaveBeenCalledWith(
                 PAYMENT.id,
                 CANDIDATE_TX.id,
-                expect.any(String),
+                CANDIDATE_TX.transaction_date,
             );
         });
         await waitFor(() => expect(onOpenChange).toHaveBeenCalledWith(false));

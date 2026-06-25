@@ -2,7 +2,7 @@ import { useState, useEffect } from "react";
 import { Money } from "@/components/shared/Money";
 import { toast } from "sonner";
 import logger from "@/lib/logger";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -32,7 +32,6 @@ export function LinkTransactionDialog({ open, onOpenChange, payment, onExecute }
   const [txLoading, setTxLoading] = useState(false);
   const [actionLoading, setActionLoading] = useState(false);
   const [selectedTxId, setSelectedTxId] = useState<number | null>(null);
-  const [executionDate, setExecutionDate] = useState<string>(() => toYmd(new Date()));
   const [txFilters, setTxFilters] = useState({
     start_date: "",
     end_date: "",
@@ -47,11 +46,18 @@ export function LinkTransactionDialog({ open, onOpenChange, payment, onExecute }
 
   useEffect(() => {
     if (payment) {
+      // Search a window that opens ~2 weeks before the due date: direct debits
+      // often post a few days early, and a strict on/after-due-date lower bound
+      // hid them entirely. Upper bound stays open so late debits still appear.
+      const due = payment.due_date ? parseLocalDateFromYmd(payment.due_date) : undefined;
+      const windowStart = due
+        ? toYmd(new Date(due.getFullYear(), due.getMonth(), due.getDate() - 14))
+        : undefined;
       setTxFilters((prev) => ({
         ...prev,
         recipient_name: payment.recipient || prev.recipient_name,
         recipient_id: null,
-        start_date: payment.due_date || prev.start_date,
+        start_date: windowStart || prev.start_date,
         bank_account: payment.bank_account || prev.bank_account,
       }));
     }
@@ -121,9 +127,13 @@ export function LinkTransactionDialog({ open, onOpenChange, payment, onExecute }
 
   const handleLinkAndExecute = async () => {
     if (!payment || !selectedTxId) return;
+    // The execution date is the linked transaction's own date — i.e. when the
+    // money actually moved. (Falls back to the backend's app-today if absent.)
+    const txDate = candidateTxs.find((x) => x.id === selectedTxId)?.transaction_date;
+    const execDate = txDate ? (txDate.includes("T") ? txDate.split("T")[0] : txDate) : undefined;
     setActionLoading(true);
     try {
-      await onExecute(payment.id, selectedTxId, executionDate || undefined);
+      await onExecute(payment.id, selectedTxId, execDate);
       handleClose();
     } catch (err) {
       logger.error("Failed to link/execute planned payment:", err);
@@ -154,26 +164,15 @@ export function LinkTransactionDialog({ open, onOpenChange, payment, onExecute }
       <DialogContent className="sm:max-w-2xl">
         <DialogHeader>
           <DialogTitle>{t('plannedPage.link.title', { name: payment?.name ?? '' })}</DialogTitle>
+          {payment?.due_date && (
+            <DialogDescription>
+              {t('plannedPage.link.dueOn', { date: formatDateStringWithAppSettings(payment.due_date, appSettings.dateFormat) })}
+            </DialogDescription>
+          )}
         </DialogHeader>
 
         <div className="grid gap-3 py-2">
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-            <Input placeholder={t('plannedPage.link.searchPlaceholder')} value={txSearchQuery} onChange={(e) => setTxSearchQuery(e.target.value)} />
-            <div className="space-y-1">
-              <DatePicker
-                value={executionDate ? parseLocalDateFromYmd(executionDate) : undefined}
-                onChange={(date) => setExecutionDate(date ? toYmd(date) : "")}
-                placeholder={t('plannedPage.link.pickDate')}
-                allowClear
-                clearLabel={t('common.clear')}
-              />
-              {selectedTxId && (
-                <div className="text-xs text-muted-foreground">
-                  {t('plannedPage.link.txDate')} {(() => { const d = candidateTxs.find((x) => x.id === selectedTxId)?.transaction_date; return d ? formatDateStringWithAppSettings(d, appSettings.dateFormat) : '—'; })()}
-                </div>
-              )}
-            </div>
-          </div>
+          <Input placeholder={t('plannedPage.link.searchPlaceholder')} value={txSearchQuery} onChange={(e) => setTxSearchQuery(e.target.value)} />
 
           <div className="space-y-3 p-3 border rounded-lg bg-muted/30 mt-2">
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
@@ -250,7 +249,7 @@ export function LinkTransactionDialog({ open, onOpenChange, payment, onExecute }
               filteredCandidates.map((tx) => (
                 <label key={tx.id} className="flex items-center justify-between gap-3 p-2 rounded-md hover:bg-muted/50 cursor-pointer">
                   <div className="flex items-center gap-3">
-                    <input type="radio" name="selectedTx" checked={selectedTxId === tx.id} onChange={() => { setSelectedTxId(tx.id); const d = tx.transaction_date; setExecutionDate(d?.includes("T") ? d.split("T")[0] : (d ?? "")); }} />
+                    <input type="radio" name="selectedTx" checked={selectedTxId === tx.id} onChange={() => setSelectedTxId(tx.id)} />
                     <div className="flex flex-col">
                       <span className="font-medium">{tx.memo || t('plannedPage.link.txFallback', { id: tx.id })}</span>
                       <span className="text-xs text-muted-foreground">
@@ -266,6 +265,12 @@ export function LinkTransactionDialog({ open, onOpenChange, payment, onExecute }
               ))
             )}
           </div>
+
+          {selectedTxId && (
+            <p className="text-xs text-muted-foreground">
+              {t('plannedPage.link.recordedOn', { date: (() => { const d = candidateTxs.find((x) => x.id === selectedTxId)?.transaction_date; return d ? formatDateStringWithAppSettings(d, appSettings.dateFormat) : '—'; })() })}
+            </p>
+          )}
         </div>
 
         <DialogFooter>

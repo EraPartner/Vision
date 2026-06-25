@@ -3,7 +3,7 @@ title: Planned Transactions
 type: feature
 status: active
 date: 2026-04-26
-updated: 2026-06-24
+updated: 2026-06-25
 tags: [feature, planned, recurring, bills, loans, phase-3, phase-12, calculations, immutability, error-handling, toast, atomic-patch, virtual-data-table, i18n-toasts, upcoming-payments-hook, occurrence-key-dismissal, june-2026, auto-link, planned-match]
 aliases: [planned-payments, scheduled-payments, recurring-payments, bills, subscriptions, loan-amortization]
 description: Scheduled and recurring payment tracking - manage bills, subscriptions, and future expenses. June 2026: auto-link & auto-clear planned payments on match — ingested transactions are automatically linked to matching planned payments (same recipient cluster, same sign, ±5% amount, ±5 days); ambiguous matches surface as confirmable suggestions. PlannedPaymentsPage migrated from DataTable to VirtualDataTable; native alert() replaced with toast.error (new i18n keys plannedPage.toggleFailed/deleteFailed). V11: useUpcomingPlannedPayments shared hook (single fetch + shared dismissed-ID store); UpcomingPaymentsNotification renders on all pages including the dashboard (no per-route stand-down). June 2026 (B1 fix): dismissals now keyed per occurrence (id:YYYY-MM-DD) so recurring reminders re-surface each cycle; past-dated keys pruned on load; legacy id-only entries silently dropped on next load.
@@ -563,11 +563,11 @@ Extracted dialog component that manages linking a transaction execution to a pla
 - `txLoading` — Search in progress
 - `actionLoading` — Execution in progress
 - `selectedTxId` — Selected transaction ID
-- `executionDate` — Date to record execution for
 - `txFilters` — Filter object with recipient, dates, bank account, amount matching
 
 **Behavior:**
-- Initializes filters from planned payment's recipient/due_date/bank_account
+- Initializes filters from the planned payment's recipient, bank_account, and a **search window that opens ~14 days before the due date** (upper bound stays open). The pre-window ensures direct debits that post a few days early are included; the open upper bound catches late postings. The `start_date` filter is therefore `due_date − 14 days`; `end_date` is not sent.
+- Dialog header (`DialogDescription`) shows the planned payment's due date using i18n key `plannedPage.link.dueOn` ("Due {date}") (2026-06-25).
 - **Recipient Resolution (2026-04-26):** When the planned payment has a `recipient_id`, the dialog:
   1. Fetches the recipient object to resolve the cluster root
   2. Uses `primary_recipient_id` if present (indicating the recipient is an alias in a cluster), otherwise uses the recipient's own ID
@@ -577,9 +577,11 @@ Extracted dialog component that manages linking a transaction execution to a pla
 - When user manually edits the recipient text input, `recipient_id` is cleared and search falls back to text-based matching
 - Debounced transaction fetch on filter changes
 - Shows matching transactions with amount, date, recipient
-- Allows optional execution date adjustment
+- **Execution date = linked transaction's date (2026-06-25):** When the user confirms a link, the `execution_date` passed to `POST /:id/execute` is always the selected transaction's own `transaction_date` (i.e. when the money actually moved). There is no separate editable execution-date field — the `DatePicker` for execution date was removed. This makes the manual-link path consistent with the auto-match path in `plannedMatchService.js`, which already used `toYmd(tx.transaction_date)`. The backend still falls back to `todayAppDateString()` when `execution_date` is absent, but the dialog always supplies it.
+- When a transaction is selected, a "Recorded as paid on {date}" read-out is shown below the list (i18n key `plannedPage.link.recordedOn`). This is read-only; it reflects the transaction's `transaction_date`.
 - **Error feedback (2026-04-26):** Uses `toast.error(...)` from sonner instead of native `alert()` for consistent project convention
 - **i18n (2026-04-26):** New key `plannedPage.link.includesLinked` for linked-recipient helper text
+- **i18n (2026-06-25):** Added `plannedPage.link.dueOn` ("Due {date}") for the header description and `plannedPage.link.recordedOn` ("Recorded as paid on {date}") for the selection readout. Removed key `plannedPage.link.txDate` (was the old "Transaction date:" caption).
 
 **Code**: [[apps/frontend/src/components/planned/LinkTransactionDialog.tsx]]
 
