@@ -3,10 +3,10 @@ title: Transactions
 type: feature
 status: active
 date: 2026-04-16
-updated: 2026-06-25
-tags: [feature, transactions, finance, phase-q, recipient-groups, bulk-actions, optimistic-updates, optimistic-create, june-2026, context-menu, quick-look, keyboard-nav, duplicate, filter-by-recipient, deep-link, electron-native, new-transaction, render-loop-fix, category-ids-filter, multi-value-filter, balance-write-protection]
+updated: 2026-06-26
+tags: [feature, transactions, finance, phase-q, recipient-groups, bulk-actions, optimistic-updates, optimistic-create, june-2026, context-menu, quick-look, keyboard-nav, duplicate, filter-by-recipient, deep-link, electron-native, new-transaction, render-loop-fix, category-ids-filter, multi-value-filter, balance-write-protection, tag-editing-fix]
 aliases: [transactions-feature, income, expenses, financial-records, money-tracking]
-description: Core transaction management - income, expenses, and tracking financial activities. Phase Q adds recipient-group filtering for linked-recipient transaction discovery. Bulk operations enable atomic multi-row delete, recategorize, reassign, activate/deactivate, export, and tag. June 2026 (ADR-070): useUpdateTransaction/useDeleteTransaction are now optimistic. June 2026 Premium v3 (ADR-071): useCreateTransaction is now optimistic (temp negative-id row → server-row swap → onSettled invalidate; virtual list excluded; 6 tests). June 2026 Premium v3 V5-V7: per-row context menu, Quick Look dialog (Space), keyboard row navigation (↑/↓/Enter), Duplicate, and Filter-by-recipient actions. June 2026 V12 (ADR-072): /transactions?new=1 deep link opens AddTransactionDialog (used by native menu and dock menu). 2026-06-25: balance field is now write-protected (import pipeline only); PATCH and manual create can no longer set it; TransactionInfoDialog renders it read-only.
+description: Core transaction management - income, expenses, and tracking financial activities. Phase Q adds recipient-group filtering for linked-recipient transaction discovery. Bulk operations enable atomic multi-row delete, recategorize, reassign, activate/deactivate, export, and tag. June 2026 (ADR-070): useUpdateTransaction/useDeleteTransaction are now optimistic. June 2026 Premium v3 (ADR-071): useCreateTransaction is now optimistic (temp negative-id row → server-row swap → onSettled invalidate; virtual list excluded; 6 tests). June 2026 Premium v3 V5-V7: per-row context menu, Quick Look dialog (Space), keyboard row navigation (↑/↓/Enter), Duplicate, and Filter-by-recipient actions. June 2026 V12 (ADR-072): /transactions?new=1 deep link opens AddTransactionDialog (used by native menu and dock menu). 2026-06-25: balance field is now write-protected (import pipeline only); PATCH and manual create can no longer set it; TransactionInfoDialog renders it read-only. 2026-06-26: TransactionInfoDialog tag-editing state bug fixed — last-tag removal chip persisted on screen after PATCH succeeded; dialog now tracks tag slugs in local state seeded from infoTransaction.tags.
 related_code: ["apps/node-backend/src/routes/transactions.js", "apps/node-backend/src/repositories/transactionRepository.js", "apps/node-backend/src/services/filterBuilder.js", "apps/node-backend/src/services/bulkSelection.js", "apps/frontend/src/features/transactions/", "apps/frontend/src/pages/TransactionsPage.tsx"]
 ---
 
@@ -91,6 +91,17 @@ Key capabilities:
 - Bulk-tag multiple transactions via checkbox selection + toolbar
 - Filter the transaction list by one or more tags
 - Soft-delete tags; historical tags are preserved
+
+### Tag Editing in TransactionInfoDialog — State Fix (2026-06-26)
+
+> [!info] Bug fixed 2026-06-26
+> Removing the last (or only) tag from a transaction in `TransactionInfoDialog` used to leave the chip on screen even after the `PATCH {tags:[]}` call succeeded. The dialog bound `TagInput`'s `value` directly to the frozen `infoTransaction` snapshot in `TransactionsPage` state. The `applyInfoFieldLocally` update path did not handle `tags`, so the snapshot never updated even though the backend and the transactions table (which reads from the React Query cache) were always correct.
+>
+> **Fix:** The dialog now maintains a local `tagSlugs` state variable, seeded by a `useEffect` keyed on `infoTransaction?.tags`. Tag removals update `tagSlugs` optimistically and are rolled back on mutation error. The transactions table continues to self-correct via the `onSettled` invalidation regardless.
+>
+> A regression test ("removing the only tag clears the chip and PATCHes empty tags") was added to `apps/frontend/src/features/transactions/__tests__/TransactionInfoDialog.test.tsx`.
+
+See [[docs/features/tags#transactioninfodialog--tag-editing-state-fix-2026-06-26|Tags — TransactionInfoDialog Tag Editing Fix]] for the full root-cause analysis.
 
 See [[docs/features/tags]] for the complete tagging feature spec.
 

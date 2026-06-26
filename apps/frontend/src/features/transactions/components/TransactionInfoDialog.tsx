@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
@@ -36,6 +36,17 @@ export function TransactionInfoDialog({
 
     const [editingInfoField, setEditingInfoField] = useState<InfoEditableField | null>(null);
     const [editingInfoValue, setEditingInfoValue] = useState("");
+
+    // `infoTransaction` is a frozen snapshot held by the parent page — tag edits
+    // never flow back into it, so binding TagInput straight at the snapshot left
+    // a removed chip stuck on screen (most visible when clearing the last tag).
+    // Track slugs locally instead: re-seed when a different transaction opens
+    // (its tags array is a fresh reference; unrelated field edits reuse the same
+    // reference via spread, so they don't clobber an in-flight optimistic edit).
+    const [tagSlugs, setTagSlugs] = useState<string[]>([]);
+    useEffect(() => {
+        setTagSlugs(infoTransaction?.tags?.map((tag) => tag.slug) ?? []);
+    }, [infoTransaction?.tags]);
 
     const startInfoFieldEdit = (field: InfoEditableField, currentValue: string) => {
         setEditingInfoField(field);
@@ -250,9 +261,15 @@ export function TransactionInfoDialog({
                             <div className="py-2.5">
                                 <span className="text-sm text-muted-foreground">{t('txPage.field.tags')}</span>
                                 <TagInput
-                                    value={txn.tags?.map((tag) => tag.slug) ?? []}
+                                    value={tagSlugs}
                                     onChange={async (slugs) => {
-                                        await updateMutation.mutateAsync({ id: txn.id, data: { tags: slugs } });
+                                        const previous = tagSlugs;
+                                        setTagSlugs(slugs);
+                                        try {
+                                            await updateMutation.mutateAsync({ id: txn.id, data: { tags: slugs } });
+                                        } catch {
+                                            setTagSlugs(previous);
+                                        }
                                     }}
                                     disabled={updateMutation.isPending}
                                     className="mt-1.5"

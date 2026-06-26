@@ -326,6 +326,45 @@ describe("TransactionInfoDialog", () => {
         );
     });
 
+    // ─── Tag removal regression (TODO 2024-06-15) ─────────────────────────
+    // Removing the only tag must visibly clear the chip and PATCH `{ tags: [] }`.
+    // Previously the dialog bound TagInput straight at the frozen `infoTransaction`
+    // snapshot, so the removed chip stayed on screen and the deletion looked stuck.
+    it("removing the only tag clears the chip and PATCHes empty tags", async () => {
+        const user = userEvent.setup();
+        let receivedTags: unknown;
+
+        const txWithTag: TableTransaction = {
+            ...TX,
+            tags: [{ id: 1, slug: "travel", color: null, is_active: true, created_at: "", updated_at: "" }],
+        };
+
+        server.use(
+            http.patch(`${API_BASE}/api/transactions/42`, async ({ request }) => {
+                const body = (await request.json()) as { tags?: unknown };
+                receivedTags = body.tags;
+                return ok({ id: 42, memo: "Test purchase", amount: -25.5, currency: "EUR", is_active: true, tags: [] });
+            }),
+        );
+
+        renderWithApp(
+            <TransactionInfoDialog infoTransaction={txWithTag} onClose={vi.fn()} onApplyLocal={vi.fn()} />,
+        );
+
+        await screen.findByRole("dialog");
+        // The chip is present before removal.
+        const removeButton = await screen.findByRole("button", { name: /remove tag travel/i });
+
+        await user.click(removeButton);
+
+        // PATCH carries an empty array (not undefined / not skipped).
+        await waitFor(() => expect(receivedTags).toEqual([]));
+        // The chip is gone from the dialog — the deletion is visible, not stuck.
+        await waitFor(() =>
+            expect(screen.queryByRole("button", { name: /remove tag travel/i })).not.toBeInTheDocument(),
+        );
+    });
+
     it("starting edit then Cancel does NOT call PATCH (no submission)", async () => {
         const user = userEvent.setup();
         let patchCalled = false;

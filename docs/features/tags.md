@@ -3,8 +3,9 @@ title: Transaction Tags
 type: feature
 status: active
 date: 2026-06-26
-tags: [feature, transactions, tags, categorization, saved-charts, analytics]
-description: Freeform tagging for transactions and planned transactions as a second orthogonal classification dimension; tags can also drive spending series in Custom Charts
+updated: 2026-06-26
+tags: [feature, transactions, tags, categorization, saved-charts, analytics, i18n, combobox-tags, bug-fix]
+description: Freeform tagging for transactions and planned transactions as a second orthogonal classification dimension; tags can also drive spending series in Custom Charts. 2026-06-26: 3 combobox.tags.* i18n keys added for TagFilterCombobox; TransactionInfoDialog tag-editing state bug fixed (last-tag removal chip stayed on screen after PATCH succeeded).
 aliases: [tags, transaction-tags, labels]
 related_code:
   - "apps/node-backend/src/repositories/tagRepository.js"
@@ -84,6 +85,18 @@ Applied on both backend (`apps/node-backend/src/lib/slugify.js`) and frontend (`
 | `useCreateTag` | Mutation for `POST /api/tags` |
 | `useBulkTagTransactions` | Mutation for `POST /api/transactions/bulk-tag` |
 
+### i18n Keys (2026-06-26)
+
+`TagFilterCombobox` uses three `combobox.tags.*` translation keys. These were missing from the locale files until 2026-06-26, causing the component to render raw key strings as fallback text:
+
+| Key | EN | NL | Surface |
+|-----|----|----|---------|
+| `combobox.tags.empty` | "No tags found" | "Geen tags gevonden" | Empty-state label |
+| `combobox.tags.nSelected` | "{n} tags" | "{n} tags" | Summary chip when multiple tags selected |
+| `combobox.tags.search` | "Search tags..." | "Tags zoeken..." | Search input placeholder |
+
+See [[docs/i18n/translations#tagfiltercombobox-i18n--bulk-tag-and-filter-toolbar-combobox-keys-2026-06-26|Translations changelog — 2026-06-26 batch]] for the full key-count context.
+
 ## API Endpoints
 
 | Method | Path | Description |
@@ -118,6 +131,16 @@ User types slug → slugify → POST /api/tags (upsert)
 
 When a planned transaction is executed via `executeAndAdvance`, its `planned_transaction_tags` rows are copied into `transaction_tags` inside the same database transaction. Idempotent: junction PK prevents double-insertion on retry.
 
+## TransactionInfoDialog — Tag Editing State Fix (2026-06-26)
+
+**Root cause:** `TransactionInfoDialog` rendered `TagInput` with `value` bound directly to `infoTransaction.tags`, where `infoTransaction` is a frozen snapshot held in `TransactionsPage` state. The `applyInfoFieldLocally` path that propagates inline edits back to that snapshot handled `date`, `memo`, `amount`, `currency`, `bank_account`, and `comment` but not `tags`. As a result, after clicking a chip's remove (×) button, the `PATCH {tags:[]}` request succeeded on the backend and the transactions table refreshed correctly (it reads from the React Query cache, not the snapshot), but the dialog's chip stayed on screen because the snapshot never updated. The problem was most visible when removing the last/only tag — the list should have visibly emptied.
+
+**Fix:** The dialog now tracks tag slugs in local component state (`tagSlugs`), seeded via `useEffect` keyed on `infoTransaction?.tags`. `TagInput`'s `onChange` updates `tagSlugs` optimistically; on mutation error the state is rolled back to the pre-edit value. This makes the dialog's tag display self-contained and independent of the frozen snapshot.
+
+**Scope:** Only the dialog's in-flight display was stale. The backend (`transactionRepository.update` / `setTransactionTags` / the `PATCH` route) was already correct for empty-array payloads; the transactions list was always correct via the `onSettled` invalidation. No backend or API change was needed.
+
+**Files changed:** `apps/frontend/src/features/transactions/components/TransactionInfoDialog.tsx` (local `tagSlugs` state + `useEffect` + rollback).
+
 ## Test Coverage
 
 The Transaction Tags feature test suite is **complete and passing** (2026-05-08).
@@ -139,6 +162,10 @@ Tag UI components are tested via:
 - Integration tests for `TransactionInfoDialog` (tag attachment to transactions)
 - Hook unit tests for `useTags`, `useCreateTag`, `useBulkTagTransactions`
 - API contract tests validating tag endpoint response shapes
+
+**Regression test added (2026-06-26):**
+
+`apps/frontend/src/features/transactions/__tests__/TransactionInfoDialog.test.tsx` — test case "removing the only tag clears the chip and PATCHes empty tags". Verifies that removing the last tag chip from the info dialog immediately removes it from the display and sends `PATCH {tags:[]}`. The test was confirmed to fail on the old snapshot-binding code and pass on the local-state fix. Full file: 21 tests pass; lint + typecheck clean.
 
 **Test Results (2026-05-08):**
 - Backend: 95/95 test files pass (1522/1527 tests pass, 5 skipped)
