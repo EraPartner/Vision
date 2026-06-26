@@ -2,9 +2,9 @@
 title: Transaction Tags
 type: feature
 status: active
-date: 2026-05-08
-tags: [feature, transactions, tags, categorization]
-description: Freeform tagging for transactions and planned transactions as a second orthogonal classification dimension
+date: 2026-06-26
+tags: [feature, transactions, tags, categorization, saved-charts, analytics]
+description: Freeform tagging for transactions and planned transactions as a second orthogonal classification dimension; tags can also drive spending series in Custom Charts
 aliases: [tags, transaction-tags, labels]
 related_code:
   - "apps/node-backend/src/repositories/tagRepository.js"
@@ -147,9 +147,19 @@ Tag UI components are tested via:
 
 See [[docs/testing/test-inventory#backend-test-suite-completion--transaction-tags-2026-05-08|Test Inventory: Transaction Tags Test Completion]] for detailed test fix notes.
 
+## Custom Chart Integration
+
+Tags are a first-class series dimension in the **Custom Charts / Saved Charts** feature. When one or more tags are selected in the chart builder, `CustomChart.tsx` calls `useTagPivot` which fetches `GET /api/aggregations/tag-pivot`. Each tag renders as an independent spending series labelled `#<slug>`.
+
+**Multi-tag overlap caveat:** a transaction carrying multiple selected tags contributes to each matching tag's total. Per-tag lines can legitimately overlap and their combined sum may exceed the period's actual total spending. This is the same OR semantics used in the transaction-list tag filter.
+
+See [[docs/features/saved-charts|Saved Charts Feature]] and [[docs/api/aggregations|Aggregations API]] (`tag-pivot` section) for full details.
+
 ## Related
 
 - [[docs/adr/052-transaction-tags-orthogonal-dimension|ADR-052]]
 - [[docs/features/transactions|Transactions]]
 - [[docs/features/categories|Categories]]
 - [[docs/features/bulk-actions|Bulk Actions]] — broader bulk operations on transactions
+- [[docs/features/saved-charts|Saved Charts Feature]] — tags as a third chart series dimension
+- [[docs/api/aggregations|Aggregations API]] — `GET /api/aggregations/tag-pivot` contract

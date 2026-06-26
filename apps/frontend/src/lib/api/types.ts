@@ -116,6 +116,7 @@ export interface SavedChart {
     time_bucket: TimeBucket;
     category_ids: number[];
     recipient_ids: number[];
+    tag_ids: number[];
     date_range_start: string | null;
     date_range_end: string | null;
     created_at: string;
@@ -129,6 +130,7 @@ export interface SavedChartCreate {
     timeBucket?: TimeBucket;
     categoryIds: number[];
     recipientIds?: number[];
+    tagIds?: number[];
     dateRangeStart?: string | null;
     dateRangeEnd?: string | null;
 }

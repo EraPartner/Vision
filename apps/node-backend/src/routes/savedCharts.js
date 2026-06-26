@@ -73,7 +73,7 @@ router.get('/', async (req, res) => {
 });
 
 router.post('/', async (req, res) => {
-  const { name, chartType, categoryIds, recipientIds, chartVariant, timeBucket, dateRangeStart, dateRangeEnd } = req.body;
+  const { name, chartType, categoryIds, recipientIds, tagIds, chartVariant, timeBucket, dateRangeStart, dateRangeEnd } = req.body;
 
   if (!name || typeof name !== 'string' || name.trim().length === 0) {
     throw new ValidationError('Missing or invalid "name"');
@@ -81,6 +81,7 @@ router.post('/', async (req, res) => {
 
   const normalizedCategoryIds = parseIntIds(categoryIds, 'categoryIds');
   const normalizedRecipientIds = recipientIds !== undefined ? parseIntIds(recipientIds, 'recipientIds') : undefined;
+  const normalizedTagIds = tagIds !== undefined ? parseIntIds(tagIds, 'tagIds') : undefined;
   assertChartType(chartType);
   assertChartVariant(chartVariant);
   assertTimeBucket(timeBucket);
@@ -94,6 +95,7 @@ router.post('/', async (req, res) => {
     chartType: resolvedType,
     categoryIds: normalizedCategoryIds,
     recipientIds: normalizedRecipientIds,
+    tagIds: normalizedTagIds,
     chartVariant: resolvedVariant,
     timeBucket: timeBucket || 'monthly',
     dateRangeStart: parseDateOrNull(dateRangeStart, 'dateRangeStart'),
@@ -106,7 +108,7 @@ router.post('/', async (req, res) => {
 router.patch('/:id', async (req, res) => {
   const id = parseChartId(req);
   const { name, chartType, chartVariant, timeBucket } = req.body;
-  let { categoryIds, recipientIds, dateRangeStart, dateRangeEnd } = req.body;
+  let { categoryIds, recipientIds, tagIds, dateRangeStart, dateRangeEnd } = req.body;
 
   if (name !== undefined && (typeof name !== 'string' || name.trim().length === 0)) {
     throw new ValidationError('Invalid "name"');
@@ -118,6 +120,7 @@ router.patch('/:id', async (req, res) => {
 
   if (categoryIds !== undefined) categoryIds = parseIntIds(categoryIds, 'categoryIds');
   if (recipientIds !== undefined) recipientIds = parseIntIds(recipientIds, 'recipientIds');
+  if (tagIds !== undefined) tagIds = parseIntIds(tagIds, 'tagIds');
   dateRangeStart = parseDateOrNull(dateRangeStart, 'dateRangeStart');
   dateRangeEnd = parseDateOrNull(dateRangeEnd, 'dateRangeEnd');
 
@@ -126,6 +129,7 @@ router.patch('/:id', async (req, res) => {
     chartType,
     categoryIds,
     recipientIds,
+    tagIds,
     chartVariant,
     timeBucket,
     dateRangeStart,

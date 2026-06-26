@@ -3,11 +3,12 @@ title: Aggregations API
 type: endpoint
 status: active
 date: 2026-04-25
-updated: 2026-06-13
-last_modified: 2026-06-13
+updated: 2026-06-26
+last_modified: 2026-06-26
 recipient_pivot_added: 2026-04-28
-tags: [endpoint, api, aggregations, backend, phase-2, phase-6, phase-9, phase-10, phase-d, phase-e, phase-f, phase-g, phase-h, phase-h-v2, decimal, money, cashflow-forecast, multi-method-forecast, statistical-forecasting, ensemble-methods, accuracy-persistence, materialized-cache, nightly-job, category-breakdown, fallback-resilience, rolling-window, url-persistence, rolling-cache, rolling-diagnostics, recipient-pivot, saved-charts, exclusion-filters, ensemble-v2]
-description: Server-computed transaction aggregations with materialized-view source distinction; includes planned cash flow forecast (Phase 6), 8-method statistical forecast with empirical-Bayes ensemble v2 (Phase 10 + F), persisted accuracy metrics with fallback-to-memory resilience (Phase D), nightly cache materialization (Phase E), per-category breakdown with reconciliation (Phase G), rolling-window cash flow forecast (Phase H), and per-recipient spending pivot for custom charts (April 2026). June 2026: recipient-insights endpoint accepts exclusion params; ensemble weighting upgraded to v2 (sample-size-shrunk RMSE + uniform-blend floor); bank-balances history changed from monthly to daily points (YYYY-MM-DD date field replaces month field).
+tag_pivot_added: 2026-06-26
+tags: [endpoint, api, aggregations, backend, phase-2, phase-6, phase-9, phase-10, phase-d, phase-e, phase-f, phase-g, phase-h, phase-h-v2, decimal, money, cashflow-forecast, multi-method-forecast, statistical-forecasting, ensemble-methods, accuracy-persistence, materialized-cache, nightly-job, category-breakdown, fallback-resilience, rolling-window, url-persistence, rolling-cache, rolling-diagnostics, recipient-pivot, tag-pivot, saved-charts, exclusion-filters, ensemble-v2, tags]
+description: Server-computed transaction aggregations with materialized-view source distinction; includes planned cash flow forecast (Phase 6), 8-method statistical forecast with empirical-Bayes ensemble v2 (Phase 10 + F), persisted accuracy metrics with fallback-to-memory resilience (Phase D), nightly cache materialization (Phase E), per-category breakdown with reconciliation (Phase G), rolling-window cash flow forecast (Phase H), per-recipient spending pivot for custom charts (April 2026), and per-tag spending pivot for custom charts (June 2026). June 2026: recipient-insights endpoint accepts exclusion params; ensemble weighting upgraded to v2 (sample-size-shrunk RMSE + uniform-blend floor); bank-balances history changed from monthly to daily points (YYYY-MM-DD date field replaces month field); tag-pivot endpoint added.
 aliases: [aggregations, stats aggregation, computed stats, aggregation endpoints, cashflow-forecast, cash-flow-forecast, multi-method-forecast]
 related_code:
   - apps/node-backend/src/routes/aggregations.js
@@ -17,6 +18,9 @@ related_code:
   - apps/node-backend/src/services/calculations/forecast/index.js
   - apps/node-backend/src/services/calculations/forecast/methods/ensemble.js
   - apps/node-backend/src/services/calculations/forecast/categoryBreakdown.js
+  - apps/node-backend/src/repositories/infoRepositoryTags.js
+  - apps/node-backend/src/services/calculations/aggregation/tagPivot.js
+  - apps/frontend/src/hooks/useTagPivot.ts
   - apps/node-backend/src/repositories/infoRepositoryRecipients.js
   - apps/node-backend/src/repositories/infoRepositoryMonthly.js
   - apps/node-backend/src/repositories/infoRepo.forecast.js
@@ -452,6 +456,89 @@ const envelope = await apiClient.getAggregationRecipientPivot({
 **Use Case:**
 
 The Recipient Pivot endpoint powers the **Custom Charts** feature's ability to render charts with recipients (merchants) as independent series alongside categories. When a user saves a chart with `recipient_ids` populated, the frontend calls this endpoint with the chart's filters and renders the result as a multi-series chart.
+
+---
+
+### Tag Pivot
+
+Per-tag aggregated spending data keyed by period, supporting custom chart rendering with tags as an orthogonal series dimension alongside categories and recipients.
+
+**Path:** `GET /api/aggregations/tag-pivot`
+
+**Query Parameters:**
+
+| Parameter | Type | Required | Description |
+|-----------|------|----------|-------------|
+| `tag_ids[]` | integer[] | Yes | Tag IDs to include; repeatable param. Empty selection returns an empty pivot (no implicit "all tags"). |
+| `bucket` | string | No (default: `monthly`) | `monthly` or `yearly` |
+| `start` | string | No | ISO date filter start (`YYYY-MM-DD`) |
+| `end` | string | No | ISO date filter end (`YYYY-MM-DD`) |
+| `currency` | string | No (default: `EUR`) | Target currency (3-letter code, case-insensitive) |
+
+**Response envelope:**
+
+```json
+{
+  "data": {
+    "tagPivot": {
+      "2026-01": [
+        { "tagId": 3, "slug": "rome-trip", "total": 412.50, "transactionCount": 8 },
+        { "tagId": 7, "slug": "home-reno", "total": 980.00, "transactionCount": 14 }
+      ],
+      "2026-02": [
+        { "tagId": 3, "slug": "rome-trip", "total": 75.00, "transactionCount": 2 }
+      ]
+    }
+  },
+  "meta": {
+    "source": "live",
+    "computedAt": "2026-06-26T10:00:00.000Z"
+  }
+}
+```
+
+**Field Descriptions:**
+
+| Field | Type | Meaning |
+|-------|------|---------|
+| `tagPivot` | `Record<period, TagPivotEntry[]>` | Map from period key (`YYYY-MM` or `YYYY`) to per-tag totals for that period |
+| `tagId` | number | Tag ID |
+| `slug` | string | Tag slug (used as chart legend label, prefixed `#` in the UI) |
+| `total` | number | Absolute spending total for this tag in this period (always positive; expenses only) |
+| `transactionCount` | number | Number of expense transactions tagged with this tag in this period |
+
+**Spending Lens:**
+
+- Expenses only (`amount < 0`); income transactions are excluded.
+- Only tags with `is_active = true` are included.
+- Internal transfers (see [[docs/adr/083-transfer-detection|ADR-083]]) are always excluded, consistent with all other spending aggregations.
+- Historical FX conversion is applied per transaction date.
+
+> [!warning] Multi-tag overlap
+> A transaction carrying several of the **selected** tags contributes to **each** matching tag's total independently (OR semantics). Per-tag totals can therefore overlap and their sum will exceed actual total spending for that period. This is by design — the same semantics as the transaction-list tag filter.
+
+**`meta.source`:** Always `'live'` — this endpoint is always computed dynamically (no materialized-view fast path).
+
+**Frontend Usage:**
+
+```typescript
+const envelope = await apiClient.getAggregationTagPivot({
+  tag_ids: [3, 7],
+  bucket: 'monthly',
+  start: '2026-01-01',
+  end: '2026-06-30',
+  currency: 'EUR'
+});
+// envelope.data.tagPivot['2026-01'] → TagPivotEntry[]
+// Render as CustomChart with tags as series (legend: #slug)
+```
+
+**Implementation:**
+- Repository: `apps/node-backend/src/repositories/infoRepositoryTags.js` — `tagInsightsRepository.getTagPivot`
+- Service: `apps/node-backend/src/services/calculations/aggregation/tagPivot.js` — `computeTagPivot`
+- Route: wired in `apps/node-backend/src/routes/aggregations.js`
+- Frontend hook: `apps/frontend/src/hooks/useTagPivot.ts` (mirrors `useRecipientPivot`)
+- Frontend API client: `getAggregationTagPivot` in `apps/frontend/src/lib/api/aggregations.ts`; `TagPivotItem` type in `apps/frontend/src/lib/api/types.ts`
 
 ---
 
@@ -1252,11 +1339,18 @@ await apiClient.getAggregationCashflowComparison({ currency: 'EUR' });
 await apiClient.getAggregationAverageVsCurrent({ currency: 'EUR' });
 await apiClient.getAggregationBankBalances({ currency: 'EUR' });
 await apiClient.getSankeyFlow({ year: 2026, currency: 'EUR' }); // Phase 7
-await apiClient.getAggregationRecipientPivot({ // Custom Charts feature
+await apiClient.getAggregationRecipientPivot({ // Custom Charts feature — recipient series
   currency: 'EUR',
   time_bucket: 'monthly',
   recipient_ids: [10, 11],
   category_ids: [5, 7]
+});
+await apiClient.getAggregationTagPivot({ // Custom Charts feature — tag series (June 2026)
+  tag_ids: [3, 7],
+  bucket: 'monthly',
+  start: '2026-01-01',
+  end: '2026-06-30',
+  currency: 'EUR'
 });
 
 // Forecast endpoints

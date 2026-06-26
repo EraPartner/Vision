@@ -107,6 +107,26 @@ describe('Saved Charts Routes', () => {
       expect(res.status).toHaveBeenCalledWith(201);
       expect(res.json).toHaveBeenCalledWith({ ok: true, data: { id: 4, name: 'Main', chart_type: 'line', category_ids: [1, 2] } });
     });
+
+    it('normalizes tagIds when provided', async () => {
+      savedChartsRepository.create.mockResolvedValue({ id: 5, name: 'Tagged', tag_ids: [5, 6] });
+
+      const req = { body: { name: 'Tagged', categoryIds: [], tagIds: ['5', 6] } };
+      const res = mockResponse();
+
+      await routeHandlers['post:/'](req, res);
+
+      expect(savedChartsRepository.create).toHaveBeenCalledWith(
+        expect.objectContaining({ tagIds: [5, 6] }),
+      );
+    });
+
+    it('throws ValidationError when tagIds has invalid entries', async () => {
+      const req = { body: { name: 'Main', categoryIds: [], tagIds: [1, 'nope'] } };
+      const res = mockResponse();
+
+      await expect(routeHandlers['post:/'](req, res)).rejects.toBeInstanceOf(ValidationError);
+    });
   });
 
   describe('PATCH /:id', () => {
@@ -154,6 +174,27 @@ describe('Saved Charts Routes', () => {
         categoryIds: [3, 4],
       });
       expect(res.json).toHaveBeenCalledWith({ ok: true, data: { id: 9, name: 'Updated' } });
+    });
+
+    it('normalizes tagIds when provided', async () => {
+      savedChartsRepository.update.mockResolvedValue({ id: 9, name: 'Updated' });
+
+      const req = { params: { id: '9' }, body: { tagIds: ['7', 8] } };
+      const res = mockResponse();
+
+      await routeHandlers['patch:/:id'](req, res);
+
+      expect(savedChartsRepository.update).toHaveBeenCalledWith(
+        9,
+        expect.objectContaining({ tagIds: [7, 8] }),
+      );
+    });
+
+    it('throws ValidationError when tagIds is invalid', async () => {
+      const req = { params: { id: '1' }, body: { tagIds: [1, 'bad-id'] } };
+      const res = mockResponse();
+
+      await expect(routeHandlers['patch:/:id'](req, res)).rejects.toBeInstanceOf(ValidationError);
     });
 
     it('passes null through to CLEAR a date range (was silently coerced to undefined)', async () => {

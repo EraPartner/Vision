@@ -2,12 +2,13 @@
 title: Saved Charts API
 type: endpoint
 status: active
-date: 2026-04-28
+date: 2026-06-26
 tags:
   - api
   - charts
   - analytics
-description: API endpoints for saving and managing custom chart configurations (recipients, variants, time buckets, date filters added 2026-04-28)
+  - tags
+description: API endpoints for saving and managing custom chart configurations (recipients, variants, time buckets, date filters added 2026-04-28; tag_ids added 2026-06-26)
 aliases:
   - saved-charts-api
   - custom-charts
@@ -46,6 +47,7 @@ Retrieve all saved chart configurations for the workspace.
     "time_bucket": "monthly",
     "category_ids": [1, 2, 3],
     "recipient_ids": [10, 11],
+    "tag_ids": [3, 7],
     "date_range_start": "2025-01-01",
     "date_range_end": null,
     "created_at": "2026-01-01T00:00:00Z",
@@ -70,6 +72,7 @@ Create a new saved chart configuration.
 | `timeBucket` | string | No | `monthly` or `yearly` (default: `monthly`) |
 | `categoryIds` | number[] | No | Category IDs |
 | `recipientIds` | number[] | No | Recipient IDs |
+| `tagIds` | number[] | No | Tag IDs (references `tags.id`; drives `GET /api/aggregations/tag-pivot` series) |
 | `dateRangeStart` | string\|null | No | ISO date start filter |
 | `dateRangeEnd` | string\|null | No | ISO date end filter |
 
@@ -120,8 +123,10 @@ Delete a saved chart configuration.
 - **timeBucket**: one of `monthly`, `yearly`
 - **categoryIds**: array of positive integers
 - **recipientIds**: array of positive integers
+- **tagIds**: array of positive integers (tag IDs from the `tags` table)
 - **dateRangeStart / dateRangeEnd**: ISO date string `YYYY-MM-DD` or `null`
 - **Combination constraint**: `(line, stacked)`, `(line, grouped)`, and `(area, grouped)` are rejected with 400
+- **Series constraint**: at least one of `categoryIds`, `recipientIds`, or `tagIds` must be non-empty to save a chart
 
 ## See Also
 

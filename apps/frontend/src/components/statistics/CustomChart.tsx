@@ -13,6 +13,7 @@ import {
 import { formatDate, parseISO } from "@/components/shared/dateUtils";
 import type { StatisticsData } from "@/hooks/useStatistics";
 import { useRecipientPivot } from "@/hooks/useRecipientPivot";
+import { useTagPivot } from "@/hooks/useTagPivot";
 import type { SavedChart } from "@/lib/api/types";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { useAppSettings } from "@/contexts/AppSettingsContext";
@@ -69,7 +70,9 @@ export function CustomChart({ savedChart, data, onEdit, onDelete }: CustomChartP
 
   const bucket = savedChart.time_bucket;
   const hasRecipients = savedChart.recipient_ids.length > 0;
+  const hasTags = savedChart.tag_ids.length > 0;
   const { recipientData, isLoading: recipientLoading } = useRecipientPivot(savedChart);
+  const { tagData, isLoading: tagLoading } = useTagPivot(savedChart);
 
   // Resolve the selected categories once — this was recomputed three times per
   // render (allPeriods, seriesMeta, chartData) with an O(n) `.includes` lookup
@@ -103,6 +106,9 @@ export function CustomChart({ savedChart, data, onEdit, onDelete }: CustomChartP
     for (const rec of recipientData) {
       for (const p of Object.keys(rec.months)) periodSet.add(p);
     }
+    for (const tag of tagData) {
+      for (const p of Object.keys(tag.months)) periodSet.add(p);
+    }
 
     let periods = Array.from(periodSet).sort();
 
@@ -120,7 +126,7 @@ export function CustomChart({ savedChart, data, onEdit, onDelete }: CustomChartP
     }
 
     return periods;
-  }, [catData, recipientData, savedChart.date_range_start, savedChart.date_range_end]);
+  }, [catData, recipientData, tagData, savedChart.date_range_start, savedChart.date_range_end]);
 
   // Build unified series metadata
   const seriesMeta = useMemo<SeriesMeta[]>(() => {
@@ -135,11 +141,16 @@ export function CustomChart({ savedChart, data, onEdit, onDelete }: CustomChartP
       result.push({ key: `rec:${rec.recipientId}`, label: rec.name, color: CHART_COLORS[colorIdx++ % CHART_COLORS.length] });
     }
 
+    for (const tag of tagData) {
+      result.push({ key: `tag:${tag.tagId}`, label: `#${tag.slug}`, color: CHART_COLORS[colorIdx++ % CHART_COLORS.length] });
+    }
+
     return result;
-  }, [catData, recipientData]);
+  }, [catData, recipientData, tagData]);
 
   const chartData = useMemo<ChartDatum[]>(() => {
     const recDataMap = new Map(recipientData.map((r) => [r.recipientId, r]));
+    const tagDataMap = new Map(tagData.map((tg) => [tg.tagId, tg]));
 
     return allPeriods.map((period) => {
       const values: Record<string, number> = {};
@@ -150,6 +161,10 @@ export function CustomChart({ savedChart, data, onEdit, onDelete }: CustomChartP
         const rec = recDataMap.get(recId);
         values[`rec:${recId}`] = Math.abs(rec?.months[period] ?? 0);
       }
+      for (const tagId of savedChart.tag_ids) {
+        const tag = tagDataMap.get(tagId);
+        values[`tag:${tagId}`] = Math.abs(tag?.months[period] ?? 0);
+      }
       return {
         period,
         periodLabel: formatPeriod(period, bucket),
@@ -157,7 +172,7 @@ export function CustomChart({ savedChart, data, onEdit, onDelete }: CustomChartP
         values,
       };
     });
-  }, [allPeriods, catData, recipientData, savedChart.recipient_ids, bucket]);
+  }, [allPeriods, catData, recipientData, tagData, savedChart.recipient_ids, savedChart.tag_ids, bucket]);
 
   // Memoised so the chart components and legend get stable array identities
   // instead of a fresh `.map()` result on every render.
@@ -190,7 +205,7 @@ export function CustomChart({ savedChart, data, onEdit, onDelete }: CustomChartP
   const xTickFmt = (v: unknown) => formatDate(v as Date, bucket === 'yearly' ? 'yyyy' : 'MMM yy');
 
   const isEmpty = seriesMeta.length === 0;
-  const isLoading = hasRecipients && recipientLoading;
+  const isLoading = (hasRecipients && recipientLoading) || (hasTags && tagLoading);
 
   const chartType = savedChart.chart_type;
   const chartVariant = savedChart.chart_variant;

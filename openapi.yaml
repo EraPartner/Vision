@@ -1050,6 +1050,14 @@ components:
           type: array
           items:
             type: integer
+        recipient_ids:
+          type: array
+          items:
+            type: integer
+        tag_ids:
+          type: array
+          items:
+            type: integer
         created_at:
           type: string
           format: date-time
@@ -3730,6 +3738,51 @@ paths:
             format: date
         - in: query
           name: end_date
+          schema:
+            type: string
+            format: date
+        - in: query
+          name: currency
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Pivot table data
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Envelope"
+
+  /api/aggregations/tag-pivot:
+    get:
+      summary: Per-tag spending pivot (periods × tags) for custom charts
+      description: >
+        Per-tag, per-period spending breakdown (expenses only, internal
+        transfers excluded). Requires an explicit tag_ids selection; with none
+        the pivot is empty. A transaction carrying several selected tags counts
+        toward each tag's total.
+      operationId: getTagPivot
+      tags: [Aggregations]
+      parameters:
+        - in: query
+          name: tag_ids
+          description: Tag ids to include as series (repeatable).
+          schema:
+            type: array
+            items:
+              type: integer
+        - in: query
+          name: bucket
+          schema:
+            type: string
+            enum: [monthly, yearly]
+        - in: query
+          name: start
+          schema:
+            type: string
+            format: date
+        - in: query
+          name: end
           schema:
             type: string
             format: date

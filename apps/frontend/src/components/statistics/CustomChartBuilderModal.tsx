@@ -12,6 +12,7 @@ import { Check, ChevronsUpDown, Plus, X } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useCreateSavedChart, useUpdateSavedChart } from "@/hooks/useSavedCharts";
 import { useRecipients } from "@/hooks/useRecipients";
+import { useTags } from "@/hooks/useTags";
 import type { StatisticsData } from "@/hooks/useStatistics";
 import type { SavedChart, ChartType, ChartVariant, TimeBucket } from "@/lib/api/types";
 import { useLanguage } from "@/contexts/LanguageContext";
@@ -43,6 +44,7 @@ interface BuilderState {
   timeBucket: TimeBucket;
   categoryIds: number[];
   recipientIds: number[];
+  tagIds: number[];
   dateRangeStart: string;
   dateRangeEnd: string;
 }
@@ -56,6 +58,7 @@ function stateToSavedChartPreview(state: BuilderState, id: number): SavedChart {
     time_bucket: state.timeBucket,
     category_ids: state.categoryIds,
     recipient_ids: state.recipientIds,
+    tag_ids: state.tagIds,
     date_range_start: state.dateRangeStart || null,
     date_range_end: state.dateRangeEnd || null,
     created_at: '',
@@ -90,18 +93,23 @@ export function CustomChartBuilderModal({ open, onOpenChange, data, editChart }:
     timeBucket: editChart?.time_bucket ?? 'monthly',
     categoryIds: editChart?.category_ids ?? [],
     recipientIds: editChart?.recipient_ids ?? [],
+    tagIds: editChart?.tag_ids ?? [],
     dateRangeStart: editChart?.date_range_start ?? '',
     dateRangeEnd: editChart?.date_range_end ?? '',
   }));
 
   const [catOpen, setCatOpen] = useState(false);
   const [recOpen, setRecOpen] = useState(false);
+  const [tagOpen, setTagOpen] = useState(false);
 
   const createChart = useCreateSavedChart();
   const updateChart = useUpdateSavedChart();
 
   const recipientsQuery = useRecipients({ active: true, limit: 200 });
   const allRecipients = recipientsQuery.data?.items ?? [];
+
+  const tagsQuery = useTags({ is_active: true });
+  const allTags = tagsQuery.data?.items ?? [];
 
   const availableCategories = useMemo(() => {
     return data.categoryPivot
@@ -111,6 +119,7 @@ export function CustomChartBuilderModal({ open, onOpenChange, data, editChart }:
 
   const selectedCats = availableCategories.filter((c) => state.categoryIds.includes(c.id));
   const selectedRecs = allRecipients.filter((r) => state.recipientIds.includes(r.id));
+  const selectedTags = allTags.filter((tg) => state.tagIds.includes(tg.id));
 
   const update = <K extends keyof BuilderState>(key: K, value: BuilderState[K]) => {
     setState((prev) => ({ ...prev, [key]: value }));
@@ -130,6 +139,13 @@ export function CustomChartBuilderModal({ open, onOpenChange, data, editChart }:
     }));
   };
 
+  const toggleTag = (id: number) => {
+    setState((prev) => ({
+      ...prev,
+      tagIds: prev.tagIds.includes(id) ? prev.tagIds.filter((x) => x !== id) : [...prev.tagIds, id],
+    }));
+  };
+
   const selectedComboKey = comboKey(state.chartType, state.chartVariant);
 
   const handleComboChange = (key: string) => {
@@ -137,7 +153,7 @@ export function CustomChartBuilderModal({ open, onOpenChange, data, editChart }:
     if (combo) setState((prev) => ({ ...prev, chartType: combo.type, chartVariant: combo.variant }));
   };
 
-  const canSave = state.name.trim().length > 0 && (state.categoryIds.length > 0 || state.recipientIds.length > 0);
+  const canSave = state.name.trim().length > 0 && (state.categoryIds.length > 0 || state.recipientIds.length > 0 || state.tagIds.length > 0);
 
   const handleSave = () => {
     const payload = {
@@ -147,6 +163,7 @@ export function CustomChartBuilderModal({ open, onOpenChange, data, editChart }:
       timeBucket: state.timeBucket,
       categoryIds: state.categoryIds,
       recipientIds: state.recipientIds,
+      tagIds: state.tagIds,
       dateRangeStart: state.dateRangeStart || null,
       dateRangeEnd: state.dateRangeEnd || null,
     };
@@ -318,6 +335,56 @@ export function CustomChartBuilderModal({ open, onOpenChange, data, editChart }:
                     >
                       <span className="truncate max-w-[150px]">{rec.name}</span>
                       <button onClick={() => toggleRecipient(rec.id)} className="ml-1 rounded-full hover:bg-muted p-0.5">
+                        <X className="h-3 w-3" />
+                      </button>
+                    </Badge>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            {/* Tag picker */}
+            <div className="space-y-2">
+              <label className="text-sm font-medium">{t('customChart.tagsLabel')}</label>
+              <Popover open={tagOpen} onOpenChange={setTagOpen}>
+                <PopoverTrigger asChild>
+                  <Button variant="outline" role="combobox" aria-expanded={tagOpen} className="w-full justify-between font-normal">
+                    <span className="text-muted-foreground">
+                      <Plus className="h-4 w-4 inline mr-1" />
+                      {t('customChart.addTag')}
+                    </span>
+                    <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                  </Button>
+                </PopoverTrigger>
+                <PopoverContent className="w-[300px] p-0" align="start">
+                  <Command>
+                    <CommandInput placeholder={t('customChart.searchTags')} />
+                    <CommandList>
+                      <CommandEmpty>{t('customChart.noTagsFound')}</CommandEmpty>
+                      <CommandGroup>
+                        {allTags.map((tag) => (
+                          <CommandItem key={tag.id} value={tag.slug} onSelect={() => toggleTag(tag.id)}>
+                            <Check className={cn("mr-2 h-4 w-4", state.tagIds.includes(tag.id) ? "opacity-100" : "opacity-0")} />
+                            <span className="flex-1 truncate">#{tag.slug}</span>
+                          </CommandItem>
+                        ))}
+                      </CommandGroup>
+                    </CommandList>
+                  </Command>
+                </PopoverContent>
+              </Popover>
+
+              {selectedTags.length > 0 && (
+                <div className="flex flex-wrap gap-1.5">
+                  {selectedTags.map((tag, i) => (
+                    <Badge
+                      key={tag.id}
+                      variant="secondary"
+                      className="gap-1 pr-1"
+                      style={{ borderLeftColor: CHART_COLORS[(selectedCats.length + selectedRecs.length + i) % CHART_COLORS.length], borderLeftWidth: 3 }}
+                    >
+                      <span className="truncate max-w-[150px]">#{tag.slug}</span>
+                      <button onClick={() => toggleTag(tag.id)} className="ml-1 rounded-full hover:bg-muted p-0.5">
                         <X className="h-3 w-3" />
                       </button>
                     </Badge>

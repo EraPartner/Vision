@@ -61,6 +61,7 @@ const SAVED_CHART: SavedChart = {
     time_bucket: "monthly",
     category_ids: [1],
     recipient_ids: [],
+    tag_ids: [],
     date_range_start: null,
     date_range_end: null,
     created_at: "2025-01-01T00:00:00Z",

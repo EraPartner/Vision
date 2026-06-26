@@ -33,6 +33,7 @@ import { computeSankeyFlow } from '../services/calculations/aggregation/sankey.j
 import { computeCategoryPivot } from '../services/calculations/aggregation/categoryPivot.js';
 import { computeRecipientByYear } from '../services/calculations/aggregation/recipientByYear.js';
 import { computeRecipientPivot } from '../services/calculations/aggregation/recipientPivot.js';
+import { computeTagPivot } from '../services/calculations/aggregation/tagPivot.js';
 import { getTargetCurrency } from './info/_queryParams.js';
 import { parseIntClamped } from '../lib/pagination.js';
 
@@ -231,6 +232,21 @@ router.get('/recipient-pivot', async (req, res) => {
     startDate,
     endDate,
     recipientIds: recipientIds.length > 0 ? recipientIds : null,
+  });
+  res.ok({ data, meta });
+});
+
+router.get('/tag-pivot', async (req, res) => {
+  const bucket = ['monthly', 'yearly'].includes(req.query.bucket) ? req.query.bucket : 'monthly';
+  const startDate = req.query.start || null;
+  const endDate = req.query.end || null;
+  const tagIds = parseNumericArrayQueryParam(req.query.tag_ids);
+  const { data, meta } = await computeTagPivot({
+    targetCurrency: getTargetCurrency(req),
+    bucket,
+    startDate,
+    endDate,
+    tagIds: tagIds.length > 0 ? tagIds : null,
   });
   res.ok({ data, meta });
 });

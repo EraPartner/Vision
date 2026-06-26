@@ -194,6 +194,32 @@ export function getAggregationRecipientPivot(params?: {
     return apiRequest(`/api/aggregations/recipient-pivot${q ? `?${q}` : ''}`);
 }
 
+export interface TagPivotItem {
+    tagId: number;
+    slug: string;
+    total: number;
+    transactionCount: number;
+}
+
+export function getAggregationTagPivot(params?: {
+    currency?: string;
+    tag_ids?: number[];
+    bucket?: 'monthly' | 'yearly';
+    start?: string | null;
+    end?: string | null;
+}): Promise<AggregationEnvelope<{ tagPivot: Record<string, TagPivotItem[]> }>> {
+    const qp = new URLSearchParams();
+    if (params?.currency) qp.set('currency', params.currency);
+    if (params?.bucket) qp.set('bucket', params.bucket);
+    if (params?.start) qp.set('start', params.start);
+    if (params?.end) qp.set('end', params.end);
+    if (params?.tag_ids?.length) {
+        params.tag_ids.forEach((id) => qp.append('tag_ids', String(id)));
+    }
+    const q = qp.toString();
+    return apiRequest(`/api/aggregations/tag-pivot${q ? `?${q}` : ''}`);
+}
+
 export interface SankeyNode {
     readonly id: string;
     readonly label: string;

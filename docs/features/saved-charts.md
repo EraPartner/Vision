@@ -2,26 +2,34 @@
 title: Saved Charts Feature
 type: feature
 status: active
-date: 2026-04-28
-tags: [feature, saved-charts, charts, customization, statistics, recipients]
-description: User-defined custom charts that persist across sessions, supporting mixed category+recipient series, multiple chart variants, yearly buckets, and date-range filters
+date: 2026-06-26
+tags: [feature, saved-charts, charts, customization, statistics, recipients, tags]
+description: User-defined custom charts that persist across sessions, supporting mixed category, recipient, and tag series, multiple chart variants, yearly buckets, and date-range filters
 aliases: [custom charts, chart presets, saved chart configurations]
 related_code:
   - apps/frontend/src/hooks/useSavedCharts.ts
   - apps/frontend/src/hooks/useRecipientPivot.ts
+  - apps/frontend/src/hooks/useTagPivot.ts
+  - apps/frontend/src/lib/api/aggregations.ts
+  - apps/frontend/src/lib/api/types.ts
   - apps/frontend/src/components/statistics/CustomChart.tsx
   - apps/frontend/src/components/statistics/CustomChartBuilderModal.tsx
   - apps/frontend/src/components/statistics/SavedChartsSection.tsx
   - apps/node-backend/src/routes/savedCharts.js
   - apps/node-backend/src/repositories/savedChartsRepository.js
+  - apps/node-backend/src/repositories/infoRepositoryTags.js
+  - apps/node-backend/src/services/calculations/aggregation/tagPivot.js
   - alembic/versions/0017_saved_charts_recipients_variants.py
+  - alembic/versions/0063_saved_charts_tag_ids.py
 ---
 
 # Saved Charts Feature
 
 ## Overview
 
-The Saved Charts feature lets users build, save, and reuse custom charts that can mix category series and recipient series on a single chart. Charts support multiple rendering variants, monthly or yearly time buckets, and optional date-range filters. Saved charts appear in a dedicated "Custom Charts" tab on the Statistics page.
+The Saved Charts feature lets users build, save, and reuse custom charts that can mix category, recipient, and tag series on a single chart. Charts support multiple rendering variants, monthly or yearly time buckets, and optional date-range filters. Saved charts appear in a dedicated "Custom Charts" tab on the Statistics page.
+
+Tags (see [[docs/adr/052-transaction-tags-orthogonal-dimension|ADR-052]]) are the third, orthogonal series dimension: selecting one or more tags renders per-tag spending lines sourced from the `GET /api/aggregations/tag-pivot` endpoint. A chart is saveable when it contains any combination of categories, recipients, and/or tags — all three sets may coexist on one chart.
 
 ## Data Model
 
@@ -40,6 +48,7 @@ interface SavedChart {
   time_bucket: TimeBucket;
   category_ids: number[];
   recipient_ids: number[];
+  tag_ids: number[];
   date_range_start: string | null;
   date_range_end: string | null;
   created_at: string;
@@ -53,6 +62,7 @@ interface SavedChartCreate {
   timeBucket?: TimeBucket;
   categoryIds: number[];
   recipientIds?: number[];
+  tagIds?: number[];
   dateRangeStart?: string | null;
   dateRangeEnd?: string | null;
 }
@@ -69,12 +79,13 @@ interface SavedChartCreate {
 | `time_bucket` | VARCHAR | `'monthly'` | `'monthly'` or `'yearly'` |
 | `category_ids` | INTEGER[] | `'{}'` | Category IDs to include as series |
 | `recipient_ids` | INTEGER[] | `'{}'` | Recipient IDs to include as series |
+| `tag_ids` | INTEGER[] | `'{}'` | Tag IDs to include as series |
 | `date_range_start` | DATE | NULL | Filter periods from this date (inclusive) |
 | `date_range_end` | DATE | NULL | Filter periods to this date (inclusive) |
 | `created_at` | TIMESTAMP | — | Creation timestamp |
 | `updated_at` | TIMESTAMP | — | Last update timestamp |
 
-Migration: `alembic/versions/0017_saved_charts_recipients_variants.py` — additive with safe defaults.
+Migrations: `alembic/versions/0017_saved_charts_recipients_variants.py` (categories + recipients, safe defaults) · `alembic/versions/0063_saved_charts_tag_ids.py` (`tag_ids INTEGER[] NOT NULL DEFAULT '{}'`, additive).
 
 ### Valid (chart_type, chart_variant) Combinations
 
@@ -103,6 +114,15 @@ See [[docs/api/savedCharts]] for full contracts.
 
 Per-recipient spending keyed by period, used by `useRecipientPivot` to power recipient series in custom charts. Accepts `?bucket=monthly|yearly&start=YYYY-MM-DD&end=YYYY-MM-DD&excluded_recipient_ids=…`.
 
+### GET /api/aggregations/tag-pivot
+
+Per-tag spending keyed by period, used by `useTagPivot` to power tag series in custom charts. Requires `tag_ids` (repeatable int); an empty selection returns an empty pivot. Same spending lens as recipient-pivot: expenses only, `is_active = true`, internal transfers always excluded. Per-date historical FX conversion applied.
+
+> [!warning] Multi-tag overlap
+> A transaction that carries several of the selected tags contributes to **each** of those tags' totals independently (OR semantics, same as the transaction-list tag filter). Per-tag lines can therefore legitimately overlap and their sum may exceed total spending for the period.
+
+See [[docs/api/aggregations|Aggregations API]] for the full `tag-pivot` contract.
+
 ## Frontend Hooks
 
 | Hook | Purpose |
@@ -112,6 +132,7 @@ Per-recipient spending keyed by period, used by `useRecipientPivot` to power rec
 | `useUpdateSavedChart()` | Updates chart by ID |
 | `useDeleteSavedChart()` | Deletes chart by ID |
 | `useRecipientPivot(chart)` | Per-chart hook; enabled only when `recipient_ids.length > 0`; keyed on `(currency, bucket, start, end)` |
+| `useTagPivot(chart)` | Per-chart hook; enabled only when `tag_ids.length > 0`; mirrors `useRecipientPivot`; calls `GET /api/aggregations/tag-pivot` |
 
 ## Rendering
 
@@ -119,9 +140,9 @@ Per-recipient spending keyed by period, used by `useRecipientPivot` to power rec
 
 `apps/frontend/src/components/statistics/CustomChart.tsx` — pure display component:
 
-1. Calls `useRecipientPivot(savedChart)` for recipient data.
-2. Collects all periods from both category pivot and recipient pivot; applies `date_range_start`/`date_range_end` filter.
-3. Builds unified `ChartDatum[]` where `values` is keyed as `cat:<id>` or `rec:<id>`.
+1. Calls `useRecipientPivot(savedChart)` for recipient data and `useTagPivot(savedChart)` for tag data.
+2. Collects all periods from category pivot, recipient pivot, and tag pivot; applies `date_range_start`/`date_range_end` filter.
+3. Builds unified `ChartDatum[]` where `values` is keyed as `cat:<id>`, `rec:<id>`, or `tag:<id>`. Tag series legend labels are rendered as `#<slug>`.
 4. Renders the correct chart primitive:
    - `bar` + `stacked` → `StackedBarChart`
    - `bar` + `default`/`grouped` → `BarChart` (multi-series = grouped)
@@ -135,10 +156,10 @@ Per-recipient spending keyed by period, used by `useRecipientPivot` to power rec
 
 `apps/frontend/src/components/statistics/CustomChartBuilderModal.tsx` — Dialog with two-column layout:
 
-- **Left column**: name field, chart-type combo select (6 flat options → `chart_type`+`chart_variant` pair), time-bucket toggle, date-range pickers, category multi-select (Popover+Command), recipient multi-select.
+- **Left column**: name field, chart-type combo select (6 flat options → `chart_type`+`chart_variant` pair), time-bucket toggle, date-range pickers, category multi-select (Popover+Command), recipient multi-select, tags multi-select picker.
 - **Right column**: live `<CustomChart>` preview updated as state changes.
 - **Modes**: create (default values) and edit (initial values from existing `SavedChart`).
-- **Save**: calls `useCreateSavedChart` or `useUpdateSavedChart`; closes modal on success.
+- **Save**: calls `useCreateSavedChart` or `useUpdateSavedChart`; closes modal on success. A chart is saveable when at least one of categories, recipients, or tags is selected.
 
 ### SavedChartsSection (tab content)
 
@@ -162,11 +183,15 @@ The "Custom Charts" tab is the sixth tab in `StatisticsPage.tsx` (`value="custom
 
 - **saved-charts query key**: `['saved-charts']`
 - **recipient-pivot query key**: `['aggregations', 'recipient-pivot', currency, bucket, start, end]`
-- **Stale time**: 60 seconds for both
+- **tag-pivot query key**: `['aggregations', 'tag-pivot', currency, bucket, start, end, ...tagIds]`
+- **Stale time**: 60 seconds for all three
 - **Invalidation**: All CRUD mutations invalidate `['saved-charts']`
 
 ## Related Features
 
 - [[docs/features/statistics|Statistics]] — Saved charts tab within the Statistics page
 - [[docs/features/transactions|Categories]] — Category IDs referenced in charts
+- [[docs/features/tags|Transaction Tags]] — Tags as a third series dimension in custom charts
+- [[docs/api/aggregations|Aggregations API]] — `tag-pivot` and `recipient-pivot` endpoint contracts
 - [[docs/adr/041-saved-charts-schema-extension|ADR-041]] — Schema extension decision record
+- [[docs/adr/052-transaction-tags-orthogonal-dimension|ADR-052]] — Tags architecture rationale
