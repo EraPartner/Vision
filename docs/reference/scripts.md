@@ -3,7 +3,7 @@ title: Package.json Scripts Reference
 type: reference
 status: active
 date: 2026-04-29
-updated: 2026-06-13
+updated: 2026-06-26
 tags: [reference, scripts, npm, bun, build, commands, phase-1, testing, e2e, mutation-testing, quote-backfill, gap-fill]
 description: Complete reference of all npm/bun scripts available in the Vision project — root, frontend workspace, and backend workspace.
 aliases: [scripts, npm scripts, bun scripts, commands, build commands, run commands]
@@ -48,7 +48,7 @@ aliases: [scripts, npm scripts, bun scripts, commands, build commands, run comma
 | `generate-locales-if-not-ci` | conditional `node scripts/generate-locales.js` | Skipped automatically inside CI (`$CI` set). |
 | `sanitize-locales` | `node scripts/generate-locales.js --sanitize-only` | Normalise quotes / whitespace in existing locale bundles. |
 | `sync-nl` | `node scripts/sync-nl-with-en.js` | Add any keys present in `en.json` but missing in `nl.json` (placeholder Dutch). |
-| `validate-locales` | `node scripts/validate-locales.js` | Parity check between `en.json` and `nl.json`; fails CI on drift. |
+| `validate-locales` | `node scripts/validate-locales.js` | Parity, placeholder, type, source key-usage, and generated-output drift checks across `en.json` ↔ `nl.json` and `apps/frontend/src/**/*.{ts,tsx}`; fails CI on any error. See [[docs/i18n/translations#validation--validate-locales-checks\|i18n — Validation checks]]. |
 
 ### Linting & type-checking
 

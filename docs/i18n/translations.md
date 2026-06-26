@@ -4,8 +4,8 @@ type: i18n
 status: active
 date: 2026-04-27
 updated: 2026-06-26
-tags: [i18n, translations, localization, internationalization, phase-6, phase-8, phase-f, phase-9, phase-c, phase-d, phase-2, splits, settlement, admin, observability, cash-flow-forecast, pdf-export, portfolio, tax, backup, encrypt, passphrase-modal, accessibility, aria-label, bug-hunt-2026-05-06, chart-aria, screen-reader, plural, tc, intl-plural-rules, planned-page, toast, electron-native, menu, system-accent, splash, upcoming-count, electron-error-page, backend-watchdog, visual-effects-tiers, auto-adapt-display, colorblind, gain-loss, june-2026, combobox-tags, tag-filter-combobox]
-description: Internationalization system including supported languages, translation workflow, and usage patterns. Phase 6 adds 32 export keys for PDF report localization. Phase 8 adds 11 additional export.section.* keys for portfolio (6) and tax (7) report sections. Phase C adds 15 cash flow forecast keys. Phase F adds 60 admin observability keys. 2026-05-29 adds 16 chart.aria.* keys (localized chart screen-reader summaries) and 21 aria.* keys (localized icon-button aria-labels). June 2026 adds tc() plural mechanism and plannedPage error-toast keys. June 2026 (ADR-070) adds 5 commandPalette.* keys (en + nl) for the new ⌘K command palette. June 2026 Premium v3 (ADR-071) adds 8 keys: settings.general.enhancedEffects/Hint, shortcuts.title/showHelp/closeDialog/chartScrub, commandPalette.recent/searchTransactions. June 2026 Premium v3 V5-V7 adds 14 keys: contextMenu.* (8 keys), quickLook.* (2 keys), shortcuts table-interaction additions (4 keys). June 2026 V12 (ADR-072) adds 11 keys: menu.edit/file/go/importCsv/keyboardShortcuts/newTransaction/settings/toggleSidebar/view, settings.appearance.systemAccent/systemAccentHint. June 2026 V11 adds 4 keys: dashboard.suggestions, dashboard.widgetDescriptions.suggestions, suggestions.kicker, suggestions.review. June 2026 (startup/UI fixes) adds 5 splash.* keys (en + nl, Electron boot splash narration) + tc()-plural upcoming.count.one/.other; removes upcoming.countSingle/countPlural. 2026-06-11 adds 5 app.* keys (Electron error page + backend-lost watchdog, en + nl). 2026-06-12 (ADR-075) adds 7 settings.appearance.visualEffects*/autoAdaptDisplay* keys; removes settings.general.enhancedEffects + settings.general.enhancedEffectsHint. ADR-075 addendum (same day) adds 2 more contextual-note keys (visualEffectsAutoNote + visualEffectsOverrideNote). 2026-06-24 adds 5 Accessibility group keys (settings.group.accessibility, settings.appearance.gainLossColors, settings.appearance.gainLossColorsHint, settings.appearance.gainLossColors.colorblind, settings.appearance.gainLossColors.classic). 2026-06-26 adds 3 combobox.tags.* keys (combobox.tags.empty, combobox.tags.nSelected, combobox.tags.search) for TagFilterCombobox i18n (bulk-tag and filter-toolbar combobox). Total: 3495 keys.
+tags: [i18n, translations, localization, internationalization, phase-6, phase-8, phase-f, phase-9, phase-c, phase-d, phase-2, splits, settlement, admin, observability, cash-flow-forecast, pdf-export, portfolio, tax, backup, encrypt, passphrase-modal, accessibility, aria-label, bug-hunt-2026-05-06, chart-aria, screen-reader, plural, tc, intl-plural-rules, planned-page, toast, electron-native, menu, system-accent, splash, upcoming-count, electron-error-page, backend-watchdog, visual-effects-tiers, auto-adapt-display, colorblind, gain-loss, june-2026, combobox-tags, tag-filter-combobox, validate-locales, source-key-usage, placeholder-bug-fix]
+description: Internationalization system including supported languages, translation workflow, and usage patterns. Phase 6 adds 32 export keys for PDF report localization. Phase 8 adds 11 additional export.section.* keys for portfolio (6) and tax (7) report sections. Phase C adds 15 cash flow forecast keys. Phase F adds 60 admin observability keys. 2026-05-29 adds 16 chart.aria.* keys (localized chart screen-reader summaries) and 21 aria.* keys (localized icon-button aria-labels). June 2026 adds tc() plural mechanism and plannedPage error-toast keys. June 2026 (ADR-070) adds 5 commandPalette.* keys (en + nl) for the new ⌘K command palette. June 2026 Premium v3 (ADR-071) adds 8 keys: settings.general.enhancedEffects/Hint, shortcuts.title/showHelp/closeDialog/chartScrub, commandPalette.recent/searchTransactions. June 2026 Premium v3 V5-V7 adds 14 keys: contextMenu.* (8 keys), quickLook.* (2 keys), shortcuts table-interaction additions (4 keys). June 2026 V12 (ADR-072) adds 11 keys: menu.edit/file/go/importCsv/keyboardShortcuts/newTransaction/settings/toggleSidebar/view, settings.appearance.systemAccent/systemAccentHint. June 2026 V11 adds 4 keys: dashboard.suggestions, dashboard.widgetDescriptions.suggestions, suggestions.kicker, suggestions.review. June 2026 (startup/UI fixes) adds 5 splash.* keys (en + nl, Electron boot splash narration) + tc()-plural upcoming.count.one/.other; removes upcoming.countSingle/countPlural. 2026-06-11 adds 5 app.* keys (Electron error page + backend-lost watchdog, en + nl). 2026-06-12 (ADR-075) adds 7 settings.appearance.visualEffects*/autoAdaptDisplay* keys; removes settings.general.enhancedEffects + settings.general.enhancedEffectsHint. ADR-075 addendum (same day) adds 2 more contextual-note keys (visualEffectsAutoNote + visualEffectsOverrideNote). 2026-06-24 adds 5 Accessibility group keys (settings.group.accessibility, settings.appearance.gainLossColors, settings.appearance.gainLossColorsHint, settings.appearance.gainLossColors.colorblind, settings.appearance.gainLossColors.classic). 2026-06-26 adds 3 combobox.tags.* keys (combobox.tags.empty, combobox.tags.nSelected, combobox.tags.search) for TagFilterCombobox i18n (bulk-tag and filter-toolbar combobox). 2026-06-26 — validate-locales gains source key-usage checks (key-existence, dropped-vars, value-shape); closes 10 missing keys and fixes placeholder mismatches. Total: 3495 keys.
 aliases: [i18n, translations, localization, language, nl, en, dutch, english]
 related_code: ["apps/frontend/src/locales", "apps/frontend/src/contexts/LanguageContext.tsx", "apps/frontend/src/hooks/useSplits.ts"]
 ---
@@ -204,6 +204,50 @@ bun run generate-locales
 ```
 
 ### Recent keys added
+
+#### i18n bug-fix batch — missing keys, placeholder fixes (2026-06-26)
+
+Motivated by the new source key-usage checks added to `validate-locales` (see [[docs/i18n/translations#validation--validate-locales-checks|Validation section]]). Three classes of pre-existing leaks were closed.
+
+**10 missing keys added to `en.json` + `nl.json`** (previously `t()` returned the raw key string at these call sites):
+
+| Key | Used for |
+|-----|---------|
+| `portfolio.addTransaction` | "Add transaction" button in portfolio investment detail |
+| `settings.app.updateAutoApply` | "Auto-apply updates" toggle in app settings |
+| `importPage.resultSummary` | Import result summary line on the import page |
+| `accounts.updateFailedTitle` | Error toast title when an account update fails |
+| `splits.createFailed` | Error toast when split creation fails |
+| `splits.paymentRecorded` | Success toast when a split payment is recorded |
+| `splits.paymentFailed` | Error toast when recording a split payment fails |
+| `splits.removeFailed` | Error toast when removing a split fails |
+| `tags.createFailed` | Error toast when tag creation fails |
+| `common.applied` | Generic "Applied" confirmation label |
+
+**Placeholder fixes — missing `{var}` tokens added to locale strings (value was rendered blank at runtime):**
+
+| Key | Token added | Component/context |
+|-----|-------------|------------------|
+| `invDetail.fee` | `{amount}` | Investment detail fee display |
+| `invDetail.tax` | `{amount}` | Investment detail tax display |
+| `tax.card.totalWithPropertyEstimate` | `{year}` | Tax card property estimate total |
+
+**Placeholder fixes — unfilled `{var}` tokens removed from locale strings (literal `{x}` was visible in UI):**
+
+| Key | Token removed | Fix detail |
+|-----|---------------|-----------|
+| `charts.deleteFailed` | `{msg}` | Error shown via toast description; `{msg}` was never passed |
+| `charts.saveFailed` | `{msg}` | Same; `WatchlistChartDialog.tsx` updated to capture error |
+| `charts.updateFailed` | `{msg}` | Same |
+| `watchlist.updateFailed` | `{msg}` | Same; `WatchlistChartDialog.tsx` now captures the catch error |
+| `cashflow.diagnostics.backtestNote` | `{n}`, `{currency}` | Now filled at the call site |
+| `statsPage.incomeAvg` | `{n}` | Now filled at the call site |
+| `statsPage.spendingAvg` | `{n}` | Now filled at the call site |
+| `tax.historical.filedLock.unfileCta` | `{year}` | Now filled at the call site |
+
+Code links: [[scripts/validate-locales.js]], [[i18n/source/en.json]], [[i18n/source/nl.json]], [[apps/frontend/src/features/watchlist/WatchlistChartDialog.tsx]]
+
+---
 
 #### TagFilterCombobox i18n — bulk-tag and filter-toolbar combobox keys (2026-06-26)
 
@@ -677,7 +721,7 @@ The English file (`en.json`) is the source of truth. All keys should exist in En
 
 ### Missing Translations
 
-If a translation is missing, the English text is displayed as fallback.
+If a Dutch (`nl`) translation is missing, the English string is used as the fallback. If a key is absent from **both** locale files (i.e., it was never added to `en.json`), `t()` returns the raw key string as-is — for example, `t('foo.bar')` renders literally as `"foo.bar"` in the UI. This silent rendering of raw keys was a known failure mode; as of 2026-06-26, `validate-locales` catches these at CI time via its source key-usage scan (see [[docs/i18n/translations#validation--validate-locales-checks|Validation — validate-locales checks]]).
 
 ## UI Components with i18n
 
@@ -801,6 +845,45 @@ When adding new UI, verify both English and Dutch displays correctly.
    ↓
 5. Verify in application
 ```
+
+## Validation — `validate-locales` checks
+
+`scripts/validate-locales.js` (run via `bun run validate-locales`) is the authoritative gate for locale correctness. It must pass before any commit that touches `i18n/source/` or frontend source files that call `t()`/`tc()`.
+
+### Checks performed
+
+The script runs all checks sequentially; any failure sets exit code 1 and blocks CI.
+
+| Check | What it verifies |
+|-------|-----------------|
+| **en ↔ nl parity** | Every key in `en.json` exists in `nl.json` and vice versa. |
+| **Placeholder parity** | Every `{var}` placeholder in an en string also appears in the nl string for the same key. |
+| **Type consistency** | Values that are objects (plural containers) in one file are objects in the other. |
+| **Key-existence** (source scan) | Every `t('a.b.c')` / `tc('a.b.c')` call in `apps/frontend/src/**/*.{ts,tsx}` whose first argument is a static, key-shaped string literal (`/^[a-z][a-zA-Z0-9]*(\.[a-zA-Z0-9_]+)+$/`) must exist in `en.json`. Comments are stripped before scanning so JSDoc usage examples do not false-positive. Dynamic/computed keys are skipped. |
+| **Dropped-vars** (source scan) | For `t('k', { x })` / `tc('k', n, { x })` calls with a static object-literal vars argument, every passed variable must have a matching `{x}` placeholder in the en string. (`count` is always allowed for `tc()`.) Catches values that are silently discarded at runtime. |
+| **Value-shape** (source scan) | No locale value may itself be a dotted key-shaped string — e.g., `"foo.bar"` as a value is a sign of an untranslated key pasted in place of the real translation. |
+| **Generated-output drift** | Compares a freshly generated locale bundle against the committed `apps/frontend/src/locales/*.ts` files; fails if they differ (requires `bun run generate-locales` to be re-run). |
+
+On a clean run the script prints:
+
+```
+All parity, placeholders, types, source key-usage, and generated-output drift checks are all clean.
+```
+
+### When a check fails
+
+| Failure | Fix |
+|---------|-----|
+| Key-existence error | Add the missing key to both `en.json` and `nl.json`, then `bun run generate-locales`. |
+| Dropped-vars error | Either add the `{var}` placeholder to the en/nl string, or remove the unused var from the call site. |
+| Value-shape error | Replace the dotted key string with the actual translated text. |
+| Drift error | Run `bun run generate-locales` and commit the regenerated `.ts` files. |
+| Parity/placeholder error | Sync the missing key or placeholder to the other locale file. |
+
+> [!info] Dynamic keys are not checked
+> Calls like `t(\`nav.${page}\`)` or `t(buildKey(x))` are skipped by the source scanner because the key cannot be statically resolved. Ensure dynamic call sites are tested manually or through E2E tests.
+
+Code link: [[scripts/validate-locales.js]]
 
 ## Related Documentation
 
