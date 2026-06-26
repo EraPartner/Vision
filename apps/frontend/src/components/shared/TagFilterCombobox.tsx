@@ -62,7 +62,7 @@ export function TagFilterCombobox({ value, onChange, disabled, className }: TagF
                             {sorted.map((tag) => {
                                 const selected = selectedSet.has(tag.slug);
                                 const chipStyle = tag.color
-                                    ? { backgroundColor: tag.color + '22', borderColor: tag.color, color: tag.color }
+                                    ? { backgroundColor: `color-mix(in srgb, ${tag.color} 14%, transparent)`, borderColor: tag.color, color: tag.color }
                                     : {};
                                 return (
                                     <CommandItem

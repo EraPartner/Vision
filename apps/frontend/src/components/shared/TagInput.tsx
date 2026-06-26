@@ -9,19 +9,36 @@ import { useLanguage } from '@/contexts/LanguageContext';
 import { slugify } from '@/lib/slugify';
 import type { Tag } from '@/types/api';
 
+// Jewel-tone palette spanning the hue wheel (matches the app's jewel accent).
 const PALETTE: string[] = [
-    'hsl(158, 62%, 38%)',
-    'hsl(38, 62%, 54%)',
-    'hsl(204, 68%, 48%)',
-    'hsl(268, 52%, 58%)',
-    'hsl(14, 76%, 54%)',
-    'hsl(182, 48%, 40%)',
-    'hsl(340, 58%, 54%)',
-    'hsl(48, 72%, 48%)',
+    'hsl(355, 60%, 52%)', // crimson
+    'hsl(20, 68%, 52%)',  // coral
+    'hsl(40, 64%, 50%)',  // amber
+    'hsl(52, 62%, 46%)',  // gold
+    'hsl(96, 42%, 42%)',  // moss
+    'hsl(150, 50%, 38%)', // emerald
+    'hsl(174, 50%, 40%)', // teal
+    'hsl(192, 58%, 44%)', // cyan
+    'hsl(210, 62%, 50%)', // azure
+    'hsl(244, 46%, 58%)', // indigo
+    'hsl(280, 46%, 56%)', // violet
+    'hsl(322, 54%, 54%)', // magenta
 ];
 
-function nextPaletteColor(existingCount: number): string {
-    return PALETTE[existingCount % PALETTE.length];
+// Pick a random palette colour so new tags aren't all the first (green) swatch.
+function randomPaletteColor(): string {
+    return PALETTE[Math.floor(Math.random() * PALETTE.length)];
+}
+
+// A translucent fill of the tag colour. color-mix works for any colour syntax
+// (hsl()/hex); the old `color + '22'` produced invalid CSS for hsl() values.
+function tagChipStyle(color: string | null): React.CSSProperties {
+    if (!color) return {};
+    return {
+        backgroundColor: `color-mix(in srgb, ${color} 14%, transparent)`,
+        borderColor: color,
+        color,
+    };
 }
 
 export interface TagChipProps {
@@ -31,7 +48,7 @@ export interface TagChipProps {
 }
 
 export function TagChip({ tag, onRemove, inactive }: TagChipProps) {
-    const style = tag.color ? { backgroundColor: tag.color + '22', borderColor: tag.color, color: tag.color } : {};
+    const style = tagChipStyle(tag.color);
     return (
         <Badge
             variant="outline"
@@ -65,7 +82,7 @@ export function TagInput({ value, onChange, disabled, className, maxTags = 20 }:
     const { t } = useLanguage();
     const [open, setOpen] = useState(false);
     const [inputValue, setInputValue] = useState('');
-    const [pendingColor, setPendingColor] = useState<string>(PALETTE[0]);
+    const [pendingColor, setPendingColor] = useState<string>(randomPaletteColor);
     const inputRef = useRef<HTMLInputElement>(null);
 
     const { data: tagListData } = useTags({ is_active: true });
@@ -109,7 +126,7 @@ export function TagInput({ value, onChange, disabled, className, maxTags = 20 }:
         }
         addSlug(slug);
         setInputValue('');
-        setPendingColor(nextPaletteColor(allActiveTags.length));
+        setPendingColor(randomPaletteColor());
     }
 
     function handleKeyDown(e: React.KeyboardEvent<HTMLInputElement>) {
