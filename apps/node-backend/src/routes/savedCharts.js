@@ -10,11 +10,16 @@ import { NotFoundError, ValidationError } from '../middleware/errorHandler.js';
 const router = Router();
 
 const VALID_CHART_TYPES = ['line', 'bar', 'area'];
-const VALID_CHART_VARIANTS = ['default', 'stacked', 'grouped'];
+// 'ranked' aggregates each entity's total over the whole range into one bar
+// (Most-Spent-Recipients style); it only applies to bar charts.
+const VALID_CHART_VARIANTS = ['default', 'stacked', 'grouped', 'ranked'];
 const VALID_TIME_BUCKETS = ['monthly', 'yearly'];
 
 // Disallowed (chart_type, chart_variant) pairs
-const INVALID_COMBINATIONS = new Set(['line:stacked', 'line:grouped', 'area:grouped']);
+const INVALID_COMBINATIONS = new Set([
+  'line:stacked', 'line:grouped', 'area:grouped',
+  'line:ranked', 'area:ranked',
+]);
 
 function parseChartId(req) {
   const id = parseInt(req.params.id, 10);
@@ -49,6 +54,12 @@ function assertChartTypeCombination(chartType, chartVariant) {
   }
 }
 
+function assertBoolean(value, fieldName) {
+  if (value !== undefined && typeof value !== 'boolean') {
+    throw new ValidationError(`"${fieldName}" must be a boolean`);
+  }
+}
+
 function parseIntIds(raw, fieldName) {
   const r = validateIntArray(raw, fieldName);
   if (!r.valid) throw new ValidationError(r.error);
@@ -73,7 +84,7 @@ router.get('/', async (req, res) => {
 });
 
 router.post('/', async (req, res) => {
-  const { name, chartType, categoryIds, recipientIds, tagIds, chartVariant, timeBucket, dateRangeStart, dateRangeEnd } = req.body;
+  const { name, chartType, categoryIds, recipientIds, tagIds, allCategories, allRecipients, allTags, chartVariant, timeBucket, dateRangeStart, dateRangeEnd } = req.body;
 
   if (!name || typeof name !== 'string' || name.trim().length === 0) {
     throw new ValidationError('Missing or invalid "name"');
@@ -85,6 +96,9 @@ router.post('/', async (req, res) => {
   assertChartType(chartType);
   assertChartVariant(chartVariant);
   assertTimeBucket(timeBucket);
+  assertBoolean(allCategories, 'allCategories');
+  assertBoolean(allRecipients, 'allRecipients');
+  assertBoolean(allTags, 'allTags');
 
   const resolvedType = chartType || 'line';
   const resolvedVariant = chartVariant || 'default';
@@ -96,6 +110,9 @@ router.post('/', async (req, res) => {
     categoryIds: normalizedCategoryIds,
     recipientIds: normalizedRecipientIds,
     tagIds: normalizedTagIds,
+    allCategories: allCategories ?? false,
+    allRecipients: allRecipients ?? false,
+    allTags: allTags ?? false,
     chartVariant: resolvedVariant,
     timeBucket: timeBucket || 'monthly',
     dateRangeStart: parseDateOrNull(dateRangeStart, 'dateRangeStart'),
@@ -107,7 +124,7 @@ router.post('/', async (req, res) => {
 
 router.patch('/:id', async (req, res) => {
   const id = parseChartId(req);
-  const { name, chartType, chartVariant, timeBucket } = req.body;
+  const { name, chartType, chartVariant, timeBucket, allCategories, allRecipients, allTags } = req.body;
   let { categoryIds, recipientIds, tagIds, dateRangeStart, dateRangeEnd } = req.body;
 
   if (name !== undefined && (typeof name !== 'string' || name.trim().length === 0)) {
@@ -117,6 +134,9 @@ router.patch('/:id', async (req, res) => {
   assertChartVariant(chartVariant);
   assertTimeBucket(timeBucket);
   assertChartTypeCombination(chartType, chartVariant);
+  assertBoolean(allCategories, 'allCategories');
+  assertBoolean(allRecipients, 'allRecipients');
+  assertBoolean(allTags, 'allTags');
 
   if (categoryIds !== undefined) categoryIds = parseIntIds(categoryIds, 'categoryIds');
   if (recipientIds !== undefined) recipientIds = parseIntIds(recipientIds, 'recipientIds');
@@ -130,6 +150,9 @@ router.patch('/:id', async (req, res) => {
     categoryIds,
     recipientIds,
     tagIds,
+    allCategories,
+    allRecipients,
+    allTags,
     chartVariant,
     timeBucket,
     dateRangeStart,

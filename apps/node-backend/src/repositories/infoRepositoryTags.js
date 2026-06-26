@@ -21,14 +21,15 @@ import {
 } from './infoRepositoryHelpers.js';
 
 export const tagInsightsRepository = {
-  async getTagPivot(targetCurrency = 'EUR', { bucket = 'monthly', startDate = null, endDate = null, tagIds = null } = {}) {
-    // Tag pivot is only ever rendered for an explicit selection on a saved
-    // chart. With no tags selected there is nothing to chart, so short-circuit
-    // instead of scanning every tagged expense row.
+  async getTagPivot(targetCurrency = 'EUR', { bucket = 'monthly', startDate = null, endDate = null, tagIds = null, allTags = false } = {}) {
+    // Tag pivot is rendered either for an explicit selection on a saved chart or
+    // for an "all tags" dynamic source. With no selection and no all-flag there
+    // is nothing to chart, so short-circuit instead of scanning every tagged
+    // expense row.
     const validTagIds = Array.isArray(tagIds)
       ? tagIds.filter((id) => Number.isInteger(id) && id > 0 && id < 2147483647)
       : [];
-    if (validTagIds.length === 0) return { tagPivot: {} };
+    if (!allTags && validTagIds.length === 0) return { tagPivot: {} };
 
     const periodExpr = bucket === 'yearly' ? "TO_CHAR(t.date, 'YYYY')" : "TO_CHAR(t.date, 'YYYY-MM')";
 
@@ -37,8 +38,13 @@ export const tagInsightsRepository = {
     if (startDate) { params.push(startDate); dateFilters.push(`t.date >= $${params.length}`); }
     if (endDate) { params.push(endDate); dateFilters.push(`t.date <= $${params.length}`); }
 
-    params.push(validTagIds);
-    const tagInclude = `AND tt.tag_id = ANY($${params.length}::int[])`;
+    // "all tags" drops the inclusion filter entirely so every tag with spend in
+    // range is returned; the client caps to top-N + Other.
+    let tagInclude = '';
+    if (!allTags) {
+      params.push(validTagIds);
+      tagInclude = `AND tt.tag_id = ANY($${params.length}::int[])`;
+    }
 
     // Aggregate per (tag, period, date, currency) in SQL. amount < 0 is pinned
     // so ABS distributes over the same-sign SUM; per-date conversion matches the

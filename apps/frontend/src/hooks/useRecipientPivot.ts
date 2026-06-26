@@ -37,7 +37,8 @@ export function useRecipientPivot(chart: SavedChart | null | undefined) {
     const { appSettings } = useAppSettings();
     const targetCurrency = appSettings.defaultCurrency || 'EUR';
 
-    const enabled = !!(chart && chart.recipient_ids.length > 0);
+    const allRecipients = !!chart?.all_recipients;
+    const enabled = !!(chart && (allRecipients || chart.recipient_ids.length > 0));
 
     const query = useQuery({
         queryKey: [
@@ -49,8 +50,10 @@ export function useRecipientPivot(chart: SavedChart | null | undefined) {
             chart?.date_range_end ?? null,
             // Narrowed per chart now, so the selected recipients MUST key the cache
             // (ADR-041 amendment) — else one chart's narrowed payload would be
-            // served to a different chart with different recipients.
-            chart?.recipient_ids ?? [],
+            // served to a different chart with different recipients. The all flag
+            // keys it too so the all-recipients payload isn't reused as a narrowed
+            // one.
+            allRecipients ? 'all' : (chart?.recipient_ids ?? []),
         ],
         queryFn: () =>
             getAggregationRecipientPivot({
@@ -59,8 +62,10 @@ export function useRecipientPivot(chart: SavedChart | null | undefined) {
                 start: chart!.date_range_start ?? undefined,
                 end: chart!.date_range_end ?? undefined,
                 // Fetch only the chart's selected recipients instead of the full
-                // all-recipients pivot the client then discarded.
-                recipient_ids: chart!.recipient_ids,
+                // all-recipients pivot the client then discarded. For an "all
+                // recipients" chart, omit the list so the server returns every
+                // recipient.
+                recipient_ids: allRecipients ? undefined : chart!.recipient_ids,
             }),
         enabled,
         staleTime: 60_000,
@@ -71,12 +76,14 @@ export function useRecipientPivot(chart: SavedChart | null | undefined) {
 
     // Filter to only the recipient IDs selected in the chart. Memoized so the
     // nested-loop reshape + filter only runs when the query data or selected
-    // recipient ids actually change, not on every consumer render.
+    // recipient ids actually change, not on every consumer render. An "all
+    // recipients" chart keeps every returned recipient.
     const filtered = useMemo(() => {
         const recipientData = buildRecipientPeriodData(rawPivot ?? {});
+        if (allRecipients) return recipientData;
         const selected = new Set(recipientIds ?? []);
         return recipientData.filter((r) => selected.has(r.recipientId));
-    }, [rawPivot, recipientIds]);
+    }, [rawPivot, recipientIds, allRecipients]);
 
     return { ...query, recipientData: filtered };
 }

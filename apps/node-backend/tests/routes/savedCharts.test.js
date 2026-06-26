@@ -99,6 +99,9 @@ describe('Saved Charts Routes', () => {
         chartType: 'line',
         categoryIds: [1, 2],
         recipientIds: undefined,
+        allCategories: false,
+        allRecipients: false,
+        allTags: false,
         chartVariant: 'default',
         timeBucket: 'monthly',
         dateRangeStart: undefined,
@@ -123,6 +126,46 @@ describe('Saved Charts Routes', () => {
 
     it('throws ValidationError when tagIds has invalid entries', async () => {
       const req = { body: { name: 'Main', categoryIds: [], tagIds: [1, 'nope'] } };
+      const res = mockResponse();
+
+      await expect(routeHandlers['post:/'](req, res)).rejects.toBeInstanceOf(ValidationError);
+    });
+
+    it('passes all-source flags through to the repository', async () => {
+      savedChartsRepository.create.mockResolvedValue({ id: 6, name: 'AllTags' });
+
+      const req = { body: { name: 'AllTags', categoryIds: [], allTags: true } };
+      const res = mockResponse();
+
+      await routeHandlers['post:/'](req, res);
+
+      expect(savedChartsRepository.create).toHaveBeenCalledWith(
+        expect.objectContaining({ allTags: true, allCategories: false, allRecipients: false }),
+      );
+    });
+
+    it('throws ValidationError when an all-source flag is not a boolean', async () => {
+      const req = { body: { name: 'Main', categoryIds: [], allTags: 'yes' } };
+      const res = mockResponse();
+
+      await expect(routeHandlers['post:/'](req, res)).rejects.toBeInstanceOf(ValidationError);
+    });
+
+    it('accepts the ranked variant on a bar chart', async () => {
+      savedChartsRepository.create.mockResolvedValue({ id: 7, name: 'Ranked' });
+
+      const req = { body: { name: 'Ranked', categoryIds: [1], chartType: 'bar', chartVariant: 'ranked' } };
+      const res = mockResponse();
+
+      await routeHandlers['post:/'](req, res);
+
+      expect(savedChartsRepository.create).toHaveBeenCalledWith(
+        expect.objectContaining({ chartType: 'bar', chartVariant: 'ranked' }),
+      );
+    });
+
+    it('rejects the ranked variant on a line chart', async () => {
+      const req = { body: { name: 'Bad', categoryIds: [1], chartType: 'line', chartVariant: 'ranked' } };
       const res = mockResponse();
 
       await expect(routeHandlers['post:/'](req, res)).rejects.toBeInstanceOf(ValidationError);
@@ -192,6 +235,26 @@ describe('Saved Charts Routes', () => {
 
     it('throws ValidationError when tagIds is invalid', async () => {
       const req = { params: { id: '1' }, body: { tagIds: [1, 'bad-id'] } };
+      const res = mockResponse();
+
+      await expect(routeHandlers['patch:/:id'](req, res)).rejects.toBeInstanceOf(ValidationError);
+    });
+
+    it('updates all-source flags when provided', async () => {
+      savedChartsRepository.update.mockResolvedValue({ id: 9 });
+
+      const req = { params: { id: '9' }, body: { allRecipients: true } };
+      const res = mockResponse();
+      await routeHandlers['patch:/:id'](req, res);
+
+      expect(savedChartsRepository.update).toHaveBeenCalledWith(
+        9,
+        expect.objectContaining({ allRecipients: true }),
+      );
+    });
+
+    it('throws ValidationError when an all-source flag is not a boolean', async () => {
+      const req = { params: { id: '1' }, body: { allCategories: 1 } };
       const res = mockResponse();
 
       await expect(routeHandlers['patch:/:id'](req, res)).rejects.toBeInstanceOf(ValidationError);

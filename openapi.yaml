@@ -1037,7 +1037,7 @@ components:
     # ─── Saved Charts ────────────────────────────────────────────────────────
     SavedChart:
       type: object
-      required: [id, name, chart_type, category_ids, created_at, updated_at]
+      required: [id, name, chart_type, chart_variant, time_bucket, category_ids, recipient_ids, tag_ids, all_categories, all_recipients, all_tags, created_at, updated_at]
       properties:
         id:
           type: integer
@@ -1046,18 +1046,46 @@ components:
         chart_type:
           type: string
           enum: [line, bar, area]
+        chart_variant:
+          type: string
+          enum: [default, stacked, grouped, ranked]
+          description: "ranked is only valid with chart_type=bar; line:ranked and area:ranked return 400"
+        time_bucket:
+          type: string
+          enum: [monthly, yearly]
+          description: "Ignored when chart_variant=ranked"
         category_ids:
           type: array
           items:
             type: integer
+          description: "Ignored when all_categories=true"
         recipient_ids:
           type: array
           items:
             type: integer
+          description: "Ignored when all_recipients=true"
         tag_ids:
           type: array
           items:
             type: integer
+          description: "Ignored when all_tags=true"
+        all_categories:
+          type: boolean
+          default: false
+        all_recipients:
+          type: boolean
+          default: false
+        all_tags:
+          type: boolean
+          default: false
+        date_range_start:
+          type: string
+          format: date
+          nullable: true
+        date_range_end:
+          type: string
+          format: date
+          nullable: true
         created_at:
           type: string
           format: date-time
@@ -2247,14 +2275,54 @@ paths:
           application/json:
             schema:
               type: object
-              required: [name, chart_type, config]
+              required: [name]
               properties:
                 name:
                   type: string
-                chart_type:
+                  description: "Chart name (non-empty, max 500 chars)"
+                chartType:
                   type: string
-                config:
-                  type: object
+                  enum: [line, bar, area]
+                  default: line
+                chartVariant:
+                  type: string
+                  enum: [default, stacked, grouped, ranked]
+                  default: default
+                  description: "ranked only valid with chartType=bar"
+                timeBucket:
+                  type: string
+                  enum: [monthly, yearly]
+                  default: monthly
+                  description: "Ignored when chartVariant=ranked"
+                categoryIds:
+                  type: array
+                  items:
+                    type: integer
+                recipientIds:
+                  type: array
+                  items:
+                    type: integer
+                tagIds:
+                  type: array
+                  items:
+                    type: integer
+                allCategories:
+                  type: boolean
+                  default: false
+                allRecipients:
+                  type: boolean
+                  default: false
+                allTags:
+                  type: boolean
+                  default: false
+                dateRangeStart:
+                  type: string
+                  format: date
+                  nullable: true
+                dateRangeEnd:
+                  type: string
+                  format: date
+                  nullable: true
       responses:
         "201":
           description: Created chart
@@ -2285,16 +2353,46 @@ paths:
           application/json:
             schema:
               type: object
+              description: "All fields optional — only provided fields are updated"
               properties:
                 name:
                   type: string
-                chart_type:
+                chartType:
                   type: string
                   enum: [line, bar, area]
-                category_ids:
+                chartVariant:
+                  type: string
+                  enum: [default, stacked, grouped, ranked]
+                  description: "ranked only valid with chartType=bar"
+                timeBucket:
+                  type: string
+                  enum: [monthly, yearly]
+                categoryIds:
                   type: array
                   items:
                     type: integer
+                recipientIds:
+                  type: array
+                  items:
+                    type: integer
+                tagIds:
+                  type: array
+                  items:
+                    type: integer
+                allCategories:
+                  type: boolean
+                allRecipients:
+                  type: boolean
+                allTags:
+                  type: boolean
+                dateRangeStart:
+                  type: string
+                  format: date
+                  nullable: true
+                dateRangeEnd:
+                  type: string
+                  format: date
+                  nullable: true
       responses:
         "200":
           description: Updated chart
@@ -3758,19 +3856,27 @@ paths:
       summary: Per-tag spending pivot (periods × tags) for custom charts
       description: >
         Per-tag, per-period spending breakdown (expenses only, internal
-        transfers excluded). Requires an explicit tag_ids selection; with none
-        the pivot is empty. A transaction carrying several selected tags counts
-        toward each tag's total.
+        transfers excluded). Pass explicit tag_ids[] for a specific selection,
+        or all=true (alias all_tags=true) to return every active tag in the
+        workspace. With neither, the pivot is empty. A transaction carrying
+        several selected tags counts toward each tag's total independently.
+        Used by custom saved charts with tag series; the frontend caps results
+        to top 8 by spend + "Other" when all=true and entity count exceeds 8.
       operationId: getTagPivot
       tags: [Aggregations]
       parameters:
         - in: query
           name: tag_ids
-          description: Tag ids to include as series (repeatable).
+          description: "Tag ids to include as series (repeatable). Ignored when all=true."
           schema:
             type: array
             items:
               type: integer
+        - in: query
+          name: all
+          description: "When true, returns all active tags; tag_ids is ignored. Alias: all_tags."
+          schema:
+            type: boolean
         - in: query
           name: bucket
           schema:

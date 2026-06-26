@@ -14,12 +14,14 @@ export async function computeTagPivot({
   startDate = null,
   endDate = null,
   tagIds = null,
+  allTags = false,
 } = {}) {
   const data = await tagInsightsRepository.getTagPivot(targetCurrency, {
     bucket,
     startDate,
     endDate,
     tagIds,
+    allTags,
   });
   return buildEnvelope(data, { source: 'live' });
 }

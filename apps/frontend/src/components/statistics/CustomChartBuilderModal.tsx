@@ -2,6 +2,8 @@ import { useState, useMemo } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
+import { Switch } from "@/components/ui/switch";
+import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "@/components/ui/command";
@@ -29,6 +31,7 @@ const CHART_COMBOS: ChartCombo[] = [
   { type: 'bar', variant: 'default', label: 'customChart.bar' },
   { type: 'bar', variant: 'stacked', label: 'customChart.barStacked' },
   { type: 'bar', variant: 'grouped', label: 'customChart.barGrouped' },
+  { type: 'bar', variant: 'ranked', label: 'customChart.barRanked' },
   { type: 'area', variant: 'default', label: 'customChart.area' },
   { type: 'area', variant: 'stacked', label: 'customChart.areaStacked' },
 ];
@@ -45,6 +48,9 @@ interface BuilderState {
   categoryIds: number[];
   recipientIds: number[];
   tagIds: number[];
+  allCategories: boolean;
+  allRecipients: boolean;
+  allTags: boolean;
   dateRangeStart: string;
   dateRangeEnd: string;
 }
@@ -59,6 +65,9 @@ function stateToSavedChartPreview(state: BuilderState, id: number): SavedChart {
     category_ids: state.categoryIds,
     recipient_ids: state.recipientIds,
     tag_ids: state.tagIds,
+    all_categories: state.allCategories,
+    all_recipients: state.allRecipients,
+    all_tags: state.allTags,
     date_range_start: state.dateRangeStart || null,
     date_range_end: state.dateRangeEnd || null,
     created_at: '',
@@ -94,6 +103,9 @@ export function CustomChartBuilderModal({ open, onOpenChange, data, editChart }:
     categoryIds: editChart?.category_ids ?? [],
     recipientIds: editChart?.recipient_ids ?? [],
     tagIds: editChart?.tag_ids ?? [],
+    allCategories: editChart?.all_categories ?? false,
+    allRecipients: editChart?.all_recipients ?? false,
+    allTags: editChart?.all_tags ?? false,
     dateRangeStart: editChart?.date_range_start ?? '',
     dateRangeEnd: editChart?.date_range_end ?? '',
   }));
@@ -153,7 +165,10 @@ export function CustomChartBuilderModal({ open, onOpenChange, data, editChart }:
     if (combo) setState((prev) => ({ ...prev, chartType: combo.type, chartVariant: combo.variant }));
   };
 
-  const canSave = state.name.trim().length > 0 && (state.categoryIds.length > 0 || state.recipientIds.length > 0 || state.tagIds.length > 0);
+  const canSave = state.name.trim().length > 0 && (
+    state.categoryIds.length > 0 || state.recipientIds.length > 0 || state.tagIds.length > 0 ||
+    state.allCategories || state.allRecipients || state.allTags
+  );
 
   const handleSave = () => {
     const payload = {
@@ -164,6 +179,9 @@ export function CustomChartBuilderModal({ open, onOpenChange, data, editChart }:
       categoryIds: state.categoryIds,
       recipientIds: state.recipientIds,
       tagIds: state.tagIds,
+      allCategories: state.allCategories,
+      allRecipients: state.allRecipients,
+      allTags: state.allTags,
       dateRangeStart: state.dateRangeStart || null,
       dateRangeEnd: state.dateRangeEnd || null,
     };
@@ -216,19 +234,21 @@ export function CustomChartBuilderModal({ open, onOpenChange, data, editChart }:
               </Select>
             </div>
 
-            {/* Time bucket */}
-            <div className="space-y-1">
-              <label className="text-sm font-medium">{t('customChart.timeBucket')}</label>
-              <Select value={state.timeBucket} onValueChange={(v) => update('timeBucket', v as TimeBucket)}>
-                <SelectTrigger className="w-full">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="monthly">{t('customChart.monthly')}</SelectItem>
-                  <SelectItem value="yearly">{t('customChart.yearly')}</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
+            {/* Time bucket — irrelevant for ranked (totals over the whole range) */}
+            {state.chartVariant !== 'ranked' && (
+              <div className="space-y-1">
+                <label className="text-sm font-medium">{t('customChart.timeBucket')}</label>
+                <Select value={state.timeBucket} onValueChange={(v) => update('timeBucket', v as TimeBucket)}>
+                  <SelectTrigger className="w-full">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="monthly">{t('customChart.monthly')}</SelectItem>
+                    <SelectItem value="yearly">{t('customChart.yearly')}</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+            )}
 
             {/* Date range */}
             <div className="grid grid-cols-2 gap-2">
@@ -244,7 +264,17 @@ export function CustomChartBuilderModal({ open, onOpenChange, data, editChart }:
 
             {/* Category picker */}
             <div className="space-y-2">
-              <label className="text-sm font-medium">{t('customChart.categoriesLabel')}</label>
+              <div className="flex items-center justify-between">
+                <label className="text-sm font-medium">{t('customChart.categoriesLabel')}</label>
+                <div className="flex items-center gap-2">
+                  <Switch id="all-categories" checked={state.allCategories} onCheckedChange={(v) => update('allCategories', v)} />
+                  <Label htmlFor="all-categories" className="text-xs font-normal text-muted-foreground">{t('customChart.allCategories')}</Label>
+                </div>
+              </div>
+              {state.allCategories ? (
+                <p className="text-xs text-muted-foreground">{t('customChart.allHint')}</p>
+              ) : (
+                <>
               <Popover open={catOpen} onOpenChange={setCatOpen}>
                 <PopoverTrigger asChild>
                   <Button variant="outline" role="combobox" aria-expanded={catOpen} className="w-full justify-between font-normal">
@@ -291,11 +321,23 @@ export function CustomChartBuilderModal({ open, onOpenChange, data, editChart }:
                   ))}
                 </div>
               )}
+                </>
+              )}
             </div>
 
             {/* Recipient picker */}
             <div className="space-y-2">
-              <label className="text-sm font-medium">{t('customChart.recipientsLabel')}</label>
+              <div className="flex items-center justify-between">
+                <label className="text-sm font-medium">{t('customChart.recipientsLabel')}</label>
+                <div className="flex items-center gap-2">
+                  <Switch id="all-recipients" checked={state.allRecipients} onCheckedChange={(v) => update('allRecipients', v)} />
+                  <Label htmlFor="all-recipients" className="text-xs font-normal text-muted-foreground">{t('customChart.allRecipients')}</Label>
+                </div>
+              </div>
+              {state.allRecipients ? (
+                <p className="text-xs text-muted-foreground">{t('customChart.allHint')}</p>
+              ) : (
+                <>
               <Popover open={recOpen} onOpenChange={setRecOpen}>
                 <PopoverTrigger asChild>
                   <Button variant="outline" role="combobox" aria-expanded={recOpen} className="w-full justify-between font-normal">
@@ -341,11 +383,23 @@ export function CustomChartBuilderModal({ open, onOpenChange, data, editChart }:
                   ))}
                 </div>
               )}
+                </>
+              )}
             </div>
 
             {/* Tag picker */}
             <div className="space-y-2">
-              <label className="text-sm font-medium">{t('customChart.tagsLabel')}</label>
+              <div className="flex items-center justify-between">
+                <label className="text-sm font-medium">{t('customChart.tagsLabel')}</label>
+                <div className="flex items-center gap-2">
+                  <Switch id="all-tags" checked={state.allTags} onCheckedChange={(v) => update('allTags', v)} />
+                  <Label htmlFor="all-tags" className="text-xs font-normal text-muted-foreground">{t('customChart.allTags')}</Label>
+                </div>
+              </div>
+              {state.allTags ? (
+                <p className="text-xs text-muted-foreground">{t('customChart.allHint')}</p>
+              ) : (
+                <>
               <Popover open={tagOpen} onOpenChange={setTagOpen}>
                 <PopoverTrigger asChild>
                   <Button variant="outline" role="combobox" aria-expanded={tagOpen} className="w-full justify-between font-normal">
@@ -390,6 +444,8 @@ export function CustomChartBuilderModal({ open, onOpenChange, data, editChart }:
                     </Badge>
                   ))}
                 </div>
+              )}
+                </>
               )}
             </div>
           </div>

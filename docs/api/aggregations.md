@@ -469,7 +469,8 @@ Per-tag aggregated spending data keyed by period, supporting custom chart render
 
 | Parameter | Type | Required | Description |
 |-----------|------|----------|-------------|
-| `tag_ids[]` | integer[] | Yes | Tag IDs to include; repeatable param. Empty selection returns an empty pivot (no implicit "all tags"). |
+| `tag_ids[]` | integer[] | Conditional | Tag IDs to include; repeatable param. Empty selection returns an empty pivot unless `all=true` is also passed. Required unless `all=true`. |
+| `all` | boolean | No | Alias: `all_tags`. When `true`, returns every active tag in the workspace; `tag_ids[]` is ignored. Used by the dynamic "all tags" source in saved custom charts. |
 | `bucket` | string | No (default: `monthly`) | `monthly` or `yearly` |
 | `start` | string | No | ISO date filter start (`YYYY-MM-DD`) |
 | `end` | string | No | ISO date filter end (`YYYY-MM-DD`) |
@@ -517,11 +518,12 @@ Per-tag aggregated spending data keyed by period, supporting custom chart render
 > [!warning] Multi-tag overlap
 > A transaction carrying several of the **selected** tags contributes to **each** matching tag's total independently (OR semantics). Per-tag totals can therefore overlap and their sum will exceed actual total spending for that period. This is by design — the same semantics as the transaction-list tag filter.
 
-**`meta.source`:** Always `'live'` — this endpoint is always computed dynamically (no materialized-view fast path).
+**`meta.source`:** Always `'live'` — this endpoint is always computed dynamically (no materialized-view fast path). This is true for both explicit `tag_ids` and `all=true` modes.
 
 **Frontend Usage:**
 
 ```typescript
+// Explicit tag selection
 const envelope = await apiClient.getAggregationTagPivot({
   tag_ids: [3, 7],
   bucket: 'monthly',
@@ -531,14 +533,22 @@ const envelope = await apiClient.getAggregationTagPivot({
 });
 // envelope.data.tagPivot['2026-01'] → TagPivotEntry[]
 // Render as CustomChart with tags as series (legend: #slug)
+
+// Dynamic all-tags mode (saved chart with all_tags=true)
+const allTagsEnvelope = await apiClient.getAggregationTagPivot({
+  all: true,  // omits tag_ids; returns every active tag
+  bucket: 'yearly',
+  currency: 'EUR'
+});
+// Client-side: cap to top 8 by spend + "Other" bundle when entity count > TOP_N
 ```
 
 **Implementation:**
-- Repository: `apps/node-backend/src/repositories/infoRepositoryTags.js` — `tagInsightsRepository.getTagPivot`
-- Service: `apps/node-backend/src/services/calculations/aggregation/tagPivot.js` — `computeTagPivot`
-- Route: wired in `apps/node-backend/src/routes/aggregations.js`
-- Frontend hook: `apps/frontend/src/hooks/useTagPivot.ts` (mirrors `useRecipientPivot`)
-- Frontend API client: `getAggregationTagPivot` in `apps/frontend/src/lib/api/aggregations.ts`; `TagPivotItem` type in `apps/frontend/src/lib/api/types.ts`
+- Repository: `apps/node-backend/src/repositories/infoRepositoryTags.js` — `tagInsightsRepository.getTagPivot`; when `allTags=true`, the tag-id filter is dropped and the short-circuit is bypassed, returning all active tags.
+- Service: `apps/node-backend/src/services/calculations/aggregation/tagPivot.js` — `computeTagPivot`; passes `allTags` flag through to the repository.
+- Route: wired in `apps/node-backend/src/routes/aggregations.js`; accepts `all` and `all_tags` query params as boolean aliases.
+- Frontend hook: `apps/frontend/src/hooks/useTagPivot.ts`; enabled when `tag_ids.length > 0` **or** `all_tags = true`; cache key includes `'all'` token when all-flag is active.
+- Frontend API client: `getAggregationTagPivot` in `apps/frontend/src/lib/api/aggregations.ts`; when `all=true`, omits `tag_ids` from the request; `TagPivotItem` type in `apps/frontend/src/lib/api/types.ts`.
 
 ---
 

@@ -20,12 +20,27 @@ import { useAppSettings } from "@/contexts/AppSettingsContext";
 import { getCurrencySymbol, numberFormatToLocale } from "@/utils/currency";
 
 const CHART_COLORS = Array.from({ length: 16 }, (_, i) => `hsl(var(--chart-${(i % 8) + 1}))`);
+// Muted colour for the bundled "Other" series/bar.
+const OTHER_COLOR = 'hsl(var(--muted-foreground))';
+// When a dynamic "All" source is active, only the top-N entities get their own
+// series/bar; the long tail is summed into one "Other" entry.
+const TOP_N = 8;
 
 interface ChartDatum {
   period: string;
   periodLabel: string;
   date: Date;
   values: Record<string, number>;
+}
+
+// A single chartable entity (one category, recipient, or tag — or the bundled
+// "Other"), with its per-period spend and grand total over the visible range.
+interface Entity {
+  key: string;
+  label: string;
+  months: Record<string, number>;
+  total: number;
+  isOther?: boolean;
 }
 
 type SeriesMeta = { key: string; label: string; color: string };
@@ -69,18 +84,23 @@ export function CustomChart({ savedChart, data, onEdit, onDelete }: CustomChartP
   const currencySymbol = getCurrencySymbol(appSettings.defaultCurrency || "EUR");
 
   const bucket = savedChart.time_bucket;
-  const hasRecipients = savedChart.recipient_ids.length > 0;
-  const hasTags = savedChart.tag_ids.length > 0;
+  const isRanked = savedChart.chart_variant === 'ranked';
+  const allCategories = savedChart.all_categories;
+  const hasRecipients = savedChart.recipient_ids.length > 0 || savedChart.all_recipients;
+  const hasTags = savedChart.tag_ids.length > 0 || savedChart.all_tags;
+  // Any dynamic "All …" source caps the long tail into "Other".
+  const capActive = allCategories || savedChart.all_recipients || savedChart.all_tags;
   const { recipientData, isLoading: recipientLoading } = useRecipientPivot(savedChart);
   const { tagData, isLoading: tagLoading } = useTagPivot(savedChart);
 
-  // Resolve the selected categories once — this was recomputed three times per
+  // Resolve the in-scope categories once — this was recomputed three times per
   // render (allPeriods, seriesMeta, chartData) with an O(n) `.includes` lookup
-  // against category_ids on every row.
+  // against category_ids on every row. With all_categories every category is in
+  // scope (incl. ones added later); otherwise just the explicit selection.
   const catData = useMemo(() => {
     const selected = new Set(savedChart.category_ids);
     const filtered = data.categoryPivot.filter(
-      (c) => c.categoryId !== null && selected.has(c.categoryId)
+      (c) => c.categoryId !== null && (allCategories || selected.has(c.categoryId))
     );
     if (bucket !== 'yearly') return filtered;
     // The category pivot only ever returns monthly ('YYYY-MM') keys, but recipient
@@ -94,7 +114,7 @@ export function CustomChart({ savedChart, data, onEdit, onDelete }: CustomChartP
       }
       return { ...c, months };
     });
-  }, [data.categoryPivot, savedChart.category_ids, bucket]);
+  }, [data.categoryPivot, savedChart.category_ids, allCategories, bucket]);
 
   // Collect all periods from both sources, apply date filter
   const allPeriods = useMemo(() => {
@@ -128,43 +148,61 @@ export function CustomChart({ savedChart, data, onEdit, onDelete }: CustomChartP
     return periods;
   }, [catData, recipientData, tagData, savedChart.date_range_start, savedChart.date_range_end]);
 
-  // Build unified series metadata
-  const seriesMeta = useMemo<SeriesMeta[]>(() => {
-    const result: SeriesMeta[] = [];
-    let colorIdx = 0;
-
-    for (const cat of catData) {
-      result.push({ key: `cat:${cat.categoryId}`, label: cat.categoryName, color: CHART_COLORS[colorIdx++ % CHART_COLORS.length] });
-    }
-
-    for (const rec of recipientData) {
-      result.push({ key: `rec:${rec.recipientId}`, label: rec.name, color: CHART_COLORS[colorIdx++ % CHART_COLORS.length] });
-    }
-
-    for (const tag of tagData) {
-      result.push({ key: `tag:${tag.tagId}`, label: `#${tag.slug}`, color: CHART_COLORS[colorIdx++ % CHART_COLORS.length] });
-    }
-
+  // Flatten every in-scope category / recipient / tag into one Entity list, each
+  // carrying its per-period spend and grand total over the visible periods.
+  // Months are stored as absolute spend so series/bars stack cleanly.
+  const entities = useMemo<Entity[]>(() => {
+    const periods = allPeriods;
+    const build = (key: string, label: string, months: Record<string, number>): Entity => {
+      const abs: Record<string, number> = {};
+      let total = 0;
+      for (const p of periods) {
+        const v = Math.abs(months[p] ?? 0);
+        abs[p] = v;
+        total += v;
+      }
+      return { key, label, months: abs, total };
+    };
+    const result: Entity[] = [];
+    for (const cat of catData) result.push(build(`cat:${cat.categoryId}`, cat.categoryName, cat.months));
+    for (const rec of recipientData) result.push(build(`rec:${rec.recipientId}`, rec.name, rec.months));
+    for (const tag of tagData) result.push(build(`tag:${tag.tagId}`, `#${tag.slug}`, tag.months));
     return result;
-  }, [catData, recipientData, tagData]);
+  }, [catData, recipientData, tagData, allPeriods]);
+
+  // Cap the long tail: when ranked, or when a dynamic "All" source is active,
+  // sort by spend and bundle everything past the top-N into one "Other" entry.
+  // Manual selections are shown verbatim in their picked order.
+  const displayEntities = useMemo<Entity[]>(() => {
+    const needsRanking = isRanked || capActive;
+    if (!needsRanking) return entities;
+    const sorted = [...entities].sort((a, b) => b.total - a.total);
+    if (!capActive || sorted.length <= TOP_N) return sorted;
+
+    const top = sorted.slice(0, TOP_N);
+    const rest = sorted.slice(TOP_N);
+    const months: Record<string, number> = {};
+    let total = 0;
+    for (const e of rest) {
+      total += e.total;
+      for (const p of allPeriods) months[p] = (months[p] ?? 0) + (e.months[p] ?? 0);
+    }
+    return [...top, { key: 'other', label: t('customChart.other'), months, total, isOther: true }];
+  }, [entities, isRanked, capActive, allPeriods, t]);
+
+  const seriesMeta = useMemo<SeriesMeta[]>(
+    () => displayEntities.map((e, i) => ({
+      key: e.key,
+      label: e.label,
+      color: e.isOther ? OTHER_COLOR : CHART_COLORS[i % CHART_COLORS.length],
+    })),
+    [displayEntities]
+  );
 
   const chartData = useMemo<ChartDatum[]>(() => {
-    const recDataMap = new Map(recipientData.map((r) => [r.recipientId, r]));
-    const tagDataMap = new Map(tagData.map((tg) => [tg.tagId, tg]));
-
     return allPeriods.map((period) => {
       const values: Record<string, number> = {};
-      for (const cat of catData) {
-        values[`cat:${cat.categoryId}`] = Math.abs(cat.months[period] ?? 0);
-      }
-      for (const recId of savedChart.recipient_ids) {
-        const rec = recDataMap.get(recId);
-        values[`rec:${recId}`] = Math.abs(rec?.months[period] ?? 0);
-      }
-      for (const tagId of savedChart.tag_ids) {
-        const tag = tagDataMap.get(tagId);
-        values[`tag:${tagId}`] = Math.abs(tag?.months[period] ?? 0);
-      }
+      for (const e of displayEntities) values[e.key] = e.months[period] ?? 0;
       return {
         period,
         periodLabel: formatPeriod(period, bucket),
@@ -172,7 +210,7 @@ export function CustomChart({ savedChart, data, onEdit, onDelete }: CustomChartP
         values,
       };
     });
-  }, [allPeriods, catData, recipientData, tagData, savedChart.recipient_ids, savedChart.tag_ids, bucket]);
+  }, [allPeriods, displayEntities, bucket]);
 
   // Memoised so the chart components and legend get stable array identities
   // instead of a fresh `.map()` result on every render.
@@ -200,6 +238,13 @@ export function CustomChart({ savedChart, data, onEdit, onDelete }: CustomChartP
       strokeWidth: 2,
     })),
     [seriesMeta]
+  );
+
+  // Ranked view: one horizontal bar per entity, sorted high→low (already sorted
+  // in displayEntities), coloured per-index with "Other" muted.
+  const rankedSeries = useMemo<BarSeries<Entity>[]>(
+    () => [{ key: 'total', label: t('statsPage.spending'), accessor: (e: Entity) => e.total }],
+    [t]
   );
   const yTick = (v: number) => `${currencySymbol}${(v / 1000).toFixed(0)}k`;
   const xTickFmt = (v: unknown) => formatDate(v as Date, bucket === 'yearly' ? 'yyyy' : 'MMM yy');
@@ -254,7 +299,20 @@ export function CustomChart({ savedChart, data, onEdit, onDelete }: CustomChartP
           </div>
         ) : (
           <div className="space-y-3">
-            {chartType === 'bar' && chartVariant === 'stacked' ? (
+            {isRanked ? (
+              <BarChart<Entity>
+                data={displayEntities}
+                categoryAccessor={(e) => e.label}
+                series={rankedSeries}
+                layout="horizontal"
+                height={Math.max(320, displayEntities.length * 36)}
+                margin={{ top: 16, right: 32, bottom: 28, left: 160 }}
+                valueTickFormat={yTick}
+                tooltipTitle={(e) => e.label}
+                tooltipValueFormat={(v) => formatCurrency(v)}
+                colorForIndex={(i) => seriesMeta[i]?.color ?? CHART_COLORS[i % CHART_COLORS.length]}
+              />
+            ) : chartType === 'bar' && chartVariant === 'stacked' ? (
               <StackedBarChart<ChartDatum>
                 data={chartData}
                 categoryAccessor={(d) => d.periodLabel}
@@ -298,7 +356,7 @@ export function CustomChart({ savedChart, data, onEdit, onDelete }: CustomChartP
                 tooltipValueFormat={(v) => formatCurrency(v)}
               />
             )}
-            <ChartLegend items={legendItems} align="center" />
+            {!isRanked && <ChartLegend items={legendItems} align="center" />}
           </div>
         )}
       </CardContent>

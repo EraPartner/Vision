@@ -241,12 +241,14 @@ router.get('/tag-pivot', async (req, res) => {
   const startDate = req.query.start || null;
   const endDate = req.query.end || null;
   const tagIds = parseNumericArrayQueryParam(req.query.tag_ids);
+  const allTags = req.query.all === 'true' || req.query.all_tags === 'true';
   const { data, meta } = await computeTagPivot({
     targetCurrency: getTargetCurrency(req),
     bucket,
     startDate,
     endDate,
     tagIds: tagIds.length > 0 ? tagIds : null,
+    allTags,
   });
   res.ok({ data, meta });
 });

@@ -105,7 +105,8 @@ export interface NetWorthResponse {
 }
 
 export type ChartType = 'line' | 'bar' | 'area';
-export type ChartVariant = 'default' | 'stacked' | 'grouped';
+// 'ranked' = one bar per entity, sized by total spend over the range (bar only).
+export type ChartVariant = 'default' | 'stacked' | 'grouped' | 'ranked';
 export type TimeBucket = 'monthly' | 'yearly';
 
 export interface SavedChart {
@@ -117,6 +118,11 @@ export interface SavedChart {
     category_ids: number[];
     recipient_ids: number[];
     tag_ids: number[];
+    // Dynamic "all of this dimension" sources. When true the matching *_ids list
+    // is ignored and every entity (incl. ones added later) is charted.
+    all_categories: boolean;
+    all_recipients: boolean;
+    all_tags: boolean;
     date_range_start: string | null;
     date_range_end: string | null;
     created_at: string;
@@ -131,6 +137,9 @@ export interface SavedChartCreate {
     categoryIds: number[];
     recipientIds?: number[];
     tagIds?: number[];
+    allCategories?: boolean;
+    allRecipients?: boolean;
+    allTags?: boolean;
     dateRangeStart?: string | null;
     dateRangeEnd?: string | null;
 }

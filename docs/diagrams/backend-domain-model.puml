@@ -229,7 +229,16 @@ package "Supporting Entities" {
     +id: integer
     +name: text
     +chart_type: text
+    +chart_variant: text
+    +time_bucket: text
     +category_ids: integer[]
+    +recipient_ids: integer[]
+    +tag_ids: integer[]
+    +all_categories: boolean
+    +all_recipients: boolean
+    +all_tags: boolean
+    +date_range_start: date
+    +date_range_end: date
     +created_at: timestamptz
     +updated_at: timestamptz
   }

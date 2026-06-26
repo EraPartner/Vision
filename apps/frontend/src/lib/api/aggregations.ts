@@ -204,6 +204,7 @@ export interface TagPivotItem {
 export function getAggregationTagPivot(params?: {
     currency?: string;
     tag_ids?: number[];
+    all?: boolean;
     bucket?: 'monthly' | 'yearly';
     start?: string | null;
     end?: string | null;
@@ -213,7 +214,10 @@ export function getAggregationTagPivot(params?: {
     if (params?.bucket) qp.set('bucket', params.bucket);
     if (params?.start) qp.set('start', params.start);
     if (params?.end) qp.set('end', params.end);
-    if (params?.tag_ids?.length) {
+    if (params?.all) {
+        // "all tags": let the server return every tag with spend in range.
+        qp.set('all', 'true');
+    } else if (params?.tag_ids?.length) {
         params.tag_ids.forEach((id) => qp.append('tag_ids', String(id)));
     }
     const q = qp.toString();

@@ -37,7 +37,8 @@ export function useTagPivot(chart: SavedChart | null | undefined) {
     const { appSettings } = useAppSettings();
     const targetCurrency = appSettings.defaultCurrency || 'EUR';
 
-    const enabled = !!(chart && chart.tag_ids.length > 0);
+    const allTags = !!chart?.all_tags;
+    const enabled = !!(chart && (allTags || chart.tag_ids.length > 0));
 
     const query = useQuery({
         queryKey: [
@@ -49,8 +50,10 @@ export function useTagPivot(chart: SavedChart | null | undefined) {
             chart?.date_range_end ?? null,
             // Narrowed per chart — the selected tags MUST key the cache so one
             // chart's payload isn't served to another with a different selection
-            // (mirrors the recipient-pivot cache key, ADR-041 amendment).
-            chart?.tag_ids ?? [],
+            // (mirrors the recipient-pivot cache key, ADR-041 amendment). The
+            // all-tags flag keys it too so an "all" chart and a narrowed chart
+            // don't share an entry.
+            allTags ? 'all' : (chart?.tag_ids ?? []),
         ],
         queryFn: () =>
             getAggregationTagPivot({
@@ -58,7 +61,8 @@ export function useTagPivot(chart: SavedChart | null | undefined) {
                 bucket: chart!.time_bucket,
                 start: chart!.date_range_start ?? undefined,
                 end: chart!.date_range_end ?? undefined,
-                tag_ids: chart!.tag_ids,
+                all: allTags,
+                tag_ids: allTags ? undefined : chart!.tag_ids,
             }),
         enabled,
         staleTime: 60_000,
@@ -69,9 +73,12 @@ export function useTagPivot(chart: SavedChart | null | undefined) {
 
     const filtered = useMemo(() => {
         const tagData = buildTagPeriodData(rawPivot ?? {});
+        // "all tags" charts every returned tag; a narrowed chart keeps only its
+        // explicit selection.
+        if (allTags) return tagData;
         const selected = new Set(tagIds ?? []);
         return tagData.filter((tg) => selected.has(tg.tagId));
-    }, [rawPivot, tagIds]);
+    }, [rawPivot, tagIds, allTags]);
 
     return { ...query, tagData: filtered };
 }
