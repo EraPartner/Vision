@@ -230,7 +230,7 @@ export function CashFlowForecastDiagnostics({
                     <p className="mt-2 text-[11px] text-muted-foreground">
                         {hasPersistedData
                             ? t("cashflow.diagnostics.backtestNoteWithHistory")
-                            : t("cashflow.diagnostics.backtestNote")}
+                            : t("cashflow.diagnostics.backtestNote", { n: String(diagnostics.history_months), currency })}
                     </p>
                 </section>
 

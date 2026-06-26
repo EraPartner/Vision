@@ -52,7 +52,7 @@ export const MonthlyChart = memo(function MonthlyChart({ data }: MonthlyChartPro
     return [
       {
         key: "incomeAvg",
-        label: t("statsPage.incomeAvg"),
+        label: t("statsPage.incomeAvg", { n: String(ROLLING_WINDOW) }),
         accessor: (d) => d.incomeAvg,
         color: "hsl(var(--gain) / 0.7)",
         strokeWidth: 2,
@@ -60,7 +60,7 @@ export const MonthlyChart = memo(function MonthlyChart({ data }: MonthlyChartPro
       },
       {
         key: "spendingAvg",
-        label: t("statsPage.spendingAvg"),
+        label: t("statsPage.spendingAvg", { n: String(ROLLING_WINDOW) }),
         accessor: (d) => d.spendingAvg,
         color: "hsl(var(--loss) / 0.7)",
         strokeWidth: 2,

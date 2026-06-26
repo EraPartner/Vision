@@ -185,8 +185,195 @@ for (const [lang, dict] of Object.entries(masters)) {
   }
 }
 
+// ---------------------------------------------------------------------------
+// Source-usage checks. parseGeneratedTs/parity/drift only compare locale files
+// to each other; they cannot see how the code calls t()/tc(). These three
+// guards close the leak classes that slip past:
+//   1. key-existence  — t('a.b.c') for a key absent from en renders the raw key
+//   2. value-shape    — a locale value that is itself a dotted key (paste error)
+//   3. dropped-vars   — t('k', { x }) where the string has no {x} drops x silently
+// ---------------------------------------------------------------------------
+const frontendSrc = path.join(repoRoot, 'apps', 'frontend', 'src');
+// i18n keys are dotted identifiers with no spaces/braces: word.subword.subsub.
+const KEY_SHAPE = /^[a-z][a-zA-Z0-9]*(?:\.[a-zA-Z0-9_]+)+$/;
+const PLURAL_CATS = ['', '.zero', '.one', '.two', '.few', '.many', '.other'];
+
+// Blank out // and /* */ comments while preserving offsets and newlines, so
+// line numbers stay accurate and key-shaped literals inside JSDoc examples
+// (e.g. the t('col.date') in a usage comment) are not mistaken for real calls.
+function blankComments(code) {
+  let out = '';
+  let str = null;
+  for (let i = 0; i < code.length; i++) {
+    const c = code[i];
+    const c2 = code[i + 1];
+    if (str) {
+      out += c;
+      if (c === '\\') { out += code[i + 1] ?? ''; i++; }
+      else if (c === str) str = null;
+      continue;
+    }
+    if (c === '"' || c === "'" || c === '`') { str = c; out += c; continue; }
+    if (c === '/' && c2 === '/') { while (i < code.length && code[i] !== '\n') { out += ' '; i++; } i--; continue; }
+    if (c === '/' && c2 === '*') {
+      out += '  '; i += 2;
+      while (i < code.length && !(code[i] === '*' && code[i + 1] === '/')) { out += code[i] === '\n' ? '\n' : ' '; i++; }
+      out += '  '; i++;
+      continue;
+    }
+    out += c;
+  }
+  return out;
+}
+
+function readStringLiteral(s, i) {
+  const q = s[i];
+  if (q !== '"' && q !== "'" && q !== '`') return undefined;
+  let val = '';
+  let dynamic = false;
+  for (let j = i + 1; j < s.length; j++) {
+    const c = s[j];
+    if (c === '\\') { val += s[j + 1]; j++; continue; }
+    if (q === '`' && c === '$' && s[j + 1] === '{') dynamic = true;
+    if (c === q) return { value: val, end: j, dynamic };
+    val += c;
+  }
+  return undefined;
+}
+
+// From just after '(', split the argument list at top-level commas.
+function readArgs(s, i) {
+  let depth = 1;
+  let cur = '';
+  let str = null;
+  const args = [];
+  for (let j = i; j < s.length; j++) {
+    const c = s[j];
+    if (str) {
+      cur += c;
+      if (c === '\\') { cur += s[j + 1] ?? ''; j++; }
+      else if (c === str) str = null;
+      continue;
+    }
+    if (c === '"' || c === "'" || c === '`') { str = c; cur += c; continue; }
+    if (c === '(' || c === '[' || c === '{') depth++;
+    else if (c === ')' || c === ']' || c === '}') {
+      depth--;
+      if (depth === 0) { args.push(cur); break; }
+    }
+    if (depth === 1 && c === ',') { args.push(cur); cur = ''; continue; }
+    cur += c;
+  }
+  return args;
+}
+
+// Top-level keys of an object literal; returns undefined for spreads/variables.
+function objectKeys(raw) {
+  const s = raw.trim();
+  if (!s.startsWith('{')) return undefined;
+  const body = s.slice(1, s.lastIndexOf('}'));
+  const keys = [];
+  let depth = 0;
+  let str = null;
+  let expectKey = true;
+  let ident = '';
+  const flush = () => { const id = ident.trim(); if (/^[A-Za-z_$][\w$]*$/.test(id)) keys.push(id); ident = ''; };
+  for (let j = 0; j < body.length; j++) {
+    const c = body[j];
+    if (str) { if (c === '\\') j++; else if (c === str) str = null; continue; }
+    if (c === '"' || c === "'" || c === '`') {
+      if (depth === 0 && expectKey) {
+        const lit = readStringLiteral(body, j);
+        if (lit && !lit.dynamic) { keys.push(lit.value); j = lit.end; expectKey = false; ident = ''; continue; }
+      }
+      str = c; continue;
+    }
+    if (c === '(' || c === '[' || c === '{') { depth++; continue; }
+    if (c === ')' || c === ']' || c === '}') { depth--; continue; }
+    if (depth === 0) {
+      if (c === ':') { flush(); expectKey = false; continue; }
+      if (c === ',') { if (expectKey) flush(); ident = ''; expectKey = true; continue; }
+      ident += c;
+    }
+  }
+  if (expectKey) flush();
+  return keys;
+}
+
+function walkSources(dir, acc) {
+  for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
+    if (entry.name === 'node_modules' || entry.name === 'locales' || entry.name === '__tests__') continue;
+    const full = path.join(dir, entry.name);
+    if (entry.isDirectory()) walkSources(full, acc);
+    else if (/\.(ts|tsx)$/.test(entry.name) && !entry.name.endsWith('.d.ts') && !/\.test\.tsx?$/.test(entry.name)) acc.push(full);
+  }
+  return acc;
+}
+
+function placeholdersFor(key) {
+  const set = new Set();
+  let exists = false;
+  for (const cat of PLURAL_CATS) {
+    const v = en[key + cat];
+    if (typeof v === 'string') { exists = true; for (const t of placeholderTokens(v)) set.add(t); }
+  }
+  return { exists, tokens: set };
+}
+
+if (fs.existsSync(frontendSrc)) {
+  const missingKeys = [];
+  const droppedVars = [];
+  const callRe = /(?<![\w$.])(t|tc)\s*\(/g;
+  for (const file of walkSources(frontendSrc, [])) {
+    const code = blankComments(fs.readFileSync(file, 'utf8'));
+    const rel = path.relative(repoRoot, file);
+    let m;
+    while ((m = callRe.exec(code))) {
+      const fn = m[1];
+      const args = readArgs(code, m.index + m[0].length);
+      if (!args.length) continue;
+      const arg0 = args[0].trim();
+      const lit = readStringLiteral(arg0, 0);
+      if (!lit || lit.dynamic || lit.end !== arg0.length - 1) continue; // dynamic/computed key
+      const key = lit.value;
+      if (!KEY_SHAPE.test(key)) continue; // not an i18n key reference
+      const line = code.slice(0, m.index).split('\n').length;
+      const { exists, tokens } = placeholdersFor(key);
+      if (!exists) { missingKeys.push(`${rel}:${line}  ${fn}('${key}')`); continue; }
+      const varsRaw = fn === 't' ? args[1] : args[2];
+      if (varsRaw == null) continue;
+      const passed = objectKeys(varsRaw);
+      if (passed === undefined) continue; // spread / variable vars
+      const allowed = new Set([...tokens].map((t) => t.slice(1, -1)));
+      if (fn === 'tc') allowed.add('count');
+      const dropped = passed.filter((p) => !allowed.has(p));
+      if (dropped.length) droppedVars.push(`${rel}:${line}  ${fn}('${key}') drops {${dropped.join('}, {')}} (string: "${en[key] ?? en[key + '.other'] ?? ''}")`);
+    }
+  }
+  if (missingKeys.length) {
+    console.error(`Found ${missingKeys.length} t()/tc() call(s) referencing keys absent from en.json (the raw key would render):`);
+    console.error(missingKeys.join('\n'));
+    failed = true;
+  }
+  if (droppedVars.length) {
+    console.error(`Found ${droppedVars.length} t()/tc() call(s) passing a var with no matching {placeholder} (value is silently dropped):`);
+    console.error(droppedVars.join('\n'));
+    failed = true;
+  }
+
+  // Value-shape: a locale value that is itself a dotted key is an untranslated leak.
+  for (const [lang, dict] of Object.entries(masters)) {
+    const keyish = Object.entries(dict).filter(([, v]) => typeof v === 'string' && KEY_SHAPE.test(v.trim()));
+    if (keyish.length) {
+      console.error(`Language ${lang} has ${keyish.length} value(s) shaped like an i18n key (likely an untranslated key pasted as a value):`);
+      console.error(keyish.slice(0, 20).map(([k, v]) => `${k} = "${v}"`).join('\n'));
+      failed = true;
+    }
+  }
+}
+
 if (failed) {
   fail('Locale validation failed.', 2);
 }
 
-console.log('Locale validation passed: parity, placeholders, types, and generated-output drift checks are all clean.');
+console.log('Locale validation passed: parity, placeholders, types, source key-usage, and generated-output drift checks are all clean.');

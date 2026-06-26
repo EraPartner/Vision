@@ -207,7 +207,7 @@ export function TaxProfileDialog({ trigger, initialStep, targetYear }: TaxProfil
                                     variant="ghost"
                                     onClick={() => unmarkYearAsFiled(effectiveTargetYear)}
                                 >
-                                    {t('tax.historical.filedLock.unfileCta')}
+                                    {t('tax.historical.filedLock.unfileCta', { year: String(effectiveTargetYear) })}
                                 </Button>
                             </div>
                         </AlertDescription>

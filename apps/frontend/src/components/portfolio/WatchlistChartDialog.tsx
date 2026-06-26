@@ -98,8 +98,8 @@ export function WatchlistChartDialog({ item, open, onOpenChange }: WatchlistChar
       toast.success(t('watchlist.targetUpdated'));
       setEditingPrice(false);
       setNewTargetPrice("");
-    } catch {
-      toast.error(t('common.error'), { description: t('watchlist.updateFailed') });
+    } catch (e) {
+      toast.error(t('watchlist.updateFailed'), { description: (e as Error).message });
     }
   };
 
