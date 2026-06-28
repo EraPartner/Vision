@@ -1095,6 +1095,8 @@ const nl: Record<string, string> = {
   'invDetail.fee': 'Kosten: {amount}',
   'invDetail.feesAndTaxes': 'Kosten & belastingen',
   'invDetail.fxAttribution': 'Valuta-attributie',
+  'invDetail.fxAwareRealized': 'Valuta-bewuste gerealiseerde winst ({currency})',
+  'invDetail.fxAwareUnrealized': 'Valuta-bewuste ongerealiseerde winst ({currency})',
   'invDetail.interestRate': 'Rentevoet',
   'invDetail.investedAtHistoricalRates': 'Geïnvesteerd ({currency}, koers op aankoopdatum)',
   'invDetail.municipality': 'Gemeente',

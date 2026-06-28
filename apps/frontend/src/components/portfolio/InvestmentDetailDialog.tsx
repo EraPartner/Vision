@@ -12,6 +12,7 @@ import { isUnitBased, isFixedIncome, isRealEstate } from '@/utils/assetClass';
 import { onActivateKeyDown } from '@/utils/a11y';
 import { usePortfolio } from '@/hooks/usePortfolio';
 import { usePortfolioSummaryQuery } from '@/hooks/portfolio/usePortfolioSummary';
+import { useFxAwarePnl } from '@/hooks/portfolio/useFxAwarePnl';
 import { useAccountPositions } from '@/hooks/portfolio/useAccountPositions';
 import { AddPortfolioTxnDialog } from './AddPortfolioTxnDialog';
 import { EditInvestmentDialog } from './EditInvestmentDialog';
@@ -32,12 +33,6 @@ type TxnRow = InvestmentSummary['transactions'][number];
 
 interface Props {
   investment: InvestmentSummary;
-  fxAwarePnl?: {
-    realizedTarget: number;
-    unrealizedTarget: number;
-    unrealizedPercent: number;
-  };
-  fxAwareCurrency?: string;
   trigger?: React.ReactNode;
   /** When provided, replaces the embedded AddPortfolioTxnDialog with a callback */
   onAddTransaction?: (investment: InvestmentSummary) => void;
@@ -60,7 +55,7 @@ const TXN_TYPE_COLORS: Record<PortfolioTxnType, string> = {
 };
 
 export function InvestmentDetailDialog({
-  investment, fxAwarePnl, fxAwareCurrency, trigger,
+  investment, trigger,
   onAddTransaction, onEditInvestment, onEditTransaction,
 }: Props) {
   const [open, setOpen] = useState(false);
@@ -96,14 +91,25 @@ export function InvestmentDetailDialog({
   const fixedIncome = isFixedIncome(investment.assetClass);
   const realEstate = isRealEstate(investment.assetClass);
 
-  // FX attribution from the backend summary (it owns the historical-rate
-  // machinery) — only shown for foreign-currency holdings. The query is shared
-  // with the overview/performance pages, so this is usually a cache hit.
+  // Anything FX-related is shown only when the holding is in a foreign currency;
+  // for EUR/base-currency holdings the conversion is a no-op and the extra rows
+  // would just duplicate the native figures.
   const targetCurrency = appSettings.defaultCurrency || 'EUR';
+  const isForeignCurrency = (investment.currency || 'EUR').toUpperCase() !== targetCurrency.toUpperCase();
+
+  // FX attribution from the backend summary (it owns the historical-rate
+  // machinery). The query is shared with the overview/performance pages, so this
+  // is usually a cache hit.
   const { data: apiSummary } = usePortfolioSummaryQuery(targetCurrency);
-  const fxSummary = (investment.currency || 'EUR').toUpperCase() !== targetCurrency.toUpperCase()
+  const fxSummary = isForeignCurrency
     ? apiSummary?.summaries.find((s) => s.id === investment.id)
     : undefined;
+
+  // FX-aware realized/unrealized P&L in the target currency, computed here so the
+  // dialog renders identically wherever it is opened (overview, stocks, crypto,
+  // …) instead of depending on the caller to pass it in.
+  const computeFxAwarePnl = useFxAwarePnl(targetCurrency);
+  const fxAwarePnl = isForeignCurrency ? computeFxAwarePnl(investment) : undefined;
 
   // Per-account positioning (ADR-091): where this holding is custodied. Only
   // shown once an account is actually involved (a lone unassigned group is noise).
@@ -307,14 +313,14 @@ export function InvestmentDetailDialog({
                           {investment.realizedGain >= 0 ? '+' : ''}{fmt(investment.realizedGain, investment.currency)}
                         </span>
                       </div>
-                      {fxAwarePnl && fxAwareCurrency && (
+                      {fxAwarePnl && (
                         <div className="flex justify-between py-1.5 border-b border-border/50">
-                          <span className="text-muted-foreground text-xs">FX-aware {t('invDetail.realizedGain')} ({fxAwareCurrency})</span>
+                          <span className="text-muted-foreground text-xs">{t('invDetail.fxAwareRealized', { currency: targetCurrency })}</span>
                           <span className={cn(
                             "font-medium tabular-nums",
                             fxAwarePnl.realizedTarget >= 0 ? "amount-gain" : "amount-loss"
                           )}>
-                            {fxAwarePnl.realizedTarget >= 0 ? '+' : ''}{fmt(fxAwarePnl.realizedTarget, fxAwareCurrency)}
+                            {fxAwarePnl.realizedTarget >= 0 ? '+' : ''}{fmt(fxAwarePnl.realizedTarget, targetCurrency)}
                           </span>
                         </div>
                       )}
@@ -330,14 +336,14 @@ export function InvestmentDetailDialog({
                           {investment.unrealizedGain >= 0 ? '+' : ''}{fmt(investment.unrealizedGain, investment.currency)}
                         </span>
                       </div>
-                      {fxAwarePnl && fxAwareCurrency && (
+                      {fxAwarePnl && (
                         <div className="flex justify-between py-1.5 border-b border-border/50">
-                          <span className="text-muted-foreground text-xs">FX-aware {t('invDetail.unrealizedGain')} ({fxAwareCurrency})</span>
+                          <span className="text-muted-foreground text-xs">{t('invDetail.fxAwareUnrealized', { currency: targetCurrency })}</span>
                           <span className={cn(
                             "font-medium tabular-nums",
                             fxAwarePnl.unrealizedTarget >= 0 ? "amount-gain" : "amount-loss"
                           )}>
-                            {fxAwarePnl.unrealizedTarget >= 0 ? '+' : ''}{fmt(fxAwarePnl.unrealizedTarget, fxAwareCurrency)}
+                            {fxAwarePnl.unrealizedTarget >= 0 ? '+' : ''}{fmt(fxAwarePnl.unrealizedTarget, targetCurrency)}
                             <span className="text-xs ml-1 opacity-70">{fxAwarePnl.unrealizedPercent >= 0 ? '+' : ''}{fmtNum(fxAwarePnl.unrealizedPercent)}%</span>
                           </span>
                         </div>

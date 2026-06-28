@@ -1095,6 +1095,8 @@ const en: Record<string, string> = {
   'invDetail.fee': 'Fee: {amount}',
   'invDetail.feesAndTaxes': 'Fees & Taxes',
   'invDetail.fxAttribution': 'FX Attribution',
+  'invDetail.fxAwareRealized': 'FX-aware Realized Gain ({currency})',
+  'invDetail.fxAwareUnrealized': 'FX-aware Unrealized Gain ({currency})',
   'invDetail.interestRate': 'Interest Rate',
   'invDetail.investedAtHistoricalRates': 'Invested ({currency}, purchase-date rates)',
   'invDetail.municipality': 'Municipality',

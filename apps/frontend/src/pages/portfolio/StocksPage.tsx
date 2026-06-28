@@ -4,6 +4,7 @@ import { Button } from "@/components/ui/button";
 import { TrendingUp, Trash2, Eye, DollarSign, ArrowUpRight } from "lucide-react";
 import { usePortfolio } from "@/hooks/usePortfolio";
 import { usePortfolioSummaryQuery } from "@/hooks/portfolio/usePortfolioSummary";
+import { useFxAwarePnl } from "@/hooks/portfolio/useFxAwarePnl";
 import { useCurrencyConverter } from "@/hooks/useCurrencyConverter";
 import { useCurrencyFormatter } from "@/hooks/useCurrencyFormatter";
 import { AddInvestmentDialog } from "@/components/portfolio/AddInvestmentDialog";
@@ -12,7 +13,6 @@ import { InvestmentDetailDialog } from "@/components/portfolio/InvestmentDetailD
 import { StalePriceIndicator } from "@/components/portfolio/StalePriceIndicator";
 import { StalePricesBanner } from "@/components/portfolio/StalePricesBanner";
 import { cn } from "@/lib/utils";
-import type { InvestmentSummary } from "@/types/portfolio";
 import { useConfirmDialog } from "@/hooks/useConfirmDialog";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { useAppSettings } from "@/contexts/AppSettingsContext";
@@ -59,7 +59,8 @@ export default function StocksPage({
   const holdings = useMemo(() => byAssetClass(assetClasses), [byAssetClass, assetClasses]);
   const targetCurrency = appSettings.defaultCurrency || 'EUR';
 
-  const { convertToTarget, ratesToEur } = useCurrencyConverter(targetCurrency);
+  const { convertToTarget } = useCurrencyConverter(targetCurrency);
+  const computeFxAwarePnl = useFxAwarePnl(targetCurrency);
 
   // Per-investment FX attribution comes from the backend summary (it has the
   // historical-rate machinery); only shown when a holding is in a foreign currency.
@@ -75,16 +76,6 @@ export default function StocksPage({
 
   const fmt = useCurrencyFormatter(targetCurrency);
 
-  const getRateToEur = useCallback((currency?: string) => {
-    const code = (currency || 'EUR').toUpperCase();
-    return ratesToEur[code] || 1;
-  }, [ratesToEur]);
-
-  const convertEurToTarget = useCallback((amountEur: number) => {
-    const rateTo = getRateToEur(targetCurrency);
-    return rateTo ? amountEur / rateTo : amountEur;
-  }, [getRateToEur, targetCurrency]);
-
   const openMarketLookup = useCallback((symbol?: string, investmentId?: number) => {
     if (!symbol) return;
     // Pass the holding id so the market page can chart non-Yahoo providers
@@ -93,62 +84,11 @@ export default function StocksPage({
     navigate(`/research/market?symbol=${encodeURIComponent(symbol)}${suffix}`);
   }, [navigate]);
 
-  const calculateFxAwarePnl = useCallback((holding: InvestmentSummary) => {
-    const sortedTxns = [...(holding.transactions || [])].sort((a, b) => String(a.date).localeCompare(String(b.date)));
-    let poolUnits = 0;
-    let poolCostEur = 0;
-    let realizedEur = 0;
-
-    for (const txn of sortedTxns) {
-      const units = Number(txn.units) || 0;
-      const amount = Number(txn.amount) || 0;
-      const fees = Number(txn.fees) || 0;
-      const taxes = Number(txn.taxes) || 0;
-      const txnRateToEur = Number(txn.fx_rate_to_eur) > 0
-        ? Number(txn.fx_rate_to_eur)
-        : getRateToEur(txn.currency || holding.currency);
-
-      if (txn.type === 'buy' || txn.type === 'gift') {
-        poolUnits += units;
-        poolCostEur += (amount + fees + taxes) * txnRateToEur;
-      } else if (txn.type === 'sell' && units > 0 && poolUnits > 0) {
-        const sellUnits = Math.min(units, poolUnits);
-        const sellRatio = units > 0 ? sellUnits / units : 0;
-        const avgCostPerUnitEur = poolCostEur / poolUnits;
-        const costOfSoldEur = avgCostPerUnitEur * sellUnits;
-        const netProceedsEur = (amount - fees - taxes) * sellRatio * txnRateToEur;
-        realizedEur += netProceedsEur - costOfSoldEur;
-
-        poolUnits -= sellUnits;
-        poolCostEur -= costOfSoldEur;
-      } else if (txn.type === 'split' && units > 0 && poolUnits > 0) {
-        // units = new TOTAL post-split; EUR cost pool is unchanged (mirrors the
-        // backend). Scaling only the unit count keeps avg-cost-per-unit correct.
-        poolUnits = units;
-      } else if (txn.type === 'return_of_capital' && poolUnits > 0) {
-        poolCostEur = Math.max(0, poolCostEur - amount * txnRateToEur);
-      }
-      // merger/spinoff are cost-basis-neutral — no change to pool.
-    }
-
-    poolCostEur = Math.max(0, poolCostEur);
-
-    const currentPrice = Number(holding.currentPrice ?? holding.current_price) || 0;
-    const currentValueEur = (Number(holding.totalUnits) || 0) * currentPrice * getRateToEur(holding.currency);
-    const unrealizedEur = currentValueEur - poolCostEur;
-
-    return {
-      realizedTarget: convertEurToTarget(realizedEur),
-      unrealizedTarget: convertEurToTarget(unrealizedEur),
-      unrealizedPercent: poolCostEur > 0 ? (unrealizedEur / poolCostEur) * 100 : 0,
-    };
-  }, [convertEurToTarget, getRateToEur]);
-
   const displayedPnlByHoldingId = useMemo(() => {
     const map: Record<number, { realizedTarget: number; unrealizedTarget: number; unrealizedPercent: number }> = {};
     for (const holding of holdings) {
       if (enableFxAwarePnl) {
-        map[holding.id] = calculateFxAwarePnl(holding);
+        map[holding.id] = computeFxAwarePnl(holding);
         continue;
       }
 
@@ -165,7 +105,7 @@ export default function StocksPage({
       };
     }
     return map;
-  }, [holdings, enableFxAwarePnl, calculateFxAwarePnl, convertToTarget]);
+  }, [holdings, enableFxAwarePnl, computeFxAwarePnl, convertToTarget]);
 
   const totals = useMemo(() => {
     return holdings.reduce((acc, holding) => {
@@ -438,10 +378,8 @@ export default function StocksPage({
                     </td>
                     <td className="py-2 px-3">
                       <div className="flex items-center gap-1 justify-end opacity-0 group-hover:opacity-100 transition-opacity">
-                        <InvestmentDetailDialog 
+                        <InvestmentDetailDialog
                           investment={h}
-                          fxAwarePnl={enableFxAwarePnl ? displayedPnlByHoldingId[h.id] : undefined}
-                          fxAwareCurrency={enableFxAwarePnl ? targetCurrency : undefined}
                           trigger={
                             <Button variant="ghost" size="icon" className="icon-touch-target" aria-label={t('portfolio.viewDetails')} title={t('portfolio.viewDetails')}>
                               <Eye className="h-3.5 w-3.5" />
