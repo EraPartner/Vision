@@ -3,9 +3,9 @@ title: Feature - Portfolio & Investments
 type: feature
 status: active
 date: 2026-06-20
-last_modified: 2026-06-24
-updated: 2026-06-24
-tags: [feature, portfolio, investments, stocks, crypto, metals, phase-1, phase-3.5, phase-3.6, phase-9, phase-8, phase-14, pdf-export, offline-resilience, stale-prices, online-status-detection, graceful-degradation, portfolio-summary, realtime-totals, decimal-precision, monetary-math, snapshot-valuation-parity, fixed-income-accrual, real-estate-appreciation, net-worth-reconciliation, historical-fx, snapshot-fx, loading-states, error-states, page-error, skeleton, portfolio-unit-math, shared-utils, splits-event, return-of-capital, banker-rounding, fx-attribution, asset-gain, fx-gain, purchase-date-rates, value-fx-neutral, adr-074, adr-091, adr-100, per-account, move-holding, close-account, brokerage-fanout, rebalancing, saved-plans, cash-aware, cross-workspace, adr-098, portfolio-ticker, marquee, live-quotes, ticker-manager, show-in-ticker, migration-0061]
+last_modified: 2026-06-28
+updated: 2026-06-28
+tags: [feature, portfolio, investments, stocks, crypto, metals, phase-1, phase-3.5, phase-3.6, phase-9, phase-8, phase-14, pdf-export, offline-resilience, stale-prices, online-status-detection, graceful-degradation, portfolio-summary, realtime-totals, decimal-precision, monetary-math, snapshot-valuation-parity, fixed-income-accrual, real-estate-appreciation, net-worth-reconciliation, historical-fx, snapshot-fx, loading-states, error-states, page-error, skeleton, portfolio-unit-math, shared-utils, splits-event, return-of-capital, banker-rounding, fx-attribution, asset-gain, fx-gain, purchase-date-rates, value-fx-neutral, adr-074, adr-091, adr-100, per-account, move-holding, close-account, brokerage-fanout, rebalancing, saved-plans, cash-aware, cross-workspace, adr-098, portfolio-ticker, marquee, live-quotes, ticker-manager, show-in-ticker, migration-0061, fx-aware-pnl, unified-detail-dialog, useFxAwarePnl]
 aliases: [portfolio-feature, investments-feature, holdings, net-worth, stocks, crypto, real-estate, savings, bonds, metals, performance, watchlist]
 description: Track stocks, ETFs, crypto, metals, real estate, savings, and bonds; includes Phase 8 PDF report export with 6 portfolio sections. 2026-05-29 adds historical FX in snapshots and loading/error states on all asset pages. June 2026 adds snapshotBuilder split/return_of_capital events, APP_TIMEZONE day-boundary fix, shared portfolioUnitMath.ts, and FX attribution UI (ADR-074): asset gain / FX effect decomposition on overview, performance, asset pages, and investment detail.
 related_code: ["apps/node-backend/src/routes/investments.js", "apps/node-backend/src/services/priceProviderService.js", "apps/node-backend/src/services/portfolioPerformanceSnapshotService.js", "apps/node-backend/src/services/portfolio/portfolioSummaryService.js", "apps/node-backend/src/routes/info/portfolioSummary.js", "apps/frontend/src/pages/portfolio/PerformancePage.tsx", "apps/frontend/src/pages/portfolio/MetalsPage.tsx", "apps/frontend/src/pages/portfolio/PortfolioOverviewPage.tsx", "apps/frontend/src/hooks/portfolio/usePortfolioSummary.ts", "apps/frontend/src/hooks/usePortfolio.ts", "apps/frontend/src/lib/api.ts"]
@@ -801,6 +801,44 @@ Before ADR-074, `totalInvested` was restated at today's FX on every request. Aft
 - The live portfolio totals and the snapshot series now agree on semantics (both use purchase-date rates for invested capital), closing the contradiction that existed before.
 
 Code links: [[apps/node-backend/src/services/portfolio/portfolioSummaryService.js]], [[apps/node-backend/src/routes/info/_performanceHelpers.js]], [[apps/node-backend/src/controllers/investmentController.js]], [[packages/shared-utils/src/portfolio.js]], [[docs/adr/074-fx-attribution-historical-rates|ADR-074]]
+
+### Unified FX-Aware P&L in InvestmentDetailDialog (2026-06-28)
+
+> [!info] Breaking change for component API — props removed
+> `InvestmentDetailDialog` no longer accepts `fxAwarePnl` or `fxAwareCurrency` props. Both computed internally via the new `useFxAwarePnl` hook. Callers that previously passed these props (i.e. `StocksPage`) must be updated.
+
+**Problem:** `fxAwarePnl` and `fxAwareCurrency` were previously passed only by `StocksPage`, so the same holding showed different FX P&L data depending on whether the dialog was opened from the Stocks page or from another surface (dashboard, overview, crypto, savings, real estate). EUR/base-currency holdings also rendered spurious FX rows because the props were unconditionally displayed when non-null.
+
+**Solution — `useFxAwarePnl` hook:**
+
+A new shared hook at [[apps/frontend/src/hooks/portfolio/useFxAwarePnl.ts]] encapsulates the EUR-pool realized/unrealized P&L computation:
+
+```typescript
+export function useFxAwarePnl(targetCurrency: string): (holding: InvestmentSummary) => FxAwarePnl
+```
+
+The hook:
+- Converts each buy/sell/gift to EUR at its transaction-date `fx_rate_to_eur` (falls back to the live rate from `useCurrencyConverter` when the field is absent).
+- Accumulates gains in EUR (handles `split` and `return_of_capital` events correctly, consistent with `snapshotBuilder` and `calculateCostBasis`).
+- Returns `{ realizedTarget, unrealizedTarget, unrealizedPercent }` converted to `targetCurrency`.
+- Returns stable references via `useCallback` — safe in `useMemo` dependency arrays.
+
+**InvestmentDetailDialog behaviour after the change:**
+
+- Calls `useFxAwarePnl(targetCurrency)` internally to compute the P&L.
+- The FX-aware realized/unrealized rows and the FX attribution card are rendered **only** when `holding.currency !== targetCurrency` (i.e., the holding is in a genuinely foreign currency). This removes spurious FX rows for EUR-denominated holdings.
+- The dialog renders identically regardless of which page opened it (Stocks, Crypto, Overview, dashboard, Real Estate, Savings).
+
+**StocksPage:** Now uses `useFxAwarePnl` for its holdings table column as well, ensuring the table values match the detail dialog values. The previously passed-down props have been removed from the component signature.
+
+**New i18n keys:**
+
+| Key | Purpose |
+|-----|---------|
+| `invDetail.fxAwareRealized` | Label for the FX-aware realized P&L row (shows `{currency}`) |
+| `invDetail.fxAwareUnrealized` | Label for the FX-aware unrealized P&L row (shows `{currency}`) |
+
+Code links: [[apps/frontend/src/hooks/portfolio/useFxAwarePnl.ts]], [[apps/frontend/src/components/portfolio/InvestmentDetailDialog.tsx]], [[apps/frontend/src/pages/portfolio/StocksPage.tsx]]
 
 ## Cash-Aware Rebalancing (ADR-098, updated 2026-06-19)
 

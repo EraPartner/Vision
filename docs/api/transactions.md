@@ -5,9 +5,9 @@ method: GET, POST, PATCH, DELETE
 path: /api/transactions
 description: CRUD operations for financial transactions, including CSV and NDJSON export, bulk operations
 date: 2026-04-24
-updated: 2026-05-08
-last_modified: 2026-05-08
-tags: [api, transactions, finance, phase-5a, phase-9, phase-13, phase-q, decimal, money, export, drillthrough, filters, recipient-groups, bulk-actions]
+updated: 2026-06-28
+last_modified: 2026-06-28
+tags: [api, transactions, finance, phase-5a, phase-9, phase-13, phase-q, decimal, money, export, drillthrough, filters, recipient-groups, bulk-actions, amount-filter, date-search, tag-search]
 status: active
 aliases: [transactions-api, transaction-crud, financial-records, income, expenses]
 related_code: [[apps/node-backend/src/routes/transactions.js]], [[apps/node-backend/src/repositories/transactionRepository.js]], [[apps/node-backend/src/services/currency/currencyConversionService.js]], [[apps/node-backend/src/services/bulkSelection.js]], [[apps/node-backend/src/services/transactionExport.js]]
@@ -46,7 +46,10 @@ Retrieve a list of transactions with filtering and pagination.
 | transaction_type | string | null | Filter by transaction type: `income` (amount > 0) or `expense` (amount < 0) (Phase 13) |
 | uncategorised | boolean | false | Show only uncategorized |
 | active | boolean | true | Show active/inactive |
-| search | string | null | Search in memo/comment |
+| search | string | null | Search in memo/comment/bank_account/currency/amount/date ISO text/tag slugs (ILIKE) — **extended 2026-06-28**: now also matches `CAST(date AS TEXT)` and active tag slugs via EXISTS subquery |
+| amount_min | number | null | Inclusive lower bound on absolute amount magnitude: `ABS(amount) >= amount_min` — sign-agnostic (2026-06-28, additive, non-breaking) |
+| amount_max | number | null | Inclusive upper bound on absolute amount magnitude: `ABS(amount) <= amount_max` — sign-agnostic (2026-06-28, additive, non-breaking) |
+| amount_exact | number | null | Shorthand for min == max; sets both bounds to the same value (2026-06-28, additive, non-breaking) |
 | normalize_to_eur | boolean | false | Convert amounts to EUR |
 | target_currency | string | null | Target currency used when normalize_to_eur=true (defaults to EUR) |
 | include_balance | boolean | false | Compute running balance via SQL window function |
@@ -56,6 +59,9 @@ Retrieve a list of transactions with filtering and pagination.
 Notes:
 - `target_currency` is only applied when `normalize_to_eur=true`.
 - If `target_currency` is invalid or unsupported, conversion falls back to EUR behavior.
+- `amount_min`, `amount_max`, `amount_exact` filter on `ABS(t.amount)` — they are magnitude-based and do not distinguish income from expenses. Use `transaction_type=income|expense` to restrict by sign (2026-06-28, additive, non-breaking — [[apps/node-backend/src/services/filterBuilder.js]]).
+- `amount_exact` sets both bounds to the same value and takes precedence when `amount_min`/`amount_max` are also supplied.
+- `search` now additionally matches `CAST(t.date AS TEXT)` (e.g., typing `2026-01` surfaces all January 2026 rows) and active tag slugs on the row via an EXISTS subquery over `transaction_tags`/`tags` (2026-06-28, [[apps/node-backend/src/services/filterBuilder.js]]).
 - `recipient_id` matches the transaction recipient directly and any aliases under it (single direction). Use `recipient_group_id` to include the full primary-recipient group (Phase Q) ([[apps/node-backend/src/services/filterBuilder.js]]).
 - `recipient_group_id` resolves the complete primary-recipient group via scalar subqueries: matches the recipient itself, any aliases under it, the recipient's own primary (if it is an alias), and all other aliases under that primary. Ignores `recipient_id` when both are provided (Phase Q) ([[apps/node-backend/src/services/filterBuilder.js]]).
 - `category_ids` accepts comma-separated integers (e.g., `category_ids=5,7,12`). Ignored if `category_id` is set. Enables pivot table drillthrough to multiple category groups (Phase 13) ([[apps/node-backend/src/services/filterBuilder.js]]).
@@ -115,7 +121,9 @@ Export transactions to CSV format using chunked streaming.
 | recipient_id | integer | null | Filter by recipient ID (matches recipient directly and aliases under it, one direction) (Phase 13) |
 | recipient_name | string | null | Filter by recipient name (Phase 13) |
 | transaction_type | string | null | Filter by transaction type: `income` (amount > 0) or `expense` (amount < 0) (Phase 13) |
-| search | string | null | Filter by memo/comment text (Phase 13) |
+| search | string | null | Filter by memo/comment/date/tag text (Phase 13 + 2026-06-28 extension) |
+| amount_min | number | null | Inclusive lower bound on `ABS(amount)` (2026-06-28, additive, non-breaking) |
+| amount_max | number | null | Inclusive upper bound on `ABS(amount)` (2026-06-28, additive, non-breaking) |
 | include_balance | boolean | false | Add a "Running Balance" column computed via JavaScript accumulator across chunks |
 
 **Filter Capping (Phase 13):**
@@ -168,7 +176,9 @@ Export transactions to NDJSON (newline-delimited JSON) format using chunked stre
 | recipient_id | integer | null | Filter by recipient ID (matches recipient directly and aliases under it, one direction) (Phase 13) |
 | recipient_name | string | null | Filter by recipient name (Phase 13) |
 | transaction_type | string | null | Filter by transaction type: `income` (amount > 0) or `expense` (amount < 0) (Phase 13) |
-| search | string | null | Filter by memo/comment text (Phase 13) |
+| search | string | null | Filter by memo/comment/date/tag text (Phase 13 + 2026-06-28 extension) |
+| amount_min | number | null | Inclusive lower bound on `ABS(amount)` (2026-06-28, additive, non-breaking) |
+| amount_max | number | null | Inclusive upper bound on `ABS(amount)` (2026-06-28, additive, non-breaking) |
 
 **Filter Capping (Phase 13):**
 - `bank_accounts` is capped at 50 entries; excess entries are silently ignored

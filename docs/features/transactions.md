@@ -3,11 +3,11 @@ title: Transactions
 type: feature
 status: active
 date: 2026-04-16
-updated: 2026-06-26
-tags: [feature, transactions, finance, phase-q, recipient-groups, bulk-actions, optimistic-updates, optimistic-create, june-2026, context-menu, quick-look, keyboard-nav, duplicate, filter-by-recipient, deep-link, electron-native, new-transaction, render-loop-fix, category-ids-filter, multi-value-filter, balance-write-protection, tag-editing-fix]
+updated: 2026-06-28
+tags: [feature, transactions, finance, phase-q, recipient-groups, bulk-actions, optimistic-updates, optimistic-create, june-2026, context-menu, quick-look, keyboard-nav, duplicate, filter-by-recipient, deep-link, electron-native, new-transaction, render-loop-fix, category-ids-filter, multi-value-filter, balance-write-protection, tag-editing-fix, amount-filter, search-suggestions, date-search, tag-search]
 aliases: [transactions-feature, income, expenses, financial-records, money-tracking]
-description: Core transaction management - income, expenses, and tracking financial activities. Phase Q adds recipient-group filtering for linked-recipient transaction discovery. Bulk operations enable atomic multi-row delete, recategorize, reassign, activate/deactivate, export, and tag. June 2026 (ADR-070): useUpdateTransaction/useDeleteTransaction are now optimistic. June 2026 Premium v3 (ADR-071): useCreateTransaction is now optimistic (temp negative-id row → server-row swap → onSettled invalidate; virtual list excluded; 6 tests). June 2026 Premium v3 V5-V7: per-row context menu, Quick Look dialog (Space), keyboard row navigation (↑/↓/Enter), Duplicate, and Filter-by-recipient actions. June 2026 V12 (ADR-072): /transactions?new=1 deep link opens AddTransactionDialog (used by native menu and dock menu). 2026-06-25: balance field is now write-protected (import pipeline only); PATCH and manual create can no longer set it; TransactionInfoDialog renders it read-only. 2026-06-26: TransactionInfoDialog tag-editing state bug fixed — last-tag removal chip persisted on screen after PATCH succeeded; dialog now tracks tag slugs in local state seeded from infoTransaction.tags.
-related_code: ["apps/node-backend/src/routes/transactions.js", "apps/node-backend/src/repositories/transactionRepository.js", "apps/node-backend/src/services/filterBuilder.js", "apps/node-backend/src/services/bulkSelection.js", "apps/frontend/src/features/transactions/", "apps/frontend/src/pages/TransactionsPage.tsx"]
+description: Core transaction management - income, expenses, and tracking financial activities. Phase Q adds recipient-group filtering for linked-recipient transaction discovery. Bulk operations enable atomic multi-row delete, recategorize, reassign, activate/deactivate, export, and tag. June 2026 (ADR-070): useUpdateTransaction/useDeleteTransaction are now optimistic. June 2026 Premium v3 (ADR-071): useCreateTransaction is now optimistic (temp negative-id row → server-row swap → onSettled invalidate; virtual list excluded; 6 tests). June 2026 Premium v3 V5-V7: per-row context menu, Quick Look dialog (Space), keyboard row navigation (↑/↓/Enter), Duplicate, and Filter-by-recipient actions. June 2026 V12 (ADR-072): /transactions?new=1 deep link opens AddTransactionDialog (used by native menu and dock menu). 2026-06-25: balance field is now write-protected (import pipeline only); PATCH and manual create can no longer set it; TransactionInfoDialog renders it read-only. 2026-06-26: TransactionInfoDialog tag-editing state bug fixed — last-tag removal chip persisted on screen after PATCH succeeded; dialog now tracks tag slugs in local state seeded from infoTransaction.tags. 2026-06-28: free-text search now also matches the transaction date (ISO text) and active tag slugs; new amount_min/amount_max/amount_exact filter params; TransactionSearchSuggestions dropdown for quick filters; FilterBanner shows amount descriptors.
+related_code: ["apps/node-backend/src/routes/transactions.js", "apps/node-backend/src/repositories/transactionRepository.js", "apps/node-backend/src/services/filterBuilder.js", "apps/node-backend/src/services/bulkSelection.js", "apps/frontend/src/features/transactions/", "apps/frontend/src/features/transactions/components/TransactionSearchSuggestions.tsx", "apps/frontend/src/pages/TransactionsPage.tsx"]
 ---
 
 # Transactions
@@ -137,9 +137,67 @@ Transactions support rich filtering:
 - Category filter
 - Recipient filter (direct + aliases via `recipient_id`)
 - Recipient group filter (full primary group via `recipient_group_id`, Phase Q)
-- Amount range (min/max)
+- Amount range (min/max) — see [Amount Filters](#amount-filters-2026-06-28) below
 - Bank account
 - Currency
+
+#### Amount Filters (2026-06-28)
+
+Three new optional query params control amount filtering on magnitude (sign-agnostic — both income and expenses of a given absolute value are matched):
+
+| Param | Description |
+|-------|-------------|
+| `amount_min` | Inclusive lower bound: `ABS(amount) >= amount_min` |
+| `amount_max` | Inclusive upper bound: `ABS(amount) <= amount_max` |
+| `amount_exact` | Shorthand for min == max (single amount match) |
+
+`amount_exact` takes precedence over `amount_min`/`amount_max` when all three are supplied. The sign convention (`income`/`expense`) is still controlled separately by `transaction_type`.
+
+These params are threaded through the full stack:
+- `parseTransactionListQuery` in [[apps/node-backend/src/routes/transactions.js]] parses all three and forwards `amountMin`/`amountMax` to `buildTransactionWhere`.
+- `buildTransactionWhere` in [[apps/node-backend/src/services/filterBuilder.js]] emits `ABS(t.amount) >= $n` / `ABS(t.amount) <= $n` clauses.
+- `getAllWithCount` in [[apps/node-backend/src/repositories/transactionRepository.js]] accepts and forwards `amountMin`/`amountMax`.
+- `buildExportFilters` passes them to both CSV and JSON export endpoints.
+- `normalizeBulkFilter` in [[apps/node-backend/src/services/bulkSelection.js]] maps them so bulk "select all matching" stays in lockstep.
+- Frontend: `useTransactionListData`, `BulkTransactionFilter`, and the export query all accept `amountMinFilter`/`amountMaxFilter`.
+
+#### Extended Free-Text Search (2026-06-28)
+
+The free-text `search` parameter (`ILIKE %term%`) now matches across **all** of the following columns (extended from the previous set):
+
+| Column | Notes |
+|--------|-------|
+| `t.memo` | Transaction description |
+| `t.comment` | User note |
+| `t.bank_account` | IBAN / account identifier |
+| `t.currency` | ISO 4217 code |
+| `CAST(t.amount AS TEXT)` | Amount as string |
+| `CAST(t.date AS TEXT)` | ISO date string (e.g., `2026-01`) — **new** |
+| `r.name` / `pr.name` | Recipient / primary recipient |
+| `c.general` / `c.detail` | Category general/detail |
+| `rc.general` / `rc.detail` | Recipient default category |
+| `pc.general` / `pc.detail` | Primary recipient category |
+| Tag slugs (EXISTS subquery) | Active tags on the row — **new** |
+
+The tag match uses `EXISTS (SELECT 1 FROM transaction_tags tt JOIN tags tg ON tg.id = tt.tag_id WHERE tt.transaction_id = t.id AND tg.is_active AND tg.slug ILIKE $n)`, so a search for `rome` will surface rows tagged `rome-2025`.
+
+Code links: [[apps/node-backend/src/services/filterBuilder.js]]
+
+#### TransactionSearchSuggestions (2026-06-28)
+
+A new `TransactionSearchSuggestions` component renders a dropdown when the transactions search bar receives focus. It offers a palette of quick filters that merge into the URL-param filter set without requiring manual param construction:
+
+- All income / All expenses (sets `transaction_type`)
+- Exact amount (sets `amount_exact`)
+- Amount range (sets `amount_min` and/or `amount_max`)
+- Current year / Previous year / Arbitrary year (sets `start_date` + `end_date`)
+- Custom date range
+
+Selecting a suggestion updates the URL search params and closes the dropdown. The `VirtualDataTable` exposes a `searchSuggestions` slot that `TransactionsTable` populates with this component.
+
+`FilterBanner` now shows readable amount descriptors alongside type and date pills — e.g., `≥ 500 EUR`, `= 75.50 EUR`, or `50–200 EUR`.
+
+Code links: [[apps/frontend/src/features/transactions/components/TransactionSearchSuggestions.tsx]], [[apps/frontend/src/features/transactions/components/FilterBanner.tsx]], [[apps/frontend/src/components/shared/VirtualDataTable.tsx]]
 
 #### Filter by Account (deep link, 2026-06-19)
 
@@ -310,7 +368,8 @@ The `FilterBanner` component exposes two export buttons (CSV, JSON) when a struc
 
 - **Structural filters**: `bank_account`, `bank_accounts`, `category_id`, `category_ids`, `recipient_id`, `recipient_name`, `transaction_type`, `transaction_id`
 - **Date filters**: `start_date`, `end_date`
-- **Search**: `search` (memo/comment text) is included in the export when present
+- **Amount filters**: `amount_min`, `amount_max` (2026-06-28 — magnitude-based, sign-agnostic)
+- **Search**: `search` (memo/comment/date/tag text) is included in the export when present
 
 **Filename pattern**: `transactions_<slug-of-filterLabel-or-"filtered">_<YYYY-MM-DD>.{csv|ndjson}`
 

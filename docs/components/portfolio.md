@@ -3,7 +3,8 @@ title: Portfolio Components
 type: component
 status: active
 date: 2026-06-24
-tags: [components, portfolio, investments, phase-1, phase-3.6, portfolio-ticker, ticker-manager, show-in-ticker, migration-0061]
+updated: 2026-06-28
+tags: [components, portfolio, investments, phase-1, phase-3.6, portfolio-ticker, ticker-manager, show-in-ticker, migration-0061, fx-aware-pnl, unified-detail-dialog]
 description: Components for investment portfolio management
 aliases: [portfolio-components, investment-components, holdings-components]
 related_code: ["apps/frontend/src/components/portfolio", "apps/frontend/src/pages/portfolio/WatchlistPage.tsx"]
@@ -146,8 +147,23 @@ Shows detailed information about an investment.
 - Notes
 - Transaction dates are formatted with app date settings
 - Dedicated edit actions for both investment metadata and individual transactions
+- FX-aware realized and unrealized P&L rows — shown only for foreign-currency holdings (2026-06-28)
 
-Code links: [[apps/frontend/src/components/portfolio/InvestmentDetailDialog.tsx]], [[apps/frontend/src/components/shared/dateUtils.ts]]
+### FX-Aware P&L (2026-06-28)
+
+`InvestmentDetailDialog` now computes FX-aware P&L internally via the `useFxAwarePnl` hook. The props `fxAwarePnl` and `fxAwareCurrency` have been **removed** from the component interface — the dialog self-computes these values regardless of which page opens it (Stocks, Crypto, Overview, dashboard, Real Estate, or Savings).
+
+The FX-aware realized/unrealized rows are gated on `holding.currency !== targetCurrency`. EUR or base-currency holdings never show the FX rows.
+
+```typescript
+// No longer accepted — these props are removed:
+// fxAwarePnl?: { realized: number; unrealized: number; unrealizedPercent: number }
+// fxAwareCurrency?: string
+```
+
+See [[docs/features/portfolio#unified-fx-aware-pl-in-investmentdetaildialog-2026-06-28|Portfolio — Unified FX-Aware P&L]] for the full description of the computation logic.
+
+Code links: [[apps/frontend/src/components/portfolio/InvestmentDetailDialog.tsx]], [[apps/frontend/src/hooks/portfolio/useFxAwarePnl.ts]], [[apps/frontend/src/components/shared/dateUtils.ts]]
 
 ### EditInvestmentDialog
 

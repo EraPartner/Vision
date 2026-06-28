@@ -3,9 +3,9 @@ title: Custom Hooks
 type: component
 status: active
 date: 2026-04-23
-updated: 2026-06-24
-last_modified: 2026-06-24
-tags: [components, hooks, react-query, zustand, form-state, data-table, phase-4, phase-13, phase-c, phase-d, i18n, notifications, export-filters, bug-hunt-2026-05-05, bug-hunt-2026-05-06, bug-hunt-2026-05-08, mount-guard, query-key-fix, prefetch, memoization, useCallback, parseLocaleNumber, currency-utilities, exclusion-ids, ssrf-correctness, loading-states, error-states, isError, refetch, recipient-insights-filter, optimistic-updates, optimistic-create, liquid-glass-v2, premium-v3, june-2026]
+updated: 2026-06-28
+last_modified: 2026-06-28
+tags: [components, hooks, react-query, zustand, form-state, data-table, phase-4, phase-13, phase-c, phase-d, i18n, notifications, export-filters, bug-hunt-2026-05-05, bug-hunt-2026-05-06, bug-hunt-2026-05-08, mount-guard, query-key-fix, prefetch, memoization, useCallback, parseLocaleNumber, currency-utilities, exclusion-ids, ssrf-correctness, loading-states, error-states, isError, refetch, recipient-insights-filter, optimistic-updates, optimistic-create, liquid-glass-v2, premium-v3, june-2026, fx-aware-pnl, useFxAwarePnl]
 description: Custom React hooks for data fetching and state management. Includes toast notifications for mutations via i18n keys. Phase 13 adds useBankAccounts hook for export filtering. May 2026 bug hunt adds mount guard to usePlannedPayments, fixes queryKey mismatch in usePortfolioPrefetch, and documents parseLocaleNumber utility for locale-aware number parsing. 2026-05-29 adds useExcludedIds as a shared exclusion-resolution hook and exposes isLoading/isError/error/refetch from usePortfolio so asset pages can distinguish loading/error from empty. 2026-06-01: useStatistics adds recipientInsightsFilteredQuery so the all-years Top Recipients chart reacts to exclusion toggles. 2026-06-10: useUpdateTransaction/useDeleteTransaction made optimistic (ADR-070 Tier 5). 2026-06-10 Premium v3 (ADR-071): useCreateTransaction made optimistic (temp negative-id row, server swap, rollback, onSettled invalidate; 6 tests total). 2026-06-10 V11: useUpcomingPlannedPayments — shared "due in next 7 days" query + module-level dismissed-ID store (useSyncExternalStore, persists to localStorage). 2026-06-24: SuggestionCard deleted — useUpcomingPlannedPayments now has a single consumer (UpcomingPaymentsNotification).
 related_code: ["apps/frontend/src/hooks"]
 ---
@@ -64,6 +64,7 @@ Vision uses custom hooks for data fetching, state management, and reusable logic
 |------|-------------|------|
 | `usePortfolioTaxAdjustments()` | Per-investment tax/fee adjustments by year | `usePortfolioTaxAdjustments.ts` |
 | `usePortfolioPrefetch()` | Prefetch portfolio performance data with corrected queryKey | [[apps/frontend/src/hooks/usePortfolioPrefetch.ts\|usePortfolioPrefetch.ts]] |
+| `useFxAwarePnl(targetCurrency)` | Computes FX-aware realized/unrealized P&L for a holding using EUR-pool accumulation; returns stable callback (2026-06-28) | [[apps/frontend/src/hooks/portfolio/useFxAwarePnl.ts\|useFxAwarePnl.ts]] |
 
 ### Chart & Formatting Hooks
 
@@ -952,6 +953,57 @@ interface SettingsStore {
 ### Internal Hydration (Provider-only)
 
 The AppSettingsContext, SettingsContext, and ThemeContext Providers call store hydration actions once preloaded data arrives. Components should never call `_hydrateAppSettings()`, etc. directly.
+
+---
+
+## useFxAwarePnl (2026-06-28)
+
+Shared hook for computing FX-aware realized/unrealized P&L on a portfolio holding. Used by both `InvestmentDetailDialog` and the `StocksPage` holdings table, guaranteeing both surfaces show identical numbers.
+
+**File:** [[apps/frontend/src/hooks/portfolio/useFxAwarePnl.ts]]
+
+### API
+
+```typescript
+import { useFxAwarePnl, type FxAwarePnl } from '@/hooks/portfolio/useFxAwarePnl';
+
+const computeFxAwarePnl = useFxAwarePnl(targetCurrency);
+const pnl: FxAwarePnl = computeFxAwarePnl(holding);
+```
+
+```typescript
+interface FxAwarePnl {
+  realizedTarget: number;   // Realized P&L in targetCurrency
+  unrealizedTarget: number; // Unrealized P&L in targetCurrency
+  unrealizedPercent: number; // Unrealized return %
+}
+```
+
+### Computation
+
+The hook returns a stable `useCallback` that, given an `InvestmentSummary`:
+
+1. Sorts transactions by date.
+2. Walks each transaction, converting amounts to EUR at the transaction's `fx_rate_to_eur` (falls back to the current rate from `useCurrencyConverter` when absent).
+3. Accumulates an EUR cost pool (`buy`/`gift` add to pool; `sell` reduces pool and books realized gain; `split` resets unit count; `return_of_capital` reduces pool cost).
+4. Computes unrealized gain as `currentValue_EUR − poolCost_EUR`.
+5. Converts both realized and unrealized values from EUR back to `targetCurrency`.
+
+For holdings where `currency === targetCurrency`, the FX rates are `1`, so the result equals the native P&L — callers should gate display on foreign currency rather than relying on this to no-op visibly (i.e., check `holding.currency !== targetCurrency`).
+
+### When to use
+
+Use this hook instead of the previously removed `fxAwarePnl` prop on `InvestmentDetailDialog`. Gate the display on `holding.currency !== targetCurrency`.
+
+```tsx
+const computeFxAwarePnl = useFxAwarePnl(targetCurrency);
+const isForeign = holding.currency !== targetCurrency;
+const pnl = isForeign ? computeFxAwarePnl(holding) : undefined;
+
+{pnl && <FxAwarePnlRows pnl={pnl} currency={targetCurrency} />}
+```
+
+Code links: [[apps/frontend/src/hooks/portfolio/useFxAwarePnl.ts]], [[apps/frontend/src/components/portfolio/InvestmentDetailDialog.tsx]], [[apps/frontend/src/pages/portfolio/StocksPage.tsx]]
 
 ---
 

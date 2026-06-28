@@ -3,7 +3,7 @@ title: API Endpoint Matrix
 type: reference
 status: active
 date: 2026-04-27
-updated: 2026-06-26
+updated: 2026-06-28
 last_modified: 2026-06-19
 adr-reference: 026
 # Authoritative HTTP-operation count, derived from openapi.yaml and enforced by
@@ -52,9 +52,9 @@ aliases: [api matrix, endpoint matrix, all endpoints, api overview, endpoint lis
 
 | Method | Path | Description | Rate Limit | Doc |
 |--------|------|-------------|------------|-----|
-| GET | `/api/transactions` | List with filtering/pagination (Phase 13: supports `transaction_id`, `recipient_id`, `recipient_name`, `search`, `transaction_type`, `category_ids`, `bank_accounts`; also single `bank_account` — used by the accounts-hub double-click deep link, 2026-06-19) | — | [[docs/api/transactions\|Transactions]] |
-| GET | `/api/transactions/export/csv` | Export as CSV (streaming, chunked); accepts same filters as `GET /api/transactions` (Phase 13) | 30 req/min | [[docs/api/transactions\|Transactions]] |
-| GET | `/api/transactions/export/json` | Export as NDJSON (streaming, chunked); accepts same filters as `GET /api/transactions` (Phase 13) | 30 req/min | [[docs/api/transactions\|Transactions]] |
+| GET | `/api/transactions` | List with filtering/pagination (Phase 13: supports `transaction_id`, `recipient_id`, `recipient_name`, `search`, `transaction_type`, `category_ids`, `bank_accounts`; also single `bank_account` — used by the accounts-hub double-click deep link, 2026-06-19; 2026-06-28 additive: `amount_min`, `amount_max`, `amount_exact` filter on ABS magnitude; `search` now also matches ISO date text and active tag slugs) | — | [[docs/api/transactions\|Transactions]] |
+| GET | `/api/transactions/export/csv` | Export as CSV (streaming, chunked); accepts same filters as `GET /api/transactions` (Phase 13); 2026-06-28: `amount_min`/`amount_max` added | 30 req/min | [[docs/api/transactions\|Transactions]] |
+| GET | `/api/transactions/export/json` | Export as NDJSON (streaming, chunked); accepts same filters as `GET /api/transactions` (Phase 13); 2026-06-28: `amount_min`/`amount_max` added | 30 req/min | [[docs/api/transactions\|Transactions]] |
 | GET | `/api/transactions/:id` | Get single | — | [[docs/api/transactions\|Transactions]] |
 | POST | `/api/transactions` | Create | — | [[docs/api/transactions\|Transactions]] |
 | PATCH | `/api/transactions/:id` | Update | 30 req/min | [[docs/api/transactions\|Transactions]] |
