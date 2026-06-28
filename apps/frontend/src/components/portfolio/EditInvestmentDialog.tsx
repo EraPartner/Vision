@@ -25,7 +25,12 @@ export function EditInvestmentDialog({ investment, trigger }: Props) {
   const [form, setForm] = useState({
     name: investment.name,
     symbol: investment.symbol || '',
-    currency: investment.currency || 'EUR',
+    // Edit the investment's NATIVE currency. On an InvestmentSummary `currency`
+    // is the app's display/target currency (all amounts are converted to it);
+    // the native currency lives in `originalCurrency`. Reading `currency` here
+    // pre-filled the wrong value and a save could overwrite the real native
+    // currency with the display one.
+    currency: investment.originalCurrency || investment.currency || 'EUR',
     currentPrice: investment.currentPrice != null
       ? String(investment.currentPrice)
       : investment.current_price != null
@@ -56,7 +61,7 @@ export function EditInvestmentDialog({ investment, trigger }: Props) {
     setForm({
       name: investment.name,
       symbol: investment.symbol || '',
-      currency: investment.currency || 'EUR',
+      currency: investment.originalCurrency || investment.currency || 'EUR', // native, not display
       currentPrice: investment.currentPrice != null
         ? String(investment.currentPrice)
         : investment.current_price != null

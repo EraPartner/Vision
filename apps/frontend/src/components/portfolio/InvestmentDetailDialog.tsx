@@ -92,10 +92,14 @@ export function InvestmentDetailDialog({
   const realEstate = isRealEstate(investment.assetClass);
 
   // Anything FX-related is shown only when the holding is in a foreign currency;
-  // for EUR/base-currency holdings the conversion is a no-op and the extra rows
-  // would just duplicate the native figures.
+  // for base-currency holdings the conversion is a no-op and the extra rows
+  // would just duplicate the native figures. On an InvestmentSummary `currency`
+  // is the display/target currency (all amounts are converted to it) — the
+  // holding's NATIVE currency lives in `originalCurrency`, which is what decides
+  // foreign-ness.
   const targetCurrency = appSettings.defaultCurrency || 'EUR';
-  const isForeignCurrency = (investment.currency || 'EUR').toUpperCase() !== targetCurrency.toUpperCase();
+  const nativeCurrency = (investment.originalCurrency || investment.currency || 'EUR').toUpperCase();
+  const isForeignCurrency = nativeCurrency !== targetCurrency.toUpperCase();
 
   // FX attribution from the backend summary (it owns the historical-rate
   // machinery). The query is shared with the overview/performance pages, so this
@@ -413,8 +417,8 @@ export function InvestmentDetailDialog({
                   <CardContent className="pt-4 space-y-2">
                     <p className="text-sm font-semibold text-muted-foreground">{t('invDetail.fxAttribution')}</p>
                     <div className="flex justify-between py-1 border-b border-border/50 text-sm">
-                      <span className="text-muted-foreground">{t('portfolio.nativeValue', { currency: investment.currency })}</span>
-                      <span className="font-medium tabular-nums">{fmt(fxSummary.nativeCurrentValue ?? investment.currentValue, investment.currency)}</span>
+                      <span className="text-muted-foreground">{t('portfolio.nativeValue', { currency: nativeCurrency })}</span>
+                      <span className="font-medium tabular-nums">{fmt(fxSummary.nativeCurrentValue ?? investment.currentValue, nativeCurrency)}</span>
                     </div>
                     <div className="flex justify-between py-1 border-b border-border/50 text-sm">
                       <span className="text-muted-foreground">{t('invDetail.investedAtHistoricalRates', { currency: targetCurrency })}</span>
@@ -541,7 +545,7 @@ export function InvestmentDetailDialog({
                           <p className="text-xs text-muted-foreground mt-1">
                             {t('invDetail.unitsAt', {
                               units: fmtNum(txn.units, 4),
-                              price: fmt(txn.price_per_unit || (txn.units !== 0 ? txn.amount / txn.units : 0), investment.currency, 2),
+                              price: fmt(txn.price_per_unit || (txn.units !== 0 ? txn.amount / txn.units : 0), txn.currency || nativeCurrency, 2),
                             })}
                           </p>
                         )}
@@ -556,14 +560,14 @@ export function InvestmentDetailDialog({
                           "font-bold tabular-nums",
                           ['buy', 'fee', 'tax'].includes(txn.type) ? 'text-loss' : 'text-gain'
                         )}>
-                          {['buy', 'fee', 'tax'].includes(txn.type) ? '-' : '+'}{fmt(txn.amount, investment.currency)}
+                          {['buy', 'fee', 'tax'].includes(txn.type) ? '-' : '+'}{fmt(txn.amount, txn.currency || nativeCurrency)}
                         </p>
                         
                         {((txn.fees ?? 0) > 0 || (txn.taxes ?? 0) > 0) && (
                           <p className="text-xs text-muted-foreground">
-                             {(txn.fees ?? 0) > 0 && t('invDetail.fee', { amount: fmt(txn.fees ?? 0, investment.currency) })}
+                             {(txn.fees ?? 0) > 0 && t('invDetail.fee', { amount: fmt(txn.fees ?? 0, txn.currency || nativeCurrency) })}
                             {(txn.fees ?? 0) > 0 && (txn.taxes ?? 0) > 0 && ' · '}
-                            {(txn.taxes ?? 0) > 0 && t('invDetail.tax', { amount: fmt(txn.taxes ?? 0, investment.currency) })}
+                            {(txn.taxes ?? 0) > 0 && t('invDetail.tax', { amount: fmt(txn.taxes ?? 0, txn.currency || nativeCurrency) })}
                           </p>
                         )}
                       </div>

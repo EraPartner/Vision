@@ -66,6 +66,25 @@ describe("EditInvestmentDialog", () => {
         ).toBeInTheDocument();
     });
 
+    it("pre-fills the NATIVE currency (originalCurrency), not the display currency", async () => {
+        // On an InvestmentSummary `currency` is the app's display/target currency
+        // (all amounts converted to it); the native currency is `originalCurrency`.
+        // The editor must show/save the native one — otherwise a save overwrites
+        // the real currency with the display currency.
+        const user = userEvent.setup();
+        const foreign: InvestmentSummary = { ...INVESTMENT, currency: "EUR", originalCurrency: "USD" };
+        renderWithApp(<EditInvestmentDialog investment={foreign} />);
+
+        await user.click(await screen.findByRole("button", { name: /^edit$/i }));
+        await screen.findByRole("dialog");
+
+        // The currency field's displayed value is the native USD, not the EUR
+        // display currency.
+        const currencyField = screen.getByRole("combobox", { name: /currency/i });
+        expect(currencyField).toHaveTextContent("USD");
+        expect(currencyField).not.toHaveTextContent("EUR");
+    });
+
     it("clicking trigger opens dialog", async () => {
         // Arrange
         const user = userEvent.setup();
