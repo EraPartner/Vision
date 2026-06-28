@@ -826,7 +826,7 @@ The hook:
 **InvestmentDetailDialog behaviour after the change:**
 
 - Calls `useFxAwarePnl(targetCurrency)` internally to compute the P&L.
-- The FX-aware realized/unrealized rows and the FX attribution card are rendered **only** when `holding.currency !== targetCurrency` (i.e., the holding is in a genuinely foreign currency). This removes spurious FX rows for EUR-denominated holdings.
+- The FX-aware realized/unrealized rows and the FX attribution card are rendered **only** when the holding is in a genuinely foreign currency. The gate compares the holding's NATIVE currency (`holding.originalCurrency`) to `targetCurrency` — **not** `holding.currency`, which on an `InvestmentSummary` is the display/target currency (every monetary field is converted to it). The native-value row and the transactions tab also label amounts in the holding's own currency. This removes spurious FX rows for base-currency holdings while keeping them for foreign ones. (Editing the same `currency`-vs-`originalCurrency` distinction: [[apps/frontend/src/components/portfolio/EditInvestmentDialog.tsx]] edits `originalCurrency`.)
 - The dialog renders identically regardless of which page opened it (Stocks, Crypto, Overview, dashboard, Real Estate, Savings).
 
 **StocksPage:** Now uses `useFxAwarePnl` for its holdings table column as well, ensuring the table values match the detail dialog values. The previously passed-down props have been removed from the component signature.
