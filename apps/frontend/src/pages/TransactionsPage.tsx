@@ -13,6 +13,7 @@ import { useTransactionListData } from "@/features/transactions/hooks/useTransac
 import { FilterBanner } from "@/features/transactions/components/FilterBanner";
 import { TableActions } from "@/features/transactions/components/TableActions";
 import { TransactionsTable } from "@/features/transactions/components/TransactionsTable";
+import { TransactionSearchSuggestions, type QuickFilterParams } from "@/features/transactions/components/TransactionSearchSuggestions";
 import { TransactionInfoDialog } from "@/features/transactions/components/TransactionInfoDialog";
 import { TransactionQuickLook } from "@/features/transactions/components/TransactionQuickLook";
 import { BulkActionsBar, type BulkSelectionMode } from "@/features/transactions/components/bulk/BulkActionsBar";
@@ -45,6 +46,13 @@ export default function TransactionsPage() {
     const bankAccountFilter = searchParams.get('bank_account') || undefined;
     const transactionTypeRaw = searchParams.get('transaction_type');
     const transactionTypeFilter = (transactionTypeRaw === 'income' || transactionTypeRaw === 'expense') ? transactionTypeRaw : undefined;
+    const parseAmountParam = (raw: string | null) => {
+        if (!raw) return undefined;
+        const n = Math.abs(Number(raw));
+        return Number.isFinite(n) ? n : undefined;
+    };
+    const amountMinFilter = parseAmountParam(searchParams.get('amount_min'));
+    const amountMaxFilter = parseAmountParam(searchParams.get('amount_max'));
     // Memoized on the raw param strings: a fresh array identity per render
     // would ripple through the currentFilter memo into the selection-clear
     // effect below, which setStates — an unconditional render→effect→render
@@ -84,6 +92,8 @@ export default function TransactionsPage() {
         startDateFilter,
         endDateFilter,
         transactionTypeFilter,
+        amountMinFilter,
+        amountMaxFilter,
         tagsFilter,
         bankAccountFilter,
     });
@@ -104,6 +114,8 @@ export default function TransactionsPage() {
         start_date: startDateFilter,
         end_date: endDateFilter,
         transaction_type: transactionTypeFilter,
+        amount_min: amountMinFilter,
+        amount_max: amountMaxFilter,
         tags: tagsFilter,
         bank_account: bankAccountFilter,
         search: search || undefined,
@@ -116,6 +128,8 @@ export default function TransactionsPage() {
         startDateFilter,
         endDateFilter,
         transactionTypeFilter,
+        amountMinFilter,
+        amountMaxFilter,
         tagsFilter,
         bankAccountFilter,
         search,
@@ -235,6 +249,19 @@ export default function TransactionsPage() {
         // including the text search (kept in local state, so clear it too).
         setSearch("");
         setSearchParams({ recipient_id: String(row.recipientId), filter_label: row.recipient });
+    }, [setSearchParams]);
+
+    // Quick-filter suggestions merge their params into the active filter set
+    // (additive — e.g. "all expense" + "amount 10–50") rather than replacing it.
+    const handleApplyQuickFilter = useCallback((params: QuickFilterParams) => {
+        setSearchParams((prev) => {
+            const next = new URLSearchParams(prev);
+            for (const [key, value] of Object.entries(params)) {
+                if (value === undefined || value === '') next.delete(key);
+                else next.set(key, value);
+            }
+            return next;
+        });
     }, [setSearchParams]);
 
     const handleUpdate = (sourceIndex: number, updated: TableTransaction) => {
@@ -372,6 +399,8 @@ export default function TransactionsPage() {
                     startDateFilter={startDateFilter}
                     endDateFilter={endDateFilter}
                     transactionTypeFilter={transactionTypeFilter}
+                    amountMinFilter={amountMinFilter}
+                    amountMaxFilter={amountMaxFilter}
                     searchFilter={search || undefined}
                     filterLabel={filterLabel}
                     bankAccountFilter={bankAccountFilter}
@@ -395,6 +424,13 @@ export default function TransactionsPage() {
                     loadMoreOffset={loadMoreOffset}
                     search={search}
                     onSearchChange={setSearch}
+                    searchSuggestions={({ query, close }) => (
+                        <TransactionSearchSuggestions
+                            query={query}
+                            onApply={handleApplyQuickFilter}
+                            close={close}
+                        />
+                    )}
                     sortKey={sortKey}
                     sortDir={sortDir}
                     onSortChange={handleSortChange}

@@ -33,6 +33,8 @@ export async function getTransactions(params?: {
     sort_by?: string;
     sort_dir?: 'asc' | 'desc';
     transaction_type?: 'income' | 'expense';
+    amount_min?: number;
+    amount_max?: number;
     tags?: string;
 }): Promise<TransactionsListResponse> {
     const res = await requestWithQuery<TransactionsListResponse>('/api/transactions', { ...params, category_ids: params?.category_ids?.join(',') });

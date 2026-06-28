@@ -545,6 +545,8 @@ export interface BulkTransactionFilter {
     search?: string;
     active?: boolean;
     transaction_type?: 'income' | 'expense';
+    amount_min?: number;
+    amount_max?: number;
     tags?: string[];
 }
 

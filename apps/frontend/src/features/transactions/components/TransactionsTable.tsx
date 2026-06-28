@@ -52,6 +52,7 @@ interface TransactionsTableProps {
     deletePending: boolean;
     selectedIds: Set<number>;
     onSelectionChange: (next: Set<number>) => void;
+    searchSuggestions?: (ctx: { query: string; close: () => void }) => React.ReactNode;
 }
 
 export function TransactionsTable({
@@ -83,6 +84,7 @@ export function TransactionsTable({
     deletePending,
     selectedIds,
     onSelectionChange,
+    searchSuggestions,
 }: TransactionsTableProps) {
     const { t } = useLanguage();
     const { appSettings } = useAppSettings();
@@ -404,6 +406,7 @@ export function TransactionsTable({
             maxHeight={700}
             cancelEditingRef={cancelEditingRef}
             onEditingChange={onEditingChange}
+            searchSuggestions={searchSuggestions}
         />
     );
 }

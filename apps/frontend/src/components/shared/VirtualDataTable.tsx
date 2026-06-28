@@ -71,6 +71,13 @@ interface VirtualDataTableProps<T> {
     cancelEditingRef?: React.MutableRefObject<(() => void) | null>;
     /** Optional callback to notify when editing state changes (true = editing started, false = editing ended) */
     onEditingChange?: (editing: boolean) => void;
+    /**
+     * Optional filter-suggestion dropdown rendered under the search input while it
+     * is focused. Receives the live query and a `close()` to dismiss the dropdown
+     * (e.g. after applying a filter). The table only provides the anchor + open
+     * state; the suggestion content is owned by the caller.
+     */
+    searchSuggestions?: (ctx: { query: string; close: () => void }) => React.ReactNode;
 }
 
 interface IndexedRow<T> {
@@ -116,6 +123,7 @@ export function VirtualDataTable<T extends Record<string, unknown>>({
     rowHeight = 44,
     cancelEditingRef,
     onEditingChange,
+    searchSuggestions,
 }: VirtualDataTableProps<T>) {
     const { t } = useLanguage();
     const isServerSort = !!onSortChange;
@@ -123,6 +131,8 @@ export function VirtualDataTable<T extends Record<string, unknown>>({
     const [editValues, setEditValues] = useState<Record<string, unknown>>({});
     const isServerSearch = !!onSearchChange;
     const [localSearchQuery, setLocalSearchQuery] = useState(searchValue ?? "");
+    const [searchFocused, setSearchFocused] = useState(false);
+    const searchContainerRef = useRef<HTMLDivElement | null>(null);
 
     // Notify parent when editing state changes
     useEffect(() => {
@@ -179,6 +189,30 @@ export function VirtualDataTable<T extends Record<string, unknown>>({
     }, [isServerSearch, searchValue, localSearchQuery]);
 
     useEffect(() => clearPendingSearch, [clearPendingSearch]);
+
+    // Close the suggestion dropdown on outside-click or Escape. Only wired up
+    // when suggestions are actually in use and currently open.
+    useEffect(() => {
+        if (!searchSuggestions || !searchFocused) return;
+        const onPointerDown = (e: MouseEvent) => {
+            const target = e.target as HTMLElement | null;
+            if (searchContainerRef.current?.contains(target)) return;
+            // A suggestion may open a portaled Radix popper (e.g. the date-range
+            // calendar) that lives outside the search container's subtree — clicks
+            // inside it must not dismiss the dropdown.
+            if (target?.closest?.('[data-radix-popper-content-wrapper]')) return;
+            setSearchFocused(false);
+        };
+        const onKeyDown = (e: KeyboardEvent) => {
+            if (e.key === 'Escape') setSearchFocused(false);
+        };
+        document.addEventListener('mousedown', onPointerDown);
+        document.addEventListener('keydown', onKeyDown);
+        return () => {
+            document.removeEventListener('mousedown', onPointerDown);
+            document.removeEventListener('keydown', onKeyDown);
+        };
+    }, [searchSuggestions, searchFocused]);
 
     // In server-sort mode use controlled props; otherwise use local state
     const [localSortKey, setLocalSortKey] = useState<string | null>(null);
@@ -470,12 +504,13 @@ export function VirtualDataTable<T extends Record<string, unknown>>({
 
             {/* Search bar */}
             <div className="px-6 pb-3 flex items-center gap-3">
-                <div className="relative flex-1">
+                <div className="relative flex-1" ref={searchContainerRef}>
                     <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
                     <Input
                         placeholder={isServerSearch ? t('table.searchDatabase') : t('table.searchAllColumns')}
                         value={localSearchQuery}
                         onChange={(e) => handleSearchInput(e.target.value)}
+                        onFocus={searchSuggestions ? () => setSearchFocused(true) : undefined}
                         className="pl-9 h-9"
                     />
                     {localSearchQuery && (
@@ -488,6 +523,14 @@ export function VirtualDataTable<T extends Record<string, unknown>>({
                         >
                             <X className="h-3 w-3" />
                         </Button>
+                    )}
+                    {searchSuggestions && searchFocused && (
+                        <div className="absolute left-0 right-0 top-full z-50 mt-1">
+                            {searchSuggestions({
+                                query: localSearchQuery,
+                                close: () => setSearchFocused(false),
+                            })}
+                        </div>
                     )}
                 </div>
                 {(activeFilterCount > 0 || localSearchQuery || sortKey) && (

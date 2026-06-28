@@ -2,6 +2,8 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { X } from "lucide-react";
 import { useLanguage } from "@/contexts/LanguageContext";
+import { useAppSettings } from "@/contexts/AppSettingsContext";
+import { formatDateStringWithAppSettings } from "@/components/shared/dateUtils";
 import { TransactionsExportButtons } from "./TransactionsExportButtons";
 
 interface FilterBannerProps {
@@ -12,6 +14,8 @@ interface FilterBannerProps {
     startDateFilter?: string;
     endDateFilter?: string;
     transactionTypeFilter?: 'income' | 'expense';
+    amountMinFilter?: number;
+    amountMaxFilter?: number;
     searchFilter?: string;
     filterLabel?: string;
     bankAccountFilter?: string;
@@ -28,6 +32,8 @@ export function FilterBanner({
     startDateFilter,
     endDateFilter,
     transactionTypeFilter,
+    amountMinFilter,
+    amountMaxFilter,
     searchFilter,
     filterLabel,
     bankAccountFilter,
@@ -36,17 +42,33 @@ export function FilterBanner({
     onClearTags,
 }: FilterBannerProps) {
     const { t } = useLanguage();
+    const { appSettings } = useAppSettings();
 
+    const hasAmountFilter = amountMinFilter != null || amountMaxFilter != null;
     const hasMainFilter = transactionIdFilter || recipientIdFilter || categoryIdFilter ||
         categoryIdsFilter?.length || startDateFilter || endDateFilter || transactionTypeFilter ||
-        bankAccountFilter;
+        bankAccountFilter || hasAmountFilter;
     const hasTagFilter = tagsFilter && tagsFilter.length > 0;
 
     if (!hasMainFilter && !hasTagFilter) {
         return null;
     }
 
-    const label =
+    const currency = appSettings.defaultCurrency || 'EUR';
+    const amountLabel = (() => {
+        if (amountMinFilter != null && amountMaxFilter != null) {
+            return amountMinFilter === amountMaxFilter
+                ? `= ${amountMinFilter} ${currency}`
+                : `${amountMinFilter}–${amountMaxFilter} ${currency}`;
+        }
+        if (amountMinFilter != null) return `≥ ${amountMinFilter} ${currency}`;
+        if (amountMaxFilter != null) return `≤ ${amountMaxFilter} ${currency}`;
+        return '';
+    })();
+    const fmtDate = (d?: string) => (d ? formatDateStringWithAppSettings(d, appSettings.dateFormat) : '…');
+
+    const descriptors: string[] = [];
+    const baseLabel =
         filterLabel ||
         (transactionIdFilter
             ? `transaction #${transactionIdFilter}`
@@ -55,6 +77,11 @@ export function FilterBanner({
                 : categoryIdFilter
                     ? `category #${categoryIdFilter}`
                     : bankAccountFilter ?? '');
+    if (baseLabel) descriptors.push(baseLabel);
+    if (transactionTypeFilter) descriptors.push(t(transactionTypeFilter === 'income' ? 'filter.type.income' : 'filter.type.expense'));
+    if (startDateFilter || endDateFilter) descriptors.push(`${fmtDate(startDateFilter)} → ${fmtDate(endDateFilter)}`);
+    if (hasAmountFilter) descriptors.push(amountLabel);
+    const label = descriptors.join(' · ');
 
     return (
         <div className="flex flex-wrap items-center gap-2 px-3 py-2 rounded-md bg-primary/10 border border-primary/20">
@@ -93,6 +120,8 @@ export function FilterBanner({
                     startDateFilter={startDateFilter}
                     endDateFilter={endDateFilter}
                     transactionTypeFilter={transactionTypeFilter}
+                    amountMinFilter={amountMinFilter}
+                    amountMaxFilter={amountMaxFilter}
                     searchFilter={searchFilter}
                     filterLabel={filterLabel}
                     bankAccountFilter={bankAccountFilter}
