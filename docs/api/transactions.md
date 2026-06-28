@@ -50,6 +50,7 @@ Retrieve a list of transactions with filtering and pagination.
 | amount_min | number | null | Inclusive lower bound on absolute amount magnitude: `ABS(amount) >= amount_min` — sign-agnostic (2026-06-28, additive, non-breaking) |
 | amount_max | number | null | Inclusive upper bound on absolute amount magnitude: `ABS(amount) <= amount_max` — sign-agnostic (2026-06-28, additive, non-breaking) |
 | amount_exact | number | null | Shorthand for min == max; sets both bounds to the same value (2026-06-28, additive, non-breaking) |
+| amount_signed | boolean | false | When true, `amount_min`/`amount_max` compare the SIGNED `t.amount` instead of `ABS(amount)`, so `-50`/`+50` are distinct exact matches (2026-06-28, additive, non-breaking) |
 | normalize_to_eur | boolean | false | Convert amounts to EUR |
 | target_currency | string | null | Target currency used when normalize_to_eur=true (defaults to EUR) |
 | include_balance | boolean | false | Compute running balance via SQL window function |
@@ -59,7 +60,8 @@ Retrieve a list of transactions with filtering and pagination.
 Notes:
 - `target_currency` is only applied when `normalize_to_eur=true`.
 - If `target_currency` is invalid or unsupported, conversion falls back to EUR behavior.
-- `amount_min`, `amount_max`, `amount_exact` filter on `ABS(t.amount)` — they are magnitude-based and do not distinguish income from expenses. Use `transaction_type=income|expense` to restrict by sign (2026-06-28, additive, non-breaking — [[apps/node-backend/src/services/filterBuilder.js]]).
+- `amount_min`, `amount_max`, `amount_exact` filter on `ABS(t.amount)` by default — magnitude-based, so they do not distinguish income from expenses. Use `transaction_type=income|expense` to restrict by sign, OR pass `amount_signed=true` to compare the signed amount directly (2026-06-28, additive, non-breaking — [[apps/node-backend/src/services/filterBuilder.js]]).
+- `amount_signed=true` switches the comparison column from `ABS(t.amount)` to `t.amount`, so the bounds may be negative and `+50` vs `-50` match exactly. It is orthogonal to `transaction_type` (both can be combined). The frontend search-suggestion UI sends it automatically when the user prefixes the amount with `+` or `-`.
 - `amount_exact` sets both bounds to the same value and takes precedence when `amount_min`/`amount_max` are also supplied.
 - `search` now additionally matches `CAST(t.date AS TEXT)` (e.g., typing `2026-01` surfaces all January 2026 rows) and active tag slugs on the row via an EXISTS subquery over `transaction_tags`/`tags` (2026-06-28, [[apps/node-backend/src/services/filterBuilder.js]]).
 - `recipient_id` matches the transaction recipient directly and any aliases under it (single direction). Use `recipient_group_id` to include the full primary-recipient group (Phase Q) ([[apps/node-backend/src/services/filterBuilder.js]]).

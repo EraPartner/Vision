@@ -143,15 +143,16 @@ Transactions support rich filtering:
 
 #### Amount Filters (2026-06-28)
 
-Three new optional query params control amount filtering on magnitude (sign-agnostic — both income and expenses of a given absolute value are matched):
+Optional query params control amount filtering. By default they match on magnitude (sign-agnostic — both income and expenses of a given absolute value are matched):
 
 | Param | Description |
 |-------|-------------|
 | `amount_min` | Inclusive lower bound: `ABS(amount) >= amount_min` |
 | `amount_max` | Inclusive upper bound: `ABS(amount) <= amount_max` |
 | `amount_exact` | Shorthand for min == max (single amount match) |
+| `amount_signed` | When true, `amount_min`/`amount_max` compare the SIGNED amount instead of `ABS(amount)` |
 
-`amount_exact` takes precedence over `amount_min`/`amount_max` when all three are supplied. The sign convention (`income`/`expense`) is still controlled separately by `transaction_type`.
+`amount_exact` takes precedence over `amount_min`/`amount_max` when all three are supplied. By default the sign convention (`income`/`expense`) is controlled separately by `transaction_type`; alternatively `amount_signed=true` makes the amount bounds themselves sign-aware. In the search-suggestion UI a bare number (`50`) matches the magnitude, while a `+50` / `-50` prefix sends `amount_signed=true` for an exact signed match.
 
 These params are threaded through the full stack:
 - `parseTransactionListQuery` in [[apps/node-backend/src/routes/transactions.js]] parses all three and forwards `amountMin`/`amountMax` to `buildTransactionWhere`.
