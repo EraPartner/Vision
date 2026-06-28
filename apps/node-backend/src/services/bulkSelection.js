@@ -43,6 +43,12 @@ export function normalizeBulkFilter(filter) {
       ? filter.category_ids
       : null;
 
+  const toAmount = (v) => {
+    if (v === undefined || v === null || v === '') return null;
+    const n = Math.abs(Number(v));
+    return Number.isFinite(n) ? n : null;
+  };
+
   return {
     transactionId: pick('transactionId', 'transaction_id'),
     startDate: pick('startDate', 'start_date'),
@@ -63,6 +69,8 @@ export function normalizeBulkFilter(filter) {
       filter.transaction_type === 'expense'
         ? filter.transactionType ?? filter.transaction_type
         : null,
+    amountMin: toAmount(filter.amountMin ?? filter.amount_min),
+    amountMax: toAmount(filter.amountMax ?? filter.amount_max),
     tagSlugs,
   };
 }

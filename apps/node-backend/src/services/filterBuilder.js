@@ -53,9 +53,14 @@ export function validateInt4Ids(ids) {
  *                                              includes the recipient's own primary (if it is an alias)
  *                                              and all other aliases sharing that primary
  * @param {string|null} [opts.recipientName] substring, ILIKE on r.name
- * @param {string|null} [opts.search]       multi-column substring
+ * @param {string|null} [opts.search]       multi-column substring (memo, comment, bank,
+ *                                          currency, amount, recipients, categories, date
+ *                                          text and tag slugs)
  * @param {boolean}     [opts.active=true]  require t.is_active = true
  * @param {'income'|'expense'|null} [opts.transactionType] filter by amount sign
+ * @param {number|null} [opts.amountMin]    inclusive lower bound on |amount| (magnitude,
+ *                                          sign-agnostic — pair with transactionType for sign)
+ * @param {number|null} [opts.amountMax]    inclusive upper bound on |amount|
  * @param {string[]|null} [opts.tagSlugs]   OR-match: row must have at least one of these active tags
  * @param {number}      [opts.startParamIdx=1] first $-index to allocate
  */
@@ -74,6 +79,8 @@ export function buildTransactionWhere(opts = {}) {
     search = null,
     active = true,
     transactionType = null,
+    amountMin = null,
+    amountMax = null,
     tagSlugs = null,
     startParamIdx = 1,
   } = opts;
@@ -127,6 +134,14 @@ export function buildTransactionWhere(opts = {}) {
   } else if (transactionType === 'expense') {
     clauses.push('t.amount < 0');
   }
+  if (amountMin != null && Number.isFinite(Number(amountMin))) {
+    clauses.push(`ABS(t.amount) >= $${p++}`);
+    params.push(Number(amountMin));
+  }
+  if (amountMax != null && Number.isFinite(Number(amountMax))) {
+    clauses.push(`ABS(t.amount) <= $${p++}`);
+    params.push(Number(amountMax));
+  }
   if (recipientId != null) {
     clauses.push(`(t.recipient_id = $${p} OR r.primary_recipient_id = $${p})`);
     p++;
@@ -151,12 +166,16 @@ export function buildTransactionWhere(opts = {}) {
     params.push(`%${recipientName}%`);
   }
   if (search) {
+    // Free-text search spans every user-visible facet of a transaction: notes,
+    // bank/currency, amount, recipients, categories, the date (as ISO text so
+    // "2026-06" matches), and any of the row's active tag slugs.
     clauses.push(`(
       t.memo ILIKE $${p} OR
       t.comment ILIKE $${p} OR
       t.bank_account ILIKE $${p} OR
       t.currency ILIKE $${p} OR
       CAST(t.amount AS TEXT) ILIKE $${p} OR
+      CAST(t.date AS TEXT) ILIKE $${p} OR
       r.name ILIKE $${p} OR
       pr.name ILIKE $${p} OR
       c.general ILIKE $${p} OR
@@ -164,7 +183,14 @@ export function buildTransactionWhere(opts = {}) {
       rc.general ILIKE $${p} OR
       rc.detail ILIKE $${p} OR
       pc.general ILIKE $${p} OR
-      pc.detail ILIKE $${p}
+      pc.detail ILIKE $${p} OR
+      EXISTS (
+        SELECT 1 FROM transaction_tags tt
+        JOIN tags tg ON tg.id = tt.tag_id
+        WHERE tt.transaction_id = t.id
+          AND tg.is_active = true
+          AND tg.slug ILIKE $${p}
+      )
     )`);
     p++;
     params.push(`%${search}%`);

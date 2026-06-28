@@ -51,6 +51,7 @@ function parseTransactionListQuery(query) {
     sort_by, sort_dir,
     include_balance,
     transaction_type,
+    amount_min, amount_max, amount_exact,
     tags,
   } = query;
   const { limit, offset } = parsePagination(query, { maxLimit: 5000 });
@@ -62,6 +63,17 @@ function parseTransactionListQuery(query) {
   const parsedTagSlugs = tags
     ? String(tags).split(',').map((s) => s.trim().toLowerCase()).filter(Boolean)
     : null;
+
+  // Amount filters match on magnitude (|amount|), so income/expense sign is left
+  // to transaction_type. amount_exact is shorthand for min == max.
+  const parseAmount = (v) => {
+    if (v === undefined || v === null || v === '') return null;
+    const n = Math.abs(Number(v));
+    return Number.isFinite(n) ? n : null;
+  };
+  const amountExact = parseAmount(amount_exact);
+  const amountMin = amountExact != null ? amountExact : parseAmount(amount_min);
+  const amountMax = amountExact != null ? amountExact : parseAmount(amount_max);
 
   return {
     limit,
@@ -81,6 +93,8 @@ function parseTransactionListQuery(query) {
     sortDir: sort_dir === 'asc' || sort_dir === 'desc' ? sort_dir : null,
     includeBalance: include_balance === 'true',
     transactionType: transaction_type === 'income' || transaction_type === 'expense' ? transaction_type : null,
+    amountMin,
+    amountMax,
     tagSlugs: parsedTagSlugs?.length ? parsedTagSlugs : null,
   };
 }
@@ -122,6 +136,8 @@ function buildExportFilters(query) {
     search: opts.search,
     active: opts.active,
     transactionType: opts.transactionType,
+    amountMin: opts.amountMin,
+    amountMax: opts.amountMax,
     tagSlugs: opts.tagSlugs,
   });
 

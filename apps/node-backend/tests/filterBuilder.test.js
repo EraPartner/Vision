@@ -98,6 +98,32 @@ describe('buildTransactionWhere', () => {
     expect(nextParamIdx).toBe(2);
   });
 
+  it('search also spans the transaction date text and active tag slugs', () => {
+    const { sql, params, nextParamIdx } = buildTransactionWhere({ search: '2026-06' });
+    // Date is matched as ISO text so "2026-06" finds June 2026.
+    expect(sql).toContain('CAST(t.date AS TEXT) ILIKE $1');
+    // Tags are matched via an EXISTS over the join table, reusing the same slot.
+    expect(sql).toContain('FROM transaction_tags tt');
+    expect(sql).toContain('tg.slug ILIKE $1');
+    expect(sql).toContain('tg.is_active = true');
+    expect(params).toEqual(['%2026-06%']);
+    expect(nextParamIdx).toBe(2);
+  });
+
+  it('amountMin/amountMax filter on magnitude (sign-agnostic) with sequential slots', () => {
+    const { sql, params, nextParamIdx } = buildTransactionWhere({ amountMin: 10, amountMax: 50 });
+    expect(sql).toContain('ABS(t.amount) >= $1');
+    expect(sql).toContain('ABS(t.amount) <= $2');
+    expect(params).toEqual([10, 50]);
+    expect(nextParamIdx).toBe(3);
+  });
+
+  it('amount bounds are skipped when null or non-finite', () => {
+    const { sql, params } = buildTransactionWhere({ amountMin: null, amountMax: undefined });
+    expect(sql).not.toContain('ABS(t.amount)');
+    expect(params).toEqual([]);
+  });
+
   it('respects startParamIdx so it can be composed into a bigger query', () => {
     const { sql, params, nextParamIdx } = buildTransactionWhere({
       startDate: '2026-01-01',
