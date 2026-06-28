@@ -124,6 +124,14 @@ describe('buildTransactionWhere', () => {
     expect(params).toEqual([]);
   });
 
+  it('amountSigned compares the signed amount instead of its magnitude', () => {
+    const { sql, params } = buildTransactionWhere({ amountMin: -50, amountMax: -50, amountSigned: true });
+    expect(sql).toContain('t.amount >= $1');
+    expect(sql).toContain('t.amount <= $2');
+    expect(sql).not.toContain('ABS(t.amount)');
+    expect(params).toEqual([-50, -50]);
+  });
+
   it('respects startParamIdx so it can be composed into a bigger query', () => {
     const { sql, params, nextParamIdx } = buildTransactionWhere({
       startDate: '2026-01-01',

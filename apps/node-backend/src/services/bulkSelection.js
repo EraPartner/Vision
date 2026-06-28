@@ -43,10 +43,13 @@ export function normalizeBulkFilter(filter) {
       ? filter.category_ids
       : null;
 
+  const amountSigned = filter.amountSigned === true || filter.amount_signed === true ||
+    filter.amountSigned === 'true' || filter.amount_signed === 'true';
   const toAmount = (v) => {
     if (v === undefined || v === null || v === '') return null;
-    const n = Math.abs(Number(v));
-    return Number.isFinite(n) ? n : null;
+    const n = Number(v);
+    if (!Number.isFinite(n)) return null;
+    return amountSigned ? n : Math.abs(n);
   };
 
   return {
@@ -71,6 +74,7 @@ export function normalizeBulkFilter(filter) {
         : null,
     amountMin: toAmount(filter.amountMin ?? filter.amount_min),
     amountMax: toAmount(filter.amountMax ?? filter.amount_max),
+    amountSigned,
     tagSlugs,
   };
 }

@@ -16,6 +16,7 @@ interface FilterBannerProps {
     transactionTypeFilter?: 'income' | 'expense';
     amountMinFilter?: number;
     amountMaxFilter?: number;
+    amountSignedFilter?: boolean;
     searchFilter?: string;
     filterLabel?: string;
     bankAccountFilter?: string;
@@ -34,6 +35,7 @@ export function FilterBanner({
     transactionTypeFilter,
     amountMinFilter,
     amountMaxFilter,
+    amountSignedFilter,
     searchFilter,
     filterLabel,
     bankAccountFilter,
@@ -55,14 +57,17 @@ export function FilterBanner({
     }
 
     const currency = appSettings.defaultCurrency || 'EUR';
+    // In signed mode the bound values carry their sign; render an explicit + for
+    // positives so "+50 income" reads differently from a "50" magnitude match.
+    const fmtAmt = (n: number) => (amountSignedFilter && n > 0 ? `+${n}` : String(n));
     const amountLabel = (() => {
         if (amountMinFilter != null && amountMaxFilter != null) {
             return amountMinFilter === amountMaxFilter
-                ? `= ${amountMinFilter} ${currency}`
-                : `${amountMinFilter}–${amountMaxFilter} ${currency}`;
+                ? `= ${fmtAmt(amountMinFilter)} ${currency}`
+                : `${fmtAmt(amountMinFilter)}–${fmtAmt(amountMaxFilter)} ${currency}`;
         }
-        if (amountMinFilter != null) return `≥ ${amountMinFilter} ${currency}`;
-        if (amountMaxFilter != null) return `≤ ${amountMaxFilter} ${currency}`;
+        if (amountMinFilter != null) return `≥ ${fmtAmt(amountMinFilter)} ${currency}`;
+        if (amountMaxFilter != null) return `≤ ${fmtAmt(amountMaxFilter)} ${currency}`;
         return '';
     })();
     const fmtDate = (d?: string) => (d ? formatDateStringWithAppSettings(d, appSettings.dateFormat) : '…');
@@ -122,6 +127,7 @@ export function FilterBanner({
                     transactionTypeFilter={transactionTypeFilter}
                     amountMinFilter={amountMinFilter}
                     amountMaxFilter={amountMaxFilter}
+                    amountSignedFilter={amountSignedFilter}
                     searchFilter={searchFilter}
                     filterLabel={filterLabel}
                     bankAccountFilter={bankAccountFilter}

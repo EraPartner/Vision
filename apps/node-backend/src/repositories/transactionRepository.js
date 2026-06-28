@@ -418,10 +418,11 @@ export const transactionRepository = {
     transactionType = null,
     amountMin = null,
     amountMax = null,
+    amountSigned = false,
     tagSlugs = null,
   } = {}) {
     const { sql: where, params, nextParamIdx: p } = buildTransactionWhere({
-      transactionId, startDate, endDate, bankAccount, categoryId, categoryIds, recipientId, recipientGroupId, recipientName, search, active, transactionType, amountMin, amountMax, tagSlugs,
+      transactionId, startDate, endDate, bankAccount, categoryId, categoryIds, recipientId, recipientGroupId, recipientName, search, active, transactionType, amountMin, amountMax, amountSigned, tagSlugs,
     });
 
     const sortCol = TRANSACTION_SORT_COLUMNS[sortBy] || 't.date';

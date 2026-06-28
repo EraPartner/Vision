@@ -19,6 +19,7 @@ interface TransactionsExportButtonsProps {
     transactionTypeFilter?: 'income' | 'expense';
     amountMinFilter?: number;
     amountMaxFilter?: number;
+    amountSignedFilter?: boolean;
     searchFilter?: string;
     filterLabel?: string;
     bankAccountFilter?: string;
@@ -37,6 +38,7 @@ function buildQueryString(props: TransactionsExportButtonsProps): string {
     if (props.transactionTypeFilter) params.append('transaction_type', props.transactionTypeFilter);
     if (props.amountMinFilter != null) params.append('amount_min', String(props.amountMinFilter));
     if (props.amountMaxFilter != null) params.append('amount_max', String(props.amountMaxFilter));
+    if (props.amountSignedFilter) params.append('amount_signed', 'true');
     if (props.searchFilter) params.append('search', props.searchFilter);
     if (props.bankAccountFilter) params.append('bank_account', props.bankAccountFilter);
     return params.toString();

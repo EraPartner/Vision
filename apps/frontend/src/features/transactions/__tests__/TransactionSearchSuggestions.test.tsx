@@ -20,17 +20,29 @@ describe("TransactionSearchSuggestions", () => {
         expect(close).toHaveBeenCalled();
     });
 
-    it("applies an exact amount as a zero-width min/max range", async () => {
+    it("applies a bare amount as a sign-agnostic magnitude match", async () => {
         const onApply = vi.fn();
         const user = userEvent.setup();
         renderWithApp(<TransactionSearchSuggestions query="" onApply={onApply} close={vi.fn()} />);
 
         await user.click(await screen.findByRole("button", { name: /Amount equals/i }));
-        const input = await screen.findByRole("spinbutton");
+        const input = await screen.findByRole("textbox");
         await user.type(input, "50");
         await user.click(screen.getByRole("button", { name: /Apply/i }));
 
-        expect(onApply).toHaveBeenCalledWith({ amount_min: "50", amount_max: "50" });
+        expect(onApply).toHaveBeenCalledWith({ amount_min: "50", amount_max: "50", amount_signed: undefined });
+    });
+
+    it("treats a +50 / -50 prefix as a signed exact match", async () => {
+        const onApply = vi.fn();
+        const user = userEvent.setup();
+        renderWithApp(<TransactionSearchSuggestions query="" onApply={onApply} close={vi.fn()} />);
+
+        await user.click(await screen.findByRole("button", { name: /Amount equals/i }));
+        await user.type(await screen.findByRole("textbox"), "-50");
+        await user.click(screen.getByRole("button", { name: /Apply/i }));
+
+        expect(onApply).toHaveBeenCalledWith({ amount_min: "-50", amount_max: "-50", amount_signed: "true" });
     });
 
     it("applies a full calendar year as a date range", async () => {

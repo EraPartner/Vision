@@ -2376,6 +2376,7 @@ const nl: Record<string, string> = {
   'savings.title': 'Sparen & Obligaties',
   'search.suggest.allExpense': 'Alle uitgaven',
   'search.suggest.allIncome': 'Alle ontvangsten',
+  'search.suggest.amount.hint': 'Tip: zet er + of − voor om alleen ontvangsten of uitgaven te tonen; een gewoon getal toont beide.',
   'search.suggest.amount.max': 'Max',
   'search.suggest.amount.min': 'Min',
   'search.suggest.amountExact': 'Bedrag gelijk aan ... {currency}',

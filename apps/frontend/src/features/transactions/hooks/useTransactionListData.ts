@@ -19,6 +19,7 @@ export interface UseTransactionListDataOptions {
     transactionTypeFilter?: 'income' | 'expense';
     amountMinFilter?: number;
     amountMaxFilter?: number;
+    amountSignedFilter?: boolean;
     tagsFilter?: string[];
     bankAccountFilter?: string;
 }
@@ -52,6 +53,7 @@ export function useTransactionListData({
     transactionTypeFilter,
     amountMinFilter,
     amountMaxFilter,
+    amountSignedFilter,
     tagsFilter,
     bankAccountFilter,
 }: UseTransactionListDataOptions): UseTransactionListDataResult {
@@ -89,6 +91,7 @@ export function useTransactionListData({
                 transactionTypeFilter,
                 amountMinFilter,
                 amountMaxFilter,
+                amountSignedFilter,
                 tagsFilter,
                 bankAccountFilter,
                 sortKey,
@@ -110,6 +113,7 @@ export function useTransactionListData({
             transaction_type: transactionTypeFilter,
             amount_min: amountMinFilter,
             amount_max: amountMaxFilter,
+            amount_signed: amountSignedFilter || undefined,
             tags: tagsFilter?.length ? tagsFilter.join(',') : undefined,
             bank_account: bankAccountFilter,
             sort_by: sortKey || undefined,
@@ -134,7 +138,7 @@ export function useTransactionListData({
     // Previously only handleSortChange bumped it, so filter/search changes raced.
     useEffect(() => {
         requestIdRef.current += 1;
-    }, [showAll, search, transactionIdFilter, recipientIdFilter, categoryIdFilter, categoryIdsFilter, startDateFilter, endDateFilter, transactionTypeFilter, amountMinFilter, amountMaxFilter, tagsFilter, bankAccountFilter, sortKey, sortDir, pageSize]);
+    }, [showAll, search, transactionIdFilter, recipientIdFilter, categoryIdFilter, categoryIdsFilter, startDateFilter, endDateFilter, transactionTypeFilter, amountMinFilter, amountMaxFilter, amountSignedFilter, tagsFilter, bankAccountFilter, sortKey, sortDir, pageSize]);
 
     const loadMore = useCallback(async () => {
         if (loadingRef.current || !hasMoreRef.current) return;
@@ -156,6 +160,7 @@ export function useTransactionListData({
                 transaction_type: transactionTypeFilter,
                 amount_min: amountMinFilter,
                 amount_max: amountMaxFilter,
+                amount_signed: amountSignedFilter || undefined,
                 tags: tagsFilter?.length ? tagsFilter.join(',') : undefined,
                 bank_account: bankAccountFilter,
                 sort_by: sortKey || undefined,
@@ -181,7 +186,7 @@ export function useTransactionListData({
             }
             loadingRef.current = false;
         }
-    }, [showAll, search, transactionIdFilter, recipientIdFilter, categoryIdFilter, categoryIdsFilter, startDateFilter, endDateFilter, transactionTypeFilter, amountMinFilter, amountMaxFilter, tagsFilter, bankAccountFilter, sortKey, sortDir, pageSize]);
+    }, [showAll, search, transactionIdFilter, recipientIdFilter, categoryIdFilter, categoryIdsFilter, startDateFilter, endDateFilter, transactionTypeFilter, amountMinFilter, amountMaxFilter, amountSignedFilter, tagsFilter, bankAccountFilter, sortKey, sortDir, pageSize]);
 
     const handleSortChange = useCallback((key: string | null, dir: SortDir) => {
         setSortKey(key);

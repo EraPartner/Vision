@@ -2376,6 +2376,7 @@ const en: Record<string, string> = {
   'savings.title': 'Savings & Bonds',
   'search.suggest.allExpense': 'All expenses',
   'search.suggest.allIncome': 'All income',
+  'search.suggest.amount.hint': 'Tip: prefix with + or − to match only income or expenses; a plain number matches both.',
   'search.suggest.amount.max': 'Max',
   'search.suggest.amount.min': 'Min',
   'search.suggest.amountExact': 'Amount equals ... {currency}',

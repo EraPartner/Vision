@@ -56,32 +56,50 @@ export function TransactionSearchSuggestions({ query, onApply, close }: Props) {
     const apply = (params: QuickFilterParams) => { onApply(params); close(); };
     const yearRange = (y: number): QuickFilterParams => ({ start_date: `${y}-01-01`, end_date: `${y}-12-31` });
 
-    const num = (s: string) => {
-        const n = Math.abs(Number(s));
-        return s.trim() !== '' && Number.isFinite(n) ? n : undefined;
+    // A leading + or - makes the amount sign-aware (exact signed match); a bare
+    // number matches the magnitude (both signs). type=text (not number) so the
+    // sign character survives to be read here.
+    const parseSigned = (raw: string): { value: number; signed: boolean } | undefined => {
+        const s = raw.trim();
+        if (s === '') return undefined;
+        const signed = s.startsWith('+') || s.startsWith('-');
+        const v = Number(s);
+        return Number.isFinite(v) ? { value: v, signed } : undefined;
     };
 
     const container = "rounded-lg border border-border bg-popover text-popover-foreground shadow-lg overflow-hidden";
 
     if (mode === 'amountExact' || mode === 'amountRange') {
         const isRange = mode === 'amountRange';
-        const a = num(amountA);
-        const b = num(amountB);
-        const valid = isRange ? (a !== undefined || b !== undefined) : a !== undefined;
+        const pa = parseSigned(amountA);
+        const pb = parseSigned(amountB);
+        const valid = isRange ? (pa !== undefined || pb !== undefined) : pa !== undefined;
+        const signed = !!(pa?.signed || pb?.signed);
+        const conv = (p?: { value: number }) => (p === undefined ? undefined : (signed ? p.value : Math.abs(p.value)));
         const onApplyAmount = () => {
             if (!valid) return;
-            // "equals" is just a zero-width range (min === max), so the whole UI
-            // speaks a single amount_min/amount_max vocabulary.
-            apply(isRange
-                ? { amount_min: a !== undefined ? String(a) : undefined, amount_max: b !== undefined ? String(b) : undefined }
-                : { amount_min: String(a), amount_max: String(a) });
+            const signedParam = signed ? 'true' : undefined;
+            if (isRange) {
+                let lo = conv(pa);
+                let hi = conv(pb);
+                if (lo !== undefined && hi !== undefined && lo > hi) [lo, hi] = [hi, lo];
+                apply({
+                    amount_min: lo !== undefined ? String(lo) : undefined,
+                    amount_max: hi !== undefined ? String(hi) : undefined,
+                    amount_signed: signedParam,
+                });
+            } else {
+                // "equals" is a zero-width range (min === max).
+                const v = conv(pa) as number;
+                apply({ amount_min: String(v), amount_max: String(v), amount_signed: signedParam });
+            }
         };
         return (
             <div className={container}>
                 <FormHeader label={isRange ? t('search.suggest.amountRange.title', { currency }) : t('search.suggest.amountExact.title', { currency })} onBack={() => setMode(null)} backLabel={t('common.back')} />
-                <div className="flex items-center gap-2 p-3">
+                <div className="flex items-center gap-2 px-3 pt-3">
                     <Input
-                        type="number" inputMode="decimal" autoFocus
+                        type="text" inputMode="text" autoFocus
                         placeholder={isRange ? t('search.suggest.amount.min') : currency}
                         value={amountA} onChange={(e) => setAmountA(e.target.value)}
                         onKeyDown={(e) => { if (e.key === 'Enter') onApplyAmount(); }}
@@ -91,7 +109,7 @@ export function TransactionSearchSuggestions({ query, onApply, close }: Props) {
                         <>
                             <span className="text-muted-foreground text-sm">–</span>
                             <Input
-                                type="number" inputMode="decimal"
+                                type="text" inputMode="text"
                                 placeholder={t('search.suggest.amount.max')}
                                 value={amountB} onChange={(e) => setAmountB(e.target.value)}
                                 onKeyDown={(e) => { if (e.key === 'Enter') onApplyAmount(); }}
@@ -103,6 +121,7 @@ export function TransactionSearchSuggestions({ query, onApply, close }: Props) {
                         {t('search.suggest.apply')}
                     </Button>
                 </div>
+                <p className="px-3 pb-2.5 pt-1.5 text-xs text-muted-foreground">{t('search.suggest.amount.hint')}</p>
             </div>
         );
     }

@@ -46,9 +46,12 @@ export default function TransactionsPage() {
     const bankAccountFilter = searchParams.get('bank_account') || undefined;
     const transactionTypeRaw = searchParams.get('transaction_type');
     const transactionTypeFilter = (transactionTypeRaw === 'income' || transactionTypeRaw === 'expense') ? transactionTypeRaw : undefined;
+    const amountSignedFilter = searchParams.get('amount_signed') === 'true';
     const parseAmountParam = (raw: string | null) => {
         if (!raw) return undefined;
-        const n = Math.abs(Number(raw));
+        // Preserve the sign — the backend decides magnitude vs signed from
+        // amount_signed; for unsigned filters the value is already non-negative.
+        const n = Number(raw);
         return Number.isFinite(n) ? n : undefined;
     };
     const amountMinFilter = parseAmountParam(searchParams.get('amount_min'));
@@ -94,6 +97,7 @@ export default function TransactionsPage() {
         transactionTypeFilter,
         amountMinFilter,
         amountMaxFilter,
+        amountSignedFilter,
         tagsFilter,
         bankAccountFilter,
     });
@@ -116,6 +120,7 @@ export default function TransactionsPage() {
         transaction_type: transactionTypeFilter,
         amount_min: amountMinFilter,
         amount_max: amountMaxFilter,
+        amount_signed: amountSignedFilter || undefined,
         tags: tagsFilter,
         bank_account: bankAccountFilter,
         search: search || undefined,
@@ -130,6 +135,7 @@ export default function TransactionsPage() {
         transactionTypeFilter,
         amountMinFilter,
         amountMaxFilter,
+        amountSignedFilter,
         tagsFilter,
         bankAccountFilter,
         search,
@@ -401,6 +407,7 @@ export default function TransactionsPage() {
                     transactionTypeFilter={transactionTypeFilter}
                     amountMinFilter={amountMinFilter}
                     amountMaxFilter={amountMaxFilter}
+                    amountSignedFilter={amountSignedFilter}
                     searchFilter={search || undefined}
                     filterLabel={filterLabel}
                     bankAccountFilter={bankAccountFilter}

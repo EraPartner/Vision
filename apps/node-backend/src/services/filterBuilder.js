@@ -58,9 +58,13 @@ export function validateInt4Ids(ids) {
  *                                          text and tag slugs)
  * @param {boolean}     [opts.active=true]  require t.is_active = true
  * @param {'income'|'expense'|null} [opts.transactionType] filter by amount sign
- * @param {number|null} [opts.amountMin]    inclusive lower bound on |amount| (magnitude,
- *                                          sign-agnostic — pair with transactionType for sign)
- * @param {number|null} [opts.amountMax]    inclusive upper bound on |amount|
+ * @param {number|null} [opts.amountMin]    inclusive lower bound on the amount. By default
+ *                                          compares |amount| (magnitude, sign-agnostic); when
+ *                                          amountSigned is true compares the signed amount.
+ * @param {number|null} [opts.amountMax]    inclusive upper bound (see amountMin)
+ * @param {boolean}     [opts.amountSigned=false] when true, amountMin/amountMax are compared
+ *                                          against the signed t.amount (so -50/+50 are distinct);
+ *                                          when false they compare against ABS(t.amount)
  * @param {string[]|null} [opts.tagSlugs]   OR-match: row must have at least one of these active tags
  * @param {number}      [opts.startParamIdx=1] first $-index to allocate
  */
@@ -81,6 +85,7 @@ export function buildTransactionWhere(opts = {}) {
     transactionType = null,
     amountMin = null,
     amountMax = null,
+    amountSigned = false,
     tagSlugs = null,
     startParamIdx = 1,
   } = opts;
@@ -134,12 +139,13 @@ export function buildTransactionWhere(opts = {}) {
   } else if (transactionType === 'expense') {
     clauses.push('t.amount < 0');
   }
+  const amountCol = amountSigned ? 't.amount' : 'ABS(t.amount)';
   if (amountMin != null && Number.isFinite(Number(amountMin))) {
-    clauses.push(`ABS(t.amount) >= $${p++}`);
+    clauses.push(`${amountCol} >= $${p++}`);
     params.push(Number(amountMin));
   }
   if (amountMax != null && Number.isFinite(Number(amountMax))) {
-    clauses.push(`ABS(t.amount) <= $${p++}`);
+    clauses.push(`${amountCol} <= $${p++}`);
     params.push(Number(amountMax));
   }
   if (recipientId != null) {
