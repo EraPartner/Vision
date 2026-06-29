@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/button";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { ArrowDown, ArrowUp, ArrowUpDown, Check, ChevronLeft, ChevronRight, Filter, Pencil, Search, X } from "lucide-react";
 import { useLanguage } from "@/contexts/LanguageContext";
+import { SEARCH_DEBOUNCE_MS } from "@/hooks/useDebounce";
 import { ColumnFilter } from "@/components/shared/ColumnFilter";
 import type { Column } from "@/types/dataTable";
 
@@ -89,7 +90,7 @@ export function DataTable<T extends Record<string, unknown>>({
                 onSearchChange!(value);
                 // Reset to page 0 on new search
                 if (onPageChange) onPageChange(0);
-            }, 350);
+            }, SEARCH_DEBOUNCE_MS);
         } else {
             setLocalSearchQuery(value);
         }

@@ -3,7 +3,7 @@ title: Troubleshooting & FAQ
 type: reference
 status: active
 date: 2026-04-21
-updated: 2026-05-23
+updated: 2026-06-29
 tags: [troubleshooting, faq, reference, debugging, phase-1, electron, app-naming, password-mismatch, keychain, safe-storage, macOS, backup-passphrase]
 description: Common issues, error messages, and their solutions for the Vision project including Electron desktop app password authentication failures and macOS Keychain prompts
 aliases: [troubleshooting, FAQ, common issues, errors, debugging, problems]
@@ -102,7 +102,7 @@ aliases: [troubleshooting, FAQ, common issues, errors, debugging, problems]
 **Solutions:**
 1. Check if `onSearchChange` callback is properly wired
 2. Verify search query is being sent to the API
-3. Check for 200ms debounce delay (search is not instant)
+3. Check for 300ms debounce delay (`SEARCH_DEBOUNCE_MS` from `@/hooks/useDebounce`) — search is not instant
 
 ## Backend
 

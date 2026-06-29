@@ -16,7 +16,7 @@ import {
   TrendingUp, TrendingDown, BarChart3, Activity, Clock, Star, Link2,
 } from "lucide-react";
 import { AreaChart, BarChart, type AreaSeries, type BarSeries } from "@/components/charts";
-import { useDebounce } from "@/hooks/useDebounce";
+import { useDebounce, SEARCH_DEBOUNCE_MS } from "@/hooks/useDebounce";
 import { cn } from "@/lib/utils";
 import { usePortfolio } from "@/hooks/usePortfolio";
 import { getInvestmentPriceHistory } from "@/lib/api/portfolio";
@@ -157,7 +157,7 @@ export default function MarketLookupPage() {
   const [searchParams] = useSearchParams();
   const symbolFromQuery = searchParams.get("symbol")?.trim().toUpperCase();
   const effectiveSelectedSymbol = selectedSymbol || symbolFromQuery || null;
-  const debouncedSearch = useDebounce(searchText, 300);
+  const debouncedSearch = useDebounce(searchText, SEARCH_DEBOUNCE_MS);
   const { summaries, isLoading: isPortfolioLoading } = usePortfolio();
 
   // When the page is opened from a portfolio holding (double-click), the URL

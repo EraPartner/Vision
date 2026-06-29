@@ -22,7 +22,7 @@ import {
 import { Badge } from "@/components/ui/badge";
 import { Search, Loader2 } from "lucide-react";
 import { SymbolSearchResultItem } from "@/components/shared/SymbolSearchResultItem";
-import { useDebounce } from "@/hooks/useDebounce";
+import { useDebounce, SEARCH_DEBOUNCE_MS } from "@/hooks/useDebounce";
 import { useLanguage } from '@/contexts/LanguageContext';
 import { useQuery } from "@tanstack/react-query";
 import { toast } from "sonner";
@@ -73,7 +73,7 @@ export function AddToWatchlistDialog({ open, onOpenChange, prefill }: AddToWatch
   const [notes, setNotes] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
 
-  const debouncedQuery = useDebounce(searchQuery, 300);
+  const debouncedQuery = useDebounce(searchQuery, SEARCH_DEBOUNCE_MS);
   const queryClient = useQueryClient();
   const { t } = useLanguage();
 

@@ -6,7 +6,7 @@ import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, Command
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { useRecipients } from "@/hooks/useRecipients";
 import { useLanguage } from "@/contexts/LanguageContext";
-import { useDebounce } from "@/hooks/useDebounce";
+import { useDebounce, SEARCH_DEBOUNCE_MS } from "@/hooks/useDebounce";
 
 interface RecipientComboboxProps {
     value?: number | null;
@@ -20,7 +20,7 @@ export function RecipientCombobox({ value, onSelect, disabled, className, portal
     const { t } = useLanguage();
     const [open, setOpen] = useState(false);
     const [search, setSearch] = useState("");
-    const debouncedSearch = useDebounce(search.trim(), 300);
+    const debouncedSearch = useDebounce(search.trim(), SEARCH_DEBOUNCE_MS);
 
     const { data } = useRecipients({
         limit: 1000,

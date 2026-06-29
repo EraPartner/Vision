@@ -10,7 +10,7 @@ import {
 import { useLanguage } from "@/contexts/LanguageContext";
 import { useAppSettings } from "@/contexts/AppSettingsContext";
 import { numberFormatToLocale } from "@/utils/currency";
-import { useDebounce } from "@/hooks/useDebounce";
+import { useDebounce, SEARCH_DEBOUNCE_MS } from "@/hooks/useDebounce";
 import { useOnlineStatus } from "@/hooks/useOnlineStatus";
 import { apiClient } from "@/lib/api";
 import { cn } from "@/lib/utils";
@@ -39,7 +39,7 @@ export default function ResearchHomePage() {
   const navigate = useNavigate();
   const isOnline = useOnlineStatus();
   const [searchText, setSearchText] = useState("");
-  const debouncedSearch = useDebounce(searchText.trim(), 300);
+  const debouncedSearch = useDebounce(searchText.trim(), SEARCH_DEBOUNCE_MS);
 
   const numberFmt = useMemo(
     () => new Intl.NumberFormat(locale, { minimumFractionDigits: 2, maximumFractionDigits: 2 }),

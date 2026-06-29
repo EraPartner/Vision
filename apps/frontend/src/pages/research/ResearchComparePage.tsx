@@ -14,7 +14,7 @@ import {
 } from "@/components/ui/table";
 import { ArrowDown, ArrowUp, GitCompareArrows, Plus, X } from "lucide-react";
 import { LineChart, getChartColor, type LineSeries } from "@/components/charts";
-import { useDebounce } from "@/hooks/useDebounce";
+import { useDebounce, SEARCH_DEBOUNCE_MS } from "@/hooks/useDebounce";
 import { cn } from "@/lib/utils";
 import { apiClient } from "@/lib/api";
 import { PageHeader } from "@/components/shared/PageHeader";
@@ -203,7 +203,7 @@ export default function ResearchComparePage() {
   const [searchText, setSearchText] = useState("");
   const [selectedRange, setSelectedRange] = useState(RANGES[3]); // 1Y
   const [sortMetric, setSortMetric] = useState<FundamentalsMetricKey | null>(null);
-  const debouncedSearch = useDebounce(searchText.trim(), 300);
+  const debouncedSearch = useDebounce(searchText.trim(), SEARCH_DEBOUNCE_MS);
 
   const fmtPct = useCallback((val: number | null | undefined) =>
     val == null || isNaN(val) ? "—" : `${val >= 0 ? "+" : ""}${(val * 100).toFixed(2)}%`, []);

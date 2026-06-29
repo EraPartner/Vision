@@ -46,7 +46,7 @@ import { useWorkspace } from "@/contexts/WorkspaceContext";
 import { useAppSettings } from "@/contexts/AppSettingsContext";
 import { useQuery } from "@tanstack/react-query";
 import { apiClient } from "@/lib/api";
-import { useDebounce } from "@/hooks/useDebounce";
+import { useDebounce, SEARCH_DEBOUNCE_MS } from "@/hooks/useDebounce";
 import { LOCAL_STORAGE_KEYS } from "@/lib/localStorage-keys";
 import { GO_TO_ROUTES } from "@/hooks/useGoToShortcuts";
 import { Keyboard, Calculator } from "lucide-react";
@@ -188,7 +188,7 @@ export function CommandPalette({ open, onOpenChange, onOpenSettings, onOpenShort
     const { setWorkspace } = useWorkspace();
     const { appSettings } = useAppSettings();
     const [query, setQuery] = useState("");
-    const debouncedQuery = useDebounce(query.trim(), 250);
+    const debouncedQuery = useDebounce(query.trim(), SEARCH_DEBOUNCE_MS);
     const [recents, setRecents] = useState<string[]>([]);
 
     useEffect(() => {
@@ -238,7 +238,7 @@ export function CommandPalette({ open, onOpenChange, onOpenSettings, onOpenShort
     // Inline ticker quote — when the query looks like a symbol, fetch a price-only
     // quote and surface its absolute + relative move. Enter opens Market Lookup.
     const tickerSymbol = useMemo(() => parseTickerQuery(query.trim()), [query]);
-    const debouncedTicker = useDebounce(tickerSymbol ?? "", 250);
+    const debouncedTicker = useDebounce(tickerSymbol ?? "", SEARCH_DEBOUNCE_MS);
     const { data: tickerQuote, isFetching: tickerLoading } = useQuery({
         queryKey: ["palette-quote", debouncedTicker],
         queryFn: async () => {

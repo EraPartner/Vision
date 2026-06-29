@@ -11,6 +11,7 @@ import {
     Pencil, Search, X,
 } from "lucide-react";
 import { useLanguage } from "@/contexts/LanguageContext";
+import { SEARCH_DEBOUNCE_MS } from "@/hooks/useDebounce";
 import { ColumnFilter } from "@/components/shared/ColumnFilter";
 import { DatePicker } from "@/components/shared/DatePicker";
 import { parseLocalDateFromYmd, toYmd } from "@/components/shared/dateUtils";
@@ -169,7 +170,7 @@ export function VirtualDataTable<T extends Record<string, unknown>>({
                 onSearchChange!(value);
                 debounceRef.current = null;
                 isTypingRef.current = false;
-            }, 200);
+            }, SEARCH_DEBOUNCE_MS);
         }
     }, [isServerSearch, onSearchChange]);
 

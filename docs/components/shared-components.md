@@ -3,7 +3,7 @@ title: Shared Components Reference
 type: component
 status: active
 date: 2026-04-26
-updated: 2026-06-24
+updated: 2026-06-29
 last_modified: 2026-06-24
 tags: [component, shared, utility, frontend, reference, phase-13, phase-c, phase-d, multi-select, export-filters, bug-hunt-2026-05-05, bug-hunt-2026-05-06, dateutils, utc-safe-dates, date-formatting, debounce, accessibility, aria-label, useCallback, aria-grid, keyboard-operability, a11y, performance, memoization, selection-toggle, upcoming-payments-hook, june-2026, symbol-search, research, ui-consistency, glass-consistency, popover-glass-thick, trend-hue, gain-loss, design-system]
 description: Reference documentation for shared utility components used across the application. May 2026 adds UTC-safe date parsing, ARIA grid semantics on VirtualDataTable, the onActivateKeyDown keyboard helper, and the columnKeySignature selection-toggle reprocessing fix. June 2026 V11: UpcomingPaymentsNotification refactored onto shared useUpcomingPlannedPayments hook; rendered by AppLayout on all pages (no per-route stand-down). 2026-06-24: SuggestionCard dashboard widget removed; UpcomingPaymentsNotification is now the sole upcoming-payments notification surface. June 2026 V12: SymbolSearchBox and SymbolSearchResultItem added — canonical chrome and result row for all research symbol pickers. June 2026 (glass consistency): SymbolSearchBox dropdown material changed from glass-elevated to glass-thick to match the rest of the floating-overlay system. 2026-06-24 (gain/loss consistency pass): TrendHue added — single shared overlay component for the faint diagonal card hue on all summary/stat cards.
@@ -336,16 +336,18 @@ interface RecipientComboboxProps {
 
 ### Implementation Detail (Phase C)
 
-The 300ms debounce prevents API overload on rapid typing:
+The `SEARCH_DEBOUNCE_MS` (300ms) constant debounce prevents API overload on rapid typing:
 
 ```typescript
+import { useDebounce, SEARCH_DEBOUNCE_MS } from '@/hooks/useDebounce';
+
 // Before (bad): Every keystroke triggers API call
 onSearchChange={(query) => {
   refetch({ filter: query });  // ❌ per-keystroke
 }}
 
-// After (good): 300ms debounce
-const debouncedSearch = useDebounce(searchQuery, 300);
+// After (good): shared SEARCH_DEBOUNCE_MS constant (300ms)
+const debouncedSearch = useDebounce(searchQuery, SEARCH_DEBOUNCE_MS);
 useEffect(() => {
   refetch({ filter: debouncedSearch });
 }, [debouncedSearch, refetch]);

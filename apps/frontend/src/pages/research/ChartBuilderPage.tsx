@@ -17,7 +17,7 @@ import { PageHeader } from "@/components/shared/PageHeader";
 import { EmptyState } from "@/components/shared/EmptyState";
 import { SymbolSearchResultItem } from "@/components/shared/SymbolSearchResultItem";
 import { SymbolSearchBox } from "@/components/shared/SymbolSearchBox";
-import { useDebounce } from "@/hooks/useDebounce";
+import { useDebounce, SEARCH_DEBOUNCE_MS } from "@/hooks/useDebounce";
 import { apiClient } from "@/lib/api";
 import { sma, ema, bollinger, rsi, macd } from "@/lib/research/indicators";
 import type { MacroProvider, MacroSeriesItem, ResearchChartPoint, ResearchRange } from "@/types/research";
@@ -114,7 +114,7 @@ export default function ChartBuilderPage() {
 
   // Symbol search picker.
   const [searchText, setSearchText] = useState("");
-  const debouncedSearch = useDebounce(searchText.trim(), 300);
+  const debouncedSearch = useDebounce(searchText.trim(), SEARCH_DEBOUNCE_MS);
   const { data: searchResult } = useQuery({
     queryKey: ["research-search", debouncedSearch],
     queryFn: () => apiClient.searchResearch(debouncedSearch),
