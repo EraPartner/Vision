@@ -43,6 +43,10 @@ LIB="$DC/launcher-common.sh"
 # shellcheck source=/dev/null
 source "$LIB"
 sandbox_stage_claude_config vision
+# Lock host-executed git paths (.git + relocated core.hooksPath, e.g. .githooks)
+# :ro over the RW workspace — an in-container agent must not plant a hook the HOST
+# git runs on commit/push. Populates GIT_RO_MOUNTS; see launcher-common.sh.
+sandbox_git_ro_mounts "$PROJECT_ROOT" /workspaces/Vision
 
 # --- 2) Build (cached) -------------------------------------------------------
 container build -t "$IMAGE" "$DC" >/dev/null
@@ -91,7 +95,7 @@ else
     -e NO_PROXY=localhost,127.0.0.1,::1 \
     -e no_proxy=localhost,127.0.0.1,::1 \
     -v "$PROJECT_ROOT:/workspaces/Vision" \
-    -v "$PROJECT_ROOT/.git:/workspaces/Vision/.git:ro" \
+    ${GIT_RO_MOUNTS[@]+"${GIT_RO_MOUNTS[@]}"} \
     -v "$DC:/workspaces/Vision/.devcontainer:ro" \
     -v vision-claude:/home/dev/.claude \
     -v vision-pgdata:/var/lib/postgresql \
