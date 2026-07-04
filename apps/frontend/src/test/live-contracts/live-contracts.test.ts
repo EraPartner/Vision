@@ -90,18 +90,12 @@ describe.skipIf(!enabled)("Live backend API contracts (E5)", () => {
         validate(z.object({ status: z.string() }), json, "GET /health");
     });
 
-    it("GET /api/info returns statistics object", async () => {
-        const data = await get("/api/info");
-        validate(
-            z.object({
-                total_transactions: z.number(),
-                total_amount: z.number(),
-                categories: z.array(z.unknown()),
-            }),
-            data,
-            "GET /api/info",
-        );
-    });
+    // NOTE: the bare `GET /api/info` statistics index was the legacy stats route.
+    // It was removed in the ADR-010 Phase 9 cutover (see apps/node-backend/src/
+    // routes/aggregations.js) — permanently replaced by the `/api/aggregations/*`
+    // endpoints (covered below) — and is not present in openapi.yaml. There is no
+    // contract to assert for it, so no test here; the subroutes /api/info/* and
+    // the aggregation endpoints carry the coverage.
 
     it("GET /api/categories returns paginated list", async () => {
         const data = await get("/api/categories");
