@@ -1,5 +1,5 @@
 # Vision project-specific egress extras (merged onto base-allowlist.txt by
-# devcontainer-egress/sync.sh into the baked allowlist.txt).
+# LockBox/sync.sh into the baked allowlist.txt).
 
 # Anthropic / Claude Code (auth, auto-updater, docs beyond the base API).
 platform.claude.com

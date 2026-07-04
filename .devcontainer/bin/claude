@@ -39,7 +39,7 @@ SVC_USER=dev
 
 # --- 1) Stage a sanitized ~/.claude for the read-only bind mount -------------
 LIB="$DC/launcher-common.sh"
-[[ -f "$LIB" ]] || { echo "claude (vision): missing $LIB (run devcontainer-egress/sync.sh)." >&2; exit 1; }
+[[ -f "$LIB" ]] || { echo "claude (vision): missing $LIB (run LockBox/sync.sh)." >&2; exit 1; }
 # shellcheck source=/dev/null
 source "$LIB"
 sandbox_stage_claude_config vision
