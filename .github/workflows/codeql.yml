@@ -28,10 +28,11 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        # JS/TS only. The backend is Node and the frontend is React/TS; the only
-        # Python here is Alembic migrations (path-ignored) plus two config-glue
-        # files, so a Python job would add ~4 min/run with effectively no coverage.
-        language: [javascript-typescript]
+        # JS/TS app code + the CI workflows themselves (actions — script
+        # injection, unpinned actions, permission misconfig). Python stays out:
+        # the only Python here is Alembic migrations (path-ignored) plus two
+        # config-glue files, so a Python job would add ~4 min/run for ~no coverage.
+        language: [javascript-typescript, actions]
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v4
 
