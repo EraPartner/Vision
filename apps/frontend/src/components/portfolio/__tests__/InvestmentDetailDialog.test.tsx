@@ -170,9 +170,9 @@ describe("InvestmentDetailDialog", () => {
         await user.click(await screen.findByRole("button", { name: /details/i }));
         await screen.findByRole("dialog");
 
-        // "portfolio.addTransaction" key has no translation — button text is the key itself
+        // The add-transaction button renders the translated "Add Transaction" label.
         const addBtn = await screen.findByRole("button", {
-            name: /portfolio\.addTransaction/i,
+            name: /add transaction/i,
         });
         await user.click(addBtn);
 

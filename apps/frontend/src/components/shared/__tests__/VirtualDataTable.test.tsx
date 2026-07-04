@@ -6,6 +6,7 @@ import { renderWithApp } from "@/test/renderWithApp";
 import { VirtualDataTable } from "@/components/shared/VirtualDataTable";
 import { ContextMenuContent, ContextMenuItem } from "@/components/ui/context-menu";
 import type { Column } from "@/types/dataTable";
+import { SEARCH_DEBOUNCE_MS } from "@/hooks/useDebounce";
 
 // Provide synchronous translations so tests don't depend on async locale loading.
 vi.mock("@/contexts/LanguageContext", async (importOriginal) => {
@@ -197,7 +198,7 @@ describe("VirtualDataTable — server-side search", () => {
         expect(screen.getByPlaceholderText("Search database...")).toBeInTheDocument();
     });
 
-    it("calls onSearchChange after 200 ms debounce", async () => {
+    it(`calls onSearchChange after ${SEARCH_DEBOUNCE_MS} ms debounce`, async () => {
         vi.useFakeTimers();
         const onSearchChange = vi.fn();
         renderTable({ onSearchChange });
@@ -208,11 +209,11 @@ describe("VirtualDataTable — server-side search", () => {
         );
         expect(onSearchChange).not.toHaveBeenCalled();
 
-        await vi.advanceTimersByTimeAsync(200);
+        await vi.advanceTimersByTimeAsync(SEARCH_DEBOUNCE_MS);
         expect(onSearchChange).toHaveBeenCalledWith("test query");
     });
 
-    it("does not fire onSearchChange before 200 ms", async () => {
+    it(`does not fire onSearchChange before ${SEARCH_DEBOUNCE_MS} ms`, async () => {
         vi.useFakeTimers();
         const onSearchChange = vi.fn();
         renderTable({ onSearchChange });
@@ -221,7 +222,7 @@ describe("VirtualDataTable — server-side search", () => {
             screen.getByPlaceholderText("Search database..."),
             { target: { value: "partial" } },
         );
-        await vi.advanceTimersByTimeAsync(199);
+        await vi.advanceTimersByTimeAsync(SEARCH_DEBOUNCE_MS - 1);
         expect(onSearchChange).not.toHaveBeenCalled();
     });
 });

@@ -1294,6 +1294,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/aggregations/tag-pivot": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Per-tag spending pivot (periods × tags) for custom charts
+         * @description Per-tag, per-period spending breakdown (expenses only, internal transfers excluded). Pass explicit tag_ids[] for a specific selection, or all=true (alias all_tags=true) to return every active tag in the workspace. With neither, the pivot is empty. A transaction carrying several selected tags counts toward each tag's total independently. Used by custom saved charts with tag series; the frontend caps results to top 8 by spend + "Other" when all=true and entity count exceeds 8.
+         */
+        get: operations["getTagPivot"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/investments/providers": {
         parameters: {
             query?: never;
@@ -3451,7 +3471,32 @@ export interface components {
             name: string;
             /** @enum {string} */
             chart_type: "line" | "bar" | "area";
+            /**
+             * @description ranked is only valid with chart_type=bar; line:ranked and area:ranked return 400
+             * @enum {string}
+             */
+            chart_variant: "default" | "stacked" | "grouped" | "ranked";
+            /**
+             * @description Ignored when chart_variant=ranked
+             * @enum {string}
+             */
+            time_bucket: "monthly" | "yearly";
+            /** @description Ignored when all_categories=true */
             category_ids: number[];
+            /** @description Ignored when all_recipients=true */
+            recipient_ids: number[];
+            /** @description Ignored when all_tags=true */
+            tag_ids: number[];
+            /** @default false */
+            all_categories: boolean;
+            /** @default false */
+            all_recipients: boolean;
+            /** @default false */
+            all_tags: boolean;
+            /** Format: date */
+            date_range_start?: string | null;
+            /** Format: date */
+            date_range_end?: string | null;
             /** Format: date-time */
             created_at: string;
             /** Format: date-time */
@@ -4643,9 +4688,38 @@ export interface operations {
         requestBody: {
             content: {
                 "application/json": {
+                    /** @description Chart name (non-empty, max 500 chars) */
                     name: string;
-                    chart_type: string;
-                    config: Record<string, never>;
+                    /**
+                     * @default line
+                     * @enum {string}
+                     */
+                    chartType?: "line" | "bar" | "area";
+                    /**
+                     * @description ranked only valid with chartType=bar
+                     * @default default
+                     * @enum {string}
+                     */
+                    chartVariant?: "default" | "stacked" | "grouped" | "ranked";
+                    /**
+                     * @description Ignored when chartVariant=ranked
+                     * @default monthly
+                     * @enum {string}
+                     */
+                    timeBucket?: "monthly" | "yearly";
+                    categoryIds?: number[];
+                    recipientIds?: number[];
+                    tagIds?: number[];
+                    /** @default false */
+                    allCategories?: boolean;
+                    /** @default false */
+                    allRecipients?: boolean;
+                    /** @default false */
+                    allTags?: boolean;
+                    /** Format: date */
+                    dateRangeStart?: string | null;
+                    /** Format: date */
+                    dateRangeEnd?: string | null;
                 };
             };
         };
@@ -4699,8 +4773,24 @@ export interface operations {
                 "application/json": {
                     name?: string;
                     /** @enum {string} */
-                    chart_type?: "line" | "bar" | "area";
-                    category_ids?: number[];
+                    chartType?: "line" | "bar" | "area";
+                    /**
+                     * @description ranked only valid with chartType=bar
+                     * @enum {string}
+                     */
+                    chartVariant?: "default" | "stacked" | "grouped" | "ranked";
+                    /** @enum {string} */
+                    timeBucket?: "monthly" | "yearly";
+                    categoryIds?: number[];
+                    recipientIds?: number[];
+                    tagIds?: number[];
+                    allCategories?: boolean;
+                    allRecipients?: boolean;
+                    allTags?: boolean;
+                    /** Format: date */
+                    dateRangeStart?: string | null;
+                    /** Format: date */
+                    dateRangeEnd?: string | null;
                 };
             };
         };
@@ -6227,6 +6317,35 @@ export interface operations {
             query?: {
                 start_date?: string;
                 end_date?: string;
+                currency?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Pivot table data */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Envelope"];
+                };
+            };
+        };
+    };
+    getTagPivot: {
+        parameters: {
+            query?: {
+                /** @description Tag ids to include as series (repeatable). Ignored when all=true. */
+                tag_ids?: number[];
+                /** @description When true, returns all active tags; tag_ids is ignored. Alias: all_tags. */
+                all?: boolean;
+                bucket?: "monthly" | "yearly";
+                start?: string;
+                end?: string;
                 currency?: string;
             };
             header?: never;

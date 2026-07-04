@@ -47,6 +47,6 @@ export function setSkinV2(on: boolean | undefined): void {
     applySkinV2Class();
 }
 
-if (import.meta.env.DEV) {
+if (import.meta.env.DEV && typeof window !== 'undefined') {
     (window as unknown as { __setSkinV2?: typeof setSkinV2 }).__setSkinV2 = setSkinV2;
 }

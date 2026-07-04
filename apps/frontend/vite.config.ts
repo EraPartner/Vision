@@ -97,6 +97,15 @@ export default defineConfig(({ mode }) => ({
         globals: true,
         environment: 'node',
         setupFiles: ['./src/test-setup.ts'],
+        // Silence the app's debug/info logger during tests. The api client logs
+        // every request at debug level; those console writes fire from inside
+        // request promises that can resolve during worker teardown, which
+        // intermittently trips Vitest's "Closing rpc while onUserConsoleLog was
+        // pending" teardown race. warn/error still emit so the suite's
+        // console.error/warn spies keep working.
+        env: {
+            VITE_LOG_LEVEL: 'warn',
+        },
         alias: {
             '@': path.resolve(__dirname, './src'),
         },
