@@ -25,6 +25,14 @@ COPY packages/types/package.json ./packages/types/
 # work tree (the case here — .git is excluded by .dockerignore). Stable file, so
 # copying it before install does not meaningfully churn the cache layer.
 COPY scripts/setup-git-hooks.js ./scripts/setup-git-hooks.js
+# Skip Puppeteer's browser downloads. The frozen workspace install resolves the
+# backend's `puppeteer` dependency even though this stage only builds the
+# frontend, and Puppeteer's postinstall would otherwise fetch Chrome +
+# chrome-headless-shell from Google's chrome-for-testing CDN. The runtime uses
+# the Alpine system chromium (PUPPETEER_EXECUTABLE_PATH), never these bundled
+# binaries — so the download is dead weight and an unnecessary network
+# dependency that makes the build flaky.
+ENV PUPPETEER_SKIP_DOWNLOAD=true
 RUN bun install --frozen-lockfile
 
 # Workspace sources + locale inputs after the install layer (cache-friendly).
@@ -55,8 +63,14 @@ WORKDIR /app
 #     Puppeteer's bundled Chrome is a glibc x86_64 binary and cannot run on
 #     Alpine (musl) or ARM64 hosts. We skip the bundled download and use the
 #     distro package instead.
-RUN apk upgrade --no-cache && \
-    apk add --no-cache python3 py3-pip chromium && \
+# Install system packages FIRST, then `apk upgrade` so that chromium's transitive
+# dependencies (e.g. openexr, harfbuzz, the media stack) are also bumped to the
+# newest patched versions in the Alpine v3.22 repo — not just the base image's
+# preinstalled packages. Upgrading before `apk add` (the previous order) left
+# freshly-pulled chromium deps at whatever version the build-cache snapshot had,
+# which is how CVE-flagged openexr 3.3.2-r0 persisted in a cached layer.
+RUN apk add --no-cache python3 py3-pip chromium && \
+    apk upgrade --no-cache && \
     python3 -m venv /venv && \
     . /venv/bin/activate && \
     pip install --no-cache-dir --upgrade pip && \
@@ -78,8 +92,14 @@ COPY packages/types/package.json ./packages/types/
 # file; it must exist or the install fails. It self-no-ops without a git work
 # tree (the case here — .git is excluded by .dockerignore).
 COPY scripts/setup-git-hooks.js ./scripts/setup-git-hooks.js
-# Skip Puppeteer's bundled Chromium download — we use the Alpine system package.
+# Skip ALL Puppeteer browser downloads — the runtime uses the Alpine system
+# chromium via PUPPETEER_EXECUTABLE_PATH (set below), never Puppeteer's bundled
+# binaries. PUPPETEER_SKIP_CHROMIUM_DOWNLOAD only covers the legacy full-Chrome
+# download; Puppeteer v25 additionally fetches chrome-headless-shell, which needs
+# the newer PUPPETEER_SKIP_DOWNLOAD flag. Skipping both keeps the image smaller
+# and the build hermetic (no dependency on Google's chrome-for-testing CDN).
 ENV PUPPETEER_SKIP_CHROMIUM_DOWNLOAD=true
+ENV PUPPETEER_SKIP_DOWNLOAD=true
 RUN bun install --frozen-lockfile --production
 
 # Workspace package sources — the node_modules/@vision/* symlinks created by
