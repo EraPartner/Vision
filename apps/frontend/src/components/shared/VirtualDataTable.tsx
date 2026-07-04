@@ -664,10 +664,13 @@ export function VirtualDataTable<T extends Record<string, unknown>>({
                     ref={parentRef}
                     className="overflow-auto"
                     style={{ maxHeight: `${maxHeight}px` }}
-                    role="rowgroup"
+                    // A `rowgroup` must contain `row` children (WCAG aria-required-children).
+                    // When there are no rows we render a status message instead, so the
+                    // rowgroup role is dropped in that case to keep the ARIA tree valid.
+                    role={processedRows.length === 0 ? undefined : "rowgroup"}
                 >
                     {processedRows.length === 0 ? (
-                        <div className="text-center text-muted-foreground py-12">
+                        <div className="text-center text-muted-foreground py-12" role="status">
                             {localSearchQuery || activeFilterCount > 0
                                 ? t('table.noFilterResults')
                                 : (emptyMessage ?? t('table.noData'))}
