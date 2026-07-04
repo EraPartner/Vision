@@ -57,8 +57,16 @@ jobs:
         run: |
           printf 'POSTGRES_PASSWORD=ci_test_password\nDATABASE_URL=postgresql://ftm_user:ci_test_password@db:5432/financial_transactions\nSECRET_KEY=ci_test_secret_key_minimum_32_chars_!\nLOG_LEVEL=warn\nENABLE_LOGGING=true\n' > .env
 
+      # Use a plain `up -d` (NOT `up -d --build`). On the ubuntu-24.04 runner's
+      # Docker Compose, `up -d --build` fails env_file resolution and aborts with
+      # "env file .../.env not found" — even though the stub .env exists at the
+      # repo root. The exact internal cause is unconfirmed (it does not reproduce
+      # on newer local Compose), but ci.yml's docker-verify and test-live-api-
+      # contracts jobs use the same stub .env with a plain `up -d` and pass, so
+      # we mirror that proven invocation. Compose still builds the `app` image
+      # implicitly here (fresh runner → no cached image), so current source runs.
       - name: Start the stack (Docker Compose)
-        run: docker compose -f docker-compose.yml up -d --build
+        run: docker compose -f docker-compose.yml up -d
 
       - name: Wait for backend health
         run: |
