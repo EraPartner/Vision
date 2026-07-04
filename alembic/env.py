@@ -13,11 +13,15 @@ env_local_path = os.path.join(config_dir, "config", ".env.local")
 if os.path.exists(env_local_path):
     load_dotenv(env_local_path, override=True)
 
-# Get database URL from environment variable
-database_url = os.getenv(
-    "DATABASE_URL",
-    "postgresql://ftm_user:ftm_password@localhost:5432/financial_transactions",
-)
+# Get database URL from environment variable. No credentialed fallback: shipping
+# a default password ("ftm_password") invites standing a DB up on it. Fail fast
+# instead so the operator must supply DATABASE_URL (compose/.env.local do).
+database_url = os.getenv("DATABASE_URL")
+if not database_url:
+    raise SystemExit(
+        "DATABASE_URL is not set. Set it in the environment or config/.env.local "
+        "before running migrations."
+    )
 
 # Handle SQLite path resolution if using SQLite
 if database_url.startswith("sqlite") and not database_url.startswith("sqlite:///"):

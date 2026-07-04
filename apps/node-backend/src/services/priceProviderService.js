@@ -7,6 +7,7 @@
  */
 
 import { logger } from '../config/logger.js';
+import { assertPublicHttpUrl } from '../lib/urlSafety.js';
 import { recordSuccess as recordProviderSuccess, recordError as recordProviderError } from './providerHealthService.js';
 import { convertRowsToEur } from './currency/currencyConversionService.js';
 import {
@@ -465,10 +466,25 @@ export async function fetchHistoricalPrices(investment, { fromMs, toMs, dbOnly =
 
   if (!points) {
     try {
-      const res = await fetch(config.historyUrl, {
-        headers: { Accept: 'application/json' },
-        signal: AbortSignal.timeout(10_000),
-      });
+      // SSRF guard: config.historyUrl is a user-controlled custom-provider URL,
+      // so validate it (DNS-resolved private/loopback/non-http block) and follow
+      // redirects manually, re-checking every hop — mirrors the guarded "latest"
+      // path in priceProviderRegistry._fetchJson so a public host cannot 302 the
+      // request onto an internal address.
+      let url = String(config.historyUrl);
+      let res;
+      for (let hop = 0; ; hop += 1) {
+        await assertPublicHttpUrl(url);
+        res = await fetch(url, {
+          headers: { Accept: 'application/json' },
+          redirect: 'manual',
+          signal: AbortSignal.timeout(10_000),
+        });
+        const location = res.status >= 300 && res.status < 400 ? res.headers.get('location') : undefined;
+        if (!location) break;
+        if (hop >= 3) throw new Error('too many redirects');
+        url = new URL(location, url).toString();
+      }
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
       const data = await res.json();
       points = normalizeHistoryPoints(parseCustomHistoryPoints(data, config));

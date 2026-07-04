@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
+import { safeHref } from "@/utils/safeHref";
 import { apiClient } from "@/lib/api";
 import { Button } from "@/components/ui/button";
 import {
@@ -210,7 +211,7 @@ export function UpdateNotification() {
                                 asChild
                                 className="mr-auto"
                             >
-                                <a href={status.html_url} target="_blank" rel="noopener noreferrer">
+                                <a href={safeHref(status.html_url)} target="_blank" rel="noopener noreferrer">
                                     <ExternalLink className="h-3.5 w-3.5 mr-1.5" />
                                     {t('update.releaseNotes')}
                                 </a>

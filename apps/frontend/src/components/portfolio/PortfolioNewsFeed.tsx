@@ -1,4 +1,5 @@
 import { useQuery } from "@tanstack/react-query";
+import { safeHref } from "@/utils/safeHref";
 import { apiClient, type MarketNewsArticle } from "@/lib/api";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -97,7 +98,7 @@ function NewsItem({ article, locale }: { article: MarketNewsArticle; locale: str
 
   return (
     <a
-      href={article.link}
+      href={safeHref(article.link)}
       target="_blank"
       rel="noopener noreferrer"
       className="flex gap-3 py-3 border-b border-border/50 last:border-0 group hover:bg-muted/50 -mx-2 px-2 rounded-md transition-colors"

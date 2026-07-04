@@ -1,4 +1,5 @@
 import { useState, useMemo, useCallback } from "react";
+import { safeHref } from "@/utils/safeHref";
 import { useQueryClient } from "@tanstack/react-query";
 import { Money } from "@/components/shared/Money";
 import logger from "@/lib/logger";
@@ -193,7 +194,7 @@ export default function PlannedPaymentsPage() {
                 <Badge variant="secondary" className="text-[10px] uppercase tracking-wide">{t('plannedPage.loanBadge')}</Badge>
               )}
               {row.url && (
-                <a href={row.url} target="_blank" rel="noopener noreferrer" onClick={(e) => e.stopPropagation()} title={t('plannedPage.openLink')} className="text-muted-foreground hover:text-primary">
+                <a href={safeHref(row.url)} target="_blank" rel="noopener noreferrer" onClick={(e) => e.stopPropagation()} title={t('plannedPage.openLink')} className="text-muted-foreground hover:text-primary">
                   <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13.828 10.172a4 4 0 010 5.656l-1.414 1.414a4 4 0 01-5.656-5.656l1.414-1.414" />
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 7h6v6" />

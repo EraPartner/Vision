@@ -1,4 +1,5 @@
 import { useQuery } from "@tanstack/react-query";
+import { safeHref } from "@/utils/safeHref";
 import { Skeleton } from "@/components/ui/skeleton";
 import { ExternalLink } from "lucide-react";
 import { useLanguage } from "@/contexts/LanguageContext";
@@ -51,11 +52,11 @@ export function ResearchNewsTab({ symbol, enabled }: ResearchNewsTabProps) {
     <div className="space-y-3">
       <div className="flex justify-end"><ProvenanceBadge meta={result?.meta} /></div>
       {articles.map((article) => {
-        const safeHref = /^https?:\/\//i.test(article.link) ? article.link : undefined;
+        const href = safeHref(article.link);
         return (
           <a
             key={article.link}
-            href={safeHref}
+            href={href}
             target="_blank"
             rel="noopener noreferrer"
             className="flex gap-3 p-2 -mx-2 rounded-md hover:bg-muted/70 transition-colors group"

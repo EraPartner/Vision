@@ -1,4 +1,5 @@
 import { useState, memo } from 'react';
+import { safeHref } from '@/utils/safeHref';
 import {
     AlertCircle, CheckCircle2, Download, ExternalLink, Loader2,
     RefreshCw, RotateCcw, Sparkles, ShieldCheck,
@@ -188,7 +189,7 @@ export const AboutSection = memo(function AboutSection({ onOpenChange }: AboutSe
                                 {updateStatus.error && <p className="mt-0.5 text-xs opacity-80">{updateStatus.error}</p>}
                             </div>
                             {updateStatus.html_url && (
-                                <a href={updateStatus.html_url} target="_blank" rel="noopener noreferrer" className="shrink-0 opacity-70 transition-opacity hover:opacity-100" title={t('update.releaseNotes')}>
+                                <a href={safeHref(updateStatus.html_url)} target="_blank" rel="noopener noreferrer" className="shrink-0 opacity-70 transition-opacity hover:opacity-100" title={t('update.releaseNotes')}>
                                     <ExternalLink className="h-3.5 w-3.5" />
                                 </a>
                             )}

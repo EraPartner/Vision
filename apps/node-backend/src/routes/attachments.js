@@ -30,6 +30,10 @@ const router = Router();
  * POST /api/attachments/transaction/:id
  * Body: multipart/form-data, field "file"
  */
+// codeql[js/missing-rate-limiting]: attachmentRateLimiter (60 req/min) is
+// applied to this whole router via mountRouter('/api/attachments',
+// attachmentRateLimiter, ...) in main.js. The scanner does not trace rate
+// limiting middleware bound at the router-mount level in a different file.
 router.post(
   '/transaction/:id',
   validateIdParam,
@@ -97,6 +101,10 @@ router.get('/transaction/:id', validateIdParam, async (req, res) => {
  * Stream the file to the client. Envelope (ADR-026) does not apply here —
  * the response is the raw file bytes with Content-Disposition: inline.
  */
+// codeql[js/missing-rate-limiting]: attachmentRateLimiter (60 req/min) is
+// applied to this whole router via mountRouter('/api/attachments',
+// attachmentRateLimiter, ...) in main.js. The scanner does not trace rate
+// limiting middleware bound at the router-mount level in a different file.
 router.get('/:id/download', validateIdParam, async (req, res, next) => {
   const attachment = await attachmentRepository.findById(parseInt(req.params.id, 10));
   if (!attachment) throw new NotFoundError('Attachment not found');
@@ -130,6 +138,10 @@ router.get('/:id/download', validateIdParam, async (req, res, next) => {
 /**
  * DELETE /api/attachments/:id
  */
+// codeql[js/missing-rate-limiting]: attachmentRateLimiter (60 req/min) is
+// applied to this whole router via mountRouter('/api/attachments',
+// attachmentRateLimiter, ...) in main.js. The scanner does not trace rate
+// limiting middleware bound at the router-mount level in a different file.
 router.delete('/:id', validateIdParam, async (req, res) => {
   const attachment = await attachmentRepository.findById(parseInt(req.params.id, 10));
   if (!attachment) throw new NotFoundError('Attachment not found');

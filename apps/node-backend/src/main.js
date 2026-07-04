@@ -29,9 +29,11 @@ import { cancelPendingAggregationRefresh } from './services/aggregationRefresh.j
 import { runWarmupTasks } from './startup/warmup.js';
 
 const adminAuthMiddleware = createAdminAuthMiddleware(() => settings.admin.authToken);
-// Blocks cross-site state-changing requests (browser CSRF) to destructive admin
-// routes, which the loopback binding alone cannot stop.
-const adminCsrfGuard = createCsrfGuard(() => settings.api.corsOrigins);
+// Blocks cross-site state-changing requests (browser CSRF), which the loopback
+// binding alone cannot stop. Mounted across the whole data plane below; the
+// alias documents intent at the (now redundant) admin mount point.
+const csrfGuard = createCsrfGuard(() => settings.api.corsOrigins);
+const adminCsrfGuard = csrfGuard;
 
 // Import route modules
 import transactionsRouter from './routes/transactions.js';
@@ -296,6 +298,14 @@ app.get('/api/', (req, res) => {
 // router so previously-unthrottled routes (/api/transactions, /api/settings, …)
 // get a DoS backstop; stricter per-route limiters below stack on top.
 app.use('/api', globalRateLimiter);
+
+// CSRF backstop across the whole data plane. Previously only /api/admin was
+// guarded, leaving state-changing data-plane routes (/api/import/csv,
+// /api/portfolio/import, /api/attachments, …) forgeable via a cross-site
+// multipart POST (a CORS-simple request that fires without preflight). The
+// guard is stateless (Sec-Fetch-Site/Origin based) so same-origin SPA and
+// Electron-main requests pass unchanged.
+app.use('/api', csrfGuard);
 
 mountRouter(app, '/api/transactions', transactionsRouter);
 mountRouter(app, '/api/categories', categoriesRouter);
