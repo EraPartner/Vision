@@ -15,16 +15,28 @@ import type { FullConfig } from "@playwright/test";
  */
 async function globalSetup(_config: FullConfig): Promise<void> {
     const apiBase = process.env.PLAYWRIGHT_BASE_URL ?? "http://localhost:3002";
-    const res = await fetch(`${apiBase}/api/settings/onboarding_complete`, {
-        method: "PUT",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ value: true }),
-    });
-    if (!res.ok) {
-        throw new Error(
-            `global-setup: could not mark onboarding complete (HTTP ${res.status} from ${apiBase})`,
-        );
+
+    async function putSetting(key: string, value: unknown): Promise<void> {
+        const res = await fetch(`${apiBase}/api/settings/${key}`, {
+            method: "PUT",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ value }),
+        });
+        if (!res.ok) {
+            throw new Error(
+                `global-setup: could not set ${key} (HTTP ${res.status} from ${apiBase})`,
+            );
+        }
     }
+
+    // Dismiss the first-run onboarding wizard (a backend setting, not localStorage).
+    await putSetting("onboarding_complete", true);
+
+    // Enable adminMode so RequireAdmin lets the /admin* routes render (the Admin
+    // overview + exchange-rates specs navigate there). adminMode lives in the
+    // app_settings blob; the store merges a stored blob over defaults, so a
+    // minimal { adminMode: true } is enough for the suite.
+    await putSetting("app_settings", { adminMode: true });
 }
 
 export default globalSetup;
