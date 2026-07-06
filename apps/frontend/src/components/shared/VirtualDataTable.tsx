@@ -664,16 +664,21 @@ export function VirtualDataTable<T extends Record<string, unknown>>({
                     ref={parentRef}
                     className="overflow-auto"
                     style={{ maxHeight: `${maxHeight}px` }}
-                    // A `rowgroup` must contain `row` children (WCAG aria-required-children).
-                    // When there are no rows we render a status message instead, so the
-                    // rowgroup role is dropped in that case to keep the ARIA tree valid.
-                    role={processedRows.length === 0 ? undefined : "rowgroup"}
+                    role="rowgroup"
                 >
                     {processedRows.length === 0 ? (
-                        <div className="text-center text-muted-foreground py-12" role="status">
-                            {localSearchQuery || activeFilterCount > 0
-                                ? t('table.noFilterResults')
-                                : (emptyMessage ?? t('table.noData'))}
+                        // A `rowgroup` must contain a `row`, and a `row` must contain a
+                        // cell (WCAG aria-required-children). Wrap the empty-state message
+                        // in row+cell so the outer `role="table"` tree stays valid instead
+                        // of having a bare `role="status"` as an (illegal) table child.
+                        <div role="row">
+                            <div role="cell" className="text-center text-muted-foreground py-12">
+                                <span role="status">
+                                    {localSearchQuery || activeFilterCount > 0
+                                        ? t('table.noFilterResults')
+                                        : (emptyMessage ?? t('table.noData'))}
+                                </span>
+                            </div>
                         </div>
                     ) : (
                         <div role="presentation" style={{ height: `${virtualizer.getTotalSize()}px`, width: "100%", position: "relative" }}>
