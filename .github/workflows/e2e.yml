@@ -55,7 +55,13 @@ jobs:
 
       - name: Create stub .env for Docker Compose
         run: |
-          printf 'POSTGRES_PASSWORD=ci_test_password\nDATABASE_URL=postgresql://ftm_user:ci_test_password@db:5432/financial_transactions\nSECRET_KEY=ci_test_secret_key_minimum_32_chars_!\nLOG_LEVEL=warn\nENABLE_LOGGING=true\n' > .env
+          # VISION_DEV=true enables the app's sanctioned dev/test bypass (skips
+          # rate limiting) so the suite's rapid full-page navigation across every
+          # route doesn't trip the 30/min per-route limiters (e.g. exchange-rates)
+          # and surface as false "network drift" 429s. Test-env only — production
+          # defaults are untouched; this suite exercises UI/a11y/contracts, not
+          # rate limiting.
+          printf 'POSTGRES_PASSWORD=ci_test_password\nDATABASE_URL=postgresql://ftm_user:ci_test_password@db:5432/financial_transactions\nSECRET_KEY=ci_test_secret_key_minimum_32_chars_!\nLOG_LEVEL=warn\nENABLE_LOGGING=true\nVISION_DEV=true\n' > .env
 
       # Use a plain `up -d` (NOT `up -d --build`). On the ubuntu-24.04 runner's
       # Docker Compose, `up -d --build` fails env_file resolution and aborts with
