@@ -32,7 +32,9 @@ export default function PlannedPaymentForm({ open, onOpenChange, onSubmit, initi
   const [name, setName] = useState(initial?.name ?? "");
   const [amount, setAmount] = useState(initial?.amount?.toString() ?? "");
   const [currency, setCurrency] = useState(initial?.currency ?? appSettings.defaultCurrency);
-  const [dueDate, setDueDate] = useState<Date | undefined>(initial?.due_date ? parseLocalDateFromYmd(initial.due_date) : undefined);
+  // New planned payments default the (required) due date to today so the form is
+  // immediately submittable; editing keeps the stored date.
+  const [dueDate, setDueDate] = useState<Date | undefined>(initial?.due_date ? parseLocalDateFromYmd(initial.due_date) : new Date());
   const [isRecurring, setIsRecurring] = useState(initial?.is_recurring ?? false);
   const [frequency, setFrequency] = useState<Frequency>(initial?.frequency ?? "monthly");
   const [isLoan, setIsLoan] = useState(initial?.is_loan ?? false);

@@ -83,6 +83,8 @@ test.describe("Phase F4 — CRUD lifecycle parity (real browser)", () => {
         await expect(page.getByRole("dialog")).toBeVisible();
         await page.getByLabel(/^name \*/i).fill(unique);
         await page.getByLabel(/^amount \*/i).fill("100");
+        // Bank account is also required; the due date now defaults to today.
+        await page.getByLabel(/^bank account \*/i).fill("Test Account");
         await page.getByRole("button", { name: /^create$/i }).click();
 
         await expect(page.getByRole("dialog")).not.toBeVisible({ timeout: 4000 });
