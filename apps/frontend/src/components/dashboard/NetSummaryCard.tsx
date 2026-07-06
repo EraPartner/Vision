@@ -104,11 +104,13 @@ export function NetSummaryCard({ netBalance, income, spending, history }: NetSum
           </div>
           <div className="h-2.5 w-full overflow-hidden rounded-full bg-muted/50 flex">
             <div
+              role="img"
               className="h-full bg-gain transition-[width] duration-700"
               style={{ width: `${incomePct}%` }}
               aria-label={t('dashboard.stat.income')}
             />
             <div
+              role="img"
               className="h-full bg-loss transition-[width] duration-700"
               style={{ width: `${spendingPct}%` }}
               aria-label={t('dashboard.stat.spending')}
