@@ -29,6 +29,12 @@ jobs:
     name: E2E + a11y (Playwright)
     runs-on: ubuntu-24.04
     timeout-minutes: 30
+    # Isolate this stack from the real `vision` compose project (the default from
+    # the repo dir basename). Without this, running these steps locally shares the
+    # vision_postgres_data volume with the packaged app and dev stack — a teardown
+    # or reset would wipe real financial data. Distinct project ⇒ distinct volumes.
+    env:
+      COMPOSE_PROJECT_NAME: vision_e2e
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v4
 

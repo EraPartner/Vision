@@ -3,8 +3,8 @@ title: Troubleshooting & FAQ
 type: reference
 status: active
 date: 2026-04-21
-updated: 2026-06-29
-tags: [troubleshooting, faq, reference, debugging, phase-1, electron, app-naming, password-mismatch, keychain, safe-storage, macOS, backup-passphrase]
+updated: 2026-07-07
+tags: [troubleshooting, faq, reference, debugging, phase-1, electron, app-naming, password-mismatch, keychain, safe-storage, macOS, backup-passphrase, compose-project-name, data-loss, down-v, volume-isolation, backup-restore]
 description: Common issues, error messages, and their solutions for the Vision project including Electron desktop app password authentication failures and macOS Keychain prompts
 aliases: [troubleshooting, FAQ, common issues, errors, debugging, problems]
 ---
@@ -208,6 +208,21 @@ If you're seeing this error and cannot wait for an app update:
 1. The `docker-entrypoint.sh` runs `alembic upgrade head` on startup (both fresh DB and migration cases)
 2. Check entrypoint logs for migration errors
 3. On a fresh DB, the baseline migration `0001_initial_database_schema.py` creates all 27 tables, enums, indexes, and triggers ([[docs/adr/027-alembic-single-source-of-schema|ADR-027]])
+
+### App opens with an empty database (real data gone)
+
+**Symptom:** The app starts cleanly but every page is empty — 0 transactions/accounts. `docker volume inspect vision_postgres_data --format '{{.CreatedAt}}'` shows a recent timestamp, and all three `vision_*` named volumes share that exact create time.
+
+**Cause:** `docker-compose.yml` sets no `name:`, so the compose project defaults to this directory's basename → **`vision`**, whose `postgres_data` volume holds the **real** database — and it's shared by the packaged Vision.app, the dev stack, *and* anyone running the CI/e2e compose commands from the repo. A `docker compose down -v` (or `docker volume rm vision_postgres_data`, or a mis-scoped `bun run docker:clean:reset`) run from this directory destroys it; the next `up` recreates it empty. This wiped real data on 2026-07-06.
+
+**Recovery:**
+1. Restore the latest real-data `.visionbak` bundle (Settings → Backup → Restore). Real-data bundles are ~1 MB+; an empty-DB backup is ~28 KB, so pick by size/date. Requires `backupOnQuit`/periodic backups to have been enabled.
+2. No migration is needed if the bundle's `schemaHead` (in `metadata.json`) equals the current alembic head.
+
+**Prevention:**
+1. Never run `down -v` / `volume rm` against project `vision` from the repo dir.
+2. For e2e/CI/clean-slate stacks use an isolated project so their volumes are separate: `COMPOSE_PROJECT_NAME=vision_e2e docker compose … up -d` (baked into `.github/workflows/{ci,e2e}.yml`), or `docker-compose.clean.yml` (separate `vision_postgres_data_clean` volume).
+3. Keep `backupOnQuit` on and back up off-machine (the iCloud copy is what enabled recovery).
 
 ## Common Error Messages
 

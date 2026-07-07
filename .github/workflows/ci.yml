@@ -515,6 +515,11 @@ jobs:
     needs: [build-image]
     permissions:
       contents: read
+    # Isolate this stack from the `vision` project (default from the repo dir
+    # basename) so the `down -v` teardown below can never remove the real app's
+    # vision_postgres_data volume when these steps are run locally.
+    env:
+      COMPOSE_PROJECT_NAME: vision_ci
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v4
 
@@ -584,6 +589,10 @@ jobs:
     if: ${{ !github.event.pull_request.draft }}
     permissions:
       contents: read
+    # Isolate from the real `vision` project so the `down -v` teardown can never
+    # remove vision_postgres_data when run locally (see docker-verify above).
+    env:
+      COMPOSE_PROJECT_NAME: vision_ci
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v4
 
