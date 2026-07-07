@@ -40,7 +40,10 @@ if ! "$ALEMBIC" --version >/dev/null 2>&1; then ALEMBIC="$(command -v alembic ||
 [ -n "$ALEMBIC" ] && "$ALEMBIC" --version >/dev/null 2>&1 \
   || { echo "ERROR: no usable alembic (repo venv broken and no system alembic with psycopg2/python-dotenv/sqlalchemy)"; exit 1; }
 
-cleanup(){ docker rm -f "$CTN" >/dev/null 2>&1 || true; }
+# `-v` also drops the anonymous volume Docker auto-creates for postgres:18-alpine's
+# declared VOLUME /var/lib/postgresql (we run it without a named mount). Without -v
+# every regen run orphaned a ~50–95 MB throwaway data dir.
+cleanup(){ docker rm -f -v "$CTN" >/dev/null 2>&1 || true; }
 trap cleanup EXIT
 
 echo "==> [1/6] throwaway Postgres ($CTN) on 127.0.0.1:$PORT"
