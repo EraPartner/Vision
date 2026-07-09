@@ -4202,6 +4202,169 @@ Decoupled on purpose: no LLM needed, no scheduling machinery, ships on its own.
 
 ---
 
+### Accounts rewrite (consolidated plan — plan review 2026-07-09)
+
+**Why a rewrite, not more patches.** The findings sections track ~20 account symptoms as
+independent items, but they share three roots — patching them one-by-one leaves the architecture
+that keeps producing them:
+
+1. **Two identities for one concept.** `transactions.bank_account` (free text, the *write-side*
+   source of truth — every create path writes the string and the 0051/0062 trigger mints/resolves
+   `accounts` rows from it) vs `accounts.id` (the *read-side* source of truth — running balances,
+   bank balances, net worth all join on the FK). ADR-088's contract step never happened
+   (`0055_drop_bank_account_string.py` is a deliberate no-op after the premature drop broke boot;
+   `0056` restored the string), and stragglers still read the string: list-filter/search
+   `t.bank_account ILIKE` (`transactionRepository.js:195,261`) and `mv_bank_balances` grain-keyed on
+   `(bank_account, currency)` (`materializedViewService.js:104-118`). Every phantom-account,
+   casing, rename-fan-out, and typo finding is this root.
+2. **Three balance definitions that disagree.** Accounts hub = anchor+delta
+   (`accountBalanceSql.js:26-46`); net-worth history + bank-balances widget = latest-*stamped*
+   balance per account (`infoRepositoryNetWorth.js:108-120`, `infoRepositoryBanks.js:80-89`);
+   `mv_bank_balances` = raw `Σ(amount)` grouped by the *string*. They diverge exactly when
+   unstamped rows (manual entries, trade legs) follow the last import — the very case the
+   anchor+delta lateral was written to fix. Post-ADR-094-addendum only the CSV import pipeline may
+   stamp `transactions.balance`, so the divergence is permanent for any account with manual
+   activity. Also FX-blind sleeve sums (`accountBalanceSql.js:37`, filed) belong to this root.
+3. **A half-live epic.** The holdings half (ADR-090 cash legs, 091 per-account lots, 095 brokerage
+   import, 100 by-account net worth) is built + tested but dark behind
+   `VITE_ENABLE_PER_ACCOUNT_HOLDINGS=false` (ADR-103) with known pre-enable bugs; the cash half runs
+   live. Meanwhile the Accounts *page* predates the app's current interaction standards
+   (double-click-only open, native `title` tooltips, dual-personality Add/Edit dialog, bare-`<p>`
+   error state) and the dashboard renders a **second, parallel account UI** from a different data
+   path (`BankBalancesWidget` keyed on `bank_account` strings via `getBankBalances`, own
+   IBAN-shortening — vs the entity cards on `AccountsPage`).
+
+**Decisions to pin first (each one line in an ADR-088/089 addendum; phases assume the recommendation):**
+
+- [ ] D1 — **Identity = `accounts.id`; explicit creation only.** `name` becomes a case-insensitive
+      unique label (`lower(btrim(name))` index), account rows are *never* minted implicitly: the
+      import pipeline surfaces "N new accounts will be created" as a review step (map-to-existing or
+      confirm-create, the review UI already exists), manual forms use a picker with an explicit
+      "create account…" affordance. The 0051/0062 trigger is demoted to lookup-only on INSERT too,
+      then dropped at contract time. 🔺
+- [ ] D2 — **One currency per account, as an invariant.** Multi-currency banks become one account
+      per currency (the Wise adapter already does `WISE <CURRENCY>`; the filed Revolut-collapse
+      finding is the missing case). Stop surfacing `multi_currency_cash` (column stays, dormant).
+      Rationale: every balance path (anchor+delta, statement drift, net worth) silently assumes it
+      already. 🔼
+- [ ] D3 — **Holdings flag stays OFF for this rewrite.** v1 ships the cash/identity/UX half only;
+      the per-account-holdings half gets a separate go/no-go (Phase E) with its prerequisite bug
+      list. Rationale: ADR-103's "no consumer in this deployment" still holds, and enabling now
+      widens the blast radius of the identity/balance migration. 🔼
+- [ ] D4 — **Opening balance becomes a first-class concept.** Today only the import pipeline may
+      stamp `transactions.balance`, so a manual/cash-only account (wallet) can *never* anchor — its
+      computed balance is Σ(deltas) from an implicit zero forever, and seeding via API is
+      impossible by design. Add a guarded "set opening balance" action that writes a
+      system-stamped anchor row (server-side, not a free-typed `balance` — preserves the ADR-094
+      addendum's tamper-protection). ⏫
+- [ ] D5 — **Lifecycle: active → closed → (only-if-empty) deleted.** "Close" = archive with a
+      `closed_at`, delete allowed only with zero referencing rows; the DELETE 409 path routes the
+      user to archive instead of dead-ending (`useAccounts.ts:78` already knows this in a comment).
+      🔽
+
+**Phase A — standalone correctness fixes (no design dependency; several already filed, folded in by title):**
+
+- [ ] Account/Category edit dialogs revert in-flight edits (filed 🔺) — fix here as part of the
+      dialog split below, or standalone first
+- [ ] Net worth never invalidated by account/investment CRUD (filed 🔺)
+- [ ] `PATCH`-to-clear no-ops on 5 account fields (filed ⏫) — both backend sentinel and frontend
+      explicit-`null` halves
+- [ ] `statement_balance` storable without `statement_balance_date` (filed ⏬) — require the date
+      whenever a balance is set (form + service + CHECK)
+- [ ] 0062 trigger: blank-on-UPDATE leaves stale `account_id`; case-sensitive lookup (both filed 🔽)
+- [ ] **New:** service-side casing gap — `accountService.create/update` only `.trim()` the name
+      while every transaction writer UPPERs (`transactionRepository.js:365`, `adapters/generic.js:13-20`);
+      `POST /api/accounts` "Checking" + import "CHECKING" = two accounts. Subsumed by D1's
+      case-insensitive unique index, but cheap to normalize in the service now. 🔼
+
+**Phase B — one identity (finish ADR-088):**
+
+- [ ] Import review gains a "new accounts" step (D1): unmatched labels → propose create/map, typed
+      at creation (type/currency prefilled from adapter context) — kills phantom accounts at the
+      source, replaces the trigger's INSERT-mint 🔺
+- [ ] `bank_account` free-text inputs in Add Transaction + Planned Payment forms → account
+      combobox with explicit-create (filed 🔼; sharpen the filed fix: the escape hatch should
+      *create an account explicitly*, never post a bare string)
+- [ ] Flip the last string readers: list-filter/search → `account_id` predicate (subsumes the filed
+      "exact bank-account filter as ILIKE" perf item — route the dropdown through the FK rather
+      than anchoring the string), `mv_bank_balances` re-grained on `(account_id, currency)` (filed
+      inside the dual-write-exit item) ⏫
+- [ ] Then the contract runbook from the filed dual-write-exit item ⏫: parity-check query,
+      code-flip inventory, out-of-band drop as its own revision. Sequencing note: do **not** fix
+      the string stragglers piecemeal outside this phase — each one binds new code to the string.
+
+**Phase C — one balance engine + reconcile UX:**
+
+- [ ] Single shared per-account balance source (the anchor+delta lateral) consumed by the accounts
+      hub, `getBankBalances`, and net worth — removes the three-way divergence (root 2). **New
+      finding:** the hub vs net-worth/widget disagreement itself was previously unfiled. ⏫
+- [ ] FX-convert non-account-currency legs at read (filed 🔼, "cash sleeve balances mix currencies")
+- [ ] Opening-balance mechanism (D4) ⏫
+- [ ] Persist the per-account split alongside snapshots + incremental rebuild (filed 🔼 as the
+      `getNetWorthByAccount` replay perf item — build it here so Phase E inherits it)
+- [ ] Reconcile flow on the drift badge: click → dialog showing statement vs computed + delta →
+      either "accept" (update statement fields) or explicit opt-in "add adjustment transaction"
+      (server-created, preserves ADR-094 descriptive-only default). Today the badge is a dead-end
+      `title` tooltip; Edit → Advanced is the only path. 🔼
+
+**Phase D — Accounts page + dialog redesign (respect the binding design constraint — refine the
+rich aesthetic, don't flatten):**
+
+- [ ] Card grid stays, but **single-click opens an account detail view** (drawer or route):
+      balance + sparkline from existing history, drift/reconcile CTA, recent transactions, holdings
+      section (dark until Phase E), metadata; per-card ⋮ menu keeps the rare actions. Kills the
+      double-click-only affordance (filed 🔼 for the widget; same fix here), gives cards
+      `role="button"`/`tabIndex`/Enter. 🔼
+- [ ] **Unify the dashboard widget onto the entity**: `BankBalancesWidget` reads the same accounts
+      + shared balance source (Phase C), cards link to the same detail view — one concept, one code
+      path. **New finding:** the two-parallel-UIs split was previously unfiled. 🔼
+- [ ] Split `AddAccountDialog` into create + edit (or remount via `key={editing.id}`): fixes the
+      filed revert bug; **new:** edit mode must not hide populated fields behind a collapsed
+      "Advanced" toggle, and type-change must only apply `flagsForType` defaults to fields the user
+      hasn't touched (today it silently clobbers manually-set `spendable`/`liquidity_class`/
+      `tax_wrapper`/`has_cash_sleeve`). Currency becomes a Select of known codes. 🔼
+- [ ] Replace native `title` tooltips with the app Tooltip (drift, balance provenance, open-hint —
+      filed inside the touch-tooltip sweep); real error state with retry (filed); accessible name
+      on the ⋮ button (filed); distinct page icon — `Landmark` currently doubles as Taxes (filed);
+      `Money` component for balances instead of plain `formatCurrency` (filed in the Money-adoption
+      sweep) 🔽
+- [ ] **New:** `funding_account_id` is dead UI-side — in the type and PATCH whitelist but never
+      surfaced or editable anywhere. Either build the ADR-090 sleeve-less funding picker here (it
+      becomes meaningful once sleeves matter) or drop it from the frontend type until Phase E. 🔽
+- [ ] Merge/close polish: merge confirm states direction explicitly (nl finding filed); close flow
+      gets `closed_at` + only-if-empty delete (D5); targeted invalidation map instead of the blanket
+      `queryClient.invalidateQueries()` 🔽
+
+**Phase E — the holdings half (separate go/no-go, after B+C are stable):**
+
+Enable `VITE_ENABLE_PER_ACCOUNT_HOLDINGS` only after its prerequisite list is green — all filed:
+sell-units validation is investment-wide not per-account (ADR-103's own known bug),
+`moveHoldingService` wrong units/cost-basis (🔺), the account-close NaN landmine (🔼), snapshot
+`value_by_account` split-rescale (🔼), `sanitizeSnapshotSpikes` breaking the Σ-invariant (🔽),
+portfolio-import dedup ignoring `account_id` (🔼), account-level dividend/interest/fee rows
+without instrument (🔽). If the answer stays no-consumer: say so in an ADR-103 addendum and stop
+carrying the dormant surfaces in every audit.
+
+**Gaps this review found in the previously-filed plan (net-new, verified against code 2026-07-09):**
+
+1. The hub-vs-net-worth **balance-definition divergence** (root 2) — pieces were filed
+   (`mv_bank_balances` string grain, FX-blind sums) but not the anchor+delta vs latest-stamped
+   disagreement itself.
+2. **No opening-balance path exists** for manual accounts post-ADR-094-addendum (D4) — nothing
+   filed anywhere.
+3. **Service-side casing gap** (`accountService` trims, writers UPPER) — only the trigger's
+   case-sensitivity was filed.
+4. **Edit-dialog flag clobber + hidden populated Advanced fields** — only the useEffect revert was
+   filed.
+5. **`funding_account_id` dead in the UI** — unfiled.
+6. **Two parallel account card UIs** (AccountsPage vs BankBalancesWidget) on two data paths —
+   individual widget bugs were filed, the duplication wasn't.
+7. **Sequencing risk**: several filed fixes (exact-filter ILIKE, widget a11y, combobox) would bind
+   *more* code to the `bank_account` string or the duplicated widget path if done before Phases
+   B/D — the filed items don't order themselves; this plan does.
+
+---
+
 ## Still to research — resume points
 
 Where each audit stopped. Pick these up to continue researching.
