@@ -17,6 +17,15 @@ import { logger } from '../../config/logger.js';
 import portfolioTransactionRepository from '../../repositories/portfolioTransactionRepository.js';
 import { autoResolveFxRateToEur } from '../portfolio/fxResolve.js';
 import { createTradeCashLeg } from '../portfolio/tradeCashLegService.js';
+import { classifyBrokerageRow } from '../importPipeline/brokerageRouting.js';
+
+// Staging stores cash magnitudes ABSOLUTE (adapter contract); the ledger sign
+// comes from the kind. Without this every withdrawal was credited as a
+// deposit (+500 instead of −500) — the sleeve error grew 2× per withdrawal.
+function signedCashAmount(row) {
+  const { direction } = classifyBrokerageRow({ kind: row.type_raw });
+  return (direction ?? 1) * Math.abs(Number(row.amount));
+}
 
 export async function commitBatch({ batchId, onProgress }) {
   await query(`UPDATE portfolio_import_batches SET status = 'committing' WHERE id = $1`, [batchId]);
@@ -93,7 +102,7 @@ export async function commitBatch({ batchId, onProgress }) {
         const r = await query(
           `INSERT INTO transactions (date, amount, currency, memo, account_id, is_active)
            VALUES ($1, $2, $3, $4, $5, true) RETURNING id`,
-          [row.tx_date, Number(row.amount), row.currency || 'EUR', memo, batchAccountId],
+          [row.tx_date, signedCashAmount(row), row.currency || 'EUR', memo, batchAccountId],
         );
         imported++;
         if (row.tx_hash) committedHashes.add(row.tx_hash);
@@ -221,7 +230,9 @@ async function isCashFieldDuplicate(accountId, row) {
       WHERE account_id = $1 AND date = $2::date AND amount = $3
         AND COALESCE(memo, '') = COALESCE($4, '') AND is_active = true
       LIMIT 1`,
-    [accountId, row.tx_date, Number(row.amount), memo],
+    // Compare the SIGNED amount — that's what the insert stores; comparing the
+    // absolute magnitude would never match a stored withdrawal on re-import.
+    [accountId, row.tx_date, signedCashAmount(row), memo],
   );
   return dup.rows.length > 0;
 }

@@ -198,6 +198,16 @@ describe('commitBatch (portfolio)', () => {
     expect(cashInserts).toHaveLength(1);
   });
 
+  it('brokerage withdrawal: debits the sleeve (negative amount) even though staging is absolute', async () => {
+    isBrokerage = true;
+    batchAccountId = 7;
+    matchedRows = [row({ id: 9, route: 'cash', type: null, type_raw: 'withdrawal', investment_id: null, amount: 500 })];
+    const res = await commitBatch({ batchId: 5 });
+    expect(res).toMatchObject({ imported: 1 });
+    const cashInsert = query.mock.calls.find(([s]) => /INSERT INTO transactions/.test(s));
+    expect(cashInsert[1][1]).toBe(-500); // amount param — was +500 (credited as a deposit)
+  });
+
   it('brokerage cash row: dedups against an existing cash transaction', async () => {
     isBrokerage = true;
     batchAccountId = 7;
