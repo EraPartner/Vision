@@ -529,6 +529,7 @@ const nl: Record<string, string> = {
   'common.income': 'Inkomsten',
   'common.kb': 'KB',
   'common.last': 'Laatste',
+  'common.loadError': 'Laden mislukt: {msg}',
   'common.loading': 'Laden...',
   'common.name': 'Naam',
   'common.next': 'Volgende',

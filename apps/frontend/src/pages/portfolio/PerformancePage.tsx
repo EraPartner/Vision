@@ -89,7 +89,7 @@ export default function PerformancePage() {
     const [selectedPeriod, setSelectedPeriod] = useState<ChartPeriod>("all");
     const [showFxNeutral, setShowFxNeutral] = useState(false);
 
-    const { data: portfolioPerformanceData, isLoading } = useQuery({
+    const { data: portfolioPerformanceData, isLoading, isError, error } = useQuery({
         queryKey: ["portfolio-performance", defaultCurrency, selectedPeriod],
         queryFn: () => apiClient.getPortfolioPerformance({ currency: defaultCurrency, period: selectedPeriod }),
         staleTime: 300_000,
@@ -189,6 +189,21 @@ export default function PerformancePage() {
             <div className="space-y-6">
                 <PageHeader title={t('performance.title')} icon={BarChart3} />
                 <SectionLoader />
+            </div>
+        );
+    }
+
+    // A failed fetch must not masquerade as "no holdings yet" — the empty state
+    // tells the user to add holdings / refresh prices, wrong on a network error.
+    if (isError) {
+        return (
+            <div className="space-y-6">
+                <PageHeader title={t('performance.title')} icon={BarChart3} />
+                <Card className="glass-regular">
+                    <CardContent className="pt-6">
+                        <p className="text-destructive">{t('common.loadError', { msg: (error as Error)?.message ?? '' })}</p>
+                    </CardContent>
+                </Card>
             </div>
         );
     }

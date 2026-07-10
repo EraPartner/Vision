@@ -352,7 +352,11 @@ export default function TaxOverviewPage() {
     liveProfile.dependentChildren > 0 ||
     liveProfile.dependentOtherPersons > 0;
   const hasStatsData = totalIncome > 0 || (monthlyData ?? []).some((m) => m.income > 0);
-  const isEmpty = !isProfileLoading && !hasProfile && !hasStatsData;
+  // Only treat "no data" as the setup-prompt empty state when the stats fetch
+  // actually succeeded. On a stats error, a user who simply hasn't filled in the
+  // profile yet (but has real transaction-derived income) would otherwise see
+  // "set up your tax profile" instead of the real error.
+  const isEmpty = !isProfileLoading && !stats.isError && !hasProfile && !hasStatsData;
 
   return (
     <TooltipProvider>

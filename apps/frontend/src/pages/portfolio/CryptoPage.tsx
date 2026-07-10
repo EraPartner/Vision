@@ -41,7 +41,7 @@ export default function CryptoPage() {
   // only rendered when a holding is denominated in a foreign currency.
   const { data: apiSummary } = usePortfolioSummaryQuery(targetCurrency);
   const fxInfoById = new Map((apiSummary?.summaries ?? []).map((s) => [s.id, s]));
-  const pageHasFxExposure = holdings.some((h) => (h.currency || 'EUR').toUpperCase() !== targetCurrency.toUpperCase());
+  const pageHasFxExposure = holdings.some((h) => (h.originalCurrency || h.currency || 'EUR').toUpperCase() !== targetCurrency.toUpperCase());
 
   const fmt = useCurrencyFormatter(targetCurrency);
 
@@ -267,7 +267,7 @@ export default function CryptoPage() {
                     </td>
                     {pageHasFxExposure && (() => {
                       const fxInfo = fxInfoById.get(h.id);
-                      const isForeign = (h.currency || 'EUR').toUpperCase() !== targetCurrency.toUpperCase();
+                      const isForeign = (h.originalCurrency || h.currency || 'EUR').toUpperCase() !== targetCurrency.toUpperCase();
                       const fxGain = fxInfo?.fxGain;
                       if (!isForeign || typeof fxGain !== 'number') {
                         return <td className="text-right py-2 px-3 tabular-nums text-muted-foreground">—</td>;

@@ -529,6 +529,7 @@ const en: Record<string, string> = {
   'common.income': 'Income',
   'common.kb': 'KB',
   'common.last': 'Last',
+  'common.loadError': 'Failed to load: {msg}',
   'common.loading': 'Loading...',
   'common.name': 'Name',
   'common.next': 'Next',

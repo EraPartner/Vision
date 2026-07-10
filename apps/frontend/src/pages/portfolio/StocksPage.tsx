@@ -70,7 +70,7 @@ export default function StocksPage({
     [apiSummary],
   );
   const pageHasFxExposure = useMemo(
-    () => holdings.some((h) => (h.currency || 'EUR').toUpperCase() !== targetCurrency.toUpperCase()),
+    () => holdings.some((h) => (h.originalCurrency || h.currency || 'EUR').toUpperCase() !== targetCurrency.toUpperCase()),
     [holdings, targetCurrency],
   );
 
@@ -359,7 +359,7 @@ export default function StocksPage({
                     </td>
                     {pageHasFxExposure && (() => {
                       const fxInfo = fxInfoById.get(h.id);
-                      const isForeign = (h.currency || 'EUR').toUpperCase() !== targetCurrency.toUpperCase();
+                      const isForeign = (h.originalCurrency || h.currency || 'EUR').toUpperCase() !== targetCurrency.toUpperCase();
                       const fxGain = fxInfo?.fxGain;
                       if (!isForeign || typeof fxGain !== 'number') {
                         return <td className="text-right py-2 px-3 tabular-nums text-muted-foreground">—</td>;
