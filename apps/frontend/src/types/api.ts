@@ -261,6 +261,8 @@ export interface PlannedLoanScheduleEntry {
 export interface PlannedTransaction {
     id: number;
     planned_date: string; // YYYY-MM-DD format
+    recurrence_end_date?: string | null;
+    max_occurrences?: number | null;
     bank_account: string;
     recipient_id?: number;
     recipient_name?: string;
@@ -305,6 +307,9 @@ export interface PlannedTransactionsListResponse {
 
 export interface PlannedTransactionCreate {
     planned_date: string; // YYYY-MM-DD format
+    /** Recurrence bounds: the series completes past this date / at this count. */
+    recurrence_end_date?: string;
+    max_occurrences?: number;
     bank_account?: string;
     recipient_id?: number;
     memo?: string;
@@ -327,6 +332,8 @@ export interface PlannedTransactionCreate {
 
 export interface PlannedTransactionUpdate {
     planned_date?: string;
+    recurrence_end_date?: string | null;
+    max_occurrences?: number | null;
     bank_account?: string;
     recipient_id?: number;
     recipient_name?: string;

@@ -704,6 +704,15 @@ components:
           type: boolean
         recurrence_pattern:
           type: string
+        recurrence_end_date:
+          type: string
+          format: date
+          nullable: true
+          description: Recurrence bound — the series completes once the next occurrence would fall past this date.
+        max_occurrences:
+          type: integer
+          nullable: true
+          description: Recurrence bound — the series completes at this execution count.
         is_loan:
           type: boolean
         loan_type:
@@ -794,6 +803,15 @@ components:
           type: boolean
         recurrence_pattern:
           type: string
+        recurrence_end_date:
+          type: string
+          format: date
+          nullable: true
+          description: Recurrence bound — the series completes once the next occurrence would fall past this date.
+        max_occurrences:
+          type: integer
+          nullable: true
+          description: Recurrence bound — the series completes at this execution count.
         is_loan:
           type: boolean
         loan_type:
@@ -3319,6 +3337,13 @@ paths:
                   type: boolean
                 recurrence_pattern:
                   type: string
+                recurrence_end_date:
+                  type: string
+                  format: date
+                  nullable: true
+                max_occurrences:
+                  type: integer
+                  nullable: true
                 is_active:
                   type: boolean
       responses:

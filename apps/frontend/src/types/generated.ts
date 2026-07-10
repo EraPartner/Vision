@@ -3315,6 +3315,13 @@ export interface components {
             url?: string;
             is_recurring: boolean;
             recurrence_pattern?: string;
+            /**
+             * Format: date
+             * @description Recurrence bound — the series completes once the next occurrence would fall past this date.
+             */
+            recurrence_end_date?: string | null;
+            /** @description Recurrence bound — the series completes at this execution count. */
+            max_occurrences?: number | null;
             is_loan?: boolean;
             loan_type?: components["schemas"]["PlannedLoanType"];
             loan_principal?: number | null;
@@ -3355,6 +3362,13 @@ export interface components {
             url?: string;
             is_recurring?: boolean;
             recurrence_pattern?: string;
+            /**
+             * Format: date
+             * @description Recurrence bound — the series completes once the next occurrence would fall past this date.
+             */
+            recurrence_end_date?: string | null;
+            /** @description Recurrence bound — the series completes at this execution count. */
+            max_occurrences?: number | null;
             is_loan?: boolean;
             loan_type?: components["schemas"]["PlannedLoanType"];
             loan_principal?: number;
@@ -5732,6 +5746,9 @@ export interface operations {
                     url?: string;
                     is_recurring?: boolean;
                     recurrence_pattern?: string;
+                    /** Format: date */
+                    recurrence_end_date?: string | null;
+                    max_occurrences?: number | null;
                     is_active?: boolean;
                 };
             };

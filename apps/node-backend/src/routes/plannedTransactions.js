@@ -203,7 +203,21 @@ router.post('/', async (req, res) => {
     if (data.frequency) delete data.frequency;
     if (data.custom_interval_days) delete data.custom_interval_days;
     if (data.end_date) delete data.end_date;
+    // A loan's horizon is its generated schedule — recurrence bounds don't apply.
+    if (data.recurrence_end_date) delete data.recurrence_end_date;
     if (data.max_occurrences) delete data.max_occurrences;
+  }
+
+  // Recurrence bounds (nullable): a Y-M-D end date and/or a positive
+  // occurrence cap. plannedExecutionService completes the series when either
+  // is reached — these used to be silently dropped and recur forever.
+  if (data.recurrence_end_date != null) {
+    assertYmd(data.recurrence_end_date, 'recurrence_end_date');
+  }
+  if (data.max_occurrences != null) {
+    const n = Number(data.max_occurrences);
+    if (!Number.isInteger(n) || n < 1) throw new ValidationError('max_occurrences must be a positive integer');
+    data.max_occurrences = n;
   }
 
   // Reject patterns calculateNextDate can't advance (e.g. "fortnightly"): they
@@ -268,6 +282,16 @@ router.patch(
       resolveRecipientIdFromName(fields),
       resolveCategoryIdFromName(fields),
     ]);
+
+    // Recurrence bounds: same validation as POST; explicit null clears a bound.
+    if (fields.recurrence_end_date != null) {
+      assertYmd(fields.recurrence_end_date, 'recurrence_end_date');
+    }
+    if (fields.max_occurrences != null) {
+      const n = Number(fields.max_occurrences);
+      if (!Number.isInteger(n) || n < 1) throw new ValidationError('max_occurrences must be a positive integer');
+      fields.max_occurrences = n;
+    }
 
     const generatedLoanSchedule = applyLoanPatchDefaults(fields, existing);
     const loanScheduleDirective = resolveLoanScheduleDirective(generatedLoanSchedule, fields, existing);
@@ -345,6 +369,8 @@ function formatPlannedTransaction(row) {
     url: row.url || null,
     is_recurring: row.is_recurring,
     recurrence_pattern: row.recurrence_pattern,
+    recurrence_end_date: ymd(row.recurrence_end_date),
+    max_occurrences: row.max_occurrences != null ? parseInt(row.max_occurrences, 10) : null,
     reminder_days_before: row.reminder_days_before != null ? parseInt(row.reminder_days_before, 10) : null,
     is_executed: row.is_executed,
     last_executed_date: ymd(row.last_executed_date),
