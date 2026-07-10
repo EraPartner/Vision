@@ -271,17 +271,21 @@ export function buildExclusionClauses(opts = {}) {
     'LEFT JOIN recipients pr ON r.primary_recipient_id = pr.id',
   ].join('\n');
 
+  // The trailing -1 keeps rows whose effective category/recipient is NULL: a bare
+  // `NULL NOT IN (...)` evaluates to NULL (not true), which silently dropped every
+  // uncategorized / recipient-less row whenever any exclusion was applied. -1 can
+  // never be an excluded id (validateInt4Ids requires id > 0), so those rows pass.
   if (safeCats.length > 0) {
     const placeholders = safeCats.map(() => `$${p++}`).join(', ');
     clauses.push(
-      `COALESCE(t.category_id, r.default_category_id, pr.default_category_id) NOT IN (${placeholders})`,
+      `COALESCE(t.category_id, r.default_category_id, pr.default_category_id, -1) NOT IN (${placeholders})`,
     );
     params.push(...safeCats);
   }
 
   if (safeRecs.length > 0) {
     const placeholders = safeRecs.map(() => `$${p++}`).join(', ');
-    clauses.push(`COALESCE(r.primary_recipient_id, t.recipient_id) NOT IN (${placeholders})`);
+    clauses.push(`COALESCE(r.primary_recipient_id, t.recipient_id, -1) NOT IN (${placeholders})`);
     params.push(...safeRecs);
   }
 

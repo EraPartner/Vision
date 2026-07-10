@@ -126,10 +126,10 @@ export async function getMonthlyFinancialSummary(
   // Canonical exclusion semantics (match buildExclusionClauses + every other
   // surface): 3-level category COALESCE and alias-aware recipient exclusion.
   const categoryExcludeClause = validIds.length > 0
-    ? `AND COALESCE(t.category_id, r.default_category_id, pr.default_category_id) NOT IN (${validIds.map(id => { params.push(id); return `$${params.length}`; }).join(',')})`
+    ? `AND COALESCE(t.category_id, r.default_category_id, pr.default_category_id, -1) NOT IN (${validIds.map(id => { params.push(id); return `$${params.length}`; }).join(',')})`
     : '';
   const recipientExcludeClause = validRecipientIds.length > 0
-    ? `AND COALESCE(r.primary_recipient_id, t.recipient_id) NOT IN (${validRecipientIds.map(id => { params.push(id); return `$${params.length}`; }).join(',')})`
+    ? `AND COALESCE(r.primary_recipient_id, t.recipient_id, -1) NOT IN (${validRecipientIds.map(id => { params.push(id); return `$${params.length}`; }).join(',')})`
     : '';
 
   const allTimeStart = allTime

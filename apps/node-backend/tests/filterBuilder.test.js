@@ -165,7 +165,7 @@ describe('buildExclusionClauses', () => {
   it('builds NOT IN predicate for categories using the same COALESCE chain', () => {
     const result = buildExclusionClauses({ excludedCategoryIds: [1, 2, 3] });
     expect(result.whereSql).toBe(
-      'COALESCE(t.category_id, r.default_category_id, pr.default_category_id) NOT IN ($1, $2, $3)',
+      'COALESCE(t.category_id, r.default_category_id, pr.default_category_id, -1) NOT IN ($1, $2, $3)',
     );
     expect(result.params).toEqual([1, 2, 3]);
     expect(result.nextParamIdx).toBe(4);
@@ -174,10 +174,19 @@ describe('buildExclusionClauses', () => {
   it('builds NOT IN predicate for recipients using primary-first COALESCE', () => {
     const result = buildExclusionClauses({ excludedRecipientIds: [7, 8] });
     expect(result.whereSql).toBe(
-      'COALESCE(r.primary_recipient_id, t.recipient_id) NOT IN ($1, $2)',
+      'COALESCE(r.primary_recipient_id, t.recipient_id, -1) NOT IN ($1, $2)',
     );
     expect(result.params).toEqual([7, 8]);
     expect(result.nextParamIdx).toBe(3);
+  });
+
+  it('coalesces NULL to -1 so uncategorized/recipient-less rows are kept, not dropped', () => {
+    // A bare `NULL NOT IN (...)` is NULL (falsy), which silently dropped every
+    // uncategorized row on any exclusion. -1 can never be an excluded id.
+    const cat = buildExclusionClauses({ excludedCategoryIds: [1] });
+    expect(cat.whereSql).toContain(', -1) NOT IN');
+    const rec = buildExclusionClauses({ excludedRecipientIds: [1] });
+    expect(rec.whereSql).toContain(', -1) NOT IN');
   });
 
   it('combines both exclusion lists with AND and sequential $-indices', () => {
@@ -187,8 +196,8 @@ describe('buildExclusionClauses', () => {
       startParamIdx: 4,
     });
     expect(result.whereSql).toBe(
-      'COALESCE(t.category_id, r.default_category_id, pr.default_category_id) NOT IN ($4, $5)'
-        + ' AND COALESCE(r.primary_recipient_id, t.recipient_id) NOT IN ($6)',
+      'COALESCE(t.category_id, r.default_category_id, pr.default_category_id, -1) NOT IN ($4, $5)'
+        + ' AND COALESCE(r.primary_recipient_id, t.recipient_id, -1) NOT IN ($6)',
     );
     expect(result.params).toEqual([10, 11, 20]);
     expect(result.nextParamIdx).toBe(7);
@@ -209,10 +218,10 @@ describe('buildAggregationFilter', () => {
     expect(whereSql).toContain('t.date >= $1');
     expect(whereSql).toContain('t.date <= $2');
     expect(whereSql).toContain(
-      'COALESCE(t.category_id, r.default_category_id, pr.default_category_id) NOT IN ($3)',
+      'COALESCE(t.category_id, r.default_category_id, pr.default_category_id, -1) NOT IN ($3)',
     );
     expect(whereSql).toContain(
-      'COALESCE(r.primary_recipient_id, t.recipient_id) NOT IN ($4, $5)',
+      'COALESCE(r.primary_recipient_id, t.recipient_id, -1) NOT IN ($4, $5)',
     );
     expect(params).toEqual(['2026-01-01', '2026-01-31', 10, 20, 21]);
     expect(nextParamIdx).toBe(6);

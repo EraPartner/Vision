@@ -97,10 +97,10 @@ export const statisticsRepository = {
     // an excluded recipient's transactions whenever they were recorded under an
     // alias of the excluded primary — disagreeing with the dashboard/forecast.
     const catExclude = validCatIds.length > 0
-      ? `AND COALESCE(t.category_id, r.default_category_id, pr.default_category_id) NOT IN (${validCatIds.map(id => { params.push(id); return `$${params.length}`; }).join(',')})`
+      ? `AND COALESCE(t.category_id, r.default_category_id, pr.default_category_id, -1) NOT IN (${validCatIds.map(id => { params.push(id); return `$${params.length}`; }).join(',')})`
       : '';
     const recExclude = validRecIds.length > 0
-      ? `AND COALESCE(r.primary_recipient_id, t.recipient_id) NOT IN (${validRecIds.map(id => { params.push(id); return `$${params.length}`; }).join(',')})`
+      ? `AND COALESCE(r.primary_recipient_id, t.recipient_id, -1) NOT IN (${validRecIds.map(id => { params.push(id); return `$${params.length}`; }).join(',')})`
       : '';
 
     // Aggregate in SQL per (category, period, date, currency) instead of

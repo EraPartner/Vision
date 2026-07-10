@@ -33,10 +33,10 @@ export const recipientInsightsRepository = {
     const validRecIds = (excludedRecipientIds || []).filter(id => Number.isInteger(id) && id > 0 && id < 2147483647);
     const params = [];
     const catExclude = validCatIds.length > 0
-      ? `AND COALESCE(t.category_id, r.default_category_id, pr.default_category_id) NOT IN (${validCatIds.map(id => { params.push(id); return `$${params.length}`; }).join(',')})`
+      ? `AND COALESCE(t.category_id, r.default_category_id, pr.default_category_id, -1) NOT IN (${validCatIds.map(id => { params.push(id); return `$${params.length}`; }).join(',')})`
       : '';
     const recExclude = validRecIds.length > 0
-      ? `AND COALESCE(pr.id, r.id) NOT IN (${validRecIds.map(id => { params.push(id); return `$${params.length}`; }).join(',')})`
+      ? `AND COALESCE(pr.id, r.id, -1) NOT IN (${validRecIds.map(id => { params.push(id); return `$${params.length}`; }).join(',')})`
       : '';
 
     const topRawResult = await query(`
@@ -167,13 +167,13 @@ export const recipientInsightsRepository = {
 
     const params = [];
     const recExclude = validRecIds.length > 0
-      ? `AND COALESCE(r.primary_recipient_id, t.recipient_id) NOT IN (${validRecIds.map(id => { params.push(id); return `$${params.length}`; }).join(',')})`
+      ? `AND COALESCE(r.primary_recipient_id, t.recipient_id, -1) NOT IN (${validRecIds.map(id => { params.push(id); return `$${params.length}`; }).join(',')})`
       : '';
     // Category exclusion (incl. hidden categories) must apply here too, or the
     // year-filtered Top Recipients view contradicts the "All years" view (which
     // does exclude them). 3-level alias-aware COALESCE matches the canonical resolver.
     const catExclude = validCatIds.length > 0
-      ? `AND COALESCE(t.category_id, r.default_category_id, pr.default_category_id) NOT IN (${validCatIds.map(id => { params.push(id); return `$${params.length}`; }).join(',')})`
+      ? `AND COALESCE(t.category_id, r.default_category_id, pr.default_category_id, -1) NOT IN (${validCatIds.map(id => { params.push(id); return `$${params.length}`; }).join(',')})`
       : '';
 
     // Aggregate in SQL per (recipient, year, date, currency) instead of streaming
@@ -238,7 +238,7 @@ export const recipientInsightsRepository = {
 
     const params = [];
     const recExclude = validRecIds.length > 0
-      ? `AND COALESCE(pr.id, r.id) NOT IN (${validRecIds.map(id => { params.push(id); return `$${params.length}`; }).join(',')})`
+      ? `AND COALESCE(pr.id, r.id, -1) NOT IN (${validRecIds.map(id => { params.push(id); return `$${params.length}`; }).join(',')})`
       : '';
 
     const periodExpr = bucket === 'yearly' ? "TO_CHAR(t.date, 'YYYY')" : "TO_CHAR(t.date, 'YYYY-MM')";

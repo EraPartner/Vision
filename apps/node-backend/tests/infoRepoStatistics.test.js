@@ -123,8 +123,8 @@ describe('statisticsRepository.getCategoryPivot', () => {
     // Canonical semantics: 3-level category COALESCE + alias-aware recipient
     // exclusion (was 2-level category + bare t.recipient_id NOT IN, which
     // disagreed with the dashboard/forecast on merged recipients).
-    expect(sql).toContain('COALESCE(t.category_id, r.default_category_id, pr.default_category_id) NOT IN');
-    expect(sql).toContain('COALESCE(r.primary_recipient_id, t.recipient_id) NOT IN');
+    expect(sql).toContain('COALESCE(t.category_id, r.default_category_id, pr.default_category_id, -1) NOT IN');
+    expect(sql).toContain('COALESCE(r.primary_recipient_id, t.recipient_id, -1) NOT IN');
   });
 
   it('drops invalid IDs from exclusion lists', async () => {

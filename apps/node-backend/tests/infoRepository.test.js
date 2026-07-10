@@ -538,7 +538,7 @@ describe('InfoRepository', () => {
       expect(fallbackSql).toContain('LEFT JOIN recipients r ON t.recipient_id = r.id');
       expect(fallbackSql).toContain('LEFT JOIN recipients pr ON r.primary_recipient_id = pr.id');
       // Canonical exclusion semantics: 3-level category COALESCE (alias-aware).
-      expect(fallbackSql).toContain('COALESCE(t.category_id, r.default_category_id, pr.default_category_id) NOT IN ($1,$2)');
+      expect(fallbackSql).toContain('COALESCE(t.category_id, r.default_category_id, pr.default_category_id, -1) NOT IN ($1,$2)');
       // Aggregated per (date,currency) in the `daily` CTE, then joined by month.
       expect(fallbackSql).toContain('LEFT JOIN daily d ON d.date >= m.month_start');
     });
