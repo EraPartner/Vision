@@ -168,6 +168,7 @@ const en: Record<string, string> = {
   'addPortTxn.date': 'Date',
   'addPortTxn.endDate': 'End Date (optional)',
   'addPortTxn.error.amountRequired': 'Amount is required',
+  'addPortTxn.error.dateRequired': 'Date is required',
   'addPortTxn.error.twoOfThreeRequired': 'For buy/sell, enter any two of amount, units, and price per unit (the third is calculated).',
   'addPortTxn.error.unitsRequired': 'Units are required',
   'addPortTxn.fees': 'Fees',

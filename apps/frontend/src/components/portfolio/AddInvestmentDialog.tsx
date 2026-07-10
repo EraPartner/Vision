@@ -1,5 +1,6 @@
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 import { parseDecimal } from '@/lib/decimal';
+import { deriveUnitMath, parsePositive } from '@/lib/portfolioUnitMath';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Plus, ArrowRight } from 'lucide-react';
@@ -51,6 +52,9 @@ export function AddInvestmentDialog({ allowedAssetClasses }: Props) {
   const [step, setStep] = useState<'type' | 'details'>('type');
   const { addInvestment, addTransaction } = usePortfolio();
   const [form, setForm] = useState<InvestmentForm>(() => makeEmptyForm(defaultCurrency));
+  // Set once the investment row exists so a retry after a failed buy leg
+  // re-attempts only the transaction instead of creating a duplicate holding.
+  const createdInvestmentIdRef = useRef<number | null>(null);
 
   const assetDescriptions: Record<AssetClass, string> = {
     stock: t('addInv.desc.stock'),
@@ -64,68 +68,6 @@ export function AddInvestmentDialog({ allowedAssetClasses }: Props) {
 
   const priceProviders = PRICE_PROVIDERS(t);
 
-  const reset = () => {
-    setForm(makeEmptyForm(defaultCurrency));
-    setStep('type');
-  };
-
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!form.assetClass || !form.name.trim()) return;
-
-    try {
-      const investment = await addInvestment({
-        name: form.name.trim(),
-        symbol: form.symbol.trim() || undefined,
-        asset_class: form.assetClass as AssetClass,
-        currency: form.currency || defaultCurrency,
-        current_price: form.currentPrice ? parseDecimal(form.currentPrice) : undefined,
-        interest_rate: form.interestRate ? parseDecimal(form.interestRate) : undefined,
-        maturity_date: form.maturityDate || undefined,
-        location: form.location.trim() || undefined,
-        municipality: form.municipality.trim() || undefined,
-        cadastral_income: form.cadastralIncome ? parseDecimal(form.cadastralIncome) : undefined,
-        municipality_tax_rate: form.municipalityTaxRate ? parseDecimal(form.municipalityTaxRate) : undefined,
-        notes: form.notes.trim() || undefined,
-        price_provider: form.priceProvider,
-        price_provider_id: form.priceProviderId.trim() || undefined,
-        price_provider_url: form.priceProviderUrl.trim() || undefined,
-        price_provider_latest_url: form.priceProviderLatestUrl.trim() || undefined,
-        price_provider_latest_path: form.priceProviderLatestPath.trim() || undefined,
-        price_provider_history_url: form.priceProviderHistoryUrl.trim() || undefined,
-        price_provider_history_path: form.priceProviderHistoryPath.trim() || undefined,
-        price_provider_history_ts_path: form.priceProviderHistoryTsPath.trim() || undefined,
-        price_provider_history_price_path: form.priceProviderHistoryPricePath.trim() || undefined,
-      });
-
-      if (form.addInitialPurchase && form.initialAmount && investment) {
-        const amount = parseDecimal(form.initialAmount);
-        const units = form.initialUnits ? parseDecimal(form.initialUnits) : undefined;
-        const fees = form.initialFees ? parseDecimal(form.initialFees) : undefined;
-
-        if (amount > 0) {
-          await addTransaction({
-            investmentId: investment.id,
-            type: 'buy',
-            date: form.initialDate,
-            amount,
-            units,
-            price_per_unit: units ? amount / units : undefined,
-            fees,
-            currency: form.currency || defaultCurrency,
-            note: t('addInv.initialPurchaseNote'),
-          });
-        }
-      }
-
-      toast.success(t('addInv.toast.added', { assetClass: getAssetClassLabel(t, form.assetClass as AssetClass), name: form.name }));
-      reset();
-      setOpen(false);
-    } catch {
-      // error handled by hook
-    }
-  };
-
   const unitBased = isUnitBased(form.assetClass as AssetClass);
   const fixedIncome = isFixedIncome(form.assetClass as AssetClass);
   const realEstate = isRealEstate(form.assetClass as AssetClass);
@@ -134,6 +76,102 @@ export function AddInvestmentDialog({ allowedAssetClasses }: Props) {
   const computedPricePerUnit = form.initialAmount && computedInitialUnits > 0
     ? (parseDecimal(form.initialAmount) / computedInitialUnits).toFixed(4)
     : '';
+
+  const reset = () => {
+    setForm(makeEmptyForm(defaultCurrency));
+    createdInvestmentIdRef.current = null;
+    setStep('type');
+  };
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!form.assetClass || !form.name.trim()) return;
+
+    // Validate the initial purchase BEFORE creating the investment. The old
+    // flow created the row first, then either silently skipped the buy (empty
+    // amount → holding with no purchase behind a success toast) or hit a
+    // guaranteed backend 400 (unit-based without units, cleared date) with
+    // the investment already committed.
+    let initialBuy: { amount: number; units?: number; price_per_unit?: number } | null = null;
+    if (form.addInitialPurchase) {
+      if (!form.initialDate) {
+        toast.error(t('addPortTxn.error.dateRequired'));
+        return;
+      }
+      const amount = parsePositive(form.initialAmount);
+      const units = parsePositive(form.initialUnits);
+      if (unitBased) {
+        const math = deriveUnitMath({ amount, units });
+        if (!math.isConsistent || math.effectiveAmount === undefined) {
+          toast.error(t('addPortTxn.error.twoOfThreeRequired'));
+          return;
+        }
+        initialBuy = {
+          amount: math.effectiveAmount,
+          units: math.effectiveUnits,
+          price_per_unit: math.effectivePrice,
+        };
+      } else if (amount === undefined) {
+        toast.error(t('addPortTxn.error.amountRequired'));
+        return;
+      } else {
+        initialBuy = { amount, units };
+      }
+    }
+
+    try {
+      let investmentId = createdInvestmentIdRef.current;
+      if (investmentId == null) {
+        const investment = await addInvestment({
+          name: form.name.trim(),
+          symbol: form.symbol.trim() || undefined,
+          asset_class: form.assetClass as AssetClass,
+          currency: form.currency || defaultCurrency,
+          current_price: form.currentPrice ? parseDecimal(form.currentPrice) : undefined,
+          interest_rate: form.interestRate ? parseDecimal(form.interestRate) : undefined,
+          maturity_date: form.maturityDate || undefined,
+          location: form.location.trim() || undefined,
+          municipality: form.municipality.trim() || undefined,
+          cadastral_income: form.cadastralIncome ? parseDecimal(form.cadastralIncome) : undefined,
+          municipality_tax_rate: form.municipalityTaxRate ? parseDecimal(form.municipalityTaxRate) : undefined,
+          notes: form.notes.trim() || undefined,
+          price_provider: form.priceProvider,
+          price_provider_id: form.priceProviderId.trim() || undefined,
+          price_provider_url: form.priceProviderUrl.trim() || undefined,
+          price_provider_latest_url: form.priceProviderLatestUrl.trim() || undefined,
+          price_provider_latest_path: form.priceProviderLatestPath.trim() || undefined,
+          price_provider_history_url: form.priceProviderHistoryUrl.trim() || undefined,
+          price_provider_history_path: form.priceProviderHistoryPath.trim() || undefined,
+          price_provider_history_ts_path: form.priceProviderHistoryTsPath.trim() || undefined,
+          price_provider_history_price_path: form.priceProviderHistoryPricePath.trim() || undefined,
+          });
+        if (!investment) return;
+        investmentId = investment.id;
+        createdInvestmentIdRef.current = investmentId;
+      }
+
+      if (initialBuy) {
+        await addTransaction({
+          investmentId,
+          type: 'buy',
+          date: form.initialDate,
+          amount: initialBuy.amount,
+          units: initialBuy.units,
+          price_per_unit: initialBuy.price_per_unit,
+          fees: form.initialFees ? parseDecimal(form.initialFees) : undefined,
+          currency: form.currency || defaultCurrency,
+          note: t('addInv.initialPurchaseNote'),
+        });
+      }
+
+      toast.success(t('addInv.toast.added', { assetClass: getAssetClassLabel(t, form.assetClass as AssetClass), name: form.name }));
+      reset();
+      setOpen(false);
+    } catch {
+      // error toast shown by the hook; the dialog stays open and a resubmit
+      // reuses createdInvestmentIdRef instead of duplicating the holding
+    }
+  };
 
   const visibleAssetClasses = (allowedAssetClasses && allowedAssetClasses.length > 0)
     ? allowedAssetClasses

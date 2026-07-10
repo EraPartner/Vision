@@ -204,6 +204,9 @@ export function InvestmentFormFields({
             </p>
           </div>
           <Switch
+            aria-label={t('addInv.initial.label', {
+              txType: isRealEstate ? t('addInv.initial.purchase') : isFixedIncome ? t('addInv.initial.deposit') : t('addInv.initial.buy')
+            })}
             checked={form.addInitialPurchase}
             onCheckedChange={(v) => setForm(f => ({ ...f, addInitialPurchase: v }))}
           />

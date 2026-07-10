@@ -168,6 +168,7 @@ const nl: Record<string, string> = {
   'addPortTxn.date': 'Datum',
   'addPortTxn.endDate': 'Einddatum (optioneel)',
   'addPortTxn.error.amountRequired': 'Bedrag is verplicht',
+  'addPortTxn.error.dateRequired': 'Datum is verplicht',
   'addPortTxn.error.twoOfThreeRequired': 'Voor kopen/verkopen vult u twee van bedrag, eenheden en prijs per eenheid in (de derde wordt berekend).',
   'addPortTxn.error.unitsRequired': 'Eenheden zijn verplicht',
   'addPortTxn.fees': 'Kosten',

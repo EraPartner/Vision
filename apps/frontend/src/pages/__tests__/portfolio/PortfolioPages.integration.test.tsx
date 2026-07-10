@@ -663,6 +663,10 @@ describe("Portfolio pages (integration)", () => {
         const nameInput = await screen.findByLabelText(/name \*/i);
         await user.type(nameInput, "Bitcoin");
 
+        // "Add initial purchase" defaults ON and now requires an amount —
+        // these tests create a bare investment, so switch it off.
+        await user.click(screen.getByRole("switch"));
+
         const createBtn = screen.getByRole("button", { name: /^create$/i });
         await user.click(createBtn);
 
@@ -690,6 +694,10 @@ describe("Portfolio pages (integration)", () => {
         const nameInput = await screen.findByLabelText(/name \*/i);
         await user.type(nameInput, "Bitcoin");
 
+        // "Add initial purchase" defaults ON and now requires an amount —
+        // these tests create a bare investment, so switch it off.
+        await user.click(screen.getByRole("switch"));
+
         const createBtn = screen.getByRole("button", { name: /^create$/i });
         await user.click(createBtn);
 
@@ -700,6 +708,39 @@ describe("Portfolio pages (integration)", () => {
                 expect.anything(),
             );
         }, { timeout: 5000 });
+
+        toastSpy.mockRestore();
+    });
+
+    it("CryptoPage Add Investment blocks submit when initial purchase is on without amount", async () => {
+        // Regression: this used to create the investment and silently drop the
+        // buy behind a success toast; now nothing is POSTed until the initial
+        // purchase is filled in (or toggled off).
+        const toastSpy = vi.spyOn(toast, "error");
+        let postCalls = 0;
+        server.use(
+            http.post(`${API_BASE}/api/investments`, () => {
+                postCalls += 1;
+                return ok({ id: 1, name: "Bitcoin", asset_class: "crypto", currency: "EUR",
+                     price_provider: "binance", created_at: "2025-01-01T00:00:00.000Z" });
+            }),
+        );
+
+        const user = userEvent.setup();
+        renderWithApp(<CryptoPage />);
+
+        const addBtns = await screen.findAllByRole("button", { name: /add investment/i });
+        await user.click(addBtns[0]);
+
+        const nameInput = await screen.findByLabelText(/name \*/i);
+        await user.type(nameInput, "Bitcoin");
+
+        await user.click(screen.getByRole("button", { name: /^create$/i }));
+
+        await vi.waitFor(() => {
+            expect(toastSpy).toHaveBeenCalled();
+        }, { timeout: 3000 });
+        expect(postCalls).toBe(0);
 
         toastSpy.mockRestore();
     });
@@ -1133,6 +1174,10 @@ describe("Portfolio pages (integration)", () => {
 
             const nameInput = await screen.findByLabelText(/name \*/i);
             await user.type(nameInput, "Apple");
+
+            // "Add initial purchase" defaults ON and now requires an amount —
+            // these tests create a bare investment, so switch it off.
+            await user.click(screen.getByRole("switch"));
 
             await user.click(screen.getByRole("button", { name: /^create$/i }));
 

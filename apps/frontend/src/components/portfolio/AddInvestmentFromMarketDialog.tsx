@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { parseDecimal } from '@/lib/decimal';
+import { deriveUnitMath, parsePositive } from '@/lib/portfolioUnitMath';
 import { useLanguage } from '@/contexts/LanguageContext';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
@@ -112,7 +113,8 @@ export function AddInvestmentFromMarketDialog({ quote, existingInvestment }: Pro
         symbol: newInvestmentForm.symbol.trim(),
         asset_class: assetClass,
         currency: newInvestmentForm.currency,
-        current_price: parseDecimal(newInvestmentForm.currentPrice),
+        // Cleared/invalid price → omit rather than persisting a bogus 0.
+        current_price: parsePositive(newInvestmentForm.currentPrice),
         notes: newInvestmentForm.notes.trim() || undefined,
         price_provider: 'yahoo',
         price_provider_id: quote.symbol,
@@ -132,11 +134,35 @@ export function AddInvestmentFromMarketDialog({ quote, existingInvestment }: Pro
   const handleAddTransaction = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!existingInvestment) return;
-    
-    const amount = parseDecimal(transactionForm.amount || computedAmount, NaN);
-    if (!Number.isFinite(amount) || amount <= 0) {
+
+    // The DatePicker can clear the date to '' — the backend 400s on it.
+    if (!transactionForm.date) {
+      toast.error(t('addPortTxn.error.dateRequired'));
+      return;
+    }
+
+    const isBuySell = ['buy', 'sell'].includes(transactionForm.type);
+    const amountInput = parsePositive(transactionForm.amount);
+    const unitsInput = parsePositive(transactionForm.units);
+    const priceInput = parsePositive(transactionForm.pricePerUnit);
+
+    let amount = amountInput;
+    let units = unitsInput;
+    let pricePerUnit = priceInput;
+    if (isBuySell && unitBased) {
+      // Backend requires a consistent 2-of-3 (amount / units / price) for
+      // unit-based buy/sell — validate here instead of surfacing a raw 400.
+      const math = deriveUnitMath({ amount: amountInput, units: unitsInput, price: priceInput });
+      if (!math.isConsistent || math.effectiveAmount === undefined) {
+        toast.error(t('addPortTxn.error.twoOfThreeRequired'));
+        return;
+      }
+      amount = math.effectiveAmount;
+      units = math.effectiveUnits;
+      pricePerUnit = math.effectivePrice;
+    } else if (amount === undefined) {
       toast.error(t('addPortTxn.error.amountRequired'));
-      return; 
+      return;
     }
 
     try {
@@ -145,8 +171,8 @@ export function AddInvestmentFromMarketDialog({ quote, existingInvestment }: Pro
         type: transactionForm.type,
         date: transactionForm.date,
         amount,
-        units: transactionForm.units ? parseDecimal(transactionForm.units) : undefined,
-        price_per_unit: transactionForm.pricePerUnit ? parseDecimal(transactionForm.pricePerUnit) : undefined,
+        units,
+        price_per_unit: pricePerUnit,
         fees: transactionForm.fees ? parseDecimal(transactionForm.fees) : undefined,
         taxes: transactionForm.taxes ? parseDecimal(transactionForm.taxes) : undefined,
         currency: existingInvestment.currency,
