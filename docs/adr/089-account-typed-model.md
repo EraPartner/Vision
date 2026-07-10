@@ -97,3 +97,66 @@ activates behavior and UI only.
 - [[docs/adr/088-account-entity|ADR-088: Account Entity]] (ships the columns)
 - [[docs/reference/data-model|Data Model Reference]] (Account entity)
 - [[docs/adr/064-net-worth-current-value-live-overlay|ADR-064: Net Worth]] (in_net_worth consumer; superseded composition in ADR-093)
+
+---
+
+## Addendum (2026-07-10): `multi_currency_cash` becomes real — per-currency balances within one account
+
+### Context
+
+`multi_currency_cash` shipped in ADR-088 as a dormant flag with no consumer. Meanwhile every
+balance path silently assumes one currency per account, and the assumption is already violated:
+the Revolut adapter books EUR and USD rows into one `bank_account` (filed finding — "Revolut
+collapses multi-currency accounts"), the anchor+delta computed balance and `mv_bank_balances`
+sum across currencies, and trade cash legs post in the trade's native currency into a
+currency-blind `SUM` (filed finding — FX-blind sleeve balances). The plan review offered two
+exits: enforce one-currency-per-account as an invariant (split multi-currency banks into one
+account per currency, the Wise pattern), or implement the flag. **Decision 2026-07-10:
+implement it** (D2) — one real-world account stays one `accounts` row.
+
+### Decision
+
+An account's cash becomes a set of **per-currency balance series keyed `(account_id,
+currency)`**:
+
+- **Balance computation** — the anchor+delta lateral partitions by `currency`; each currency
+  anchors and accumulates independently. Single-currency accounts degenerate to today's
+  behavior unchanged.
+- **Consumers** — `getBankBalances`, the accounts hub, net worth, and `mv_bank_balances` all
+  move to `(account_id, currency)` grain (the MV re-grain also satisfies the ADR-088 contract
+  runbook precondition). Display sums convert per currency to the app display currency at read
+  time using the existing FX machinery (ADR-074/085 precedent).
+- **Statement balance / drift** — the single `statement_balance` + `statement_balance_date`
+  column pair cannot represent a multi-currency statement; they move to a side table
+  `account_statement_balances (account_id, currency, balance, balance_date)` with a backfill
+  from the existing columns. Drift is computed per currency, which also retires ADR-094's
+  "same-currency diff only" limitation.
+- **Trade cash legs** — keep posting in the trade's native currency; the per-currency
+  partitioning plus read-time conversion fixes the filed FX-blind sleeve-sum bug without
+  touching the write path.
+- **Adapters** — Revolut keeps **one** account with `multi_currency_cash = true`; each row keeps
+  its currency (this replaces the filed fix of minting `REVOLUT <CURRENCY>` accounts). Wise's
+  existing one-account-per-currency split remains valid — both models are allowed; the invariant
+  is that a row's currency is always honored, never collapsed into another currency's series.
+- **`accounts.currency`** is reinterpreted as the account's *primary/reporting* currency (the
+  default for rows that don't specify one, and the only currency for single-currency accounts) —
+  no longer an assumed invariant on the rows.
+
+### Consequences
+
+**Positive**
+- One real-world account = one `accounts` row, matching how Revolut/Wise present themselves.
+- The two filed currency bugs (Revolut collapse, FX-blind sleeve sums) are fixed structurally
+  rather than patched.
+- Per-currency drift makes reconciliation meaningful for multi-currency users.
+
+**Negative / cost**
+- This touches every balance consumer — it is deliberately sequenced inside the accounts
+  rewrite's balance-engine phase (Phase C in TODO.md), **not** shippable piecemeal.
+- A new side table + backfill migration (rollback: copy the primary-currency row back into the
+  scalar columns and drop the table).
+- Frontend surfaces that show "the" account balance need a per-currency presentation for
+  multi-currency accounts (stacked rows or a primary-currency headline with a breakdown).
+
+**Superseded within this ADR:** the main body's note that `multi_currency_cash` is merely a
+"cash-sleeve input" — it is now an activated, behavior-bearing flag.

@@ -228,3 +228,79 @@ string-based display code always see the current label.
 - The rename propagation updates every `bank_account` string on all owned transactions in one
   query — on large accounts this is a brief write-amplification on the `PATCH /api/accounts/:id`
   path. Still atomic and bounded.
+
+---
+
+## Addendum (2026-07-10): Accounts-rewrite decisions — normalized implicit minting, lifecycle, and the contract runbook
+
+### Context
+
+The 2026-07-09 accounts plan review (TODO.md → Feature work → "Accounts rewrite") traced most
+filed account bugs to this ADR's unfinished migration: the contract step never ran
+(`0055_drop_bank_account_string.py` is a deliberate no-op after the premature drop broke boot;
+`0056` restored the string), stragglers still read the string (list filter/search
+`t.bank_account ILIKE`, `mv_bank_balances` grain-keyed on `(bank_account, currency)`), and
+account identity is enforced case-*sensitively* while writers disagree on casing (transaction
+paths UPPER the label; `accountService.create/update` only trim — `POST /api/accounts`
+"Checking" + import "CHECKING" mint two accounts). Two decisions (D1, D5) were taken on
+2026-07-10; this addendum records them and pins the contract preconditions.
+
+### Decision
+
+**a) D1 — implicit minting stays, on a normalized identity.** The resolve-or-create-on-INSERT
+behavior of `sync_account_id_from_bank_account()` is **kept** (import onboarding stays
+zero-ceremony; an explicit "new accounts" review step was considered and rejected). In exchange,
+account identity becomes case-insensitive and whitespace-insensitive everywhere:
+
+| Surface | Change |
+|---------|--------|
+| Uniqueness | `uq_accounts_name` replaced by a unique expression index on `lower(btrim(name))`; stored `name` keeps the user's casing for display |
+| Trigger | INSERT's `ON CONFLICT` retargets the expression index; lookup compares `lower(btrim(...))` on both sides (closes the filed case-sensitive INSERT/UPDATE findings) |
+| Service layer | `accountService.create/update` and `accountRepository.resolveOrCreateByName` normalize with the same expression (closes the unfiled trim-vs-UPPER gap) |
+| Blank-on-UPDATE | An UPDATE clearing `bank_account` now also NULLs `account_id` — the row stops counting toward an account whose label was removed (resolves the filed 0062 stale-account edge, decided rather than left open) |
+
+Manual entry forms still move to an account picker with an explicit-create escape hatch (a UX
+concern tracked in the rewrite plan, not an identity mechanism) — free text remains possible and
+resolves case-insensitively.
+
+**b) D5 — account lifecycle: active → closed → (only-if-empty) deleted.** "Close" = archive:
+`is_active = false` plus a new `closed_at TIMESTAMPTZ` stamped at close time. Hard DELETE is
+allowed only when zero rows reference the account; the existing FK-RESTRICT 409 stays, and both
+the API error and the UI route the user to *close* instead of dead-ending (the
+`useAccounts.ts` delete-error comment becomes actual behavior).
+
+**c) Contract runbook — preconditions to drop `bank_account`.** The contract step remains
+out-of-band and manual (per 0055's note), but is now gated on an explicit checklist rather than
+an undefined "soak":
+
+1. **Parity query returns zero rows**: transactions/planned rows whose `bank_account` resolves
+   (normalized) to a different account than their `account_id`, or that have exactly one of the
+   two set.
+2. **All string readers flipped**: list filter + search predicates use `account_id`;
+   `mv_bank_balances` re-grained on `(account_id, currency)`; CSV export's account filter and
+   any display code read `accounts.name` via join.
+3. **Import writes the FK directly**: adapters/staging resolve `account_id` at commit time; the
+   raw label survives only in the raw-mirror tables.
+4. **The drop ships as its own alembic revision with a rollback** (re-derive the string from
+   `accounts.name` over the FK), applied manually by the user.
+
+Until all four hold, **no new code may bind to the `bank_account` string** — new consumers read
+via `account_id`/join.
+
+### Consequences
+
+**Positive**
+- Casing/whitespace can no longer split one real-world account into two rows, from any writer.
+- The contract step has a definition of done instead of an indefinite dual-write.
+- Close-vs-delete is finally a modeled lifecycle rather than a 409 surprise.
+
+**Negative / cost**
+- Implicit minting keeps its residual risk: a *differently-worded* label (not just re-cased) still
+  mints a new account on first import; merge remains the cleanup for that.
+- The expression-index swap needs a one-time duplicate check (existing rows differing only by
+  case must be merged before the index can be created).
+- `closed_at` is a schema addition (small revision; rollback drops the column).
+
+**Related:** the multi-currency decision that re-grains `mv_bank_balances` lives in
+[[docs/adr/089-account-typed-model|ADR-089 addendum]]; the enable decision for the holdings half
+in [[docs/adr/103-per-account-holdings-ui-flag|ADR-103 addendum]].

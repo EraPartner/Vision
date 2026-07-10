@@ -259,7 +259,7 @@ look-changing one.
 - [ ] **Revolut collapses multi-currency accounts into one `bank_account` — same class as the fixed KBC collapse** 🔼
   - ↪ _from: Correctness research 2026-07-02 · Wave 1a_
   - `adapters/revolut.js:19-24,74` — `bankAccount` = `REVOLUT <PRODUCT>` only, but the export has a Currency column (revolut.js:44); EUR+USD rows book to one account, mixing currencies in one balance series. Wise already does `WISE <CURRENCY>` (wise.js:87).
-  - Fix: include currency in the label (`REVOLUT CURRENT EUR`) + ADR-088 merge note for existing data.
+  - Fix: ~~include currency in the label (`REVOLUT CURRENT EUR`) + ADR-088 merge note for existing data.~~ **Superseded by decision D2 (2026-07-10, ADR-089 addendum — Accounts rewrite Phase C): do NOT split per currency; keep one REVOLUT account with `multi_currency_cash=true`, rows keep their currency, balances become per-(account, currency) series.** The *finding* (currencies collapsed into one balance series) stands until Phase C lands.
 
 - [ ] **BNP imports rejected transactions; SABB imports non-completed rows** 🔼
   - ↪ _from: Correctness research 2026-07-02 · Wave 1a_
@@ -520,7 +520,7 @@ look-changing one.
   - `tradeCashLegService.js:66-79`, `commit.js:93-97` vs `repositories/accountBalanceSql.js:37` (`SUM(t2.amount)`, no FX conversion)
   - USD trade on a EUR sleeve posts `−1000` USD; balance sums it as EUR.
   - Verification (2026-07-03): confirmed end-to-end — `tradeCashLegService.js:66-79` posts the cash leg in the trade's native currency (`portfolioTxn.currency || 'EUR'`); `accountBalanceSql.js:37` sums with no currency discrimination, and both consumers (`accountRepository.js:46`, `crossWorkspaceDataService.js:61`) receive the single collapsed number — no conversion happens anywhere downstream. The anchor+delta balance logic itself is otherwise sound (fine for single-currency accounts) — only the currency-blindness is the bug.
-  - Fix: convert each leg's amount to the account's currency at read time (or stamp a converted amount at write time), matching the FX handling already done for the transactions table.
+  - Fix: ~~convert each leg's amount to the account's currency at read time (or stamp a converted amount at write time), matching the FX handling already done for the transactions table.~~ **Superseded by decision D2 (2026-07-10, ADR-089 addendum — Accounts rewrite Phase C): legs keep their native currency; the balance SQL partitions by `(account_id, currency)` and conversion happens per currency at display time.** The *finding* (currency-blind `SUM`) stands until Phase C lands.
 
 - [ ] **Dormant `brokerageFanout` computes leg amount from the raw row, not repo canonicals** 🔽 *(latent — no production callers, verified by grep)*
   - ↪ _from: Correctness research 2026-07-02 · Wave 1b_
@@ -4234,33 +4234,37 @@ that keeps producing them:
    path (`BankBalancesWidget` keyed on `bank_account` strings via `getBankBalances`, own
    IBAN-shortening — vs the entity cards on `AccountsPage`).
 
-**Decisions to pin first (each one line in an ADR-088/089 addendum; phases assume the recommendation):**
+**Decisions — DECIDED 2026-07-10 (owner sign-off); recorded as ADR addenda (088/089/094/103),
+no implementation yet. Note D1/D2/D3 went the *other* way from the original recommendation —
+the phases below are updated accordingly:**
 
-- [ ] D1 — **Identity = `accounts.id`; explicit creation only.** `name` becomes a case-insensitive
-      unique label (`lower(btrim(name))` index), account rows are *never* minted implicitly: the
-      import pipeline surfaces "N new accounts will be created" as a review step (map-to-existing or
-      confirm-create, the review UI already exists), manual forms use a picker with an explicit
-      "create account…" affordance. The 0051/0062 trigger is demoted to lookup-only on INSERT too,
-      then dropped at contract time. 🔺
-- [ ] D2 — **One currency per account, as an invariant.** Multi-currency banks become one account
-      per currency (the Wise adapter already does `WISE <CURRENCY>`; the filed Revolut-collapse
-      finding is the missing case). Stop surfacing `multi_currency_cash` (column stays, dormant).
-      Rationale: every balance path (anchor+delta, statement drift, net worth) silently assumes it
-      already. 🔼
-- [ ] D3 — **Holdings flag stays OFF for this rewrite.** v1 ships the cash/identity/UX half only;
-      the per-account-holdings half gets a separate go/no-go (Phase E) with its prerequisite bug
-      list. Rationale: ADR-103's "no consumer in this deployment" still holds, and enabling now
-      widens the blast radius of the identity/balance migration. 🔼
-- [ ] D4 — **Opening balance becomes a first-class concept.** Today only the import pipeline may
-      stamp `transactions.balance`, so a manual/cash-only account (wallet) can *never* anchor — its
-      computed balance is Σ(deltas) from an implicit zero forever, and seeding via API is
-      impossible by design. Add a guarded "set opening balance" action that writes a
-      system-stamped anchor row (server-side, not a free-typed `balance` — preserves the ADR-094
-      addendum's tamper-protection). ⏫
-- [ ] D5 — **Lifecycle: active → closed → (only-if-empty) deleted.** "Close" = archive with a
-      `closed_at`, delete allowed only with zero referencing rows; the DELETE 409 path routes the
-      user to archive instead of dead-ending (`useAccounts.ts:78` already knows this in a comment).
-      🔽
+- [x] D1 — **Implicit minting stays, normalized** (ADR-088 addendum). The trigger keeps
+      resolve-or-create on INSERT; in exchange identity becomes case/whitespace-insensitive
+      everywhere: `lower(btrim(name))` unique expression index, trigger `ON CONFLICT` +
+      lookup retargeted, `accountService`/`resolveOrCreateByName` normalize identically. Blanking
+      `bank_account` on UPDATE now also NULLs `account_id` (decides the filed 0062 edge). No
+      import-review "new accounts" step. Manual forms still get a picker with explicit-create
+      (UX concern, not identity). 🔺
+- [x] D2 — **Implement `multi_currency_cash` for real** (ADR-089 addendum). Cash becomes
+      per-currency series keyed `(account_id, currency)`: anchor+delta partitions by currency;
+      `getBankBalances`/hub/net-worth/`mv_bank_balances` move to that grain; statement/drift moves
+      to an `account_statement_balances (account_id, currency, balance, balance_date)` side table;
+      Revolut keeps ONE account with per-currency rows (**replaces** the filed split-per-currency
+      Revolut fix — do not implement that finding as filed); Wise's existing split stays valid;
+      `accounts.currency` = primary/reporting currency. Lands inside Phase C. 🔺
+- [x] D3 — **Commit to enabling the holdings half** (ADR-103 addendum). Phase E is no longer a
+      go/no-go — it is the committed final phase: `VITE_ENABLE_PER_ACCOUNT_HOLDINGS` flips
+      default-on after Phases B+C land and the 8-item prerequisite gate (listed in the addendum
+      and Phase E below) is green; flag kept temporarily as kill-switch. ⏫
+- [x] D4 — **Guarded opening-balance anchor** (ADR-094 second addendum). Dedicated
+      `POST /api/accounts/:id/opening-balance` creates/updates one server-stamped system row per
+      (account, currency): `amount 0`, `balance` = figure, `is_transfer=true`,
+      `transfer_source='opening'` (new CHECK value, `'trade'` precedent — excluded from spending
+      aggregations and reconciliation). Generic transaction surface stays balance-free. The
+      planned zero-amount rejection must exempt `transfer_source='opening'`. ⏫
+- [x] D5 — **Lifecycle: active → closed → (only-if-empty) deleted** (ADR-088 addendum). Close =
+      archive + new `closed_at TIMESTAMPTZ`; delete only with zero referencing rows; the DELETE
+      409 path routes the user to close instead of dead-ending. 🔽
 
 **Phase A — standalone correctness fixes (no design dependency; several already filed, folded in by title):**
 
@@ -4277,33 +4281,46 @@ that keeps producing them:
       `POST /api/accounts` "Checking" + import "CHECKING" = two accounts. Subsumed by D1's
       case-insensitive unique index, but cheap to normalize in the service now. 🔼
 
-**Phase B — one identity (finish ADR-088):**
+**Phase B — one identity (finish ADR-088, per D1):**
 
-- [ ] Import review gains a "new accounts" step (D1): unmatched labels → propose create/map, typed
-      at creation (type/currency prefilled from adapter context) — kills phantom accounts at the
-      source, replaces the trigger's INSERT-mint 🔺
+- [ ] Normalized identity (D1): swap `uq_accounts_name` for a unique expression index on
+      `lower(btrim(name))` (one-time duplicate-merge check first), retarget the trigger's
+      `ON CONFLICT` + lookup, normalize in `accountService.create/update` +
+      `resolveOrCreateByName`; blank-on-UPDATE also NULLs `account_id`. Closes both filed 0062
+      case findings + the service-side casing gap in one move. 🔺
 - [ ] `bank_account` free-text inputs in Add Transaction + Planned Payment forms → account
-      combobox with explicit-create (filed 🔼; sharpen the filed fix: the escape hatch should
-      *create an account explicitly*, never post a bare string)
+      combobox with an explicit "create account…" affordance (filed 🔼; free text remains a valid
+      escape hatch under D1 — it now resolves case-insensitively)
 - [ ] Flip the last string readers: list-filter/search → `account_id` predicate (subsumes the filed
       "exact bank-account filter as ILIKE" perf item — route the dropdown through the FK rather
       than anchoring the string), `mv_bank_balances` re-grained on `(account_id, currency)` (filed
-      inside the dual-write-exit item) ⏫
-- [ ] Then the contract runbook from the filed dual-write-exit item ⏫: parity-check query,
-      code-flip inventory, out-of-band drop as its own revision. Sequencing note: do **not** fix
-      the string stragglers piecemeal outside this phase — each one binds new code to the string.
+      inside the dual-write-exit item; the grain choice is also the D2 multi-currency grain) ⏫
+- [ ] Then the contract runbook now pinned in the ADR-088 addendum ⏫: parity-check query returns
+      zero, all readers flipped, import writes the FK, out-of-band drop as its own revision with
+      rollback. Sequencing note: do **not** fix the string stragglers piecemeal outside this
+      phase — each one binds new code to the string.
+- [ ] Lifecycle (D5): `closed_at` column revision, close flow stamps it, DELETE 409 + UI route to
+      close 🔽
 
-**Phase C — one balance engine + reconcile UX:**
+**Phase C — one balance engine + multi-currency + reconcile UX:**
 
 - [ ] Single shared per-account balance source (the anchor+delta lateral) consumed by the accounts
       hub, `getBankBalances`, and net worth — removes the three-way divergence (root 2). **New
       finding:** the hub vs net-worth/widget disagreement itself was previously unfiled. ⏫
-- [ ] FX-convert non-account-currency legs at read (filed 🔼, "cash sleeve balances mix currencies")
-- [ ] Opening-balance mechanism (D4) ⏫
+- [ ] Multi-currency cash (D2, ADR-089 addendum): the shared balance source partitions by
+      `(account_id, currency)`; per-currency read-time FX conversion (subsumes the filed
+      "cash sleeve balances mix currencies" FX-blind finding); statement/drift moves to the
+      `account_statement_balances` side table with backfill + per-currency drift; Revolut adapter
+      keeps one account, rows keep currency (supersedes the filed Revolut split-per-currency fix);
+      per-currency presentation on hub/widget for `multi_currency_cash` accounts. 🔺
+- [ ] Opening-balance mechanism (D4, ADR-094 second addendum): endpoint + `transfer_source
+      ='opening'` CHECK value + "Set opening balance" in the account detail/reconcile flow;
+      exempt `'opening'` rows from the planned zero-amount rejection ⏫
 - [ ] Persist the per-account split alongside snapshots + incremental rebuild (filed 🔼 as the
-      `getNetWorthByAccount` replay perf item — build it here so Phase E inherits it)
+      `getNetWorthByAccount` replay perf item — build it here; it is prerequisite 8 of the
+      ADR-103 addendum gate)
 - [ ] Reconcile flow on the drift badge: click → dialog showing statement vs computed + delta →
-      either "accept" (update statement fields) or explicit opt-in "add adjustment transaction"
+      either "accept" (update statement figures) or explicit opt-in "add adjustment transaction"
       (server-created, preserves ADR-094 descriptive-only default). Today the badge is a dead-end
       `title` tooltip; Edit → Advanced is the only path. 🔼
 
@@ -4329,21 +4346,27 @@ rich aesthetic, don't flatten):**
       `Money` component for balances instead of plain `formatCurrency` (filed in the Money-adoption
       sweep) 🔽
 - [ ] **New:** `funding_account_id` is dead UI-side — in the type and PATCH whitelist but never
-      surfaced or editable anywhere. Either build the ADR-090 sleeve-less funding picker here (it
-      becomes meaningful once sleeves matter) or drop it from the frontend type until Phase E. 🔽
+      surfaced or editable anywhere. Decided via D3: the ADR-090 sleeve-less funding picker is
+      built in Phase E (holdings enable); until then leave the field untouched, don't surface it
+      in Phase D dialogs. 🔽
 - [ ] Merge/close polish: merge confirm states direction explicitly (nl finding filed); close flow
       gets `closed_at` + only-if-empty delete (D5); targeted invalidation map instead of the blanket
       `queryClient.invalidateQueries()` 🔽
 
-**Phase E — the holdings half (separate go/no-go, after B+C are stable):**
+**Phase E — enable the holdings half (COMMITTED per D3, ADR-103 addendum; final phase, strictly
+after B+C):**
 
-Enable `VITE_ENABLE_PER_ACCOUNT_HOLDINGS` only after its prerequisite list is green — all filed:
-sell-units validation is investment-wide not per-account (ADR-103's own known bug),
-`moveHoldingService` wrong units/cost-basis (🔺), the account-close NaN landmine (🔼), snapshot
-`value_by_account` split-rescale (🔼), `sanitizeSnapshotSpikes` breaking the Σ-invariant (🔽),
-portfolio-import dedup ignoring `account_id` (🔼), account-level dividend/interest/fee rows
-without instrument (🔽). If the answer stays no-consumer: say so in an ADR-103 addendum and stop
-carrying the dormant surfaces in every audit.
+Flip `VITE_ENABLE_PER_ACCOUNT_HOLDINGS` to default-on (keep temporarily as kill-switch, remove
+after soak) once the 8-item prerequisite gate is green — all filed: (1) sell-units validation
+per `(investment, account)` (ADR-103's own known bug), (2) `moveHoldingService` wrong
+units/cost-basis (🔺), (3) the account-close NaN landmine (🔼), (4) snapshot `value_by_account`
+split-rescale (🔼), (5) `sanitizeSnapshotSpikes` breaking the Σ-invariant (🔽), (6)
+portfolio-import dedup ignoring `account_id` (🔼), (7) account-level dividend/interest/fee rows
+without instrument (🔽), (8) per-account snapshot persistence (built in Phase C). Also in scope
+with the flip: the ADR-090 funding-account picker for sleeve-less wallets (revives the dead
+`funding_account_id` surface — resolves the Phase D either/or), and a bulk "assign lots to
+account" action for legacy `account_id = NULL` lots (user-driven, no backfill migration —
+ADR-091's stance stands).
 
 **Gaps this review found in the previously-filed plan (net-new, verified against code 2026-07-09):**
 
