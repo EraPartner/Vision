@@ -17,17 +17,14 @@ function parseRouteId(req) {
 }
 
 function buildOwedExportCsvRow(row) {
-  // Numeric columns skip the formula guard (a leading "'" on a negative breaks
-  // re-import); text columns keep it. Same rule as transactionExport.
-  const numeric = { neutralizeFormula: false };
   return [
     escapeCsvValue(row.date),
     escapeCsvValue(row.bank_account),
     escapeCsvValue(row.recipient_name),
     escapeCsvValue(row.memo),
-    escapeCsvValue(row.amount, numeric),
+    escapeCsvValue(row.amount),
     escapeCsvValue(row.currency),
-    escapeCsvValue(row.balance, numeric),
+    escapeCsvValue(row.balance),
     escapeCsvValue(row.category_name),
     escapeCsvValue(row.comment),
   ].join(',');

@@ -94,26 +94,20 @@ function buildExportChunkSql(whereSql, limitParamIdx, cursorDateParamIdx, cursor
   `;
 }
 
-// Numeric columns must skip the formula-injection guard: a negative pg-NUMERIC
-// ("-12.34") starts with a dangerous prefix, so the guard would prepend "'" and
-// the value would fail to re-import (NaN → dropped/nulled row). Numbers can't be
-// spreadsheet formulas anyway.
-const NUMERIC = { neutralizeFormula: false };
-
 function buildCsvRow(row, { includeBalance = false } = {}) {
   const cols = [
     escapeCsvValue(row.date),
     escapeCsvValue(row.bank_account),
     escapeCsvValue(row.recipient_name),
     escapeCsvValue(row.memo),
-    escapeCsvValue(row.amount, NUMERIC),
+    escapeCsvValue(row.amount),
     escapeCsvValue(row.currency),
-    escapeCsvValue(row.balance, NUMERIC),
+    escapeCsvValue(row.balance),
     escapeCsvValue(row.category_name),
     escapeCsvValue(row.comment),
     escapeCsvValue(Array.isArray(row.tags) ? row.tags.join(';') : ''),
   ];
-  if (includeBalance) cols.push(escapeCsvValue(row.running_balance, NUMERIC));
+  if (includeBalance) cols.push(escapeCsvValue(row.running_balance));
   return cols.join(',');
 }
 
