@@ -1928,6 +1928,7 @@
   "portfolioImport.toast.holdingCreated": "Holding created.",
   "portfolioImport.toast.importSuccess": "Imported {n} transactions ({dups} duplicates skipped).",
   "portfolioImport.toast.noMapping": "Map a date column, a symbol or name column, and an asset class first.",
+  "portfolioImport.toast.rowsSkipped": "{n} rows could not be parsed and were skipped -- check the column mapping and date format.",
   "portfolioImport.typeMappingAuto": "Auto",
   "portfolioImport.typeMappingTitle": "Map transaction types",
   "quickLook.hint": "Press Space to close",

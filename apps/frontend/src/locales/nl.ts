@@ -1930,6 +1930,7 @@ const nl: Record<string, string> = {
   'portfolioImport.toast.holdingCreated': 'Belegging aangemaakt.',
   'portfolioImport.toast.importSuccess': '{n} transacties geïmporteerd ({dups} duplicaten overgeslagen).',
   'portfolioImport.toast.noMapping': 'Wijs eerst een datumkolom, een symbool- of naamkolom en een activaklasse toe.',
+  'portfolioImport.toast.rowsSkipped': '{n} rijen konden niet worden verwerkt en zijn overgeslagen -- controleer de kolomtoewijzing en het datumformaat.',
   'portfolioImport.typeMappingAuto': 'Automatisch',
   'portfolioImport.typeMappingTitle': 'Transactietypes toewijzen',
   'quickLook.hint': 'Druk op de spatiebalk om te sluiten',
