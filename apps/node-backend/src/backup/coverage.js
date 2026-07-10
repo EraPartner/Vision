@@ -70,6 +70,7 @@ export const BACKUP_COVERED_TABLES = Object.freeze([
   'transaction_splits',
   'transaction_tags',
   'transactions',
+  'transfer_dismissals',
   'user_settings',
   'vision_raw_transactions',
   'watchlist',

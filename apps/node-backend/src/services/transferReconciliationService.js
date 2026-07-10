@@ -23,7 +23,9 @@ const DEFAULT_WINDOW_DAYS = 3;
 // Candidate (outflow, inflow) pairs among open rows: equal-and-opposite amount,
 // same currency, two different own accounts, within ±windowDays. Fixing the
 // outflow side (amount < 0) yields each pair exactly once. Uses the
-// (amount, date) index added in migration 0044.
+// (amount, date) index added in migration 0044. Pairs the user explicitly
+// rejected (transfer_dismissals, migration 0070) are excluded — the PAIR, not
+// the rows: each leg stays matchable with every other candidate.
 async function loadCandidatePairs(windowDays) {
   const { rows } = await query(
     `SELECT a.id AS "outId", b.id AS "inId"
@@ -37,7 +39,12 @@ async function loadCandidatePairs(windowDays) {
       WHERE a.is_active AND b.is_active
         AND a.is_transfer = false AND b.is_transfer = false
         AND a.transfer_source IS NULL AND b.transfer_source IS NULL
-        AND a.amount < 0`,
+        AND a.amount < 0
+        AND NOT EXISTS (
+          SELECT 1 FROM transfer_dismissals d
+           WHERE d.txn_a_id = LEAST(a.id, b.id)
+             AND d.txn_b_id = GREATEST(a.id, b.id)
+        )`,
     [windowDays],
   );
   return rows;
@@ -200,24 +207,35 @@ export async function markTransfer(aId, bId) {
  * Clear a transfer mark on a transaction and its peer (handles false positives
  * and single-leg un-marking).
  *
- * The dismissal is STICKY: both legs are stamped transfer_source='dismissed'
- * (is_transfer=false), not reset to NULL. Resetting to NULL re-opened them as
- * candidates, so the reconcile the caller triggers ~1s later re-paired the exact
- * pair the user just rejected. 'dismissed' is excluded by loadCandidatePairs
- * (transfer_source IS NULL), so it stays un-paired; a later manual markTransfer
- * (transfer_source='manual') still overrides it.
+ * The dismissal is STICKY and PER-PAIR (migration 0070): the rejected pairing
+ * is recorded in transfer_dismissals, then both legs reset to open (NULL).
+ * Resetting alone re-opened them as candidates, so the reconcile the caller
+ * triggers ~1s later re-paired the exact pair the user just rejected; stamping
+ * the ROWS 'dismissed' (the first fix) over-corrected — it removed each leg
+ * from the candidate pool entirely, so a leg wrongly paired with B could never
+ * auto-pair with its true counterpart C. Excluding just the pair gives both: A↔B
+ * never comes back on its own, A↔C still can. A manual markTransfer of a
+ * dismissed pair still works — dismissals only gate auto-detection.
  */
 export async function unmarkTransfer(id) {
   await withTransaction(async (client) => {
     const { rows } = await client.query('SELECT transfer_peer_id FROM transactions WHERE id = $1', [id]);
     const peer = rows[0]?.transfer_peer_id;
+    if (peer) {
+      await client.query(
+        `INSERT INTO transfer_dismissals (txn_a_id, txn_b_id)
+         VALUES (LEAST($1::int, $2::int), GREATEST($1::int, $2::int))
+         ON CONFLICT DO NOTHING`,
+        [id, peer],
+      );
+    }
     await client.query(
-      `UPDATE transactions SET is_transfer = false, transfer_peer_id = NULL, transfer_source = 'dismissed' WHERE id = $1`,
+      `UPDATE transactions SET is_transfer = false, transfer_peer_id = NULL, transfer_source = NULL WHERE id = $1`,
       [id],
     );
     if (peer) {
       await client.query(
-        `UPDATE transactions SET is_transfer = false, transfer_peer_id = NULL, transfer_source = 'dismissed' WHERE id = $1`,
+        `UPDATE transactions SET is_transfer = false, transfer_peer_id = NULL, transfer_source = NULL WHERE id = $1`,
         [peer],
       );
     }

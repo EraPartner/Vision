@@ -12,6 +12,7 @@ import {
   unmarkTransfer,
   markTransfer,
   reconcileTransfers,
+  getTransferSuggestions,
 } from '../../src/services/transferReconciliationService.js';
 
 beforeEach(() => {
@@ -20,29 +21,51 @@ beforeEach(() => {
   mockClient.query.mockResolvedValue({ rows: [], rowCount: 0 });
 });
 
-describe('unmarkTransfer — sticky dismissal (ADR-083)', () => {
-  it("stamps both legs transfer_source='dismissed' so they can't auto re-pair", async () => {
+describe('unmarkTransfer — sticky per-pair dismissal (ADR-083, migration 0070)', () => {
+  it('records the rejected PAIR and resets both legs to open (NULL)', async () => {
     mockClient.query.mockResolvedValueOnce({ rows: [{ transfer_peer_id: 20 }] }); // SELECT peer
     await unmarkTransfer(10);
 
-    const updates = mockClient.query.mock.calls
-      .map(([sql]) => sql)
-      .filter((s) => s.includes('UPDATE transactions'));
+    const sqls = mockClient.query.mock.calls.map(([sql]) => sql);
+    // The pairing is persisted in transfer_dismissals (ordered, idempotent)…
+    const dismissal = sqls.find((s) => s.includes('INSERT INTO transfer_dismissals'));
+    expect(dismissal).toBeTruthy();
+    expect(dismissal).toContain('LEAST');
+    expect(dismissal).toContain('GREATEST');
+    expect(dismissal).toContain('ON CONFLICT DO NOTHING');
+    // …and the ROWS go back to open so each can still pair with OTHER candidates.
+    const updates = sqls.filter((s) => s.includes('UPDATE transactions'));
     expect(updates).toHaveLength(2); // the row + its peer
     for (const sql of updates) {
-      expect(sql).toContain("transfer_source = 'dismissed'");
-      expect(sql).not.toContain('transfer_source = NULL');
+      expect(sql).toContain('transfer_source = NULL');
+      expect(sql).not.toContain('dismissed');
     }
   });
 
-  it('dismisses even a peerless (single-leg) row', async () => {
+  it('a peerless (single-leg) row is just reset — no pair to dismiss', async () => {
     mockClient.query.mockResolvedValueOnce({ rows: [{ transfer_peer_id: null }] });
     await unmarkTransfer(10);
-    const updates = mockClient.query.mock.calls
-      .map(([sql]) => sql)
-      .filter((s) => s.includes('UPDATE transactions'));
+    const sqls = mockClient.query.mock.calls.map(([sql]) => sql);
+    expect(sqls.find((s) => s.includes('transfer_dismissals'))).toBeUndefined();
+    const updates = sqls.filter((s) => s.includes('UPDATE transactions'));
     expect(updates).toHaveLength(1);
-    expect(updates[0]).toContain("transfer_source = 'dismissed'");
+    expect(updates[0]).toContain('transfer_source = NULL');
+  });
+});
+
+describe('candidate pool — dismissed pairs are excluded, rows stay matchable', () => {
+  it('loadCandidatePairs excludes exactly the dismissed pair (LEAST/GREATEST anti-join)', async () => {
+    await getTransferSuggestions();
+    const candidateSql = query.mock.calls
+      .map(([sql]) => sql)
+      .find((s) => s.includes('AS "outId"'));
+    expect(candidateSql).toBeTruthy();
+    expect(candidateSql).toContain('NOT EXISTS');
+    expect(candidateSql).toContain('transfer_dismissals');
+    expect(candidateSql).toContain('LEAST(a.id, b.id)');
+    expect(candidateSql).toContain('GREATEST(a.id, b.id)');
+    // The per-row 'dismissed' state is gone — rows are only gated by open state.
+    expect(candidateSql).not.toContain("'dismissed'");
   });
 });
 
