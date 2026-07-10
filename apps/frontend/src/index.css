@@ -1120,4 +1120,13 @@
     :root.fx-static-atmosphere .liquid-canvas::after {
         animation: none;
     }
+
+    /* Window blurred / tab hidden (VisualEffectsController): pause the drift
+       so every backdrop-filter surface stops re-blurring per vsync while
+       nobody is looking. animation-play-state (not `animation: none`) resumes
+       mid-cycle without a visual jump when focus returns. */
+    :root.fx-idle-atmosphere .liquid-canvas::before,
+    :root.fx-idle-atmosphere .liquid-canvas::after {
+        animation-play-state: paused;
+    }
 }
