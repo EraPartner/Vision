@@ -119,8 +119,16 @@ export interface AccountCreate {
     statement_balance_date?: string;
 }
 
-export interface AccountUpdate extends Partial<AccountCreate> {
+// On PATCH, explicit null clears the field (the backend maps it to SQL NULL);
+// undefined/omitted leaves it untouched.
+export interface AccountUpdate extends Partial<Omit<AccountCreate,
+    'display_name' | 'institution' | 'funding_account_id' | 'statement_balance' | 'statement_balance_date'>> {
     is_active?: boolean;
+    display_name?: string | null;
+    institution?: string | null;
+    funding_account_id?: number | null;
+    statement_balance?: number | null;
+    statement_balance_date?: string | null;
 }
 
 // ==================== Recipient Types ====================

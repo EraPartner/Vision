@@ -61,6 +61,30 @@ describe('accountService.update', () => {
   it('rejects a non-boolean flag', async () => {
     await expect(accountService.update(1, { in_net_worth: 'yes' })).rejects.toThrow(ValidationError);
   });
+
+  it('forwards explicit null as SQL NULL for clearable fields (PATCH-to-clear)', async () => {
+    accountRepository.update.mockResolvedValueOnce({ id: 1 });
+    await accountService.update(1, {
+      display_name: null,
+      institution: null,
+      funding_account_id: null,
+      statement_balance: null,
+      statement_balance_date: null,
+    });
+    expect(accountRepository.update).toHaveBeenCalledWith(1, {
+      display_name: null,
+      institution: null,
+      funding_account_id: null,
+      statement_balance: null,
+      statement_balance_date: null,
+    });
+  });
+
+  it('still drops omitted fields (undefined never reaches the repository)', async () => {
+    accountRepository.update.mockResolvedValueOnce({ id: 1 });
+    await accountService.update(1, { display_name: 'Main' });
+    expect(accountRepository.update).toHaveBeenCalledWith(1, { display_name: 'Main' });
+  });
 });
 
 describe('accountService.remove', () => {

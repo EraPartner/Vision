@@ -54,8 +54,10 @@ export default function AccountsPage() {
                 id: editing.id,
                 data: {
                     name: values.name,
-                    display_name: values.display_name || undefined,
-                    institution: values.institution || undefined,
+                    // Emptied fields PATCH as explicit null so the backend clears
+                    // them — `undefined` keys are dropped in JSON and would no-op.
+                    display_name: values.display_name || null,
+                    institution: values.institution || null,
                     currency: values.currency,
                     type: values.type,
                     owner: values.owner,
@@ -65,8 +67,8 @@ export default function AccountsPage() {
                     in_net_worth: values.in_net_worth,
                     multi_currency_cash: values.multi_currency_cash,
                     has_cash_sleeve: values.has_cash_sleeve,
-                    statement_balance: values.statementBalance ? Number(values.statementBalance) : undefined,
-                    statement_balance_date: values.statementBalanceDate || undefined,
+                    statement_balance: values.statementBalance ? Number(values.statementBalance) : null,
+                    statement_balance_date: values.statementBalanceDate || null,
                 },
             },
             { onSuccess: () => setEditing(undefined) },

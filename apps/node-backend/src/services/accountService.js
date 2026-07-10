@@ -36,12 +36,15 @@ function sanitize(body, { requireName }) {
     out.name = body.name.trim();
   }
 
+  // Explicit null means "clear this field" and must survive to the repository
+  // as SQL NULL — mapping it to undefined made PATCH-to-clear a silent no-op
+  // (the repository skips undefined when building SET).
   for (const key of ['display_name', 'institution']) {
     if (body[key] !== undefined) {
       if (body[key] !== null && typeof body[key] !== 'string') {
         throw new ValidationError(`${key} must be a string`);
       }
-      out[key] = body[key] === null ? undefined : body[key].trim();
+      out[key] = body[key] === null ? null : body[key].trim();
     }
   }
 
@@ -69,7 +72,7 @@ function sanitize(body, { requireName }) {
 
   if (body.funding_account_id !== undefined) {
     if (body.funding_account_id === null) {
-      out.funding_account_id = undefined;
+      out.funding_account_id = null;
     } else {
       const fid = Number(body.funding_account_id);
       if (!Number.isInteger(fid) || fid <= 0) throw new ValidationError('funding_account_id must be a positive integer');
@@ -79,7 +82,7 @@ function sanitize(body, { requireName }) {
 
   if (body.statement_balance !== undefined) {
     if (body.statement_balance === null) {
-      out.statement_balance = undefined;
+      out.statement_balance = null;
     } else {
       const bal = Number(body.statement_balance);
       if (!Number.isFinite(bal)) throw new ValidationError('statement_balance must be a number');
@@ -89,7 +92,7 @@ function sanitize(body, { requireName }) {
 
   if (body.statement_balance_date !== undefined) {
     if (body.statement_balance_date === null) {
-      out.statement_balance_date = undefined;
+      out.statement_balance_date = null;
     } else {
       const d = String(body.statement_balance_date);
       if (!/^\d{4}-\d{2}-\d{2}$/.test(d)) throw new ValidationError('statement_balance_date must be an ISO date (YYYY-MM-DD)');
