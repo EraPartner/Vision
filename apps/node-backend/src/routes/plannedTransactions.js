@@ -8,6 +8,7 @@ import { Router } from 'express';
 import { query as dbQuery } from '../database/connection.js';
 import plannedTransactionRepository from '../services/plannedTransactionService.js';
 import { validateIdParam, assertYmd, validateId } from '../middleware/validation.js';
+import { formatDateToYmd } from '../lib/dateFormat.js';
 import { rateLimiter } from '../middleware/rateLimiter.js';
 import { generateLoanRepaymentSchedule } from '../services/calculations/loanSchedule.js';
 import { isValidPattern } from '../services/calculations/recurrence.js';
@@ -321,11 +322,17 @@ router.delete('/:id', validateIdParam, async (req, res) => {
   res.ok({ message: `Planned transaction ${id} deleted permanently`, links: [] });
 });
 
+// DATE columns arrive from pg as local-midnight Date objects; JSON-serialized
+// raw they become an ISO timestamp of the PREVIOUS day east of UTC, which the
+// frontend T-splits and writes back on the next save (date-1 per edit).
+// Emit calendar-day strings; timestamps (created_at/updated_at) stay ISO.
+const ymd = (v) => (v instanceof Date ? formatDateToYmd(v) : v);
+
 function formatPlannedTransaction(row) {
   if (!row) return null;
   return {
     id: row.id,
-    planned_date: row.planned_date,
+    planned_date: ymd(row.planned_date),
     bank_account: row.bank_account,
     recipient_id: row.recipient_id,
     recipient_name: row.recipient_name || null,
@@ -340,19 +347,19 @@ function formatPlannedTransaction(row) {
     recurrence_pattern: row.recurrence_pattern,
     reminder_days_before: row.reminder_days_before != null ? parseInt(row.reminder_days_before, 10) : null,
     is_executed: row.is_executed,
-    last_executed_date: row.last_executed_date,
+    last_executed_date: ymd(row.last_executed_date),
     is_loan: row.is_loan || false,
     loan_type: row.loan_type || null,
     loan_principal: row.loan_principal != null ? toNumber(toDecimal(row.loan_principal)) : null,
     loan_annual_interest_rate: row.loan_annual_interest_rate != null ? toNumber(toDecimal(row.loan_annual_interest_rate)) : null,
     loan_term_months: row.loan_term_months != null ? parseInt(row.loan_term_months, 10) : null,
-    loan_start_date: row.loan_start_date || null,
+    loan_start_date: ymd(row.loan_start_date) || null,
     loan_payment_day: row.loan_payment_day != null ? parseInt(row.loan_payment_day, 10) : null,
     loan_regular_payment_amount: row.loan_regular_payment_amount != null ? toNumber(toDecimal(row.loan_regular_payment_amount)) : null,
-    loan_first_payment_date: row.loan_first_payment_date || null,
+    loan_first_payment_date: ymd(row.loan_first_payment_date) || null,
     loan_schedule: (row.loan_schedule || []).map((entry) => ({
       installment_number: parseInt(entry.installment_number, 10),
-      due_date: entry.due_date,
+      due_date: ymd(entry.due_date),
       payment_amount: toNumber(toDecimal(entry.payment_amount)),
       principal_amount: toNumber(toDecimal(entry.principal_amount)),
       interest_amount: toNumber(toDecimal(entry.interest_amount)),
@@ -363,7 +370,7 @@ function formatPlannedTransaction(row) {
     executions: (row.executions || []).map(e => ({
       id: e.id,
       executed_transaction_id: e.executed_transaction_id,
-      execution_date: e.execution_date,
+      execution_date: ymd(e.execution_date),
       created_at: e.created_at,
     })),
     tags: row.tags ?? [],
