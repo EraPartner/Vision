@@ -70,6 +70,11 @@ async function releaseInvalidAutoPairs(windowDays) {
         AND NOT EXISTS (
           SELECT 1 FROM transactions p
            WHERE p.id = t.transfer_peer_id
+             -- Reciprocity: the peer must still point back at t. Without this,
+             -- when markTransfer re-points one leg elsewhere the stranded auto
+             -- leg stayed is_transfer=true forever (a phantom one-way transfer,
+             -- excluded from cash-flow aggregates).
+             AND p.transfer_peer_id = t.id
              AND p.amount = -t.amount
              AND COALESCE(p.currency, 'EUR') = COALESCE(t.currency, 'EUR')
              AND p.account_id IS DISTINCT FROM t.account_id
@@ -170,6 +175,15 @@ export async function markTransfer(aId, bId) {
     if (!((aAmt < 0 && bAmt > 0) || (aAmt > 0 && bAmt < 0))) {
       throw new ValidationError('A transfer needs one outflow and one inflow (opposite signs)');
     }
+    // Release any existing peer of A or B before re-pairing them together, so a
+    // prior counterpart (e.g. an auto pair A↔C) isn't stranded as a phantom
+    // one-way transfer. The stranded peer goes back to open (NULL), not
+    // dismissed — releasing it is a side effect, not a user dismissal.
+    await client.query(
+      `UPDATE transactions SET is_transfer = false, transfer_peer_id = NULL, transfer_source = NULL
+        WHERE transfer_peer_id = ANY($1) AND id <> ALL($1)`,
+      [[aId, bId]],
+    );
     await client.query(
       `UPDATE transactions SET is_transfer = true, transfer_peer_id = $2, transfer_source = 'manual' WHERE id = $1`,
       [aId, bId],
@@ -185,18 +199,25 @@ export async function markTransfer(aId, bId) {
 /**
  * Clear a transfer mark on a transaction and its peer (handles false positives
  * and single-leg un-marking).
+ *
+ * The dismissal is STICKY: both legs are stamped transfer_source='dismissed'
+ * (is_transfer=false), not reset to NULL. Resetting to NULL re-opened them as
+ * candidates, so the reconcile the caller triggers ~1s later re-paired the exact
+ * pair the user just rejected. 'dismissed' is excluded by loadCandidatePairs
+ * (transfer_source IS NULL), so it stays un-paired; a later manual markTransfer
+ * (transfer_source='manual') still overrides it.
  */
 export async function unmarkTransfer(id) {
   await withTransaction(async (client) => {
     const { rows } = await client.query('SELECT transfer_peer_id FROM transactions WHERE id = $1', [id]);
     const peer = rows[0]?.transfer_peer_id;
     await client.query(
-      `UPDATE transactions SET is_transfer = false, transfer_peer_id = NULL, transfer_source = NULL WHERE id = $1`,
+      `UPDATE transactions SET is_transfer = false, transfer_peer_id = NULL, transfer_source = 'dismissed' WHERE id = $1`,
       [id],
     );
     if (peer) {
       await client.query(
-        `UPDATE transactions SET is_transfer = false, transfer_peer_id = NULL, transfer_source = NULL WHERE id = $1`,
+        `UPDATE transactions SET is_transfer = false, transfer_peer_id = NULL, transfer_source = 'dismissed' WHERE id = $1`,
         [peer],
       );
     }
