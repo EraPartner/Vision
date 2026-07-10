@@ -6,6 +6,7 @@ const crypto = require('crypto');
 const fs = require('fs');
 const os = require('os');
 const path = require('path');
+const readline = require('readline');
 const http = require('http');
 const https = require('https');
 const { createBundle, encryptBundle, openBundle, isBundleEncrypted } = require('./backup/bundle');
@@ -2121,6 +2122,66 @@ async function getSchemaHead(composeFileArgs, dbUser, dbName) {
 }
 
 /**
+ * Extract the alembic revision recorded inside a plain-SQL pg_dump file.
+ * pg_dump emits the alembic_version row either as a COPY block
+ * (`COPY public.alembic_version (version_num) FROM stdin;` + data line)
+ * or, with --inserts, as an INSERT statement. Streams the file and stops
+ * at the first match, so arbitrarily large dumps stay cheap.
+ * Returns '' when no revision is found (not a Vision dump, empty table, …).
+ */
+function readDumpSchemaHead(sqlPath) {
+  return new Promise((resolve) => {
+    const stream = fs.createReadStream(sqlPath, { encoding: 'utf8' });
+    const rl = readline.createInterface({ input: stream, crlfDelay: Infinity });
+    let inCopyBlock = false;
+    let settled = false;
+    const finish = (value) => {
+      if (settled) return;
+      settled = true;
+      resolve(value);
+      rl.close();
+      stream.destroy();
+    };
+    rl.on('line', (line) => {
+      if (inCopyBlock) {
+        const value = line.trim();
+        finish(value === '\\.' ? '' : value);
+        return;
+      }
+      if (/^COPY\s+(?:"?[\w$]+"?\.)?"?alembic_version"?\s*\("?version_num"?\)\s+FROM\s+stdin;/i.test(line)) {
+        inCopyBlock = true;
+        return;
+      }
+      const insert = line.match(
+        /^INSERT INTO\s+(?:"?[\w$]+"?\.)?"?alembic_version"?\s*(?:\("?version_num"?\)\s*)?VALUES\s*\('([^']+)'\)/i,
+      );
+      if (insert) finish(insert[1]);
+    });
+    rl.on('close', () => finish(''));
+    stream.on('error', () => finish(''));
+  });
+}
+
+/**
+ * True only when `candidate` is provably a newer alembic revision than
+ * `current`. Vision revisions carry a zero-padded numeric prefix
+ * ("0071_planned_recurrence_bounds"); compare those numerically — the old
+ * lexicographic `>` silently misorders any future hash-style id. When either
+ * id has no numeric prefix (or `current` is unknown), skip the guard rather
+ * than block a restore on an uncomparable pair.
+ */
+function isSchemaRevisionNewer(candidate, current) {
+  const numericPrefix = (rev) => {
+    const m = /^(\d+)/.exec(String(rev || ''));
+    return m ? parseInt(m[1], 10) : null;
+  };
+  const a = numericPrefix(candidate);
+  const b = numericPrefix(current);
+  if (a == null || b == null) return false;
+  return a > b;
+}
+
+/**
  * Create a .visionbak bundle in destDir, optionally encrypted.
  * frontendStateJson may be null (e.g. when called at quit time).
  */
@@ -2272,7 +2333,7 @@ async function runBundleRestore(bundlePath, { passphrase } = {}) {
   // Schema version check: block restore if bundle is from a newer schema
   if (metadata.schemaHead) {
     const currentHead = await getSchemaHead(composeFileArgs, dbUser, dbName);
-    if (currentHead && metadata.schemaHead > currentHead) {
+    if (isSchemaRevisionNewer(metadata.schemaHead, currentHead)) {
       cleanup();
       throw new Error(
         `BUNDLE_SCHEMA_NEWER: This bundle was created on schema revision "${metadata.schemaHead}" ` +
@@ -2482,6 +2543,24 @@ async function runRestore(sqlFilePath, { passphrase } = {}) {
   } catch { /* use defaults */ }
 
   const composeFileArgs = composeArgs(workDir, overrideFiles);
+
+  // Newer-schema guard (parity with the bundle path): a plain dump taken on a
+  // newer install restores cleanly at the psql level, then boot-time
+  // `alembic upgrade head` hits the unknown revision and the backend
+  // crash-loops with no user-facing message. Refuse before anything is
+  // stopped or dropped.
+  const dumpHead = await readDumpSchemaHead(restoreSource);
+  if (dumpHead) {
+    const currentHead = await getSchemaHead(composeFileArgs, dbUser, dbName);
+    if (isSchemaRevisionNewer(dumpHead, currentHead)) {
+      cleanupRestoreSource();
+      throw new Error(
+        `BUNDLE_SCHEMA_NEWER: This backup was created on schema revision "${dumpHead}" ` +
+        `but this Vision install is at "${currentHead}". ` +
+        `Update Vision to a newer version and retry.`
+      );
+    }
+  }
 
   // 1. Stop the app container (release DB connections)
   await run('docker', [
