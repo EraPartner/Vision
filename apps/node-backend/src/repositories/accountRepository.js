@@ -2,7 +2,9 @@
  * Account Repository — data access for the accounts table (ADR-088).
  *
  * Accounts are the user's own accounts (distinct from recipient_bank_accounts,
- * which are counterparty IBANs). `name` is globally unique. The flag columns
+ * which are counterparty IBANs). `name` is unique on its normalized form —
+ * lower(btrim(name)), migration 0066 / ADR-088 addendum (D1) — while the stored
+ * value keeps the user's casing for display. The flag columns
  * (type / liquidity_class / spendable / in_net_worth / tax_wrapper / owner /
  * multi_currency_cash / has_cash_sleeve) exist here from migration 0050; their
  * semantics are activated in ADR-089.
@@ -58,7 +60,12 @@ export const accountRepository = {
   },
 
   async getByName(name) {
-    const result = await query(`SELECT ${COLUMNS} FROM accounts WHERE name = $1`, [name]);
+    // Identity is case/whitespace-insensitive (D1) — match how the sync
+    // trigger and resolveOrCreateByName resolve labels.
+    const result = await query(
+      `SELECT ${COLUMNS} FROM accounts WHERE lower(btrim(name)) = lower(btrim($1))`,
+      [name],
+    );
     return result.rows[0] ?? undefined;
   },
 
@@ -143,15 +150,17 @@ export const accountRepository = {
 
   /**
    * Resolve an account id by name, creating the row if absent. Mirrors the
-   * dual-write trigger's normalization (trimmed name) so explicit creation and
-   * trigger-driven creation converge on the same row.
+   * dual-write trigger's normalization — identity is lower(btrim(name)), D1 —
+   * so explicit creation and trigger-driven creation converge on the same row.
+   * On conflict the existing row keeps its stored casing (no-op update purely
+   * to RETURNING the id in one round-trip).
    */
   async resolveOrCreateByName(name) {
     const trimmed = String(name).trim();
     if (!trimmed) return undefined;
     const result = await query(
       `INSERT INTO accounts (name, display_name) VALUES ($1, $1)
-       ON CONFLICT (name) DO UPDATE SET name = EXCLUDED.name
+       ON CONFLICT (lower(btrim(name))) DO UPDATE SET name = accounts.name
        RETURNING id`,
       [trimmed],
     );
