@@ -530,7 +530,7 @@ look-changing one.
 - [ ] **Account-level dividend/interest/fee rows without an instrument can never commit** 🔽 *(blocks, doesn't corrupt — design gap)*
   - ↪ _from: Correctness research 2026-07-02 · Wave 1b_
   - `importPipeline/brokerageRouting.js:25` routes them `'portfolio'`; `commit.js:111-114` errors "unresolved instrument". Cash interest on the sleeve / custody fees have no representable path.
-  - Fix: decide a path, e.g. instrument-less rows → signed cash row.
+  - Fix: **DECIDED 2026-07-10 (D6, ADR-095 addendum): instrument-less dividend/interest/fee/tax rows route `'cash'` — one signed transactions row on the sleeve, auto-categorized by row kind. Ships with Accounts rewrite Phase E (it's prerequisite 7 of the ADR-103 gate).**
 
 - [ ] **Native float accumulation on money in report/aggregation paths (beyond already-known sites)** 🔽 *(drift, not gross error — all rounded at the end)*
   - ↪ _from: Correctness research 2026-07-02 · Wave 1c_
@@ -834,7 +834,7 @@ look-changing one.
 - [ ] **Backlog batch: assorted low-severity validation/consistency gaps across planned/portfolio-tx/splits/watchlist/accounts/tax** ⏬
   - ↪ _from: Correctness research 2026-07-02 · Wave 2a (residue, closed 2026-07-03)_
   - Planned: API-only `is_recurring:true` without a pattern stores and is perpetually due after execution (`plannedTransactions.js:211` guard fires only when a pattern is present; `recurrence.js:55`) · `reminder_days_before` creatable + returned but missing from the PATCH whitelist → updates silently dropped (`validation.js:26-33`) · zero/absurd amounts end-to-end (`PlannedPaymentForm.tsx:58` blocks only empty; `plannedTransactions.js:181` null-check only; zero at least excluded from auto-match, `plannedMatchService.js:63`).
-  - Portfolio-tx: `type`/`currency`/`recurrence_interval` have no backend whitelist or DB CHECK (`type:'banana'` inserts and is invisible to units replay, `common.js:222-266`) · recurrence fields are stored-but-inert metadata — grep finds NO backend consumer of `is_recurring`/`recurrence_interval`/`recurrence_end_date` for portfolio txns (verify "badge-only" is the intended design before filing more; `end < start` also unvalidated but inert) · turning recurrence off leaves stale interval/end-date stored (`EditPortfolioTxnDialog.tsx:153-155`).
+  - Portfolio-tx: `type`/`currency`/`recurrence_interval` have no backend whitelist or DB CHECK (`type:'banana'` inserts and is invisible to units replay, `common.js:222-266`) · recurrence fields are stored-but-inert metadata — grep finds NO backend consumer of `is_recurring`/`recurrence_interval`/`recurrence_end_date` for portfolio txns (**CONFIRMED 2026-07-10 (D9): badge-only IS the intended design — do not file the missing consumer as a bug; remaining work is hygiene only: whitelist interval values, validate `end ≥ start`, clear stale interval/end-date on recurrence-off**) · turning recurrence off leaves stale interval/end-date stored (`EditPortfolioTxnDialog.tsx:153-155`).
   - Splits (API-only; UI pre-filters): `/batch` silently drops malformed rows, all-dropped → 201 `{total: 0}` instead of 400 (`routes/splits.js:43-51`, `splitRepository.js:121`) · `transaction_id`/`recipient_id` truthiness-checked only → pg FK/type 500s (`splits.js:87-108`; contrast `/pay`'s own numeric validation `:136-138`).
   - Watchlist: PATCH accepts `name:''`; `added_price` passes PATCH validation but isn't in the update allowed-list — dead validation, silently ignored (`watchlist.js:26-30` vs `watchlistRepository.js:80`).
   - Accounts: `statement_balance` storable without `statement_balance_date` (ADR-094 drift badge then anchors to an undated figure; `accountService.js:80-98`) and unbounded.
@@ -3414,7 +3414,7 @@ look-changing one.
 - [ ] **Investments table-inheritance legacy is a permanent two-shape schema fork with no documented path out — and the docs present the legacy shape as canonical** ⏫
   - ↪ _from: Architecture & code design 2026-07-06 · Wave W2 (DB schema & data model)_
   - evidence: fresh installs get flat `investments`/`portfolio_transactions` tables (`0001_initial_database_schema.py:470-534`); legacy installs keep `investments_base` + 7 child tables + view (ADR-004, still status "Accepted", `docs/adr/004-postgresql-table-inheritance.md:15`). Cost is structural, not just the known ALTER-crash gotcha: FKs are *conditionally absent* on legacy installs (`0040_add_portfolio_import_staging.py:117-121` "PostgreSQL rejects FK references to views… columns stay plain INTEGERs", same pattern in 0026, 0052), runtime shape-probing via `to_regclass` in `investmentRepository.js:20,32` and `portfolioTxRepo.common.js:20`, inheritance-aware branching across ≥11 backend files, and the 0061 side-table idiom now needed for every future investments column. Meanwhile `docs/reference/data-model.md:260-327` documents the *inheritance* shape ("Investment (Base Table)" + child tables) as the data model, which is exactly what a fresh install does not have.
-  - fix: write an ADR that either (a) declares the flat shape target and specifies a one-time legacy-install conversion migration (CREATE new flat table AS SELECT from view → swap names → drop children; rollback = keep old tables renamed), or (b) explicitly accepts the fork forever — then update data-model.md to describe the flat shape as primary with a legacy-shape appendix. Option (a) removes an entire class of conditional-FK/side-table workarounds from all future migrations.
+  - fix: **DECIDED 2026-07-10 (D8): option (a) — ADR-107 written** (flat shape canonical; guarded one-time conversion with parity pre-flight, rename-based rollback, no-op on flat installs; ADR-004 marked Superseded). Remaining work: author the conversion migration per ADR-107, then remove the ≥11 `to_regclass` branches and update data-model.md. Sequencing: land before (or early in) Accounts rewrite Phase E so `portfolio_transactions.account_id` is a real FK everywhere.
 
 - [ ] **`docs/reference/data-model.md` has hard drift: a dropped MV, a fictional table, a legacy-only table, and stale column contracts** ⏫
   - ↪ _from: Architecture & code design 2026-07-06 · Wave W2 (DB schema & data model)_
@@ -3434,7 +3434,7 @@ look-changing one.
 - [ ] **Money precision forked in 0025: `transactions.amount` is NUMERIC(18,4) but every sibling money column stayed NUMERIC(15,2)** 🔼
   - ↪ _from: Architecture & code design 2026-07-06 · Wave W2 (DB schema & data model)_
   - evidence: `0025_fix_numeric_precision.py:141` retypes only `transactions.amount`. Still (15,2): `transactions.balance` (0001:191), `planned_transactions.amount` (0001:208), `transaction_splits.amount`/`split_payments.amount`/`agg_split_outstanding.*` (0019:24,40,61-63), loan schedule columns (0001:251-254), `accounts.statement_balance` (0054:29), and all 8 raw tables' amounts (0001). Consequence: a 4-decimal transaction cannot be split exactly (splits round to cents while the 0062 split-guard trigger compares `SUM(splits) > ABS(amount)+0.005`), and a planned→executed copy silently gains precision headroom one way only. `import_staging_rows.amount` is NUMERIC(20,4) (0001:629) — wider than its commit target.
-  - fix: decide the intended domain precision (ADR-060 audited arithmetic, not column types) and ship one alignment revision — either widen the sibling columns to (18,4) (safe, no rewrite for in-range values) or document 2-dp as the split/planned contract; rollback = re-narrow with a USING round().
+  - fix: **DECIDED 2026-07-10 (D7, ADR-060 addendum): NUMERIC(18,4) is the domain precision** — one alignment revision widens the (15,2) siblings; new money columns (incl. D2's `account_statement_balances`) created at (18,4); rollback = re-narrow with USING round(). Ship in the Accounts rewrite Phase A/C window.
 
 - [ ] **`saved_charts` INTEGER[] id-arrays (`category_ids`, `recipient_ids`, `tag_ids`) have no referential integrity and no delete-cleanup** 🔼
   - ↪ _from: Architecture & code design 2026-07-06 · Wave W2 (DB schema & data model)_
@@ -4266,6 +4266,24 @@ the phases below are updated accordingly:**
       archive + new `closed_at TIMESTAMPTZ`; delete only with zero referencing rows; the DELETE
       409 path routes the user to close instead of dead-ending. 🔽
 
+**Round 2 — DECIDED 2026-07-10 (rewrite-adjacent forks surfaced by the same review):**
+
+- [x] D6 — **Instrument-less brokerage rows → signed cash row** (ADR-095 addendum). Routes
+      `'cash'`: one signed sleeve transaction, auto-categorized by row kind; accepted trade-off
+      that these live in the ledger, not portfolio analytics. Ships with Phase E (it *is*
+      prerequisite 7 of the ADR-103 gate). 🔼
+- [x] D7 — **NUMERIC(18,4) is the domain money precision** (ADR-060 addendum). One alignment
+      revision widens the (15,2) siblings; D2's `account_statement_balances` table is created at
+      (18,4) from day one. Phase A/C window. 🔼
+- [x] D8 — **Flat investments schema is canonical — one-time legacy conversion** (new ADR-107;
+      ADR-004 marked Superseded). Guarded conversion migration with parity pre-flight and
+      rename-based rollback; kills the conditional-FK/side-table/`to_regclass` class and gives
+      Phase E a real `portfolio_transactions.account_id` FK on every install. Land before or
+      early in Phase E. ⏫
+- [x] D9 — **Portfolio-tx recurrence is badge-only by design** (confirmed; recorded on the
+      backlog-batch finding). Remaining work is hygiene only: interval whitelist, `end ≥ start`
+      validation, clear stale fields on recurrence-off. ⏬
+
 **Phase A — standalone correctness fixes (no design dependency; several already filed, folded in by title):**
 
 - [ ] Account/Category edit dialogs revert in-flight edits (filed 🔺) — fix here as part of the
@@ -4362,7 +4380,9 @@ per `(investment, account)` (ADR-103's own known bug), (2) `moveHoldingService` 
 units/cost-basis (🔺), (3) the account-close NaN landmine (🔼), (4) snapshot `value_by_account`
 split-rescale (🔼), (5) `sanitizeSnapshotSpikes` breaking the Σ-invariant (🔽), (6)
 portfolio-import dedup ignoring `account_id` (🔼), (7) account-level dividend/interest/fee rows
-without instrument (🔽), (8) per-account snapshot persistence (built in Phase C). Also in scope
+without instrument (🔽 — path decided via D6: signed cash row, ADR-095 addendum), (8) per-account
+snapshot persistence (built in Phase C). ADR-107's legacy-install conversion (D8) lands before or
+early in this phase so `account_id` is a real FK on every install. Also in scope
 with the flip: the ADR-090 funding-account picker for sleeve-less wallets (revives the dead
 `funding_account_id` surface — resolves the Phase D either/or), and a bulk "assign lots to
 account" action for legacy `account_id = NULL` lots (user-driven, no backfill migration —

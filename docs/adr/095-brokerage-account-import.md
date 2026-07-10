@@ -118,3 +118,39 @@ no user-facing override to flip a row's route. That would be a separate, optiona
 
 > [!note] 2026-06-20 — Brokerage UI gated by ADR-103
 > The brokerage-routing **frontend surfaces** introduced by this ADR (brokerage toggle + sleeve-account picker on `PortfolioImportPage`; per-row cash/trade routing display + account picker on `PortfolioImportReviewPage`) are hidden by default behind `VITE_ENABLE_PER_ACCOUNT_HOLDINGS=false` (ADR-103). Standard portfolio CSV import (non-brokerage) is unaffected. The `brokerageFanout` service and `tradeCashLegService` backend code are retained and go dormant. See [[docs/adr/103-per-account-holdings-ui-flag|ADR-103]] for the flag details.
+
+---
+
+## Addendum (2026-07-10): Instrument-less rows route as signed cash rows (D6)
+
+### Context
+
+Account-level dividend/interest/fee rows without a resolvable instrument — sleeve interest, fund
+distributions the symbol matcher can't map, custody fees — currently have **no representable
+path**: `brokerageRouting.js` routes them `'portfolio'` and `commit.js` errors every one with
+"unresolved instrument", so a real brokerage statement can never fully import (filed finding;
+prerequisite 7 of the [[docs/adr/103-per-account-holdings-ui-flag|ADR-103 addendum]] gate).
+Decision 2026-07-10 (accounts-rewrite round 2): **signed cash row**, per this ADR's own routing
+philosophy — an instrument-less money movement *is* a cash movement.
+
+### Decision
+
+Rows classified dividend/interest/fee/tax that resolve **no instrument** route `'cash'` instead
+of `'portfolio'`: one signed `transactions` row on the batch's sleeve account (positive for
+interest/distributions, negative for fees/taxes), auto-categorized by row kind (interest income /
+investment fees), deduplicated by the existing cash-side `tx_hash` path. Rows that *do* resolve
+an instrument keep today's trade + ADR-090 cash-leg path unchanged — this addendum only gives the
+instrument-less remainder somewhere to go.
+
+**Accepted trade-off:** these amounts live in the *ledger*, not in portfolio analytics — an
+account-level distribution won't count toward per-instrument dividend-income surfaces
+(ADR-096). Category-based reporting covers them. If per-account cash yield reporting is ever
+wanted inside portfolio analytics, that's a separate enhancement, not a rerouting.
+
+### Consequences
+
+- Brokerage statements import completely; the "unresolved instrument" error remains only for
+  rows that *should* have matched (true trade rows), where it is a correct signal.
+- The review UI's read-only routing display gains a third visible outcome
+  (cash-from-instrument-less) — still deterministic from the row, still no user override.
+- No schema change; ships inside the accounts-rewrite Phase E work.

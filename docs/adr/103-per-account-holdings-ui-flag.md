@@ -112,7 +112,9 @@ a kill-switch and removed after a soak.
 4. Snapshot `value_by_account`: rescale per-account weights on splits.
 5. `sanitizeSnapshotSpikes` must preserve the `Σ value_by_account == value` invariant.
 6. Portfolio-import dedup includes `account_id` (cross-account trades / legitimate repeat fills).
-7. A representable path for account-level instrument-less rows (sleeve interest, custody fees).
+7. A representable path for account-level instrument-less rows (sleeve interest, custody fees) —
+   path decided 2026-07-10: signed cash row, see the
+   [[docs/adr/095-brokerage-account-import|ADR-095 addendum]].
 8. Per-account snapshot persistence from Phase C, so `getNetWorthByAccount` reads a table
    instead of replaying the full multi-year history per request.
 
