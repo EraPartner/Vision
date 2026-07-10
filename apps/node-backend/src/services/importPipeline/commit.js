@@ -101,7 +101,18 @@ export async function commitBatch({ batchId, onProgress }) {
 
         // Field-based duplicate check against canonical transactions.
         // Includes memo so two legitimate same-day same-amount same-recipient
-        // purchases (e.g. two coffees) are not falsely deduped.
+        // purchases (e.g. two coffees) are not falsely deduped — but memo does
+        // NOT discriminate card payments (Revolut stamps the identical
+        // "CARD_PAYMENT - CURRENT" on every one), so two more guards:
+        //  - same account only (bank_account): an identical purchase on a
+        //    DIFFERENT account is a distinct transaction, not a duplicate;
+        //  - when both rows carry a tx_hash and the hashes DIFFER, the hash is
+        //    the identity and the rows are distinct (two same-day card
+        //    payments differ by running balance → different hash). Equal
+        //    hashes never reach here (intra-batch set + ON CONFLICT below).
+        //    Without this, the second of two identical same-batch card
+        //    payments field-matched the first inside the same DB transaction
+        //    and a REAL transaction was silently dropped.
         const memoNorm = (row.memo ?? '').trim();
         const dupCheck = await client.query(
           `SELECT t.id
@@ -113,9 +124,11 @@ export async function commitBatch({ batchId, onProgress }) {
                 OR ($3::integer IS NULL AND t.recipient_id IS NULL)
               )
               AND COALESCE(TRIM(t.memo), '') = $4
+              AND t.bank_account IS NOT DISTINCT FROM $5
+              AND NOT (t.tx_hash IS NOT NULL AND $6::text IS NOT NULL AND t.tx_hash <> $6)
               AND t.is_active = true
             LIMIT 1`,
-          [dateStr, row.amount, effectiveRecipientId, memoNorm]
+          [dateStr, row.amount, effectiveRecipientId, memoNorm, row.bank_account || null, row.tx_hash || null]
         );
 
         if (dupCheck.rows.length > 0) {
