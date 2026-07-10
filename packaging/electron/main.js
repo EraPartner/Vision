@@ -363,15 +363,33 @@ async function resolveWorkDir() {
     // dialogs will fallback to internal defaults.
   }
 
-  // If we've already set up the embedded compose, reuse it.
+  const embeddedSrc = path.join(process.resourcesPath, 'resources', 'docker-compose.yml');
+
+  // If we've already set up the embedded compose, reuse it — but refresh the
+  // compose file from the packaged resources first. Without this, a compose
+  // change shipped in a new app version (new named volume, healthcheck,
+  // security opt) never reaches upgraded installs, only fresh ones — the
+  // v1.0.2 data-loss channel. .env stays untouched: it carries the install's
+  // generated secrets.
   const embeddedCompose = settings.embeddedDir && path.join(settings.embeddedDir, 'docker-compose.yml');
   const hasEmbedded = embeddedCompose && await fs.promises.access(embeddedCompose).then(() => true).catch(() => false);
   if (hasEmbedded) {
+    try {
+      const [current, packaged] = await Promise.all([
+        fs.promises.readFile(embeddedCompose, 'utf8'),
+        fs.promises.readFile(embeddedSrc, 'utf8'),
+      ]);
+      if (current !== packaged) {
+        await fs.promises.copyFile(embeddedSrc, embeddedCompose);
+      }
+    } catch (err) {
+      // Non-fatal: a launch with the existing (stale) compose beats no launch.
+      console.warn('Embedded compose refresh failed (non-fatal):', err?.message || err);
+    }
     return settings.embeddedDir;
   }
 
   // Copy embedded compose from resources to a writable app data folder.
-  const embeddedSrc = path.join(process.resourcesPath, 'resources', 'docker-compose.yml');
   const embeddedDir = path.join(app.getPath('userData'), 'embedded_compose');
   try {
     await fs.promises.mkdir(embeddedDir, { recursive: true });
