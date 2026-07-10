@@ -96,7 +96,9 @@ function buildExportChunkSql(whereSql, limitParamIdx, cursorDateParamIdx, cursor
 
 function buildCsvRow(row, { includeBalance = false } = {}) {
   const cols = [
-    escapeCsvValue(row.date),
+    // toYmd, not the raw pg Date: String() of it is "Wed Jul 01 2026 …" —
+    // unusable in Excel and a day off on cross-TZ re-import.
+    escapeCsvValue(toYmd(row.date)),
     escapeCsvValue(row.bank_account),
     escapeCsvValue(row.recipient_name),
     escapeCsvValue(row.memo),
@@ -114,7 +116,9 @@ function buildCsvRow(row, { includeBalance = false } = {}) {
 function buildNdjsonRow(row) {
   return JSON.stringify({
     id: row.id,
-    date: row.date,
+    // toYmd, not the raw pg Date: JSON.stringify would toISOString it into
+    // the PREVIOUS day's timestamp on any backend east of UTC.
+    date: toYmd(row.date),
     bank_account: row.bank_account,
     recipient: row.recipient_name ?? null,
     memo: row.memo ?? null,
