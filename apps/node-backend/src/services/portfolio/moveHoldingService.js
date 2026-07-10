@@ -26,6 +26,66 @@ const EPS = 1e-9;
 const MOVE_STRATEGIES = new Set(['fifo', 'proportional']);
 
 /**
+ * Replay a single (investment, account) lot stream in date/id order to derive
+ * the *currently held* units — the same event semantics the shared cost-basis
+ * core uses (calculateCostBasis / snapshotBuilder), which the naive
+ * buy+gift−sell sum got wrong:
+ *   - buy/gift  : add units
+ *   - sell      : consume FIFO from the oldest still-available buy/gift lots
+ *   - split     : `units` is the new absolute post-split total → rescale every
+ *                 still-available lot by newTotal/oldTotal
+ *   - return_of_capital / income / dividends / fees / taxes : no unit effect
+ *
+ * @param {Array<{id:number,type:string,units?:number|string,date:string}>} lots ordered by (date, id)
+ * @returns {{ netUnits: import('decimal.js').Decimal,
+ *             availableById: Map<number, import('decimal.js').Decimal>,
+ *             hasPriorConsumption: boolean }}
+ *   `hasPriorConsumption` is true when a sell or split has altered a buy lot's
+ *   available units away from its stored `units` — the case the physical
+ *   lot-repoint move model (ADR-091) cannot represent without rewriting the
+ *   date-ordered replay of an earlier sell.
+ */
+function replayAvailableLots(lots) {
+  const availableById = new Map();
+  const order = []; // buy/gift lot ids in FIFO order
+  let hasPriorConsumption = false;
+
+  for (const lot of lots) {
+    const units = toDecimal(lot.units || 0);
+    if (lot.type === 'buy' || lot.type === 'gift') {
+      availableById.set(lot.id, units);
+      order.push(lot.id);
+    } else if (lot.type === 'sell') {
+      if (units.lte(0)) continue;
+      hasPriorConsumption = true;
+      let remaining = units;
+      for (const id of order) {
+        if (remaining.lte(EPS)) break;
+        const avail = availableById.get(id) ?? toDecimal(0);
+        if (avail.lte(0)) continue;
+        const take = avail.lte(remaining) ? avail : remaining;
+        availableById.set(id, avail.minus(take));
+        remaining = remaining.minus(take);
+      }
+      // An oversell beyond held units is clamped (mirrors the cost-basis core).
+    } else if (lot.type === 'split') {
+      if (units.lte(0)) continue;
+      const oldTotal = order.reduce((s, id) => s.plus(availableById.get(id) ?? toDecimal(0)), toDecimal(0));
+      if (oldTotal.lte(0)) continue;
+      hasPriorConsumption = true;
+      const factor = units.dividedBy(oldTotal);
+      for (const id of order) {
+        availableById.set(id, (availableById.get(id) ?? toDecimal(0)).times(factor));
+      }
+    }
+    // return_of_capital and cash-flow rows leave units untouched.
+  }
+
+  const netUnits = order.reduce((s, id) => s.plus(availableById.get(id) ?? toDecimal(0)), toDecimal(0));
+  return { netUnits, availableById, hasPriorConsumption };
+}
+
+/**
  * Split a lot, leaving `stayUnits` on the source row and inserting a sibling row carrying
  * `moveUnits` on the target account. Amount/fees/taxes are divided pro-rata by `f` so per-unit
  * cost basis is identical on both sides.
@@ -106,12 +166,11 @@ export async function moveHolding({ investmentId, fromAccountId, toAccountId, un
     const lots = lotsRes.rows;
     if (!lots.length) throw new ValidationError('No holdings for that investment in the source account');
 
-    const netUnits = lots.reduce((n, l) => {
-      const u = Number(l.units) || 0;
-      if (l.type === 'buy' || l.type === 'gift') return n + u;
-      if (l.type === 'sell') return n - u;
-      return n;
-    }, 0);
+    // Held units via the shared event replay (split / return_of_capital / FIFO
+    // sells applied) — the old buy+gift−sell sum ignored splits and RoC, so
+    // post-split validation was stale.
+    const { netUnits: netUnitsDec, hasPriorConsumption } = replayAvailableLots(lots);
+    const netUnits = toNumber(netUnitsDec);
 
     const repoint = async (ids) => {
       if (!ids.length) return;
@@ -132,6 +191,24 @@ export async function moveHolding({ investmentId, fromAccountId, toAccountId, un
     }
 
     // ── Partial move (unit-based, 0 < requested < net) ───────────────────────
+    //
+    // The partial move physically splits/repoints buy-lot ROWS by their stored
+    // `units`. That is only sound when every buy lot's stored units still equal
+    // its currently-available units — i.e. no prior sell or split has consumed
+    // or rescaled them. When one has (`hasPriorConsumption`), a lot's stored
+    // units overstate what is held, so splitting by stored units moves the wrong
+    // basis; worse, rewriting a buy row dated before an earlier sell
+    // retroactively changes that sell's date-ordered cost-basis replay (ADR-091
+    // lot-repoint model vs. the replay model diverge here). Rather than silently
+    // corrupt basis, reject and point the user at the whole-holding move; the
+    // full fix is a design reconciliation tracked for the ADR-103 enable gate.
+    if (hasPriorConsumption) {
+      throw new ValidationError(
+        'A partial move is not supported once the source account has a sell or split for this holding. ' +
+        'Move the whole holding, or adjust the transactions first.',
+      );
+    }
+
     const childTable = TRANSACTION_TABLE_BY_ASSET_CLASS[assetClass];
     const buyLots = lots.filter((l) => l.type === 'buy' || l.type === 'gift');
 
