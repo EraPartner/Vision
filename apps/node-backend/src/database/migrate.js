@@ -14,7 +14,22 @@ const __dirname = path.dirname(__filename)
 // repo root: apps/node-backend/src/database/ -> ../../../..
 const REPO_ROOT = path.resolve(__dirname, '..', '..', '..', '..')
 
-const DEFAULT_TIMEOUT_MS = 120_000
+// A cold or big-jump upgrade can legitimately run for minutes (full-table
+// rewrites on transactions / asset_price_history). The old 120s kill turned a
+// slow-but-progressing upgrade into a hard failure. Default to 10 minutes and
+// let operators override via VISION_MIGRATE_TIMEOUT_MS (0 = no timeout).
+// Progress is now durable per-migration (env.py transaction_per_migration), so
+// even if this fires mid-chain the completed migrations persist and the next
+// boot resumes rather than restarting the whole chain.
+function resolveDefaultTimeoutMs() {
+  const raw = process.env.VISION_MIGRATE_TIMEOUT_MS
+  if (raw === undefined || raw === '') return 600_000
+  const n = Number(raw)
+  if (!Number.isFinite(n) || n < 0) return 600_000
+  return n // 0 disables the execFile timeout entirely
+}
+
+const DEFAULT_TIMEOUT_MS = resolveDefaultTimeoutMs()
 
 // Binary path for alembic. Defaults to PATH lookup; override in containers
 // where alembic lives inside a venv (e.g. /venv/bin/alembic).
@@ -196,7 +211,8 @@ export async function stampBaselineIfLegacy() {
  */
 export async function runMigrations(options = {}) {
   const target = options.target || 'head'
-  const timeoutMs = options.timeoutMs || DEFAULT_TIMEOUT_MS
+  // Nullish (not ||) so an explicit timeoutMs: 0 ("no timeout") is honoured.
+  const timeoutMs = options.timeoutMs ?? DEFAULT_TIMEOUT_MS
 
   logger.info({ target, cwd: REPO_ROOT }, 'alembic migrate start')
 
