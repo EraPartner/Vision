@@ -477,11 +477,16 @@ function mapDbError(err) {
     case '22003': // numeric_value_out_of_range
     case '22007': // invalid_datetime_format
       return new ValidationError(`Invalid value for column type: ${err.message}`);
-    case '42601': // syntax_error (typically a bad raw WHERE clause)
+    case '42601': // syntax_error
     case '42703': // undefined_column
     case '42883': // undefined_function / operator
     case '42P01': // undefined_table
-      return new ValidationError(`Invalid query: ${err.message}`);
+      // Never echo raw driver text back to the client: with identifiers
+      // allowlisted these are unreachable in normal use, and leaking the
+      // message hands schema/column names to a prober (data-protection policy,
+      // docs/security/data-protection.md). Full detail still goes to the logs
+      // via the caught error.
+      return new ValidationError('Invalid query');
     case '42501': // insufficient_privilege
       return new ForbiddenError('Insufficient database privileges for this operation');
     case '25006': // read_only_sql_transaction

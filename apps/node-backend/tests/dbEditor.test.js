@@ -282,4 +282,19 @@ describe('mapDbError (via applyMutations)', () => {
     await expect(applyMutations('tags', [{ op: 'insert', values: { slug: '' } }]))
       .rejects.toMatchObject({ status: 400 });
   });
+
+  it('does not leak raw driver text for syntax/undefined-object errors', async () => {
+    query.mockImplementation(catalogRouter('tags'));
+    const { client } = makeClient([
+      ['INSERT INTO "tags"', () => {
+        const e = new Error('column "secret_internal_col" does not exist');
+        e.code = '42703';
+        throw e;
+      }],
+    ]);
+    getClient.mockResolvedValue(client);
+
+    await expect(applyMutations('tags', [{ op: 'insert', values: { slug: 'x' } }]))
+      .rejects.toMatchObject({ status: 400, message: 'Invalid query' });
+  });
 });
