@@ -2332,7 +2332,14 @@ async function runBundleRestore(bundlePath, { passphrase } = {}) {
         ...(networkName ? ['--network', networkName] : []),
         '--env-file', envFile,
         pgImageTag,
+        // ON_ERROR_STOP: psql's default is continue-on-error + exit 0, so a
+        // truncated/corrupt dump restored PARTIALLY and reported success —
+        // after the original DB was already dropped. Exit 3 on first error
+        // (the nonzero-exit rejection below fires) and --single-transaction
+        // so a failed restore leaves an empty DB, not a half-restored one.
         'psql', '-h', 'db', '-U', dbUser, '-d', dbName,
+        '-v', 'ON_ERROR_STOP=1',
+        '--single-transaction',
         '-f', `/restore/${sqlFilename}`,
       ], { env: dockerEnv, cwd: workDir });
 
@@ -2542,6 +2549,12 @@ async function runRestore(sqlFilePath, { passphrase } = {}) {
         '-h', 'db',
         '-U', dbUser,
         '-d', dbName,
+        // Fail fast + all-or-nothing: without ON_ERROR_STOP a partial/corrupt
+        // dump restored partially and exited 0 (silent partial financial DB,
+        // original already dropped). --single-transaction leaves an empty DB
+        // on failure instead of a half-restored one.
+        '-v', 'ON_ERROR_STOP=1',
+        '--single-transaction',
         '-f', `/restore/${sqlFilename}`,
       ], { env: dockerEnv, cwd: workDir });
 
