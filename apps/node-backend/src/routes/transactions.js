@@ -35,6 +35,7 @@ import {
 } from '../services/transactionExport.js';
 import { resolveBulkSelection } from '../services/bulkSelection.js';
 import { parsePagination } from '../lib/pagination.js';
+import { toWireDate } from '../lib/dateFormat.js';
 
 const router = Router();
 
@@ -670,8 +671,10 @@ function formatTransaction(row) {
   const amountEur = row.amount_eur != null ? toNumber(toDecimal(row.amount_eur)) : amount;
   return {
     id: row.id,
-    transaction_date: row.date,
-    date: row.date,
+    // DATE column: emit the calendar day, not the raw pg Date (which JSON-
+    // serializes as the previous day's ISO timestamp east of UTC).
+    transaction_date: toWireDate(row.date),
+    date: toWireDate(row.date),
     bank_account: row.bank_account,
     recipient_id: row.recipient_id,
     recipient_name: row.recipient_name || null,

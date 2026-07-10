@@ -9,6 +9,7 @@
  */
 
 import { query } from '../database/connection.js';
+import { toWireDate } from '../lib/dateFormat.js';
 import { convertRowsToEur } from '../services/currency/currencyConversionService.js';
 import {
   roundToCents,
@@ -76,14 +77,18 @@ export const recipientInsightsRepository = {
           name: row.recipient_name,
           totalSpend: 0,
           transactionCount: 0,
-          firstSeen: row.first_seen,
-          lastSeen: row.last_seen,
+          // DATE columns as calendar-day strings (Y-M-D compares
+          // lexicographically, so the min/max below still works).
+          firstSeen: toWireDate(row.first_seen),
+          lastSeen: toWireDate(row.last_seen),
         };
       }
       recipientAgg[rid].totalSpend += eur;
       recipientAgg[rid].transactionCount += count;
-      if (row.first_seen < recipientAgg[rid].firstSeen) recipientAgg[rid].firstSeen = row.first_seen;
-      if (row.last_seen > recipientAgg[rid].lastSeen) recipientAgg[rid].lastSeen = row.last_seen;
+      const firstSeen = toWireDate(row.first_seen);
+      const lastSeen = toWireDate(row.last_seen);
+      if (firstSeen < recipientAgg[rid].firstSeen) recipientAgg[rid].firstSeen = firstSeen;
+      if (lastSeen > recipientAgg[rid].lastSeen) recipientAgg[rid].lastSeen = lastSeen;
     }
 
     const topMerchants = Object.values(recipientAgg)

@@ -7,6 +7,7 @@
  */
 
 import { query, withTransaction } from '../database/connection.js';
+import { toWireDate } from '../lib/dateFormat.js';
 import {
   computeOwedSummary,
   validateSplitAllocation,
@@ -386,7 +387,7 @@ export const splitRepository = {
           JSON.stringify({
             payment_id: result.rows[0].id,
             amount: Number(amount),
-            paid_at: result.rows[0].paid_at,
+            paid_at: toWireDate(result.rows[0].paid_at),
             note: note || null,
             auto_settled: settledResult.rowCount > 0,
           }),
@@ -406,6 +407,8 @@ export const splitRepository = {
     return result.rows.map(row => ({
       ...row,
       amount: toNumber(toDecimal(row.amount)),
+      // DATE column: calendar-day string, not a raw pg Date.
+      paid_at: toWireDate(row.paid_at),
     }));
   },
 

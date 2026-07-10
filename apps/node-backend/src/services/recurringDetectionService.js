@@ -9,6 +9,7 @@
  */
 
 import { query } from '../database/connection.js';
+import { toWireDate } from '../lib/dateFormat.js';
 import { logger } from '../config/logger.js';
 import { toDecimal } from '../lib/money.js';
 
@@ -246,8 +247,10 @@ export async function detectRecurringPatterns() {
         categoryId: txns[txns.length - 1].category_id,
         categoryName: txns[txns.length - 1].category_name,
         bankAccount: txns[txns.length - 1].bank_account,
-        firstSeen: txns[0].date,
-        lastSeen: txns[txns.length - 1].date,
+        // DATE columns: calendar-day strings, not raw pg Dates (which
+        // toJSON to the previous day's ISO timestamp east of UTC).
+        firstSeen: toWireDate(txns[0].date),
+        lastSeen: toWireDate(txns[txns.length - 1].date),
         predictedNext: nextDate.toISOString().split('T')[0],
         amountChanges,
         isAlreadyPlanned,

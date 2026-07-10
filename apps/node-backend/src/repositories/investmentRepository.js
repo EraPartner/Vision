@@ -3,13 +3,20 @@
  */
 
 import { query, withTransaction } from '../database/connection.js';
+import { toWireDate } from '../lib/dateFormat.js';
 import { coerceNumericFields } from '../lib/money.js';
 
 // NUMERIC columns node-postgres returns as strings; coerce to numbers on emit
 // so rows match the `number` API/TS types (the inheritance create/update paths
 // all return through getById, so coercing the methods below covers them too).
 const INVESTMENT_NUMERIC_FIELDS = ['current_price', 'interest_rate', 'cadastral_income', 'municipality_tax_rate'];
-const mapInvestmentRow = (row) => coerceNumericFields(row, INVESTMENT_NUMERIC_FIELDS);
+const mapInvestmentRow = (row) => {
+  const mapped = coerceNumericFields(row, INVESTMENT_NUMERIC_FIELDS);
+  // DATE column: calendar-day string, not a raw pg Date (previous-day ISO
+  // timestamp east of UTC once JSON-serialized).
+  if (mapped && mapped.maturity_date instanceof Date) mapped.maturity_date = toWireDate(mapped.maturity_date);
+  return mapped;
+};
 
 let _hasInvestmentInheritanceSchema;
 let _hasMetalsInheritanceTable;

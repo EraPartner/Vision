@@ -15,7 +15,7 @@ import { COMPUTED_BALANCE_LATERAL } from './accountBalanceSql.js';
 
 const COLUMNS = `id, name, display_name, institution, currency, type, liquidity_class,
   spendable, in_net_worth, tax_wrapper, owner, multi_currency_cash, has_cash_sleeve,
-  funding_account_id, statement_balance, statement_balance_date, is_active, closed_at,
+  funding_account_id, statement_balance, to_char(statement_balance_date, 'YYYY-MM-DD') AS statement_balance_date, is_active, closed_at,
   created_at, updated_at`;
 
 // Columns a caller may set on create/update. `name` is handled explicitly on

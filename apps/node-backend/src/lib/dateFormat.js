@@ -20,3 +20,17 @@ export function formatDateToYmd(date) {
   const d = String(date.getDate()).padStart(2, '0');
   return `${y}-${m}-${d}`;
 }
+
+/**
+ * Null-safe wire formatter for DATE columns. pg reads DATE as a local-midnight
+ * Date object; JSON-serializing that raw emits an ISO timestamp of the
+ * PREVIOUS day east of UTC. Route/repo emit boundaries pass DATE values
+ * through here: Dates become calendar-day strings, strings pass through,
+ * null/undefined become null.
+ * @param {Date|string|null|undefined} value
+ * @returns {string|null}
+ */
+export function toWireDate(value) {
+  if (value instanceof Date) return formatDateToYmd(value);
+  return value ?? null;
+}
