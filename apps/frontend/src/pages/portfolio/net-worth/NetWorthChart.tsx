@@ -23,6 +23,8 @@ interface NetWorthChartProps {
   t: (key: string) => string;
 }
 
+type NetWorthChartPoint = NetWorthSnapshot & { chartDate: Date };
+
 const TOTAL_COLOR = 'hsl(var(--primary))';
 const LIQUID_COLOR = 'hsl(var(--chart-2))';
 const INVESTMENTS_COLOR = 'hsl(var(--chart-4))';
@@ -46,11 +48,19 @@ export function NetWorthChart({
     [snapshots],
   );
 
-  const series = useMemo((): AreaSeries<NetWorthSnapshot>[] => [
+  // Parse each snapshot's date ONCE per data change. Parsing inside xAccessor
+  // ran per point per render — at the "all" period that was thousands of
+  // string parses on every chart re-render.
+  const chartData = useMemo(
+    () => snapshots.map((s) => ({ ...s, chartDate: parseLocalDateFromYmd(normalizeYmd(s.date)) })),
+    [snapshots],
+  );
+
+  const series = useMemo((): AreaSeries<NetWorthChartPoint>[] => [
     { key: 'liquid', label: t('networth.liquid'), accessor: (d) => d.liquid, color: LIQUID_COLOR, fillOpacity: 0, strokeWidth: 2 },
     { key: 'investments', label: t('networth.investments'), accessor: (d) => d.investments, color: INVESTMENTS_COLOR, fillOpacity: 0, strokeWidth: 2 },
     ...(hasLiabilities
-      ? [{ key: 'liabilities', label: t('networth.liabilities'), accessor: (d: NetWorthSnapshot) => d.liabilities, color: LIABILITIES_COLOR, fillOpacity: 0, strokeWidth: 2 }]
+      ? [{ key: 'liabilities', label: t('networth.liabilities'), accessor: (d: NetWorthChartPoint) => d.liabilities, color: LIABILITIES_COLOR, fillOpacity: 0, strokeWidth: 2 }]
       : []),
     { key: 'netWorth', label: t('networth.seriesTotal'), accessor: (d) => d.netWorth, color: TOTAL_COLOR, strokeWidth: 2.5 },
   ], [t, hasLiabilities]);
@@ -80,8 +90,8 @@ export function NetWorthChart({
     >
       <VisxAreaChart
         scrubbable
-        data={snapshots}
-        xAccessor={(d) => parseLocalDateFromYmd(normalizeYmd(d.date))}
+        data={chartData}
+        xAccessor={(d) => d.chartDate}
         series={series}
         xIsDate
         xTickFormat={(v) => xTickFormat(v as Date)}
