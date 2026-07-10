@@ -12,7 +12,7 @@
  * column there) plus an intra-batch hash guard.
  */
 
-import { query } from '../../database/connection.js';
+import { query, withTransaction } from '../../database/connection.js';
 import { logger } from '../../config/logger.js';
 import portfolioTransactionRepository from '../../repositories/portfolioTransactionRepository.js';
 import { autoResolveFxRateToEur } from '../portfolio/fxResolve.js';
@@ -131,48 +131,49 @@ export async function commitBatch({ batchId, onProgress }) {
       let fxRate = row.fx_rate_to_eur != null ? Number(row.fx_rate_to_eur) : undefined;
       if (fxRate === undefined) fxRate = await autoResolveFxRateToEur(currency, row.tx_date);
 
-      const created = await portfolioTransactionRepository.create(/** @type {any} */ ({
-        investment_id: row.investment_id,
-        type: row.type,
-        date: row.tx_date,
-        amount: row.amount != null ? Number(row.amount) : undefined,
-        units: row.units != null ? Number(row.units) : undefined,
-        price_per_unit: row.price_per_unit != null ? Number(row.price_per_unit) : undefined,
-        fees: row.fees != null ? Number(row.fees) : 0,
-        taxes: row.taxes != null ? Number(row.taxes) : 0,
-        currency,
-        note: row.note || undefined,
-        fx_rate_to_eur: fxRate,
-        account_id: batchAccountId,
-        preloaded_asset_class: row.asset_class,
-      }));
+      // Trade + its ADR-090 cash leg are all-or-nothing (ADR-095): one DB
+      // transaction, so a leg failure (or a crash mid-pair) leaves nothing
+      // behind — no compensating delete with its own crash window. The
+      // repository joins this transaction via the ambient-client reroute in
+      // withTransaction; the staging-row status update stays outside on
+      // purpose (it's bookkeeping about the batch, not part of the pair).
+      const { created, legCreated } = await withTransaction(async () => {
+        const created = await portfolioTransactionRepository.create(/** @type {any} */ ({
+          investment_id: row.investment_id,
+          type: row.type,
+          date: row.tx_date,
+          amount: row.amount != null ? Number(row.amount) : undefined,
+          units: row.units != null ? Number(row.units) : undefined,
+          price_per_unit: row.price_per_unit != null ? Number(row.price_per_unit) : undefined,
+          fees: row.fees != null ? Number(row.fees) : 0,
+          taxes: row.taxes != null ? Number(row.taxes) : 0,
+          currency,
+          note: row.note || undefined,
+          fx_rate_to_eur: fxRate,
+          account_id: batchAccountId,
+          preloaded_asset_class: row.asset_class,
+        }));
 
-      // Brokerage trade (ADR-095/ADR-090): the trade's single cash movement is its
-      // auto-created leg on the same sleeve — never a second standalone cash row.
-      // The trade + its leg are all-or-nothing (ADR-095): a leg failure used to
-      // only log a warning and keep the trade, leaving the sleeve un-debited (cash
-      // overstated) with no repair path (re-import dedups the trade). Instead we
-      // roll the trade back and mark the row 'error' so a re-import retries cleanly.
-      if (isBrokerage && batchAccountId) {
-        try {
-          const legId = await createTradeCashLeg({
-            portfolioTxn: { ...created, type: row.type, amount: created?.amount ?? row.amount, fees: created?.fees ?? row.fees, taxes: created?.taxes ?? row.taxes, currency, date: row.tx_date, id: created?.id },
-            cashAccountId: batchAccountId,
-          });
-          if (legId) legs++;
-        } catch (legErr) {
-          if (created?.id != null) {
-            try {
-              await portfolioTransactionRepository.hardDelete(created.id);
-            } catch (rollbackErr) {
-              logger.error('[portfolio-pipeline:commit] failed to roll back trade after cash-leg failure', { rowId: row.id, txnId: created.id, err: rollbackErr?.message });
-            }
+        // Brokerage trade (ADR-095/ADR-090): the trade's single cash movement
+        // is its auto-created leg on the same sleeve — never a second
+        // standalone cash row.
+        let legCreated = false;
+        if (isBrokerage && batchAccountId) {
+          try {
+            const legId = await createTradeCashLeg({
+              portfolioTxn: { ...created, type: row.type, amount: created?.amount ?? row.amount, fees: created?.fees ?? row.fees, taxes: created?.taxes ?? row.taxes, currency, date: row.tx_date, id: created?.id },
+              cashAccountId: batchAccountId,
+            });
+            legCreated = Boolean(legId);
+          } catch (legErr) {
+            // Rethrow with context: the whole pair rolls back, and the row's
+            // error message should say which half failed.
+            throw new Error(`cash leg failed: ${legErr?.message?.slice(0, 400) || 'unknown'}`, { cause: legErr });
           }
-          errors++;
-          await markRow(row.id, 'error', `cash leg failed: ${legErr?.message?.slice(0, 400) || 'unknown'}`);
-          continue;
         }
-      }
+        return { created, legCreated };
+      });
+      if (legCreated) legs++;
 
       imported++;
       if (row.tx_hash) committedHashes.add(row.tx_hash);

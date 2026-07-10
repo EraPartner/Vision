@@ -6,6 +6,9 @@ vi.mock('../src/config/logger.js', () => ({
 
 vi.mock('../src/database/connection.js', () => ({
   query: vi.fn(),
+  // Transaction shim: run the callback; a throw propagates (= rollback).
+  // The repo + leg service are module-mocked, so the client goes unused.
+  withTransaction: vi.fn(async (fn) => fn({ query: vi.fn().mockResolvedValue({ rows: [] }) })),
 }));
 
 vi.mock('../src/repositories/portfolioTransactionRepository.js', () => ({
@@ -175,9 +178,11 @@ describe('commitBatch (portfolio)', () => {
     matchedRows = [row({ route: 'portfolio', type: 'buy', type_raw: 'buy' })];
 
     const res = await commitBatch({ batchId: 5 });
-    // Trade is rolled back, row errored — not counted as imported.
+    // The pair shares one DB transaction: the leg failure rejects the
+    // withTransaction callback, rolling the trade back with it — no
+    // compensating delete (which had a crash window between create and delete).
     expect(res).toMatchObject({ imported: 0, errors: 1, legs: 0 });
-    expect(portfolioTransactionRepository.hardDelete).toHaveBeenCalledWith(555);
+    expect(portfolioTransactionRepository.hardDelete).not.toHaveBeenCalled();
     expect(marked[0]).toMatchObject({ status: 'error', message: expect.stringMatching(/cash leg/) });
   });
 
