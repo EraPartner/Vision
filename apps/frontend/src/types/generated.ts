@@ -3258,19 +3258,20 @@ export interface components {
             /** @description Tag slugs to assign (replaces existing tags) */
             tags?: string[];
         };
+        /** @description PATCH semantics: an explicit null on a nullable field clears the stored value; an absent key leaves it unchanged. */
         TransactionUpdate: {
             /** Format: date */
             transaction_date?: string;
-            bank_account?: string;
-            recipient_id?: number;
+            bank_account?: string | null;
+            recipient_id?: number | null;
             recipient_name?: string;
-            memo?: string;
+            memo?: string | null;
             amount?: number;
             currency?: string;
             balance?: number;
-            category_id?: number;
+            category_id?: number | null;
             category_name?: string;
-            comment?: string;
+            comment?: string | null;
             is_active?: boolean;
             /** @description Tag slugs to assign (replaces existing tags when present) */
             tags?: string[];

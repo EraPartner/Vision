@@ -177,17 +177,19 @@ export interface RecipientUpdate {
 export interface Transaction {
     id: number;
     transaction_date: string; // date field, aliased as "date" in API
-    bank_account: string;
-    recipient_id?: number;
+    // Nullable on the wire: rows without a label exist (e.g. ADR-090 trade
+    // cash legs), and a PATCH null-to-clear leaves NULL behind.
+    bank_account: string | null;
+    recipient_id?: number | null;
     recipient_name?: string; // Recipient name
-    memo?: string;
+    memo?: string | null;
     amount: number;
     amount_eur?: number;
     currency?: string;
     balance?: number;
-    category_id?: number;
+    category_id?: number | null;
     category_name?: string; // Category name in 'General:Detail' format (e.g., 'FOOD:GROCERIES')
-    comment?: string;
+    comment?: string | null;
     tags?: Tag[];
     created_at: string;
     updated_at?: string;
@@ -215,18 +217,21 @@ export interface TransactionCreate {
     tags?: string[];
 }
 
+// Nullable fields carry PATCH null-to-clear semantics: explicit null clears
+// the value server-side, undefined (absent key) leaves it unchanged. `??
+// undefined` on a cleared value silently dropped the key — the clear no-op'd.
 export interface TransactionUpdate {
     transaction_date?: string;
-    bank_account?: string;
-    recipient_id?: number;
+    bank_account?: string | null;
+    recipient_id?: number | null;
     recipient_name?: string;
-    memo?: string;
+    memo?: string | null;
     amount?: number;
     currency?: string;
     balance?: number;
-    category_id?: number;
+    category_id?: number | null;
     category_name?: string;
-    comment?: string;
+    comment?: string | null;
     is_active?: boolean;
     tags?: string[];
 }

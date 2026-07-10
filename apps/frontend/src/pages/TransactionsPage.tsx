@@ -317,7 +317,11 @@ export default function TransactionsPage() {
         });
         updateMutation.mutate({
             id: transactionId,
-            data: { category_id: catId ?? undefined },
+            // Explicit null clears the category on the backend; `?? undefined`
+            // dropped the key from the PATCH body ({}), so the onSuccess echo
+            // re-applied the OLD category over the optimistic patch and the
+            // clear visually reverted.
+            data: { category_id: catId },
         }, {
             onSuccess: (updated) => {
                 applyTransactionLocalPatch(transactionId, {
@@ -335,7 +339,8 @@ export default function TransactionsPage() {
         });
         updateMutation.mutate({
             id: transactionId,
-            data: { recipient_id: recipientId ?? undefined },
+            // Same null-to-clear semantics as category above.
+            data: { recipient_id: recipientId },
         }, {
             onSuccess: (updated) => {
                 applyTransactionLocalPatch(transactionId, {
