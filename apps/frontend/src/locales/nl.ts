@@ -19,6 +19,7 @@ const nl: Record<string, string> = {
   'accounts.createFailedTitle': 'Kon rekening niet aanmaken',
   'accounts.created': 'Rekening aangemaakt',
   'accounts.delete.description': 'Hiermee wordt "{name}" permanent verwijderd. Deze actie kan niet ongedaan worden gemaakt.',
+  'accounts.delete.stillReferenced': '"{name}" heeft nog activiteit en kan niet worden verwijderd -- sluit de rekening in plaats daarvan.',
   'accounts.delete.title': 'Rekening verwijderen?',
   'accounts.deleteFailedTitle': 'Kon rekening niet verwijderen',
   'accounts.deleted': 'Rekening verwijderd',

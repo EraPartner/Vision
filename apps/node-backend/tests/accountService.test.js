@@ -132,6 +132,38 @@ describe('accountService.update', () => {
     expect(accountRepository.update).toHaveBeenCalledWith(1, { statement_balance: 99 });
   });
 
+  it('stamps closed_at when archiving an active account (lifecycle D5)', async () => {
+    accountRepository.getById.mockResolvedValueOnce({ id: 1, is_active: true });
+    accountRepository.update.mockResolvedValueOnce({ id: 1 });
+    await accountService.update(1, { is_active: false });
+    const fields = accountRepository.update.mock.calls[0][1];
+    expect(fields.is_active).toBe(false);
+    expect(fields.closed_at).toBeInstanceOf(Date);
+  });
+
+  it('keeps the original closed_at on a redundant re-archive', async () => {
+    accountRepository.getById.mockResolvedValueOnce({ id: 1, is_active: false, closed_at: '2026-01-01T00:00:00Z' });
+    accountRepository.update.mockResolvedValueOnce({ id: 1 });
+    await accountService.update(1, { is_active: false });
+    const fields = accountRepository.update.mock.calls[0][1];
+    expect('closed_at' in fields).toBe(false);
+  });
+
+  it('clears closed_at when reactivating', async () => {
+    accountRepository.getById.mockResolvedValueOnce({ id: 1, is_active: false, closed_at: '2026-01-01T00:00:00Z' });
+    accountRepository.update.mockResolvedValueOnce({ id: 1 });
+    await accountService.update(1, { is_active: true });
+    const fields = accountRepository.update.mock.calls[0][1];
+    expect(fields.closed_at).toBeNull();
+  });
+
+  it('never accepts closed_at from the request body', async () => {
+    accountRepository.update.mockResolvedValueOnce({ id: 1 });
+    await accountService.update(1, { display_name: 'X', closed_at: '2020-01-01T00:00:00Z' });
+    const fields = accountRepository.update.mock.calls[0][1];
+    expect('closed_at' in fields).toBe(false);
+  });
+
   it('allows clearing balance and date together', async () => {
     accountRepository.getById.mockResolvedValueOnce({
       id: 1, statement_balance: 99, statement_balance_date: '2026-07-01',

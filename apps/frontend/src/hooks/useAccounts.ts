@@ -84,7 +84,9 @@ export function useDeleteAccount() {
             toast.success(t('accounts.deleted'));
         },
         onError: (error: Error) => {
-            // 409 = account still has transactions → archive instead
+            // 409 = account still referenced → the caller routes to the close
+            // flow (lifecycle D5); no dead-end error toast for that case.
+            if ((error as { status?: number }).status === 409) return;
             toast.error(t('accounts.deleteFailedTitle'), { description: error.message });
         },
     });

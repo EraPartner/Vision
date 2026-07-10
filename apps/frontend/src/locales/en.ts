@@ -19,6 +19,7 @@ const en: Record<string, string> = {
   'accounts.createFailedTitle': 'Could not create account',
   'accounts.created': 'Account created',
   'accounts.delete.description': 'This permanently deletes "{name}". This action cannot be undone.',
+  'accounts.delete.stillReferenced': '"{name}" still has activity and can\'t be deleted -- close it instead.',
   'accounts.delete.title': 'Delete account?',
   'accounts.deleteFailedTitle': 'Could not delete account',
   'accounts.deleted': 'Account deleted',

@@ -18,6 +18,7 @@ import { CloseAccountDialog } from "@/features/accounts/CloseAccountDialog";
 import { usePortfolio } from "@/hooks/usePortfolio";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { useConfirmDialog } from "@/hooks/useConfirmDialog";
+import { toast } from "sonner";
 import type { Account } from "@/types/api";
 
 export default function AccountsPage() {
@@ -37,7 +38,17 @@ export default function AccountsPage() {
             confirmLabel: t('common.delete'),
             variant: 'destructive',
         });
-        if (ok) deleteMutation.mutate(a.id);
+        if (!ok) return;
+        deleteMutation.mutate(a.id, {
+            onError: (error) => {
+                // Still referenced (409): route to the close flow instead of
+                // dead-ending (lifecycle D5, ADR-088 addendum).
+                if ((error as { status?: number }).status === 409) {
+                    toast.info(t('accounts.delete.stillReferenced', { name: a.display_name || a.name }));
+                    setClosing(a);
+                }
+            },
+        });
     };
 
     const [editing, setEditing] = useState<Account | undefined>(undefined);

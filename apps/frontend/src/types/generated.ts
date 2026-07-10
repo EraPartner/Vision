@@ -3128,6 +3128,11 @@ export interface components {
             /** @description Whether the account has any active ledger rows; only returned by the list endpoint. */
             has_transactions?: boolean;
             is_active: boolean;
+            /**
+             * Format: date-time
+             * @description Server-stamped when the account is closed (is_active=false); cleared on reactivate (ADR-088 addendum, D5)
+             */
+            closed_at?: string | null;
             /** Format: date-time */
             created_at: string;
             /** Format: date-time */

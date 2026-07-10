@@ -15,14 +15,18 @@ import { COMPUTED_BALANCE_LATERAL } from './accountBalanceSql.js';
 
 const COLUMNS = `id, name, display_name, institution, currency, type, liquidity_class,
   spendable, in_net_worth, tax_wrapper, owner, multi_currency_cash, has_cash_sleeve,
-  funding_account_id, statement_balance, statement_balance_date, is_active, created_at, updated_at`;
+  funding_account_id, statement_balance, statement_balance_date, is_active, closed_at,
+  created_at, updated_at`;
 
 // Columns a caller may set on create/update. `name` is handled explicitly on
 // create; everything else is optional and falls back to the DB default.
+// `closed_at` is server-stamped by the service's lifecycle logic (D5) — it is
+// writable here but never accepted from a request body.
 const WRITABLE = new Set([
   'name', 'display_name', 'institution', 'currency', 'type', 'liquidity_class',
   'spendable', 'in_net_worth', 'tax_wrapper', 'owner', 'multi_currency_cash',
-  'has_cash_sleeve', 'funding_account_id', 'statement_balance', 'statement_balance_date', 'is_active',
+  'has_cash_sleeve', 'funding_account_id', 'statement_balance', 'statement_balance_date',
+  'is_active', 'closed_at',
 ]);
 
 export const accountRepository = {

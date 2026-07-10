@@ -139,15 +139,27 @@ export const accountService = {
 
   async update(id, body) {
     const fields = sanitize(body, { requireName: false });
+    const touchesStatement = 'statement_balance' in fields || 'statement_balance_date' in fields;
+    let current;
+    if (touchesStatement || 'is_active' in fields) {
+      current = await accountRepository.getById(id);
+      if (!current) throw new NotFoundError(`Account ${id} not found`);
+    }
     // Partial PATCH: validate the merged state, not just the provided keys —
     // e.g. setting a balance while the stored date is NULL must still fail.
-    if ('statement_balance' in fields || 'statement_balance_date' in fields) {
-      const current = await accountRepository.getById(id);
-      if (!current) throw new NotFoundError(`Account ${id} not found`);
+    if (touchesStatement) {
       assertStatementBalanceHasDate(
         'statement_balance' in fields ? fields.statement_balance : current.statement_balance,
         'statement_balance_date' in fields ? fields.statement_balance_date : current.statement_balance_date,
       );
+    }
+    // Lifecycle (ADR-088 addendum, D5): closing stamps closed_at once (a
+    // redundant re-archive keeps the original timestamp); reactivating clears
+    // it. Server-stamped only — sanitize() never accepts closed_at from the body.
+    if (fields.is_active === false && current.is_active) {
+      fields.closed_at = new Date();
+    } else if (fields.is_active === true) {
+      fields.closed_at = null;
     }
     let updated;
     try {
@@ -161,9 +173,9 @@ export const accountService = {
   },
 
   /**
-   * Hard-delete an account. Accounts protect history: if transactions or planned
-   * transactions still reference it (FK ON DELETE RESTRICT), surface a 409 with a
-   * clear instruction to archive (set is_active=false) instead.
+   * Hard-delete an account. Accounts protect history: delete is only possible
+   * with zero referencing rows (FK ON DELETE RESTRICT); otherwise a 409 routes
+   * the caller to the close flow (lifecycle D5: active → closed → deleted).
    */
   async remove(id) {
     let removed;
@@ -172,7 +184,7 @@ export const accountService = {
     } catch (err) {
       if (err?.code === '23503') {
         throw new ConflictError(
-          `Account ${id} still has transactions and cannot be deleted. Archive it instead (set is_active=false).`,
+          `Account ${id} still has activity referencing it and cannot be deleted. Close the account instead.`,
         );
       }
       throw err;

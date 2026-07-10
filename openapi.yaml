@@ -315,6 +315,11 @@ components:
           description: Whether the account has any active ledger rows; only returned by the list endpoint.
         is_active:
           type: boolean
+        closed_at:
+          type: string
+          format: date-time
+          nullable: true
+          description: Server-stamped when the account is closed (is_active=false); cleared on reactivate (ADR-088 addendum, D5)
         created_at:
           type: string
           format: date-time

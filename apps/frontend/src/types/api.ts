@@ -91,6 +91,8 @@ export interface Account {
     /** Whether the account has any active ledger rows; only set by the list endpoint. */
     has_transactions?: boolean;
     is_active: boolean;
+    /** Server-stamped when the account is closed (is_active=false); cleared on reactivate (D5). */
+    closed_at?: string | null;
     created_at: string;
     updated_at?: string;
 }
