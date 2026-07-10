@@ -20,7 +20,7 @@
 
 import { query, getClient } from '../database/connection.js';
 import { logger } from '../config/logger.js';
-import { scheduleRefresh } from './materializedViewService.js';
+import { scheduleAggregationRefresh } from './aggregationRefresh.js';
 import {
   AppError,
   ValidationError,
@@ -439,7 +439,7 @@ export async function applyMutations(table, changes, { dryRun = false } = {}) {
     }
 
     const refreshed = MATVIEW_BASE_TABLES.has(table);
-    if (refreshed) scheduleRefresh();
+    if (refreshed) scheduleAggregationRefresh();
 
     return { dryRun: false, applied: results.length, results, refreshScheduled: refreshed };
   } catch (err) {

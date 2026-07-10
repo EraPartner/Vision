@@ -14,7 +14,7 @@
 
 import { query, withTransaction } from '../database/connection.js';
 import { resolveTransferMatches } from './calculations/transfers.js';
-import { scheduleRefresh } from './materializedViewService.js';
+import { scheduleAggregationRefresh } from './aggregationRefresh.js';
 import { logger } from '../config/logger.js';
 import { ValidationError, NotFoundError } from '../middleware/errorHandler.js';
 
@@ -271,7 +271,7 @@ export function scheduleReconcile() {
     reconcileTimer = undefined;
     reconcileTransfers()
       .catch((err) => logger.warn('[transfers] debounced reconcile failed', { err: err?.message }))
-      .finally(() => scheduleRefresh());
+      .finally(() => scheduleAggregationRefresh());
   }, 1000);
 }
 
