@@ -103,6 +103,17 @@ function sanitize(body, { requireName }) {
   return out;
 }
 
+/**
+ * A statement balance is only meaningful with its as-of date (ADR-094 drift
+ * anchors on it). Enforced here for a friendly 4xx; migration 0065's CHECK
+ * (ck_accounts_statement_balance_has_date) backstops at the DB.
+ */
+function assertStatementBalanceHasDate(balance, date) {
+  if (balance != null && date == null) {
+    throw new ValidationError('statement_balance_date is required when statement_balance is set');
+  }
+}
+
 export const accountService = {
   /** List accounts (active=true|false|null for all). */
   async list({ active = null } = {}) {
@@ -117,6 +128,7 @@ export const accountService = {
 
   async create(body) {
     const fields = sanitize(body, { requireName: true });
+    assertStatementBalanceHasDate(fields.statement_balance, fields.statement_balance_date);
     try {
       return await accountRepository.create(fields);
     } catch (err) {
@@ -127,6 +139,16 @@ export const accountService = {
 
   async update(id, body) {
     const fields = sanitize(body, { requireName: false });
+    // Partial PATCH: validate the merged state, not just the provided keys —
+    // e.g. setting a balance while the stored date is NULL must still fail.
+    if ('statement_balance' in fields || 'statement_balance_date' in fields) {
+      const current = await accountRepository.getById(id);
+      if (!current) throw new NotFoundError(`Account ${id} not found`);
+      assertStatementBalanceHasDate(
+        'statement_balance' in fields ? fields.statement_balance : current.statement_balance,
+        'statement_balance_date' in fields ? fields.statement_balance_date : current.statement_balance_date,
+      );
+    }
     let updated;
     try {
       updated = await accountRepository.update(id, fields);

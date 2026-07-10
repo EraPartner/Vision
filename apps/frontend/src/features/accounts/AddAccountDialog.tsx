@@ -91,6 +91,9 @@ export function AddAccountDialog(props: AddAccountDialogProps = {}) {
     const handleSubmit = (e: React.FormEvent) => {
         e.preventDefault();
         if (!form.name.trim()) return;
+        // A statement balance is only meaningful with its as-of date (ADR-094);
+        // the date input is marked required, this guards non-native submits.
+        if (form.statementBalance && !form.statementBalanceDate) return;
 
         const values: AccountFormValues = {
             ...form,
@@ -269,7 +272,7 @@ export function AddAccountDialog(props: AddAccountDialogProps = {}) {
                             </div>
                             <div className="space-y-2">
                                 <Label htmlFor="acct-stmt-date">{t('accounts.field.statementBalanceDate')}</Label>
-                                <Input id="acct-stmt-date" type="date" value={form.statementBalanceDate} onChange={(e) => set("statementBalanceDate", e.target.value)} />
+                                <Input id="acct-stmt-date" type="date" required={!!form.statementBalance} value={form.statementBalanceDate} onChange={(e) => set("statementBalanceDate", e.target.value)} />
                             </div>
                         </div>
                     </div>
