@@ -1,8 +1,17 @@
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { useMutation, useQuery, useQueryClient, type QueryClient } from '@tanstack/react-query';
 import { apiClient } from '@/lib/api';
 import type { AccountCreate, AccountUpdate } from '@/types/api';
 import { toast } from 'sonner';
 import { useLanguage } from '@/contexts/LanguageContext';
+
+// Account CRUD changes balances/in_net_worth flags, so the net-worth views must
+// refetch too — NetWorthPage keeps both queries at a 2-minute staleTime, so a
+// missed invalidation shows a stale total for up to 2 minutes.
+function invalidateAccountDerived(queryClient: QueryClient) {
+    queryClient.invalidateQueries({ queryKey: ['accounts'] });
+    queryClient.invalidateQueries({ queryKey: ['net-worth'] });
+    queryClient.invalidateQueries({ queryKey: ['net-worth-by-account'] });
+}
 
 export function useAccounts(params?: { active?: 'true' | 'false' | 'all' }) {
     return useQuery({
@@ -20,7 +29,7 @@ export function useCreateAccount() {
     return useMutation({
         mutationFn: (account: AccountCreate) => apiClient.createAccount(account),
         onSuccess: () => {
-            queryClient.invalidateQueries({ queryKey: ['accounts'] });
+            invalidateAccountDerived(queryClient);
             toast.success(t('accounts.created'));
         },
         onError: (error: Error) => {
@@ -37,7 +46,7 @@ export function useUpdateAccount() {
         mutationFn: ({ id, data }: { id: number; data: AccountUpdate }) =>
             apiClient.updateAccount(id, data),
         onSuccess: () => {
-            queryClient.invalidateQueries({ queryKey: ['accounts'] });
+            invalidateAccountDerived(queryClient);
         },
         onError: (error: Error) => {
             toast.error(t('accounts.updateFailedTitle'), { description: error.message });
@@ -71,7 +80,7 @@ export function useDeleteAccount() {
     return useMutation({
         mutationFn: (id: number) => apiClient.deleteAccount(id),
         onSuccess: () => {
-            queryClient.invalidateQueries({ queryKey: ['accounts'] });
+            invalidateAccountDerived(queryClient);
             toast.success(t('accounts.deleted'));
         },
         onError: (error: Error) => {
