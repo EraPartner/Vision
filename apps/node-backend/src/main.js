@@ -419,9 +419,10 @@ async function start() {
   if (!settings.admin.authToken) {
     logger.warn(
       'ADMIN_AUTH_TOKEN is not set — admin endpoints have no per-request token check. ' +
-      'This is safe only because the port is published on 127.0.0.1 (loopback) and the ' +
-      'CSRF guard blocks cross-site browser requests. If you publish the port on 0.0.0.0 ' +
-      'or behind a proxy, SET ADMIN_AUTH_TOKEN to enforce token-based auth.'
+      'This is safe only because the port is published on 127.0.0.1 (loopback). The CSRF ' +
+      'guard blocks cross-site *state-changing* requests, but NOT cross-site GET reads ' +
+      '(safe methods are exempt), so it is not by itself an authorization boundary. If you ' +
+      'publish the port on 0.0.0.0 or behind a proxy, SET ADMIN_AUTH_TOKEN to enforce token-based auth.'
     );
   }
 

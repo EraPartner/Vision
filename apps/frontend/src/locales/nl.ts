@@ -736,7 +736,6 @@ const nl: Record<string, string> = {
   'dbEditor.previewEmpty': 'Geen wijzigingen om toe te passen.',
   'dbEditor.previewFailed': 'Voorvertoning kon niet worden opgebouwd',
   'dbEditor.previewTitle': 'Openstaande wijzigingen controleren',
-  'dbEditor.rawWherePlaceholder': 'WHERE-clausule, bv. amount < 0 AND currency = \'EUR\'',
   'dbEditor.readOnlyCol': 'Alleen-lezen kolom',
   'dbEditor.refresh': 'Vernieuwen',
   'dbEditor.rowsCount': '{n} rij(en)',

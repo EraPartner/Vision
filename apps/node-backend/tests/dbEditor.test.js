@@ -117,27 +117,30 @@ describe('readRows', () => {
     expect(issued.some((s) => s.includes('LIMIT 25'))).toBe(true);
   });
 
-  it('rejects a raw WHERE clause containing a semicolon', async () => {
+  it('rejects any raw WHERE parameter (escape hatch removed — SQLi oracle)', async () => {
     query.mockImplementation(catalogRouter('transactions'));
     getClient.mockResolvedValue(makeClient([]).client);
+    // Even a benign-looking clause is refused: the structured filters[] path
+    // is the only way to filter now.
+    await expect(readRows('transactions', { where: 'amount > 0' }))
+      .rejects.toMatchObject({ status: 400 });
     await expect(readRows('transactions', { where: '1=1; DROP TABLE transactions' }))
       .rejects.toMatchObject({ status: 400 });
+  });
+
+  it('does not run any SQL when a raw WHERE is supplied (rejected before query)', async () => {
+    query.mockImplementation(catalogRouter('transactions'));
+    const { client, calls } = makeClient([]);
+    getClient.mockResolvedValue(client);
+    await expect(readRows('transactions', { where: 'pg_sleep(5)' }))
+      .rejects.toMatchObject({ status: 400 });
+    expect(calls.some((c) => c.sql.includes('SELECT *'))).toBe(false);
   });
 
   it('rejects sorting by an unknown column', async () => {
     query.mockImplementation(catalogRouter('transactions'));
     getClient.mockResolvedValue(makeClient([]).client);
     await expect(readRows('transactions', { orderBy: 'evil' }))
-      .rejects.toMatchObject({ status: 400 });
-  });
-
-  it('maps a bad raw WHERE clause to a 400 instead of a 500', async () => {
-    query.mockImplementation(catalogRouter('transactions'));
-    const { client } = makeClient([
-      ['SELECT *', () => { const e = new Error('syntax error'); e.code = '42601'; throw e; }],
-    ]);
-    getClient.mockResolvedValue(client);
-    await expect(readRows('transactions', { where: 'amount >' }))
       .rejects.toMatchObject({ status: 400 });
   });
 

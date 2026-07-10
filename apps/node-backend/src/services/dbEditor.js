@@ -151,9 +151,15 @@ function buildFilterFragment(filter, params, columnNames) {
 
 /**
  * Read a page of rows. Runs inside a READ ONLY transaction.
+ *
+ * Only the structured, parameterized `filters[]` path exists — the ADR-101
+ * raw-WHERE escape hatch was removed (2026-07-10): concatenating a caller
+ * string into the SQL was a blind-SQLi timing oracle (pg_sleep in the WHERE
+ * survives CORS on this CSRF-exempt GET), and a bare `--` silently truncated
+ * the rest of the statement past the `;` guard.
  * @param {string} table
  * @param {{limit?:number, offset?:number, orderBy?:string, dir?:string,
- *          filters?:Array<{column:string,op?:string,value?:unknown}>, where?:string}} opts
+ *          filters?:Array<{column:string,op?:string,value?:unknown}>}} opts
  */
 export async function readRows(table, opts = {}) {
   const { columns, primaryKey } = await getTableMeta(table);
@@ -170,11 +176,9 @@ export async function readRows(table, opts = {}) {
   }
 
   if (opts.where !== undefined && String(opts.where).trim() !== '') {
-    const raw = String(opts.where);
-    if (raw.includes(';')) {
-      throw new ValidationError('WHERE clause may not contain ";"');
-    }
-    whereParts.push(`(${raw})`);
+    throw new ValidationError(
+      'The raw WHERE parameter has been removed. Use the structured filters[] parameter instead.',
+    );
   }
 
   const whereSql = whereParts.length ? `WHERE ${whereParts.join(' AND ')}` : '';

@@ -736,7 +736,6 @@ const en: Record<string, string> = {
   'dbEditor.previewEmpty': 'No changes to apply.',
   'dbEditor.previewFailed': 'Could not build preview',
   'dbEditor.previewTitle': 'Review pending changes',
-  'dbEditor.rawWherePlaceholder': 'WHERE clause, e.g. amount < 0 AND currency = \'EUR\'',
   'dbEditor.readOnlyCol': 'Read-only column',
   'dbEditor.refresh': 'Refresh',
   'dbEditor.rowsCount': '{n} row(s)',
