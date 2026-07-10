@@ -3990,6 +3990,8 @@ export interface operations {
                 offset?: number;
                 start_date?: string;
                 end_date?: string;
+                /** @description Preferred account filter (exact FK match, ADR-088); bank_account remains a substring escape hatch */
+                account_id?: number;
                 bank_account?: string;
                 category_id?: number;
                 recipient_id?: number;
@@ -5069,6 +5071,10 @@ export interface operations {
             query?: {
                 start_date?: string;
                 end_date?: string;
+                /** @description Preferred account filter (exact FK match, ADR-088); bank_account remains a substring escape hatch */
+                account_id?: number;
+                /** @description Comma-separated account ids (exact FK match, ADR-088); preferred over bank_accounts */
+                account_ids?: string;
                 bank_account?: string;
                 include_balance?: boolean;
                 /** @description Comma-separated tag slugs — OR filter */
@@ -5096,6 +5102,10 @@ export interface operations {
             query?: {
                 start_date?: string;
                 end_date?: string;
+                /** @description Preferred account filter (exact FK match, ADR-088); bank_account remains a substring escape hatch */
+                account_id?: number;
+                /** @description Comma-separated account ids (exact FK match, ADR-088); preferred over bank_accounts */
+                account_ids?: string;
                 bank_account?: string;
                 /** @description Comma-separated tag slugs — OR filter */
                 tags?: string;
@@ -5813,6 +5823,8 @@ export interface operations {
     getTransactionCount: {
         parameters: {
             query?: {
+                /** @description Preferred account filter (exact FK match, ADR-088); bank_account remains a substring escape hatch */
+                account_id?: number;
                 bank_account?: string;
             };
             header?: never;
