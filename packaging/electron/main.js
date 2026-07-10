@@ -1301,9 +1301,9 @@ function stopContainers(cwd, extraFiles = []) {
 
 // Pull the latest Docker image tag for the app service without stopping the DB.
 // Returns true if a new image was pulled, false if already up to date.
-async function pullLatestImage(cwd) {
+async function pullLatestImage(cwd, extraFiles = []) {
   try {
-    const output = await run('docker', ['compose', 'pull', 'app'], cwd, { timeout: 120000 });
+    const output = await run('docker', ['compose', ...composeArgs(cwd, extraFiles), 'pull', 'app'], cwd, { timeout: 120000 });
     // docker compose pull outputs "Pulled" when a new layer was downloaded
     return /pulled/i.test(output);
   } catch (err) {
@@ -1315,7 +1315,11 @@ async function pullLatestImage(cwd) {
 // Restart only the app container (not the db) to pick up the new image.
 async function restartAppContainer(cwd, extraFiles = []) {
   const args = ['compose', ...composeArgs(cwd, extraFiles), 'up', '-d', '--no-deps', 'app'];
-  await run('docker', args, cwd, { timeout: 120000 });
+  // Same PORT injection as every other compose start path: `up` recreates the
+  // container, and without it compose falls back to ${PORT:-3002} — republishing
+  // on 3002 (wrong CORS too) while Electron keeps polling the persisted appPort.
+  const env = { ...dockerEnv, PORT: String(appPort) };
+  await run('docker', args, cwd, { timeout: 120000, env });
 }
 
 // ── Main window ───────────────────────────────────────────────────────────────
@@ -1984,7 +1988,7 @@ function setupManualShellUpdater() {
 async function applyDockerImageUpdate(cwd, extraFiles = []) {
   try {
     notify(t('app.pullingLatestImage'));
-    const wasNew = await pullLatestImage(cwd);
+    const wasNew = await pullLatestImage(cwd, extraFiles);
     if (wasNew) {
       await restartAppContainer(cwd, extraFiles);
       await pollHealth().catch(() => {});
