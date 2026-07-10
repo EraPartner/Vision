@@ -1185,7 +1185,7 @@ look-changing one.
   - ↪ _from: Performance research 2026-07-02 · Backend — reports & aggregations_
   - `infoRepositoryStatistics.js:113-133` (`getCategoryPivot`: groups by `t.date` over the whole table, then **doubles** the set in JS — two conversion legs pushed per row at `:139-144`), `infoRepositoryRecipients.js:183-200` (`getRecipientByYear`, no date filter), `:274-292` (`getRecipientPivot`, dates optional/default null), `infoRepositoryTags.js:53-70` (`getTagPivot` with `allTags=true`)
   - Grouping by `t.date` is deliberate (per-date FX, documented at `:106-112`), but the intermediate set ≈ distinct (entity, day, currency) pairs ≈ transaction count for sparse data, growing forever; all are `source:'live'` on every statistics-page load.
-  - Fix (cheapest first): default `startDate` to a rolling window in the routes; add a short in-process TTL cache keyed on (endpoint, currency, exclusions) invalidated by the existing transaction-mutation hook; longer term, month-grain pre-aggregation for the ≥1-year-old portion. **Shared root cause with the two findings above (per-date FX forcing row-grain work) — a single "grain policy" decision (exact FX for recent months, month-grain beyond) would resolve all three; ADR-worthy if pursued.**
+  - Fix (cheapest first): default `startDate` to a rolling window in the routes; add a short in-process TTL cache keyed on (endpoint, currency, exclusions) invalidated by the existing transaction-mutation hook; longer term, month-grain pre-aggregation for the ≥1-year-old portion. **DECIDED 2026-07-10: NO grain policy — exact per-date FX semantics are binding everywhere.** Pursue only the semantics-preserving fixes (rolling-window defaults, TTL cache); any pre-aggregation must aggregate rows that were each converted at their own exact date rate — never month-average rates. Do not re-raise the grain-policy ADR.
 
 - [ ] **aiChat tools: 50k-100k full-row fetches per tool call, re-fetched within the same chat turn** 🔼
   - ↪ _from: Performance research 2026-07-02 · Backend — reports & aggregations_
@@ -1317,13 +1317,13 @@ look-changing one.
   - Chain: entry JS → mount → settings HTTP round trip → language flip → nl chunk fetch → Dutch text. An nl user watches English (or raw keys) repaint to Dutch on every single boot.
   - Fix: mirror `language` to localStorage on change (same pattern as theme/skin), read it at module scope in `main.tsx`/LanguageContext, and kick off the right locale import immediately; server value still wins on hydration.
 
-- [ ] **Hide-on-close instead of destroy — reopen becomes ~0ms with route/scroll state intact (option — user decision, recommended first; the cheapest large win of the whole pass)** 💡🔼
+- [ ] **Hide-on-close instead of destroy — reopen becomes ~0ms with route/scroll state intact (APPROVED 2026-07-10 — build it)** 💡🔼
   - ↪ _from: Startup/Electron performance research 2026-07-05 · Wave S3 (architecture options)_
   - `packaging/electron/main.js:1561` (`closed` handler nulls the window — red-button close destroys the booted renderer), `:3512-3514` (`window-all-closed` no-op on darwin: app + containers + health watchdog already keep running), `:3430-3488` (only Cmd+Q reaches `will-quit` → `stopContainers`)
   - macOS close *already* keeps everything warm — the app just throws away the fully-booted renderer, so reopening re-runs the entire SPA boot against a hot backend. Standard macOS convention fixes it: `close` → `event.preventDefault(); mainWindow.hide()` unless `isQuitting` (set in `before-quit`); `activate`/`second-instance` → `show()`.
   - Trade-offs for the user: renderer RAM stays resident while hidden (containers already do — no new container cost); users who expect close-to-free-memory lose that. Settings home if made toggleable: `BehaviorSection.tsx:38-49` already hosts the startup group.
 
-- [ ] **"Keep services running on quit" toggle — next launch takes the measured 0.6-1.1s hot path instead of ~2-2.5s warm (option — user decision)** 💡🔼
+- [ ] **"Keep services running on quit" toggle — next launch takes the measured 0.6-1.1s hot path instead of ~2-2.5s warm (APPROVED 2026-07-10 — build as an opt-in setting)** 💡🔼
   - ↪ _from: Startup/Electron performance research 2026-07-05 · Wave S3 (architecture options)_
   - `packaging/electron/main.js:3479` (`will-quit` → `stopContainers`), `:1296-1298` (`compose stop`); no skip setting exists (only `backupOnQuit` — preload.js:91-97); `:1268` (all-running fast path returns immediately for packaged builds); dual-read settings pattern to copy: `:3446-3454`
   - A toggle (Electron settings.json mirror + DB, same pattern as the backup settings) that skips `stopContainers` on quit puts every next launch on the S1-measured hot path. Backup-on-quit still works since containers stay up; compose restart policy governs reboot behavior; image updates still hot-swap via the updater.
@@ -1554,7 +1554,7 @@ look-changing one.
   - After a red-button close (window destroyed, app + containers still alive), reopening paints an empty window and re-runs the entire SPA boot unguarded.
   - Fix: the hide-on-close option above makes this path disappear entirely; short of that, load `splashDataUrl()` first and reuse `pollAndLoad()`.
 
-- [ ] **Login-item background prelaunch — true cold-login-to-instant, but weakest value-for-effort of the three keep-alive options (option — user decision, recommend skipping unless asked)** 💡🔽
+- [ ] ~~**Login-item background prelaunch — true cold-login-to-instant, but weakest value-for-effort of the three keep-alive options**~~ **DECLINED 2026-07-10 — do not build; the other two keep-alive options were approved instead.** 💡🔽
   - ↪ _from: Startup/Electron performance research 2026-07-05 · Wave S3 (architecture options)_
   - No `setLoginItemSettings`/launchd code exists anywhere in main.js (grep confirmed)
   - Feasible via `app.setLoginItemSettings({ openAtLogin: true, openAsHidden: true })` + a launch flag that runs the container path without showing a window. Appears in System Settings › Login Items (consent UX needed), always-on RAM, and mostly duplicates what hide-on-close + keep-services-running achieve on the first manual open.
@@ -1761,7 +1761,7 @@ look-changing one.
 - [ ] **Dutch UI mixes formal "u/uw" and informal "je/jouw" — two voices in one app, the top machine-translation tell for a Dutch reader** ⏫
   - ↪ _from: Design authenticity 2026-07-03 · Wave S1_
   - `i18n/source/nl.json` — 118 lines use u/uw vs 30 lines je/jouw (grep `\b(je|jouw|jij)\b` / `\b(u|uw)\b`). The je-lines cluster in 2026 features (accounts:26, aiChat:278-279, dbEditor:728,741, research:2112-2365, tax:2943-3299, rebalance:1937, settings:2396,2579,2624) against the older u-core (onboarding, import, dashboard:694, insights:1074). Same-concept clashes: `addWatchlist.notesPlaceholder`:213 "Waarom volgt u dit actief?" vs `research.entry.watchlist`:2163 "Volg effecten die je nog niet bezit"; `customChart.createFirst`:607 "Maak uw eerste grafiek" vs `research.builder.emptyTitle`:2112 "Bouw je grafiek". (Dead `scripts/auto-translate-nl.js` — already filed by Wave D3 — corroborates the MT origin.)
-  - Fix: pick **je** app-wide (single power user, personal finance, matches Apple's Dutch register) and sweep nl.json u/uw→je/jouw with verb agreement; add the rule to the i18n skill. Run `bun run validate-locales` after.
+  - Fix: **DECIDED 2026-07-10: je app-wide.** Sweep nl.json u/uw→je/jouw with verb agreement; add the rule to the i18n skill. Run `bun run validate-locales` after.
   - Verification (2026-07-03): a regex-complete sweep of all 3,529 keys refines the counts — 99 formal (u/uw/kunt u/wilt u/heeft u) vs 34 informal (je/jouw), split by feature age (older core formal: `onboarding` ×32, `tax` ×22, `importPage` ×7, dashboard/txPage/statsPage/insights/metals/crypto/stocks…; newer features informal: `research` ×8, accounts, aiChat, dbEditor, rebalance, transfers, parts of settings). Mixed on one surface even within `tax` itself: 22 formal vs 12 informal (`tax.profile.description` "uw belastingsituatie" vs `tax.trendStrip.description` "die je hebt bijgehouden" — adjacent widgets); `settings` splits 4 vs 4.
 
 - [ ] **63 strings use " -- " (double hyphen) as an em dash — renders literally in daily-visible headers and stat labels** ⏫
@@ -1844,7 +1844,7 @@ look-changing one.
   - ↪ _from: Design authenticity 2026-07-03 · Wave S6_
   - `apps/frontend/index.html` — no `<link rel="icon">` at all, no `theme-color` meta; the browser falls back to `apps/frontend/public/favicon.ico`, which is a 73×74 PNG masquerading as .ico (template leftover, dated with the scaffold), next to a dead `public/placeholder.svg` (the stock Lovable placeholder, 0 references in src). Meanwhile `packaging/electron/build/icon.svg` is a *designed* mark — obsidian glass body, emerald→champagne gradient, aurora washes, its comments even name the app's glass tokens — and it never reaches the web surface.
   - Fix: export the mark from `icon.svg` as `favicon.svg` (+ PNG fallbacks) and add `<link rel="icon" type="image/svg+xml">` + apple-touch-icon + a light/dark `theme-color` pair to index.html; delete `placeholder.svg` and the stale favicon.ico. (Per-route `document.title` is Wave U3's finding at TODO ~line 756 — land the title scheme there, not here.)
-  - Addendum (2026-07-03): a PWA manifest is a separate, undecided call — Electron-first distribution makes it optional, but self-hosted web use is real; if wanted, a minimal `manifest.json` + `theme-color` rides on this same favicon work (no new investigation needed, just a scope decision).
+  - Addendum (2026-07-03): a PWA manifest is a separate call — **DECIDED 2026-07-10: yes, minimal** — a `manifest.json` + `theme-color` rides on this same favicon work (no service worker, no offline claims).
 
 - [ ] **The app's logo appears nowhere inside the app — every identity surface improvises with the lucide `Wallet` glyph or nothing** ⏫
   - ↪ _from: Design authenticity 2026-07-03 · Wave S6_
@@ -2595,8 +2595,8 @@ look-changing one.
 
 - [ ] **4 stray `focus-visible:ring-primary/50` sites break from the house `ring-2 ring-ring/70 ring-offset-2` pattern** 🔽
   - ↪ _from: Design authenticity 2026-07-03 · Wave S2 (residue, closed 2026-07-03)_
-  - `WatchlistPage.tsx:166`, `OwesPage.tsx:91`, `VirtualDataTable.tsx:703`, `devtools/RequestList.tsx:124` (this last one is `ring-1` — a candidate for the devtools palette-exemption decision below rather than a fix).
-  - Fix: sweep the first three onto the house ring pattern; decide the devtools one alongside the broader devtools-exemption call below.
+  - `WatchlistPage.tsx:166`, `OwesPage.tsx:91`, `VirtualDataTable.tsx:703`, `devtools/RequestList.tsx:124` (devtools exemption was DECLINED 2026-07-10 — tokenize decision below — so this site gets swept with the rest).
+  - Fix: sweep all four onto the house ring pattern (devtools included — exemption declined 2026-07-10).
 
 - [ ] **Vision Demo ships the identical app icon as the real app — indistinguishable in the Dock/Applications** 🔽
   - ↪ _from: Design authenticity 2026-07-03 · Wave S6 (residue, closed 2026-07-03)_
@@ -2618,10 +2618,10 @@ look-changing one.
   - The error card is on-token (`border-destructive/30 bg-destructive/5`, `ToolResultCard.tsx:95-105`) but its fallback string 'Tool failed.' (`:21`) is hardcoded English; there's no designed tool-running intermediate state (the crafted thinking dots already carry this — acceptable as-is). Copy nits found alongside: ⬇ `OllamaStatusBanner.tsx:38` prefers the raw English `status?.error` over its own localized hint; ⏬ `aria.toggleSidebar` nl "Zijbalk wisselen" means "swap sidebar", not toggle — should be in-/uitklappen; ⏬ nl `shortcuts.*` mixes imperative and infinitive verb forms; ⬇ `cashflow.window30` nl reads "30 d" vs en "30d".
   - Fix: translate 'Tool failed.'; fix the four copy nits alongside any other nl.json sweep.
 
-- [ ] **Four design/UX decisions are filed but not yet decided by the user** 🔽
-  - ↪ _from: Design authenticity 2026-07-03 · Wave S1–S6 (residue, closed 2026-07-03)_
-  - (1) **devtools palette exemption** — declare devtools/admin surfaces exempt from token discipline by design (parallel to their already-accepted English-only-by-design status; sites: `RequestList.tsx:14-17` sky/orange, TableDataEditor amber/emerald, EndpointLiveness blue) or tokenize them. (2) **`formatCurrencyCompact`'s 9-char threshold** (`utils/currency.ts:151`) — the dashboard hero silently compacts large balances to "€12.3K"; a mitigation already exists (StatCard's `titleValue` shows the full amount on hover) — keep, tune, or gate behind a setting. (3) **print story** — zero `@media print` repo-wide; the backend Puppeteer report path (`themeCss.js`, token-driven) partially covers PDF, so decide whether browser-print of TaxOverviewPage (a Belgian tax filing document) is a supported surface worth a print stylesheet. (4) **PWA manifest** — Electron-first distribution makes it optional, but self-hosted web use is real; if wanted, a minimal manifest + theme-color rides on the already-filed favicon/brand-mark work above (no new investigation needed).
-  - Fix: none of these have a fix yet — they need a user call before any code change; the nl je/u register decision (see the ⏫ finding above) is the fifth decision in this same family.
+- [ ] **Four design/UX decisions — ALL DECIDED 2026-07-10 (now implementation work)** 🔽
+  - ↪ _from: Design authenticity 2026-07-03 · Wave S1–S6 (residue, closed 2026-07-03); decided by the user 2026-07-10_
+  - (1) **devtools palette: TOKENIZE** — no exemption; sweep `RequestList.tsx:14-17` sky/orange, TableDataEditor amber/emerald, EndpointLiveness blue onto the token system (includes the devtools `ring-1` site parked in the focus-ring finding above). (2) **`formatCurrencyCompact` 9-char threshold: KEEP AS-IS** — hover mitigation stands; touch access arrives with the filed touch-tooltip sweep; no threshold change, no setting. (3) **print story: BROADER SUPPORT** — browser print is a supported surface for the report-like pages (TaxOverviewPage first, then Statistics and Net Worth): `@media print` stylesheets that hide nav/aurora/glass and flatten to ink-on-paper; other pages stay out of scope. (4) **PWA manifest: YES, minimal** — `manifest.json` + `theme-color` riding on the filed favicon/brand-mark work; no service worker, no offline claims.
+  - Fix: implement the four calls above; the nl je/u register (fifth in this family) is decided **je** on its own ⏫ finding.
 
 - [ ] **Route-change focus never resets, and OnboardingWizard has zero focus management on step change** ⏫
   - ↪ _from: UI/UX research 2026-07-03 · Wave U1 (residue, closed 2026-07-03)_
@@ -3494,7 +3494,7 @@ look-changing one.
 - [ ] **Real-DB test harness built but adoption stalled at 1 suite; TEST_DATABASE_URL set nowhere, so its tests silently skip everywhere** ⏫
   - ↪ _from: Architecture & code design 2026-07-06 · Wave W4 (test architecture)_
   - evidence: `apps/node-backend/tests/setup/db.js:1-53` is a deliberate opt-in real-PG seam ("Phase 0 step 6": `getTestPool()` + `it.skipIf(!hasTestDatabase())`), but only one production suite uses it (`tests/services/aggregationRefresh.test.js:37` `describe.skipIf(!hasTestDatabase())`) plus the harness self-test (`tests/setup/db.test.js`). `TEST_DATABASE_URL` appears in zero workflows and zero package.json scripts — the gated cases skip in CI *and* in every default local run. Meanwhile 60 suites mock the pool (`vi.mock('../src/database/connection.js')` 48× + 12× two-levels-deep), with 48 SQL-string assertions across 11 files, and multi-step `mockResolvedValueOnce` choreographies encoding exact query order (e.g. `tests/infoRepoMonthly.test.js:33-50`: MV probe → currency probe → data query, pinned fake clock). DB-bound orchestration like `src/services/transferReconciliationService.js` (254 lines) has no direct test at all — only its pure-calc extract is golden-tested (`tests/services/transfers.golden.test.js` → `calculations/transfers.js`, 87 lines) and the service is mocked in 3 bulk-route tests. These are exactly the tests the harness was built for.
-  - fix: decide the harness's fate: either wire `TEST_DATABASE_URL` into CI (compose PG service or testcontainers) + a local script, then migrate the SQL-order-choreography suites (infoRepo*, transactionRepository*, transferReconciliation) onto it incrementally; or delete `setup/db.js` and record the "mock-only" decision in an ADR so the half-seam stops implying integration coverage that never runs.
+  - fix: **DECIDED 2026-07-10: wire the real-DB harness.** Add a Postgres service to CI (compose service or testcontainers) + a local script wiring `TEST_DATABASE_URL`, then migrate the SQL-order-choreography suites (infoRepo*, transactionRepository*, transferReconciliation) onto it incrementally. The mock-only alternative is rejected — do not delete `setup/db.js`.
 
 - [ ] **Route tests mock Express itself and execute only the last handler — middleware chains are never exercised; no supertest anywhere** ⏫
   - ↪ _from: Architecture & code design 2026-07-06 · Wave W4 (test architecture)_
@@ -3653,7 +3653,7 @@ look-changing one.
 - [ ] **Web (non-Electron) deployments get wrong update-install instructions** ⏫
   - ↪ _from: DevOps research 2026-07-03 · Wave D3 (residue, closed 2026-07-03)_
   - `/api/admin/update/check`'s payload omits `update_mode` (`routes/admin.js:81-97`) → `UpdateNotification` defaults to `'source'` (`UpdateNotification.tsx:64`) and shows an Install button to browser users with no `isElectron()` gate (unlike `AboutSection.tsx:216`); clicking it calls `installShellUpdate()`, which no-ops outside Electron (`lib/electron.ts:140-144`) and shows a "Close and reopen the app" toast — wrong instructions for a docker-compose self-host (the correct action is `docker compose pull`). `settings.app.updatesHintWeb` (`en.json:2442`) is equally wrong for pure-web deployments. `source_launcher_available` (produced in three places, `main.js:1793,1875,1904`) is consumed nowhere in the frontend — a dead payload; the `update_mode` gate above is the live half of the same wiring gap.
-  - Fix: needs a product decision — gate the Install button on `isElectron()`, or have the backend return `update_mode: 'docker-compose'` with correct instructions (and fix `updatesHintWeb` to match).
+  - Fix: **DECIDED 2026-07-10: both halves** — gate the Install button on `isElectron()` AND have the backend return `update_mode: 'docker-compose'` with correct pull/up instructions on non-Electron deployments (fix `updatesHintWeb` to match). Docker users keep the update notice, lose the dead button.
 
 - [ ] **Devcontainer writes platform-specific state into the shared host workspace (node_modules, venv, .env)** ⏫
   - ↪ _from: DevOps research 2026-07-03 · Wave D4_
@@ -3741,7 +3741,7 @@ look-changing one.
 - [ ] **Two competing lockfiles in packaging/electron; shipped artifact and local builds resolve deps differently** 🔼
   - ↪ _from: DevOps research 2026-07-03 · Wave D3_
   - `packaging/electron/bun.lock` + `packaging/electron/package-lock.json` are both committed. Release CI installs with `npm ci --ignore-scripts` (`.github/workflows/release.yml:260`), while `install.sh:123` (`bun run dist` after root `bun install`), `install-demo.sh:46` (`bun install`, unfrozen), and the shipped updater/launcher (`main.js:1673` `bun install --ignore-scripts`, `unsigned/launch.command`) all use bun. A dep bump landing in one lockfile but not the other means the .dmg you ship was built against a different electron/electron-builder tree than the one you tested locally — silent until a build or runtime break.
-  - Fix: pick one lockfile (npm, since it feeds the shipped artifact), delete the other, and make `install-demo.sh`/`install.sh` use the same frozen install (`npm ci` or `bun install --frozen-lockfile` against the kept lockfile).
+  - Fix: **DECIDED 2026-07-10: bun is canonical** (against the filed npm suggestion — the repo is a Bun monorepo). Keep `bun.lock`, delete the npm lockfile, make `install-demo.sh`/`install.sh` use `bun install --frozen-lockfile`. **Verification gate before deleting the npm lockfile:** confirm the packaging/shipped-artifact path (the reason npm was suggested) builds cleanly from `bun.lock`; if it can't, surface that back as a blocker rather than switching anyway.
 
 - [ ] **Compose-volume sync guard exists only as inline CI shell, duplicated twice, with no local equivalent** 🔼
   - ↪ _from: DevOps research 2026-07-03 · Wave D3_
