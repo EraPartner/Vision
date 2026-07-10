@@ -14,7 +14,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Skeleton } from "@/components/ui/skeleton";
 import { ArrowUpRight, LayoutDashboard, Receipt, TrendingDown, Tags, AlertTriangle } from "lucide-react";
 import { useTransactions } from "@/hooks/useTransactions";
-import { useFilteredDashboardStats } from "@/hooks/useFilteredDashboardStats";
+import { useFilteredDashboardStats, useMonthlySummary } from "@/hooks/useFilteredDashboardStats";
 import { useExcludedIds } from "@/hooks/useExcludedIds";
 import { useQuery } from "@tanstack/react-query";
 import { apiClient } from "@/lib/api";
@@ -78,28 +78,21 @@ export default function DashboardPage() {
     // Fetch transactions for charts and recent transactions table
     const { data: transactionsData, isLoading: transactionsLoading, error: transactionsError } = useTransactions({ limit: 50 });
 
-    // Stable exclusion params (don't change with toggle)
-    const filteredExclusionParams = useMemo(() => ({
-        excluded_category_ids: allExcludedCategoryIds.length > 0 ? allExcludedCategoryIds : undefined,
-        excluded_recipient_ids: excludedRecipientIds.length > 0 ? excludedRecipientIds : undefined,
-    }), [allExcludedCategoryIds, excludedRecipientIds]);
-
-    // Fetch monthly summary — FILTERED version (stable query key)
-    const { data: monthlySummaryFiltered, isLoading: monthlyFilteredLoading } = useQuery({
-        queryKey: ['monthlySummary', 'filtered', targetCurrency, filteredExclusionParams],
-        queryFn: () => apiClient.getMonthlyFinancialSummary({ ...filteredExclusionParams, currency: targetCurrency }),
-        staleTime: 30000,
+    // Monthly summary — FILTERED version. Shares the
+    // ['monthlySummary', currency, categoryIds, recipientIds] key family with
+    // useFilteredDashboardStats above, so the identical request is deduped into
+    // one cache entry instead of refetched under a page-local key.
+    const { data: monthlySummaryFiltered, isLoading: monthlyFilteredLoading } = useMonthlySummary({
+        excludedCategoryIds: allExcludedCategoryIds,
+        excludedRecipientIds,
         enabled: exclusionsApply,
     });
 
-    // Fetch monthly summary — UNFILTERED version (stable query key)
-    // Always enabled as fallback when users toggle a graph to "ignore filters"
-    const { data: monthlySummaryUnfiltered, isLoading: monthlyUnfilteredLoading } = useQuery({
-        queryKey: ['monthlySummary', 'unfiltered', targetCurrency],
-        queryFn: () => apiClient.getMonthlyFinancialSummary({ currency: targetCurrency }),
-        staleTime: 30000,
-        enabled: true,
-    });
+    // Monthly summary — UNFILTERED version (no exclusions in the key).
+    // Always enabled as fallback when users toggle a graph to "ignore filters";
+    // with exclusions off this collapses onto the same cache entry as the
+    // filtered variant and the stat cards — one fetch for the whole page.
+    const { data: monthlySummaryUnfiltered, isLoading: monthlyUnfilteredLoading } = useMonthlySummary();
 
     const monthlyLoading = monthlyFilteredLoading || monthlyUnfilteredLoading;
 
