@@ -93,6 +93,14 @@ describe('dateOnlyToTimestampMs', () => {
     expect(dateOnlyToTimestampMs('not-a-date')).toBeNaN();
     expect(dateOnlyToTimestampMs('')).toBeNaN();
   });
+
+  it('accepts a pg-read DATE (local-midnight Date object) — the DB cache read shape', () => {
+    // String(pgDate) is "Wed Jul 01 2026 …" — the old split('-') path NaN'd on
+    // it, so EVERY DB-cached price-history read returned [] (silent live
+    // re-fetch / empty chart under db_only), in every deployment.
+    expect(dateOnlyToTimestampMs(new Date(2025, 3, 15))).toBe(Date.UTC(2025, 3, 15, 12, 0, 0, 0));
+    expect(dateOnlyToTimestampMs(new Date(NaN))).toBeNaN();
+  });
 });
 
 describe('normalizeHistoryPoints', () => {

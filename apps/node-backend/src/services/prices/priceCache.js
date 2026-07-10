@@ -35,6 +35,16 @@ export function toDateOnly(timestampMs) {
 
 export function dateOnlyToTimestampMs(dateOnly) {
   if (!dateOnly) return Number.NaN;
+  // pg returns DATE columns as local-midnight Date objects. String() on one is
+  // "Wed Jul 01 2026 …" — no parseable y-m-d in ANY timezone — so every
+  // DB-cached price-history read NaN'd out and normalizeHistoryPoints filtered
+  // every row: a silent live re-fetch (provider-quota burn) or an empty chart
+  // under db_only, in every deployment. Extract the calendar day with local
+  // getters (the day pg meant), then pin to UTC noon like the string path.
+  if (dateOnly instanceof Date) {
+    if (Number.isNaN(dateOnly.getTime())) return Number.NaN;
+    return Date.UTC(dateOnly.getFullYear(), dateOnly.getMonth(), dateOnly.getDate(), 12, 0, 0, 0);
+  }
   const [y, m, d] = String(dateOnly).split('-').map(Number);
   if (!Number.isFinite(y) || !Number.isFinite(m) || !Number.isFinite(d)) return Number.NaN;
   return Date.UTC(y, m - 1, d, 12, 0, 0, 0);
