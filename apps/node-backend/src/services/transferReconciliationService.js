@@ -258,21 +258,35 @@ export async function releaseAutoPairsFor(ids) {
   );
 }
 
-let reconcileTimer;
-
 /**
  * Debounced reconcile after single-row mutations (coalesces rapid edits), then
  * schedules a materialized-view refresh so the transfer exclusion is reflected.
- * Mirrors materializedViewService.scheduleRefresh's 1s debounce.
+ *
+ * Trailing 5s debounce + 10s max-wait, mirroring
+ * materializedViewService.scheduleRefresh: the previous 1s window only
+ * coalesced edits made <1s apart, so human editing cadence paid a
+ * full-corpus reconcile (3 UPDATE scans + self-join) per save; trailing-only
+ * debounce also let a machine-cadence mutation stream defer the reconcile
+ * indefinitely.
  */
+export const RECONCILE_DEBOUNCE_MS = 5000;
+export const RECONCILE_MAX_WAIT_MS = 10000;
+
+let reconcileTimer;
+let reconcileDeadline = null; // epoch ms the current burst must flush by
+
 export function scheduleReconcile() {
+  const now = Date.now();
   if (reconcileTimer) clearTimeout(reconcileTimer);
+  if (reconcileDeadline === null) reconcileDeadline = now + RECONCILE_MAX_WAIT_MS;
+  const delay = Math.max(0, Math.min(RECONCILE_DEBOUNCE_MS, reconcileDeadline - now));
   reconcileTimer = setTimeout(() => {
     reconcileTimer = undefined;
+    reconcileDeadline = null;
     reconcileTransfers()
       .catch((err) => logger.warn('[transfers] debounced reconcile failed', { err: err?.message }))
       .finally(() => scheduleAggregationRefresh());
-  }, 1000);
+  }, delay);
 }
 
 /**
