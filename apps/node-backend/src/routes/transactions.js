@@ -168,7 +168,10 @@ function buildExportFilters(query) {
 function normalizeTransactionPatchFields(body) {
   const fields = { ...body };
 
-  if (fields.date) {
+  // Remap whenever the key is present — a cleared date ('' / null) must also
+  // land on transaction_date so the PATCH validation can reject it instead of
+  // letting `SET "date" = ''` reach Postgres.
+  if ('date' in fields) {
     fields.transaction_date = fields.date;
     delete fields.date;
   }
@@ -632,6 +635,37 @@ router.patch(
 
     if (fields.tags !== undefined && !Array.isArray(fields.tags)) {
       throw new ValidationError('tags must be an array of strings');
+    }
+
+    // Parity with POST, which validates date/amount/recipient_id. Without
+    // these, the inline row editor's cleared native date input ('') survived
+    // the whitelist and reached Postgres as `SET "date" = ''` — a 22007 cast
+    // error surfacing as a 500 from pressing Enter. Both columns are NOT NULL,
+    // so a PATCH may change them but never clear them.
+    if ('transaction_date' in fields) {
+      if (!fields.transaction_date) {
+        throw new ValidationError('transaction_date cannot be cleared');
+      }
+      fields.transaction_date = assertYmd(fields.transaction_date, 'transaction_date');
+    }
+    if ('amount' in fields) {
+      const amountNum = Number(fields.amount);
+      if (fields.amount == null || fields.amount === '' || !Number.isFinite(amountNum)) {
+        throw new ValidationError('amount must be a number');
+      }
+      fields.amount = amountNum;
+    }
+    // recipient_id/category_id: null clears (both columns are nullable), but a
+    // present non-null value must be a positive integer — a non-integer here
+    // otherwise reached the DB as an FK type error and surfaced as a 500.
+    for (const fkField of ['recipient_id', 'category_id']) {
+      const value = fields[fkField];
+      if (value === undefined || value === null) continue;
+      const idNum = Number(value);
+      if (!Number.isInteger(idNum) || idNum <= 0) {
+        throw new ValidationError(`${fkField} must be a positive integer`);
+      }
+      fields[fkField] = idNum;
     }
 
     // Independent — touch disjoint fields, run in parallel.
