@@ -220,6 +220,7 @@ export default function AccountsPage() {
 
             {editing && (
                 <AddAccountDialog
+                    key={editing.id}
                     mode="edit"
                     open={!!editing}
                     onOpenChange={(o) => { if (!o) setEditing(undefined); }}

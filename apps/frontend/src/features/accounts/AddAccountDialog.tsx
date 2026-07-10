@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState } from "react";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -75,13 +75,12 @@ export function AddAccountDialog(props: AddAccountDialogProps = {}) {
     const [showAdvanced, setShowAdvanced] = useState(false);
     const createMutation = useCreateAccount();
 
+    // Initialized once on mount. Parents mount the edit dialog per target
+    // (keyed by account id), so a target switch remounts with fresh values —
+    // no sync effect, which would revert in-flight edits on parent re-renders.
     const [form, setForm] = useState<AccountFormValues>(
         isEditMode ? props.initialValues : EMPTY,
     );
-
-    useEffect(() => {
-        if (editProps) setForm(editProps.initialValues);
-    }, [editProps, editProps?.initialValues, editProps?.open]);
 
     const set = <K extends keyof AccountFormValues>(key: K, value: AccountFormValues[K]) =>
         setForm(f => ({ ...f, [key]: value }));
