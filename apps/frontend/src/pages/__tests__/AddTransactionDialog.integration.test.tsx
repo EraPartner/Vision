@@ -27,6 +27,21 @@ const testRecipientsList = {
     links: [],
 };
 
+
+// The bank-account field is an AccountCombobox (Phase B2, ADR-088 addendum D1):
+// open it, type the label, and take the explicit-create escape hatch (the MSW
+// accounts list is empty, so every label is "new").
+async function pickBankAccount(user: ReturnType<typeof userEvent.setup>, name: string) {
+    await user.click(screen.getByLabelText(/bank account/i));
+    await user.type(screen.getByPlaceholderText(/search or type a new account/i), name);
+    await user.click(await screen.findByText(new RegExp(`create account "${name}"`, "i")));
+}
+
+async function pickRecipient(user: ReturnType<typeof userEvent.setup>, name: string) {
+    await user.click(screen.getByRole("combobox", { name: /recipient/i }));
+    await user.click(await screen.findByRole("option", { name }));
+}
+
 describe("AddTransactionDialog (integration)", () => {
     afterEach(() => {
         vi.restoreAllMocks();
@@ -81,10 +96,8 @@ describe("AddTransactionDialog (integration)", () => {
         await screen.findByRole("dialog");
 
         await user.type(screen.getByLabelText(/amount/i), "12.50");
-        await user.type(screen.getByLabelText(/bank account/i), "Main");
-
-        await user.click(screen.getAllByRole("combobox")[0]);
-        await user.click(await screen.findByRole("option", { name: "Test Supermarket" }));
+        await pickBankAccount(user, "Main");
+        await pickRecipient(user, "Test Supermarket");
 
         await user.click(screen.getByRole("button", { name: /create/i }));
 
@@ -154,10 +167,8 @@ describe("AddTransactionDialog (integration)", () => {
         await screen.findByRole("dialog");
 
         await user.type(screen.getByLabelText(/amount/i), "12.50");
-        await user.type(screen.getByLabelText(/bank account/i), "Main");
-
-        await user.click(screen.getAllByRole("combobox")[0]);
-        await user.click(await screen.findByRole("option", { name: "Test Supermarket" }));
+        await pickBankAccount(user, "Main");
+        await pickRecipient(user, "Test Supermarket");
 
         await user.click(screen.getByRole("button", { name: /create/i }));
 
@@ -187,10 +198,8 @@ describe("AddTransactionDialog (integration)", () => {
         await screen.findByRole("dialog");
 
         await user.type(screen.getByLabelText(/amount/i), "12.50");
-        await user.type(screen.getByLabelText(/bank account/i), "Main");
-
-        await user.click(screen.getAllByRole("combobox")[0]);
-        await user.click(await screen.findByRole("option", { name: "Test Supermarket" }));
+        await pickBankAccount(user, "Main");
+        await pickRecipient(user, "Test Supermarket");
 
         await user.click(screen.getByRole("button", { name: /create/i }));
 
@@ -218,10 +227,8 @@ describe("AddTransactionDialog (integration)", () => {
         await screen.findByRole("dialog");
 
         await user.type(screen.getByLabelText(/amount/i), "12.50");
-        await user.type(screen.getByLabelText(/bank account/i), "Main");
-
-        await user.click(screen.getAllByRole("combobox")[0]);
-        await user.click(await screen.findByRole("option", { name: "Test Supermarket" }));
+        await pickBankAccount(user, "Main");
+        await pickRecipient(user, "Test Supermarket");
 
         await user.click(screen.getByRole("button", { name: /create/i }));
 
@@ -247,11 +254,9 @@ describe("AddTransactionDialog (integration)", () => {
         await screen.findByRole("dialog");
 
         await user.type(screen.getByLabelText(/amount/i), "abc");
-        await user.type(screen.getByLabelText(/bank account/i), "Main");
-
+        await pickBankAccount(user, "Main");
         // Select recipient so the guard passes
-        await user.click(screen.getAllByRole("combobox")[0]);
-        await user.click(await screen.findByRole("option", { name: "Test Supermarket" }));
+        await pickRecipient(user, "Test Supermarket");
 
         // fireEvent.submit bypasses JSDOM pattern constraint checking so handleSubmit runs
         const formEl = screen.getByRole("dialog").querySelector("form")!;

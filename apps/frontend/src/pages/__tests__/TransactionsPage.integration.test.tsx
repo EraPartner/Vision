@@ -216,19 +216,15 @@ describe("TransactionsPage (integration)", () => {
         await user.clear(amountInput);
         await user.type(amountInput, "-25.50");
 
-        // Fill bank account
-        const bankInput = screen.getByRole("textbox", { name: /bank account/i });
-        await user.clear(bankInput);
-        await user.type(bankInput, "IBAN001");
+        // Fill bank account via the AccountCombobox (Phase B2): type a new
+        // label and take the explicit-create escape hatch (D1) — the MSW
+        // accounts list is empty, so every label is "new".
+        await user.click(screen.getByRole("combobox", { name: /bank account/i }));
+        await user.type(screen.getByPlaceholderText(/search or type a new account/i), "IBAN001");
+        await user.click(await screen.findByText(/create account "IBAN001"/i));
 
         // Select recipient (required by form guard).
-        // Radix SelectTrigger has no htmlFor association, so we locate it
-        // by its placeholder text content instead of an accessible name.
-        const comboboxes = screen.getAllByRole("combobox");
-        const recipientTrigger = comboboxes.find(
-            (el) => el.textContent?.includes("Recipient"),
-        )!;
-        await user.click(recipientTrigger);
+        await user.click(screen.getByRole("combobox", { name: /recipient/i }));
         await user.click(await screen.findByRole("option", { name: /test recipient/i }));
 
         // Submit
