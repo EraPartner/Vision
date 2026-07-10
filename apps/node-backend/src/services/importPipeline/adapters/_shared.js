@@ -95,23 +95,37 @@ export const SUPPORTED_DATE_FORMATS = ['%Y-%m-%d', '%d/%m/%Y', '%m/%d/%Y', '%d-%
  * @returns {Date|null}
  */
 export function parseDateWithFormat(dateStr, fmt) {
+  // Round-trip guard: Date.UTC silently rolls over out-of-range components
+  // (Date.UTC(2024, 24, 12) → 2026-01-12 for a MM/DD file parsed as %d/%m/%Y),
+  // and a 2-digit year like "24" becomes 1924. Reject instead of importing a
+  // wrong day — matches parseDayMonthYear's validation.
+  const build = (y, m, d) => {
+    if (!Number.isFinite(y) || !Number.isFinite(m) || !Number.isFinite(d)) return null;
+    if (y < 100) return null; // 2-digit-year misparse (e.g. "24" → 1924)
+    const date = new Date(Date.UTC(y, m - 1, d));
+    if (isNaN(date.getTime())) return null;
+    if (date.getUTCFullYear() !== y || date.getUTCMonth() !== m - 1 || date.getUTCDate() !== d) {
+      return null;
+    }
+    return date;
+  };
   if (fmt.includes('%d/%m/%Y')) {
     const [d, m, y] = dateStr.split('/').map((s) => parseInt(s, 10));
-    return new Date(Date.UTC(y, m - 1, d));
+    return build(y, m, d);
   }
   if (fmt.includes('%m/%d/%Y')) {
     const [m, d, y] = dateStr.split('/').map((s) => parseInt(s, 10));
-    return new Date(Date.UTC(y, m - 1, d));
+    return build(y, m, d);
   }
   if (fmt.includes('%d-%m-%Y')) {
     const [d, m, y] = dateStr.split('-').map((s) => parseInt(s, 10));
-    return new Date(Date.UTC(y, m - 1, d));
+    return build(y, m, d);
   }
   if (fmt.includes('%Y-%m-%d')) {
     // Covers both '%Y-%m-%d' and '%Y-%m-%d %H:%M:%S' — parse the date part only,
     // as UTC, so an early-morning timestamp can't roll back a day.
     const [y, m, d] = dateStr.slice(0, 10).split('-').map((s) => parseInt(s, 10));
-    return new Date(Date.UTC(y, m - 1, d));
+    return build(y, m, d);
   }
   // Unknown format token: shared parser rebuilds the parsed calendar day at
   // UTC midnight (plain new Date() was local → day-shift on serialization).
