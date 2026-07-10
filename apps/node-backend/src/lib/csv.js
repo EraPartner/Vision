@@ -23,9 +23,18 @@ export function neutralizeCsvFormula(value) {
   return `'${value}`;
 }
 
-export function escapeCsvValue(value) {
+/**
+ * @param {unknown} value
+ * @param {{ neutralizeFormula?: boolean }} [opts] Set neutralizeFormula:false for
+ *   numeric columns. A pg-NUMERIC negative like "-12.34" starts with "-", a
+ *   dangerous prefix, so the guard would prepend "'" and export "'-12.34" \u2014 which
+ *   our own importer then fails to parse (NaN), silently dropping every expense
+ *   row on a Vision-export round-trip. Numbers can't be spreadsheet formulas, so
+ *   the guard is unnecessary as well as harmful here.
+ */
+export function escapeCsvValue(value, { neutralizeFormula = true } = {}) {
   if (value == null) return '';
-  const stringValue = neutralizeCsvFormula(String(value));
+  const stringValue = neutralizeFormula ? neutralizeCsvFormula(String(value)) : String(value);
   // Quote on \r as well as \n \u2014 a bare CR can split a row for strict parsers.
   return (
     stringValue.includes(',') ||

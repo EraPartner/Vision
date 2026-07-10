@@ -16,7 +16,10 @@ function rowToTransaction(row) {
   const date = parseDateFlexibleUtc(dateStr);
   if (!date) return null;
 
-  const amountStr = (row['Amount'] || '').replace(/[€$£,\s]/g, '').trim();
+  // Strip a leading "'" too: older exports ran numeric cells through the
+  // CSV formula-injection guard, which prepended "'" to negatives ("'-12.34").
+  // Without this, every expense row NaN-drops on a Vision-export round-trip.
+  const amountStr = (row['Amount'] || '').replace(/[€$£,\s']/g, '').trim();
   const amount = parseDecimalSafe(amountStr);
   if (isNaN(amount)) return null;
 
@@ -25,7 +28,9 @@ function rowToTransaction(row) {
   const recipient = recipientRaw ? normalizeToUppercase(cleanRecipientName(recipientRaw)) : 'UNKNOWN';
   const memo = row['Memo'] ? normalizeToUppercase(row['Memo'].trim()) : '';
   const currency = (row['Currency'] || 'EUR').trim().toUpperCase();
-  const balanceStr = (row['Balance'] || '').trim();
+  // Same guard-apostrophe cleanup as Amount, so a negative Balance survives the
+  // round-trip instead of being silently nulled.
+  const balanceStr = (row['Balance'] || '').replace(/[€$£,\s']/g, '').trim();
   const balance = balanceStr ? parseDecimalSafe(balanceStr) : null;
   const category = (row['Category'] || '').trim();
   const comment = (row['Comment'] || '').trim() || null;

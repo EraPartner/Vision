@@ -50,4 +50,12 @@ describe('escapeCsvValue', () => {
   it('combines neutralization with quoting', () => {
     expect(escapeCsvValue('=SUM(A1,B1)')).toBe('"\'=SUM(A1,B1)"');
   });
+
+  it('skips the formula guard for numeric columns (neutralizeFormula:false)', () => {
+    // A negative NUMERIC must export as "-12.34", not "'-12.34" — otherwise our
+    // own importer NaN-drops it on a round-trip.
+    expect(escapeCsvValue('-12.34', { neutralizeFormula: false })).toBe('-12.34');
+    // Guard still on by default.
+    expect(escapeCsvValue('-12.34')).toBe("'-12.34");
+  });
 });

@@ -194,11 +194,15 @@ describe('Transaction Routes', () => {
       expect(res.write).toHaveBeenCalled();
       expect(res.end).toHaveBeenCalledTimes(1);
       const csv = res.write.mock.calls.map(([chunk]) => chunk).join('');
+      // Text columns are still guarded against spreadsheet formula injection.
       expect(csv).toContain(`'=HYPERLINK(""http://evil"")`);
       expect(csv).toContain("'+cmd");
-      expect(csv).toContain("'-100.00");
       expect(csv).toContain("'@danger");
       expect(csv).toContain("'-comment");
+      // Numeric columns are NOT guarded — a leading "'" would break re-import
+      // (negative amounts/balances would NaN-drop on a Vision-export round-trip).
+      expect(csv).toContain(",-100.00,");
+      expect(csv).not.toContain("'-100.00");
     });
 
     it('should sanitize server error detail when export fails', async () => {
