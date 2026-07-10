@@ -159,7 +159,9 @@ function buildFilterFragment(filter, params, columnNames) {
  * the rest of the statement past the `;` guard.
  * @param {string} table
  * @param {{limit?:number, offset?:number, orderBy?:string, dir?:string,
- *          filters?:Array<{column:string,op?:string,value?:unknown}>}} opts
+ *          filters?:Array<{column:string,op?:string,value?:unknown}>,
+ *          where?:string}} opts `where` is accepted only to be rejected (400) —
+ *          the raw-WHERE escape hatch was removed.
  */
 export async function readRows(table, opts = {}) {
   const { columns, primaryKey } = await getTableMeta(table);
