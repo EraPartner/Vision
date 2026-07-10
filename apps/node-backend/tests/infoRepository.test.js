@@ -684,5 +684,24 @@ describe('InfoRepository', () => {
         vi.useRealTimers();
       }
     });
+
+    // TODO E21: the old queries streamed raw rows capped by LIMIT 10000/5000
+    // with NO ORDER BY — past the cap Postgres dropped *arbitrary* heap-order
+    // rows, making the dashboard figures nondeterministically wrong.
+    it('aggregates avg-vs-current in SQL, grouped by date/currency/sign with no LIMIT', async () => {
+      convertRowsToEur.mockImplementation(async (rows) => rows.map((row) => ({
+        ...row,
+        amount_eur: Number(row.amount ?? 0),
+      })));
+      query.mockResolvedValue({ rows: [] });
+
+      await infoRepository.getAverageVsCurrentSpending('EUR');
+
+      for (const [sql] of query.mock.calls) {
+        expect(sql).toContain('GROUP BY t.date, t.currency');
+        expect(sql).toContain('SUM(t.amount)');
+        expect(sql).not.toMatch(/LIMIT/i);
+      }
+    });
   });
 });
