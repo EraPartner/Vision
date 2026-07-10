@@ -43,6 +43,10 @@ export default function TransactionsPage() {
     const filterLabel = searchParams.get('filter_label') || undefined;
     const startDateFilter = searchParams.get('start_date') || undefined;
     const endDateFilter = searchParams.get('end_date') || undefined;
+    // account_id is the preferred account filter (exact FK match, ADR-088);
+    // bank_account stays as a substring escape hatch (e.g. the string-keyed
+    // bank-balances widget until its Phase C re-grain).
+    const accountIdFilter = searchParams.get('account_id') ? Number(searchParams.get('account_id')) : undefined;
     const bankAccountFilter = searchParams.get('bank_account') || undefined;
     const transactionTypeRaw = searchParams.get('transaction_type');
     const transactionTypeFilter = (transactionTypeRaw === 'income' || transactionTypeRaw === 'expense') ? transactionTypeRaw : undefined;
@@ -99,6 +103,7 @@ export default function TransactionsPage() {
         amountMaxFilter,
         amountSignedFilter,
         tagsFilter,
+        accountIdFilter,
         bankAccountFilter,
     });
 
@@ -122,6 +127,7 @@ export default function TransactionsPage() {
         amount_max: amountMaxFilter,
         amount_signed: amountSignedFilter || undefined,
         tags: tagsFilter,
+        account_id: accountIdFilter,
         bank_account: bankAccountFilter,
         search: search || undefined,
         active: !showAll,
@@ -137,6 +143,7 @@ export default function TransactionsPage() {
         amountMaxFilter,
         amountSignedFilter,
         tagsFilter,
+        accountIdFilter,
         bankAccountFilter,
         search,
         showAll,
@@ -410,6 +417,7 @@ export default function TransactionsPage() {
                     amountSignedFilter={amountSignedFilter}
                     searchFilter={search || undefined}
                     filterLabel={filterLabel}
+                    accountIdFilter={accountIdFilter}
                     bankAccountFilter={bankAccountFilter}
                     tagsFilter={tagsFilter}
                     onClear={() => setSearchParams({})}

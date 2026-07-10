@@ -1641,6 +1641,11 @@ paths:
             type: string
             format: date
         - in: query
+          name: account_id
+          description: Preferred account filter (exact FK match, ADR-088); bank_account remains a substring escape hatch
+          schema:
+            type: integer
+        - in: query
           name: bank_account
           schema:
             type: string
@@ -2645,6 +2650,16 @@ paths:
             type: string
             format: date
         - in: query
+          name: account_id
+          description: Preferred account filter (exact FK match, ADR-088); bank_account remains a substring escape hatch
+          schema:
+            type: integer
+        - in: query
+          name: account_ids
+          description: Comma-separated account ids (exact FK match, ADR-088); preferred over bank_accounts
+          schema:
+            type: string
+        - in: query
           name: bank_account
           schema:
             type: string
@@ -2681,6 +2696,16 @@ paths:
           schema:
             type: string
             format: date
+        - in: query
+          name: account_id
+          description: Preferred account filter (exact FK match, ADR-088); bank_account remains a substring escape hatch
+          schema:
+            type: integer
+        - in: query
+          name: account_ids
+          description: Comma-separated account ids (exact FK match, ADR-088); preferred over bank_accounts
+          schema:
+            type: string
         - in: query
           name: bank_account
           schema:
@@ -3378,6 +3403,11 @@ paths:
       operationId: getTransactionCount
       tags: [Info]
       parameters:
+        - in: query
+          name: account_id
+          description: Preferred account filter (exact FK match, ADR-088); bank_account remains a substring escape hatch
+          schema:
+            type: integer
         - in: query
           name: bank_account
           schema:

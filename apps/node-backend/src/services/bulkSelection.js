@@ -56,6 +56,7 @@ export function normalizeBulkFilter(filter) {
     transactionId: pick('transactionId', 'transaction_id'),
     startDate: pick('startDate', 'start_date'),
     endDate: pick('endDate', 'end_date'),
+    accountId: pick('accountId', 'account_id'),
     bankAccount: pick('bankAccount', 'bank_account'),
     bankAccounts: filter.bankAccounts ?? filter.bank_accounts ?? null,
     categoryId: pick('categoryId', 'category_id'),

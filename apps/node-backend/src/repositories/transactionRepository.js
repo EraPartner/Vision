@@ -85,6 +85,7 @@ export const transactionRepository = {
     offset = 0,
     startDate = null,
     endDate = null,
+    accountId = null,
     bankAccount = null,
     categoryId = null,
     recipientId = null,
@@ -98,7 +99,7 @@ export const transactionRepository = {
     tagSlugs = null,
   } = {}) {
     const { sql: where, params, nextParamIdx: p } = buildTransactionWhere({
-      transactionId, startDate, endDate, bankAccount, categoryId, recipientId, recipientGroupId, recipientName, search, active, tagSlugs,
+      transactionId, startDate, endDate, accountId, bankAccount, categoryId, recipientId, recipientGroupId, recipientName, search, active, tagSlugs,
     });
 
     // Build ORDER BY — fall back to default date DESC when no valid sort supplied
@@ -150,6 +151,7 @@ export const transactionRepository = {
     transactionId = null,
     startDate = null,
     endDate = null,
+    accountId = null,
     bankAccount = null,
     categoryId = null,
     recipientId = null,
@@ -160,7 +162,7 @@ export const transactionRepository = {
     tagSlugs = null,
   } = {}) {
     const { sql: where, params } = buildTransactionWhere({
-      transactionId, startDate, endDate, bankAccount, categoryId, recipientId, recipientGroupId, recipientName, search, active, tagSlugs,
+      transactionId, startDate, endDate, accountId, bankAccount, categoryId, recipientId, recipientGroupId, recipientName, search, active, tagSlugs,
     });
 
     const sql = `
@@ -176,7 +178,7 @@ export const transactionRepository = {
   /**
    * Get uncategorised transactions (recipient has no default category and transaction has no category).
    */
-  async getUncategorised({ limit = 50, offset = 0, startDate = null, endDate = null, bankAccount = null, recipientId = null, recipientName = null } = {}) {
+  async getUncategorised({ limit = 50, offset = 0, startDate = null, endDate = null, accountId = null, bankAccount = null, recipientId = null, recipientName = null } = {}) {
     let sql = `
       SELECT t.*,
              r.name AS recipient_name,
@@ -192,6 +194,7 @@ export const transactionRepository = {
 
     if (startDate) { sql += ` AND t.date >= $${paramIdx++}`; params.push(startDate); }
     if (endDate) { sql += ` AND t.date <= $${paramIdx++}`; params.push(endDate); }
+    if (accountId != null) { sql += ` AND t.account_id = $${paramIdx++}`; params.push(accountId); }
     if (bankAccount) { sql += ` AND t.bank_account ILIKE $${paramIdx++}`; params.push(`%${bankAccount}%`); }
     if (recipientId != null) { sql += ` AND t.recipient_id = $${paramIdx++}`; params.push(recipientId); }
     if (recipientName) { sql += ` AND r.name ILIKE $${paramIdx++}`; params.push(`%${recipientName}%`); }
@@ -217,6 +220,7 @@ export const transactionRepository = {
     offset = 0,
     startDate = null,
     endDate = null,
+    accountId = null,
     bankAccount = null,
     categoryId = null,
     recipientId = null,
@@ -232,6 +236,7 @@ export const transactionRepository = {
       transactionId,
       startDate,
       endDate,
+      accountId,
       bankAccount,
       categoryId,
       recipientId,
@@ -256,6 +261,10 @@ export const transactionRepository = {
     if (endDate) {
       uncategorisedWhere += ` AND t.date <= $${paramIdx++}`;
       params.push(endDate);
+    }
+    if (accountId != null) {
+      uncategorisedWhere += ` AND t.account_id = $${paramIdx++}`;
+      params.push(accountId);
     }
     if (bankAccount) {
       uncategorisedWhere += ` AND t.bank_account ILIKE $${paramIdx++}`;
@@ -404,6 +413,7 @@ export const transactionRepository = {
     offset = 0,
     startDate = null,
     endDate = null,
+    accountId = null,
     bankAccount = null,
     categoryId = null,
     categoryIds = null,
@@ -422,7 +432,7 @@ export const transactionRepository = {
     tagSlugs = null,
   } = {}) {
     const { sql: where, params, nextParamIdx: p } = buildTransactionWhere({
-      transactionId, startDate, endDate, bankAccount, categoryId, categoryIds, recipientId, recipientGroupId, recipientName, search, active, transactionType, amountMin, amountMax, amountSigned, tagSlugs,
+      transactionId, startDate, endDate, accountId, bankAccount, categoryId, categoryIds, recipientId, recipientGroupId, recipientName, search, active, transactionType, amountMin, amountMax, amountSigned, tagSlugs,
     });
 
     const sortCol = TRANSACTION_SORT_COLUMNS[sortBy] || 't.date';

@@ -45,7 +45,7 @@ function parseRouteId(req) {
 function parseTransactionListQuery(query) {
   const {
     transaction_id,
-    start_date, end_date, bank_account,
+    start_date, end_date, account_id, bank_account,
     category_id, category_ids, recipient_id, recipient_group_id, recipient_name,
     active = 'true', search,
     sort_by, sort_dir,
@@ -85,6 +85,9 @@ function parseTransactionListQuery(query) {
     transactionId: transaction_id ? parseInt(transaction_id, 10) : null,
     startDate: assertYmd(start_date, 'start_date'),
     endDate: assertYmd(end_date, 'end_date'),
+    // account_id is the preferred account filter (ADR-088 — reads key on the
+    // FK); bank_account stays as a substring escape hatch.
+    accountId: account_id ? parseInt(account_id, 10) : null,
     bankAccount: bank_account || null,
     categoryId: category_id ? parseInt(category_id, 10) : null,
     categoryIds: parsedCategoryIds?.length ? parsedCategoryIds : null,
@@ -112,12 +115,21 @@ function parseTransactionListQuery(query) {
  * raw query-string shape used by the list endpoint, including `transaction_id`,
  * `recipient_id`, `recipient_name`, `search`, `transaction_type`, and `active`.
  *
- * Bank-account multi-value support: `bank_accounts=a,b,c` → array of trimmed values.
+ * Account multi-value support: `account_ids=1,2,3` → array of ids (preferred);
+ * `bank_accounts=a,b,c` → array of trimmed strings (legacy escape hatch).
  *
  * Returns { whereSql, params, nextParamIdx }.
  */
 function buildExportFilters(query) {
   const opts = parseTransactionListQuery(query);
+
+  const accountIds = query.account_ids
+    ? String(query.account_ids)
+        .split(',')
+        .map((s) => parseInt(s, 10))
+        .filter((n) => Number.isFinite(n) && n > 0)
+        .slice(0, EXPORT_MAX_LIST_SIZE)
+    : null;
 
   const bankAccounts = query.bank_accounts
     ? String(query.bank_accounts)
@@ -131,6 +143,8 @@ function buildExportFilters(query) {
     transactionId: opts.transactionId,
     startDate: opts.startDate,
     endDate: opts.endDate,
+    accountId: opts.accountId,
+    accountIds: accountIds && accountIds.length > 0 ? accountIds : null,
     bankAccount: opts.bankAccount,
     bankAccounts: bankAccounts && bankAccounts.length > 0 ? bankAccounts : null,
     categoryId: opts.categoryId,

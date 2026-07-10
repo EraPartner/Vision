@@ -228,6 +228,34 @@ describe('buildAggregationFilter', () => {
   });
 });
 
+describe('buildTransactionWhere — accountId / accountIds (FK filter, ADR-088)', () => {
+  it('builds an exact account_id predicate', () => {
+    const { sql, params, nextParamIdx } = buildTransactionWhere({ accountId: 7, active: false });
+    expect(sql).toContain('t.account_id = $1');
+    expect(params).toEqual([7]);
+    expect(nextParamIdx).toBe(2);
+  });
+
+  it('builds an IN clause for accountIds and drops invalid ids', () => {
+    const { sql, params } = buildTransactionWhere({ accountIds: [3, -1, 9, 0.5], active: false });
+    expect(sql).toContain('t.account_id IN ($1, $2)');
+    expect(params).toEqual([3, 9]);
+  });
+
+  it('accountId wins over accountIds; string filters still compose', () => {
+    const { sql, params } = buildTransactionWhere({ accountId: 4, accountIds: [5, 6], bankAccount: 'BE12', active: false });
+    expect(sql).toContain('t.account_id = $1');
+    expect(sql).not.toContain('t.account_id IN');
+    expect(sql).toContain('t.bank_account ILIKE $2');
+    expect(params).toEqual([4, '%BE12%']);
+  });
+
+  it('skips the clause entirely when neither is provided', () => {
+    const { sql } = buildTransactionWhere({ active: false });
+    expect(sql).not.toContain('t.account_id');
+  });
+});
+
 describe('buildTransactionWhere — bankAccounts (plural IN clause)', () => {
   it('builds correct IN clause for exact IBAN match', () => {
     const { sql, params, nextParamIdx } = buildTransactionWhere({ bankAccounts: ['NL12INGB0001234567', 'BE68539007547034'], active: false });

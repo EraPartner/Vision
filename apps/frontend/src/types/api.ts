@@ -545,6 +545,8 @@ export interface BulkTransactionFilter {
     transaction_id?: number;
     start_date?: string;
     end_date?: string;
+    /** Preferred account filter (exact FK match, ADR-088). */
+    account_id?: number;
     bank_account?: string;
     bank_accounts?: string[];
     category_id?: number;

@@ -44,7 +44,10 @@ export function validateInt4Ids(ids) {
  * @param {number|null} [opts.transactionId]
  * @param {string|null} [opts.startDate]    inclusive
  * @param {string|null} [opts.endDate]      inclusive
- * @param {string|null}   [opts.bankAccount]   substring, ILIKE
+ * @param {number|null}   [opts.accountId]     exact match on t.account_id — the preferred account
+ *                                             filter (ADR-088; the bank_account string is being retired)
+ * @param {number[]|null} [opts.accountIds]    multiple account ids (IN clause); ignored when accountId is set
+ * @param {string|null}   [opts.bankAccount]   substring, ILIKE — legacy escape hatch; prefer accountId
  * @param {string[]|null} [opts.bankAccounts]  exact match IN clause; ignored when bankAccount is set; capped at MAX_LIST_SIZE
  * @param {number|null}   [opts.categoryId]    matches transaction, recipient-default or primary-default
  * @param {number[]|null} [opts.categoryIds]   multiple category IDs (IN clause); ignored when categoryId is set
@@ -73,6 +76,8 @@ export function buildTransactionWhere(opts = {}) {
     transactionId = null,
     startDate = null,
     endDate = null,
+    accountId = null,
+    accountIds = null,
     bankAccount = null,
     bankAccounts = null,
     categoryId = null,
@@ -107,6 +112,17 @@ export function buildTransactionWhere(opts = {}) {
   if (endDate) {
     clauses.push(`t.date <= $${p++}`);
     params.push(endDate);
+  }
+  if (accountId != null) {
+    clauses.push(`t.account_id = $${p++}`);
+    params.push(accountId);
+  } else if (Array.isArray(accountIds) && accountIds.length > 0) {
+    const safe = validateInt4Ids(accountIds);
+    if (safe.length > 0) {
+      const placeholders = safe.map(() => `$${p++}`).join(', ');
+      clauses.push(`t.account_id IN (${placeholders})`);
+      params.push(...safe);
+    }
   }
   if (bankAccount) {
     clauses.push(`t.bank_account ILIKE $${p++}`);

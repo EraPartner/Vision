@@ -89,11 +89,11 @@ export default function AccountsPage() {
     const toggleArchive = (a: Account) =>
         updateMutation.mutate({ id: a.id, data: { is_active: !a.is_active } });
 
-    // The dual-write trigger (migration 0051) keeps `transactions.bank_account`
-    // equal to `accounts.name`, so the account name is the transaction filter key.
+    // Filter by the account entity's id (ADR-088) — reads key on the FK, not
+    // the retiring bank_account string.
     const openAccountTransactions = (a: Account) => {
         const params = new URLSearchParams({
-            bank_account: a.name,
+            account_id: String(a.id),
             filter_label: a.display_name || a.name,
         });
         navigate(`/transactions?${params.toString()}`);
