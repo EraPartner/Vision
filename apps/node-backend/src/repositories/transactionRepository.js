@@ -23,6 +23,19 @@ const TRANSACTION_JOINS = `
   LEFT JOIN categories pc ON pr.default_category_id = pc.id
 `;
 
+// Effective category = own → recipient default → primary-recipient default
+// (3-level, alias-aware). Requires TRANSACTION_JOINS. Shared so the single-row
+// getById/create paths resolve categories identically to the list paths — an
+// alias recipient must not show categorized in lists but uncategorized on GET.
+const EFFECTIVE_CATEGORY_ID_SQL = 'COALESCE(t.category_id, r.default_category_id, pr.default_category_id)';
+const CATEGORY_NAME_SQL = `CASE
+               WHEN c.id IS NOT NULL THEN c.general || ':' || c.detail
+               WHEN pc.id IS NOT NULL THEN pc.general || ':' || pc.detail
+               WHEN rc.id IS NOT NULL THEN rc.general || ':' || rc.detail
+               ELSE NULL
+             END`;
+const RECIPIENT_NAME_SQL = 'COALESCE(pr.name, r.name)';
+
 // Allowed sort columns for transactions (maps frontend key -> SQL expression)
 const TRANSACTION_SORT_COLUMNS = {
   date: 't.date',
@@ -322,16 +335,11 @@ export const transactionRepository = {
   async getById(id) {
     const sql = `
       SELECT t.*,
-             r.name AS recipient_name,
-             CASE
-               WHEN c.id IS NOT NULL THEN c.general || ':' || c.detail
-               WHEN rc.id IS NOT NULL THEN rc.general || ':' || rc.detail
-               ELSE NULL
-             END AS category_name
+             ${RECIPIENT_NAME_SQL} AS recipient_name,
+             ${EFFECTIVE_CATEGORY_ID_SQL} AS effective_category_id,
+             ${CATEGORY_NAME_SQL} AS category_name
       FROM transactions t
-      LEFT JOIN recipients r ON t.recipient_id = r.id
-      LEFT JOIN categories c ON t.category_id = c.id
-      LEFT JOIN categories rc ON r.default_category_id = rc.id
+      ${TRANSACTION_JOINS}
       WHERE t.id = $1
     `;
     const result = await queryPrepared('tx_get_by_id', sql, [id]);
@@ -358,16 +366,11 @@ export const transactionRepository = {
         RETURNING *
       )
       SELECT t.*,
-             r.name AS recipient_name,
-             CASE
-               WHEN c.id IS NOT NULL THEN c.general || ':' || c.detail
-               WHEN rc.id IS NOT NULL THEN rc.general || ':' || rc.detail
-               ELSE NULL
-             END AS category_name
+             ${RECIPIENT_NAME_SQL} AS recipient_name,
+             ${EFFECTIVE_CATEGORY_ID_SQL} AS effective_category_id,
+             ${CATEGORY_NAME_SQL} AS category_name
       FROM inserted t
-      LEFT JOIN recipients r ON t.recipient_id = r.id
-      LEFT JOIN categories c ON t.category_id = c.id
-      LEFT JOIN categories rc ON r.default_category_id = rc.id
+      ${TRANSACTION_JOINS}
     `;
     const sqlParams = [
       transaction_date,
