@@ -9,7 +9,7 @@ vi.mock('../src/database/connection.js', () => ({
 }));
 
 vi.mock('../src/repositories/portfolioTransactionRepository.js', () => ({
-  default: { create: vi.fn() },
+  default: { create: vi.fn(), hardDelete: vi.fn() },
 }));
 
 vi.mock('../src/services/portfolio/fxResolve.js', () => ({
@@ -165,6 +165,20 @@ describe('commitBatch (portfolio)', () => {
     // No standalone cash INSERT for the trade (its leg is the cash effect).
     const cashInserts = query.mock.calls.filter(([s]) => /INSERT INTO transactions/.test(s));
     expect(cashInserts).toHaveLength(0);
+  });
+
+  it('brokerage trade: rolls back the trade and errors the row when the cash leg fails (ADR-095 atomicity)', async () => {
+    isBrokerage = true;
+    batchAccountId = 7;
+    portfolioTransactionRepository.create.mockResolvedValueOnce({ id: 555, amount: -1000, fees: 0, taxes: 0 });
+    createTradeCashLeg.mockRejectedValueOnce(new Error('leg insert failed'));
+    matchedRows = [row({ route: 'portfolio', type: 'buy', type_raw: 'buy' })];
+
+    const res = await commitBatch({ batchId: 5 });
+    // Trade is rolled back, row errored — not counted as imported.
+    expect(res).toMatchObject({ imported: 0, errors: 1, legs: 0 });
+    expect(portfolioTransactionRepository.hardDelete).toHaveBeenCalledWith(555);
+    expect(marked[0]).toMatchObject({ status: 'error', message: expect.stringMatching(/cash leg/) });
   });
 
   it('brokerage cash row: inserts a cash transaction, no trade/leg', async () => {

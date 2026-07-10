@@ -147,11 +147,12 @@ export async function commitBatch({ batchId, onProgress }) {
         preloaded_asset_class: row.asset_class,
       }));
 
-      imported++;
-      if (row.tx_hash) committedHashes.add(row.tx_hash);
-
       // Brokerage trade (ADR-095/ADR-090): the trade's single cash movement is its
       // auto-created leg on the same sleeve — never a second standalone cash row.
+      // The trade + its leg are all-or-nothing (ADR-095): a leg failure used to
+      // only log a warning and keep the trade, leaving the sleeve un-debited (cash
+      // overstated) with no repair path (re-import dedups the trade). Instead we
+      // roll the trade back and mark the row 'error' so a re-import retries cleanly.
       if (isBrokerage && batchAccountId) {
         try {
           const legId = await createTradeCashLeg({
@@ -160,9 +161,21 @@ export async function commitBatch({ batchId, onProgress }) {
           });
           if (legId) legs++;
         } catch (legErr) {
-          logger.warn('[portfolio-pipeline:commit] trade cash leg failed (trade kept)', { rowId: row.id, err: legErr?.message });
+          if (created?.id != null) {
+            try {
+              await portfolioTransactionRepository.hardDelete(created.id);
+            } catch (rollbackErr) {
+              logger.error('[portfolio-pipeline:commit] failed to roll back trade after cash-leg failure', { rowId: row.id, txnId: created.id, err: rollbackErr?.message });
+            }
+          }
+          errors++;
+          await markRow(row.id, 'error', `cash leg failed: ${legErr?.message?.slice(0, 400) || 'unknown'}`);
+          continue;
         }
       }
+
+      imported++;
+      if (row.tx_hash) committedHashes.add(row.tx_hash);
 
       await query(
         `UPDATE portfolio_import_staging_rows SET status = 'committed', committed_txn_id = $2 WHERE id = $1`,
