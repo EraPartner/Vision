@@ -91,7 +91,7 @@ export async function getPreviewRows(batchId) {
             isr.recipient_raw,
             isr.amount,
             isr.currency,
-            isr.tx_date,
+            to_char(isr.tx_date, 'YYYY-MM-DD') AS tx_date,
             isr.memo,
             isr.match_source,
             isr.match_similarity,

@@ -4,12 +4,25 @@
 
 import { query } from '../database/connection.js';
 import { coerceNumericFields } from '../lib/money.js';
+import { toYmd } from '../utils/portfolioMath.js';
 import { buildListWhereClause } from './portfolioTxRepo.common.js';
 
 // NUMERIC columns node-postgres returns as strings; coerce to numbers on emit
 // so portfolio transaction rows match their `number` API/TS types.
 const PORTFOLIO_TX_NUMERIC_FIELDS = ['amount', 'units', 'price_per_unit', 'fees', 'taxes', 'fx_rate_to_eur'];
-export const mapPortfolioTxRow = (row) => coerceNumericFields(row, PORTFOLIO_TX_NUMERIC_FIELDS);
+// DATE columns node-postgres returns as local-midnight Date objects; emitted
+// raw they JSON-serialize to an ISO timestamp that is the PREVIOUS day east of
+// UTC. The frontend then T-splits that shifted value (edit dialogs wrote the
+// date back one day earlier per save) or NaNs on it (parseLocalDateFromYmd).
+// Emit calendar-day strings — the API/TS contract is `string` here.
+const PORTFOLIO_TX_DATE_FIELDS = ['date', 'recurrence_end_date'];
+export const mapPortfolioTxRow = (row) => {
+  const mapped = coerceNumericFields(row, PORTFOLIO_TX_NUMERIC_FIELDS);
+  for (const field of PORTFOLIO_TX_DATE_FIELDS) {
+    if (mapped[field] instanceof Date) mapped[field] = toYmd(mapped[field]);
+  }
+  return mapped;
+};
 
 export async function getAll({ investmentId = null, type = null, limit = 200, offset = 0 } = {}) {
   const { where, params, nextParam } = buildListWhereClause({ investmentId, type });

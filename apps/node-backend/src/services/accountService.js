@@ -36,12 +36,15 @@ function sanitize(body, { requireName }) {
     out.name = body.name.trim();
   }
 
+  // Explicit null means "clear this field" and must survive to the repository
+  // as SQL NULL — mapping it to undefined made PATCH-to-clear a silent no-op
+  // (the repository skips undefined when building SET).
   for (const key of ['display_name', 'institution']) {
     if (body[key] !== undefined) {
       if (body[key] !== null && typeof body[key] !== 'string') {
         throw new ValidationError(`${key} must be a string`);
       }
-      out[key] = body[key] === null ? undefined : body[key].trim();
+      out[key] = body[key] === null ? null : body[key].trim();
     }
   }
 
@@ -69,7 +72,7 @@ function sanitize(body, { requireName }) {
 
   if (body.funding_account_id !== undefined) {
     if (body.funding_account_id === null) {
-      out.funding_account_id = undefined;
+      out.funding_account_id = null;
     } else {
       const fid = Number(body.funding_account_id);
       if (!Number.isInteger(fid) || fid <= 0) throw new ValidationError('funding_account_id must be a positive integer');
@@ -79,7 +82,7 @@ function sanitize(body, { requireName }) {
 
   if (body.statement_balance !== undefined) {
     if (body.statement_balance === null) {
-      out.statement_balance = undefined;
+      out.statement_balance = null;
     } else {
       const bal = Number(body.statement_balance);
       if (!Number.isFinite(bal)) throw new ValidationError('statement_balance must be a number');
@@ -89,7 +92,7 @@ function sanitize(body, { requireName }) {
 
   if (body.statement_balance_date !== undefined) {
     if (body.statement_balance_date === null) {
-      out.statement_balance_date = undefined;
+      out.statement_balance_date = null;
     } else {
       const d = String(body.statement_balance_date);
       if (!/^\d{4}-\d{2}-\d{2}$/.test(d)) throw new ValidationError('statement_balance_date must be an ISO date (YYYY-MM-DD)');
@@ -98,6 +101,17 @@ function sanitize(body, { requireName }) {
   }
 
   return out;
+}
+
+/**
+ * A statement balance is only meaningful with its as-of date (ADR-094 drift
+ * anchors on it). Enforced here for a friendly 4xx; migration 0065's CHECK
+ * (ck_accounts_statement_balance_has_date) backstops at the DB.
+ */
+function assertStatementBalanceHasDate(balance, date) {
+  if (balance != null && date == null) {
+    throw new ValidationError('statement_balance_date is required when statement_balance is set');
+  }
 }
 
 export const accountService = {
@@ -114,6 +128,7 @@ export const accountService = {
 
   async create(body) {
     const fields = sanitize(body, { requireName: true });
+    assertStatementBalanceHasDate(fields.statement_balance, fields.statement_balance_date);
     try {
       return await accountRepository.create(fields);
     } catch (err) {
@@ -124,6 +139,28 @@ export const accountService = {
 
   async update(id, body) {
     const fields = sanitize(body, { requireName: false });
+    const touchesStatement = 'statement_balance' in fields || 'statement_balance_date' in fields;
+    let current;
+    if (touchesStatement || 'is_active' in fields) {
+      current = await accountRepository.getById(id);
+      if (!current) throw new NotFoundError(`Account ${id} not found`);
+    }
+    // Partial PATCH: validate the merged state, not just the provided keys —
+    // e.g. setting a balance while the stored date is NULL must still fail.
+    if (touchesStatement) {
+      assertStatementBalanceHasDate(
+        'statement_balance' in fields ? fields.statement_balance : current.statement_balance,
+        'statement_balance_date' in fields ? fields.statement_balance_date : current.statement_balance_date,
+      );
+    }
+    // Lifecycle (ADR-088 addendum, D5): closing stamps closed_at once (a
+    // redundant re-archive keeps the original timestamp); reactivating clears
+    // it. Server-stamped only — sanitize() never accepts closed_at from the body.
+    if (fields.is_active === false && current.is_active) {
+      fields.closed_at = new Date();
+    } else if (fields.is_active === true) {
+      fields.closed_at = null;
+    }
     let updated;
     try {
       updated = await accountRepository.update(id, fields);
@@ -136,9 +173,9 @@ export const accountService = {
   },
 
   /**
-   * Hard-delete an account. Accounts protect history: if transactions or planned
-   * transactions still reference it (FK ON DELETE RESTRICT), surface a 409 with a
-   * clear instruction to archive (set is_active=false) instead.
+   * Hard-delete an account. Accounts protect history: delete is only possible
+   * with zero referencing rows (FK ON DELETE RESTRICT); otherwise a 409 routes
+   * the caller to the close flow (lifecycle D5: active → closed → deleted).
    */
   async remove(id) {
     let removed;
@@ -147,7 +184,7 @@ export const accountService = {
     } catch (err) {
       if (err?.code === '23503') {
         throw new ConflictError(
-          `Account ${id} still has transactions and cannot be deleted. Archive it instead (set is_active=false).`,
+          `Account ${id} still has activity referencing it and cannot be deleted. Close the account instead.`,
         );
       }
       throw err;

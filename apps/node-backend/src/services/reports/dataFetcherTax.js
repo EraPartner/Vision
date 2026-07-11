@@ -191,14 +191,18 @@ async function fetchTaxTransactions(targetCurrency, startDate, endDate) {
     const fees     = convert(row.fees);
     const amount   = convert(row.amount);
 
-    // Classify taxes by transaction type
+    // Classify taxes by transaction type. Belgian TOB (beurstaks) is levied on
+    // BOTH legs of an exchange transaction — "transfer and acquisition" are
+    // each taxable (FOD Financiën) — so a sell's pt.taxes is TOB exactly like
+    // a buy's. It was previously bucketed into sellTaxTotal and rendered as
+    // "Capital Gains / Sell Tax": with Belgian CGT at 0% through 2025, a
+    // nonzero line under that label was materially misleading (it was TOB all
+    // along) and the TOB line under-reported by the whole sell side.
     let tobAmt = 0, whtAmt = 0, sellAmt = 0, otherAmt = 0;
     switch (row.type) {
       case 'buy':
-        tobAmt = taxes;
-        break;
       case 'sell':
-        sellAmt = taxes;
+        tobAmt = taxes;
         break;
       case 'dividend':
         whtAmt = taxes;
@@ -296,8 +300,8 @@ export async function fetchTaxData(currency, period, { taxProfile, precomputedPI
     period,
     periodNote,
     taxTables,
-    taxProfile: taxProfile ?? null,
-    precomputedPIT: precomputedPIT ?? null,
+    taxProfile: taxProfile ?? undefined,
+    precomputedPIT: precomputedPIT ?? undefined,
     tobTotal:          txns?.tobTotal          ?? 0,
     dividendWHTTotal:  txns?.dividendWHTTotal  ?? 0,
     sellTaxTotal:      txns?.sellTaxTotal      ?? 0,

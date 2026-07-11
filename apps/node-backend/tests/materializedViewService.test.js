@@ -77,17 +77,48 @@ describe('materializedViewService', () => {
   it('debounces scheduleRefresh calls into one refresh', async () => {
     vi.useFakeTimers();
 
-    const { scheduleRefresh, query } = await loadMaterializedViewService();
+    const { scheduleRefresh, query, REFRESH_DEBOUNCE_MS } = await loadMaterializedViewService();
     query.mockResolvedValue({ rows: [] });
 
     scheduleRefresh();
     scheduleRefresh();
 
-    await vi.advanceTimersByTimeAsync(999);
+    await vi.advanceTimersByTimeAsync(REFRESH_DEBOUNCE_MS - 1);
     expect(query).not.toHaveBeenCalled();
 
     await vi.advanceTimersByTimeAsync(1);
     expect(query).toHaveBeenCalledTimes(4);
+  });
+
+  // TODO E20: trailing-only debounce let a steady mutation stream (< debounce
+  // apart) defer the refresh indefinitely — the max-wait cap forces a flush.
+  it('scheduleRefresh flushes at the max-wait cap under a steady mutation stream', async () => {
+    vi.useFakeTimers();
+
+    const {
+      scheduleRefresh, query, REFRESH_DEBOUNCE_MS, REFRESH_MAX_WAIT_MS,
+    } = await loadMaterializedViewService();
+    query.mockResolvedValue({ rows: [] });
+
+    // Reschedule every 2s — always inside the 5s trailing window.
+    const step = 2000;
+    scheduleRefresh();
+    for (let elapsed = 0; elapsed < REFRESH_MAX_WAIT_MS - step; elapsed += step) {
+      await vi.advanceTimersByTimeAsync(step);
+      scheduleRefresh();
+    }
+    expect(query).not.toHaveBeenCalled();
+
+    // Crossing the 10s deadline flushes even though the last call was < 5s ago.
+    await vi.advanceTimersByTimeAsync(step);
+    expect(query).toHaveBeenCalledTimes(4);
+
+    // The burst state resets: the next lone call waits the full trailing window again.
+    scheduleRefresh();
+    await vi.advanceTimersByTimeAsync(REFRESH_DEBOUNCE_MS - 1);
+    expect(query).toHaveBeenCalledTimes(4);
+    await vi.advanceTimersByTimeAsync(1);
+    expect(query).toHaveBeenCalledTimes(8);
   });
 
   it('creates materialized views and indexes in expected order', async () => {

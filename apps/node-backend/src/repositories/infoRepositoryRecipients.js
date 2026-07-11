@@ -9,6 +9,7 @@
  */
 
 import { query } from '../database/connection.js';
+import { toWireDate } from '../lib/dateFormat.js';
 import { convertRowsToEur } from '../services/currency/currencyConversionService.js';
 import {
   roundToCents,
@@ -33,10 +34,10 @@ export const recipientInsightsRepository = {
     const validRecIds = (excludedRecipientIds || []).filter(id => Number.isInteger(id) && id > 0 && id < 2147483647);
     const params = [];
     const catExclude = validCatIds.length > 0
-      ? `AND COALESCE(t.category_id, r.default_category_id, pr.default_category_id) NOT IN (${validCatIds.map(id => { params.push(id); return `$${params.length}`; }).join(',')})`
+      ? `AND COALESCE(t.category_id, r.default_category_id, pr.default_category_id, -1) NOT IN (${validCatIds.map(id => { params.push(id); return `$${params.length}`; }).join(',')})`
       : '';
     const recExclude = validRecIds.length > 0
-      ? `AND COALESCE(pr.id, r.id) NOT IN (${validRecIds.map(id => { params.push(id); return `$${params.length}`; }).join(',')})`
+      ? `AND COALESCE(pr.id, r.id, -1) NOT IN (${validRecIds.map(id => { params.push(id); return `$${params.length}`; }).join(',')})`
       : '';
 
     const topRawResult = await query(`
@@ -76,14 +77,18 @@ export const recipientInsightsRepository = {
           name: row.recipient_name,
           totalSpend: 0,
           transactionCount: 0,
-          firstSeen: row.first_seen,
-          lastSeen: row.last_seen,
+          // DATE columns as calendar-day strings (Y-M-D compares
+          // lexicographically, so the min/max below still works).
+          firstSeen: toWireDate(row.first_seen),
+          lastSeen: toWireDate(row.last_seen),
         };
       }
       recipientAgg[rid].totalSpend += eur;
       recipientAgg[rid].transactionCount += count;
-      if (row.first_seen < recipientAgg[rid].firstSeen) recipientAgg[rid].firstSeen = row.first_seen;
-      if (row.last_seen > recipientAgg[rid].lastSeen) recipientAgg[rid].lastSeen = row.last_seen;
+      const firstSeen = toWireDate(row.first_seen);
+      const lastSeen = toWireDate(row.last_seen);
+      if (firstSeen < recipientAgg[rid].firstSeen) recipientAgg[rid].firstSeen = firstSeen;
+      if (lastSeen > recipientAgg[rid].lastSeen) recipientAgg[rid].lastSeen = lastSeen;
     }
 
     const topMerchants = Object.values(recipientAgg)
@@ -167,13 +172,13 @@ export const recipientInsightsRepository = {
 
     const params = [];
     const recExclude = validRecIds.length > 0
-      ? `AND COALESCE(r.primary_recipient_id, t.recipient_id) NOT IN (${validRecIds.map(id => { params.push(id); return `$${params.length}`; }).join(',')})`
+      ? `AND COALESCE(r.primary_recipient_id, t.recipient_id, -1) NOT IN (${validRecIds.map(id => { params.push(id); return `$${params.length}`; }).join(',')})`
       : '';
     // Category exclusion (incl. hidden categories) must apply here too, or the
     // year-filtered Top Recipients view contradicts the "All years" view (which
     // does exclude them). 3-level alias-aware COALESCE matches the canonical resolver.
     const catExclude = validCatIds.length > 0
-      ? `AND COALESCE(t.category_id, r.default_category_id, pr.default_category_id) NOT IN (${validCatIds.map(id => { params.push(id); return `$${params.length}`; }).join(',')})`
+      ? `AND COALESCE(t.category_id, r.default_category_id, pr.default_category_id, -1) NOT IN (${validCatIds.map(id => { params.push(id); return `$${params.length}`; }).join(',')})`
       : '';
 
     // Aggregate in SQL per (recipient, year, date, currency) instead of streaming
@@ -238,7 +243,7 @@ export const recipientInsightsRepository = {
 
     const params = [];
     const recExclude = validRecIds.length > 0
-      ? `AND COALESCE(pr.id, r.id) NOT IN (${validRecIds.map(id => { params.push(id); return `$${params.length}`; }).join(',')})`
+      ? `AND COALESCE(pr.id, r.id, -1) NOT IN (${validRecIds.map(id => { params.push(id); return `$${params.length}`; }).join(',')})`
       : '';
 
     const periodExpr = bucket === 'yearly' ? "TO_CHAR(t.date, 'YYYY')" : "TO_CHAR(t.date, 'YYYY-MM')";

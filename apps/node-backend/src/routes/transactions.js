@@ -35,6 +35,7 @@ import {
 } from '../services/transactionExport.js';
 import { resolveBulkSelection } from '../services/bulkSelection.js';
 import { parsePagination } from '../lib/pagination.js';
+import { toWireDate } from '../lib/dateFormat.js';
 
 const router = Router();
 
@@ -45,7 +46,7 @@ function parseRouteId(req) {
 function parseTransactionListQuery(query) {
   const {
     transaction_id,
-    start_date, end_date, bank_account,
+    start_date, end_date, account_id, bank_account,
     category_id, category_ids, recipient_id, recipient_group_id, recipient_name,
     active = 'true', search,
     sort_by, sort_dir,
@@ -85,6 +86,9 @@ function parseTransactionListQuery(query) {
     transactionId: transaction_id ? parseInt(transaction_id, 10) : null,
     startDate: assertYmd(start_date, 'start_date'),
     endDate: assertYmd(end_date, 'end_date'),
+    // account_id is the preferred account filter (ADR-088 — reads key on the
+    // FK); bank_account stays as a substring escape hatch.
+    accountId: account_id ? parseInt(account_id, 10) : null,
     bankAccount: bank_account || null,
     categoryId: category_id ? parseInt(category_id, 10) : null,
     categoryIds: parsedCategoryIds?.length ? parsedCategoryIds : null,
@@ -112,12 +116,21 @@ function parseTransactionListQuery(query) {
  * raw query-string shape used by the list endpoint, including `transaction_id`,
  * `recipient_id`, `recipient_name`, `search`, `transaction_type`, and `active`.
  *
- * Bank-account multi-value support: `bank_accounts=a,b,c` → array of trimmed values.
+ * Account multi-value support: `account_ids=1,2,3` → array of ids (preferred);
+ * `bank_accounts=a,b,c` → array of trimmed strings (legacy escape hatch).
  *
  * Returns { whereSql, params, nextParamIdx }.
  */
 function buildExportFilters(query) {
   const opts = parseTransactionListQuery(query);
+
+  const accountIds = query.account_ids
+    ? String(query.account_ids)
+        .split(',')
+        .map((s) => parseInt(s, 10))
+        .filter((n) => Number.isFinite(n) && n > 0)
+        .slice(0, EXPORT_MAX_LIST_SIZE)
+    : null;
 
   const bankAccounts = query.bank_accounts
     ? String(query.bank_accounts)
@@ -131,6 +144,8 @@ function buildExportFilters(query) {
     transactionId: opts.transactionId,
     startDate: opts.startDate,
     endDate: opts.endDate,
+    accountId: opts.accountId,
+    accountIds: accountIds && accountIds.length > 0 ? accountIds : null,
     bankAccount: opts.bankAccount,
     bankAccounts: bankAccounts && bankAccounts.length > 0 ? bankAccounts : null,
     categoryId: opts.categoryId,
@@ -153,7 +168,10 @@ function buildExportFilters(query) {
 function normalizeTransactionPatchFields(body) {
   const fields = { ...body };
 
-  if (fields.date) {
+  // Remap whenever the key is present — a cleared date ('' / null) must also
+  // land on transaction_date so the PATCH validation can reject it instead of
+  // letting `SET "date" = ''` reach Postgres.
+  if ('date' in fields) {
     fields.transaction_date = fields.date;
     delete fields.date;
   }
@@ -619,6 +637,37 @@ router.patch(
       throw new ValidationError('tags must be an array of strings');
     }
 
+    // Parity with POST, which validates date/amount/recipient_id. Without
+    // these, the inline row editor's cleared native date input ('') survived
+    // the whitelist and reached Postgres as `SET "date" = ''` — a 22007 cast
+    // error surfacing as a 500 from pressing Enter. Both columns are NOT NULL,
+    // so a PATCH may change them but never clear them.
+    if ('transaction_date' in fields) {
+      if (!fields.transaction_date) {
+        throw new ValidationError('transaction_date cannot be cleared');
+      }
+      fields.transaction_date = assertYmd(fields.transaction_date, 'transaction_date');
+    }
+    if ('amount' in fields) {
+      const amountNum = Number(fields.amount);
+      if (fields.amount == null || fields.amount === '' || !Number.isFinite(amountNum)) {
+        throw new ValidationError('amount must be a number');
+      }
+      fields.amount = amountNum;
+    }
+    // recipient_id/category_id: null clears (both columns are nullable), but a
+    // present non-null value must be a positive integer — a non-integer here
+    // otherwise reached the DB as an FK type error and surfaced as a 500.
+    for (const fkField of ['recipient_id', 'category_id']) {
+      const value = fields[fkField];
+      if (value === undefined || value === null) continue;
+      const idNum = Number(value);
+      if (!Number.isInteger(idNum) || idNum <= 0) {
+        throw new ValidationError(`${fkField} must be a positive integer`);
+      }
+      fields[fkField] = idNum;
+    }
+
     // Independent — touch disjoint fields, run in parallel.
     await Promise.all([
       resolveRecipientNameToId(fields),
@@ -656,8 +705,10 @@ function formatTransaction(row) {
   const amountEur = row.amount_eur != null ? toNumber(toDecimal(row.amount_eur)) : amount;
   return {
     id: row.id,
-    transaction_date: row.date,
-    date: row.date,
+    // DATE column: emit the calendar day, not the raw pg Date (which JSON-
+    // serializes as the previous day's ISO timestamp east of UTC).
+    transaction_date: toWireDate(row.date),
+    date: toWireDate(row.date),
     bank_account: row.bank_account,
     recipient_id: row.recipient_id,
     recipient_name: row.recipient_name || null,

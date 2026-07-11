@@ -19,23 +19,30 @@ export async function getAverageVsCurrentSpending(targetCurrency = 'EUR') {
   // (and the dropping of mv_cashflow_daily) set out to prevent.
   const includeTransfers = await getIncludeTransfers();
   const transferFilter = includeTransfers ? '' : 'AND t.is_transfer = false';
+  // Aggregate in SQL, grouped by (date, currency, sign). The previous
+  // row-streaming version capped the scans with LIMIT 10000/5000 and NO ORDER
+  // BY — past 10k rows in the window Postgres dropped *arbitrary* heap-order
+  // rows, making these dashboard figures nondeterministically wrong. Grouping
+  // bounds the result by days x currencies x 2 (no LIMIT needed), keeps one
+  // signed `amount` per row so the existing conversion pipeline and sign
+  // checks below work unchanged, and moves the summing where it belongs.
   const sql6m = `
-    SELECT t.amount, t.currency, t.date
+    SELECT t.date, t.currency, (t.amount < 0) AS is_spending, SUM(t.amount) AS amount
     FROM transactions t
     WHERE t.is_active = true
       ${transferFilter}
       AND t.date >= date_trunc('month', CURRENT_DATE) - interval '6 months'
       AND t.date < date_trunc('month', CURRENT_DATE)
-    LIMIT 10000
+    GROUP BY t.date, t.currency, (t.amount < 0)
   `;
   const sqlCurrent = `
-    SELECT t.amount, t.currency, t.date
+    SELECT t.date, t.currency, (t.amount < 0) AS is_spending, SUM(t.amount) AS amount
     FROM transactions t
     WHERE t.is_active = true
       ${transferFilter}
       AND t.date >= date_trunc('month', CURRENT_DATE)
       AND t.date <= CURRENT_DATE
-    LIMIT 5000
+    GROUP BY t.date, t.currency, (t.amount < 0)
   `;
 
   const [past6Result, currentResult] = await Promise.all([

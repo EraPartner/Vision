@@ -98,4 +98,22 @@ describe('fetchTaxData — Belgian tax FX uses transaction-date rates (ADR-085)'
     expect(data.dividendsReceived).toBeCloseTo(1000, 6);
     expect(data.unconvertedCurrencies).toEqual(['KRW']);
   });
+
+  it('buckets sell-leg taxes into TOB, not "Capital Gains / Sell Tax" (TOB hits both legs)', async () => {
+    // Belgian TOB is levied on transfer AND acquisition — a sell's pt.taxes is
+    // TOB like a buy's. It used to land in sellTaxTotal, rendered under a
+    // "Capital Gains / Sell Tax" label (materially misleading with CGT at 0%
+    // through 2025) while the TOB line under-reported the whole sell side.
+    query.mockResolvedValueOnce({
+      rows: [
+        dividendRow({ id: 2, type: 'buy', amount: 1000, taxes: 3.5, currency: 'EUR' }),
+        dividendRow({ id: 3, type: 'sell', amount: 1200, taxes: 4.2, currency: 'EUR' }),
+      ],
+    });
+
+    const data = await fetchTaxData('EUR', { kind: 'year', year: 2024 }, {});
+
+    expect(data.tobTotal).toBeCloseTo(7.7, 6); // buy 3.5 + sell 4.2
+    expect(data.sellTaxTotal).toBe(0);
+  });
 });

@@ -89,7 +89,7 @@ export default function PerformancePage() {
     const [selectedPeriod, setSelectedPeriod] = useState<ChartPeriod>("all");
     const [showFxNeutral, setShowFxNeutral] = useState(false);
 
-    const { data: portfolioPerformanceData, isLoading } = useQuery({
+    const { data: portfolioPerformanceData, isLoading, isError, error } = useQuery({
         queryKey: ["portfolio-performance", defaultCurrency, selectedPeriod],
         queryFn: () => apiClient.getPortfolioPerformance({ currency: defaultCurrency, period: selectedPeriod }),
         staleTime: 300_000,
@@ -138,9 +138,12 @@ export default function PerformancePage() {
     );
     const hasFxExposure = breakdownSummary.some((b) => b.currency && b.currency !== defaultCurrency);
 
-    // Lightweight mapping of already-downsampled snapshots to chart format
+    // Lightweight mapping of already-downsampled snapshots to chart format.
+    // chartDate is parsed ONCE here — parsing inside the chart's xAccessor ran
+    // per point per render (~400 points × 7 series on a scrubbable chart).
     const chartData = useMemo(() => snapshots.map((s) => ({
         day: s.date,
+        chartDate: parseISO(s.date),
         [CHART_KEYS.invested]: Math.round(s.invested * 100) / 100,
         [CHART_KEYS.inflationAdjusted]: Math.round(s.inflation_adjusted_value * 100) / 100,
         [CHART_KEYS.value]: Math.round(s.value * 100) / 100,
@@ -176,6 +179,7 @@ export default function PerformancePage() {
 
         return snapshots.map((s) => ({
             day: s.date,
+            chartDate: parseISO(s.date),
             [CHART_KEYS.relativePortfolio]: cumulativeReturn(s.value, s.invested),
             [CHART_KEYS.relativeStocksEtfs]: cumulativeReturn(s.stocks_etfs_value, s.stocks_etfs_invested),
             [CHART_KEYS.relativeCrypto]: cumulativeReturn(s.crypto_value, s.crypto_invested),
@@ -189,6 +193,21 @@ export default function PerformancePage() {
             <div className="space-y-6">
                 <PageHeader title={t('performance.title')} icon={BarChart3} />
                 <SectionLoader />
+            </div>
+        );
+    }
+
+    // A failed fetch must not masquerade as "no holdings yet" — the empty state
+    // tells the user to add holdings / refresh prices, wrong on a network error.
+    if (isError) {
+        return (
+            <div className="space-y-6">
+                <PageHeader title={t('performance.title')} icon={BarChart3} />
+                <Card className="glass-regular">
+                    <CardContent className="pt-6">
+                        <p className="text-destructive">{t('common.loadError', { msg: (error as Error)?.message ?? '' })}</p>
+                    </CardContent>
+                </Card>
             </div>
         );
     }
@@ -302,7 +321,7 @@ export default function PerformancePage() {
                     <VisxAreaChart
                         scrubbable
                         data={chartData}
-                        xAccessor={(d) => parseISO(d.day)}
+                        xAccessor={(d) => d.chartDate}
                         series={[
                             { key: CHART_KEYS.invested, label: t('portfolio.totalInvested'), accessor: (d) => d.invested, color: 'hsl(var(--muted-foreground))', dashed: true, strokeWidth: 1.5 },
                             { key: CHART_KEYS.inflationAdjusted, label: t('performance.inflationAdjusted'), accessor: (d) => d.inflationAdjusted, color: 'hsl(30, 80%, 55%)', strokeWidth: 2 },
@@ -342,7 +361,7 @@ export default function PerformancePage() {
                     <VisxAreaChart
                         scrubbable
                         data={relativePerformanceData}
-                        xAccessor={(d) => parseISO(d.day)}
+                        xAccessor={(d) => d.chartDate}
                         series={[
                             { key: CHART_KEYS.relativePortfolio, label: t('performance.relativePortfolio'), accessor: (d) => d.relativePortfolio, color: 'hsl(var(--primary))', strokeWidth: 2.5 },
                             { key: CHART_KEYS.relativeStocksEtfs, label: t('performance.relativeStocksEtfs'), accessor: (d) => d.relativeStocksEtfs, color: 'hsl(0, 72%, 51%)', fillOpacity: 0, strokeWidth: 2 },

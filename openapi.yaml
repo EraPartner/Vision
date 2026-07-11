@@ -315,6 +315,11 @@ components:
           description: Whether the account has any active ledger rows; only returned by the list endpoint.
         is_active:
           type: boolean
+        closed_at:
+          type: string
+          format: date-time
+          nullable: true
+          description: Server-stamped when the account is closed (is_active=false); cleared on reactivate (ADR-088 addendum, D5)
         created_at:
           type: string
           format: date-time
@@ -573,18 +578,24 @@ components:
 
     TransactionUpdate:
       type: object
+      description: >-
+        PATCH semantics: an explicit null on a nullable field clears the stored
+        value; an absent key leaves it unchanged.
       properties:
         transaction_date:
           type: string
           format: date
         bank_account:
           type: string
+          nullable: true
         recipient_id:
           type: integer
+          nullable: true
         recipient_name:
           type: string
         memo:
           type: string
+          nullable: true
         amount:
           type: number
         currency:
@@ -593,10 +604,12 @@ components:
           type: number
         category_id:
           type: integer
+          nullable: true
         category_name:
           type: string
         comment:
           type: string
+          nullable: true
         is_active:
           type: boolean
         tags:
@@ -691,6 +704,15 @@ components:
           type: boolean
         recurrence_pattern:
           type: string
+        recurrence_end_date:
+          type: string
+          format: date
+          nullable: true
+          description: Recurrence bound — the series completes once the next occurrence would fall past this date.
+        max_occurrences:
+          type: integer
+          nullable: true
+          description: Recurrence bound — the series completes at this execution count.
         is_loan:
           type: boolean
         loan_type:
@@ -781,6 +803,15 @@ components:
           type: boolean
         recurrence_pattern:
           type: string
+        recurrence_end_date:
+          type: string
+          format: date
+          nullable: true
+          description: Recurrence bound — the series completes once the next occurrence would fall past this date.
+        max_occurrences:
+          type: integer
+          nullable: true
+          description: Recurrence bound — the series completes at this execution count.
         is_loan:
           type: boolean
         loan_type:
@@ -1635,6 +1666,11 @@ paths:
           schema:
             type: string
             format: date
+        - in: query
+          name: account_id
+          description: Preferred account filter (exact FK match, ADR-088); bank_account remains a substring escape hatch
+          schema:
+            type: integer
         - in: query
           name: bank_account
           schema:
@@ -2640,6 +2676,16 @@ paths:
             type: string
             format: date
         - in: query
+          name: account_id
+          description: Preferred account filter (exact FK match, ADR-088); bank_account remains a substring escape hatch
+          schema:
+            type: integer
+        - in: query
+          name: account_ids
+          description: Comma-separated account ids (exact FK match, ADR-088); preferred over bank_accounts
+          schema:
+            type: string
+        - in: query
           name: bank_account
           schema:
             type: string
@@ -2676,6 +2722,16 @@ paths:
           schema:
             type: string
             format: date
+        - in: query
+          name: account_id
+          description: Preferred account filter (exact FK match, ADR-088); bank_account remains a substring escape hatch
+          schema:
+            type: integer
+        - in: query
+          name: account_ids
+          description: Comma-separated account ids (exact FK match, ADR-088); preferred over bank_accounts
+          schema:
+            type: string
         - in: query
           name: bank_account
           schema:
@@ -3281,6 +3337,13 @@ paths:
                   type: boolean
                 recurrence_pattern:
                   type: string
+                recurrence_end_date:
+                  type: string
+                  format: date
+                  nullable: true
+                max_occurrences:
+                  type: integer
+                  nullable: true
                 is_active:
                   type: boolean
       responses:
@@ -3373,6 +3436,11 @@ paths:
       operationId: getTransactionCount
       tags: [Info]
       parameters:
+        - in: query
+          name: account_id
+          description: Preferred account filter (exact FK match, ADR-088); bank_account remains a substring escape hatch
+          schema:
+            type: integer
         - in: query
           name: bank_account
           schema:

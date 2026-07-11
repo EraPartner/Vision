@@ -17,6 +17,7 @@ import { DatePicker } from "@/components/shared/DatePicker";
 import { parseLocalDateFromYmd, toYmd } from "@/components/shared/dateUtils";
 import { createAddTransactionFormState } from "@/components/forms/addTransactionForm";
 import { parseLocaleNumber } from "@/utils/currency";
+import { AccountCombobox } from "@/components/shared/AccountCombobox";
 
 export function AddTransactionDialog() {
     const { t } = useLanguage();
@@ -112,7 +113,12 @@ export function AddTransactionDialog() {
                     <div className="grid grid-cols-2 gap-4">
                         <div className="space-y-2">
                             <Label htmlFor="tx_bank">{t('addTxn.bankAccount')}</Label>
-                            <Input id="tx_bank" placeholder={t('addTxn.bankAccountPlaceholder')} maxLength={100} value={form.bank_account} onChange={(e) => setForm(f => ({...f, bank_account: e.target.value}))} required />
+                            <AccountCombobox
+                                id="tx_bank"
+                                value={form.bank_account}
+                                onChange={(name) => setForm(f => ({...f, bank_account: name}))}
+                                placeholder={t('addTxn.bankAccountPlaceholder')}
+                            />
                         </div>
                         <div className="space-y-2">
                             <Label htmlFor="tx_currency">{t('form.addTransaction.bank')}</Label>
@@ -121,9 +127,9 @@ export function AddTransactionDialog() {
                     </div>
 
                     <div className="space-y-2">
-                        <Label>{t('form.addTransaction.recipient')}</Label>
+                        <Label htmlFor="tx_recipient">{t('form.addTransaction.recipient')}</Label>
                         <Select value={form.recipient_id} onValueChange={(v) => setForm(f => ({...f, recipient_id: v}))}>
-                            <SelectTrigger><SelectValue placeholder={t('form.addTransaction.recipient')} /></SelectTrigger>
+                            <SelectTrigger id="tx_recipient"><SelectValue placeholder={t('form.addTransaction.recipient')} /></SelectTrigger>
                             <SelectContent>
                                 {recipientsData?.items.map((r) => (
                                     <SelectItem key={r.id} value={String(r.id)}>{r.name}</SelectItem>
@@ -133,9 +139,9 @@ export function AddTransactionDialog() {
                     </div>
 
                     <div className="space-y-2">
-                        <Label>{t('addTxn.categoryOptional')}</Label>
+                        <Label htmlFor="tx_category">{t('addTxn.categoryOptional')}</Label>
                         <Select value={form.category_id} onValueChange={(v) => setForm(f => ({...f, category_id: v}))}>
-                            <SelectTrigger><SelectValue placeholder={t('form.addTransaction.category')} /></SelectTrigger>
+                            <SelectTrigger id="tx_category"><SelectValue placeholder={t('form.addTransaction.category')} /></SelectTrigger>
                             <SelectContent>
                                 {categoriesData?.items.map((c) => (
                                     <SelectItem key={c.id} value={String(c.id)}>{c.general}: {c.detail}</SelectItem>

@@ -12,6 +12,7 @@ import { useLanguage } from "@/contexts/LanguageContext";
 import { useAppSettings } from "@/contexts/AppSettingsContext";
 import { RecipientCombobox } from "@/components/shared/RecipientCombobox";
 import { CategoryCombobox } from "@/components/shared/CategoryCombobox";
+import { AccountCombobox } from "@/components/shared/AccountCombobox";
 import { DatePicker } from "@/components/shared/DatePicker";
 import { TagInput } from "@/components/shared/TagInput";
 import { parseLocalDateFromYmd, toYmd } from "@/components/shared/dateUtils";
@@ -203,7 +204,12 @@ export default function PlannedPaymentForm({ open, onOpenChange, onSubmit, initi
             {/* Bank account */}
             <div className="grid gap-1.5">
               <Label htmlFor="pp-bank">{t('plannedForm.bankAccountRequired')}</Label>
-              <Input id="pp-bank" placeholder={t('plannedForm.bankPlaceholder')} value={bankAccount} onChange={(e) => setBankAccount(e.target.value)} />
+              <AccountCombobox
+                id="pp-bank"
+                value={bankAccount}
+                onChange={setBankAccount}
+                placeholder={t('plannedForm.bankPlaceholder')}
+              />
             </div>
 
             {/* Recurring toggle */}

@@ -16,21 +16,32 @@
 // Lowercased external-cash kinds (+ common EN/NL/DE brokerage synonyms) → a plain
 // cash transaction on the sleeve. Everything else cash-affecting (dividend, fee, …)
 // rides on a trade's ADR-090 leg, so it is NOT listed here (that is the double-count guard).
-const CASH_ONLY_KINDS = new Set([
-  'deposit', 'withdrawal', 'deposits', 'withdrawals',
-  'cash deposit', 'cash withdrawal', 'transfer in', 'transfer out',
-  'storting', 'opname', 'inleg', 'terugbetaling',
-  'einzahlung', 'auszahlung',
+// Split by direction: statement magnitudes are staged ABSOLUTE (the adapters
+// strip the sign), so the ledger sign must be re-derived from the kind here.
+// Without it every withdrawal was credited as a deposit — sleeve cash error
+// grew 2× the withdrawn amount per row.
+const CASH_INFLOW_KINDS = new Set([
+  'deposit', 'deposits', 'cash deposit', 'transfer in',
+  'storting', 'inleg', 'terugbetaling',
+  'einzahlung',
+]);
+const CASH_OUTFLOW_KINDS = new Set([
+  'withdrawal', 'withdrawals', 'cash withdrawal', 'transfer out',
+  'opname',
+  'auszahlung',
 ]);
 const PORTFOLIO_KINDS = new Set(['buy', 'sell', 'dividend', 'interest', 'fee', 'tax']);
 
 /**
  * @param {{ kind?: string }} row  parsed brokerage row (kind normalized by the adapter)
- * @returns {{ target: 'cash'|'portfolio'|'review', portfolioTxnType?: string }}
+ * @returns {{ target: 'cash'|'portfolio'|'review', portfolioTxnType?: string, direction?: 1|-1 }}
+ *   `direction` is set for cash targets: +1 credits the sleeve (deposit),
+ *   −1 debits it (withdrawal).
  */
 export function classifyBrokerageRow(row) {
   const kind = String(row?.kind || '').toLowerCase().trim();
-  if (CASH_ONLY_KINDS.has(kind)) return { target: 'cash' };
+  if (CASH_INFLOW_KINDS.has(kind)) return { target: 'cash', direction: 1 };
+  if (CASH_OUTFLOW_KINDS.has(kind)) return { target: 'cash', direction: -1 };
   if (PORTFOLIO_KINDS.has(kind)) return { target: 'portfolio', portfolioTxnType: kind };
   // Unknown / ambiguous → block on review rather than guess (ADR-095).
   return { target: 'review' };

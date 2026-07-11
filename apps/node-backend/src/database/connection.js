@@ -5,9 +5,29 @@
  * Uses node-postgres (pg) with a connection pool.
  */
 
+import { AsyncLocalStorage } from 'node:async_hooks';
 import pg from 'pg';
 import { getSettings } from '../config/config.js';
 import { logger } from '../config/logger.js';
+
+// Ambient transaction context: withTransaction() runs its callback inside this
+// store so module-level query() joins the transaction instead of grabbing a
+// separate pool connection. Without it, a repo call inside withTransaction
+// silently runs OUTSIDE the transaction — it can't see uncommitted rows and
+// survives a rollback, which is exactly the partial-write bug transactions
+// exist to prevent. The store is invalidated (client nulled) when the
+// transaction ends so a leaked continuation can't write on a released client.
+const txStorage = new AsyncLocalStorage();
+
+/**
+ * The pg client of the withTransaction() this code is running inside, or null.
+ * Exposed for callers that must adapt to ambient-transaction mode (e.g. wrap a
+ * catch-and-retry INSERT in a SAVEPOINT — see withSavepointIfInTransaction).
+ * @returns {pg.PoolClient|null}
+ */
+export function getAmbientTransactionClient() {
+  return txStorage.getStore()?.client ?? null;
+}
 
 const settings = getSettings();
 
@@ -54,6 +74,14 @@ function isRetryableStatement(sql) {
  * @returns {Promise<pg.QueryResult>}
  */
 export async function query(text, params, opts = {}) {
+  // Inside withTransaction(): run on the transaction's client, and never
+  // retry — after a connection error the transaction is dead, so a retried
+  // statement would run outside it (or on a poisoned client).
+  const ambient = getAmbientTransactionClient();
+  if (ambient) {
+    return ambient.query(text, params);
+  }
+
   const maxRetries = (opts.retries ?? 0) > 0 && isRetryableStatement(text)
     ? opts.retries
     : 0;
@@ -125,10 +153,15 @@ export async function getClient() {
  */
 export async function withTransaction(fn) {
   const client = await getClient();
+  // The callback runs inside txStorage so module-level query() joins this
+  // transaction (see getAmbientTransactionClient). fn still receives the
+  // client for code that threads it explicitly — both routes hit the same
+  // connection.
+  const store = { client };
   let rollbackFailed = false;
   try {
     await client.query('BEGIN');
-    const result = await fn(client);
+    const result = await txStorage.run(store, () => fn(client));
     await client.query('COMMIT');
     return result;
   } catch (err) {
@@ -140,10 +173,42 @@ export async function withTransaction(fn) {
     }
     throw err;
   } finally {
+    // Invalidate the ambient store: a continuation leaked out of the callback
+    // (timer, un-awaited promise) must fall back to the pool, not write on a
+    // released client.
+    store.client = null;
     // If ROLLBACK threw, the connection's transaction state is unknown.
     // Passing a truthy arg to release() destroys the client instead of
     // returning a poisoned connection to the pool.
     client.release(rollbackFailed || undefined);
+  }
+}
+
+/**
+ * Run `fn` under a SAVEPOINT when inside an ambient withTransaction(), so a
+ * caught failure doesn't abort the whole transaction (PostgreSQL poisons a tx
+ * on ANY statement error — a catch-and-retry pattern that works on a pool
+ * connection would otherwise fail with 25P02 on every statement after the
+ * catch). Outside a transaction this is a plain passthrough.
+ *
+ * `name` must be a static identifier from the caller, never user input.
+ *
+ * @template T
+ * @param {string} name
+ * @param {() => Promise<T>} fn
+ * @returns {Promise<T>}
+ */
+export async function withSavepointIfInTransaction(name, fn) {
+  const client = getAmbientTransactionClient();
+  if (!client) return fn();
+  await client.query(`SAVEPOINT ${name}`);
+  try {
+    const result = await fn();
+    await client.query(`RELEASE SAVEPOINT ${name}`);
+    return result;
+  } catch (err) {
+    await client.query(`ROLLBACK TO SAVEPOINT ${name}`);
+    throw err;
   }
 }
 

@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { parseDecimal } from '@/lib/decimal';
-import { deriveUnitMath } from '@/lib/portfolioUnitMath';
+import { deriveUnitMath, parsePositive } from '@/lib/portfolioUnitMath';
 import { useLanguage } from '@/contexts/LanguageContext';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
@@ -19,14 +19,6 @@ import { getTxnTypeLabel } from '@/types/portfolio';
 import { toast } from 'sonner';
 import { DatePicker } from '@/components/shared/DatePicker';
 import { parseLocalDateFromYmd, toYmd } from '@/components/shared/dateUtils';
-
-function parsePositive(value: string): number | undefined {
-  if (!value.trim()) return undefined;
-  const n = parseDecimal(value, NaN);
-  if (!Number.isFinite(n) || n <= 0) return undefined;
-  return n;
-}
-
 
 interface Props {
   investment: InvestmentSummary;

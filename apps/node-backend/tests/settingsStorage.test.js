@@ -206,6 +206,99 @@ describe('rebalance_plans setting (ADR-098 custom rebalancing plans)', () => {
   });
 });
 
+describe('belgian_tax_profile setting validation (TODO E6)', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  const put = async (key, value) => {
+    query.mockResolvedValue({});
+    const req = { params: { key }, body: { value } };
+    const res = mockResponse();
+    await routeHandlers['put:/:key'](req, res);
+    return res;
+  };
+
+  const validProfile = {
+    profileConfigured: true,
+    grossAnnualIncome: 55000,
+    communalSurchargePercent: 7,
+    dependentChildren: 2,
+    childcareEligibleDays: 120,
+    taxYear: 2026,
+    additionalResidences: [{ cadastralIncome: 1200, centimesOverride: 1400 }],
+  };
+
+  it('accepts a well-formed profile', async () => {
+    const res = await put('belgian_tax_profile', validProfile);
+    expect(res.json).toHaveBeenCalledWith(
+      expect.objectContaining({ ok: true }),
+    );
+  });
+
+  it('rejects a negative communal surcharge (would become a tax credit)', async () => {
+    await expect(put('belgian_tax_profile', { ...validProfile, communalSurchargePercent: -7 }))
+      .rejects.toMatchObject({ name: 'ValidationError' });
+  });
+
+  it('rejects a fat-fingered 70% surcharge (10x the real 7.0)', async () => {
+    await expect(put('belgian_tax_profile', { ...validProfile, communalSurchargePercent: 70 }))
+      .rejects.toMatchObject({ name: 'ValidationError' });
+  });
+
+  it('rejects negative and absurd money fields', async () => {
+    await expect(put('belgian_tax_profile', { ...validProfile, grossAnnualIncome: -50000 }))
+      .rejects.toMatchObject({ name: 'ValidationError' });
+    await expect(put('belgian_tax_profile', { ...validProfile, medicalExpenses: 1e15 }))
+      .rejects.toMatchObject({ name: 'ValidationError' });
+    await expect(put('belgian_tax_profile', { ...validProfile, unionDues: 'lots' }))
+      .rejects.toMatchObject({ name: 'ValidationError' });
+  });
+
+  it('rejects negative childcareEligibleDays and non-integer counts', async () => {
+    await expect(put('belgian_tax_profile', { ...validProfile, childcareEligibleDays: -5 }))
+      .rejects.toMatchObject({ name: 'ValidationError' });
+    await expect(put('belgian_tax_profile', { ...validProfile, dependentChildren: 1.5 }))
+      .rejects.toMatchObject({ name: 'ValidationError' });
+  });
+
+  it('rejects bad additional residences and non-object profiles', async () => {
+    await expect(put('belgian_tax_profile', {
+      ...validProfile,
+      additionalResidences: [{ cadastralIncome: -1 }],
+    })).rejects.toMatchObject({ name: 'ValidationError' });
+    await expect(put('belgian_tax_profile', [validProfile]))
+      .rejects.toMatchObject({ name: 'ValidationError' });
+  });
+
+  it('validates each snapshot in the year-keyed snapshots map', async () => {
+    const res = await put('belgian_tax_profile_snapshots_v1', { 2025: validProfile });
+    expect(res.json).toHaveBeenCalledWith(expect.objectContaining({ ok: true }));
+
+    await expect(put('belgian_tax_profile_snapshots_v1', {
+      2025: { ...validProfile, communalSurchargePercent: -3 },
+    })).rejects.toMatchObject({ name: 'ValidationError' });
+  });
+
+  it('requires snapshot meta to be a year-keyed object map', async () => {
+    const res = await put('belgian_tax_profile_snapshot_meta_v1', { 2025: { history: [] } });
+    expect(res.json).toHaveBeenCalledWith(expect.objectContaining({ ok: true }));
+
+    await expect(put('belgian_tax_profile_snapshot_meta_v1', { 2025: 'filed' }))
+      .rejects.toMatchObject({ name: 'ValidationError' });
+    await expect(put('belgian_tax_profile_snapshot_meta_v1', 'nope'))
+      .rejects.toMatchObject({ name: 'ValidationError' });
+  });
+
+  it('bulk PUT enforces the same profile rules', async () => {
+    query.mockResolvedValue({});
+    const req = { body: { belgian_tax_profile: { ...validProfile, communalSurchargePercent: -1 } } };
+    const res = mockResponse();
+    await expect(routeHandlers['put:/'](req, res))
+      .rejects.toMatchObject({ name: 'ValidationError' });
+  });
+});
+
 function mockResponse() {
   const res = { json: vi.fn(), status: vi.fn(), send: vi.fn() };
   res.status.mockReturnValue(res);

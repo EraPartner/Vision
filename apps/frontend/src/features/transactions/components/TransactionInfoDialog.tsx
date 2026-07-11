@@ -73,14 +73,20 @@ export function TransactionInfoDialog({
             if (!trimmed) return;
             payload.transaction_date = trimmed;
         } else if (editingInfoField === 'memo') {
-            payload.memo = trimmed || undefined;
+            // Cleared fields must be SENT as explicit null — `|| undefined`
+            // dropped the key, the PATCH body was {}, and onApplyLocal still
+            // blanked the visible row: silent divergence until reload.
+            payload.memo = trimmed || null;
             localValue = trimmed || '';
         } else if (editingInfoField === 'currency') {
+            // currency is NOT NULL at the DB level — a blanked input means
+            // "no change", never "clear".
             payload.currency = trimmed || undefined;
         } else if (editingInfoField === 'bank') {
-            payload.bank_account = trimmed || undefined;
+            // null clears the label (and the 0066 trigger clears account_id).
+            payload.bank_account = trimmed || null;
         } else if (editingInfoField === 'comment') {
-            payload.comment = trimmed || undefined;
+            payload.comment = trimmed || null;
             localValue = trimmed || '';
         }
 

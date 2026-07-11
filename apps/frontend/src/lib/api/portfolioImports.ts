@@ -89,6 +89,8 @@ export interface PortfolioImportResult {
   batch_id: number;
   total_processed?: number;
   total?: number;
+  /** Rows the adapter could not parse (bad column mapping / date format). */
+  skipped?: number;
   imported: number;
   duplicates: number;
   errors: number;

@@ -160,6 +160,7 @@ router.post('/csv/custom', csvUpload.single('file'), async (req, res) => {
     res.ok({
       batch_id: result.batchId,
       total: result.total,
+      skipped: result.skipped,
       imported: result.imported,
       duplicates: result.duplicates,
       errors: result.errors,
@@ -216,6 +217,7 @@ router.post('/csv/stream', csvUpload.single('file'), async (req, res) => {
       await writer.write('complete', {
         batch_id: result.batchId,
         total_processed: result.total,
+        skipped: result.skipped,
         imported: result.imported,
         duplicates: result.duplicates,
         errors: result.errors,
@@ -227,7 +229,10 @@ router.post('/csv/stream', csvUpload.single('file'), async (req, res) => {
   } catch (err) {
     logger.error('Streaming portfolio import error', { error: err.message });
     if (!writer.closed) {
-      await writer.write('error', { detail: 'Import failed' });
+      // Expected validation failures (zero-row batch, bad config) carry a safe,
+      // actionable message; anything else stays generic to avoid leaking internals.
+      const detail = err instanceof ValidationError ? err.message : 'Import failed';
+      await writer.write('error', { detail });
       writer.end();
     }
   } finally {

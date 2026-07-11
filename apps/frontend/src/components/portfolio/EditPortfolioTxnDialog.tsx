@@ -145,10 +145,15 @@ export function EditPortfolioTxnDialog({ investment, transaction, trigger }: Pro
         amount: effectiveAmount,
         units: effectiveUnits,
         price_per_unit: effectivePrice,
-        fees: isGift ? 0 : (form.fees ? parseDecimal(form.fees) : undefined),
-        taxes: isGift ? 0 : (form.taxes ? parseDecimal(form.taxes) : undefined),
-        fx_rate_to_eur: form.fxRateToEur ? parseDecimal(form.fxRateToEur) : undefined,
-        note: form.note.trim() || undefined,
+        // Cleared fields must be SENT, not dropped: undefined keys vanish from
+        // the JSON body and the backend merge keeps the old value — "delete the
+        // €7.50 fee → Save → success" left the fee in the DB (and the FX/note
+        // likewise). Cleared money fields are 0; cleared note/FX are explicit
+        // null, same semantics as account_id below.
+        fees: isGift ? 0 : (form.fees ? parseDecimal(form.fees) : 0),
+        taxes: isGift ? 0 : (form.taxes ? parseDecimal(form.taxes) : 0),
+        fx_rate_to_eur: form.fxRateToEur ? parseDecimal(form.fxRateToEur) : null,
+        note: form.note.trim() || null,
         account_id: form.accountId ? Number(form.accountId) : null,
         is_recurring: form.isRecurring,
         recurrence_interval: form.isRecurring ? form.recurrenceInterval : undefined,

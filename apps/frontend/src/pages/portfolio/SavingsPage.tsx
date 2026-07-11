@@ -1,4 +1,6 @@
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { StatCard } from "@/components/dashboard/StatCard";
+import { RollingNumber } from "@/components/shared/RollingNumber";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { PiggyBank, Shield, Trash2, Eye, Percent, TrendingUp, Calendar, DollarSign } from "lucide-react";
@@ -9,7 +11,7 @@ import { InvestmentDetailDialog } from "@/components/portfolio/InvestmentDetailD
 import { useConfirmDialog } from "@/hooks/useConfirmDialog";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { useAppSettings } from "@/contexts/AppSettingsContext";
-import { useCurrencyFormatter } from "@/hooks/useCurrencyFormatter";
+import { useCurrencyFormatter, useCurrencyPartsFormatter } from "@/hooks/useCurrencyFormatter";
 import { formatDateStringWithAppSettings } from "@/components/shared/dateUtils";
 import { parseYmd, daysBetween } from "@/lib/timezone";
 import { cn } from "@/lib/utils";
@@ -35,6 +37,7 @@ export default function SavingsPage() {
   const { convertToTarget } = useCurrencyConverter(targetCurrency);
 
   const fmt = useCurrencyFormatter(targetCurrency);
+  const fmtParts = useCurrencyPartsFormatter(targetCurrency);
 
   const totalBalance = accounts.reduce((s, a) => s + convertToTarget(a.currentValue, a.currency), 0);
   const totalInterestEarned = accounts.reduce((s, a) => s + convertToTarget(a.totalIncome, a.currency), 0);
@@ -95,60 +98,18 @@ export default function SavingsPage() {
 
       {/* Summary Cards */}
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-        <Card className="group relative overflow-hidden glass-regular premium-frame micro-lift">
-          <CardHeader className="pb-1 pt-3 px-4">
-            <CardTitle className="text-xs font-medium text-muted-foreground flex items-center gap-2">
-              <span className="inline-flex h-6 w-6 items-center justify-center rounded-md bg-gradient-to-br from-primary/20 to-primary/5 text-primary ring-1 ring-primary/15">
-                <DollarSign className="h-3 w-3" />
-              </span>
-              {t('portfolio.totalBalance')}
-            </CardTitle>
-          </CardHeader>
-          <CardContent className="pb-3 px-4">
-            <p className="text-xl font-bold text-primary tabular-nums">{fmt(totalBalance)}</p>
-          </CardContent>
-        </Card>
-
-        <Card className="group relative overflow-hidden glass-regular premium-frame micro-lift">
-          <CardHeader className="pb-1 pt-3 px-4">
-            <CardTitle className="text-xs font-medium text-muted-foreground flex items-center gap-2">
-              <span className="inline-flex h-6 w-6 items-center justify-center rounded-md bg-gradient-to-br from-accent/20 to-accent/5 text-accent ring-1 ring-accent/15">
-                <Percent className="h-3 w-3" />
-              </span>
-              {t('portfolio.avgInterestRate')}
-            </CardTitle>
-          </CardHeader>
-          <CardContent className="pb-3 px-4">
-            <p className="text-xl font-bold text-accent tabular-nums">{weightedRate.toFixed(2)}%</p>
-          </CardContent>
-        </Card>
-
-        <Card className="group relative overflow-hidden glass-regular premium-frame micro-lift">
-          <CardHeader className="pb-1 pt-3 px-4">
-            <CardTitle className="text-xs font-medium text-muted-foreground flex items-center gap-2">
-              <span className="inline-flex h-6 w-6 items-center justify-center rounded-md bg-gradient-to-br from-accent/20 to-accent/5 text-accent ring-1 ring-accent/15">
-                <TrendingUp className="h-3 w-3" />
-              </span>
-              {t('portfolio.interestEarned')}
-            </CardTitle>
-          </CardHeader>
-          <CardContent className="pb-3 px-4">
-            <p className="text-xl font-bold text-gain tabular-nums">+{fmt(totalInterestEarned)}</p>
-          </CardContent>
-        </Card>
-
-        <Card className="group relative overflow-hidden glass-regular premium-frame micro-lift">
-          <div aria-hidden className="pointer-events-none absolute inset-0 rounded-[inherit] bg-gradient-to-br from-primary/15 to-primary/5" />
-          <CardHeader className="pb-1 pt-3 px-4">
-            <CardTitle className="text-xs font-medium text-muted-foreground">{t('portfolio.projectedAnnual')}</CardTitle>
-          </CardHeader>
-          <CardContent className="pb-3 px-4">
-            <p className="text-xl font-bold text-primary tabular-nums">+{fmt(totalProjectedAnnual)}</p>
-            {totalAccrued > 0 && (
-              <p className="text-xs text-muted-foreground mt-0.5">{fmt(totalAccrued)} {t('portfolio.accrued')}</p>
-            )}
-          </CardContent>
-        </Card>
+        <StatCard size="compact" title={t('portfolio.totalBalance')}
+          value={<RollingNumber parts={fmtParts(totalBalance)} />}
+          icon={DollarSign} valueClassName="text-primary" />
+        <StatCard size="compact" title={t('portfolio.avgInterestRate')} value={`${weightedRate.toFixed(2)}%`}
+          icon={Percent} valueClassName="text-accent" />
+        <StatCard size="compact" title={t('portfolio.interestEarned')}
+          value={<RollingNumber parts={fmtParts(totalInterestEarned, { signed: true })} />}
+          icon={TrendingUp} trend="income" valueClassName="text-gain" />
+        <StatCard size="compact" title={t('portfolio.projectedAnnual')}
+          value={<RollingNumber parts={fmtParts(totalProjectedAnnual, { signed: true })} />}
+          valueClassName="text-primary"
+          subtitle={totalAccrued > 0 ? `${fmt(totalAccrued)} ${t('portfolio.accrued')}` : undefined} />
       </div>
 
       {/* Account Cards */}

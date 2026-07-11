@@ -308,14 +308,14 @@ describe('validateSellUnitsAvailability', () => {
   });
 
   it('passes when sell units fit available holdings', async () => {
-    query.mockResolvedValueOnce({ rows: [{ net_units: '10' }] });
+    query.mockResolvedValueOnce({ rows: [{ type: 'buy', units: '10' }] });
     await expect(validateSellUnitsAvailability({
       type: 'sell', assetClass: 'stock', investmentId: 1, date: '2025-04-01', units: 10,
     })).resolves.toBeUndefined();
   });
 
   it('throws VALIDATION_ERROR when exceeds available holdings', async () => {
-    query.mockResolvedValueOnce({ rows: [{ net_units: '5' }] });
+    query.mockResolvedValueOnce({ rows: [{ type: 'buy', units: '5' }] });
     await expect(validateSellUnitsAvailability({
       type: 'sell', assetClass: 'stock', investmentId: 1, date: '2025-04-01', units: 10,
     })).rejects.toMatchObject({
@@ -324,8 +324,32 @@ describe('validateSellUnitsAvailability', () => {
     });
   });
 
+  it('accepts a post-split sell (split sets the new absolute total)', async () => {
+    // Buy 10 → 2:1 split (row units = 20 new total). Held = 20, so selling 20 is
+    // valid. The old flat SUM ignored the split and saw only 10 → wrong reject.
+    query.mockResolvedValueOnce({ rows: [
+      { type: 'buy', units: '10' },
+      { type: 'split', units: '20' },
+    ] });
+    await expect(validateSellUnitsAvailability({
+      type: 'sell', assetClass: 'stock', investmentId: 1, date: '2025-04-01', units: 20,
+    })).resolves.toBeUndefined();
+  });
+
+  it('subtracts prior sells and ignores return_of_capital for units', async () => {
+    query.mockResolvedValueOnce({ rows: [
+      { type: 'buy', units: '10' },
+      { type: 'sell', units: '4' },
+      { type: 'return_of_capital', units: '0' },
+    ] });
+    // Held = 6; selling 7 must fail.
+    await expect(validateSellUnitsAvailability({
+      type: 'sell', assetClass: 'stock', investmentId: 1, date: '2025-04-01', units: 7,
+    })).rejects.toMatchObject({ code: 'VALIDATION_ERROR' });
+  });
+
   it('binds excludeTransactionId when provided', async () => {
-    query.mockResolvedValueOnce({ rows: [{ net_units: '50' }] });
+    query.mockResolvedValueOnce({ rows: [{ type: 'buy', units: '50' }] });
     await validateSellUnitsAvailability({
       type: 'sell', assetClass: 'stock', investmentId: 1, date: '2025-04-01', units: 5, excludeTransactionId: 99,
     });

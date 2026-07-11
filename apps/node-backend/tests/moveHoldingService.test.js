@@ -100,4 +100,70 @@ describe('moveHolding (ADR-091)', () => {
     const r = await moveHolding({ investmentId: 1, fromAccountId: 1, toAccountId: 2, units: 100 });
     expect(r.mode).toBe('whole');
   });
+
+  // ── Corporate-action / prior-sell awareness (the C2 fix) ──────────────────
+
+  it('counts held units after a split (units = new absolute total)', async () => {
+    // Buy 10 → 2:1 split (row units = 20 post-split total). Held = 20, not 30.
+    route({ lots: [
+      { id: 10, type: 'buy', date: '2020-01-01', amount: 1000, units: 10, fees: 0, taxes: 0, currency: 'EUR', fx_rate_to_eur: 1 },
+      { id: 11, type: 'split', date: '2021-01-01', amount: 0, units: 20, fees: 0, taxes: 0, currency: 'EUR', fx_rate_to_eur: 1 },
+    ]});
+    const r = await moveHolding({ investmentId: 1, fromAccountId: 1, toAccountId: 2 });
+    expect(r.mode).toBe('whole');
+    expect(r.movedUnits).toBe(20); // split applied — the old buy−sell sum would have said 30
+    // The whole move re-points the buy AND the split row together.
+    const repoint = mockClient.query.mock.calls.find(([s]) => s.includes('SET account_id = $1') && s.includes('ANY'));
+    expect(repoint[1]).toEqual([2, [10, 11]]);
+  });
+
+  it('rejects moving more units than held once a split has been applied', async () => {
+    route({ lots: [
+      { id: 10, type: 'buy', date: '2020-01-01', amount: 1000, units: 10, fees: 0, taxes: 0, currency: 'EUR', fx_rate_to_eur: 1 },
+      { id: 11, type: 'split', date: '2021-01-01', amount: 0, units: 20, fees: 0, taxes: 0, currency: 'EUR', fx_rate_to_eur: 1 },
+    ]});
+    // 25 > 20 held — must reject (the stale sum would have allowed up to 30).
+    await expect(moveHolding({ investmentId: 1, fromAccountId: 1, toAccountId: 2, units: 25 }))
+      .rejects.toThrow(ValidationError);
+  });
+
+  it('refuses a partial move once the source has a prior sell (unsound lot model)', async () => {
+    route({ lots: [
+      { id: 10, type: 'buy', date: '2020-01-01', amount: 1000, units: 10, fees: 0, taxes: 0, currency: 'EUR', fx_rate_to_eur: 1 },
+      { id: 11, type: 'buy', date: '2020-06-01', amount: 1000, units: 10, fees: 0, taxes: 0, currency: 'EUR', fx_rate_to_eur: 1 },
+      { id: 12, type: 'sell', date: '2021-01-01', amount: 400, units: 4, fees: 0, taxes: 0, currency: 'EUR', fx_rate_to_eur: 1 },
+    ]});
+    // Held = 16; a partial move would physically split a buy lot dated before
+    // the sell, retroactively changing the sell's replayed basis → reject.
+    await expect(moveHolding({ investmentId: 1, fromAccountId: 1, toAccountId: 2, units: 5 }))
+      .rejects.toThrow(/whole holding|sell or split/i);
+  });
+
+  it('refuses a partial move once the source has a split', async () => {
+    route({ lots: [
+      { id: 10, type: 'buy', date: '2020-01-01', amount: 1000, units: 10, fees: 0, taxes: 0, currency: 'EUR', fx_rate_to_eur: 1 },
+      { id: 11, type: 'split', date: '2021-01-01', amount: 0, units: 20, fees: 0, taxes: 0, currency: 'EUR', fx_rate_to_eur: 1 },
+    ]});
+    await expect(moveHolding({ investmentId: 1, fromAccountId: 1, toAccountId: 2, units: 5 }))
+      .rejects.toThrow(ValidationError);
+  });
+
+  it('still allows a whole move after a sell (moves the entire history)', async () => {
+    route({ lots: [
+      { id: 10, type: 'buy', date: '2020-01-01', amount: 1000, units: 10, fees: 0, taxes: 0, currency: 'EUR', fx_rate_to_eur: 1 },
+      { id: 11, type: 'sell', date: '2021-01-01', amount: 400, units: 4, fees: 0, taxes: 0, currency: 'EUR', fx_rate_to_eur: 1 },
+    ]});
+    const r = await moveHolding({ investmentId: 1, fromAccountId: 1, toAccountId: 2, units: 6 });
+    expect(r.mode).toBe('whole'); // requested 6 == net (10−4) → whole
+    expect(r.movedUnits).toBe(6);
+  });
+
+  it('return_of_capital does not change held units', async () => {
+    route({ lots: [
+      { id: 10, type: 'buy', date: '2020-01-01', amount: 1000, units: 10, fees: 0, taxes: 0, currency: 'EUR', fx_rate_to_eur: 1 },
+      { id: 11, type: 'return_of_capital', date: '2021-01-01', amount: 200, units: 0, fees: 0, taxes: 0, currency: 'EUR', fx_rate_to_eur: 1 },
+    ]});
+    const r = await moveHolding({ investmentId: 1, fromAccountId: 1, toAccountId: 2 });
+    expect(r.movedUnits).toBe(10); // RoC leaves units untouched
+  });
 });

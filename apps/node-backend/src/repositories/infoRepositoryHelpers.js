@@ -6,7 +6,7 @@
 import { query } from '../database/connection.js';
 import { convertRowsToEur } from '../services/currency/currencyConversionService.js';
 import { toDecimal, toNumber, roundMoney } from '../lib/money.js';
-import { formatDateToYmd } from '../lib/dateFormat.js';
+import { formatDateToYmd, toWireDate } from '../lib/dateFormat.js';
 import settingsRepository from './settingsRepository.js';
 
 /**
@@ -91,7 +91,7 @@ export function roundToCents(value) {
 
 // Re-exported from lib/dateFormat so the existing repository importers keep
 // working while routes import the canonical helper from lib directly.
-export { formatDateToYmd };
+export { formatDateToYmd, toWireDate };
 
 export function formatDateToYm(date) {
   return date.toISOString().substring(0, 7);

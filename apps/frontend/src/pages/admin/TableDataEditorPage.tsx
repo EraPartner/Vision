@@ -146,9 +146,7 @@ export default function TableDataEditorPage() {
     const [page, setPage] = useState(0);
     const [sort, setSort] = useState<SortState>(undefined);
     const [draftFilters, setDraftFilters] = useState<Record<string, string>>({});
-    const [draftWhere, setDraftWhere] = useState('');
     const [appliedFilters, setAppliedFilters] = useState<DbFilter[]>([]);
-    const [appliedWhere, setAppliedWhere] = useState('');
 
     const [edits, setEdits] = useState<EditMap>({});
     const [deletes, setDeletes] = useState<Set<string>>(new Set());
@@ -159,14 +157,13 @@ export default function TableDataEditorPage() {
     const [previewStatements, setPreviewStatements] = useState<PreviewStatement[]>([]);
 
     const query = useQuery({
-        queryKey: ['admin', 'db-table', table, page, sort, appliedFilters, appliedWhere],
+        queryKey: ['admin', 'db-table', table, page, sort, appliedFilters],
         queryFn: () => getTableRows(table, {
             limit: PAGE_SIZE,
             offset: page * PAGE_SIZE,
             orderBy: sort?.column,
             dir: sort?.dir,
             filters: appliedFilters,
-            where: appliedWhere || undefined,
         }),
     });
 
@@ -246,7 +243,6 @@ export default function TableDataEditorPage() {
             .filter(([, v]) => v.trim() !== '')
             .map(([column, v]) => ({ column, op: 'contains', value: v }));
         setAppliedFilters(fs);
-        setAppliedWhere(draftWhere.trim());
         setPage(0);
     }
     function toggleSort(column: string) {
@@ -307,16 +303,10 @@ export default function TableDataEditorPage() {
                 </span>
             </div>
 
-            {/* Toolbar */}
+            {/* Toolbar. Filtering is the per-column inputs in the header row
+                (structured, parameterized). The raw-WHERE box was removed —
+                it was a SQL-injection oracle (ADR-101 addendum, 2026-07-10). */}
             <div className="flex flex-wrap items-center gap-2">
-                <Input
-                    value={draftWhere}
-                    placeholder={t('dbEditor.rawWherePlaceholder')}
-                    className="h-8 max-w-md font-mono text-xs"
-                    onChange={(e) => setDraftWhere(e.target.value)}
-                    onKeyDown={(e) => { if (e.key === 'Enter') applyFilters(); }}
-                    disabled={hasPending}
-                />
                 <Button variant="outline" size="sm" onClick={applyFilters} disabled={hasPending}>
                     {t('dbEditor.applyFilters')}
                 </Button>

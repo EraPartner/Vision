@@ -38,12 +38,13 @@ function expandRecurringOccurrences(plannedDate, pattern, startYmd, endYmd) {
 export const plannedRepository = {
   async getPlannedExpensesNextMonth(targetCurrency = 'EUR') {
     // Anchor the month window to today's calendar month in APP_TIMEZONE.
-    // Server-local `new Date(y, m+1, 1)` serialized via toISOString() could
-    // resolve to the last day of the *current* month on a non-UTC server,
-    // shifting the whole planned_date SQL range by a month.
+    // Constructed LOCALLY to pair with formatDateToYmd's local extraction —
+    // a UTC-constructed boundary would render as the last day of the previous
+    // month on any server west of UTC. (today.month is 1-based, so passing it
+    // as the 0-based month argument yields the first of the NEXT month.)
     const today = toAppTz(new Date());
-    const nextMonth = new Date(Date.UTC(today.year, today.month, 1));
-    const monthAfter = new Date(Date.UTC(today.year, today.month + 1, 1));
+    const nextMonth = new Date(today.year, today.month, 1);
+    const monthAfter = new Date(today.year, today.month + 1, 1);
     const lastDay = new Date(monthAfter.getTime() - 1);
 
     const sql = `

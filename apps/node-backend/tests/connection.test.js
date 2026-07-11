@@ -182,4 +182,81 @@ describe('database connection module', () => {
     await expect(module.getClient()).resolves.toBe(mockClient);
     expect(pool.connect).toHaveBeenCalledTimes(1);
   });
+
+  describe('ambient transaction (AsyncLocalStorage reroute)', () => {
+    function mockTxClient() {
+      return { query: vi.fn().mockResolvedValue({ rows: [] }), release: vi.fn() };
+    }
+
+    it('module-level query() joins the withTransaction client instead of the pool', async () => {
+      const { module, pool } = await loadConnectionModule();
+      const client = mockTxClient();
+      pool.connect.mockResolvedValueOnce(client);
+
+      await module.withTransaction(async () => {
+        await module.query('INSERT INTO t VALUES (1)');
+      });
+
+      // BEGIN, the rerouted INSERT, COMMIT — all on the tx client; pool untouched.
+      const clientSql = client.query.mock.calls.map((c) => c[0]);
+      expect(clientSql).toEqual(['BEGIN', 'INSERT INTO t VALUES (1)', 'COMMIT']);
+      expect(pool.query).not.toHaveBeenCalled();
+    });
+
+    it('query() outside a transaction still uses the pool', async () => {
+      const { module, pool } = await loadConnectionModule();
+      pool.query.mockResolvedValueOnce({ rows: [] });
+
+      await module.query('SELECT 1');
+      expect(pool.query).toHaveBeenCalledWith('SELECT 1', undefined);
+      expect(module.getAmbientTransactionClient()).toBeNull();
+    });
+
+    it('a continuation leaked past the transaction falls back to the pool', async () => {
+      const { module, pool } = await loadConnectionModule();
+      const client = mockTxClient();
+      pool.connect.mockResolvedValueOnce(client);
+      pool.query.mockResolvedValue({ rows: [] });
+
+      let leaked;
+      await module.withTransaction(async () => {
+        leaked = () => module.query('SELECT after');
+      });
+      await leaked();
+
+      // The leaked query ran after release — it must NOT hit the released client.
+      expect(client.query.mock.calls.map((c) => c[0])).toEqual(['BEGIN', 'COMMIT']);
+      expect(pool.query).toHaveBeenCalledWith('SELECT after', undefined);
+    });
+
+    it('withSavepointIfInTransaction releases on success and rolls back to the savepoint on failure', async () => {
+      const { module, pool } = await loadConnectionModule();
+      const client = mockTxClient();
+      pool.connect.mockResolvedValueOnce(client);
+
+      await module.withTransaction(async () => {
+        await module.withSavepointIfInTransaction('sp_ok', async () => 'fine');
+        await expect(
+          module.withSavepointIfInTransaction('sp_fail', async () => {
+            throw new Error('boom');
+          }),
+        ).rejects.toThrow('boom');
+      });
+
+      expect(client.query.mock.calls.map((c) => c[0])).toEqual([
+        'BEGIN',
+        'SAVEPOINT sp_ok',
+        'RELEASE SAVEPOINT sp_ok',
+        'SAVEPOINT sp_fail',
+        'ROLLBACK TO SAVEPOINT sp_fail',
+        'COMMIT',
+      ]);
+    });
+
+    it('withSavepointIfInTransaction is a passthrough outside a transaction', async () => {
+      const { module, pool } = await loadConnectionModule();
+      await expect(module.withSavepointIfInTransaction('sp', async () => 42)).resolves.toBe(42);
+      expect(pool.query).not.toHaveBeenCalled();
+    });
+  });
 });

@@ -5,8 +5,8 @@ method: GET, POST, PATCH, DELETE
 path: /api/accounts
 description: Account entity management (ADR-088) — the user's own accounts spanning budgeting cash, portfolio holdings, and liabilities
 date: 2026-06-21
-updated: 2026-06-25
-tags: [api, accounts, account-entity, adr-088, net-worth, cash-sleeve, rename-propagation]
+updated: 2026-07-10
+tags: [api, accounts, account-entity, adr-088, net-worth, cash-sleeve, rename-propagation, lifecycle, normalized-identity]
 status: active
 aliases: [accounts-api, account-management, account-entity]
 related_code: [[apps/node-backend/src/routes/accounts.js]], [[apps/node-backend/src/services/accountService.js]], [[apps/node-backend/src/repositories/accountRepository.js]]
@@ -51,11 +51,24 @@ Fetch a single account (404 if not found).
 Create an account. Body: `AccountCreate` (`name` required; all flags optional, falling back to
 DB defaults — `type='checking'`, `owner='me'`, `in_net_worth=true`, `has_cash_sleeve=true`).
 `currency` is validated as ISO-4217 and uppercased. Returns `201` with the created account, or
-`409` if an account with that name already exists.
+`409` if an account with that name already exists. Identity is case/whitespace-insensitive
+(`lower(btrim(name))`, migration 0066 — [[docs/adr/088-account-entity|ADR-088 addendum]], D1):
+"Checking" collides with "CHECKING"; the stored name keeps the creator's casing for display.
+`statement_balance` requires `statement_balance_date` (400 without it; backstopped by the
+migration-0065 CHECK).
 
 ### PATCH /api/accounts/:id
 
-Partial update (`AccountUpdate`). `404` if not found, `409` on name collision.
+Partial update (`AccountUpdate`). `404` if not found, `409` on (normalized) name collision.
+
+Explicit `null` **clears** a nullable field (`display_name`, `institution`,
+`funding_account_id`, `statement_balance`, `statement_balance_date`); an omitted key leaves the
+field untouched. The statement-balance/date pairing is validated on the merged state: setting a
+balance while the stored date is `NULL`, or clearing only the date, both return 400.
+
+Lifecycle ([[docs/adr/088-account-entity|ADR-088 addendum]], D5): `{ is_active: false }` stamps
+`closed_at` server-side (kept on redundant re-archives); `{ is_active: true }` clears it.
+`closed_at` is never accepted from the request body.
 
 > [!info] Account rename propagates to transactions (2026-06-25)
 > When the `name` field is included in the update body, `accountRepository.update()` atomically
@@ -70,9 +83,11 @@ Partial update (`AccountUpdate`). `404` if not found, `409` on name collision.
 
 ### DELETE /api/accounts/:id
 
-Delete an account. Because the `account_id` FKs are `ON DELETE RESTRICT`, an account that still
-has transactions, planned transactions, or portfolio lots cannot be deleted — the API returns `409`
-with a message to **archive** it instead (set `is_active=false` via PATCH). `404` if not found.
+Delete an account. Delete is only possible with zero referencing rows (the `account_id` FKs are
+`ON DELETE RESTRICT`): an account that still has transactions, planned transactions, or portfolio
+lots returns `409` with a message routing the caller to **close** the account instead (lifecycle
+D5: active → closed → only-if-empty deleted). The UI opens `CloseAccountDialog` on that 409.
+`404` if not found.
 
 > [!tip] Close-account workflow
 > Use `CloseAccountDialog` (wired into `AccountsPage`) to transfer all portfolio lots in-specie to

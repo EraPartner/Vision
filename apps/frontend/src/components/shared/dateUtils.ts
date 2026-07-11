@@ -72,7 +72,13 @@ export function parseLocalDateFromYmd(dateStr: string): Date {
   if (typeof dateStr !== "string" || dateStr.length === 0) {
     return new Date(NaN);
   }
-  const [year, month, day] = dateStr.split("-").map(Number);
+  // Defensive: accept an ISO-timestamp wire value by taking its date part.
+  // "2026-07-01T00:00:00.000Z".split("-") used to yield day NaN → Invalid
+  // Date → consumers silently skipped every row (flat-zero sparkline,
+  // "NaN days remaining"). The backend now sends plain Y-M-D for date-only
+  // columns, but a raw timestamp must degrade to its calendar day, not NaN.
+  const ymdPart = dateStr.includes("T") ? dateStr.split("T")[0] : dateStr;
+  const [year, month, day] = ymdPart.split("-").map(Number);
   return new Date(year, month - 1, day, 0, 0, 0, 0);
 }
 

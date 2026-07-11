@@ -1,18 +1,86 @@
+import { type ReactNode } from "react";
+import { cva, type VariantProps } from "class-variance-authority";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Skeleton } from "@/components/ui/skeleton";
 import { RollingNumber } from "@/components/shared/RollingNumber";
 import { DeltaPill } from "@/components/shared/DeltaPill";
 import { TrendHue, type TrendTone } from "@/components/shared/TrendHue";
+import { cn } from "@/lib/utils";
 import { LucideIcon } from "lucide-react";
+
+/**
+ * The app's ONE stat tile. Every KPI/summary card composes this — page-specific
+ * content, shared anatomy (title + trend-toned icon chip, odometer value,
+ * DeltaPill / hint line). `size="compact"` is the dense 4-6-up summary rows on
+ * the portfolio asset pages; the default size is the dashboard/overview tile.
+ */
+
+const statHeaderVariants = cva(
+    "flex flex-row items-center justify-between space-y-0",
+    {
+        variants: {
+            size: {
+                default: "pb-3",
+                compact: "pb-1 pt-3 px-4",
+            },
+        },
+        defaultVariants: { size: "default" },
+    },
+);
+
+const statTitleVariants = cva("text-muted-foreground", {
+    variants: {
+        size: {
+            default: "text-sm font-semibold",
+            compact: "text-xs font-medium",
+        },
+    },
+    defaultVariants: { size: "default" },
+});
+
+const statChipVariants = cva("flex items-center justify-center shrink-0", {
+    variants: {
+        size: {
+            default: "h-10 w-10 rounded-xl shadow-[0_2px_8px_-2px_hsl(var(--primary)/0.25)]",
+            compact: "h-6 w-6 rounded-md",
+        },
+    },
+    defaultVariants: { size: "default" },
+});
+
+const statContentVariants = cva("", {
+    variants: {
+        size: {
+            default: "",
+            compact: "pb-3 px-4",
+        },
+    },
+    defaultVariants: { size: "default" },
+});
+
+const statValueVariants = cva("font-bold tabular-nums", {
+    variants: {
+        size: {
+            default: "text-3xl",
+            compact: "text-xl",
+        },
+    },
+    defaultVariants: { size: "default" },
+});
+
+type StatCardSize = NonNullable<VariantProps<typeof statValueVariants>["size"]>;
 
 interface StatCardProps {
     title: string;
-    value: string;
+    /** Formatted display value. Strings get the odometer treatment; nodes (e.g. <Money/>) render as-is. */
+    value?: ReactNode;
     /** Raw numeric value for the count-up animation. If omitted, value is shown statically. */
     numericValue?: number;
     change?: string;
     changeType?: "positive" | "negative" | "neutral";
-    subtitle?: string;
-    icon: LucideIcon;
+    /** Hint line under the value (rendered after the change pill when both are set). */
+    subtitle?: ReactNode;
+    icon?: LucideIcon;
     trend?: "income" | "expense" | "up" | "down" | "neutral";
     /** Format function that turns numeric → display string (e.g. currency formatter) */
     formatValue?: (n: number) => string;
@@ -20,9 +88,20 @@ interface StatCardProps {
     titleValue?: string;
     /** Override the headline value colour (e.g. "text-primary" for a featured total). Defaults to neutral foreground. */
     valueClassName?: string;
+    size?: StatCardSize;
+    /** Render a skeleton in the value slot while the data is still loading. */
+    loading?: boolean;
+    className?: string;
+    /** Extra content below the value block (secondary pill rows etc.). */
+    children?: ReactNode;
 }
 
-export function StatCard({ title, value, numericValue, change, changeType = "neutral", subtitle, icon: Icon, trend = "neutral", formatValue, titleValue, valueClassName = "text-foreground" }: StatCardProps) {
+export function StatCard({
+    title, value, numericValue, change, changeType = "neutral", subtitle,
+    icon: Icon, trend = "neutral", formatValue, titleValue,
+    valueClassName = "text-foreground", size = "default", loading = false,
+    className, children,
+}: StatCardProps) {
     const normalisedTrend = trend === "up" ? "income" : trend === "down" ? "expense" : trend;
 
     const tone: TrendTone = normalisedTrend === "income" ? "gain" : normalisedTrend === "expense" ? "loss" : "neutral";
@@ -38,34 +117,42 @@ export function StatCard({ title, value, numericValue, change, changeType = "neu
         : value;
 
     return (
-        <Card
-            className="glass-elevated premium-frame micro-lift group relative overflow-hidden h-full">
+        <Card className={cn("glass-elevated premium-frame micro-lift group relative overflow-hidden h-full", className)}>
             <TrendHue tone={tone} />
             <div
                 className="absolute top-0 right-0 w-32 h-32 bg-gradient-to-br from-background/40 to-transparent rounded-full -mr-16 -mt-16 transition-transform duration-500 group-hover:scale-110" />
-            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-3">
-                <CardTitle className="text-sm font-semibold text-muted-foreground">{title}</CardTitle>
-                <div className={`h-10 w-10 rounded-xl flex items-center justify-center ${iconBg} shadow-[0_2px_8px_-2px_hsl(var(--primary)/0.25)]`}>
-                    <Icon className="h-5 w-5" />
-                </div>
+            <CardHeader className={statHeaderVariants({ size })}>
+                <CardTitle className={statTitleVariants({ size })}>{title}</CardTitle>
+                {Icon && (
+                    <div className={cn(statChipVariants({ size }), iconBg)}>
+                        <Icon className={size === "compact" ? "h-3.5 w-3.5" : "h-5 w-5"} />
+                    </div>
+                )}
             </CardHeader>
-            <CardContent>
-                <div className={`text-3xl font-bold tabular-nums ${valueClassName}`}>
-                    <span title={titleValue}>
-                        <RollingNumber value={displayValue} />
-                    </span>
+            <CardContent className={statContentVariants({ size })}>
+                <div className={cn(statValueVariants({ size }), valueClassName)}>
+                    {loading ? (
+                        <Skeleton className={size === "compact" ? "h-6 w-20" : "h-9 w-28"} />
+                    ) : typeof displayValue === "string" ? (
+                        <span title={titleValue}>
+                            <RollingNumber value={displayValue} />
+                        </span>
+                    ) : (
+                        <span title={titleValue}>{displayValue}</span>
+                    )}
                 </div>
                 {change && (
-                    <div className="mt-2">
+                    <div className={size === "compact" ? "mt-1" : "mt-2"}>
                         <DeltaPill
                             value={changeType === "positive" ? 1 : changeType === "negative" ? -1 : 0}
                             label={change}
                         />
                     </div>
                 )}
-                {!change && subtitle && (
-                    <p className="text-xs text-muted-foreground mt-2">{subtitle}</p>
+                {subtitle && (
+                    <p className={cn("text-xs text-muted-foreground", size === "compact" ? "mt-0.5" : "mt-2")}>{subtitle}</p>
                 )}
+                {children}
             </CardContent>
         </Card>
     );

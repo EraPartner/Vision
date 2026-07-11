@@ -11,6 +11,7 @@ import {
   mvAvailable,
   roundToCents,
   formatDateToYmd,
+  toWireDate,
   formatYearMonthKey,
   buildMonthlySummary,
   mapRowsForAmountConversion,
@@ -75,7 +76,7 @@ export async function getMonthlyFinancialSummary(
       if (!monthMap[key]) {
         monthMap[key] = {
           month: r.month, year: r.year,
-          period_start: r.month_start,
+          period_start: toWireDate(r.month_start),
           period_end: null,
           total_spending: 0, total_income: 0, net_amount: 0, transaction_count: 0,
         };
@@ -126,10 +127,10 @@ export async function getMonthlyFinancialSummary(
   // Canonical exclusion semantics (match buildExclusionClauses + every other
   // surface): 3-level category COALESCE and alias-aware recipient exclusion.
   const categoryExcludeClause = validIds.length > 0
-    ? `AND COALESCE(t.category_id, r.default_category_id, pr.default_category_id) NOT IN (${validIds.map(id => { params.push(id); return `$${params.length}`; }).join(',')})`
+    ? `AND COALESCE(t.category_id, r.default_category_id, pr.default_category_id, -1) NOT IN (${validIds.map(id => { params.push(id); return `$${params.length}`; }).join(',')})`
     : '';
   const recipientExcludeClause = validRecipientIds.length > 0
-    ? `AND COALESCE(r.primary_recipient_id, t.recipient_id) NOT IN (${validRecipientIds.map(id => { params.push(id); return `$${params.length}`; }).join(',')})`
+    ? `AND COALESCE(r.primary_recipient_id, t.recipient_id, -1) NOT IN (${validRecipientIds.map(id => { params.push(id); return `$${params.length}`; }).join(',')})`
     : '';
 
   const allTimeStart = allTime
@@ -220,8 +221,8 @@ export async function getMonthlyFinancialSummary(
       monthMap[key] = {
         month: row.month,
         year: row.year,
-        period_start: row.period_start,
-        period_end: row.period_end,
+        period_start: toWireDate(row.period_start),
+        period_end: toWireDate(row.period_end),
         total_spending: 0,
         total_income: 0,
         net_amount: 0,

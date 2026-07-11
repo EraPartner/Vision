@@ -25,7 +25,9 @@ import {
     useMemo,
     type ReactNode,
 } from 'react';
+import { toast } from 'sonner';
 import { apiClient } from '@/lib/api';
+import { useLanguage } from '@/contexts/LanguageContext';
 import { usePreloadedSetting } from '@/contexts/SettingsPreloadContext';
 import logger from '@/lib/logger';
 import {
@@ -91,6 +93,12 @@ interface BelgianTaxProfileContextType {
     /** PIT calculation for the live profile (i.e. the active year). */
     calculation: BelgianTaxCalculation;
     isLoading: boolean;
+    /**
+     * Bumped whenever a debounced persist fails. The provider mounts above
+     * LanguageProvider so it cannot toast a translated message itself;
+     * BelgianTaxSaveErrorToaster (mounted under it) watches this nonce.
+     */
+    saveErrorNonce: number;
     /** Frozen per-year profile snapshots, keyed by income year. */
     snapshots: BelgianTaxProfileSnapshots;
     /** Per-year meta (filing status, frozen calc, audit history). Sparse — only present for years touched by file/freeze/edit. */
@@ -226,6 +234,11 @@ export function BelgianTaxProfileProvider({ children }: { children: ReactNode })
     const [snapshotMetas, setSnapshotMetas] = useState<BelgianTaxProfileSnapshotMetas>({});
     const [viewedYear, setViewedYearState] = useState<number>(defaultProfile.taxYear);
     const [isLoading, setIsLoading] = useState(true);
+    // Debounced saves have no Save button: a silent failure means the user
+    // believes an edit persisted when it didn't (gone on reload). Bump a nonce
+    // on each failure so the toaster under LanguageProvider can surface it.
+    const [saveErrorNonce, setSaveErrorNonce] = useState(0);
+    const markSaveError = useCallback(() => setSaveErrorNonce((n) => n + 1), []);
     const profileSaveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
     const snapshotsSaveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
     const metasSaveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -279,12 +292,13 @@ export function BelgianTaxProfileProvider({ children }: { children: ReactNode })
         profileSaveTimerRef.current = setTimeout(() => {
             apiClient.saveSetting(PROFILE_SETTINGS_KEY, profile).catch((err) => {
                 logger.error('Failed to save Belgian tax profile:', err);
+                markSaveError();
             });
         }, PERSIST_DEBOUNCE_MS);
         return () => {
             if (profileSaveTimerRef.current) clearTimeout(profileSaveTimerRef.current);
         };
-    }, [profile, isLoading]);
+    }, [profile, isLoading, markSaveError]);
 
     useEffect(() => {
         if (isFirstSnapshotsRender.current) {
@@ -296,12 +310,13 @@ export function BelgianTaxProfileProvider({ children }: { children: ReactNode })
         snapshotsSaveTimerRef.current = setTimeout(() => {
             apiClient.saveSetting(SNAPSHOTS_SETTINGS_KEY, snapshots).catch((err) => {
                 logger.error('Failed to save Belgian tax profile snapshots:', err);
+                markSaveError();
             });
         }, PERSIST_DEBOUNCE_MS);
         return () => {
             if (snapshotsSaveTimerRef.current) clearTimeout(snapshotsSaveTimerRef.current);
         };
-    }, [snapshots, isLoading]);
+    }, [snapshots, isLoading, markSaveError]);
 
     useEffect(() => {
         if (isFirstMetasRender.current) {
@@ -313,12 +328,13 @@ export function BelgianTaxProfileProvider({ children }: { children: ReactNode })
         metasSaveTimerRef.current = setTimeout(() => {
             apiClient.saveSetting(SNAPSHOT_METAS_SETTINGS_KEY, snapshotMetas).catch((err) => {
                 logger.error('Failed to save Belgian tax profile snapshot meta:', err);
+                markSaveError();
             });
         }, PERSIST_DEBOUNCE_MS);
         return () => {
             if (metasSaveTimerRef.current) clearTimeout(metasSaveTimerRef.current);
         };
-    }, [snapshotMetas, isLoading]);
+    }, [snapshotMetas, isLoading, markSaveError]);
 
     /**
      * Append a history entry to a year's meta, creating the meta if absent. Trims to
@@ -548,6 +564,7 @@ export function BelgianTaxProfileProvider({ children }: { children: ReactNode })
             resetProfile,
             calculation,
             isLoading,
+            saveErrorNonce,
             snapshots,
             snapshotMetas,
             viewedYear,
@@ -574,6 +591,7 @@ export function BelgianTaxProfileProvider({ children }: { children: ReactNode })
             resetProfile,
             calculation,
             isLoading,
+            saveErrorNonce,
             snapshots,
             snapshotMetas,
             viewedYear,
@@ -601,6 +619,24 @@ export function BelgianTaxProfileProvider({ children }: { children: ReactNode })
             {children}
         </BelgianTaxProfileContext.Provider>
     );
+}
+
+/**
+ * Surfaces a translated toast when a debounced tax-profile persist fails.
+ * Mounted UNDER LanguageProvider (the provider above it cannot translate),
+ * mirroring AppSettingsSaveErrorToaster.
+ */
+export function BelgianTaxSaveErrorToaster() {
+    const { t } = useLanguage();
+    const { saveErrorNonce } = useBelgianTaxProfile();
+    const lastSeen = useRef(saveErrorNonce);
+    useEffect(() => {
+        if (saveErrorNonce !== lastSeen.current) {
+            lastSeen.current = saveErrorNonce;
+            if (saveErrorNonce > 0) toast.error(t('settings.saveFailed'));
+        }
+    }, [saveErrorNonce, t]);
+    return null;
 }
 
 // eslint-disable-next-line react-refresh/only-export-components

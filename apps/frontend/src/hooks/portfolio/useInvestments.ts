@@ -61,6 +61,10 @@ export function useInvestmentMutations() {
     queryClient.invalidateQueries({ queryKey: [PORTFOLIO_TRANSACTIONS_QUERY_KEY_PREFIX] });
     queryClient.invalidateQueries({ queryKey: [PORTFOLIO_SUMMARY_QUERY_KEY_PREFIX] });
     queryClient.invalidateQueries({ queryKey: [PORTFOLIO_PERFORMANCE_QUERY_KEY_PREFIX] });
+    // Investment CRUD moves the net-worth total; both queries sit at a 2-minute
+    // staleTime on NetWorthPage, so without this they show stale figures.
+    queryClient.invalidateQueries({ queryKey: ['net-worth'] });
+    queryClient.invalidateQueries({ queryKey: ['net-worth-by-account'] });
   }, [queryClient]);
 
   const addInvestmentMutation = useMutation({

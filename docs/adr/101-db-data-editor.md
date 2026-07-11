@@ -43,8 +43,18 @@ CSRF guard, rate limiter; see [[docs/adr/026-unified-api-response-envelope|ADR-0
   against `information_schema.columns`. Identifiers are double-quoted, never interpolated raw. Values are
   always parameterized — reusing the pattern already proven by the VACUUM endpoint.
 - **Read-only reads.** Browse/filter/sort run inside a `BEGIN; SET TRANSACTION READ ONLY; SET LOCAL
-  statement_timeout` block, and the raw-WHERE escape hatch rejects `;`. A hostile WHERE clause can
-  therefore neither mutate nor hang the database.
+  statement_timeout` block. Filtering is done exclusively through the structured, parameterized
+  `filters[]` path (column allowlisted, operator whitelisted, value bound as a parameter).
+
+  > **Addendum (2026-07-10): raw-WHERE escape hatch removed.** The original design offered a raw
+  > `where` string, guarded only by rejecting `;`. That guard was insufficient and the field was a
+  > blind-SQLi timing oracle: because the read is a **GET** (exempt from the CSRF guard's safe-method
+  > check), a cross-site page could issue it, and `pg_sleep()` inside the WHERE made response *timing*
+  > a boolean channel over the whole schema — CORS does not stop a timing side-channel. A bare `--`
+  > also silently truncated the ORDER BY/LIMIT/OFFSET past the `;` check. The raw `where` param is
+  > gone; `readRows` now returns 400 for any `where`, and the UI exposes only the per-column
+  > structured filters. The earlier claim that "a hostile WHERE clause can neither mutate nor hang the
+  > database" was true only for those two vectors and missed the read/timing exfiltration entirely.
 - **Optimistic concurrency via `xmin`.** Each row carries its PostgreSQL `xmin` (row version) as a hidden
   token. On commit, the row is locked `FOR UPDATE` and its current `xmin` compared to the token the client
   loaded; a mismatch (or a vanished row) is a `409 Conflict`, never a silent overwrite. This implements the

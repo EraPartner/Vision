@@ -3,7 +3,7 @@
  */
 import { describe, expect, it, vi } from "vitest";
 import { onActivateKeyDown } from "@/utils/a11y";
-import { getCategoryColor } from "@/utils/categoryColors";
+import { getCategoryColor, getCategoryChartColor, categoryColorIndex } from "@/utils/categoryColors";
 
 describe("onActivateKeyDown", () => {
   function evt(key: string, opts: { sameTarget?: boolean } = {}) {
@@ -49,10 +49,29 @@ describe("onActivateKeyDown", () => {
 describe("getCategoryColor", () => {
   it("returns the muted fallback for an empty category", () => {
     expect(getCategoryColor("")).toContain("bg-muted");
+    expect(getCategoryColor("   ")).toContain("bg-muted");
   });
 
-  it("returns the muted fallback for any non-empty category (current behaviour)", () => {
-    expect(getCategoryColor("FOOD:GROCERIES")).toContain("bg-muted");
-    expect(getCategoryColor("anything")).toContain("text-muted-foreground");
+  it("assigns a chart-token color to any real category", () => {
+    expect(getCategoryColor("FOOD:GROCERIES")).toMatch(/bg-chart-[1-8]\/15/);
+    expect(getCategoryColor("anything")).toMatch(/text-chart-[1-8]/);
+  });
+
+  it("keys on the GENERAL part — same general, same color, case-insensitive", () => {
+    const groceries = getCategoryColor("FOOD:GROCERIES");
+    expect(getCategoryColor("FOOD:RESTAURANT")).toBe(groceries);
+    expect(getCategoryColor("food : groceries")).toBe(groceries);
+    expect(getCategoryColor("FOOD")).toBe(groceries);
+  });
+
+  it("chart fill and badge classes agree on the token index", () => {
+    const fill = getCategoryChartColor("FOOD:GROCERIES");
+    const index = categoryColorIndex("FOOD:GROCERIES");
+    expect(fill).toBe(`hsl(var(--chart-${index + 1}))`);
+    expect(getCategoryColor("FOOD:GROCERIES")).toContain(`bg-chart-${index + 1}/15`);
+  });
+
+  it("chart fill falls back to muted-foreground for empty input", () => {
+    expect(getCategoryChartColor("")).toBe("hsl(var(--muted-foreground))");
   });
 });

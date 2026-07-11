@@ -44,7 +44,6 @@ describe("dbEditor API client", () => {
       offset: 10,
       orderBy: "id",
       dir: "desc",
-      where: "amount > 0",
       filters: [{ col: "x", op: "=", val: 1 }] as never,
     });
     const p = new URL(url).searchParams;
@@ -52,7 +51,8 @@ describe("dbEditor API client", () => {
     expect(p.get("offset")).toBe("10");
     expect(p.get("orderBy")).toBe("id");
     expect(p.get("dir")).toBe("desc");
-    expect(p.get("where")).toBe("amount > 0");
+    // The raw `where` param was removed (SQLi oracle) — never sent.
+    expect(p.get("where")).toBeNull();
     expect(JSON.parse(p.get("filters")!)).toEqual([{ col: "x", op: "=", val: 1 }]);
   });
 

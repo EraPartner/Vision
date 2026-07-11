@@ -3,7 +3,7 @@
  * Polymorphic on assetClass; delegates unit-math + inheritance-table paths to common helpers.
  */
 
-import { query } from '../database/connection.js';
+import { query, withSavepointIfInTransaction } from '../database/connection.js';
 import { getById, mapPortfolioTxRow } from './portfolioTxRepo.reads.js';
 import {
   hasPortfolioTransactionInheritanceSchema,
@@ -56,39 +56,46 @@ export async function create({ investment_id, type, date, amount, units, price_p
     units: payload.units,
   });
 
+  // The schema-shape fallbacks below CATCH a failed statement and try another
+  // route. On a pool connection that's fine; inside an ambient withTransaction
+  // a failed statement poisons the whole tx, so each attempt that can be
+  // recovered from runs under a savepoint.
   if (await hasPortfolioTransactionInheritanceSchema()) {
     try {
-      return await createThroughInheritanceTables(payload, getById, assetClass);
+      return await withSavepointIfInTransaction('ptx_create_inherit', () =>
+        createThroughInheritanceTables(payload, getById, assetClass));
     } catch (err) {
       if (!isMissingInheritanceRelationError(err)) throw err;
     }
   }
 
   try {
-    const result = await query(
-      `INSERT INTO portfolio_transactions
-         (investment_id, type, date, amount, units, price_per_unit, fees, taxes, currency, note, is_recurring, recurrence_interval, recurrence_end_date, fx_rate_to_eur, account_id)
-         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15)
-         RETURNING *`,
-      [
-        payload.investment_id,
-        payload.type,
-        payload.date,
-        payload.amount,
-        payload.units ?? null,
-        payload.price_per_unit ?? null,
-        payload.fees ?? 0,
-        payload.taxes ?? 0,
-        payload.currency,
-        payload.note || null,
-        payload.is_recurring || false,
-        payload.recurrence_interval || null,
-        payload.recurrence_end_date || null,
-        payload.fx_rate_to_eur ?? null,
-        payload.account_id ?? null,
-      ]
-    );
-    return mapPortfolioTxRow(result.rows[0]);
+    return await withSavepointIfInTransaction('ptx_create_flat', async () => {
+      const result = await query(
+        `INSERT INTO portfolio_transactions
+           (investment_id, type, date, amount, units, price_per_unit, fees, taxes, currency, note, is_recurring, recurrence_interval, recurrence_end_date, fx_rate_to_eur, account_id)
+           VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15)
+           RETURNING *`,
+        [
+          payload.investment_id,
+          payload.type,
+          payload.date,
+          payload.amount,
+          payload.units ?? null,
+          payload.price_per_unit ?? null,
+          payload.fees ?? 0,
+          payload.taxes ?? 0,
+          payload.currency,
+          payload.note || null,
+          payload.is_recurring || false,
+          payload.recurrence_interval || null,
+          payload.recurrence_end_date || null,
+          payload.fx_rate_to_eur ?? null,
+          payload.account_id ?? null,
+        ]
+      );
+      return mapPortfolioTxRow(result.rows[0]);
+    });
   } catch (err) {
     if (!isNonUpdatablePortfolioTransactionsViewError(err)) throw err;
     markInheritanceSchemaPresent();

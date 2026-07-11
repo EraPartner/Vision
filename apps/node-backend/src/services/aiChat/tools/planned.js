@@ -9,6 +9,7 @@ import { infoRepository } from '../../../repositories/infoRepository.js';
 import settings from '../../../config/config.js';
 import { toDecimal, roundToCents } from '../../../lib/money.js';
 import { calculateNextDate } from '../../calculations/recurrence.js';
+import { toYmd } from '../../../utils/portfolioMath.js';
 import {
   parseEnum,
   parsePositiveInt,
@@ -25,9 +26,17 @@ const RECURRENCE_TO_MONTHLY = Object.freeze({
 
 function toIsoDate(value) {
   if (!value) return null;
-  const d = value instanceof Date ? value : new Date(value);
-  if (Number.isNaN(d.getTime())) return null;
-  return d.toISOString().slice(0, 10);
+  // pg-read DATE values are local midnight — UTC extraction (toISOString)
+  // rendered planned dates a day early east of UTC, and the recurrence
+  // expansion base with them. Strings that already carry a Y-M-D prefix are
+  // sliced as-is (parsing them via new Date() would be a UTC-midnight parse).
+  if (value instanceof Date) {
+    return Number.isNaN(value.getTime()) ? null : toYmd(value);
+  }
+  const s = String(value);
+  if (/^\d{4}-\d{2}-\d{2}/.test(s)) return s.slice(0, 10);
+  const d = new Date(s);
+  return Number.isNaN(d.getTime()) ? null : toYmd(d);
 }
 
 /**
