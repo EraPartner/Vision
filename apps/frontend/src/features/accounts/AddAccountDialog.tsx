@@ -33,6 +33,17 @@ const ACCOUNT_TYPES: AccountType[] = [
 const OWNERS: AccountOwner[] = ["me", "partner", "joint"];
 const LIQUIDITY: AccountLiquidityClass[] = ["liquid", "semi_liquid", "illiquid"];
 const TAX_WRAPPERS: AccountTaxWrapper[] = ["none", "pension", "tax_advantaged"];
+const CURRENCIES = [
+    "EUR", "USD", "GBP", "CHF", "JPY", "CAD", "AUD", "SEK", "NOK", "DKK",
+    "PLN", "CZK", "HUF", "RON", "BGN", "HRK", "TRY", "SAR", "AED", "INR",
+    "BRL", "MXN", "ZAR", "SGD", "HKD", "NZD", "KRW", "THB", "MYR", "PHP",
+];
+
+// Flag fields that flagsForType pre-fills. Once the user edits one of these
+// directly, a later type change must not clobber their choice — ADR-089
+// defaults are only suggestions for fields the user hasn't touched.
+const FLAG_KEYS = ["liquidity_class", "spendable", "has_cash_sleeve", "tax_wrapper"] as const;
+type FlagKey = typeof FLAG_KEYS[number];
 
 const EMPTY: AccountFormValues = {
     name: "", display_name: "", institution: "", currency: "EUR", type: "checking",
@@ -72,7 +83,10 @@ export function AddAccountDialog(props: AddAccountDialogProps = {}) {
     const editProps = isEditMode ? props : undefined;
 
     const [createOpen, setCreateOpen] = useState(false);
-    const [showAdvanced, setShowAdvanced] = useState(false);
+    // In edit mode the account already has populated flags/statement fields, so
+    // the "Advanced" section starts expanded — don't hide the user's data behind
+    // a collapsed toggle. Create mode still starts collapsed for a lean form.
+    const [showAdvanced, setShowAdvanced] = useState(isEditMode);
     const createMutation = useCreateAccount();
 
     // Initialized once on mount. Parents mount the edit dialog per target
@@ -82,11 +96,24 @@ export function AddAccountDialog(props: AddAccountDialogProps = {}) {
         isEditMode ? props.initialValues : EMPTY,
     );
 
-    const set = <K extends keyof AccountFormValues>(key: K, value: AccountFormValues[K]) =>
-        setForm(f => ({ ...f, [key]: value }));
+    // Flag fields the user has edited by hand this session; a type change leaves
+    // these alone and only applies flagsForType defaults to untouched fields.
+    const [touchedFlags, setTouchedFlags] = useState<Set<FlagKey>>(new Set());
 
-    const onTypeChange = (type: AccountType) =>
-        setForm(f => ({ ...f, type, ...flagsForType(type) }));
+    const set = <K extends keyof AccountFormValues>(key: K, value: AccountFormValues[K]) => {
+        if ((FLAG_KEYS as readonly string[]).includes(key as string)) {
+            setTouchedFlags(prev => new Set(prev).add(key as FlagKey));
+        }
+        setForm(f => ({ ...f, [key]: value }));
+    };
+
+    const onTypeChange = (type: AccountType) => {
+        const defaults = flagsForType(type);
+        const untouched = Object.fromEntries(
+            FLAG_KEYS.filter(k => !touchedFlags.has(k)).map(k => [k, defaults[k]]),
+        ) as Partial<AccountFormValues>;
+        setForm(f => ({ ...f, type, ...untouched }));
+    };
 
     const handleSubmit = (e: React.FormEvent) => {
         e.preventDefault();
@@ -126,6 +153,7 @@ export function AddAccountDialog(props: AddAccountDialogProps = {}) {
                 {
                     onSuccess: () => {
                         setForm(EMPTY);
+                        setTouchedFlags(new Set());
                         setShowAdvanced(false);
                         setCreateOpen(false);
                     },
@@ -193,12 +221,17 @@ export function AddAccountDialog(props: AddAccountDialogProps = {}) {
                     </div>
                     <div className="space-y-2">
                         <Label htmlFor="acct-currency">{t('accounts.field.currency')}</Label>
-                        <Input
-                            id="acct-currency"
-                            maxLength={3}
-                            value={form.currency}
-                            onChange={(e) => set("currency", e.target.value.toUpperCase())}
-                        />
+                        <Select value={form.currency} onValueChange={(v) => set("currency", v)}>
+                            <SelectTrigger id="acct-currency"><SelectValue /></SelectTrigger>
+                            <SelectContent>
+                                {(CURRENCIES.includes(form.currency)
+                                    ? CURRENCIES
+                                    : [form.currency, ...CURRENCIES]
+                                ).map((c) => (
+                                    <SelectItem key={c} value={c}>{c}</SelectItem>
+                                ))}
+                            </SelectContent>
+                        </Select>
                     </div>
                 </div>
                 <div className="space-y-2">
