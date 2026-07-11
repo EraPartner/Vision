@@ -1,5 +1,5 @@
-import { useMemo, useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { useEffect, useMemo, useState } from "react";
+import { useNavigate, useSearchParams } from "react-router-dom";
 import { PageHeader } from "@/components/shared/PageHeader";
 import { EmptyState } from "@/components/shared/EmptyState";
 import { SectionLoader } from "@/components/shared/SectionLoader";
@@ -27,6 +27,7 @@ import type { Account } from "@/types/api";
 export default function AccountsPage() {
     const { t } = useLanguage();
     const navigate = useNavigate();
+    const [searchParams, setSearchParams] = useSearchParams();
     const [showArchived, setShowArchived] = useState(false);
     const { data, isLoading, isError, error } = useAccounts({ active: showArchived ? "all" : "true" });
     const updateMutation = useUpdateAccount();
@@ -63,6 +64,26 @@ export default function AccountsPage() {
     const { summaries } = usePortfolio();
 
     const accounts = useMemo(() => data?.items ?? [], [data]);
+
+    // Deep link from the dashboard BankBalancesWidget (?account=<id>): open the
+    // shared AccountDetailSheet for that entity, then strip the param so closing
+    // + reopening works and a refresh doesn't re-trigger it. One concept, one
+    // detail code path (Accounts-rewrite Phase D).
+    const detailParam = searchParams.get("account");
+    useEffect(() => {
+        if (!detailParam) return;
+        const match = accounts.find((a) => String(a.id) === detailParam);
+        if (!match) return;
+        setDetailing(match);
+        setSearchParams(
+            (prev) => {
+                const next = new URLSearchParams(prev);
+                next.delete("account");
+                return next;
+            },
+            { replace: true },
+        );
+    }, [detailParam, accounts, setSearchParams]);
 
     const handleSave = (values: AccountFormValues) => {
         if (!editing) return;
