@@ -136,6 +136,32 @@ describe('materializedViewService', () => {
     expect(logger.info).toHaveBeenCalledWith('Materialized views ready');
   });
 
+  it('grains mv_bank_balances on (account_id, currency), not the bank_account string', async () => {
+    // Accounts rewrite Phase B (ADR-088): mv_bank_balances is the last derived
+    // object flipped off the bank_account string onto the account_id FK.
+    const { createMaterializedViews, query } = await loadMaterializedViewService();
+    query.mockResolvedValue({ rows: [] });
+
+    await createMaterializedViews();
+
+    const sqlCalls = query.mock.calls.map(([sql]) => sql);
+    const createSql = sqlCalls.find((sql) =>
+      sql.includes('CREATE MATERIALIZED VIEW IF NOT EXISTS mv_bank_balances'));
+    const indexSql = sqlCalls.find((sql) =>
+      sql.includes('CREATE UNIQUE INDEX IF NOT EXISTS mv_bank_balances_idx'));
+
+    expect(createSql).toBeDefined();
+    // Grouped by the FK + currency, joined to accounts for the compat label.
+    expect(createSql).toMatch(/JOIN accounts a ON a\.id = t\.account_id/);
+    expect(createSql).toMatch(/GROUP BY t\.account_id, a\.name, t\.currency/);
+    expect(createSql).toMatch(/a\.name AS bank_account/);
+    // No longer groups on / requires the raw bank_account string.
+    expect(createSql).not.toMatch(/GROUP BY bank_account/);
+
+    expect(indexSql).toBeDefined();
+    expect(indexSql).toMatch(/mv_bank_balances \(account_id, currency\)/);
+  });
+
   it('ensures indexes and warns when one creation fails', async () => {
     const { ensureMaterializedViewIndexes, query, logger } = await loadMaterializedViewService();
     query.mockImplementation((sql) => {

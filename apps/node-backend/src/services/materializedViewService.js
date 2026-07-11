@@ -99,23 +99,29 @@ export async function createMaterializedViews() {
       ON mv_cashflow_daily (date, currency)
     `)),
 
-    // 4. Bank account balances (running totals)
+    // 4. Bank account balances (running totals). Grained on (account_id, currency)
+    //    per ADR-088 / D2 — the last reader flipped off the bank_account string.
+    //    `a.name AS bank_account` is kept as an output label so read-side consumers
+    //    stay source-compatible while the string column is retired. Matches
+    //    alembic/manual/contract_drop_bank_account/up.sql step 2.
     query(`
       CREATE MATERIALIZED VIEW IF NOT EXISTS mv_bank_balances AS
       SELECT
-        bank_account,
+        t.account_id,
+        a.name AS bank_account,
         t.currency,
         COUNT(*) AS transaction_count,
         MIN(t.date) AS first_transaction,
         MAX(t.date) AS last_transaction,
         SUM(t.amount) AS balance
       FROM transactions t
-      WHERE t.is_active = true AND bank_account IS NOT NULL
-      GROUP BY bank_account, t.currency
-      ORDER BY bank_account
+      JOIN accounts a ON a.id = t.account_id
+      WHERE t.is_active = true AND t.account_id IS NOT NULL
+      GROUP BY t.account_id, a.name, t.currency
+      ORDER BY a.name
     `).then(() => query(`
       CREATE UNIQUE INDEX IF NOT EXISTS mv_bank_balances_idx
-      ON mv_bank_balances (bank_account, currency)
+      ON mv_bank_balances (account_id, currency)
     `)),
   ]);
 
@@ -147,7 +153,7 @@ export async function ensureMaterializedViewIndexes() {
     {
       name: 'mv_bank_balances_idx',
       view: 'mv_bank_balances',
-      columns: `(bank_account, currency)`,
+      columns: `(account_id, currency)`,
     },
   ];
 

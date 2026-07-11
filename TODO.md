@@ -4544,7 +4544,7 @@ the phases below are updated accordingly:**
 - [x] `bank_account` free-text inputs in Add Transaction + Planned Payment forms → account ✅ 2026-07-11 · 76cdad8
       combobox with an explicit "create account…" affordance (filed 🔼; free text remains a valid
       escape hatch under D1 — it now resolves case-insensitively)
-- [ ] Flip the last string readers: list-filter/search → `account_id` predicate (subsumes the filed 🔎 partial 2026-07-11 (list/count/uncategorised/export/bulk filters flipped to account_id per b223a7a; mv_bank_balances still grained on (bank_account,currency))
+- [x] Flip the last string readers: list-filter/search → `account_id` predicate (subsumes the filed ✅ 2026-07-11 · fb79c85 (list/count/uncategorised/export/bulk filters flipped to account_id per b223a7a; mv_bank_balances now re-grained on (account_id, currency) — migration 0072 drops the stale MV so the service recreates it)
       "exact bank-account filter as ILIKE" perf item — route the dropdown through the FK rather
       than anchoring the string), `mv_bank_balances` re-grained on `(account_id, currency)` (filed
       inside the dual-write-exit item; the grain choice is also the D2 multi-currency grain) ⏫
