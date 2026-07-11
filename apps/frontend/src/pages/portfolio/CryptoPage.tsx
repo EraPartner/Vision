@@ -1,5 +1,6 @@
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { StatCard } from "@/components/dashboard/StatCard";
+import { RollingNumber } from "@/components/shared/RollingNumber";
 import { Button } from "@/components/ui/button";
 import { TrendingUp, TrendingDown, Trash2, Bitcoin, Eye, DollarSign, ArrowUpRight } from "lucide-react";
 import { usePortfolio } from "@/hooks/usePortfolio";
@@ -14,7 +15,7 @@ import { cn } from "@/lib/utils";
 import { useConfirmDialog } from "@/hooks/useConfirmDialog";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { useAppSettings } from "@/contexts/AppSettingsContext";
-import { useCurrencyFormatter } from "@/hooks/useCurrencyFormatter";
+import { useCurrencyFormatter, useCurrencyPartsFormatter } from "@/hooks/useCurrencyFormatter";
 import { useNavigate } from "react-router-dom";
 import { PageHeader } from "@/components/shared/PageHeader";
 import { PageError } from "@/components/shared/PageError";
@@ -45,6 +46,7 @@ export default function CryptoPage() {
   const pageHasFxExposure = holdings.some((h) => (h.originalCurrency || h.currency || 'EUR').toUpperCase() !== targetCurrency.toUpperCase());
 
   const fmt = useCurrencyFormatter(targetCurrency);
+  const fmtParts = useCurrencyPartsFormatter(targetCurrency);
 
   function openMarketLookup(symbol?: string, investmentId?: number) {
     if (!symbol) return;
@@ -123,22 +125,24 @@ export default function CryptoPage() {
 
       {/* Summary Cards */}
       <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
-        <StatCard size="compact" title={t('portfolio.portfolioValue')} value={fmt(totalValue)}
+        <StatCard size="compact" title={t('portfolio.portfolioValue')}
+          value={<RollingNumber parts={fmtParts(totalValue)} />}
           icon={DollarSign} valueClassName="text-primary" />
         <StatCard size="compact" title={t('portfolio.realizedPnl')}
-          value={`${totalRealizedGain >= 0 ? "+" : ""}${fmt(totalRealizedGain)}`}
+          value={<RollingNumber parts={fmtParts(totalRealizedGain, { signed: true })} />}
           icon={ArrowUpRight} trend={totalRealizedGain >= 0 ? "income" : "expense"}
           valueClassName={totalRealizedGain >= 0 ? "amount-gain" : "amount-loss"} />
         <StatCard size="compact" title={t('portfolio.unrealizedPnl')}
-          value={`${totalUnrealizedGain >= 0 ? "+" : ""}${fmt(totalUnrealizedGain)}`}
+          value={<RollingNumber parts={fmtParts(totalUnrealizedGain, { signed: true })} />}
           icon={totalUnrealizedGain >= 0 ? TrendingUp : TrendingDown}
           trend={totalUnrealizedGain >= 0 ? "income" : "expense"}
           valueClassName={totalUnrealizedGain >= 0 ? "amount-gain" : "amount-loss"} />
-        <StatCard size="compact" title={t('portfolio.feesAndTaxes')} value={`-${fmt(totalFees + totalTaxes)}`}
+        <StatCard size="compact" title={t('portfolio.feesAndTaxes')}
+          value={<RollingNumber parts={fmtParts(-(totalFees + totalTaxes), { signed: true })} />}
           trend="expense" valueClassName="text-loss" />
 
         <StatCard size="compact" title={t('portfolio.netReturn')}
-          value={`${netGain >= 0 ? "+" : ""}${fmt(netGain)}`}
+          value={<RollingNumber parts={fmtParts(netGain, { signed: true })} />}
           trend={netGain >= 0 ? "income" : "expense"}
           valueClassName={netGain >= 0 ? "amount-gain" : "amount-loss"} />
       </div>

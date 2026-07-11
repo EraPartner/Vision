@@ -12,6 +12,7 @@ import { cn } from "@/lib/utils";
 import { PageHeader } from "@/components/shared/PageHeader";
 import { EmptyState } from "@/components/shared/EmptyState";
 import { StatCard } from "@/components/dashboard/StatCard";
+import { RollingNumber } from "@/components/shared/RollingNumber";
 import { CHART_PERIODS, filterByPeriod, type ChartPeriod } from "@/components/charts";
 import {
   EMPTY_SNAPSHOTS,
@@ -100,6 +101,7 @@ export default function NetWorthPage() {
   }), [appSettings.defaultCurrency, appSettings.showDecimalPlaces, locale]);
 
   const fmt = useCallback((val: number) => currencyFormatter.format(val), [currencyFormatter]);
+  const fmtParts = useCallback((val: number) => currencyFormatter.formatToParts(val), [currencyFormatter]);
 
   const monthLabelLocale = useMemo(() => (language === 'nl' ? 'nl-NL' : 'en-US'), [language]);
   const xTickFormatter = useMemo(() => {
@@ -238,9 +240,7 @@ export default function NetWorthPage() {
         <div className={cn("lg:col-span-3 [&>*]:h-full", hasLiabilities ? "lg:row-span-3" : "lg:row-span-2")}>
           <StatCard
             title={t('networth.title')}
-            value={fmt(current.netWorth)}
-            numericValue={current.netWorth}
-            formatValue={fmt}
+            value={<RollingNumber parts={fmtParts(current.netWorth)} />}
             icon={Wallet}
             valueClassName="text-primary"
             trend={monthlyChange >= 0 ? "income" : "expense"}
@@ -250,9 +250,7 @@ export default function NetWorthPage() {
         <div className="lg:col-span-3">
           <StatCard
             title={t('networth.liquid')}
-            value={fmt(current.liquid)}
-            numericValue={current.liquid}
-            formatValue={fmt}
+            value={<RollingNumber parts={fmtParts(current.liquid)} />}
             icon={Landmark}
             trend="neutral"
             subtitle={`${liquidPct} ${t('networth.ofNetWorth')}`}
@@ -261,9 +259,7 @@ export default function NetWorthPage() {
         <div className="lg:col-span-3">
           <StatCard
             title={t('networth.investments')}
-            value={fmt(current.investments)}
-            numericValue={current.investments}
-            formatValue={fmt}
+            value={<RollingNumber parts={fmtParts(current.investments)} />}
             icon={PiggyBank}
             trend="neutral"
             subtitle={`${investmentsPct} ${t('networth.ofNetWorth')}`}
@@ -273,9 +269,7 @@ export default function NetWorthPage() {
           <div className="lg:col-span-3">
             <StatCard
               title={t('networth.liabilities')}
-              value={fmt(current.liabilities)}
-              numericValue={current.liabilities}
-              formatValue={fmt}
+              value={<RollingNumber parts={fmtParts(current.liabilities)} />}
               icon={CreditCard}
               trend="expense"
               subtitle={`${liabilitiesPct} ${t('networth.ofNetWorth')}`}
@@ -352,8 +346,8 @@ export default function NetWorthPage() {
 
       {/* Historical extremes */}
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-        <StatCard title={t('networth.peak')} value={fmt(peak)} icon={TrendingUp} trend="income" />
-        <StatCard title={t('networth.lowest')} value={fmt(trough)} icon={TrendingDown} trend="expense" />
+        <StatCard title={t('networth.peak')} value={<RollingNumber parts={fmtParts(peak)} />} icon={TrendingUp} trend="income" />
+        <StatCard title={t('networth.lowest')} value={<RollingNumber parts={fmtParts(trough)} />} icon={TrendingDown} trend="expense" />
         <StatCard title={t('networth.daysTracked')} value={String(displaySnapshots.length)} icon={Wallet} />
       </div>
 

@@ -1,5 +1,7 @@
+import { type ReactNode } from "react";
 import { TrendingUp, TrendingDown, DollarSign, BarChart3 } from "lucide-react";
 import { StatCard } from "@/components/dashboard/StatCard";
+import { RollingNumber } from "@/components/shared/RollingNumber";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { useChartCurrencyFormatter } from "@/hooks/useChartCurrencyFormatter";
 import type { StatisticsData } from "@/hooks/useStatistics";
@@ -22,7 +24,7 @@ export function SummaryCards({ data }: SummaryCardsProps) {
   const cards = [
     {
       title: t("statsPage.totalIncome"),
-      value: incomeCompact.display,
+      value: <RollingNumber parts={incomeCompact.parts} />,
       fullValue: incomeCompact.isCompact ? incomeCompact.full : undefined,
       icon: TrendingUp,
       description: t("statsPage.avgPerMonth", { amount: avgIncomeCompact.display }),
@@ -31,7 +33,7 @@ export function SummaryCards({ data }: SummaryCardsProps) {
     },
     {
       title: t("statsPage.totalSpending"),
-      value: spendingCompact.display,
+      value: <RollingNumber parts={spendingCompact.parts} />,
       fullValue: spendingCompact.isCompact ? spendingCompact.full : undefined,
       icon: TrendingDown,
       description: t("statsPage.avgPerMonth", { amount: avgSpendingCompact.display }),
@@ -40,7 +42,7 @@ export function SummaryCards({ data }: SummaryCardsProps) {
     },
     {
       title: t("statsPage.netBalance"),
-      value: netCompact.display,
+      value: <RollingNumber parts={netCompact.parts} />,
       fullValue: netCompact.isCompact ? netCompact.full : undefined,
       icon: DollarSign,
       description: t("statsPage.overMonths", { n: data.monthlyData.length }),
@@ -49,7 +51,7 @@ export function SummaryCards({ data }: SummaryCardsProps) {
     },
     {
       title: t("statsPage.monthsTracked"),
-      value: data.monthlyData.length.toString(),
+      value: data.monthlyData.length.toString() as ReactNode,
       fullValue: undefined as string | undefined,
       icon: BarChart3,
       description: t("statsPage.years", { n: data.allYears.length }),

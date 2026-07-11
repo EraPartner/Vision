@@ -1,5 +1,7 @@
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { StatCard } from "@/components/dashboard/StatCard";
+import { RollingNumber } from "@/components/shared/RollingNumber";
+import { useCurrencyPartsFormatter } from "@/hooks/useCurrencyFormatter";
 import { Button } from "@/components/ui/button";
 import { Building2, Trash2, Eye, TrendingUp, DollarSign, Home, MapPin, Percent } from "lucide-react";
 import { usePortfolio } from "@/hooks/usePortfolio";
@@ -28,6 +30,7 @@ export default function RealEstatePage() {
   const properties = byAssetClass('real_estate');
 
   const { convertToTarget } = useCurrencyConverter(targetCurrency);
+  const fmtParts = useCurrencyPartsFormatter(targetCurrency);
 
   function fmt(
     val: number,
@@ -111,21 +114,24 @@ export default function RealEstatePage() {
 
       {/* Summary Cards */}
       <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
-        <StatCard size="compact" title={t('portfolio.totalValue')} value={fmt(totalValue)}
+        <StatCard size="compact" title={t('portfolio.totalValue')}
+          value={<RollingNumber parts={fmtParts(totalValue)} />}
           icon={DollarSign} valueClassName="text-primary" />
-        <StatCard size="compact" title={t('portfolio.totalCost')} value={fmt(totalCost)}
+        <StatCard size="compact" title={t('portfolio.totalCost')}
+          value={<RollingNumber parts={fmtParts(totalCost)} />}
           icon={Home} valueClassName="text-muted-foreground" />
         <StatCard size="compact" title={t('portfolio.appreciation')}
-          value={`${totalAppreciation >= 0 ? "+" : ""}${fmt(totalAppreciation)}`}
+          value={<RollingNumber parts={fmtParts(totalAppreciation, { signed: true })} />}
           icon={TrendingUp} trend={totalAppreciation >= 0 ? "income" : "expense"}
           valueClassName={totalAppreciation >= 0 ? "amount-gain" : "amount-loss"} />
-        <StatCard size="compact" title={t('portfolio.rentalIncome')} value={`+${fmt(totalRentIncome)}`}
+        <StatCard size="compact" title={t('portfolio.rentalIncome')}
+          value={<RollingNumber parts={fmtParts(totalRentIncome, { signed: true })} />}
           trend="income" valueClassName="text-gain"
           subtitle={`~${fmt(estimatedMonthlyRent)}${t('realestate.perMonth')}`} />
         <StatCard size="compact" title={t('portfolio.yield')} value={`${annualYield.toFixed(1)}%`}
           icon={Percent} subtitle={t('portfolio.annual')} />
         <StatCard size="compact" title={t('portfolio.totalReturn')}
-          value={`${totalReturn >= 0 ? "+" : ""}${fmt(totalReturn)}`}
+          value={<RollingNumber parts={fmtParts(totalReturn, { signed: true })} />}
           trend={totalReturn >= 0 ? "income" : "expense"}
           valueClassName={totalReturn >= 0 ? "amount-gain" : "amount-loss"}>
           <div className="mt-1 flex items-center gap-1.5">

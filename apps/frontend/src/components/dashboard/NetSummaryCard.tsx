@@ -88,7 +88,7 @@ export function NetSummaryCard({ netBalance, income, spending, history }: NetSum
         <div className="flex items-end gap-3 flex-wrap">
           <div className={`text-4xl md:text-5xl font-bold tabular-nums ${netColor}`}>
             <span title={netCompact.isCompact ? netCompact.full : undefined}>
-              <RollingNumber value={netCompact.display} />
+              <RollingNumber parts={netCompact.parts} />
             </span>
           </div>
           {savingsRate !== null && (

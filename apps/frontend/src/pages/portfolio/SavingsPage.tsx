@@ -1,5 +1,6 @@
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { StatCard } from "@/components/dashboard/StatCard";
+import { RollingNumber } from "@/components/shared/RollingNumber";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { PiggyBank, Shield, Trash2, Eye, Percent, TrendingUp, Calendar, DollarSign } from "lucide-react";
@@ -10,7 +11,7 @@ import { InvestmentDetailDialog } from "@/components/portfolio/InvestmentDetailD
 import { useConfirmDialog } from "@/hooks/useConfirmDialog";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { useAppSettings } from "@/contexts/AppSettingsContext";
-import { useCurrencyFormatter } from "@/hooks/useCurrencyFormatter";
+import { useCurrencyFormatter, useCurrencyPartsFormatter } from "@/hooks/useCurrencyFormatter";
 import { formatDateStringWithAppSettings } from "@/components/shared/dateUtils";
 import { parseYmd, daysBetween } from "@/lib/timezone";
 import { cn } from "@/lib/utils";
@@ -36,6 +37,7 @@ export default function SavingsPage() {
   const { convertToTarget } = useCurrencyConverter(targetCurrency);
 
   const fmt = useCurrencyFormatter(targetCurrency);
+  const fmtParts = useCurrencyPartsFormatter(targetCurrency);
 
   const totalBalance = accounts.reduce((s, a) => s + convertToTarget(a.currentValue, a.currency), 0);
   const totalInterestEarned = accounts.reduce((s, a) => s + convertToTarget(a.totalIncome, a.currency), 0);
@@ -96,13 +98,16 @@ export default function SavingsPage() {
 
       {/* Summary Cards */}
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-        <StatCard size="compact" title={t('portfolio.totalBalance')} value={fmt(totalBalance)}
+        <StatCard size="compact" title={t('portfolio.totalBalance')}
+          value={<RollingNumber parts={fmtParts(totalBalance)} />}
           icon={DollarSign} valueClassName="text-primary" />
         <StatCard size="compact" title={t('portfolio.avgInterestRate')} value={`${weightedRate.toFixed(2)}%`}
           icon={Percent} valueClassName="text-accent" />
-        <StatCard size="compact" title={t('portfolio.interestEarned')} value={`+${fmt(totalInterestEarned)}`}
+        <StatCard size="compact" title={t('portfolio.interestEarned')}
+          value={<RollingNumber parts={fmtParts(totalInterestEarned, { signed: true })} />}
           icon={TrendingUp} trend="income" valueClassName="text-gain" />
-        <StatCard size="compact" title={t('portfolio.projectedAnnual')} value={`+${fmt(totalProjectedAnnual)}`}
+        <StatCard size="compact" title={t('portfolio.projectedAnnual')}
+          value={<RollingNumber parts={fmtParts(totalProjectedAnnual, { signed: true })} />}
           valueClassName="text-primary"
           subtitle={totalAccrued > 0 ? `${fmt(totalAccrued)} ${t('portfolio.accrued')}` : undefined} />
       </div>
