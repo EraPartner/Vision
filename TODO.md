@@ -4595,7 +4595,7 @@ rich aesthetic, don't flatten):**
       "Advanced" toggle, and type-change must only apply `flagsForType` defaults to fields the user
       hasn't touched (today it silently clobbers manually-set `spendable`/`liquidity_class`/
       `tax_wrapper`/`has_cash_sleeve`). Currency becomes a Select of known codes. 🔼
-- [ ] Replace native `title` tooltips with the app Tooltip (drift, balance provenance, open-hint — 🔎 verified-present 2026-07-11
+- [x] Replace native `title` tooltips with the app Tooltip (drift, balance provenance, open-hint — 🔎 verified-present 2026-07-11 ✅ 2026-07-11 · 041eb35
       filed inside the touch-tooltip sweep); real error state with retry (filed); accessible name
       on the ⋮ button (filed); distinct page icon — `Landmark` currently doubles as Taxes (filed);
       `Money` component for balances instead of plain `formatCurrency` (filed in the Money-adoption
