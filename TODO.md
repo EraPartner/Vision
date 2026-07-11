@@ -4302,7 +4302,7 @@ detection layer never touches an LLM, so it's unaffected either way.
    can call the other read-only Insights tools for extra context (e.g. "how unusual is this recipient
    historically") exactly like it would for any other query.
 
-- [ ] Write ADR: detection-layer/narration-layer split for local-LLM insights 🔼 🔎 verified-present 2026-07-11
+- [x] Write ADR: detection-layer/narration-layer split for local-LLM insights 🔼 ✅ 2026-07-11 · 57ae3b8
     - Records the two-layer split above: detection always runs on normal page load (no privacy/
       hardware concern, it's plain code); narration only ever runs on an explicit user click (the only
       part that spends local inference)
