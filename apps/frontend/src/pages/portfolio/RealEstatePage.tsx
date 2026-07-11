@@ -1,4 +1,5 @@
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { StatCard } from "@/components/dashboard/StatCard";
 import { Button } from "@/components/ui/button";
 import { Building2, Trash2, Eye, TrendingUp, DollarSign, Home, MapPin, Percent } from "lucide-react";
 import { usePortfolio } from "@/hooks/usePortfolio";
@@ -110,98 +111,28 @@ export default function RealEstatePage() {
 
       {/* Summary Cards */}
       <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
-        <Card className="group relative overflow-hidden glass-regular premium-frame micro-lift">
-          <CardHeader className="pb-1 pt-3 px-4">
-            <CardTitle className="text-xs font-medium text-muted-foreground flex items-center gap-2">
-              <span className="inline-flex h-6 w-6 items-center justify-center rounded-md bg-gradient-to-br from-primary/20 to-primary/5 text-primary ring-1 ring-primary/15">
-                <DollarSign className="h-3 w-3" />
-              </span>
-              {t('portfolio.totalValue')}
-            </CardTitle>
-          </CardHeader>
-          <CardContent className="pb-3 px-4">
-            <p className="text-xl font-bold text-primary tabular-nums">{fmt(totalValue)}</p>
-          </CardContent>
-        </Card>
-
-        <Card className="group relative overflow-hidden glass-regular premium-frame micro-lift">
-          <CardHeader className="pb-1 pt-3 px-4">
-            <CardTitle className="text-xs font-medium text-muted-foreground flex items-center gap-2">
-              <span className="inline-flex h-6 w-6 items-center justify-center rounded-md bg-gradient-to-br from-muted-foreground/20 to-muted-foreground/5 text-muted-foreground ring-1 ring-muted-foreground/15">
-                <Home className="h-3 w-3" />
-              </span>
-              {t('portfolio.totalCost')}
-            </CardTitle>
-          </CardHeader>
-          <CardContent className="pb-3 px-4">
-            <p className="text-xl font-bold text-muted-foreground tabular-nums">{fmt(totalCost)}</p>
-          </CardContent>
-        </Card>
-
-        <Card className="group relative overflow-hidden glass-regular premium-frame micro-lift">
-          <CardHeader className="pb-1 pt-3 px-4">
-            <CardTitle className="text-xs font-medium text-muted-foreground flex items-center gap-2">
-              <span className={cn(
-                "inline-flex h-6 w-6 items-center justify-center rounded-md bg-gradient-to-br ring-1",
-                totalAppreciation >= 0
-                  ? "from-gain/20 to-gain/5 text-gain ring-gain/15"
-                  : "from-loss/20 to-loss/5 text-loss ring-loss/15"
-              )}>
-                <TrendingUp className="h-3 w-3" />
-              </span>
-              {t('portfolio.appreciation')}
-            </CardTitle>
-          </CardHeader>
-          <CardContent className="pb-3 px-4">
-            <p className={cn("text-xl font-bold tabular-nums", totalAppreciation >= 0 ? "amount-gain" : "amount-loss")}>
-              {totalAppreciation >= 0 ? "+" : ""}{fmt(totalAppreciation)}
-            </p>
-          </CardContent>
-        </Card>
-
-        <Card className="group relative overflow-hidden glass-regular premium-frame micro-lift">
-          <CardHeader className="pb-1 pt-3 px-4">
-            <CardTitle className="text-xs font-medium text-muted-foreground">{t('portfolio.rentalIncome')}</CardTitle>
-          </CardHeader>
-          <CardContent className="pb-3 px-4">
-            <p className="text-xl font-bold text-gain tabular-nums">+{fmt(totalRentIncome)}</p>
-            <p className="text-xs text-muted-foreground mt-0.5">~{fmt(estimatedMonthlyRent)}{t('realestate.perMonth')}</p>
-          </CardContent>
-        </Card>
-
-        <Card className="group relative overflow-hidden glass-regular premium-frame micro-lift">
-          <CardHeader className="pb-1 pt-3 px-4">
-            <CardTitle className="text-xs font-medium text-muted-foreground flex items-center gap-2">
-              <span className="inline-flex h-6 w-6 items-center justify-center rounded-md bg-gradient-to-br from-foreground/15 to-foreground/5 text-foreground ring-1 ring-foreground/10">
-                <Percent className="h-3 w-3" />
-              </span>
-              {t('portfolio.yield')}
-            </CardTitle>
-          </CardHeader>
-          <CardContent className="pb-3 px-4">
-            <p className="text-xl font-bold text-foreground tabular-nums">{annualYield.toFixed(1)}%</p>
-            <p className="text-xs text-muted-foreground mt-0.5">{t('portfolio.annual')}</p>
-          </CardContent>
-        </Card>
-
-        <Card className="group relative overflow-hidden glass-regular premium-frame micro-lift">
-          <div aria-hidden className={cn(
-            "pointer-events-none absolute inset-0 rounded-[inherit] bg-gradient-to-br",
-            totalReturn >= 0 ? "from-gain/15 to-gain/5" : "from-loss/15 to-loss/5",
-          )} />
-          <CardHeader className="pb-1 pt-3 px-4">
-            <CardTitle className="text-xs font-medium text-muted-foreground">{t('portfolio.totalReturn')}</CardTitle>
-          </CardHeader>
-          <CardContent className="pb-3 px-4">
-            <p className={cn("text-xl font-bold tabular-nums", totalReturn >= 0 ? "amount-gain" : "amount-loss")}>
-              {totalReturn >= 0 ? "+" : ""}{fmt(totalReturn)}
-            </p>
-            <div className="mt-1 flex items-center gap-1.5">
-              <DeltaPill value={roi} label={`${roi >= 0 ? "+" : ""}${roi.toFixed(1)}%`} />
-              <span className="text-xs text-muted-foreground">{t('portfolio.totalROI')}</span>
-            </div>
-          </CardContent>
-        </Card>
+        <StatCard size="compact" title={t('portfolio.totalValue')} value={fmt(totalValue)}
+          icon={DollarSign} valueClassName="text-primary" />
+        <StatCard size="compact" title={t('portfolio.totalCost')} value={fmt(totalCost)}
+          icon={Home} valueClassName="text-muted-foreground" />
+        <StatCard size="compact" title={t('portfolio.appreciation')}
+          value={`${totalAppreciation >= 0 ? "+" : ""}${fmt(totalAppreciation)}`}
+          icon={TrendingUp} trend={totalAppreciation >= 0 ? "income" : "expense"}
+          valueClassName={totalAppreciation >= 0 ? "amount-gain" : "amount-loss"} />
+        <StatCard size="compact" title={t('portfolio.rentalIncome')} value={`+${fmt(totalRentIncome)}`}
+          trend="income" valueClassName="text-gain"
+          subtitle={`~${fmt(estimatedMonthlyRent)}${t('realestate.perMonth')}`} />
+        <StatCard size="compact" title={t('portfolio.yield')} value={`${annualYield.toFixed(1)}%`}
+          icon={Percent} subtitle={t('portfolio.annual')} />
+        <StatCard size="compact" title={t('portfolio.totalReturn')}
+          value={`${totalReturn >= 0 ? "+" : ""}${fmt(totalReturn)}`}
+          trend={totalReturn >= 0 ? "income" : "expense"}
+          valueClassName={totalReturn >= 0 ? "amount-gain" : "amount-loss"}>
+          <div className="mt-1 flex items-center gap-1.5">
+            <DeltaPill value={roi} label={`${roi >= 0 ? "+" : ""}${roi.toFixed(1)}%`} />
+            <span className="text-xs text-muted-foreground">{t('portfolio.totalROI')}</span>
+          </div>
+        </StatCard>
       </div>
 
       {/* Property Cards */}

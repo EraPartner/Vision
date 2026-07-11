@@ -1,8 +1,7 @@
 import { TrendingUp, TrendingDown, DollarSign, BarChart3 } from "lucide-react";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { StatCard } from "@/components/dashboard/StatCard";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { useChartCurrencyFormatter } from "@/hooks/useChartCurrencyFormatter";
-import { cn } from "@/lib/utils";
 import type { StatisticsData } from "@/hooks/useStatistics";
 
 interface SummaryCardsProps {
@@ -28,6 +27,7 @@ export function SummaryCards({ data }: SummaryCardsProps) {
       icon: TrendingUp,
       description: t("statsPage.avgPerMonth", { amount: avgIncomeCompact.display }),
       className: "text-gain",
+      trend: "income" as const,
     },
     {
       title: t("statsPage.totalSpending"),
@@ -36,6 +36,7 @@ export function SummaryCards({ data }: SummaryCardsProps) {
       icon: TrendingDown,
       description: t("statsPage.avgPerMonth", { amount: avgSpendingCompact.display }),
       className: "text-loss",
+      trend: "expense" as const,
     },
     {
       title: t("statsPage.netBalance"),
@@ -44,6 +45,7 @@ export function SummaryCards({ data }: SummaryCardsProps) {
       icon: DollarSign,
       description: t("statsPage.overMonths", { n: data.monthlyData.length }),
       className: net >= 0 ? "amount-gain" : "amount-loss",
+      trend: net >= 0 ? ("income" as const) : ("expense" as const),
     },
     {
       title: t("statsPage.monthsTracked"),
@@ -52,33 +54,23 @@ export function SummaryCards({ data }: SummaryCardsProps) {
       icon: BarChart3,
       description: t("statsPage.years", { n: data.allYears.length }),
       className: "text-primary",
+      trend: "neutral" as const,
     },
   ];
 
   return (
     <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 animate-stagger">
       {cards.map((card) => (
-        <Card key={card.title} className="group relative overflow-hidden glass-regular premium-frame micro-lift">
-          <CardHeader className="flex flex-row items-center justify-between pb-2">
-            <CardTitle className="text-sm font-medium text-muted-foreground">{card.title}</CardTitle>
-            <span className={cn(
-              "inline-flex h-7 w-7 items-center justify-center rounded-md ring-1",
-              card.className.includes("text-gain")
-                ? "bg-gradient-to-br from-gain/20 to-gain/5 ring-gain/15"
-                : card.className.includes("text-loss")
-                ? "bg-gradient-to-br from-loss/20 to-loss/5 ring-loss/15"
-                : "bg-gradient-to-br from-primary/20 to-primary/5 ring-primary/15"
-            )}>
-              <card.icon className={`h-4 w-4 ${card.className}`} />
-            </span>
-          </CardHeader>
-          <CardContent>
-            <p className={`text-2xl font-bold ${card.className}`}>
-              <span title={card.fullValue}>{card.value}</span>
-            </p>
-            <p className="text-xs text-muted-foreground mt-1">{card.description}</p>
-          </CardContent>
-        </Card>
+        <StatCard
+          key={card.title}
+          title={card.title}
+          value={card.value}
+          titleValue={card.fullValue}
+          icon={card.icon}
+          trend={card.trend}
+          valueClassName={card.className}
+          subtitle={card.description}
+        />
       ))}
     </div>
   );

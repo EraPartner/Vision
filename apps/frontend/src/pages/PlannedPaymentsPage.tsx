@@ -3,13 +3,14 @@ import { safeHref } from "@/utils/safeHref";
 import { useQueryClient } from "@tanstack/react-query";
 import { Money } from "@/components/shared/Money";
 import logger from "@/lib/logger";
-import { Plus, CalendarClock, Repeat, Trash2, Pencil, ToggleLeft, ToggleRight, AlertCircle, CheckCircle2, Circle, Eye, EyeOff, History } from "lucide-react";
+import { Plus, CalendarClock, Clock, Repeat, Trash2, Pencil, ToggleLeft, ToggleRight, AlertCircle, CheckCircle2, Circle, Eye, EyeOff, History } from "lucide-react";
 import { PageHeader } from "@/components/shared/PageHeader";
+import { StatCard } from "@/components/dashboard/StatCard";
 import { Skeleton } from "@/components/ui/skeleton";
 import { RecurringDetectionPanel } from "@/components/planned/RecurringDetectionPanel";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { VirtualDataTable } from "@/components/shared/VirtualDataTable";
 import { toast } from "sonner";
 import { Alert, AlertDescription } from "@/components/ui/alert";
@@ -444,53 +445,10 @@ export default function PlannedPaymentsPage() {
         )}
 
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-          <Card className="group relative overflow-hidden glass-regular premium-frame micro-lift">
-            <CardHeader className="pb-2">
-              <CardTitle className="text-sm font-medium text-muted-foreground">{t('plannedPage.pending')}</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <p className="text-2xl font-bold">{pending}</p>
-            </CardContent>
-          </Card>
-          <Card className="group relative overflow-hidden glass-regular premium-frame micro-lift">
-            <CardHeader className="pb-2">
-              <CardTitle className="text-sm font-medium text-muted-foreground flex items-center gap-2">
-                <span className="inline-flex h-6 w-6 items-center justify-center rounded-md bg-gradient-to-br from-accent/20 to-accent/5 text-accent ring-1 ring-accent/15">
-                  <CheckCircle2 className="h-3.5 w-3.5" />
-                </span>
-                {t('plannedPage.executed')}
-              </CardTitle>
-            </CardHeader>
-            <CardContent>
-              <p className="text-2xl font-bold text-accent">{executed}</p>
-            </CardContent>
-          </Card>
-          <Card className="group relative overflow-hidden glass-regular premium-frame micro-lift">
-            <CardHeader className="pb-2">
-              <CardTitle className="text-sm font-medium text-muted-foreground flex items-center gap-2">
-                <span className="inline-flex h-6 w-6 items-center justify-center rounded-md bg-gradient-to-br from-primary/20 to-primary/5 text-primary ring-1 ring-primary/15">
-                  <Repeat className="h-3.5 w-3.5" />
-                </span>
-                {t('plannedPage.estMonthly')}
-              </CardTitle>
-            </CardHeader>
-            <CardContent>
-              <p className="text-2xl font-bold tabular-nums"><Money amount={totalMonthly} signed /></p>
-            </CardContent>
-          </Card>
-          <Card className="group relative overflow-hidden glass-regular premium-frame micro-lift">
-            <CardHeader className="pb-2">
-              <CardTitle className="text-sm font-medium text-muted-foreground flex items-center gap-2">
-                <span className="inline-flex h-6 w-6 items-center justify-center rounded-md bg-gradient-to-br from-accent/20 to-accent/5 text-accent ring-1 ring-accent/15">
-                  <CalendarClock className="h-3.5 w-3.5" />
-                </span>
-                {t('plannedPage.dueThisWeek')}
-              </CardTitle>
-            </CardHeader>
-            <CardContent>
-              <p className="text-2xl font-bold">{upcoming}</p>
-            </CardContent>
-          </Card>
+          <StatCard title={t('plannedPage.pending')} value={String(pending)} icon={Clock} />
+          <StatCard title={t('plannedPage.executed')} value={String(executed)} icon={CheckCircle2} valueClassName="text-accent" />
+          <StatCard title={t('plannedPage.estMonthly')} value={<Money amount={totalMonthly} signed />} icon={Repeat} />
+          <StatCard title={t('plannedPage.dueThisWeek')} value={String(upcoming)} icon={CalendarClock} />
         </div>
 
         <MatchSuggestionsBanner onReview={handleReviewSuggestion} />

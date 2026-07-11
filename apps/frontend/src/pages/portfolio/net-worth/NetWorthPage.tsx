@@ -352,33 +352,9 @@ export default function NetWorthPage() {
 
       {/* Historical extremes */}
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-        <Card className="group relative overflow-hidden glass-regular premium-frame micro-lift">
-          <CardHeader className="flex flex-row items-center justify-between pb-2">
-            <CardTitle className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">{t('networth.peak')}</CardTitle>
-            <TrendingUp className="h-4 w-4 text-gain" />
-          </CardHeader>
-          <CardContent>
-            <p className="text-2xl font-bold text-foreground tabular-nums">{fmt(peak)}</p>
-          </CardContent>
-        </Card>
-        <Card className="group relative overflow-hidden glass-regular premium-frame micro-lift">
-          <CardHeader className="flex flex-row items-center justify-between pb-2">
-            <CardTitle className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">{t('networth.lowest')}</CardTitle>
-            <TrendingDown className="h-4 w-4 text-loss" />
-          </CardHeader>
-          <CardContent>
-            <p className="text-2xl font-bold text-foreground tabular-nums">{fmt(trough)}</p>
-          </CardContent>
-        </Card>
-        <Card className="group relative overflow-hidden glass-regular premium-frame micro-lift">
-          <CardHeader className="flex flex-row items-center justify-between pb-2">
-            <CardTitle className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">{t('networth.daysTracked')}</CardTitle>
-            <Wallet className="h-4 w-4 text-primary" />
-          </CardHeader>
-          <CardContent>
-            <p className="text-2xl font-bold text-foreground tabular-nums">{displaySnapshots.length}</p>
-          </CardContent>
-        </Card>
+        <StatCard title={t('networth.peak')} value={fmt(peak)} icon={TrendingUp} trend="income" />
+        <StatCard title={t('networth.lowest')} value={fmt(trough)} icon={TrendingDown} trend="expense" />
+        <StatCard title={t('networth.daysTracked')} value={String(displaySnapshots.length)} icon={Wallet} />
       </div>
 
       <SnapshotDataTable

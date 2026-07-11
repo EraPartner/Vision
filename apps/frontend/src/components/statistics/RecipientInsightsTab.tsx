@@ -13,6 +13,7 @@ import { useLanguage } from "@/contexts/LanguageContext";
 import { useAppSettings } from "@/contexts/AppSettingsContext";
 import { numberFormatToLocale } from "@/utils/currency";
 import { formatDateWithAppSettings } from "@/components/shared/dateUtils";
+import { StatCard } from "@/components/dashboard/StatCard";
 
 type RecipientDetailRow = {
   recipientId: number;
@@ -181,38 +182,24 @@ export function RecipientInsightsTab({ statisticsTopRecipientsChart }: Recipient
 
       {/* KPI cards */}
       <div className="grid gap-4 md:grid-cols-3">
-        <Card className="glass-regular">
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">{t('insights.topRecipient')}</CardTitle>
-            <Store className="h-4 w-4 text-muted-foreground" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">{top10[0]?.name || "—"}</div>
-            <p className="text-xs text-muted-foreground">
-              {top10[0] ? formatCurrency(top10[0].totalSpend) : t('insights.noDataFallback')}
-            </p>
-          </CardContent>
-        </Card>
-        <Card className="glass-regular">
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">{t('insights.top10Total')}</CardTitle>
-            <DollarSign className="h-4 w-4 text-muted-foreground" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold"><Money amount={totalTopSpend} /></div>
-            <p className="text-xs text-muted-foreground">{totalTopTx} {t('insights.transactionCount').toLowerCase()}</p>
-          </CardContent>
-        </Card>
-        <Card className="glass-regular">
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">{t('insights.avgTransaction')}</CardTitle>
-            <Hash className="h-4 w-4 text-muted-foreground" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold"><Money amount={avgTopAmount} /></div>
-            <p className="text-xs text-muted-foreground">{t('insights.acrossTop10')}</p>
-          </CardContent>
-        </Card>
+        <StatCard
+          title={t('insights.topRecipient')}
+          value={top10[0]?.name || "—"}
+          icon={Store}
+          subtitle={top10[0] ? formatCurrency(top10[0].totalSpend) : t('insights.noDataFallback')}
+        />
+        <StatCard
+          title={t('insights.top10Total')}
+          value={<Money amount={totalTopSpend} />}
+          icon={DollarSign}
+          subtitle={`${totalTopTx} ${t('insights.transactionCount').toLowerCase()}`}
+        />
+        <StatCard
+          title={t('insights.avgTransaction')}
+          value={<Money amount={avgTopAmount} />}
+          icon={Hash}
+          subtitle={t('insights.acrossTop10')}
+        />
       </div>
 
       {/* Statistics-derived chart with exclusion toggle */}
