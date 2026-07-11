@@ -10,7 +10,7 @@ import { logger } from '../config/logger.js';
 import { NotFoundError } from '../middleware/errorHandler.js';
 import { toDecimal } from '../lib/money.js';
 import { toYmd } from '../utils/portfolioMath.js';
-import { escapeCsvValue, escapeCsvNumeric } from '../lib/csv.js';
+import { escapeCsvValue } from '../lib/csv.js';
 
 export const EXPORT_CHUNK_SIZE = 1000;
 export const EXPORT_MAX_LIST_SIZE = 50;
@@ -95,9 +95,10 @@ function buildExportChunkSql(whereSql, limitParamIdx, cursorDateParamIdx, cursor
 }
 
 function buildCsvRow(row, { includeBalance = false } = {}) {
-  // Text columns get the formula-injection guard; numeric columns must NOT (a
-  // leading "-" is a real minus sign — guarding it breaks Vision-export
-  // round-trips). See escapeCsvNumeric in lib/csv.js.
+  // escapeCsvValue auto-detects strictly-numeric cells and skips the
+  // formula-injection guard for them (a leading "-" is a real minus sign —
+  // guarding it would break Vision-export round-trips). See STRICT_NUMERIC_RE
+  // in lib/csv.js.
   const cols = [
     // toYmd, not the raw pg Date: String() of it is "Wed Jul 01 2026 …" —
     // unusable in Excel and a day off on cross-TZ re-import.
@@ -105,14 +106,14 @@ function buildCsvRow(row, { includeBalance = false } = {}) {
     escapeCsvValue(row.bank_account),
     escapeCsvValue(row.recipient_name),
     escapeCsvValue(row.memo),
-    escapeCsvNumeric(row.amount),
+    escapeCsvValue(row.amount),
     escapeCsvValue(row.currency),
-    escapeCsvNumeric(row.balance),
+    escapeCsvValue(row.balance),
     escapeCsvValue(row.category_name),
     escapeCsvValue(row.comment),
     escapeCsvValue(Array.isArray(row.tags) ? row.tags.join(';') : ''),
   ];
-  if (includeBalance) cols.push(escapeCsvNumeric(row.running_balance));
+  if (includeBalance) cols.push(escapeCsvValue(row.running_balance));
   return cols.join(',');
 }
 

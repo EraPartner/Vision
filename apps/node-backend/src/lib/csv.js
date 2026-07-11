@@ -23,36 +23,14 @@ export function neutralizeCsvFormula(value) {
   return `'${value}`;
 }
 
-/**
- * Escape a machine-generated numeric cell (pg NUMERIC strings like "-12.34").
- *
- * Numeric columns are app-produced, never user-controllable, so they must NOT
- * pass through the formula-injection guard: a leading "-" is a legitimate minus
- * sign, and prefixing "'" corrupts the value so a re-imported Vision export
- * NaN-drops every expense row (and nulls negative balances). Still applies the
- * ordinary CSV quoting rules in case a locale decimal ever contains a comma.
- */
-export function escapeCsvNumeric(value) {
-  if (value == null) return '';
-  const stringValue = String(value);
-  return (
-    stringValue.includes(',') ||
-    stringValue.includes('"') ||
-    stringValue.includes('\n') ||
-    stringValue.includes('\r')
-  )
-    ? `"${stringValue.replace(/"/g, '""')}"`
-    : stringValue;
-}
-
 // A strictly numeric cell can't be a spreadsheet formula, so the guard must
 // not touch it: a pg-NUMERIC negative like "-12.34" starts with "-", a
 // dangerous prefix, and quoting it exports "'-12.34" \u2014 which our own importer
 // fails to parse (NaN), silently dropping every expense row on a
 // Vision-export round-trip. Detected here rather than flagged by callers so a
-// future export column can't reintroduce the bug by forgetting an option.
-// (escapeCsvNumeric above is the explicit variant for known-numeric columns;
-// this keeps escapeCsvValue numeric-safe for callers that pass mixed cells.)
+// future export column can't reintroduce the bug by forgetting an option \u2014 any
+// caller (transactions export, splits export) can pass numeric columns straight
+// through escapeCsvValue and stay round-trip-safe.
 const STRICT_NUMERIC_RE = /^-?\d+(\.\d+)?$/;
 
 /**

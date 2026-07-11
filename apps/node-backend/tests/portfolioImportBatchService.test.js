@@ -50,6 +50,8 @@ describe('rollbackBatch — route-aware deletion (ADR-095)', () => {
     expect(res).toEqual({ deleted: 1 });
     expect(transactionRepository.hardDelete).toHaveBeenCalledWith(812);
     expect(portfolioTransactionRepository.hardDelete).not.toHaveBeenCalled();
+    // A cash row has no ADR-090 trade cash leg, so rollback must not touch it.
+    expect(deleteTradeCashLegs).not.toHaveBeenCalled();
     expect(markBatchAborted).toHaveBeenCalledWith(5);
   });
 

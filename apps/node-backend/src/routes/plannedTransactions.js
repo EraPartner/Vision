@@ -8,7 +8,7 @@ import { Router } from 'express';
 import { query as dbQuery } from '../database/connection.js';
 import plannedTransactionRepository from '../services/plannedTransactionService.js';
 import { validateIdParam, assertYmd, validateId } from '../middleware/validation.js';
-import { formatDateToYmd } from '../lib/dateFormat.js';
+import { formatPgDateToYmd } from '../lib/dateFormat.js';
 import { rateLimiter } from '../middleware/rateLimiter.js';
 import { generateLoanRepaymentSchedule } from '../services/calculations/loanSchedule.js';
 import { isValidPattern } from '../services/calculations/recurrence.js';
@@ -350,7 +350,7 @@ router.delete('/:id', validateIdParam, async (req, res) => {
 // raw they become an ISO timestamp of the PREVIOUS day east of UTC, which the
 // frontend T-splits and writes back on the next save (date-1 per edit).
 // Emit calendar-day strings; timestamps (created_at/updated_at) stay ISO.
-const ymd = (v) => (v instanceof Date ? formatDateToYmd(v) : v);
+const ymd = (v) => (v instanceof Date ? formatPgDateToYmd(v) : v);
 
 function formatPlannedTransaction(row) {
   if (!row) return null;
