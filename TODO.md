@@ -4552,6 +4552,7 @@ the phases below are updated accordingly:**
       zero, all readers flipped, import writes the FK, out-of-band drop as its own revision with
       rollback. Sequencing note: do **not** fix the string stragglers piecemeal outside this
       phase — each one binds new code to the string.
+  - 🔎 attempt 2026-07-11: blocked — needs a live DB + user-applied out-of-band drop. Runbook + `up.sql`/`down.sql` are authored and `mv_bank_balances` is already re-grained on `(account_id, currency)` (8f18086), but the reader/writer decouple is still incomplete (readers ILIKE the string: `filterBuilder.js:133,139,212`, `transactionRepository.js:211,283`, `plannedTransactionRepository.js:28,38`; writers still INSERT it: `transactionRepository.js:364-377`, `plannedTransactionRepository.js:337-364`, `importPipeline/commit.js:171-178`, `importPipeline/stage.js:108`). Exit criteria (parity query = 0, apply `alembic/manual/contract_drop_bank_account/up.sql`, healthy boot after MV refresh, import/dedup/net-worth smoke) all require a live DB — `DATABASE_URL` is empty here — and the README pins the drop as a MANUAL, user-run step. Cannot verify end-to-end in this environment.
 - [x] Lifecycle (D5): `closed_at` column revision, close flow stamps it, DELETE 409 + UI route to ✅ 2026-07-11 · 48e87c5
       close 🔽
 
