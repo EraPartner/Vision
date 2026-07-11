@@ -81,3 +81,28 @@ export function setOpeningBalance(id: number, input: OpeningBalanceInput): Promi
         body: JSON.stringify(input),
     });
 }
+
+export type ReconcileMode = 'accept' | 'adjustment';
+
+export interface ReconcileResult {
+    mode: ReconcileMode;
+    /** Drift after the operation — always 0 on success. */
+    drift: number;
+    statement_balance: number;
+    computed_balance: number;
+    /** The server-created adjustment row (mode 'adjustment'), else null. */
+    transaction: { id: number; amount: number; transfer_source: string } | null;
+}
+
+/**
+ * Reconcile an account's drift (ADR-094, Phase C). `mode: 'accept'` rewrites the
+ * stored statement figures to the computed balance; `mode: 'adjustment'` stamps a
+ * server-side 'adjustment' ledger row so the computed balance rises to meet the
+ * statement (balance-free — ADR-094 descriptive-only default preserved).
+ */
+export function reconcileAccount(id: number, mode: ReconcileMode): Promise<ReconcileResult> {
+    return apiRequest<ReconcileResult>(`/api/accounts/${id}/reconcile`, {
+        method: 'POST',
+        body: JSON.stringify({ mode }),
+    });
+}

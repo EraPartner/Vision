@@ -4,7 +4,7 @@ import { PageHeader } from "@/components/shared/PageHeader";
 import { EmptyState } from "@/components/shared/EmptyState";
 import { SectionLoader } from "@/components/shared/SectionLoader";
 import { Card, CardContent } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
+import { Badge, badgeVariants } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
     DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger,
@@ -16,6 +16,7 @@ import { AddAccountDialog, type AccountFormValues } from "@/features/accounts/Ad
 import { MergeAccountDialog } from "@/features/accounts/MergeAccountDialog";
 import { CloseAccountDialog } from "@/features/accounts/CloseAccountDialog";
 import { OpeningBalanceDialog } from "@/features/accounts/OpeningBalanceDialog";
+import { ReconcileDialog } from "@/features/accounts/ReconcileDialog";
 import { usePortfolio } from "@/hooks/usePortfolio";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { useConfirmDialog } from "@/hooks/useConfirmDialog";
@@ -56,6 +57,7 @@ export default function AccountsPage() {
     const [merging, setMerging] = useState<Account | undefined>(undefined);
     const [closing, setClosing] = useState<Account | undefined>(undefined);
     const [anchoring, setAnchoring] = useState<Account | undefined>(undefined);
+    const [reconciling, setReconciling] = useState<Account | undefined>(undefined);
     const { summaries } = usePortfolio();
 
     const accounts = useMemo(() => data?.items ?? [], [data]);
@@ -163,13 +165,18 @@ export default function AccountsPage() {
                                         <span>{a.currency}</span>
                                         {a.institution && <span>· {a.institution}</span>}
                                         {a.drift != null && a.drift !== 0 && (
-                                            <Badge
-                                                variant="destructive"
-                                                className="text-xs"
+                                            // Clicking the drift badge opens the reconcile dialog
+                                            // (statement vs computed + delta → accept / adjust).
+                                            <button
+                                                type="button"
+                                                className={`${badgeVariants({ variant: "destructive" })} cursor-pointer text-xs`}
                                                 title={t('accounts.driftTooltip')}
+                                                aria-label={t('accounts.reconcile.open')}
+                                                onClick={() => setReconciling(a)}
+                                                onDoubleClick={(e) => e.stopPropagation()}
                                             >
                                                 {t('accounts.drift')}: {a.drift > 0 ? "+" : ""}{fmtCur(a.drift, a.currency)}
-                                            </Badge>
+                                            </button>
                                         )}
                                     </div>
                                     {a.computed_balance != null && (
@@ -290,6 +297,15 @@ export default function AccountsPage() {
                     account={anchoring}
                     open={!!anchoring}
                     onOpenChange={(o) => { if (!o) setAnchoring(undefined); }}
+                />
+            )}
+
+            {reconciling && (
+                <ReconcileDialog
+                    key={reconciling.id}
+                    account={reconciling}
+                    open={!!reconciling}
+                    onOpenChange={(o) => { if (!o) setReconciling(undefined); }}
                 />
             )}
 

@@ -1684,6 +1684,50 @@ paths:
         "404":
           description: Account not found
 
+  /api/accounts/{id}/reconcile:
+    parameters:
+      - in: path
+        name: id
+        required: true
+        schema:
+          type: integer
+        description: Account to reconcile
+    post:
+      summary: Reconcile an account's drift
+      description: >-
+        Resolves the drift (statement_balance − computed_balance) surfaced by the
+        drift badge (ADR-094, Phase C). `mode: 'accept'` rewrites the stored
+        statement figure to the computed balance (no transaction created);
+        `mode: 'adjustment'` stamps one server-side ledger row (amount=drift,
+        balance-free, is_transfer=true, transfer_source='adjustment') so the
+        computed balance rises to meet the statement — preserving the ADR-094
+        descriptive-only default. Either way the drift collapses to 0.
+      operationId: reconcileAccount
+      tags: [Accounts]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [mode]
+              properties:
+                mode:
+                  type: string
+                  enum: [accept, adjustment]
+                  description: How to resolve the drift
+      responses:
+        "200":
+          description: The reconciled figures plus any created adjustment transaction
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Envelope"
+        "400":
+          description: No drift to resolve, no statement balance, or an invalid mode
+        "404":
+          description: Account not found
+
   # ─── Transactions ────────────────────────────────────────────────────────────
 
   /api/transactions:

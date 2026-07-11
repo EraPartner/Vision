@@ -63,6 +63,7 @@ export const apiClient = {
     deleteAccount: acct.deleteAccount,
     mergeAccounts: acct.mergeAccounts,
     setOpeningBalance: acct.setOpeningBalance,
+    reconcileAccount: acct.reconcileAccount,
 
     // Recipients
     getRecipients: rec.getRecipients,
