@@ -3,7 +3,7 @@
  */
 import { describe, expect, it, vi } from "vitest";
 import { onActivateKeyDown } from "@/utils/a11y";
-import { getCategoryColor, getCategoryChartColor, categoryColorIndex } from "@/utils/categoryColors";
+import { getCategoryColor, getCategoryChartColor, getCategoryColorIndex } from "@/utils/categoryColors";
 
 describe("onActivateKeyDown", () => {
   function evt(key: string, opts: { sameTarget?: boolean } = {}) {
@@ -55,6 +55,8 @@ describe("getCategoryColor", () => {
   it("assigns a chart-token color to any real category", () => {
     expect(getCategoryColor("FOOD:GROCERIES")).toMatch(/bg-chart-[1-8]\/15/);
     expect(getCategoryColor("anything")).toMatch(/text-chart-[1-8]/);
+    // Same input → same color on every call (stable identity).
+    expect(getCategoryColor("FOOD:GROCERIES")).toBe(getCategoryColor("FOOD:GROCERIES"));
   });
 
   it("keys on the GENERAL part — same general, same color, case-insensitive", () => {
@@ -62,11 +64,13 @@ describe("getCategoryColor", () => {
     expect(getCategoryColor("FOOD:RESTAURANT")).toBe(groceries);
     expect(getCategoryColor("food : groceries")).toBe(groceries);
     expect(getCategoryColor("FOOD")).toBe(groceries);
+    // Chart fills share the hue by GENERAL part too.
+    expect(getCategoryChartColor("FOOD:GROCERIES")).toBe(getCategoryChartColor("FOOD:DINING"));
   });
 
   it("chart fill and badge classes agree on the token index", () => {
     const fill = getCategoryChartColor("FOOD:GROCERIES");
-    const index = categoryColorIndex("FOOD:GROCERIES");
+    const index = getCategoryColorIndex("FOOD:GROCERIES");
     expect(fill).toBe(`hsl(var(--chart-${index + 1}))`);
     expect(getCategoryColor("FOOD:GROCERIES")).toContain(`bg-chart-${index + 1}/15`);
   });

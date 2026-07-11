@@ -1,20 +1,28 @@
 /**
- * Category color identity — ONE deterministic category → color assignment
- * shared by badge chips and every chart.
+ * Category color identity.
  *
- * Colors key on the GENERAL part of "GENERAL:DETAIL" via a stable string
- * hash into the eight --chart-N tokens, so FOOD:GROCERIES keeps the same hue
- * on the dashboard donut, the statistics donut, the Sankey, and the
- * transaction chips — regardless of spend rank, list order, or month.
- * Collisions are expected past eight generals; identity (same category =
- * same color everywhere) is the goal, not uniqueness.
+ * A category must keep the *same* color everywhere it appears — chip, pie slice,
+ * Sankey node — regardless of its spend rank or which list it is in. Positional
+ * (by-loop-index) coloring gives FOOD:GROCERIES a different hue on every surface,
+ * which reads as machine-generated and defeats the point of color.
+ *
+ * So color is derived deterministically from the category's GENERAL part
+ * (`GENERAL:DETAIL` → `GENERAL`) via a stable hash into the 8 chart tokens. Both
+ * the chart color and the chip classes resolve to the SAME `--chart-N` token, so
+ * the two never drift.
  */
 
-const CHART_TOKEN_COUNT = 8;
+import { CHART_TOKEN_COLORS } from "@/components/charts/palette";
 
-// Literal class strings so Tailwind's content scan generates them — a
-// template literal built at runtime would never be seen by the scanner.
-const BADGE_CLASSES = [
+/** Number of chart tokens (`--chart-1..8`). */
+const TOKEN_COUNT = CHART_TOKEN_COLORS.length;
+
+/**
+ * Chip class triplets, one per chart token. Kept as complete literal strings so
+ * Tailwind's JIT scanner emits `bg-chart-N/15 text-chart-N border-chart-N/30`;
+ * a computed `bg-chart-${n}` template would never be generated.
+ */
+const CHIP_CLASSES = [
     "bg-chart-1/15 text-chart-1 border-chart-1/30",
     "bg-chart-2/15 text-chart-2 border-chart-2/30",
     "bg-chart-3/15 text-chart-3 border-chart-3/30",
@@ -25,28 +33,46 @@ const BADGE_CLASSES = [
     "bg-chart-8/15 text-chart-8 border-chart-8/30",
 ] as const;
 
-function categoryGeneral(category: string): string {
-    return (category.split(":")[0] ?? "").trim().toUpperCase();
+const MUTED_CHIP = "bg-muted/15 text-muted-foreground border-muted/30";
+
+/** The GENERAL part of a `GENERAL:DETAIL` category, trimmed and upper-cased. */
+function generalKey(category: string): string {
+    return (category.split(":")[0] || category).trim().toUpperCase();
 }
 
-/** Stable 0-based chart-token index for a category (hash of the GENERAL part). */
-export function categoryColorIndex(category: string): number {
-    const general = categoryGeneral(category);
-    let hash = 0;
-    for (let i = 0; i < general.length; i++) {
-        hash = (hash * 31 + general.charCodeAt(i)) | 0;
+/** Stable non-negative djb2 hash — deterministic across sessions and reloads. */
+function hashString(value: string): number {
+    let hash = 5381;
+    for (let i = 0; i < value.length; i++) {
+        hash = (hash * 33 + value.charCodeAt(i)) | 0;
     }
-    return Math.abs(hash) % CHART_TOKEN_COUNT;
+    return Math.abs(hash);
 }
 
-/** Chart fill for a category — `hsl(var(--chart-N))`, theme-adaptive. */
+/**
+ * Deterministic chart-token index (0-based) for a category's GENERAL part.
+ * Empty categories map to index 0 but callers should special-case them (charts
+ * use a neutral tone, chips use the muted fallback).
+ */
+export function getCategoryColorIndex(category: string): number {
+    if (!category || !category.trim()) return 0;
+    return hashString(generalKey(category)) % TOKEN_COUNT;
+}
+
+/**
+ * Deterministic chart color (`hsl(var(--chart-N))`) for a category. Use this for
+ * every chart — pie slices, Sankey nodes, bars — so a category holds one hue.
+ */
 export function getCategoryChartColor(category: string): string {
     if (!category || !category.trim()) return "hsl(var(--muted-foreground))";
-    return `hsl(var(--chart-${categoryColorIndex(category) + 1}))`;
+    return CHART_TOKEN_COLORS[getCategoryColorIndex(category)];
 }
 
-/** Badge chip classes for a category; muted for uncategorized. */
+/**
+ * Tailwind chip classes (bg/text/border) for a category, tied to the SAME token
+ * as {@link getCategoryChartColor}. Uncategorized/empty falls back to muted.
+ */
 export const getCategoryColor = (category: string): string => {
-    if (!category || !category.trim()) return "bg-muted/15 text-muted-foreground border-muted/30";
-    return BADGE_CLASSES[categoryColorIndex(category)];
+    if (!category || !category.trim()) return MUTED_CHIP;
+    return CHIP_CLASSES[getCategoryColorIndex(category)];
 };

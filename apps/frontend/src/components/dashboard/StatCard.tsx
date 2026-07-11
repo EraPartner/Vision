@@ -2,6 +2,7 @@ import { type ReactNode } from "react";
 import { cva, type VariantProps } from "class-variance-authority";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
+import { CardSheen } from "@/components/shared/CardSheen";
 import { RollingNumber } from "@/components/shared/RollingNumber";
 import { DeltaPill } from "@/components/shared/DeltaPill";
 import { TrendHue, type TrendTone } from "@/components/shared/TrendHue";
@@ -117,10 +118,9 @@ export function StatCard({
         : value;
 
     return (
-        <Card className={cn("glass-elevated premium-frame micro-lift group relative overflow-hidden h-full", className)}>
+        <Card variant="interactive" className={cn("glass-elevated group relative overflow-hidden h-full", className)}>
             <TrendHue tone={tone} />
-            <div
-                className="absolute top-0 right-0 w-32 h-32 bg-gradient-to-br from-background/40 to-transparent rounded-full -mr-16 -mt-16 transition-transform duration-500 group-hover:scale-110" />
+            <CardSheen animated />
             <CardHeader className={statHeaderVariants({ size })}>
                 <CardTitle className={statTitleVariants({ size })}>{title}</CardTitle>
                 {Icon && (

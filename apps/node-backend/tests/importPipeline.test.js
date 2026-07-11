@@ -237,10 +237,13 @@ describe('commitBatch', () => {
       return { rows: [] }
     })
     expect(await commitBatch({ batchId: 9 })).toEqual({ imported: 1, duplicates: 0, errors: 0, autoLinkedCount: 0 })
-    expect(dupSql).toContain('t.bank_account IS NOT DISTINCT FROM $5')
+    expect(dupSql).toContain("COALESCE(t.bank_account, '') = COALESCE($5, '')")
     expect(dupSql).toContain('t.tx_hash <> $6')
+    // A candidate with a hash also excludes rows from its own import batch ($7).
+    expect(dupSql).toContain('t.import_batch_id = $7')
     expect(dupParams[4]).toBe('BE12')
     expect(dupParams[5]).toBe('h2')
+    expect(dupParams[6]).toBe(9)
   })
 
   it('records an insert error via SAVEPOINT rollback', async () => {

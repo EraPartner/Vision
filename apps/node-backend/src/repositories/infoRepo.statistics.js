@@ -6,7 +6,7 @@ import { query } from '../database/connection.js';
 import { convertRowsToEur } from '../services/currency/currencyConversionService.js';
 import {
   roundToCents,
-  formatDateToYmd,
+  formatPgDateToYmd,
   extractYearMonth,
   mapRowsForAmountConversion,
   getIncludeTransfers,
@@ -57,7 +57,7 @@ export async function getAverageVsCurrentSpending(targetCurrency = 'EUR') {
 
   const monthlySpending = {};
   for (const row of past6Converted) {
-    const dateStr = row.date instanceof Date ? formatDateToYmd(row.date) : row.date;
+    const dateStr = row.date instanceof Date ? formatPgDateToYmd(row.date) : row.date;
     const eur = row.amount_eur;
     const monthKey = extractYearMonth(dateStr);
     if (!monthlySpending[monthKey]) monthlySpending[monthKey] = 0;
@@ -86,7 +86,7 @@ export async function getAverageVsCurrentSpending(targetCurrency = 'EUR') {
 
   const dailyMap = {};
   for (const row of currentConverted) {
-    const dateStr = row.date instanceof Date ? formatDateToYmd(row.date) : row.date;
+    const dateStr = row.date instanceof Date ? formatPgDateToYmd(row.date) : row.date;
     const eur = row.amount_eur;
     if (!dailyMap[dateStr]) dailyMap[dateStr] = { spending: 0, income: 0 };
     if (eur < 0) dailyMap[dateStr].spending += Math.abs(eur);

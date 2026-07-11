@@ -158,11 +158,10 @@ export const getRecipientInsights = {
       if (amount.lt(0)) entry.totalSpend = entry.totalSpend.plus(amount.abs());
       else entry.totalIncome = entry.totalIncome.plus(amount);
 
-      // Local extraction: pg-read DATE is local midnight; toISOString showed
-      // the previous day east of UTC (same fix as toYmd elsewhere in this file).
-      const dateStr = row.date instanceof Date
-        ? toYmd(row.date)
-        : String(row.date).slice(0, 10);
+      // toYmd uses local getters for pg's local-midnight DATE values; toISOString
+      // shifted these one day back on a UTC+ server (see the account-dates fix above).
+      // (toYmd also slices non-Date/string inputs, so the guard is unnecessary here.)
+      const dateStr = toYmd(row.date);
       if (!entry.lastDate || dateStr > entry.lastDate) entry.lastDate = dateStr;
 
       byRecipient.set(name, entry);

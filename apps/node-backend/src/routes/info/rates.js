@@ -20,7 +20,7 @@ import {
   clearInflationMemoryCache,
 } from '../../services/belgianInflationService.js';
 import { toDecimal, toNumber } from '../../lib/money.js';
-import { formatDateToYmd } from '../../lib/dateFormat.js';
+import { formatPgDateToYmd } from '../../lib/dateFormat.js';
 import {
   getMonthParam,
   isTruthyQueryParam,
@@ -45,7 +45,7 @@ router.get(
     const rates = result.rows.map(row => ({
       currency: row.currency_code,
       rate_to_eur: toNumber(toDecimal(row.rate_to_eur)),
-      rate_date: row.rate_date instanceof Date ? formatDateToYmd(row.rate_date) : String(row.rate_date),
+      rate_date: row.rate_date instanceof Date ? formatPgDateToYmd(row.rate_date) : String(row.rate_date),
       fetched_at: row.fetched_at,
     }));
 

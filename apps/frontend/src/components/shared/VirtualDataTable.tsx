@@ -2,6 +2,7 @@ import { Fragment, useCallback, useDeferredValue, useEffect, useMemo, useRef, us
 import { parseDecimal } from "@/lib/decimal";
 import { useVirtualizer } from "@tanstack/react-virtual";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { CardSheen } from "@/components/shared/CardSheen";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { ContextMenu, ContextMenuTrigger } from "@/components/ui/context-menu";
@@ -96,6 +97,15 @@ function getSortValue(val: unknown): string | number {
 function getRowKey<T extends Record<string, unknown>>(row: T, fallbackIndex: number): string | number {
     const candidate = row.id;
     return (typeof candidate === "string" || typeof candidate === "number") ? candidate : fallbackIndex;
+}
+
+/**
+ * Numeric columns right-align by default so magnitudes form a readable column —
+ * the whole point of a numeric column. Skip the default only when the coldef
+ * already declares an explicit horizontal alignment in `className`.
+ */
+function isNumericAligned<T>(col: Column<T>): boolean {
+    return col.type === "number" && !/\btext-(left|right|center)\b/.test(col.className ?? "");
 }
 
 export function VirtualDataTable<T extends Record<string, unknown>>({
@@ -493,8 +503,8 @@ export function VirtualDataTable<T extends Record<string, unknown>>({
     };
 
     return (
-        <Card className="premium-frame micro-lift relative overflow-hidden">
-            <div className="absolute top-0 right-0 w-32 h-32 bg-gradient-to-br from-white/50 to-transparent dark:from-white/10 rounded-full -mr-16 -mt-16" />
+        <Card variant="interactive" className="overflow-hidden">
+            <CardSheen />
             <CardHeader className="flex flex-row items-start justify-between space-y-0 pb-4">
                 <div>
                     <CardTitle className="text-lg font-semibold">{title}</CardTitle>
@@ -592,10 +602,10 @@ export function VirtualDataTable<T extends Record<string, unknown>>({
                                     key={col.key}
                                     role="columnheader"
                                     aria-sort={ariaSort}
-                                    className={`px-4 py-2 font-semibold text-muted-foreground text-sm relative select-none group flex-1 min-w-0 whitespace-nowrap ${col.className || ""}`}
+                                    className={`px-4 py-2 font-semibold text-muted-foreground text-sm relative select-none group flex-1 min-w-0 whitespace-nowrap ${isNumericAligned(col) ? "text-right" : ""} ${col.className || ""}`}
                                     style={width ? { width: `${width}px`, flex: "none" } : undefined}
                                 >
-                                    <div className="flex items-center gap-1">
+                                    <div className={`flex items-center gap-1 ${isNumericAligned(col) ? "justify-end" : ""}`}>
                                         {isSortable ? (
                                             <button
                                                 onClick={() => handleSort(col.key)}
@@ -741,7 +751,7 @@ export function VirtualDataTable<T extends Record<string, unknown>>({
                                                 <div
                                                     key={col.key}
                                                     role="cell"
-                                                    className={`px-4 py-2 text-sm flex-1 min-w-0 whitespace-normal break-words [overflow-wrap:anywhere] ${col.className || ""}`}
+                                                    className={`px-4 py-2 text-sm flex-1 min-w-0 whitespace-normal break-words [overflow-wrap:anywhere] ${isNumericAligned(col) ? "text-right tabular-nums" : ""} ${col.className || ""}`}
                                                     style={width ? { width: `${width}px`, flex: "none" } : undefined}
                                                 >
                                                     {isEditing && col.editable ? (

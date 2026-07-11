@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { parseDecimal } from "@/lib/decimal";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { CardSheen } from "@/components/shared/CardSheen";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
@@ -48,6 +49,15 @@ function getSortValue(val: unknown): string | number {
     if (typeof val === "number") return val;
     if (typeof val === "boolean") return val ? 1 : 0;
     return String(val).toLowerCase();
+}
+
+/**
+ * Numeric columns right-align by default so magnitudes form a readable column.
+ * Skip the default only when the coldef already declares an explicit horizontal
+ * alignment in `className`.
+ */
+function isNumericAligned<T>(col: Column<T>): boolean {
+    return col.type === "number" && !/\btext-(left|right|center)\b/.test(col.className ?? "");
 }
 
 export function DataTable<T extends Record<string, unknown>>({
@@ -305,8 +315,8 @@ export function DataTable<T extends Record<string, unknown>>({
     };
 
     return (
-        <Card className="premium-frame micro-lift relative overflow-hidden">
-            <div className="absolute top-0 right-0 w-32 h-32 bg-gradient-to-br from-white/50 to-transparent dark:from-white/10 rounded-full -mr-16 -mt-16"></div>
+        <Card variant="interactive" className="overflow-hidden">
+            <CardSheen />
             <CardHeader className="flex flex-row items-start justify-between space-y-0 pb-4">
                 <div>
                     <CardTitle className="text-lg font-semibold">{title}</CardTitle>
@@ -403,10 +413,10 @@ export function DataTable<T extends Record<string, unknown>>({
                                     return (
                                         <TableHead
                                             key={col.key}
-                                            className={`font-semibold text-muted-foreground relative select-none group whitespace-nowrap ${col.className || ""}`}
+                                            className={`font-semibold text-muted-foreground relative select-none group whitespace-nowrap ${isNumericAligned(col) ? "text-right" : ""} ${col.className || ""}`}
                                             style={width ? { width: `${width}px` } : undefined}
                                         >
-                                            <div className="flex items-center gap-1">
+                                            <div className={`flex items-center gap-1 ${isNumericAligned(col) ? "justify-end" : ""}`}>
                                                 {/* Sortable header */}
                                                 {isSortable ? (
                                                     <button
@@ -493,7 +503,7 @@ export function DataTable<T extends Record<string, unknown>>({
                                             className={`transition-colors duration-150 ${isEditing ? "bg-primary/5" : visibleIndex % 2 === 1 ? "bg-muted/30" : ""} hover:bg-muted/50`}
                                         >
                                             {columns.map((col) => (
-                                                <TableCell key={col.key} className={`whitespace-normal break-words [overflow-wrap:anywhere] align-top ${col.className || ""}`}>
+                                                <TableCell key={col.key} className={`whitespace-normal break-words [overflow-wrap:anywhere] align-top ${isNumericAligned(col) ? "text-right tabular-nums" : ""} ${col.className || ""}`}>
                                                     {isEditing && col.editable ? (
                                                         <Input
                                                             type={col.type || "text"}

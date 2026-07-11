@@ -37,13 +37,14 @@ INVALID_DATE,Main Account,Skip Date,Note,-10.00,EUR,944.80,OTHER,invalid date
     expect(txns[0].amount).toBe(-45.2);
   });
 
-  it("re-imports guard-quoted negative amounts and balances (export round-trip)", async () => {
-    // Older exports ran numeric cells through the CSV formula-injection guard,
-    // which prepended "'" to negatives. The adapter must strip it so the
-    // expense row is not NaN-dropped and the balance not silently nulled.
+  it('round-trips a formula-guarded export: strips a leading apostrophe on amount and balance', async () => {
+    // Older Vision exports prefixed numeric cells with "'" to neutralise CSV
+    // formula injection ("'-45.20"). That apostrophe must be stripped on
+    // re-import, or every expense row NaN-drops and negative balances null out.
     const csv = `Date,Bank Account,Recipient,Memo,Amount,Currency,Balance,Category,Comment
 2026-03-01,Main Account,John Doe,Dinner,'-45.20,EUR,'-12.00,FOOD,Shared meal
 `;
+
     tmpPath = writeTempCSV(csv);
     const txns = await parse(tmpPath);
 

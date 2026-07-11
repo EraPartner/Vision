@@ -39,7 +39,6 @@ interface ToolResultCardProps {
     result: ToolResultPayload;
 }
 
-
 type Row = Record<string, unknown>;
 
 function asRows(data: unknown): Row[] {

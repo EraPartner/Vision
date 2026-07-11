@@ -16,10 +16,11 @@ function rowToTransaction(row) {
   const date = parseDateFlexibleUtc(dateStr);
   if (!date) return null;
 
-  // Strip a leading "'" too: older exports ran numeric cells through the
-  // CSV formula-injection guard, which prepended "'" to negatives ("'-12.34").
-  // Without this, every expense row NaN-drops on a Vision-export round-trip.
-  const amountStr = (row['Amount'] || '').replace(/[€$£,\s']/g, '').trim();
+  // Strip a leading formula-guard apostrophe defensively: older Vision exports
+  // prefixed numeric cells with "'" (e.g. "'-12.34"), which otherwise NaN-drops
+  // the row. Current exports no longer do this, but round-tripping an old file
+  // must still work.
+  const amountStr = (row['Amount'] || '').replace(/^'/, '').replace(/[€$£,\s]/g, '').trim();
   const amount = parseDecimalSafe(amountStr);
   if (isNaN(amount)) return null;
 
@@ -30,7 +31,7 @@ function rowToTransaction(row) {
   const currency = (row['Currency'] || 'EUR').trim().toUpperCase();
   // Same guard-apostrophe cleanup as Amount, so a negative Balance survives the
   // round-trip instead of being silently nulled.
-  const balanceStr = (row['Balance'] || '').replace(/[€$£,\s']/g, '').trim();
+  const balanceStr = (row['Balance'] || '').replace(/^'/, '').replace(/[€$£,\s]/g, '').trim();
   const balance = balanceStr ? parseDecimalSafe(balanceStr) : null;
   const category = (row['Category'] || '').trim();
   const comment = (row['Comment'] || '').trim() || null;

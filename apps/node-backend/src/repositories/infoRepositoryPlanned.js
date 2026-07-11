@@ -9,6 +9,7 @@ import { calculateNextDate } from '../services/calculations/recurrence.js';
 import {
   roundToCents,
   formatDateToYmd,
+  formatPgDateToYmd,
   mapRowsForAmountConversion,
 } from './infoRepositoryHelpers.js';
 
@@ -38,13 +39,12 @@ function expandRecurringOccurrences(plannedDate, pattern, startYmd, endYmd) {
 export const plannedRepository = {
   async getPlannedExpensesNextMonth(targetCurrency = 'EUR') {
     // Anchor the month window to today's calendar month in APP_TIMEZONE.
-    // Constructed LOCALLY to pair with formatDateToYmd's local extraction —
-    // a UTC-constructed boundary would render as the last day of the previous
-    // month on any server west of UTC. (today.month is 1-based, so passing it
-    // as the 0-based month argument yields the first of the NEXT month.)
+    // Server-local `new Date(y, m+1, 1)` serialized via toISOString() could
+    // resolve to the last day of the *current* month on a non-UTC server,
+    // shifting the whole planned_date SQL range by a month.
     const today = toAppTz(new Date());
-    const nextMonth = new Date(today.year, today.month, 1);
-    const monthAfter = new Date(today.year, today.month + 1, 1);
+    const nextMonth = new Date(Date.UTC(today.year, today.month, 1));
+    const monthAfter = new Date(Date.UTC(today.year, today.month + 1, 1));
     const lastDay = new Date(monthAfter.getTime() - 1);
 
     const sql = `
@@ -107,7 +107,7 @@ export const plannedRepository = {
         }
       } else {
         const dateStr = row.planned_date instanceof Date
-          ? formatDateToYmd(row.planned_date)
+          ? formatPgDateToYmd(row.planned_date)
           : String(row.planned_date).slice(0, 10);
         // Non-recurring (or pattern-less) rows only count inside the window.
         if (dateStr >= startYmd && dateStr < endYmd) pushOccurrence(dateStr, row, eur);

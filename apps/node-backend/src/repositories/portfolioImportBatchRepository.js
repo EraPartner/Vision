@@ -126,24 +126,22 @@ export async function getRowForInvestmentCreation({ batchId, rowId }) {
 }
 
 /**
- * Committed (id, route) pairs produced by a batch (for rollback).
- *
- * The route MUST travel with the id: a route='cash' row stores a
- * `transactions.id` in committed_txn_id while every other row stores a
- * portfolio-transaction id, and the two sequences are independent — feeding a
- * cash id to the portfolio hard-delete removed an UNRELATED trade that
- * happened to share the number.
+ * Committed rows produced by a batch, paired with their route so rollback can
+ * target the correct table. A cash row's `committed_txn_id` is a `transactions`
+ * id; a trade row's is a `portfolio_transactions` id. The two tables have
+ * independent sequences, so deleting a cash id from `portfolio_transactions`
+ * (or vice versa) would hard-delete an unrelated record.
  *
  * @param {number} batchId
- * @returns {Promise<Array<{id:number, route:string|null}>>}
+ * @returns {Promise<Array<{ id: number, route: string|null }>>}
  */
-export async function getCommittedRows(batchId) {
+export async function getCommittedTxnTargets(batchId) {
   const { rows } = await query(
-    `SELECT committed_txn_id AS id, route FROM portfolio_import_staging_rows
+    `SELECT committed_txn_id, route FROM portfolio_import_staging_rows
       WHERE batch_id = $1 AND committed_txn_id IS NOT NULL`,
     [batchId],
   );
-  return rows;
+  return rows.map((r) => ({ id: r.committed_txn_id, route: r.route ?? null }));
 }
 
 /**

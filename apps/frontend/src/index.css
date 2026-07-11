@@ -712,13 +712,11 @@
         transition: opacity var(--duration-normal) var(--ease-out-quint);
     }
 
-    .premium-frame:hover {
-        border-color: hsl(var(--primary) / 0.4);
-    }
-
-    .premium-frame:hover::after {
-        opacity: 1;
-    }
+    /* premium-frame:hover intentionally carries NO glow. A static content card
+       holds the material but sits still — a card that reacts to the pointer
+       reads as clickable, so reserving the reaction for genuinely interactive
+       cards is what keeps the affordance meaningful (ADR-105). The single
+       interactive hover treatment lives in .micro-lift below. */
 
     .dark .premium-frame {
         box-shadow:
@@ -730,17 +728,28 @@
         box-shadow: 0 18px 40px hsl(0 0% 0% / 0.48);
     }
 
-    .dark .premium-frame:hover {
-        border-color: hsl(var(--primary) / 0.5);
-    }
-
+    /* .micro-lift is THE interactive-card affordance (applied by the Card
+       `interactive` variant): one hover that lifts, glows the border primary,
+       and rises to the elevated shadow. Consolidated here so it can't fight a
+       second transform baked into the Card base. */
     .micro-lift {
         transition: transform var(--duration-fast) var(--ease-out-quint);
     }
 
     .micro-lift:hover {
-        transform: translateY(-1px);
+        transform: translateY(-2px);
+        border-color: hsl(var(--primary) / 0.4);
+        box-shadow:
+            0 1px 0 hsl(var(--glass-highlight) / 0.22) inset,
+            0 12px 30px hsl(var(--glass-shadow) / 0.1);
         will-change: transform;
+    }
+
+    .dark .micro-lift:hover {
+        border-color: hsl(var(--primary) / 0.5);
+        box-shadow:
+            0 1px 0 hsl(var(--glass-highlight) / 0.12) inset,
+            0 18px 40px hsl(0 0% 0% / 0.48);
     }
 
     .press-feedback {
@@ -749,6 +758,35 @@
 
     .press-feedback:active {
         transform: scale(0.97);
+    }
+
+    /* Corner sheen for hero/KPI cards — one motif, one size, token-driven.
+       See <CardSheen/>. Reads --glass-highlight (not raw white) so it adapts to
+       light/dark and theme variants; opacity is dialed back in dark so the orb
+       stays a whisper rather than a smear. */
+    .card-sheen {
+        pointer-events: none;
+        position: absolute;
+        top: 0;
+        right: 0;
+        height: 8rem;
+        width: 8rem;
+        margin-top: -4rem;
+        margin-right: -4rem;
+        border-radius: 9999px;
+        background-image: linear-gradient(
+            to bottom right,
+            hsl(var(--glass-highlight) / 0.5),
+            transparent
+        );
+    }
+
+    .dark .card-sheen {
+        background-image: linear-gradient(
+            to bottom right,
+            hsl(var(--glass-highlight) / 0.12),
+            transparent
+        );
     }
 
     .premium-icon-action {

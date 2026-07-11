@@ -3,6 +3,7 @@ import { Money } from "@/components/shared/Money";
 import { useQuery, keepPreviousData } from "@tanstack/react-query";
 import { apiClient } from "@/lib/api";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { CardSheen } from "@/components/shared/CardSheen";
 import { formatCurrency, numberFormatToLocale } from "@/utils/currency";
 import { useLanguage } from "@/contexts/LanguageContext";
 import {
@@ -461,7 +462,7 @@ function TotalValueCard({
             className="liquid-glass micro-lift relative overflow-hidden border shadow-lg lg:col-span-2 lg:row-span-3"
         >
             <TrendHue tone={isGain ? "gain" : "loss"} />
-            <div className="absolute top-0 right-0 w-40 h-40 bg-gradient-to-br from-white/50 to-transparent dark:from-white/10 rounded-full -mr-20 -mt-20 pointer-events-none" />
+            <CardSheen />
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
                 <CardTitle className="text-sm font-semibold text-muted-foreground">{labels.title}</CardTitle>
                 <div className={`h-9 w-9 rounded-xl flex items-center justify-center ${iconBg} shadow-sm`}>

@@ -1,5 +1,6 @@
 import { useMemo } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { CardSheen } from "@/components/shared/CardSheen";
 import { DonutChart, ChartLegend } from "@/components/charts";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { useAppSettings } from "@/contexts/AppSettingsContext";
@@ -58,7 +59,7 @@ export function CategoryPieChart({ data, embedded = false, formatValue }: Catego
 
         return (
             <Card className="relative overflow-hidden glass-regular premium-frame micro-lift">
-                <div className="absolute top-0 right-0 w-32 h-32 bg-gradient-to-br from-white/50 to-transparent dark:from-white/10 rounded-full -mr-16 -mt-16"></div>
+                <CardSheen />
                 <CardHeader>
                     <CardTitle className="text-lg font-semibold">
                         {t("categoryPie.title")}
@@ -78,7 +79,7 @@ export function CategoryPieChart({ data, embedded = false, formatValue }: Catego
 
     return (
         <Card className="relative overflow-hidden glass-regular premium-frame micro-lift">
-            <div className="absolute top-0 right-0 w-32 h-32 bg-gradient-to-br from-white/50 to-transparent dark:from-white/10 rounded-full -mr-16 -mt-16"></div>
+            <CardSheen />
             <CardHeader>
                 <CardTitle className="text-lg font-semibold">
                     {t("categoryPie.title")}

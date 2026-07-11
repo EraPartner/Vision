@@ -71,6 +71,8 @@ function SankeyInner({
   // selected year, and matches the donuts and chips (utils/categoryColors).
   const nodeColorMap = useMemo(() => {
     const map = new Map<string, string>();
+    // Color by category identity (shared with the pie charts and chips), not by
+    // node index — so a category keeps one hue across every chart.
     data.nodes.forEach((n) => map.set(n.id, getCategoryChartColor(n.label)));
     return map;
   }, [data.nodes]);

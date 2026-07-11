@@ -29,7 +29,8 @@ function toIsoDate(value) {
   // pg-read DATE values are local midnight — UTC extraction (toISOString)
   // rendered planned dates a day early east of UTC, and the recurrence
   // expansion base with them. Strings that already carry a Y-M-D prefix are
-  // sliced as-is (parsing them via new Date() would be a UTC-midnight parse).
+  // sliced as-is (parsing them via new Date() would be a UTC-midnight parse
+  // that rolls the day back west of UTC).
   if (value instanceof Date) {
     return Number.isNaN(value.getTime()) ? null : toYmd(value);
   }

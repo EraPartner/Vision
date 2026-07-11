@@ -8,7 +8,7 @@
 import { query } from '../database/connection.js';
 import {
   roundToCents,
-  formatDateToYmd,
+  formatPgDateToYmd,
   mapRowsForAmountConversion,
   batchConvertGroupsWithHistoricalRateFallback,
 } from './infoRepositoryHelpers.js';
@@ -310,7 +310,7 @@ export async function getCashflowForecastData(
   const aggregateByDate = (rows) => {
     const map = new Map();
     for (const r of rows) {
-      const iso = r.date instanceof Date ? formatDateToYmd(r.date) : String(r.date).slice(0, 10);
+      const iso = r.date instanceof Date ? formatPgDateToYmd(r.date) : String(r.date).slice(0, 10);
       map.set(iso, (map.get(iso) ?? 0) + (Number(r.amount_eur) || 0));
     }
     return Array.from(map, ([date, net]) => ({ date, net })).sort((a, b) => a.date.localeCompare(b.date));
@@ -420,7 +420,7 @@ export async function getCashflowForecastDataRolling(
   const aggregateByDate = (rows) => {
     const map = new Map();
     for (const r of rows) {
-      const iso = r.date instanceof Date ? formatDateToYmd(r.date) : String(r.date).slice(0, 10);
+      const iso = r.date instanceof Date ? formatPgDateToYmd(r.date) : String(r.date).slice(0, 10);
       map.set(iso, (map.get(iso) ?? 0) + (Number(r.amount_eur) || 0));
     }
     return Array.from(map, ([date, net]) => ({ date, net })).sort((a, b) => a.date.localeCompare(b.date));
@@ -517,7 +517,7 @@ export async function getCashflowForecastDataByCategory(
   const aggregateByDateAndCategory = (rows) => {
     const map = new Map();
     for (const r of rows) {
-      const date = r.date instanceof Date ? formatDateToYmd(r.date) : String(r.date).slice(0, 10);
+      const date = r.date instanceof Date ? formatPgDateToYmd(r.date) : String(r.date).slice(0, 10);
       const key = `${date}|${r.category_id ?? 'null'}`;
       if (!map.has(key)) {
         map.set(key, {

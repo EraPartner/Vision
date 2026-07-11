@@ -8,13 +8,13 @@
  */
 
 import portfolioTransactionRepository from '../repositories/portfolioTransactionRepository.js';
+import transactionRepository from '../repositories/transactionRepository.js';
 import investmentRepository from '../repositories/investmentRepository.js';
-import { query } from '../database/connection.js';
 import { deleteTradeCashLegs } from './portfolio/tradeCashLegService.js';
 import {
   getRowForInvestmentCreation,
   overrideInvestment,
-  getCommittedRows,
+  getCommittedTxnTargets,
   markBatchAborted,
 } from '../repositories/portfolioImportBatchRepository.js';
 
@@ -61,22 +61,22 @@ export async function createInvestmentForRow({ batchId, rowId }) {
 
 /**
  * Rollback: hard-delete every committed row this batch produced and mark the
- * batch aborted. Routed by target table (ADR-095): a cash row's
- * committed_txn_id is a `transactions.id`, a trade's is a portfolio-
- * transaction id — the sequences are independent, so deleting every id
- * through the portfolio repo removed UNRELATED trades that happened to share
- * a cash row's number (and left the imported cash row in the ledger).
- * Trades also drop their ADR-090 cash leg (no FK cascade — the inheritance
- * schema can't support one).
+ * batch aborted. Each id is routed to the table it was actually written to
+ * (ADR-095): a cash row's committed_txn_id is a `transactions.id`, a trade's is
+ * a `portfolio_transactions` id — the two tables have independent sequences, so
+ * a cross-table delete would destroy an unrelated record (deleting every id
+ * through the portfolio repo removed UNRELATED trades that shared a cash row's
+ * number). Trades also drop their ADR-090 cash leg first (no FK cascade — the
+ * inheritance schema can't support one).
  */
 export async function rollbackBatch(batchId) {
-  const rows = await getCommittedRows(batchId);
+  const targets = await getCommittedTxnTargets(batchId);
 
   let deleted = 0;
-  for (const { id, route } of rows) {
+  for (const { id, route } of targets) {
     if (route === 'cash') {
-      const r = await query('DELETE FROM transactions WHERE id = $1', [id]);
-      if ((r.rowCount ?? 0) > 0) deleted++;
+      const ok = await transactionRepository.hardDelete(id);
+      if (ok) deleted++;
     } else {
       await deleteTradeCashLegs(id);
       const ok = await portfolioTransactionRepository.hardDelete(id);

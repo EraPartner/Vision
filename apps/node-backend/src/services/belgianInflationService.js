@@ -72,14 +72,21 @@ function normalizeMonthInput(value) {
   return undefined;
 }
 
+// 'YYYY-MM' from a Date using LOCAL getters. pg reads `month_date` (a DATE,
+// stored first-of-month) into a server-local-midnight Date; UTC extraction
+// (toISOString) rolls first-of-month back to the previous month on any UTC+
+// server (Brussels), labelling every rate with the prior month.
+function localMonthKey(date) {
+  const y = date.getFullYear();
+  const m = String(date.getMonth() + 1).padStart(2, '0');
+  return `${y}-${m}`;
+}
+
 function monthKeyFromDatabaseValue(value) {
   if (value === null || value === undefined) return undefined;
 
   if (value instanceof Date && Number.isFinite(value.getTime())) {
-    // pg reads month_date (first-of-month DATE) as LOCAL midnight; UTC
-    // extraction (toISOString) rendered it as the last day of the PREVIOUS
-    // month east of UTC, labeling every rate with the prior month's key.
-    return `${value.getFullYear()}-${String(value.getMonth() + 1).padStart(2, '0')}`;
+    return localMonthKey(value);
   }
 
   const normalized = normalizeMonthInput(value);
@@ -87,7 +94,7 @@ function monthKeyFromDatabaseValue(value) {
 
   const parsed = new Date(value);
   if (Number.isFinite(parsed.getTime())) {
-    return parsed.toISOString().slice(0, 7);
+    return localMonthKey(parsed);
   }
 
   return undefined;

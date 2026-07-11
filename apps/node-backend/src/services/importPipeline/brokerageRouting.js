@@ -14,34 +14,45 @@
 //    cash leg IS the cash effect — so the importer never also emits a standalone
 //    cash row for these (the double-count guard).
 // Lowercased external-cash kinds (+ common EN/NL/DE brokerage synonyms) → a plain
-// cash transaction on the sleeve. Everything else cash-affecting (dividend, fee, …)
-// rides on a trade's ADR-090 leg, so it is NOT listed here (that is the double-count guard).
-// Split by direction: statement magnitudes are staged ABSOLUTE (the adapters
-// strip the sign), so the ledger sign must be re-derived from the kind here.
-// Without it every withdrawal was credited as a deposit — sleeve cash error
-// grew 2× the withdrawn amount per row.
-const CASH_INFLOW_KINDS = new Set([
+// cash transaction on the sleeve. Split by direction so the commit step can stamp
+// the sign: money INTO the sleeve is +|amount|, money OUT is -|amount|. Everything
+// else cash-affecting (dividend, fee, …) rides on a trade's ADR-090 leg, so it is
+// NOT listed here (that is the double-count guard).
+const CASH_IN_KINDS = new Set([
   'deposit', 'deposits', 'cash deposit', 'transfer in',
-  'storting', 'inleg', 'terugbetaling',
-  'einzahlung',
+  'storting', 'inleg', 'einzahlung',
 ]);
-const CASH_OUTFLOW_KINDS = new Set([
+const CASH_OUT_KINDS = new Set([
   'withdrawal', 'withdrawals', 'cash withdrawal', 'transfer out',
-  'opname',
-  'auszahlung',
+  'opname', 'terugbetaling', 'auszahlung',
 ]);
+const CASH_ONLY_KINDS = new Set([...CASH_IN_KINDS, ...CASH_OUT_KINDS]);
 const PORTFOLIO_KINDS = new Set(['buy', 'sell', 'dividend', 'interest', 'fee', 'tax']);
 
 /**
+ * Signed direction for a cash-only brokerage kind: +1 for money entering the
+ * sleeve (deposit / transfer-in), -1 for money leaving (withdrawal /
+ * transfer-out). Mirrors CASH_ONLY_KINDS so the two never drift. Since the
+ * generic adapter stores every amount as an absolute magnitude, this is the
+ * single source of a cash row's sign — without it a withdrawal credits the
+ * sleeve instead of debiting it. Unrecognised kinds default to +1 (import as a
+ * credit rather than silently flipping an unknown row).
+ *
+ * @param {string} kind  raw kind string (e.g. staging `type_raw`)
+ * @returns {1|-1}
+ */
+export function cashDirection(kind) {
+  const k = String(kind || '').toLowerCase().trim();
+  return CASH_OUT_KINDS.has(k) ? -1 : 1;
+}
+
+/**
  * @param {{ kind?: string }} row  parsed brokerage row (kind normalized by the adapter)
- * @returns {{ target: 'cash'|'portfolio'|'review', portfolioTxnType?: string, direction?: 1|-1 }}
- *   `direction` is set for cash targets: +1 credits the sleeve (deposit),
- *   −1 debits it (withdrawal).
+ * @returns {{ target: 'cash'|'portfolio'|'review', portfolioTxnType?: string }}
  */
 export function classifyBrokerageRow(row) {
   const kind = String(row?.kind || '').toLowerCase().trim();
-  if (CASH_INFLOW_KINDS.has(kind)) return { target: 'cash', direction: 1 };
-  if (CASH_OUTFLOW_KINDS.has(kind)) return { target: 'cash', direction: -1 };
+  if (CASH_ONLY_KINDS.has(kind)) return { target: 'cash' };
   if (PORTFOLIO_KINDS.has(kind)) return { target: 'portfolio', portfolioTxnType: kind };
   // Unknown / ambiguous → block on review rather than guess (ADR-095).
   return { target: 'review' };

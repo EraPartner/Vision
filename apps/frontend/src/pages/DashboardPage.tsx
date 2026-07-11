@@ -287,7 +287,7 @@ export default function DashboardPage() {
             className: "text-right",
             render: (row: (typeof recentTransactions)[0]) => (
                 <span className={`font-semibold ${row.amount >= 0 ? "amount-gain" : "amount-loss"}`}>
-                    {row.amount >= 0 ? "+" : "-"}<Money amount={Math.abs(row.amount)} currency={row.currency} />
+                    <Money signed amount={row.amount} currency={row.currency} />
                 </span>
             ),
         },

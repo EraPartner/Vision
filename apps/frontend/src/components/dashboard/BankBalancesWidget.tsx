@@ -1,4 +1,5 @@
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
+import { CardSheen } from "@/components/shared/CardSheen";
 import { useNavigate } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
 import { apiClient } from "@/lib/api";
@@ -152,7 +153,7 @@ export function BankBalancesWidget() {
         <div className="space-y-4">
             {/* Total Net Position Card */}
             <Card className="glass-regular premium-frame micro-lift group relative overflow-hidden">
-                <div className="absolute top-0 right-0 w-32 h-32 bg-gradient-to-br from-primary/10 to-transparent rounded-full -mr-16 -mt-16" />
+                <CardSheen />
                 <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-3">
                     <CardTitle className="text-sm font-semibold text-muted-foreground">
                         {t('bankWidget.netPosition')}

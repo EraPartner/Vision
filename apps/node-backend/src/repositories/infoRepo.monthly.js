@@ -10,7 +10,7 @@ import { toDecimal, toNumber } from '../lib/money.js';
 import {
   mvAvailable,
   roundToCents,
-  formatDateToYmd,
+  formatPgDateToYmd,
   toWireDate,
   formatYearMonthKey,
   buildMonthlySummary,
@@ -62,7 +62,7 @@ export async function getMonthlyFinancialSummary(
 
     const mergedRows = [];
     for (const r of mvResult.rows) {
-      const dateStr = r.month_start instanceof Date ? formatDateToYmd(r.month_start) : String(r.month_start);
+      const dateStr = r.month_start instanceof Date ? formatPgDateToYmd(r.month_start) : String(r.month_start);
       const monthKey = formatYearMonthKey(r.year, r.month);
       mergedRows.push({ currency: r.currency, amount: toNumber(toDecimal(r.total_income)), _key: monthKey, _type: 'income', _row: r, date: dateStr });
       mergedRows.push({ currency: r.currency, amount: toNumber(toDecimal(r.total_spending)), _key: monthKey, _type: 'spending', _row: r, date: dateStr });
@@ -114,7 +114,7 @@ export async function getMonthlyFinancialSummary(
       .sort((a, b) => a.year !== b.year ? a.year - b.year : a.month - b.month)
       .map(m => ({
         ...m,
-        period_end: formatDateToYmd(new Date(m.year, m.month, 0)),
+        period_end: formatPgDateToYmd(new Date(m.year, m.month, 0)),
         total_spending: roundToCents(m.total_spending),
         total_income: roundToCents(m.total_income),
         net_amount: roundToCents(m.net_amount),

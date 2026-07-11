@@ -10,7 +10,7 @@ import { convertToCurrency } from '../services/currency/currencyConversionServic
 import { toNumber } from '../lib/money.js';
 import {
   roundToCents,
-  formatDateToYmd,
+  formatPgDateToYmd,
   extractYearMonth,
   addDaysUtc,
   getDayKeyUtc,
@@ -50,7 +50,7 @@ export const netWorthRepository = {
     }
 
     const firstDataDateYmd = firstDataDate
-      ? (firstDataDate instanceof Date ? formatDateToYmd(firstDataDate) : String(firstDataDate).split('T')[0])
+      ? (firstDataDate instanceof Date ? formatPgDateToYmd(firstDataDate) : String(firstDataDate).split('T')[0])
       : null;
 
     if (!firstDataDateYmd) {
