@@ -4590,7 +4590,7 @@ rich aesthetic, don't flatten):**
 - [x] **Unify the dashboard widget onto the entity**: `BankBalancesWidget` reads the same accounts 🔎 verified-present 2026-07-11
       + shared balance source (Phase C), cards link to the same detail view — one concept, one code
       path. **New finding:** the two-parallel-UIs split was previously unfiled. 🔼 ✅ 2026-07-11 · d3f7398
-- [ ] Split `AddAccountDialog` into create + edit (or remount via `key={editing.id}`): fixes the 🔎 partial 2026-07-11 (key={editing.id} remount + mode="edit" done, fixes the revert bug; Advanced-collapse-in-edit, non-clobbering type-change, and Currency Select still missing)
+- [x] Split `AddAccountDialog` into create + edit (or remount via `key={editing.id}`): fixes the 🔎 partial 2026-07-11 (key={editing.id} remount + mode="edit" done, fixes the revert bug; Advanced-collapse-in-edit, non-clobbering type-change, and Currency Select still missing) ✅ 2026-07-11 · 0b9eb80
       filed revert bug; **new:** edit mode must not hide populated fields behind a collapsed
       "Advanced" toggle, and type-change must only apply `flagsForType` defaults to fields the user
       hasn't touched (today it silently clobbers manually-set `spendable`/`liquidity_class`/
