@@ -57,3 +57,27 @@ export function mergeAccounts(targetId: number, sourceIds: number[]): Promise<Ac
         body: JSON.stringify({ source_ids: sourceIds }),
     });
 }
+
+export interface OpeningBalanceInput {
+    balance: number;
+    date: string;
+    currency?: string;
+}
+
+export interface OpeningBalanceResult {
+    transaction: { id: number; balance: number; transfer_source: string } | null;
+    /** Set when the anchor date does not precede existing activity (anchor+delta makes it inert). */
+    warning: string | null;
+}
+
+/**
+ * Set (create or update) the opening-balance anchor for a manual/cash-only account
+ * (ADR-094 second addendum, D4). Stamps one system row per account+currency; the
+ * single sanctioned exception to the `transactions.balance` write-protection.
+ */
+export function setOpeningBalance(id: number, input: OpeningBalanceInput): Promise<OpeningBalanceResult> {
+    return apiRequest<OpeningBalanceResult>(`/api/accounts/${id}/opening-balance`, {
+        method: 'POST',
+        body: JSON.stringify(input),
+    });
+}

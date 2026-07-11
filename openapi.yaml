@@ -1638,6 +1638,52 @@ paths:
         "404":
           description: Target or a source account not found
 
+  /api/accounts/{id}/opening-balance:
+    parameters:
+      - in: path
+        name: id
+        required: true
+        schema:
+          type: integer
+        description: Account to anchor
+    post:
+      summary: Set the opening-balance anchor for an account
+      description: >-
+        Creates (or updates) one system anchor row per account+currency with
+        amount=0, a server-stamped `balance`, is_transfer=true and
+        transfer_source='opening' (ADR-094 second addendum, D4). The single
+        sanctioned exception to the balance write-protection; lets manual/cash-only
+        accounts seed a balance. Invoking again updates the existing anchor.
+      operationId: setAccountOpeningBalance
+      tags: [Accounts]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [balance, date]
+              properties:
+                balance:
+                  type: number
+                  description: The opening balance to stamp
+                date:
+                  type: string
+                  format: date
+                  description: As-of date; expected to precede the account's activity
+                currency:
+                  type: string
+                  description: 3-letter ISO code; defaults to the account currency
+      responses:
+        "200":
+          description: The anchor transaction plus an optional warning
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Envelope"
+        "404":
+          description: Account not found
+
   # ─── Transactions ────────────────────────────────────────────────────────────
 
   /api/transactions:

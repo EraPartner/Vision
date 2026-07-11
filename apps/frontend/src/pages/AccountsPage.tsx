@@ -9,12 +9,13 @@ import { Button } from "@/components/ui/button";
 import {
     DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { Landmark, MoreVertical, Pencil, Archive, ArchiveRestore, Trash2, GitMerge, DoorClosed, Receipt } from "lucide-react";
+import { Landmark, MoreVertical, Pencil, Archive, ArchiveRestore, Trash2, GitMerge, DoorClosed, Receipt, Coins } from "lucide-react";
 import { useAccounts, useUpdateAccount, useDeleteAccount } from "@/hooks/useAccounts";
 import { useCurrencyFormatter } from "@/hooks/useCurrencyFormatter";
 import { AddAccountDialog, type AccountFormValues } from "@/features/accounts/AddAccountDialog";
 import { MergeAccountDialog } from "@/features/accounts/MergeAccountDialog";
 import { CloseAccountDialog } from "@/features/accounts/CloseAccountDialog";
+import { OpeningBalanceDialog } from "@/features/accounts/OpeningBalanceDialog";
 import { usePortfolio } from "@/hooks/usePortfolio";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { useConfirmDialog } from "@/hooks/useConfirmDialog";
@@ -54,6 +55,7 @@ export default function AccountsPage() {
     const [editing, setEditing] = useState<Account | undefined>(undefined);
     const [merging, setMerging] = useState<Account | undefined>(undefined);
     const [closing, setClosing] = useState<Account | undefined>(undefined);
+    const [anchoring, setAnchoring] = useState<Account | undefined>(undefined);
     const { summaries } = usePortfolio();
 
     const accounts = useMemo(() => data?.items ?? [], [data]);
@@ -201,6 +203,9 @@ export default function AccountsPage() {
                                         <DropdownMenuItem onClick={() => setEditing(a)}>
                                             <Pencil className="mr-2 h-4 w-4" /> {t('common.edit')}
                                         </DropdownMenuItem>
+                                        <DropdownMenuItem onClick={() => setAnchoring(a)}>
+                                            <Coins className="mr-2 h-4 w-4" /> {t('accounts.openingBalance.action')}
+                                        </DropdownMenuItem>
                                         {accounts.length > 1 && (
                                             <DropdownMenuItem onClick={() => setMerging(a)}>
                                                 <GitMerge className="mr-2 h-4 w-4" /> {t('accounts.merge')}
@@ -276,6 +281,15 @@ export default function AccountsPage() {
                     summaries={summaries}
                     open={!!closing}
                     onOpenChange={(o) => { if (!o) setClosing(undefined); }}
+                />
+            )}
+
+            {anchoring && (
+                <OpeningBalanceDialog
+                    key={anchoring.id}
+                    account={anchoring}
+                    open={!!anchoring}
+                    onOpenChange={(o) => { if (!o) setAnchoring(undefined); }}
                 />
             )}
 
