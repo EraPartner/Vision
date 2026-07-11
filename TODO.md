@@ -66,26 +66,26 @@ look-changing one.
 
 ### 🐛 Correctness
 
-- [ ] **Vision CSV export mangles negative amounts → re-importing a Vision export silently drops every expense row** 🔺 *(spot-verified by hand 2026-07-02: mechanism confirmed end-to-end)*
+- [ ] **Vision CSV export mangles negative amounts → re-importing a Vision export silently drops every expense row** 🔺 ✅ *(spot-verified by hand 2026-07-02: mechanism confirmed end-to-end)*
   - ↪ _from: Correctness research 2026-07-02 · Wave 1a_
   - `apps/node-backend/src/lib/csv.js:10-24` (`neutralizeCsvFormula`, `-` in the dangerous-prefix set) + `services/transactionExport.js:97-112` (`buildCsvRow` maps **every** column through `escapeCsvValue`, incl. `amount`/`balance`/`running_balance`) + `services/importPipeline/adapters/vision.js:19-21`
   - Amount is a pg-NUMERIC string (`"-12.34"`); the formula-injection guard prepends `'` → exports as `'-12.34`. On re-import, vision.js strips only `[€$£,\s]`, leaving the apostrophe → `parseDecimalSafe` → NaN → row counted "skipped". Round-tripping a Vision export imports income and silently drops **all expenses**; negative `Balance` values corrupt the same way.
   - Fix: don't apply the formula guard to numeric columns in `buildCsvRow`; defensively strip a leading `'` in vision.js amount cleanup.
   - Verification (2026-07-03): the negative-`Balance` corruption confirmed at a specific site — `vision.js:44` silently nulls the balance (rather than NaN-dropping the row like amount does), so the row is kept but its balance is lost, distinct from the expense-dropping mechanism above.
 
-- [ ] **Commit-phase field dedup collapses genuinely distinct same-day transactions (incl. within one import batch)** 🔺
+- [ ] **Commit-phase field dedup collapses genuinely distinct same-day transactions (incl. within one import batch)** 🔺 ✅
   - ↪ _from: Correctness research 2026-07-02 · Wave 1a_
   - `apps/node-backend/src/services/importPipeline/commit.js:102-127`
   - Field check = `date + amount + recipient_id + memo` — no `bank_account`, no exclusion of rows inserted by the same batch. Two same-price card payments at the same merchant on the same day (Revolut memo `"CARD_PAYMENT - CURRENT"` is identical, revolut.js:61) pass hash-validate (different balances → different `tx_hash`) but the second hits the first at `dupCheck` inside the same DB transaction → marked `duplicate` → a real transaction is lost. Also collapses identical purchases across two different accounts. The comment at commit.js:103-104 claiming memo discriminates is wrong for card payments.
   - Fix: skip the field-based check when the candidate has a `tx_hash` and the match is same-`import_batch_id` (or both have differing non-null hashes); add `bank_account` to the predicate.
 
-- [ ] **Brokerage cash rows lose their sign — withdrawals credited as deposits** 🔺 *(critical)*
+- [ ] **Brokerage cash rows lose their sign — withdrawals credited as deposits** 🔺 ✅ *(critical)*
   - ↪ _from: Correctness research 2026-07-02 · Wave 1b_
   - `services/portfolioImportPipeline/portfolioGenericAdapter.js:16-21,45` (stores every amount as `Math.abs(n)`) + `services/portfolioImportPipeline/commit.js:93-97` (inserts `Number(row.amount)` verbatim); `importPipeline/brokerageRouting.js:31-37` (`classifyBrokerageRow`) carries no sign
   - Statement row `kind=withdrawal, amount=500` → staged `+500` → `transactions` row `+500` on the cash sleeve. Every withdrawal *raises* sleeve cash; error grows 2× per withdrawal.
   - Fix: stamp direction from the cash kind at validate/commit (deposit/transfer-in → `+|amount|`, withdrawal/transfer-out → `−|amount|`).
 
-- [ ] **Brokerage-batch rollback deletes wrong-table ids — can hard-delete unrelated portfolio trades** 🔺 *(critical; spot-verified by hand 2026-07-02)*
+- [ ] **Brokerage-batch rollback deletes wrong-table ids — can hard-delete unrelated portfolio trades** 🔺 ✅ *(critical; spot-verified by hand 2026-07-02)*
   - ↪ _from: Correctness research 2026-07-02 · Wave 1b_
   - `commit.js:100-103` (cash rows store a **`transactions`** id into `committed_txn_id`) + `repositories/portfolioImportBatchRepository.js:134-141` (`getCommittedTxnIds` has no route filter) + `services/portfolioImportBatchService.js:65-76` (feeds every id to `portfolioTransactionRepository.hardDelete` = `DELETE FROM portfolio_transactions[_base]`)
   - The two tables have independent sequences: brokerage deposit → `transactions.id = 812` → rollback hard-deletes **unrelated portfolio trade id 812** and leaves the imported cash row in the ledger. Distinct from the known orphaned-cash-legs finding — this is cross-table id confusion deleting someone else's trade.
