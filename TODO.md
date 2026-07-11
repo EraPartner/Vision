@@ -4567,6 +4567,7 @@ the phases below are updated accordingly:**
       `account_statement_balances` side table with backfill + per-currency drift; Revolut adapter
       keeps one account, rows keep currency (supersedes the filed Revolut split-per-currency fix);
       per-currency presentation on hub/widget for `multi_currency_cash` accounts. 🔺
+  - 🔎 attempt 2026-07-11: blocked — env (no live DB) + phase dep. The `account_statement_balances` side table doesn't exist yet (no migration/code); this item's core (create side table + backfill from `accounts.statement_balance` + per-currency drift, re-grain the balance lateral by `(account_id, currency)`, "healthy boot after MV refresh") needs a live DB, but `DATABASE_URL=''` and the pg socket is unresponsive here — same live-DB wall as the sibling contract-drop (4551). Also gated on the still-open Phase B contract runbook (4551, itself blocked on live DB + manual out-of-band drop). Code-only slices (Revolut adapter one-account/rows-keep-currency, lateral partition SQL) can't be honestly ticked without the backfill/refresh verified end-to-end, so leaving the box open for a session with `DATABASE_URL` set.
 - [ ] Opening-balance mechanism (D4, ADR-094 second addendum): endpoint + `transfer_source
       ='opening'` CHECK value + "Set opening balance" in the account detail/reconcile flow;
       exempt `'opening'` rows from the planned zero-amount rejection ⏫ 🔎 verified-present 2026-07-11
