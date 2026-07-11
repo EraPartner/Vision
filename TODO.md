@@ -4604,6 +4604,14 @@ rich aesthetic, don't flatten):**
       surfaced or editable anywhere. Decided via D3: the ADR-090 sleeve-less funding picker is
       built in Phase E (holdings enable); until then leave the field untouched, don't surface it
       in Phase D dialogs. 🔽
+  - 🔎 attempt 2026-07-11: no Phase-D deliverable. Confirmed field is present in the type (`api.ts`,
+    `generated.ts`) + PATCH whitelist (`accountRepository.js:28`, validated `accountService.js:73-79`)
+    and is NOT surfaced in any FE component/dialog (only types + MSW mock ref it) — the D3
+    "leave untouched, don't surface in Phase D" state is already met. The real fix (ADR-090 funding
+    picker reviving the surface) is committed to Phase E, gated on the holdings-flag flip + 8-item
+    prerequisite gate (ADR-103 §121-124), strictly after B+C+D. Ticking now would falsely imply the
+    dead-surface problem is resolved; building the picker now would break phase ordering + D3. Leave
+    open until the Phase E flip.
 - [ ] Merge/close polish: merge confirm states direction explicitly (nl finding filed); close flow 🔎 partial 2026-07-11 (merge direction confirm + closed_at/only-if-empty-delete lifecycle done; targeted invalidation map still the blanket queryClient.invalidateQueries())
       gets `closed_at` + only-if-empty delete (D5); targeted invalidation map instead of the blanket
       `queryClient.invalidateQueries()` 🔽
