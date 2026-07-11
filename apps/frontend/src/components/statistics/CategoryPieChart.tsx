@@ -3,6 +3,7 @@ import { DonutChart, type PieDatum } from "@/components/charts";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { useChartCurrencyFormatter } from "@/hooks/useChartCurrencyFormatter";
+import { getCategoryChartColor } from "@/utils/categoryColors";
 import type { StatisticsData } from "@/hooks/useStatistics";
 
 interface CategoryPieChartProps {
@@ -35,9 +36,9 @@ export const CategoryPieChart = memo(function CategoryPieChart({ data }: Categor
       .sort((a, b) => b.value - a.value)
       .slice(0, 10);
 
-    return totals.map((item, index) => ({
+    return totals.map((item) => ({
       ...item,
-      color: `hsl(var(--chart-${(index % 8) + 1}))`,
+      color: getCategoryChartColor(item.name),
     }));
   }, [data.categoryPivot, filteredPeriods]);
 

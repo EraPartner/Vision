@@ -1,4 +1,5 @@
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { CardSheen } from "@/components/shared/CardSheen";
 import { RollingNumber } from "@/components/shared/RollingNumber";
 import { DeltaPill } from "@/components/shared/DeltaPill";
 import { TrendHue, type TrendTone } from "@/components/shared/TrendHue";
@@ -39,10 +40,10 @@ export function StatCard({ title, value, numericValue, change, changeType = "neu
 
     return (
         <Card
-            className="glass-elevated premium-frame micro-lift group relative overflow-hidden h-full">
+            variant="interactive"
+            className="glass-elevated group overflow-hidden h-full">
             <TrendHue tone={tone} />
-            <div
-                className="absolute top-0 right-0 w-32 h-32 bg-gradient-to-br from-background/40 to-transparent rounded-full -mr-16 -mt-16 transition-transform duration-500 group-hover:scale-110" />
+            <CardSheen animated />
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-3">
                 <CardTitle className="text-sm font-semibold text-muted-foreground">{title}</CardTitle>
                 <div className={`h-10 w-10 rounded-xl flex items-center justify-center ${iconBg} shadow-[0_2px_8px_-2px_hsl(var(--primary)/0.25)]`}>

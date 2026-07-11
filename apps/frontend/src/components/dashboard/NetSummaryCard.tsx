@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { CardSheen } from "@/components/shared/CardSheen";
 import { Badge } from "@/components/ui/badge";
 import { Sparkline as ChartSparkline } from "@/components/charts";
 import { RollingNumber } from "@/components/shared/RollingNumber";
@@ -65,10 +66,10 @@ export function NetSummaryCard({ netBalance, income, spending, history }: NetSum
 
   return (
     <Card
-      className="glass-elevated premium-frame micro-lift group relative overflow-hidden flex flex-col h-full">
+      variant="interactive"
+      className="glass-elevated group overflow-hidden flex flex-col h-full">
       <div className={`absolute inset-0 pointer-events-none rounded-[inherit] bg-gradient-to-br ${trendGradient}`} />
-      <div
-        className="absolute top-0 right-0 w-48 h-48 bg-gradient-to-br from-background/40 to-transparent rounded-full -mr-24 -mt-24 transition-transform duration-500 group-hover:scale-110" />
+      <CardSheen animated />
 
       <CardHeader className="flex flex-row items-start justify-between space-y-0 pb-2">
         <div>

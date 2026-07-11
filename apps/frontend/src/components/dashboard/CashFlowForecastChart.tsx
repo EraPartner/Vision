@@ -18,6 +18,7 @@ import {
     CardHeader,
     CardTitle,
 } from "@/components/ui/card";
+import { CardSheen } from "@/components/shared/CardSheen";
 import { Button } from "@/components/ui/button";
 import { Switch } from "@/components/ui/switch";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -389,7 +390,7 @@ export function CashFlowForecastChart({
 
     return (
         <Card className="relative overflow-hidden glass-regular premium-frame micro-lift lg:col-span-2">
-            <div className="absolute top-0 right-0 w-32 h-32 bg-gradient-to-br from-primary/10 to-transparent rounded-full -mr-16 -mt-16" />
+            <CardSheen />
             <CardHeader className="space-y-3">
                 <div className="flex items-center gap-3">
                     <div className="h-12 w-12 rounded-xl bg-gradient-to-br from-primary/20 to-primary/5 flex items-center justify-center shadow-sm text-primary">

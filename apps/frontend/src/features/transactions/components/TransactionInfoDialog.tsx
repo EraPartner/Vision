@@ -142,7 +142,7 @@ export function TransactionInfoDialog({
                             {
                                 key: 'amount',
                                 label: t('txPage.field.amount'),
-                                value: `${txn.amount >= 0 ? '+' : '-'}${formatCurrency(Math.abs(txn.amount), txn.currency, locale)}`,
+                                value: formatCurrency(txn.amount, txn.currency, locale, undefined, true),
                                 editable: true,
                                 editField: 'amount',
                                 editValue: String(txn.amount),

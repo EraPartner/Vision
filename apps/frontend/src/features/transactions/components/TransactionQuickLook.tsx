@@ -45,8 +45,7 @@ export function TransactionQuickLook({ transaction, onClose }: TransactionQuickL
                     <div className="space-y-4">
                         <div className="space-y-1.5 text-center">
                             <div className={`font-mono text-4xl font-semibold tracking-tight ${transaction.amount >= 0 ? 'amount-gain' : 'amount-loss'} ${!transaction.is_active ? 'opacity-50' : ''}`}>
-                                {transaction.amount >= 0 ? '+' : '-'}
-                                <Money amount={Math.abs(transaction.amount)} currency={transaction.currency} />
+                                <Money signed amount={transaction.amount} currency={transaction.currency} />
                             </div>
                             <div className="text-base font-medium">{transaction.recipient}</div>
                             <div className="text-sm text-muted-foreground">

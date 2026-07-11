@@ -3,7 +3,7 @@
  */
 import { describe, expect, it, vi } from "vitest";
 import { onActivateKeyDown } from "@/utils/a11y";
-import { getCategoryColor } from "@/utils/categoryColors";
+import { getCategoryColor, getCategoryChartColor } from "@/utils/categoryColors";
 
 describe("onActivateKeyDown", () => {
   function evt(key: string, opts: { sameTarget?: boolean } = {}) {
@@ -51,8 +51,14 @@ describe("getCategoryColor", () => {
     expect(getCategoryColor("")).toContain("bg-muted");
   });
 
-  it("returns the muted fallback for any non-empty category (current behaviour)", () => {
-    expect(getCategoryColor("FOOD:GROCERIES")).toContain("bg-muted");
-    expect(getCategoryColor("anything")).toContain("text-muted-foreground");
+  it("assigns a deterministic chart-token chip to a non-empty category", () => {
+    expect(getCategoryColor("FOOD:GROCERIES")).toMatch(/bg-chart-\d/);
+    // Same input → same color on every call (stable identity).
+    expect(getCategoryColor("FOOD:GROCERIES")).toBe(getCategoryColor("FOOD:GROCERIES"));
+  });
+
+  it("colors by the GENERAL part, so DETAIL variations share one hue", () => {
+    expect(getCategoryColor("FOOD:GROCERIES")).toBe(getCategoryColor("FOOD:RESTAURANT"));
+    expect(getCategoryChartColor("FOOD:GROCERIES")).toBe(getCategoryChartColor("FOOD:DINING"));
   });
 });

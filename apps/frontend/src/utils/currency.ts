@@ -128,7 +128,9 @@ export function formatCurrency(
   amount: number,
   currencyCode?: string,
   locale?: string,
-  fractionDigits?: number
+  fractionDigits?: number,
+  /** Render an explicit locale-correct sign (+/−) for non-zero amounts. */
+  signed?: boolean
 ): string {
   const effectiveCurrency = currencyCode || currencyFormatDefaults.defaultCurrency;
   const effectiveLocale = locale || currencyFormatDefaults.locale;
@@ -139,6 +141,7 @@ export function formatCurrency(
     currency: effectiveCurrency,
     minimumFractionDigits: effectiveFractionDigits,
     maximumFractionDigits: effectiveFractionDigits,
+    signDisplay: signed ? 'exceptZero' : 'auto',
   }).format(amount);
 }
 
