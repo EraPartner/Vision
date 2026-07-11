@@ -8,11 +8,12 @@
  */
 
 import portfolioTransactionRepository from '../repositories/portfolioTransactionRepository.js';
+import transactionRepository from '../repositories/transactionRepository.js';
 import investmentRepository from '../repositories/investmentRepository.js';
 import {
   getRowForInvestmentCreation,
   overrideInvestment,
-  getCommittedTxnIds,
+  getCommittedTxnTargets,
   markBatchAborted,
 } from '../repositories/portfolioImportBatchRepository.js';
 
@@ -59,15 +60,19 @@ export async function createInvestmentForRow({ batchId, rowId }) {
 
 /**
  * Rollback: hard-delete every committed transaction this batch produced and
- * mark the batch aborted. Uses the repo per id so it works whether portfolio
- * transactions are stored flat or through the inheritance tables.
+ * mark the batch aborted. Each id is routed to the table it was actually
+ * written to — cash rows to `transactions`, trades to `portfolio_transactions`
+ * — because the two tables have independent sequences and a cross-table delete
+ * would destroy an unrelated record.
  */
 export async function rollbackBatch(batchId) {
-  const ids = await getCommittedTxnIds(batchId);
+  const targets = await getCommittedTxnTargets(batchId);
 
   let deleted = 0;
-  for (const id of ids) {
-    const ok = await portfolioTransactionRepository.hardDelete(id);
+  for (const { id, route } of targets) {
+    const ok = route === 'cash'
+      ? await transactionRepository.hardDelete(id)
+      : await portfolioTransactionRepository.hardDelete(id);
     if (ok) deleted++;
   }
 

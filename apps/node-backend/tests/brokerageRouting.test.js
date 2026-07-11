@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { classifyBrokerageRow, tradeDedupKey } from '../src/services/importPipeline/brokerageRouting.js';
+import { classifyBrokerageRow, tradeDedupKey, cashDirection } from '../src/services/importPipeline/brokerageRouting.js';
 
 describe('classifyBrokerageRow (ADR-095)', () => {
   it('routes deposits/withdrawals to a plain cash transaction', () => {
@@ -20,6 +20,27 @@ describe('classifyBrokerageRow (ADR-095)', () => {
   it('blocks unknown kinds on review rather than guessing', () => {
     expect(classifyBrokerageRow({ kind: 'mystery' })).toEqual({ target: 'review' });
     expect(classifyBrokerageRow({})).toEqual({ target: 'review' });
+  });
+});
+
+describe('cashDirection', () => {
+  it('credits inflows (+1): deposit / transfer-in and EN/NL/DE synonyms', () => {
+    for (const k of ['deposit', 'deposits', 'cash deposit', 'transfer in', 'storting', 'inleg', 'einzahlung']) {
+      expect(cashDirection(k)).toBe(1);
+    }
+  });
+
+  it('debits outflows (-1): withdrawal / transfer-out and EN/NL/DE synonyms', () => {
+    for (const k of ['withdrawal', 'withdrawals', 'cash withdrawal', 'transfer out', 'opname', 'terugbetaling', 'auszahlung']) {
+      expect(cashDirection(k)).toBe(-1);
+    }
+  });
+
+  it('normalizes case/whitespace and defaults unknown kinds to +1', () => {
+    expect(cashDirection('  WITHDRAWAL ')).toBe(-1);
+    expect(cashDirection('mystery')).toBe(1);
+    expect(cashDirection('')).toBe(1);
+    expect(cashDirection(null)).toBe(1);
   });
 });
 

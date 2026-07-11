@@ -16,7 +16,11 @@ function rowToTransaction(row) {
   const date = parseDateFlexibleUtc(dateStr);
   if (!date) return null;
 
-  const amountStr = (row['Amount'] || '').replace(/[€$£,\s]/g, '').trim();
+  // Strip a leading formula-guard apostrophe defensively: older Vision exports
+  // prefixed numeric cells with "'" (e.g. "'-12.34"), which otherwise NaN-drops
+  // the row. Current exports no longer do this, but round-tripping an old file
+  // must still work.
+  const amountStr = (row['Amount'] || '').replace(/^'/, '').replace(/[€$£,\s]/g, '').trim();
   const amount = parseDecimalSafe(amountStr);
   if (isNaN(amount)) return null;
 
@@ -25,7 +29,7 @@ function rowToTransaction(row) {
   const recipient = recipientRaw ? normalizeToUppercase(cleanRecipientName(recipientRaw)) : 'UNKNOWN';
   const memo = row['Memo'] ? normalizeToUppercase(row['Memo'].trim()) : '';
   const currency = (row['Currency'] || 'EUR').trim().toUpperCase();
-  const balanceStr = (row['Balance'] || '').trim();
+  const balanceStr = (row['Balance'] || '').replace(/^'/, '').replace(/[€$£,\s]/g, '').trim();
   const balance = balanceStr ? parseDecimalSafe(balanceStr) : null;
   const category = (row['Category'] || '').trim();
   const comment = (row['Comment'] || '').trim() || null;

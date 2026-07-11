@@ -23,6 +23,28 @@ export function neutralizeCsvFormula(value) {
   return `'${value}`;
 }
 
+/**
+ * Escape a machine-generated numeric cell (pg NUMERIC strings like "-12.34").
+ *
+ * Numeric columns are app-produced, never user-controllable, so they must NOT
+ * pass through the formula-injection guard: a leading "-" is a legitimate minus
+ * sign, and prefixing "'" corrupts the value so a re-imported Vision export
+ * NaN-drops every expense row (and nulls negative balances). Still applies the
+ * ordinary CSV quoting rules in case a locale decimal ever contains a comma.
+ */
+export function escapeCsvNumeric(value) {
+  if (value == null) return '';
+  const stringValue = String(value);
+  return (
+    stringValue.includes(',') ||
+    stringValue.includes('"') ||
+    stringValue.includes('\n') ||
+    stringValue.includes('\r')
+  )
+    ? `"${stringValue.replace(/"/g, '""')}"`
+    : stringValue;
+}
+
 export function escapeCsvValue(value) {
   if (value == null) return '';
   const stringValue = neutralizeCsvFormula(String(value));

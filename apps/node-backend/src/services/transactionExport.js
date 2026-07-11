@@ -10,7 +10,7 @@ import { logger } from '../config/logger.js';
 import { NotFoundError } from '../middleware/errorHandler.js';
 import { toDecimal } from '../lib/money.js';
 import { toYmd } from '../utils/portfolioMath.js';
-import { escapeCsvValue } from '../lib/csv.js';
+import { escapeCsvValue, escapeCsvNumeric } from '../lib/csv.js';
 
 export const EXPORT_CHUNK_SIZE = 1000;
 export const EXPORT_MAX_LIST_SIZE = 50;
@@ -95,20 +95,23 @@ function buildExportChunkSql(whereSql, limitParamIdx, cursorDateParamIdx, cursor
 }
 
 function buildCsvRow(row, { includeBalance = false } = {}) {
+  // Text columns get the formula-injection guard; numeric columns must NOT (a
+  // leading "-" is a real minus sign — guarding it breaks Vision-export
+  // round-trips). See escapeCsvNumeric in lib/csv.js.
   const cols = [
-    row.date,
-    row.bank_account,
-    row.recipient_name,
-    row.memo,
-    row.amount,
-    row.currency,
-    row.balance,
-    row.category_name,
-    row.comment,
-    Array.isArray(row.tags) ? row.tags.join(';') : '',
+    escapeCsvValue(row.date),
+    escapeCsvValue(row.bank_account),
+    escapeCsvValue(row.recipient_name),
+    escapeCsvValue(row.memo),
+    escapeCsvNumeric(row.amount),
+    escapeCsvValue(row.currency),
+    escapeCsvNumeric(row.balance),
+    escapeCsvValue(row.category_name),
+    escapeCsvValue(row.comment),
+    escapeCsvValue(Array.isArray(row.tags) ? row.tags.join(';') : ''),
   ];
-  if (includeBalance) cols.push(row.running_balance);
-  return cols.map(escapeCsvValue).join(',');
+  if (includeBalance) cols.push(escapeCsvNumeric(row.running_balance));
+  return cols.join(',');
 }
 
 function buildNdjsonRow(row) {

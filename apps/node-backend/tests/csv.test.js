@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { neutralizeCsvFormula, escapeCsvValue } from '../src/lib/csv.js';
+import { neutralizeCsvFormula, escapeCsvValue, escapeCsvNumeric } from '../src/lib/csv.js';
 
 describe('neutralizeCsvFormula', () => {
   it('prefixes leading =, +, -, @', () => {
@@ -49,5 +49,23 @@ describe('escapeCsvValue', () => {
 
   it('combines neutralization with quoting', () => {
     expect(escapeCsvValue('=SUM(A1,B1)')).toBe('"\'=SUM(A1,B1)"');
+  });
+});
+
+describe('escapeCsvNumeric', () => {
+  it('does NOT formula-guard a negative amount (leading "-" is a real minus)', () => {
+    // Guarding it would export "'-12.34", which NaN-drops the row on re-import.
+    expect(escapeCsvNumeric('-12.34')).toBe('-12.34');
+    expect(escapeCsvNumeric('-1000')).toBe('-1000');
+  });
+
+  it('passes positive/zero numbers through untouched', () => {
+    expect(escapeCsvNumeric('45.20')).toBe('45.20');
+    expect(escapeCsvNumeric(0)).toBe('0');
+  });
+
+  it('returns empty string for null/undefined (e.g. a missing balance)', () => {
+    expect(escapeCsvNumeric(null)).toBe('');
+    expect(escapeCsvNumeric(undefined)).toBe('');
   });
 });

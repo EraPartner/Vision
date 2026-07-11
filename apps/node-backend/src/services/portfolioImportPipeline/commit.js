@@ -17,6 +17,7 @@ import { logger } from '../../config/logger.js';
 import portfolioTransactionRepository from '../../repositories/portfolioTransactionRepository.js';
 import { autoResolveFxRateToEur } from '../portfolio/fxResolve.js';
 import { createTradeCashLeg } from '../portfolio/tradeCashLegService.js';
+import { cashDirection } from '../importPipeline/brokerageRouting.js';
 
 export async function commitBatch({ batchId, onProgress }) {
   await query(`UPDATE portfolio_import_batches SET status = 'committing' WHERE id = $1`, [batchId]);
@@ -90,10 +91,13 @@ export async function commitBatch({ batchId, onProgress }) {
       }
       try {
         const memo = row.note || (row.type_raw ? String(row.type_raw).toUpperCase() : 'BROKERAGE CASH');
+        // The adapter stores amount as an absolute magnitude; stamp the sign from
+        // the cash kind so a withdrawal debits the sleeve instead of crediting it.
+        const signedAmount = Math.abs(Number(row.amount)) * cashDirection(row.type_raw);
         const r = await query(
           `INSERT INTO transactions (date, amount, currency, memo, account_id, is_active)
            VALUES ($1, $2, $3, $4, $5, true) RETURNING id`,
-          [row.tx_date, Number(row.amount), row.currency || 'EUR', memo, batchAccountId],
+          [row.tx_date, signedAmount, row.currency || 'EUR', memo, batchAccountId],
         );
         imported++;
         if (row.tx_hash) committedHashes.add(row.tx_hash);
