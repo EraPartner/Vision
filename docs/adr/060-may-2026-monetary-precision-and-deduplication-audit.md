@@ -203,3 +203,41 @@ If critical issues arise:
 - [[docs/features/import|Feature: CSV Import & Deduplication]]
 - [[docs/features/portfolio|Feature: Portfolio & Investments]]
 - [[docs/features/cash-flow-forecast|Feature: Cash Flow Forecast]]
+
+---
+
+## Addendum (2026-07-10): Domain precision is NUMERIC(18,4) — align the sibling money columns (D7)
+
+### Context
+
+This ADR audited *arithmetic*, not column types, and migration `0025_fix_numeric_precision.py`
+retyped only `transactions.amount` to NUMERIC(18,4). Every sibling money column stayed
+NUMERIC(15,2): `transactions.balance`, `planned_transactions.amount`,
+`transaction_splits.amount` / `split_payments.amount` / `agg_split_outstanding.*`, the loan
+schedule columns, `accounts.statement_balance`, and the raw-bank-table amounts
+(`import_staging_rows.amount` is an outlier at (20,4)). Consequences filed in TODO.md: a
+4-decimal transaction cannot be split exactly (splits round to cents while the 0062 split-guard
+trigger compares against `ABS(amount) + 0.005`), and a planned→executed copy gains precision
+headroom one way only. **Decision 2026-07-10 (accounts-rewrite round 2): NUMERIC(18,4) is the
+domain precision for money columns.**
+
+### Decision
+
+One alignment revision widens the (15,2) sibling money columns to (18,4) — a safe metadata-level
+retype for in-range values, no data rewrite. New money columns are created at (18,4) from day
+one; concretely, the `account_statement_balances` side table from the
+[[docs/adr/089-account-typed-model|ADR-089 addendum]] (accounts-rewrite Phase C) ships at (18,4).
+`import_staging_rows.amount` stays (20,4) (wider than its commit target is harmless).
+Display/rounding behavior is unchanged — banker's-rounding at the edges per this ADR's main body;
+the widening removes *storage* truncation, not presentation rounding.
+
+**Rollback:** re-narrow with `USING round(col, 2)` (lossy only for values that actually used the
+extra precision).
+
+### Consequences
+
+- Splits can represent a 4-dp parent exactly; the split-guard tolerance stops masking a
+  representational gap.
+- Planned→executed copies and statement figures are precision-symmetric with `transactions.amount`.
+- Ships as part of the accounts rewrite (Phase A/C window), one revision, migration not auto-run
+  per project convention.
