@@ -19,6 +19,45 @@ import {
   sanitizeIsolatedDailyInvestmentSpikes,
 } from './infoRepositoryHelpers.js';
 
+/**
+ * Read the persisted per-account holdings split (ADR-100, migration 0074) for
+ * one currency, shaped as the same Map<accountKey, [{date, holdings}]> the live
+ * replay produces. Returns null when the side table is absent or holds no rows
+ * for the currency, so the caller falls back to a live computeDailySnapshots
+ * replay. Rows are pre-sparse (only accounts holding value on a day) and stored
+ * ordered by (account_key, snapshot_date).
+ *
+ * @param {string} target uppercase currency code
+ * @returns {Promise<Map<string, {date: string, holdings: number}[]>|null>}
+ */
+async function readPersistedAccountSeries(target) {
+  const tableExists = await query(`
+    SELECT 1
+    FROM information_schema.tables
+    WHERE table_schema = current_schema()
+      AND table_name = 'portfolio_snapshot_accounts'
+    LIMIT 1
+  `);
+  if (tableExists.rows.length === 0) return null;
+
+  const result = await query(`
+    SELECT to_char(snapshot_date, 'YYYY-MM-DD') AS day, account_key, value
+    FROM portfolio_snapshot_accounts
+    WHERE currency = $1
+    ORDER BY account_key, snapshot_date
+  `, [target]);
+
+  if (result.rows.length === 0) return null;
+
+  const seriesByAcct = new Map();
+  for (const row of result.rows) {
+    const key = row.account_key;
+    if (!seriesByAcct.has(key)) seriesByAcct.set(key, []);
+    seriesByAcct.get(key).push({ date: row.day, holdings: roundToCents(row.value) });
+  }
+  return seriesByAcct;
+}
+
 export const netWorthRepository = {
   /**
    * Net Worth (snapshot-backed) — reads investment values from pre-computed
@@ -288,17 +327,27 @@ export const netWorthRepository = {
    */
   async getNetWorthByAccount(targetCurrency = 'EUR') {
     const target = (targetCurrency || 'EUR').toUpperCase();
-    const [snapshots, accounts] = await Promise.all([
-      computeDailySnapshots(target),
+
+    // Prefer the persisted per-account split (migration 0074): a cheap indexed
+    // read of the same value_by_account the snapshot builder already computed,
+    // instead of replaying the full multi-year day-walk on every cache miss.
+    // Falls back to a live replay when the side table is missing or empty (an
+    // un-migrated DB, or before the first snapshot store) — same graceful
+    // degrade the FX-neutral column uses.
+    const [persistedSeries, accounts] = await Promise.all([
+      readPersistedAccountSeries(target),
       accountRepository.getAll({ active: null }),
     ]);
 
-    // Per-account daily holdings from the builder's value_by_account split.
-    const holdingsSeriesByAcct = new Map();
-    for (const s of snapshots) {
-      for (const [acctKey, value] of Object.entries(s.value_by_account || {})) {
-        if (!holdingsSeriesByAcct.has(acctKey)) holdingsSeriesByAcct.set(acctKey, []);
-        holdingsSeriesByAcct.get(acctKey).push({ date: s.snapshot_date, holdings: roundToCents(value) });
+    let holdingsSeriesByAcct = persistedSeries;
+    if (!holdingsSeriesByAcct) {
+      const snapshots = await computeDailySnapshots(target);
+      holdingsSeriesByAcct = new Map();
+      for (const s of snapshots) {
+        for (const [acctKey, value] of Object.entries(s.value_by_account || {})) {
+          if (!holdingsSeriesByAcct.has(acctKey)) holdingsSeriesByAcct.set(acctKey, []);
+          holdingsSeriesByAcct.get(acctKey).push({ date: s.snapshot_date, holdings: roundToCents(value) });
+        }
       }
     }
     const lastHoldings = (key) => {
