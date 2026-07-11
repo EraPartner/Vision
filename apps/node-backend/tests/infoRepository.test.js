@@ -437,8 +437,7 @@ describe('InfoRepository', () => {
   describe('getBankBalances', () => {
     it('should return account balances with history', async () => {
       query.mockImplementation(async (sql) => {
-        if (sql.includes('SELECT 1 FROM')) return { rows: [] };
-        if (sql.includes('DISTINCT ON (t.account_id)')) {
+        if (sql.includes('tx.transaction_count > 0')) {
           return {
             rows: [
               {

@@ -5,6 +5,7 @@
 import { query } from '../database/connection.js';
 import { toDecimal, toNumber } from '../lib/money.js';
 import { toYmd } from '../utils/portfolioMath.js';
+import { COMPUTED_BALANCE_LATERAL } from './accountBalanceSql.js';
 import {
   roundToCents,
   batchConvertGroupsWithHistoricalRateFallback,
@@ -13,10 +14,17 @@ import {
 export const banksRepository = {
   /**
    * Get current balance per account and daily historical balances over
-   * the last 12 months. Uses the balance field from the single most recent
-   * transaction (by date) per account. Grouped by account_id (ADR-088) — the
-   * label is sourced from accounts.name so the response contract is unchanged
-   * while the bank_account string is being retired.
+   * the last 12 months.
+   *
+   * The current balance is sourced from the shared anchor+delta lateral
+   * (`COMPUTED_BALANCE_LATERAL`, ADR-094) — the *same* single source the
+   * accounts hub (`accountRepository.getAll`) and net-worth-by-account
+   * (`getNetWorthByAccount`) consume — so the dashboard widget no longer
+   * diverges from the hub. The naive "latest stamped balance" it replaced froze
+   * at the last imported statement figure, dropping manual/trade/brokerage
+   * activity that leaves `transactions.balance` NULL. Grouped by account_id
+   * (ADR-088); the label is sourced from `accounts.name` so the response
+   * contract is unchanged while the bank_account string is being retired.
    */
   async getBankBalances(targetCurrency = 'EUR') {
     const accounts = [];
@@ -26,21 +34,29 @@ export const banksRepository = {
     // with one historical-rate lookup instead of two.
     const [latestBalanceResult, historyResult] = await Promise.all([
       query(`
-        SELECT DISTINCT ON (t.account_id)
-               a.name AS bank_account,
-               COALESCE(t.currency, 'EUR') AS currency,
-               t.balance,
-               t.date,
-               COUNT(*) OVER (PARTITION BY t.account_id) AS transaction_count,
-               MIN(t.date) OVER (PARTITION BY t.account_id) AS first_transaction,
-               MAX(t.date) OVER (PARTITION BY t.account_id) AS last_transaction
-        FROM transactions t
-        JOIN accounts a ON a.id = t.account_id
-        WHERE t.is_active = true
-          AND t.account_id IS NOT NULL
-          AND t.balance IS NOT NULL
-          AND a.type <> 'liability'
-        ORDER BY t.account_id, t.date DESC, t.id DESC
+        SELECT a.name AS bank_account,
+               tx.currency,
+               COALESCE(lb.balance, 0) AS balance,
+               tx.last_transaction AS date,
+               tx.transaction_count,
+               tx.first_transaction,
+               tx.last_transaction
+        FROM accounts a
+        ${COMPUTED_BALANCE_LATERAL}
+        JOIN LATERAL (
+          -- Per-account activity metadata over active rows. The currency is the
+          -- most recent active row's (multi-currency partitioning is D2); the
+          -- date anchors the FX conversion below to the latest activity.
+          SELECT COUNT(*) AS transaction_count,
+                 MIN(t.date) AS first_transaction,
+                 MAX(t.date) AS last_transaction,
+                 (ARRAY_AGG(COALESCE(t.currency, 'EUR') ORDER BY t.date DESC, t.id DESC))[1] AS currency
+          FROM transactions t
+          WHERE t.account_id = a.id AND t.is_active = true
+        ) tx ON true
+        WHERE a.type <> 'liability'
+          AND tx.transaction_count > 0
+        ORDER BY a.name
       `),
       query(`
         WITH days AS (
