@@ -4344,6 +4344,14 @@ detection layer never touches an LLM, so it's unaffected either way.
       cleanup to a prerequisite, since it will now run far more often. The new category-outlier
       detector (below) needs the same caching treatment from day one — don't ship a second uncached
       hot path alongside the fix for the first one
+    - 🔎 attempt 2026-07-11: blocked on the detection layer this panel/badge renders. The panel shows the
+      `{ subscriptionCreep, categoryOutliers, cashForecast }` return contract and the badge reads its
+      cached undismissed count, but none of the producers exist yet — no `insightsDigest` tool, no
+      category-outlier service, no `findingType` dismiss-tracking (grep clean across apps/). Depends on
+      three still-open detector items below (Subscription-creep digest, Category-level spend-outlier
+      detection, Month-end cash forecast) plus the recurring-patterns caching fix (TODO.md:1387) that
+      this item itself promotes to a prerequisite — all still '- [ ]'. Ship those first; there's nothing
+      to surface until the return contract has a real producer.
 
 - [ ] On-demand narration: chat button + insights tool 🔼 🔎 verified-present 2026-07-11
     - New read-only tool (detection layer above) registered in the existing `TOOLS` map
