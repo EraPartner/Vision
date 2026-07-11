@@ -17,6 +17,7 @@ import { MergeAccountDialog } from "@/features/accounts/MergeAccountDialog";
 import { CloseAccountDialog } from "@/features/accounts/CloseAccountDialog";
 import { OpeningBalanceDialog } from "@/features/accounts/OpeningBalanceDialog";
 import { ReconcileDialog } from "@/features/accounts/ReconcileDialog";
+import { AccountDetailSheet } from "@/features/accounts/AccountDetailSheet";
 import { usePortfolio } from "@/hooks/usePortfolio";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { useConfirmDialog } from "@/hooks/useConfirmDialog";
@@ -58,6 +59,7 @@ export default function AccountsPage() {
     const [closing, setClosing] = useState<Account | undefined>(undefined);
     const [anchoring, setAnchoring] = useState<Account | undefined>(undefined);
     const [reconciling, setReconciling] = useState<Account | undefined>(undefined);
+    const [detailing, setDetailing] = useState<Account | undefined>(undefined);
     const { summaries } = usePortfolio();
 
     const accounts = useMemo(() => data?.items ?? [], [data]);
@@ -146,9 +148,18 @@ export default function AccountsPage() {
                         return (
                         <Card
                             key={a.id}
-                            className={`glass-regular transition-shadow ${a.is_active ? "" : "opacity-60"} ${canViewTransactions ? "cursor-pointer hover:shadow-glass-soft" : ""}`}
-                            onDoubleClick={canViewTransactions ? () => openAccountTransactions(a) : undefined}
-                            title={canViewTransactions ? t('accounts.openTransactions') : undefined}
+                            role="button"
+                            tabIndex={0}
+                            aria-label={t('accounts.openDetail', { name: a.display_name || a.name })}
+                            className={`glass-regular cursor-pointer transition-shadow hover:shadow-glass-soft focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/70 focus-visible:ring-offset-2 ${a.is_active ? "" : "opacity-60"}`}
+                            onClick={() => setDetailing(a)}
+                            onKeyDown={(e) => {
+                                if (e.key === "Enter" || e.key === " ") {
+                                    e.preventDefault();
+                                    setDetailing(a);
+                                }
+                            }}
+                            title={t('accounts.openDetailHint')}
                         >
                             <CardContent className="flex items-start justify-between gap-3 p-4">
                                 <div className="min-w-0">
@@ -172,8 +183,7 @@ export default function AccountsPage() {
                                                 className={`${badgeVariants({ variant: "destructive" })} cursor-pointer text-xs`}
                                                 title={t('accounts.driftTooltip')}
                                                 aria-label={t('accounts.reconcile.open')}
-                                                onClick={() => setReconciling(a)}
-                                                onDoubleClick={(e) => e.stopPropagation()}
+                                                onClick={(e) => { e.stopPropagation(); setReconciling(a); }}
                                             >
                                                 {t('accounts.drift')}: {a.drift > 0 ? "+" : ""}{fmtCur(a.drift, a.currency)}
                                             </button>
@@ -194,12 +204,13 @@ export default function AccountsPage() {
                                             variant="ghost"
                                             size="icon"
                                             className="h-8 w-8 shrink-0"
-                                            onDoubleClick={(e) => e.stopPropagation()}
+                                            aria-label={t('accounts.actionsMenu')}
+                                            onClick={(e) => e.stopPropagation()}
                                         >
                                             <MoreVertical className="h-4 w-4" />
                                         </Button>
                                     </DropdownMenuTrigger>
-                                    <DropdownMenuContent align="end">
+                                    <DropdownMenuContent align="end" onClick={(e) => e.stopPropagation()}>
                                         {/* Keyboard/touch-accessible equivalent of the card's
                                             double-click-to-open shortcut. */}
                                         {canViewTransactions && (
@@ -308,6 +319,16 @@ export default function AccountsPage() {
                     onOpenChange={(o) => { if (!o) setReconciling(undefined); }}
                 />
             )}
+
+            <AccountDetailSheet
+                account={detailing}
+                open={!!detailing}
+                onOpenChange={(o) => { if (!o) setDetailing(undefined); }}
+                onEdit={(a) => { setDetailing(undefined); setEditing(a); }}
+                onReconcile={(a) => { setDetailing(undefined); setReconciling(a); }}
+                onOpeningBalance={(a) => { setDetailing(undefined); setAnchoring(a); }}
+                onViewTransactions={(a) => { setDetailing(undefined); openAccountTransactions(a); }}
+            />
 
             <ConfirmDialog />
         </div>
