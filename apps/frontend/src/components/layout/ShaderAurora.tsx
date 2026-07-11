@@ -6,7 +6,8 @@ import { useEffect, useRef } from "react";
  * One fullscreen quad running 4-octave value-noise fbm, tinted with the
  * theme's --primary/--accent. Budgeted deliberately (ADR-020 history):
  * renders at 0.25× resolution upscaled by CSS, capped at ~30 fps, pauses
- * when the tab is hidden (rAF) and draws a single static frame under
+ * whenever the window is blurred or the document hidden (rAF alone only
+ * pauses for hidden tabs) and draws a single static frame under
  * prefers-reduced-motion. Any WebGL failure leaves the CSS aurora blobs
  * (always rendered underneath) as the silent fallback.
  */
@@ -179,27 +180,58 @@ export function ShaderAurora() {
 
         let raf = 0;
         let last = 0;
+        let running = false;
+        let contextLost = false;
+
+        const frame = (now: number) => {
+            raf = requestAnimationFrame(frame);
+            if (now - last < FRAME_MIN_MS) return;
+            last = now;
+            draw(now / 1000);
+        };
+        const startLoop = () => {
+            if (running || contextLost) return;
+            running = true;
+            raf = requestAnimationFrame(frame);
+        };
+        const stopLoop = () => {
+            running = false;
+            cancelAnimationFrame(raf);
+        };
+        // rAF's implicit throttling only covers hidden tabs (and, in Electron,
+        // fully occluded windows) — a desktop window left visible behind
+        // another keeps drawing at ~30fps forever. Gate the loop on window
+        // focus + document visibility instead, mirroring the CSS blobs'
+        // fx-idle-atmosphere pause; the last rendered frame stays on screen.
+        const syncLoop = () => {
+            if (document.hidden || !document.hasFocus()) stopLoop();
+            else startLoop();
+        };
+
         if (reducedMotion) {
             draw(0);
         } else {
-            const frame = (now: number) => {
-                raf = requestAnimationFrame(frame);
-                if (now - last < FRAME_MIN_MS) return;
-                last = now;
-                draw(now / 1000);
-            };
-            raf = requestAnimationFrame(frame);
+            syncLoop();
+            window.addEventListener("focus", syncLoop);
+            window.addEventListener("blur", syncLoop);
+            document.addEventListener("visibilitychange", syncLoop);
         }
 
         const onContextLost = (e: Event) => {
             e.preventDefault();
-            cancelAnimationFrame(raf);
+            contextLost = true;
+            stopLoop();
         };
         canvas.addEventListener("webglcontextlost", onContextLost);
 
         return () => {
-            cancelAnimationFrame(raf);
+            stopLoop();
             window.removeEventListener("resize", resize);
+            if (!reducedMotion) {
+                window.removeEventListener("focus", syncLoop);
+                window.removeEventListener("blur", syncLoop);
+                document.removeEventListener("visibilitychange", syncLoop);
+            }
             canvas.removeEventListener("webglcontextlost", onContextLost);
             themeObserver.disconnect();
             gl?.getExtension("WEBGL_lose_context")?.loseContext();
