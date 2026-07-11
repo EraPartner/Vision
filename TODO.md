@@ -4612,7 +4612,7 @@ rich aesthetic, don't flatten):**
     prerequisite gate (ADR-103 §121-124), strictly after B+C+D. Ticking now would falsely imply the
     dead-surface problem is resolved; building the picker now would break phase ordering + D3. Leave
     open until the Phase E flip.
-- [ ] Merge/close polish: merge confirm states direction explicitly (nl finding filed); close flow 🔎 partial 2026-07-11 (merge direction confirm + closed_at/only-if-empty-delete lifecycle done; targeted invalidation map still the blanket queryClient.invalidateQueries())
+- [x] Merge/close polish: merge confirm states direction explicitly (nl finding filed); close flow 🔎 partial 2026-07-11 (merge direction confirm + closed_at/only-if-empty-delete lifecycle done; targeted invalidation map still the blanket queryClient.invalidateQueries()) ✅ 2026-07-11 · 83e126d
       gets `closed_at` + only-if-empty delete (D5); targeted invalidation map instead of the blanket
       `queryClient.invalidateQueries()` 🔽
 
