@@ -4582,11 +4582,11 @@ the phases below are updated accordingly:**
 **Phase D — Accounts page + dialog redesign (respect the binding design constraint — refine the
 rich aesthetic, don't flatten):**
 
-- [ ] Card grid stays, but **single-click opens an account detail view** (drawer or route): 🔎 verified-present 2026-07-11
+- [x] Card grid stays, but **single-click opens an account detail view** (drawer or route): 🔎 verified-present 2026-07-11
       balance + sparkline from existing history, drift/reconcile CTA, recent transactions, holdings
       section (dark until Phase E), metadata; per-card ⋮ menu keeps the rare actions. Kills the
       double-click-only affordance (filed 🔼 for the widget; same fix here), gives cards
-      `role="button"`/`tabIndex`/Enter. 🔼
+      `role="button"`/`tabIndex`/Enter. 🔼 ✅ 2026-07-11 · 9dc7371
 - [ ] **Unify the dashboard widget onto the entity**: `BankBalancesWidget` reads the same accounts 🔎 verified-present 2026-07-11
       + shared balance source (Phase C), cards link to the same detail view — one concept, one code
       path. **New finding:** the two-parallel-UIs split was previously unfiled. 🔼
