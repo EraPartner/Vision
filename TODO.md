@@ -4558,7 +4558,7 @@ the phases below are updated accordingly:**
 
 **Phase C — one balance engine + multi-currency + reconcile UX:**
 
-- [ ] Single shared per-account balance source (the anchor+delta lateral) consumed by the accounts 🔎 verified-present 2026-07-11
+- [x] Single shared per-account balance source (the anchor+delta lateral) consumed by the accounts ✅ 2026-07-11 · 5938370
       hub, `getBankBalances`, and net worth — removes the three-way divergence (root 2). **New
       finding:** the hub vs net-worth/widget disagreement itself was previously unfiled. ⏫
 - [ ] Multi-currency cash (D2, ADR-089 addendum): the shared balance source partitions by 🔎 verified-present 2026-07-11
