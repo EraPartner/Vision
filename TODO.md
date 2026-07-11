@@ -4574,10 +4574,10 @@ the phases below are updated accordingly:**
 - [x] Persist the per-account split alongside snapshots + incremental rebuild (filed 🔼 as the 🔎 verified-present 2026-07-11
       `getNetWorthByAccount` replay perf item — build it here; it is prerequisite 8 of the
       ADR-103 addendum gate) ✅ 2026-07-11 · c638531
-- [ ] Reconcile flow on the drift badge: click → dialog showing statement vs computed + delta → 🔎 verified-present 2026-07-11
+- [x] Reconcile flow on the drift badge: click → dialog showing statement vs computed + delta → 🔎 verified-present 2026-07-11
       either "accept" (update statement figures) or explicit opt-in "add adjustment transaction"
       (server-created, preserves ADR-094 descriptive-only default). Today the badge is a dead-end
-      `title` tooltip; Edit → Advanced is the only path. 🔼
+      `title` tooltip; Edit → Advanced is the only path. 🔼 ✅ 2026-07-11 · 51c443c
 
 **Phase D — Accounts page + dialog redesign (respect the binding design constraint — refine the
 rich aesthetic, don't flatten):**
