@@ -47,6 +47,21 @@ describe('belgianInflationService', () => {
     expect(query).toHaveBeenCalledTimes(2);
   });
 
+  it('keys a pg-read DATE (Date object) by its LOCAL month, not the UTC-shifted prior month', async () => {
+    // node-postgres returns a DATE column as a server-local-midnight Date.
+    // First-of-month via UTC extraction rolled back to the prior month on a
+    // UTC+ server; local getters must keep 2024-01.
+    const pgDate = new Date(2024, 0, 1); // local Jan 1 2024
+    query
+      .mockResolvedValueOnce({ rows: [{ month_date: pgDate, monthly_rate: '0.00400000' }] })
+      .mockResolvedValueOnce({ rows: [{ month_date: pgDate, monthly_rate: '0.00400000' }] });
+
+    const result = await getInflationRates({ startMonth: '2024-01', endMonth: '2024-12' });
+
+    expect(result.source).toBe('database');
+    expect(result.rates).toEqual([{ month: '2024-01', monthly_rate: 0.004 }]);
+  });
+
   it('fetches Statbel rates and saves to database when db is empty', async () => {
     query
       .mockResolvedValueOnce({ rows: [] })
