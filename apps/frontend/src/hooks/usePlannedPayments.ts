@@ -102,6 +102,8 @@ function mapFromAPI(pt: PlannedTransaction): PlannedPayment {
     loan_schedule: pt.loan_schedule || [],
     frequency: pt.is_recurring ? frequency : undefined,
     custom_interval_days,
+    end_date: pt.recurrence_end_date ?? undefined,
+    max_occurrences: pt.max_occurrences ?? undefined,
     recipient: pt.recipient_name,
     recipient_id: pt.recipient_id,
     category: pt.category_name,
@@ -148,6 +150,10 @@ function mapToCreateAPI(payment: Omit<PlannedPayment, "id" | "created_at">): Pla
     url: payment.url,
     is_recurring: payment.is_recurring,
     recurrence_pattern,
+    // Recurrence bounds — these were dropped here, so "ends Dec 2026 / max 12"
+    // silently recurred forever (and the editor showed the loss as endless).
+    recurrence_end_date: payment.end_date,
+    max_occurrences: payment.max_occurrences,
     is_loan: !!payment.is_loan,
     loan_type: payment.loan_type,
     loan_principal: payment.loan_principal,
@@ -173,6 +179,8 @@ function mapToUpdateAPI(updates: Partial<PlannedPayment>): PlannedTransactionUpd
   if (updates.notes !== undefined) result.comment = updates.notes;
   if (updates.url !== undefined) result.url = updates.url;
   if (updates.is_recurring !== undefined) result.is_recurring = updates.is_recurring;
+  if (updates.end_date !== undefined) result.recurrence_end_date = updates.end_date ?? null;
+  if (updates.max_occurrences !== undefined) result.max_occurrences = updates.max_occurrences ?? null;
   if (updates.is_loan !== undefined) result.is_loan = updates.is_loan;
   if (updates.loan_type !== undefined) result.loan_type = updates.loan_type;
   if (updates.loan_principal !== undefined) result.loan_principal = updates.loan_principal;

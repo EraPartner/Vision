@@ -18,7 +18,7 @@ import { scaleLinear, scaleTime } from "@visx/scale";
 import { AreaClosed, AreaStack, Line, LinePath } from "@visx/shape";
 import { bisector, extent, max, min } from "d3-array";
 import { motion, useReducedMotion } from "framer-motion";
-import { useCallback, useMemo, useRef, useState } from "react";
+import { memo, useCallback, useMemo, useRef, useState } from "react";
 
 import { BottomAxis, LeftAxis, RightAxis } from "./ChartAxis";
 import { useChartSync } from "./ChartSyncContext";
@@ -71,6 +71,129 @@ export interface AreaChartProps<Datum> {
 }
 
 const DEFAULT_MARGIN = { top: 16, right: 24, bottom: 28, left: 90 };
+
+type AreaYScale = ReturnType<typeof scaleLinear<number>>;
+type AreaXScale = ReturnType<typeof scaleTime<number>> | ReturnType<typeof scaleLinear<number>>;
+
+interface AreaSeriesLayerProps<Datum> {
+    readonly data: ReadonlyArray<Datum>;
+    readonly series: ReadonlyArray<AreaSeries<Datum>>;
+    readonly stacked: boolean | undefined;
+    readonly xAccessor: (d: Datum) => Date | number;
+    readonly xScale: AreaXScale;
+    readonly yScale: AreaYScale;
+    readonly reduce: boolean | null;
+    readonly gradId: string;
+    readonly revealId: string;
+}
+
+/**
+ * The expensive part of the chart: every series path (monotone curve fit over
+ * N points). Isolated behind React.memo so hover/scrub state changes in
+ * AreaChartInner — which fire on every pointermove — re-render only the cheap
+ * crosshair/tooltip overlays, never the paths. All props are referentially
+ * stable across those renders (scales are memoized, xAccessor is the stable
+ * wrapper), so pointermove renders hit the memo cache.
+ */
+function AreaSeriesLayerInner<Datum>({
+    data,
+    series,
+    stacked,
+    xAccessor,
+    xScale,
+    yScale,
+    reduce,
+    gradId,
+    revealId,
+}: AreaSeriesLayerProps<Datum>) {
+    return (
+        <g clipPath={`url(#${revealId})`}>
+        {stacked ? (
+            <AreaStack<Datum>
+                keys={series.map((s) => s.key)}
+                data={data as Datum[]}
+                curve={curveMonotoneX}
+                value={(d, key) => {
+                    const s = series.find((x) => x.key === key);
+                    return s ? (s.accessor(d) ?? 0) : 0;
+                }}
+                x={(d) => xScale(xAccessor(d.data) as never) ?? 0}
+                y0={(d) => yScale(d[0]) ?? 0}
+                y1={(d) => yScale(d[1]) ?? 0}
+            >
+                {({ stacks, path }) =>
+                    stacks.map((stack, i) => {
+                        const s = series[i];
+                        const color = s.color ?? getChartColor(i);
+                        return (
+                            <motion.path
+                                key={`stack-${stack.key}`}
+                                d={path(stack) || ""}
+                                fill={color}
+                                fillOpacity={0.55}
+                                stroke={color}
+                                strokeOpacity={0.95}
+                                strokeWidth={1.5}
+                                initial={
+                                    reduce ? { opacity: 1 } : { opacity: 0, y: 12 }
+                                }
+                                animate={{ opacity: 1, y: 0 }}
+                                transition={{
+                                    duration: reduce ? 0 : durations.slow,
+                                    ease: easings.outExpo,
+                                    delay: i * 0.04,
+                                }}
+                            />
+                        );
+                    })
+                }
+            </AreaStack>
+        ) : (
+            series.map((s, i) => {
+                const color = s.color ?? getChartColor(i);
+                return (
+                    <g key={s.key}>
+                        <motion.g
+                            initial={reduce ? { opacity: 1 } : { opacity: 0 }}
+                            animate={{ opacity: 1 }}
+                            transition={{
+                                duration: reduce ? 0 : durations.slow,
+                                ease: easings.outExpo,
+                                delay: i * 0.04,
+                            }}
+                        >
+                            {s.fillOpacity !== 0 && (
+                                <AreaClosed<Datum>
+                                    data={data as Datum[]}
+                                    x={(d) => xScale(xAccessor(d) as never) ?? 0}
+                                    y={(d) => yScale(s.accessor(d) ?? 0) ?? 0}
+                                    yScale={yScale}
+                                    curve={curveMonotoneX}
+                                    fill={`url(#${gradId}-${s.key})`}
+                                    fillOpacity={s.fillOpacity ?? 1}
+                                />
+                            )}
+                            <LinePath<Datum>
+                                data={data as Datum[]}
+                                x={(d) => xScale(xAccessor(d) as never) ?? 0}
+                                y={(d) => yScale(s.accessor(d) ?? 0) ?? 0}
+                                curve={curveMonotoneX}
+                                stroke={color}
+                                strokeWidth={s.strokeWidth ?? 2}
+                                strokeDasharray={s.dashed ? "5 4" : undefined}
+                                fill="none"
+                            />
+                        </motion.g>
+                    </g>
+                );
+            })
+        )}
+        </g>
+    );
+}
+
+// memo() erases the generic signature; the cast restores it for callers.
+const AreaSeriesLayer = memo(AreaSeriesLayerInner) as typeof AreaSeriesLayerInner;
 
 export function AreaChart<Datum>(props: AreaChartProps<Datum>) {
     const { height = 280, width } = props;
@@ -327,89 +450,19 @@ function AreaChartInner<Datum>({
                         />
                     ))}
 
-                    {/* Stacked or unstacked */}
-                    <g clipPath={`url(#${revealId})`}>
-                    {stacked ? (
-                        <AreaStack<Datum>
-                            keys={series.map((s) => s.key)}
-                            data={data as Datum[]}
-                            curve={curveMonotoneX}
-                            value={(d, key) => {
-                                const s = series.find((x) => x.key === key);
-                                return s ? (s.accessor(d) ?? 0) : 0;
-                            }}
-                            x={(d) => xScale(xAccessor(d.data) as never) ?? 0}
-                            y0={(d) => yScale(d[0]) ?? 0}
-                            y1={(d) => yScale(d[1]) ?? 0}
-                        >
-                            {({ stacks, path }) =>
-                                stacks.map((stack, i) => {
-                                    const s = series[i];
-                                    const color = s.color ?? getChartColor(i);
-                                    return (
-                                        <motion.path
-                                            key={`stack-${stack.key}`}
-                                            d={path(stack) || ""}
-                                            fill={color}
-                                            fillOpacity={0.55}
-                                            stroke={color}
-                                            strokeOpacity={0.95}
-                                            strokeWidth={1.5}
-                                            initial={
-                                                reduce ? { opacity: 1 } : { opacity: 0, y: 12 }
-                                            }
-                                            animate={{ opacity: 1, y: 0 }}
-                                            transition={{
-                                                duration: reduce ? 0 : durations.slow,
-                                                ease: easings.outExpo,
-                                                delay: i * 0.04,
-                                            }}
-                                        />
-                                    );
-                                })
-                            }
-                        </AreaStack>
-                    ) : (
-                        series.map((s, i) => {
-                            const color = s.color ?? getChartColor(i);
-                            return (
-                                <g key={s.key}>
-                                    <motion.g
-                                        initial={reduce ? { opacity: 1 } : { opacity: 0 }}
-                                        animate={{ opacity: 1 }}
-                                        transition={{
-                                            duration: reduce ? 0 : durations.slow,
-                                            ease: easings.outExpo,
-                                            delay: i * 0.04,
-                                        }}
-                                    >
-                                        {s.fillOpacity !== 0 && (
-                                            <AreaClosed<Datum>
-                                                data={data as Datum[]}
-                                                x={(d) => xScale(xAccessor(d) as never) ?? 0}
-                                                y={(d) => yScale(s.accessor(d) ?? 0) ?? 0}
-                                                yScale={yScale}
-                                                curve={curveMonotoneX}
-                                                fill={`url(#${gradId}-${s.key})`}
-                                                fillOpacity={s.fillOpacity ?? 1}
-                                            />
-                                        )}
-                                        <LinePath<Datum>
-                                            data={data as Datum[]}
-                                            x={(d) => xScale(xAccessor(d) as never) ?? 0}
-                                            y={(d) => yScale(s.accessor(d) ?? 0) ?? 0}
-                                            curve={curveMonotoneX}
-                                            stroke={color}
-                                            strokeWidth={s.strokeWidth ?? 2}
-                                            strokeDasharray={s.dashed ? "5 4" : undefined}
-                                            fill="none"
-                                        />
-                                    </motion.g>
-                                </g>
-                            );
-                        })
-                    )}
-                    </g>
+                    {/* Stacked or unstacked series paths — memoized so pointermove
+                        renders never regenerate them (see AreaSeriesLayer). */}
+                    <AreaSeriesLayer
+                        data={data}
+                        series={series}
+                        stacked={stacked}
+                        xAccessor={stableXAccessor}
+                        xScale={xScale}
+                        yScale={yScale}
+                        reduce={reduce}
+                        gradId={gradId}
+                        revealId={revealId}
+                    />
 
                     {/* Reference lines */}
                     {referenceLines?.map((r, i) => {

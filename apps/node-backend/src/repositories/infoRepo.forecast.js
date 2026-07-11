@@ -41,7 +41,7 @@ export async function getCashflowComparison(
   if (validCatIds.length > 0) {
     const placeholders = validCatIds.map(() => `$${paramIdx++}`).join(', ');
     categoryExclusionWhere += `
-      AND COALESCE(t.category_id, r.default_category_id, pr.default_category_id) NOT IN (${placeholders})
+      AND COALESCE(t.category_id, r.default_category_id, pr.default_category_id, -1) NOT IN (${placeholders})
     `;
     excludeParams.push(...validCatIds);
   }
@@ -49,7 +49,7 @@ export async function getCashflowComparison(
   if (validRecIds.length > 0) {
     const placeholders = validRecIds.map(() => `$${paramIdx++}`).join(', ');
     categoryExclusionWhere += `
-      AND COALESCE(r.primary_recipient_id, t.recipient_id) NOT IN (${placeholders})
+      AND COALESCE(r.primary_recipient_id, t.recipient_id, -1) NOT IN (${placeholders})
     `;
     excludeParams.push(...validRecIds);
   }
@@ -241,14 +241,14 @@ export async function getCashflowForecastData(
   if (validCatIds.length > 0) {
     const placeholders = validCatIds.map(() => `$${paramIdx++}`).join(', ');
     categoryExclusionWhere += `
-      AND COALESCE(t.category_id, r.default_category_id, pr.default_category_id) NOT IN (${placeholders})
+      AND COALESCE(t.category_id, r.default_category_id, pr.default_category_id, -1) NOT IN (${placeholders})
     `;
     excludeParams.push(...validCatIds);
   }
   if (validRecIds.length > 0) {
     const placeholders = validRecIds.map(() => `$${paramIdx++}`).join(', ');
     categoryExclusionWhere += `
-      AND COALESCE(r.primary_recipient_id, t.recipient_id) NOT IN (${placeholders})
+      AND COALESCE(r.primary_recipient_id, t.recipient_id, -1) NOT IN (${placeholders})
     `;
     excludeParams.push(...validRecIds);
   }
@@ -360,14 +360,14 @@ export async function getCashflowForecastDataRolling(
   if (validCatIds.length > 0) {
     const placeholders = validCatIds.map(() => `$${paramIdx++}`).join(', ');
     categoryExclusionWhere += `
-      AND COALESCE(t.category_id, r.default_category_id, pr.default_category_id) NOT IN (${placeholders})
+      AND COALESCE(t.category_id, r.default_category_id, pr.default_category_id, -1) NOT IN (${placeholders})
     `;
     excludeParams.push(...validCatIds);
   }
   if (validRecIds.length > 0) {
     const placeholders = validRecIds.map(() => `$${paramIdx++}`).join(', ');
     categoryExclusionWhere += `
-      AND COALESCE(r.primary_recipient_id, t.recipient_id) NOT IN (${placeholders})
+      AND COALESCE(r.primary_recipient_id, t.recipient_id, -1) NOT IN (${placeholders})
     `;
     excludeParams.push(...validRecIds);
   }
@@ -459,12 +459,12 @@ export async function getCashflowForecastDataByCategory(
 
   if (validCatIds.length > 0) {
     const placeholders = validCatIds.map(() => `$${paramIdx++}`).join(', ');
-    catExclusionWhere = `AND COALESCE(t.category_id, r.default_category_id, pr.default_category_id) NOT IN (${placeholders})`;
+    catExclusionWhere = `AND COALESCE(t.category_id, r.default_category_id, pr.default_category_id, -1) NOT IN (${placeholders})`;
     excludeParams.push(...validCatIds);
   }
   if (validRecIds.length > 0) {
     const placeholders = validRecIds.map(() => `$${paramIdx++}`).join(', ');
-    recExclusionWhere = `AND COALESCE(r.primary_recipient_id, t.recipient_id) NOT IN (${placeholders})`;
+    recExclusionWhere = `AND COALESCE(r.primary_recipient_id, t.recipient_id, -1) NOT IN (${placeholders})`;
     excludeParams.push(...validRecIds);
   }
 

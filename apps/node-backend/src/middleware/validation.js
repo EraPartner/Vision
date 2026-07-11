@@ -26,7 +26,8 @@ const ALLOWED_COLUMNS = {
   planned_transactions: new Set([
     'planned_date', 'bank_account', 'recipient_id', 'amount', 'memo',
     'currency', 'category_id', 'comment', 'url', 'is_recurring',
-    'recurrence_pattern', 'is_executed', 'is_active', 'last_executed_date',
+    'recurrence_pattern', 'recurrence_end_date', 'max_occurrences',
+    'is_executed', 'is_active', 'last_executed_date',
     'is_loan', 'loan_type', 'loan_principal', 'loan_annual_interest_rate',
     'loan_term_months', 'loan_start_date', 'loan_payment_day',
     'loan_regular_payment_amount', 'loan_first_payment_date',

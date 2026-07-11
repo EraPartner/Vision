@@ -6,6 +6,7 @@ const crypto = require('crypto');
 const fs = require('fs');
 const os = require('os');
 const path = require('path');
+const readline = require('readline');
 const http = require('http');
 const https = require('https');
 const { createBundle, encryptBundle, openBundle, isBundleEncrypted } = require('./backup/bundle');
@@ -362,15 +363,33 @@ async function resolveWorkDir() {
     // dialogs will fallback to internal defaults.
   }
 
-  // If we've already set up the embedded compose, reuse it.
+  const embeddedSrc = path.join(process.resourcesPath, 'resources', 'docker-compose.yml');
+
+  // If we've already set up the embedded compose, reuse it — but refresh the
+  // compose file from the packaged resources first. Without this, a compose
+  // change shipped in a new app version (new named volume, healthcheck,
+  // security opt) never reaches upgraded installs, only fresh ones — the
+  // v1.0.2 data-loss channel. .env stays untouched: it carries the install's
+  // generated secrets.
   const embeddedCompose = settings.embeddedDir && path.join(settings.embeddedDir, 'docker-compose.yml');
   const hasEmbedded = embeddedCompose && await fs.promises.access(embeddedCompose).then(() => true).catch(() => false);
   if (hasEmbedded) {
+    try {
+      const [current, packaged] = await Promise.all([
+        fs.promises.readFile(embeddedCompose, 'utf8'),
+        fs.promises.readFile(embeddedSrc, 'utf8'),
+      ]);
+      if (current !== packaged) {
+        await fs.promises.copyFile(embeddedSrc, embeddedCompose);
+      }
+    } catch (err) {
+      // Non-fatal: a launch with the existing (stale) compose beats no launch.
+      console.warn('Embedded compose refresh failed (non-fatal):', err?.message || err);
+    }
     return settings.embeddedDir;
   }
 
   // Copy embedded compose from resources to a writable app data folder.
-  const embeddedSrc = path.join(process.resourcesPath, 'resources', 'docker-compose.yml');
   const embeddedDir = path.join(app.getPath('userData'), 'embedded_compose');
   try {
     await fs.promises.mkdir(embeddedDir, { recursive: true });
@@ -1300,9 +1319,9 @@ function stopContainers(cwd, extraFiles = []) {
 
 // Pull the latest Docker image tag for the app service without stopping the DB.
 // Returns true if a new image was pulled, false if already up to date.
-async function pullLatestImage(cwd) {
+async function pullLatestImage(cwd, extraFiles = []) {
   try {
-    const output = await run('docker', ['compose', 'pull', 'app'], cwd, { timeout: 120000 });
+    const output = await run('docker', ['compose', ...composeArgs(cwd, extraFiles), 'pull', 'app'], cwd, { timeout: 120000 });
     // docker compose pull outputs "Pulled" when a new layer was downloaded
     return /pulled/i.test(output);
   } catch (err) {
@@ -1314,7 +1333,11 @@ async function pullLatestImage(cwd) {
 // Restart only the app container (not the db) to pick up the new image.
 async function restartAppContainer(cwd, extraFiles = []) {
   const args = ['compose', ...composeArgs(cwd, extraFiles), 'up', '-d', '--no-deps', 'app'];
-  await run('docker', args, cwd, { timeout: 120000 });
+  // Same PORT injection as every other compose start path: `up` recreates the
+  // container, and without it compose falls back to ${PORT:-3002} — republishing
+  // on 3002 (wrong CORS too) while Electron keeps polling the persisted appPort.
+  const env = { ...dockerEnv, PORT: String(appPort) };
+  await run('docker', args, cwd, { timeout: 120000, env });
 }
 
 // ── Main window ───────────────────────────────────────────────────────────────
@@ -1983,7 +2006,7 @@ function setupManualShellUpdater() {
 async function applyDockerImageUpdate(cwd, extraFiles = []) {
   try {
     notify(t('app.pullingLatestImage'));
-    const wasNew = await pullLatestImage(cwd);
+    const wasNew = await pullLatestImage(cwd, extraFiles);
     if (wasNew) {
       await restartAppContainer(cwd, extraFiles);
       await pollHealth().catch(() => {});
@@ -2118,6 +2141,66 @@ async function getSchemaHead(composeFileArgs, dbUser, dbName) {
   } catch {
     return '';
   }
+}
+
+/**
+ * Extract the alembic revision recorded inside a plain-SQL pg_dump file.
+ * pg_dump emits the alembic_version row either as a COPY block
+ * (`COPY public.alembic_version (version_num) FROM stdin;` + data line)
+ * or, with --inserts, as an INSERT statement. Streams the file and stops
+ * at the first match, so arbitrarily large dumps stay cheap.
+ * Returns '' when no revision is found (not a Vision dump, empty table, …).
+ */
+function readDumpSchemaHead(sqlPath) {
+  return new Promise((resolve) => {
+    const stream = fs.createReadStream(sqlPath, { encoding: 'utf8' });
+    const rl = readline.createInterface({ input: stream, crlfDelay: Infinity });
+    let inCopyBlock = false;
+    let settled = false;
+    const finish = (value) => {
+      if (settled) return;
+      settled = true;
+      resolve(value);
+      rl.close();
+      stream.destroy();
+    };
+    rl.on('line', (line) => {
+      if (inCopyBlock) {
+        const value = line.trim();
+        finish(value === '\\.' ? '' : value);
+        return;
+      }
+      if (/^COPY\s+(?:"?[\w$]+"?\.)?"?alembic_version"?\s*\("?version_num"?\)\s+FROM\s+stdin;/i.test(line)) {
+        inCopyBlock = true;
+        return;
+      }
+      const insert = line.match(
+        /^INSERT INTO\s+(?:"?[\w$]+"?\.)?"?alembic_version"?\s*(?:\("?version_num"?\)\s*)?VALUES\s*\('([^']+)'\)/i,
+      );
+      if (insert) finish(insert[1]);
+    });
+    rl.on('close', () => finish(''));
+    stream.on('error', () => finish(''));
+  });
+}
+
+/**
+ * True only when `candidate` is provably a newer alembic revision than
+ * `current`. Vision revisions carry a zero-padded numeric prefix
+ * ("0071_planned_recurrence_bounds"); compare those numerically — the old
+ * lexicographic `>` silently misorders any future hash-style id. When either
+ * id has no numeric prefix (or `current` is unknown), skip the guard rather
+ * than block a restore on an uncomparable pair.
+ */
+function isSchemaRevisionNewer(candidate, current) {
+  const numericPrefix = (rev) => {
+    const m = /^(\d+)/.exec(String(rev || ''));
+    return m ? parseInt(m[1], 10) : null;
+  };
+  const a = numericPrefix(candidate);
+  const b = numericPrefix(current);
+  if (a == null || b == null) return false;
+  return a > b;
 }
 
 /**
@@ -2272,7 +2355,7 @@ async function runBundleRestore(bundlePath, { passphrase } = {}) {
   // Schema version check: block restore if bundle is from a newer schema
   if (metadata.schemaHead) {
     const currentHead = await getSchemaHead(composeFileArgs, dbUser, dbName);
-    if (currentHead && metadata.schemaHead > currentHead) {
+    if (isSchemaRevisionNewer(metadata.schemaHead, currentHead)) {
       cleanup();
       throw new Error(
         `BUNDLE_SCHEMA_NEWER: This bundle was created on schema revision "${metadata.schemaHead}" ` +
@@ -2332,7 +2415,14 @@ async function runBundleRestore(bundlePath, { passphrase } = {}) {
         ...(networkName ? ['--network', networkName] : []),
         '--env-file', envFile,
         pgImageTag,
+        // ON_ERROR_STOP: psql's default is continue-on-error + exit 0, so a
+        // truncated/corrupt dump restored PARTIALLY and reported success —
+        // after the original DB was already dropped. Exit 3 on first error
+        // (the nonzero-exit rejection below fires) and --single-transaction
+        // so a failed restore leaves an empty DB, not a half-restored one.
         'psql', '-h', 'db', '-U', dbUser, '-d', dbName,
+        '-v', 'ON_ERROR_STOP=1',
+        '--single-transaction',
         '-f', `/restore/${sqlFilename}`,
       ], { env: dockerEnv, cwd: workDir });
 
@@ -2476,6 +2566,24 @@ async function runRestore(sqlFilePath, { passphrase } = {}) {
 
   const composeFileArgs = composeArgs(workDir, overrideFiles);
 
+  // Newer-schema guard (parity with the bundle path): a plain dump taken on a
+  // newer install restores cleanly at the psql level, then boot-time
+  // `alembic upgrade head` hits the unknown revision and the backend
+  // crash-loops with no user-facing message. Refuse before anything is
+  // stopped or dropped.
+  const dumpHead = await readDumpSchemaHead(restoreSource);
+  if (dumpHead) {
+    const currentHead = await getSchemaHead(composeFileArgs, dbUser, dbName);
+    if (isSchemaRevisionNewer(dumpHead, currentHead)) {
+      cleanupRestoreSource();
+      throw new Error(
+        `BUNDLE_SCHEMA_NEWER: This backup was created on schema revision "${dumpHead}" ` +
+        `but this Vision install is at "${currentHead}". ` +
+        `Update Vision to a newer version and retry.`
+      );
+    }
+  }
+
   // 1. Stop the app container (release DB connections)
   await run('docker', [
     'compose', ...composeFileArgs, 'stop', 'app',
@@ -2542,6 +2650,12 @@ async function runRestore(sqlFilePath, { passphrase } = {}) {
         '-h', 'db',
         '-U', dbUser,
         '-d', dbName,
+        // Fail fast + all-or-nothing: without ON_ERROR_STOP a partial/corrupt
+        // dump restored partially and exited 0 (silent partial financial DB,
+        // original already dropped). --single-transaction leaves an empty DB
+        // on failure instead of a half-restored one.
+        '-v', 'ON_ERROR_STOP=1',
+        '--single-transaction',
         '-f', `/restore/${sqlFilename}`,
       ], { env: dockerEnv, cwd: workDir });
 

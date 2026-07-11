@@ -84,7 +84,7 @@ export function ExecutionHistoryDialog({ open, onOpenChange, payments }: Executi
             categoryName: transaction.category_name,
             amount: transaction.amount,
             currency: transaction.currency,
-            memo: transaction.memo,
+            memo: transaction.memo ?? undefined,
           } satisfies ExecutionHistoryItem;
         })
       );

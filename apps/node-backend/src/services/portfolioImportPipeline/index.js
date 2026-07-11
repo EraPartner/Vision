@@ -23,6 +23,7 @@
 
 import { query } from '../../database/connection.js';
 import { logger } from '../../config/logger.js';
+import { ValidationError } from '../../middleware/errorHandler.js';
 import { invalidatePortfolioCaches } from '../../routes/info/_cache.js';
 
 import { createBatch, stageBatch } from './stage.js';
@@ -33,7 +34,19 @@ import { commitBatch } from './commit.js';
 export { createBatch, stageBatch, validateBatch, matchBatch, commitBatch };
 
 export async function prepareImport({ batchId, filePath, customConfig, onProgress }) {
-  const { rowsTotal } = await stageBatch({ batchId, filePath, customConfig, onProgress });
+  const { rowsTotal, rowsSkipped } = await stageBatch({ batchId, filePath, customConfig, onProgress });
+
+  // A mapping that matches no column (or a wrong date format) null-parses every
+  // row: the adapter skips them all and the batch would sail through to a
+  // "0 imported" success. Fail loudly instead — the user needs to fix the mapping.
+  if (rowsTotal === 0) {
+    throw new ValidationError(
+      rowsSkipped > 0
+        ? `No importable rows: all ${rowsSkipped} data rows failed to parse. Check the column mapping and date format.`
+        : 'No importable rows found in the file.',
+    );
+  }
+
   const { errors: validateErrors } = await validateBatch({ batchId, onProgress });
   const { matchSourceCounts, unresolved } = await matchBatch({ batchId, onProgress });
 
@@ -57,7 +70,7 @@ export async function prepareImport({ batchId, filePath, customConfig, onProgres
     logger.info('[portfolio-pipeline] awaiting review', { batchId, matchSourceCounts, validateErrors });
   }
 
-  return { batchId, rowsTotal, requiresReview, matchSourceCounts, validateErrors };
+  return { batchId, rowsTotal, rowsSkipped, requiresReview, matchSourceCounts, validateErrors };
 }
 
 /**
@@ -91,19 +104,19 @@ export async function runPortfolioImportPipeline({ filePath, adapterName, custom
   logger.info('[portfolio-pipeline] created batch', { batchId, adapterName });
 
   try {
-    const { rowsTotal, requiresReview, matchSourceCounts, validateErrors } = await prepareImport({
+    const { rowsTotal, rowsSkipped, requiresReview, matchSourceCounts, validateErrors } = await prepareImport({
       batchId, filePath, customConfig, onProgress,
     });
 
     if (requiresReview) {
-      return { batchId, total: rowsTotal, requiresReview: true, matchSourceCounts };
+      return { batchId, total: rowsTotal, skipped: rowsSkipped, requiresReview: true, matchSourceCounts };
     }
 
     const { imported, duplicates, errors: commitErrors } = await commitPortfolioImport({ batchId, onProgress });
     const totalErrors = (validateErrors || 0) + (commitErrors || 0);
 
-    logger.info('[portfolio-pipeline] complete', { batchId, total: rowsTotal, imported, duplicates, errors: totalErrors });
-    return { batchId, total: rowsTotal, requiresReview: false, imported, duplicates, errors: totalErrors };
+    logger.info('[portfolio-pipeline] complete', { batchId, total: rowsTotal, skipped: rowsSkipped, imported, duplicates, errors: totalErrors });
+    return { batchId, total: rowsTotal, skipped: rowsSkipped, requiresReview: false, imported, duplicates, errors: totalErrors };
   } catch (err) {
     await query(
       `UPDATE portfolio_import_batches SET status = 'failed', completed_at = NOW(), error_summary = $2 WHERE id = $1`,

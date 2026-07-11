@@ -22,6 +22,8 @@ interface TransactionsExportButtonsProps {
     amountSignedFilter?: boolean;
     searchFilter?: string;
     filterLabel?: string;
+    /** Preferred account filter (exact FK match, ADR-088). */
+    accountIdFilter?: number;
     bankAccountFilter?: string;
 }
 
@@ -40,6 +42,7 @@ function buildQueryString(props: TransactionsExportButtonsProps): string {
     if (props.amountMaxFilter != null) params.append('amount_max', String(props.amountMaxFilter));
     if (props.amountSignedFilter) params.append('amount_signed', 'true');
     if (props.searchFilter) params.append('search', props.searchFilter);
+    if (props.accountIdFilter != null) params.append('account_id', String(props.accountIdFilter));
     if (props.bankAccountFilter) params.append('bank_account', props.bankAccountFilter);
     return params.toString();
 }

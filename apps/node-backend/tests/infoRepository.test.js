@@ -538,7 +538,7 @@ describe('InfoRepository', () => {
       expect(fallbackSql).toContain('LEFT JOIN recipients r ON t.recipient_id = r.id');
       expect(fallbackSql).toContain('LEFT JOIN recipients pr ON r.primary_recipient_id = pr.id');
       // Canonical exclusion semantics: 3-level category COALESCE (alias-aware).
-      expect(fallbackSql).toContain('COALESCE(t.category_id, r.default_category_id, pr.default_category_id) NOT IN ($1,$2)');
+      expect(fallbackSql).toContain('COALESCE(t.category_id, r.default_category_id, pr.default_category_id, -1) NOT IN ($1,$2)');
       // Aggregated per (date,currency) in the `daily` CTE, then joined by month.
       expect(fallbackSql).toContain('LEFT JOIN daily d ON d.date >= m.month_start');
     });
@@ -682,6 +682,25 @@ describe('InfoRepository', () => {
         expect(query.mock.calls[1][0]).toContain('is_transfer = false');
       } finally {
         vi.useRealTimers();
+      }
+    });
+
+    // TODO E21: the old queries streamed raw rows capped by LIMIT 10000/5000
+    // with NO ORDER BY — past the cap Postgres dropped *arbitrary* heap-order
+    // rows, making the dashboard figures nondeterministically wrong.
+    it('aggregates avg-vs-current in SQL, grouped by date/currency/sign with no LIMIT', async () => {
+      convertRowsToEur.mockImplementation(async (rows) => rows.map((row) => ({
+        ...row,
+        amount_eur: Number(row.amount ?? 0),
+      })));
+      query.mockResolvedValue({ rows: [] });
+
+      await infoRepository.getAverageVsCurrentSpending('EUR');
+
+      for (const [sql] of query.mock.calls) {
+        expect(sql).toContain('GROUP BY t.date, t.currency');
+        expect(sql).toContain('SUM(t.amount)');
+        expect(sql).not.toMatch(/LIMIT/i);
       }
     });
   });

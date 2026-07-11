@@ -40,3 +40,45 @@ export function useCurrencyFormatter(defaultCurrency?: string): CurrencyFormatte
     [locale, fallbackCurrency, decimalsSetting],
   );
 }
+
+export type CurrencyPartsFormatter = (
+  val: number,
+  opts?: { currency?: string; decimals?: number; signed?: boolean },
+) => Intl.NumberFormatPart[];
+
+/**
+ * Parts sibling of `useCurrencyFormatter` — same locale/currency/decimals
+ * resolution and formatter caching, but returns `formatToParts` output so the
+ * value can carry the Money micro-typography (raised symbol, de-emphasized
+ * cents) through `<RollingNumber parts>` instead of a plain string.
+ * `signed: true` renders a locale-correct leading sign for non-zero amounts.
+ */
+export function useCurrencyPartsFormatter(defaultCurrency?: string): CurrencyPartsFormatter {
+  const { appSettings } = useAppSettings();
+  const locale = numberFormatToLocale(appSettings.numberFormat);
+  const fallbackCurrency = defaultCurrency || appSettings.defaultCurrency || "EUR";
+  const decimalsSetting = appSettings.showDecimalPlaces;
+  const cacheRef = useRef<Map<string, Intl.NumberFormat>>(new Map());
+
+  return useCallback(
+    (val: number, opts: { currency?: string; decimals?: number; signed?: boolean } = {}) => {
+      const currency = opts.currency ?? fallbackCurrency;
+      const decimals = opts.decimals ?? decimalsSetting;
+      const signed = opts.signed ?? false;
+      const key = `${locale}:${currency}:${decimals}:${signed ? "s" : "a"}`;
+      let formatter = cacheRef.current.get(key);
+      if (!formatter) {
+        formatter = new Intl.NumberFormat(locale, {
+          style: "currency",
+          currency,
+          minimumFractionDigits: decimals,
+          maximumFractionDigits: decimals,
+          signDisplay: signed ? "exceptZero" : "auto",
+        });
+        cacheRef.current.set(key, formatter);
+      }
+      return formatter.formatToParts(val);
+    },
+    [locale, fallbackCurrency, decimalsSetting],
+  );
+}

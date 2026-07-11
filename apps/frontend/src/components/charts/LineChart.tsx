@@ -9,7 +9,7 @@ import { scaleLinear, scaleTime } from "@visx/scale";
 import { Line, LinePath } from "@visx/shape";
 import { bisector, extent } from "d3-array";
 import { motion, useReducedMotion } from "framer-motion";
-import { useCallback, useMemo, useState } from "react";
+import { memo, useCallback, useMemo, useRef, useState } from "react";
 
 import { BottomAxis, LeftAxis, RightAxis } from "./ChartAxis";
 import { useChartSync } from "./ChartSyncContext";
@@ -61,6 +61,81 @@ export interface LineChartProps<Datum> {
 
 const DEFAULT_MARGIN = { top: 16, right: 24, bottom: 28, left: 90 };
 
+type LineYScale = ReturnType<typeof scaleLinear<number>>;
+type LineXScale = ReturnType<typeof scaleTime<number>> | ReturnType<typeof scaleLinear<number>>;
+
+interface LineSeriesLayerProps<Datum> {
+    readonly data: ReadonlyArray<Datum>;
+    readonly series: ReadonlyArray<LineSeries<Datum>>;
+    readonly xAccessor: (d: Datum) => Date | number;
+    readonly xScale: LineXScale;
+    readonly yScale: LineYScale;
+    readonly reduce: boolean | null;
+}
+
+/**
+ * Series paths behind React.memo: hover state changes in Inner fire per
+ * pointermove and must not re-run the per-series filtering + monotone curve
+ * fits below. All props are referentially stable across those renders.
+ */
+function LineSeriesLayerInner<Datum>({
+    data,
+    series,
+    xAccessor,
+    xScale,
+    yScale,
+    reduce,
+}: LineSeriesLayerProps<Datum>) {
+    return (
+        <>
+            {series.map((s, i) => {
+                const color = s.color ?? getChartColor(i);
+                const connectNulls = s.connectNulls !== false;
+                // connectNulls=true → drop null points so the path runs
+                // continuously through the remaining ones; false → keep
+                // them and let `defined` (below) break the path at each
+                // gap. These were inverted (true left gaps, false bridged).
+                const filtered = connectNulls
+                    ? (data as Datum[]).filter((d) => {
+                          const v = s.accessor(d);
+                          return v != null && Number.isFinite(v);
+                      })
+                    : (data as Datum[]);
+                return (
+                    <motion.g
+                        key={s.key}
+                        initial={reduce ? { opacity: 1 } : { opacity: 0 }}
+                        animate={{ opacity: 1 }}
+                        transition={{
+                            duration: reduce ? 0 : durations.slow,
+                            ease: easings.outExpo,
+                            delay: i * 0.05,
+                        }}
+                    >
+                        <LinePath<Datum>
+                            data={filtered}
+                            x={(d) => xScale(xAccessor(d) as never) ?? 0}
+                            y={(d) => yScale(s.accessor(d) ?? 0) ?? 0}
+                            curve={curveMonotoneX}
+                            stroke={color}
+                            strokeWidth={s.strokeWidth ?? 2}
+                            strokeDasharray={s.dashed ? "5 4" : undefined}
+                            fill="none"
+                            defined={(d) => {
+                                const v = s.accessor(d);
+                                return v != null && Number.isFinite(v);
+                            }}
+                        />
+                    </motion.g>
+                );
+            })}
+        </>
+    );
+}
+
+// memo() erases the generic signature; the cast restores it for callers.
+const LineSeriesLayer = memo(LineSeriesLayerInner) as typeof LineSeriesLayerInner;
+
 export function LineChart<Datum>(props: LineChartProps<Datum>) {
     const { height = 280 } = props;
     return (
@@ -100,8 +175,15 @@ function Inner<Datum>({
     const innerWidth = Math.max(0, width - margin.left - margin.right);
     const innerHeight = Math.max(0, height - margin.top - margin.bottom);
 
+    // Prevent inline xAccessor props from invalidating memoized derivations every
+    // render (same stabilizer as AreaChart) — without it, a consumer re-render
+    // with an inline accessor rebuilds the scale, the bisector, and every path.
+    const xAccessorRef = useRef(xAccessor);
+    xAccessorRef.current = xAccessor;
+    const stableXAccessor = useCallback((d: Datum) => xAccessorRef.current(d), []);
+
     const xScale = useMemo(() => {
-        const xs = data.map((d) => xAccessor(d));
+        const xs = data.map((d) => stableXAccessor(d));
         if (xIsDate) {
             const [lo, hi] = extent(xs as Date[]);
             return scaleTime({
@@ -114,7 +196,7 @@ function Inner<Datum>({
             range: [0, innerWidth],
             domain: [Math.min(...nums), Math.max(...nums)],
         });
-    }, [data, innerWidth, xAccessor, xIsDate]);
+    }, [data, innerWidth, stableXAccessor, xIsDate]);
 
     const yScale = useMemo(() => {
         if (yDomain) {
@@ -147,8 +229,8 @@ function Inner<Datum>({
     }, [data, innerHeight, referenceLines, series, yDomain]);
 
     const bisect = useMemo(
-        () => bisector<Datum, Date | number>((d) => xAccessor(d) as Date).center,
-        [xAccessor],
+        () => bisector<Datum, Date | number>((d) => stableXAccessor(d) as Date).center,
+        [stableXAccessor],
     );
 
     const [hoverIdx, setHoverIdx] = useState<number | null>(null);
@@ -171,10 +253,10 @@ function Inner<Datum>({
             const idx = indexAtClientX(event);
             if (idx == null) return;
             setHoverIdx(idx);
-            publishHover(Number(xAccessor(data[idx])));
+            publishHover(Number(stableXAccessor(data[idx])));
             if (scrub.scrubbing) scrub.move(idx);
         },
-        [indexAtClientX, publishHover, xAccessor, data, scrub],
+        [indexAtClientX, publishHover, stableXAccessor, data, scrub],
     );
 
     const handleLeave = useCallback(() => {
@@ -200,17 +282,17 @@ function Inner<Datum>({
         if (hoverIdx != null || syncedX == null || data.length === 0) return null;
         // Only mirror when the synced x falls inside this chart's domain —
         // disjoint timelines (history vs forecast) must not pin to an edge.
-        const lo = Number(xAccessor(data[0]));
-        const hi = Number(xAccessor(data[data.length - 1]));
+        const lo = Number(stableXAccessor(data[0]));
+        const hi = Number(stableXAccessor(data[data.length - 1]));
         if (syncedX < Math.min(lo, hi) || syncedX > Math.max(lo, hi)) return null;
         let best = 0;
         let bestDist = Infinity;
         for (let i = 0; i < data.length; i++) {
-            const dist = Math.abs(Number(xAccessor(data[i])) - syncedX);
+            const dist = Math.abs(Number(stableXAccessor(data[i])) - syncedX);
             if (dist < bestDist) { bestDist = dist; best = i; }
         }
         return best;
-    }, [hoverIdx, syncedX, data, xAccessor]);
+    }, [hoverIdx, syncedX, data, stableXAccessor]);
 
     const effectiveIdx = hoverIdx ?? syncedIdx;
     const hoverDatum = effectiveIdx != null ? data[effectiveIdx] : null;
@@ -250,47 +332,16 @@ function Inner<Datum>({
                         />
                     ))}
 
-                    {series.map((s, i) => {
-                        const color = s.color ?? getChartColor(i);
-                        const connectNulls = s.connectNulls !== false;
-                        // connectNulls=true → drop null points so the path runs
-                        // continuously through the remaining ones; false → keep
-                        // them and let `defined` (below) break the path at each
-                        // gap. These were inverted (true left gaps, false bridged).
-                        const filtered = connectNulls
-                            ? (data as Datum[]).filter((d) => {
-                                  const v = s.accessor(d);
-                                  return v != null && Number.isFinite(v);
-                              })
-                            : (data as Datum[]);
-                        return (
-                            <motion.g
-                                key={s.key}
-                                initial={reduce ? { opacity: 1 } : { opacity: 0 }}
-                                animate={{ opacity: 1 }}
-                                transition={{
-                                    duration: reduce ? 0 : durations.slow,
-                                    ease: easings.outExpo,
-                                    delay: i * 0.05,
-                                }}
-                            >
-                                <LinePath<Datum>
-                                    data={filtered}
-                                    x={(d) => xScale(xAccessor(d) as never) ?? 0}
-                                    y={(d) => yScale(s.accessor(d) ?? 0) ?? 0}
-                                    curve={curveMonotoneX}
-                                    stroke={color}
-                                    strokeWidth={s.strokeWidth ?? 2}
-                                    strokeDasharray={s.dashed ? "5 4" : undefined}
-                                    fill="none"
-                                    defined={(d) => {
-                                        const v = s.accessor(d);
-                                        return v != null && Number.isFinite(v);
-                                    }}
-                                />
-                            </motion.g>
-                        );
-                    })}
+                    {/* Series paths — memoized so pointermove renders never
+                        regenerate them (see LineSeriesLayer). */}
+                    <LineSeriesLayer
+                        data={data}
+                        series={series}
+                        xAccessor={stableXAccessor}
+                        xScale={xScale}
+                        yScale={yScale}
+                        reduce={reduce}
+                    />
 
                     {referenceLines?.map((r, i) => {
                         const color = r.color ?? CHART_NEUTRAL.label;

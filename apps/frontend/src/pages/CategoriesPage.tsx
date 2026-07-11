@@ -288,6 +288,7 @@ export default function CategoriesPage() {
 
         {editTarget && (
             <AddCategoryDialog
+                key={editTarget.id}
                 mode="edit"
                 open={!!editTarget}
                 onOpenChange={(open) => { if (!open) setEditTarget(null); }}

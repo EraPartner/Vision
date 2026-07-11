@@ -1,11 +1,27 @@
 import { describe, it, expect } from 'vitest';
 import {
   deriveUnitMath,
+  parsePositive,
   roundUnitMath,
   UNIT_MATH_AMOUNT_DP,
   UNIT_MATH_UNITS_DP,
   UNIT_MATH_PRICE_DP,
 } from '@/lib/portfolioUnitMath';
+
+describe('parsePositive', () => {
+  it('parses plain and locale-formatted positive numbers', () => {
+    expect(parsePositive('150')).toBe(150);
+    expect(parsePositive('1.234,56')).toBe(1234.56);
+  });
+
+  it('maps empty, invalid, zero, and negative inputs to undefined', () => {
+    expect(parsePositive('')).toBeUndefined();
+    expect(parsePositive('   ')).toBeUndefined();
+    expect(parsePositive('abc')).toBeUndefined();
+    expect(parsePositive('0')).toBeUndefined();
+    expect(parsePositive('-5')).toBeUndefined();
+  });
+});
 
 describe('deriveUnitMath', () => {
   it('derives amount from units × price', () => {

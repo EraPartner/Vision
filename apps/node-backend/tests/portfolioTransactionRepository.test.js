@@ -3,6 +3,8 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 vi.mock('../src/database/connection.js', () => ({
   query: vi.fn(),
   withTransaction: vi.fn(),
+  // Outside a real transaction this is a passthrough — mirror that.
+  withSavepointIfInTransaction: vi.fn((_name, fn) => fn()),
 }));
 
 import { query, withTransaction } from '../src/database/connection.js';
@@ -35,9 +37,9 @@ describe('portfolioTransactionRepository.create', () => {
     expect(query).toHaveBeenNthCalledWith(
       3,
       `INSERT INTO portfolio_transactions
-         (investment_id, type, date, amount, units, price_per_unit, fees, taxes, currency, note, is_recurring, recurrence_interval, recurrence_end_date, fx_rate_to_eur, account_id)
-         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15)
-         RETURNING *`,
+           (investment_id, type, date, amount, units, price_per_unit, fees, taxes, currency, note, is_recurring, recurrence_interval, recurrence_end_date, fx_rate_to_eur, account_id)
+           VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15)
+           RETURNING *`,
       [1, 'buy', '2026-03-24', 1000, 3, 333.33, 0, 0, 'EUR', null, false, null, null, null, null]
     );
     // No unconditional pre-resync — the child INSERT runs straight after the

@@ -1,4 +1,6 @@
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { StatCard } from "@/components/dashboard/StatCard";
+import { RollingNumber } from "@/components/shared/RollingNumber";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { TrendingUp, Trash2, Eye, DollarSign, ArrowUpRight } from "lucide-react";
@@ -6,7 +8,7 @@ import { usePortfolio } from "@/hooks/usePortfolio";
 import { usePortfolioSummaryQuery } from "@/hooks/portfolio/usePortfolioSummary";
 import { useFxAwarePnl } from "@/hooks/portfolio/useFxAwarePnl";
 import { useCurrencyConverter } from "@/hooks/useCurrencyConverter";
-import { useCurrencyFormatter } from "@/hooks/useCurrencyFormatter";
+import { useCurrencyFormatter, useCurrencyPartsFormatter } from "@/hooks/useCurrencyFormatter";
 import { AddInvestmentDialog } from "@/components/portfolio/AddInvestmentDialog";
 import { AddPortfolioTxnDialog } from "@/components/portfolio/AddPortfolioTxnDialog";
 import { InvestmentDetailDialog } from "@/components/portfolio/InvestmentDetailDialog";
@@ -70,11 +72,12 @@ export default function StocksPage({
     [apiSummary],
   );
   const pageHasFxExposure = useMemo(
-    () => holdings.some((h) => (h.currency || 'EUR').toUpperCase() !== targetCurrency.toUpperCase()),
+    () => holdings.some((h) => (h.originalCurrency || h.currency || 'EUR').toUpperCase() !== targetCurrency.toUpperCase()),
     [holdings, targetCurrency],
   );
 
   const fmt = useCurrencyFormatter(targetCurrency);
+  const fmtParts = useCurrencyPartsFormatter(targetCurrency);
 
   const openMarketLookup = useCallback((symbol?: string, investmentId?: number) => {
     if (!symbol) return;
@@ -203,94 +206,27 @@ export default function StocksPage({
 
       {/* Summary Cards */}
       <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
-        <Card className="group relative overflow-hidden glass-regular premium-frame micro-lift">
-          <CardHeader className="pb-1 pt-3 px-4">
-            <CardTitle className="text-xs font-medium text-muted-foreground flex items-center gap-1.5">
-              <span className="inline-flex h-6 w-6 items-center justify-center rounded-md bg-gradient-to-br from-primary/20 to-primary/5 text-primary ring-1 ring-primary/15">
-                <DollarSign className="h-3 w-3" />
-              </span>
-              {t('portfolio.portfolioValue')}
-            </CardTitle>
-          </CardHeader>
-          <CardContent className="pb-3 px-4">
-            <p className="text-xl font-bold text-primary tabular-nums">{fmt(totalValue)}</p>
-          </CardContent>
-        </Card>
-
-        <Card className="group relative overflow-hidden glass-regular premium-frame micro-lift">
-          <CardHeader className="pb-1 pt-3 px-4">
-            <CardTitle className="text-xs font-medium text-muted-foreground flex items-center gap-1.5">
-              <span className={cn(
-                "inline-flex h-6 w-6 items-center justify-center rounded-md ring-1",
-                totalRealizedGain >= 0
-                  ? "bg-gradient-to-br from-gain/20 to-gain/5 text-gain ring-gain/15"
-                  : "bg-gradient-to-br from-loss/20 to-loss/5 text-loss ring-loss/15"
-              )}>
-                <ArrowUpRight className="h-3 w-3" />
-              </span>
-              {t('portfolio.realizedPnl')}
-            </CardTitle>
-          </CardHeader>
-          <CardContent className="pb-3 px-4">
-            <p className={cn("text-xl font-bold tabular-nums", totalRealizedGain >= 0 ? "amount-gain" : "amount-loss")}>
-              {totalRealizedGain >= 0 ? "+" : ""}{fmt(totalRealizedGain)}
-            </p>
-          </CardContent>
-        </Card>
-
-        <Card className="group relative overflow-hidden glass-regular premium-frame micro-lift">
-          <CardHeader className="pb-1 pt-3 px-4">
-            <CardTitle className="text-xs font-medium text-muted-foreground flex items-center gap-1.5">
-              <span className={cn(
-                "inline-flex h-6 w-6 items-center justify-center rounded-md ring-1",
-                totalUnrealizedGain >= 0
-                  ? "bg-gradient-to-br from-gain/20 to-gain/5 text-gain ring-gain/15"
-                  : "bg-gradient-to-br from-loss/20 to-loss/5 text-loss ring-loss/15"
-              )}>
-                <TrendingUp className="h-3 w-3" />
-              </span>
-              {t('portfolio.unrealizedPnl')}
-            </CardTitle>
-          </CardHeader>
-          <CardContent className="pb-3 px-4">
-            <p className={cn("text-xl font-bold tabular-nums", totalUnrealizedGain >= 0 ? "amount-gain" : "amount-loss")}>
-              {totalUnrealizedGain >= 0 ? "+" : ""}{fmt(totalUnrealizedGain)}
-            </p>
-          </CardContent>
-        </Card>
-
-        <Card className="group relative overflow-hidden glass-regular premium-frame micro-lift">
-          <CardHeader className="pb-1 pt-3 px-4">
-            <CardTitle className="text-xs font-medium text-muted-foreground">{t('portfolio.dividends')}</CardTitle>
-          </CardHeader>
-          <CardContent className="pb-3 px-4">
-            <p className="text-xl font-bold text-gain tabular-nums">+{fmt(totalDividends)}</p>
-          </CardContent>
-        </Card>
-
-        <Card className="group relative overflow-hidden glass-regular premium-frame micro-lift">
-          <CardHeader className="pb-1 pt-3 px-4">
-            <CardTitle className="text-xs font-medium text-muted-foreground">{t('portfolio.feesAndTaxes')}</CardTitle>
-          </CardHeader>
-          <CardContent className="pb-3 px-4">
-            <p className="text-xl font-bold text-loss tabular-nums">-{fmt(totalFees + totalTaxes)}</p>
-          </CardContent>
-        </Card>
-
-        <Card className="group relative overflow-hidden glass-regular premium-frame micro-lift">
-          <div aria-hidden className={cn(
-            "pointer-events-none absolute inset-0 rounded-[inherit] bg-gradient-to-br",
-            netGain >= 0 ? "from-accent/15 to-accent/5" : "from-destructive/15 to-destructive/5",
-          )} />
-          <CardHeader className="pb-1 pt-3 px-4">
-            <CardTitle className="text-xs font-medium text-muted-foreground">{t('portfolio.netReturn')}</CardTitle>
-          </CardHeader>
-          <CardContent className="pb-3 px-4">
-            <p className={cn("text-xl font-bold tabular-nums", netGain >= 0 ? "amount-gain" : "amount-loss")}>
-              {netGain >= 0 ? "+" : ""}{fmt(netGain)}
-            </p>
-          </CardContent>
-        </Card>
+        <StatCard size="compact" title={t('portfolio.portfolioValue')}
+          value={<RollingNumber parts={fmtParts(totalValue)} />}
+          icon={DollarSign} valueClassName="text-primary" />
+        <StatCard size="compact" title={t('portfolio.realizedPnl')}
+          value={<RollingNumber parts={fmtParts(totalRealizedGain, { signed: true })} />}
+          icon={ArrowUpRight} trend={totalRealizedGain >= 0 ? "income" : "expense"}
+          valueClassName={totalRealizedGain >= 0 ? "amount-gain" : "amount-loss"} />
+        <StatCard size="compact" title={t('portfolio.unrealizedPnl')}
+          value={<RollingNumber parts={fmtParts(totalUnrealizedGain, { signed: true })} />}
+          icon={TrendingUp} trend={totalUnrealizedGain >= 0 ? "income" : "expense"}
+          valueClassName={totalUnrealizedGain >= 0 ? "amount-gain" : "amount-loss"} />
+        <StatCard size="compact" title={t('portfolio.dividends')}
+          value={<RollingNumber parts={fmtParts(totalDividends, { signed: true })} />}
+          trend="income" valueClassName="text-gain" />
+        <StatCard size="compact" title={t('portfolio.feesAndTaxes')}
+          value={<RollingNumber parts={fmtParts(-(totalFees + totalTaxes), { signed: true })} />}
+          trend="expense" valueClassName="text-loss" />
+        <StatCard size="compact" title={t('portfolio.netReturn')}
+          value={<RollingNumber parts={fmtParts(netGain, { signed: true })} />}
+          trend={netGain >= 0 ? "income" : "expense"}
+          valueClassName={netGain >= 0 ? "amount-gain" : "amount-loss"} />
       </div>
 
       {/* Holdings Table */}
@@ -359,7 +295,7 @@ export default function StocksPage({
                     </td>
                     {pageHasFxExposure && (() => {
                       const fxInfo = fxInfoById.get(h.id);
-                      const isForeign = (h.currency || 'EUR').toUpperCase() !== targetCurrency.toUpperCase();
+                      const isForeign = (h.originalCurrency || h.currency || 'EUR').toUpperCase() !== targetCurrency.toUpperCase();
                       const fxGain = fxInfo?.fxGain;
                       if (!isForeign || typeof fxGain !== 'number') {
                         return <td className="text-right py-2 px-3 tabular-nums text-muted-foreground">—</td>;

@@ -18,6 +18,7 @@ import { CloseAccountDialog } from "@/features/accounts/CloseAccountDialog";
 import { usePortfolio } from "@/hooks/usePortfolio";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { useConfirmDialog } from "@/hooks/useConfirmDialog";
+import { toast } from "sonner";
 import type { Account } from "@/types/api";
 
 export default function AccountsPage() {
@@ -37,7 +38,17 @@ export default function AccountsPage() {
             confirmLabel: t('common.delete'),
             variant: 'destructive',
         });
-        if (ok) deleteMutation.mutate(a.id);
+        if (!ok) return;
+        deleteMutation.mutate(a.id, {
+            onError: (error) => {
+                // Still referenced (409): route to the close flow instead of
+                // dead-ending (lifecycle D5, ADR-088 addendum).
+                if ((error as { status?: number }).status === 409) {
+                    toast.info(t('accounts.delete.stillReferenced', { name: a.display_name || a.name }));
+                    setClosing(a);
+                }
+            },
+        });
     };
 
     const [editing, setEditing] = useState<Account | undefined>(undefined);
@@ -54,8 +65,10 @@ export default function AccountsPage() {
                 id: editing.id,
                 data: {
                     name: values.name,
-                    display_name: values.display_name || undefined,
-                    institution: values.institution || undefined,
+                    // Emptied fields PATCH as explicit null so the backend clears
+                    // them — `undefined` keys are dropped in JSON and would no-op.
+                    display_name: values.display_name || null,
+                    institution: values.institution || null,
                     currency: values.currency,
                     type: values.type,
                     owner: values.owner,
@@ -65,8 +78,8 @@ export default function AccountsPage() {
                     in_net_worth: values.in_net_worth,
                     multi_currency_cash: values.multi_currency_cash,
                     has_cash_sleeve: values.has_cash_sleeve,
-                    statement_balance: values.statementBalance ? Number(values.statementBalance) : undefined,
-                    statement_balance_date: values.statementBalanceDate || undefined,
+                    statement_balance: values.statementBalance ? Number(values.statementBalance) : null,
+                    statement_balance_date: values.statementBalanceDate || null,
                 },
             },
             { onSuccess: () => setEditing(undefined) },
@@ -76,11 +89,11 @@ export default function AccountsPage() {
     const toggleArchive = (a: Account) =>
         updateMutation.mutate({ id: a.id, data: { is_active: !a.is_active } });
 
-    // The dual-write trigger (migration 0051) keeps `transactions.bank_account`
-    // equal to `accounts.name`, so the account name is the transaction filter key.
+    // Filter by the account entity's id (ADR-088) — reads key on the FK, not
+    // the retiring bank_account string.
     const openAccountTransactions = (a: Account) => {
         const params = new URLSearchParams({
-            bank_account: a.name,
+            account_id: String(a.id),
             filter_label: a.display_name || a.name,
         });
         navigate(`/transactions?${params.toString()}`);
@@ -220,6 +233,7 @@ export default function AccountsPage() {
 
             {editing && (
                 <AddAccountDialog
+                    key={editing.id}
                     mode="edit"
                     open={!!editing}
                     onOpenChange={(o) => { if (!o) setEditing(undefined); }}

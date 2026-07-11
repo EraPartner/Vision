@@ -141,6 +141,9 @@ export function PortfolioImportPage() {
       toast.success(t("portfolioImport.toast.importSuccess", { n: data.imported, dups: data.duplicates }), {
         icon: <CheckCircle2 className="h-4 w-4" />,
       });
+      if ((data.skipped ?? 0) > 0) {
+        toast.warning(t("portfolioImport.toast.rowsSkipped", { n: data.skipped as number }));
+      }
       setFile(null);
       setProgress((p) => (p ? { ...p, phase: "complete", percent: 100 } : null));
     } catch (error) {

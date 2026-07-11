@@ -11,6 +11,7 @@ import type { SankeyGraph, SankeyNode } from "d3-sankey";
 import { ParentSize } from "@visx/responsive";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { useChartCurrencyFormatter } from "@/hooks/useChartCurrencyFormatter";
+import { getCategoryChartColor } from "@/utils/categoryColors";
 import type { SankeyFlowData } from "@/lib/api/aggregations";
 
 interface SankeyChartProps {
@@ -24,26 +25,6 @@ type LinkExtra = { value: number };
 const MARGIN = { top: 16, right: 16, bottom: 16, left: 16 };
 const NODE_WIDTH = 16;
 const NODE_PADDING = 18;
-const NODE_COLORS = [
-  "hsl(var(--primary))",
-  "hsl(220 70% 50%)",
-  "hsl(262 80% 60%)",
-  "hsl(330 70% 55%)",
-  "hsl(14 80% 55%)",
-  "hsl(48 90% 50%)",
-  "hsl(165 60% 45%)",
-  "hsl(200 65% 50%)",
-  "hsl(290 60% 55%)",
-  "hsl(35 75% 52%)",
-  "hsl(130 55% 45%)",
-  "hsl(0 70% 55%)",
-  "hsl(180 55% 45%)",
-  "hsl(var(--muted-foreground))",
-];
-
-function getNodeColor(index: number): string {
-  return NODE_COLORS[index % NODE_COLORS.length];
-}
 
 function SankeyInner({
   data,
@@ -85,9 +66,12 @@ function SankeyInner({
     }
   }, [data, innerWidth, innerHeight]);
 
+  // Color by node identity (label hash into the chart tokens), not node
+  // index — a category keeps its hue when the node set changes with the
+  // selected year, and matches the donuts and chips (utils/categoryColors).
   const nodeColorMap = useMemo(() => {
     const map = new Map<string, string>();
-    data.nodes.forEach((n, i) => map.set(n.id, getNodeColor(i)));
+    data.nodes.forEach((n) => map.set(n.id, getCategoryChartColor(n.label)));
     return map;
   }, [data.nodes]);
 

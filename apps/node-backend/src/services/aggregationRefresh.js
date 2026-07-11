@@ -39,26 +39,47 @@ export const TRIGGER_MAINTAINED_TABLES = Object.freeze([
  */
 export async function refreshAggregations() {
   await refreshLegacyMaterializedViews();
-  await Promise.all([
+  await clearForecastMcCaches();
+}
+
+function clearForecastMcCaches() {
+  return Promise.all([
     mcCacheRepo.clearAll().catch((err) => logger.warn('Forecast MC cache invalidation failed', { error: err.message })),
     mcRollingCacheRepo.clearAll().catch((err) => logger.warn('Rolling forecast MC cache invalidation failed', { error: err.message })),
   ]);
 }
 
+// Mirrors the legacy service's 1s coalescing window for rapid single-row edits.
+const MC_CLEAR_DEBOUNCE_MS = 1000;
+let mcClearTimer = null;
+
 /**
- * Debounced refresh for single-row mutations. Delegates to the legacy service,
- * which owns its own debounce/coalescing window.
+ * Debounced refresh for single-row mutations: delegates the MV refresh to the
+ * legacy service (which owns its own debounce) AND clears the 6-hour
+ * cashflow-forecast MC caches. Without the latter, a single create/edit/delete
+ * left the forecast serving pre-edit data for up to 6 hours — only the bulk
+ * import paths (which call refreshAggregations) invalidated it.
  */
 export function scheduleAggregationRefresh() {
   scheduleLegacyRefresh();
+  if (mcClearTimer) clearTimeout(mcClearTimer);
+  mcClearTimer = setTimeout(() => {
+    mcClearTimer = null;
+    clearForecastMcCaches();
+  }, MC_CLEAR_DEBOUNCE_MS);
+  if (typeof mcClearTimer.unref === 'function') mcClearTimer.unref();
 }
 
 /**
- * Cancel any pending debounced refresh. Retained for API stability (graceful
- * shutdown calls it); now a no-op since the only app-side debounce
- * (mv_recipient_monthly) was removed and the legacy service manages its own.
+ * Cancel any pending debounced MC-cache clear (graceful shutdown calls this;
+ * the legacy MV service manages its own pending work).
  */
-export function cancelPendingAggregationRefresh() {}
+export function cancelPendingAggregationRefresh() {
+  if (mcClearTimer) {
+    clearTimeout(mcClearTimer);
+    mcClearTimer = null;
+  }
+}
 
 export default {
   refreshAggregations,

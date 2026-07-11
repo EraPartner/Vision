@@ -18,16 +18,16 @@ function parseRouteId(req) {
 
 function buildOwedExportCsvRow(row) {
   return [
-    row.date,
-    row.bank_account,
-    row.recipient_name,
-    row.memo,
-    row.amount,
-    row.currency,
-    row.balance,
-    row.category_name,
-    row.comment,
-  ].map(escapeCsvValue).join(',');
+    escapeCsvValue(row.date),
+    escapeCsvValue(row.bank_account),
+    escapeCsvValue(row.recipient_name),
+    escapeCsvValue(row.memo),
+    escapeCsvValue(row.amount),
+    escapeCsvValue(row.currency),
+    escapeCsvValue(row.balance),
+    escapeCsvValue(row.category_name),
+    escapeCsvValue(row.comment),
+  ].join(',');
 }
 
 function buildOwedExportCsv(rows) {

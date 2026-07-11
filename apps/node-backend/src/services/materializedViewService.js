@@ -225,18 +225,32 @@ export async function refreshMaterializedViews() {
 
 /**
  * Schedule a debounced refresh — useful after single-row mutations.
- * Waits 1s to coalesce rapid changes (e.g. rapid edits).
+ *
+ * Trailing 5s debounce: the previous 1s window only coalesced edits made
+ * <1s apart, so human editing cadence (a save every few seconds) paid the
+ * full four-view rebuild — two of them all-time aggregates — per edit.
+ * The 10s max-wait guarantees a machine-cadence mutation stream (steady
+ * writes <5s apart, e.g. an importer) still flushes instead of deferring
+ * the refresh indefinitely.
  */
+export const REFRESH_DEBOUNCE_MS = 5000;
+export const REFRESH_MAX_WAIT_MS = 10000;
+
 let debounceTimer = null;
+let debounceDeadline = null; // epoch ms the current burst must flush by
 
 export function scheduleRefresh() {
+  const now = Date.now();
   if (debounceTimer) clearTimeout(debounceTimer);
+  if (debounceDeadline === null) debounceDeadline = now + REFRESH_MAX_WAIT_MS;
+  const delay = Math.max(0, Math.min(REFRESH_DEBOUNCE_MS, debounceDeadline - now));
   debounceTimer = setTimeout(() => {
     debounceTimer = null;
+    debounceDeadline = null;
     refreshMaterializedViews().catch(err => {
       logger.warn('Debounced materialized view refresh failed', { error: err.message });
     });
-  }, 1000);
+  }, delay);
 }
 
 export default { createMaterializedViews, refreshMaterializedViews, scheduleRefresh };

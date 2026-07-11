@@ -317,6 +317,8 @@ export const plannedTransactionRepository = {
     url,
     is_recurring,
     recurrence_pattern,
+    recurrence_end_date,
+    max_occurrences,
     reminder_days_before,
     is_loan,
     loan_type,
@@ -333,17 +335,19 @@ export const plannedTransactionRepository = {
     const sql = `
       INSERT INTO planned_transactions (
         planned_date, bank_account, recipient_id, amount, memo, currency, category_id, comment, url,
-        is_recurring, recurrence_pattern, reminder_days_before, is_executed, is_active,
+        is_recurring, recurrence_pattern, recurrence_end_date, max_occurrences,
+        reminder_days_before, is_executed, is_active,
         is_loan, loan_type, loan_principal, loan_annual_interest_rate,
         loan_term_months, loan_start_date, loan_payment_day,
         loan_regular_payment_amount, loan_first_payment_date
       )
       VALUES (
         $1, $2, $3, $4, $5, $6, $7, $8, $9,
-        $10, $11, $12, false, true,
-        $13, $14, $15, $16,
-        $17, $18, $19,
-        $20, $21
+        $10, $11, $12, $13,
+        $14, false, true,
+        $15, $16, $17, $18,
+        $19, $20, $21,
+        $22, $23
       )
       RETURNING *
     `;
@@ -366,6 +370,8 @@ export const plannedTransactionRepository = {
       category_id, comment, url || null,
       is_recurring || false,
       recurrence_pattern || null,
+      recurrence_end_date || null,
+      max_occurrences != null ? Number(max_occurrences) : null,
       reminder_days_before != null ? Number(reminder_days_before) : null,
       is_loan || false,
       loan_type || null,

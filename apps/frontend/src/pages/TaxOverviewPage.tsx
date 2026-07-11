@@ -35,6 +35,7 @@ import { useStatistics } from "@/hooks/useStatistics";
 import { isApproximatedTaxYear } from "@/lib/belgianTax";
 import { usePortfolio } from "@/hooks/usePortfolio";
 import { TaxProfileDialog } from "@/components/tax/TaxProfileDialog";
+import { TaxSummaryCard } from "@/pages/portfolio/tax/TaxSummaryCard";
 import SuggestedDeductionsCard from "@/components/tax/SuggestedDeductionsCard";
 import { WidgetVisibilityDialog } from "@/components/shared/WidgetVisibilityDialog";
 import { useWidgetVisibility, type WidgetDefinition } from "@/hooks/useWidgetVisibility";
@@ -352,7 +353,11 @@ export default function TaxOverviewPage() {
     liveProfile.dependentChildren > 0 ||
     liveProfile.dependentOtherPersons > 0;
   const hasStatsData = totalIncome > 0 || (monthlyData ?? []).some((m) => m.income > 0);
-  const isEmpty = !isProfileLoading && !hasProfile && !hasStatsData;
+  // Only treat "no data" as the setup-prompt empty state when the stats fetch
+  // actually succeeded. On a stats error, a user who simply hasn't filled in the
+  // profile yet (but has real transaction-derived income) would otherwise see
+  // "set up your tax profile" instead of the real error.
+  const isEmpty = !isProfileLoading && !stats.isError && !hasProfile && !hasStatsData;
 
   return (
     <TooltipProvider>
@@ -446,22 +451,7 @@ export default function TaxOverviewPage() {
           </Card>
         ) : (
           <>
-            {isVisible("summaryCards") && (
-              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-                {cards.map((c) => (
-                  <Card key={c.title} className="glass-regular premium-frame">
-                    <CardHeader className="flex flex-row items-center justify-between pb-2">
-                      <CardTitle className="text-sm font-medium text-muted-foreground">{c.title}</CardTitle>
-                      <c.icon className={`h-4 w-4 ${c.cls}`} />
-                    </CardHeader>
-                    <CardContent>
-                      <p className={`text-2xl font-bold ${c.cls}`}>{c.value}</p>
-                      <p className="text-xs text-muted-foreground mt-1">{c.desc}</p>
-                    </CardContent>
-                  </Card>
-                ))}
-              </div>
-            )}
+            {isVisible("summaryCards") && <TaxSummaryCard cards={cards} />}
 
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
               {isVisible("pitBreakdown") && (

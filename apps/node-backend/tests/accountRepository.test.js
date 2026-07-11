@@ -48,11 +48,14 @@ describe('accountRepository', () => {
       expect(await accountRepository.getById(99)).toBeUndefined();
     });
 
-    it('getByName queries by name', async () => {
+    it('getByName matches on the normalized identity (D1: case/whitespace-insensitive)', async () => {
       query.mockResolvedValueOnce({ rows: [{ id: 3, name: 'Brokerage' }] });
       const r = await accountRepository.getByName('Brokerage');
       expect(r.id).toBe(3);
-      expect(query).toHaveBeenCalledWith(expect.stringContaining('WHERE name = $1'), ['Brokerage']);
+      expect(query).toHaveBeenCalledWith(
+        expect.stringContaining('lower(btrim(name)) = lower(btrim($1))'),
+        ['Brokerage'],
+      );
     });
   });
 
@@ -115,11 +118,17 @@ describe('accountRepository', () => {
   });
 
   describe('resolveOrCreateByName', () => {
-    it('trims and upserts, returning the id', async () => {
+    it('trims and upserts on the normalized identity, returning the id', async () => {
       query.mockResolvedValueOnce({ rows: [{ id: 21 }] });
       const id = await accountRepository.resolveOrCreateByName('  My Bank  ');
       expect(id).toBe(21);
-      expect(query).toHaveBeenCalledWith(expect.stringContaining('ON CONFLICT (name)'), ['My Bank']);
+      expect(query).toHaveBeenCalledWith(
+        expect.stringContaining('ON CONFLICT (lower(btrim(name)))'),
+        ['My Bank'],
+      );
+      // The existing row keeps its stored casing — the conflict arm must not
+      // overwrite name with the incoming label.
+      expect(query.mock.calls[0][0]).toContain('DO UPDATE SET name = accounts.name');
     });
 
     it('returns undefined for a blank name without touching the DB', async () => {

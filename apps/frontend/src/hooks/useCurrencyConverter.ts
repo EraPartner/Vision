@@ -9,8 +9,11 @@
 import { useCallback, useMemo } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { apiClient } from '@/lib/api';
+import { EXCHANGE_RATES_QUERY_KEY } from '@/hooks/useExchangeRates';
 
-export const EXCHANGE_RATES_QUERY_KEY_PREFIX = 'exchange-rates';
+// Re-exported for existing importers; the single source of truth is
+// EXCHANGE_RATES_QUERY_KEY so every consumer shares one invalidation namespace.
+export const EXCHANGE_RATES_QUERY_KEY_PREFIX = EXCHANGE_RATES_QUERY_KEY;
 
 export function useCurrencyConverter(targetCurrency: string) {
   const { data: exchangeData, isLoading, error } = useQuery({

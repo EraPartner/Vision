@@ -3128,6 +3128,11 @@ export interface components {
             /** @description Whether the account has any active ledger rows; only returned by the list endpoint. */
             has_transactions?: boolean;
             is_active: boolean;
+            /**
+             * Format: date-time
+             * @description Server-stamped when the account is closed (is_active=false); cleared on reactivate (ADR-088 addendum, D5)
+             */
+            closed_at?: string | null;
             /** Format: date-time */
             created_at: string;
             /** Format: date-time */
@@ -3253,19 +3258,20 @@ export interface components {
             /** @description Tag slugs to assign (replaces existing tags) */
             tags?: string[];
         };
+        /** @description PATCH semantics: an explicit null on a nullable field clears the stored value; an absent key leaves it unchanged. */
         TransactionUpdate: {
             /** Format: date */
             transaction_date?: string;
-            bank_account?: string;
-            recipient_id?: number;
+            bank_account?: string | null;
+            recipient_id?: number | null;
             recipient_name?: string;
-            memo?: string;
+            memo?: string | null;
             amount?: number;
             currency?: string;
             balance?: number;
-            category_id?: number;
+            category_id?: number | null;
             category_name?: string;
-            comment?: string;
+            comment?: string | null;
             is_active?: boolean;
             /** @description Tag slugs to assign (replaces existing tags when present) */
             tags?: string[];
@@ -3309,6 +3315,13 @@ export interface components {
             url?: string;
             is_recurring: boolean;
             recurrence_pattern?: string;
+            /**
+             * Format: date
+             * @description Recurrence bound — the series completes once the next occurrence would fall past this date.
+             */
+            recurrence_end_date?: string | null;
+            /** @description Recurrence bound — the series completes at this execution count. */
+            max_occurrences?: number | null;
             is_loan?: boolean;
             loan_type?: components["schemas"]["PlannedLoanType"];
             loan_principal?: number | null;
@@ -3349,6 +3362,13 @@ export interface components {
             url?: string;
             is_recurring?: boolean;
             recurrence_pattern?: string;
+            /**
+             * Format: date
+             * @description Recurrence bound — the series completes once the next occurrence would fall past this date.
+             */
+            recurrence_end_date?: string | null;
+            /** @description Recurrence bound — the series completes at this execution count. */
+            max_occurrences?: number | null;
             is_loan?: boolean;
             loan_type?: components["schemas"]["PlannedLoanType"];
             loan_principal?: number;
@@ -3985,6 +4005,8 @@ export interface operations {
                 offset?: number;
                 start_date?: string;
                 end_date?: string;
+                /** @description Preferred account filter (exact FK match, ADR-088); bank_account remains a substring escape hatch */
+                account_id?: number;
                 bank_account?: string;
                 category_id?: number;
                 recipient_id?: number;
@@ -5064,6 +5086,10 @@ export interface operations {
             query?: {
                 start_date?: string;
                 end_date?: string;
+                /** @description Preferred account filter (exact FK match, ADR-088); bank_account remains a substring escape hatch */
+                account_id?: number;
+                /** @description Comma-separated account ids (exact FK match, ADR-088); preferred over bank_accounts */
+                account_ids?: string;
                 bank_account?: string;
                 include_balance?: boolean;
                 /** @description Comma-separated tag slugs — OR filter */
@@ -5091,6 +5117,10 @@ export interface operations {
             query?: {
                 start_date?: string;
                 end_date?: string;
+                /** @description Preferred account filter (exact FK match, ADR-088); bank_account remains a substring escape hatch */
+                account_id?: number;
+                /** @description Comma-separated account ids (exact FK match, ADR-088); preferred over bank_accounts */
+                account_ids?: string;
                 bank_account?: string;
                 /** @description Comma-separated tag slugs — OR filter */
                 tags?: string;
@@ -5716,6 +5746,9 @@ export interface operations {
                     url?: string;
                     is_recurring?: boolean;
                     recurrence_pattern?: string;
+                    /** Format: date */
+                    recurrence_end_date?: string | null;
+                    max_occurrences?: number | null;
                     is_active?: boolean;
                 };
             };
@@ -5808,6 +5841,8 @@ export interface operations {
     getTransactionCount: {
         parameters: {
             query?: {
+                /** @description Preferred account filter (exact FK match, ADR-088); bank_account remains a substring escape hatch */
+                account_id?: number;
                 bank_account?: string;
             };
             header?: never;

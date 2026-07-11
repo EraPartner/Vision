@@ -75,4 +75,27 @@ describe('matchBatch (investment matching)', () => {
     const symbolLookups = query.mock.calls.filter(([sql]) => /LOWER\(symbol\)/.test(sql));
     expect(symbolLookups).toHaveLength(1);
   });
+
+  it('leaves an ambiguous ticker (>1 active match) unresolved instead of picking the lowest id', async () => {
+    let captured2 = {};
+    query.mockReset();
+    query.mockImplementation((sql, params) => {
+      if (/status = 'validated'/.test(sql)) {
+        return Promise.resolve({ rows: [{ id: 31, symbol_raw: 'DUAL', name_raw: 'Dual Listed' }] });
+      }
+      if (/LOWER\(symbol\)/.test(sql)) {
+        // Two active investments share the ticker → ambiguous.
+        return Promise.resolve({ rows: [{ id: 5 }, { id: 6 }] });
+      }
+      if (/LOWER\(TRIM\(name\)\)/.test(sql)) return Promise.resolve({ rows: [] });
+      if (/SET\s+status = 'matched'/.test(sql)) { captured2.update = params; return Promise.resolve({ rows: [] }); }
+      return Promise.resolve({ rows: [] });
+    });
+
+    const result = await matchBatch({ batchId: 9 });
+    expect(result.unresolved).toBe(1);
+    const [, investmentIds, matchSources] = captured2.update;
+    expect(investmentIds).toEqual([null]); // not 5 (the lowest id)
+    expect(matchSources).toEqual([null]);
+  });
 });

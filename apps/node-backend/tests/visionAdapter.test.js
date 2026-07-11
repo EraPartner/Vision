@@ -37,6 +37,21 @@ INVALID_DATE,Main Account,Skip Date,Note,-10.00,EUR,944.80,OTHER,invalid date
     expect(txns[0].amount).toBe(-45.2);
   });
 
+  it("re-imports guard-quoted negative amounts and balances (export round-trip)", async () => {
+    // Older exports ran numeric cells through the CSV formula-injection guard,
+    // which prepended "'" to negatives. The adapter must strip it so the
+    // expense row is not NaN-dropped and the balance not silently nulled.
+    const csv = `Date,Bank Account,Recipient,Memo,Amount,Currency,Balance,Category,Comment
+2026-03-01,Main Account,John Doe,Dinner,'-45.20,EUR,'-12.00,FOOD,Shared meal
+`;
+    tmpPath = writeTempCSV(csv);
+    const txns = await parse(tmpPath);
+
+    expect(txns).toHaveLength(1);
+    expect(txns[0].amount).toBe(-45.2);
+    expect(txns[0].balance).toBe(-12);
+  });
+
   it('uses UNKNOWN recipient when recipient is empty', async () => {
     const csv = `Date,Bank Account,Recipient,Memo,Amount,Currency,Balance,Category,Comment
 2026-03-03,Main Account,,transfer,25.00,EUR,979.80,INCOME,

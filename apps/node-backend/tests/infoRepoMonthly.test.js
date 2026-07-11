@@ -142,7 +142,7 @@ describe('getMonthlyFinancialSummary — materialized-view fast path', () => {
     const [sql, params] = query.mock.calls[0];
     expect(sql).toMatch(/category.*\$1/);
     // Alias-aware recipient exclusion (canonical), not bare t.recipient_id.
-    expect(sql).toContain('COALESCE(r.primary_recipient_id, t.recipient_id) NOT IN ($2)');
+    expect(sql).toContain('COALESCE(r.primary_recipient_id, t.recipient_id, -1) NOT IN ($2)');
     expect(params).toEqual([1, 99]);
   });
 

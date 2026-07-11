@@ -7,7 +7,7 @@
  *   - inheritance-table CRUD helpers (create/update/hardDelete through base)
  */
 
-import { query, withTransaction } from '../database/connection.js';
+import { query, withTransaction, withSavepointIfInTransaction } from '../database/connection.js';
 import { toDecimal, toNumber, roundMoney, multiply, divide } from '../lib/money.js';
 
 let _hasPortfolioTransactionInheritanceSchema;
@@ -243,14 +243,13 @@ async function getNetUnitsOnOrBeforeDate(investmentId, date, { excludeTransactio
 
   const hasExcludedTxn = Number.isInteger(excludeTransactionId) && excludeTransactionId > 0;
   const params = [investmentId, date];
+  // Ordered replay, not a flat SUM: a `split` row carries the NEW absolute
+  // post-split total, not a delta, so it can't be summed. Buy/gift add, sell
+  // subtracts, split sets the running total to its units value — mirroring
+  // snapshotBuilder / calculateCostBasis. A flat buy+gift−sell SUM under-counted
+  // held units after a split, wrongly rejecting legitimate imported sells.
   let sql = `
-    SELECT COALESCE(SUM(
-      CASE
-        WHEN type IN ('buy', 'gift') THEN COALESCE(units, 0)
-        WHEN type = 'sell' THEN -COALESCE(units, 0)
-        ELSE 0
-      END
-    ), 0) AS net_units
+    SELECT type, COALESCE(units, 0) AS units
     FROM portfolio_transactions
     WHERE investment_id = $1
       AND date <= $2::date
@@ -260,9 +259,18 @@ async function getNetUnitsOnOrBeforeDate(investmentId, date, { excludeTransactio
     params.push(excludeTransactionId);
     sql += ` AND id <> $3`;
   }
+  sql += ` ORDER BY date ASC, id ASC`;
 
   const result = await query(sql, params);
-  return toNumber(toDecimal(result.rows[0]?.net_units ?? 0));
+  let net = toDecimal(0);
+  for (const row of result.rows) {
+    const units = toDecimal(row.units || 0);
+    if (row.type === 'buy' || row.type === 'gift') net = net.plus(units);
+    else if (row.type === 'sell') net = net.minus(units);
+    else if (row.type === 'split' && units.gt(0)) net = units; // absolute new total
+    // return_of_capital / merger / spinoff / cash rows: no unit change
+  }
+  return toNumber(net);
 }
 
 /**
@@ -404,7 +412,9 @@ export async function createThroughInheritanceTables(fields, getByIdFn, preloade
   try {
     let insertResult;
     try {
-      insertResult = await query(insertSql, values);
+      // Savepoint so a caught 23505 inside an ambient withTransaction doesn't
+      // poison the tx before the resync + retry below.
+      insertResult = await withSavepointIfInTransaction('ptx_inherit_insert', () => query(insertSql, values));
     } catch (err) {
       // Resync only on an actual duplicate-id collision. Running setval()
       // unconditionally before every insert made concurrent creates race each

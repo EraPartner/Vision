@@ -14,7 +14,7 @@
 
 import { query, withTransaction } from '../database/connection.js';
 import { resolveTransferMatches } from './calculations/transfers.js';
-import { scheduleRefresh } from './materializedViewService.js';
+import { scheduleAggregationRefresh } from './aggregationRefresh.js';
 import { logger } from '../config/logger.js';
 import { ValidationError, NotFoundError } from '../middleware/errorHandler.js';
 
@@ -23,7 +23,9 @@ const DEFAULT_WINDOW_DAYS = 3;
 // Candidate (outflow, inflow) pairs among open rows: equal-and-opposite amount,
 // same currency, two different own accounts, within ±windowDays. Fixing the
 // outflow side (amount < 0) yields each pair exactly once. Uses the
-// (amount, date) index added in migration 0044.
+// (amount, date) index added in migration 0044. Pairs the user explicitly
+// rejected (transfer_dismissals, migration 0070) are excluded — the PAIR, not
+// the rows: each leg stays matchable with every other candidate.
 async function loadCandidatePairs(windowDays) {
   const { rows } = await query(
     `SELECT a.id AS "outId", b.id AS "inId"
@@ -37,7 +39,12 @@ async function loadCandidatePairs(windowDays) {
       WHERE a.is_active AND b.is_active
         AND a.is_transfer = false AND b.is_transfer = false
         AND a.transfer_source IS NULL AND b.transfer_source IS NULL
-        AND a.amount < 0`,
+        AND a.amount < 0
+        AND NOT EXISTS (
+          SELECT 1 FROM transfer_dismissals d
+           WHERE d.txn_a_id = LEAST(a.id, b.id)
+             AND d.txn_b_id = GREATEST(a.id, b.id)
+        )`,
     [windowDays],
   );
   return rows;
@@ -70,6 +77,11 @@ async function releaseInvalidAutoPairs(windowDays) {
         AND NOT EXISTS (
           SELECT 1 FROM transactions p
            WHERE p.id = t.transfer_peer_id
+             -- Reciprocity: the peer must still point back at t. Without this,
+             -- when markTransfer re-points one leg elsewhere the stranded auto
+             -- leg stayed is_transfer=true forever (a phantom one-way transfer,
+             -- excluded from cash-flow aggregates).
+             AND p.transfer_peer_id = t.id
              AND p.amount = -t.amount
              AND COALESCE(p.currency, 'EUR') = COALESCE(t.currency, 'EUR')
              AND p.account_id IS DISTINCT FROM t.account_id
@@ -170,6 +182,15 @@ export async function markTransfer(aId, bId) {
     if (!((aAmt < 0 && bAmt > 0) || (aAmt > 0 && bAmt < 0))) {
       throw new ValidationError('A transfer needs one outflow and one inflow (opposite signs)');
     }
+    // Release any existing peer of A or B before re-pairing them together, so a
+    // prior counterpart (e.g. an auto pair A↔C) isn't stranded as a phantom
+    // one-way transfer. The stranded peer goes back to open (NULL), not
+    // dismissed — releasing it is a side effect, not a user dismissal.
+    await client.query(
+      `UPDATE transactions SET is_transfer = false, transfer_peer_id = NULL, transfer_source = NULL
+        WHERE transfer_peer_id = ANY($1) AND id <> ALL($1)`,
+      [[aId, bId]],
+    );
     await client.query(
       `UPDATE transactions SET is_transfer = true, transfer_peer_id = $2, transfer_source = 'manual' WHERE id = $1`,
       [aId, bId],
@@ -185,11 +206,29 @@ export async function markTransfer(aId, bId) {
 /**
  * Clear a transfer mark on a transaction and its peer (handles false positives
  * and single-leg un-marking).
+ *
+ * The dismissal is STICKY and PER-PAIR (migration 0070): the rejected pairing
+ * is recorded in transfer_dismissals, then both legs reset to open (NULL).
+ * Resetting alone re-opened them as candidates, so the reconcile the caller
+ * triggers ~1s later re-paired the exact pair the user just rejected; stamping
+ * the ROWS 'dismissed' (the first fix) over-corrected — it removed each leg
+ * from the candidate pool entirely, so a leg wrongly paired with B could never
+ * auto-pair with its true counterpart C. Excluding just the pair gives both: A↔B
+ * never comes back on its own, A↔C still can. A manual markTransfer of a
+ * dismissed pair still works — dismissals only gate auto-detection.
  */
 export async function unmarkTransfer(id) {
   await withTransaction(async (client) => {
     const { rows } = await client.query('SELECT transfer_peer_id FROM transactions WHERE id = $1', [id]);
     const peer = rows[0]?.transfer_peer_id;
+    if (peer) {
+      await client.query(
+        `INSERT INTO transfer_dismissals (txn_a_id, txn_b_id)
+         VALUES (LEAST($1::int, $2::int), GREATEST($1::int, $2::int))
+         ON CONFLICT DO NOTHING`,
+        [id, peer],
+      );
+    }
     await client.query(
       `UPDATE transactions SET is_transfer = false, transfer_peer_id = NULL, transfer_source = NULL WHERE id = $1`,
       [id],
@@ -219,21 +258,35 @@ export async function releaseAutoPairsFor(ids) {
   );
 }
 
-let reconcileTimer;
-
 /**
  * Debounced reconcile after single-row mutations (coalesces rapid edits), then
  * schedules a materialized-view refresh so the transfer exclusion is reflected.
- * Mirrors materializedViewService.scheduleRefresh's 1s debounce.
+ *
+ * Trailing 5s debounce + 10s max-wait, mirroring
+ * materializedViewService.scheduleRefresh: the previous 1s window only
+ * coalesced edits made <1s apart, so human editing cadence paid a
+ * full-corpus reconcile (3 UPDATE scans + self-join) per save; trailing-only
+ * debounce also let a machine-cadence mutation stream defer the reconcile
+ * indefinitely.
  */
+export const RECONCILE_DEBOUNCE_MS = 5000;
+export const RECONCILE_MAX_WAIT_MS = 10000;
+
+let reconcileTimer;
+let reconcileDeadline = null; // epoch ms the current burst must flush by
+
 export function scheduleReconcile() {
+  const now = Date.now();
   if (reconcileTimer) clearTimeout(reconcileTimer);
+  if (reconcileDeadline === null) reconcileDeadline = now + RECONCILE_MAX_WAIT_MS;
+  const delay = Math.max(0, Math.min(RECONCILE_DEBOUNCE_MS, reconcileDeadline - now));
   reconcileTimer = setTimeout(() => {
     reconcileTimer = undefined;
+    reconcileDeadline = null;
     reconcileTransfers()
       .catch((err) => logger.warn('[transfers] debounced reconcile failed', { err: err?.message }))
-      .finally(() => scheduleRefresh());
-  }, 1000);
+      .finally(() => scheduleAggregationRefresh());
+  }, delay);
 }
 
 /**

@@ -12,11 +12,20 @@
  * column there) plus an intra-batch hash guard.
  */
 
-import { query } from '../../database/connection.js';
+import { query, withTransaction } from '../../database/connection.js';
 import { logger } from '../../config/logger.js';
 import portfolioTransactionRepository from '../../repositories/portfolioTransactionRepository.js';
 import { autoResolveFxRateToEur } from '../portfolio/fxResolve.js';
 import { createTradeCashLeg } from '../portfolio/tradeCashLegService.js';
+import { classifyBrokerageRow } from '../importPipeline/brokerageRouting.js';
+
+// Staging stores cash magnitudes ABSOLUTE (adapter contract); the ledger sign
+// comes from the kind. Without this every withdrawal was credited as a
+// deposit (+500 instead of −500) — the sleeve error grew 2× per withdrawal.
+function signedCashAmount(row) {
+  const { direction } = classifyBrokerageRow({ kind: row.type_raw });
+  return (direction ?? 1) * Math.abs(Number(row.amount));
+}
 
 export async function commitBatch({ batchId, onProgress }) {
   await query(`UPDATE portfolio_import_batches SET status = 'committing' WHERE id = $1`, [batchId]);
@@ -93,7 +102,7 @@ export async function commitBatch({ batchId, onProgress }) {
         const r = await query(
           `INSERT INTO transactions (date, amount, currency, memo, account_id, is_active)
            VALUES ($1, $2, $3, $4, $5, true) RETURNING id`,
-          [row.tx_date, Number(row.amount), row.currency || 'EUR', memo, batchAccountId],
+          [row.tx_date, signedCashAmount(row), row.currency || 'EUR', memo, batchAccountId],
         );
         imported++;
         if (row.tx_hash) committedHashes.add(row.tx_hash);
@@ -131,38 +140,52 @@ export async function commitBatch({ batchId, onProgress }) {
       let fxRate = row.fx_rate_to_eur != null ? Number(row.fx_rate_to_eur) : undefined;
       if (fxRate === undefined) fxRate = await autoResolveFxRateToEur(currency, row.tx_date);
 
-      const created = await portfolioTransactionRepository.create(/** @type {any} */ ({
-        investment_id: row.investment_id,
-        type: row.type,
-        date: row.tx_date,
-        amount: row.amount != null ? Number(row.amount) : undefined,
-        units: row.units != null ? Number(row.units) : undefined,
-        price_per_unit: row.price_per_unit != null ? Number(row.price_per_unit) : undefined,
-        fees: row.fees != null ? Number(row.fees) : 0,
-        taxes: row.taxes != null ? Number(row.taxes) : 0,
-        currency,
-        note: row.note || undefined,
-        fx_rate_to_eur: fxRate,
-        account_id: batchAccountId,
-        preloaded_asset_class: row.asset_class,
-      }));
+      // Trade + its ADR-090 cash leg are all-or-nothing (ADR-095): one DB
+      // transaction, so a leg failure (or a crash mid-pair) leaves nothing
+      // behind — no compensating delete with its own crash window. The
+      // repository joins this transaction via the ambient-client reroute in
+      // withTransaction; the staging-row status update stays outside on
+      // purpose (it's bookkeeping about the batch, not part of the pair).
+      const { created, legCreated } = await withTransaction(async () => {
+        const created = await portfolioTransactionRepository.create(/** @type {any} */ ({
+          investment_id: row.investment_id,
+          type: row.type,
+          date: row.tx_date,
+          amount: row.amount != null ? Number(row.amount) : undefined,
+          units: row.units != null ? Number(row.units) : undefined,
+          price_per_unit: row.price_per_unit != null ? Number(row.price_per_unit) : undefined,
+          fees: row.fees != null ? Number(row.fees) : 0,
+          taxes: row.taxes != null ? Number(row.taxes) : 0,
+          currency,
+          note: row.note || undefined,
+          fx_rate_to_eur: fxRate,
+          account_id: batchAccountId,
+          preloaded_asset_class: row.asset_class,
+        }));
+
+        // Brokerage trade (ADR-095/ADR-090): the trade's single cash movement
+        // is its auto-created leg on the same sleeve — never a second
+        // standalone cash row.
+        let legCreated = false;
+        if (isBrokerage && batchAccountId) {
+          try {
+            const legId = await createTradeCashLeg({
+              portfolioTxn: { ...created, type: row.type, amount: created?.amount ?? row.amount, fees: created?.fees ?? row.fees, taxes: created?.taxes ?? row.taxes, currency, date: row.tx_date, id: created?.id },
+              cashAccountId: batchAccountId,
+            });
+            legCreated = Boolean(legId);
+          } catch (legErr) {
+            // Rethrow with context: the whole pair rolls back, and the row's
+            // error message should say which half failed.
+            throw new Error(`cash leg failed: ${legErr?.message?.slice(0, 400) || 'unknown'}`, { cause: legErr });
+          }
+        }
+        return { created, legCreated };
+      });
+      if (legCreated) legs++;
 
       imported++;
       if (row.tx_hash) committedHashes.add(row.tx_hash);
-
-      // Brokerage trade (ADR-095/ADR-090): the trade's single cash movement is its
-      // auto-created leg on the same sleeve — never a second standalone cash row.
-      if (isBrokerage && batchAccountId) {
-        try {
-          const legId = await createTradeCashLeg({
-            portfolioTxn: { ...created, type: row.type, amount: created?.amount ?? row.amount, fees: created?.fees ?? row.fees, taxes: created?.taxes ?? row.taxes, currency, date: row.tx_date, id: created?.id },
-            cashAccountId: batchAccountId,
-          });
-          if (legId) legs++;
-        } catch (legErr) {
-          logger.warn('[portfolio-pipeline:commit] trade cash leg failed (trade kept)', { rowId: row.id, err: legErr?.message });
-        }
-      }
 
       await query(
         `UPDATE portfolio_import_staging_rows SET status = 'committed', committed_txn_id = $2 WHERE id = $1`,
@@ -207,7 +230,9 @@ async function isCashFieldDuplicate(accountId, row) {
       WHERE account_id = $1 AND date = $2::date AND amount = $3
         AND COALESCE(memo, '') = COALESCE($4, '') AND is_active = true
       LIMIT 1`,
-    [accountId, row.tx_date, Number(row.amount), memo],
+    // Compare the SIGNED amount — that's what the insert stores; comparing the
+    // absolute magnitude would never match a stored withdrawal on re-import.
+    [accountId, row.tx_date, signedCashAmount(row), memo],
   );
   return dup.rows.length > 0;
 }

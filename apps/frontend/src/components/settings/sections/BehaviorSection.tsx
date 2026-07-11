@@ -1,4 +1,5 @@
 import { memo } from 'react';
+import { useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
 import { Switch } from '@/components/ui/switch';
@@ -7,6 +8,7 @@ import {
 } from '@/components/ui/select';
 import { useLanguage } from '@/contexts/LanguageContext';
 import { useAppSettings } from '@/contexts/AppSettingsContext';
+import { PORTFOLIO_SUMMARY_QUERY_KEY_PREFIX } from '@/hooks/portfolio/useInvestments';
 import { apiClient } from '@/lib/api';
 import type { CostBasisMethod, StartupSection } from '@/stores/settingsStore';
 import { SettingsSection, SettingsGroup, SettingRow } from '../SettingsPrimitives';
@@ -16,6 +18,19 @@ const DISMISSED_RECURRING_PATTERNS_KEY = 'dismissed_recurring_patterns';
 export const BehaviorSection = memo(function BehaviorSection() {
     const { t } = useLanguage();
     const { appSettings, updateAppSettings } = useAppSettings();
+    const queryClient = useQueryClient();
+
+    const handleCostBasisMethodChange = async (v: string) => {
+        updateAppSettings({ costBasisMethod: v as CostBasisMethod });
+        try {
+            // Server-computed summaries (portfolioSummaryService) read the
+            // top-level cost_basis_method setting, not the app_settings blob.
+            await apiClient.saveSetting('cost_basis_method', v);
+            await queryClient.invalidateQueries({ queryKey: [PORTFOLIO_SUMMARY_QUERY_KEY_PREFIX] });
+        } catch {
+            toast.error(t('settings.saveFailed'));
+        }
+    };
 
     const handleResetRecurringDismissals = async () => {
         try {
@@ -54,9 +69,9 @@ export const BehaviorSection = memo(function BehaviorSection() {
                 <SettingRow title={t('settings.general.costBasisMethod')} description={t('settings.general.costBasisMethodHint')} layout="stack">
                     <Select
                         value={appSettings.costBasisMethod ?? 'weighted_avg'}
-                        onValueChange={(v) => updateAppSettings({ costBasisMethod: v as CostBasisMethod })}
+                        onValueChange={(v) => { void handleCostBasisMethodChange(v); }}
                     >
-                        <SelectTrigger><SelectValue /></SelectTrigger>
+                        <SelectTrigger aria-label={t('settings.general.costBasisMethod')}><SelectValue /></SelectTrigger>
                         <SelectContent>
                             <SelectItem value="weighted_avg">{t('settings.general.costBasisMethod.weighted_avg')}</SelectItem>
                             <SelectItem value="fifo">{t('settings.general.costBasisMethod.fifo')}</SelectItem>

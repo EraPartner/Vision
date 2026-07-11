@@ -123,6 +123,16 @@ def run_migrations_online() -> None:
             compare_type=True,
             compare_server_default=True,
             render_as_batch=_render_as_batch_for_sqlite(connection),
+            # Commit each migration in its own transaction (Postgres DDL is
+            # transactional). Previously the whole pending chain ran inside one
+            # transaction, so if a long upgrade was killed at the migrate.js
+            # timeout the *entire* chain rolled back and re-ran identically on
+            # every boot — never making progress. Per-migration commits mean a
+            # kill only loses the in-flight migration; completed ones persist
+            # and a re-run resumes from where it stopped. SQLite (dev/test) does
+            # not support transactional DDL, so keep the single-transaction
+            # behaviour there.
+            transaction_per_migration=connection.dialect.name != "sqlite",
         )
 
         with context.begin_transaction():

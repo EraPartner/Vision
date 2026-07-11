@@ -1,4 +1,4 @@
-import {useState, useEffect} from "react";
+import {useState} from "react";
 import {Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger} from "@/components/ui/dialog";
 import {Button} from "@/components/ui/button";
 import {Input} from "@/components/ui/input";
@@ -34,16 +34,12 @@ export function AddCategoryDialog(props: AddCategoryDialogProps = {}) {
     const [createOpen, setCreateOpen] = useState(false);
     const createMutation = useCreateCategory();
 
+    // Initialized once on mount. Parents mount the edit dialog per target
+    // (keyed by category id), so a target switch remounts with fresh values —
+    // no sync effect, which would revert in-flight edits on parent re-renders.
     const [form, setForm] = useState<CategoryFormValues>(
         isEditMode ? props.initialValues : { general: "", detail: "", description: "" }
     );
-
-    // Sync form when edit dialog reopens with new values
-    useEffect(() => {
-        if (editProps) {
-            setForm(editProps.initialValues);
-        }
-    }, [editProps, editProps?.initialValues, editProps?.open]);
 
     const handleSubmit = (e: React.FormEvent) => {
         e.preventDefault();

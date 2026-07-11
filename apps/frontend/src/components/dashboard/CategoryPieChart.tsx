@@ -1,9 +1,10 @@
 import { useMemo } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { DonutChart, ChartLegend, getChartColor } from "@/components/charts";
+import { DonutChart, ChartLegend } from "@/components/charts";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { useAppSettings } from "@/contexts/AppSettingsContext";
 import { formatCurrency, numberFormatToLocale } from "@/utils/currency";
+import { getCategoryChartColor } from "@/utils/categoryColors";
 
 interface CategoryPieChartProps {
     readonly data: Array<{ name: string; value: number }>;
@@ -17,8 +18,10 @@ export function CategoryPieChart({ data, embedded = false, formatValue }: Catego
     const locale = numberFormatToLocale(appSettings.numberFormat);
     const defaultCurrency = appSettings.defaultCurrency || "EUR";
 
+    // Color by category identity, not list position — matches the statistics
+    // donut, the Sankey, and the transaction chips (utils/categoryColors).
     const coloredData = useMemo(
-        () => data.map((d, i) => ({ ...d, color: getChartColor(i) })),
+        () => data.map((d) => ({ ...d, color: getCategoryChartColor(d.name) })),
         [data],
     );
     const tooltipFmt = useMemo(

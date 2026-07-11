@@ -224,6 +224,25 @@ describe('commitBatch', () => {
     expect(refreshAggregations).not.toHaveBeenCalled()
   })
 
+  it('field-dedup is scoped to the same account and never matches a differing-hash row', async () => {
+    // Two same-day card payments share date+amount+recipient+memo (Revolut
+    // stamps the identical "CARD_PAYMENT - CURRENT") but differ by tx_hash
+    // (running balance differs) — the second must NOT collapse into the first.
+    // Likewise an identical purchase on a DIFFERENT account is distinct.
+    setupCommit({ ...matchedRow, tx_hash: 'h2' })
+    let dupSql, dupParams
+    mockClient.query.mockImplementation(async (sql, params) => {
+      if (sql.includes('SELECT t.id')) { dupSql = sql; dupParams = params; return { rows: [] } }
+      if (sql.includes('INSERT INTO transactions')) return { rows: [{ id: 100 }] }
+      return { rows: [] }
+    })
+    expect(await commitBatch({ batchId: 9 })).toEqual({ imported: 1, duplicates: 0, errors: 0, autoLinkedCount: 0 })
+    expect(dupSql).toContain('t.bank_account IS NOT DISTINCT FROM $5')
+    expect(dupSql).toContain('t.tx_hash <> $6')
+    expect(dupParams[4]).toBe('BE12')
+    expect(dupParams[5]).toBe('h2')
+  })
+
   it('records an insert error via SAVEPOINT rollback', async () => {
     setupCommit(matchedRow)
     mockClient.query.mockImplementation(async (sql) => {

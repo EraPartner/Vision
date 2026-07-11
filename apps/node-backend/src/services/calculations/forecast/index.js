@@ -234,10 +234,14 @@ function buildSeed({ yyyymm, filterHash }) {
   return fnv1aHash(`${yyyymm}|${filterHash}`);
 }
 
-function filterHash({ excludedCategoryIds, excludedRecipientIds, currency, includePlanned }) {
+// historyMonths is part of the key: isDefaultMcParams guards mcPaths and
+// mcPercentiles, but nothing else guarded historyMonths — a request with
+// history_months=120 happily got a cached 36-month forecast served back, and
+// a non-default history cached under the same key, colliding both directions.
+function filterHash({ excludedCategoryIds, excludedRecipientIds, currency, includePlanned, historyMonths }) {
   const cats = [...(excludedCategoryIds ?? [])].sort((a, b) => a - b).join(',');
   const recs = [...(excludedRecipientIds ?? [])].sort((a, b) => a - b).join(',');
-  return `${currency}|${cats}|${recs}|${includePlanned ? 1 : 0}`;
+  return `${currency}|${cats}|${recs}|${includePlanned ? 1 : 0}|h${historyMonths}`;
 }
 
 function isDefaultMcParams(mcPaths, mcPercentiles) {
@@ -267,7 +271,7 @@ export async function computeCashflowForecast({
   _forceCache = false,
 } = {}) {
   const { all, future, todayDay, daysInMonth, yyyymm } = currentMonthDates();
-  const hash = filterHash({ excludedCategoryIds, excludedRecipientIds, currency: targetCurrency, includePlanned });
+  const hash = filterHash({ excludedCategoryIds, excludedRecipientIds, currency: targetCurrency, includePlanned, historyMonths });
 
   // Try cache when not forcing a refresh and using default MC params.
   if (!_forceCache && isDefaultMcParams(mcPaths, mcPercentiles)) {
@@ -423,7 +427,7 @@ export async function computeCashflowForecastRolling({
   userId = 'anonymous',
 } = {}) {
   const { all, future, todayIndex, todayIso } = rollingWindowDates(daysBack, daysForward);
-  const hash = filterHash({ excludedCategoryIds, excludedRecipientIds, currency: targetCurrency, includePlanned });
+  const hash = filterHash({ excludedCategoryIds, excludedRecipientIds, currency: targetCurrency, includePlanned, historyMonths });
 
   // Cache check: skip for non-default rolling MC params or when backtest is requested.
   if (isDefaultRollingMcParams(mcPaths, mcPercentiles) && !includeBacktest) {

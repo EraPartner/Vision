@@ -15,6 +15,7 @@ import plannedTransactionRepository from '../repositories/plannedTransactionRepo
 import { calculateNextDate } from './calculations/recurrence.js';
 import { NotFoundError } from '../middleware/errorHandler.js';
 import { toAppDateString, todayAppDateString } from '../lib/timezone.js';
+import { toWireDate } from '../lib/dateFormat.js';
 
 /**
  * Execute a planned transaction against an existing real transaction.
@@ -35,6 +36,15 @@ export async function executePlanned({ id, executedTransactionId, executionDate 
   };
 
   if (existing.is_recurring && existing.recurrence_pattern) {
+    // Recurrence bounds (migration 0071): the series COMPLETES — is_executed
+    // stays true, planned_date stays put — when this execution reaches
+    // max_occurrences, or when the next occurrence would fall past
+    // recurrence_end_date. These bounds were collected by the form but dropped
+    // at every layer, so bounded recurrences generated due bills forever.
+    const priorExecutions = Number(existing.execution_count || 0);
+    const reachedMaxOccurrences =
+      existing.max_occurrences != null && priorExecutions + 1 >= Number(existing.max_occurrences);
+
     const baseDate = new Date(existing.planned_date);
     const nextDate = calculateNextDate(baseDate, existing.recurrence_pattern);
     if (nextDate) {
@@ -43,8 +53,16 @@ export async function executePlanned({ id, executedTransactionId, executionDate 
       // a UTC+ zone — moving a monthly payment one day earlier per cycle.
       // toAppDateString reads the date back in APP_TIMEZONE. (Day-of-month anchor
       // is intentionally sticky-clamped — see docs/features planned-transactions.)
-      updateFields.planned_date = toAppDateString(nextDate);
-      updateFields.is_executed = false;
+      const nextYmd = toAppDateString(nextDate);
+      const endYmd = toWireDate(existing.recurrence_end_date);
+      const pastEndDate = endYmd != null && nextYmd > endYmd;
+
+      if (reachedMaxOccurrences || pastEndDate) {
+        updateFields.is_executed = true;
+      } else {
+        updateFields.planned_date = nextYmd;
+        updateFields.is_executed = false;
+      }
     }
   }
 

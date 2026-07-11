@@ -19,6 +19,8 @@ export async function getTransactions(params?: {
     offset?: number;
     start_date?: string;
     end_date?: string;
+    /** Preferred account filter (exact FK match, ADR-088); bank_account is the legacy substring escape hatch. */
+    account_id?: number;
     bank_account?: string;
     category_id?: number;
     category_ids?: number[];

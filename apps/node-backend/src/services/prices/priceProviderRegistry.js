@@ -437,8 +437,11 @@ export const PROVIDERS = {
   },
 
   async custom(investments) {
+    // Per-holding fetches run concurrently — each iteration self-catches, and
+    // serially one hung endpoint (10s timeout, up to 2 fetches per holding on
+    // the fallback path) stalled every holding behind it.
     const prices = {};
-    for (const inv of investments) {
+    await Promise.all(investments.map(async (inv) => {
       const { latestUrl, latestPath } = _resolveCustomLatestConfig(inv);
       const historyConfig = resolveCustomHistoryConfig(inv);
 
@@ -474,18 +477,20 @@ export const PROVIDERS = {
       }
 
       if (isValidPrice(price)) prices[inv.id] = { price };
-    }
+    }));
     return prices;
   },
 
   async kinesis(investments) {
+    // Same concurrency rationale as custom(): these ran one sequential fetch
+    // per holding with a 15s timeout — worst case ~75s for 5 holdings.
     const prices = {};
-    for (const inv of investments) {
+    await Promise.all(investments.map(async (inv) => {
       const { symbol, timeframe, fromDate, needsUsdToEur } = resolveKinesisConfig(inv);
 
       if (!symbol) {
         logger.warn(`Kinesis: no symbol configured for investment ${inv.id}`);
-        continue;
+        return;
       }
 
       try {
@@ -497,7 +502,7 @@ export const PROVIDERS = {
 
         if (!res.ok) {
           logger.warn(`Kinesis API error: ${res.status} for ${symbol}`);
-          continue;
+          return;
         }
 
         _assertResponseWithinCap(res, 'Kinesis');
@@ -506,11 +511,11 @@ export const PROVIDERS = {
 
         if (!Array.isArray(rawPoints) || rawPoints.length === 0) {
           logger.warn(`Kinesis: no data returned for ${symbol}`);
-          continue;
+          return;
         }
 
         const parsedPoints = _parseKinesisTrendlinePoints(rawPoints);
-        if (!parsedPoints.length) continue;
+        if (!parsedPoints.length) return;
 
         const latestPoint = parsedPoints[parsedPoints.length - 1];
         const usdPrice = toNumber(latestPoint?.price);
@@ -530,7 +535,7 @@ export const PROVIDERS = {
       } catch (err) {
         logger.warn(`Kinesis fetch failed for ${symbol}: ${err.message}`);
       }
-    }
+    }));
     return prices;
   },
 };

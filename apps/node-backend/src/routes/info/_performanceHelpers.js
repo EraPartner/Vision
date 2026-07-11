@@ -6,6 +6,7 @@
  */
 
 import { computeMetrics, computeHeatmap } from '../../services/portfolioPerformanceSnapshotService.js';
+import { toWireDate } from '../../lib/dateFormat.js';
 import { getPortfolioSummary } from '../../services/portfolio/portfolioSummaryService.js';
 import { todayAppDateString, addDaysYmd } from '../../lib/timezone.js';
 import { toYmd, sanitizeIsolatedValueSpikes } from '../../utils/portfolioMath.js';
@@ -30,7 +31,8 @@ function parseSnapshotNumber(value) {
 
 export function mapPortfolioPerformanceSnapshot(snapshot) {
   return {
-    date: snapshot.snapshot_date,
+    // DATE column: calendar-day string, not a raw pg Date.
+    date: toWireDate(snapshot.snapshot_date),
     invested: parseSnapshotNumber(snapshot.invested),
     value: parseSnapshotNumber(snapshot.value),
     stocks_etfs_value: parseSnapshotNumber(snapshot.stocks_etfs_value),

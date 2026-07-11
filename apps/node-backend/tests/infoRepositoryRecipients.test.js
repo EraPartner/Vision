@@ -120,7 +120,7 @@ describe('recipientInsightsRepository.getRecipientInsights', () => {
     const [topSql, topParams] = query.mock.calls[0];
     const [momSql] = query.mock.calls[1];
     for (const sql of [topSql, momSql]) {
-      expect(sql).toContain('COALESCE(t.category_id, r.default_category_id, pr.default_category_id) NOT IN');
+      expect(sql).toContain('COALESCE(t.category_id, r.default_category_id, pr.default_category_id, -1) NOT IN');
     }
     expect(topParams).toEqual([5, 7]);
   });
@@ -184,7 +184,7 @@ describe('recipientInsightsRepository.getRecipientByYear', () => {
     convertRowsToEur.mockResolvedValueOnce([]);
     await recipientInsightsRepository.getRecipientByYear('EUR', [], [5, 7]);
     const [sql, params] = query.mock.calls[0];
-    expect(sql).toContain('COALESCE(t.category_id, r.default_category_id, pr.default_category_id) NOT IN');
+    expect(sql).toContain('COALESCE(t.category_id, r.default_category_id, pr.default_category_id, -1) NOT IN');
     expect(params).toEqual([5, 7]);
   });
 });

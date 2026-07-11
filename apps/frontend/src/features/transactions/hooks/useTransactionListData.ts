@@ -21,6 +21,8 @@ export interface UseTransactionListDataOptions {
     amountMaxFilter?: number;
     amountSignedFilter?: boolean;
     tagsFilter?: string[];
+    /** Preferred account filter (exact FK match, ADR-088). */
+    accountIdFilter?: number;
     bankAccountFilter?: string;
 }
 
@@ -55,6 +57,7 @@ export function useTransactionListData({
     amountMaxFilter,
     amountSignedFilter,
     tagsFilter,
+    accountIdFilter,
     bankAccountFilter,
 }: UseTransactionListDataOptions): UseTransactionListDataResult {
     const [sortKey, setSortKey] = useState<string | null>(null);
@@ -93,6 +96,7 @@ export function useTransactionListData({
                 amountMaxFilter,
                 amountSignedFilter,
                 tagsFilter,
+                accountIdFilter,
                 bankAccountFilter,
                 sortKey,
                 sortDir,
@@ -115,6 +119,7 @@ export function useTransactionListData({
             amount_max: amountMaxFilter,
             amount_signed: amountSignedFilter || undefined,
             tags: tagsFilter?.length ? tagsFilter.join(',') : undefined,
+            account_id: accountIdFilter,
             bank_account: bankAccountFilter,
             sort_by: sortKey || undefined,
             sort_dir: sortDir || undefined,
@@ -138,7 +143,7 @@ export function useTransactionListData({
     // Previously only handleSortChange bumped it, so filter/search changes raced.
     useEffect(() => {
         requestIdRef.current += 1;
-    }, [showAll, search, transactionIdFilter, recipientIdFilter, categoryIdFilter, categoryIdsFilter, startDateFilter, endDateFilter, transactionTypeFilter, amountMinFilter, amountMaxFilter, amountSignedFilter, tagsFilter, bankAccountFilter, sortKey, sortDir, pageSize]);
+    }, [showAll, search, transactionIdFilter, recipientIdFilter, categoryIdFilter, categoryIdsFilter, startDateFilter, endDateFilter, transactionTypeFilter, amountMinFilter, amountMaxFilter, amountSignedFilter, tagsFilter, accountIdFilter, bankAccountFilter, sortKey, sortDir, pageSize]);
 
     const loadMore = useCallback(async () => {
         if (loadingRef.current || !hasMoreRef.current) return;
@@ -162,6 +167,7 @@ export function useTransactionListData({
                 amount_max: amountMaxFilter,
                 amount_signed: amountSignedFilter || undefined,
                 tags: tagsFilter?.length ? tagsFilter.join(',') : undefined,
+                account_id: accountIdFilter,
                 bank_account: bankAccountFilter,
                 sort_by: sortKey || undefined,
                 sort_dir: sortDir || undefined,
@@ -186,7 +192,7 @@ export function useTransactionListData({
             }
             loadingRef.current = false;
         }
-    }, [showAll, search, transactionIdFilter, recipientIdFilter, categoryIdFilter, categoryIdsFilter, startDateFilter, endDateFilter, transactionTypeFilter, amountMinFilter, amountMaxFilter, amountSignedFilter, tagsFilter, bankAccountFilter, sortKey, sortDir, pageSize]);
+    }, [showAll, search, transactionIdFilter, recipientIdFilter, categoryIdFilter, categoryIdsFilter, startDateFilter, endDateFilter, transactionTypeFilter, amountMinFilter, amountMaxFilter, amountSignedFilter, tagsFilter, accountIdFilter, bankAccountFilter, sortKey, sortDir, pageSize]);
 
     const handleSortChange = useCallback((key: string | null, dir: SortDir) => {
         setSortKey(key);

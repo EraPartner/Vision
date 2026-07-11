@@ -79,6 +79,7 @@ describe('aggregationRefresh', () => {
   });
 
   it('scheduleAggregationRefresh delegates to the legacy debounce', async () => {
+    vi.useFakeTimers();
     const { scheduleAggregationRefresh, scheduleLegacyRefresh, query } = await loadAggregationRefresh();
 
     scheduleAggregationRefresh();
@@ -89,9 +90,34 @@ describe('aggregationRefresh', () => {
     expect(query).not.toHaveBeenCalled(); // no app-side MV refresh anymore
   });
 
-  it('cancelPendingAggregationRefresh is a no-op and never throws', async () => {
-    const { cancelPendingAggregationRefresh } = await loadAggregationRefresh();
-    expect(() => cancelPendingAggregationRefresh()).not.toThrow();
+  // TODO E15: single-transaction mutations previously had NO path to the MC
+  // cache clear — an edit left the cashflow forecast stale for up to 6 hours.
+  it('scheduleAggregationRefresh clears the forecast MC caches once per burst', async () => {
+    vi.useFakeTimers();
+    const { scheduleAggregationRefresh, clearMcCache, clearRollingMcCache } = await loadAggregationRefresh();
+
+    scheduleAggregationRefresh();
+    scheduleAggregationRefresh();
+    scheduleAggregationRefresh();
+    expect(clearMcCache).not.toHaveBeenCalled(); // still inside the debounce window
+
+    await vi.advanceTimersByTimeAsync(1000);
+
+    expect(clearMcCache).toHaveBeenCalledTimes(1);
+    expect(clearRollingMcCache).toHaveBeenCalledTimes(1);
+  });
+
+  it('cancelPendingAggregationRefresh drops a pending MC-cache clear', async () => {
+    vi.useFakeTimers();
+    const { scheduleAggregationRefresh, cancelPendingAggregationRefresh, clearMcCache } = await loadAggregationRefresh();
+
+    expect(() => cancelPendingAggregationRefresh()).not.toThrow(); // idle: no-op
+
+    scheduleAggregationRefresh();
+    cancelPendingAggregationRefresh();
+    await vi.advanceTimersByTimeAsync(2000);
+
+    expect(clearMcCache).not.toHaveBeenCalled();
   });
 
   it('default export exposes the public API', async () => {

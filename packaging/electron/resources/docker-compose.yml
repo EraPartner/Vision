@@ -16,6 +16,10 @@ services:
       timeout: 3s
       retries: 10
       start_period: 5s
+      # During start_period Docker probes at start_interval (default 5s!), not
+      # `interval` — without this the first probe fires at +5s while postgres is
+      # ready ~100ms in, idling any service_healthy consumer for the full 5s.
+      start_interval: 250ms
 
   app:
     # CI pushes ghcr.io/erapartner/vision:<semver> and :latest on every release tag.
