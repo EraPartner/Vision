@@ -2,6 +2,18 @@
 
 Format: Obsidian Tasks plugin emoji. Priority 🔺 highest / ⏫ high / 🔼 medium / 🔽 low / ⏬ lowest. Dates 📅 due / 🛫 start / ⏳ scheduled.
 
+## Status markers (implementation tracking)
+
+Use these to tell *implemented* from *still open* at a glance. A checkbox is only the truth when it is backed by a code-level check:
+
+- `- [ ]` — **open**; not yet implemented.
+- `- [x]` — **implemented and verified in code.** Stamp it `✅ YYYY-MM-DD · <commit>` as proof. Never tick a box without confirming the fix exists in the current tree.
+- `🔎 verified-present YYYY-MM-DD` — the finding was re-checked against current code on that date and the bug is **still present** (confirmed real, *not* done). This is a live work queue, not a completion mark.
+- `🔎 needs-GitHub-check YYYY-MM-DD` — cannot be confirmed from the repo alone (e.g. GitHub branch-protection / ruleset settings); check the platform side.
+- _no status marker_ — open finding, not re-verified since it was filed.
+
+> **History note:** a bare `✅` on an *unchecked* item used to mean "confirmed real finding." Because that reads as "done," it was misleading. On **2026-07-11** all 71 such items were re-verified against the current code (every one still present) and converted to the `🔎` markers above. `✅` is now reserved for the Obsidian done-date on completed (`- [x]`) items only.
+
 ## How to use this file
 
 - **Findings** (grouped by domain, ordered by priority) = what to implement. Each carries a `↪ from:` line naming the research pass it came from.
@@ -32,33 +44,33 @@ look-changing one.
 
 ### 🔒 Security
 
-- [ ] **Admin DB data-editor's raw WHERE clause is a SQL-injection oracle, reachable cross-site with no auth by default** 🔺 ✅
+- [ ] **Admin DB data-editor's raw WHERE clause is a SQL-injection oracle, reachable cross-site with no auth by default** 🔺 🔎 verified-present 2026-07-11
   - ↪ _from: Codebase audit 2026-06-30 · Security (backend)_
   - `apps/node-backend/src/services/dbEditor.js:172-178` (`readRows`), `apps/node-backend/src/routes/admin.js:259-279`, mount order `main.js:307`
   - The `where` query param is concatenated into the SQL with only a `;`-block guard (ADR-101's documented "raw WHERE escape hatch"). Because it's a **GET**, the CSRF guard's safe-method exemption lets a cross-site page trigger it; response *timing* (via `pg_sleep()` in the WHERE expr) survives CORS, making this a practical blind-SQLi timing oracle against the whole schema — not just the URL's table. `adminAuthMiddleware` is a no-op when `ADMIN_AUTH_TOKEN` is unset (the default), so if the port is ever exposed beyond loopback this becomes a trivial full-DB-read primitive.
   - Fix: drop the raw-WHERE escape hatch (the structured `filters[]` path already covers safe column/op/value filtering), or at minimum: fail closed (require non-empty `ADMIN_AUTH_TOKEN`) for any route exposing this, and don't rely on the GET/safe-method CSRF exemption for it.
   - Verification (2026-06-30): re-confirmed, if anything understated. A bare `--` in the WHERE clause also silently truncates the rest of the single-line SQL (ORDER BY/LIMIT/OFFSET) — a second bypass the original finding didn't mention. **Bonus finding: `docs/adr/101-db-data-editor.md:45-47` itself asserts "the raw-WHERE escape hatch rejects `;`. A hostile WHERE clause can therefore neither mutate nor hang the database" — that claim is false; the project's own design doc has the same blind spot as the code. Fix the ADR text alongside the code.**
 
-- [ ] **Verbose PostgreSQL error text returned to API clients in production** ⏫ ✅
+- [ ] **Verbose PostgreSQL error text returned to API clients in production** ⏫ 🔎 verified-present 2026-07-11
   - ↪ _from: Codebase audit 2026-06-30 · Security (backend)_
   - `apps/node-backend/src/services/dbEditor.js:472-480` (`mapDbError`, SQLSTATEs `42601/42703/42883/42P01`)
   - These map to `ValidationError` (4xx), and `errorHandler.js` always shows 4xx text verbatim on the assumption "4xx messages are authored by us" — but here the message is raw driver text, contradicting `docs/security/data-protection.md`'s stated policy of suppressing DB error details, and handing schema/column feedback to anyone probing the injection above.
   - Fix: replace `err.message` with a generic "invalid query" string for these codes (or gate behind `!isProduction()`).
 
-- [ ] **Backend DB role is the Postgres bootstrap superuser — no least-privilege application role** 🔼 ✅
+- [ ] **Backend DB role is the Postgres bootstrap superuser — no least-privilege application role** 🔼 🔎 verified-present 2026-07-11
   - ↪ _from: Codebase audit 2026-06-30 · Security (backend)_
   - `docker-compose.yml:7` (`POSTGRES_USER: ftm_user`), `.env.example:19-20`
   - The runtime connection pool (including the dbEditor path above) runs as the same superuser the official Postgres image bootstraps. Any successful injection or compromised dependency has instance-level reach.
   - Fix: create a non-superuser application role scoped to the app schema; keep DDL/migrations on a separate, more-privileged role used only by Alembic.
 
-- [ ] **Admin auth is optional by default, with only a startup log line as the safety net** 🔼 ✅ *(same root cause as DevOps finding below — fix once)*
+- [ ] **Admin auth is optional by default, with only a startup log line as the safety net** 🔼 🔎 verified-present 2026-07-11 *(same root cause as DevOps finding below — fix once)*
   - ↪ _from: Codebase audit 2026-06-30 · Security (backend)_
   - `apps/node-backend/src/middleware/adminAuth.js:36-51`, warning at `main.js:411-414`
   - When `ADMIN_AUTH_TOKEN` is unset, `/api/admin/*` (including destructive routes) has no per-request check; the only safeguard is "the operator kept the port on loopback," signaled by a log line a self-hosted user is unlikely to read.
   - Fix: hard-fail (or visibly banner in the Electron UI) if a non-loopback bind address is detected with no token configured, rather than log-only.
   - Verification (2026-06-30): re-confirmed exactly. **Bonus finding: the startup warning text itself overstates protection — it claims "the CSRF guard blocks cross-site browser requests," which is true only for state-changing methods, not for the GET-based SQLi oracle above. Fix the warning copy alongside the real fix.**
 
-- [ ] **Hardcoded weak default DB credential fallback in source** 🔽 ✅
+- [ ] **Hardcoded weak default DB credential fallback in source** 🔽 🔎 verified-present 2026-07-11
   - ↪ _from: Codebase audit 2026-06-30 · Security (backend)_
   - `apps/node-backend/src/config/env.js:60` — default `DATABASE_URL` is `postgresql://ftm_user:ftm_password@localhost:5432/financial_transactions`
   - If `DATABASE_URL` is ever unset outside the documented Docker flow, the backend silently connects with a guessable password instead of failing closed.
@@ -111,21 +123,21 @@ look-changing one.
   - pg reads `2026-06-01` as local midnight → `toISOString().slice(0,7)` = `'2026-05'` → `loadFromDatabase` labels every rate with the prior month; downstream (snapshotBuilder compounding) applies the wrong month's rate, and the most recent month appears missing. Only the DB path is affected (Statbel/Eurostat JSON keys are text-parsed and safe), but DB fallback is the designed offline/self-hosted path.
   - Fix: local getters (`getFullYear`/`getMonth+1`) or `to_char(month_date,'YYYY-MM')` in the SELECT.
 
-- [ ] **`moveHoldingService` computes wrong remaining units and cost basis when moving holdings between accounts** 🔺 ✅
+- [ ] **`moveHoldingService` computes wrong remaining units and cost basis when moving holdings between accounts** 🔺 🔎 verified-present 2026-07-11
   - ↪ _from: Codebase audit 2026-06-30 · Correctness — Backend · Portfolio / investments_
   - `apps/node-backend/src/services/portfolio/moveHoldingService.js:109-114` (netUnits), `:136,156-181` (FIFO lot walk)
   - Two compounding bugs: (a) `netUnits` only sums `buy`/`gift`/`sell` rows — `split` and `return_of_capital` events are silently ignored (unlike `applyEventToLots`/`snapshotBuilder.js`, which do apply them), so post-split unit validation is stale; (b) the FIFO partial-move walk doesn't net out units already consumed by intervening sells, so it can pull from a lot a prior sell already fully consumed, moving the wrong cost basis to the destination account.
   - Fix: replay split/RoC events and prior sells (mirroring `calculateCostBasisFIFO`'s lot-replay) before walking lots for validation or the move.
   - Verification (2026-06-30): re-confirmed by hand-tracing a concrete scenario (buy 10@lotA, buy 10@lotB, sell 8 → true FIFO leaves 2 of A + 10 of B = 12 net). A later partial move physically overwrites the source lot's stored `units`/`amount` columns, which **also retroactively changes the FIFO-replay cost basis of the historical sell that happened before the move** — the bug is more compounding than originally described.
 
-- [ ] **Orphaned trade-linked cash legs on investment delete and on portfolio-import rollback** 🔺 ✅ *(confirmed independently by three audits — API/ADR-drift, backend-performance, and the verification pass)*
+- [ ] **Orphaned trade-linked cash legs on investment delete and on portfolio-import rollback** 🔺 🔎 verified-present 2026-07-11 *(confirmed independently by three audits — API/ADR-drift, backend-performance, and the verification pass)*
   - ↪ _from: Codebase audit 2026-06-30 · Correctness — Backend · Portfolio / investments_
   - `apps/node-backend/src/controllers/investmentController.js:373-378` (`deleteInvestment`), `apps/node-backend/src/services/portfolioImportBatchService.js:65-76` (`rollbackBatch`) — vs. the correct cascade at `investmentController.js:464-477` (`deleteTransaction`, which calls `deleteTradeCashLegs` citing ADR-090)
   - Neither `deleteInvestment` nor a rolled-back import batch cleans up the cash-sleeve legs (`portfolio_transaction_id` isn't a real FK, so nothing cascades automatically). This leaves cash legs pointing at deleted/nonexistent trades — silent ledger corruption feeding net worth (ADR-093) and reconciliation (ADR-094).
   - Fix: add the same `deleteTradeCashLegs` cascade to both paths before/alongside the hard-deletes; also add an `import_batch_id` column to the portfolio transaction tables (see Performance section) so rollback can do this in one batched pass instead of a per-row loop.
   - Verification (2026-06-30): re-confirmed — `deleteTradeCashLegs` has exactly one call site in the entire codebase (the one correct path), proving the other two paths genuinely never clean up.
 
-- [ ] **Belgian TOB tax-table cap is wrong in the backend — wrong number on every generated tax report** 🔺 ✅
+- [ ] **Belgian TOB tax-table cap is wrong in the backend — wrong number on every generated tax report** 🔺 🔎 verified-present 2026-07-11
   - ↪ _from: Codebase audit 2026-06-30 · Correctness — Backend · Belgian tax_
   - `apps/node-backend/src/services/reports/belgianTaxTables.js:9-14` — `TOB_DEFAULT.sharesAndOther.cap = 4000`
   - The canonical source `apps/frontend/src/lib/belgianTax/constants.ts:354,493` has `cap: 1_600`, with an explicit comment confirming 1,600 is correct ("NOT 4,000 — that cap belongs to the 1.32% rate only"). The backend value is a copy-paste of the wrong cap. Every PDF tax report's TOB table currently shows €4,000 instead of €1,600.
@@ -200,13 +212,13 @@ look-changing one.
   - Any compose change shipped in a new version (new named volume, healthcheck, security opt) never reaches upgraded installs — exactly the v1.0.2 data-loss channel: a new volume in `resources/docker-compose.yml` is absent from the old userData copy; with `read_only: true` the backend can't write that path at all.
   - Fix: on every packaged launch, overwrite the embedded compose from `process.resourcesPath` (leave `.env` alone), or hash-compare and refresh on change.
 
-- [ ] **Category resolution is inconsistent between list endpoints and single-row endpoints — alias recipients show as uncategorized on GET/POST but categorized on list views** ⏫ ✅
+- [ ] **Category resolution is inconsistent between list endpoints and single-row endpoints — alias recipients show as uncategorized on GET/POST but categorized on list views** ⏫ 🔎 verified-present 2026-07-11
   - ↪ _from: Codebase audit 2026-06-30 · Correctness — Backend · Categorization_
   - `apps/node-backend/src/repositories/transactionRepository.js:313-333` (`getById`), `:341-393` (`create`) vs. `:18-24` (`TRANSACTION_JOINS`)
   - `getAll`/`getAllWithCount` resolve category via a 3-level fallback (own → recipient default → recipient's *primary* recipient's default) and expose `effective_category_id`. `getById`/`create` hand-roll separate SQL with only 2 levels, never computing `effective_category_id`. A transaction on an alias recipient is correctly categorized in lists but shows uncategorized when fetched/created via the single-row paths.
   - Fix: extract the category CASE + `effective_category_id` expression into one shared SQL fragment reused by `getAll`, `getById`, and `create`.
 
-- [ ] **`PATCH`-to-clear silently no-ops on 5 account fields** ⏫ ✅
+- [ ] **`PATCH`-to-clear silently no-ops on 5 account fields** ⏫ 🔎 verified-present 2026-07-11
   - ↪ _from: Codebase audit 2026-06-30 · Correctness — Backend · Architecture / route-service boundary / dead code (backend)_
   - `apps/node-backend/src/services/accountService.js:44,71-92` (`sanitize()` maps explicit `null` → `undefined`), `apps/node-backend/src/repositories/accountRepository.js:95` (skips any field `=== undefined` when building `SET`)
   - `PATCH /api/accounts/:id` sent to clear e.g. `funding_account_id: null` is silently ignored — no error, no change — for `display_name`, `institution`, `funding_account_id`, `statement_balance`, `statement_balance_date`. The same bug class was already fixed once in `savedCharts.js` per its own comment, and is reintroduced here.
@@ -220,13 +232,13 @@ look-changing one.
   - Fix: export one shared `EXCHANGE_RATES_QUERY_KEY` constant; use it everywhere, or invalidate both literal prefixes from the refresh mutation.
   - Verification (2026-06-30): `DashboardPage.tsx` (named in the original impact list) does not actually call either hook — drop it from the affected-surfaces list; everything else named checks out.
 
-- [ ] **FX-exposure gating on Stocks/Crypto pages is dead code — always evaluates false** ⏫ ✅
+- [ ] **FX-exposure gating on Stocks/Crypto pages is dead code — always evaluates false** ⏫ 🔎 verified-present 2026-07-11
   - ↪ _from: Codebase audit 2026-06-30 · Correctness — Frontend_
   - `apps/frontend/src/pages/portfolio/StocksPage.tsx:73,362`, `CryptoPage.tsx:44,270` — `(h.currency || 'EUR') !== targetCurrency`
   - `usePortfolioSummaries` always sets `currency` to the *display* currency on every summary, exposing the real native currency separately as `originalCurrency`. This comparison can never be true, so the FX-gain column/banner never renders for any foreign-currency holding — the same currency-confusion bug class already fixed elsewhere (commit `54187c21`, native vs. display currency), left unfixed here. `PortfolioOverviewPage.tsx:87-88` already does this correctly via `originalCurrency`.
   - Fix: compare against `h.originalCurrency` (fall back to `h.currency` only if absent).
 
-- [ ] **Portfolio Performance page shows a misleading empty state on fetch failure** ⏫ ✅
+- [ ] **Portfolio Performance page shows a misleading empty state on fetch failure** ⏫ 🔎 verified-present 2026-07-11
   - ↪ _from: Codebase audit 2026-06-30 · Correctness — Frontend_
   - `apps/frontend/src/pages/portfolio/PerformancePage.tsx:92-98,187-198`
   - The query never reads `isError`/`error`, only `isLoading`. A failed fetch defaults `snapshots` to `[]`, rendering "add holdings or hit Refresh Prices" — wrong when the real cause is a network/API failure.
@@ -394,37 +406,37 @@ look-changing one.
   - `main.js:2377-2387` — a restore whose boot-time `alembic upgrade` exceeds the 60s health budget reports **failure after psql succeeded** and never runs the swap (attachments stay in `.staging`); the swap shell (:2382-2385) chains the first `mv` with `;` — if staging is missing, live attachments are moved to `.old` and nothing replaces them.
   - Fix: try/catch around `pollHealth` with a bigger budget; guard the swap with `[ -d …staging ] && …`.
 
-- [ ] **Cost-basis calculators silently clamp oversells instead of flagging a data-integrity problem** 🔼 ✅
+- [ ] **Cost-basis calculators silently clamp oversells instead of flagging a data-integrity problem** 🔼 🔎 verified-present 2026-07-11
   - ↪ _from: Codebase audit 2026-06-30 · Correctness — Backend · Portfolio / investments_
   - `packages/shared-utils/src/portfolio.js:135-150` (weighted-avg), `:219-256` (FIFO), `:321-358` (LIFO)
   - When a sell's recorded lots are insufficient (e.g. an earlier buy was deleted), `sellUnits = min(units, totalUnits)` clamps and shrinks the ratio proportionally — excess gain/fees/taxes are dropped with no warning surfaced anywhere. Deleting a buy while keeping its matching sell silently understates realized gain.
   - Fix: surface a flag (mirroring the existing `_fxFellBack` pattern) when `units.gt(totalUnits)` so the response can warn.
 
-- [ ] **"Uncategorised transactions" queue misses alias-recipient transactions that are already categorized everywhere else** 🔼 ✅
+- [ ] **"Uncategorised transactions" queue misses alias-recipient transactions that are already categorized everywhere else** 🔼 🔎 verified-present 2026-07-11
   - ↪ _from: Codebase audit 2026-06-30 · Correctness — Backend · Categorization_
   - `apps/node-backend/src/repositories/transactionRepository.js:179-204,214-308` (`getUncategorised`/`WithCount`)
   - Checks only `t.category_id IS NULL AND r.default_category_id IS NULL`, never the primary recipient's default — same root cause as the finding above.
   - Fix: join the primary recipient and extend the predicate, matching `getAll`'s fallback chain.
 
-- [ ] **Category display truncates DETAIL text that contains a colon** 🔼 ✅ *(frontend, same root cause as backend issue above is unrelated — separate bug)*
+- [ ] **Category display truncates DETAIL text that contains a colon** 🔼 🔎 verified-present 2026-07-11 *(frontend, same root cause as backend issue above is unrelated — separate bug)*
   - ↪ _from: Codebase audit 2026-06-30 · Correctness — Backend · Categorization_
   - `apps/frontend/src/pages/DashboardPage.tsx:224-232`, `apps/frontend/src/pages/RecipientsPage.tsx:213-221`
   - `categoryName.split(':')` then uses only `parts[1]` — a category like `general="TRAVEL", detail="FLIGHT: BOOKING.COM"` renders as just "Flight". `CategoryPivotTable.tsx:112-116` already handles this correctly via `split(":")` + rejoin.
   - Fix: apply the same join-back pattern (`const [general, ...rest] = name.split(":"); rest.join(":")`) at both call sites.
 
-- [ ] **Stale fast-cadence recurring planned transactions silently vanish from next-month forecast** 🔼 ✅
+- [ ] **Stale fast-cadence recurring planned transactions silently vanish from next-month forecast** 🔼 🔎 verified-present 2026-07-11
   - ↪ _from: Codebase audit 2026-06-30 · Correctness — Backend · Planned / recurring transactions_
   - `apps/node-backend/src/repositories/infoRepositoryPlanned.js:15` (`MAX_OCCURRENCES = 120`), `:22-36` (`expandRecurringOccurrences`)
   - The function walks forward from the row's stored `planned_date` (not "today") up to 120 hops to find occurrences inside next month's window. A daily-cadence row that hasn't been executed/advanced in >120 days exhausts the cap before reaching next month and returns `[]` — silently disappearing from the forecast, no error or log.
   - Fix: fast-forward `current` directly to the first occurrence ≥ `startYmd` via interval math instead of a flat linear walk.
 
-- [ ] **Planned-transaction name resolution silently drops unmatched category/recipient instead of erroring, unlike live transactions** 🔼 ✅
+- [ ] **Planned-transaction name resolution silently drops unmatched category/recipient instead of erroring, unlike live transactions** 🔼 🔎 verified-present 2026-07-11
   - ↪ _from: Codebase audit 2026-06-30 · Correctness — Backend · Planned / recurring transactions_
   - `apps/node-backend/src/routes/plannedTransactions.js:38-75`
   - `resolveRecipientIdFromName`/`resolveCategoryIdFromName` just delete the field on no match; the equivalent live-transaction logic in `transactions.js` correctly throws `ValidationError` on the same condition. A typo'd `category_name` saves successfully with no category and no indication anything was wrong.
   - Fix: make the planned-transaction route throw `ValidationError` on unresolved lookups, or extract one shared resolver both routes call (also fixes the duplication noted below).
 
-- [ ] **Recurring-transaction detection blends income and expense from the same recipient into one nonsensical pattern** 🔼 ✅
+- [ ] **Recurring-transaction detection blends income and expense from the same recipient into one nonsensical pattern** 🔼 🔎 verified-present 2026-07-11
   - ↪ _from: Codebase audit 2026-06-30 · Correctness — Backend · Planned / recurring transactions_
   - `apps/node-backend/src/services/recurringDetectionService.js:159-170,212-214`
   - Transactions are bucketed solely by `recipient_id`; amounts go through `.abs()` before averaging, with no sign/category partitioning. A recipient who both pays and is paid by the user gets both directions merged into one averaged "pattern" that matches neither real flow.
@@ -436,45 +448,45 @@ look-changing one.
   - Fix: move these queries into `transactionService`/`plannedTransactionService`; extend the lint rule to also flag `database/connection.js` imports under `routes/**`.
   - Verification (2026-06-30): corrected citation — the rule lives at **`apps/node-backend/eslint.config.js`** (not a bare `eslint.config.js` at repo root, which doesn't exist), and the actual matching predicate is at **line 43**, not lines 18-32 (which is the rule's JSDoc/meta block).
 
-- [ ] **Duplicated recipient/category-name-resolution logic between `transactions.js` and `plannedTransactions.js` routes has already diverged in error behavior** 🔼 ✅
+- [ ] **Duplicated recipient/category-name-resolution logic between `transactions.js` and `plannedTransactions.js` routes has already diverged in error behavior** 🔼 🔎 verified-present 2026-07-11
   - ↪ _from: Codebase audit 2026-06-30 · Correctness — Backend · Architecture / route-service boundary / dead code (backend)_
   - `routes/transactions.js:168-205` vs. `routes/plannedTransactions.js:38-75`
   - Near-identical raw SQL copy-pasted across two files; one throws `ValidationError` on no-match, the other silently no-ops (see the planned-transactions finding above — same fix resolves both).
   - Fix: extract one shared `resolveRecipientId`/`resolveCategoryId` helper into `recipientService.js`/`categoryService.js`.
 
-- [ ] **CSV export's `running_balance` is a single global accumulator, not partitioned by account — same bug class already fixed on the list endpoint** 🔼 ✅ *(found incidentally during the performance audit)*
+- [ ] **CSV export's `running_balance` is a single global accumulator, not partitioned by account — same bug class already fixed on the list endpoint** 🔼 🔎 verified-present 2026-07-11 *(found incidentally during the performance audit)*
   - ↪ _from: Codebase audit 2026-06-30 · Correctness — Backend · Data export_
   - `apps/node-backend/src/services/transactionExport.js:196,211`
   - The main transaction-list endpoint (`transactionRepository.js:121-123`, ADR-088) was explicitly fixed to partition `running_balance` by `account_id` because "a list spanning multiple accounts summed them into one meaningless cross-account total." The CSV export path has the identical unfixed bug. Confirmed reachable via `GET /api/transactions/export/csv?include_balance=true` with no account filter.
   - Fix: partition the export's running-balance accumulator by `account_id`, mirroring the list-endpoint fix.
 
-- [ ] **Cash-flow forecast header is off by a month in timezones behind UTC** 🔼 ✅
+- [ ] **Cash-flow forecast header is off by a month in timezones behind UTC** 🔼 🔎 verified-present 2026-07-11
   - ↪ _from: Codebase audit 2026-06-30 · Correctness — Frontend_
   - `apps/frontend/src/components/dashboard/CashFlowForecastChart.tsx:207` — `new Date(monthQuery.data.month + "-01T00:00:00Z")` then formatted with local getters
   - Confirmed via concrete trace: month="2026-01", US Pacific (UTC-8) → `2026-01-01T00:00:00Z` reads locally as `2025-12-31T16:00:00-08:00`, so local `getMonth()` returns December 2025. Brussels (UTC+1/+2, ahead of UTC) is unaffected. `NetSummaryCard.tsx:53` already avoids this via numeric year/month construction.
   - Fix: build the `Date` from numeric parts, not a UTC-anchored string.
   - Verification (2026-07-03): two more surfaces hit the same west-of-UTC-only class (Brussels users unaffected either way): `PortfolioForecastPage.tsx:79` (`new Date(ymd).getTime()` + local-getter formatting at `:273`) and `forecastMerge.ts:247` (UTC-midnight points) vs `ForecastInnerRolling.tsx:62` (local-midnight today-line) — the marker sits 1-2h off its day's point; both only shift labels/markers west of UTC.
 
-- [ ] **Recipient merge/unmerge leaves Statistics aggregations stale** 🔼 ✅
+- [ ] **Recipient merge/unmerge leaves Statistics aggregations stale** 🔼 🔎 verified-present 2026-07-11
   - ↪ _from: Codebase audit 2026-06-30 · Correctness — Frontend_
   - `apps/frontend/src/hooks/useRecipients.ts:82-84,115-117`
   - Both invalidate only `['recipients']`/`['transactions']`; Statistics' recipient breakdowns live under a separate `['aggregations', ...]` namespace that's never touched, so merged/unmerged identities stay split in Top Recipients until staleTime expires.
   - Fix: also invalidate `['aggregations']` in both mutations.
 
-- [ ] **Planned-payment edits don't refresh the global "upcoming payments" banner** 🔼 ✅
+- [ ] **Planned-payment edits don't refresh the global "upcoming payments" banner** 🔼 🔎 verified-present 2026-07-11
   - ↪ _from: Codebase audit 2026-06-30 · Correctness — Frontend_
   - `apps/frontend/src/hooks/usePlannedPayments.ts` (plain `useState`/`fetch`, no React Query), `pages/PlannedPaymentsPage.tsx:100-103`
   - Nothing invalidates `['upcomingPlannedPayments', queryDate]`, the cache backing the app-wide banner. Creating/deactivating/executing a planned payment doesn't update the banner for up to 5 minutes. `ImportReviewPage.tsx:130-131` already invalidates both keys correctly elsewhere, confirming this is an inconsistency.
   - Fix: invalidate `["upcomingPlannedPayments"]` from every mutating path.
 
-- [ ] **Combined investment-create + initial-purchase flow can create duplicate investments on partial failure** 🔼 ✅
+- [ ] **Combined investment-create + initial-purchase flow can create duplicate investments on partial failure** 🔼 🔎 verified-present 2026-07-11
   - ↪ _from: Codebase audit 2026-06-30 · Correctness — Frontend_
   - `apps/frontend/src/components/portfolio/AddInvestmentDialog.tsx:76-126`
   - If `addInvestment` succeeds but the chained `addTransaction` fails, the dialog stays open in "create" mode with no indication a server-side row already exists; resubmitting creates a duplicate investment.
   - Fix: track the created investment id in state so a retry only re-attempts the transaction step.
   - Verification (2026-07-03): a concrete, deterministic everyday trigger was found (not previously filed) — `AddInvestmentDialog.tsx:101-119` unit-based initial purchase with units left empty submits an amount-only buy that fails `portfolioTxRepo.common.js:109-116`'s 2-of-3 check, producing a raw 400 *after* the investment row has already been committed — a guaranteed hit of this bug, not just a network-failure edge case. See the new "AddInvestmentDialog: initial purchase silently dropped" finding for the sibling amount-skipped-entirely case.
 
-- [ ] **Triple-cast produces a dormant NaN landmine in the account-close flow** 🔼 ✅ *(currently inert — gated behind ADR-103, verified OFF)*
+- [ ] **Triple-cast produces a dormant NaN landmine in the account-close flow** 🔼 🔎 verified-present 2026-07-11 *(currently inert — gated behind ADR-103, verified OFF)*
   - ↪ _from: Codebase audit 2026-06-30 · Correctness — Frontend_
   - `apps/frontend/src/hooks/portfolio/useAccountPositions.ts:90`, `useAccountNetWorth.ts:49`, `features/accounts/CloseAccountDialog.tsx:65`
   - All three bridge `InvestmentSummary` → `Investment` via `as unknown as` (three separate occurrences, not one nested cast). `CloseAccountDialog.tsx:65` passes `today: ''` instead of `todayYmd()` (the other two sites pass it correctly); `''.split('-').map(Number)` then produces `NaN` accrued interest in the holdings-transfer preview. Will surface the moment per-account holdings is enabled.
@@ -515,7 +527,7 @@ look-changing one.
   - A typo year (2062) commits; snapshots exclude it (query bounded to today) while cost-basis/summary include it → pages disagree, no error anywhere.
   - Fix: validate `tx_date ≤ today` (or route to review).
 
-- [ ] **Foreign-currency trade legs/cash rows posted onto the sleeve raw; balance SQL sums without FX** 🔽 ✅ *(CONFIRMED 2026-07-03 — was "needs confirmation")*
+- [ ] **Foreign-currency trade legs/cash rows posted onto the sleeve raw; balance SQL sums without FX** 🔽 🔎 verified-present 2026-07-11 *(CONFIRMED 2026-07-03 — was "needs confirmation")*
   - ↪ _from: Correctness research 2026-07-02 · Wave 1b_
   - `tradeCashLegService.js:66-79`, `commit.js:93-97` vs `repositories/accountBalanceSql.js:37` (`SUM(t2.amount)`, no FX conversion)
   - USD trade on a EUR sleeve posts `−1000` USD; balance sums it as EUR.
@@ -590,31 +602,31 @@ look-changing one.
   - ↪ _from: Correctness research 2026-07-02 · Wave 2c · Migrations (only 0061 + 0062 verified this pass)_
   - `0062…py:64-67,73` — `WHERE name = acct_name` / `ON CONFLICT (name)`: a casing-only difference ("Kbc" vs "KBC") creates a duplicate account on INSERT or silently keeps the old `account_id` on UPDATE. Fix (deliberate decision — changes onboarding semantics): normalize via `lower(btrim(...))` or case-insensitive unique index.
 
-- [ ] **`findAutoLinkTarget` is dead in production and diverges from the real (stricter) auto-link rule** 🔽 ✅
+- [ ] **`findAutoLinkTarget` is dead in production and diverges from the real (stricter) auto-link rule** 🔽 🔎 verified-present 2026-07-11
   - ↪ _from: Codebase audit 2026-06-30 · Correctness — Backend · Planned / recurring transactions_
   - `apps/node-backend/src/services/plannedMatchService.js:85-88` vs. the actual logic at `:130-145`
   - Only checks single-direction uniqueness, not the documented mutual-uniqueness rule the real `autoLinkTransactions` enforces inline. It's covered by its own passing unit tests, creating false confidence — a future editor of the matching rule is likely to "fix" the wrong copy.
   - Fix: delete it (and its tests), or refactor `autoLinkTransactions` to call it as the single-direction primitive with the mutual check layered on top.
 
-- [ ] **In-place `delete` on PATCH fields contradicts the documented immutable-rest sanitization pattern** 🔽 ✅
+- [ ] **In-place `delete` on PATCH fields contradicts the documented immutable-rest sanitization pattern** 🔽 🔎 verified-present 2026-07-11
   - ↪ _from: Codebase audit 2026-06-30 · Correctness — Backend · Architecture / route-service boundary / dead code (backend)_
   - `routes/transactions.js:153-166,161-163,181`, `routes/plannedTransactions.js:40,53,74`
   - `docs/reference/code-patterns.md:585` states the canonical pattern explicitly ("never in-place delete"); both files mutate a shallow copy directly with `delete fields.x`. Notably, `plannedTransactions.js` has the *correct* pattern right next to the bug (`withoutPatchOnlyReadOnlyFields`, lines 26-36, uses destructured rest), showing the divergence is real and inconsistent even within one file. Not a live bug today (the copy isn't `req.body` itself), but an easy pattern to copy onto a non-copied object later.
   - Fix: rewrite as `const { x, ...rest } = fields; return rest;` in both files.
 
-- [ ] **Amount-sign filter coercion logic is duplicated between list and bulk-action routes** 🔽 ✅
+- [ ] **Amount-sign filter coercion logic is duplicated between list and bulk-action routes** 🔽 🔎 verified-present 2026-07-11
   - ↪ _from: Codebase audit 2026-06-30 · Correctness — Backend · Architecture / route-service boundary / dead code (backend)_
   - `routes/transactions.js:71-80` (`parseTransactionListQuery`) vs. `services/bulkSelection.js:46-53` (`normalizeBulkFilter`)
   - Both independently reimplement identical `amount_signed`/magnitude coercion; `bulkSelection.js` is documented to "mirror" the list endpoint but a future fix to one won't propagate to the other.
   - Fix: extract a shared `parseAmountFilter(value, signed)` into `filterBuilder.js`, import in both places.
 
-- [ ] **Dead, unguarded `createSplit` bypasses the over-allocation validation its "atomic" siblings exist to enforce** 🔽 ✅
+- [ ] **Dead, unguarded `createSplit` bypasses the over-allocation validation its "atomic" siblings exist to enforce** 🔽 🔎 verified-present 2026-07-11
   - ↪ _from: Codebase audit 2026-06-30 · Correctness — Backend · Architecture / route-service boundary / dead code (backend)_
   - `apps/node-backend/src/repositories/splitRepository.js:65-73`
   - Inserts a split row with no row lock and no `validateSplitAllocation` call; unreferenced in live code (test-mock only). Real call sites use `createSplitAtomic`/`createSplitsBatchAtomic`. (Note: `openapi.yaml`'s `operationId: createSplit` for the POST endpoint is an unrelated naming coincidence, not a real caller of this function.)
   - Fix: delete it, or make it delegate to `createSplitAtomic`.
 
-- [ ] **Dead legacy per-bank dedup repository with its own passing test suite (false confidence)** 🔽 ✅
+- [ ] **Dead legacy per-bank dedup repository with its own passing test suite (false confidence)** 🔽 🔎 verified-present 2026-07-11
   - ↪ _from: Codebase audit 2026-06-30 · Correctness — Backend · Architecture / route-service boundary / dead code (backend)_
   - `apps/node-backend/src/repositories/rawTransactionRepository.js` (323 lines — `belfiusRawRepo`, `kbcRawRepo`, `revolutRawRepo`, `sabbRawRepo`, `wiseRawRepo`, `visionRawRepo`, `rawReferenceRepo`, `isRawDuplicate`)
   - Zero references in `src/` outside itself; only its own test file exercises it (and that test mocks the DB connection entirely, so it passes with zero real wiring). The live dedup path is `services/deduplication.js` against a different table — this older mechanism (including `kbcRawRepo`, backing `kbc_raw_transactions`) is fully disconnected from the import pipeline.
@@ -625,13 +637,13 @@ look-changing one.
   - ↪ _from: Correctness research 2026-07-02 · Wave 2a_
   - `addInvFromMarket.option.addTxnDesc`: "verkop" → "verkoop" · `filter.type.income`/`search.suggest.allIncome` use "Ontvangsten" while every other surface uses "Inkomsten" · `tax.profile.field.cadastralIncome` nl reads "Kadastraal inkomen (kadastraal inkomen)" (EN parenthetical was already the Dutch term).
 
-- [ ] **Recurring-detection and forecast aggregates use native float arithmetic instead of the mandatory Decimal helper** ⬇ ✅
+- [ ] **Recurring-detection and forecast aggregates use native float arithmetic instead of the mandatory Decimal helper** ⬇ 🔎 verified-present 2026-07-11
   - ↪ _from: Codebase audit 2026-06-30 · Correctness — Backend · Planned / recurring transactions_
   - `apps/node-backend/src/services/recurringDetectionService.js:213,243-244`, `apps/node-backend/src/repositories/infoRepositoryPlanned.js:86-87,125-126`
   - Per `docs/reference/code-patterns.md`, monetary accumulation must route through `addAll()`/Decimal; here amounts are summed/averaged with native `+=`/`reduce` after one `toDecimal().toNumber()` conversion. Final values are cent-rounded so drift is negligible (display-only, not ledger writes), but it's inconsistent with the stated scope.
   - Fix: swap the accumulations for `addAll()` from `lib/money.js`.
 
-- [ ] **`generateLoanRepaymentSchedule` falls back to `null` instead of `undefined`** ⬇ ✅
+- [ ] **`generateLoanRepaymentSchedule` falls back to `null` instead of `undefined`** ⬇ 🔎 verified-present 2026-07-11
   - ↪ _from: Codebase audit 2026-06-30 · Correctness — Backend · Planned / recurring transactions_
   - `apps/node-backend/src/services/calculations/loanSchedule.js:154` — `schedule[0]?.due_date ?? null`
   - Dead code in practice (`validateLoanConfig` guarantees a non-empty schedule), but a stray `null` outside the documented repository-row-not-found exception.
@@ -643,7 +655,7 @@ look-changing one.
   - Fix: wire into a portfolio-stats route if this is still wanted, or close the ADR as deferred/not-pursued.
   - Verification (2026-06-30): the original framing ("unlike `brokerageFanout.js`, there's no note explaining why this is unreachable") is misleading — **`docs/adr/096-dividend-income-fire.md:13` has status "Proposed"** (vs. ADR-095 "Implemented" and ADR-103 "Accepted"), which *is* the explanation: this was never built out, not built-and-abandoned. The code-level dead end and the fix suggestion are still valid; only the "documentation discipline gap" framing was wrong.
 
-- [ ] **Systemic `null` instead of `undefined` for optional values in route filter-parsing, beyond the documented exception** ⬇ ✅
+- [ ] **Systemic `null` instead of `undefined` for optional values in route filter-parsing, beyond the documented exception** ⬇ 🔎 verified-present 2026-07-11
   - ↪ _from: Codebase audit 2026-06-30 · Correctness — Backend · Architecture / route-service boundary / dead code (backend)_
   - Pervasive: `routes/transactions.js:61-94`, `importRoutes.js:414-524`, `portfolioImportRoutes.js:55-422`, `aggregations.js:234-250`, `categories.js:21`, `tags.js:21`, `research.js:57-146`, `marketLookup.js`
   - Violates the stated convention at scale beyond the documented repository row-not-found exception. Currently harmless (consumers mostly use `!= null` loose checks) but the same pattern class that caused the account-PATCH bug above.
@@ -946,7 +958,7 @@ look-changing one.
   - Measured (3 warm runs): Postgres accepts connections ~100ms after container start, but Docker's first health probe fires only at +5.0s — with `start_period` set but no `start_interval`, probes during the start period run at the `start-interval` **default of 5s** (the `interval: 3s` doesn't apply yet) — so `depends_on: service_healthy` holds the app container until +5.6s; `compose_up` = 5.9s of a 6.8s warm boot, all idle. Verified by hand: bare `docker compose start` = 5.8s; `docker events` shows db `start` +0.18s → first health exec +5.18s → healthy +5.25s → app start +5.80s.
   - Fix: add `start_interval: 250ms` to the db healthcheck (Docker Engine 25+) — projected demo warm boot ~2.0s instead of ~6.8s. Do NOT remove `service_healthy` here: the compose file's comment documents a real crash-loop edge case (db image rebuild → new IP) it guards against. The real app's composes (`packaging/electron/resources/docker-compose.yml`, root `docker-compose.yml:61-73`) deliberately have no `depends_on`, so they don't pay this — but their healthcheck stanzas (root `:12-19`) should gain `start_interval` too for anything that consumes health status.
 
-- [ ] **Portfolio CSV-import commit loop has no transaction batching — 4-6+ sequential round trips per row** ⏫ ✅
+- [ ] **Portfolio CSV-import commit loop has no transaction batching — 4-6+ sequential round trips per row** ⏫ 🔎 verified-present 2026-07-11
   - ↪ _from: Codebase audit 2026-06-30 · Performance — Backend_
   - `apps/node-backend/src/services/portfolioImportPipeline/commit.js:70-179`
   - Unlike the bank-import pipeline, this loop is never wrapped in `withTransaction`/chunked. Per row: dup-check SELECT, uncached FX-rate lookup, sell-validation + INSERT (+ a separate `getById` on inheritance-schema installs) + optional cash-leg INSERT + staging-row UPDATE. A 500-1000 row brokerage CSV issues thousands of sequential statements (minutes of latency), with no crash-isolation between rows.
@@ -1032,7 +1044,7 @@ look-changing one.
   - Fix: restructure as a UNION/`t.id IN (…)` of per-relation indexable branches (memo/comment/recipient-name via trgm, tags via slug lookup → junction), gate the amount/date CAST branches on numeric/date-shaped input, and enforce a minimum search length (2-3 chars).
   - 📏 **Verdict CONFIRMED structural (2026-07-06, Wave D2 live EXPLAIN, demo DB):** with `enable_seqscan=off` the OR is applied as a post-join `Filter` (Rows Removed: 992); no trgm index ever gets an `Index Cond`. Control: an isolated `memo ILIKE '%Loon%'` DOES hit `idx_transactions_memo_trgm` (Bitmap Index Scan, Index Cond) — the UNION-restructure fix direction is capability-proven. Benefit at real scale not measurable on the 1,051-row demo corpus.
 
-- [ ] **Bank-transaction CSV import commit issues exactly 5 sequential statements per row inside its transaction chunks** 🔼 ✅
+- [ ] **Bank-transaction CSV import commit issues exactly 5 sequential statements per row inside its transaction chunks** 🔼 🔎 verified-present 2026-07-11
   - ↪ _from: Codebase audit 2026-06-30 · Performance — Backend_
   - `apps/node-backend/src/services/importPipeline/commit.js:79-213`
   - Chunking (1000 rows/txn) amortizes BEGIN/COMMIT but not per-row round trips: dup-check SELECT, SAVEPOINT, single-row INSERT, staging UPDATE, RELEASE SAVEPOINT = 5 statements, confirmed exact. A 2,000-row CSV (the most common operation in the app) issues ~10,000 sequential statements.
@@ -1045,7 +1057,7 @@ look-changing one.
   - Verification (2026-06-30): the index's provenance was backwards in the original write-up — migration 0044 (2026-06-18) was added for transfer-pairing matching (ADR-083), **10 days before** the `amount_signed` filter feature (commit `eff2da4f`, 2026-06-28). The signed-filter feature didn't add this index; it just happened to be able to reuse a pre-existing one, leaving the older/more-common default path with no usable index — same conclusion, different (correct) history.
   - 📏 **Verdict CONFIRMED structural (2026-07-06, Wave D2 live EXPLAIN):** seqscan-off leaves `abs(amount) >= 100` as a Filter (Rows Removed: 756); control `t.amount >= 100` gets `Index Cond` on `idx_transactions_amount_date`. The signed path (`amountSigned=true`) correctly uses the index.
 
-- [ ] **JS-side aggregation regression in category-breakdown live fallback** 🔼 ✅
+- [ ] **JS-side aggregation regression in category-breakdown live fallback** 🔼 🔎 verified-present 2026-07-11
   - ↪ _from: Codebase audit 2026-06-30 · Performance — Backend_
   - `apps/node-backend/src/repositories/infoRepositoryStatistics.js:33-62` (`getCategoryBreakdown`)
   - When the materialized-view path is unavailable, or whenever `includeTransfers=true`, this pulls every active transaction into Node with no date bound/LIMIT and sums in a JS loop. Its sibling `getCategoryPivot` 25 lines below (same file) was explicitly rewritten to aggregate in SQL via `GROUP BY` — this one was never migrated.
@@ -1058,43 +1070,43 @@ look-changing one.
   - Fix: pre-fetch existing recipients/categories in one query, bulk-insert new ones via the same `UNNEST(...) ON CONFLICT DO NOTHING` pattern used in the bank-import pipeline.
   - Verification (2026-06-30): "~5 queries/row" only fits the recipients loop (`createOrGet` + optional notes UPDATE + optional bank-account `createOrGet` + optional category `createOrGet` + default-category UPDATE); the categories loop is just one `createOrGet` call per row (~1-2 queries).
 
-- [ ] **Portfolio import rollback is a per-row DELETE loop — no `import_batch_id` column on portfolio transaction tables** 🔼 ✅ *(schema gap also blocking the cash-leg cleanup fix above)*
+- [ ] **Portfolio import rollback is a per-row DELETE loop — no `import_batch_id` column on portfolio transaction tables** 🔼 🔎 verified-present 2026-07-11 *(schema gap also blocking the cash-leg cleanup fix above)*
   - ↪ _from: Codebase audit 2026-06-30 · Performance — Backend_
   - `apps/node-backend/src/services/portfolioImportBatchService.js:65-76`, `apps/node-backend/src/repositories/portfolioTxRepo.writes.js:190-207`
   - Bank-import rollback is one `DELETE ... WHERE import_batch_id = $1`; no migration ever added the equivalent column to the portfolio transaction tables (confirmed: `import_batch_id` exists only on `transactions`, added by `0003_import_batch_id_on_transactions.py` — never on `portfolio_transactions`/`portfolio_transactions_base`, including in the later `0052_portfolio_transactions_account_id.py` which touched the same tables for a different column). Rollback instead calls `hardDelete(id)` once per row.
   - Fix: add an `import_batch_id` column (+ index) to the portfolio transaction tables for a single bulk DELETE; short-term, batch with `WHERE id = ANY($1::int[])` and call `deleteTradeCashLegs` in the same pass (fixes the orphaned-cash-leg correctness bug above too).
 
-- [ ] **`refreshPrices` issues one UPDATE per investment instead of a single batched upsert** 🔼 ✅
+- [ ] **`refreshPrices` issues one UPDATE per investment instead of a single batched upsert** 🔼 🔎 verified-present 2026-07-11
   - ↪ _from: Codebase audit 2026-06-30 · Performance — Backend_
   - `apps/node-backend/src/controllers/investmentController.js:257-301`
   - Uses bounded concurrency (10) but still N round trips where one `UNNEST`-based batch UPDATE (pattern already used in `priceCache.js:saveHistoricalPointsToDatabase:250-258`) would do it in one statement.
   - Fix: replace the per-investment loop with one `UPDATE ... FROM (SELECT * FROM UNNEST(...))` statement.
 
-- [ ] **Unbounded, unvirtualized row rendering in portfolio import review** 🔼 ✅
+- [ ] **Unbounded, unvirtualized row rendering in portfolio import review** 🔼 🔎 verified-present 2026-07-11
   - ↪ _from: Codebase audit 2026-06-30 · Performance — Frontend_
   - `apps/frontend/src/pages/portfolio/PortfolioImportReviewPage.tsx:121-176`
   - Every group's rows render directly into the DOM — no collapse/accordion (unlike the sibling `ImportReviewPage`), no pagination, no virtualization. A multi-year brokerage import can produce 500-2000+ rows mounted simultaneously.
   - Fix: wrap per-group rows in a collapsible (mirror `ImportReviewPage`'s `Accordion`), or virtualize via the existing `VirtualDataTable`/`@tanstack/react-virtual`.
 
-- [ ] **Unbounded grid of glass-blur cards on the Watchlist page** 🔼 ✅
+- [ ] **Unbounded grid of glass-blur cards on the Watchlist page** 🔼 🔎 verified-present 2026-07-11
   - ↪ _from: Codebase audit 2026-06-30 · Performance — Frontend_
   - `apps/frontend/src/pages/research/WatchlistPage.tsx:145-168`
   - Each item is a full `Card` with `backdrop-filter: blur(20px) saturate(180%)` in an uncapped, unvirtualized grid — compositor cost scales linearly with item count.
   - Fix: cap/paginate past ~24 items, or use a cheaper flat surface (no `backdrop-filter`) for this dense-grid case.
 
-- [ ] **`framer-motion` is pulled into the always-loaded app shell, not just lazy chart routes** 🔼 ✅
+- [ ] **`framer-motion` is pulled into the always-loaded app shell, not just lazy chart routes** 🔼 🔎 verified-present 2026-07-11
   - ↪ _from: Codebase audit 2026-06-30 · Performance — Frontend_
   - `apps/frontend/src/components/layout/AppLayout.tsx:19,220`, `PageTransition.tsx`, `AppSidebar.tsx:68`, `components/ui/tabs.tsx:78`
   - `AppLayout` wraps every route and is statically imported, so framer-motion ships in the initial bundle regardless of route, for animations CSS transitions could likely replace. (The library's other 9 usage sites, in `components/charts/*`, are correctly confined to lazy routes.)
   - Fix: replace shell-level motion with CSS transitions, or adopt `LazyMotion`/the tree-shaken `m` API.
 
-- [ ] **`ImportReviewPage` mounts a live, query-subscribed combobox per group unconditionally** 🔼 ✅
+- [ ] **`ImportReviewPage` mounts a live, query-subscribed combobox per group unconditionally** 🔼 🔎 verified-present 2026-07-11
   - ↪ _from: Codebase audit 2026-06-30 · Performance — Frontend_
   - `apps/frontend/src/pages/ImportReviewPage.tsx:320-367`
   - Each accordion group's trigger unconditionally mounts a `RecipientCombobox` regardless of expansion state (it sits in `AccordionTrigger`, not `AccordionContent`). A year of bank CSV import can produce 100-300+ groups → that many live component instances/subscriptions at once.
   - Fix: lazy-mount the combobox only when its accordion item opens, or virtualize the groups list.
 
-- [ ] **Column-resize drag re-renders the full table on every `mousemove`, unthrottled** 🔼 ✅
+- [ ] **Column-resize drag re-renders the full table on every `mousemove`, unthrottled** 🔼 🔎 verified-present 2026-07-11
   - ↪ _from: Codebase audit 2026-06-30 · Performance — Frontend_
   - `apps/frontend/src/components/shared/VirtualDataTable.tsx:265-287` (`handleMouseMove`)
   - `setColumnWidths` fires synchronously on every native mousemove during a drag, with no rAF batching/throttle; rows aren't individually memoized, so every pixel of drag re-renders the header plus all visible+overscan rows.
@@ -1341,31 +1353,31 @@ look-changing one.
   - Both queries are bounded by the report's date range and aggregate in JS after that — not literally unbounded. The real gap is the missing defensive LIMIT for pathological multi-year custom periods, mirroring the precedent in `infoRepo.statistics.js` (note: **not** `infoRepositoryStatistics.js`, a different, similarly-named file — the original citation was wrong).
   - Fix: add a defensive LIMIT for pathological multi-year custom periods.
 
-- [ ] **`matchInvestments.js` resolves distinct symbol/name keys one at a time instead of batched** 🔽 ✅
+- [ ] **`matchInvestments.js` resolves distinct symbol/name keys one at a time instead of batched** 🔽 🔎 verified-present 2026-07-11
   - ↪ _from: Codebase audit 2026-06-30 · Performance — Backend_
   - `apps/node-backend/src/services/portfolioImportPipeline/matchInvestments.js:51-67,86-106`
   - Each distinct `(symbol, name)` pair triggers up to 2 sequential SELECTs (per-key cached, but distinct keys aren't batched) — contrast with the bank pipeline's recipient resolution, which batches all distinct names into one `pg_trgm` query.
   - Fix: batch with `WHERE LOWER(symbol) = ANY($1::text[])`, then one batched query for unresolved names.
 
-- [ ] **`GET /api/info/recurring-patterns` does uncached synchronous recomputation, including from AI chat** 🔽 ✅
+- [ ] **`GET /api/info/recurring-patterns` does uncached synchronous recomputation, including from AI chat** 🔽 🔎 verified-present 2026-07-11
   - ↪ _from: Codebase audit 2026-06-30 · Performance — Backend_
   - `apps/node-backend/src/services/recurringDetectionService.js:129-277`; also called from `aiChat/tools/insights.js:288`
   - Query is bounded (3 years) but the grouping/sorting/interval-detection runs synchronously on the event loop with no caching; the AI-chat tool can trigger it repeatedly within one chat session.
   - Fix: cache the result short-term (a few minutes), invalidate on transaction mutation.
 
-- [ ] **`Card` primitive defaults every instance to the most expensive glass-blur tier** 🔽 ✅ *(root cause of the Watchlist finding above)*
+- [ ] **`Card` primitive defaults every instance to the most expensive glass-blur tier** 🔽 🔎 verified-present 2026-07-11 *(root cause of the Watchlist finding above)*
   - ↪ _from: Codebase audit 2026-06-30 · Performance — Frontend_
   - `apps/frontend/src/components/ui/card.tsx:9`
   - Blur tier is baked unconditionally into the base `className`, with no variant prop to opt out — only an additive override is possible.
   - Fix: default `Card` to a flat surface; require an explicit `glass-*` className for hero/standalone cards.
 
-- [ ] **`SettingsPreloadContext` provider value is an unmemoized object literal at the app root** 🔽 ✅
+- [ ] **`SettingsPreloadContext` provider value is an unmemoized object literal at the app root** 🔽 🔎 verified-present 2026-07-11
   - ↪ _from: Codebase audit 2026-06-30 · Performance — Frontend_
   - `apps/frontend/src/contexts/SettingsPreloadContext.tsx:70`, used at `App.tsx:168`
   - `value={{ rawSettings, isLoading }}` is a fresh object every render in the outermost provider — the one provider not following the `useMemo` pattern used elsewhere (`LanguageContext`, `BelgianTaxProfileContext`, `PageTitleContext`).
   - Fix: `useMemo(() => ({ rawSettings, isLoading }), [rawSettings, isLoading])`.
 
-- [ ] **Attachment thumbnails fetch full-resolution images for a 24px icon, not lazy-loaded** 🔽 ✅
+- [ ] **Attachment thumbnails fetch full-resolution images for a 24px icon, not lazy-loaded** 🔽 🔎 verified-present 2026-07-11
   - ↪ _from: Codebase audit 2026-06-30 · Performance — Frontend_
   - `apps/frontend/src/components/shared/AttachmentPanel.tsx:64-68`
   - Points at the original download endpoint (receipt photos can be several MB) to render a 24×24px thumbnail; no `loading="lazy"`, no server-side thumbnail variant.
@@ -1610,7 +1622,7 @@ look-changing one.
   - Fix: composite indexes if/when these tables grow — `(is_active, is_executed, planned_date)`, `(investment_id, date, id)`, `(investment_id, account_id)`.
   - Verification (2026-06-30): the `exchange_rates` sub-claim is **wrong and removed** — `alembic/versions/0001_initial_database_schema.py` defines `CONSTRAINT uq_currency_date UNIQUE (currency_code, rate_date)` inline in the table definition, which Postgres backs with a real composite index covering exactly the access pattern (`rateFetcher.js:308-326` filters `currency_code = $1 AND rate_date <= $2`). Two independent verification passes initially missed this by only grepping for `CREATE INDEX` statements and not inline `CONSTRAINT ... UNIQUE` clauses — a useful lesson for future index audits in this codebase.
 
-- [ ] **Minor pagination/cache hygiene gaps** ⬇ ✅
+- [ ] **Minor pagination/cache hygiene gaps** ⬇ 🔎 verified-present 2026-07-11
   - ↪ _from: Codebase audit 2026-06-30 · Performance — Backend_
   - `routes/tags.js:19-24` + `tagRepository.js:15-29` (unbounded list, no LIMIT, unlike every sibling route); `recipients.js:23-26` → `recipientClusterService.js:36-43` (loads every active recipient before bucketing, output capped but scan isn't); `infoRepositoryHelpers.js:80-82` `clearMvCache()` exported/documented as "used after bulk import" but has zero actual callers (self-heals via 60s negative TTL; comment is stale).
   - Fix: add `parsePagination` to the tags route; wire up or remove the dead `clearMvCache()` export.
@@ -1621,7 +1633,7 @@ look-changing one.
   - `for (const row of missingResult.rows) { await getRateToEurForDate(...); await query(exactCheck...) }` — a genuine N+1, confirmed. Its sole caller is `startup/warmup.js:230-235`, invoked unconditionally on every boot (when online) — not a manually-triggered one-time migration script as originally described, though it stays cheap after the first run since its own query is gated to only rows genuinely missing a rate.
   - Fix: low priority given the self-limiting behavior; batch if it ever shows up in startup-time profiling.
 
-- [ ] **Accordion height animation has no `prefers-reduced-motion` guard** ⬇ ✅
+- [ ] **Accordion height animation has no `prefers-reduced-motion` guard** ⬇ 🔎 verified-present 2026-07-11
   - ↪ _from: Codebase audit 2026-06-30 · Performance — Frontend_
   - `config/tailwind.config.ts:71-91` (keyframes), `apps/frontend/src/index.css:977-1005` (reduced-motion block doesn't include these)
   - Animates layout-triggering `height`; unlike every other animation class, `animate-accordion-down/-up` is missing from the existing reduced-motion override list, and there's no JS-level `useReducedMotion` check either (unlike `ThemeContext`/`ShaderAurora`/`useCountUp`/`RollingNumber`, which all do their own check).
@@ -1930,19 +1942,19 @@ look-changing one.
   - Fix: gate on `stats.isLoading` with a skeleton before falling through to the real empty/error checks.
   - Verification (2026-06-30): the originally-cited lines (`:562-573`/`:689-700`) were the wrong branch — those render an unrelated CTA gated by a tax-*profile* income-sources setting, not by fetch timing. Corrected to the actual loading-conflated-with-empty branches above.
 
-- [ ] **Transaction table header and data desync on horizontal scroll** ⏫ ✅
+- [ ] **Transaction table header and data desync on horizontal scroll** ⏫ 🔎 verified-present 2026-07-11
   - ↪ _from: Codebase audit 2026-06-30 · UI/UX & Accessibility — Frontend_
   - `apps/frontend/src/components/shared/VirtualDataTable.tsx:578` (header) and `:663-665` (body) — two independent scroll containers, no synchronization
   - Fixed pixel column widths mean any viewport narrower than total column width (phone, or a narrowed desktop window) lets the body scroll horizontally while headers stay put, in the app's most-used view.
   - Fix: drive both containers from one shared scroll position (shared ref + synced `scrollLeft`, or one wrapping scrollable element).
 
-- [ ] **Portfolio buy/sell/dividend dialogs have no pending-state guard — double-submit risk on money-affecting actions** ⏫ ✅
+- [ ] **Portfolio buy/sell/dividend dialogs have no pending-state guard — double-submit risk on money-affecting actions** ⏫ 🔎 verified-present 2026-07-11
   - ↪ _from: Codebase audit 2026-06-30 · UI/UX & Accessibility — Frontend_
   - `AddPortfolioTxnDialog.tsx:315`, `AddInvestmentDialog.tsx`, `EditInvestmentDialog.tsx`, `EditPortfolioTxnDialog.tsx`, `AddInvestmentFromMarketDialog.tsx` (two-step flow, both buttons)
   - All five submit buttons lack `disabled`/`isPending` wiring — a double-click/double-Enter before the mutation resolves can fire two buy/sell/dividend transactions; the underlying hooks don't even expose `isPending` today. `AddTransactionDialog.tsx` already does this correctly for regular transactions.
   - Fix: apply the same `disabled={mutation.isPending}` + spinner pattern to all five dialogs.
 
-- [ ] **Attachment delete has zero confirmation step** ⏫ ✅
+- [ ] **Attachment delete has zero confirmation step** ⏫ 🔎 verified-present 2026-07-11
   - ↪ _from: Codebase audit 2026-06-30 · UI/UX & Accessibility — Frontend_
   - `apps/frontend/src/components/shared/AttachmentPanel.tsx:130-133`
   - `handleDelete` calls `mutate(id)` directly — every other delete flow checked (Accounts, Recipients, Planned Payments, Categories) confirms first via `useConfirmDialog`.
@@ -2243,20 +2255,20 @@ look-changing one.
   - Affects tablet users reading portfolio/dashboard figures — the compacted exact amounts and stale-price timestamps are core financial data, not decoration.
   - Fix: for compact currency, reveal the full value on tap (wrap in a Popover-on-coarse-pointer, or toggle full/compact on click); for stale-price/FX warnings, render the date/note as visible text on coarse-pointer layouts or make the indicator a tap-toggled Popover.
 
-- [ ] **Six+ pages roll bespoke error UI instead of the shared `PageError` component** 🔼 ✅
+- [ ] **Six+ pages roll bespoke error UI instead of the shared `PageError` component** 🔼 🔎 verified-present 2026-07-11
   - ↪ _from: Codebase audit 2026-06-30 · UI/UX & Accessibility — Frontend_
   - `AccountsPage.tsx:109-111` (plain `<p>`, no icon/retry), `DbMaintenancePage.tsx:206-212`, `RecipientInsightsPage.tsx:145-151`, `PlannedPaymentsPage.tsx:438-443`, `ImportReviewPage.tsx:256-264`, `DashboardPage.tsx:344-348`
   - `PageError` already supports icon/heading/message/`onRetry` but is used in only 6 consumer pages; the rest produce several visually different treatments, several with no retry action.
   - Fix: converge all of these on `PageError`.
 
-- [ ] **Icon-only action buttons missing accessible names** 🔼 ✅
+- [ ] **Icon-only action buttons missing accessible names** 🔼 🔎 verified-present 2026-07-11
   - ↪ _from: Codebase audit 2026-06-30 · UI/UX & Accessibility — Frontend_
   - `AccountsPage.tsx:171-178` (account-row "more options" menu, icon-only), `RecipientPatternsDialog.tsx:281-289` (delete-pattern button, unlike the adjacent edit button which has `sr-only` text)
   - Primary entry points for account management and a destructive action, exposed with no name to assistive tech.
   - Fix: add translated `aria-label`s mirroring the existing edit-button pattern.
   - Verification (2026-07-03): the same gap recurs on `TableDataEditorPage.tsx:419` (delete new row) and `:490,:495` (pager) — `:446` alone has a `title`.
 
-- [ ] **Add/edit transaction dialog can overflow viewport height with no scroll** 🔼 ✅
+- [ ] **Add/edit transaction dialog can overflow viewport height with no scroll** 🔼 🔎 verified-present 2026-07-11
   - ↪ _from: Codebase audit 2026-06-30 · UI/UX & Accessibility — Frontend_
   - `components/ui/dialog.tsx:39-46` (base `DialogContent`, no `max-h`/`overflow-y-auto`), inherited by `forms/AddTransactionDialog.tsx:91`
   - On a short viewport (landscape phone, or keyboard open), the submit button can be pushed off-screen with no way to reach it. Other dialogs (`AddInvestmentDialog.tsx`, `TaxProfileDialog.tsx`, `SnapshotHistoryDialog.tsx`) already self-apply a scroll workaround per-dialog.
@@ -2888,7 +2900,7 @@ look-changing one.
   - Sibling endpoints (only 2 in the whole spec: `deleteCustomParser`/`deletePortfolioParser`) correctly document 204, confirming this is inconsistent application, not deliberate.
   - Fix: update openapi.yaml to 204 for all 5 paths.
 
-- [ ] **`GET /api/market/quote` — spec parameter name doesn't match the handler** ⏫ ✅
+- [ ] **`GET /api/market/quote` — spec parameter name doesn't match the handler** ⏫ 🔎 verified-present 2026-07-11
   - ↪ _from: Codebase audit 2026-06-30 · Architecture & API Contract · API ↔ openapi.yaml drift_
   - `routes/marketLookup.js:264-267` reads `req.query.symbols` (plural) vs. `openapi.yaml:4294-4315` documenting singular `symbol` + an unused `currency` param; the real `detail=basic|full` param is documented in the matrix but missing from the spec.
   - A client built strictly from openapi.yaml gets a 400.
@@ -2988,18 +3000,18 @@ look-changing one.
   - evidence: portfolio recurrence uses `'bi-weekly'` (apps/frontend/src/types/portfolio.ts:63, types/api.ts:348 — identical `RecurrenceInterval` declared twice in FE — and generated.ts:3352), while planned-transaction recurrence uses `'biweekly'` (apps/node-backend/src/services/calculations/recurrence.js:20 `SUPPORTED_PATTERNS`, FE hooks/usePlannedPayments.ts:22). Two hand-maintained vocabularies for the same concept, differing only in a hyphen — a standing trap for anyone unifying planned/portfolio recurrence.
   - fix: define one shared recurrence-token list in `@vision/types` (breaking-change note: aligning the wire value needs a compat mapping) and delete the duplicate FE declaration.
 
-- [ ] **`PATCH /api/investments/{id}` — accepted `show_in_ticker` missing from the request schema** 🔼 ✅
+- [ ] **`PATCH /api/investments/{id}` — accepted `show_in_ticker` missing from the request schema** 🔼 🔎 verified-present 2026-07-11
   - ↪ _from: Codebase audit 2026-06-30 · Architecture & API Contract · API ↔ openapi.yaml drift_
   - `investmentController.js:359-371` forwards `req.body` (upserts `show_in_ticker` per `docs/api/investments.md:246-251`) vs. `openapi.yaml:4051-4067`'s PATCH body, which lists only `name, symbol, asset_class, currency, is_active`
   - A prior commit added `show_in_ticker` to the **response** schema but never the request schema — a half-finished fix.
   - Fix: add `show_in_ticker: boolean` to the PATCH requestBody schema.
 
-- [ ] **`POST /api/investments/{id}/move` — undocumented `strategy` field** 🔼 ✅
+- [ ] **`POST /api/investments/{id}/move` — undocumented `strategy` field** 🔼 🔎 verified-present 2026-07-11
   - ↪ _from: Codebase audit 2026-06-30 · Architecture & API Contract · API ↔ openapi.yaml drift_
   - `investmentController.js:452-458` reads `strategy` (`'fifo'|'proportional'`) vs. `openapi.yaml:4217-4232` documenting only `from_account_id, to_account_id, units`.
   - Fix: add `strategy` enum to the requestBody schema.
 
-- [ ] **`api-endpoint-matrix.md` self-contradicts on operation count, invisible to CI** 🔼 ✅
+- [ ] **`api-endpoint-matrix.md` self-contradicts on operation count, invisible to CI** 🔼 🔎 verified-present 2026-07-11
   - ↪ _from: Codebase audit 2026-06-30 · Architecture & API Contract · API ↔ openapi.yaml drift_
   - Frontmatter says 211 (`:11`, confirmed currently correct/CI-verified by running `scripts/check-endpoint-matrix.js` directly), body text says "210" (`:20`), Summary table sums to 219 but omits the Cross-Workspace group entirely (despite it existing correctly at `:45-49` and in openapi.yaml). The check script only validates the frontmatter number, never the body text or table.
   - Fix: fix body text to 211, add the missing Cross-Workspace row; consider extending the CI script to validate the table total too.
@@ -3085,7 +3097,7 @@ look-changing one.
   - evidence: internal port 3002, `ftm_user`, `financial_transactions` are hardcoded independently in packaging/electron/main.js:120,304,411,558-560, docker-compose.yml:7,13,26,59, and apps/node-backend/src/config/env.js:56; main.js:398 relies on a "mirror from this single file" comment (plus `.claude/rules/packaging.md`) rather than any mechanical check.
   - fix: extract the stack constants into one sourced file (or a compose env include) that electron main.js and compose both interpolate from.
 
-- [ ] **`api-endpoint-matrix.md` stale on `amount_signed`** 🔽 ✅
+- [ ] **`api-endpoint-matrix.md` stale on `amount_signed`** 🔽 🔎 verified-present 2026-07-11
   - ↪ _from: Codebase audit 2026-06-30 · Architecture & API Contract · API ↔ openapi.yaml drift_
   - `:55` (GET /api/transactions row) still lists only `amount_min/max/exact`. Commit `692fd9b1` added `amount_signed` to `docs/api/transactions.md`/`docs/features/transactions.md` but never touched the matrix.
   - Fix: append `amount_signed` to the matrix row.
@@ -3235,7 +3247,7 @@ look-changing one.
   - evidence: `OnboardingWizard` co-locates its `useOnboarding` hook (the react-refresh lint-disable at `components/onboarding/OnboardingWizard.tsx:26` is the tell); `CommandPalette`'s FX-parser/arithmetic-evaluator/recents-store (`CommandPalette.tsx:119-175`) are lib-shaped; `DashboardPage`'s inline page-scanning `queryFn` (`pages/DashboardPage.tsx:115-159`) and `PortfolioOverviewPage`'s sparkline builder (:147-186) are likewise lib-shaped.
   - fix: extract each into hooks/ or lib/ as appropriate; no urgency.
 
-- [ ] **FX fallback in portfolio P&L hook silently uses the current (not point-in-time) rate, with no acknowledging comment** ⬇ ✅
+- [ ] **FX fallback in portfolio P&L hook silently uses the current (not point-in-time) rate, with no acknowledging comment** ⬇ 🔎 verified-present 2026-07-11
   - ↪ _from: Codebase audit 2026-06-30 · Architecture & API Contract · API ↔ openapi.yaml drift_
   - `apps/frontend/src/hooks/portfolio/useFxAwarePnl.ts:48-50` falls back to live-rate `getRateToEur` when `fx_rate_to_eur` is missing/zero
   - `docs/adr/085-belgian-tax-point-in-time-fx.md` sanctions an identical fallback for the *tax* path as "a transient approximation that self-corrects" — confirmed via official FOD Financiën guidance that point-in-time FX is indeed the technically correct convention for Belgian capital-gains/TOB valuation. The portfolio P&L hook has the same trade-off with no equivalent comment, and silently blends current-rate legs into an EUR cost pool used for gain math. This is a third surface with this pattern, distinct from the one ADR-085 already explicitly waves off (the portfolio-summary "current value display," which is intentionally out of scope).
@@ -3662,21 +3674,21 @@ look-changing one.
   - `.devcontainer/post-create.sh:78-91` — on a fresh clone it also writes a repo-root `.env` with `POSTGRES_PASSWORD=localdev` that host-side `docker compose` (`env_file`) and `loadDotenv` would silently consume.
   - Fix: put the container's venv and node_modules outside the mount (named volumes over `./venv` and `./node_modules`, or `/home/dev/venv` + change `ALEMBIC_BIN` in `bin/claude:82`), and write the generated env file to a container-local path.
 
-- [ ] **No enforced branch protection / required status checks on `main`** ⏫ ✅
+- [ ] **No enforced branch protection / required status checks on `main`** ⏫ 🔎 needs-GitHub-check 2026-07-11
   - ↪ _from: Codebase audit 2026-06-30 · DevOps/CI-CD/Packaging_
   - The repo is private on a plan tier without classic branch protection or rulesets (`gh api .../branches/main/protection` and `.../rulesets` both 403 "Upgrade to GitHub Pro"). None of the 13 CI gates can structurally block a merge or direct push — they only report. Mitigated today by solo-dev discipline + the "commit to main" workflow, but no backstop if that lapses or a token is compromised.
   - Fix: upgrade to GitHub Team/Pro (or make public) to enable rulesets; require `CI Complete` + CodeQL before merge.
   - Verification (2026-06-30): re-confirmed live — `gh api repos/EraPartner/Vision/branches/main` returns `"protected": false` today, independently corroborating the 403s.
   - Verification (2026-07-03, D1 residue, live `gh api` read): the picture has changed since 2026-06-30 — the repo is now public and a ruleset "Protect main" exists (id 14889474, `enforcement: active`, created 2026-04-09): requires exactly ONE status check (`CI Complete`, strict), a `code_scanning` rule (CodeQL `high_or_higher` + Trivy `errors`) plus `code_quality: errors`, PR-required with 0 approvals, linear history, required signatures, non-fast-forward. So "none of the 13 CI gates can structurally block a merge" is no longer accurate for non-admins — but (a) the sole required check (`CI Complete`) is exactly the one undermined by the skipped-tier bypass bug filed at the top of this section, (b) the `code_scanning` rule does not block when a scan is merely skipped/missing for the PR (see the PR #73 evidence below), and (c) `bypass_mode: always` for `RepositoryRole 5` (admin) means the repo owner's direct pushes bypass every one of these rules — which is why unsigned direct-to-main commits work despite "required signatures". Net: protection now exists on paper but the two live gaps in this domain (skipped-tier + admin-bypass) mean the practical exposure this finding described is still largely present. Full ruleset enumeration in Checked-clean below.
 
-- [ ] **Dependabot auto-merge has no required-checks backstop** ⏫ ✅
+- [ ] **Dependabot auto-merge has no required-checks backstop** ⏫ 🔎 verified-present 2026-07-11
   - ↪ _from: Codebase audit 2026-06-30 · DevOps/CI-CD/Packaging_
   - `.github/workflows/auto-merge.yml:28` — `gh pr merge --auto` only waits on checks marked *required*, and (per above) none are. A patch/minor dependency PR can complete its auto-merge independent of whether tests/lint/Trivy passed or even failed.
   - Fix: either fix branch protection above, or have the workflow explicitly `gh pr checks --watch` and gate on the result before calling `gh pr merge`.
   - Verification (2026-06-30): re-confirmed with live evidence — PR #73 merged via auto-merge on 2026-06-23 while its "Build Docker Image" check was failing. (That specific failure is a known artifact-quota false-positive, not a real defect — but the structural finding stands: nothing distinguishes a benign failure from a real one before merge.)
   - Verification (2026-07-03, D1 residue): downgrade — a required-checks backstop DOES exist (`allow_auto_merge: true` + `CI Complete` IS a ruleset-required check), so the "zero CI merge" worst case as originally framed is refuted; PR #73's `trivy-scan` was SKIPPED, not failing, and the `code_scanning` ruleset rule doesn't block on a missing/skipped scan (required-tools-list ≠ required-fresh-analysis). The actual residual exposure is exactly the `ci-complete` skipped-tier bypass bug filed at the top of this section — not "no backstop at all".
 
-- [ ] **Precedent: an auto-applied migration shipped a destructive DROP ahead of its coupled code and crashed boot — no automated guard against recurrence** ⏫ ✅
+- [ ] **Precedent: an auto-applied migration shipped a destructive DROP ahead of its coupled code and crashed boot — no automated guard against recurrence** ⏫ 🔎 verified-present 2026-07-11
   - ↪ _from: Codebase audit 2026-06-30 · DevOps/CI-CD/Packaging_
   - `alembic/versions/0055_drop_bank_account_string.py` (now neutered to a no-op) + recovery in `0056_restore_bank_account_after_premature_drop.py`; doctrine in ADR-088
   - The app runs `alembic upgrade head` unconditionally on every boot. 0055 originally dropped columns/a trigger/a matview; because it ran before the dependent app code shipped, it crashed startup. The fix was manual (a docstring + convention), not tooling-enforced — there's still no CI check flagging destructive DDL (`DROP TABLE/COLUMN`, narrowing `ALTER COLUMN TYPE`) landing without an explicit marker. Self-hosted users with no DB expertise have nothing protecting them from this recurring beyond developer memory of this one incident.
@@ -3759,7 +3771,7 @@ look-changing one.
   - `package.json:12-58` — `lint`, `lint:backend`, `typecheck`, `test`, `test:frontend`, `validate-locales`, `check-endpoint-matrix`, `build` all exist but there is no `check`/`verify` aggregate, and `docs/common-tasks.md` documents none; the pre-push hook covers typecheck+locales+matrix+backend tests only, so lint and frontend-test regressions routinely surface first in CI.
   - Fix: add `"check": "bun run lint && bun run lint:backend && bun run typecheck && bun run validate-locales && bun run check-endpoint-matrix && bun run test && bun run test:frontend"` and reference it in `docs/common-tasks.md`.
 
-- [ ] **Desktop app's backend update path pulls a mutable image tag with no signature verification** 🔼 ✅
+- [ ] **Desktop app's backend update path pulls a mutable image tag with no signature verification** 🔼 🔎 verified-present 2026-07-11
   - ↪ _from: Codebase audit 2026-06-30 · DevOps/CI-CD/Packaging_
   - `packaging/electron/resources/docker-compose.yml:24` (`image: ...vision:${APP_IMAGE_TAG:-latest}`), pulled via `docker compose pull` in `packaging/electron/main.js:1305,3192`
   - No digest pin, no cosign/sigstore check — contrast with the separate shell-updater path in the same file, which does checksum + SHA256 verification correctly. A compromised registry/pipeline would silently propagate to every running instance.
@@ -3919,7 +3931,7 @@ look-changing one.
   - Verification (2026-07-03, D4 residue): `FRED_API_KEY` gap reconfirmed and cross-checked against Electron's own `PROVIDER_KEY_VARS` (`main.js:424-427`), which wires it too.
   - Fix: add a commented `# FRED_API_KEY=` line with the free-tier note (root `.env.example`); add the two missing `VITE_*` lines to `apps/frontend/.env.local.example`.
 
-- [ ] **`SECRET_KEY` documented and seeded in CI but never read by any backend code** 🔽 ✅
+- [ ] **`SECRET_KEY` documented and seeded in CI but never read by any backend code** 🔽 🔎 verified-present 2026-07-11
   - ↪ _from: Codebase audit 2026-06-30 · DevOps/CI-CD/Packaging_
   - `docs/guides/deployment.md:55,434,447`, `.github/workflows/ci.yml:532,601` vs. zero references in `apps/node-backend/src`
   - Operators are told to "set a secure SECRET_KEY" for an auth system that doesn't exist (the real gate is `ADMIN_AUTH_TOKEN`, documented separately and correctly). False sense of configuration.
@@ -4014,13 +4026,13 @@ look-changing one.
   - `i18n/source/*.json` + `apps/frontend/src/locales/*.ts` + `packaging/electron/i18n/*.json` (~1.2 MB total, all rewritten by `scripts/generate-locales.js`) plus the periodically re-dumped `packaging/electron/demo-db/01-demo.sql` (1.1 MB) are the main repo-churn sources; pack is still only 17 MiB so this is informational. Note the committed copies are load-bearing (`package.json:21` skips generation in CI), so don't untrack without changing CI.
   - Fix: none needed now; if pack size ever matters, generate electron/i18n copies at package time instead of committing them.
 
-- [ ] **Postgres image pinned by floating tag, inconsistent with digest-pinning everywhere else** ⏬ ✅
+- [ ] **Postgres image pinned by floating tag, inconsistent with digest-pinning everywhere else** ⏬ 🔎 verified-present 2026-07-11
   - ↪ _from: Codebase audit 2026-06-30 · DevOps/CI-CD/Packaging_
   - `docker-compose.yml:3`, `packaging/electron/resources/docker-compose.yml:5` — `postgres:18-alpine`
   - The app `Dockerfile` and devcontainer `Dockerfile` are both digest-pinned; Postgres (holding all user financial data) isn't.
   - Fix: pin to a digest; Dependabot's `docker` ecosystem entry already exists to manage bumps.
 
-- [ ] **`.dockerignore` omits the plain `.env` file** ⬇ ✅
+- [ ] **`.dockerignore` omits the plain `.env` file** ⬇ 🔎 verified-present 2026-07-11
   - ↪ _from: Codebase audit 2026-06-30 · DevOps/CI-CD/Packaging_
   - `.dockerignore:16-17` — only `.env.local`/`.env.*.local` excluded. Currently harmless (`Dockerfile` uses explicit `COPY <path>`, not `COPY . .`), but no defense-in-depth if that ever changes.
   - Fix: add `.env`/`.env.*` to `.dockerignore`.
@@ -4502,7 +4514,7 @@ Investigated and disproven; kept for transparency.
 
 **Codebase audit 2026-06-30**
 
-- [ ] `docs/reference/code-patterns.md` still warns about old shim duplication (`loanRepaymentService.js`/`recurrenceService.js` vs. their `calculations/` replacements) that was fully removed in the Phase 9 cutover (commit `65d3dac0`) — doc is stale, code is clean. Update the doc. ⬬ ✅ *(re-confirmed during verification: code is clean, doc is the only thing stale)*
+- [ ] `docs/reference/code-patterns.md` still warns about old shim duplication (`loanRepaymentService.js`/`recurrenceService.js` vs. their `calculations/` replacements) that was fully removed in the Phase 9 cutover (commit `65d3dac0`) — doc is stale, code is clean. Update the doc. ⬬ 🔎 verified-present 2026-07-11 *(re-confirmed during verification: code is clean, doc is the only thing stale)*
 - [ ] `docs/adr/101-db-data-editor.md:45-47` makes a false security claim ("a hostile WHERE clause can therefore neither mutate nor hang the database") — see the SQL-injection finding at the top of this document. Correct the ADR text alongside the code fix. ⏫ *(found during verification)*
 
 **Code/architecture 2026-07-03 (ADR re-run nits)**
