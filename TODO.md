@@ -9,10 +9,11 @@ Use these to tell *implemented* from *still open* at a glance. A checkbox is onl
 - `- [ ]` — **open**; not yet implemented.
 - `- [x]` — **implemented and verified in code.** Stamp it `✅ YYYY-MM-DD · <commit>` as proof. Never tick a box without confirming the fix exists in the current tree.
 - `🔎 verified-present YYYY-MM-DD` — the finding was re-checked against current code on that date and the bug is **still present** (confirmed real, *not* done). This is a live work queue, not a completion mark.
+- `🔎 partial-#NN YYYY-MM-DD (…)` — PR #NN addresses part of the finding but a described sub-case still remains; kept **open** on purpose, with a note on what's done vs. left.
 - `🔎 needs-GitHub-check YYYY-MM-DD` — cannot be confirmed from the repo alone (e.g. GitHub branch-protection / ruleset settings); check the platform side.
 - _no status marker_ — open finding, not re-verified since it was filed.
 
-> **History note:** a bare `✅` on an *unchecked* item used to mean "confirmed real finding." Because that reads as "done," it was misleading. On **2026-07-11** all 71 such items were re-verified against the current code (every one still present) and converted to the `🔎` markers above. `✅` is now reserved for the Obsidian done-date on completed (`- [x]`) items only.
+> **History note:** a bare `✅` on an *unchecked* item used to mean "confirmed real finding." Because that reads as "done," it was misleading. On **2026-07-11** all 71 such items were re-verified — first against `main` (every one still present) — then against **PR #82** (`accounts-feature`, the branch where the backlog is being implemented). Result: **8 are fixed by #82** (now ticked `- [x]` with #82's commit), **2 are partially fixed** (`partial-#82`, kept open), and the remaining **61 are still open** (`🔎 verified-present` / one `needs-GitHub-check`). `✅` is now reserved for the Obsidian done-date on completed (`- [x]`) items only.
 
 ## How to use this file
 
@@ -44,14 +45,14 @@ look-changing one.
 
 ### 🔒 Security
 
-- [ ] **Admin DB data-editor's raw WHERE clause is a SQL-injection oracle, reachable cross-site with no auth by default** 🔺 🔎 verified-present 2026-07-11
+- [x] **Admin DB data-editor's raw WHERE clause is a SQL-injection oracle, reachable cross-site with no auth by default** 🔺 ✅ 2026-07-11 · 8555ede (#82)
   - ↪ _from: Codebase audit 2026-06-30 · Security (backend)_
   - `apps/node-backend/src/services/dbEditor.js:172-178` (`readRows`), `apps/node-backend/src/routes/admin.js:259-279`, mount order `main.js:307`
   - The `where` query param is concatenated into the SQL with only a `;`-block guard (ADR-101's documented "raw WHERE escape hatch"). Because it's a **GET**, the CSRF guard's safe-method exemption lets a cross-site page trigger it; response *timing* (via `pg_sleep()` in the WHERE expr) survives CORS, making this a practical blind-SQLi timing oracle against the whole schema — not just the URL's table. `adminAuthMiddleware` is a no-op when `ADMIN_AUTH_TOKEN` is unset (the default), so if the port is ever exposed beyond loopback this becomes a trivial full-DB-read primitive.
   - Fix: drop the raw-WHERE escape hatch (the structured `filters[]` path already covers safe column/op/value filtering), or at minimum: fail closed (require non-empty `ADMIN_AUTH_TOKEN`) for any route exposing this, and don't rely on the GET/safe-method CSRF exemption for it.
   - Verification (2026-06-30): re-confirmed, if anything understated. A bare `--` in the WHERE clause also silently truncates the rest of the single-line SQL (ORDER BY/LIMIT/OFFSET) — a second bypass the original finding didn't mention. **Bonus finding: `docs/adr/101-db-data-editor.md:45-47` itself asserts "the raw-WHERE escape hatch rejects `;`. A hostile WHERE clause can therefore neither mutate nor hang the database" — that claim is false; the project's own design doc has the same blind spot as the code. Fix the ADR text alongside the code.**
 
-- [ ] **Verbose PostgreSQL error text returned to API clients in production** ⏫ 🔎 verified-present 2026-07-11
+- [x] **Verbose PostgreSQL error text returned to API clients in production** ⏫ ✅ 2026-07-11 · 66a42fb (#82)
   - ↪ _from: Codebase audit 2026-06-30 · Security (backend)_
   - `apps/node-backend/src/services/dbEditor.js:472-480` (`mapDbError`, SQLSTATEs `42601/42703/42883/42P01`)
   - These map to `ValidationError` (4xx), and `errorHandler.js` always shows 4xx text verbatim on the assumption "4xx messages are authored by us" — but here the message is raw driver text, contradicting `docs/security/data-protection.md`'s stated policy of suppressing DB error details, and handing schema/column feedback to anyone probing the injection above.
@@ -63,7 +64,7 @@ look-changing one.
   - The runtime connection pool (including the dbEditor path above) runs as the same superuser the official Postgres image bootstraps. Any successful injection or compromised dependency has instance-level reach.
   - Fix: create a non-superuser application role scoped to the app schema; keep DDL/migrations on a separate, more-privileged role used only by Alembic.
 
-- [ ] **Admin auth is optional by default, with only a startup log line as the safety net** 🔼 🔎 verified-present 2026-07-11 *(same root cause as DevOps finding below — fix once)*
+- [ ] **Admin auth is optional by default, with only a startup log line as the safety net** 🔼 🔎 partial-#82 2026-07-11 (8555ede fixed the misleading warning copy; non-loopback hard-fail still missing) *(same root cause as DevOps finding below — fix once)*
   - ↪ _from: Codebase audit 2026-06-30 · Security (backend)_
   - `apps/node-backend/src/middleware/adminAuth.js:36-51`, warning at `main.js:411-414`
   - When `ADMIN_AUTH_TOKEN` is unset, `/api/admin/*` (including destructive routes) has no per-request check; the only safeguard is "the operator kept the port on loopback," signaled by a log line a self-hosted user is unlikely to read.
@@ -123,14 +124,14 @@ look-changing one.
   - pg reads `2026-06-01` as local midnight → `toISOString().slice(0,7)` = `'2026-05'` → `loadFromDatabase` labels every rate with the prior month; downstream (snapshotBuilder compounding) applies the wrong month's rate, and the most recent month appears missing. Only the DB path is affected (Statbel/Eurostat JSON keys are text-parsed and safe), but DB fallback is the designed offline/self-hosted path.
   - Fix: local getters (`getFullYear`/`getMonth+1`) or `to_char(month_date,'YYYY-MM')` in the SELECT.
 
-- [ ] **`moveHoldingService` computes wrong remaining units and cost basis when moving holdings between accounts** 🔺 🔎 verified-present 2026-07-11
+- [x] **`moveHoldingService` computes wrong remaining units and cost basis when moving holdings between accounts** 🔺 ✅ 2026-07-11 · 1e671a8 (#82)
   - ↪ _from: Codebase audit 2026-06-30 · Correctness — Backend · Portfolio / investments_
   - `apps/node-backend/src/services/portfolio/moveHoldingService.js:109-114` (netUnits), `:136,156-181` (FIFO lot walk)
   - Two compounding bugs: (a) `netUnits` only sums `buy`/`gift`/`sell` rows — `split` and `return_of_capital` events are silently ignored (unlike `applyEventToLots`/`snapshotBuilder.js`, which do apply them), so post-split unit validation is stale; (b) the FIFO partial-move walk doesn't net out units already consumed by intervening sells, so it can pull from a lot a prior sell already fully consumed, moving the wrong cost basis to the destination account.
   - Fix: replay split/RoC events and prior sells (mirroring `calculateCostBasisFIFO`'s lot-replay) before walking lots for validation or the move.
   - Verification (2026-06-30): re-confirmed by hand-tracing a concrete scenario (buy 10@lotA, buy 10@lotB, sell 8 → true FIFO leaves 2 of A + 10 of B = 12 net). A later partial move physically overwrites the source lot's stored `units`/`amount` columns, which **also retroactively changes the FIFO-replay cost basis of the historical sell that happened before the move** — the bug is more compounding than originally described.
 
-- [ ] **Orphaned trade-linked cash legs on investment delete and on portfolio-import rollback** 🔺 🔎 verified-present 2026-07-11 *(confirmed independently by three audits — API/ADR-drift, backend-performance, and the verification pass)*
+- [ ] **Orphaned trade-linked cash legs on investment delete and on portfolio-import rollback** 🔺 🔎 partial-#82 2026-07-11 (ffb13d7 fixed the import-rollback path; deleteInvestment path still orphans cash legs) *(confirmed independently by three audits — API/ADR-drift, backend-performance, and the verification pass)*
   - ↪ _from: Codebase audit 2026-06-30 · Correctness — Backend · Portfolio / investments_
   - `apps/node-backend/src/controllers/investmentController.js:373-378` (`deleteInvestment`), `apps/node-backend/src/services/portfolioImportBatchService.js:65-76` (`rollbackBatch`) — vs. the correct cascade at `investmentController.js:464-477` (`deleteTransaction`, which calls `deleteTradeCashLegs` citing ADR-090)
   - Neither `deleteInvestment` nor a rolled-back import batch cleans up the cash-sleeve legs (`portfolio_transaction_id` isn't a real FK, so nothing cascades automatically). This leaves cash legs pointing at deleted/nonexistent trades — silent ledger corruption feeding net worth (ADR-093) and reconciliation (ADR-094).
@@ -212,13 +213,13 @@ look-changing one.
   - Any compose change shipped in a new version (new named volume, healthcheck, security opt) never reaches upgraded installs — exactly the v1.0.2 data-loss channel: a new volume in `resources/docker-compose.yml` is absent from the old userData copy; with `read_only: true` the backend can't write that path at all.
   - Fix: on every packaged launch, overwrite the embedded compose from `process.resourcesPath` (leave `.env` alone), or hash-compare and refresh on change.
 
-- [ ] **Category resolution is inconsistent between list endpoints and single-row endpoints — alias recipients show as uncategorized on GET/POST but categorized on list views** ⏫ 🔎 verified-present 2026-07-11
+- [x] **Category resolution is inconsistent between list endpoints and single-row endpoints — alias recipients show as uncategorized on GET/POST but categorized on list views** ⏫ ✅ 2026-07-11 · 1449bf7 (#82)
   - ↪ _from: Codebase audit 2026-06-30 · Correctness — Backend · Categorization_
   - `apps/node-backend/src/repositories/transactionRepository.js:313-333` (`getById`), `:341-393` (`create`) vs. `:18-24` (`TRANSACTION_JOINS`)
   - `getAll`/`getAllWithCount` resolve category via a 3-level fallback (own → recipient default → recipient's *primary* recipient's default) and expose `effective_category_id`. `getById`/`create` hand-roll separate SQL with only 2 levels, never computing `effective_category_id`. A transaction on an alias recipient is correctly categorized in lists but shows uncategorized when fetched/created via the single-row paths.
   - Fix: extract the category CASE + `effective_category_id` expression into one shared SQL fragment reused by `getAll`, `getById`, and `create`.
 
-- [ ] **`PATCH`-to-clear silently no-ops on 5 account fields** ⏫ 🔎 verified-present 2026-07-11
+- [x] **`PATCH`-to-clear silently no-ops on 5 account fields** ⏫ ✅ 2026-07-11 · 9a2db72 (#82)
   - ↪ _from: Codebase audit 2026-06-30 · Correctness — Backend · Architecture / route-service boundary / dead code (backend)_
   - `apps/node-backend/src/services/accountService.js:44,71-92` (`sanitize()` maps explicit `null` → `undefined`), `apps/node-backend/src/repositories/accountRepository.js:95` (skips any field `=== undefined` when building `SET`)
   - `PATCH /api/accounts/:id` sent to clear e.g. `funding_account_id: null` is silently ignored — no error, no change — for `display_name`, `institution`, `funding_account_id`, `statement_balance`, `statement_balance_date`. The same bug class was already fixed once in `savedCharts.js` per its own comment, and is reintroduced here.
@@ -232,13 +233,13 @@ look-changing one.
   - Fix: export one shared `EXCHANGE_RATES_QUERY_KEY` constant; use it everywhere, or invalidate both literal prefixes from the refresh mutation.
   - Verification (2026-06-30): `DashboardPage.tsx` (named in the original impact list) does not actually call either hook — drop it from the affected-surfaces list; everything else named checks out.
 
-- [ ] **FX-exposure gating on Stocks/Crypto pages is dead code — always evaluates false** ⏫ 🔎 verified-present 2026-07-11
+- [x] **FX-exposure gating on Stocks/Crypto pages is dead code — always evaluates false** ⏫ ✅ 2026-07-11 · a899a72 (#82)
   - ↪ _from: Codebase audit 2026-06-30 · Correctness — Frontend_
   - `apps/frontend/src/pages/portfolio/StocksPage.tsx:73,362`, `CryptoPage.tsx:44,270` — `(h.currency || 'EUR') !== targetCurrency`
   - `usePortfolioSummaries` always sets `currency` to the *display* currency on every summary, exposing the real native currency separately as `originalCurrency`. This comparison can never be true, so the FX-gain column/banner never renders for any foreign-currency holding — the same currency-confusion bug class already fixed elsewhere (commit `54187c21`, native vs. display currency), left unfixed here. `PortfolioOverviewPage.tsx:87-88` already does this correctly via `originalCurrency`.
   - Fix: compare against `h.originalCurrency` (fall back to `h.currency` only if absent).
 
-- [ ] **Portfolio Performance page shows a misleading empty state on fetch failure** ⏫ 🔎 verified-present 2026-07-11
+- [x] **Portfolio Performance page shows a misleading empty state on fetch failure** ⏫ ✅ 2026-07-11 · a899a72 (#82)
   - ↪ _from: Codebase audit 2026-06-30 · Correctness — Frontend_
   - `apps/frontend/src/pages/portfolio/PerformancePage.tsx:92-98,187-198`
   - The query never reads `isError`/`error`, only `isLoading`. A failed fetch defaults `snapshots` to `[]`, rendering "add holdings or hit Refresh Prices" — wrong when the real cause is a network/API failure.
@@ -479,7 +480,7 @@ look-changing one.
   - Nothing invalidates `['upcomingPlannedPayments', queryDate]`, the cache backing the app-wide banner. Creating/deactivating/executing a planned payment doesn't update the banner for up to 5 minutes. `ImportReviewPage.tsx:130-131` already invalidates both keys correctly elsewhere, confirming this is an inconsistency.
   - Fix: invalidate `["upcomingPlannedPayments"]` from every mutating path.
 
-- [ ] **Combined investment-create + initial-purchase flow can create duplicate investments on partial failure** 🔼 🔎 verified-present 2026-07-11
+- [x] **Combined investment-create + initial-purchase flow can create duplicate investments on partial failure** 🔼 ✅ 2026-07-11 · 750022d (#82)
   - ↪ _from: Codebase audit 2026-06-30 · Correctness — Frontend_
   - `apps/frontend/src/components/portfolio/AddInvestmentDialog.tsx:76-126`
   - If `addInvestment` succeeds but the chained `addTransaction` fails, the dialog stays open in "create" mode with no indication a server-side row already exists; resubmitting creates a duplicate investment.
