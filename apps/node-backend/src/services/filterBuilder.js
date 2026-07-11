@@ -19,6 +19,10 @@
 
 const MAX_INT4 = 2147483647;
 const MAX_LIST_SIZE = 50;
+// Free-text search terms shorter than this (after trimming) are ignored: a
+// 1-character term matches nearly every row while still paying the full cost
+// of the multi-branch scan below.
+export const MIN_SEARCH_LENGTH = 2;
 
 /**
  * Keep only safe PostgreSQL INT4 ids. Drops null, undefined, non-integer, non-positive,
@@ -58,7 +62,8 @@ export function validateInt4Ids(ids) {
  * @param {string|null} [opts.recipientName] substring, ILIKE on r.name
  * @param {string|null} [opts.search]       multi-column substring (memo, comment, bank,
  *                                          currency, amount, recipients, categories, date
- *                                          text and tag slugs)
+ *                                          text and tag slugs); ignored when shorter than
+ *                                          MIN_SEARCH_LENGTH after trimming
  * @param {boolean}     [opts.active=true]  require t.is_active = true
  * @param {'income'|'expense'|null} [opts.transactionType] filter by amount sign
  * @param {number|null} [opts.amountMin]    inclusive lower bound on the amount. By default
@@ -187,35 +192,59 @@ export function buildTransactionWhere(opts = {}) {
     clauses.push(`r.name ILIKE $${p++}`);
     params.push(`%${recipientName}%`);
   }
-  if (search) {
+  const searchText = search == null ? '' : String(search);
+  if (searchText.trim().length >= MIN_SEARCH_LENGTH) {
     // Free-text search spans every user-visible facet of a transaction: notes,
     // bank/currency, amount, recipients, categories, the date (as ISO text so
     // "2026-06" matches), and any of the row's active tag slugs.
-    clauses.push(`(
-      t.memo ILIKE $${p} OR
-      t.comment ILIKE $${p} OR
-      t.bank_account ILIKE $${p} OR
-      t.currency ILIKE $${p} OR
-      CAST(t.amount AS TEXT) ILIKE $${p} OR
-      CAST(t.date AS TEXT) ILIKE $${p} OR
-      r.name ILIKE $${p} OR
-      pr.name ILIKE $${p} OR
-      c.general ILIKE $${p} OR
-      c.detail ILIKE $${p} OR
-      rc.general ILIKE $${p} OR
-      rc.detail ILIKE $${p} OR
-      pc.general ILIKE $${p} OR
-      pc.detail ILIKE $${p} OR
-      EXISTS (
-        SELECT 1 FROM transaction_tags tt
+    //
+    // Shaped as `t.id IN (UNION of per-relation branches)` rather than one OR
+    // chain over the outer LEFT-JOIN aliases: the planner cannot push an OR
+    // that spans joined relations down to any single scan, so the old shape
+    // seq-scanned transactions plus all five joins plus per-row amount/date
+    // casts and a per-row tag probe on every keystroke. Each branch here is a
+    // self-contained scan the planner can index (pg_trgm on memo/comment and
+    // recipients.name, btree on the id hops), and the CAST branches exist only
+    // when the term is made of characters the cast text can actually contain.
+    const matchingCategories = `SELECT sc.id FROM categories sc WHERE sc.general ILIKE $${p} OR sc.detail ILIKE $${p}`;
+    const branches = [
+      `SELECT st.id FROM transactions st WHERE st.memo ILIKE $${p} OR st.comment ILIKE $${p}`,
+      `SELECT st.id FROM transactions st WHERE st.bank_account ILIKE $${p} OR st.currency ILIKE $${p}`,
+    ];
+    if (/^[0-9.-]+$/.test(searchText)) {
+      branches.push(`SELECT st.id FROM transactions st WHERE CAST(st.amount AS TEXT) ILIKE $${p}`);
+    }
+    if (/^[0-9-]+$/.test(searchText)) {
+      branches.push(`SELECT st.id FROM transactions st WHERE CAST(st.date AS TEXT) ILIKE $${p}`);
+    }
+    branches.push(
+      // Recipient name — the transaction's own recipient (r.name) or the
+      // primary it aliases (pr.name).
+      `SELECT st.id FROM transactions st WHERE st.recipient_id IN (
+        SELECT sr.id FROM recipients sr WHERE sr.name ILIKE $${p}
+        UNION
+        SELECT sr.id FROM recipients sr WHERE sr.primary_recipient_id IN (
+          SELECT srp.id FROM recipients srp WHERE srp.name ILIKE $${p}
+        )
+      )`,
+      // Categories — the transaction's own (c), the recipient's default (rc),
+      // and the primary recipient's default (pc).
+      `SELECT st.id FROM transactions st WHERE st.category_id IN (${matchingCategories})`,
+      `SELECT st.id FROM transactions st WHERE st.recipient_id IN (
+        SELECT sr.id FROM recipients sr WHERE sr.default_category_id IN (${matchingCategories})
+        UNION
+        SELECT sr.id FROM recipients sr WHERE sr.primary_recipient_id IN (
+          SELECT srp.id FROM recipients srp WHERE srp.default_category_id IN (${matchingCategories})
+        )
+      )`,
+      // Active tag slugs via the junction table.
+      `SELECT tt.transaction_id FROM transaction_tags tt
         JOIN tags tg ON tg.id = tt.tag_id
-        WHERE tt.transaction_id = t.id
-          AND tg.is_active = true
-          AND tg.slug ILIKE $${p}
-      )
-    )`);
+        WHERE tg.is_active = true AND tg.slug ILIKE $${p}`,
+    );
+    clauses.push(`t.id IN (\n      ${branches.join('\n      UNION\n      ')}\n    )`);
     p++;
-    params.push(`%${search}%`);
+    params.push(`%${searchText}%`);
   }
   if (Array.isArray(tagSlugs) && tagSlugs.length > 0) {
     const safe = tagSlugs.slice(0, MAX_LIST_SIZE).map((s) => String(s).trim()).filter(Boolean);

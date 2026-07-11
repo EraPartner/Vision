@@ -88,12 +88,17 @@ describe('buildTransactionWhere', () => {
     expect(nextParamIdx).toBe(3);
   });
 
-  it('search parameter is referenced by every LIKE column with a single $-slot', () => {
+  it('search builds an indexable t.id IN (UNION ...) with a single $-slot', () => {
     const { sql, params, nextParamIdx } = buildTransactionWhere({ search: 'groceries' });
-    // Every column reuses $1 (single bound value).
-    expect(sql.match(/\$1/g)).not.toBeNull();
-    expect(sql).toContain('t.memo ILIKE $1');
-    expect(sql).toContain('pc.detail ILIKE $1');
+    // One id-producing branch per relation instead of an OR chain over the
+    // outer join aliases, so each branch can use its own index.
+    expect(sql).toContain('t.id IN (');
+    expect(sql).toContain('st.memo ILIKE $1 OR st.comment ILIKE $1');
+    expect(sql).toContain('st.bank_account ILIKE $1 OR st.currency ILIKE $1');
+    expect(sql).toContain('sr.name ILIKE $1');
+    expect(sql).toContain('sc.general ILIKE $1 OR sc.detail ILIKE $1');
+    expect(sql).toContain('sr.default_category_id IN');
+    expect(sql).toContain('srp.default_category_id IN');
     expect(params).toEqual(['%groceries%']);
     expect(nextParamIdx).toBe(2);
   });
@@ -101,13 +106,36 @@ describe('buildTransactionWhere', () => {
   it('search also spans the transaction date text and active tag slugs', () => {
     const { sql, params, nextParamIdx } = buildTransactionWhere({ search: '2026-06' });
     // Date is matched as ISO text so "2026-06" finds June 2026.
-    expect(sql).toContain('CAST(t.date AS TEXT) ILIKE $1');
-    // Tags are matched via an EXISTS over the join table, reusing the same slot.
+    expect(sql).toContain('CAST(st.date AS TEXT) ILIKE $1');
+    // Tags are matched via the junction table, reusing the same slot.
     expect(sql).toContain('FROM transaction_tags tt');
     expect(sql).toContain('tg.slug ILIKE $1');
     expect(sql).toContain('tg.is_active = true');
     expect(params).toEqual(['%2026-06%']);
     expect(nextParamIdx).toBe(2);
+  });
+
+  it('search omits the amount/date CAST branches when the term cannot match them', () => {
+    const { sql } = buildTransactionWhere({ search: 'groceries' });
+    // 'groceries' contains letters, which never appear in amount/date text.
+    expect(sql).not.toContain('CAST(');
+  });
+
+  it('search includes the amount CAST branch only for numeric-shaped terms', () => {
+    const { sql } = buildTransactionWhere({ search: '12.5' });
+    expect(sql).toContain('CAST(st.amount AS TEXT) ILIKE $1');
+    // '.' never appears in date text, so the date branch is skipped.
+    expect(sql).not.toContain('CAST(st.date AS TEXT)');
+  });
+
+  it('search shorter than MIN_SEARCH_LENGTH after trimming is ignored', () => {
+    for (const term of ['a', ' a ', '', '  ']) {
+      const { sql, params, nextParamIdx } = buildTransactionWhere({ search: term });
+      expect(sql).not.toContain('t.id IN (');
+      expect(sql).not.toContain('ILIKE');
+      expect(params).toEqual([]);
+      expect(nextParamIdx).toBe(1);
+    }
   });
 
   it('amountMin/amountMax filter on magnitude (sign-agnostic) with sequential slots', () => {
