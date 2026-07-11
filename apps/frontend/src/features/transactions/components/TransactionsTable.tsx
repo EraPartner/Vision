@@ -224,10 +224,11 @@ export function TransactionsTable({
             type: "number" as const,
             defaultWidth: 90,
             minWidth: 70,
+            className: "text-right",
             render: (row: TableTransaction) => (
                 <span className={`font-mono font-medium whitespace-nowrap ${row.amount >= 0 ? 'amount-gain' : 'amount-loss'
                     } ${!row.is_active ? 'opacity-50 line-through' : ''}`}>
-                    {row.amount >= 0 ? '+' : '-'}<Money amount={Math.abs(row.amount)} currency={row.currency} />
+                    <Money signed amount={row.amount} currency={row.currency} />
                 </span>
             ),
         },

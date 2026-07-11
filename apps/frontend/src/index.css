@@ -743,6 +743,35 @@
         will-change: transform;
     }
 
+    /* One decorative corner-orb motif for hero/KPI cards (ADR-105).
+       See <CardSheen/>. Reads --glass-highlight (not raw white) so it adapts to
+       light/dark and theme variants; opacity is dialed back in dark so the orb
+       stays a whisper rather than a smear. */
+    .card-sheen {
+        pointer-events: none;
+        position: absolute;
+        top: 0;
+        right: 0;
+        height: 8rem;
+        width: 8rem;
+        margin-top: -4rem;
+        margin-right: -4rem;
+        border-radius: 9999px;
+        background-image: linear-gradient(
+            to bottom right,
+            hsl(var(--glass-highlight) / 0.5),
+            transparent
+        );
+    }
+
+    .dark .card-sheen {
+        background-image: linear-gradient(
+            to bottom right,
+            hsl(var(--glass-highlight) / 0.12),
+            transparent
+        );
+    }
+
     .press-feedback {
         transition: transform 90ms ease-out;
     }

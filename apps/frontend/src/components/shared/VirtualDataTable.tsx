@@ -1,4 +1,5 @@
 import { Fragment, useCallback, useDeferredValue, useEffect, useMemo, useRef, useState } from "react";
+import { CardSheen } from "@/components/shared/CardSheen";
 import { parseDecimal } from "@/lib/decimal";
 import { useVirtualizer } from "@tanstack/react-virtual";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -494,7 +495,7 @@ export function VirtualDataTable<T extends Record<string, unknown>>({
 
     return (
         <Card className="premium-frame micro-lift relative overflow-hidden">
-            <div className="absolute top-0 right-0 w-32 h-32 bg-gradient-to-br from-white/50 to-transparent dark:from-white/10 rounded-full -mr-16 -mt-16" />
+            <CardSheen />
             <CardHeader className="flex flex-row items-start justify-between space-y-0 pb-4">
                 <div>
                     <CardTitle className="text-lg font-semibold">{title}</CardTitle>
