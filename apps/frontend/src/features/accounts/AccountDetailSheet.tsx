@@ -6,6 +6,7 @@ import {
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Separator } from "@/components/ui/separator";
+import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { Sparkline } from "@/components/charts";
 import { Pencil, Coins, Receipt, Scale, Lock } from "lucide-react";
 import { apiClient } from "@/lib/api";
@@ -110,9 +111,14 @@ export function AccountDetailSheet({
                         {t("accounts.detail.balance")}
                     </div>
                     {a.computed_balance != null ? (
-                        <div className="mt-1 text-3xl font-semibold tabular-nums" title={t("accounts.balanceTooltip")}>
-                            {fmtCur(a.computed_balance, a.currency)}
-                        </div>
+                        <Tooltip>
+                            <TooltipTrigger asChild>
+                                <div className="mt-1 text-3xl font-semibold tabular-nums">
+                                    {fmtCur(a.computed_balance, a.currency)}
+                                </div>
+                            </TooltipTrigger>
+                            <TooltipContent>{t("accounts.balanceTooltip")}</TooltipContent>
+                        </Tooltip>
                     ) : (
                         <div className="mt-1 text-sm text-muted-foreground">{t("accounts.detail.noBalance")}</div>
                     )}

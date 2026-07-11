@@ -9,6 +9,7 @@ import { Button } from "@/components/ui/button";
 import {
     DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { Landmark, MoreVertical, Pencil, Archive, ArchiveRestore, Trash2, GitMerge, DoorClosed, Receipt, Coins } from "lucide-react";
 import { useAccounts, useUpdateAccount, useDeleteAccount } from "@/hooks/useAccounts";
 import { useCurrencyFormatter } from "@/hooks/useCurrencyFormatter";
@@ -167,8 +168,9 @@ export default function AccountsPage() {
                         // when there actually are ledger rows to show.
                         const canViewTransactions = a.has_transactions !== false;
                         return (
+                        <Tooltip key={a.id}>
+                        <TooltipTrigger asChild>
                         <Card
-                            key={a.id}
                             role="button"
                             tabIndex={0}
                             aria-label={t('accounts.openDetail', { name: a.display_name || a.name })}
@@ -180,7 +182,6 @@ export default function AccountsPage() {
                                     setDetailing(a);
                                 }
                             }}
-                            title={t('accounts.openDetailHint')}
                         >
                             <CardContent className="flex items-start justify-between gap-3 p-4">
                                 <div className="min-w-0">
@@ -199,24 +200,30 @@ export default function AccountsPage() {
                                         {a.drift != null && a.drift !== 0 && (
                                             // Clicking the drift badge opens the reconcile dialog
                                             // (statement vs computed + delta → accept / adjust).
-                                            <button
-                                                type="button"
-                                                className={`${badgeVariants({ variant: "destructive" })} cursor-pointer text-xs`}
-                                                title={t('accounts.driftTooltip')}
-                                                aria-label={t('accounts.reconcile.open')}
-                                                onClick={(e) => { e.stopPropagation(); setReconciling(a); }}
-                                            >
-                                                {t('accounts.drift')}: {a.drift > 0 ? "+" : ""}{fmtCur(a.drift, a.currency)}
-                                            </button>
+                                            <Tooltip>
+                                                <TooltipTrigger asChild>
+                                                    <button
+                                                        type="button"
+                                                        className={`${badgeVariants({ variant: "destructive" })} cursor-pointer text-xs`}
+                                                        aria-label={t('accounts.reconcile.open')}
+                                                        onClick={(e) => { e.stopPropagation(); setReconciling(a); }}
+                                                    >
+                                                        {t('accounts.drift')}: {a.drift > 0 ? "+" : ""}{fmtCur(a.drift, a.currency)}
+                                                    </button>
+                                                </TooltipTrigger>
+                                                <TooltipContent>{t('accounts.driftTooltip')}</TooltipContent>
+                                            </Tooltip>
                                         )}
                                     </div>
                                     {a.computed_balance != null && (
-                                        <div
-                                            className="mt-2 text-lg font-semibold tabular-nums"
-                                            title={t('accounts.balanceTooltip')}
-                                        >
-                                            {fmtCur(a.computed_balance, a.currency)}
-                                        </div>
+                                        <Tooltip>
+                                            <TooltipTrigger asChild>
+                                                <div className="mt-2 text-lg font-semibold tabular-nums">
+                                                    {fmtCur(a.computed_balance, a.currency)}
+                                                </div>
+                                            </TooltipTrigger>
+                                            <TooltipContent>{t('accounts.balanceTooltip')}</TooltipContent>
+                                        </Tooltip>
                                     )}
                                 </div>
                                 <DropdownMenu>
@@ -270,6 +277,9 @@ export default function AccountsPage() {
                                 </DropdownMenu>
                             </CardContent>
                         </Card>
+                        </TooltipTrigger>
+                        <TooltipContent>{t('accounts.openDetailHint')}</TooltipContent>
+                        </Tooltip>
                         );
                     })}
                 </div>
