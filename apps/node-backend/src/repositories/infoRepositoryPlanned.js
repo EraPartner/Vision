@@ -9,6 +9,7 @@ import { calculateNextDate } from '../services/calculations/recurrence.js';
 import {
   roundToCents,
   formatDateToYmd,
+  formatPgDateToYmd,
   mapRowsForAmountConversion,
 } from './infoRepositoryHelpers.js';
 
@@ -106,7 +107,7 @@ export const plannedRepository = {
         }
       } else {
         const dateStr = row.planned_date instanceof Date
-          ? formatDateToYmd(row.planned_date)
+          ? formatPgDateToYmd(row.planned_date)
           : String(row.planned_date).slice(0, 10);
         // Non-recurring (or pattern-less) rows only count inside the window.
         if (dateStr >= startYmd && dateStr < endYmd) pushOccurrence(dateStr, row, eur);

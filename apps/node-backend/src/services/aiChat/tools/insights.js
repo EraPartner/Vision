@@ -158,9 +158,9 @@ export const getRecipientInsights = {
       if (amount.lt(0)) entry.totalSpend = entry.totalSpend.plus(amount.abs());
       else entry.totalIncome = entry.totalIncome.plus(amount);
 
-      const dateStr = row.date instanceof Date
-        ? row.date.toISOString().slice(0, 10)
-        : String(row.date).slice(0, 10);
+      // toYmd uses local getters for pg's local-midnight DATE values; toISOString
+      // shifted these one day back on a UTC+ server (see the account-dates fix above).
+      const dateStr = toYmd(row.date);
       if (!entry.lastDate || dateStr > entry.lastDate) entry.lastDate = dateStr;
 
       byRecipient.set(name, entry);

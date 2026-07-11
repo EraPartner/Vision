@@ -13,6 +13,7 @@ import {
   parseEnum,
   parsePositiveInt,
 } from './_validate.js';
+import { toYmd } from '../../../utils/portfolioMath.js';
 
 const RECURRENCE_TO_MONTHLY = Object.freeze({
   daily: 30,
@@ -27,7 +28,10 @@ function toIsoDate(value) {
   if (!value) return null;
   const d = value instanceof Date ? value : new Date(value);
   if (Number.isNaN(d.getTime())) return null;
-  return d.toISOString().slice(0, 10);
+  // pg reads a DATE column into a server-local-midnight Date; toYmd uses local
+  // getters so the calendar day is kept instead of rolling back a day via UTC
+  // extraction (which dated every planned row one day early on a UTC+ server).
+  return toYmd(d);
 }
 
 /**
