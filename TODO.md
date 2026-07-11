@@ -4571,9 +4571,9 @@ the phases below are updated accordingly:**
 - [x] Opening-balance mechanism (D4, ADR-094 second addendum): endpoint + `transfer_source
       ='opening'` CHECK value + "Set opening balance" in the account detail/reconcile flow;
       exempt `'opening'` rows from the planned zero-amount rejection ⏫ ✅ 2026-07-11 · 39ff5f0
-- [ ] Persist the per-account split alongside snapshots + incremental rebuild (filed 🔼 as the 🔎 verified-present 2026-07-11
+- [x] Persist the per-account split alongside snapshots + incremental rebuild (filed 🔼 as the 🔎 verified-present 2026-07-11
       `getNetWorthByAccount` replay perf item — build it here; it is prerequisite 8 of the
-      ADR-103 addendum gate)
+      ADR-103 addendum gate) ✅ 2026-07-11 · c638531
 - [ ] Reconcile flow on the drift badge: click → dialog showing statement vs computed + delta → 🔎 verified-present 2026-07-11
       either "accept" (update statement figures) or explicit opt-in "add adjustment transaction"
       (server-created, preserves ADR-094 descriptive-only default). Today the badge is a dead-end
