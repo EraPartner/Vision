@@ -16,6 +16,7 @@ import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Archive, ArrowRight, Loader2 } from 'lucide-react';
 import { apiClient } from '@/lib/api';
+import { invalidateAccountRepoint } from '@/hooks/useAccounts';
 import { toNumber } from '@/lib/money';
 import { useLanguage } from '@/contexts/LanguageContext';
 import { useAppSettings } from '@/contexts/AppSettingsContext';
@@ -91,7 +92,10 @@ export function CloseAccountDialog({ account, accounts, summaries, open, onOpenC
       await apiClient.updateAccount(account.id, { is_active: false });
     },
     onSuccess: () => {
-      queryClient.invalidateQueries();
+      // Closing transfers holdings in-specie then archives the account, so the same
+      // account/transaction/planned/portfolio trees restate as in a merge. Invalidate
+      // exactly those instead of the whole cache — see invalidateAccountRepoint.
+      invalidateAccountRepoint(queryClient);
       toast.success(t('accounts.close.done', { name: account.display_name || account.name }));
       onOpenChange(false);
     },
