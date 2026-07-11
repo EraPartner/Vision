@@ -14,6 +14,7 @@ import {
     XAxis,
     YAxis,
 } from 'recharts';
+import { getChartColor } from '@/components/charts';
 import { cn } from '@/lib/utils';
 import type { ToolErrorDetail, ToolRenderAs, ToolResultPayload } from '@/types/aiChat';
 
@@ -38,16 +39,6 @@ interface ToolResultCardProps {
     result: ToolResultPayload;
 }
 
-const CHART_COLORS = [
-    'hsl(217, 91%, 60%)',
-    'hsl(142, 76%, 36%)',
-    'hsl(45, 93%, 47%)',
-    'hsl(280, 87%, 65%)',
-    'hsl(340, 82%, 52%)',
-    'hsl(200, 80%, 50%)',
-    'hsl(20, 90%, 55%)',
-    'hsl(170, 70%, 40%)',
-];
 
 type Row = Record<string, unknown>;
 
@@ -207,7 +198,7 @@ function LineChartView({ rows, xKey, yKeys }: ChartViewProps) {
                             key={key}
                             type="monotone"
                             dataKey={key}
-                            stroke={CHART_COLORS[i % CHART_COLORS.length]}
+                            stroke={getChartColor(i)}
                             strokeWidth={2}
                             dot={false}
                             isAnimationActive={false}
@@ -237,7 +228,7 @@ function BarChartView({ rows, xKey, yKeys }: ChartViewProps) {
                         <Bar
                             key={key}
                             dataKey={key}
-                            fill={CHART_COLORS[i % CHART_COLORS.length]}
+                            fill={getChartColor(i)}
                             radius={[4, 4, 0, 0]}
                             isAnimationActive={false}
                         />
@@ -276,7 +267,7 @@ function PieChartView({ rows, xKey, yKeys }: ChartViewProps) {
                         isAnimationActive={false}
                     >
                         {data.map((entry, i) => (
-                            <Cell key={`${entry.name}-${i}`} fill={CHART_COLORS[i % CHART_COLORS.length]} />
+                            <Cell key={`${entry.name}-${i}`} fill={getChartColor(i)} />
                         ))}
                     </Pie>
                     <Tooltip contentStyle={tooltipStyle} />
