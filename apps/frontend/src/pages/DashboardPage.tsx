@@ -219,7 +219,8 @@ export default function DashboardPage() {
             if (categoryName === t('txPage.field.uncategorized')) return categoryName;
             const parts = categoryName.split(':');
             if (parts.length > 1) {
-                const detail = parts[1].trim();
+                // Join back — the DETAIL text itself may contain colons.
+                const detail = parts.slice(1).join(':').trim();
                 return detail.charAt(0) + detail.slice(1).toLowerCase();
             }
             return categoryName.charAt(0) + categoryName.slice(1).toLowerCase();
