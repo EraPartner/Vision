@@ -344,7 +344,7 @@ look-changing one.
   - Only `apps/frontend/src/lib/env.ts` imports zod in the entire frontend; every financial form does ad-hoc manual validation of varying quality.
   - Fix: either adopt Zod schemas for the financial forms (transactions, portfolio txns, accounts, tax profile) or update CLAUDE.md to describe the real convention — currently the doc misleads audits and new code.
 
-- [ ] **Garbage input in Fees / Taxes / FX-rate fields silently becomes 0 — corrupts EUR conversion of the transaction** 🔼 🔎 verified-present 2026-07-11
+- [x] **Garbage input in Fees / Taxes / FX-rate fields silently becomes 0 — corrupts EUR conversion of the transaction** 🔼 ✅ 2026-07-12 · 20481c8 (#84, pre-submit validation in AddPortfolioTxnDialog: fees/taxes must be finite ≥ 0, fx_rate_to_eur finite > 0, toast via new addPortTxn.error.invalidNumber key + regression test) *(EditPortfolioTxnDialog and other forms not touched — this fixes only the Add dialog named in the finding)*
   - ↪ _from: Correctness research 2026-07-02 · Wave 2a_
   - `apps/frontend/src/components/portfolio/AddPortfolioTxnDialog.tsx:132-134` + `lib/decimal.ts:12` (`parseDecimal(value, fallback = 0)`)
   - Amount/units/price use `parsePositive` (NaN fallback + finite/positive check) — but `fees`, `taxes`, `fx_rate_to_eur` use `parseDecimal(v)` with the default-0 fallback. Typing "0,5%" (or any unparseable string) into FX rate submits `fx_rate_to_eur = 0`; garbage fees/taxes silently become €0. *(Note: backend repo guards reject `fx_rate_to_eur ≤ 0` per Wave 1b — so the FX case errors server-side; fees/taxes→0 goes through silently.)*
@@ -495,7 +495,7 @@ look-changing one.
   - All three bridge `InvestmentSummary` → `Investment` via `as unknown as` (three separate occurrences, not one nested cast). `CloseAccountDialog.tsx:65` passes `today: ''` instead of `todayYmd()` (the other two sites pass it correctly); `''.split('-').map(Number)` then produces `NaN` accrued interest in the holdings-transfer preview. Will surface the moment per-account holdings is enabled.
   - Fix: pass `todayYmd()` consistently; replace the double-cast with a narrower structural type.
 
-- [ ] **Belfius "Laatste saldo" parse breaks at ≥ €1000 → running balances silently absent** 🔽 🔎 verified-present 2026-07-11
+- [x] **Belfius "Laatste saldo" parse breaks at ≥ €1000 → running balances silently absent** 🔽 ✅ 2026-07-12 · a2dcd30 (#84, header balance now routed through parseCommaDecimal like the amount column; dot-grouped regression test added)
   - ↪ _from: Correctness research 2026-07-02 · Wave 1a_
   - `belfius.js:22-24` — `"12.345,67 EUR"` → `.replace(',', '.')` leaves `"12.345.67"` → NaN → `lastBalance = null` → `applyRunningBalances` no-ops. Fail-safe, but the balance feature silently never works for dot-grouped balances.
   - Fix: use `parseCommaDecimal`.
@@ -552,7 +552,7 @@ look-changing one.
   - `infoRepo.monthly.js:83-85` · `infoRepositoryNetWorth.js:199` · `infoRepo.forecast.js:314,531` · `infoRepo.statistics.js:57,62,85-86` · `services/reports/dataFetcherTax.js:205` (`dividendsReceived +=` — tax report, medium-low) · `reports/sections/portfolioExecutiveSummary.js:33-34`, `portfolioAllocation.js:59-60`, `assetClassDetail.js:58-59` (display-only)
   - Fix: `toDecimal`/`addAll` from `lib/money.js` / shared-utils.
 
-- [ ] **Zero-amount transactions accepted end-to-end** 🔽 🔎 verified-present 2026-07-11
+- [x] **Zero-amount transactions accepted end-to-end** 🔽 ✅ 2026-07-12 · c4588ca (#84, POST /api/transactions now requires a non-zero finite amount; AddTransactionDialog blocks 0 with new addTxn.zeroAmount toast; route tests added) *(PATCH amount validation still allows 0 — only the create path named in the finding was tightened)*
   - ↪ _from: Correctness research 2026-07-02 · Wave 2a_
   - Frontend `components/forms/AddTransactionDialog.tsx:51-57` (`"0"` passes truthiness + `Number.isFinite(0)`); backend `routes/transactions.js:539` only checks `amount == null`
   - In the sign-based model (− expense / + income) a 0-amount row is meaningless and pollutes aggregations.
@@ -569,12 +569,12 @@ look-changing one.
   - nl-app user with an en-US browser gets US date order in tooltips. Central helpers (`shared/dateUtils.ts`, `utils/currency.ts`) are correctly locale-parameterized — only these fallbacks bypass them.
   - Fix: thread the app locale into the chart label fallbacks.
 
-- [ ] **Zero-fill month set uses server-local `new Date()` while the SQL paths use Postgres `CURRENT_DATE`** 🔽 🔎 verified-present 2026-07-11
+- [x] **Zero-fill month set uses server-local `new Date()` while the SQL paths use Postgres `CURRENT_DATE`** 🔽 ✅ 2026-07-12 · 407cfd4 (#84, MV fast path's 6-month zero-fill anchor now derived via todayAppDateString + firstOfMonthYmd)
   - ↪ _from: Correctness research 2026-07-02 · Wave 2b · Materialized views / aggregations_
   - `repositories/infoRepo.monthly.js:92-106` — around a month boundary with differing Node/Postgres TZ, the JS zero-fill generates a different 6-month key set than `generate_series` → one month duplicated as all-zero or the newest missing. Project convention (`todayAppDateString`) exists for exactly this.
   - Fix: derive the anchor month from the DB or the shared app-date helper.
 
-- [ ] **Attachment upload orphans the stored file if the DB insert fails after `storeAttachment`** 🔽 🔎 verified-present 2026-07-11
+- [x] **Attachment upload orphans the stored file if the DB insert fails after `storeAttachment`** 🔽 ✅ 2026-07-12 · 1d19141 (#84, insert wrapped in try/catch with removeAttachmentFile(storedPath) on failure, cleanup failure logged + original error rethrown; new tests/routes/attachments.test.js)
   - ↪ _from: Correctness research 2026-07-02 · Wave 2b · Attachments_
   - `routes/attachments.js:66-74` — existence check at :61 races a concurrent hard delete; FK failure on insert leaves the file on disk with no row, no cleanup.
   - Fix: try/catch around the insert, `removeAttachmentFile(storedPath)` on failure.
@@ -605,13 +605,13 @@ look-changing one.
   - ↪ _from: Correctness research 2026-07-02 · Wave 2c · Migrations (only 0061 + 0062 verified this pass)_
   - `0062…py:64-67,73` — `WHERE name = acct_name` / `ON CONFLICT (name)`: a casing-only difference ("Kbc" vs "KBC") creates a duplicate account on INSERT or silently keeps the old `account_id` on UPDATE. Fix (deliberate decision — changes onboarding semantics): normalize via `lower(btrim(...))` or case-insensitive unique index.
 
-- [ ] **`findAutoLinkTarget` is dead in production and diverges from the real (stricter) auto-link rule** 🔽 🔎 verified-present 2026-07-11
+- [x] **`findAutoLinkTarget` is dead in production and diverges from the real (stricter) auto-link rule** 🔽 ✅ 2026-07-12 · a71e79e (#84, function + its unit tests deleted; NOTE left in plannedMatchService.js pointing at the live mutual-uniqueness rule inside autoLinkTransactions)
   - ↪ _from: Codebase audit 2026-06-30 · Correctness — Backend · Planned / recurring transactions_
   - `apps/node-backend/src/services/plannedMatchService.js:85-88` vs. the actual logic at `:130-145`
   - Only checks single-direction uniqueness, not the documented mutual-uniqueness rule the real `autoLinkTransactions` enforces inline. It's covered by its own passing unit tests, creating false confidence — a future editor of the matching rule is likely to "fix" the wrong copy.
   - Fix: delete it (and its tests), or refactor `autoLinkTransactions` to call it as the single-direction primitive with the mutual check layered on top.
 
-- [ ] **In-place `delete` on PATCH fields contradicts the documented immutable-rest sanitization pattern** 🔽 🔎 verified-present 2026-07-11
+- [x] **In-place `delete` on PATCH fields contradicts the documented immutable-rest sanitization pattern** 🔽 ✅ 2026-07-12 · 5359b56 (#84, both routes now strip keys via destructured rest; name→id resolvers return the resolved id instead of mutating fields — no behavior change)
   - ↪ _from: Codebase audit 2026-06-30 · Correctness — Backend · Architecture / route-service boundary / dead code (backend)_
   - `routes/transactions.js:153-166,161-163,181`, `routes/plannedTransactions.js:40,53,74`
   - `docs/reference/code-patterns.md:585` states the canonical pattern explicitly ("never in-place delete"); both files mutate a shallow copy directly with `delete fields.x`. Notably, `plannedTransactions.js` has the *correct* pattern right next to the bug (`withoutPatchOnlyReadOnlyFields`, lines 26-36, uses destructured rest), showing the divergence is real and inconsistent even within one file. Not a live bug today (the copy isn't `req.body` itself), but an easy pattern to copy onto a non-copied object later.
@@ -629,7 +629,7 @@ look-changing one.
   - Inserts a split row with no row lock and no `validateSplitAllocation` call; unreferenced in live code (test-mock only). Real call sites use `createSplitAtomic`/`createSplitsBatchAtomic`. (Note: `openapi.yaml`'s `operationId: createSplit` for the POST endpoint is an unrelated naming coincidence, not a real caller of this function.)
   - Fix: delete it, or make it delegate to `createSplitAtomic`.
 
-- [ ] **Dead legacy per-bank dedup repository with its own passing test suite (false confidence)** 🔽 🔎 verified-present 2026-07-11
+- [x] **Dead legacy per-bank dedup repository with its own passing test suite (false confidence)** 🔽 ✅ 2026-07-12 · 644e893 (#84, rawTransactionRepository.js + its DB-mocked test suite deleted — 554 lines; zero references outside the pair confirmed by grep) *(the sibling bankAdapters.js shim finding filed separately was NOT taken — adapter tests still import it)*
   - ↪ _from: Codebase audit 2026-06-30 · Correctness — Backend · Architecture / route-service boundary / dead code (backend)_
   - `apps/node-backend/src/repositories/rawTransactionRepository.js` (323 lines — `belfiusRawRepo`, `kbcRawRepo`, `revolutRawRepo`, `sabbRawRepo`, `wiseRawRepo`, `visionRawRepo`, `rawReferenceRepo`, `isRawDuplicate`)
   - Zero references in `src/` outside itself; only its own test file exercises it (and that test mocks the DB connection entirely, so it passes with zero real wiring). The live dedup path is `services/deduplication.js` against a different table — this older mechanism (including `kbcRawRepo`, backing `kbc_raw_transactions`) is fully disconnected from the import pipeline.
@@ -664,7 +664,7 @@ look-changing one.
   - Violates the stated convention at scale beyond the documented repository row-not-found exception. Currently harmless (consumers mostly use `!= null` loose checks) but the same pattern class that caused the account-PATCH bug above.
   - Fix: not urgent in isolation — worth a dedicated lint rule / sweep rather than a one-off fix.
 
-- [ ] **`GET /index.html` bypasses the no-cache SPA fallback and gets `Cache-Control: max-age=1y, immutable` — a stale-shell-after-upgrade edge** 🔽 🔎 verified-present 2026-07-11
+- [x] **`GET /index.html` bypasses the no-cache SPA fallback and gets `Cache-Control: max-age=1y, immutable` — a stale-shell-after-upgrade edge** 🔽 ✅ 2026-07-12 · 07c7e15 (#84, setHeaders override in express.static forces Cache-Control: no-cache for index.html) *(the three non-hashed public/ passthroughs — favicon.ico, robots.txt, placeholder.svg — keep the 1y header; stale-favicon-after-upgrade accepted as trivial)*
   - ↪ _from: UI/GPU performance research 2026-07-05 · Wave G3 (filed under Correctness — broken-app edge, not a perf cost)_
   - `apps/node-backend/src/main.js:359` `express.static(distPath, { index: false, maxAge: '1y', immutable: true })` vs `:363-366` fallback (`no-cache`, in-memory shell)
   - `index: false` only disables *directory-index resolution* — a request for the literal path `/index.html` is still a real file in `distPath` and is served by `express.static` **with the 1-year immutable header**. A client pinned to that URL keeps the old shell after an upgrade; its old hashed chunk URLs then 404 → broken app until hard refresh. Exposure is honestly low: the SPA always navigates via `/` and nothing in the app links `/index.html` — it takes a user bookmark or an external tool hitting the literal path. Same header also applies to the non-hashed `public/` passthroughs (`dist/favicon.ico`, `robots.txt`, `placeholder.svg`) — stale favicon after upgrade, trivial.
@@ -681,7 +681,7 @@ look-changing one.
   - A genuine 2-day value swing of ≥18% with recovery (plausible for crypto-heavy portfolios — detection runs on TOTAL value) is permanently smoothed into persisted history; a real 1-day cash transit (deposit, next-day withdrawal) gets `value` smoothed while `invested` stays → a fabricated loss day. First/last rows are never smoothed, so a latest-day needle passes through and then mutates retroactively on the next build.
   - Fix: also smooth/reconcile `value_by_account` and `cash_value` in lockstep with `value`, or skip smoothing when it would break the per-account sum invariant.
 
-- [ ] **`vision.detect()` is substring-only — any unknown bank CSV containing its header words auto-routes to the Vision self-import adapter** 🔽 🔎 verified-present 2026-07-11
+- [x] **`vision.detect()` is substring-only — any unknown bank CSV containing its header words auto-routes to the Vision self-import adapter** 🔽 ✅ 2026-07-12 · 1cb499d (#84, detect now requires the exact ordered Date,Bank Account,Recipient,Memo,Amount,Currency column prefix, BOM-tolerant, trailing columns free to vary; first detect() tests added) *(adapter ordering in adapters/index.js still unpinned by tests)*
   - ↪ _from: Correctness research 2026-07-02 · Wave 1a (residue, closed 2026-07-03)_
   - `adapters/vision.js:53-60` matches on `'Booking Date,Recipient Bank Account,Amount,Reference'` as a substring, not an exact header match (verified). Current first-match-wins order (`adapters/index.js:19,53-58`) shields the five earlier adapters, but nothing pins that ordering, and any future/unknown bank export containing those words would silently misdetect as a Vision export.
   - Fix: require an exact header match (or a stronger positive signal) in `vision.detect()`.
