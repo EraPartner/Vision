@@ -70,8 +70,17 @@ export async function isManualDuplicate({ date, amount, recipientId, memo, bankA
   const hash = createManualTransactionHash({ date, amount, recipientId, memo, bankAccount });
   
   try {
+    // Only a live, active transaction blocks. The FK is ON DELETE SET NULL
+    // (migration 0024), so a deleted transaction leaves its hash row behind
+    // with transaction_id = NULL — without the join that dangling row would
+    // block re-adding the identical transaction forever, with a ConflictError
+    // pointing at nothing.
     const result = await query(
-      `SELECT transaction_id FROM manual_raw_transactions WHERE deduplication_hash = $1 LIMIT 1`,
+      `SELECT m.transaction_id
+         FROM manual_raw_transactions m
+         JOIN transactions t ON t.id = m.transaction_id AND t.is_active = true
+        WHERE m.deduplication_hash = $1
+        LIMIT 1`,
       [hash]
     );
     if (result.rows.length > 0) {
@@ -106,10 +115,12 @@ export async function recordManualRawTransaction({ date, amount, recipientId, me
   const hash = createManualTransactionHash({ date, amount, recipientId, memo, bankAccount });
   
   try {
+    // DO UPDATE (not DO NOTHING): re-adding a previously deleted transaction
+    // re-claims its dangling hash row, so the hash points at the live row again.
     await query(
       `INSERT INTO manual_raw_transactions (deduplication_hash, transaction_id, date, bank_account, recipient_id, amount, memo, currency, category_id, comment)
        VALUES ($1, $2, $3, $4, $5, $6, $7, NULL, $8, $9)
-       ON CONFLICT (deduplication_hash) DO NOTHING`,
+       ON CONFLICT (deduplication_hash) DO UPDATE SET transaction_id = EXCLUDED.transaction_id`,
       [hash, transactionId, date, bankAccount, recipientId, amount, memo, categoryId, comment]
     );
   } catch (err) {
