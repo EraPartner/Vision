@@ -287,7 +287,7 @@ look-changing one.
   - `revolut.js:54-57,66` — Revolut's `Amount` excludes `Fee`; actual balance delta is `amount − fee`. Adapter imports `amount` (fee comment-only) *and* the `Balance` column → consecutive balances don't differ by the amounts; total spend understated by all fees.
   - Fix: book `amount − fee` (Decimal arithmetic) or emit a separate fee transaction.
 
-- [ ] **Manual-dedup hash blocks re-adding a transaction forever after deletion (dangling `manual_raw_transactions` row)** 🔼 🔎 verified-present 2026-07-11
+- [x] **Manual-dedup hash blocks re-adding a transaction forever after deletion (dangling `manual_raw_transactions` row)** 🔼 ✅ 2026-07-12 · 3ba6a29 (#84, hash lookup now joins transactions on is_active so only a live row blocks; recordManualRawTransaction upserts so a re-add re-claims the dangling hash row) *(the explicit "add anyway" override UI and the fallback-query bankAccount inconsistency were not taken — the dangling-row root cause is fixed)*
   - ↪ _from: Correctness research 2026-07-02 · Wave 1a_
   - `services/deduplication.js:69-79,105-121` + `routes/transactions.js:552-564`; FK is `ON DELETE SET NULL` (`alembic/versions/0024_add_manual_raw_transaction_fks.py:46`)
   - Deleting a manual transaction leaves its hash row with `transaction_id = NULL`; re-adding the identical transaction → `ConflictError` with `existing_transaction_id: null` (points at nothing), no force/override path. Also blocks a legitimate second identical manual purchase. Inconsistency: the hash includes `bankAccount` but the fallback field query (deduplication.js:88-94) ignores it.
@@ -512,7 +512,7 @@ look-changing one.
   - Fix: `to_char(tx_date,'YYYY-MM-DD')` in the SELECT, matching commit.js.
   - Verification (2026-07-03): the file's own header comment (`validate.js:5`) claims it uses `deduplication.createTransactionHash` — it doesn't; that function has zero production callers, so the header is misleading about which hashing path is actually live. Latent only because all 10 adapters currently set `raw_data`; if one ever stops, every hash silently changes (mass duplicate re-imports on the next upload) with a wrong date baked in.
 
-- [ ] **Vision adapter strips commas from Amount — EU-decimal CSVs auto-routed to it get 100× amounts** 🔽 🔎 verified-present 2026-07-11
+- [x] **Vision adapter strips commas from Amount — EU-decimal CSVs auto-routed to it get 100× amounts** 🔽 ✅ 2026-07-12 · a6bc1c1 (#84, Amount/Balance now parse via shared parseAmountField, keeping the formula-injection-guard apostrophe strip; the loose vision.detect() header matching is a separate still-open finding)
   - ↪ _from: Correctness research 2026-07-02 · Wave 1a_
   - `vision.js:19` + loose header detection at `vision.js:53-59` (vision precedes sabb/wise in `adapters/index.js:19`)
   - A non-Vision CSV with `date/amount/bank account/recipient` headers routes here; `"12,34"` → comma deleted → `"1234"` — silent 100× error rather than a skip.
@@ -623,7 +623,7 @@ look-changing one.
   - Both independently reimplement identical `amount_signed`/magnitude coercion; `bulkSelection.js` is documented to "mirror" the list endpoint but a future fix to one won't propagate to the other.
   - Fix: extract a shared `parseAmountFilter(value, signed)` into `filterBuilder.js`, import in both places.
 
-- [ ] **Dead, unguarded `createSplit` bypasses the over-allocation validation its "atomic" siblings exist to enforce** 🔽 🔎 verified-present 2026-07-11
+- [x] **Dead, unguarded `createSplit` bypasses the over-allocation validation its "atomic" siblings exist to enforce** 🔽 ✅ 2026-07-12 · 65e1ad0 (#84, deleted with a note pointing at createSplitAtomic; test-mock entry removed)
   - ↪ _from: Codebase audit 2026-06-30 · Correctness — Backend · Architecture / route-service boundary / dead code (backend)_
   - `apps/node-backend/src/repositories/splitRepository.js:65-73`
   - Inserts a split row with no row lock and no `validateSplitAllocation` call; unreferenced in live code (test-mock only). Real call sites use `createSplitAtomic`/`createSplitsBatchAtomic`. (Note: `openapi.yaml`'s `operationId: createSplit` for the POST endpoint is an unrelated naming coincidence, not a real caller of this function.)
@@ -710,7 +710,7 @@ look-changing one.
   - Latent secondary bug in the same component: `PortfolioOverviewPage.tsx:152,172` buckets days via raw `86_400_000` ms against local-midnight anchors, which mis-buckets transactions by one day across a DST boundary — moot today because the NaN bug above drops all transactions first, but it will surface once that's fixed.
   - Fix: fix at the source (stop emitting ISO timestamps for date-only columns), and/or harden `parseLocalDateFromYmd` to also accept a `'T'`-suffixed value defensively.
 
-- [ ] **Jan-1 income/portfolio transactions are misattributed to the PREVIOUS tax year (non-UTC backend)** ⏫ 🔎 partial 2026-07-11 (frontend tax-year slicing + aiChat portfolio.js fixed via ymd emission at the API/repo boundary 398be50/765e036; aiChat tools/tax.js:48-104 still compares raw pg local-midnight Dates from transactionRepository.getAll against Date.UTC year bounds — Jan-1 regular income still lands in the prior year)
+- [x] **Jan-1 income/portfolio transactions are misattributed to the PREVIOUS tax year (non-UTC backend)** ⏫ ✅ 2026-07-12 · 398be50/765e036 (frontend + aiChat portfolio.js via ymd boundary emission) + b56c885 (#84, tools/tax.js inYear now slices on the calendar day via toYmd instead of epoch-ms vs Date.UTC bounds; the transaction-ledger paths were already SQL-date-filtered)
   - ↪ _from: Correctness research 2026-07-02 · Wave 1c (residue, closed 2026-07-03)_
   - Frontend: `belgianTax/portfolioTax.ts:55` `yearOf = date.slice(0,4)` operates on the already date−1-shifted ISO (used at `:67,:82,:130,:167,:277`), and `useAvailableTaxYears.ts:33` inherits the same shift — both put a Jan-1 portfolio transaction in the PREVIOUS tax year.
   - aiChat: `tools/tax.js:48-51` `inYear` compares pg local-midnight Dates against `Date.UTC` year bounds — Jan-1 income lands in the prior year's taxable summary; `tools/portfolio.js:23-33,163-165,258-260,482-483` is the same class — every transaction dated exactly on a range's START day is excluded from income/costs/fees aggregations.
@@ -790,7 +790,7 @@ look-changing one.
   - `portfolioUnitMath.ts:17` `UNIT_MATH_TOLERANCE = 0.0001` vs backend `≤ 0.01` (`portfolioTxRepo.common.js:140`). €100.00 for 3 units @ €33.33 (product 99.99 — exactly the 1-cent case the backend tolerance exists to allow) hard-blocks with the "twoOfThree" error (`AddPortfolioTxnDialog.tsx:109`, `EditPortfolioTxnDialog.tsx:123`); the helper's header claim "matches the backend normalizer" (`portfolioUnitMath.ts:11`) is true for the 4/8/6 dp, false for the tolerance.
   - Fix: widen `UNIT_MATH_TOLERANCE` to match the backend's `0.01`.
 
-- [ ] **Backend units×price cross-check compares FLOATS at the boundary — the exactly-one-cent case its own tolerance intends to accept gets a 400** 🔽 🔎 verified-present 2026-07-11 *(verified)*
+- [x] **Backend units×price cross-check compares FLOATS at the boundary — the exactly-one-cent case its own tolerance intends to accept gets a 400** 🔽 ✅ 2026-07-12 · 0a0e496 (#84, Decimal .minus().abs().gt('0.01') instead of float subtraction; boundary case unit-tested)
   - ↪ _from: Correctness research 2026-07-02 · Wave 2a (residue, closed 2026-07-03)_
   - `portfolioTxRepo.common.js:138-140`: `roundMoney` returns `.toNumber()` (`packages/shared-utils/src/money.js:86-88`), so `:140` is float−float: `Math.abs(100.00−99.99) = 0.010000000000005116 > 0.01` → units=3, price=33.33, amount=100.00 rejected.
   - Reachable via AddInvestmentFromMarketDialog / CSV import / raw API (the Add/Edit dialogs block earlier per the tolerance item above). Boundary-only refinement of the Wave 1b "repo numeric guards sound" checked-clean verdict.
