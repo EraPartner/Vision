@@ -4,7 +4,7 @@
 
 import { cleanRecipientName, normalizeToUppercase } from '../../textNormalization.js';
 import { logger } from '../../../config/logger.js';
-import { parseCsvFile, buildOptionalComment, buildRawRowString, parseDecimalSafe, parseDateFlexibleUtc } from './_shared.js';
+import { parseCsvFile, buildOptionalComment, buildRawRowString, parseAmountField, parseDateFlexibleUtc } from './_shared.js';
 
 const NAME = 'vision';
 const BANK_LABEL = 'Vision';
@@ -16,11 +16,14 @@ function rowToTransaction(row) {
   const date = parseDateFlexibleUtc(dateStr);
   if (!date) return null;
 
-  // Strip a leading "'" too: older exports ran numeric cells through the
-  // CSV formula-injection guard, which prepended "'" to negatives ("'-12.34").
+  // Strip a leading "'": older exports ran numeric cells through the CSV
+  // formula-injection guard, which prepended "'" to negatives ("'-12.34").
   // Without this, every expense row NaN-drops on a Vision-export round-trip.
-  const amountStr = (row['Amount'] || '').replace(/[€$£,\s']/g, '').trim();
-  const amount = parseDecimalSafe(amountStr);
+  // Amounts go through parseAmountField — this adapter's loose header
+  // detection can catch non-Vision CSVs, and blindly deleting commas turned
+  // an EU-decimal "12,34" into 1234 (a silent 100× error).
+  const amountStr = (row['Amount'] || '').replace(/'/g, '').trim();
+  const amount = parseAmountField(amountStr);
   if (isNaN(amount)) return null;
 
   const bankAccount = normalizeToUppercase((row['Bank Account'] || 'VISION').trim());
@@ -30,8 +33,8 @@ function rowToTransaction(row) {
   const currency = (row['Currency'] || 'EUR').trim().toUpperCase();
   // Same guard-apostrophe cleanup as Amount, so a negative Balance survives the
   // round-trip instead of being silently nulled.
-  const balanceStr = (row['Balance'] || '').replace(/[€$£,\s']/g, '').trim();
-  const balance = balanceStr ? parseDecimalSafe(balanceStr) : null;
+  const balanceStr = (row['Balance'] || '').replace(/'/g, '').trim();
+  const balance = balanceStr ? parseAmountField(balanceStr) : null;
   const category = (row['Category'] || '').trim();
   const comment = (row['Comment'] || '').trim() || null;
 

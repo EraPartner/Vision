@@ -52,6 +52,20 @@ INVALID_DATE,Main Account,Skip Date,Note,-10.00,EUR,944.80,OTHER,invalid date
     expect(txns[0].balance).toBe(-12);
   });
 
+  it('parses EU-decimal amounts instead of stripping the comma into a 100× value', async () => {
+    // The loose header detection can route non-Vision CSVs here; a blind
+    // comma-strip turned "12,34" into 1234.
+    const csv = `Date,Bank Account,Recipient,Memo,Amount,Currency,Balance,Category,Comment
+2026-03-04,Main Account,EU Shop,groceries,"-12,34",EUR,"1.234,56",FOOD,
+`;
+    tmpPath = writeTempCSV(csv);
+    const txns = await parse(tmpPath);
+
+    expect(txns).toHaveLength(1);
+    expect(txns[0].amount).toBe(-12.34);
+    expect(txns[0].balance).toBe(1234.56);
+  });
+
   it('uses UNKNOWN recipient when recipient is empty', async () => {
     const csv = `Date,Bank Account,Recipient,Memo,Amount,Currency,Balance,Category,Comment
 2026-03-03,Main Account,,transfer,25.00,EUR,979.80,INCOME,
