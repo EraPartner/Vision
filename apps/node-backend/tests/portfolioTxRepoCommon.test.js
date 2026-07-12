@@ -188,6 +188,16 @@ describe('normalizeTransactionPayload — buy/sell on unit-based assets', () => 
     )).toThrow(/amount must equal/);
   });
 
+  it('accepts the exactly-one-cent tolerance boundary (Decimal compare, not float subtraction)', () => {
+    // 3 × 33.33 = 99.99 vs amount 100.00: |diff| is exactly 0.01, which the
+    // tolerance intends to accept — float subtraction produced 0.010000000000005116.
+    const r = normalizeTransactionPayload(
+      { type: 'buy', amount: 100.0, units: 3, price_per_unit: 33.33 },
+      { assetClass: 'stock' },
+    );
+    expect(r.amount).toBe(100);
+  });
+
   it('rejects negative or zero values', () => {
     expect(() => normalizeTransactionPayload(
       { type: 'buy', amount: 0, units: 1, price_per_unit: 1 },

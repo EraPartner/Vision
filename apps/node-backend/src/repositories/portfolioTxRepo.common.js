@@ -137,7 +137,10 @@ function normalizeBuySellMath({ amount, units, pricePerUnit }) {
 
   const expectedAmount = roundMoney(multiply(nextUnits, nextPrice), 4);
   const comparableAmount = roundMoney(nextAmount, 4);
-  if (Math.abs(expectedAmount - comparableAmount) > 0.01) {
+  // Decimal compare: float subtraction at the tolerance boundary rejects the
+  // exactly-one-cent case this check intends to accept (e.g. |100.00 − 99.99|
+  // as floats is 0.010000000000005116 > 0.01).
+  if (toDecimal(expectedAmount).minus(toDecimal(comparableAmount)).abs().gt('0.01')) {
     throw makeValidationError('amount must equal units * price_per_unit for buy/sell transactions');
   }
 
