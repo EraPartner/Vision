@@ -35,6 +35,22 @@ export function validateInt4Ids(ids) {
 }
 
 /**
+ * Coerce one amount-filter value to a comparable number. Compares on magnitude
+ * (|amount|) by default — income/expense sign belongs to transaction_type — or
+ * on the signed amount when `signed` is true, so +50 and -50 are distinct.
+ * Returns null for missing or unparseable input (the clause is skipped).
+ *
+ * Single source of truth for the list endpoint (routes/transactions.js) and
+ * bulk selection (services/bulkSelection.js), which must stay in lockstep.
+ */
+export function parseAmountFilter(value, signed = false) {
+  if (value === undefined || value === null || value === '') return null;
+  const n = Number(value);
+  if (!Number.isFinite(n)) return null;
+  return signed ? n : Math.abs(n);
+}
+
+/**
  * Build the canonical transaction WHERE clause.
  *
  * Assumes the caller joined `transactions t` with:

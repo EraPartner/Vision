@@ -26,7 +26,7 @@ import {
   ConflictError,
 } from '../middleware/errorHandler.js';
 import { toDecimal, toNumber } from '../lib/money.js';
-import { buildTransactionWhere, validateInt4Ids } from '../services/filterBuilder.js';
+import { buildTransactionWhere, parseAmountFilter, validateInt4Ids } from '../services/filterBuilder.js';
 import {
   EXPORT_MAX_LIST_SIZE,
   streamCsvExport,
@@ -65,20 +65,12 @@ function parseTransactionListQuery(query) {
     ? String(tags).split(',').map((s) => s.trim().toLowerCase()).filter(Boolean)
     : null;
 
-  // Amount filters compare on magnitude (|amount|) by default, leaving income/
-  // expense sign to transaction_type. With amount_signed=true they instead
-  // compare the signed amount, so +50 and -50 are distinct. amount_exact is
-  // shorthand for min == max.
+  // Amount coercion lives in filterBuilder.parseAmountFilter (shared with
+  // bulkSelection). amount_exact is shorthand for min == max.
   const amountSigned = amount_signed === 'true' || amount_signed === '1';
-  const parseAmount = (v) => {
-    if (v === undefined || v === null || v === '') return null;
-    const raw = Number(v);
-    if (!Number.isFinite(raw)) return null;
-    return amountSigned ? raw : Math.abs(raw);
-  };
-  const amountExact = parseAmount(amount_exact);
-  const amountMin = amountExact != null ? amountExact : parseAmount(amount_min);
-  const amountMax = amountExact != null ? amountExact : parseAmount(amount_max);
+  const amountExact = parseAmountFilter(amount_exact, amountSigned);
+  const amountMin = amountExact != null ? amountExact : parseAmountFilter(amount_min, amountSigned);
+  const amountMax = amountExact != null ? amountExact : parseAmountFilter(amount_max, amountSigned);
 
   return {
     limit,

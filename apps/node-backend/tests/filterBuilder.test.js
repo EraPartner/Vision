@@ -11,8 +11,29 @@ import {
   buildTransactionWhere,
   buildExclusionClauses,
   buildAggregationFilter,
+  parseAmountFilter,
   validateInt4Ids,
 } from '../src/services/filterBuilder.js';
+
+describe('parseAmountFilter', () => {
+  it('returns null for missing or unparseable input', () => {
+    expect(parseAmountFilter(undefined)).toBeNull();
+    expect(parseAmountFilter(null)).toBeNull();
+    expect(parseAmountFilter('')).toBeNull();
+    expect(parseAmountFilter('abc')).toBeNull();
+    expect(parseAmountFilter(Infinity)).toBeNull();
+  });
+
+  it('compares on magnitude by default', () => {
+    expect(parseAmountFilter('-50')).toBe(50);
+    expect(parseAmountFilter(12.5)).toBe(12.5);
+  });
+
+  it('keeps the sign when signed=true', () => {
+    expect(parseAmountFilter('-50', true)).toBe(-50);
+    expect(parseAmountFilter('50', true)).toBe(50);
+  });
+});
 
 describe('validateInt4Ids', () => {
   it('keeps valid positive int4 ids', () => {
