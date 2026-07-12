@@ -417,6 +417,34 @@ describe('Transaction Routes', () => {
       expect(res.status).toHaveBeenCalledWith(400);
     });
 
+    it('should return 400 for a zero amount', async () => {
+      const req = {
+        body: {
+          transaction_date: '2026-01-15', bank_account: 'Chase',
+          recipient_id: 1, amount: 0,
+        },
+      };
+      const res = mockResponse();
+      await callHandler(routeHandlers['post:/'], req, res);
+
+      expect(res.status).toHaveBeenCalledWith(400);
+      expect(transactionRepository.create).not.toHaveBeenCalled();
+    });
+
+    it('should return 400 for a non-numeric amount', async () => {
+      const req = {
+        body: {
+          transaction_date: '2026-01-15', bank_account: 'Chase',
+          recipient_id: 1, amount: 'abc',
+        },
+      };
+      const res = mockResponse();
+      await callHandler(routeHandlers['post:/'], req, res);
+
+      expect(res.status).toHaveBeenCalledWith(400);
+      expect(transactionRepository.create).not.toHaveBeenCalled();
+    });
+
     it('should return 409 when manual duplicate is detected', async () => {
       isManualDuplicate.mockResolvedValue({ isDuplicate: true, existingTransactionId: 99 });
 

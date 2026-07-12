@@ -242,6 +242,7 @@ const nl: Record<string, string> = {
   'addTxn.descPlaceholder': 'Transactieomschrijving',
   'addTxn.duplicateError': 'Dubbele transactie gedetecteerd -- een overeenkomstige transactie bestaat al.',
   'addTxn.invalidAmount': 'Ongeldig bedrag. Gebruik alleen cijfers (komma of punt als decimaalteken).',
+  'addTxn.zeroAmount': 'Bedrag mag niet nul zijn.',
   'addWatchlist.aboveCurrent': '{n}% boven huidige koers',
   'addWatchlist.assetClass': 'Activaklasse',
   'addWatchlist.belowCurrent': '{n}% onder huidige koers',

@@ -242,6 +242,7 @@ const en: Record<string, string> = {
   'addTxn.descPlaceholder': 'Transaction description',
   'addTxn.duplicateError': 'Duplicate transaction detected -- a matching transaction already exists.',
   'addTxn.invalidAmount': 'Invalid amount. Use digits only (commas or periods accepted as decimal separator).',
+  'addTxn.zeroAmount': 'Amount cannot be zero.',
   'addWatchlist.aboveCurrent': '{n}% above current price',
   'addWatchlist.assetClass': 'Asset Class',
   'addWatchlist.belowCurrent': '{n}% below current price',

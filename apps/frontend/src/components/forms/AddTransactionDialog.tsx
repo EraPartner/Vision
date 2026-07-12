@@ -56,6 +56,12 @@ export function AddTransactionDialog() {
             toast.error(t('addTxn.invalidAmount') || 'Invalid amount');
             return;
         }
+        // Sign is the expense/income marker, so 0 is meaningless — the backend
+        // rejects it too; catching it here gives a proper message.
+        if (amountValue === 0) {
+            toast.error(t('addTxn.zeroAmount'));
+            return;
+        }
 
         createMutation.mutate(
             {

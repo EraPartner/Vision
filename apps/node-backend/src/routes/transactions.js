@@ -549,6 +549,12 @@ router.post('/', async (req, res) => {
   if (!txDate || !data.bank_account || !data.recipient_id || data.amount == null) {
     throw new ValidationError('Missing required fields: date, bank_account, recipient_id, amount');
   }
+  // Sign carries meaning (− expense / + income), so a zero amount is
+  // meaningless and only pollutes aggregations — reject it up front.
+  const amountNum = Number(data.amount);
+  if (!Number.isFinite(amountNum) || amountNum === 0) {
+    throw new ValidationError('amount must be a non-zero finite number');
+  }
   // Validate recipient_id is a positive integer up front — a non-integer here
   // otherwise reached the DB as an FK type error and surfaced as a 500.
   const recipientIdNum = Number(data.recipient_id);
