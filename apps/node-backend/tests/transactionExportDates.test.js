@@ -70,6 +70,21 @@ describe('export date serialization', () => {
     expect(dataRow).not.toMatch(/GMT|Jul/);
   });
 
+  it('CSV running balance is partitioned per account, not one global accumulator', async () => {
+    primeQueries([
+      exportRow({ id: 1, account_id: 1, amount: '100.00' }),
+      exportRow({ id: 2, account_id: 2, amount: '50.00' }),
+      exportRow({ id: 3, account_id: 1, amount: '-30.00' }),
+    ]);
+    const res = mockRes();
+
+    await streamCsvExport(res, { whereSql: '1=1', params: [], nextParamIdx: 1, includeBalance: true });
+
+    const balances = res.chunks.slice(1).map((line) => line.trim().split(',').pop());
+    // account 1: 100 → 70; account 2: 50 (not 150/120 from a global sum)
+    expect(balances).toEqual(['100', '50', '70']);
+  });
+
   it('NDJSON emits the calendar day, not the previous-day ISO timestamp', async () => {
     primeQueries([exportRow()]);
     const res = mockRes();

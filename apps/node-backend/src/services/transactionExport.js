@@ -69,7 +69,7 @@ function buildExportChunkSql(whereSql, limitParamIdx, cursorDateParamIdx, cursor
     ? `AND (t.date, t.id) > ($${cursorDateParamIdx}::date, $${cursorIdParamIdx}::bigint)`
     : '';
   return `
-    SELECT t.id, t.date, t.bank_account,
+    SELECT t.id, t.date, t.bank_account, t.account_id,
            COALESCE(pr.name, r.name) AS recipient_name, t.memo,
            t.amount, t.currency, t.balance,
            CASE
@@ -195,9 +195,12 @@ async function streamExport(res, { whereSql, params, nextParamIdx, contentType, 
 }
 
 export async function streamCsvExport(res, { whereSql, params, nextParamIdx, includeBalance = false }) {
-  // Kept as a Decimal across the whole stream — collapsing to a JS number each
-  // row re-ingested a drifted float into the next step's running balance.
-  let runningBalance = toDecimal(0);
+  // Partitioned by account_id (ADR-088): the list endpoint's window partitions
+  // by account because a stream spanning multiple accounts otherwise sums them
+  // into one meaningless cross-account total. Kept as Decimals across the whole
+  // stream — collapsing to a JS number each row re-ingested a drifted float
+  // into the next step's running balance.
+  const runningBalances = new Map();
   return streamExport(res, {
     whereSql,
     params,
@@ -212,8 +215,10 @@ export async function streamCsvExport(res, { whereSql, params, nextParamIdx, inc
     },
     formatRow(row) {
       if (includeBalance) {
-        runningBalance = runningBalance.plus(toDecimal(row.amount ?? 0));
-        return `${buildCsvRow({ ...row, running_balance: runningBalance.toNumber() }, { includeBalance })}\n`;
+        const key = row.account_id ?? null;
+        const next = (runningBalances.get(key) ?? toDecimal(0)).plus(toDecimal(row.amount ?? 0));
+        runningBalances.set(key, next);
+        return `${buildCsvRow({ ...row, running_balance: next.toNumber() }, { includeBalance })}\n`;
       }
       return `${buildCsvRow(row)}\n`;
     },
