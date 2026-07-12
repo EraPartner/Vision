@@ -355,8 +355,20 @@ buildRouteManifest(app);
 // Must be registered AFTER API routes but BEFORE the 404 handler.
 if (settings.isProduction()) {
   const distPath = resolve(dirname(fileURLToPath(import.meta.url)), '..', '..', '..', 'dist');
-  // Hashed assets (JS/CSS) — long-lived cache
-  app.use(express.static(distPath, { index: false, maxAge: '1y', immutable: true }));
+  // Hashed assets (JS/CSS) — long-lived cache. `index: false` only disables
+  // directory-index resolution: a literal GET /index.html is still a real file
+  // in distPath and would otherwise be pinned for a year, serving a stale
+  // shell whose old hashed chunk URLs 404 after an upgrade.
+  app.use(express.static(distPath, {
+    index: false,
+    maxAge: '1y',
+    immutable: true,
+    setHeaders: (res, filePath) => {
+      if (filePath.endsWith('index.html')) {
+        res.setHeader('Cache-Control', 'no-cache');
+      }
+    },
+  }));
   // Preload the SPA shell once at startup; the fallback route then serves it
   // from memory with no per-request file I/O.
   const indexHtml = fs.readFileSync(resolve(distPath, 'index.html'), 'utf-8');
