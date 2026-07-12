@@ -206,6 +206,7 @@
   "addPortTxn.endDate": "Einddatum (optioneel)",
   "addPortTxn.error.amountRequired": "Bedrag is verplicht",
   "addPortTxn.error.dateRequired": "Datum is verplicht",
+  "addPortTxn.error.invalidNumber": "Kosten en belastingen moeten geldige getallen van nul of hoger zijn; de wisselkoers moet groter zijn dan 0.",
   "addPortTxn.error.twoOfThreeRequired": "Voor kopen/verkopen vult u twee van bedrag, eenheden en prijs per eenheid in (de derde wordt berekend).",
   "addPortTxn.error.unitsRequired": "Eenheden zijn verplicht",
   "addPortTxn.fees": "Kosten",

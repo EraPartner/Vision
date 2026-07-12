@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import { describe, expect, it } from "vitest";
-import { screen, waitFor } from "@testing-library/react";
+import { fireEvent, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { http } from "msw";
 import { renderWithApp } from "@/test/renderWithApp";
@@ -242,6 +242,46 @@ describe("AddPortfolioTxnDialog", () => {
         expect(
             await screen.findByText(/for buy\/sell.*two|enter any two|two of.*(amount|units)/i),
         ).toBeInTheDocument();
+    });
+
+    it("blocks submit on invalid fees or zero FX rate instead of posting silently", async () => {
+        // Arrange — bad values in these fields used to fall back to 0 and submit
+        let posted = false;
+        server.use(
+            http.post(`${API_BASE}/api/investments/1/transactions`, () => {
+                posted = true;
+                return ok(PORTFOLIO_TXN_STUB);
+            }),
+        );
+        const user = userEvent.setup();
+        renderWithApp(<AddPortfolioTxnDialog investment={INVESTMENT} />);
+
+        await user.click(await screen.findByRole("button", { name: /add transaction/i }));
+        await screen.findByRole("dialog");
+
+        const unitsInput = await screen.findByLabelText(/units/i);
+        await user.type(unitsInput, "10");
+        const ppuInput = screen.getByLabelText(/price per unit/i);
+        await user.type(ppuInput, "90");
+
+        // Act 1 — negative fees (fireEvent.change = paste-equivalent; the
+        // min="0" attribute is inert without native form validation)
+        const feesInput = screen.getByLabelText(/fees/i);
+        fireEvent.change(feesInput, { target: { value: "-1" } });
+        await user.click(screen.getByRole("button", { name: /record/i }));
+
+        // Assert 1 — dialog stays open and nothing was posted
+        expect(screen.getByRole("dialog")).toBeInTheDocument();
+        expect(posted).toBe(false);
+
+        // Act 2 — fees valid again, but FX rate of 0 (backend rejects ≤ 0)
+        fireEvent.change(feesInput, { target: { value: "1" } });
+        fireEvent.change(screen.getByLabelText(/fx rate to eur/i), { target: { value: "0" } });
+        await user.click(screen.getByRole("button", { name: /record/i }));
+
+        // Assert 2 — still blocked client-side
+        expect(screen.getByRole("dialog")).toBeInTheDocument();
+        expect(posted).toBe(false);
     });
 
     it("shows buy/sell/dividend transaction types for etf asset class", async () => {
