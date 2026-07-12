@@ -158,61 +158,55 @@ function buildExportFilters(query) {
 }
 
 function normalizeTransactionPatchFields(body) {
-  const fields = { ...body };
+  // Immutable-rest sanitization (docs/reference/code-patterns.md) — strip
+  // read-only keys via destructuring, never with in-place delete.
+  const { links: _links, id: _id, created_at: _createdAt, date, ...fields } = body;
 
   // Remap whenever the key is present — a cleared date ('' / null) must also
   // land on transaction_date so the PATCH validation can reject it instead of
   // letting `SET "date" = ''` reach Postgres.
-  if ('date' in fields) {
-    fields.transaction_date = fields.date;
-    delete fields.date;
+  if ('date' in body) {
+    fields.transaction_date = date;
   }
-
-  delete fields.links;
-  delete fields.id;
-  delete fields.created_at;
 
   return fields;
 }
 
+// The name→id resolvers return the id to use (or undefined to leave the
+// column untouched) instead of mutating the fields object — the caller strips
+// the *_name keys immutably and applies the resolved ids itself.
 async function resolveRecipientNameToId(fields) {
-  if (fields.recipient_name && !fields.recipient_id) {
-    const normalized = normalizeForMatching(fields.recipient_name);
-    const recipientResult = await dbQuery(
-      `SELECT id FROM recipients WHERE normalized_name = $1 LIMIT 1`,
-      [normalized]
-    );
-    if (recipientResult.rows.length === 0) {
-      throw new ValidationError(`Recipient with name '${fields.recipient_name}' does not exist`);
-    }
-    fields.recipient_id = recipientResult.rows[0].id;
+  if (!fields.recipient_name || fields.recipient_id) return fields.recipient_id;
+  const normalized = normalizeForMatching(fields.recipient_name);
+  const recipientResult = await dbQuery(
+    `SELECT id FROM recipients WHERE normalized_name = $1 LIMIT 1`,
+    [normalized]
+  );
+  if (recipientResult.rows.length === 0) {
+    throw new ValidationError(`Recipient with name '${fields.recipient_name}' does not exist`);
   }
-
-  delete fields.recipient_name;
+  return recipientResult.rows[0].id;
 }
 
 async function resolveCategoryNameToId(fields) {
-  if (fields.category_name && !fields.category_id) {
-    const normalized = fields.category_name.toUpperCase().trim();
-    if (!normalized.includes(':')) {
-      throw new ValidationError(
-        `Invalid category name format '${normalized}'. Expected format: 'General:Detail' (e.g., 'FOOD:BEVERAGES')`,
-      );
-    }
-    const [general, detail] = normalized.split(':', 2).map(s => s.trim());
-    const catResult = await dbQuery(
-      `SELECT id FROM categories WHERE general = $1 AND detail = $2 LIMIT 1`,
-      [general, detail]
+  if (!fields.category_name || fields.category_id) return fields.category_id;
+  const normalized = fields.category_name.toUpperCase().trim();
+  if (!normalized.includes(':')) {
+    throw new ValidationError(
+      `Invalid category name format '${normalized}'. Expected format: 'General:Detail' (e.g., 'FOOD:BEVERAGES')`,
     );
-    if (catResult.rows.length === 0) {
-      throw new ValidationError(
-        `Category '${normalized}' does not exist. Please create it first or use an existing category.`,
-      );
-    }
-    fields.category_id = catResult.rows[0].id;
   }
-
-  delete fields.category_name;
+  const [general, detail] = normalized.split(':', 2).map(s => s.trim());
+  const catResult = await dbQuery(
+    `SELECT id FROM categories WHERE general = $1 AND detail = $2 LIMIT 1`,
+    [general, detail]
+  );
+  if (catResult.rows.length === 0) {
+    throw new ValidationError(
+      `Category '${normalized}' does not exist. Please create it first or use an existing category.`,
+    );
+  }
+  return catResult.rows[0].id;
 }
 
 // ── Internal transfers (ADR-083) ───────────────────────────────────────────
@@ -666,13 +660,16 @@ router.patch(
       fields[fkField] = idNum;
     }
 
-    // Independent — touch disjoint fields, run in parallel.
-    await Promise.all([
+    // Independent lookups — run in parallel, then apply immutably.
+    const [recipientId, categoryId] = await Promise.all([
       resolveRecipientNameToId(fields),
       resolveCategoryNameToId(fields),
     ]);
+    const { recipient_name: _recipientName, category_name: _categoryName, ...patch } = fields;
+    if (recipientId !== undefined) patch.recipient_id = recipientId;
+    if (categoryId !== undefined) patch.category_id = categoryId;
 
-    const updated = await transactionRepository.update(id, fields);
+    const updated = await transactionRepository.update(id, patch);
     if (!updated) {
       throw new NotFoundError(`Transaction with ID ${id} not found`);
     }

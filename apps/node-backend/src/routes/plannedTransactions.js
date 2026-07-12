@@ -36,29 +36,22 @@ function withoutPatchOnlyReadOnlyFields(fields) {
   return rest;
 }
 
+// The name→id resolvers return the id to use (or undefined to leave the
+// column untouched) instead of mutating the fields object — the caller strips
+// the *_name keys immutably and applies the resolved ids itself.
 async function resolveRecipientIdFromName(fields) {
-  if (!fields.recipient_name || fields.recipient_id) {
-    delete fields.recipient_name;
-    return;
-  }
+  if (!fields.recipient_name || fields.recipient_id) return fields.recipient_id;
 
   const normalized = fields.recipient_name.toUpperCase().trim();
   const recipientResult = await dbQuery(
     `SELECT id FROM recipients WHERE UPPER(name) = $1 LIMIT 1`,
     [normalized]
   );
-  if (recipientResult.rows.length > 0) {
-    fields.recipient_id = recipientResult.rows[0].id;
-  }
-
-  delete fields.recipient_name;
+  return recipientResult.rows.length > 0 ? recipientResult.rows[0].id : fields.recipient_id;
 }
 
 async function resolveCategoryIdFromName(fields) {
-  if (!fields.category_name || fields.category_id) {
-    delete fields.category_name;
-    return;
-  }
+  if (!fields.category_name || fields.category_id) return fields.category_id;
 
   const normalized = fields.category_name.toUpperCase().trim();
   const parts = normalized.split(':');
@@ -68,11 +61,11 @@ async function resolveCategoryIdFromName(fields) {
       [parts[0].trim(), parts[1].trim()]
     );
     if (catResult.rows.length > 0) {
-      fields.category_id = catResult.rows[0].id;
+      return catResult.rows[0].id;
     }
   }
 
-  delete fields.category_name;
+  return fields.category_id;
 }
 
 function generateLoanScheduleOrThrow(input) {
@@ -276,12 +269,16 @@ router.patch(
     const existing = await plannedTransactionRepository.getById(id);
     if (!existing) throw new NotFoundError(`Planned transaction ${id} not found`);
 
-    const fields = withoutPatchOnlyReadOnlyFields(req.body);
-    if (fields.tags !== undefined && !Array.isArray(fields.tags)) throw new ValidationError('tags must be an array of strings');
-    await Promise.all([
-      resolveRecipientIdFromName(fields),
-      resolveCategoryIdFromName(fields),
+    const rawFields = withoutPatchOnlyReadOnlyFields(req.body);
+    if (rawFields.tags !== undefined && !Array.isArray(rawFields.tags)) throw new ValidationError('tags must be an array of strings');
+    // Independent lookups — run in parallel, then apply immutably.
+    const [recipientId, categoryId] = await Promise.all([
+      resolveRecipientIdFromName(rawFields),
+      resolveCategoryIdFromName(rawFields),
     ]);
+    const { recipient_name: _recipientName, category_name: _categoryName, ...fields } = rawFields;
+    if (recipientId !== undefined) fields.recipient_id = recipientId;
+    if (categoryId !== undefined) fields.category_id = categoryId;
 
     // Recurrence bounds: same validation as POST; explicit null clears a bound.
     if (fields.recurrence_end_date != null) {
