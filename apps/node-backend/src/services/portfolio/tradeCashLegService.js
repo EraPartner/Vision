@@ -97,3 +97,20 @@ export async function deleteTradeCashLegs(portfolioTxnId, client) {
   );
   return result.rowCount ?? 0;
 }
+
+/**
+ * Bulk variant of deleteTradeCashLegs for deleting a whole investment: removes the
+ * cash legs of every given trade in one statement. Returns the number of legs removed.
+ *
+ * @param {number[]} portfolioTxnIds
+ * @param {object} [client]
+ */
+export async function deleteTradeCashLegsForTrades(portfolioTxnIds, client) {
+  if (!portfolioTxnIds?.length) return 0;
+  const run = client ? client.query.bind(client) : query;
+  const result = await run(
+    'DELETE FROM transactions WHERE portfolio_transaction_id = ANY($1::int[])',
+    [portfolioTxnIds],
+  );
+  return result.rowCount ?? 0;
+}

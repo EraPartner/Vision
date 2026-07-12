@@ -3,7 +3,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 vi.mock('../src/database/connection.js', () => ({ query: vi.fn() }));
 
 import { query } from '../src/database/connection.js';
-import { computeTradeCashLegAmount, createTradeCashLeg } from '../src/services/portfolio/tradeCashLegService.js';
+import { computeTradeCashLegAmount, createTradeCashLeg, deleteTradeCashLegsForTrades } from '../src/services/portfolio/tradeCashLegService.js';
 
 beforeEach(() => vi.clearAllMocks());
 
@@ -62,5 +62,22 @@ describe('createTradeCashLeg', () => {
     expect(params[1]).toBe(-1000);
     expect(params[4]).toBe(3);
     expect(params[5]).toBe(7);
+  });
+});
+
+describe('deleteTradeCashLegsForTrades', () => {
+  it('no-ops on an empty or missing id list', async () => {
+    expect(await deleteTradeCashLegsForTrades([])).toBe(0);
+    expect(await deleteTradeCashLegsForTrades(undefined)).toBe(0);
+    expect(query).not.toHaveBeenCalled();
+  });
+
+  it('deletes the legs of all given trades in one statement', async () => {
+    query.mockResolvedValueOnce({ rowCount: 2 });
+    expect(await deleteTradeCashLegsForTrades([7, 8, 9])).toBe(2);
+    const [sql, params] = query.mock.calls[0];
+    expect(sql).toContain('DELETE FROM transactions');
+    expect(sql).toContain('portfolio_transaction_id = ANY');
+    expect(params[0]).toEqual([7, 8, 9]);
   });
 });

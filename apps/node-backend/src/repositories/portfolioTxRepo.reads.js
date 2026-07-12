@@ -55,6 +55,14 @@ export async function getAllWithCount({ investmentId = null, type = null, limit 
   return { rows, total };
 }
 
+export async function getIdsByInvestment(investmentId) {
+  const result = await query(
+    'SELECT id FROM portfolio_transactions WHERE investment_id = $1',
+    [investmentId],
+  );
+  return result.rows.map((row) => row.id);
+}
+
 export async function getAllByInvestmentIds({
   investmentIds = [],
   type = null,
