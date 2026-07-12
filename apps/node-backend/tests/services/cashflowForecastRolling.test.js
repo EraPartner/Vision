@@ -18,12 +18,12 @@ const buildHistory = ({ days = 400 } = {}) => {
   return out;
 };
 
-const todayIso = () => new Date().toISOString().slice(0, 10);
-const isoOffsetFromToday = (offsetDays) => {
-  const now = new Date();
-  const ms = Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate()) + offsetDays * 86_400_000;
-  return new Date(ms).toISOString().slice(0, 10);
-};
+// App-timezone today (ADR-009) — must match rollingWindowDates' anchor, which
+// is deliberately NOT the UTC calendar day (they differ between local
+// midnight and 01:00/02:00 Brussels).
+import { todayAppDateString, addDaysYmd } from '../../src/lib/timezone.js';
+const todayIso = () => todayAppDateString();
+const isoOffsetFromToday = (offsetDays) => addDaysYmd(todayAppDateString(), offsetDays);
 
 vi.mock('../../src/repositories/infoRepository.js', () => ({
   infoRepository: {

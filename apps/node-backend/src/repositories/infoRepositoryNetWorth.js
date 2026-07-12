@@ -8,6 +8,7 @@ import { computeDailySnapshots } from '../services/portfolio/snapshotBuilder.js'
 import { accountRepository } from './accountRepository.js';
 import { convertToCurrency } from '../services/currency/currencyConversionService.js';
 import { toNumber } from '../lib/money.js';
+import { todayAppDateString } from '../lib/timezone.js';
 import {
   roundToCents,
   formatDateToYmd,
@@ -114,9 +115,14 @@ export const netWorthRepository = {
       investmentsByDay[row.day] = Number(row.investments) || 0;
     }
 
+    // App-timezone today (ADR-009), threaded into the SQL bounds as well so
+    // the generated day series and the JS walk below agree on the last day —
+    // Postgres CURRENT_DATE follows the server timezone, not the app's.
+    const todayYmd = todayAppDateString();
+
     const bankHistoryResult = await query(`
       WITH bounds AS (
-        SELECT $1::date AS start_date, CURRENT_DATE AS end_date
+        SELECT $1::date AS start_date, $2::date AS end_date
       ),
       days AS (
         SELECT generate_series(start_date, end_date, interval '1 day')::date AS day
@@ -156,7 +162,7 @@ export const netWorthRepository = {
       ) lb ON true
       WHERE lb.balance IS NOT NULL
       ORDER BY d.day, a.account_id
-    `, [firstDataDateYmd]);
+    `, [firstDataDateYmd, todayYmd]);
 
     let bankHistoryConverted = await convertRowsWithHistoricalRateFallback(
       mapRowsForAmountConversion(bankHistoryResult.rows, 'balance'),
@@ -172,7 +178,7 @@ export const netWorthRepository = {
 
       const liquidFlowResult = await query(`
         WITH bounds AS (
-          SELECT $1::date AS start_date, CURRENT_DATE AS end_date
+          SELECT $1::date AS start_date, $2::date AS end_date
         ),
         days AS (
           SELECT generate_series(start_date, end_date, interval '1 day')::date AS day
@@ -218,7 +224,7 @@ export const netWorthRepository = {
           value
         FROM tx_cumulative
         ORDER BY day, currency
-      `, [firstDataDateYmd]);
+      `, [firstDataDateYmd, todayYmd]);
 
       bankHistoryConverted = await convertRowsWithHistoricalRateFallback(
         mapRowsForAmountConversion(liquidFlowResult.rows, 'value'),
@@ -239,8 +245,9 @@ export const netWorthRepository = {
     }
 
     const start = new Date(`${firstDataDateYmd}T00:00:00Z`);
-    const end = new Date();
-    end.setUTCHours(0, 0, 0, 0);
+    // End anchor on the app-timezone today (ADR-009) — UTC midnight dropped
+    // the newest day from the series between local midnight and 01:00/02:00.
+    const end = new Date(`${todayYmd}T00:00:00Z`);
 
     const snapshots = [];
     // Forward-fill the last known investments value: portfolio snapshots are

@@ -6,6 +6,7 @@
 
 import { query, withTransaction } from '../database/connection.js';
 import { sanitizeUpdateFields } from '../middleware/validation.js';
+import { todayAppDateString } from '../lib/timezone.js';
 
 function buildPlannedTransactionWhereClause({
   startDate = null,
@@ -627,7 +628,9 @@ export const plannedTransactionRepository = {
     await query(
       `INSERT INTO planned_transaction_executions (planned_transaction_id, executed_transaction_id, execution_date)
        VALUES ($1, $2, $3)`,
-      [plannedTransactionId, executedTransactionId, executionDate || new Date().toISOString().split('T')[0]]
+      // App-timezone today (ADR-009) — the UTC calendar day is yesterday
+      // between local midnight and 01:00/02:00 Brussels.
+      [plannedTransactionId, executedTransactionId, executionDate || todayAppDateString()]
     );
   },
 

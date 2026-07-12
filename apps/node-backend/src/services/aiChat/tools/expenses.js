@@ -9,6 +9,7 @@ import { transactionRepository } from '../../../repositories/transactionReposito
 import settings from '../../../config/config.js';
 import { toDecimal, roundToCents } from '../../../lib/money.js';
 import { toYmd } from '../../../utils/portfolioMath.js';
+import { todayAppDateString, firstOfMonthYmd } from '../../../lib/timezone.js';
 import {
   requireDate,
   parsePositiveInt,
@@ -495,12 +496,10 @@ export const getSpendTrendForCategory = {
     const categoryId = parsePositiveInt(args.categoryId, 'categoryId', { min: 1, max: Number.MAX_SAFE_INTEGER });
     const months = parsePositiveInt(args.months, 'months', { min: 1, max: 36, defaultValue: 12 });
 
-    const today = new Date();
-    const to = today.toISOString().slice(0, 10);
-    const fromDate = new Date(today);
-    fromDate.setUTCMonth(fromDate.getUTCMonth() - months + 1);
-    fromDate.setUTCDate(1);
-    const from = fromDate.toISOString().slice(0, 10);
+    // App-timezone today (ADR-009) — the UTC day excluded today's transactions
+    // from trend queries between local midnight and 01:00/02:00 Brussels.
+    const to = todayAppDateString();
+    const from = firstOfMonthYmd(to, -(months - 1));
 
     const rows = await fetchTransactionsInRange({ from, to, categoryId });
 

@@ -10,6 +10,7 @@ import settings from '../../../config/config.js';
 import { toDecimal, roundToCents } from '../../../lib/money.js';
 import { calculateNextDate } from '../../calculations/recurrence.js';
 import { toYmd } from '../../../utils/portfolioMath.js';
+import { todayAppDateString, addDaysYmd } from '../../../lib/timezone.js';
 import {
   parseEnum,
   parsePositiveInt,
@@ -59,16 +60,16 @@ export const getUpcomingPlanned = {
   async run(args, { maxRows = settings.aiChat.maxToolRows } = {}) {
     const horizonDays = parsePositiveInt(args.horizonDays, 'horizonDays', { min: 1, max: 365, defaultValue: 30 });
 
-    const today = new Date();
-    today.setUTCHours(0, 0, 0, 0);
-    const end = new Date(today.getTime());
-    end.setUTCDate(end.getUTCDate() + horizonDays);
+    // App-timezone today (ADR-009) — the UTC window started a day early /
+    // ended a day short between local midnight and 01:00/02:00 Brussels.
+    const fromDate = todayAppDateString();
+    const toDate = addDaysYmd(fromDate, horizonDays);
 
     const { items } = await plannedTransactionRepository.getAll({
       limit: 1000,
       offset: 0,
-      startDate: today.toISOString().slice(0, 10),
-      endDate: end.toISOString().slice(0, 10),
+      startDate: fromDate,
+      endDate: toDate,
       isExecuted: false,
       active: true,
     });
@@ -96,8 +97,8 @@ export const getUpcomingPlanned = {
       data: rows.slice(0, maxRows),
       meta: {
         horizonDays,
-        fromDate: today.toISOString().slice(0, 10),
-        toDate: end.toISOString().slice(0, 10),
+        fromDate,
+        toDate,
         count: rows.length,
         currency: 'EUR',
         renderAs: 'table',
@@ -266,18 +267,16 @@ export const getProjectedBalance = {
   async run(args, _context = {}) {
     const horizonDays = parsePositiveInt(args.horizonDays, 'horizonDays', { min: 1, max: 365, defaultValue: 30 });
 
-    const today = new Date();
-    today.setUTCHours(0, 0, 0, 0);
-    const end = new Date(today.getTime());
-    end.setUTCDate(end.getUTCDate() + horizonDays);
-    const endStr = end.toISOString().slice(0, 10);
+    // App-timezone today (ADR-009) — same edge-hour window fix as above.
+    const fromDate = todayAppDateString();
+    const endStr = addDaysYmd(fromDate, horizonDays);
 
     const [bankResult, { items }] = await Promise.all([
       infoRepository.getBankBalances('EUR'),
       plannedTransactionRepository.getAll({
         limit: 1000,
         offset: 0,
-        startDate: today.toISOString().slice(0, 10),
+        startDate: fromDate,
         endDate: endStr,
         isExecuted: false,
         active: true,
@@ -344,7 +343,7 @@ export const getProjectedBalance = {
         plannedNetChange: roundToCents(plannedNet).toNumber(),
         projectedBalance,
         horizonDays,
-        fromDate: today.toISOString().slice(0, 10),
+        fromDate,
         toDate: endStr,
         currency: 'EUR',
         renderAs: 'table',

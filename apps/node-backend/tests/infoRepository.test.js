@@ -37,6 +37,10 @@ vi.mock('../src/config/logger.js', () => ({
 
 import { logger } from '../src/config/logger.js';
 
+// App-timezone today (ADR-009) — getNetWorthFromSnapshots anchors its day
+// series on the app timezone, not the server-local/UTC calendar day.
+import { todayAppDateString, addDaysYmd } from '../src/lib/timezone.js';
+
 // YYYY-MM period helpers. Derive the previous month from the first-of-month in
 // UTC so end-of-month run dates (the 29th–31st) don't roll `setMonth(-1)` into
 // the wrong month and collapse current==prev — which made these MoM tests
@@ -62,8 +66,7 @@ describe('InfoRepository', () => {
 
   describe('getNetWorthFromSnapshots', () => {
     it('should return combined net worth from bank balances and portfolio snapshots', async () => {
-      const now = new Date();
-      const todayKey = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
+      const todayKey = todayAppDateString();
       query.mockImplementation(async (sql) => {
         if (sql.includes('SELECT 1 FROM')) return { rows: [] };
         if (sql.includes('first_data_date')) return { rows: [{ first_data_date: '2026-02-01' }] };
@@ -106,8 +109,7 @@ describe('InfoRepository', () => {
     });
 
     it('should overlay the latest point with the live portfolio value when provided', async () => {
-      const now = new Date();
-      const todayKey = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
+      const todayKey = todayAppDateString();
       query.mockImplementation(async (sql) => {
         if (sql.includes('SELECT 1 FROM')) return { rows: [] };
         if (sql.includes('first_data_date')) return { rows: [{ first_data_date: '2026-02-01' }] };
@@ -146,8 +148,7 @@ describe('InfoRepository', () => {
     });
 
     it('should pass target currency through conversion calls', async () => {
-      const now = new Date();
-      const todayKey = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
+      const todayKey = todayAppDateString();
       query.mockImplementation(async (sql) => {
         if (sql.includes('SELECT 1 FROM')) return { rows: [] };
         if (sql.includes('first_data_date')) return { rows: [{ first_data_date: todayKey }] };
@@ -186,8 +187,7 @@ describe('InfoRepository', () => {
     });
 
     it('should return investments: 0 when snapshots table is empty', async () => {
-      const now = new Date();
-      const todayKey = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
+      const todayKey = todayAppDateString();
       query.mockImplementation(async (sql) => {
         if (sql.includes('SELECT 1 FROM')) return { rows: [] };
         if (sql.includes('first_data_date')) return { rows: [{ first_data_date: todayKey }] };
@@ -209,12 +209,8 @@ describe('InfoRepository', () => {
     });
 
     it('should compute monthly change correctly', async () => {
-      const today = new Date();
-      today.setHours(0, 0, 0, 0);
-      const yesterday = new Date(today);
-      yesterday.setDate(yesterday.getDate() - 1);
-      const firstDayKey = `${yesterday.getFullYear()}-${String(yesterday.getMonth() + 1).padStart(2, '0')}-${String(yesterday.getDate()).padStart(2, '0')}`;
-      const secondDayKey = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`;
+      const secondDayKey = todayAppDateString();
+      const firstDayKey = addDaysYmd(secondDayKey, -1);
       query.mockImplementation(async (sql) => {
         if (sql.includes('SELECT 1 FROM')) return { rows: [] };
         if (sql.includes('first_data_date')) return { rows: [{ first_data_date: firstDayKey }] };
@@ -239,8 +235,7 @@ describe('InfoRepository', () => {
     });
 
     it('should fall back to cumulative transaction flow when no bank balances are available', async () => {
-      const now = new Date();
-      const todayKey = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
+      const todayKey = todayAppDateString();
       query.mockImplementation(async (sql) => {
         if (sql.includes('SELECT 1 FROM')) return { rows: [] };
         if (sql.includes('first_data_date')) return { rows: [{ first_data_date: '2026-02-01' }] };
@@ -270,8 +265,7 @@ describe('InfoRepository', () => {
     });
 
     it('should fallback to seed date without active-only filters when primary query returns null', async () => {
-      const now = new Date();
-      const todayKey = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
+      const todayKey = todayAppDateString();
       query.mockImplementation(async (sql) => {
         if (sql.includes('SELECT 1 FROM')) return { rows: [] };
         if (sql.includes('first_data_date') && sql.includes('WHERE is_active = true')) {
@@ -296,8 +290,7 @@ describe('InfoRepository', () => {
     });
 
     it('should emit debug log with summary metrics', async () => {
-      const now = new Date();
-      const todayKey = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
+      const todayKey = todayAppDateString();
       query.mockImplementation(async (sql) => {
         if (sql.includes('SELECT 1 FROM')) return { rows: [] };
         if (sql.includes('first_data_date')) return { rows: [{ first_data_date: todayKey }] };
