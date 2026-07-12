@@ -7,6 +7,7 @@ import { query } from '../database/connection.js';
 import { convertRowsToEur } from '../services/currency/currencyConversionService.js';
 import { logger } from '../config/logger.js';
 import { toDecimal, toNumber } from '../lib/money.js';
+import { todayAppDateString, firstOfMonthYmd } from '../lib/timezone.js';
 import {
   mvAvailable,
   roundToCents,
@@ -90,16 +91,19 @@ export async function getMonthlyFinancialSummary(
     // Zero-fill months with no transactions so the MV path returns the SAME
     // 6-month set as the live path's generate_series. Without this, toggling an
     // exclusion (which switches paths) changed the dashboard's month set.
-    const now = new Date();
+    // Anchor on the app-timezone "today" (ADR-009), not server-local new Date()
+    // — around a month boundary a differing Node TZ generated a different
+    // key set than the SQL paths' CURRENT_DATE.
+    const todayYmd = todayAppDateString();
     for (let i = 5; i >= 0; i--) {
-      const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
-      const year = d.getFullYear();
-      const month = d.getMonth() + 1;
+      const monthStart = firstOfMonthYmd(todayYmd, -i);
+      const year = Number(monthStart.slice(0, 4));
+      const month = Number(monthStart.slice(5, 7));
       const key = formatYearMonthKey(year, month);
       if (!monthMap[key]) {
         monthMap[key] = {
           month, year,
-          period_start: `${year}-${String(month).padStart(2, '0')}-01`,
+          period_start: monthStart,
           period_end: null,
           total_spending: 0, total_income: 0, net_amount: 0, transaction_count: 0,
         };
