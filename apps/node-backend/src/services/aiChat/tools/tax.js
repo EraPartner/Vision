@@ -11,6 +11,7 @@
 import { transactionRepository } from '../../../repositories/transactionRepository.js';
 import settings from '../../../config/config.js';
 import { toDecimal, roundToCents, addAll, roundMoney } from '../../../lib/money.js';
+import { toYmd } from '../../../utils/portfolioMath.js';
 import { loadActiveInvestments, loadTransactionsForInvestments } from './_portfolioFetch.js';
 import { parsePositiveInt } from './_validate.js';
 
@@ -36,8 +37,6 @@ function yearRange(year) {
   return {
     from: `${year}-01-01`,
     to: `${year}-12-31`,
-    fromMs: Date.UTC(year, 0, 1),
-    toMs: Date.UTC(year, 11, 31, 23, 59, 59, 999),
   };
 }
 
@@ -45,10 +44,13 @@ function parseYear(value) {
   return parsePositiveInt(value, 'year', { min: MIN_YEAR, max: MAX_YEAR });
 }
 
-function inYear(dateValue, fromMs, toMs) {
-  const d = dateValue instanceof Date ? dateValue : new Date(dateValue);
-  const ms = d.getTime();
-  return ms >= fromMs && ms <= toMs;
+// Year test on the calendar day, not epoch-ms: a pg DATE arrives as a
+// server-local-midnight Date whose getTime() east of UTC falls in the
+// PREVIOUS UTC year for Jan-1 rows, so comparing against Date.UTC bounds
+// misattributed them to the prior tax year. toYmd uses local getters for
+// Dates and passes 'YYYY-MM-DD' strings through unchanged.
+function inYear(dateValue, year) {
+  return toYmd(dateValue).slice(0, 4) === String(year);
 }
 
 /**
@@ -72,7 +74,7 @@ export const getTaxableIncomeSummary = {
   },
   async run(args, { maxRows = settings.aiChat.maxToolRows, cache = undefined } = {}) {
     const year = parseYear(args.year);
-    const { from, to, fromMs, toMs } = yearRange(year);
+    const { from, to } = yearRange(year);
 
     const txns = await transactionRepository.getAll({
       startDate: from,
@@ -101,7 +103,7 @@ export const getTaxableIncomeSummary = {
     };
 
     for (const t of portfolioTxns) {
-      if (!inYear(t.date, fromMs, toMs)) continue;
+      if (!inYear(t.date, year)) continue;
       if (!(t.type in buckets)) continue;
       buckets[t.type] = buckets[t.type].plus(toDecimal(t.amount ?? 0).abs());
     }
@@ -158,7 +160,7 @@ export const getCapitalGainsForYear = {
   },
   async run(args, { maxRows = settings.aiChat.maxToolRows, cache = undefined } = {}) {
     const year = parseYear(args.year);
-    const { fromMs, toMs, from, to } = yearRange(year);
+    const { from, to } = yearRange(year);
 
     const investments = await loadActiveInvestments(cache);
 
@@ -170,7 +172,7 @@ export const getCapitalGainsForYear = {
     let totalTaxesPaid = toDecimal(0);
 
     for (const t of sells) {
-      if (!inYear(t.date, fromMs, toMs)) continue;
+      if (!inYear(t.date, year)) continue;
       const proceeds = toDecimal(t.amount ?? 0).abs();
       const taxes = toDecimal(t.taxes ?? 0).abs();
       const fees = toDecimal(t.fees ?? 0).abs();
