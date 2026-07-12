@@ -133,14 +133,14 @@ look-changing one.
   - Fix: replay split/RoC events and prior sells (mirroring `calculateCostBasisFIFO`'s lot-replay) before walking lots for validation or the move.
   - Verification (2026-06-30): re-confirmed by hand-tracing a concrete scenario (buy 10@lotA, buy 10@lotB, sell 8 → true FIFO leaves 2 of A + 10 of B = 12 net). A later partial move physically overwrites the source lot's stored `units`/`amount` columns, which **also retroactively changes the FIFO-replay cost basis of the historical sell that happened before the move** — the bug is more compounding than originally described.
 
-- [ ] **Orphaned trade-linked cash legs on investment delete and on portfolio-import rollback** 🔺 🔎 partial-#82 2026-07-11 (ffb13d7 fixed the import-rollback path; deleteInvestment path still orphans cash legs) *(confirmed independently by three audits — API/ADR-drift, backend-performance, and the verification pass)*
+- [x] **Orphaned trade-linked cash legs on investment delete and on portfolio-import rollback** 🔺 ✅ 2026-07-12 · ffb13d7 (#82, import-rollback path) + 2a21c50 (#84, deleteInvestment path via bulk `deleteTradeCashLegsForTrades`) *(confirmed independently by three audits — API/ADR-drift, backend-performance, and the verification pass; the `import_batch_id` batching suggestion remains a Performance-section follow-up)*
   - ↪ _from: Codebase audit 2026-06-30 · Correctness — Backend · Portfolio / investments_
   - `apps/node-backend/src/controllers/investmentController.js:373-378` (`deleteInvestment`), `apps/node-backend/src/services/portfolioImportBatchService.js:65-76` (`rollbackBatch`) — vs. the correct cascade at `investmentController.js:464-477` (`deleteTransaction`, which calls `deleteTradeCashLegs` citing ADR-090)
   - Neither `deleteInvestment` nor a rolled-back import batch cleans up the cash-sleeve legs (`portfolio_transaction_id` isn't a real FK, so nothing cascades automatically). This leaves cash legs pointing at deleted/nonexistent trades — silent ledger corruption feeding net worth (ADR-093) and reconciliation (ADR-094).
   - Fix: add the same `deleteTradeCashLegs` cascade to both paths before/alongside the hard-deletes; also add an `import_batch_id` column to the portfolio transaction tables (see Performance section) so rollback can do this in one batched pass instead of a per-row loop.
   - Verification (2026-06-30): re-confirmed — `deleteTradeCashLegs` has exactly one call site in the entire codebase (the one correct path), proving the other two paths genuinely never clean up.
 
-- [ ] **Belgian TOB tax-table cap is wrong in the backend — wrong number on every generated tax report** 🔺 🔎 verified-present 2026-07-11
+- [x] **Belgian TOB tax-table cap is wrong in the backend — wrong number on every generated tax report** 🔺 ✅ 2026-07-12 · 5c80cfe (#84) *(cap corrected to €1,600 + regression test pinning all four tiers; the fuller dedupe-into-shared-source refactor was not taken)*
   - ↪ _from: Codebase audit 2026-06-30 · Correctness — Backend · Belgian tax_
   - `apps/node-backend/src/services/reports/belgianTaxTables.js:9-14` — `TOB_DEFAULT.sharesAndOther.cap = 4000`
   - The canonical source `apps/frontend/src/lib/belgianTax/constants.ts:354,493` has `cap: 1_600`, with an explicit comment confirming 1,600 is correct ("NOT 4,000 — that cap belongs to the 1.32% rate only"). The backend value is a copy-paste of the wrong cap. Every PDF tax report's TOB table currently shows €4,000 instead of €1,600.
@@ -350,7 +350,7 @@ look-changing one.
   - Amount/units/price use `parsePositive` (NaN fallback + finite/positive check) — but `fees`, `taxes`, `fx_rate_to_eur` use `parseDecimal(v)` with the default-0 fallback. Typing "0,5%" (or any unparseable string) into FX rate submits `fx_rate_to_eur = 0`; garbage fees/taxes silently become €0. *(Note: backend repo guards reject `fx_rate_to_eur ≤ 0` per Wave 1b — so the FX case errors server-side; fees/taxes→0 goes through silently.)*
   - Fix: `parseDecimal(v, NaN)` + reject non-finite (or reuse `parsePositive`), matching the amount fields.
 
-- [ ] **Wrong-word Dutch translation: "Who Owes You" page titled "Openstaande verordeningen" (= outstanding *ordinances*)** 🔼 🔎 verified-present 2026-07-11
+- [x] **Wrong-word Dutch translation: "Who Owes You" page titled "Openstaande verordeningen" (= outstanding *ordinances*)** 🔼 ✅ 2026-07-12 · d3c7100 (#84) *(owesPage.title fixed, nav.whoOwesYou unified to the same label, locales regenerated + validated)*
   - ↪ _from: Correctness research 2026-07-02 · Wave 2a_
   - `i18n/source/nl.json` key `owesPage.title`; also three different nl renderings of the same concept (`nav.whoOwesYou` = "Verschuldigde Betalingen", `owes.title` = "Wie u iets verschuldigd is")
   - Fix: `owesPage.title` → "Wie u iets verschuldigd is", unify the nav label, regenerate locales (`bun run validate-locales` after).
@@ -421,7 +421,7 @@ look-changing one.
   - Checks only `t.category_id IS NULL AND r.default_category_id IS NULL`, never the primary recipient's default — same root cause as the finding above.
   - Fix: join the primary recipient and extend the predicate, matching `getAll`'s fallback chain.
 
-- [ ] **Category display truncates DETAIL text that contains a colon** 🔼 🔎 verified-present 2026-07-11 *(frontend, same root cause as backend issue above is unrelated — separate bug)*
+- [x] **Category display truncates DETAIL text that contains a colon** 🔼 ✅ 2026-07-12 · ab1f15d (#84) *(join-back pattern applied at both call sites, matching CategoryPivotTable)*
   - ↪ _from: Codebase audit 2026-06-30 · Correctness — Backend · Categorization_
   - `apps/frontend/src/pages/DashboardPage.tsx:224-232`, `apps/frontend/src/pages/RecipientsPage.tsx:213-221`
   - `categoryName.split(':')` then uses only `parts[1]` — a category like `general="TRAVEL", detail="FLIGHT: BOOKING.COM"` renders as just "Flight". `CategoryPivotTable.tsx:112-116` already handles this correctly via `split(":")` + rejoin.
@@ -636,7 +636,7 @@ look-changing one.
   - Fix: delete module + test, or confirm intent and wire it in.
   - Verification (2026-07-03): dead-in-prod reconfirmed by a full re-read — the per-bank raw tables are never written by the current pipeline. Also: `isRawDuplicate` returns `null` instead of `undefined` (convention violation), and its literal-line hashes could never agree with the pipeline's `tx_hash` anyway even if wired back in (vision/generic/sabb/wise/revolut adapters rebuild `rawData` rather than hash the literal CSV line, so hash-agreement is moot). The same false-confidence-via-passing-tests class also applies to the sibling `services/bankAdapters.js` shim (zero production importers; only adapter test files and one route-test mock exercise it) — already filed separately as an Architecture-domain doc/dead-code finding, not refiled here.
 
-- [ ] **nl typo + minor wording inconsistencies** ⏬ 🔎 verified-present 2026-07-11
+- [x] **nl typo + minor wording inconsistencies** ⏬ ✅ 2026-07-12 · d3c7100 (#84)
   - ↪ _from: Correctness research 2026-07-02 · Wave 2a_
   - `addInvFromMarket.option.addTxnDesc`: "verkop" → "verkoop" · `filter.type.income`/`search.suggest.allIncome` use "Ontvangsten" while every other surface uses "Inkomsten" · `tax.profile.field.cadastralIncome` nl reads "Kadastraal inkomen (kadastraal inkomen)" (EN parenthetical was already the Dutch term).
 
@@ -646,7 +646,7 @@ look-changing one.
   - Per `docs/reference/code-patterns.md`, monetary accumulation must route through `addAll()`/Decimal; here amounts are summed/averaged with native `+=`/`reduce` after one `toDecimal().toNumber()` conversion. Final values are cent-rounded so drift is negligible (display-only, not ledger writes), but it's inconsistent with the stated scope.
   - Fix: swap the accumulations for `addAll()` from `lib/money.js`.
 
-- [ ] **`generateLoanRepaymentSchedule` falls back to `null` instead of `undefined`** ⬇ 🔎 verified-present 2026-07-11
+- [x] **`generateLoanRepaymentSchedule` falls back to `null` instead of `undefined`** ⬇ ✅ 2026-07-12 · 3fc60e0 (#84)
   - ↪ _from: Codebase audit 2026-06-30 · Correctness — Backend · Planned / recurring transactions_
   - `apps/node-backend/src/services/calculations/loanSchedule.js:154` — `schedule[0]?.due_date ?? null`
   - Dead code in practice (`validateLoanConfig` guarantees a non-empty schedule), but a stray `null` outside the documented repository-row-not-found exception.
