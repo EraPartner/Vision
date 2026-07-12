@@ -11,7 +11,7 @@
 import { query } from '../database/connection.js';
 import { toWireDate } from '../lib/dateFormat.js';
 import { logger } from '../config/logger.js';
-import { toDecimal } from '../lib/money.js';
+import { addAll, divide, roundMoney, toDecimal } from '../lib/money.js';
 
 const MIN_OCCURRENCES = 3; // Minimum transactions to consider a pattern
 const INTERVAL_TOLERANCE = 0.25; // 25% tolerance for interval matching
@@ -209,9 +209,9 @@ export async function detectRecurringPatterns() {
       const detected = detectInterval(intervals);
       if (!detected) continue;
 
-      // Get amounts info
-      const amounts = txns.map((t) => toDecimal(t.amount).abs().toNumber());
-      const avgAmount = amounts.reduce((s, v) => s + v, 0) / amounts.length;
+      // Get amounts info — accumulated as Decimals per the monetary-arithmetic rule
+      const amounts = txns.map((t) => toDecimal(t.amount).abs());
+      const avgAmount = divide(addAll(amounts), amounts.length);
       const latestAmount = amounts[amounts.length - 1];
       const currency = txns[0].currency || 'EUR';
 
@@ -241,8 +241,8 @@ export async function detectRecurringPatterns() {
         intervalDays: detected.medianDays,
         consistency: detected.consistency,
         occurrences: txns.length,
-        averageAmount: Math.round(avgAmount * 100) / 100,
-        latestAmount: Math.round(latestAmount * 100) / 100,
+        averageAmount: roundMoney(avgAmount),
+        latestAmount: roundMoney(latestAmount),
         currency,
         categoryId: txns[txns.length - 1].category_id,
         categoryName: txns[txns.length - 1].category_name,
