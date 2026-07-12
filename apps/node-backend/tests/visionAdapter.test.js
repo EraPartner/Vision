@@ -7,6 +7,7 @@ import fs from 'fs';
 import os from 'os';
 import path from 'path';
 import { createAdapter } from '../src/services/bankAdapters.js';
+import { detect } from '../src/services/importPipeline/adapters/vision.js';
 
 function writeTempCSV(content) {
   const tmpPath = path.join(os.tmpdir(), `test_vision_${Date.now()}.csv`);
@@ -115,5 +116,21 @@ INVALID_DATE,Main Account,Skip Date,Note,-10.00,EUR,944.80,OTHER,invalid date
 
     expect(txns).toHaveLength(1);
     expect(txns[0].memo).toBe('MIXED CASE MEMO');
+  });
+});
+
+describe('vision.detect', () => {
+  it('detects the exact Vision export header, with or without trailing columns', () => {
+    expect(detect('Date,Bank Account,Recipient,Memo,Amount,Currency,Balance,Category,Comment,Tags\n2026-03-01,A,B,,-1.00,EUR,,,,')).toBe(true);
+    expect(detect('Date,Bank Account,Recipient,Memo,Amount,Currency,Balance,Category,Comment,Tags,Running Balance\n')).toBe(true);
+    expect(detect('date,bank account,recipient,memo,amount,currency\n')).toBe(true);
+  });
+
+  it('rejects unknown bank CSVs that merely contain the header words', () => {
+    // Substring matching used to auto-route any of these to the Vision adapter.
+    expect(detect('Booking Date,Recipient Bank Account,Amount,Reference\n')).toBe(false);
+    expect(detect('Transaction Date,Amount,Recipient,Bank Account Nr,Description\n')).toBe(false);
+    expect(detect('Date,Amount,Bank Account,Recipient,Memo,Currency\n')).toBe(false); // wrong order
+    expect(detect('')).toBe(false);
   });
 });

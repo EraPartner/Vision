@@ -58,13 +58,21 @@ function rowToTransaction(row) {
   };
 }
 
+// Vision's own export column order (transactionExport.js). Detection requires
+// this exact ordered prefix — word-substring matching used to auto-route any
+// unknown bank CSV whose header merely contained "date"/"amount"/"bank
+// account"/"recipient" to this adapter. Columns after Currency (Balance,
+// Category, Comment, Tags, Running Balance) are allowed to vary so older or
+// extended exports still detect.
+const EXPORT_HEADER_PREFIX = ['date', 'bank account', 'recipient', 'memo', 'amount', 'currency'];
+
 export function detect(csvSample) {
   if (!csvSample) return false;
-  const firstLine = (csvSample.split('\n')[0] || '').toLowerCase();
-  return firstLine.includes('date')
-    && firstLine.includes('amount')
-    && firstLine.includes('bank account')
-    && firstLine.includes('recipient');
+  // Strip a UTF-8 BOM — detect() receives raw file content, not the
+  // BOM-stripped lines the parsers see.
+  const firstLine = (csvSample.replace(/^\uFEFF/, '').split('\n')[0] || '').trim().toLowerCase();
+  const cols = firstLine.split(',').map((c) => c.trim());
+  return EXPORT_HEADER_PREFIX.every((name, i) => cols[i] === name);
 }
 
 export async function parse(filePath) {
