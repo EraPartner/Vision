@@ -4260,6 +4260,269 @@ look-changing one.
   - `.dockerignore:16-17` — only `.env.local`/`.env.*.local` excluded. Currently harmless (`Dockerfile` uses explicit `COPY <path>`, not `COPY . .`), but no defense-in-depth if that ever changes.
   - Fix: add `.env`/`.env.*` to `.dockerignore`.
 
+## 🔍 PR #84 delivery review — findings in the new additions (2026-07-12)
+
+**Scope & method:** review of everything PR #84 *delivers* (the `main...735a2e5` diff — 241 files, +10 686/−3 011), i.e. the #82 accounts rewrite + ported #83 fixes + new migrations/docs — **not** a re-audit of the pre-existing backlog above. Seven parallel area reviews (DB migrations/infra · import-export/date/CSV · accounts/transactions services · portfolio backend · frontend charts/design · frontend accounts/pages/hooks · docs/OpenAPI/i18n), each finding verified against the actual tree with file:line evidence before filing. Items below are **new findings about the code this PR adds/changes**; none duplicate an existing entry in this file.
+
+**Claimed-fix verdicts (what the PR says it delivers, re-verified):**
+- The five headline #82 correctness fixes (CSV negative amounts (a), same-day dedup (b), brokerage cash sign (c), brokerage rollback (d), systemic `formatDateToYmd` (e)) are **implemented as claimed** — but (b) introduces a cross-source dedup regression and (c) lacks a repair path for pre-fix data (both filed below). (e) was audited caller-by-caller incl. DST edge zones: complete within scope. (d) verified correct end-to-end.
+- The four ported #83 fixes: **CardSheen** — all 8 claimed sites converted, but not pixel-identical at 3 of them and a 9th hand-rolled orb was left behind (filed below). **Signed money glyphs** — verified at all 5 claimed sites; ~20 pre-existing hand-concatenated sign sites remain elsewhere (pre-existing on `main`, not regressions). **Amount `text-right`** — verified. **CashFlowForecastChart trailing-`Z` drop** — verified correct for clients both east and west of UTC.
+- Migrations 0065–0075: unusually well-authored (idempotent DDL, pre-cleaned CHECKs, symmetric downgrades); only the items filed below.
+- i18n: all six locale copies in exact parity (3 575 keys each), all 47 new nl values genuinely translated. Frontend `tsc --noEmit` passes; scoped backend test files pass under TZ=UTC, Europe/Brussels, Pacific/Kiritimati, America/Santiago.
+
+### 🐛 Correctness — reconciliation & accounts backend
+
+- [ ] **`releaseOrphans` strips the new `'opening'`/`'adjustment'` system rows — aggregates corruption, duplicate anchors, false transfer pairing** 🔺
+  - ↪ _from: PR #84 delivery review 2026-07-12 · accounts/transactions services_
+  - `apps/node-backend/src/services/transferReconciliationService.js:60-66` vs `services/reconcileService.js:107-112` and `services/openingBalanceService.js:96-120`
+  - Both new row types are created with `is_transfer=true, transfer_peer_id NULL`. The PR's comments claim the ADR-083 reconciler "only touches NULL/'auto'" — true of `loadCandidatePairs`/`releaseInvalidAutoPairs`, but `releaseOrphans` has no `transfer_source` filter (`WHERE is_transfer = true AND transfer_peer_id IS NULL`), and `reconcileTransfers()` runs after every import commit (`importPipeline/index.js:91`) and ~5 s after any transaction mutation. On the next mutation: (a) an adjustment row (amount = drift ≠ 0) is flipped to `is_transfer=false, transfer_source=NULL`, re-enters income/spending aggregates, and becomes an auto-pair candidate that can wrongly capture a real opposite-amount transaction within ±3 days; (b) an opening anchor loses its `transfer_source='opening'` tag, so `setOpeningBalance`'s upsert can never find it again and every subsequent call INSERTs a duplicate anchor.
+  - Fix: constrain `releaseOrphans` to reconciler-owned rows (`AND transfer_source IN ('auto','manual')`) — this also fixes the pre-existing `'trade'` exposure.
+
+- [ ] **Opening-balance "inert anchor" warning can never fire — pg `DATE` object stringifies as `"Wed Jul 01"`, not ISO** ⏫ *(found independently by two reviewers)*
+  - ↪ _from: PR #84 delivery review 2026-07-12 · portfolio backend + accounts services_
+  - `apps/node-backend/src/services/openingBalanceService.js:79-90`
+  - `SELECT MIN(date)` on the `DATE` column returns a JS `Date` (no `setTypeParser` override exists in `database/connection.js`), so `String(earliest).slice(0, 10)` yields e.g. `"Fri Jul 10"` — lexically never `<=` an ISO `"YYYY-MM-DD"` string (`'F' > '9'`). The advertised warning ("anchor does not precede existing activity") is dead code in production; `tests/openingBalanceService.test.js:84-85` passes only because it mocks `earliest` as a string. Same pg-Date bug class this PR fixes elsewhere (priceCache, mapPortfolioTxRow).
+  - Fix: normalize with `toWireDate(earliest)`/`formatDateToYmd` before comparing.
+
+- [ ] **`reconcileAccount` and `setOpeningBalance` are not atomic — concurrent requests double-apply drift / mint duplicate anchors** 🔼
+  - ↪ _from: PR #84 delivery review 2026-07-12 · accounts/transactions services (race also flagged by the portfolio reviewer)_
+  - `apps/node-backend/src/services/reconcileService.js:66-77,106-112`; `openingBalanceService.js:99-121`
+  - The statement/computed-balance SELECT and the adjustment INSERT run as separate pool queries with no transaction or lock: two concurrent `POST /:id/reconcile {mode:'adjustment'}` (double-click, retry) both read the same drift and both insert, overshooting the statement by exactly the drift. `setOpeningBalance` has the same read-then-write shape and no unique index backs the one-anchor-per-(account, currency) invariant (migration 0073 adds only a CHECK), so concurrent calls can mint two anchors.
+  - Fix: wrap in `withTransaction` + `SELECT ... FOR UPDATE` on the account row; add a partial unique index (`WHERE transfer_source='opening'`) and use `ON CONFLICT` for the anchor.
+
+- [ ] **`moveHolding` replays splits per-account, but split rows are investment-wide — NULL-account splits are invisible to the new guard** 🔼
+  - ↪ _from: PR #84 delivery review 2026-07-12 · portfolio backend_
+  - `apps/node-backend/src/services/portfolio/moveHoldingService.js:159-165` (lots query filters `AND account_id = $2`) and `:71-79` (`replayAvailableLots` split branch)
+  - (a) A split row with NULL `account_id` (the Add dialog only sends `account_id` when the user picks one — `AddPortfolioTxnDialog.tsx:129` — and a corporate action has no natural account) is excluded by the query: `netUnits` stays pre-split and `hasPriorConsumption` stays false, so the partial-move guard (line 205) doesn't trip and FIFO splits buy lots at stale pre-split stored units — the exact basis corruption the guard was added to prevent (buy 10, 2:1 split, move 5 → user actually moves 10 post-split units at half the intended basis). (b) When the split row does carry the source account and the holding exists in other accounts, `units` is the investment-wide new total (`snapshotBuilder.js:437-441`, `shared-utils/portfolio.js:151`) divided by the account-local `oldTotal` → inflated `netUnits`.
+  - Fix: replay the investment-wide stream to apply splits; set `hasPriorConsumption` when any split/sell exists for the investment regardless of its `account_id`.
+
+- [ ] **Sell validation applies a split with zero held units — diverges from the canonical core it mirrors** 🔼
+  - ↪ _from: PR #84 delivery review 2026-07-12 · portfolio backend_
+  - `apps/node-backend/src/repositories/portfolioTxRepo.common.js:270`
+  - `else if (row.type === 'split' && units.gt(0)) net = units;` sets the running total unconditionally, while the canonical implementations require units already held (`shared-utils/portfolio.js:67,151`; `snapshotBuilder.js:440-441`). A stray/imported split row with no prior buys grants phantom units, so `validateSellUnitsAvailability` accepts a sell every valuation path treats as an oversell — snapshotBuilder still subtracts that sell's amount from `cumulativeInvested` while clamping units, distorting the invested series. Pre-PR the flat SUM ignored split rows, so this input was harmless.
+  - Fix: apply the split only when `net.gt(0)`, matching the shared core.
+
+- [ ] **`reconcileService` stamps UTC "today" instead of APP_TIMEZONE** 🔽 *(found independently by two reviewers)*
+  - ↪ _from: PR #84 delivery review 2026-07-12 · accounts services + portfolio backend_
+  - `apps/node-backend/src/services/reconcileService.js:86-91`
+  - `new Date().toISOString().slice(0, 10)` is the UTC calendar day; the codebase convention is `todayAppDateString()` (`lib/timezone.js`, ADR-009). East of UTC (Brussels), an adjustment row or accepted `statement_balance_date` created between local midnight and ~02:00 is dated yesterday — ironic in the PR that fixes the systemic date-shift class.
+  - Fix: use `todayAppDateString()`.
+
+- [ ] **New `account_id` filter passes `NaN` to Postgres → 500 instead of 400** 🔽
+  - ↪ _from: PR #84 delivery review 2026-07-12 · accounts/transactions services_
+  - `apps/node-backend/src/routes/transactions.js:93` → `services/filterBuilder.js:121-124`
+  - `account_id ? parseInt(account_id, 10) : null` yields `NaN` for `?account_id=abc`; `NaN != null`, so filterBuilder emits `t.account_id = $n` with a `NaN` param, which pg serializes to `'NaN'` and Postgres rejects (22P02) — a 500 for malformed input on list/count/uncategorised/export.
+  - Fix: validate with `Number.isInteger`/`validateId` and throw `ValidationError`.
+
+- [ ] **`normalizeOpeningBalance` date check is regex-only — impossible calendar dates reach Postgres as a 500** 🔽
+  - ↪ _from: PR #84 delivery review 2026-07-12 · accounts/transactions services_
+  - `apps/node-backend/src/services/openingBalanceService.js:44-47`
+  - `/^\d{4}-\d{2}-\d{2}$/` accepts `2026-13-40`, which fails the DATE cast in the upsert (22008) and surfaces as a 500, unlike `assertYmd` (used by the transactions routes) which also parse-checks.
+  - Fix: reuse `assertYmd` from `middleware/validation.js`.
+
+- [ ] **`unmarkTransfer` takes no row locks — race with `markTransfer` can strand a permanent one-way manual pair** 🔽
+  - ↪ _from: PR #84 delivery review 2026-07-12 · accounts/transactions services_
+  - `apps/node-backend/src/services/transferReconciliationService.js:220-244`
+  - It SELECTs the peer without `FOR UPDATE` (markTransfer does lock), then unconditionally resets it. If the peer is concurrently re-paired to a third row Q between SELECT and UPDATE, Q is left `is_transfer=true, transfer_source='manual'` with a dangling `transfer_peer_id` no cleanup path releases (`releaseOrphans` requires NULL peer; `releaseInvalidAutoPairs` only touches 'auto') — silently excluded from cash-flow aggregates forever.
+  - Fix: `SELECT ... FOR UPDATE` of both rows in `unmarkTransfer`.
+
+- [ ] **Opening-balance / reconcile endpoints don't schedule aggregation refresh** 🔽
+  - ↪ _from: PR #84 delivery review 2026-07-12 · accounts/transactions services_
+  - `apps/node-backend/src/routes/accounts.js:69-83`
+  - Both endpoints create/update ledger rows that feed `mv_bank_balances` and the forecast MC caches, but unlike every transaction mutation route neither calls `scheduleAggregationRefresh()` — dashboards serve stale figures until the next unrelated mutation or cache expiry.
+  - Fix: call `scheduleAggregationRefresh()` after a successful write.
+
+### 🐛 Correctness — import/export pipeline
+
+- [ ] **New `tx_hash`-inequality dedup guard defeats cross-source re-import — the Vision round-trip this PR fixes now re-inserts everything** ⏫
+  - ↪ _from: PR #84 delivery review 2026-07-12 · import/export backend_
+  - `apps/node-backend/src/services/importPipeline/commit.js:128` (hash source: `validate.js:108-117`; `adapters/vision.js:54`)
+  - `tx_hash = sha256(raw CSV row)` of the *original source format*. Re-importing the same transactions from a different format — most concretely the Vision-export round-trip the csv.js/vision.js fixes exist to support — stages rows whose hash never equals the stored bank-format hash. All field-dedup criteria match, but the new predicate `NOT (t.tx_hash IS NOT NULL AND $6 IS NOT NULL AND t.tx_hash <> $6)` excludes the match, so every previously-imported transaction re-inserts as a duplicate (`ON CONFLICT` can't catch the unseen hash). On `main` this flow deduped to a no-op.
+  - Fix: scope the hash-inequality exemption to rows written by the current batch (e.g. `t.import_batch_id = $batchId` inside the NOT clause) — still fixes the same-batch card-payment collapse without breaking cross-source idempotency.
+
+- [ ] **Cash-sign fix has no repair path for pre-fix rows — statement re-import is no longer a no-op after upgrade** 🔼
+  - ↪ _from: PR #84 delivery review 2026-07-12 · import/export backend_
+  - `apps/node-backend/src/services/portfolioImportPipeline/commit.js:105,235`
+  - Brokerage withdrawals committed before this PR are stored positive. `isCashFieldDuplicate` now compares the *signed* amount (`-500`), which never matches the stored `+500`, so re-importing an already-imported statement after upgrading inserts a second, negative row while the wrong-signed row remains — the "re-importing a statement is a no-op" promise breaks exactly for data affected by the bug being fixed.
+  - Fix: ship a data migration flipping `route='cash'` outflow rows from prior batches, or dedup on `ABS(amount)` + kind.
+
+- [ ] **`brokerageFanout.js` still inserts unsigned cash amounts, ignoring the new `direction` contract** 🔽 *(latent — no production caller found)*
+  - ↪ _from: PR #84 delivery review 2026-07-12 · import/export backend_
+  - `apps/node-backend/src/services/importPipeline/brokerageFanout.js:39,103`
+  - `planBrokerageFanout` destructures only `{ target, portfolioTxnType }` and `commitBrokerageFanout` inserts `Number(row.amount)` raw, violating the contract this PR wrote into `brokerageRouting.js` ("the ledger sign must be re-derived from the kind"). The one remaining `classifyBrokerageRow` cash consumer without the sign.
+  - Fix: apply `direction * Math.abs(...)` there, or remove the unused module.
+
+- [ ] **Raw NUL byte makes `matchInvestments.js` a binary file to git — this PR's own change to it is invisible in diffs** 🔽 *(byte pre-exists on `main`)*
+  - ↪ _from: PR #84 delivery review 2026-07-12 · import/export backend_
+  - `apps/node-backend/src/services/portfolioImportPipeline/matchInvestments.js` (literal 0x00 at byte offset 1654, inside the `resolveKey` template literal)
+  - Git renders the PR's (otherwise correct) ambiguity-guard change as "Binary files differ", hiding it from diff review and text tooling. Node parses it fine.
+  - Fix: replace the raw byte with the `'\x00'` escape sequence.
+
+### 🐛 Correctness — DB migrations / infra / packaging
+
+- [ ] **Migration 0066's duplicate pre-flight bricks boot while its remediation requires a running app** 🔼
+  - ↪ _from: PR #84 delivery review 2026-07-12 · DB migrations/infra_
+  - `alembic/versions/0066_normalized_account_identity.py:53-73`, `apps/node-backend/src/main.js:451`, `database/migrate.js:262-265`
+  - If any accounts differ only by case/whitespace — the very state this migration exists to fix, and plausible because the transaction path UPPERCASEs `bank_account` while `POST /api/accounts` only trims — the migration raises, `runMigrations()` throws, and the backend crash-loops. The exception HINT ("Merge each pair on the Accounts page…") directs users to a UI that can never load.
+  - Fix: auto-merge duplicates deterministically in the migration (or skip enforcement + warn); at minimum give a CLI/SQL remediation in the HINT.
+
+- [ ] **Migrations 0073/0075 re-permit the retired `'dismissed'` value; 0073's downgrade doesn't restore the true prior constraint** 🔽
+  - ↪ _from: PR #84 delivery review 2026-07-12 · DB migrations/infra_
+  - `alembic/versions/0073_transfer_source_opening.py:41-46,50-57`; same pattern in `0075_transfer_source_adjustment.py:37-42`
+  - 0070 removed `'dismissed'` from `ck_transactions_transfer_source` (replaced by the `transfer_dismissals` pair table), yet 0073/0075 include it in the new CHECK and 0073's downgrade restores a 4-value list while a fresh upgrade stopped at 0072 leaves 3 — the same revision yields two different constraints depending on path, and a retired value is silently writable again.
+  - Fix: drop `'dismissed'` from both lists in 0073 and 0075.
+
+- [ ] **`queryPrepared` bypasses the new ambient transaction** 🔽 *(latent — no current in-transaction caller found)*
+  - ↪ _from: PR #84 delivery review 2026-07-12 · DB migrations/infra_
+  - `apps/node-backend/src/database/connection.js:131-133`
+  - `query()` now reroutes onto the ambient `withTransaction` client, but `queryPrepared()` always hits the pool. Any repo method built on it (e.g. `transactionRepository.getById/create/hardDelete`, incl. the `tx_create` write) invoked inside a `withTransaction` callback silently runs outside the transaction — exactly the partial-write class this PR's reroute fixes.
+  - Fix: check `getAmbientTransactionClient()` in `queryPrepared` and run `ambient.query({name, text, values})`.
+
+- [ ] **`withSavepointIfInTransaction` masks the original error when the rollback itself fails** 🔽
+  - ↪ _from: PR #84 delivery review 2026-07-12 · DB migrations/infra_
+  - `apps/node-backend/src/database/connection.js:209-211`
+  - If `fn` failed because the connection dropped, `ROLLBACK TO SAVEPOINT` also throws and that error replaces the original, losing the root cause (contrast `withTransaction`, which logs the rollback failure and rethrows the original at lines 167-174).
+  - Fix: try/catch the `ROLLBACK TO`, log it, rethrow the original `err`.
+
+- [ ] **`healthcheck.start_interval` requires Compose ≥ 2.20.2 / Engine ≥ 25 — and the new compose auto-refresh pushes it onto existing installs** 🔽
+  - ↪ _from: PR #84 delivery review 2026-07-12 · DB migrations/infra_
+  - `docker-compose.yml:31`, `packaging/electron/resources/docker-compose.yml:22`, `resources-demo/docker-compose.yml:29`, `packaging/electron/main.js:366-386`
+  - Older compose binaries fail schema validation on the unknown property, and `resolveWorkDir()` now overwrites the embedded compose on every launch — an existing Electron install on an older Docker Desktop that previously worked can start failing `docker compose up` after the app update.
+  - Fix: gate the field (or the refresh) on a `docker compose version` check, or document/enforce the raised minimum Docker version.
+
+### 🎨 Frontend — new/refactored UI
+
+- [ ] **"Top Recipient" name is routed through the digit-odometer — spaces collapse ("AlbertHeijn"), digits animate** 🔼
+  - ↪ _from: PR #84 delivery review 2026-07-12 · frontend charts/design_
+  - `apps/frontend/src/components/statistics/RecipientInsightsTab.tsx:187` → `components/dashboard/StatCard.tsx:136-139` → `components/shared/RollingNumber.tsx:97`
+  - The KPI migrated from a plain `<div>{name}</div>` to `StatCard value={...}`, and StatCard passes any string to `<RollingNumber>`, which splits it into per-char `inline-block` spans: a span containing only U+0020 collapses to zero width, and digits in a name ride the 0→N rolling reels on mount. Intl-formatted numbers never hit this (NBSP), so it's a new exposure from feeding arbitrary text through the odometer.
+  - Fix: plain-text path in StatCard (or `odometer={false}` opt-out) for non-numeric values, or render non-digit runs with `whitespace-pre` in RollingNumber.
+
+- [ ] **Merge/close account no longer refreshes the bank-balances widget — targeted invalidation misses `bankBalances`/`cashflowForecast*` keys** 🔼
+  - ↪ _from: PR #84 delivery review 2026-07-12 · frontend accounts/pages_
+  - `apps/frontend/src/hooks/useAccounts.ts:28-45` (`invalidateAccountRepoint`), `features/accounts/CloseAccountDialog.tsx:95`, `components/dashboard/BankBalancesWidget.tsx:56`
+  - On `main`, merge/close invalidated everything; the new targeted list covers accounts/net-worth/transactions/planned/portfolio keys but not `["bankBalances", currency]` (the widget's history chart and net-position total) nor `cashflowForecast*` — stale totals after a balance-repointing merge/close until staleTime expires.
+  - Fix: add `['bankBalances']` (and the forecast keys) to `invalidateAccountRepoint`.
+
+- [ ] **ReconcileDialog invalidates `['transactions']` but the list lives under `['transactions-virtual', …]` — the new adjustment row silently doesn't appear** 🔼
+  - ↪ _from: PR #84 delivery review 2026-07-12 · frontend accounts/pages_
+  - `apps/frontend/src/features/accounts/ReconcileDialog.tsx:50-54`; list key at `features/transactions/hooks/useTransactionListData.ts:84`
+  - Mode `'adjustment'` stamps a real ledger row (not filtered from list endpoints), but the dialog misses `['transactions-virtual']` (main TransactionsPage list) and `['dashboardRecentTransactions']`. `invalidateTransactionLists` (useTransactions.ts:110-122) exists for exactly this.
+  - Fix: call `invalidateTransactionLists(queryClient)`.
+
+- [ ] **Clearing recurrence bounds on a planned payment silently persists the old bound server-side** 🔼
+  - ↪ _from: PR #84 delivery review 2026-07-12 · frontend accounts/pages_
+  - `apps/frontend/src/components/planned/PlannedPaymentForm.tsx:111-112` + `hooks/usePlannedPayments.ts:182-183`
+  - The form spreads `...(endDateStr ? { end_date } : {})` / `...(maxOccurrences ? { max_occurrences } : {})`, so clearing either field omits the key; `mapToUpdateAPI` only maps keys `!== undefined` (its `?? null` branch is unreachable), so the PATCH never sends `null` and the series still stops at the removed date/count while the UI implies unbounded. Set works; clear can't. (New wiring in this PR.)
+  - Fix: when recurring and non-loan, always include `end_date: endDateStr ?? null` / `max_occurrences: parsed ?? null` (and widen the type to admit null).
+
+- [ ] **Account card `onKeyDown` hijacks Enter/Space on inner controls — keyboard activation of the actions menu / drift badge also opens the detail sheet** 🔼
+  - ↪ _from: PR #84 delivery review 2026-07-12 · frontend accounts/pages_
+  - `apps/frontend/src/pages/AccountsPage.tsx:179-184`
+  - The card's handler fires `setDetailing(a)` on Enter/Space without checking `e.target === e.currentTarget`. Radix's DropdownMenuTrigger `preventDefault`s Enter/Space but does not stop propagation, and the drift badge only stops propagation on *click* — so keyboard users get the menu/reconcile dialog *plus* the AccountDetailSheet on top, making those controls effectively unusable by keyboard.
+  - Fix: guard with `if (e.target !== e.currentTarget) return;`.
+
+- [ ] **OpeningBalanceDialog doesn't invalidate any transaction query after stamping the ledger anchor row** 🔽
+  - ↪ _from: PR #84 delivery review 2026-07-12 · frontend accounts/pages_
+  - `apps/frontend/src/features/accounts/OpeningBalanceDialog.tsx:60-64`
+  - The POST creates/updates a real transactions row (`transfer_source='opening'`, not filtered from list endpoints), but only accounts/net-worth keys are invalidated — the transactions page, `['transactions-virtual']`, and AccountDetailSheet's recent-transactions/sparkline query keep serving pre-anchor data.
+  - Fix: call `invalidateTransactionLists(queryClient)` in `onSuccess`.
+
+- [ ] **AddAccountDialog: statement balance + collapsed Advanced section = silently dead submit button** 🔽
+  - ↪ _from: PR #84 delivery review 2026-07-12 · frontend accounts/pages_
+  - `apps/frontend/src/features/accounts/AddAccountDialog.tsx:123,258,308`
+  - The Advanced section is conditionally *unmounted*; if the user enters a statement balance, collapses Advanced, and submits, the `required={!!form.statementBalance}` date input no longer exists so native validation can't fire, and the guard returns silently — Create/Save does nothing with zero feedback.
+  - Fix: toast a validation error (and/or auto-expand Advanced) instead of the bare `return`.
+
+- [ ] **AddTransactionDialog lost its only "bank account required" feedback when the Input became AccountCombobox** 🔽
+  - ↪ _from: PR #84 delivery review 2026-07-12 · frontend accounts/pages_
+  - `apps/frontend/src/components/forms/AddTransactionDialog.tsx:52,115-121`
+  - The old `<Input … required>` produced a native validation message; `AccountCombobox` renders a plain button with no required semantics, so an empty bank account now hits the silent `return` — submit does nothing with no indication of what's missing.
+  - Fix: toast/inline error when `!form.bank_account.trim()` on submit.
+
+- [ ] **Opening-balance date prefill uses the UTC calendar day, not the local one** 🔽
+  - ↪ _from: PR #84 delivery review 2026-07-12 · frontend accounts/pages_
+  - `apps/frontend/src/features/accounts/OpeningBalanceDialog.tsx:42-46`
+  - `new Date().toISOString().slice(0, 10)` yields the UTC date; for the app's primary Belgian audience (UTC+1/+2), any use before 01:00/02:00 local prefills *yesterday*. `toYmd` (components/shared/dateUtils) exists for exactly this and is used by the other dialogs.
+  - Fix: use `toYmd(new Date())`.
+
+- [ ] **`updatePortfolioTransaction` request types diverge from the payload actually sent — nulls and missing fields hidden by a cast** 🔽
+  - ↪ _from: PR #84 delivery review 2026-07-12 · frontend accounts/pages_
+  - `apps/frontend/src/components/portfolio/EditPortfolioTxnDialog.tsx:143-161`, `lib/api/portfolio.ts:133-136`, `types/generated.ts:6500-6512`
+  - The dialog sends `fx_rate_to_eur: null`, `note: null`, `account_id: null`, and recurrence fields under an `as Partial<PortfolioTransactionCreate>` cast; that type admits none of the nulls, and the generated schema for the operation lists neither `fx_rate_to_eur`, `account_id`, nor recurrence fields, though the backend accepts and null-persists them. Runtime is correct; the contract types are wrong exactly where the PR's null-to-clear semantics matter.
+  - Fix: introduce a proper `PortfolioTransactionUpdate` type with nullable fields (and extend the OpenAPI schema) instead of the cast.
+
+- [ ] **CardSheen is not visually identical at 3 of the 8 replaced sites — flag for design sign-off** 🔽 *(needs author confirmation, not necessarily a bug)*
+  - ↪ _from: PR #84 delivery review 2026-07-12 · frontend charts/design_
+  - `apps/frontend/src/index.css:750-773`, `components/dashboard/StatCard.tsx:123`, `BankBalancesWidget.tsx:168`, `CashFlowForecastChart.tsx:393`
+  - On `main`, StatCard's orb was `from-background/40` and BankBalancesWidget/CashFlowForecastChart used `from-primary/10`; all now render `--glass-highlight` — the two primary-tinted orbs lose their brand tint and StatCard's dark-mode orb flips from near-invisible dark to visible light sheen. The CardSheen doc frames this as deliberate normalization, but the PR's "visual is identical" claim only holds for the 5 `white/50` sites.
+  - Fix: none if the normalization is intended — confirm with the design direction (ADR-105 rich-aesthetic constraint above).
+
+- [ ] **Leftover copy-pasted corner-orb not migrated to CardSheen** 🔽
+  - ↪ _from: PR #84 delivery review 2026-07-12 · frontend charts/design_
+  - `apps/frontend/src/pages/portfolio/PerformancePage.tsx:464`
+  - `main` had 9 corner-orb divs; the PR converted the 8 `w-32` ones but left the `w-40 h-40 … -mr-20 -mt-20` variant (with hard-coded `from-white/50` instead of the theme token), so the motif the PR set out to unify still has one hand-rolled instance.
+  - Fix: `<CardSheen className="h-40 w-40 -mt-20 -mr-20" />` (or equivalent).
+
+- [ ] **ChartTooltip anchor-rect cache can go stale on hover-time layout shift** 🔽
+  - ↪ _from: PR #84 delivery review 2026-07-12 · frontend charts/design_
+  - `apps/frontend/src/components/charts/ChartTooltip.tsx:129,186-198`
+  - `parentRectRef` is read once per hover session and only invalidated on close, scroll, or resize; if the chart container moves without those events mid-hover (an async widget above it resolves and expands, an accordion reflows), `applyPosition` keeps the pre-shift rect and the tooltip renders offset from the crosshair until pointer re-entry.
+  - Fix: also invalidate from a ResizeObserver/position check on `anchorParent`.
+
+### 🏛️ Docs / API contract
+
+- [ ] **`types/generated.ts` is stale — missing both new account endpoints; the `verify-generated` CI job will fail** ⏫
+  - ↪ _from: PR #84 delivery review 2026-07-12 · docs/OpenAPI/i18n_
+  - `apps/frontend/src/types/generated.ts:65-120` vs `openapi.yaml:1641` (`/api/accounts/{id}/opening-balance`) and `:1687` (`/api/accounts/{id}/reconcile`)
+  - openapi.yaml adds both paths (operationIds `setAccountOpeningBalance`, `reconcileAccount`) but the committed generated.ts contains neither; regenerating with the repo's own `openapi-typescript` command produces a 137-line all-additions diff. `.github/workflows/ci.yml:208-240` (`verify-generated`) reruns `generate:types` and fails on any diff.
+  - Fix: run `bun run generate:types` and commit the result.
+
+- [ ] **openapi documents an `account_id` filter on GET /api/info/transaction-count that the route ignores** 🔼
+  - ↪ _from: PR #84 delivery review 2026-07-12 · docs/OpenAPI/i18n_
+  - `openapi.yaml:3529-3534` vs `apps/node-backend/src/routes/info/statistics.js:39-42` and `repositories/infoRepositoryStatistics.js:83-86`
+  - The handler calls `getTransactionCount()` with no arguments and the repository runs an unconditional `SELECT count(*) … WHERE is_active = true` — every query param silently ignored. (Pre-existing `bank_account` param has the same problem; `account_id` is newly documented by this PR.)
+  - Fix: wire the filter through `getTransactionCount({ accountId })` or remove the param from the spec.
+
+- [ ] **Endpoint-matrix description still says "all 211" after the count was bumped to 213; missing changelog entry** 🔽
+  - ↪ _from: PR #84 delivery review 2026-07-12 · docs/OpenAPI/i18n_
+  - `docs/reference/api-endpoint-matrix.md:11` (`api_operation_count: 213`, independently recounted as correct) vs `:13` ("Complete matrix of all 211 HTTP API operations…")
+  - `scripts/check-endpoint-matrix.js:30-41` only validates the count key, so this passes CI while contradicting it; every previous count change carried a changelog sentence, the +2 accounts operations don't.
+  - Fix: update the description to 213 and add the changelog entry.
+
+- [ ] **Opening-balance spec omits the 400 response its validation actually produces** 🔽
+  - ↪ _from: PR #84 delivery review 2026-07-12 · docs/OpenAPI/i18n_
+  - `openapi.yaml:1678-1685` (only `200`/`404`) vs `services/openingBalanceService.js:41-59` (`ValidationError` → 400 for bad balance/date/currency); the sibling `/reconcile` added in the same diff documents its 400.
+  - Fix: add the `400` response.
+
+- [ ] **ADR-094 addendum says the anchor memo is "Opening balance (i18n'd)"; the code stamps a fixed English constant** 🔽
+  - ↪ _from: PR #84 delivery review 2026-07-12 · docs/OpenAPI/i18n_
+  - `docs/adr/094-balance-reconciliation-drift.md` (addendum decision table, memo row) vs `services/openingBalanceService.js:29` (`const OPENING_MEMO = 'OPENING BALANCE';`)
+  - Fix: drop "(i18n'd)" from the ADR table (or note the memo is a fixed server-side constant).
+
+- [ ] **ADR index claims "no implementation shipped with these" while this same PR ships the implementation** 🔽
+  - ↪ _from: PR #84 delivery review 2026-07-12 · docs/OpenAPI/i18n_
+  - `docs/adr/index.md` → "2026-07-10: Accounts-rewrite decisions (D1–D5)" ("…no implementation shipped with these.") — at this PR's HEAD, D1 (migration 0066), D5 (0067/0069 + `accountService.js:156-162`), and D4 (0073/0075 + the two new endpoints) are all implemented.
+  - Fix: reword to "implementation landed with the 2026-07 integration".
+
+- [ ] **Stale `dbEditor.js` header comment contradicts the raw-WHERE removal this PR itself makes** 🔽
+  - ↪ _from: PR #84 delivery review 2026-07-12 · docs/OpenAPI/i18n_
+  - `apps/node-backend/src/services/dbEditor.js:8-9` ("…the raw WHERE escape hatch cannot mutate or hang the DB") vs lines 180-183 of the same file, where any `where` param is now a hard 400.
+  - Fix: update the header bullet to match the `readRows` docblock (structured filters only).
+
+### ✅ Checked clean in this review (do NOT re-audit against this PR)
+
+- Migrations 0065, 0067–0072, 0074: idempotent, symmetric, no downgrade-time CHECK violations; 0066's trigger SQL and expression-index targeting correct; `alembic/env.py` `transaction_per_migration` correctly SQLite-gated.
+- `connection.js` ambient-transaction reroute end-to-end (leaked-continuation protection, savepoint nesting, retry suppression); trade+leg atomicity through the repo savepoint path.
+- dbEditor raw-WHERE removal complete (hard 400 before any SQL); driver-error redaction for 42xxx; Electron backup/restore paths (`ON_ERROR_STOP`, `--single-transaction`, schema-head parsing), compose PORT injection, demo-build resource mapping.
+- Export/import: numeric-column formula-guard bypass with `=`,`+`,`@`,tab,CR still neutralized; vision adapter apostrophe stripping (Amount + Balance); rollback route-pairing (cash → `transactions`, trades → repo with ADR-090 leg cleanup); `parseDateWithFormat` rollover/2-digit-year rejection; date-shift fix audited caller-by-caller incl. DST-skip zones; scoped tests pass under 4 timezones.
+- `filterBuilder` search rewrite (shared `$p` across UNION branches, int4 id validation, `COALESCE(...,-1)` NULL-exclusion in all six copies); transactions PATCH parity validation; planned-recurrence bounds end-to-end (route → repo insert $1..$23 → completion semantics); transfer-pair dismissals (ordered-pair consistency); MV regrain to `(account_id, currency)`; forecast cache-key collision fix.
+- accountService/accountRepository: normalized-identity resolution matching `uq_accounts_name_norm`, rename propagation under `FOR UPDATE`, closed_at server-only stamping, 23505/23503 mapping; `AccountUpdate` correctly rejects `closed_at`.
+- priceCache date handling, priceProviderRegistry parallelization, snapshotBuilder `storeAccountSplit` batching/params, investmentController numeric guards, `moveHolding` FIFO boundary-lot basis math (aside from the split-replay finding), `getNetUnitsOnOrBeforeDate` replay semantics (aside from the zero-held split finding).
+- Chart memoization refactors (referentially stable props, no stale closures found), ChartSyncContext store rewrite, LineChart `connectNulls` inversion, NaN/zero-division guards, chart a11y (no regressions; BankBalancesWidget gained keyboard access), index.css compositor-only hover shadow, ShaderAurora/VisualEffectsController gating.
+- Frontend: `tsc --noEmit` passes; useAccounts CRUD invalidation (aside from the repoint gap), 409→close-flow routing, undo/restore null mapping, `account_id` filter plumbing end-to-end, StatCard/Money `signed` refactors across all pages, AccountCombobox identity-rule consistency, dialog remount-per-target key usage.
+- i18n: six locale copies in exact parity (3 575 keys), removed key fully cleaned, all new nl values translated; docs/api/accounts.md and the endpoint-matrix accounts table match the routes (aside from the filed doc nits); ADR-101 addendum accurate; ADR-107/108 internally consistent.
+
 ## 🧩 Feature work
 
 ### AI insight / anomaly agent (scoped from brainstorm — 2026-07-01, redesigned — 2026-07-01)
