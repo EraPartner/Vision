@@ -293,7 +293,7 @@ look-changing one.
   - Deleting a manual transaction leaves its hash row with `transaction_id = NULL`; re-adding the identical transaction → `ConflictError` with `existing_transaction_id: null` (points at nothing), no force/override path. Also blocks a legitimate second identical manual purchase. Inconsistency: the hash includes `bankAccount` but the fallback field query (deduplication.js:88-94) ignores it.
   - Fix: delete/invalidate the manual_raw row on transaction delete (or join `transactions.is_active`); add an explicit "add anyway" override.
 
-- [ ] **Portfolio-import dedup ignores `account_id` — cross-account trades and legitimate repeat fills dropped** 🔼 🔎 partial 2026-07-11 (cash predicate isCashFieldDuplicate now filters account_id; trade predicate isFieldDuplicate still matches investment/date/type/amount/units with no account_id or currency)
+- [x] **Portfolio-import dedup ignores `account_id` — cross-account trades and legitimate repeat fills dropped** 🔼 ✅ 2026-07-12 · 6c98904 (#84, trade predicate now matches account_id via IS NOT DISTINCT FROM + currency; cash predicate was already fixed) *(the order-reference-column idea for legitimate same-day duplicate fills was not taken — two byte-identical same-day fills on the same account still dedup)*
   - ↪ _from: Correctness research 2026-07-02 · Wave 1b_
   - `commit.js:215-234` (trades), `:203-213` (cash) — `isFieldDuplicate` matches (investment, date, type, amount, units) with no account filter, unlike the dormant fanout's `tradeRowExists` (`importPipeline/brokerageFanout.js:72-81`)
   - Identical buy already on the Degiro account → importing the same-shaped IBKR buy drops it as duplicate → IBKR position under-counted. Two identical same-day fills / equal same-day deposits: the second is always dropped.
@@ -457,7 +457,7 @@ look-changing one.
   - Near-identical raw SQL copy-pasted across two files; one throws `ValidationError` on no-match, the other silently no-ops (see the planned-transactions finding above — same fix resolves both).
   - Fix: extract one shared `resolveRecipientId`/`resolveCategoryId` helper into `recipientService.js`/`categoryService.js`.
 
-- [ ] **CSV export's `running_balance` is a single global accumulator, not partitioned by account — same bug class already fixed on the list endpoint** 🔼 🔎 verified-present 2026-07-11 *(found incidentally during the performance audit)*
+- [x] **CSV export's `running_balance` is a single global accumulator, not partitioned by account — same bug class already fixed on the list endpoint** 🔼 ✅ 2026-07-12 · c44819d (#84, per-account Decimal accumulator map, mirroring the list endpoint's PARTITION BY account_id)
   - ↪ _from: Codebase audit 2026-06-30 · Correctness — Backend · Data export_
   - `apps/node-backend/src/services/transactionExport.js:196,211`
   - The main transaction-list endpoint (`transactionRepository.js:121-123`, ADR-088) was explicitly fixed to partition `running_balance` by `account_id` because "a list spanning multiple accounts summed them into one meaningless cross-account total." The CSV export path has the identical unfixed bug. Confirmed reachable via `GET /api/transactions/export/csv?include_balance=true` with no account filter.
@@ -505,7 +505,7 @@ look-changing one.
   - `belfius.js:32-40` — direction guessed from first-vs-last date; a single-day statement is treated as descending. If actually ascending, every row gets the wrong running balance (walked from the wrong end). Balances anchor accounts per ADR-094, so wrong values are user-visible.
   - Fix: order by statement/transaction number (parts[2]/parts[3]) instead of dates.
 
-- [ ] **`validate.js` reads `tx_date` raw and runs it through `toISOString` — fallback dedup hashes shift a day in UTC+ zones** 🔽 🔎 verified-present 2026-07-11
+- [x] **`validate.js` reads `tx_date` raw and runs it through `toISOString` — fallback dedup hashes shift a day in UTC+ zones** 🔽 ✅ 2026-07-12 · c864097 (#84, SELECT now emits to_char(tx_date,'YYYY-MM-DD') matching commit.js; misleading createTransactionHash header comment also corrected)
   - ↪ _from: Correctness research 2026-07-02 · Wave 1a_
   - `services/importPipeline/validate.js:22,113` vs `lib/importDates.js:8-11`; commit.js:26 already uses `to_char` correctly
   - Only the `raw_data`-missing fallback-hash path consumes it; self-consistent while server TZ is stable, but a TZ change between imports silently changes fallback hashes → missed duplicates.
@@ -617,7 +617,7 @@ look-changing one.
   - `docs/reference/code-patterns.md:585` states the canonical pattern explicitly ("never in-place delete"); both files mutate a shallow copy directly with `delete fields.x`. Notably, `plannedTransactions.js` has the *correct* pattern right next to the bug (`withoutPatchOnlyReadOnlyFields`, lines 26-36, uses destructured rest), showing the divergence is real and inconsistent even within one file. Not a live bug today (the copy isn't `req.body` itself), but an easy pattern to copy onto a non-copied object later.
   - Fix: rewrite as `const { x, ...rest } = fields; return rest;` in both files.
 
-- [ ] **Amount-sign filter coercion logic is duplicated between list and bulk-action routes** 🔽 🔎 verified-present 2026-07-11
+- [x] **Amount-sign filter coercion logic is duplicated between list and bulk-action routes** 🔽 ✅ 2026-07-12 · 6193a9f (#84, shared parseAmountFilter(value, signed) in filterBuilder.js, imported by both call sites)
   - ↪ _from: Codebase audit 2026-06-30 · Correctness — Backend · Architecture / route-service boundary / dead code (backend)_
   - `routes/transactions.js:71-80` (`parseTransactionListQuery`) vs. `services/bulkSelection.js:46-53` (`normalizeBulkFilter`)
   - Both independently reimplement identical `amount_signed`/magnitude coercion; `bulkSelection.js` is documented to "mirror" the list endpoint but a future fix to one won't propagate to the other.
@@ -640,7 +640,7 @@ look-changing one.
   - ↪ _from: Correctness research 2026-07-02 · Wave 2a_
   - `addInvFromMarket.option.addTxnDesc`: "verkop" → "verkoop" · `filter.type.income`/`search.suggest.allIncome` use "Ontvangsten" while every other surface uses "Inkomsten" · `tax.profile.field.cadastralIncome` nl reads "Kadastraal inkomen (kadastraal inkomen)" (EN parenthetical was already the Dutch term).
 
-- [ ] **Recurring-detection and forecast aggregates use native float arithmetic instead of the mandatory Decimal helper** ⬇ 🔎 verified-present 2026-07-11
+- [x] **Recurring-detection and forecast aggregates use native float arithmetic instead of the mandatory Decimal helper** ⬇ ✅ 2026-07-12 · 3634db2 (#84, addAll/divide/roundMoney in recurringDetectionService; per-day Decimal accumulators + addAll totals in infoRepositoryPlanned)
   - ↪ _from: Codebase audit 2026-06-30 · Correctness — Backend · Planned / recurring transactions_
   - `apps/node-backend/src/services/recurringDetectionService.js:213,243-244`, `apps/node-backend/src/repositories/infoRepositoryPlanned.js:86-87,125-126`
   - Per `docs/reference/code-patterns.md`, monetary accumulation must route through `addAll()`/Decimal; here amounts are summed/averaged with native `+=`/`reduce` after one `toDecimal().toNumber()` conversion. Final values are cent-rounded so drift is negligible (display-only, not ledger writes), but it's inconsistent with the stated scope.
