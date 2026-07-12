@@ -93,11 +93,18 @@ function buildPortfolioConfig(data) {
 
   const trimOrEmpty = (v) => (typeof v === 'string' ? v.trim() : '');
 
+  // csv-parse throws "Invalid Option: from must be a positive integer" on a
+  // negative skip — validate here so it 400s instead of a raw 500.
+  const skipRows = parseInt(skip_rows, 10) || 0;
+  if (skipRows < 0) {
+    throw new ValidationError('skip_rows must be zero or a positive integer');
+  }
+
   const customConfig = {
     date_format: (date_format && String(date_format).trim()) || '%Y-%m-%d',
     separator: sep || ',',
     encoding: (encoding && String(encoding).trim()) || 'utf-8',
-    skip_rows: parseInt(skip_rows, 10) || 0,
+    skip_rows: skipRows,
     default_asset_class,
     default_type: default_type || 'buy',
     type_mapping: parseTypeMapping(type_mapping),

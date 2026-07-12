@@ -216,7 +216,7 @@ export function PortfolioImportPage() {
                 type="number"
                 min="0"
                 value={config.skipRows}
-                onChange={(e) => setConfig({ ...config, skipRows: parseInt(e.target.value) || 0 })}
+                onChange={(e) => setConfig({ ...config, skipRows: Math.max(0, parseInt(e.target.value) || 0) })}
               />
             </div>
           </div>

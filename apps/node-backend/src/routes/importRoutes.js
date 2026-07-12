@@ -112,12 +112,20 @@ router.post('/csv/custom', csvUpload.single('file'), async (req, res) => {
     throw new ValidationError('separator must be a single character');
   }
 
+  // csv-parse throws "Invalid Option: from must be a positive integer" on a
+  // negative skip — validate here so it 400s instead of a raw 500.
+  const skipRowsNum = parseInt(skip_rows, 10) || 0;
+  if (skipRowsNum < 0) {
+    cleanup(req.file.path);
+    throw new ValidationError('skip_rows must be zero or a positive integer');
+  }
+
   const customConfig = {
     bank_name: bank_name.trim(),
     date_format: date_format.trim(),
     encoding: encoding || 'utf-8',
     separator: separatorStr || ',',
-    skip_rows: parseInt(skip_rows, 10) || 0,
+    skip_rows: skipRowsNum,
     column_mapping: {
       date: date_column.trim(),
       recipient: recipient_column.trim(),

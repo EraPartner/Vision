@@ -269,6 +269,23 @@ describe('Import Routes', () => {
       await expect(routeHandlers['post:/csv/custom'](req, res)).rejects.toThrow('separator');
     });
 
+    it('should return 400 for negative skip_rows', async () => {
+      // csv-parse throws a raw error on a negative `from` — must 400 up front.
+      const req = {
+        file: { path: '/tmp/custom.csv', originalname: 'custom.csv' },
+        query: {
+          bank_name: 'Custom', date_format: '%d/%m/%Y',
+          date_column: 'Date', recipient_column: 'Desc',
+          amount_column: 'Amount', skip_rows: '-3',
+        },
+        body: {},
+      };
+      const res = mockResponse();
+
+      await expect(routeHandlers['post:/csv/custom'](req, res)).rejects.toThrow('skip_rows');
+      expect(runImportPipeline).not.toHaveBeenCalled();
+    });
+
     it('should return 201 on success', async () => {
       runImportPipeline.mockResolvedValue({
         total: 1, imported: 1, duplicates: 0, errors: 0,
