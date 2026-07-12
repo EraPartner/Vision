@@ -1649,6 +1649,7 @@ const en: Record<string, string> = {
   'plannedForm.categoryOptional': 'Select a category (optional)',
   'plannedForm.createPayment': 'Create Payment',
   'plannedForm.currency': 'Currency',
+  'plannedForm.customDaysInvalid': 'Custom frequency needs a repeat interval of at least 1 day.',
   'plannedForm.customDaysPlaceholder': 'e.g. 10',
   'plannedForm.dueDate': 'Due Date *',
   'plannedForm.editTitle': 'Edit Payment',

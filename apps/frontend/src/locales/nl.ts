@@ -1649,6 +1649,7 @@ const nl: Record<string, string> = {
   'plannedForm.categoryOptional': 'Selecteer een categorie (optioneel)',
   'plannedForm.createPayment': 'Betaling aanmaken',
   'plannedForm.currency': 'Valuta',
+  'plannedForm.customDaysInvalid': 'Aangepaste frequentie vereist een herhalingsinterval van minstens 1 dag.',
   'plannedForm.customDaysPlaceholder': 'bijv. 10',
   'plannedForm.dueDate': 'Vervaldatum *',
   'plannedForm.editTitle': 'Betaling bewerken',

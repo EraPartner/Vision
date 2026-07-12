@@ -75,6 +75,16 @@ export default function PlannedPaymentForm({ open, onOpenChange, onSubmit, initi
       }
     }
 
+    // A "custom" pattern with a blank/0 interval reached the backend as the
+    // literal pattern "custom" and came back as a raw 400 — block it here.
+    if (!isLoan && isRecurring && frequency === "custom") {
+      const days = parseInt(customDays, 10);
+      if (!Number.isInteger(days) || days < 1) {
+        alert(t('plannedForm.customDaysInvalid'));
+        return;
+      }
+    }
+
     const dueDateStr = toYmd(dueDate);
 
     let endDateStr: string | undefined = undefined;
