@@ -53,6 +53,15 @@ describe('BelfiusAdapter', () => {
     expect(txns[0].balance).toBe(1234.56);
   });
 
+  it('parses a dot-grouped "Laatste saldo" (≥ €1000)', async () => {
+    // "12.345,67 EUR" used to become NaN via a bare comma swap, so running
+    // balances silently never applied for balances of €1000 and up.
+    const csv = SAMPLE_BELFIUS_CSV.replace('Laatste saldo;1234,56 EUR', 'Laatste saldo;12.345,67 EUR');
+    tmpPath = writeTempCSV(csv);
+    const txns = await parse(tmpPath);
+    expect(txns[0].balance).toBe(12345.67);
+  });
+
   it('parses transaction fields correctly', async () => {
     tmpPath = writeTempCSV(SAMPLE_BELFIUS_CSV);
     const txns = await parse(tmpPath);

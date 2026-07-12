@@ -6,7 +6,7 @@
 import fs from 'fs';
 import { cleanRecipientName, normalizeToUppercase } from '../../textNormalization.js';
 import { logger } from '../../../config/logger.js';
-import { parseDayMonthYear, parseCommaDecimal, parseDecimalSafe, buildOptionalComment, splitCsvLines, canonicalIban } from './_shared.js';
+import { parseDayMonthYear, parseCommaDecimal, buildOptionalComment, splitCsvLines, canonicalIban } from './_shared.js';
 import { toDecimal, roundMoney } from '../../../lib/money.js';
 
 const NAME = 'belfius';
@@ -19,8 +19,10 @@ function parseLastBalance(line) {
   if (!line.includes('Laatste saldo;')) return null;
   const parts = line.split(';');
   if (parts.length < 2) return null;
-  const balStr = parts[1].replace(' EUR', '').replace(',', '.').trim();
-  const val = parseDecimalSafe(balStr);
+  // "12.345,67 EUR" — a bare comma swap left "12.345.67" (NaN), so running
+  // balances silently never applied for balances ≥ €1000.
+  const balStr = parts[1].replace(' EUR', '').trim();
+  const val = parseCommaDecimal(balStr);
   return isNaN(val) ? null : val;
 }
 
