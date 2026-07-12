@@ -78,14 +78,11 @@ export function matchesTolerance(planned, tx) {
   return true;
 }
 
-/**
- * Returns the single planned payment that `tx` matches, or undefined when the
- * match is ambiguous (0 or ≥2 candidates).
- */
-export function findAutoLinkTarget(tx, activePlanned) {
-  const matches = activePlanned.filter((planned) => matchesTolerance(planned, tx));
-  return matches.length === 1 ? matches[0] : undefined;
-}
+// NOTE: a findAutoLinkTarget(tx, activePlanned) helper used to live here, but
+// it only checked single-direction uniqueness while the real rule inside
+// autoLinkTransactions is mutual uniqueness (both match directions). It had no
+// production callers and its passing tests created false confidence that the
+// weaker rule was the live one, so it was removed.
 
 async function isAutoClearEnabled() {
   try {
@@ -208,4 +205,4 @@ export async function getMatchSuggestions() {
   return suggestions;
 }
 
-export default { matchesTolerance, findAutoLinkTarget, autoLinkTransactions, getMatchSuggestions };
+export default { matchesTolerance, autoLinkTransactions, getMatchSuggestions };
