@@ -129,7 +129,7 @@ export async function commitBatch({ batchId, onProgress }) {
       continue;
     }
 
-    if (await isFieldDuplicate(row)) {
+    if (await isFieldDuplicate(row, batchAccountId)) {
       duplicates++;
       await markRow(row.id, 'duplicate');
       continue;
@@ -237,7 +237,11 @@ async function isCashFieldDuplicate(accountId, row) {
   return dup.rows.length > 0;
 }
 
-async function isFieldDuplicate(row) {
+async function isFieldDuplicate(row, batchAccountId) {
+  // account_id and currency are part of the identity: the same-shaped fill on
+  // a different account (or in a different currency) is a distinct trade, not
+  // a re-import of this one. IS NOT DISTINCT FROM keeps NULL==NULL matching
+  // for account-less (non-brokerage) batches.
   const dup = await query(
     `SELECT 1
        FROM portfolio_transactions
@@ -246,6 +250,8 @@ async function isFieldDuplicate(row) {
         AND type = $3::portfolio_txn_type
         AND amount = $4
         AND COALESCE(units, 0) = COALESCE($5, 0)
+        AND account_id IS NOT DISTINCT FROM $6
+        AND COALESCE(currency, 'EUR') = $7
       LIMIT 1`,
     [
       row.investment_id,
@@ -253,6 +259,8 @@ async function isFieldDuplicate(row) {
       row.type,
       row.amount != null ? Number(row.amount) : 0,
       row.units != null ? Number(row.units) : null,
+      batchAccountId ?? null,
+      row.currency || row.investment_currency || 'EUR',
     ],
   );
   return dup.rows.length > 0;

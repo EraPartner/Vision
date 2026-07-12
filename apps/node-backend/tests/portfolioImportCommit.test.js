@@ -136,6 +136,16 @@ describe('commitBatch (portfolio)', () => {
     expect(portfolioTransactionRepository.create).not.toHaveBeenCalled();
   });
 
+  it('field-dedup predicate matches on account_id and currency, not just trade shape', async () => {
+    batchAccountId = 7;
+    matchedRows = [row({ currency: 'USD', fx_rate_to_eur: 0.9 })];
+    await commitBatch({ batchId: 5 });
+    const dedupCall = query.mock.calls.find(([sql]) => /FROM portfolio_transactions\s+WHERE investment_id/.test(sql));
+    expect(dedupCall[0]).toContain('account_id IS NOT DISTINCT FROM');
+    // [investment_id, tx_date, type, amount, units, account_id, currency]
+    expect(dedupCall[1].slice(5)).toEqual([7, 'USD']);
+  });
+
   it('stamps the batch-level account_id onto every committed lot (ADR-095)', async () => {
     batchAccountId = 7;
     matchedRows = [row()];
