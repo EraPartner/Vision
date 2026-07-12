@@ -21,7 +21,6 @@ vi.mock('../../src/repositories/splitRepository.js', () => ({
     getSplitsByTransaction: vi.fn(),
     getOwedExportRowsByRecipient: vi.fn(),
     getTransactionSplitTotals: vi.fn(),
-    createSplit: vi.fn(),
     createSplitAtomic: vi.fn(),
     createSplitsBatch: vi.fn(),
     createSplitsBatchAtomic: vi.fn(),

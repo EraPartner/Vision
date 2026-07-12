@@ -60,18 +60,9 @@ export const splitRepository = {
     };
   },
 
-  /**
-   * Create a new split for a transaction.
-   */
-  async createSplit({ transaction_id, recipient_id, amount, note }) {
-    const sql = `
-      INSERT INTO transaction_splits (transaction_id, recipient_id, amount, note)
-      VALUES ($1, $2, $3, $4)
-      RETURNING *
-    `;
-    const result = await query(sql, [transaction_id, recipient_id, amount, note || null]);
-    return result.rows[0];
-  },
+  // NOTE: single-split creation goes through createSplitAtomic below — a
+  // plain unguarded INSERT here (the old createSplit) bypassed the row lock
+  // and over-allocation validation the atomic variants exist to enforce.
 
   /**
    * Atomically validate and create a single split.
