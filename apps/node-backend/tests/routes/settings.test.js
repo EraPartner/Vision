@@ -78,6 +78,17 @@ describe('Settings Routes', () => {
       expect(res.json).toHaveBeenCalledWith({ ok: true, data: { key: 'onboarding_complete', value: false } });
     });
 
+    it('returns false default for includeTransfers when unset', async () => {
+      // Missing from SETTING_DEFAULTS this GET 404'd until the first toggle.
+      settingsRepository.get.mockResolvedValue(null);
+
+      const req = { params: { key: 'includeTransfers' } };
+      const res = mockResponse();
+      await routeHandlers['get:/:key'](req, res);
+
+      expect(res.json).toHaveBeenCalledWith({ ok: true, data: { key: 'includeTransfers', value: false } });
+    });
+
     it('throws NotFoundError for unknown missing key', async () => {
       settingsRepository.get.mockResolvedValue(null);
 

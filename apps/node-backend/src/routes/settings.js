@@ -263,6 +263,9 @@ const SETTING_DEFAULTS = {
   widget_visibility: {},
   cost_basis_method: 'weighted_avg',
   rebalance_plans: [],
+  // Matches getIncludeTransfers' `=== true` read default — without this entry
+  // the GET 404'd until the first toggle and react-query retried on every visit.
+  includeTransfers: false,
 };
 
 router.get('/:key', async (req, res) => {
