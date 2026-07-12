@@ -146,7 +146,9 @@ function assertThemeSettingsValue(value) {
 }
 
 function assertDashboardSettingsValue(value, { validateExcludeHiddenCategories = false, validateExclusionScope = false } = {}) {
-  if (typeof value !== 'object' || Array.isArray(value)) {
+  // typeof null === 'object' — without the null check, value.excludedCategoryIds
+  // below threw a TypeError that surfaced as a 500 instead of a 400.
+  if (typeof value !== 'object' || value === null || Array.isArray(value)) {
     throw new ValidationError('dashboard_settings must be an object');
   }
 

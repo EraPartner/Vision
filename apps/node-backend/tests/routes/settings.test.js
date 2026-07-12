@@ -110,6 +110,14 @@ describe('Settings Routes', () => {
       await expect(routeHandlers['put:/:key'](req, res)).rejects.toBeInstanceOf(ValidationError);
     });
 
+    it('throws ValidationError (not TypeError) for dashboard_settings with value null', async () => {
+      // typeof null === 'object' — a missing null check made this a 500.
+      const req = { params: { key: 'dashboard_settings' }, body: { value: null } };
+      const res = mockResponse();
+
+      await expect(routeHandlers['put:/:key'](req, res)).rejects.toBeInstanceOf(ValidationError);
+    });
+
     it('throws ValidationError for dashboard_settings with invalid exclusionScope', async () => {
       const req = {
         params: { key: 'dashboard_settings' },
