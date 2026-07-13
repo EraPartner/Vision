@@ -33,6 +33,34 @@ interface Props {
     breakdownSummary: BreakdownItem[];
 }
 
+type TranslateFn = (key: string, params?: Record<string, string | number>) => string;
+
+// One row of the top/bottom performer lists. The two lists were byte-identical
+// JSX differing only in which array they mapped, so they share this row.
+function PerformerRow({ inv, defaultCurrency, t }: { inv: BreakdownItem; defaultCurrency: string; t: TranslateFn }) {
+    return (
+        <div className="flex items-center justify-between">
+            <div className="min-w-0">
+                <p className="text-sm font-medium text-foreground truncate">{inv.name}</p>
+                <p className="text-xs text-muted-foreground">{inv.symbol || inv.assetClass}</p>
+            </div>
+            <div className="text-right shrink-0">
+                <p className={`text-sm font-bold ${inv.gainLossPercent >= 0 ? "amount-gain" : "amount-loss"}`}>
+                    {inv.gainLossPercent >= 0 ? "+" : ""}{inv.gainLossPercent.toFixed(1)}%
+                </p>
+                <p className="text-xs text-muted-foreground">
+                    <Money amount={inv.gainLoss} currency={defaultCurrency} />
+                    {typeof inv.fxGain === 'number' && inv.currency !== defaultCurrency && (
+                        <span className="ml-1.5" title={t('portfolio.fxEffect')}>
+                            {t('portfolio.fxShort')} {inv.fxGain >= 0 ? "+" : ""}<Money amount={inv.fxGain} currency={defaultCurrency} />
+                        </span>
+                    )}
+                </p>
+            </div>
+        </div>
+    );
+}
+
 function getHeatColor(val: number | null, maxAbsPct: number): string {
     if (val === null) return "bg-muted/30";
     if (val === 0) return "bg-muted text-muted-foreground";
@@ -216,25 +244,7 @@ export default function PerformanceBreakdown({ heatmapData, breakdownSummary }: 
                     <CardContent>
                         <div className="space-y-3">
                             {topPerformers.map((inv) => (
-                                <div key={inv.id} className="flex items-center justify-between">
-                                    <div className="min-w-0">
-                                        <p className="text-sm font-medium text-foreground truncate">{inv.name}</p>
-                                        <p className="text-xs text-muted-foreground">{inv.symbol || inv.assetClass}</p>
-                                    </div>
-                                    <div className="text-right shrink-0">
-                                        <p className={`text-sm font-bold ${inv.gainLossPercent >= 0 ? "amount-gain" : "amount-loss"}`}>
-                                            {inv.gainLossPercent >= 0 ? "+" : ""}{inv.gainLossPercent.toFixed(1)}%
-                                        </p>
-                                        <p className="text-xs text-muted-foreground">
-                                            <Money amount={inv.gainLoss} currency={defaultCurrency} />
-                                            {typeof inv.fxGain === 'number' && inv.currency !== defaultCurrency && (
-                                                <span className="ml-1.5" title={t('portfolio.fxEffect')}>
-                                                    {t('portfolio.fxShort')} {inv.fxGain >= 0 ? "+" : ""}<Money amount={inv.fxGain} currency={defaultCurrency} />
-                                                </span>
-                                            )}
-                                        </p>
-                                    </div>
-                                </div>
+                                <PerformerRow key={inv.id} inv={inv} defaultCurrency={defaultCurrency} t={t} />
                             ))}
                         </div>
                     </CardContent>
@@ -250,25 +260,7 @@ export default function PerformanceBreakdown({ heatmapData, breakdownSummary }: 
                     <CardContent>
                         <div className="space-y-3">
                             {bottomPerformers.map((inv) => (
-                                <div key={inv.id} className="flex items-center justify-between">
-                                    <div className="min-w-0">
-                                        <p className="text-sm font-medium text-foreground truncate">{inv.name}</p>
-                                        <p className="text-xs text-muted-foreground">{inv.symbol || inv.assetClass}</p>
-                                    </div>
-                                    <div className="text-right shrink-0">
-                                        <p className={`text-sm font-bold ${inv.gainLossPercent >= 0 ? "amount-gain" : "amount-loss"}`}>
-                                            {inv.gainLossPercent >= 0 ? "+" : ""}{inv.gainLossPercent.toFixed(1)}%
-                                        </p>
-                                        <p className="text-xs text-muted-foreground">
-                                            <Money amount={inv.gainLoss} currency={defaultCurrency} />
-                                            {typeof inv.fxGain === 'number' && inv.currency !== defaultCurrency && (
-                                                <span className="ml-1.5" title={t('portfolio.fxEffect')}>
-                                                    {t('portfolio.fxShort')} {inv.fxGain >= 0 ? "+" : ""}<Money amount={inv.fxGain} currency={defaultCurrency} />
-                                                </span>
-                                            )}
-                                        </p>
-                                    </div>
-                                </div>
+                                <PerformerRow key={inv.id} inv={inv} defaultCurrency={defaultCurrency} t={t} />
                             ))}
                         </div>
                     </CardContent>

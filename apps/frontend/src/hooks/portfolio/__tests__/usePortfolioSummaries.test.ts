@@ -1,8 +1,7 @@
 // @vitest-environment jsdom
 import { describe, it, expect } from 'vitest';
-import React, { type ReactNode } from 'react';
 import { renderHook } from '@testing-library/react';
-import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import { createQueryWrapper } from '@/test/queryWrapper';
 import { usePortfolioSummaries } from '@/hooks/portfolio/usePortfolioSummaries';
 import type { Investment, PortfolioTransaction } from '@/types/api';
 
@@ -10,14 +9,7 @@ import type { Investment, PortfolioTransaction } from '@/types/api';
 // hook needs a QueryClientProvider. The query is left unresolved on purpose: the
 // rate map degrades to EUR-only (multiplier 1), which is correct for the all-EUR
 // fixtures below.
-function makeWrapper() {
-  const qc = new QueryClient({
-    defaultOptions: { queries: { retry: false, gcTime: 0, staleTime: 0 } },
-  });
-  return function Wrapper({ children }: { children: ReactNode }) {
-    return React.createElement(QueryClientProvider, { client: qc }, children);
-  };
-}
+const makeWrapper = createQueryWrapper;
 
 const inv = (overrides: Partial<Investment>): Investment =>
   ({

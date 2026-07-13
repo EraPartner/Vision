@@ -57,10 +57,6 @@
     "generate:types": "openapi-typescript openapi.yaml -o apps/frontend/src/types/generated.ts",
     "check-endpoint-matrix": "node scripts/check-endpoint-matrix.js"
   },
-  "dependencies": {
-    "archiver": "^8.0.0",
-    "yauzl": "^3.4.0"
-  },
   "devDependencies": {
     "@commitlint/cli": "^21.2.1",
     "@commitlint/config-conventional": "^21.2.0",

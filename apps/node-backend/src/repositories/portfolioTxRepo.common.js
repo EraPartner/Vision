@@ -9,6 +9,7 @@
 
 import { query, withTransaction, withSavepointIfInTransaction } from '../database/connection.js';
 import { toDecimal, toNumber, roundMoney, multiply, divide } from '../lib/money.js';
+import { buildSetClauses } from '../lib/sqlClauses.js';
 
 let _hasPortfolioTransactionInheritanceSchema;
 
@@ -325,16 +326,7 @@ export const CHILD_ALLOWED_FIELDS_BY_ASSET_CLASS = {
 };
 
 function buildUpdateSql(tableName, id, fields, allowedFields) {
-  const setClauses = [];
-  const params = [];
-  let idx = 1;
-
-  for (const [key, value] of Object.entries(fields)) {
-    if (allowedFields.includes(key) && value !== undefined) {
-      setClauses.push(`${key} = $${idx++}`);
-      params.push(value);
-    }
-  }
+  const { clauses: setClauses, params, nextIdx: idx } = buildSetClauses(fields, { allowed: allowedFields });
 
   if (!setClauses.length) return null;
 

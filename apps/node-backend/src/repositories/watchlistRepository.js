@@ -4,6 +4,7 @@
 
 import { query } from '../database/connection.js';
 import { coerceNumericFields } from '../lib/money.js';
+import { buildSetClauses } from '../lib/sqlClauses.js';
 
 // target_price is NUMERIC (node-postgres returns it as a string); coerce on
 // emit so it matches the `number` API/TS type. current_price/price_change are
@@ -78,16 +79,7 @@ export const watchlistRepository = {
 
   async update(id, fields) {
     const allowed = ['name', 'symbol', 'asset_class', 'target_price', 'currency', 'notes', 'price_provider_id'];
-    const setClauses = [];
-    const params = [];
-    let idx = 1;
-
-    for (const [key, value] of Object.entries(fields)) {
-      if (allowed.includes(key) && value !== undefined) {
-        setClauses.push(`${key} = $${idx++}`);
-        params.push(value);
-      }
-    }
+    const { clauses: setClauses, params, nextIdx: idx } = buildSetClauses(fields, { allowed });
 
     if (setClauses.length === 0) return this.getById(id);
 

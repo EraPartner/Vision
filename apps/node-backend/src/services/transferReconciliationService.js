@@ -20,6 +20,15 @@ import { ValidationError, NotFoundError } from '../middleware/errorHandler.js';
 
 const DEFAULT_WINDOW_DAYS = 3;
 
+// Mark one leg of a transfer pair (SIMP-50). The `auto` variant guards against
+// clobbering a concurrent manual mark or already-paired row; the `manual`
+// variant is unconditional (the caller has already released prior peers).
+const MARK_AUTO_LEG_SQL = `UPDATE transactions SET is_transfer = true, transfer_peer_id = $2, transfer_source = 'auto'
+            WHERE id = $1 AND is_transfer = false AND transfer_source IS NULL`;
+const MARK_MANUAL_LEG_SQL = `UPDATE transactions SET is_transfer = true, transfer_peer_id = $2, transfer_source = 'manual' WHERE id = $1`;
+const markAutoLeg = (client, id, peerId) => client.query(MARK_AUTO_LEG_SQL, [id, peerId]);
+const markManualLeg = (client, id, peerId) => client.query(MARK_MANUAL_LEG_SQL, [id, peerId]);
+
 // Candidate (outflow, inflow) pairs among open rows: equal-and-opposite amount,
 // same currency, two different own accounts, within ±windowDays. Fixing the
 // outflow side (amount < 0) yields each pair exactly once. Uses the
@@ -109,16 +118,8 @@ export async function reconcileTransfers({ windowDays = DEFAULT_WINDOW_DAYS } = 
       for (const { outId, inId } of autoPairs) {
         // Re-check open state inside the txn so we never clobber a concurrent
         // manual mark or an already-paired row.
-        const r1 = await client.query(
-          `UPDATE transactions SET is_transfer = true, transfer_peer_id = $2, transfer_source = 'auto'
-            WHERE id = $1 AND is_transfer = false AND transfer_source IS NULL`,
-          [outId, inId],
-        );
-        const r2 = await client.query(
-          `UPDATE transactions SET is_transfer = true, transfer_peer_id = $2, transfer_source = 'auto'
-            WHERE id = $1 AND is_transfer = false AND transfer_source IS NULL`,
-          [inId, outId],
-        );
+        const r1 = await markAutoLeg(client, outId, inId);
+        const r2 = await markAutoLeg(client, inId, outId);
         if (r1.rowCount && r2.rowCount) created += 1;
       }
     });
@@ -191,14 +192,8 @@ export async function markTransfer(aId, bId) {
         WHERE transfer_peer_id = ANY($1) AND id <> ALL($1)`,
       [[aId, bId]],
     );
-    await client.query(
-      `UPDATE transactions SET is_transfer = true, transfer_peer_id = $2, transfer_source = 'manual' WHERE id = $1`,
-      [aId, bId],
-    );
-    await client.query(
-      `UPDATE transactions SET is_transfer = true, transfer_peer_id = $1, transfer_source = 'manual' WHERE id = $2`,
-      [aId, bId],
-    );
+    await markManualLeg(client, aId, bId);
+    await markManualLeg(client, bId, aId);
   });
   return { ok: true };
 }

@@ -3,15 +3,10 @@
  * Mirrors: apps/backend/tests/test_recipient_bank_accounts.py
  */
 import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { mockLogger } from '../helpers/mockLogger.js';
+import { createMockRouter, createMockResponse } from '../helpers/routeHarness.js';
 
-const routeHandlers = {};
-const mockRouter = {
-  get: vi.fn((path, ...args) => { routeHandlers[`get:${path}`] = args[args.length - 1]; }),
-  post: vi.fn((path, ...args) => { routeHandlers[`post:${path}`] = args[args.length - 1]; }),
-  patch: vi.fn((path, ...args) => { routeHandlers[`patch:${path}`] = args[args.length - 1]; }),
-  delete: vi.fn((path, ...args) => { routeHandlers[`delete:${path}`] = args[args.length - 1]; }),
-  use: vi.fn(),
-};
+const { router: mockRouter, handlers: routeHandlers } = createMockRouter();
 
 vi.mock('express', () => ({
   default: { Router: () => mockRouter },
@@ -35,7 +30,7 @@ vi.mock('../../src/middleware/validation.js', () => ({
 }));
 
 vi.mock('../../src/config/logger.js', () => ({
-  logger: { info: vi.fn(), error: vi.fn(), warn: vi.fn(), debug: vi.fn() },
+  logger: mockLogger(),
 }));
 
 import bankAccountRepo from '../../src/repositories/recipientBankAccountRepository.js';
@@ -43,14 +38,7 @@ import { ValidationError, NotFoundError } from '../../src/middleware/errorHandle
 await import('../../src/routes/recipientBankAccounts.js');
 
 function mockResponse() {
-  const res = { json: vi.fn(), status: vi.fn(), send: vi.fn() };
-  res.status.mockReturnValue(res);
-  res.ok = (data, meta) => {
-    const body = { ok: true, data };
-    if (meta) body.meta = meta;
-    return res.json(body);
-  };
-  return res;
+  return createMockResponse();
 }
 
 describe('Recipient Bank Account Routes', () => {

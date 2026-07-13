@@ -6194,3 +6194,60 @@ Track A = backend truth (do first — no UI is trustworthy on disagreeing number
 Research phase CLOSED 2026-07-10: all four passes ran, the user signed off, decisions are in
 ADR-107/108, and **§5️⃣ above is the operative plan — next agent starts at WP-A1** (or the first
 unchecked WP in dependency order). Log WP-level conflicts/surprises here per Guardrail 10.
+
+
+---
+
+## 🔽 Deferred: July 2026 code-simplification audit (SIMP) — LOWEST PRIORITY, do last
+
+Source: `docs/audits/2026-07-code-simplification-audit.md`. The bulk of the audit
+(SIMP-01…58) was remediated in PR #92; the ledger in that doc records per-finding
+status. The items below were **deliberately deferred** — each has a verification
+gap that could not be closed in the remediation environment (no browser for visual
+e2e, no electron runtime, no live DB for SQL-diffing, or an observable behavior
+change). Pick these up **last**, each in its own PR, only when the stated gate can
+actually be exercised.
+
+- [ ] **SIMP-05 / SIMP-12 — dateUtils → date-fns** 🔽 — rewriting `formatDate` to
+  date-fns changes the `default` branch (Intl `dateStyle:"long"` ≠ date-fns `PPP`),
+  an app-wide rendered-date change. SIMP-12 (ImportReviewPage local `formatDate`) is
+  gated on it. Land only with a before/after visual diff of every date surface.
+- [ ] **SIMP-13 — visx chart-frame extraction** 🔽 — one `useCartesianChartFrame`
+  hook + `<ChartFrame>` shared by AreaChart/LineChart/ComposedChart. Must land with
+  the visual-regression e2e suite green (scrub/hover/sync behavior). Needs a browser.
+- [ ] **SIMP-14 — inheritance-table CRUD factory** 🔽 — `makeInheritanceRepo(...)`
+  (or at least share `buildUpdateSql` + error classifiers + sequence-resync) across
+  `investmentRepository` and `portfolioTxRepo.common`. Medium risk; do under the
+  portfolio-tx repo tests.
+- [ ] **SIMP-18 — Belgian tax page dedup** 🔽 — `<TaxProfileInputsCard>`, config-array
+  estimate cards, `bucketTxnCosts`, shared income-sources empty state, `NumberField` +
+  `<RegionSelect>` in the profile steps (~180 lines).
+- [ ] **SIMP-22 — validate-locales lexer → TS AST** 🔽 — replace the hand-rolled
+  tokenizer with a `ts.createSourceFile` + `CallExpression` visitor. Load-bearing CI
+  tooling; do with a before/after diff of extracted keys.
+- [ ] **SIMP-32 — investment spike sanitizer wrapper** 🔽 — the clone assigns a
+  `Decimal` to `investments` while the shared `sanitizeIsolatedValueSpikes` wraps in
+  `toNumber`; on the untested net-worth path this flips a Decimal→number JSON wire
+  type. Needs a test pinning the net-worth wire shape first.
+- [ ] **SIMP-34 — quoteBackfill SELECT + row-mapper dedup** 🔽 — parameterize the
+  WHERE, share `mapRowToInvestment`.
+- [ ] **SIMP-44 — App.tsx route/lazy list generation** 🔽 — derive the 37 `lazy(...)`
+  lines + `<RequireAdmin>` wraps from the `routeLoaders` map; hoist the repeated
+  `staleTime` magic numbers. Touches routing — verify navigation + admin gating.
+- [ ] **SIMP-48 — finish the filterBuilder migration** 🔽 — call the already-written,
+  already-tested `buildExclusionClauses`/`buildAggregationFilter` at the ~8 inline
+  sites. The audit itself flags this as **not purely mechanical**: it harmonizes a
+  `COALESCE(pr.id, r.id)` inconsistency, i.e. a behavior change to aggregate
+  attribution. Diff the generated SQL per site against a live DB before landing.
+- [ ] **SIMP-50 (snapshotBuilder part only)** 🔽 — the sleeve-dispatch `if/else if`
+  chains need the Decimal accumulator vars restructured into a keyed map. (The
+  transfer-leg + forecast parts of SIMP-50 shipped in PR #92.)
+- [ ] **SIMP-52 / SIMP-53 — electron backup crypto + restore plumbing** 🔽 — share
+  the AES-256 KDF/scheme (`crypto.js` parameterized by magic bytes) and the
+  pg_dump/restore/`.env`-cred plumbing. **Data-loss risk**: must verify old backups
+  still decrypt on both the v1 and v2 paths — needs a real electron run + legacy
+  backup fixtures.
+
+**Decided (keep — no action):** SIMP-45 (keep `recharts`; visx port is visual-regression
+risk for a bundle-weight-only gain), SIMP-46 (keep the checked-in demo `pg_dump`; it is a
+required offline build input).

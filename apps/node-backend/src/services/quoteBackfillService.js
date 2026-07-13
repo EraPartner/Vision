@@ -16,7 +16,7 @@
 import { logger } from '../config/logger.js';
 import { query } from '../database/connection.js';
 import { getDayKeyUtc } from '../repositories/infoRepositoryHelpers.js';
-import { median } from '../lib/math.js';
+import { madReturnStats, isRobustNeedle } from '../lib/math.js';
 import { forEachConcurrent } from '../lib/concurrency.js';
 import {
   fetchHistoricalPrices,
@@ -142,13 +142,7 @@ export function sanitizeIsolatedSpikes(points) {
 
   if (logReturns.length < 4) return sanitized;
 
-  const medianReturn = median(logReturns) ?? 0;
-  const absDeviations = logReturns.map((r) => Math.abs(r - medianReturn));
-  const mad = median(absDeviations) ?? 0;
-  const robustSigma = Math.max(1.4826 * mad, 0.0015);
-  const spikeThreshold = 6 * robustSigma;
-  const bridgeThreshold = 4 * robustSigma;
-  const minSpikeMove = Math.log(1.18);
+  const stats = madReturnStats(logReturns);
 
   for (let i = 1; i < sanitized.length - 1; i += 1) {
     const prev = sanitized[i - 1]?.price;
@@ -156,16 +150,7 @@ export function sanitizeIsolatedSpikes(points) {
     const next = sanitized[i + 1]?.price;
     if (!_isPositive(prev) || !_isPositive(current) || !_isPositive(next)) continue;
 
-    const jump = Math.log(current / prev);
-    const revert = Math.log(next / current);
-    const bridge = Math.log(next / prev);
-
-    const hasLargeJump = Math.abs(jump - medianReturn) > spikeThreshold && Math.abs(jump) > minSpikeMove;
-    const hasLargeRevert = Math.abs(revert - medianReturn) > spikeThreshold && Math.abs(revert) > minSpikeMove;
-    const oppositeDirections = (jump > 0 && revert < 0) || (jump < 0 && revert > 0);
-    const bridgeLooksNormal = Math.abs(bridge - medianReturn) <= bridgeThreshold;
-
-    if (hasLargeJump && hasLargeRevert && oppositeDirections && bridgeLooksNormal) {
+    if (isRobustNeedle(prev, current, next, stats)) {
       sanitized[i] = { ...sanitized[i], price: Math.sqrt(prev * next) };
     }
   }

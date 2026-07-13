@@ -166,8 +166,9 @@ for (const [lang, dict] of Object.entries(masters)) {
   }
 
   if (!fs.existsSync(packagingPath)) {
-    console.error(`Missing generated electron locale: ${packagingPath}`);
-    failed = true;
+    // The electron i18n JSON is a build-time output of generate-locales.js and is
+    // no longer tracked (SIMP-25); it is regenerated on `electron start`/`dist`.
+    // Only enforce drift when a copy is present on disk.
   } else {
     const pkg = readJson(packagingPath);
     const srcKeys = Object.keys(dict).sort();
@@ -372,8 +373,84 @@ if (fs.existsSync(frontendSrc)) {
   }
 }
 
+// ---------------------------------------------------------------------------
+// Unused-key pass (SIMP-47). The parity/drift checks above only compare locale
+// files to each other; nothing catches keys that are defined but referenced
+// nowhere in code, so dead keys accrue silently. A key counts as "used" if its
+// dotted string appears anywhere in the non-locale source tree (statically,
+// via a variable/JSON, or in the backend), OR it is reachable through a dynamic
+// key prefix (t(`accounts.type.${x}`)) or the electron `app.*` allowlist. The
+// substring check errs toward keeping keys, so this never deletes a live key.
+// ---------------------------------------------------------------------------
+const USAGE_SCAN_DIRS = ['apps', 'packaging', 'scripts', 'packages', 'config'];
+const USAGE_EXTS = /\.(ts|tsx|js|jsx|cjs|mjs|json|html|sh|mako|yml|yaml)$/;
+// Prefixes for keys consumed dynamically outside t()/tc() (e.g. the electron shell).
+const DYNAMIC_KEY_ALLOWLIST = ['app.'];
+// A dotted-key prefix ending at a dot boundary (e.g. "accounts.type.").
+const KEY_PREFIX = /([a-z][a-zA-Z0-9]*(?:\.[a-zA-Z0-9_]+)*\.)$/;
+
+function collectSourceText(dir, skipAbs, acc) {
+  let entries;
+  try { entries = fs.readdirSync(dir, { withFileTypes: true }); } catch { return acc; }
+  for (const entry of entries) {
+    if (entry.name === 'node_modules' || entry.name === 'dist' || entry.name === 'build' || entry.name === 'coverage') continue;
+    const full = path.join(dir, entry.name);
+    if (skipAbs.has(full)) continue;
+    if (entry.isDirectory()) collectSourceText(full, skipAbs, acc);
+    else if (USAGE_EXTS.test(entry.name)) {
+      try { acc.push(fs.readFileSync(full, 'utf8')); } catch { /* ignore unreadable */ }
+    }
+  }
+  return acc;
+}
+
+// Skip the locale files themselves (they define every key, so they'd mark all "used").
+const usageSkip = new Set([frontendLocales, packagingI18n]);
+const usageChunks = [];
+for (const d of USAGE_SCAN_DIRS) collectSourceText(path.join(repoRoot, d), usageSkip, usageChunks);
+const haystack = usageChunks.join('\n');
+
+// Dynamic prefixes: literal segment before the first `${` in a template literal,
+// and the literal segment before a `+` string concatenation.
+const dynamicPrefixes = new Set(DYNAMIC_KEY_ALLOWLIST);
+const tplRe = /`([^`\\]*)\$\{/g;
+let tpm;
+while ((tpm = tplRe.exec(haystack))) {
+  const lead = tpm[1].match(KEY_PREFIX);
+  if (lead) dynamicPrefixes.add(lead[1]);
+}
+const concatRe = /['"]([a-z][a-zA-Z0-9]*(?:\.[a-zA-Z0-9_]+)*\.)['"]\s*\+/g;
+let ccm;
+while ((ccm = concatRe.exec(haystack))) dynamicPrefixes.add(ccm[1]);
+
+function keyIsUsed(key) {
+  for (const p of dynamicPrefixes) if (key.startsWith(p)) return true;
+  if (haystack.includes(key)) return true;
+  // Plural variants: a live `tc('x')` only mentions the base key, not x.one/x.other.
+  const base = key.replace(/\.(zero|one|two|few|many|other)$/, '');
+  if (base !== key) {
+    for (const p of dynamicPrefixes) if (base.startsWith(p)) return true;
+    if (haystack.includes(base)) return true;
+  }
+  return false;
+}
+
+const unusedKeys = [...enKeys].filter((k) => !keyIsUsed(k));
+
+if (process.argv.includes('--list-unused')) {
+  process.stdout.write(unusedKeys.sort().join('\n') + (unusedKeys.length ? '\n' : ''));
+  process.exit(0);
+}
+
+if (unusedKeys.length) {
+  console.error(`Found ${unusedKeys.length} i18n key(s) defined in en.json but referenced nowhere in ${USAGE_SCAN_DIRS.join('/')}:`);
+  console.error(unusedKeys.slice(0, 40).join('\n'));
+  if (unusedKeys.length > 40) console.error(`... and ${unusedKeys.length - 40} more. Run \`node scripts/validate-locales.js --list-unused\` for the full list.`);
+  failed = true;
+}
+
 if (failed) {
   fail('Locale validation failed.', 2);
 }
 
-console.log('Locale validation passed: parity, placeholders, types, source key-usage, and generated-output drift checks are all clean.');
+console.log('Locale validation passed: parity, placeholders, types, source key-usage, unused-key, and generated-output drift checks are all clean.');

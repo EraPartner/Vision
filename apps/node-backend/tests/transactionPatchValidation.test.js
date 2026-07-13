@@ -1,4 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { mockLogger } from './helpers/mockLogger.js';
 
 // PATCH /api/transactions/:id validation parity (TODO E8): the handler
 // whitelist-filtered only — a cleared inline date ('') survived to Postgres
@@ -34,7 +35,7 @@ vi.mock('../src/services/deduplication.js', () => ({
 }));
 vi.mock('../src/services/currency/currencyConversionService.js', () => ({ convertRowsToEur: vi.fn() }));
 vi.mock('../src/config/logger.js', () => ({
-  logger: { info: vi.fn(), error: vi.fn(), warn: vi.fn(), debug: vi.fn() },
+  logger: mockLogger(),
 }));
 vi.mock('../src/services/transferReconciliationService.js', () => ({
   scheduleReconcile: vi.fn(),

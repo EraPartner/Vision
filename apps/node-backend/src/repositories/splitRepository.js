@@ -39,25 +39,54 @@ const RECIPIENT_GROUP_CTE = `
   )
 `;
 
+/**
+ * Split-allocation totals for a transaction: the transaction's absolute amount
+ * and the sum of its existing splits.
+ */
+const SPLIT_TOTALS_SQL = `
+  SELECT ABS(t.amount) AS transaction_total,
+         COALESCE(SUM(ts.amount), 0) AS current_split_total
+    FROM transactions t
+    LEFT JOIN transaction_splits ts ON ts.transaction_id = t.id
+   WHERE t.id = $1
+   GROUP BY t.id, t.amount
+`;
+
+/** Coerce a SPLIT_TOTALS_SQL row to the numeric totals shape. */
+function mapSplitTotals(row) {
+  return {
+    transaction_total: toNumber(toDecimal(row.transaction_total)),
+    current_split_total: toNumber(toDecimal(row.current_split_total)),
+  };
+}
+
+/**
+ * Lock the transaction row (SELECT … FOR UPDATE) inside the caller's
+ * transaction, then read its split-allocation totals. The lock serializes the
+ * validate→insert window so concurrent split creation cannot over-allocate.
+ * Throws NotFoundError if the transaction does not exist.
+ *
+ * @param {import('pg').PoolClient} client
+ * @param {number} transactionId
+ */
+async function lockAndGetTotals(client, transactionId) {
+  const lockResult = await client.query(
+    `SELECT id FROM transactions WHERE id = $1 FOR UPDATE`,
+    [transactionId]
+  );
+  if (lockResult.rows.length === 0) throw new NotFoundError('Transaction not found');
+  const totalsResult = await client.query(SPLIT_TOTALS_SQL, [transactionId]);
+  return mapSplitTotals(totalsResult.rows[0]);
+}
+
 export const splitRepository = {
   /**
    * Get split allocation totals for a transaction.
    */
   async getTransactionSplitTotals(transactionId) {
-    const sql = `
-      SELECT ABS(t.amount) AS transaction_total,
-             COALESCE(SUM(ts.amount), 0) AS current_split_total
-      FROM transactions t
-      LEFT JOIN transaction_splits ts ON ts.transaction_id = t.id
-      WHERE t.id = $1
-      GROUP BY t.id, t.amount
-    `;
-    const result = await query(sql, [transactionId]);
+    const result = await query(SPLIT_TOTALS_SQL, [transactionId]);
     if (result.rows.length === 0) return null;
-    return {
-      transaction_total: toNumber(toDecimal(result.rows[0].transaction_total)),
-      current_split_total: toNumber(toDecimal(result.rows[0].current_split_total)),
-    };
+    return mapSplitTotals(result.rows[0]);
   },
 
   // NOTE: single-split creation goes through createSplitAtomic below — a
@@ -71,24 +100,7 @@ export const splitRepository = {
    */
   async createSplitAtomic({ transaction_id, recipient_id, amount, note }) {
     return withTransaction(async (client) => {
-      const lockResult = await client.query(
-        `SELECT id FROM transactions WHERE id = $1 FOR UPDATE`,
-        [transaction_id]
-      );
-      if (lockResult.rows.length === 0) throw new NotFoundError('Transaction not found');
-      const totalsResult = await client.query(
-        `SELECT ABS(t.amount) AS transaction_total,
-                COALESCE(SUM(ts.amount), 0) AS current_split_total
-           FROM transactions t
-           LEFT JOIN transaction_splits ts ON ts.transaction_id = t.id
-          WHERE t.id = $1
-          GROUP BY t.id, t.amount`,
-        [transaction_id]
-      );
-      const totals = {
-        transaction_total: toNumber(toDecimal(totalsResult.rows[0].transaction_total)),
-        current_split_total: toNumber(toDecimal(totalsResult.rows[0].current_split_total)),
-      };
+      const totals = await lockAndGetTotals(client, transaction_id);
       const check = validateSplitAllocation({
         newSplitAmount: Number(amount),
         transactionTotal: totals.transaction_total,
@@ -112,24 +124,7 @@ export const splitRepository = {
   async createSplitsBatchAtomic({ transaction_id, splits }) {
     if (!Array.isArray(splits) || splits.length === 0) return [];
     return withTransaction(async (client) => {
-      const lockResult = await client.query(
-        `SELECT id FROM transactions WHERE id = $1 FOR UPDATE`,
-        [transaction_id]
-      );
-      if (lockResult.rows.length === 0) throw new NotFoundError('Transaction not found');
-      const totalsResult = await client.query(
-        `SELECT ABS(t.amount) AS transaction_total,
-                COALESCE(SUM(ts.amount), 0) AS current_split_total
-           FROM transactions t
-           LEFT JOIN transaction_splits ts ON ts.transaction_id = t.id
-          WHERE t.id = $1
-          GROUP BY t.id, t.amount`,
-        [transaction_id]
-      );
-      const totals = {
-        transaction_total: toNumber(toDecimal(totalsResult.rows[0].transaction_total)),
-        current_split_total: toNumber(toDecimal(totalsResult.rows[0].current_split_total)),
-      };
+      const totals = await lockAndGetTotals(client, transaction_id);
       const preparedSplits = splits.map((s) => ({
         recipient_id: s.recipient_id,
         amount: roundToCentsCalc(Number(s.amount)),

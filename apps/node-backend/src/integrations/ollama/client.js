@@ -71,6 +71,23 @@ async function readJson(response) {
   }
 }
 
+/**
+ * Map a fetch-layer error to a typed OllamaError (timeout / aborted / network),
+ * shared by the request and chatStream paths (SIMP-38). An OllamaError already
+ * in flight is passed through unchanged.
+ * @param {any} err
+ * @param {{ isTimeout: boolean, aborted: boolean, timeoutMessage: string, failurePrefix: string }} ctx
+ * @returns {OllamaError}
+ */
+function normalizeFetchError(err, { isTimeout, aborted, timeoutMessage, failurePrefix }) {
+  if (err instanceof OllamaError) return err;
+  if (isTimeout) return new OllamaError(timeoutMessage, { code: 'TIMEOUT', cause: err });
+  if (err?.name === 'AbortError' || aborted) {
+    return new OllamaError('Ollama request aborted', { code: 'ABORTED', cause: err });
+  }
+  return new OllamaError(`${failurePrefix}: ${err.message}`, { code: 'NETWORK_ERROR', cause: err });
+}
+
 export function createOllamaClient({
   baseUrl = settings.ollama.url,
   requestTimeoutMs = settings.ollama.requestTimeoutMs,
@@ -108,16 +125,11 @@ export function createOllamaClient({
 
       return await readJson(response);
     } catch (err) {
-      if (err instanceof OllamaError) throw err;
-      if (isTimeout()) {
-        throw new OllamaError(`Ollama ${method} ${path} timed out after ${timeoutMs}ms`, { code: 'TIMEOUT', cause: err });
-      }
-      if (err?.name === 'AbortError' || composedSignal.aborted) {
-        throw new OllamaError('Ollama request aborted', { code: 'ABORTED', cause: err });
-      }
-      throw new OllamaError(`Ollama ${method} ${path} failed: ${err.message}`, {
-        cause: err,
-        code: 'NETWORK_ERROR',
+      throw normalizeFetchError(err, {
+        isTimeout: isTimeout(),
+        aborted: composedSignal.aborted,
+        timeoutMessage: `Ollama ${method} ${path} timed out after ${timeoutMs}ms`,
+        failurePrefix: `Ollama ${method} ${path} failed`,
       });
     } finally {
       cancel();
@@ -256,15 +268,11 @@ export function createOllamaClient({
       });
     } catch (err) {
       cancel();
-      if (isTimeout()) {
-        throw new OllamaError(`Ollama request timed out after ${requestTimeoutMs}ms`, { code: 'TIMEOUT', cause: err });
-      }
-      if (err?.name === 'AbortError' || composedSignal.aborted) {
-        throw new OllamaError('Ollama request aborted', { code: 'ABORTED', cause: err });
-      }
-      throw new OllamaError(`Ollama POST /api/chat failed: ${err.message}`, {
-        cause: err,
-        code: 'NETWORK_ERROR',
+      throw normalizeFetchError(err, {
+        isTimeout: isTimeout(),
+        aborted: composedSignal.aborted,
+        timeoutMessage: `Ollama request timed out after ${requestTimeoutMs}ms`,
+        failurePrefix: 'Ollama POST /api/chat failed',
       });
     }
 

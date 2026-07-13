@@ -7,15 +7,14 @@
 
 import { query } from '../database/connection.js';
 import { computeMetrics, computeHeatmap } from '../utils/portfolioMath.js';
-import { computeAndStoreSnapshots as _computeAndStoreSnapshots } from './portfolio/snapshotBuilder.js';
-import {
-  getPortfolioSummary as _getPortfolioSummary,
-  getBreakdownSummary as _getBreakdownSummary,
-} from './portfolio/portfolioSummaryService.js';
+import { computeAndStoreSnapshots } from './portfolio/snapshotBuilder.js';
+import { getPortfolioSummary, getBreakdownSummary } from './portfolio/portfolioSummaryService.js';
 
-export { computeMetrics, computeHeatmap } from '../utils/portfolioMath.js';
-export { computeAndStoreSnapshots } from './portfolio/snapshotBuilder.js';
-export { getPortfolioSummary, getBreakdownSummary } from './portfolio/portfolioSummaryService.js';
+// Re-export the imported bindings so both `import { x } from` consumers and the
+// default-object consumers below share a single declaration each (SIMP-51).
+export { computeMetrics, computeHeatmap };
+export { computeAndStoreSnapshots };
+export { getPortfolioSummary, getBreakdownSummary };
 
 export async function getSnapshots(startDate, endDate, currency = 'EUR') {
   // SELECT * + shape in JS: value_fx_neutral only exists once migration 0039
@@ -61,11 +60,11 @@ export async function getLatestSnapshot(currency = 'EUR') {
 }
 
 export default {
-  computeAndStoreSnapshots: _computeAndStoreSnapshots,
+  computeAndStoreSnapshots,
   getSnapshots,
   getLatestSnapshot,
   computeMetrics,
   computeHeatmap,
-  getBreakdownSummary: _getBreakdownSummary,
-  getPortfolioSummary: _getPortfolioSummary,
+  getBreakdownSummary,
+  getPortfolioSummary,
 };

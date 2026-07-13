@@ -12,6 +12,7 @@ vi.mock('../src/repositories/investmentRepository.js', () => ({
     update: vi.fn().mockResolvedValue({ id: 1 }),
     getById: vi.fn(),
   },
+  pickInvestmentCreateFields: (body) => body,
 }));
 vi.mock('../src/repositories/portfolioTransactionRepository.js', () => ({ default: {} }));
 vi.mock('../src/services/priceProviderService.js', () => ({

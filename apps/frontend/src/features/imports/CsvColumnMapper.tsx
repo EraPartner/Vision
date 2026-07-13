@@ -28,11 +28,22 @@ interface Props {
   onChange: (next: CsvColumnConfig) => void;
 }
 
+// [state key, input id, label key, placeholder key, required] — one row per
+// mapped column, driving both the select (with headers) and text-input (no
+// headers) branches, mirroring PortfolioCsvColumnMapper's config-array pattern.
+const COLUMN_FIELDS: [keyof CsvColumnConfig, string, string, string, boolean][] = [
+  ["dateColumn", "date-column", "importPage.dateCol", "importPage.dateColPlaceholder", true],
+  ["recipientColumn", "recipient-column", "importPage.recipientCol", "importPage.recipientColPlaceholder", true],
+  ["amountColumn", "amount-column", "importPage.amountCol", "importPage.amountColPlaceholder", true],
+  ["memoColumn", "memo-column", "importPage.memoCol", "importPage.memoColPlaceholder", false],
+];
+
 export function CsvColumnMapper({ file, separator, config, onChange }: Props) {
   const { t } = useLanguage();
   const { preview } = useCsvPreview(file, separator);
 
-  const hasHeaders = preview && preview.headers.length > 0;
+  const headers = preview?.headers ?? [];
+  const hasHeaders = headers.length > 0;
 
   const set = (key: keyof CsvColumnConfig) => (val: string) =>
     onChange({ ...config, [key]: val });
@@ -43,84 +54,30 @@ export function CsvColumnMapper({ file, separator, config, onChange }: Props) {
     <div className="space-y-4">
       {/* Column selects or text inputs */}
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-        {hasHeaders ? (
-          <>
+        {COLUMN_FIELDS.map(([key, id, labelKey, placeholderKey, required]) => (
+          hasHeaders ? (
             <ColumnSelect
-              id="date-column"
-              label={t("importPage.dateCol")}
-              value={config.dateColumn}
-              headers={preview.headers}
-              required
-              onChange={set("dateColumn")}
+              key={key}
+              id={id}
+              label={t(labelKey)}
+              value={config[key]}
+              headers={headers}
+              required={required}
+              onChange={set(key)}
               noMappingLabel={noMappingLabel}
             />
-            <ColumnSelect
-              id="recipient-column"
-              label={t("importPage.recipientCol")}
-              value={config.recipientColumn}
-              headers={preview.headers}
-              required
-              onChange={set("recipientColumn")}
-              noMappingLabel={noMappingLabel}
-            />
-            <ColumnSelect
-              id="amount-column"
-              label={t("importPage.amountCol")}
-              value={config.amountColumn}
-              headers={preview.headers}
-              required
-              onChange={set("amountColumn")}
-              noMappingLabel={noMappingLabel}
-            />
-            <ColumnSelect
-              id="memo-column"
-              label={t("importPage.memoCol")}
-              value={config.memoColumn}
-              headers={preview.headers}
-              onChange={set("memoColumn")}
-              noMappingLabel={noMappingLabel}
-            />
-          </>
-        ) : (
-          <>
-            <div className="space-y-2">
-              <Label htmlFor="date-column">{t("importPage.dateCol")}</Label>
+          ) : (
+            <div key={key} className="space-y-2">
+              <Label htmlFor={id}>{t(labelKey)}</Label>
               <Input
-                id="date-column"
-                placeholder={t("importPage.dateColPlaceholder")}
-                value={config.dateColumn}
-                onChange={(e) => set("dateColumn")(e.target.value)}
+                id={id}
+                placeholder={t(placeholderKey)}
+                value={config[key]}
+                onChange={(e) => set(key)(e.target.value)}
               />
             </div>
-            <div className="space-y-2">
-              <Label htmlFor="recipient-column">{t("importPage.recipientCol")}</Label>
-              <Input
-                id="recipient-column"
-                placeholder={t("importPage.recipientColPlaceholder")}
-                value={config.recipientColumn}
-                onChange={(e) => set("recipientColumn")(e.target.value)}
-              />
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="amount-column">{t("importPage.amountCol")}</Label>
-              <Input
-                id="amount-column"
-                placeholder={t("importPage.amountColPlaceholder")}
-                value={config.amountColumn}
-                onChange={(e) => set("amountColumn")(e.target.value)}
-              />
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="memo-column">{t("importPage.memoCol")}</Label>
-              <Input
-                id="memo-column"
-                placeholder={t("importPage.memoColPlaceholder")}
-                value={config.memoColumn}
-                onChange={(e) => set("memoColumn")(e.target.value)}
-              />
-            </div>
-          </>
-        )}
+          )
+        ))}
       </div>
     </div>
   );

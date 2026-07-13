@@ -18,6 +18,14 @@
       "types": "./src/portfolio.d.ts",
       "default": "./src/portfolio.js"
     },
+    "./assetClasses": {
+      "types": "./src/assetClasses.d.ts",
+      "default": "./src/assetClasses.js"
+    },
+    "./csv": {
+      "types": "./src/csv.d.ts",
+      "default": "./src/csv.js"
+    },
     "./slugify": {
       "types": "./src/slugify.d.ts",
       "default": "./src/slugify.js"

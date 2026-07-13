@@ -1,9 +1,7 @@
 // @vitest-environment jsdom
 import { describe, it, expect, vi, afterEach } from "vitest";
-import { type ReactNode } from "react";
 import { renderHook, act, waitFor } from "@testing-library/react";
-import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { LanguageProvider } from "@/contexts/LanguageContext";
+import { createLanguageQueryWrapper } from "@/test/queryWrapper";
 import { apiClient } from "@/lib/api";
 import {
     useBulkDeleteTransactions,
@@ -20,20 +18,7 @@ if (typeof URL.revokeObjectURL !== "function") {
     URL.revokeObjectURL = () => undefined;
 }
 
-function makeWrapper() {
-    const qc = new QueryClient({
-        defaultOptions: { queries: { retry: false, gcTime: 0, staleTime: 0 } },
-    });
-    return function Wrapper({ children }: { children: ReactNode }) {
-        return (
-            <QueryClientProvider client={qc}>
-                <LanguageProvider language="en" setLanguage={() => {}}>
-                    {children}
-                </LanguageProvider>
-            </QueryClientProvider>
-        );
-    };
-}
+const makeWrapper = createLanguageQueryWrapper;
 
 afterEach(() => vi.restoreAllMocks());
 

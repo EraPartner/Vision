@@ -264,14 +264,14 @@ describe('InfoRepository', () => {
       expect(convertRowsToEur).toHaveBeenCalled();
     });
 
-    it('should fallback to seed date without active-only filters when primary query returns null', async () => {
+    it('should fall back to the seed date via the combined COALESCE query when there are no active transactions', async () => {
       const todayKey = todayAppDateString();
       query.mockImplementation(async (sql) => {
         if (sql.includes('SELECT 1 FROM')) return { rows: [] };
-        if (sql.includes('first_data_date') && sql.includes('WHERE is_active = true')) {
-          return { rows: [{ first_data_date: null }] };
-        }
-        if (sql.includes('first_data_date') && !sql.includes('WHERE is_active = true')) {
+        // The first-data-date query now folds the active-only minimum and the
+        // all-transactions fallback into one COALESCE (SIMP-51); the DB resolves
+        // the fallback and returns the seed date directly.
+        if (sql.includes('first_data_date')) {
           return { rows: [{ first_data_date: todayKey }] };
         }
         if (sql.includes('portfolio_performance_snapshots') && sql.includes('value AS investments')) {

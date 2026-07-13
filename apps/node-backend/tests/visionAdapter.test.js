@@ -2,26 +2,17 @@
  * Vision Bank Adapter Tests
  */
 
-import { describe, it, expect, afterEach } from 'vitest';
-import fs from 'fs';
-import os from 'os';
-import path from 'path';
+import { describe, it, expect } from 'vitest';
 import { createAdapter } from '../src/services/bankAdapters.js';
 import { detect } from '../src/services/importPipeline/adapters/vision.js';
 
-function writeTempCSV(content) {
-  const tmpPath = path.join(os.tmpdir(), `test_vision_${Date.now()}.csv`);
-  fs.writeFileSync(tmpPath, content, 'utf-8');
-  return tmpPath;
-}
+import { useTempCSV } from './helpers/tempFile.js';
+
+const writeTempCSV = useTempCSV('vision');
 
 describe('VisionAdapter', () => {
   let tmpPath;
   const parse = createAdapter('vision');
-
-  afterEach(() => {
-    if (tmpPath && fs.existsSync(tmpPath)) fs.unlinkSync(tmpPath);
-  });
 
   it('parses valid rows and skips invalid date or amount rows', async () => {
     const csv = `Date,Bank Account,Recipient,Memo,Amount,Currency,Balance,Category,Comment

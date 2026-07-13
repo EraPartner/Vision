@@ -3,15 +3,10 @@
  * Mirrors: apps/backend/tests/test_planned_transactions.py
  */
 import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { mockLogger } from '../helpers/mockLogger.js';
+import { createMockRouter, createMockResponse } from '../helpers/routeHarness.js';
 
-const routeHandlers = {};
-const mockRouter = {
-  get: vi.fn((path, ...handlers) => { routeHandlers[`get:${path}`] = handlers[handlers.length - 1]; }),
-  post: vi.fn((path, ...handlers) => { routeHandlers[`post:${path}`] = handlers[handlers.length - 1]; }),
-  patch: vi.fn((path, ...handlers) => { routeHandlers[`patch:${path}`] = handlers[handlers.length - 1]; }),
-  delete: vi.fn((path, ...handlers) => { routeHandlers[`delete:${path}`] = handlers[handlers.length - 1]; }),
-  use: vi.fn(),
-};
+const { router: mockRouter, handlers: routeHandlers } = createMockRouter();
 
 vi.mock('express', () => ({
   default: { Router: () => mockRouter },
@@ -75,7 +70,7 @@ vi.mock('../../src/services/recurrenceService.js', () => ({
 }));
 
 vi.mock('../../src/config/logger.js', () => ({
-  logger: { info: vi.fn(), error: vi.fn(), warn: vi.fn(), debug: vi.fn() },
+  logger: mockLogger(),
 }));
 
 import plannedTransactionRepository from '../../src/repositories/plannedTransactionRepository.js';
@@ -84,14 +79,7 @@ import { ValidationError, NotFoundError } from '../../src/middleware/errorHandle
 await import('../../src/routes/plannedTransactions.js');
 
 function mockResponse() {
-  const res = { json: vi.fn(), status: vi.fn(), send: vi.fn(), set: vi.fn() };
-  res.status.mockReturnValue(res);
-  res.ok = (data, meta) => {
-    const body = { ok: true, data };
-    if (meta) body.meta = meta;
-    return res.json(body);
-  };
-  return res;
+  return createMockResponse({ set: vi.fn() });
 }
 
 describe('Planned Transaction Routes', () => {

@@ -7,7 +7,7 @@ import { MonthlyTrendsChart } from "@/components/dashboard/MonthlyTrendsChart";
 import { CashFlowForecastChart } from "@/components/dashboard/CashFlowForecastChart";
 import { CategoryPieChart } from "@/components/dashboard/CategoryPieChart";
 import { BankBalancesWidget } from "@/components/dashboard/BankBalancesWidget";
-import { DataTable } from "@/components/shared/DataTable";
+import { VirtualDataTable } from "@/components/shared/VirtualDataTable";
 import { ExclusionToggle } from "@/components/shared/ExclusionToggle";
 import { PageHeader } from "@/components/shared/PageHeader";
 import { Badge } from "@/components/ui/badge";
@@ -488,7 +488,7 @@ export default function DashboardPage() {
             {/* Recent transactions */}
             {isVisible('recentTransactions') && (transactionsLoading || recentTransactionsLoading) && recentSkeleton}
             {isVisible('recentTransactions') && !(transactionsLoading || recentTransactionsLoading) && (
-            <DataTable
+            <VirtualDataTable
                 title={t('dashboard.recentTransactions')}
                 subtitle={t('dashboard.recentTransactionsSubtitle', { n: recentTransactions.length })}
                 columns={columns}

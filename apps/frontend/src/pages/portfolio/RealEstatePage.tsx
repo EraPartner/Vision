@@ -1,7 +1,7 @@
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { StatCard } from "@/components/dashboard/StatCard";
 import { RollingNumber } from "@/components/shared/RollingNumber";
-import { useCurrencyPartsFormatter } from "@/hooks/useCurrencyFormatter";
+import { useCurrencyFormatter, useCurrencyPartsFormatter } from "@/hooks/useCurrencyFormatter";
 import { Button } from "@/components/ui/button";
 import { Building2, Trash2, Eye, TrendingUp, DollarSign, Home, MapPin, Percent } from "lucide-react";
 import { usePortfolio } from "@/hooks/usePortfolio";
@@ -31,14 +31,7 @@ export default function RealEstatePage() {
 
   const { convertToTarget } = useCurrencyConverter(targetCurrency);
   const fmtParts = useCurrencyPartsFormatter(targetCurrency);
-
-  function fmt(
-    val: number,
-    currency = targetCurrency,
-    decimals = appSettings.showDecimalPlaces
-  ) {
-    return new Intl.NumberFormat(locale, { style: "currency", currency, minimumFractionDigits: decimals, maximumFractionDigits: decimals }).format(val);
-  }
+  const fmt = useCurrencyFormatter(targetCurrency);
 
   function fmtNum(val: number, decimals = 2) {
     return new Intl.NumberFormat(locale, { minimumFractionDigits: decimals, maximumFractionDigits: decimals }).format(val);

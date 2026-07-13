@@ -16,7 +16,6 @@ import StatisticsPage from "@/pages/StatisticsPage";
 import OwesPage from "@/pages/OwesPage";
 import DashboardPage from "@/pages/DashboardPage";
 import AIChatPage from "@/pages/AIChatPage";
-import RecipientInsightsPage from "@/pages/RecipientInsightsPage";
 import PortfolioOverviewPage from "@/pages/portfolio/PortfolioOverviewPage";
 import AdminOverviewPage from "@/pages/admin/AdminOverviewPage";
 import DbMaintenancePage from "@/pages/DbMaintenancePage";
@@ -197,23 +196,6 @@ describe("Language switch (integration)", () => {
         // Dutch: aiChat.title = "AI-chat"
         expect(
             await screen.findByRole("heading", { name: /^ai-chat$/i }),
-        ).toBeInTheDocument();
-    });
-
-    // ── RecipientInsightsPage ─────────────────────────────────────────────────
-    it("RecipientInsightsPage renders English heading by default", async () => {
-        renderWithApp(<RecipientInsightsPage />);
-        expect(
-            await screen.findByRole("heading", { name: /recipient insights/i }),
-        ).toBeInTheDocument();
-    });
-
-    it("RecipientInsightsPage renders Dutch heading when language is nl", async () => {
-        useDutch();
-        renderWithApp(<RecipientInsightsPage />);
-        // Dutch: insights.title = "Inzichten per ontvanger"
-        expect(
-            await screen.findByRole("heading", { name: /inzichten per ontvanger/i }),
         ).toBeInTheDocument();
     });
 

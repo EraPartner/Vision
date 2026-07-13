@@ -2,15 +2,10 @@
  * Attachment route tests — upload cleanup on failed DB insert.
  */
 import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { mockLogger } from '../helpers/mockLogger.js';
+import { createMockRouter, createMockResponse } from '../helpers/routeHarness.js';
 
-const routeHandlers = {};
-const mockRouter = {
-  get: vi.fn((path, ...handlers) => { routeHandlers[`get:${path}`] = handlers[handlers.length - 1]; }),
-  post: vi.fn((path, ...handlers) => { routeHandlers[`post:${path}`] = handlers[handlers.length - 1]; }),
-  patch: vi.fn((path, ...handlers) => { routeHandlers[`patch:${path}`] = handlers[handlers.length - 1]; }),
-  delete: vi.fn((path, ...handlers) => { routeHandlers[`delete:${path}`] = handlers[handlers.length - 1]; }),
-  use: vi.fn(),
-};
+const { router: mockRouter, handlers: routeHandlers } = createMockRouter();
 
 vi.mock('express', () => ({
   default: { Router: () => mockRouter },
@@ -43,7 +38,7 @@ vi.mock('../../src/database/connection.js', () => ({
 }));
 
 vi.mock('../../src/config/logger.js', () => ({
-  logger: { info: vi.fn(), error: vi.fn(), warn: vi.fn(), debug: vi.fn() },
+  logger: mockLogger(),
 }));
 
 import { attachmentRepository } from '../../src/services/attachmentRecordService.js';
@@ -108,21 +103,7 @@ describe('Attachment routes', () => {
 });
 
 function mockResponse() {
-  const res = {
-    json: vi.fn(),
-    status: vi.fn(),
-    send: vi.fn(),
-    setHeader: vi.fn(),
-    end: vi.fn(),
-    headersSent: false,
-  };
-  res.status.mockReturnValue(res);
-  res.ok = (data, meta) => {
-    const body = { ok: true, data };
-    if (meta) body.meta = meta;
-    return res.json(body);
-  };
-  return res;
+  return createMockResponse({ setHeader: vi.fn(), end: vi.fn(), headersSent: false });
 }
 
 async function callHandler(handler, req, res) {

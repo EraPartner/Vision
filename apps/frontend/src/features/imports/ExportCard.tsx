@@ -130,20 +130,15 @@ export function ExportCard() {
         )}
 
         <div className="flex gap-2">
-          <Button onClick={() => handleExport('csv')} disabled={exportingFormat !== null} variant="outline" className="flex-1 h-11" size="lg">
-            {exportingFormat === 'csv' ? (
-              <><Loader2 className="h-4 w-4 mr-2 animate-spin" /> {t('importPage.exporting')}</>
-            ) : (
-              <><Download className="h-4 w-4 mr-2" /> {t('importPage.exportBtn')}</>
-            )}
-          </Button>
-          <Button onClick={() => handleExport('json')} disabled={exportingFormat !== null} variant="outline" className="flex-1 h-11" size="lg">
-            {exportingFormat === 'json' ? (
-              <><Loader2 className="h-4 w-4 mr-2 animate-spin" /> {t('importPage.exporting')}</>
-            ) : (
-              <><Download className="h-4 w-4 mr-2" /> {t('importPage.exportJsonBtn')}</>
-            )}
-          </Button>
+          {(['csv', 'json'] as const).map((format) => (
+            <Button key={format} onClick={() => handleExport(format)} disabled={exportingFormat !== null} variant="outline" className="flex-1 h-11" size="lg">
+              {exportingFormat === format ? (
+                <><Loader2 className="h-4 w-4 mr-2 animate-spin" /> {t('importPage.exporting')}</>
+              ) : (
+                <><Download className="h-4 w-4 mr-2" /> {t(format === 'csv' ? 'importPage.exportBtn' : 'importPage.exportJsonBtn')}</>
+              )}
+            </Button>
+          ))}
         </div>
       </CardContent>
     </Card>

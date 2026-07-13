@@ -20,64 +20,64 @@ Each finding has a stable ID (`SIMP-01` … `SIMP-58`). To continue this work:
 
 | ID | Finding | Files (primary) | Est. lines | Risk | In PR #84 too? | Status |
 | --- | --- | --- | --- | --- | --- | --- |
-| SIMP-01 | Dead script: locales-capitalizer + report | `scripts/locales-capitalizer.js`, `scripts/locales-capitalizer-report.json` | ~607 | None | Yes — unchanged | OPEN |
-| SIMP-02 | Dead scripts: auto-translate-nl ×2 | `scripts/auto-translate-nl.js`, `scripts/auto-translate-nl-pass2.js` | ~242 | None | Yes — unchanged | OPEN |
-| SIMP-03 | Orphaned page: RecipientInsightsPage | `apps/frontend/src/pages/RecipientInsightsPage.tsx` | ~302 | None | Yes — still orphaned | OPEN |
-| SIMP-04 | DataTable is a frozen copy of VirtualDataTable | `apps/frontend/src/components/shared/DataTable.tsx` | 200–611 | Low | Yes — still 1 consumer | OPEN |
-| SIMP-05 | dateUtils.ts reimplements date-fns | `apps/frontend/src/components/shared/dateUtils.ts` | 80–120 | Low | Yes — intact | OPEN |
-| SIMP-06 | Inline formatCurrency bypasses shared hooks (8 files) | see finding | ~75 | Low | Yes — all 7 live sites intact | OPEN |
-| SIMP-07 | fmtLargeNum ×3 | `ResearchComparePage`, `MarketLookupPage`, `ResearchFundamentalsTab` | ~14 | Low | Yes — untouched | OPEN |
-| SIMP-08 | toYmd ×3 | `portfolioMath.js`, `plannedMatchService.js`, `dateUtils.ts` | ~15 | Low | Yes — but see #84 note | OPEN |
-| SIMP-09 | prefersReducedMotion ×4 | `useCountUp`, `RollingNumber`, `ShaderAurora`, `ThemeContext` | ~15 | Low | Yes — all 4 intact | OPEN |
-| SIMP-10 | CSV escaping mirrored frontend/backend | `frontend/src/lib/csv.ts`, `node-backend/src/lib/csv.js` | ~30 | Low | Yes — intact | OPEN |
-| SIMP-11 | ASSET_CLASSES duplicated frontend/backend | `frontend/src/utils/assetClass.ts`, `node-backend/src/lib/assetClasses.js` | ~5 | Low | Yes — untouched | OPEN |
-| SIMP-12 | Local formatDate shadows shared helper | `apps/frontend/src/pages/ImportReviewPage.tsx` | ~8 | Low | Yes — untouched | OPEN |
-| SIMP-13 | visx chart frame duplicated ×3 | `charts/AreaChart.tsx`, `LineChart.tsx`, `ComposedChart.tsx` | 300–400 | Medium | Yes — intact | OPEN |
-| SIMP-14 | Inheritance-table CRUD duplicated ×2 | `investmentRepository.js`, `portfolioTxRepo.common.js` | 150–180 | Medium | Yes — `buildUpdateSql` still ×2 | OPEN |
-| SIMP-15 | SQL SET/INSERT clause builder ×10 repos | `apps/node-backend/src/repositories/*` | 60–80 | Low | Yes — 9 files, 30 sites | OPEN |
-| SIMP-16 | plannedTransactionRepository SELECT ×5 + hydration ×2 | `plannedTransactionRepository.js` | ~65 | Low | Yes — **worse: SELECT ×6** | OPEN |
-| SIMP-17 | Investment field list spelled out 4–5× | `investmentRepository.js`, `investmentController.js` | ~40 | Low | Yes — intact | OPEN |
-| SIMP-18 | Belgian tax pages: repeated cards/reducers/fields | `TaxOverviewPage`, `PortfolioTaxPage`, `IncomeStep`, `ExemptionsStep` | ~180 | Low | Yes — intact | OPEN |
-| SIMP-19 | Small backend extractions (reports, splits, formatters) | `reports/index.js`, `splitRepository.js`, `routes/transactions.js` | ~70 | Low | Yes — intact | OPEN |
-| SIMP-20 | BelgianTaxProfileContext debounce ×3 + installers dup | `BelgianTaxProfileContext.tsx`, `install.sh`, `install-demo.sh` | ~80 | Low | Yes — intact | OPEN |
-| SIMP-21 | FIFO/LIFO cost basis near-twins (money math) | `packages/shared-utils/src/portfolio.js` | ~90 | **High care** | Yes — untouched | OPEN |
-| SIMP-22 | validate-locales hand-rolled JS lexer | `scripts/validate-locales.js` | ~80 | Medium | Yes — untouched | OPEN |
-| SIMP-23 | 9 unused vendored shadcn components + orphaned deps | `apps/frontend/src/components/ui/*` | ~790 + 13 deps | None | Yes — still unimported | OPEN |
-| SIMP-24 | Stale electron `package-lock.json` beside `bun.lock` | `packaging/electron/package-lock.json` | 170 KB | None | Yes — both tracked | OPEN |
-| SIMP-25 | Generated electron i18n JSON checked in (byte-identical to source) | `packaging/electron/i18n/{en,nl}.json` | ~418 KB | None | Yes — present | OPEN |
-| SIMP-26 | Dead exports in shared packages + dead re-export barrel | `packages/types`, `packages/shared-utils`, `frontend/src/utils/downsample.ts` | ~30 | None | Yes | OPEN |
-| SIMP-27 | CI setup prelude copy-pasted across 9+ jobs | `.github/workflows/ci.yml` (+e2e/release) | ~100 YAML | Low | Yes — 9 sites | OPEN |
-| SIMP-28 | Generated frontend locales not verified in CI (drift gap) | `apps/frontend/src/locales/{en,nl}.ts`, `ci.yml` | correctness | Low | Yes — same gap | OPEN |
-| SIMP-29 | `archiver`/`yauzl` are root runtime deps, used only by one test | root `package.json` | 2 deps | Low | Yes | OPEN |
-| SIMP-30 | Parser-config CRUD duplicated across both import routers | `routes/importRoutes.js:167-235`, `routes/portfolioImportRoutes.js:242-300` | ~70 | Low | Yes — 2×2 handlers | OPEN |
-| SIMP-31 | MAD spike-detector duplicated between price sanitizers | `quoteBackfillService.js:132-171`, `prices/priceProviderRegistry.js:233-282` | ~45 | Low | Yes — `1.4826` in both | OPEN |
-| SIMP-32 | Investment-spike sanitizer clones portfolioMath | `repositories/infoRepositoryHelpers.js:234-274` | ~35 | Low | Yes | OPEN |
-| SIMP-33 | `fetchLivePricesDetailed` provider blocks ×4 | `services/priceProviderService.js:87-164` | ~40 | Low | Yes | OPEN |
-| SIMP-34 | quoteBackfill SELECT + row-mapper cloned ×2 | `services/quoteBackfillService.js:186-329` | ~35 | Low | Yes | OPEN |
-| SIMP-35 | AI-chat tools: repeated bucketing/shaping/envelope + arg-coercion dup | `services/aiChat/tools/*`, `aiChatService.js` | ~110–130 | Low | Yes | OPEN |
-| SIMP-36 | `svgGroupedBarChart` is a special case of the generic chart | `services/reports/sectionHelpers.js:123-280` | ~40 | Low | Yes | OPEN |
-| SIMP-37 | importRoutes: result block ×3, csv-options validation ×2 | `routes/importRoutes.js` | ~20 | Low | Yes | OPEN |
-| SIMP-38 | Ollama error-normalization ×2 + no-logic pass-through wrappers | `integrations/ollama/client.js`, `priceProviderService.js:256-262` | ~12 | Low | Yes | OPEN |
-| SIMP-39 | Route-test harness (`mockRouter` + `mockResponse`) copy-pasted in 22 files | `apps/node-backend/tests/routes/*` | ~470 | Low | Yes — grew to 23–24 files | OPEN |
-| SIMP-40 | Shared test mocks: logger ×28, `clearAllMocks` ×73, repo mocks, `writeTempCSV` ×8 | `apps/node-backend/tests/**` | ~200 | Low | Yes | OPEN |
-| SIMP-41 | `contracts.test.ts`: near-identical `it()` blocks → `it.each` tables | `apps/frontend/src/test/msw/contracts.test.ts` | ~150–200 | Low | Yes | OPEN |
-| SIMP-42 | Hook-test QueryClient wrapper re-implemented ×7 | `apps/frontend/src/hooks/**/__tests__/*` | ~70 | Low | Yes | OPEN |
-| SIMP-43 | MSW handler micro-helpers (`aggOk`, `deleted`) | `apps/frontend/src/test/msw/handlers.ts` | ~40–60 | Low | Yes | OPEN |
-| SIMP-44 | App.tsx lazy/route lists hand-maintained; redundant react-query overrides | `apps/frontend/src/App.tsx`, hooks | ~50 | Medium | Yes | OPEN |
-| SIMP-45 | `recharts` is a full dependency for exactly one component | `features/ai-chat/ToolResultCard.tsx` | 1 dep | Medium | Yes — still 1 file | CONSIDER |
-| SIMP-46 | 1.1 MB checked-in pg_dump for demo DB | `packaging/electron/demo-db/01-demo.sql` | ~1.1 MB | Medium | Yes | CONSIDER |
-| SIMP-47 | 507 dead i18n keys (14% of surface) + no unused-key validator pass | `i18n/source/*.json` + 4 generated locale files | ~3,042 data lines | Low | Yes — samples verified | OPEN |
-| SIMP-48 | Exclusion-clause builder copy-pasted ~8× while tested canonical helper sits unused | `infoRepo.*`/`infoRepository*.js`, `services/filterBuilder.js` | ~110–130 | Low–medium | Yes — 0 prod call sites there too | OPEN |
-| SIMP-49 | Period-pivot + recipient-rollup shaping duplicated across info repos | `infoRepositoryRecipients/Tags/Statistics.js` | ~65 | Low | Yes | OPEN |
-| SIMP-50 | Small service dedups: asset-class dispatch ×4, `aggregateByDate` ×2, cumulative-avg ×2, transfer-leg UPDATE ×3 | `snapshotBuilder.js`, `infoRepo.forecast.js`, `transferReconciliationService.js` | ~50 | Low | Yes | OPEN |
-| SIMP-51 | Backend hygiene: dead `IMPORT_PIPELINE_V2` env key, duplicate net-worth query, per-account await loop, double export | `config/env.js:108`, `infoRepositoryNetWorth.js`, `portfolioPerformanceSnapshotService.js` | ~20 + perf | Low | Yes — env key present | OPEN |
-| SIMP-52 | Backup AES-256 crypto fully duplicated between electron main and bundle | `packaging/electron/main.js:669-975`, `backup/bundle.js:80-416` | ~150 | Medium | Yes — same KDF consts ×2 | OPEN |
-| SIMP-53 | Electron backup/restore plumbing copy-pasted (restore-SQL ×2, pg_dump ×2, .env creds ×4) | `packaging/electron/main.js` | ~110 | Medium | Yes | OPEN |
-| SIMP-54 | E2E page catalog redeclared 3-4×; critical-flows unrolls 13 identical tests | `apps/frontend/e2e/*.spec.ts` | ~105–125 | Low | Yes — grew to 15 tests | OPEN |
-| SIMP-55 | Dead alembic autogenerate block imports a nonexistent Python backend | `alembic/env.py:31-51` | ~20 | None | Yes | OPEN |
-| SIMP-56 | Portfolio transaction form fields triplicated across add/edit/from-market dialogs | `components/portfolio/{Add,Edit}PortfolioTxnDialog.tsx`, `AddInvestmentFromMarketDialog.tsx` | ~180–200 | Low | Yes | OPEN |
-| SIMP-57 | EditInvestmentDialog reimplements InvestmentFormFields' provider block; `PRICE_PROVIDERS` ×3 | `components/portfolio/EditInvestmentDialog.tsx:175-297` | ~110 | Low | Yes — dup intact | OPEN |
-| SIMP-58 | Small frontend dedups: CsvColumnMapper double-write, PerformanceBreakdown twins, ToolResultCard chart views, GeneralSection rows, ExportCard buttons | see finding | ~130 | Low | Yes | OPEN |
+| SIMP-01 | Dead script: locales-capitalizer + report | `scripts/locales-capitalizer.js`, `scripts/locales-capitalizer-report.json` | ~607 | None | Yes — unchanged | FIXED (#92) |
+| SIMP-02 | Dead scripts: auto-translate-nl ×2 | `scripts/auto-translate-nl.js`, `scripts/auto-translate-nl-pass2.js` | ~242 | None | Yes — unchanged | FIXED (#92) |
+| SIMP-03 | Orphaned page: RecipientInsightsPage | `apps/frontend/src/pages/RecipientInsightsPage.tsx` | ~302 | None | Yes — still orphaned | FIXED (#92) |
+| SIMP-04 | DataTable is a frozen copy of VirtualDataTable | `apps/frontend/src/components/shared/DataTable.tsx` | 200–611 | Low | Yes — still 1 consumer | FIXED (#92) |
+| SIMP-05 | dateUtils.ts reimplements date-fns | `apps/frontend/src/components/shared/dateUtils.ts` | 80–120 | Low | Yes — intact | DEFERRED |
+| SIMP-06 | Inline formatCurrency bypasses shared hooks (8 files) | see finding | ~75 | Low | Yes — all 7 live sites intact | FIXED (#92) |
+| SIMP-07 | fmtLargeNum ×3 | `ResearchComparePage`, `MarketLookupPage`, `ResearchFundamentalsTab` | ~14 | Low | Yes — untouched | FIXED (#92) |
+| SIMP-08 | toYmd ×3 | `portfolioMath.js`, `plannedMatchService.js`, `dateUtils.ts` | ~15 | Low | Yes — but see #84 note | FIXED (#92) |
+| SIMP-09 | prefersReducedMotion ×4 | `useCountUp`, `RollingNumber`, `ShaderAurora`, `ThemeContext` | ~15 | Low | Yes — all 4 intact | FIXED (#92) |
+| SIMP-10 | CSV escaping mirrored frontend/backend | `frontend/src/lib/csv.ts`, `node-backend/src/lib/csv.js` | ~30 | Low | Yes — intact | FIXED (#92) |
+| SIMP-11 | ASSET_CLASSES duplicated frontend/backend | `frontend/src/utils/assetClass.ts`, `node-backend/src/lib/assetClasses.js` | ~5 | Low | Yes — untouched | FIXED (#92) |
+| SIMP-12 | Local formatDate shadows shared helper | `apps/frontend/src/pages/ImportReviewPage.tsx` | ~8 | Low | Yes — untouched | DEFERRED |
+| SIMP-13 | visx chart frame duplicated ×3 | `charts/AreaChart.tsx`, `LineChart.tsx`, `ComposedChart.tsx` | 300–400 | Medium | Yes — intact | DEFERRED |
+| SIMP-14 | Inheritance-table CRUD duplicated ×2 | `investmentRepository.js`, `portfolioTxRepo.common.js` | 150–180 | Medium | Yes — `buildUpdateSql` still ×2 | DEFERRED |
+| SIMP-15 | SQL SET/INSERT clause builder ×10 repos | `apps/node-backend/src/repositories/*` | 60–80 | Low | Yes — 9 files, 30 sites | FIXED (#92) |
+| SIMP-16 | plannedTransactionRepository SELECT ×5 + hydration ×2 | `plannedTransactionRepository.js` | ~65 | Low | Yes — **worse: SELECT ×6** | FIXED (#92) |
+| SIMP-17 | Investment field list spelled out 4–5× | `investmentRepository.js`, `investmentController.js` | ~40 | Low | Yes — intact | FIXED (#92) |
+| SIMP-18 | Belgian tax pages: repeated cards/reducers/fields | `TaxOverviewPage`, `PortfolioTaxPage`, `IncomeStep`, `ExemptionsStep` | ~180 | Low | Yes — intact | DEFERRED |
+| SIMP-19 | Small backend extractions (reports, splits, formatters) | `reports/index.js`, `splitRepository.js`, `routes/transactions.js` | ~70 | Low | Yes — intact | FIXED (#92) |
+| SIMP-20 | BelgianTaxProfileContext debounce ×3 + installers dup | `BelgianTaxProfileContext.tsx`, `install.sh`, `install-demo.sh` | ~80 | Low | Yes — intact | FIXED (#92) |
+| SIMP-21 | FIFO/LIFO cost basis near-twins (money math) | `packages/shared-utils/src/portfolio.js` | ~90 | **High care** | Yes — untouched | FIXED (#92) |
+| SIMP-22 | validate-locales hand-rolled JS lexer | `scripts/validate-locales.js` | ~80 | Medium | Yes — untouched | DEFERRED |
+| SIMP-23 | 9 unused vendored shadcn components + orphaned deps | `apps/frontend/src/components/ui/*` | ~790 + 13 deps | None | Yes — still unimported | FIXED (#92) |
+| SIMP-24 | Stale electron `package-lock.json` beside `bun.lock` | `packaging/electron/package-lock.json` | 170 KB | None | Yes — both tracked | FIXED (#92) |
+| SIMP-25 | Generated electron i18n JSON checked in (byte-identical to source) | `packaging/electron/i18n/{en,nl}.json` | ~418 KB | None | Yes — present | FIXED (#92) |
+| SIMP-26 | Dead exports in shared packages + dead re-export barrel | `packages/types`, `packages/shared-utils`, `frontend/src/utils/downsample.ts` | ~30 | None | Yes | FIXED (#92) |
+| SIMP-27 | CI setup prelude copy-pasted across 9+ jobs | `.github/workflows/ci.yml` (+e2e/release) | ~100 YAML | Low | Yes — 9 sites | FIXED (#92) |
+| SIMP-28 | Generated frontend locales not verified in CI (drift gap) | `apps/frontend/src/locales/{en,nl}.ts`, `ci.yml` | correctness | Low | Yes — same gap | FIXED (#92) |
+| SIMP-29 | `archiver`/`yauzl` are root runtime deps, used only by one test | root `package.json` | 2 deps | Low | Yes | FIXED (#92) |
+| SIMP-30 | Parser-config CRUD duplicated across both import routers | `routes/importRoutes.js:167-235`, `routes/portfolioImportRoutes.js:242-300` | ~70 | Low | Yes — 2×2 handlers | FIXED (#92) |
+| SIMP-31 | MAD spike-detector duplicated between price sanitizers | `quoteBackfillService.js:132-171`, `prices/priceProviderRegistry.js:233-282` | ~45 | Low | Yes — `1.4826` in both | FIXED (#92) |
+| SIMP-32 | Investment-spike sanitizer clones portfolioMath | `repositories/infoRepositoryHelpers.js:234-274` | ~35 | Low | Yes | DEFERRED |
+| SIMP-33 | `fetchLivePricesDetailed` provider blocks ×4 | `services/priceProviderService.js:87-164` | ~40 | Low | Yes | FIXED (#92) |
+| SIMP-34 | quoteBackfill SELECT + row-mapper cloned ×2 | `services/quoteBackfillService.js:186-329` | ~35 | Low | Yes | DEFERRED |
+| SIMP-35 | AI-chat tools: repeated bucketing/shaping/envelope + arg-coercion dup | `services/aiChat/tools/*`, `aiChatService.js` | ~110–130 | Low | Yes | FIXED (#92) |
+| SIMP-36 | `svgGroupedBarChart` is a special case of the generic chart | `services/reports/sectionHelpers.js:123-280` | ~40 | Low | Yes | FIXED (#92) |
+| SIMP-37 | importRoutes: result block ×3, csv-options validation ×2 | `routes/importRoutes.js` | ~20 | Low | Yes | FIXED (#92) |
+| SIMP-38 | Ollama error-normalization ×2 + no-logic pass-through wrappers | `integrations/ollama/client.js`, `priceProviderService.js:256-262` | ~12 | Low | Yes | FIXED (#92) |
+| SIMP-39 | Route-test harness (`mockRouter` + `mockResponse`) copy-pasted in 22 files | `apps/node-backend/tests/routes/*` | ~470 | Low | Yes — grew to 23–24 files | FIXED (#92) |
+| SIMP-40 | Shared test mocks: logger ×28, `clearAllMocks` ×73, repo mocks, `writeTempCSV` ×8 | `apps/node-backend/tests/**` | ~200 | Low | Yes | FIXED partial (#92) |
+| SIMP-41 | `contracts.test.ts`: near-identical `it()` blocks → `it.each` tables | `apps/frontend/src/test/msw/contracts.test.ts` | ~150–200 | Low | Yes | FIXED (#92) |
+| SIMP-42 | Hook-test QueryClient wrapper re-implemented ×7 | `apps/frontend/src/hooks/**/__tests__/*` | ~70 | Low | Yes | FIXED (#92) |
+| SIMP-43 | MSW handler micro-helpers (`aggOk`, `deleted`) | `apps/frontend/src/test/msw/handlers.ts` | ~40–60 | Low | Yes | FIXED (#92) |
+| SIMP-44 | App.tsx lazy/route lists hand-maintained; redundant react-query overrides | `apps/frontend/src/App.tsx`, hooks | ~50 | Medium | Yes | DEFERRED |
+| SIMP-45 | `recharts` is a full dependency for exactly one component | `features/ai-chat/ToolResultCard.tsx` | 1 dep | Medium | Yes — still 1 file | KEEP (#92) |
+| SIMP-46 | 1.1 MB checked-in pg_dump for demo DB | `packaging/electron/demo-db/01-demo.sql` | ~1.1 MB | Medium | Yes | KEEP (#92) |
+| SIMP-47 | 507 dead i18n keys (14% of surface) + no unused-key validator pass | `i18n/source/*.json` + 4 generated locale files | ~3,042 data lines | Low | Yes — samples verified | FIXED (#92) |
+| SIMP-48 | Exclusion-clause builder copy-pasted ~8× while tested canonical helper sits unused | `infoRepo.*`/`infoRepository*.js`, `services/filterBuilder.js` | ~110–130 | Low–medium | Yes — 0 prod call sites there too | DEFERRED |
+| SIMP-49 | Period-pivot + recipient-rollup shaping duplicated across info repos | `infoRepositoryRecipients/Tags/Statistics.js` | ~65 | Low | Yes | FIXED (#92) |
+| SIMP-50 | Small service dedups: asset-class dispatch ×4, `aggregateByDate` ×2, cumulative-avg ×2, transfer-leg UPDATE ×3 | `snapshotBuilder.js`, `infoRepo.forecast.js`, `transferReconciliationService.js` | ~50 | Low | Yes | FIXED partial (#92) |
+| SIMP-51 | Backend hygiene: dead `IMPORT_PIPELINE_V2` env key, duplicate net-worth query, per-account await loop, double export | `config/env.js:108`, `infoRepositoryNetWorth.js`, `portfolioPerformanceSnapshotService.js` | ~20 + perf | Low | Yes — env key present | FIXED (#92) |
+| SIMP-52 | Backup AES-256 crypto fully duplicated between electron main and bundle | `packaging/electron/main.js:669-975`, `backup/bundle.js:80-416` | ~150 | Medium | Yes — same KDF consts ×2 | DEFERRED |
+| SIMP-53 | Electron backup/restore plumbing copy-pasted (restore-SQL ×2, pg_dump ×2, .env creds ×4) | `packaging/electron/main.js` | ~110 | Medium | Yes | DEFERRED |
+| SIMP-54 | E2E page catalog redeclared 3-4×; critical-flows unrolls 13 identical tests | `apps/frontend/e2e/*.spec.ts` | ~105–125 | Low | Yes — grew to 15 tests | FIXED (#92) |
+| SIMP-55 | Dead alembic autogenerate block imports a nonexistent Python backend | `alembic/env.py:31-51` | ~20 | None | Yes | FIXED (#92) |
+| SIMP-56 | Portfolio transaction form fields triplicated across add/edit/from-market dialogs | `components/portfolio/{Add,Edit}PortfolioTxnDialog.tsx`, `AddInvestmentFromMarketDialog.tsx` | ~180–200 | Low | Yes | FIXED (#92) |
+| SIMP-57 | EditInvestmentDialog reimplements InvestmentFormFields' provider block; `PRICE_PROVIDERS` ×3 | `components/portfolio/EditInvestmentDialog.tsx:175-297` | ~110 | Low | Yes — dup intact | FIXED (#92) |
+| SIMP-58 | Small frontend dedups: CsvColumnMapper double-write, PerformanceBreakdown twins, ToolResultCard chart views, GeneralSection rows, ExportCard buttons | see finding | ~130 | Low | Yes | FIXED (#92) |
 
 ---
 

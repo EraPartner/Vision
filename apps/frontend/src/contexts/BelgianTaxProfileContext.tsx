@@ -26,10 +26,9 @@ import {
     type ReactNode,
 } from 'react';
 import { toast } from 'sonner';
-import { apiClient } from '@/lib/api';
 import { useLanguage } from '@/contexts/LanguageContext';
 import { usePreloadedSetting } from '@/contexts/SettingsPreloadContext';
-import logger from '@/lib/logger';
+import { useDebouncedSetting } from '@/hooks/useDebouncedSetting';
 import {
     computeBelgianPIT,
     LATEST_TAX_YEAR,
@@ -160,7 +159,6 @@ interface BelgianTaxProfileContextType {
 const PROFILE_SETTINGS_KEY = 'belgian_tax_profile';
 const SNAPSHOTS_SETTINGS_KEY = 'belgian_tax_profile_snapshots_v1';
 const SNAPSHOT_METAS_SETTINGS_KEY = 'belgian_tax_profile_snapshot_meta_v1';
-const PERSIST_DEBOUNCE_MS = 500;
 const MAX_HISTORY_ENTRIES_PER_YEAR = 200;
 
 const defaultProfile: BelgianTaxProfile = {
@@ -239,12 +237,6 @@ export function BelgianTaxProfileProvider({ children }: { children: ReactNode })
     // on each failure so the toaster under LanguageProvider can surface it.
     const [saveErrorNonce, setSaveErrorNonce] = useState(0);
     const markSaveError = useCallback(() => setSaveErrorNonce((n) => n + 1), []);
-    const profileSaveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-    const snapshotsSaveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-    const metasSaveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-    const isFirstProfileRender = useRef(true);
-    const isFirstSnapshotsRender = useRef(true);
-    const isFirstMetasRender = useRef(true);
     const hasInitializedViewedYear = useRef(false);
 
     const { value: preloadedProfile, isLoading: preloadProfileLoading } =
@@ -282,59 +274,9 @@ export function BelgianTaxProfileProvider({ children }: { children: ReactNode })
         preloadMetasLoading,
     ]);
 
-    useEffect(() => {
-        if (isFirstProfileRender.current) {
-            isFirstProfileRender.current = false;
-            return;
-        }
-        if (isLoading) return;
-        if (profileSaveTimerRef.current) clearTimeout(profileSaveTimerRef.current);
-        profileSaveTimerRef.current = setTimeout(() => {
-            apiClient.saveSetting(PROFILE_SETTINGS_KEY, profile).catch((err) => {
-                logger.error('Failed to save Belgian tax profile:', err);
-                markSaveError();
-            });
-        }, PERSIST_DEBOUNCE_MS);
-        return () => {
-            if (profileSaveTimerRef.current) clearTimeout(profileSaveTimerRef.current);
-        };
-    }, [profile, isLoading, markSaveError]);
-
-    useEffect(() => {
-        if (isFirstSnapshotsRender.current) {
-            isFirstSnapshotsRender.current = false;
-            return;
-        }
-        if (isLoading) return;
-        if (snapshotsSaveTimerRef.current) clearTimeout(snapshotsSaveTimerRef.current);
-        snapshotsSaveTimerRef.current = setTimeout(() => {
-            apiClient.saveSetting(SNAPSHOTS_SETTINGS_KEY, snapshots).catch((err) => {
-                logger.error('Failed to save Belgian tax profile snapshots:', err);
-                markSaveError();
-            });
-        }, PERSIST_DEBOUNCE_MS);
-        return () => {
-            if (snapshotsSaveTimerRef.current) clearTimeout(snapshotsSaveTimerRef.current);
-        };
-    }, [snapshots, isLoading, markSaveError]);
-
-    useEffect(() => {
-        if (isFirstMetasRender.current) {
-            isFirstMetasRender.current = false;
-            return;
-        }
-        if (isLoading) return;
-        if (metasSaveTimerRef.current) clearTimeout(metasSaveTimerRef.current);
-        metasSaveTimerRef.current = setTimeout(() => {
-            apiClient.saveSetting(SNAPSHOT_METAS_SETTINGS_KEY, snapshotMetas).catch((err) => {
-                logger.error('Failed to save Belgian tax profile snapshot meta:', err);
-                markSaveError();
-            });
-        }, PERSIST_DEBOUNCE_MS);
-        return () => {
-            if (metasSaveTimerRef.current) clearTimeout(metasSaveTimerRef.current);
-        };
-    }, [snapshotMetas, isLoading, markSaveError]);
+    useDebouncedSetting(PROFILE_SETTINGS_KEY, profile, isLoading, markSaveError, 'Failed to save Belgian tax profile:');
+    useDebouncedSetting(SNAPSHOTS_SETTINGS_KEY, snapshots, isLoading, markSaveError, 'Failed to save Belgian tax profile snapshots:');
+    useDebouncedSetting(SNAPSHOT_METAS_SETTINGS_KEY, snapshotMetas, isLoading, markSaveError, 'Failed to save Belgian tax profile snapshot meta:');
 
     /**
      * Append a history entry to a year's meta, creating the meta if absent. Trims to

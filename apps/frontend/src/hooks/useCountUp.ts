@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from "react";
+import { prefersReducedMotion } from "@/utils/prefersReducedMotion";
 
 /**
  * Animates a number from the currently-visible value to the target value.
@@ -23,15 +24,8 @@ export function useCountUp(target: number, duration = 600): number {
             setCurrent(value);
         };
 
-        // Honor prefers-reduced-motion: snap straight to the target instead of
-        // animating. Guarded so environments without matchMedia (jsdom) fall
-        // through to the normal animation path.
-        const prefersReducedMotion =
-            typeof window !== "undefined" &&
-            typeof window.matchMedia === "function" &&
-            window.matchMedia("(prefers-reduced-motion: reduce)").matches;
-
-        if (from === target || prefersReducedMotion) {
+        // Honor prefers-reduced-motion: snap straight to the target instead of animating.
+        if (from === target || prefersReducedMotion()) {
             apply(target);
             return;
         }

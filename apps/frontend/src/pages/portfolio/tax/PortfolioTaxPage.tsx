@@ -22,7 +22,7 @@ import { usePortfolioTaxAdjustments } from "@/hooks/usePortfolioTaxAdjustments";
 import { usePortfolioTaxClassifications } from "@/hooks/usePortfolioTaxClassifications";
 import { useCurrencyConverter } from "@/hooks/useCurrencyConverter";
 import { getAssetClassLabel, type InvestmentSummary } from "@/types/portfolio";
-import { numberFormatToLocale } from "@/utils/currency";
+import { useCurrencyFormatter } from "@/hooks/useCurrencyFormatter";
 import { cn } from "@/lib/utils";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -92,8 +92,8 @@ export default function PortfolioTaxPage() {
     }),
     [rawSummaries, getClassification],
   );
-  const locale = numberFormatToLocale(appSettings.numberFormat);
   const targetCurrency = appSettings.defaultCurrency || "EUR";
+  const fmt = useCurrencyFormatter(targetCurrency);
   const txYear = viewedYear;
 
   const { convertToTarget } = useCurrencyConverter(targetCurrency);
@@ -103,15 +103,6 @@ export default function PortfolioTaxPage() {
 
   const WIDGETS = getPortfolioTaxWidgets(t);
   const { isVisible, setWidgetVisible, setAllVisible, resetToDefaults, widgets: widgetDefs } = useWidgetVisibility("portfolioTax", WIDGETS);
-
-  function fmt(val: number, currency = targetCurrency) {
-    return new Intl.NumberFormat(locale, {
-      style: "currency",
-      currency,
-      minimumFractionDigits: appSettings.showDecimalPlaces,
-      maximumFractionDigits: appSettings.showDecimalPlaces,
-    }).format(val);
-  }
 
   const enrichedInvestments = useMemo(
     () =>

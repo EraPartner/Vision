@@ -37,6 +37,60 @@ function endOfDayMs(ymd) {
 const UNIT_CREDIT_TYPES = new Set(['buy', 'gift']);
 const UNIT_DEBIT_TYPES = new Set(['sell']);
 
+/**
+ * Group transaction rows by their `investment_id`, preserving order.
+ */
+function groupTxnsByInvestment(txns) {
+  const byInvestment = new Map();
+  for (const t of txns) {
+    const list = byInvestment.get(t.investment_id) || [];
+    list.push(t);
+    byInvestment.set(t.investment_id, list);
+  }
+  return byInvestment;
+}
+
+/**
+ * Cash-flow aggregation per investment over a date range.
+ *
+ * Income = dividend/interest/rent_income/appreciation amounts. Costs =
+ * fee/tax amounts plus every row's fees and taxes. Rows outside
+ * [from, to] (inclusive, end-of-day) are skipped. Returns a Map of
+ * investment_id → `{ income, costs, count }` (Decimals + count).
+ */
+function aggregateFlows(txns, { from, to }) {
+  const fromMs = startOfDayMs(from);
+  const toMs = endOfDayMs(to);
+
+  const byInvestment = new Map();
+  for (const t of txns) {
+    const d = t.date instanceof Date ? t.date : new Date(t.date);
+    const ms = d.getTime();
+    if (ms < fromMs || ms > toMs) continue;
+
+    const entry = byInvestment.get(t.investment_id) || {
+      income: toDecimal(0),
+      costs: toDecimal(0),
+      count: 0,
+    };
+
+    const amount = toDecimal(t.amount ?? 0).abs();
+    const fees = toDecimal(t.fees ?? 0).abs();
+    const taxes = toDecimal(t.taxes ?? 0).abs();
+
+    if (t.type === 'dividend' || t.type === 'interest' || t.type === 'rent_income' || t.type === 'appreciation') {
+      entry.income = entry.income.plus(amount);
+    } else if (t.type === 'fee' || t.type === 'tax') {
+      entry.costs = entry.costs.plus(amount);
+    }
+
+    entry.costs = entry.costs.plus(fees).plus(taxes);
+    entry.count += 1;
+    byInvestment.set(t.investment_id, entry);
+  }
+  return byInvestment;
+}
+
 function computeNetUnits(txns) {
   let net = toDecimal(0);
   // Rows arrive date-ordered from the repository query.
@@ -81,12 +135,7 @@ export const getPortfolioHoldings = {
     const ids = investments.map((inv) => inv.id);
     const txns = await loadTransactionsForInvestments(cache, assetClass, ids);
 
-    const txnsByInvestment = new Map();
-    for (const t of txns) {
-      const list = txnsByInvestment.get(t.investment_id) || [];
-      list.push(t);
-      txnsByInvestment.set(t.investment_id, list);
-    }
+    const txnsByInvestment = groupTxnsByInvestment(txns);
 
     const holdings = [];
     for (const inv of investments) {
@@ -155,37 +204,7 @@ export const getReturnsForRange = {
     const ids = investments.map((inv) => inv.id);
     const txns = await loadTransactionsForInvestments(cache, assetClass, ids);
 
-    const fromMs = startOfDayMs(from);
-    const toMs = endOfDayMs(to);
-
-    const byInvestment = new Map();
-    for (const t of txns) {
-      const d = t.date instanceof Date ? t.date : new Date(t.date);
-      const ms = d.getTime();
-      if (ms < fromMs || ms > toMs) continue;
-
-      const entry = byInvestment.get(t.investment_id) || {
-        income: toDecimal(0),
-        costs: toDecimal(0),
-        count: 0,
-      };
-
-      const amount = toDecimal(t.amount ?? 0).abs();
-      const fees = toDecimal(t.fees ?? 0).abs();
-      const taxes = toDecimal(t.taxes ?? 0).abs();
-
-      if (t.type === 'dividend' || t.type === 'interest' || t.type === 'rent_income' || t.type === 'appreciation') {
-        entry.income = entry.income.plus(amount);
-      } else if (t.type === 'fee') {
-        entry.costs = entry.costs.plus(amount);
-      } else if (t.type === 'tax') {
-        entry.costs = entry.costs.plus(amount);
-      }
-
-      entry.costs = entry.costs.plus(fees).plus(taxes);
-      entry.count += 1;
-      byInvestment.set(t.investment_id, entry);
-    }
+    const byInvestment = aggregateFlows(txns, { from, to });
 
     const rows = [];
     for (const inv of investments) {
@@ -317,12 +336,7 @@ export const getAssetAllocation = {
     const ids = investments.map((inv) => inv.id);
     const txns = await loadTransactionsForInvestments(cache, null, ids);
 
-    const txnsByInvestment = new Map();
-    for (const t of txns) {
-      const list = txnsByInvestment.get(t.investment_id) || [];
-      list.push(t);
-      txnsByInvestment.set(t.investment_id, list);
-    }
+    const txnsByInvestment = groupTxnsByInvestment(txns);
 
     const byClass = new Map();
     let grandTotal = toDecimal(0);
@@ -389,12 +403,7 @@ export const getUnrealizedGains = {
     const ids = investments.map((inv) => inv.id);
     const txns = await loadTransactionsForInvestments(cache, assetClass, ids);
 
-    const txnsByInvestment = new Map();
-    for (const t of txns) {
-      const list = txnsByInvestment.get(t.investment_id) || [];
-      list.push(t);
-      txnsByInvestment.set(t.investment_id, list);
-    }
+    const txnsByInvestment = groupTxnsByInvestment(txns);
 
     const rows = [];
     for (const inv of investments) {
@@ -474,28 +483,7 @@ export const getBestWorstPerformers = {
     const ids = investments.map((inv) => inv.id);
     const txns = await loadTransactionsForInvestments(cache, assetClass, ids);
 
-    const fromMs = startOfDayMs(from);
-    const toMs = endOfDayMs(to);
-
-    const byInvestment = new Map();
-    for (const t of txns) {
-      const d = t.date instanceof Date ? t.date : new Date(t.date);
-      if (d.getTime() < fromMs || d.getTime() > toMs) continue;
-
-      const entry = byInvestment.get(t.investment_id) || { income: toDecimal(0), costs: toDecimal(0), count: 0 };
-      const amount = toDecimal(t.amount ?? 0).abs();
-      const fees = toDecimal(t.fees ?? 0).abs();
-      const taxes = toDecimal(t.taxes ?? 0).abs();
-
-      if (['dividend', 'interest', 'rent_income', 'appreciation'].includes(t.type)) {
-        entry.income = entry.income.plus(amount);
-      } else if (['fee', 'tax'].includes(t.type)) {
-        entry.costs = entry.costs.plus(amount);
-      }
-      entry.costs = entry.costs.plus(fees).plus(taxes);
-      entry.count += 1;
-      byInvestment.set(t.investment_id, entry);
-    }
+    const byInvestment = aggregateFlows(txns, { from, to });
 
     const all = [];
     for (const inv of investments) {

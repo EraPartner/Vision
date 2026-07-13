@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { mockLogger } from './helpers/mockLogger.js';
 
 const mockQuery = vi.fn();
 
@@ -7,7 +8,7 @@ vi.mock('../src/database/connection.js', () => ({
 }));
 
 vi.mock('../src/config/logger.js', () => ({
-  logger: { info: vi.fn(), error: vi.fn(), warn: vi.fn(), debug: vi.fn() },
+  logger: mockLogger(),
 }));
 
 import { detectRecurringPatterns } from '../src/services/recurringDetectionService.js';

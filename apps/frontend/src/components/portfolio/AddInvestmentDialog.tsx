@@ -15,6 +15,7 @@ import { useAppSettings } from '@/contexts/AppSettingsContext';
 import { AssetTypeSelector } from './AssetTypeSelector';
 import { InvestmentFormFields } from './InvestmentFormFields';
 import type { InvestmentForm } from './InvestmentFormFields';
+import { PRICE_PROVIDERS } from './PriceProviderFields';
 import { todayYmd } from '@/lib/timezone';
 
 type Props = {
@@ -22,14 +23,6 @@ type Props = {
   // the dialog will open directly to the details form for that class
   allowedAssetClasses?: AssetClass[];
 };
-
-const PRICE_PROVIDERS = (t: (k: string) => string) => [
-  { key: 'manual' as PriceProvider, name: t('addInv.provider.manual'), hint: t('addInv.provider.hint.manual') },
-  { key: 'binance' as PriceProvider, name: 'Binance', hint: t('addInv.provider.hint.binance') },
-  { key: 'yahoo' as PriceProvider, name: 'Yahoo Finance', hint: t('addInv.provider.hint.yahoo') },
-  { key: 'kinesis' as PriceProvider, name: 'Kinesis', hint: t('addInv.provider.hint.kinesis') },
-  { key: 'custom' as PriceProvider, name: 'Custom JSON', hint: t('addInv.provider.hint.custom') },
-];
 
 function makeEmptyForm(defaultCurrency: string): InvestmentForm {
   return {

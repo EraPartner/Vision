@@ -270,158 +270,48 @@ const PortfolioSummarySchema = z.object({
 // ── Tests: static GET endpoints ───────────────────────────────────────────────
 
 describe("MSW handler contracts", () => {
-    it("GET /api/settings conforms to settings schema", async () => {
-        validate(SettingsSchema, await getEnvelope("/api/settings"), "settings");
-    });
-
-    it("GET /api/settings/:key conforms to nullable value schema", async () => {
-        validate(SettingValueSchema, await getEnvelope("/api/settings/language"), "settings/:key");
-    });
-
-    it("GET /api/info conforms to app-info schema", async () => {
-        validate(InfoSchema, await getEnvelope("/api/info"), "info");
-    });
-
-    it("GET /api/info/health conforms to health schema", async () => {
-        validate(HealthSchema, await getEnvelope("/api/info/health"), "health");
-    });
-
-    it("GET /api/aggregations/:name accepts nullable blob", async () => {
-        validate(z.unknown(), await getEnvelope("/api/aggregations/monthly"), "aggregations/:name");
-    });
-
-    it("GET /api/info/exchange-rates conforms to rates schema", async () => {
-        validate(ExchangeRatesSchema, await getEnvelope("/api/info/exchange-rates"), "exchange-rates");
-    });
-
-    it("GET /api/market/news conforms to news schema", async () => {
-        validate(MarketNewsSchema, await getEnvelope("/api/market/news"), "market/news");
-    });
-
-    it("GET /api/import/batches conforms to batches schema", async () => {
-        validate(ImportBatchesSchema, await getEnvelope("/api/import/batches"), "import/batches");
-    });
-
-    it("GET /api/portfolio/summary conforms to portfolio-summary schema", async () => {
-        validate(PortfolioSummarySchema, await getEnvelope("/api/portfolio/summary"), "portfolio/summary");
-    });
-
-    it("GET /api/admin/endpoint-liveness conforms to array schema", async () => {
-        validate(z.array(z.unknown()), await getEnvelope("/api/admin/endpoint-liveness"), "admin/endpoint-liveness");
-    });
-
-    it("GET /api/planned conforms to array schema", async () => {
-        validate(z.array(z.unknown()), await getEnvelope("/api/planned"), "planned");
+    it.each<[string, z.ZodTypeAny, string, string]>([
+        ["GET /api/settings conforms to settings schema", SettingsSchema, "/api/settings", "settings"],
+        ["GET /api/settings/:key conforms to nullable value schema", SettingValueSchema, "/api/settings/language", "settings/:key"],
+        ["GET /api/info conforms to app-info schema", InfoSchema, "/api/info", "info"],
+        ["GET /api/info/health conforms to health schema", HealthSchema, "/api/info/health", "health"],
+        ["GET /api/aggregations/:name accepts nullable blob", z.unknown(), "/api/aggregations/monthly", "aggregations/:name"],
+        ["GET /api/info/exchange-rates conforms to rates schema", ExchangeRatesSchema, "/api/info/exchange-rates", "exchange-rates"],
+        ["GET /api/market/news conforms to news schema", MarketNewsSchema, "/api/market/news", "market/news"],
+        ["GET /api/import/batches conforms to batches schema", ImportBatchesSchema, "/api/import/batches", "import/batches"],
+        ["GET /api/portfolio/summary conforms to portfolio-summary schema", PortfolioSummarySchema, "/api/portfolio/summary", "portfolio/summary"],
+        ["GET /api/admin/endpoint-liveness conforms to array schema", z.array(z.unknown()), "/api/admin/endpoint-liveness", "admin/endpoint-liveness"],
+        ["GET /api/planned conforms to array schema", z.array(z.unknown()), "/api/planned", "planned"],
+    ])("%s", async (_name, schema, path, label) => {
+        validate(schema, await getEnvelope(path), label);
     });
 });
 
 // ── E1: Strict list item schemas ──────────────────────────────────────────────
 
 describe("GET list endpoints — strict item schemas (E1)", () => {
-    describe("/api/categories", () => {
+    describe.each<[string, z.ZodTypeAny, Record<string, unknown>, number]>([
+        ["/api/categories", CategoryItemSchema, CATEGORY_STUB, 200],
+        ["/api/recipients", RecipientItemSchema, RECIPIENT_STUB, 200],
+        ["/api/transactions", TransactionItemSchema, TRANSACTION_STUB, 50],
+        ["/api/planned-transactions", PlannedTransactionItemSchema, PLANNED_TRANSACTION_STUB, 1000],
+        ["/api/investments", InvestmentItemSchema, INVESTMENT_STUB, 100],
+    ])("%s", (path, ItemSchema, STUB, limit) => {
         it("empty list envelope is valid", async () => {
-            validate(paginatedOf(CategoryItemSchema), await getEnvelope("/api/categories"), "categories empty");
+            validate(paginatedOf(ItemSchema), await getEnvelope(path), `${path} empty`);
         });
 
-        it("item shape matches CategoryItemSchema", async () => {
+        it("item shape matches schema", async () => {
             server.use(
-                http.get(`${BASE}/api/categories`, () =>
+                http.get(`${BASE}${path}`, () =>
                     HttpResponse.json({
                         ok: true,
-                        data: { items: [CATEGORY_STUB], total: 1, limit: 200, offset: 0, links: [] },
+                        data: { items: [STUB], total: 1, limit, offset: 0, links: [] },
                     }),
                 ),
             );
-            const data = await getEnvelope("/api/categories");
-            const parsed = validate(paginatedOf(CategoryItemSchema), data, "categories item");
-            expect(parsed.items).toHaveLength(1);
-        });
-    });
-
-    describe("/api/recipients", () => {
-        it("empty list envelope is valid", async () => {
-            validate(paginatedOf(RecipientItemSchema), await getEnvelope("/api/recipients"), "recipients empty");
-        });
-
-        it("item shape matches RecipientItemSchema", async () => {
-            server.use(
-                http.get(`${BASE}/api/recipients`, () =>
-                    HttpResponse.json({
-                        ok: true,
-                        data: { items: [RECIPIENT_STUB], total: 1, limit: 200, offset: 0, links: [] },
-                    }),
-                ),
-            );
-            const data = await getEnvelope("/api/recipients");
-            const parsed = validate(paginatedOf(RecipientItemSchema), data, "recipients item");
-            expect(parsed.items).toHaveLength(1);
-        });
-    });
-
-    describe("/api/transactions", () => {
-        it("empty list envelope is valid", async () => {
-            validate(paginatedOf(TransactionItemSchema), await getEnvelope("/api/transactions"), "transactions empty");
-        });
-
-        it("item shape matches TransactionItemSchema", async () => {
-            server.use(
-                http.get(`${BASE}/api/transactions`, () =>
-                    HttpResponse.json({
-                        ok: true,
-                        data: { items: [TRANSACTION_STUB], total: 1, limit: 50, offset: 0, links: [] },
-                    }),
-                ),
-            );
-            const data = await getEnvelope("/api/transactions");
-            const parsed = validate(paginatedOf(TransactionItemSchema), data, "transactions item");
-            expect(parsed.items).toHaveLength(1);
-        });
-    });
-
-    describe("/api/planned-transactions", () => {
-        it("empty list envelope is valid", async () => {
-            validate(
-                paginatedOf(PlannedTransactionItemSchema),
-                await getEnvelope("/api/planned-transactions"),
-                "planned-transactions empty",
-            );
-        });
-
-        it("item shape matches PlannedTransactionItemSchema", async () => {
-            server.use(
-                http.get(`${BASE}/api/planned-transactions`, () =>
-                    HttpResponse.json({
-                        ok: true,
-                        data: { items: [PLANNED_TRANSACTION_STUB], total: 1, limit: 1000, offset: 0, links: [] },
-                    }),
-                ),
-            );
-            const data = await getEnvelope("/api/planned-transactions");
-            const parsed = validate(
-                paginatedOf(PlannedTransactionItemSchema),
-                data,
-                "planned-transactions item",
-            );
-            expect(parsed.items).toHaveLength(1);
-        });
-    });
-
-    describe("/api/investments", () => {
-        it("empty list envelope is valid", async () => {
-            validate(paginatedOf(InvestmentItemSchema), await getEnvelope("/api/investments"), "investments empty");
-        });
-
-        it("item shape matches InvestmentItemSchema", async () => {
-            server.use(
-                http.get(`${BASE}/api/investments`, () =>
-                    HttpResponse.json({
-                        ok: true,
-                        data: { items: [INVESTMENT_STUB], total: 1, limit: 100, offset: 0, links: [] },
-                    }),
-                ),
-            );
-            const data = await getEnvelope("/api/investments");
-            const parsed = validate(paginatedOf(InvestmentItemSchema), data, "investments item");
+            const data = await getEnvelope(path);
+            const parsed = validate(paginatedOf(ItemSchema), data, `${path} item`);
             expect(parsed.items).toHaveLength(1);
         });
     });
@@ -430,85 +320,23 @@ describe("GET list endpoints — strict item schemas (E1)", () => {
 // ── E2: Mutation contract tests ───────────────────────────────────────────────
 
 describe("Mutation handler contracts (E2)", () => {
-    describe("transactions", () => {
-        it("POST /api/transactions response matches TransactionItemSchema", async () => {
-            validate(TransactionItemSchema, await mutateEnvelope("POST", "/api/transactions", {}), "POST transactions");
+    describe.each<[string, string, z.ZodTypeAny, z.ZodTypeAny]>([
+        ["transactions", "/api/transactions", TransactionItemSchema, TransactionDeleteResponseSchema],
+        ["categories", "/api/categories", CategoryItemSchema, DeleteResponseSchema],
+        ["recipients", "/api/recipients", RecipientItemSchema, DeleteResponseSchema],
+        ["investments", "/api/investments", InvestmentItemSchema, DeleteResponseSchema],
+        ["planned-transactions", "/api/planned-transactions", PlannedTransactionItemSchema, DeleteResponseSchema],
+    ])("%s", (label, path, ItemSchema, DeleteSchema) => {
+        it(`POST ${path} response matches item schema`, async () => {
+            validate(ItemSchema, await mutateEnvelope("POST", path, {}), `POST ${label}`);
         });
 
-        it("PATCH /api/transactions/:id response matches TransactionItemSchema", async () => {
-            validate(TransactionItemSchema, await mutateEnvelope("PATCH", "/api/transactions/1", {}), "PATCH transactions");
+        it(`PATCH ${path}/:id response matches item schema`, async () => {
+            validate(ItemSchema, await mutateEnvelope("PATCH", `${path}/1`, {}), `PATCH ${label}`);
         });
 
-        it("DELETE /api/transactions/:id response matches delete response schema", async () => {
-            validate(TransactionDeleteResponseSchema, await mutateEnvelope("DELETE", "/api/transactions/1"), "DELETE transactions");
-        });
-    });
-
-    describe("categories", () => {
-        it("POST /api/categories response matches CategoryItemSchema", async () => {
-            validate(CategoryItemSchema, await mutateEnvelope("POST", "/api/categories", {}), "POST categories");
-        });
-
-        it("PATCH /api/categories/:id response matches CategoryItemSchema", async () => {
-            validate(CategoryItemSchema, await mutateEnvelope("PATCH", "/api/categories/1", {}), "PATCH categories");
-        });
-
-        it("DELETE /api/categories/:id response matches delete response schema", async () => {
-            validate(DeleteResponseSchema, await mutateEnvelope("DELETE", "/api/categories/1"), "DELETE categories");
-        });
-    });
-
-    describe("recipients", () => {
-        it("POST /api/recipients response matches RecipientItemSchema", async () => {
-            validate(RecipientItemSchema, await mutateEnvelope("POST", "/api/recipients", {}), "POST recipients");
-        });
-
-        it("PATCH /api/recipients/:id response matches RecipientItemSchema", async () => {
-            validate(RecipientItemSchema, await mutateEnvelope("PATCH", "/api/recipients/1", {}), "PATCH recipients");
-        });
-
-        it("DELETE /api/recipients/:id response matches delete response schema", async () => {
-            validate(DeleteResponseSchema, await mutateEnvelope("DELETE", "/api/recipients/1"), "DELETE recipients");
-        });
-    });
-
-    describe("investments", () => {
-        it("POST /api/investments response matches InvestmentItemSchema", async () => {
-            validate(InvestmentItemSchema, await mutateEnvelope("POST", "/api/investments", {}), "POST investments");
-        });
-
-        it("PATCH /api/investments/:id response matches InvestmentItemSchema", async () => {
-            validate(InvestmentItemSchema, await mutateEnvelope("PATCH", "/api/investments/1", {}), "PATCH investments");
-        });
-
-        it("DELETE /api/investments/:id response matches delete response schema", async () => {
-            validate(DeleteResponseSchema, await mutateEnvelope("DELETE", "/api/investments/1"), "DELETE investments");
-        });
-    });
-
-    describe("planned-transactions", () => {
-        it("POST /api/planned-transactions response matches PlannedTransactionItemSchema", async () => {
-            validate(
-                PlannedTransactionItemSchema,
-                await mutateEnvelope("POST", "/api/planned-transactions", {}),
-                "POST planned-transactions",
-            );
-        });
-
-        it("PATCH /api/planned-transactions/:id response matches PlannedTransactionItemSchema", async () => {
-            validate(
-                PlannedTransactionItemSchema,
-                await mutateEnvelope("PATCH", "/api/planned-transactions/1", {}),
-                "PATCH planned-transactions",
-            );
-        });
-
-        it("DELETE /api/planned-transactions/:id response matches delete response schema", async () => {
-            validate(
-                DeleteResponseSchema,
-                await mutateEnvelope("DELETE", "/api/planned-transactions/1"),
-                "DELETE planned-transactions",
-            );
+        it(`DELETE ${path}/:id response matches delete response schema`, async () => {
+            validate(DeleteSchema, await mutateEnvelope("DELETE", `${path}/1`), `DELETE ${label}`);
         });
     });
 });

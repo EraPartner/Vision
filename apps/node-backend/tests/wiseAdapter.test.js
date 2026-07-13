@@ -2,25 +2,16 @@
  * Wise Bank Adapter Tests
  */
 
-import { describe, it, expect, afterEach } from 'vitest';
-import fs from 'fs';
-import os from 'os';
-import path from 'path';
+import { describe, it, expect } from 'vitest';
 import { createAdapter } from '../src/services/bankAdapters.js';
 
-function writeTempCSV(content) {
-  const tmpPath = path.join(os.tmpdir(), `test_wise_${Date.now()}.csv`);
-  fs.writeFileSync(tmpPath, content, 'utf-8');
-  return tmpPath;
-}
+import { useTempCSV } from './helpers/tempFile.js';
+
+const writeTempCSV = useTempCSV('wise');
 
 describe('WiseAdapter', () => {
   let tmpPath;
   const parse = createAdapter('wise');
-
-  afterEach(() => {
-    if (tmpPath && fs.existsSync(tmpPath)) fs.unlinkSync(tmpPath);
-  });
 
   it('filters non-COMPLETED rows', async () => {
     const csv = `Status,Finished on,Created on,Direction,Target amount (after fees),Source amount (after fees),Target currency,Source currency,Target name,Source name,Reference,Category,Note,Source fee amount,Source fee currency,Exchange rate,ID,Batch

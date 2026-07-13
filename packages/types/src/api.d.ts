@@ -4,7 +4,7 @@
 
 import type { ApiErrorCodeValue } from './errors.js';
 
-export { ApiErrorCode, isApiErrorCode } from './errors.js';
+export { ApiErrorCode } from './errors.js';
 export type { ApiErrorCodeValue } from './errors.js';
 
 export interface ResponsePagination {

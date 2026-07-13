@@ -3,6 +3,7 @@ import { useQueries, useQuery } from "@tanstack/react-query";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { useAppSettings } from "@/contexts/AppSettingsContext";
 import { numberFormatToLocale } from "@/utils/currency";
+import { formatCompactNumber } from "@/utils/formatCompactNumber";
 import { formatDateWithAppSettings, formatDateTimeWithAppSettings } from "@/components/shared/dateUtils";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -178,14 +179,6 @@ const FUNDAMENTALS_METRICS: FundamentalsMetric[] = [
   { key: "fcfYield", labelKey: "research.metric.fcfYield", format: "pct", betterWhenHigher: true },
 ];
 
-function fmtLargeNum(val: number | null | undefined): string {
-  if (val == null || isNaN(val)) return "—";
-  const abs = Math.abs(val);
-  if (abs >= 1e12) return `${(val / 1e12).toFixed(2)}T`;
-  if (abs >= 1e9) return `${(val / 1e9).toFixed(2)}B`;
-  if (abs >= 1e6) return `${(val / 1e6).toFixed(2)}M`;
-  return String(val);
-}
 
 /** Rebase each series' closes to start at 100 so different price levels overlay. */
 function rebaseTo100(points: ResearchChartPoint[]): { time: number; value: number }[] {
@@ -329,7 +322,7 @@ export default function ResearchComparePage() {
   const fundamentalsLoading = fundamentalsQueries.some((q) => q.isFetching && !q.data);
 
   const fmtMetric = useCallback((metric: FundamentalsMetric, val: number | null | undefined) => {
-    if (metric.format === "largeNum") return fmtLargeNum(val);
+    if (metric.format === "largeNum") return formatCompactNumber(val);
     if (metric.format === "pct") return val == null || isNaN(val) ? "—" : `${(val * 100).toFixed(2)}%`;
     return fmtRatio(val);
   }, [fmtRatio]);

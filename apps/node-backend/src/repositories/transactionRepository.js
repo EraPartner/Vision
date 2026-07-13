@@ -13,6 +13,7 @@
 import { query, queryPrepared, withTransaction } from '../database/connection.js';
 import { sanitizeUpdateFields } from '../middleware/validation.js';
 import { buildTransactionWhere } from '../services/filterBuilder.js';
+import { buildSetClauses } from '../lib/sqlClauses.js';
 
 // Shared JOIN fragment used by every multi-join query
 const TRANSACTION_JOINS = `
@@ -485,17 +486,11 @@ export const transactionRepository = {
     const { tags, ...txFields } = fields;
     // Sanitize field names to prevent SQL injection via column names
     const sanitized = sanitizeUpdateFields('transactions', txFields);
-    const setClauses = [];
-    const updateParams = [];
-    let paramIdx = 1;
-
-    for (const [key, value] of Object.entries(sanitized)) {
-      if (value === undefined) continue;
-      // Map frontend field names to DB columns
-      const dbCol = key === 'transaction_date' ? 'date' : key;
-      setClauses.push(`"${dbCol}" = $${paramIdx++}`);
-      updateParams.push(value);
-    }
+    // Map frontend field names to DB columns (transaction_date → date)
+    const { clauses: setClauses, params: updateParams, nextIdx: paramIdx } = buildSetClauses(sanitized, {
+      quote: true,
+      mapColumn: (key) => (key === 'transaction_date' ? 'date' : key),
+    });
 
     const fetchSql = `
       SELECT t.*, r.name AS recipient_name,

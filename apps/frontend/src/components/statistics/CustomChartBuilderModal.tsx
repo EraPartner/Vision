@@ -18,8 +18,7 @@ import { useTags } from "@/hooks/useTags";
 import type { StatisticsData } from "@/hooks/useStatistics";
 import type { SavedChart, ChartType, ChartVariant, TimeBucket } from "@/lib/api/types";
 import { useLanguage } from "@/contexts/LanguageContext";
-import { useAppSettings } from "@/contexts/AppSettingsContext";
-import { numberFormatToLocale } from "@/utils/currency";
+import { useCurrencyFormatter } from "@/hooks/useCurrencyFormatter";
 import { CustomChart } from "./CustomChart";
 
 const CHART_COLORS = Array.from({ length: 16 }, (_, i) => `hsl(var(--chart-${(i % 8) + 1}))`);
@@ -84,14 +83,8 @@ interface CustomChartBuilderModalProps {
 
 export function CustomChartBuilderModal({ open, onOpenChange, data, editChart }: CustomChartBuilderModalProps) {
   const { t } = useLanguage();
-  const { appSettings } = useAppSettings();
-  const locale = numberFormatToLocale(appSettings.numberFormat);
-  const formatCurrency = (val: number) => new Intl.NumberFormat(locale, {
-    style: "currency",
-    currency: appSettings.defaultCurrency || "EUR",
-    minimumFractionDigits: 0,
-    maximumFractionDigits: 0,
-  }).format(val);
+  const formatCurrencyBase = useCurrencyFormatter();
+  const formatCurrency = (val: number) => formatCurrencyBase(val, undefined, 0);
 
   const isEdit = !!editChart;
 

@@ -3,17 +3,12 @@
  * Mirrors: apps/backend/tests/test_kbc_adapter.py
  */
 
-import { describe, it, expect, afterEach } from 'vitest';
-import fs from 'fs';
-import os from 'os';
-import path from 'path';
+import { describe, it, expect } from 'vitest';
 import { createAdapter } from '../src/services/bankAdapters.js';
 
-function writeTempCSV(content) {
-  const tmpPath = path.join(os.tmpdir(), `test_kbc_${Date.now()}.csv`);
-  fs.writeFileSync(tmpPath, content, 'utf-8');
-  return tmpPath;
-}
+import { useTempCSV } from './helpers/tempFile.js';
+
+const writeTempCSV = useTempCSV('kbc');
 
 const SAMPLE_KBC_CSV = `Rekeningnummer;Rubrieknaam;Naam;Munt;Afschriftnummer;Datum;Omschrijving;Valuta;Bedrag;Saldo;credit;debet;rekeningnummer tegenpartij;BIC tegenpartij;Naam tegenpartij;Adres tegenpartij;gestructureerde mededeling;Vrije mededeling
 BE61734041478017;                                                  ;BAU IE;EUR;  02026001;03/01/2026;INSTANTOVERSCHRIJVING NAAR;03/01/2026;-775,08;0,00;              ;-775,08;BE89 6509 6582 5185;REVOBEB2XXX;IE BAU;                                                                       ;                                   ;                                                                                                                                             
@@ -24,10 +19,6 @@ BE34744010767090;                                                  ;BAU IE;EUR; 
 describe('KBCAdapter', () => {
   let tmpPath;
   const parse = createAdapter('kbc');
-
-  afterEach(() => {
-    if (tmpPath && fs.existsSync(tmpPath)) fs.unlinkSync(tmpPath);
-  });
 
   it('parses correct number of transactions', async () => {
     tmpPath = writeTempCSV(SAMPLE_KBC_CSV);

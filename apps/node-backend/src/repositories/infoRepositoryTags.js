@@ -16,7 +16,7 @@
 import { query } from '../database/connection.js';
 import { convertRowsToEur } from '../services/currency/currencyConversionService.js';
 import {
-  roundToCents,
+  buildPeriodPivot,
   mapRowsForAmountConversion,
 } from './infoRepositoryHelpers.js';
 
@@ -77,27 +77,12 @@ export const tagInsightsRepository = {
       { useHistoricalRatesByDate: true, dateField: 'date' }
     );
 
-    const periodTagMap = {};
-    for (const row of converted) {
-      const period = row.period;
-      const tid = parseInt(row.tag_id, 10);
-      const eur = Math.abs(row.amount_eur);
-      const cnt = parseInt(row.cnt, 10) || 0;
-
-      if (!periodTagMap[period]) periodTagMap[period] = {};
-      if (!periodTagMap[period][tid]) {
-        periodTagMap[period][tid] = { tagId: tid, slug: row.tag_slug, total: 0, transactionCount: 0 };
-      }
-      periodTagMap[period][tid].total += eur;
-      periodTagMap[period][tid].transactionCount += cnt;
-    }
-
-    const tagPivot = {};
-    for (const [period, tags] of Object.entries(periodTagMap)) {
-      tagPivot[period] = Object.values(tags)
-        .map((tg) => ({ ...tg, total: roundToCents(tg.total) }))
-        .sort((a, b) => a.total - b.total);
-    }
+    const tagPivot = buildPeriodPivot(converted, {
+      idField: 'tag_id',
+      labelField: 'tag_slug',
+      idKey: 'tagId',
+      labelKey: 'slug',
+    });
 
     return { tagPivot };
   },

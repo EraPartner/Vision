@@ -6,6 +6,7 @@
  * and server lifecycle.
  */
 import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { mockLogger } from './helpers/mockLogger.js';
 
 // ── Mock dependencies before importing main ──────────────────
 
@@ -24,7 +25,7 @@ vi.mock('../src/services/currency/currencyConversionService.js', () => ({
 }));
 
 vi.mock('../src/config/logger.js', () => ({
-  logger: { info: vi.fn(), error: vi.fn(), warn: vi.fn(), debug: vi.fn() },
+  logger: mockLogger(),
 }));
 
 vi.mock('../src/middleware/rateLimiter.js', () => ({

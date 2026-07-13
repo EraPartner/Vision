@@ -44,7 +44,6 @@ aliases: [env vars, environment variables, .env, configuration, env]
 | `ALEMBIC_BIN` | `alembic` | No | Path to alembic binary; override in containers where alembic is installed to a venv (e.g. `/venv/bin/alembic`). Used by `runMigrations()` on startup | [[apps/node-backend/src/database/migrate.js\|migrate.js]] |
 | `ALEMBIC_CONFIG` | `config/alembic.ini` | No | Path to alembic config file relative to repo root, passed to alembic via `-c` flag | [[apps/node-backend/src/database/migrate.js\|migrate.js]] |
 | `APP_TIMEZONE` | `Europe/Brussels` | No | Default timezone for business math (ADR-009) | [[apps/node-backend/src/config/env.js\|env.js]] |
-| `IMPORT_PIPELINE_V2` | `true` | No | Gate for import pipeline v2 (default on) | [[apps/node-backend/src/config/env.js\|env.js]] |
 | `ATTACHMENTS_DIR` | `./data/attachments` | No | Filesystem root for receipt attachments (Phase 5A) | [[apps/node-backend/src/config/env.js\|env.js]] |
 | `ATTACHMENT_MAX_SIZE_MB` | `10` | No | Per-file upload ceiling in MB | [[apps/node-backend/src/config/env.js\|env.js]] |
 | `RATE_LIMIT_GLOBAL_MAX` | `1000` | No | Max requests per window for the app-wide baseline limiter mounted on `/api`. Per-route limiters stack on top. | [[apps/node-backend/src/middleware/rateLimiter.js\|rateLimiter.js]], [[apps/node-backend/src/config/env.js\|env.js]] |
