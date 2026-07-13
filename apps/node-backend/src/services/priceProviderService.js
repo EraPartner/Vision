@@ -82,85 +82,59 @@ export async function fetchLivePricesDetailed(investments, { cachedPricesByInves
     }
   }
 
+  // Provider fetch tasks. Two shapes (SIMP-33): id-based providers batch by a
+  // resolved symbol and key results/cache by that symbol; investment-based
+  // providers pass the investments through and key by inv.id.
+  const runProviderTask = async (key, label, task) => {
+    try {
+      await task();
+      recordProviderSuccess(key);
+    } catch (err) {
+      logger.error(`${label} failed`, { error: err.message });
+      recordProviderError(key, err);
+    }
+  };
+
+  // { key, resolveId, batchFn, label }
+  const idBasedProviders = [
+    { key: 'binance', resolveId: (inv) => (inv.price_provider_id || '').toUpperCase(), batchFn: PROVIDERS.binance, label: 'Binance batch fetch' },
+    { key: 'yahoo', resolveId: resolveYahooSymbol, batchFn: PROVIDERS.yahoo, label: 'Yahoo Finance batch fetch' },
+  ];
+  // { key, batchFn, label } — kinesis already converts EUR-symbol prices out of USD.
+  const investmentBasedProviders = [
+    { key: 'custom', batchFn: PROVIDERS.custom, label: 'Custom price fetch' },
+    { key: 'kinesis', batchFn: PROVIDERS.kinesis, label: 'Kinesis price fetch' },
+  ];
+
   const providerTasks = [];
 
-  if (stale.binance.length) {
-    providerTasks.push((async () => {
-      try {
-        const ids = [...new Set(stale.binance.map(inv => (inv.price_provider_id || '').toUpperCase()).filter(Boolean))];
-        const prices = await PROVIDERS.binance(ids);
-        for (const inv of stale.binance) {
-          const pid = (inv.price_provider_id || '').toUpperCase();
-          if (prices[pid]) {
-            results[inv.id] = { price: prices[pid].price, source: prices[pid].source || 'live' };
-            cacheSet(`binance:${pid}`, { price: prices[pid].price, source: prices[pid].source || 'live' });
-          }
+  for (const { key, resolveId, batchFn, label } of idBasedProviders) {
+    if (!stale[key].length) continue;
+    providerTasks.push(runProviderTask(key, label, async () => {
+      const ids = [...new Set(stale[key].map(resolveId).filter(Boolean))];
+      const prices = await batchFn(ids);
+      for (const inv of stale[key]) {
+        const pid = resolveId(inv);
+        if (prices[pid]) {
+          results[inv.id] = { price: prices[pid].price, source: prices[pid].source || 'live' };
+          cacheSet(`${key}:${pid}`, { price: prices[pid].price, source: prices[pid].source || 'live' });
         }
-        recordProviderSuccess('binance');
-      } catch (err) {
-        logger.error('Binance batch fetch failed', { error: err.message });
-        recordProviderError('binance', err);
       }
-    })());
+    }));
   }
 
-  if (stale.yahoo.length) {
-    providerTasks.push((async () => {
-      try {
-        const ids = [...new Set(stale.yahoo.map(resolveYahooSymbol).filter(Boolean))];
-        const prices = await PROVIDERS.yahoo(ids);
-        for (const inv of stale.yahoo) {
-          const pid = resolveYahooSymbol(inv);
-          if (prices[pid]) {
-            results[inv.id] = { price: prices[pid].price, source: prices[pid].source || 'live' };
-            cacheSet(`yahoo:${pid}`, { price: prices[pid].price, source: prices[pid].source || 'live' });
-          }
+  for (const { key, batchFn, label } of investmentBasedProviders) {
+    if (!stale[key].length) continue;
+    providerTasks.push(runProviderTask(key, label, async () => {
+      const prices = await batchFn(stale[key]);
+      for (const inv of stale[key]) {
+        const data = prices[inv.id];
+        if (data !== undefined && isValidPrice(data.price)) {
+          results[inv.id] = { price: data.price, source: 'live' };
+          cacheSet(`${key}:${inv.id}`, { price: data.price, source: 'live' });
         }
-        recordProviderSuccess('yahoo');
-      } catch (err) {
-        logger.error('Yahoo Finance batch fetch failed', { error: err.message });
-        recordProviderError('yahoo', err);
       }
-    })());
-  }
-
-  if (stale.custom.length) {
-    providerTasks.push((async () => {
-      try {
-        const prices = await PROVIDERS.custom(stale.custom);
-        for (const inv of stale.custom) {
-          const data = prices[inv.id];
-          if (data !== undefined && isValidPrice(data.price)) {
-            results[inv.id] = { price: data.price, source: 'live' };
-            cacheSet(`custom:${inv.id}`, { price: data.price, source: 'live' });
-          }
-        }
-        recordProviderSuccess('custom');
-      } catch (err) {
-        logger.error('Custom price fetch failed', { error: err.message });
-        recordProviderError('custom', err);
-      }
-    })());
-  }
-
-  if (stale.kinesis.length) {
-    providerTasks.push((async () => {
-      try {
-        // PROVIDERS.kinesis already converts EUR-symbol prices out of USD.
-        const prices = await PROVIDERS.kinesis(stale.kinesis);
-        for (const inv of stale.kinesis) {
-          const data = prices[inv.id];
-          if (data !== undefined && isValidPrice(data.price)) {
-            results[inv.id] = { price: data.price, source: 'live' };
-            cacheSet(`kinesis:${inv.id}`, { price: data.price, source: 'live' });
-          }
-        }
-        recordProviderSuccess('kinesis');
-      } catch (err) {
-        logger.error('Kinesis price fetch failed', { error: err.message });
-        recordProviderError('kinesis', err);
-      }
-    })());
+    }));
   }
 
   if (providerTasks.length > 0) {
@@ -257,10 +231,6 @@ function _filterHistoricalPoints(points, fromMs, toMs) {
   return filterPointsByRange(points, { fromMs, toMs });
 }
 
-function _fallbackHistoricalPoints(cachedDbPoints, fromMs, toMs) {
-  return _filterHistoricalPoints(cachedDbPoints, fromMs, toMs);
-}
-
 /**
  * @param {number} investmentId
  * @param {Array<{ timestampMs: number, price: number }>} points
@@ -345,7 +315,7 @@ export async function fetchHistoricalPrices(investment, { fromMs, toMs, dbOnly =
         cacheSet(cacheKey, { points, source: 'live' });
       } catch (err) {
         logger.warn(`Yahoo history fetch error for ${symbol}: ${err.message}`);
-        return _fallbackHistoricalPoints(cachedDbPoints, from, to);
+        return _filterHistoricalPoints(cachedDbPoints, from, to);
       }
     }
 
@@ -382,7 +352,7 @@ export async function fetchHistoricalPrices(investment, { fromMs, toMs, dbOnly =
         cacheSet(cacheKey, { points, source: 'live' });
       } catch (err) {
         logger.warn(`Binance history fetch error for ${symbol}: ${err.message}`);
-        return _fallbackHistoricalPoints(cachedDbPoints, from, to);
+        return _filterHistoricalPoints(cachedDbPoints, from, to);
       }
     }
 
@@ -394,7 +364,7 @@ export async function fetchHistoricalPrices(investment, { fromMs, toMs, dbOnly =
 
     if (!symbol) {
       logger.warn(`Kinesis history: no symbol configured for investment ${investment.id}`);
-      return _fallbackHistoricalPoints(cachedDbPoints, from, to);
+      return _filterHistoricalPoints(cachedDbPoints, from, to);
     }
 
     const cacheKey = `kinesis-history:${symbol}:${timeframe}`;
@@ -411,14 +381,14 @@ export async function fetchHistoricalPrices(investment, { fromMs, toMs, dbOnly =
 
         if (!res.ok) {
           logger.warn(`Kinesis history API error: ${res.status} for ${symbol}`);
-          return _fallbackHistoricalPoints(cachedDbPoints, from, to);
+          return _filterHistoricalPoints(cachedDbPoints, from, to);
         }
 
         const data = await res.json();
         const rawPoints = data?.[symbol];
         if (!Array.isArray(rawPoints)) {
           logger.warn(`Kinesis history: invalid data for ${symbol}`);
-          return _fallbackHistoricalPoints(cachedDbPoints, from, to);
+          return _filterHistoricalPoints(cachedDbPoints, from, to);
         }
 
         const { _parseKinesisTrendlinePoints } = await import('./prices/priceProviderRegistry.js');
@@ -426,7 +396,7 @@ export async function fetchHistoricalPrices(investment, { fromMs, toMs, dbOnly =
         cacheSet(cacheKey, { points, source: 'live' });
       } catch (err) {
         logger.warn(`Kinesis history fetch error for ${symbol}: ${err.message}`);
-        return _fallbackHistoricalPoints(cachedDbPoints, from, to);
+        return _filterHistoricalPoints(cachedDbPoints, from, to);
       }
     }
 
@@ -454,7 +424,7 @@ export async function fetchHistoricalPrices(investment, { fromMs, toMs, dbOnly =
   }
 
   if (provider !== 'custom') {
-    return _fallbackHistoricalPoints(cachedDbPoints, from, to);
+    return _filterHistoricalPoints(cachedDbPoints, from, to);
   }
 
   const config = resolveCustomHistoryConfig(investment);
@@ -491,7 +461,7 @@ export async function fetchHistoricalPrices(investment, { fromMs, toMs, dbOnly =
       cacheSet(cacheKey, { points, source: 'live' });
     } catch (err) {
       logger.warn(`Custom history fetch error for investment ${investment.id}: ${err.message}`);
-      return _fallbackHistoricalPoints(cachedDbPoints, from, to);
+      return _filterHistoricalPoints(cachedDbPoints, from, to);
     }
   }
 
