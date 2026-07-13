@@ -6,6 +6,9 @@ APP_DEST="/Applications/Vision.app"
 USERDATA="$HOME/Library/Application Support/Vision"
 SETTINGS="$USERDATA/settings.json"
 
+# shellcheck source=scripts/lib/mac-install.sh
+source "$REPO_PATH/scripts/lib/mac-install.sh"
+
 echo "==> Vision installer"
 echo "    Repo: $REPO_PATH"
 
@@ -94,17 +97,12 @@ if ! docker info &>/dev/null 2>&1; then
   echo "==> Docker is installed but not running. Starting Docker Desktop..."
   open -a Docker
   echo "    Waiting for Docker daemon..."
-  for i in $(seq 1 30); do
-    sleep 2
-    if docker info &>/dev/null 2>&1; then
-      echo "    Docker is ready."
-      break
-    fi
-    if [ "$i" -eq 30 ]; then
-      echo "ERROR: Docker did not start in time. Please start Docker Desktop manually and re-run."
-      exit 1
-    fi
-  done
+  if wait_for_docker_daemon; then
+    echo "    Docker is ready."
+  else
+    echo "ERROR: Docker did not start in time. Please start Docker Desktop manually and re-run."
+    exit 1
+  fi
 fi
 
 # ── Bun ───────────────────────────────────────────────────────────────────────
@@ -123,31 +121,16 @@ echo "==> Building Vision.app (this takes a minute)..."
 bun run dist
 
 # Find the built .app (arm64 or x64)
-APP_SRC=""
-for candidate in \
+APP_SRC="$(find_built_app \
   "$REPO_PATH/packaging/electron/dist/mac-arm64/Vision.app" \
   "$REPO_PATH/packaging/electron/dist/mac/Vision.app" \
-  "$REPO_PATH/packaging/electron/dist/mac-x64/Vision.app"; do
-  if [ -d "$candidate" ]; then
-    APP_SRC="$candidate"
-    break
-  fi
-done
-
-if [ -z "$APP_SRC" ]; then
+  "$REPO_PATH/packaging/electron/dist/mac-x64/Vision.app")" || {
   echo "ERROR: Could not find built Vision.app in packaging/electron/dist/"
   exit 1
-fi
+}
 
 # ── Install to /Applications ──────────────────────────────────────────────────
-echo "==> Installing to $APP_DEST..."
-if [ -d "$APP_DEST" ]; then
-  rm -rf "$APP_DEST"
-fi
-cp -r "$APP_SRC" "$APP_DEST"
-
-# Remove quarantine flag so Gatekeeper doesn't block the self-built app
-xattr -cr "$APP_DEST" 2>/dev/null || true
+install_app_bundle "$APP_SRC" "$APP_DEST"
 
 # ── Write repoPath to Vision settings ────────────────────────────────────────
 # Tells the packaged app to build from local source instead of pulling GHCR image.

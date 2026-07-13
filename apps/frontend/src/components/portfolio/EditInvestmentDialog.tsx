@@ -11,6 +11,7 @@ import { toast } from 'sonner';
 import type { InvestmentSummary } from '@/types/portfolio';
 import { isUnitBased } from '@/utils/assetClass';
 import type { PriceProvider } from '@/types/api';
+import { PriceProviderFields, PRICE_PROVIDERS } from './PriceProviderFields';
 
 interface Props {
   investment: InvestmentSummary;
@@ -49,13 +50,7 @@ export function EditInvestmentDialog({ investment, trigger }: Props) {
 
   const unitBased = isUnitBased(investment.assetClass);
 
-  const PRICE_PROVIDERS: { key: PriceProvider; name: string; hint: string }[] = [
-    { key: 'manual', name: t('addInv.provider.manual'), hint: t('addInv.provider.hint.manual') },
-    { key: 'binance', name: 'Binance', hint: t('addInv.provider.hint.binance') },
-    { key: 'yahoo', name: 'Yahoo Finance', hint: t('addInv.provider.hint.yahoo') },
-    { key: 'kinesis', name: 'Kinesis', hint: t('addInv.provider.hint.kinesis') },
-    { key: 'custom', name: 'Custom JSON', hint: t('addInv.provider.hint.custom') },
-  ];
+  const priceProviders = PRICE_PROVIDERS(t);
 
   const reset = () => {
     setForm({
@@ -113,7 +108,7 @@ export function EditInvestmentDialog({ investment, trigger }: Props) {
     }
   };
 
-  const selectedProvider = PRICE_PROVIDERS.find((p) => p.key === form.priceProvider);
+  const selectedProvider = priceProviders.find((p) => p.key === form.priceProvider);
 
   return (
     <Dialog
@@ -172,129 +167,15 @@ export function EditInvestmentDialog({ investment, trigger }: Props) {
             </div>
           </div>
 
-          <div className="space-y-3 pt-2 border-t border-border">
-            <Label className="text-sm font-medium">{t('addInv.label.priceProvider')}</Label>
-            <Select
-              value={form.priceProvider}
-              onValueChange={(v) => setForm((f) => ({ ...f, priceProvider: v as PriceProvider, priceProviderId: '' }))}
-            >
-              <SelectTrigger><SelectValue /></SelectTrigger>
-              <SelectContent>
-                {PRICE_PROVIDERS.map((p) => (
-                  <SelectItem key={p.key} value={p.key}>
-                    <span className="font-medium">{p.name}</span>
-                    <span className="text-muted-foreground ml-2 text-xs">— {p.hint}</span>
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-
-            {form.priceProvider !== 'manual' && form.priceProvider !== 'custom' && (
-              <div className="space-y-2">
-                <Label htmlFor="edit-inv-provider-id" className="text-xs">
-                  {t('addInv.label.providerId')}
-                </Label>
-                <Input
-                  id="edit-inv-provider-id"
-                  placeholder={selectedProvider?.hint || ''}
-                  value={form.priceProviderId}
-                  onChange={(e) => setForm((f) => ({ ...f, priceProviderId: e.target.value }))}
-                  maxLength={200}
-                  className="font-mono text-sm"
-                />
-              </div>
-            )}
-
-            {unitBased && form.priceProvider === 'manual' && (
-              <div className="space-y-2">
-                <Label htmlFor="edit-inv-price" className="text-xs">{t('addInv.label.currentPrice')}</Label>
-                <Input
-                  id="edit-inv-price"
-                  type="number"
-                  step="0.0001"
-                  min="0"
-                  placeholder="0.00"
-                  value={form.currentPrice}
-                  onChange={(e) => setForm((f) => ({ ...f, currentPrice: e.target.value }))}
-                />
-              </div>
-            )}
-
-            {form.priceProvider === 'custom' && (
-              <div className="space-y-3">
-                <div className="space-y-2">
-                  <Label htmlFor="edit-inv-provider-latest-url" className="text-xs">{t('addInv.label.latestJsonEndpoint')}</Label>
-                  <Input
-                    id="edit-inv-provider-latest-url"
-                    type="url"
-                    placeholder={t('addInv.placeholder.jsonEndpoint')}
-                    value={form.priceProviderLatestUrl}
-                    onChange={(e) => setForm((f) => ({ ...f, priceProviderLatestUrl: e.target.value }))}
-                    maxLength={500}
-                    className="font-mono text-sm"
-                  />
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="edit-inv-provider-latest-path" className="text-xs">{t('addInv.label.latestJsonPath')}</Label>
-                  <Input
-                    id="edit-inv-provider-latest-path"
-                    placeholder="price"
-                    value={form.priceProviderLatestPath}
-                    onChange={(e) => setForm((f) => ({ ...f, priceProviderLatestPath: e.target.value }))}
-                    maxLength={300}
-                    className="font-mono text-sm"
-                  />
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="edit-inv-provider-history-url" className="text-xs">{t('addInv.label.historyJsonEndpoint')}</Label>
-                  <Input
-                    id="edit-inv-provider-history-url"
-                    type="url"
-                    placeholder={t('addInv.placeholder.jsonEndpoint')}
-                    value={form.priceProviderHistoryUrl}
-                    onChange={(e) => setForm((f) => ({ ...f, priceProviderHistoryUrl: e.target.value }))}
-                    maxLength={500}
-                    className="font-mono text-sm"
-                  />
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="edit-inv-provider-history-path" className="text-xs">{t('addInv.label.historyArrayPath')}</Label>
-                  <Input
-                    id="edit-inv-provider-history-path"
-                    placeholder="points"
-                    value={form.priceProviderHistoryPath}
-                    onChange={(e) => setForm((f) => ({ ...f, priceProviderHistoryPath: e.target.value }))}
-                    maxLength={300}
-                    className="font-mono text-sm"
-                  />
-                </div>
-                <div className="grid grid-cols-2 gap-3">
-                  <div className="space-y-2">
-                    <Label htmlFor="edit-inv-provider-history-ts" className="text-xs">{t('addInv.label.historyTimestampPath')}</Label>
-                    <Input
-                      id="edit-inv-provider-history-ts"
-                      placeholder="timestamp_ms"
-                      value={form.priceProviderHistoryTsPath}
-                      onChange={(e) => setForm((f) => ({ ...f, priceProviderHistoryTsPath: e.target.value }))}
-                      maxLength={300}
-                      className="font-mono text-sm"
-                    />
-                  </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="edit-inv-provider-history-price" className="text-xs">{t('addInv.label.historyPricePath')}</Label>
-                    <Input
-                      id="edit-inv-provider-history-price"
-                      placeholder="price"
-                      value={form.priceProviderHistoryPricePath}
-                      onChange={(e) => setForm((f) => ({ ...f, priceProviderHistoryPricePath: e.target.value }))}
-                      maxLength={300}
-                      className="font-mono text-sm"
-                    />
-                  </div>
-                </div>
-              </div>
-            )}
-          </div>
+          <PriceProviderFields
+            idPrefix="edit-inv"
+            form={form}
+            setForm={setForm}
+            priceProviders={priceProviders}
+            selectedProvider={selectedProvider}
+            showManualPrice={unitBased}
+            t={t}
+          />
 
           <DialogFooter className="pt-2">
             <Button type="button" variant="outline" onClick={() => setOpen(false)}>{t('common.cancel')}</Button>

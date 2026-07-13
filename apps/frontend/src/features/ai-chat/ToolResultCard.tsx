@@ -105,10 +105,10 @@ export function ToolResultCard({ toolName, result }: ToolResultCardProps) {
         <div className="space-y-2">
             {renderAs === 'table' && <TableView rows={rows} columns={meta?.columns} />}
             {renderAs === 'line' && (
-                <LineChartView rows={rows} xKey={meta?.xKey} yKeys={meta?.yKeys} />
+                <CartesianChartView kind="line" rows={rows} xKey={meta?.xKey} yKeys={meta?.yKeys} />
             )}
             {renderAs === 'bar' && (
-                <BarChartView rows={rows} xKey={meta?.xKey} yKeys={meta?.yKeys} />
+                <CartesianChartView kind="bar" rows={rows} xKey={meta?.xKey} yKeys={meta?.yKeys} />
             )}
             {renderAs === 'pie' && (
                 <PieChartView rows={rows} xKey={meta?.xKey} yKeys={meta?.yKeys} />
@@ -185,61 +185,50 @@ function resolveAxes(rows: Row[], xKey?: string, yKeys?: string[]) {
     return { xk, yk };
 }
 
-function LineChartView({ rows, xKey, yKeys }: ChartViewProps) {
+// Line and bar tool-result charts share the entire frame (grid/axes/tooltip/
+// legend) and differ only in the container element and the mark, so one view
+// renders both.
+function CartesianChartView({ rows, xKey, yKeys, kind }: ChartViewProps & { kind: 'line' | 'bar' }) {
     const { xk, yk } = resolveAxes(rows, xKey, yKeys);
     if (rows.length === 0 || yk.length === 0) {
         return <p className="text-xs text-muted-foreground">No chart data.</p>;
     }
+    const frame = [
+        <CartesianGrid key="grid" strokeDasharray="3 3" stroke="hsl(var(--border))" opacity={0.3} />,
+        <XAxis key="x" dataKey={xk} tick={{ fontSize: 10 }} stroke="hsl(var(--muted-foreground))" />,
+        <YAxis key="y" tick={{ fontSize: 10 }} stroke="hsl(var(--muted-foreground))" />,
+        <Tooltip key="tooltip" contentStyle={tooltipStyle} />,
+        ...(yk.length > 1 ? [<Legend key="legend" wrapperStyle={{ fontSize: 11 }} />] : []),
+        ...yk.map((key, i) => (
+            kind === 'line' ? (
+                <Line
+                    key={key}
+                    type="monotone"
+                    dataKey={key}
+                    stroke={getChartColor(i)}
+                    strokeWidth={2}
+                    dot={false}
+                    isAnimationActive={false}
+                />
+            ) : (
+                <Bar
+                    key={key}
+                    dataKey={key}
+                    fill={getChartColor(i)}
+                    radius={[4, 4, 0, 0]}
+                    isAnimationActive={false}
+                />
+            )
+        )),
+    ];
     return (
         <div className="h-56 w-full">
             <ResponsiveContainer width="100%" height="100%">
-                <LineChart data={rows} margin={{ top: 8, right: 12, left: 0, bottom: 0 }}>
-                    <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" opacity={0.3} />
-                    <XAxis dataKey={xk} tick={{ fontSize: 10 }} stroke="hsl(var(--muted-foreground))" />
-                    <YAxis tick={{ fontSize: 10 }} stroke="hsl(var(--muted-foreground))" />
-                    <Tooltip contentStyle={tooltipStyle} />
-                    {yk.length > 1 && <Legend wrapperStyle={{ fontSize: 11 }} />}
-                    {yk.map((key, i) => (
-                        <Line
-                            key={key}
-                            type="monotone"
-                            dataKey={key}
-                            stroke={getChartColor(i)}
-                            strokeWidth={2}
-                            dot={false}
-                            isAnimationActive={false}
-                        />
-                    ))}
-                </LineChart>
-            </ResponsiveContainer>
-        </div>
-    );
-}
-
-function BarChartView({ rows, xKey, yKeys }: ChartViewProps) {
-    const { xk, yk } = resolveAxes(rows, xKey, yKeys);
-    if (rows.length === 0 || yk.length === 0) {
-        return <p className="text-xs text-muted-foreground">No chart data.</p>;
-    }
-    return (
-        <div className="h-56 w-full">
-            <ResponsiveContainer width="100%" height="100%">
-                <BarChart data={rows} margin={{ top: 8, right: 12, left: 0, bottom: 0 }}>
-                    <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" opacity={0.3} />
-                    <XAxis dataKey={xk} tick={{ fontSize: 10 }} stroke="hsl(var(--muted-foreground))" />
-                    <YAxis tick={{ fontSize: 10 }} stroke="hsl(var(--muted-foreground))" />
-                    <Tooltip contentStyle={tooltipStyle} />
-                    {yk.length > 1 && <Legend wrapperStyle={{ fontSize: 11 }} />}
-                    {yk.map((key, i) => (
-                        <Bar
-                            key={key}
-                            dataKey={key}
-                            fill={getChartColor(i)}
-                            radius={[4, 4, 0, 0]}
-                            isAnimationActive={false}
-                        />
-                    ))}
-                </BarChart>
+                {kind === 'line' ? (
+                    <LineChart data={rows} margin={{ top: 8, right: 12, left: 0, bottom: 0 }}>{frame}</LineChart>
+                ) : (
+                    <BarChart data={rows} margin={{ top: 8, right: 12, left: 0, bottom: 0 }}>{frame}</BarChart>
+                )}
             </ResponsiveContainer>
         </div>
     );

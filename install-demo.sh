@@ -10,6 +10,9 @@ ELECTRON_DIR="$REPO_PATH/packaging/electron"
 APP_NAME="Vision Demo"
 APP_DEST="/Applications/$APP_NAME.app"
 
+# shellcheck source=scripts/lib/mac-install.sh
+source "$REPO_PATH/scripts/lib/mac-install.sh"
+
 echo "==> Vision Demo installer"
 echo "    Repo: $REPO_PATH"
 
@@ -18,7 +21,7 @@ command -v docker >/dev/null 2>&1 || { echo "ERROR: Docker not found. Install Do
 if ! docker info >/dev/null 2>&1; then
   echo "==> Docker not running. Starting Docker Desktop..."
   open -a Docker || true
-  for i in $(seq 1 30); do sleep 2; docker info >/dev/null 2>&1 && break; [ "$i" -eq 30 ] && { echo "ERROR: Docker did not start."; exit 1; }; done
+  wait_for_docker_daemon || { echo "ERROR: Docker did not start."; exit 1; }
 fi
 command -v bun >/dev/null 2>&1 || { echo "ERROR: bun not found (brew install bun)."; exit 1; }
 
@@ -50,16 +53,12 @@ echo "==> Building $APP_NAME.app (takes a couple of minutes)..."
 ./node_modules/.bin/electron-builder --config electron-builder-demo.json --mac --arm64
 
 # ── 4) Locate + install to /Applications ─────────────────────────────────────
-APP_SRC=""
-for c in "$ELECTRON_DIR/dist-demo/mac-arm64/$APP_NAME.app" "$ELECTRON_DIR/dist-demo/mac/$APP_NAME.app"; do
-  [ -d "$c" ] && { APP_SRC="$c"; break; }
-done
-[ -n "$APP_SRC" ] || { echo "ERROR: built app not found under $ELECTRON_DIR/dist-demo/"; exit 1; }
+APP_SRC="$(find_built_app \
+  "$ELECTRON_DIR/dist-demo/mac-arm64/$APP_NAME.app" \
+  "$ELECTRON_DIR/dist-demo/mac/$APP_NAME.app")" \
+  || { echo "ERROR: built app not found under $ELECTRON_DIR/dist-demo/"; exit 1; }
 
-echo "==> Installing to $APP_DEST..."
-[ -d "$APP_DEST" ] && rm -rf "$APP_DEST"
-cp -r "$APP_SRC" "$APP_DEST"
-xattr -cr "$APP_DEST" 2>/dev/null || true
+install_app_bundle "$APP_SRC" "$APP_DEST"
 # electron-builder skips signing (identity:null); arm64 needs at least an ad-hoc
 # signature or macOS refuses to launch it. Sign locally.
 codesign --force --deep -s - "$APP_DEST" 2>/dev/null || true

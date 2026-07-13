@@ -1,32 +1,21 @@
-import { useMemo, useState } from 'react';
+import { useState } from 'react';
 import { parseDecimal } from '@/lib/decimal';
-import { deriveUnitMath } from '@/lib/portfolioUnitMath';
+import { deriveUnitMath, parsePositive } from '@/lib/portfolioUnitMath';
 import { useLanguage } from '@/contexts/LanguageContext';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { Textarea } from '@/components/ui/textarea';
-import { Switch } from '@/components/ui/switch';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { DatePicker } from '@/components/shared/DatePicker';
-import { parseLocalDateFromYmd, toYmd } from '@/components/shared/dateUtils';
+import { toYmd } from '@/components/shared/dateUtils';
 import { usePortfolio } from '@/hooks/usePortfolio';
 import { useAccounts } from '@/hooks/useAccounts';
-import { isPerAccountHoldingsEnabled } from '@/lib/env';
 import { isUnitBased } from '@/utils/assetClass';
 import { toast } from 'sonner';
 import type { InvestmentSummary, PortfolioTxnType, RecurrenceInterval } from '@/types/portfolio';
 import type { PortfolioTransaction, PortfolioTransactionCreate } from '@/types/api';
 import { getTxnTypeLabel } from '@/types/portfolio';
+import { PortfolioTxnFormFields } from './PortfolioTxnFormFields';
 
-
-function parsePositive(value: string): number | undefined {
-  if (!value.trim()) return undefined;
-  const n = parseDecimal(value, NaN);
-  if (!Number.isFinite(n) || n <= 0) return undefined;
-  return n;
-}
 
 function parseNonNegative(value: string): number | undefined {
   if (!value.trim()) return undefined;
@@ -107,15 +96,6 @@ export function EditPortfolioTxnDialog({ investment, transaction, trigger }: Pro
   const showUnits = unitBased && ['buy', 'sell', 'gift'].includes(transaction.type);
   const showFeesTaxes = ['buy', 'sell', 'dividend'].includes(transaction.type);
   const showRecurring = ['buy', 'sell', 'dividend', 'interest', 'rent_income'].includes(transaction.type);
-
-  const RECURRENCE_LABELS: Record<RecurrenceInterval, string> = useMemo(() => ({
-    daily: t('addPortTxn.recurrence.daily'),
-    weekly: t('addPortTxn.recurrence.weekly'),
-    'bi-weekly': t('addPortTxn.recurrence.biweekly'),
-    monthly: t('addPortTxn.recurrence.monthly'),
-    quarterly: t('addPortTxn.recurrence.quarterly'),
-    yearly: t('addPortTxn.recurrence.yearly'),
-  }), [t]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -199,178 +179,29 @@ export function EditPortfolioTxnDialog({ investment, transaction, trigger }: Pro
         </DialogHeader>
 
         <form onSubmit={handleSubmit} className="space-y-4">
-          <div className="grid grid-cols-2 gap-4">
-            <div className="space-y-2">
-              <Label>{t('addPortTxn.type')}</Label>
-              <Input value={getTxnTypeLabel(t, transaction.type)} disabled />
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="edit-txn-date">{t('addPortTxn.date')}</Label>
-              <DatePicker
-                value={form.date ? parseLocalDateFromYmd(form.date) : undefined}
-                onChange={(date) => setForm((f) => ({ ...f, date: date ? toYmd(date) : '' }))}
-                placeholder={t('plannedPage.link.pickDate')}
-              />
-            </div>
-
-            {isPerAccountHoldingsEnabled && (
-              <div className="space-y-2 col-span-2">
-                <Label>{t('nav.accounts')}</Label>
-                <Select
-                  value={form.accountId || 'none'}
-                  onValueChange={(v) => setForm((f) => ({ ...f, accountId: v === 'none' ? '' : v }))}
-                >
-                  <SelectTrigger><SelectValue /></SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="none">{t('accounts.unassigned')}</SelectItem>
-                    {(accountsData?.items ?? []).map((a) => (
-                      <SelectItem key={a.id} value={String(a.id)}>{a.display_name || a.name}</SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+          <PortfolioTxnFormFields
+            idPrefix="edit-txn"
+            form={form}
+            setForm={setForm}
+            currency={investment.currency}
+            t={t}
+            typeField={(
+              <div className="space-y-2">
+                <Label>{t('addPortTxn.type')}</Label>
+                <Input value={getTxnTypeLabel(t, transaction.type)} disabled />
               </div>
             )}
-
-            {showUnits && (
-              <>
-                <div className="space-y-2">
-                  <Label htmlFor="edit-txn-units">{t('addPortTxn.units')}</Label>
-                  <Input
-                    id="edit-txn-units"
-                    type="number"
-                    step="0.000001"
-                    min="0"
-                    value={form.units}
-                    onChange={(e) => setForm((f) => ({ ...f, units: e.target.value }))}
-                  />
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="edit-txn-ppu">{t('addPortTxn.pricePerUnit')}</Label>
-                  <Input
-                    id="edit-txn-ppu"
-                    type="number"
-                    step="0.0001"
-                    min="0"
-                    value={form.pricePerUnit}
-                    onChange={(e) => setForm((f) => ({ ...f, pricePerUnit: e.target.value }))}
-                  />
-                </div>
-              </>
-            )}
-
-            <div className={`space-y-2 ${showUnits ? 'col-span-2' : ''}`}>
-              <Label htmlFor="edit-txn-amount">
-                {t('addPortTxn.totalAmount', { currency: investment.currency })}
-                {derivedAmount !== undefined
-                  ? <span className="text-muted-foreground ml-1 text-xs">= {derivedAmount.toFixed(4)}</span>
-                  : null}
-              </Label>
-              <Input
-                id="edit-txn-amount"
-                type="number"
-                step="0.0001"
-                min="0"
-                value={form.amount}
-                onChange={(e) => setForm((f) => ({ ...f, amount: e.target.value }))}
-              />
-            </div>
-
-            {isBuySell && !buySellIsValid && (
-              <div className="col-span-2 text-xs text-destructive">{t('addPortTxn.error.twoOfThreeRequired')}</div>
-            )}
-
-            {showFeesTaxes && (
-              <>
-                <div className="space-y-2">
-                  <Label htmlFor="edit-txn-fees">{t('addPortTxn.fees')}</Label>
-                  <Input
-                    id="edit-txn-fees"
-                    type="number"
-                    step="0.01"
-                    min="0"
-                    value={form.fees}
-                    onChange={(e) => setForm((f) => ({ ...f, fees: e.target.value }))}
-                  />
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="edit-txn-taxes">{t('addPortTxn.taxes')}</Label>
-                  <Input
-                    id="edit-txn-taxes"
-                    type="number"
-                    step="0.01"
-                    min="0"
-                    value={form.taxes}
-                    onChange={(e) => setForm((f) => ({ ...f, taxes: e.target.value }))}
-                  />
-                </div>
-              </>
-            )}
-
-            <div className={`space-y-2 ${showFeesTaxes ? 'col-span-2' : ''}`}>
-              <Label htmlFor="edit-txn-fx-rate-to-eur">FX rate to EUR (optional)</Label>
-              <Input
-                id="edit-txn-fx-rate-to-eur"
-                type="number"
-                step="0.0000000001"
-                min="0"
-                value={form.fxRateToEur}
-                onChange={(e) => setForm((f) => ({ ...f, fxRateToEur: e.target.value }))}
-              />
-            </div>
-          </div>
-
-          {showRecurring && (
-            <div className="rounded-lg border border-border p-3 space-y-3">
-              <div className="flex items-center justify-between">
-                <Label htmlFor="edit-txn-recurring" className="text-sm">{t('addPortTxn.recurring')}</Label>
-                <Switch
-                  id="edit-txn-recurring"
-                  checked={form.isRecurring}
-                  onCheckedChange={(v) => setForm((f) => ({ ...f, isRecurring: v }))}
-                />
-              </div>
-              {form.isRecurring && (
-                <div className="grid grid-cols-2 gap-3">
-                  <div className="space-y-1">
-                    <Label className="text-xs">{t('addPortTxn.interval')}</Label>
-                    <Select
-                      value={form.recurrenceInterval}
-                      onValueChange={(v) => setForm((f) => ({ ...f, recurrenceInterval: v as RecurrenceInterval }))}
-                    >
-                      <SelectTrigger className="h-8 text-xs"><SelectValue /></SelectTrigger>
-                      <SelectContent>
-                        {Object.entries(RECURRENCE_LABELS).map(([k, l]) => (
-                          <SelectItem key={k} value={k}>{l}</SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  </div>
-                  <div className="space-y-1">
-                    <Label className="text-xs">{t('addPortTxn.endDate')}</Label>
-                    <DatePicker
-                      value={form.recurrenceEndDate ? parseLocalDateFromYmd(form.recurrenceEndDate) : undefined}
-                      onChange={(date) => setForm((f) => ({ ...f, recurrenceEndDate: date ? toYmd(date) : '' }))}
-                      placeholder={t('plannedPage.link.pickDate')}
-                      allowClear
-                      clearLabel={t('common.clear')}
-                      buttonClassName="h-8 text-xs"
-                    />
-                  </div>
-                </div>
-              )}
-            </div>
-          )}
-
-          <div className="space-y-2">
-            <Label htmlFor="edit-txn-note">{t('addPortTxn.note')}</Label>
-            <Textarea
-              id="edit-txn-note"
-              rows={2}
-              value={form.note}
-              onChange={(e) => setForm((f) => ({ ...f, note: e.target.value }))}
-              maxLength={300}
-            />
-          </div>
+            accounts={accountsData?.items ?? []}
+            showUnits={showUnits}
+            showFeesTaxes={showFeesTaxes}
+            showRecurring={showRecurring}
+            derivedAmount={derivedAmount}
+            isBuySell={isBuySell}
+            buySellIsValid={buySellIsValid}
+            isGift={isGift}
+            lockAmountWhenGift={false}
+            withPlaceholders={false}
+          />
 
           <DialogFooter className="pt-2">
             <Button type="button" variant="outline" onClick={() => setOpen(false)}>{t('common.cancel')}</Button>
