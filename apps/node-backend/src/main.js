@@ -8,7 +8,7 @@
 import express from 'express';
 import fs from 'node:fs';
 import { createGzip } from 'node:zlib';
-import { dirname, resolve } from 'path';
+import { dirname, resolve, sep } from 'path';
 import { fileURLToPath } from 'url';
 import { getSettings } from './config/config.js';
 import { logger } from './config/logger.js';
@@ -355,16 +355,20 @@ buildRouteManifest(app);
 // Must be registered AFTER API routes but BEFORE the 404 handler.
 if (settings.isProduction()) {
   const distPath = resolve(dirname(fileURLToPath(import.meta.url)), '..', '..', '..', 'dist');
-  // Hashed assets (JS/CSS) — long-lived cache. `index: false` only disables
-  // directory-index resolution: a literal GET /index.html is still a real file
-  // in distPath and would otherwise be pinned for a year, serving a stale
-  // shell whose old hashed chunk URLs 404 after an upgrade.
+  // Only Vite's content-hashed bundles live under dist/assets/ — those are
+  // safe to cache for a year. Everything else in dist/ has a stable name
+  // (index.html, favicon.ico, robots.txt, …) and must revalidate, or an
+  // explicit GET for it is pinned for a year and never sees an app update
+  // (stale shells then 404 on their old hashed chunk URLs after an upgrade).
+  // `index: false` only disables directory-index resolution, it does not
+  // exempt those files from the long-lived cache header.
+  const hashedAssetsPrefix = resolve(distPath, 'assets') + sep;
   app.use(express.static(distPath, {
     index: false,
     maxAge: '1y',
     immutable: true,
     setHeaders: (res, filePath) => {
-      if (filePath.endsWith('index.html')) {
+      if (!filePath.startsWith(hashedAssetsPrefix)) {
         res.setHeader('Cache-Control', 'no-cache');
       }
     },

@@ -51,6 +51,12 @@ export function verifyAttachmentContent(file) {
   }
   const ext = extname(file.originalname).toLowerCase();
   const expected = extensionMime(ext);
+  // An unrecognized extension is a mismatch, not a free pass — otherwise a
+  // valid PNG named x.exe skipped this check and stored as uuid.exe. A missing
+  // extension stays allowed (nothing misleading is stored).
+  if (ext && !expected) {
+    throw new Error(`Unsupported file extension ${ext}. Allowed: .png, .jpg, .jpeg, .gif, .webp, .pdf.`);
+  }
   if (expected && expected !== sniffed) {
     throw new Error(`File extension ${ext} does not match content (${sniffed}).`);
   }

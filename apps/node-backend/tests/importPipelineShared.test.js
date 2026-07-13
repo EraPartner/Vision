@@ -1,5 +1,34 @@
 import { describe, it, expect } from 'vitest';
-import { splitCsvLines, parseCommaDecimal, parseDateWithFormat } from '../src/services/importPipeline/adapters/_shared.js';
+import { splitCsvLines, splitDelimitedRecord, parseCommaDecimal, parseDateWithFormat } from '../src/services/importPipeline/adapters/_shared.js';
+
+describe('splitDelimitedRecord', () => {
+  it('splits a plain semicolon record', () => {
+    expect(splitDelimitedRecord('a;b;c')).toEqual(['a', 'b', 'c']);
+  });
+
+  it('keeps a quoted delimiter inside one field (the naive split(";") bug)', () => {
+    expect(splitDelimitedRecord('1;"Factuur 123; klant 456";2,50')).toEqual([
+      '1',
+      'Factuur 123; klant 456',
+      '2,50',
+    ]);
+  });
+
+  it('unescapes doubled quotes and drops the wrapping quotes', () => {
+    expect(splitDelimitedRecord('x;"he said ""hi""";y')).toEqual(['x', 'he said "hi"', 'y']);
+  });
+
+  it('keeps empty fields', () => {
+    expect(splitDelimitedRecord('a;;c;')).toEqual(['a', '', 'c', '']);
+  });
+
+  it('tolerates a stray quote mid-field (relax_quotes)', () => {
+    const parts = splitDelimitedRecord('a;5" screw;c');
+    expect(parts).toHaveLength(3);
+    expect(parts[0]).toBe('a');
+    expect(parts[2]).toBe('c');
+  });
+});
 
 describe('parseDateWithFormat round-trip validation', () => {
   it('parses a valid date for the chosen format', () => {

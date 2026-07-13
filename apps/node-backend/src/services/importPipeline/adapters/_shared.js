@@ -194,6 +194,32 @@ export function splitCsvLines(content) {
   return String(content).replace(UTF8_BOM_RE, '').split(/\r\n|\r|\n/);
 }
 
+/**
+ * Split one delimited CSV record into fields, honouring RFC-4180 quoting.
+ *
+ * The Belgian bank adapters used to `line.split(';')`, so a quoted field
+ * containing the delimiter (`"Factuur 123; klant 456"`) shifted every later
+ * column — dates/amounts misread and rows silently skipped, or worse, a
+ * shifted numeric field parsed as the amount. Delegates to csv-parse so
+ * quoted delimiters and doubled quotes ("") are handled like the record-based
+ * adapters already do. Returns null for an unparseable line (caller counts it
+ * as skipped).
+ *
+ * @param {string} line - a single physical CSV line (no embedded newlines)
+ * @param {string} [delimiter]
+ * @returns {string[]|null}
+ */
+export function splitDelimitedRecord(line, delimiter = ';') {
+  try {
+    // relax_quotes: bank exports occasionally leave a stray quote mid-field;
+    // treat it as literal text instead of failing the whole row.
+    const rows = parse(line, { delimiter, relax_column_count: true, relax_quotes: true });
+    return rows.length > 0 ? rows[0] : null;
+  } catch {
+    return null;
+  }
+}
+
 export function buildOptionalComment(commentParts) {
   return commentParts.length ? commentParts.join(' | ') : null;
 }

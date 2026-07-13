@@ -1619,7 +1619,35 @@ function compareVersions(a, b) {
   // Equal numeric cores: pre-release < release (semver §9)
   if (prea && !preb) return -1;
   if (!prea && preb) return 1;
-  if (prea && preb) return prea < preb ? -1 : prea > preb ? 1 : 0;
+  if (prea && preb) return comparePreRelease(prea, preb);
+  return 0;
+}
+
+// Semver §11 pre-release precedence: compare dot-separated identifiers left to
+// right — numeric identifiers compare numerically (so rc.10 > rc.2, which a
+// plain string compare got backwards), numeric < alphanumeric, and when all
+// shared identifiers are equal the shorter set has lower precedence.
+function comparePreRelease(prea, preb) {
+  const idsA = prea.split('.');
+  const idsB = preb.split('.');
+  const len = Math.max(idsA.length, idsB.length);
+  for (let i = 0; i < len; i += 1) {
+    const x = idsA[i];
+    const y = idsB[i];
+    if (x === undefined) return -1;
+    if (y === undefined) return 1;
+    const xNumeric = /^\d+$/.test(x);
+    const yNumeric = /^\d+$/.test(y);
+    if (xNumeric && yNumeric) {
+      const dx = parseInt(x, 10);
+      const dy = parseInt(y, 10);
+      if (dx !== dy) return dx < dy ? -1 : 1;
+    } else if (xNumeric !== yNumeric) {
+      return xNumeric ? -1 : 1;
+    } else if (x !== y) {
+      return x < y ? -1 : 1;
+    }
+  }
   return 0;
 }
 

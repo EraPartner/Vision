@@ -6,7 +6,7 @@
 import fs from 'fs';
 import { cleanRecipientName, normalizeToUppercase } from '../../textNormalization.js';
 import { logger } from '../../../config/logger.js';
-import { parseDayMonthYear, parseCommaDecimal, buildOptionalComment, splitCsvLines, canonicalIban } from './_shared.js';
+import { parseDayMonthYear, parseCommaDecimal, buildOptionalComment, splitCsvLines, splitDelimitedRecord, canonicalIban } from './_shared.js';
 import { toDecimal, roundMoney } from '../../../lib/money.js';
 
 const NAME = 'belfius';
@@ -57,8 +57,8 @@ function applyRunningBalances(transactions, lastBalance) {
 }
 
 function parseTransactionLine(line) {
-  const parts = line.split(';');
-  if (parts.length < MIN_FIELDS) return null;
+  const parts = splitDelimitedRecord(line);
+  if (!parts || parts.length < MIN_FIELDS) return null;
 
   const accountNumber = parts[0].trim();
   const transactionDateStr = parts[1].trim();

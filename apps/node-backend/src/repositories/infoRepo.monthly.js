@@ -48,7 +48,11 @@ export async function getMonthlyFinancialSummary(
   }
 
   if (mvUsable && mvCurrencyHomogeneous) {
-    const dateFilterClause = `WHERE month_start >= date_trunc('month', CURRENT_DATE - interval '5 months')`;
+    // Upper bound matches the live path (whose generate_series ends at the
+    // current month) — without it a post-dated transaction adds a future month
+    // on the MV path only, so the dashboard month set changed with the code path.
+    const dateFilterClause = `WHERE month_start >= date_trunc('month', CURRENT_DATE - interval '5 months')
+        AND month_start <= date_trunc('month', CURRENT_DATE)`;
     const mvResult = await query(`
       SELECT month_start, month, year, currency,
              SUM(transaction_count) AS transaction_count,

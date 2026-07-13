@@ -9,7 +9,18 @@ import { parseCsvFile, buildOptionalComment, buildRawRowString, parseAmountField
 const NAME = 'sabb';
 const BANK_LABEL = 'SABB';
 
+// Non-completed rows (pending authorisations, declines, reversals) haven't
+// settled — importing them corrupts balances, the same class of bug the
+// Revolut/Wise adapters already guard against by skipping non-COMPLETED rows.
+// Denylist rather than "keep only Completed": SABB's status vocabulary isn't
+// pinned against a real export, so an unknown status keeps the row instead of
+// silently dropping a settled transaction.
+const NON_COMPLETED_STATUS_RE = /pending|declin|reject|refus|revers|fail|cancel/i;
+
 function rowToTransaction(row) {
+  const status = (row['Status'] || '').trim();
+  if (NON_COMPLETED_STATUS_RE.test(status)) return null;
+
   const dateStr = (row['Transaction date'] || '').trim();
   if (!dateStr) return null;
 
@@ -36,7 +47,6 @@ function rowToTransaction(row) {
   const recipient = descCleaned ? normalizeToUppercase(cleanRecipientName(descCleaned)) : 'UNKNOWN';
   const memo = descriptionRaw ? normalizeToUppercase(descriptionRaw) : '';
 
-  const status = (row['Status'] || '').trim();
   const postingDate = (row['Posting date'] || '').trim();
   const otherCurrency = (row['Amount(Other Currency)'] || '').trim();
 

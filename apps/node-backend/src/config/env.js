@@ -11,6 +11,12 @@
 
 import './loadDotenv.js';
 import { z } from 'zod';
+import { logger } from './logger.js';
+
+// Development-only convenience fallback matching the documented Docker flow.
+// Outside development the backend must fail closed rather than silently
+// connect with a guessable password — see enforceDatabaseUrlPolicy().
+const DEFAULT_DATABASE_URL = 'postgresql://ftm_user:ftm_password@localhost:5432/financial_transactions';
 
 const booleanEnv = (defaultValue) =>
   z.string().optional().transform((value) => {
@@ -57,7 +63,7 @@ const envSchema = z.object({
   ENVIRONMENT: optionalStringEnv,
   NODE_ENV: optionalStringEnv,
 
-  DATABASE_URL: stringEnv('postgresql://ftm_user:ftm_password@localhost:5432/financial_transactions'),
+  DATABASE_URL: stringEnv(DEFAULT_DATABASE_URL),
   DB_ECHO: booleanEnv(false),
   DB_POOL_SIZE: intEnv(5),
   DB_MAX_OVERFLOW: intEnv(10),
@@ -119,7 +125,33 @@ function parseEnv() {
       .join('\n');
     throw new Error(`[env] Invalid environment configuration:\n${issues}`);
   }
+  enforceDatabaseUrlPolicy(result.data);
   return result.data;
+}
+
+/**
+ * DATABASE_URL is required (no fallback) outside development: the default
+ * carries a well-known password, so an unset variable in production must fail
+ * fast instead of silently connecting with guessable credentials. An
+ * explicitly set value is always honoured (the operator made a choice); the
+ * development fallback stays, but with a visible warning.
+ */
+function enforceDatabaseUrlPolicy(data) {
+  const explicitlySet = Boolean(process.env.DATABASE_URL && process.env.DATABASE_URL.trim());
+  if (explicitlySet) return;
+  const environment = (data.ENVIRONMENT || data.NODE_ENV || 'development').toLowerCase();
+  if (environment !== 'development' && environment !== 'test') {
+    throw new Error(
+      '[env] DATABASE_URL is not set. Refusing to fall back to the built-in '
+      + 'development credentials outside development — set DATABASE_URL explicitly '
+      + '(see .env.example).',
+    );
+  }
+  if (environment === 'test') return; // unit tests never open a real connection
+  logger.warn(
+    '[env] DATABASE_URL is not set — falling back to the built-in development '
+    + 'default (ftm_user/ftm_password@localhost). Never use this outside local development.',
+  );
 }
 
 export const env = Object.freeze(parseEnv());

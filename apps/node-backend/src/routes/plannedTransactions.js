@@ -5,8 +5,9 @@
  */
 
 import { Router } from 'express';
-import { query as dbQuery } from '../database/connection.js';
 import plannedTransactionRepository from '../services/plannedTransactionService.js';
+import { resolveRecipientIdByName } from '../services/recipientService.js';
+import { resolveCategoryIdByName } from '../services/categoryService.js';
 import { validateIdParam, assertYmd, validateId } from '../middleware/validation.js';
 import { formatDateToYmd } from '../lib/dateFormat.js';
 import { rateLimiter } from '../middleware/rateLimiter.js';
@@ -39,33 +40,18 @@ function withoutPatchOnlyReadOnlyFields(fields) {
 // The name→id resolvers return the id to use (or undefined to leave the
 // column untouched) instead of mutating the fields object — the caller strips
 // the *_name keys immutably and applies the resolved ids itself.
+// Resolution delegates to the shared service resolvers, which throw
+// ValidationError on an unmatched name — this route used to silently drop the
+// field instead (a typo'd category_name saved with no category and no error),
+// diverging from the live-transaction route's behavior.
 async function resolveRecipientIdFromName(fields) {
   if (!fields.recipient_name || fields.recipient_id) return fields.recipient_id;
-
-  const normalized = fields.recipient_name.toUpperCase().trim();
-  const recipientResult = await dbQuery(
-    `SELECT id FROM recipients WHERE UPPER(name) = $1 LIMIT 1`,
-    [normalized]
-  );
-  return recipientResult.rows.length > 0 ? recipientResult.rows[0].id : fields.recipient_id;
+  return resolveRecipientIdByName(fields.recipient_name);
 }
 
 async function resolveCategoryIdFromName(fields) {
   if (!fields.category_name || fields.category_id) return fields.category_id;
-
-  const normalized = fields.category_name.toUpperCase().trim();
-  const parts = normalized.split(':');
-  if (parts.length === 2) {
-    const catResult = await dbQuery(
-      `SELECT id FROM categories WHERE general = $1 AND detail = $2 LIMIT 1`,
-      [parts[0].trim(), parts[1].trim()]
-    );
-    if (catResult.rows.length > 0) {
-      return catResult.rows[0].id;
-    }
-  }
-
-  return fields.category_id;
+  return resolveCategoryIdByName(fields.category_name);
 }
 
 function generateLoanScheduleOrThrow(input) {

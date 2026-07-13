@@ -54,6 +54,22 @@ describe('SABBAdapter', () => {
     expect(txns[1].memo).toBe('');
   });
 
+  it('skips non-completed rows (pending / declined / reversed)', async () => {
+    const csv = `Transaction date,Amount(SAR),Description,Status,Posting date,Amount(Other Currency)
+25 Feb 2026,-50.00 SAR,1234567890123456Coffee Shop,PENDING,,
+25 Feb 2026,-75.00 SAR,1234567890123456Fuel Station,DECLINED,,
+25 Feb 2026,100.00 SAR,1234567890123456Refund Store,REVERSED,,
+26 Feb 2026,-20.00 SAR,1234567890123456Amazon Marketplace,POSTED,27 Feb 2026,
+`;
+
+    tmpPath = writeTempCSV(csv);
+    const txns = await parse(tmpPath);
+
+    expect(txns).toHaveLength(1);
+    expect(txns[0].amount).toBe(-20);
+    expect(txns.skipped).toBe(3);
+  });
+
   it('builds comment when status posting date and other currency are present', async () => {
     const csv = `Transaction date,Amount(SAR),Description,Status,Posting date,Amount(Other Currency)
 28 Feb 2026,-100.00 SAR,1234567890123456Hotel Booking,SETTLED,01 Mar 2026,-26.67 USD

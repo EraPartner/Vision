@@ -11,11 +11,26 @@ async function loadMaterializedViewService() {
     debug: vi.fn(),
   };
 
-  vi.doMock('../src/database/connection.js', () => ({ query }));
+  // Refresh statements run on a dedicated client with the pool-wide
+  // statement_timeout lifted. Record every client statement in clientSql, but
+  // delegate the actual REFRESH statements to the same `query` spy so the
+  // in-flight/debounce tests keep asserting one call per refresh statement.
+  const clientSql = [];
+  const release = vi.fn();
+  const getClient = vi.fn(async () => ({
+    query: (sql) => {
+      clientSql.push(sql);
+      if (/statement_timeout/i.test(sql)) return Promise.resolve({ rows: [] });
+      return query(sql);
+    },
+    release,
+  }));
+
+  vi.doMock('../src/database/connection.js', () => ({ query, getClient }));
   vi.doMock('../src/config/logger.js', () => ({ logger }));
 
   const service = await import('../src/services/materializedViewService.js');
-  return { ...service, query, logger };
+  return { ...service, query, logger, getClient, clientSql, release };
 }
 
 describe('materializedViewService', () => {
@@ -44,6 +59,23 @@ describe('materializedViewService', () => {
     expect(logger.warn).toHaveBeenCalledWith('Falling back to non-concurrent refresh for mv_monthly_summary');
   });
 
+  it('lifts the pool statement_timeout around each refresh and restores it after', async () => {
+    const { refreshMaterializedViews, query, clientSql, release } = await loadMaterializedViewService();
+    query.mockResolvedValue({ rows: [] });
+
+    await refreshMaterializedViews();
+
+    // Each view's refresh is bracketed by SET 0 / RESET on its dedicated client.
+    const firstRefreshIdx = clientSql.findIndex((sql) => sql.includes('REFRESH MATERIALIZED VIEW'));
+    expect(firstRefreshIdx).toBeGreaterThan(-1);
+    expect(clientSql.filter((sql) => sql === 'SET statement_timeout = 0')).toHaveLength(4);
+    expect(clientSql.filter((sql) => sql === 'RESET statement_timeout')).toHaveLength(4);
+    expect(clientSql[firstRefreshIdx - 1]).toBe('SET statement_timeout = 0');
+    // Clients go back to the pool healthy (no destructive release).
+    expect(release).toHaveBeenCalledTimes(4);
+    expect(release).not.toHaveBeenCalledWith(true);
+  });
+
   it('queues one deferred refresh while a refresh is in flight', async () => {
     vi.useFakeTimers();
 
@@ -63,6 +95,9 @@ describe('materializedViewService', () => {
 
     const firstRefresh = refreshMaterializedViews();
     await refreshMaterializedViews();
+    // Flush the microtask hops (getClient + SET statement_timeout) that now
+    // precede each REFRESH statement.
+    await vi.advanceTimersByTimeAsync(0);
 
     expect(query).toHaveBeenCalledTimes(4);
 

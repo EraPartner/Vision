@@ -99,6 +99,17 @@ describe('KBCAdapter', () => {
     expect(txns[2].recipientAccount).toBe('BE61 7340 4147 8017');
   });
 
+  it('keeps a quoted delimiter inside the free-communication field (no column shift)', async () => {
+    const csv = 'Rekeningnummer;Rubrieknaam;Naam;Munt;Afschriftnummer;Datum;Omschrijving;Valuta;Bedrag;Saldo;credit;debet;rekeningnummer tegenpartij;BIC tegenpartij;Naam tegenpartij;Adres tegenpartij;gestructureerde mededeling;Vrije mededeling\n'
+      + 'BE61734041478017;;BAU IE;EUR;02026001;03/01/2026;OVERSCHRIJVING NAAR;03/01/2026;-12,50;100,00;;-12,50;BE89 6509 6582 5185;REVOBEB2XXX;ENERGIE NV;;;"Factuur 123; klant 456"\n';
+    tmpPath = writeTempCSV(csv);
+    const txns = await parse(tmpPath);
+    expect(txns).toHaveLength(1);
+    expect(txns[0].amount).toBe(-12.5);
+    expect(txns[0].recipient).toBe('ENERGIE NV');
+    expect(txns[0].comment).toContain('Free: Factuur 123; klant 456');
+  });
+
   it('parses amounts with comma decimal separator', async () => {
     tmpPath = writeTempCSV(SAMPLE_KBC_CSV);
     const txns = await parse(tmpPath);

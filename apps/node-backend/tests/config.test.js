@@ -110,6 +110,7 @@ describe('Configuration Management', () => {
 
     it('should override server environment from env', async () => {
       process.env.ENVIRONMENT = 'production';
+      process.env.DATABASE_URL = 'postgresql://user:pass@host:5432/db'; // required outside development
       const { getSettings } = await importConfigFresh();
       const settings = getSettings();
       expect(settings.server.environment).toBe('production');
@@ -177,14 +178,36 @@ describe('Configuration Management', () => {
     it('should prioritize ENVIRONMENT over NODE_ENV', async () => {
       process.env.ENVIRONMENT = 'staging';
       process.env.NODE_ENV = 'production';
+      process.env.DATABASE_URL = 'postgresql://user:pass@host:5432/db'; // required outside development
       const { getSettings } = await importConfigFresh();
       expect(getSettings().server.environment).toBe('staging');
     });
 
     it('should fall back to NODE_ENV when ENVIRONMENT not set', async () => {
       process.env.NODE_ENV = 'production';
+      process.env.DATABASE_URL = 'postgresql://user:pass@host:5432/db'; // required outside development
       const { getSettings } = await importConfigFresh();
       expect(getSettings().server.environment).toBe('production');
+    });
+  });
+
+  describe('DATABASE_URL fail-closed policy', () => {
+    it('refuses to start without DATABASE_URL outside development', async () => {
+      process.env.ENVIRONMENT = 'production';
+      await expect(importConfigFresh()).rejects.toThrow(/DATABASE_URL is not set/);
+    });
+
+    it('honours an explicit DATABASE_URL in production', async () => {
+      process.env.ENVIRONMENT = 'production';
+      process.env.DATABASE_URL = 'postgresql://user:pass@host:5432/db';
+      const { getSettings } = await importConfigFresh();
+      expect(getSettings().database.url).toBe('postgresql://user:pass@host:5432/db');
+    });
+
+    it('falls back to the built-in default in development (unset DATABASE_URL)', async () => {
+      process.env.ENVIRONMENT = 'development';
+      const { getSettings } = await importConfigFresh();
+      expect(getSettings().database.url).toBe('postgresql://ftm_user:ftm_password@localhost:5432/financial_transactions');
     });
   });
 

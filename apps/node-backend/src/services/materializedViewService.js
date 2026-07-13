@@ -6,8 +6,35 @@
  * Views are refreshed CONCURRENTLY so reads remain unblocked.
  */
 
-import { query } from '../database/connection.js';
+import { query, getClient } from '../database/connection.js';
 import { logger } from '../config/logger.js';
+
+/**
+ * Run one maintenance statement with the pool-wide 30s statement_timeout
+ * lifted. REFRESH MATERIALIZED VIEW on a large transactions table can
+ * legitimately exceed 30s; under the shared pool's timeout every refresh past
+ * that threshold failed and the views went permanently stale. CONCURRENTLY
+ * cannot run inside a transaction block, so SET LOCAL is not an option — use a
+ * session-level SET on a dedicated client and restore the pool default before
+ * the client is reused.
+ */
+async function runMaintenanceStatement(sql) {
+  const client = await getClient();
+  try {
+    await client.query('SET statement_timeout = 0');
+    return await client.query(sql);
+  } finally {
+    try {
+      // RESET returns to the connection-startup value (the pool's 30s default).
+      await client.query('RESET statement_timeout');
+      client.release();
+    } catch {
+      // Couldn't restore the timeout — discard the connection rather than hand
+      // an unbounded-timeout client back to the pool.
+      client.release(true);
+    }
+  }
+}
 
 /** All managed materialized view names */
 const MATERIALIZED_VIEWS = [
@@ -188,7 +215,7 @@ export async function refreshMaterializedViews() {
     // reads to continue during refresh.
     await Promise.all(
       MATERIALIZED_VIEWS.map(view =>
-        query(`REFRESH MATERIALIZED VIEW CONCURRENTLY ${view}`).catch(err => {
+        runMaintenanceStatement(`REFRESH MATERIALIZED VIEW CONCURRENTLY ${view}`).catch(err => {
           // Fall back to non-concurrent if the view has no unique index or was never
           // populated. Match case-insensitively: Postgres phrases the unpopulated case as
           // "CONCURRENTLY cannot be used when the materialized view is not populated"
@@ -202,7 +229,7 @@ export async function refreshMaterializedViews() {
             msg.includes('concurrently')
           ) {
             logger.warn(`Falling back to non-concurrent refresh for ${view}`);
-            return query(`REFRESH MATERIALIZED VIEW ${view}`);
+            return runMaintenanceStatement(`REFRESH MATERIALIZED VIEW ${view}`);
           }
           // Any other error is a real refresh failure — re-throw so the outer
           // catch logs it. Swallowing it here let refreshMaterializedViews
