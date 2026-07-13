@@ -5,6 +5,7 @@
 import { query, withTransaction } from '../database/connection.js';
 import { toWireDate } from '../lib/dateFormat.js';
 import { coerceNumericFields } from '../lib/money.js';
+import { buildSetClauses } from '../lib/sqlClauses.js';
 
 // NUMERIC columns node-postgres returns as strings; coerce to numbers on emit
 // so rows match the `number` API/TS types (the inheritance create/update paths
@@ -126,6 +127,72 @@ const CHILD_ALLOWED_FIELDS_BY_ASSET_CLASS = {
   bond: ['current_price', 'interest_rate', 'maturity_date'],
 };
 
+// Single source of truth for the investment INSERT column list and the
+// coalescing defaults each column applies. Order is load-bearing — it drives
+// placeholder numbering. `base: true` marks the columns that also live on
+// investments_base in the inheritance schema (everything except the
+// asset-class-specific child columns). create() and createThroughInheritanceTables()
+// previously spelled these out as modernValues/legacyValues/baseValues/legacyBaseValues.
+const INVESTMENT_INSERT_FIELDS = [
+  { column: 'name', base: true, value: (f) => f.name },
+  { column: 'symbol', value: (f) => f.symbol || null },
+  { column: 'asset_class', value: (f) => f.asset_class },
+  { column: 'currency', base: true, value: (f) => f.currency },
+  { column: 'current_price', value: (f) => f.current_price || null },
+  { column: 'interest_rate', value: (f) => f.interest_rate || null },
+  { column: 'maturity_date', value: (f) => f.maturity_date || null },
+  { column: 'location', value: (f) => f.location || null },
+  { column: 'municipality', value: (f) => f.municipality || null },
+  { column: 'cadastral_income', value: (f) => f.cadastral_income ?? null },
+  { column: 'municipality_tax_rate', value: (f) => f.municipality_tax_rate ?? null },
+  { column: 'notes', base: true, value: (f) => f.notes || null },
+  { column: 'price_provider', base: true, value: (f) => f.price_provider || 'manual' },
+  { column: 'price_provider_id', base: true, value: (f) => f.price_provider_id || null },
+  { column: 'price_provider_url', base: true, value: (f) => f.price_provider_url || null },
+  { column: 'price_provider_latest_url', base: true, value: (f) => f.price_provider_latest_url || null },
+  { column: 'price_provider_latest_path', base: true, value: (f) => f.price_provider_latest_path || null },
+  { column: 'price_provider_history_url', base: true, value: (f) => f.price_provider_history_url || null },
+  { column: 'price_provider_history_path', base: true, value: (f) => f.price_provider_history_path || null },
+  { column: 'price_provider_history_ts_path', base: true, value: (f) => f.price_provider_history_ts_path || null },
+  { column: 'price_provider_history_price_path', base: true, value: (f) => f.price_provider_history_price_path || null },
+];
+
+const INVESTMENT_BASE_FIELDS = INVESTMENT_INSERT_FIELDS.filter((f) => f.base);
+
+// The provider columns the legacy flat/base insert paths carry (name … price_provider_url).
+const INVESTMENT_LEGACY_FLAT_FIELDS = INVESTMENT_INSERT_FIELDS.slice(0, 15);
+const INVESTMENT_LEGACY_BASE_FIELDS = INVESTMENT_BASE_FIELDS.slice(0, 6);
+
+/** Column names for a create() payload — the caller-facing field set. */
+const INVESTMENT_CREATE_COLUMNS = INVESTMENT_INSERT_FIELDS.map((f) => f.column);
+
+function investmentColumns(fieldSpecs) {
+  return fieldSpecs.map((f) => f.column);
+}
+
+function investmentValues(fieldSpecs, source) {
+  return fieldSpecs.map((f) => f.value(source));
+}
+
+function investmentPlaceholders(count) {
+  return Array.from({ length: count }, (_, i) => `$${i + 1}`).join(', ');
+}
+
+/**
+ * Pick the investment create field set out of a request body, preserving the
+ * exact key set create() expects (each key present, undefined when absent so
+ * create()'s per-field defaults still apply). Lets the controller stop
+ * re-destructuring the same ~21 fields by hand.
+ *
+ * @param {Record<string, unknown>} body
+ * @returns {Record<string, unknown>}
+ */
+export function pickInvestmentCreateFields(body) {
+  const picked = {};
+  for (const column of INVESTMENT_CREATE_COLUMNS) picked[column] = body?.[column];
+  return picked;
+}
+
 function makeValidationError(message) {
   const err = /** @type {Error & { code?: string }} */ (new Error(message));
   err.code = 'VALIDATION_ERROR';
@@ -149,16 +216,7 @@ async function ensureSymbolIsUnique(symbol, excludeId) {
 }
 
 function buildUpdateSql(tableName, id, fields, allowedFields) {
-  const setClauses = [];
-  const params = [];
-  let idx = 1;
-
-  for (const [key, value] of Object.entries(fields)) {
-    if (allowedFields.includes(key) && value !== undefined) {
-      setClauses.push(`${key} = $${idx++}`);
-      params.push(value);
-    }
-  }
+  const { clauses: setClauses, params, nextIdx: idx } = buildSetClauses(fields, { allowed: allowedFields });
 
   if (!setClauses.length) return null;
 
@@ -199,10 +257,9 @@ async function updateThroughInheritanceTables(id, fields, getByIdFn) {
 
 async function createThroughInheritanceTables(fields, getByIdFn) {
   const {
-    name,
-    symbol,
     asset_class,
     currency = 'EUR',
+    symbol,
     current_price,
     interest_rate,
     maturity_date,
@@ -210,16 +267,6 @@ async function createThroughInheritanceTables(fields, getByIdFn) {
     municipality,
     cadastral_income,
     municipality_tax_rate,
-    notes,
-    price_provider,
-    price_provider_id,
-    price_provider_url,
-    price_provider_latest_url,
-    price_provider_latest_path,
-    price_provider_history_url,
-    price_provider_history_path,
-    price_provider_history_ts_path,
-    price_provider_history_price_path,
   } = fields;
 
   const childTable = await resolveChildTable(asset_class);
@@ -227,34 +274,11 @@ async function createThroughInheritanceTables(fields, getByIdFn) {
     throw new Error(`Unsupported asset_class: ${asset_class}`);
   }
 
-  const baseColumns = [
-    'name',
-    'currency',
-    'notes',
-    'price_provider',
-    'price_provider_id',
-    'price_provider_url',
-    'price_provider_latest_url',
-    'price_provider_latest_path',
-    'price_provider_history_url',
-    'price_provider_history_path',
-    'price_provider_history_ts_path',
-    'price_provider_history_price_path',
-  ];
-  const baseValues = [
-    name,
-    currency,
-    notes || null,
-    price_provider || 'manual',
-    price_provider_id || null,
-    price_provider_url || null,
-    price_provider_latest_url || null,
-    price_provider_latest_path || null,
-    price_provider_history_url || null,
-    price_provider_history_path || null,
-    price_provider_history_ts_path || null,
-    price_provider_history_price_path || null,
-  ];
+  // Base columns/values are the provider/name field set; `currency` carries the
+  // 'EUR' default so a missing currency behaves as before.
+  const source = { ...fields, currency };
+  const baseColumns = investmentColumns(INVESTMENT_BASE_FIELDS);
+  const baseValues = investmentValues(INVESTMENT_BASE_FIELDS, source);
 
   const childColumns = [];
   const childValues = [];
@@ -275,30 +299,19 @@ async function createThroughInheritanceTables(fields, getByIdFn) {
 
   const columns = [...baseColumns, ...childColumns];
   const values = [...baseValues, ...childValues];
-  const placeholders = values.map((_, i) => `$${i + 1}`).join(', ');
+  const placeholders = investmentPlaceholders(values.length);
   const insertSql = `INSERT INTO ${childTable} (${columns.join(', ')}) VALUES (${placeholders}) RETURNING id`;
 
-  const legacyProviderUrl = price_provider_url || price_provider_latest_url || null;
-  const legacyProviderId = price_provider_id || price_provider_latest_path || null;
-  const legacyBaseColumns = [
-    'name',
-    'currency',
-    'notes',
-    'price_provider',
-    'price_provider_id',
-    'price_provider_url',
-  ];
-  const legacyBaseValues = [
-    name,
-    currency,
-    notes || null,
-    price_provider || 'manual',
-    legacyProviderId,
-    legacyProviderUrl,
-  ];
+  // Legacy schema folds the extra provider URL/path columns back into
+  // price_provider_url / price_provider_id.
+  const legacyProviderUrl = source.price_provider_url || source.price_provider_latest_url || null;
+  const legacyProviderId = source.price_provider_id || source.price_provider_latest_path || null;
+  const legacySource = { ...source, price_provider_id: legacyProviderId, price_provider_url: legacyProviderUrl };
+  const legacyBaseColumns = investmentColumns(INVESTMENT_LEGACY_BASE_FIELDS);
+  const legacyBaseValues = investmentValues(INVESTMENT_LEGACY_BASE_FIELDS, legacySource);
   const legacyColumns = [...legacyBaseColumns, ...childColumns];
   const legacyValues = [...legacyBaseValues, ...childValues];
-  const legacyPlaceholders = legacyValues.map((_, i) => `$${i + 1}`).join(', ');
+  const legacyPlaceholders = investmentPlaceholders(legacyValues.length);
   const legacyInsertSql = `INSERT INTO ${childTable} (${legacyColumns.join(', ')}) VALUES (${legacyPlaceholders}) RETURNING id`;
 
   try {
@@ -454,34 +467,14 @@ export const investmentRepository = {
       }
     }
 
-    const modernValues = [
-      name,
-      symbol || null,
-      asset_class,
-      currency,
-      current_price || null,
-      interest_rate || null,
-      maturity_date || null,
-      location || null,
-      municipality || null,
-      cadastral_income ?? null,
-      municipality_tax_rate ?? null,
-      notes || null,
-      price_provider || 'manual',
-      price_provider_id || null,
-      price_provider_url || null,
-      price_provider_latest_url || null,
-      price_provider_latest_path || null,
-      price_provider_history_url || null,
-      price_provider_history_path || null,
-      price_provider_history_ts_path || null,
-      price_provider_history_price_path || null,
-    ];
+    const modernColumns = investmentColumns(INVESTMENT_INSERT_FIELDS).join(', ');
+    const modernPlaceholders = investmentPlaceholders(INVESTMENT_INSERT_FIELDS.length);
+    const modernValues = investmentValues(INVESTMENT_INSERT_FIELDS, payload);
 
     try {
       const result = await query(
-        `INSERT INTO investments (name, symbol, asset_class, currency, current_price, interest_rate, maturity_date, location, municipality, cadastral_income, municipality_tax_rate, notes, price_provider, price_provider_id, price_provider_url, price_provider_latest_url, price_provider_latest_path, price_provider_history_url, price_provider_history_path, price_provider_history_ts_path, price_provider_history_price_path)
-         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21) RETURNING *`,
+        `INSERT INTO investments (${modernColumns})
+         VALUES (${modernPlaceholders}) RETURNING *`,
         modernValues
       );
       return mapInvestmentRow(result.rows[0]);
@@ -489,27 +482,14 @@ export const investmentRepository = {
       if (isUndefinedColumnError(err, 'price_provider_latest_url')) {
         const legacyProviderUrl = price_provider_url || price_provider_latest_url || null;
         const legacyProviderId = price_provider_id || price_provider_latest_path || null;
-        const legacyValues = [
-          name,
-          symbol || null,
-          asset_class,
-          currency,
-          current_price || null,
-          interest_rate || null,
-          maturity_date || null,
-          location || null,
-          municipality || null,
-          cadastral_income ?? null,
-          municipality_tax_rate ?? null,
-          notes || null,
-          price_provider || 'manual',
-          legacyProviderId,
-          legacyProviderUrl,
-        ];
+        const legacySource = { ...payload, price_provider_id: legacyProviderId, price_provider_url: legacyProviderUrl };
+        const legacyColumns = investmentColumns(INVESTMENT_LEGACY_FLAT_FIELDS).join(', ');
+        const legacyPlaceholders = investmentPlaceholders(INVESTMENT_LEGACY_FLAT_FIELDS.length);
+        const legacyValues = investmentValues(INVESTMENT_LEGACY_FLAT_FIELDS, legacySource);
         try {
           const legacyResult = await query(
-            `INSERT INTO investments (name, symbol, asset_class, currency, current_price, interest_rate, maturity_date, location, municipality, cadastral_income, municipality_tax_rate, notes, price_provider, price_provider_id, price_provider_url)
-             VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15) RETURNING *`,
+            `INSERT INTO investments (${legacyColumns})
+             VALUES (${legacyPlaceholders}) RETURNING *`,
             legacyValues
           );
           return mapInvestmentRow(legacyResult.rows[0]);
@@ -553,16 +533,7 @@ export const investmentRepository = {
       await setTickerPreference(id, showInTicker);
     }
 
-    const setClauses = [];
-    const params = [];
-    let idx = 1;
-
-    for (const [key, value] of Object.entries(normalizedFields)) {
-      if (allowed.includes(key) && value !== undefined) {
-        setClauses.push(`${key} = $${idx++}`);
-        params.push(value);
-      }
-    }
+    const { clauses: setClauses, params, nextIdx: idx } = buildSetClauses(normalizedFields, { allowed });
 
     // Nothing else changed — re-read only if the ticker pref moved (to reflect it).
     if (setClauses.length === 0) {

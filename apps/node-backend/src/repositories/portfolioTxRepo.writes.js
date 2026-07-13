@@ -4,6 +4,7 @@
  */
 
 import { query, withSavepointIfInTransaction } from '../database/connection.js';
+import { buildSetClauses } from '../lib/sqlClauses.js';
 import { getById, mapPortfolioTxRow } from './portfolioTxRepo.reads.js';
 import {
   hasPortfolioTransactionInheritanceSchema,
@@ -166,15 +167,11 @@ export async function update(id, fields) {
     excludeTransactionId: id,
   });
 
-  const normalizedSetClauses = [];
-  const normalizedParams = [];
-  let normalizedIdx = 1;
-  for (const [key, value] of Object.entries(normalizedFields)) {
-    if (allowed.includes(key) && value !== undefined) {
-      normalizedSetClauses.push(`${key} = $${normalizedIdx++}`);
-      normalizedParams.push(value);
-    }
-  }
+  const {
+    clauses: normalizedSetClauses,
+    params: normalizedParams,
+    nextIdx: normalizedIdx,
+  } = buildSetClauses(normalizedFields, { allowed });
 
   if (normalizedSetClauses.length === 0) return existing;
 

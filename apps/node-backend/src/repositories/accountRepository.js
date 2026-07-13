@@ -12,6 +12,7 @@
 
 import { query, withTransaction } from '../database/connection.js';
 import { COMPUTED_BALANCE_LATERAL } from './accountBalanceSql.js';
+import { buildInsert, buildSetClauses } from '../lib/sqlClauses.js';
 
 const COLUMNS = `id, name, display_name, institution, currency, type, liquidity_class,
   spendable, in_net_worth, tax_wrapper, owner, multi_currency_cash, has_cash_sleeve,
@@ -78,16 +79,7 @@ export const accountRepository = {
    * else falls back to the column default (e.g. type='checking', owner='me').
    */
   async create(fields) {
-    const cols = [];
-    const placeholders = [];
-    const params = [];
-    let i = 1;
-    for (const [key, value] of Object.entries(fields)) {
-      if (!WRITABLE.has(key) || value === undefined) continue;
-      cols.push(`"${key}"`);
-      placeholders.push(`$${i++}`);
-      params.push(value);
-    }
+    const { columns: cols, placeholders, params } = buildInsert(fields, { allowed: WRITABLE, quote: true });
     const result = await query(
       `INSERT INTO accounts (${cols.join(', ')})
        VALUES (${placeholders.join(', ')})
@@ -99,14 +91,7 @@ export const accountRepository = {
 
   /** Update an account; returns the updated row, or undefined if not found. */
   async update(id, fields) {
-    const setClauses = [];
-    const params = [];
-    let i = 1;
-    for (const [key, value] of Object.entries(fields)) {
-      if (!WRITABLE.has(key) || value === undefined) continue;
-      setClauses.push(`"${key}" = $${i++}`);
-      params.push(value);
-    }
+    const { clauses: setClauses, params, nextIdx: i } = buildSetClauses(fields, { allowed: WRITABLE, quote: true });
     if (setClauses.length === 0) return this.getById(id);
     setClauses.push(`updated_at = NOW()`);
     params.push(id);

@@ -10,7 +10,7 @@
  * Express 5 async-throw to errorHandler.js for the {ok:false,...} shape.
  */
 
-import investmentRepository from '../repositories/investmentRepository.js';
+import investmentRepository, { pickInvestmentCreateFields } from '../repositories/investmentRepository.js';
 import portfolioTransactionRepository from '../repositories/portfolioTransactionRepository.js';
 import { fetchHistoricalPrices, fetchLivePricesDetailed, SUPPORTED_PROVIDERS } from '../services/priceProviderService.js';
 import { refreshQuotesForInvestment } from '../services/quoteBackfillService.js';
@@ -223,29 +223,7 @@ export async function listInvestments(req, res) {
 
 export async function createInvestment(req, res) {
   validateInvestmentNumericFields(req.body);
-  const {
-    name,
-    symbol,
-    asset_class,
-    currency,
-    current_price,
-    interest_rate,
-    maturity_date,
-    location,
-    municipality,
-    cadastral_income,
-    municipality_tax_rate,
-    notes,
-    price_provider,
-    price_provider_id,
-    price_provider_url,
-    price_provider_latest_url,
-    price_provider_latest_path,
-    price_provider_history_url,
-    price_provider_history_path,
-    price_provider_history_ts_path,
-    price_provider_history_price_path,
-  } = req.body;
+  const { name, asset_class } = req.body;
 
   if (!name || !asset_class) {
     throw new ValidationError('name and asset_class are required');
@@ -255,14 +233,7 @@ export async function createInvestment(req, res) {
 
   let inv;
   try {
-    inv = await investmentRepository.create({
-      name, symbol, asset_class, currency, current_price, interest_rate,
-      maturity_date, location, municipality, cadastral_income,
-      municipality_tax_rate, notes, price_provider, price_provider_id,
-      price_provider_url, price_provider_latest_url, price_provider_latest_path,
-      price_provider_history_url, price_provider_history_path,
-      price_provider_history_ts_path, price_provider_history_price_path,
-    });
+    inv = await investmentRepository.create(pickInvestmentCreateFields(req.body));
   } catch (err) {
     translateRepoError(err);
   }

@@ -7,6 +7,66 @@
 import { query, withTransaction } from '../database/connection.js';
 import { sanitizeUpdateFields } from '../middleware/validation.js';
 import { todayAppDateString } from '../lib/timezone.js';
+import { buildSetClauses } from '../lib/sqlClauses.js';
+
+// Shared projection + joins for planned_transaction reads. getAll, getById,
+// getDueSoon, getForForecast and the update() RETURNING wrapper all read the
+// same recipient_name + resolved category_name shape over the same joins;
+// keeping the block in one place avoids five-way drift.
+const PLANNED_SELECT_FIELDS = `pt.*,
+             r.name AS recipient_name,
+             CASE
+                WHEN c.id IS NOT NULL THEN c.general || ':' || c.detail
+                WHEN rc.id IS NOT NULL THEN rc.general || ':' || rc.detail
+                ELSE NULL
+              END AS category_name`;
+
+const PLANNED_JOINS = `LEFT JOIN recipients r ON pt.recipient_id = r.id
+      LEFT JOIN categories c ON pt.category_id = c.id
+      LEFT JOIN categories rc ON r.default_category_id = rc.id`;
+
+/**
+ * Attach the executions, loan_schedule and tags sub-collections to a hydrated
+ * planned-transaction row. Identical between getById() and update(); mutates and
+ * returns the row.
+ *
+ * @param {object} row - a planned_transactions row (must carry id, is_loan)
+ * @returns {Promise<object>} the same row, hydrated
+ */
+async function hydratePlannedRow(row, id) {
+  const execResult = await query(
+    `SELECT * FROM planned_transaction_executions WHERE planned_transaction_id = $1 ORDER BY execution_date DESC`,
+    [id]
+  );
+  row.executions = execResult.rows;
+  row.execution_count = execResult.rows.length;
+  row.executed_transaction_id = execResult.rows.length > 0 ? execResult.rows[0].executed_transaction_id : null;
+
+  if (row.is_loan) {
+    const scheduleResult = await query(
+      `SELECT installment_number, due_date, payment_amount, principal_amount, interest_amount, remaining_principal
+           FROM planned_transaction_loan_schedule
+          WHERE planned_transaction_id = $1
+          ORDER BY installment_number ASC`,
+      [id]
+    );
+    row.loan_schedule = scheduleResult.rows;
+  } else {
+    row.loan_schedule = [];
+  }
+
+  const tagResult = await query(
+    `SELECT tg.id, tg.slug, tg.color, tg.is_active
+       FROM planned_transaction_tags ptt
+       JOIN tags tg ON tg.id = ptt.tag_id
+       WHERE ptt.planned_transaction_id = $1
+       ORDER BY tg.slug ASC`,
+    [id],
+  );
+  row.tags = tagResult.rows;
+
+  return row;
+}
 
 function buildPlannedTransactionWhereClause({
   startDate = null,
@@ -116,18 +176,10 @@ export const plannedTransactionRepository = {
     const limitParam = params.length + 1;
     const offsetParam = params.length + 2;
     const sql = `
-      SELECT pt.*,
-             r.name AS recipient_name,
-             CASE
-                WHEN c.id IS NOT NULL THEN c.general || ':' || c.detail
-                WHEN rc.id IS NOT NULL THEN rc.general || ':' || rc.detail
-                ELSE NULL
-              END AS category_name,
+      SELECT ${PLANNED_SELECT_FIELDS},
              COUNT(*) OVER() AS total_count
       FROM planned_transactions pt
-      LEFT JOIN recipients r ON pt.recipient_id = r.id
-      LEFT JOIN categories c ON pt.category_id = c.id
-      LEFT JOIN categories rc ON r.default_category_id = rc.id
+      ${PLANNED_JOINS}
       ${whereClause}
       ORDER BY pt.planned_date DESC
       LIMIT $${limitParam}
@@ -140,9 +192,7 @@ export const plannedTransactionRepository = {
       const countSql = `
         SELECT count(*)
         FROM planned_transactions pt
-        LEFT JOIN recipients r ON pt.recipient_id = r.id
-        LEFT JOIN categories c ON pt.category_id = c.id
-        LEFT JOIN categories rc ON r.default_category_id = rc.id
+        ${PLANNED_JOINS}
         ${whereClause}
       `;
       const countResult = await query(countSql, params);
@@ -255,55 +305,15 @@ export const plannedTransactionRepository = {
 
   async getById(id) {
     const sql = `
-      SELECT pt.*,
-             r.name AS recipient_name,
-             CASE
-               WHEN c.id IS NOT NULL THEN c.general || ':' || c.detail
-               WHEN rc.id IS NOT NULL THEN rc.general || ':' || rc.detail
-               ELSE NULL
-             END AS category_name
+      SELECT ${PLANNED_SELECT_FIELDS}
       FROM planned_transactions pt
-      LEFT JOIN recipients r ON pt.recipient_id = r.id
-      LEFT JOIN categories c ON pt.category_id = c.id
-      LEFT JOIN categories rc ON r.default_category_id = rc.id
+      ${PLANNED_JOINS}
       WHERE pt.id = $1
     `;
     const result = await query(sql, [id]);
     if (result.rows.length === 0) return null;
 
-    const row = result.rows[0];
-    const execResult = await query(
-      `SELECT * FROM planned_transaction_executions WHERE planned_transaction_id = $1 ORDER BY execution_date DESC`,
-      [id]
-    );
-    row.executions = execResult.rows;
-    row.execution_count = execResult.rows.length;
-    row.executed_transaction_id = execResult.rows.length > 0 ? execResult.rows[0].executed_transaction_id : null;
-
-    if (row.is_loan) {
-      const scheduleResult = await query(
-        `SELECT installment_number, due_date, payment_amount, principal_amount, interest_amount, remaining_principal
-           FROM planned_transaction_loan_schedule
-          WHERE planned_transaction_id = $1
-          ORDER BY installment_number ASC`,
-        [id]
-      );
-      row.loan_schedule = scheduleResult.rows;
-    } else {
-      row.loan_schedule = [];
-    }
-
-    const tagResult = await query(
-      `SELECT tg.id, tg.slug, tg.color, tg.is_active
-       FROM planned_transaction_tags ptt
-       JOIN tags tg ON tg.id = ptt.tag_id
-       WHERE ptt.planned_transaction_id = $1
-       ORDER BY tg.slug ASC`,
-      [id],
-    );
-    row.tags = tagResult.rows;
-
-    return row;
+    return hydratePlannedRow(result.rows[0], id);
   },
 
   async create({
@@ -405,15 +415,7 @@ export const plannedTransactionRepository = {
     const { tags, ...txFields } = fields;
     // Sanitize field names to prevent SQL injection via column names
     const sanitized = sanitizeUpdateFields('planned_transactions', txFields);
-    const setClauses = [];
-    const params = [];
-    let paramIdx = 1;
-
-    for (const [key, value] of Object.entries(sanitized)) {
-      if (value === undefined) continue;
-      setClauses.push(`"${key}" = $${paramIdx++}`);
-      params.push(value);
-    }
+    const { clauses: setClauses, params, nextIdx: paramIdx } = buildSetClauses(sanitized, { quote: true });
 
     if (tags !== undefined) {
       const found = await withTransaction(async (client) => {
@@ -447,55 +449,15 @@ export const plannedTransactionRepository = {
         WHERE id = $${paramIdx}
         RETURNING *
       )
-      SELECT pt.*,
-             r.name AS recipient_name,
-             CASE
-               WHEN c.id IS NOT NULL THEN c.general || ':' || c.detail
-               WHEN rc.id IS NOT NULL THEN rc.general || ':' || rc.detail
-               ELSE NULL
-             END AS category_name
+      SELECT ${PLANNED_SELECT_FIELDS}
       FROM updated pt
-      LEFT JOIN recipients r ON pt.recipient_id = r.id
-      LEFT JOIN categories c ON pt.category_id = c.id
-      LEFT JOIN categories rc ON r.default_category_id = rc.id
+      ${PLANNED_JOINS}
     `;
 
     const result = await query(sql, params);
     if (result.rows.length === 0) return null;
 
-    const row = result.rows[0];
-    const execResult = await query(
-      `SELECT * FROM planned_transaction_executions WHERE planned_transaction_id = $1 ORDER BY execution_date DESC`,
-      [id]
-    );
-    row.executions = execResult.rows;
-    row.execution_count = execResult.rows.length;
-    row.executed_transaction_id = execResult.rows.length > 0 ? execResult.rows[0].executed_transaction_id : null;
-
-    if (row.is_loan) {
-      const scheduleResult = await query(
-        `SELECT installment_number, due_date, payment_amount, principal_amount, interest_amount, remaining_principal
-           FROM planned_transaction_loan_schedule
-          WHERE planned_transaction_id = $1
-          ORDER BY installment_number ASC`,
-        [id]
-      );
-      row.loan_schedule = scheduleResult.rows;
-    } else {
-      row.loan_schedule = [];
-    }
-
-    const tagResult = await query(
-      `SELECT tg.id, tg.slug, tg.color, tg.is_active
-       FROM planned_transaction_tags ptt
-       JOIN tags tg ON tg.id = ptt.tag_id
-       WHERE ptt.planned_transaction_id = $1
-       ORDER BY tg.slug ASC`,
-      [id],
-    );
-    row.tags = tagResult.rows;
-
-    return row;
+    return hydratePlannedRow(result.rows[0], id);
   },
 
   /**
@@ -516,14 +478,7 @@ export const plannedTransactionRepository = {
     const sanitized = sanitizeUpdateFields('planned_transactions', txFields);
 
     const found = await withTransaction(async (client) => {
-      const setClauses = [];
-      const params = [];
-      let paramIdx = 1;
-      for (const [key, value] of Object.entries(sanitized)) {
-        if (value === undefined) continue;
-        setClauses.push(`"${key}" = $${paramIdx++}`);
-        params.push(value);
-      }
+      const { clauses: setClauses, params, nextIdx: paramIdx } = buildSetClauses(sanitized, { quote: true });
 
       if (setClauses.length > 0) {
         setClauses.push('updated_at = NOW()');
@@ -566,17 +521,9 @@ export const plannedTransactionRepository = {
    */
   async getDueSoon(days) {
     const sql = `
-      SELECT pt.*,
-             r.name AS recipient_name,
-             CASE
-               WHEN c.id IS NOT NULL THEN c.general || ':' || c.detail
-               WHEN rc.id IS NOT NULL THEN rc.general || ':' || rc.detail
-               ELSE NULL
-             END AS category_name
+      SELECT ${PLANNED_SELECT_FIELDS}
       FROM planned_transactions pt
-      LEFT JOIN recipients r ON pt.recipient_id = r.id
-      LEFT JOIN categories c ON pt.category_id = c.id
-      LEFT JOIN categories rc ON r.default_category_id = rc.id
+      ${PLANNED_JOINS}
       WHERE pt.is_active = true
         AND pt.is_executed = false
         AND pt.planned_date >= CURRENT_DATE
@@ -607,9 +554,7 @@ export const plannedTransactionRepository = {
                ELSE NULL
              END AS category_name
       FROM planned_transactions pt
-      LEFT JOIN recipients r ON pt.recipient_id = r.id
-      LEFT JOIN categories c ON pt.category_id = c.id
-      LEFT JOIN categories rc ON r.default_category_id = rc.id
+      ${PLANNED_JOINS}
       WHERE pt.is_active = true
         AND pt.is_executed = false
         AND pt.planned_date <= CURRENT_DATE + ($1 * INTERVAL '1 month')
@@ -670,14 +615,7 @@ export const plannedTransactionRepository = {
       }
 
       const sanitized = sanitizeUpdateFields('planned_transactions', updateFields);
-      const setClauses = [];
-      const params = [];
-      let paramIdx = 1;
-      for (const [key, value] of Object.entries(sanitized)) {
-        if (value === undefined) continue;
-        setClauses.push(`"${key}" = $${paramIdx++}`);
-        params.push(value);
-      }
+      const { clauses: setClauses, params, nextIdx: paramIdx } = buildSetClauses(sanitized, { quote: true });
 
       if (setClauses.length > 0) {
         setClauses.push('updated_at = NOW()');
