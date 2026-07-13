@@ -14,6 +14,36 @@ import {
 } from './infoRepositoryHelpers.js';
 import { todayAppDateString } from '../lib/timezone.js';
 
+// Sum converted rows into a sorted per-day net series (SIMP-50).
+function aggregateByDate(rows) {
+  const map = new Map();
+  for (const r of rows) {
+    const iso = r.date instanceof Date ? formatDateToYmd(r.date) : String(r.date).slice(0, 10);
+    map.set(iso, (map.get(iso) ?? 0) + (Number(r.amount_eur) || 0));
+  }
+  return Array.from(map, ([date, net]) => ({ date, net })).sort((a, b) => a.date.localeCompare(b.date));
+}
+
+// Average, across months, of the running cumulative day-of-month net (SIMP-50).
+// `monthDayNet` is { monthKey: { dayOfMonth: net } }.
+function computeAvgCumulativeByDay(monthDayNet) {
+  const monthKeys = Object.keys(monthDayNet);
+  const monthCount = monthKeys.length || 1;
+  const out = {};
+  for (const mk of monthKeys) {
+    const dayNet = monthDayNet[mk];
+    let cum = 0;
+    for (let d = 1; d <= 31; d++) {
+      cum += (dayNet[d] || 0);
+      out[d] = (out[d] || 0) + cum;
+    }
+  }
+  for (const d of Object.keys(out)) {
+    out[d] /= monthCount;
+  }
+  return out;
+}
+
 export async function getCashflowComparison(
   excludedCategoryIds = [],
   excludedRecipientIds = [],
@@ -132,20 +162,7 @@ export async function getCashflowComparison(
     monthDayNet[mk][row.day_of_month] = (monthDayNet[mk][row.day_of_month] || 0) + eur;
   }
 
-  const monthKeys = Object.keys(monthDayNet);
-  const monthCount = monthKeys.length || 1;
-  const avgCumulativeByDay = {};
-  for (const mk of monthKeys) {
-    const dayNet = monthDayNet[mk];
-    let cum = 0;
-    for (let d = 1; d <= 31; d++) {
-      cum += (dayNet[d] || 0);
-      avgCumulativeByDay[d] = (avgCumulativeByDay[d] || 0) + cum;
-    }
-  }
-  for (const d of Object.keys(avgCumulativeByDay)) {
-    avgCumulativeByDay[d] /= monthCount;
-  }
+  const avgCumulativeByDay = computeAvgCumulativeByDay(monthDayNet);
 
   const currentDayNet = {};
   for (const row of currentCashflowConverted) {
@@ -171,20 +188,7 @@ export async function getCashflowComparison(
     plannedHistMonthDay[mk][row.day_of_month] = (plannedHistMonthDay[mk][row.day_of_month] || 0) + row.amount_eur;
   }
 
-  const plannedHistMonthKeys = Object.keys(plannedHistMonthDay);
-  const plannedHistCount = plannedHistMonthKeys.length || 1;
-  const avgPlannedCumByDay = {};
-  for (const mk of plannedHistMonthKeys) {
-    const dayNet = plannedHistMonthDay[mk];
-    let cum = 0;
-    for (let d = 1; d <= 31; d++) {
-      cum += (dayNet[d] || 0);
-      avgPlannedCumByDay[d] = (avgPlannedCumByDay[d] || 0) + cum;
-    }
-  }
-  for (const d of Object.keys(avgPlannedCumByDay)) {
-    avgPlannedCumByDay[d] /= plannedHistCount;
-  }
+  const avgPlannedCumByDay = computeAvgCumulativeByDay(plannedHistMonthDay);
 
   const withoutPlanned = [];
   const withPlanned = [];
@@ -314,15 +318,6 @@ export async function getCashflowForecastData(
       'date'
     );
 
-  const aggregateByDate = (rows) => {
-    const map = new Map();
-    for (const r of rows) {
-      const iso = r.date instanceof Date ? formatDateToYmd(r.date) : String(r.date).slice(0, 10);
-      map.set(iso, (map.get(iso) ?? 0) + (Number(r.amount_eur) || 0));
-    }
-    return Array.from(map, ([date, net]) => ({ date, net })).sort((a, b) => a.date.localeCompare(b.date));
-  };
-
   return {
     history: aggregateByDate(histConv),
     currentActual: aggregateByDate(currentConv),
@@ -423,15 +418,6 @@ export async function getCashflowForecastDataRolling(
       targetCurrency,
       'date',
     );
-
-  const aggregateByDate = (rows) => {
-    const map = new Map();
-    for (const r of rows) {
-      const iso = r.date instanceof Date ? formatDateToYmd(r.date) : String(r.date).slice(0, 10);
-      map.set(iso, (map.get(iso) ?? 0) + (Number(r.amount_eur) || 0));
-    }
-    return Array.from(map, ([date, net]) => ({ date, net })).sort((a, b) => a.date.localeCompare(b.date));
-  };
 
   return {
     history: aggregateByDate(histConv),
