@@ -7,9 +7,10 @@
 import { Router } from 'express';
 import { query as dbQuery, withTransaction } from '../database/connection.js';
 import transactionRepository from '../services/transactionService.js';
+import { resolveRecipientIdByName } from '../services/recipientService.js';
+import { resolveCategoryIdByName } from '../services/categoryService.js';
 import { isManualDuplicate, recordManualRawTransaction } from '../services/deduplication.js';
 import { convertRowsToEur } from '../services/currency/currencyConversionService.js';
-import { normalizeForMatching } from '../services/textNormalization.js';
 import { logger } from '../config/logger.js';
 import { validateIdParam, assertYmd } from '../middleware/validation.js';
 import { rateLimiter } from '../middleware/rateLimiter.js';
@@ -197,36 +198,12 @@ function normalizeTransactionPatchFields(body) {
 // the *_name keys immutably and applies the resolved ids itself.
 async function resolveRecipientNameToId(fields) {
   if (!fields.recipient_name || fields.recipient_id) return fields.recipient_id;
-  const normalized = normalizeForMatching(fields.recipient_name);
-  const recipientResult = await dbQuery(
-    `SELECT id FROM recipients WHERE normalized_name = $1 LIMIT 1`,
-    [normalized]
-  );
-  if (recipientResult.rows.length === 0) {
-    throw new ValidationError(`Recipient with name '${fields.recipient_name}' does not exist`);
-  }
-  return recipientResult.rows[0].id;
+  return resolveRecipientIdByName(fields.recipient_name);
 }
 
 async function resolveCategoryNameToId(fields) {
   if (!fields.category_name || fields.category_id) return fields.category_id;
-  const normalized = fields.category_name.toUpperCase().trim();
-  if (!normalized.includes(':')) {
-    throw new ValidationError(
-      `Invalid category name format '${normalized}'. Expected format: 'General:Detail' (e.g., 'FOOD:BEVERAGES')`,
-    );
-  }
-  const [general, detail] = normalized.split(':', 2).map(s => s.trim());
-  const catResult = await dbQuery(
-    `SELECT id FROM categories WHERE general = $1 AND detail = $2 LIMIT 1`,
-    [general, detail]
-  );
-  if (catResult.rows.length === 0) {
-    throw new ValidationError(
-      `Category '${normalized}' does not exist. Please create it first or use an existing category.`,
-    );
-  }
-  return catResult.rows[0].id;
+  return resolveCategoryIdByName(fields.category_name);
 }
 
 // ── Internal transfers (ADR-083) ───────────────────────────────────────────

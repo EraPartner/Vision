@@ -23,7 +23,7 @@
 import fs from 'fs';
 import { cleanRecipientName, normalizeToUppercase } from '../../textNormalization.js';
 import { logger } from '../../../config/logger.js';
-import { parseDayMonthYear, parseAmountField, buildOptionalComment, splitCsvLines, canonicalIban } from './_shared.js';
+import { parseDayMonthYear, parseAmountField, buildOptionalComment, splitCsvLines, splitDelimitedRecord, canonicalIban } from './_shared.js';
 
 const NAME = 'bnp';
 const BANK_LABEL = 'BNP Paribas Fortis';
@@ -33,9 +33,21 @@ function isHeaderLine(line) {
   return line.includes('Volgnummer') && line.includes('Uitvoeringsdatum');
 }
 
+// A rejected/cancelled row (e.g. a refused direct debit) means the money never
+// moved — importing it as a real expense corrupts balances and spend totals.
+// Denylist rather than "keep only executed": the status vocabulary isn't pinned
+// against every BNP export variant, so an unknown status keeps the row (never
+// silently drop a real transaction). NL/FR/EN refusal + cancellation stems.
+const NON_EXECUTED_STATUS_RE = /geweiger|geannuleer|annulering|refus|annul|reject|cancel/i;
+
+function isNonExecutedRow(status, rejectionReason) {
+  if (rejectionReason) return true;
+  return NON_EXECUTED_STATUS_RE.test(status);
+}
+
 function parseLine(line) {
-  const parts = line.split(';');
-  if (parts.length < MIN_FIELDS) return null;
+  const parts = splitDelimitedRecord(line);
+  if (!parts || parts.length < MIN_FIELDS) return null;
 
   const sequenceNumber = parts[0].trim();
   const executionDateStr = parts[1].trim();
@@ -49,6 +61,8 @@ function parseLine(line) {
   const details = parts[10] ? parts[10].trim() : '';
   const status = parts[11] ? parts[11].trim() : '';
   const rejectionReason = parts[12] ? parts[12].trim() : '';
+
+  if (isNonExecutedRow(status, rejectionReason)) return null;
 
   const date = parseDayMonthYear(executionDateStr);
   if (!date) return null;

@@ -17,6 +17,11 @@ import { findRecipientClusters } from '../services/recipientClusterService.js';
 import { NotFoundError, ValidationError } from '../middleware/errorHandler.js';
 import { validateIdParam } from '../middleware/validation.js';
 import { parsePagination } from '../lib/pagination.js';
+// The MVs attribute transactions to categories via the recipient's
+// default_category_id (COALESCE(t.category_id, r.default_category_id)), so
+// recipient edits/merges/deletes must schedule a refresh — otherwise the
+// dashboard serves the old grouping until an unrelated transaction mutation.
+import { scheduleRefresh } from '../services/materializedViewService.js';
 
 const router = Router();
 
@@ -84,6 +89,7 @@ router.patch('/:id', validateIdParam, async (req, res) => {
   const id = parseInt(req.params.id, 10);
   const updated = await recipientRepository.update(id, req.body);
   if (!updated) throw new NotFoundError('Recipient not found');
+  scheduleRefresh();
   res.ok({ ...updated, links: [] });
 });
 
@@ -91,6 +97,7 @@ router.delete('/:id', validateIdParam, async (req, res) => {
   const id = parseInt(req.params.id, 10);
   const deleted = await recipientRepository.hardDelete(id);
   if (!deleted) throw new NotFoundError('Recipient not found');
+  scheduleRefresh();
   res.ok({ message: `Recipient ${id} deleted permanently`, links: [] });
 });
 
@@ -135,6 +142,7 @@ router.post('/:id/merge', validateIdParam, async (req, res) => {
     }
   }
 
+  scheduleRefresh();
   res.ok({
     primary: { ...updatedPrimary, links: [] },
     merged_ids: mergedAliasIds,
@@ -149,6 +157,7 @@ router.post('/:id/unmerge', validateIdParam, async (req, res) => {
   const success = await recipientRepository.unmergeRecipient(id);
   if (!success) throw new NotFoundError('Recipient not found');
   const recipient = await recipientRepository.getById(id);
+  scheduleRefresh();
   res.ok({ ...recipient, links: [] });
 });
 

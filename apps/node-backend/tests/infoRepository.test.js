@@ -634,6 +634,37 @@ describe('InfoRepository', () => {
       }
     });
 
+    it('fast-forwards a stale fast-cadence recurring row instead of dropping it (120-hop cap)', async () => {
+      convertRowsToEur.mockImplementation(async (rows) => rows.map((row) => ({
+        ...row,
+        amount_eur: Number(row.amount ?? 0),
+      })));
+
+      vi.useFakeTimers();
+      vi.setSystemTime(new Date('2026-06-15T12:00:00Z'));
+      try {
+        // Daily row last advanced >120 days before the July window: the flat
+        // 120-hop walk exhausted MAX_OCCURRENCES around mid-May and the row
+        // silently vanished from the forecast. The fast-forward jump must
+        // land it back in the window with every July day present.
+        query.mockResolvedValueOnce({
+          rows: [
+            { id: 1, planned_date: '2025-11-01', amount: '-5', currency: 'EUR', recipient_name: 'Coffee', category_name: null, is_recurring: true, recurrence_pattern: 'daily' },
+          ],
+        });
+
+        const result = await infoRepository.getPlannedExpensesNextMonth('EUR');
+        // Every day of July 2026 = 31 occurrences.
+        expect(result.summary.transaction_count).toBe(31);
+        expect(result.summary.total_expenses).toBe(-155);
+        const dates = result.daily_data.map((d) => d.date).sort();
+        expect(dates[0]).toBe('2026-07-01');
+        expect(dates[dates.length - 1]).toBe('2026-07-31');
+      } finally {
+        vi.useRealTimers();
+      }
+    });
+
     it('should compute average-vs-current spending projections on calendar-day denominators', async () => {
       convertRowsToEur.mockImplementation(async (rows) => rows.map((row) => ({
         ...row,

@@ -19,7 +19,7 @@
 import fs from 'fs';
 import { normalizeToUppercase } from '../../textNormalization.js';
 import { logger } from '../../../config/logger.js';
-import { parseDayMonthYear, parseCommaDecimal, buildOptionalComment, splitCsvLines, canonicalIban } from './_shared.js';
+import { parseDayMonthYear, parseCommaDecimal, buildOptionalComment, splitCsvLines, splitDelimitedRecord, canonicalIban } from './_shared.js';
 
 const NAME = 'ing';
 const BANK_LABEL = 'ING';
@@ -30,8 +30,8 @@ function isHeaderLine(line) {
 }
 
 function parseLine(line) {
-  const parts = line.split(';');
-  if (parts.length < MIN_FIELDS) return null;
+  const parts = splitDelimitedRecord(line);
+  if (!parts || parts.length < MIN_FIELDS) return null;
 
   const accountNumber = parts[0].trim();
   const counterpartyAccount = parts[2].trim();

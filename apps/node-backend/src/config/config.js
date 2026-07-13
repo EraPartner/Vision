@@ -76,6 +76,7 @@ const settings = deepFreeze({
   admin: {
     enableResetDb: env.ENABLE_RESET_DB,
     authToken: env.ADMIN_AUTH_TOKEN,
+    allowTokenlessNonLoopback: env.ADMIN_ALLOW_TOKENLESS_NONLOOPBACK,
   },
 
   security: {

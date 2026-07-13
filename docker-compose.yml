@@ -17,6 +17,9 @@ services:
       # Password is read from POSTGRES_PASSWORD in .env (see .env.example)
     volumes:
       - postgres_data:/var/lib/postgresql
+      # First-init-only scripts: creates the optional least-privilege ftm_app
+      # role when POSTGRES_APP_PASSWORD is set in .env (see .env.example).
+      - ./docker/postgres-init:/docker-entrypoint-initdb.d:ro
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U ftm_user -d financial_transactions"]
       # Tightened from interval:5s/retries:12 → 3s/10 so the app container
@@ -64,6 +67,10 @@ services:
     environment:
       # DATABASE_URL is built in .env so the password is never hard-coded here
       SERVER_HOST: "0.0.0.0"
+      # The container binds 0.0.0.0 but the port is published on host loopback
+      # only (see ports: above) — acknowledge that so a tokenless start is not
+      # refused. Remove this (and set ADMIN_AUTH_TOKEN) if you widen ports:.
+      ADMIN_ALLOW_TOKENLESS_NONLOOPBACK: "true"
       CORS_ORIGINS: "http://localhost:${PORT:-3002}"
       # Database connection for Alembic migrations
       DB_HOST: db

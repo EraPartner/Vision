@@ -27,6 +27,7 @@ vi.mock('../../src/repositories/investmentRepository.js', () => ({
     create: vi.fn(),
     update: vi.fn(),
     updatePrice: vi.fn(),
+    updatePricesBulk: vi.fn(),
     hardDelete: vi.fn(),
   },
 }));
@@ -270,7 +271,8 @@ describe('Investment Routes', () => {
         { id: 1, price_provider: 'binance', price_provider_id: 'BTCUSDT' },
       ]);
       fetchLivePricesDetailed.mockResolvedValue({ 1: { price: 50000, source: 'live' } });
-      investmentRepository.updatePrice.mockResolvedValue({});
+      // Faithful stand-in for the real bulk update: one statement, N rows.
+      investmentRepository.updatePricesBulk.mockImplementation(async (updates) => updates.length);
 
       const req = { body: {} };
       const res = mockResponse();
@@ -279,7 +281,10 @@ describe('Investment Routes', () => {
       const data = res.json.mock.calls[0][0].data;
       expect(data.updated).toBe(1);
       expect(data.priceSources).toEqual({ 1: 'live' });
-      expect(investmentRepository.updatePrice).toHaveBeenCalledTimes(1);
+      expect(investmentRepository.updatePricesBulk).toHaveBeenCalledTimes(1);
+      expect(investmentRepository.updatePricesBulk).toHaveBeenCalledWith([
+        expect.objectContaining({ id: 1, current_price: 50000 }),
+      ]);
     });
 
     it('should include cached source and skip DB update for cached fallback', async () => {
@@ -287,6 +292,7 @@ describe('Investment Routes', () => {
         { id: 1, current_price: 123.45, price_provider: 'yahoo', price_provider_id: 'AAPL' },
       ]);
       fetchLivePricesDetailed.mockResolvedValue({ 1: { price: 123.45, source: 'cached' } });
+      investmentRepository.updatePricesBulk.mockImplementation(async (updates) => updates.length);
 
       const req = { body: {} };
       const res = mockResponse();
@@ -296,7 +302,8 @@ describe('Investment Routes', () => {
       expect(data.updated).toBe(0);
       expect(data.prices).toEqual({ 1: 123.45 });
       expect(data.priceSources).toEqual({ 1: 'cached' });
-      expect(investmentRepository.updatePrice).not.toHaveBeenCalled();
+      // Cached fallback rows must not reach the DB write.
+      expect(investmentRepository.updatePricesBulk).toHaveBeenCalledWith([]);
     });
 
     it('should refresh yahoo investments when only symbol is configured', async () => {
@@ -304,7 +311,7 @@ describe('Investment Routes', () => {
         { id: 1, symbol: 'AAPL', price_provider: 'yahoo', price_provider_id: null },
       ]);
       fetchLivePricesDetailed.mockResolvedValue({ 1: { price: 188.4, source: 'live' } });
-      investmentRepository.updatePrice.mockResolvedValue({});
+      investmentRepository.updatePricesBulk.mockImplementation(async (updates) => updates.length);
 
       const req = { body: {} };
       const res = mockResponse();
@@ -313,7 +320,7 @@ describe('Investment Routes', () => {
       const data = res.json.mock.calls[0][0].data;
       expect(data.total).toBe(1);
       expect(data.updated).toBe(1);
-      expect(investmentRepository.updatePrice).toHaveBeenCalledTimes(1);
+      expect(investmentRepository.updatePricesBulk).toHaveBeenCalledTimes(1);
     });
 
     it('should refresh kinesis investments when configured by mapped asset name', async () => {
@@ -321,7 +328,7 @@ describe('Investment Routes', () => {
         { id: 1, name: 'kaufen_gold', price_provider: 'kinesis', price_provider_id: null },
       ]);
       fetchLivePricesDetailed.mockResolvedValue({ 1: { price: 101.25, source: 'live' } });
-      investmentRepository.updatePrice.mockResolvedValue({});
+      investmentRepository.updatePricesBulk.mockImplementation(async (updates) => updates.length);
 
       const req = { body: {} };
       const res = mockResponse();
@@ -332,7 +339,7 @@ describe('Investment Routes', () => {
       expect(data.updated).toBe(1);
       expect(data.prices).toEqual({ 1: 101.25 });
       expect(data.priceSources).toEqual({ 1: 'live' });
-      expect(investmentRepository.updatePrice).toHaveBeenCalledTimes(1);
+      expect(investmentRepository.updatePricesBulk).toHaveBeenCalledTimes(1);
     });
 
     it('should return 0 updated when no providers configured', async () => {

@@ -16,7 +16,12 @@ if os.path.exists(env_local_path):
 # Get database URL from environment variable. No credentialed fallback: shipping
 # a default password ("ftm_password") invites standing a DB up on it. Fail fast
 # instead so the operator must supply DATABASE_URL (compose/.env.local do).
-database_url = os.getenv("DATABASE_URL")
+#
+# DATABASE_URL_MIGRATIONS takes precedence when set: in the least-privilege
+# setup (docker/postgres-init/01-app-role.sh) the runtime pool's DATABASE_URL
+# points at the non-superuser ftm_app role, while migrations keep the
+# privileged ftm_user role for DDL.
+database_url = os.getenv("DATABASE_URL_MIGRATIONS") or os.getenv("DATABASE_URL")
 if not database_url:
     raise SystemExit(
         "DATABASE_URL is not set. Set it in the environment or config/.env.local "

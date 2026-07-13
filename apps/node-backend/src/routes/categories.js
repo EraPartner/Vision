@@ -7,6 +7,11 @@ import categoryRepository from '../services/categoryService.js';
 import { NotFoundError, ValidationError } from '../middleware/errorHandler.js';
 import { validateIdParam } from '../middleware/validation.js';
 import { parsePagination } from '../lib/pagination.js';
+// mv_monthly_summary / mv_category_totals embed the category name and the
+// recipient default-category mapping, so category mutations must schedule a
+// refresh — otherwise renamed/reassigned categories serve stale until an
+// unrelated transaction mutation happens to refresh the views.
+import { scheduleRefresh } from '../services/materializedViewService.js';
 
 const router = Router();
 
@@ -59,6 +64,7 @@ router.post('/assign', async (req, res) => {
     detail: category_detail,
   });
   const updated = await categoryRepository.assignToRecipients(category.id, ids);
+  scheduleRefresh();
   res.ok({ updated_recipients: updated, links: [] });
 });
 
@@ -72,6 +78,7 @@ router.patch('/:id', validateIdParam, async (req, res) => {
   const id = parseInt(req.params.id, 10);
   const updated = await categoryRepository.update(id, req.body);
   if (!updated) throw new NotFoundError(`Category ${id} not found`);
+  scheduleRefresh();
   res.ok({ ...updated, links: [] });
 });
 
@@ -79,6 +86,7 @@ router.delete('/:id', validateIdParam, async (req, res) => {
   const id = parseInt(req.params.id, 10);
   const deleted = await categoryRepository.hardDelete(id);
   if (!deleted) throw new NotFoundError(`Category ${id} not found`);
+  scheduleRefresh();
   res.ok({ message: `Category ${id} deleted permanently`, links: [] });
 });
 
@@ -89,6 +97,7 @@ router.post('/:id/assign', validateIdParam, async (req, res) => {
   if (!Array.isArray(recipient_ids)) recipient_ids = [recipient_ids];
 
   const updated = await categoryRepository.assignToRecipients(categoryId, recipient_ids);
+  scheduleRefresh();
   res.ok({ updated_recipients: updated, links: [] });
 });
 

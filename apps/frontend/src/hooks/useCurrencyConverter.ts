@@ -16,10 +16,18 @@ import { EXCHANGE_RATES_QUERY_KEY } from '@/hooks/useExchangeRates';
 export const EXCHANGE_RATES_QUERY_KEY_PREFIX = EXCHANGE_RATES_QUERY_KEY;
 
 export function useCurrencyConverter(targetCurrency: string) {
+  // The endpoint's response does not depend on targetCurrency (conversion
+  // happens client-side from the rate map), so the key must not include it —
+  // keying per display currency cached a duplicate copy of the identical
+  // payload for every currency in view. One flat key shares a single cache
+  // entry with useExchangeRates and ExchangeRatesPage; staleTime/gcTime match
+  // useExchangeRates (the backend scheduler owns refreshes, and the manual
+  // refresh invalidates this namespace).
   const { data: exchangeData, isLoading, error } = useQuery({
-    queryKey: [EXCHANGE_RATES_QUERY_KEY_PREFIX, targetCurrency],
+    queryKey: [EXCHANGE_RATES_QUERY_KEY_PREFIX],
     queryFn: () => apiClient.getExchangeRates({ dbOnly: true }),
-    staleTime: 60_000,
+    staleTime: 10 * 60_000,
+    gcTime: 30 * 60_000,
   });
 
   // Fallback rates are hardcoded constants that only fill gaps the live DB

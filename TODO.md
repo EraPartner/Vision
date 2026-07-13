@@ -60,20 +60,20 @@ look-changing one.
   - These map to `ValidationError` (4xx), and `errorHandler.js` always shows 4xx text verbatim on the assumption "4xx messages are authored by us" — but here the message is raw driver text, contradicting `docs/security/data-protection.md`'s stated policy of suppressing DB error details, and handing schema/column feedback to anyone probing the injection above.
   - Fix: replace `err.message` with a generic "invalid query" string for these codes (or gate behind `!isProduction()`).
 
-- [ ] **Backend DB role is the Postgres bootstrap superuser — no least-privilege application role** 🔼 🔎 verified-present 2026-07-11
+- [ ] **Backend DB role is the Postgres bootstrap superuser — no least-privilege application role** 🔼 🔎 partial-5938da7 2026-07-13 (the least-privilege mechanism now exists and is documented: docker/postgres-init/01-app-role.sh creates a non-superuser `ftm_app` role on first init when POSTGRES_APP_PASSWORD is set, alembic env.py honours DATABASE_URL_MIGRATIONS for privileged DDL, .env.example documents the three-variable setup, compose mounts the init dir. LEFT: the desktop app's generated .env and existing installs still run single-role — flipping the default needs a runtime role-bootstrap for already-initialised DBs plus the electron .env writer, deliberately not attempted here)
   - ↪ _from: Codebase audit 2026-06-30 · Security (backend)_
   - `docker-compose.yml:7` (`POSTGRES_USER: ftm_user`), `.env.example:19-20`
   - The runtime connection pool (including the dbEditor path above) runs as the same superuser the official Postgres image bootstraps. Any successful injection or compromised dependency has instance-level reach.
   - Fix: create a non-superuser application role scoped to the app schema; keep DDL/migrations on a separate, more-privileged role used only by Alembic.
 
-- [ ] **Admin auth is optional by default, with only a startup log line as the safety net** 🔼 🔎 partial-#82 2026-07-11 (8555ede fixed the misleading warning copy; non-loopback hard-fail still missing) *(same root cause as DevOps finding below — fix once)*
+- [x] **Admin auth is optional by default, with only a startup log line as the safety net** 🔼 ✅ 2026-07-13 · 5938da7 (non-loopback hard-fail landed: startup now refuses (`process.exit(1)`) when the bind address isn't loopback and no ADMIN_AUTH_TOKEN is set, unless ADMIN_ALLOW_TOKENLESS_NONLOOPBACK explicitly acknowledges an outer restriction — set by docker-compose.yml, where the container binds 0.0.0.0 but the port is published on host loopback only; new `isLoopbackHost` covers localhost/127.0.0.0-8/::1/IPv4-mapped, with unit tests. Warning copy was already fixed by 8555ede in #82)
   - ↪ _from: Codebase audit 2026-06-30 · Security (backend)_
   - `apps/node-backend/src/middleware/adminAuth.js:36-51`, warning at `main.js:411-414`
   - When `ADMIN_AUTH_TOKEN` is unset, `/api/admin/*` (including destructive routes) has no per-request check; the only safeguard is "the operator kept the port on loopback," signaled by a log line a self-hosted user is unlikely to read.
   - Fix: hard-fail (or visibly banner in the Electron UI) if a non-loopback bind address is detected with no token configured, rather than log-only.
   - Verification (2026-06-30): re-confirmed exactly. **Bonus finding: the startup warning text itself overstates protection — it claims "the CSRF guard blocks cross-site browser requests," which is true only for state-changing methods, not for the GET-based SQLi oracle above. Fix the warning copy alongside the real fix.**
 
-- [ ] **Hardcoded weak default DB credential fallback in source** 🔽 🔎 verified-present 2026-07-11
+- [x] **Hardcoded weak default DB credential fallback in source** 🔽 ✅ 2026-07-13 · 0b9d64b (env.js fails closed when DATABASE_URL is unset outside development/test; loud logger.warn when the dev fallback is in effect; policy pinned by new config tests)
   - ↪ _from: Codebase audit 2026-06-30 · Security (backend)_
   - `apps/node-backend/src/config/env.js:60` — default `DATABASE_URL` is `postgresql://ftm_user:ftm_password@localhost:5432/financial_transactions`
   - If `DATABASE_URL` is ever unset outside the documented Docker flow, the backend silently connects with a guessable password instead of failing closed.
@@ -259,7 +259,7 @@ look-changing one.
   - Belgian bank exports are frequently ANSI: `é` (0xE9) → U+FFFD → `"CAF� REN�"` recipients → wrong/duplicate recipients, degraded pg_trgm matching, and dedup-hash drift vs a correctly-decoded re-import of the same rows.
   - Fix: decode buffer, detect invalid-UTF-8/replacement chars, fall back to `latin1` (or expose encoding option). *(Code-level risk confirmed; live bank CSV samples not inspected — verify with a real export.)*
 
-- [ ] **Naive `split(';')` in Belfius/KBC/ING/BNP — quoted fields containing `;` shift all columns** 🔼 🔎 verified-present 2026-07-11
+- [x] **Naive `split(';')` in Belfius/KBC/ING/BNP — quoted fields containing `;` shift all columns** 🔼 ✅ 2026-07-13 · 0b9d64b (shared `splitDelimitedRecord` in _shared.js delegates to csv-parse with `delimiter: ';'`, `relax_quotes`; all four adapters converted; regression tests for BNP/ING/KBC quoted-`;` fields + helper unit tests)
   - ↪ _from: Correctness research 2026-07-02 · Wave 1a_
   - `belfius.js:44`, `kbc.js:27`, `ing.js:33`, `bnp.js:37` (Revolut/Wise/SABB/Vision correctly use `csv-parse`)
   - A quoted free-communication field like `"Factuur 123; klant 456"` shifts every later column → date/amount misread → row silently skipped, or worse a shifted numeric field parses as the amount. Quoted fields also keep literal `"` in recipient names, splitting recipient identity.
@@ -276,7 +276,7 @@ look-changing one.
   - `adapters/revolut.js:19-24,74` — `bankAccount` = `REVOLUT <PRODUCT>` only, but the export has a Currency column (revolut.js:44); EUR+USD rows book to one account, mixing currencies in one balance series. Wise already does `WISE <CURRENCY>` (wise.js:87).
   - Fix: ~~include currency in the label (`REVOLUT CURRENT EUR`) + ADR-088 merge note for existing data.~~ **Superseded by decision D2 (2026-07-10, ADR-089 addendum — Accounts rewrite Phase C): do NOT split per currency; keep one REVOLUT account with `multi_currency_cash=true`, rows keep their currency, balances become per-(account, currency) series.** The *finding* (currencies collapsed into one balance series) stands until Phase C lands.
 
-- [ ] **BNP imports rejected transactions; SABB imports non-completed rows** 🔼 🔎 verified-present 2026-07-11
+- [x] **BNP imports rejected transactions; SABB imports non-completed rows** 🔼 ✅ 2026-07-13 · 0b9d64b (BNP: skip on non-empty rejection reason or NL/FR/EN rejected/cancelled status stems; SABB: skip pending/declined/rejected/reversed/failed/cancelled. Denylist on purpose — status vocabulary still unconfirmed against a real export, so unknown statuses keep the row rather than risk dropping settled transactions)
   - ↪ _from: Correctness research 2026-07-02 · Wave 1a_
   - `bnp.js:51,66-68` (parses `Status` + `Reden van weigering` but only stores them in the comment), `sabb.js:39,44` (same for `Status`)
   - A **rejected** direct debit (money never moved) imports as a real expense, corrupting balances and spend totals. Revolut (revolut.js:48) and Wise (wise.js:41) correctly skip non-COMPLETED rows.
@@ -360,7 +360,7 @@ look-changing one.
   - `services/transferReconciliationService.js:96-111` — candidates loaded outside the write transaction; if `inId` gets marked concurrently, `r1` succeeds but `r2.rowCount=0` and the code only skips the counter — it never reverts `r1` → `outId` points at a peer that points elsewhere; same non-reciprocity gap means it's never self-healed.
   - Fix: revert the successful UPDATE when `r1.rowCount !== r2.rowCount`; the reciprocity fix above also makes this self-healing.
 
-- [ ] **Monthly-summary MV fast path includes future-dated months; the live path structurally cannot — dashboard month set changes with code path** 🔼 🔎 verified-present 2026-07-11
+- [x] **Monthly-summary MV fast path includes future-dated months; the live path structurally cannot — dashboard month set changes with code path** 🔼 ✅ 2026-07-13 · 0b9d64b (`AND month_start <= date_trunc('month', CURRENT_DATE)` added to the MV-path WHERE, matching the live path's generate_series bound)
   - ↪ _from: Correctness research 2026-07-02 · Wave 2b · Materialized views / aggregations_
   - `repositories/infoRepo.monthly.js:49` (lower bound only) vs `:150-155,188-189` (live path ends at current month); MV definition `services/materializedViewService.js:46` has no upper bound
   - A post-dated transaction makes the dashboard show an extra future month on the MV path; the month set flips when exclusions/`includeTransfers` toggle the code path — the exact divergence the zero-fill block (:89-106) exists to prevent.
@@ -371,7 +371,7 @@ look-changing one.
   - `repositories/infoRepo.statistics.js:29` (`LIMIT 10000`), `:38` (`LIMIT 5000`) — no ORDER BY; past 10k transactions in 6 months, averages come from whichever rows the planner returns first — silently wrong, non-deterministic across plans.
   - Fix: aggregate in SQL (SUM/COUNT grouped by date/currency, like infoRepo.monthly's `daily` CTE), drop the LIMITs.
 
-- [ ] **Category/recipient mutations never trigger an MV refresh — stale labels/groupings served indefinitely** 🔼 🔎 verified-present 2026-07-11
+- [x] **Category/recipient mutations never trigger an MV refresh — stale labels/groupings served indefinitely** 🔼 ✅ 2026-07-13 · 0b9d64b (`scheduleRefresh()` now called from category PATCH/DELETE/assign (both routes) and recipient PATCH/DELETE/merge/unmerge)
   - ↪ _from: Correctness research 2026-07-02 · Wave 2b · Materialized views / aggregations_
   - Grep-verified `scheduleRefresh`/`refreshAggregations` callers: maintenance, importRoutes, dbEditor, transferReconciliation, importPipeline — `routes/categories.js` and `routes/recipients.js` absent. `mv_monthly_summary`/`mv_category_totals` embed `c.general || ':' || c.detail` and `r.default_category_id` (materializedViewService.js:41-44,64-71)
   - Renaming a category / changing a recipient default serves the old name until an unrelated transaction mutation refreshes.
@@ -427,13 +427,13 @@ look-changing one.
   - `categoryName.split(':')` then uses only `parts[1]` — a category like `general="TRAVEL", detail="FLIGHT: BOOKING.COM"` renders as just "Flight". `CategoryPivotTable.tsx:112-116` already handles this correctly via `split(":")` + rejoin.
   - Fix: apply the same join-back pattern (`const [general, ...rest] = name.split(":"); rest.join(":")`) at both call sites.
 
-- [ ] **Stale fast-cadence recurring planned transactions silently vanish from next-month forecast** 🔼 🔎 verified-present 2026-07-11
+- [x] **Stale fast-cadence recurring planned transactions silently vanish from next-month forecast** 🔼 ✅ 2026-07-13 · 5938da7 (day-stepped patterns — daily/weekly/biweekly/every-N-days — fast-forward to one step before the window via whole-step ms arithmetic, exactly equivalent to N sequential calculateNextDate hops; month-based patterns keep the plain walk on purpose since 120 monthly hops = 10 years and bulk month jumps would change sequential month-end clamping; regression test: daily row 8 months stale expands into all 31 July occurrences)
   - ↪ _from: Codebase audit 2026-06-30 · Correctness — Backend · Planned / recurring transactions_
   - `apps/node-backend/src/repositories/infoRepositoryPlanned.js:15` (`MAX_OCCURRENCES = 120`), `:22-36` (`expandRecurringOccurrences`)
   - The function walks forward from the row's stored `planned_date` (not "today") up to 120 hops to find occurrences inside next month's window. A daily-cadence row that hasn't been executed/advanced in >120 days exhausts the cap before reaching next month and returns `[]` — silently disappearing from the forecast, no error or log.
   - Fix: fast-forward `current` directly to the first occurrence ≥ `startYmd` via interval math instead of a flat linear walk.
 
-- [ ] **Planned-transaction name resolution silently drops unmatched category/recipient instead of erroring, unlike live transactions** 🔼 🔎 verified-present 2026-07-11
+- [x] **Planned-transaction name resolution silently drops unmatched category/recipient instead of erroring, unlike live transactions** 🔼 ✅ 2026-07-13 · 0b9d64b (planned route now delegates to the shared service resolvers, which throw ValidationError on an unmatched name — same behavior as the live-transaction route; recipient matching also upgraded from `UPPER(name)` to `normalized_name`)
   - ↪ _from: Codebase audit 2026-06-30 · Correctness — Backend · Planned / recurring transactions_
   - `apps/node-backend/src/routes/plannedTransactions.js:38-75`
   - `resolveRecipientIdFromName`/`resolveCategoryIdFromName` just delete the field on no match; the equivalent live-transaction logic in `transactions.js` correctly throws `ValidationError` on the same condition. A typo'd `category_name` saves successfully with no category and no indication anything was wrong.
@@ -445,13 +445,13 @@ look-changing one.
   - Transactions are bucketed solely by `recipient_id`; amounts go through `.abs()` before averaging, with no sign/category partitioning. A recipient who both pays and is paid by the user gets both directions merged into one averaged "pattern" that matches neither real flow.
   - Fix: partition each recipient's transactions by sign (or category) before interval/amount detection.
 
-- [ ] **Route/service boundary (ADR-067) is bypassed via direct DB access in several route files, undetected by the lint gate meant to prevent exactly this** 🔼 🔎 verified-present 2026-07-11 🔧 *(citation path corrected)*
+- [ ] **Route/service boundary (ADR-067) is bypassed via direct DB access in several route files, undetected by the lint gate meant to prevent exactly this** 🔼 🔎 partial-0b9d64b 2026-07-13 (the shared name-resolver extraction removed `plannedTransactions.js`'s only `database/connection.js` import; `transactions.js` and `attachments.js` still import it directly, and the lint rule still doesn't flag connection.js imports under routes/**)
   - ↪ _from: Codebase audit 2026-06-30 · Correctness — Backend · Architecture / route-service boundary / dead code (backend)_
   - `routes/transactions.js:8,171-203,318-485`, `routes/plannedTransactions.js:8,45-75`, `routes/attachments.js:22,61` import `query`/`withTransaction` straight from `database/connection.js` and run raw SQL in route handlers. The custom ESLint rule `no-repo-direct-from-route` only blocks `/repositories/` imports, not `database/connection.js` — this larger bypass passes lint clean (verified directly by running `npx eslint` on all three files: exit 0, zero warnings).
   - Fix: move these queries into `transactionService`/`plannedTransactionService`; extend the lint rule to also flag `database/connection.js` imports under `routes/**`.
   - Verification (2026-06-30): corrected citation — the rule lives at **`apps/node-backend/eslint.config.js`** (not a bare `eslint.config.js` at repo root, which doesn't exist), and the actual matching predicate is at **line 43**, not lines 18-32 (which is the rule's JSDoc/meta block).
 
-- [ ] **Duplicated recipient/category-name-resolution logic between `transactions.js` and `plannedTransactions.js` routes has already diverged in error behavior** 🔼 🔎 verified-present 2026-07-11
+- [x] **Duplicated recipient/category-name-resolution logic between `transactions.js` and `plannedTransactions.js` routes has already diverged in error behavior** 🔼 ✅ 2026-07-13 · 0b9d64b (`resolveRecipientIdByName` extracted into recipientService.js, `resolveCategoryIdByName` into categoryService.js; both routes call the shared resolvers; the raw-SQL copies are deleted — plannedTransactions.js no longer imports `database/connection.js` at all)
   - ↪ _from: Codebase audit 2026-06-30 · Correctness — Backend · Architecture / route-service boundary / dead code (backend)_
   - `routes/transactions.js:168-205` vs. `routes/plannedTransactions.js:38-75`
   - Near-identical raw SQL copy-pasted across two files; one throws `ValidationError` on no-match, the other silently no-ops (see the planned-transactions finding above — same fix resolves both).
@@ -579,29 +579,29 @@ look-changing one.
   - `routes/attachments.js:66-74` — existence check at :61 races a concurrent hard delete; FK failure on insert leaves the file on disk with no row, no cleanup.
   - Fix: try/catch around the insert, `removeAttachmentFile(storedPath)` on failure.
 
-- [ ] **`backup:save-settings` IPC skips the sender check and destination validation** 🔽 🔎 verified-present 2026-07-11
+- [x] **`backup:save-settings` IPC skips the sender check and destination validation** 🔽 ✅ 2026-07-13 · 5938da7 (sender check added to backup:save-settings AND backup:run; new shared `validateBackupDest` checks the dir against BLOCKED_BACKUP_PREFIXES at save time so the quit-time backup can't be repointed; prefix list corrected — nonexistent `/Library/System` replaced with `/Library`, which doesn't match per-user `/Users/*/Library` backup dirs)
   - ↪ _from: Correctness research 2026-07-02 · Wave 2c · Electron shell (`packaging/electron/main.js`)_
   - `main.js:2724-2736` vs prefix list at `:2581-2584` — no `event.sender === mainWindow.webContents` check (unlike `backup:restore`), dir not checked against `BLOCKED_BACKUP_PREFIXES` (which itself lists nonexistent `/Library/System` but not `/Library`); quit-time backup (:3461) then writes wherever it points.
   - Fix: same sender check + prefix validation as `backup:run`; correct the prefix list.
 
-- [ ] **`compareVersions` compares pre-release tags as plain strings** 🔽 🔎 verified-present 2026-07-11
+- [x] **`compareVersions` compares pre-release tags as plain strings** 🔽 ✅ 2026-07-13 · 0b9d64b (new `comparePreRelease` implements semver §11: dot-split identifiers, numeric compared numerically, numeric < alphanumeric, fewer identifiers = lower; hand-verified against 10 precedence cases incl. rc.2 < rc.10)
   - ↪ _from: Correctness research 2026-07-02 · Wave 2c · Electron shell (`packaging/electron/main.js`)_
   - `main.js:1599` — `"rc.10" < "rc.2"` lexicographically → update prompts mis-order prereleases. Fix: semver §11 numeric-identifier comparison.
 
-- [ ] **Stale `pendingShellUpdate` installed without revalidation — can quit with no update and no error** 🔽 🔎 verified-present 2026-07-11
+- [x] **Stale `pendingShellUpdate` installed without revalidation — can quit with no update and no error** 🔽 ✅ 2026-07-13 · 5938da7 (`installPreparedShellUpdate` now checks `existsSync(installerPath)` and best-effort rechecks the latest release before setting `isQuitting`; a purged bundle or a newer release clears the pending update and returns an actionable error instead of quitting silently; offline recheck failures still install the verified-present bundle)
   - ↪ _from: Correctness research 2026-07-02 · Wave 2c · Electron shell (`packaging/electron/main.js`)_
   - `main.js:1928-1934` — reuses a bundle prepared arbitrarily long ago; if the OS purged the temp dir, `spawn('open', …)` fails silently *after* `isQuitting = true; app.quit()`. Fix: `existsSync(installerPath)` + re-check latest version before quitting.
 
-- [ ] **Restore schema-guard compares alembic revision ids lexicographically** 🔽 🔎 partial 2026-07-11 (lexicographic compare fixed via isSchemaRevisionNewer numeric-prefix parse; getSchemaHead LIMIT 1 arbitrary-row under multi-head + empty-currentHead-skips-guard remain)
+- [x] **Restore schema-guard compares alembic revision ids lexicographically** 🔽 ✅ 2026-07-13 · 5938da7 (both remaining nuances closed: `getSchemaHead` fetches ALL alembic_version rows and deterministically picks the highest numeric-prefixed revision instead of `LIMIT 1`'s arbitrary row; an empty/unreadable DB head now falls back to the newest revision in the local alembic/versions directory — new `getLocalMigrationChainHead` — instead of skipping the guard, at both the bundle and plain-dump call sites. Lexicographic compare itself was already fixed pre-#84)
   - ↪ _from: Correctness research 2026-07-02 · Wave 2c · Electron shell (`packaging/electron/main.js`)_
   - `main.js:2275` — `metadata.schemaHead > currentHead` only works for zero-padded numeric prefixes; a future hash-style revision silently breaks the "bundle from newer schema" guard both directions. Fix: parse numeric prefix; warn+skip when unparseable.
   - Verification (2026-07-03): two more nuances found on the same guard — `getSchemaHead`'s `LIMIT 1` (`:2115`) picks an arbitrary row under the known multi-head `alembic_version` drift (rather than a deterministic head), and an empty `currentHead` (DB down at guard-check time) skips the guard entirely rather than failing safe.
 
-- [ ] **0062 trigger: blanking `bank_account` on UPDATE leaves a stale `account_id`** 🔽 🔎 verified-present 2026-07-11
+- [x] **0062 trigger: blanking `bank_account` on UPDATE leaves a stale `account_id`** 🔽 ✅ 2026-07-13 · 5938da7 (migration 0076: an UPDATE that changes `bank_account` to blank/NULL now explicitly NULLs `account_id` — the "detach" decision; INSERTs and already-blank UPDATEs untouched so account-first writers keep their supplied `account_id`)
   - ↪ _from: Correctness research 2026-07-02 · Wave 2c · Migrations (only 0061 + 0062 verified this pass)_
   - `alembic/versions/0062_trigger_lookup_only_on_update.py:59-78` — body gated on `acct_name IS NOT NULL AND <> ''`, so an UPDATE clearing `bank_account` keeps the old `account_id`; the row keeps counting toward an account whose label was removed. Fix: decide explicitly (keep or NULL) in the blank-on-UPDATE case.
 
-- [ ] **0062 trigger: account lookup is case-sensitive on INSERT and UPDATE** 🔽 🔎 verified-present 2026-07-11
+- [x] **0062 trigger: account lookup is case-sensitive on INSERT and UPDATE** 🔽 ✅ 2026-07-13 · 5938da7 (migration 0076: both paths resolve via `lower(btrim(name))` with deterministic `ORDER BY id LIMIT 1`; INSERT creates a new account only when no casing variant exists. Deliberately NO case-insensitive unique index — existing DBs may hold legitimate case-duplicates; the oldest match wins)
   - ↪ _from: Correctness research 2026-07-02 · Wave 2c · Migrations (only 0061 + 0062 verified this pass)_
   - `0062…py:64-67,73` — `WHERE name = acct_name` / `ON CONFLICT (name)`: a casing-only difference ("Kbc" vs "KBC") creates a duplicate account on INSERT or silently keeps the old `account_id` on UPDATE. Fix (deliberate decision — changes onboarding semantics): normalize via `lower(btrim(...))` or case-insensitive unique index.
 
@@ -907,7 +907,7 @@ look-changing one.
   - `SETTING_DEFAULTS.app_settings` (`routes/settings.js:146-155`) lacks `costBasisMethod`/`adminMode`/`visualEffects`/`autoAdaptDisplay`/`startupSection`/`colorblindGainLoss`; `dashboard_settings`'s default lacks `exclusionScope`. Harmless today because the frontend merges over its own defaults (`settingsStore.ts:93-133`, `SettingsContext.tsx:53`), but any new non-frontend consumer of the GET default would inherit the gap.
   - Fix: keep `SETTING_DEFAULTS` in sync with the frontend default shapes as new settings keys are added.
 
-- [ ] **Unknown attachment extension bypasses the extension-vs-content-type match** ⬇ 🔎 verified-present 2026-07-11
+- [x] **Unknown attachment extension bypasses the extension-vs-content-type match** ⬇ ✅ 2026-07-13 · 0b9d64b (non-empty unrecognized extension now rejected in `verifyAttachmentContent`; extensionless filenames stay allowed — nothing misleading is stored)
   - ↪ _from: Correctness research 2026-07-02 · Wave 2b (residue, closed 2026-07-03)_
   - `attachmentService.js:52-56`: `extensionMime('.exe')` → `undefined` → the check is skipped. A valid PNG named `x.exe` stores as `uuid.exe`; the served MIME is the sniffed one, so the practical effect is cosmetic (filename extension only), not a content-type confusion.
   - Fix: treat an unrecognized extension as a mismatch (reject or normalize) rather than skipping the check.
@@ -1101,7 +1101,7 @@ look-changing one.
   - Bank-import rollback is one `DELETE ... WHERE import_batch_id = $1`; no migration ever added the equivalent column to the portfolio transaction tables (confirmed: `import_batch_id` exists only on `transactions`, added by `0003_import_batch_id_on_transactions.py` — never on `portfolio_transactions`/`portfolio_transactions_base`, including in the later `0052_portfolio_transactions_account_id.py` which touched the same tables for a different column). Rollback instead calls `hardDelete(id)` once per row.
   - Fix: add an `import_batch_id` column (+ index) to the portfolio transaction tables for a single bulk DELETE; short-term, batch with `WHERE id = ANY($1::int[])` and call `deleteTradeCashLegs` in the same pass (fixes the orphaned-cash-leg correctness bug above too).
 
-- [ ] **`refreshPrices` issues one UPDATE per investment instead of a single batched upsert** 🔼 🔎 verified-present 2026-07-11
+- [x] **`refreshPrices` issues one UPDATE per investment instead of a single batched upsert** 🔼 ✅ 2026-07-13 · 5938da7 (new `investmentRepository.updatePricesBulk` — one `UPDATE … FROM UNNEST($1::int[], $2::numeric[], $3::timestamptz[])`, the priceCache pattern; falls back to the per-row path on the legacy inheritance schema where flat `investments` is a non-updatable view; controller's processInBatches loop deleted)
   - ↪ _from: Codebase audit 2026-06-30 · Performance — Backend_
   - `apps/node-backend/src/controllers/investmentController.js:257-301`
   - Uses bounded concurrency (10) but still N round trips where one `UNNEST`-based batch UPDATE (pattern already used in `priceCache.js:saveHistoricalPointsToDatabase:250-258`) would do it in one statement.
@@ -1143,7 +1143,7 @@ look-changing one.
   - Identical URL with no exclusions; the tab's key sits outside the `['aggregations']` prefix so `useTransactions.invalidateAll` never reaches it (stale until staleTime expiry). `RecipientInsightsPage.tsx:50` shares the tab's key, so that pair dedupes — the page/hook split is the problem.
   - Fix: move the tab/page key under `['aggregations','recipient-insights', currency, catIds, recIds]` and share it.
 
-- [ ] **Exchange-rates endpoint cached under three keys; `useCurrencyConverter` needlessly parameterizes by target currency** 🔼 🔎 verified-present 2026-07-11
+- [x] **Exchange-rates endpoint cached under three keys; `useCurrencyConverter` needlessly parameterizes by target currency** 🔼 ✅ 2026-07-13 · 5938da7 (all three converge on the flat `['exchange-rates']` key with one staleTime (10min) + gcTime (30min): useCurrencyConverter drops targetCurrency from its key, ExchangeRatesPage drops the `{dbOnly:true}` discriminator — the request is always db-only, so it carried no information)
   - ↪ _from: Performance research 2026-07-02 · Frontend — React Query_
   - `apps/frontend/src/hooks/useCurrencyConverter.ts:17-19` (`['exchange-rates', targetCurrency]`, 60s staleTime), `hooks/useExchangeRates.ts:28-33` (`['exchange-rates']`, 10min), `pages/admin/ExchangeRatesPage.tsx:24` (`["exchangeRates", {dbOnly:true}]`)
   - All three issue the same `getExchangeRates({dbOnly:true})`; the response doesn't depend on `targetCurrency` at all, so each distinct display currency fetches and caches a duplicate copy of the identical payload. (The `exchangeRates`-vs-`exchange-rates` *invalidation* mismatch is already filed above — this is the separate duplicate-fetch/cache-fan-out angle.)
@@ -1201,13 +1201,13 @@ look-changing one.
   - `apps/frontend/src/contexts/LanguageContext.tsx:75-84` eagerly imports `en` as fallback regardless of active language; measured `en-*.js` 50.4 KB gz + `nl-*.js` 54.5 KB gz. Locale chunks are otherwise correctly lazy (dynamic import per language, not in the preload graph).
   - Fix: merge en-fallbacks into each generated locale at build time in `scripts/generate-locales.js` (only missing keys need the en value), or fetch the en dict lazily on first lookup miss.
 
-- [ ] **Pool-wide `statement_timeout: 30s` also applies to MV refreshes — past a data-size threshold every refresh silently fails and views go permanently stale** 🔼 🔎 verified-present 2026-07-11
+- [x] **Pool-wide `statement_timeout: 30s` also applies to MV refreshes — past a data-size threshold every refresh silently fails and views go permanently stale** 🔼 ✅ 2026-07-13 · 0b9d64b (refresh statements run via `runMaintenanceStatement`: dedicated pool client, session `SET statement_timeout = 0`, `RESET` before release (destructive release if the reset fails); SET LOCAL was not an option because REFRESH ... CONCURRENTLY can't run in a transaction block. Snapshot/MC-cache queries on the shared pool remain on the 30s timeout — only the MV-refresh exposure is fixed)
   - ↪ _from: Performance research 2026-07-02 · Backend — HTTP / infrastructure_
   - `apps/node-backend/src/database/connection.js:27` + `services/materializedViewService.js:185` (same pool); errors caught and only logged (`:210-211`)
   - `REFRESH MATERIALIZED VIEW CONCURRENTLY` on a large transactions table can exceed 30s; the failure mode is silent staleness with no recovery. Same exposure for snapshot computation and MC-cache queries on the shared pool. Theoretical today, guaranteed later.
   - Fix: run maintenance statements with a per-statement override (`SET LOCAL statement_timeout = 0` in a transaction, or a dedicated client).
 
-- [ ] **Non-hashed files in `dist/` served with `Cache-Control: max-age=1y, immutable` — an explicit `GET /index.html` never sees an app update again** 🔼 🔎 verified-present 2026-07-11
+- [x] **Non-hashed files in `dist/` served with `Cache-Control: max-age=1y, immutable` — an explicit `GET /index.html` never sees an app update again** 🔼 ✅ 2026-07-13 · 0b9d64b (setHeaders now sends `no-cache` for every file outside `dist/assets/` — favicon.ico/robots.txt/placeholder.svg included, generalizing the earlier index.html-only special case)
   - ↪ _from: Performance research 2026-07-02 · Backend — HTTP / infrastructure_
   - `apps/node-backend/src/main.js:349` — `express.static(distPath, { index: false, maxAge: '1y', immutable: true })`; `dist/` root holds non-hashed `index.html`, `favicon.ico`, etc. `index: false` only disables directory-index resolution; the SPA fallback's `no-cache` (`main.js:354`) covers only non-file paths.
   - Fix: `setHeaders` in the static options — `no-cache` for anything not under `/assets/`.

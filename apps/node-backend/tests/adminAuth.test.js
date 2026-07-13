@@ -2,10 +2,32 @@ import { describe, it, expect, vi } from 'vitest';
 import {
   createAdminAuthMiddleware,
   extractAdminBearerToken,
+  isLoopbackHost,
 } from '../src/middleware/adminAuth.js';
 import { UnauthorizedError } from '../src/middleware/errorHandler.js';
 
 const mkReq = (overrides = {}) => ({ headers: {}, socket: {}, ...overrides });
+
+describe('isLoopbackHost', () => {
+  it('accepts localhost and the 127/8 block', () => {
+    expect(isLoopbackHost('localhost')).toBe(true);
+    expect(isLoopbackHost('LOCALHOST')).toBe(true);
+    expect(isLoopbackHost('127.0.0.1')).toBe(true);
+    expect(isLoopbackHost('127.10.20.30')).toBe(true);
+    expect(isLoopbackHost('::1')).toBe(true);
+    expect(isLoopbackHost('[::1]')).toBe(true);
+    expect(isLoopbackHost('::ffff:127.0.0.1')).toBe(true);
+  });
+
+  it('rejects wildcard, LAN, and empty binds', () => {
+    expect(isLoopbackHost('0.0.0.0')).toBe(false);
+    expect(isLoopbackHost('::')).toBe(false);
+    expect(isLoopbackHost('192.168.1.10')).toBe(false);
+    expect(isLoopbackHost('example.com')).toBe(false);
+    expect(isLoopbackHost('')).toBe(false);
+    expect(isLoopbackHost(undefined)).toBe(false);
+  });
+});
 
 describe('extractAdminBearerToken', () => {
   it('parses Bearer header', () => {

@@ -8,7 +8,7 @@
 import express from 'express';
 import fs from 'node:fs';
 import { createGzip } from 'node:zlib';
-import { dirname, resolve } from 'path';
+import { dirname, resolve, sep } from 'path';
 import { fileURLToPath } from 'url';
 import { getSettings } from './config/config.js';
 import { logger } from './config/logger.js';
@@ -19,7 +19,7 @@ import {
   ensureMaterializedViewIndexes,
 } from './services/materializedViewService.js';
 import { createErrorHandler, NotFoundError } from './middleware/errorHandler.js';
-import { createAdminAuthMiddleware } from './middleware/adminAuth.js';
+import { createAdminAuthMiddleware, isLoopbackHost } from './middleware/adminAuth.js';
 import { createCsrfGuard } from './middleware/csrfGuard.js';
 import { closeBrowser as closePuppeteerBrowser } from './services/reports/puppeteerRenderer.js';
 import { wrapResponse } from './middleware/envelope.js';
@@ -355,16 +355,20 @@ buildRouteManifest(app);
 // Must be registered AFTER API routes but BEFORE the 404 handler.
 if (settings.isProduction()) {
   const distPath = resolve(dirname(fileURLToPath(import.meta.url)), '..', '..', '..', 'dist');
-  // Hashed assets (JS/CSS) — long-lived cache. `index: false` only disables
-  // directory-index resolution: a literal GET /index.html is still a real file
-  // in distPath and would otherwise be pinned for a year, serving a stale
-  // shell whose old hashed chunk URLs 404 after an upgrade.
+  // Only Vite's content-hashed bundles live under dist/assets/ — those are
+  // safe to cache for a year. Everything else in dist/ has a stable name
+  // (index.html, favicon.ico, robots.txt, …) and must revalidate, or an
+  // explicit GET for it is pinned for a year and never sees an app update
+  // (stale shells then 404 on their old hashed chunk URLs after an upgrade).
+  // `index: false` only disables directory-index resolution, it does not
+  // exempt those files from the long-lived cache header.
+  const hashedAssetsPrefix = resolve(distPath, 'assets') + sep;
   app.use(express.static(distPath, {
     index: false,
     maxAge: '1y',
     immutable: true,
     setHeaders: (res, filePath) => {
-      if (filePath.endsWith('index.html')) {
+      if (!filePath.startsWith(hashedAssetsPrefix)) {
         res.setHeader('Cache-Control', 'no-cache');
       }
     },
@@ -429,6 +433,22 @@ function bootSummary(extraPhase = 'backend_total') {
 
 async function start() {
   if (!settings.admin.authToken) {
+    // A non-loopback bind with no token means /api/admin/* (including
+    // destructive routes) is reachable by anyone who can reach the port, with
+    // no per-request check. Refuse to start rather than rely on a log line —
+    // unless the operator explicitly acknowledges an outer restriction
+    // (ADMIN_ALLOW_TOKENLESS_NONLOOPBACK, set by the documented compose flow
+    // where the container binds 0.0.0.0 but the port is published on host
+    // loopback only).
+    if (!isLoopbackHost(HOST) && !settings.admin.allowTokenlessNonLoopback) {
+      logger.error(
+        `Refusing to start: bind address '${HOST}' is not loopback and ADMIN_AUTH_TOKEN is not set. ` +
+        'Set ADMIN_AUTH_TOKEN to protect /api/admin/*, bind to 127.0.0.1/localhost, or — only if an ' +
+        'outer layer already restricts access (e.g. Docker publishing the port on host loopback) — ' +
+        'set ADMIN_ALLOW_TOKENLESS_NONLOOPBACK=true.'
+      );
+      process.exit(1);
+    }
     logger.warn(
       'ADMIN_AUTH_TOKEN is not set — admin endpoints have no per-request token check. ' +
       'This is safe only because the port is published on 127.0.0.1 (loopback). The CSRF ' +

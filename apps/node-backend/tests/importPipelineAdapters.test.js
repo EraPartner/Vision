@@ -69,6 +69,31 @@ describe('BNP adapter — parseAmountField edge cases', () => {
     const txns = await parseBnp(writeTempCSV('bnp', csv));
     expect(txns.map((t) => t.amount)).toEqual([42]);
   });
+
+  it('keeps a quoted delimiter inside the message field (no column shift)', async () => {
+    const csv = [
+      HEADER,
+      '1;24/11/2025;24/11/2025;-25,00;EUR;BE81;DOMICILIERING;BE12;ENERGIE NV;"Factuur 123; klant 456";;Uitgevoerd;',
+    ].join('\n');
+    const txns = await parseBnp(writeTempCSV('bnp', csv));
+    expect(txns).toHaveLength(1);
+    expect(txns[0].amount).toBe(-25);
+    expect(txns[0].recipient).toBe('ENERGIE NV');
+    expect(txns[0].comment).toContain('Message: Factuur 123; klant 456');
+  });
+
+  it('skips rejected / non-executed rows (money never moved)', async () => {
+    const csv = [
+      HEADER,
+      '1;24/11/2025;24/11/2025;-99,00;EUR;BE81;DOMICILIERING;BE12;ENERGIE NV;;;Geweigerd;Onvoldoende saldo', // rejected direct debit
+      '2;24/11/2025;24/11/2025;-10,00;EUR;BE81;DOMICILIERING;BE12;ENERGIE NV;;;;Saldo ontoereikend', // rejection reason, no status
+      '3;23/11/2025;23/11/2025;-42,00;EUR;BE81;BANCONTACT;;SHOP NV;;;Uitgevoerd;', // executed → kept
+      '4;22/11/2025;22/11/2025;-7,00;EUR;BE81;BANCONTACT;;SHOP NV;;;;', // no status info → kept
+    ].join('\n');
+    const txns = await parseBnp(writeTempCSV('bnp', csv));
+    expect(txns.map((t) => t.amount)).toEqual([-42, -7]);
+    expect(txns.skipped).toBe(2);
+  });
 });
 
 describe('ING adapter — parseCommaDecimal', () => {
@@ -86,6 +111,18 @@ describe('ING adapter — parseCommaDecimal', () => {
     const txns = await parseIng(writeTempCSV('ing', csv));
     expect(txns.map((t) => t.amount)).toEqual([-67.9, 2500, 0.01, 1234.5]);
     expect(txns).toHaveLength(4);
+  });
+
+  it('keeps a quoted delimiter inside the message field (no column shift)', async () => {
+    const csv = [
+      HEADER,
+      'BE99;ME;BE12;0001;24/11/2025;24/11/2025;-67,90;EUR;BETALING;SHOP;"ref 12; loc 34"',
+    ].join('\n');
+    const txns = await parseIng(writeTempCSV('ing', csv));
+    expect(txns).toHaveLength(1);
+    expect(txns[0].amount).toBe(-67.9);
+    expect(txns[0].recipient).toBe('SHOP');
+    expect(txns[0].comment).toContain('Message: ref 12; loc 34');
   });
 });
 

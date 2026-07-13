@@ -27,6 +27,22 @@ function safeTokenEquals(provided, configured) {
   return timingSafeEqual(a, b);
 }
 
+/**
+ * True when a bind address only accepts local connections. Used by startup to
+ * decide whether running with no ADMIN_AUTH_TOKEN is tolerable: on loopback
+ * the OS restricts who can connect; on any other bind there is no
+ * per-request identity check at all, so startup refuses instead of warning
+ * (unless ADMIN_ALLOW_TOKENLESS_NONLOOPBACK acknowledges an outer layer, e.g.
+ * Docker publishing the container port on host loopback only).
+ */
+export function isLoopbackHost(host) {
+  const h = String(host ?? '').trim().toLowerCase();
+  if (!h) return false;
+  if (h === 'localhost' || h === '::1' || h === '[::1]') return true;
+  // Entire 127.0.0.0/8 block, incl. IPv4-mapped IPv6 (::ffff:127.x.x.x).
+  return /^(::ffff:)?127(\.\d{1,3}){3}$/.test(h);
+}
+
 export function extractAdminBearerToken(authorizationHeader) {
   if (typeof authorizationHeader !== 'string') return undefined;
   const match = authorizationHeader.match(/^Bearer\s+(.+)$/i);

@@ -611,6 +611,54 @@ export const investmentRepository = {
     }
   },
 
+  /**
+   * Batch variant of updatePrice: one UNNEST-driven UPDATE for the whole
+   * refresh instead of N sequential round trips (same pattern as
+   * priceCache.saveHistoricalPointsToDatabase). Falls back to the per-row
+   * path on the legacy inheritance schema, where the flat `investments`
+   * relation is a non-updatable view.
+   *
+   * @param {Array<{id: number, current_price: number, price_updated_at: string}>} updates
+   * @returns {Promise<number>} number of rows updated
+   */
+  async updatePricesBulk(updates) {
+    if (!Array.isArray(updates) || updates.length === 0) return 0;
+
+    const perRowFallback = async () => {
+      let updated = 0;
+      for (const u of updates) {
+        const row = await this.updatePrice(u.id, u);
+        if (row) updated += 1;
+      }
+      return updated;
+    };
+
+    if (await hasInvestmentInheritanceSchema()) {
+      return perRowFallback();
+    }
+
+    try {
+      const result = await query(
+        `UPDATE investments i
+            SET current_price = u.current_price,
+                price_updated_at = u.price_updated_at
+           FROM UNNEST($1::int[], $2::numeric[], $3::timestamptz[])
+                AS u(id, current_price, price_updated_at)
+          WHERE i.id = u.id`,
+        [
+          updates.map((u) => u.id),
+          updates.map((u) => u.current_price),
+          updates.map((u) => u.price_updated_at),
+        ]
+      );
+      return result.rowCount ?? 0;
+    } catch (err) {
+      if (!isNonUpdatableInvestmentsViewError(err)) throw err;
+      _hasInvestmentInheritanceSchema = true;
+      return perRowFallback();
+    }
+  },
+
   async getLatestPriceUpdatedAt() {
     const result = await query(
       `SELECT MAX(price_updated_at) AS latest
