@@ -359,6 +359,30 @@ export default function TaxOverviewPage() {
   // "set up your tax profile" instead of the real error.
   const isEmpty = !isProfileLoading && !stats.isError && !hasProfile && !hasStatsData;
 
+  // Same full-page error pattern as StatisticsPage. This must replace the whole
+  // stats-dependent tree, not render as an extra banner: the widget cards below
+  // also subscribe to useStatistics, and mounting them on an errored query
+  // triggers react-query's retryOnMount refetch, flipping isError back to false
+  // — an infinite empty-state/content flap plus a refetch storm.
+  if (stats.isError) {
+    return (
+      <div className="space-y-6">
+        <PageHeader
+          title={t("tax.page.title")}
+          subtitle={t("tax.page.subtitle")}
+          icon={Landmark}
+        />
+        <Card className="glass-regular">
+          <CardContent className="pt-6">
+            <p className="text-destructive">
+              {t("statsPage.error", { msg: stats.error?.message ?? "" })}
+            </p>
+          </CardContent>
+        </Card>
+      </div>
+    );
+  }
+
   return (
     <TooltipProvider>
       <div className="space-y-6">

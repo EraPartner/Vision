@@ -190,6 +190,23 @@ describe("TaxOverviewPage (integration)", () => {
         consoleSpy.mockRestore();
     });
 
+    it("shows an error banner instead of the setup prompt when the stats fetch fails", async () => {
+        const consoleSpy = vi.spyOn(console, "error").mockImplementation(() => {});
+        server.use(
+            http.get(`${API_BASE}/api/aggregations/monthly-summary`, () =>
+                err(500, "aggregation failed"),
+            ),
+        );
+        renderWithApp(<TaxOverviewPage />);
+        // statsPage.error = "Failed to load statistics: {msg}"
+        expect(
+            await screen.findByText(/failed to load statistics/i, {}, { timeout: 8000 }),
+        ).toBeInTheDocument();
+        // A user without a profile must NOT be told to set one up on a fetch error
+        expect(screen.queryByText(/no tax profile yet/i)).not.toBeInTheDocument();
+        consoleSpy.mockRestore();
+    }, 15000);
+
     // ─── Historical year viewer ────────────────────────────────────────────
 
     it("renders the tax year switcher trigger", async () => {
