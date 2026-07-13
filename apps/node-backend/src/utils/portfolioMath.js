@@ -8,6 +8,7 @@
 
 import { toDecimal, toNumber, roundToCents } from '../lib/money.js';
 import { appDateStringToUtc, toAppDateString } from '../lib/timezone.js';
+import { formatDateToYmd } from '../lib/dateFormat.js';
 import { calculateAccruedInterest as sharedCalculateAccruedInterest } from '@vision/shared-utils/portfolio';
 
 // Cost-basis accounting and interest accrual live in the shared workspace
@@ -95,12 +96,7 @@ export function sanitizeIsolatedValueSpikes(rows, field = 'value', { extraFields
  * @returns {string}
  */
 export function toYmd(value) {
-  if (value instanceof Date) {
-    const y = value.getFullYear();
-    const m = String(value.getMonth() + 1).padStart(2, '0');
-    const d = String(value.getDate()).padStart(2, '0');
-    return `${y}-${m}-${d}`;
-  }
+  if (value instanceof Date) return formatDateToYmd(value);
   return String(value).slice(0, 10);
 }
 

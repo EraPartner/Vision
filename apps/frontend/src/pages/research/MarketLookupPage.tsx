@@ -2,6 +2,7 @@ import { useState, useCallback, useMemo } from "react";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { useAppSettings } from "@/contexts/AppSettingsContext";
 import { numberFormatToLocale } from "@/utils/currency";
+import { formatCompactNumber } from "@/utils/formatCompactNumber";
 import {
   formatDateTimeWithAppSettings,
   formatDateWithAppSettings,
@@ -141,13 +142,11 @@ export default function MarketLookupPage() {
       maximumFractionDigits: 2,
     }).format(val);
   }, [locale]);
-  const fmtLargeNum = useCallback((val: number | null | undefined) => {
-    if (val == null || isNaN(val)) return "—";
-    if (val >= 1e12) return `${(val / 1e12).toFixed(2)}T`;
-    if (val >= 1e9) return `${(val / 1e9).toFixed(2)}B`;
-    if (val >= 1e6) return `${(val / 1e6).toFixed(2)}M`;
-    return fmtNum(val, { maximumFractionDigits: 0 });
-  }, [fmtNum]);
+  const fmtLargeNum = useCallback(
+    (val: number | null | undefined) =>
+      formatCompactNumber(val, (v) => fmtNum(v, { maximumFractionDigits: 0 })),
+    [fmtNum],
+  );
   const [searchText, setSearchText] = useState("");
   const [selectedSymbol, setSelectedSymbol] = useState<string | null>(null);
   const [watchlistOpen, setWatchlistOpen] = useState(false);

@@ -11,6 +11,7 @@ import { MultiYearTrendStrip } from "@/components/tax/MultiYearTrendStrip";
 import { YearComparisonCard } from "@/components/tax/YearComparisonCard";
 import { resolveHistoricalBannerMode } from "@/components/tax/historicalBannerMode";
 import { useCurrencyConverter } from "@/hooks/useCurrencyConverter";
+import { useCurrencyFormatter } from "@/hooks/useCurrencyFormatter";
 import { numberFormatToLocale } from "@/utils/currency";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -87,14 +88,7 @@ export default function TaxOverviewPage() {
   const { isVisible, setWidgetVisible, setAllVisible, resetToDefaults, widgets: widgetDefs } =
     useWidgetVisibility("budgetTax", WIDGETS);
 
-  function fmt(val: number) {
-    return new Intl.NumberFormat(locale, {
-      style: "currency",
-      currency: appSettings.defaultCurrency || "EUR",
-      minimumFractionDigits: appSettings.showDecimalPlaces,
-      maximumFractionDigits: appSettings.showDecimalPlaces,
-    }).format(val);
-  }
+  const fmt = useCurrencyFormatter();
 
   const totalIncome = stats.data?.totalIncome ?? 0;
   const monthlyData = stats.data?.monthlyData;

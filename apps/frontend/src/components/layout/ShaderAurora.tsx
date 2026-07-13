@@ -1,4 +1,5 @@
 import { useEffect, useRef } from "react";
+import { prefersReducedMotion } from "@/utils/prefersReducedMotion";
 
 /**
  * WebGL aurora — the "enhanced visual effects" layer (ADR-071).
@@ -174,9 +175,7 @@ export function ShaderAurora() {
             gl!.drawArrays(gl!.TRIANGLES, 0, 3);
         };
 
-        const reducedMotion =
-            typeof window.matchMedia === "function" &&
-            window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+        const reducedMotion = prefersReducedMotion();
 
         let raf = 0;
         let last = 0;

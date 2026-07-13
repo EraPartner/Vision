@@ -4,6 +4,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { useAppSettings } from "@/contexts/AppSettingsContext";
 import { numberFormatToLocale } from "@/utils/currency";
+import { formatCompactNumber } from "@/utils/formatCompactNumber";
 import { apiClient } from "@/lib/api";
 import { ProvenanceBadge } from "@/components/research/ProvenanceBadge";
 import { ResearchUnavailableNote } from "@/components/research/ResearchUnavailableNote";
@@ -74,14 +75,6 @@ const METRIC_GROUPS: { titleKey: string; metrics: MetricDescriptor[] }[] = [
   },
 ];
 
-function fmtLargeNum(val: number | null | undefined): string {
-  if (val == null || isNaN(val)) return "—";
-  const abs = Math.abs(val);
-  if (abs >= 1e12) return `${(val / 1e12).toFixed(2)}T`;
-  if (abs >= 1e9) return `${(val / 1e9).toFixed(2)}B`;
-  if (abs >= 1e6) return `${(val / 1e6).toFixed(2)}M`;
-  return String(val);
-}
 
 export function ResearchFundamentalsTab({ symbol, enabled }: ResearchFundamentalsTabProps) {
   const { t } = useLanguage();
@@ -109,7 +102,7 @@ export function ResearchFundamentalsTab({ symbol, enabled }: ResearchFundamental
 
   const fmt = (format: MetricFormat, val: number | null | undefined) => {
     if (format === "pct") return fmtPct(val);
-    if (format === "largeNum") return fmtLargeNum(val);
+    if (format === "largeNum") return formatCompactNumber(val);
     if (format === "price") return fmtPrice(val);
     return fmtRatio(val);
   };

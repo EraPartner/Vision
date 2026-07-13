@@ -16,8 +16,7 @@ import { useRecipientPivot } from "@/hooks/useRecipientPivot";
 import { useTagPivot } from "@/hooks/useTagPivot";
 import type { SavedChart } from "@/lib/api/types";
 import { useLanguage } from "@/contexts/LanguageContext";
-import { useAppSettings } from "@/contexts/AppSettingsContext";
-import { getCurrencySymbol, numberFormatToLocale } from "@/utils/currency";
+import { useChartCurrencyFormatter } from "@/hooks/useChartCurrencyFormatter";
 
 const CHART_COLORS = Array.from({ length: 16 }, (_, i) => `hsl(var(--chart-${(i % 8) + 1}))`);
 // Muted colour for the bundled "Other" series/bar.
@@ -73,15 +72,7 @@ interface CustomChartProps {
 
 export function CustomChart({ savedChart, data, onEdit, onDelete }: CustomChartProps) {
   const { t } = useLanguage();
-  const { appSettings } = useAppSettings();
-  const locale = numberFormatToLocale(appSettings.numberFormat);
-  const formatCurrency = (val: number) => new Intl.NumberFormat(locale, {
-    style: "currency",
-    currency: appSettings.defaultCurrency || "EUR",
-    minimumFractionDigits: appSettings.showDecimalPlaces,
-    maximumFractionDigits: appSettings.showDecimalPlaces,
-  }).format(val);
-  const currencySymbol = getCurrencySymbol(appSettings.defaultCurrency || "EUR");
+  const { formatCurrency, currencySymbol } = useChartCurrencyFormatter();
 
   const bucket = savedChart.time_bucket;
   const isRanked = savedChart.chart_variant === 'ranked';

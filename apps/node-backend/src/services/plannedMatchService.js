@@ -21,6 +21,7 @@ import settingsRepository from '../repositories/settingsRepository.js';
 import { executePlanned } from './plannedExecutionService.js';
 import { addDaysYmd, todayAppDateString } from '../lib/timezone.js';
 import { toDecimal, toNumber } from '../lib/money.js';
+import { formatDateToYmd } from '../lib/dateFormat.js';
 import { logger } from '../config/logger.js';
 
 const AMOUNT_TOLERANCE_PCT = 5;
@@ -32,13 +33,7 @@ const SUGGESTION_LOOKBACK_DAYS = 45;
 // Date built from local Y/M/D, so local getters recover the calendar date.
 function toYmd(value) {
   if (value == null) return undefined;
-  if (typeof value === 'string') return value.slice(0, 10);
-  if (value instanceof Date) {
-    const y = value.getFullYear();
-    const m = String(value.getMonth() + 1).padStart(2, '0');
-    const d = String(value.getDate()).padStart(2, '0');
-    return `${y}-${m}-${d}`;
-  }
+  if (value instanceof Date) return formatDateToYmd(value);
   return String(value).slice(0, 10);
 }
 

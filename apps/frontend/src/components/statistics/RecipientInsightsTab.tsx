@@ -11,7 +11,7 @@ import { useExcludedIds } from "@/hooks/useExcludedIds";
 import { Badge } from "@/components/ui/badge";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { useAppSettings } from "@/contexts/AppSettingsContext";
-import { numberFormatToLocale } from "@/utils/currency";
+import { useCurrencyFormatter } from "@/hooks/useCurrencyFormatter";
 import { formatDateWithAppSettings } from "@/components/shared/dateUtils";
 import { StatCard } from "@/components/dashboard/StatCard";
 
@@ -40,31 +40,14 @@ export function RecipientInsightsTab({ statisticsTopRecipientsChart }: Recipient
   const effectiveExcludedRecIds = exclusionsApply ? excludedRecipientIds : [];
   const { t } = useLanguage();
   const { appSettings } = useAppSettings();
-  const locale = numberFormatToLocale(appSettings.numberFormat);
   const targetCurrency = appSettings.defaultCurrency || "EUR";
-  // Memoise the common-case formatter instead of constructing a new
-  // Intl.NumberFormat on every formatCurrency call. A non-default
-  // fractionDigits override (rare) still builds a one-off formatter.
-  const defaultCurrencyFormatter = useMemo(
-    () => new Intl.NumberFormat(locale, {
-      style: "currency",
-      currency: appSettings.defaultCurrency || "EUR",
-      minimumFractionDigits: appSettings.showDecimalPlaces,
-      maximumFractionDigits: appSettings.showDecimalPlaces,
-    }),
-    [locale, appSettings.defaultCurrency, appSettings.showDecimalPlaces],
+  // Shared cached currency formatter; an optional fractionDigits override falls
+  // back to the app's showDecimalPlaces setting.
+  const formatCurrencyBase = useCurrencyFormatter();
+  const formatCurrency = useCallback(
+    (val: number, fractionDigits?: number) => formatCurrencyBase(val, undefined, fractionDigits),
+    [formatCurrencyBase],
   );
-  const formatCurrency = useCallback((val: number, fractionDigits = appSettings.showDecimalPlaces) => {
-    if (fractionDigits === appSettings.showDecimalPlaces) {
-      return defaultCurrencyFormatter.format(val);
-    }
-    return new Intl.NumberFormat(locale, {
-      style: "currency",
-      currency: appSettings.defaultCurrency || "EUR",
-      minimumFractionDigits: fractionDigits,
-      maximumFractionDigits: fractionDigits,
-    }).format(val);
-  }, [defaultCurrencyFormatter, locale, appSettings.defaultCurrency, appSettings.showDecimalPlaces]);
   const { data, isLoading, isError } = useQuery({
     queryKey: ["recipient-insights", targetCurrency, effectiveExcludedCatIds, effectiveExcludedRecIds],
     queryFn: () => apiClient.getRecipientInsights({

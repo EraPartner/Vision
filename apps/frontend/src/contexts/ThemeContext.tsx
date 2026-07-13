@@ -15,6 +15,7 @@
 import { useCallback, useEffect, useRef, type ReactNode } from 'react';
 import { useShallow } from 'zustand/react/shallow';
 import { apiClient } from '@/lib/api';
+import { prefersReducedMotion } from '@/utils/prefersReducedMotion';
 import { usePreloadedSetting } from '@/contexts/SettingsPreloadContext';
 import { applyThemePalette, isThemeVariant, themes, type ThemeVariant } from '@/styles/themes';
 import { getElectronAPI, getSystemAccentColor, isElectronMac, persistSplashTheme } from '@/lib/api/electron';
@@ -178,14 +179,12 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
         };
 
         const alreadyApplied = document.documentElement.classList.contains('dark') === (theme === 'dark');
-        const prefersReducedMotion =
-            typeof window.matchMedia === 'function' &&
-            window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+        const reducedMotion = prefersReducedMotion();
         const startViewTransition = (
             document as Document & { startViewTransition?: (cb: () => void) => unknown }
         ).startViewTransition;
 
-        if (!alreadyApplied && !prefersReducedMotion && typeof startViewTransition === 'function') {
+        if (!alreadyApplied && !reducedMotion && typeof startViewTransition === 'function') {
             startViewTransition.call(document, apply);
         } else {
             apply();

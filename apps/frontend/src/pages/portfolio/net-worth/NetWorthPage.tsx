@@ -3,7 +3,7 @@ import { useCallback, useMemo, useState } from "react";
 import { apiClient } from "@/lib/api";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { useAppSettings } from "@/contexts/AppSettingsContext";
-import { numberFormatToLocale } from "@/utils/currency";
+import { useCurrencyFormatter, useCurrencyPartsFormatter } from "@/hooks/useCurrencyFormatter";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -34,7 +34,6 @@ import { isPerAccountHoldingsEnabled } from "@/lib/env";
 export default function NetWorthPage() {
   const { t, language } = useLanguage();
   const { appSettings } = useAppSettings();
-  const locale = numberFormatToLocale(appSettings.numberFormat);
   const targetCurrency = appSettings.defaultCurrency || "EUR";
 
   const { data, isLoading, error } = useQuery({
@@ -93,15 +92,8 @@ export default function NetWorthPage() {
     [snapshots, period],
   );
 
-  const currencyFormatter = useMemo(() => new Intl.NumberFormat(locale, {
-    style: "currency",
-    currency: appSettings.defaultCurrency || "EUR",
-    minimumFractionDigits: appSettings.showDecimalPlaces,
-    maximumFractionDigits: appSettings.showDecimalPlaces,
-  }), [appSettings.defaultCurrency, appSettings.showDecimalPlaces, locale]);
-
-  const fmt = useCallback((val: number) => currencyFormatter.format(val), [currencyFormatter]);
-  const fmtParts = useCallback((val: number) => currencyFormatter.formatToParts(val), [currencyFormatter]);
+  const fmt = useCurrencyFormatter();
+  const fmtParts = useCurrencyPartsFormatter();
 
   const monthLabelLocale = useMemo(() => (language === 'nl' ? 'nl-NL' : 'en-US'), [language]);
   const xTickFormatter = useMemo(() => {
