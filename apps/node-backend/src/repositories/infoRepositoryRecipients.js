@@ -13,6 +13,7 @@ import { toWireDate } from '../lib/dateFormat.js';
 import { convertRowsToEur } from '../services/currency/currencyConversionService.js';
 import {
   roundToCents,
+  buildPeriodPivot,
   mapRowsForAmountConversion,
 } from './infoRepositoryHelpers.js';
 
@@ -304,27 +305,12 @@ export const recipientInsightsRepository = {
       { useHistoricalRatesByDate: true, dateField: 'date' }
     );
 
-    const periodRecMap = {};
-    for (const row of converted) {
-      const period = row.period;
-      const rid = parseInt(row.recipient_id, 10);
-      const eur = Math.abs(row.amount_eur);
-      const cnt = parseInt(row.cnt, 10) || 0;
-
-      if (!periodRecMap[period]) periodRecMap[period] = {};
-      if (!periodRecMap[period][rid]) {
-        periodRecMap[period][rid] = { recipientId: rid, name: row.recipient_name, total: 0, transactionCount: 0 };
-      }
-      periodRecMap[period][rid].total += eur;
-      periodRecMap[period][rid].transactionCount += cnt;
-    }
-
-    const recipientPivot = {};
-    for (const [period, recs] of Object.entries(periodRecMap)) {
-      recipientPivot[period] = Object.values(recs)
-        .map(r => ({ ...r, total: roundToCents(r.total) }))
-        .sort((a, b) => a.total - b.total);
-    }
+    const recipientPivot = buildPeriodPivot(converted, {
+      idField: 'recipient_id',
+      labelField: 'recipient_name',
+      idKey: 'recipientId',
+      labelKey: 'name',
+    });
 
     return { recipientPivot };
   },

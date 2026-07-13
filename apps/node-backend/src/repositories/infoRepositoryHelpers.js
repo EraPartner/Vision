@@ -129,6 +129,38 @@ export function extractYearMonth(value) {
 
 // ── Aggregation helpers ────────────────────────────────────────────────────
 
+/**
+ * Shape converted `{ period, <idField>, <labelField>, amount_eur, cnt }` rows
+ * into `{ [period]: [{ [idKey], [labelKey], total, transactionCount }] }`,
+ * summing absolute EUR per (period, entity), rounding totals to cents, and
+ * sorting each period ascending by total. Shared by the recipient and tag
+ * period-pivots (SIMP-49).
+ */
+export function buildPeriodPivot(convertedRows, { idField, labelField, idKey, labelKey }) {
+  const periodMap = {};
+  for (const row of convertedRows) {
+    const period = row.period;
+    const id = parseInt(row[idField], 10);
+    const eur = Math.abs(row.amount_eur);
+    const cnt = parseInt(row.cnt, 10) || 0;
+
+    if (!periodMap[period]) periodMap[period] = {};
+    if (!periodMap[period][id]) {
+      periodMap[period][id] = { [idKey]: id, [labelKey]: row[labelField], total: 0, transactionCount: 0 };
+    }
+    periodMap[period][id].total += eur;
+    periodMap[period][id].transactionCount += cnt;
+  }
+
+  const pivot = {};
+  for (const [period, entities] of Object.entries(periodMap)) {
+    pivot[period] = Object.values(entities)
+      .map((e) => ({ ...e, total: roundToCents(e.total) }))
+      .sort((a, b) => a.total - b.total);
+  }
+  return pivot;
+}
+
 export function buildMonthlySummary(months) {
   return {
     total_spending: toNumber(months.reduce((sum, m) => sum.plus(toDecimal(m.total_spending)), toDecimal(0))),
