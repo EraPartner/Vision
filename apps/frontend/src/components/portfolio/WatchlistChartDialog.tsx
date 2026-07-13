@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { parseDecimal } from "@/lib/decimal";
+import { MAX_NUMERIC_18_6, parseDecimal } from "@/lib/decimal";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   Dialog,
@@ -91,8 +91,16 @@ export function WatchlistChartDialog({ item, open, onOpenChange }: WatchlistChar
   const handleUpdateTargetPrice = async () => {
     if (!item || !newTargetPrice) return;
 
+    // parseDecimal's default 0-fallback would silently save a 0 target for
+    // garbage input like "1e999"; validate explicitly instead.
+    const targetValue = parseDecimal(newTargetPrice, NaN);
+    if (!Number.isFinite(targetValue) || targetValue <= 0 || targetValue > MAX_NUMERIC_18_6) {
+      toast.error(t('watchlistChart.invalidTarget'));
+      return;
+    }
+
     try {
-      await apiClient.updateWatchlistItem(item.id, { target_price: parseDecimal(newTargetPrice) });
+      await apiClient.updateWatchlistItem(item.id, { target_price: targetValue });
 
       queryClient.invalidateQueries({ queryKey: ["watchlist"] });
       toast.success(t('watchlist.targetUpdated'));

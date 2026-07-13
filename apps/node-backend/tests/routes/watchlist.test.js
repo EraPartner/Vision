@@ -133,6 +133,28 @@ describe('Watchlist Routes', () => {
       await expect(routeHandlers['post:/'](req, mockResponse())).rejects.toBeInstanceOf(ValidationError);
     });
 
+    it('rejects a zero target_price (meaningless for the at-or-below alert)', async () => {
+      const req = { body: { ...validBody, target_price: 0 } };
+      await expect(routeHandlers['post:/'](req, mockResponse())).rejects.toBeInstanceOf(ValidationError);
+      expect(watchlistRepository.create).not.toHaveBeenCalled();
+    });
+
+    it('rejects target_price beyond the NUMERIC(18,6) cap (was a DB overflow 500)', async () => {
+      const req = { body: { ...validBody, target_price: 1e15 } };
+      await expect(routeHandlers['post:/'](req, mockResponse())).rejects.toBeInstanceOf(ValidationError);
+      expect(watchlistRepository.create).not.toHaveBeenCalled();
+    });
+
+    it('rejects Infinity target_price', async () => {
+      const req = { body: { ...validBody, target_price: Infinity } };
+      await expect(routeHandlers['post:/'](req, mockResponse())).rejects.toBeInstanceOf(ValidationError);
+    });
+
+    it('rejects added_price beyond the NUMERIC(18,6) cap', async () => {
+      const req = { body: { ...validBody, added_price: 1e15 } };
+      await expect(routeHandlers['post:/'](req, mockResponse())).rejects.toBeInstanceOf(ValidationError);
+    });
+
     it('rejects unknown asset_class', async () => {
       const req = { body: { ...validBody, asset_class: 'beanie-babies' } };
       await expect(routeHandlers['post:/'](req, mockResponse())).rejects.toBeInstanceOf(ValidationError);

@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import { describe, expect, it, afterEach, vi } from "vitest";
-import { screen, waitFor } from "@testing-library/react";
+import { fireEvent, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { http } from "msw";
 import { renderWithApp } from "@/test/renderWithApp";
@@ -174,6 +174,40 @@ describe("AddToWatchlistDialog", () => {
 
     // Assert — onOpenChange(false) is NOT called after error
     await waitFor(() => expect(submitButton).not.toBeDisabled());
+    expect(onOpenChange).not.toHaveBeenCalledWith(false);
+  });
+
+  it("rejects a 0 target price — no POST, dialog stays open (regression)", async () => {
+    // parseDecimal's 0-fallback used to POST target_price: 0 for garbage
+    // input like "1e999"; a 0/non-finite target must now be rejected.
+    let posted = false;
+    server.use(
+      http.get(`${API_BASE}/api/market/search`, () =>
+        ok({ items: [MARKET_SEARCH_RESULT] }),
+      ),
+      http.post(`${API_BASE}/api/watchlist`, () => {
+        posted = true;
+        return ok(WATCHLIST_STUB);
+      }),
+    );
+    const user = userEvent.setup();
+    const onOpenChange = vi.fn();
+    renderWithApp(<AddToWatchlistDialog open={true} onOpenChange={onOpenChange} />);
+
+    // Act — search, select, set a 0 target price (paste-equivalent), submit
+    const searchInput = await screen.findByRole("textbox");
+    await user.type(searchInput, "AAPL");
+    await user.click(await screen.findByText("Apple Inc."));
+
+    const targetPriceInput = await screen.findByRole("spinbutton");
+    fireEvent.change(targetPriceInput, { target: { value: "0" } });
+
+    const submitButton = await screen.findByRole("button", { name: /add to watchlist/i });
+    await user.click(submitButton);
+
+    // Assert — dialog stays open, no POST sent
+    await waitFor(() => expect(submitButton).not.toBeDisabled());
+    expect(posted).toBe(false);
     expect(onOpenChange).not.toHaveBeenCalledWith(false);
   });
 

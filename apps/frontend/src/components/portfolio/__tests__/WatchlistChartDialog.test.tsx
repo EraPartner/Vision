@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import { describe, expect, it, afterEach, vi } from "vitest";
-import { screen, waitFor } from "@testing-library/react";
+import { fireEvent, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { http } from "msw";
 import { renderWithApp } from "@/test/renderWithApp";
@@ -190,6 +190,38 @@ describe("WatchlistChartDialog", () => {
     await waitFor(() =>
       expect(patchBody).toMatchObject({ target_price: 210 }),
     );
+  });
+
+  it("rejects a 0 target price — no PATCH, validation toast (regression)", async () => {
+    // parseDecimal's 0-fallback used to let garbage input PATCH target_price: 0
+    // with a success toast. A 0 target must now be rejected client-side.
+    let patched = false;
+    server.use(
+      http.get(`${API_BASE}/api/market/chart`, () => ok({ symbol: "AAPL", currency: "USD", points: [] })),
+      http.get(`${API_BASE}/api/market/quote`, () => ok(QUOTE_RESPONSE)),
+      http.patch(`${API_BASE}/api/watchlist/1`, () => {
+        patched = true;
+        return ok(ITEM);
+      }),
+    );
+    const user = userEvent.setup();
+    renderWithApp(
+      <WatchlistChartDialog item={ITEM} open={true} onOpenChange={vi.fn()} />,
+    );
+    await screen.findByRole("dialog");
+
+    // Act — enter edit mode and set the price to 0 (paste-equivalent)
+    await user.click(await screen.findByRole("button", { name: /200/i }));
+    const priceInput = await screen.findByRole("spinbutton");
+    fireEvent.change(priceInput, { target: { value: "0" } });
+
+    const editContainer = priceInput.closest("div") as HTMLElement;
+    const editButtons = editContainer.querySelectorAll("button");
+    await user.click(editButtons[0] as HTMLButtonElement);
+
+    // Assert — edit mode stays open (success path would close it) and no PATCH sent
+    await waitFor(() => expect(screen.getByRole("spinbutton")).toBeInTheDocument());
+    expect(patched).toBe(false);
   });
 
   it("close button calls onOpenChange(false)", async () => {
