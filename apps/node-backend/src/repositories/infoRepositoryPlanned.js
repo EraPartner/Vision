@@ -15,16 +15,58 @@ import {
 
 const MAX_OCCURRENCES = 120; // guard against infinite loops on tiny intervals
 
+const MS_PER_DAY = 24 * 60 * 60 * 1000;
+
+/**
+ * Fixed day-step for the day-based recurrence patterns, or null for the
+ * month-based ones (monthly/quarterly/yearly), whose step length varies.
+ */
+function dayStepForPattern(pattern) {
+  const p = String(pattern || '').toLowerCase().trim();
+  if (p === 'daily') return 1;
+  if (p === 'weekly') return 7;
+  if (p === 'biweekly') return 14;
+  const match = p.match(/^every\s+(\d+)\s+days?$/);
+  if (match) {
+    const days = parseInt(match[1], 10);
+    return days >= 1 ? days : null;
+  }
+  return null;
+}
+
 /**
  * Walk a recurring planned transaction forward from its stored date, emitting
  * each occurrence (as a YYYY-MM-DD string in APP_TIMEZONE) that falls within
  * [startYmd, endYmd). Returns [] for a pattern calculateNextDate can't advance.
+ *
+ * Day-stepped patterns fast-forward to just before the window in one jump: a
+ * stale fast-cadence row (e.g. daily, last advanced >120 days ago) used to
+ * exhaust MAX_OCCURRENCES before reaching next month and silently vanish from
+ * the forecast. The jump is whole-step ms arithmetic — exactly equivalent to N
+ * sequential calculateNextDate hops for these patterns — landing at least one
+ * step before the window so the boundary occurrence is never skipped.
+ * Month-based patterns keep the plain walk (120 monthly hops = 10 years, far
+ * beyond any realistic staleness, and bulk month jumps would change the
+ * sequential month-end clamping semantics).
  */
 function expandRecurringOccurrences(plannedDate, pattern, startYmd, endYmd) {
   const ymds = [];
   if (!pattern) return ymds;
   let current = plannedDate instanceof Date ? new Date(plannedDate.getTime()) : new Date(plannedDate);
   if (Number.isNaN(current.getTime())) return ymds;
+
+  const stepDays = dayStepForPattern(pattern);
+  if (stepDays) {
+    const [y, m, d] = startYmd.split('-').map((s) => parseInt(s, 10));
+    const windowStartMs = Date.UTC(y, m - 1, d);
+    const stepMs = stepDays * MS_PER_DAY;
+    const deficitMs = windowStartMs - current.getTime();
+    if (deficitMs > stepMs) {
+      const hops = Math.floor(deficitMs / stepMs) - 1;
+      if (hops > 0) current = new Date(current.getTime() + hops * stepMs);
+    }
+  }
+
   for (let i = 0; i < MAX_OCCURRENCES; i++) {
     const ymd = toAppDateString(current);
     if (ymd >= endYmd) break;

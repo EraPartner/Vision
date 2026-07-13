@@ -87,6 +87,12 @@ const envSchema = z.object({
 
   ENABLE_RESET_DB: booleanEnv(false),
   ADMIN_AUTH_TOKEN: stringEnv(''),
+  // Explicit acknowledgment that /api/admin/* may run without a token on a
+  // non-loopback bind because an OUTER layer restricts access (the documented
+  // compose flow binds 0.0.0.0 inside the container but publishes the port on
+  // host loopback only). Without this, a tokenless non-loopback bind refuses
+  // to start instead of logging a warning nobody reads.
+  ADMIN_ALLOW_TOKENLESS_NONLOOPBACK: booleanEnv(false),
 
   OLLAMA_URL: optionalStringEnv,
   OLLAMA_DEFAULT_MODEL: stringEnv('llama3.1:8b'),

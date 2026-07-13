@@ -21,14 +21,17 @@ export default function ExchangeRatesPage() {
     const defaultCurrency = appSettings.defaultCurrency || "EUR";
     const queryClient = useQueryClient();
 
-    // Share the one exchange-rates namespace so a refresh here invalidates every
-    // consumer (net worth, portfolio, tax…). The page previously used a camelCase
-    // ["exchangeRates"] key while the hooks use ['exchange-rates'], so "Refresh
-    // rates" only ever updated this page.
+    // Share the one exchange-rates cache entry — same flat key, queryFn, and
+    // staleTime as useExchangeRates/useCurrencyConverter, so this page reads
+    // the copy every other consumer already fetched instead of a third
+    // duplicate (the request is always db-only, so the {dbOnly} discriminator
+    // carried no information). "Refresh rates" below invalidates the shared
+    // namespace for everyone.
     const { data, isLoading, error, isFetching } = useQuery<ExchangeRatesData>({
-        queryKey: [EXCHANGE_RATES_QUERY_KEY, { dbOnly: true }],
+        queryKey: [EXCHANGE_RATES_QUERY_KEY],
         queryFn: () => apiClient.getExchangeRates({ dbOnly: true }),
-        staleTime: 60_000,
+        staleTime: 10 * 60_000,
+        gcTime: 30 * 60_000,
     });
 
     const refreshMutation = useMutation({

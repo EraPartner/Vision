@@ -19,7 +19,7 @@ import {
   ensureMaterializedViewIndexes,
 } from './services/materializedViewService.js';
 import { createErrorHandler, NotFoundError } from './middleware/errorHandler.js';
-import { createAdminAuthMiddleware } from './middleware/adminAuth.js';
+import { createAdminAuthMiddleware, isLoopbackHost } from './middleware/adminAuth.js';
 import { createCsrfGuard } from './middleware/csrfGuard.js';
 import { closeBrowser as closePuppeteerBrowser } from './services/reports/puppeteerRenderer.js';
 import { wrapResponse } from './middleware/envelope.js';
@@ -433,6 +433,22 @@ function bootSummary(extraPhase = 'backend_total') {
 
 async function start() {
   if (!settings.admin.authToken) {
+    // A non-loopback bind with no token means /api/admin/* (including
+    // destructive routes) is reachable by anyone who can reach the port, with
+    // no per-request check. Refuse to start rather than rely on a log line —
+    // unless the operator explicitly acknowledges an outer restriction
+    // (ADMIN_ALLOW_TOKENLESS_NONLOOPBACK, set by the documented compose flow
+    // where the container binds 0.0.0.0 but the port is published on host
+    // loopback only).
+    if (!isLoopbackHost(HOST) && !settings.admin.allowTokenlessNonLoopback) {
+      logger.error(
+        `Refusing to start: bind address '${HOST}' is not loopback and ADMIN_AUTH_TOKEN is not set. ` +
+        'Set ADMIN_AUTH_TOKEN to protect /api/admin/*, bind to 127.0.0.1/localhost, or — only if an ' +
+        'outer layer already restricts access (e.g. Docker publishing the port on host loopback) — ' +
+        'set ADMIN_ALLOW_TOKENLESS_NONLOOPBACK=true.'
+      );
+      process.exit(1);
+    }
     logger.warn(
       'ADMIN_AUTH_TOKEN is not set — admin endpoints have no per-request token check. ' +
       'This is safe only because the port is published on 127.0.0.1 (loopback). The CSRF ' +

@@ -1979,6 +1979,24 @@ async function installPreparedShellUpdate() {
   try {
     const installerPath = pendingShellUpdate.installerPath;
     const latestVersion = pendingShellUpdate.latest_version || '';
+    // Revalidate before committing to quit: the bundle may have been prepared
+    // arbitrarily long ago. If the OS purged the temp dir, the old flow set
+    // isQuitting and quit anyway — the spawn failed silently and the app
+    // exited with no update and no error.
+    if (!fs.existsSync(installerPath)) {
+      pendingShellUpdate = null;
+      return { success: false, error: 'The downloaded update is no longer available. Please check for updates again.' };
+    }
+    // Best-effort recheck: don't install a stale bundle when a newer release
+    // shipped since it was prepared. Offline recheck failures fall through —
+    // the existing (verified-present) bundle still installs.
+    try {
+      const recheck = await checkForShellUpdate();
+      if (recheck?.latest_version && compareVersions(recheck.latest_version, latestVersion) > 0) {
+        pendingShellUpdate = null;
+        return { success: false, error: `A newer version (${recheck.latest_version}) is available. Please check for updates again.` };
+      }
+    } catch (_) { /* offline — proceed with the prepared bundle */ }
     spawn('open', [installerPath], { detached: true, stdio: 'ignore' }).unref();
     isQuitting = true;
     setImmediate(() => app.quit());
@@ -2154,18 +2172,64 @@ async function runBackup(destDir) {
 
 // ── Bundle backup/restore helpers ────────────────────────────────────────────
 
+/** Zero-padded numeric prefix of a Vision alembic revision id, or null. */
+function revisionNumericPrefix(rev) {
+  const m = /^(\d+)/.exec(String(rev || ''));
+  return m ? parseInt(m[1], 10) : null;
+}
+
 /**
  * Query the running DB for the current alembic revision.
  * Returns empty string if unavailable (e.g. DB not yet initialised).
+ *
+ * Fetches ALL alembic_version rows: under the known multi-head drift the old
+ * `LIMIT 1` returned an arbitrary row, making the newer-schema guard
+ * nondeterministic. Deterministically pick the highest numeric-prefixed
+ * revision (the guard compares numeric prefixes).
  */
 async function getSchemaHead(composeFileArgs, dbUser, dbName) {
   try {
     const result = await run('docker', [
       'compose', ...composeFileArgs, 'exec', '-T', 'db',
       'psql', '-U', dbUser, '-d', dbName, '-t', '-A', '-c',
-      'SELECT version_num FROM alembic_version LIMIT 1;',
+      'SELECT version_num FROM alembic_version;',
     ], workDir, { timeout: 10000 });
-    return result.trim();
+    const rows = result.split('\n').map(s => s.trim()).filter(Boolean);
+    if (rows.length === 0) return '';
+    let best = rows[0];
+    for (const row of rows.slice(1)) {
+      const a = revisionNumericPrefix(row);
+      const b = revisionNumericPrefix(best);
+      if (a != null && (b == null || a > b)) best = row;
+    }
+    return best;
+  } catch {
+    return '';
+  }
+}
+
+/**
+ * Newest revision in the LOCAL alembic/versions directory (by numeric
+ * prefix; filenames match revision ids). Fail-safe fallback for the
+ * newer-schema guard: when the DB's head is unreadable (fresh DB, container
+ * down), an empty currentHead used to skip the guard entirely — but a bundle
+ * from a newer install still crash-loops boot-time `alembic upgrade head`
+ * regardless of DB state, because the CODE's migration chain doesn't know the
+ * bundle's revision. Comparing against the local chain head catches that.
+ */
+function getLocalMigrationChainHead() {
+  try {
+    const versionsDir = path.join(workDir || path.resolve(__dirname, '..', '..'), 'alembic', 'versions');
+    let best = '';
+    for (const f of fs.readdirSync(versionsDir)) {
+      if (!f.endsWith('.py') || f.startsWith('_')) continue;
+      const rev = f.slice(0, -3);
+      const a = revisionNumericPrefix(rev);
+      if (a == null) continue;
+      const b = revisionNumericPrefix(best);
+      if (b == null || a > b) best = rev;
+    }
+    return best;
   } catch {
     return '';
   }
@@ -2221,12 +2285,8 @@ function readDumpSchemaHead(sqlPath) {
  * than block a restore on an uncomparable pair.
  */
 function isSchemaRevisionNewer(candidate, current) {
-  const numericPrefix = (rev) => {
-    const m = /^(\d+)/.exec(String(rev || ''));
-    return m ? parseInt(m[1], 10) : null;
-  };
-  const a = numericPrefix(candidate);
-  const b = numericPrefix(current);
+  const a = revisionNumericPrefix(candidate);
+  const b = revisionNumericPrefix(current);
   if (a == null || b == null) return false;
   return a > b;
 }
@@ -2380,9 +2440,13 @@ async function runBundleRestore(bundlePath, { passphrase } = {}) {
 
   const composeFileArgs = composeArgs(workDir, overrideFiles);
 
-  // Schema version check: block restore if bundle is from a newer schema
+  // Schema version check: block restore if bundle is from a newer schema.
+  // When the DB head is unreadable (fresh DB, container down), fall back to
+  // the local migration chain head instead of skipping the guard — a
+  // newer-schema bundle crash-loops boot regardless of current DB state.
   if (metadata.schemaHead) {
-    const currentHead = await getSchemaHead(composeFileArgs, dbUser, dbName);
+    const currentHead = await getSchemaHead(composeFileArgs, dbUser, dbName)
+      || getLocalMigrationChainHead();
     if (isSchemaRevisionNewer(metadata.schemaHead, currentHead)) {
       cleanup();
       throw new Error(
@@ -2601,7 +2665,10 @@ async function runRestore(sqlFilePath, { passphrase } = {}) {
   // stopped or dropped.
   const dumpHead = await readDumpSchemaHead(restoreSource);
   if (dumpHead) {
-    const currentHead = await getSchemaHead(composeFileArgs, dbUser, dbName);
+    // Same fail-safe as the bundle path: unknown DB head → compare against
+    // the local migration chain head rather than skipping the guard.
+    const currentHead = await getSchemaHead(composeFileArgs, dbUser, dbName)
+      || getLocalMigrationChainHead();
     if (isSchemaRevisionNewer(dumpHead, currentHead)) {
       cleanupRestoreSource();
       throw new Error(
@@ -2720,10 +2787,26 @@ async function runRestore(sqlFilePath, { passphrase } = {}) {
 const ALLOWED_RESTORE_PATHS = new Set();
 
 // macOS system directories that must never be used as a backup destination.
+// '/Library' is the SYSTEM-level library (a previous entry listed the
+// nonexistent '/Library/System'); per-user backups live under
+// /Users/<name>/Library (e.g. iCloud Drive), which this does not match.
 const BLOCKED_BACKUP_PREFIXES = [
   '/System', '/usr', '/bin', '/sbin', '/etc',
-  '/private/etc', '/private/var/db', '/Library/System',
+  '/private/etc', '/private/var/db', '/Library',
 ];
+
+// Shared destination validation for every path that can set or use a backup
+// directory (backup:run, backup:save-settings → quit-time backup). Returns an
+// error string, or null when the destination is acceptable.
+function validateBackupDest(dir) {
+  if (typeof dir !== 'string' || !dir) return 'Invalid backup directory';
+  const resolved = path.resolve(dir);
+  if (!path.isAbsolute(resolved)) return 'Backup directory must be an absolute path';
+  if (BLOCKED_BACKUP_PREFIXES.some(p => resolved === p || resolved.startsWith(p + '/'))) {
+    return 'Backup to system directories is not allowed';
+  }
+  return null;
+}
 
 const ALLOWED_RESTORE_EXTS = new Set(['.visionbak', '.enc', '.sql']);
 function hasAllowedRestoreExt(p) {
@@ -2830,15 +2913,14 @@ ipcMain.handle('backup:restore', async (event, filePath, opts) => {
 // collected by the renderer before invoking this handler.  Optional — when null
 // (e.g. automated backup on quit) the bundle is created without frontend-state.json.
 let backupInFlight = false;
-ipcMain.handle('backup:run', async (_event, destDir, frontendStateJson = null) => {
+ipcMain.handle('backup:run', async (event, destDir, frontendStateJson = null) => {
+  if (!mainWindow || event.sender !== mainWindow.webContents) {
+    return { success: false, error: 'Unauthorized sender' };
+  }
   if (!workDir) return { success: false, error: 'workDir not set' };
-  if (typeof destDir !== 'string' || !destDir) {
-    return { success: false, error: 'Invalid backup directory' };
-  }
+  const destError = validateBackupDest(destDir);
+  if (destError) return { success: false, error: destError };
   const resolvedDest = path.resolve(destDir);
-  if (BLOCKED_BACKUP_PREFIXES.some(p => resolvedDest === p || resolvedDest.startsWith(p + '/'))) {
-    return { success: false, error: 'Backup to system directories is not allowed' };
-  }
   if (backupInFlight) return { success: false, error: 'A backup is already in progress' };
   backupInFlight = true;
   try {
@@ -2863,7 +2945,18 @@ ipcMain.handle('backup:select-dir', async () => {
   return result.filePaths[0];
 });
 
-ipcMain.handle('backup:save-settings', async (_event, { backupDir, backupOnQuit }) => {
+ipcMain.handle('backup:save-settings', async (event, { backupDir, backupOnQuit }) => {
+  // Same sender check as backup:restore — a compromised non-main frame must
+  // not be able to repoint where the quit-time backup writes.
+  if (!mainWindow || event.sender !== mainWindow.webContents) {
+    return { success: false, error: 'Unauthorized sender' };
+  }
+  // Validate the destination NOW: the quit-time backup (will-quit handler)
+  // writes wherever this setting points, with no further checks.
+  if (backupDir) {
+    const destError = validateBackupDest(backupDir);
+    if (destError) return { success: false, error: destError };
+  }
   // Persist to database via the running backend API (source of truth).
   // Also mirror to local settings.json as a fallback for the will-quit handler
   // in case the backend is already shutting down.

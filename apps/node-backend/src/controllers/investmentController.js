@@ -75,7 +75,6 @@ function validateInvestmentNumericFields(body) {
 // ── In-memory response caches ────────────────────────────────────────────────
 
 const INVESTMENTS_CACHE_TTL_MS = 60_000;
-const REFRESH_PRICE_CONCURRENCY = 10;
 
 let investmentsCache = { data: undefined, expiresAt: 0 };
 let bulkTxnCache = { data: undefined, key: '', expiresAt: 0 };
@@ -196,16 +195,6 @@ function hasLivePriceRefreshConfig(investment) {
   return Boolean(investment?.price_provider_id);
 }
 
-async function processInBatches(items, batchSize, worker) {
-  const results = [];
-  for (let index = 0; index < items.length; index += batchSize) {
-    const chunk = items.slice(index, index + batchSize);
-    const chunkResults = await Promise.all(chunk.map(worker));
-    results.push(...chunkResults);
-  }
-  return results;
-}
-
 // ── Handlers ─────────────────────────────────────────────────────────────────
 
 export async function listInvestments(req, res) {
@@ -300,27 +289,23 @@ export async function refreshPrices(req, res) {
   const prices = await fetchLivePricesDetailed(toRefresh, { cachedPricesByInvestmentId });
   const priceSources = {};
 
-  const priceEntries = Object.entries(prices);
-  const updateResults = await processInBatches(
-    priceEntries,
-    REFRESH_PRICE_CONCURRENCY,
-    async ([investmentId, priceData]) => {
-      const { price, source } = priceData || {};
-      if (price != null && !isNaN(price)) {
-        priceSources[investmentId] = source || 'live';
-        if (source === 'cached' || source === 'historical_fallback') return 0;
-        await investmentRepository.updatePrice(parseInt(investmentId, 10), {
-          current_price: price,
-          price_updated_at: new Date().toISOString(),
-        });
-        return 1;
-      }
-      return 0;
-    }
-  );
-
-  // eslint-disable-next-line vision-local-money/no-raw-money-arithmetic
-  const updated = updateResults.reduce((sum, n) => sum + n, 0);
+  // Collect the fresh prices, then write them in ONE UNNEST-driven UPDATE —
+  // the previous per-investment loop (bounded concurrency 10) still paid N
+  // round trips per refresh.
+  const refreshedAt = new Date().toISOString();
+  const priceUpdates = [];
+  for (const [investmentId, priceData] of Object.entries(prices)) {
+    const { price, source } = priceData || {};
+    if (price == null || isNaN(price)) continue;
+    priceSources[investmentId] = source || 'live';
+    if (source === 'cached' || source === 'historical_fallback') continue;
+    priceUpdates.push({
+      id: parseInt(investmentId, 10),
+      current_price: price,
+      price_updated_at: refreshedAt,
+    });
+  }
+  const updated = await investmentRepository.updatePricesBulk(priceUpdates);
   logger.info(`Refreshed prices for ${updated}/${toRefresh.length} investments`);
   clearInvestmentsCaches();
 
