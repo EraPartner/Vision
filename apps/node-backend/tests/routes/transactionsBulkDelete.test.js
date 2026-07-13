@@ -70,10 +70,22 @@ vi.mock('../../src/database/connection.js', () => {
   };
 });
 
+vi.mock('../../src/services/attachmentRecordService.js', () => ({
+  attachmentRepository: {
+    listPathsByTransactionIds: vi.fn(async () => []),
+  },
+}));
+
+vi.mock('../../src/services/attachmentService.js', () => ({
+  removeAttachmentFile: vi.fn(async () => undefined),
+}));
+
 await import('../../src/routes/transactions.js');
 
 import { getClient, query as dbQuery } from '../../src/database/connection.js';
 import { scheduleReconcile } from '../../src/services/transferReconciliationService.js';
+import { attachmentRepository } from '../../src/services/attachmentRecordService.js';
+import { removeAttachmentFile } from '../../src/services/attachmentService.js';
 
 const handler = routeHandlers['post:/bulk-delete'];
 
