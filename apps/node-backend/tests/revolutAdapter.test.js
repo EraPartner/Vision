@@ -86,12 +86,14 @@ describe('RevolutAdapter', () => {
     expect(txns[3].memo).toBe('EXCHANGE - SAVINGS');
   });
 
-  it('parses amounts correctly', async () => {
+  it('parses amounts correctly, netting the fee', async () => {
     tmpPath = writeTempCSV(SAMPLE_REVOLUT_CSV);
     const txns = await parse(tmpPath);
     expect(txns[0].amount).toBe(-39.50);
     expect(txns[1].amount).toBe(50.00);
-    expect(txns[2].amount).toBe(-100.00);
+    // Revolut's Amount excludes Fee — the €100 ATM withdrawal with a €2.50
+    // fee moves −102.50, which is what reconciles with the Balance column.
+    expect(txns[2].amount).toBe(-102.50);
     expect(txns[3].amount).toBe(500.00);
   });
 
