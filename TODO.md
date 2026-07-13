@@ -318,7 +318,7 @@ look-changing one.
   - Fix: add a non-unit branch reducing `runningInvested`, mirroring sell.
   - Verification (2026-07-03): blast radius is wider than the snapshot walk alone — the LIVE summary is equally blind. `packages/shared-utils/src/portfolio.js:510-522` (`buildInvestmentSummaryCore` txn switch has no `return_of_capital` case) and `:566,:583` (non-unit `totalInvested = buys − sells`) ignore non-unit RoC the same way; unit-based RoC IS handled correctly on both sides via `applyEventToLots`. The two surfaces agree today (consistent overstatement, no parity break), but fixing only the snapshot walk would CREATE a live-vs-snapshot disagreement — any fix must patch both `snapshotBuilder.js` and `buildInvestmentSummaryCore` together. Adjacent design gap: `computeTradeCashLegAmount` has no RoC case either, so RoC cash never reaches the sleeve.
 
-- [ ] **UTC-derived "today" instead of `todayAppDateString()` at 5 sites — wrong between 00:00 and 01:00/02:00 Brussels** 🔼 🔎 verified-present 2026-07-11
+- [x] **UTC-derived "today" instead of `todayAppDateString()` at 5 sites — wrong between 00:00 and 01:00/02:00 Brussels** 🔼 ✅ 2026-07-12 · d9a890c (#84, all 5 listed sites + the 2 verification finds fixed via todayAppDateString/addDaysYmd/firstOfMonthYmd; infoRepositoryNetWorth's SQL bounds now take the app-date instead of CURRENT_DATE so SQL and JS agree; UTC-anchored test helpers updated to the same convention)
   - ↪ _from: Correctness research 2026-07-02 · Wave 1c_
   - `repositories/plannedTransactionRepository.js:624` — execution recorded with **yesterday's** date if executed after midnight
   - `services/aiChat/tools/planned.js:52-56,61-62,90-91,~264-271,~338` — upcoming-planned window starts a day early / ends a day short at night
@@ -500,7 +500,7 @@ look-changing one.
   - `belfius.js:22-24` — `"12.345,67 EUR"` → `.replace(',', '.')` leaves `"12.345.67"` → NaN → `lastBalance = null` → `applyRunningBalances` no-ops. Fail-safe, but the balance feature silently never works for dot-grouped balances.
   - Fix: use `parseCommaDecimal`.
 
-- [ ] **Belfius running-balance direction heuristic mis-assigns balances for single-day/ambiguous statements** 🔽 🔎 verified-present 2026-07-11
+- [x] **Belfius running-balance direction heuristic mis-assigns balances for single-day/ambiguous statements** 🔽 ✅ 2026-07-12 · fdc4303 (#84, ordering now uses the export's statement + transaction numbers; first-vs-last-date heuristic kept only as fallback for rows without parseable sequence numbers; single-day regression test added)
   - ↪ _from: Correctness research 2026-07-02 · Wave 1a_
   - `belfius.js:32-40` — direction guessed from first-vs-last date; a single-day statement is treated as descending. If actually ascending, every row gets the wrong running balance (walked from the wrong end). Balances anchor accounts per ADR-094, so wrong values are user-visible.
   - Fix: order by statement/transaction number (parts[2]/parts[3]) instead of dates.
@@ -801,12 +801,12 @@ look-changing one.
   - `:128-130` `(parseDecimal(units) * parseDecimal(price)).toFixed(2)`, submitted when amount is left blank (`:136`): 2dp truncation (3 × 0.3333 → stores 1.00 vs true 0.9999 — within backend tolerance → silent sub-cent cost-basis skew) plus the `(1.005).toFixed(2) === "1.00"` float half-down behavior vs the shared path's Decimal banker's rounding. Max error ≤ half-cent, so silent skew, not 400s.
   - Fix: route this computation through `deriveUnitMath` like the other portfolio dialogs.
 
-- [ ] **Custom frequency with blank/0 interval → guaranteed raw 400** 🔽 🔎 verified-present 2026-07-11
+- [x] **Custom frequency with blank/0 interval → guaranteed raw 400** 🔽 ✅ 2026-07-12 · ea027e9 (#84, PlannedPaymentForm validates a positive integer customDays before submit with new plannedForm.customDaysInvalid message) *(loan numeric sub-fields beyond the existing term check not touched — presence-checked as before)*
   - ↪ _from: Correctness research 2026-07-02 · Wave 2a (residue, closed 2026-07-03)_
   - No client guard (`PlannedPaymentForm.tsx:58,323` skip `customDays`); `usePlannedPayments.ts:126-131` (create) and `:187-194` (edit — same falsy-zero bug) send `recurrence_pattern:"custom"` → rejected (`recurrence.js:77-86`; `plannedTransactions.js:211-213,277-279`). Loan numeric sub-fields likewise presence-checked only (`PlannedPaymentForm.tsx:64`; min/max attrs inert — no `<form>`) → backend 400s (`loanSchedule.js:36-52`).
   - Fix: validate a positive `customDays` client-side before submit for the `custom` pattern.
 
-- [ ] **`fx_rate_to_eur = 0` passes the frontend → raw 400** 🔽 🔎 verified-present 2026-07-11
+- [x] **`fx_rate_to_eur = 0` passes the frontend → raw 400** 🔽 ✅ 2026-07-12 · e679551 (#84, EditPortfolioTxnDialog pre-submit validation: fx finite > 0 when present, fees/taxes finite ≥ 0 — same guard as the Add dialog; regression test added)
   - ↪ _from: Correctness research 2026-07-02 · Wave 2a (residue, closed 2026-07-03)_
   - `EditPortfolioTxnDialog.tsx:150,290-298` (`min="0"` permits 0) vs `portfolioTxRepo.common.js:164-166` ("must be positive").
   - Fix: change the field's `min` to just above 0 (or validate `> 0` client-side).
@@ -826,7 +826,7 @@ look-changing one.
   - Unknown `asset_class` → plain `Error` → 500 not 400 (`investmentRepository.js:220`; legacy view-schema installs insert arbitrary classes `:476-509`). Symbol uniqueness + trim/uppercase normalization enforced on **update only** (`:537-541` vs create `:417`; no DB unique index on symbol; `EditInvestmentDialog.tsx:94` uppercases, `AddInvestmentDialog.tsx:79` doesn't — compounds the filed duplicate-on-retry bug). Empty-name Save silently no-ops (`EditInvestmentDialog.tsx:85` bare `return`, no feedback; backend would accept `''` — `investmentRepository.js:95-110` has no non-empty check).
   - Fix: validate `asset_class` against the enum before insert (400 not 500), apply the same normalization at create time as update, and give empty-name Save an explicit rejection with feedback.
 
-- [ ] **Negative CSV skipRows → raw 500** 🔽 🔎 verified-present 2026-07-11
+- [x] **Negative CSV skipRows → raw 500** 🔽 ✅ 2026-07-12 · fa0082f (#84, skip_rows ≥ 0 validated in both the bank and portfolio custom-import routes → 400; portfolio import page clamps to 0 client-side; route test added)
   - ↪ _from: Correctness research 2026-07-02 · Wave 2a (residue, closed 2026-07-03)_
   - `PortfolioImportPage.tsx:211-217` (`min="0"` attr only; `parseInt || 0` keeps negatives) and `portfolioImportRoutes.js:100`; csv-parse throws `Invalid Option: from must be a positive integer` (verified by executing csv-parse).
   - Fix: clamp to `Math.max(0, n)` client-side and/or validate server-side before passing to csv-parse.
@@ -876,7 +876,7 @@ look-changing one.
   - The bundle restore path blocks newer bundles (`main.js:2272-2283` via `metadata.schemaHead`) but `runRestore` (`:2456+`) restores any plain dump; a dump taken on a newer install restores cleanly at the psql level, then boot-time `alembic upgrade head` hits the unknown revision → the backend crash-loops with no user-facing message.
   - Fix: parse the dump's `alembic_version` COPY line, or call `getSchemaHead` on the just-restored DB before restarting the app, and reject/warn on a newer schema the same way the bundle path does.
 
-- [ ] **`PUT /api/settings/dashboard_settings` with `value: null` → 500 instead of 400** 🔽 🔎 verified-present 2026-07-11
+- [x] **`PUT /api/settings/dashboard_settings` with `value: null` → 500 instead of 400** 🔽 ✅ 2026-07-12 · bdf7808 (#84, explicit null check added to assertDashboardSettingsValue, matching the theme validator; route test added)
   - ↪ _from: Correctness research 2026-07-02 · Wave 2b (residue, closed 2026-07-03)_
   - `assertDashboardSettingsValue` (`routes/settings.js:57-60`) checks `typeof value !== 'object' || Array.isArray(value)` but not `null` (the theme validator at `:33` does it right); `null.excludedCategoryIds` throws a TypeError.
   - Fix: add an explicit `value === null` check alongside the existing type/array checks.
@@ -887,7 +887,7 @@ look-changing one.
   - No backend consumer ingests settings into SQL/math unguarded (`plannedMatchService.js:92-95` tolerant, `portfolioSummaryService` set-membership, `getIncludeTransfers === true`), so exposure today is garbage-in for frontend blobs (e.g. `defaultPageSize:"abc"` survives the `migrateAppSettings` spread) — low severity on a single-user install, but the Belgian-tax-profile finding above shows the concrete cost when a settings blob DOES feed real math.
   - Fix: not urgent on its own (see the tax-profile finding for the concrete instance worth prioritizing); consider a per-key Zod schema registry longer-term.
 
-- [ ] **`includeTransfers` missing from `SETTING_DEFAULTS`** 🔽 🔎 verified-present 2026-07-11
+- [x] **`includeTransfers` missing from `SETTING_DEFAULTS`** 🔽 ✅ 2026-07-12 · 0f16a41 (#84, default false added, matching getIncludeTransfers' strict === true read and the frontend's error fallback; route test added)
   - ↪ _from: Correctness research 2026-07-02 · Wave 2b (residue, closed 2026-07-03)_
   - `routes/settings.js:143-173` — `GET /api/settings/includeTransfers` 404s until the first toggle; `StatisticsSection.tsx:35-47` happens to treat the query error as `false` (matches the intended backend default), but react-query fires and retries a failing request on every settings visit.
   - Fix: add `includeTransfers` to the `SETTING_DEFAULTS` map.
