@@ -46,6 +46,8 @@ export async function getRecurringPatterns(): Promise<{
     patterns: Array<{
         recipientId: number;
         recipientName: string;
+        /** Flow direction — a recipient can yield one pattern per direction. */
+        direction: 'income' | 'expense';
         detectedPattern: string;
         intervalDays: number;
         consistency: number;

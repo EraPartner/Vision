@@ -156,22 +156,32 @@ export async function detectRecurringPatterns() {
     );
     const plannedTableAvailable = Boolean(plannedTableCheck.rows[0]?.exists);
 
-    // Group by recipient
+    // Group by recipient AND flow direction. Bucketing on recipient alone
+    // blended income and expense from the same recipient (e.g. an employer
+    // that is also occasionally reimbursed) into one averaged "pattern" that
+    // matched neither real flow — amounts go through .abs() below, so the
+    // sign distinction would otherwise be lost entirely.
     const byRecipient = {};
     for (const row of result.rows) {
-      const key = row.recipient_id;
+      const direction = Number(row.amount) < 0 ? 'expense' : 'income';
+      const key = `${row.recipient_id}:${direction}`;
       if (!byRecipient[key]) {
         byRecipient[key] = {
           recipientId: row.recipient_id,
           recipientName: row.recipient_name || 'Unknown',
+          direction,
           transactions: [],
         };
       }
       byRecipient[key].transactions.push(row);
     }
 
-    // Batch-fetch all planned recipient IDs in one query (avoids N+1)
-    const allRecipientIds = Object.keys(byRecipient).map(Number).filter(Boolean);
+    // Batch-fetch all planned recipient IDs in one query (avoids N+1).
+    // Keys are now "recipientId:direction" composites — read the id from the
+    // group, not the key.
+    const allRecipientIds = [...new Set(
+      Object.values(byRecipient).map((g) => g.recipientId).filter(Boolean),
+    )];
     const plannedRecipientIds = new Set();
     if (plannedTableAvailable && allRecipientIds.length > 0) {
       const plannedResult = await query(
@@ -237,6 +247,7 @@ export async function detectRecurringPatterns() {
       patterns.push({
         recipientId: group.recipientId,
         recipientName: group.recipientName,
+        direction: group.direction,
         detectedPattern: detected.pattern,
         intervalDays: detected.medianDays,
         consistency: detected.consistency,
