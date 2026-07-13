@@ -18,6 +18,7 @@ import { Archive, ArrowRight, Loader2 } from 'lucide-react';
 import { apiClient } from '@/lib/api';
 import { invalidateAccountRepoint } from '@/hooks/useAccounts';
 import { toNumber } from '@/lib/money';
+import { todayYmd } from '@/lib/timezone';
 import { useLanguage } from '@/contexts/LanguageContext';
 import { useAppSettings } from '@/contexts/AppSettingsContext';
 import { useExchangeRates } from '@/hooks/useExchangeRates';
@@ -66,7 +67,9 @@ export function CloseAccountDialog({ account, accounts, summaries, open, onOpenC
       const positions = accountPositionsFor(summary as unknown as Investment, summary.transactions, {
         costBasisMethod: appSettings.costBasisMethod ?? 'weighted_avg',
         multiplier: multiplierFor(native, target),
-        today: '',
+        // The other two call sites pass todayYmd() — '' made accrued interest
+        // NaN in the transfer preview (''.split('-').map(Number)).
+        today: todayYmd(),
         accountName: () => null,
       });
       const here = positions.find((p) => p.accountId === account.id);
