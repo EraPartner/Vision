@@ -17,10 +17,11 @@ import { refreshQuotesForInvestment } from '../services/quoteBackfillService.js'
 import { logger } from '../config/logger.js';
 import { getKinesisAssetConfig } from '../config/kinesisConfig.js';
 import { NotFoundError, ValidationError } from '../middleware/errorHandler.js';
+import { validateNumber } from '../middleware/validation.js';
 import { invalidatePortfolioCaches } from '../routes/info/_cache.js';
 import { assertPublicHttpUrl } from '../lib/urlSafety.js';
 import { autoResolveFxRateToEur } from '../services/portfolio/fxResolve.js';
-import { createTradeCashLeg, deleteTradeCashLegs } from '../services/portfolio/tradeCashLegService.js';
+import { createTradeCashLeg, deleteTradeCashLegs, deleteTradeCashLegsForTrades } from '../services/portfolio/tradeCashLegService.js';
 import { moveHolding as moveHoldingSvc } from '../services/portfolio/moveHoldingService.js';
 
 // Custom price-provider URLs are fetched server-side at refresh time, so reject
@@ -38,6 +39,36 @@ async function validateProviderUrls(body) {
     } catch (err) {
       throw new ValidationError(`Invalid ${field}: ${err.message}`);
     }
+  }
+}
+
+// Numeric investment fields forwarded to typed columns. Bounds keep garbage
+// out of the valuation and Belgian property-tax math: without them a
+// non-numeric string surfaced as a pg cast error (500 instead of 400) while
+// negatives, 1e15, and JSON "Infinity" inserted cleanly. Both rate fields are
+// percentages in the UI. Mirrors the routes/watchlist.js guards.
+const INVESTMENT_NUMERIC_BOUNDS = [
+  { field: 'current_price', min: 0, max: 1e12 },
+  { field: 'interest_rate', min: -100, max: 100 },
+  { field: 'cadastral_income', min: 0, max: 1e12 },
+  { field: 'municipality_tax_rate', min: 0, max: 100 },
+];
+
+function validateInvestmentNumericFields(body) {
+  if (!body || typeof body !== 'object') return;
+  for (const { field, min, max } of INVESTMENT_NUMERIC_BOUNDS) {
+    if (!(field in body)) continue;
+    const value = body[field];
+    if (value === null) continue; // explicit clear (null-to-clear PATCH semantics)
+    if (value === '') {
+      // A cleared form field means "no value", not 0 — and ''::numeric is a pg
+      // cast error (500) if forwarded raw.
+      body[field] = null;
+      continue;
+    }
+    const result = validateNumber(value, { min, max, fieldName: field });
+    if (!result.valid) throw new ValidationError(result.error);
+    body[field] = result.value;
   }
 }
 
@@ -202,6 +233,7 @@ export async function listInvestments(req, res) {
 }
 
 export async function createInvestment(req, res) {
+  validateInvestmentNumericFields(req.body);
   const {
     name,
     symbol,
@@ -357,6 +389,7 @@ export async function getInvestment(req, res) {
 }
 
 export async function updateInvestment(req, res) {
+  validateInvestmentNumericFields(req.body);
   await validateProviderUrls(req.body);
 
   let inv;
@@ -371,8 +404,20 @@ export async function updateInvestment(req, res) {
 }
 
 export async function deleteInvestment(req, res) {
-  const ok = await investmentRepository.hardDelete(parseRequestId(req));
+  const investmentId = parseRequestId(req);
+
+  // Capture trade ids before the delete: the schema cascade removes the trades
+  // themselves, but their cash legs hang off portfolio_transaction_id, which is
+  // not a real FK (ADR-090) — cascade app-side, like deleteTransaction below.
+  const tradeIds = await portfolioTransactionRepository.getIdsByInvestment(investmentId);
+
+  const ok = await investmentRepository.hardDelete(investmentId);
   if (!ok) throw new NotFoundError('Investment not found');
+
+  await deleteTradeCashLegsForTrades(tradeIds).catch((err) => {
+    logger.error('Trade cash-leg cleanup failed', { investmentId, error: err.message });
+  });
+
   clearInvestmentsCaches();
   res.status(204).send();
 }

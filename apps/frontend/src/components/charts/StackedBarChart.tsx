@@ -7,7 +7,7 @@ import { ParentSize } from "@visx/responsive";
 import { scaleBand, scaleLinear } from "@visx/scale";
 import { BarStack } from "@visx/shape";
 import { motion, useReducedMotion } from "framer-motion";
-import { useCallback, useMemo, useState } from "react";
+import { memo, useCallback, useMemo, useRef, useState } from "react";
 
 import { BottomAxis, LeftAxis } from "./ChartAxis";
 import { ChartTooltip, type ChartTooltipDatum } from "./ChartTooltip";
@@ -38,6 +38,97 @@ export interface StackedBarChartProps<Datum> {
 }
 
 const DEFAULT_MARGIN = { top: 16, right: 16, bottom: 36, left: 48 };
+
+type StackRow<Datum> = Record<string, number> & { __datum: Datum; __category: string };
+
+interface StackedBarLayerProps<Datum> {
+    readonly rows: StackRow<Datum>[];
+    readonly seriesKeys: string[];
+    readonly categoryScale: ReturnType<typeof scaleBand<string>>;
+    readonly valueScale: ReturnType<typeof scaleLinear<number>>;
+    readonly colorLookup: Map<string, string>;
+    readonly barRadius: number;
+    readonly maxBarSize: number | undefined;
+    readonly baseline: number;
+    readonly reduce: boolean | null;
+    readonly onEnter: (datum: Datum, x: number, y: number) => void;
+    readonly onLeave: () => void;
+}
+
+/**
+ * The BarStack (stack layout + N×S motion.rects) behind React.memo: hover
+ * state changes in Inner fire on every segment pointerenter/leave and must
+ * not recompute the stack. All props are referentially stable across those
+ * renders.
+ */
+function StackedBarLayerInner<Datum>({
+    rows,
+    seriesKeys,
+    categoryScale,
+    valueScale,
+    colorLookup,
+    barRadius,
+    maxBarSize,
+    baseline,
+    reduce,
+    onEnter,
+    onLeave,
+}: StackedBarLayerProps<Datum>) {
+    return (
+        <BarStack<StackRow<Datum>, string>
+            data={rows}
+            keys={seriesKeys}
+            x={(d) => d.__category}
+            xScale={categoryScale}
+            yScale={valueScale}
+            color={(key) => colorLookup.get(key) ?? CHART_NEUTRAL.primary}
+        >
+            {(stacks) =>
+                stacks.map((stack) =>
+                    stack.bars.map((bar) => {
+                        const bw = Math.min(
+                            bar.width,
+                            maxBarSize ?? Number.POSITIVE_INFINITY,
+                        );
+                        const bx = bar.x + (bar.width - bw) / 2;
+                        return (
+                            <motion.rect
+                                key={`sb-${stack.index}-${bar.index}`}
+                                x={bx}
+                                width={bw}
+                                rx={barRadius}
+                                fill={bar.color}
+                                initial={
+                                    reduce
+                                        ? { y: bar.y, height: bar.height }
+                                        : { y: baseline, height: 0 }
+                                }
+                                animate={{ y: bar.y, height: bar.height }}
+                                transition={{
+                                    duration: reduce ? 0 : durations.normal,
+                                    ease: easings.outExpo,
+                                    delay:
+                                        (bar.index * 0.02 + stack.index * 0.03),
+                                }}
+                                onPointerEnter={() =>
+                                    onEnter(
+                                        bar.bar.data.__datum,
+                                        bx + bw / 2,
+                                        bar.y,
+                                    )
+                                }
+                                onPointerLeave={onLeave}
+                            />
+                        );
+                    }),
+                )
+            }
+        </BarStack>
+    );
+}
+
+// memo() erases the generic signature; the cast restores it for callers.
+const StackedBarLayer = memo(StackedBarLayerInner) as typeof StackedBarLayerInner;
 
 export function StackedBarChart<Datum>(props: StackedBarChartProps<Datum>) {
     const { height = 280 } = props;
@@ -73,9 +164,15 @@ function Inner<Datum>({
     const innerWidth = Math.max(0, width - margin.left - margin.right);
     const innerHeight = Math.max(0, height - margin.top - margin.bottom);
 
+    // Same inline-prop stabilizer as the other chart primitives — keeps the
+    // scales, rows, and the memoized stack layer valid across consumer re-renders.
+    const categoryAccessorRef = useRef(categoryAccessor);
+    categoryAccessorRef.current = categoryAccessor;
+    const stableCategoryAccessor = useCallback((d: Datum) => categoryAccessorRef.current(d), []);
+
     const categories = useMemo(
-        () => data.map((d) => categoryAccessor(d)),
-        [data, categoryAccessor],
+        () => data.map((d) => stableCategoryAccessor(d)),
+        [data, stableCategoryAccessor],
     );
 
     const totals = useMemo(
@@ -111,18 +208,17 @@ function Inner<Datum>({
         return m;
     }, [series]);
 
-    type BarRow = Record<string, number> & { __datum: Datum; __category: string };
-    const rows: BarRow[] = useMemo(
+    const rows: StackRow<Datum>[] = useMemo(
         () =>
             data.map((d) => {
                 const row = {
                     __datum: d,
-                    __category: categoryAccessor(d),
-                } as BarRow;
+                    __category: stableCategoryAccessor(d),
+                } as StackRow<Datum>;
                 for (const s of series) row[s.key] = s.accessor(d) ?? 0;
                 return row;
             }),
-        [categoryAccessor, data, series],
+        [stableCategoryAccessor, data, series],
     );
 
     const [hover, setHover] = useState<{ datum: Datum; x: number; y: number } | null>(null);
@@ -164,55 +260,21 @@ function Inner<Datum>({
                         />
                     ))}
 
-                    <BarStack<BarRow, string>
-                        data={rows}
-                        keys={seriesKeys}
-                        x={(d) => d.__category}
-                        xScale={categoryScale}
-                        yScale={valueScale}
-                        color={(key) => colorLookup.get(key) ?? CHART_NEUTRAL.primary}
-                    >
-                        {(stacks) =>
-                            stacks.map((stack) =>
-                                stack.bars.map((bar) => {
-                                    const bw = Math.min(
-                                        bar.width,
-                                        maxBarSize ?? Number.POSITIVE_INFINITY,
-                                    );
-                                    const bx = bar.x + (bar.width - bw) / 2;
-                                    return (
-                                        <motion.rect
-                                            key={`sb-${stack.index}-${bar.index}`}
-                                            x={bx}
-                                            width={bw}
-                                            rx={barRadius}
-                                            fill={bar.color}
-                                            initial={
-                                                reduce
-                                                    ? { y: bar.y, height: bar.height }
-                                                    : { y: baseline, height: 0 }
-                                            }
-                                            animate={{ y: bar.y, height: bar.height }}
-                                            transition={{
-                                                duration: reduce ? 0 : durations.normal,
-                                                ease: easings.outExpo,
-                                                delay:
-                                                    (bar.index * 0.02 + stack.index * 0.03),
-                                            }}
-                                            onPointerEnter={() =>
-                                                handleEnter(
-                                                    bar.bar.data.__datum,
-                                                    bx + bw / 2,
-                                                    bar.y,
-                                                )
-                                            }
-                                            onPointerLeave={handleLeave}
-                                        />
-                                    );
-                                }),
-                            )
-                        }
-                    </BarStack>
+                    {/* Stack layout + rects — memoized so hover enter/leave
+                        renders never recompute the stack (see StackedBarLayer). */}
+                    <StackedBarLayer
+                        rows={rows}
+                        seriesKeys={seriesKeys}
+                        categoryScale={categoryScale}
+                        valueScale={valueScale}
+                        colorLookup={colorLookup}
+                        barRadius={barRadius}
+                        maxBarSize={maxBarSize}
+                        baseline={baseline}
+                        reduce={reduce}
+                        onEnter={handleEnter}
+                        onLeave={handleLeave}
+                    />
 
                     <BottomAxis
                         scale={categoryScale}

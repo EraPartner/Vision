@@ -11,8 +11,29 @@ import {
   buildTransactionWhere,
   buildExclusionClauses,
   buildAggregationFilter,
+  parseAmountFilter,
   validateInt4Ids,
 } from '../src/services/filterBuilder.js';
+
+describe('parseAmountFilter', () => {
+  it('returns null for missing or unparseable input', () => {
+    expect(parseAmountFilter(undefined)).toBeNull();
+    expect(parseAmountFilter(null)).toBeNull();
+    expect(parseAmountFilter('')).toBeNull();
+    expect(parseAmountFilter('abc')).toBeNull();
+    expect(parseAmountFilter(Infinity)).toBeNull();
+  });
+
+  it('compares on magnitude by default', () => {
+    expect(parseAmountFilter('-50')).toBe(50);
+    expect(parseAmountFilter(12.5)).toBe(12.5);
+  });
+
+  it('keeps the sign when signed=true', () => {
+    expect(parseAmountFilter('-50', true)).toBe(-50);
+    expect(parseAmountFilter('50', true)).toBe(50);
+  });
+});
 
 describe('validateInt4Ids', () => {
   it('keeps valid positive int4 ids', () => {
@@ -88,12 +109,17 @@ describe('buildTransactionWhere', () => {
     expect(nextParamIdx).toBe(3);
   });
 
-  it('search parameter is referenced by every LIKE column with a single $-slot', () => {
+  it('search builds an indexable t.id IN (UNION ...) with a single $-slot', () => {
     const { sql, params, nextParamIdx } = buildTransactionWhere({ search: 'groceries' });
-    // Every column reuses $1 (single bound value).
-    expect(sql.match(/\$1/g)).not.toBeNull();
-    expect(sql).toContain('t.memo ILIKE $1');
-    expect(sql).toContain('pc.detail ILIKE $1');
+    // One id-producing branch per relation instead of an OR chain over the
+    // outer join aliases, so each branch can use its own index.
+    expect(sql).toContain('t.id IN (');
+    expect(sql).toContain('st.memo ILIKE $1 OR st.comment ILIKE $1');
+    expect(sql).toContain('st.bank_account ILIKE $1 OR st.currency ILIKE $1');
+    expect(sql).toContain('sr.name ILIKE $1');
+    expect(sql).toContain('sc.general ILIKE $1 OR sc.detail ILIKE $1');
+    expect(sql).toContain('sr.default_category_id IN');
+    expect(sql).toContain('srp.default_category_id IN');
     expect(params).toEqual(['%groceries%']);
     expect(nextParamIdx).toBe(2);
   });
@@ -101,13 +127,36 @@ describe('buildTransactionWhere', () => {
   it('search also spans the transaction date text and active tag slugs', () => {
     const { sql, params, nextParamIdx } = buildTransactionWhere({ search: '2026-06' });
     // Date is matched as ISO text so "2026-06" finds June 2026.
-    expect(sql).toContain('CAST(t.date AS TEXT) ILIKE $1');
-    // Tags are matched via an EXISTS over the join table, reusing the same slot.
+    expect(sql).toContain('CAST(st.date AS TEXT) ILIKE $1');
+    // Tags are matched via the junction table, reusing the same slot.
     expect(sql).toContain('FROM transaction_tags tt');
     expect(sql).toContain('tg.slug ILIKE $1');
     expect(sql).toContain('tg.is_active = true');
     expect(params).toEqual(['%2026-06%']);
     expect(nextParamIdx).toBe(2);
+  });
+
+  it('search omits the amount/date CAST branches when the term cannot match them', () => {
+    const { sql } = buildTransactionWhere({ search: 'groceries' });
+    // 'groceries' contains letters, which never appear in amount/date text.
+    expect(sql).not.toContain('CAST(');
+  });
+
+  it('search includes the amount CAST branch only for numeric-shaped terms', () => {
+    const { sql } = buildTransactionWhere({ search: '12.5' });
+    expect(sql).toContain('CAST(st.amount AS TEXT) ILIKE $1');
+    // '.' never appears in date text, so the date branch is skipped.
+    expect(sql).not.toContain('CAST(st.date AS TEXT)');
+  });
+
+  it('search shorter than MIN_SEARCH_LENGTH after trimming is ignored', () => {
+    for (const term of ['a', ' a ', '', '  ']) {
+      const { sql, params, nextParamIdx } = buildTransactionWhere({ search: term });
+      expect(sql).not.toContain('t.id IN (');
+      expect(sql).not.toContain('ILIKE');
+      expect(params).toEqual([]);
+      expect(nextParamIdx).toBe(1);
+    }
   });
 
   it('amountMin/amountMax filter on magnitude (sign-agnostic) with sequential slots', () => {
@@ -165,7 +214,7 @@ describe('buildExclusionClauses', () => {
   it('builds NOT IN predicate for categories using the same COALESCE chain', () => {
     const result = buildExclusionClauses({ excludedCategoryIds: [1, 2, 3] });
     expect(result.whereSql).toBe(
-      'COALESCE(t.category_id, r.default_category_id, pr.default_category_id) NOT IN ($1, $2, $3)',
+      'COALESCE(t.category_id, r.default_category_id, pr.default_category_id, -1) NOT IN ($1, $2, $3)',
     );
     expect(result.params).toEqual([1, 2, 3]);
     expect(result.nextParamIdx).toBe(4);
@@ -174,10 +223,19 @@ describe('buildExclusionClauses', () => {
   it('builds NOT IN predicate for recipients using primary-first COALESCE', () => {
     const result = buildExclusionClauses({ excludedRecipientIds: [7, 8] });
     expect(result.whereSql).toBe(
-      'COALESCE(r.primary_recipient_id, t.recipient_id) NOT IN ($1, $2)',
+      'COALESCE(r.primary_recipient_id, t.recipient_id, -1) NOT IN ($1, $2)',
     );
     expect(result.params).toEqual([7, 8]);
     expect(result.nextParamIdx).toBe(3);
+  });
+
+  it('coalesces NULL to -1 so uncategorized/recipient-less rows are kept, not dropped', () => {
+    // A bare `NULL NOT IN (...)` is NULL (falsy), which silently dropped every
+    // uncategorized row on any exclusion. -1 can never be an excluded id.
+    const cat = buildExclusionClauses({ excludedCategoryIds: [1] });
+    expect(cat.whereSql).toContain(', -1) NOT IN');
+    const rec = buildExclusionClauses({ excludedRecipientIds: [1] });
+    expect(rec.whereSql).toContain(', -1) NOT IN');
   });
 
   it('combines both exclusion lists with AND and sequential $-indices', () => {
@@ -187,8 +245,8 @@ describe('buildExclusionClauses', () => {
       startParamIdx: 4,
     });
     expect(result.whereSql).toBe(
-      'COALESCE(t.category_id, r.default_category_id, pr.default_category_id) NOT IN ($4, $5)'
-        + ' AND COALESCE(r.primary_recipient_id, t.recipient_id) NOT IN ($6)',
+      'COALESCE(t.category_id, r.default_category_id, pr.default_category_id, -1) NOT IN ($4, $5)'
+        + ' AND COALESCE(r.primary_recipient_id, t.recipient_id, -1) NOT IN ($6)',
     );
     expect(result.params).toEqual([10, 11, 20]);
     expect(result.nextParamIdx).toBe(7);
@@ -209,10 +267,10 @@ describe('buildAggregationFilter', () => {
     expect(whereSql).toContain('t.date >= $1');
     expect(whereSql).toContain('t.date <= $2');
     expect(whereSql).toContain(
-      'COALESCE(t.category_id, r.default_category_id, pr.default_category_id) NOT IN ($3)',
+      'COALESCE(t.category_id, r.default_category_id, pr.default_category_id, -1) NOT IN ($3)',
     );
     expect(whereSql).toContain(
-      'COALESCE(r.primary_recipient_id, t.recipient_id) NOT IN ($4, $5)',
+      'COALESCE(r.primary_recipient_id, t.recipient_id, -1) NOT IN ($4, $5)',
     );
     expect(params).toEqual(['2026-01-01', '2026-01-31', 10, 20, 21]);
     expect(nextParamIdx).toBe(6);
@@ -225,6 +283,34 @@ describe('buildAggregationFilter', () => {
     expect(whereSql).toBe('1=1 AND t.is_active = true AND t.bank_account ILIKE $1');
     expect(params).toEqual(['%BE12%']);
     expect(nextParamIdx).toBe(2);
+  });
+});
+
+describe('buildTransactionWhere — accountId / accountIds (FK filter, ADR-088)', () => {
+  it('builds an exact account_id predicate', () => {
+    const { sql, params, nextParamIdx } = buildTransactionWhere({ accountId: 7, active: false });
+    expect(sql).toContain('t.account_id = $1');
+    expect(params).toEqual([7]);
+    expect(nextParamIdx).toBe(2);
+  });
+
+  it('builds an IN clause for accountIds and drops invalid ids', () => {
+    const { sql, params } = buildTransactionWhere({ accountIds: [3, -1, 9, 0.5], active: false });
+    expect(sql).toContain('t.account_id IN ($1, $2)');
+    expect(params).toEqual([3, 9]);
+  });
+
+  it('accountId wins over accountIds; string filters still compose', () => {
+    const { sql, params } = buildTransactionWhere({ accountId: 4, accountIds: [5, 6], bankAccount: 'BE12', active: false });
+    expect(sql).toContain('t.account_id = $1');
+    expect(sql).not.toContain('t.account_id IN');
+    expect(sql).toContain('t.bank_account ILIKE $2');
+    expect(params).toEqual([4, '%BE12%']);
+  });
+
+  it('skips the clause entirely when neither is provided', () => {
+    const { sql } = buildTransactionWhere({ active: false });
+    expect(sql).not.toContain('t.account_id');
   });
 });
 

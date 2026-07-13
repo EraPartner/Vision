@@ -151,7 +151,7 @@ export function generateLoanRepaymentSchedule(config) {
 
   return {
     regular_payment_amount: roundMoney(regularPayment),
-    first_due_date: schedule[0]?.due_date ?? null,
+    first_due_date: schedule[0]?.due_date,
     schedule,
   };
 }

@@ -267,6 +267,8 @@ router.get('/database/tables/:table/rows', async (req, res) => {
       throw new ValidationError(`Invalid filters parameter: ${err.message}`);
     }
   }
+  // The raw `where` query param was removed (SQLi timing oracle, see ADR-101
+  // addendum); readRows rejects it with a 400 pointing at filters[].
   const result = await readRows(req.params.table, {
     limit: req.query.limit,
     offset: req.query.offset,

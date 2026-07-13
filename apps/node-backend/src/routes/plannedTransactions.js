@@ -8,6 +8,7 @@ import { Router } from 'express';
 import { query as dbQuery } from '../database/connection.js';
 import plannedTransactionRepository from '../services/plannedTransactionService.js';
 import { validateIdParam, assertYmd, validateId } from '../middleware/validation.js';
+import { formatDateToYmd } from '../lib/dateFormat.js';
 import { rateLimiter } from '../middleware/rateLimiter.js';
 import { generateLoanRepaymentSchedule } from '../services/calculations/loanSchedule.js';
 import { isValidPattern } from '../services/calculations/recurrence.js';
@@ -35,29 +36,22 @@ function withoutPatchOnlyReadOnlyFields(fields) {
   return rest;
 }
 
+// The name→id resolvers return the id to use (or undefined to leave the
+// column untouched) instead of mutating the fields object — the caller strips
+// the *_name keys immutably and applies the resolved ids itself.
 async function resolveRecipientIdFromName(fields) {
-  if (!fields.recipient_name || fields.recipient_id) {
-    delete fields.recipient_name;
-    return;
-  }
+  if (!fields.recipient_name || fields.recipient_id) return fields.recipient_id;
 
   const normalized = fields.recipient_name.toUpperCase().trim();
   const recipientResult = await dbQuery(
     `SELECT id FROM recipients WHERE UPPER(name) = $1 LIMIT 1`,
     [normalized]
   );
-  if (recipientResult.rows.length > 0) {
-    fields.recipient_id = recipientResult.rows[0].id;
-  }
-
-  delete fields.recipient_name;
+  return recipientResult.rows.length > 0 ? recipientResult.rows[0].id : fields.recipient_id;
 }
 
 async function resolveCategoryIdFromName(fields) {
-  if (!fields.category_name || fields.category_id) {
-    delete fields.category_name;
-    return;
-  }
+  if (!fields.category_name || fields.category_id) return fields.category_id;
 
   const normalized = fields.category_name.toUpperCase().trim();
   const parts = normalized.split(':');
@@ -67,11 +61,11 @@ async function resolveCategoryIdFromName(fields) {
       [parts[0].trim(), parts[1].trim()]
     );
     if (catResult.rows.length > 0) {
-      fields.category_id = catResult.rows[0].id;
+      return catResult.rows[0].id;
     }
   }
 
-  delete fields.category_name;
+  return fields.category_id;
 }
 
 function generateLoanScheduleOrThrow(input) {
@@ -202,7 +196,21 @@ router.post('/', async (req, res) => {
     if (data.frequency) delete data.frequency;
     if (data.custom_interval_days) delete data.custom_interval_days;
     if (data.end_date) delete data.end_date;
+    // A loan's horizon is its generated schedule — recurrence bounds don't apply.
+    if (data.recurrence_end_date) delete data.recurrence_end_date;
     if (data.max_occurrences) delete data.max_occurrences;
+  }
+
+  // Recurrence bounds (nullable): a Y-M-D end date and/or a positive
+  // occurrence cap. plannedExecutionService completes the series when either
+  // is reached — these used to be silently dropped and recur forever.
+  if (data.recurrence_end_date != null) {
+    assertYmd(data.recurrence_end_date, 'recurrence_end_date');
+  }
+  if (data.max_occurrences != null) {
+    const n = Number(data.max_occurrences);
+    if (!Number.isInteger(n) || n < 1) throw new ValidationError('max_occurrences must be a positive integer');
+    data.max_occurrences = n;
   }
 
   // Reject patterns calculateNextDate can't advance (e.g. "fortnightly"): they
@@ -261,12 +269,26 @@ router.patch(
     const existing = await plannedTransactionRepository.getById(id);
     if (!existing) throw new NotFoundError(`Planned transaction ${id} not found`);
 
-    const fields = withoutPatchOnlyReadOnlyFields(req.body);
-    if (fields.tags !== undefined && !Array.isArray(fields.tags)) throw new ValidationError('tags must be an array of strings');
-    await Promise.all([
-      resolveRecipientIdFromName(fields),
-      resolveCategoryIdFromName(fields),
+    const rawFields = withoutPatchOnlyReadOnlyFields(req.body);
+    if (rawFields.tags !== undefined && !Array.isArray(rawFields.tags)) throw new ValidationError('tags must be an array of strings');
+    // Independent lookups — run in parallel, then apply immutably.
+    const [recipientId, categoryId] = await Promise.all([
+      resolveRecipientIdFromName(rawFields),
+      resolveCategoryIdFromName(rawFields),
     ]);
+    const { recipient_name: _recipientName, category_name: _categoryName, ...fields } = rawFields;
+    if (recipientId !== undefined) fields.recipient_id = recipientId;
+    if (categoryId !== undefined) fields.category_id = categoryId;
+
+    // Recurrence bounds: same validation as POST; explicit null clears a bound.
+    if (fields.recurrence_end_date != null) {
+      assertYmd(fields.recurrence_end_date, 'recurrence_end_date');
+    }
+    if (fields.max_occurrences != null) {
+      const n = Number(fields.max_occurrences);
+      if (!Number.isInteger(n) || n < 1) throw new ValidationError('max_occurrences must be a positive integer');
+      fields.max_occurrences = n;
+    }
 
     const generatedLoanSchedule = applyLoanPatchDefaults(fields, existing);
     const loanScheduleDirective = resolveLoanScheduleDirective(generatedLoanSchedule, fields, existing);
@@ -321,11 +343,17 @@ router.delete('/:id', validateIdParam, async (req, res) => {
   res.ok({ message: `Planned transaction ${id} deleted permanently`, links: [] });
 });
 
+// DATE columns arrive from pg as local-midnight Date objects; JSON-serialized
+// raw they become an ISO timestamp of the PREVIOUS day east of UTC, which the
+// frontend T-splits and writes back on the next save (date-1 per edit).
+// Emit calendar-day strings; timestamps (created_at/updated_at) stay ISO.
+const ymd = (v) => (v instanceof Date ? formatDateToYmd(v) : v);
+
 function formatPlannedTransaction(row) {
   if (!row) return null;
   return {
     id: row.id,
-    planned_date: row.planned_date,
+    planned_date: ymd(row.planned_date),
     bank_account: row.bank_account,
     recipient_id: row.recipient_id,
     recipient_name: row.recipient_name || null,
@@ -338,21 +366,23 @@ function formatPlannedTransaction(row) {
     url: row.url || null,
     is_recurring: row.is_recurring,
     recurrence_pattern: row.recurrence_pattern,
+    recurrence_end_date: ymd(row.recurrence_end_date),
+    max_occurrences: row.max_occurrences != null ? parseInt(row.max_occurrences, 10) : null,
     reminder_days_before: row.reminder_days_before != null ? parseInt(row.reminder_days_before, 10) : null,
     is_executed: row.is_executed,
-    last_executed_date: row.last_executed_date,
+    last_executed_date: ymd(row.last_executed_date),
     is_loan: row.is_loan || false,
     loan_type: row.loan_type || null,
     loan_principal: row.loan_principal != null ? toNumber(toDecimal(row.loan_principal)) : null,
     loan_annual_interest_rate: row.loan_annual_interest_rate != null ? toNumber(toDecimal(row.loan_annual_interest_rate)) : null,
     loan_term_months: row.loan_term_months != null ? parseInt(row.loan_term_months, 10) : null,
-    loan_start_date: row.loan_start_date || null,
+    loan_start_date: ymd(row.loan_start_date) || null,
     loan_payment_day: row.loan_payment_day != null ? parseInt(row.loan_payment_day, 10) : null,
     loan_regular_payment_amount: row.loan_regular_payment_amount != null ? toNumber(toDecimal(row.loan_regular_payment_amount)) : null,
-    loan_first_payment_date: row.loan_first_payment_date || null,
+    loan_first_payment_date: ymd(row.loan_first_payment_date) || null,
     loan_schedule: (row.loan_schedule || []).map((entry) => ({
       installment_number: parseInt(entry.installment_number, 10),
-      due_date: entry.due_date,
+      due_date: ymd(entry.due_date),
       payment_amount: toNumber(toDecimal(entry.payment_amount)),
       principal_amount: toNumber(toDecimal(entry.principal_amount)),
       interest_amount: toNumber(toDecimal(entry.interest_amount)),
@@ -363,7 +393,7 @@ function formatPlannedTransaction(row) {
     executions: (row.executions || []).map(e => ({
       id: e.id,
       executed_transaction_id: e.executed_transaction_id,
-      execution_date: e.execution_date,
+      execution_date: ymd(e.execution_date),
       created_at: e.created_at,
     })),
     tags: row.tags ?? [],

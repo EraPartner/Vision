@@ -50,4 +50,21 @@ describe('escapeCsvValue', () => {
   it('combines neutralization with quoting', () => {
     expect(escapeCsvValue('=SUM(A1,B1)')).toBe('"\'=SUM(A1,B1)"');
   });
+
+  it('skips the formula guard for strictly numeric values (no caller opt-out needed)', () => {
+    // A negative NUMERIC must export as "-12.34", not "'-12.34" — otherwise our
+    // own importer NaN-drops it on a round-trip. A pure number can't be a
+    // formula, so the guard self-disables instead of relying on a per-column flag.
+    expect(escapeCsvValue('-12.34')).toBe('-12.34');
+    expect(escapeCsvValue(-12.34)).toBe('-12.34');
+    expect(escapeCsvValue('1234')).toBe('1234');
+  });
+
+  it('still guards number-like-but-not-numeric payloads', () => {
+    // "-12+34" is a real formula; "-12,34" (EU decimal) is not strict numeric
+    // and gets the guard + quoting — conservative but safe.
+    expect(escapeCsvValue('-12+34')).toBe("'-12+34");
+    expect(escapeCsvValue('-1E2+3')).toBe("'-1E2+3");
+    expect(escapeCsvValue('+123')).toBe("'+123");
+  });
 });

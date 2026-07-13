@@ -7,6 +7,7 @@
  */
 
 import { renderHtmlToPdf } from './puppeteerRenderer.js';
+import { toAppDateString } from '../../lib/timezone.js';
 import { buildThemeCss } from './themeCss.js';
 import { escapeHtml, SECTION_CSS } from './sectionHelpers.js';
 import { fetchFinancialData } from './dataFetcher.js';
@@ -599,7 +600,9 @@ export async function generateReport({ type, currency, period, sections, theme, 
     margin: { top: '0', right: '0', bottom: '28px', left: '0' },
   });
 
-  const date = new Date(generatedAt).toISOString().slice(0, 10);
+  // App-timezone date for the filename — the UTC slice named a report
+  // generated shortly after local midnight with yesterday's date.
+  const date = toAppDateString(new Date(generatedAt));
   const filename = `vision-${type}-${date}.pdf`;
 
   res.setHeader('Content-Type', 'application/pdf');

@@ -8,6 +8,7 @@ import { computeDailySnapshots } from '../services/portfolio/snapshotBuilder.js'
 import { accountRepository } from './accountRepository.js';
 import { convertToCurrency } from '../services/currency/currencyConversionService.js';
 import { toNumber } from '../lib/money.js';
+import { todayAppDateString } from '../lib/timezone.js';
 import {
   roundToCents,
   formatDateToYmd,
@@ -18,6 +19,45 @@ import {
   convertRowsWithHistoricalRateFallback,
   sanitizeIsolatedDailyInvestmentSpikes,
 } from './infoRepositoryHelpers.js';
+
+/**
+ * Read the persisted per-account holdings split (ADR-100, migration 0074) for
+ * one currency, shaped as the same Map<accountKey, [{date, holdings}]> the live
+ * replay produces. Returns null when the side table is absent or holds no rows
+ * for the currency, so the caller falls back to a live computeDailySnapshots
+ * replay. Rows are pre-sparse (only accounts holding value on a day) and stored
+ * ordered by (account_key, snapshot_date).
+ *
+ * @param {string} target uppercase currency code
+ * @returns {Promise<Map<string, {date: string, holdings: number}[]>|null>}
+ */
+async function readPersistedAccountSeries(target) {
+  const tableExists = await query(`
+    SELECT 1
+    FROM information_schema.tables
+    WHERE table_schema = current_schema()
+      AND table_name = 'portfolio_snapshot_accounts'
+    LIMIT 1
+  `);
+  if (tableExists.rows.length === 0) return null;
+
+  const result = await query(`
+    SELECT to_char(snapshot_date, 'YYYY-MM-DD') AS day, account_key, value
+    FROM portfolio_snapshot_accounts
+    WHERE currency = $1
+    ORDER BY account_key, snapshot_date
+  `, [target]);
+
+  if (result.rows.length === 0) return null;
+
+  const seriesByAcct = new Map();
+  for (const row of result.rows) {
+    const key = row.account_key;
+    if (!seriesByAcct.has(key)) seriesByAcct.set(key, []);
+    seriesByAcct.get(key).push({ date: row.day, holdings: roundToCents(row.value) });
+  }
+  return seriesByAcct;
+}
 
 export const netWorthRepository = {
   /**
@@ -75,9 +115,14 @@ export const netWorthRepository = {
       investmentsByDay[row.day] = Number(row.investments) || 0;
     }
 
+    // App-timezone today (ADR-009), threaded into the SQL bounds as well so
+    // the generated day series and the JS walk below agree on the last day —
+    // Postgres CURRENT_DATE follows the server timezone, not the app's.
+    const todayYmd = todayAppDateString();
+
     const bankHistoryResult = await query(`
       WITH bounds AS (
-        SELECT $1::date AS start_date, CURRENT_DATE AS end_date
+        SELECT $1::date AS start_date, $2::date AS end_date
       ),
       days AS (
         SELECT generate_series(start_date, end_date, interval '1 day')::date AS day
@@ -117,7 +162,7 @@ export const netWorthRepository = {
       ) lb ON true
       WHERE lb.balance IS NOT NULL
       ORDER BY d.day, a.account_id
-    `, [firstDataDateYmd]);
+    `, [firstDataDateYmd, todayYmd]);
 
     let bankHistoryConverted = await convertRowsWithHistoricalRateFallback(
       mapRowsForAmountConversion(bankHistoryResult.rows, 'balance'),
@@ -133,7 +178,7 @@ export const netWorthRepository = {
 
       const liquidFlowResult = await query(`
         WITH bounds AS (
-          SELECT $1::date AS start_date, CURRENT_DATE AS end_date
+          SELECT $1::date AS start_date, $2::date AS end_date
         ),
         days AS (
           SELECT generate_series(start_date, end_date, interval '1 day')::date AS day
@@ -179,7 +224,7 @@ export const netWorthRepository = {
           value
         FROM tx_cumulative
         ORDER BY day, currency
-      `, [firstDataDateYmd]);
+      `, [firstDataDateYmd, todayYmd]);
 
       bankHistoryConverted = await convertRowsWithHistoricalRateFallback(
         mapRowsForAmountConversion(liquidFlowResult.rows, 'value'),
@@ -200,8 +245,9 @@ export const netWorthRepository = {
     }
 
     const start = new Date(`${firstDataDateYmd}T00:00:00Z`);
-    const end = new Date();
-    end.setUTCHours(0, 0, 0, 0);
+    // End anchor on the app-timezone today (ADR-009) — UTC midnight dropped
+    // the newest day from the series between local midnight and 01:00/02:00.
+    const end = new Date(`${todayYmd}T00:00:00Z`);
 
     const snapshots = [];
     // Forward-fill the last known investments value: portfolio snapshots are
@@ -288,17 +334,27 @@ export const netWorthRepository = {
    */
   async getNetWorthByAccount(targetCurrency = 'EUR') {
     const target = (targetCurrency || 'EUR').toUpperCase();
-    const [snapshots, accounts] = await Promise.all([
-      computeDailySnapshots(target),
+
+    // Prefer the persisted per-account split (migration 0074): a cheap indexed
+    // read of the same value_by_account the snapshot builder already computed,
+    // instead of replaying the full multi-year day-walk on every cache miss.
+    // Falls back to a live replay when the side table is missing or empty (an
+    // un-migrated DB, or before the first snapshot store) — same graceful
+    // degrade the FX-neutral column uses.
+    const [persistedSeries, accounts] = await Promise.all([
+      readPersistedAccountSeries(target),
       accountRepository.getAll({ active: null }),
     ]);
 
-    // Per-account daily holdings from the builder's value_by_account split.
-    const holdingsSeriesByAcct = new Map();
-    for (const s of snapshots) {
-      for (const [acctKey, value] of Object.entries(s.value_by_account || {})) {
-        if (!holdingsSeriesByAcct.has(acctKey)) holdingsSeriesByAcct.set(acctKey, []);
-        holdingsSeriesByAcct.get(acctKey).push({ date: s.snapshot_date, holdings: roundToCents(value) });
+    let holdingsSeriesByAcct = persistedSeries;
+    if (!holdingsSeriesByAcct) {
+      const snapshots = await computeDailySnapshots(target);
+      holdingsSeriesByAcct = new Map();
+      for (const s of snapshots) {
+        for (const [acctKey, value] of Object.entries(s.value_by_account || {})) {
+          if (!holdingsSeriesByAcct.has(acctKey)) holdingsSeriesByAcct.set(acctKey, []);
+          holdingsSeriesByAcct.get(acctKey).push({ date: s.snapshot_date, holdings: roundToCents(value) });
+        }
       }
     }
     const lastHoldings = (key) => {

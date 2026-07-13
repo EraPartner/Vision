@@ -69,13 +69,30 @@ router.post(
 
     const storedPath = await storeAttachment(transactionId, req.file);
 
-    const attachment = await attachmentRepository.create({
-      transaction_id: transactionId,
-      filename: req.file.originalname,
-      stored_path: storedPath,
-      mime_type: sniffedMime,
-      size_bytes: req.file.size,
-    });
+    // The existence check above races a concurrent hard delete — if the insert
+    // fails (FK gone, DB error) the stored file would sit on disk with no row
+    // pointing at it. Clean it up before rethrowing.
+    let attachment;
+    try {
+      attachment = await attachmentRepository.create({
+        transaction_id: transactionId,
+        filename: req.file.originalname,
+        stored_path: storedPath,
+        mime_type: sniffedMime,
+        size_bytes: req.file.size,
+      });
+    } catch (err) {
+      try {
+        await removeAttachmentFile(storedPath);
+      } catch (cleanupErr) {
+        logger.warn('Attachment cleanup after failed insert also failed; file orphaned on disk', {
+          transactionId,
+          storedPath,
+          error: cleanupErr?.message,
+        });
+      }
+      throw err;
+    }
 
     res.status(201);
     res.ok(attachment);

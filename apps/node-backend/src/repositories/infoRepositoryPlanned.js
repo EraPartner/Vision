@@ -6,6 +6,7 @@ import { query } from '../database/connection.js';
 import { convertRowsToEur } from '../services/currency/currencyConversionService.js';
 import { toAppTz, toAppDateString } from '../lib/timezone.js';
 import { calculateNextDate } from '../services/calculations/recurrence.js';
+import { addAll, toDecimal, toNumber } from '../lib/money.js';
 import {
   roundToCents,
   formatDateToYmd,
@@ -38,12 +39,13 @@ function expandRecurringOccurrences(plannedDate, pattern, startYmd, endYmd) {
 export const plannedRepository = {
   async getPlannedExpensesNextMonth(targetCurrency = 'EUR') {
     // Anchor the month window to today's calendar month in APP_TIMEZONE.
-    // Server-local `new Date(y, m+1, 1)` serialized via toISOString() could
-    // resolve to the last day of the *current* month on a non-UTC server,
-    // shifting the whole planned_date SQL range by a month.
+    // Constructed LOCALLY to pair with formatDateToYmd's local extraction —
+    // a UTC-constructed boundary would render as the last day of the previous
+    // month on any server west of UTC. (today.month is 1-based, so passing it
+    // as the 0-based month argument yields the first of the NEXT month.)
     const today = toAppTz(new Date());
-    const nextMonth = new Date(Date.UTC(today.year, today.month, 1));
-    const monthAfter = new Date(Date.UTC(today.year, today.month + 1, 1));
+    const nextMonth = new Date(today.year, today.month, 1);
+    const monthAfter = new Date(today.year, today.month + 1, 1);
     const lastDay = new Date(monthAfter.getTime() - 1);
 
     const sql = `
@@ -79,12 +81,14 @@ export const plannedRepository = {
 
     const dailyMap = {};
     let occurrenceCount = 0;
+    // Day totals accumulate as Decimals (monetary-arithmetic rule) and are
+    // collapsed to numbers once, after the loop.
     const pushOccurrence = (dateStr, row, eur) => {
       if (!dailyMap[dateStr]) {
-        dailyMap[dateStr] = { date: dateStr, total_income: 0, total_expenses: 0, transactions: [] };
+        dailyMap[dateStr] = { date: dateStr, total_income: toDecimal(0), total_expenses: toDecimal(0), transactions: [] };
       }
-      if (eur >= 0) dailyMap[dateStr].total_income += eur;
-      else dailyMap[dateStr].total_expenses += eur;
+      if (eur >= 0) dailyMap[dateStr].total_income = dailyMap[dateStr].total_income.plus(toDecimal(eur));
+      else dailyMap[dateStr].total_expenses = dailyMap[dateStr].total_expenses.plus(toDecimal(eur));
       dailyMap[dateStr].transactions.push({
         id: row.id,
         recipient_name: row.recipient_name,
@@ -122,8 +126,12 @@ export const plannedRepository = {
       return aTime - bTime;
     });
 
-    const totalIncome = dailyData.reduce((s, d) => s + d.total_income, 0);
-    const totalExpenses = dailyData.reduce((s, d) => s + d.total_expenses, 0);
+    const totalIncome = addAll(dailyData.map((d) => d.total_income));
+    const totalExpenses = addAll(dailyData.map((d) => d.total_expenses));
+    for (const day of dailyData) {
+      day.total_income = toNumber(day.total_income);
+      day.total_expenses = toNumber(day.total_expenses);
+    }
 
     return {
       month: nextMonth.getUTCMonth() + 1,
@@ -134,7 +142,7 @@ export const plannedRepository = {
       summary: {
         total_income: roundToCents(totalIncome),
         total_expenses: roundToCents(totalExpenses),
-        net_amount: roundToCents(totalIncome + totalExpenses),
+        net_amount: roundToCents(totalIncome.plus(totalExpenses)),
         transaction_count: occurrenceCount,
       },
     };

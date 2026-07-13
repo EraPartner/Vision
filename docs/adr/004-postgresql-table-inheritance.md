@@ -1,7 +1,7 @@
 ---
 title: ADR 004 - PostgreSQL Table Inheritance for Investments
 type: adr
-status: Accepted
+status: Superseded
 date: 2026-04-02
 tags: [architecture, database, postgresql, inheritance, investments]
 description: Decision to use PostgreSQL table inheritance for the investments domain, separating shared fields from asset-class-specific fields
@@ -12,7 +12,8 @@ related_code: ["alembic/versions/0013_investment_inheritance.py", "alembic/versi
 # ADR-004: PostgreSQL Table Inheritance for Investments
 
 ## Status
-Accepted
+Superseded by [[docs/adr/109-flat-investments-schema-canonical|ADR-109]] (2026-07-10) — the flat
+shape is canonical; legacy inheritance installs convert via a one-time guarded migration.
 
 ## Date
 2026-03-22

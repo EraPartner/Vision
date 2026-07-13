@@ -193,14 +193,16 @@ export function useDeleteTransaction() {
                     try {
                         await apiClient.createTransaction({
                             transaction_date: row.transaction_date,
-                            bank_account: row.bank_account,
+                            // Guarded truthy above; nullable wire fields map to
+                            // undefined for the create contract.
+                            bank_account: row.bank_account as string,
                             recipient_id: row.recipient_id as number,
-                            memo: row.memo,
+                            memo: row.memo ?? undefined,
                             amount: row.amount,
                             currency: row.currency,
                             balance: row.balance,
-                            category_id: row.category_id,
-                            comment: row.comment,
+                            category_id: row.category_id ?? undefined,
+                            comment: row.comment ?? undefined,
                             tags: row.tags?.map((tag) => (typeof tag === 'string' ? tag : tag.slug)),
                         });
                         invalidateTransactionLists(queryClient);

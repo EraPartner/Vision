@@ -26,7 +26,7 @@ import {
   ConflictError,
 } from '../middleware/errorHandler.js';
 import { toDecimal, toNumber } from '../lib/money.js';
-import { buildTransactionWhere, validateInt4Ids } from '../services/filterBuilder.js';
+import { buildTransactionWhere, parseAmountFilter, validateInt4Ids } from '../services/filterBuilder.js';
 import {
   EXPORT_MAX_LIST_SIZE,
   streamCsvExport,
@@ -35,6 +35,9 @@ import {
 } from '../services/transactionExport.js';
 import { resolveBulkSelection } from '../services/bulkSelection.js';
 import { parsePagination } from '../lib/pagination.js';
+import { toWireDate } from '../lib/dateFormat.js';
+import { attachmentRepository } from '../services/attachmentRecordService.js';
+import { removeAttachmentFile } from '../services/attachmentService.js';
 
 const router = Router();
 
@@ -42,10 +45,28 @@ function parseRouteId(req) {
   return parseInt(req.params.id, 10);
 }
 
+// Hard deletes CASCADE the attachments ROWS, but nothing removes the FILES —
+// receipt PII persisted forever on disk and re-entered every backup. Collect
+// stored paths before the delete, remove best-effort after (same log-only
+// pattern as DELETE /api/attachments/:id — a removal failure must not fail
+// the already-committed transaction delete).
+async function removeAttachmentFilesBestEffort(storedPaths) {
+  for (const storedPath of storedPaths) {
+    try {
+      await removeAttachmentFile(storedPath);
+    } catch (err) {
+      logger.warn('Attachment file removal failed after transaction delete; file orphaned on disk', {
+        storedPath,
+        error: err?.message,
+      });
+    }
+  }
+}
+
 function parseTransactionListQuery(query) {
   const {
     transaction_id,
-    start_date, end_date, bank_account,
+    start_date, end_date, account_id, bank_account,
     category_id, category_ids, recipient_id, recipient_group_id, recipient_name,
     active = 'true', search,
     sort_by, sort_dir,
@@ -64,20 +85,12 @@ function parseTransactionListQuery(query) {
     ? String(tags).split(',').map((s) => s.trim().toLowerCase()).filter(Boolean)
     : null;
 
-  // Amount filters compare on magnitude (|amount|) by default, leaving income/
-  // expense sign to transaction_type. With amount_signed=true they instead
-  // compare the signed amount, so +50 and -50 are distinct. amount_exact is
-  // shorthand for min == max.
+  // Amount coercion lives in filterBuilder.parseAmountFilter (shared with
+  // bulkSelection). amount_exact is shorthand for min == max.
   const amountSigned = amount_signed === 'true' || amount_signed === '1';
-  const parseAmount = (v) => {
-    if (v === undefined || v === null || v === '') return null;
-    const raw = Number(v);
-    if (!Number.isFinite(raw)) return null;
-    return amountSigned ? raw : Math.abs(raw);
-  };
-  const amountExact = parseAmount(amount_exact);
-  const amountMin = amountExact != null ? amountExact : parseAmount(amount_min);
-  const amountMax = amountExact != null ? amountExact : parseAmount(amount_max);
+  const amountExact = parseAmountFilter(amount_exact, amountSigned);
+  const amountMin = amountExact != null ? amountExact : parseAmountFilter(amount_min, amountSigned);
+  const amountMax = amountExact != null ? amountExact : parseAmountFilter(amount_max, amountSigned);
 
   return {
     limit,
@@ -85,6 +98,9 @@ function parseTransactionListQuery(query) {
     transactionId: transaction_id ? parseInt(transaction_id, 10) : null,
     startDate: assertYmd(start_date, 'start_date'),
     endDate: assertYmd(end_date, 'end_date'),
+    // account_id is the preferred account filter (ADR-088 — reads key on the
+    // FK); bank_account stays as a substring escape hatch.
+    accountId: account_id ? parseInt(account_id, 10) : null,
     bankAccount: bank_account || null,
     categoryId: category_id ? parseInt(category_id, 10) : null,
     categoryIds: parsedCategoryIds?.length ? parsedCategoryIds : null,
@@ -112,12 +128,21 @@ function parseTransactionListQuery(query) {
  * raw query-string shape used by the list endpoint, including `transaction_id`,
  * `recipient_id`, `recipient_name`, `search`, `transaction_type`, and `active`.
  *
- * Bank-account multi-value support: `bank_accounts=a,b,c` → array of trimmed values.
+ * Account multi-value support: `account_ids=1,2,3` → array of ids (preferred);
+ * `bank_accounts=a,b,c` → array of trimmed strings (legacy escape hatch).
  *
  * Returns { whereSql, params, nextParamIdx }.
  */
 function buildExportFilters(query) {
   const opts = parseTransactionListQuery(query);
+
+  const accountIds = query.account_ids
+    ? String(query.account_ids)
+        .split(',')
+        .map((s) => parseInt(s, 10))
+        .filter((n) => Number.isFinite(n) && n > 0)
+        .slice(0, EXPORT_MAX_LIST_SIZE)
+    : null;
 
   const bankAccounts = query.bank_accounts
     ? String(query.bank_accounts)
@@ -131,6 +156,8 @@ function buildExportFilters(query) {
     transactionId: opts.transactionId,
     startDate: opts.startDate,
     endDate: opts.endDate,
+    accountId: opts.accountId,
+    accountIds: accountIds && accountIds.length > 0 ? accountIds : null,
     bankAccount: opts.bankAccount,
     bankAccounts: bankAccounts && bankAccounts.length > 0 ? bankAccounts : null,
     categoryId: opts.categoryId,
@@ -151,58 +178,55 @@ function buildExportFilters(query) {
 }
 
 function normalizeTransactionPatchFields(body) {
-  const fields = { ...body };
+  // Immutable-rest sanitization (docs/reference/code-patterns.md) — strip
+  // read-only keys via destructuring, never with in-place delete.
+  const { links: _links, id: _id, created_at: _createdAt, date, ...fields } = body;
 
-  if (fields.date) {
-    fields.transaction_date = fields.date;
-    delete fields.date;
+  // Remap whenever the key is present — a cleared date ('' / null) must also
+  // land on transaction_date so the PATCH validation can reject it instead of
+  // letting `SET "date" = ''` reach Postgres.
+  if ('date' in body) {
+    fields.transaction_date = date;
   }
-
-  delete fields.links;
-  delete fields.id;
-  delete fields.created_at;
 
   return fields;
 }
 
+// The name→id resolvers return the id to use (or undefined to leave the
+// column untouched) instead of mutating the fields object — the caller strips
+// the *_name keys immutably and applies the resolved ids itself.
 async function resolveRecipientNameToId(fields) {
-  if (fields.recipient_name && !fields.recipient_id) {
-    const normalized = normalizeForMatching(fields.recipient_name);
-    const recipientResult = await dbQuery(
-      `SELECT id FROM recipients WHERE normalized_name = $1 LIMIT 1`,
-      [normalized]
-    );
-    if (recipientResult.rows.length === 0) {
-      throw new ValidationError(`Recipient with name '${fields.recipient_name}' does not exist`);
-    }
-    fields.recipient_id = recipientResult.rows[0].id;
+  if (!fields.recipient_name || fields.recipient_id) return fields.recipient_id;
+  const normalized = normalizeForMatching(fields.recipient_name);
+  const recipientResult = await dbQuery(
+    `SELECT id FROM recipients WHERE normalized_name = $1 LIMIT 1`,
+    [normalized]
+  );
+  if (recipientResult.rows.length === 0) {
+    throw new ValidationError(`Recipient with name '${fields.recipient_name}' does not exist`);
   }
-
-  delete fields.recipient_name;
+  return recipientResult.rows[0].id;
 }
 
 async function resolveCategoryNameToId(fields) {
-  if (fields.category_name && !fields.category_id) {
-    const normalized = fields.category_name.toUpperCase().trim();
-    if (!normalized.includes(':')) {
-      throw new ValidationError(
-        `Invalid category name format '${normalized}'. Expected format: 'General:Detail' (e.g., 'FOOD:BEVERAGES')`,
-      );
-    }
-    const [general, detail] = normalized.split(':', 2).map(s => s.trim());
-    const catResult = await dbQuery(
-      `SELECT id FROM categories WHERE general = $1 AND detail = $2 LIMIT 1`,
-      [general, detail]
+  if (!fields.category_name || fields.category_id) return fields.category_id;
+  const normalized = fields.category_name.toUpperCase().trim();
+  if (!normalized.includes(':')) {
+    throw new ValidationError(
+      `Invalid category name format '${normalized}'. Expected format: 'General:Detail' (e.g., 'FOOD:BEVERAGES')`,
     );
-    if (catResult.rows.length === 0) {
-      throw new ValidationError(
-        `Category '${normalized}' does not exist. Please create it first or use an existing category.`,
-      );
-    }
-    fields.category_id = catResult.rows[0].id;
   }
-
-  delete fields.category_name;
+  const [general, detail] = normalized.split(':', 2).map(s => s.trim());
+  const catResult = await dbQuery(
+    `SELECT id FROM categories WHERE general = $1 AND detail = $2 LIMIT 1`,
+    [general, detail]
+  );
+  if (catResult.rows.length === 0) {
+    throw new ValidationError(
+      `Category '${normalized}' does not exist. Please create it first or use an existing category.`,
+    );
+  }
+  return catResult.rows[0].id;
 }
 
 // ── Internal transfers (ADR-083) ───────────────────────────────────────────
@@ -391,6 +415,7 @@ router.post(
     const { ids, filter } = req.body ?? {};
     const txIds = await resolveBulkSelection({ ids, filter });
 
+    const attachmentPaths = await attachmentRepository.listPathsByTransactionIds(txIds);
     const deleted = await withTransaction(async (client) => {
       const r = await client.query(
         `DELETE FROM transactions WHERE id = ANY($1::int[]) RETURNING id`,
@@ -399,7 +424,10 @@ router.post(
       return r.rows.length;
     });
 
-    if (deleted > 0) scheduleReconcile();
+    if (deleted > 0) {
+      await removeAttachmentFilesBestEffort(attachmentPaths);
+      scheduleReconcile();
+    }
     res.ok({ deleted });
   },
 );
@@ -539,6 +567,12 @@ router.post('/', async (req, res) => {
   if (!txDate || !data.bank_account || !data.recipient_id || data.amount == null) {
     throw new ValidationError('Missing required fields: date, bank_account, recipient_id, amount');
   }
+  // Sign carries meaning (− expense / + income), so a zero amount is
+  // meaningless and only pollutes aggregations — reject it up front.
+  const amountNum = Number(data.amount);
+  if (!Number.isFinite(amountNum) || amountNum === 0) {
+    throw new ValidationError('amount must be a non-zero finite number');
+  }
   // Validate recipient_id is a positive integer up front — a non-integer here
   // otherwise reached the DB as an FK type error and surfaced as a 500.
   const recipientIdNum = Number(data.recipient_id);
@@ -619,13 +653,47 @@ router.patch(
       throw new ValidationError('tags must be an array of strings');
     }
 
-    // Independent — touch disjoint fields, run in parallel.
-    await Promise.all([
+    // Parity with POST, which validates date/amount/recipient_id. Without
+    // these, the inline row editor's cleared native date input ('') survived
+    // the whitelist and reached Postgres as `SET "date" = ''` — a 22007 cast
+    // error surfacing as a 500 from pressing Enter. Both columns are NOT NULL,
+    // so a PATCH may change them but never clear them.
+    if ('transaction_date' in fields) {
+      if (!fields.transaction_date) {
+        throw new ValidationError('transaction_date cannot be cleared');
+      }
+      fields.transaction_date = assertYmd(fields.transaction_date, 'transaction_date');
+    }
+    if ('amount' in fields) {
+      const amountNum = Number(fields.amount);
+      if (fields.amount == null || fields.amount === '' || !Number.isFinite(amountNum)) {
+        throw new ValidationError('amount must be a number');
+      }
+      fields.amount = amountNum;
+    }
+    // recipient_id/category_id: null clears (both columns are nullable), but a
+    // present non-null value must be a positive integer — a non-integer here
+    // otherwise reached the DB as an FK type error and surfaced as a 500.
+    for (const fkField of ['recipient_id', 'category_id']) {
+      const value = fields[fkField];
+      if (value === undefined || value === null) continue;
+      const idNum = Number(value);
+      if (!Number.isInteger(idNum) || idNum <= 0) {
+        throw new ValidationError(`${fkField} must be a positive integer`);
+      }
+      fields[fkField] = idNum;
+    }
+
+    // Independent lookups — run in parallel, then apply immutably.
+    const [recipientId, categoryId] = await Promise.all([
       resolveRecipientNameToId(fields),
       resolveCategoryNameToId(fields),
     ]);
+    const { recipient_name: _recipientName, category_name: _categoryName, ...patch } = fields;
+    if (recipientId !== undefined) patch.recipient_id = recipientId;
+    if (categoryId !== undefined) patch.category_id = categoryId;
 
-    const updated = await transactionRepository.update(id, fields);
+    const updated = await transactionRepository.update(id, patch);
     if (!updated) {
       throw new NotFoundError(`Transaction with ID ${id} not found`);
     }
@@ -638,10 +706,12 @@ router.patch(
 // DELETE /api/transactions/:id
 router.delete('/:id', validateIdParam, async (req, res) => {
   const id = parseRouteId(req);
+  const attachmentPaths = await attachmentRepository.listPathsByTransactionIds([id]);
   const deleted = await transactionRepository.hardDelete(id);
   if (!deleted) {
     throw new NotFoundError(`Transaction with ID ${id} not found`);
   }
+  await removeAttachmentFilesBestEffort(attachmentPaths);
   scheduleReconcile();
   res.ok({ message: 'Transaction deleted permanently', details: { method: 'hard delete' }, links: [] });
 });
@@ -656,8 +726,10 @@ function formatTransaction(row) {
   const amountEur = row.amount_eur != null ? toNumber(toDecimal(row.amount_eur)) : amount;
   return {
     id: row.id,
-    transaction_date: row.date,
-    date: row.date,
+    // DATE column: emit the calendar day, not the raw pg Date (which JSON-
+    // serializes as the previous day's ISO timestamp east of UTC).
+    transaction_date: toWireDate(row.date),
+    date: toWireDate(row.date),
     bank_account: row.bank_account,
     recipient_id: row.recipient_id,
     recipient_name: row.recipient_name || null,

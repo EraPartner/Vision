@@ -20,7 +20,7 @@
 
 import { query, getClient } from '../database/connection.js';
 import { logger } from '../config/logger.js';
-import { scheduleRefresh } from './materializedViewService.js';
+import { scheduleAggregationRefresh } from './aggregationRefresh.js';
 import {
   AppError,
   ValidationError,
@@ -151,9 +151,17 @@ function buildFilterFragment(filter, params, columnNames) {
 
 /**
  * Read a page of rows. Runs inside a READ ONLY transaction.
+ *
+ * Only the structured, parameterized `filters[]` path exists — the ADR-101
+ * raw-WHERE escape hatch was removed (2026-07-10): concatenating a caller
+ * string into the SQL was a blind-SQLi timing oracle (pg_sleep in the WHERE
+ * survives CORS on this CSRF-exempt GET), and a bare `--` silently truncated
+ * the rest of the statement past the `;` guard.
  * @param {string} table
  * @param {{limit?:number, offset?:number, orderBy?:string, dir?:string,
- *          filters?:Array<{column:string,op?:string,value?:unknown}>, where?:string}} opts
+ *          filters?:Array<{column:string,op?:string,value?:unknown}>,
+ *          where?:string}} opts `where` is accepted only to be rejected (400) —
+ *          the raw-WHERE escape hatch was removed.
  */
 export async function readRows(table, opts = {}) {
   const { columns, primaryKey } = await getTableMeta(table);
@@ -170,11 +178,9 @@ export async function readRows(table, opts = {}) {
   }
 
   if (opts.where !== undefined && String(opts.where).trim() !== '') {
-    const raw = String(opts.where);
-    if (raw.includes(';')) {
-      throw new ValidationError('WHERE clause may not contain ";"');
-    }
-    whereParts.push(`(${raw})`);
+    throw new ValidationError(
+      'The raw WHERE parameter has been removed. Use the structured filters[] parameter instead.',
+    );
   }
 
   const whereSql = whereParts.length ? `WHERE ${whereParts.join(' AND ')}` : '';
@@ -433,7 +439,7 @@ export async function applyMutations(table, changes, { dryRun = false } = {}) {
     }
 
     const refreshed = MATVIEW_BASE_TABLES.has(table);
-    if (refreshed) scheduleRefresh();
+    if (refreshed) scheduleAggregationRefresh();
 
     return { dryRun: false, applied: results.length, results, refreshScheduled: refreshed };
   } catch (err) {
@@ -473,11 +479,16 @@ function mapDbError(err) {
     case '22003': // numeric_value_out_of_range
     case '22007': // invalid_datetime_format
       return new ValidationError(`Invalid value for column type: ${err.message}`);
-    case '42601': // syntax_error (typically a bad raw WHERE clause)
+    case '42601': // syntax_error
     case '42703': // undefined_column
     case '42883': // undefined_function / operator
     case '42P01': // undefined_table
-      return new ValidationError(`Invalid query: ${err.message}`);
+      // Never echo raw driver text back to the client: with identifiers
+      // allowlisted these are unreachable in normal use, and leaking the
+      // message hands schema/column names to a prober (data-protection policy,
+      // docs/security/data-protection.md). Full detail still goes to the logs
+      // via the caught error.
+      return new ValidationError('Invalid query');
     case '42501': // insufficient_privilege
       return new ForbiddenError('Insufficient database privileges for this operation');
     case '25006': // read_only_sql_transaction

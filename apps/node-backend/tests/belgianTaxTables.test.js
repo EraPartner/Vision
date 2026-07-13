@@ -24,6 +24,14 @@ describe('belgianTaxTables', () => {
     expect(t.capitalGainsTaxRate).toBe(0.10); // uses 2026 numbers
   });
 
+  it('TOB caps follow the rate: 0.35% → €1,600 (the €4,000 cap belongs to the 1.32% rate)', () => {
+    const { tob } = getTaxTable(2026);
+    expect(tob.bonds).toEqual({ rate: 0.0012, cap: 1300 });
+    expect(tob.sharesAndOther).toEqual({ rate: 0.0035, cap: 1600 });
+    expect(tob.accumulatingFunds).toEqual({ rate: 0.0132, cap: 4000 });
+    expect(tob.distributingFunds).toEqual({ rate: 0.0012, cap: 1300 });
+  });
+
   it('lists available years ascending incl. 2026', () => {
     expect(getAvailableYears()).toEqual([2024, 2025, 2026]);
   });

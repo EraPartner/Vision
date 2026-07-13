@@ -9,8 +9,9 @@
  */
 
 import { query } from '../database/connection.js';
+import { toWireDate } from '../lib/dateFormat.js';
 import { logger } from '../config/logger.js';
-import { toDecimal } from '../lib/money.js';
+import { addAll, divide, roundMoney, toDecimal } from '../lib/money.js';
 
 const MIN_OCCURRENCES = 3; // Minimum transactions to consider a pattern
 const INTERVAL_TOLERANCE = 0.25; // 25% tolerance for interval matching
@@ -155,22 +156,32 @@ export async function detectRecurringPatterns() {
     );
     const plannedTableAvailable = Boolean(plannedTableCheck.rows[0]?.exists);
 
-    // Group by recipient
+    // Group by recipient AND flow direction. Bucketing on recipient alone
+    // blended income and expense from the same recipient (e.g. an employer
+    // that is also occasionally reimbursed) into one averaged "pattern" that
+    // matched neither real flow — amounts go through .abs() below, so the
+    // sign distinction would otherwise be lost entirely.
     const byRecipient = {};
     for (const row of result.rows) {
-      const key = row.recipient_id;
+      const direction = Number(row.amount) < 0 ? 'expense' : 'income';
+      const key = `${row.recipient_id}:${direction}`;
       if (!byRecipient[key]) {
         byRecipient[key] = {
           recipientId: row.recipient_id,
           recipientName: row.recipient_name || 'Unknown',
+          direction,
           transactions: [],
         };
       }
       byRecipient[key].transactions.push(row);
     }
 
-    // Batch-fetch all planned recipient IDs in one query (avoids N+1)
-    const allRecipientIds = Object.keys(byRecipient).map(Number).filter(Boolean);
+    // Batch-fetch all planned recipient IDs in one query (avoids N+1).
+    // Keys are now "recipientId:direction" composites — read the id from the
+    // group, not the key.
+    const allRecipientIds = [...new Set(
+      Object.values(byRecipient).map((g) => g.recipientId).filter(Boolean),
+    )];
     const plannedRecipientIds = new Set();
     if (plannedTableAvailable && allRecipientIds.length > 0) {
       const plannedResult = await query(
@@ -208,9 +219,9 @@ export async function detectRecurringPatterns() {
       const detected = detectInterval(intervals);
       if (!detected) continue;
 
-      // Get amounts info
-      const amounts = txns.map((t) => toDecimal(t.amount).abs().toNumber());
-      const avgAmount = amounts.reduce((s, v) => s + v, 0) / amounts.length;
+      // Get amounts info — accumulated as Decimals per the monetary-arithmetic rule
+      const amounts = txns.map((t) => toDecimal(t.amount).abs());
+      const avgAmount = divide(addAll(amounts), amounts.length);
       const latestAmount = amounts[amounts.length - 1];
       const currency = txns[0].currency || 'EUR';
 
@@ -236,18 +247,21 @@ export async function detectRecurringPatterns() {
       patterns.push({
         recipientId: group.recipientId,
         recipientName: group.recipientName,
+        direction: group.direction,
         detectedPattern: detected.pattern,
         intervalDays: detected.medianDays,
         consistency: detected.consistency,
         occurrences: txns.length,
-        averageAmount: Math.round(avgAmount * 100) / 100,
-        latestAmount: Math.round(latestAmount * 100) / 100,
+        averageAmount: roundMoney(avgAmount),
+        latestAmount: roundMoney(latestAmount),
         currency,
         categoryId: txns[txns.length - 1].category_id,
         categoryName: txns[txns.length - 1].category_name,
         bankAccount: txns[txns.length - 1].bank_account,
-        firstSeen: txns[0].date,
-        lastSeen: txns[txns.length - 1].date,
+        // DATE columns: calendar-day strings, not raw pg Dates (which
+        // toJSON to the previous day's ISO timestamp east of UTC).
+        firstSeen: toWireDate(txns[0].date),
+        lastSeen: toWireDate(txns[txns.length - 1].date),
         predictedNext: nextDate.toISOString().split('T')[0],
         amountChanges,
         isAlreadyPlanned,

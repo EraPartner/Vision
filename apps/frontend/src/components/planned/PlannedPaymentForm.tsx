@@ -12,6 +12,7 @@ import { useLanguage } from "@/contexts/LanguageContext";
 import { useAppSettings } from "@/contexts/AppSettingsContext";
 import { RecipientCombobox } from "@/components/shared/RecipientCombobox";
 import { CategoryCombobox } from "@/components/shared/CategoryCombobox";
+import { AccountCombobox } from "@/components/shared/AccountCombobox";
 import { DatePicker } from "@/components/shared/DatePicker";
 import { TagInput } from "@/components/shared/TagInput";
 import { parseLocalDateFromYmd, toYmd } from "@/components/shared/dateUtils";
@@ -70,6 +71,16 @@ export default function PlannedPaymentForm({ open, onOpenChange, onSubmit, initi
       const term = parseInt(loanTermMonths, 10);
       if (!Number.isInteger(term) || term < 1 || term > 600) {
         alert(t('plannedForm.loanTermInvalid'));
+        return;
+      }
+    }
+
+    // A "custom" pattern with a blank/0 interval reached the backend as the
+    // literal pattern "custom" and came back as a raw 400 — block it here.
+    if (!isLoan && isRecurring && frequency === "custom") {
+      const days = parseInt(customDays, 10);
+      if (!Number.isInteger(days) || days < 1) {
+        alert(t('plannedForm.customDaysInvalid'));
         return;
       }
     }
@@ -203,7 +214,12 @@ export default function PlannedPaymentForm({ open, onOpenChange, onSubmit, initi
             {/* Bank account */}
             <div className="grid gap-1.5">
               <Label htmlFor="pp-bank">{t('plannedForm.bankAccountRequired')}</Label>
-              <Input id="pp-bank" placeholder={t('plannedForm.bankPlaceholder')} value={bankAccount} onChange={(e) => setBankAccount(e.target.value)} />
+              <AccountCombobox
+                id="pp-bank"
+                value={bankAccount}
+                onChange={setBankAccount}
+                placeholder={t('plannedForm.bankPlaceholder')}
+              />
             </div>
 
             {/* Recurring toggle */}

@@ -128,7 +128,9 @@ export function formatCurrency(
   amount: number,
   currencyCode?: string,
   locale?: string,
-  fractionDigits?: number
+  fractionDigits?: number,
+  /** Render an explicit locale-correct sign (+/−) for non-zero amounts. */
+  signed?: boolean
 ): string {
   const effectiveCurrency = currencyCode || currencyFormatDefaults.defaultCurrency;
   const effectiveLocale = locale || currencyFormatDefaults.locale;
@@ -139,6 +141,7 @@ export function formatCurrency(
     currency: effectiveCurrency,
     minimumFractionDigits: effectiveFractionDigits,
     maximumFractionDigits: effectiveFractionDigits,
+    signDisplay: signed ? 'exceptZero' : 'auto',
   }).format(amount);
 }
 
@@ -146,6 +149,8 @@ export interface CompactFormatResult {
   display: string;
   full: string;
   isCompact: boolean;
+  /** formatToParts of `display` — feed to `<RollingNumber parts>` for the Money treatment. */
+  parts: Intl.NumberFormatPart[];
 }
 
 const COMPACT_LENGTH_THRESHOLD = 9;
@@ -160,22 +165,29 @@ export function formatCurrencyCompact(
   const effectiveLocale = locale || currencyFormatDefaults.locale;
   const effectiveFractionDigits = fractionDigits ?? currencyFormatDefaults.fractionDigits;
 
-  const full = formatCurrency(amount, effectiveCurrency, effectiveLocale, effectiveFractionDigits);
+  const fullParts = new Intl.NumberFormat(effectiveLocale, {
+    style: 'currency',
+    currency: effectiveCurrency,
+    minimumFractionDigits: effectiveFractionDigits,
+    maximumFractionDigits: effectiveFractionDigits,
+  }).formatToParts(amount);
+  const full = fullParts.map((p) => p.value).join('');
   if (full.length <= COMPACT_LENGTH_THRESHOLD) {
-    return { display: full, full, isCompact: false };
+    return { display: full, full, isCompact: false, parts: fullParts };
   }
 
-  const compact = new Intl.NumberFormat(effectiveLocale, {
+  const compactParts = new Intl.NumberFormat(effectiveLocale, {
     style: 'currency',
     currency: effectiveCurrency,
     notation: 'compact',
     maximumFractionDigits: 1,
-  }).format(amount);
+  }).formatToParts(amount);
+  const compact = compactParts.map((p) => p.value).join('');
 
   if (compact.length >= full.length) {
-    return { display: full, full, isCompact: false };
+    return { display: full, full, isCompact: false, parts: fullParts };
   }
 
-  return { display: compact, full, isCompact: true };
+  return { display: compact, full, isCompact: true, parts: compactParts };
 }
 

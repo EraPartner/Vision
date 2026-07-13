@@ -13,6 +13,7 @@ import {
   getAllByInvestmentIds,
   getCount,
   getById,
+  getIdsByInvestment,
   getSummary,
 } from './portfolioTxRepo.reads.js';
 import {
@@ -27,6 +28,7 @@ export const portfolioTransactionRepository = {
   getAllByInvestmentIds,
   getCount,
   getById,
+  getIdsByInvestment,
   create,
   update,
   hardDelete,

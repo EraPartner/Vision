@@ -57,3 +57,52 @@ export function mergeAccounts(targetId: number, sourceIds: number[]): Promise<Ac
         body: JSON.stringify({ source_ids: sourceIds }),
     });
 }
+
+export interface OpeningBalanceInput {
+    balance: number;
+    date: string;
+    currency?: string;
+}
+
+export interface OpeningBalanceResult {
+    transaction: { id: number; balance: number; transfer_source: string } | null;
+    /** Set when the anchor date does not precede existing activity (anchor+delta makes it inert). */
+    warning: string | null;
+}
+
+/**
+ * Set (create or update) the opening-balance anchor for a manual/cash-only account
+ * (ADR-094 second addendum, D4). Stamps one system row per account+currency; the
+ * single sanctioned exception to the `transactions.balance` write-protection.
+ */
+export function setOpeningBalance(id: number, input: OpeningBalanceInput): Promise<OpeningBalanceResult> {
+    return apiRequest<OpeningBalanceResult>(`/api/accounts/${id}/opening-balance`, {
+        method: 'POST',
+        body: JSON.stringify(input),
+    });
+}
+
+export type ReconcileMode = 'accept' | 'adjustment';
+
+export interface ReconcileResult {
+    mode: ReconcileMode;
+    /** Drift after the operation — always 0 on success. */
+    drift: number;
+    statement_balance: number;
+    computed_balance: number;
+    /** The server-created adjustment row (mode 'adjustment'), else null. */
+    transaction: { id: number; amount: number; transfer_source: string } | null;
+}
+
+/**
+ * Reconcile an account's drift (ADR-094, Phase C). `mode: 'accept'` rewrites the
+ * stored statement figures to the computed balance; `mode: 'adjustment'` stamps a
+ * server-side 'adjustment' ledger row so the computed balance rises to meet the
+ * statement (balance-free — ADR-094 descriptive-only default preserved).
+ */
+export function reconcileAccount(id: number, mode: ReconcileMode): Promise<ReconcileResult> {
+    return apiRequest<ReconcileResult>(`/api/accounts/${id}/reconcile`, {
+        method: 'POST',
+        body: JSON.stringify({ mode }),
+    });
+}

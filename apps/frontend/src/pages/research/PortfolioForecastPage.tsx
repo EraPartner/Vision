@@ -15,6 +15,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { LineChart, type LineSeries } from "@/components/charts";
 import { PageHeader } from "@/components/shared/PageHeader";
+import { StatCard } from "@/components/dashboard/StatCard";
 import { useDebounce } from "@/hooks/useDebounce";
 import { apiClient } from "@/lib/api";
 import { cn } from "@/lib/utils";
@@ -220,29 +221,33 @@ export default function PortfolioForecastPage() {
         <>
           {/* Summary */}
           <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-            <SummaryCard
+            <StatCard
               icon={Wallet}
-              label={t("research.forecast.projectedMedian")}
-              value={isFetching && !forecast ? undefined : fmtMoney(forecast?.projected?.p50)}
-              hint={forecast ? `${fmtMoney(forecast.projected?.p10)} – ${fmtMoney(forecast.projected?.p90)}` : undefined}
+              title={t("research.forecast.projectedMedian")}
+              loading={isFetching && !forecast}
+              value={fmtMoney(forecast?.projected?.p50)}
+              subtitle={forecast ? `${fmtMoney(forecast.projected?.p10)} – ${fmtMoney(forecast.projected?.p90)}` : undefined}
             />
-            <SummaryCard
+            <StatCard
               icon={TrendingUp}
-              label={t("research.forecast.expectedReturn")}
-              value={isFetching && !forecast ? undefined : fmtPct(forecast?.expectedAnnualReturn, true)}
-              hint={forecast?.usedForward ? t("research.forecast.blendedHint") : t("research.forecast.historicalHint")}
+              title={t("research.forecast.expectedReturn")}
+              loading={isFetching && !forecast}
+              value={fmtPct(forecast?.expectedAnnualReturn, true)}
+              subtitle={forecast?.usedForward ? t("research.forecast.blendedHint") : t("research.forecast.historicalHint")}
             />
-            <SummaryCard
+            <StatCard
               icon={Activity}
-              label={t("research.forecast.volatility")}
-              value={isFetching && !forecast ? undefined : fmtPct(forecast?.annualVolatility)}
-              hint={t("research.forecast.annualized")}
+              title={t("research.forecast.volatility")}
+              loading={isFetching && !forecast}
+              value={fmtPct(forecast?.annualVolatility)}
+              subtitle={t("research.forecast.annualized")}
             />
-            <SummaryCard
+            <StatCard
               icon={Target}
-              label={forecast?.targetValue ? t("research.forecast.probTarget") : t("research.forecast.probBelowInvested")}
-              value={isFetching && !forecast ? undefined : fmtPct(forecast?.targetValue ? forecast?.probTarget : forecast?.probBelowInvested)}
-              hint={forecast?.targetValue ? fmtMoney(forecast.targetValue) : fmtMoney(forecast?.netInvested)}
+              title={forecast?.targetValue ? t("research.forecast.probTarget") : t("research.forecast.probBelowInvested")}
+              loading={isFetching && !forecast}
+              value={fmtPct(forecast?.targetValue ? forecast?.probTarget : forecast?.probBelowInvested)}
+              subtitle={forecast?.targetValue ? fmtMoney(forecast.targetValue) : fmtMoney(forecast?.netInvested)}
             />
           </div>
 
@@ -309,31 +314,3 @@ export default function PortfolioForecastPage() {
   );
 }
 
-function SummaryCard({
-  icon: Icon,
-  label,
-  value,
-  hint,
-}: {
-  icon: React.ComponentType<{ className?: string }>;
-  label: string;
-  value: string | undefined;
-  hint?: string;
-}) {
-  return (
-    <Card className="glass-regular">
-      <CardContent className="space-y-1 pt-6">
-        <div className="flex items-center gap-2 text-xs text-muted-foreground">
-          <Icon className="h-3.5 w-3.5" />
-          {label}
-        </div>
-        {value === undefined ? (
-          <Skeleton className="h-7 w-24" />
-        ) : (
-          <div className="text-2xl font-semibold tabular-nums">{value}</div>
-        )}
-        {hint && <div className="text-xs text-muted-foreground tabular-nums">{hint}</div>}
-      </CardContent>
-    </Card>
-  );
-}

@@ -27,7 +27,6 @@ vi.mock('../src/config/logger.js', () => ({
 
 import {
   matchesTolerance,
-  findAutoLinkTarget,
   autoLinkTransactions,
   getMatchSuggestions,
 } from '../src/services/plannedMatchService.js';
@@ -88,21 +87,6 @@ describe('matchesTolerance', () => {
   it('handles pg Date objects for the date fields', () => {
     const p = planned({ planned_date: new Date(2026, 6, 1) }); // local midnight Jul 1
     expect(matchesTolerance(p, tx({ transaction_date: new Date(2026, 6, 3) }))).toBe(true);
-  });
-});
-
-describe('findAutoLinkTarget', () => {
-  it('returns the sole match', () => {
-    const target = findAutoLinkTarget(tx(), [planned({ id: 1 }), planned({ id: 2, recipient_cluster_id: 99 })]);
-    expect(target?.id).toBe(1);
-  });
-
-  it('returns undefined when two planned payments match', () => {
-    expect(findAutoLinkTarget(tx(), [planned({ id: 1 }), planned({ id: 2 })])).toBeUndefined();
-  });
-
-  it('returns undefined when nothing matches', () => {
-    expect(findAutoLinkTarget(tx({ recipient_cluster_id: 99 }), [planned()])).toBeUndefined();
   });
 });
 

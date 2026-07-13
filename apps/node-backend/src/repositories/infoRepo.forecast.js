@@ -12,15 +12,22 @@ import {
   mapRowsForAmountConversion,
   batchConvertGroupsWithHistoricalRateFallback,
 } from './infoRepositoryHelpers.js';
+import { todayAppDateString } from '../lib/timezone.js';
 
 export async function getCashflowComparison(
   excludedCategoryIds = [],
   excludedRecipientIds = [],
   targetCurrency = 'EUR',
 ) {
-  const now = new Date();
-  const daysInMonth = new Date(now.getFullYear(), now.getMonth() + 1, 0).getDate();
-  const currentDay = now.getDate();
+  // App-timezone today (ADR-009) — server-local getters could disagree with
+  // the SQL paths' CURRENT_DATE around a day boundary.
+  const todayYmd = todayAppDateString();
+  const daysInMonth = new Date(Date.UTC(
+    Number(todayYmd.slice(0, 4)),
+    Number(todayYmd.slice(5, 7)),
+    0,
+  )).getUTCDate();
+  const currentDay = Number(todayYmd.slice(8, 10));
   const HISTORY_MONTHS = 24;
 
   const validCatIds = excludedCategoryIds.filter(id => Number.isInteger(id) && id > 0 && id < 2147483647);
@@ -41,7 +48,7 @@ export async function getCashflowComparison(
   if (validCatIds.length > 0) {
     const placeholders = validCatIds.map(() => `$${paramIdx++}`).join(', ');
     categoryExclusionWhere += `
-      AND COALESCE(t.category_id, r.default_category_id, pr.default_category_id) NOT IN (${placeholders})
+      AND COALESCE(t.category_id, r.default_category_id, pr.default_category_id, -1) NOT IN (${placeholders})
     `;
     excludeParams.push(...validCatIds);
   }
@@ -49,7 +56,7 @@ export async function getCashflowComparison(
   if (validRecIds.length > 0) {
     const placeholders = validRecIds.map(() => `$${paramIdx++}`).join(', ');
     categoryExclusionWhere += `
-      AND COALESCE(r.primary_recipient_id, t.recipient_id) NOT IN (${placeholders})
+      AND COALESCE(r.primary_recipient_id, t.recipient_id, -1) NOT IN (${placeholders})
     `;
     excludeParams.push(...validRecIds);
   }
@@ -207,8 +214,8 @@ export async function getCashflowComparison(
   return {
     days_in_month: daysInMonth,
     current_day: currentDay,
-    month: now.getMonth() + 1,
-    year: now.getFullYear(),
+    month: Number(todayYmd.slice(5, 7)),
+    year: Number(todayYmd.slice(0, 4)),
     without_planned: withoutPlanned,
     with_planned: withPlanned,
   };
@@ -241,14 +248,14 @@ export async function getCashflowForecastData(
   if (validCatIds.length > 0) {
     const placeholders = validCatIds.map(() => `$${paramIdx++}`).join(', ');
     categoryExclusionWhere += `
-      AND COALESCE(t.category_id, r.default_category_id, pr.default_category_id) NOT IN (${placeholders})
+      AND COALESCE(t.category_id, r.default_category_id, pr.default_category_id, -1) NOT IN (${placeholders})
     `;
     excludeParams.push(...validCatIds);
   }
   if (validRecIds.length > 0) {
     const placeholders = validRecIds.map(() => `$${paramIdx++}`).join(', ');
     categoryExclusionWhere += `
-      AND COALESCE(r.primary_recipient_id, t.recipient_id) NOT IN (${placeholders})
+      AND COALESCE(r.primary_recipient_id, t.recipient_id, -1) NOT IN (${placeholders})
     `;
     excludeParams.push(...validRecIds);
   }
@@ -360,14 +367,14 @@ export async function getCashflowForecastDataRolling(
   if (validCatIds.length > 0) {
     const placeholders = validCatIds.map(() => `$${paramIdx++}`).join(', ');
     categoryExclusionWhere += `
-      AND COALESCE(t.category_id, r.default_category_id, pr.default_category_id) NOT IN (${placeholders})
+      AND COALESCE(t.category_id, r.default_category_id, pr.default_category_id, -1) NOT IN (${placeholders})
     `;
     excludeParams.push(...validCatIds);
   }
   if (validRecIds.length > 0) {
     const placeholders = validRecIds.map(() => `$${paramIdx++}`).join(', ');
     categoryExclusionWhere += `
-      AND COALESCE(r.primary_recipient_id, t.recipient_id) NOT IN (${placeholders})
+      AND COALESCE(r.primary_recipient_id, t.recipient_id, -1) NOT IN (${placeholders})
     `;
     excludeParams.push(...validRecIds);
   }
@@ -459,12 +466,12 @@ export async function getCashflowForecastDataByCategory(
 
   if (validCatIds.length > 0) {
     const placeholders = validCatIds.map(() => `$${paramIdx++}`).join(', ');
-    catExclusionWhere = `AND COALESCE(t.category_id, r.default_category_id, pr.default_category_id) NOT IN (${placeholders})`;
+    catExclusionWhere = `AND COALESCE(t.category_id, r.default_category_id, pr.default_category_id, -1) NOT IN (${placeholders})`;
     excludeParams.push(...validCatIds);
   }
   if (validRecIds.length > 0) {
     const placeholders = validRecIds.map(() => `$${paramIdx++}`).join(', ');
-    recExclusionWhere = `AND COALESCE(r.primary_recipient_id, t.recipient_id) NOT IN (${placeholders})`;
+    recExclusionWhere = `AND COALESCE(r.primary_recipient_id, t.recipient_id, -1) NOT IN (${placeholders})`;
     excludeParams.push(...validRecIds);
   }
 

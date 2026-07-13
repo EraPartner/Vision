@@ -12,6 +12,7 @@ import { useAppSettings } from "@/contexts/AppSettingsContext";
 import { formatDateTimeStringWithAppSettings } from "@/components/shared/dateUtils";
 import { PageHeader } from "@/components/shared/PageHeader";
 import { SectionLoader } from "@/components/shared/SectionLoader";
+import { EXCHANGE_RATES_QUERY_KEY } from "@/hooks/useExchangeRates";
 
 export default function ExchangeRatesPage() {
     const { t } = useLanguage();
@@ -20,8 +21,12 @@ export default function ExchangeRatesPage() {
     const defaultCurrency = appSettings.defaultCurrency || "EUR";
     const queryClient = useQueryClient();
 
+    // Share the one exchange-rates namespace so a refresh here invalidates every
+    // consumer (net worth, portfolio, tax…). The page previously used a camelCase
+    // ["exchangeRates"] key while the hooks use ['exchange-rates'], so "Refresh
+    // rates" only ever updated this page.
     const { data, isLoading, error, isFetching } = useQuery<ExchangeRatesData>({
-        queryKey: ["exchangeRates", { dbOnly: true }],
+        queryKey: [EXCHANGE_RATES_QUERY_KEY, { dbOnly: true }],
         queryFn: () => apiClient.getExchangeRates({ dbOnly: true }),
         staleTime: 60_000,
     });
@@ -29,7 +34,7 @@ export default function ExchangeRatesPage() {
     const refreshMutation = useMutation({
         mutationFn: () => apiClient.refreshExchangeRates(),
         onSuccess: () => {
-            queryClient.invalidateQueries({ queryKey: ["exchangeRates"] });
+            queryClient.invalidateQueries({ queryKey: [EXCHANGE_RATES_QUERY_KEY] });
             toast.success(t('exchangeRates.refreshSuccess'));
         },
         onError: () => {

@@ -1,6 +1,8 @@
 import { query } from '../database/connection.js';
 
-const COLUMNS = 'id, name, chart_type, category_ids, recipient_ids, tag_ids, all_categories, all_recipients, all_tags, chart_variant, time_bucket, date_range_start, date_range_end, created_at, updated_at';
+// date_range_* are DATE columns — emitted via to_char so the wire carries the
+// calendar day, not a pg Date that JSON-serializes to the previous day east of UTC.
+const COLUMNS = "id, name, chart_type, category_ids, recipient_ids, tag_ids, all_categories, all_recipients, all_tags, chart_variant, time_bucket, to_char(date_range_start, 'YYYY-MM-DD') AS date_range_start, to_char(date_range_end, 'YYYY-MM-DD') AS date_range_end, created_at, updated_at";
 
 function mapRow(r) {
   return {

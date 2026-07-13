@@ -51,7 +51,6 @@ export interface ReadParams {
     offset?: number;
     orderBy?: string;
     dir?: 'asc' | 'desc';
-    where?: string;
     filters?: DbFilter[];
 }
 
@@ -92,7 +91,6 @@ export function getTableRows(table: string, params: ReadParams = {}): Promise<Ta
     if (params.offset !== undefined) q.set('offset', String(params.offset));
     if (params.orderBy) q.set('orderBy', params.orderBy);
     if (params.dir) q.set('dir', params.dir);
-    if (params.where) q.set('where', params.where);
     if (params.filters && params.filters.length) q.set('filters', JSON.stringify(params.filters));
     const qs = q.toString();
     return apiRequest<TableRows>(`${base(table)}/rows${qs ? `?${qs}` : ''}`);

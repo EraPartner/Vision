@@ -228,7 +228,7 @@ export function RecurringDetectionPanel({ onCreatePlanned }: Props) {
                                 const lastChange = pattern.amountChanges[pattern.amountChanges.length - 1];
                                 return (
                                     <div
-                                        key={`alert-${pattern.recipientId}`}
+                                        key={`alert-${pattern.recipientId}-${pattern.direction}`}
                                         className="flex items-center justify-between gap-3 rounded-lg border border-destructive/20 bg-background p-3"
                                     >
                                         <div className="min-w-0 flex-1">
@@ -300,7 +300,7 @@ export function RecurringDetectionPanel({ onCreatePlanned }: Props) {
                             <div className="space-y-3">
                                 {patterns.map((pattern) => (
                                     <div
-                                        key={pattern.recipientId}
+                                        key={`${pattern.recipientId}-${pattern.direction}`}
                                         className="flex items-center gap-3 rounded-lg border bg-card p-3 hover:shadow-sm transition-shadow"
                                     >
                                         <div className="h-9 w-9 rounded-lg bg-primary/10 flex items-center justify-center shrink-0">

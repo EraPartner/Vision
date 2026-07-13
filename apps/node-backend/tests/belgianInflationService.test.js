@@ -47,6 +47,27 @@ describe('belgianInflationService', () => {
     expect(query).toHaveBeenCalledTimes(2);
   });
 
+  it('keys a pg-read Date month_date to its OWN month (local extraction, not toISOString)', async () => {
+    // pg returns DATE columns as local-midnight Date objects. Under a TZ east
+    // of UTC, toISOString().slice(0,7) rendered 2024-06-01 as '2024-05' — every
+    // rate labeled with the prior month. Simulate the pg shape directly.
+    const prevTz = process.env.TZ;
+    process.env.TZ = 'Europe/Brussels';
+    try {
+      const pgDate = new Date(2024, 5, 1); // local midnight, June 1
+      query
+        .mockResolvedValueOnce({ rows: [{ month_date: pgDate, monthly_rate: '0.00300000' }] })
+        .mockResolvedValueOnce({ rows: [{ month_date: pgDate, monthly_rate: '0.00300000' }] });
+
+      const result = await getInflationRates({ startMonth: '2024-06', endMonth: '2024-06' });
+
+      expect(result.source).toBe('database');
+      expect(result.rates).toEqual([{ month: '2024-06', monthly_rate: 0.003 }]);
+    } finally {
+      process.env.TZ = prevTz;
+    }
+  });
+
   it('fetches Statbel rates and saves to database when db is empty', async () => {
     query
       .mockResolvedValueOnce({ rows: [] })

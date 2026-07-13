@@ -76,7 +76,10 @@ function monthKeyFromDatabaseValue(value) {
   if (value === null || value === undefined) return undefined;
 
   if (value instanceof Date && Number.isFinite(value.getTime())) {
-    return value.toISOString().slice(0, 7);
+    // pg reads month_date (first-of-month DATE) as LOCAL midnight; UTC
+    // extraction (toISOString) rendered it as the last day of the PREVIOUS
+    // month east of UTC, labeling every rate with the prior month's key.
+    return `${value.getFullYear()}-${String(value.getMonth() + 1).padStart(2, '0')}`;
   }
 
   const normalized = normalizeMonthInput(value);

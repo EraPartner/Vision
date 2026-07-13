@@ -25,6 +25,7 @@ import { recordAccuracy, getLatestAccuracyByMethod } from './accuracyStore.js';
 import mcCacheRepo from '../../../repositories/cashflowForecastMcRepository.js';
 import mcRollingCacheRepo from '../../../repositories/cashflowForecastMcRollingRepository.js';
 import { logger } from '../../../config/logger.js';
+import { todayAppDateString } from '../../../lib/timezone.js';
 
 const DEFAULT_HISTORY_MONTHS = 36;
 const DEFAULT_MC_PATHS = 1000;
@@ -36,11 +37,13 @@ const POINT_METHODS = [simpleAverage, weightedAverage, ewma, holtWinters, prophe
 const MC_METHODS = [monteCarloParametric, monteCarloBlockBootstrap];
 
 function currentMonthDates() {
-  const now = new Date();
-  const y = now.getUTCFullYear();
-  const m = now.getUTCMonth();
+  // App-timezone today (ADR-009) — the UTC calendar day put the actuals /
+  // forecast split on yesterday between local midnight and 01:00/02:00.
+  const todayYmd = todayAppDateString();
+  const y = Number(todayYmd.slice(0, 4));
+  const m = Number(todayYmd.slice(5, 7)) - 1;
   const daysInMonth = new Date(Date.UTC(y, m + 1, 0)).getUTCDate();
-  const todayDay = now.getUTCDate();
+  const todayDay = Number(todayYmd.slice(8, 10));
   const all = [];
   const future = [];
   for (let d = 1; d <= daysInMonth; d++) {
@@ -72,9 +75,10 @@ function actualCumulativeDaily(currentActual, allDates, todayIndex) {
 
 function rollingWindowDates(daysBack, daysForward) {
   // Builds a date list spanning [today - daysBack ... today + daysForward].
-  // Returns ISO date strings (UTC), today index (1-based), and todayIso.
-  const now = new Date();
-  const todayMs = Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate());
+  // Anchored on the app-timezone today (ADR-009); pure calendar math after.
+  const todayYmd = todayAppDateString();
+  const [ty, tm, td] = todayYmd.split('-').map(Number);
+  const todayMs = Date.UTC(ty, tm - 1, td);
   const all = [];
   for (let offset = -daysBack; offset <= daysForward; offset++) {
     const ms = todayMs + offset * 86_400_000;
@@ -234,10 +238,14 @@ function buildSeed({ yyyymm, filterHash }) {
   return fnv1aHash(`${yyyymm}|${filterHash}`);
 }
 
-function filterHash({ excludedCategoryIds, excludedRecipientIds, currency, includePlanned }) {
+// historyMonths is part of the key: isDefaultMcParams guards mcPaths and
+// mcPercentiles, but nothing else guarded historyMonths — a request with
+// history_months=120 happily got a cached 36-month forecast served back, and
+// a non-default history cached under the same key, colliding both directions.
+function filterHash({ excludedCategoryIds, excludedRecipientIds, currency, includePlanned, historyMonths }) {
   const cats = [...(excludedCategoryIds ?? [])].sort((a, b) => a - b).join(',');
   const recs = [...(excludedRecipientIds ?? [])].sort((a, b) => a - b).join(',');
-  return `${currency}|${cats}|${recs}|${includePlanned ? 1 : 0}`;
+  return `${currency}|${cats}|${recs}|${includePlanned ? 1 : 0}|h${historyMonths}`;
 }
 
 function isDefaultMcParams(mcPaths, mcPercentiles) {
@@ -267,7 +275,7 @@ export async function computeCashflowForecast({
   _forceCache = false,
 } = {}) {
   const { all, future, todayDay, daysInMonth, yyyymm } = currentMonthDates();
-  const hash = filterHash({ excludedCategoryIds, excludedRecipientIds, currency: targetCurrency, includePlanned });
+  const hash = filterHash({ excludedCategoryIds, excludedRecipientIds, currency: targetCurrency, includePlanned, historyMonths });
 
   // Try cache when not forcing a refresh and using default MC params.
   if (!_forceCache && isDefaultMcParams(mcPaths, mcPercentiles)) {
@@ -423,7 +431,7 @@ export async function computeCashflowForecastRolling({
   userId = 'anonymous',
 } = {}) {
   const { all, future, todayIndex, todayIso } = rollingWindowDates(daysBack, daysForward);
-  const hash = filterHash({ excludedCategoryIds, excludedRecipientIds, currency: targetCurrency, includePlanned });
+  const hash = filterHash({ excludedCategoryIds, excludedRecipientIds, currency: targetCurrency, includePlanned, historyMonths });
 
   // Cache check: skip for non-default rolling MC params or when backtest is requested.
   if (isDefaultRollingMcParams(mcPaths, mcPercentiles) && !includeBacktest) {

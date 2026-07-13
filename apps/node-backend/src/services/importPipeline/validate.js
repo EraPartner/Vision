@@ -2,10 +2,10 @@
  * Import pipeline — VALIDATE
  *
  * Reads staging rows (status='pending'), validates required fields,
- * computes tx_hash per row via deduplication.createTransactionHash
- * (or fallback field-based hash if raw_data is missing), and marks
- * each row 'validated', 'duplicate' (a second row in this same batch
- * with an identical tx_hash), or 'error'.
+ * computes tx_hash per row as sha256 of the literal raw_data (or a
+ * fallback date|amount|recipient|memo field hash if raw_data is
+ * missing), and marks each row 'validated', 'duplicate' (a second row
+ * in this same batch with an identical tx_hash), or 'error'.
  */
 
 import crypto from 'crypto';
@@ -18,8 +18,13 @@ const VALIDATE_CHUNK = 500;
 export async function validateBatch({ batchId, onProgress }) {
   await query(`UPDATE import_batches SET status = 'validating' WHERE id = $1`, [batchId]);
 
+  // tx_date via to_char, matching commit.js: read raw, a pg DATE arrives as a
+  // server-local-midnight Date whose toISOString() (in the fallback hash below)
+  // rolls back a day east of UTC — and silently changes fallback hashes if the
+  // server timezone ever changes between imports.
   const { rows: pending } = await query(
-    `SELECT id, row_index, tx_date, amount, recipient_raw, memo, currency, raw_data, bank_account, balance
+    `SELECT id, row_index, to_char(tx_date, 'YYYY-MM-DD') AS tx_date,
+            amount, recipient_raw, memo, currency, raw_data, bank_account, balance
        FROM import_staging_rows
       WHERE batch_id = $1 AND status = 'pending'
       ORDER BY row_index ASC`,

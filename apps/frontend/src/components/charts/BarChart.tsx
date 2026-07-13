@@ -8,7 +8,7 @@ import { summarizeSeriesChart } from "./chartAria";
 import { ParentSize } from "@visx/responsive";
 import { scaleBand, scaleLinear } from "@visx/scale";
 import { motion, useReducedMotion } from "framer-motion";
-import { useCallback, useMemo, useState } from "react";
+import { memo, useCallback, useMemo, useRef, useState } from "react";
 
 import { BottomAxis, LeftAxis } from "./ChartAxis";
 import { ChartTooltip, type ChartTooltipDatum } from "./ChartTooltip";
@@ -93,6 +93,187 @@ function buildOverlayPath<Datum>(
     return path;
 }
 
+type BarValueScale = ReturnType<typeof scaleLinear<number>>;
+type BarBandScale = ReturnType<typeof scaleBand<string>>;
+
+interface BarLayerProps<Datum> {
+    readonly data: ReadonlyArray<Datum>;
+    readonly series: ReadonlyArray<BarSeries<Datum>>;
+    readonly overlays: ReadonlyArray<BarOverlay<Datum>> | undefined;
+    readonly layout: "vertical" | "horizontal";
+    readonly barRadius: number;
+    readonly maxBarSize: number | undefined;
+    readonly categoryAccessor: (d: Datum) => string;
+    /** Always defined (stable wrapper); returns undefined when no override was passed. */
+    readonly colorForIndex: (index: number, datum: Datum) => string | undefined;
+    readonly categoryScale: BarBandScale;
+    readonly seriesScale: BarBandScale;
+    readonly valueScale: BarValueScale;
+    readonly baseline: number;
+    readonly reduce: boolean | null;
+    readonly onEnter: (datum: Datum, x: number, y: number) => void;
+    readonly onLeave: () => void;
+}
+
+/**
+ * Bars + overlay lines behind React.memo: hover state changes in Inner fire
+ * on every bar pointerenter/leave and must not re-render N×S motion.rects
+ * (plus the overlay path rebuild). All props are referentially stable across
+ * those renders.
+ */
+function BarLayerInner<Datum>({
+    data,
+    series,
+    overlays,
+    layout,
+    barRadius,
+    maxBarSize,
+    categoryAccessor,
+    colorForIndex,
+    categoryScale,
+    seriesScale,
+    valueScale,
+    baseline,
+    reduce,
+    onEnter,
+    onLeave,
+}: BarLayerProps<Datum>) {
+    return (
+        <>
+            {data.map((d, di) => {
+                const cat = categoryAccessor(d);
+                const c0 = categoryScale(cat) ?? 0;
+
+                return series.map((s, si) => {
+                    const v = s.accessor(d);
+                    const color = colorForIndex(di, d) ?? s.color ?? getChartColor(si);
+
+                    if (layout === "vertical") {
+                        const bw = Math.min(
+                            seriesScale.bandwidth(),
+                            maxBarSize ?? Number.POSITIVE_INFINITY,
+                        );
+                        const bandOffset = (seriesScale.bandwidth() - bw) / 2;
+                        const x =
+                            c0 + (seriesScale(s.key) ?? 0) + bandOffset;
+                        const yTop = valueScale(Math.max(v, 0)) ?? 0;
+                        const yBot = valueScale(Math.min(v, 0)) ?? baseline;
+                        const h = Math.max(0, yBot - yTop);
+                        return (
+                            <motion.rect
+                                key={`b-${di}-${s.key}`}
+                                x={x}
+                                width={bw}
+                                rx={barRadius}
+                                fill={color}
+                                initial={
+                                    reduce
+                                        ? { y: yTop, height: h }
+                                        : { y: baseline, height: 0 }
+                                }
+                                animate={{ y: yTop, height: h }}
+                                transition={{
+                                    duration: reduce ? 0 : durations.normal,
+                                    ease: easings.outExpo,
+                                    delay: (di * series.length + si) * 0.015,
+                                }}
+                                onPointerEnter={() =>
+                                    onEnter(d, x + bw / 2, yTop)
+                                }
+                                onPointerLeave={onLeave}
+                            />
+                        );
+                    }
+
+                    // horizontal
+                    const bh = Math.min(
+                        seriesScale.bandwidth(),
+                        maxBarSize ?? Number.POSITIVE_INFINITY,
+                    );
+                    const bandOffset = (seriesScale.bandwidth() - bh) / 2;
+                    const y = c0 + (seriesScale(s.key) ?? 0) + bandOffset;
+                    const xStart = valueScale(Math.min(v, 0)) ?? 0;
+                    const xEnd = valueScale(Math.max(v, 0)) ?? 0;
+                    const w = Math.max(0, xEnd - xStart);
+                    return (
+                        <motion.rect
+                            key={`b-${di}-${s.key}`}
+                            y={y}
+                            height={bh}
+                            rx={barRadius}
+                            fill={color}
+                            initial={
+                                reduce
+                                    ? { x: xStart, width: w }
+                                    : { x: baseline, width: 0 }
+                            }
+                            animate={{ x: xStart, width: w }}
+                            transition={{
+                                duration: reduce ? 0 : durations.normal,
+                                ease: easings.outExpo,
+                                delay: (di * series.length + si) * 0.015,
+                            }}
+                            onPointerEnter={() =>
+                                onEnter(d, xStart + w, y + bh / 2)
+                            }
+                            onPointerLeave={onLeave}
+                        />
+                    );
+                });
+            })}
+
+            {/* Overlay lines (e.g. rolling averages) — vertical layout only */}
+            {layout === "vertical" && overlays?.map((ov) => {
+                const pathD = buildOverlayPath(
+                    data, ov.accessor, categoryAccessor, categoryScale, valueScale,
+                );
+                if (!pathD) return null;
+
+                // Dot markers for each non-null point
+                const dots = data.flatMap((datum) => {
+                    const val = ov.accessor(datum);
+                    if (val === null) return [];
+                    const cat = categoryAccessor(datum);
+                    const cx = (categoryScale(cat) ?? 0) + categoryScale.bandwidth() / 2;
+                    const cy = valueScale(val) ?? 0;
+                    return [{ cx, cy }];
+                });
+
+                const stroke = ov.color ?? "hsl(var(--accent))";
+                return (
+                    <g key={`ov-${ov.key}`}>
+                        <path
+                            d={pathD}
+                            fill="none"
+                            stroke={stroke}
+                            strokeWidth={ov.strokeWidth ?? 2}
+                            strokeDasharray={ov.strokeDasharray}
+                            strokeLinecap="round"
+                            strokeLinejoin="round"
+                            style={{ pointerEvents: "none" }}
+                        />
+                        {dots.map(({ cx, cy }, i) => (
+                            <circle
+                                key={`dot-${ov.key}-${i}`}
+                                cx={cx}
+                                cy={cy}
+                                r={3}
+                                fill={stroke}
+                                stroke="var(--background, #fff)"
+                                strokeWidth={1.5}
+                                style={{ pointerEvents: "none" }}
+                            />
+                        ))}
+                    </g>
+                );
+            })}
+        </>
+    );
+}
+
+// memo() erases the generic signature; the cast restores it for callers.
+const BarLayer = memo(BarLayerInner) as typeof BarLayerInner;
+
 function Inner<Datum>({
     data,
     categoryAccessor,
@@ -120,7 +301,20 @@ function Inner<Datum>({
     const innerWidth = Math.max(0, width - effMargin.left - effMargin.right);
     const innerHeight = Math.max(0, height - effMargin.top - effMargin.bottom);
 
-    const categories = useMemo(() => data.map((d) => categoryAccessor(d)), [data, categoryAccessor]);
+    // Same inline-prop stabilizers as the other chart primitives — keep the
+    // scales and the memoized bar layer valid across consumer re-renders.
+    const categoryAccessorRef = useRef(categoryAccessor);
+    categoryAccessorRef.current = categoryAccessor;
+    const stableCategoryAccessor = useCallback((d: Datum) => categoryAccessorRef.current(d), []);
+
+    const colorForIndexRef = useRef(colorForIndex);
+    colorForIndexRef.current = colorForIndex;
+    const stableColorForIndex = useCallback(
+        (index: number, datum: Datum) => colorForIndexRef.current?.(index, datum),
+        [],
+    );
+
+    const categories = useMemo(() => data.map((d) => stableCategoryAccessor(d)), [data, stableCategoryAccessor]);
 
     const valueDomain = useMemo(() => {
         if (yDomain) return yDomain;
@@ -236,135 +430,25 @@ function Inner<Datum>({
                         ),
                     )}
 
-                    {data.map((d, di) => {
-                        const cat = categoryAccessor(d);
-                        const c0 = categoryScale(cat) ?? 0;
-
-                        return series.map((s, si) => {
-                            const v = s.accessor(d);
-                            const color = colorForIndex
-                                ? colorForIndex(di, d)
-                                : (s.color ?? getChartColor(si));
-
-                            if (layout === "vertical") {
-                                const bw = Math.min(
-                                    seriesScale.bandwidth(),
-                                    maxBarSize ?? Number.POSITIVE_INFINITY,
-                                );
-                                const bandOffset = (seriesScale.bandwidth() - bw) / 2;
-                                const x =
-                                    c0 + (seriesScale(s.key) ?? 0) + bandOffset;
-                                const yTop = valueScale(Math.max(v, 0)) ?? 0;
-                                const yBot = valueScale(Math.min(v, 0)) ?? baseline;
-                                const h = Math.max(0, yBot - yTop);
-                                return (
-                                    <motion.rect
-                                        key={`b-${di}-${s.key}`}
-                                        x={x}
-                                        width={bw}
-                                        rx={barRadius}
-                                        fill={color}
-                                        initial={
-                                            reduce
-                                                ? { y: yTop, height: h }
-                                                : { y: baseline, height: 0 }
-                                        }
-                                        animate={{ y: yTop, height: h }}
-                                        transition={{
-                                            duration: reduce ? 0 : durations.normal,
-                                            ease: easings.outExpo,
-                                            delay: (di * series.length + si) * 0.015,
-                                        }}
-                                        onPointerEnter={() =>
-                                            handleEnter(d, x + bw / 2, yTop)
-                                        }
-                                        onPointerLeave={handleLeave}
-                                    />
-                                );
-                            }
-
-                            // horizontal
-                            const bh = Math.min(
-                                seriesScale.bandwidth(),
-                                maxBarSize ?? Number.POSITIVE_INFINITY,
-                            );
-                            const bandOffset = (seriesScale.bandwidth() - bh) / 2;
-                            const y = c0 + (seriesScale(s.key) ?? 0) + bandOffset;
-                            const xStart = valueScale(Math.min(v, 0)) ?? 0;
-                            const xEnd = valueScale(Math.max(v, 0)) ?? 0;
-                            const w = Math.max(0, xEnd - xStart);
-                            return (
-                                <motion.rect
-                                    key={`b-${di}-${s.key}`}
-                                    y={y}
-                                    height={bh}
-                                    rx={barRadius}
-                                    fill={color}
-                                    initial={
-                                        reduce
-                                            ? { x: xStart, width: w }
-                                            : { x: baseline, width: 0 }
-                                    }
-                                    animate={{ x: xStart, width: w }}
-                                    transition={{
-                                        duration: reduce ? 0 : durations.normal,
-                                        ease: easings.outExpo,
-                                        delay: (di * series.length + si) * 0.015,
-                                    }}
-                                    onPointerEnter={() =>
-                                        handleEnter(d, xStart + w, y + bh / 2)
-                                    }
-                                    onPointerLeave={handleLeave}
-                                />
-                            );
-                        });
-                    })}
-
-                    {/* Overlay lines (e.g. rolling averages) — vertical layout only */}
-                    {layout === "vertical" && overlays?.map((ov) => {
-                        const pathD = buildOverlayPath(
-                            data, ov.accessor, categoryAccessor, categoryScale, valueScale,
-                        );
-                        if (!pathD) return null;
-
-                        // Dot markers for each non-null point
-                        const dots = data.flatMap((datum) => {
-                            const val = ov.accessor(datum);
-                            if (val === null) return [];
-                            const cat = categoryAccessor(datum);
-                            const cx = (categoryScale(cat) ?? 0) + categoryScale.bandwidth() / 2;
-                            const cy = valueScale(val) ?? 0;
-                            return [{ cx, cy }];
-                        });
-
-                        const stroke = ov.color ?? "hsl(var(--accent))";
-                        return (
-                            <g key={`ov-${ov.key}`}>
-                                <path
-                                    d={pathD}
-                                    fill="none"
-                                    stroke={stroke}
-                                    strokeWidth={ov.strokeWidth ?? 2}
-                                    strokeDasharray={ov.strokeDasharray}
-                                    strokeLinecap="round"
-                                    strokeLinejoin="round"
-                                    style={{ pointerEvents: "none" }}
-                                />
-                                {dots.map(({ cx, cy }, i) => (
-                                    <circle
-                                        key={`dot-${ov.key}-${i}`}
-                                        cx={cx}
-                                        cy={cy}
-                                        r={3}
-                                        fill={stroke}
-                                        stroke="var(--background, #fff)"
-                                        strokeWidth={1.5}
-                                        style={{ pointerEvents: "none" }}
-                                    />
-                                ))}
-                            </g>
-                        );
-                    })}
+                    {/* Bars + overlays — memoized so hover enter/leave renders
+                        never re-render every bar (see BarLayer). */}
+                    <BarLayer
+                        data={data}
+                        series={series}
+                        overlays={overlays}
+                        layout={layout}
+                        barRadius={barRadius}
+                        maxBarSize={maxBarSize}
+                        categoryAccessor={stableCategoryAccessor}
+                        colorForIndex={stableColorForIndex}
+                        categoryScale={categoryScale}
+                        seriesScale={seriesScale}
+                        valueScale={valueScale}
+                        baseline={baseline}
+                        reduce={reduce}
+                        onEnter={handleEnter}
+                        onLeave={handleLeave}
+                    />
 
                     {layout === "vertical" ? (
                         <>

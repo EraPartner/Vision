@@ -93,11 +93,18 @@ function buildPortfolioConfig(data) {
 
   const trimOrEmpty = (v) => (typeof v === 'string' ? v.trim() : '');
 
+  // csv-parse throws "Invalid Option: from must be a positive integer" on a
+  // negative skip — validate here so it 400s instead of a raw 500.
+  const skipRows = parseInt(skip_rows, 10) || 0;
+  if (skipRows < 0) {
+    throw new ValidationError('skip_rows must be zero or a positive integer');
+  }
+
   const customConfig = {
     date_format: (date_format && String(date_format).trim()) || '%Y-%m-%d',
     separator: sep || ',',
     encoding: (encoding && String(encoding).trim()) || 'utf-8',
-    skip_rows: parseInt(skip_rows, 10) || 0,
+    skip_rows: skipRows,
     default_asset_class,
     default_type: default_type || 'buy',
     type_mapping: parseTypeMapping(type_mapping),
@@ -160,6 +167,7 @@ router.post('/csv/custom', csvUpload.single('file'), async (req, res) => {
     res.ok({
       batch_id: result.batchId,
       total: result.total,
+      skipped: result.skipped,
       imported: result.imported,
       duplicates: result.duplicates,
       errors: result.errors,
@@ -216,6 +224,7 @@ router.post('/csv/stream', csvUpload.single('file'), async (req, res) => {
       await writer.write('complete', {
         batch_id: result.batchId,
         total_processed: result.total,
+        skipped: result.skipped,
         imported: result.imported,
         duplicates: result.duplicates,
         errors: result.errors,
@@ -227,7 +236,10 @@ router.post('/csv/stream', csvUpload.single('file'), async (req, res) => {
   } catch (err) {
     logger.error('Streaming portfolio import error', { error: err.message });
     if (!writer.closed) {
-      await writer.write('error', { detail: 'Import failed' });
+      // Expected validation failures (zero-row batch, bad config) carry a safe,
+      // actionable message; anything else stays generic to avoid leaking internals.
+      const detail = err instanceof ValidationError ? err.message : 'Import failed';
+      await writer.write('error', { detail });
       writer.end();
     }
   } finally {

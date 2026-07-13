@@ -7,6 +7,7 @@
  */
 
 import { query, withTransaction } from '../database/connection.js';
+import { toWireDate } from '../lib/dateFormat.js';
 import {
   computeOwedSummary,
   validateSplitAllocation,
@@ -59,18 +60,9 @@ export const splitRepository = {
     };
   },
 
-  /**
-   * Create a new split for a transaction.
-   */
-  async createSplit({ transaction_id, recipient_id, amount, note }) {
-    const sql = `
-      INSERT INTO transaction_splits (transaction_id, recipient_id, amount, note)
-      VALUES ($1, $2, $3, $4)
-      RETURNING *
-    `;
-    const result = await query(sql, [transaction_id, recipient_id, amount, note || null]);
-    return result.rows[0];
-  },
+  // NOTE: single-split creation goes through createSplitAtomic below — a
+  // plain unguarded INSERT here (the old createSplit) bypassed the row lock
+  // and over-allocation validation the atomic variants exist to enforce.
 
   /**
    * Atomically validate and create a single split.
@@ -386,7 +378,7 @@ export const splitRepository = {
           JSON.stringify({
             payment_id: result.rows[0].id,
             amount: Number(amount),
-            paid_at: result.rows[0].paid_at,
+            paid_at: toWireDate(result.rows[0].paid_at),
             note: note || null,
             auto_settled: settledResult.rowCount > 0,
           }),
@@ -406,6 +398,8 @@ export const splitRepository = {
     return result.rows.map(row => ({
       ...row,
       amount: toNumber(toDecimal(row.amount)),
+      // DATE column: calendar-day string, not a raw pg Date.
+      paid_at: toWireDate(row.paid_at),
     }));
   },
 

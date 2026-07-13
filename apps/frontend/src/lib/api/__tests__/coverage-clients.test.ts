@@ -17,6 +17,8 @@ import {
   updateAccount,
   deleteAccount,
   mergeAccounts,
+  setOpeningBalance,
+  reconcileAccount,
 } from "@/lib/api/accounts";
 import {
   getPlannedTransactions,
@@ -226,6 +228,47 @@ describe("accounts API client", () => {
     expect(body).toMatchObject({ source_ids: [2, 3] });
     expect(result.merged).toEqual([2, 3]);
     expect(result.reassigned.transactions).toBe(5);
+  });
+
+  it("setOpeningBalance posts the anchor payload and returns the transaction + warning", async () => {
+    let body: unknown = null;
+    server.use(
+      http.post(`${API_BASE}/api/accounts/4/opening-balance`, async ({ request }) => {
+        body = await request.json();
+        return ok({
+          transaction: { id: 88, balance: 1500, transfer_source: "opening" },
+          warning: null,
+        });
+      }),
+    );
+
+    const result = await setOpeningBalance(4, { balance: 1500, date: "2024-01-01" });
+
+    expect(body).toMatchObject({ balance: 1500, date: "2024-01-01" });
+    expect(result.transaction?.transfer_source).toBe("opening");
+    expect(result.warning).toBeNull();
+  });
+
+  it("reconcileAccount posts the mode and returns the reconciled figures", async () => {
+    let body: unknown = null;
+    server.use(
+      http.post(`${API_BASE}/api/accounts/4/reconcile`, async ({ request }) => {
+        body = await request.json();
+        return ok({
+          mode: "adjustment",
+          drift: 0,
+          statement_balance: 120,
+          computed_balance: 120,
+          transaction: { id: 77, amount: 20, transfer_source: "adjustment" },
+        });
+      }),
+    );
+
+    const result = await reconcileAccount(4, "adjustment");
+
+    expect(body).toMatchObject({ mode: "adjustment" });
+    expect(result.drift).toBe(0);
+    expect(result.transaction?.transfer_source).toBe("adjustment");
   });
 });
 

@@ -114,3 +114,54 @@ Specific enforcement:
 [[apps/node-backend/src/repositories/transactionRepository.js]],
 [[apps/frontend/src/features/transactions/components/TransactionInfoDialog.tsx]],
 [[apps/frontend/src/features/transactions/types.ts]]
+
+---
+
+## Addendum (2026-07-10): Guarded opening-balance anchor for manual accounts
+
+### Context
+
+The 2026-06-25 addendum made `transactions.balance` import-pipeline-only, and its stated cost
+was real: there is now **no path to seed an opening balance**. A manual/cash-only account (a
+wallet, an account whose bank has no CSV export) can never anchor — its computed balance is
+Σ(amounts) from an implicit zero forever, and the drift badge compares the statement figure
+against that unanchored sum. The 2026-07-09 plan review filed this as a gap; **decision
+2026-07-10 (D4): a guarded, server-side anchor action** — not a relaxation of the write
+protection, and not an ordinary "opening deposit" transaction (which would pollute income
+statistics and still not stamp an anchor).
+
+### Decision
+
+A dedicated action, e.g. `POST /api/accounts/:id/opening-balance` with
+`{ balance, date, currency? }`, creates **one system anchor row** in `transactions`,
+server-side:
+
+| Field | Value |
+|-------|-------|
+| `amount` | `0` — the row moves no money |
+| `balance` | the stated opening balance (stamped by the server, the one non-import writer) |
+| `date` | user-chosen; expected to precede the account's activity (warn when it doesn't — by anchor+delta semantics a *later* stamped row always wins, so a mid-history anchor is inert against newer import stamps) |
+| `is_transfer` / `transfer_source` | `true` / `'opening'` — a new CHECK value following ADR-090's `'trade'` precedent, so the row is excluded from spending aggregations and from transfer reconciliation |
+| `memo` | "Opening balance" (i18n'd) |
+
+One anchor per `(account, currency)`; invoking the action again **updates** the existing row
+rather than adding a second. The generic `POST /api/transactions` / `PATCH` surface remains
+balance-free — the 2026-06-25 write protection is untouched; this endpoint is the single,
+auditable exception, and the UI exposes it as "Set opening balance" in the account
+detail/reconcile flow (rewrite Phase C/D).
+
+### Consequences
+
+**Positive**
+- Manual accounts finally anchor; their computed balance and drift become meaningful.
+- The tamper-protection stays intact — users still never free-type `balance` on a row.
+- Replaces the awkward documented workaround ("import a statement that carries a balance
+  column") for accounts that will never have one.
+
+**Negative / cost**
+- A new `transfer_source` CHECK value (small revision; rollback removes the value after deleting
+  any `'opening'` rows).
+- The planned zero-amount-transaction rejection (filed elsewhere in TODO.md) must exempt
+  `transfer_source = 'opening'` rows — they are legitimately zero-amount.
+- Deleting the anchor row must be guarded the same way (only via the action / with a clear
+  warning), or the account silently de-anchors.

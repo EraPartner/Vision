@@ -355,8 +355,20 @@ buildRouteManifest(app);
 // Must be registered AFTER API routes but BEFORE the 404 handler.
 if (settings.isProduction()) {
   const distPath = resolve(dirname(fileURLToPath(import.meta.url)), '..', '..', '..', 'dist');
-  // Hashed assets (JS/CSS) — long-lived cache
-  app.use(express.static(distPath, { index: false, maxAge: '1y', immutable: true }));
+  // Hashed assets (JS/CSS) — long-lived cache. `index: false` only disables
+  // directory-index resolution: a literal GET /index.html is still a real file
+  // in distPath and would otherwise be pinned for a year, serving a stale
+  // shell whose old hashed chunk URLs 404 after an upgrade.
+  app.use(express.static(distPath, {
+    index: false,
+    maxAge: '1y',
+    immutable: true,
+    setHeaders: (res, filePath) => {
+      if (filePath.endsWith('index.html')) {
+        res.setHeader('Cache-Control', 'no-cache');
+      }
+    },
+  }));
   // Preload the SPA shell once at startup; the fallback route then serves it
   // from memory with no per-request file I/O.
   const indexHtml = fs.readFileSync(resolve(distPath, 'index.html'), 'utf-8');
@@ -419,9 +431,10 @@ async function start() {
   if (!settings.admin.authToken) {
     logger.warn(
       'ADMIN_AUTH_TOKEN is not set — admin endpoints have no per-request token check. ' +
-      'This is safe only because the port is published on 127.0.0.1 (loopback) and the ' +
-      'CSRF guard blocks cross-site browser requests. If you publish the port on 0.0.0.0 ' +
-      'or behind a proxy, SET ADMIN_AUTH_TOKEN to enforce token-based auth.'
+      'This is safe only because the port is published on 127.0.0.1 (loopback). The CSRF ' +
+      'guard blocks cross-site *state-changing* requests, but NOT cross-site GET reads ' +
+      '(safe methods are exempt), so it is not by itself an authorization boundary. If you ' +
+      'publish the port on 0.0.0.0 or behind a proxy, SET ADMIN_AUTH_TOKEN to enforce token-based auth.'
     );
   }
 

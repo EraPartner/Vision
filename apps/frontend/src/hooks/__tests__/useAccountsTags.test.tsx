@@ -115,6 +115,27 @@ describe("useMergeAccounts", () => {
     });
     await waitFor(() => expect(toast.error).toHaveBeenCalled());
   });
+
+  it("invalidates the repointed trees by key, never blanket", async () => {
+    const invalidateSpy = vi.spyOn(QueryClient.prototype, "invalidateQueries");
+    vi.spyOn(apiClient, "mergeAccounts").mockResolvedValue({ into: 1, merged: [2], reassigned: {} } as never);
+    const { result } = renderHook(() => useMergeAccounts(), { wrapper: makeFullWrapper() });
+    await act(async () => {
+      await result.current.mutateAsync({ targetId: 1, sourceIds: [2] });
+    });
+    // A merge must NOT fall back to the whole-cache blanket form invalidateQueries()
+    // (called with no filter) — every call carries an explicit queryKey.
+    expect(invalidateSpy).toHaveBeenCalled();
+    for (const call of invalidateSpy.mock.calls) {
+      expect(call[0]?.queryKey).toBeDefined();
+    }
+    const invalidatedKeys = invalidateSpy.mock.calls.map((c) => c[0]?.queryKey?.[0]);
+    // Account-derived, transaction, planned and portfolio trees are all covered.
+    for (const key of ["accounts", "net-worth", "transactions", "upcomingPlannedPayments", "investments"]) {
+      expect(invalidatedKeys).toContain(key);
+    }
+    invalidateSpy.mockRestore();
+  });
 });
 
 describe("useDeleteAccount", () => {

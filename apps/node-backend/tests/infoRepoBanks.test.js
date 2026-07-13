@@ -12,6 +12,7 @@ vi.mock('../src/repositories/infoRepositoryHelpers.js', async () => {
 import { query } from '../src/database/connection.js';
 import { batchConvertGroupsWithHistoricalRateFallback } from '../src/repositories/infoRepositoryHelpers.js';
 import { banksRepository } from '../src/repositories/infoRepositoryBanks.js';
+import { COMPUTED_BALANCE_LATERAL } from '../src/repositories/accountBalanceSql.js';
 
 beforeEach(() => vi.clearAllMocks());
 
@@ -126,6 +127,24 @@ describe('banksRepository.getBankBalances', () => {
 
     const r = await banksRepository.getBankBalances();
     expect(r.history).toEqual({});
+  });
+
+  it('sources the current balance from the shared anchor+delta lateral (not a frozen stamped balance)', async () => {
+    // Regression: the widget used to read the latest stamped `transactions.balance`,
+    // freezing at the last imported statement figure and diverging from the accounts
+    // hub. It must now consume the SAME COMPUTED_BALANCE_LATERAL the hub and
+    // net-worth-by-account use, so all three surfaces agree by construction.
+    query.mockResolvedValue({ rows: [] });
+    batchConvertGroupsWithHistoricalRateFallback.mockResolvedValueOnce([[], []]);
+
+    await banksRepository.getBankBalances();
+
+    const currentBalanceSql = query.mock.calls[0][0];
+    expect(currentBalanceSql).toContain(COMPUTED_BALANCE_LATERAL.trim());
+    // The balance is the lateral's anchored figure, not a frozen stamped row:
+    // the old query keyed off `DISTINCT ON (t.account_id) ... t.balance` — that
+    // shape must be gone.
+    expect(currentBalanceSql).not.toContain('DISTINCT ON (t.account_id)');
   });
 
   it('runs the two queries in parallel', async () => {

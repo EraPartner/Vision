@@ -7,6 +7,7 @@ import fs from 'fs';
 import os from 'os';
 import path from 'path';
 import { createAdapter } from '../src/services/bankAdapters.js';
+import { detect } from '../src/services/importPipeline/adapters/vision.js';
 
 function writeTempCSV(content) {
   const tmpPath = path.join(os.tmpdir(), `test_vision_${Date.now()}.csv`);
@@ -35,6 +36,35 @@ INVALID_DATE,Main Account,Skip Date,Note,-10.00,EUR,944.80,OTHER,invalid date
     expect(txns).toHaveLength(1);
     expect(txns[0].recipient).toBe('JOHN DOE');
     expect(txns[0].amount).toBe(-45.2);
+  });
+
+  it("re-imports guard-quoted negative amounts and balances (export round-trip)", async () => {
+    // Older exports ran numeric cells through the CSV formula-injection guard,
+    // which prepended "'" to negatives. The adapter must strip it so the
+    // expense row is not NaN-dropped and the balance not silently nulled.
+    const csv = `Date,Bank Account,Recipient,Memo,Amount,Currency,Balance,Category,Comment
+2026-03-01,Main Account,John Doe,Dinner,'-45.20,EUR,'-12.00,FOOD,Shared meal
+`;
+    tmpPath = writeTempCSV(csv);
+    const txns = await parse(tmpPath);
+
+    expect(txns).toHaveLength(1);
+    expect(txns[0].amount).toBe(-45.2);
+    expect(txns[0].balance).toBe(-12);
+  });
+
+  it('parses EU-decimal amounts instead of stripping the comma into a 100× value', async () => {
+    // The loose header detection can route non-Vision CSVs here; a blind
+    // comma-strip turned "12,34" into 1234.
+    const csv = `Date,Bank Account,Recipient,Memo,Amount,Currency,Balance,Category,Comment
+2026-03-04,Main Account,EU Shop,groceries,"-12,34",EUR,"1.234,56",FOOD,
+`;
+    tmpPath = writeTempCSV(csv);
+    const txns = await parse(tmpPath);
+
+    expect(txns).toHaveLength(1);
+    expect(txns[0].amount).toBe(-12.34);
+    expect(txns[0].balance).toBe(1234.56);
   });
 
   it('uses UNKNOWN recipient when recipient is empty', async () => {
@@ -86,5 +116,21 @@ INVALID_DATE,Main Account,Skip Date,Note,-10.00,EUR,944.80,OTHER,invalid date
 
     expect(txns).toHaveLength(1);
     expect(txns[0].memo).toBe('MIXED CASE MEMO');
+  });
+});
+
+describe('vision.detect', () => {
+  it('detects the exact Vision export header, with or without trailing columns', () => {
+    expect(detect('Date,Bank Account,Recipient,Memo,Amount,Currency,Balance,Category,Comment,Tags\n2026-03-01,A,B,,-1.00,EUR,,,,')).toBe(true);
+    expect(detect('Date,Bank Account,Recipient,Memo,Amount,Currency,Balance,Category,Comment,Tags,Running Balance\n')).toBe(true);
+    expect(detect('date,bank account,recipient,memo,amount,currency\n')).toBe(true);
+  });
+
+  it('rejects unknown bank CSVs that merely contain the header words', () => {
+    // Substring matching used to auto-route any of these to the Vision adapter.
+    expect(detect('Booking Date,Recipient Bank Account,Amount,Reference\n')).toBe(false);
+    expect(detect('Transaction Date,Amount,Recipient,Bank Account Nr,Description\n')).toBe(false);
+    expect(detect('Date,Amount,Bank Account,Recipient,Memo,Currency\n')).toBe(false); // wrong order
+    expect(detect('')).toBe(false);
   });
 });

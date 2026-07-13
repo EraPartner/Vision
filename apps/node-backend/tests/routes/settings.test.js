@@ -78,6 +78,17 @@ describe('Settings Routes', () => {
       expect(res.json).toHaveBeenCalledWith({ ok: true, data: { key: 'onboarding_complete', value: false } });
     });
 
+    it('returns false default for includeTransfers when unset', async () => {
+      // Missing from SETTING_DEFAULTS this GET 404'd until the first toggle.
+      settingsRepository.get.mockResolvedValue(null);
+
+      const req = { params: { key: 'includeTransfers' } };
+      const res = mockResponse();
+      await routeHandlers['get:/:key'](req, res);
+
+      expect(res.json).toHaveBeenCalledWith({ ok: true, data: { key: 'includeTransfers', value: false } });
+    });
+
     it('throws NotFoundError for unknown missing key', async () => {
       settingsRepository.get.mockResolvedValue(null);
 
@@ -105,6 +116,14 @@ describe('Settings Routes', () => {
 
     it('throws ValidationError when value is missing from request body', async () => {
       const req = { params: { key: 'dashboard_settings' }, body: {} };
+      const res = mockResponse();
+
+      await expect(routeHandlers['put:/:key'](req, res)).rejects.toBeInstanceOf(ValidationError);
+    });
+
+    it('throws ValidationError (not TypeError) for dashboard_settings with value null', async () => {
+      // typeof null === 'object' — a missing null check made this a 500.
+      const req = { params: { key: 'dashboard_settings' }, body: { value: null } };
       const res = mockResponse();
 
       await expect(routeHandlers['put:/:key'](req, res)).rejects.toBeInstanceOf(ValidationError);

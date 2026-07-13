@@ -20,6 +20,97 @@ const ALLOWED_THEME_VARIANTS = ['default', 'dracula', 'solarized', 'nord', 'high
 const ALLOWED_THEME_MODES = ['light', 'dark', 'system', 'schedule'];
 const ALLOWED_EXCLUSION_SCOPES = ['everywhere', 'dashboard', 'statistics'];
 
+// ── belgian_tax_profile validation ───────────────────────────────────────────
+// The PIT engine multiplies these fields unclamped (frontend pit.ts): a
+// negative communal surcharge flipped into a tax credit, a fat-fingered 70
+// ("7.0") multiplied it 10×, and negative money fields produced negative
+// social security — the load side blind-casts, so whatever is stored flows
+// straight into the math. Field lists mirror BelgianTaxProfile in
+// apps/frontend/src/lib/belgianTax/types.ts; the profile steps always send
+// numbers (parseDecimal), so strict number checks reject only garbage.
+const TAX_PROFILE_MONEY_FIELDS = [
+  'grossAnnualIncome', 'actualProfessionalExpenses', 'cadastralIncome',
+  'otherTaxableIncome', 'alimonyPaid', 'personalPensionContributions',
+  'lifeInsurancePremiums', 'mortgageInterestPaid', 'mortgageCapitalRepaid',
+  'charitableDonations', 'childcareCosts', 'employeeGroupInsuranceContributions',
+  'unionDues', 'medicalExpenses', 'domesticHelpCosts',
+  'spouseProfessionalIncome', 'annualDividendIncome', 'annualSavingsInterest',
+];
+const TAX_PROFILE_COUNT_FIELDS = [
+  'dependentChildren', 'dependentChildrenUnder3', 'dependentChildrenDisabled',
+  'dependentOtherPersons', 'dependentOtherPersonsDisabled',
+  'childcareEligibleDays', 'serviceVoucherCount',
+];
+const TAX_PROFILE_MONEY_MAX = 1e12;
+const TAX_PROFILE_CENTIMES_MAX = 100000;
+
+function assertFiniteNumberInRange(value, { min, max, field, integer = false }) {
+  if (typeof value !== 'number' || !Number.isFinite(value)) {
+    throw new ValidationError(`${field} must be a finite number`);
+  }
+  if (integer && !Number.isInteger(value)) {
+    throw new ValidationError(`${field} must be an integer`);
+  }
+  if (value < min || value > max) {
+    throw new ValidationError(`${field} must be between ${min} and ${max}`);
+  }
+}
+
+function assertBelgianTaxProfileValue(value, label = 'belgian_tax_profile') {
+  if (typeof value !== 'object' || value === null || Array.isArray(value)) {
+    throw new ValidationError(`${label} must be an object`);
+  }
+  const check = (obj, field, opts) => {
+    const v = obj[field];
+    if (v === undefined || v === null) return;
+    assertFiniteNumberInRange(v, { ...opts, field: `${label}.${field}` });
+  };
+  // % on federal PIT — Belgian municipalities levy 0-9% (matches the UI hint).
+  check(value, 'communalSurchargePercent', { min: 0, max: 9 });
+  for (const field of TAX_PROFILE_MONEY_FIELDS) {
+    check(value, field, { min: 0, max: TAX_PROFILE_MONEY_MAX });
+  }
+  for (const field of TAX_PROFILE_COUNT_FIELDS) {
+    check(value, field, { min: 0, max: 1000, integer: true });
+  }
+  check(value, 'taxYear', { min: 1900, max: 2200, integer: true });
+  check(value, 'mortgageStartYear', { min: 1900, max: 2200, integer: true });
+  check(value, 'cadastralCentimesOverride', { min: 0, max: TAX_PROFILE_CENTIMES_MAX });
+  if (value.additionalResidences !== undefined && value.additionalResidences !== null) {
+    if (!Array.isArray(value.additionalResidences)) {
+      throw new ValidationError(`${label}.additionalResidences must be an array`);
+    }
+    value.additionalResidences.forEach((residence, i) => {
+      if (typeof residence !== 'object' || residence === null || Array.isArray(residence)) {
+        throw new ValidationError(`${label}.additionalResidences[${i}] must be an object`);
+      }
+      check(residence, 'cadastralIncome', { min: 0, max: TAX_PROFILE_MONEY_MAX });
+      check(residence, 'centimesOverride', { min: 0, max: TAX_PROFILE_CENTIMES_MAX });
+    });
+  }
+}
+
+/** Year-keyed maps: snapshots get the full profile validation per entry. */
+function assertBelgianTaxSnapshotsValue(value) {
+  if (typeof value !== 'object' || value === null || Array.isArray(value)) {
+    throw new ValidationError('belgian_tax_profile_snapshots_v1 must be an object keyed by year');
+  }
+  for (const [year, profile] of Object.entries(value)) {
+    assertBelgianTaxProfileValue(profile, `belgian_tax_profile_snapshots_v1[${year}]`);
+  }
+}
+
+function assertBelgianTaxSnapshotMetaValue(value) {
+  if (typeof value !== 'object' || value === null || Array.isArray(value)) {
+    throw new ValidationError('belgian_tax_profile_snapshot_meta_v1 must be an object keyed by year');
+  }
+  for (const [year, meta] of Object.entries(value)) {
+    if (typeof meta !== 'object' || meta === null || Array.isArray(meta)) {
+      throw new ValidationError(`belgian_tax_profile_snapshot_meta_v1[${year}] must be an object`);
+    }
+  }
+}
+
 function assertSettingKeyLength(key, includeKeyInMessage = false) {
   if (key.length > 100) {
     const msg = includeKeyInMessage
@@ -55,7 +146,9 @@ function assertThemeSettingsValue(value) {
 }
 
 function assertDashboardSettingsValue(value, { validateExcludeHiddenCategories = false, validateExclusionScope = false } = {}) {
-  if (typeof value !== 'object' || Array.isArray(value)) {
+  // typeof null === 'object' — without the null check, value.excludedCategoryIds
+  // below threw a TypeError that surfaced as a 500 instead of a 400.
+  if (typeof value !== 'object' || value === null || Array.isArray(value)) {
     throw new ValidationError('dashboard_settings must be an object');
   }
 
@@ -170,6 +263,9 @@ const SETTING_DEFAULTS = {
   widget_visibility: {},
   cost_basis_method: 'weighted_avg',
   rebalance_plans: [],
+  // Matches getIncludeTransfers' `=== true` read default — without this entry
+  // the GET 404'd until the first toggle and react-query retried on every visit.
+  includeTransfers: false,
 };
 
 router.get('/:key', async (req, res) => {
@@ -204,6 +300,9 @@ function validateSettingValue(key, value) {
     throw new ValidationError('includeTransfers must be a boolean');
   }
   if (key === 'rebalance_plans') assertRebalancePlansValue(value);
+  if (key === 'belgian_tax_profile') assertBelgianTaxProfileValue(value);
+  if (key === 'belgian_tax_profile_snapshots_v1') assertBelgianTaxSnapshotsValue(value);
+  if (key === 'belgian_tax_profile_snapshot_meta_v1') assertBelgianTaxSnapshotMetaValue(value);
 }
 
 router.put('/:key', async (req, res) => {

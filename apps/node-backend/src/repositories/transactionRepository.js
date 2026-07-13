@@ -23,6 +23,19 @@ const TRANSACTION_JOINS = `
   LEFT JOIN categories pc ON pr.default_category_id = pc.id
 `;
 
+// Effective category = own → recipient default → primary-recipient default
+// (3-level, alias-aware). Requires TRANSACTION_JOINS. Shared so the single-row
+// getById/create paths resolve categories identically to the list paths — an
+// alias recipient must not show categorized in lists but uncategorized on GET.
+const EFFECTIVE_CATEGORY_ID_SQL = 'COALESCE(t.category_id, r.default_category_id, pr.default_category_id)';
+const CATEGORY_NAME_SQL = `CASE
+               WHEN c.id IS NOT NULL THEN c.general || ':' || c.detail
+               WHEN pc.id IS NOT NULL THEN pc.general || ':' || pc.detail
+               WHEN rc.id IS NOT NULL THEN rc.general || ':' || rc.detail
+               ELSE NULL
+             END`;
+const RECIPIENT_NAME_SQL = 'COALESCE(pr.name, r.name)';
+
 // Allowed sort columns for transactions (maps frontend key -> SQL expression)
 const TRANSACTION_SORT_COLUMNS = {
   date: 't.date',
@@ -85,6 +98,7 @@ export const transactionRepository = {
     offset = 0,
     startDate = null,
     endDate = null,
+    accountId = null,
     bankAccount = null,
     categoryId = null,
     recipientId = null,
@@ -98,7 +112,7 @@ export const transactionRepository = {
     tagSlugs = null,
   } = {}) {
     const { sql: where, params, nextParamIdx: p } = buildTransactionWhere({
-      transactionId, startDate, endDate, bankAccount, categoryId, recipientId, recipientGroupId, recipientName, search, active, tagSlugs,
+      transactionId, startDate, endDate, accountId, bankAccount, categoryId, recipientId, recipientGroupId, recipientName, search, active, tagSlugs,
     });
 
     // Build ORDER BY — fall back to default date DESC when no valid sort supplied
@@ -150,6 +164,7 @@ export const transactionRepository = {
     transactionId = null,
     startDate = null,
     endDate = null,
+    accountId = null,
     bankAccount = null,
     categoryId = null,
     recipientId = null,
@@ -160,7 +175,7 @@ export const transactionRepository = {
     tagSlugs = null,
   } = {}) {
     const { sql: where, params } = buildTransactionWhere({
-      transactionId, startDate, endDate, bankAccount, categoryId, recipientId, recipientGroupId, recipientName, search, active, tagSlugs,
+      transactionId, startDate, endDate, accountId, bankAccount, categoryId, recipientId, recipientGroupId, recipientName, search, active, tagSlugs,
     });
 
     const sql = `
@@ -176,7 +191,7 @@ export const transactionRepository = {
   /**
    * Get uncategorised transactions (recipient has no default category and transaction has no category).
    */
-  async getUncategorised({ limit = 50, offset = 0, startDate = null, endDate = null, bankAccount = null, recipientId = null, recipientName = null } = {}) {
+  async getUncategorised({ limit = 50, offset = 0, startDate = null, endDate = null, accountId = null, bankAccount = null, recipientId = null, recipientName = null } = {}) {
     let sql = `
       SELECT t.*,
              r.name AS recipient_name,
@@ -192,6 +207,7 @@ export const transactionRepository = {
 
     if (startDate) { sql += ` AND t.date >= $${paramIdx++}`; params.push(startDate); }
     if (endDate) { sql += ` AND t.date <= $${paramIdx++}`; params.push(endDate); }
+    if (accountId != null) { sql += ` AND t.account_id = $${paramIdx++}`; params.push(accountId); }
     if (bankAccount) { sql += ` AND t.bank_account ILIKE $${paramIdx++}`; params.push(`%${bankAccount}%`); }
     if (recipientId != null) { sql += ` AND t.recipient_id = $${paramIdx++}`; params.push(recipientId); }
     if (recipientName) { sql += ` AND r.name ILIKE $${paramIdx++}`; params.push(`%${recipientName}%`); }
@@ -217,6 +233,7 @@ export const transactionRepository = {
     offset = 0,
     startDate = null,
     endDate = null,
+    accountId = null,
     bankAccount = null,
     categoryId = null,
     recipientId = null,
@@ -232,6 +249,7 @@ export const transactionRepository = {
       transactionId,
       startDate,
       endDate,
+      accountId,
       bankAccount,
       categoryId,
       recipientId,
@@ -256,6 +274,10 @@ export const transactionRepository = {
     if (endDate) {
       uncategorisedWhere += ` AND t.date <= $${paramIdx++}`;
       params.push(endDate);
+    }
+    if (accountId != null) {
+      uncategorisedWhere += ` AND t.account_id = $${paramIdx++}`;
+      params.push(accountId);
     }
     if (bankAccount) {
       uncategorisedWhere += ` AND t.bank_account ILIKE $${paramIdx++}`;
@@ -313,16 +335,11 @@ export const transactionRepository = {
   async getById(id) {
     const sql = `
       SELECT t.*,
-             r.name AS recipient_name,
-             CASE
-               WHEN c.id IS NOT NULL THEN c.general || ':' || c.detail
-               WHEN rc.id IS NOT NULL THEN rc.general || ':' || rc.detail
-               ELSE NULL
-             END AS category_name
+             ${RECIPIENT_NAME_SQL} AS recipient_name,
+             ${EFFECTIVE_CATEGORY_ID_SQL} AS effective_category_id,
+             ${CATEGORY_NAME_SQL} AS category_name
       FROM transactions t
-      LEFT JOIN recipients r ON t.recipient_id = r.id
-      LEFT JOIN categories c ON t.category_id = c.id
-      LEFT JOIN categories rc ON r.default_category_id = rc.id
+      ${TRANSACTION_JOINS}
       WHERE t.id = $1
     `;
     const result = await queryPrepared('tx_get_by_id', sql, [id]);
@@ -349,16 +366,11 @@ export const transactionRepository = {
         RETURNING *
       )
       SELECT t.*,
-             r.name AS recipient_name,
-             CASE
-               WHEN c.id IS NOT NULL THEN c.general || ':' || c.detail
-               WHEN rc.id IS NOT NULL THEN rc.general || ':' || rc.detail
-               ELSE NULL
-             END AS category_name
+             ${RECIPIENT_NAME_SQL} AS recipient_name,
+             ${EFFECTIVE_CATEGORY_ID_SQL} AS effective_category_id,
+             ${CATEGORY_NAME_SQL} AS category_name
       FROM inserted t
-      LEFT JOIN recipients r ON t.recipient_id = r.id
-      LEFT JOIN categories c ON t.category_id = c.id
-      LEFT JOIN categories rc ON r.default_category_id = rc.id
+      ${TRANSACTION_JOINS}
     `;
     const sqlParams = [
       transaction_date,
@@ -404,6 +416,7 @@ export const transactionRepository = {
     offset = 0,
     startDate = null,
     endDate = null,
+    accountId = null,
     bankAccount = null,
     categoryId = null,
     categoryIds = null,
@@ -422,7 +435,7 @@ export const transactionRepository = {
     tagSlugs = null,
   } = {}) {
     const { sql: where, params, nextParamIdx: p } = buildTransactionWhere({
-      transactionId, startDate, endDate, bankAccount, categoryId, categoryIds, recipientId, recipientGroupId, recipientName, search, active, transactionType, amountMin, amountMax, amountSigned, tagSlugs,
+      transactionId, startDate, endDate, accountId, bankAccount, categoryId, categoryIds, recipientId, recipientGroupId, recipientName, search, active, transactionType, amountMin, amountMax, amountSigned, tagSlugs,
     });
 
     const sortCol = TRANSACTION_SORT_COLUMNS[sortBy] || 't.date';

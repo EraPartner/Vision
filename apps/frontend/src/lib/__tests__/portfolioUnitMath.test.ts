@@ -1,11 +1,27 @@
 import { describe, it, expect } from 'vitest';
 import {
   deriveUnitMath,
+  parsePositive,
   roundUnitMath,
   UNIT_MATH_AMOUNT_DP,
   UNIT_MATH_UNITS_DP,
   UNIT_MATH_PRICE_DP,
 } from '@/lib/portfolioUnitMath';
+
+describe('parsePositive', () => {
+  it('parses plain and locale-formatted positive numbers', () => {
+    expect(parsePositive('150')).toBe(150);
+    expect(parsePositive('1.234,56')).toBe(1234.56);
+  });
+
+  it('maps empty, invalid, zero, and negative inputs to undefined', () => {
+    expect(parsePositive('')).toBeUndefined();
+    expect(parsePositive('   ')).toBeUndefined();
+    expect(parsePositive('abc')).toBeUndefined();
+    expect(parsePositive('0')).toBeUndefined();
+    expect(parsePositive('-5')).toBeUndefined();
+  });
+});
 
 describe('deriveUnitMath', () => {
   it('derives amount from units × price', () => {
@@ -40,6 +56,17 @@ describe('deriveUnitMath', () => {
   it('accepts all three when consistent within tolerance', () => {
     const r = deriveUnitMath({ amount: 30.00005, units: 3, price: 10 });
     expect(r.isConsistent).toBe(true);
+  });
+
+  it('accepts the exactly-one-cent broker-statement case the backend tolerance allows', () => {
+    // 3 × 33.33 = 99.99 vs statement amount 100.00 — the old 0.0001 frontend
+    // tolerance hard-blocked what the backend's 0.01 deliberately accepts.
+    const r = deriveUnitMath({ amount: 100.0, units: 3, price: 33.33 });
+    expect(r.isConsistent).toBe(true);
+  });
+
+  it('still rejects a difference beyond the backend tolerance', () => {
+    expect(deriveUnitMath({ amount: 100.02, units: 3, price: 33.33 }).isConsistent).toBe(false);
   });
 
   it('is not consistent with fewer than two values', () => {

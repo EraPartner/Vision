@@ -53,10 +53,22 @@ vi.mock('../../src/database/connection.js', () => ({
   query: vi.fn(),
 }));
 
+vi.mock('../../src/services/attachmentRecordService.js', () => ({
+  attachmentRepository: {
+    listPathsByTransactionIds: vi.fn(async () => []),
+  },
+}));
+
+vi.mock('../../src/services/attachmentService.js', () => ({
+  removeAttachmentFile: vi.fn(async () => undefined),
+}));
+
 import transactionRepository from '../../src/repositories/transactionRepository.js';
 import { query as dbQuery } from '../../src/database/connection.js';
 import { isManualDuplicate } from '../../src/services/deduplication.js';
 import { convertRowsToEur } from '../../src/services/currency/currencyConversionService.js';
+import { attachmentRepository } from '../../src/services/attachmentRecordService.js';
+import { removeAttachmentFile } from '../../src/services/attachmentService.js';
 await import('../../src/routes/transactions.js');
 
 describe('Transaction Routes', () => {
@@ -194,11 +206,15 @@ describe('Transaction Routes', () => {
       expect(res.write).toHaveBeenCalled();
       expect(res.end).toHaveBeenCalledTimes(1);
       const csv = res.write.mock.calls.map(([chunk]) => chunk).join('');
+      // Text columns are still guarded against spreadsheet formula injection.
       expect(csv).toContain(`'=HYPERLINK(""http://evil"")`);
       expect(csv).toContain("'+cmd");
-      expect(csv).toContain("'-100.00");
       expect(csv).toContain("'@danger");
       expect(csv).toContain("'-comment");
+      // Numeric columns are NOT guarded — a leading "'" would break re-import
+      // (negative amounts/balances would NaN-drop on a Vision-export round-trip).
+      expect(csv).toContain(",-100.00,");
+      expect(csv).not.toContain("'-100.00");
     });
 
     it('should sanitize server error detail when export fails', async () => {
@@ -413,6 +429,34 @@ describe('Transaction Routes', () => {
       expect(res.status).toHaveBeenCalledWith(400);
     });
 
+    it('should return 400 for a zero amount', async () => {
+      const req = {
+        body: {
+          transaction_date: '2026-01-15', bank_account: 'Chase',
+          recipient_id: 1, amount: 0,
+        },
+      };
+      const res = mockResponse();
+      await callHandler(routeHandlers['post:/'], req, res);
+
+      expect(res.status).toHaveBeenCalledWith(400);
+      expect(transactionRepository.create).not.toHaveBeenCalled();
+    });
+
+    it('should return 400 for a non-numeric amount', async () => {
+      const req = {
+        body: {
+          transaction_date: '2026-01-15', bank_account: 'Chase',
+          recipient_id: 1, amount: 'abc',
+        },
+      };
+      const res = mockResponse();
+      await callHandler(routeHandlers['post:/'], req, res);
+
+      expect(res.status).toHaveBeenCalledWith(400);
+      expect(transactionRepository.create).not.toHaveBeenCalled();
+    });
+
     it('should return 409 when manual duplicate is detected', async () => {
       isManualDuplicate.mockResolvedValue({ isDuplicate: true, existingTransactionId: 99 });
 
@@ -541,6 +585,35 @@ describe('Transaction Routes', () => {
       await callHandler(routeHandlers['delete:/:id'], req, res);
 
       expect(res.status).toHaveBeenCalledWith(404);
+    });
+
+    it('removes attachment files from disk after the delete', async () => {
+      // The DB CASCADE only removes the attachments rows — the files must be
+      // removed too or receipt PII persists forever and re-enters backups.
+      transactionRepository.hardDelete.mockResolvedValue(true);
+      attachmentRepository.listPathsByTransactionIds.mockResolvedValue([
+        'attachments/1/receipt-a.png',
+        'attachments/1/receipt-b.pdf',
+      ]);
+
+      const req = { params: { id: '1' } };
+      const res = mockResponse();
+      await routeHandlers['delete:/:id'](req, res);
+
+      expect(attachmentRepository.listPathsByTransactionIds).toHaveBeenCalledWith([1]);
+      expect(removeAttachmentFile).toHaveBeenCalledWith('attachments/1/receipt-a.png');
+      expect(removeAttachmentFile).toHaveBeenCalledWith('attachments/1/receipt-b.pdf');
+    });
+
+    it('does not remove files when the transaction was not found', async () => {
+      transactionRepository.hardDelete.mockResolvedValue(false);
+      attachmentRepository.listPathsByTransactionIds.mockResolvedValue(['attachments/9/x.png']);
+
+      const req = { params: { id: '99999' } };
+      const res = mockResponse();
+      await callHandler(routeHandlers['delete:/:id'], req, res);
+
+      expect(removeAttachmentFile).not.toHaveBeenCalled();
     });
   });
 });

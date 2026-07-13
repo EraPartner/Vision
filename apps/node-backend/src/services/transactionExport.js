@@ -69,7 +69,7 @@ function buildExportChunkSql(whereSql, limitParamIdx, cursorDateParamIdx, cursor
     ? `AND (t.date, t.id) > ($${cursorDateParamIdx}::date, $${cursorIdParamIdx}::bigint)`
     : '';
   return `
-    SELECT t.id, t.date, t.bank_account,
+    SELECT t.id, t.date, t.bank_account, t.account_id,
            COALESCE(pr.name, r.name) AS recipient_name, t.memo,
            t.amount, t.currency, t.balance,
            CASE
@@ -96,25 +96,29 @@ function buildExportChunkSql(whereSql, limitParamIdx, cursorDateParamIdx, cursor
 
 function buildCsvRow(row, { includeBalance = false } = {}) {
   const cols = [
-    row.date,
-    row.bank_account,
-    row.recipient_name,
-    row.memo,
-    row.amount,
-    row.currency,
-    row.balance,
-    row.category_name,
-    row.comment,
-    Array.isArray(row.tags) ? row.tags.join(';') : '',
+    // toYmd, not the raw pg Date: String() of it is "Wed Jul 01 2026 …" —
+    // unusable in Excel and a day off on cross-TZ re-import.
+    escapeCsvValue(toYmd(row.date)),
+    escapeCsvValue(row.bank_account),
+    escapeCsvValue(row.recipient_name),
+    escapeCsvValue(row.memo),
+    escapeCsvValue(row.amount),
+    escapeCsvValue(row.currency),
+    escapeCsvValue(row.balance),
+    escapeCsvValue(row.category_name),
+    escapeCsvValue(row.comment),
+    escapeCsvValue(Array.isArray(row.tags) ? row.tags.join(';') : ''),
   ];
-  if (includeBalance) cols.push(row.running_balance);
-  return cols.map(escapeCsvValue).join(',');
+  if (includeBalance) cols.push(escapeCsvValue(row.running_balance));
+  return cols.join(',');
 }
 
 function buildNdjsonRow(row) {
   return JSON.stringify({
     id: row.id,
-    date: row.date,
+    // toYmd, not the raw pg Date: JSON.stringify would toISOString it into
+    // the PREVIOUS day's timestamp on any backend east of UTC.
+    date: toYmd(row.date),
     bank_account: row.bank_account,
     recipient: row.recipient_name ?? null,
     memo: row.memo ?? null,
@@ -191,9 +195,12 @@ async function streamExport(res, { whereSql, params, nextParamIdx, contentType, 
 }
 
 export async function streamCsvExport(res, { whereSql, params, nextParamIdx, includeBalance = false }) {
-  // Kept as a Decimal across the whole stream — collapsing to a JS number each
-  // row re-ingested a drifted float into the next step's running balance.
-  let runningBalance = toDecimal(0);
+  // Partitioned by account_id (ADR-088): the list endpoint's window partitions
+  // by account because a stream spanning multiple accounts otherwise sums them
+  // into one meaningless cross-account total. Kept as Decimals across the whole
+  // stream — collapsing to a JS number each row re-ingested a drifted float
+  // into the next step's running balance.
+  const runningBalances = new Map();
   return streamExport(res, {
     whereSql,
     params,
@@ -208,8 +215,10 @@ export async function streamCsvExport(res, { whereSql, params, nextParamIdx, inc
     },
     formatRow(row) {
       if (includeBalance) {
-        runningBalance = runningBalance.plus(toDecimal(row.amount ?? 0));
-        return `${buildCsvRow({ ...row, running_balance: runningBalance.toNumber() }, { includeBalance })}\n`;
+        const key = row.account_id ?? null;
+        const next = (runningBalances.get(key) ?? toDecimal(0)).plus(toDecimal(row.amount ?? 0));
+        runningBalances.set(key, next);
+        return `${buildCsvRow({ ...row, running_balance: next.toNumber() }, { includeBalance })}\n`;
       }
       return `${buildCsvRow(row)}\n`;
     },

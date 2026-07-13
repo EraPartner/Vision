@@ -19,6 +19,8 @@ interface FilterBannerProps {
     amountSignedFilter?: boolean;
     searchFilter?: string;
     filterLabel?: string;
+    /** Preferred account filter (exact FK match, ADR-088); shown via filterLabel. */
+    accountIdFilter?: number;
     bankAccountFilter?: string;
     tagsFilter?: string[];
     onClear: () => void;
@@ -38,6 +40,7 @@ export function FilterBanner({
     amountSignedFilter,
     searchFilter,
     filterLabel,
+    accountIdFilter,
     bankAccountFilter,
     tagsFilter,
     onClear,
@@ -49,7 +52,7 @@ export function FilterBanner({
     const hasAmountFilter = amountMinFilter != null || amountMaxFilter != null;
     const hasMainFilter = transactionIdFilter || recipientIdFilter || categoryIdFilter ||
         categoryIdsFilter?.length || startDateFilter || endDateFilter || transactionTypeFilter ||
-        bankAccountFilter || hasAmountFilter;
+        accountIdFilter || bankAccountFilter || hasAmountFilter;
     const hasTagFilter = tagsFilter && tagsFilter.length > 0;
 
     if (!hasMainFilter && !hasTagFilter) {
@@ -81,7 +84,9 @@ export function FilterBanner({
                 ? `recipient #${recipientIdFilter}`
                 : categoryIdFilter
                     ? `category #${categoryIdFilter}`
-                    : bankAccountFilter ?? '');
+                    : accountIdFilter
+                        ? `account #${accountIdFilter}`
+                        : bankAccountFilter ?? '');
     if (baseLabel) descriptors.push(baseLabel);
     if (transactionTypeFilter) descriptors.push(t(transactionTypeFilter === 'income' ? 'filter.type.income' : 'filter.type.expense'));
     if (startDateFilter || endDateFilter) descriptors.push(`${fmtDate(startDateFilter)} → ${fmtDate(endDateFilter)}`);
@@ -130,6 +135,7 @@ export function FilterBanner({
                     amountSignedFilter={amountSignedFilter}
                     searchFilter={searchFilter}
                     filterLabel={filterLabel}
+                    accountIdFilter={accountIdFilter}
                     bankAccountFilter={bankAccountFilter}
                 />
                 {hasMainFilter && (

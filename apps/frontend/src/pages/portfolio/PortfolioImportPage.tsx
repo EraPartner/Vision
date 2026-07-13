@@ -141,6 +141,9 @@ export function PortfolioImportPage() {
       toast.success(t("portfolioImport.toast.importSuccess", { n: data.imported, dups: data.duplicates }), {
         icon: <CheckCircle2 className="h-4 w-4" />,
       });
+      if ((data.skipped ?? 0) > 0) {
+        toast.warning(t("portfolioImport.toast.rowsSkipped", { n: data.skipped as number }));
+      }
       setFile(null);
       setProgress((p) => (p ? { ...p, phase: "complete", percent: 100 } : null));
     } catch (error) {
@@ -213,7 +216,7 @@ export function PortfolioImportPage() {
                 type="number"
                 min="0"
                 value={config.skipRows}
-                onChange={(e) => setConfig({ ...config, skipRows: parseInt(e.target.value) || 0 })}
+                onChange={(e) => setConfig({ ...config, skipRows: Math.max(0, parseInt(e.target.value) || 0) })}
               />
             </div>
           </div>

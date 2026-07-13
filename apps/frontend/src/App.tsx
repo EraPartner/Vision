@@ -6,7 +6,7 @@ import { AppLayout } from "@/components/layout/AppLayout";
 import { SettingsProvider } from "@/contexts/SettingsContext";
 import { SettingsPreloadProvider } from "@/contexts/SettingsPreloadContext";
 import { AppSettingsProvider, AppSettingsSaveErrorToaster, useAppSettings } from "@/contexts/AppSettingsContext";
-import { BelgianTaxProfileProvider } from "@/contexts/BelgianTaxProfileContext";
+import { BelgianTaxProfileProvider, BelgianTaxSaveErrorToaster } from "@/contexts/BelgianTaxProfileContext";
 import { ThemeProvider } from "@/contexts/ThemeContext";
 import { LanguageProvider, type Language } from "@/contexts/LanguageContext";
 import { configureCurrencyFormatDefaults, numberFormatToLocale } from "@/utils/currency";
@@ -175,6 +175,7 @@ const App = () => {
                                     <ErrorBoundary>
                                         <Sonner />
                                         <AppSettingsSaveErrorToaster />
+                                        <BelgianTaxSaveErrorToaster />
                                         <BrowserRouter>
                                             <ScrollToTop />
                                             <StartupRedirect />

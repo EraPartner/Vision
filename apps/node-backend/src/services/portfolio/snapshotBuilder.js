@@ -571,7 +571,9 @@ export async function computeDailySnapshots(targetCurrency = 'EUR') {
       inflation_adjusted_value: cumulativeInflation.gt(0)
         ? roundMoney(totalValue.div(cumulativeInflation)) : roundMoney(totalValue),
       // Per-account holdings split (ADR-100). Σ value_by_account == value by
-      // construction. In-memory only — not persisted to the snapshots table.
+      // construction. Persisted by computeAndStoreSnapshots into the
+      // portfolio_snapshot_accounts side table (migration 0074) so
+      // getNetWorthByAccount reads it instead of replaying this day-walk.
       value_by_account: Object.fromEntries(
         [...valueByAccount].map(([k, v]) => [k, roundMoney(v)]),
       ),
@@ -612,6 +614,68 @@ async function hasFxNeutralColumn() {
 }
 
 /**
+ * Whether the portfolio_snapshot_accounts side table exists (migration 0074).
+ * Migrations are user-applied, so the writer degrades gracefully on databases
+ * that haven't run it yet — the per-account split is simply not persisted and
+ * getNetWorthByAccount falls back to a live replay.
+ */
+async function hasSnapshotAccountsTable() {
+  const result = await query(`
+    SELECT 1
+    FROM information_schema.tables
+    WHERE table_schema = current_schema()
+      AND table_name = 'portfolio_snapshot_accounts'
+    LIMIT 1
+  `);
+  return result.rows.length > 0;
+}
+
+/**
+ * Persist the per-account holdings split (ADR-100) for one currency inside the
+ * caller's transaction. Atomic replace: DELETE + batched INSERTs, mirroring the
+ * aggregate snapshot writer so the split never diverges from the snapshots it
+ * accompanies. Rows are sparse — only accounts holding value on a day appear.
+ *
+ * @param {import('pg').PoolClient} client
+ * @param {object[]} snapshots
+ * @param {string} targetCurrency
+ * @returns {Promise<number>} number of per-account rows written
+ */
+async function storeAccountSplit(client, snapshots, targetCurrency) {
+  await client.query('DELETE FROM portfolio_snapshot_accounts WHERE currency = $1', [targetCurrency]);
+
+  // Flatten each day's value_by_account map into (date, account_key, value) rows.
+  const rows = [];
+  for (const snap of snapshots) {
+    const byAccount = snap.value_by_account || {};
+    for (const [accountKey, value] of Object.entries(byAccount)) {
+      const numeric = Number(value) || 0;
+      if (numeric === 0) continue; // sparse: skip zero-value entries
+      rows.push([snap.snapshot_date, accountKey, numeric]);
+    }
+  }
+
+  for (let i = 0; i < rows.length; i += BATCH_SIZE) {
+    const batch = rows.slice(i, i + BATCH_SIZE);
+    const values = [];
+    const params = [];
+    let p = 1;
+    for (const [snapshotDate, accountKey, value] of batch) {
+      values.push(`($${p++},$${p++},$${p++},$${p++},NOW())`);
+      params.push(snapshotDate, targetCurrency, accountKey, value);
+    }
+    await client.query(`
+      INSERT INTO portfolio_snapshot_accounts (snapshot_date, currency, account_key, value, computed_at)
+      VALUES ${values.join(', ')}
+      ON CONFLICT (snapshot_date, currency, account_key) DO UPDATE SET
+        value = EXCLUDED.value, computed_at = NOW()
+    `, params);
+  }
+
+  return rows.length;
+}
+
+/**
  * Recompute all daily snapshots and persist to portfolio_performance_snapshots.
  *
  * @param {string} targetCurrency
@@ -629,6 +693,11 @@ export async function computeAndStoreSnapshots(targetCurrency = 'EUR') {
   const includeFxNeutral = await hasFxNeutralColumn();
   if (!includeFxNeutral) {
     logger.warn('portfolio_performance_snapshots.value_fx_neutral missing — apply migration 0039 to store the FX-neutral series');
+  }
+
+  const includeAccountSplit = await hasSnapshotAccountsTable();
+  if (!includeAccountSplit) {
+    logger.warn('portfolio_snapshot_accounts missing — apply migration 0074 to persist the per-account split (getNetWorthByAccount will replay live until then)');
   }
 
   const columns = [
@@ -675,6 +744,13 @@ export async function computeAndStoreSnapshots(targetCurrency = 'EUR') {
         VALUES ${values.join(', ')}
         ON CONFLICT (snapshot_date, currency) DO UPDATE SET ${updateSet}
       `, params);
+    }
+
+    // Persist the per-account holdings split (ADR-100) in the same transaction,
+    // so getNetWorthByAccount reads it instead of replaying the full day-walk.
+    if (includeAccountSplit) {
+      const accountRows = await storeAccountSplit(client, snapshots, targetCurrency);
+      logger.info('Per-account snapshot split stored', { rows: accountRows });
     }
   });
 

@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import { describe, expect, it } from "vitest";
-import { screen, waitFor } from "@testing-library/react";
+import { fireEvent, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { http } from "msw";
 import { renderWithApp } from "@/test/renderWithApp";
@@ -182,6 +182,32 @@ describe("EditPortfolioTxnDialog", () => {
         await waitFor(() =>
             expect(screen.queryByRole("dialog")).not.toBeInTheDocument(),
         );
+    });
+
+    it("blocks submit when FX rate is 0 instead of sending a doomed PATCH", async () => {
+        // Arrange — the backend rejects fx_rate_to_eur ≤ 0 with a raw 400;
+        // min="0" on the input permits typing 0, so the dialog must catch it.
+        let patched = false;
+        server.use(
+            http.patch(`${API_BASE}/api/investments/transactions/101`, () => {
+                patched = true;
+                return ok(PORTFOLIO_TXN_STUB);
+            }),
+        );
+        const user = userEvent.setup();
+        renderWithApp(
+            <EditPortfolioTxnDialog investment={INVESTMENT} transaction={TRANSACTION} />,
+        );
+
+        // Act — open, set FX rate to 0, submit
+        await user.click(await screen.findByRole("button", { name: /^edit$/i }));
+        await screen.findByRole("dialog");
+        fireEvent.change(screen.getByLabelText(/fx rate to eur/i), { target: { value: "0" } });
+        await user.click(screen.getByRole("button", { name: /save/i }));
+
+        // Assert — dialog stays open and nothing was sent
+        expect(screen.getByRole("dialog")).toBeInTheDocument();
+        expect(patched).toBe(false);
     });
 
     it("shows error toast on API failure and keeps dialog open", async () => {

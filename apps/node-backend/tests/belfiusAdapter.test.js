@@ -53,6 +53,40 @@ describe('BelfiusAdapter', () => {
     expect(txns[0].balance).toBe(1234.56);
   });
 
+  it('parses a dot-grouped "Laatste saldo" (≥ €1000)', async () => {
+    // "12.345,67 EUR" used to become NaN via a bare comma swap, so running
+    // balances silently never applied for balances of €1000 and up.
+    const csv = SAMPLE_BELFIUS_CSV.replace('Laatste saldo;1234,56 EUR', 'Laatste saldo;12.345,67 EUR');
+    tmpPath = writeTempCSV(csv);
+    const txns = await parse(tmpPath);
+    expect(txns[0].balance).toBe(12345.67);
+  });
+
+  it('walks running balances by statement/transaction number for a single-day ascending statement', async () => {
+    // All rows share one date, so the old first-vs-last-date heuristic
+    // treated this ascending statement as descending and walked balances
+    // from the wrong end. Transaction numbers 50→52 define the real order.
+    const csv = SAMPLE_BELFIUS_CSV
+      .replace('Laatste saldo;1234,56 EUR', 'Laatste saldo;1000,00 EUR')
+      .replace(
+        /BE81[^]*$/,
+        `BE81 0637 5694 4024;24/11/2025;00010;50;;SALARY;;1000 Brussels;VIREMENT;24/11/2025;100,00;EUR;;BE;
+BE81 0637 5694 4024;24/11/2025;00010;51;;SHOP A;;1000 Brussels;BANCONTACT;24/11/2025;-50,00;EUR;;BE;
+BE81 0637 5694 4024;24/11/2025;00010;52;;SHOP B;;1000 Brussels;BANCONTACT;24/11/2025;-20,00;EUR;;BE;
+`,
+      );
+    tmpPath = writeTempCSV(csv);
+    const txns = await parse(tmpPath);
+
+    expect(txns).toHaveLength(3);
+    // Newest (txn 52) carries the "Laatste saldo"; older rows walk backwards.
+    expect(txns[2].balance).toBe(1000);
+    expect(txns[1].balance).toBe(1020);
+    expect(txns[0].balance).toBe(1070);
+    // The internal ordering key must not leak into the emitted rows.
+    expect(txns[0]._seq).toBeUndefined();
+  });
+
   it('parses transaction fields correctly', async () => {
     tmpPath = writeTempCSV(SAMPLE_BELFIUS_CSV);
     const txns = await parse(tmpPath);

@@ -6,7 +6,7 @@
 import fs from 'fs';
 import { cleanRecipientName, normalizeToUppercase } from '../../textNormalization.js';
 import { logger } from '../../../config/logger.js';
-import { parseDayMonthYear, parseCommaDecimal, parseDecimalSafe, buildOptionalComment, splitCsvLines, canonicalIban } from './_shared.js';
+import { parseDayMonthYear, parseCommaDecimal, buildOptionalComment, splitCsvLines, canonicalIban } from './_shared.js';
 import { toDecimal, roundMoney } from '../../../lib/money.js';
 
 const NAME = 'belfius';
@@ -19,24 +19,40 @@ function parseLastBalance(line) {
   if (!line.includes('Laatste saldo;')) return null;
   const parts = line.split(';');
   if (parts.length < 2) return null;
-  const balStr = parts[1].replace(' EUR', '').replace(',', '.').trim();
-  const val = parseDecimalSafe(balStr);
+  // "12.345,67 EUR" — a bare comma swap left "12.345.67" (NaN), so running
+  // balances silently never applied for balances ≥ €1000.
+  const balStr = parts[1].replace(' EUR', '').trim();
+  const val = parseCommaDecimal(balStr);
   return isNaN(val) ? null : val;
 }
 
 function applyRunningBalances(transactions, lastBalance) {
   if (lastBalance === null || transactions.length === 0) return;
+
+  // Order by the statement/transaction numbers — the export's own sequence.
+  // Guessing direction from first-vs-last date treated a single-day statement
+  // as descending; if it was actually ascending, every row was assigned a
+  // balance walked from the wrong end. Date heuristic kept only as a fallback
+  // for rows without parseable sequence numbers.
+  const haveSeq = transactions.every(
+    (tx) => Number.isFinite(tx._seq[0]) && Number.isFinite(tx._seq[1]),
+  );
+  let newestToOldest;
+  if (haveSeq) {
+    newestToOldest = [...transactions].sort(
+      (a, b) => (b._seq[0] - a._seq[0]) || (b._seq[1] - a._seq[1]),
+    );
+  } else {
+    const isDescending = transactions[0].date >= transactions[transactions.length - 1].date;
+    newestToOldest = isDescending ? [...transactions] : [...transactions].reverse();
+  }
+
   // Accumulate as Decimal — rounding the float `bal` every row let drift
   // compound backwards across the whole statement.
   let bal = toDecimal(lastBalance);
-  const isDescending = transactions[0].date >= transactions[transactions.length - 1].date;
-  const indices = isDescending
-    ? Array.from({ length: transactions.length }, (_, i) => i)
-    : Array.from({ length: transactions.length }, (_, i) => transactions.length - 1 - i);
-
-  for (const i of indices) {
-    transactions[i].balance = roundMoney(bal);
-    bal = bal.minus(toDecimal(transactions[i].amount));
+  for (const tx of newestToOldest) {
+    tx.balance = roundMoney(bal);
+    bal = bal.minus(toDecimal(tx.amount));
   }
 }
 
@@ -92,6 +108,9 @@ function parseTransactionLine(line) {
     recipientBankName: recipientAccount ? 'BELFIUS' : null,
     comment: buildOptionalComment(commentParts),
     rawData: line,
+    // Statement + transaction number: the export's own ordering, used (and
+    // stripped again) by applyRunningBalances.
+    _seq: [Number.parseInt(statementNumber, 10), Number.parseInt(transactionNumber, 10)],
   };
 }
 
@@ -123,6 +142,7 @@ export async function parse(filePath) {
   }
 
   applyRunningBalances(transactions, lastBalance);
+  for (const tx of transactions) delete tx._seq;
   transactions.skipped = skipped;
   logger.info(`Belfius CSV parsed: ${transactions.length} transactions, ${skipped} skipped`);
   return transactions;

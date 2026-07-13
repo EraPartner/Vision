@@ -6,9 +6,11 @@
  * when the government publishes new rates; do not modify past entries.
  */
 
+// The cap is a function of the rate, not the instrument:
+// 0.12% → €1,300; 0.35% → €1,600; 1.32% → €4,000.
 const TOB_DEFAULT = {
   bonds:             { rate: 0.0012, cap: 1300 },
-  sharesAndOther:    { rate: 0.0035, cap: 4000 },
+  sharesAndOther:    { rate: 0.0035, cap: 1600 },
   accumulatingFunds: { rate: 0.0132, cap: 4000 },
   distributingFunds: { rate: 0.0012, cap: 1300 },
 };

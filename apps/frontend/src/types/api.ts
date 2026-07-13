@@ -91,6 +91,8 @@ export interface Account {
     /** Whether the account has any active ledger rows; only set by the list endpoint. */
     has_transactions?: boolean;
     is_active: boolean;
+    /** Server-stamped when the account is closed (is_active=false); cleared on reactivate (D5). */
+    closed_at?: string | null;
     created_at: string;
     updated_at?: string;
 }
@@ -119,8 +121,16 @@ export interface AccountCreate {
     statement_balance_date?: string;
 }
 
-export interface AccountUpdate extends Partial<AccountCreate> {
+// On PATCH, explicit null clears the field (the backend maps it to SQL NULL);
+// undefined/omitted leaves it untouched.
+export interface AccountUpdate extends Partial<Omit<AccountCreate,
+    'display_name' | 'institution' | 'funding_account_id' | 'statement_balance' | 'statement_balance_date'>> {
     is_active?: boolean;
+    display_name?: string | null;
+    institution?: string | null;
+    funding_account_id?: number | null;
+    statement_balance?: number | null;
+    statement_balance_date?: string | null;
 }
 
 // ==================== Recipient Types ====================
@@ -167,17 +177,19 @@ export interface RecipientUpdate {
 export interface Transaction {
     id: number;
     transaction_date: string; // date field, aliased as "date" in API
-    bank_account: string;
-    recipient_id?: number;
+    // Nullable on the wire: rows without a label exist (e.g. ADR-090 trade
+    // cash legs), and a PATCH null-to-clear leaves NULL behind.
+    bank_account: string | null;
+    recipient_id?: number | null;
     recipient_name?: string; // Recipient name
-    memo?: string;
+    memo?: string | null;
     amount: number;
     amount_eur?: number;
     currency?: string;
     balance?: number;
-    category_id?: number;
+    category_id?: number | null;
     category_name?: string; // Category name in 'General:Detail' format (e.g., 'FOOD:GROCERIES')
-    comment?: string;
+    comment?: string | null;
     tags?: Tag[];
     created_at: string;
     updated_at?: string;
@@ -205,18 +217,21 @@ export interface TransactionCreate {
     tags?: string[];
 }
 
+// Nullable fields carry PATCH null-to-clear semantics: explicit null clears
+// the value server-side, undefined (absent key) leaves it unchanged. `??
+// undefined` on a cleared value silently dropped the key — the clear no-op'd.
 export interface TransactionUpdate {
     transaction_date?: string;
-    bank_account?: string;
-    recipient_id?: number;
+    bank_account?: string | null;
+    recipient_id?: number | null;
     recipient_name?: string;
-    memo?: string;
+    memo?: string | null;
     amount?: number;
     currency?: string;
     balance?: number;
-    category_id?: number;
+    category_id?: number | null;
     category_name?: string;
-    comment?: string;
+    comment?: string | null;
     is_active?: boolean;
     tags?: string[];
 }
@@ -246,6 +261,8 @@ export interface PlannedLoanScheduleEntry {
 export interface PlannedTransaction {
     id: number;
     planned_date: string; // YYYY-MM-DD format
+    recurrence_end_date?: string | null;
+    max_occurrences?: number | null;
     bank_account: string;
     recipient_id?: number;
     recipient_name?: string;
@@ -290,6 +307,9 @@ export interface PlannedTransactionsListResponse {
 
 export interface PlannedTransactionCreate {
     planned_date: string; // YYYY-MM-DD format
+    /** Recurrence bounds: the series completes past this date / at this count. */
+    recurrence_end_date?: string;
+    max_occurrences?: number;
     bank_account?: string;
     recipient_id?: number;
     memo?: string;
@@ -312,6 +332,8 @@ export interface PlannedTransactionCreate {
 
 export interface PlannedTransactionUpdate {
     planned_date?: string;
+    recurrence_end_date?: string | null;
+    max_occurrences?: number | null;
     bank_account?: string;
     recipient_id?: number;
     recipient_name?: string;
@@ -535,6 +557,8 @@ export interface BulkTransactionFilter {
     transaction_id?: number;
     start_date?: string;
     end_date?: string;
+    /** Preferred account filter (exact FK match, ADR-088). */
+    account_id?: number;
     bank_account?: string;
     bank_accounts?: string[];
     category_id?: number;

@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { parseDecimal } from '@/lib/decimal';
-import { deriveUnitMath } from '@/lib/portfolioUnitMath';
+import { deriveUnitMath, parsePositive } from '@/lib/portfolioUnitMath';
 import { useLanguage } from '@/contexts/LanguageContext';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
@@ -19,14 +19,6 @@ import { getTxnTypeLabel } from '@/types/portfolio';
 import { toast } from 'sonner';
 import { DatePicker } from '@/components/shared/DatePicker';
 import { parseLocalDateFromYmd, toYmd } from '@/components/shared/dateUtils';
-
-function parsePositive(value: string): number | undefined {
-  if (!value.trim()) return undefined;
-  const n = parseDecimal(value, NaN);
-  if (!Number.isFinite(n) || n <= 0) return undefined;
-  return n;
-}
-
 
 interface Props {
   investment: InvestmentSummary;
@@ -121,6 +113,20 @@ export function AddPortfolioTxnDialog({ investment, trigger }: Props) {
       return;
     }
 
+    // NaN fallback, not the default 0 — garbage in these fields must block the
+    // submit instead of silently posting €0 fees/taxes or fx_rate_to_eur = 0.
+    const feesValue = form.fees ? parseDecimal(form.fees, NaN) : undefined;
+    const taxesValue = form.taxes ? parseDecimal(form.taxes, NaN) : undefined;
+    const fxRateValue = form.fxRateToEur ? parseDecimal(form.fxRateToEur, NaN) : undefined;
+    if (
+      (feesValue !== undefined && (!Number.isFinite(feesValue) || feesValue < 0)) ||
+      (taxesValue !== undefined && (!Number.isFinite(taxesValue) || taxesValue < 0)) ||
+      (fxRateValue !== undefined && (!Number.isFinite(fxRateValue) || fxRateValue <= 0))
+    ) {
+      toast.error(t('addPortTxn.error.invalidNumber'));
+      return;
+    }
+
     try {
       await addTransaction({
         investmentId: investment.id,
@@ -129,9 +135,9 @@ export function AddPortfolioTxnDialog({ investment, trigger }: Props) {
         amount: isGift ? 0 : effectiveAmount,
         units: effectiveUnits,
         price_per_unit: effectivePrice,
-        fees: isGift ? 0 : (form.fees ? parseDecimal(form.fees) : undefined),
-        taxes: isGift ? 0 : (form.taxes ? parseDecimal(form.taxes) : undefined),
-        fx_rate_to_eur: form.fxRateToEur ? parseDecimal(form.fxRateToEur) : undefined,
+        fees: isGift ? 0 : feesValue,
+        taxes: isGift ? 0 : taxesValue,
+        fx_rate_to_eur: fxRateValue,
         currency: investment.currency,
         note: form.note.trim() || undefined,
         ...(form.accountId ? { account_id: Number(form.accountId) } : {}),

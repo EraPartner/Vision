@@ -137,6 +137,21 @@ export function EditPortfolioTxnDialog({ investment, transaction, trigger }: Pro
       return;
     }
 
+    // Same guard as the Add dialog: NaN fallback so garbage can't silently
+    // become €0, and an FX rate of 0 (min="0" permits it) must not reach the
+    // backend's "must be positive" check as a raw 400.
+    const feesValue = form.fees ? parseDecimal(form.fees, NaN) : 0;
+    const taxesValue = form.taxes ? parseDecimal(form.taxes, NaN) : 0;
+    const fxRateValue = form.fxRateToEur ? parseDecimal(form.fxRateToEur, NaN) : null;
+    if (
+      !Number.isFinite(feesValue) || feesValue < 0 ||
+      !Number.isFinite(taxesValue) || taxesValue < 0 ||
+      (fxRateValue !== null && (!Number.isFinite(fxRateValue) || fxRateValue <= 0))
+    ) {
+      toast.error(t('addPortTxn.error.invalidNumber'));
+      return;
+    }
+
     try {
       // account_id: a number reassigns the lot, explicit null clears it back to
       // unassigned (the PATCH endpoint maps null → SQL NULL, undefined → unchanged).
@@ -145,10 +160,15 @@ export function EditPortfolioTxnDialog({ investment, transaction, trigger }: Pro
         amount: effectiveAmount,
         units: effectiveUnits,
         price_per_unit: effectivePrice,
-        fees: isGift ? 0 : (form.fees ? parseDecimal(form.fees) : undefined),
-        taxes: isGift ? 0 : (form.taxes ? parseDecimal(form.taxes) : undefined),
-        fx_rate_to_eur: form.fxRateToEur ? parseDecimal(form.fxRateToEur) : undefined,
-        note: form.note.trim() || undefined,
+        // Cleared fields must be SENT, not dropped: undefined keys vanish from
+        // the JSON body and the backend merge keeps the old value — "delete the
+        // €7.50 fee → Save → success" left the fee in the DB (and the FX/note
+        // likewise). Cleared money fields are 0; cleared note/FX are explicit
+        // null, same semantics as account_id below.
+        fees: isGift ? 0 : feesValue,
+        taxes: isGift ? 0 : taxesValue,
+        fx_rate_to_eur: fxRateValue,
+        note: form.note.trim() || null,
         account_id: form.accountId ? Number(form.accountId) : null,
         is_recurring: form.isRecurring,
         recurrence_interval: form.isRecurring ? form.recurrenceInterval : undefined,

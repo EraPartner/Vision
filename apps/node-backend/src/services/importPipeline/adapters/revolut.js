@@ -5,6 +5,7 @@
 import { cleanRecipientName, normalizeToUppercase } from '../../textNormalization.js';
 import { logger } from '../../../config/logger.js';
 import { parseCsvFile, buildOptionalComment, parseDecimalSafe, parseDateFlexibleUtc } from './_shared.js';
+import { toDecimal, roundMoney } from '../../../lib/money.js';
 
 const NAME = 'revolut';
 const BANK_LABEL = 'Revolut';
@@ -51,10 +52,14 @@ function parseRow(parts) {
   const date = parseRevolutDate(completedDateStr);
   if (!date) return null;
 
-  const amount = parseDecimalSafe(amountStr);
-  if (isNaN(amount)) return null;
+  const grossAmount = parseDecimalSafe(amountStr);
+  if (isNaN(grossAmount)) return null;
 
   const fee = parseDecimalSafe(feeStr) || 0;
+  // Revolut's Amount column excludes Fee — the actual balance delta is
+  // amount − fee. Book the net so imported amounts reconcile with the
+  // imported Balance column (fee stays visible in the comment below).
+  const amount = fee ? roundMoney(toDecimal(grossAmount).minus(toDecimal(fee))) : grossAmount;
   const balance = balanceStr ? parseDecimalSafe(balanceStr) : null;
 
   const cleanedDescription = normalizeToUppercase(cleanRecipientName(description));

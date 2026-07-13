@@ -124,6 +124,52 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/accounts/{id}/opening-balance": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Account to anchor */
+                id: number;
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Set the opening-balance anchor for an account
+         * @description Creates (or updates) one system anchor row per account+currency with amount=0, a server-stamped `balance`, is_transfer=true and transfer_source='opening' (ADR-094 second addendum, D4). The single sanctioned exception to the balance write-protection; lets manual/cash-only accounts seed a balance. Invoking again updates the existing anchor.
+         */
+        post: operations["setAccountOpeningBalance"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/accounts/{id}/reconcile": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Account to reconcile */
+                id: number;
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Reconcile an account's drift
+         * @description Resolves the drift (statement_balance − computed_balance) surfaced by the drift badge (ADR-094, Phase C). `mode: 'accept'` rewrites the stored statement figure to the computed balance (no transaction created); `mode: 'adjustment'` stamps one server-side ledger row (amount=drift, balance-free, is_transfer=true, transfer_source='adjustment') so the computed balance rises to meet the statement — preserving the ADR-094 descriptive-only default. Either way the drift collapses to 0.
+         */
+        post: operations["reconcileAccount"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/transactions": {
         parameters: {
             query?: never;
@@ -3128,6 +3174,11 @@ export interface components {
             /** @description Whether the account has any active ledger rows; only returned by the list endpoint. */
             has_transactions?: boolean;
             is_active: boolean;
+            /**
+             * Format: date-time
+             * @description Server-stamped when the account is closed (is_active=false); cleared on reactivate (ADR-088 addendum, D5)
+             */
+            closed_at?: string | null;
             /** Format: date-time */
             created_at: string;
             /** Format: date-time */
@@ -3253,19 +3304,20 @@ export interface components {
             /** @description Tag slugs to assign (replaces existing tags) */
             tags?: string[];
         };
+        /** @description PATCH semantics: an explicit null on a nullable field clears the stored value; an absent key leaves it unchanged. */
         TransactionUpdate: {
             /** Format: date */
             transaction_date?: string;
-            bank_account?: string;
-            recipient_id?: number;
+            bank_account?: string | null;
+            recipient_id?: number | null;
             recipient_name?: string;
-            memo?: string;
+            memo?: string | null;
             amount?: number;
             currency?: string;
             balance?: number;
-            category_id?: number;
+            category_id?: number | null;
             category_name?: string;
-            comment?: string;
+            comment?: string | null;
             is_active?: boolean;
             /** @description Tag slugs to assign (replaces existing tags when present) */
             tags?: string[];
@@ -3309,6 +3361,13 @@ export interface components {
             url?: string;
             is_recurring: boolean;
             recurrence_pattern?: string;
+            /**
+             * Format: date
+             * @description Recurrence bound — the series completes once the next occurrence would fall past this date.
+             */
+            recurrence_end_date?: string | null;
+            /** @description Recurrence bound — the series completes at this execution count. */
+            max_occurrences?: number | null;
             is_loan?: boolean;
             loan_type?: components["schemas"]["PlannedLoanType"];
             loan_principal?: number | null;
@@ -3349,6 +3408,13 @@ export interface components {
             url?: string;
             is_recurring?: boolean;
             recurrence_pattern?: string;
+            /**
+             * Format: date
+             * @description Recurrence bound — the series completes once the next occurrence would fall past this date.
+             */
+            recurrence_end_date?: string | null;
+            /** @description Recurrence bound — the series completes at this execution count. */
+            max_occurrences?: number | null;
             is_loan?: boolean;
             loan_type?: components["schemas"]["PlannedLoanType"];
             loan_principal?: number;
@@ -3978,6 +4044,97 @@ export interface operations {
             };
         };
     };
+    setAccountOpeningBalance: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Account to anchor */
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    /** @description The opening balance to stamp */
+                    balance: number;
+                    /**
+                     * Format: date
+                     * @description As-of date; expected to precede the account's activity
+                     */
+                    date: string;
+                    /** @description 3-letter ISO code; defaults to the account currency */
+                    currency?: string;
+                };
+            };
+        };
+        responses: {
+            /** @description The anchor transaction plus an optional warning */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Envelope"];
+                };
+            };
+            /** @description Account not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    reconcileAccount: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Account to reconcile */
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    /**
+                     * @description How to resolve the drift
+                     * @enum {string}
+                     */
+                    mode: "accept" | "adjustment";
+                };
+            };
+        };
+        responses: {
+            /** @description The reconciled figures plus any created adjustment transaction */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Envelope"];
+                };
+            };
+            /** @description No drift to resolve, no statement balance, or an invalid mode */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Account not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
     getTransactions: {
         parameters: {
             query?: {
@@ -3985,6 +4142,8 @@ export interface operations {
                 offset?: number;
                 start_date?: string;
                 end_date?: string;
+                /** @description Preferred account filter (exact FK match, ADR-088); bank_account remains a substring escape hatch */
+                account_id?: number;
                 bank_account?: string;
                 category_id?: number;
                 recipient_id?: number;
@@ -5064,6 +5223,10 @@ export interface operations {
             query?: {
                 start_date?: string;
                 end_date?: string;
+                /** @description Preferred account filter (exact FK match, ADR-088); bank_account remains a substring escape hatch */
+                account_id?: number;
+                /** @description Comma-separated account ids (exact FK match, ADR-088); preferred over bank_accounts */
+                account_ids?: string;
                 bank_account?: string;
                 include_balance?: boolean;
                 /** @description Comma-separated tag slugs — OR filter */
@@ -5091,6 +5254,10 @@ export interface operations {
             query?: {
                 start_date?: string;
                 end_date?: string;
+                /** @description Preferred account filter (exact FK match, ADR-088); bank_account remains a substring escape hatch */
+                account_id?: number;
+                /** @description Comma-separated account ids (exact FK match, ADR-088); preferred over bank_accounts */
+                account_ids?: string;
                 bank_account?: string;
                 /** @description Comma-separated tag slugs — OR filter */
                 tags?: string;
@@ -5716,6 +5883,9 @@ export interface operations {
                     url?: string;
                     is_recurring?: boolean;
                     recurrence_pattern?: string;
+                    /** Format: date */
+                    recurrence_end_date?: string | null;
+                    max_occurrences?: number | null;
                     is_active?: boolean;
                 };
             };
@@ -5808,6 +5978,8 @@ export interface operations {
     getTransactionCount: {
         parameters: {
             query?: {
+                /** @description Preferred account filter (exact FK match, ADR-088); bank_account remains a substring escape hatch */
+                account_id?: number;
                 bank_account?: string;
             };
             header?: never;

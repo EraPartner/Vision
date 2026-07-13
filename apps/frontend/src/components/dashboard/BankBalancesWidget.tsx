@@ -1,4 +1,5 @@
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
+import { CardSheen } from "@/components/shared/CardSheen";
 import { useNavigate } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
 import { apiClient } from "@/lib/api";
@@ -9,6 +10,7 @@ import { AreaChart, type AreaSeries, ChartLegend, type ChartLegendItem } from "@
 import { formatDate, parseISO } from "@/components/shared/dateUtils";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { useAppSettings } from "@/contexts/AppSettingsContext";
+import { useAccounts } from "@/hooks/useAccounts";
 
 const ACCOUNT_COLORS = [
     "hsl(var(--chart-1))",
@@ -40,15 +42,12 @@ export function BankBalancesWidget() {
     const navigate = useNavigate();
     const { appSettings } = useAppSettings();
 
-    // Double-clicking a per-account card opens the transactions list filtered to
-    // that account — same mechanism as AccountsPage. The dual-write trigger keeps
-    // transactions.bank_account equal to the account name, so it is the filter key.
-    const openAccountTransactions = (bankAccount: string) => {
-        const params = new URLSearchParams({
-            bank_account: bankAccount,
-            filter_label: shortAccountName(bankAccount),
-        });
-        navigate(`/transactions?${params.toString()}`);
+    // Clicking a per-account card opens the SAME account detail view the
+    // Accounts page uses (AccountDetailSheet), deep-linked by entity id — one
+    // concept, one code path (Accounts-rewrite Phase D). The widget no longer
+    // keys on the retiring transactions.bank_account string.
+    const openAccountDetail = (accountId: number) => {
+        navigate(`/accounts?account=${accountId}`);
     };
     const locale = numberFormatToLocale(appSettings.numberFormat);
     const integerLocaleFormatter = new Intl.NumberFormat(locale);
@@ -58,8 +57,13 @@ export function BankBalancesWidget() {
         queryFn: () => apiClient.getBankBalances({ currency: defaultCurrency }),
         staleTime: 60_000,
     });
+    // The account entity is the source of truth for the balance CARDS: same
+    // accounts, same shared balance source (computed_balance, ADR-094 Phase C)
+    // the Accounts hub reads. getBankBalances still backs the history chart +
+    // net-position total (both now read that shared source server-side).
+    const { data: accountsData, isLoading: accountsLoading } = useAccounts({ active: "true" });
 
-    if (isLoading) {
+    if (isLoading || accountsLoading) {
         return (
             <Card className="glass-regular">
                 <CardHeader className="flex flex-row items-center gap-2 pb-3">
@@ -97,8 +101,17 @@ export function BankBalancesWidget() {
 
     const { accounts, total_net_position, history, total_history } = data;
 
-    // Balance CARDS: only accounts with a non-zero *current* balance.
-    const visibleAccounts = accounts.filter((acct) => Math.abs(acct.balance) > 0.000001);
+    // Transaction counts still come from the balances aggregation, keyed by the
+    // account name (== transactions.bank_account via the dual-write trigger).
+    const countByAccountName = new Map(accounts.map((acct) => [acct.bank_account, acct.transaction_count]));
+
+    // Balance CARDS come from the account ENTITY now: only accounts carrying a
+    // non-zero computed balance (the shared source), so a card always maps 1:1
+    // to a real account that opens in the detail sheet.
+    const entityAccounts = accountsData?.items ?? [];
+    const balanceCards = entityAccounts.filter(
+        (a) => a.computed_balance != null && Math.abs(a.computed_balance) > 0.000001,
+    );
 
     // CHART: include any account with a non-zero balance anywhere in history, not
     // just a non-zero current balance — an account closed last month (current 0,
@@ -152,7 +165,7 @@ export function BankBalancesWidget() {
         <div className="space-y-4">
             {/* Total Net Position Card */}
             <Card className="glass-regular premium-frame micro-lift group relative overflow-hidden">
-                <div className="absolute top-0 right-0 w-32 h-32 bg-gradient-to-br from-primary/10 to-transparent rounded-full -mr-16 -mt-16" />
+                <CardSheen />
                 <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-3">
                     <CardTitle className="text-sm font-semibold text-muted-foreground">
                         {t('bankWidget.netPosition')}
@@ -167,23 +180,36 @@ export function BankBalancesWidget() {
                     </div>
                     <p className={`text-xs font-medium mt-2 flex items-center gap-1 ${isPositive ? "amount-gain" : "amount-loss"}`}>
                         {isPositive ? <TrendingUp className="h-3 w-3" /> : <TrendingDown className="h-3 w-3" />}
-                        {t('bankWidget.acrossAccounts', { n: visibleAccounts.length.toString() })}
+                        {t('bankWidget.acrossAccounts', { n: balanceCards.length.toString() })}
                     </p>
                 </CardContent>
             </Card>
 
-            {/* Per-Account Balance Cards */}
-            {visibleAccounts.length > 0 && (
+            {/* Per-Account Balance Cards — driven by the account entity; a single
+                click opens the shared account detail view. */}
+            {balanceCards.length > 0 && (
                 <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-                    {visibleAccounts.map((acct, idx) => {
+                    {balanceCards.map((a, idx) => {
                         const color = ACCOUNT_COLORS[idx % ACCOUNT_COLORS.length];
-                        const acctPositive = acct.balance >= 0;
+                        const balance = a.computed_balance ?? 0;
+                        const acctPositive = balance >= 0;
+                        const label = a.display_name || a.name;
+                        const txCount = countByAccountName.get(a.name);
                         return (
                             <Card
-                                key={acct.bank_account}
-                                className="glass-regular premium-frame group cursor-pointer transition-shadow hover:shadow-glass-soft"
-                                onDoubleClick={() => openAccountTransactions(acct.bank_account)}
-                                title={t('accounts.openTransactions')}
+                                key={a.id}
+                                role="button"
+                                tabIndex={0}
+                                aria-label={t('accounts.openDetail', { name: label })}
+                                className="glass-regular premium-frame group cursor-pointer transition-shadow hover:shadow-glass-soft focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/70 focus-visible:ring-offset-2"
+                                onClick={() => openAccountDetail(a.id)}
+                                onKeyDown={(e) => {
+                                    if (e.key === "Enter" || e.key === " ") {
+                                        e.preventDefault();
+                                        openAccountDetail(a.id);
+                                    }
+                                }}
+                                title={t('accounts.openDetailHint')}
                             >
                                 <CardContent className="pt-4 pb-4 px-4">
                                     <div className="flex items-start justify-between mb-2">
@@ -192,18 +218,20 @@ export function BankBalancesWidget() {
                                                 className="h-3 w-3 rounded-full shrink-0 ring-2 ring-offset-1 ring-offset-card transition-transform duration-300 group-hover:scale-125"
                                                 style={{ backgroundColor: color, ['--tw-ring-color']: color } as React.CSSProperties}
                                             />
-                                            <span className="text-xs font-mono text-muted-foreground truncate" title={acct.bank_account}>
-                                                {shortAccountName(acct.bank_account)}
+                                            <span className="text-xs font-semibold tracking-tight text-muted-foreground truncate" title={label}>
+                                                {label}
                                             </span>
                                         </div>
                                         <Landmark className="h-4 w-4 text-muted-foreground/40 shrink-0" />
                                     </div>
                                     <div className={`text-xl font-bold tabular-nums ${acctPositive ? "text-foreground" : "text-loss"}`}>
-                                        {(() => { const r = formatCurrencyCompact(acct.balance, defaultCurrency, locale); return <span title={r.isCompact ? r.full : undefined}>{r.display}</span>; })()}
+                                        {(() => { const r = formatCurrencyCompact(balance, defaultCurrency, locale); return <span title={r.isCompact ? r.full : undefined}>{r.display}</span>; })()}
                                     </div>
-                                    <div className="text-xs text-muted-foreground mt-1">
-                                        {t('bankWidget.transactions', { n: integerLocaleFormatter.format(acct.transaction_count) })}
-                                    </div>
+                                    {txCount != null && (
+                                        <div className="text-xs text-muted-foreground mt-1">
+                                            {t('bankWidget.transactions', { n: integerLocaleFormatter.format(txCount) })}
+                                        </div>
+                                    )}
                                 </CardContent>
                             </Card>
                         );

@@ -172,6 +172,19 @@ describe('DeduplicationService', () => {
       expect(query.mock.calls[0][0]).toContain('FROM manual_raw_transactions');
     });
 
+    it('only a live, active transaction blocks — a dangling hash row (ON DELETE SET NULL) does not', async () => {
+      // The join filters out dangling rows in SQL: the hash query returns no
+      // rows for them, and the field fallback (is_active = true) misses too.
+      query
+        .mockResolvedValueOnce({ rows: [] })
+        .mockResolvedValueOnce({ rows: [] });
+
+      const result = await isManualDuplicate(manualTx);
+
+      expect(result).toEqual({ isDuplicate: false, existingTransactionId: null });
+      expect(query.mock.calls[0][0]).toMatch(/JOIN transactions t ON t\.id = m\.transaction_id AND t\.is_active = true/);
+    });
+
     it('falls back to field-based lookup when manual raw table is unavailable', async () => {
       query
         .mockRejectedValueOnce(new Error('relation "manual_raw_transactions" does not exist'))
@@ -212,6 +225,8 @@ describe('DeduplicationService', () => {
 
       expect(query).toHaveBeenCalledTimes(1);
       expect(query.mock.calls[0][0]).toContain('INSERT INTO manual_raw_transactions');
+      // Upsert, so re-adding a deleted transaction re-claims its dangling hash row.
+      expect(query.mock.calls[0][0]).toContain('DO UPDATE SET transaction_id = EXCLUDED.transaction_id');
       expect(query.mock.calls[0][1][1]).toBe(777);
     });
 

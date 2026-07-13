@@ -13,7 +13,7 @@
 
 import { query as dbQuery } from '../database/connection.js';
 import { ValidationError } from '../middleware/errorHandler.js';
-import { buildTransactionWhere, validateInt4Ids } from './filterBuilder.js';
+import { buildTransactionWhere, parseAmountFilter, validateInt4Ids } from './filterBuilder.js';
 import { EXPORT_JOINS_SQL } from './transactionExport.js';
 
 const DEFAULT_ID_CAP = 500;
@@ -45,17 +45,12 @@ export function normalizeBulkFilter(filter) {
 
   const amountSigned = filter.amountSigned === true || filter.amount_signed === true ||
     filter.amountSigned === 'true' || filter.amount_signed === 'true';
-  const toAmount = (v) => {
-    if (v === undefined || v === null || v === '') return null;
-    const n = Number(v);
-    if (!Number.isFinite(n)) return null;
-    return amountSigned ? n : Math.abs(n);
-  };
 
   return {
     transactionId: pick('transactionId', 'transaction_id'),
     startDate: pick('startDate', 'start_date'),
     endDate: pick('endDate', 'end_date'),
+    accountId: pick('accountId', 'account_id'),
     bankAccount: pick('bankAccount', 'bank_account'),
     bankAccounts: filter.bankAccounts ?? filter.bank_accounts ?? null,
     categoryId: pick('categoryId', 'category_id'),
@@ -72,8 +67,8 @@ export function normalizeBulkFilter(filter) {
       filter.transaction_type === 'expense'
         ? filter.transactionType ?? filter.transaction_type
         : null,
-    amountMin: toAmount(filter.amountMin ?? filter.amount_min),
-    amountMax: toAmount(filter.amountMax ?? filter.amount_max),
+    amountMin: parseAmountFilter(filter.amountMin ?? filter.amount_min, amountSigned),
+    amountMax: parseAmountFilter(filter.amountMax ?? filter.amount_max, amountSigned),
     amountSigned,
     tagSlugs,
   };

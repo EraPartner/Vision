@@ -77,17 +77,48 @@ describe('materializedViewService', () => {
   it('debounces scheduleRefresh calls into one refresh', async () => {
     vi.useFakeTimers();
 
-    const { scheduleRefresh, query } = await loadMaterializedViewService();
+    const { scheduleRefresh, query, REFRESH_DEBOUNCE_MS } = await loadMaterializedViewService();
     query.mockResolvedValue({ rows: [] });
 
     scheduleRefresh();
     scheduleRefresh();
 
-    await vi.advanceTimersByTimeAsync(999);
+    await vi.advanceTimersByTimeAsync(REFRESH_DEBOUNCE_MS - 1);
     expect(query).not.toHaveBeenCalled();
 
     await vi.advanceTimersByTimeAsync(1);
     expect(query).toHaveBeenCalledTimes(4);
+  });
+
+  // TODO E20: trailing-only debounce let a steady mutation stream (< debounce
+  // apart) defer the refresh indefinitely — the max-wait cap forces a flush.
+  it('scheduleRefresh flushes at the max-wait cap under a steady mutation stream', async () => {
+    vi.useFakeTimers();
+
+    const {
+      scheduleRefresh, query, REFRESH_DEBOUNCE_MS, REFRESH_MAX_WAIT_MS,
+    } = await loadMaterializedViewService();
+    query.mockResolvedValue({ rows: [] });
+
+    // Reschedule every 2s — always inside the 5s trailing window.
+    const step = 2000;
+    scheduleRefresh();
+    for (let elapsed = 0; elapsed < REFRESH_MAX_WAIT_MS - step; elapsed += step) {
+      await vi.advanceTimersByTimeAsync(step);
+      scheduleRefresh();
+    }
+    expect(query).not.toHaveBeenCalled();
+
+    // Crossing the 10s deadline flushes even though the last call was < 5s ago.
+    await vi.advanceTimersByTimeAsync(step);
+    expect(query).toHaveBeenCalledTimes(4);
+
+    // The burst state resets: the next lone call waits the full trailing window again.
+    scheduleRefresh();
+    await vi.advanceTimersByTimeAsync(REFRESH_DEBOUNCE_MS - 1);
+    expect(query).toHaveBeenCalledTimes(4);
+    await vi.advanceTimersByTimeAsync(1);
+    expect(query).toHaveBeenCalledTimes(8);
   });
 
   it('creates materialized views and indexes in expected order', async () => {
@@ -103,6 +134,32 @@ describe('materializedViewService', () => {
     expect(sqlCalls.some((sql) => sql.includes('CREATE MATERIALIZED VIEW IF NOT EXISTS mv_cashflow_daily'))).toBe(true);
     expect(sqlCalls.some((sql) => sql.includes('CREATE MATERIALIZED VIEW IF NOT EXISTS mv_bank_balances'))).toBe(true);
     expect(logger.info).toHaveBeenCalledWith('Materialized views ready');
+  });
+
+  it('grains mv_bank_balances on (account_id, currency), not the bank_account string', async () => {
+    // Accounts rewrite Phase B (ADR-088): mv_bank_balances is the last derived
+    // object flipped off the bank_account string onto the account_id FK.
+    const { createMaterializedViews, query } = await loadMaterializedViewService();
+    query.mockResolvedValue({ rows: [] });
+
+    await createMaterializedViews();
+
+    const sqlCalls = query.mock.calls.map(([sql]) => sql);
+    const createSql = sqlCalls.find((sql) =>
+      sql.includes('CREATE MATERIALIZED VIEW IF NOT EXISTS mv_bank_balances'));
+    const indexSql = sqlCalls.find((sql) =>
+      sql.includes('CREATE UNIQUE INDEX IF NOT EXISTS mv_bank_balances_idx'));
+
+    expect(createSql).toBeDefined();
+    // Grouped by the FK + currency, joined to accounts for the compat label.
+    expect(createSql).toMatch(/JOIN accounts a ON a\.id = t\.account_id/);
+    expect(createSql).toMatch(/GROUP BY t\.account_id, a\.name, t\.currency/);
+    expect(createSql).toMatch(/a\.name AS bank_account/);
+    // No longer groups on / requires the raw bank_account string.
+    expect(createSql).not.toMatch(/GROUP BY bank_account/);
+
+    expect(indexSql).toBeDefined();
+    expect(indexSql).toMatch(/mv_bank_balances \(account_id, currency\)/);
   });
 
   it('ensures indexes and warns when one creation fails', async () => {

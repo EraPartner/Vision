@@ -14,6 +14,8 @@
 import { Router } from 'express';
 import accountService from '../services/accountService.js';
 import { mergeAccounts } from '../services/accountMergeService.js';
+import { setOpeningBalance } from '../services/openingBalanceService.js';
+import { reconcileAccount } from '../services/reconcileService.js';
 import { validateIdParam } from '../middleware/validation.js';
 
 const router = Router();
@@ -57,6 +59,27 @@ router.post('/:id/merge', validateIdParam, async (req, res) => {
     ? req.body.source_ids.map((x) => parseInt(x, 10)).filter((n) => Number.isInteger(n))
     : [];
   const result = await mergeAccounts(targetId, sourceIds);
+  res.ok({ ...result, links: [] });
+});
+
+// Set (create or update) the opening-balance anchor for a manual/cash-only
+// account (ADR-094 second addendum, D4). Body: { balance, date, currency? }.
+// The single sanctioned exception to the balance write-protection: it stamps one
+// system anchor row (amount=0, transfer_source='opening') per account+currency.
+router.post('/:id/opening-balance', validateIdParam, async (req, res) => {
+  const id = parseInt(req.params.id, 10);
+  const result = await setOpeningBalance(id, req.body);
+  res.ok({ ...result, links: [] });
+});
+
+// Resolve an account's drift (statement_balance − computed_balance) from the
+// reconcile dialog (ADR-094, Phase C). Body: { mode: 'accept' | 'adjustment' }.
+// 'accept' rewrites the stored statement figures to the computed balance;
+// 'adjustment' stamps one server-side 'adjustment' ledger row so the computed
+// balance rises to meet the statement (balance-free — descriptive-only preserved).
+router.post('/:id/reconcile', validateIdParam, async (req, res) => {
+  const id = parseInt(req.params.id, 10);
+  const result = await reconcileAccount(id, req.body);
   res.ok({ ...result, links: [] });
 });
 

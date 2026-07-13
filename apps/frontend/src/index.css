@@ -679,9 +679,17 @@
      * ------------------------------------------------------------------ */
 
     /* premium-frame and micro-lift are frequently combined (and premium-frame
-       is baked into the Card base): both declare the same full transition
-       list so whichever wins the cascade still animates border, shadow, and
-       transform together. */
+       is baked into the Card base). Their transitions animate transform ONLY:
+       box-shadow and border-color are paint properties, so animating them
+       repainted the card plus its full shadow extent on every frame of the
+       260ms hover ease — sweeping the cursor across a card grid stacked
+       overlapping multi-hundred-ms paint storms. The hover shadow is instead
+       pre-rendered on ::after and faded in (compositor-only opacity), and
+       the border accent swaps instantly: one repaint per enter/leave. Cards
+       that clip their children (the overflow-hidden grids) clip the ::after
+       shadow too and keep the border accent + lift as their hover feedback.
+       ::after needs a positioned ancestor — Card bakes in `relative`, and
+       the remaining premium-frame consumers all declare it alongside. */
     .premium-frame {
         border: 1px solid hsl(var(--border) / 0.7);
         /* Light mode reads as embossed paper: top highlight + bottom hairline. */
@@ -689,17 +697,27 @@
             0 1px 0 hsl(var(--glass-highlight) / 0.16) inset,
             0 -1px 0 hsl(var(--glass-shadow) / 0.05) inset,
             0 8px 24px hsl(var(--glass-shadow) / 0.06);
-        transition:
-            border-color var(--duration-normal) var(--ease-out-quint),
-            box-shadow var(--duration-normal) var(--ease-out-quint),
-            transform var(--duration-fast) var(--ease-out-quint);
+        transition: transform var(--duration-fast) var(--ease-out-quint);
+    }
+
+    .premium-frame::after {
+        content: "";
+        position: absolute;
+        /* Cover the border box so the shadow hugs the frame. */
+        inset: -1px;
+        border-radius: inherit;
+        pointer-events: none;
+        box-shadow: 0 12px 30px hsl(var(--glass-shadow) / 0.1);
+        opacity: 0;
+        transition: opacity var(--duration-normal) var(--ease-out-quint);
     }
 
     .premium-frame:hover {
         border-color: hsl(var(--primary) / 0.4);
-        box-shadow:
-            0 1px 0 hsl(var(--glass-highlight) / 0.22) inset,
-            0 12px 30px hsl(var(--glass-shadow) / 0.1);
+    }
+
+    .premium-frame:hover::after {
+        opacity: 1;
     }
 
     .dark .premium-frame {
@@ -708,23 +726,50 @@
             0 14px 30px hsl(0 0% 0% / 0.38);
     }
 
+    .dark .premium-frame::after {
+        box-shadow: 0 18px 40px hsl(0 0% 0% / 0.48);
+    }
+
     .dark .premium-frame:hover {
         border-color: hsl(var(--primary) / 0.5);
-        box-shadow:
-            0 1px 0 hsl(var(--glass-highlight) / 0.12) inset,
-            0 18px 40px hsl(0 0% 0% / 0.48);
     }
 
     .micro-lift {
-        transition:
-            transform var(--duration-fast) var(--ease-out-quint),
-            box-shadow var(--duration-normal) var(--ease-out-quint),
-            border-color var(--duration-normal) var(--ease-out-quint);
+        transition: transform var(--duration-fast) var(--ease-out-quint);
     }
 
     .micro-lift:hover {
         transform: translateY(-1px);
         will-change: transform;
+    }
+
+    /* One decorative corner-orb motif for hero/KPI cards (ADR-105).
+       See <CardSheen/>. Reads --glass-highlight (not raw white) so it adapts to
+       light/dark and theme variants; opacity is dialed back in dark so the orb
+       stays a whisper rather than a smear. */
+    .card-sheen {
+        pointer-events: none;
+        position: absolute;
+        top: 0;
+        right: 0;
+        height: 8rem;
+        width: 8rem;
+        margin-top: -4rem;
+        margin-right: -4rem;
+        border-radius: 9999px;
+        background-image: linear-gradient(
+            to bottom right,
+            hsl(var(--glass-highlight) / 0.5),
+            transparent
+        );
+    }
+
+    .dark .card-sheen {
+        background-image: linear-gradient(
+            to bottom right,
+            hsl(var(--glass-highlight) / 0.12),
+            transparent
+        );
     }
 
     .press-feedback {
@@ -1119,5 +1164,14 @@
     :root.fx-static-atmosphere .liquid-canvas::before,
     :root.fx-static-atmosphere .liquid-canvas::after {
         animation: none;
+    }
+
+    /* Window blurred / tab hidden (VisualEffectsController): pause the drift
+       so every backdrop-filter surface stops re-blurring per vsync while
+       nobody is looking. animation-play-state (not `animation: none`) resumes
+       mid-cycle without a visual jump when focus returns. */
+    :root.fx-idle-atmosphere .liquid-canvas::before,
+    :root.fx-idle-atmosphere .liquid-canvas::after {
+        animation-play-state: paused;
     }
 }
