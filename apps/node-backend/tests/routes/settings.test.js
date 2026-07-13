@@ -1,12 +1,8 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { mockLogger } from '../helpers/mockLogger.js';
+import { createMockRouter, createMockResponse } from '../helpers/routeHarness.js';
 
-const routeHandlers = {};
-const mockRouter = {
-  get: vi.fn((path, ...handlers) => { routeHandlers[`get:${path}`] = handlers[handlers.length - 1]; }),
-  put: vi.fn((path, ...handlers) => { routeHandlers[`put:${path}`] = handlers[handlers.length - 1]; }),
-  delete: vi.fn((path, ...handlers) => { routeHandlers[`delete:${path}`] = handlers[handlers.length - 1]; }),
-  use: vi.fn(),
-};
+const { router: mockRouter, handlers: routeHandlers } = createMockRouter();
 
 vi.mock('express', () => ({
   default: { Router: () => mockRouter },
@@ -24,7 +20,7 @@ vi.mock('../../src/repositories/settingsRepository.js', () => ({
 }));
 
 vi.mock('../../src/config/logger.js', () => ({
-  logger: { info: vi.fn(), error: vi.fn(), warn: vi.fn(), debug: vi.fn() },
+  logger: mockLogger(),
 }));
 
 import settingsRepository from '../../src/repositories/settingsRepository.js';
@@ -328,12 +324,5 @@ describe('Settings Routes', () => {
 });
 
 function mockResponse() {
-  const res = { json: vi.fn(), status: vi.fn(), send: vi.fn() };
-  res.status.mockReturnValue(res);
-  res.ok = (data, meta) => {
-    const body = { ok: true, data };
-    if (meta) body.meta = meta;
-    return res.json(body);
-  };
-  return res;
+  return createMockResponse();
 }

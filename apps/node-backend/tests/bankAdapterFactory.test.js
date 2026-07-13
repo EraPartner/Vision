@@ -3,24 +3,15 @@
  * Tests the factory pattern and generic CSV adapter.
  */
 
-import { describe, it, expect, afterEach } from 'vitest';
-import fs from 'fs';
-import os from 'os';
-import path from 'path';
+import { describe, it, expect } from 'vitest';
 import { createAdapter, getSupportedBanks, detectBank } from '../src/services/bankAdapters.js';
 
-function writeTempCSV(content) {
-  const tmpPath = path.join(os.tmpdir(), `test_factory_${Date.now()}.csv`);
-  fs.writeFileSync(tmpPath, content, 'utf-8');
-  return tmpPath;
-}
+import { useTempCSV } from './helpers/tempFile.js';
+
+const writeTempCSV = useTempCSV('factory');
 
 describe('BankAdapterFactory', () => {
   let tmpPath;
-
-  afterEach(() => {
-    if (tmpPath && fs.existsSync(tmpPath)) fs.unlinkSync(tmpPath);
-  });
 
   it('creates belfius adapter', async () => {
     const parser = createAdapter('belfius');

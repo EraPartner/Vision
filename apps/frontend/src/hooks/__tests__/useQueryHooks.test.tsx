@@ -1,9 +1,7 @@
 // @vitest-environment jsdom
 import { describe, it, expect, vi, afterEach } from "vitest";
-import { type ReactNode } from "react";
 import { renderHook, act, waitFor } from "@testing-library/react";
-import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { LanguageProvider } from "@/contexts/LanguageContext";
+import { createQueryWrapper, createLanguageQueryWrapper } from "@/test/queryWrapper";
 import { apiClient } from "@/lib/api";
 import { useBankAccounts } from "@/hooks/useBankAccounts";
 import { useSavedCharts, useCreateSavedChart, useUpdateSavedChart, useDeleteSavedChart } from "@/hooks/useSavedCharts";
@@ -11,29 +9,9 @@ import { useOllamaStatus, useOllamaModels } from "@/hooks/useOllamaStatus";
 import { useCurrencyConverter } from "@/hooks/useCurrencyConverter";
 import type { SavedChart } from "@/lib/api";
 
-function makeQueryWrapper() {
-    const qc = new QueryClient({
-        defaultOptions: { queries: { retry: false, gcTime: 0, staleTime: 0 } },
-    });
-    return function Wrapper({ children }: { children: ReactNode }) {
-        return <QueryClientProvider client={qc}>{children}</QueryClientProvider>;
-    };
-}
+const makeQueryWrapper = createQueryWrapper;
 
-function makeFullWrapper() {
-    const qc = new QueryClient({
-        defaultOptions: { queries: { retry: false, gcTime: 0, staleTime: 0 } },
-    });
-    return function Wrapper({ children }: { children: ReactNode }) {
-        return (
-            <QueryClientProvider client={qc}>
-                <LanguageProvider language="en" setLanguage={() => {}}>
-                    {children}
-                </LanguageProvider>
-            </QueryClientProvider>
-        );
-    };
-}
+const makeFullWrapper = createLanguageQueryWrapper;
 
 const CHART_STUB: SavedChart = {
     id: 1,

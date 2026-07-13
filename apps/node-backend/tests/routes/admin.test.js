@@ -3,15 +3,10 @@
  * Mirrors: apps/backend/tests/test_admin.py
  */
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { mockLogger } from '../helpers/mockLogger.js';
+import { createMockRouter, createMockResponse } from '../helpers/routeHarness.js';
 
-const routeHandlers = {};
-const lastHandler = (handlers) => handlers[handlers.length - 1];
-const mockRouter = {
-  get: vi.fn((path, ...handlers) => { routeHandlers[`get:${path}`] = lastHandler(handlers); }),
-  post: vi.fn((path, ...handlers) => { routeHandlers[`post:${path}`] = lastHandler(handlers); }),
-  patch: vi.fn((path, ...handlers) => { routeHandlers[`patch:${path}`] = lastHandler(handlers); }),
-  use: vi.fn(),
-};
+const { router: mockRouter, handlers: routeHandlers } = createMockRouter();
 
 vi.mock('express', () => ({
   default: { Router: () => mockRouter },
@@ -38,7 +33,7 @@ vi.mock('../../src/config/config.js', () => ({
 }));
 
 vi.mock('../../src/config/logger.js', () => ({
-  logger: { info: vi.fn(), error: vi.fn(), warn: vi.fn(), debug: vi.fn() },
+  logger: mockLogger(),
 }));
 
 vi.mock('../../src/services/priceProviderService.js', () => ({
@@ -343,12 +338,5 @@ function mockGitHubReleaseBody(body) {
 }
 
 function mockResponse() {
-  const res = { json: vi.fn(), status: vi.fn(), send: vi.fn() };
-  res.status.mockReturnValue(res);
-  res.ok = (data, meta) => {
-    const body = { ok: true, data };
-    if (meta) body.meta = meta;
-    return res.json(body);
-  };
-  return res;
+  return createMockResponse();
 }

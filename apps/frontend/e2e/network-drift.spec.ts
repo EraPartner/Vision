@@ -8,22 +8,16 @@
  * or a route that 5xxs because the request envelope drifted).
  */
 import { test, expect } from "@playwright/test";
+import { PAGES } from "./pages";
 
-const PAGES: Array<{ name: string; path: string }> = [
-    { name: "Dashboard", path: "/" },
-    { name: "Transactions", path: "/transactions" },
-    { name: "Categories", path: "/categories" },
-    { name: "Recipients", path: "/recipients" },
-    { name: "Statistics", path: "/statistics" },
-    { name: "Owes", path: "/owes" },
-    { name: "Planned", path: "/planned" },
-    { name: "PortfolioOverview", path: "/portfolio" },
-    { name: "Watchlist", path: "/portfolio/watchlist" },
-    { name: "TaxOverview", path: "/tax" },
+// The drift listener additionally sweeps the Tax page, which the a11y suite skips.
+const DRIFT_PAGES = [
+    ...PAGES,
+    { name: "TaxOverview", path: "/tax", heading: /tax overview/i },
 ];
 
 test.describe("Phase F4 — network drift listener", () => {
-    for (const { name, path } of PAGES) {
+    for (const { name, path } of DRIFT_PAGES) {
         test(`${name} loads with no 5xx / 4xx from API endpoints`, async ({ page }) => {
             const failures: Array<{ url: string; status: number }> = [];
 

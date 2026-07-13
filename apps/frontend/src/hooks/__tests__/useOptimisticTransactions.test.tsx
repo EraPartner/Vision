@@ -1,32 +1,16 @@
 // @vitest-environment jsdom
 import { describe, it, expect, vi, afterEach } from "vitest";
-import { type ReactNode } from "react";
 import { renderHook, act, waitFor } from "@testing-library/react";
-import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { LanguageProvider } from "@/contexts/LanguageContext";
+import { createTestQueryClient, createLanguageQueryWrapper } from "@/test/queryWrapper";
 import { apiClient } from "@/lib/api";
 import type { Transaction, TransactionsListResponse } from "@/types/api";
 import { useUpdateTransaction, useDeleteTransaction, useCreateTransaction } from "@/hooks/useTransactions";
 
-function makeClient() {
-    return new QueryClient({
-        // gcTime must outlive the test: seeded caches have no observers and
-        // would be garbage-collected instantly with gcTime 0.
-        defaultOptions: { queries: { retry: false, gcTime: Infinity, staleTime: Infinity } },
-    });
-}
+// gcTime must outlive the test: seeded caches have no observers and would be
+// garbage-collected instantly with gcTime 0.
+const makeClient = () => createTestQueryClient({ gcTime: Infinity, staleTime: Infinity });
 
-function makeWrapper(qc: QueryClient) {
-    return function Wrapper({ children }: { children: ReactNode }) {
-        return (
-            <QueryClientProvider client={qc}>
-                <LanguageProvider language="en" setLanguage={() => {}}>
-                    {children}
-                </LanguageProvider>
-            </QueryClientProvider>
-        );
-    };
-}
+const makeWrapper = createLanguageQueryWrapper;
 
 function seedList(): TransactionsListResponse {
     return {

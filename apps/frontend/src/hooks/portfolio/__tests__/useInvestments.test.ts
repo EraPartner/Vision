@@ -1,8 +1,7 @@
 // @vitest-environment jsdom
 import { describe, it, expect, vi, afterEach } from "vitest";
-import React, { type ReactNode } from "react";
 import { renderHook, act, waitFor } from "@testing-library/react";
-import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import { createQueryWrapper } from "@/test/queryWrapper";
 import { toast } from "sonner";
 import { apiClient } from "@/lib/api";
 import {
@@ -49,14 +48,7 @@ const PORTFOLIO_TXN_STUB = {
     updated_at: "2025-01-15T10:00:00.000Z",
 };
 
-function makeWrapper() {
-    const qc = new QueryClient({
-        defaultOptions: { queries: { retry: false, gcTime: 0, staleTime: 0 } },
-    });
-    return function Wrapper({ children }: { children: ReactNode }) {
-        return React.createElement(QueryClientProvider, { client: qc }, children);
-    };
-}
+const makeWrapper = createQueryWrapper;
 
 afterEach(() => vi.restoreAllMocks());
 

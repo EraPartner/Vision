@@ -12,29 +12,16 @@
  */
 import { test, expect, Page } from "@playwright/test";
 
-async function openAddTransactionDialog(page: Page) {
-    await page.goto("/transactions");
-    await page.getByRole("button", { name: /add transaction/i }).first().click();
+async function openDialog(page: Page, path: string, button: RegExp) {
+    await page.goto(path);
+    await page.getByRole("button", { name: button }).first().click();
     await expect(page.getByRole("dialog")).toBeVisible();
 }
 
-async function openAddCategoryDialog(page: Page) {
-    await page.goto("/categories");
-    await page.getByRole("button", { name: /add category/i }).first().click();
-    await expect(page.getByRole("dialog")).toBeVisible();
-}
-
-async function openAddRecipientDialog(page: Page) {
-    await page.goto("/recipients");
-    await page.getByRole("button", { name: /add recipient/i }).first().click();
-    await expect(page.getByRole("dialog")).toBeVisible();
-}
-
-async function openWidgetVisibilityDialog(page: Page) {
-    await page.goto("/");
-    await page.getByRole("button", { name: /widgets/i }).first().click();
-    await expect(page.getByRole("dialog")).toBeVisible();
-}
+const openAddTransactionDialog = (page: Page) => openDialog(page, "/transactions", /add transaction/i);
+const openAddCategoryDialog = (page: Page) => openDialog(page, "/categories", /add category/i);
+const openAddRecipientDialog = (page: Page) => openDialog(page, "/recipients", /add recipient/i);
+const openWidgetVisibilityDialog = (page: Page) => openDialog(page, "/", /widgets/i);
 
 test.describe("Dialog backdrop click", () => {
     test("AddTransaction backdrop click closes dialog", async ({ page }) => {

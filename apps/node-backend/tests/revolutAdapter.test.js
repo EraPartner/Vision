@@ -3,17 +3,12 @@
  * Mirrors: apps/backend/tests/test_revolut_adapter.py
  */
 
-import { describe, it, expect, afterEach } from 'vitest';
-import fs from 'fs';
-import os from 'os';
-import path from 'path';
+import { describe, it, expect } from 'vitest';
 import { createAdapter } from '../src/services/bankAdapters.js';
 
-function writeTempCSV(content) {
-  const tmpPath = path.join(os.tmpdir(), `test_revolut_${Date.now()}.csv`);
-  fs.writeFileSync(tmpPath, content, 'utf-8');
-  return tmpPath;
-}
+import { useTempCSV } from './helpers/tempFile.js';
+
+const writeTempCSV = useTempCSV('revolut');
 
 const SAMPLE_REVOLUT_CSV = `Type,Product,Started Date,Completed Date,Description,Amount,Fee,Currency,State,Balance
 Card Payment,Current,2026-02-01 21:27:32,2026-02-02 11:28:17,Sardinha Rabina,-39.50,0.00,EUR,COMPLETED,113.74
@@ -26,10 +21,6 @@ Card Payment,Current,2026-01-29 12:00:00,2026-01-29 12:00:30,Pending Store,-25.0
 describe('RevolutAdapter', () => {
   let tmpPath;
   const parse = createAdapter('revolut');
-
-  afterEach(() => {
-    if (tmpPath && fs.existsSync(tmpPath)) fs.unlinkSync(tmpPath);
-  });
 
   it('filters out PENDING transactions', async () => {
     tmpPath = writeTempCSV(SAMPLE_REVOLUT_CSV);

@@ -3,15 +3,10 @@
  * connection mock without touching the 584-line transactions.test.js.
  */
 import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { mockLogger } from '../helpers/mockLogger.js';
+import { createMockRouter, createMockResponse } from '../helpers/routeHarness.js';
 
-const routeHandlers = {};
-const mockRouter = {
-  get: vi.fn((path, ...handlers) => { routeHandlers[`get:${path}`] = handlers[handlers.length - 1]; }),
-  post: vi.fn((path, ...handlers) => { routeHandlers[`post:${path}`] = handlers[handlers.length - 1]; }),
-  patch: vi.fn((path, ...handlers) => { routeHandlers[`patch:${path}`] = handlers[handlers.length - 1]; }),
-  delete: vi.fn((path, ...handlers) => { routeHandlers[`delete:${path}`] = handlers[handlers.length - 1]; }),
-  use: vi.fn(),
-};
+const { router: mockRouter, handlers: routeHandlers } = createMockRouter();
 
 vi.mock('express', () => ({
   default: { Router: () => mockRouter },
@@ -38,7 +33,7 @@ vi.mock('../../src/services/deduplication.js', () => ({
 }));
 
 vi.mock('../../src/config/logger.js', () => ({
-  logger: { info: vi.fn(), error: vi.fn(), warn: vi.fn(), debug: vi.fn() },
+  logger: mockLogger(),
 }));
 
 vi.mock('../../src/services/transferReconciliationService.js', () => ({
@@ -229,10 +224,7 @@ describe('POST /bulk-tag — atomicity', () => {
 });
 
 function mockResponse() {
-  const res = { json: vi.fn(), status: vi.fn(), headersSent: false };
-  res.status.mockReturnValue(res);
-  res.ok = (data) => res.json({ ok: true, data });
-  return res;
+  return createMockResponse({ headersSent: false });
 }
 
 async function callHandler(handler, req, res) {

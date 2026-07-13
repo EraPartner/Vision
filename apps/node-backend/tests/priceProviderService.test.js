@@ -3,6 +3,7 @@
  * Tests price fetching from Binance, Yahoo, Kinesis, and custom endpoints.
  */
 import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { mockLogger } from './helpers/mockLogger.js';
 
 const { mockYahooQuote, mockYahooChart } = vi.hoisted(() => ({
   mockYahooQuote: vi.fn(),
@@ -19,7 +20,7 @@ vi.mock('yahoo-finance2', () => ({
 }));
 
 vi.mock('../src/config/logger.js', () => ({
-  logger: { info: vi.fn(), error: vi.fn(), warn: vi.fn(), debug: vi.fn() },
+  logger: mockLogger(),
 }));
 
 vi.mock('../src/database/connection.js', () => ({

@@ -10,12 +10,13 @@
  */
 
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
+import { mockLogger } from '../helpers/mockLogger.js';
 
 vi.mock('../../src/database/connection.js', () => ({
   query: vi.fn(async () => ({ rows: [] })),
 }));
 vi.mock('../../src/config/logger.js', () => ({
-  logger: { info: vi.fn(), error: vi.fn(), warn: vi.fn(), debug: vi.fn() },
+  logger: mockLogger(),
 }));
 
 const {

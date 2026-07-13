@@ -1,8 +1,7 @@
 // @vitest-environment jsdom
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
-import { type ReactNode } from "react";
 import { renderHook, act, waitFor } from "@testing-library/react";
-import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import { createQueryWrapper } from "@/test/queryWrapper";
 import { apiClient } from "@/lib/api";
 import {
     useUpcomingPlannedPayments,
@@ -13,14 +12,7 @@ import { LOCAL_STORAGE_KEYS } from "@/lib/localStorage-keys";
 import { todayYmd } from "@/lib/timezone";
 import type { PlannedTransaction } from "@/types/api";
 
-function makeQueryWrapper() {
-    const qc = new QueryClient({
-        defaultOptions: { queries: { retry: false, gcTime: 0, staleTime: 0 } },
-    });
-    return function Wrapper({ children }: { children: ReactNode }) {
-        return <QueryClientProvider client={qc}>{children}</QueryClientProvider>;
-    };
-}
+const makeQueryWrapper = createQueryWrapper;
 
 function makePlanned(overrides: Partial<PlannedTransaction>): PlannedTransaction {
     return {

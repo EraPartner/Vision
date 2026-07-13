@@ -1,9 +1,8 @@
 // @vitest-environment jsdom
 import { describe, it, expect, vi, afterEach } from "vitest";
-import { type ReactNode } from "react";
 import { renderHook, act, waitFor } from "@testing-library/react";
-import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { LanguageProvider } from "@/contexts/LanguageContext";
+import { QueryClient } from "@tanstack/react-query";
+import { createLanguageQueryWrapper } from "@/test/queryWrapper";
 import { apiClient } from "@/lib/api";
 import {
   useAccounts,
@@ -19,20 +18,7 @@ vi.mock("sonner", () => ({
 }));
 import { toast } from "sonner";
 
-function makeFullWrapper() {
-  const qc = new QueryClient({
-    defaultOptions: { queries: { retry: false, gcTime: 0, staleTime: 0 } },
-  });
-  return function Wrapper({ children }: { children: ReactNode }) {
-    return (
-      <QueryClientProvider client={qc}>
-        <LanguageProvider language="en" setLanguage={() => {}}>
-          {children}
-        </LanguageProvider>
-      </QueryClientProvider>
-    );
-  };
-}
+const makeFullWrapper = createLanguageQueryWrapper;
 
 afterEach(() => vi.clearAllMocks());
 

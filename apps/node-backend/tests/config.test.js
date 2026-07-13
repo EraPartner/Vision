@@ -2,6 +2,7 @@
  * Configuration tests.
  */
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
+import { mockLogger } from './helpers/mockLogger.js';
 
 vi.mock('fs', async (importOriginal) => {
   const actual = await importOriginal();
@@ -12,7 +13,7 @@ vi.mock('fs', async (importOriginal) => {
 });
 
 vi.mock('../src/config/logger.js', () => ({
-  logger: { info: vi.fn(), error: vi.fn(), warn: vi.fn(), debug: vi.fn() },
+  logger: mockLogger(),
 }));
 
 const ENV_KEYS = [

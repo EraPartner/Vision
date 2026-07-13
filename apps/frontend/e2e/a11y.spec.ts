@@ -7,18 +7,7 @@
  */
 import { test, expect } from "@playwright/test";
 import AxeBuilder from "@axe-core/playwright";
-
-const PAGES: Array<{ name: string; path: string; heading: RegExp }> = [
-    { name: "Dashboard", path: "/", heading: /^(dashboard|good (morning|afternoon|evening))/i },
-    { name: "Transactions", path: "/transactions", heading: /^transactions$/i },
-    { name: "Categories", path: "/categories", heading: /categories/i },
-    { name: "Recipients", path: "/recipients", heading: /recipients/i },
-    { name: "Statistics", path: "/statistics", heading: /statistics|analytics/i },
-    { name: "Owes", path: "/owes", heading: /who owes/i },
-    { name: "PortfolioOverview", path: "/portfolio", heading: /portfolio/i },
-    { name: "Watchlist", path: "/portfolio/watchlist", heading: /watchlist/i },
-    { name: "Planned", path: "/planned", heading: /planned payments/i },
-];
+import { PAGES } from "./pages";
 
 test.describe("Phase F4 — a11y axe scans (WCAG 2.1 A/AA)", () => {
     for (const { name, path, heading } of PAGES) {

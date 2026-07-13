@@ -1,11 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { createMockRouter, createMockResponse } from '../helpers/routeHarness.js';
 
-const routeHandlers = {};
-const mockRouter = {
-  get: vi.fn((path, ...handlers) => { routeHandlers[`get:${path}`] = handlers[handlers.length - 1]; }),
-  post: vi.fn(),
-  use: vi.fn(),
-};
+const { router: mockRouter, handlers: routeHandlers } = createMockRouter();
 
 const mockYahooSearch = vi.fn();
 const mockYahooQuote = vi.fn();
@@ -41,18 +37,7 @@ import { ValidationError, AppError } from '../../src/middleware/errorHandler.js'
 const { __clearQuoteCacheForTests } = await import('../../src/routes/marketLookup.js');
 
 function mockResponse() {
-  const res = {
-    json: vi.fn(),
-    send: vi.fn(),
-    status: vi.fn(),
-  };
-  res.status.mockReturnValue(res);
-  res.ok = (data, meta) => {
-    const body = { ok: true, data };
-    if (meta) body.meta = meta;
-    return res.json(body);
-  };
-  return res;
+  return createMockResponse();
 }
 
 describe('Market Lookup Routes', () => {

@@ -23,6 +23,18 @@ export function err(status: number, message: string, code?: string) {
     );
 }
 
+const AGG_COMPUTED_AT = "2025-01-01T00:00:00Z";
+
+/** Aggregation-endpoint envelope: ok({ data, meta: { computedAt, source: "live" } }). */
+export function aggOk<T>(data: T, computedAt: string = AGG_COMPUTED_AT) {
+    return ok({ data, meta: { computedAt, source: "live" as const } });
+}
+
+/** Delete-endpoint stub: ok({ message }). */
+export function deleted(message: string) {
+    return ok({ message });
+}
+
 // ── Mutation fixture stubs — minimal valid shapes matching backend formatters ─
 
 export const TRANSACTION_STUB = {
@@ -200,128 +212,89 @@ export const defaultHandlers = [
         ok({ items: [], total: 0, limit: 100, offset: 0, links: [] }),
     ),
     http.get(`${API_BASE}/api/aggregations/monthly-summary`, () =>
-        ok({
-            data: {
-                months: [],
-                summary: {
-                    total_spending: 0,
-                    total_income: 0,
-                    net_amount: 0,
-                    transaction_count: 0,
-                    period_start: "",
-                    period_end: "",
-                },
+        aggOk({
+            months: [],
+            summary: {
+                total_spending: 0,
+                total_income: 0,
+                net_amount: 0,
+                transaction_count: 0,
+                period_start: "",
+                period_end: "",
             },
-            meta: { computedAt: "2025-01-01T00:00:00.000Z", source: "live" as const },
-        }),
+        }, "2025-01-01T00:00:00.000Z"),
     ),
     http.get(`${API_BASE}/api/aggregations/recipient-insights`, () =>
-        ok({
-            data: { topMerchants: [], monthOverMonth: [] },
-            meta: { computedAt: "2025-01-01T00:00:00.000Z", source: "live" as const },
-        }),
+        aggOk({ topMerchants: [], monthOverMonth: [] }, "2025-01-01T00:00:00.000Z"),
     ),
     http.get(`${API_BASE}/api/aggregations/cashflow-comparison`, () =>
-        ok({
-            data: {
-                days_in_month: 31,
-                current_day: 1,
-                month: 1,
-                year: 2025,
-                without_planned: [],
-                with_planned: [],
-            },
-            meta: { computedAt: "2025-01-01T00:00:00Z", source: "live" as const },
+        aggOk({
+            days_in_month: 31,
+            current_day: 1,
+            month: 1,
+            year: 2025,
+            without_planned: [],
+            with_planned: [],
         }),
     ),
     http.get(`${API_BASE}/api/aggregations/cashflow-forecast-accuracy`, () =>
-        ok({
-            data: { methods: [], limit_months: 0 },
-            meta: { computedAt: "2025-01-01T00:00:00Z", source: "live" as const },
-        }),
+        aggOk({ methods: [], limit_months: 0 }),
     ),
     http.get(`${API_BASE}/api/aggregations/cashflow-forecast-methods`, () =>
-        ok({
-            data: {
-                month: "2025-01",
-                currency: "EUR",
-                days_in_month: 31,
-                current_day: 1,
-                actual: [],
-                methods: [],
-                planned: [],
-                diagnostics: null,
-                history_months: 0,
-                include_planned: false,
-            },
-            meta: { computedAt: "2025-01-01T00:00:00Z", source: "live" as const },
+        aggOk({
+            month: "2025-01",
+            currency: "EUR",
+            days_in_month: 31,
+            current_day: 1,
+            actual: [],
+            methods: [],
+            planned: [],
+            diagnostics: null,
+            history_months: 0,
+            include_planned: false,
         }),
     ),
     http.get(`${API_BASE}/api/aggregations/cashflow-forecast-rolling`, () =>
-        ok({
-            data: {
-                window_start: "2025-01-01",
-                window_end: "2025-01-31",
-                today: "2025-01-15",
-                currency: "EUR",
-                days_back: 14,
-                days_forward: 14,
-                actual: [],
-                methods: [],
-                planned: [],
-                diagnostics: null,
-                history_months: 0,
-                include_planned: false,
-            },
-            meta: { computedAt: "2025-01-01T00:00:00Z", source: "live" as const },
+        aggOk({
+            window_start: "2025-01-01",
+            window_end: "2025-01-31",
+            today: "2025-01-15",
+            currency: "EUR",
+            days_back: 14,
+            days_forward: 14,
+            actual: [],
+            methods: [],
+            planned: [],
+            diagnostics: null,
+            history_months: 0,
+            include_planned: false,
         }),
     ),
     http.get(`${API_BASE}/api/aggregations/category-pivot`, () =>
-        ok({
-            data: { categoryPivot: {} },
-            meta: { computedAt: "2025-01-01T00:00:00Z", source: "live" as const },
-        }),
+        aggOk({ categoryPivot: {} }),
     ),
     http.get(`${API_BASE}/api/aggregations/recipient-by-year`, () =>
-        ok({
-            data: { recipientsByYear: {} },
-            meta: { computedAt: "2025-01-01T00:00:00Z", source: "live" as const },
-        }),
+        aggOk({ recipientsByYear: {} }),
     ),
     http.get(`${API_BASE}/api/aggregations/recipient-pivot`, () =>
-        ok({
-            data: { recipientPivot: {} },
-            meta: { computedAt: "2025-01-01T00:00:00Z", source: "live" as const },
-        }),
+        aggOk({ recipientPivot: {} }),
     ),
     http.get(`${API_BASE}/api/aggregations/sankey`, () =>
-        ok({
-            data: { nodes: [], links: [], year: 2025 },
-            meta: { computedAt: "2025-01-01T00:00:00Z", source: "live" as const },
-        }),
+        aggOk({ nodes: [], links: [], year: 2025 }),
     ),
     http.get(`${API_BASE}/api/aggregations/category-breakdown`, () =>
-        ok({
-            data: { categories: [] },
-            meta: { computedAt: "2025-01-01T00:00:00Z", source: "live" as const },
-        }),
+        aggOk({ categories: [] }),
     ),
     http.get(`${API_BASE}/api/aggregations/bank-balances`, () =>
-        ok({
-            data: {
-                accounts: [],
-                total_net_position: 0,
-                history: {},
-                total_history: [],
-            },
-            meta: { computedAt: "2025-01-01T00:00:00Z", source: "live" as const },
+        aggOk({
+            accounts: [],
+            total_net_position: 0,
+            history: {},
+            total_history: [],
         }),
     ),
     http.get(`${API_BASE}/api/aggregations/average-vs-current`, () =>
-        ok({
-            data: { months: [] },
-            meta: { computedAt: "2025-01-01T00:00:00Z", source: "live" as const },
-        }),
+        aggOk({ months: [] }),
     ),
     http.get(`${API_BASE}/api/aggregations/:name`, () => ok(null)),
     http.get(`${API_BASE}/api/portfolio/summary`, () =>
@@ -494,7 +467,7 @@ export const defaultHandlers = [
         }),
     ),
     http.delete(`${API_BASE}/api/ai/conversations/:id`, () =>
-        ok({ message: "Conversation deleted" }),
+        deleted("Conversation deleted"),
     ),
     http.get(`${API_BASE}/api/ai/models`, () => ok({ models: [] })),
 
@@ -507,7 +480,7 @@ export const defaultHandlers = [
         new Response(new Blob(["data"], { type: "application/pdf" }), { status: 200 }),
     ),
     http.delete(`${API_BASE}/api/attachments/:id`, () =>
-        ok({ message: "Attachment deleted" }),
+        deleted("Attachment deleted"),
     ),
 
     // Categories sub-routes
@@ -589,7 +562,7 @@ export const defaultHandlers = [
         ok({ id: 1, investment_id: 1, type: "buy", date: "2025-01-01", amount: 100, units: 1, price_per_unit: 100, currency: "EUR", is_recurring: false, created_at: "2025-01-01T00:00:00Z", updated_at: "2025-01-01T00:00:00Z" }),
     ),
     http.delete(`${API_BASE}/api/investments/transactions/:id`, () =>
-        ok({ message: "Transaction deleted" }),
+        deleted("Transaction deleted"),
     ),
 
     // Recipients sub-routes
@@ -637,7 +610,7 @@ export const defaultHandlers = [
         ok({ id: 1, name: "Updated", config: {}, created_at: "2025-01-01T00:00:00Z" }),
     ),
     http.delete(`${API_BASE}/api/saved-charts/:id`, () =>
-        ok({ message: "Chart deleted" }),
+        deleted("Chart deleted"),
     ),
 
     // Splits sub-routes
@@ -647,7 +620,7 @@ export const defaultHandlers = [
         ok({ id: 1, transaction_id: 1, recipient_id: 1, amount: 0, note: null, is_paid: false, paid_at: null, created_at: "2025-01-01T00:00:00Z" }),
     ),
     http.delete(`${API_BASE}/api/splits/:id`, () =>
-        ok({ message: "Split deleted" }),
+        deleted("Split deleted"),
     ),
     http.post(`${API_BASE}/api/splits/:id/pay`, () =>
         ok({ message: "Paid" }),
@@ -685,7 +658,7 @@ export const defaultHandlers = [
         ok({ id: 1, symbol: "TEST", name: "Test", asset_class: "stock", currency: "USD", target_price: 100, notes: null, price_provider_id: "TEST", created_at: "2025-01-01T00:00:00Z", updated_at: "2025-01-01T00:00:00Z" }),
     ),
     http.delete(`${API_BASE}/api/watchlist/:id`, () =>
-        ok({ message: "Watchlist item deleted" }),
+        deleted("Watchlist item deleted"),
     ),
 
     // Recipients delete (already handled above) — clusters, etc. covered

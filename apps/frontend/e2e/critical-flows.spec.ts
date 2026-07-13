@@ -9,111 +9,41 @@
  */
 import { test, expect } from "@playwright/test";
 
+// Each page: goto, then either assert its <h1> is visible or (for pages with no
+// stable heading) wait for network idle — always asserting zero runtime errors.
+// Local catalog: headings/paths here diverge from the a11y/network-drift
+// catalog (e.g. Portfolio uses a stricter heading, and this set adds
+// Stocks/Exchange-rates/Chat/Admin), so it is intentionally not shared.
+const SMOKE_PAGES: Array<{ title: string; path: string; heading?: RegExp }> = [
+    { title: "Dashboard", path: "/", heading: /^(dashboard|good (morning|afternoon|evening))/i },
+    { title: "Transactions page", path: "/transactions", heading: /^transactions$/i },
+    { title: "Categories page", path: "/categories", heading: /categories/i },
+    { title: "Recipients page", path: "/recipients", heading: /recipients/i },
+    { title: "Statistics page", path: "/statistics", heading: /statistics|analytics/i },
+    { title: "Owes page", path: "/owes", heading: /who owes/i },
+    { title: "Tax overview page", path: "/tax", heading: /tax overview/i },
+    { title: "Portfolio overview page", path: "/portfolio", heading: /portfolio overview/i },
+    { title: "Stocks page", path: "/portfolio/stocks" },
+    { title: "Watchlist page", path: "/portfolio/watchlist", heading: /watchlist/i },
+    { title: "Exchange rates page", path: "/admin/exchange-rates", heading: /exchange rates/i },
+    { title: "AI Chat page", path: "/chat" },
+    { title: "Admin overview", path: "/admin", heading: /admin overview/i },
+];
+
 test.describe("Page load smoke (catches backend ↔ frontend drift)", () => {
-    test("Dashboard renders without runtime errors", async ({ page }) => {
-        const errors: string[] = [];
-        page.on("pageerror", (e) => errors.push(e.message));
-        await page.goto("/");
-        await expect(page.getByRole("heading", { level: 1, name: /^(dashboard|good (morning|afternoon|evening))/i })).toBeVisible();
-        expect(errors).toHaveLength(0);
-    });
-
-    test("Transactions page renders without runtime errors", async ({ page }) => {
-        const errors: string[] = [];
-        page.on("pageerror", (e) => errors.push(e.message));
-        await page.goto("/transactions");
-        await expect(page.getByRole("heading", { level: 1, name: /^transactions$/i })).toBeVisible();
-        expect(errors).toHaveLength(0);
-    });
-
-    test("Categories page renders without runtime errors", async ({ page }) => {
-        const errors: string[] = [];
-        page.on("pageerror", (e) => errors.push(e.message));
-        await page.goto("/categories");
-        await expect(page.getByRole("heading", { level: 1, name: /categories/i })).toBeVisible();
-        expect(errors).toHaveLength(0);
-    });
-
-    test("Recipients page renders without runtime errors", async ({ page }) => {
-        const errors: string[] = [];
-        page.on("pageerror", (e) => errors.push(e.message));
-        await page.goto("/recipients");
-        await expect(page.getByRole("heading", { level: 1, name: /recipients/i })).toBeVisible();
-        expect(errors).toHaveLength(0);
-    });
-
-    test("Statistics page renders without runtime errors", async ({ page }) => {
-        const errors: string[] = [];
-        page.on("pageerror", (e) => errors.push(e.message));
-        await page.goto("/statistics");
-        await expect(page.getByRole("heading", { level: 1, name: /statistics|analytics/i })).toBeVisible();
-        expect(errors).toHaveLength(0);
-    });
-
-    test("Owes page renders without runtime errors", async ({ page }) => {
-        const errors: string[] = [];
-        page.on("pageerror", (e) => errors.push(e.message));
-        await page.goto("/owes");
-        await expect(page.getByRole("heading", { level: 1, name: /who owes/i })).toBeVisible();
-        expect(errors).toHaveLength(0);
-    });
-
-    test("Tax overview page renders without runtime errors", async ({ page }) => {
-        const errors: string[] = [];
-        page.on("pageerror", (e) => errors.push(e.message));
-        await page.goto("/tax");
-        await expect(page.getByRole("heading", { level: 1, name: /tax overview/i })).toBeVisible();
-        expect(errors).toHaveLength(0);
-    });
-
-    test("Portfolio overview page renders without runtime errors", async ({ page }) => {
-        const errors: string[] = [];
-        page.on("pageerror", (e) => errors.push(e.message));
-        await page.goto("/portfolio");
-        await expect(page.getByRole("heading", { level: 1, name: /portfolio overview/i })).toBeVisible();
-        expect(errors).toHaveLength(0);
-    });
-
-    test("Stocks page renders without runtime errors", async ({ page }) => {
-        const errors: string[] = [];
-        page.on("pageerror", (e) => errors.push(e.message));
-        await page.goto("/portfolio/stocks");
-        // Stocks page heading or empty state should appear
-        await page.waitForLoadState("networkidle");
-        expect(errors).toHaveLength(0);
-    });
-
-    test("Watchlist page renders without runtime errors", async ({ page }) => {
-        const errors: string[] = [];
-        page.on("pageerror", (e) => errors.push(e.message));
-        await page.goto("/portfolio/watchlist");
-        await expect(page.getByRole("heading", { level: 1, name: /watchlist/i })).toBeVisible();
-        expect(errors).toHaveLength(0);
-    });
-
-    test("Exchange rates page renders without runtime errors", async ({ page }) => {
-        const errors: string[] = [];
-        page.on("pageerror", (e) => errors.push(e.message));
-        await page.goto("/admin/exchange-rates");
-        await expect(page.getByRole("heading", { level: 1, name: /exchange rates/i })).toBeVisible();
-        expect(errors).toHaveLength(0);
-    });
-
-    test("AI Chat page renders without runtime errors", async ({ page }) => {
-        const errors: string[] = [];
-        page.on("pageerror", (e) => errors.push(e.message));
-        await page.goto("/chat");
-        await page.waitForLoadState("networkidle");
-        expect(errors).toHaveLength(0);
-    });
-
-    test("Admin overview renders without runtime errors", async ({ page }) => {
-        const errors: string[] = [];
-        page.on("pageerror", (e) => errors.push(e.message));
-        await page.goto("/admin");
-        await expect(page.getByRole("heading", { level: 1, name: /admin overview/i })).toBeVisible();
-        expect(errors).toHaveLength(0);
-    });
+    for (const { title, path, heading } of SMOKE_PAGES) {
+        test(`${title} renders without runtime errors`, async ({ page }) => {
+            const errors: string[] = [];
+            page.on("pageerror", (e) => errors.push(e.message));
+            await page.goto(path);
+            if (heading) {
+                await expect(page.getByRole("heading", { level: 1, name: heading })).toBeVisible();
+            } else {
+                await page.waitForLoadState("networkidle");
+            }
+            expect(errors).toHaveLength(0);
+        });
+    }
 });
 
 test.describe("Mutation roundtrip (catches contract drift on writes)", () => {

@@ -3,17 +3,12 @@
  * Mirrors: apps/backend/tests/test_belfius_adapter.py
  */
 
-import { describe, it, expect, beforeEach, afterEach } from 'vitest';
-import fs from 'fs';
-import os from 'os';
-import path from 'path';
+import { describe, it, expect, beforeEach } from 'vitest';
 import { createAdapter } from '../src/services/bankAdapters.js';
 
-function writeTempCSV(content) {
-  const tmpPath = path.join(os.tmpdir(), `test_belfius_${Date.now()}.csv`);
-  fs.writeFileSync(tmpPath, content, 'utf-8');
-  return tmpPath;
-}
+import { useTempCSV } from './helpers/tempFile.js';
+
+const writeTempCSV = useTempCSV('belfius');
 
 const SAMPLE_BELFIUS_CSV = `Boekingsdatum vanaf; Boekingsdatum tot en met; Bedrag vanaf; Bedrag tot en met; Rekeninguittrekselnummer vanaf; Rekeninguittrekselnummer tot en met; Mededeling; Naam tegenpartij bevat; Rekening tegenpartij;
 ;;;;;;;;;
@@ -36,10 +31,6 @@ BE81 0637 5694 4024;22/11/2025;00010;50;;SALARY PAYMENT;;1000 Brussels;VIREMENT 
 describe('BelfiusAdapter', () => {
   let tmpPath;
   const parse = createAdapter('belfius');
-
-  afterEach(() => {
-    if (tmpPath && fs.existsSync(tmpPath)) fs.unlinkSync(tmpPath);
-  });
 
   it('parses correct number of transactions', async () => {
     tmpPath = writeTempCSV(SAMPLE_BELFIUS_CSV);
