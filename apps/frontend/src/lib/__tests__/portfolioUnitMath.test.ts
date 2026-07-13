@@ -58,6 +58,17 @@ describe('deriveUnitMath', () => {
     expect(r.isConsistent).toBe(true);
   });
 
+  it('accepts the exactly-one-cent broker-statement case the backend tolerance allows', () => {
+    // 3 × 33.33 = 99.99 vs statement amount 100.00 — the old 0.0001 frontend
+    // tolerance hard-blocked what the backend's 0.01 deliberately accepts.
+    const r = deriveUnitMath({ amount: 100.0, units: 3, price: 33.33 });
+    expect(r.isConsistent).toBe(true);
+  });
+
+  it('still rejects a difference beyond the backend tolerance', () => {
+    expect(deriveUnitMath({ amount: 100.02, units: 3, price: 33.33 }).isConsistent).toBe(false);
+  });
+
   it('is not consistent with fewer than two values', () => {
     expect(deriveUnitMath({ amount: 30 }).isConsistent).toBe(false);
     expect(deriveUnitMath({}).isConsistent).toBe(false);
