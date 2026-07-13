@@ -35,6 +35,20 @@ export const attachmentRepository = {
   },
 
   /**
+   * List stored file paths for a set of transactions. Used before a hard
+   * delete so the DB CASCADE (which only removes the rows) can be followed
+   * by best-effort file removal.
+   */
+  async listPathsByTransactionIds(transactionIds) {
+    if (!Array.isArray(transactionIds) || transactionIds.length === 0) return [];
+    const result = await query(
+      'SELECT stored_path FROM attachments WHERE transaction_id = ANY($1::int[])',
+      [transactionIds],
+    );
+    return result.rows.map((row) => row.stored_path);
+  },
+
+  /**
    * Insert a new attachment row. Returns the created row.
    */
   async create({ transaction_id, filename, stored_path, mime_type, size_bytes }) {

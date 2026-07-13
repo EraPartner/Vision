@@ -36,11 +36,31 @@ import {
 import { resolveBulkSelection } from '../services/bulkSelection.js';
 import { parsePagination } from '../lib/pagination.js';
 import { toWireDate } from '../lib/dateFormat.js';
+import { attachmentRepository } from '../services/attachmentRecordService.js';
+import { removeAttachmentFile } from '../services/attachmentService.js';
 
 const router = Router();
 
 function parseRouteId(req) {
   return parseInt(req.params.id, 10);
+}
+
+// Hard deletes CASCADE the attachments ROWS, but nothing removes the FILES —
+// receipt PII persisted forever on disk and re-entered every backup. Collect
+// stored paths before the delete, remove best-effort after (same log-only
+// pattern as DELETE /api/attachments/:id — a removal failure must not fail
+// the already-committed transaction delete).
+async function removeAttachmentFilesBestEffort(storedPaths) {
+  for (const storedPath of storedPaths) {
+    try {
+      await removeAttachmentFile(storedPath);
+    } catch (err) {
+      logger.warn('Attachment file removal failed after transaction delete; file orphaned on disk', {
+        storedPath,
+        error: err?.message,
+      });
+    }
+  }
 }
 
 function parseTransactionListQuery(query) {
@@ -395,6 +415,7 @@ router.post(
     const { ids, filter } = req.body ?? {};
     const txIds = await resolveBulkSelection({ ids, filter });
 
+    const attachmentPaths = await attachmentRepository.listPathsByTransactionIds(txIds);
     const deleted = await withTransaction(async (client) => {
       const r = await client.query(
         `DELETE FROM transactions WHERE id = ANY($1::int[]) RETURNING id`,
@@ -403,7 +424,10 @@ router.post(
       return r.rows.length;
     });
 
-    if (deleted > 0) scheduleReconcile();
+    if (deleted > 0) {
+      await removeAttachmentFilesBestEffort(attachmentPaths);
+      scheduleReconcile();
+    }
     res.ok({ deleted });
   },
 );
@@ -682,10 +706,12 @@ router.patch(
 // DELETE /api/transactions/:id
 router.delete('/:id', validateIdParam, async (req, res) => {
   const id = parseRouteId(req);
+  const attachmentPaths = await attachmentRepository.listPathsByTransactionIds([id]);
   const deleted = await transactionRepository.hardDelete(id);
   if (!deleted) {
     throw new NotFoundError(`Transaction with ID ${id} not found`);
   }
+  await removeAttachmentFilesBestEffort(attachmentPaths);
   scheduleReconcile();
   res.ok({ message: 'Transaction deleted permanently', details: { method: 'hard delete' }, links: [] });
 });

@@ -53,10 +53,22 @@ vi.mock('../../src/database/connection.js', () => ({
   query: vi.fn(),
 }));
 
+vi.mock('../../src/services/attachmentRecordService.js', () => ({
+  attachmentRepository: {
+    listPathsByTransactionIds: vi.fn(async () => []),
+  },
+}));
+
+vi.mock('../../src/services/attachmentService.js', () => ({
+  removeAttachmentFile: vi.fn(async () => undefined),
+}));
+
 import transactionRepository from '../../src/repositories/transactionRepository.js';
 import { query as dbQuery } from '../../src/database/connection.js';
 import { isManualDuplicate } from '../../src/services/deduplication.js';
 import { convertRowsToEur } from '../../src/services/currency/currencyConversionService.js';
+import { attachmentRepository } from '../../src/services/attachmentRecordService.js';
+import { removeAttachmentFile } from '../../src/services/attachmentService.js';
 await import('../../src/routes/transactions.js');
 
 describe('Transaction Routes', () => {
@@ -573,6 +585,35 @@ describe('Transaction Routes', () => {
       await callHandler(routeHandlers['delete:/:id'], req, res);
 
       expect(res.status).toHaveBeenCalledWith(404);
+    });
+
+    it('removes attachment files from disk after the delete', async () => {
+      // The DB CASCADE only removes the attachments rows — the files must be
+      // removed too or receipt PII persists forever and re-enters backups.
+      transactionRepository.hardDelete.mockResolvedValue(true);
+      attachmentRepository.listPathsByTransactionIds.mockResolvedValue([
+        'attachments/1/receipt-a.png',
+        'attachments/1/receipt-b.pdf',
+      ]);
+
+      const req = { params: { id: '1' } };
+      const res = mockResponse();
+      await routeHandlers['delete:/:id'](req, res);
+
+      expect(attachmentRepository.listPathsByTransactionIds).toHaveBeenCalledWith([1]);
+      expect(removeAttachmentFile).toHaveBeenCalledWith('attachments/1/receipt-a.png');
+      expect(removeAttachmentFile).toHaveBeenCalledWith('attachments/1/receipt-b.pdf');
+    });
+
+    it('does not remove files when the transaction was not found', async () => {
+      transactionRepository.hardDelete.mockResolvedValue(false);
+      attachmentRepository.listPathsByTransactionIds.mockResolvedValue(['attachments/9/x.png']);
+
+      const req = { params: { id: '99999' } };
+      const res = mockResponse();
+      await callHandler(routeHandlers['delete:/:id'], req, res);
+
+      expect(removeAttachmentFile).not.toHaveBeenCalled();
     });
   });
 });
