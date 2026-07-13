@@ -13,18 +13,24 @@ const router = Router();
 const WATCHLIST_ASSET_CLASSES = new Set(['stock', 'etf', 'crypto', 'metals']);
 const CURRENCY_RE = /^[A-Za-z]{3}$/;
 
+// NUMERIC(18,6) price columns hold at most 12 integer digits — anything
+// larger (or Infinity) previously surfaced as a DB overflow error → 500.
+const MAX_PRICE = 999_999_999_999;
+
 // Type-check the fields the repository forwards to typed columns; without
 // this a string target_price surfaces as a DB error (500) instead of a 400.
 // Presence requirements stay in the POST handler — PATCH allows partials.
 function validateWatchlistFields(body) {
   if (body.target_price !== undefined && body.target_price !== null) {
-    const result = validateNumber(body.target_price, { min: 0, fieldName: 'target_price' });
+    const result = validateNumber(body.target_price, { min: 0, max: MAX_PRICE, fieldName: 'target_price' });
     if (!result.valid) throw new ValidationError(result.error);
+    // A 0 target is meaningless for the at-or-below alert check.
+    if (result.value === 0) throw new ValidationError('target_price must be greater than 0');
     body.target_price = result.value;
   }
   // Snapshot of the live price when the item was added (ADR-097 backtest); optional.
   if (body.added_price !== undefined && body.added_price !== null) {
-    const result = validateNumber(body.added_price, { min: 0, fieldName: 'added_price' });
+    const result = validateNumber(body.added_price, { min: 0, max: MAX_PRICE, fieldName: 'added_price' });
     if (!result.valid) throw new ValidationError(result.error);
     body.added_price = result.value;
   }
