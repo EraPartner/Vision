@@ -282,7 +282,7 @@ look-changing one.
   - A **rejected** direct debit (money never moved) imports as a real expense, corrupting balances and spend totals. Revolut (revolut.js:48) and Wise (wise.js:41) correctly skip non-COMPLETED rows.
   - Fix: skip BNP rows with a non-empty rejection reason / non-executed status; filter SABB non-completed statuses. *(Confirm status vocabulary against a real export first.)*
 
-- [ ] **Revolut fee not applied to amount — imported amounts don't reconcile with imported balances** 🔼 🔎 verified-present 2026-07-11
+- [x] **Revolut fee not applied to amount — imported amounts don't reconcile with imported balances** 🔼 ✅ 2026-07-13 · 1f63774 (#84, books amount − fee via Decimal; fee stays visible in the comment; ATM-fee regression test) *(the alternative separate-fee-transaction design was not taken)*
   - ↪ _from: Correctness research 2026-07-02 · Wave 1a_
   - `revolut.js:54-57,66` — Revolut's `Amount` excludes `Fee`; actual balance delta is `amount − fee`. Adapter imports `amount` (fee comment-only) *and* the `Balance` column → consecutive balances don't differ by the amounts; total spend understated by all fees.
   - Fix: book `amount − fee` (Decimal arithmetic) or emit a separate fee transaction.
@@ -377,7 +377,7 @@ look-changing one.
   - Renaming a category / changing a recipient default serves the old name until an unrelated transaction mutation refreshes.
   - Fix: call `scheduleRefresh()` from category/recipient mutation routes or services.
 
-- [ ] **Hard-deleting a transaction leaves its attachment files orphaned on disk — receipt PII persists forever and re-enters every backup** 🔼 🔎 verified-present 2026-07-11
+- [x] **Hard-deleting a transaction leaves its attachment files orphaned on disk — receipt PII persists forever and re-enters every backup** 🔼 ✅ 2026-07-13 · ed2e411 (#84, single + bulk delete collect stored paths first, then best-effort removeAttachmentFile after the DB delete with the same log-on-failure pattern as the attachment route; new listPathsByTransactionIds; dbd1bba adds the bulk-suite mocks) *(the optional maintenance orphan sweep was not taken)*
   - ↪ _from: Correctness research 2026-07-02 · Wave 2b · Attachments_
   - `routes/transactions.js:385,567` — DB CASCADE removes `attachments` rows; nothing removes files under `ATTACHMENTS_DIR` (file removal only exists in `DELETE /api/attachments/:id`, routes/attachments.js:132-155)
   - Fix: list attachments before delete, then best-effort `removeAttachmentFile` each path (same log-on-failure pattern as the attachment-delete route); optionally a maintenance orphan sweep.
@@ -439,7 +439,7 @@ look-changing one.
   - `resolveRecipientIdFromName`/`resolveCategoryIdFromName` just delete the field on no match; the equivalent live-transaction logic in `transactions.js` correctly throws `ValidationError` on the same condition. A typo'd `category_name` saves successfully with no category and no indication anything was wrong.
   - Fix: make the planned-transaction route throw `ValidationError` on unresolved lookups, or extract one shared resolver both routes call (also fixes the duplication noted below).
 
-- [ ] **Recurring-transaction detection blends income and expense from the same recipient into one nonsensical pattern** 🔼 🔎 verified-present 2026-07-11
+- [x] **Recurring-transaction detection blends income and expense from the same recipient into one nonsensical pattern** 🔼 ✅ 2026-07-13 · 033c7f8 (#84, grouped by recipient + sign with a `direction` field on each pattern; panel React keys extended so both directions render; regression test with salary+payment mix) *(category partitioning was not taken — sign partitioning resolves the filed blend)*
   - ↪ _from: Codebase audit 2026-06-30 · Correctness — Backend · Planned / recurring transactions_
   - `apps/node-backend/src/services/recurringDetectionService.js:159-170,212-214`
   - Transactions are bucketed solely by `recipient_id`; amounts go through `.abs()` before averaging, with no sign/category partitioning. A recipient who both pays and is paid by the user gets both directions merged into one averaged "pattern" that matches neither real flow.
@@ -489,7 +489,7 @@ look-changing one.
   - Fix: track the created investment id in state so a retry only re-attempts the transaction step.
   - Verification (2026-07-03): a concrete, deterministic everyday trigger was found (not previously filed) — `AddInvestmentDialog.tsx:101-119` unit-based initial purchase with units left empty submits an amount-only buy that fails `portfolioTxRepo.common.js:109-116`'s 2-of-3 check, producing a raw 400 *after* the investment row has already been committed — a guaranteed hit of this bug, not just a network-failure edge case. See the new "AddInvestmentDialog: initial purchase silently dropped" finding for the sibling amount-skipped-entirely case.
 
-- [ ] **Triple-cast produces a dormant NaN landmine in the account-close flow** 🔼 🔎 verified-present 2026-07-11 *(currently inert — gated behind ADR-103, verified OFF)*
+- [x] **Triple-cast produces a dormant NaN landmine in the account-close flow** 🔼 ✅ 2026-07-13 · 00c6fb8 (#84, CloseAccountDialog now passes todayYmd() like the other two call sites) *(the narrower structural type to replace the `as unknown as Investment` double-casts was not taken — all three casts remain)*
   - ↪ _from: Codebase audit 2026-06-30 · Correctness — Frontend_
   - `apps/frontend/src/hooks/portfolio/useAccountPositions.ts:90`, `useAccountNetWorth.ts:49`, `features/accounts/CloseAccountDialog.tsx:65`
   - All three bridge `InvestmentSummary` → `Investment` via `as unknown as` (three separate occurrences, not one nested cast). `CloseAccountDialog.tsx:65` passes `today: ''` instead of `todayYmd()` (the other two sites pass it correctly); `''.split('-').map(Number)` then produces `NaN` accrued interest in the holdings-transfer preview. Will surface the moment per-account holdings is enabled.
@@ -563,7 +563,7 @@ look-changing one.
   - `hooks/useTransactions.ts:78-81` (toast description = raw `error.message`); no global `MutationCache` onError in `App.tsx:93-101`, so any mutation without a hook-level handler silently swallows errors (none confirmed, hooks unaudited — see residue)
   - Fix: map backend error codes to i18n keys at the toast layer; add a global MutationCache onError as backstop.
 
-- [ ] **Chart tooltips + two pages format via browser locale, not the app language setting** 🔽 🔎 verified-present 2026-07-11
+- [x] **Chart tooltips + two pages format via browser locale, not the app language setting** 🔽 ✅ 2026-07-13 · d9e4bf9 (#84, Area/Line/ComposedChart fallbacks use formatDateWithAppSettings(appSettings.dateFormat); ToolResultCard and DbMaintenancePage use numberFormatToLocale/formatDateTimeWithAppSettings)
   - ↪ _from: Correctness research 2026-07-02 · Wave 2a_
   - `components/charts/AreaChart.tsx:564`, `LineChart.tsx:481`, `ComposedChart.tsx:346` (no-arg `toLocaleDateString()` fallback); `features/ai-chat/ToolResultCard.tsx:68`, `pages/DbMaintenancePage.tsx:87,91` (no-arg `toLocaleString()`)
   - nl-app user with an en-US browser gets US date order in tooltips. Central helpers (`shared/dateUtils.ts`, `utils/currency.ts`) are correctly locale-parameterized — only these fallbacks bypass them.
@@ -785,7 +785,7 @@ look-changing one.
   - This is the only systemic nl defect found: file-wide mechanical screens show 3,529/3,529 key parity, 0 placeholder-token mismatches, no other en-left-in-nl.
   - Fix: translate the 32 `txPage.bulk.*` keys and strip the `[NL] ` marker from all 49.
 
-- [ ] **Portfolio unit-math tolerance: frontend 100× stricter than backend — legitimately cent-off broker statements are un-enterable** 🔽 🔎 verified-present 2026-07-11
+- [x] **Portfolio unit-math tolerance: frontend 100× stricter than backend — legitimately cent-off broker statements are un-enterable** 🔽 ✅ 2026-07-13 · 9c844b7 (#84, UNIT_MATH_TOLERANCE 0.0001 → 0.01 matching the backend, and the difference is rounded before comparing so the exact one-cent boundary doesn't fail on float noise — same artifact the backend fixed with Decimal in 0a0e496)
   - ↪ _from: Correctness research 2026-07-02 · Wave 2a (residue, closed 2026-07-03)_
   - `portfolioUnitMath.ts:17` `UNIT_MATH_TOLERANCE = 0.0001` vs backend `≤ 0.01` (`portfolioTxRepo.common.js:140`). €100.00 for 3 units @ €33.33 (product 99.99 — exactly the 1-cent case the backend tolerance exists to allow) hard-blocks with the "twoOfThree" error (`AddPortfolioTxnDialog.tsx:109`, `EditPortfolioTxnDialog.tsx:123`); the helper's header claim "matches the backend normalizer" (`portfolioUnitMath.ts:11`) is true for the 4/8/6 dp, false for the tolerance.
   - Fix: widen `UNIT_MATH_TOLERANCE` to match the backend's `0.01`.
@@ -841,7 +841,7 @@ look-changing one.
   - `1e15` is typeable in every number field (no `max` anywhere; PG14+ NUMERIC even accepts `Infinity` on the unchecked investments path); `middleware/validation.js:87-96` defaults `max = Infinity`, and `Infinity > Infinity` is false, so a JSON `"Infinity"` passes every no-max call-site and then 500s at the DB. API-only siblings: negative fees/taxes accepted (`portfolioTxRepo.common.js:155-234` — fees/taxes unchecked except gift; the final dividend/interest/fee/tax/rent branch accepts `amount ≤ 0`).
   - Fix: add a sane upper bound to `validateNumber`'s default and to money fields specifically.
 
-- [ ] **nl semantic lows: several small meaning/consistency issues beyond the 218 financial-term keys** ⬇ 🔎 verified-present 2026-07-11
+- [x] **nl semantic lows: several small meaning/consistency issues beyond the 218 financial-term keys** ⬇ ✅ 2026-07-13 · 1b7c5e1 (#84, all five fixed: restore flow unified on "wachtzin", persistDefaultFailed referent, recurring.loading noun order, transactions.memo → "Memo", Goedemiddag; greeting test regex updated to match)
   - ↪ _from: Correctness research 2026-07-02 · Wave 2a (residue, closed 2026-07-03)_
   - Restore flow asks for a "wachtwoord" where backup set a "wachtzin" (same secret, two different names, in a security-critical flow: `settings.restore.passphrase*` vs `settings.backup.passphrase.*`) · `importReview.toast.persistDefaultFailed` "Standaard ontvanger opslaan mislukt" — wrong referent (reads "failed to save the default recipient"; sibling `importReview.persistDefault` gets it right) · `recurring.loading` "Terugkerende detectie" (modifier on the wrong noun) · `transactions.memo` "Omschrijving" collides with the Description label (also "Omschrijving") · `dashboard.greetingAfternoon` "Goedenmiddag" should be "Goedemiddag".
   - Fix: correct each string; unify the backup/restore passphrase terminology first (security-critical UX).
