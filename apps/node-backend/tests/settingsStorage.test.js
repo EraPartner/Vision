@@ -104,6 +104,34 @@ describe('Settings storage and retrieval', () => {
     });
   });
 
+  it('self-heals a legacy jsonb-string boolean on get (double-encoded row)', async () => {
+    query.mockResolvedValue({ rows: [{ value: 'true' }] });
+    const result = await settingsRepository.get('includeTransfers');
+    expect(result).toBe(true);
+  });
+
+  it('does NOT type-flip string-valued keys whose value parses as JSON', async () => {
+    // A cost_basis_method (string by contract) of "123" must stay the
+    // string "123" — the legacy JSON.parse self-heal used to return 123.
+    query.mockResolvedValue({ rows: [{ value: '123' }] });
+    const result = await settingsRepository.get('cost_basis_method');
+    expect(result).toBe('123');
+  });
+
+  it('getAll keeps string-valued keys as strings while self-healing others', async () => {
+    query.mockResolvedValue({
+      rows: [
+        { key: 'cost_basis_method', value: 'true' },
+        { key: 'includeTransfers', value: 'true' },
+      ],
+    });
+    const result = await settingsRepository.getAll();
+    expect(result).toEqual({
+      cost_basis_method: 'true',
+      includeTransfers: true,
+    });
+  });
+
   it('settingsRepository.setMany should normalize object values before bulk upsert', async () => {
     query.mockResolvedValue({});
 

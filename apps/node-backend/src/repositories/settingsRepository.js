@@ -7,6 +7,24 @@
 
 import { query } from '../database/connection.js';
 
+/**
+ * Settings whose values are plain strings. The legacy self-heal in
+ * reviveLegacyJsonString must never JSON.parse these — a stored value that
+ * happens to parse as JSON ("123", "true") would silently type-flip on
+ * read. Register any new string-valued setting key here.
+ */
+const STRING_VALUED_KEYS = new Set(['cost_basis_method']);
+
+/**
+ * Legacy rows (and some restore paths) stored the JSON of the value inside a
+ * jsonb string — e.g. jsonb `"true"` for the boolean true. Self-heal those on
+ * read by parsing, but only for keys that are not string-valued by contract.
+ */
+function reviveLegacyJsonString(key, value) {
+  if (typeof value !== 'string' || STRING_VALUED_KEYS.has(key)) return value;
+  try { return JSON.parse(value); } catch { return value; }
+}
+
 function normalizeSettingValue(value) {
   let normalizedValue = value;
 
@@ -34,12 +52,7 @@ export const settingsRepository = {
   async get(key) {
     const result = await query('SELECT value FROM user_settings WHERE key = $1', [key]);
     if (result.rows.length === 0) return null;
-    const v = result.rows[0].value;
-    // Some DB versions or legacy rows might store a JSON string; normalize.
-    if (typeof v === 'string') {
-      try { return JSON.parse(v); } catch { return v; }
-    }
-    return v;
+    return reviveLegacyJsonString(key, result.rows[0].value);
   },
 
   /**
@@ -49,10 +62,7 @@ export const settingsRepository = {
     const result = await query('SELECT key, value FROM user_settings ORDER BY key');
     const settings = {};
     for (const row of result.rows) {
-      const v = row.value;
-      settings[row.key] = (typeof v === 'string') ? (() => {
-        try { return JSON.parse(v); } catch { return v; }
-      })() : v;
+      settings[row.key] = reviveLegacyJsonString(row.key, row.value);
     }
     return settings;
   },
