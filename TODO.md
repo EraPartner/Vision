@@ -60,13 +60,13 @@ look-changing one.
   - These map to `ValidationError` (4xx), and `errorHandler.js` always shows 4xx text verbatim on the assumption "4xx messages are authored by us" — but here the message is raw driver text, contradicting `docs/security/data-protection.md`'s stated policy of suppressing DB error details, and handing schema/column feedback to anyone probing the injection above.
   - Fix: replace `err.message` with a generic "invalid query" string for these codes (or gate behind `!isProduction()`).
 
-- [ ] **Backend DB role is the Postgres bootstrap superuser — no least-privilege application role** 🔼 🔎 verified-present 2026-07-11
+- [ ] **Backend DB role is the Postgres bootstrap superuser — no least-privilege application role** 🔼 🔎 partial-5938da7 2026-07-13 (the least-privilege mechanism now exists and is documented: docker/postgres-init/01-app-role.sh creates a non-superuser `ftm_app` role on first init when POSTGRES_APP_PASSWORD is set, alembic env.py honours DATABASE_URL_MIGRATIONS for privileged DDL, .env.example documents the three-variable setup, compose mounts the init dir. LEFT: the desktop app's generated .env and existing installs still run single-role — flipping the default needs a runtime role-bootstrap for already-initialised DBs plus the electron .env writer, deliberately not attempted here)
   - ↪ _from: Codebase audit 2026-06-30 · Security (backend)_
   - `docker-compose.yml:7` (`POSTGRES_USER: ftm_user`), `.env.example:19-20`
   - The runtime connection pool (including the dbEditor path above) runs as the same superuser the official Postgres image bootstraps. Any successful injection or compromised dependency has instance-level reach.
   - Fix: create a non-superuser application role scoped to the app schema; keep DDL/migrations on a separate, more-privileged role used only by Alembic.
 
-- [ ] **Admin auth is optional by default, with only a startup log line as the safety net** 🔼 🔎 partial-#82 2026-07-11 (8555ede fixed the misleading warning copy; non-loopback hard-fail still missing) *(same root cause as DevOps finding below — fix once)*
+- [x] **Admin auth is optional by default, with only a startup log line as the safety net** 🔼 ✅ 2026-07-13 · 5938da7 (non-loopback hard-fail landed: startup now refuses (`process.exit(1)`) when the bind address isn't loopback and no ADMIN_AUTH_TOKEN is set, unless ADMIN_ALLOW_TOKENLESS_NONLOOPBACK explicitly acknowledges an outer restriction — set by docker-compose.yml, where the container binds 0.0.0.0 but the port is published on host loopback only; new `isLoopbackHost` covers localhost/127.0.0.0-8/::1/IPv4-mapped, with unit tests. Warning copy was already fixed by 8555ede in #82)
   - ↪ _from: Codebase audit 2026-06-30 · Security (backend)_
   - `apps/node-backend/src/middleware/adminAuth.js:36-51`, warning at `main.js:411-414`
   - When `ADMIN_AUTH_TOKEN` is unset, `/api/admin/*` (including destructive routes) has no per-request check; the only safeguard is "the operator kept the port on loopback," signaled by a log line a self-hosted user is unlikely to read.
@@ -427,7 +427,7 @@ look-changing one.
   - `categoryName.split(':')` then uses only `parts[1]` — a category like `general="TRAVEL", detail="FLIGHT: BOOKING.COM"` renders as just "Flight". `CategoryPivotTable.tsx:112-116` already handles this correctly via `split(":")` + rejoin.
   - Fix: apply the same join-back pattern (`const [general, ...rest] = name.split(":"); rest.join(":")`) at both call sites.
 
-- [ ] **Stale fast-cadence recurring planned transactions silently vanish from next-month forecast** 🔼 🔎 verified-present 2026-07-11
+- [x] **Stale fast-cadence recurring planned transactions silently vanish from next-month forecast** 🔼 ✅ 2026-07-13 · 5938da7 (day-stepped patterns — daily/weekly/biweekly/every-N-days — fast-forward to one step before the window via whole-step ms arithmetic, exactly equivalent to N sequential calculateNextDate hops; month-based patterns keep the plain walk on purpose since 120 monthly hops = 10 years and bulk month jumps would change sequential month-end clamping; regression test: daily row 8 months stale expands into all 31 July occurrences)
   - ↪ _from: Codebase audit 2026-06-30 · Correctness — Backend · Planned / recurring transactions_
   - `apps/node-backend/src/repositories/infoRepositoryPlanned.js:15` (`MAX_OCCURRENCES = 120`), `:22-36` (`expandRecurringOccurrences`)
   - The function walks forward from the row's stored `planned_date` (not "today") up to 120 hops to find occurrences inside next month's window. A daily-cadence row that hasn't been executed/advanced in >120 days exhausts the cap before reaching next month and returns `[]` — silently disappearing from the forecast, no error or log.
@@ -579,7 +579,7 @@ look-changing one.
   - `routes/attachments.js:66-74` — existence check at :61 races a concurrent hard delete; FK failure on insert leaves the file on disk with no row, no cleanup.
   - Fix: try/catch around the insert, `removeAttachmentFile(storedPath)` on failure.
 
-- [ ] **`backup:save-settings` IPC skips the sender check and destination validation** 🔽 🔎 verified-present 2026-07-11
+- [x] **`backup:save-settings` IPC skips the sender check and destination validation** 🔽 ✅ 2026-07-13 · 5938da7 (sender check added to backup:save-settings AND backup:run; new shared `validateBackupDest` checks the dir against BLOCKED_BACKUP_PREFIXES at save time so the quit-time backup can't be repointed; prefix list corrected — nonexistent `/Library/System` replaced with `/Library`, which doesn't match per-user `/Users/*/Library` backup dirs)
   - ↪ _from: Correctness research 2026-07-02 · Wave 2c · Electron shell (`packaging/electron/main.js`)_
   - `main.js:2724-2736` vs prefix list at `:2581-2584` — no `event.sender === mainWindow.webContents` check (unlike `backup:restore`), dir not checked against `BLOCKED_BACKUP_PREFIXES` (which itself lists nonexistent `/Library/System` but not `/Library`); quit-time backup (:3461) then writes wherever it points.
   - Fix: same sender check + prefix validation as `backup:run`; correct the prefix list.
@@ -588,20 +588,20 @@ look-changing one.
   - ↪ _from: Correctness research 2026-07-02 · Wave 2c · Electron shell (`packaging/electron/main.js`)_
   - `main.js:1599` — `"rc.10" < "rc.2"` lexicographically → update prompts mis-order prereleases. Fix: semver §11 numeric-identifier comparison.
 
-- [ ] **Stale `pendingShellUpdate` installed without revalidation — can quit with no update and no error** 🔽 🔎 verified-present 2026-07-11
+- [x] **Stale `pendingShellUpdate` installed without revalidation — can quit with no update and no error** 🔽 ✅ 2026-07-13 · 5938da7 (`installPreparedShellUpdate` now checks `existsSync(installerPath)` and best-effort rechecks the latest release before setting `isQuitting`; a purged bundle or a newer release clears the pending update and returns an actionable error instead of quitting silently; offline recheck failures still install the verified-present bundle)
   - ↪ _from: Correctness research 2026-07-02 · Wave 2c · Electron shell (`packaging/electron/main.js`)_
   - `main.js:1928-1934` — reuses a bundle prepared arbitrarily long ago; if the OS purged the temp dir, `spawn('open', …)` fails silently *after* `isQuitting = true; app.quit()`. Fix: `existsSync(installerPath)` + re-check latest version before quitting.
 
-- [ ] **Restore schema-guard compares alembic revision ids lexicographically** 🔽 🔎 partial 2026-07-11 (lexicographic compare fixed via isSchemaRevisionNewer numeric-prefix parse; getSchemaHead LIMIT 1 arbitrary-row under multi-head + empty-currentHead-skips-guard remain)
+- [x] **Restore schema-guard compares alembic revision ids lexicographically** 🔽 ✅ 2026-07-13 · 5938da7 (both remaining nuances closed: `getSchemaHead` fetches ALL alembic_version rows and deterministically picks the highest numeric-prefixed revision instead of `LIMIT 1`'s arbitrary row; an empty/unreadable DB head now falls back to the newest revision in the local alembic/versions directory — new `getLocalMigrationChainHead` — instead of skipping the guard, at both the bundle and plain-dump call sites. Lexicographic compare itself was already fixed pre-#84)
   - ↪ _from: Correctness research 2026-07-02 · Wave 2c · Electron shell (`packaging/electron/main.js`)_
   - `main.js:2275` — `metadata.schemaHead > currentHead` only works for zero-padded numeric prefixes; a future hash-style revision silently breaks the "bundle from newer schema" guard both directions. Fix: parse numeric prefix; warn+skip when unparseable.
   - Verification (2026-07-03): two more nuances found on the same guard — `getSchemaHead`'s `LIMIT 1` (`:2115`) picks an arbitrary row under the known multi-head `alembic_version` drift (rather than a deterministic head), and an empty `currentHead` (DB down at guard-check time) skips the guard entirely rather than failing safe.
 
-- [ ] **0062 trigger: blanking `bank_account` on UPDATE leaves a stale `account_id`** 🔽 🔎 verified-present 2026-07-11
+- [x] **0062 trigger: blanking `bank_account` on UPDATE leaves a stale `account_id`** 🔽 ✅ 2026-07-13 · 5938da7 (migration 0076: an UPDATE that changes `bank_account` to blank/NULL now explicitly NULLs `account_id` — the "detach" decision; INSERTs and already-blank UPDATEs untouched so account-first writers keep their supplied `account_id`)
   - ↪ _from: Correctness research 2026-07-02 · Wave 2c · Migrations (only 0061 + 0062 verified this pass)_
   - `alembic/versions/0062_trigger_lookup_only_on_update.py:59-78` — body gated on `acct_name IS NOT NULL AND <> ''`, so an UPDATE clearing `bank_account` keeps the old `account_id`; the row keeps counting toward an account whose label was removed. Fix: decide explicitly (keep or NULL) in the blank-on-UPDATE case.
 
-- [ ] **0062 trigger: account lookup is case-sensitive on INSERT and UPDATE** 🔽 🔎 verified-present 2026-07-11
+- [x] **0062 trigger: account lookup is case-sensitive on INSERT and UPDATE** 🔽 ✅ 2026-07-13 · 5938da7 (migration 0076: both paths resolve via `lower(btrim(name))` with deterministic `ORDER BY id LIMIT 1`; INSERT creates a new account only when no casing variant exists. Deliberately NO case-insensitive unique index — existing DBs may hold legitimate case-duplicates; the oldest match wins)
   - ↪ _from: Correctness research 2026-07-02 · Wave 2c · Migrations (only 0061 + 0062 verified this pass)_
   - `0062…py:64-67,73` — `WHERE name = acct_name` / `ON CONFLICT (name)`: a casing-only difference ("Kbc" vs "KBC") creates a duplicate account on INSERT or silently keeps the old `account_id` on UPDATE. Fix (deliberate decision — changes onboarding semantics): normalize via `lower(btrim(...))` or case-insensitive unique index.
 
@@ -1101,7 +1101,7 @@ look-changing one.
   - Bank-import rollback is one `DELETE ... WHERE import_batch_id = $1`; no migration ever added the equivalent column to the portfolio transaction tables (confirmed: `import_batch_id` exists only on `transactions`, added by `0003_import_batch_id_on_transactions.py` — never on `portfolio_transactions`/`portfolio_transactions_base`, including in the later `0052_portfolio_transactions_account_id.py` which touched the same tables for a different column). Rollback instead calls `hardDelete(id)` once per row.
   - Fix: add an `import_batch_id` column (+ index) to the portfolio transaction tables for a single bulk DELETE; short-term, batch with `WHERE id = ANY($1::int[])` and call `deleteTradeCashLegs` in the same pass (fixes the orphaned-cash-leg correctness bug above too).
 
-- [ ] **`refreshPrices` issues one UPDATE per investment instead of a single batched upsert** 🔼 🔎 verified-present 2026-07-11
+- [x] **`refreshPrices` issues one UPDATE per investment instead of a single batched upsert** 🔼 ✅ 2026-07-13 · 5938da7 (new `investmentRepository.updatePricesBulk` — one `UPDATE … FROM UNNEST($1::int[], $2::numeric[], $3::timestamptz[])`, the priceCache pattern; falls back to the per-row path on the legacy inheritance schema where flat `investments` is a non-updatable view; controller's processInBatches loop deleted)
   - ↪ _from: Codebase audit 2026-06-30 · Performance — Backend_
   - `apps/node-backend/src/controllers/investmentController.js:257-301`
   - Uses bounded concurrency (10) but still N round trips where one `UNNEST`-based batch UPDATE (pattern already used in `priceCache.js:saveHistoricalPointsToDatabase:250-258`) would do it in one statement.
@@ -1143,7 +1143,7 @@ look-changing one.
   - Identical URL with no exclusions; the tab's key sits outside the `['aggregations']` prefix so `useTransactions.invalidateAll` never reaches it (stale until staleTime expiry). `RecipientInsightsPage.tsx:50` shares the tab's key, so that pair dedupes — the page/hook split is the problem.
   - Fix: move the tab/page key under `['aggregations','recipient-insights', currency, catIds, recIds]` and share it.
 
-- [ ] **Exchange-rates endpoint cached under three keys; `useCurrencyConverter` needlessly parameterizes by target currency** 🔼 🔎 verified-present 2026-07-11
+- [x] **Exchange-rates endpoint cached under three keys; `useCurrencyConverter` needlessly parameterizes by target currency** 🔼 ✅ 2026-07-13 · 5938da7 (all three converge on the flat `['exchange-rates']` key with one staleTime (10min) + gcTime (30min): useCurrencyConverter drops targetCurrency from its key, ExchangeRatesPage drops the `{dbOnly:true}` discriminator — the request is always db-only, so it carried no information)
   - ↪ _from: Performance research 2026-07-02 · Frontend — React Query_
   - `apps/frontend/src/hooks/useCurrencyConverter.ts:17-19` (`['exchange-rates', targetCurrency]`, 60s staleTime), `hooks/useExchangeRates.ts:28-33` (`['exchange-rates']`, 10min), `pages/admin/ExchangeRatesPage.tsx:24` (`["exchangeRates", {dbOnly:true}]`)
   - All three issue the same `getExchangeRates({dbOnly:true})`; the response doesn't depend on `targetCurrency` at all, so each distinct display currency fetches and caches a duplicate copy of the identical payload. (The `exchangeRates`-vs-`exchange-rates` *invalidation* mismatch is already filed above — this is the separate duplicate-fetch/cache-fan-out angle.)
