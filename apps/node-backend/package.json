@@ -18,10 +18,10 @@
   },
   "devDependencies": {
     "@eslint/js": "^10.0.1",
-    "@vitest/coverage-v8": "^4.1.7",
-    "eslint": "^10.4.0",
-    "globals": "^17.6.0",
-    "vitest": "^4.1.7"
+    "@vitest/coverage-v8": "^4.1.10",
+    "eslint": "^10.7.0",
+    "globals": "^17.7.0",
+    "vitest": "^4.1.10"
   },
   "dependencies": {
     "@vision/shared-utils": "workspace:*",
