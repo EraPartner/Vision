@@ -5,6 +5,9 @@ import { Database, HardDrive, RefreshCw, Zap } from 'lucide-react';
 import { toast } from 'sonner';
 
 import { PageHeader } from '@/components/shared/PageHeader';
+import { useAppSettings } from '@/contexts/AppSettingsContext';
+import { numberFormatToLocale } from '@/utils/currency';
+import { formatDateTimeWithAppSettings } from '@/components/shared/dateUtils';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Skeleton } from '@/components/ui/skeleton';
@@ -64,13 +67,15 @@ function TableStatRow({
     isVacuuming: boolean;
     t: (key: string) => string;
 }) {
+    // App settings, not the browser locale — an eu-format nl user with an
+    // en-US browser otherwise saw US date order and separators here.
+    const { appSettings } = useAppSettings();
+    const locale = numberFormatToLocale(appSettings.numberFormat);
+
     function fmt(ts: string | null) {
         if (!ts) return '—';
         try {
-            return new Date(ts).toLocaleString(undefined, {
-                dateStyle: 'short',
-                timeStyle: 'short',
-            });
+            return formatDateTimeWithAppSettings(new Date(ts), appSettings.dateFormat, locale);
         } catch {
             return ts;
         }
@@ -84,11 +89,11 @@ function TableStatRow({
         >
             <TableCell className="font-mono text-xs">{row.table_name}</TableCell>
             <TableCell className="text-right tabular-nums">
-                {Number(row.live_rows).toLocaleString()}
+                {Number(row.live_rows).toLocaleString(locale)}
             </TableCell>
             <TableCell className="text-right tabular-nums">
                 <span className={Number(row.dead_rows) > 1000 ? 'text-yellow-600' : ''}>
-                    {Number(row.dead_rows).toLocaleString()}
+                    {Number(row.dead_rows).toLocaleString(locale)}
                 </span>
             </TableCell>
             <TableCell className="text-xs text-muted-foreground">{fmt(row.last_autovacuum)}</TableCell>

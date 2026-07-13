@@ -15,6 +15,8 @@ import { memo, useCallback, useMemo, useRef, useState } from "react";
 import { BottomAxis, LeftAxis, RightAxis } from "./ChartAxis";
 import { ChartTooltip, type ChartTooltipDatum } from "./ChartTooltip";
 import { CHART_NEUTRAL, getChartColor } from "./palette";
+import { useAppSettings } from "@/contexts/AppSettingsContext";
+import { formatDateWithAppSettings } from "@/components/shared/dateUtils";
 
 export type ComposedSeriesType = "line" | "area" | "bar" | "candlestick";
 
@@ -241,6 +243,7 @@ function Inner<Datum>({
 }: ComposedChartProps<Datum> & { width: number; height: number }) {
   const innerWidth = Math.max(0, width - MARGIN.left - MARGIN.right);
   const innerHeight = Math.max(0, height - MARGIN.top - MARGIN.bottom);
+  const { appSettings } = useAppSettings();
 
   const hasRight = series.some((s) => s.axis === "right");
 
@@ -402,7 +405,8 @@ function Inner<Datum>({
           hoverDatum && tooltipTitle
             ? tooltipTitle(hoverDatum)
             : hoverDatum
-              ? String(xAccessor(hoverDatum) instanceof Date ? (xAccessor(hoverDatum) as Date).toLocaleDateString() : xAccessor(hoverDatum))
+              // App date format, not the browser locale, for the fallback title
+              ? String(xAccessor(hoverDatum) instanceof Date ? formatDateWithAppSettings(xAccessor(hoverDatum) as Date, appSettings.dateFormat) : xAccessor(hoverDatum))
               : undefined
         }
         items={tooltipItems}

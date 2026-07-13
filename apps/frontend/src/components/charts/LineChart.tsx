@@ -18,6 +18,8 @@ import { ChartTooltip, type ChartTooltipDatum } from "./ChartTooltip";
 import { CHART_NEUTRAL, getChartColor } from "./palette";
 import { durations, easings } from "@/lib/motion";
 import { useLanguage } from "@/contexts/LanguageContext";
+import { useAppSettings } from "@/contexts/AppSettingsContext";
+import { formatDateWithAppSettings } from "@/components/shared/dateUtils";
 
 export interface LineSeries<Datum> {
     readonly key: string;
@@ -170,6 +172,7 @@ function Inner<Datum>({
     scrubbable = false,
 }: LineChartProps<Datum> & { width: number; height: number }) {
     const { t } = useLanguage();
+    const { appSettings } = useAppSettings();
     const reduce = useReducedMotion();
 
     const innerWidth = Math.max(0, width - margin.left - margin.right);
@@ -519,7 +522,7 @@ function Inner<Datum>({
                     hoverDatum && tooltipTitle
                         ? tooltipTitle(hoverDatum)
                         : hoverDatum
-                          ? formatTitle(xAccessor(hoverDatum))
+                          ? formatTitle(xAccessor(hoverDatum), appSettings.dateFormat)
                           : undefined
                 }
                 items={tooltipItems}
@@ -528,7 +531,9 @@ function Inner<Datum>({
     );
 }
 
-function formatTitle(x: Date | number): string {
-    if (x instanceof Date) return x.toLocaleDateString();
+// App date format, not the browser locale — an nl-app user with an en-US
+// browser otherwise got US date order in tooltips.
+function formatTitle(x: Date | number, appDateFormat: string): string {
+    if (x instanceof Date) return formatDateWithAppSettings(x, appDateFormat);
     return String(x);
 }

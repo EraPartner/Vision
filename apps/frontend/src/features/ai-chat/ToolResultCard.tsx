@@ -16,6 +16,8 @@ import {
 } from 'recharts';
 import { getChartColor } from '@/components/charts';
 import { cn } from '@/lib/utils';
+import { useAppSettings } from '@/contexts/AppSettingsContext';
+import { numberFormatToLocale } from '@/utils/currency';
 import type { ToolErrorDetail, ToolRenderAs, ToolResultPayload } from '@/types/aiChat';
 
 function formatToolError(error: ToolResultPayload['error']): string {
@@ -52,12 +54,14 @@ function asRows(data: unknown): Row[] {
     return [];
 }
 
-function formatCell(value: unknown): string {
+// App number-format locale, not the browser locale — an eu-format user with
+// an en-US browser otherwise got US separators in tool-result tables.
+function formatCell(value: unknown, locale: string): string {
     if (value === null || value === undefined) return '—';
     if (typeof value === 'number') {
         if (!Number.isFinite(value)) return String(value);
-        if (Number.isInteger(value)) return value.toLocaleString();
-        return value.toLocaleString(undefined, { maximumFractionDigits: 2 });
+        if (Number.isInteger(value)) return value.toLocaleString(locale);
+        return value.toLocaleString(locale, { maximumFractionDigits: 2 });
     }
     if (typeof value === 'boolean') return value ? 'true' : 'false';
     if (typeof value === 'string') return value;
@@ -116,6 +120,8 @@ export function ToolResultCard({ toolName, result }: ToolResultCardProps) {
 }
 
 function TableView({ rows, columns }: { rows: Row[]; columns?: string[] }) {
+    const { appSettings } = useAppSettings();
+    const locale = numberFormatToLocale(appSettings.numberFormat);
     const cols = inferColumns(rows, columns);
     if (cols.length === 0 || rows.length === 0) {
         return <p className="text-xs text-muted-foreground">No rows.</p>;
@@ -155,7 +161,7 @@ function TableView({ rows, columns }: { rows: Row[]; columns?: string[] }) {
                                             numeric && 'text-right tabular-nums',
                                         )}
                                     >
-                                        {formatCell(val)}
+                                        {formatCell(val, locale)}
                                     </td>
                                 );
                             })}
