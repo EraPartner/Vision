@@ -177,9 +177,9 @@ describe("Language switch (integration)", () => {
     it("DashboardPage renders Dutch greeting heading when language is nl", async () => {
         useDutch();
         renderWithApp(<DashboardPage />);
-        // Dutch: "Goedemorgen" / "Goedenmiddag" / "Goedenavond"
+        // Dutch: "Goedemorgen" / "Goedemiddag" / "Goedenavond"
         expect(
-            await screen.findByRole("heading", { name: /goedemorgen|goedenmiddag|goedenavond/i }),
+            await screen.findByRole("heading", { name: /goedemorgen|goedemiddag|goedenavond/i }),
         ).toBeInTheDocument();
     });
 
