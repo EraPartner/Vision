@@ -188,7 +188,18 @@ export function calculateCostBasis(txns, opts = {}) {
  * @param {{ defaultFxMultiplier?: number|string }} [opts]
  * @returns {CostBasisResult}
  */
-export function calculateCostBasisFIFO(txns, opts = {}) {
+/**
+ * Lot-based cost basis (FIFO or LIFO). The two methods differ only in which lot
+ * a sell consumes first — the head of the queue (FIFO) or the tail (LIFO, when
+ * `fromEnd` is true). All other math is identical, so it lives here once
+ * (SIMP-21). Golden-fixture-covered money math; keep the arithmetic verbatim.
+ *
+ * @param {PortfolioTxnLike[]} txns
+ * @param {{ defaultFxMultiplier?: number|string }} opts
+ * @param {{ fromEnd?: boolean }} config
+ * @returns {CostBasisResult}
+ */
+function calculateCostBasisLotBased(txns, opts = {}, { fromEnd = false } = {}) {
   const sorted = [...txns].sort((a, b) => a.date.localeCompare(b.date));
 
   const ZERO = toDecimal(0);
@@ -225,26 +236,26 @@ export function calculateCostBasisFIFO(txns, opts = {}) {
       let costOfSoldConv = ZERO;
 
       while (unitsToSell.gt(0) && lots.length > 0) {
-        const lot = lots[0];
+        const lot = fromEnd ? lots[lots.length - 1] : lots[0];
         if (lot.units.lte(unitsToSell)) {
           costOfSold = costOfSold.plus(lot.costBasis);
           costOfSoldConv = costOfSoldConv.plus(lot.costBasisConv);
           unitsToSell = unitsToSell.minus(lot.units);
-          lots = lots.slice(1);
+          lots = fromEnd ? lots.slice(0, -1) : lots.slice(1);
         } else {
           const fraction = unitsToSell.dividedBy(lot.units);
           const lotCostUsed = lot.costBasis.times(fraction);
           const lotCostUsedConv = lot.costBasisConv.times(fraction);
           costOfSold = costOfSold.plus(lotCostUsed);
           costOfSoldConv = costOfSoldConv.plus(lotCostUsedConv);
-          lots = [
-            {
-              units: lot.units.minus(unitsToSell),
-              costBasis: lot.costBasis.minus(lotCostUsed),
-              costBasisConv: lot.costBasisConv.minus(lotCostUsedConv),
-            },
-            ...lots.slice(1),
-          ];
+          const reducedLot = {
+            units: lot.units.minus(unitsToSell),
+            costBasis: lot.costBasis.minus(lotCostUsed),
+            costBasisConv: lot.costBasisConv.minus(lotCostUsedConv),
+          };
+          lots = fromEnd
+            ? [...lots.slice(0, -1), reducedLot]
+            : [reducedLot, ...lots.slice(1)];
           unitsToSell = ZERO;
         }
       }
@@ -282,6 +293,10 @@ export function calculateCostBasisFIFO(txns, opts = {}) {
   };
 }
 
+export function calculateCostBasisFIFO(txns, opts = {}) {
+  return calculateCostBasisLotBased(txns, opts, { fromEnd: false });
+}
+
 /**
  * Calculate LIFO (last-in, first-out) cost basis.
  * Sells exhaust the most-recently-acquired lots first.
@@ -291,97 +306,7 @@ export function calculateCostBasisFIFO(txns, opts = {}) {
  * @returns {CostBasisResult}
  */
 export function calculateCostBasisLIFO(txns, opts = {}) {
-  const sorted = [...txns].sort((a, b) => a.date.localeCompare(b.date));
-
-  const ZERO = toDecimal(0);
-  const defaultFx = toDecimal(opts.defaultFxMultiplier ?? 1);
-  /** @type {{ units: Decimal, costBasis: Decimal, costBasisConv: Decimal }[]} */
-  let lots = [];
-  let totalUnits = ZERO;
-  let realizedGain = ZERO;
-  let realizedGainConv = ZERO;
-  let totalBuyCost = ZERO;
-  let totalBuyCostConv = ZERO;
-  let totalSellProceeds = ZERO;
-  let totalSellProceedsConv = ZERO;
-
-  for (const txn of sorted) {
-    const units = toDecimal(txn.units || 0);
-    const amount = toDecimal(txn.amount || 0);
-    const fees = toDecimal(txn.fees || 0);
-    const taxes = toDecimal(txn.taxes || 0);
-    const fx = txn.fxMultiplier !== undefined ? toDecimal(txn.fxMultiplier) : defaultFx;
-
-    if (txn.type === 'buy' || txn.type === 'gift') {
-      const buyCost = amount.plus(fees).plus(taxes);
-      lots = [...lots, { units, costBasis: buyCost, costBasisConv: buyCost.times(fx) }];
-      totalUnits = totalUnits.plus(units);
-      totalBuyCost = totalBuyCost.plus(buyCost);
-      totalBuyCostConv = totalBuyCostConv.plus(buyCost.times(fx));
-    } else if (txn.type === 'sell' && units.gt(0)) {
-      const sellUnits = Decimal.min(units, totalUnits);
-      const sellRatio = units.gt(0) ? sellUnits.dividedBy(units) : ZERO;
-      const netProceeds = amount.minus(fees).minus(taxes).times(sellRatio);
-      let unitsToSell = sellUnits;
-      let costOfSold = ZERO;
-      let costOfSoldConv = ZERO;
-
-      while (unitsToSell.gt(0) && lots.length > 0) {
-        const lot = lots[lots.length - 1];
-        if (lot.units.lte(unitsToSell)) {
-          costOfSold = costOfSold.plus(lot.costBasis);
-          costOfSoldConv = costOfSoldConv.plus(lot.costBasisConv);
-          unitsToSell = unitsToSell.minus(lot.units);
-          lots = lots.slice(0, -1);
-        } else {
-          const fraction = unitsToSell.dividedBy(lot.units);
-          const lotCostUsed = lot.costBasis.times(fraction);
-          const lotCostUsedConv = lot.costBasisConv.times(fraction);
-          costOfSold = costOfSold.plus(lotCostUsed);
-          costOfSoldConv = costOfSoldConv.plus(lotCostUsedConv);
-          lots = [
-            ...lots.slice(0, -1),
-            {
-              units: lot.units.minus(unitsToSell),
-              costBasis: lot.costBasis.minus(lotCostUsed),
-              costBasisConv: lot.costBasisConv.minus(lotCostUsedConv),
-            },
-          ];
-          unitsToSell = ZERO;
-        }
-      }
-
-      totalUnits = totalUnits.minus(sellUnits);
-      realizedGain = realizedGain.plus(netProceeds.minus(costOfSold));
-      realizedGainConv = realizedGainConv.plus(netProceeds.times(fx).minus(costOfSoldConv));
-      totalSellProceeds = totalSellProceeds.plus(amount.times(sellRatio));
-      totalSellProceedsConv = totalSellProceedsConv.plus(amount.times(sellRatio).times(fx));
-    } else if (txn.type === 'split' || txn.type === 'merger' || txn.type === 'spinoff' || txn.type === 'return_of_capital') {
-      const result = applyEventToLots(lots, txn.type, units, amount, totalUnits);
-      totalUnits = result.totalUnits;
-      lots = result.lots;
-    }
-  }
-
-  const totalCost = lots.reduce((sum, lot) => sum.plus(lot.costBasis), ZERO);
-  const totalCostConv = lots.reduce((sum, lot) => sum.plus(lot.costBasisConv), ZERO);
-  const finalUnits = Decimal.max(ZERO, totalUnits);
-  const finalCost = Decimal.max(ZERO, totalCost);
-  const finalCostConv = Decimal.max(ZERO, totalCostConv);
-
-  return {
-    totalUnits: toNumber(finalUnits),
-    totalCost: toNumber(roundToCents(finalCost)),
-    avgCostBasis: toNumber(finalUnits.gt(0) ? finalCost.dividedBy(finalUnits) : ZERO),
-    realizedGain: toNumber(roundToCents(realizedGain)),
-    totalBuyCost: toNumber(roundToCents(totalBuyCost)),
-    totalSellProceeds: toNumber(roundToCents(totalSellProceeds)),
-    totalCostConv: toNumber(roundToCents(finalCostConv)),
-    avgCostBasisConv: toNumber(finalUnits.gt(0) ? finalCostConv.dividedBy(finalUnits) : ZERO),
-    realizedGainConv: toNumber(roundToCents(realizedGainConv)),
-    totalBuyCostConv: toNumber(roundToCents(totalBuyCostConv)),
-    totalSellProceedsConv: toNumber(roundToCents(totalSellProceedsConv)),
-  };
+  return calculateCostBasisLotBased(txns, opts, { fromEnd: true });
 }
 
 /**
