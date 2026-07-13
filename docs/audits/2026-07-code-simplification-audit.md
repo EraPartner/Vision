@@ -2,14 +2,14 @@
 
 **Audited at:** `main@1e494de` (2026-07-13). All line numbers below refer to this commit.
 **Cross-checked against:** PR **#84** (`claude/review-todo-backlog-jrbvpo@413d40e`, the open integration branch) — see [PR #84 cross-check](#pr-84-cross-check). **Every finding below is still present on #84's tree**; none of them are fixed there.
-**Scope:** All hand-written source — `apps/frontend/src`, `apps/node-backend/src`, `packages/*`, `scripts/`, root shell scripts, and compose files (~200k LOC total; tests, codegen output, and locales excluded).
-**Method:** Four parallel dimension sweeps (backend, frontend components/hooks, frontend pages/lib/contexts, scripts & cross-app duplication) hunting for "100 lines where 1 would do": dead code, hand-rolled reimplementations of existing dependencies, copy-pasted scaffolding, and boilerplate replaceable by a config-driven loop. Every finding was verified by reading the code at HEAD; the highest-impact claims (dead-code reachability, byte-identical duplicates, dependency availability) were independently re-verified with grep, and then re-verified a second time against PR #84's tree. Read-only — no code was changed.
+**Scope:** All hand-written source — `apps/frontend/src`, `apps/node-backend/src`, `packages/*`, `scripts/`, root shell scripts, and compose files (~200k LOC total; codegen output and locales excluded).
+**Method:** Two audit rounds, each of four parallel dimension sweeps. **Round 1** (SIMP-01…22): backend data layer, frontend components/hooks, frontend pages/lib, scripts & cross-app duplication (tests excluded). **Round 2** (SIMP-23…46): backend services not covered in round 1 (AI chat, price providers, importers), frontend infrastructure (vendored UI, dependencies, API/MSW plumbing), the test suites, and repo-wide dead weight (lockfiles, generated artifacts, CI config). Every finding was verified by reading the code at HEAD; the highest-impact claims (dead-code reachability, byte-identical duplicates, dependency availability) were independently re-verified with grep, and then re-verified a second time against PR #84's tree. Read-only — no code was changed.
 
 ---
 
 ## How to use this document (for follow-up agents)
 
-Each finding has a stable ID (`SIMP-01` … `SIMP-22`). To continue this work:
+Each finding has a stable ID (`SIMP-01` … `SIMP-46`). To continue this work:
 
 1. **Pick a finding** from the [status ledger](#status-ledger) with status `OPEN`, lowest tier first (Tier 1 is zero-risk).
 2. **Re-verify before changing anything.** Line numbers are pinned to `main@1e494de`. If PR #84 has merged (it rewrites 279 files, splits `portfolioTxRepo` into `.common`/`.reads`/`.writes`, and adds `apps/node-backend/src/lib/dateFormat.js`), re-locate the code by the grep patterns given in each finding, not by line number. Per-finding `#84 note` rows call out where the fix should differ on #84's tree.
@@ -42,6 +42,30 @@ Each finding has a stable ID (`SIMP-01` … `SIMP-22`). To continue this work:
 | SIMP-20 | BelgianTaxProfileContext debounce ×3 + installers dup | `BelgianTaxProfileContext.tsx`, `install.sh`, `install-demo.sh` | ~80 | Low | Yes — intact | OPEN |
 | SIMP-21 | FIFO/LIFO cost basis near-twins (money math) | `packages/shared-utils/src/portfolio.js` | ~90 | **High care** | Yes — untouched | OPEN |
 | SIMP-22 | validate-locales hand-rolled JS lexer | `scripts/validate-locales.js` | ~80 | Medium | Yes — untouched | OPEN |
+| SIMP-23 | 9 unused vendored shadcn components + orphaned deps | `apps/frontend/src/components/ui/*` | ~790 + 13 deps | None | Yes — still unimported | OPEN |
+| SIMP-24 | Stale electron `package-lock.json` beside `bun.lock` | `packaging/electron/package-lock.json` | 170 KB | None | Yes — both tracked | OPEN |
+| SIMP-25 | Generated electron i18n JSON checked in (byte-identical to source) | `packaging/electron/i18n/{en,nl}.json` | ~418 KB | None | Yes — present | OPEN |
+| SIMP-26 | Dead exports in shared packages + dead re-export barrel | `packages/types`, `packages/shared-utils`, `frontend/src/utils/downsample.ts` | ~30 | None | Yes | OPEN |
+| SIMP-27 | CI setup prelude copy-pasted across 9+ jobs | `.github/workflows/ci.yml` (+e2e/release) | ~100 YAML | Low | Yes — 9 sites | OPEN |
+| SIMP-28 | Generated frontend locales not verified in CI (drift gap) | `apps/frontend/src/locales/{en,nl}.ts`, `ci.yml` | correctness | Low | Yes — same gap | OPEN |
+| SIMP-29 | `archiver`/`yauzl` are root runtime deps, used only by one test | root `package.json` | 2 deps | Low | Yes | OPEN |
+| SIMP-30 | Parser-config CRUD duplicated across both import routers | `routes/importRoutes.js:167-235`, `routes/portfolioImportRoutes.js:242-300` | ~70 | Low | Yes — 2×2 handlers | OPEN |
+| SIMP-31 | MAD spike-detector duplicated between price sanitizers | `quoteBackfillService.js:132-171`, `prices/priceProviderRegistry.js:233-282` | ~45 | Low | Yes — `1.4826` in both | OPEN |
+| SIMP-32 | Investment-spike sanitizer clones portfolioMath | `repositories/infoRepositoryHelpers.js:234-274` | ~35 | Low | Yes | OPEN |
+| SIMP-33 | `fetchLivePricesDetailed` provider blocks ×4 | `services/priceProviderService.js:87-164` | ~40 | Low | Yes | OPEN |
+| SIMP-34 | quoteBackfill SELECT + row-mapper cloned ×2 | `services/quoteBackfillService.js:186-329` | ~35 | Low | Yes | OPEN |
+| SIMP-35 | AI-chat tools: repeated bucketing/shaping/envelope + arg-coercion dup | `services/aiChat/tools/*`, `aiChatService.js` | ~110–130 | Low | Yes | OPEN |
+| SIMP-36 | `svgGroupedBarChart` is a special case of the generic chart | `services/reports/sectionHelpers.js:123-280` | ~40 | Low | Yes | OPEN |
+| SIMP-37 | importRoutes: result block ×3, csv-options validation ×2 | `routes/importRoutes.js` | ~20 | Low | Yes | OPEN |
+| SIMP-38 | Ollama error-normalization ×2 + no-logic pass-through wrappers | `integrations/ollama/client.js`, `priceProviderService.js:256-262` | ~12 | Low | Yes | OPEN |
+| SIMP-39 | Route-test harness (`mockRouter` + `mockResponse`) copy-pasted in 22 files | `apps/node-backend/tests/routes/*` | ~470 | Low | Yes — grew to 23–24 files | OPEN |
+| SIMP-40 | Shared test mocks: logger ×28, `clearAllMocks` ×73, repo mocks, `writeTempCSV` ×8 | `apps/node-backend/tests/**` | ~200 | Low | Yes | OPEN |
+| SIMP-41 | `contracts.test.ts`: near-identical `it()` blocks → `it.each` tables | `apps/frontend/src/test/msw/contracts.test.ts` | ~150–200 | Low | Yes | OPEN |
+| SIMP-42 | Hook-test QueryClient wrapper re-implemented ×7 | `apps/frontend/src/hooks/**/__tests__/*` | ~70 | Low | Yes | OPEN |
+| SIMP-43 | MSW handler micro-helpers (`aggOk`, `deleted`) | `apps/frontend/src/test/msw/handlers.ts` | ~40–60 | Low | Yes | OPEN |
+| SIMP-44 | App.tsx lazy/route lists hand-maintained; redundant react-query overrides | `apps/frontend/src/App.tsx`, hooks | ~50 | Medium | Yes | OPEN |
+| SIMP-45 | `recharts` is a full dependency for exactly one component | `features/ai-chat/ToolResultCard.tsx` | 1 dep | Medium | Yes — still 1 file | CONSIDER |
+| SIMP-46 | 1.1 MB checked-in pg_dump for demo DB | `packaging/electron/demo-db/01-demo.sql` | ~1.1 MB | Medium | Yes | CONSIDER |
 
 ---
 
@@ -51,7 +75,7 @@ The codebase is healthier than a bloat audit usually finds. Routes use a central
 
 The dominant smell is **not** clever over-abstraction — it is **unfinished deduplication**: abstractions that exist but aren't used everywhere (shared currency-formatter hooks bypassed by inline `Intl.NumberFormat` copies; `date-fns` installed but re-implemented by hand), and large stateful scaffolding that was copy-pasted instead of extracted (three visx charts each carrying the same ~150-line scale/hover/tooltip machine; `DataTable` being a frozen copy of `VirtualDataTable`'s state machine; two repositories carrying byte-identical inheritance-table helpers). On top of that sits ~1,150 lines of provably dead code that can simply be deleted.
 
-**Realistically removable: ~2,300–2,900 lines** with no behavior change, of which ~1,150 are zero-risk deletions.
+**Realistically removable across both rounds: ~4,600–5,400 lines** with no behavior change (~2,300–2,900 from round 1 + ~2,300–2,500 from round 2), plus **~1.7 MB of checked-in artifacts** and **~15 removable npm dependencies**. Of the line total, ~1,950 are zero-risk deletions (dead code + unused vendored components).
 
 | Tier | Theme | Findings | Est. lines removed | Risk |
 | --- | --- | --- | --- | --- |
@@ -59,6 +83,10 @@ The dominant smell is **not** clever over-abstraction — it is **unfinished ded
 | 2 | Use what already exists (date-fns, shared hooks, shared-utils) | SIMP-04…12 | ~450–700 | Low |
 | 3 | Extract shared scaffolding (charts, repos, tax pages) | SIMP-13…20 | ~700–900 | Low–medium |
 | 4 | Careful refactors (money math, load-bearing tooling) | SIMP-21…22 | ~170 | Medium — do under existing tests |
+| R2-dead | Round 2: unused vendored UI, stale artifacts, dead exports, misplaced deps | SIMP-23…26, 29 | ~820 + ~590 KB + 15 deps | None–low |
+| R2-backend | Round 2: service-layer dedup (importers, prices, AI chat, reports) | SIMP-30…38 | ~400 | Low |
+| R2-tests | Round 2: test-scaffolding dedup and table-driven tests | SIMP-39…43 | ~900 | Low (coverage-neutral) |
+| R2-infra | Round 2: CI prelude, locales drift guard, App.tsx, judgment calls | SIMP-27, 28, 44…46 | ~150 + ~1.1 MB | Low–medium |
 
 ---
 
@@ -215,12 +243,148 @@ Lines 204–311 implement a from-scratch tokenizer (`blankComments`, `readString
 
 ---
 
+## Round 2 — dead weight & artifacts (SIMP-23…29)
+
+### SIMP-23 — Nine vendored shadcn components never imported — ~790 lines + 13 dependencies
+
+Verified with grep (zero importers outside `components/ui/` on both main and #84): `aspect-ratio.tsx` (5), `avatar.tsx` (44), `breadcrumb.tsx` (99), `form.tsx` (132), `hover-card.tsx` (27), `input-otp.tsx` (61), `menubar.tsx` (196), `navigation-menu.tsx` (122), `pagination.tsx` (104) — all in `apps/frontend/src/components/ui/`.
+
+Deleting them also orphans their backing npm packages, plus five deps that never even got a component vendored: `@radix-ui/react-aspect-ratio`, `@radix-ui/react-avatar`, `@radix-ui/react-hover-card`, `@radix-ui/react-menubar`, `@radix-ui/react-navigation-menu`, `input-otp`, `react-hook-form`, `@hookform/resolvers`, and (already zero imports today) `embla-carousel-react`, `vaul`, `react-resizable-panels`, `d3-time`, `next-themes`. Each verified at zero imports across `apps/frontend/src` (the lone `react-hook-form`/`input-otp` matches are inside the dead `ui/` files themselves).
+
+**Fix:** delete the nine files, remove the 13 packages from `apps/frontend/package.json`. *Re-verify:* `grep -rn "ui/<name>\"" apps/frontend/src | grep -v components/ui` per component.
+
+### SIMP-24 — Stale `packaging/electron/package-lock.json` — 170 KB
+
+`packaging/electron/package.json` declares `"packageManager": "bun"` and `bun.lock` (73 KB) is tracked beside it; all electron scripts run via bun, nothing references npm here. **Fix:** `git rm packaging/electron/package-lock.json`.
+
+### SIMP-25 — Generated electron i18n JSON checked in — ~418 KB, maintained-twice hazard
+
+`packaging/electron/i18n/{en,nl}.json` are **byte-identical** (md5-verified) to `i18n/source/{en,nl}.json` and are listed as generated outputs in `scripts/generate-locales.js` (header, lines 6–9), rewritten on `electron start`/`dist`. Nothing gitignores them, so the copies are committed and can silently drift. **Fix:** gitignore `packaging/electron/i18n/*.json` (the electron scripts already run the generator), or read `i18n/source` directly.
+
+### SIMP-26 — Dead exports in shared packages + dead barrel — ~30 lines
+
+- `packages/types`: `isApiErrorCode` has zero external references.
+- `packages/shared-utils/portfolio`: exported `UNIT_BASED_CLASSES`, `FIXED_INCOME_CLASSES`, `REAL_ESTATE_CLASS`, `daysBetweenYmd` are used only internally — make them private.
+- `apps/frontend/src/utils/downsample.ts` is a re-export barrel with **zero importers** (verified) — delete.
+
+### SIMP-27 — CI setup prelude copy-pasted across 9+ jobs — ~100 YAML lines
+
+`bun install --frozen-lockfile` appears 9× in `.github/workflows/ci.yml` (plus e2e/release), each preceded by the same pinned `actions/checkout` + toolchain setup (~10 lines/job). No `.github/actions/` composite exists. **Fix:** one composite action (`.github/actions/setup`); each job becomes `- uses: ./.github/actions/setup`.
+
+### SIMP-28 — Generated frontend locales are not drift-checked in CI
+
+`apps/frontend/src/locales/{en,nl}.ts` are generator output (`// Auto-generated - do not edit manually`), but the root build runs `generate-locales-if-not-ci`, which **skips generation when `$CI` is set** — CI consumes the committed files with no freshness check, unlike `generated.ts` which has the `verify-generated` job. **Fix:** add a `verify-locales` job (run the generator, `git diff --exit-code`), mirroring `verify-generated`. Few lines, real correctness gap.
+
+### SIMP-29 — `archiver`/`yauzl` are root runtime dependencies used only by one test
+
+The only importers are `packaging/electron/backup/bundle.js` (which has its own copies in the electron `package.json`) and `apps/node-backend/tests/backup-roundtrip.test.js` — no backend `src/` file uses either. **Fix:** move both from root `dependencies` to `apps/node-backend` `devDependencies`.
+
+---
+
+## Round 2 — backend service dedup (SIMP-30…38)
+
+### SIMP-30 — Parser-config CRUD duplicated across both import routers — ~70 lines
+
+`routes/importRoutes.js:167–235` and `routes/portfolioImportRoutes.js:242–300`: the four `/parsers` handlers (GET/POST/PATCH/DELETE) are identical except a `PARSER_KIND` constant, the `normalize*ParserConfig` fn, and the word "portfolio" in the conflict message (same 23505/`PARSER_NAME_CONSTRAINT` handling, same `parseParserId`/`normalizeParserName`). `lib/parserConfigRoutes.js` already exists as the shared home. **Fix:** `registerParserRoutes(router, { kind, normalizeConfig, label })`.
+
+### SIMP-31 — MAD spike-detector duplicated between the two price sanitizers — ~45 lines
+
+`services/quoteBackfillService.js:132–171` and `services/prices/priceProviderRegistry.js:233–282` contain the same log-returns → `median` → MAD → `robustSigma = max(1.4826*mad, .0015)` → needle-detection loop verbatim (both already import `median` from `lib/math.js`; the `1.4826` constant appears in exactly these two files). **Fix:** one `detectMadNeedles(points, opts)` in `lib/math.js`.
+
+### SIMP-32 — `sanitizeIsolatedDailyInvestmentSpikes` clones `sanitizeIsolatedValueSpikes` — ~35 lines
+
+`repositories/infoRepositoryHelpers.js:234–274` reimplements `utils/portfolioMath.js:48–86` (same `minJump`/`neighborTolerance`/`localNeedleRatio`, same needle/peak/trough conditions), differing only in the fixed `investments` field and recomputing `netWorth`. `portfolioMath.sanitizeSnapshotSpikes:300` already shows the wrapper pattern. **Fix:** thin wrapper over `sanitizeIsolatedValueSpikes(rows, 'investments', {...})` + a `netWorth` post-pass.
+
+### SIMP-33 — `fetchLivePricesDetailed` provider blocks are a copy-paste quartet — ~40 lines
+
+`services/priceProviderService.js:87–164`: four `if (stale.X.length) { providerTasks.push(async () => { try {…map+cacheSet…; recordProviderSuccess} catch {…recordProviderError} })}` blocks; `custom` and `kinesis` are essentially identical. **Fix:** a provider descriptor table `{ key, resolveId, cacheKey, batchFn }` driving one loop.
+
+### SIMP-34 — quoteBackfill `getInvestments(With)HoldingWindows` — SELECT + row-mapper cloned — ~35 lines
+
+`services/quoteBackfillService.js:186–260` vs `268–329`: the same 25-line SELECT (12-column `price_provider_*` list) and the same 13-field investment literal written twice. **Fix:** parameterize the WHERE, share `mapRowToInvestment(row)`.
+
+### SIMP-35 — AI-chat tools: repeated bucketing/shaping/envelope + arg-coercion dup — ~110–130 lines
+
+- `tools/expenses.js`: the `ymd → year/quarter|year-month` bucket-key logic is inlined 4× (124–135, 314, 514, 665–670) and the `{id, date, amount, recipient, category, memo}` row shaper appears 4× (272, 409, 458, 611) → `bucketKey(ymd, groupBy)` + `shapeTxnRow(row)`.
+- `tools/portfolio.js`: the per-investment `{income, costs, count}` flow aggregation is duplicated (161–207 vs 480–506), and the `txnsByInvestment` grouping + `computeNetUnits` + market-value calc repeats ×3 (84–108, 320–343, 392–415) → `aggregateFlows(txns, range)` + `groupTxnsByInvestment(txns)`.
+- All 29 tools repeat the same envelope (destructure `maxRows`, validate, `rows.slice(0, maxRows)`, `{ok, data, meta}`) → a `defineTool({...})` factory centralizes the contract.
+- `aiChatService.js:43–56` `parseToolCallArguments` duplicates `tools/index.js:107–123` `coerceArguments` → export one.
+
+### SIMP-36 — `svgGroupedBarChart` is a special case of `svgGenericGroupedBarChart` — ~40 lines
+
+`services/reports/sectionHelpers.js:123–178` vs `228–280`: the income/spending chart is the generic N-series chart with two fixed series. All three chart builders also repeat the empty-SVG string, W/H/PAD constants, baseline, label-thinning, and legend loop — a `chartFrame()` helper trims more. **Fix:** call the generic with a two-series config.
+
+### SIMP-37 — importRoutes: result block ×3, csv-options validation ×2 — ~20 lines
+
+The `requiresReview` + `{total, imported, duplicates, errors, batch_id, auto_linked_count}` result block repeats in `/csv:59–80`, `/csv/custom:138–157`, `/csv/stream:267–291`; the separator/encoding validation is duplicated in `/recipients:314–320` and `/categories:338–344`. **Fix:** `buildPipelineResult(pipelineResult)` + `parseCsvOptions(req)`.
+
+### SIMP-38 — Ollama error-normalization ×2 + no-logic pass-throughs — ~12 lines
+
+`integrations/ollama/client.js`: the timeout/abort/network error mapping is written twice (`request:112–121`, `chatStream:259–269`) → `normalizeFetchError(err, opts)`. `services/priceProviderService.js:256–262`: `_fallbackHistoricalPoints` → `_filterHistoricalPoints` → `filterPointsByRange` are two wrapper layers with no logic → inline.
+
+---
+
+## Round 2 — test suites (SIMP-39…43)
+
+The suite is healthy where it counts: `renderWithApp` is shared by 55 frontend files, MSW is centralized, there are essentially no skipped/dead tests, and the big backend test files (`filterBuilder`, `priceProviderService`, `aiChatTools`, `pit.test.ts`) were checked and are **correctly** shaped, not table-able. The debt is concentrated and mechanical:
+
+### SIMP-39 — Route-test harness copy-pasted in 22 files — ~470 lines
+
+Every backend route test re-declares the same ~15-line `mockRouter`/`routeHandlers`/`vi.mock('express')` scaffold (e.g. `tests/routes/ai.test.js:9–24`) **and** a ~10-line `mockResponse()` helper (e.g. `routes/info.test.js:842`) — 22 files each, and no `tests/helpers/` directory exists at all. On #84's tree it's already 23–24 files. **Fix:** `tests/helpers/routeHarness.js` exporting `createMockRouter()` and `createMockResponse(extra)`.
+
+### SIMP-40 — Shared test mocks: logger ×28, `clearAllMocks` ×73, repo mocks, temp files — ~200 lines
+
+- The literal `logger: { info: vi.fn(), error: vi.fn(), warn: vi.fn(), debug: vi.fn() }` mock appears verbatim in 28 files → `mockLogger()`.
+- `vi.clearAllMocks()` in `beforeEach` across 73 files → vitest `clearMocks: true` config.
+- The AI-chat repository `vi.mock` blocks are re-declared across 4 files → `tests/helpers/repoMocks.js`.
+- 8 bank-adapter tests each define the same `writeTempCSV` + unlink `afterEach` → `tests/helpers/tempFile.js`.
+
+### SIMP-41 — `contracts.test.ts`: sequential identical `it()` blocks — ~150–200 lines
+
+`src/test/msw/contracts.test.ts` (1,352 lines, ~119 tests): lines 320–432 are 5 resources × 2 byte-identical blocks differing only in `{path, Schema, STUB, limit}`; 273–313 are ~11 one-line schema checks; the mutation section repeats 45 `mutateEnvelope(...)` one-liners. Only 4 files in the whole repo use `it.each` today. **Fix:** `describe.each`/`it.each` tables.
+
+### SIMP-42 — Hook-test QueryClient wrapper re-implemented ×7 — ~70 lines
+
+Seven `hooks/**/__tests__` files each define a ~12-line `makeWrapper`/`createWrapper` (`new QueryClient({retry:false…})` + provider); `renderWithApp` covers component rendering but nothing covers `renderHook`. **Fix:** `src/test/queryWrapper.tsx` exporting `createQueryWrapper()`.
+
+### SIMP-43 — MSW handler micro-helpers — ~40–60 lines
+
+`test/msw/handlers.ts` already uses `ok()`/`err()`, but the `meta: { computedAt, source: "live" }` wrapper repeats 13× and `ok({ message: "... deleted" })` stubs repeat 11× → `aggOk(data)` + `deleted(msg)`.
+
+---
+
+## Round 2 — judgment calls (SIMP-44…46)
+
+### SIMP-44 — App.tsx hand-maintained lazy/route lists + redundant react-query overrides — ~50 lines
+
+`App.tsx` has 37 `const X = lazy(routeLoaders["/path"])` lines (26–62) that must be kept in sync with the `routeLoaders` map by hand, and `<RequireAdmin>` is wrapped manually 6× — derivable from the map + one admin parent route. Separately, several hooks re-state query options equal to the app defaults (`staleTime: 30_000` in `useSplits` ×3, `useTransactions:35`, `useFilteredDashboardStats:105`, `useAIChat:19`) and `staleTime: 60_000` recurs ~15× as a magic number → drop redundant overrides, hoist a shared constant. Medium confidence; behavior-neutral but touches routing.
+
+### SIMP-45 — `recharts` is a full charting dependency for exactly one component — CONSIDER
+
+`grep -rln recharts` → only `features/ai-chat/ToolResultCard.tsx`; every other chart uses visx. Porting that one card to visx drops the dependency. Not dead code — a bundle-weight judgment call.
+
+### SIMP-46 — 1.1 MB checked-in pg_dump — CONSIDER
+
+`packaging/electron/demo-db/01-demo.sql` is pg_dump output, regenerable via the co-located `generate.mjs`/`regenerate.sh`, but it IS a required build input (`demo-db/Dockerfile` COPYs it). Keep if the demo image must build offline; otherwise generate at build time. Largest artifact in the tree.
+
+### Round 2 non-findings — checked, leave alone
+
+- **Root `alembic.ini` vs `config/alembic.ini`** — not duplication: the root file is an intentional 791-byte compat shim; both are reachable.
+- **`apps/frontend/src/types/generated.ts`** — generated but CI-guarded (`verify-generated` job). Correct.
+- **`docs/flow-visualizer.html`, `docs/templates/*`** — hand-authored and referenced, not artifacts.
+- **All `apps/node-backend` dependencies** — every one verified imported (`pg`, `decimal.js`, `express`, `zod`, `multer`, `csv-parse`, `puppeteer`, `yahoo-finance2`).
+- **`lib/concurrency.js` / `lib/network.js` / `toolCache.js`** — appropriately minimal; `forEachConcurrent` is a legitimate bounded pool (no p-limit in deps).
+- **`lib/api/client.ts`** — single well-factored transport, no duplicate fetch wrappers; `lib/api.ts` is a live barrel with 37 importers.
+- **Big backend test files** (`filterBuilder`, `priceProviderService`, `aiChatTools`, `pit.test.ts`) — high `it()` counts but each block asserts different behavior; converting to tables would hurt readability. `pit.test.ts` already uses a `profile()` factory.
+
+---
+
 ## PR #84 cross-check
 
-PR **#84** (`claude/review-todo-backlog-jrbvpo`, 279 files, +12k/−3.9k, based on the same `main@1e494de`) is the open integration branch consolidating #79–#83/#87. Every finding above was re-verified against its head `413d40e` by grepping that tree directly (`git grep … origin/claude/review-todo-backlog-jrbvpo`). Results:
+PR **#84** (`claude/review-todo-backlog-jrbvpo`, 279 files, +12k/−3.9k, based on the same `main@1e494de`) is the open integration branch consolidating #79–#83/#87. Every finding above — both rounds — was re-verified against its head `413d40e` by grepping that tree directly (`git grep … origin/claude/review-todo-backlog-jrbvpo`). Results:
 
-- **No finding is fixed by #84.** All 22 remain present on its tree; the dead files (SIMP-01…03) are untouched and `RecipientInsightsPage` is still unrouted there.
-- **One got worse:** SIMP-16 — the planned-transaction SELECT block appears 6× on #84 vs 5× on main; SIMP-15's SET-clause idiom grew to 30 sites (accounts rewrite).
+- **No finding is fixed by #84.** All 46 remain present on its tree; the dead files (SIMP-01…03) are untouched, `RecipientInsightsPage` is still unrouted, the nine shadcn components are still unimported, both electron lockfiles are still tracked, the CI prelude still repeats 9×, and the `1.4826` MAD block is still in both sanitizers there.
+- **Some got worse:** SIMP-16 — the planned-transaction SELECT block appears 6× on #84 vs 5× on main; SIMP-15's SET-clause idiom grew to 30 sites (accounts rewrite); SIMP-39's route-test harness grew from 22 to 23–24 files.
 - **One fix should be done differently on #84:** SIMP-08 — #84 introduces `apps/node-backend/src/lib/dateFormat.js`; the surviving private `toYmd` copies should route through it rather than a new helper.
 - **Line-number drift:** #84 rewrites `accountRepository`, the charts, `dateUtils.ts`, `TaxOverviewPage`, and splits `portfolioTxRepo` into `.common`/`.reads`/`.writes` (+ tests). If working on or after #84, re-locate code by the grep patterns given per finding, not by the line numbers (which are pinned to `main@1e494de`).
 
@@ -246,12 +410,14 @@ These were flagged as suspects by size and verified **fine**; don't spend refact
 
 Wait for PR #84 to merge first (or branch from it) — see the cross-check section. Then:
 
-1. **PR: dead code deletion** (SIMP-01, 02, 03) — ~1,150 lines, zero behavioral risk, immediate.
+1. **PR: dead code & artifact deletion** (SIMP-01, 02, 03 + SIMP-23, 24, 25, 26, 29) — ~1,950 lines + ~590 KB + 15 deps, zero-to-minimal behavioral risk, immediate.
 2. **PR: formatting stragglers** (SIMP-05…12) — mechanical swaps to existing hooks/deps; verify with `bun run test:frontend` + visual e2e.
 3. **PR: kill `DataTable`** (SIMP-04) — migrate `DashboardPage` to `VirtualDataTable`, delete the copy.
-4. **PR per backend extraction** (SIMP-14…17, 19) — small, each independently testable against the existing route/repo tests.
-5. **PR: chart frame extraction** (SIMP-13) — the largest single win; do it after the visual-regression e2e suite is green so scrub/hover/sync behavior is pinned.
-6. **PR: tax page dedup** (SIMP-18) and the debounce/installer pair (SIMP-20) — UI-only / tooling-only, config-driven rewrites.
-7. **Last, separately: cost-basis merge** (SIMP-21) under golden fixtures, and the locale-lexer swap (SIMP-22) with a key-extraction diff.
+4. **PR: CI hygiene** (SIMP-27 composite setup action, SIMP-28 verify-locales job) — tooling only.
+5. **PR per backend extraction** (SIMP-14…17, 19 from round 1; SIMP-30…38 from round 2) — small, each independently testable against the existing route/repo tests. Start with SIMP-30 (the shared home `lib/parserConfigRoutes.js` already exists) and SIMP-31 (pure function extraction).
+6. **PR: test-harness helpers** (SIMP-39…43) — create `apps/node-backend/tests/helpers/` (routeHarness, mockLogger, repoMocks, tempFile) + frontend `queryWrapper`; then the `contracts.test.ts` tables. Coverage-neutral by construction.
+7. **PR: chart frame extraction** (SIMP-13) — the largest single win; do it after the visual-regression e2e suite is green so scrub/hover/sync behavior is pinned.
+8. **PR: tax page dedup** (SIMP-18), the debounce/installer pair (SIMP-20), and App.tsx route generation (SIMP-44) — UI-only / tooling-only, config-driven rewrites.
+9. **Last, separately: cost-basis merge** (SIMP-21) under golden fixtures, and the locale-lexer swap (SIMP-22) with a key-extraction diff. SIMP-45/46 are optional judgment calls — decide, don't default.
 
 When a finding lands, update its row in the [status ledger](#status-ledger) to `FIXED (<PR #>)` in the same PR.
