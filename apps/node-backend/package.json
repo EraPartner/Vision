@@ -19,10 +19,12 @@
   "devDependencies": {
     "@eslint/js": "^10.0.1",
     "@vitest/coverage-v8": "^4.1.10",
+    "archiver": "^8.0.0",
     "eslint": "^10.7.0",
     "globals": "^17.7.0",
     "typescript": "^6.0.3",
-    "vitest": "^4.1.10"
+    "vitest": "^4.1.10",
+    "yauzl": "^3.4.0"
   },
   "dependencies": {
     "@vision/shared-utils": "workspace:*",

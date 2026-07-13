@@ -15,9 +15,9 @@
 import Decimal from 'decimal.js';
 import { toDecimal, roundToCents, toNumber } from './money.js';
 
-export const UNIT_BASED_CLASSES = new Set(['stock', 'etf', 'crypto', 'metals']);
-export const FIXED_INCOME_CLASSES = new Set(['savings', 'bond']);
-export const REAL_ESTATE_CLASS = 'real_estate';
+const UNIT_BASED_CLASSES = new Set(['stock', 'etf', 'crypto', 'metals']);
+const FIXED_INCOME_CLASSES = new Set(['savings', 'bond']);
+const REAL_ESTATE_CLASS = 'real_estate';
 
 /** @typedef {'weighted_avg'|'fifo'|'lifo'} CostBasisMethod */
 

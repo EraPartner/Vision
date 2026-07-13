@@ -117,8 +117,6 @@ const envSchema = z.object({
   KINESIS_DEFAULT_TIMEFRAME: intEnv(60),
   KINESIS_DEFAULT_FROM_DATE: stringEnv('2019-01-01T08:47:55.843Z'),
 
-  IMPORT_PIPELINE_V2: booleanEnv(true),
-
   ATTACHMENTS_DIR: stringEnv('./data/attachments'),
   ATTACHMENT_MAX_SIZE_MB: intEnv(10),
 }).passthrough();

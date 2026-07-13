@@ -20,12 +20,3 @@ export const ApiErrorCode = Object.freeze({
 });
 
 /** @typedef {typeof ApiErrorCode[keyof typeof ApiErrorCode]} ApiErrorCodeValue */
-
-/**
- * Runtime type guard: is the given value one of the known error codes?
- * @param {unknown} value
- * @returns {value is ApiErrorCodeValue}
- */
-export function isApiErrorCode(value) {
-  return typeof value === 'string' && Object.values(ApiErrorCode).includes(value);
-}

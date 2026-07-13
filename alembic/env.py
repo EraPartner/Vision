@@ -1,5 +1,4 @@
 import os
-import sys
 from logging.config import fileConfig
 from dotenv import load_dotenv
 
@@ -33,27 +32,9 @@ if database_url.startswith("sqlite") and not database_url.startswith("sqlite:///
     default_db_path = os.path.join(config_dir, "financial_transactions.db")
     database_url = f"sqlite:///{default_db_path}"
 
-# Try to load models for autogenerate support (optional - continues if fails)
+# The backend is Node.js; there are no Python SQLAlchemy models to import.
+# Migrations are hand-written SQL, so --autogenerate is not supported.
 target_metadata = None
-try:
-    sys.path.insert(0, os.path.join(config_dir, "apps", "backend"))
-    from database.models import Base
-
-    target_metadata = Base.metadata
-
-    try:
-        from database import raw_transaction_models  # noqa: F401
-    except Exception:
-        pass  # Continue even if raw_transaction_models can't be imported
-except Exception as e:
-    # If models can't be imported, Alembic will still work for migrations
-    # but autogenerate functionality will be limited
-    import logging
-
-    logging.getLogger(__name__).warning(
-        f"Could not import database models for autogenerate support: {e}\n"
-        "Alembic will still work for manual migrations."
-    )
 
 # this is the Alembic Config object, which provides
 # access to the values within the .ini file in use.

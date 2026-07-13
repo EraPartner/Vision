@@ -18,4 +18,3 @@ export declare const ApiErrorCode: Readonly<{
 
 export type ApiErrorCodeValue = typeof ApiErrorCode[keyof typeof ApiErrorCode];
 
-export declare function isApiErrorCode(value: unknown): value is ApiErrorCodeValue;

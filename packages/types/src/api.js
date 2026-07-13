@@ -9,7 +9,7 @@
  * envelope has no runtime shape of its own, so nothing to instantiate here.
  */
 
-export { ApiErrorCode, isApiErrorCode } from './errors.js';
+export { ApiErrorCode } from './errors.js';
 
 /**
  * Pagination cursor. Endpoints use either `page` or `offset`, never both.

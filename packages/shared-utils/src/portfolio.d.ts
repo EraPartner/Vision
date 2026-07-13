@@ -65,9 +65,6 @@ export interface InvestmentSummaryCore {
     converted: ConvertedTrack;
 }
 
-export const UNIT_BASED_CLASSES: Set<string>;
-export const FIXED_INCOME_CLASSES: Set<string>;
-export const REAL_ESTATE_CLASS: string;
 
 export function daysBetweenYmd(fromYmd: string, toYmd: string): number;
 export function calculateCostBasis(txns: PortfolioTxnLike[]): CostBasisResult;
