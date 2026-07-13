@@ -14,7 +14,7 @@ import {
   getKinesisAssetConfig,
 } from '../../config/kinesisConfig.js';
 import { toNumber, isValidPrice } from './priceCache.js';
-import { median } from '../../lib/math.js';
+import { madReturnStats, isRobustNeedle } from '../../lib/math.js';
 import { convertToCurrency } from '../currency/currencyConversionService.js';
 import { assertPublicHttpUrl } from '../../lib/urlSafety.js';
 
@@ -242,14 +242,7 @@ export function sanitizeKinesisIsolatedSpikes(points) {
 
   if (logReturns.length < 4) return sanitized;
 
-  const medianReturn = median(logReturns) ?? 0;
-  const absDeviations = logReturns.map(r => Math.abs(r - medianReturn));
-  const mad = median(absDeviations) ?? 0;
-  const robustSigma = Math.max(1.4826 * mad, 0.0015);
-
-  const spikeThreshold = 6 * robustSigma;
-  const bridgeThreshold = 4 * robustSigma;
-  const minSpikeMove = Math.log(1.18);
+  const stats = madReturnStats(logReturns);
   const localNeedleNeighborTolerance = Math.log(1.12);
 
   for (let i = 1; i < sanitized.length - 1; i += 1) {
@@ -258,14 +251,8 @@ export function sanitizeKinesisIsolatedSpikes(points) {
     const next = toNumber(sanitized[i + 1]?.price);
     if (!isValidPrice(prev) || !isValidPrice(current) || !isValidPrice(next)) continue;
 
-    const jump = Math.log(current / prev);
-    const revert = Math.log(next / current);
     const bridge = Math.log(next / prev);
-
-    const hasLargeJump = Math.abs(jump - medianReturn) > spikeThreshold && Math.abs(jump) > minSpikeMove;
-    const hasLargeRevert = Math.abs(revert - medianReturn) > spikeThreshold && Math.abs(revert) > minSpikeMove;
-    const oppositeDirections = (jump > 0 && revert < 0) || (jump < 0 && revert > 0);
-    const bridgeLooksNormal = Math.abs(bridge - medianReturn) <= bridgeThreshold;
+    const robustNeedle = isRobustNeedle(prev, current, next, stats);
 
     const maxNeighbor = Math.max(prev, next);
     const minNeighbor = Math.min(prev, next);
@@ -273,8 +260,6 @@ export function sanitizeKinesisIsolatedSpikes(points) {
       && Math.abs(bridge) <= localNeedleNeighborTolerance;
     const localNeedleTrough = current * localNeedleRatio <= minNeighbor
       && Math.abs(bridge) <= localNeedleNeighborTolerance;
-
-    const robustNeedle = hasLargeJump && hasLargeRevert && oppositeDirections && bridgeLooksNormal;
 
     if (robustNeedle || localNeedlePeak || localNeedleTrough) {
       sanitized[i].price = Math.sqrt(prev * next);

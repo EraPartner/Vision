@@ -70,24 +70,21 @@ export const netWorthRepository = {
    * @param {{ liveInvestments?: number }} [opts]
    */
   async getNetWorthFromSnapshots(targetCurrency = 'EUR', { liveInvestments } = {}) {
+    // First data date over active transactions + snapshots, falling back to any
+    // transaction when there are no active ones — folded into one round-trip via
+    // COALESCE (LEAST ignores NULLs, so it only falls through when both the
+    // snapshot and active-txn minima are NULL) (SIMP-51).
     const firstDateResult = await query(`
-      SELECT LEAST(
-        (SELECT MIN(snapshot_date) FROM portfolio_performance_snapshots WHERE currency = $1),
-        (SELECT MIN(date)::date FROM transactions WHERE is_active = true)
+      SELECT COALESCE(
+        LEAST(
+          (SELECT MIN(snapshot_date) FROM portfolio_performance_snapshots WHERE currency = $1),
+          (SELECT MIN(date)::date FROM transactions WHERE is_active = true)
+        ),
+        (SELECT MIN(date)::date FROM transactions)
       )::date AS first_data_date
     `, [targetCurrency]);
 
-    let firstDataDate = firstDateResult.rows[0]?.first_data_date;
-
-    if (!firstDataDate) {
-      const fallbackResult = await query(`
-        SELECT LEAST(
-          (SELECT MIN(snapshot_date) FROM portfolio_performance_snapshots WHERE currency = $1),
-          (SELECT MIN(date)::date FROM transactions)
-        )::date AS first_data_date
-      `, [targetCurrency]);
-      firstDataDate = fallbackResult.rows[0]?.first_data_date;
-    }
+    const firstDataDate = firstDateResult.rows[0]?.first_data_date;
 
     const firstDataDateYmd = firstDataDate
       ? (firstDataDate instanceof Date ? formatDateToYmd(firstDataDate) : String(firstDataDate).split('T')[0])
@@ -362,26 +359,30 @@ export const netWorthRepository = {
       return series && series.length ? series[series.length - 1].holdings : 0;
     };
 
-    const rows = [];
-    for (const a of accounts) {
-      if (!a.in_net_worth) continue;
-      const key = String(a.id);
-      const acctCur = (a.currency || 'EUR').toUpperCase();
-      const cashNative = Number(a.computed_balance) || 0;
-      const cash = roundToCents(
-        acctCur === target ? cashNative : toNumber(await convertToCurrency(cashNative, acctCur, target)),
-      );
-      const currentHoldings = lastHoldings(key);
-      rows.push({
-        accountId: a.id,
-        name: a.display_name || a.name,
-        currency: acctCur,
-        cash,
-        currentHoldings,
-        currentTotal: roundToCents(cash + currentHoldings),
-        holdingsSeries: holdingsSeriesByAcct.get(key) || [],
-      });
-    }
+    // Convert each account's cash sleeve concurrently rather than awaiting one
+    // FX lookup per account serially (SIMP-51). Order is preserved by map.
+    const rows = await Promise.all(
+      accounts
+        .filter((a) => a.in_net_worth)
+        .map(async (a) => {
+          const key = String(a.id);
+          const acctCur = (a.currency || 'EUR').toUpperCase();
+          const cashNative = Number(a.computed_balance) || 0;
+          const cash = roundToCents(
+            acctCur === target ? cashNative : toNumber(await convertToCurrency(cashNative, acctCur, target)),
+          );
+          const currentHoldings = lastHoldings(key);
+          return {
+            accountId: a.id,
+            name: a.display_name || a.name,
+            currency: acctCur,
+            cash,
+            currentHoldings,
+            currentTotal: roundToCents(cash + currentHoldings),
+            holdingsSeries: holdingsSeriesByAcct.get(key) || [],
+          };
+        }),
+    );
 
     // Unassigned holdings (legacy lots, no account) — holdings only, no cash sleeve.
     const unassigned = holdingsSeriesByAcct.get('unassigned');

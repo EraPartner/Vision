@@ -473,12 +473,25 @@ const DEFAULT_TAX_SECTIONS = [
 ];
 
 /**
- * @param {{ currency: string; period: Period; sections: string[]; excludedCategoryIds?: number[]; excludedRecipientIds?: number[] }} opts
+ * Shared report-body builder. Picks the requested sections (or the type's
+ * defaults), renders each with the type's renderer map, and joins them.
+ * Emits the shared "no sections selected" placeholder when nothing valid
+ * remains, so the (previously triplicated) placeholder lives in one place.
+ *
+ * @param {{
+ *   currency: string;
+ *   period: Period;
+ *   sections: string[];
+ *   renderers: Record<string, (data: any, ctx: { currency: string; period: Period }) => string>;
+ *   defaultSections: string[];
+ *   fetchData: () => Promise<any>;
+ *   separator?: string;
+ * }} opts
  * @returns {Promise<string>}
  */
-async function buildFinancialBody({ currency, period, sections, excludedCategoryIds = [], excludedRecipientIds = [] }) {
-  const requested = sections.length > 0 ? sections : DEFAULT_FINANCIAL_SECTIONS;
-  const valid = requested.filter(id => id in FINANCIAL_SECTION_RENDERERS);
+async function buildBody({ currency, period, sections, renderers, defaultSections, fetchData, separator = '\n' }) {
+  const requested = sections.length > 0 ? sections : defaultSections;
+  const valid = requested.filter(id => id in renderers);
 
   if (!valid.length) {
     return `
@@ -488,57 +501,58 @@ async function buildFinancialBody({ currency, period, sections, excludedCategory
       </div>`;
   }
 
-  const data = await fetchFinancialData(currency, { excludedCategoryIds, excludedRecipientIds });
+  const data = await fetchData();
 
   return valid
-    .map(id => FINANCIAL_SECTION_RENDERERS[id](data, { currency, period }))
-    .join('\n');
+    .map(id => renderers[id](data, { currency, period }))
+    .join(separator);
+}
+
+/**
+ * @param {{ currency: string; period: Period; sections: string[]; excludedCategoryIds?: number[]; excludedRecipientIds?: number[] }} opts
+ * @returns {Promise<string>}
+ */
+function buildFinancialBody({ currency, period, sections, excludedCategoryIds = [], excludedRecipientIds = [] }) {
+  return buildBody({
+    currency,
+    period,
+    sections,
+    renderers: FINANCIAL_SECTION_RENDERERS,
+    defaultSections: DEFAULT_FINANCIAL_SECTIONS,
+    fetchData: () => fetchFinancialData(currency, { excludedCategoryIds, excludedRecipientIds }),
+  });
 }
 
 /**
  * @param {{ currency: string; period: Period; sections: string[] }} opts
  * @returns {Promise<string>}
  */
-async function buildPortfolioBody({ currency, period, sections }) {
-  const requested = sections.length > 0 ? sections : DEFAULT_PORTFOLIO_SECTIONS;
-  const valid = requested.filter(id => id in PORTFOLIO_SECTION_RENDERERS);
-
-  if (!valid.length) {
-    return `
-      <div class="page placeholder-notice">
-        <strong>No sections selected</strong>
-        Select sections in the export dialog to include them in this report.
-      </div>`;
-  }
-
-  const data = await fetchPortfolioData(currency, period);
-
-  return valid
-    .map(id => PORTFOLIO_SECTION_RENDERERS[id](data, { currency, period }))
-    .join('\n<div class="page-break"></div>\n');
+function buildPortfolioBody({ currency, period, sections }) {
+  return buildBody({
+    currency,
+    period,
+    sections,
+    renderers: PORTFOLIO_SECTION_RENDERERS,
+    defaultSections: DEFAULT_PORTFOLIO_SECTIONS,
+    fetchData: () => fetchPortfolioData(currency, period),
+    separator: '\n<div class="page-break"></div>\n',
+  });
 }
 
 /**
  * @param {{ currency: string; period: Period; sections: string[]; taxProfile?: object; precomputedPIT?: object }} opts
  * @returns {Promise<string>}
  */
-async function buildTaxBody({ currency, period, sections, taxProfile, precomputedPIT }) {
-  const requested = sections.length > 0 ? sections : DEFAULT_TAX_SECTIONS;
-  const valid = requested.filter(id => id in TAX_SECTION_RENDERERS);
-
-  if (!valid.length) {
-    return `
-      <div class="page placeholder-notice">
-        <strong>No sections selected</strong>
-        Select sections in the export dialog to include them in this report.
-      </div>`;
-  }
-
-  const data = await fetchTaxData(currency, period, { taxProfile, precomputedPIT });
-
-  return valid
-    .map(id => TAX_SECTION_RENDERERS[id](data, { currency, period }))
-    .join('\n<div class="page-break"></div>\n');
+function buildTaxBody({ currency, period, sections, taxProfile, precomputedPIT }) {
+  return buildBody({
+    currency,
+    period,
+    sections,
+    renderers: TAX_SECTION_RENDERERS,
+    defaultSections: DEFAULT_TAX_SECTIONS,
+    fetchData: () => fetchTaxData(currency, period, { taxProfile, precomputedPIT }),
+    separator: '\n<div class="page-break"></div>\n',
+  });
 }
 
 /**

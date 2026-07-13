@@ -114,67 +114,48 @@ export function signClass(amount) {
 // ── SVG Charts ─────────────────────────────────────────────────────────────
 
 /**
+ * Standard "No data" placeholder SVG shared by the chart builders.
+ *
+ * @param {number} w
+ * @param {number} h
+ * @returns {string}
+ */
+function emptyChartSvg(w, h) {
+  return `<svg viewBox="0 0 ${w} ${h}" width="100%" xmlns="http://www.w3.org/2000/svg"><text x="${w / 2}" y="${h / 2}" text-anchor="middle" fill="hsl(var(--muted))" font-size="12">No data</text></svg>`;
+}
+
+/**
+ * Axis-label thinning step: render every Nth label to avoid crowding as the
+ * point/group count grows.
+ *
+ * @param {number} count
+ * @returns {number}
+ */
+function labelStep(count) {
+  return count > 12 ? 3 : count > 6 ? 2 : 1;
+}
+
+/**
  * Render a grouped-bar chart as an SVG string.
  * Each group has two bars: income (success color) and spending (expense color).
+ *
+ * This is a two-series special case of {@link svgGenericGroupedBarChart} — it
+ * delegates with the income/spending series config and the layout constants
+ * (top padding, bar-width cap, bar gap, legend offsets, income drawn without
+ * the 0.85 opacity) that reproduce the original income/spending chart exactly.
  *
  * @param {{ label: string; income: number; spending: number }[]} groups
  * @returns {string}  SVG element string
  */
 export function svgGroupedBarChart(groups) {
-  const W = 500, H = 160;
-  const PAD_L = 10, PAD_R = 10, PAD_T = 12, PAD_B = 28;
-  const chartW = W - PAD_L - PAD_R;
-  const chartH = H - PAD_T - PAD_B;
-
-  if (!groups.length) {
-    return `<svg viewBox="0 0 ${W} ${H}" width="100%" xmlns="http://www.w3.org/2000/svg"><text x="${W / 2}" y="${H / 2}" text-anchor="middle" fill="hsl(var(--muted))" font-size="12">No data</text></svg>`;
-  }
-
-  const maxVal = Math.max(...groups.map(g => Math.max(g.income, Math.abs(g.spending))), 1);
-  const numGroups = groups.length;
-  const groupW = chartW / numGroups;
-  const barW = Math.max(3, Math.min(18, (groupW - 6) / 2));
-  const barGap = 2;
-
-  const baseline = PAD_T + chartH;
-  let rects = `<line x1="${PAD_L}" y1="${baseline}" x2="${W - PAD_R}" y2="${baseline}" stroke="hsl(var(--border))" stroke-width="1"/>`;
-  let labels = '';
-
-  for (let i = 0; i < groups.length; i++) {
-    const g = groups[i];
-    const cx = PAD_L + i * groupW + groupW / 2;
-
-    const incomeH = Math.max(1, (g.income / maxVal) * chartH);
-    const spendH = Math.max(1, (Math.abs(g.spending) / maxVal) * chartH);
-
-    const incomeX = cx - barW - barGap / 2;
-    const spendX = cx + barGap / 2;
-
-    rects += `<rect x="${incomeX.toFixed(1)}" y="${(baseline - incomeH).toFixed(1)}" width="${barW.toFixed(1)}" height="${incomeH.toFixed(1)}" fill="hsl(var(--success))" rx="2"/>`;
-    rects += `<rect x="${spendX.toFixed(1)}" y="${(baseline - spendH).toFixed(1)}" width="${barW.toFixed(1)}" height="${spendH.toFixed(1)}" fill="hsl(var(--expense))" rx="2" opacity="0.85"/>`;
-
-    // Only render every Nth label to avoid crowding
-    const step = numGroups > 12 ? 3 : numGroups > 6 ? 2 : 1;
-    if (i % step === 0) {
-      labels += `<text x="${cx.toFixed(1)}" y="${(H - 6).toFixed(1)}" text-anchor="middle" font-size="8.5" fill="hsl(var(--muted))">${escapeHtml(g.label)}</text>`;
-    }
-  }
-
-  // Legend
-  const legendY = 6;
-  const legendItems = [
-    { color: 'hsl(var(--success))', label: 'Income' },
-    { color: 'hsl(var(--expense))', label: 'Expenses' },
-  ];
-  let legend = '';
-  let lx = PAD_L;
-  for (const li of legendItems) {
-    legend += `<rect x="${lx}" y="${legendY - 6}" width="8" height="8" rx="2" fill="${li.color}"/>`;
-    legend += `<text x="${lx + 10}" y="${legendY + 1}" font-size="8" fill="hsl(var(--muted))">${li.label}</text>`;
-    lx += 70;
-  }
-
-  return `<svg viewBox="0 0 ${W} ${H}" width="100%" xmlns="http://www.w3.org/2000/svg">${legend}${rects}${labels}</svg>`;
+  return svgGenericGroupedBarChart(
+    groups,
+    [
+      { key: 'income', color: 'hsl(var(--success))', label: 'Income', opacity: null },
+      { key: 'spending', color: 'hsl(var(--expense))', label: 'Expenses' },
+    ],
+    { padT: 12, barWMax: 18, barGap: 2, legendRectY: 0, legendTextY: 7 },
+  );
 }
 
 /**
@@ -221,18 +202,25 @@ export function svgHorizontalBars(items, { maxItems = 10 } = {}) {
  * Generic grouped bar chart — configurable series colours.
  * Each group has N bars defined by seriesDefs.
  *
+ * Layout constants have defaults matching the N-series (tax/portfolio) charts;
+ * the two-series income/spending chart ({@link svgGroupedBarChart}) overrides
+ * them via `opts`. A `seriesDefs` entry may set `opacity: null` to omit the
+ * bar's opacity attribute entirely (default is 0.85).
+ *
  * @param {{ label: string; [key: string]: number | string }[]} groups
- * @param {{ key: string; color: string; label: string }[]} seriesDefs
+ * @param {{ key: string; color: string; label: string; opacity?: number | null }[]} seriesDefs
+ * @param {{ padT?: number; barWMax?: number; barGap?: number; legendRectY?: number; legendTextY?: number }} [opts]
  * @returns {string}
  */
-export function svgGenericGroupedBarChart(groups, seriesDefs) {
+export function svgGenericGroupedBarChart(groups, seriesDefs, opts = {}) {
+  const { padT = 18, barWMax = 14, barGap = 1, legendRectY = 4, legendTextY = 11 } = opts;
   const W = 500, H = 160;
-  const PAD_L = 10, PAD_R = 10, PAD_T = 18, PAD_B = 28;
+  const PAD_L = 10, PAD_R = 10, PAD_T = padT, PAD_B = 28;
   const chartW = W - PAD_L - PAD_R;
   const chartH = H - PAD_T - PAD_B;
 
   if (!groups.length || !seriesDefs.length) {
-    return `<svg viewBox="0 0 ${W} ${H}" width="100%" xmlns="http://www.w3.org/2000/svg"><text x="${W / 2}" y="${H / 2}" text-anchor="middle" fill="hsl(var(--muted))" font-size="12">No data</text></svg>`;
+    return emptyChartSvg(W, H);
   }
 
   const numSeries = seriesDefs.length;
@@ -242,8 +230,7 @@ export function svgGenericGroupedBarChart(groups, seriesDefs) {
   );
   const numGroups = groups.length;
   const groupW = chartW / numGroups;
-  const barW = Math.max(3, Math.min(14, (groupW - 6) / numSeries));
-  const barGap = 1;
+  const barW = Math.max(3, Math.min(barWMax, (groupW - 6) / numSeries));
   const baseline = PAD_T + chartH;
 
   let rects = `<line x1="${PAD_L}" y1="${baseline}" x2="${W - PAD_R}" y2="${baseline}" stroke="hsl(var(--border))" stroke-width="1"/>`;
@@ -258,11 +245,13 @@ export function svgGenericGroupedBarChart(groups, seriesDefs) {
     for (let s = 0; s < seriesDefs.length; s++) {
       const val = Math.abs(Number(g[seriesDefs[s].key]) || 0);
       const bH = Math.max(1, (val / maxVal) * chartH);
-      rects += `<rect x="${startX.toFixed(1)}" y="${(baseline - bH).toFixed(1)}" width="${barW.toFixed(1)}" height="${bH.toFixed(1)}" fill="${seriesDefs[s].color}" rx="2" opacity="0.85"/>`;
+      const op = seriesDefs[s].opacity;
+      const opacityAttr = op === null ? '' : ` opacity="${op ?? 0.85}"`;
+      rects += `<rect x="${startX.toFixed(1)}" y="${(baseline - bH).toFixed(1)}" width="${barW.toFixed(1)}" height="${bH.toFixed(1)}" fill="${seriesDefs[s].color}" rx="2"${opacityAttr}/>`;
       startX += barW + barGap;
     }
 
-    const step = numGroups > 12 ? 3 : numGroups > 6 ? 2 : 1;
+    const step = labelStep(numGroups);
     if (i % step === 0) {
       labels += `<text x="${cx.toFixed(1)}" y="${(H - 6).toFixed(1)}" text-anchor="middle" font-size="8.5" fill="hsl(var(--muted))">${escapeHtml(g.label)}</text>`;
     }
@@ -271,8 +260,8 @@ export function svgGenericGroupedBarChart(groups, seriesDefs) {
   let legend = '';
   let lx = PAD_L;
   for (const s of seriesDefs) {
-    legend += `<rect x="${lx}" y="4" width="8" height="8" rx="2" fill="${s.color}"/>`;
-    legend += `<text x="${lx + 10}" y="11" font-size="8" fill="hsl(var(--muted))">${escapeHtml(s.label)}</text>`;
+    legend += `<rect x="${lx}" y="${legendRectY}" width="8" height="8" rx="2" fill="${s.color}"/>`;
+    legend += `<text x="${lx + 10}" y="${legendTextY}" font-size="8" fill="hsl(var(--muted))">${escapeHtml(s.label)}</text>`;
     lx += 70;
   }
 
@@ -297,7 +286,7 @@ export function svgLineChart(series, { labels = [], height = 160 } = {}) {
 
   const allValues = series.flatMap(s => s.values);
   if (!allValues.length || !labels.length) {
-    return `<svg viewBox="0 0 ${W} ${H}" width="100%" xmlns="http://www.w3.org/2000/svg"><text x="${W / 2}" y="${H / 2}" text-anchor="middle" fill="hsl(var(--muted))" font-size="12">No data</text></svg>`;
+    return emptyChartSvg(W, H);
   }
 
   const maxVal = Math.max(...allValues.map(Math.abs), 1);
@@ -323,7 +312,7 @@ export function svgLineChart(series, { labels = [], height = 160 } = {}) {
 
   // X labels
   let xLabels = '';
-  const step = n > 12 ? 3 : n > 6 ? 2 : 1;
+  const step = labelStep(n);
   for (let i = 0; i < n; i += step) {
     xLabels += `<text x="${xOf(i).toFixed(1)}" y="${(H - 6).toFixed(1)}" text-anchor="middle" font-size="8.5" fill="hsl(var(--muted))">${escapeHtml(labels[i])}</text>`;
   }

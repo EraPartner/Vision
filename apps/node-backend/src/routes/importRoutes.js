@@ -7,7 +7,7 @@ import { Router } from 'express';
 import { importRecipientsCSV, importCategoriesCSV } from '../services/dataImportService.js';
 import { logger } from '../config/logger.js';
 import { runImportPipeline, commitImport } from '../services/importPipeline/index.js';
-import { ValidationError, NotFoundError, ConflictError } from '../middleware/errorHandler.js';
+import { ValidationError, NotFoundError } from '../middleware/errorHandler.js';
 import { createSseWriter } from '../lib/sse.js';
 import { csvUpload, cleanup, csvUploadErrorTranslator } from '../lib/csvUpload.js';
 import { progressToPercent } from '../lib/importProgress.js';
@@ -20,9 +20,8 @@ import {
   overrideCategory,
   categoryExists,
 } from '../services/importBatchService.js';
-import customParserConfigRepository from '../services/customParserConfigService.js';
 import { refreshAggregations } from '../services/aggregationRefresh.js';
-import { parseParserId, normalizeParserName, PARSER_NAME_CONSTRAINT } from '../lib/parserConfigRoutes.js';
+import { registerParserRoutes } from '../lib/parserConfigRoutes.js';
 import { parsePagination } from '../lib/pagination.js';
 
 const router = Router();
@@ -34,6 +33,40 @@ function buildImportResult(result) {
     error_message: result.error_message || null,
     links: [],
   };
+}
+
+// Shared 202 "review required" response for the transaction CSV import endpoints.
+function respondReviewRequired(res, pipelineResult) {
+  res.status(202);
+  res.ok({
+    batch_id: pipelineResult.batchId,
+    requires_review: true,
+    match_source_counts: pipelineResult.matchSourceCounts,
+  });
+}
+
+// Shared completed-import result object for the transaction CSV import endpoints.
+function buildPipelineResult(pipelineResult) {
+  return {
+    total: pipelineResult.total,
+    imported: pipelineResult.imported,
+    duplicates: pipelineResult.duplicates,
+    errors: pipelineResult.errors,
+    batch_id: pipelineResult.batchId,
+    auto_linked_count: pipelineResult.autoLinkedCount || 0,
+  };
+}
+
+// Parse + validate the CSV separator/encoding options shared by the
+// recipients/categories import endpoints. Cleans up the upload on rejection.
+function parseCsvImportOptions(req) {
+  const separator = String(req.query.separator || req.body.separator || ',');
+  const encoding = String(req.query.encoding || req.body.encoding || 'utf-8');
+  if (separator.length !== 1) {
+    if (req.file) cleanup(req.file.path);
+    throw new ValidationError('separator must be a single character');
+  }
+  return { separator, encoding };
 }
 
 // POST /api/import/csv
@@ -57,24 +90,11 @@ router.post('/csv', csvUpload.single('file'), async (req, res) => {
     });
 
     if (pipelineResult.requiresReview) {
-      res.status(202);
-      res.ok({
-        batch_id: pipelineResult.batchId,
-        requires_review: true,
-        match_source_counts: pipelineResult.matchSourceCounts,
-      });
+      respondReviewRequired(res, pipelineResult);
       return;
     }
 
-    const result = {
-      total: pipelineResult.total,
-      imported: pipelineResult.imported,
-      duplicates: pipelineResult.duplicates,
-      errors: pipelineResult.errors,
-      batch_id: pipelineResult.batchId,
-      auto_linked_count: pipelineResult.autoLinkedCount || 0,
-    };
-
+    const result = buildPipelineResult(pipelineResult);
     logger.info('CSV import completed', { bankName, fileName: req.file.originalname, ...result });
     res.status(201);
     res.ok(buildImportResult(result));
@@ -144,23 +164,11 @@ router.post('/csv/custom', csvUpload.single('file'), async (req, res) => {
     });
 
     if (pipelineResult.requiresReview) {
-      res.status(202);
-      res.ok({
-        batch_id: pipelineResult.batchId,
-        requires_review: true,
-        match_source_counts: pipelineResult.matchSourceCounts,
-      });
+      respondReviewRequired(res, pipelineResult);
       return;
     }
 
-    const result = {
-      total: pipelineResult.total,
-      imported: pipelineResult.imported,
-      duplicates: pipelineResult.duplicates,
-      errors: pipelineResult.errors,
-      batch_id: pipelineResult.batchId,
-      auto_linked_count: pipelineResult.autoLinkedCount || 0,
-    };
+    const result = buildPipelineResult(pipelineResult);
     res.status(201);
     res.ok(buildImportResult(result));
   } finally {
@@ -195,52 +203,8 @@ function normalizeParserConfig(config) {
   };
 }
 
-// GET /api/import/parsers
-router.get('/parsers', async (req, res) => {
-  const configs = await customParserConfigRepository.getAll('transaction');
-  res.ok(configs);
-});
-
-// POST /api/import/parsers
-router.post('/parsers', async (req, res) => {
-  const name = normalizeParserName(req.body.name);
-  const config = normalizeParserConfig(req.body.config);
-  try {
-    const created = await customParserConfigRepository.create({ name, config, kind: 'transaction' });
-    res.status(201);
-    res.ok(created);
-  } catch (err) {
-    if (err.code === '23505' && err.constraint === PARSER_NAME_CONSTRAINT) {
-      throw new ConflictError(`A parser named "${name}" already exists`);
-    }
-    throw err;
-  }
-});
-
-// PATCH /api/import/parsers/:id
-router.patch('/parsers/:id', async (req, res) => {
-  const id = parseParserId(req);
-  const name = req.body.name !== undefined ? normalizeParserName(req.body.name) : undefined;
-  const config = req.body.config !== undefined ? normalizeParserConfig(req.body.config) : undefined;
-  try {
-    const updated = await customParserConfigRepository.update(id, { name, config });
-    if (!updated) throw new NotFoundError('Parser config not found');
-    res.ok(updated);
-  } catch (err) {
-    if (err.code === '23505' && err.constraint === PARSER_NAME_CONSTRAINT) {
-      throw new ConflictError(`A parser named "${name}" already exists`);
-    }
-    throw err;
-  }
-});
-
-// DELETE /api/import/parsers/:id
-router.delete('/parsers/:id', async (req, res) => {
-  const id = parseParserId(req);
-  const deleted = await customParserConfigRepository.delete(id);
-  if (!deleted) throw new NotFoundError('Parser config not found');
-  res.status(204).send();
-});
+// GET/POST/PATCH/DELETE /api/import/parsers[/:id] — shared with the portfolio router.
+registerParserRoutes(router, { kind: 'transaction', normalizeConfig: normalizeParserConfig });
 
 // POST /api/import/csv/stream — SSE, preserves raw event protocol
 router.post('/csv/stream', csvUpload.single('file'), async (req, res) => {
@@ -319,13 +283,7 @@ router.post('/recipients', csvUpload.single('file'), async (req, res) => {
     throw new ValidationError('No file uploaded. Send a CSV file as multipart form-data with field name "file".');
   }
 
-  const separator = String(req.query.separator || req.body.separator || ',');
-  const encoding = String(req.query.encoding || req.body.encoding || 'utf-8');
-
-  if (separator.length !== 1) {
-    cleanup(req.file.path);
-    throw new ValidationError('separator must be a single character');
-  }
+  const { separator, encoding } = parseCsvImportOptions(req);
 
   try {
     const result = await importRecipientsCSV(req.file.path, { separator, encoding });
@@ -343,13 +301,7 @@ router.post('/categories', csvUpload.single('file'), async (req, res) => {
     throw new ValidationError('No file uploaded. Send a CSV file as multipart form-data with field name "file".');
   }
 
-  const separator = String(req.query.separator || req.body.separator || ',');
-  const encoding = String(req.query.encoding || req.body.encoding || 'utf-8');
-
-  if (separator.length !== 1) {
-    cleanup(req.file.path);
-    throw new ValidationError('separator must be a single character');
-  }
+  const { separator, encoding } = parseCsvImportOptions(req);
 
   try {
     const result = await importCategoriesCSV(req.file.path, { separator, encoding });

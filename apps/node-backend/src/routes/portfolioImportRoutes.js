@@ -6,7 +6,7 @@
 
 import { Router } from 'express';
 import { logger } from '../config/logger.js';
-import { ValidationError, NotFoundError, ConflictError } from '../middleware/errorHandler.js';
+import { ValidationError, NotFoundError } from '../middleware/errorHandler.js';
 import { createSseWriter } from '../lib/sse.js';
 import { csvUpload, cleanup, csvUploadErrorTranslator } from '../lib/csvUpload.js';
 import { progressToPercent } from '../lib/importProgress.js';
@@ -25,9 +25,8 @@ import {
   setBatchAccount,
 } from '../services/portfolioImportBatchService.js';
 import accountService from '../services/accountService.js';
-import customParserConfigRepository from '../services/customParserConfigService.js';
 import { VALID_ASSET_CLASSES } from '../lib/assetClasses.js';
-import { parseParserId, normalizeParserName, PARSER_NAME_CONSTRAINT } from '../lib/parserConfigRoutes.js';
+import { registerParserRoutes } from '../lib/parserConfigRoutes.js';
 import { parsePagination } from '../lib/pagination.js';
 
 const router = Router();
@@ -269,46 +268,11 @@ function normalizePortfolioParserConfig(config) {
   return config;
 }
 
-router.get('/parsers', async (req, res) => {
-  res.ok(await customParserConfigRepository.getAll(PARSER_KIND));
-});
-
-router.post('/parsers', async (req, res) => {
-  const name = normalizeParserName(req.body.name);
-  const config = normalizePortfolioParserConfig(req.body.config);
-  try {
-    const created = await customParserConfigRepository.create({ name, config, kind: PARSER_KIND });
-    res.status(201);
-    res.ok(created);
-  } catch (err) {
-    if (err.code === '23505' && err.constraint === PARSER_NAME_CONSTRAINT) {
-      throw new ConflictError(`A portfolio parser named "${name}" already exists`);
-    }
-    throw err;
-  }
-});
-
-router.patch('/parsers/:id', async (req, res) => {
-  const id = parseParserId(req);
-  const name = req.body.name !== undefined ? normalizeParserName(req.body.name) : undefined;
-  const config = req.body.config !== undefined ? normalizePortfolioParserConfig(req.body.config) : undefined;
-  try {
-    const updated = await customParserConfigRepository.update(id, { name, config });
-    if (!updated) throw new NotFoundError('Parser config not found');
-    res.ok(updated);
-  } catch (err) {
-    if (err.code === '23505' && err.constraint === PARSER_NAME_CONSTRAINT) {
-      throw new ConflictError(`A portfolio parser named "${name}" already exists`);
-    }
-    throw err;
-  }
-});
-
-router.delete('/parsers/:id', async (req, res) => {
-  const id = parseParserId(req);
-  const deleted = await customParserConfigRepository.delete(id);
-  if (!deleted) throw new NotFoundError('Parser config not found');
-  res.status(204).send();
+// GET/POST/PATCH/DELETE /parsers[/:id] — shared with the transaction import router.
+registerParserRoutes(router, {
+  kind: PARSER_KIND,
+  normalizeConfig: normalizePortfolioParserConfig,
+  label: 'portfolio ',
 });
 
 // --- Batch history + rollback -------------------------------------------------
