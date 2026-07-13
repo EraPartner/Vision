@@ -185,9 +185,10 @@ function investmentPlaceholders(count) {
  * re-destructuring the same ~21 fields by hand.
  *
  * @param {Record<string, unknown>} body
- * @returns {Record<string, unknown>}
+ * @returns {any}
  */
 export function pickInvestmentCreateFields(body) {
+  /** @type {Record<string, unknown>} */
   const picked = {};
   for (const column of INVESTMENT_CREATE_COLUMNS) picked[column] = body?.[column];
   return picked;

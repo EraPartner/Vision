@@ -75,7 +75,7 @@ async function readJson(response) {
  * Map a fetch-layer error to a typed OllamaError (timeout / aborted / network),
  * shared by the request and chatStream paths (SIMP-38). An OllamaError already
  * in flight is passed through unchanged.
- * @param {unknown} err
+ * @param {any} err
  * @param {{ isTimeout: boolean, aborted: boolean, timeoutMessage: string, failurePrefix: string }} ctx
  * @returns {OllamaError}
  */

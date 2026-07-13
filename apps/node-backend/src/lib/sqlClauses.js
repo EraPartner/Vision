@@ -24,6 +24,11 @@ function isAllowed(allowed, key) {
   return allowed.includes(key);
 }
 
+/**
+ * @param {string} key
+ * @param {{ quote?: boolean, mapColumn?: (key: string) => string }} [options]
+ * @returns {string}
+ */
 function renderColumn(key, { quote = false, mapColumn } = {}) {
   const rawColumn = mapColumn ? mapColumn(key) : key;
   return quote ? `"${rawColumn}"` : rawColumn;
@@ -32,7 +37,7 @@ function renderColumn(key, { quote = false, mapColumn } = {}) {
 /**
  * Build a parameterized `SET` clause list from a field bag.
  *
- * @param {Record<string, unknown>} fields
+ * @param {object} fields
  * @param {object} [options]
  * @param {string[]|Set<string>} [options.allowed] - whitelist of writable keys
  * @param {number} [options.startIdx=1] - first placeholder number
@@ -58,7 +63,7 @@ export function buildSetClauses(fields, { allowed, startIdx = 1, quote = false, 
 /**
  * Build parameterized INSERT column/placeholder lists from a field bag.
  *
- * @param {Record<string, unknown>} fields
+ * @param {object} fields
  * @param {object} [options]
  * @param {string[]|Set<string>} [options.allowed] - whitelist of writable keys
  * @param {number} [options.startIdx=1] - first placeholder number
