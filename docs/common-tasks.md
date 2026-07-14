@@ -102,12 +102,12 @@ aliases: [common tasks, quick reference, i want to, task navigation, cheat sheet
 | Run all local checks (lint, typecheck, locales, endpoint matrix, tests) | `bun run check` | [[docs/reference/scripts\|Scripts Reference]] |
 | Run all tests | [[docs/reference/scripts\|Scripts Reference]] | `bun run test` |
 | Run E2E tests | [[docs/testing/testing#phase-b-e2e-testing-2026-04-30--complete\|E2E Testing]] | `bun run test:e2e` |
-| Run mutation tests | [[docs/testing/testing#phase-f6-mutation-testing-harness-2026-05-02--complete\|Mutation Testing]] | `bun run test:mutation` |
+| Run mutation tests | [[docs/testing/testing#phase-f6-mutation-testing-harness-2026-05-02--complete\|Mutation Testing]] | `bun run --filter 'vision-frontend' test:mutation` |
 | Write a unit test | [[docs/testing/testing\|Testing Documentation]] | [[docs/reference/code-patterns\|Code Patterns]] |
 | Write an integration test | [[docs/testing/frontend-component-integration\|Component-Integration Test Guide]] | [[docs/testing/test-inventory\|Test Inventory]] |
 | Write an E2E test | [[docs/testing/frontend/e2e\|E2E Test Guide]] | [[docs/testing/test-inventory#phase-f4--playwright-parity-expansion-2026-05-02\|Phase F4: Playwright Specs]] |
 | Check test coverage | `bun run test:coverage` | [[docs/reference/scripts\|Scripts Reference]] |
-| Update Playwright snapshots | `bun run test:e2e:update-snapshots` | [[docs/testing/testing#phase-c-accessibility--visual-regression-2026-04-30--complete\|Visual Regression]] |
+| Update Playwright snapshots | `bun run --filter 'vision-frontend' test:e2e:update-snapshots` | [[docs/testing/testing#phase-c-accessibility--visual-regression-2026-04-30--complete\|Visual Regression]] |
 
 ## Debugging Tasks
 
@@ -144,7 +144,7 @@ bun run check            # Run all local checks (lint, typecheck, locales, endpo
 bun run test             # Run all tests
 bun run test:watch       # Watch mode
 bun run test:e2e         # Run E2E tests (Playwright)
-bun run test:mutation    # Run mutation tests (Stryker)
+bun run --filter 'vision-frontend' test:mutation    # Run mutation tests (Stryker; frontend workspace only)
 
 # Building
 bun run build            # Production build

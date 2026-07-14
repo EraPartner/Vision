@@ -22,8 +22,10 @@ mv_bank_balances is intentionally NOT touched — account balances must reflect
 the real money movement of a transfer.
 
 Blast radius: trigger-function redefinition (no data rewrite) + drop/recreate of
-three derived MVs. Downgrade restores the prior function and likewise drops the
-MVs so the older code recreates the prior definitions.
+three derived MVs. Downgrade restores the prior function, re-seeds
+agg_recipient_totals from the base table (so totals that were skewed while
+transfers were being excluded are recomputed rather than left drifting), and
+likewise drops the MVs so the older code recreates the prior definitions.
 """
 
 from typing import Sequence, Union
@@ -115,6 +117,38 @@ def downgrade() -> None:
         END;
         $$ LANGUAGE plpgsql;
     """)
+
+    # Re-seed agg_recipient_totals from scratch so the running totals match the
+    # restored (transfer-counting) function. While 0045+ was live, every row that
+    # got marked as a transfer was *subtracted* from the aggregate (OLD counted,
+    # NEW did not). Merely restoring the old function above would leave that
+    # negative drift in place, and the first UPDATE of a former-transfer row under
+    # the restored function would subtract an OLD amount that was never counted —
+    # compounding the corruption. agg_recipient_totals is trigger-maintained only
+    # (no reseed path in the app), so a full recompute from the base table here is
+    # the only way to restore a consistent aggregate. This mirrors the backfill in
+    # 0035's upgrade and counts all active rows regardless of is_transfer, exactly
+    # as the restored function now does.
+    op.execute("TRUNCATE agg_recipient_totals;")
+    op.execute("""
+        INSERT INTO agg_recipient_totals (
+            recipient_id, currency, total_amount, transaction_count,
+            last_transaction_date, updated_at
+        )
+        SELECT
+            t.recipient_id,
+            t.currency,
+            SUM(t.amount),
+            COUNT(*),
+            MAX(t.date),
+            NOW()
+        FROM transactions t
+        WHERE t.is_active = true
+          AND t.recipient_id IS NOT NULL
+          AND t.currency IS NOT NULL
+        GROUP BY t.recipient_id, t.currency;
+    """)
+
     op.execute("DROP MATERIALIZED VIEW IF EXISTS mv_monthly_summary CASCADE;")
     op.execute("DROP MATERIALIZED VIEW IF EXISTS mv_category_totals CASCADE;")
     op.execute("DROP MATERIALIZED VIEW IF EXISTS mv_cashflow_daily CASCADE;")

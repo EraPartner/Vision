@@ -18,14 +18,23 @@ cleanup — handled below.
 Steps (each table):
   1. Normalise rows that BECOME valid after trim+upper (e.g. ' eur ' -> 'EUR').
      Idempotent: a no-op on already-clean data, so it is safe on fresh DBs.
-  2. VALIDATE the constraint.
+  2. VALIDATE the constraint — but tolerantly (see below).
 
 If a long-lived DB still holds un-normalisable values (e.g. 'EURO', '€', ''),
-VALIDATE will fail and abort this migration in its transaction (no partial
-state). Audit and fix those rows, then re-run:
+a bare VALIDATE would fail and abort the whole migration chain. Because
+migrations run fail-fast on app boot, that would strand an Electron end-user at
+the error page with psql-only recovery. To avoid bricking boot, the VALIDATE is
+wrapped in a savepoint that catches check_violation: on failure the constraint
+simply stays NOT VALID (new/updated rows are still shape-enforced by the 0046
+check) and a WARNING is logged with the cleanup recipe:
 
   SELECT id, currency FROM transactions WHERE currency !~ '^[A-Z]{3}$';
   SELECT id, currency FROM planned_transactions WHERE currency !~ '^[A-Z]{3}$';
+  -- fix the offending rows, then:
+  ALTER TABLE transactions VALIDATE CONSTRAINT chk_transactions_currency_iso;
+  ALTER TABLE planned_transactions VALIDATE CONSTRAINT chk_planned_transactions_currency_iso;
+
+On a clean DB VALIDATE succeeds and the constraint is validated exactly as before.
 
 Blast radius: at most an UPDATE of malformed rows plus one validating scan per
 table (SHARE UPDATE EXCLUSIVE lock — does not block reads or normal writes).
@@ -49,8 +58,9 @@ _TABLES = ("transactions", "planned_transactions")
 
 def upgrade() -> None:
     for table in _TABLES:
+        constraint = f"chk_{table}_currency_iso"
         # 1. Normalise only rows that become valid after trim+upper; leave
-        #    genuinely-malformed values untouched so VALIDATE surfaces them.
+        #    genuinely-malformed values untouched so the audit query surfaces them.
         op.execute(
             f"""
             UPDATE {table}
@@ -59,8 +69,26 @@ def upgrade() -> None:
                AND upper(trim(currency)) ~ '^[A-Z]{{3}}$'
             """
         )
-        # 2. Make the NOT VALID constraint retroactive.
-        op.execute(f"ALTER TABLE {table} VALIDATE CONSTRAINT chk_{table}_currency_iso")
+        # 2. Make the NOT VALID constraint retroactive — tolerantly. A bare
+        #    VALIDATE aborts the whole migration chain if a long-lived DB still
+        #    holds un-normalisable codes ('EURO', '€', ''); because migrations run
+        #    fail-fast on boot, that strands an Electron end-user at the error page
+        #    with psql-only recovery. Catch the check_violation instead: the
+        #    constraint stays NOT VALID (new/updated rows remain shape-enforced by
+        #    the 0046 check), boot proceeds, and the warning tells the operator how
+        #    to clean up and validate manually. On a clean DB VALIDATE succeeds and
+        #    the outcome is identical to before.
+        op.execute(
+            f"""
+            DO $$
+            BEGIN
+                ALTER TABLE {table} VALIDATE CONSTRAINT {constraint};
+            EXCEPTION WHEN check_violation THEN
+                RAISE WARNING 'Vision migration 0049: could not VALIDATE {constraint} because {table} still holds currency codes outside ^[A-Z]{{3}}$. The constraint remains NOT VALID; new and updated rows are still enforced. Audit with: SELECT id, currency FROM {table} WHERE currency !~ ''^[A-Z]{{3}}$''; fix those rows, then run: ALTER TABLE {table} VALIDATE CONSTRAINT {constraint};';
+            END;
+            $$;
+            """
+        )
 
 
 def downgrade() -> None:
