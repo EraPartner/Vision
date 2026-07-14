@@ -1360,15 +1360,23 @@ function dockerSocketGetJson(socketPath, urlPath, timeoutMs = 1500) {
 // wrong answer can only cost the spawn we hoped to save, never correctness
 // (a running container guarantees its image is present).
 async function isComposeAppRunning(projectName) {
-  const labels = ['com.docker.compose.service=app'];
-  if (projectName) labels.push(`com.docker.compose.project=${projectName}`);
-  const filters = encodeURIComponent(JSON.stringify({ label: labels, status: ['running'] }));
+  // The request itself is scoped only by the fixed compose service label — the
+  // project name (read from the compose file on disk) is deliberately NOT put
+  // into the outbound request; it only filters the returned list in memory, so
+  // no file-derived data reaches the network sink.
+  const filters = encodeURIComponent(JSON.stringify({
+    label: ['com.docker.compose.service=app'],
+    status: ['running'],
+  }));
   const urlPath = `/containers/json?filters=${filters}`;
   for (const socketPath of dockerSocketCandidates()) {
     try {
       await fs.promises.access(socketPath);
       const list = await dockerSocketGetJson(socketPath, urlPath);
-      if (Array.isArray(list) && list.length > 0) return true;
+      if (Array.isArray(list) && list.some((c) => !projectName
+        || (c && c.Labels && c.Labels['com.docker.compose.project'] === projectName))) {
+        return true;
+      }
     } catch { /* try next candidate */ }
   }
   return false;

@@ -36,7 +36,13 @@ function formatMessage(level, ...args) {
     extra = (typeof args[1] === 'object' && args[1] !== null) ? args[1] : {};
   }
   const extraStr = Object.keys(extra).length > 0 ? ` ${JSON.stringify(extra)}` : '';
-  return `${timestamp} [${level}] ${message}${extraStr}`;
+  // Strip CR/LF (and unicode line separators) from the free-text message so a
+  // value that reaches a log call can't forge extra log lines (log injection).
+  // `extra` is already newline-safe via JSON.stringify.
+  const safeMessage = typeof message === 'string'
+    ? message.replace(/[\r\n\u2028\u2029]+/g, ' ')
+    : message;
+  return `${timestamp} [${level}] ${safeMessage}${extraStr}`;
 }
 
 export const logger = {
