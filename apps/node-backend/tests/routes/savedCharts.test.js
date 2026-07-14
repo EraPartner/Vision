@@ -276,6 +276,14 @@ describe('Saved Charts Routes', () => {
       await expect(routeHandlers['delete:/:id'](req, res)).rejects.toBeInstanceOf(ValidationError);
     });
 
+    it('throws ValidationError for a negative chart id (was accepted as -5)', async () => {
+      const req = { params: { id: '-5' } };
+      const res = mockResponse();
+
+      await expect(routeHandlers['delete:/:id'](req, res)).rejects.toBeInstanceOf(ValidationError);
+      expect(savedChartsRepository.delete).not.toHaveBeenCalled();
+    });
+
     it('throws NotFoundError when delete misses', async () => {
       savedChartsRepository.delete.mockResolvedValue(false);
 

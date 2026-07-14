@@ -11,6 +11,7 @@ vi.mock('express', () => ({
 vi.mock('../../src/repositories/tagRepository.js', () => ({
   default: {
     getAll: vi.fn(),
+    getCount: vi.fn(),
     getBySlug: vi.fn(),
     findOrCreateBySlug: vi.fn(),
     update: vi.fn(),
@@ -32,28 +33,31 @@ describe('GET /api/tags', () => {
 
   it('returns active tags by default', async () => {
     tagRepository.getAll.mockResolvedValue([{ id: 1, slug: 'rome-2020', is_active: true }]);
+    tagRepository.getCount.mockResolvedValue(1);
     const req = { query: {} };
     const res = mockResponse();
     await routeHandlers['get:/'](req, res);
-    expect(tagRepository.getAll).toHaveBeenCalledWith({ active: true });
+    expect(tagRepository.getAll).toHaveBeenCalledWith(expect.objectContaining({ active: true }));
     expect(res.json.mock.calls[0][0].data.total).toBe(1);
     expect(res.json.mock.calls[0][0].data.items[0].slug).toBe('rome-2020');
   });
 
   it('passes active=false when ?active=false', async () => {
     tagRepository.getAll.mockResolvedValue([]);
+    tagRepository.getCount.mockResolvedValue(0);
     const req = { query: { active: 'false' } };
     const res = mockResponse();
     await routeHandlers['get:/'](req, res);
-    expect(tagRepository.getAll).toHaveBeenCalledWith({ active: false });
+    expect(tagRepository.getAll).toHaveBeenCalledWith(expect.objectContaining({ active: false }));
   });
 
   it('passes active=null when ?active=all', async () => {
     tagRepository.getAll.mockResolvedValue([]);
+    tagRepository.getCount.mockResolvedValue(0);
     const req = { query: { active: 'all' } };
     const res = mockResponse();
     await routeHandlers['get:/'](req, res);
-    expect(tagRepository.getAll).toHaveBeenCalledWith({ active: null });
+    expect(tagRepository.getAll).toHaveBeenCalledWith(expect.objectContaining({ active: null }));
   });
 });
 

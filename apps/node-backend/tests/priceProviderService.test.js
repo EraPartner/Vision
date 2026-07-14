@@ -45,12 +45,17 @@ import {
   __resetPriceCache,
 } from '../src/services/priceProviderService.js';
 import { query } from '../src/database/connection.js';
+import { clearHistoricalIndexCache } from '../src/services/currency/currencyConversionService.js';
 
 describe('Price Provider Service', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     vi.restoreAllMocks();
     __resetPriceCache();
+    // The historical-FX index is a process-level cache (perf: avoids reloading
+    // the full rate history per call); reset it between tests so a prior case's
+    // mocked rates don't leak into the next, exactly like __resetPriceCache.
+    clearHistoricalIndexCache();
     mockYahooQuote.mockReset();
     mockYahooChart.mockReset();
     query.mockReset();

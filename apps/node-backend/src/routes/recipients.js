@@ -196,14 +196,14 @@ router.post('/:id/patterns/preview', validateIdParam, async (req, res) => {
 
 router.patch('/:id/patterns/:patternId', validateIdParam, async (req, res) => {
   const patternId = parseInt(req.params.patternId, 10);
-  if (!Number.isFinite(patternId)) throw new ValidationError('Invalid patternId');
+  if (!Number.isInteger(patternId) || patternId <= 0) throw new ValidationError('Invalid patternId');
   await updatePattern(patternId, req.body);
   res.ok({ patternId });
 });
 
 router.delete('/:id/patterns/:patternId', validateIdParam, async (req, res) => {
   const patternId = parseInt(req.params.patternId, 10);
-  if (!Number.isFinite(patternId)) throw new ValidationError('Invalid patternId');
+  if (!Number.isInteger(patternId) || patternId <= 0) throw new ValidationError('Invalid patternId');
   await deletePattern(patternId);
   res.ok({ patternId });
 });

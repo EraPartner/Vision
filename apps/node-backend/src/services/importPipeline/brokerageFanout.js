@@ -36,9 +36,13 @@ export function planBrokerageFanout(accountId, rows = []) {
   const review = [];
 
   for (const row of rows) {
-    const { target, portfolioTxnType } = classifyBrokerageRow(row);
+    const { target, portfolioTxnType, direction } = classifyBrokerageRow(row);
     if (target === 'cash') {
-      cash.push({ row, dedupKey: cashDedupKey(accountId, row) });
+      // Carry the classifier's direction (+1 inflow / -1 outflow): the ledger
+      // sign must be re-derived from the kind, not trusted from the raw export
+      // (brokerageRouting.js contract). Without it commit inserts an unsigned
+      // amount and a withdrawal lands as a deposit.
+      cash.push({ row, direction, dedupKey: cashDedupKey(accountId, row) });
     } else if (target === 'portfolio') {
       if (row.investment_id == null) {
         review.push({ row, reason: 'unresolved instrument' });
@@ -93,14 +97,17 @@ export async function commitBrokerageFanout({ accountId, rows }) {
   const seen = new Set();
   let cash = 0; let trades = 0; let legs = 0; let duplicates = 0; let errors = 0;
 
-  for (const { row, dedupKey } of plan.cash) {
+  for (const { row, direction, dedupKey } of plan.cash) {
     if (seen.has(dedupKey) || await cashRowExists(accountId, row)) { duplicates++; continue; }
     seen.add(dedupKey);
     try {
+      // Re-derive the sign from the classified direction (default +1 for legacy
+      // plans that predate the direction field), not from the export's sign.
+      const signedAmount = (direction ?? 1) * Math.abs(Number(row.amount));
       await query(
         `INSERT INTO transactions (date, amount, currency, memo, account_id, is_active)
          VALUES ($1, $2, $3, $4, $5, true)`,
-        [row.date, Number(row.amount), row.currency || 'EUR', row.memo || null, accountId],
+        [row.date, signedAmount, row.currency || 'EUR', row.memo || null, accountId],
       );
       cash++;
     } catch {

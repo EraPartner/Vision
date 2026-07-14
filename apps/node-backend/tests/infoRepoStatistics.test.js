@@ -75,6 +75,26 @@ describe('statisticsRepository.getTransactionCount', () => {
     queryPrepared.mockResolvedValueOnce({ rows: [{ count: '5000' }] });
     expect(await statisticsRepository.getTransactionCount()).toBe(5000);
   });
+
+  it('runs the unconditional count when no accountId is given', async () => {
+    queryPrepared.mockResolvedValueOnce({ rows: [{ count: '42' }] });
+    expect(await statisticsRepository.getTransactionCount({})).toBe(42);
+    expect(queryPrepared).toHaveBeenCalledWith(
+      'info_tx_count',
+      'SELECT count(*) FROM transactions WHERE is_active = true',
+      [],
+    );
+  });
+
+  it('adds an account_id filter (separate prepared statement) when accountId is provided', async () => {
+    queryPrepared.mockResolvedValueOnce({ rows: [{ count: '7' }] });
+    expect(await statisticsRepository.getTransactionCount({ accountId: 3 })).toBe(7);
+    expect(queryPrepared).toHaveBeenCalledWith(
+      'info_tx_count_by_account',
+      expect.stringContaining('AND account_id = $1'),
+      [3],
+    );
+  });
 });
 
 describe('statisticsRepository.getCategoryPivot', () => {

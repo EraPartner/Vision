@@ -4079,6 +4079,13 @@ export interface operations {
                     "application/json": components["schemas"]["Envelope"];
                 };
             };
+            /** @description Missing/invalid balance, date, or currency (must be a 3-letter ISO code) */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
             /** @description Account not found */
             404: {
                 headers: {
@@ -6645,7 +6652,17 @@ export interface operations {
                     price_per_unit?: number;
                     fees?: number;
                     taxes?: number;
-                    note?: string;
+                    currency?: string;
+                    /** @description Explicit EUR conversion rate; null clears it */
+                    fx_rate_to_eur?: number | null;
+                    /** @description Owning account for the lot (ADR-091); null = unassigned */
+                    account_id?: number | null;
+                    /** @description Free-text note; null clears it */
+                    note?: string | null;
+                    is_recurring?: boolean;
+                    recurrence_interval?: components["schemas"]["RecurrenceInterval"];
+                    /** Format: date */
+                    recurrence_end_date?: string;
                 };
             };
         };

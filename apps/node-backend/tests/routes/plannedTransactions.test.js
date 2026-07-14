@@ -216,6 +216,18 @@ describe('Planned Transaction Routes', () => {
       expect(plannedTransactionRepository.create).not.toHaveBeenCalled();
     });
 
+    it('rejects is_recurring:true with no recurrence_pattern (would be perpetually due)', async () => {
+      const req = {
+        body: {
+          planned_date: '2026-03-15', bank_account: 'Chase', amount: 50,
+          is_recurring: true,
+        },
+      };
+      const res = mockResponse();
+      await expect(routeHandlers['post:/'](req, res)).rejects.toBeInstanceOf(ValidationError);
+      expect(plannedTransactionRepository.create).not.toHaveBeenCalled();
+    });
+
     it('accepts an "every N days" recurrence_pattern', async () => {
       plannedTransactionRepository.create.mockResolvedValue({
         id: 9, planned_date: '2026-03-15', amount: '50.00', bank_account: 'Chase',

@@ -199,11 +199,13 @@ router.post('/', async (req, res) => {
     data.max_occurrences = n;
   }
 
-  // Reject patterns calculateNextDate can't advance (e.g. "fortnightly"): they
-  // store fine but on /execute leave the row stuck as perpetually-due. Loans
-  // set recurrence_pattern='monthly' above, so this never trips loan creation.
-  if (data.is_recurring && data.recurrence_pattern && !isValidPattern(data.recurrence_pattern)) {
-    throw new ValidationError(`Invalid recurrence_pattern: ${data.recurrence_pattern}`);
+  // A recurring planned tx needs a recurrence_pattern calculateNextDate can
+  // advance. An absent pattern (is_recurring:true with none) or one it can't
+  // advance (e.g. "fortnightly") stores fine but on /execute leaves the row
+  // stuck as perpetually-due. Loans set recurrence_pattern='monthly' above, so
+  // this never trips loan creation.
+  if (data.is_recurring && !isValidPattern(data.recurrence_pattern)) {
+    throw new ValidationError(`Invalid or missing recurrence_pattern: ${data.recurrence_pattern}`);
   }
 
   const created = await plannedTransactionRepository.create(data);

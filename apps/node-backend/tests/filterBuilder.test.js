@@ -78,17 +78,28 @@ describe('buildTransactionWhere', () => {
     expect(nextParamIdx).toBe(4);
   });
 
-  it('categoryId uses the COALESCE chain over txn / recipient / primary defaults', () => {
-    const { sql, params } = buildTransactionWhere({ categoryId: 9 });
-    expect(sql).toContain(
-      'COALESCE(t.category_id, r.default_category_id, pr.default_category_id) = $1',
-    );
+  it('categoryId expands the effective-category chain into an indexable disjunction', () => {
+    const { sql, params, nextParamIdx } = buildTransactionWhere({ categoryId: 9 });
+    // Effective category = own → recipient default → primary default, expanded
+    // to semi-joins (replaces the non-indexable COALESCE(...) = $ wrapper).
+    expect(sql).toContain('t.category_id = $1');
+    expect(sql).toContain('t.recipient_id IN (SELECT id FROM recipients WHERE default_category_id = $1)');
+    expect(sql).toContain('pr2.default_category_id = $1');
+    expect(sql).toContain('r2.default_category_id IS NULL');
+    // COALESCE precedence preserved: recipient/primary fallbacks only apply when
+    // the txn's own category is NULL.
+    expect(sql).toContain('t.category_id IS NULL AND t.recipient_id IN');
+    expect(sql).not.toContain('COALESCE(t.category_id');
     expect(params).toEqual([9]);
+    // Single param slot reused across all three leaves — param count unchanged.
+    expect(nextParamIdx).toBe(2);
   });
 
-  it('recipientId matches both direct and primary-recipient children', () => {
+  it('recipientId matches both direct and primary-recipient children via a semi-join', () => {
     const { sql, params } = buildTransactionWhere({ recipientId: 5 });
-    expect(sql).toContain('(t.recipient_id = $1 OR r.primary_recipient_id = $1)');
+    // Semi-join (indexable on t.recipient_id) equivalent to the old
+    // (t.recipient_id = $ OR r.primary_recipient_id = $).
+    expect(sql).toContain('t.recipient_id IN (SELECT id FROM recipients WHERE id = $1 OR primary_recipient_id = $1)');
     expect(params).toEqual([5]);
   });
 
@@ -103,7 +114,7 @@ describe('buildTransactionWhere', () => {
 
   it('recipientGroupId and recipientId can coexist and use sequential $-indices', () => {
     const { sql, params, nextParamIdx } = buildTransactionWhere({ recipientId: 3, recipientGroupId: 7 });
-    expect(sql).toContain('t.recipient_id = $1 OR r.primary_recipient_id = $1');
+    expect(sql).toContain('t.recipient_id IN (SELECT id FROM recipients WHERE id = $1 OR primary_recipient_id = $1)');
     expect(sql).toContain('t.recipient_id = $2');
     expect(params).toEqual([3, 7]);
     expect(nextParamIdx).toBe(3);
@@ -381,29 +392,34 @@ describe('buildTransactionWhere — transactionType', () => {
 });
 
 describe('buildTransactionWhere — categoryIds (plural IN clause)', () => {
-  it('builds correct IN clause', () => {
+  it('builds effective-category disjunction with the id list in every leaf', () => {
     const { sql, params, nextParamIdx } = buildTransactionWhere({ categoryIds: [2, 5, 9], active: false });
-    expect(sql).toContain('COALESCE(t.category_id, r.default_category_id, pr.default_category_id) IN ($1, $2, $3)');
+    // Same placeholder slots ($1,$2,$3) reused across own / recipient-default /
+    // primary-default leaves — params allocated once, count unchanged.
+    expect(sql).toContain('t.category_id IN ($1, $2, $3)');
+    expect(sql).toContain('WHERE default_category_id IN ($1, $2, $3)');
+    expect(sql).toContain('pr2.default_category_id IN ($1, $2, $3)');
+    expect(sql).not.toContain('COALESCE(t.category_id');
     expect(params).toEqual([2, 5, 9]);
     expect(nextParamIdx).toBe(4);
   });
 
   it('drops invalid ids silently and skips clause when nothing remains', () => {
     const { sql, params } = buildTransactionWhere({ categoryIds: [0, -1, null, 1.5], active: false });
-    expect(sql).not.toContain('IN (');
+    expect(sql).not.toContain('t.category_id IN');
     expect(params).toHaveLength(0);
   });
 
   it('categoryId (singular) takes precedence over categoryIds', () => {
     const { sql, params } = buildTransactionWhere({ categoryId: 3, categoryIds: [1, 2], active: false });
-    expect(sql).toContain('= $1');
-    expect(sql).not.toContain('IN (');
+    expect(sql).toContain('t.category_id = $1');
+    expect(sql).not.toContain('t.category_id IN (');
     expect(params).toEqual([3]);
   });
 
   it('respects startParamIdx offset', () => {
     const { sql, params, nextParamIdx } = buildTransactionWhere({ categoryIds: [4, 7], active: false, startParamIdx: 3 });
-    expect(sql).toContain('IN ($3, $4)');
+    expect(sql).toContain('t.category_id IN ($3, $4)');
     expect(params).toEqual([4, 7]);
     expect(nextParamIdx).toBe(5);
   });

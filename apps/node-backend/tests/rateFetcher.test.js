@@ -15,6 +15,8 @@ import {
   fetchFromEcb,
   fetchFromErApi,
   fetchHistoricalFromEcb90d,
+  fetchHistoricalFromEcbFull,
+  HISTORICAL_FULL_CACHE_IDLE_MS,
   clearHistoricalCache,
   loadFromDatabase,
   saveToDatabase,
@@ -34,6 +36,7 @@ beforeEach(() => {
 
 afterEach(() => {
   vi.unstubAllGlobals();
+  vi.useRealTimers();
 });
 
 describe('normalizeDateInput', () => {
@@ -339,5 +342,24 @@ describe('getRateToEurForDate', () => {
 
     const r = await getRateToEurForDate('USD', '2025-04-01');
     expect(r).toBeCloseTo(0.95, 4);
+  });
+});
+
+describe('fetchHistoricalFromEcbFull idle eviction', () => {
+  it('serves the full-history cache within the idle window, then evicts and refetches', async () => {
+    vi.useFakeTimers();
+    const xml = `<Cube time='2025-01-02'><Cube currency='USD' rate='1.05'/></Cube>`;
+    const fetchMock = vi.fn().mockResolvedValue({ ok: true, text: () => Promise.resolve(xml) });
+    vi.stubGlobal('fetch', fetchMock);
+
+    await fetchHistoricalFromEcbFull(); // cold: fetch + cache + arm eviction timer
+    await fetchHistoricalFromEcbFull(); // warm: served from cache, no new fetch
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+
+    // Idle past the eviction window → cache is nulled by the unref'd timer.
+    vi.advanceTimersByTime(HISTORICAL_FULL_CACHE_IDLE_MS + 1);
+
+    await fetchHistoricalFromEcbFull(); // cache gone → fetches again
+    expect(fetchMock).toHaveBeenCalledTimes(2);
   });
 });

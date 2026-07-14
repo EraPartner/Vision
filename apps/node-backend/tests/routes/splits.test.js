@@ -156,6 +156,23 @@ describe('Splits Routes', () => {
       await expect(routeHandlers['post:/batch'](req, res)).rejects.toBeInstanceOf(ValidationError);
     });
 
+    it('rejects a non-empty batch whose rows are all invalid with 400, not a 201 empty envelope', async () => {
+      const req = {
+        body: {
+          transaction_id: 1,
+          // Both rows drop out of normalization (missing recipient_id / amount).
+          splits: [
+            { amount: 10 },
+            { recipient_id: 3 },
+          ],
+        },
+        get: () => null,
+      };
+      const res = mockResponse();
+      await expect(routeHandlers['post:/batch'](req, res)).rejects.toBeInstanceOf(ValidationError);
+      expect(splitRepository.createSplitsBatchAtomic).not.toHaveBeenCalled();
+    });
+
     it('creates batch with normalized splits', async () => {
       splitRepository.createSplitsBatchAtomic.mockResolvedValue([{ id: 1 }]);
       splitRepository.writeAudit.mockResolvedValue();

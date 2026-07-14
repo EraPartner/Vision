@@ -3,6 +3,11 @@ name: CodeQL
 on:
   push:
     branches: [main]
+    # NOTE: if CodeQL is a required check, a diff matching every pattern here
+    # skips the workflow and the required check can stay pending, blocking
+    # merge. Keep the markdown ignore ROOT-ONLY ("*.md", not "**/*.md") so
+    # nested-doc-only PRs don't strand the check. The weekly schedule below
+    # still guarantees a full scan regardless.
     paths-ignore:
       - "docs/**"
       - "*.md"
@@ -13,6 +18,10 @@ on:
       - "*.md"
   schedule:
     - cron: "0 3 * * 1"  # weekly, Monday 03:00 UTC — full scan even without code changes
+
+concurrency:
+  group: codeql-${{ github.ref }}
+  cancel-in-progress: true
 
 # Deny all permissions by default; each job opts in to only what it needs.
 permissions: {}

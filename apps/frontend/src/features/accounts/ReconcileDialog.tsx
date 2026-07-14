@@ -27,6 +27,7 @@ import { apiClient } from '@/lib/api';
 import type { ReconcileMode } from '@/lib/api/accounts';
 import { useCurrencyFormatter } from '@/hooks/useCurrencyFormatter';
 import { useLanguage } from '@/contexts/LanguageContext';
+import { invalidateTransactionLists } from '@/hooks/useTransactions';
 import { toast } from 'sonner';
 import type { Account } from '@/types/api';
 
@@ -50,7 +51,9 @@ export function ReconcileDialog({ account, open, onOpenChange }: {
       queryClient.invalidateQueries({ queryKey: ['accounts'] });
       queryClient.invalidateQueries({ queryKey: ['net-worth'] });
       queryClient.invalidateQueries({ queryKey: ['net-worth-by-account'] });
-      queryClient.invalidateQueries({ queryKey: ['transactions'] });
+      // The 'adjustment' mode stamps a real ledger row; the lists live under
+      // ['transactions-virtual', …] (+ derived widgets), so invalidate them all.
+      invalidateTransactionLists(queryClient);
       toast.success(t(mode === 'accept' ? 'accounts.reconcile.acceptSaved' : 'accounts.reconcile.adjustSaved'));
       onOpenChange(false);
     },

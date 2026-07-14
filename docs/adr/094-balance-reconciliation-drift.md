@@ -142,7 +142,7 @@ server-side:
 | `balance` | the stated opening balance (stamped by the server, the one non-import writer) |
 | `date` | user-chosen; expected to precede the account's activity (warn when it doesn't — by anchor+delta semantics a *later* stamped row always wins, so a mid-history anchor is inert against newer import stamps) |
 | `is_transfer` / `transfer_source` | `true` / `'opening'` — a new CHECK value following ADR-090's `'trade'` precedent, so the row is excluded from spending aggregations and from transfer reconciliation |
-| `memo` | "Opening balance" (i18n'd) |
+| `memo` | `'OPENING BALANCE'` — a fixed English server-side constant (`OPENING_MEMO`), stamped by the service, not i18n'd |
 
 One anchor per `(account, currency)`; invoking the action again **updates** the existing row
 rather than adding a second. The generic `POST /api/transactions` / `PATCH` surface remains

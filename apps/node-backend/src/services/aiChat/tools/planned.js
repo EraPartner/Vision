@@ -8,7 +8,7 @@ import { plannedTransactionRepository } from '../../../repositories/plannedTrans
 import { infoRepository } from '../../../repositories/infoRepository.js';
 import settings from '../../../config/config.js';
 import { toDecimal, roundToCents } from '../../../lib/money.js';
-import { calculateNextDate } from '../../calculations/recurrence.js';
+import { expandOccurrences } from '../../calculations/recurrence.js';
 import { toYmd } from '../../../utils/portfolioMath.js';
 import { todayAppDateString, addDaysYmd } from '../../../lib/timezone.js';
 import {
@@ -302,28 +302,24 @@ export const getProjectedBalance = {
     });
 
     // Expand recurring transactions: the DB row holds only the next stored
-    // occurrence. Generate all subsequent firings within the horizon window.
+    // occurrence, already added once in the map above. Generate the subsequent
+    // firings within the horizon via the shared app-tz-correct expander (the
+    // first element is the base occurrence, so skip it). This replaces the old
+    // UTC-slice loop, which shifted occurrence days east of UTC.
     for (const row of items) {
       if (!row.is_recurring || !row.recurrence_pattern) continue;
-      const baseIso = toIsoDate(row.planned_date);
-      if (!baseIso) continue;
-      let curDate = new Date(`${baseIso}T00:00:00.000Z`);
-      for (let guard = 0; guard < 500; guard++) {
-        const nextDate = calculateNextDate(curDate, row.recurrence_pattern);
-        if (!nextDate) break;
-        const nextStr = nextDate.toISOString().slice(0, 10);
-        if (nextStr > endStr) break; // ISO YYYY-MM-DD lexicographic order equals chronological order
+      const occurrences = expandOccurrences(row, endStr);
+      for (const ymd of occurrences.slice(1)) {
         const amount = toDecimal(row.amount ?? 0);
         plannedNet = plannedNet.plus(amount);
         plannedRows.push({
-          date: nextStr,
+          date: ymd,
           amount: roundToCents(amount).toNumber(),
           recipient: row.recipient_name || null,
           category: row.category_name || null,
           memo: row.memo || '',
           isRecurring: true,
         });
-        curDate = nextDate;
       }
     }
 

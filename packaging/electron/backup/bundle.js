@@ -129,8 +129,14 @@ async function createBundle({ destDir, deviceId, schemaHead, appVersion, dbSqlPa
     encrypted: false,
   };
 
+  // Write to a `.partial` sidecar and rename to the canonical name only after
+  // the archive finalizes cleanly. An interrupted backup (e.g. a second ⌘Q
+  // during quit-backup) then leaves a truncated `*.partial` — which retention
+  // cleanup deletes — never a truncated file at the final, restorable name.
+  const partialPath = `${bundlePath}.partial`;
+
   await new Promise((resolve, reject) => {
-    const output = fs.createWriteStream(bundlePath);
+    const output = fs.createWriteStream(partialPath);
     const archive = archiver('zip', { zlib: { level: 6 } });
 
     let settled = false;
@@ -139,7 +145,7 @@ async function createBundle({ destDir, deviceId, schemaHead, appVersion, dbSqlPa
       settled = true;
       archive.abort();
       output.destroy();
-      fs.unlink(bundlePath, () => {});
+      fs.unlink(partialPath, () => {});
       reject(err);
     };
 
@@ -148,7 +154,16 @@ async function createBundle({ destDir, deviceId, schemaHead, appVersion, dbSqlPa
     output.on('close', () => {
       if (settled) return;
       settled = true;
-      resolve();
+      // Promote the completed partial to its canonical name. Only a fully
+      // finalized archive reaches here (archiver emits 'error' → fail otherwise).
+      fs.rename(partialPath, bundlePath, (err) => {
+        if (err) {
+          fs.unlink(partialPath, () => {});
+          reject(err);
+          return;
+        }
+        resolve();
+      });
     });
 
     archive.pipe(output);

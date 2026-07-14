@@ -6,8 +6,8 @@
  */
 
 import { query } from '../../database/connection.js';
-import { convertWithRates, loadCurrentRates } from '../currency/currencyConversionService.js';
-import { buildHistoricalRateIndex, findRateOnOrBeforeInIndex } from '../currency/rateFetcher.js';
+import { convertWithRates, loadCurrentRates, getHistoricalRateIndex } from '../currency/currencyConversionService.js';
+import { findRateOnOrBeforeInIndex } from '../currency/rateFetcher.js';
 import { getTaxTable } from './belgianTaxTables.js';
 import { todayAppDateString, firstOfMonthYmd } from '../../lib/timezone.js';
 import { logger } from '../../config/logger.js';
@@ -143,16 +143,11 @@ async function fetchTaxTransactions(targetCurrency, startDate, endDate) {
     toCur,
   ])].filter((c) => c && c !== 'EUR');
 
+  // Shared process-level index cache (see getHistoricalRateIndex) avoids
+  // reloading the full exchange_rates history and rebuilding the index per call.
   let historicalIndex = new Map();
   if (relevantCurrencies.length > 0) {
-    const ratesResult = await query(
-      `SELECT currency_code, rate_date, rate_to_eur
-       FROM exchange_rates
-       WHERE currency_code = ANY($1::text[])
-       ORDER BY currency_code ASC, rate_date ASC`,
-      [relevantCurrencies]
-    );
-    historicalIndex = buildHistoricalRateIndex(ratesResult.rows || []);
+    historicalIndex = await getHistoricalRateIndex(relevantCurrencies);
   }
 
   // Rate-to-EUR for a currency on a given date: the stored historical rate on or

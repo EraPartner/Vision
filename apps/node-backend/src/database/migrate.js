@@ -202,6 +202,23 @@ export async function stampBaselineIfLegacy() {
 }
 
 /**
+ * Best-effort ANALYZE of the tables a migration most likely rewrote or
+ * backfilled in full, so the planner has fresh row/histogram stats for the
+ * first queries after an upgrade instead of stale (or empty) ones. Runs only
+ * on a real (non-cached) upgrade. Failures are logged and swallowed — stale
+ * statistics degrade plans but must never fail application boot.
+ */
+async function analyzeAfterMigrations() {
+  for (const table of ['transactions', 'asset_price_history']) {
+    try {
+      await query(`ANALYZE ${table}`)
+    } catch (err) {
+      logger.warn({ err: err.message, table }, 'post-migration ANALYZE failed; non-fatal')
+    }
+  }
+}
+
+/**
  * Run alembic upgrade head. Fail-fast on non-zero exit.
  * Logs stdout/stderr streamed from alembic.
  *
@@ -248,6 +265,13 @@ export async function runMigrations(options = {}) {
     if (target === 'head') {
       await writeHeadCache()
     }
+
+    // Freshen planner statistics on the two tables that migrations most often
+    // rewrite/backfill wholesale (transactions, asset_price_history). This only
+    // runs when alembic actually executed — the warm-boot path short-circuits
+    // via isAtHeadCached() above and never reaches here — so it is not paid on
+    // every boot. Best-effort: bad stats are a perf issue, never a boot blocker.
+    await analyzeAfterMigrations()
   } catch (error) {
     logger.error(
       {

@@ -74,6 +74,19 @@ export function validateId(value, fieldName = 'id') {
 }
 
 /**
+ * Throwing variant of validateId for optional query params: returns null when
+ * the value is absent/empty, the parsed integer when valid, and raises
+ * ValidationError on malformed input — so `?account_id=abc` becomes a 400
+ * instead of a `NaN` param that Postgres rejects (22P02) as a 500.
+ */
+export function assertOptionalId(value, fieldName = 'id') {
+  if (value == null || value === '') return null;
+  const result = validateId(value, fieldName);
+  if (!result.valid) throw new ValidationError(result.error);
+  return result.value;
+}
+
+/**
  * Validate and sanitize a string input.
  */
 export function sanitizeString(value, maxLength = 500) {

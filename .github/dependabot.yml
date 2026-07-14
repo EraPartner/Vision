@@ -46,3 +46,22 @@ updates:
     groups:
       docker-deps:
         patterns: ["*"]
+
+  # Base image for the dev container (debian:bookworm-slim).
+  - package-ecosystem: "docker"
+    directory: "/.devcontainer"
+    schedule:
+      interval: "weekly"
+    groups:
+      devcontainer-deps:
+        patterns: ["*"]
+
+  # Packaged-app embedded compose: postgres + the GHCR app image.
+  # (resources-demo uses only local pull_policy:never images, so nothing to track.)
+  - package-ecosystem: "docker"
+    directory: "/packaging/electron/resources"
+    schedule:
+      interval: "weekly"
+    groups:
+      packaged-compose-deps:
+        patterns: ["*"]

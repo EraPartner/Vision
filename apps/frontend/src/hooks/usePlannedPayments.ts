@@ -31,8 +31,11 @@ export interface PlannedPayment {
   loan_first_payment_date?: string;
   loan_schedule?: PlannedLoanScheduleEntry[];
   custom_interval_days?: number;
-  end_date?: string;
-  max_occurrences?: number;
+  // `null` is an explicit "clear the bound" signal from the editor; `undefined`
+  // means "leave unchanged". Both must be representable so a cleared end date /
+  // max count reaches mapToUpdateAPI as null instead of being dropped.
+  end_date?: string | null;
+  max_occurrences?: number | null;
   recipient?: string;
   recipient_id?: number;
   category?: string;
@@ -152,8 +155,8 @@ function mapToCreateAPI(payment: Omit<PlannedPayment, "id" | "created_at">): Pla
     recurrence_pattern,
     // Recurrence bounds — these were dropped here, so "ends Dec 2026 / max 12"
     // silently recurred forever (and the editor showed the loss as endless).
-    recurrence_end_date: payment.end_date,
-    max_occurrences: payment.max_occurrences,
+    recurrence_end_date: payment.end_date ?? undefined,
+    max_occurrences: payment.max_occurrences ?? undefined,
     is_loan: !!payment.is_loan,
     loan_type: payment.loan_type,
     loan_principal: payment.loan_principal,

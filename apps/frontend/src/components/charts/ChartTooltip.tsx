@@ -197,6 +197,22 @@ export function ChartTooltip({
         };
     }, [open, applyPosition]);
 
+    // Mid-hover layout shifts (an async widget above expands, an accordion
+    // reflows) can move the anchor parent without firing scroll/resize, leaving
+    // the cached rect stale. Observe the parent so those moves drop the cache
+    // and reposition from a fresh rect.
+    useEffect(() => {
+        if (!open) return;
+        const anchorParent = anchorRef.current?.parentElement;
+        if (!anchorParent) return;
+        const ro = new ResizeObserver(() => {
+            parentRectRef.current = null;
+            applyPosition();
+        });
+        ro.observe(anchorParent);
+        return () => ro.disconnect();
+    }, [open, applyPosition]);
+
     const tooltipNode = (
         <div ref={setPositionerEl} style={POSITIONER_STYLE}>
             <AnimatePresence>

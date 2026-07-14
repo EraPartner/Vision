@@ -49,7 +49,13 @@ export function AddTransactionDialog() {
 
     const handleSubmit = (e: React.FormEvent) => {
         e.preventDefault();
-        if (!form.transaction_date || !form.bank_account.trim() || !form.recipient_id || !form.amount) return;
+        if (!form.transaction_date || !form.recipient_id || !form.amount) return;
+        // The bank-account field became a combobox, losing the native `required`
+        // message — surface an explicit error instead of a silent return.
+        if (!form.bank_account.trim()) {
+            toast.error(t('addTxn.bankAccount'), { description: t('portfolio.move.selectAccount') });
+            return;
+        }
 
         const amountValue = parseLocaleNumber(form.amount);
         if (!Number.isFinite(amountValue)) {

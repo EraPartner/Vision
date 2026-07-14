@@ -11,7 +11,7 @@ vi.mock('../src/services/currency/currencyConversionService.js', async (importOr
 });
 
 import { query } from '../src/database/connection.js';
-import { loadCurrentRates } from '../src/services/currency/currencyConversionService.js';
+import { loadCurrentRates, clearHistoricalIndexCache } from '../src/services/currency/currencyConversionService.js';
 import { fetchTaxData } from '../src/services/reports/dataFetcherTax.js';
 
 const dividendRow = (over = {}) => ({
@@ -34,6 +34,9 @@ const dividendRow = (over = {}) => ({
 describe('fetchTaxData — Belgian tax FX uses transaction-date rates (ADR-085)', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    // The historical-rate index is cached at process level; clear it so each case
+    // builds from its own mocked exchange_rates rows.
+    clearHistoricalIndexCache();
     // Today's USD rate is deliberately different from the historical one so the test
     // can tell which rate was applied.
     loadCurrentRates.mockResolvedValue({ EUR: 1, USD: 0.8 });

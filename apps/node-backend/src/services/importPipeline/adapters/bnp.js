@@ -20,10 +20,9 @@
  *  12  Reden van weigering     rejection reason
  */
 
-import fs from 'fs';
 import { cleanRecipientName, normalizeToUppercase } from '../../textNormalization.js';
 import { logger } from '../../../config/logger.js';
-import { parseDayMonthYear, parseAmountField, buildOptionalComment, splitCsvLines, splitDelimitedRecord, canonicalIban } from './_shared.js';
+import { parseDayMonthYear, parseAmountField, buildOptionalComment, splitCsvLines, splitDelimitedRecord, canonicalIban, readTextWithEncodingFallback } from './_shared.js';
 
 const NAME = 'bnp';
 const BANK_LABEL = 'BNP Paribas Fortis';
@@ -108,7 +107,7 @@ export function detect(csvSample) {
 }
 
 export async function parse(filePath) {
-  const content = await fs.promises.readFile(filePath, 'utf-8');
+  const content = await readTextWithEncodingFallback(filePath);
   const lines = splitCsvLines(content);
   const transactions = /** @type {any[] & { skipped?: number }} */ ([]);
   let skipped = 0;

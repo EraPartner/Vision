@@ -29,8 +29,8 @@ import {
   resolveKinesisConfig,
   sanitizeKinesisIsolatedSpikes,
   parseCustomHistoryPoints,
-  yahooFinance,
 } from './prices/priceProviderRegistry.js';
+import { getYahooClient } from './prices/yahooClient.js';
 
 export {
   saveHistoricalPointsToDatabase,
@@ -299,6 +299,7 @@ export async function fetchHistoricalPrices(investment, { fromMs, toMs, dbOnly =
 
     if (!points) {
       try {
+        const yahooFinance = await getYahooClient();
         const chart = await yahooFinance.chart(symbol, {
           period1: new Date(from || (Date.now() - 5 * 365 * 24 * 60 * 60 * 1000)),
           interval: '1d',

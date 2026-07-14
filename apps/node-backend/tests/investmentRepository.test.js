@@ -538,8 +538,10 @@ describe('investmentRepository read helpers and extra branches', () => {
   it('throws for unsupported inheritance asset class in create path', async () => {
     query.mockResolvedValueOnce({ rows: [{ investments_base: 'investments_base' }] });
 
+    // Must be a VALIDATION_ERROR so the controller maps it to a 400, not a 500
+    // (translateRepoError in investmentController keys on this code).
     await expect(
       investmentRepository.create({ name: 'X', asset_class: 'unsupported', currency: 'EUR' })
-    ).rejects.toThrow('Unsupported asset_class: unsupported');
+    ).rejects.toMatchObject({ code: 'VALIDATION_ERROR', message: 'Unsupported asset_class: unsupported' });
   });
 });

@@ -138,8 +138,9 @@ echo "==> Configuring Vision to use local repo..."
 mkdir -p "$USERDATA"
 
 if [ -f "$SETTINGS" ]; then
-  # Merge repoPath into existing settings
-  node -e "
+  # Merge repoPath into existing settings (bun is guaranteed installed above;
+  # node is not, so run this snippet through bun — it evaluates the same JS).
+  bun -e "
     const fs = require('fs');
     const p = process.argv[1];
     let s = {};

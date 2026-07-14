@@ -129,6 +129,14 @@ export async function query(text, params, opts = {}) {
  * @returns {Promise<pg.QueryResult>}
  */
 export async function queryPrepared(name, text, values) {
+  // Inside withTransaction(): run on the ambient client so repo methods built on
+  // queryPrepared (e.g. transactionRepository.getById/create) participate in the
+  // transaction instead of silently hitting the pool outside it — the same
+  // partial-write class the query() reroute above closes.
+  const ambient = getAmbientTransactionClient();
+  if (ambient) {
+    return ambient.query({ name, text, values });
+  }
   return pool.query({ name, text, values });
 }
 
@@ -207,7 +215,14 @@ export async function withSavepointIfInTransaction(name, fn) {
     await client.query(`RELEASE SAVEPOINT ${name}`);
     return result;
   } catch (err) {
-    await client.query(`ROLLBACK TO SAVEPOINT ${name}`);
+    // If fn failed because the connection dropped, ROLLBACK TO SAVEPOINT throws
+    // too; log it but rethrow the ORIGINAL error so the root cause isn't lost
+    // (mirrors withTransaction's rollback handling above).
+    try {
+      await client.query(`ROLLBACK TO SAVEPOINT ${name}`);
+    } catch (rollbackErr) {
+      logger.error(`ROLLBACK TO SAVEPOINT ${name} failed`, rollbackErr);
+    }
     throw err;
   }
 }

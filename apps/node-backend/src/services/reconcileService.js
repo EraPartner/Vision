@@ -24,9 +24,10 @@
  * income/spending aggregations and out of the ADR-083 transfer reconciler.
  */
 
-import { query } from '../database/connection.js';
+import { query, withTransaction } from '../database/connection.js';
 import { COMPUTED_BALANCE_LATERAL } from '../repositories/accountBalanceSql.js';
 import { NotFoundError, ValidationError } from '../middleware/errorHandler.js';
+import { todayAppDateString } from '../lib/timezone.js';
 
 const ADJUSTMENT_MEMO = 'BALANCE ADJUSTMENT';
 const VALID_MODES = new Set(['accept', 'adjustment']);
@@ -61,67 +62,84 @@ export function normalizeReconcile(body) {
 export async function reconcileAccount(accountId, body) {
   const { mode } = normalizeReconcile(body);
 
-  // Statement figure + the live computed balance (same lateral the hub/drift use).
-  const res = await query(
-    `SELECT a.currency,
-            a.statement_balance,
-            COALESCE(lb.balance, 0) AS computed_balance
-       FROM accounts a
-       ${COMPUTED_BALANCE_LATERAL}
-      WHERE a.id = $1`,
-    [accountId],
-  );
-  const row = res.rows[0];
-  if (!row) throw new NotFoundError(`Account ${accountId} not found`);
+  // The drift read and the adjustment INSERT / accept UPDATE must be atomic:
+  // two concurrent adjustment reconciles would otherwise both read the same
+  // drift and both insert, overshooting by exactly the drift. Lock the account
+  // row FOR UPDATE first so the second request blocks, then re-reads a now-zero
+  // drift and falls into the "already reconciled" guard below.
+  return withTransaction(async () => {
+    const lockRes = await query(
+      `SELECT id FROM accounts WHERE id = $1 FOR UPDATE`,
+      [accountId],
+    );
+    if (!lockRes.rows[0]) throw new NotFoundError(`Account ${accountId} not found`);
 
-  if (row.statement_balance == null) {
-    throw new ValidationError('Account has no statement balance to reconcile against');
-  }
+    // Statement figure + the live computed balance (same lateral the hub/drift
+    // use). The FOR UPDATE cannot ride on this SELECT — the lateral aggregates,
+    // so the lock is taken separately above.
+    const res = await query(
+      `SELECT a.currency,
+              a.statement_balance,
+              COALESCE(lb.balance, 0) AS computed_balance
+         FROM accounts a
+         ${COMPUTED_BALANCE_LATERAL}
+        WHERE a.id = $1`,
+      [accountId],
+    );
+    const row = res.rows[0];
+    if (!row) throw new NotFoundError(`Account ${accountId} not found`);
 
-  const statement = Number(row.statement_balance);
-  const computed = Number(row.computed_balance);
-  const drift = statement - computed;
+    if (row.statement_balance == null) {
+      throw new ValidationError('Account has no statement balance to reconcile against');
+    }
 
-  if (Math.abs(drift) < DRIFT_EPSILON) {
-    throw new ValidationError('Account is already reconciled (no drift to resolve)');
-  }
+    const statement = Number(row.statement_balance);
+    const computed = Number(row.computed_balance);
+    const drift = statement - computed;
 
-  const today = new Date().toISOString().slice(0, 10);
+    if (Math.abs(drift) < DRIFT_EPSILON) {
+      throw new ValidationError('Account is already reconciled (no drift to resolve)');
+    }
 
-  if (mode === 'accept') {
-    // Adopt the computed balance as the statement of record; drift → 0.
-    const upd = await query(
-      `UPDATE accounts
-          SET statement_balance = $2, statement_balance_date = $3, updated_at = NOW()
-        WHERE id = $1
-      RETURNING statement_balance`,
-      [accountId, computed, today],
+    // APP_TIMEZONE calendar day (ADR-009), not UTC — otherwise a row created
+    // between local midnight and ~02:00 east of UTC is stamped yesterday.
+    const today = todayAppDateString();
+
+    if (mode === 'accept') {
+      // Adopt the computed balance as the statement of record; drift → 0.
+      const upd = await query(
+        `UPDATE accounts
+            SET statement_balance = $2, statement_balance_date = $3, updated_at = NOW()
+          WHERE id = $1
+        RETURNING statement_balance`,
+        [accountId, computed, today],
+      );
+      return {
+        mode,
+        drift: 0,
+        statement_balance: Number(upd.rows[0].statement_balance),
+        computed_balance: computed,
+        transaction: null,
+      };
+    }
+
+    // mode === 'adjustment': stamp a descriptive delta row (no `balance`) so the
+    // computed balance rises to meet the statement.
+    const ins = await query(
+      `INSERT INTO transactions
+         (date, amount, currency, memo, account_id, is_transfer, transfer_source, is_active)
+       VALUES ($1, $2, $3, $4, $5, true, 'adjustment', true)
+       RETURNING id, amount, transfer_source`,
+      [today, drift, row.currency, ADJUSTMENT_MEMO, accountId],
     );
     return {
       mode,
       drift: 0,
-      statement_balance: Number(upd.rows[0].statement_balance),
-      computed_balance: computed,
-      transaction: null,
+      statement_balance: statement,
+      computed_balance: statement, // computed now equals statement after the delta
+      transaction: ins.rows[0] || null,
     };
-  }
-
-  // mode === 'adjustment': stamp a descriptive delta row (no `balance`) so the
-  // computed balance rises to meet the statement.
-  const ins = await query(
-    `INSERT INTO transactions
-       (date, amount, currency, memo, account_id, is_transfer, transfer_source, is_active)
-     VALUES ($1, $2, $3, $4, $5, true, 'adjustment', true)
-     RETURNING id, amount, transfer_source`,
-    [today, drift, row.currency, ADJUSTMENT_MEMO, accountId],
-  );
-  return {
-    mode,
-    drift: 0,
-    statement_balance: statement,
-    computed_balance: statement, // computed now equals statement after the delta
-    transaction: ins.rows[0] || null,
-  };
+  });
 }
 
 export default { reconcileAccount, normalizeReconcile };

@@ -1681,6 +1681,8 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/Envelope"
+        "400":
+          description: Missing/invalid balance, date, or currency (must be a 3-letter ISO code)
         "404":
           description: Account not found
 
@@ -4153,8 +4155,27 @@ paths:
                   type: number
                 taxes:
                   type: number
+                currency:
+                  type: string
+                fx_rate_to_eur:
+                  type: number
+                  nullable: true
+                  description: Explicit EUR conversion rate; null clears it
+                account_id:
+                  type: integer
+                  nullable: true
+                  description: Owning account for the lot (ADR-091); null = unassigned
                 note:
                   type: string
+                  nullable: true
+                  description: Free-text note; null clears it
+                is_recurring:
+                  type: boolean
+                recurrence_interval:
+                  $ref: "#/components/schemas/RecurrenceInterval"
+                recurrence_end_date:
+                  type: string
+                  format: date
       responses:
         "200":
           description: Updated transaction

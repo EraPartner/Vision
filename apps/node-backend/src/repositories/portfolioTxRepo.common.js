@@ -271,7 +271,11 @@ async function getNetUnitsOnOrBeforeDate(investmentId, date, { excludeTransactio
     const units = toDecimal(row.units || 0);
     if (row.type === 'buy' || row.type === 'gift') net = net.plus(units);
     else if (row.type === 'sell') net = net.minus(units);
-    else if (row.type === 'split' && units.gt(0)) net = units; // absolute new total
+    // Split only applies to units already held (net.gt(0)) — matching the
+    // canonical core (shared-utils/portfolio.js, snapshotBuilder). A stray/
+    // imported split with no prior buys must NOT mint phantom units, or a sell
+    // that every valuation path treats as an oversell would validate here.
+    else if (row.type === 'split' && units.gt(0) && net.gt(0)) net = units; // absolute new total
     // return_of_capital / merger / spinoff / cash rows: no unit change
   }
   return toNumber(net);

@@ -36,6 +36,17 @@ import { settingsRepository } from '../../repositories/settingsRepository.js';
 // In-memory cache: { rates: {...}, timestamp: number } | null
 let memoryCache = null;
 
+// Process-level cache of the built historical-rate index. Historical-FX row
+// conversion (convertRowsToEur, dataFetcherTax) otherwise reloaded the full
+// exchange_rates history and rebuilt the index on EVERY request. The index is
+// built for a growing union of requested currencies so a request with a new
+// currency set doesn't invalidate it; it's invalidated whenever rates are
+// refreshed (warmCache), the memory cache is cleared, or a backfill runs, and
+// expires after CACHE_LIFETIME_MS as a backstop. Cache misses still resolve
+// correctly via the per-date fallback paths, so conversion results are unchanged.
+/** @type {{ index: Map<string, Array<{date: string, rate: number}>>, currencies: string[], builtAt: number } | null} */
+let historicalIndexCache = null;
+
 // Static hardcoded fallback rates. Never mutated.
 // Covers ECB currencies plus common non-ECB currencies (Gulf, South Asia, Africa, etc.)
 export const FALLBACK_RATES = {
@@ -119,7 +130,49 @@ async function getRates() {
 export function clearMemoryCache() {
   memoryCache = null;
   clearHistoricalCache();
+  clearHistoricalIndexCache();
   logger.debug('Cleared exchange rate memory cache');
+}
+
+/** Drop the cached historical-rate index (rebuilt on next demand). */
+export function clearHistoricalIndexCache() {
+  historicalIndexCache = null;
+}
+
+/**
+ * Historical-rate index for the given currencies, cached at process level and
+ * shared across call sites. Builds (or extends) the index for the union of
+ * already-cached and newly-requested currencies so distinct currency sets don't
+ * thrash the cache. A superset index is safe: per-currency lookups
+ * (findNearestRateInIndex / findRateOnOrBeforeInIndex) are unaffected by extra
+ * currencies being present.
+ *
+ * @param {string[]} currencies
+ * @returns {Promise<Map<string, Array<{date: string, rate: number}>>>}
+ */
+export async function getHistoricalRateIndex(currencies) {
+  const wanted = [...new Set(currencies)].filter(Boolean);
+  if (wanted.length === 0) return new Map();
+
+  const fresh = historicalIndexCache !== null
+    && Date.now() - historicalIndexCache.builtAt < CACHE_LIFETIME_MS;
+  if (fresh && wanted.every((c) => historicalIndexCache.currencies.includes(c))) {
+    return historicalIndexCache.index;
+  }
+
+  const union = fresh
+    ? [...new Set([...historicalIndexCache.currencies, ...wanted])]
+    : wanted;
+  const result = await query(
+    `SELECT currency_code, rate_date, rate_to_eur
+     FROM exchange_rates
+     WHERE currency_code = ANY($1::text[])
+     ORDER BY currency_code ASC, rate_date ASC`,
+    [union]
+  );
+  const index = buildHistoricalRateIndex(result.rows || []);
+  historicalIndexCache = { index, currencies: union, builtAt: Date.now() };
+  return index;
 }
 
 /**
@@ -166,6 +219,9 @@ export async function warmCache() {
     liveFallbackRates = mergedRates;
     await saveToDatabase(mergedRates);
     memoryCache = { rates: mergedRates, timestamp: Date.now() };
+    // Fresh rates were written — drop the cached historical index so the 12h
+    // refresh cycle is the primary invalidation hook for it.
+    clearHistoricalIndexCache();
   } catch (err) {
     logger.warn('Failed to warm exchange rate cache', { error: err.message });
   }
@@ -249,14 +305,7 @@ export async function convertRowsToEur(rows, targetCurrency = 'EUR', options = {
     ])].filter(Boolean);
 
     if (relevantCurrencies.length > 0) {
-      const historicalRowsResult = await query(
-        `SELECT currency_code, rate_date, rate_to_eur
-         FROM exchange_rates
-         WHERE currency_code = ANY($1::text[])
-         ORDER BY currency_code ASC, rate_date ASC`,
-        [relevantCurrencies]
-      );
-      historicalIndex = buildHistoricalRateIndex(historicalRowsResult.rows || []);
+      historicalIndex = await getHistoricalRateIndex(relevantCurrencies);
     }
   }
 
@@ -506,6 +555,7 @@ export async function backfillPortfolioHistoricalRates() {
 
   if (inserted > 0 || repaired > 0) {
     clearHistoricalCache();
+    clearHistoricalIndexCache();
   }
 
   return { inserted, missing: unresolved, repaired, stamped };

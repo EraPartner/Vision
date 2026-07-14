@@ -13,14 +13,16 @@
 import { Router } from 'express';
 import tagService from '../services/tagService.js';
 import { validateIdParam } from '../middleware/validation.js';
+import { parsePagination } from '../lib/pagination.js';
 
 const router = Router();
 
 router.get('/', async (req, res) => {
   const { active = 'true' } = req.query;
   const activeFilter = active === 'all' ? null : active !== 'false';
-  const tags = await tagService.list({ active: activeFilter });
-  res.ok({ items: tags, total: tags.length, links: [] });
+  const { limit, offset } = parsePagination(req.query, { maxLimit: 1000 });
+  const { items, total } = await tagService.list({ active: activeFilter, limit, offset });
+  res.ok({ items, total, limit, offset, links: [] });
 });
 
 router.post('/', async (req, res) => {

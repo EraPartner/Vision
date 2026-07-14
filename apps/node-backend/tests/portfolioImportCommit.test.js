@@ -218,6 +218,38 @@ describe('commitBatch (portfolio)', () => {
     expect(cashInsert[1][1]).toBe(-500); // amount param — was +500 (credited as a deposit)
   });
 
+  it('cash dedup matches across the sign fix: signed value OR legacy positive magnitude', async () => {
+    // A withdrawal committed BEFORE the cash-sign fix is stored positive (+500);
+    // the post-fix insert stores the signed −500. The dedup must recognize both
+    // as the same row so re-importing an already-imported statement is a no-op.
+    isBrokerage = true;
+    batchAccountId = 7;
+    matchedRows = [row({ id: 9, route: 'cash', type: null, type_raw: 'withdrawal', investment_id: null, amount: 500 })];
+    await commitBatch({ batchId: 5 });
+
+    const dedupCall = query.mock.calls.find(([s]) => /SELECT 1 FROM transactions/.test(s));
+    // Predicate accepts either the post-fix signed value or the legacy magnitude.
+    expect(dedupCall[0]).toMatch(/amount = \$3 OR amount = \$4/);
+    // params: [accountId, tx_date, signed(-500), magnitude(500), memo]
+    expect(dedupCall[1][2]).toBe(-500); // signed (post-fix) branch
+    expect(dedupCall[1][3]).toBe(500); // legacy positive (pre-fix) branch
+    expect(dedupCall[1][4]).toBe('WITHDRAWAL'); // memo carries the kind/direction
+  });
+
+  it('cash dedup does not conflate opposite directions: a deposit only matches positive amounts', async () => {
+    // A +500 deposit's signed value equals its magnitude, so both branches are
+    // +500 — it can never dedup against a −500 withdrawal on the same day.
+    isBrokerage = true;
+    batchAccountId = 7;
+    matchedRows = [row({ id: 9, route: 'cash', type: null, type_raw: 'deposit', investment_id: null, amount: 500 })];
+    await commitBatch({ batchId: 5 });
+
+    const dedupCall = query.mock.calls.find(([s]) => /SELECT 1 FROM transactions/.test(s));
+    expect(dedupCall[1][2]).toBe(500); // signed
+    expect(dedupCall[1][3]).toBe(500); // magnitude — same, so no negative branch
+    expect(dedupCall[1][4]).toBe('DEPOSIT');
+  });
+
   it('brokerage cash row: dedups against an existing cash transaction', async () => {
     isBrokerage = true;
     batchAccountId = 7;

@@ -3,10 +3,10 @@
  */
 
 import { Router } from 'express';
-import YahooFinance from 'yahoo-finance2';
 import { ApiErrorCode } from '@vision/types/errors';
 import { AppError, ValidationError } from '../middleware/errorHandler.js';
 import { createResearchCache } from '../services/research/researchCache.js';
+import { getYahooClient } from '../services/prices/yahooClient.js';
 
 const router = Router();
 
@@ -54,7 +54,6 @@ function pickBestThumbnail(thumbnail) {
   }
   return null;
 }
-const yahooFinance = new YahooFinance({ suppressNotices: ['yahooSurvey'] });
 
 // yahoo-finance2 validates every upstream payload against its own schema and
 // THROWS on any mismatch. Yahoo's responses drift (new quoteTypes, non-Yahoo
@@ -95,6 +94,7 @@ router.get('/search', async (req, res) => {
   /** @type {any} */
   let results;
   try {
+    const yahooFinance = await getYahooClient();
     results = await yahooFinance.search(q, { quotesCount: 8, newsCount: 0 }, NO_VALIDATE);
   } catch (err) {
     throw upstreamError('Market search unavailable', err);
@@ -146,6 +146,7 @@ function mapQuoteCore(q) {
  * when the upstream quote is unavailable.
  */
 async function buildQuote(sym, basic) {
+  const yahooFinance = await getYahooClient();
   if (basic) {
     const q = /** @type {any} */ (await yahooFinance.quote(sym, {}, NO_VALIDATE));
     return mapQuoteCore(q);
@@ -293,6 +294,7 @@ router.get('/chart', async (req, res) => {
     // NO_VALIDATE: Yahoo intermittently returns an incomplete `meta` block (null
     // currency/regularMarketTime, missing regularMarketPrice); the time-series
     // `quotes` we render are still present, so degrade instead of 502-ing.
+    const yahooFinance = await getYahooClient();
     result = await yahooFinance.chart(symbol, {
       period1: rangeToDate(range),
       interval,
@@ -330,6 +332,7 @@ router.get('/news', async (req, res) => {
 
   let newsResults;
   try {
+    const yahooFinance = await getYahooClient();
     newsResults = await Promise.allSettled(
       querySymbols.split(',').slice(0, 10).map(async (sym) => {
         const results = await yahooFinance.search(sym.trim(), {

@@ -272,7 +272,7 @@ async function createThroughInheritanceTables(fields, getByIdFn) {
 
   const childTable = await resolveChildTable(asset_class);
   if (!childTable) {
-    throw new Error(`Unsupported asset_class: ${asset_class}`);
+    throw makeValidationError(`Unsupported asset_class: ${asset_class}`);
   }
 
   // Base columns/values are the provider/name field set; `currency` carries the

@@ -113,6 +113,45 @@ describe('calculateCostBasis (weighted average)', () => {
   });
 });
 
+describe('oversell flag (_oversold)', () => {
+  it('sets _oversold on a weighted-avg oversell while leaving the clamped numbers intact', () => {
+    const exact = calculateCostBasis([
+      { type: 'buy', units: 10, amount: 100, fees: 0, taxes: 0, date: '2025-01-01' },
+      { type: 'sell', units: 10, amount: 200, fees: 0, taxes: 0, date: '2025-03-01' },
+    ]);
+    const over = calculateCostBasis([
+      { type: 'buy', units: 10, amount: 100, fees: 0, taxes: 0, date: '2025-01-01' },
+      { type: 'sell', units: 15, amount: 200, fees: 0, taxes: 0, date: '2025-03-01' },
+    ]);
+    // A well-formed (non-oversell) result never carries the flag.
+    expect(exact._oversold).toBeUndefined();
+    // The oversell is flagged, but the sell is still clamped to the 10 units held:
+    // position drains to 0 and only 10/15 of the proceeds/gain are recognised.
+    expect(over._oversold).toBe(true);
+    expect(over.totalUnits).toBe(0);
+    expect(over.totalCost).toBe(0);
+    expect(over.realizedGain).toBe(33.33); // 200*(10/15) - avg10*10
+    expect(over.totalSellProceeds).toBe(133.33);
+    // The flag is purely additive — stripping it yields the same numbers.
+    const { _oversold, ...numbers } = over;
+    expect(_oversold).toBe(true);
+    expect(numbers.totalUnits).toBe(0);
+  });
+
+  it('sets _oversold on a FIFO oversell without changing the clamp', () => {
+    const over = calculateCostBasisByMethod(
+      [
+        { type: 'buy', units: 4, amount: 40, fees: 0, taxes: 0, date: '2025-01-01' },
+        { type: 'sell', units: 10, amount: 100, fees: 0, taxes: 0, date: '2025-03-01' },
+      ],
+      'fifo',
+    );
+    expect(over._oversold).toBe(true);
+    expect(over.totalUnits).toBe(0);
+    expect(over.totalCost).toBe(0);
+  });
+});
+
 describe('calculateCostBasisByMethod', () => {
   const txns = [
     { type: 'buy', units: 10, amount: 100, fees: 0, taxes: 0, date: '2025-01-01' },

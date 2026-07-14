@@ -65,6 +65,29 @@ describe('accountService.create', () => {
     });
     expect(accountRepository.create).toHaveBeenCalled();
   });
+
+  it('rejects a funding_account_id pointing at a nonexistent account with 400, not 500', async () => {
+    accountRepository.getById.mockResolvedValueOnce(undefined); // referenced account missing
+    await expect(
+      accountService.create({ name: 'KBC', funding_account_id: 999 }),
+    ).rejects.toThrow(ValidationError);
+    expect(accountRepository.create).not.toHaveBeenCalled();
+  });
+
+  it('accepts a funding_account_id that references an existing account', async () => {
+    accountRepository.getById.mockResolvedValueOnce({ id: 7, name: 'Funder' });
+    accountRepository.create.mockResolvedValueOnce({ id: 1 });
+    await accountService.create({ name: 'KBC', funding_account_id: 7 });
+    expect(accountRepository.create).toHaveBeenCalled();
+  });
+
+  it('maps a FK violation (23503) on create to a ValidationError (400)', async () => {
+    accountRepository.getById.mockResolvedValueOnce({ id: 7 }); // passes the existence pre-check
+    accountRepository.create.mockRejectedValueOnce(pgErr('23503')); // lost a race with a delete
+    await expect(
+      accountService.create({ name: 'KBC', funding_account_id: 7 }),
+    ).rejects.toThrow(ValidationError);
+  });
 });
 
 describe('accountService.update', () => {
@@ -75,6 +98,21 @@ describe('accountService.update', () => {
 
   it('rejects a non-boolean flag', async () => {
     await expect(accountService.update(1, { in_net_worth: 'yes' })).rejects.toThrow(ValidationError);
+  });
+
+  it('rejects a self-referencing funding_account_id with 400', async () => {
+    await expect(
+      accountService.update(5, { funding_account_id: 5 }),
+    ).rejects.toThrow(ValidationError);
+    expect(accountRepository.update).not.toHaveBeenCalled();
+  });
+
+  it('rejects a funding_account_id pointing at a nonexistent account with 400, not 500', async () => {
+    accountRepository.getById.mockResolvedValueOnce(undefined);
+    await expect(
+      accountService.update(1, { funding_account_id: 999 }),
+    ).rejects.toThrow(ValidationError);
+    expect(accountRepository.update).not.toHaveBeenCalled();
   });
 
   it('forwards explicit null as SQL NULL for clearable fields (PATCH-to-clear)', async () => {

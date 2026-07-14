@@ -1,5 +1,8 @@
-import { describe, it, expect } from 'vitest';
-import { splitCsvLines, splitDelimitedRecord, parseCommaDecimal, parseDateWithFormat } from '../src/services/importPipeline/adapters/_shared.js';
+import { describe, it, expect, afterEach } from 'vitest';
+import fs from 'fs';
+import os from 'os';
+import path from 'path';
+import { splitCsvLines, splitDelimitedRecord, parseCommaDecimal, parseDateWithFormat, readTextWithEncodingFallback } from '../src/services/importPipeline/adapters/_shared.js';
 
 describe('splitDelimitedRecord', () => {
   it('splits a plain semicolon record', () => {
@@ -94,5 +97,36 @@ describe('splitCsvLines', () => {
 
   it('handles non-string input by coercing it', () => {
     expect(splitCsvLines(null)).toEqual(['null']);
+  });
+});
+
+describe('readTextWithEncodingFallback', () => {
+  const files = [];
+  afterEach(() => {
+    while (files.length) {
+      const p = files.pop();
+      try { if (fs.existsSync(p)) fs.unlinkSync(p); } catch { /* ignore */ }
+    }
+  });
+  const writeBytes = (buffer) => {
+    const p = path.join(os.tmpdir(), `test_encfallback_${Date.now()}_${files.length}.csv`);
+    fs.writeFileSync(p, buffer);
+    files.push(p);
+    return p;
+  };
+
+  it('decodes a latin1 (windows-1252) file with é (byte 0xE9) instead of corrupting it', async () => {
+    // "Sofié" where é is the single latin1 byte 0xE9 — decoded as UTF-8 this
+    // byte is invalid and becomes U+FFFD, corrupting the recipient name.
+    const buffer = Buffer.concat([Buffer.from('Naam;Sofi', 'latin1'), Buffer.from([0xe9])]);
+    const content = await readTextWithEncodingFallback(writeBytes(buffer));
+    expect(content).toContain('Sofié');
+    expect(content).not.toContain('\uFFFD');
+  });
+
+  it('decodes a valid UTF-8 file (multi-byte é) unchanged', async () => {
+    const buffer = Buffer.from('Naam;Sofié', 'utf-8');
+    const content = await readTextWithEncodingFallback(writeBytes(buffer));
+    expect(content).toBe('Naam;Sofié');
   });
 });

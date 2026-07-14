@@ -4,6 +4,17 @@ services:
   db:
     image: postgres:18-alpine
     restart: unless-stopped
+    # SSD-tuned planner: default random_page_cost=4.0 assumes spinning disks and
+    # over-penalizes index scans. 1.1 reflects near-uniform random/sequential cost.
+    command: postgres -c random_page_cost=1.1
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "5m"
+        max-file: "3"
+    # Postgres uses /dev/shm for parallel query workers and large sorts/hash
+    # joins; Docker's 64mb default is easily exhausted. 256mb is a safe bump.
+    shm_size: 256mb
     env_file: .env
     environment:
       POSTGRES_USER: ftm_user
@@ -12,14 +23,16 @@ services:
       - postgres_data:/var/lib/postgresql
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U ftm_user -d financial_transactions"]
-      interval: 3s
+      interval: 30s
       timeout: 3s
       retries: 10
       start_period: 5s
-      # During start_period Docker probes at start_interval (default 5s!), not
-      # `interval` — without this the first probe fires at +5s while postgres is
-      # ready ~100ms in, idling any service_healthy consumer for the full 5s.
-      start_interval: 250ms
+      # NOTE: `start_interval` was removed — it requires Compose >= 2.20.2 /
+      # Engine >= 25, and older binaries reject the unknown property during
+      # schema validation. Since resolveWorkDir() in main.js overwrites the
+      # embedded compose on every launch, shipping it would break `docker
+      # compose up` for upgraded installs on older Docker Desktop. It only sped
+      # up the first health probes; the healthcheck works without it.
 
   app:
     # CI pushes ghcr.io/erapartner/vision:<semver> and :latest on every release tag.
@@ -28,6 +41,11 @@ services:
     image: ghcr.io/erapartner/vision:${APP_IMAGE_TAG:-latest}
     pull_policy: missing
     restart: unless-stopped
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "5m"
+        max-file: "3"
     env_file: .env
     ports:
       - "127.0.0.1:${PORT:-3002}:3002"

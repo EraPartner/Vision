@@ -15,9 +15,12 @@
  *   getSupportedPatterns() → string[]
  */
 
-import { toAppTz, toUtc } from '../../lib/timezone.js';
+import { toAppTz, toUtc, appDateStringToUtc, toAppDateString } from '../../lib/timezone.js';
 
 const SUPPORTED_PATTERNS = ['daily', 'weekly', 'biweekly', 'monthly', 'quarterly', 'yearly'];
+
+// Guard against infinite expansion on tiny custom intervals.
+const MAX_OCCURRENCES = 500;
 
 function addDaysUtc(dateLike, days) {
   const source = new Date(dateLike);
@@ -87,4 +90,69 @@ export function isValidPattern(pattern) {
 
 export function getSupportedPatterns() {
   return [...SUPPORTED_PATTERNS];
+}
+
+/**
+ * Parse a planned_date into a UTC Date at start-of-day in APP_TIMEZONE.
+ *
+ * node-postgres parses DATE columns into a JS Date at server-local midnight (no
+ * custom type parser is registered); recover its calendar day with local getters
+ * before re-parsing in APP_TIMEZONE. Y-M-D strings are sliced and re-parsed in
+ * APP_TIMEZONE directly. This is the parser the cashflow forecast uses — the
+ * app-tz-correct reference — so occurrence dates stay stable across DST.
+ *
+ * @param {string|Date} value
+ * @returns {Date}
+ */
+function parsePlannedDate(value) {
+  if (value instanceof Date) {
+    const y = value.getFullYear();
+    const m = String(value.getMonth() + 1).padStart(2, '0');
+    const d = String(value.getDate()).padStart(2, '0');
+    return appDateStringToUtc(`${y}-${m}-${d}`);
+  }
+  return appDateStringToUtc(String(value).slice(0, 10));
+}
+
+/**
+ * Expand one planned-transaction row into the ordered list of occurrence dates
+ * that fall on or before `horizonYmd` (INCLUSIVE), as APP_TIMEZONE 'YYYY-MM-DD'
+ * strings.
+ *
+ * App-tz-correct: the base date is parsed in APP_TIMEZONE and each subsequent
+ * firing is advanced via {@link calculateNextDate} (also APP_TIMEZONE), then
+ * rendered with {@link toAppDateString}. This is the single source of truth for
+ * the horizon-expansion loop that cashflow forecast and the AI-chat planned
+ * tools previously re-implemented with divergent (UTC-slice) date semantics.
+ *
+ * - The first element is always the stored planned_date (the base occurrence).
+ * - Non-recurring rows yield at most that single date (only if within horizon).
+ * - The horizon boundary is inclusive (an occurrence landing exactly on
+ *   `horizonYmd` is included), matching the cashflow forecast reference.
+ *
+ * @param {{ planned_date: string|Date, is_recurring?: boolean, recurrence_pattern?: string|null }} row
+ * @param {string} horizonYmd  inclusive upper bound, 'YYYY-MM-DD'
+ * @param {{ maxOccurrences?: number }} [opts]
+ * @returns {string[]}  ordered occurrence dates, 'YYYY-MM-DD'
+ */
+export function expandOccurrences(row, horizonYmd, { maxOccurrences = MAX_OCCURRENCES } = {}) {
+  const end = appDateStringToUtc(horizonYmd);
+  const first = parsePlannedDate(row.planned_date);
+  const occurrences = [];
+
+  if (!row.is_recurring || !row.recurrence_pattern) {
+    if (first <= end) occurrences.push(toAppDateString(first));
+    return occurrences;
+  }
+
+  let current = first;
+  let count = 0;
+  while (current <= end && count < maxOccurrences) {
+    occurrences.push(toAppDateString(current));
+    const next = calculateNextDate(current, row.recurrence_pattern);
+    if (!next || next <= current) break; // safety: no forward progress
+    current = next;
+    count++;
+  }
+  return occurrences;
 }

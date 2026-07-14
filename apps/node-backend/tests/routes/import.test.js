@@ -608,6 +608,14 @@ describe('Import Routes', () => {
       expect(getBatch).not.toHaveBeenCalled();
     });
 
+    it('throws ValidationError for a trailing-garbage id like "12abc" (was treated as batch 12)', async () => {
+      const req = { params: { id: '12abc' } };
+      const res = mockResponse();
+
+      await expect(routeHandlers['get:/batches/:id'](req, res)).rejects.toBeInstanceOf(ValidationError);
+      expect(getBatch).not.toHaveBeenCalled();
+    });
+
     it('throws NotFoundError when batch does not exist', async () => {
       getBatch.mockResolvedValue(null);
 

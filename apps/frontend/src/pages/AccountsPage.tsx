@@ -177,6 +177,10 @@ export default function AccountsPage() {
                             className={`glass-regular cursor-pointer transition-shadow hover:shadow-glass-soft focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/70 focus-visible:ring-offset-2 ${a.is_active ? "" : "opacity-60"}`}
                             onClick={() => setDetailing(a)}
                             onKeyDown={(e) => {
+                                // Only act on the card itself — keyboard activation of
+                                // inner controls (actions menu, drift badge) must not
+                                // also open the detail sheet.
+                                if (e.target !== e.currentTarget) return;
                                 if (e.key === "Enter" || e.key === " ") {
                                     e.preventDefault();
                                     setDetailing(a);

@@ -22,9 +22,11 @@
  * inert — the service returns a `warning` in that case.
  */
 
-import { query } from '../database/connection.js';
+import { query, withTransaction } from '../database/connection.js';
 import accountRepository from '../repositories/accountRepository.js';
 import { NotFoundError, ValidationError } from '../middleware/errorHandler.js';
+import { assertYmd } from '../middleware/validation.js';
+import { toWireDate } from '../lib/dateFormat.js';
 
 const OPENING_MEMO = 'OPENING BALANCE';
 
@@ -43,9 +45,12 @@ export function normalizeOpeningBalance(body, account) {
   }
 
   const date = String(body?.date ?? '');
-  if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) {
+  if (!date) {
     throw new ValidationError('date is required and must be an ISO date (YYYY-MM-DD)');
   }
+  // assertYmd also parse-checks the calendar (rejects e.g. 2026-13-40), which a
+  // bare regex lets through to fail the Postgres DATE cast as a 500.
+  assertYmd(date, 'date');
 
   let currency;
   if (body?.currency != null && body.currency !== '') {
@@ -73,53 +78,68 @@ export async function setOpeningBalance(accountId, body) {
 
   const { balance, date, currency } = normalizeOpeningBalance(body, account);
 
-  // Warn when the anchor does not precede the account's real activity: a later
-  // import-stamped balance wins, leaving a mid-history anchor inert.
-  const earliestRes = await query(
-    `SELECT MIN(date) AS earliest
-       FROM transactions
-      WHERE account_id = $1
-        AND is_active = true
-        AND currency = $2
-        AND (transfer_source IS DISTINCT FROM 'opening')`,
-    [accountId, currency],
-  );
-  const earliest = earliestRes.rows[0]?.earliest;
-  const warning =
-    earliest && String(earliest).slice(0, 10) <= date
-      ? 'Opening-balance date does not precede existing activity; a later import-stamped balance will override this anchor.'
-      : null;
+  // The earliest-activity read, the "does an anchor already exist?" check, and
+  // the upsert must be atomic: two concurrent calls would otherwise both see no
+  // existing anchor and both INSERT, minting two anchors for one
+  // (account, currency) — the one-anchor invariant is backed only by a CHECK.
+  // Lock the account row FOR UPDATE first so the second caller blocks, then
+  // re-runs the CTE's `existing` SELECT against the now-committed anchor and
+  // takes the UPDATE branch. The partial unique index (migration
+  // 0077_opening_anchor_unique_index) is the defense-in-depth backstop.
+  return withTransaction(async () => {
+    await query(`SELECT id FROM accounts WHERE id = $1 FOR UPDATE`, [accountId]);
 
-  // Single atomic upsert: UPDATE the existing (account, currency) anchor if one
-  // exists, else INSERT. `balance` is server-stamped here — the one sanctioned
-  // exception to the ADR-094 import-pipeline-only write protection.
-  const upsertRes = await query(
-    `WITH existing AS (
-        SELECT id FROM transactions
-         WHERE account_id = $1 AND transfer_source = 'opening' AND currency = $3
-         LIMIT 1
-     ),
-     updated AS (
-        UPDATE transactions t
-           SET balance = $2, date = $4, memo = $5, amount = 0, is_active = true
-          FROM existing
-         WHERE t.id = existing.id
-        RETURNING t.*
-     ),
-     inserted AS (
-        INSERT INTO transactions
-          (date, amount, balance, currency, memo, account_id, is_transfer, transfer_source, is_active)
-        SELECT $4, 0, $2, $3, $5, $1, true, 'opening', true
-         WHERE NOT EXISTS (SELECT 1 FROM existing)
-        RETURNING *
-     )
-     SELECT * FROM updated
-     UNION ALL
-     SELECT * FROM inserted`,
-    [accountId, balance, currency, date, OPENING_MEMO],
-  );
+    // Warn when the anchor does not precede the account's real activity: a later
+    // import-stamped balance wins, leaving a mid-history anchor inert.
+    const earliestRes = await query(
+      `SELECT MIN(date) AS earliest
+         FROM transactions
+        WHERE account_id = $1
+          AND is_active = true
+          AND currency = $2
+          AND (transfer_source IS DISTINCT FROM 'opening')`,
+      [accountId, currency],
+    );
+    // pg reads MIN(date) as a JS Date (no setTypeParser override); String(Date)
+    // yields "Wed Jul 01", which is never lexically <= an ISO "YYYY-MM-DD" — the
+    // warning was dead code. Normalize to a calendar-day string before comparing.
+    const earliest = toWireDate(earliestRes.rows[0]?.earliest);
+    const warning =
+      earliest && earliest <= date
+        ? 'Opening-balance date does not precede existing activity; a later import-stamped balance will override this anchor.'
+        : null;
 
-  return { transaction: upsertRes.rows[0] || null, warning };
+    // Single atomic upsert: UPDATE the existing (account, currency) anchor if one
+    // exists, else INSERT. `balance` is server-stamped here — the one sanctioned
+    // exception to the ADR-094 import-pipeline-only write protection.
+    const upsertRes = await query(
+      `WITH existing AS (
+          SELECT id FROM transactions
+           WHERE account_id = $1 AND transfer_source = 'opening' AND currency = $3
+           LIMIT 1
+       ),
+       updated AS (
+          UPDATE transactions t
+             SET balance = $2, date = $4, memo = $5, amount = 0, is_active = true
+            FROM existing
+           WHERE t.id = existing.id
+          RETURNING t.*
+       ),
+       inserted AS (
+          INSERT INTO transactions
+            (date, amount, balance, currency, memo, account_id, is_transfer, transfer_source, is_active)
+          SELECT $4, 0, $2, $3, $5, $1, true, 'opening', true
+           WHERE NOT EXISTS (SELECT 1 FROM existing)
+          RETURNING *
+       )
+       SELECT * FROM updated
+       UNION ALL
+       SELECT * FROM inserted`,
+      [accountId, balance, currency, date, OPENING_MEMO],
+    );
+
+    return { transaction: upsertRes.rows[0] || null, warning };
+  });
 }
 
 export default { setOpeningBalance, normalizeOpeningBalance };

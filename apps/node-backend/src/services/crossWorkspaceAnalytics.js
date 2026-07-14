@@ -1,7 +1,8 @@
 /**
  * Cross-workspace analytics (ADR-098) — pure, descriptive. Compose Budgeting +
- * Portfolio + Research: net-worth projection cone, cash-aware rebalancing, and
- * owner-allocated unified tax. No IO; callers supply the workspace inputs.
+ * Portfolio + Research: net-worth projection cone and cash-aware rebalancing.
+ * (The unified-tax surface was removed in ADR-102.) No IO; callers supply the
+ * workspace inputs.
  */
 
 import { toDecimal, toNumber, roundToCents } from '../lib/money.js';

@@ -99,6 +99,7 @@ aliases: [common tasks, quick reference, i want to, task navigation, cheat sheet
 
 | I want to... | Start here | Also check |
 |-------------|------------|------------|
+| Run all local checks (lint, typecheck, locales, endpoint matrix, tests) | `bun run check` | [[docs/reference/scripts\|Scripts Reference]] |
 | Run all tests | [[docs/reference/scripts\|Scripts Reference]] | `bun run test` |
 | Run E2E tests | [[docs/testing/testing#phase-b-e2e-testing-2026-04-30--complete\|E2E Testing]] | `bun run test:e2e` |
 | Run mutation tests | [[docs/testing/testing#phase-f6-mutation-testing-harness-2026-05-02--complete\|Mutation Testing]] | `bun run test:mutation` |
@@ -139,6 +140,7 @@ bun run docker:dev       # Start Docker dev stack
 bun run db:upgrade       # Run migrations
 
 # Testing
+bun run check            # Run all local checks (lint, typecheck, locales, endpoint matrix, tests)
 bun run test             # Run all tests
 bun run test:watch       # Watch mode
 bun run test:e2e         # Run E2E tests (Playwright)

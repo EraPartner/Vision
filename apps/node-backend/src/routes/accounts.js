@@ -16,6 +16,8 @@ import accountService from '../services/accountService.js';
 import { mergeAccounts } from '../services/accountMergeService.js';
 import { setOpeningBalance } from '../services/openingBalanceService.js';
 import { reconcileAccount } from '../services/reconcileService.js';
+import { scheduleAggregationRefresh } from '../services/aggregationRefresh.js';
+import { invalidatePortfolioCaches } from './info/_cache.js';
 import { validateIdParam } from '../middleware/validation.js';
 
 const router = Router();
@@ -35,6 +37,10 @@ router.get('/:id', validateIdParam, async (req, res) => {
 
 router.post('/', async (req, res) => {
   const account = await accountService.create(req.body);
+  // A new account can enter the net-worth aggregate; drop the cached response
+  // so the next read recomputes (invalidatePortfolioCaches also clears the
+  // bank-balances cache — shared seam).
+  invalidatePortfolioCaches();
   res.status(201);
   res.ok({ ...account, links: [] });
 });
@@ -42,12 +48,16 @@ router.post('/', async (req, res) => {
 router.patch('/:id', validateIdParam, async (req, res) => {
   const id = parseInt(req.params.id, 10);
   const updated = await accountService.update(id, req.body);
+  // rename / in_net_worth / is_active / statement_balance all shift the
+  // net-worth + bank-balances response caches; bust them (shared seam).
+  invalidatePortfolioCaches();
   res.ok({ ...updated, links: [] });
 });
 
 router.delete('/:id', validateIdParam, async (req, res) => {
   const id = parseInt(req.params.id, 10);
   await accountService.remove(id);
+  invalidatePortfolioCaches();
   res.ok({ message: `Account ${id} deleted`, links: [] });
 });
 
@@ -59,6 +69,9 @@ router.post('/:id/merge', validateIdParam, async (req, res) => {
     ? req.body.source_ids.map((x) => parseInt(x, 10)).filter((n) => Number.isInteger(n))
     : [];
   const result = await mergeAccounts(targetId, sourceIds);
+  // Merge deletes the source accounts and repoints their references, changing
+  // the net-worth + bank-balances aggregates; bust the caches (shared seam).
+  invalidatePortfolioCaches();
   res.ok({ ...result, links: [] });
 });
 
@@ -69,6 +82,13 @@ router.post('/:id/merge', validateIdParam, async (req, res) => {
 router.post('/:id/opening-balance', validateIdParam, async (req, res) => {
   const id = parseInt(req.params.id, 10);
   const result = await setOpeningBalance(id, req.body);
+  // The anchor row feeds mv_bank_balances + the forecast MC caches; refresh them
+  // like every transaction mutation route does, else dashboards serve stale
+  // figures until the next unrelated mutation or cache expiry.
+  scheduleAggregationRefresh();
+  // Also drop the net-worth + bank-balances response caches (shared seam) so the
+  // new anchored balance is not masked by a stale cached response.
+  invalidatePortfolioCaches();
   res.ok({ ...result, links: [] });
 });
 
@@ -80,6 +100,13 @@ router.post('/:id/opening-balance', validateIdParam, async (req, res) => {
 router.post('/:id/reconcile', validateIdParam, async (req, res) => {
   const id = parseInt(req.params.id, 10);
   const result = await reconcileAccount(id, req.body);
+  // 'accept' rewrites the statement figure and 'adjustment' inserts a ledger row;
+  // both change mv_bank_balances + forecast caches, so refresh like the mutation
+  // routes rather than serving a stale drift/balance until the next mutation.
+  scheduleAggregationRefresh();
+  // Same reasoning applies to the net-worth + bank-balances response caches
+  // (shared seam) — clear them so the reconciled balance surfaces immediately.
+  invalidatePortfolioCaches();
   res.ok({ ...result, links: [] });
 });
 

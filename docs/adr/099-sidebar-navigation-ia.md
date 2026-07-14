@@ -10,7 +10,7 @@ aliases: [sidebar IA, navigation IA, nav layout]
 # ADR-099: Sidebar / Navigation Information Architecture
 
 ## Status
-Proposed
+Accepted
 
 ## Date
 2026-06-18

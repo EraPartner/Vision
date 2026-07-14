@@ -108,6 +108,12 @@ router.post('/batch', async (req, res) => {
   }
 
   const preparedSplits = normalizeBatchSplitInputs(splits);
+  // Client sent rows but every one was dropped by normalization (missing
+  // recipient_id/amount) — that's a bad request, not a legitimately-empty
+  // batch. Fail loud instead of returning a 201 { total: 0 } success envelope.
+  if (preparedSplits.length === 0) {
+    throw new ValidationError('No valid splits: each split requires recipient_id and amount');
+  }
   const created = await splitRepository.createSplitsBatchAtomic({
     transaction_id,
     splits: preparedSplits,

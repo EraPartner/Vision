@@ -157,17 +157,43 @@ export function buildTransactionWhere(opts = {}) {
     }
   }
   if (categoryId != null) {
-    clauses.push(
-      `COALESCE(t.category_id, r.default_category_id, pr.default_category_id) = $${p++}`,
-    );
+    // Effective-category match, expanded from COALESCE(t.category_id,
+    // r.default_category_id, pr.default_category_id) = $ into an indexable
+    // disjunction of semi-joins so the planner can use the category_id indexes.
+    // Replicates the COALESCE precedence exactly:
+    //   own category = X, OR
+    //   (own NULL AND recipient default = X), OR
+    //   (own NULL AND recipient default NULL AND primary default = X).
+    const idx = p++;
+    clauses.push(`(
+      t.category_id = $${idx}
+      OR (t.category_id IS NULL AND t.recipient_id IN (SELECT id FROM recipients WHERE default_category_id = $${idx}))
+      OR (t.category_id IS NULL AND t.recipient_id IN (
+        SELECT r2.id FROM recipients r2
+        JOIN recipients pr2 ON r2.primary_recipient_id = pr2.id
+        WHERE r2.default_category_id IS NULL AND pr2.default_category_id = $${idx}
+      ))
+    )`);
     params.push(categoryId);
   } else if (Array.isArray(categoryIds) && categoryIds.length > 0) {
     const safe = validateInt4Ids(categoryIds);
     if (safe.length > 0) {
-      const placeholders = safe.map(() => `$${p++}`).join(', ');
-      clauses.push(
-        `COALESCE(t.category_id, r.default_category_id, pr.default_category_id) IN (${placeholders})`,
-      );
+      // Same effective-category expansion as the single-value branch above,
+      // with each leaf comparing against the id list. The placeholder slots are
+      // allocated once and reused across the three leaves (Postgres allows a
+      // $N to appear multiple times), so the param count/order is unchanged.
+      const startIdx = p;
+      const placeholders = safe.map((_, i) => `$${startIdx + i}`).join(', ');
+      p += safe.length;
+      clauses.push(`(
+        t.category_id IN (${placeholders})
+        OR (t.category_id IS NULL AND t.recipient_id IN (SELECT id FROM recipients WHERE default_category_id IN (${placeholders})))
+        OR (t.category_id IS NULL AND t.recipient_id IN (
+          SELECT r2.id FROM recipients r2
+          JOIN recipients pr2 ON r2.primary_recipient_id = pr2.id
+          WHERE r2.default_category_id IS NULL AND pr2.default_category_id IN (${placeholders})
+        ))
+      )`);
       params.push(...safe);
     }
   }
@@ -186,7 +212,11 @@ export function buildTransactionWhere(opts = {}) {
     params.push(Number(amountMax));
   }
   if (recipientId != null) {
-    clauses.push(`(t.recipient_id = $${p} OR r.primary_recipient_id = $${p})`);
+    // Semi-join so the planner can use the t.recipient_id index instead of an
+    // OR spanning t and the joined recipients r. Equivalent to
+    // (t.recipient_id = $ OR r.primary_recipient_id = $): the subquery returns
+    // the recipient itself plus every alias whose primary is it.
+    clauses.push(`t.recipient_id IN (SELECT id FROM recipients WHERE id = $${p} OR primary_recipient_id = $${p})`);
     p++;
     params.push(recipientId);
   }

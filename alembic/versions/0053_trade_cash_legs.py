@@ -62,7 +62,7 @@ def downgrade() -> None:
         ALTER TABLE transactions DROP CONSTRAINT IF EXISTS ck_transactions_transfer_source;
         ALTER TABLE transactions
             ADD CONSTRAINT ck_transactions_transfer_source
-            CHECK (transfer_source IS NULL OR transfer_source IN ('auto', 'manual'));
+            CHECK (transfer_source IS NULL OR transfer_source IN ('auto', 'manual')) NOT VALID;
 
         DROP INDEX IF EXISTS idx_transactions_portfolio_txn;
         ALTER TABLE transactions DROP COLUMN IF EXISTS portfolio_transaction_id;

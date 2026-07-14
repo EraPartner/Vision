@@ -32,7 +32,7 @@ vi.mock('../src/services/portfolio/tradeCashLegService.js', () => ({
 vi.mock('../src/services/portfolio/moveHoldingService.js', () => ({ moveHolding: vi.fn() }));
 
 import investmentRepository from '../src/repositories/investmentRepository.js';
-import { createInvestment, updateInvestment } from '../src/controllers/investmentController.js';
+import { createInvestment, updateInvestment, parseDefaultListOptions } from '../src/controllers/investmentController.js';
 import { ValidationError } from '../src/middleware/errorHandler.js';
 
 function mockRes() {
@@ -109,5 +109,20 @@ describe('updateInvestment — numeric field guards', () => {
       expect.objectContaining({ current_price: 99.99, interest_rate: null }),
     );
     expect(res.ok).toHaveBeenCalled();
+  });
+});
+
+describe('parseDefaultListOptions — pagination clamp', () => {
+  it('clamps an oversized limit down to the per-route maxLimit', () => {
+    expect(parseDefaultListOptions({ limit: '999999' }).limit).toBe(1000);
+  });
+
+  it('falls back to the default limit for a falsy limit like "0"', () => {
+    expect(parseDefaultListOptions({ limit: '0' }).limit).toBe(200);
+    expect(parseDefaultListOptions({}).limit).toBe(200);
+  });
+
+  it('never lets offset go negative', () => {
+    expect(parseDefaultListOptions({ offset: '-5' }).offset).toBe(0);
   });
 });

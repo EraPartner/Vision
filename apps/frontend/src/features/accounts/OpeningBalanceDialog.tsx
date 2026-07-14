@@ -20,6 +20,8 @@ import { Label } from '@/components/ui/label';
 import { Coins, Loader2 } from 'lucide-react';
 import { apiClient } from '@/lib/api';
 import { useLanguage } from '@/contexts/LanguageContext';
+import { invalidateTransactionLists } from '@/hooks/useTransactions';
+import { toYmd } from '@/components/shared/dateUtils';
 import { toast } from 'sonner';
 import type { Account } from '@/types/api';
 
@@ -43,7 +45,7 @@ export function OpeningBalanceDialog({ account, open, onOpenChange }: {
   const [date, setDate] = useState(
     account.statement_balance_date
       ? account.statement_balance_date.slice(0, 10)
-      : new Date().toISOString().slice(0, 10),
+      : toYmd(new Date()),
   );
 
   const reset = () => {
@@ -62,6 +64,9 @@ export function OpeningBalanceDialog({ account, open, onOpenChange }: {
       queryClient.invalidateQueries({ queryKey: ['accounts'] });
       queryClient.invalidateQueries({ queryKey: ['net-worth'] });
       queryClient.invalidateQueries({ queryKey: ['net-worth-by-account'] });
+      // The anchor is a real ledger row, so the transaction lists must refetch
+      // for it to appear.
+      invalidateTransactionLists(queryClient);
       // A mid-history anchor is inert (a later import stamp wins) — surface it.
       if (result.warning) toast.warning(t('accounts.openingBalance.saved'), { description: result.warning });
       else toast.success(t('accounts.openingBalance.saved'));

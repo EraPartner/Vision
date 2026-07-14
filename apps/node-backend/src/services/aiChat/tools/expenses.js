@@ -6,6 +6,7 @@
  */
 
 import { transactionRepository } from '../../../repositories/transactionRepository.js';
+import { memoizeAsync } from '../toolCache.js';
 import settings from '../../../config/config.js';
 import { toDecimal, roundToCents } from '../../../lib/money.js';
 import { toYmd } from '../../../utils/portfolioMath.js';
@@ -22,8 +23,19 @@ const UNCATEGORISED_LABEL = 'Uncategorised';
 const UNKNOWN_RECIPIENT_LABEL = 'Unknown';
 const MAX_ROWS = 50_000;
 
-async function fetchTransactionsInRange({ from, to, limit = MAX_ROWS, categoryId = null, recipientId = null }) {
-  return transactionRepository.getAll({
+/**
+ * Fetch active transactions for a range, routed through the per-turn tool cache
+ * (see ../toolCache.js). Several expense tools scan the same [from, to] window in
+ * one chat turn; keying on the full param set lets identical fetches share a
+ * single DB read (up to 50k rows) instead of rescanning per tool. When `cache`
+ * is absent (standalone/unit calls) the read runs directly, unchanged.
+ *
+ * @param {Map|undefined} cache
+ * @param {{ from?: string, to?: string, limit?: number, categoryId?: number|null, recipientId?: number|null }} params
+ */
+function fetchTransactionsInRange(cache, { from, to, limit = MAX_ROWS, categoryId = null, recipientId = null }) {
+  const key = `expenses:txn:${from ?? ''}:${to ?? ''}:${limit}:${categoryId ?? '*'}:${recipientId ?? '*'}`;
+  return memoizeAsync(cache, key, () => transactionRepository.getAll({
     startDate: from,
     endDate: to,
     limit,
@@ -31,7 +43,7 @@ async function fetchTransactionsInRange({ from, to, limit = MAX_ROWS, categoryId
     active: true,
     categoryId,
     recipientId,
-  });
+  }));
 }
 
 function categoryLabel(row) {
@@ -87,13 +99,13 @@ export const getSpendByCategory = {
     },
     required: ['from', 'to'],
   },
-  async run(args, { maxRows = settings.aiChat.maxToolRows } = {}) {
+  async run(args, { maxRows = settings.aiChat.maxToolRows, cache = undefined } = {}) {
     const from = requireDate(args.from, 'from');
     const to = requireDate(args.to, 'to');
     assertDateOrder(from, to);
     const topN = parsePositiveInt(args.topN, 'topN', { min: 1, max: 100, defaultValue: 10 });
 
-    const rows = await fetchTransactionsInRange({ from, to });
+    const rows = await fetchTransactionsInRange(cache, { from, to });
 
     const byCategory = new Map();
     for (const row of rows) {
@@ -144,13 +156,13 @@ export const getMonthlySpend = {
     },
     required: ['from', 'to'],
   },
-  async run(args, { maxRows = settings.aiChat.maxToolRows } = {}) {
+  async run(args, { maxRows = settings.aiChat.maxToolRows, cache = undefined } = {}) {
     const from = requireDate(args.from, 'from');
     const to = requireDate(args.to, 'to');
     assertDateOrder(from, to);
     const groupBy = parseEnum(args.groupBy, 'groupBy', ['month', 'quarter'], { defaultValue: 'month' });
 
-    const rows = await fetchTransactionsInRange({ from, to });
+    const rows = await fetchTransactionsInRange(cache, { from, to });
 
     const buckets = new Map();
     for (const row of rows) {
@@ -214,13 +226,13 @@ export const getTopRecipients = {
     },
     required: ['from', 'to'],
   },
-  async run(args, { maxRows = settings.aiChat.maxToolRows } = {}) {
+  async run(args, { maxRows = settings.aiChat.maxToolRows, cache = undefined } = {}) {
     const from = requireDate(args.from, 'from');
     const to = requireDate(args.to, 'to');
     assertDateOrder(from, to);
     const topN = parsePositiveInt(args.topN, 'topN', { min: 1, max: 100, defaultValue: 10 });
 
-    const rows = await fetchTransactionsInRange({ from, to });
+    const rows = await fetchTransactionsInRange(cache, { from, to });
 
     const byRecipient = new Map();
     for (const row of rows) {
@@ -275,7 +287,7 @@ export const getTransactionsInRange = {
     },
     required: ['from', 'to'],
   },
-  async run(args, { maxRows = settings.aiChat.maxToolRows } = {}) {
+  async run(args, { maxRows = settings.aiChat.maxToolRows, cache = undefined } = {}) {
     const from = requireDate(args.from, 'from');
     const to = requireDate(args.to, 'to');
     assertDateOrder(from, to);
@@ -287,7 +299,7 @@ export const getTransactionsInRange = {
       ? parsePositiveInt(args.recipientId, 'recipientId', { min: 1, max: Number.MAX_SAFE_INTEGER })
       : null;
 
-    const rows = await fetchTransactionsInRange({ from, to, limit, categoryId, recipientId });
+    const rows = await fetchTransactionsInRange(cache, { from, to, limit, categoryId, recipientId });
 
     const shaped = rows.slice(0, limit).map(shapeTxnRow);
 
@@ -367,13 +379,13 @@ export const getMonthlyCategoryBreakdown = {
     },
     required: ['from', 'to'],
   },
-  async run(args, { maxRows = settings.aiChat.maxToolRows } = {}) {
+  async run(args, { maxRows = settings.aiChat.maxToolRows, cache = undefined } = {}) {
     const from = requireDate(args.from, 'from');
     const to = requireDate(args.to, 'to');
     assertDateOrder(from, to);
     const topN = parsePositiveInt(args.topN, 'topN', { min: 1, max: 20, defaultValue: 5 });
 
-    const rows = await fetchTransactionsInRange({ from, to });
+    const rows = await fetchTransactionsInRange(cache, { from, to });
     const result = aggregateByMonthCategory(rows, { topN });
 
     return {
@@ -445,14 +457,14 @@ export const getLargestTransactions = {
     },
     required: ['from', 'to'],
   },
-  async run(args, { maxRows = settings.aiChat.maxToolRows } = {}) {
+  async run(args, { maxRows = settings.aiChat.maxToolRows, cache = undefined } = {}) {
     const from = requireDate(args.from, 'from');
     const to = requireDate(args.to, 'to');
     assertDateOrder(from, to);
     const topN = parsePositiveInt(args.topN, 'topN', { min: 1, max: 100, defaultValue: 10 });
     const direction = parseEnum(args.direction, 'direction', ['expense', 'income', 'both'], { defaultValue: 'expense' });
 
-    const rows = await fetchTransactionsInRange({ from, to, limit: MAX_ROWS });
+    const rows = await fetchTransactionsInRange(cache, { from, to, limit: MAX_ROWS });
 
     const withAbs = rows
       .filter((row) => {
@@ -492,7 +504,7 @@ export const getSpendTrendForCategory = {
     },
     required: ['categoryId'],
   },
-  async run(args, { maxRows = settings.aiChat.maxToolRows } = {}) {
+  async run(args, { maxRows = settings.aiChat.maxToolRows, cache = undefined } = {}) {
     const categoryId = parsePositiveInt(args.categoryId, 'categoryId', { min: 1, max: Number.MAX_SAFE_INTEGER });
     const months = parsePositiveInt(args.months, 'months', { min: 1, max: 36, defaultValue: 12 });
 
@@ -501,7 +513,7 @@ export const getSpendTrendForCategory = {
     const to = todayAppDateString();
     const from = firstOfMonthYmd(to, -(months - 1));
 
-    const rows = await fetchTransactionsInRange({ from, to, categoryId });
+    const rows = await fetchTransactionsInRange(cache, { from, to, categoryId });
 
     const byMonth = new Map();
     for (const row of rows) {
@@ -543,15 +555,15 @@ export const getYearOverYearComparison = {
     },
     required: ['year'],
   },
-  async run(args, { maxRows = settings.aiChat.maxToolRows } = {}) {
+  async run(args, { maxRows = settings.aiChat.maxToolRows, cache = undefined } = {}) {
     const year = parsePositiveInt(args.year, 'year', { min: 2000, max: 2100 });
     const prevYear = args.prevYear != null
       ? parsePositiveInt(args.prevYear, 'prevYear', { min: 2000, max: 2100 })
       : year - 1;
 
     const [currRows, prevRows] = await Promise.all([
-      fetchTransactionsInRange({ from: `${year}-01-01`, to: `${year}-12-31` }),
-      fetchTransactionsInRange({ from: `${prevYear}-01-01`, to: `${prevYear}-12-31` }),
+      fetchTransactionsInRange(cache, { from: `${year}-01-01`, to: `${year}-12-31` }),
+      fetchTransactionsInRange(cache, { from: `${prevYear}-01-01`, to: `${prevYear}-12-31` }),
     ]);
 
     function sumByCategory(txns) {

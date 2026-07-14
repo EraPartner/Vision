@@ -75,8 +75,9 @@ its `global.fetch` fetch-spy CI test (`aiChatService.test.js`) to the new narrat
 
 ### 2026-07-10: Accounts-rewrite decisions (D1–D5) — four addenda
 
-Decision records for the accounts rewrite (TODO.md → Feature work → "Accounts rewrite"); no
-implementation shipped with these.
+Decision records for the accounts rewrite (TODO.md → Feature work → "Accounts rewrite").
+D1/D4/D5 implementation landed with the 2026-07 integration (migrations 0066/0067/0069/0073/0075
++ `accountService` + the opening-balance and reconcile endpoints).
 
 **ADR-088 addendum** — D1: implicit account minting on INSERT stays, but identity becomes
 case/whitespace-insensitive (`lower(btrim(name))` unique expression index; trigger + service

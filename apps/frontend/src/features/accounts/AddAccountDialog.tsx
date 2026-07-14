@@ -6,6 +6,7 @@ import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Plus, Loader2, ChevronDown, ChevronRight } from "lucide-react";
+import { toast } from "sonner";
 import { useCreateAccount } from "@/hooks/useAccounts";
 import { useLanguage } from "@/contexts/LanguageContext";
 import type { AccountType, AccountOwner, AccountLiquidityClass, AccountTaxWrapper } from "@/types/api";
@@ -118,9 +119,18 @@ export function AddAccountDialog(props: AddAccountDialogProps = {}) {
     const handleSubmit = (e: React.FormEvent) => {
         e.preventDefault();
         if (!form.name.trim()) return;
-        // A statement balance is only meaningful with its as-of date (ADR-094);
-        // the date input is marked required, this guards non-native submits.
-        if (form.statementBalance && !form.statementBalanceDate) return;
+        // A statement balance is only meaningful with its as-of date (ADR-094).
+        // The date input is marked required, but it lives in the Advanced section
+        // which is unmounted while collapsed — so a bare `return` here would be a
+        // silent dead-end. Expand the section (revealing the required field) and
+        // surface a toast instead of failing invisibly.
+        if (form.statementBalance && !form.statementBalanceDate) {
+            setShowAdvanced(true);
+            toast.error(t('accounts.field.statementBalance'), {
+                description: t('accounts.field.statementBalanceDate'),
+            });
+            return;
+        }
 
         const values: AccountFormValues = {
             ...form,

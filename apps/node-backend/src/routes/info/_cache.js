@@ -7,11 +7,13 @@
 export const NET_WORTH_CACHE_TTL_MS = 300_000; // 5min
 export const PERF_CACHE_TTL_MS = 300_000; // 5min
 export const PORTFOLIO_SUMMARY_CACHE_TTL_MS = 60_000; // 1min — realtime-ish
+export const BANK_BALANCES_CACHE_TTL_MS = 60_000; // 1min — live SQL, short TTL
 export const MAX_CACHE_ENTRIES = 100;
 
 export const netWorthResponseCache = new Map();
 export const perfResponseCache = new Map();
 export const portfolioSummaryCache = new Map();
+export const bankBalancesResponseCache = new Map();
 
 /**
  * Invalidate every cache that depends on portfolio investments or transactions.
@@ -23,6 +25,7 @@ export function invalidatePortfolioCaches() {
   portfolioSummaryCache.clear();
   netWorthResponseCache.clear();
   perfResponseCache.clear();
+  bankBalancesResponseCache.clear();
 }
 
 function pruneExpiredCacheEntries(cache) {

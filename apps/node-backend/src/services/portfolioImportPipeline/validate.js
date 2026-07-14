@@ -12,6 +12,8 @@ import crypto from 'crypto';
 import { query } from '../../database/connection.js';
 import { logger } from '../../config/logger.js';
 import { parsedDateToYmd } from '../../lib/importDates.js';
+import { toYmd } from '../../utils/portfolioMath.js';
+import { todayAppDateString } from '../../lib/timezone.js';
 import { UNIT_BASED_ASSET_CLASSES } from '../../repositories/portfolioTxRepo.common.js';
 import { normalizeType } from './portfolioTypeNormalizer.js';
 import { classifyBrokerageRow } from '../importPipeline/brokerageRouting.js';
@@ -43,6 +45,10 @@ export async function validateBatch({ batchId, onProgress }) {
     [batchId],
   );
 
+  // App-timezone calendar day (ADR-009), computed once — used to reject
+  // future-dated rows below.
+  const today = todayAppDateString();
+
   const total = pending.length;
   let seen = 0;
   let errors = 0;
@@ -62,7 +68,7 @@ export async function validateBatch({ batchId, onProgress }) {
 
     for (const row of chunk) {
       ids.push(row.id);
-      const { type, route, error } = resolveAndCheck(row, { typeMapping, defaultType, unitBased, isBrokerage });
+      const { type, route, error } = resolveAndCheck(row, { typeMapping, defaultType, unitBased, isBrokerage, today });
       if (error) {
         errors++;
         statuses.push('error');
@@ -125,8 +131,18 @@ export async function validateBatch({ batchId, onProgress }) {
   return { validated, duplicates, errors };
 }
 
-function resolveAndCheck(row, { typeMapping, defaultType, unitBased, isBrokerage }) {
+function resolveAndCheck(row, { typeMapping, defaultType, unitBased, isBrokerage, today }) {
   if (!row.tx_date) return { error: 'missing date' };
+
+  // Reject future-dated rows: a typo'd year (e.g. 2035) or a broker export with a
+  // trade-settlement date ahead of today would otherwise pass validation and
+  // commit a transaction dated in the future, skewing every time-based portfolio
+  // calc. tx_date is a pg DATE (local-midnight Date) — format with local getters
+  // (toYmd), never UTC, then compare against the app-timezone calendar day.
+  if (today) {
+    const rowYmd = toYmd(row.tx_date);
+    if (rowYmd && rowYmd > today) return { error: 'transaction date is in the future' };
+  }
 
   // Try the portfolio type first (handles aliases + the user's type_mapping). A
   // brokerage statement's dividend/interest/fee/tax resolve here and ride a trade

@@ -6,7 +6,6 @@
  */
 
 import { logger } from '../../config/logger.js';
-import YahooFinance from 'yahoo-finance2';
 import {
   KINESIS_BASE_URL,
   KINESIS_DEFAULT_TIMEFRAME,
@@ -17,8 +16,7 @@ import { toNumber, isValidPrice } from './priceCache.js';
 import { madReturnStats, isRobustNeedle } from '../../lib/math.js';
 import { convertToCurrency } from '../currency/currencyConversionService.js';
 import { assertPublicHttpUrl } from '../../lib/urlSafety.js';
-
-const yahooFinance = new YahooFinance({ suppressNotices: ['yahooSurvey'] });
+import { getYahooClient } from './yahooClient.js';
 
 // ─── Path helpers ─────────────────────────────────────────────────────────────
 
@@ -289,6 +287,7 @@ function _parseKinesisTrendlinePoints(rawPoints) {
 // ─── Yahoo helper ─────────────────────────────────────────────────────────────
 
 async function _fetchYahooLatestClose(symbol) {
+  const yahooFinance = await getYahooClient();
   const chart = await yahooFinance.chart(symbol, {
     period1: new Date(Date.now() - 5 * 24 * 60 * 60 * 1000),
     interval: '1d',
@@ -373,6 +372,7 @@ export const PROVIDERS = {
     const symbols = [...new Set(providerIds.map((s) => (s || '').toUpperCase()).filter(Boolean))];
     if (symbols.length === 0) return prices;
 
+    const yahooFinance = await getYahooClient();
     try {
       // Single batched request. yahoo-finance2 `.quote()` accepts an array and
       // returns one Quote per resolvable symbol — collapsing what used to be N
@@ -525,4 +525,4 @@ export const PROVIDERS = {
   },
 };
 
-export { yahooFinance, _parseKinesisTrendlinePoints };
+export { _parseKinesisTrendlinePoints };

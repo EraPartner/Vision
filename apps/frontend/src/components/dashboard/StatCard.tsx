@@ -87,6 +87,12 @@ interface StatCardProps {
     formatValue?: (n: number) => string;
     /** Full unabbreviated value shown as tooltip when the displayed value is compact */
     titleValue?: string;
+    /**
+     * Whether string values get the odometer (digit-reel) treatment. Defaults to
+     * true for numeric KPIs. Set false for arbitrary text (e.g. a recipient name)
+     * so spaces aren't collapsed and letters aren't run through the digit reels.
+     */
+    odometer?: boolean;
     /** Override the headline value colour (e.g. "text-primary" for a featured total). Defaults to neutral foreground. */
     valueClassName?: string;
     size?: StatCardSize;
@@ -99,7 +105,7 @@ interface StatCardProps {
 
 export function StatCard({
     title, value, numericValue, change, changeType = "neutral", subtitle,
-    icon: Icon, trend = "neutral", formatValue, titleValue,
+    icon: Icon, trend = "neutral", formatValue, titleValue, odometer = true,
     valueClassName = "text-foreground", size = "default", loading = false,
     className, children,
 }: StatCardProps) {
@@ -135,7 +141,7 @@ export function StatCard({
                         <Skeleton className={size === "compact" ? "h-6 w-20" : "h-9 w-28"} />
                     ) : typeof displayValue === "string" ? (
                         <span title={titleValue}>
-                            <RollingNumber value={displayValue} />
+                            {odometer ? <RollingNumber value={displayValue} /> : displayValue}
                         </span>
                     ) : (
                         <span title={titleValue}>{displayValue}</span>

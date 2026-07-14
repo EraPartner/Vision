@@ -14,13 +14,13 @@ describe('tagRepository.getAll', () => {
   it('adds is_active = true clause when active=true', async () => {
     query.mockResolvedValue({ rows: [] });
     await tagRepository.getAll({ active: true });
-    expect(query).toHaveBeenCalledWith(expect.stringContaining('is_active = true'), []);
+    expect(query).toHaveBeenCalledWith(expect.stringContaining('is_active = true'), [50, 0]);
   });
 
   it('adds is_active = false clause when active=false', async () => {
     query.mockResolvedValue({ rows: [] });
     await tagRepository.getAll({ active: false });
-    expect(query).toHaveBeenCalledWith(expect.stringContaining('is_active = false'), []);
+    expect(query).toHaveBeenCalledWith(expect.stringContaining('is_active = false'), [50, 0]);
   });
 
   it('omits is_active filter when active=null', async () => {
@@ -39,11 +39,56 @@ describe('tagRepository.getAll', () => {
     );
   });
 
+  it('applies LIMIT/OFFSET with default page size when unspecified', async () => {
+    query.mockResolvedValue({ rows: [] });
+    await tagRepository.getAll({});
+    const [sql, params] = query.mock.calls[0];
+    expect(sql).toContain('LIMIT $1 OFFSET $2');
+    expect(params).toEqual([50, 0]);
+  });
+
+  it('passes through explicit limit and offset', async () => {
+    query.mockResolvedValue({ rows: [] });
+    await tagRepository.getAll({ active: true, limit: 10, offset: 20 });
+    expect(query).toHaveBeenCalledWith(
+      expect.stringContaining('LIMIT $1 OFFSET $2'),
+      [10, 20],
+    );
+  });
+
   it('returns the rows from the query result', async () => {
     const rows = [{ id: 1, slug: 'rome-2020', color: '#f00', is_active: true }];
     query.mockResolvedValue({ rows });
     const result = await tagRepository.getAll({ active: true });
     expect(result).toEqual(rows);
+  });
+});
+
+describe('tagRepository.getCount', () => {
+  beforeEach(() => vi.clearAllMocks());
+
+  it('returns the count as an integer', async () => {
+    query.mockResolvedValue({ rows: [{ count: '12' }] });
+    const total = await tagRepository.getCount({ active: true });
+    expect(total).toBe(12);
+    expect(query).toHaveBeenCalledWith(
+      expect.stringContaining('COUNT(*)'),
+      [],
+    );
+  });
+
+  it('applies the is_active filter matching getAll', async () => {
+    query.mockResolvedValue({ rows: [{ count: '0' }] });
+    await tagRepository.getCount({ active: false });
+    const [sql] = query.mock.calls[0];
+    expect(sql).toContain('is_active = false');
+  });
+
+  it('omits the is_active filter when active=null', async () => {
+    query.mockResolvedValue({ rows: [{ count: '3' }] });
+    await tagRepository.getCount({ active: null });
+    const [sql] = query.mock.calls[0];
+    expect(sql).not.toContain('is_active');
   });
 });
 

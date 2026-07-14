@@ -36,6 +36,7 @@ import { computeRecipientPivot } from '../services/calculations/aggregation/reci
 import { computeTagPivot } from '../services/calculations/aggregation/tagPivot.js';
 import { getTargetCurrency } from './info/_queryParams.js';
 import { parseIntClamped } from '../lib/pagination.js';
+import { ValidationError } from '../middleware/errorHandler.js';
 
 const router = Router();
 
@@ -132,7 +133,7 @@ router.get('/cashflow-forecast-rolling', async (req, res) => {
   const daysBack = parseIntClamped(req.query.days_back, { max: 365, fallback: 90 });
   const daysForward = parseIntClamped(req.query.days_forward, { max: 365, fallback: 90 });
   if (daysBack + daysForward > 730) {
-    return res.status(400).json({ ok: false, error: { code: 'BAD_REQUEST', message: 'days_back + days_forward must be <= 730' } });
+    throw new ValidationError('days_back + days_forward must be <= 730');
   }
   const mcPaths = parseIntClamped(req.query.mc_paths, { max: 5000, fallback: 1000 });
   const historyMonths = parseIntClamped(req.query.history_months, { max: 120, fallback: 36 });

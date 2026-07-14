@@ -225,14 +225,24 @@ async function markRow(id, status, message) {
 // statement is a no-op (cash rows have no tx_hash partial-unique of their own here).
 async function isCashFieldDuplicate(accountId, row) {
   const memo = row.note || (row.type_raw ? String(row.type_raw).toUpperCase() : 'BROKERAGE CASH');
+  const signed = signedCashAmount(row);
+  const magnitude = Math.abs(signed);
   const dup = await query(
     `SELECT 1 FROM transactions
-      WHERE account_id = $1 AND date = $2::date AND amount = $3
-        AND COALESCE(memo, '') = COALESCE($4, '') AND is_active = true
+      WHERE account_id = $1 AND date = $2::date
+        AND (amount = $3 OR amount = $4)
+        AND COALESCE(memo, '') = COALESCE($5, '') AND is_active = true
       LIMIT 1`,
-    // Compare the SIGNED amount — that's what the insert stores; comparing the
-    // absolute magnitude would never match a stored withdrawal on re-import.
-    [accountId, row.tx_date, signedCashAmount(row), memo],
+    // Match on magnitude, not the raw signed value, so a re-import is a no-op
+    // ACROSS the cash-sign fix: brokerage withdrawals committed before the fix
+    // are stored positive (+500), while the post-fix insert stores the signed
+    // −500. `amount = $3` catches the correctly-signed (post-fix) row and
+    // `amount = $4` catches the legacy positive magnitude (pre-fix) row.
+    // Direction is still respected: the memo carries the kind (WITHDRAWAL vs
+    // DEPOSIT), and a deposit's signed value equals its magnitude so it never
+    // reaches the opposite-signed branch — a −500 withdrawal is not deduped
+    // against a legitimate +500 deposit.
+    [accountId, row.tx_date, signed, magnitude, memo],
   );
   return dup.rows.length > 0;
 }

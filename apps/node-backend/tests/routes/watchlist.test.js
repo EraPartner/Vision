@@ -159,6 +159,12 @@ describe('Watchlist Routes', () => {
       await expect(routeHandlers['post:/'](req, mockResponse())).rejects.toBeInstanceOf(ValidationError);
     });
 
+    it('rejects a whitespace-only name (truthy, so the POST presence check let it through)', async () => {
+      const req = { body: { ...validBody, name: '   ' } };
+      await expect(routeHandlers['post:/'](req, mockResponse())).rejects.toBeInstanceOf(ValidationError);
+      expect(watchlistRepository.create).not.toHaveBeenCalled();
+    });
+
     it('coerces numeric-string target_price before reaching the repository', async () => {
       watchlistRepository.create.mockResolvedValue({ id: 1 });
       const req = { body: { ...validBody, target_price: '123.45' } };
@@ -186,6 +192,27 @@ describe('Watchlist Routes', () => {
       const req = { params: { id: '1' }, body: { notes: 'watch earnings' } };
       await routeHandlers['patch:/:id'](req, mockResponse());
       expect(watchlistRepository.update).toHaveBeenCalledWith(1, { notes: 'watch earnings' });
+    });
+
+    it('rejects an empty name on PATCH (400, not a persisted blank label)', async () => {
+      const req = { params: { id: '1' }, body: { name: '' } };
+      await expect(routeHandlers['patch:/:id'](req, mockResponse())).rejects.toBeInstanceOf(ValidationError);
+      expect(watchlistRepository.update).not.toHaveBeenCalled();
+    });
+
+    it('rejects a whitespace-only name on PATCH', async () => {
+      const req = { params: { id: '1' }, body: { name: '   ' } };
+      await expect(routeHandlers['patch:/:id'](req, mockResponse())).rejects.toBeInstanceOf(ValidationError);
+      expect(watchlistRepository.update).not.toHaveBeenCalled();
+    });
+
+    it('rejects added_price on PATCH instead of silently accepting-then-dropping it', async () => {
+      // added_price is an add-time snapshot: the repository update allow-list omits
+      // it, so before the fix a valid value validated fine yet never persisted (a
+      // no-op). It must now surface a 400 rather than the silent no-op.
+      const req = { params: { id: '1' }, body: { added_price: 123.45 } };
+      await expect(routeHandlers['patch:/:id'](req, mockResponse())).rejects.toBeInstanceOf(ValidationError);
+      expect(watchlistRepository.update).not.toHaveBeenCalled();
     });
   });
 

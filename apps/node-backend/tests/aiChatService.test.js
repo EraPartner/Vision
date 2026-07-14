@@ -538,6 +538,15 @@ describe('AiChatServiceError', () => {
     const err = new AiChatServiceError('outer', { code: 'X', status: 502, cause });
     expect(err.cause).toBe(cause);
   });
+
+  it('extends AppError and carries status/code so the error middleware maps it', async () => {
+    const { AppError } = await import('../src/middleware/errorHandler.js');
+    const err = new AiChatServiceError('nope', { code: 'CONVERSATION_NOT_FOUND', status: 404 });
+    expect(err).toBeInstanceOf(AppError);
+    expect(err).toBeInstanceOf(Error);
+    expect(err.status).toBe(404);
+    expect(err.code).toBe('CONVERSATION_NOT_FOUND');
+  });
 });
 
 describe('runChatTurn — streaming', () => {

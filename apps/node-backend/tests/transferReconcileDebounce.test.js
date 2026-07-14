@@ -67,3 +67,24 @@ describe('scheduleReconcile debounce', () => {
     expect(query).toHaveBeenCalled();
   });
 });
+
+describe('releaseOrphans scope', () => {
+  afterEach(() => {
+    vi.clearAllMocks();
+    vi.resetModules();
+  });
+
+  it('only releases reconciler-owned rows, never system rows (opening/adjustment/trade)', async () => {
+    const { reconcileTransfers, query } = await loadService();
+    await reconcileTransfers();
+
+    const orphanUpdate = query.mock.calls
+      .map((c) => c[0])
+      .find((sql) => /SET is_transfer = false, transfer_source = NULL\s+WHERE is_transfer = true AND transfer_peer_id IS NULL/.test(sql));
+
+    expect(orphanUpdate).toBeDefined();
+    // The fix: constrain to 'auto'/'manual' so an opening anchor keeps its tag
+    // and an adjustment row is not flipped back into income/spending aggregates.
+    expect(orphanUpdate).toMatch(/transfer_source IN \('auto', 'manual'\)/);
+  });
+});

@@ -1276,7 +1276,7 @@ As of Phase 3, business logic for non-trivial calculations has been extracted in
 - `applyEventToLots()` returns an object with mapped lot arrays (never mutations), supporting corporate actions (splits, return_of_capital) with immutable lot transformations.
 - All portfolio math calculations avoid in-place mutations, enabling safe concurrent processing and eliminating hidden side effects.
 
-**Migration Status (Phase 9):** Old paths (`services/loanRepaymentService.js`, `services/recurrenceService.js`) are still the live implementation and are directly imported by `routes/plannedTransactions.js`. Migration to the canonical `services/calculations/` paths is blocked on Phase 3 completion. Once routes migrate, the old shims can be removed in Phase 9.
+**Migration Status:** Complete. The old `services/loanRepaymentService.js` and `services/recurrenceService.js` shims have been removed; `routes/plannedTransactions.js` now uses the canonical `services/calculations/` modules directly.
 
 ---
 

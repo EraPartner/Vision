@@ -166,4 +166,85 @@ describe('moveHolding (ADR-091)', () => {
     const r = await moveHolding({ investmentId: 1, fromAccountId: 1, toAccountId: 2 });
     expect(r.movedUnits).toBe(10); // RoC leaves units untouched
   });
+
+  // ── Investment-wide split replay (the C-scoped fix) ───────────────────────
+  //
+  // Splits are corporate actions recorded once for the whole investment, often
+  // with a NULL account_id. An account-filtered replay never sees them, so the
+  // partial-move guard would not trip and FIFO would split lots at stale
+  // pre-split units. These tests mock the two SELECTs separately: the
+  // account-local query (`account_id = $2`) and the investment-wide one.
+
+  // Distinguishes the account-local lot query from the investment-wide one.
+  function routeWide({ localLots, wideLots, accounts = [1, 2], assetClass = 'stock' }) {
+    mockClient.query.mockImplementation(async (sql) => {
+      if (sql.includes('FROM accounts WHERE id = ANY')) return { rows: accounts.map((id) => ({ id })) };
+      if (sql.includes('asset_class FROM investments')) return { rows: [{ asset_class: assetClass }] };
+      if (sql.includes('to_regclass')) return { rows: [{ r: 'public.portfolio_transactions_base' }] };
+      // Order matters: the account-local query also contains 'ORDER BY date'.
+      if (sql.includes('FROM portfolio_transactions') && sql.includes('account_id = $2')) return { rows: localLots };
+      if (sql.includes('FROM portfolio_transactions') && sql.includes('ORDER BY date')) return { rows: wideLots };
+      return { rowCount: 1, rows: [] };
+    });
+  }
+
+  it('a NULL-account split trips the partial-move guard (buy 10 / 2:1 split / move 5)', async () => {
+    // The source account holds only the buy; the 2:1 split (units = 20 absolute
+    // post-split total) is a corporate-action row with NO account, so it is
+    // absent from the account-local query but present investment-wide.
+    routeWide({
+      localLots: [
+        { id: 10, type: 'buy', date: '2020-01-01', amount: 1000, units: 10, fees: 0, taxes: 0, currency: 'EUR', fx_rate_to_eur: 1 },
+      ],
+      wideLots: [
+        { id: 10, type: 'buy', date: '2020-01-01', amount: 1000, units: 10, fees: 0, taxes: 0, currency: 'EUR', fx_rate_to_eur: 1 },
+        { id: 11, type: 'split', date: '2021-01-01', amount: 0, units: 20, fees: 0, taxes: 0, currency: 'EUR', fx_rate_to_eur: 1 },
+      ],
+    });
+    // Pre-fix: split invisible → net stays 10, no consumption → move 5 proceeds
+    // and buys lots at half basis. Post-fix: the split makes hasPriorConsumption
+    // true, so the partial move is rejected.
+    await expect(moveHolding({ investmentId: 1, fromAccountId: 1, toAccountId: 2, units: 5 }))
+      .rejects.toThrow(/whole holding|sell or split/i);
+  });
+
+  it('a NULL-account split ratio is applied to account-local units (whole move reports post-split total)', async () => {
+    routeWide({
+      localLots: [
+        { id: 10, type: 'buy', date: '2020-01-01', amount: 1000, units: 10, fees: 0, taxes: 0, currency: 'EUR', fx_rate_to_eur: 1 },
+      ],
+      wideLots: [
+        { id: 10, type: 'buy', date: '2020-01-01', amount: 1000, units: 10, fees: 0, taxes: 0, currency: 'EUR', fx_rate_to_eur: 1 },
+        { id: 11, type: 'split', date: '2021-01-01', amount: 0, units: 20, fees: 0, taxes: 0, currency: 'EUR', fx_rate_to_eur: 1 },
+      ],
+    });
+    const r = await moveHolding({ investmentId: 1, fromAccountId: 1, toAccountId: 2 });
+    expect(r.mode).toBe('whole');
+    expect(r.movedUnits).toBe(20); // 10 buy × (20/10 split ratio) = 20 post-split
+    // Only the account-local buy is repointed — the NULL-account split row stays.
+    const repoint = mockClient.query.mock.calls.find(([s]) => s.includes('SET account_id = $1') && s.includes('ANY'));
+    expect(repoint[1]).toEqual([2, [10]]);
+  });
+
+  it('split ratio uses the investment-wide denominator, not the account-local total', async () => {
+    // Source (acct 1) holds buy 10; another account holds buy 10; a 2:1 split
+    // (units = 40 = new investment-wide total) carries the source account. The
+    // ratio must be 40/20 = 2 (investment-wide), giving 20 local units — not
+    // 40/10 = 4 (account-local) which would inflate to 40.
+    routeWide({
+      accounts: [1, 3],
+      localLots: [
+        { id: 10, type: 'buy', date: '2020-01-01', amount: 1000, units: 10, fees: 0, taxes: 0, currency: 'EUR', fx_rate_to_eur: 1 },
+        { id: 30, type: 'split', date: '2021-01-01', amount: 0, units: 40, fees: 0, taxes: 0, currency: 'EUR', fx_rate_to_eur: 1 },
+      ],
+      wideLots: [
+        { id: 10, type: 'buy', date: '2020-01-01', amount: 1000, units: 10, fees: 0, taxes: 0, currency: 'EUR', fx_rate_to_eur: 1 },
+        { id: 20, type: 'buy', date: '2020-06-01', amount: 1000, units: 10, fees: 0, taxes: 0, currency: 'EUR', fx_rate_to_eur: 1 },
+        { id: 30, type: 'split', date: '2021-01-01', amount: 0, units: 40, fees: 0, taxes: 0, currency: 'EUR', fx_rate_to_eur: 1 },
+      ],
+    });
+    const r = await moveHolding({ investmentId: 1, fromAccountId: 1, toAccountId: 3 });
+    expect(r.mode).toBe('whole');
+    expect(r.movedUnits).toBe(20); // 10 × (40/20) = 20, not the inflated 40
+  });
 });

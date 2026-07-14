@@ -284,16 +284,16 @@ router.get('/batches', async (req, res) => {
 });
 
 router.get('/batches/:id', async (req, res) => {
-  const id = parseInt(req.params.id, 10);
-  if (!Number.isFinite(id)) throw new ValidationError('Invalid batch id');
+  const id = Number(req.params.id);
+  if (!Number.isInteger(id) || id <= 0) throw new ValidationError('Invalid batch id');
   const batch = await getBatch(id);
   if (!batch) throw new NotFoundError(`Import batch ${id} not found`);
   res.ok(batch);
 });
 
 router.delete('/batches/:id', async (req, res) => {
-  const id = parseInt(req.params.id, 10);
-  if (!Number.isFinite(id)) throw new ValidationError('Invalid batch id');
+  const id = Number(req.params.id);
+  if (!Number.isInteger(id) || id <= 0) throw new ValidationError('Invalid batch id');
   const batch = await getBatch(id);
   if (!batch) throw new NotFoundError(`Import batch ${id} not found`);
   if (batch.status === 'aborted') throw new ValidationError('Batch is already aborted');
@@ -308,8 +308,8 @@ router.delete('/batches/:id', async (req, res) => {
 // --- Review -------------------------------------------------------------------
 
 router.get('/batches/:id/preview', async (req, res) => {
-  const batchId = parseInt(req.params.id, 10);
-  if (!Number.isFinite(batchId)) throw new ValidationError('Invalid batch id');
+  const batchId = Number(req.params.id);
+  if (!Number.isInteger(batchId) || batchId <= 0) throw new ValidationError('Invalid batch id');
   const batch = await getBatch(batchId);
   if (!batch) throw new NotFoundError(`Import batch ${batchId} not found`);
 
@@ -378,9 +378,9 @@ router.get('/batches/:id/preview', async (req, res) => {
 // POST /api/portfolio/import/batches/:id/rows/:rowId/investment-override
 // Body: { investment_id } to point at an existing holding, or { create_new: true }.
 router.post('/batches/:id/rows/:rowId/investment-override', async (req, res) => {
-  const batchId = parseInt(req.params.id, 10);
-  const rowId = parseInt(req.params.rowId, 10);
-  if (!Number.isFinite(batchId) || !Number.isFinite(rowId)) {
+  const batchId = Number(req.params.id);
+  const rowId = Number(req.params.rowId);
+  if (!Number.isInteger(batchId) || batchId <= 0 || !Number.isInteger(rowId) || rowId <= 0) {
     throw new ValidationError('Invalid batch or row id');
   }
 
@@ -406,8 +406,8 @@ router.post('/batches/:id/rows/:rowId/investment-override', async (req, res) => 
 
 // POST /api/portfolio/import/batches/:id/commit
 router.post('/batches/:id/commit', async (req, res) => {
-  const batchId = parseInt(req.params.id, 10);
-  if (!Number.isFinite(batchId)) throw new ValidationError('Invalid batch id');
+  const batchId = Number(req.params.id);
+  if (!Number.isInteger(batchId) || batchId <= 0) throw new ValidationError('Invalid batch id');
   const batch = await getBatch(batchId);
   if (!batch) throw new NotFoundError(`Import batch ${batchId} not found`);
   if (!['awaiting_review', 'matching'].includes(batch.status)) {
