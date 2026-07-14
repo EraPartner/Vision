@@ -35,100 +35,126 @@ Decide on:
 
 ### 2. Create the Route File
 
-Create `apps/node-backend/src/routes/<resource>.js`:
+Create `apps/node-backend/src/routes/<resource>.js`. Routes are thin: they parse/validate the request, delegate to the **service** (never the repository — the `vision-local/no-repo-direct-from-route` ESLint gate enforces this, [[docs/adr/067-enforce-route-service-boundary|ADR-067]]), and reply with the `res.ok()` envelope ([[docs/adr/026-unified-api-response-envelope|ADR-026]]). Use `validateIdParam` for `/:id` routes and throw the typed errors from `middleware/errorHandler.js` instead of hand-rolling `res.status(...).json(...)` — the central error handler turns them into the `{ ok:false, error:{ code, message } }` envelope. See `routes/tags.js` for a live reference.
 
 ```javascript
 import { Router } from 'express';
-import { rateLimit } from 'express-rate-limit';
-import { <resource>Repository } from '../repositories/<resource>Repository.js';
+import <resource>Service from '../services/<resource>Service.js';
+import { validateIdParam } from '../middleware/validation.js';
+import { parsePagination } from '../lib/pagination.js';
 
 const router = Router();
 
-// Rate limiting
-const limiter = rateLimit({ windowMs: 60_000, max: 100 });
-router.use(limiter);
-
 // GET /api/<resource>
 router.get('/', async (req, res) => {
-  const { limit = 50, offset = 0 } = req.query;
-  const items = await <resource>Repository.getAll({ limit, offset });
-  const total = await <resource>Repository.getCount();
-  res.json({ items, total, limit, offset, links: [] });
+  const { limit, offset } = parsePagination(req.query, { maxLimit: 1000 });
+  const { items, total } = await <resource>Service.list({ limit, offset });
+  res.ok({ items, total, limit, offset, links: [] });
 });
 
 // POST /api/<resource>
 router.post('/', async (req, res) => {
-  const item = await <resource>Repository.create(req.body);
-  res.status(201).json({ ...item, links: [] });
+  const item = await <resource>Service.create(req.body); // throws ValidationError on bad input
+  res.status(201);
+  res.ok({ ...item, links: [] });
 });
 
 // GET /api/<resource>/:id
-router.get('/:id', async (req, res) => {
-  const item = await <resource>Repository.getById(parseInt(req.params.id, 10));
-  if (!item) return res.status(404).json({ detail: 'Not found' });
-  res.json({ ...item, links: [] });
+router.get('/:id', validateIdParam, async (req, res) => {
+  const item = await <resource>Service.get(Number(req.params.id)); // throws NotFoundError if absent
+  res.ok({ ...item, links: [] });
 });
 
 // PATCH /api/<resource>/:id
-router.patch('/:id', async (req, res) => {
-  const item = await <resource>Repository.update(parseInt(req.params.id, 10), req.body);
-  if (!item) return res.status(404).json({ detail: 'Not found' });
-  res.json({ ...item, links: [] });
+router.patch('/:id', validateIdParam, async (req, res) => {
+  const item = await <resource>Service.update(Number(req.params.id), req.body);
+  res.ok({ ...item, links: [] });
 });
 
 // DELETE /api/<resource>/:id
-router.delete('/:id', async (req, res) => {
-  const deleted = await <resource>Repository.hardDelete(parseInt(req.params.id, 10));
-  if (!deleted) return res.status(404).json({ detail: 'Not found' });
+router.delete('/:id', validateIdParam, async (req, res) => {
+  await <resource>Service.remove(Number(req.params.id)); // throws NotFoundError if absent
   res.status(204).end();
 });
 
 export default router;
 ```
 
+> [!tip] Rate limiting
+> Don't add a per-router `rateLimit(...)` unless the resource needs a tighter budget than the global `/api` limiter already applied in `main.js`. When it does, pass the limiter as middleware to `mountRouter` (see the `aggregations`/`admin` mounts) rather than `router.use(...)`.
+
 ### 3. Register the Route
 
-Add to `apps/node-backend/src/main.js`:
+Add to `apps/node-backend/src/main.js`, using `mountRouter` (which also registers the route in the manifest) — not a bare `app.use`:
 
 ```javascript
 import <resource>Router from './routes/<resource>.js';
 
-// ...
-app.use('/api/<resource>', <resource>Router);
+// ...alongside the other mounts near main.js:310+
+mountRouter(app, '/api/<resource>', <resource>Router);
 ```
 
-### 4. Create the Repository
+### 4. Create the Service and Repository
 
-Create `apps/node-backend/src/repositories/<resource>Repository.js`:
+**Service** — the ADR-067 seam where validation and orchestration live. Create `apps/node-backend/src/services/<resource>Service.js`:
 
 ```javascript
-import { getPool } from '../database/pool.js';
+import <resource>Repository from '../repositories/<resource>Repository.js';
+import { NotFoundError, ValidationError } from '../middleware/errorHandler.js';
 
-export const <resource>Repository = {
-  async getAll({ limit = 50, offset = 0 }) {
-    const pool = getPool();
-    const { rows } = await pool.query(
-      'SELECT * FROM <resource> ORDER BY id ASC LIMIT $1 OFFSET $2',
-      [limit, offset]
-    );
-    return rows;
+const <resource>Service = {
+  list: ({ limit, offset }) => <resource>Repository.getAllWithCount({ limit, offset }),
+
+  create(data) {
+    if (typeof data?.name !== 'string' || !data.name.trim()) {
+      throw new ValidationError('Missing required field: name');
+    }
+    return <resource>Repository.create(data);
   },
 
-  async getCount() {
-    const pool = getPool();
-    const { rows } = await pool.query('SELECT COUNT(*) as count FROM <resource>');
-    return parseInt(rows[0].count, 10);
+  async get(id) {
+    const item = await <resource>Repository.getById(id);
+    if (!item) throw new NotFoundError(`<resource> ${id} not found`);
+    return item;
+  },
+
+  async update(id, data) {
+    const item = await <resource>Repository.update(id, data);
+    if (!item) throw new NotFoundError(`<resource> ${id} not found`);
+    return item;
+  },
+
+  async remove(id) {
+    const deleted = await <resource>Repository.hardDelete(id);
+    if (!deleted) throw new NotFoundError(`<resource> ${id} not found`);
+  },
+};
+
+export default <resource>Service;
+```
+
+**Repository** — parameterized SQL only, via the shared `query` helper (there is no `database/pool.js`; the connection module is `database/connection.js`). Create `apps/node-backend/src/repositories/<resource>Repository.js`:
+
+```javascript
+import { query } from '../database/connection.js';
+
+const <resource>Repository = {
+  async getAllWithCount({ limit = 50, offset = 0 }) {
+    const { rows } = await query(
+      'SELECT *, COUNT(*) OVER() AS total_count FROM <resource> ORDER BY id ASC LIMIT $1 OFFSET $2',
+      [limit, offset]
+    );
+    const total = rows.length ? Number(rows[0].total_count) : 0;
+    return { items: rows.map(({ total_count, ...r }) => r), total };
   },
 
   async getById(id) {
-    const pool = getPool();
-    const { rows } = await pool.query('SELECT * FROM <resource> WHERE id = $1', [id]);
+    const { rows } = await query('SELECT * FROM <resource> WHERE id = $1', [id]);
     return rows[0] || null;
   },
 
   async create(data) {
-    const pool = getPool();
-    const { rows } = await pool.query(
+    const { rows } = await query(
       'INSERT INTO <resource> (name, created_at) VALUES ($1, NOW()) RETURNING *',
       [data.name]
     );
@@ -136,8 +162,7 @@ export const <resource>Repository = {
   },
 
   async update(id, data) {
-    const pool = getPool();
-    const { rows } = await pool.query(
+    const { rows } = await query(
       'UPDATE <resource> SET name = $1, updated_at = NOW() WHERE id = $2 RETURNING *',
       [data.name, id]
     );
@@ -145,8 +170,7 @@ export const <resource>Repository = {
   },
 
   async hardDelete(id) {
-    const pool = getPool();
-    const { rowCount } = await pool.query('DELETE FROM <resource> WHERE id = $1', [id]);
+    const { rowCount } = await query('DELETE FROM <resource> WHERE id = $1', [id]);
     return rowCount > 0;
   },
 };
@@ -202,23 +226,28 @@ describe('<resource> API', () => {
 });
 ```
 
-### 7. Update Documentation
+### 7. Update the Contract and Documentation
 
-1. Create `docs/api/<resource>.md` following the pattern in [[docs/api/transactions\|Transactions API]]
-2. Add to [[docs/api/index\|API Index]]
-3. Update [[docs/adr/002-database-schema\|Database Schema ADR]] if new table
-4. Add to [[docs/architecture/backend-architecture\|Backend Architecture]] diagram if significant
+The endpoint is not "done" until the API contract and the generated frontend types agree with it:
+
+1. Add the operation(s) to `openapi.yaml` — it is the authoritative spec, and `scripts/check-endpoint-matrix.js` gates the count in CI.
+2. Run `bun run generate:types` to regenerate `apps/frontend/src/types/generated.ts` from `openapi.yaml` ([[docs/adr/031-openapi-type-generation-frontend|ADR-031]]).
+3. Add the row(s) to [[docs/reference/api-endpoint-matrix|api-endpoint-matrix.md]] (and bump its `api_operation_count`).
+4. Create `docs/api/<resource>.md` following the pattern in [[docs/api/transactions\|Transactions API]], and add it to [[docs/api/index\|API Index]].
+5. Update the data-model reference if you added a table, and the [[docs/architecture/backend-architecture\|Backend Architecture]] diagram if significant.
 
 ## Checklist
 
-- [ ] Route file created with proper HTTP methods
-- [ ] Route registered in `main.js`
-- [ ] Repository created with all CRUD operations
+- [ ] Route file created (thin — delegates to the service, uses `res.ok()` + `validateIdParam`, throws typed errors)
+- [ ] Service module created (ADR-067 seam; validation + orchestration)
+- [ ] Repository created (parameterized SQL via `query` from `database/connection.js`)
+- [ ] Route registered in `main.js` via `mountRouter`
 - [ ] Database migration created and tested
 - [ ] Tests written for all endpoints
-- [ ] API documentation created
-- [ ] API index updated
-- [ ] Frontmatter includes `type: endpoint`, `tags`, `description`, `related_code`
+- [ ] `openapi.yaml` updated **and** `bun run generate:types` run
+- [ ] `docs/reference/api-endpoint-matrix.md` row + count updated
+- [ ] `docs/api/<resource>.md` created and API index updated
+- [ ] Frontmatter includes `type`, `tags`, `description`, `related_code`
 
 ## Related
 

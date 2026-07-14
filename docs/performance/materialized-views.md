@@ -22,8 +22,8 @@ See [[docs/adr/010-phase1-aggregation-strategy|ADR-010]] for the full architectu
 
 | Strategy | Use Case | Maintenance | Latency | Examples |
 |----------|----------|-------------|---------|----------|
-| **Materialized Views** | Expensive temporal aggregates (monthly rollups, category breakdowns) | On-demand refresh after mutations | ~50–150ms | `mv_monthly_summary`, `mv_recipient_monthly` |
-| **Trigger-Maintained Tables** | Real-time aggregates requiring consistency with source tables | Automatic via row-level triggers | <1ms | `agg_recipient_totals`, `agg_split_outstanding` |
+| **Materialized Views** | Expensive temporal aggregates (monthly rollups, category breakdowns) | On-demand refresh after mutations | ~50–150ms | `mv_monthly_summary`, `mv_bank_balances` (`mv_recipient_monthly` was dropped in 0038) |
+| **Trigger-Maintained Tables** | Real-time aggregates requiring consistency with source tables | Automatic via row-level triggers | <1ms | `agg_split_outstanding` (`agg_recipient_totals` was dropped in 0080) |
 
 ## Materialized Views in Vision
 

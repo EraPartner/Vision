@@ -28,7 +28,7 @@ related_code: ["apps/node-backend/src/repositories/", "alembic/versions/"]
 |-------|------|-------------|-------------|
 | `id` | SERIAL | PK | Unique identifier |
 | `date` | DATE | NOT NULL | Transaction date |
-| `amount` | NUMERIC(15,2) | NOT NULL | Amount (negative=expense, positive=income) |
+| `amount` | NUMERIC(18,4) | NOT NULL | Amount (negative=expense, positive=income). Widened from `NUMERIC(15,2)` in migration 0025 (`fix_numeric_precision`). |
 | `currency` | VARCHAR(3) | NOT NULL, DEFAULT 'EUR', CHECK (`currency ~ '^[A-Z]{3}$'`) NOT VALID | Currency code (migration 0046 — see note below) |
 | `balance` | NUMERIC(15,2) | NULLABLE | Running balance after transaction — **written exclusively by the import pipeline** (`importPipeline/commit.js`). `NULL` on manually-created rows. `PATCH /api/transactions/:id` and `POST /api/transactions` (create) no longer accept this field. `TransactionInfoDialog` renders it read-only. See [[docs/adr/094-balance-reconciliation-drift|ADR-094 addendum (2026-06-25)]]. |
 | `memo` | TEXT | NULLABLE | Original bank description |
@@ -257,28 +257,29 @@ types: `account_type`, `account_liquidity_class`, `account_tax_wrapper`, `accoun
 
 ## Portfolio Entities
 
-### Investment (Base Table)
+### Investment
 
-**Purpose:** Abstract base for all investment types using PostgreSQL table inheritance.
+> [!info] Canonical shape is a single flat table (ADR-109)
+> Fresh installs (the `0001` baseline) create **one flat `investments` table** holding every asset class — there is no base/child inheritance and no `stock_investments`/`etf_investments`/… child tables. This flat shape is the **canonical** schema per [[docs/adr/109-flat-investments-schema-canonical|ADR-109]], which **supersedes** [[docs/adr/004-postgresql-table-inheritance|ADR-004]]. The PostgreSQL table-inheritance shape (base `investments_base` + 7 child tables + an `investments` VIEW) exists **only on legacy installs** upgraded through the pre-baseline chain, and is being retired via a one-time guarded conversion migration (ADR-109). Asset-class-specific columns are simply NULL when not applicable.
+
+**Purpose:** All investment holdings, one row per holding, discriminated by `asset_class`.
 
 | Field | Type | Constraints | Description |
 |-------|------|-------------|-------------|
 | `id` | SERIAL | PK | Unique identifier |
 | `name` | VARCHAR(200) | NOT NULL | Display name |
+| `symbol` | VARCHAR(20) | NULLABLE | Ticker/symbol (stocks, ETFs, crypto, metals) |
 | `asset_class` | asset_class | NOT NULL | Enum: stock, etf, crypto, metals, real_estate, savings, bond |
 | `currency` | VARCHAR(10) | DEFAULT 'EUR' | Trading currency |
+| `current_price` | NUMERIC(18,6) | NULLABLE | Latest unit price (unit assets) |
+| `interest_rate` | NUMERIC(8,4) | NULLABLE | Rate (savings, bonds) |
+| `maturity_date` | DATE | NULLABLE | Maturity (bonds) |
+| `location` / `municipality` / `cadastral_income` / `municipality_tax_rate` | — | NULLABLE | Real-estate fields |
+| `price_provider` | price_provider | DEFAULT 'manual' | Quote source; plus the `price_provider_*` URL/path config columns |
 | `is_active` | BOOLEAN | DEFAULT true | Soft delete |
+| `created_at` / `updated_at` | TIMESTAMPTZ | NOT NULL | Timestamps |
 
-**Child Tables:**
-- `stock_investments` — Stocks (symbol, current_price)
-- `etf_investments` — ETFs (symbol, current_price)
-- `crypto_investments` — Crypto (symbol, current_price)
-- `metals_investments` — Precious metals (symbol, current_price)
-- `real_estate_investments` — Real estate (location, cadastral_income, municipality_tax_rate)
-- `savings_investments` — Savings accounts (interest_rate)
-- `bond_investments` — Bonds (interest_rate, maturity_date)
-
-**Related:** [[docs/features/portfolio|Portfolio Feature]], [[docs/adr/004-postgresql-table-inheritance|ADR-004]]
+**Related:** [[docs/features/portfolio|Portfolio Feature]], [[docs/adr/109-flat-investments-schema-canonical|ADR-109]] (canonical), [[docs/adr/004-postgresql-table-inheritance|ADR-004]] (superseded)
 
 ---
 
@@ -399,12 +400,12 @@ types: `account_type`, `account_liquidity_class`, `account_tax_wrapper`, `accoun
 
 **Related:** [[docs/integrations/currency-conversion|Currency Conversion]], [[docs/api/info|Info API]]
 
-> [!note] Phase 0 Note
-> See `exchange_rate_cache` below. The new table supports arbitrary currency pair caching; the legacy `exchange_rates` table is preserved for backward compatibility during Phase 0.
-
 ---
 
-### ExchangeRateCache
+### ExchangeRateCache (legacy installs only)
+
+> [!warning] Legacy-only table — not in the consolidated baseline
+> `exchange_rate_cache` exists **only on databases upgraded through the pre-baseline legacy migration chain** (`migrate.js` legacy list). It is **not created by the consolidated `0001` baseline**, and no current application code references the table. The columns below describe the legacy shape for reference only; treat `exchange_rates` (above) as the live FX-cache table.
 
 **Purpose:** Cached exchange rates for any currency pair at any date. Complements `exchange_rates` (EUR-only) for full FX flexibility.
 
@@ -422,7 +423,7 @@ types: `account_type`, `account_liquidity_class`, `account_tax_wrapper`, `accoun
 - `CHECK (rate > 0)` — All rates must be positive
 - Indices: `idx_exchange_rate_cache_date` (for date range queries), `idx_exchange_rate_cache_from_to` (for pair lookups)
 
-**Related:** [[docs/integrations/currency-conversion|Currency Conversion]], migration [[alembic/versions/0025_exchange_rate_cache.py|0025]]
+**Related:** [[docs/integrations/currency-conversion|Currency Conversion]] (legacy migration `exchange_rate_cache`, applied only via `migrate.js`'s legacy chain — there is no `0025_exchange_rate_cache.py` in the consolidated `alembic/versions/`)
 
 ---
 
@@ -663,15 +664,18 @@ types: `account_type`, `account_liquidity_class`, `account_tax_wrapper`, `accoun
 > - **Materialized Views** (computed on demand, refreshed after mutations)
 > - **Trigger-maintained Tables** (updated automatically via row-level triggers)
 >
-> Migration 0035 (`add_recipient_aggregations`) restores `mv_recipient_monthly` and `agg_recipient_totals`, which were originally in 0026 but never folded into the consolidated baseline. Without 0035, post-import aggregation refreshes and recipient queries fail.
+> Migration 0035 (`add_recipient_aggregations`) added `mv_recipient_monthly` and `agg_recipient_totals`. **Both have since been dropped** — see the two sections below — because the recipient-insight endpoints run live scans instead. The only trigger-maintained aggregate still live is `agg_split_outstanding`.
 >
 > See [[docs/adr/010-phase1-aggregation-strategy|ADR-010]] for the design rationale.
 
-### mv_recipient_monthly (Materialized View)
+### mv_recipient_monthly (Materialized View — DROPPED in 0038)
+
+> [!warning] Removed
+> Dropped in migration [[alembic/versions/0038_drop_mv_recipient_monthly.py|0038]]: the MV was refreshed on every mutation but never read (the recipient-insight endpoints run live scans with per-transaction-date FX that its monthly granularity cannot reproduce). `aggregationRefresh.js` no longer refreshes it. The columns below are retained only to describe the historical shape (downgrading past 0038 recreates them).
 
 **Purpose:** Pre-computed monthly aggregates per recipient per currency, with rollup to primary recipient.
 
-**Scope:** Last 24 months for freshness (older totals read from `agg_recipient_totals`)
+**Scope:** Last 24 months for freshness
 
 | Field | Type | Description |
 |-------|------|-------------|
@@ -694,7 +698,10 @@ types: `account_type`, `account_liquidity_class`, `account_tax_wrapper`, `accoun
 
 ---
 
-### agg_recipient_totals (Trigger-Maintained Table)
+### agg_recipient_totals (Trigger-Maintained Table — DROPPED in 0080)
+
+> [!warning] Removed
+> Dropped in migration [[alembic/versions/0080_drop_agg_recipient_totals.py|0080]] along with its sync triggers. Recipient totals are now computed on read. The columns below describe the historical shape only.
 
 **Purpose:** Running all-time totals per recipient per currency. Maintained automatically via row-level triggers on `transactions`.
 
@@ -776,24 +783,37 @@ types: `account_type`, `account_liquidity_class`, `account_tax_wrapper`, `accoun
 |-------|------|-------------|
 | `id` | SERIAL | PK |
 | `name` | TEXT | Chart name |
-| `chart_type` | TEXT | Chart type |
+| `chart_type` | TEXT (default `'line'`) | Chart type |
 | `category_ids` | INTEGER[] | Associated categories |
+| `recipient_ids` | INTEGER[] | Associated recipients (migration 0017) |
+| `chart_variant` | TEXT (default `'default'`) | Ranked/variant selector (migration 0017) |
+| `time_bucket` | TEXT (default `'monthly'`) | Aggregation bucket (migration 0017) |
+| `date_range_start` | DATE NULL | Optional custom range start (migration 0017) |
+| `date_range_end` | DATE NULL | Optional custom range end (migration 0017) |
+| `tag_ids` | INTEGER[] | Associated tags (migration 0063) |
+| `all_categories` | BOOLEAN (default false) | Dynamic all-categories mode (migration 0064) |
+| `all_recipients` | BOOLEAN (default false) | Dynamic all-recipients mode (migration 0064) |
+| `all_tags` | BOOLEAN (default false) | Dynamic all-tags mode (migration 0064) |
+| `created_at` | TIMESTAMPTZ | Creation timestamp |
+| `updated_at` | TIMESTAMPTZ | Last modification (shared `update_updated_at` trigger) |
 
 **Related:** [[docs/features/saved-charts|Saved Charts]], [[docs/api/savedCharts|API]]
 
 ---
 
-### RawTransaction
+### Raw transaction tables (per-bank)
 
-**Purpose:** Bank-specific raw transaction data for audit and deduplication.
+**Purpose:** Bank-specific raw transaction rows for audit and deduplication. There is **no single `raw_transactions` table and no `imports` table** — each supported source has its own table with a bank-specific column set, created in the `0001` baseline: `belfius_raw_transactions`, `revolut_raw_transactions`, `kbc_raw_transactions`, `sabb_raw_transactions`, `wise_raw_transactions`, `vision_raw_transactions`, `custom_raw_transactions`, `manual_raw_transactions` (later adapters — e.g. ING, BNP — add their own).
+
+All of them share these anchor columns; the remaining columns are the source's native CSV fields:
 
 | Field | Type | Description |
 |-------|------|-------------|
 | `id` | SERIAL | PK |
-| `bank_name` | TEXT | Bank identifier |
-| `raw_data` | JSONB | Original CSV row |
-| `hash` | TEXT | SHA-256 for dedup |
-| `import_id` | INTEGER | FK → imports |
+| `deduplication_hash` | VARCHAR(64) | NOT NULL UNIQUE — dedup key (not `hash`) |
+| `created_at` | TIMESTAMPTZ | DEFAULT NOW() |
+| `raw_csv_line` | TEXT | NOT NULL — the original CSV line verbatim (not a `raw_data` JSONB blob) |
+| … | — | plus bank-specific columns (account_number, transaction_date, amount, currency, recipient_*, etc.) |
 
 **Related:** [[docs/features/import|Import Feature]]
 

@@ -40,15 +40,21 @@ bun install
 
 ### 2. Environment Configuration
 
-```bash
-# Copy the example environment file
-cp .env .env.local
+Env vars live in a few well-defined files — there is **no** root `.env.local` (retired in [[docs/adr/080-layered-env-loading-shared-secrets|ADR-080]]). See [[docs/reference/environment-variables|environment-variables]] for the authoritative layering.
 
-# Edit .env.local with your settings
-# Key variables:
-# - DATABASE_URL: PostgreSQL connection string
-# - VITE_API_URL: Frontend API URL (default: http://localhost:3002)
+```bash
+# Shared secrets + Docker config (provider API keys, POSTGRES_PASSWORD, DATABASE_URL):
+cp .env.example .env
+# then replace the placeholder password (openssl rand -hex 32)
+
+# Local-dev backend overrides (localhost DATABASE_URL, CORS, ports) — layered over root .env:
+#   apps/node-backend/.env.local
+
+# Frontend dev vars (VITE_-prefixed only, e.g. VITE_API_URL):
+cp apps/frontend/.env.local.example apps/frontend/.env.local
 ```
+
+**Running Alembic migrations outside Docker:** `alembic/env.py` loads `config/.env.local` (if present) and reads `DATABASE_URL` (or `DATABASE_URL_MIGRATIONS`). Put the migration connection string there, or export it in the shell before `bun run db:upgrade`.
 
 ### 3. Database Setup
 

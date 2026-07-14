@@ -1020,7 +1020,8 @@ import {
   ForbiddenError,
   NotFoundError,
   ConflictError,
-} from '../lib/errors.js';
+  RateLimitedError,
+} from '../middleware/errorHandler.js';
 
 // Usage in routes:
 if (!requiredField) {
@@ -1037,13 +1038,15 @@ if (isDuplicate) {
 }
 ```
 
-### Response Format (Back-Compat)
+### Response Format
 
-All errors return this envelope:
+The `errorHandler` middleware ([[apps/node-backend/src/middleware/errorHandler.js|errorHandler.js]]) converts every thrown error into the unified envelope (ADR-026):
 
 ```json
-{ "detail": "Human-readable error message", "error_code": "ERROR_TYPE" }
+{ "ok": false, "error": { "code": "ERROR_TYPE", "message": "Human-readable error message" }, "meta": { "requestId": "…" } }
 ```
+
+`error.details` is included only when the thrown `AppError` carried a non-sensitive `details` object; `meta.requestId` is included when the request has an id. 5xx messages are suppressed in production.
 
 | Status Code | Class | Error Code | When to Use |
 |-------------|-------|-----------|-------------|
@@ -1052,7 +1055,8 @@ All errors return this envelope:
 | 403 | ForbiddenError | FORBIDDEN | Access denied |
 | 404 | NotFoundError | NOT_FOUND | Resource not found |
 | 409 | ConflictError | CONFLICT | Duplicate entry |
-| 500 | AppError | APP_ERROR | Internal server error |
+| 429 | RateLimitedError | RATE_LIMITED | Rate limit exceeded |
+| 500 | AppError | APP_ERROR (INTERNAL_SERVER_ERROR when unhandled) | Internal server error |
 
 ### Frontend Error Handling (Phase 5+)
 
