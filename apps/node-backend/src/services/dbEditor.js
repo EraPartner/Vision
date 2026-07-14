@@ -228,24 +228,14 @@ export async function readRows(table, opts = {}) {
     await client.query('SET TRANSACTION READ ONLY');
     await client.query(`SET LOCAL statement_timeout = ${READ_TIMEOUT_MS}`);
     const dataRes = await client.query(dataSql, params);
-    // Skip the full COUNT(*) scan when the first page didn't fill: the filtered
-    // set is then exactly what we already fetched, so the total is known without
-    // a second scan (worst case: an unfiltered `transactions` count on every
-    // page/sort change). Deep pages still need the exact count.
-    let total;
-    if (offset === 0 && dataRes.rows.length < limit) {
-      total = dataRes.rows.length;
-    } else {
-      const countRes = await client.query(countSql, params);
-      total = Number(countRes.rows[0].total);
-    }
+    const countRes = await client.query(countSql, params);
     await client.query('COMMIT');
     return {
       table,
       columns,
       primaryKey,
       rows: dataRes.rows,
-      total,
+      total: Number(countRes.rows[0].total),
       limit,
       offset,
     };

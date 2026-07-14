@@ -64,7 +64,7 @@ export function ChatMessageList({
         // synchronously right after React mutated the container (forced reflow
         // per streamed chunk); by rAF time the layout is already up to date.
         const raf = requestAnimationFrame(() => {
-            el.scrollTo({ top: el.scrollHeight });
+            el.scrollTop = el.scrollHeight;
         });
         return () => cancelAnimationFrame(raf);
     }, [combined.length, assistantDraft, isStreaming, streamingToolContentLength]);

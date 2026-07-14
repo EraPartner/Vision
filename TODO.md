@@ -1815,7 +1815,7 @@ look-changing one.
   - Both join a derived `(SELECT split_id, SUM(amount) FROM split_payments GROUP BY split_id)` that aggregates ALL payments across every recipient, then discard everything outside the requested recipient. Tiny table today; grows with every recorded payment.
   - Fix: correlate the sum to the recipient's splits (`LEFT JOIN LATERAL ... WHERE split_id = ts.id`) or push the recipient filter into the aggregate subquery.
 
-- [x] **DB-editor table browser runs an unbounded `COUNT(*)` + LIMIT/OFFSET on every page load (admin-only)** 🔽 🔎 verified-present 2026-07-11 ✅ 2026-07-14 · 453662d
+- [ ] **DB-editor table browser runs an unbounded `COUNT(*)` + LIMIT/OFFSET on every page load (admin-only)** 🔽 🔎 verified-present 2026-07-11 🔎 reverted-2026-07-14 (a first-page count-skip was implemented in 453662d then reverted: it relocated the pre-existing `client.query(countSql, params)` sink into a changed hunk, which CodeQL re-flags as a "new" taint alert on this admin editor even though columns are allowlisted against the live schema and values are parameterized. Left open to avoid re-introducing that sink line; a future fix should compute the total without moving the interpolated-WHERE query — e.g. a windowed count on the data query, or keep it on `main`'s line)
   - ↪ _from: Performance research 2026-07-09 · Wave F2_
   - `apps/node-backend/src/services/dbEditor.js:196,204` (count alongside every data page, same READ-ONLY txn), `:195` (`LIMIT/OFFSET` paging)
   - With no filter the count is a full scan of the table (worst: `transactions`) re-executed on every page/sort/filter change, racing the 15s `READ_TIMEOUT_MS`; deep offsets scan-and-discard.

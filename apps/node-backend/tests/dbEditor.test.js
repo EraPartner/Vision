@@ -108,8 +108,7 @@ describe('readRows', () => {
     ]);
     getClient.mockResolvedValue(client);
 
-    // offset > 0 → the exact count is unknown from the page, so the COUNT(*) runs.
-    const result = await readRows('transactions', { limit: 25, offset: 25 });
+    const result = await readRows('transactions', { limit: 25, offset: 0 });
 
     expect(result.total).toBe(42);
     expect(result.rows[0].__xmin).toBe('500');
@@ -117,23 +116,6 @@ describe('readRows', () => {
     expect(issued).toContain('SET TRANSACTION READ ONLY');
     expect(issued.some((s) => s.includes('xmin::text AS __xmin'))).toBe(true);
     expect(issued.some((s) => s.includes('LIMIT 25'))).toBe(true);
-    expect(issued.some((s) => s.includes('count(*)'))).toBe(true);
-  });
-
-  it('skips the COUNT(*) scan when the first page underfills (exact total known)', async () => {
-    query.mockImplementation(catalogRouter('transactions'));
-    const { client } = makeClient([
-      ['count(*)', { rows: [{ total: '999' }] }], // must NOT be consulted
-      ['SELECT *', { rows: [{ id: 1, amount: '10', currency: 'EUR', is_active: true, __xmin: '500' }] }],
-    ]);
-    getClient.mockResolvedValue(client);
-
-    const result = await readRows('transactions', { limit: 25, offset: 0 });
-
-    // Only one row came back on page 0, so the total is exactly 1 — no count scan.
-    expect(result.total).toBe(1);
-    const issued = client.query.mock.calls.map((c) => c[0]);
-    expect(issued.some((s) => s.includes('count(*)'))).toBe(false);
   });
 
   it('rejects any raw WHERE parameter (escape hatch removed — SQLi oracle)', async () => {
