@@ -80,7 +80,11 @@ export const statisticsRepository = {
     return result.rows.map(r => r.bank_account);
   },
 
-  async getTransactionCount({ accountId } = {}) {
+  /**
+   * @param {{ accountId?: (number|null) }} [opts]
+   */
+  async getTransactionCount(opts = {}) {
+    const { accountId } = opts;
     // Optional exact-FK account filter (ADR-088). Absent → unchanged unconditional
     // count (reuses the cached prepared statement); present → a parameterized,
     // separately-cached prepared statement so the two query shapes don't collide.
