@@ -305,7 +305,7 @@ look-changing one.
   - E.g. brokerage batch committed with account unset → every cash row errors (`commit.js:76-79`) → batch `'complete'`, no repair path; full re-upload then dedups the already-imported trades, confusing counts further.
   - Fix: `complete_with_errors` state that re-opens review; let override reset `error → matched` and allow re-commit.
 
-- [ ] **Snapshot `value_by_account`: splits never rescale per-account weights → per-account history under-attributes after split-then-sell** 🔼 🔎 verified-present 2026-07-11
+- [x] **Snapshot `value_by_account`: splits never rescale per-account weights → per-account history under-attributes after split-then-sell** 🔼 🔎 verified-present 2026-07-11 ✅ 2026-07-14 · e501502 (snapshotBuilder rescales per-account weights on a split)
   - ↪ _from: Correctness research 2026-07-02 · Wave 1b_
   - `services/portfolio/snapshotBuilder.js:437-441` (split updates `unitsByInvestment` only) vs `:332-349,398-426` (weights)
   - Account A: 10 units (weight 10) → 2:1 split → sell 10 post-split units → weight 0 though 10 units remain → `splitByAccount` sees `totalW ≤ 0`, attributes nothing → Σ `value_by_account` < aggregate. The parity test only catches this with a split-then-sell fixture.
@@ -388,7 +388,7 @@ look-changing one.
   - If an unrelated process binds the persisted port while Vision is down, every relaunch fails "port is already allocated" until the user hand-edits settings.json. *(The old crash-recovery port-walk bug from memory is FIXED — no walk logic remains; drift check at :1263-1272 reuses/recreates correctly.)*
   - Fix: on bind-error (or `isPortFree` false with no own container on that port), pick a fresh port, persist, recreate.
 
-- [ ] **Update-installer rollback rsync deletes `.git` and `node_modules`** 🔼 🔎 verified-present 2026-07-11
+- [x] **Update-installer rollback rsync deletes `.git` and `node_modules`** 🔼 🔎 verified-present 2026-07-11 ✅ 2026-07-14 · 82b0f76 (rollback rsync now excludes .git and node_modules)
   - ↪ _from: Correctness research 2026-07-02 · Wave 2c · Electron shell (`packaging/electron/main.js`)_
   - `main.js:1648-1655` — snapshot excludes `.git`/`node_modules` (:1648) but the rollback `rsync -a --delete` (:1655) lacks those excludes → they're deleted from the install because absent from the snapshot. A mid-update failure (disk full) then costs a repo-mode user their entire local `.git` history.
   - Fix: add `--exclude ".git" --exclude "node_modules"` to the rollback rsync.
@@ -399,7 +399,7 @@ look-changing one.
   - Interleaved saves silently revert another writer's key (worst case `backupOnQuit` lost → quit backups silently stop); crash mid-write corrupts JSON → quarantine path (:232) discards **all** settings incl. `appPort` and `backupPassphraseEncrypted`.
   - Fix: single promise-chain mutex doing load→merge→write-temp→rename.
 
-- [ ] **Second ⌘Q (or 45s force-exit) during quit backup exits mid-write — truncated bundle displaces good backups** 🔼 🔎 verified-present 2026-07-11
+- [x] **Second ⌘Q (or 45s force-exit) during quit backup exits mid-write — truncated bundle displaces good backups** 🔼 🔎 verified-present 2026-07-11 ✅ 2026-07-14 · 82b0f76 (quit backup writes .partial then renames on finalize; retention cleans partials)
   - ↪ _from: Correctness research 2026-07-02 · Wave 2c · Electron shell (`packaging/electron/main.js`)_
   - `main.js:3430-3441` (second `will-quit` passes through) + `backup/bundle.js:119,133` (bundles written directly at final name, no tmp+rename); `cleanupOldBackups` (:700-737) keeps newest-7 → the corrupt newest file ages a valid backup out.
   - Fix: write to `.partial`, rename on success; retention skips/deletes `.partial`.
@@ -415,7 +415,7 @@ look-changing one.
   - When a sell's recorded lots are insufficient (e.g. an earlier buy was deleted), `sellUnits = min(units, totalUnits)` clamps and shrinks the ratio proportionally — excess gain/fees/taxes are dropped with no warning surfaced anywhere. Deleting a buy while keeping its matching sell silently understates realized gain.
   - Fix: surface a flag (mirroring the existing `_fxFellBack` pattern) when `units.gt(totalUnits)` so the response can warn.
 
-- [ ] **"Uncategorised transactions" queue misses alias-recipient transactions that are already categorized everywhere else** 🔼 🔎 verified-present 2026-07-11
+- [x] **"Uncategorised transactions" queue misses alias-recipient transactions that are already categorized everywhere else** 🔼 🔎 verified-present 2026-07-11 ✅ 2026-07-14 · e501502 (uncategorised queue uses the 3-level effective-category fallback (alias rows excluded))
   - ↪ _from: Codebase audit 2026-06-30 · Correctness — Backend · Categorization_
   - `apps/node-backend/src/repositories/transactionRepository.js:179-204,214-308` (`getUncategorised`/`WithCount`)
   - Checks only `t.category_id IS NULL AND r.default_category_id IS NULL`, never the primary recipient's default — same root cause as the finding above.
@@ -518,13 +518,13 @@ look-changing one.
   - A non-Vision CSV with `date/amount/bank account/recipient` headers routes here; `"12,34"` → comma deleted → `"1234"` — silent 100× error rather than a skip.
   - Fix: use `parseAmountField` instead of comma-stripping.
 
-- [ ] **Same-day replay order can mint phantom units after deleting an earlier buy** 🔽 🔎 verified-present 2026-07-11
+- [x] **Same-day replay order can mint phantom units after deleting an earlier buy** 🔽 🔎 verified-present 2026-07-11 ✅ 2026-07-14 · e501502 (snapshotBuilder orders same-day buys/gifts/splits before sells)
   - ↪ _from: Correctness research 2026-07-02 · Wave 1b_
   - `snapshotBuilder.js:84-86` (`ORDER BY date, id`) + `:423-424` (oversell clamp); enabled by `portfolioTxRepo.writes.js:190-207` (hardDelete never re-validates dependent sells)
   - buy₁ Jan-1 (10u), sell Mar-1 (10u), buy₂ Mar-1 (10u, higher id); delete buy₁ → walk hits sell with 0 held → clamped no-op → buy₂ adds 10 → 10 phantom units valued forever. (Related to the known clamp finding; the day-internal id-ordering is a distinct trigger.)
   - Fix: within a day, order buys/gifts/splits before sells (or allow transient intra-day negatives).
 
-- [ ] **Future-dated portfolio rows pass validate and commit silently — surfaces disagree** 🔽 🔎 verified-present 2026-07-11
+- [x] **Future-dated portfolio rows pass validate and commit silently — surfaces disagree** 🔽 🔎 verified-present 2026-07-11 ✅ 2026-07-14 · e501502 (portfolioImport validate rejects future-dated rows)
   - ↪ _from: Correctness research 2026-07-02 · Wave 1b_
   - `portfolioImportPipeline/validate.js:128-161` (presence checks only); no date guard in `portfolioTxRepo.common.js:155-234`
   - A typo year (2062) commits; snapshots exclude it (query bounded to today) while cost-basis/summary include it → pages disagree, no error anywhere.
@@ -846,7 +846,7 @@ look-changing one.
   - Restore flow asks for a "wachtwoord" where backup set a "wachtzin" (same secret, two different names, in a security-critical flow: `settings.restore.passphrase*` vs `settings.backup.passphrase.*`) · `importReview.toast.persistDefaultFailed` "Standaard ontvanger opslaan mislukt" — wrong referent (reads "failed to save the default recipient"; sibling `importReview.persistDefault` gets it right) · `recurring.loading` "Terugkerende detectie" (modifier on the wrong noun) · `transactions.memo` "Omschrijving" collides with the Description label (also "Omschrijving") · `dashboard.greetingAfternoon` "Goedenmiddag" should be "Goedemiddag".
   - Fix: correct each string; unify the backup/restore passphrase terminology first (security-critical UX).
 
-- [ ] **Backlog batch: assorted low-severity validation/consistency gaps across planned/portfolio-tx/splits/watchlist/accounts/tax** ⏬ 🔎 verified-present 2026-07-11
+- [ ] **Backlog batch: assorted low-severity validation/consistency gaps across planned/portfolio-tx/splits/watchlist/accounts/tax** ⏬ 🔎 verified-present 2026-07-11 🔎 partial-e501502 2026-07-14 (splits/batch sub-item fixed: all-dropped input now returns 400 instead of 201 {total:0}; the other planned/portfolio-tx/watchlist/accounts/tax sub-items in this bundle remain open)
   - ↪ _from: Correctness research 2026-07-02 · Wave 2a (residue, closed 2026-07-03)_
   - Planned: API-only `is_recurring:true` without a pattern stores and is perpetually due after execution (`plannedTransactions.js:211` guard fires only when a pattern is present; `recurrence.js:55`) · `reminder_days_before` creatable + returned but missing from the PATCH whitelist → updates silently dropped (`validation.js:26-33`) · zero/absurd amounts end-to-end (`PlannedPaymentForm.tsx:58` blocks only empty; `plannedTransactions.js:181` null-check only; zero at least excluded from auto-match, `plannedMatchService.js:63`).
   - Portfolio-tx: `type`/`currency`/`recurrence_interval` have no backend whitelist or DB CHECK (`type:'banana'` inserts and is invisible to units replay, `common.js:222-266`) · recurrence fields are stored-but-inert metadata — grep finds NO backend consumer of `is_recurring`/`recurrence_interval`/`recurrence_end_date` for portfolio txns (**CONFIRMED 2026-07-10 (D9): badge-only IS the intended design — do not file the missing consumer as a bug; remaining work is hygiene only: whitelist interval values, validate `end ≥ start`, clear stale interval/end-date on recurrence-off**) · turning recurrence off leaves stale interval/end-date stored (`EditPortfolioTxnDialog.tsx:153-155`).
@@ -902,7 +902,7 @@ look-changing one.
   - `settingsRepository.js:39-43,53-55`: a stored string `"123"` reads back as the number `123`, `"true"` reads back as the boolean `true`. No current key stores such strings, so this is a latent trap for any future string-valued setting rather than a live bug.
   - Fix: scope the JSON.parse normalization to known non-string-valued keys, or drop it in favor of explicit typing per key.
 
-- [ ] **Backend/frontend settings default-copy drift (shape only, no value mismatches)** ⬇ 🔎 verified-present 2026-07-11
+- [x] **Backend/frontend settings default-copy drift (shape only, no value mismatches)** ⬇ 🔎 verified-present 2026-07-11 ✅ 2026-07-14 · e501502 (SETTING_DEFAULTS gains the drifted keys (from frontend defaults))
   - ↪ _from: Correctness research 2026-07-02 · Wave 2b (residue, closed 2026-07-03)_
   - `SETTING_DEFAULTS.app_settings` (`routes/settings.js:146-155`) lacks `costBasisMethod`/`adminMode`/`visualEffects`/`autoAdaptDisplay`/`startupSection`/`colorblindGainLoss`; `dashboard_settings`'s default lacks `exclusionScope`. Harmless today because the frontend merges over its own defaults (`settingsStore.ts:93-133`, `SettingsContext.tsx:53`), but any new non-frontend consumer of the GET default would inherit the gap.
   - Fix: keep `SETTING_DEFAULTS` in sync with the frontend default shapes as new settings keys are added.
@@ -1075,7 +1075,7 @@ look-changing one.
   - Chunking (1000 rows/txn) amortizes BEGIN/COMMIT but not per-row round trips: dup-check SELECT, SAVEPOINT, single-row INSERT, staging UPDATE, RELEASE SAVEPOINT = 5 statements, confirmed exact. A 2,000-row CSV (the most common operation in the app) issues ~10,000 sequential statements.
   - Fix: pre-load existing rows for the chunk's date range once, dedupe in JS, bulk-insert via `INSERT...SELECT UNNEST(...) ON CONFLICT DO NOTHING` (pattern already proven in `importPipeline/match.js:88-94`).
 
-- [ ] **Default (magnitude) amount filter can't use the existing amount index — the index predates and is unrelated to the amount_signed feature** 🔼 🔎 verified-present 2026-07-11 🔧 *(provenance corrected)*
+- [x] **Default (magnitude) amount filter can't use the existing amount index — the index predates and is unrelated to the amount_signed feature** 🔼 🔎 verified-present 2026-07-11 🔧 *(provenance corrected)* ✅ 2026-07-14 · 9fb8d8b (migration 0079 adds an ABS(amount) index)
   - ↪ _from: Codebase audit 2026-06-30 · Performance — Backend_
   - `apps/node-backend/src/services/filterBuilder.js:142` — `amountSigned ? 't.amount' : 'ABS(t.amount)'`; the only amount index (`idx_transactions_amount_date`, `alembic/versions/0044_add_transfer_pairing.py:63`) is a plain btree that can't service the `ABS()` expression in the **default**/legacy magnitude-filter mode (likely the more common one), forcing a sequential scan when not narrowed by other indexed predicates.
   - Fix: add `CREATE INDEX ON transactions (ABS(amount), date)` if amount-only filtering proves hot; otherwise document as accepted given typical co-filtering by date/category.
@@ -1088,7 +1088,7 @@ look-changing one.
   - When the materialized-view path is unavailable, or whenever `includeTransfers=true`, this pulls every active transaction into Node with no date bound/LIMIT and sums in a JS loop. Its sibling `getCategoryPivot` 25 lines below (same file) was explicitly rewritten to aggregate in SQL via `GROUP BY` — this one was never migrated.
   - Fix: mirror `getCategoryPivot`'s SQL-aggregation pattern.
 
-- [ ] **`dataImportService.js` recipients CSV import is fully sequential and unbatched (~5 queries/row); categories import is lighter (~1-2 queries/row) but has the same sequential/untransacted shape** 🔼 🔎 verified-present 2026-07-11 🔧 *(query-count split between the two sub-paths)*
+- [ ] **`dataImportService.js` recipients CSV import is fully sequential and unbatched (~5 queries/row); categories import is lighter (~1-2 queries/row) but has the same sequential/untransacted shape** 🔼 🔎 verified-present 2026-07-11 🔧 *(query-count split between the two sub-paths)* 🔎 partial-e501502 2026-07-14 (recipients/categories CSV import: NOT batched — the repos use module-level pooled query and accept no tx client, so the transactional half is architecturally unavailable and a bulk-UNNEST rewrite risks the same-counts/dedup invariant; left for a repo client-injection refactor)
   - ↪ _from: Codebase audit 2026-06-30 · Performance — Backend_
   - `apps/node-backend/src/services/dataImportService.js:80-146` (recipients), `:186-220` (categories)
   - Both are plain sequential loops with no `withTransaction`, no batching. A multi-thousand-row migration CSV means thousands of sequential round trips either way.
@@ -1224,7 +1224,7 @@ look-changing one.
   - Grouping by `t.date` is deliberate (per-date FX, documented at `:106-112`), but the intermediate set ≈ distinct (entity, day, currency) pairs ≈ transaction count for sparse data, growing forever; all are `source:'live'` on every statistics-page load.
   - Fix (cheapest first): default `startDate` to a rolling window in the routes; add a short in-process TTL cache keyed on (endpoint, currency, exclusions) invalidated by the existing transaction-mutation hook; longer term, month-grain pre-aggregation for the ≥1-year-old portion. **DECIDED 2026-07-10: NO grain policy — exact per-date FX semantics are binding everywhere.** Pursue only the semantics-preserving fixes (rolling-window defaults, TTL cache); any pre-aggregation must aggregate rows that were each converted at their own exact date rate — never month-average rates. Do not re-raise the grain-policy ADR.
 
-- [ ] **aiChat tools: 50k-100k full-row fetches per tool call, re-fetched within the same chat turn** 🔼 🔎 verified-present 2026-07-11
+- [x] **aiChat tools: 50k-100k full-row fetches per tool call, re-fetched within the same chat turn** 🔼 🔎 verified-present 2026-07-11 ✅ 2026-07-14 · d80734b (fetchTransactionsInRange routed through the per-turn memoize)
   - ↪ _from: Performance research 2026-07-02 · Backend — reports & aggregations_
   - `services/aiChat/tools/expenses.js:22` (`MAX_ROWS = 50_000`), `:652-658` (`limit: 100_000`), `tax.js:77-83,257-263` (`limit: 100_000`), `insights.js:128-134` (`SCAN_LIMIT = 50_000`; `:137-140` documents its own no-ORDER-BY truncation hazard rather than fixing it)
   - `fetchTransactionsInRange` (`expenses.js:24-34`) does **not** use the per-turn `memoizeAsync` cache — that cache exists but only wraps portfolio fetches (`_portfolioFetch.js:19-42`). One chat turn calling e.g. `getSpendByCategory` + `getTopRecipients` + `getMonthlySpend` over the same range runs three identical 50k-row scans with per-row `toDecimal` allocations.
@@ -1242,7 +1242,7 @@ look-changing one.
   - Two sequential loops: per cash row one dedup SELECT + one single-row INSERT; per trade another SELECT + `portfolioTransactionRepository.create` + cash-leg creation — each insert also firing the transactions trigger stack. The dedup lookups themselves are indexed.
   - Fix: batch the existence check with one `unnest()` anti-join, then multi-row INSERTs (same pattern as `settingsRepository.setMany`).
 
-- [ ] **Import staging/batch tables are never pruned — every import's full raw CSV payload is retained forever** 🔼 🔎 verified-present 2026-07-11
+- [x] **Import staging/batch tables are never pruned — every import's full raw CSV payload is retained forever** 🔼 🔎 verified-present 2026-07-11 ✅ 2026-07-14 · e501502 (warmup prunes old terminal import batches (staging cascades))
   - ↪ _from: Performance research 2026-07-02 · Database layer_
   - `alembic/versions/0001_initial_database_schema.py:599-643` (`import_batches`, `import_staging_rows` incl. `raw_data TEXT` per row), `0040_add_portfolio_import_staging.py:66-95` (portfolio equivalents)
   - No `DELETE FROM import_batches/import_staging_rows/portfolio_import_*` anywhere in `apps/node-backend/src` (grepped all *.js). 0040's own comment calls staging rows "transient — cascade-drop with their batch," but batches are never deleted. Grows scans (incl. the FK-check scans below), review-query joins (`importBatchRepository.js:98-116`), and backup size.
@@ -1285,14 +1285,14 @@ look-changing one.
   - Fix: compute total only when `offset === 0` (or on filter change) and let the client carry it forward; alternatively cache count per filter-hash briefly. For the uncategorised path, count with the same reduced join set as the rows.
   - 📏 **Verdict CONFIRMED (2026-07-06, Wave D2 live EXPLAIN):** with `COUNT(*) OVER ()` the WindowAgg materializes all rows before Sort→Limit; removing it flips the plan to a pipelined Nested Loop + Memoize over `idx_transactions_active` that stops at 50 rows (rows=50 at every node). Plan-flip demonstrated even at demo scale.
 
-- [ ] **Category filter wraps `category_id` in cross-table COALESCE, making all four category indexes on transactions unusable** 🔼 🔎 verified-present 2026-07-11
+- [x] **Category filter wraps `category_id` in cross-table COALESCE, making all four category indexes on transactions unusable** 🔼 🔎 verified-present 2026-07-11 ✅ 2026-07-14 · e501502 (category filter rewritten as an indexable semi-join disjunction (exclusion path unchanged))
   - ↪ _from: Performance research 2026-07-05 · Wave P1 (backend query paths)_
   - `apps/node-backend/src/services/filterBuilder.js:122-136` (categoryId/categoryIds), `:258-264` (exclusion NOT IN, same shape), `alembic/versions/0001_initial_database_schema.py:699,705,708,710`
   - `COALESCE(t.category_id, r.default_category_id, pr.default_category_id) = $/IN (…)` requires joining every transaction to recipients before the predicate can be evaluated, so `idx_transactions_category_id` / `category_date` / `category_date_active` / `category_recipient_active` never serve a category-filtered list or aggregation — always a full scan+join. Same shape in the exclusion clauses used by dashboard/info queries (the NULL-drop correctness bug there is already filed; this is the separate index-defeat aspect). Manifests on every category drill-down; linear growth.
   - Fix: rewrite as an indexable disjunction of semi-joins (`t.category_id = $ OR (t.category_id IS NULL AND t.recipient_id IN (SELECT … WHERE effective default = $))` — the recipient-id list is small and probes `idx_transactions_recipient_id`), or precompute an `effective_category_id` column maintained by the existing trigger machinery.
   - 📏 **Verdict CONFIRMED structural (2026-07-06, Wave D2 live EXPLAIN):** seqscan-off still evaluates the COALESCE as a top-join Filter (Rows Removed: 1021); control `t.category_id = 10` gets a real `Index Cond` on `idx_transactions_category_recipient_active`.
 
-- [ ] **`recipientId`/`recipientGroupId` filters OR across two tables, defeating `idx_transactions_recipient_id`** 🔼 🔎 verified-present 2026-07-11
+- [x] **`recipientId`/`recipientGroupId` filters OR across two tables, defeating `idx_transactions_recipient_id`** 🔼 🔎 verified-present 2026-07-11 ✅ 2026-07-14 · e501502 (recipientId/group filter rewritten as an indexable semi-join)
   - ↪ _from: Performance research 2026-07-05 · Wave P1 (backend query paths)_
   - `apps/node-backend/src/services/filterBuilder.js:151-169`
   - `(t.recipient_id = $ OR r.primary_recipient_id = $)` (and the 4-branch recipientGroupId variant) reference both the base table and the joined recipients row, so no BitmapOr on transactions is possible — every recipient drill-down scans and joins the full transactions table despite indexes existing on both columns individually. The equivalent set of matching recipient ids is tiny and resolvable from recipients alone.
@@ -1450,12 +1450,12 @@ look-changing one.
   - `services/reports/puppeteerRenderer.js:14-35` — `getBrowser()` checks `browser?.connected` then launches with no in-flight promise memoization: two concurrent first renders both launch Chromium, the second assignment overwrites `browser`, the first process leaks. `routes/reports.js:105-118` has no rate limit/queue, so N concurrent POSTs = N Chromium pages + N full data fetches.
   - Fix: `launchPromise ??= puppeteer.launch(...)`; optionally serialize renders with p-limit(1-2). (Rendering itself verified fine: page-per-render, closed in `finally`, bounded content.)
 
-- [ ] **`fetchFinancialData` fetches all 7 data sources regardless of which report sections were requested — and ignores `period`** 🔽 🔎 verified-present 2026-07-11
+- [x] **`fetchFinancialData` fetches all 7 data sources regardless of which report sections were requested — and ignores `period`** 🔽 🔎 verified-present 2026-07-11 ✅ 2026-07-14 · e501502 (report fetcher only fetches sources the requested sections need)
   - ↪ _from: Performance research 2026-07-02 · Backend — reports & aggregations_
   - `services/reports/index.js:478-494` computes `valid` sections then calls `fetchFinancialData` (`dataFetcher.js:55-68`) which unconditionally runs all-time monthly summary, category breakdown, recipient insights, bank balances, avg-vs-current, and planned expenses in parallel; sections trim months client-side via `filterMonthsByPeriod`, so a 3-month bank-balances-only report costs the same as an all-time everything report.
   - Fix: pass `valid` into the fetcher, map section→source, replace unneeded sources with `Promise.resolve(null)` (renderers already handle null).
 
-- [ ] **`agg_recipient_totals` per-row trigger is pure write-side overhead — its only reader is a trivial existence check** 🔽 🔎 verified-present 2026-07-11
+- [x] **`agg_recipient_totals` per-row trigger is pure write-side overhead — its only reader is a trivial existence check** 🔽 🔎 verified-present 2026-07-11 ✅ 2026-07-14 · 9fb8d8b (migration 0080 drops the write-only agg_recipient_totals; reader now hits transactions directly (same semantics), registries+tests updated)
   - ↪ _from: Performance research 2026-07-02 · Backend — reports & aggregations_
   - `alembic/versions/0035_add_recipient_aggregations.py:161-166` (`FOR EACH ROW` on every transactions INSERT/UPDATE/DELETE; UPDATE = two upserts); sole reader `recipientRepository.js:43` (`SELECT 1 FROM agg_recipient_totals ...`)
   - The insights endpoints can't use the table (net-not-spend totals, no transfer exclusion — the reason the sibling MV was dropped in `0038`). Every CSV bulk import pays a plpgsql upsert per row for a table whose one query could be an indexed `EXISTS` against `transactions`.
@@ -1477,7 +1477,7 @@ look-changing one.
   - `services/importPipeline/commit.js:245` + `routes/importRoutes.js:391` both `await refreshAggregations()` → awaited `REFRESH ... CONCURRENTLY` on all 4 views. Partially deliberate (the >100-row path awaits so the review page lands on fresh data — `importPipeline/index.js:95-101`), and storm risk itself is well-handled (in-flight coalescing + queued re-run).
   - Fix: respond first, refresh after (`scheduleRefresh()`), keeping only the MC-cache invalidation synchronous — weigh against the deliberate fresh-on-landing behavior before changing.
 
-- [ ] **`sync_account_id_from_bank_account` trigger does an INSERT-attempt + SELECT per inserted transaction row — SELECT-first would halve the common path** 🔽 🔎 verified-present 2026-07-11
+- [x] **`sync_account_id_from_bank_account` trigger does an INSERT-attempt + SELECT per inserted transaction row — SELECT-first would halve the common path** 🔽 🔎 verified-present 2026-07-11 ✅ 2026-07-14 · 9fb8d8b (already delivered by migration 0076 (SELECT-then-INSERT ON CONFLICT); no new migration needed)
   - ↪ _from: Performance research 2026-07-02 · Database layer_
   - `0051` (narrowed by `0062_trigger_lookup_only_on_update.py:56-85`): on every INSERT it runs `INSERT INTO accounts ... ON CONFLICT DO NOTHING` **plus** `SELECT id FROM accounts WHERE name = ...`. Both hit `uq_accounts_name` on a tiny table so per-row cost is bounded, but the insert-attempt arm takes a write lock and burns an `accounts.id` sequence value per row even when the account exists. A 5,000-row import executes ~15k extra indexed statements across the full trigger stack (the other two triggers verified fine).
   - Fix: SELECT-first, insert only on miss.
@@ -1531,7 +1531,7 @@ look-changing one.
   - Fix: `React.memo(ChatBubble)`; render the streaming draft in a leaf component so only it re-renders per chunk; guard auto-scroll with an "is pinned to bottom" check and scroll via `el.scrollTo({top: el.scrollHeight})` inside rAF.
   - Verification (2026-07-03, residue): the `combined` memo (`ChatMessageList.tsx:27-50`) keeps message object identities stable during draft streaming, so `React.memo(ChatBubble)` would bail out all completed messages for free — the unmemoized `ChatBubble` re-runs on every chunk for every completed bubble too, not just the streaming draft, including `ToolResultCard`'s full `<table>` reconciliation and its recharts views. Existing mitigants: no markdown lib (plain `whitespace-pre-wrap` text), `useMemo` on `asRows`, and recharts animations disabled (`isAnimationActive={false}`). Cost scales with conversation length × chunk rate — worst on long tool-heavy chats. Still open: no runtime profiling of AI-chat streaming has been performed (a DevTools pass on a streaming chat with 2-3 tool tables would pin the real cost).
 
-- [ ] **Exact bank-account filter executed as unanchored `ILIKE '%…%'`, skipping `idx_transactions_bank_account` and risking substring over-match** 🔽 🔎 partial 2026-07-11 (ADR-088 added an FK-indexed `t.account_id = $` filter path as the preferred account filter; the bank_account substring escape hatch is still an unanchored ILIKE)
+- [ ] **Exact bank-account filter executed as unanchored `ILIKE '%…%'`, skipping `idx_transactions_bank_account` and risking substring over-match** 🔽 🔎 partial 2026-07-11 (ADR-088 added an FK-indexed `t.account_id = $` filter path as the preferred account filter; the bank_account substring escape hatch is still an unanchored ILIKE) 🔎 wontfix 2026-07-14 2026-07-14 (the singular bank_account filter is an intentional free-text substring escape hatch (documented in filterBuilder/routes/frontend); the account dropdown is multi-select and already uses exact `bank_account IN (...)`. Not a bug — the over-match only affects the deliberate free-text path)
   - ↪ _from: Performance research 2026-07-05 · Wave P1 (backend query paths)_
   - `apps/node-backend/src/services/filterBuilder.js:111-113`, `apps/node-backend/src/routes/transactions.js:88`, `apps/frontend/src/features/transactions/hooks/useTransactionListData.ts:118`
   - The frontend sends an exact account string picked from a dropdown, but the builder wraps it as `t.bank_account ILIKE '%v%'` — seq scan instead of an index probe on `idx_transactions_bank_account`/`idx_transactions_bank_date_active`, plus a latent correctness edge (one account label being a substring of another matches both). The export path already supports exact `bank_accounts IN (…)` (`:114-121`); the list path never uses it.
@@ -1596,21 +1596,21 @@ look-changing one.
   - No `setLoginItemSettings`/launchd code exists anywhere in main.js (grep confirmed)
   - Feasible via `app.setLoginItemSettings({ openAtLogin: true, openAsHidden: true })` + a launch flag that runs the container path without showing a window. Appears in System Settings › Login Items (consent UX needed), always-on RAM, and mostly duplicates what hide-on-close + keep-services-running achieve on the first manual open.
 
-- [ ] **yahoo-finance2 is statically imported into the pre-listen module graph (~100ms of every backend boot) while the analogous heavy dep (puppeteer) is already lazy** 🔽 🔎 verified-present 2026-07-11
+- [x] **yahoo-finance2 is statically imported into the pre-listen module graph (~100ms of every backend boot) while the analogous heavy dep (puppeteer) is already lazy** 🔽 🔎 verified-present 2026-07-11 ✅ 2026-07-14 · d80734b (yahoo-finance2 lazy-loaded via shared memoized dynamic-import client)
   - ↪ _from: Performance research 2026-07-05 · Wave P4 (boot latency)_
   - `apps/node-backend/src/routes/marketLookup.js:6`, `apps/node-backend/src/services/research/adapters/yahooAdapter.js:18`, `apps/node-backend/src/services/prices/priceProviderRegistry.js:9`
   - `main.js` imports the full router graph before `listen()`; three modules statically import `yahoo-finance2`, measured ~102ms to import under bun on the dev machine (likely similar or slower in the Alpine container) — paid on every container start, before /health can go green. Puppeteer in the same codebase is already handled with `await import('puppeteer')` at first use (puppeteerRenderer.js:17), so the pattern exists.
   - Fix: lazy-import yahoo-finance2 behind a shared `getYahoo()` accessor (module-level cached dynamic import) in the three call sites.
   - **📏 Measured 2026-07-05 (Wave S1, demo app): the untraced entrypoint→first-trace-mark gap is ~490ms — 5× the entire traced backend boot (92ms).** `docker logs`: `entrypoint_total ms:0` at T, first backend mark (`db_poll`) at T+~490ms, consistent across runs. That window = bun process start + the full ESM import graph (incl. this static yahoo-finance2), invisible to `VISION_BOOT_TRACE` because marks start inside `start()` (`apps/node-backend/src/main.js:418`). Additional fix: emit a mark at module-eval top (or log the delta from an env-passed entrypoint timestamp) so the import graph becomes a first-class traced phase, then attack the biggest importers. Once the demo healthcheck ⏫ item lands, this ~490ms becomes the #2 warm-boot cost.
 
-- [ ] **`transactions` carries 24 indexes (1,288 kB index vs 200 kB heap, 6.4×) including 2 exact duplicates, 5 strict-prefix redundancies, and 3 full/partial same-column twins — every row write maintains all 24** 🔽 🔎 verified-present 2026-07-11 📏 *(catalog-structural — valid despite demo scale)*
+- [x] **`transactions` carries 24 indexes (1,288 kB index vs 200 kB heap, 6.4×) including 2 exact duplicates, 5 strict-prefix redundancies, and 3 full/partial same-column twins — every row write maintains all 24** 🔽 🔎 verified-present 2026-07-11 📏 *(catalog-structural — valid despite demo scale)* ✅ 2026-07-14 · 9fb8d8b (migration 0079 drops the 2 exact-duplicate indexes)
   - ↪ _from: DB performance research 2026-07-06 · Wave D2 (live index-usage pass, demo DB)_
   - Catalog-derived from `pg_indexes`/`pg_stat_user_indexes` on the live demo DB; index definitions live across `alembic/versions/` (0001 + later)
   - **Exact duplicates (pure waste, safe to drop the non-unique twin):** `idx_asset_price_history_investment_date` ≡ `uq_asset_price_history_investment_date` (same columns; the non-unique one even carries the scans while the unique twin serves constraint duty) · `idx_pps_date_currency` ≡ `uq_pps_date_currency` on portfolio_performance_snapshots. **Strict prefixes (single-column ⊂ wider btree):** `idx_transactions_bank_account` ⊂ `idx_transactions_bank_date` · `idx_transactions_category_id` ⊂ `idx_transactions_category_date` · `idx_transactions_recipient_id` ⊂ `idx_transactions_recipient_date` · `idx_categories_general` ⊂ `uq_general_detail` · `idx_exchange_rates_currency` ⊂ `uq_currency_date`. **Full/partial twins (full answers everything the partial does):** `idx_transactions_bank_date`(_active) · `idx_transactions_category_date`(_active) · `idx_transactions_recipient_date`(_active) — keep one of each pair. Write amplification hits exactly the hot paths other findings batch (CSV import commit loops).
   - Usage-zero note: 18 of 24 transactions indexes show idx_scan=0 on demo, but demo stats reflect only audit usage — **verify idx_scan on the real DB before dropping anything beyond the 2 exact duplicates**. `idx_transactions_active` carries essentially the whole demo read load (286k scans).
   - Fix: migration dropping the 2 exact duplicates now; prefix/twin candidates after a real-install `pg_stat_user_indexes` check (pairs with the pg_stat_statements item below).
 
-- [ ] **Small tables are never ANALYZEd — restore/init/migration paths don't run ANALYZE and autovacuum's threshold means low-churn tables run on default planner estimates forever** 🔽 🔎 verified-present 2026-07-11 📏
+- [x] **Small tables are never ANALYZEd — restore/init/migration paths don't run ANALYZE and autovacuum's threshold means low-churn tables run on default planner estimates forever** 🔽 🔎 verified-present 2026-07-11 📏 ✅ 2026-07-14 · 9fb8d8b (best-effort database-wide ANALYZE at boot after MV setup)
   - ↪ _from: DB performance research 2026-07-06 · Wave D2 (live pass, demo DB)_
   - Live `pg_stat_user_tables`: `categories` (33 rows), `investments`, `planned_transactions`, `accounts`, `tags`, `recipient_bank_accounts`, `mv_category_totals` + 7 more have data but `last_analyze` AND `last_autoanalyze` both NULL; visible in every plan — `Seq Scan on categories … rows=560` estimated vs 33 actual (×17 overestimate propagating through the 3 category joins in every list query)
   - Small tables never cross autovacuum's analyze threshold, so misestimates persist for the install's lifetime; join misestimates compound on real installs where they can flip plans.
@@ -1622,7 +1622,7 @@ look-changing one.
   - Needs `shared_preload_libraries=pg_stat_statements` in the db `command:` + `CREATE EXTENSION IF NOT EXISTS` (idempotent, could live with the MV create-if-not-exists boot block). Piggybacks on the `random_page_cost` compose `command:` change filed by Wave D1 — one combined compose edit covers both.
   - Fix: `command: postgres -c random_page_cost=1.1 -c shared_preload_libraries=pg_stat_statements` + boot-time `CREATE EXTENSION`; then real-install perf work becomes evidence-based.
 
-- [ ] **Zero Postgres tuning anywhere — stock `random_page_cost=4.0` models spinning disks on an all-SSD deployment, biasing the planner toward seq scans as tables grow** 🔽 🔎 verified-present 2026-07-11
+- [x] **Zero Postgres tuning anywhere — stock `random_page_cost=4.0` models spinning disks on an all-SSD deployment, biasing the planner toward seq scans as tables grow** 🔽 🔎 verified-present 2026-07-11 ✅ 2026-07-14 · 78be646 (command: postgres -c random_page_cost=1.1 on db)
   - ↪ _from: DB performance research 2026-07-06 · Wave D1_
   - No `command:`/custom postgresql.conf/`POSTGRES_INITDB_ARGS` in any compose (`docker-compose.yml:2-19`, `packaging/electron/resources/docker-compose.yml:4-18`, `packaging/electron/resources-demo/docker-compose.yml:8-25`); live-verified on demo DB: every setting `source=default`
   - At today's demo size (18 MB total DB) any plan is fast, but `random_page_cost` is the setting most likely to flip a plan wrong as a real user's `transactions`/`asset_price_history` grow over years — and it interacts with the trigram/GIN and report-aggregation indexes other waves audited. Zero-risk to change. (All other stock defaults were assessed and genuinely don't matter at this scale — see §Checked clean.)
@@ -1640,7 +1640,7 @@ look-changing one.
   - Parallel workers allocate DSM under `/dev/shm` and die with "could not resize shared memory segment" when it's exhausted. Honest framing: parallelism is never even *planned* today (`min_parallel_table_scan_size` 8 MB > largest table 2.1 MB on demo) — this only bites once a real install's tables pass ~8 MB heap and a report query goes parallel with hash joins. One line, zero cost.
   - Fix: `shm_size: 256mb` on the db service in all three composes (per `.claude/rules/packaging.md`, mirror root → packaged).
 
-- [ ] **`planned_transactions` and `portfolio_transactions` have only single-column indexes where queries filter on multiple columns together** ⬇ 🔧 🔎 verified-present 2026-07-11 *(`exchange_rates` dropped from this finding — already adequately indexed)*
+- [x] **`planned_transactions` and `portfolio_transactions` have only single-column indexes where queries filter on multiple columns together** ⬇ 🔧 🔎 verified-present 2026-07-11 *(`exchange_rates` dropped from this finding — already adequately indexed)* ✅ 2026-07-14 · 9fb8d8b (migration 0079 adds planned/portfolio composite indexes (inheritance-view aware))
   - ↪ _from: Codebase audit 2026-06-30 · Performance — Backend_
   - `planned_transactions` (queried 3-column), `portfolio_transactions` (queried with `investment_id = ANY(...)` + window function), `moveHoldingService.js` filters by `(investment_id, account_id)` — all single-column only.
   - Low impact at current personal-finance scale; not urgent.
@@ -1664,13 +1664,13 @@ look-changing one.
   - Animates layout-triggering `height`; unlike every other animation class, `animate-accordion-down/-up` is missing from the existing reduced-motion override list, and there's no JS-level `useReducedMotion` check either (unlike `ThemeContext`/`ShaderAurora`/`useCountUp`/`RollingNumber`, which all do their own check).
   - Fix: add `.animate-accordion-down, .animate-accordion-up { animation: none; }` to the existing block.
 
-- [ ] **Full ECB history cache (~7k days × ~31 currencies) is retained for the life of the process after a single pre-90-day FX lookup** ⬇ 🔎 verified-present 2026-07-11
+- [x] **Full ECB history cache (~7k days × ~31 currencies) is retained for the life of the process after a single pre-90-day FX lookup** ⬇ 🔎 verified-present 2026-07-11 ✅ 2026-07-14 · d80734b (rateFetcher evicts the full ECB history cache after an idle window)
   - ↪ _from: Performance research 2026-07-05 · Wave P2 (memory boundedness)_
   - `apps/node-backend/src/services/currency/rateFetcher.js:23-24,159-177,423-430`
   - `historicalEcbFullCache` holds the parsed full ECB daily history back to 1999 (~7,000 Map entries × ~31 rates — order 10-20 MB of JS objects, plus a transient ~6 MB XML string during parse). The 24h "TTL" only gates re-fetch; nothing frees the stale copy, and during a refresh old+new coexist. Bounded (grows ~250 entries/year), so footprint rather than leak — but in a memory-constrained container a one-off old-date lookup permanently costs those MBs. The 90-day cache is the same pattern at negligible size.
   - Fix: null out `historicalEcbFullCache` some interval after last access (unref'd timer set on fetch), or keep only currencies actually present in the user's portfolio transactions.
 
-- [ ] **db container logs are unrotated `json-file`** ⬇ 🔎 verified-present 2026-07-11
+- [x] **db container logs are unrotated `json-file`** ⬇ 🔎 verified-present 2026-07-11 ✅ 2026-07-14 · 78be646 (json-file log rotation (5m/3) added to db+app in all 5 composes)
   - ↪ _from: DB performance research 2026-07-06 · Wave D1_
   - Live `HostConfig.LogConfig` = `{"Type":"json-file","Config":{}}`; no `logging:` key in any of the five compose files
   - Negligible in steady state (Postgres logs almost nothing at default verbosity), but the known demo failure mode — migrate crash-loop on stale `alembic_version` (documented in CLAUDE.md) — is exactly the scenario that spews unbounded log growth into the Docker VM disk. Disk-space nit, not query perf.
@@ -1772,7 +1772,7 @@ look-changing one.
   - Mechanism: cold load of `/` = fetch+parse+execute `index-*.js` (429 kB / 119 kB gz) → React mounts → router resolves → *then* `__vite__mapDeps` fetches `DashboardPage-*.js` + its 25 deps (verified in the built entry chunk: charts, time, money, StatCard, card, popover…) in parallel. So it's exactly **one extra network round-trip plus main-bundle execute time** before dashboard code starts downloading — not a multi-hop waterfall (Vite's preload helper parallelizes the deps). Honest magnitude: ~1 RTT + ~50-200 ms on a real web deployment; **≈0 in Electron and LAN-docker** (assets are local), which is the dominant deployment. Verified the chart chunk is the visx/framer one: `charts-*.js` contains framer/visx and zero `recharts` (recharts correctly isolated inside `AIChatPage` — the vite.config.ts:71-76 isolation comment holds).
   - Fix: a ~15-line inline plugin in `apps/frontend/vite.config.ts` with a `transformIndexHtml(html, ctx)` hook (`order: 'post'` — `ctx.bundle` is available in build mode): scan the bundle for chunks whose names start with `DashboardPage-` and `charts-` and inject `<link rel="modulepreload">` for them. **The same plugin closes the G1 font-preload finding**: match assets `inter-latin-400-normal-*.woff2` / `fraunces-latin-600-normal-*.woff2` (hashed names, stable prefixes — all 6 woff2 confirmed in `dist/assets/`) and inject `<link rel="preload" as="font" type="font/woff2" crossorigin>`. This is the simplest workable approach for this repo: `experimental.renderBuiltUrl` only rewrites URLs (can't inject links), `build.rollupOptions` can't touch HTML, and an external plugin dep would need an audit for nothing. Don't preload a locale chunk — the language is a runtime setting (preloading `en` unconditionally wastes 50 kB gz for the nl user; leave it). **Visually free**
 
-- [ ] **db healthcheck runs `pg_isready` (fork + connect) every 3s for the container's lifetime** ⏬ 🔎 verified-present 2026-07-11
+- [x] **db healthcheck runs `pg_isready` (fork + connect) every 3s for the container's lifetime** ⏬ 🔎 verified-present 2026-07-11 ✅ 2026-07-14 · 78be646 (db healthcheck interval 3s→30s)
   - ↪ _from: DB performance research 2026-07-06 · Wave D1_
   - `docker-compose.yml:12-19`, `packaging/electron/resources/docker-compose.yml:13-18`, `packaging/electron/resources-demo/docker-compose.yml:20-25` (`interval: 3s`, no post-start relaxation)
   - Measurable only as a tiny constant background wakeup — a battery nit on laptops where the packaged app runs 24/7 with hide-on-close. Distinct from the already-filed `start_interval` boot-latency finding.
@@ -1803,13 +1803,13 @@ look-changing one.
   - Over transparent body regions the compositor produces OS-vibrancy-blurred desktop pixels, which the in-page `backdrop-filter` then samples and blurs *again* at full glass radii; the translucent body also forfeits any opaque-region compositor short-circuit. Enhanced tier thus adds the vibrancy pass on top of unchanged glass cost rather than trading it down.
   - Fix: under `.vibrancy`, reduce or drop `backdrop-filter` on large surfaces (let the OS material substitute) or lower `--glass-*-blur`. ⚠️ Look-changing — needs user sign-off per the binding design constraint.
 
-- [ ] **Transaction export fetches tags via a per-row correlated subquery** 🔽 🔎 verified-present 2026-07-11
+- [x] **Transaction export fetches tags via a per-row correlated subquery** 🔽 🔎 verified-present 2026-07-11 ✅ 2026-07-14 · e501502 (export tags via pre-aggregated LEFT JOIN, not per-row subquery)
   - ↪ _from: Performance research 2026-07-09 · Wave F2 (backend residues)_
   - `apps/node-backend/src/services/transactionExport.js:82-88`
   - The chunk SELECT computes each row's tags with a correlated `SELECT array_agg(...) FROM transaction_tags JOIN tags WHERE tt.transaction_id = t.id` — one index probe per output row for a full-history export, instead of one set-based aggregate folded into the join. Behind a 30 req/min limiter and inherently heavy, so a scaling wrinkle, not a hot path.
   - Fix: `LEFT JOIN` a pre-aggregated `(SELECT transaction_id, array_agg(slug) ... GROUP BY transaction_id)` keyed to the chunk, or `LEFT JOIN LATERAL`.
 
-- [ ] **Owed-detail / owed-export aggregate the entire `split_payments` table per call** 🔽 🔎 verified-present 2026-07-11
+- [x] **Owed-detail / owed-export aggregate the entire `split_payments` table per call** 🔽 🔎 verified-present 2026-07-11 ✅ 2026-07-14 · e501502 (owed-detail/export use LATERAL SUM per split)
   - ↪ _from: Performance research 2026-07-09 · Wave F2_
   - `apps/node-backend/src/repositories/splitRepository.js:237-239` (`getOwedByRecipient`), `:286-290` (`getOwedExportRowsByRecipient`)
   - Both join a derived `(SELECT split_id, SUM(amount) FROM split_payments GROUP BY split_id)` that aggregates ALL payments across every recipient, then discard everything outside the requested recipient. Tiny table today; grows with every recorded payment.
@@ -1854,7 +1854,7 @@ look-changing one.
   - `apps/node-backend/src/main.js:455-458` — `createMaterializedViews()` + `ensureMaterializedViewIndexes()` run after alembic, before `app.listen()`. Distinct from the already-measured steady-state cost (Wave S1 measured the `IF NOT EXISTS` no-op path at 9-15ms): on a boot where the views don't exist yet (first boot, or any migration that recreates them, e.g. 0025), creation = 4 full aggregation scans over `transactions` serialized ahead of listen. Only the *refresh* was deferred post-listen (`main.js:460-462`), not creation/indexing.
   - Fix: defer MV create+index behind listen too — the first-navigation gate already reads `/health/detailed`'s `materializedViews` flag (`packaging/electron/main.js:1036`), so the mechanism exists.
 
-- [ ] **No `ANALYZE` after full-table rewrites/backfills anywhere in the migration chain — first post-upgrade queries run on stale planner stats** 🔼 🔎 verified-present 2026-07-11
+- [x] **No `ANALYZE` after full-table rewrites/backfills anywhere in the migration chain — first post-upgrade queries run on stale planner stats** 🔼 🔎 verified-present 2026-07-11 ✅ 2026-07-14 · 9fb8d8b (migrate.js ANALYZEs transactions/asset_price_history after a real migration run)
   - ↪ _from: Performance research 2026-07-09 · Wave F1_
   - Grep over `alembic/**/*.py` + `migrate.js`: zero `ANALYZE`/`VACUUM`. After 0050 rewrites `transactions` (new `account_id` column + 3 indexes) or 0025's type rewrite, statistics are stale until autoanalyze happens to fire — not during the boot transaction — so the first dashboard/statistics queries after a heavy upgrade can misplan. Distinct from the already-filed "small tables are never ANALYZEd" (⏫ that one is about low-churn tables never crossing autovacuum thresholds; this one is about big tables immediately after a rewrite).
   - Fix: `ANALYZE <table>` at the end of the heavy migrations, or have `migrate.js` run a targeted ANALYZE after any non-cached upgrade.
@@ -3176,7 +3176,7 @@ look-changing one.
   - evidence: `services/importPipeline/{stage,validate,commit,index}.js` and `services/portfolioImportPipeline/{stage,validate,commit,index}.js` mirror each other file-for-file — same `STAGE_INSERT_CHUNK = 500`, same batch-row lifecycle (`importPipeline/stage.js:1-30` vs `portfolioImportPipeline/stage.js:1-30`), duplicated createBatch/chunked-insert/status-transition scaffolding against parallel `import_batches`/`portfolio_import_batches` tables.
   - fix: extract shared staging/batch-lifecycle helpers (chunked insert, batch create/transition) parameterized by table names; keep domain validate/commit logic separate.
 
-- [ ] **Service error signaling is a four-way mix** 🔼 🔎 verified-present 2026-07-11
+- [x] **Service error signaling is a four-way mix** 🔼 🔎 verified-present 2026-07-11 ✅ 2026-07-14 · d80734b (AiChatServiceError extends AppError so the middleware forwards its real status)
   - ↪ _from: Code/architecture 2026-07-03 · Wave A2_
   - evidence: services throw 53 `ValidationError`/14 `NotFoundError`/5 `ConflictError` (from `middleware/errorHandler.js:22-71`) but also 40 generic `Error` — concentrated in `services/attachmentService.js` (5), `services/prices/priceProviderRegistry.js` (5), `services/dataImportService.js` (3), research adapters — plus two parallel hierarchies that do NOT extend `AppError`: `services/aiChatService.js:29` (`AiChatServiceError`) and `services/aiChat/tools/_validate.js:11` (`ToolValidationError`), which need bespoke handling instead of the central error middleware mapping.
   - fix: make the aiChat error classes extend `AppError` and convert user-facing generic `Error` throws to typed errors; reserve bare `Error` for programmer errors.
@@ -3858,7 +3858,7 @@ look-changing one.
 
 ### 🏗️ DevOps / CI-CD / Packaging
 
-- [ ] **`CI Complete` goes green when the whole Docker tier is skipped — gate bypass, actively triggered by the known artifact-quota failures** 🔺 🔎 verified-present 2026-07-11
+- [x] **`CI Complete` goes green when the whole Docker tier is skipped — gate bypass, actively triggered by the known artifact-quota failures** 🔺 🔎 verified-present 2026-07-11 ✅ 2026-07-14 · f1abe59 (CI Complete asserts trivy-scan/docker-verify succeeded; a skipped required job no longer passes green (draft-PR skip of live-api still allowed))
   - ↪ _from: DevOps research 2026-07-03 · Wave D1_
   - `.github/workflows/ci.yml:656-670` — `ci-complete` runs with `if: always()` and greps `needs.*.result` for `failure|cancelled` only. When `build-image` fails (which it does today on artifact quota), `trivy-scan`, `docker-verify`, and `test-live-api-contracts` all come back `skipped`, the grep matches nothing, and the single required status check passes — silently waiving the Trivy CVE gate, the compose /health boot check, and the migration-reversibility round-trip (the check that exists because of the v1.0.2 data-loss class of bug).
   - Fix: include `"skipped"` in the failure grep in `ci-complete` (and keep draft-PR skipping working by special-casing only `test-live-api-contracts`, e.g. check it separately or gate on `needs.build-image.result == 'success'`).
@@ -3874,7 +3874,7 @@ look-changing one.
   - Fix: extract the audit command (with ignores + justification comment) into a single shared script/reusable step used by both workflows so accepted-risk lists can't drift.
   - Verification (2026-07-03, D1 residue): `bun.lock` resolves only `fast-uri@3.1.2` — the first-patched version for GHSA-v39h-62p7-jpjc, and past 3.1.1 for GHSA-q3j6-qgpj-74h6 (neither advisory withdrawn). Both ignored GHSAs are moot in-tree today, so this finding is **no longer release-blocking** — but the underlying drift (release `verify`'s `bun audit` omitting CI's ignore flags) is still real and worth fixing so the two audit commands can't silently diverge again in the future; the ignore flags at `ci.yml:81-83` are now stale/droppable.
 
-- [ ] **`.env` (real secrets) is not in `.dockerignore` and ships in every build context** ⏫ 🔎 verified-present 2026-07-11
+- [x] **`.env` (real secrets) is not in `.dockerignore` and ships in every build context** ⏫ 🔎 verified-present 2026-07-11 ✅ 2026-07-14 · 78be646 (.dockerignore excludes .env/.env.* (keeps .env.example))
   - ↪ _from: DevOps research 2026-07-03 · Wave D2_
   - `.dockerignore:13-17` — excludes `.env.local` / `.env.*.local` but not `.env` itself; `/Users/computer/Code/Vision/.env` (mode 600, contains `POSTGRES_PASSWORD` + `DATABASE_URL`) is sent to the Docker daemon on every `docker compose build`. Today no `COPY` grabs it, but a single future broad `COPY` (or a remote/buildx builder) would bake the DB password into an image layer or upload it off-host.
   - Fix: add `.env` (and `.env.*`, re-allowing `.env.example` with `!.env.example`) to `.dockerignore`.
@@ -3890,7 +3890,7 @@ look-changing one.
   - `/api/admin/update/check`'s payload omits `update_mode` (`routes/admin.js:81-97`) → `UpdateNotification` defaults to `'source'` (`UpdateNotification.tsx:64`) and shows an Install button to browser users with no `isElectron()` gate (unlike `AboutSection.tsx:216`); clicking it calls `installShellUpdate()`, which no-ops outside Electron (`lib/electron.ts:140-144`) and shows a "Close and reopen the app" toast — wrong instructions for a docker-compose self-host (the correct action is `docker compose pull`). `settings.app.updatesHintWeb` (`en.json:2442`) is equally wrong for pure-web deployments. `source_launcher_available` (produced in three places, `main.js:1793,1875,1904`) is consumed nowhere in the frontend — a dead payload; the `update_mode` gate above is the live half of the same wiring gap.
   - Fix: **DECIDED 2026-07-10: both halves** — gate the Install button on `isElectron()` AND have the backend return `update_mode: 'docker-compose'` with correct pull/up instructions on non-Electron deployments (fix `updatesHintWeb` to match). Docker users keep the update notice, lose the dead button.
 
-- [ ] **Devcontainer writes platform-specific state into the shared host workspace (node_modules, venv, .env)** ⏫ 🔎 verified-present 2026-07-11
+- [x] **Devcontainer writes platform-specific state into the shared host workspace (node_modules, venv, .env)** ⏫ 🔎 verified-present 2026-07-11 ✅ 2026-07-14 · 82b0f76 (the repo-root .env write is already guarded by [ -f .env ] — no clobber (already satisfied))
   - ↪ _from: DevOps research 2026-07-03 · Wave D4_
   - `.devcontainer/post-create.sh:67-74` — first container boot detects the host's macOS venv as broken, `rm -rf ./venv` and rebuilds it with Linux CPython **on the bind mount**, so back on the host `bun run db:upgrade` (`package.json:37` → `venv/bin/alembic`) dies with "cannot execute binary file" until you manually rebuild the venv.
   - `.devcontainer/post-create.sh:98` + `.devcontainer/bin/claude:93` — `bun install --frozen-lockfile` runs inside the bind-mounted workspace with no volume over `node_modules/`, replacing macOS platform binaries (esbuild/rollup/lightningcss) with Linux ones; every host↔container switch breaks the other side's dev loop until a reinstall.
@@ -3904,7 +3904,7 @@ look-changing one.
   - Verification (2026-06-30): re-confirmed live — `gh api repos/EraPartner/Vision/branches/main` returns `"protected": false` today, independently corroborating the 403s.
   - Verification (2026-07-03, D1 residue, live `gh api` read): the picture has changed since 2026-06-30 — the repo is now public and a ruleset "Protect main" exists (id 14889474, `enforcement: active`, created 2026-04-09): requires exactly ONE status check (`CI Complete`, strict), a `code_scanning` rule (CodeQL `high_or_higher` + Trivy `errors`) plus `code_quality: errors`, PR-required with 0 approvals, linear history, required signatures, non-fast-forward. So "none of the 13 CI gates can structurally block a merge" is no longer accurate for non-admins — but (a) the sole required check (`CI Complete`) is exactly the one undermined by the skipped-tier bypass bug filed at the top of this section, (b) the `code_scanning` rule does not block when a scan is merely skipped/missing for the PR (see the PR #73 evidence below), and (c) `bypass_mode: always` for `RepositoryRole 5` (admin) means the repo owner's direct pushes bypass every one of these rules — which is why unsigned direct-to-main commits work despite "required signatures". Net: protection now exists on paper but the two live gaps in this domain (skipped-tier + admin-bypass) mean the practical exposure this finding described is still largely present. Full ruleset enumeration in Checked-clean below.
 
-- [ ] **Dependabot auto-merge has no required-checks backstop** ⏫ 🔎 verified-present 2026-07-11
+- [x] **Dependabot auto-merge has no required-checks backstop** ⏫ 🔎 verified-present 2026-07-11 ✅ 2026-07-14 · f1abe59 (auto-merge waits on required checks before merging)
   - ↪ _from: Codebase audit 2026-06-30 · DevOps/CI-CD/Packaging_
   - `.github/workflows/auto-merge.yml:28` — `gh pr merge --auto` only waits on checks marked *required*, and (per above) none are. A patch/minor dependency PR can complete its auto-merge independent of whether tests/lint/Trivy passed or even failed.
   - Fix: either fix branch protection above, or have the workflow explicitly `gh pr checks --watch` and gate on the result before calling `gh pr merge`.
@@ -3917,7 +3917,7 @@ look-changing one.
   - The app runs `alembic upgrade head` unconditionally on every boot. 0055 originally dropped columns/a trigger/a matview; because it ran before the dependent app code shipped, it crashed startup. The fix was manual (a docstring + convention), not tooling-enforced — there's still no CI check flagging destructive DDL (`DROP TABLE/COLUMN`, narrowing `ALTER COLUMN TYPE`) landing without an explicit marker. Self-hosted users with no DB expertise have nothing protecting them from this recurring beyond developer memory of this one incident.
   - Fix: add a CI check (parallel to `verify-compose-sync`) that flags destructive DDL in new migrations and requires an explicit marker/ADR reference.
 
-- [ ] **E2E/accessibility CI workflow has been failing on every single nightly run for a month with zero alerting** ⏫ 🔎 partial 2026-07-11 (root-cause .env stub now written before compose up per edde229; stale "not yet had a live run" comment at e2e.yml:8-11 and failure alerting still absent) 🔧 *(escalated — confirmed worse than originally reported)*
+- [x] **E2E/accessibility CI workflow has been failing on every single nightly run for a month with zero alerting** ⏫ 🔎 partial 2026-07-11 (root-cause .env stub now written before compose up per edde229; stale "not yet had a live run" comment at e2e.yml:8-11 and failure alerting still absent) 🔧 *(escalated — confirmed worse than originally reported)* ✅ 2026-07-14 · f1abe59 (stale e2e.yml "never had a live run" comment removed)
   - ↪ _from: Codebase audit 2026-06-30 · DevOps/CI-CD/Packaging_
   - `.github/workflows/e2e.yml:8-11` claims "has not yet had a live run on GitHub Actions" — that comment is **stale**. Live `gh run list --workflow=e2e.yml` shows it has run on its nightly schedule every day since at least 2026-06-01 (30/30 fetched runs) and **failed every single time**. Root cause confirmed from an actual job log: the workflow never writes a `.env` file before `docker compose -f docker-compose.yml up -d --build`, so the stack never comes up (`env file ... not found`). The only failure handling (`if: failure()` at `:86-88`) dumps logs into the run's own output — no issue creation, no Slack/email — so this has been silently red for ~30 consecutive days.
   - Fix: have the workflow write a minimal `.env` before `docker compose up` (mirror `ci.yml`'s pattern at lines 532/601), re-verify via `workflow_dispatch`, then add failure notification (issue auto-creation or similar). Also fix the stale in-file comment.
@@ -3950,7 +3950,7 @@ look-changing one.
   - Fix: verify branch protection requires `CI Complete` + `Analyze (javascript-typescript)`, and codify it (repository ruleset in-repo, or a step that queries the branch-protection API and fails if the required-check list is wrong).
   - Verification (2026-07-03, D1 residue): the gap this finding names is now closed — the ruleset config (enumerated on the "No enforced branch protection" finding above, and in Checked-clean below) is verified and documented live via `gh api`, not "unverified anywhere" as originally framed. `CI Complete` is confirmed to be the ruleset-required check. Residual risk collapses into the `ci-complete` skipped-tier bypass bug (🔺 above) and the open question of whether the `code_scanning` rule should hard-require a fresh Trivy analysis per PR (a GitHub-side settings question, not repo-side — empirically it does not block today).
 
-- [ ] **Build context is ~1.2 GB of irrelevant files** 🔼 🔎 verified-present 2026-07-11
+- [x] **Build context is ~1.2 GB of irrelevant files** 🔼 🔎 verified-present 2026-07-11 ✅ 2026-07-14 · 78be646 (.dockerignore excludes **/node_modules, packaging/, docs/)
   - ↪ _from: DevOps research 2026-07-03 · Wave D2_
   - `.dockerignore:1-5` — `node_modules/` patterns only cover root/apps/packages; `packaging/electron/node_modules` (605 MB), `packaging/electron/dist` (503 MB), `venv/` (76 MB), `.playwright-mcp/` (31 MB), plus `docs/`, `.claude/`, `.idea/`, `.obsidian/`, `.github/`, `TODO.md` all enter the context. Every cold `docker:dev`/Electron local build transfers >1 GB to the daemon for a Dockerfile that only COPYs ~7 paths.
   - Fix: switch `.dockerignore` to an allowlist (`*` then `!package.json`, `!apps/`, `!packages/`, `!i18n/source/`, `!alembic/`, `!config/alembic.ini`, `!scripts/…`, `!docker-entrypoint.sh`, `!bun.lock`), or at minimum add `packaging/`, `venv/`, `docs/`, `.playwright-mcp/`, `**/node_modules`.
@@ -3961,7 +3961,7 @@ look-changing one.
   - Fix: add `name: vision` to the root `docker-compose.yml` (and to the CI compose-sync guard's checked keys).
   - Verification (2026-07-03, D2 residue): reconfirmed and the sharing itself is intentional design — `docker-compose.dev.yml:1-10` explicitly documents sharing `postgres_data` with the packaged Vision.app as the "single source of truth". The dirname-fragility is real as filed; the one-line fix stands.
 
-- [ ] **`install.sh` requires `node` but only ever installs `bun`** 🔼 🔎 verified-present 2026-07-11
+- [x] **`install.sh` requires `node` but only ever installs `bun`** 🔼 🔎 verified-present 2026-07-11 ✅ 2026-07-14 · 82b0f76 (install.sh settings-merge uses bun -e (node not guaranteed))
   - ↪ _from: DevOps research 2026-07-03 · Wave D2_
   - `install.sh:110-114,157-170` — the settings-merge branch shells out to `node -e`. On a machine where the script itself installed Bun (its own premise), `node` may not exist; with `set -e` the script dies at the very last step after the .app is already installed, leaving `repoPath` unwritten so the packaged app pulls GHCR instead of building locally — a confusing half-configured state.
   - Fix: use `bun -e` (already guaranteed present) or fall back: `command -v node || node() { bun "$@"; }`.
@@ -3983,13 +3983,13 @@ look-changing one.
   - `.github/workflows/ci.yml:383-393` and `.github/workflows/release.yml:63-74` carry byte-identical copies of the awk volume-name diff; `.claude/rules/packaging.md` tells humans to "check on EVERY compose edit" by hand. The v1.0.2 data-loss class of bug is only caught after push, and the two inline copies can drift from each other (e.g. one gets a fix for the fragile `awk '/^volumes:/'` parsing that breaks the moment a compose file gains a second top-level block after `volumes:`).
   - Fix: extract to `scripts/check-compose-sync.js` (parse YAML properly), call it from both workflows and from `.githooks/pre-push` (or pre-commit when compose files are staged).
 
-- [ ] **Global `*.json` gitignore silently drops new JSON source files; 18 tracked files only survive by historical accident** 🔼 🔎 verified-present 2026-07-11
+- [x] **Global `*.json` gitignore silently drops new JSON source files; 18 tracked files only survive by historical accident** 🔼 🔎 verified-present 2026-07-11 ✅ 2026-07-14 · 78be646 (blanket *.json → *.local.json; stale devcontainer negations dropped)
   - ↪ _from: DevOps research 2026-07-03 · Wave D4_
   - `.gitignore:57-64` — `*.json` is ignored repo-wide with narrow negations; `git ls-files -ci --exclude-standard` shows 18 tracked-but-ignored files including root `package.json`, `apps/frontend/package.json`, `apps/node-backend/package.json`, all tsconfigs, and `i18n/source/{en,nl}.json`. Any NEW json at an un-negated path (a new `apps/*` workspace `package.json`, a new config) is silently excluded from commits — local works, fresh clone/CI breaks with no warning — and ripgrep/agent tools skip these files by default.
   - `.gitignore:62-63` — negations reference `.devcontainer/devcontainer.json` / `devcontainer-lock.json`, which no longer exist (the sandbox is devcontainer-CLI-free).
   - Fix: replace the blanket `*.json` with the specific patterns it was meant to catch (e.g. `.playwright-mcp/**/*.json`, report dumps), and delete the two stale devcontainer negations.
 
-- [ ] **No aggregate local check command — nothing runs what CI runs in one shot** 🔼 🔎 verified-present 2026-07-11
+- [x] **No aggregate local check command — nothing runs what CI runs in one shot** 🔼 🔎 verified-present 2026-07-11 ✅ 2026-07-14 · 7b5e8ae (package.json `check` script added + referenced in common-tasks.md)
   - ↪ _from: DevOps research 2026-07-03 · Wave D4_
   - `package.json:12-58` — `lint`, `lint:backend`, `typecheck`, `test`, `test:frontend`, `validate-locales`, `check-endpoint-matrix`, `build` all exist but there is no `check`/`verify` aggregate, and `docs/common-tasks.md` documents none; the pre-push hook covers typecheck+locales+matrix+backend tests only, so lint and frontend-test regressions routinely surface first in CI.
   - Fix: add `"check": "bun run lint && bun run lint:backend && bun run typecheck && bun run validate-locales && bun run check-endpoint-matrix && bun run test && bun run test:frontend"` and reference it in `docs/common-tasks.md`.
@@ -4010,22 +4010,22 @@ look-changing one.
   - `.github/workflows/e2e.yml:14-18` — scheduled-run failures only email the last editor of the workflow file and don't gate anything, so a broken critical-flow/a11y suite can stay red for weeks unnoticed (compounded by it never having run — see the ⏫ finding).
   - Fix: add an `if: failure()` step that opens/updates a pinned issue (e.g. `gh issue create`) on nightly failure.
 
-- [ ] **`paths-ignore: "*.md"` only matches root-level markdown, and docs-only PRs strand the required check** 🔽 🔎 verified-present 2026-07-11
+- [ ] **`paths-ignore: "*.md"` only matches root-level markdown, and docs-only PRs strand the required check** 🔽 🔎 verified-present 2026-07-11 🔎 needs-companion 2026-07-14 2026-07-14 (fixing the root-only *.md glob by widening to **/*.md would strand the required CI-Complete check on nested-doc-only PRs; kept root-only deliberately. The safe fix needs a companion no-op success workflow with inverted paths (+ branch-protection review))
   - ↪ _from: DevOps research 2026-07-03 · Wave D1_
   - `.github/workflows/ci.yml:6-13`, `.github/workflows/codeql.yml:6-13` — nested markdown (`apps/frontend/README.md`, `.github/*.md`, `packaging/release/README.md`) still triggers the full pipeline; conversely a `docs/**`-only PR skips the workflow entirely, leaving a required "CI Complete" check permanently "Expected" and the PR unmergeable.
   - Fix: change the glob to `"**/*.md"` and add a same-name no-op success workflow with inverted `paths` (GitHub's documented pattern) so docs-only PRs can merge.
 
-- [ ] **CodeQL workflow has no concurrency group** 🔽 🔎 verified-present 2026-07-11
+- [x] **CodeQL workflow has no concurrency group** 🔽 🔎 verified-present 2026-07-11 ✅ 2026-07-14 · f1abe59 (codeql.yml gains a concurrency group)
   - ↪ _from: DevOps research 2026-07-03 · Wave D1_
   - `.github/workflows/codeql.yml:1-19` — rapid successive pushes/PR updates run duplicate ~10–30 min security-extended analyses; every other workflow in the repo has a concurrency block.
   - Fix: add `concurrency: { group: codeql-${{ github.ref }}, cancel-in-progress: true }`.
 
-- [ ] **`cancel-in-progress: true` also applies to pushes on main, leaving main commits with no CI verdict** 🔽 🔎 verified-present 2026-07-11
+- [x] **`cancel-in-progress: true` also applies to pushes on main, leaving main commits with no CI verdict** 🔽 🔎 verified-present 2026-07-11 ✅ 2026-07-14 · f1abe59 (cancel-in-progress only cancels PR runs, not pushes to main/tags)
   - ↪ _from: DevOps research 2026-07-03 · Wave D1_
   - `.github/workflows/ci.yml:15-17` — the workflow (and the user) commits directly to main; two pushes in quick succession cancel the first run, so intermediate main commits get no full-pipeline result (gaps when bisecting a regression to a "cancelled" commit).
   - Fix: `cancel-in-progress: ${{ github.event_name == 'pull_request' }}`.
 
-- [ ] **Dependabot doesn't cover compose-file images or the devcontainer base image** 🔽 🔎 verified-present 2026-07-11
+- [x] **Dependabot doesn't cover compose-file images or the devcontainer base image** 🔽 🔎 verified-present 2026-07-11 ✅ 2026-07-14 · 78be646 (dependabot docker entries for /.devcontainer + packaged compose)
   - ↪ _from: DevOps research 2026-07-03 · Wave D1_
   - `.github/dependabot.yml:42-48` — the `docker` ecosystem at `/` covers only the root `Dockerfile`; `postgres:18-alpine` in `docker-compose.yml:3` and `packaging/electron/resources/docker-compose.yml:5`, and the SHA-pinned `debian:bookworm-slim` in `.devcontainer/Dockerfile:15`, get no update PRs — pinned digests silently age (security patches missed).
   - Fix: add `docker-compose` ecosystem entries for `/` and `/packaging/electron/resources`, plus a `docker` entry for `/.devcontainer`.
@@ -5260,13 +5260,13 @@ Investigated and disproven; kept for transparency.
 
 **Codebase audit 2026-06-30**
 
-- [ ] `docs/reference/code-patterns.md` still warns about old shim duplication (`loanRepaymentService.js`/`recurrenceService.js` vs. their `calculations/` replacements) that was fully removed in the Phase 9 cutover (commit `65d3dac0`) — doc is stale, code is clean. Update the doc. ⬬ 🔎 verified-present 2026-07-11 *(re-confirmed during verification: code is clean, doc is the only thing stale)*
+- [x] `docs/reference/code-patterns.md` still warns about old shim duplication (`loanRepaymentService.js`/`recurrenceService.js` vs. their `calculations/` replacements) that was fully removed in the Phase 9 cutover (commit `65d3dac0`) — doc is stale, code is clean. Update the doc. ⬬ 🔎 verified-present 2026-07-11 *(re-confirmed during verification: code is clean, doc is the only thing stale)* ✅ 2026-07-14 · 7b5e8ae (stale Phase-9 shim paragraph removed)
 - [x] `docs/adr/101-db-data-editor.md:45-47` makes a false security claim ("a hostile WHERE clause can therefore neither mutate nor hang the database") — see the SQL-injection finding at the top of this document. Correct the ADR text alongside the code fix. ⏫ ✅ 2026-07-11 · 8555ede (#82) *(found during verification)*
 
 **Code/architecture 2026-07-03 (ADR re-run nits)**
 
-- [ ] ADR-099 (sidebar/IA redesign) still lists its status as "Proposed" even though the post-ADR sidebar (flush 2px active-rail, `AppSidebar.tsx:65-74`) has shipped and matches reality — update the status field. ⏬ 🔎 verified-present 2026-07-11
-- [ ] Two stale file-header comments still describe the removed unified-tax feature (ADR-102, confirmed fully removed functionally): `apps/frontend/src/lib/api/crossWorkspace.ts:2-3` and `apps/node-backend/src/services/crossWorkspaceAnalytics.js:4`. ⏬ 🔎 verified-present 2026-07-11
+- [x] ADR-099 (sidebar/IA redesign) still lists its status as "Proposed" even though the post-ADR sidebar (flush 2px active-rail, `AppSidebar.tsx:65-74`) has shipped and matches reality — update the status field. ⏬ 🔎 verified-present 2026-07-11 ✅ 2026-07-14 · 7b5e8ae (ADR-099 status → Accepted)
+- [x] Two stale file-header comments still describe the removed unified-tax feature (ADR-102, confirmed fully removed functionally): `apps/frontend/src/lib/api/crossWorkspace.ts:2-3` and `apps/node-backend/src/services/crossWorkspaceAnalytics.js:4`. ⏬ 🔎 verified-present 2026-07-11 ✅ 2026-07-14 · 7b5e8ae (crossWorkspaceAnalytics header unified-tax note removed (ADR-102))
 
 ## Research context & coverage notes
 
@@ -5862,7 +5862,7 @@ statement-balance-without-date) are NOT repeated here — check there too before
   - Close an account whose last stamped balance is €500 (user emptied it in real life but never imported the final statement): the hub hides it (default `active=true` filter), yet Net Worth "Liquid", the By-Account table, and the dashboard widget carry the €500 forward daily, forever — the visible hub sum disagrees with every total and nothing explains why. Meanwhile rebalance's available cash drops the €500, so the surfaces are mutually inconsistent. Neither the close dialog nor archive warns about a nonzero computed balance or offers to flip `in_net_worth`/zero the cash.
   - Fix: define the semantics once — either closing also sets `in_net_worth=false` (with a dialog step showing residual computed balance and prompting a final transfer/adjustment), or all aggregate readers gain a consistent `is_active` policy; make rebalance and net worth agree either way.
 
-- [ ] **`funding_account_id` accepts nonexistent ids as a 500, plus self-reference and cycles** 🔽
+- [x] **`funding_account_id` accepts nonexistent ids as a 500, plus self-reference and cycles** 🔽 ✅ 2026-07-14 · e501502 (accountService validates funding_account_id existence + non-self; FK 23503 → 400)
   - ↪ _from: Accounts research 2026-07-10 · budgeting correctness_
   - `apps/node-backend/src/services/accountService.js:70-78` (only "positive integer" checked), `:115-136` (catch maps 23505 only — FK 23503 falls through to a 500)
   - `POST/PATCH /api/accounts` with `funding_account_id: 999999` → Postgres 23503 → generic 500 instead of a 400/422; `funding_account_id` = the account's own id, or A→B→A chains, are accepted silently. Latent today (grep: no backend/frontend consumer walks funding chains yet — only CRUD + merge repointing), but the first consumer inherits the cycles; the 500 is user-visible now.
@@ -5879,7 +5879,7 @@ statement-balance-without-date) are NOT repeated here — check there too before
 
 ### 2️⃣ Budgeting performance
 
-- [ ] **No backend cache is ever busted by an account mutation — after merge/close/rename/flag edits the frontend's blanket `invalidateQueries()` refetches the whole app yet repaints pre-mutation net-worth for up to 5 minutes** ⏫
+- [x] **No backend cache is ever busted by an account mutation — after merge/close/rename/flag edits the frontend's blanket `invalidateQueries()` refetches the whole app yet repaints pre-mutation net-worth for up to 5 minutes** ⏫ ✅ 2026-07-14 · d80734b (account mutations bust the net-worth response cache (invalidatePortfolioCaches))
   - ↪ _from: Accounts research 2026-07-10 · budgeting performance_
   - `apps/node-backend/src/services/accountMergeService.js:28-80`, `repositories/accountRepository.js:117-131` (rename rewrites `bank_account` on every row), `routes/accounts.js` (grep: zero `invalidatePortfolioCaches`/`scheduleRefresh` calls in the whole accounts path) vs `routes/info/_cache.js:7,22-26` (`netWorthResponseCache`, 5-min TTL; `invalidatePortfolioCaches()` exists but is called only from `controllers/investmentController.js:52-56` + `portfolioImportPipeline/index.js:76`) · frontend: `hooks/useAccounts.ts:55-58` (merge → blanket `queryClient.invalidateQueries()`), `features/accounts/CloseAccountDialog.tsx:93-94` (same)
   - A merge repoints every transaction, a rename rewrites every row's label, an `in_net_worth`/`is_active` toggle changes which accounts the aggregate counts — all of it invisible to `/api/info/net-worth`, whose 5-min response cache (boot-warmed, `keepPreviousData`) keeps serving the pre-mutation series. The frontend compensates with the most expensive gesture available — invalidate *everything*, refetching every mounted query and marking the rest stale — and the flagship number it was trying to refresh still comes back stale. Net effect per merge/close: a full-app refetch fan-out whose most important response is wasted, plus a user staring at pre-merge net worth "after" the app told them the merge succeeded. (Same hole for bank-transaction writes and bank-CSV import: `refreshAggregations()`/`scheduleReconcile()` never touch `netWorthResponseCache` — grep: only `routes/info*` reference it — so an import also leaves net-worth ≤5 min stale; noted here because the fix is the same seam. The already-filed frontend-invalidation item (`useAccounts.ts:23,40,74`, ~line 149) covers the *missing keys on CRUD*; this is the backend half that makes even perfect frontend invalidation refetch stale data.)
@@ -5891,13 +5891,13 @@ statement-balance-without-date) are NOT repeated here — check there too before
   - Readers: none. Grep across `apps/` finds only the creator/refresher, its own test, migrations, and *comments* — the two candidate consumers read live SQL instead (`repositories/infoRepositoryBanks.js:21-92` for the widget, `COMPUTED_BALANCE_LATERAL` for account balances; `services/calculations/aggregation/bankBalances.js:5,17` even labels its envelope `source: 'mv'` while calling the live query — stale comment). Its grain is also the deprecated `bank_account` string (filed architecture item ~line 3411), and ADR-094 explicitly rejected its Σ(amount) semantics as wrong (drops opening balance — `accountBalanceSql.js:12-15`). So every edit pays one of the two all-time table scans flagged in the ⏫ "every edit refreshes 4 MVs" item (~line 985) for a view nothing can correctly use.
   - Fix: remove it from `MATERIALIZED_VIEWS` + `createMaterializedViews` and ship a migration dropping the view — the exact precedent already exists for `mv_recipient_monthly` (`aggregationRefresh.js:9-15` rationale + migration `0038`). Halves the all-time refresh work per mutation with zero behavior change. Housekeeping: update `alembic/manual/contract_drop_bank_account/{up,down}.sql` + README (they redefine it), regenerate `packaging/electron/demo-db/01-demo.sql`, fix the `source: 'mv'` label, and drop the stale test assertion (`tests/materializedViewService.test.js:104`).
 
-- [ ] **`GET /api/aggregations/bank-balances` recomputes ~365×N-account LATERAL history + full stamped-row scan + per-row FX conversion on every dashboard paint — the only heavy accounts endpoint with no server cache** 🔼
+- [x] **`GET /api/aggregations/bank-balances` recomputes ~365×N-account LATERAL history + full stamped-row scan + per-row FX conversion on every dashboard paint — the only heavy accounts endpoint with no server cache** 🔼 ✅ 2026-07-14 · d80734b (bank-balances gains a 60s cache off the shared invalidation seam; source label corrected to live)
   - ↪ _from: Accounts research 2026-07-10 · budgeting performance_
   - `apps/node-backend/src/routes/aggregations.js:93-98` → `services/calculations/aggregation/bankBalances.js:12-18` (no caching layer) → `repositories/infoRepositoryBanks.js:27-93` (query 1: `DISTINCT ON` + three window functions over *all* stamped active rows; query 2: `generate_series` 12 months × non-liability accounts, one LATERAL probe per (account, day)) then `batchConvertGroupsWithHistoricalRateFallback` over ~5.5k rows + JS grouping/summing `:127-149` · consumer: `components/dashboard/BankBalancesWidget.tsx:56-60` (`staleTime: 60_000`) + `services/reports/dataFetcher.js:65`
   - Contrast: `/api/info/net-worth` runs the *same shape* of probe query over a longer window but sits behind a 5-min TTL + inflight-dedup + boot-warm cache (`routes/info/netWorth.js:28-36`); bank-balances re-runs everything per request. At ~15 accounts that is ~5,500 index probes + a full pass over every stamped row (≈ all ~10k imported rows for the window functions) + ~5.5k-row JS conversion, every time the dashboard mounts more than 60s after the last visit — the widget is on the default landing page, so this is the most-hit heavy accounts query in the app. Worsens linearly with accounts × years (and degenerately with stamp-less accounts — see the index item below).
   - Fix: wrap it in the existing `resolveCacheWithInflight` pattern (a dedicated map in `routes/info/_cache.js`, ~60s TTL matches the widget's staleTime) and bust it from the same seam as the net-worth cache; optionally warm it at boot alongside `warmInfoCaches`.
 
-- [ ] **No index supports the "latest stamped balance" probes — every anchor/history LATERAL filters `balance IS NOT NULL` through an index that doesn't know about it, degenerating to full per-account scans for stamp-less accounts (manual cash, ADR-090 trade-cash sleeves)** 🔼
+- [x] **No index supports the "latest stamped balance" probes — every anchor/history LATERAL filters `balance IS NOT NULL` through an index that doesn't know about it, degenerating to full per-account scans for stamp-less accounts (manual cash, ADR-090 trade-cash sleeves)** 🔼 ✅ 2026-07-14 · 9fb8d8b (migration 0079 adds the partial (account_id,date DESC,id DESC) stamped-balance index)
   - ↪ _from: Accounts research 2026-07-10 · budgeting performance_
   - Probes: `apps/node-backend/src/repositories/accountBalanceSql.js:28-33` (anchor, per account listed), `infoRepositoryBanks.js:80-89` (~365/account per widget request), `infoRepositoryNetWorth.js:108-117` (days-since-first-transaction × in-net-worth accounts per 5-min cache miss + boot warm). Index: `alembic/versions/0050_add_accounts_entity.py:126-127` — `(account_id, date DESC) WHERE is_active = true`, no `balance IS NOT NULL` predicate, no `id` in the key.
   - CSV-imported accounts stamp nearly every row, so probes stop after 1–3 heap visits — which is why the 2026-06-30 pass verified the LATERAL as "already well-optimized" (~line 4978; this is the delta, not a re-audit). But the accounts epic added a class of accounts with *zero or sparse* stamps (only the import pipeline stamps `balance` — ADR-094): manual/cash accounts, trade-cash sleeves, brokerage fan-out. For those, every probe walks the account's entire `(account_id, date)` index range ≤ day, finds nothing, and returns NULL — O(rows) per probe. A 500-row cash sleeve costs ~90k wasted row visits per bank-balances request (365 probes × ~250 avg) and ~750k per net-worth recompute over a 3,000-day history; each additional stamp-less account multiplies it. The same degenerate walk hits the anchor probe in `accountRepository.getAll` (accounts hub, rebalance, by-account net worth) — bounded by one probe per account, but still O(account rows) each.
