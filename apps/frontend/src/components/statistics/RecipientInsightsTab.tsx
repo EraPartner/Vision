@@ -168,6 +168,7 @@ export function RecipientInsightsTab({ statisticsTopRecipientsChart }: Recipient
         <StatCard
           title={t('insights.topRecipient')}
           value={top10[0]?.name || "—"}
+          odometer={false}
           icon={Store}
           subtitle={top10[0] ? formatCurrency(top10[0].totalSpend) : t('insights.noDataFallback')}
         />

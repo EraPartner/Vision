@@ -27,6 +27,7 @@ import { RefreshCw } from "lucide-react";
 import { usePortfolio } from "@/hooks/usePortfolio";
 import { useOnlineStatus } from "@/hooks/useOnlineStatus";
 import { TrendHue } from "@/components/shared/TrendHue";
+import { CardSheen } from "@/components/shared/CardSheen";
 
 const CHART_KEYS = {
     invested: 'invested',
@@ -461,7 +462,7 @@ function TotalValueCard({
             className="liquid-glass micro-lift relative overflow-hidden border shadow-lg lg:col-span-2 lg:row-span-3"
         >
             <TrendHue tone={isGain ? "gain" : "loss"} />
-            <div className="absolute top-0 right-0 w-40 h-40 bg-gradient-to-br from-white/50 to-transparent dark:from-white/10 rounded-full -mr-20 -mt-20 pointer-events-none" />
+            <CardSheen className="h-40 w-40 -mt-20 -mr-20" />
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
                 <CardTitle className="text-sm font-semibold text-muted-foreground">{labels.title}</CardTitle>
                 <div className={`h-9 w-9 rounded-xl flex items-center justify-center ${iconBg} shadow-sm`}>

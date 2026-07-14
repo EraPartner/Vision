@@ -124,6 +124,20 @@ describe("usePlannedPayments", () => {
         expect(result.current.payments[0].name).toBe("Updated rent");
     });
 
+    it("updatePayment forwards cleared recurrence bounds as explicit null", async () => {
+        vi.spyOn(apiClient, "getPlannedTransactions").mockResolvedValue(oneItem);
+        const spy = vi.spyOn(apiClient, "updatePlannedTransaction").mockResolvedValue(STUB);
+        const { result } = renderHook(() => usePlannedPayments());
+        await waitFor(() => expect(result.current.loading).toBe(false));
+        await act(async () => {
+            await result.current.updatePayment(1, { end_date: null, max_occurrences: null });
+        });
+        expect(spy).toHaveBeenCalledWith(1, expect.objectContaining({
+            recurrence_end_date: null,
+            max_occurrences: null,
+        }));
+    });
+
     it("refetch re-calls the API", async () => {
         const spy = vi.spyOn(apiClient, "getPlannedTransactions").mockResolvedValue(emptyList);
         const { result } = renderHook(() => usePlannedPayments());

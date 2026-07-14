@@ -118,8 +118,11 @@ export default function PlannedPaymentForm({ open, onOpenChange, onSubmit, initi
       ...(!isLoan && isRecurring && {
         frequency,
         ...(frequency === "custom" && customDays ? { custom_interval_days: parseInt(customDays) } : {}),
-        ...(endDateStr ? { end_date: endDateStr } : {}),
-        ...(maxOccurrences ? { max_occurrences: parseInt(maxOccurrences) } : {}),
+        // Always send the recurrence bounds (null when cleared) — omitting the key
+        // makes mapToUpdateAPI leave the old bound in place, so clearing an end
+        // date / max count would silently keep the series bounded.
+        end_date: endDateStr ?? null,
+        max_occurrences: maxOccurrences ? parseInt(maxOccurrences) : null,
       }),
       is_active: initial?.is_active ?? true,
     };

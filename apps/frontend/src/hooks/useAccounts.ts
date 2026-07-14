@@ -30,6 +30,12 @@ function invalidateAccountDerived(queryClient: QueryClient) {
 export function invalidateAccountRepoint(queryClient: QueryClient) {
     invalidateAccountDerived(queryClient);
     invalidateTransactionLists(queryClient);
+    // The dashboard bank-balances widget (history + net-position) and the
+    // cash-flow forecast both key off account balances, so a repoint restates them.
+    queryClient.invalidateQueries({ queryKey: ['bankBalances'] });
+    queryClient.invalidateQueries({ queryKey: ['cashflowForecastMethods'] });
+    queryClient.invalidateQueries({ queryKey: ['cashflowForecastRolling'] });
+    queryClient.invalidateQueries({ queryKey: ['cashflowForecastRollingDiagnostics'] });
     // Planned payments can reference the merged/closed account.
     queryClient.invalidateQueries({ queryKey: ['upcomingPlannedPayments'] });
     queryClient.invalidateQueries({ queryKey: ['plannedTransactions'] });
