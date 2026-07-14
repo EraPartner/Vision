@@ -348,6 +348,31 @@ async function resolveAppPort() {
   return port;
 }
 
+// A persisted appPort is reused unconditionally (so the running container's
+// published port stays valid). But if an unrelated process bound that port
+// while Vision was down, `compose up`/`start` can't publish the app container
+// on it and fails with a host-port collision — which, unrecovered, bricks every
+// relaunch until the user hand-edits settings.json. Detect that specific failure
+// so the caller can pick a fresh port and recreate. The message wording varies
+// by platform/daemon, hence the several alternatives. run() rejects with the
+// raw stderr string, so match against that.
+function isPortConflictError(err) {
+  const msg = String(err && err.message ? err.message : err).toLowerCase();
+  return /already allocated|address already in use|bind for [^\n]*failed|ports are not available|failed to bind host port/.test(msg);
+}
+
+// Pick a fresh free port, persist it, and re-derive the URLs polled during boot.
+// Used to self-heal after a foreign process squats the persisted appPort.
+async function repickAppPort() {
+  const port = await pickRandomFreePort();
+  appPort = port;
+  APP_URL = `http://localhost:${appPort}`;
+  HEALTH_URL = `http://localhost:${appPort}/health`;
+  try { await updateSettings((cur) => { cur.appPort = port; }); }
+  catch (err) { console.warn('[port] failed to persist re-picked appPort:', err && err.message ? err.message : err); }
+  return port;
+}
+
 // Extract the host port an existing compose `app` service is published on, from
 // a `docker compose ps --format json` service object. The container's internal
 // target port is always 3002. Returns undefined when not published/parseable.
@@ -1207,8 +1232,46 @@ function startHealthWatchdog() {
   }, HEALTH_WATCHDOG_INTERVAL_MS);
 }
 
+// When the initial boot poll times out onto the error page, keep probing in the
+// background so a genuinely slow start — e.g. a long alembic migration after a
+// packaged image update, which can outlast even the extended poll budget — still
+// lands the user on the app once the backend finally answers, instead of
+// stranding them on the error page until they press Retry. Bounded, and self-
+// cancels the moment the window leaves the error page (manual Retry, or nav).
+let renavTimer = null;
+function stopRenavigateWhenReady() {
+  if (renavTimer) { clearTimeout(renavTimer); renavTimer = null; }
+}
+function renavigateWhenReady(maxAttempts = HEALTH_POLL_BUILD_ATTEMPTS) {
+  stopRenavigateWhenReady();
+  let tries = 0;
+  const tick = async () => {
+    renavTimer = null;
+    if (!mainWindow || mainWindow.isDestroyed()) return;
+    // Give up as soon as we're no longer on the error page — a successful Retry
+    // (or any other navigation) has taken over.
+    let url = '';
+    try { url = mainWindow.webContents.getURL(); } catch { return; }
+    if (!url.includes('error.html')) return;
+    const status = await pingReady();
+    if (status && status.ready) {
+      if (mainWindow && !mainWindow.isDestroyed()) mainWindow.loadURL(APP_URL);
+      notify(t('app.running'));
+      startHealthWatchdog();
+      return;
+    }
+    tries += 1;
+    if (tries >= maxAttempts) return;
+    renavTimer = setTimeout(tick, HEALTH_POLL_INTERVAL_MS);
+  };
+  renavTimer = setTimeout(tick, HEALTH_POLL_INTERVAL_MS);
+}
+
 function pollAndLoad({ building = false } = {}) {
   const endPollHealth = bootMark('poll_ready');
+  // A fresh boot poll supersedes any background re-navigation loop still running
+  // from a previous timeout.
+  stopRenavigateWhenReady();
   pollReady(building ? HEALTH_POLL_BUILD_ATTEMPTS : HEALTH_POLL_ATTEMPTS)
     .then(() => {
       endPollHealth();
@@ -1220,6 +1283,9 @@ function pollAndLoad({ building = false } = {}) {
     .catch(() => {
       endPollHealth();
       loadErrorPage();
+      // Keep polling in the background so a still-running migration that finishes
+      // after the budget elapses re-navigates to the app on its own.
+      renavigateWhenReady();
       // A cold build already got the longer budget that covers backend boot; if it
       // still isn't up, drop to the error page (with Retry) but skip the blocking
       // "taking longer than expected" modal — that warning is meant for warm boots
@@ -1257,16 +1323,74 @@ function pingDockerSocket(socketPath) {
   });
 }
 
-async function checkDocker(cwd) {
-  // Fast path: hit the Docker socket directly — avoids spawning docker CLI
-  // and serialising `docker info` output (~6s → <50ms on warm macOS).
+// Candidate Docker Unix-socket paths, most-specific first. Shared by the daemon
+// ping and the container-state probe below.
+function dockerSocketCandidates() {
   const homeDir = process.env.HOME || '';
-  const socketCandidates = [
+  return [
     process.env.DOCKER_HOST?.replace(/^unix:\/\//, ''),
     path.join(homeDir, '.docker', 'run', 'docker.sock'),
     path.join(homeDir, '.docker', 'desktop', 'docker.sock'),
     '/var/run/docker.sock',
   ].filter(Boolean);
+}
+
+// GET a JSON body from the Docker Engine socket. Resolves the parsed body on 200,
+// rejects otherwise (or on timeout). Same lightweight pattern as pingDockerSocket.
+function dockerSocketGetJson(socketPath, urlPath, timeoutMs = 1500) {
+  return new Promise((resolve, reject) => {
+    const req = http.get({ socketPath, path: urlPath, timeout: timeoutMs }, (res) => {
+      if (res.statusCode !== 200) { res.resume(); return reject(new Error(`status ${res.statusCode}`)); }
+      let body = '';
+      res.setEncoding('utf8');
+      res.on('data', (c) => { body += c; });
+      res.on('end', () => { try { resolve(JSON.parse(body)); } catch (e) { reject(e); } });
+    });
+    req.on('error', reject);
+    req.on('timeout', () => { req.destroy(); reject(new Error('socket timeout')); });
+  });
+}
+
+// True when the compose `app` service container is already running, checked via
+// the Docker socket (~15–20ms) instead of a `docker compose images` CLI spawn
+// (~150–250ms). Used to skip the pre-pull image-presence check on warm boots,
+// where the image is necessarily present. `projectName` (the compose `name:`)
+// scopes the match to THIS install so a sibling demo/app can't answer for us.
+// Any failure resolves false → the caller falls back to the CLI check, so a
+// wrong answer can only cost the spawn we hoped to save, never correctness
+// (a running container guarantees its image is present).
+async function isComposeAppRunning(projectName) {
+  const labels = ['com.docker.compose.service=app'];
+  if (projectName) labels.push(`com.docker.compose.project=${projectName}`);
+  const filters = encodeURIComponent(JSON.stringify({ label: labels, status: ['running'] }));
+  const urlPath = `/containers/json?filters=${filters}`;
+  for (const socketPath of dockerSocketCandidates()) {
+    try {
+      await fs.promises.access(socketPath);
+      const list = await dockerSocketGetJson(socketPath, urlPath);
+      if (Array.isArray(list) && list.length > 0) return true;
+    } catch { /* try next candidate */ }
+  }
+  return false;
+}
+
+// The compose project name is declared via the `name:` top-level key in the
+// shipped compose file; Docker labels running containers with it. Read it once,
+// synchronously, so isComposeAppRunning() can scope its match. Undefined on any
+// read/parse miss (probe then matches by service label alone).
+function readComposeProjectName(cwd) {
+  try {
+    const txt = fs.readFileSync(path.join(cwd, 'docker-compose.yml'), 'utf8');
+    const m = txt.match(/^name:\s*(\S+)\s*$/m);
+    if (m) return m[1];
+  } catch { /* fall through */ }
+  return undefined;
+}
+
+async function checkDocker(cwd) {
+  // Fast path: hit the Docker socket directly — avoids spawning docker CLI
+  // and serialising `docker info` output (~6s → <50ms on warm macOS).
+  const socketCandidates = dockerSocketCandidates();
 
   // Race all socket candidates in parallel instead of probing them serially: a
   // dead candidate (missing socket, or the daemon still waking from resource-
@@ -1539,6 +1663,25 @@ function setSplashStatus(key) {
     .catch(() => { /* splash already navigated away */ });
 }
 
+// The compose `up`/`start` phase is the dominant span of a warm boot, and
+// "Starting services…" would otherwise sit frozen through all of it. Advance the
+// splash to the next honest, already-localized status ("Almost ready…") once the
+// phase has run long enough that it's fair, so the line visibly progresses
+// instead of freezing. Pure setSplashStatus work — its data:-URL guard keeps it
+// safe once the splash navigates away — and uses existing i18n keys only.
+let splashProgressTimer = null;
+function startComposeSplashProgress() {
+  stopComposeSplashProgress();
+  splashProgressTimer = setTimeout(() => {
+    splashProgressTimer = null;
+    setSplashStatus('splash.waitingApp');
+  }, 6000);
+  if (splashProgressTimer && splashProgressTimer.unref) splashProgressTimer.unref();
+}
+function stopComposeSplashProgress() {
+  if (splashProgressTimer) { clearTimeout(splashProgressTimer); splashProgressTimer = null; }
+}
+
 // ── Window-state persistence ──────────────────────────────────────────────────
 // Restore frame across launches (baseline macOS behavior). Bounds live in the
 // existing settings.json mirror under `windowBounds`; saved debounced on
@@ -1700,6 +1843,19 @@ function createWindow() {
   // Persist the window frame across launches (debounced).
   mainWindow.on('resize', () => scheduleWindowBoundsSave(mainWindow));
   mainWindow.on('move', () => scheduleWindowBoundsSave(mainWindow));
+
+  // macOS convention: the red close button HIDES the window instead of
+  // destroying it, keeping the fully-booted renderer (route + scroll state) and
+  // the warm backend/containers resident so reopening is ~instant. A real quit
+  // (⌘Q / menu Quit → before-quit sets isAppQuitting) closes for real. Only
+  // darwin hides — elsewhere close must destroy so window-all-closed → app.quit()
+  // still fires. `activate`/`second-instance` show() the hidden window.
+  mainWindow.on('close', (e) => {
+    if (process.platform === 'darwin' && !isAppQuitting && mainWindow && !mainWindow.isDestroyed()) {
+      e.preventDefault();
+      mainWindow.hide();
+    }
+  });
 
   // Caller is responsible for loading the initial URL.
   mainWindow.on('closed', () => { mainWindow = null; rendererReady = false; });
@@ -3143,6 +3299,24 @@ ipcMain.handle('backup:load-settings', async () => {
   return { backupDir: s.backupDir || '', backupOnQuit: s.backupOnQuit === true };
 });
 
+// ── Services (keep-running-on-quit) settings ─────────────────────────────────
+// Opt-in toggle: when enabled, quit leaves the Docker containers running so the
+// next launch takes the hot path. Persisted to the Electron settings.json mirror
+// (read by the will-quit handler, which must work even after the backend is
+// down). Same authenticated-sender guard as backup:save-settings.
+ipcMain.handle('services:save-settings', async (event, { keepServicesOnQuit } = {}) => {
+  if (!mainWindow || event.sender !== mainWindow.webContents) {
+    return { success: false, error: 'Unauthorized sender' };
+  }
+  await updateSettings((cur) => { cur.keepServicesOnQuit = !!keepServicesOnQuit; });
+  return { success: true };
+});
+
+ipcMain.handle('services:load-settings', async () => {
+  const s = await loadSettings();
+  return { keepServicesOnQuit: s.keepServicesOnQuit === true };
+});
+
 // ── Recovery (error page) ────────────────────────────────────────────────────
 ipcMain.handle('recovery:retry', () => {
   pollAndLoad();
@@ -3518,6 +3692,11 @@ async function launch() {
   //        if the app image already exists — all are independent so run in parallel.
   let skipBuild = false;
   let dockerStatus = 'ok';
+  // Set when the pre-pull step actually downloaded the app image (first run, or
+  // an updated tag) — such a boot then runs alembic migrations before /health
+  // goes green, so it earns the extended poll budget (see pollAndLoad below).
+  let imageWasPulled = false;
+  const composeProject = readComposeProjectName(workDir);
   setSplashStatus('splash.checkingDocker');
   const endParallelInit = bootMark('parallel_init');
   await Promise.all([
@@ -3557,6 +3736,10 @@ async function launch() {
       ? (async () => {
           const end = bootMark('pre_pull_image');
           try {
+            // Warm boot: if the app container is already running its image is
+            // present, so skip the `docker compose images` CLI spawn entirely
+            // (the slowest member of this phase) via a cheap Docker-socket probe.
+            if (await isComposeAppRunning(composeProject)) { return; }
             const ids = await run(
               'docker',
               ['compose', ...composeArgs(workDir, overrideFiles), 'images', '-q', 'app'],
@@ -3571,6 +3754,7 @@ async function launch() {
               workDir,
               { timeout: 600000, env: dockerEnv }
             );
+            imageWasPulled = true;
           } catch (err) {
             console.warn('pre-pull failed (non-fatal, compose up will retry):', err.message || err);
           } finally {
@@ -3682,13 +3866,32 @@ async function launch() {
 
   // 7. docker compose start (fast path) or up (cold/dev rebuild)
   setSplashStatus('splash.startingServices');
+  // Progress the otherwise-frozen status line through this dominant phase.
+  startComposeSplashProgress();
   const endComposeUp = bootMark('compose_up');
   let composeDidBuild = false;
   try {
-    const { built } = await composeStartOrUp(workDir, overrideFiles, skipBuild);
-    composeDidBuild = built;
+    let result;
+    try {
+      result = await composeStartOrUp(workDir, overrideFiles, skipBuild);
+    } catch (err) {
+      // A foreign process squatting the persisted appPort makes compose fail to
+      // publish the app container. Re-pick a fresh port and recreate once —
+      // `up` republishes on the new port, self-healing what would otherwise be
+      // a permanent "port is already allocated" brick on every relaunch.
+      if (isPortConflictError(err)) {
+        console.warn(`[port] appPort ${appPort} is held by another process; picking a fresh port and recreating`);
+        await repickAppPort();
+        result = await composeStartOrUp(workDir, overrideFiles, skipBuild);
+      } else {
+        throw err;
+      }
+    }
+    composeDidBuild = result.built;
+    stopComposeSplashProgress();
     endComposeUp();
   } catch (err) {
+    stopComposeSplashProgress();
     endComposeUp();
     await dialog.showMessageBox({
       type: 'error',
@@ -3727,7 +3930,12 @@ async function launch() {
   //    A cold/dev build (composeDidBuild) gets the extended budget and skips the
   //    slow-start modal, since first-launch boot is expected to be slow.
   setSplashStatus('splash.waitingApp');
-  pollAndLoad({ building: composeDidBuild });
+  // A cold build OR a freshly-pulled packaged image both run migrations before
+  // the backend listens, so both need the extended poll budget — otherwise a
+  // long alembic migration trips the 60s timeout mid-migration and drops to the
+  // error page. (renavigateWhenReady() then covers migrations that outlast even
+  // this budget.)
+  pollAndLoad({ building: composeDidBuild || imageWasPulled });
 
   // 10. Set up manual shell updater (source/dev mode only — not in embedded .app mode)
   if (!app.isPackaged || useRepoMode) {
@@ -3830,6 +4038,14 @@ async function launch() {
 // ── Shutdown flow ─────────────────────────────────────────────────────────────
 let isQuitting = false;
 
+// Distinct from isQuitting (will-quit's re-entrancy guard): this flips on the
+// FIRST quit signal (⌘Q, menu Quit, app.quit()), before any window 'close'
+// fires, so the hide-on-close handler knows a red-button close from a real quit.
+// The shell-updater path (which sets isQuitting directly then calls app.quit())
+// also routes through before-quit, so windows there destroy rather than hide.
+let isAppQuitting = false;
+app.on('before-quit', () => { isAppQuitting = true; });
+
 app.on('will-quit', (e) => {
   if (isQuitting || !workDir) return;
   e.preventDefault();
@@ -3874,11 +4090,19 @@ app.on('will-quit', (e) => {
       : Promise.resolve();
 
     doBackup
-      .then(() => {
+      .then(async () => {
         // Drop the watchdog's idle keep-alive socket so the backend's
         // graceful shutdown isn't held open waiting on it.
         stopHealthWatchdog();
         try { healthAgent.destroy(); } catch { /* already gone */ }
+        // Opt-in "keep services running on quit": leave the containers up so the
+        // next launch takes the hot path instead of a warm restart. Read from the
+        // local settings.json mirror (the backend may already be shutting down).
+        // compose's `restart: unless-stopped` policy governs reboot behaviour.
+        let keepServices = false;
+        try { keepServices = (await loadSettings()).keepServicesOnQuit === true; }
+        catch { /* default: stop containers */ }
+        if (keepServices) return;
         return stopContainers(workDir, overrideFiles);
       })
       .catch((err) => console.error('docker compose down failed:', err))
@@ -3904,13 +4128,21 @@ if (gotSingleInstanceLock) {
   app.whenReady().then(launch);
 
   app.on('activate', () => {
+    // Hide-on-close keeps the window alive but hidden on darwin: just re-show it,
+    // preserving the booted renderer's route/scroll state (reopen is ~instant).
+    if (mainWindow && !mainWindow.isDestroyed()) {
+      if (mainWindow.isMinimized()) mainWindow.restore();
+      mainWindow.show();
+      mainWindow.focus();
+      return;
+    }
+    // Window was actually destroyed (non-darwin, or a first-run edge): the app +
+    // containers may still be warm, but the SPA has to boot from scratch. Show the
+    // splash and re-poll readiness (reusing the boot handoff) instead of a bare
+    // loadURL(APP_URL) that would paint a blank window — or a connection error if
+    // the backend isn't answering yet.
     if (mainWindow === null) {
       createWindow();
-      // Reopening after a red-button close: the app + containers are still warm,
-      // but the backend may have died meanwhile and the SPA has to boot from
-      // scratch. Show the splash and re-poll readiness (reusing the boot handoff)
-      // instead of a bare loadURL(APP_URL) that would paint a blank window — or a
-      // connection error if the backend isn't answering yet.
       mainWindow.loadURL(splashDataUrl());
       pollAndLoad();
     }
