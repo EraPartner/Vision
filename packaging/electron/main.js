@@ -84,11 +84,24 @@ const __IS_DEMO = (() => {
 })();
 app.setName(__IS_DEMO ? 'Vision Demo' : 'Vision');
 
+// Acquire the single-instance lock as early as possible — immediately after
+// setName (the lock lives in userData, so it must run after that) and BEFORE the
+// legacy-userData migration and the rest of module eval. This means a second
+// launch quits here instead of evaluating the whole module first, and two
+// simultaneous first launches can't both enter the migration's renameSync.
+// The primary instance registers its second-instance/activate/launch handlers
+// at the bottom of the module, still gated on this same flag.
+const gotSingleInstanceLock = app.requestSingleInstanceLock();
+if (!gotSingleInstanceLock) {
+  app.quit();
+}
+
 // One-shot migration from the legacy "vision-desktop" userData dir to the
 // canonical "Vision" dir. Preserves existing settings.json + embedded_compose
 // (and its .env with the original POSTGRES_PASSWORD) so the shared docker
-// volume keeps authenticating after the rename.
-(function migrateLegacyUserData() {
+// volume keeps authenticating after the rename. Skipped for a second instance
+// (it doesn't hold the lock and is about to quit).
+if (gotSingleInstanceLock) (function migrateLegacyUserData() {
   try {
     if (__IS_DEMO) return; // demo build never adopts the real app's legacy data
     const target = app.getPath('userData');
@@ -240,9 +253,50 @@ async function loadSettings() {
   }
 }
 
-async function saveSettings(data) {
+// Serialize every settings write through one promise chain so concurrent
+// callers can neither interleave a read-modify-write (silently dropping each
+// other's keys) nor observe a half-written file. Each write lands in a temp
+// file that is atomically renamed into place — a crash mid-write leaves the
+// previous good settings.json intact instead of corrupting it.
+let settingsWriteChain = Promise.resolve();
+
+async function writeSettingsAtomic(data) {
   await fs.promises.mkdir(path.dirname(settingsPath), { recursive: true });
-  await fs.promises.writeFile(settingsPath, JSON.stringify(data, null, 2));
+  const tmpPath = `${settingsPath}.tmp-${process.pid}-${Date.now()}`;
+  try {
+    await fs.promises.writeFile(tmpPath, JSON.stringify(data, null, 2));
+    await fs.promises.rename(tmpPath, settingsPath);
+  } catch (err) {
+    try { await fs.promises.unlink(tmpPath); } catch { /* best effort */ }
+    throw err;
+  }
+}
+
+// Overwrite settings.json with `data`. Serialized + atomic. Prefer
+// updateSettings() when the new value depends on the current one.
+function saveSettings(data) {
+  const run = settingsWriteChain.then(() => writeSettingsAtomic(data));
+  // Keep the chain alive even if this write rejects, so later writes still run.
+  settingsWriteChain = run.catch(() => {});
+  return run;
+}
+
+// Atomic read-modify-write: load current settings, apply `mutate` to a copy,
+// then persist — all inside the shared write chain, so two concurrent updaters
+// can't clobber each other's keys. `mutate` may mutate the passed copy in place
+// (return nothing) or return a replacement object. Replaces the racy
+// `saveSettings({ ...(await loadSettings()), ... })` pattern.
+function updateSettings(mutate) {
+  const run = settingsWriteChain.then(async () => {
+    const current = await loadSettings();
+    const draft = { ...current };
+    const result = await mutate(draft);
+    const next = result !== undefined ? result : draft;
+    await writeSettingsAtomic(next);
+    return next;
+  });
+  settingsWriteChain = run.catch(() => {});
+  return run;
 }
 
 // ── Backend host-port resolution ───────────────────────────────────────────────
@@ -289,7 +343,7 @@ async function resolveAppPort() {
     return persisted;
   }
   const port = await pickRandomFreePort();
-  try { await saveSettings({ ...s, appPort: port }); }
+  try { await updateSettings((cur) => { cur.appPort = port; }); }
   catch (err) { console.warn('[port] failed to persist appPort:', err && err.message ? err.message : err); }
   return port;
 }
@@ -396,7 +450,7 @@ async function resolveWorkDir() {
     const dest = path.join(embeddedDir, 'docker-compose.yml');
     // Overwrite if exists to allow updates on new app versions
     await fs.promises.copyFile(embeddedSrc, dest);
-    await saveSettings({ ...(await loadSettings()), embeddedDir });
+    await updateSettings((cur) => { cur.embeddedDir = embeddedDir; });
     return embeddedDir;
   } catch (err) {
     await dialog.showMessageBox({
@@ -622,7 +676,7 @@ async function getBackupDeviceId() {
     app.getPath('userData'),
   ].join('|');
   const backupDeviceId = crypto.createHash('sha1').update(machineToken).digest('hex').slice(0, 8);
-  await saveSettings({ ...settings, backupDeviceId });
+  await updateSettings((cur) => { cur.backupDeviceId = backupDeviceId; });
   return backupDeviceId;
 }
 
@@ -647,11 +701,8 @@ async function getBackupPassphrase() {
 }
 
 async function setBackupPassphrase(passphrase) {
-  const settings = await loadSettings();
-  const next = { ...settings };
   if (!passphrase) {
-    delete next.backupPassphraseEncrypted;
-    await saveSettings(next);
+    await updateSettings((cur) => { delete cur.backupPassphraseEncrypted; });
     return { success: true, available: true };
   }
   if (!safeStorage || typeof safeStorage.isEncryptionAvailable !== 'function' || !safeStorage.isEncryptionAvailable()) {
@@ -659,8 +710,8 @@ async function setBackupPassphrase(passphrase) {
   }
   try {
     const encrypted = safeStorage.encryptString(passphrase);
-    next.backupPassphraseEncrypted = encrypted.toString('base64');
-    await saveSettings(next);
+    const encoded = encrypted.toString('base64');
+    await updateSettings((cur) => { cur.backupPassphraseEncrypted = encoded; });
     return { success: true, available: true };
   } catch (err) {
     return { success: false, available: true, error: String(err) };
@@ -1217,14 +1268,19 @@ async function checkDocker(cwd) {
     '/var/run/docker.sock',
   ].filter(Boolean);
 
-  for (const socketPath of socketCandidates) {
-    try {
+  // Race all socket candidates in parallel instead of probing them serially: a
+  // dead candidate (missing socket, or the daemon still waking from resource-
+  // saver idle) no longer stacks its full 2s timeout ahead of the live one, so
+  // the wake path is bounded by the single slowest probe rather than their sum.
+  try {
+    await Promise.any(socketCandidates.map(async (socketPath) => {
       await fs.promises.access(socketPath);
       await pingDockerSocket(socketPath);
-      return 'ok';
-    } catch {
-      // socket missing or daemon not responding — try next candidate
-    }
+    }));
+    return 'ok';
+  } catch {
+    // No candidate answered (all sockets missing / daemon not responding) —
+    // fall through to the docker CLI probe below.
   }
 
   // Fallback: docker info (distinguishes "not installed" from "not running")
@@ -1234,6 +1290,22 @@ async function checkDocker(cwd) {
   } catch (err) {
     if (/ENOENT|not found|no such file/i.test(String(err))) return 'not-installed';
     return 'not-running';
+  }
+}
+
+// After opening Docker Desktop, poll the daemon until it answers. Docker rarely
+// autostarts after a reboot and takes ~20–45s to come up cold, so rather than
+// quitting and making the user relaunch (and risk hitting the same dialog if
+// they relaunch too early), we keep the splash up and wait. Resolves 'ok' as
+// soon as the daemon responds, or 'not-running' after the budget elapses. The
+// user can still abort with ⌘Q, which reaches the will-quit handler.
+async function waitForDockerDaemon(cwd, { budgetMs = 90000, intervalMs = 1000 } = {}) {
+  const deadline = Date.now() + budgetMs;
+  for (;;) {
+    if (mainWindow && mainWindow.isDestroyed()) return 'not-running';
+    if ((await checkDocker(cwd)) === 'ok') return 'ok';
+    if (Date.now() >= deadline) return 'not-running';
+    await new Promise((r) => setTimeout(r, intervalMs));
   }
 }
 
@@ -1503,6 +1575,35 @@ function clampBoundsToWorkArea(bounds) {
   };
 }
 
+// Hex equivalent of the splash's base fill, used for the BrowserWindow
+// backgroundColor so frame 1 matches the splash instead of flashing the default
+// backdrop (white / vibrancy material) before the data-URL splash HTML paints —
+// visible in dark mode, and on Windows/Linux reload/navigation where the
+// darwin-only vibrancy mask doesn't apply. Falls back to the same slate the
+// splash uses when no theme is persisted.
+function hslToHex(h, s, l) {
+  s /= 100; l /= 100;
+  const k = (n) => (n + h / 30) % 12;
+  const a = s * Math.min(l, 1 - l);
+  const f = (n) => {
+    const color = l - a * Math.max(-1, Math.min(k(n) - 3, Math.min(9 - k(n), 1)));
+    return Math.round(255 * color).toString(16).padStart(2, '0');
+  };
+  return `#${f(0)}${f(8)}${f(4)}`;
+}
+
+function splashBackgroundColor() {
+  try {
+    const theme = readSplashTheme();
+    const derived = theme ? deriveSplashPalette(theme.background) : undefined;
+    if (derived) {
+      const m = /^(\d{1,3}(?:\.\d+)?)\s+(\d{1,3}(?:\.\d+)?)%\s+(\d{1,3}(?:\.\d+)?)%$/.exec(derived.base);
+      if (m) return hslToHex(Number(m[1]), Number(m[2]), Number(m[3]));
+    }
+  } catch { /* fall through to slate */ }
+  return '#0f172a';
+}
+
 let windowBoundsSaveTimer = null;
 function scheduleWindowBoundsSave(win) {
   if (windowBoundsSaveTimer) clearTimeout(windowBoundsSaveTimer);
@@ -1513,9 +1614,7 @@ function scheduleWindowBoundsSave(win) {
       // getNormalBounds: a maximized/fullscreen window records its restored
       // frame, not the screen size.
       const bounds = win.getNormalBounds();
-      const settings = await loadSettings();
-      settings[WINDOW_BOUNDS_KEY] = bounds;
-      await saveSettings(settings);
+      await updateSettings((cur) => { cur[WINDOW_BOUNDS_KEY] = bounds; });
     } catch (err) {
       console.warn('window-bounds save failed (non-fatal):', err.message || err);
     }
@@ -1531,6 +1630,9 @@ function createWindow() {
     minWidth: WINDOW_MIN_WIDTH,
     minHeight: WINDOW_MIN_HEIGHT,
     title: APP_NAME,
+    // Paint the very first frame in the splash's base color so there's no
+    // white/vibrancy flash before the splash HTML (or a reloaded document) paints.
+    backgroundColor: splashBackgroundColor(),
     // macOS-native chrome: frameless content with inset traffic lights. The
     // renderer adds a drag region + left inset to its topbar when it detects
     // electronAPI.platform === 'darwin' (see ElectronBridge in the frontend).
@@ -2575,15 +2677,30 @@ async function runBundleRestore(bundlePath, { passphrase } = {}) {
     // 6. Atomically swap attachments.staging → attachments once container is up.
     //    Awaited so a swap failure surfaces to the caller instead of being silently dropped.
     if (attachmentsDir) {
-      await pollHealth();
+      // A restore boot runs `alembic upgrade head`, which on a large DB can
+      // exceed the normal liveness budget. A pollHealth() timeout here must NOT
+      // skip the swap (that would strand the restored attachments in .staging
+      // forever), so use the larger build budget and swallow a timeout — the
+      // swap only needs the container process to be up, not fully migrated.
+      try {
+        await pollHealth(HEALTH_POLL_BUILD_ATTEMPTS);
+      } catch (err) {
+        console.warn('post-restore health poll did not confirm readiness in time; attempting attachments swap anyway:', err && err.message ? err.message : err);
+      }
       const composeArgs_ = composeArgs(workDir, overrideFiles);
       await run('docker', [
         'compose', ...composeArgs_, 'exec', '-T', 'app',
         'sh', '-c',
+        // Guard the whole swap on the staging dir existing: only demote the live
+        // attachments once the replacement is actually present. Without this, a
+        // missing/failed staging copy would move live attachments to .old and
+        // then fail to replace them — destroying the attachments dir.
+        'if [ -d /app/data/attachments.staging ]; then ' +
         'rm -rf /app/data/attachments.old && ' +
         'mv /app/data/attachments /app/data/attachments.old 2>/dev/null; ' +
         'mv /app/data/attachments.staging /app/data/attachments && ' +
-        'rm -rf /app/data/attachments.old',
+        'rm -rf /app/data/attachments.old; ' +
+        'fi',
       ], workDir, { timeout: 30000 });
     }
   }
@@ -2980,7 +3097,10 @@ ipcMain.handle('backup:save-settings', async (event, { backupDir, backupOnQuit }
   // Also mirror to local settings.json as a fallback for the will-quit handler
   // in case the backend is already shutting down.
   const payload = { backupDir: backupDir || '', backupOnQuit: !!backupOnQuit };
-  await saveSettings({ ...(await loadSettings()), backupDir: payload.backupDir, backupOnQuit: payload.backupOnQuit });
+  await updateSettings((cur) => {
+    cur.backupDir = payload.backupDir;
+    cur.backupOnQuit = payload.backupOnQuit;
+  });
   try {
     await httpPut(`http://localhost:${appPort}/api/settings/backup_settings`, { value: payload });
   } catch (err) {
@@ -3009,10 +3129,9 @@ ipcMain.handle('backup:load-settings', async () => {
       // Mirror the RAW stored value (not the default-resolved one) back to
       // settings.json so the will-quit fallback matches the DB instead of
       // baking display defaults into the stored config.
-      await saveSettings({
-        ...(await loadSettings()),
-        backupDir: typeof stored.backupDir === 'string' ? stored.backupDir : '',
-        backupOnQuit: stored.backupOnQuit === true,
+      await updateSettings((cur) => {
+        cur.backupDir = typeof stored.backupDir === 'string' ? stored.backupDir : '';
+        cur.backupOnQuit = stored.backupOnQuit === true;
       });
       const v = resolveBackupSettingsWithDefaults(stored);
       return { backupDir: v.backupDir || '', backupOnQuit: v.backupOnQuit === true };
@@ -3055,7 +3174,12 @@ function sendToApp(channel, payload) {
   if (!mainWindow || mainWindow.isDestroyed()) {
     pendingAppMessages.push([channel, payload]);
     createWindow();
-    mainWindow.loadURL(APP_URL);
+    // Same reopen-from-destroyed path as `activate`: show the splash and re-poll
+    // readiness rather than a bare loadURL(APP_URL), so a backend that died while
+    // the window was closed surfaces the error page instead of a blank/broken
+    // window. The queued message flushes once the renderer signals ready.
+    mainWindow.loadURL(splashDataUrl());
+    pollAndLoad();
     return;
   }
   if (mainWindow.isMinimized()) mainWindow.restore();
@@ -3286,9 +3410,9 @@ ipcMain.handle('theme:persist-splash', async (event, colors) => {
     return { success: false };
   }
   try {
-    const data = await loadSettings();
-    data[SPLASH_THEME_KEY] = { background: colors.background, foreground: colors.foreground };
-    await saveSettings(data);
+    await updateSettings((cur) => {
+      cur[SPLASH_THEME_KEY] = { background: colors.background, foreground: colors.foreground };
+    });
     return { success: true };
   } catch (err) {
     console.warn('theme:persist-splash failed (non-fatal):', err && err.message ? err.message : err);
@@ -3523,9 +3647,28 @@ async function launch() {
       message: t('app.dockerNotRunning'),
       detail: t('app.dockerNotRunningDetail'),
     });
-    if (response === 0) shell.openPath('/Applications/Docker.app');
-    app.quit();
-    return;
+    if (response !== 0) {
+      app.quit();
+      return;
+    }
+    // User chose to open Docker: launch Docker Desktop and wait for the daemon
+    // to come up, then continue launch() automatically instead of quitting and
+    // forcing a manual relaunch. The splash stays up during the wait.
+    shell.openPath('/Applications/Docker.app');
+    setSplashStatus('splash.checkingDocker');
+    dockerStatus = await waitForDockerDaemon(workDir);
+    if (dockerStatus !== 'ok') {
+      await dialog.showMessageBox({
+        type: 'warning',
+        buttons: [t('common.ok')],
+        title: APP_NAME,
+        message: t('app.dockerNotRunning'),
+        detail: t('app.dockerNotRunningDetail'),
+      });
+      app.quit();
+      return;
+    }
+    // Daemon is up — fall through and continue the normal launch path.
   }
 
   // 5. If running in clean mode, wipe the clean volume so every run starts fresh.
@@ -3748,10 +3891,9 @@ app.on('will-quit', (e) => {
 });
 
 // ── App lifecycle ─────────────────────────────────────────────────────────────
-const gotSingleInstanceLock = app.requestSingleInstanceLock();
-if (!gotSingleInstanceLock) {
-  app.quit();
-} else {
+// The single-instance lock is acquired early (just after app.setName). A second
+// instance already called app.quit() up there; only the primary registers here.
+if (gotSingleInstanceLock) {
   app.on('second-instance', () => {
     if (!mainWindow) return;
     if (mainWindow.isMinimized()) mainWindow.restore();
@@ -3764,7 +3906,13 @@ if (!gotSingleInstanceLock) {
   app.on('activate', () => {
     if (mainWindow === null) {
       createWindow();
-      mainWindow.loadURL(APP_URL);
+      // Reopening after a red-button close: the app + containers are still warm,
+      // but the backend may have died meanwhile and the SPA has to boot from
+      // scratch. Show the splash and re-poll readiness (reusing the boot handoff)
+      // instead of a bare loadURL(APP_URL) that would paint a blank window — or a
+      // connection error if the backend isn't answering yet.
+      mainWindow.loadURL(splashDataUrl());
+      pollAndLoad();
     }
   });
 }
