@@ -9,11 +9,29 @@ import { query } from '../database/connection.js';
 
 export const tagRepository = {
   /**
-   * List tags, optionally filtered by active status.
+   * List tags, optionally filtered by active status, with pagination.
+   * @param {{ active?: boolean|null, limit?: number, offset?: number }} opts
+   */
+  async getAll({ active = null, limit = 50, offset = 0 } = {}) {
+    let sql = 'SELECT * FROM tags WHERE 1=1';
+
+    if (active === true) {
+      sql += ` AND is_active = true`;
+    } else if (active === false) {
+      sql += ` AND is_active = false`;
+    }
+
+    sql += ` ORDER BY slug LIMIT $1 OFFSET $2`;
+    const result = await query(sql, [limit, offset]);
+    return result.rows;
+  },
+
+  /**
+   * Count tags matching the active filter (for paginated list totals).
    * @param {{ active?: boolean|null }} opts
    */
-  async getAll({ active = null } = {}) {
-    let sql = 'SELECT * FROM tags WHERE 1=1';
+  async getCount({ active = null } = {}) {
+    let sql = 'SELECT COUNT(*) FROM tags WHERE 1=1';
     const params = [];
 
     if (active === true) {
@@ -22,9 +40,8 @@ export const tagRepository = {
       sql += ` AND is_active = false`;
     }
 
-    sql += ' ORDER BY slug';
     const result = await query(sql, params);
-    return result.rows;
+    return parseInt(result.rows[0].count, 10);
   },
 
   async getById(id) {

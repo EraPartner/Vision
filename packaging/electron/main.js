@@ -3420,7 +3420,7 @@ async function launch() {
               workDir,
               { timeout: 10000, env: dockerEnv }
             ).then(r => r.trim()).catch(() => '');
-            if (ids) { end(); return; }
+            if (ids) { return; }
             setSplashStatus('splash.downloading');
             await run(
               'docker',
@@ -3657,6 +3657,12 @@ async function launch() {
       console.warn('Failed to set up dev rebuild watcher:', e);
     }
   }
+
+  // Launch orchestration is complete: the window is up, background health
+  // polling is running, and dev watchers (if any) are registered. Close the
+  // top-level launch mark. Reached only on the success path — every failure
+  // branch above returns after app.quit() without closing this mark.
+  endLaunch();
 }
 
 // ── Shutdown flow ─────────────────────────────────────────────────────────────

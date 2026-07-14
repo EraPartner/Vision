@@ -10,9 +10,16 @@ import { slugify } from '../lib/slugify.js';
 import { NotFoundError, ValidationError } from '../middleware/errorHandler.js';
 
 export const tagService = {
-  /** List tags, optionally filtered by active status. */
-  async list({ active = null } = {}) {
-    return tagRepository.getAll({ active });
+  /**
+   * List tags, optionally filtered by active status, with pagination.
+   * @param {{ active?: boolean|null, limit?: number, offset?: number }} [opts]
+   */
+  async list({ active = null, limit, offset } = {}) {
+    const [items, total] = await Promise.all([
+      tagRepository.getAll({ active, limit, offset }),
+      tagRepository.getCount({ active }),
+    ]);
+    return { items, total };
   },
 
   /**
