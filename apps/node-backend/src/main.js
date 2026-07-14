@@ -12,7 +12,7 @@ import { dirname, resolve, sep } from 'path';
 import { fileURLToPath } from 'url';
 import { getSettings } from './config/config.js';
 import { logger } from './config/logger.js';
-import { checkConnection, closePool, getPoolStats } from './database/connection.js';
+import { checkConnection, closePool, getPoolStats, query } from './database/connection.js';
 import { runMigrations } from './database/migrate.js';
 import {
   createMaterializedViews,
@@ -490,6 +490,20 @@ async function start() {
         const endIdxMv = bootMark('ensure_mv_indexes');
         await ensureMaterializedViewIndexes();
         endIdxMv();
+        // One database-wide ANALYZE at boot so small, rarely-mutated tables
+        // (which no migration or trigger ever ANALYZEs) still hand the planner
+        // fresh statistics. Fire-and-forget: ANALYZE only refreshes planner
+        // stats (idempotent, non-destructive), so it must never delay `listen`
+        // or block boot — hence not awaited, errors swallowed. This is complementary
+        // to, not in conflict with, the post-migration targeted ANALYZE in
+        // migrate.js: that one guarantees the two big, migration-rewritten tables
+        // are fresh immediately after an upgrade; this one covers every remaining
+        // table on every boot. On a boot that just migrated, the two big tables
+        // are simply re-sampled here — harmless (ANALYZE is idempotent), and the
+        // whole-DB sample is cheap on this dataset.
+        query('ANALYZE').catch((err) =>
+          logger.warn({ err: err.message }, 'boot-time ANALYZE failed; non-fatal'),
+        );
         // refreshMaterializedViews moved to post-listen warmup so /health
         // goes green sooner. Stale MV data is acceptable for the first few
         // seconds of warm boot.

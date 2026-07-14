@@ -44,7 +44,12 @@ describe('recipientRepository', () => {
       query.mockResolvedValueOnce({ rows: [] });
       await recipientRepository.getAll({ uncategorized: true, defaultCategoryId: 5 });
       const sql = query.mock.calls[0][0];
-      expect(sql).toContain('agg_recipient_totals');
+      // Existence probe now hits transactions directly (agg_recipient_totals
+      // was dropped in migration 0080); assert the equivalent semantics.
+      expect(sql).not.toContain('agg_recipient_totals');
+      expect(sql).toContain('FROM transactions t');
+      expect(sql).toContain('t.is_active = true');
+      expect(sql).toContain('t.is_transfer = false');
       expect(sql).toContain('r.default_category_id IS NULL');
       expect(sql).not.toContain('r.default_category_id = $');
     });

@@ -18,10 +18,6 @@
  *   3. planned_transactions.recipient_id  → primary (guarded: column may not exist on very old schemas)
  *   4. recipient_bank_accounts.recipient_id → primary (unless that would create a dupe account_number)
  *   5. recipients.primary_recipient_id    → primary (aliases now officially point at it)
- *
- * `agg_recipient_totals` self-maintains via triggers on transactions, so
- * the reassignments above will cascade to the aggregation table without
- * manual intervention.
  */
 import { withTransaction } from '../database/connection.js';
 

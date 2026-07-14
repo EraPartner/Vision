@@ -25,7 +25,6 @@ import { logger } from '../config/logger.js';
 
 /** Trigger-maintained tables — documented here, never refreshed from app code. */
 export const TRIGGER_MAINTAINED_TABLES = Object.freeze([
-  'agg_recipient_totals',
   'agg_split_outstanding',
 ]);
 

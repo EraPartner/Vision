@@ -35,14 +35,21 @@ function buildWhereClause({ name, defaultCategoryId, search, active, uncategoriz
   if (name) { sql += ` AND r.name ILIKE $${p++}`; params.push(`%${name}%`); }
   if (uncategorized) {
     // Phase 6: only surface recipients that both lack a default category
-    // *and* have recorded activity in `agg_recipient_totals`. The
-    // aggregation table is trigger-maintained, so this stays O(1) per
-    // recipient vs the old HAVING + full-table scan.
+    // *and* have recorded activity. This previously read the trigger-maintained
+    // `agg_recipient_totals` table (dropped in migration 0080 as pure write
+    // overhead); it now probes `transactions` directly. Semantics are preserved
+    // exactly: `agg_recipient_totals.transaction_count > 0` counted active,
+    // non-transfer, currency-bearing rows keyed on the raw recipient_id (see
+    // migrations 0035/0045), so the equivalent existence check is an active,
+    // non-transfer transaction with a currency for this recipient. Served by
+    // idx_transactions_recipient_date_active (recipient_id ... WHERE is_active).
     sql += ` AND r.default_category_id IS NULL
              AND EXISTS (
-               SELECT 1 FROM agg_recipient_totals art
-               WHERE art.recipient_id = r.id
-                 AND art.transaction_count > 0
+               SELECT 1 FROM transactions t
+               WHERE t.recipient_id = r.id
+                 AND t.is_active = true
+                 AND t.is_transfer = false
+                 AND t.currency IS NOT NULL
              )`;
   } else if (defaultCategoryId != null) {
     sql += ` AND r.default_category_id = $${p++}`;

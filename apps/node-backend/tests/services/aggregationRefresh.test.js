@@ -28,7 +28,6 @@ describe('services/aggregationRefresh — module surface', () => {
   it('documents the trigger-maintained tables as frozen', () => {
     expect(Object.isFrozen(TRIGGER_MAINTAINED_TABLES)).toBe(true);
     expect(TRIGGER_MAINTAINED_TABLES).toEqual([
-      'agg_recipient_totals',
       'agg_split_outstanding',
     ]);
   });
@@ -52,21 +51,9 @@ describe.skipIf(!hasTestDatabase())(
       expect(idx.rowCount).toBeGreaterThan(0);
     });
 
-    it('creates agg_recipient_totals with trigger on transactions', async () => {
-      const pool = getTestPool();
-      const table = await pool.query(
-        `SELECT 1 FROM information_schema.tables
-         WHERE table_name = 'agg_recipient_totals'`,
-      );
-      expect(table.rowCount).toBe(1);
-
-      const trg = await pool.query(
-        `SELECT 1 FROM pg_trigger
-         WHERE tgname = 'trg_agg_recipient_totals_sync'
-           AND NOT tgisinternal`,
-      );
-      expect(trg.rowCount).toBe(1);
-    });
+    // agg_recipient_totals was dropped in 0080_drop_agg_recipient_totals; its
+    // sole reader (recipientRepository existence probe) now hits transactions
+    // directly, so there is no table/trigger to assert here anymore.
 
     it('creates agg_split_outstanding with triggers on splits and payments', async () => {
       const pool = getTestPool();
