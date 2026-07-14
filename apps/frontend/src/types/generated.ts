@@ -1556,7 +1556,7 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** Get real-time quote for symbol */
+        /** Get real-time quotes for one or more symbols */
         get: operations["marketQuote"];
         put?: never;
         post?: never;
@@ -4914,14 +4914,12 @@ export interface operations {
         };
         requestBody?: never;
         responses: {
-            /** @description Deleted */
-            200: {
+            /** @description No Content */
+            204: {
                 headers: {
                     [name: string]: unknown;
                 };
-                content: {
-                    "application/json": components["schemas"]["Envelope"];
-                };
+                content?: never;
             };
         };
     };
@@ -6621,14 +6619,12 @@ export interface operations {
         };
         requestBody?: never;
         responses: {
-            /** @description Deleted */
-            200: {
+            /** @description No Content */
+            204: {
                 headers: {
                     [name: string]: unknown;
                 };
-                content: {
-                    "application/json": components["schemas"]["Envelope"];
-                };
+                content?: never;
             };
         };
     };
@@ -6715,14 +6711,12 @@ export interface operations {
         };
         requestBody?: never;
         responses: {
-            /** @description Deleted */
-            200: {
+            /** @description No Content */
+            204: {
                 headers: {
                     [name: string]: unknown;
                 };
-                content: {
-                    "application/json": components["schemas"]["Envelope"];
-                };
+                content?: never;
             };
         };
     };
@@ -6743,6 +6737,7 @@ export interface operations {
                     asset_class?: components["schemas"]["AssetClass"];
                     currency?: string;
                     is_active?: boolean;
+                    show_in_ticker?: boolean;
                 };
             };
         };
@@ -6871,6 +6866,11 @@ export interface operations {
                     to_account_id: number;
                     /** @description Units to move; omit for the whole position */
                     units?: number | null;
+                    /**
+                     * @description Lot-selection strategy for a partial move; ignored for a whole move. Defaults to the service default when omitted.
+                     * @enum {string}
+                     */
+                    strategy?: "fifo" | "proportional";
                 };
             };
         };
@@ -6944,8 +6944,10 @@ export interface operations {
     marketQuote: {
         parameters: {
             query: {
-                symbol: string;
-                currency?: string;
+                /** @description Comma-separated list of symbols (e.g. `AAPL,MSFT`) */
+                symbols: string;
+                /** @description `basic` returns price fields only; the default (full) also fetches fundamentals/analyst data */
+                detail?: "basic" | "full";
             };
             header?: never;
             path?: never;
@@ -7097,14 +7099,12 @@ export interface operations {
         };
         requestBody?: never;
         responses: {
-            /** @description Removed */
-            200: {
+            /** @description No Content */
+            204: {
                 headers: {
                     [name: string]: unknown;
                 };
-                content: {
-                    "application/json": components["schemas"]["Envelope"];
-                };
+                content?: never;
             };
         };
     };
@@ -7715,14 +7715,12 @@ export interface operations {
         };
         requestBody?: never;
         responses: {
-            /** @description Deleted */
-            200: {
+            /** @description No Content */
+            204: {
                 headers: {
                     [name: string]: unknown;
                 };
-                content: {
-                    "application/json": components["schemas"]["Envelope"];
-                };
+                content?: never;
             };
         };
     };
