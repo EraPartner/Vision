@@ -12,7 +12,7 @@ aliases: [scripts, npm scripts, bun scripts, commands, build commands, run comma
 # Package.json Scripts Reference
 
 > [!abstract] Overview
-> Vision is a Bun workspace with scripts at three levels: the repo root (`package.json`), the frontend (`apps/frontend/package.json`), and the backend (`apps/node-backend/package.json`). The tables below mirror those three files verbatim.
+> Vision is a Bun workspace with scripts at three levels: the repo root (`package.json`), the frontend (`apps/frontend/package.json`), and the backend (`apps/node-backend/package.json`). The tables below mirror those three files verbatim. The separate Electron build workspace (`packaging/electron/package.json`) is intentionally out of scope here — its scripts are release-tooling internals invoked only via the root `dist`/`electron:*` wrappers; see [[packaging/release/README.md]].
 
 > [!info] Workspace conventions
 > - Root scripts dispatch into workspaces via `bun run --filter '<pkg-name>' <script>`.
@@ -26,6 +26,8 @@ aliases: [scripts, npm scripts, bun scripts, commands, build commands, run comma
 | Script | Command | Description |
 |--------|---------|-------------|
 | `install:all` | `bun install` | Install workspace dependencies (frontend + backend + packages/types). |
+| `prepare` | `node scripts/setup-git-hooks.js` | Lifecycle hook — installs the repo's git hooks automatically after `bun install`. |
+| `hooks:setup` | `node scripts/setup-git-hooks.js` | Manually (re)install the git hooks (same script as `prepare`). |
 | `dev` | `concurrently … backend dev … frontend dev` | Run both workspaces' `dev` scripts in parallel with coloured prefixes. |
 | `backend` | `bun run --filter '…-node' start` | Start the backend in production mode (no watcher). |
 | `update` | `bun update` | Refresh dependency graph to the latest allowed versions. |
@@ -36,7 +38,7 @@ aliases: [scripts, npm scripts, bun scripts, commands, build commands, run comma
 |--------|---------|-------------|
 | `build` | `npm run generate-locales-if-not-ci && bun run --filter 'vision-frontend' build` | Production frontend build, preceded by locale generation outside CI. |
 | `build:dev` | `bun run --filter 'vision-frontend' build:dev` | Frontend build in development mode (no minification). |
-| `dist` | `npm run build && cd packaging/electron && npm run dist` | Full Electron desktop build (signs + notarises on macOS in CI). |
+| `dist` | `npm run build && cd packaging/electron && npm run dist` | Full Electron desktop build. Output is **unsigned / ad-hoc; no notarization** (`packaging/electron/package.json` sets `identity: null`, `hardenedRuntime: false`, and CI sets `CSC_IDENTITY_AUTO_DISCOVERY=false`) — see [[packaging/release/README.md]] for the release posture. |
 | `preview` | `bun run --filter 'vision-frontend' preview` | Serve the built frontend bundle locally for smoke-testing. |
 | `generate:types` | `openapi-typescript openapi.yaml -o apps/frontend/src/types/generated.ts` | Regenerate the TypeScript types from `openapi.yaml` (ADR-031). |
 
@@ -84,7 +86,7 @@ Alembic is the single source of schema DDL ([[docs/adr/027-alembic-single-source
 | `db:stamp` | `venv/bin/alembic -c config/alembic.ini stamp head` | Mark DB at a revision without running migrations. |
 | `db:revision` | `venv/bin/alembic … revision --autogenerate -m` | Create a new migration. |
 | `db:index-stats` | `bun run apps/node-backend/scripts/index-stats.js` | Dump per-index usage stats from `pg_stat_user_indexes`. |
-| `db:precision-drift` | `bun run apps/node-backend/scripts/check-precision-drift.js` | Check NUMERIC columns for precision drift across snapshots. |
+| `db:precision-drift` | `bun run apps/node-backend/scripts/check-precision-drift.js` | Static source scan (does **not** touch the database): flags `transactions ↔ *_raw_transactions` joins doing rounding-sensitive `amount` arithmetic, so a future NUMERIC widening has evidence. Prints nothing today. |
 | `quotes:densify` | `bun run apps/node-backend/scripts/densify-asset-history.js` | One-time gap-fill: runs `backfillHoldingGaps` across all investments to heal sparse `asset_price_history`, then recomputes portfolio snapshots if new rows were written. Safe to re-run (idempotent). Run once after upgrading from a version where Binance history was capped at 365 days. See [[docs/adr/065-daily-gap-fill-dense-asset-history\|ADR-065]]. |
 
 ### Docker

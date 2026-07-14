@@ -34,7 +34,7 @@ export function ChartPeriodSelector<P extends string>({
                         aria-selected={active}
                         onClick={() => onChange(p)}
                         className={cn(
-                            "rounded-md text-xs font-medium transition-all",
+                            "rounded-md text-xs font-medium transition-[color,background-color,box-shadow]",
                             pad,
                             active
                                 ? "bg-background text-foreground shadow-sm"

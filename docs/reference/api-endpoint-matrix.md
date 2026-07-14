@@ -54,7 +54,7 @@ aliases: [api matrix, endpoint matrix, all endpoints, api overview, endpoint lis
 
 | Method | Path | Description | Rate Limit | Doc |
 |--------|------|-------------|------------|-----|
-| GET | `/api/transactions` | List with filtering/pagination (Phase 13: supports `transaction_id`, `recipient_id`, `recipient_name`, `search`, `transaction_type`, `category_ids`, `bank_accounts`; also single `bank_account` — used by the accounts-hub double-click deep link, 2026-06-19; 2026-06-28 additive: `amount_min`, `amount_max`, `amount_exact` filter on ABS magnitude; `search` now also matches ISO date text and active tag slugs) | — | [[docs/api/transactions\|Transactions]] |
+| GET | `/api/transactions` | List with filtering/pagination (Phase 13: supports `transaction_id`, `recipient_id`, `recipient_name`, `search`, `transaction_type`, `category_ids`, `bank_accounts`; also single `bank_account` — used by the accounts-hub double-click deep link, 2026-06-19; 2026-06-28 additive: `amount_min`, `amount_max`, `amount_exact` filter on ABS magnitude, plus `amount_signed=true` to compare the signed `t.amount` instead; `search` now also matches ISO date text and active tag slugs) | — | [[docs/api/transactions\|Transactions]] |
 | GET | `/api/transactions/export/csv` | Export as CSV (streaming, chunked); accepts same filters as `GET /api/transactions` (Phase 13); 2026-06-28: `amount_min`/`amount_max` added | 30 req/min | [[docs/api/transactions\|Transactions]] |
 | GET | `/api/transactions/export/json` | Export as NDJSON (streaming, chunked); accepts same filters as `GET /api/transactions` (Phase 13); 2026-06-28: `amount_min`/`amount_max` added | 30 req/min | [[docs/api/transactions\|Transactions]] |
 | GET | `/api/transactions/:id` | Get single | — | [[docs/api/transactions\|Transactions]] |
@@ -400,7 +400,8 @@ Electron-specific inter-process communication for desktop features (backup, rest
 
 | Resource | Endpoints | Rate-Limited |
 |----------|-----------|--------------|
-| Accounts (ADR-088) | 6 | 0 |
+| Accounts (ADR-088) | 8 | 0 |
+| Cross-Workspace (ADR-098) | 1 | 0 |
 | Transactions (incl. Tags) | 18 | 2 |
 | Categories | 7 | 0 |
 | Recipients | 14 | 0 |
@@ -418,14 +419,14 @@ Electron-specific inter-process communication for desktop features (backup, rest
 | Admin (incl. DB Data Editor ADR-101) | 17 | 3 |
 | Splits | 11 | 0 |
 | Health | 2 | 0 |
-| Aggregations (Phase 2/6/10/D) | 14 | 0 |
+| Aggregations (Phase 2/6/10/D) | 15 | 0 |
 | Reports (Phase 3/7) | 3 | 0 |
 | Info/Statistics (Phase 14, ADR-100) | 14 | 5 |
 | AI Chat | 9 | 2 |
 | IPC Handlers (Phase 1+2) | 8 | 0 |
-| **Total** | **219** | **15** |
+| **Total** | **223** | **15** |
 
-> **210** of these are versioned `/api` HTTP operations — the authoritative count enforced against `openapi.yaml` by `scripts/check-endpoint-matrix.js`. The remaining 10 are 2 unversioned `/health` endpoints and 8 Electron IPC handlers, which sit outside the OpenAPI spec. (The Rate-Limited column is an approximate per-section tally, not gate-checked.)
+> **213** of these are versioned `/api` HTTP operations — the authoritative count enforced against `openapi.yaml` by `scripts/check-endpoint-matrix.js`. The remaining 10 are 2 unversioned `/health` endpoints and 8 Electron IPC handlers, which sit outside the OpenAPI spec. (The Rate-Limited column is an approximate per-section tally, not gate-checked.)
 
 ## Phase G Endpoint Consolidation (April 2026)
 

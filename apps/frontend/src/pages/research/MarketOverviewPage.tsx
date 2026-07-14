@@ -1012,7 +1012,7 @@ export default function MarketOverviewPage() {
             style={heatStyle(pct)}
             title={held ? t("research.markets.held") : undefined}
             className={cn(
-              "relative flex flex-col gap-1 rounded-xl border border-border/40 p-3.5 text-left transition-all",
+              "relative flex flex-col gap-1 rounded-xl border border-border/40 p-3.5 text-left transition-colors",
               "micro-lift hover:border-primary/40 outline-none focus-visible:ring-2 focus-visible:ring-ring",
               pct == null && "bg-muted/20",
               held &&

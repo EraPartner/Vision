@@ -259,7 +259,7 @@ export function CashFlowForecastDiagnostics({
                                             <span className="text-xs w-44 truncate">{e.label}</span>
                                             <div className="flex-1 h-1.5 rounded-full bg-muted overflow-hidden">
                                                 <div
-                                                    className="h-full rounded-full transition-all duration-300"
+                                                    className="h-full rounded-full transition-[width] duration-300"
                                                     style={{
                                                         width: `${barPct}%`,
                                                         background: color,

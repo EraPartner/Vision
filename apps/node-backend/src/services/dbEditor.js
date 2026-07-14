@@ -56,12 +56,25 @@ function clampInt(value, fallback, min, max) {
   return Math.min(Math.max(n, min), max);
 }
 
+// The catalog IS the injection allowlist, so it must stay correct — but table
+// column/PK metadata is static within a running backend (this editor only does
+// data DML, never DDL; a schema migration restarts the process). A short TTL
+// memo removes the ~5 catalog round-trips per browse tick / mutation without
+// weakening the allowlist semantics.
+const META_TTL_MS = 60_000;
+let userTablesCache = { value: /** @type {Set<string>|null} */ (null), expiresAt: 0 };
+const tableMetaCache = new Map();
+
 async function listUserTables() {
+  const now = Date.now();
+  if (userTablesCache.value && userTablesCache.expiresAt > now) return userTablesCache.value;
   const r = await query(
     `SELECT relname FROM pg_stat_user_tables WHERE schemaname = 'public'`,
     [],
   );
-  return new Set(r.rows.map((row) => row.relname));
+  const set = new Set(r.rows.map((row) => row.relname));
+  userTablesCache = { value: set, expiresAt: now + META_TTL_MS };
+  return set;
 }
 
 async function assertEditableTable(table) {
@@ -82,6 +95,10 @@ async function assertEditableTable(table) {
  */
 export async function getTableMeta(table) {
   await assertEditableTable(table);
+
+  const now = Date.now();
+  const cached = tableMetaCache.get(table);
+  if (cached && cached.expiresAt > now) return cached.value;
 
   const [colsRes, pkRes] = await Promise.all([
     query(
@@ -118,7 +135,9 @@ export async function getTableMeta(table) {
     };
   });
 
-  return { table, columns, primaryKey: pkRes.rows.map((r) => r.column_name) };
+  const meta = { table, columns, primaryKey: pkRes.rows.map((r) => r.column_name) };
+  tableMetaCache.set(table, { value: meta, expiresAt: now + META_TTL_MS });
+  return meta;
 }
 
 // ── Reads (browse / filter / sort / paginate) ───────────────────────────────
@@ -253,6 +272,18 @@ function normalizeWrite(value) {
  */
 function buildMutationSql(table, change, ctx) {
   const tbl = quoteIdent(table);
+
+  // Domain guard: getIncludeTransfers reads user_settings with a strict
+  // `=== true`, so a jsonb number 1/0 (or any non-boolean) written for the
+  // includeTransfers key would silently be interpreted as false. The API PUT
+  // layer already rejects this; close the same gap on the admin editor path.
+  if (table === 'user_settings') {
+    const key = change.op === 'insert' ? change.values?.key : change.pk?.key;
+    const value = change.op === 'insert' ? change.values?.value : change.set?.value;
+    if (key === 'includeTransfers' && value !== undefined && typeof value !== 'boolean') {
+      throw new ValidationError('user_settings.includeTransfers must be a JSON boolean');
+    }
+  }
 
   if (change.op === 'insert') {
     const cols = Object.keys(change.values ?? {}).filter((c) => ctx.colMeta.has(c));

@@ -60,7 +60,13 @@ export function ChatMessageList({
     useEffect(() => {
         const el = scrollRef.current;
         if (!el) return;
-        el.scrollTop = el.scrollHeight;
+        // Defer the scroll write into a rAF so we don't read scrollHeight
+        // synchronously right after React mutated the container (forced reflow
+        // per streamed chunk); by rAF time the layout is already up to date.
+        const raf = requestAnimationFrame(() => {
+            el.scrollTop = el.scrollHeight;
+        });
+        return () => cancelAnimationFrame(raf);
     }, [combined.length, assistantDraft, isStreaming, streamingToolContentLength]);
 
     const { t } = useLanguage();

@@ -298,7 +298,7 @@ export function AppSidebar() {
         {/* Workspace switcher */}
         {!collapsed && (
           <div className="px-3 pt-3">
-            <div className="flex rounded-xl bg-sidebar-accent/60 ring-1 ring-sidebar-border/50 p-1 gap-1 backdrop-blur-sm">
+            <div className="flex rounded-xl bg-sidebar-accent/60 ring-1 ring-sidebar-border/50 p-1 gap-1">
               <WorkspaceTab
                 active={workspace === "budgeting"}
                 onClick={() => setWorkspace("budgeting")}
@@ -426,7 +426,7 @@ function WorkspaceTab({
     <button
       onClick={onClick}
       title={label}
-      className={`min-w-0 flex-1 flex items-center justify-center gap-1 rounded-lg px-1.5 py-1.5 text-xs font-medium tracking-tight transition-all duration-[var(--duration-normal)] ease-[var(--ease-out-expo)] ${active
+      className={`min-w-0 flex-1 flex items-center justify-center gap-1 rounded-lg px-1.5 py-1.5 text-xs font-medium tracking-tight transition-[background-color,color,box-shadow,transform] duration-[var(--duration-normal)] ease-[var(--ease-out-expo)] ${active
           ? "bg-background/90 text-foreground shadow-[0_6px_18px_-8px_hsl(var(--primary)/0.35)] ring-1 ring-primary/25 scale-[1.02]"
           : "text-muted-foreground hover:text-foreground hover:bg-background/40"
         }`}

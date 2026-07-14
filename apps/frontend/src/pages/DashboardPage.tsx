@@ -108,13 +108,17 @@ export default function DashboardPage() {
         queryKey: ['dashboardRecentTransactions', allExcludedCategoryIds, excludedRecipientIds, exclusionsApply],
         queryFn: async () => {
             const pageSize = 200;
+            // Cap the scan so a history dominated by excluded categories (e.g.
+            // transfers) can't trigger an unbounded sequence of 200-row round
+            // trips — this queryFn re-runs on every transaction mutation.
+            const maxPages = 3;
             let offset = 0;
             const picked: Transaction[] = [];
 
             const excludedCategoryIdSet = new Set(allExcludedCategoryIds);
             const excludedRecipientIdSet = new Set(excludedRecipientIds);
 
-            while (picked.length < 5) {
+            for (let pageIndex = 0; picked.length < 5 && pageIndex < maxPages; pageIndex++) {
                 const page = await apiClient.getTransactions({
                     limit: pageSize,
                     offset,
@@ -476,18 +480,22 @@ export default function DashboardPage() {
                 )}
             </div>
 
-            {/* Cash Flow Forecast */}
+            {/* Cash Flow Forecast — below the fold on typical viewports, so let
+                the browser skip its layout+paint until scrolled near (visually free). */}
             {isVisible('cashflowComparison') && (
-                <CashFlowForecastChart
-                    excludedCategoryIds={allExcludedCategoryIds}
-                    excludedRecipientIds={excludedRecipientIds}
-                    currency={targetCurrency}
-                />
+                <div className="cv-auto">
+                    <CashFlowForecastChart
+                        excludedCategoryIds={allExcludedCategoryIds}
+                        excludedRecipientIds={excludedRecipientIds}
+                        currency={targetCurrency}
+                    />
+                </div>
             )}
 
             {/* Recent transactions */}
             {isVisible('recentTransactions') && (transactionsLoading || recentTransactionsLoading) && recentSkeleton}
             {isVisible('recentTransactions') && !(transactionsLoading || recentTransactionsLoading) && (
+            <div className="cv-auto">
             <VirtualDataTable
                 title={t('dashboard.recentTransactions')}
                 subtitle={t('dashboard.recentTransactionsSubtitle', { n: recentTransactions.length })}
@@ -503,6 +511,7 @@ export default function DashboardPage() {
                     />
                 }
             />
+            </div>
             )}
         </div>
         </ChartSyncProvider>

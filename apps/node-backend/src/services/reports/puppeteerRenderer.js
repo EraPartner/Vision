@@ -10,17 +10,17 @@ import { logger } from '../../config/logger.js';
 
 /** @type {import('puppeteer').Browser | null} */
 let browser = null;
+/** @type {Promise<import('puppeteer').Browser> | null} */
+let launchPromise = null;
 
-async function getBrowser() {
-  if (browser?.connected) return browser;
-
+async function launchBrowser() {
   const { default: puppeteer } = await import('puppeteer');
   // In Docker (Alpine) PUPPETEER_EXECUTABLE_PATH points to the distro-packaged
   // Chromium (musl-linked, works on ARM64). Locally it is unset and Puppeteer
   // falls back to its own bundled Chrome.
   const executablePath = process.env.PUPPETEER_EXECUTABLE_PATH || undefined;
 
-  browser = await puppeteer.launch({
+  const launched = await puppeteer.launch({
     headless: true,
     ...(executablePath ? { executablePath } : {}),
     args: [
@@ -30,8 +30,47 @@ async function getBrowser() {
       '--disable-gpu',
     ],
   });
+  browser = launched;
   logger.info('Puppeteer browser launched for report rendering');
-  return browser;
+  return launched;
+}
+
+// Bound concurrent renders so N simultaneous report POSTs can't open N Chromium
+// pages (+ N full data fetches) at once. Each render still runs to completion;
+// excess renders queue for a slot rather than piling pages onto one browser.
+const MAX_CONCURRENT_RENDERS = 2;
+let activeRenders = 0;
+/** @type {Array<() => void>} */
+const renderWaiters = [];
+
+function acquireRenderSlot() {
+  if (activeRenders < MAX_CONCURRENT_RENDERS) {
+    activeRenders += 1;
+    return Promise.resolve();
+  }
+  return new Promise((resolve) => { renderWaiters.push(() => resolve()); });
+}
+
+function releaseRenderSlot() {
+  const next = renderWaiters.shift();
+  if (next) {
+    // Hand the still-held slot straight to the next waiter (no decrement).
+    next();
+  } else {
+    activeRenders -= 1;
+  }
+}
+
+async function getBrowser() {
+  if (browser?.connected) return browser;
+
+  // Memoize the in-flight launch: two concurrent first renders otherwise both
+  // launched Chromium, the second assignment overwrote `browser`, and the first
+  // process leaked. The promise clears on settle so a failed launch can retry.
+  if (!launchPromise) {
+    launchPromise = launchBrowser().finally(() => { launchPromise = null; });
+  }
+  return launchPromise;
 }
 
 /**
@@ -46,6 +85,15 @@ async function getBrowser() {
  * @returns {Promise<Buffer>}
  */
 export async function renderHtmlToPdf(html, opts = {}) {
+  await acquireRenderSlot();
+  try {
+    return await renderHtmlToPdfInner(html, opts);
+  } finally {
+    releaseRenderSlot();
+  }
+}
+
+async function renderHtmlToPdfInner(html, opts = {}) {
   const b = await getBrowser();
   const page = await b.newPage();
   try {
@@ -82,5 +130,6 @@ export async function closeBrowser() {
     // ignore errors during shutdown
   } finally {
     browser = null;
+    launchPromise = null;
   }
 }

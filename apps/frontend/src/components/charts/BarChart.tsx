@@ -175,7 +175,10 @@ function BarLayerInner<Datum>({
                                 transition={{
                                     duration: reduce ? 0 : durations.normal,
                                     ease: easings.outExpo,
-                                    delay: (di * series.length + si) * 0.015,
+                                    // Clamp the stagger tail so a decade of months
+                                // doesn't run ~4s of entrance animation; past
+                                // ~0.4s the stagger is already imperceptible.
+                                delay: Math.min((di * series.length + si) * 0.015, 0.4),
                                 }}
                                 onPointerEnter={() =>
                                     onEnter(d, x + bw / 2, yTop)
@@ -211,7 +214,10 @@ function BarLayerInner<Datum>({
                             transition={{
                                 duration: reduce ? 0 : durations.normal,
                                 ease: easings.outExpo,
-                                delay: (di * series.length + si) * 0.015,
+                                // Clamp the stagger tail so a decade of months
+                                // doesn't run ~4s of entrance animation; past
+                                // ~0.4s the stagger is already imperceptible.
+                                delay: Math.min((di * series.length + si) * 0.015, 0.4),
                             }}
                             onPointerEnter={() =>
                                 onEnter(d, xStart + w, y + bh / 2)

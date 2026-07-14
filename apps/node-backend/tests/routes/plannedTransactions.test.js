@@ -168,6 +168,29 @@ describe('Planned Transaction Routes', () => {
       await expect(routeHandlers['post:/'](req, res)).rejects.toBeInstanceOf(ValidationError);
     });
 
+    it('rejects a zero amount (meaningless, never auto-matches)', async () => {
+      const req = { body: { planned_date: '2026-03-15', bank_account: 'Chase', amount: 0 } };
+      const res = mockResponse();
+      await expect(routeHandlers['post:/'](req, res)).rejects.toBeInstanceOf(ValidationError);
+      expect(plannedTransactionRepository.create).not.toHaveBeenCalled();
+    });
+
+    it('rejects an absurd amount above the money-column ceiling', async () => {
+      const req = { body: { planned_date: '2026-03-15', bank_account: 'Chase', amount: 1e15 } };
+      const res = mockResponse();
+      await expect(routeHandlers['post:/'](req, res)).rejects.toBeInstanceOf(ValidationError);
+      expect(plannedTransactionRepository.create).not.toHaveBeenCalled();
+    });
+
+    it('rejects a negative reminder_days_before', async () => {
+      const req = {
+        body: { planned_date: '2026-03-15', bank_account: 'Chase', amount: 50, reminder_days_before: -1 },
+      };
+      const res = mockResponse();
+      await expect(routeHandlers['post:/'](req, res)).rejects.toBeInstanceOf(ValidationError);
+      expect(plannedTransactionRepository.create).not.toHaveBeenCalled();
+    });
+
     it('should create loan payment and overwrite amount/date from schedule', async () => {
       plannedTransactionRepository.create.mockResolvedValue({
         id: 2,

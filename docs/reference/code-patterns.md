@@ -370,8 +370,18 @@ const ymdString = toYmd(new Date());                // → "2026-04-22"
 
 **Source:** [[apps/node-backend/src/repositories/transactionRepository.js|transactionRepository.js]], [[apps/node-backend/src/repositories/categoryRepository.js|categoryRepository.js]]
 
-> [!note] `null` at the repository boundary
-> Repository methods return `null` (not `undefined`) when a row is not found — this is a deliberate exception to the project-wide "use `undefined` for optional values" convention. `null` preserves the semantics of a DB query that returns zero rows, signalling "row does not exist" to callers that need to distinguish it from a missing argument.
+> [!note] `null`/`undefined` at the repository boundary
+> Repository methods return an empty result (rather than throwing) when a row is not found — a
+> deliberate exception to the project-wide "use `undefined` for optional values" convention, because
+> a zero-row query means "row does not exist" and callers need to distinguish that from a missing
+> argument.
+>
+> Historically this was standardized on `null` (`rows[0] || null`, e.g.
+> `importBatchRepository.js`), and `null` remains the preferred sentinel for new code. Note that
+> several newer repositories currently return `undefined` instead (`accountRepository.js`,
+> `customParserConfigRepository.js`, `portfolioImportBatchRepository.js` return bare `rows[0]` /
+> `?? undefined`), so **callers must treat either as "not found"** — test with `== null` (matches
+> both) rather than `=== null`.
 
 ```js
 import { query } from '../database/connection.js';
@@ -1020,7 +1030,8 @@ import {
   ForbiddenError,
   NotFoundError,
   ConflictError,
-} from '../lib/errors.js';
+  RateLimitedError,
+} from '../middleware/errorHandler.js';
 
 // Usage in routes:
 if (!requiredField) {
@@ -1037,13 +1048,15 @@ if (isDuplicate) {
 }
 ```
 
-### Response Format (Back-Compat)
+### Response Format
 
-All errors return this envelope:
+The `errorHandler` middleware ([[apps/node-backend/src/middleware/errorHandler.js|errorHandler.js]]) converts every thrown error into the unified envelope (ADR-026):
 
 ```json
-{ "detail": "Human-readable error message", "error_code": "ERROR_TYPE" }
+{ "ok": false, "error": { "code": "ERROR_TYPE", "message": "Human-readable error message" }, "meta": { "requestId": "…" } }
 ```
+
+`error.details` is included only when the thrown `AppError` carried a non-sensitive `details` object; `meta.requestId` is included when the request has an id. 5xx messages are suppressed in production.
 
 | Status Code | Class | Error Code | When to Use |
 |-------------|-------|-----------|-------------|
@@ -1052,7 +1065,8 @@ All errors return this envelope:
 | 403 | ForbiddenError | FORBIDDEN | Access denied |
 | 404 | NotFoundError | NOT_FOUND | Resource not found |
 | 409 | ConflictError | CONFLICT | Duplicate entry |
-| 500 | AppError | APP_ERROR | Internal server error |
+| 429 | RateLimitedError | RATE_LIMITED | Rate limit exceeded |
+| 500 | AppError | APP_ERROR (INTERNAL_SERVER_ERROR when unhandled) | Internal server error |
 
 ### Frontend Error Handling (Phase 5+)
 

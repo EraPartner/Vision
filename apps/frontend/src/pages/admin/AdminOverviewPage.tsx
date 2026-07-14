@@ -34,7 +34,7 @@ function OverviewCard({
 
     return (
         <Link to={to} className="block group">
-            <Card className={`glass-chrome transition-all duration-200 group-hover:shadow-lg ${statusRing}`}>
+            <Card className={`glass-chrome transition-shadow duration-200 group-hover:shadow-lg ${statusRing}`}>
                 <CardContent className="pt-6">
                     <div className="flex items-center gap-4">
                         <div className="h-10 w-10 shrink-0 rounded-xl bg-gradient-to-br from-primary/20 to-primary/5 flex items-center justify-center">

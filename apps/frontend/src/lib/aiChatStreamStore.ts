@@ -151,8 +151,17 @@ class AiChatStreamStore {
         for (const [id, state] of this.streams) {
             if (state.isStreaming) ids.push(id);
         }
-        this.activeIdsCache = ids.length === 0 ? EMPTY_ACTIVE_IDS : Object.freeze(ids);
         this.activeIdsDirty = false;
+        // Compare-before-swap: token deltas dirty the cache on every event, but
+        // the *active set* changes only when a stream starts/stops. Keeping the
+        // previous array reference when membership is unchanged means
+        // `useSyncExternalStore` consumers (ChatConversationList) don't re-render
+        // per streamed token.
+        const prev = this.activeIdsCache;
+        if (ids.length === prev.length && ids.every((id, i) => id === prev[i])) {
+            return prev;
+        }
+        this.activeIdsCache = ids.length === 0 ? EMPTY_ACTIVE_IDS : Object.freeze(ids);
         return this.activeIdsCache;
     }
 

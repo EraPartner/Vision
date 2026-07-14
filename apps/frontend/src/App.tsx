@@ -11,7 +11,7 @@ import { ThemeProvider } from "@/contexts/ThemeContext";
 import { LanguageProvider, type Language } from "@/contexts/LanguageContext";
 import { configureCurrencyFormatDefaults, numberFormatToLocale } from "@/utils/currency";
 
-import { lazy, Suspense, useEffect, type ReactNode } from "react";
+import { lazy, Suspense, useCallback, useEffect, type ReactNode } from "react";
 import { ErrorBoundary } from "@/components/shared/ErrorBoundary";
 import { ScrollToTop } from "@/components/shared/ScrollToTop";
 import { StartupRedirect } from "@/components/shared/StartupRedirect";
@@ -22,6 +22,7 @@ import { useSettingsStore } from "@/stores/settingsStore";
 // Lazy-loaded pages for code splitting. Loaders live in lib/routePreload so
 // sidebar hover can warm the same chunks the router requests on click.
 import { routeLoaders } from "@/lib/routePreload";
+import { LOCAL_STORAGE_KEYS } from "@/lib/localStorage-keys";
 
 const TaxOverviewPage = lazy(routeLoaders["/tax"]);
 const PortfolioTaxPage = lazy(routeLoaders["/portfolio/tax"]);
@@ -115,7 +116,25 @@ function PageLoader() {
 function LanguageBridge({ children }: { children: React.ReactNode }) {
     const { appSettings, updateAppSettings } = useAppSettings();
     const language: Language = (appSettings.language as Language) ?? 'en';
-    const setLanguage = (lang: Language) => updateAppSettings({ language: lang });
+    // `updateAppSettings` (zustand action) is referentially stable, so this
+    // callback identity stays stable across settings changes — otherwise every
+    // unrelated settings toggle would re-publish the LanguageContext value and
+    // re-render every `useLanguage` consumer app-wide.
+    const setLanguage = useCallback(
+        (lang: Language) => updateAppSettings({ language: lang }),
+        [updateAppSettings],
+    );
+
+    // Mirror the active language to localStorage so the next cold boot can start
+    // the correct locale chunk during entry execution (see LanguageContext),
+    // instead of waiting behind the settings API round trip.
+    useEffect(() => {
+        try {
+            localStorage.setItem(LOCAL_STORAGE_KEYS.LANGUAGE, language);
+        } catch {
+            // localStorage unavailable — locale prefetch falls back to English.
+        }
+    }, [language]);
 
     useEffect(() => {
         configureCurrencyFormatDefaults({

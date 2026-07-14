@@ -136,7 +136,12 @@ export async function commitBrokerageFanout({ accountId, rows }) {
       // The trade's single cash movement (ADR-090). createTradeCashLeg no-ops when
       // legAmount is null/zero (split, gift), so no spurious cash row is produced.
       if (legAmount != null && legAmount !== 0) {
-        const legId = await createTradeCashLeg({ portfolioTxn: { ...created, ...row, id: created?.id }, cashAccountId: accountId });
+        // Spread `created` LAST so the repo-computed canonicals (esp. amount,
+        // which a units+price CSV leaves null on the raw row) win over the raw
+        // row — otherwise the leg booked -(fees+taxes) instead of
+        // -(units×price+fees+taxes). `row` still supplies fields the repo row
+        // may lack (currency, fx_rate_to_eur).
+        const legId = await createTradeCashLeg({ portfolioTxn: { ...row, ...created }, cashAccountId: accountId });
         if (legId) legs++;
       }
     } catch {

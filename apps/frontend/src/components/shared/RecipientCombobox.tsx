@@ -23,7 +23,9 @@ export function RecipientCombobox({ value, onSelect, disabled, className, portal
     const debouncedSearch = useDebounce(search.trim(), SEARCH_DEBOUNCE_MS);
 
     const { data } = useRecipients({
-        limit: 1000,
+        // The server search is the filter; keep the unsearched fetch small so
+        // opening the popover doesn't mount ~1000 CommandItems at once.
+        limit: debouncedSearch ? 1000 : 100,
         active: false,
         search: debouncedSearch || undefined,
     });
@@ -47,7 +49,7 @@ export function RecipientCombobox({ value, onSelect, disabled, className, portal
                 </Button>
             </PopoverTrigger>
             <PopoverContent container={portalContainer} className="w-[280px] p-0 z-[200]" align="start">
-                <Command>
+                <Command shouldFilter={false}>
                     <CommandInput
                         placeholder={t('combobox.recipient.search')}
                         value={search}

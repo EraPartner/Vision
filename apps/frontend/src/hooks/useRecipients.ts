@@ -82,6 +82,10 @@ export function useMergeRecipients() {
         onSuccess: (data) => {
             queryClient.invalidateQueries({queryKey: ['recipients']});
             queryClient.invalidateQueries({queryKey: ['transactions']});
+            // Statistics' recipient breakdowns live under ['aggregations', …];
+            // without this a merged/unmerged identity stays split in Top
+            // Recipients until staleTime expires.
+            queryClient.invalidateQueries({queryKey: ['aggregations']});
             toast.success(t('recipients.merged', { n: String(data.merged_ids.length), name: data.primary.name }));
             if (data.patternSuggestion) {
                 const { patternSuggestion } = data;
@@ -115,6 +119,9 @@ export function useUnmergeRecipient() {
         onSuccess: () => {
             queryClient.invalidateQueries({queryKey: ['recipients']});
             queryClient.invalidateQueries({queryKey: ['transactions']});
+            // See useMergeRecipients: keep Statistics' ['aggregations'] breakdowns
+            // in sync with the recipient-identity change.
+            queryClient.invalidateQueries({queryKey: ['aggregations']});
             toast.success(t('recipients.unmerged'));
         },
         onError: (error: Error) => {

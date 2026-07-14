@@ -149,6 +149,18 @@ describe('Watchlist Routes', () => {
       await expect(routeHandlers['post:/'](req, mockResponse())).rejects.toBeInstanceOf(ValidationError);
     });
 
+    it('rejects an over-length name (VARCHAR(200)) before the DB 22001', async () => {
+      const req = { body: { ...validBody, name: 'x'.repeat(201) } };
+      await expect(routeHandlers['post:/'](req, mockResponse())).rejects.toBeInstanceOf(ValidationError);
+      expect(watchlistRepository.create).not.toHaveBeenCalled();
+    });
+
+    it('rejects an over-length symbol (VARCHAR(20))', async () => {
+      const req = { body: { ...validBody, symbol: 'A'.repeat(21) } };
+      await expect(routeHandlers['post:/'](req, mockResponse())).rejects.toBeInstanceOf(ValidationError);
+      expect(watchlistRepository.create).not.toHaveBeenCalled();
+    });
+
     it('rejects unknown asset_class', async () => {
       const req = { body: { ...validBody, asset_class: 'beanie-babies' } };
       await expect(routeHandlers['post:/'](req, mockResponse())).rejects.toBeInstanceOf(ValidationError);
@@ -157,6 +169,15 @@ describe('Watchlist Routes', () => {
     it('rejects malformed currency', async () => {
       const req = { body: { ...validBody, currency: 'EURO' } };
       await expect(routeHandlers['post:/'](req, mockResponse())).rejects.toBeInstanceOf(ValidationError);
+    });
+
+    it('normalises a lower-case currency to uppercase before the repository', async () => {
+      watchlistRepository.create.mockResolvedValue({ id: 1 });
+      const req = { body: { ...validBody, currency: 'usd' } };
+      await routeHandlers['post:/'](req, mockResponse());
+      expect(watchlistRepository.create).toHaveBeenCalledWith(
+        expect.objectContaining({ currency: 'USD' }),
+      );
     });
 
     it('rejects a whitespace-only name (truthy, so the POST presence check let it through)', async () => {

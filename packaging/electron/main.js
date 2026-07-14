@@ -53,8 +53,8 @@ async function initI18n() {
   i18n = await loadI18nAsync();
 }
 
-function t(key, vars) {
-  let txt = i18n[key] || key;
+function t(key, vars, fallback) {
+  let txt = i18n[key] || fallback || key;
   if (vars) {
     for (const [k, v] of Object.entries(vars)) txt = txt.replace(`{${k}}`, v);
   }
@@ -84,11 +84,62 @@ const __IS_DEMO = (() => {
 })();
 app.setName(__IS_DEMO ? 'Vision Demo' : 'Vision');
 
+// Acquire the single-instance lock as early as possible — immediately after
+// setName (the lock lives in userData, so it must run after that) and BEFORE the
+// legacy-userData migration and the rest of module eval. This means a second
+// launch quits here instead of evaluating the whole module first, and two
+// simultaneous first launches can't both enter the migration's renameSync.
+// The primary instance registers its second-instance/activate/launch handlers
+// at the bottom of the module, still gated on this same flag.
+const gotSingleInstanceLock = app.requestSingleInstanceLock();
+if (!gotSingleInstanceLock) {
+  app.quit();
+}
+
+// Persist main-process logs to a rotating file in userData. A double-clicked
+// .app discards stderr, so packaged-app startup failures (the migration below,
+// boot-phase timings, corrupt-settings quarantine, port selection, the startup
+// error dialogs) leave no trail to attach to a bug report. Installed here —
+// right after the single-instance lock, before the first console.* of module
+// eval — so migration/startup logs are captured. Best-effort: any failure
+// leaves console untouched and never blocks boot. Gated on the lock so a
+// second (about-to-quit) instance doesn't contend on the same file.
+if (gotSingleInstanceLock) (function initFileLogger() {
+  try {
+    const logDir = path.join(app.getPath('userData'), 'logs');
+    fs.mkdirSync(logDir, { recursive: true });
+    const logPath = path.join(logDir, 'main.log');
+    // Rotate once the live log passes ~2 MB so it can't grow unbounded across
+    // sessions; keep exactly one previous generation.
+    try {
+      if (fs.statSync(logPath).size > 2 * 1024 * 1024) {
+        try { fs.renameSync(logPath, `${logPath}.1`); } catch { /* best effort */ }
+      }
+    } catch { /* no existing log — first run */ }
+    const stream = fs.createWriteStream(logPath, { flags: 'a' });
+    stream.on('error', () => { /* never let a log write crash the app */ });
+    const serialize = (a) => {
+      if (typeof a === 'string') return a;
+      try { return JSON.stringify(a); } catch { return String(a); }
+    };
+    const write = (level, args) => {
+      try { stream.write(`${new Date().toISOString()} [${level}] ${args.map(serialize).join(' ')}\n`); }
+      catch { /* best effort */ }
+    };
+    for (const level of ['log', 'warn', 'error']) {
+      const orig = console[level].bind(console);
+      console[level] = (...args) => { write(level, args); orig(...args); };
+    }
+    write('log', [`main-process logger started (pid ${process.pid})`]);
+  } catch { /* logging is best-effort; never block boot */ }
+})();
+
 // One-shot migration from the legacy "vision-desktop" userData dir to the
 // canonical "Vision" dir. Preserves existing settings.json + embedded_compose
 // (and its .env with the original POSTGRES_PASSWORD) so the shared docker
-// volume keeps authenticating after the rename.
-(function migrateLegacyUserData() {
+// volume keeps authenticating after the rename. Skipped for a second instance
+// (it doesn't hold the lock and is about to quit).
+if (gotSingleInstanceLock) (function migrateLegacyUserData() {
   try {
     if (__IS_DEMO) return; // demo build never adopts the real app's legacy data
     const target = app.getPath('userData');
@@ -240,9 +291,50 @@ async function loadSettings() {
   }
 }
 
-async function saveSettings(data) {
+// Serialize every settings write through one promise chain so concurrent
+// callers can neither interleave a read-modify-write (silently dropping each
+// other's keys) nor observe a half-written file. Each write lands in a temp
+// file that is atomically renamed into place — a crash mid-write leaves the
+// previous good settings.json intact instead of corrupting it.
+let settingsWriteChain = Promise.resolve();
+
+async function writeSettingsAtomic(data) {
   await fs.promises.mkdir(path.dirname(settingsPath), { recursive: true });
-  await fs.promises.writeFile(settingsPath, JSON.stringify(data, null, 2));
+  const tmpPath = `${settingsPath}.tmp-${process.pid}-${Date.now()}`;
+  try {
+    await fs.promises.writeFile(tmpPath, JSON.stringify(data, null, 2));
+    await fs.promises.rename(tmpPath, settingsPath);
+  } catch (err) {
+    try { await fs.promises.unlink(tmpPath); } catch { /* best effort */ }
+    throw err;
+  }
+}
+
+// Overwrite settings.json with `data`. Serialized + atomic. Prefer
+// updateSettings() when the new value depends on the current one.
+function saveSettings(data) {
+  const run = settingsWriteChain.then(() => writeSettingsAtomic(data));
+  // Keep the chain alive even if this write rejects, so later writes still run.
+  settingsWriteChain = run.catch(() => {});
+  return run;
+}
+
+// Atomic read-modify-write: load current settings, apply `mutate` to a copy,
+// then persist — all inside the shared write chain, so two concurrent updaters
+// can't clobber each other's keys. `mutate` may mutate the passed copy in place
+// (return nothing) or return a replacement object. Replaces the racy
+// `saveSettings({ ...(await loadSettings()), ... })` pattern.
+function updateSettings(mutate) {
+  const run = settingsWriteChain.then(async () => {
+    const current = await loadSettings();
+    const draft = { ...current };
+    const result = await mutate(draft);
+    const next = result !== undefined ? result : draft;
+    await writeSettingsAtomic(next);
+    return next;
+  });
+  settingsWriteChain = run.catch(() => {});
+  return run;
 }
 
 // ── Backend host-port resolution ───────────────────────────────────────────────
@@ -289,8 +381,33 @@ async function resolveAppPort() {
     return persisted;
   }
   const port = await pickRandomFreePort();
-  try { await saveSettings({ ...s, appPort: port }); }
+  try { await updateSettings((cur) => { cur.appPort = port; }); }
   catch (err) { console.warn('[port] failed to persist appPort:', err && err.message ? err.message : err); }
+  return port;
+}
+
+// A persisted appPort is reused unconditionally (so the running container's
+// published port stays valid). But if an unrelated process bound that port
+// while Vision was down, `compose up`/`start` can't publish the app container
+// on it and fails with a host-port collision — which, unrecovered, bricks every
+// relaunch until the user hand-edits settings.json. Detect that specific failure
+// so the caller can pick a fresh port and recreate. The message wording varies
+// by platform/daemon, hence the several alternatives. run() rejects with the
+// raw stderr string, so match against that.
+function isPortConflictError(err) {
+  const msg = String(err && err.message ? err.message : err).toLowerCase();
+  return /already allocated|address already in use|bind for [^\n]*failed|ports are not available|failed to bind host port/.test(msg);
+}
+
+// Pick a fresh free port, persist it, and re-derive the URLs polled during boot.
+// Used to self-heal after a foreign process squats the persisted appPort.
+async function repickAppPort() {
+  const port = await pickRandomFreePort();
+  appPort = port;
+  APP_URL = `http://localhost:${appPort}`;
+  HEALTH_URL = `http://localhost:${appPort}/health`;
+  try { await updateSettings((cur) => { cur.appPort = port; }); }
+  catch (err) { console.warn('[port] failed to persist re-picked appPort:', err && err.message ? err.message : err); }
   return port;
 }
 
@@ -345,8 +462,11 @@ async function resolveWorkDir() {
     const packagedI18n = path.join(process.resourcesPath, 'i18n');
     const packagedI18nExists = await fs.promises.access(packagedI18n).then(() => true).catch(() => false);
     if (!packagedI18nExists) {
-      // If it's missing, attempt to copy from the repo i18n/source (best effort)
-      const repoI18n = path.join(__dirname, '..', 'i18n');
+      // If it's missing, attempt to copy from the repo i18n/source (best effort).
+      // __dirname is packaging/electron, so the repo masters live two levels up
+      // under i18n/source — the previous `../i18n` (packaging/i18n) never existed,
+      // making this whole branch dead code.
+      const repoI18n = path.join(__dirname, '..', '..', 'i18n', 'source');
       const repoI18nExists = await fs.promises.access(repoI18n).then(() => true).catch(() => false);
       if (repoI18nExists) {
         await fs.promises.mkdir(packagedI18n, { recursive: true });
@@ -396,7 +516,7 @@ async function resolveWorkDir() {
     const dest = path.join(embeddedDir, 'docker-compose.yml');
     // Overwrite if exists to allow updates on new app versions
     await fs.promises.copyFile(embeddedSrc, dest);
-    await saveSettings({ ...(await loadSettings()), embeddedDir });
+    await updateSettings((cur) => { cur.embeddedDir = embeddedDir; });
     return embeddedDir;
   } catch (err) {
     await dialog.showMessageBox({
@@ -622,7 +742,7 @@ async function getBackupDeviceId() {
     app.getPath('userData'),
   ].join('|');
   const backupDeviceId = crypto.createHash('sha1').update(machineToken).digest('hex').slice(0, 8);
-  await saveSettings({ ...settings, backupDeviceId });
+  await updateSettings((cur) => { cur.backupDeviceId = backupDeviceId; });
   return backupDeviceId;
 }
 
@@ -647,11 +767,8 @@ async function getBackupPassphrase() {
 }
 
 async function setBackupPassphrase(passphrase) {
-  const settings = await loadSettings();
-  const next = { ...settings };
   if (!passphrase) {
-    delete next.backupPassphraseEncrypted;
-    await saveSettings(next);
+    await updateSettings((cur) => { delete cur.backupPassphraseEncrypted; });
     return { success: true, available: true };
   }
   if (!safeStorage || typeof safeStorage.isEncryptionAvailable !== 'function' || !safeStorage.isEncryptionAvailable()) {
@@ -659,8 +776,8 @@ async function setBackupPassphrase(passphrase) {
   }
   try {
     const encrypted = safeStorage.encryptString(passphrase);
-    next.backupPassphraseEncrypted = encrypted.toString('base64');
-    await saveSettings(next);
+    const encoded = encrypted.toString('base64');
+    await updateSettings((cur) => { cur.backupPassphraseEncrypted = encoded; });
     return { success: true, available: true };
   } catch (err) {
     return { success: false, available: true, error: String(err) };
@@ -1156,8 +1273,46 @@ function startHealthWatchdog() {
   }, HEALTH_WATCHDOG_INTERVAL_MS);
 }
 
+// When the initial boot poll times out onto the error page, keep probing in the
+// background so a genuinely slow start — e.g. a long alembic migration after a
+// packaged image update, which can outlast even the extended poll budget — still
+// lands the user on the app once the backend finally answers, instead of
+// stranding them on the error page until they press Retry. Bounded, and self-
+// cancels the moment the window leaves the error page (manual Retry, or nav).
+let renavTimer = null;
+function stopRenavigateWhenReady() {
+  if (renavTimer) { clearTimeout(renavTimer); renavTimer = null; }
+}
+function renavigateWhenReady(maxAttempts = HEALTH_POLL_BUILD_ATTEMPTS) {
+  stopRenavigateWhenReady();
+  let tries = 0;
+  const tick = async () => {
+    renavTimer = null;
+    if (!mainWindow || mainWindow.isDestroyed()) return;
+    // Give up as soon as we're no longer on the error page — a successful Retry
+    // (or any other navigation) has taken over.
+    let url = '';
+    try { url = mainWindow.webContents.getURL(); } catch { return; }
+    if (!url.includes('error.html')) return;
+    const status = await pingReady();
+    if (status && status.ready) {
+      if (mainWindow && !mainWindow.isDestroyed()) mainWindow.loadURL(APP_URL);
+      notify(t('app.running'));
+      startHealthWatchdog();
+      return;
+    }
+    tries += 1;
+    if (tries >= maxAttempts) return;
+    renavTimer = setTimeout(tick, HEALTH_POLL_INTERVAL_MS);
+  };
+  renavTimer = setTimeout(tick, HEALTH_POLL_INTERVAL_MS);
+}
+
 function pollAndLoad({ building = false } = {}) {
   const endPollHealth = bootMark('poll_ready');
+  // A fresh boot poll supersedes any background re-navigation loop still running
+  // from a previous timeout.
+  stopRenavigateWhenReady();
   pollReady(building ? HEALTH_POLL_BUILD_ATTEMPTS : HEALTH_POLL_ATTEMPTS)
     .then(() => {
       endPollHealth();
@@ -1169,6 +1324,9 @@ function pollAndLoad({ building = false } = {}) {
     .catch(() => {
       endPollHealth();
       loadErrorPage();
+      // Keep polling in the background so a still-running migration that finishes
+      // after the budget elapses re-navigates to the app on its own.
+      renavigateWhenReady();
       // A cold build already got the longer budget that covers backend boot; if it
       // still isn't up, drop to the error page (with Retry) but skip the blocking
       // "taking longer than expected" modal — that warning is meant for warm boots
@@ -1206,25 +1364,96 @@ function pingDockerSocket(socketPath) {
   });
 }
 
-async function checkDocker(cwd) {
-  // Fast path: hit the Docker socket directly — avoids spawning docker CLI
-  // and serialising `docker info` output (~6s → <50ms on warm macOS).
+// Candidate Docker Unix-socket paths, most-specific first. Shared by the daemon
+// ping and the container-state probe below.
+function dockerSocketCandidates() {
   const homeDir = process.env.HOME || '';
-  const socketCandidates = [
+  return [
     process.env.DOCKER_HOST?.replace(/^unix:\/\//, ''),
     path.join(homeDir, '.docker', 'run', 'docker.sock'),
     path.join(homeDir, '.docker', 'desktop', 'docker.sock'),
     '/var/run/docker.sock',
   ].filter(Boolean);
+}
 
-  for (const socketPath of socketCandidates) {
+// GET a JSON body from the Docker Engine socket. Resolves the parsed body on 200,
+// rejects otherwise (or on timeout). Same lightweight pattern as pingDockerSocket.
+function dockerSocketGetJson(socketPath, urlPath, timeoutMs = 1500) {
+  return new Promise((resolve, reject) => {
+    const req = http.get({ socketPath, path: urlPath, timeout: timeoutMs }, (res) => {
+      if (res.statusCode !== 200) { res.resume(); return reject(new Error(`status ${res.statusCode}`)); }
+      let body = '';
+      res.setEncoding('utf8');
+      res.on('data', (c) => { body += c; });
+      res.on('end', () => { try { resolve(JSON.parse(body)); } catch (e) { reject(e); } });
+    });
+    req.on('error', reject);
+    req.on('timeout', () => { req.destroy(); reject(new Error('socket timeout')); });
+  });
+}
+
+// True when the compose `app` service container is already running, checked via
+// the Docker socket (~15–20ms) instead of a `docker compose images` CLI spawn
+// (~150–250ms). Used to skip the pre-pull image-presence check on warm boots,
+// where the image is necessarily present. `projectName` (the compose `name:`)
+// scopes the match to THIS install so a sibling demo/app can't answer for us.
+// Any failure resolves false → the caller falls back to the CLI check, so a
+// wrong answer can only cost the spawn we hoped to save, never correctness
+// (a running container guarantees its image is present).
+async function isComposeAppRunning(projectName) {
+  // The request itself is scoped only by the fixed compose service label — the
+  // project name (read from the compose file on disk) is deliberately NOT put
+  // into the outbound request; it only filters the returned list in memory, so
+  // no file-derived data reaches the network sink.
+  const filters = encodeURIComponent(JSON.stringify({
+    label: ['com.docker.compose.service=app'],
+    status: ['running'],
+  }));
+  const urlPath = `/containers/json?filters=${filters}`;
+  for (const socketPath of dockerSocketCandidates()) {
     try {
       await fs.promises.access(socketPath);
+      const list = await dockerSocketGetJson(socketPath, urlPath);
+      if (Array.isArray(list) && list.some((c) => !projectName
+        || (c && c.Labels && c.Labels['com.docker.compose.project'] === projectName))) {
+        return true;
+      }
+    } catch { /* try next candidate */ }
+  }
+  return false;
+}
+
+// The compose project name is declared via the `name:` top-level key in the
+// shipped compose file; Docker labels running containers with it. Read it once,
+// synchronously, so isComposeAppRunning() can scope its match. Undefined on any
+// read/parse miss (probe then matches by service label alone).
+function readComposeProjectName(cwd) {
+  try {
+    const txt = fs.readFileSync(path.join(cwd, 'docker-compose.yml'), 'utf8');
+    const m = txt.match(/^name:\s*(\S+)\s*$/m);
+    if (m) return m[1];
+  } catch { /* fall through */ }
+  return undefined;
+}
+
+async function checkDocker(cwd) {
+  // Fast path: hit the Docker socket directly — avoids spawning docker CLI
+  // and serialising `docker info` output (~6s → <50ms on warm macOS).
+  const socketCandidates = dockerSocketCandidates();
+
+  // Race all socket candidates in parallel instead of probing them serially: a
+  // dead candidate (missing socket, or the daemon still waking from resource-
+  // saver idle) no longer stacks its full 2s timeout ahead of the live one, so
+  // the wake path is bounded by the single slowest probe rather than their sum.
+  try {
+    await Promise.any(socketCandidates.map(async (socketPath) => {
+      await fs.promises.access(socketPath);
       await pingDockerSocket(socketPath);
-      return 'ok';
-    } catch {
-      // socket missing or daemon not responding — try next candidate
-    }
+    }));
+    return 'ok';
+  } catch {
+    // No candidate answered (all sockets missing / daemon not responding) —
+    // fall through to the docker CLI probe below.
   }
 
   // Fallback: docker info (distinguishes "not installed" from "not running")
@@ -1234,6 +1463,22 @@ async function checkDocker(cwd) {
   } catch (err) {
     if (/ENOENT|not found|no such file/i.test(String(err))) return 'not-installed';
     return 'not-running';
+  }
+}
+
+// After opening Docker Desktop, poll the daemon until it answers. Docker rarely
+// autostarts after a reboot and takes ~20–45s to come up cold, so rather than
+// quitting and making the user relaunch (and risk hitting the same dialog if
+// they relaunch too early), we keep the splash up and wait. Resolves 'ok' as
+// soon as the daemon responds, or 'not-running' after the budget elapses. The
+// user can still abort with ⌘Q, which reaches the will-quit handler.
+async function waitForDockerDaemon(cwd, { budgetMs = 90000, intervalMs = 1000 } = {}) {
+  const deadline = Date.now() + budgetMs;
+  for (;;) {
+    if (mainWindow && mainWindow.isDestroyed()) return 'not-running';
+    if ((await checkDocker(cwd)) === 'ok') return 'ok';
+    if (Date.now() >= deadline) return 'not-running';
+    await new Promise((r) => setTimeout(r, intervalMs));
   }
 }
 
@@ -1467,6 +1712,25 @@ function setSplashStatus(key) {
     .catch(() => { /* splash already navigated away */ });
 }
 
+// The compose `up`/`start` phase is the dominant span of a warm boot, and
+// "Starting services…" would otherwise sit frozen through all of it. Advance the
+// splash to the next honest, already-localized status ("Almost ready…") once the
+// phase has run long enough that it's fair, so the line visibly progresses
+// instead of freezing. Pure setSplashStatus work — its data:-URL guard keeps it
+// safe once the splash navigates away — and uses existing i18n keys only.
+let splashProgressTimer = null;
+function startComposeSplashProgress() {
+  stopComposeSplashProgress();
+  splashProgressTimer = setTimeout(() => {
+    splashProgressTimer = null;
+    setSplashStatus('splash.waitingApp');
+  }, 6000);
+  if (splashProgressTimer && splashProgressTimer.unref) splashProgressTimer.unref();
+}
+function stopComposeSplashProgress() {
+  if (splashProgressTimer) { clearTimeout(splashProgressTimer); splashProgressTimer = null; }
+}
+
 // ── Window-state persistence ──────────────────────────────────────────────────
 // Restore frame across launches (baseline macOS behavior). Bounds live in the
 // existing settings.json mirror under `windowBounds`; saved debounced on
@@ -1503,6 +1767,35 @@ function clampBoundsToWorkArea(bounds) {
   };
 }
 
+// Hex equivalent of the splash's base fill, used for the BrowserWindow
+// backgroundColor so frame 1 matches the splash instead of flashing the default
+// backdrop (white / vibrancy material) before the data-URL splash HTML paints —
+// visible in dark mode, and on Windows/Linux reload/navigation where the
+// darwin-only vibrancy mask doesn't apply. Falls back to the same slate the
+// splash uses when no theme is persisted.
+function hslToHex(h, s, l) {
+  s /= 100; l /= 100;
+  const k = (n) => (n + h / 30) % 12;
+  const a = s * Math.min(l, 1 - l);
+  const f = (n) => {
+    const color = l - a * Math.max(-1, Math.min(k(n) - 3, Math.min(9 - k(n), 1)));
+    return Math.round(255 * color).toString(16).padStart(2, '0');
+  };
+  return `#${f(0)}${f(8)}${f(4)}`;
+}
+
+function splashBackgroundColor() {
+  try {
+    const theme = readSplashTheme();
+    const derived = theme ? deriveSplashPalette(theme.background) : undefined;
+    if (derived) {
+      const m = /^(\d{1,3}(?:\.\d+)?)\s+(\d{1,3}(?:\.\d+)?)%\s+(\d{1,3}(?:\.\d+)?)%$/.exec(derived.base);
+      if (m) return hslToHex(Number(m[1]), Number(m[2]), Number(m[3]));
+    }
+  } catch { /* fall through to slate */ }
+  return '#0f172a';
+}
+
 let windowBoundsSaveTimer = null;
 function scheduleWindowBoundsSave(win) {
   if (windowBoundsSaveTimer) clearTimeout(windowBoundsSaveTimer);
@@ -1513,9 +1806,7 @@ function scheduleWindowBoundsSave(win) {
       // getNormalBounds: a maximized/fullscreen window records its restored
       // frame, not the screen size.
       const bounds = win.getNormalBounds();
-      const settings = await loadSettings();
-      settings[WINDOW_BOUNDS_KEY] = bounds;
-      await saveSettings(settings);
+      await updateSettings((cur) => { cur[WINDOW_BOUNDS_KEY] = bounds; });
     } catch (err) {
       console.warn('window-bounds save failed (non-fatal):', err.message || err);
     }
@@ -1531,6 +1822,9 @@ function createWindow() {
     minWidth: WINDOW_MIN_WIDTH,
     minHeight: WINDOW_MIN_HEIGHT,
     title: APP_NAME,
+    // Paint the very first frame in the splash's base color so there's no
+    // white/vibrancy flash before the splash HTML (or a reloaded document) paints.
+    backgroundColor: splashBackgroundColor(),
     // macOS-native chrome: frameless content with inset traffic lights. The
     // renderer adds a drag region + left inset to its topbar when it detects
     // electronAPI.platform === 'darwin' (see ElectronBridge in the frontend).
@@ -1560,6 +1854,39 @@ function createWindow() {
   });
   // Block all new-window spawns (target="_blank", window.open, etc.)
   mainWindow.webContents.setWindowOpenHandler(() => ({ action: 'deny' }));
+
+  // Native right-click menu for text: without this, plain inputs (search boxes,
+  // the AI-chat composer, the dbEditor cell/WHERE editors) get no copy/paste/
+  // select-all, and Electron's default-on spellcheck underlines misspellings
+  // with no way to reach the suggestions. Cut/Copy/Paste/SelectAll roles carry
+  // OS-native (already-localized) labels; the dictionary label uses t().
+  mainWindow.webContents.on('context-menu', (_event, params) => {
+    const wc = mainWindow.webContents;
+    const items = [];
+    const suggestions = Array.isArray(params.dictionarySuggestions) ? params.dictionarySuggestions : [];
+    for (const suggestion of suggestions) {
+      items.push({ label: suggestion, click: () => wc.replaceMisspelling(suggestion) });
+    }
+    if (params.misspelledWord) {
+      if (items.length) items.push({ type: 'separator' });
+      items.push({
+        label: t('menu.addToDictionary', null, 'Add to Dictionary'),
+        click: () => wc.session.addWordToSpellCheckerDictionary(params.misspelledWord),
+      });
+    }
+    const flags = params.editFlags || {};
+    const roleItems = [];
+    if (params.isEditable) roleItems.push({ role: 'cut', enabled: !!flags.canCut });
+    if (params.isEditable || params.selectionText) roleItems.push({ role: 'copy', enabled: !!flags.canCopy });
+    if (params.isEditable) roleItems.push({ role: 'paste', enabled: !!flags.canPaste });
+    if (params.isEditable) roleItems.push({ role: 'selectAll' });
+    if (roleItems.length) {
+      if (items.length) items.push({ type: 'separator' });
+      items.push(...roleItems);
+    }
+    if (!items.length) return;
+    Menu.buildFromTemplate(items).popup({ window: mainWindow });
+  });
 
   // Block navigation to any URL that isn't localhost/127.0.0.1 or a local file.
   mainWindow.webContents.on('will-navigate', (event, url) => {
@@ -1598,6 +1925,19 @@ function createWindow() {
   // Persist the window frame across launches (debounced).
   mainWindow.on('resize', () => scheduleWindowBoundsSave(mainWindow));
   mainWindow.on('move', () => scheduleWindowBoundsSave(mainWindow));
+
+  // macOS convention: the red close button HIDES the window instead of
+  // destroying it, keeping the fully-booted renderer (route + scroll state) and
+  // the warm backend/containers resident so reopening is ~instant. A real quit
+  // (⌘Q / menu Quit → before-quit sets isAppQuitting) closes for real. Only
+  // darwin hides — elsewhere close must destroy so window-all-closed → app.quit()
+  // still fires. `activate`/`second-instance` show() the hidden window.
+  mainWindow.on('close', (e) => {
+    if (process.platform === 'darwin' && !isAppQuitting && mainWindow && !mainWindow.isDestroyed()) {
+      e.preventDefault();
+      mainWindow.hide();
+    }
+  });
 
   // Caller is responsible for loading the initial URL.
   mainWindow.on('closed', () => { mainWindow = null; rendererReady = false; });
@@ -1954,6 +2294,14 @@ async function prepareShellUpdateInstaller() {
 }
 
 async function checkForShellUpdate() {
+  // Demo builds must never offer to install the real Vision shell over
+  // themselves. setupManualShellUpdater is already gated off for the packaged
+  // demo, but the update:check-github IPC still calls this — short-circuit so
+  // the demo reports "up to date" instead of surfacing (and later trying to
+  // install) the real Vision release ZIP. Also avoids the GitHub round-trip.
+  if (__IS_DEMO) {
+    return { up_to_date: true, current_version: getCurrentVersionTag(), latest_version: null, update_mode: getUpdateMode() };
+  }
   const release = await readGitHubRelease();
   const latestVersion = normalizeVersionTag(release?.tag_name);
   const currentVersion = getCurrentVersionTag();
@@ -2575,15 +2923,30 @@ async function runBundleRestore(bundlePath, { passphrase } = {}) {
     // 6. Atomically swap attachments.staging → attachments once container is up.
     //    Awaited so a swap failure surfaces to the caller instead of being silently dropped.
     if (attachmentsDir) {
-      await pollHealth();
+      // A restore boot runs `alembic upgrade head`, which on a large DB can
+      // exceed the normal liveness budget. A pollHealth() timeout here must NOT
+      // skip the swap (that would strand the restored attachments in .staging
+      // forever), so use the larger build budget and swallow a timeout — the
+      // swap only needs the container process to be up, not fully migrated.
+      try {
+        await pollHealth(HEALTH_POLL_BUILD_ATTEMPTS);
+      } catch (err) {
+        console.warn('post-restore health poll did not confirm readiness in time; attempting attachments swap anyway:', err && err.message ? err.message : err);
+      }
       const composeArgs_ = composeArgs(workDir, overrideFiles);
       await run('docker', [
         'compose', ...composeArgs_, 'exec', '-T', 'app',
         'sh', '-c',
+        // Guard the whole swap on the staging dir existing: only demote the live
+        // attachments once the replacement is actually present. Without this, a
+        // missing/failed staging copy would move live attachments to .old and
+        // then fail to replace them — destroying the attachments dir.
+        'if [ -d /app/data/attachments.staging ]; then ' +
         'rm -rf /app/data/attachments.old && ' +
         'mv /app/data/attachments /app/data/attachments.old 2>/dev/null; ' +
         'mv /app/data/attachments.staging /app/data/attachments && ' +
-        'rm -rf /app/data/attachments.old',
+        'rm -rf /app/data/attachments.old; ' +
+        'fi',
       ], workDir, { timeout: 30000 });
     }
   }
@@ -2890,12 +3253,15 @@ ipcMain.handle('backup:restore', async (event, filePath, opts) => {
   // Require explicit user confirmation before overwriting live data.
   const { response } = await dialog.showMessageBox(mainWindow, {
     type: 'warning',
-    buttons: ['Restore', 'Cancel'],
+    // Route the one destructive dialog through the same main-process t() loader
+    // every other Electron dialog uses (reusing existing settings.restore.* keys),
+    // so it follows the app language instead of being hardcoded English.
+    buttons: [t('settings.restore.runNow', null, 'Restore'), t('settings.restore.cancelButton', null, 'Cancel')],
     defaultId: 1,
     cancelId: 1,
-    title: 'Restore Backup',
-    message: 'This will permanently replace all current data and cannot be undone.',
-    detail: `Restore from: ${path.basename(resolved)}`,
+    title: t('settings.restore.title', null, 'Restore Backup'),
+    message: t('settings.restore.warning', null, 'This will permanently replace all current data and cannot be undone.'),
+    detail: path.basename(resolved),
   });
   if (response !== 0) return { success: false, error: 'Restore cancelled by user' };
 
@@ -2980,7 +3346,10 @@ ipcMain.handle('backup:save-settings', async (event, { backupDir, backupOnQuit }
   // Also mirror to local settings.json as a fallback for the will-quit handler
   // in case the backend is already shutting down.
   const payload = { backupDir: backupDir || '', backupOnQuit: !!backupOnQuit };
-  await saveSettings({ ...(await loadSettings()), backupDir: payload.backupDir, backupOnQuit: payload.backupOnQuit });
+  await updateSettings((cur) => {
+    cur.backupDir = payload.backupDir;
+    cur.backupOnQuit = payload.backupOnQuit;
+  });
   try {
     await httpPut(`http://localhost:${appPort}/api/settings/backup_settings`, { value: payload });
   } catch (err) {
@@ -3009,10 +3378,9 @@ ipcMain.handle('backup:load-settings', async () => {
       // Mirror the RAW stored value (not the default-resolved one) back to
       // settings.json so the will-quit fallback matches the DB instead of
       // baking display defaults into the stored config.
-      await saveSettings({
-        ...(await loadSettings()),
-        backupDir: typeof stored.backupDir === 'string' ? stored.backupDir : '',
-        backupOnQuit: stored.backupOnQuit === true,
+      await updateSettings((cur) => {
+        cur.backupDir = typeof stored.backupDir === 'string' ? stored.backupDir : '';
+        cur.backupOnQuit = stored.backupOnQuit === true;
       });
       const v = resolveBackupSettingsWithDefaults(stored);
       return { backupDir: v.backupDir || '', backupOnQuit: v.backupOnQuit === true };
@@ -3022,6 +3390,24 @@ ipcMain.handle('backup:load-settings', async () => {
   }
   const s = resolveBackupSettingsWithDefaults(await loadSettings());
   return { backupDir: s.backupDir || '', backupOnQuit: s.backupOnQuit === true };
+});
+
+// ── Services (keep-running-on-quit) settings ─────────────────────────────────
+// Opt-in toggle: when enabled, quit leaves the Docker containers running so the
+// next launch takes the hot path. Persisted to the Electron settings.json mirror
+// (read by the will-quit handler, which must work even after the backend is
+// down). Same authenticated-sender guard as backup:save-settings.
+ipcMain.handle('services:save-settings', async (event, { keepServicesOnQuit } = {}) => {
+  if (!mainWindow || event.sender !== mainWindow.webContents) {
+    return { success: false, error: 'Unauthorized sender' };
+  }
+  await updateSettings((cur) => { cur.keepServicesOnQuit = !!keepServicesOnQuit; });
+  return { success: true };
+});
+
+ipcMain.handle('services:load-settings', async () => {
+  const s = await loadSettings();
+  return { keepServicesOnQuit: s.keepServicesOnQuit === true };
 });
 
 // ── Recovery (error page) ────────────────────────────────────────────────────
@@ -3055,7 +3441,12 @@ function sendToApp(channel, payload) {
   if (!mainWindow || mainWindow.isDestroyed()) {
     pendingAppMessages.push([channel, payload]);
     createWindow();
-    mainWindow.loadURL(APP_URL);
+    // Same reopen-from-destroyed path as `activate`: show the splash and re-poll
+    // readiness rather than a bare loadURL(APP_URL), so a backend that died while
+    // the window was closed surfaces the error page instead of a blank/broken
+    // window. The queued message flushes once the renderer signals ready.
+    mainWindow.loadURL(splashDataUrl());
+    pollAndLoad();
     return;
   }
   if (mainWindow.isMinimized()) mainWindow.restore();
@@ -3142,6 +3533,20 @@ function handleMenuAccelerator(event, input) {
 }
 
 function setupApplicationMenu() {
+  // Populate the native About panel ({ role: 'about' } below) — otherwise it
+  // shows only the bare app name with no version, copyright, or license. macOS
+  // and Linux honour these; Windows has no native About panel.
+  if (process.platform === 'darwin' || process.platform === 'linux') {
+    try {
+      app.setAboutPanelOptions({
+        applicationName: APP_NAME,
+        applicationVersion: app.getVersion ? app.getVersion() : '',
+        copyright: `© ${new Date().getFullYear()} Vision · AGPL-3.0`,
+        website: `https://github.com/${GITHUB_OWNER}/${GITHUB_REPO}`,
+      });
+    } catch { /* non-fatal — cosmetic */ }
+  }
+
   const template = [
     ...(process.platform === 'darwin' ? [{
       label: APP_NAME,
@@ -3286,9 +3691,9 @@ ipcMain.handle('theme:persist-splash', async (event, colors) => {
     return { success: false };
   }
   try {
-    const data = await loadSettings();
-    data[SPLASH_THEME_KEY] = { background: colors.background, foreground: colors.foreground };
-    await saveSettings(data);
+    await updateSettings((cur) => {
+      cur[SPLASH_THEME_KEY] = { background: colors.background, foreground: colors.foreground };
+    });
     return { success: true };
   } catch (err) {
     console.warn('theme:persist-splash failed (non-fatal):', err && err.message ? err.message : err);
@@ -3394,6 +3799,11 @@ async function launch() {
   //        if the app image already exists — all are independent so run in parallel.
   let skipBuild = false;
   let dockerStatus = 'ok';
+  // Set when the pre-pull step actually downloaded the app image (first run, or
+  // an updated tag) — such a boot then runs alembic migrations before /health
+  // goes green, so it earns the extended poll budget (see pollAndLoad below).
+  let imageWasPulled = false;
+  const composeProject = readComposeProjectName(workDir);
   setSplashStatus('splash.checkingDocker');
   const endParallelInit = bootMark('parallel_init');
   await Promise.all([
@@ -3433,6 +3843,10 @@ async function launch() {
       ? (async () => {
           const end = bootMark('pre_pull_image');
           try {
+            // Warm boot: if the app container is already running its image is
+            // present, so skip the `docker compose images` CLI spawn entirely
+            // (the slowest member of this phase) via a cheap Docker-socket probe.
+            if (await isComposeAppRunning(composeProject)) { return; }
             const ids = await run(
               'docker',
               ['compose', ...composeArgs(workDir, overrideFiles), 'images', '-q', 'app'],
@@ -3447,6 +3861,7 @@ async function launch() {
               workDir,
               { timeout: 600000, env: dockerEnv }
             );
+            imageWasPulled = true;
           } catch (err) {
             console.warn('pre-pull failed (non-fatal, compose up will retry):', err.message || err);
           } finally {
@@ -3523,9 +3938,28 @@ async function launch() {
       message: t('app.dockerNotRunning'),
       detail: t('app.dockerNotRunningDetail'),
     });
-    if (response === 0) shell.openPath('/Applications/Docker.app');
-    app.quit();
-    return;
+    if (response !== 0) {
+      app.quit();
+      return;
+    }
+    // User chose to open Docker: launch Docker Desktop and wait for the daemon
+    // to come up, then continue launch() automatically instead of quitting and
+    // forcing a manual relaunch. The splash stays up during the wait.
+    shell.openPath('/Applications/Docker.app');
+    setSplashStatus('splash.checkingDocker');
+    dockerStatus = await waitForDockerDaemon(workDir);
+    if (dockerStatus !== 'ok') {
+      await dialog.showMessageBox({
+        type: 'warning',
+        buttons: [t('common.ok')],
+        title: APP_NAME,
+        message: t('app.dockerNotRunning'),
+        detail: t('app.dockerNotRunningDetail'),
+      });
+      app.quit();
+      return;
+    }
+    // Daemon is up — fall through and continue the normal launch path.
   }
 
   // 5. If running in clean mode, wipe the clean volume so every run starts fresh.
@@ -3539,13 +3973,32 @@ async function launch() {
 
   // 7. docker compose start (fast path) or up (cold/dev rebuild)
   setSplashStatus('splash.startingServices');
+  // Progress the otherwise-frozen status line through this dominant phase.
+  startComposeSplashProgress();
   const endComposeUp = bootMark('compose_up');
   let composeDidBuild = false;
   try {
-    const { built } = await composeStartOrUp(workDir, overrideFiles, skipBuild);
-    composeDidBuild = built;
+    let result;
+    try {
+      result = await composeStartOrUp(workDir, overrideFiles, skipBuild);
+    } catch (err) {
+      // A foreign process squatting the persisted appPort makes compose fail to
+      // publish the app container. Re-pick a fresh port and recreate once —
+      // `up` republishes on the new port, self-healing what would otherwise be
+      // a permanent "port is already allocated" brick on every relaunch.
+      if (isPortConflictError(err)) {
+        console.warn(`[port] appPort ${appPort} is held by another process; picking a fresh port and recreating`);
+        await repickAppPort();
+        result = await composeStartOrUp(workDir, overrideFiles, skipBuild);
+      } else {
+        throw err;
+      }
+    }
+    composeDidBuild = result.built;
+    stopComposeSplashProgress();
     endComposeUp();
   } catch (err) {
+    stopComposeSplashProgress();
     endComposeUp();
     await dialog.showMessageBox({
       type: 'error',
@@ -3584,7 +4037,12 @@ async function launch() {
   //    A cold/dev build (composeDidBuild) gets the extended budget and skips the
   //    slow-start modal, since first-launch boot is expected to be slow.
   setSplashStatus('splash.waitingApp');
-  pollAndLoad({ building: composeDidBuild });
+  // A cold build OR a freshly-pulled packaged image both run migrations before
+  // the backend listens, so both need the extended poll budget — otherwise a
+  // long alembic migration trips the 60s timeout mid-migration and drops to the
+  // error page. (renavigateWhenReady() then covers migrations that outlast even
+  // this budget.)
+  pollAndLoad({ building: composeDidBuild || imageWasPulled });
 
   // 10. Set up manual shell updater (source/dev mode only — not in embedded .app mode)
   if (!app.isPackaged || useRepoMode) {
@@ -3687,6 +4145,14 @@ async function launch() {
 // ── Shutdown flow ─────────────────────────────────────────────────────────────
 let isQuitting = false;
 
+// Distinct from isQuitting (will-quit's re-entrancy guard): this flips on the
+// FIRST quit signal (⌘Q, menu Quit, app.quit()), before any window 'close'
+// fires, so the hide-on-close handler knows a red-button close from a real quit.
+// The shell-updater path (which sets isQuitting directly then calls app.quit())
+// also routes through before-quit, so windows there destroy rather than hide.
+let isAppQuitting = false;
+app.on('before-quit', () => { isAppQuitting = true; });
+
 app.on('will-quit', (e) => {
   if (isQuitting || !workDir) return;
   e.preventDefault();
@@ -3731,11 +4197,19 @@ app.on('will-quit', (e) => {
       : Promise.resolve();
 
     doBackup
-      .then(() => {
+      .then(async () => {
         // Drop the watchdog's idle keep-alive socket so the backend's
         // graceful shutdown isn't held open waiting on it.
         stopHealthWatchdog();
         try { healthAgent.destroy(); } catch { /* already gone */ }
+        // Opt-in "keep services running on quit": leave the containers up so the
+        // next launch takes the hot path instead of a warm restart. Read from the
+        // local settings.json mirror (the backend may already be shutting down).
+        // compose's `restart: unless-stopped` policy governs reboot behaviour.
+        let keepServices = false;
+        try { keepServices = (await loadSettings()).keepServicesOnQuit === true; }
+        catch { /* default: stop containers */ }
+        if (keepServices) return;
         return stopContainers(workDir, overrideFiles);
       })
       .catch((err) => console.error('docker compose down failed:', err))
@@ -3748,10 +4222,9 @@ app.on('will-quit', (e) => {
 });
 
 // ── App lifecycle ─────────────────────────────────────────────────────────────
-const gotSingleInstanceLock = app.requestSingleInstanceLock();
-if (!gotSingleInstanceLock) {
-  app.quit();
-} else {
+// The single-instance lock is acquired early (just after app.setName). A second
+// instance already called app.quit() up there; only the primary registers here.
+if (gotSingleInstanceLock) {
   app.on('second-instance', () => {
     if (!mainWindow) return;
     if (mainWindow.isMinimized()) mainWindow.restore();
@@ -3762,9 +4235,23 @@ if (!gotSingleInstanceLock) {
   app.whenReady().then(launch);
 
   app.on('activate', () => {
+    // Hide-on-close keeps the window alive but hidden on darwin: just re-show it,
+    // preserving the booted renderer's route/scroll state (reopen is ~instant).
+    if (mainWindow && !mainWindow.isDestroyed()) {
+      if (mainWindow.isMinimized()) mainWindow.restore();
+      mainWindow.show();
+      mainWindow.focus();
+      return;
+    }
+    // Window was actually destroyed (non-darwin, or a first-run edge): the app +
+    // containers may still be warm, but the SPA has to boot from scratch. Show the
+    // splash and re-poll readiness (reusing the boot handoff) instead of a bare
+    // loadURL(APP_URL) that would paint a blank window — or a connection error if
+    // the backend isn't answering yet.
     if (mainWindow === null) {
       createWindow();
-      mainWindow.loadURL(APP_URL);
+      mainWindow.loadURL(splashDataUrl());
+      pollAndLoad();
     }
   });
 }

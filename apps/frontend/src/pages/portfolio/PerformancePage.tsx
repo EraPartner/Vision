@@ -298,7 +298,7 @@ export default function PerformancePage() {
                         <button
                             onClick={() => setShowFxNeutral((v) => !v)}
                             title={t('performance.fxNeutralDesc')}
-                            className={`px-3 py-1.5 text-xs font-medium rounded-md border transition-all shrink-0 ${
+                            className={`px-3 py-1.5 text-xs font-medium rounded-md border transition-[color,background-color,border-color] shrink-0 ${
                                 showFxNeutral
                                     ? "bg-background text-foreground shadow-sm border-border"
                                     : "text-muted-foreground hover:text-foreground border-transparent"

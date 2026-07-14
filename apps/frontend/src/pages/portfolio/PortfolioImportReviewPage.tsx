@@ -159,7 +159,7 @@ export function PortfolioImportReviewPage() {
 
               <div className="divide-y rounded-md border text-xs">
                 {g.rows.map((row) => (
-                  <div key={row.id} className="flex flex-wrap items-center gap-x-3 gap-y-1 p-2">
+                  <div key={row.id} className="cv-auto-row flex flex-wrap items-center gap-x-3 gap-y-1 p-2">
                     <span className="text-muted-foreground">{row.tx_date}</span>
                     <Badge variant="outline" className="font-normal">{row.type ?? row.type_raw}</Badge>
                     {row.units != null && <span>{row.units} @ {row.price_per_unit ?? "—"}</span>}

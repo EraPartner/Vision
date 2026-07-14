@@ -135,6 +135,14 @@ describe('Validation Middleware', () => {
       expect(() => sanitizeUpdateFields('unknown_table', { field: 'value' }))
         .toThrow('Unknown resource type');
     });
+
+    it('keeps reminder_days_before for planned_transactions (was silently dropped)', () => {
+      const result = sanitizeUpdateFields('planned_transactions', {
+        reminder_days_before: 3, injection_field: 'DROP TABLE',
+      });
+      expect(result).toHaveProperty('reminder_days_before', 3);
+      expect(result).not.toHaveProperty('injection_field');
+    });
   });
 
   describe('validateIntArray', () => {

@@ -45,6 +45,12 @@ const pool = new pg.Pool({
   idleTimeoutMillis: 60_000,      // close idle connections after 60s
   connectionTimeoutMillis: 5_000,  // fail fast if can't connect in 5s
   statement_timeout: 30_000,       // kill queries running > 30s
+  // statement_timeout does NOT fire while a session is idle *inside* a
+  // transaction — if a withTransaction() callback stalls on a non-DB await
+  // (hung network/stream) the lock + pool slot are held until restart, and
+  // autovacuum's xmin horizon stalls (table bloat). node-postgres passes this
+  // per-connection; kill any transaction left idle > 60s.
+  idle_in_transaction_session_timeout: 60_000,
 });
 
 pool.on('error', (err) => {
@@ -92,7 +98,12 @@ export async function query(text, params, opts = {}) {
     try {
       const result = await pool.query(text, params);
       const duration = Date.now() - start;
-      if (settings.database.echo || duration > 1000) {
+      // A >1s query is a production-relevant signal; keep it visible at the
+      // default (info/warn) level instead of debug, where it was invisible in
+      // prod. Plain echo tracing stays at debug.
+      if (duration > 1000) {
+        logger.warn(`Slow query (${duration}ms): ${text.slice(0, 100)}`);
+      } else if (settings.database.echo) {
         logger.debug(`Query executed in ${duration}ms: ${text.slice(0, 100)}`);
       }
       return result;

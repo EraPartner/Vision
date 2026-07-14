@@ -37,19 +37,40 @@ Repository Layer (SQL queries)
 - Pure computation services have zero dependencies
 - Side-effect services depend on `connection.js` (PostgreSQL)
 
+> [!note] Who owns HTTP semantics (route/service boundary)
+> The rule is: **services throw typed `AppError` subclasses** (`ValidationError`, `NotFoundError`,
+> `ConflictError`, … from `middleware/errorHandler.js`); **only the error-handling middleware maps
+> those to HTTP status codes**. A service should never set a status code or shape an HTTP response.
+>
+> Two current gaps to be aware of when adding upstream integrations:
+> - The `AppError` set covers 400/401/403/404/409/429 only — there is no 502/503/504 class, so an
+>   uncaught provider outage or timeout surfaces as a generic 500. Upstream services (price
+>   providers, research adapters, import) still `throw new Error(...)` in places rather than a typed
+>   error; those reach the handler as 500s.
+> - `AiChatServiceError` and `ToolValidationError` sit **outside** the `AppError` hierarchy and are
+>   hand-translated to HTTP status codes in `routes/ai.js`. New service errors should extend
+>   `AppError` (carrying `status` + `code`) so no per-route translation shim is needed.
+
 ---
 
-## 1. bankAdapters.js
+## 1. bankAdapters.js *(deprecated shim)*
 
 **File:** [[apps/node-backend/src/services/bankAdapters.js]]  
-**Purpose:** Parses bank-specific CSV files into a unified transaction format. Supports 8 bank formats via a factory pattern.
+**Purpose:** Parses bank-specific CSV files into a unified transaction format.
 
-### Exported Functions
+> [!warning] Source of truth moved to `importPipeline/adapters/`
+> `bankAdapters.js` is now a **deprecated re-export shim** (zero importers) that only forwards
+> `createAdapter`/`getSupportedBanks`/`detectBank`/`getAdapter` from
+> `services/importPipeline/adapters/index.js`. Adapters live one per module in that directory and
+> the registry is auto-discovered — see [[docs/integrations/bank-adapters#adding-new-banks|Adding
+> New Banks]] for the current recipe.
+
+### Exported Functions (re-exported from the adapter registry)
 
 | Function | Signature | Returns |
 |----------|-----------|---------|
 | `createAdapter` | `(bankName: string, customConfig?: object) => Function` | Parser function for the given bank |
-| `getSupportedBanks` | `() => string[]` | `['belfius', 'revolut', 'kbc', 'vision', 'sabb', 'wise']` |
+| `getSupportedBanks` | `() => string[]` | Non-generic adapter keys, derived from the registry (e.g. `['belfius', 'revolut', 'ing', 'bnp', 'kbc', 'vision', 'sabb', 'wise']`) |
 
 ### Supported Banks
 

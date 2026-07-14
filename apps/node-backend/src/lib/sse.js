@@ -41,9 +41,27 @@ const SSE_FLUSH_PADDING = `:${' '.repeat(2048)}\n\n`;
  *   end(): void,
  * }}
  */
+// Heartbeat comment cadence. Behind a reverse proxy with a default idle
+// timeout (nginx 60s), a silent stream — e.g. an Ollama cold-load that takes
+// >60s before its first token — gets killed, triggering a client reconnect
+// loop. A periodic SSE comment keeps the connection warm; comments (lines
+// starting with `:`) are ignored by the EventSource spec.
+const SSE_HEARTBEAT_MS = 20_000;
+
 export function createSseWriter(req, res) {
   let closed = false;
-  const onClose = () => { closed = true; };
+
+  let heartbeat = setInterval(() => {
+    if (closed || res.writableEnded) return;
+    res.write(':hb\n\n');
+  }, SSE_HEARTBEAT_MS);
+  // Never let the heartbeat keep the event loop (or a test run) alive.
+  if (heartbeat && typeof heartbeat.unref === 'function') heartbeat.unref();
+  const stopHeartbeat = () => {
+    if (heartbeat) { clearInterval(heartbeat); heartbeat = null; }
+  };
+
+  const onClose = () => { closed = true; stopHeartbeat(); };
   // Listen on res only. req is a Readable stream and emits 'close' after the
   // body is consumed by upstream middleware (express.json()), which would
   // mark the writer closed before any event is emitted. res's 'close' event
@@ -66,6 +84,7 @@ export function createSseWriter(req, res) {
     },
 
     end() {
+      stopHeartbeat();
       if (!res.writableEnded) res.end();
     },
   };

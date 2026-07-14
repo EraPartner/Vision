@@ -300,15 +300,29 @@ function Inner<Datum>({
   const bisect = useMemo(() => bisector<Datum, Date | number>((d) => stableXAccessor(d) as Date).center, [stableXAccessor]);
   const [hoverIdx, setHoverIdx] = useState<number | null>(null);
 
+  // Cache the overlay rect for the duration of a hover session instead of
+  // calling getBoundingClientRect on every pointermove (forced layout per
+  // frame). Cleared on pointerleave so the next hover re-measures.
+  const overlayRectRef = useRef<DOMRect | null>(null);
+
   const handleMove = useCallback(
     (event: React.PointerEvent<SVGRectElement>) => {
-      const rect = event.currentTarget.getBoundingClientRect();
+      let rect = overlayRectRef.current;
+      if (!rect) {
+        rect = event.currentTarget.getBoundingClientRect();
+        overlayRectRef.current = rect;
+      }
       const x0 = xScale.invert(event.clientX - rect.left);
       const idx = bisect(data, x0 as never);
       setHoverIdx(idx >= 0 && idx < data.length ? idx : null);
     },
     [bisect, data, xScale],
   );
+
+  const handleLeave = useCallback(() => {
+    overlayRectRef.current = null;
+    setHoverIdx(null);
+  }, []);
 
   const hoverDatum = hoverIdx != null ? data[hoverIdx] : null;
   const tooltipItems: ChartTooltipDatum[] = useMemo(() => {
@@ -392,7 +406,7 @@ function Inner<Datum>({
             height={innerHeight}
             fill="transparent"
             onPointerMove={handleMove}
-            onPointerLeave={() => setHoverIdx(null)}
+            onPointerLeave={handleLeave}
           />
         </Group>
       </svg>

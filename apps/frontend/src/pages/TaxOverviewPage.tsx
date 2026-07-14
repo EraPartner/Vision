@@ -194,17 +194,20 @@ export default function TaxOverviewPage() {
    * Format a "YYYY-MM" period as a compact month tick. Year is shown only when it changes
    * (every January) and on the first tick so the starting year is unambiguous.
    */
+  // One formatter per locale instead of one per tick (called at chart-hover rate).
+  const monthTickFormatter = useMemo(
+    () => new Intl.DateTimeFormat(locale, { month: 'short' }),
+    [locale],
+  );
   const formatMonthTick = useCallback((period: string, firstPeriod: string): string => {
     const [yearStr, monthStr] = period.split('-');
     const year = Number.parseInt(yearStr, 10);
     const month = Number.parseInt(monthStr, 10);
     if (Number.isNaN(year) || Number.isNaN(month)) return period;
-    const monthName = new Intl.DateTimeFormat(locale, { month: 'short' }).format(
-      new Date(year, month - 1, 1),
-    );
+    const monthName = monthTickFormatter.format(new Date(year, month - 1, 1));
     const showYear = month === 1 || period === firstPeriod;
     return showYear ? `${monthName} ’${String(year).slice(-2)}` : monthName;
-  }, [locale]);
+  }, [monthTickFormatter]);
 
   /**
    * Monthly reserve series.

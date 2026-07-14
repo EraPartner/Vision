@@ -17,19 +17,35 @@
  * .sql.enc format so that runRestore can share the decryption path.
  */
 
+// archiver (65 transitive modules) and yauzl are only needed by the backup
+// create/restore paths, all of which run well after boot. Lazy-require them via
+// memoized getters so `require('./backup/bundle')` at Electron module-eval time
+// stays cheap — the first backup/restore pays the load cost instead of every launch.
+
 // archiver v7 exposes a CJS factory: archiver('zip', opts).
 // archiver v8+ is ESM with named class exports: new ZipArchive(opts).
 // This shim keeps the call site (`archiver('zip', opts)`) stable across both.
-const archiverPkg = require('archiver');
-const archiver = typeof archiverPkg === 'function'
-  ? archiverPkg
-  : (format, opts) => {
-      if (format === 'zip') return new archiverPkg.ZipArchive(opts);
-      if (format === 'tar') return new archiverPkg.TarArchive(opts);
-      if (format === 'json') return new archiverPkg.JsonArchive(opts);
-      throw new Error(`Unsupported archiver format: ${format}`);
-    };
-const yauzl = require('yauzl');
+let _archiver = null;
+function getArchiver() {
+  if (_archiver) return _archiver;
+  const archiverPkg = require('archiver');
+  _archiver = typeof archiverPkg === 'function'
+    ? archiverPkg
+    : (format, opts) => {
+        if (format === 'zip') return new archiverPkg.ZipArchive(opts);
+        if (format === 'tar') return new archiverPkg.TarArchive(opts);
+        if (format === 'json') return new archiverPkg.JsonArchive(opts);
+        throw new Error(`Unsupported archiver format: ${format}`);
+      };
+  return _archiver;
+}
+
+let _yauzl = null;
+function getYauzl() {
+  if (!_yauzl) _yauzl = require('yauzl');
+  return _yauzl;
+}
+
 const crypto = require('crypto');
 const fs = require('fs');
 const os = require('os');
@@ -137,7 +153,7 @@ async function createBundle({ destDir, deviceId, schemaHead, appVersion, dbSqlPa
 
   await new Promise((resolve, reject) => {
     const output = fs.createWriteStream(partialPath);
-    const archive = archiver('zip', { zlib: { level: 6 } });
+    const archive = getArchiver()('zip', { zlib: { level: 6 } });
 
     let settled = false;
     const fail = (err) => {
@@ -443,7 +459,7 @@ async function decryptToTempV2(encPath, passphrase, tmpPath) {
  */
 function extractZip(zipPath, destDir) {
   return new Promise((resolve, reject) => {
-    yauzl.open(zipPath, { lazyEntries: true, autoClose: true }, (err, zipfile) => {
+    getYauzl().open(zipPath, { lazyEntries: true, autoClose: true }, (err, zipfile) => {
       if (err) return reject(err);
 
       let entryCount = 0;

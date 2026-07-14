@@ -14,6 +14,33 @@ interface MoneyProps {
     className?: string;
 }
 
+// Intl.NumberFormat construction is ~50-200µs; a Money instance renders 30-50
+// times per virtual-scroll batch. Cache one formatter per distinct
+// locale/currency/digits/signed combination so only formatToParts(amount) runs
+// per render.
+const currencyFormatterCache = new Map<string, Intl.NumberFormat>();
+
+function getCurrencyFormatter(
+    locale: string,
+    currency: string,
+    digits: number,
+    signed: boolean,
+): Intl.NumberFormat {
+    const key = `${locale}:${currency}:${digits}:${signed}`;
+    let fmt = currencyFormatterCache.get(key);
+    if (!fmt) {
+        fmt = new Intl.NumberFormat(locale, {
+            style: "currency",
+            currency,
+            minimumFractionDigits: digits,
+            maximumFractionDigits: digits,
+            signDisplay: signed ? "exceptZero" : "auto",
+        });
+        currencyFormatterCache.set(key, fmt);
+    }
+    return fmt;
+}
+
 /**
  * Currency micro-typography: the symbol renders small and raised, decimals
  * (separator + fraction) render at reduced size/opacity — the Apple Wallet
@@ -28,13 +55,7 @@ export function Money({ amount, currency, fractionDigits, signed = false, classN
 
     const parts = useMemo(() => {
         try {
-            return new Intl.NumberFormat(locale, {
-                style: "currency",
-                currency: resolvedCurrency,
-                minimumFractionDigits: digits,
-                maximumFractionDigits: digits,
-                signDisplay: signed ? "exceptZero" : "auto",
-            }).formatToParts(amount);
+            return getCurrencyFormatter(locale, resolvedCurrency, digits, signed).formatToParts(amount);
         } catch {
             return [{ type: "literal" as const, value: `${amount}` }];
         }

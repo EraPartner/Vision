@@ -3,8 +3,8 @@
  */
 
 import { query, queryPrepared } from '../database/connection.js';
-import { convertRowsToEur } from '../services/currency/currencyConversionService.js';
 import { toDecimal, toNumber } from '../lib/money.js';
+import { convertRowsToEur } from '../services/currency/currencyConversionService.js';
 import {
   mvAvailable,
   roundToCents,
@@ -30,17 +30,27 @@ export const statisticsRepository = {
 
     // Live fallback path. Mirror the MV's transfer exclusion (ADR-083) so totals
     // do not silently change depending on whether the MV is populated.
+    //
+    // Aggregate in SQL per (category, currency) instead of streaming every
+    // active transaction into JS. The default conversion (below) applies one
+    // flat rate per currency — no per-date component — so SUM(amount) per
+    // (category, currency) converted once equals Σ of the converted per-row
+    // amounts (rate is linear and sign-preserving): numerically identical to
+    // the old per-row loop, minus the row-cardinality transfer to Node.
     const categoryAmountResult = await query(`
       SELECT COALESCE(c.id, -1) AS category_id,
              COALESCE(c.general || ':' || c.detail, 'UNCATEGORISED') AS name,
-             t.amount,
-             t.currency,
-             t.date
+             SUM(t.amount) AS amount,
+             COUNT(*) AS cnt,
+             t.currency
       FROM transactions t
       LEFT JOIN recipients r ON t.recipient_id = r.id
       LEFT JOIN categories c ON COALESCE(t.category_id, r.default_category_id) = c.id
       WHERE t.is_active = true
         ${includeTransfers ? '' : 'AND t.is_transfer = false'}
+      GROUP BY COALESCE(c.id, -1),
+               COALESCE(c.general || ':' || c.detail, 'UNCATEGORISED'),
+               t.currency
     `);
 
     const catConverted = await convertRowsToEur(
@@ -54,8 +64,10 @@ export const statisticsRepository = {
       const eur = row.amount_eur;
       const key = catId ?? 'null';
       if (!catMap[key]) catMap[key] = { id: catId, name: row.name, count: 0, total: 0 };
-      catMap[key].count++;
-      catMap[key].total += eur;
+      catMap[key].count += parseInt(row.cnt, 10) || 0;
+      // Decimal accumulation (money-hygiene) — native `+=` over the per-currency
+      // converted subtotals drifts sub-cent before the roundToCents below.
+      catMap[key].total = toNumber(toDecimal(catMap[key].total).plus(toDecimal(eur)));
     }
     return Object.values(catMap)
       .map(cat => ({ ...cat, total: roundToCents(cat.total) }))

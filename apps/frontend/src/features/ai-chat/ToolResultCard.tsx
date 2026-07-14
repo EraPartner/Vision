@@ -1,4 +1,4 @@
-import { useMemo } from 'react';
+import { memo, useMemo } from 'react';
 import {
     Bar,
     BarChart,
@@ -85,7 +85,7 @@ function pickNumericKeys(rows: Row[], exclude: string): string[] {
     );
 }
 
-export function ToolResultCard({ toolName, result }: ToolResultCardProps) {
+function ToolResultCardInner({ toolName, result }: ToolResultCardProps) {
     const rows = useMemo(() => asRows(result.ok ? result.data : null), [result]);
     const meta = result.meta;
     const renderAs: ToolRenderAs | 'json' = meta?.renderAs ?? (rows.length > 0 ? 'table' : 'json');
@@ -308,3 +308,8 @@ const tooltipStyle = {
     fontSize: '11px',
     color: 'hsl(var(--popover-foreground))',
 };
+
+// Memoized: for completed tool messages the props (toolName/result) are stable
+// across streamed AI-chat token chunks, so the whole card — including its
+// recharts tree — bails out of the per-token reconcile of the message backlog.
+export const ToolResultCard = memo(ToolResultCardInner);

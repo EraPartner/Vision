@@ -107,6 +107,7 @@ async function fetchTaxTransactions(targetCurrency, startDate, endDate) {
     WHERE pt.date::date BETWEEN $1 AND $2
       AND (pt.taxes > 0 OR pt.fees > 0 OR pt.type IN ('dividend', 'tax', 'fee'))
     ORDER BY pt.date
+    LIMIT 100000
   `, [startDate, endDate]);
 
   // Aggregation accumulators

@@ -20,6 +20,25 @@ aliases: [env vars, environment variables, .env, configuration, env]
 > - **`apps/frontend/.env.local`** — Vite frontend dev (`VITE_`-prefixed vars only).
 > - **Provider API keys** (`TWELVE_DATA_API_KEY` / `FINNHUB_API_KEY` / `FMP_API_KEY` / `ALPHA_VANTAGE_API_KEY` / `FRED_API_KEY`) go in the **root `.env`** — set once, used by both dev and Docker. There is no separate root `.env.local` (retired in ADR-080).
 
+> [!tip] Where does a new toggle live? (env vs. user settings)
+> ADR-035 removed the standalone flag system — "the enabling condition is now the presence of
+> configuration" — but toggles still exist across **three** layers, and the layering above only
+> covers `.env`-*file* precedence, not the env-vs-settings question. Use this to decide where a new
+> toggle belongs and how the layers resolve:
+> - **Boot-time backend env** — read once at startup through the Zod schema in `config/env.js`
+>   (e.g. `AI_CHAT_ENABLED`). Use for deployment-level capability switches.
+> - **Build-time frontend env** — `VITE_`-prefixed, baked into the bundle at build time via
+>   `lib/env.ts` (e.g. `VITE_ENABLE_PER_ACCOUNT_HOLDINGS`, `VITE_SKIN_V2`). Use only for a *default*
+>   that ships in the image.
+> - **Runtime user settings** — persisted per-install and editable in-app; these **override** a
+>   build-time default once settings hydrate. Examples: the `colorblindGainLoss` setting overrides
+>   `VITE_SKIN_V2` (see `lib/skin.ts`, with a `localStorage` mirror for first paint), and a
+>   Settings-managed provider key overrides its env-var counterpart (`services/research/providerKeys.js`).
+>
+> **Precedence when a toggle spans layers:** persisted user setting > build/boot env > coded
+> default. Prefer a user setting for anything the end user should control; reserve env vars for
+> deployment-time capability gating.
+
 ## Backend Variables
 
 | Variable | Default | Required | Description | Code |
@@ -114,9 +133,10 @@ keyed — Yahoo needs no key). See
 | `VITE_ENABLE_LOGGING` | `true` | No | String coerced to boolean (`'true'` → true, empty → default); validated by Zod on boot | Enable frontend logging | [[apps/frontend/src/lib/env.ts\|env.ts]] |
 | `VITE_DEVTOOLS` | _(unset)_ | No | — | When `"true"`, enables React Query Devtools in production builds. On the local Vite dev server, devtools are always enabled via `import.meta.env.DEV` regardless of this variable. Injected as a Docker build arg in `docker-compose.dev.yml`. Do **not** set in production. | [[apps/frontend/src/App.tsx\|App.tsx]] |
 | `VITE_ENABLE_PER_ACCOUNT_HOLDINGS` | `false` | No | String coerced to boolean; validated by the ADR-030 Zod env-schema | When `"true"`, restores the full per-account **holdings** UI surfaces that are hidden by default since ADR-103 (2026-06-20): account pickers on `AddPortfolioTxnDialog`/`EditPortfolioTxnDialog`, the "Move Holdings" button + `MoveHoldingDialog`, the per-account breakdown card in `InvestmentDetailDialog`, the per-account holdings grid + `NetWorthByAccountChart` on the Net Worth page (and re-enables the by-account net-worth query), and the brokerage toggle + sleeve-account picker on `PortfolioImportPage`/`PortfolioImportReviewPage`. Budgeting/cash accounts, bank-balances widget, and liabilities are unaffected by this flag. The backend is unchanged regardless of this setting. Set in `apps/frontend/.env.local` for local dev; inject as a build arg for Docker builds. See [[docs/adr/103-per-account-holdings-ui-flag\|ADR-103]]. | [[apps/frontend/src/lib/env.ts\|env.ts]] |
+| `VITE_SKIN_V2` | `false` | No | String coerced to boolean; validated by the ADR-030 Zod env-schema | When `"true"`, makes the build default to the colorblind ("skin v2") gain/loss palette (`isSkinV2Default`). This is only the build-time default — the runtime `colorblindGainLoss` user setting overrides it after hydration (see `apps/frontend/src/lib/skin.ts`). Inject as a build arg for Docker builds. | [[apps/frontend/src/lib/env.ts\|env.ts]] |
 
 > [!info] Frontend Env Validation (ADR-030)
-> All three `VITE_*` variables are validated at boot time by Zod schema in `apps/frontend/src/lib/env.ts`. Misconfiguration fails immediately on app startup with an aggregated error message. See [[docs/adr/030-frontend-environment-schema|ADR-030]] for details.
+> All `VITE_*` variables are validated at boot time by Zod schema in `apps/frontend/src/lib/env.ts`. Misconfiguration fails immediately on app startup with an aggregated error message. See [[docs/adr/030-frontend-environment-schema|ADR-030]] for details.
 
 ## Electron Variables
 
@@ -136,10 +156,10 @@ keyed — Yahoo needs no key). See
 | `POSTGRES_USER` | `ftm_user` | No | PostgreSQL username | [[docker-compose.yml\|docker-compose.yml]] |
 | `POSTGRES_DB` | `financial_transactions` | No | PostgreSQL database name | [[docker-compose.yml\|docker-compose.yml]] |
 | `PORT` | `3002` | No | Host port → app container mapping; also read by backend at startup | [[docker-compose.yml\|docker-compose.yml]] |
-| `DB_HOST` | `db` | No | Postgres host injected into app container for Alembic | [[docker-compose.yml\|docker-compose.yml]] |
-| `DB_PORT` | `5432` | No | Postgres port for Alembic migrations | [[docker-compose.yml\|docker-compose.yml]] |
-| `DB_USER` | `ftm_user` | No | Postgres user for Alembic migrations | [[docker-compose.yml\|docker-compose.yml]] |
-| `DB_NAME` | `financial_transactions` | No | Postgres database for Alembic migrations | [[docker-compose.yml\|docker-compose.yml]] |
+| `DB_HOST` | `db` | No | **Stale / not consumed.** Injected into the app container by both compose files but read by nothing — Alembic connects via `DATABASE_URL` (or `DATABASE_URL_MIGRATIONS`) only, see `alembic/env.py`. Kept here only to document the unused compose injection; safe to remove from compose. | [[docker-compose.yml\|docker-compose.yml]] |
+| `DB_PORT` | `5432` | No | **Stale / not consumed** — see `DB_HOST`. | [[docker-compose.yml\|docker-compose.yml]] |
+| `DB_USER` | `ftm_user` | No | **Stale / not consumed** — see `DB_HOST`. | [[docker-compose.yml\|docker-compose.yml]] |
+| `DB_NAME` | `financial_transactions` | No | **Stale / not consumed** — see `DB_HOST`. | [[docker-compose.yml\|docker-compose.yml]] |
 
 ## Source-of-Truth
 

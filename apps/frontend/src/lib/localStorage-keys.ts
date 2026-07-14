@@ -33,6 +33,21 @@ export const LOCAL_STORAGE_KEYS = Object.freeze({
 
   /** Last visited route (pathname+search) for window-state restoration */
   LAST_ROUTE: 'vision.lastRoute',
+
+  /**
+   * Boot cache of the active UI language ('en' | 'nl'), mirrored from the
+   * server-persisted app setting. Lets the correct locale chunk start loading
+   * before the settings API round trip resolves. Server value wins on hydration.
+   */
+  LANGUAGE: 'vision.language',
+
+  /**
+   * Boot cache of the configured startup section, mirrored from the
+   * server-persisted app setting. Lets StartupRedirect resolve the launch target
+   * synchronously instead of mounting the default Dashboard first, then
+   * discarding it once settings hydrate. Server value wins on hydration.
+   */
+  STARTUP_SECTION: 'vision.startupSection',
 } as const);
 
 export type LocalStorageKey = typeof LOCAL_STORAGE_KEYS[keyof typeof LOCAL_STORAGE_KEYS];
@@ -52,4 +67,8 @@ export const LOCAL_STORAGE_EXCLUDED_KEYS: ReadonlyArray<string> = Object.freeze(
   'vision.palette.recents',
   // Transient window-state restoration — meaningless on another machine.
   'vision.lastRoute',
+  // Boot caches derived from server-persisted settings — the server value is
+  // authoritative and re-mirrors on next launch, so they need not be backed up.
+  'vision.language',
+  'vision.startupSection',
 ]);

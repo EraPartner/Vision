@@ -64,6 +64,8 @@ function AttachmentRow({
                     <img
                         src={url}
                         alt={attachment.filename}
+                        loading="lazy"
+                        decoding="async"
                         className="h-6 w-6 rounded object-cover border border-border shrink-0"
                     />
                 </a>

@@ -53,11 +53,14 @@ export function SplitTransactionDialog({ transactionId, transactionAmount, trans
     // Money math runs through Decimal and rounds to cents on emit so the
     // "exceeds total" gate compares exact cent values — a float `reduce`
     // could drift an exact split just past `absAmount` and mis-gate it.
-    const equalShare = totalPeople > 1 ? roundMoney(toDecimal(absAmount).div(totalPeople)) : 0;
+    // All of these values are only consumed inside <DialogContent> (rendered
+    // only when open), so a closed dialog — one sits in every table row — must
+    // not run the Decimal pipeline on every parent re-render/keystroke.
+    const equalShare = open && totalPeople > 1 ? roundMoney(toDecimal(absAmount).div(totalPeople)) : 0;
 
-    const customTotal = roundMoney(addAll(validEntries.map((e) => parseDecimal(e.amount))));
+    const customTotal = open ? roundMoney(addAll(validEntries.map((e) => parseDecimal(e.amount)))) : 0;
     const existingSplits = existingSplitsData?.items ?? [];
-    const existingSplitTotal = roundMoney(addAll(existingSplits.map((split) => split.amount || 0)));
+    const existingSplitTotal = open ? roundMoney(addAll(existingSplits.map((split) => split.amount || 0))) : 0;
     const existingRecipientNames = existingSplits
         .map((split) => split.recipient_name)
         .filter(Boolean)
@@ -65,15 +68,17 @@ export function SplitTransactionDialog({ transactionId, transactionAmount, trans
     const newSplitTotal = splitType === "equal"
         ? roundMoney(multiply(equalShare, validEntries.length))
         : customTotal;
-    const hasNonPositiveSplitAmount = splitType === "equal"
-        ? validEntries.length > 0 && equalShare <= 0
-        : validEntries.some((entry) => {
-            if (!entry.recipient_id) return false;
-            return parseDecimal(entry.amount) <= 0;
-        });
+    const hasNonPositiveSplitAmount = !open
+        ? false
+        : splitType === "equal"
+            ? validEntries.length > 0 && equalShare <= 0
+            : validEntries.some((entry) => {
+                if (!entry.recipient_id) return false;
+                return parseDecimal(entry.amount) <= 0;
+            });
     const totalAfterSubmit = roundMoney(toDecimal(existingSplitTotal).plus(newSplitTotal));
-    const remainingSplitCapacity = Math.max(roundMoney(toDecimal(absAmount).minus(existingSplitTotal)), 0);
-    const hasExceededTransactionTotal = toDecimal(totalAfterSubmit).gt(roundMoney(absAmount));
+    const remainingSplitCapacity = open ? Math.max(roundMoney(toDecimal(absAmount).minus(existingSplitTotal)), 0) : 0;
+    const hasExceededTransactionTotal = open ? toDecimal(totalAfterSubmit).gt(roundMoney(absAmount)) : false;
 
     const handleSubmit = () => {
         const splits = validEntries.map(e => ({

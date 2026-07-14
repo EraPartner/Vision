@@ -1,4 +1,5 @@
 import { useState, useCallback, useEffect, useRef } from "react";
+import { useQueryClient } from "@tanstack/react-query";
 import { apiClient } from "@/lib/api";
 import logger from "@/lib/logger";
 import { getCurrencyFormatDefaults } from "@/utils/currency";
@@ -212,6 +213,15 @@ export function usePlannedPayments(showInactive: boolean = false) {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const mountedRef = useRef(true);
+  const queryClient = useQueryClient();
+
+  // This hook manages its own state (not React Query), but the app-wide
+  // "upcoming payments" banner is a React Query cache (['upcomingPlannedPayments',
+  // queryDate]). Every mutating path must bust it or the banner shows stale data
+  // for up to its staleTime — ImportReviewPage already does this elsewhere.
+  const invalidateUpcoming = useCallback(() => {
+    queryClient.invalidateQueries({ queryKey: ["upcomingPlannedPayments"] });
+  }, [queryClient]);
 
   const fetchPayments = useCallback(async () => {
     try {
@@ -243,32 +253,35 @@ export function usePlannedPayments(showInactive: boolean = false) {
       const apiPayload = mapToCreateAPI(payment);
       const created = await apiClient.createPlannedTransaction(apiPayload);
       setPayments((prev) => [...prev, mapFromAPI(created)]);
+      invalidateUpcoming();
     } catch (err) {
       logger.error("Error creating planned payment:", err);
       throw err;
     }
-  }, []);
+  }, [invalidateUpcoming]);
 
   const updatePayment = useCallback(async (id: number, updates: Partial<PlannedPayment>) => {
     try {
       const apiUpdates = mapToUpdateAPI(updates);
       const updated = await apiClient.updatePlannedTransaction(id, apiUpdates);
       setPayments((prev) => prev.map((p) => (p.id === id ? mapFromAPI(updated) : p)));
+      invalidateUpcoming();
     } catch (err) {
       logger.error("Error updating planned payment:", err);
       throw err;
     }
-  }, []);
+  }, [invalidateUpcoming]);
 
   const deletePayment = useCallback(async (id: number) => {
     try {
       await apiClient.deletePlannedTransaction(id);
       setPayments((prev) => prev.filter((p) => p.id !== id));
+      invalidateUpcoming();
     } catch (err) {
       logger.error("Error deleting planned payment:", err);
       throw err;
     }
-  }, []);
+  }, [invalidateUpcoming]);
 
   const toggleActive = useCallback(async (id: number) => {
     try {
@@ -279,11 +292,12 @@ export function usePlannedPayments(showInactive: boolean = false) {
         is_active: !payment.is_active
       });
       setPayments((prev) => prev.map((p) => (p.id === id ? mapFromAPI(updated) : p)));
+      invalidateUpcoming();
     } catch (err) {
       logger.error("Error toggling payment active status:", err);
       throw err;
     }
-  }, [payments]);
+  }, [payments, invalidateUpcoming]);
 
   const executePayment = useCallback(async (id: number, transactionId: number, executionDate?: string) => {
     try {
@@ -293,11 +307,12 @@ export function usePlannedPayments(showInactive: boolean = false) {
       };
       const updated = await apiClient.executePlannedTransaction(id, executeRequest);
       setPayments((prev) => prev.map((p) => (p.id === id ? mapFromAPI(updated) : p)));
+      invalidateUpcoming();
     } catch (err) {
       logger.error("Error executing payment:", err);
       throw err;
     }
-  }, []);
+  }, [invalidateUpcoming]);
 
   return {
     payments,

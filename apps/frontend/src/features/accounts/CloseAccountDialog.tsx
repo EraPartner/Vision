@@ -23,6 +23,7 @@ import { useLanguage } from '@/contexts/LanguageContext';
 import { useAppSettings } from '@/contexts/AppSettingsContext';
 import { useExchangeRates } from '@/hooks/useExchangeRates';
 import { accountPositionsFor } from '@/hooks/portfolio/useAccountPositions';
+import { usePortfolio } from '@/hooks/usePortfolio';
 import { isPerAccountHoldingsEnabled } from '@/lib/env';
 import { numberFormatToLocale } from '@/utils/currency';
 import { toast } from 'sonner';
@@ -36,12 +37,37 @@ interface AccountHolding {
   currentValue: number;
 }
 
-export function CloseAccountDialog({ account, accounts, summaries, open, onOpenChange }: {
+const EMPTY_SUMMARIES: InvestmentSummary[] = [];
+
+interface CloseAccountDialogProps {
   account: Account;
   accounts: Account[];
-  summaries: InvestmentSummary[];
   open: boolean;
   onOpenChange: (o: boolean) => void;
+}
+
+/**
+ * Fetches the portfolio summaries the holdings-transfer step needs. Split into
+ * its own component so the (expensive: investments → dependent bulk
+ * portfolio-transactions waterfall + cost-basis math) `usePortfolio()` pipeline
+ * runs only when the per-account-holdings flag is on AND the close dialog is
+ * actually open — never on every AccountsPage paint (ADR-103 keeps the flag off).
+ */
+function CloseAccountDialogWithPortfolio(props: CloseAccountDialogProps) {
+  const { summaries } = usePortfolio();
+  return <CloseAccountDialogView {...props} summaries={summaries} />;
+}
+
+export function CloseAccountDialog(props: CloseAccountDialogProps) {
+  // `isPerAccountHoldingsEnabled` is a build-time constant, so this branch is
+  // stable across renders (no rules-of-hooks issue).
+  return isPerAccountHoldingsEnabled
+    ? <CloseAccountDialogWithPortfolio {...props} />
+    : <CloseAccountDialogView {...props} summaries={EMPTY_SUMMARIES} />;
+}
+
+function CloseAccountDialogView({ account, accounts, summaries, open, onOpenChange }: CloseAccountDialogProps & {
+  summaries: InvestmentSummary[];
 }) {
   const { t } = useLanguage();
   const { appSettings } = useAppSettings();

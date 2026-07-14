@@ -266,15 +266,28 @@ export function VirtualDataTable<T extends Record<string, unknown>>({
     const handleResizeStart = useCallback((e: React.MouseEvent, colKey: string, currentWidth: number) => {
         e.preventDefault();
         resizingRef.current = { key: colKey, startX: e.clientX, startWidth: currentWidth };
+        // Coalesce the per-mousemove state writes into one commit per animation
+        // frame, so a fast drag re-renders the table at most once per frame.
+        let rafId: number | null = null;
+        let pendingWidth: number | null = null;
+        const flush = () => {
+            rafId = null;
+            if (pendingWidth == null || !resizingRef.current) return;
+            const key = resizingRef.current.key;
+            const width = pendingWidth;
+            setColumnWidths(prev => ({ ...prev, [key]: width }));
+        };
         const handleMouseMove = (ev: MouseEvent) => {
             if (!resizingRef.current) return;
             const diff = ev.clientX - resizingRef.current.startX;
             const col = columns.find(c => c.key === resizingRef.current!.key);
             const minW = col?.minWidth || 60;
-            const newWidth = Math.max(minW, resizingRef.current.startWidth + diff);
-            setColumnWidths(prev => ({ ...prev, [resizingRef.current!.key]: newWidth }));
+            pendingWidth = Math.max(minW, resizingRef.current.startWidth + diff);
+            if (rafId == null) rafId = requestAnimationFrame(flush);
         };
         const handleMouseUp = () => {
+            if (rafId != null) cancelAnimationFrame(rafId);
+            flush();
             resizingRef.current = null;
             document.removeEventListener("mousemove", handleMouseMove);
             document.removeEventListener("mouseup", handleMouseUp);
@@ -341,6 +354,11 @@ export function VirtualDataTable<T extends Record<string, unknown>>({
 
     const deferredData = useDeferredValue(data);
 
+    // In server-search mode the localSearchQuery filter branch below is skipped
+    // entirely, so the query text must not re-run the O(n) pipeline on every
+    // keystroke. Collapse it to a constant dep when the server does the search.
+    const localSearchDep = isServerSearch ? "" : localSearchQuery;
+
     // Client-side filter/sort pipeline
     // NOTE: when onSortChange is provided (server-sort mode) the sort step is
     // skipped — the server already returns rows in the correct order.
@@ -382,7 +400,7 @@ export function VirtualDataTable<T extends Record<string, unknown>>({
         // pipeline re-runs when the column SET changes but not on selection-driven
         // array rebuilds. eslint can't see that relationship.
         // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [deferredData, columnFilters, localSearchQuery, isServerSearch, isServerSort, sortKey, sortDir, columnKeySignature]);
+    }, [deferredData, columnFilters, localSearchDep, isServerSearch, isServerSort, sortKey, sortDir, columnKeySignature]);
 
     // Virtualizer
     const parentRef = useRef<HTMLDivElement>(null);
@@ -641,7 +659,7 @@ export function VirtualDataTable<T extends Record<string, unknown>>({
 
                                     {col.header && (
                                         <div
-                                            className="absolute right-0 top-2 bottom-2 w-px bg-border cursor-col-resize hover:w-0.5 hover:bg-primary/50 active:bg-primary transition-all"
+                                            className="absolute right-0 top-2 bottom-2 w-px bg-border cursor-col-resize hover:w-0.5 hover:bg-primary/50 active:bg-primary transition-[width,background-color]"
                                             onMouseDown={(e) => {
                                                 const el = e.currentTarget.parentElement;
                                                 const currentWidth = el ? el.getBoundingClientRect().width : 120;
@@ -704,8 +722,17 @@ export function VirtualDataTable<T extends Record<string, unknown>>({
                                         aria-rowindex={virtualRow.index + 2}
                                         // Keyboard equivalent for the mouse-only row actions:
                                         // focusable rows take ↑/↓ (move), Enter (open) and
-                                        // Space (quick look).
-                                        tabIndex={rowsInteractive ? 0 : undefined}
+                                        // Space (quick look). Roving tabindex — only the
+                                        // topmost rendered row is a tab stop, so Tab reaches
+                                        // the table once instead of walking every row; ↑/↓
+                                        // (focusRowByIndex) move focus to the -1 rows.
+                                        tabIndex={
+                                            rowsInteractive
+                                                ? virtualRow.index === virtualizer.getVirtualItems()[0]?.index
+                                                    ? 0
+                                                    : -1
+                                                : undefined
+                                        }
                                         className={`flex items-center border-b border-border transition-colors hover:bg-muted/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50 focus-visible:ring-inset ${isEditing ? "bg-primary/5" : ""} ${onRowDoubleClick ? "cursor-pointer" : ""}`}
                                         style={{
                                             position: "absolute",

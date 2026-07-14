@@ -1,3 +1,4 @@
+import { memo } from 'react';
 import { Bot, User, Wrench } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import type { ChatMessage } from '@/types/aiChat';
@@ -8,12 +9,16 @@ interface ChatBubbleProps {
     streaming?: boolean;
 }
 
-export function ChatBubble({ message, streaming = false }: ChatBubbleProps) {
+// Memoized: `combined` in ChatMessageList keeps completed message identities
+// stable across streamed token chunks, so every completed bubble (including the
+// tool cards and their charts) bails out of re-render — only the streaming draft
+// bubble, whose `message`/`streaming` props actually change, re-renders.
+export const ChatBubble = memo(function ChatBubble({ message, streaming = false }: ChatBubbleProps) {
     if (message.role === 'tool') {
         return <ToolBubble message={message} />;
     }
     return <TextBubble message={message} streaming={streaming} />;
-}
+});
 
 function TextBubble({ message, streaming }: { message: ChatMessage; streaming: boolean }) {
     const isUser = message.role === 'user';

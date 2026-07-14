@@ -436,6 +436,15 @@ export const investmentRepository = {
   },
 
   async create({ name, symbol, asset_class, currency = 'EUR', current_price, interest_rate, maturity_date, location, municipality, cadastral_income, municipality_tax_rate, notes, price_provider, price_provider_id, price_provider_url, price_provider_latest_url, price_provider_latest_path, price_provider_history_url, price_provider_history_path, price_provider_history_ts_path, price_provider_history_price_path }) {
+    // Apply the same input hygiene as update(): reject an empty name (the
+    // backend previously accepted '' silently) and normalise the symbol
+    // (trim/uppercase) so a lower-case symbol can't slip in only via create.
+    const trimmedName = typeof name === 'string' ? name.trim() : name;
+    if (!trimmedName) {
+      throw makeValidationError('name is required');
+    }
+    name = trimmedName;
+    symbol = normalizeSymbol(symbol);
     const payload = {
       name,
       symbol,

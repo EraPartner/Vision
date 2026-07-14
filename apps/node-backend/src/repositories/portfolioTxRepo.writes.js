@@ -49,6 +49,17 @@ export async function create({ investment_id, type, date, amount, units, price_p
     account_id,
   }, { assetClass });
 
+  // Recurrence hygiene: a non-recurring row must not carry a stale interval /
+  // end-date, and a bounded series must end on or after its start date. The
+  // import path leaves is_recurring falsy, so this is a no-op there.
+  if (!payload.is_recurring) {
+    payload.recurrence_interval = null;
+    payload.recurrence_end_date = null;
+  } else if (payload.recurrence_end_date && payload.date
+      && String(payload.recurrence_end_date) < String(payload.date)) {
+    throw makeValidationError('recurrence_end_date must be on or after the transaction date');
+  }
+
   await validateSellUnitsAvailability({
     investmentId: payload.investment_id,
     assetClass,
@@ -157,6 +168,21 @@ export async function update(id, fields) {
   if (shouldApplyDefaultFeesTaxes || fields.fees !== undefined) normalizedFields.fees = normalized.fees;
   if (shouldApplyDefaultFeesTaxes || fields.taxes !== undefined) normalizedFields.taxes = normalized.taxes;
   if (fields.fx_rate_to_eur !== undefined) normalizedFields.fx_rate_to_eur = normalized.fx_rate_to_eur;
+
+  // Recurrence hygiene on update: turning recurrence off clears the now-stale
+  // interval/end-date; a bounded series's end date must stay on or after its
+  // start date (checked only when the patch actually touches either field).
+  if (fields.is_recurring === false) {
+    normalizedFields.recurrence_interval = null;
+    normalizedFields.recurrence_end_date = null;
+  } else {
+    const touchesRecurrenceWindow = fields.recurrence_end_date !== undefined || fields.date !== undefined;
+    if (touchesRecurrenceWindow && merged.is_recurring
+        && merged.recurrence_end_date && merged.date
+        && String(merged.recurrence_end_date) < String(merged.date)) {
+      throw makeValidationError('recurrence_end_date must be on or after the transaction date');
+    }
+  }
 
   await validateSellUnitsAvailability({
     investmentId: existing.investment_id,

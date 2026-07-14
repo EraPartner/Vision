@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useMemo, useRef, useState } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Sparkline as ChartSparkline } from "@/components/charts";
@@ -31,13 +31,23 @@ export function NetSummaryCard({ netBalance, income, spending, history }: NetSum
   const [scrubIndex, setScrubIndex] = useState<number | undefined>(undefined);
   const scrubPoint = scrubIndex !== undefined ? history[scrubIndex] : undefined;
 
+  // The plot rect can't change mid-scrub, so measure it once on pointerdown and
+  // reuse it for every pointermove instead of a getBoundingClientRect per move.
+  const scrubRectRef = useRef<DOMRect | null>(null);
+
   const scrubFromEvent = (e: React.PointerEvent<HTMLDivElement>) => {
     if (history.length < 2) return;
-    const rect = e.currentTarget.getBoundingClientRect();
+    const rect = scrubRectRef.current ?? e.currentTarget.getBoundingClientRect();
+    scrubRectRef.current = rect;
     if (rect.width === 0) return;
     const frac = (e.clientX - rect.left) / rect.width;
     const idx = Math.round(frac * (history.length - 1));
     setScrubIndex(Math.max(0, Math.min(history.length - 1, idx)));
+  };
+
+  const endScrub = () => {
+    scrubRectRef.current = null;
+    setScrubIndex(undefined);
   };
 
   const isPositive = netBalance >= 0;
@@ -49,10 +59,14 @@ export function NetSummaryCard({ netBalance, income, spending, history }: NetSum
   const incomePct = splitTotal > 0 ? (incomeTotal / splitTotal) * 100 : 50;
   const spendingPct = splitTotal > 0 ? (spendingTotal / splitTotal) * 100 : 50;
 
-  const chartData = history.map((p) => ({
-    label: formatMonthYearWithAppSettings(new Date(p.year, p.month - 1, 1), appSettings.dateFormat, locale),
-    net: p.net,
-  }));
+  const chartData = useMemo(
+    () =>
+      history.map((p) => ({
+        label: formatMonthYearWithAppSettings(new Date(p.year, p.month - 1, 1), appSettings.dateFormat, locale),
+        net: p.net,
+      })),
+    [history, appSettings.dateFormat, locale],
+  );
 
   const trendGradient = isPositive ? "from-gain/10 to-gain/5" : "from-loss/10 to-loss/5";
   const areaStroke = isPositive ? "hsl(var(--gain))" : "hsl(var(--loss))";
@@ -137,9 +151,9 @@ export function NetSummaryCard({ netBalance, income, spending, history }: NetSum
               e.currentTarget.setPointerCapture(e.pointerId);
               scrubFromEvent(e);
             }}
-            onPointerUp={() => setScrubIndex(undefined)}
-            onPointerCancel={() => setScrubIndex(undefined)}
-            onPointerLeave={() => setScrubIndex(undefined)}
+            onPointerUp={endScrub}
+            onPointerCancel={endScrub}
+            onPointerLeave={endScrub}
           >
             <p className={`text-xs mb-1 ${scrubPoint ? "font-medium text-foreground" : "text-muted-foreground"}`}>
               {scrubPoint && scrubIndex !== undefined

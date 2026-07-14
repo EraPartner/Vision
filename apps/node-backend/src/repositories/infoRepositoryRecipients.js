@@ -9,6 +9,7 @@
  */
 
 import { query } from '../database/connection.js';
+import { toDecimal, toNumber } from '../lib/money.js';
 import { toWireDate } from '../lib/dateFormat.js';
 import { convertRowsToEur } from '../services/currency/currencyConversionService.js';
 import {
@@ -84,7 +85,9 @@ export const recipientInsightsRepository = {
           lastSeen: toWireDate(row.last_seen),
         };
       }
-      recipientAgg[rid].totalSpend += eur;
+      // Decimal accumulation (money-hygiene): native `+=` over per-currency
+      // converted spend drifts sub-cent before the final round.
+      recipientAgg[rid].totalSpend = toNumber(toDecimal(recipientAgg[rid].totalSpend).plus(toDecimal(eur)));
       recipientAgg[rid].transactionCount += count;
       const firstSeen = toWireDate(row.first_seen);
       const lastSeen = toWireDate(row.last_seen);
@@ -224,7 +227,7 @@ export const recipientInsightsRepository = {
       if (!yearRecMap[year][rid]) {
         yearRecMap[year][rid] = { recipientId: rid, name: row.name, totalSpend: 0, transactionCount: 0 };
       }
-      yearRecMap[year][rid].totalSpend += eur;
+      yearRecMap[year][rid].totalSpend = toNumber(toDecimal(yearRecMap[year][rid].totalSpend).plus(toDecimal(eur)));
       yearRecMap[year][rid].transactionCount += cnt;
     }
 

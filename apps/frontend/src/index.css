@@ -131,6 +131,30 @@
 
 @layer utilities {
     /* ------------------------------------------------------------------
+     * Off-screen render skipping (visually free)
+     *
+     * `content-visibility: auto` lets the browser skip layout + paint for a
+     * subtree until it is scrolled near the viewport, then renders it exactly
+     * as it would have. `contain-intrinsic-size` reserves a placeholder box so
+     * the scrollbar and scroll offset stay stable before the subtree renders.
+     * Apply only to below-the-fold section wrappers that own their own scroll
+     * context (no `position: sticky` descendants that must stay pinned to the
+     * page). Appearance is unchanged once on screen.
+     * ------------------------------------------------------------------ */
+    .cv-auto {
+        content-visibility: auto;
+        contain-intrinsic-size: auto 320px;
+    }
+
+    /* Row-scale variant for long unvirtualized lists inside their own scroll
+     * container (e.g. dialog transaction lists). Same visually-free skip, sized
+     * for a single list row rather than a page section. */
+    .cv-auto-row {
+        content-visibility: auto;
+        contain-intrinsic-size: auto 72px;
+    }
+
+    /* ------------------------------------------------------------------
      * Apple-style liquid glass hierarchy
      *
      * thin     — navigation, top chrome
@@ -1024,6 +1048,11 @@
         .animate-stagger > *,
         .icon-success-bounce,
         .ticker-track,
+        /* Systematic leaks: these infinite/height animations were gated per
+           component elsewhere (or not at all) — one global rule covers them. */
+        .animate-shimmer,
+        .animate-accordion-up,
+        .animate-accordion-down,
         [data-sonner-toast][data-type="success"] [data-icon] {
             animation: none;
         }

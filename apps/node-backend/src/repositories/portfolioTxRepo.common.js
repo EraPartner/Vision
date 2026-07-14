@@ -10,6 +10,14 @@
 import { query, withTransaction, withSavepointIfInTransaction } from '../database/connection.js';
 import { toDecimal, toNumber, roundMoney, multiply, divide } from '../lib/money.js';
 import { buildSetClauses } from '../lib/sqlClauses.js';
+import { VALID_PORTFOLIO_TXN_TYPES } from '../services/portfolioImportPipeline/portfolioTypeNormalizer.js';
+
+// Mirrors the recurrence_interval DB enum (migration 0001) and the frontend
+// RecurrenceInterval union. An out-of-set value has no DB CHECK on the flat
+// table path and otherwise surfaces as a raw enum-cast 500.
+export const VALID_RECURRENCE_INTERVALS = new Set([
+  'daily', 'weekly', 'bi-weekly', 'monthly', 'quarterly', 'yearly',
+]);
 
 let _hasPortfolioTransactionInheritanceSchema;
 
@@ -158,6 +166,19 @@ function normalizeBuySellMath({ amount, units, pricePerUnit }) {
  */
 export function normalizeTransactionPayload(payload, { assetClass } = {}) {
   const type = payload.type;
+  // Membership guard: an unknown type ('banana') otherwise inserted (invisible
+  // to the units replay) or reached the enum column as a raw cast 500. The
+  // import pipeline already constrains types to this same canonical set, so this
+  // only rejects genuine garbage on the direct-API/update paths.
+  if (type != null && !VALID_PORTFOLIO_TXN_TYPES.has(type)) {
+    throw makeValidationError(`Invalid transaction type: ${type}`);
+  }
+  // recurrence_interval is a DB enum with no CHECK on the flat-table path; an
+  // out-of-set value 500'd at insert. The import path never sets it (undefined).
+  if (payload.recurrence_interval != null && payload.recurrence_interval !== ''
+      && !VALID_RECURRENCE_INTERVALS.has(payload.recurrence_interval)) {
+    throw makeValidationError(`Invalid recurrence_interval: ${payload.recurrence_interval}`);
+  }
   const amount = parseOptionalNumber(payload.amount, 'amount');
   const units = parseOptionalNumber(payload.units, 'units');
   const pricePerUnit = parseOptionalNumber(payload.price_per_unit, 'price_per_unit');

@@ -150,7 +150,11 @@ const BARE_TICKER_QUERY = /^[A-Za-z]{2,5}(?:[.-][A-Za-z0-9]{1,4})?$/;
 function parseTickerQuery(q: string): string | null {
     const cash = q.match(CASHTAG_QUERY);
     if (cash) return cash[1].toUpperCase();
-    if (BARE_TICKER_QUERY.test(q)) return q.toUpperCase();
+    // Require at least one uppercase letter before treating a bare word as a
+    // ticker candidate, so ordinary lowercase words typed while the palette is
+    // open (e.g. "food") don't each fire a market-quote request. The $cashtag
+    // form above remains the case-insensitive path.
+    if (/[A-Z]/.test(q) && BARE_TICKER_QUERY.test(q)) return q.toUpperCase();
     return null;
 }
 

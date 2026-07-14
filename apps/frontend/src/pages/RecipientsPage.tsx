@@ -65,6 +65,7 @@ export default function RecipientsPage() {
     const { data: initialData, isLoading, error } = useQuery({
         queryKey: ['recipients', 'virtual', { active: !showAll, search: search || undefined, uncategorized: showUncategorized, sortKey, sortDir, pageSize }],
         queryFn: () => apiClient.getRecipients({ limit: pageSize, offset: 0, active: !showAll, search: search || undefined, uncategorized: showUncategorized, sort_by: sortKey || undefined, sort_dir: sortDir || undefined }),
+        placeholderData: (prev) => prev, // keep previous list while a new filter/search/sort round-trips
         staleTime: 30_000,
     });
 

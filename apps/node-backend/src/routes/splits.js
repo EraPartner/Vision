@@ -4,7 +4,7 @@
 
 import { Router } from 'express';
 import splitRepository from '../services/splitService.js';
-import { validateIdParam } from '../middleware/validation.js';
+import { validateIdParam, validateId } from '../middleware/validation.js';
 import { NotFoundError, ValidationError } from '../middleware/errorHandler.js';
 import { escapeCsvValue } from '../lib/csv.js';
 
@@ -42,9 +42,12 @@ function buildOwedExportFilename(recipientId) {
 
 function normalizeBatchSplitInputs(splits) {
   return splits
-    .filter((split) => split?.recipient_id && split?.amount != null)
+    .filter((split) =>
+      validateId(split?.recipient_id, 'recipient_id').valid
+      && split?.amount != null
+      && Number.isFinite(Number(split.amount)))
     .map((split) => ({
-      recipient_id: split.recipient_id,
+      recipient_id: validateId(split.recipient_id).value,
       amount: Number(split.amount),
       note: split.note,
     }));
@@ -89,6 +92,15 @@ router.post('/', async (req, res) => {
   if (!transaction_id || !recipient_id || amount == null) {
     throw new ValidationError('Missing required fields: transaction_id, recipient_id, amount');
   }
+  // FK ids were only truthiness-checked, so a non-integer (e.g. "abc") reached
+  // Postgres as an FK/type error and surfaced as a raw 500. Validate up front.
+  const txIdCheck = validateId(transaction_id, 'transaction_id');
+  if (!txIdCheck.valid) throw new ValidationError(txIdCheck.error);
+  const recIdCheck = validateId(recipient_id, 'recipient_id');
+  if (!recIdCheck.valid) throw new ValidationError(recIdCheck.error);
+  if (!Number.isFinite(Number(amount))) {
+    throw new ValidationError('amount must be a finite number');
+  }
 
   const split = await splitRepository.createSplitAtomic({ transaction_id, recipient_id, amount, note });
   await splitRepository.writeAudit({
@@ -106,6 +118,8 @@ router.post('/batch', async (req, res) => {
   if (!transaction_id || !Array.isArray(splits) || splits.length === 0) {
     throw new ValidationError('Missing required fields: transaction_id, splits[]');
   }
+  const batchTxIdCheck = validateId(transaction_id, 'transaction_id');
+  if (!batchTxIdCheck.valid) throw new ValidationError(batchTxIdCheck.error);
 
   const preparedSplits = normalizeBatchSplitInputs(splits);
   // Client sent rows but every one was dropped by normalization (missing

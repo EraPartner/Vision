@@ -105,7 +105,17 @@ export function ShaderAurora() {
 
         let gl: WebGLRenderingContext | null = null;
         try {
-            gl = canvas.getContext("webgl", { alpha: true, antialias: false, depth: false, stencil: false });
+            // Decorative background: prefer the integrated GPU (battery) and let a
+            // blocklisted/software renderer fall through to the cheap CSS blobs
+            // rather than run the fbm shader on the CPU.
+            gl = canvas.getContext("webgl", {
+                alpha: true,
+                antialias: false,
+                depth: false,
+                stencil: false,
+                powerPreference: "low-power",
+                failIfMajorPerformanceCaveat: true,
+            });
         } catch {
             gl = null;
         }
@@ -120,50 +130,50 @@ export function ShaderAurora() {
             return shader;
         };
 
-        const vs = compile(gl.VERTEX_SHADER, VERT);
-        const fs = compile(gl.FRAGMENT_SHADER, FRAG);
-        const program = gl.createProgram();
-        if (!vs || !fs || !program) return;
-        gl.attachShader(program, vs);
-        gl.attachShader(program, fs);
-        gl.linkProgram(program);
-        if (!gl.getProgramParameter(program, gl.LINK_STATUS)) return;
-        gl.useProgram(program);
+        // Uniform locations live in mutable slots so they can be re-resolved when
+        // the GL resources are rebuilt after a context-restore (GPU restart).
+        let uRes: WebGLUniformLocation | null = null;
+        let uTime: WebGLUniformLocation | null = null;
+        let uC1: WebGLUniformLocation | null = null;
+        let uC2: WebGLUniformLocation | null = null;
 
-        const buf = gl.createBuffer();
-        gl.bindBuffer(gl.ARRAY_BUFFER, buf);
-        gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([-1, -1, 3, -1, -1, 3]), gl.STATIC_DRAW);
-        const aPos = gl.getAttribLocation(program, "a_pos");
-        gl.enableVertexAttribArray(aPos);
-        gl.vertexAttribPointer(aPos, 2, gl.FLOAT, false, 0, 0);
+        // Compile + link the program and set up the fullscreen-triangle geometry.
+        // Returns false if any step fails (e.g. the context is still recovering),
+        // leaving the CSS blobs as the fallback.
+        const buildResources = (): boolean => {
+            const vs = compile(gl!.VERTEX_SHADER, VERT);
+            const fs = compile(gl!.FRAGMENT_SHADER, FRAG);
+            const program = gl!.createProgram();
+            if (!vs || !fs || !program) return false;
+            gl!.attachShader(program, vs);
+            gl!.attachShader(program, fs);
+            gl!.linkProgram(program);
+            if (!gl!.getProgramParameter(program, gl!.LINK_STATUS)) return false;
+            gl!.useProgram(program);
 
-        gl.enable(gl.BLEND);
-        gl.blendFunc(gl.ONE, gl.ONE_MINUS_SRC_ALPHA);
+            const buf = gl!.createBuffer();
+            gl!.bindBuffer(gl!.ARRAY_BUFFER, buf);
+            gl!.bufferData(gl!.ARRAY_BUFFER, new Float32Array([-1, -1, 3, -1, -1, 3]), gl!.STATIC_DRAW);
+            const aPos = gl!.getAttribLocation(program, "a_pos");
+            gl!.enableVertexAttribArray(aPos);
+            gl!.vertexAttribPointer(aPos, 2, gl!.FLOAT, false, 0, 0);
 
-        const uRes = gl.getUniformLocation(program, "u_res");
-        const uTime = gl.getUniformLocation(program, "u_time");
-        const uC1 = gl.getUniformLocation(program, "u_c1");
-        const uC2 = gl.getUniformLocation(program, "u_c2");
+            gl!.enable(gl!.BLEND);
+            gl!.blendFunc(gl!.ONE, gl!.ONE_MINUS_SRC_ALPHA);
+
+            uRes = gl!.getUniformLocation(program, "u_res");
+            uTime = gl!.getUniformLocation(program, "u_time");
+            uC1 = gl!.getUniformLocation(program, "u_c1");
+            uC2 = gl!.getUniformLocation(program, "u_c2");
+            return true;
+        };
+
+        if (!buildResources()) return;
 
         let c1 = resolveThemeColor("--primary", [0.18, 0.65, 0.45]);
         let c2 = resolveThemeColor("--accent", [0.85, 0.7, 0.4]);
-        const refreshColors = () => {
-            c1 = resolveThemeColor("--primary", c1);
-            c2 = resolveThemeColor("--accent", c2);
-        };
-        const themeObserver = new MutationObserver(refreshColors);
-        themeObserver.observe(document.documentElement, { attributes: true, attributeFilter: ["class", "style"] });
 
-        const resize = () => {
-            const scale = Math.min(RESOLUTION_SCALE, MAX_CANVAS_WIDTH / Math.max(1, window.innerWidth));
-            const w = Math.max(1, Math.floor(window.innerWidth * scale));
-            const h = Math.max(1, Math.floor(window.innerHeight * scale));
-            canvas.width = w;
-            canvas.height = h;
-            gl!.viewport(0, 0, w, h);
-        };
-        resize();
-        window.addEventListener("resize", resize);
+        const reducedMotion = prefersReducedMotion();
 
         const draw = (timeSec: number) => {
             gl!.uniform2f(uRes, canvas.width, canvas.height);
@@ -175,7 +185,30 @@ export function ShaderAurora() {
             gl!.drawArrays(gl!.TRIANGLES, 0, 3);
         };
 
-        const reducedMotion = prefersReducedMotion();
+        const refreshColors = () => {
+            c1 = resolveThemeColor("--primary", c1);
+            c2 = resolveThemeColor("--accent", c2);
+            // The animated loop repaints on its own; the static (reduced-motion)
+            // frame would otherwise keep the old colors after a theme switch.
+            if (reducedMotion) draw(0);
+        };
+        const themeObserver = new MutationObserver(refreshColors);
+        themeObserver.observe(document.documentElement, { attributes: true, attributeFilter: ["class", "style"] });
+
+        const resize = () => {
+            const scale = Math.min(RESOLUTION_SCALE, MAX_CANVAS_WIDTH / Math.max(1, window.innerWidth));
+            const w = Math.max(1, Math.floor(window.innerWidth * scale));
+            const h = Math.max(1, Math.floor(window.innerHeight * scale));
+            canvas.width = w;
+            canvas.height = h;
+            gl!.viewport(0, 0, w, h);
+            // Setting canvas.width wipes the backing store; the animated loop
+            // repaints next frame, but the static frame must be redrawn here or
+            // the reduced-motion aurora blanks permanently after the first resize.
+            if (reducedMotion) draw(0);
+        };
+        resize();
+        window.addEventListener("resize", resize);
 
         let raf = 0;
         let last = 0;
@@ -221,7 +254,18 @@ export function ShaderAurora() {
             contextLost = true;
             stopLoop();
         };
+        // Without this, a GPU-process restart leaves the aurora permanently blank
+        // (all GL objects were invalidated) while its listeners keep running.
+        // Rebuild the program/geometry, then resume from the current motion state.
+        const onContextRestored = () => {
+            if (!buildResources()) return;
+            contextLost = false;
+            resize();
+            if (reducedMotion) draw(0);
+            else syncLoop();
+        };
         canvas.addEventListener("webglcontextlost", onContextLost);
+        canvas.addEventListener("webglcontextrestored", onContextRestored);
 
         return () => {
             stopLoop();
@@ -232,6 +276,7 @@ export function ShaderAurora() {
                 document.removeEventListener("visibilitychange", syncLoop);
             }
             canvas.removeEventListener("webglcontextlost", onContextLost);
+            canvas.removeEventListener("webglcontextrestored", onContextRestored);
             themeObserver.disconnect();
             gl?.getExtension("WEBGL_lose_context")?.loseContext();
         };

@@ -17,6 +17,7 @@ import { createContext, useCallback, useContext, useEffect, useMemo, useState } 
 import type { ReactNode } from 'react';
 
 import logger from '@/lib/logger';
+import { LOCAL_STORAGE_KEYS } from '@/lib/localStorage-keys';
 
 export type Language = 'en' | 'nl';
 
@@ -29,6 +30,35 @@ const loaders: Record<Language, () => Promise<{ default: Record<string, string> 
 };
 
 const englishLoader = loaders.en;
+
+// Kick the fallback (English) dictionary fetch off at module-evaluation time so
+// the chunk request overlaps the entry bundle's execution + React mount, instead
+// of only starting after first commit — this removes the raw-key flash on cold
+// boot (keys like `nav.dashboard` rendering literally until the dict arrives).
+const enDictPromise: Promise<Record<string, string>> = englishLoader()
+    .then((mod) => mod.default)
+    .catch((err) => {
+        logger.error('Failed to preload fallback locale "en":', err);
+        return {} as Record<string, string>;
+    });
+
+// Language mirrored to localStorage on the previous session (server value still
+// wins on hydration). Reading it synchronously lets a non-English user warm the
+// active locale chunk during entry execution rather than waiting behind the
+// settings API round trip.
+function readCachedLanguage(): Language {
+    try {
+        return localStorage.getItem(LOCAL_STORAGE_KEYS.LANGUAGE) === 'nl' ? 'nl' : 'en';
+    } catch {
+        return 'en';
+    }
+}
+const cachedLanguage = readCachedLanguage();
+if (cachedLanguage !== 'en') {
+    // Fire-and-forget: warms Vite's module cache so the later effect-driven
+    // import resolves from cache instead of a fresh request.
+    void loaders[cachedLanguage]();
+}
 
 // Type-safe key is derived from the English dictionary at compile time.
 // We keep a static reference only to en for TypeScript — it is not bundled at runtime.
@@ -74,13 +104,11 @@ export function LanguageProvider({ children, language, setLanguage }: LanguagePr
 
     useEffect(() => {
         if (dicts.en) return;
-        englishLoader()
-            .then((mod) => {
-                setDicts((prev) => (prev.en ? prev : { ...prev, en: mod.default }));
-            })
-            .catch((err) => {
-                logger.error('Failed to preload fallback locale "en":', err);
-            });
+        let cancelled = false;
+        void enDictPromise.then((en) => {
+            if (!cancelled) setDicts((prev) => (prev.en ? prev : { ...prev, en }));
+        });
+        return () => { cancelled = true; };
     }, [dicts.en]);
 
     useEffect(() => {
