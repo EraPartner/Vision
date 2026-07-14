@@ -3082,7 +3082,7 @@ look-changing one.
   - evidence: `routes/marketLookup.js:19-258` carries a module-level TTL cache + in-flight coalescing map, its own `YahooFinance` client (:57), and ~160 lines of quote assembly (`mapQuoteCore`:121, `buildQuote`:148, `getCachedQuote`:231) — the clearest remaining ADR-067 boundary loophole. The same upstream is independently wrapped by `services/research/adapters/yahooAdapter.js` (a second `YahooFinance` instance with its own mapping).
   - fix: extract into `services/marketLookupService.js` and consolidate the two Yahoo client instances.
 
-- [ ] **ADR-090 (cash-sleeve-trades-as-transfers) vs ADR-083 (internal-transfer-detection): the contradiction is a real, dormant bug, not just a doc conflict** ⏫ 🔎 verified-present 2026-07-11
+- [x] **ADR-090 (cash-sleeve-trades-as-transfers) vs ADR-083 (internal-transfer-detection): the contradiction is a real, dormant bug, not just a doc conflict** ⏫ ✅ 2026-07-14 · 1f46727 (re-verified: releaseOrphans already guards with `transfer_source IN ('auto','manual')` — an allowlist stricter than the finding's suggested `IS DISTINCT FROM 'trade'` denylist, so a trade leg is never released. Landed the missing piece: the ADR-090-required regression test ("single-sided 'trade' leg survives reconcileTransfers"), corrected the stale isolation comment in tradeCashLegService, and added an ADR-083 addendum recording the exception)
   - ↪ _from: Code/architecture 2026-07-03 · ADR re-run (backend, re-run 2026-07-03)_
   - The 2026-06-25 addendum widened `releaseOrphans()` to `WHERE is_transfer AND transfer_peer_id IS NULL` (`transferReconciliationService.js:53-59`) with no `transfer_source='trade'` carve-out — silently invalidating ADR-090's isolation claim. A trade cash leg is inserted single-sided as `is_transfer=true, transfer_source='trade', peer NULL` (`tradeCashLegService.js:66-79`), so the next `reconcileTransfers()` (runs after every import commit/edit) would release it, re-entering it into income/spending and breaking the ADR-090 double-count guard. The stale isolation claim survives verbatim in `tradeCashLegService.js:5-9` and in ADR-090's own text; the regression test ADR-090 explicitly required ("single-sided 'trade' leg survives reconcileTransfers") was never written (`tests/tradeCashLegService.test.js` doesn't touch the reconciler). Currently dormant: under the ADR-103 default flag, trades get no `account_id`, so `createTradeCashLeg` no-ops — brokerage/portfolio-import commit paths would arm it.
   - fix: add `AND transfer_source IS DISTINCT FROM 'trade'` to `releaseOrphans`, write the missing regression test, and add an ADR-083 addendum note recording the exception.
@@ -3117,13 +3117,13 @@ look-changing one.
   - evidence: `generated.ts`'s `Split` (:3509-3520), `SplitOwed` (:3521-3526), `WatchlistItem` (:3536-3546, documents a never-returned `current_price`), `AiConversation` (:3547-3554, wrong casing), and `Attachment` (:3527) are all stale vs. actual responses, and `types/contract-guard.ts:58-65` doesn't guard any of them — so the drift is invisible to CI.
   - fix: fix the spec at `apps/node-backend/openapi.yaml:1106/1131/1164/1186`, then extend contract-guard to assert against these schemas.
 
-- [ ] **openapi.yaml documents a 200+JSON body for 5 DELETE endpoints that actually return 204 No Content** ⏫ 🔎 verified-present 2026-07-11 🔧 *(undercounted — a 5th instance found during verification)*
+- [x] **openapi.yaml documents a 200+JSON body for 5 DELETE endpoints that actually return 204 No Content** ⏫ ✅ 2026-07-14 · 68fa5ad (all 5 — deleteSavedChart, deletePortfolioTransaction, deleteInvestment, deleteWatchlistItem, deleteAiConversation — now document 204 No Content; generated.ts regenerated)
   - ↪ _from: Codebase audit 2026-06-30 · Architecture & API Contract · API ↔ openapi.yaml drift_
   - `watchlist.js:89`, `savedCharts.js:169`, `investmentController.js:377`, `investmentController.js:483`, and **`routes/ai.js:217` (`DELETE /api/ai/conversations/:id`)** (all `res.status(204).send()`) vs. `openapi.yaml:4457-4468,2408-2418,4080-4090,4012-4022,5007-5017` (all declare 200 + Envelope body)
   - Sibling endpoints (only 2 in the whole spec: `deleteCustomParser`/`deletePortfolioParser`) correctly document 204, confirming this is inconsistent application, not deliberate.
   - Fix: update openapi.yaml to 204 for all 5 paths.
 
-- [ ] **`GET /api/market/quote` — spec parameter name doesn't match the handler** ⏫ 🔎 verified-present 2026-07-11
+- [x] **`GET /api/market/quote` — spec parameter name doesn't match the handler** ⏫ ✅ 2026-07-14 · 68fa5ad (spec now documents `symbols` (comma-separated, required) + `detail=basic|full`; removed the singular `symbol` and unused `currency`; generated.ts regenerated)
   - ↪ _from: Codebase audit 2026-06-30 · Architecture & API Contract · API ↔ openapi.yaml drift_
   - `routes/marketLookup.js:264-267` reads `req.query.symbols` (plural) vs. `openapi.yaml:4294-4315` documenting singular `symbol` + an unused `currency` param; the real `detail=basic|full` param is documented in the matrix but missing from the spec.
   - A client built strictly from openapi.yaml gets a 400.
@@ -3223,13 +3223,13 @@ look-changing one.
   - evidence: portfolio recurrence uses `'bi-weekly'` (apps/frontend/src/types/portfolio.ts:63, types/api.ts:348 — identical `RecurrenceInterval` declared twice in FE — and generated.ts:3352), while planned-transaction recurrence uses `'biweekly'` (apps/node-backend/src/services/calculations/recurrence.js:20 `SUPPORTED_PATTERNS`, FE hooks/usePlannedPayments.ts:22). Two hand-maintained vocabularies for the same concept, differing only in a hyphen — a standing trap for anyone unifying planned/portfolio recurrence.
   - fix: define one shared recurrence-token list in `@vision/types` (breaking-change note: aligning the wire value needs a compat mapping) and delete the duplicate FE declaration.
 
-- [ ] **`PATCH /api/investments/{id}` — accepted `show_in_ticker` missing from the request schema** 🔼 🔎 verified-present 2026-07-11
+- [x] **`PATCH /api/investments/{id}` — accepted `show_in_ticker` missing from the request schema** 🔼 ✅ 2026-07-14 · 68fa5ad (added `show_in_ticker: boolean` to the PATCH requestBody schema; generated.ts regenerated)
   - ↪ _from: Codebase audit 2026-06-30 · Architecture & API Contract · API ↔ openapi.yaml drift_
   - `investmentController.js:359-371` forwards `req.body` (upserts `show_in_ticker` per `docs/api/investments.md:246-251`) vs. `openapi.yaml:4051-4067`'s PATCH body, which lists only `name, symbol, asset_class, currency, is_active`
   - A prior commit added `show_in_ticker` to the **response** schema but never the request schema — a half-finished fix.
   - Fix: add `show_in_ticker: boolean` to the PATCH requestBody schema.
 
-- [ ] **`POST /api/investments/{id}/move` — undocumented `strategy` field** 🔼 🔎 verified-present 2026-07-11
+- [x] **`POST /api/investments/{id}/move` — undocumented `strategy` field** 🔼 ✅ 2026-07-14 · 68fa5ad (added `strategy` enum [fifo, proportional] to the move requestBody schema; generated.ts regenerated)
   - ↪ _from: Codebase audit 2026-06-30 · Architecture & API Contract · API ↔ openapi.yaml drift_
   - `investmentController.js:452-458` reads `strategy` (`'fifo'|'proportional'`) vs. `openapi.yaml:4217-4232` documenting only `from_account_id, to_account_id, units`.
   - Fix: add `strategy` enum to the requestBody schema.
@@ -3410,7 +3410,7 @@ look-changing one.
   - evidence: main.js:90-125 (CORS) and main.js:148-215 (hand-rolled gzip with backpressure) are inline `app.use` closures while every other cross-cutting concern is a middleware/ module; main.js totals 582 lines. Documented as a deliberate Phase 5 dependency slim-down, so this is a consistency nit, not a defect.
   - fix: extract to middleware/cors.js and middleware/compression.js purely for symmetry; keep zero-dependency implementations.
 
-- [ ] **`return null` is the de-facto sentinel in import adapters and rateFetcher (undocumented exception to the no-null convention)** ⏬ 🔎 verified-present 2026-07-11
+- [x] **`return null` is the de-facto sentinel in import adapters and rateFetcher (undocumented exception to the no-null convention)** ⏬ ✅ 2026-07-14 · 1f46727 (documented the `null` "parse/fetch miss" sentinel for CSV adapters + rateFetcher in code-patterns.md as a sanctioned exception alongside the repository-boundary one)
   - ↪ _from: Code/architecture 2026-07-03 · Wave A2_
   - evidence: the whole CSV-adapter subsystem returns `null` for unparseable rows (`services/importPipeline/adapters/wise.js` 6×, `_shared.js` 6×, `revolut.js` 5×, `belfius.js` 5×, `kbc.js` 4×, `sabb.js` 4×) and `services/currency/rateFetcher.js` has 9 `return null`. code-patterns.md documents the null exception only for the *repository* boundary (code-patterns.md:373-376).
   - fix: either extend the documented null-exception to "parse/fetch miss" sentinels or sweep these to `undefined`; don't leave the convention ambiguous.
@@ -3450,12 +3450,12 @@ look-changing one.
   - evidence: UTC date helpers (:96-126), `roundToCents` (:86, an alias of `lib/money`'s `roundMoney`), and `sanitizeIsolatedDailyInvestmentSpikes` (:234, a smoothing heuristic — business logic) all sit in a repository-helpers file.
   - fix: move to `lib/` or a calculations service.
 
-- [ ] **16 stale "Mirrors: apps/backend/….py" file headers reference the deleted Python backend** ⏬ 🔎 verified-present 2026-07-11
+- [x] **16 stale "Mirrors: apps/backend/….py" file headers reference the deleted Python backend** ⏬ ✅ 2026-07-14 · 1f46727 (all 16 `Mirrors: …py` comment lines removed across the 15 files + the inner RecipientBankAccountService reference; JSDoc blocks otherwise intact)
   - ↪ _from: Code/architecture 2026-07-03 · Wave A2_
   - evidence: e.g. `importRoutes.js:3`, `config/logger.js:8`, and 14 others carry a header comment mirroring a Python backend that no longer exists.
   - fix: delete the stale header comments in a mechanical sweep.
 
-- [ ] **backup/coverage.js's verification-stamp comment is stale** ⏬ 🔎 verified-present 2026-07-11
+- [x] **backup/coverage.js's verification-stamp comment is stale** ⏬ ✅ 2026-07-14 (re-verified stale finding: coverage.js:22 already reads "Last verified against: 0080_drop_agg_recipient_totals" — current with the latest migration; no change needed)
   - ↪ _from: Code/architecture 2026-07-03 · Wave A2_
   - evidence: `coverage.js:22` says "Last verified against: 0035" while migrations are at 0064. Comment-only drift — the table list itself is CI-enforced (`tests/backup-coverage.test.js`) so the content is current.
   - fix: update the comment (or make it self-updating from the migration count).
@@ -3470,7 +3470,7 @@ look-changing one.
   - evidence: `OnboardingWizard` co-locates its `useOnboarding` hook (the react-refresh lint-disable at `components/onboarding/OnboardingWizard.tsx:26` is the tell); `CommandPalette`'s FX-parser/arithmetic-evaluator/recents-store (`CommandPalette.tsx:119-175`) are lib-shaped; `DashboardPage`'s inline page-scanning `queryFn` (`pages/DashboardPage.tsx:115-159`) and `PortfolioOverviewPage`'s sparkline builder (:147-186) are likewise lib-shaped.
   - fix: extract each into hooks/ or lib/ as appropriate; no urgency.
 
-- [ ] **FX fallback in portfolio P&L hook silently uses the current (not point-in-time) rate, with no acknowledging comment** ⬇ 🔎 verified-present 2026-07-11
+- [x] **FX fallback in portfolio P&L hook silently uses the current (not point-in-time) rate, with no acknowledging comment** ⬇ ✅ 2026-07-14 · 68fa5ad (added an acknowledging comment at useFxAwarePnl.ts documenting the live-rate fallback trade-off, mirroring ADR-085's tax-path note; no code change, as the finding recommended)
   - ↪ _from: Codebase audit 2026-06-30 · Architecture & API Contract · API ↔ openapi.yaml drift_
   - `apps/frontend/src/hooks/portfolio/useFxAwarePnl.ts:48-50` falls back to live-rate `getRateToEur` when `fx_rate_to_eur` is missing/zero
   - `docs/adr/085-belgian-tax-point-in-time-fx.md` sanctions an identical fallback for the *tax* path as "a transient approximation that self-corrects" — confirmed via official FOD Financiën guidance that point-in-time FX is indeed the technically correct convention for Belgian capital-gains/TOB valuation. The portfolio P&L hook has the same trade-off with no equivalent comment, and silently blends current-rate legs into an EUR cost pool used for gain math. This is a third surface with this pattern, distinct from the one ADR-085 already explicitly waves off (the portfolio-summary "current value display," which is intentionally out of scope).
@@ -3511,7 +3511,7 @@ look-changing one.
   - evidence: a `__`-prefix convention exists (`__resetInvestmentSchemaCache`, `__clearQuoteCacheForTests`, `__resetPriceCache`) but ~90% of test-only exports don't use it, e.g. `ipMatchesRule` (`rateLimiter.js:38`), `resetMetrics` (`requestMetrics.js:155`), `portfolioMath`'s cost-basis re-exports, and 4 each of `quoteBackfillService`/`priceCache` internals.
   - fix: apply the `__`-prefix convention to the unmarked test-only exports (or move the assertions onto the public surface where one exists).
 
-- [ ] **utils/portfolioMath.js's shared-utils re-export block has no live backend importer** ⬇ 🔎 verified-present 2026-07-11
+- [x] **utils/portfolioMath.js's shared-utils re-export block has no live backend importer** ⬇ ✅ 2026-07-14 · 1f46727 (re-export block deleted; the only callers were 3 test files, now importing the cost-basis fns from @vision/shared-utils/portfolio directly)
   - ↪ _from: Code/architecture 2026-07-03 · Wave A2_
   - evidence: the `@vision/shared-utils/portfolio` re-export block (`utils/portfolioMath.js:16-23`) is unused in production — `portfolioSummaryService` imports `shared-utils` directly, FIFO/LIFO/ByMethod are only reached test-only via this path, and `daysBetweenYmd` is fully dead. Two import paths exist for the same functions; the live locals are `toYmd`/`sanitize*`/`calendarDaysBetween`/`computeMetrics`/`computeHeatmap`.
   - fix: delete the unused re-export block (or the dead `daysBetweenYmd`) once test-only callers are updated to import from `@vision/shared-utils` directly.
@@ -4154,14 +4154,14 @@ look-changing one.
   - Verification (2026-07-03, D4 residue): `FRED_API_KEY` gap reconfirmed and cross-checked against Electron's own `PROVIDER_KEY_VARS` (`main.js:424-427`), which wires it too.
   - Fix: add a commented `# FRED_API_KEY=` line with the free-tier note (root `.env.example`); add the two missing `VITE_*` lines to `apps/frontend/.env.local.example`.
 
-- [ ] **`SECRET_KEY` documented and seeded in CI but never read by any backend code** 🔽 🔎 verified-present 2026-07-11
+- [x] **`SECRET_KEY` documented and seeded in CI but never read by any backend code** 🔽 ✅ 2026-07-14 · 1f46727 (removed from deployment.md's env example/table/checklist — checklist now points at the real ADMIN_AUTH_TOKEN gate — and from the two ci.yml `.env` stubs)
   - ↪ _from: Codebase audit 2026-06-30 · DevOps/CI-CD/Packaging_
   - `docs/guides/deployment.md:55,434,447`, `.github/workflows/ci.yml:532,601` vs. zero references in `apps/node-backend/src`
   - Operators are told to "set a secure SECRET_KEY" for an auth system that doesn't exist (the real gate is `ADMIN_AUTH_TOKEN`, documented separately and correctly). False sense of configuration.
   - Fix: remove from the deployment checklist + CI stub, or mark explicitly reserved/unused.
   - Verification (2026-06-30): re-confirmed, and the "never read" claim holds repo-wide (grepped all `.js/.ts/.tsx/.py`, not just the backend), so the underlying claim is if anything stronger than stated.
 
-- [ ] **`gitleaks.toml` whole-file-allowlists `opencode.json`** ⬇ 🔎 verified-present 2026-07-11
+- [x] **`gitleaks.toml` whole-file-allowlists `opencode.json`** ⬇ ✅ 2026-07-14 · 1f46727 (removed the `^opencode\.json$` path allowlist — the file doesn't exist in the repo, so the allowlist was dead weight that would have masked a real secret there; the `.obsidian/` allowlist and match-scoped placeholder regexes are kept)
   - ↪ _from: DevOps research 2026-07-03 · Wave D1 (residue, closed 2026-07-03)_
   - `config/gitleaks.toml:12-14` — a real secret ever committed to that specific file would be permanently masked from all future scans. Rest of the config is sane (`useDefault = true`, `.obsidian/` path allowlist, match-scoped placeholder regexes).
   - Fix: scope the allowlist to specific known placeholder patterns in that file instead of the whole path, or remove the allowlist and fix any current false positives directly.
@@ -4255,7 +4255,7 @@ look-changing one.
   - The app `Dockerfile` and devcontainer `Dockerfile` are both digest-pinned; Postgres (holding all user financial data) isn't.
   - Fix: pin to a digest; Dependabot's `docker` ecosystem entry already exists to manage bumps.
 
-- [ ] **`.dockerignore` omits the plain `.env` file** ⬇ 🔎 verified-present 2026-07-11
+- [x] **`.dockerignore` omits the plain `.env` file** ⬇ ✅ 2026-07-14 (re-verified stale finding: `.dockerignore` already excludes `.env` and `.env.*` with `!.env.example` allowlisted; no change needed)
   - ↪ _from: Codebase audit 2026-06-30 · DevOps/CI-CD/Packaging_
   - `.dockerignore:16-17` — only `.env.local`/`.env.*.local` excluded. Currently harmless (`Dockerfile` uses explicit `COPY <path>`, not `COPY . .`), but no defense-in-depth if that ever changes.
   - Fix: add `.env`/`.env.*` to `.dockerignore`.
