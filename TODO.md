@@ -3295,7 +3295,7 @@ look-changing one.
   - evidence: (1) `utils/currency.ts:127` `formatCurrency` reads process-wide mutable defaults set by `configureCurrencyFormatDefaults` from an `App.tsx:120-126` effect (hidden temporal coupling — wrong output before settings hydrate); (2) `hooks/useCurrencyFormatter.ts:20` re-derives locale/currency from settings with its own Intl cache; (3) `hooks/useChartCurrencyFormatter.ts:19` wraps the same again for charts. Date: `components/shared/dateUtils.ts:5` `formatDate` is a pure util misfiled under components/, and `pages/ImportReviewPage.tsx:81` defines a private `formatDate` besides it.
   - fix: make `useCurrencyFormatter` the single settings-aware entry (chart variant composes it), keep `utils/currency` pure-args-only, move dateUtils into utils/ and delete the page-local copy.
 
-- [ ] **Seven shadcn ui primitives are dead (zero importers)** 🔽 🔎 verified-present 2026-07-11
+- [x] **Seven shadcn ui primitives are dead (zero importers)** 🔽 ✅ 2026-07-14 (re-verified stale finding: all seven — aspect-ratio, input-otp, hover-card, navigation-menu, breadcrumb, avatar, menubar — are already absent from components/ui/ and have zero importers; nothing left to delete)
   - ↪ _from: Code/architecture 2026-07-03 · Wave A4_
   - evidence: grep sweep over all src imports found no consumers for components/ui/{aspect-ratio,input-otp,hover-card,navigation-menu,breadcrumb,avatar,menubar}.tsx.
   - fix: delete them; they can be re-scaffolded from shadcn if ever needed.
