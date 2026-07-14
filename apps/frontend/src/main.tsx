@@ -14,10 +14,15 @@ import "@fontsource/inter/latin-500.css";
 import "@fontsource/inter/latin-600.css";
 // Apply the visual skin (skin-v2) class before first paint to avoid a flash.
 import { applySkinV2Class } from "./lib/skin";
+import { startSettingsPreload } from "./lib/settingsPreload";
 import App from "./App";
 import "./index.css";
 
 applySkinV2Class();
+// Kick off the settings fetch before React mounts so the round trip overlaps
+// the remaining JS execution + mount instead of waiting behind them; the
+// SettingsPreloadProvider awaits this same shared promise.
+startSettingsPreload();
 
 createRoot(document.getElementById("root")!).render(
   <StrictMode>

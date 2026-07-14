@@ -13,6 +13,7 @@
 
 import { createContext, useContext, useEffect, useMemo, useState, type ReactNode } from 'react';
 import { apiClient } from '@/lib/api';
+import { getStartedSettingsPreload } from '@/lib/settingsPreload';
 import logger from '@/lib/logger';
 
 interface SettingsPreload {
@@ -33,7 +34,11 @@ export function SettingsPreloadProvider({ children }: { children: ReactNode }) {
 
     useEffect(() => {
         let cancelled = false;
-        apiClient.getSettings()
+        // Prefer the promise started at boot (main.tsx) so the fetch overlaps JS
+        // execution + mount and isn't duplicated. When nothing kicked it off
+        // (e.g. a unit test rendering this provider directly), fetch here — same
+        // behaviour as before.
+        (getStartedSettingsPreload() ?? apiClient.getSettings())
             .then((all) => {
                 if (!cancelled) {
                     // Backend returns an array of { key, value } rows — convert to map

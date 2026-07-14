@@ -20,9 +20,9 @@ export function buildQuery(params?: QueryParams): string {
     return queryParams.toString();
 }
 
-export function requestWithQuery<T>(endpoint: string, params?: QueryParams): Promise<T> {
+export function requestWithQuery<T>(endpoint: string, params?: QueryParams, signal?: AbortSignal): Promise<T> {
     const query = buildQuery(params);
-    return apiRequest<T>(`${endpoint}${query ? `?${query}` : ''}`);
+    return apiRequest<T>(`${endpoint}${query ? `?${query}` : ''}`, signal ? { signal } : {});
 }
 
 export function buildExclusionQuery(params?: {

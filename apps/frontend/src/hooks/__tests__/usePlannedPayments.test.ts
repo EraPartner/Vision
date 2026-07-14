@@ -1,9 +1,16 @@
 // @vitest-environment jsdom
 import { describe, it, expect, vi, afterEach } from "vitest";
+import { createElement, type ReactNode } from "react";
 import { renderHook, act, waitFor } from "@testing-library/react";
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { apiClient } from "@/lib/api";
 import { usePlannedPayments } from "@/hooks/usePlannedPayments";
 import type { PlannedTransaction } from "@/types/api";
+
+// The hook busts the ['upcomingPlannedPayments'] React Query cache on mutations,
+// so it must render inside a QueryClientProvider.
+const wrapper = ({ children }: { children: ReactNode }) =>
+    createElement(QueryClientProvider, { client: new QueryClient() }, children);
 
 const STUB: PlannedTransaction = {
     id: 1,
@@ -49,13 +56,13 @@ afterEach(() => vi.restoreAllMocks());
 describe("usePlannedPayments", () => {
     it("starts in loading state", () => {
         vi.spyOn(apiClient, "getPlannedTransactions").mockResolvedValue(emptyList);
-        const { result } = renderHook(() => usePlannedPayments());
+        const { result } = renderHook(() => usePlannedPayments(), { wrapper });
         expect(result.current.loading).toBe(true);
     });
 
     it("resolves with empty payments list", async () => {
         vi.spyOn(apiClient, "getPlannedTransactions").mockResolvedValue(emptyList);
-        const { result } = renderHook(() => usePlannedPayments());
+        const { result } = renderHook(() => usePlannedPayments(), { wrapper });
         await waitFor(() => expect(result.current.loading).toBe(false));
         expect(result.current.payments).toEqual([]);
         expect(result.current.error).toBeNull();
@@ -63,7 +70,7 @@ describe("usePlannedPayments", () => {
 
     it("maps API response to PlannedPayment shape", async () => {
         vi.spyOn(apiClient, "getPlannedTransactions").mockResolvedValue(oneItem);
-        const { result } = renderHook(() => usePlannedPayments());
+        const { result } = renderHook(() => usePlannedPayments(), { wrapper });
         await waitFor(() => expect(result.current.loading).toBe(false));
         expect(result.current.payments).toHaveLength(1);
         const p = result.current.payments[0];
@@ -76,7 +83,7 @@ describe("usePlannedPayments", () => {
 
     it("sets error when fetch fails", async () => {
         vi.spyOn(apiClient, "getPlannedTransactions").mockRejectedValue(new Error("Network error"));
-        const { result } = renderHook(() => usePlannedPayments());
+        const { result } = renderHook(() => usePlannedPayments(), { wrapper });
         await waitFor(() => expect(result.current.loading).toBe(false));
         expect(result.current.error).toBe("Network error");
     });
@@ -84,7 +91,7 @@ describe("usePlannedPayments", () => {
     it("addPayment appends to the list", async () => {
         vi.spyOn(apiClient, "getPlannedTransactions").mockResolvedValue(emptyList);
         vi.spyOn(apiClient, "createPlannedTransaction").mockResolvedValue(STUB);
-        const { result } = renderHook(() => usePlannedPayments());
+        const { result } = renderHook(() => usePlannedPayments(), { wrapper });
         await waitFor(() => expect(result.current.loading).toBe(false));
         await act(async () => {
             await result.current.addPayment({
@@ -102,7 +109,7 @@ describe("usePlannedPayments", () => {
     it("deletePayment removes the payment from the list", async () => {
         vi.spyOn(apiClient, "getPlannedTransactions").mockResolvedValue(oneItem);
         vi.spyOn(apiClient, "deletePlannedTransaction").mockResolvedValue(undefined);
-        const { result } = renderHook(() => usePlannedPayments());
+        const { result } = renderHook(() => usePlannedPayments(), { wrapper });
         await waitFor(() => expect(result.current.loading).toBe(false));
         expect(result.current.payments).toHaveLength(1);
         await act(async () => {
@@ -115,7 +122,7 @@ describe("usePlannedPayments", () => {
         vi.spyOn(apiClient, "getPlannedTransactions").mockResolvedValue(oneItem);
         const updated = { ...STUB, amount: 1500, memo: "Updated rent" };
         vi.spyOn(apiClient, "updatePlannedTransaction").mockResolvedValue(updated);
-        const { result } = renderHook(() => usePlannedPayments());
+        const { result } = renderHook(() => usePlannedPayments(), { wrapper });
         await waitFor(() => expect(result.current.loading).toBe(false));
         await act(async () => {
             await result.current.updatePayment(1, { amount: 1500 });
@@ -127,7 +134,7 @@ describe("usePlannedPayments", () => {
     it("updatePayment forwards cleared recurrence bounds as explicit null", async () => {
         vi.spyOn(apiClient, "getPlannedTransactions").mockResolvedValue(oneItem);
         const spy = vi.spyOn(apiClient, "updatePlannedTransaction").mockResolvedValue(STUB);
-        const { result } = renderHook(() => usePlannedPayments());
+        const { result } = renderHook(() => usePlannedPayments(), { wrapper });
         await waitFor(() => expect(result.current.loading).toBe(false));
         await act(async () => {
             await result.current.updatePayment(1, { end_date: null, max_occurrences: null });
@@ -140,7 +147,7 @@ describe("usePlannedPayments", () => {
 
     it("refetch re-calls the API", async () => {
         const spy = vi.spyOn(apiClient, "getPlannedTransactions").mockResolvedValue(emptyList);
-        const { result } = renderHook(() => usePlannedPayments());
+        const { result } = renderHook(() => usePlannedPayments(), { wrapper });
         await waitFor(() => expect(result.current.loading).toBe(false));
         await act(async () => { await result.current.refetch(); });
         expect(spy).toHaveBeenCalledTimes(2);

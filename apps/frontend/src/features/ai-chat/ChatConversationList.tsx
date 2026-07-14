@@ -99,7 +99,7 @@ export function ChatConversationList({ selectedId, onSelect }: ChatConversationL
                             const active = conv.id === selectedId;
                             const streaming = streamingSet.has(conv.id);
                             return (
-                                <li key={conv.id}>
+                                <li key={conv.id} className="cv-auto-row">
                                     <div
                                         className={cn(
                                             'group flex items-center gap-2 rounded-lg px-2 py-2 transition-colors',

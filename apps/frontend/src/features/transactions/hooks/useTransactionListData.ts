@@ -103,7 +103,10 @@ export function useTransactionListData({
                 pageSize,
             },
         ],
-        queryFn: () => apiClient.getTransactions({
+        // Forward React Query's abort `signal` so a superseded keystroke's
+        // request is actually aborted client-side (React Query drops the stale
+        // query, but without this the expensive backend search kept running).
+        queryFn: ({ signal }) => apiClient.getTransactions({
             limit: pageSize,
             offset: 0,
             active: !showAll,
@@ -123,7 +126,7 @@ export function useTransactionListData({
             bank_account: bankAccountFilter,
             sort_by: sortKey || undefined,
             sort_dir: sortDir || undefined,
-        }),
+        }, signal),
         placeholderData: (prev) => prev, // keep previous page while a new filter/search/sort round-trips
         staleTime: 30_000,
     });

@@ -11,11 +11,19 @@
 const LOG_LEVELS = { debug: 0, info: 1, warn: 2, error: 3, silent: 4 } as const;
 type LogLevel = keyof typeof LOG_LEVELS;
 
-function getLogLevel(): number {
+function resolveLogLevel(): number {
     if (import.meta.env.VITE_ENABLE_LOGGING?.toLowerCase() === 'false') return LOG_LEVELS.silent;
     const level = (import.meta.env.VITE_LOG_LEVEL || '').toLowerCase() as LogLevel;
     if (level in LOG_LEVELS) return LOG_LEVELS[level];
     return import.meta.env.DEV ? LOG_LEVELS.debug : LOG_LEVELS.warn;
+}
+
+// Resolve once at module load. `import.meta.env` is statically inlined by Vite
+// and never changes at runtime, so re-reading it on every log call (including
+// suppressed debug calls on hot paths) was pure waste.
+const LOG_LEVEL = resolveLogLevel();
+function getLogLevel(): number {
+    return LOG_LEVEL;
 }
 
 function formatMessage(level: string, message: string): string {

@@ -19,7 +19,6 @@ import { CloseAccountDialog } from "@/features/accounts/CloseAccountDialog";
 import { OpeningBalanceDialog } from "@/features/accounts/OpeningBalanceDialog";
 import { ReconcileDialog } from "@/features/accounts/ReconcileDialog";
 import { AccountDetailSheet } from "@/features/accounts/AccountDetailSheet";
-import { usePortfolio } from "@/hooks/usePortfolio";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { useConfirmDialog } from "@/hooks/useConfirmDialog";
 import { toast } from "sonner";
@@ -62,7 +61,6 @@ export default function AccountsPage() {
     const [anchoring, setAnchoring] = useState<Account | undefined>(undefined);
     const [reconciling, setReconciling] = useState<Account | undefined>(undefined);
     const [detailing, setDetailing] = useState<Account | undefined>(undefined);
-    const { summaries } = usePortfolio();
 
     const accounts = useMemo(() => data?.items ?? [], [data]);
 
@@ -331,7 +329,6 @@ export default function AccountsPage() {
                 <CloseAccountDialog
                     account={closing}
                     accounts={accounts}
-                    summaries={summaries}
                     open={!!closing}
                     onOpenChange={(o) => { if (!o) setClosing(undefined); }}
                 />

@@ -42,6 +42,36 @@ interface Props {
   onEditTransaction?: (txn: TxnRow, investment: InvestmentSummary) => void;
 }
 
+// Module-level formatter caches. The transactions tab calls fmt/fmtNum several
+// times per row and re-renders the whole (unbounded) list on any dialog-level
+// state change, so constructing a fresh Intl.NumberFormat per call (~50-200µs
+// each) was pure waste. Cached by locale+currency+decimals — identical output.
+const currencyFmtCache = new Map<string, Intl.NumberFormat>();
+function getCurrencyFmt(locale: string, currency: string, decimals: number): Intl.NumberFormat {
+  const key = `${locale}:${currency}:${decimals}`;
+  let f = currencyFmtCache.get(key);
+  if (!f) {
+    f = new Intl.NumberFormat(locale, {
+      style: 'currency', currency,
+      minimumFractionDigits: decimals, maximumFractionDigits: decimals,
+    });
+    currencyFmtCache.set(key, f);
+  }
+  return f;
+}
+const numberFmtCache = new Map<string, Intl.NumberFormat>();
+function getNumberFmt(locale: string, decimals: number): Intl.NumberFormat {
+  const key = `${locale}:${decimals}`;
+  let f = numberFmtCache.get(key);
+  if (!f) {
+    f = new Intl.NumberFormat(locale, {
+      minimumFractionDigits: decimals, maximumFractionDigits: decimals,
+    });
+    numberFmtCache.set(key, f);
+  }
+  return f;
+}
+
 const TXN_TYPE_COLORS: Record<PortfolioTxnType, string> = {
   buy: 'bg-accent/10 text-accent border-accent/20',
   sell: 'bg-destructive/10 text-destructive border-destructive/20',
@@ -72,19 +102,11 @@ export function InvestmentDetailDialog({
     currency = appSettings.defaultCurrency || 'EUR',
     decimals = appSettings.showDecimalPlaces
   ) {
-    return new Intl.NumberFormat(locale, {
-      style: 'currency',
-      currency,
-      minimumFractionDigits: decimals,
-      maximumFractionDigits: decimals,
-    }).format(val);
+    return getCurrencyFmt(locale, currency, decimals).format(val);
   }
 
   function fmtNum(val: number, decimals = 2) {
-    return new Intl.NumberFormat(locale, {
-      minimumFractionDigits: decimals,
-      maximumFractionDigits: decimals,
-    }).format(val);
+    return getNumberFmt(locale, decimals).format(val);
   }
 
   const unitBased = isUnitBased(investment.assetClass);
@@ -525,7 +547,7 @@ export function InvestmentDetailDialog({
                   {investment.transactions.map((txn) => (
                     <div
                       key={txn.id}
-                      className="flex items-center gap-3 p-3 rounded-lg border border-border hover:bg-muted/30 transition-colors"
+                      className="cv-auto-row flex items-center gap-3 p-3 rounded-lg border border-border hover:bg-muted/30 transition-colors"
                     >
                       <div className="flex-1 min-w-0">
                         <div className="flex items-center gap-2">

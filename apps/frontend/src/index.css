@@ -146,6 +146,14 @@
         contain-intrinsic-size: auto 320px;
     }
 
+    /* Row-scale variant for long unvirtualized lists inside their own scroll
+     * container (e.g. dialog transaction lists). Same visually-free skip, sized
+     * for a single list row rather than a page section. */
+    .cv-auto-row {
+        content-visibility: auto;
+        contain-intrinsic-size: auto 72px;
+    }
+
     /* ------------------------------------------------------------------
      * Apple-style liquid glass hierarchy
      *
