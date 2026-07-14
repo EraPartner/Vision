@@ -80,7 +80,18 @@ export const statisticsRepository = {
     return result.rows.map(r => r.bank_account);
   },
 
-  async getTransactionCount() {
+  async getTransactionCount({ accountId } = {}) {
+    // Optional exact-FK account filter (ADR-088). Absent → unchanged unconditional
+    // count (reuses the cached prepared statement); present → a parameterized,
+    // separately-cached prepared statement so the two query shapes don't collide.
+    if (accountId != null) {
+      const result = await queryPrepared(
+        'info_tx_count_by_account',
+        'SELECT count(*) FROM transactions WHERE is_active = true AND account_id = $1',
+        [accountId],
+      );
+      return parseInt(result.rows[0].count, 10);
+    }
     const result = await queryPrepared('info_tx_count', 'SELECT count(*) FROM transactions WHERE is_active = true', []);
     return parseInt(result.rows[0].count, 10);
   },

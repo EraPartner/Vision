@@ -20,9 +20,12 @@ normalizes identity everywhere:
   edge). Rows that never had a bank_account (e.g. ADR-090 trade cash legs) are
   untouched: the branch only fires when the string itself changed.
 
-Pre-flight: accounts already differing only by case/whitespace must be merged
-first — the migration fails loudly with the offending names rather than letting
-CREATE UNIQUE INDEX throw an opaque duplicate-key error.
+Pre-flight: accounts already differing only by case/whitespace are auto-merged
+in-migration (deterministically: lowest-id row is canonical, all FKs referencing
+accounts(id) are repointed via the catalog, the twins are deleted) so the unique
+index can be created without a running app. Previously this RAISEd with a "merge
+on the Accounts page" hint — but that UI can't load when the backend crash-loops
+on the failed migration, so boot must not depend on it.
 
 Blast radius: one index swap + one trigger function replace; no row rewrite.
 Downgrade restores the 0062 function verbatim, drops the expression index and
@@ -45,25 +48,67 @@ depends_on: Union[str, Sequence[str], None] = None
 
 
 def upgrade() -> None:
-    # 1. One-time duplicate check: normalized-identity twins must be merged
-    #    (Accounts page → ⋮ → Merge) before the unique index can exist.
+    # 1. One-time deterministic auto-merge of normalized-identity twins so the
+    #    unique index below can be created without a running app. The old
+    #    pre-flight RAISEd with a "merge on the Accounts page" hint — but that UI
+    #    can't load, because runMigrations() throws on boot and the backend
+    #    crash-loops. Instead we merge here: per normalized key (lower(btrim(name)))
+    #    the lowest-id row is canonical, every FK that references accounts(id) is
+    #    repointed off the colliding rows via the catalog (covers account_id,
+    #    funding_account_id, import-batch account_id, and any future FK), then the
+    #    now-orphaned twins are deleted. ON DELETE RESTRICT children are safe
+    #    because they are repointed before the delete. The stored name keeps the
+    #    canonical row's casing (the index normalizes for comparison only). The
+    #    still-installed 0062 trigger does not clobber the repoint: on UPDATE with
+    #    bank_account unchanged and account_id non-null it takes no branch.
     op.execute(
         """
         DO $$
-        DECLARE dup text;
+        DECLARE
+            fk record;
+            merged bigint;
         BEGIN
-            SELECT string_agg(names, ' | ') INTO dup FROM (
-                SELECT string_agg(name, ' / ' ORDER BY name) AS names
+            CREATE TEMP TABLE _acct_merge_map ON COMMIT DROP AS
+            SELECT a.id AS old_id, c.canonical_id AS new_id
+            FROM accounts a
+            JOIN (
+                SELECT lower(btrim(name)) AS norm, min(id) AS canonical_id
                 FROM accounts
                 GROUP BY lower(btrim(name))
                 HAVING count(*) > 1
-            ) d;
-            IF dup IS NOT NULL THEN
-                RAISE EXCEPTION
-                    'accounts differing only by case/whitespace exist and must be merged before normalized identity (ADR-088 addendum) can be enforced: %',
-                    dup
-                    USING HINT = 'Merge each pair on the Accounts page (card menu -> Merge), then re-run migrations.';
+            ) c ON lower(btrim(a.name)) = c.norm
+            WHERE a.id <> c.canonical_id;
+
+            SELECT count(*) INTO merged FROM _acct_merge_map;
+            IF merged = 0 THEN
+                RETURN;
             END IF;
+
+            -- Repoint every single-column FK that references accounts(id).
+            FOR fk IN
+                SELECT con.conrelid::regclass AS child_table,
+                       att.attname          AS child_col
+                FROM pg_constraint con
+                JOIN pg_attribute att
+                  ON att.attrelid = con.conrelid
+                 AND att.attnum   = con.conkey[1]
+                WHERE con.contype = 'f'
+                  AND con.confrelid = 'accounts'::regclass
+                  AND array_length(con.conkey, 1) = 1
+            LOOP
+                EXECUTE format(
+                    'UPDATE %s c SET %I = m.new_id '
+                    'FROM _acct_merge_map m WHERE c.%I = m.old_id',
+                    fk.child_table, fk.child_col, fk.child_col
+                );
+            END LOOP;
+
+            DELETE FROM accounts a
+             USING _acct_merge_map m WHERE a.id = m.old_id;
+
+            RAISE NOTICE
+                'normalized_account_identity: auto-merged % case/whitespace-duplicate account row(s) into their canonical (lowest-id) twin (ADR-088 addendum)',
+                merged;
         END $$;
         """
     )

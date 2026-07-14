@@ -5,8 +5,10 @@
  * Safety model (see docs/adr for rationale):
  *   - Table/column identifiers are validated against pg_stat_user_tables /
  *     information_schema and double-quoted — never interpolated raw.
- *   - Reads run inside a READ ONLY transaction with a short statement_timeout,
- *     so the raw WHERE escape hatch cannot mutate or hang the DB.
+ *   - Reads accept only structured, parameterized filters[] (the raw WHERE
+ *     escape hatch was removed, ADR-101 2026-07-10 — any `where` param now 400s)
+ *     and run inside a READ ONLY transaction with a short statement_timeout, so a
+ *     browse can neither mutate nor hang the DB.
  *   - Writes run in one transaction. Each edited row is locked (FOR UPDATE) and
  *     its version (the `xmin` system column) is compared against the token the
  *     client loaded — a mismatch is a 409 conflict, never a silent overwrite.

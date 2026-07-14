@@ -28,10 +28,12 @@ services:
       timeout: 3s
       retries: 10
       start_period: 5s
-      # During start_period Docker probes at start_interval (default 5s!), not
-      # `interval` — without this the first probe fires at +5s while postgres is
-      # ready ~100ms in, idling any service_healthy consumer for the full 5s.
-      start_interval: 250ms
+      # NOTE: `start_interval` (faster first-probe cadence during start_period)
+      # was removed — it requires Compose >= 2.20.2 / Engine >= 25, and older
+      # binaries reject the unknown property during schema validation, breaking
+      # `docker compose up` on installs that previously worked. It was only an
+      # optimization for the very first health probes; the healthcheck is fully
+      # functional without it.
 
   app:
     build: .

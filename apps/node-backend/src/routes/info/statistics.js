@@ -15,6 +15,7 @@ import { detectRecurringPatterns } from '../../services/recurringDetectionServic
 import { listAdapters } from '../../services/importPipeline/adapters/index.js';
 import { logger } from '../../config/logger.js';
 import { getTargetCurrency } from './_queryParams.js';
+import { assertOptionalId } from '../../middleware/validation.js';
 
 const router = Router();
 
@@ -37,7 +38,8 @@ router.get('/supported-adapters', async (req, res) => {
 });
 
 router.get('/transaction-count', async (req, res) => {
-  const count = await infoRepository.getTransactionCount();
+  const accountId = assertOptionalId(req.query.account_id, 'account_id');
+  const count = await infoRepository.getTransactionCount({ accountId });
   res.ok({ total_transactions: count });
 });
 
