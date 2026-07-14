@@ -240,9 +240,18 @@ function Inner<Datum>({
     const { syncedX, publishHover } = useChartSync(syncId);
     const scrub = useChartScrub();
 
+    // Cache the overlay rect for the duration of a hover session instead of
+    // calling getBoundingClientRect on every pointermove (forced layout per
+    // frame). Cleared on pointerleave so the next hover re-measures.
+    const overlayRectRef = useRef<DOMRect | null>(null);
+
     const indexAtClientX = useCallback(
         (event: React.PointerEvent<SVGRectElement>) => {
-            const rect = event.currentTarget.getBoundingClientRect();
+            let rect = overlayRectRef.current;
+            if (!rect) {
+                rect = event.currentTarget.getBoundingClientRect();
+                overlayRectRef.current = rect;
+            }
             const x = event.clientX - rect.left;
             const x0 = xScale.invert(x);
             const idx = bisect(data, x0 as never);
@@ -263,6 +272,7 @@ function Inner<Datum>({
     );
 
     const handleLeave = useCallback(() => {
+        overlayRectRef.current = null;
         setHoverIdx(null);
         publishHover(null);
         scrub.end();

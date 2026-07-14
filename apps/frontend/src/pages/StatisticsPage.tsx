@@ -179,14 +179,19 @@ export default function StatisticsPage() {
               </ChartCard>
             )}
             {isVisible("netTrend") && (
-              <ChartCard
-                title={t("statsPage.chart.netTitle")}
-                description={t("statsPage.chart.netDesc")}
-                graphKey="netTrend"
-                {...chartCardProps}
-              >
-                {(d) => <NetTrendChart data={d} />}
-              </ChartCard>
+              // Stacked below the monthly chart, so start off-screen on typical
+              // viewports — let the browser skip its layout+paint until scrolled
+              // near (visually free once on screen).
+              <div className="cv-auto">
+                <ChartCard
+                  title={t("statsPage.chart.netTitle")}
+                  description={t("statsPage.chart.netDesc")}
+                  graphKey="netTrend"
+                  {...chartCardProps}
+                >
+                  {(d) => <NetTrendChart data={d} />}
+                </ChartCard>
+              </div>
             )}
           </Suspense>
         </TabsContent>
@@ -216,13 +221,18 @@ export default function StatisticsPage() {
               )}
             </div>
             {isVisible("pivotTable") && (
-              <CategoryPivotTable
-                data={getGraphData("pivotTable") || data}
-                graphKey="pivotTable"
-                isFiltered={graphExclusions["pivotTable"] ?? true}
-                onToggle={toggleGraphExclusion}
-                exclusionsApply={exclusionsApply}
-              />
+              // Below the chart grid; the pivot's own sticky column lives inside
+              // its internal scroll container, so skipping the whole table's
+              // layout until scrolled near is safe (visually free).
+              <div className="cv-auto">
+                <CategoryPivotTable
+                  data={getGraphData("pivotTable") || data}
+                  graphKey="pivotTable"
+                  isFiltered={graphExclusions["pivotTable"] ?? true}
+                  onToggle={toggleGraphExclusion}
+                  exclusionsApply={exclusionsApply}
+                />
+              </div>
             )}
           </Suspense>
         </TabsContent>

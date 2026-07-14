@@ -131,6 +131,22 @@
 
 @layer utilities {
     /* ------------------------------------------------------------------
+     * Off-screen render skipping (visually free)
+     *
+     * `content-visibility: auto` lets the browser skip layout + paint for a
+     * subtree until it is scrolled near the viewport, then renders it exactly
+     * as it would have. `contain-intrinsic-size` reserves a placeholder box so
+     * the scrollbar and scroll offset stay stable before the subtree renders.
+     * Apply only to below-the-fold section wrappers that own their own scroll
+     * context (no `position: sticky` descendants that must stay pinned to the
+     * page). Appearance is unchanged once on screen.
+     * ------------------------------------------------------------------ */
+    .cv-auto {
+        content-visibility: auto;
+        contain-intrinsic-size: auto 320px;
+    }
+
+    /* ------------------------------------------------------------------
      * Apple-style liquid glass hierarchy
      *
      * thin     — navigation, top chrome

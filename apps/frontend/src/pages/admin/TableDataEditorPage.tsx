@@ -165,6 +165,7 @@ export default function TableDataEditorPage() {
             dir: sort?.dir,
             filters: appliedFilters,
         }),
+        placeholderData: (prev) => prev, // keep previous page while paging/sorting/filtering round-trips
     });
 
     const data = query.data;

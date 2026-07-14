@@ -48,8 +48,14 @@ export function ChatComposer({
     useEffect(() => {
         const el = textareaRef.current;
         if (!el) return;
-        el.style.height = 'auto';
-        el.style.height = `${Math.min(el.scrollHeight, 200)}px`;
+        // Defer the auto-size write-read-write into a rAF so the forced reflow
+        // (height='auto' → read scrollHeight → set height) happens off the
+        // keystroke's critical path instead of synchronously per character.
+        const raf = requestAnimationFrame(() => {
+            el.style.height = 'auto';
+            el.style.height = `${Math.min(el.scrollHeight, 200)}px`;
+        });
+        return () => cancelAnimationFrame(raf);
     }, [value]);
 
     const canSend = !disabled && !isStreaming && value.trim().length > 0;

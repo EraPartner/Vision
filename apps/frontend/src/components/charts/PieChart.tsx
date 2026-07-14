@@ -99,10 +99,7 @@ function Inner({
                                                 ease: easings.outExpo,
                                                 delay: i * 0.04,
                                             }}
-                                            onPointerEnter={(e) => {
-                                                const rect =
-                                                    e.currentTarget.ownerSVGElement?.getBoundingClientRect();
-                                                if (!rect) return;
+                                            onPointerEnter={() => {
                                                 setHover({
                                                     datum: arc.data,
                                                     x: centerX + cx,

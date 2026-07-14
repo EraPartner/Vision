@@ -49,7 +49,10 @@ export function RecipientInsightsTab({ statisticsTopRecipientsChart }: Recipient
     [formatCurrencyBase],
   );
   const { data, isLoading, isError } = useQuery({
-    queryKey: ["recipient-insights", targetCurrency, effectiveExcludedCatIds, effectiveExcludedRecIds],
+    // Keyed under the ['aggregations', …] prefix so useTransactions.invalidateAll
+    // (which invalidates the whole aggregations family) reaches this copy too —
+    // otherwise it stayed stale until staleTime expiry after a mutation.
+    queryKey: ["aggregations", "recipient-insights", targetCurrency, effectiveExcludedCatIds, effectiveExcludedRecIds],
     queryFn: () => apiClient.getRecipientInsights({
       currency: targetCurrency,
       excluded_category_ids: effectiveExcludedCatIds,

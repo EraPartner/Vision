@@ -1,3 +1,4 @@
+import { useMemo } from "react";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { CardSheen } from "@/components/shared/CardSheen";
 import { useNavigate } from "react-router-dom";
@@ -63,6 +64,63 @@ export function BankBalancesWidget() {
     // net-position total (both now read that shared source server-side).
     const { data: accountsData, isLoading: accountsLoading } = useAccounts({ active: "true" });
 
+    // The ~365-point × N-accounts chart dataset (and its derived series/legend)
+    // is expensive to build and produced a fresh `data`/`series` identity on
+    // every dashboard re-render, defeating chart-level memoization. Memoize it
+    // on the source payload so it only rebuilds when the balances change.
+    const chartBundle = useMemo(() => {
+        if (!data) return null;
+        const { accounts, history, total_history } = data;
+
+        // CHART: include any account with a non-zero balance anywhere in history,
+        // not just a non-zero current balance — an account closed last month
+        // (current 0, large past balances) must still appear in the 12-month chart.
+        const chartAccounts = accounts.filter((acct) => {
+            if (Math.abs(acct.balance) > 0.000001) return true;
+            return (history[acct.bank_account] || []).some((h) => Math.abs(h.balance) > 0.000001);
+        });
+
+        // Index each account's history by date first — a per-entry .find() would
+        // be O(days²) at ~365 points.
+        const balancesByAccount = new Map<string, Map<string, number>>(
+            chartAccounts.map((acct) => [
+                acct.bank_account,
+                new Map((history[acct.bank_account] || []).map((h) => [h.date, h.balance])),
+            ]),
+        );
+        const chartData: BankChartDatum[] = total_history.map((entry) => {
+            const values: Record<string, number> = {};
+            for (const acct of chartAccounts) {
+                values[acct.bank_account] = balancesByAccount.get(acct.bank_account)?.get(entry.date) ?? 0;
+            }
+            return {
+                date: parseISO(entry.date),
+                values,
+                total: entry.balance,
+            };
+        });
+
+        // visx AreaStack cumulates band edges, which is meaningless/overlapping
+        // once a series goes negative (overdraft/credit line). Stack only when
+        // every value is ≥ 0; otherwise render truthful unstacked multi-lines.
+        const hasNegativeBalances = chartData.some((d) => Object.values(d.values).some((v) => v < 0));
+
+        const accountSeries: AreaSeries<BankChartDatum>[] = chartAccounts.map((acct, idx) => ({
+            key: acct.bank_account,
+            label: shortAccountName(acct.bank_account),
+            accessor: (d) => d.values[acct.bank_account] ?? 0,
+            color: ACCOUNT_COLORS[idx % ACCOUNT_COLORS.length],
+            strokeWidth: 2,
+        }));
+
+        const legendItems: ChartLegendItem[] = accountSeries.map((s) => ({
+            label: s.label ?? s.key,
+            color: s.color ?? "hsl(var(--chart-1))",
+        }));
+
+        return { chartAccounts, chartData, hasNegativeBalances, accountSeries, legendItems };
+    }, [data]);
+
     if (isLoading || accountsLoading) {
         return (
             <Card className="glass-regular">
@@ -99,7 +157,7 @@ export function BankBalancesWidget() {
         );
     }
 
-    const { accounts, total_net_position, history, total_history } = data;
+    const { accounts, total_net_position } = data;
 
     // Transaction counts still come from the balances aggregation, keyed by the
     // account name (== transactions.bank_account via the dual-write trigger).
@@ -113,51 +171,9 @@ export function BankBalancesWidget() {
         (a) => a.computed_balance != null && Math.abs(a.computed_balance) > 0.000001,
     );
 
-    // CHART: include any account with a non-zero balance anywhere in history, not
-    // just a non-zero current balance — an account closed last month (current 0,
-    // large past balances) must still appear in the 12-month chart.
-    const chartAccounts = accounts.filter((acct) => {
-        if (Math.abs(acct.balance) > 0.000001) return true;
-        return (history[acct.bank_account] || []).some((h) => Math.abs(h.balance) > 0.000001);
-    });
-
-    // Build chart data from total_history (daily points). Index each account's
-    // history by date first — a per-entry .find() would be O(days²) at ~365 points.
-    const balancesByAccount = new Map<string, Map<string, number>>(
-        chartAccounts.map((acct) => [
-            acct.bank_account,
-            new Map((history[acct.bank_account] || []).map((h) => [h.date, h.balance])),
-        ]),
-    );
-    const chartData: BankChartDatum[] = total_history.map((entry) => {
-        const values: Record<string, number> = {};
-        for (const acct of chartAccounts) {
-            values[acct.bank_account] = balancesByAccount.get(acct.bank_account)?.get(entry.date) ?? 0;
-        }
-        return {
-            date: parseISO(entry.date),
-            values,
-            total: entry.balance,
-        };
-    });
-
-    // visx AreaStack cumulates band edges, which is meaningless/overlapping once a
-    // series goes negative (overdraft/credit line). Stack only when every value is
-    // ≥ 0; otherwise render truthful unstacked multi-lines.
-    const hasNegativeBalances = chartData.some((d) => Object.values(d.values).some((v) => v < 0));
-
-    const accountSeries: AreaSeries<BankChartDatum>[] = chartAccounts.map((acct, idx) => ({
-        key: acct.bank_account,
-        label: shortAccountName(acct.bank_account),
-        accessor: (d) => d.values[acct.bank_account] ?? 0,
-        color: ACCOUNT_COLORS[idx % ACCOUNT_COLORS.length],
-        strokeWidth: 2,
-    }));
-
-    const legendItems: ChartLegendItem[] = accountSeries.map((s) => ({
-        label: s.label ?? s.key,
-        color: s.color ?? "hsl(var(--chart-1))",
-    }));
+    // Memoized above (rebuilds only when `data` changes); non-null once past the
+    // loading/error guards.
+    const { chartAccounts, chartData, hasNegativeBalances, accountSeries, legendItems } = chartBundle!;
 
     const isPositive = total_net_position >= 0;
 

@@ -124,6 +124,7 @@ export function useTransactionListData({
             sort_by: sortKey || undefined,
             sort_dir: sortDir || undefined,
         }),
+        placeholderData: (prev) => prev, // keep previous page while a new filter/search/sort round-trips
         staleTime: 30_000,
     });
 

@@ -11,7 +11,7 @@ import { ThemeProvider } from "@/contexts/ThemeContext";
 import { LanguageProvider, type Language } from "@/contexts/LanguageContext";
 import { configureCurrencyFormatDefaults, numberFormatToLocale } from "@/utils/currency";
 
-import { lazy, Suspense, useEffect, type ReactNode } from "react";
+import { lazy, Suspense, useCallback, useEffect, type ReactNode } from "react";
 import { ErrorBoundary } from "@/components/shared/ErrorBoundary";
 import { ScrollToTop } from "@/components/shared/ScrollToTop";
 import { StartupRedirect } from "@/components/shared/StartupRedirect";
@@ -115,7 +115,14 @@ function PageLoader() {
 function LanguageBridge({ children }: { children: React.ReactNode }) {
     const { appSettings, updateAppSettings } = useAppSettings();
     const language: Language = (appSettings.language as Language) ?? 'en';
-    const setLanguage = (lang: Language) => updateAppSettings({ language: lang });
+    // `updateAppSettings` (zustand action) is referentially stable, so this
+    // callback identity stays stable across settings changes — otherwise every
+    // unrelated settings toggle would re-publish the LanguageContext value and
+    // re-render every `useLanguage` consumer app-wide.
+    const setLanguage = useCallback(
+        (lang: Language) => updateAppSettings({ language: lang }),
+        [updateAppSettings],
+    );
 
     useEffect(() => {
         configureCurrencyFormatDefaults({

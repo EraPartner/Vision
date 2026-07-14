@@ -11,7 +11,7 @@
  * Now there is exactly 1 round-trip at mount time.
  */
 
-import { createContext, useContext, useEffect, useState, type ReactNode } from 'react';
+import { createContext, useContext, useEffect, useMemo, useState, type ReactNode } from 'react';
 import { apiClient } from '@/lib/api';
 import logger from '@/lib/logger';
 
@@ -66,8 +66,10 @@ export function SettingsPreloadProvider({ children }: { children: ReactNode }) {
         return () => { cancelled = true; };
     }, []);
 
+    const value = useMemo(() => ({ rawSettings, isLoading }), [rawSettings, isLoading]);
+
     return (
-        <SettingsPreloadContext.Provider value={{ rawSettings, isLoading }}>
+        <SettingsPreloadContext.Provider value={value}>
             {children}
         </SettingsPreloadContext.Provider>
     );
