@@ -27,7 +27,7 @@
  */
 
 import plannedTransactionRepository from '../../../repositories/plannedTransactionRepository.js';
-import { calculateNextDate } from '../recurrence.js';
+import { expandOccurrences as expandRecurrence } from '../recurrence.js';
 import { buildEnvelope } from './_envelope.js';
 import { toAppTz, appDateStringToUtc, toAppDateString } from '../../../lib/timezone.js';
 import { toDecimal, roundMoney } from '../../../lib/money.js';
@@ -42,25 +42,6 @@ const MAX_OCCURRENCES_PER_ITEM = 500; // guard against infinite-loop on tiny int
 function toMonthKey(d) {
   const { year, month } = toAppTz(d);
   return `${year}-${String(month).padStart(2, '0')}`;
-}
-
-/**
- * @param {string|Date} value  e.g. '2026-05-15', or a pg-returned DATE column
- * @returns {Date} UTC Date for start-of-day in APP_TIMEZONE
- */
-function parseDate(value) {
-  // node-postgres parses DATE columns into a JS Date at server-local midnight
-  // (no custom type parser is registered). `String(date)` then yields e.g.
-  // 'Mon Jun 08 ...', which appDateStringToUtc rejects — crashing the forecast
-  // whenever a planned transaction exists. Recover the stored calendar day with
-  // local getters before re-parsing in APP_TIMEZONE.
-  if (value instanceof Date) {
-    const y = value.getFullYear();
-    const m = String(value.getMonth() + 1).padStart(2, '0');
-    const d = String(value.getDate()).padStart(2, '0');
-    return appDateStringToUtc(`${y}-${m}-${d}`);
-  }
-  return appDateStringToUtc(String(value).slice(0, 10));
 }
 
 /**
@@ -103,35 +84,18 @@ function expandOccurrences(row, start, end) {
     recurrence_pattern: row.recurrence_pattern ?? null,
   };
 
+  // Shared app-tz-correct horizon expansion yields occurrence day-strings up to
+  // and including the window end; apply this window's lower bound here (the
+  // helper only takes an upper horizon). Day-granular string compare matches the
+  // former Date compare since both are start-of-day in APP_TIMEZONE.
+  const startYmd = toAppDateString(start);
+  const horizonYmd = toAppDateString(end);
+
   const occurrences = [];
-
-  if (!row.is_recurring || !row.recurrence_pattern) {
-    // One-shot: include only if within window
-    const d = parseDate(row.planned_date);
-    if (d >= start && d <= end) {
-      occurrences.push({ date: d, item: { ...base, planned_date: toAppDateString(d) } });
-    }
-    return occurrences;
+  for (const ymd of expandRecurrence(row, horizonYmd, { maxOccurrences: MAX_OCCURRENCES_PER_ITEM })) {
+    if (ymd < startYmd) continue;
+    occurrences.push({ date: appDateStringToUtc(ymd), item: { ...base, planned_date: ymd } });
   }
-
-  // Recurring: walk forward from the stored planned_date (first upcoming
-  // occurrence), generating dates until we exceed the forecast horizon.
-  let current = parseDate(row.planned_date);
-  let count = 0;
-
-  while (current <= end && count < MAX_OCCURRENCES_PER_ITEM) {
-    if (current >= start) {
-      occurrences.push({
-        date: current,
-        item: { ...base, planned_date: toAppDateString(current) },
-      });
-    }
-    const next = calculateNextDate(current, row.recurrence_pattern);
-    if (!next || next <= current) break; // safety: no forward progress
-    current = next;
-    count++;
-  }
-
   return occurrences;
 }
 
