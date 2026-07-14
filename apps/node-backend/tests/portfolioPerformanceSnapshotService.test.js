@@ -338,6 +338,30 @@ describe('portfolioPerformanceSnapshotService', () => {
     expect(snapshots[1].value).toBe(100); // units unchanged → value unchanged
   });
 
+  it('reduces non-unit (bond) invested and value on return_of_capital', async () => {
+    // Non-unit classes hold no units, so the heldUnits gate never fired and
+    // return_of_capital was ignored — invested/value overstated forever.
+    mockSnapshotQueries({
+      investments: [],
+      nonUnitInvestments: [
+        { id: 1, currency: 'EUR', current_price: 0, interest_rate: 0, asset_class: 'bond', active_from: '2026-01-01' },
+      ],
+      transactions: [
+        { investment_id: 1, day: '2026-01-01', type: 'buy', amount: 10000, units: 0, currency: 'EUR', fx_rate_to_eur: null },
+        { investment_id: 1, day: '2026-01-02', type: 'return_of_capital', amount: 2000, units: 0, currency: 'EUR', fx_rate_to_eur: null },
+      ],
+    });
+
+    const snapshots = await computeAndStoreSnapshots('EUR');
+
+    expect(snapshots[0].invested).toBeCloseTo(10000, 2);
+    expect(snapshots[0].value).toBeCloseTo(10000, 2);
+    // Day 2 onward: 2 000 of capital returned → both drop to 8 000.
+    expect(snapshots[1].invested).toBeCloseTo(8000, 2);
+    expect(snapshots[1].value).toBeCloseTo(8000, 2);
+    expect(snapshots[2].value).toBeCloseTo(8000, 2);
+  });
+
   it('converts a foreign-currency holding with no stored fx rate at each day\'s historical rate', async () => {
     // USD holding, no fx_rate_to_eur on the buy. USD/EUR moves 0.80 → 0.85 → 0.90
     // (latest). System time is 2026-01-03, so 01-03 is the latest day.

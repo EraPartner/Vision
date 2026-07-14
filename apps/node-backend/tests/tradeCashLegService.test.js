@@ -16,10 +16,11 @@ describe('computeTradeCashLegAmount (ADR-090)', () => {
     expect(computeTradeCashLegAmount({ type: 'sell', amount: 1000, fees: 5, taxes: 2 })).toBe(993);
   });
 
-  it('dividend / interest / rent_income credit the amount', () => {
+  it('dividend / interest / rent_income / return_of_capital credit the amount', () => {
     expect(computeTradeCashLegAmount({ type: 'dividend', amount: 50 })).toBe(50);
     expect(computeTradeCashLegAmount({ type: 'interest', amount: 12.5 })).toBe(12.5);
     expect(computeTradeCashLegAmount({ type: 'rent_income', amount: 800 })).toBe(800);
+    expect(computeTradeCashLegAmount({ type: 'return_of_capital', amount: 200 })).toBe(200);
   });
 
   it('fee / tax debit the amount', () => {

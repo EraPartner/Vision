@@ -19,7 +19,7 @@ import { toDecimal, toNumber } from '../../lib/money.js';
  *
  *   buy   → −(amount + fees + taxes)   (cash leaves the sleeve)
  *   sell  → +(amount − fees − taxes)   (net proceeds enter the sleeve)
- *   dividend / interest / rent_income → +amount   (income into the sleeve)
+ *   dividend / interest / rent_income / return_of_capital → +amount   (cash into the sleeve)
  *   fee / tax → −amount                (cash leaves the sleeve)
  *
  * @param {{type:string, amount?:number|string, fees?:number|string, taxes?:number|string}} txn
@@ -38,6 +38,7 @@ export function computeTradeCashLegAmount(txn) {
     case 'dividend':
     case 'interest':
     case 'rent_income':
+    case 'return_of_capital':
       return toNumber(amount);
     case 'fee':
     case 'tax':

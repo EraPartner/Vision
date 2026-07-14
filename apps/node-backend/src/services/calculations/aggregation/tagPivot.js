@@ -11,9 +11,9 @@ import { buildEnvelope } from './_envelope.js';
 export async function computeTagPivot({
   targetCurrency = 'EUR',
   bucket = 'monthly',
-  startDate = null,
-  endDate = null,
-  tagIds = null,
+  startDate = undefined,
+  endDate = undefined,
+  tagIds = undefined,
   allTags = false,
 } = {}) {
   const data = await tagInsightsRepository.getTagPivot(targetCurrency, {

@@ -406,6 +406,28 @@ describe('asset-class formula coverage', () => {
     expect(result.summaries[0].totalInvested).toBe(0);
   });
 
+  it('reduces non-unit invested and value on return_of_capital', async () => {
+    // Bond: buy €10 000, return €2 000 of capital. Invested and (no-interest)
+    // value must both drop to 8 000 — pre-fix return_of_capital was ignored for
+    // non-unit classes so both stayed at 10 000 forever.
+    query
+      .mockResolvedValueOnce({
+        rows: [investmentRow({ asset_class: 'bond', interest_rate: 0, current_price: 0, currency: 'EUR' })],
+      })
+      .mockResolvedValueOnce({
+        rows: [
+          txnRow({ id: 1, type: 'buy', amount: 10000, units: 0, currency: 'EUR', date: '2025-01-01' }),
+          txnRow({ id: 2, type: 'return_of_capital', amount: 2000, units: 0, currency: 'EUR', date: '2026-01-01' }),
+        ],
+      });
+
+    const result = await getPortfolioSummary('EUR');
+    const s = result.summaries[0];
+
+    expect(s.totalInvested).toBe(8000);
+    expect(s.currentValue).toBeCloseTo(8000, 2);
+  });
+
   it('real estate adds appreciation to current value', async () => {
     query
       .mockResolvedValueOnce({

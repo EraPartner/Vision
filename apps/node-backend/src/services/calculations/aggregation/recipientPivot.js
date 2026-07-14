@@ -13,9 +13,9 @@ export async function computeRecipientPivot({
   targetCurrency = 'EUR',
   excludedRecipientIds = [],
   bucket = 'monthly',
-  startDate = null,
-  endDate = null,
-  recipientIds = null,
+  startDate = undefined,
+  endDate = undefined,
+  recipientIds = undefined,
 } = {}) {
   const data = await recipientInsightsRepository.getRecipientPivot(
     excludedRecipientIds,

@@ -418,6 +418,7 @@ export function buildInvestmentSummaryCore(inv, txns, { costBasisMethod = 'weigh
   let totalBuyAmount = ZERO;
   let totalBuyOrGiftAmount = ZERO;
   let totalSellAmount = ZERO;
+  let totalReturnOfCapital = ZERO;
   let feeTxnAmount = ZERO;
   let taxTxnAmount = ZERO;
   let feesFieldAmount = ZERO;
@@ -430,6 +431,7 @@ export function buildInvestmentSummaryCore(inv, txns, { costBasisMethod = 'weigh
   let totalBuyAmountC = ZERO;
   let totalBuyOrGiftAmountC = ZERO;
   let totalSellAmountC = ZERO;
+  let totalReturnOfCapitalC = ZERO;
   let feeTxnAmountC = ZERO;
   let taxTxnAmountC = ZERO;
   let feesFieldAmountC = ZERO;
@@ -453,6 +455,10 @@ export function buildInvestmentSummaryCore(inv, txns, { costBasisMethod = 'weigh
       case 'interest':     totalInterestPaid = totalInterestPaid.plus(amount); totalInterestPaidC = totalInterestPaidC.plus(amount.times(fx)); break;
       case 'rent_income':  totalRent = totalRent.plus(amount); totalRentC = totalRentC.plus(amount.times(fx)); break;
       case 'appreciation': totalAppreciation = totalAppreciation.plus(amount); break;
+      // Unit-based classes fold return_of_capital into cost basis via the
+      // cost-basis calculator; non-unit classes (savings/bond/real_estate) have
+      // no lot machinery, so accumulate it here and subtract from invested below.
+      case 'return_of_capital': totalReturnOfCapital = totalReturnOfCapital.plus(amount); totalReturnOfCapitalC = totalReturnOfCapitalC.plus(amount.times(fx)); break;
     }
   }
 
@@ -500,10 +506,10 @@ export function buildInvestmentSummaryCore(inv, txns, { costBasisMethod = 'weigh
       ? currentPrice.minus(avgCostBasis).times(totalUnits)
       : ZERO;
   } else if (isFixedIncome) {
-    totalInvested = totalBuyOrGiftAmount.minus(totalSellAmount);
+    totalInvested = totalBuyOrGiftAmount.minus(totalSellAmount).minus(totalReturnOfCapital);
     totalBuyCost = totalBuyOrGiftAmount;
     totalSellProceeds = totalSellAmount;
-    totalInvestedC = totalBuyOrGiftAmountC.minus(totalSellAmountC);
+    totalInvestedC = totalBuyOrGiftAmountC.minus(totalSellAmountC).minus(totalReturnOfCapitalC);
     totalBuyCostC = totalBuyOrGiftAmountC;
     totalSellProceedsC = totalSellAmountC;
 
@@ -517,10 +523,10 @@ export function buildInvestmentSummaryCore(inv, txns, { costBasisMethod = 'weigh
     realizedGain = ZERO;
     unrealizedGain = accruedInterest;
   } else if (isRealEstate) {
-    totalInvested = totalBuyAmount.minus(totalSellAmount);
+    totalInvested = totalBuyAmount.minus(totalSellAmount).minus(totalReturnOfCapital);
     totalBuyCost = totalBuyAmount;
     totalSellProceeds = totalSellAmount;
-    totalInvestedC = totalBuyAmountC.minus(totalSellAmountC);
+    totalInvestedC = totalBuyAmountC.minus(totalSellAmountC).minus(totalReturnOfCapitalC);
     totalBuyCostC = totalBuyAmountC;
     totalSellProceedsC = totalSellAmountC;
     currentValue = totalInvested.plus(totalAppreciation);
@@ -530,10 +536,10 @@ export function buildInvestmentSummaryCore(inv, txns, { costBasisMethod = 'weigh
     // rent−fees−taxes into realizedGain here double-counted all three.
     realizedGain = ZERO;
   } else {
-    totalInvested = totalBuyAmount.minus(totalSellAmount);
+    totalInvested = totalBuyAmount.minus(totalSellAmount).minus(totalReturnOfCapital);
     totalBuyCost = totalBuyAmount;
     totalSellProceeds = totalSellAmount;
-    totalInvestedC = totalBuyAmountC.minus(totalSellAmountC);
+    totalInvestedC = totalBuyAmountC.minus(totalSellAmountC).minus(totalReturnOfCapitalC);
     totalBuyCostC = totalBuyAmountC;
     totalSellProceedsC = totalSellAmountC;
     currentValue = totalInvested;
