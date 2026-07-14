@@ -95,3 +95,40 @@ describe('export date serialization', () => {
     expect(parsed.date).toBe('2026-07-01');
   });
 });
+
+describe('export tag aggregation', () => {
+  it('CSV joins a multi-tag transaction on the slug-ordered array', async () => {
+    primeQueries([exportRow({ tags: ['alpha', 'beta', 'gamma'] })]);
+    const res = mockRes();
+
+    await streamCsvExport(res, { whereSql: '1=1', params: [], nextParamIdx: 1 });
+
+    // Tags column (10th) preserves order and joins with ';'.
+    expect(res.chunks[1]).toContain('alpha;beta;gamma');
+  });
+
+  it('NDJSON emits the multi-tag array unchanged', async () => {
+    primeQueries([exportRow({ tags: ['alpha', 'beta', 'gamma'] })]);
+    const res = mockRes();
+
+    await streamNdjsonExport(res, { whereSql: '1=1', params: [], nextParamIdx: 1 });
+
+    expect(JSON.parse(res.chunks[0]).tags).toEqual(['alpha', 'beta', 'gamma']);
+  });
+
+  it('fetches tags via a single pre-aggregated LEFT JOIN, not a per-row correlated subquery', async () => {
+    primeQueries([exportRow()]);
+    const res = mockRes();
+
+    await streamNdjsonExport(res, { whereSql: '1=1', params: [], nextParamIdx: 1 });
+
+    // dbQuery calls: [0] probe, [1] first chunk.
+    const chunkSql = dbQuery.mock.calls[1][0];
+    // Slug ordering + active-only filter preserved …
+    expect(chunkSql).toContain('array_agg(tg.slug ORDER BY tg.slug)');
+    expect(chunkSql).toContain('WHERE tg.is_active = true');
+    // … as a grouped LEFT JOIN, not a t.id-correlated subquery.
+    expect(chunkSql).toContain('GROUP BY tt.transaction_id');
+    expect(chunkSql).not.toContain('WHERE tt.transaction_id = t.id');
+  });
+});

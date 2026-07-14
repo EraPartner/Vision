@@ -221,9 +221,9 @@ export const splitRepository = {
       JOIN transactions t ON ts.transaction_id = t.id
       LEFT JOIN recipients r ON t.recipient_id = r.id
       LEFT JOIN recipients pr ON r.primary_recipient_id = pr.id
-      LEFT JOIN (
-        SELECT split_id, SUM(amount) AS paid FROM split_payments GROUP BY split_id
-      ) sp_agg ON sp_agg.split_id = ts.id
+      LEFT JOIN LATERAL (
+        SELECT SUM(amount) AS paid FROM split_payments WHERE split_id = ts.id
+      ) sp_agg ON true
       WHERE ts.recipient_id IN (SELECT id FROM recipient_group) AND ts.is_settled = false
       ORDER BY t.date DESC
     `;
@@ -270,11 +270,11 @@ export const splitRepository = {
       LEFT JOIN categories c ON t.category_id = c.id
       LEFT JOIN categories rc ON tr.default_category_id = rc.id
       LEFT JOIN categories pc ON pr.default_category_id = pc.id
-      LEFT JOIN (
-        SELECT split_id, SUM(amount) AS paid
+      LEFT JOIN LATERAL (
+        SELECT SUM(amount) AS paid
         FROM split_payments
-        GROUP BY split_id
-      ) sp_agg ON sp_agg.split_id = ts.id
+        WHERE split_id = ts.id
+      ) sp_agg ON true
       WHERE ts.recipient_id IN (SELECT id FROM recipient_group)
         AND ts.is_settled = false
         AND (ts.amount - COALESCE(sp_agg.paid, 0)) > 0

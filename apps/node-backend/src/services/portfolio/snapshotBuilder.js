@@ -82,7 +82,7 @@ export async function computeDailySnapshots(targetCurrency = 'EUR') {
       FROM portfolio_transactions pt
       JOIN investments i ON i.id = pt.investment_id
       WHERE pt.date >= $1::date AND pt.date <= $2::date
-      ORDER BY pt.date::date, pt.id
+      ORDER BY pt.date::date, CASE WHEN pt.type = 'sell' THEN 1 ELSE 0 END, pt.id
     `, [firstDateYmd, todayYmd]),
     query(`
       SELECT id, COALESCE(currency, 'EUR') AS currency,
@@ -192,6 +192,12 @@ export async function computeDailySnapshots(targetCurrency = 'EUR') {
   }
 
   // { day: tx[] }
+  // Within a day, replay buys/gifts/splits before sells so a sell can never be
+  // applied against units its own-day buy hasn't established yet (which would
+  // clamp the buy away and mint phantom units — e.g. after an earlier buy was
+  // deleted). Mirrors the query's ORDER BY sell-last key; kept defensively in JS
+  // (per the same pattern as the price-history sort) so the day-walk stays
+  // correct regardless of raw row order.
   const txByDay = {};
   for (const row of allTxResult.rows) {
     if (!txByDay[row.day]) txByDay[row.day] = [];
@@ -206,6 +212,10 @@ export async function computeDailySnapshots(targetCurrency = 'EUR') {
       // for legacy NULLs). Used to split each day's value Σ accounts (ADR-100).
       accountKey: row.account_id == null ? 'unassigned' : String(Number(row.account_id)),
     });
+  }
+  // Stable sort each day: non-sells (buy/gift/split/…) first, sells last.
+  for (const dayTxs of Object.values(txByDay)) {
+    dayTxs.sort((a, b) => (a.type === 'sell' ? 1 : 0) - (b.type === 'sell' ? 1 : 0));
   }
 
   // --- Day walk helpers ---
@@ -438,7 +448,19 @@ export async function computeDailySnapshots(targetCurrency = 'EUR') {
         // units = new total post-split; invested/cost basis is unchanged
         // (mirrors calculateCostBasis). Only applies once units are held.
         const heldUnits = unitsByInvestment[tx.investmentId] || 0;
-        if (heldUnits > 0 && tx.units > 0) unitsByInvestment[tx.investmentId] = tx.units;
+        if (heldUnits > 0 && tx.units > 0) {
+          unitsByInvestment[tx.investmentId] = tx.units;
+          // Rescale every account's weight by the same newTotal/oldTotal factor
+          // so per-account weights stay expressed in post-split units (parity
+          // guarantee, ADR-100). Without this, a later per-account buy/sell —
+          // which carries post-split units — mixes unit scales and skews the
+          // value_by_account proportions.
+          const m = weightByAcctInv.get(tx.investmentId);
+          if (m) {
+            const factor = tx.units / heldUnits;
+            for (const [acctKey, w] of m) m.set(acctKey, w * factor);
+          }
+        }
       } else if (tx.type === 'return_of_capital') {
         // Returns capital, reducing net invested (mirrors calculateCostBasis
         // reducing cost basis). Units are unchanged. Only while units are held.

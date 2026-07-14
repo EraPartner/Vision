@@ -484,7 +484,7 @@ const DEFAULT_TAX_SECTIONS = [
  *   sections: string[];
  *   renderers: Record<string, (data: any, ctx: { currency: string; period: Period }) => string>;
  *   defaultSections: string[];
- *   fetchData: () => Promise<any>;
+ *   fetchData: (sections: string[]) => Promise<any>;
  *   separator?: string;
  * }} opts
  * @returns {Promise<string>}
@@ -501,7 +501,7 @@ async function buildBody({ currency, period, sections, renderers, defaultSection
       </div>`;
   }
 
-  const data = await fetchData();
+  const data = await fetchData(valid);
 
   return valid
     .map(id => renderers[id](data, { currency, period }))
@@ -519,7 +519,7 @@ function buildFinancialBody({ currency, period, sections, excludedCategoryIds = 
     sections,
     renderers: FINANCIAL_SECTION_RENDERERS,
     defaultSections: DEFAULT_FINANCIAL_SECTIONS,
-    fetchData: () => fetchFinancialData(currency, { excludedCategoryIds, excludedRecipientIds }),
+    fetchData: (validSections) => fetchFinancialData(currency, { excludedCategoryIds, excludedRecipientIds, sections: validSections }),
   });
 }
 

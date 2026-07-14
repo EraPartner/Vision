@@ -37,10 +37,29 @@ function unwrap(result, label) {
 }
 
 /**
+ * Maps each financial report section to the data source(s) it renders from.
+ * Used to skip fetching sources whose sections were not requested, instead of
+ * always aggregating all seven. Keep in sync with the section renderers'
+ * `data.<source>` reads.
+ */
+const FINANCIAL_SECTION_SOURCES = {
+  executiveSummary: ['monthly', 'filteredMonthly'],
+  cashflowTrend: ['monthly'],
+  categoryBreakdown: ['categories'],
+  topRecipients: ['recipients'],
+  bankBalances: ['banks'],
+  rollingAverages: ['averages'],
+  plannedOutlook: ['planned'],
+};
+
+/**
  * Fetch all data required for a financial PDF report in parallel.
  *
  * @param {string} currency  Target currency (e.g. "EUR")
- * @param {{ excludedCategoryIds?: number[]; excludedRecipientIds?: number[] }} [exclusions]
+ * @param {{ excludedCategoryIds?: number[]; excludedRecipientIds?: number[]; sections?: string[] | null }} [exclusions]
+ *   `sections`, when provided, limits fetching to the sources those sections
+ *   render from; unrequested sources resolve to null (renderers handle null).
+ *   Omit / pass null to fetch every source (default behaviour).
  * @returns {Promise<{
  *   monthly: { months: object[]; summary: object } | null;
  *   filteredMonthly: { months: object[]; summary: object } | null;
@@ -52,19 +71,28 @@ function unwrap(result, label) {
  *   exclusions: { categoryIds: number[]; recipientIds: number[] };
  * }>}
  */
-export async function fetchFinancialData(currency, { excludedCategoryIds = [], excludedRecipientIds = [] } = {}) {
+export async function fetchFinancialData(currency, { excludedCategoryIds = [], excludedRecipientIds = [], sections = null } = {}) {
   const hasExclusions = excludedCategoryIds.length > 0 || excludedRecipientIds.length > 0;
 
+  // Null sections → fetch everything (unchanged default). Otherwise only fetch
+  // the sources the requested sections actually render from.
+  const neededSources = sections
+    ? new Set(sections.flatMap((id) => FINANCIAL_SECTION_SOURCES[id] ?? []))
+    : null;
+  const want = (source) => !neededSources || neededSources.has(source);
+
   const [monthly, filteredMonthly, categories, recipients, banks, averages, planned] = await Promise.allSettled([
-    computeMonthlySummary({ targetCurrency: currency, allTime: true }),
-    hasExclusions
+    want('monthly')
+      ? computeMonthlySummary({ targetCurrency: currency, allTime: true })
+      : Promise.resolve(null),
+    hasExclusions && want('filteredMonthly')
       ? computeMonthlySummary({ targetCurrency: currency, allTime: true, excludedCategoryIds, excludedRecipientIds })
       : Promise.resolve(null),
-    computeCategoryBreakdown({ targetCurrency: currency }),
-    computeRecipientInsights({ targetCurrency: currency }),
-    computeBankBalances({ targetCurrency: currency }),
-    computeAverageVsCurrent({ targetCurrency: currency }),
-    infoRepository.getPlannedExpensesNextMonth(currency),
+    want('categories') ? computeCategoryBreakdown({ targetCurrency: currency }) : Promise.resolve(null),
+    want('recipients') ? computeRecipientInsights({ targetCurrency: currency }) : Promise.resolve(null),
+    want('banks') ? computeBankBalances({ targetCurrency: currency }) : Promise.resolve(null),
+    want('averages') ? computeAverageVsCurrent({ targetCurrency: currency }) : Promise.resolve(null),
+    want('planned') ? infoRepository.getPlannedExpensesNextMonth(currency) : Promise.resolve(null),
   ]);
 
   return {

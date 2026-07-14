@@ -74,6 +74,36 @@ describe('Settings Routes', () => {
       expect(res.json).toHaveBeenCalledWith({ ok: true, data: { key: 'onboarding_complete', value: false } });
     });
 
+    it('app_settings default mirrors the frontend store (no default-copy drift)', async () => {
+      settingsRepository.get.mockResolvedValue(null);
+
+      const req = { params: { key: 'app_settings' } };
+      const res = mockResponse();
+      await routeHandlers['get:/:key'](req, res);
+
+      const { value } = res.json.mock.calls[0][0].data;
+      // Keys that had drifted from DEFAULT_APP_SETTINGS.
+      expect(value).toMatchObject({
+        costBasisMethod: 'weighted_avg',
+        adminMode: false,
+        visualEffects: 'standard',
+        autoAdaptDisplay: true,
+        startupSection: 'budgeting',
+        colorblindGainLoss: false,
+      });
+    });
+
+    it('dashboard_settings default includes exclusionScope', async () => {
+      settingsRepository.get.mockResolvedValue(null);
+
+      const req = { params: { key: 'dashboard_settings' } };
+      const res = mockResponse();
+      await routeHandlers['get:/:key'](req, res);
+
+      const { value } = res.json.mock.calls[0][0].data;
+      expect(value.exclusionScope).toBe('everywhere');
+    });
+
     it('returns false default for includeTransfers when unset', async () => {
       // Missing from SETTING_DEFAULTS this GET 404'd until the first toggle.
       settingsRepository.get.mockResolvedValue(null);

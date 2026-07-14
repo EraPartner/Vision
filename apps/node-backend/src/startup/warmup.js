@@ -12,6 +12,7 @@
  */
 
 import { logger } from '../config/logger.js';
+import { query } from '../database/connection.js';
 import { refreshMaterializedViews } from '../services/materializedViewService.js';
 import {
   warmCache as warmExchangeRateCache,
@@ -43,6 +44,36 @@ import investmentRepository from '../repositories/investmentRepository.js';
 const TWELVE_HOURS_MS = 12 * 60 * 60 * 1000;
 const ONE_HOUR_MS = 60 * 60 * 1000;
 const ONE_DAY_MS = 24 * 60 * 60 * 1000;
+
+// Terminal import-batch states safe to prune (no in-flight staging work).
+const IMPORT_RETENTION_DAYS = 30;
+
+/**
+ * Best-effort retention sweep: drop finished import batches (and their staging
+ * rows) older than IMPORT_RETENTION_DAYS so raw CSV staging data isn't retained
+ * forever. Staging rows are removed automatically — both *_staging_rows tables
+ * FK the batch with ON DELETE CASCADE. Age is measured from started_at (always
+ * NOT NULL; completed_at can be null for aborted/failed batches). Failures are
+ * logged and swallowed so warmup is never blocked.
+ */
+async function pruneOldImportBatches() {
+  const tables = ['import_batches', 'portfolio_import_batches'];
+  for (const table of tables) {
+    try {
+      const result = await query(
+        `DELETE FROM ${table}
+          WHERE status IN ('complete', 'failed', 'aborted')
+            AND started_at < now() - ($1 || ' days')::interval`,
+        [String(IMPORT_RETENTION_DAYS)],
+      );
+      if (result.rowCount > 0) {
+        logger.info(`Pruned ${result.rowCount} old ${table} row(s) (> ${IMPORT_RETENTION_DAYS}d, staging rows cascade)`);
+      }
+    } catch (err) {
+      logger.error(`Failed to prune old ${table} on startup`, { error: err.message });
+    }
+  }
+}
 
 /**
  * Wrap a scheduled async task so a slow run can't overlap the next interval
@@ -205,6 +236,9 @@ export async function runWarmupTasks({ warmupStatus }) {
       warmupStatus.materializedViews = 'failed';
       logger.error('Failed to refresh materialized views on startup', { error: err.message });
     });
+
+  // Best-effort retention sweep for finished import batches (self-catching).
+  pruneOldImportBatches();
 
   const online = await isInternetReachable();
   if (!online) {

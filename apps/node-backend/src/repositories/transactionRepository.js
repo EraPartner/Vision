@@ -193,15 +193,19 @@ export const transactionRepository = {
    * Get uncategorised transactions (recipient has no default category and transaction has no category).
    */
   async getUncategorised({ limit = 50, offset = 0, startDate = null, endDate = null, accountId = null, bankAccount = null, recipientId = null, recipientName = null } = {}) {
+    // "Uncategorised" means the full 3-level effective category is NULL — own
+    // category, the recipient default, AND the primary-recipient default. Joining
+    // pr (and using EFFECTIVE_CATEGORY_ID_SQL) stops alias-recipient rows whose
+    // primary carries a category from wrongly appearing in the queue.
     let sql = `
       SELECT t.*,
              r.name AS recipient_name,
              NULL AS category_name
       FROM transactions t
       LEFT JOIN recipients r ON t.recipient_id = r.id
+      LEFT JOIN recipients pr ON r.primary_recipient_id = pr.id
       WHERE t.is_active = true
-        AND t.category_id IS NULL
-        AND (r.default_category_id IS NULL)
+        AND ${EFFECTIVE_CATEGORY_ID_SQL} IS NULL
     `;
     const params = [];
     let paramIdx = 1;
@@ -262,10 +266,11 @@ export const transactionRepository = {
     const params = [...totalParams];
     let paramIdx = totalNextParam;
 
+    // Full 3-level effective-category IS NULL (see getUncategorised) — requires
+    // the pr join added to the uncategorised_rows CTE below.
     let uncategorisedWhere = `
       t.is_active = true
-      AND t.category_id IS NULL
-      AND (r.default_category_id IS NULL)
+      AND ${EFFECTIVE_CATEGORY_ID_SQL} IS NULL
     `;
 
     if (startDate) {
@@ -310,6 +315,7 @@ export const transactionRepository = {
                NULL AS category_name
         FROM transactions t
         LEFT JOIN recipients r ON t.recipient_id = r.id
+        LEFT JOIN recipients pr ON r.primary_recipient_id = pr.id
         WHERE ${uncategorisedWhere}
         ORDER BY t.date DESC, t.id DESC
         LIMIT $${limitParam} OFFSET $${offsetParam}

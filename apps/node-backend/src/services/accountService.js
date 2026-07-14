@@ -114,6 +114,26 @@ function assertStatementBalanceHasDate(balance, date) {
   }
 }
 
+/**
+ * A funding account must exist and cannot be the account itself (a self-funding
+ * cycle). `sanitize` only checks the value is a positive integer; this verifies
+ * the reference. The DB FK (fk_accounts_funding_account) backstops races, but a
+ * nonexistent id would otherwise surface as a raw 23503 → 500; we 400 here.
+ *
+ * @param {number|null|undefined} fundingAccountId
+ * @param {number|null} selfId  the account being updated (null on create)
+ */
+async function assertFundingAccountValid(fundingAccountId, selfId) {
+  if (fundingAccountId == null) return;
+  if (selfId != null && fundingAccountId === Number(selfId)) {
+    throw new ValidationError('funding_account_id cannot reference the account itself');
+  }
+  const funding = await accountRepository.getById(fundingAccountId);
+  if (!funding) {
+    throw new ValidationError(`funding_account_id ${fundingAccountId} does not reference an existing account`);
+  }
+}
+
 export const accountService = {
   /** List accounts (active=true|false|null for all). */
   async list({ active = null } = {}) {
@@ -129,16 +149,20 @@ export const accountService = {
   async create(body) {
     const fields = sanitize(body, { requireName: true });
     assertStatementBalanceHasDate(fields.statement_balance, fields.statement_balance_date);
+    await assertFundingAccountValid(fields.funding_account_id, null);
     try {
       return await accountRepository.create(fields);
     } catch (err) {
       if (err?.code === '23505') throw new ConflictError(`An account named "${fields.name}" already exists`);
+      // FK violation (e.g. funding_account_id lost a race with a delete) → 400.
+      if (err?.code === '23503') throw new ValidationError('funding_account_id does not reference an existing account');
       throw err;
     }
   },
 
   async update(id, body) {
     const fields = sanitize(body, { requireName: false });
+    await assertFundingAccountValid(fields.funding_account_id, id);
     const touchesStatement = 'statement_balance' in fields || 'statement_balance_date' in fields;
     let current;
     if (touchesStatement || 'is_active' in fields) {
@@ -166,6 +190,7 @@ export const accountService = {
       updated = await accountRepository.update(id, fields);
     } catch (err) {
       if (err?.code === '23505') throw new ConflictError(`An account named "${fields.name}" already exists`);
+      if (err?.code === '23503') throw new ValidationError('funding_account_id does not reference an existing account');
       throw err;
     }
     if (!updated) throw new NotFoundError(`Account ${id} not found`);

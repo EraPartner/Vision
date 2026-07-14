@@ -236,6 +236,8 @@ router.get('/', async (req, res) => {
 const SETTING_DEFAULTS = {
   onboarding_complete: false,
   dismissed_recurring_patterns: [],
+  // Mirror DEFAULT_APP_SETTINGS in apps/frontend/src/stores/settingsStore.ts so
+  // a fresh GET returns the same defaults the frontend store applies.
   app_settings: {
     defaultCurrency: 'EUR',
     dateFormat: 'DD/MM/YYYY',
@@ -245,11 +247,19 @@ const SETTING_DEFAULTS = {
     showDecimalPlaces: 2,
     language: 'en',
     autoClearPlannedOnMatch: true,
+    costBasisMethod: 'weighted_avg',
+    adminMode: false,
+    visualEffects: 'standard',
+    autoAdaptDisplay: true,
+    startupSection: 'budgeting',
+    colorblindGainLoss: false,
   },
+  // Mirror DEFAULT_DASHBOARD_SETTINGS in the same frontend store.
   dashboard_settings: {
     excludedCategoryIds: [],
     excludedRecipientIds: [],
     excludeHiddenCategories: true,
+    exclusionScope: 'everywhere',
   },
   theme_settings: {
     mode: 'system',

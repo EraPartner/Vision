@@ -70,7 +70,10 @@ describe('getUncategorised', () => {
       offset: 5,
     });
     const [sql, params] = query.mock.calls[0];
-    expect(sql).toContain('t.category_id IS NULL');
+    // Uncategorised = full 3-level effective category is NULL (own, recipient
+    // default, and primary-recipient default), so the primary is joined too.
+    expect(sql).toContain('LEFT JOIN recipients pr ON r.primary_recipient_id = pr.id');
+    expect(sql).toContain('COALESCE(t.category_id, r.default_category_id, pr.default_category_id) IS NULL');
     expect(sql).toContain('t.date >= $1');
     expect(sql).toContain('t.date <= $2');
     expect(sql).toContain('t.bank_account ILIKE $3');
@@ -78,9 +81,33 @@ describe('getUncategorised', () => {
     expect(sql).toContain('r.name ILIKE $5');
     expect(params).toEqual(['2024-01-01', '2024-12-31', '%kbc%', 5, '%aldi%', 25, 5]);
   });
+
+  it('treats an alias recipient whose primary has a category as categorised (excluded from the queue)', async () => {
+    // Regression: the old predicate (t.category_id IS NULL AND
+    // r.default_category_id IS NULL) missed the primary-recipient default, so
+    // alias-recipient rows with a categorised primary leaked into the queue.
+    query.mockResolvedValueOnce({ rows: [] });
+    await transactionRepository.getUncategorised({});
+    const [sql] = query.mock.calls[0];
+    // The effective-category predicate now spans all three levels, so a row
+    // whose primary carries a default category is NOT NULL → excluded.
+    expect(sql).toContain('COALESCE(t.category_id, r.default_category_id, pr.default_category_id) IS NULL');
+    expect(sql).toContain('LEFT JOIN recipients pr ON r.primary_recipient_id = pr.id');
+    // The old, alias-blind predicate must be gone.
+    expect(sql).not.toMatch(/t\.category_id IS NULL\s+AND\s+\(r\.default_category_id IS NULL\)/);
+  });
 });
 
 describe('getUncategorisedWithCount', () => {
+  it('joins the primary recipient and filters on the full effective category', async () => {
+    query.mockResolvedValueOnce({ rows: [{ id: null, total_count: '0' }] });
+    await transactionRepository.getUncategorisedWithCount({});
+    const [sql] = query.mock.calls[0];
+    // The uncategorised_rows CTE must join pr and use the 3-level predicate.
+    expect(sql).toContain('LEFT JOIN recipients pr ON r.primary_recipient_id = pr.id');
+    expect(sql).toContain('COALESCE(t.category_id, r.default_category_id, pr.default_category_id) IS NULL');
+  });
+
   it('returns total 0 and empty rows when CTE yields only the null-joined total row', async () => {
     query.mockResolvedValueOnce({ rows: [{ id: null, total_count: '0' }] });
     const res = await transactionRepository.getUncategorisedWithCount({});

@@ -79,14 +79,15 @@ function buildExportChunkSql(whereSql, limitParamIdx, cursorDateParamIdx, cursor
              ELSE ''
            END AS category_name,
            t.comment,
-           COALESCE(
-             (SELECT array_agg(tg.slug ORDER BY tg.slug)
-              FROM transaction_tags tt
-              JOIN tags tg ON tg.id = tt.tag_id
-              WHERE tt.transaction_id = t.id AND tg.is_active = true),
-             '{}'::text[]
-           ) AS tags
+           COALESCE(tag_agg.tags, '{}'::text[]) AS tags
     ${EXPORT_JOINS_SQL}
+    LEFT JOIN (
+      SELECT tt.transaction_id, array_agg(tg.slug ORDER BY tg.slug) AS tags
+      FROM transaction_tags tt
+      JOIN tags tg ON tg.id = tt.tag_id
+      WHERE tg.is_active = true
+      GROUP BY tt.transaction_id
+    ) tag_agg ON tag_agg.transaction_id = t.id
     WHERE ${whereSql}
       ${keyset}
     ORDER BY t.date ASC, t.id ASC
