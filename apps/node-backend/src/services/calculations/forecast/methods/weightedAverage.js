@@ -45,5 +45,3 @@ export function forecast({ history, forecastDates }) {
     return { date, value: v };
   });
 }
-
-export default { id, label, forecast };

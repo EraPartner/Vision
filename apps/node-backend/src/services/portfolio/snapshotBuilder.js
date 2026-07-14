@@ -463,13 +463,21 @@ export async function computeDailySnapshots(targetCurrency = 'EUR') {
         }
       } else if (tx.type === 'return_of_capital') {
         // Returns capital, reducing net invested (mirrors calculateCostBasis
-        // reducing cost basis). Units are unchanged. Only while units are held.
+        // reducing cost basis). Units are unchanged.
         const heldUnits = unitsByInvestment[tx.investmentId] || 0;
         if (heldUnits > 0) {
           cumulativeInvested = cumulativeInvested.minus(converted);
           if (inv?.assetClass === 'stock' || inv?.assetClass === 'etf') stocksEtfsInvested = stocksEtfsInvested.minus(converted);
           else if (inv?.assetClass === 'crypto') cryptoInvested = cryptoInvested.minus(converted);
           else if (inv?.assetClass === 'metals') metalsInvested = metalsInvested.minus(converted);
+        } else if (nonUnitS) {
+          // Non-unit classes (savings/bond/real_estate) hold no units, so the
+          // heldUnits gate never fires. Mirror the sell branch: reduce net
+          // invested and the returning account's weight, so invested/value
+          // stop being overstated forever after a return of capital.
+          cumulativeInvested = cumulativeInvested.minus(converted);
+          nonUnitS.runningInvested = nonUnitS.runningInvested.minus(converted);
+          bumpWeight(tx.investmentId, tx.accountKey, converted.negated().toNumber());
         }
       } else if (tx.type === 'interest' && nonUnitS) {
         // Resets the accrual clock to match calculateAccruedInterest.

@@ -121,15 +121,3 @@ export async function findBestRecipientMatches(names, { threshold = DEFAULT_MATC
   return out;
 }
 
-/**
- * Single-name convenience wrapper around {@link findBestRecipientMatches}.
- *
- * @param {string} name
- * @param {{ threshold?: number }} [opts]
- * @returns {Promise<{ recipientId: number, normalizedName: string, similarity: number, exact: boolean } | null>}
- */
-export async function findBestRecipientMatch(name, opts) {
-  if (name == null) return null;
-  const matches = await findBestRecipientMatches([name], opts);
-  return matches.get(name) || null;
-}

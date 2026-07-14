@@ -1,7 +1,6 @@
 /**
  * Planned Transaction routes.
  *
- * Mirrors: apps/backend/api/api_routes_planned_transactions.py
  */
 
 import { Router } from 'express';

@@ -1,7 +1,6 @@
 /**
  * Planned Transaction Repository - data access for planned_transactions table.
  *
- * Mirrors: apps/backend/repositories/planned_transaction_repository.py
  */
 
 import { query, withTransaction } from '../database/connection.js';

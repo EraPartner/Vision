@@ -1793,6 +1793,78 @@ paths:
           schema:
             type: string
           description: Comma-separated tag slugs — OR filter
+        - in: query
+          name: transaction_id
+          description: Fetch a single transaction by id (exact match)
+          schema:
+            type: integer
+        - in: query
+          name: category_ids
+          description: Comma-separated category ids — OR filter
+          schema:
+            type: string
+        - in: query
+          name: recipient_group_id
+          description: Filter by primary (grouped) recipient id
+          schema:
+            type: integer
+        - in: query
+          name: recipient_name
+          description: Filter by recipient display name (substring)
+          schema:
+            type: string
+        - in: query
+          name: active
+          description: Include only active (default true) or inactive rows
+          schema:
+            type: boolean
+            default: true
+        - in: query
+          name: include_balance
+          description: Include the running-balance column on each row
+          schema:
+            type: boolean
+        - in: query
+          name: transaction_type
+          description: Filter by kind (e.g. income/expense)
+          schema:
+            type: string
+        - in: query
+          name: amount_min
+          description: Minimum amount (see amount_signed for sign semantics)
+          schema:
+            type: number
+        - in: query
+          name: amount_max
+          description: Maximum amount (see amount_signed)
+          schema:
+            type: number
+        - in: query
+          name: amount_exact
+          description: Exact amount — shorthand for amount_min == amount_max
+          schema:
+            type: number
+        - in: query
+          name: amount_signed
+          description: When true, amount_* compare signed values; otherwise magnitude
+          schema:
+            type: boolean
+        - in: query
+          name: uncategorised
+          description: When true, return only uncategorised transactions
+          schema:
+            type: boolean
+        - in: query
+          name: normalize_to_eur
+          description: Convert amounts to EUR (or target_currency) at read time
+          schema:
+            type: boolean
+            default: false
+        - in: query
+          name: target_currency
+          description: Target currency for normalize_to_eur (defaults to EUR)
+          schema:
+            type: string
       responses:
         "200":
           description: Paginated transaction list
@@ -2538,12 +2610,8 @@ paths:
       operationId: deleteSavedChart
       tags: [Charts]
       responses:
-        "200":
-          description: Deleted
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/Envelope"
+        "204":
+          description: No Content
 
   # ─── Transactions extra ──────────────────────────────────────────────────────
   /api/transactions/bulk-delete:
@@ -4193,12 +4261,8 @@ paths:
       operationId: deletePortfolioTransaction
       tags: [Portfolio]
       responses:
-        "200":
-          description: Deleted
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/Envelope"
+        "204":
+          description: No Content
 
   /api/investments/{id}:
     parameters:
@@ -4244,6 +4308,8 @@ paths:
                   type: string
                 is_active:
                   type: boolean
+                show_in_ticker:
+                  type: boolean
       responses:
         "200":
           description: Updated investment
@@ -4261,12 +4327,8 @@ paths:
       operationId: deleteInvestment
       tags: [Portfolio]
       responses:
-        "200":
-          description: Deleted
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/Envelope"
+        "204":
+          description: No Content
 
   /api/investments/{id}/price-history:
     parameters:
@@ -4409,6 +4471,10 @@ paths:
                   type: number
                   nullable: true
                   description: Units to move; omit for the whole position
+                strategy:
+                  type: string
+                  enum: [fifo, proportional]
+                  description: Lot-selection strategy for a partial move; ignored for a whole move. Defaults to the service default when omitted.
       responses:
         "200":
           description: Move result (mode, movedUnits, lotsMoved, lotsSplit)
@@ -4472,19 +4538,22 @@ paths:
 
   /api/market/quote:
     get:
-      summary: Get real-time quote for symbol
+      summary: Get real-time quotes for one or more symbols
       operationId: marketQuote
       tags: [Market]
       parameters:
         - in: query
-          name: symbol
+          name: symbols
           required: true
+          description: Comma-separated list of symbols (e.g. `AAPL,MSFT`)
           schema:
             type: string
         - in: query
-          name: currency
+          name: detail
+          description: "`basic` returns price fields only; the default (full) also fetches fundamentals/analyst data"
           schema:
             type: string
+            enum: [basic, full]
       responses:
         "200":
           description: Quote data
@@ -4638,12 +4707,8 @@ paths:
       operationId: deleteWatchlistItem
       tags: [Watchlist]
       responses:
-        "200":
-          description: Removed
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/Envelope"
+        "204":
+          description: No Content
 
   # ─── Splits ───────────────────────────────────────────────────────────────────
   /api/splits/owed:
@@ -5188,12 +5253,8 @@ paths:
       operationId: deleteAiConversation
       tags: [AI]
       responses:
-        "200":
-          description: Deleted
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/Envelope"
+        "204":
+          description: No Content
 
   /api/ai/chat:
     post:

@@ -2,7 +2,6 @@
  * Financial Transaction Manager - Node.js Backend
  *
  * Main application entry point.
- * Mirrors: apps/backend/main.py (Python/FastAPI backend)
  */
 
 import express from 'express';

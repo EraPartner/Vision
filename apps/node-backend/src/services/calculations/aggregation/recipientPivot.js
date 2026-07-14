@@ -8,20 +8,22 @@
 
 import { recipientInsightsRepository } from '../../../repositories/infoRepositoryRecipients.js';
 import { buildEnvelope } from './_envelope.js';
+import { assertNoNaN } from './_invariants.js';
 
 export async function computeRecipientPivot({
   targetCurrency = 'EUR',
   excludedRecipientIds = [],
   bucket = 'monthly',
-  startDate = null,
-  endDate = null,
-  recipientIds = null,
+  startDate = undefined,
+  endDate = undefined,
+  recipientIds = undefined,
 } = {}) {
   const data = await recipientInsightsRepository.getRecipientPivot(
     excludedRecipientIds,
     targetCurrency,
     { bucket, startDate, endDate, recipientIds }
   );
+  assertNoNaN(data, 'computeRecipientPivot');
   return buildEnvelope(data, { source: 'live' });
 }
 

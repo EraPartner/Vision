@@ -119,6 +119,20 @@ const envSchema = z.object({
 
   ATTACHMENTS_DIR: stringEnv('./data/attachments'),
   ATTACHMENT_MAX_SIZE_MB: intEnv(10),
+
+  // ── Declared for discoverability (ADR-030) ───────────────────────────────
+  // These are read at their own call sites (logger, migrate, puppeteer,
+  // boot-trace) rather than via `env`, but are listed here so every env var the
+  // app reads is documented and validated in one place. Kept as loose strings —
+  // the reading sites own their parsing/defaults.
+  LOG_LEVEL: optionalStringEnv,          // config/logger.js
+  ENABLE_LOGGING: optionalStringEnv,     // config/logger.js
+  PUPPETEER_EXECUTABLE_PATH: optionalStringEnv, // services/reports/puppeteerRenderer.js
+  VISION_BOOT_TRACE: optionalStringEnv,  // main.js (disabled when '0')
+  VISION_MIGRATE_TIMEOUT_MS: optionalStringEnv, // database/migrate.js
+  ALEMBIC_BIN: optionalStringEnv,        // database/migrate.js
+  ALEMBIC_CONFIG: optionalStringEnv,     // database/migrate.js
+  VISION_CACHE_DIR: optionalStringEnv,   // database/migrate.js
 }).passthrough();
 
 function parseEnv() {

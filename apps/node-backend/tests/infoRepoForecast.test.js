@@ -20,6 +20,7 @@ import {
   getCashflowForecastDataRolling,
   getCashflowForecastDataByCategory,
 } from '../src/repositories/infoRepo.forecast.js';
+import { ValidationError } from '../src/middleware/errorHandler.js';
 
 beforeEach(() => {
   vi.clearAllMocks();
@@ -170,6 +171,8 @@ describe('getCashflowForecastData', () => {
 
 describe('getCashflowForecastDataRolling', () => {
   it('rejects out-of-range historyMonths', async () => {
+    // ValidationError (not a plain Error) so the route surface answers 400, not 500.
+    await expect(getCashflowForecastDataRolling(0, 30, 60)).rejects.toBeInstanceOf(ValidationError);
     await expect(getCashflowForecastDataRolling(0, 30, 60)).rejects.toThrow(/historyMonths/);
     await expect(getCashflowForecastDataRolling(121, 30, 60)).rejects.toThrow(/historyMonths/);
     await expect(getCashflowForecastDataRolling(1.5, 30, 60)).rejects.toThrow(/historyMonths/);

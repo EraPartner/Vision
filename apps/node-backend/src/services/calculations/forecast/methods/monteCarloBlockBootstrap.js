@@ -87,5 +87,3 @@ export function forecast({
 
   return { series, bands: bandsByDate };
 }
-
-export default { id, label, forecast };

@@ -1,7 +1,6 @@
 /**
  * Transaction Repository - data access for transactions table.
  *
- * Mirrors: apps/backend/repositories/transaction_repository.py
  *
  * Performance notes:
  * - create() uses a CTE to INSERT and immediately JOIN in a single round-trip,

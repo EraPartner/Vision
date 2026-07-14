@@ -4,8 +4,9 @@
  *
  * The leg is marked is_transfer=true (so the cross-cutting `AND NOT is_transfer`
  * exclusion keeps it out of income/spending) and transfer_source='trade' (so the
- * ADR-083 reconciler — which only touches transfer_source IS NULL or 'auto' —
- * never releases this single-sided leg as an orphan). It is linked to its trade
+ * ADR-083 reconciler — whose releaseOrphans only releases reconciler-owned
+ * 'auto'/'manual' orphans — never releases this single-sided leg). It is linked
+ * to its trade
  * via portfolio_transaction_id (ON DELETE CASCADE removes it with the trade).
  */
 
@@ -19,7 +20,7 @@ import { toDecimal, toNumber } from '../../lib/money.js';
  *
  *   buy   → −(amount + fees + taxes)   (cash leaves the sleeve)
  *   sell  → +(amount − fees − taxes)   (net proceeds enter the sleeve)
- *   dividend / interest / rent_income → +amount   (income into the sleeve)
+ *   dividend / interest / rent_income / return_of_capital → +amount   (cash into the sleeve)
  *   fee / tax → −amount                (cash leaves the sleeve)
  *
  * @param {{type:string, amount?:number|string, fees?:number|string, taxes?:number|string}} txn
@@ -38,6 +39,7 @@ export function computeTradeCashLegAmount(txn) {
     case 'dividend':
     case 'interest':
     case 'rent_income':
+    case 'return_of_capital':
       return toNumber(amount);
     case 'fee':
     case 'tax':

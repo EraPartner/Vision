@@ -125,3 +125,22 @@ describe('releaseInvalidAutoPairs — reciprocity guard', () => {
     expect(releaseSql).toContain('p.transfer_peer_id = t.id');
   });
 });
+
+describe('releaseOrphans — single-sided system legs survive reconcile (ADR-090 vs ADR-083)', () => {
+  it('only releases reconciler-owned rows, so a trade cash leg is never re-entered into aggregates', async () => {
+    // ADR-090 inserts a trade cash leg single-sided (is_transfer=true,
+    // transfer_source='trade', peer NULL). ADR-083's releaseOrphans must NOT
+    // release it — otherwise the leg re-enters income/spending and breaks the
+    // double-count guard. The guard is the source allowlist; this regression
+    // test is the one ADR-090 required and that was never written.
+    await reconcileTransfers();
+    const orphanSql = query.mock.calls
+      .map(([sql]) => sql)
+      .find((s) => s.includes('is_transfer = true') && s.includes('transfer_peer_id IS NULL'));
+    expect(orphanSql).toBeTruthy();
+    // Allowlist to the two reconciler-owned sources — 'trade' (and 'opening',
+    // 'adjustment', …) are deliberately excluded.
+    expect(orphanSql).toContain("transfer_source IN ('auto', 'manual')");
+    expect(orphanSql).not.toContain("'trade'");
+  });
+});

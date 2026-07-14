@@ -383,6 +383,17 @@ const ymdString = toYmd(new Date());                // → "2026-04-22"
 > `?? undefined`), so **callers must treat either as "not found"** — test with `== null` (matches
 > both) rather than `=== null`.
 
+> [!note] `null` as a "parse/fetch miss" sentinel
+> The same "distinguish absence from a missing argument" reasoning extends `null` to two more
+> boundaries beyond the repository layer:
+> - **CSV import adapters** (`services/importPipeline/adapters/*.js`, `_shared.js`) return `null`
+>   for an unparseable row so the pipeline can count it as skipped rather than treating it as data.
+> - **Rate fetching** (`services/currency/rateFetcher.js`) returns `null` when a provider has no
+>   rate for a currency/date.
+>
+> Both are deliberate "miss" sentinels, not the "optional value" case — new code at these two
+> boundaries should keep returning `null` (test with `== null`). Everywhere else, prefer `undefined`.
+
 ```js
 import { query } from '../database/connection.js';
 

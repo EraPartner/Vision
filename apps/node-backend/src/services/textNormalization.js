@@ -1,6 +1,5 @@
 /**
  * Text Normalization Service
- * Mirrors: apps/backend/services/text_normalization_service.py
  */
 
 const RECIPIENT_PREFIXES = [

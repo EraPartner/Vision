@@ -45,6 +45,12 @@ export function useFxAwarePnl(targetCurrency: string) {
       const amount = Number(txn.amount) || 0;
       const fees = Number(txn.fees) || 0;
       const taxes = Number(txn.taxes) || 0;
+      // Prefer the point-in-time rate stamped on the txn; fall back to the live
+      // rate only when it's missing/zero. Like ADR-085's tax-path fallback this
+      // is a transient approximation that self-corrects once the historical rate
+      // is backfilled — but here it briefly blends a current-rate leg into the
+      // EUR cost pool used for gain math, so the fallback is a known accuracy
+      // trade-off, not an exact figure.
       const txnRateToEur = Number(txn.fx_rate_to_eur) > 0
         ? Number(txn.fx_rate_to_eur)
         : getRateToEur(txn.currency || holding.currency);

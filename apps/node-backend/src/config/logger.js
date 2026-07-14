@@ -5,7 +5,6 @@
  *   LOG_LEVEL=debug|info|warn|error  (default: info in production, debug in development)
  *   ENABLE_LOGGING=true|false        (default: true)
  *
- * Mirrors: apps/backend/config/logging_config.py
  */
 
 const LOG_LEVELS = { debug: 0, info: 1, warn: 2, error: 3, silent: 4 };

@@ -52,5 +52,3 @@ export function forecast({ history, forecastDates, alpha = DEFAULT_ALPHA }) {
     return { date, value: levels.get(d) ?? 0 };
   });
 }
-
-export default { id, label, forecast };

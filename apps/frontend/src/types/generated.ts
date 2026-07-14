@@ -1556,7 +1556,7 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** Get real-time quote for symbol */
+        /** Get real-time quotes for one or more symbols */
         get: operations["marketQuote"];
         put?: never;
         post?: never;
@@ -4159,6 +4159,34 @@ export interface operations {
                 sort_dir?: "asc" | "desc";
                 /** @description Comma-separated tag slugs — OR filter */
                 tags?: string;
+                /** @description Fetch a single transaction by id (exact match) */
+                transaction_id?: number;
+                /** @description Comma-separated category ids — OR filter */
+                category_ids?: string;
+                /** @description Filter by primary (grouped) recipient id */
+                recipient_group_id?: number;
+                /** @description Filter by recipient display name (substring) */
+                recipient_name?: string;
+                /** @description Include only active (default true) or inactive rows */
+                active?: boolean;
+                /** @description Include the running-balance column on each row */
+                include_balance?: boolean;
+                /** @description Filter by kind (e.g. income/expense) */
+                transaction_type?: string;
+                /** @description Minimum amount (see amount_signed for sign semantics) */
+                amount_min?: number;
+                /** @description Maximum amount (see amount_signed) */
+                amount_max?: number;
+                /** @description Exact amount — shorthand for amount_min == amount_max */
+                amount_exact?: number;
+                /** @description When true, amount_* compare signed values; otherwise magnitude */
+                amount_signed?: boolean;
+                /** @description When true, return only uncategorised transactions */
+                uncategorised?: boolean;
+                /** @description Convert amounts to EUR (or target_currency) at read time */
+                normalize_to_eur?: boolean;
+                /** @description Target currency for normalize_to_eur (defaults to EUR) */
+                target_currency?: string;
             };
             header?: never;
             path?: never;
@@ -4914,14 +4942,12 @@ export interface operations {
         };
         requestBody?: never;
         responses: {
-            /** @description Deleted */
-            200: {
+            /** @description No Content */
+            204: {
                 headers: {
                     [name: string]: unknown;
                 };
-                content: {
-                    "application/json": components["schemas"]["Envelope"];
-                };
+                content?: never;
             };
         };
     };
@@ -6621,14 +6647,12 @@ export interface operations {
         };
         requestBody?: never;
         responses: {
-            /** @description Deleted */
-            200: {
+            /** @description No Content */
+            204: {
                 headers: {
                     [name: string]: unknown;
                 };
-                content: {
-                    "application/json": components["schemas"]["Envelope"];
-                };
+                content?: never;
             };
         };
     };
@@ -6715,14 +6739,12 @@ export interface operations {
         };
         requestBody?: never;
         responses: {
-            /** @description Deleted */
-            200: {
+            /** @description No Content */
+            204: {
                 headers: {
                     [name: string]: unknown;
                 };
-                content: {
-                    "application/json": components["schemas"]["Envelope"];
-                };
+                content?: never;
             };
         };
     };
@@ -6743,6 +6765,7 @@ export interface operations {
                     asset_class?: components["schemas"]["AssetClass"];
                     currency?: string;
                     is_active?: boolean;
+                    show_in_ticker?: boolean;
                 };
             };
         };
@@ -6871,6 +6894,11 @@ export interface operations {
                     to_account_id: number;
                     /** @description Units to move; omit for the whole position */
                     units?: number | null;
+                    /**
+                     * @description Lot-selection strategy for a partial move; ignored for a whole move. Defaults to the service default when omitted.
+                     * @enum {string}
+                     */
+                    strategy?: "fifo" | "proportional";
                 };
             };
         };
@@ -6944,8 +6972,10 @@ export interface operations {
     marketQuote: {
         parameters: {
             query: {
-                symbol: string;
-                currency?: string;
+                /** @description Comma-separated list of symbols (e.g. `AAPL,MSFT`) */
+                symbols: string;
+                /** @description `basic` returns price fields only; the default (full) also fetches fundamentals/analyst data */
+                detail?: "basic" | "full";
             };
             header?: never;
             path?: never;
@@ -7097,14 +7127,12 @@ export interface operations {
         };
         requestBody?: never;
         responses: {
-            /** @description Removed */
-            200: {
+            /** @description No Content */
+            204: {
                 headers: {
                     [name: string]: unknown;
                 };
-                content: {
-                    "application/json": components["schemas"]["Envelope"];
-                };
+                content?: never;
             };
         };
     };
@@ -7715,14 +7743,12 @@ export interface operations {
         };
         requestBody?: never;
         responses: {
-            /** @description Deleted */
-            200: {
+            /** @description No Content */
+            204: {
                 headers: {
                     [name: string]: unknown;
                 };
-                content: {
-                    "application/json": components["schemas"]["Envelope"];
-                };
+                content?: never;
             };
         };
     };

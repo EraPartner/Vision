@@ -70,8 +70,3 @@ export async function isInternetReachable(opts = {}) {
 
   return inflight;
 }
-
-export function clearReachabilityCache() {
-  cachedResult = null;
-  cachedAt = 0;
-}

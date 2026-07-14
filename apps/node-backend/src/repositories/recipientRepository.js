@@ -1,7 +1,6 @@
 /**
  * Recipient Repository - data access for recipients table.
  *
- * Mirrors: apps/backend/repositories/recipient_repository.py
  *
  * Performance notes:
  * - textNormalization is imported at module level to avoid per-call dynamic import overhead.

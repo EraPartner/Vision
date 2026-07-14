@@ -1,6 +1,5 @@
 /**
  * Import routes - Full CSV import with bank adapters.
- * Mirrors: apps/backend/api/api_routes_import.py
  */
 
 import { Router } from 'express';

@@ -1,7 +1,6 @@
 /**
  * Transaction routes.
  *
- * Mirrors: apps/backend/api/api_routes_transactions.py
  */
 
 import { Router } from 'express';

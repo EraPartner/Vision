@@ -29,14 +29,6 @@ export function parseDecimalSafe(value) {
 }
 
 /**
- * @param {string} filePath
- * @param {BufferEncoding} [encoding]
- */
-export async function readFileAsync(filePath, encoding = 'utf-8') {
-  return fs.promises.readFile(filePath, encoding);
-}
-
-/**
  * Read a text file, decoding as UTF-8 but falling back to latin1 (ISO-8859-1)
  * when the bytes aren't valid UTF-8. Belgian bank exports are frequently
  * windows-1252/latin-1, where e.g. `é` is the single byte 0xE9 — decoding that

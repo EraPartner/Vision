@@ -5,7 +5,7 @@
  * function logs a warning — it never throws, since these are observational
  * sanity checks, not hard validation gates.
  *
- * Usage: import { assertNaN, assertMonthlyInvariants } from './_invariants.js';
+ * Usage: import { assertNoNaN, assertMonthlyInvariants } from './_invariants.js';
  */
 
 import settings from '../../../config/config.js';

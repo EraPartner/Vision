@@ -13,6 +13,7 @@ import {
   batchConvertGroupsWithHistoricalRateFallback,
 } from './infoRepositoryHelpers.js';
 import { todayAppDateString } from '../lib/timezone.js';
+import { ValidationError } from '../middleware/errorHandler.js';
 
 // Sum converted rows into a sorted per-day net series (SIMP-50).
 function aggregateByDate(rows) {
@@ -242,7 +243,7 @@ export async function getCashflowForecastData(
   targetCurrency = 'EUR',
 ) {
   if (!Number.isInteger(historyMonths) || historyMonths < 1 || historyMonths > 120) {
-    throw new Error('historyMonths must be an integer in [1, 120]');
+    throw new ValidationError('historyMonths must be an integer in [1, 120]');
   }
 
   const validCatIds = (excludedCategoryIds || []).filter(id => Number.isInteger(id) && id > 0 && id < 2147483647);
@@ -353,13 +354,13 @@ export async function getCashflowForecastDataRolling(
   targetCurrency = 'EUR',
 ) {
   if (!Number.isInteger(historyMonths) || historyMonths < 1 || historyMonths > 120) {
-    throw new Error('historyMonths must be an integer in [1, 120]');
+    throw new ValidationError('historyMonths must be an integer in [1, 120]');
   }
   if (!Number.isInteger(daysBack) || daysBack < 1 || daysBack > 365) {
-    throw new Error('daysBack must be an integer in [1, 365]');
+    throw new ValidationError('daysBack must be an integer in [1, 365]');
   }
   if (!Number.isInteger(daysForward) || daysForward < 1 || daysForward > 365) {
-    throw new Error('daysForward must be an integer in [1, 365]');
+    throw new ValidationError('daysForward must be an integer in [1, 365]');
   }
 
   const validCatIds = (excludedCategoryIds || []).filter(id => Number.isInteger(id) && id > 0 && id < 2147483647);
@@ -455,7 +456,7 @@ export async function getCashflowForecastDataByCategory(
   targetCurrency = 'EUR',
 ) {
   if (!Number.isInteger(historyMonths) || historyMonths < 1 || historyMonths > 120) {
-    throw new Error('historyMonths must be an integer in [1, 120]');
+    throw new ValidationError('historyMonths must be an integer in [1, 120]');
   }
 
   const validCatIds = (excludedCategoryIds || []).filter(

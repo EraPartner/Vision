@@ -9,8 +9,10 @@
 import { describe, it, expect } from 'vitest';
 import {
   calculateCostBasis,
-  calculateAccruedInterest,
   projectedAnnualInterest,
+} from '@vision/shared-utils/portfolio';
+import {
+  calculateAccruedInterest,
   annualizedReturn,
   contributionAdjustedMonthlyReturn,
   sanitizeSnapshotSpikes,
