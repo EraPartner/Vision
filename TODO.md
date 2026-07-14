@@ -4272,13 +4272,13 @@ look-changing one.
 
 ### 🐛 Correctness — reconciliation & accounts backend
 
-- [ ] **`releaseOrphans` strips the new `'opening'`/`'adjustment'` system rows — aggregates corruption, duplicate anchors, false transfer pairing** 🔺
+- [x] **`releaseOrphans` strips the new `'opening'`/`'adjustment'` system rows — aggregates corruption, duplicate anchors, false transfer pairing** 🔺 ✅ 2026-07-14 · 32bbc42 (releaseOrphans now constrained to `transfer_source IN ('auto','manual')` — system rows keep their tag; test added)
   - ↪ _from: PR #84 delivery review 2026-07-12 · accounts/transactions services_
   - `apps/node-backend/src/services/transferReconciliationService.js:60-66` vs `services/reconcileService.js:107-112` and `services/openingBalanceService.js:96-120`
   - Both new row types are created with `is_transfer=true, transfer_peer_id NULL`. The PR's comments claim the ADR-083 reconciler "only touches NULL/'auto'" — true of `loadCandidatePairs`/`releaseInvalidAutoPairs`, but `releaseOrphans` has no `transfer_source` filter (`WHERE is_transfer = true AND transfer_peer_id IS NULL`), and `reconcileTransfers()` runs after every import commit (`importPipeline/index.js:91`) and ~5 s after any transaction mutation. On the next mutation: (a) an adjustment row (amount = drift ≠ 0) is flipped to `is_transfer=false, transfer_source=NULL`, re-enters income/spending aggregates, and becomes an auto-pair candidate that can wrongly capture a real opposite-amount transaction within ±3 days; (b) an opening anchor loses its `transfer_source='opening'` tag, so `setOpeningBalance`'s upsert can never find it again and every subsequent call INSERTs a duplicate anchor.
   - Fix: constrain `releaseOrphans` to reconciler-owned rows (`AND transfer_source IN ('auto','manual')`) — this also fixes the pre-existing `'trade'` exposure.
 
-- [ ] **Opening-balance "inert anchor" warning can never fire — pg `DATE` object stringifies as `"Wed Jul 01"`, not ISO** ⏫ *(found independently by two reviewers)*
+- [x] **Opening-balance "inert anchor" warning can never fire — pg `DATE` object stringifies as `"Wed Jul 01"`, not ISO** ⏫ *(found independently by two reviewers)* ✅ 2026-07-14 · 32bbc42 (normalize via `toWireDate` before the compare; Date-typed-earliest tests added)
   - ↪ _from: PR #84 delivery review 2026-07-12 · portfolio backend + accounts services_
   - `apps/node-backend/src/services/openingBalanceService.js:79-90`
   - `SELECT MIN(date)` on the `DATE` column returns a JS `Date` (no `setTypeParser` override exists in `database/connection.js`), so `String(earliest).slice(0, 10)` yields e.g. `"Fri Jul 10"` — lexically never `<=` an ISO `"YYYY-MM-DD"` string (`'F' > '9'`). The advertised warning ("anchor does not precede existing activity") is dead code in production; `tests/openingBalanceService.test.js:84-85` passes only because it mocks `earliest` as a string. Same pg-Date bug class this PR fixes elsewhere (priceCache, mapPortfolioTxRow).
@@ -4296,25 +4296,25 @@ look-changing one.
   - (a) A split row with NULL `account_id` (the Add dialog only sends `account_id` when the user picks one — `AddPortfolioTxnDialog.tsx:129` — and a corporate action has no natural account) is excluded by the query: `netUnits` stays pre-split and `hasPriorConsumption` stays false, so the partial-move guard (line 205) doesn't trip and FIFO splits buy lots at stale pre-split stored units — the exact basis corruption the guard was added to prevent (buy 10, 2:1 split, move 5 → user actually moves 10 post-split units at half the intended basis). (b) When the split row does carry the source account and the holding exists in other accounts, `units` is the investment-wide new total (`snapshotBuilder.js:437-441`, `shared-utils/portfolio.js:151`) divided by the account-local `oldTotal` → inflated `netUnits`.
   - Fix: replay the investment-wide stream to apply splits; set `hasPriorConsumption` when any split/sell exists for the investment regardless of its `account_id`.
 
-- [ ] **Sell validation applies a split with zero held units — diverges from the canonical core it mirrors** 🔼
+- [x] **Sell validation applies a split with zero held units — diverges from the canonical core it mirrors** 🔼 ✅ 2026-07-14 · 32bbc42 (split applied only when `net.gt(0)`, matching shared core; phantom-units test added)
   - ↪ _from: PR #84 delivery review 2026-07-12 · portfolio backend_
   - `apps/node-backend/src/repositories/portfolioTxRepo.common.js:270`
   - `else if (row.type === 'split' && units.gt(0)) net = units;` sets the running total unconditionally, while the canonical implementations require units already held (`shared-utils/portfolio.js:67,151`; `snapshotBuilder.js:440-441`). A stray/imported split row with no prior buys grants phantom units, so `validateSellUnitsAvailability` accepts a sell every valuation path treats as an oversell — snapshotBuilder still subtracts that sell's amount from `cumulativeInvested` while clamping units, distorting the invested series. Pre-PR the flat SUM ignored split rows, so this input was harmless.
   - Fix: apply the split only when `net.gt(0)`, matching the shared core.
 
-- [ ] **`reconcileService` stamps UTC "today" instead of APP_TIMEZONE** 🔽 *(found independently by two reviewers)*
+- [x] **`reconcileService` stamps UTC "today" instead of APP_TIMEZONE** 🔽 *(found independently by two reviewers)* ✅ 2026-07-14 · 32bbc42 (uses `todayAppDateString()`)
   - ↪ _from: PR #84 delivery review 2026-07-12 · accounts services + portfolio backend_
   - `apps/node-backend/src/services/reconcileService.js:86-91`
   - `new Date().toISOString().slice(0, 10)` is the UTC calendar day; the codebase convention is `todayAppDateString()` (`lib/timezone.js`, ADR-009). East of UTC (Brussels), an adjustment row or accepted `statement_balance_date` created between local midnight and ~02:00 is dated yesterday — ironic in the PR that fixes the systemic date-shift class.
   - Fix: use `todayAppDateString()`.
 
-- [ ] **New `account_id` filter passes `NaN` to Postgres → 500 instead of 400** 🔽
+- [x] **New `account_id` filter passes `NaN` to Postgres → 500 instead of 400** 🔽 ✅ 2026-07-14 · 32bbc42 (new `assertOptionalId` throws ValidationError → 400; test added)
   - ↪ _from: PR #84 delivery review 2026-07-12 · accounts/transactions services_
   - `apps/node-backend/src/routes/transactions.js:93` → `services/filterBuilder.js:121-124`
   - `account_id ? parseInt(account_id, 10) : null` yields `NaN` for `?account_id=abc`; `NaN != null`, so filterBuilder emits `t.account_id = $n` with a `NaN` param, which pg serializes to `'NaN'` and Postgres rejects (22P02) — a 500 for malformed input on list/count/uncategorised/export.
   - Fix: validate with `Number.isInteger`/`validateId` and throw `ValidationError`.
 
-- [ ] **`normalizeOpeningBalance` date check is regex-only — impossible calendar dates reach Postgres as a 500** 🔽
+- [x] **`normalizeOpeningBalance` date check is regex-only — impossible calendar dates reach Postgres as a 500** 🔽 ✅ 2026-07-14 · 32bbc42 (reuses `assertYmd` calendar parse-check; test added)
   - ↪ _from: PR #84 delivery review 2026-07-12 · accounts/transactions services_
   - `apps/node-backend/src/services/openingBalanceService.js:44-47`
   - `/^\d{4}-\d{2}-\d{2}$/` accepts `2026-13-40`, which fails the DATE cast in the upsert (22008) and surfaces as a 500, unlike `assertYmd` (used by the transactions routes) which also parse-checks.
@@ -4326,7 +4326,7 @@ look-changing one.
   - It SELECTs the peer without `FOR UPDATE` (markTransfer does lock), then unconditionally resets it. If the peer is concurrently re-paired to a third row Q between SELECT and UPDATE, Q is left `is_transfer=true, transfer_source='manual'` with a dangling `transfer_peer_id` no cleanup path releases (`releaseOrphans` requires NULL peer; `releaseInvalidAutoPairs` only touches 'auto') — silently excluded from cash-flow aggregates forever.
   - Fix: `SELECT ... FOR UPDATE` of both rows in `unmarkTransfer`.
 
-- [ ] **Opening-balance / reconcile endpoints don't schedule aggregation refresh** 🔽
+- [x] **Opening-balance / reconcile endpoints don't schedule aggregation refresh** 🔽 ✅ 2026-07-14 · 32bbc42 (both endpoints call `scheduleAggregationRefresh()` after a successful write)
   - ↪ _from: PR #84 delivery review 2026-07-12 · accounts/transactions services_
   - `apps/node-backend/src/routes/accounts.js:69-83`
   - Both endpoints create/update ledger rows that feed `mv_bank_balances` and the forecast MC caches, but unlike every transaction mutation route neither calls `scheduleAggregationRefresh()` — dashboards serve stale figures until the next unrelated mutation or cache expiry.
@@ -4334,7 +4334,7 @@ look-changing one.
 
 ### 🐛 Correctness — import/export pipeline
 
-- [ ] **New `tx_hash`-inequality dedup guard defeats cross-source re-import — the Vision round-trip this PR fixes now re-inserts everything** ⏫
+- [x] **New `tx_hash`-inequality dedup guard defeats cross-source re-import — the Vision round-trip this PR fixes now re-inserts everything** ⏫ ✅ 2026-07-14 · 32bbc42 (hash-inequality exemption scoped to `t.import_batch_id = $batchId` — same-batch card-payment split preserved, cross-source idempotency restored)
   - ↪ _from: PR #84 delivery review 2026-07-12 · import/export backend_
   - `apps/node-backend/src/services/importPipeline/commit.js:128` (hash source: `validate.js:108-117`; `adapters/vision.js:54`)
   - `tx_hash = sha256(raw CSV row)` of the *original source format*. Re-importing the same transactions from a different format — most concretely the Vision-export round-trip the csv.js/vision.js fixes exist to support — stages rows whose hash never equals the stored bank-format hash. All field-dedup criteria match, but the new predicate `NOT (t.tx_hash IS NOT NULL AND $6 IS NOT NULL AND t.tx_hash <> $6)` excludes the match, so every previously-imported transaction re-inserts as a duplicate (`ON CONFLICT` can't catch the unseen hash). On `main` this flow deduped to a no-op.
@@ -4346,13 +4346,13 @@ look-changing one.
   - Brokerage withdrawals committed before this PR are stored positive. `isCashFieldDuplicate` now compares the *signed* amount (`-500`), which never matches the stored `+500`, so re-importing an already-imported statement after upgrading inserts a second, negative row while the wrong-signed row remains — the "re-importing a statement is a no-op" promise breaks exactly for data affected by the bug being fixed.
   - Fix: ship a data migration flipping `route='cash'` outflow rows from prior batches, or dedup on `ABS(amount)` + kind.
 
-- [ ] **`brokerageFanout.js` still inserts unsigned cash amounts, ignoring the new `direction` contract** 🔽 *(latent — no production caller found)*
+- [x] **`brokerageFanout.js` still inserts unsigned cash amounts, ignoring the new `direction` contract** 🔽 *(latent — no production caller found)* ✅ 2026-07-14 · 32bbc42 (plan carries the classifier `direction`; commit inserts `direction * Math.abs(amount)`; sign test added)
   - ↪ _from: PR #84 delivery review 2026-07-12 · import/export backend_
   - `apps/node-backend/src/services/importPipeline/brokerageFanout.js:39,103`
   - `planBrokerageFanout` destructures only `{ target, portfolioTxnType }` and `commitBrokerageFanout` inserts `Number(row.amount)` raw, violating the contract this PR wrote into `brokerageRouting.js` ("the ledger sign must be re-derived from the kind"). The one remaining `classifyBrokerageRow` cash consumer without the sign.
   - Fix: apply `direction * Math.abs(...)` there, or remove the unused module.
 
-- [ ] **Raw NUL byte makes `matchInvestments.js` a binary file to git — this PR's own change to it is invisible in diffs** 🔽 *(byte pre-exists on `main`)*
+- [x] **Raw NUL byte makes `matchInvestments.js` a binary file to git — this PR's own change to it is invisible in diffs** 🔽 *(byte pre-exists on `main`)* ✅ 2026-07-14 · 32bbc42 (raw 0x00 replaced with the `\x00` escape; file is text going forward)
   - ↪ _from: PR #84 delivery review 2026-07-12 · import/export backend_
   - `apps/node-backend/src/services/portfolioImportPipeline/matchInvestments.js` (literal 0x00 at byte offset 1654, inside the `resolveKey` template literal)
   - Git renders the PR's (otherwise correct) ambiguity-guard change as "Binary files differ", hiding it from diff review and text tooling. Node parses it fine.
@@ -4366,19 +4366,19 @@ look-changing one.
   - If any accounts differ only by case/whitespace — the very state this migration exists to fix, and plausible because the transaction path UPPERCASEs `bank_account` while `POST /api/accounts` only trims — the migration raises, `runMigrations()` throws, and the backend crash-loops. The exception HINT ("Merge each pair on the Accounts page…") directs users to a UI that can never load.
   - Fix: auto-merge duplicates deterministically in the migration (or skip enforcement + warn); at minimum give a CLI/SQL remediation in the HINT.
 
-- [ ] **Migrations 0073/0075 re-permit the retired `'dismissed'` value; 0073's downgrade doesn't restore the true prior constraint** 🔽
+- [x] **Migrations 0073/0075 re-permit the retired `'dismissed'` value; 0073's downgrade doesn't restore the true prior constraint** 🔽 ✅ 2026-07-14 · 32bbc42 (`'dismissed'` dropped from both CHECK lists; 0073 downgrade restores the true 3-value constraint)
   - ↪ _from: PR #84 delivery review 2026-07-12 · DB migrations/infra_
   - `alembic/versions/0073_transfer_source_opening.py:41-46,50-57`; same pattern in `0075_transfer_source_adjustment.py:37-42`
   - 0070 removed `'dismissed'` from `ck_transactions_transfer_source` (replaced by the `transfer_dismissals` pair table), yet 0073/0075 include it in the new CHECK and 0073's downgrade restores a 4-value list while a fresh upgrade stopped at 0072 leaves 3 — the same revision yields two different constraints depending on path, and a retired value is silently writable again.
   - Fix: drop `'dismissed'` from both lists in 0073 and 0075.
 
-- [ ] **`queryPrepared` bypasses the new ambient transaction** 🔽 *(latent — no current in-transaction caller found)*
+- [x] **`queryPrepared` bypasses the new ambient transaction** 🔽 *(latent — no current in-transaction caller found)* ✅ 2026-07-14 · 32bbc42 (checks `getAmbientTransactionClient()` and runs on the ambient client when in a transaction)
   - ↪ _from: PR #84 delivery review 2026-07-12 · DB migrations/infra_
   - `apps/node-backend/src/database/connection.js:131-133`
   - `query()` now reroutes onto the ambient `withTransaction` client, but `queryPrepared()` always hits the pool. Any repo method built on it (e.g. `transactionRepository.getById/create/hardDelete`, incl. the `tx_create` write) invoked inside a `withTransaction` callback silently runs outside the transaction — exactly the partial-write class this PR's reroute fixes.
   - Fix: check `getAmbientTransactionClient()` in `queryPrepared` and run `ambient.query({name, text, values})`.
 
-- [ ] **`withSavepointIfInTransaction` masks the original error when the rollback itself fails** 🔽
+- [x] **`withSavepointIfInTransaction` masks the original error when the rollback itself fails** 🔽 ✅ 2026-07-14 · 32bbc42 (try/catch around `ROLLBACK TO SAVEPOINT`, log it, rethrow the original error)
   - ↪ _from: PR #84 delivery review 2026-07-12 · DB migrations/infra_
   - `apps/node-backend/src/database/connection.js:209-211`
   - If `fn` failed because the connection dropped, `ROLLBACK TO SAVEPOINT` also throws and that error replaces the original, losing the root cause (contrast `withTransaction`, which logs the rollback failure and rethrows the original at lines 167-174).
