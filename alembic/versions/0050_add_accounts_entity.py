@@ -163,6 +163,32 @@ def upgrade() -> None:
         """
     )
 
+    # Fallback: accounts that appear only in planned_transactions (no transaction ever
+    # supplied a valid ISO currency) derive their currency from the most recent planned
+    # row instead. The NOT EXISTS guard keeps a transaction-derived currency authoritative
+    # and makes this idempotent — it only touches accounts the previous UPDATE left at the
+    # 'EUR' default because they have no valid-currency transaction.
+    op.execute(
+        """
+        UPDATE accounts a
+           SET currency = sub.currency
+          FROM (
+            SELECT DISTINCT ON (btrim(bank_account)) btrim(bank_account) AS acct, currency
+              FROM planned_transactions
+             WHERE bank_account IS NOT NULL AND btrim(bank_account) <> ''
+             ORDER BY btrim(bank_account), planned_date DESC, id DESC
+          ) sub
+         WHERE a.name = sub.acct
+           AND sub.currency ~ '^[A-Z]{3}$'
+           AND NOT EXISTS (
+             SELECT 1 FROM transactions t
+              WHERE t.bank_account IS NOT NULL
+                AND btrim(t.bank_account) = a.name
+                AND t.currency ~ '^[A-Z]{3}$'
+           );
+        """
+    )
+
     # Link existing rows to their account by exact trimmed-name match.
     op.execute(
         """

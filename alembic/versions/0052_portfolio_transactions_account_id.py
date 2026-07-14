@@ -65,6 +65,15 @@ _VIEW = """
 _VIEW_WITH_ACCT = _VIEW % {"ACCT": ",\n                ptb.account_id"}
 _VIEW_WITHOUT_ACCT = _VIEW % {"ACCT": ""}
 
+# Downgrade must remove the account_id column from the view. CREATE OR REPLACE VIEW
+# cannot drop a column (Postgres 42P16), so the without-acct body has to be applied via
+# DROP + CREATE. Nothing depends on this view (verified), so a plain DROP is safe — no
+# CASCADE. Same body as _VIEW_WITHOUT_ACCT, just DROP-then-CREATE instead of REPLACE.
+_VIEW_WITHOUT_ACCT_RECREATE = _VIEW_WITHOUT_ACCT.replace(
+    "CREATE OR REPLACE VIEW portfolio_transactions AS",
+    "DROP VIEW portfolio_transactions;\n        CREATE VIEW portfolio_transactions AS",
+)
+
 
 def upgrade() -> None:
     op.execute(
@@ -97,7 +106,7 @@ def downgrade() -> None:
         BEGIN
           IF to_regclass('public.portfolio_transactions_base') IS NOT NULL THEN
         """
-        + _VIEW_WITHOUT_ACCT
+        + _VIEW_WITHOUT_ACCT_RECREATE
         + """
             DROP INDEX IF EXISTS idx_portfolio_transactions_base_account_id;
             ALTER TABLE portfolio_transactions_base DROP COLUMN IF EXISTS account_id;
