@@ -18,6 +18,7 @@
 
 import { logger } from '../config/logger.js';
 import settings from '../config/config.js';
+import { AppError } from '../middleware/errorHandler.js';
 import { aiChatRepository } from '../repositories/aiChatRepository.js';
 import { getOllamaClient, OllamaError } from '../integrations/ollama/client.js';
 import { buildChatMessages } from '../integrations/ollama/prompts.js';
@@ -26,17 +27,17 @@ import { dispatchTool, getToolSchemas, getToolNames } from './aiChat/tools/index
 const MAX_TOOL_ITERATIONS = 6;
 const DEFAULT_CONVERSATION_TITLE = 'New conversation';
 
-export class AiChatServiceError extends Error {
+export class AiChatServiceError extends AppError {
   /**
    * @param {string} message
    * @param {{ code?: string, status?: number, cause?: unknown }} [options]
    */
   constructor(message, { code, status, cause } = {}) {
-    super(message);
+    // Extend AppError so the central error middleware forwards our status/code
+    // (e.g. 404/410/503) instead of collapsing to a generic 500. Defaults match
+    // the previous plain-Error behaviour.
+    super(message, { code: code || 'AI_CHAT_ERROR', status: status || 500, cause });
     this.name = 'AiChatServiceError';
-    this.code = code || 'AI_CHAT_ERROR';
-    this.status = status || 500;
-    if (cause) this.cause = cause;
   }
 }
 

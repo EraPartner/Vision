@@ -34,9 +34,13 @@ import { computeRecipientInsights } from '../../src/services/calculations/aggreg
 import { computeCashflowComparison } from '../../src/services/calculations/aggregation/cashflow.js';
 import { computeAverageVsCurrent } from '../../src/services/calculations/aggregation/averageVsCurrent.js';
 import { computeBankBalances } from '../../src/services/calculations/aggregation/bankBalances.js';
+import { bankBalancesResponseCache, invalidatePortfolioCaches } from '../../src/routes/info/_cache.js';
 
 beforeEach(() => {
   vi.clearAllMocks();
+  // bankBalances now shares a module-scoped inflight cache — reset it so each
+  // test starts cold.
+  bankBalancesResponseCache.clear();
 });
 
 function expectEnvelope(envelope, { source }) {
@@ -159,11 +163,28 @@ describe('computeAverageVsCurrent', () => {
 });
 
 describe('computeBankBalances', () => {
-  it('returns mv-sourced envelope', async () => {
+  it('returns a live-sourced envelope (runs live SQL, not an MV read)', async () => {
     infoRepository.getBankBalances.mockResolvedValue([{ account: 'A', balance: 100 }]);
     const env = await computeBankBalances({ targetCurrency: 'EUR' });
     expect(infoRepository.getBankBalances).toHaveBeenCalledWith('EUR');
-    expectEnvelope(env, { source: 'mv' });
+    expectEnvelope(env, { source: 'live' });
     expect(env.data).toEqual([{ account: 'A', balance: 100 }]);
+  });
+
+  it('caches: two calls hit the DB once, second is served from cache', async () => {
+    infoRepository.getBankBalances.mockResolvedValue([{ account: 'A', balance: 100 }]);
+    const first = await computeBankBalances({ targetCurrency: 'EUR' });
+    const second = await computeBankBalances({ targetCurrency: 'EUR' });
+    expect(infoRepository.getBankBalances).toHaveBeenCalledTimes(1);
+    expect(second).toEqual(first);
+    expect(second.data).toEqual([{ account: 'A', balance: 100 }]);
+  });
+
+  it('cache is busted by invalidatePortfolioCaches (shared net-worth seam)', async () => {
+    infoRepository.getBankBalances.mockResolvedValue([{ account: 'A', balance: 100 }]);
+    await computeBankBalances({ targetCurrency: 'EUR' });
+    invalidatePortfolioCaches();
+    await computeBankBalances({ targetCurrency: 'EUR' });
+    expect(infoRepository.getBankBalances).toHaveBeenCalledTimes(2);
   });
 });

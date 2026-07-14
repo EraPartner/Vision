@@ -19,9 +19,37 @@ const ECB_HISTORY_FULL_URL = 'https://www.ecb.europa.eu/stats/eurofxref/eurofxre
 
 export const CACHE_LIFETIME_MS = 24 * 60 * 60 * 1000; // 24 hours
 
+// Idle window after which the full-history cache (~6 MB parsed) is dropped so a
+// single old-date lookup doesn't pin it in memory for the process lifetime. The
+// timer is reset on every access, so an actively-used cache is retained.
+export const HISTORICAL_FULL_CACHE_IDLE_MS = 60 * 60 * 1000; // 1 hour
+
 // { byDate: Map<YYYY-MM-DD, ratesMap>, timestamp }
 let historicalEcb90dCache = null;
 let historicalEcbFullCache = null;
+/** @type {ReturnType<typeof setTimeout> | null} */
+let historicalEcbFullEvictTimer = null;
+
+/**
+ * (Re)arm the idle-eviction timer for the full-history cache. Called on populate
+ * and on every cache hit so the cache lives as long as it's being used, then is
+ * nulled once idle for HISTORICAL_FULL_CACHE_IDLE_MS. The timer is unref'd so it
+ * never keeps the process (or a test runner) alive. Guards on typeof so the
+ * module stays safe in environments without timers.
+ */
+function scheduleHistoricalFullEviction() {
+  if (typeof setTimeout !== 'function') return;
+  if (historicalEcbFullEvictTimer && typeof clearTimeout === 'function') {
+    clearTimeout(historicalEcbFullEvictTimer);
+  }
+  historicalEcbFullEvictTimer = setTimeout(() => {
+    historicalEcbFullCache = null;
+    historicalEcbFullEvictTimer = null;
+  }, HISTORICAL_FULL_CACHE_IDLE_MS);
+  if (historicalEcbFullEvictTimer && typeof historicalEcbFullEvictTimer.unref === 'function') {
+    historicalEcbFullEvictTimer.unref();
+  }
+}
 
 // ─── Date helpers ─────────────────────────────────────────────────────────────
 
@@ -158,6 +186,7 @@ export async function fetchHistoricalFromEcb90d() {
 
 export async function fetchHistoricalFromEcbFull() {
   if (historicalEcbFullCache && Date.now() - historicalEcbFullCache.timestamp < CACHE_LIFETIME_MS) {
+    scheduleHistoricalFullEviction(); // touch: keep a live cache from being evicted
     return historicalEcbFullCache.byDate;
   }
   try {
@@ -167,6 +196,7 @@ export async function fetchHistoricalFromEcbFull() {
     const byDate = parseEcbHistoricalXml(xmlText);
     if (byDate.size > 0) {
       historicalEcbFullCache = { byDate, timestamp: Date.now() };
+      scheduleHistoricalFullEviction();
       logger.info(`Fetched full ECB rate history: ${byDate.size} days`);
     }
     return byDate;
@@ -179,6 +209,10 @@ export async function fetchHistoricalFromEcbFull() {
 export function clearHistoricalCache() {
   historicalEcb90dCache = null;
   historicalEcbFullCache = null;
+  if (historicalEcbFullEvictTimer && typeof clearTimeout === 'function') {
+    clearTimeout(historicalEcbFullEvictTimer);
+  }
+  historicalEcbFullEvictTimer = null;
 }
 
 /**

@@ -9,6 +9,8 @@ vi.mock('../src/repositories/transactionRepository.js', () => ({
 
 import { transactionRepository } from '../src/repositories/transactionRepository.js';
 import {
+  getSpendByCategory,
+  getTopRecipients,
   getMonthlyCategoryBreakdown,
   searchTransactions,
   getLargestTransactions,
@@ -20,6 +22,39 @@ import {
 
 beforeEach(() => vi.resetAllMocks());
 afterEach(() => vi.useRealTimers());
+
+describe('fetchTransactionsInRange per-turn memoization', () => {
+  it('reuses one DB read for two identical-range calls sharing a cache', async () => {
+    transactionRepository.getAll.mockResolvedValue([]);
+    const cache = new Map();
+    await getSpendByCategory.run({ from: '2025-01-01', to: '2025-12-31' }, { cache });
+    await getSpendByCategory.run({ from: '2025-01-01', to: '2025-12-31' }, { cache });
+    expect(transactionRepository.getAll).toHaveBeenCalledTimes(1);
+  });
+
+  it('shares one read across different tools with the same range/cache', async () => {
+    transactionRepository.getAll.mockResolvedValue([]);
+    const cache = new Map();
+    await getSpendByCategory.run({ from: '2025-01-01', to: '2025-12-31' }, { cache });
+    await getTopRecipients.run({ from: '2025-01-01', to: '2025-12-31' }, { cache });
+    expect(transactionRepository.getAll).toHaveBeenCalledTimes(1);
+  });
+
+  it('fetches separately for distinct ranges', async () => {
+    transactionRepository.getAll.mockResolvedValue([]);
+    const cache = new Map();
+    await getSpendByCategory.run({ from: '2025-01-01', to: '2025-06-30' }, { cache });
+    await getSpendByCategory.run({ from: '2025-07-01', to: '2025-12-31' }, { cache });
+    expect(transactionRepository.getAll).toHaveBeenCalledTimes(2);
+  });
+
+  it('does not memoize when no cache is supplied (standalone calls)', async () => {
+    transactionRepository.getAll.mockResolvedValue([]);
+    await getSpendByCategory.run({ from: '2025-01-01', to: '2025-12-31' });
+    await getSpendByCategory.run({ from: '2025-01-01', to: '2025-12-31' });
+    expect(transactionRepository.getAll).toHaveBeenCalledTimes(2);
+  });
+});
 
 describe('getMonthlyCategoryBreakdown', () => {
   it('groups by month then top-N categories per month', async () => {

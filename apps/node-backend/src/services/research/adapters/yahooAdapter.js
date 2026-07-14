@@ -15,9 +15,7 @@
  * came back — matching routes/marketLookup.js.
  */
 
-import YahooFinance from 'yahoo-finance2';
-
-const yahoo = new YahooFinance({ suppressNotices: ['yahooSurvey'] });
+import { getYahooClient } from '../../prices/yahooClient.js';
 
 const NO_VALIDATE = /** @type {{ validateResult: false }} */ ({ validateResult: false });
 
@@ -70,6 +68,7 @@ const yahooAdapter = {
   key: 'yahoo',
 
   async search(query) {
+    const yahoo = await getYahooClient();
     const results = /** @type {any} */ (
       await yahoo.search(query, { quotesCount: 8, newsCount: 0 }, NO_VALIDATE)
     );
@@ -85,6 +84,7 @@ const yahooAdapter = {
   },
 
   async quote(symbol) {
+    const yahoo = await getYahooClient();
     const q = /** @type {any} */ (await yahoo.quote(symbol, {}, NO_VALIDATE));
     return {
       symbol: q.symbol,
@@ -107,6 +107,7 @@ const yahooAdapter = {
   },
 
   async chart(symbol, { range = '1mo', interval = '1d' } = {}) {
+    const yahoo = await getYahooClient();
     const result = /** @type {any} */ (
       await yahoo.chart(symbol, { period1: rangeToDate(range), interval: /** @type {any} */ (interval), includePrePost: false }, NO_VALIDATE)
     );
@@ -123,6 +124,7 @@ const yahooAdapter = {
   },
 
   async fundamentals(symbol) {
+    const yahoo = await getYahooClient();
     const s = /** @type {any} */ (
       await yahoo.quoteSummary(
         symbol,
@@ -175,6 +177,7 @@ const yahooAdapter = {
   },
 
   async analyst(symbol) {
+    const yahoo = await getYahooClient();
     const s = /** @type {any} */ (
       await yahoo.quoteSummary(
         symbol,
@@ -213,6 +216,7 @@ const yahooAdapter = {
   },
 
   async news(symbol, { count = 20 } = {}) {
+    const yahoo = await getYahooClient();
     const newsCount = Math.min(count, 50);
     const results = /** @type {any} */ (
       await yahoo.search(symbol, { quotesCount: 0, newsCount }, NO_VALIDATE)
