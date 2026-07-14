@@ -355,7 +355,7 @@ look-changing one.
   - `i18n/source/nl.json` key `owesPage.title`; also three different nl renderings of the same concept (`nav.whoOwesYou` = "Verschuldigde Betalingen", `owes.title` = "Wie u iets verschuldigd is")
   - Fix: `owesPage.title` → "Wie u iets verschuldigd is", unify the nav label, regenerate locales (`bun run validate-locales` after).
 
-- [ ] **Auto-pairing can commit a half-pair when the second leg's guarded UPDATE misses (race)** 🔼 🔎 partial 2026-07-11 (self-healing via reciprocity release added in 4ea8430; the in-txn revert of r1 when r2 misses is still absent so a half-pair is transiently committed until next reconcile)
+- [x] **Auto-pairing can commit a half-pair when the second leg's guarded UPDATE misses (race)** 🔼 🔎 partial 2026-07-11 (self-healing via reciprocity release added in 4ea8430; the in-txn revert of r1 when r2 misses is still absent so a half-pair is transiently committed until next reconcile) ✅ 2026-07-14 · 453662d (in-txn revert of the marked leg now added (revertAutoLeg))
   - ↪ _from: Correctness research 2026-07-02 · Wave 2b · Transfer reconciliation (ADR-083)_
   - `services/transferReconciliationService.js:96-111` — candidates loaded outside the write transaction; if `inId` gets marked concurrently, `r1` succeeds but `r2.rowCount=0` and the code only skips the counter — it never reverts `r1` → `outId` points at a peer that points elsewhere; same non-reciprocity gap means it's never self-healed.
   - Fix: revert the successful UPDATE when `r1.rowCount !== r2.rowCount`; the reciprocity fix above also makes this self-healing.
@@ -393,7 +393,7 @@ look-changing one.
   - `main.js:1648-1655` — snapshot excludes `.git`/`node_modules` (:1648) but the rollback `rsync -a --delete` (:1655) lacks those excludes → they're deleted from the install because absent from the snapshot. A mid-update failure (disk full) then costs a repo-mode user their entire local `.git` history.
   - Fix: add `--exclude ".git" --exclude "node_modules"` to the rollback rsync.
 
-- [ ] **settings.json: non-atomic writes + unserialized read-modify-write across five writers** 🔼 🔎 verified-present 2026-07-11
+- [x] **settings.json: non-atomic writes + unserialized read-modify-write across five writers** 🔼 🔎 verified-present 2026-07-11 ✅ 2026-07-14 · b3ee04b
   - ↪ _from: Correctness research 2026-07-02 · Wave 2c · Electron shell (`packaging/electron/main.js`)_
   - Writer `main.js:242-245`; racing callers :291 (appPort), :1467-1480 (window bounds, debounced), :2724-2729 (`backup:save-settings`), :2758-2762, :3035-3037 (splash theme)
   - Interleaved saves silently revert another writer's key (worst case `backupOnQuit` lost → quit backups silently stop); crash mid-write corrupts JSON → quarantine path (:232) discards **all** settings incl. `appPort` and `backupPassphraseEncrypted`.
@@ -404,7 +404,7 @@ look-changing one.
   - `main.js:3430-3441` (second `will-quit` passes through) + `backup/bundle.js:119,133` (bundles written directly at final name, no tmp+rename); `cleanupOldBackups` (:700-737) keeps newest-7 → the corrupt newest file ages a valid backup out.
   - Fix: write to `.partial`, rename on success; retention skips/deletes `.partial`.
 
-- [ ] **`runBundleRestore` finally-block: unguarded `pollHealth()` + unconditional attachments swap can strand or destroy the attachments dir** 🔼 🔎 verified-present 2026-07-11
+- [x] **`runBundleRestore` finally-block: unguarded `pollHealth()` + unconditional attachments swap can strand or destroy the attachments dir** 🔼 🔎 verified-present 2026-07-11 ✅ 2026-07-14 · b3ee04b
   - ↪ _from: Correctness research 2026-07-02 · Wave 2c · Electron shell (`packaging/electron/main.js`)_
   - `main.js:2377-2387` — a restore whose boot-time `alembic upgrade` exceeds the 60s health budget reports **failure after psql succeeded** and never runs the swap (attachments stay in `.staging`); the swap shell (:2382-2385) chains the first `mv` with `;` — if staging is missing, live attachments are moved to `.old` and nothing replaces them.
   - Fix: try/catch around `pollHealth` with a bigger budget; guard the swap with `[ -d …staging ] && …`.
@@ -537,7 +537,7 @@ look-changing one.
   - Verification (2026-07-03): confirmed end-to-end — `tradeCashLegService.js:66-79` posts the cash leg in the trade's native currency (`portfolioTxn.currency || 'EUR'`); `accountBalanceSql.js:37` sums with no currency discrimination, and both consumers (`accountRepository.js:46`, `crossWorkspaceDataService.js:61`) receive the single collapsed number — no conversion happens anywhere downstream. The anchor+delta balance logic itself is otherwise sound (fine for single-currency accounts) — only the currency-blindness is the bug.
   - Fix: ~~convert each leg's amount to the account's currency at read time (or stamp a converted amount at write time), matching the FX handling already done for the transactions table.~~ **Superseded by decision D2 (2026-07-10, ADR-089 addendum — Accounts rewrite Phase C): legs keep their native currency; the balance SQL partitions by `(account_id, currency)` and conversion happens per currency at display time.** The *finding* (currency-blind `SUM`) stands until Phase C lands.
 
-- [ ] **Dormant `brokerageFanout` computes leg amount from the raw row, not repo canonicals** 🔽 🔎 verified-present 2026-07-11 *(latent — no production callers, verified by grep)*
+- [x] **Dormant `brokerageFanout` computes leg amount from the raw row, not repo canonicals** 🔽 🔎 verified-present 2026-07-11 *(latent — no production callers, verified by grep)* ✅ 2026-07-14 · 453662d
   - ↪ _from: Correctness research 2026-07-02 · Wave 1b_
   - `importPipeline/brokerageFanout.js:132` — `{ ...created, ...row }` lets a null `row.amount` (units+price CSV) overwrite the repo-computed amount → leg = `−(fees+taxes)` instead of `−(units×price+fees+taxes)`. `commit.js:158` does it correctly (prefers `created`).
   - Fix: spread `created` last (or delete the dormant module — it's also flagged in the 2026-06-30 audit context).
@@ -811,7 +811,7 @@ look-changing one.
   - `EditPortfolioTxnDialog.tsx:150,290-298` (`min="0"` permits 0) vs `portfolioTxRepo.common.js:164-166` ("must be positive").
   - Fix: change the field's `min` to just above 0 (or validate `> 0` client-side).
 
-- [ ] **Currency free-text class: multiple surfaces let malformed currency codes reach a raw 400/500** 🔽 🔎 verified-present 2026-07-11
+- [ ] **Currency free-text class: multiple surfaces let malformed currency codes reach a raw 400/500** 🔽 🔎 verified-present 2026-07-11 🔎 partial-453662d 2026-07-14 (ISO-4217 assertCurrency now wired into POST/PATCH /api/transactions so free-typed codes 400 instead of 500; other currency-accepting surfaces still open)
   - ↪ _from: Correctness research 2026-07-02 · Wave 2a (residue, closed 2026-07-03)_
   - AddAccountDialog: `<3` letters/digits → `accountService.js:48-51` `^[A-Z]{3}$` raw 400 (`AddAccountDialog.tsx:194-199`; the `|| "EUR"` at `:101` rescues empty only). Transaction PATCH: free text, no check either side in code (`TransactionInfoDialog.tsx:78-79,158`) — the 0046 DB CHECK turns `"euro"`/`"€"` into a raw 500. `AddTransactionDialog.tsx:119` `maxLength={10}` vs `transactions.currency` VARCHAR(3) (`0001_initial_database_schema.py:190`) + ISO CHECK (`0046_currency_integrity.py:65`) → 4-10 chars = PG 22001/CHECK 500.
   - Fix: validate ISO-4217 client-side (regex or a fixed currency list) before submit on all three surfaces.
@@ -821,7 +821,7 @@ look-changing one.
   - No max client-side (`AddToWatchlistDialog.tsx:276-284`, `WatchlistChartDialog.tsx:165-172`) or server-side (`watchlist.js:20-24`, `min: 0` inclusive — a 0 alert target is meaningless for the at/below check `WatchlistPage.tsx:149-150`); column `0001…py:542` caps ~1e12; `1e999` → `Infinity` → `parseDecimal` fallback 0 → PATCH sets 0 with a success toast (`lib/decimal.ts:13-17`, `WatchlistChartDialog.tsx:95`). Negative target: frontend allows it, backend 400s.
   - Fix: reject `≤0` and cap at the column's max both sides; reject non-finite instead of falling back to 0.
 
-- [ ] **Investments API hygiene: unknown asset_class 500s, symbol uniqueness only enforced on update, empty-name Save silently no-ops** 🔽 🔎 verified-present 2026-07-11 🔎 partial-08c8250 2026-07-14 (unknown asset_class on create now throws a validation error → 400 (test strengthened); LEFT: symbol-uniqueness-on-update and empty-name Save feedback are frontend/other, not addressed here)
+- [ ] **Investments API hygiene: unknown asset_class 500s, symbol uniqueness only enforced on update, empty-name Save silently no-ops** 🔽 🔎 verified-present 2026-07-11 🔎 partial-08c8250 2026-07-14 (unknown asset_class on create now throws a validation error → 400 (test strengthened); LEFT: symbol-uniqueness-on-update and empty-name Save feedback are frontend/other, not addressed here) 🔎 partial-453662d 2026-07-14 (create() now rejects empty name and trims/uppercases symbol to match update(); symbol-uniqueness-on-create still not enforced)
   - ↪ _from: Correctness research 2026-07-02 · Wave 2a (residue, closed 2026-07-03)_
   - Unknown `asset_class` → plain `Error` → 500 not 400 (`investmentRepository.js:220`; legacy view-schema installs insert arbitrary classes `:476-509`). Symbol uniqueness + trim/uppercase normalization enforced on **update only** (`:537-541` vs create `:417`; no DB unique index on symbol; `EditInvestmentDialog.tsx:94` uppercases, `AddInvestmentDialog.tsx:79` doesn't — compounds the filed duplicate-on-retry bug). Empty-name Save silently no-ops (`EditInvestmentDialog.tsx:85` bare `return`, no feedback; backend would accept `''` — `investmentRepository.js:95-110` has no non-empty check).
   - Fix: validate `asset_class` against the enum before insert (400 not 500), apply the same normalization at create time as update, and give empty-name Save an explicit rejection with feedback.
@@ -831,12 +831,12 @@ look-changing one.
   - `PortfolioImportPage.tsx:211-217` (`min="0"` attr only; `parseInt || 0` keeps negatives) and `portfolioImportRoutes.js:100`; csv-parse throws `Invalid Option: from must be a positive integer` (verified by executing csv-parse).
   - Fix: clamp to `Math.max(0, n)` client-side and/or validate server-side before passing to csv-parse.
 
-- [ ] **Backend has ZERO length validation anywhere — `sanitizeString` is dead code** 🔽 🔎 verified-present 2026-07-11
+- [ ] **Backend has ZERO length validation anywhere — `sanitizeString` is dead code** 🔽 🔎 verified-present 2026-07-11 🔎 partial-453662d 2026-07-14 (throwing assertMaxLength added and wired to the VARCHAR(100) bank_account mirror on create/PATCH; broad systemic length coverage still open)
   - ↪ _from: Correctness research 2026-07-02 · Wave 2a (residue, closed 2026-07-03)_
   - `middleware/validation.js:78` `sanitizeString` has no call sites (`validateDateString` likewise dead) — an intended-but-unwired sanitization layer; the only real protection is frontend `maxLength` + the DB column width. Real exposure is narrow (core text columns are TEXT): `manual_raw_transactions.bank_account` VARCHAR(100) (`0001:431`) — frontend cap is exact-match, so an API-length overflow 500s the raw-mirror insert *after* the main insert already succeeded (mid-operation failure; `transactions.bank_account` is TEXT, so the sinks diverge); `watchlist.name/symbol/price_provider_id` (200/20/200, `0001:539-545`) and `investments.name` (200, `0001:473`) are provider-/market-prefilled — HTML `maxLength` doesn't clamp programmatic values.
   - Fix: wire `sanitizeString`/`validateDateString` into the routes they were built for, or delete them if genuinely superseded.
 
-- [ ] **No upper bound on any money input; backend `validateNumber` passes `Infinity` through** ⬇ 🔎 verified-present 2026-07-11
+- [x] **No upper bound on any money input; backend `validateNumber` passes `Infinity` through** ⬇ 🔎 verified-present 2026-07-11 ✅ 2026-07-14 · 453662d
   - ↪ _from: Correctness research 2026-07-02 · Wave 2a (residue, closed 2026-07-03)_
   - `1e15` is typeable in every number field (no `max` anywhere; PG14+ NUMERIC even accepts `Infinity` on the unchecked investments path); `middleware/validation.js:87-96` defaults `max = Infinity`, and `Infinity > Infinity` is false, so a JSON `"Infinity"` passes every no-max call-site and then 500s at the DB. API-only siblings: negative fees/taxes accepted (`portfolioTxRepo.common.js:155-234` — fees/taxes unchecked except gift; the final dividend/interest/fee/tax/rent branch accepts `amount ≤ 0`).
   - Fix: add a sane upper bound to `validateNumber`'s default and to money fields specifically.
@@ -846,7 +846,7 @@ look-changing one.
   - Restore flow asks for a "wachtwoord" where backup set a "wachtzin" (same secret, two different names, in a security-critical flow: `settings.restore.passphrase*` vs `settings.backup.passphrase.*`) · `importReview.toast.persistDefaultFailed` "Standaard ontvanger opslaan mislukt" — wrong referent (reads "failed to save the default recipient"; sibling `importReview.persistDefault` gets it right) · `recurring.loading` "Terugkerende detectie" (modifier on the wrong noun) · `transactions.memo` "Omschrijving" collides with the Description label (also "Omschrijving") · `dashboard.greetingAfternoon` "Goedenmiddag" should be "Goedemiddag".
   - Fix: correct each string; unify the backup/restore passphrase terminology first (security-critical UX).
 
-- [ ] **Backlog batch: assorted low-severity validation/consistency gaps across planned/portfolio-tx/splits/watchlist/accounts/tax** ⏬ 🔎 verified-present 2026-07-11 🔎 partial-e501502 2026-07-14 (splits/batch sub-item fixed: all-dropped input now returns 400 instead of 201 {total:0}; the other planned/portfolio-tx/watchlist/accounts/tax sub-items in this bundle remain open) 🔎 partial-8fe6720/7b8ed98 2026-07-14 (two more sub-items fixed: planned is_recurring-without-pattern now 400; watchlist empty-name + added_price-on-PATCH now rejected — bundle still has other open sub-items)
+- [ ] **Backlog batch: assorted low-severity validation/consistency gaps across planned/portfolio-tx/splits/watchlist/accounts/tax** ⏬ 🔎 verified-present 2026-07-11 🔎 partial-e501502 2026-07-14 (splits/batch sub-item fixed: all-dropped input now returns 400 instead of 201 {total:0}; the other planned/portfolio-tx/watchlist/accounts/tax sub-items in this bundle remain open) 🔎 partial-8fe6720/7b8ed98 2026-07-14 (two more sub-items fixed: planned is_recurring-without-pattern now 400; watchlist empty-name + added_price-on-PATCH now rejected — bundle still has other open sub-items) 🔎 partial-453662d 2026-07-14 (splits sub-item fixed: POST / and /batch validate transaction_id/recipient_id/amount before Postgres (was FK/type 500); other planned/portfolio-tx/watchlist/accounts/tax sub-items remain)
   - ↪ _from: Correctness research 2026-07-02 · Wave 2a (residue, closed 2026-07-03)_
   - Planned: API-only `is_recurring:true` without a pattern stores and is perpetually due after execution (`plannedTransactions.js:211` guard fires only when a pattern is present; `recurrence.js:55`) · `reminder_days_before` creatable + returned but missing from the PATCH whitelist → updates silently dropped (`validation.js:26-33`) · zero/absurd amounts end-to-end (`PlannedPaymentForm.tsx:58` blocks only empty; `plannedTransactions.js:181` null-check only; zero at least excluded from auto-match, `plannedMatchService.js:63`).
   - Portfolio-tx: `type`/`currency`/`recurrence_interval` have no backend whitelist or DB CHECK (`type:'banana'` inserts and is invisible to units replay, `common.js:222-266`) · recurrence fields are stored-but-inert metadata — grep finds NO backend consumer of `is_recurring`/`recurrence_interval`/`recurrence_end_date` for portfolio txns (**CONFIRMED 2026-07-10 (D9): badge-only IS the intended design — do not file the missing consumer as a bug; remaining work is hygiene only: whitelist interval values, validate `end ≥ start`, clear stale interval/end-date on recurrence-off**) · turning recurrence off leaves stale interval/end-date stored (`EditPortfolioTxnDialog.tsx:153-155`).
@@ -881,7 +881,7 @@ look-changing one.
   - `assertDashboardSettingsValue` (`routes/settings.js:57-60`) checks `typeof value !== 'object' || Array.isArray(value)` but not `null` (the theme validator at `:33` does it right); `null.excludedCategoryIds` throws a TypeError.
   - Fix: add an explicit `value === null` check alongside the existing type/array checks.
 
-- [ ] **Settings write route validates only 5 keys — every other settings key accepts arbitrary JSON** 🔽 🔎 partial 2026-07-11 (belgian_tax_profile* blobs now validated in validateSettingValue; app_settings/backup_settings/widget_visibility/onboarding_complete/unknown keys still accept arbitrary JSON)
+- [ ] **Settings write route validates only 5 keys — every other settings key accepts arbitrary JSON** 🔽 🔎 partial 2026-07-11 (belgian_tax_profile* blobs now validated in validateSettingValue; app_settings/backup_settings/widget_visibility/onboarding_complete/unknown keys still accept arbitrary JSON) 🔎 partial-453662d 2026-07-14 (onboarding_complete/app_settings/backup_settings/widget_visibility now type-guarded in validateSettingValue; unknown keys still accept arbitrary JSON)
   - ↪ _from: Correctness research 2026-07-02 · Wave 2b (residue, closed 2026-07-03)_
   - `validateSettingValue` (`routes/settings.js:190-207`) covers dashboard/theme/cost-basis/includeTransfers/rebalance_plans; `app_settings`, `backup_settings`, `widget_visibility`, `onboarding_complete`, tax-profile blobs, and ANY unknown key accept arbitrary JSON (≤1MB body, key ≤100 chars, unbounded key count).
   - No backend consumer ingests settings into SQL/math unguarded (`plannedMatchService.js:92-95` tolerant, `portfolioSummaryService` set-membership, `getIncludeTransfers === true`), so exposure today is garbage-in for frontend blobs (e.g. `defaultPageSize:"abc"` survives the `migrateAppSettings` spread) — low severity on a single-user install, but the Belgian-tax-profile finding above shows the concrete cost when a settings blob DOES feed real math.
@@ -892,7 +892,7 @@ look-changing one.
   - `routes/settings.js:143-173` — `GET /api/settings/includeTransfers` 404s until the first toggle; `StatisticsSection.tsx:35-47` happens to treat the query error as `false` (matches the intended backend default), but react-query fires and retries a failing request on every settings visit.
   - Fix: add `includeTransfers` to the `SETTING_DEFAULTS` map.
 
-- [ ] **Admin DB editor can store jsonb number `1`/`0` for `includeTransfers`; string-`"true"` storage is otherwise closed off on all paths** ⬇ 🔎 verified-present 2026-07-11
+- [x] **Admin DB editor can store jsonb number `1`/`0` for `includeTransfers`; string-`"true"` storage is otherwise closed off on all paths** ⬇ 🔎 verified-present 2026-07-11 ✅ 2026-07-14 · 453662d
   - ↪ _from: Correctness research 2026-07-02 · Wave 2b (residue, closed 2026-07-03)_
   - A jsonb number `1`/`0` stored via the admin DB editor makes `getIncludeTransfers` (`infoRepositoryHelpers.js:19` `=== true`) silently read `false` — conservative direction, and the UI toggle agrees, so this is low severity. The resume question this closes ("can a jsonb string `"true"` be stored and silently misread?") is answered NO on every other path: the API validates boolean on single+bulk PUT (`settings.js:203-205,230-232`), restore preserves jsonb types, db-editor text params are jsonb-parsed by pg (`'true'` → boolean), and a jsonb-string `"true"` self-heals on read via `settingsRepository.get:39-41`'s JSON.parse normalization.
   - Fix: optional — reject non-boolean jsonb for `includeTransfers` in the admin DB editor's write path too, for consistency.
@@ -924,13 +924,13 @@ look-changing one.
   - A faithful downgrade must first neutralize/delete trade legs (they also lose their `portfolio_transaction_id` link in the same migration) or re-add the CHECK `NOT VALID`. Loud failure, atomic. Not reproduced against a scratch DB (seed a trade leg, then `downgrade -N`, would confirm before fixing).
   - Fix: re-add the CHECK as `NOT VALID` in the downgrade, or neutralize trade-leg rows first.
 
-- [ ] **0045 migration downgrade silently corrupts `agg_recipient_totals` on DBs with marked transfers** ⬇ 🔎 verified-present 2026-07-11
+- [x] **0045 migration downgrade silently corrupts `agg_recipient_totals` on DBs with marked transfers** ⬇ 🔎 verified-present 2026-07-11 ✅ 2026-07-14 · 8943b9d
   - ↪ _from: Correctness research 2026-07-02 · Wave 2c (residue, closed 2026-07-03)_
   - `alembic/versions/0045_exclude_transfers_from_aggregations.py:83-118` restores the pre-transfer trigger function (byte-identical to 0035's, verified) but never re-adds the transfer rows that were *subtracted* from the aggregate while 0045+ was live; worse, the first UPDATE of a former-transfer row under the restored function subtracts an OLD amount that was never counted → negative drift. No reseed path exists anywhere (`agg_recipient_totals` is trigger-maintained only, `services/aggregationRefresh.js:27-30`).
   - Implausible path (requires a multi-step downgrade past 0045), silent when hit.
   - Fix: document as a known downgrade limitation, or add a reseed step to the 0045 downgrade that recomputes the aggregate from scratch.
 
-- [ ] **0049 migration's `VALIDATE CONSTRAINT` is boot-blocking on a legacy DB with un-normalisable currency codes** ⬇ 🔎 verified-present 2026-07-11
+- [x] **0049 migration's `VALIDATE CONSTRAINT` is boot-blocking on a legacy DB with un-normalisable currency codes** ⬇ 🔎 verified-present 2026-07-11 ✅ 2026-07-14 · 8943b9d
   - ↪ _from: Correctness research 2026-07-02 · Wave 2c (residue, closed 2026-07-03)_
   - Migrations fail-fast on boot (`apps/node-backend/src/main.js:450`), so a `VALIDATE CONSTRAINT` failure (values like `'EURO'`/`''` that trim+upper can't fix, `0049_validate_currency_checks.py:63-71`) leaves an Electron end-user at the error page with manual-psql-only recovery (documented in the migration's own docstring, but no guided UX). Hypothetical — this user's own DB was audited clean on 2026-06-25.
   - Fix: add a guided-recovery path in the Electron error page for this specific failure mode, or a pre-migration currency-code sanity check with a clearer message.
@@ -1082,7 +1082,7 @@ look-changing one.
   - Verification (2026-06-30): the index's provenance was backwards in the original write-up — migration 0044 (2026-06-18) was added for transfer-pairing matching (ADR-083), **10 days before** the `amount_signed` filter feature (commit `eff2da4f`, 2026-06-28). The signed-filter feature didn't add this index; it just happened to be able to reuse a pre-existing one, leaving the older/more-common default path with no usable index — same conclusion, different (correct) history.
   - 📏 **Verdict CONFIRMED structural (2026-07-06, Wave D2 live EXPLAIN):** seqscan-off leaves `abs(amount) >= 100` as a Filter (Rows Removed: 756); control `t.amount >= 100` gets `Index Cond` on `idx_transactions_amount_date`. The signed path (`amountSigned=true`) correctly uses the index.
 
-- [ ] **JS-side aggregation regression in category-breakdown live fallback** 🔼 🔎 verified-present 2026-07-11
+- [x] **JS-side aggregation regression in category-breakdown live fallback** 🔼 🔎 verified-present 2026-07-11 ✅ 2026-07-14 · 453662d
   - ↪ _from: Codebase audit 2026-06-30 · Performance — Backend_
   - `apps/node-backend/src/repositories/infoRepositoryStatistics.js:33-62` (`getCategoryBreakdown`)
   - When the materialized-view path is unavailable, or whenever `includeTransfers=true`, this pulls every active transaction into Node with no date bound/LIMIT and sums in a JS loop. Its sibling `getCategoryPivot` 25 lines below (same file) was explicitly rewritten to aggregate in SQL via `GROUP BY` — this one was never migrated.
@@ -1131,13 +1131,13 @@ look-changing one.
   - Each accordion group's trigger unconditionally mounts a `RecipientCombobox` regardless of expansion state (it sits in `AccordionTrigger`, not `AccordionContent`). A year of bank CSV import can produce 100-300+ groups → that many live component instances/subscriptions at once.
   - Fix: lazy-mount the combobox only when its accordion item opens, or virtualize the groups list.
 
-- [ ] **Column-resize drag re-renders the full table on every `mousemove`, unthrottled** 🔼 🔎 verified-present 2026-07-11
+- [x] **Column-resize drag re-renders the full table on every `mousemove`, unthrottled** 🔼 🔎 verified-present 2026-07-11 ✅ 2026-07-14 · da226a6
   - ↪ _from: Codebase audit 2026-06-30 · Performance — Frontend_
   - `apps/frontend/src/components/shared/VirtualDataTable.tsx:265-287` (`handleMouseMove`)
   - `setColumnWidths` fires synchronously on every native mousemove during a drag, with no rAF batching/throttle; rows aren't individually memoized, so every pixel of drag re-renders the header plus all visible+overscan rows.
   - Fix: throttle via `requestAnimationFrame`, or track width in a ref + CSS transform during drag, committing to state only on `mouseup`.
 
-- [ ] **StatisticsPage fetches `/api/aggregations/recipient-insights` twice under two unrelated key families — and the tab's copy is missed by mutation invalidation** 🔼 🔎 verified-present 2026-07-11
+- [x] **StatisticsPage fetches `/api/aggregations/recipient-insights` twice under two unrelated key families — and the tab's copy is missed by mutation invalidation** 🔼 🔎 verified-present 2026-07-11 ✅ 2026-07-14 · da226a6
   - ↪ _from: Performance research 2026-07-02 · Frontend — React Query_
   - `apps/frontend/src/hooks/useStatistics.ts:229-233,294-307` (`['aggregations','recipient-insights',...]`) vs. `apps/frontend/src/components/statistics/RecipientInsightsTab.tsx:68-74` (`["recipient-insights", ...]`)
   - Identical URL with no exclusions; the tab's key sits outside the `['aggregations']` prefix so `useTransactions.invalidateAll` never reaches it (stale until staleTime expiry). `RecipientInsightsPage.tsx:50` shares the tab's key, so that pair dedupes — the page/hook split is the problem.
@@ -1155,25 +1155,25 @@ look-changing one.
   - Every flip of the switch refetches *every* query in the cache — settings usually open as an overlay over a mounted page, so all active queries (dashboard aggregations, transactions, portfolio, research quotes…) refire per toggle. The setting only affects server-side aggregation/cash-flow outputs.
   - Fix: scope to the affected families (`['aggregations']`, `['monthlySummary']`, `['filteredDashboardStats']`, cashflow-forecast keys).
 
-- [ ] **Virtualized transaction/recipient list queries lack `placeholderData` — pending flash + list reset on every filter/search/sort change** 🔼 🔎 verified-present 2026-07-11
+- [x] **Virtualized transaction/recipient list queries lack `placeholderData` — pending flash + list reset on every filter/search/sort change** 🔼 🔎 verified-present 2026-07-11 ✅ 2026-07-14 · da226a6
   - ↪ _from: Performance research 2026-07-02 · Frontend — React Query_
   - `apps/frontend/src/features/transactions/hooks/useTransactionListData.ts:79-123`, `apps/frontend/src/pages/RecipientsPage.tsx:65-69`
   - Every filter/search/sort value is in the query key with no `placeholderData: (prev) => prev`, so each (debounced) keystroke creates a fresh cache entry and blanks to loading UI until the round trip completes. The sibling `useTransactions.ts:36` sets it explicitly with a comment — these two hooks missed the convention.
   - Fix: add `placeholderData: (prev) => prev` to both (the existing `initialData`-sync effects already handle repopulation). Same one-liner for the admin table editor (`pages/admin/TableDataEditorPage.tsx:161-171`, admin-only).
 
-- [ ] **`dashboardRecentTransactions` queryFn runs an unbounded pagination loop, re-run after every transaction mutation** 🔼 🔎 verified-present 2026-07-11
+- [x] **`dashboardRecentTransactions` queryFn runs an unbounded pagination loop, re-run after every transaction mutation** 🔼 🔎 verified-present 2026-07-11 ✅ 2026-07-14 · da226a6
   - ↪ _from: Performance research 2026-07-02 · Frontend — React Query_
   - `apps/frontend/src/pages/DashboardPage.tsx:113-159`
   - The queryFn loops `getTransactions({limit: 200, offset})` pages until 5 non-excluded rows are found, with no page cap — a user whose recent history is dominated by excluded categories (e.g. transfers) triggers many sequential 200-row round trips, and `invalidateAll` refires the whole loop after every transaction create/update/delete.
   - Fix: pass exclusion IDs server-side with `limit: 5`, or at minimum cap the loop (~3 pages).
 
-- [ ] **VirtualDataTable: every search keystroke re-renders the whole table and re-runs the O(n) row pipeline** 🔼 🔎 verified-present 2026-07-11
+- [x] **VirtualDataTable: every search keystroke re-renders the whole table and re-runs the O(n) row pipeline** 🔼 🔎 verified-present 2026-07-11 ✅ 2026-07-14 · da226a6
   - ↪ _from: Performance research 2026-07-02 · Frontend — runtime rendering_
   - `apps/frontend/src/components/shared/VirtualDataTable.tsx:134,164-175,346-384,677-810`
   - The 300ms debounce only covers the API call; `setLocalSearchQuery` fires per keystroke and re-renders the entire table. `processedRows` lists `localSearchQuery` in its deps and re-maps **all loaded rows** even in server-search mode (filter branch skipped, `deferredData.map` not); the ~25-40 visible virtual rows then all re-render (no row memoization), each carrying a Radix ContextMenu root, badges, `TagChip`s, and a closed `SplitTransactionDialog` whose body still executes Decimal math every render (`components/splits/SplitTransactionDialog.tsx:57-77`).
   - Fix: colocate the search input + suggestions in a child component; drop `localSearchQuery` from `processedRows` deps when `isServerSearch`; extract a memoized Row keyed on `(row, isEditing, columnWidths)`; gate SplitTransactionDialog's derived math behind `open`.
 
-- [ ] **`Intl.NumberFormat`/`DateTimeFormat` constructed per formatted value on TaxOverviewPage (and 6 smaller sites) — re-run at chart-hover rate** 🔼 🔎 verified-present 2026-07-11
+- [x] **`Intl.NumberFormat`/`DateTimeFormat` constructed per formatted value on TaxOverviewPage (and 6 smaller sites) — re-run at chart-hover rate** 🔼 🔎 verified-present 2026-07-11 ✅ 2026-07-14 · da226a6
   - ↪ _from: Performance research 2026-07-02 · Frontend — runtime rendering_
   - `apps/frontend/src/pages/TaxOverviewPage.tsx:89-96` (`fmt()` constructs a formatter per call: 7 cards + 16 PIT rows + ~12 profile fields + both BarCharts' tick/tooltip formatters at `:588-589,715-716`), `:207` (`formatMonthTick`); same per-call pattern at `RealEstatePage.tsx:36-40`, `MarketLookupPage.tsx:133-137`, `CustomChart.tsx:78`, `CustomChartBuilderModal.tsx:89`, `ResearchFundamentalsTab.tsx:106`, `CloseAccountDialog.tsx:52`
   - Formatter construction is ~50-200µs each — low-ms per render, repeated at hover rate via the chart findings above. (Distinct from the already-filed "24 files use raw Intl.NumberFormat" *consistency* item — this is the per-render instantiation cost angle.)
@@ -1212,7 +1212,7 @@ look-changing one.
   - `apps/node-backend/src/main.js:349` — `express.static(distPath, { index: false, maxAge: '1y', immutable: true })`; `dist/` root holds non-hashed `index.html`, `favicon.ico`, etc. `index: false` only disables directory-index resolution; the SPA fallback's `no-cache` (`main.js:354`) covers only non-file paths.
   - Fix: `setHeaders` in the static options — `no-cache` for anything not under `/assets/`.
 
-- [ ] **Forecast repo streams raw per-transaction rows to JS instead of SQL `GROUP BY (date, currency)` — all four query paths** 🔼 🔎 verified-present 2026-07-11
+- [x] **Forecast repo streams raw per-transaction rows to JS instead of SQL `GROUP BY (date, currency)` — all four query paths** 🔼 🔎 verified-present 2026-07-11 ✅ 2026-07-14 · 453662d
   - ↪ _from: Performance research 2026-07-02 · Backend — reports & aggregations_
   - `apps/node-backend/src/repositories/infoRepo.forecast.js:256-263` (`getCashflowForecastData`), `:376-392` (Rolling), `:486-501` (ByCategory), `:57-78` (Comparison); JS aggregation at `:310-317`; per-row `{...row}` copies in `infoRepositoryHelpers.js:144-151`
   - No GROUP BY, no LIMIT; `historyMonths` clamps at 120, so a 10-year window ships every transaction row through Node per request. The sibling `infoRepo.monthly.js:139-180` already proved the fix is FX-semantics-preserving (grouped by date+currency with an explicit comment). `ByCategory` is worse: re-run on every `include_breakdown` request even on MC-cache hits (`forecast/index.js:284-287`). *(Note: the 2026-06-30 "verified optimized" entry covered `services/calculations/aggregation/cashflowForecast.js`, which contains no SQL — this is the separate `infoRepo.forecast.js` layer.)*
@@ -1278,7 +1278,7 @@ look-changing one.
   - Same defect class as the already-filed VirtualDataTable column-resize, but in the separate non-virtual `DataTable` used for Dashboard "Recent transactions" (`apps/frontend/src/pages/DashboardPage.tsx:495`); each mousemove (~60-120Hz) creates a new widths object and re-renders header + all rows, and width changes reflow the table each frame. Bounded by the small row count, but it's a second copy of the bug that will be missed if only VirtualDataTable is fixed.
   - Fix: during drag, write the width to a CSS variable / inline style on the `<col>`/`<th>` via ref per rAF; commit to React state once on mouseup (same fix as VirtualDataTable — fix both together).
 
-- [ ] **Every transactions-list page load scans the entire filtered set — `COUNT(*) OVER ()` defeats LIMIT top-N even on the unfiltered default view** 🔼 🔎 verified-present 2026-07-11
+- [x] **Every transactions-list page load scans the entire filtered set — `COUNT(*) OVER ()` defeats LIMIT top-N even on the unfiltered default view** 🔼 🔎 verified-present 2026-07-11 ✅ 2026-07-14 · 453662d
   - ↪ _from: Performance research 2026-07-05 · Wave P1 (backend query paths)_
   - `apps/node-backend/src/repositories/transactionRepository.js:452-457,277-299`, `apps/node-backend/src/routes/transactions.js:243-250`
   - `getAllWithCount` appends `COUNT(*) OVER () AS total_count`, forcing full materialization of the filtered 6-way join before LIMIT/OFFSET on every page request — including page 1 of the plain unfiltered list, paid even when `include_balance=false`. Distinct from the filed OFFSET+running_balance item (keyset wouldn't remove this: the count itself is the full-set scan). `getUncategorisedWithCount` is worse: its total CTE runs a second, semantically different full count (full TRANSACTION_JOINS + list filters) alongside the uncategorised row query, per request. Growth linear in table size on the app's hottest read endpoint.
@@ -1299,7 +1299,7 @@ look-changing one.
   - Fix: rewrite as `t.recipient_id IN (SELECT id FROM recipients WHERE id = $ OR primary_recipient_id = $ [OR …group branches])` — a small semi-join that probes `idx_transactions_recipient_id` / `idx_transactions_recipient_date_active`.
   - 📏 **Verdict CONFIRMED structural (2026-07-06, Wave D2 live EXPLAIN):** seqscan-off evaluates the OR as a join Filter (Rows Removed: 1021); recipient indexes never get an `Index Cond`.
 
-- [ ] **`LanguageBridge` recreates `setLanguage` every render, so ANY app-settings change re-publishes the LanguageContext value and re-renders every `useLanguage` consumer app-wide** 🔼 🔎 verified-present 2026-07-11
+- [x] **`LanguageBridge` recreates `setLanguage` every render, so ANY app-settings change re-publishes the LanguageContext value and re-renders every `useLanguage` consumer app-wide** 🔼 🔎 verified-present 2026-07-11 ✅ 2026-07-14 · da226a6
   - ↪ _from: Performance research 2026-07-05 · Wave P3 (frontend state/i18n runtime)_
   - `apps/frontend/src/App.tsx:115-133` (`setLanguage` is a fresh arrow at :118), `apps/frontend/src/contexts/LanguageContext.tsx:130-133` (`value` memo deps include `setLanguage`), `apps/frontend/src/components/layout/AppLayout.tsx:231` (settings render as a Dialog over the live page), `components/settings/sections/GeneralSection.tsx:43-109` + `BehaviorSection.tsx:41,57` + `AppearanceSection.tsx:213` (per-toggle `updateAppSettings` calls)
   - `updateAppSettings` replaces the whole `appSettings` object, so `LanguageBridge` (subscribed via `useAppSettings`) re-renders on every settings change — including keys unrelated to language (decimals, startup section, AI model, colorblind toggle). Each re-render mints a new `setLanguage` identity, invalidating the `useMemo`'d context value and forcing every `useLanguage` consumer (virtually every text-bearing component) to re-render. Because settings is a modal over the mounted page, each toggle re-renders the full page + shell behind the dialog. `t`/`tc` themselves are stable — the unstable arrow is the sole leak. (TODO's existing LanguageBridge item files it as a naming/altitude issue only — this is the separate perf leak.)
@@ -1312,19 +1312,19 @@ look-changing one.
   - Fix: gate on "populated" instead of "refreshed this boot" — e.g. backend reports `pg_matviews.ispopulated` (instant query) as the readiness key, or Electron navigates on plain `/health` and the refresh overlaps SPA load; keep the strict gate only for the first-run/unpopulated case.
   - **📏 Measured 2026-07-05 (Wave S1, demo app, 31 months data): 33–38ms gate cost, not 0.3-2s — recommend CLOSING as "keep the gate, cost negligible".** A 25ms-resolution poller saw `caches.materializedViews:true` 33–38ms after the first HTTP response in all three warm runs; backend logs "Materialized views refreshed in 31ms". Even at the real DB's ~4× data scale this projects well under the Electron 100ms poll quantum. The gate buys a guaranteed non-empty first dashboard paint for ~0 cost. (Caveat: demo DB is ~¼ of the real month span — re-check only if a real-data instrumented boot ever shows the refresh above ~200ms.)
 
-- [ ] **Docker Desktop not running → dialog + `app.quit()`, forcing a manual relaunch instead of waiting for the daemon** 🔼 🔎 verified-present 2026-07-11
+- [x] **Docker Desktop not running → dialog + `app.quit()`, forcing a manual relaunch instead of waiting for the daemon** 🔼 🔎 verified-present 2026-07-11 ✅ 2026-07-14 · b3ee04b
   - ↪ _from: Performance research 2026-07-05 · Wave P4 (boot latency)_
   - `packaging/electron/main.js:3263-3275` (dialog → `shell.openPath('/Applications/Docker.app')` → `app.quit()`); `:1156-1200` (cheap socket ping already available)
   - On every post-reboot launch (Docker Desktop rarely autostarts), the boot path dead-ends: the user clicks "Open Docker", Vision quits, Docker takes ~20-45s to come up, and the user must remember to relaunch Vision — and gets the same dialog again if they relaunch too early. The app already has a sub-50ms daemon probe (`pingDockerSocket`) it could poll; instead the single largest wall-clock event in the boot story requires two manual user actions.
   - Fix: after opening Docker.app, keep the splash up with a "waiting for Docker" status and poll `pingDockerSocket` (e.g. 1s cadence, 90s budget, cancel button), then continue `launch()` automatically instead of quitting.
 
-- [ ] **Serial 2s-timeout Docker-socket probing turns a Docker-daemon wake into a multi-second `check_docker` stall on the first launch after idle** 🔼 🔎 verified-present 2026-07-11 📏 *(measured live)*
+- [x] **Serial 2s-timeout Docker-socket probing turns a Docker-daemon wake into a multi-second `check_docker` stall on the first launch after idle** 🔼 🔎 verified-present 2026-07-11 📏 *(measured live)* ✅ 2026-07-14 · b3ee04b
   - ↪ _from: Startup/Electron performance research 2026-07-05 · Wave S1 (live instrumented boot, demo app)_
   - `packaging/electron/main.js:1175-1190` (socket candidates tried serially), `:1159` (`pingDockerSocket` 2000ms timeout per candidate)
   - Measured: first launch after ~45min Docker Desktop idle (resource-saver) → `check_docker` = 2227ms; every subsequent launch = 15–21ms. Real-world launches usually happen *after* idle, so the 2.2s wake path is more representative of what the user feels than the 19ms best case — and each dead socket candidate can stack another 2s serially before the live one answers. (Attribution to daemon wake is inferred from idle time + both parallel Docker calls being uniformly slow in that run — not independently confirmed.)
   - Fix: race all socket candidates in parallel (`Promise.any`) and/or drop the per-candidate timeout to ~500ms with one retry — bounds the wake path near the daemon's actual response time instead of stacking serial timeouts.
 
-- [ ] **Backup feature's `archiver`/`yauzl` chain (65 modules) loads at Electron module eval — ~56ms+ of the pre-splash window for functionality that only runs post-boot** 🔼 🔎 verified-present 2026-07-11
+- [x] **Backup feature's `archiver`/`yauzl` chain (65 modules) loads at Electron module eval — ~56ms+ of the pre-splash window for functionality that only runs post-boot** 🔼 🔎 verified-present 2026-07-11 ✅ 2026-07-14 · b3ee04b
   - ↪ _from: Startup/Electron performance research 2026-07-05 · Wave S2 (main-process cold-start static sweep)_
   - `packaging/electron/main.js:11` (`require('./backup/bundle')` at module scope) → `packaging/electron/backup/bundle.js:23` (`require('archiver')`), `:32` (`require('yauzl')`)
   - bundle.js is only used by backup IPC handlers (main.js:2596-2747), restore, and the will-quit backup (main.js:3462) — all post-boot — yet its require pulls 65 modules (archiver → zip-stream → compress-commons → readable-stream → archiver-utils → lodash pieces, glob, cross-spawn…). Measured 56ms warm-FS-cache in plain node; inside the asar on a cold launch it's plausibly worse. That's ~15-25% of the app-controlled pre-splash time (S1 measured module eval → splash ≈ 150ms app-controlled), pure waste for boot.
@@ -1372,7 +1372,7 @@ look-changing one.
   - A user who installed at PG 18.0 stays on 18.0 — missing minor-release bugfixes, security patches, and occasional perf fixes — for the lifetime of the install, on the one component holding all user data. (Demo shows 18.4 only because its image was built recently.) Not a query-speed issue today; a slow-burning currency/security gap.
   - Fix: include `db` in the update-time pull (`docker compose pull app db` at both sites). Same-major minor bumps are drop-in for Postgres (no pg_upgrade); the `postgres:18-alpine` major pin already prevents accidental major jumps.
 
-- [ ] **Unbounded-looking report-data fetches actually are date-bounded, but still lack a defensive hard cap for pathological custom periods** 🔽 🔎 verified-present 2026-07-11 🔧 *(toned down + citation fixed)*
+- [x] **Unbounded-looking report-data fetches actually are date-bounded, but still lack a defensive hard cap for pathological custom periods** 🔽 🔎 verified-present 2026-07-11 🔧 *(toned down + citation fixed)* ✅ 2026-07-14 · 453662d
   - ↪ _from: Codebase audit 2026-06-30 · Performance — Backend_
   - `apps/node-backend/src/services/reports/dataFetcherTax.js:89-110`, `dataFetcherPortfolio.js:73-89`
   - Both queries are bounded by the report's date range and aggregate in JS after that — not literally unbounded. The real gap is the missing defensive LIMIT for pathological multi-year custom periods, mirroring the precedent in `infoRepo.statistics.js` (note: **not** `infoRepositoryStatistics.js`, a different, similarly-named file — the original citation was wrong).
@@ -1396,13 +1396,13 @@ look-changing one.
   - Blur tier is baked unconditionally into the base `className`, with no variant prop to opt out — only an additive override is possible.
   - Fix: default `Card` to a flat surface; require an explicit `glass-*` className for hero/standalone cards.
 
-- [ ] **`SettingsPreloadContext` provider value is an unmemoized object literal at the app root** 🔽 🔎 verified-present 2026-07-11
+- [x] **`SettingsPreloadContext` provider value is an unmemoized object literal at the app root** 🔽 🔎 verified-present 2026-07-11 ✅ 2026-07-14 · da226a6
   - ↪ _from: Codebase audit 2026-06-30 · Performance — Frontend_
   - `apps/frontend/src/contexts/SettingsPreloadContext.tsx:70`, used at `App.tsx:168`
   - `value={{ rawSettings, isLoading }}` is a fresh object every render in the outermost provider — the one provider not following the `useMemo` pattern used elsewhere (`LanguageContext`, `BelgianTaxProfileContext`, `PageTitleContext`).
   - Fix: `useMemo(() => ({ rawSettings, isLoading }), [rawSettings, isLoading])`.
 
-- [ ] **Attachment thumbnails fetch full-resolution images for a 24px icon, not lazy-loaded** 🔽 🔎 verified-present 2026-07-11
+- [x] **Attachment thumbnails fetch full-resolution images for a 24px icon, not lazy-loaded** 🔽 🔎 verified-present 2026-07-11 ✅ 2026-07-14 · da226a6
   - ↪ _from: Codebase audit 2026-06-30 · Performance — Frontend_
   - `apps/frontend/src/components/shared/AttachmentPanel.tsx:64-68`
   - Points at the original download endpoint (receipt photos can be several MB) to render a 24×24px thumbnail; no `loading="lazy"`, no server-side thumbnail variant.
@@ -1416,7 +1416,7 @@ look-changing one.
   - `useOllamaStatus` polls every 30s while chat/settings mounted even when the integration is disabled/unreachable (`hooks/useOllamaStatus.ts:11-14`); optional backoff when down.
   - `usePortfolioPrefetch` (`hooks/usePortfolioPrefetch.ts:37-42`, mounted in AppSidebar) fires net-worth + full-period performance on every app boot for all users, documented as intentional (backend warms these) — verify backend cache-hit cost before changing; flagged as a trade-off, not a bug.
 
-- [ ] **Minor render hygiene (grouped)** 🔽 🔎 verified-present 2026-07-11
+- [x] **Minor render hygiene (grouped)** 🔽 🔎 verified-present 2026-07-11 ✅ 2026-07-14 · da226a6
   - ↪ _from: Performance research 2026-07-02 · Frontend — runtime rendering_
   - `CategoryPivotTable.tsx:76,242-360` defaults to "all" years and renders every period × category eagerly — multi-year data ≈ 3-4k `<td>`s rebuilt per valueMode/collapse/year toggle (computation memos are fine; cost is DOM size). Default to latest year or window the period columns.
   - `BankBalancesWidget.tsx:113-147` builds its ~365-point × N-accounts chart dataset in the render body unmemoized — fresh `data` identity per dashboard re-render, which would also defeat any chart-level memoization added for the findings above. Wrap in `useMemo` keyed on `data`.
@@ -1518,13 +1518,13 @@ look-changing one.
   - Setting `canvas.width` resets the drawing buffer to transparent; in the animated branch the next 33ms frame repaints, but in the reduced-motion branch no draw is ever scheduled again, so the first resize permanently blanks the enhanced-tier WebGL layer; `refreshColors()` similarly updates `c1`/`c2` without a redraw.
   - Fix: call `draw(0)` at the end of `resize()` and in `refreshColors()` when in the reduced-motion (or future static) mode.
 
-- [ ] **NetSummaryCard sparkline scrub calls getBoundingClientRect on every pointermove and re-renders the full hero card (RollingNumber + Sparkline path rebuild) per index change** 🔽 🔎 verified-present 2026-07-11
+- [x] **NetSummaryCard sparkline scrub calls getBoundingClientRect on every pointermove and re-renders the full hero card (RollingNumber + Sparkline path rebuild) per index change** 🔽 🔎 verified-present 2026-07-11 ✅ 2026-07-14 · da226a6
   - ↪ _from: UI/GPU research 2026-07-02 · Wave C_
   - `apps/frontend/src/components/dashboard/NetSummaryCard.tsx:34-41,133` (`scrubFromEvent` does `e.currentTarget.getBoundingClientRect()` per move → `setScrubIndex`; `chartData` rebuilt in render body at 52-55 so Sparkline gets a fresh array each render)
   - GBCR runs on every pointermove during scrub (rect never changes mid-drag), and each index change re-renders the whole Card — RollingNumber digit animation restarts and Sparkline recomputes scales/curves from a newly-allocated array. Cost is bounded by React's same-index setState bailout (with ~12-24 history points most moves bail), so this is a polish item, not a storm.
   - Fix: cache the rect on pointerdown (in a ref) and reuse it for the drag; hoist `chartData`/the `data` array into `useMemo` so Sparkline's memoizable inputs are referentially stable.
 
-- [ ] **ChatMessageList forces a layout flush (scrollHeight read + scrollTop write) and re-renders every unmemoized ChatBubble on each streamed token chunk** 🔽 🔎 verified-present 2026-07-11
+- [x] **ChatMessageList forces a layout flush (scrollHeight read + scrollTop write) and re-renders every unmemoized ChatBubble on each streamed token chunk** 🔽 🔎 verified-present 2026-07-11 ✅ 2026-07-14 · da226a6
   - ↪ _from: UI/GPU research 2026-07-02 · Wave C_
   - `apps/frontend/src/features/ai-chat/ChatMessageList.tsx:60-64` (effect keyed on `assistantDraft`/`streamingToolContentLength` → `el.scrollTop = el.scrollHeight` per chunk); `ChatBubble` is not memoized (`apps/frontend/src/features/ai-chat/ChatBubble.tsx:11`)
   - During streaming, every chunk re-renders the entire unvirtualized message list (O(conversation length)) and the effect reads `scrollHeight` on the freshly-mutated container, forcing a synchronous reflow per chunk. Also pins scroll unconditionally — the user can't scroll up while streaming (UX side effect of the same code). Chat page only, so bounded blast radius.
@@ -1573,7 +1573,7 @@ look-changing one.
   - Measured spawn→`create_window` end: 337/339ms warm-typical, 646–653ms on first-launch-after-idle; actual pixel paint of the data-URL splash adds an unmeasured few tens of ms. Composition: ~190–430ms Electron framework init before module eval (fixed cost, untraced) + ~60ms `app.whenReady`/menus + 87–124ms `create_window`. Only the last ~150ms is app-controlled.
   - Fix: move menu/dock setup after `createWindow()`; real gain ≤100ms — don't prioritize over the items above.
 
-- [ ] **No `backgroundColor` on the BrowserWindow — the first visible frames paint the default backdrop (white / vibrancy material) before the data-URL splash renders, a visible flash in dark mode** 🔽 🔎 verified-present 2026-07-11
+- [x] **No `backgroundColor` on the BrowserWindow — the first visible frames paint the default backdrop (white / vibrancy material) before the data-URL splash renders, a visible flash in dark mode** 🔽 🔎 verified-present 2026-07-11 ✅ 2026-07-14 · b3ee04b
   - ↪ _from: Startup/Electron performance research 2026-07-05 · Wave S2 (main-process cold-start static sweep)_
   - `packaging/electron/main.js:1485-1510` (BrowserWindow options — no `backgroundColor`, default `show:true`), splash loaded via data-URL at `:3127`
   - Show-immediately is the right strategy for perceived speed, but until the splash HTML paints, the window shows the default backdrop — against a near-black splash in dark mode that's a flash. The splash base color is already computed synchronously (`readSplashTheme()`/`deriveSplashPalette()`, main.js:1340-1370) before window creation.
@@ -1585,7 +1585,7 @@ look-changing one.
   - Nothing lies, but nothing progresses either — the spinner is the only motion for seconds during the phase S1 measured as the bulk of warm boot. A splash that visibly progresses feels faster.
   - Fix: cheap sub-progress inside `composeStartOrUp` — parse compose stderr progress events, or a timed rotation ("Starting database…" → "Starting Vision engine…" keyed off elapsed time). Pure `setSplashStatus` work; its data:-URL guard (`:1419`) already makes this safe.
 
-- [ ] **Dock-reactivate reopen path skips splash AND poll — blank window while the SPA reloads, connection error if the backend died meanwhile** 🔽 🔎 verified-present 2026-07-11
+- [x] **Dock-reactivate reopen path skips splash AND poll — blank window while the SPA reloads, connection error if the backend died meanwhile** 🔽 🔎 verified-present 2026-07-11 ✅ 2026-07-14 · b3ee04b
   - ↪ _from: Startup/Electron performance research 2026-07-05 · Wave S3 (splash→SPA handoff)_
   - `packaging/electron/main.js:3504-3509` (`activate` with `mainWindow === null` → `createWindow()` + bare `loadURL(APP_URL)`); same pattern in the `sendToApp` recovery path `:2800-2806`
   - After a red-button close (window destroyed, app + containers still alive), reopening paints an empty window and re-runs the entire SPA boot unguarded.
@@ -1628,7 +1628,7 @@ look-changing one.
   - At today's demo size (18 MB total DB) any plan is fast, but `random_page_cost` is the setting most likely to flip a plan wrong as a real user's `transactions`/`asset_price_history` grow over years — and it interacts with the trigram/GIN and report-aggregation indexes other waves audited. Zero-risk to change. (All other stock defaults were assessed and genuinely don't matter at this scale — see §Checked clean.)
   - Fix: add to the db service in all three composes: `command: postgres -c random_page_cost=1.1` (applies on restart, no re-init). Optionally fold in the `idle_in_transaction_session_timeout` and `shm_size` items below.
 
-- [ ] **No `idle_in_transaction_session_timeout` anywhere (server-side 0, nothing pool-side) — a transaction stalled on a non-DB await holds locks + a pool slot indefinitely** 🔽 🔎 verified-present 2026-07-11
+- [x] **No `idle_in_transaction_session_timeout` anywhere (server-side 0, nothing pool-side) — a transaction stalled on a non-DB await holds locks + a pool slot indefinitely** 🔽 🔎 verified-present 2026-07-11 ✅ 2026-07-14 · 453662d
   - ↪ _from: DB performance research 2026-07-06 · Wave D1_
   - Live `pg_settings`: `idle_in_transaction_session_timeout | 0`; pool options at `apps/node-backend/src/database/connection.js:22-28` set only `statement_timeout`/`idleTimeoutMillis`/`connectionTimeoutMillis`; `withTransaction` (`connection.js:126-148`) holds a client across arbitrary `await fn(client)`
   - `statement_timeout` does NOT fire while a session is idle *in* transaction — if `fn` stalls on a network call or hung stream, the lock + pool slot are held until restart, and autovacuum's xmin horizon stalls (table bloat). Single-user blast radius = "app wedges until restart". Low likelihood, cheap insurance.
@@ -1652,7 +1652,7 @@ look-changing one.
   - `routes/tags.js:19-24` + `tagRepository.js:15-29` (unbounded list, no LIMIT, unlike every sibling route); `recipients.js:23-26` → `recipientClusterService.js:36-43` (loads every active recipient before bucketing, output capped but scan isn't); `infoRepositoryHelpers.js:80-82` `clearMvCache()` exported/documented as "used after bulk import" but has zero actual callers (self-heals via 60s negative TTL; comment is stale).
   - Fix: add `parsePagination` to the tags route; wire up or remove the dead `clearMvCache()` export.
 
-- [ ] **FX-backfill helper runs on every backend startup (not literally "one-time"), but is self-limiting and not request-path** ⬇ 🔧 🔎 verified-present 2026-07-11 *(re-characterized)*
+- [x] **FX-backfill helper runs on every backend startup (not literally "one-time"), but is self-limiting and not request-path** ⬇ 🔧 🔎 verified-present 2026-07-11 *(re-characterized)* ✅ 2026-07-14 · 453662d
   - ↪ _from: Codebase audit 2026-06-30 · Performance — Backend_
   - `apps/node-backend/src/services/currency/currencyConversionService.js:475-494` (`backfillPortfolioHistoricalRates`)
   - `for (const row of missingResult.rows) { await getRateToEurForDate(...); await query(exactCheck...) }` — a genuine N+1, confirmed. Its sole caller is `startup/warmup.js:230-235`, invoked unconditionally on every boot (when online) — not a manually-triggered one-time migration script as originally described, though it stays cheap after the first run since its own query is gated to only rows genuinely missing a rate.
@@ -1687,7 +1687,7 @@ look-changing one.
   - `packaging/electron/main.js:3188` (early `return` after `end()` inside a `try` whose `finally` at `:3198-3199` calls `end()` again → duplicate mark in every run), `:3105` (`endLaunch` never invoked → a `launch` phase exists but never emits)
   - Fix: drop the early `end()` or guard `bootMark` closures against double invocation; call `endLaunch` where launch actually completes.
 
-- [ ] **Single-instance lock acquired at the END of module eval — a second launch evaluates the whole 3514-line module (incl. the archiver chain) before quitting** ⏬ 🔎 verified-present 2026-07-11
+- [x] **Single-instance lock acquired at the END of module eval — a second launch evaluates the whole 3514-line module (incl. the archiver chain) before quitting** ⏬ 🔎 verified-present 2026-07-11 ✅ 2026-07-14 · b3ee04b
   - ↪ _from: Startup/Electron performance research 2026-07-05 · Wave S2 (main-process cold-start static sweep)_
   - `packaging/electron/main.js:3491` (`requestSingleInstanceLock` in the last 25 lines) vs `migrateLegacyUserData()` IIFE at `:90-113`; second-instance handler `:3495-3500` is clean (restore/show/focus only)
   - A second launch pays full module eval before discovering the lock; two simultaneous first launches can also both enter the `renameSync` migration before either takes the lock (theoretical race, non-fatal).
@@ -1717,13 +1717,13 @@ look-changing one.
   - At standard/reduced tiers the page paints opaque so the NSVisualEffectView is invisible, but the window server still maintains the under-window blur material behind the window (sampled on move/desktop changes) — wasted (small) compositor/battery work for the common non-enhanced case; `followWindow` limits it to the active window only.
   - Fix: expose an IPC that calls `mainWindow.setVibrancy(effectiveTier === 'enhanced' ? 'under-window' : null)` from the same effect that toggles the CSS class.
 
-- [ ] **ChatComposer textarea autosize does a write-read-write (`height='auto'` → `scrollHeight` → `height=…`) per keystroke — one forced reflow per character typed** ⏬ 🔎 verified-present 2026-07-11
+- [x] **ChatComposer textarea autosize does a write-read-write (`height='auto'` → `scrollHeight` → `height=…`) per keystroke — one forced reflow per character typed** ⏬ 🔎 verified-present 2026-07-11 ✅ 2026-07-14 · da226a6
   - ↪ _from: UI/GPU research 2026-07-02 · Wave C_
   - `apps/frontend/src/features/ai-chat/ChatComposer.tsx:48-53`
   - Canonical autosize pattern; the interleaved style write + scrollHeight read forces a synchronous layout per keystroke. Single small textarea on the chat page, so real cost is minimal — noted for completeness.
   - Fix: use CSS `field-sizing: content` (Chromium/Electron supports it) and drop the effect, or accept as-is.
 
-- [ ] **PieChart reads getBoundingClientRect on slice pointerenter but never uses the rect — dead forced layout read** ⏬ 🔎 verified-present 2026-07-11
+- [x] **PieChart reads getBoundingClientRect on slice pointerenter but never uses the rect — dead forced layout read** ⏬ 🔎 verified-present 2026-07-11 ✅ 2026-07-14 · da226a6
   - ↪ _from: UI/GPU research 2026-07-02 · Wave C_
   - `apps/frontend/src/components/charts/PieChart.tsx:102-110` (`rect` fetched at 103-104, used only as a truthiness guard; `setHover` uses centroid coords `centerX + cx` / `centerY + cy`)
   - Per-enter (not per-move) so frequency is low; it's dead code that forces a layout read for nothing.
@@ -1741,13 +1741,13 @@ look-changing one.
   - Conversation count grows unboundedly with usage, and the same component re-renders per streamed token via `useActiveStreams`/`ChatConversationList` (that identity-churn half is filed separately as "aiChatStreamStore emits a new `activeIds` array on every token, not just on membership change", 🏛️ Architecture & API) — so N light rows × per-token frequency multiply. Growth is slow, rows are light; minimal on its own, but that already-filed compare-before-swap fix increases in value as the list grows.
   - Fix: the filed `activeIds` compare-before-swap fix removes the multiplier; pagination optional later.
 
-- [ ] **Zero CSS containment anywhere — every below-fold dashboard/statistics section is fully laid out and painted on mount; `content-visibility: auto` is an untapped, visually-free win** 🔼 🔎 verified-present 2026-07-11
+- [x] **Zero CSS containment anywhere — every below-fold dashboard/statistics section is fully laid out and painted on mount; `content-visibility: auto` is an untapped, visually-free win** 🔼 🔎 verified-present 2026-07-11 ✅ 2026-07-14 · da226a6
   - ↪ _from: UI/GPU performance research 2026-07-05 · Wave G1_
   - `grep contain:/content-visibility/contain-intrinsic across apps/frontend/src → 0 hits` · `apps/frontend/src/pages/DashboardPage.tsx:485-511` (CashFlowForecastChart + recent-transactions DataTable, below the fold on typical viewports) · `apps/frontend/src/pages/StatisticsPage.tsx:169-283` (stacked ChartCards + CategoryPivotTable per tab) · `apps/frontend/src/features/ai-chat/ChatMessageList.tsx:82-97` (plain column of ChatBubbles in an overflow-y scroller)
   - The repo uses no `contain:` or `content-visibility:` at all. Dashboard mounts 5 stacked widget sections and paints all of them (including two glass chart cards, the forecast chart, and a DataTable) even though the lower half starts offscreen; Statistics tabs stack 2+ chart cards plus the pivot table; long AI chats paint every bubble on each update. `content-visibility: auto` + `contain-intrinsic-size` (matching the existing skeleton heights) on the below-fold section wrappers and on chat bubbles skips their layout+paint until scrolled near — a real cut to first-render and update cost on the two heaviest pages. Interactions verified: no `position: sticky` inside any proposed target (DataTable/CashFlowForecastChart/ChartCard grep clean; CategoryPivotTable's sticky column lives inside its own scroll container, so wrapping the whole table is safe — just don't apply it per-row there). Caveat to verify at runtime: visx `ParentSize` (ResizeObserver) inside a skipped subtree may measure 0 until unskip, which defers chart SVG generation to scroll-into-view — that is the desired lazy behavior and matches the app's already-documented blank-until-scrolled screenshot artifact, and it composes with the already-filed chart mount-stagger fix (whileInView gating). **Runtime-verified 2026-07-05 (Wave G2, demo app): PASS** — tested both post-mount application and the faithful variant (property applied in the same mutation batch the chart node was inserted, so ParentSize's first ResizeObserver measurement happened while skipped); in both, scrolling into view produced a fully rendered 1284×300 visx SVG with real geometry (screenshots `.playwright-mcp/cv-*.png`). The measure-0-while-skipped state recovers on unskip.
   - Fix: add a utility (e.g. `.cv-auto { content-visibility: auto; contain-intrinsic-size: auto 320px; }`) and apply to Dashboard's forecast + recent-transactions wrappers, Statistics ChartCard/pivot wrappers, and ChatBubble roots. **Visually free**
 
-- [ ] **RecipientCombobox renders up to 1000 CommandItems and filters twice — cmdk re-scores and re-renders the full list synchronously on every keystroke while the debounced server search does the same filtering again** 🔼 🔎 verified-present 2026-07-11
+- [x] **RecipientCombobox renders up to 1000 CommandItems and filters twice — cmdk re-scores and re-renders the full list synchronously on every keystroke while the debounced server search does the same filtering again** 🔼 🔎 verified-present 2026-07-11 ✅ 2026-07-14 · da226a6
   - ↪ _from: UI/GPU performance research 2026-07-05 · Wave G1_
   - `apps/frontend/src/components/shared/RecipientCombobox.tsx:23-29` (`limit: 1000, active: false`, `useDebounce` server search) · `:51-55` (`CommandInput` drives `setSearch` per keystroke) · `:69-84` (all items rendered as CommandItems) · same shape at `CategoryCombobox.tsx:21` and `CategoryMultiCombobox.tsx:20` (`limit: 500`, client-only filtering)
   - Every keystroke sets `search` immediately, re-rendering `Command` and making cmdk score/sort/filter all rendered items synchronously (against the *stale* pre-debounce list), then 300ms later the server query re-filters and swaps the list — double filtering with a rank flash, plus a ~1000-item (~3-4k DOM node) mount inside a glass popover every time it opens. This combobox sits on transaction edit surfaces, so it's a hot path. React 19 note: no `useTransition`/`useDeferredValue` is used here (the only `useDeferredValue` in the app is VirtualDataTable's).
@@ -1759,7 +1759,7 @@ look-changing one.
   - Subsetting is already good (latin-only, 3 weights each). But the woff2 files are discovered only from the bundled CSS, and `swap` with no `size-adjust`/ascent-override means Fraunces (display serif) first paints as Iowan/Palatino/Georgia and then reflows every heading on swap — visible CLS on web cold loads. In Electron the files are local so the swap window is near-zero; this is a web-deployment polish item, honestly modest.
   - Fix: preload the two critical files (Inter 400, Fraunces 600) — needs a tiny Vite plugin or manual hashed-asset injection since names are hashed; and/or add metric-override fallback `@font-face` rules (fontaine does this automatically). Drop the dead `"* Variable"` names from tokens.css, or actually switch to `@fontsource-variable` (2 requests instead of 6). **Visually free** (strictly reduces visual instability)
 
-- [ ] **AreaChart/LineChart/ComposedChart hover handlers call `getBoundingClientRect` on every pointermove — one forced layout per hover frame, on top of the already-filed tooltip reflows** 🔽 🔎 verified-present 2026-07-11
+- [x] **AreaChart/LineChart/ComposedChart hover handlers call `getBoundingClientRect` on every pointermove — one forced layout per hover frame, on top of the already-filed tooltip reflows** 🔽 🔎 verified-present 2026-07-11 ✅ 2026-07-14 · da226a6
   - ↪ _from: UI/GPU performance research 2026-07-05 · Wave G1_
   - `apps/frontend/src/components/charts/AreaChart.tsx:202-211` · `LineChart.tsx:158-167` · `ComposedChart.tsx:145-153` (all: `indexAtClientX`/`handleMove` → `event.currentTarget.getBoundingClientRect()` per pointermove)
   - Each pointermove GBCRs the overlay rect immediately after the previous hover frame's DOM writes (hover-index state → path/tooltip re-render), forcing a layout flush per frame. Distinct mechanism and fix from the filed "hover path rebuilds" and "ChartTooltip double-reflow" findings — this is the third layout read stacking in the same hot frame, and via ChartSync it repeats per synced chart. Small on its own; cheap to remove.
@@ -1791,7 +1791,7 @@ look-changing one.
   - Typing e.g. "food" issues a debounced `/market/quotes` request per candidate word while the palette is open. Network/API-quota churn, not a render cost (the result card only renders on a live quote, 30s staleTime).
   - Fix: require the `$` cashtag prefix or ≥1 uppercase char before treating a query as a ticker candidate.
 
-- [ ] **Completed `ToolResultCard`s (incl. their Recharts trees) re-reconcile on every streamed AI-chat token** 🔼 🔎 verified-present 2026-07-11
+- [x] **Completed `ToolResultCard`s (incl. their Recharts trees) re-reconcile on every streamed AI-chat token** 🔼 🔎 verified-present 2026-07-11 ✅ 2026-07-14 · da226a6
   - ↪ _from: Performance research 2026-07-09 · Wave F3 (frontend residues; distinct from the filed ChatMessageList scroll-flush/unmemoized-ChatBubble item — this is the Recharts-subtree half)_
   - `apps/frontend/src/features/ai-chat/ToolResultCard.tsx:93` (no `React.memo`), `ChatMessageList.tsx:84-86` (re-maps all bubbles per render)
   - During an assistant stream, every token re-renders `AIChatPage` → `ChatMessageList` → fresh `ChatBubble` elements → every prior `ToolBubble`/`ToolResultCard` re-renders and its Recharts tree reconciles per token (the `useMemo(asRows, [result])` at `:94` keeps data stable, so it's pure reconcile cost). A conversation with several chart/table tool results pays a full Recharts reconcile of the whole backlog per token.
@@ -1815,13 +1815,13 @@ look-changing one.
   - Both join a derived `(SELECT split_id, SUM(amount) FROM split_payments GROUP BY split_id)` that aggregates ALL payments across every recipient, then discard everything outside the requested recipient. Tiny table today; grows with every recorded payment.
   - Fix: correlate the sum to the recipient's splits (`LEFT JOIN LATERAL ... WHERE split_id = ts.id`) or push the recipient filter into the aggregate subquery.
 
-- [ ] **DB-editor table browser runs an unbounded `COUNT(*)` + LIMIT/OFFSET on every page load (admin-only)** 🔽 🔎 verified-present 2026-07-11
+- [x] **DB-editor table browser runs an unbounded `COUNT(*)` + LIMIT/OFFSET on every page load (admin-only)** 🔽 🔎 verified-present 2026-07-11 ✅ 2026-07-14 · 453662d
   - ↪ _from: Performance research 2026-07-09 · Wave F2_
   - `apps/node-backend/src/services/dbEditor.js:196,204` (count alongside every data page, same READ-ONLY txn), `:195` (`LIMIT/OFFSET` paging)
   - With no filter the count is a full scan of the table (worst: `transactions`) re-executed on every page/sort/filter change, racing the 15s `READ_TIMEOUT_MS`; deep offsets scan-and-discard.
   - Fix: skip the exact count when `offset===0 && rows<limit`, use `pg_class.reltuples` estimates for large tables or cache the count per filter signature; keyset paging for deep pages.
 
-- [ ] **`db_editor_audit` grows unbounded — full before/after JSONB images per changed row, no retention** 🔽 🔎 verified-present 2026-07-11
+- [x] **`db_editor_audit` grows unbounded — full before/after JSONB images per changed row, no retention** 🔽 🔎 verified-present 2026-07-11 ✅ 2026-07-14 · 453662d
   - ↪ _from: Performance research 2026-07-09 · Wave F2_
   - `apps/node-backend/src/services/dbEditor.js:372-380` (writer), `alembic/versions/0059_db_editor_audit.py`; grep confirms nothing ever deletes from it
   - Every committed data-editor change inserts a row carrying full `before_json` + `after_json` + rendered statement text; a bulk edit of N rows writes N fat JSONB rows, forever. Indexed so reads stay fast — slow-burn disk growth (same family as the filed unpruned import-staging finding).
@@ -1833,7 +1833,7 @@ look-changing one.
   - A holding with B buys does ~B²/2 array-element copies; only affects non-default cost-basis users (`weighted_avg` at `:106` is O(N) and unaffected) and is served through the TTL'd info-response cache, so it bites only on cache-miss recompute. Pathological single-holding DCA history (~1-2k txns) ≈ low-tens-of-ms; below that negligible.
   - Fix: track lots with a head index (FIFO) / `pop` (LIFO) and `push` new lots instead of spreading — trivially O(N), zero behavior change.
 
-- [ ] **DB-editor issues ~5 uncached catalog/introspection round-trips per page read (admin-only)** ⏬ 🔎 verified-present 2026-07-11
+- [x] **DB-editor issues ~5 uncached catalog/introspection round-trips per page read (admin-only)** ⏬ 🔎 verified-present 2026-07-11 ✅ 2026-07-14 · 453662d
   - ↪ _from: Performance research 2026-07-09 · Wave F2_
   - `apps/node-backend/src/services/dbEditor.js:158-204` (`listUserTables` via `assertEditableTable` :57-63, `getTableMeta` 2 catalog queries :84-103, then data + count); `applyMutations` re-runs the 3 introspection queries
   - Column/PK metadata is static within a session but re-fetched on every browse tick. Correctness-motivated (the catalog IS the injection allowlist), so keep the allowlist semantics.
@@ -2918,7 +2918,7 @@ look-changing one.
   - `i18n/source/en.json:1186` `"menu.importCsv": "Import CSV..."` and `:1189` `"menu.settings": "Settings..."` (mirrored in nl.json) ship three periods where the macOS HIG specifies the single `…` glyph for menu items opening further UI — exactly the "Apple-polished" convention the app targets. The same `...` habit appears in-app (`dbEditor.committing`, `contextMenu.delete`, `importReview.committing`).
   - Fix: replace `...` with `…` in the two `menu.*` keys (and sweep the in-app `...` strings) in en.json + nl.json — fold into the em-dash typography sweep already filed.
 
-- [ ] **BrowserWindow sets no `backgroundColor` — white flash on reload/navigation in dark mode on Windows/Linux** 🔽 🔎 verified-present 2026-07-11 *(static analysis; confirm live per the eyes-on resume point)*
+- [x] **BrowserWindow sets no `backgroundColor` — white flash on reload/navigation in dark mode on Windows/Linux** 🔽 🔎 verified-present 2026-07-11 *(static analysis; confirm live per the eyes-on resume point)* ✅ 2026-07-14 · b3ee04b
   - ↪ _from: UI/UX review 2026-07-10 · Wave R2_
   - `createWindow()` (`main.js:1485-1510`) never sets `backgroundColor`, so Electron defaults to opaque white. Boot is covered by the theme-aware splash (`:3127`) and on macOS the `vibrancy: 'under-window'` material (`:1500`) masks the default — but the vibrancy block is darwin-only. On Windows/Linux, and on any full document load bypassing the splash (View → Reload role `:2951` / ⌘R), a dark-theme user gets a white frame before the app paints.
   - Fix: set `backgroundColor` from the persisted splash theme (`readSplashTheme`/`SPLASH_THEME_KEY` already exist — convert the stored HSL to hex) so the pre-paint frame matches the active theme on every platform.
@@ -4073,12 +4073,12 @@ look-changing one.
   - `package.json:37-42` — all `db:*` scripts call `venv/bin/alembic`, which `packaging/electron/demo-db/regenerate.sh:37-41` already documents as broken on the host when the venv was built in the devcontainer (it carries its own fallback; the npm scripts don't). There is no `alembic heads`-count check anywhere (a parallel-branch merge creating two heads only surfaces indirectly when CI's `upgrade head` errors), and downgrade fidelity is checked only in CI and only for the top revision (`ci.yml:559-567`) — nothing local, echoing the multiple-stamped-heads demo-volume incident.
   - Fix: add a `db:check` script (single-head assert + `downgrade -1`/`upgrade head` round-trip) reusing regenerate.sh's alembic-resolution fallback, and wire the head-count assert into pre-push.
 
-- [ ] **docs claim the release is signed and notarized — it is neither** 🔽 🔎 verified-present 2026-07-11
+- [x] **docs claim the release is signed and notarized — it is neither** 🔽 🔎 verified-present 2026-07-11 ✅ 2026-07-14 · 8943b9d
   - ↪ _from: DevOps research 2026-07-03 · Wave D3_
   - `docs/reference/scripts.md:39` says `dist` "signs + notarises on macOS in CI", but `packaging/electron/package.json:54-56` sets `identity: null, hardenedRuntime: false` and `release.yml:253` sets `CSC_IDENTITY_AUTO_DISCOVERY: "false"`; `packaging/release/README.md:149-155` correctly documents the ad-hoc posture. Anyone doing release ops from scripts.md will mis-state the security posture (e.g. when a user reports Gatekeeper errors).
   - Fix: correct the scripts.md row to "unsigned/ad-hoc; no notarization (see packaging/release/README.md)".
 
-- [ ] **`docs/reference/scripts.md` has further inaccuracies beyond the notarization claim** 🔽 🔎 verified-present 2026-07-11
+- [x] **`docs/reference/scripts.md` has further inaccuracies beyond the notarization claim** 🔽 🔎 verified-present 2026-07-11 ✅ 2026-07-14 · 8943b9d
   - ↪ _from: DevOps research 2026-07-03 · Wave D3 (residue, closed 2026-07-03)_
   - `docs/reference/scripts.md:87` — the `db:precision-drift` row claims it performs DB checks; the script is actually a static source scan and never touches the database.
   - Root `prepare` and `hooks:setup` scripts are undocumented; the `packaging/electron` workspace has no table at all despite the doc's claim that its tables mirror "those three files verbatim". (All other rows were verified verbatim-accurate.)
@@ -4125,7 +4125,7 @@ look-changing one.
   - May be intentional (the sync tool's status output does count/report it) — needs a user decision on whether it should be stripped too.
   - Fix: pending user decision — if unintentional, strip `.projects` from the staged `claude.json` the same way other sensitive host state is stripped.
 
-- [ ] **`docs/reference/environment-variables.md` has drifted from actual env-var usage in both directions** 🔽 🔎 verified-present 2026-07-11
+- [x] **`docs/reference/environment-variables.md` has drifted from actual env-var usage in both directions** 🔽 🔎 verified-present 2026-07-11 ✅ 2026-07-14 · 8943b9d
   - ↪ _from: DevOps research 2026-07-03 · Wave D4 (residue, closed 2026-07-03)_
   - `VITE_SKIN_V2` is read by the frontend (`lib/env.ts`) but undocumented.
   - `DB_HOST`/`DB_PORT`/`DB_USER`/`DB_NAME` are documented (`:140-143`) as "injected for Alembic" and are indeed injected by both compose files, but no code actually consumes them — `alembic/env.py:19` reads only `DATABASE_URL`. Stale in both the doc AND the compose files.
@@ -4142,7 +4142,7 @@ look-changing one.
   - `.devcontainer/allowlist.txt:63-65` allowlists `cdn.playwright.dev` for "E2E in apps/frontend", but `bunx playwright install --with-deps` needs `apt-get` (no Debian mirror is allowlisted, and `squid.conf:31` denies port 80) and the image bakes no browser system libraries — so `bun run test:e2e` inside the sandbox fails at setup, not by policy choice.
   - Fix: bake the Playwright deps into `.devcontainer/Dockerfile` (`npx playwright install-deps` equivalent apt list) or drop the two CDN hosts + document E2E as host-only next to the Electron limitation.
 
-- [ ] **`docs/common-tasks.md` documents root commands that don't exist** 🔽 🔎 verified-present 2026-07-11
+- [x] **`docs/common-tasks.md` documents root commands that don't exist** 🔽 🔎 verified-present 2026-07-11 ✅ 2026-07-14 · 8943b9d
   - ↪ _from: DevOps research 2026-07-03 · Wave D4_
   - `docs/common-tasks.md:104,109,145` — `bun run test:mutation` and `bun run test:e2e:update-snapshots` are only defined in `apps/frontend/package.json`; at the repo root they fail with `error: Script not found` (verified).
   - Fix: change to `bun run --filter 'vision-frontend' …` or add root pass-through scripts.
