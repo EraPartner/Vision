@@ -24,14 +24,28 @@ This document contains UML diagrams for the React frontend application.
 
 > **Note**: These diagrams are generated from the codebase and should be regenerated when significant changes are made.
 
-## Feature Folder Organization (Phase 6)
+## Feature Folder Organization (Phase 6 — partially migrated)
 
-Dialog and form components are organized by feature in the `apps/frontend/src/features/` folder:
+Some dialog and form components are organized by feature in the `apps/frontend/src/features/` folder:
 
 - **`features/recipients/`** — Recipient management dialogs (AddRecipientDialog, MergeRecipientsDialog)
 - **`features/categories/`** — Category management dialogs (AddCategoryDialog)
 
-This organization improves feature discoverability and reduces cross-cutting concerns in the shared `components/` folder. Page components import from these feature folders instead of centralized form/dialog directories.
+Seven feature folders exist today (`accounts`, `ai-chat`, `categories`, `imports`, `portfolio`,
+`recipients`, `transactions`).
+
+> [!warning] The migration is incomplete — both conventions coexist
+> Only part of the codebase has moved. Roughly ten equally feature-shaped directories still live
+> under `components/` (e.g. `portfolio`, `tax`, `statistics`, `settings`, `dashboard`, `planned`,
+> `research`, `splits`, `reports`, `onboarding`), and `portfolio` is currently split-brained —
+> `features/portfolio/` holds a single file (`MoveHoldingDialog.tsx`) while `components/portfolio/`
+> holds the rest. A few `components/* → features/*` imports also invert the intended layering
+> (e.g. `components/portfolio/InvestmentDetailDialog.tsx` imports `@/features/portfolio/…`). When
+> adding a component, follow the target rule below rather than assuming everything already lives in
+> `features/`.
+
+The intended end state: feature-specific dialogs/forms live in `features/`, and `components/` holds
+only genuinely shared primitives (`components/ui/`, `components/shared/`, `components/layout/`).
 
 ## Technology Stack
 

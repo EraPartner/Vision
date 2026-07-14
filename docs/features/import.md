@@ -209,13 +209,16 @@ Each phase is idempotent at its boundary. On error, the batch is marked `failed`
 
 #### 1. **Staging** (`stageBatch`)
 - Parse CSV via bank adapter (Belfius, Revolut, KBC, SABB, Wise, Vision, or custom)
-- Store raw rows in `import_staging` table
+- Store parsed rows in the `import_staging_rows` table (the original CSV line is retained in the
+  `raw_data` column)
 - Emit progress events: `{ phase: 'staging', current, total }`
 
 #### 2. **Validation** (`validateBatch`)
 - Check required fields (date, recipient, amount)
 - Parse amounts and dates to canonical form
-- Detect deduplication hash collisions (if raw table exists for bank)
+- Compute each row's `tx_hash` and flag rows whose hash already exists in the canonical
+  `transactions` table or collides with an earlier row in the same batch (see *Deduplication* below;
+  there are no per-bank raw tables in this path)
 - Mark invalid rows with error details
 - Emit progress events: `{ phase: 'validating', current, total, errors }`
 
@@ -229,7 +232,8 @@ Each phase is idempotent at its boundary. On error, the batch is marked `failed`
 - Insert canonical transactions with per-row SAVEPOINT protection (if insert fails, transaction stays usable for remaining rows)
 - **BIGSERIAL Validation (2026-05-12):** [[apps/node-backend/src/services/importPipeline/commit.js]] (lines 101–105) validates staging row IDs via regex `/^\d+$/` instead of `Number.isInteger()`. Root cause: `import_staging_rows.id` is BIGSERIAL; the `pg` driver returns BIGINT values as strings to preserve int64 precision. The old `Number.isInteger("123")` check failed silently, counting all rows as errors before any INSERT. New regex accepts string-form bigints and is injection-safe for SAVEPOINT identifiers.
 - **Transaction Hash Deduplication (2026-05-14):** Transaction INSERT statements now include a `tx_hash` column and use `ON CONFLICT (tx_hash) WHERE tx_hash IS NOT NULL DO NOTHING RETURNING id` for race-safe deduplication. The `tx_hash` is computed from `date|amount|recipient|memo|bank_account` and stored in the canonical `transactions` table (via migration [[alembic/versions/0036_add_transactions_tx_hash.py]]). Intra-batch deduplication tracks committed hashes in a Set; a second row with an identical `tx_hash` in the same batch is marked `duplicate`.
-- Insert raw references (link transaction to raw bank data); errors captured and logged per row
+- Errors are captured and logged per row (the current pipeline does **not** write per-bank raw
+  tables — the original CSV line stays in `import_staging_rows.raw_data`)
 - Return final counts: `{ imported, duplicates, errors }`
 - Emit progress events: `{ phase: 'committing', current, total, imported, duplicates, errors }`
 
@@ -369,18 +373,24 @@ CREATE UNIQUE INDEX uniq_transactions_tx_hash
 - If insert fails with UNIQUE violation, the existing transaction's `id` is returned (idempotent)
 - Enables safe concurrent imports without cross-import duplicate checking
 
-### Bank-Specific Raw Table Hashes (Legacy, Still Maintained)
+### Bank-Specific Raw Table Hashes (Legacy — write-orphaned)
 
-Each bank-specific raw transaction table also stores a `deduplication_hash` for audit trail and bank-specific duplicate detection:
+The per-bank `*_raw_transactions` tables each carry a `deduplication_hash` column and historically
+provided bank-specific duplicate detection:
 - `belfius_raw_transactions.deduplication_hash`
 - `revolut_raw_transactions.deduplication_hash`
 - `kbc_raw_transactions.deduplication_hash`
 - `sabb_raw_transactions.deduplication_hash`
 - `wise_raw_transactions.deduplication_hash`
 - `vision_raw_transactions.deduplication_hash`
-- `manual_raw_transactions.deduplication_hash` - Manual entry deduplication
+- `manual_raw_transactions.deduplication_hash`
 
-> **Note:** `custom_raw_transactions` was dropped by migration `0008_drop_custom_raw_transactions.py`. Custom CSV imports now use the generic import path without a dedicated raw table.
+> [!warning] These tables are no longer written by the import pipeline
+> The current pipeline stages into `import_staging_rows` and dedups via the canonical
+> `transactions.tx_hash` (above); it never inserts into the `*_raw_transactions` tables. Their
+> repository (`repositories/rawTransactionRepository.js`) has **zero importers** in `src/`, and only
+> historical rows remain in the tables that still exist. `custom_raw_transactions` was dropped by
+> migration `0008_drop_custom_raw_transactions.py`.
 
 ### Field-based Matching
 For manual transactions, checks:

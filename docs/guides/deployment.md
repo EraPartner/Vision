@@ -198,6 +198,27 @@ docker compose exec -T db psql -U ftm_user financial_transactions < backup.sql
 docker compose exec -T db pg_restore -U ftm_user -d financial_transactions -c backup.dump
 ```
 
+### Scheduled Backups (recommended)
+
+The commands above are **ad-hoc** — nothing runs them on a schedule. The Electron app-level backup
+keeps only the newest 7 bundles, so between manual dumps your recovery point objective (RPO) is
+"whenever you last ran a backup." A volume loss in that window is otherwise unrecoverable. For any
+Docker/server deployment holding real data, schedule a periodic `pg_dump` with retention.
+
+Example nightly cron entry (compressed dump + 14-day retention):
+
+```bash
+# /etc/cron.d/vision-db-backup  — runs at 02:30 daily
+30 2 * * *  cd /path/to/vision && \
+  docker compose exec -T db pg_dump -U ftm_user -Fc financial_transactions \
+    > "backups/financial_transactions-$(date +\%F).dump" && \
+  find backups -name 'financial_transactions-*.dump' -mtime +14 -delete
+```
+
+Store the backups directory on a **separate volume/host** from `postgres_data` so a disk failure
+does not take both. Periodically test a restore into a throwaway database — an untested backup is
+not a backup.
+
 ## Docker Commands Reference
 
 | Command | Description |

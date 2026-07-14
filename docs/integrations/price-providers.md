@@ -248,6 +248,38 @@ All five adapters are wired (Yahoo needs no key; Twelve Data, Finnhub, FMP, and 
 >
 > With no `FRED_API_KEY`, the surface degrades gracefully to the keyless Eurostat catalog and DBnomics fetch-by-id (ECB rates, OECD CLI). See [[docs/adr/082-macroeconomic-indicators-data-vertical|ADR-082]] and [[docs/features/research#macroeconomic-indicators-adr-082|Research Feature — Macro section]] for full details.
 
+## Adding a Price Provider
+
+Unlike the [bank-adapter seam](bank-adapters.md#adding-new-banks), adding a price provider is **not**
+a single registration point — the provider identity is spread across the backend, a PostgreSQL enum,
+the OpenAPI contract, and several hardcoded frontend lists. The current touchpoints:
+
+**Backend**
+1. Add the fetch strategy to `PROVIDERS` in `services/prices/priceProviderRegistry.js`.
+2. Add a `SUPPORTED_PROVIDERS` entry (key/name/description) in `services/priceProviderService.js`.
+3. Extend live-price fetching in the same file: add the provider's key to the
+   `stale = { … }` bucket and add its `if (stale.<key>.length)` batch-fetch block.
+4. Add per-provider handling in `fetchHistoricalPrices` (`services/priceProviderService.js`).
+5. Add a probe entry in `services/providerHealthService.js`.
+
+**Database**
+6. Add the value to the `price_provider` PostgreSQL enum via a **new** Alembic revision (the enum is
+   defined in `0001_initial_database_schema.py`; adding a value follows the enum-migration safety
+   pattern used by `0022_add_kinesis_price_provider_enum.py`).
+
+**Contract + frontend**
+7. Add the value to the `price_provider` enum in `openapi.yaml`, then run `bun run generate:types`.
+8. Update the two hardcoded provider lists in `AddInvestmentDialog.tsx` and
+   `EditInvestmentDialog.tsx`, the frontend type unions (`types/api.ts`, `types/portfolio.ts`), and
+   the `addInv.provider.hint.*` i18n keys (en + nl).
+
+> [!tip] Reducing this cost
+> Steps 1–4 are the load-bearing backend duplication (four near-identical dispatch blocks differing
+> only in key resolution). Collapsing them into a single loop over a provider descriptor
+> (`{ key, resolveId, batch, cacheKeyOf }`) would make the registry strategy object the single
+> backend registration point; the enum-migration, OpenAPI, and frontend touchpoints remain
+> unavoidable.
+
 ## Related
 
 - [[docs/api/investments|API: Investments]]

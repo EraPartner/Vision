@@ -82,9 +82,24 @@ Each bank adapter:
 
 ## Adding New Banks
 
-1. Create parser in `apps/node-backend/src/services/bankAdapters.js`
-2. Register in `getSupportedBanks()`
-3. Handle all edge cases (missing fields, date formats)
+The adapter registry auto-discovers every module in
+`apps/node-backend/src/services/importPipeline/adapters/`, so adding a bank is two touchpoints:
+
+1. Create `apps/node-backend/src/services/importPipeline/adapters/<bank>.js` whose **default export**
+   is `{ name, bankName, detect, parse }` (see `adapters/wise.js` for a full example; shared CSV
+   helpers — line splitting, amount/date parsing — live in `adapters/_shared.js`). Handle the
+   edge cases here: missing fields, date formats, decimal separators.
+2. Register it in `adapters/index.js`: add the `import` and append the module to the `ADAPTERS`
+   array.
+
+Everything downstream is derived from the registry — `getSupportedBanks()`, the detection order,
+the UI catalog (`listAdapters()` → the import-statistics endpoint → the frontend picker), and
+hash/dedup — so no other files (and no i18n keys) need editing.
+
+> [!warning] Do not add adapters to `bankAdapters.js`
+> `apps/node-backend/src/services/bankAdapters.js` is a **deprecated re-export shim** (zero
+> importers) that only forwards to `importPipeline/adapters/index.js` for backward compatibility.
+> New adapters must live in the `importPipeline/adapters/` directory above.
 
 ## Field Mapping
 

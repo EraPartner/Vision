@@ -20,6 +20,25 @@ aliases: [env vars, environment variables, .env, configuration, env]
 > - **`apps/frontend/.env.local`** — Vite frontend dev (`VITE_`-prefixed vars only).
 > - **Provider API keys** (`TWELVE_DATA_API_KEY` / `FINNHUB_API_KEY` / `FMP_API_KEY` / `ALPHA_VANTAGE_API_KEY` / `FRED_API_KEY`) go in the **root `.env`** — set once, used by both dev and Docker. There is no separate root `.env.local` (retired in ADR-080).
 
+> [!tip] Where does a new toggle live? (env vs. user settings)
+> ADR-035 removed the standalone flag system — "the enabling condition is now the presence of
+> configuration" — but toggles still exist across **three** layers, and the layering above only
+> covers `.env`-*file* precedence, not the env-vs-settings question. Use this to decide where a new
+> toggle belongs and how the layers resolve:
+> - **Boot-time backend env** — read once at startup through the Zod schema in `config/env.js`
+>   (e.g. `AI_CHAT_ENABLED`). Use for deployment-level capability switches.
+> - **Build-time frontend env** — `VITE_`-prefixed, baked into the bundle at build time via
+>   `lib/env.ts` (e.g. `VITE_ENABLE_PER_ACCOUNT_HOLDINGS`, `VITE_SKIN_V2`). Use only for a *default*
+>   that ships in the image.
+> - **Runtime user settings** — persisted per-install and editable in-app; these **override** a
+>   build-time default once settings hydrate. Examples: the `colorblindGainLoss` setting overrides
+>   `VITE_SKIN_V2` (see `lib/skin.ts`, with a `localStorage` mirror for first paint), and a
+>   Settings-managed provider key overrides its env-var counterpart (`services/research/providerKeys.js`).
+>
+> **Precedence when a toggle spans layers:** persisted user setting > build/boot env > coded
+> default. Prefer a user setting for anything the end user should control; reserve env vars for
+> deployment-time capability gating.
+
 ## Backend Variables
 
 | Variable | Default | Required | Description | Code |

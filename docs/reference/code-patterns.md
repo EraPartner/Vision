@@ -370,8 +370,18 @@ const ymdString = toYmd(new Date());                // → "2026-04-22"
 
 **Source:** [[apps/node-backend/src/repositories/transactionRepository.js|transactionRepository.js]], [[apps/node-backend/src/repositories/categoryRepository.js|categoryRepository.js]]
 
-> [!note] `null` at the repository boundary
-> Repository methods return `null` (not `undefined`) when a row is not found — this is a deliberate exception to the project-wide "use `undefined` for optional values" convention. `null` preserves the semantics of a DB query that returns zero rows, signalling "row does not exist" to callers that need to distinguish it from a missing argument.
+> [!note] `null`/`undefined` at the repository boundary
+> Repository methods return an empty result (rather than throwing) when a row is not found — a
+> deliberate exception to the project-wide "use `undefined` for optional values" convention, because
+> a zero-row query means "row does not exist" and callers need to distinguish that from a missing
+> argument.
+>
+> Historically this was standardized on `null` (`rows[0] || null`, e.g.
+> `importBatchRepository.js`), and `null` remains the preferred sentinel for new code. Note that
+> several newer repositories currently return `undefined` instead (`accountRepository.js`,
+> `customParserConfigRepository.js`, `portfolioImportBatchRepository.js` return bare `rows[0]` /
+> `?? undefined`), so **callers must treat either as "not found"** — test with `== null` (matches
+> both) rather than `=== null`.
 
 ```js
 import { query } from '../database/connection.js';
