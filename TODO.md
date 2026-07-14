@@ -3360,7 +3360,7 @@ look-changing one.
   - evidence: `forecast/methods/monteCarloParametric.js:18-26` is a verbatim copy of `monteCarloBlockBootstrap.js:19-27`'s `quantile()`; separately, a shared `forecast/_densify.js` exists yet `holtWinters.js:24-43` and `prophetLite.js:105-122` keep private zero-fill densify copies.
   - fix: hoist `quantile()` into a shared forecast helper and switch `holtWinters`/`prophetLite` onto `forecast/_densify.js`.
 
-- [ ] **8 fully dead exports found in a scripted export-vs-import diff over services/, repositories/, lib/, utils/** 🔽 🔎 verified-present 2026-07-11
+- [x] **8 fully dead exports found in a scripted export-vs-import diff over services/, repositories/, lib/, utils/** 🔽 ✅ 2026-07-14 · b90c11b (all deleted after a repo-wide zero-reference re-check incl. tests: releaseAutoPairsFor, clearReachabilityCache, formatDateToYm, getUtcDayEndTimestamp, findBestRecipientMatch, readFileAsync, DATA_TYPES, fmtCurrencyCompact, and the daysBetweenYmd re-export; IMPORT_PIPELINE_V2 env key was already removed from env.js — nothing to drop)
   - ↪ _from: Code/architecture 2026-07-03 · Wave A2_
   - evidence: `releaseAutoPairsFor` (`transferReconciliationService.js:213` — orphaned when reconcile went debounced-full-corpus), `clearReachabilityCache` (`lib/network.js`), `formatDateToYm` + `getUtcDayEndTimestamp` (`repositories/infoRepositoryHelpers.js:96-126`), `findBestRecipientMatch` (`services/calculations/normalization.js`), `readFileAsync` (`services/importPipeline/adapters/_shared.js`), `DATA_TYPES` (`services/research/capabilityMap.js`), and the `daysBetweenYmd` re-export (`utils/portfolioMath.js:21`) have zero references anywhere, not even in their own file or tests. Also dead: `fmtCurrencyCompact` (`services/reports/sectionHelpers.js:54`) and the env key `IMPORT_PIPELINE_V2` (`config/env.js:108`, validated + documented, zero consumers).
   - fix: delete all 8; drop the `IMPORT_PIPELINE_V2` env key or wire it to an actual toggle.
@@ -3516,7 +3516,7 @@ look-changing one.
   - evidence: the `@vision/shared-utils/portfolio` re-export block (`utils/portfolioMath.js:16-23`) is unused in production — `portfolioSummaryService` imports `shared-utils` directly, FIFO/LIFO/ByMethod are only reached test-only via this path, and `daysBetweenYmd` is fully dead. Two import paths exist for the same functions; the live locals are `toYmd`/`sanitize*`/`calendarDaysBetween`/`computeMetrics`/`computeHeatmap`.
   - fix: delete the unused re-export block (or the dead `daysBetweenYmd`) once test-only callers are updated to import from `@vision/shared-utils` directly.
 
-- [ ] **feeBreakdown.js has a dead identity branch; all 7 forecast method modules export a dead default** ⬇ 🔎 verified-present 2026-07-11
+- [x] **feeBreakdown.js has a dead identity branch; all 7 forecast method modules export a dead default** ⬇ ✅ 2026-07-14 · b90c11b (feeBreakdown: identity `displayRows` branch + misleading "byInvestment fallback" comment removed, uses `rows` directly; the 7 point/MC method modules' unused `export default { id, label, forecast }` dropped — index.js consumes them via `import *` named exports, verified no default import or `.default` access anywhere)
   - ↪ _from: Code/architecture 2026-07-03 · Wave A2_
   - evidence: `feeBreakdown.js:37-38`'s comment promises a byInvestment fallback, but `displayRows = rows.length ? rows : []` is an identity no-op. Separately, `forecast/index.js:12-19` consumes the method modules via `import * as`, so their default exports are all dead (ensemble correctly omits one).
   - fix: fix or remove the identity branch; drop the unused default exports from the 6 non-ensemble method modules.
@@ -4147,7 +4147,7 @@ look-changing one.
   - `docs/common-tasks.md:104,109,145` — `bun run test:mutation` and `bun run test:e2e:update-snapshots` are only defined in `apps/frontend/package.json`; at the repo root they fail with `error: Script not found` (verified).
   - Fix: change to `bun run --filter 'vision-frontend' …` or add root pass-through scripts.
 
-- [ ] **`.env.example` research-provider block omits `FRED_API_KEY`** 🔽 🔎 verified-present 2026-07-11
+- [x] **`.env.example` research-provider block omits `FRED_API_KEY`** 🔽 ✅ 2026-07-14 · b90c11b (commented `# FRED_API_KEY=` (ADR-082 macro) added to root .env.example; `VITE_ENABLE_PER_ACCOUNT_HOLDINGS`, `VITE_SKIN_V2`, `VITE_DEVTOOLS` added to apps/frontend/.env.local.example. packaging/electron example left as human-reference-only per the finding.)
   - ↪ _from: DevOps research 2026-07-03 · Wave D4_
   - `.env.example:26-35` declares itself the "single home for the research provider API keys" but lists only 4 of the 5 keyed providers; `apps/node-backend/src/services/research/providerKeys.js:23` also wires `FRED_API_KEY` (ADR-082). A user enabling macro research won't find the key documented in the template.
   - `apps/frontend/.env.local.example` is separately missing `VITE_ENABLE_PER_ACCOUNT_HOLDINGS` and `VITE_SKIN_V2` (both parsed at `lib/env.ts:66,72`; arguably also `VITE_DEVTOOLS`) — same class of env-example incompleteness, in the frontend's own template. (`packaging/electron/resources/.env.example` is never read by code — `main.js` generates the real `.env` itself — so it's human-reference-only and lower stakes.)
