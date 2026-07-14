@@ -253,7 +253,7 @@ look-changing one.
   - `useStatistics()` is the same hook `StatisticsPage.tsx` correctly checks `isError` on — here it's never read. The empty-state branch only fires when `hasProfile` is false, so a failed stats fetch makes a user who hasn't yet filled in the tax-profile dialog (but does have real transaction-derived income) see "you haven't set up tax tracking" instead of an error. Users who *have* completed tax-profile setup don't hit this branch.
   - Fix: destructure `isError`/`error`, reuse `StatisticsPage`'s error-banner pattern.
 
-- [ ] **Belgian bank adapters hardcode UTF-8 — windows-1252/latin-1 exports corrupt recipient names** 🔼 🔎 verified-present 2026-07-11
+- [x] **Belgian bank adapters hardcode UTF-8 — windows-1252/latin-1 exports corrupt recipient names** 🔼 🔎 verified-present 2026-07-11 ✅ 2026-07-14 · 8c9ec9d (shared readTextWithEncodingFallback helper falls back to latin1 on invalid UTF-8; all four adapters use it; test added)
   - ↪ _from: Correctness research 2026-07-02 · Wave 1a_
   - `adapters/belfius.js:106`, `kbc.js:98`, `ing.js:85`, `bnp.js:97` — all `readFile(filePath, 'utf-8')`, no detection/fallback (only `generic.js:82` accepts an encoding)
   - Belgian bank exports are frequently ANSI: `é` (0xE9) → U+FFFD → `"CAF� REN�"` recipients → wrong/duplicate recipients, degraded pg_trgm matching, and dedup-hash drift vs a correctly-decoded re-import of the same rows.
@@ -409,7 +409,7 @@ look-changing one.
   - `main.js:2377-2387` — a restore whose boot-time `alembic upgrade` exceeds the 60s health budget reports **failure after psql succeeded** and never runs the swap (attachments stay in `.staging`); the swap shell (:2382-2385) chains the first `mv` with `;` — if staging is missing, live attachments are moved to `.old` and nothing replaces them.
   - Fix: try/catch around `pollHealth` with a bigger budget; guard the swap with `[ -d …staging ] && …`.
 
-- [ ] **Cost-basis calculators silently clamp oversells instead of flagging a data-integrity problem** 🔼 🔎 verified-present 2026-07-11
+- [x] **Cost-basis calculators silently clamp oversells instead of flagging a data-integrity problem** 🔼 🔎 verified-present 2026-07-11 ✅ 2026-07-14 · 8c9ec9d (both weighted-avg and FIFO/LIFO paths surface an _oversold flag (mirroring _fxFellBack); clamp numbers unchanged; test added)
   - ↪ _from: Codebase audit 2026-06-30 · Correctness — Backend · Portfolio / investments_
   - `packages/shared-utils/src/portfolio.js:135-150` (weighted-avg), `:219-256` (FIFO), `:321-358` (LIFO)
   - When a sell's recorded lots are insufficient (e.g. an earlier buy was deleted), `sellUnits = min(units, totalUnits)` clamps and shrinks the ratio proportionally — excess gain/fees/taxes are dropped with no warning surfaced anywhere. Deleting a buy while keeping its matching sell silently understates realized gain.
@@ -821,7 +821,7 @@ look-changing one.
   - No max client-side (`AddToWatchlistDialog.tsx:276-284`, `WatchlistChartDialog.tsx:165-172`) or server-side (`watchlist.js:20-24`, `min: 0` inclusive — a 0 alert target is meaningless for the at/below check `WatchlistPage.tsx:149-150`); column `0001…py:542` caps ~1e12; `1e999` → `Infinity` → `parseDecimal` fallback 0 → PATCH sets 0 with a success toast (`lib/decimal.ts:13-17`, `WatchlistChartDialog.tsx:95`). Negative target: frontend allows it, backend 400s.
   - Fix: reject `≤0` and cap at the column's max both sides; reject non-finite instead of falling back to 0.
 
-- [ ] **Investments API hygiene: unknown asset_class 500s, symbol uniqueness only enforced on update, empty-name Save silently no-ops** 🔽 🔎 verified-present 2026-07-11
+- [ ] **Investments API hygiene: unknown asset_class 500s, symbol uniqueness only enforced on update, empty-name Save silently no-ops** 🔽 🔎 verified-present 2026-07-11 🔎 partial-08c8250 2026-07-14 (unknown asset_class on create now throws a validation error → 400 (test strengthened); LEFT: symbol-uniqueness-on-update and empty-name Save feedback are frontend/other, not addressed here)
   - ↪ _from: Correctness research 2026-07-02 · Wave 2a (residue, closed 2026-07-03)_
   - Unknown `asset_class` → plain `Error` → 500 not 400 (`investmentRepository.js:220`; legacy view-schema installs insert arbitrary classes `:476-509`). Symbol uniqueness + trim/uppercase normalization enforced on **update only** (`:537-541` vs create `:417`; no DB unique index on symbol; `EditInvestmentDialog.tsx:94` uppercases, `AddInvestmentDialog.tsx:79` doesn't — compounds the filed duplicate-on-retry bug). Empty-name Save silently no-ops (`EditInvestmentDialog.tsx:85` bare `return`, no feedback; backend would accept `''` — `investmentRepository.js:95-110` has no non-empty check).
   - Fix: validate `asset_class` against the enum before insert (400 not 500), apply the same normalization at create time as update, and give empty-name Save an explicit rejection with feedback.
@@ -912,13 +912,13 @@ look-changing one.
   - `attachmentService.js:52-56`: `extensionMime('.exe')` → `undefined` → the check is skipped. A valid PNG named `x.exe` stores as `uuid.exe`; the served MIME is the sniffed one, so the practical effect is cosmetic (filename extension only), not a content-type confusion.
   - Fix: treat an unrecognized extension as a mismatch (reject or normalize) rather than skipping the check.
 
-- [ ] **0052 migration downgrade is broken on legacy inheritance installs** 🔽 🔎 verified-present 2026-07-11
+- [x] **0052 migration downgrade is broken on legacy inheritance installs** 🔽 🔎 verified-present 2026-07-11 ✅ 2026-07-14 · 59a6b82 (downgrade DROPs+recreates the view instead of CREATE OR REPLACE (42P16))
   - ↪ _from: Correctness research 2026-07-02 · Wave 2c (residue, closed 2026-07-03)_
   - `alembic/versions/0052_portfolio_transactions_account_id.py:93-110` runs `CREATE OR REPLACE VIEW portfolio_transactions` with the `account_id` column *removed* (`_VIEW_WITHOUT_ACCT`, `:66`); PostgreSQL cannot drop columns via `CREATE OR REPLACE VIEW` (42P16 "cannot drop columns from view"), so the downgrade aborts on exactly the schema shape the migration was written to support. The flat-schema branch downgrades fine.
   - Loud failure, atomic (alembic per-migration transaction) — no partial state. Not reproduced against a scratch DB (a `upgrade head` → seed the legacy-inheritance schema → `downgrade -N` run would confirm the 42P16 before fixing).
   - Fix: use `DROP VIEW` + `CREATE VIEW` instead of `CREATE OR REPLACE VIEW` in the downgrade.
 
-- [ ] **0053 migration downgrade aborts on any DB containing trade cash legs** 🔽 🔎 verified-present 2026-07-11
+- [x] **0053 migration downgrade aborts on any DB containing trade cash legs** 🔽 🔎 verified-present 2026-07-11 ✅ 2026-07-14 · 59a6b82 (downgrade re-adds the CHECK as NOT VALID)
   - ↪ _from: Correctness research 2026-07-02 · Wave 2c (residue, closed 2026-07-03)_
   - `alembic/versions/0053_trade_cash_legs.py:59-70` re-adds `ck_transactions_transfer_source CHECK (... IN ('auto','manual'))` as a plain (validating) constraint while rows with `transfer_source='trade'` (every ADR-090 trade leg) still exist → `ADD CONSTRAINT` fails, downgrade aborts.
   - A faithful downgrade must first neutralize/delete trade legs (they also lose their `portfolio_transaction_id` link in the same migration) or re-add the CHECK `NOT VALID`. Loud failure, atomic. Not reproduced against a scratch DB (seed a trade leg, then `downgrade -N`, would confirm before fixing).
@@ -935,7 +935,7 @@ look-changing one.
   - Migrations fail-fast on boot (`apps/node-backend/src/main.js:450`), so a `VALIDATE CONSTRAINT` failure (values like `'EURO'`/`''` that trim+upper can't fix, `0049_validate_currency_checks.py:63-71`) leaves an Electron end-user at the error page with manual-psql-only recovery (documented in the migration's own docstring, but no guided UX). Hypothetical — this user's own DB was audited clean on 2026-06-25.
   - Fix: add a guided-recovery path in the Electron error page for this specific failure mode, or a pre-migration currency-code sanity check with a clearer message.
 
-- [ ] **0050 migration's account-currency backfill ignores `planned_transactions`** ⬇ 🔎 verified-present 2026-07-11
+- [x] **0050 migration's account-currency backfill ignores `planned_transactions`** ⬇ 🔎 verified-present 2026-07-11 ✅ 2026-07-14 · 59a6b82 (added a planned_transactions fallback UPDATE for accounts with no transactions (idempotent, same currency guard))
   - ↪ _from: Correctness research 2026-07-02 · Wave 2c (residue, closed 2026-07-03)_
   - `alembic/versions/0050_add_accounts_entity.py:150-161` copies each account's currency from its most recent row in `transactions` only; an account that exists solely via `planned_transactions` strings keeps the `'EUR'` default even when its planned rows carry another valid ISO code.
   - Cosmetic-scale (currency is display metadata at that layer).
@@ -1378,13 +1378,13 @@ look-changing one.
   - Both queries are bounded by the report's date range and aggregate in JS after that — not literally unbounded. The real gap is the missing defensive LIMIT for pathological multi-year custom periods, mirroring the precedent in `infoRepo.statistics.js` (note: **not** `infoRepositoryStatistics.js`, a different, similarly-named file — the original citation was wrong).
   - Fix: add a defensive LIMIT for pathological multi-year custom periods.
 
-- [ ] **`matchInvestments.js` resolves distinct symbol/name keys one at a time instead of batched** 🔽 🔎 verified-present 2026-07-11
+- [x] **`matchInvestments.js` resolves distinct symbol/name keys one at a time instead of batched** 🔽 🔎 verified-present 2026-07-11 ✅ 2026-07-14 · 8c9ec9d (two batched ANY() queries (symbol then name) preserving exact ambiguity semantics/counts; test added)
   - ↪ _from: Codebase audit 2026-06-30 · Performance — Backend_
   - `apps/node-backend/src/services/portfolioImportPipeline/matchInvestments.js:51-67,86-106`
   - Each distinct `(symbol, name)` pair triggers up to 2 sequential SELECTs (per-key cached, but distinct keys aren't batched) — contrast with the bank pipeline's recipient resolution, which batches all distinct names into one `pg_trgm` query.
   - Fix: batch with `WHERE LOWER(symbol) = ANY($1::text[])`, then one batched query for unresolved names.
 
-- [ ] **`GET /api/info/recurring-patterns` does uncached synchronous recomputation, including from AI chat** 🔽 🔎 verified-present 2026-07-11
+- [x] **`GET /api/info/recurring-patterns` does uncached synchronous recomputation, including from AI chat** 🔽 🔎 verified-present 2026-07-11 ✅ 2026-07-14 · 8c9ec9d (wrapped in a 3-min in-process cache (eventually-consistent suggestion feature))
   - ↪ _from: Codebase audit 2026-06-30 · Performance — Backend_
   - `apps/node-backend/src/services/recurringDetectionService.js:129-277`; also called from `aiChat/tools/insights.js:288`
   - Query is bounded (3 years) but the grouping/sorting/interval-detection runs synchronously on the event loop with no caching; the AI-chat tool can trigger it repeatedly within one chat session.
@@ -1461,12 +1461,12 @@ look-changing one.
   - The insights endpoints can't use the table (net-not-spend totals, no transfer exclusion — the reason the sibling MV was dropped in `0038`). Every CSV bulk import pays a plpgsql upsert per row for a table whose one query could be an indexed `EXISTS` against `transactions`.
   - Fix: replace the reader with `EXISTS(SELECT 1 FROM transactions ...)` (covered by existing indexes) and drop table+trigger in a new migration — or wire it into a real fast path; either way stop paying for nothing.
 
-- [ ] **Historical-FX conversion loads the full `exchange_rates` history per call; zero-rate currencies can trigger per-(currency,date) DB/HTTP fetches inside the conversion loop** 🔽 🔎 verified-present 2026-07-11
+- [ ] **Historical-FX conversion loads the full `exchange_rates` history per call; zero-rate currencies can trigger per-(currency,date) DB/HTTP fetches inside the conversion loop** 🔽 🔎 verified-present 2026-07-11 🔎 partial-8c9ec9d 2026-07-14 (the full-history-per-call reload is now a process-level cached index invalidated on write paths + 24h TTL; LEFT: the zero-rate per-(currency,date) in-loop fetch edge deliberately deferred as a follow-up)
   - ↪ _from: Performance research 2026-07-02 · Backend — reports & aggregations_
   - `services/currency/currencyConversionService.js:252-258` (duplicated at `services/reports/dataFetcherTax.js:148-155`) — no date lower bound, no cross-request cache: every historical-converting endpoint re-reads ~all stored rates per currency (ECB backfill ≈ 6.9k rows/currency) and rebuilds `buildHistoricalRateIndex` per request. Edge: a currency with zero stored rows falls into `getRateToEurForDate` per unique (currency,date) — `rateFetcher.js:395-434` does a DB point query and potentially an ECB HTTP fetch inside the loop (memoized only per-call).
   - Fix: bound the history query by the data's min date; add a small process-level rate-index cache invalidated by the existing 12h `warmCache` cycle.
 
-- [ ] **Six unindexed FK columns get seq-scanned on every recipient/pattern/category/investment delete** 🔽 🔎 verified-present 2026-07-11 *(amplified by the unpruned staging tables above)*
+- [x] **Six unindexed FK columns get seq-scanned on every recipient/pattern/category/investment delete** 🔽 🔎 verified-present 2026-07-11 *(amplified by the unpruned staging tables above)* ✅ 2026-07-14 · 59a6b82 (new migration 0078 adds the six partial FK indexes)
   - ↪ _from: Performance research 2026-07-02 · Database layer_
   - `import_staging_rows.matched_pattern_id` + `.user_override_recipient_id` (`0015_recipient_match_patterns.py:83-90`, `ON DELETE SET NULL`, no index); `manual_raw_transactions.recipient_id` + `.category_id` (`0024:51,56`); `portfolio_import_staging_rows.resolved_investment_id` + `.user_override_investment_id` (`0040:132-143`)
   - Postgres scans these tables in full to enforce `SET NULL` on each parent delete — and recipients *are* deleted in bulk (import rollback `DELETE ... WHERE id = ANY(...)` at `importBatchRepository.js:215`, plus merges).
@@ -1543,7 +1543,7 @@ look-changing one.
   - `TRANSACTION_SORT_COLUMNS` maps recipient → `COALESCE(pr.name, r.name)` and category → a 3-branch CASE with string concatenation; memo and currency have no btree index. Any non-date sort string-computes a sort key per row and sorts the entire filtered set each page (compounded by the `COUNT(*) OVER ()` materialization filed above). Interpolation itself is safe — whitelist map + ternary direction, values parameterized.
   - Fix: low priority at current scale; if non-date sorts get hot, add btree indexes on `(memo)`, `(currency, date)` and consider sorting by the joined name only after restricting to page candidates.
 
-- [ ] **marketLookup per-symbol quote cache has no sweeper — expired entries persist forever for symbols never re-queried** 🔽 🔎 verified-present 2026-07-11
+- [x] **marketLookup per-symbol quote cache has no sweeper — expired entries persist forever for symbols never re-queried** 🔽 🔎 verified-present 2026-07-11 ✅ 2026-07-14 · 8c9ec9d (the 5-min sweeper moved into createResearchCache so every instance self-sweeps; test added)
   - ↪ _from: Performance research 2026-07-05 · Wave P2 (memory boundedness)_
   - `apps/node-backend/src/routes/marketLookup.js:19-22,231-248`, `apps/node-backend/src/services/research/researchCache.js:43-51,74-79`
   - `quoteCache = createResearchCache()` is a private instance; the 5-min sweep interval in researchCache.js:76-79 only sweeps the exported `researchCache` singleton, and `createResearchCache` itself attaches no timer. Expired entries are removed only on a `get()` of the same key, so every unique `basic:SYM`/`full:SYM` key ever quoted leaves a dead entry (full quotes ~2-5 KB each). Growth is user-driven and slow — weeks of research browsing → hundreds-thousands of stale entries, single-digit MB worst case — but strictly monotonic on a never-redeployed process. (`inFlightQuotes` is fine — deleted in `finally` at :247.)
@@ -1634,7 +1634,7 @@ look-changing one.
   - `statement_timeout` does NOT fire while a session is idle *in* transaction — if `fn` stalls on a network call or hung stream, the lock + pool slot are held until restart, and autovacuum's xmin horizon stalls (table bloat). Single-user blast radius = "app wedges until restart". Low likelihood, cheap insurance.
   - Fix: add `idle_in_transaction_session_timeout: 60000` to the `pg.Pool` options (node-postgres passes it per-connection), or server-side via the same `command:` as the finding above.
 
-- [ ] **db service has no `shm_size` — 64 MiB `/dev/shm` compose default will break parallel queries once tables outgrow ~8 MB (future-proofing, not a current bug)** 🔽 🔎 verified-present 2026-07-11
+- [x] **db service has no `shm_size` — 64 MiB `/dev/shm` compose default will break parallel queries once tables outgrow ~8 MB (future-proofing, not a current bug)** 🔽 🔎 verified-present 2026-07-11 ✅ 2026-07-14 · 08c8250 (shm_size: 256mb added to the db service in all three compose files)
   - ↪ _from: DB performance research 2026-07-06 · Wave D1_
   - No `shm_size` key on the db service in any of the three composes; live: `df -h /dev/shm` → 64.0M, `HostConfig.ShmSize` = 67108864
   - Parallel workers allocate DSM under `/dev/shm` and die with "could not resize shared memory segment" when it's exhausted. Honest framing: parallelism is never even *planned* today (`min_parallel_table_scan_size` 8 MB > largest table 2.1 MB on demo) — this only bites once a real install's tables pass ~8 MB heap and a report query goes parallel with hash joins. One line, zero cost.
@@ -1647,7 +1647,7 @@ look-changing one.
   - Fix: composite indexes if/when these tables grow — `(is_active, is_executed, planned_date)`, `(investment_id, date, id)`, `(investment_id, account_id)`.
   - Verification (2026-06-30): the `exchange_rates` sub-claim is **wrong and removed** — `alembic/versions/0001_initial_database_schema.py` defines `CONSTRAINT uq_currency_date UNIQUE (currency_code, rate_date)` inline in the table definition, which Postgres backs with a real composite index covering exactly the access pattern (`rateFetcher.js:308-326` filters `currency_code = $1 AND rate_date <= $2`). Two independent verification passes initially missed this by only grepping for `CREATE INDEX` statements and not inline `CONSTRAINT ... UNIQUE` clauses — a useful lesson for future index audits in this codebase.
 
-- [ ] **Minor pagination/cache hygiene gaps** ⬇ 🔎 verified-present 2026-07-11
+- [ ] **Minor pagination/cache hygiene gaps** ⬇ 🔎 verified-present 2026-07-11 🔎 partial-08c8250 2026-07-14 (GET /api/tags is now paginated (parsePagination + LIMIT/OFFSET + getCount, threaded through tagService); other minor hygiene gaps in the bundle not swept)
   - ↪ _from: Codebase audit 2026-06-30 · Performance — Backend_
   - `routes/tags.js:19-24` + `tagRepository.js:15-29` (unbounded list, no LIMIT, unlike every sibling route); `recipients.js:23-26` → `recipientClusterService.js:36-43` (loads every active recipient before bucketing, output capped but scan isn't); `infoRepositoryHelpers.js:80-82` `clearMvCache()` exported/documented as "used after bulk import" but has zero actual callers (self-heals via 60s negative TTL; comment is stale).
   - Fix: add `parsePagination` to the tags route; wire up or remove the dead `clearMvCache()` export.
@@ -1682,7 +1682,7 @@ look-changing one.
   - Under musl, `en_US.utf8` collates as byte order (accented Dutch recipient names sort "wrong" — cosmetic; marginally *faster* sorts, no perf harm). The real hazard: a future "switch off Alpine for CVE reasons" image change on an existing `postgres_data` volume changes collation order silently — text btree indexes become corrupt without erroring.
   - Fix: none needed today; add a line to `.claude/rules/packaging.md` that the db image musl/glibc variant must never change on an existing volume without `REINDEX`.
 
-- [ ] **Boot-trace instrumentation bugs: `pre_pull_image` double-emits its mark and the `launch` mark never closes** ⏬ 📏 🔎 verified-present 2026-07-11 *(found live — cosmetic, but skews any tooling that sums marks)*
+- [x] **Boot-trace instrumentation bugs: `pre_pull_image` double-emits its mark and the `launch` mark never closes** ⏬ 📏 🔎 verified-present 2026-07-11 *(found live — cosmetic, but skews any tooling that sums marks)* ✅ 2026-07-14 · 08c8250 (dropped the redundant early end(); endLaunch() now called on the launch success path)
   - ↪ _from: Startup/Electron performance research 2026-07-05 · Wave S1 (live instrumented boot, demo app)_
   - `packaging/electron/main.js:3188` (early `return` after `end()` inside a `try` whose `finally` at `:3198-3199` calls `end()` again → duplicate mark in every run), `:3105` (`endLaunch` never invoked → a `launch` phase exists but never emits)
   - Fix: drop the early `end()` or guard `bootMark` closures against double invocation; call `endLaunch` where launch actually completes.
@@ -1729,7 +1729,7 @@ look-changing one.
   - Per-enter (not per-move) so frequency is low; it's dead code that forces a layout read for nothing.
   - Fix: delete the GBCR call and the guard.
 
-- [ ] **quotaGovernor `dayMirror` accumulates one key per metered provider per UTC day, never evicted** ⏬ 🔎 verified-present 2026-07-11
+- [x] **quotaGovernor `dayMirror` accumulates one key per metered provider per UTC day, never evicted** ⏬ 🔎 verified-present 2026-07-11 ✅ 2026-07-14 · 8c9ec9d (dayCount prunes stale-day keys; test added)
   - ↪ _from: Performance research 2026-07-05 · Wave P2 (memory boundedness)_
   - `apps/node-backend/src/services/research/quotaGovernor.js:66,91,116-118,127-133`
   - `dayMirror` is keyed `${provider}:${dayKey}` and past-day entries are never deleted — up to 5 entries/day for process lifetime; weeks of uptime = a few hundred `[string, number]` entries (KBs) and a `snapshot()` payload that grows to include every historical day. Functionally harmless; hygiene only.
