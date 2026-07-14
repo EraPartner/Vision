@@ -12,7 +12,7 @@ import { resolveCategoryIdByName } from '../services/categoryService.js';
 import { isManualDuplicate, recordManualRawTransaction } from '../services/deduplication.js';
 import { convertRowsToEur } from '../services/currency/currencyConversionService.js';
 import { logger } from '../config/logger.js';
-import { validateIdParam, assertYmd } from '../middleware/validation.js';
+import { validateIdParam, assertYmd, assertOptionalId } from '../middleware/validation.js';
 import { rateLimiter } from '../middleware/rateLimiter.js';
 import {
   scheduleReconcile,
@@ -101,7 +101,7 @@ function parseTransactionListQuery(query) {
     endDate: assertYmd(end_date, 'end_date'),
     // account_id is the preferred account filter (ADR-088 — reads key on the
     // FK); bank_account stays as a substring escape hatch.
-    accountId: account_id ? parseInt(account_id, 10) : null,
+    accountId: assertOptionalId(account_id, 'account_id'),
     bankAccount: bank_account || null,
     categoryId: category_id ? parseInt(category_id, 10) : null,
     categoryIds: parsedCategoryIds?.length ? parsedCategoryIds : null,

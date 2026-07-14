@@ -27,6 +27,7 @@
 import { query } from '../database/connection.js';
 import { COMPUTED_BALANCE_LATERAL } from '../repositories/accountBalanceSql.js';
 import { NotFoundError, ValidationError } from '../middleware/errorHandler.js';
+import { todayAppDateString } from '../lib/timezone.js';
 
 const ADJUSTMENT_MEMO = 'BALANCE ADJUSTMENT';
 const VALID_MODES = new Set(['accept', 'adjustment']);
@@ -86,7 +87,9 @@ export async function reconcileAccount(accountId, body) {
     throw new ValidationError('Account is already reconciled (no drift to resolve)');
   }
 
-  const today = new Date().toISOString().slice(0, 10);
+  // APP_TIMEZONE calendar day (ADR-009), not UTC — otherwise a row created
+  // between local midnight and ~02:00 east of UTC is stamped yesterday.
+  const today = todayAppDateString();
 
   if (mode === 'accept') {
     // Adopt the computed balance as the statement of record; drift → 0.

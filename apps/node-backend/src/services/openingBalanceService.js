@@ -25,6 +25,8 @@
 import { query } from '../database/connection.js';
 import accountRepository from '../repositories/accountRepository.js';
 import { NotFoundError, ValidationError } from '../middleware/errorHandler.js';
+import { assertYmd } from '../middleware/validation.js';
+import { toWireDate } from '../lib/dateFormat.js';
 
 const OPENING_MEMO = 'OPENING BALANCE';
 
@@ -43,9 +45,12 @@ export function normalizeOpeningBalance(body, account) {
   }
 
   const date = String(body?.date ?? '');
-  if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) {
+  if (!date) {
     throw new ValidationError('date is required and must be an ISO date (YYYY-MM-DD)');
   }
+  // assertYmd also parse-checks the calendar (rejects e.g. 2026-13-40), which a
+  // bare regex lets through to fail the Postgres DATE cast as a 500.
+  assertYmd(date, 'date');
 
   let currency;
   if (body?.currency != null && body.currency !== '') {
@@ -84,9 +89,12 @@ export async function setOpeningBalance(accountId, body) {
         AND (transfer_source IS DISTINCT FROM 'opening')`,
     [accountId, currency],
   );
-  const earliest = earliestRes.rows[0]?.earliest;
+  // pg reads MIN(date) as a JS Date (no setTypeParser override); String(Date)
+  // yields "Wed Jul 01", which is never lexically <= an ISO "YYYY-MM-DD" — the
+  // warning was dead code. Normalize to a calendar-day string before comparing.
+  const earliest = toWireDate(earliestRes.rows[0]?.earliest);
   const warning =
-    earliest && String(earliest).slice(0, 10) <= date
+    earliest && earliest <= date
       ? 'Opening-balance date does not precede existing activity; a later import-stamped balance will override this anchor.'
       : null;
 

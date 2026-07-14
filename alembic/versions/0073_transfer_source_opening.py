@@ -39,7 +39,7 @@ def upgrade() -> None:
         ALTER TABLE transactions DROP CONSTRAINT IF EXISTS ck_transactions_transfer_source;
         ALTER TABLE transactions
             ADD CONSTRAINT ck_transactions_transfer_source
-            CHECK (transfer_source IS NULL OR transfer_source IN ('auto', 'manual', 'trade', 'dismissed', 'opening'));
+            CHECK (transfer_source IS NULL OR transfer_source IN ('auto', 'manual', 'trade', 'opening'));
         """
     )
 
@@ -51,6 +51,6 @@ def downgrade() -> None:
         ALTER TABLE transactions DROP CONSTRAINT IF EXISTS ck_transactions_transfer_source;
         ALTER TABLE transactions
             ADD CONSTRAINT ck_transactions_transfer_source
-            CHECK (transfer_source IS NULL OR transfer_source IN ('auto', 'manual', 'trade', 'dismissed'));
+            CHECK (transfer_source IS NULL OR transfer_source IN ('auto', 'manual', 'trade'));
         """
     )

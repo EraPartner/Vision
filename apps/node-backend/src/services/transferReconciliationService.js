@@ -67,10 +67,17 @@ async function loadCandidatePairs(windowDays) {
 // orphaned manual leg stayed is_transfer=true forever, silently excluded from
 // every cash-flow aggregate.
 async function releaseOrphans() {
+  // Only release rows the reconciler itself owns ('auto'/'manual'). System rows
+  // — opening anchors, reconcile adjustments, trade cash legs — are also created
+  // with is_transfer=true, transfer_peer_id NULL, but they are NOT reconciler
+  // pairs: releasing them would flip an adjustment back into income/spending
+  // aggregates (and make it an auto-pair candidate) and strip an opening anchor's
+  // 'opening' tag so setOpeningBalance's upsert can never find it again.
   await query(
     `UPDATE transactions
         SET is_transfer = false, transfer_source = NULL
-      WHERE is_transfer = true AND transfer_peer_id IS NULL`,
+      WHERE is_transfer = true AND transfer_peer_id IS NULL
+        AND transfer_source IN ('auto', 'manual')`,
   );
 }
 

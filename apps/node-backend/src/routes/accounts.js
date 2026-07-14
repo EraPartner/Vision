@@ -16,6 +16,7 @@ import accountService from '../services/accountService.js';
 import { mergeAccounts } from '../services/accountMergeService.js';
 import { setOpeningBalance } from '../services/openingBalanceService.js';
 import { reconcileAccount } from '../services/reconcileService.js';
+import { scheduleAggregationRefresh } from '../services/aggregationRefresh.js';
 import { validateIdParam } from '../middleware/validation.js';
 
 const router = Router();
@@ -69,6 +70,10 @@ router.post('/:id/merge', validateIdParam, async (req, res) => {
 router.post('/:id/opening-balance', validateIdParam, async (req, res) => {
   const id = parseInt(req.params.id, 10);
   const result = await setOpeningBalance(id, req.body);
+  // The anchor row feeds mv_bank_balances + the forecast MC caches; refresh them
+  // like every transaction mutation route does, else dashboards serve stale
+  // figures until the next unrelated mutation or cache expiry.
+  scheduleAggregationRefresh();
   res.ok({ ...result, links: [] });
 });
 
@@ -80,6 +85,10 @@ router.post('/:id/opening-balance', validateIdParam, async (req, res) => {
 router.post('/:id/reconcile', validateIdParam, async (req, res) => {
   const id = parseInt(req.params.id, 10);
   const result = await reconcileAccount(id, req.body);
+  // 'accept' rewrites the statement figure and 'adjustment' inserts a ledger row;
+  // both change mv_bank_balances + forecast caches, so refresh like the mutation
+  // routes rather than serving a stale drift/balance until the next mutation.
+  scheduleAggregationRefresh();
   res.ok({ ...result, links: [] });
 });
 

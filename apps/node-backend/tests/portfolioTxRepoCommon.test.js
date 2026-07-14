@@ -346,6 +346,18 @@ describe('validateSellUnitsAvailability', () => {
     })).resolves.toBeUndefined();
   });
 
+  it('does not grant phantom units from a split with no prior holdings', async () => {
+    // A stray/imported split row with no prior buys must NOT set the running
+    // total (matches the canonical core, which requires units already held).
+    // Held = 0, so any sell is an oversell and must be rejected.
+    query.mockResolvedValueOnce({ rows: [
+      { type: 'split', units: '20' },
+    ] });
+    await expect(validateSellUnitsAvailability({
+      type: 'sell', assetClass: 'stock', investmentId: 1, date: '2025-04-01', units: 1,
+    })).rejects.toMatchObject({ code: 'VALIDATION_ERROR' });
+  });
+
   it('subtracts prior sells and ignores return_of_capital for units', async () => {
     query.mockResolvedValueOnce({ rows: [
       { type: 'buy', units: '10' },

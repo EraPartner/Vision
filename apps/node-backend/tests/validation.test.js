@@ -7,6 +7,7 @@ import {
   validateId, sanitizeString, validateNumber,
   validateDateString, validatePagination,
   sanitizeUpdateFields, validateIntArray, validateIdParam,
+  assertOptionalId,
 } from '../src/middleware/validation.js';
 import { ValidationError } from '../src/middleware/errorHandler.js';
 
@@ -24,6 +25,24 @@ describe('Validation Middleware', () => {
       expect(validateId('abc').valid).toBe(false);
       expect(validateId('').valid).toBe(false);
       expect(validateId('999999999999').valid).toBe(false);
+    });
+  });
+
+  describe('assertOptionalId', () => {
+    it('returns null for absent/empty values', () => {
+      expect(assertOptionalId(undefined, 'account_id')).toBeNull();
+      expect(assertOptionalId(null, 'account_id')).toBeNull();
+      expect(assertOptionalId('', 'account_id')).toBeNull();
+    });
+
+    it('returns the parsed integer for a valid id', () => {
+      expect(assertOptionalId('42', 'account_id')).toBe(42);
+    });
+
+    it('throws ValidationError for malformed input (would otherwise reach pg as NaN → 500)', () => {
+      expect(() => assertOptionalId('abc', 'account_id')).toThrow(ValidationError);
+      expect(() => assertOptionalId('0', 'account_id')).toThrow(ValidationError);
+      expect(() => assertOptionalId('-3', 'account_id')).toThrow(ValidationError);
     });
   });
 

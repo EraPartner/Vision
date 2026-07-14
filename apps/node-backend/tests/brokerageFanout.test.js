@@ -87,6 +87,23 @@ describe('commitBrokerageFanout (ADR-095 fan-out)', () => {
     expect(createTradeCashLeg).not.toHaveBeenCalled();
   });
 
+  it('re-derives the cash sign from the kind, not the export sign', async () => {
+    // Export gives a withdrawal as +200 and a deposit as -1000 (wrong signs);
+    // the ledger must store −200 (outflow) and +1000 (inflow) per the classifier
+    // direction, regardless of the raw export sign.
+    await commitBrokerageFanout({
+      accountId: 7,
+      rows: [
+        { kind: 'withdrawal', date: '2026-01-01', amount: 200, memo: 'atm' },
+        { kind: 'deposit', date: '2026-02-01', amount: -1000, memo: 'wire' },
+      ],
+    });
+    const cashInserts = query.mock.calls.filter(([s]) => /INSERT INTO transactions/.test(s));
+    const amounts = cashInserts.map(([, params]) => params[1]);
+    expect(amounts).toContain(-200);
+    expect(amounts).toContain(1000);
+  });
+
   it('dedups both sides against existing rows (idempotent re-import)', async () => {
     query.mockImplementation(async (sql) => {
       if (/SELECT 1 FROM/.test(sql)) return { rows: [{ exists: 1 }] }; // everything already present

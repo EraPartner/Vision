@@ -113,6 +113,13 @@ export async function commitBatch({ batchId, onProgress }) {
         //    Without this, the second of two identical same-batch card
         //    payments field-matched the first inside the same DB transaction
         //    and a REAL transaction was silently dropped.
+        //    Scoped to `t.import_batch_id = $7` (this batch only): tx_hash is
+        //    sha256 of the SOURCE-format row, so a cross-source re-import (the
+        //    Vision export round-trip the csv/vision adapters exist to support)
+        //    carries a different hash than the stored bank-format one. Without
+        //    the batch scope that hash inequality would suppress the field
+        //    match and re-insert every already-imported transaction — breaking
+        //    the "re-import is a no-op" idempotency this dedup is meant to give.
         const memoNorm = (row.memo ?? '').trim();
         const dupCheck = await client.query(
           `SELECT t.id
@@ -125,10 +132,10 @@ export async function commitBatch({ batchId, onProgress }) {
               )
               AND COALESCE(TRIM(t.memo), '') = $4
               AND t.bank_account IS NOT DISTINCT FROM $5
-              AND NOT (t.tx_hash IS NOT NULL AND $6::text IS NOT NULL AND t.tx_hash <> $6)
+              AND NOT (t.import_batch_id = $7 AND t.tx_hash IS NOT NULL AND $6::text IS NOT NULL AND t.tx_hash <> $6)
               AND t.is_active = true
             LIMIT 1`,
-          [dateStr, row.amount, effectiveRecipientId, memoNorm, row.bank_account || null, row.tx_hash || null]
+          [dateStr, row.amount, effectiveRecipientId, memoNorm, row.bank_account || null, row.tx_hash || null, batchId]
         );
 
         if (dupCheck.rows.length > 0) {
