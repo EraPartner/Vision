@@ -1793,6 +1793,78 @@ paths:
           schema:
             type: string
           description: Comma-separated tag slugs — OR filter
+        - in: query
+          name: transaction_id
+          description: Fetch a single transaction by id (exact match)
+          schema:
+            type: integer
+        - in: query
+          name: category_ids
+          description: Comma-separated category ids — OR filter
+          schema:
+            type: string
+        - in: query
+          name: recipient_group_id
+          description: Filter by primary (grouped) recipient id
+          schema:
+            type: integer
+        - in: query
+          name: recipient_name
+          description: Filter by recipient display name (substring)
+          schema:
+            type: string
+        - in: query
+          name: active
+          description: Include only active (default true) or inactive rows
+          schema:
+            type: boolean
+            default: true
+        - in: query
+          name: include_balance
+          description: Include the running-balance column on each row
+          schema:
+            type: boolean
+        - in: query
+          name: transaction_type
+          description: Filter by kind (e.g. income/expense)
+          schema:
+            type: string
+        - in: query
+          name: amount_min
+          description: Minimum amount (see amount_signed for sign semantics)
+          schema:
+            type: number
+        - in: query
+          name: amount_max
+          description: Maximum amount (see amount_signed)
+          schema:
+            type: number
+        - in: query
+          name: amount_exact
+          description: Exact amount — shorthand for amount_min == amount_max
+          schema:
+            type: number
+        - in: query
+          name: amount_signed
+          description: When true, amount_* compare signed values; otherwise magnitude
+          schema:
+            type: boolean
+        - in: query
+          name: uncategorised
+          description: When true, return only uncategorised transactions
+          schema:
+            type: boolean
+        - in: query
+          name: normalize_to_eur
+          description: Convert amounts to EUR (or target_currency) at read time
+          schema:
+            type: boolean
+            default: false
+        - in: query
+          name: target_currency
+          description: Target currency for normalize_to_eur (defaults to EUR)
+          schema:
+            type: string
       responses:
         "200":
           description: Paginated transaction list

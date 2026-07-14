@@ -4159,6 +4159,34 @@ export interface operations {
                 sort_dir?: "asc" | "desc";
                 /** @description Comma-separated tag slugs — OR filter */
                 tags?: string;
+                /** @description Fetch a single transaction by id (exact match) */
+                transaction_id?: number;
+                /** @description Comma-separated category ids — OR filter */
+                category_ids?: string;
+                /** @description Filter by primary (grouped) recipient id */
+                recipient_group_id?: number;
+                /** @description Filter by recipient display name (substring) */
+                recipient_name?: string;
+                /** @description Include only active (default true) or inactive rows */
+                active?: boolean;
+                /** @description Include the running-balance column on each row */
+                include_balance?: boolean;
+                /** @description Filter by kind (e.g. income/expense) */
+                transaction_type?: string;
+                /** @description Minimum amount (see amount_signed for sign semantics) */
+                amount_min?: number;
+                /** @description Maximum amount (see amount_signed) */
+                amount_max?: number;
+                /** @description Exact amount — shorthand for amount_min == amount_max */
+                amount_exact?: number;
+                /** @description When true, amount_* compare signed values; otherwise magnitude */
+                amount_signed?: boolean;
+                /** @description When true, return only uncategorised transactions */
+                uncategorised?: boolean;
+                /** @description Convert amounts to EUR (or target_currency) at read time */
+                normalize_to_eur?: boolean;
+                /** @description Target currency for normalize_to_eur (defaults to EUR) */
+                target_currency?: string;
             };
             header?: never;
             path?: never;
