@@ -63,8 +63,14 @@ function validateWatchlistFields(body, { context = 'create' } = {}) {
       `asset_class must be one of: ${[...WATCHLIST_ASSET_CLASSES].join(', ')}`
     );
   }
-  if (body.currency !== undefined && body.currency !== null && !CURRENCY_RE.test(String(body.currency))) {
-    throw new ValidationError('currency must be a 3-letter code');
+  if (body.currency !== undefined && body.currency !== null) {
+    if (!CURRENCY_RE.test(String(body.currency))) {
+      throw new ValidationError('currency must be a 3-letter code');
+    }
+    // Normalise to uppercase ISO shape so a lower-case 'usd' can't be stored
+    // and then mismatch the uppercase codes every FX/conversion path expects
+    // (transactions/accounts already uppercase via assertCurrency).
+    body.currency = String(body.currency).toUpperCase();
   }
 }
 

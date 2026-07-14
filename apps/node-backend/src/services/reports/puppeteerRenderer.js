@@ -35,6 +35,32 @@ async function launchBrowser() {
   return launched;
 }
 
+// Bound concurrent renders so N simultaneous report POSTs can't open N Chromium
+// pages (+ N full data fetches) at once. Each render still runs to completion;
+// excess renders queue for a slot rather than piling pages onto one browser.
+const MAX_CONCURRENT_RENDERS = 2;
+let activeRenders = 0;
+/** @type {Array<() => void>} */
+const renderWaiters = [];
+
+function acquireRenderSlot() {
+  if (activeRenders < MAX_CONCURRENT_RENDERS) {
+    activeRenders += 1;
+    return Promise.resolve();
+  }
+  return new Promise((resolve) => { renderWaiters.push(() => resolve()); });
+}
+
+function releaseRenderSlot() {
+  const next = renderWaiters.shift();
+  if (next) {
+    // Hand the still-held slot straight to the next waiter (no decrement).
+    next();
+  } else {
+    activeRenders -= 1;
+  }
+}
+
 async function getBrowser() {
   if (browser?.connected) return browser;
 
@@ -59,6 +85,15 @@ async function getBrowser() {
  * @returns {Promise<Buffer>}
  */
 export async function renderHtmlToPdf(html, opts = {}) {
+  await acquireRenderSlot();
+  try {
+    return await renderHtmlToPdfInner(html, opts);
+  } finally {
+    releaseRenderSlot();
+  }
+}
+
+async function renderHtmlToPdfInner(html, opts = {}) {
   const b = await getBrowser();
   const page = await b.newPage();
   try {

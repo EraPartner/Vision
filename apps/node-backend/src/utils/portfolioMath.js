@@ -294,7 +294,33 @@ export function computeHeatmap(snapshots) {
  * @returns {Array} Sanitized copy (no mutation of input)
  */
 export function sanitizeSnapshotSpikes(snapshots) {
-  return sanitizeIsolatedValueSpikes(snapshots, 'value', {
+  const sanitized = sanitizeIsolatedValueSpikes(snapshots, 'value', {
     extraFields: ['stocks_etfs_value', 'crypto_value', 'metals_value', 'value_fx_neutral'],
   });
+  // The smoother only rewrites the scalar `value`; on a smoothed day the
+  // per-account split (`value_by_account`, ADR-100) is left at its raw sum,
+  // silently breaking the `Σ value_by_account == value` invariant the snapshot
+  // builder guarantees and mis-attributing per-account history. Reconcile the
+  // split in lockstep: rescale each account's slice by newValue/oldSum so the
+  // sum tracks the smoothed value. Clone the map first — sanitizeIsolatedValueSpikes
+  // returns shallow copies that still share nested objects with the input.
+  if (!Array.isArray(snapshots)) return sanitized;
+  for (let i = 0; i < sanitized.length; i += 1) {
+    const after = sanitized[i];
+    const original = snapshots[i];
+    if (!after || !original) continue;
+    const oldValue = Number(original.value);
+    const newValue = Number(after.value);
+    const vba = after.value_by_account;
+    if (!vba || typeof vba !== 'object' || Number(oldValue) === Number(newValue)) continue;
+    const oldSum = Object.values(vba).reduce((s, v) => s + (Number(v) || 0), 0);
+    if (!(oldSum > 0) || !Number.isFinite(newValue)) continue;
+    const ratio = newValue / oldSum;
+    const rescaled = {};
+    for (const [k, v] of Object.entries(vba)) {
+      rescaled[k] = toNumber(roundToCents((Number(v) || 0) * ratio));
+    }
+    after.value_by_account = rescaled;
+  }
+  return sanitized;
 }

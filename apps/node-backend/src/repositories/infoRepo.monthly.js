@@ -86,9 +86,11 @@ export async function getMonthlyFinancialSummary(
           total_spending: 0, total_income: 0, net_amount: 0, transaction_count: 0,
         };
       }
-      if (conv._type === 'income') monthMap[key].total_income += conv.amount_eur;
-      else monthMap[key].total_spending += conv.amount_eur;
-      monthMap[key].net_amount = monthMap[key].total_income + monthMap[key].total_spending;
+      // Decimal accumulation (ADR money-hygiene): summing per-month EUR amounts
+      // with native `+=` drifts sub-cent across many rows before the final round.
+      if (conv._type === 'income') monthMap[key].total_income = toNumber(toDecimal(monthMap[key].total_income).plus(toDecimal(conv.amount_eur)));
+      else monthMap[key].total_spending = toNumber(toDecimal(monthMap[key].total_spending).plus(toDecimal(conv.amount_eur)));
+      monthMap[key].net_amount = toNumber(toDecimal(monthMap[key].total_income).plus(toDecimal(monthMap[key].total_spending)));
       monthMap[key].transaction_count += parseInt(r.transaction_count, 10);
     }
 

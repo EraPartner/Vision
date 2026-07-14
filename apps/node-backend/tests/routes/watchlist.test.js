@@ -171,6 +171,15 @@ describe('Watchlist Routes', () => {
       await expect(routeHandlers['post:/'](req, mockResponse())).rejects.toBeInstanceOf(ValidationError);
     });
 
+    it('normalises a lower-case currency to uppercase before the repository', async () => {
+      watchlistRepository.create.mockResolvedValue({ id: 1 });
+      const req = { body: { ...validBody, currency: 'usd' } };
+      await routeHandlers['post:/'](req, mockResponse());
+      expect(watchlistRepository.create).toHaveBeenCalledWith(
+        expect.objectContaining({ currency: 'USD' }),
+      );
+    });
+
     it('rejects a whitespace-only name (truthy, so the POST presence check let it through)', async () => {
       const req = { body: { ...validBody, name: '   ' } };
       await expect(routeHandlers['post:/'](req, mockResponse())).rejects.toBeInstanceOf(ValidationError);

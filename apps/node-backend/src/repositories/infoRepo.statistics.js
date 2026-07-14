@@ -3,6 +3,7 @@
  */
 
 import { query } from '../database/connection.js';
+import { toDecimal, toNumber, addAll } from '../lib/money.js';
 import { convertRowsToEur } from '../services/currency/currencyConversionService.js';
 import {
   roundToCents,
@@ -61,12 +62,14 @@ export async function getAverageVsCurrentSpending(targetCurrency = 'EUR') {
     const eur = row.amount_eur;
     const monthKey = extractYearMonth(dateStr);
     if (!monthlySpending[monthKey]) monthlySpending[monthKey] = 0;
-    if (eur < 0) monthlySpending[monthKey] += Math.abs(eur);
+    // Decimal accumulation (money-hygiene): native `+=` over many converted
+    // rows drifts sub-cent before the final round.
+    if (eur < 0) monthlySpending[monthKey] = toNumber(toDecimal(monthlySpending[monthKey]).plus(toDecimal(Math.abs(eur))));
   }
 
   const monthKeys = Object.keys(monthlySpending);
   const monthsCount = monthKeys.length || 1;
-  const totalMonthlySpending = monthKeys.reduce((s, k) => s + monthlySpending[k], 0);
+  const totalMonthlySpending = toNumber(addAll(monthKeys.map((k) => monthlySpending[k])));
   const avgMonthlySpending = totalMonthlySpending / monthsCount;
 
   const now = new Date();
@@ -89,8 +92,8 @@ export async function getAverageVsCurrentSpending(targetCurrency = 'EUR') {
     const dateStr = row.date instanceof Date ? formatDateToYmd(row.date) : row.date;
     const eur = row.amount_eur;
     if (!dailyMap[dateStr]) dailyMap[dateStr] = { spending: 0, income: 0 };
-    if (eur < 0) dailyMap[dateStr].spending += Math.abs(eur);
-    else dailyMap[dateStr].income += eur;
+    if (eur < 0) dailyMap[dateStr].spending = toNumber(toDecimal(dailyMap[dateStr].spending).plus(toDecimal(Math.abs(eur))));
+    else dailyMap[dateStr].income = toNumber(toDecimal(dailyMap[dateStr].income).plus(toDecimal(eur)));
   }
 
   const dailyData = Object.entries(dailyMap)
@@ -101,7 +104,7 @@ export async function getAverageVsCurrentSpending(targetCurrency = 'EUR') {
       income: roundToCents(d.income),
     }));
 
-  const totalCurrentSpending = dailyData.reduce((s, d) => s + d.spending, 0);
+  const totalCurrentSpending = toNumber(addAll(dailyData.map((d) => d.spending)));
   // Calendar days elapsed this month (not the number of days with a transaction).
   const daysElapsed = now.getDate();
   const daysInMonth = new Date(now.getFullYear(), now.getMonth() + 1, 0).getDate();

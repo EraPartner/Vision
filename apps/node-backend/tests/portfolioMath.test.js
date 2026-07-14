@@ -185,6 +185,20 @@ describe('sanitizeSnapshotSpikes', () => {
     sanitizeSnapshotSpikes(snapshots)
     expect(snapshots[1].value).toBe(500)
   })
+
+  it('rescales value_by_account in lockstep so Σ value_by_account == value after smoothing', () => {
+    const snapshots = [
+      { value: 100, value_by_account: { '1': 60, '2': 40 } },
+      { value: 500, value_by_account: { '1': 300, '2': 200 } },
+      { value: 102, value_by_account: { '1': 62, '2': 40 } },
+    ]
+    const result = sanitizeSnapshotSpikes(snapshots)
+    const smoothed = result[1].value
+    const sum = Object.values(result[1].value_by_account).reduce((s, v) => s + v, 0)
+    expect(sum).toBeCloseTo(smoothed, 2)
+    // Input's nested map is untouched (shallow-copy sharing guarded against).
+    expect(snapshots[1].value_by_account['1']).toBe(300)
+  })
 })
 
 describe('UTC day-walk DST safety', () => {

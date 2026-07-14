@@ -3,6 +3,7 @@
  */
 
 import { query, queryPrepared } from '../database/connection.js';
+import { toDecimal, toNumber } from '../lib/money.js';
 import { convertRowsToEur } from '../services/currency/currencyConversionService.js';
 import {
   mvAvailable,
@@ -64,7 +65,9 @@ export const statisticsRepository = {
       const key = catId ?? 'null';
       if (!catMap[key]) catMap[key] = { id: catId, name: row.name, count: 0, total: 0 };
       catMap[key].count += parseInt(row.cnt, 10) || 0;
-      catMap[key].total += eur;
+      // Decimal accumulation (money-hygiene) — native `+=` over the per-currency
+      // converted subtotals drifts sub-cent before the roundToCents below.
+      catMap[key].total = toNumber(toDecimal(catMap[key].total).plus(toDecimal(eur)));
     }
     return Object.values(catMap)
       .map(cat => ({ ...cat, total: roundToCents(cat.total) }))

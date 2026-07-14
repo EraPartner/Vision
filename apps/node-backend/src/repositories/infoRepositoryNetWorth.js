@@ -7,7 +7,7 @@ import { logger } from '../config/logger.js';
 import { computeDailySnapshots } from '../services/portfolio/snapshotBuilder.js';
 import { accountRepository } from './accountRepository.js';
 import { convertToCurrency } from '../services/currency/currencyConversionService.js';
-import { toNumber } from '../lib/money.js';
+import { toNumber, toDecimal } from '../lib/money.js';
 import { todayAppDateString } from '../lib/timezone.js';
 import {
   roundToCents,
@@ -238,7 +238,9 @@ export const netWorthRepository = {
     for (const row of bankHistoryConverted) {
       const bucket = row.is_liability ? liabilitiesByDay : liquidByDay;
       if (!bucket[row.day]) bucket[row.day] = 0;
-      bucket[row.day] += row.amount_eur;
+      // Decimal accumulation (money-hygiene): per-day EUR balances summed with
+      // native `+=` drift sub-cent before the roundToCents below.
+      bucket[row.day] = toNumber(toDecimal(bucket[row.day]).plus(toDecimal(row.amount_eur)));
     }
 
     const start = new Date(`${firstDataDateYmd}T00:00:00Z`);
