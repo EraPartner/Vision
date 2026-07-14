@@ -23,6 +23,7 @@ import { assertPublicHttpUrl } from '../lib/urlSafety.js';
 import { autoResolveFxRateToEur } from '../services/portfolio/fxResolve.js';
 import { createTradeCashLeg, deleteTradeCashLegs, deleteTradeCashLegsForTrades } from '../services/portfolio/tradeCashLegService.js';
 import { moveHolding as moveHoldingSvc } from '../services/portfolio/moveHoldingService.js';
+import { parsePagination } from '../lib/pagination.js';
 
 // Custom price-provider URLs are fetched server-side at refresh time, so reject
 // non-public targets at the write boundary too (SSRF defense-in-depth). DNS is
@@ -135,11 +136,16 @@ function parseDbOnlyOrDefault(raw, defaultValue) {
   return parseDbOnlyQueryValue(raw);
 }
 
-function parseDefaultListOptions(query) {
-  const { limit = 200, offset = 0, asset_class, active = 'true' } = query;
+// Route limit/offset through the canonical parsePagination clamp (used by the
+// other list routes) so limit is bounded to maxLimit, a falsy/absent limit falls
+// back to the default, and offset can never go negative — instead of the
+// hand-rolled arithmetic that left offset unclamped.
+export function parseDefaultListOptions(query) {
+  const { asset_class, active = 'true' } = query;
+  const { limit, offset } = parsePagination(query, { defaultLimit: 200, maxLimit: 1000 });
   return {
-    limit: Math.min(parseInteger(limit) || 200, 1000),
-    offset: parseInteger(offset) || 0,
+    limit,
+    offset,
     assetClass: asset_class || null,
     active: active !== 'false',
   };

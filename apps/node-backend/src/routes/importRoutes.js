@@ -324,8 +324,8 @@ router.get('/batches', async (req, res) => {
 
 // GET /api/import/batches/:id
 router.get('/batches/:id', async (req, res) => {
-  const id = parseInt(req.params.id, 10);
-  if (!Number.isFinite(id)) throw new ValidationError('Invalid batch id');
+  const id = Number(req.params.id);
+  if (!Number.isInteger(id) || id <= 0) throw new ValidationError('Invalid batch id');
   const batch = await getBatch(id);
   if (!batch) throw new NotFoundError(`Import batch ${id} not found`);
   res.ok(batch);
@@ -333,8 +333,8 @@ router.get('/batches/:id', async (req, res) => {
 
 // DELETE /api/import/batches/:id — rollback: deletes transactions, marks batch aborted
 router.delete('/batches/:id', async (req, res) => {
-  const id = parseInt(req.params.id, 10);
-  if (!Number.isFinite(id)) throw new ValidationError('Invalid batch id');
+  const id = Number(req.params.id);
+  if (!Number.isInteger(id) || id <= 0) throw new ValidationError('Invalid batch id');
 
   const batch = await getBatch(id);
   if (!batch) throw new NotFoundError(`Import batch ${id} not found`);
@@ -362,8 +362,8 @@ router.delete('/batches/:id', async (req, res) => {
 // GET /api/import/batches/:id/preview
 // Returns staging rows grouped by resolved recipient with match-source badges.
 router.get('/batches/:id/preview', async (req, res) => {
-  const batchId = parseInt(req.params.id, 10);
-  if (!Number.isFinite(batchId)) throw new ValidationError('Invalid batch id');
+  const batchId = Number(req.params.id);
+  if (!Number.isInteger(batchId) || batchId <= 0) throw new ValidationError('Invalid batch id');
 
   const batch = await getBatch(batchId);
   if (!batch) throw new NotFoundError(`Import batch ${batchId} not found`);
@@ -439,9 +439,9 @@ router.get('/batches/:id/preview', async (req, res) => {
 // POST /api/import/batches/:id/rows/:rowId/override
 // Set (or clear) user_override_recipient_id on a single staging row.
 router.post('/batches/:id/rows/:rowId/override', async (req, res) => {
-  const batchId = parseInt(req.params.id, 10);
-  const rowId = parseInt(req.params.rowId, 10);
-  if (!Number.isFinite(batchId) || !Number.isFinite(rowId)) {
+  const batchId = Number(req.params.id);
+  const rowId = Number(req.params.rowId);
+  if (!Number.isInteger(batchId) || batchId <= 0 || !Number.isInteger(rowId) || rowId <= 0) {
     throw new ValidationError('Invalid batch or row id');
   }
 
@@ -470,9 +470,9 @@ router.post('/batches/:id/rows/:rowId/override', async (req, res) => {
 // the recipient override above. The category landing on the committed
 // transaction is COALESCE(staging.override_category_id, recipient.default_category_id).
 router.post('/batches/:id/rows/:rowId/category-override', async (req, res) => {
-  const batchId = parseInt(req.params.id, 10);
-  const rowId = parseInt(req.params.rowId, 10);
-  if (!Number.isFinite(batchId) || !Number.isFinite(rowId)) {
+  const batchId = Number(req.params.id);
+  const rowId = Number(req.params.rowId);
+  if (!Number.isInteger(batchId) || batchId <= 0 || !Number.isInteger(rowId) || rowId <= 0) {
     throw new ValidationError('Invalid batch or row id');
   }
 
@@ -503,8 +503,8 @@ router.post('/batches/:id/rows/:rowId/category-override', async (req, res) => {
 // POST /api/import/batches/:id/commit
 // Commit a reviewed batch, honouring any user overrides set above.
 router.post('/batches/:id/commit', async (req, res) => {
-  const batchId = parseInt(req.params.id, 10);
-  if (!Number.isFinite(batchId)) throw new ValidationError('Invalid batch id');
+  const batchId = Number(req.params.id);
+  if (!Number.isInteger(batchId) || batchId <= 0) throw new ValidationError('Invalid batch id');
 
   const batch = await getBatch(batchId);
   if (!batch) throw new NotFoundError(`Import batch ${batchId} not found`);

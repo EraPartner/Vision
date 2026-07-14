@@ -50,6 +50,7 @@ vi.mock('../../src/config/logger.js', () => ({
 
 import recipientRepository from '../../src/repositories/recipientRepository.js';
 import { mergeRecipients as mergeRecipientsAtomic } from '../../src/services/recipientMergeService.js';
+import { updatePattern, deletePattern } from '../../src/services/recipientPatternService.js';
 import { ValidationError, NotFoundError } from '../../src/middleware/errorHandler.js';
 await import('../../src/routes/recipients.js');
 
@@ -285,6 +286,26 @@ describe('Recipient Routes', () => {
           total: 2,
         },
       });
+    });
+  });
+
+  describe('pattern sub-route id guards', () => {
+    it('PATCH /:id/patterns/:patternId rejects a negative patternId', async () => {
+      const req = { params: { id: '1', patternId: '-3' }, body: {} };
+      const res = mockResponse();
+
+      await expect(routeHandlers['patch:/:id/patterns/:patternId'](req, res))
+        .rejects.toBeInstanceOf(ValidationError);
+      expect(updatePattern).not.toHaveBeenCalled();
+    });
+
+    it('DELETE /:id/patterns/:patternId rejects a zero patternId', async () => {
+      const req = { params: { id: '1', patternId: '0' } };
+      const res = mockResponse();
+
+      await expect(routeHandlers['delete:/:id/patterns/:patternId'](req, res))
+        .rejects.toBeInstanceOf(ValidationError);
+      expect(deletePattern).not.toHaveBeenCalled();
     });
   });
 });

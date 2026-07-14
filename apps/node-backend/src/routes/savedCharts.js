@@ -23,7 +23,7 @@ const INVALID_COMBINATIONS = new Set([
 
 function parseChartId(req) {
   const id = parseInt(req.params.id, 10);
-  if (Number.isNaN(id)) throw new ValidationError('Invalid chart id');
+  if (!Number.isInteger(id) || id <= 0) throw new ValidationError('Invalid chart id');
   return id;
 }
 
