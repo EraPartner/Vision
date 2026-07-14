@@ -54,13 +54,14 @@ htmlcov/
 .smart-env
 copilot/
 opencode.json
-*.json
+# Only local, uncommitted override json — not a blanket *.json (which forced a
+# growing list of negations just to keep tracked config files like package.json
+# and tsconfig.json committable).
+*.local.json
 !packaging/electron/package-lock.json
 !packages/*/package.json
 !apps/node-backend/tsconfig*.json
 !apps/node-backend/tests/golden/__fixtures__/**/*.json
-!.devcontainer/devcontainer.json
-!.devcontainer/devcontainer-lock.json
 !packaging/electron/electron-builder-demo.json
 
 # Vision demo build output (install-demo.sh)

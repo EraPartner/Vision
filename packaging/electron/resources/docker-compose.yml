@@ -4,6 +4,14 @@ services:
   db:
     image: postgres:18-alpine
     restart: unless-stopped
+    # SSD-tuned planner: default random_page_cost=4.0 assumes spinning disks and
+    # over-penalizes index scans. 1.1 reflects near-uniform random/sequential cost.
+    command: postgres -c random_page_cost=1.1
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "5m"
+        max-file: "3"
     # Postgres uses /dev/shm for parallel query workers and large sorts/hash
     # joins; Docker's 64mb default is easily exhausted. 256mb is a safe bump.
     shm_size: 256mb
@@ -15,7 +23,7 @@ services:
       - postgres_data:/var/lib/postgresql
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U ftm_user -d financial_transactions"]
-      interval: 3s
+      interval: 30s
       timeout: 3s
       retries: 10
       start_period: 5s
@@ -33,6 +41,11 @@ services:
     image: ghcr.io/erapartner/vision:${APP_IMAGE_TAG:-latest}
     pull_policy: missing
     restart: unless-stopped
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "5m"
+        max-file: "3"
     env_file: .env
     ports:
       - "127.0.0.1:${PORT:-3002}:3002"

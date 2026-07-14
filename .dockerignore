@@ -1,5 +1,6 @@
 # Dependencies
 node_modules/
+**/node_modules
 apps/frontend/node_modules/
 apps/node-backend/node_modules/
 packages/*/node_modules/
@@ -13,6 +14,11 @@ dist/
 # Dev/cache files
 cache/
 *.log
+# Secrets: keep all env files out of the build context, but allow the example
+# template through so it can still be shipped if a Dockerfile ever needs it.
+.env
+.env.*
+!.env.example
 .env.local
 .env.*.local
 
@@ -37,3 +43,8 @@ __pycache__/
 # Test artifacts
 apps/node-backend/tests/
 coverage/
+
+# Large paths not needed by the image build (Dockerfile never COPYs these).
+# Trims the ~1.2 GB build context sent to the daemon.
+packaging/
+docs/

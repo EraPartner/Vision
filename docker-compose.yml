@@ -10,6 +10,14 @@ services:
   db:
     image: postgres:18-alpine
     restart: unless-stopped
+    # SSD-tuned planner: default random_page_cost=4.0 assumes spinning disks and
+    # over-penalizes index scans. 1.1 reflects near-uniform random/sequential cost.
+    command: postgres -c random_page_cost=1.1
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "5m"
+        max-file: "3"
     # Postgres uses /dev/shm for parallel query workers and large sorts/hash
     # joins; Docker's 64mb default is easily exhausted. 256mb is a safe bump.
     shm_size: 256mb
@@ -25,9 +33,9 @@ services:
       - ./docker/postgres-init:/docker-entrypoint-initdb.d:ro
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U ftm_user -d financial_transactions"]
-      # Tightened from interval:5s/retries:12 → 3s/10 so the app container
-      # starts up to ~20s sooner on cold boots without sacrificing reliability.
-      interval: 3s
+      # Steady-state interval:30s to reduce log/CPU churn; start_period keeps the
+      # first probes fast so the app container isn't held up on cold boots.
+      interval: 30s
       timeout: 3s
       retries: 10
       start_period: 5s
@@ -41,6 +49,11 @@ services:
   app:
     build: .
     restart: unless-stopped
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "5m"
+        max-file: "3"
     env_file: .env
     ports:
       - "127.0.0.1:${PORT:-3002}:3002"
