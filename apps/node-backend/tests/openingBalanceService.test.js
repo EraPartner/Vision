@@ -1,11 +1,15 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-vi.mock('../src/database/connection.js', () => ({ query: vi.fn() }));
+vi.mock('../src/database/connection.js', () => ({
+  query: vi.fn(),
+  // Transaction shim: run the callback directly; a throw propagates (= rollback).
+  withTransaction: vi.fn(async (fn) => fn({ query: vi.fn() })),
+}));
 vi.mock('../src/repositories/accountRepository.js', () => ({
   default: { getById: vi.fn() },
 }));
 
-import { query } from '../src/database/connection.js';
+import { query, withTransaction } from '../src/database/connection.js';
 import accountRepository from '../src/repositories/accountRepository.js';
 import {
   normalizeOpeningBalance,
@@ -70,6 +74,7 @@ describe('setOpeningBalance (ADR-094 D4)', () => {
 
   it('stamps a system anchor row (amount 0, transfer_source opening, server balance)', async () => {
     query
+      .mockResolvedValueOnce({ rows: [{ id: 5 }] }) // account row lock (FOR UPDATE)
       .mockResolvedValueOnce({ rows: [{ earliest: null }] }) // no prior activity
       .mockResolvedValueOnce({ rows: [{ id: 42, amount: 0, balance: 1000, transfer_source: 'opening' }] });
 
@@ -78,8 +83,13 @@ describe('setOpeningBalance (ADR-094 D4)', () => {
     expect(result.warning).toBeNull();
     expect(result.transaction.id).toBe(42);
 
-    // Second query is the upsert; params carry the server-stamped balance and currency.
-    const [sql, params] = query.mock.calls[1];
+    // Whole upsert runs in a transaction; the first query locks the account row.
+    expect(withTransaction).toHaveBeenCalledTimes(1);
+    expect(query.mock.calls[0][0]).toMatch(/SELECT id FROM accounts WHERE id = \$1 FOR UPDATE/);
+    expect(query.mock.calls[0][1]).toEqual([5]);
+
+    // Third query is the upsert; params carry the server-stamped balance and currency.
+    const [sql, params] = query.mock.calls[2];
     expect(sql).toMatch(/transfer_source = 'opening'/);
     expect(sql).toMatch(/is_transfer, transfer_source, is_active/);
     expect(params).toEqual([5, 1000, 'EUR', '2024-01-01', 'OPENING BALANCE']);
@@ -87,6 +97,7 @@ describe('setOpeningBalance (ADR-094 D4)', () => {
 
   it('warns when the anchor date does not precede existing activity', async () => {
     query
+      .mockResolvedValueOnce({ rows: [{ id: 5 }] }) // lock
       .mockResolvedValueOnce({ rows: [{ earliest: '2023-06-01' }] }) // activity predates the anchor
       .mockResolvedValueOnce({ rows: [{ id: 7 }] });
 
@@ -100,6 +111,7 @@ describe('setOpeningBalance (ADR-094 D4)', () => {
     // "YYYY-MM-DD" — so the pre-fix String(earliest).slice(0,10) compare made
     // the warning dead code in production. toWireDate normalizes it first.
     query
+      .mockResolvedValueOnce({ rows: [{ id: 5 }] }) // lock
       .mockResolvedValueOnce({ rows: [{ earliest: new Date(2023, 5, 1) }] })
       .mockResolvedValueOnce({ rows: [{ id: 8 }] });
 
@@ -109,6 +121,7 @@ describe('setOpeningBalance (ADR-094 D4)', () => {
 
   it('does not warn when a Date-typed earliest is after the anchor', async () => {
     query
+      .mockResolvedValueOnce({ rows: [{ id: 5 }] }) // lock
       .mockResolvedValueOnce({ rows: [{ earliest: new Date(2024, 5, 1) }] })
       .mockResolvedValueOnce({ rows: [{ id: 9 }] });
 

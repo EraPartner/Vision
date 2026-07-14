@@ -23,10 +23,16 @@ beforeEach(() => {
 
 describe('unmarkTransfer — sticky per-pair dismissal (ADR-083, migration 0070)', () => {
   it('records the rejected PAIR and resets both legs to open (NULL)', async () => {
-    mockClient.query.mockResolvedValueOnce({ rows: [{ transfer_peer_id: 20 }] }); // SELECT peer
+    mockClient.query
+      .mockResolvedValueOnce({ rows: [{ transfer_peer_id: 20 }] })  // lock target 10 → peer 20
+      .mockResolvedValueOnce({ rows: [{ transfer_peer_id: 10 }] }); // lock peer 20 → points back at 10
     await unmarkTransfer(10);
 
     const sqls = mockClient.query.mock.calls.map(([sql]) => sql);
+    // Both the target and its peer are locked FOR UPDATE before any mutation
+    // (mirrors markTransfer) so a concurrent re-pair can't strand a third row.
+    const locks = sqls.filter((s) => s.includes('FOR UPDATE'));
+    expect(locks).toHaveLength(2);
     // The pairing is persisted in transfer_dismissals (ordered, idempotent)…
     const dismissal = sqls.find((s) => s.includes('INSERT INTO transfer_dismissals'));
     expect(dismissal).toBeTruthy();
@@ -40,6 +46,24 @@ describe('unmarkTransfer — sticky per-pair dismissal (ADR-083, migration 0070)
       expect(sql).toContain('transfer_source = NULL');
       expect(sql).not.toContain('dismissed');
     }
+  });
+
+  it('does not reset a peer concurrently re-paired to a third row (reciprocity under lock)', async () => {
+    mockClient.query
+      .mockResolvedValueOnce({ rows: [{ transfer_peer_id: 20 }] })  // lock target 10 → peer 20
+      .mockResolvedValueOnce({ rows: [{ transfer_peer_id: 99 }] }); // lock peer 20 → now points at 99, not 10
+    await unmarkTransfer(10);
+
+    const sqls = mockClient.query.mock.calls.map(([sql]) => sql);
+    // Both rows were still locked FOR UPDATE.
+    expect(sqls.filter((s) => s.includes('FOR UPDATE'))).toHaveLength(2);
+    // The stale pair 10↔20 is no longer reciprocal → no dismissal recorded…
+    expect(sqls.find((s) => s.includes('transfer_dismissals'))).toBeUndefined();
+    // …and ONLY the target is reset; the re-paired peer (20→99) is left intact,
+    // so row 99 is never stranded as a phantom one-way transfer.
+    const updates = sqls.filter((s) => s.includes('UPDATE transactions'));
+    expect(updates).toHaveLength(1);
+    expect(updates[0]).toContain('WHERE id = $1');
   });
 
   it('a peerless (single-leg) row is just reset — no pair to dismiss', async () => {

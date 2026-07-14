@@ -221,9 +221,29 @@ export async function markTransfer(aId, bId) {
  */
 export async function unmarkTransfer(id) {
   await withTransaction(async (client) => {
-    const { rows } = await client.query('SELECT transfer_peer_id FROM transactions WHERE id = $1', [id]);
-    const peer = rows[0]?.transfer_peer_id;
+    // Lock the target row before reading its peer (mirrors markTransfer's
+    // FOR UPDATE). Without the lock, a concurrent markTransfer could re-point the
+    // peer at a third row Q between this SELECT and the reset below, stranding Q
+    // as a phantom one-way manual transfer that no cleanup path releases.
+    const { rows } = await client.query(
+      'SELECT transfer_peer_id FROM transactions WHERE id = $1 FOR UPDATE',
+      [id],
+    );
+    const peer = rows[0]?.transfer_peer_id ?? null;
+
+    // Lock the peer too and re-read its pointer under the lock: only reset it if
+    // it still points back at `id`. If markTransfer already re-paired it to Q,
+    // leave that legitimate pairing (and Q) untouched — we just reset our leg.
+    let peerPointsBack = false;
     if (peer) {
+      const peerRes = await client.query(
+        'SELECT transfer_peer_id FROM transactions WHERE id = $1 FOR UPDATE',
+        [peer],
+      );
+      peerPointsBack = peerRes.rows[0]?.transfer_peer_id === id;
+    }
+
+    if (peer && peerPointsBack) {
       await client.query(
         `INSERT INTO transfer_dismissals (txn_a_id, txn_b_id)
          VALUES (LEAST($1::int, $2::int), GREATEST($1::int, $2::int))
@@ -235,7 +255,7 @@ export async function unmarkTransfer(id) {
       `UPDATE transactions SET is_transfer = false, transfer_peer_id = NULL, transfer_source = NULL WHERE id = $1`,
       [id],
     );
-    if (peer) {
+    if (peer && peerPointsBack) {
       await client.query(
         `UPDATE transactions SET is_transfer = false, transfer_peer_id = NULL, transfer_source = NULL WHERE id = $1`,
         [peer],

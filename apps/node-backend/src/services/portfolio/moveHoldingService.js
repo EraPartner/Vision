@@ -26,9 +26,9 @@ const EPS = 1e-9;
 const MOVE_STRATEGIES = new Set(['fifo', 'proportional']);
 
 /**
- * Replay a single (investment, account) lot stream in date/id order to derive
- * the *currently held* units — the same event semantics the shared cost-basis
- * core uses (calculateCostBasis / snapshotBuilder), which the naive
+ * Replay the INVESTMENT-WIDE lot stream in date/id order to derive the source
+ * account's *currently held* units — the same event semantics the shared
+ * cost-basis core uses (calculateCostBasis / snapshotBuilder), which the naive
  * buy+gift−sell sum got wrong:
  *   - buy/gift  : add units
  *   - sell      : consume FIFO from the oldest still-available buy/gift lots
@@ -36,47 +36,70 @@ const MOVE_STRATEGIES = new Set(['fifo', 'proportional']);
  *                 still-available lot by newTotal/oldTotal
  *   - return_of_capital / income / dividends / fees / taxes : no unit effect
  *
- * @param {Array<{id:number,type:string,units?:number|string,date:string}>} lots ordered by (date, id)
+ * Splits are corporate actions recorded once for the whole investment — often
+ * with a NULL account_id, since a corporate action has no natural account — so
+ * the split RATIO must be computed from the investment-wide running total
+ * (ratio = newTotal / totalUnitsHeldSoFar, matching applyEventToLots in the
+ * shared core), NOT from the account-local total. An account-filtered replay
+ * either misses a NULL-account split entirely (leaving `netUnits` pre-split and
+ * `hasPriorConsumption` false) or, when the split carries the source account and
+ * the holding also exists elsewhere, divides the investment-wide new total by
+ * the account-local old total → an inflated ratio.
+ *
+ * Account membership (which buy/gift/sell rows belong to the source account) is
+ * taken from `accountLotIds`; splits always apply investment-wide regardless of
+ * membership. The MOVE itself still operates on the account-local lots.
+ *
+ * @param {Array<{id:number,type:string,units?:number|string,date:string}>} allLots
+ *   the investment-wide stream, ordered by (date, id)
+ * @param {Set<number>} accountLotIds ids of the rows belonging to the source account
  * @returns {{ netUnits: import('decimal.js').Decimal,
  *             availableById: Map<number, import('decimal.js').Decimal>,
  *             hasPriorConsumption: boolean }}
- *   `hasPriorConsumption` is true when a sell or split has altered a buy lot's
- *   available units away from its stored `units` — the case the physical
- *   lot-repoint move model (ADR-091) cannot represent without rewriting the
- *   date-ordered replay of an earlier sell.
+ *   `hasPriorConsumption` is true when a sell or split exists ANYWHERE for the
+ *   investment — the case the physical lot-repoint move model (ADR-091) cannot
+ *   represent without rewriting the date-ordered replay of an earlier sell.
  */
-function replayAvailableLots(lots) {
-  const availableById = new Map();
-  const order = []; // buy/gift lot ids in FIFO order
+function replayAvailableLots(allLots, accountLotIds) {
+  const availableById = new Map(); // source-account buy/gift lots → available units
+  const order = []; // source-account buy/gift lot ids in FIFO order
+  let wideTotal = toDecimal(0); // investment-wide units held so far (drives split ratios)
   let hasPriorConsumption = false;
 
-  for (const lot of lots) {
+  for (const lot of allLots) {
     const units = toDecimal(lot.units || 0);
+    const isLocal = accountLotIds.has(lot.id);
     if (lot.type === 'buy' || lot.type === 'gift') {
-      availableById.set(lot.id, units);
-      order.push(lot.id);
+      wideTotal = wideTotal.plus(units);
+      if (isLocal) {
+        availableById.set(lot.id, units);
+        order.push(lot.id);
+      }
     } else if (lot.type === 'sell') {
       if (units.lte(0)) continue;
-      hasPriorConsumption = true;
-      let remaining = units;
-      for (const id of order) {
-        if (remaining.lte(EPS)) break;
-        const avail = availableById.get(id) ?? toDecimal(0);
-        if (avail.lte(0)) continue;
-        const take = avail.lte(remaining) ? avail : remaining;
-        availableById.set(id, avail.minus(take));
-        remaining = remaining.minus(take);
+      hasPriorConsumption = true; // a sell anywhere for the investment blocks a partial move
+      wideTotal = wideTotal.minus(units);
+      if (wideTotal.lt(0)) wideTotal = toDecimal(0);
+      if (isLocal) {
+        let remaining = units;
+        for (const id of order) {
+          if (remaining.lte(EPS)) break;
+          const avail = availableById.get(id) ?? toDecimal(0);
+          if (avail.lte(0)) continue;
+          const take = avail.lte(remaining) ? avail : remaining;
+          availableById.set(id, avail.minus(take));
+          remaining = remaining.minus(take);
+        }
+        // An oversell beyond held units is clamped (mirrors the cost-basis core).
       }
-      // An oversell beyond held units is clamped (mirrors the cost-basis core).
     } else if (lot.type === 'split') {
-      if (units.lte(0)) continue;
-      const oldTotal = order.reduce((s, id) => s.plus(availableById.get(id) ?? toDecimal(0)), toDecimal(0));
-      if (oldTotal.lte(0)) continue;
-      hasPriorConsumption = true;
-      const factor = units.dividedBy(oldTotal);
+      if (units.lte(0) || wideTotal.lte(0)) continue;
+      hasPriorConsumption = true; // a split anywhere for the investment blocks a partial move
+      const ratio = units.dividedBy(wideTotal); // investment-wide new total / total held so far
       for (const id of order) {
-        availableById.set(id, (availableById.get(id) ?? toDecimal(0)).times(factor));
+        availableById.set(id, (availableById.get(id) ?? toDecimal(0)).times(ratio));
       }
+      wideTotal = units;
     }
     // return_of_capital and cash-flow rows leave units untouched.
   }
@@ -166,10 +189,24 @@ export async function moveHolding({ investmentId, fromAccountId, toAccountId, un
     const lots = lotsRes.rows;
     if (!lots.length) throw new ValidationError('No holdings for that investment in the source account');
 
+    // Investment-wide stream (all accounts): splits are corporate actions
+    // recorded once for the whole investment — frequently with a NULL account_id
+    // — so the split ratio and the prior-consumption flag must be derived from
+    // every account, not the account-filtered rows above. The MOVE still operates
+    // on the account-local `lots`; `accountLotIds` maps rows back to the source.
+    const allLotsRes = await client.query(
+      `SELECT id, type, units
+         FROM portfolio_transactions
+        WHERE investment_id = $1
+        ORDER BY date ASC, id ASC`,
+      [investmentId],
+    );
+    const accountLotIds = new Set(lots.map((l) => l.id));
+
     // Held units via the shared event replay (split / return_of_capital / FIFO
     // sells applied) — the old buy+gift−sell sum ignored splits and RoC, so
     // post-split validation was stale.
-    const { netUnits: netUnitsDec, hasPriorConsumption } = replayAvailableLots(lots);
+    const { netUnits: netUnitsDec, hasPriorConsumption } = replayAvailableLots(allLotsRes.rows, accountLotIds);
     const netUnits = toNumber(netUnitsDec);
 
     const repoint = async (ids) => {
