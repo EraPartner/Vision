@@ -744,11 +744,30 @@ async function cleanupOldBackups(destDir, deviceId, keep = BACKUP_RETENTION_KEEP
   const ordered = files.filter(Boolean).sort((a, b) => b.mtimeMs - a.mtimeMs);
   const stale = ordered.slice(keep).filter((f) => (now - f.mtimeMs) > graceMs);
 
+  // Orphaned `*.partial` bundles are truncated writes from an interrupted
+  // backup (createBundle renames partial → canonical only on clean finalize).
+  // They never count toward retention; delete any older than the grace window
+  // so an in-progress write is never yanked out from under the backup.
+  const partials = names
+    .filter((name) => name.startsWith(prefix) && name.endsWith('.partial'))
+    .map((name) => path.join(destDir, name));
+
   let removed = 0;
   for (const file of stale) {
     try {
       await fs.promises.unlink(file.fullPath);
       removed += 1;
+    } catch {
+      // ignore individual file deletion errors
+    }
+  }
+  for (const partialPath of partials) {
+    try {
+      const stat = await fs.promises.stat(partialPath);
+      if ((now - stat.mtimeMs) > graceMs) {
+        await fs.promises.unlink(partialPath);
+        removed += 1;
+      }
     } catch {
       // ignore individual file deletion errors
     }
@@ -1703,7 +1722,7 @@ function writeInstallerScript({ scriptPath, sourceRootPath, sourceLaunchPath, de
     'rsync -a --delete --exclude ".env" --exclude "postgres_data" --exclude ".git" --exclude "node_modules" "$SRC_ROOT/" "$DEST_ROOT/" && rsync_ok=1',
     'if [ "$rsync_ok" -ne 1 ]; then',
     '  echo "ERROR: rsync failed — rolling back from backup" >&2',
-    '  rsync -a --delete --exclude ".env" --exclude "postgres_data" "$BAK_DIR/" "$DEST_ROOT/" || true',
+    '  rsync -a --delete --exclude ".env" --exclude "postgres_data" --exclude ".git" --exclude "node_modules" "$BAK_DIR/" "$DEST_ROOT/" || true',
     '  rm -rf "$BAK_DIR" 2>/dev/null || true',
     '  exit 1',
     'fi',
