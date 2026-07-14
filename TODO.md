@@ -311,7 +311,7 @@ look-changing one.
   - Account A: 10 units (weight 10) → 2:1 split → sell 10 post-split units → weight 0 though 10 units remain → `splitByAccount` sees `totalW ≤ 0`, attributes nothing → Σ `value_by_account` < aggregate. The parity test only catches this with a split-then-sell fixture.
   - Fix: on split, rescale every account weight by `newTotal/oldTotal`.
 
-- [ ] **`return_of_capital` ignored for non-unit assets (savings/bond/real_estate) — invested + value overstated forever** 🔼 🔎 verified-present 2026-07-11
+- [x] **`return_of_capital` ignored for non-unit assets (savings/bond/real_estate) — invested + value overstated forever** 🔼 ✅ 2026-07-14 · c4d3d06 (non-unit RoC branch added to snapshotBuilder — reduces runningInvested + returning-account weight, mirroring sell — and to buildInvestmentSummaryCore's fixed-income/real-estate/generic branches in lockstep; computeTradeCashLegAmount now credits RoC to the sleeve; tests on all three surfaces)
   - ↪ _from: Correctness research 2026-07-02 · Wave 1b_
   - `snapshotBuilder.js:442-451` — branch gated on `heldUnits > 0` (always 0 for non-unit classes); never touches `nonUnitState.runningInvested` (contrast sell at `:436`)
   - Bond: buy 10 000, RoC 2 000 → snapshot `invested` and `value` stay 10 000.
@@ -3250,7 +3250,7 @@ look-changing one.
   - evidence: services/plannedTransactionService.js is solely `export { default } from '../repositories/plannedTransactionRepository.js'`, and routes/plannedTransactions.js:9 imports it as `plannedTransactionRepository` — so the seam adds a hop without changing what the route "sees"; same import-aliasing in routes/info.js:18 (`infoRepository` from infoService). The seam files themselves are intended (ADR-067), but the aliasing erases the boundary in the code readers actually read.
   - fix: rename import bindings to `…Service` at route call sites; consider making seams that stay pure re-exports for >1 release into real service modules or documenting them as permanent.
 
-- [ ] **routes/aggregations.js hand-rolls its 400 response instead of throwing ValidationError** 🔽 🔎 verified-present 2026-07-11
+- [x] **routes/aggregations.js hand-rolls its 400 response instead of throwing ValidationError** 🔽 ✅ 2026-07-14 · 55d9364 (#93) (stale finding re-verified: aggregations.js:136 already throws `new ValidationError('days_back + days_forward must be <= 730')` — the hand-rolled `res.status(400)`/`BAD_REQUEST` is gone; fixed by the #93 backlog sweep, marker was just never stamped)
   - ↪ _from: Code/architecture 2026-07-03 · Wave A1_
   - evidence: routes/aggregations.js:135 `res.status(400).json({ ok:false, error:{ code:'BAD_REQUEST', … } })` — the only hand-rolled error response in routes/ backend-wide; bypasses createErrorHandler and invents an ad-hoc `BAD_REQUEST` code (canonical typed errors emit `VALIDATION_ERROR`, middleware/errorHandler.js:41-45) and omits `meta.requestId`.
   - fix: `throw new ValidationError('days_back + days_forward must be <= 730')`.
@@ -3521,12 +3521,12 @@ look-changing one.
   - evidence: `feeBreakdown.js:37-38`'s comment promises a byInvestment fallback, but `displayRows = rows.length ? rows : []` is an identity no-op. Separately, `forecast/index.js:12-19` consumes the method modules via `import * as`, so their default exports are all dead (ensemble correctly omits one).
   - fix: fix or remove the identity branch; drop the unused default exports from the 6 non-ensemble method modules.
 
-- [ ] **infoRepo.forecast.js is the only repo doing input-range validation, and it does so with untyped `throw new Error`** ⬇ 🔎 verified-present 2026-07-11
+- [x] **infoRepo.forecast.js is the only repo doing input-range validation, and it does so with untyped `throw new Error`** ⬇ ✅ 2026-07-14 · c4d3d06 (all 5 out-of-range `throw new Error` sites now `throw new ValidationError` → 400 not 500; existing range tests strengthened to assert the ValidationError type)
   - ↪ _from: Code/architecture 2026-07-03 · Wave A2_
   - evidence: `infoRepo.forecast.js:224,337,340,343,444` throw plain `Error` for out-of-range params, which the error middleware normalizes to a 500 instead of a 400.
   - fix: convert to `ValidationError` so bad params 400 instead of 500.
 
-- [ ] **recipientPivot.js/tagPivot.js use `= null` param defaults, against the project's never-null convention** ⬇ 🔎 verified-present 2026-07-11
+- [x] **recipientPivot.js/tagPivot.js use `= null` param defaults, against the project's never-null convention** ⬇ ✅ 2026-07-14 · c4d3d06 (both pivot services default startDate/endDate/recipientIds/tagIds to `undefined`; downstream repos use truthy/`Array.isArray` checks so behaviour is unchanged)
   - ↪ _from: Code/architecture 2026-07-03 · Wave A2_
   - evidence: `recipientPivot.js:16-18` / `tagPivot.js:14-16` default params to `null`, and those nulls flow into repo options.
   - fix: default to `undefined` per convention.
