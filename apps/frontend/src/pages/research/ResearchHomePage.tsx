@@ -305,7 +305,7 @@ function EntryCard({ icon: Icon, title, desc, onClick }: EntryCardProps) {
   return (
     <button
       onClick={onClick}
-      className="text-left rounded-xl border border-border glass-regular p-4 hover:border-primary/50 hover:shadow-glass-soft transition-all group"
+      className="text-left rounded-xl border border-border glass-regular p-4 hover:border-primary/50 hover:shadow-glass-soft transition-[border-color,box-shadow] group"
     >
       <div className="flex items-center gap-3 mb-2">
         <div className="h-9 w-9 rounded-lg bg-primary/10 text-primary flex items-center justify-center">

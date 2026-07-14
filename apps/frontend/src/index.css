@@ -1040,6 +1040,11 @@
         .animate-stagger > *,
         .icon-success-bounce,
         .ticker-track,
+        /* Systematic leaks: these infinite/height animations were gated per
+           component elsewhere (or not at all) — one global rule covers them. */
+        .animate-shimmer,
+        .animate-accordion-up,
+        .animate-accordion-down,
         [data-sonner-toast][data-type="success"] [data-icon] {
             animation: none;
         }

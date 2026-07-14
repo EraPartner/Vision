@@ -198,12 +198,14 @@ export function useTransactionListData({
     const handleSortChange = useCallback((key: string | null, dir: SortDir) => {
         setSortKey(key);
         setSortDir(dir);
-        setAllItems([]);
-        setTotalItems(0);
+        // Keep the current rows on screen while the re-sorted page round-trips
+        // (React Query's placeholderData does the same for filter/search): the
+        // initialData effect swaps in the new ordering when it arrives, so the
+        // list re-sorts in place instead of blanking to a skeleton.
         offsetRef.current = 0;
         hasMoreRef.current = true;
         // Invalidate any in-flight loadMore so its response cannot append
-        // rows from the previous sort/filter into the cleared list.
+        // rows from the previous sort/filter into the list.
         requestIdRef.current += 1;
     }, []);
 

@@ -20,6 +20,7 @@ import { AreaChart, BarChart, type AreaSeries, type BarSeries } from "@/componen
 import { useDebounce, SEARCH_DEBOUNCE_MS } from "@/hooks/useDebounce";
 import { cn } from "@/lib/utils";
 import { usePortfolio } from "@/hooks/usePortfolio";
+import { useOnlineStatus } from "@/hooks/useOnlineStatus";
 import { getInvestmentPriceHistory } from "@/lib/api/portfolio";
 import { AddInvestmentFromMarketDialog } from "@/components/portfolio/AddInvestmentFromMarketDialog";
 import { AddToWatchlistDialog } from "@/components/portfolio/AddToWatchlistDialog";
@@ -158,6 +159,7 @@ export default function MarketLookupPage() {
   const effectiveSelectedSymbol = selectedSymbol || symbolFromQuery || null;
   const debouncedSearch = useDebounce(searchText, SEARCH_DEBOUNCE_MS);
   const { summaries, isLoading: isPortfolioLoading } = usePortfolio();
+  const isOnline = useOnlineStatus();
 
   // When the page is opened from a portfolio holding (double-click), the URL
   // carries its investmentId. If that holding prices via a non-Yahoo provider
@@ -196,9 +198,11 @@ export default function MarketLookupPage() {
       const { quotes } = await apiClient.getMarketQuotes<Quote>(effectiveSelectedSymbol!, { detail: "basic" });
       return quotes[0] ?? null;
     },
-    enabled: useYahoo,
+    enabled: useYahoo && isOnline,
     staleTime: 30_000,
-    refetchInterval: 60_000,
+    // Don't keep polling a failing quote endpoint while offline (matches the
+    // sibling research pages that gate their price polls on online state).
+    refetchInterval: isOnline ? 60_000 : false,
   });
 
   // Chart

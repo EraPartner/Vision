@@ -133,7 +133,7 @@ export function MultiYearTrendStrip({ className, maxYears = DEFAULT_MAX_YEARS }:
                                 <div className="mt-2 h-1 w-full rounded-full bg-muted">
                                     <div
                                         className={cn(
-                                            'h-full rounded-full transition-all',
+                                            'h-full rounded-full transition-[width]',
                                             isActive ? 'bg-primary' : 'bg-primary/40',
                                         )}
                                         style={{ width: `${tile.barRatio * 100}%` }}

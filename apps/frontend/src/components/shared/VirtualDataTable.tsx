@@ -659,7 +659,7 @@ export function VirtualDataTable<T extends Record<string, unknown>>({
 
                                     {col.header && (
                                         <div
-                                            className="absolute right-0 top-2 bottom-2 w-px bg-border cursor-col-resize hover:w-0.5 hover:bg-primary/50 active:bg-primary transition-all"
+                                            className="absolute right-0 top-2 bottom-2 w-px bg-border cursor-col-resize hover:w-0.5 hover:bg-primary/50 active:bg-primary transition-[width,background-color]"
                                             onMouseDown={(e) => {
                                                 const el = e.currentTarget.parentElement;
                                                 const currentWidth = el ? el.getBoundingClientRect().width : 120;
@@ -722,8 +722,17 @@ export function VirtualDataTable<T extends Record<string, unknown>>({
                                         aria-rowindex={virtualRow.index + 2}
                                         // Keyboard equivalent for the mouse-only row actions:
                                         // focusable rows take ↑/↓ (move), Enter (open) and
-                                        // Space (quick look).
-                                        tabIndex={rowsInteractive ? 0 : undefined}
+                                        // Space (quick look). Roving tabindex — only the
+                                        // topmost rendered row is a tab stop, so Tab reaches
+                                        // the table once instead of walking every row; ↑/↓
+                                        // (focusRowByIndex) move focus to the -1 rows.
+                                        tabIndex={
+                                            rowsInteractive
+                                                ? virtualRow.index === virtualizer.getVirtualItems()[0]?.index
+                                                    ? 0
+                                                    : -1
+                                                : undefined
+                                        }
                                         className={`flex items-center border-b border-border transition-colors hover:bg-muted/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50 focus-visible:ring-inset ${isEditing ? "bg-primary/5" : ""} ${onRowDoubleClick ? "cursor-pointer" : ""}`}
                                         style={{
                                             position: "absolute",

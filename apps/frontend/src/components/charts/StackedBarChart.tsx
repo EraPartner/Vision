@@ -107,8 +107,13 @@ function StackedBarLayerInner<Datum>({
                                 transition={{
                                     duration: reduce ? 0 : durations.normal,
                                     ease: easings.outExpo,
-                                    delay:
-                                        (bar.index * 0.02 + stack.index * 0.03),
+                                    // Clamp the stagger tail: past ~0.4s the
+                                    // entrance is imperceptible, so long ranges
+                                    // don't run seconds of settle animation.
+                                    delay: Math.min(
+                                        bar.index * 0.02 + stack.index * 0.03,
+                                        0.4,
+                                    ),
                                 }}
                                 onPointerEnter={() =>
                                     onEnter(

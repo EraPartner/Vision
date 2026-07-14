@@ -230,7 +230,7 @@ export function ResearchMappingDialog({
                 onClick={() => auditMutation.mutate()}
                 disabled={auditMutation.isPending}
               >
-                <ShieldCheck className={cn("h-3.5 w-3.5", auditMutation.isPending && "animate-pulse")} />
+                <ShieldCheck className={cn("h-3.5 w-3.5", auditMutation.isPending && "motion-safe:animate-pulse")} />
                 {t('research.mapping.audit')}
               </Button>
             )}

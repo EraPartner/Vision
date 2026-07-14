@@ -117,9 +117,11 @@
         --ease-in-out-quart: cubic-bezier(0.77, 0, 0.175, 1);
 
         /* -------- Typography -------- */
-        --font-display: "Fraunces Variable", "Fraunces", "Iowan Old Style",
+        /* The app ships the static @fontsource subsets (main.tsx), not the
+           *-Variable packages — those names never matched, so they're dropped. */
+        --font-display: "Fraunces", "Iowan Old Style",
             "Palatino", "Georgia", serif;
-        --font-body: "Inter Variable", "Inter", -apple-system,
+        --font-body: "Inter", -apple-system,
             BlinkMacSystemFont, "SF Pro Text", "Segoe UI", system-ui, sans-serif;
         --font-mono: "SF Mono", "JetBrains Mono", "Menlo", "Consolas", monospace;
     }

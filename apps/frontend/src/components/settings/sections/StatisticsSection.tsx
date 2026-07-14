@@ -65,7 +65,22 @@ export const StatisticsSection = memo(function StatisticsSection() {
     const handleIncludeTransfersChange = (v: boolean) => {
         queryClient.setQueryData(['setting', 'includeTransfers'], { key: 'includeTransfers', value: v });
         apiClient.saveSetting('includeTransfers', v)
-            .then(() => queryClient.invalidateQueries())
+            // includeTransfers only affects server-side aggregation / cash-flow
+            // outputs, so scope the refetch to those families instead of blanket-
+            // invalidating every cached query (portfolio, research quotes, etc.).
+            .then(() => queryClient.invalidateQueries({
+                predicate: (query) => {
+                    const root = query.queryKey[0];
+                    if (typeof root !== 'string') return false;
+                    return (
+                        root === 'aggregations' ||
+                        root === 'monthlySummary' ||
+                        root === 'filteredDashboardStats' ||
+                        root === 'dashboardRecentTransactions' ||
+                        root.toLowerCase().startsWith('cashflow')
+                    );
+                },
+            }))
             .catch(() => { /* non-fatal */ });
     };
 

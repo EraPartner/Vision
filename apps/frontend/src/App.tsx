@@ -22,6 +22,7 @@ import { useSettingsStore } from "@/stores/settingsStore";
 // Lazy-loaded pages for code splitting. Loaders live in lib/routePreload so
 // sidebar hover can warm the same chunks the router requests on click.
 import { routeLoaders } from "@/lib/routePreload";
+import { LOCAL_STORAGE_KEYS } from "@/lib/localStorage-keys";
 
 const TaxOverviewPage = lazy(routeLoaders["/tax"]);
 const PortfolioTaxPage = lazy(routeLoaders["/portfolio/tax"]);
@@ -123,6 +124,17 @@ function LanguageBridge({ children }: { children: React.ReactNode }) {
         (lang: Language) => updateAppSettings({ language: lang }),
         [updateAppSettings],
     );
+
+    // Mirror the active language to localStorage so the next cold boot can start
+    // the correct locale chunk during entry execution (see LanguageContext),
+    // instead of waiting behind the settings API round trip.
+    useEffect(() => {
+        try {
+            localStorage.setItem(LOCAL_STORAGE_KEYS.LANGUAGE, language);
+        } catch {
+            // localStorage unavailable — locale prefetch falls back to English.
+        }
+    }, [language]);
 
     useEffect(() => {
         configureCurrencyFormatDefaults({
