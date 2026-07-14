@@ -12,7 +12,7 @@
 #     firewall), then drops to a keep-alive
 #   - all egress forced through an in-container squid proxy (hostname allowlist)
 
-FROM debian:bookworm-slim@sha256:0104b334637a5f19aa9c983a91b54c89887c0984081f2068983107a6f6c21eeb
+FROM debian:bookworm-slim@sha256:7b140f374b289a7c2befc338f42ebe6441b7ea838a042bbd5acbfca6ec875818
 
 ARG TZ=UTC
 ENV TZ="$TZ"
