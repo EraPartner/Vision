@@ -3,6 +3,13 @@ name: CI
 on:
   push:
     branches: ["main"]
+    # NOTE: "CI Complete" is a required status check. A diff that matches every
+    # pattern here skips the whole workflow, so "CI Complete" never reports and
+    # such a PR is left pending / blocked from merging. We deliberately keep the
+    # markdown ignore ROOT-ONLY ("*.md", not "**/*.md"): widening it would make
+    # nested-doc-only PRs skip CI and strand the required check. Properly
+    # skipping nested-docs PRs needs a companion no-op success workflow with the
+    # inverted paths (tracked in TODO.md) — do not widen this without it.
     paths-ignore:
       - "docs/**"
       - "*.md"
@@ -14,7 +21,9 @@ on:
 
 concurrency:
   group: ci-${{ github.ref }}
-  cancel-in-progress: true
+  # Only cancel superseded PR runs; never cancel a push to main/tags mid-run
+  # (those runs gate merges/releases and must complete).
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 # Deny all permissions by default; each job opts in to only what it needs.
 permissions: {}
@@ -573,9 +582,30 @@ jobs:
     steps:
       - name: Check Docker-tier stages passed
         run: |
-          results='${{ toJson(needs.*.result) }}'
-          if echo "$results" | grep -qE '"(failure|cancelled)"'; then
-            echo "CI failed in Docker tier. Job results: $results"
+          echo "trivy-scan:              ${{ needs.trivy-scan.result }}"
+          echo "docker-verify:           ${{ needs.docker-verify.result }}"
+          echo "test-live-api-contracts: ${{ needs.test-live-api-contracts.result }}"
+          # trivy-scan and docker-verify MUST run and succeed. A 'skipped' here
+          # means the Docker tier was silently bypassed (e.g. quality-gate or
+          # build-image failed upstream) — treat that as a failure, not a pass.
+          # A plain failure/cancellation grep would let a skipped required job
+          # slip through green; assert success explicitly instead.
+          if [ "${{ needs.trivy-scan.result }}" != "success" ]; then
+            echo "CI failed: trivy-scan did not succeed (got '${{ needs.trivy-scan.result }}')."
             exit 1
           fi
+          if [ "${{ needs.docker-verify.result }}" != "success" ]; then
+            echo "CI failed: docker-verify did not succeed (got '${{ needs.docker-verify.result }}')."
+            exit 1
+          fi
+          # test-live-api-contracts is INTENTIONALLY skipped on draft PRs
+          # (if: !github.event.pull_request.draft), so 'skipped' is allowed here;
+          # only an actual failure/cancellation is a hard error.
+          case "${{ needs.test-live-api-contracts.result }}" in
+            success|skipped) ;;
+            *)
+              echo "CI failed: test-live-api-contracts result is '${{ needs.test-live-api-contracts.result }}'."
+              exit 1
+              ;;
+          esac
           echo "All CI stages complete."

@@ -5,10 +5,9 @@
 # and on demand against the real Docker stack, so regressions in critical user
 # journeys and a11y are still caught — just off the PR critical path.
 #
-# NOTE: this workflow is modeled on ci.yml's docker-verify / test-live-api-contracts
-# jobs but has not yet had a live run on GitHub Actions. Confirm the first
-# scheduled/dispatch run is green and adjust the browser-install / compose steps
-# if the runner image differs from expectations.
+# This workflow is modeled on ci.yml's docker-verify / test-live-api-contracts
+# jobs and reuses the same stub .env + `docker compose up -d` invocation (see
+# the "Create stub .env" step below).
 name: E2E (scheduled)
 
 on:
