@@ -15,6 +15,8 @@ export const TAX_WRAPPERS = ['none', 'pension', 'tax_advantaged'];
 export const ACCOUNT_OWNERS = ['me', 'partner', 'joint'];
 
 const BOOLEAN_FIELDS = ['spendable', 'in_net_worth', 'multi_currency_cash', 'has_cash_sleeve', 'is_active'];
+// Matches the 12-integer-digit ceiling of the money columns (NUMERIC(18,6)).
+const MAX_STATEMENT_BALANCE = 1e12;
 const ENUM_FIELDS = {
   type: ACCOUNT_TYPES,
   liquidity_class: LIQUIDITY_CLASSES,
@@ -86,6 +88,13 @@ function sanitize(body, { requireName }) {
     } else {
       const bal = Number(body.statement_balance);
       if (!Number.isFinite(bal)) throw new ValidationError('statement_balance must be a number');
+      // Bound it like the money columns (NUMERIC 12-integer-digit ceiling): an
+      // unbounded 1e15 / JSON "Infinity" otherwise slid past the finite check
+      // and 500'd at the DB. Balances can be negative (liability), so bound the
+      // magnitude.
+      if (Math.abs(bal) > MAX_STATEMENT_BALANCE) {
+        throw new ValidationError(`statement_balance must be between -${MAX_STATEMENT_BALANCE} and ${MAX_STATEMENT_BALANCE}`);
+      }
       out.statement_balance = bal;
     }
   }

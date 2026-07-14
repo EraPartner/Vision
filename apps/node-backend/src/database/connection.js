@@ -98,7 +98,12 @@ export async function query(text, params, opts = {}) {
     try {
       const result = await pool.query(text, params);
       const duration = Date.now() - start;
-      if (settings.database.echo || duration > 1000) {
+      // A >1s query is a production-relevant signal; keep it visible at the
+      // default (info/warn) level instead of debug, where it was invisible in
+      // prod. Plain echo tracing stays at debug.
+      if (duration > 1000) {
+        logger.warn(`Slow query (${duration}ms): ${text.slice(0, 100)}`);
+      } else if (settings.database.echo) {
         logger.debug(`Query executed in ${duration}ms: ${text.slice(0, 100)}`);
       }
       return result;

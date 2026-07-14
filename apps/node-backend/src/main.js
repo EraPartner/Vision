@@ -171,6 +171,13 @@ app.use((req, res, next) => {
     gz = createGzip();
     res.removeHeader('Content-Length');
     res.setHeader('Content-Encoding', 'gzip');
+    // The representation now varies by Accept-Encoding — a shared cache/proxy
+    // must not serve this gzipped body to an identical-URL request that didn't
+    // send Accept-Encoding: gzip. Merge, don't clobber, any existing Vary.
+    const existingVary = String(res.getHeader('Vary') ?? '');
+    if (!/\bAccept-Encoding\b/i.test(existingVary)) {
+      res.setHeader('Vary', existingVary ? `${existingVary}, Accept-Encoding` : 'Accept-Encoding');
+    }
 
     // Downstream backpressure: pause gz when raw socket buffer is full,
     // resume on socket drain. Without this the gzip transform spins until

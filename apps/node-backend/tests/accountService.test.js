@@ -66,6 +66,15 @@ describe('accountService.create', () => {
     expect(accountRepository.create).toHaveBeenCalled();
   });
 
+  it('rejects an absurd statement_balance above the money-column ceiling', async () => {
+    await expect(
+      accountService.create({
+        name: 'KBC', statement_balance: 1e15, statement_balance_date: '2026-07-01',
+      }),
+    ).rejects.toThrow(ValidationError);
+    expect(accountRepository.create).not.toHaveBeenCalled();
+  });
+
   it('rejects a funding_account_id pointing at a nonexistent account with 400, not 500', async () => {
     accountRepository.getById.mockResolvedValueOnce(undefined); // referenced account missing
     await expect(

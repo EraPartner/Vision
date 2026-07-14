@@ -27,6 +27,9 @@ const ALLOWED_COLUMNS = {
     'planned_date', 'bank_account', 'recipient_id', 'amount', 'memo',
     'currency', 'category_id', 'comment', 'url', 'is_recurring',
     'recurrence_pattern', 'recurrence_end_date', 'max_occurrences',
+    // reminder_days_before is creatable + returned; without it here a PATCH
+    // update to the reminder lead time was silently dropped by the whitelist.
+    'reminder_days_before',
     'is_executed', 'is_active', 'last_executed_date',
     'is_loan', 'loan_type', 'loan_principal', 'loan_annual_interest_rate',
     'loan_term_months', 'loan_start_date', 'loan_payment_day',

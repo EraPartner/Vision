@@ -21,6 +21,9 @@ import { parsePagination } from '../lib/pagination.js';
 
 const router = Router();
 
+// Matches the 12-integer-digit ceiling of the money columns (NUMERIC).
+const MAX_PLANNED_AMOUNT = 1e12;
+
 function parseRouteId(req) {
   return parseInt(req.params.id, 10);
 }
@@ -52,6 +55,19 @@ async function resolveRecipientIdFromName(fields) {
 async function resolveCategoryIdFromName(fields) {
   if (!fields.category_name || fields.category_id) return fields.category_id;
   return resolveCategoryIdByName(fields.category_name);
+}
+
+// reminder_days_before is a small non-negative integer lead time (bill-reminder
+// widgets). Validate it up front so a string/negative/fractional value 400s
+// instead of reaching the smallint column as a raw cast/overflow 500. Coerces
+// in place on the provided object.
+function assertReminderDaysBefore(fields) {
+  if (fields.reminder_days_before == null) return;
+  const n = Number(fields.reminder_days_before);
+  if (!Number.isInteger(n) || n < 0 || n > 365) {
+    throw new ValidationError('reminder_days_before must be an integer between 0 and 365');
+  }
+  fields.reminder_days_before = n;
 }
 
 function generateLoanScheduleOrThrow(input) {
@@ -162,6 +178,25 @@ router.post('/', async (req, res) => {
     throw new ValidationError('Missing required fields: planned_date, amount');
   }
 
+  // A non-loan planned payment's amount must be a real, non-zero figure. The
+  // create path previously null-checked only, so a 0 (meaningless — excluded
+  // from auto-match) or a non-finite value stored end-to-end. Loans set their
+  // own amount from the generated schedule below, so skip them here.
+  if (!data.is_loan && data.amount != null) {
+    const amt = Number(data.amount);
+    if (!Number.isFinite(amt) || amt === 0) {
+      throw new ValidationError('amount must be a non-zero finite number');
+    }
+    // Bound the magnitude like the money columns (NUMERIC 12-integer-digit
+    // ceiling) — an absurd 1e15 otherwise reached the column as an overflow 500.
+    if (Math.abs(amt) > MAX_PLANNED_AMOUNT) {
+      throw new ValidationError(`amount must be between -${MAX_PLANNED_AMOUNT} and ${MAX_PLANNED_AMOUNT}`);
+    }
+    data.amount = amt;
+  }
+
+  assertReminderDaysBefore(data);
+
   if (data.is_loan) {
     if (data.loan_term_months && (data.loan_term_months < 1 || data.loan_term_months > 600)) {
       throw new ValidationError('loan_term_months must be between 1 and 600 months');
@@ -267,6 +302,8 @@ router.patch(
     const { recipient_name: _recipientName, category_name: _categoryName, ...fields } = rawFields;
     if (recipientId !== undefined) fields.recipient_id = recipientId;
     if (categoryId !== undefined) fields.category_id = categoryId;
+
+    assertReminderDaysBefore(fields);
 
     // Recurrence bounds: same validation as POST; explicit null clears a bound.
     if (fields.recurrence_end_date != null) {

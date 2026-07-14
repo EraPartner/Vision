@@ -20,7 +20,10 @@ export async function getIncludeTransfers() {
 }
 
 // ── Materialized-view cache ────────────────────────────────────────────────
-// Keyed by view name; cleared via clearMvCache() after bulk import.
+// Keyed by view name. There is no production caller that clears it after an
+// import: negative entries self-heal via the short TTL below (a freshly created
+// view is picked up within MV_NEGATIVE_CACHE_TTL_MS), and positive entries are
+// stable schema facts. clearMvCache() exists only as a test-reset seam.
 // Stores entries as { value: boolean, expires: number | null } so that a
 // negative result (view missing or empty) does not force a DB round-trip on
 // every request — without it, a fresh DB or a missing MV produces N hits
@@ -74,8 +77,10 @@ export async function mvAvailable(viewName) {
 }
 
 /**
- * Clear the materialized-view availability cache.
- * Call after schema changes or when views are known to have been recreated.
+ * Clear the materialized-view availability cache. Test-reset seam only — there
+ * is no production caller (negative entries self-heal via the negative TTL, and
+ * positive entries reflect a stable schema fact). Kept for tests that need a
+ * deterministic starting cache state.
  */
 export function clearMvCache() {
   mvCache.clear();

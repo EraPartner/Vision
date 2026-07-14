@@ -299,6 +299,20 @@ describe('normalizeTransactionPayload — other types (dividend/fee/tax/etc)', (
   it('rejects non-numeric input', () => {
     expect(() => normalizeTransactionPayload({ type: 'dividend', amount: 'free' })).toThrow(/amount must be a valid number/);
   });
+
+  it('rejects an unknown transaction type (was invisible-to-replay / DB 500)', () => {
+    expect(() => normalizeTransactionPayload({ type: 'banana', amount: 100 })).toThrow(/Invalid transaction type/);
+  });
+
+  it('rejects an out-of-enum recurrence_interval', () => {
+    expect(() => normalizeTransactionPayload({ type: 'dividend', amount: 100, recurrence_interval: 'fortnightly' }))
+      .toThrow(/Invalid recurrence_interval/);
+  });
+
+  it('accepts a valid recurrence_interval', () => {
+    const r = normalizeTransactionPayload({ type: 'dividend', amount: 100, recurrence_interval: 'monthly' });
+    expect(r.recurrence_interval).toBe('monthly');
+  });
 });
 
 describe('validateSellUnitsAvailability', () => {

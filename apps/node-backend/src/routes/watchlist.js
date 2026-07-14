@@ -5,7 +5,7 @@
 import { Router } from 'express';
 import { watchlistRepository } from '../services/watchlistService.js';
 import { NotFoundError, ValidationError } from '../middleware/errorHandler.js';
-import { validateIdParam, validateNumber } from '../middleware/validation.js';
+import { validateIdParam, validateNumber, assertMaxLength } from '../middleware/validation.js';
 import { parsePagination } from '../lib/pagination.js';
 
 const router = Router();
@@ -32,6 +32,12 @@ function validateWatchlistFields(body, { context = 'create' } = {}) {
       throw new ValidationError('name cannot be empty');
     }
   }
+  // VARCHAR column widths (migration 0001): a provider-/market-prefilled value
+  // can exceed the HTML maxLength cap (which only clamps typed input), reaching
+  // the column as a raw 22001 500 instead of a clean 400.
+  assertMaxLength(body.name, 200, 'name');
+  assertMaxLength(body.symbol, 20, 'symbol');
+  assertMaxLength(body.price_provider_id, 200, 'price_provider_id');
   if (body.target_price !== undefined && body.target_price !== null) {
     const result = validateNumber(body.target_price, { min: 0, max: MAX_PRICE, fieldName: 'target_price' });
     if (!result.valid) throw new ValidationError(result.error);

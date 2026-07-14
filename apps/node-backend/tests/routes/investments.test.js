@@ -72,7 +72,10 @@ vi.mock('../../src/config/kinesisConfig.js', () => ({
   }),
 }));
 
-vi.mock('../../src/middleware/validation.js', () => ({
+vi.mock('../../src/middleware/validation.js', async (importOriginal) => ({
+  // Keep the real value helpers (assertCurrency, assertMaxLength, validateNumber);
+  // only stub the id-param middleware to a no-op.
+  ...(await importOriginal()),
   validateIdParam: (req, res, next) => next(),
 }));
 

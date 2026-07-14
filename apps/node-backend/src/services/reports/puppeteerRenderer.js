@@ -10,17 +10,17 @@ import { logger } from '../../config/logger.js';
 
 /** @type {import('puppeteer').Browser | null} */
 let browser = null;
+/** @type {Promise<import('puppeteer').Browser> | null} */
+let launchPromise = null;
 
-async function getBrowser() {
-  if (browser?.connected) return browser;
-
+async function launchBrowser() {
   const { default: puppeteer } = await import('puppeteer');
   // In Docker (Alpine) PUPPETEER_EXECUTABLE_PATH points to the distro-packaged
   // Chromium (musl-linked, works on ARM64). Locally it is unset and Puppeteer
   // falls back to its own bundled Chrome.
   const executablePath = process.env.PUPPETEER_EXECUTABLE_PATH || undefined;
 
-  browser = await puppeteer.launch({
+  const launched = await puppeteer.launch({
     headless: true,
     ...(executablePath ? { executablePath } : {}),
     args: [
@@ -30,8 +30,21 @@ async function getBrowser() {
       '--disable-gpu',
     ],
   });
+  browser = launched;
   logger.info('Puppeteer browser launched for report rendering');
-  return browser;
+  return launched;
+}
+
+async function getBrowser() {
+  if (browser?.connected) return browser;
+
+  // Memoize the in-flight launch: two concurrent first renders otherwise both
+  // launched Chromium, the second assignment overwrote `browser`, and the first
+  // process leaked. The promise clears on settle so a failed launch can retry.
+  if (!launchPromise) {
+    launchPromise = launchBrowser().finally(() => { launchPromise = null; });
+  }
+  return launchPromise;
 }
 
 /**
@@ -82,5 +95,6 @@ export async function closeBrowser() {
     // ignore errors during shutdown
   } finally {
     browser = null;
+    launchPromise = null;
   }
 }

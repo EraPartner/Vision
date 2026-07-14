@@ -19,6 +19,11 @@ function getLogLevel() {
   return env === 'production' ? LOG_LEVELS.info : LOG_LEVELS.debug;
 }
 
+// Resolve the level ONCE at module load rather than re-parsing process.env on
+// every logger call (invoked per request and per DB query). The level is fixed
+// for a process lifetime; env changes require a restart anyway.
+const CURRENT_LOG_LEVEL = getLogLevel();
+
 function formatMessage(level, ...args) {
   const timestamp = new Date().toISOString();
   let message, extra;
@@ -36,16 +41,16 @@ function formatMessage(level, ...args) {
 
 export const logger = {
   debug(...args) {
-    if (getLogLevel() <= LOG_LEVELS.debug) console.debug(formatMessage('DEBUG', ...args));
+    if (CURRENT_LOG_LEVEL <= LOG_LEVELS.debug) console.debug(formatMessage('DEBUG', ...args));
   },
   info(...args) {
-    if (getLogLevel() <= LOG_LEVELS.info) console.log(formatMessage('INFO', ...args));
+    if (CURRENT_LOG_LEVEL <= LOG_LEVELS.info) console.log(formatMessage('INFO', ...args));
   },
   warn(...args) {
-    if (getLogLevel() <= LOG_LEVELS.warn) console.warn(formatMessage('WARN', ...args));
+    if (CURRENT_LOG_LEVEL <= LOG_LEVELS.warn) console.warn(formatMessage('WARN', ...args));
   },
   error(...args) {
-    if (getLogLevel() <= LOG_LEVELS.error) console.error(formatMessage('ERROR', ...args));
+    if (CURRENT_LOG_LEVEL <= LOG_LEVELS.error) console.error(formatMessage('ERROR', ...args));
   },
 };
 

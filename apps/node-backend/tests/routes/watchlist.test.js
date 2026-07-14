@@ -149,6 +149,18 @@ describe('Watchlist Routes', () => {
       await expect(routeHandlers['post:/'](req, mockResponse())).rejects.toBeInstanceOf(ValidationError);
     });
 
+    it('rejects an over-length name (VARCHAR(200)) before the DB 22001', async () => {
+      const req = { body: { ...validBody, name: 'x'.repeat(201) } };
+      await expect(routeHandlers['post:/'](req, mockResponse())).rejects.toBeInstanceOf(ValidationError);
+      expect(watchlistRepository.create).not.toHaveBeenCalled();
+    });
+
+    it('rejects an over-length symbol (VARCHAR(20))', async () => {
+      const req = { body: { ...validBody, symbol: 'A'.repeat(21) } };
+      await expect(routeHandlers['post:/'](req, mockResponse())).rejects.toBeInstanceOf(ValidationError);
+      expect(watchlistRepository.create).not.toHaveBeenCalled();
+    });
+
     it('rejects unknown asset_class', async () => {
       const req = { body: { ...validBody, asset_class: 'beanie-babies' } };
       await expect(routeHandlers['post:/'](req, mockResponse())).rejects.toBeInstanceOf(ValidationError);

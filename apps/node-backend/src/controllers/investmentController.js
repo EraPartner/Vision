@@ -17,7 +17,7 @@ import { refreshQuotesForInvestment } from '../services/quoteBackfillService.js'
 import { logger } from '../config/logger.js';
 import { getKinesisAssetConfig } from '../config/kinesisConfig.js';
 import { NotFoundError, ValidationError } from '../middleware/errorHandler.js';
-import { validateNumber } from '../middleware/validation.js';
+import { validateNumber, assertMaxLength, assertCurrency } from '../middleware/validation.js';
 import { invalidatePortfolioCaches } from '../routes/info/_cache.js';
 import { assertPublicHttpUrl } from '../lib/urlSafety.js';
 import { autoResolveFxRateToEur } from '../services/portfolio/fxResolve.js';
@@ -54,6 +54,29 @@ const INVESTMENT_NUMERIC_BOUNDS = [
   { field: 'cadastral_income', min: 0, max: 1e12 },
   { field: 'municipality_tax_rate', min: 0, max: 100 },
 ];
+
+// VARCHAR column widths (migration 0001). Provider-/market-prefilled values can
+// exceed the frontend maxLength cap (which only clamps typed input) and reach
+// the column as a raw 22001 500 instead of a clean 400.
+const INVESTMENT_STRING_MAX_LENGTHS = [
+  { field: 'name', max: 200 },
+  { field: 'symbol', max: 20 },
+  { field: 'location', max: 300 },
+  { field: 'municipality', max: 200 },
+];
+
+function validateInvestmentStringLengths(body) {
+  if (!body || typeof body !== 'object') return;
+  for (const { field, max } of INVESTMENT_STRING_MAX_LENGTHS) {
+    if (field in body) assertMaxLength(body[field], max, field);
+  }
+  // ISO-4217 shape guard: a free-typed "euro"/"€"/over-long currency otherwise
+  // reached the VARCHAR column as a raw 400/500. Absent/empty leaves the column
+  // default ('EUR') in place; a valid code is normalised to uppercase.
+  if (body.currency !== undefined && body.currency !== null && body.currency !== '') {
+    body.currency = assertCurrency(body.currency);
+  }
+}
 
 function validateInvestmentNumericFields(body) {
   if (!body || typeof body !== 'object') return;
@@ -229,6 +252,7 @@ export async function listInvestments(req, res) {
 
 export async function createInvestment(req, res) {
   validateInvestmentNumericFields(req.body);
+  validateInvestmentStringLengths(req.body);
   const { name, asset_class } = req.body;
 
   if (!name || !asset_class) {
@@ -352,6 +376,7 @@ export async function getInvestment(req, res) {
 
 export async function updateInvestment(req, res) {
   validateInvestmentNumericFields(req.body);
+  validateInvestmentStringLengths(req.body);
   await validateProviderUrls(req.body);
 
   let inv;
@@ -412,7 +437,10 @@ export async function createTransaction(req, res) {
     throw new ValidationError('type and date are required');
   }
 
-  const effectiveCurrency = currency || inv.currency;
+  // Validate a free-typed currency (ISO-4217 shape) before it reaches the
+  // VARCHAR column — a "euro"/"€"/4-10-char value otherwise 500'd. Absent/empty
+  // falls back to the investment's own currency.
+  const effectiveCurrency = assertCurrency(currency) || inv.currency;
   if (fx_rate_to_eur === undefined || fx_rate_to_eur === null) {
     fx_rate_to_eur = await autoResolveFxRateToEur(effectiveCurrency, date);
   }
