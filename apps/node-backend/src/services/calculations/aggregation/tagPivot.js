@@ -7,6 +7,7 @@
 
 import { tagInsightsRepository } from '../../../repositories/infoRepositoryTags.js';
 import { buildEnvelope } from './_envelope.js';
+import { assertNoNaN } from './_invariants.js';
 
 export async function computeTagPivot({
   targetCurrency = 'EUR',
@@ -23,6 +24,7 @@ export async function computeTagPivot({
     tagIds,
     allTags,
   });
+  assertNoNaN(data, 'computeTagPivot');
   return buildEnvelope(data, { source: 'live' });
 }
 

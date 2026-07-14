@@ -8,6 +8,7 @@
 
 import { recipientInsightsRepository } from '../../../repositories/infoRepositoryRecipients.js';
 import { buildEnvelope } from './_envelope.js';
+import { assertNoNaN } from './_invariants.js';
 
 export async function computeRecipientPivot({
   targetCurrency = 'EUR',
@@ -22,6 +23,7 @@ export async function computeRecipientPivot({
     targetCurrency,
     { bucket, startDate, endDate, recipientIds }
   );
+  assertNoNaN(data, 'computeRecipientPivot');
   return buildEnvelope(data, { source: 'live' });
 }
 

@@ -21,6 +21,7 @@
 import { query } from '../../../database/connection.js';
 import { convertRowsToEur } from '../../currency/currencyConversionService.js';
 import { buildEnvelope } from './_envelope.js';
+import { assertNoNaN } from './_invariants.js';
 import { roundMoney } from '../../../lib/money.js';
 
 const INCOME_NODE_ID = '__income__';
@@ -155,7 +156,9 @@ export async function computeSankeyFlow({
       : []),
   ];
 
-  return buildEnvelope({ nodes, links, year: targetYear }, { source: 'live' });
+  const data = { nodes, links, year: targetYear };
+  assertNoNaN(data, 'computeSankey');
+  return buildEnvelope(data, { source: 'live' });
 }
 
 function round(n) {

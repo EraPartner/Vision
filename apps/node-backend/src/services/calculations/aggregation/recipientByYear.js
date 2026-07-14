@@ -7,6 +7,7 @@
 
 import infoRepository from '../../../repositories/infoRepository.js';
 import { buildEnvelope } from './_envelope.js';
+import { assertNoNaN } from './_invariants.js';
 
 export async function computeRecipientByYear({
   targetCurrency = 'EUR',
@@ -14,6 +15,7 @@ export async function computeRecipientByYear({
   excludedCategoryIds = [],
 } = {}) {
   const data = await infoRepository.getRecipientByYear(targetCurrency, excludedRecipientIds, excludedCategoryIds);
+  assertNoNaN(data, 'computeRecipientByYear');
   return buildEnvelope(data, { source: 'live' });
 }
 

@@ -29,6 +29,7 @@
 import plannedTransactionRepository from '../../../repositories/plannedTransactionRepository.js';
 import { expandOccurrences as expandRecurrence } from '../recurrence.js';
 import { buildEnvelope } from './_envelope.js';
+import { assertNoNaN } from './_invariants.js';
 import { toAppTz, appDateStringToUtc, toAppDateString } from '../../../lib/timezone.js';
 import { toDecimal, roundMoney } from '../../../lib/money.js';
 
@@ -157,6 +158,7 @@ export async function computeCashflowForecast({ months = 3 } = {}) {
     };
   });
 
+  assertNoNaN(data, 'computeCashflowForecast');
   return buildEnvelope(data, {
     source: 'live',
   });

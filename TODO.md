@@ -3129,7 +3129,7 @@ look-changing one.
   - A client built strictly from openapi.yaml gets a 400.
   - Fix: correct param name to `symbols`, drop `currency`, add `detail`.
 
-- [ ] **`GET /api/transactions` — openapi.yaml documents 11 of ~25 real query params (14 undocumented, not ~6)** ⏫ 🔎 verified-present 2026-07-11 🔧 *(undercounted significantly — scope corrected)*
+- [x] **`GET /api/transactions` — openapi.yaml documents 11 of ~25 real query params (14 undocumented, not ~6)** ⏫ ✅ 2026-07-14 · f29a62c (added all 14 undocumented params — transaction_id, category_ids, recipient_group_id, recipient_name, active, include_balance, transaction_type, amount_min/max/exact/signed, uncategorised, normalize_to_eur, target_currency — to the spec; generated.ts regenerated. account_id was already present)
   - ↪ _from: Codebase audit 2026-06-30 · Architecture & API Contract · API ↔ openapi.yaml drift_
   - `routes/transactions.js:45-105,238` accepts `transaction_id, category_ids, recipient_group_id, recipient_name, active, include_balance, transaction_type, amount_min, amount_max, amount_exact, amount_signed, uncategorised, normalize_to_eur, target_currency` (14 params) on top of the 11 openapi.yaml documents (`limit, offset, start_date, end_date, bank_account, category_id, recipient_id, search, sort_by, sort_dir, tags`) — 25 total. `docs/api/transactions.md` has most of these correctly; openapi.yaml, the file the KB calls "authoritative," never got them. This is the most heavily-used endpoint in the app.
   - Fix: sync openapi.yaml's parameter list from `docs/api/transactions.md`.
@@ -3335,7 +3335,7 @@ look-changing one.
   - evidence: review grouping/label-formatting/totals are built inline at `routes/importRoutes.js:404-477` (74 lines) and `routes/portfolioImportRoutes.js:334-400` (66 lines) — service-shaped logic sitting in the route handler.
   - fix: extract into a shared preview-assembly service function per pipeline.
 
-- [ ] **ADR-030 env-discipline has undocumented leaks, and the env vars involved are absent from the Zod schema** 🔽 🔎 verified-present 2026-07-11
+- [x] **ADR-030 env-discipline has undocumented leaks, and the env vars involved are absent from the Zod schema** 🔽 ✅ 2026-07-14 · f29a62c+ (declared LOG_LEVEL, ENABLE_LOGGING, PUPPETEER_EXECUTABLE_PATH, VISION_BOOT_TRACE, and the migrate.js vars — VISION_MIGRATE_TIMEOUT_MS/ALEMBIC_BIN/ALEMBIC_CONFIG/VISION_CACHE_DIR — in the env Zod schema for discoverability; reading sites keep their own parsing, .passthrough() means no behavior change)
   - ↪ _from: Code/architecture 2026-07-03 · Wave A1_
   - evidence: `process.env` is read outside `config/env.js` beyond the documented logger exception: `database/migrate.js:21,24,30`, `services/reports/puppeteerRenderer.js:21` (`PUPPETEER_EXECUTABLE_PATH`), `main.js:397` (`VISION_BOOT_TRACE`) — none of these are declared in the Zod schema (logger's `LOG_LEVEL`/`ENABLE_LOGGING` are also absent from it).
   - fix: add the missing keys to the Zod schema even if the reading site stays outside `config/env.js`, so every env var the app reads is at least documented and validated once.
@@ -3440,7 +3440,7 @@ look-changing one.
   - evidence: `getCategoryPivot(exclCat, currency, exclRecip)` vs `getRecipientByYear(currency, exclRecip, exclCat)` vs options-object styles — three positional conventions across sibling repo calls.
   - fix: converge on one calling convention (options object is the safest against future argument-order mistakes).
 
-- [ ] **Aggregation invariant-assertion coverage is inconsistent, and one doc/export name mismatches** ⏬ 🔎 verified-present 2026-07-11
+- [x] **Aggregation invariant-assertion coverage is inconsistent, and one doc/export name mismatches** ⏬ ✅ 2026-07-14 · f29a62c+ (added `assertNoNaN` to the 6 uncovered wrappers — categoryPivot, recipientPivot, recipientByYear, tagPivot, sankey, cashflowForecast; these log-only in non-prod, never throw. Fixed the `_invariants.js` usage doc-comment `assertNaN` → `assertNoNaN`)
   - ↪ _from: Code/architecture 2026-07-03 · Wave A2_
   - evidence: 6 aggregation wrappers assert invariants (`monthly`, `cashflow`, `category`, `recipient`, `averageVsCurrent`, `bankBalances`) but `categoryPivot`/`recipientPivot`/`recipientByYear`/`tagPivot`/`sankey`/`cashflowForecast` don't; separately, `_invariants.js:8`'s doc comment says `assertNaN` but the actual export is `assertNoNaN`.
   - fix: add invariant assertions to the 6 uncovered aggregations; fix the doc-comment name.
