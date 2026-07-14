@@ -521,6 +521,7 @@ export async function backfillPortfolioHistoricalRates() {
   let inserted = 0;
   let unresolved = 0;
 
+  const resolvedPairs = [];
   for (const row of missingResult.rows) {
     const currencyCode = String(row.currency_code || '').toUpperCase().trim();
     const rateDate = normalizeDateInput(row.rate_date);
@@ -530,15 +531,29 @@ export async function backfillPortfolioHistoricalRates() {
     // history). When it falls through to a nearest-stored rate no exact row
     // appears — count those as unresolved rather than fabricating history.
     await getRateToEurForDate(currencyCode, rateDate, { saveFetchedHistoricalRate: true });
+    resolvedPairs.push({ currencyCode, rateDate });
+  }
 
-    const exactCheck = await query(
-      `SELECT 1 FROM exchange_rates WHERE currency_code = $1 AND rate_date = $2::date LIMIT 1`,
-      [currencyCode, rateDate]
+  // One batched existence check for every attempted pair, replacing the former
+  // per-row SELECT (the N+1). Same accounting: a pair with an exact stored row
+  // now counts as inserted, everything else unresolved.
+  if (resolvedPairs.length > 0) {
+    const codes = resolvedPairs.map((p) => p.currencyCode);
+    const dates = resolvedPairs.map((p) => p.rateDate);
+    const existsResult = await query(
+      `SELECT er.currency_code, er.rate_date::text AS rate_date
+         FROM exchange_rates er
+         JOIN UNNEST($1::text[], $2::text[]) AS want(currency_code, rate_date)
+           ON er.currency_code = want.currency_code
+          AND er.rate_date = want.rate_date::date`,
+      [codes, dates]
     );
-    if (exactCheck.rows.length > 0) {
-      inserted += 1;
-    } else {
-      unresolved += 1;
+    const present = new Set(
+      existsResult.rows.map((r) => `${r.currency_code}|${String(r.rate_date).slice(0, 10)}`)
+    );
+    for (const p of resolvedPairs) {
+      if (present.has(`${p.currencyCode}|${p.rateDate}`)) inserted += 1;
+      else unresolved += 1;
     }
   }
 

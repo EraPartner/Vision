@@ -36,17 +36,17 @@ describe('statisticsRepository.getCategoryBreakdown', () => {
 
   it('groups categories from live query and sorts by count desc', async () => {
     mvAvailable.mockResolvedValueOnce(false);
+    // Live path now aggregates per (category, currency) in SQL, so rows arrive
+    // pre-summed with a COUNT(*) AS cnt column.
     query.mockResolvedValueOnce({
       rows: [
-        { category_id: 1, name: 'A', amount: '-10' },
-        { category_id: 1, name: 'A', amount: '-20' },
-        { category_id: 2, name: 'B', amount: '-50' },
+        { category_id: 1, name: 'A', amount: '-30', cnt: '2' },
+        { category_id: 2, name: 'B', amount: '-50', cnt: '1' },
       ],
     });
     convertRowsToEur.mockResolvedValueOnce([
-      { category_id: 1, name: 'A', amount_eur: -10 },
-      { category_id: 1, name: 'A', amount_eur: -20 },
-      { category_id: 2, name: 'B', amount_eur: -50 },
+      { category_id: 1, name: 'A', amount_eur: -30, cnt: '2' },
+      { category_id: 2, name: 'B', amount_eur: -50, cnt: '1' },
     ]);
 
     const r = await statisticsRepository.getCategoryBreakdown();

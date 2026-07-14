@@ -45,6 +45,12 @@ const pool = new pg.Pool({
   idleTimeoutMillis: 60_000,      // close idle connections after 60s
   connectionTimeoutMillis: 5_000,  // fail fast if can't connect in 5s
   statement_timeout: 30_000,       // kill queries running > 30s
+  // statement_timeout does NOT fire while a session is idle *inside* a
+  // transaction — if a withTransaction() callback stalls on a non-DB await
+  // (hung network/stream) the lock + pool slot are held until restart, and
+  // autovacuum's xmin horizon stalls (table bloat). node-postgres passes this
+  // per-connection; kill any transaction left idle > 60s.
+  idle_in_transaction_session_timeout: 60_000,
 });
 
 pool.on('error', (err) => {

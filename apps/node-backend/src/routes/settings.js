@@ -309,6 +309,20 @@ function validateSettingValue(key, value) {
   if (key === 'includeTransfers' && typeof value !== 'boolean') {
     throw new ValidationError('includeTransfers must be a boolean');
   }
+  // Structural guards for the remaining first-party blob keys that previously
+  // accepted arbitrary JSON. Conservative: only reject values whose top-level
+  // type is plainly wrong (a scalar where the frontend always stores an object,
+  // or a non-boolean flag), so a malformed `defaultPageSize:"abc"` blob can no
+  // longer masquerade as a valid settings object.
+  if (key === 'onboarding_complete' && typeof value !== 'boolean') {
+    throw new ValidationError('onboarding_complete must be a boolean');
+  }
+  if (
+    (key === 'app_settings' || key === 'backup_settings' || key === 'widget_visibility')
+    && (typeof value !== 'object' || value === null || Array.isArray(value))
+  ) {
+    throw new ValidationError(`${key} must be a JSON object`);
+  }
   if (key === 'rebalance_plans') assertRebalancePlansValue(value);
   if (key === 'belgian_tax_profile') assertBelgianTaxProfileValue(value);
   if (key === 'belgian_tax_profile_snapshots_v1') assertBelgianTaxSnapshotsValue(value);

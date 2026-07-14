@@ -91,8 +91,14 @@ export async function getCashflowComparison(
     excludeParams.push(...validRecIds);
   }
 
+  // Aggregate in SQL per (date, currency) rather than streaming every row to
+  // Node. batchConvertGroupsWithHistoricalRateFallback converts by (currency,
+  // date), and every consumer below re-buckets by date — and rows sharing a
+  // (date, currency) share one rate — so SUM-then-convert is identical to
+  // convert-then-SUM. day_of_month/month_key are deterministic functions of the
+  // grouped date column, so they remain valid in the SELECT list.
   const sqlPast = `
-    SELECT t.amount, t.currency, t.date,
+    SELECT SUM(t.amount) AS amount, t.currency, t.date,
            EXTRACT(DAY FROM t.date)::int AS day_of_month,
            TO_CHAR(date_trunc('month', t.date), 'YYYY-MM') AS month_key
     FROM transactions t
@@ -101,10 +107,11 @@ export async function getCashflowComparison(
       AND t.date >= date_trunc('month', CURRENT_DATE) - interval '${HISTORY_MONTHS} months'
       AND t.date < date_trunc('month', CURRENT_DATE)
       ${categoryExclusionWhere}
+    GROUP BY t.date, t.currency
   `;
 
   const sqlCurrent = `
-    SELECT t.amount, t.currency, t.date,
+    SELECT SUM(t.amount) AS amount, t.currency, t.date,
            EXTRACT(DAY FROM t.date)::int AS day_of_month
     FROM transactions t
     ${categoryExclusionJoin}
@@ -112,20 +119,22 @@ export async function getCashflowComparison(
       AND t.date >= date_trunc('month', CURRENT_DATE)
       AND t.date <= CURRENT_DATE
       ${categoryExclusionWhere}
+    GROUP BY t.date, t.currency
   `;
 
   const sqlPlannedCurrent = `
-    SELECT pt.amount, pt.currency, pt.planned_date,
+    SELECT SUM(pt.amount) AS amount, pt.currency, pt.planned_date,
            EXTRACT(DAY FROM pt.planned_date)::int AS day_of_month
     FROM planned_transactions pt
     WHERE pt.is_active = true
       AND pt.is_executed = false
       AND pt.planned_date >= date_trunc('month', CURRENT_DATE)
       AND pt.planned_date <= (date_trunc('month', CURRENT_DATE) + interval '1 month' - interval '1 day')
+    GROUP BY pt.planned_date, pt.currency
   `;
 
   const sqlPlannedHist = `
-    SELECT pt.amount, pt.currency, pt.planned_date,
+    SELECT SUM(pt.amount) AS amount, pt.currency, pt.planned_date,
            EXTRACT(DAY FROM pt.planned_date)::int AS day_of_month,
            TO_CHAR(date_trunc('month', pt.planned_date), 'YYYY-MM') AS month_key
     FROM planned_transactions pt
@@ -133,6 +142,7 @@ export async function getCashflowComparison(
       AND pt.is_executed = false
       AND pt.planned_date >= date_trunc('month', CURRENT_DATE) - interval '${HISTORY_MONTHS} months'
       AND pt.planned_date < date_trunc('month', CURRENT_DATE)
+    GROUP BY pt.planned_date, pt.currency
   `;
 
   const [pastResult, currentResult, plannedCurrentResult, plannedHistResult] = await Promise.all([
@@ -264,39 +274,46 @@ export async function getCashflowForecastData(
     excludeParams.push(...validRecIds);
   }
 
+  // GROUP BY (date, currency) in SQL — aggregateByDate re-buckets by date and
+  // conversion is per (currency, date), so this is identical to the old per-row
+  // stream (see getCashflowComparison for the full rationale).
   const sqlHistory = `
-    SELECT t.amount, t.currency, t.date
+    SELECT SUM(t.amount) AS amount, t.currency, t.date
     FROM transactions t
     ${categoryExclusionJoin}
     WHERE t.is_active = true
       AND t.date >= date_trunc('month', CURRENT_DATE) - interval '${historyMonths} months'
       AND t.date < date_trunc('month', CURRENT_DATE)
       ${categoryExclusionWhere}
+    GROUP BY t.date, t.currency
   `;
   const sqlCurrent = `
-    SELECT t.amount, t.currency, t.date
+    SELECT SUM(t.amount) AS amount, t.currency, t.date
     FROM transactions t
     ${categoryExclusionJoin}
     WHERE t.is_active = true
       AND t.date >= date_trunc('month', CURRENT_DATE)
       AND t.date <= CURRENT_DATE
       ${categoryExclusionWhere}
+    GROUP BY t.date, t.currency
   `;
   const sqlPlannedCurrent = `
-    SELECT pt.amount, pt.currency, pt.planned_date AS date
+    SELECT SUM(pt.amount) AS amount, pt.currency, pt.planned_date AS date
     FROM planned_transactions pt
     WHERE pt.is_active = true
       AND pt.is_executed = false
       AND pt.planned_date >= date_trunc('month', CURRENT_DATE)
       AND pt.planned_date <= (date_trunc('month', CURRENT_DATE) + interval '1 month' - interval '1 day')
+    GROUP BY pt.planned_date, pt.currency
   `;
   const sqlPlannedHist = `
-    SELECT pt.amount, pt.currency, pt.planned_date AS date
+    SELECT SUM(pt.amount) AS amount, pt.currency, pt.planned_date AS date
     FROM planned_transactions pt
     WHERE pt.is_active = true
       AND pt.is_executed = false
       AND pt.planned_date >= date_trunc('month', CURRENT_DATE) - interval '${historyMonths} months'
       AND pt.planned_date < date_trunc('month', CURRENT_DATE)
+    GROUP BY pt.planned_date, pt.currency
   `;
 
   const [histRes, currentRes, plannedCurRes, plannedHistRes] = await Promise.all([
@@ -375,31 +392,35 @@ export async function getCashflowForecastDataRolling(
   }
 
   // History ends at `today - daysBack` (exclusive) so it never overlaps with currentActual.
+  // GROUP BY (date, currency) — identical to the old per-row stream (aggregateByDate re-buckets by date).
   const sqlHistory = `
-    SELECT t.amount, t.currency, t.date
+    SELECT SUM(t.amount) AS amount, t.currency, t.date
     FROM transactions t
     ${categoryExclusionJoin}
     WHERE t.is_active = true
       AND t.date >= (CURRENT_DATE - interval '${daysBack} days') - interval '${historyMonths} months'
       AND t.date < (CURRENT_DATE - interval '${daysBack} days')
       ${categoryExclusionWhere}
+    GROUP BY t.date, t.currency
   `;
   const sqlCurrent = `
-    SELECT t.amount, t.currency, t.date
+    SELECT SUM(t.amount) AS amount, t.currency, t.date
     FROM transactions t
     ${categoryExclusionJoin}
     WHERE t.is_active = true
       AND t.date >= (CURRENT_DATE - interval '${daysBack} days')
       AND t.date <= CURRENT_DATE
       ${categoryExclusionWhere}
+    GROUP BY t.date, t.currency
   `;
   const sqlPlannedFuture = `
-    SELECT pt.amount, pt.currency, pt.planned_date AS date
+    SELECT SUM(pt.amount) AS amount, pt.currency, pt.planned_date AS date
     FROM planned_transactions pt
     WHERE pt.is_active = true
       AND pt.is_executed = false
       AND pt.planned_date > CURRENT_DATE
       AND pt.planned_date <= (CURRENT_DATE + interval '${daysForward} days')
+    GROUP BY pt.planned_date, pt.currency
   `;
 
   const [histRes, currentRes, plannedRes] = await Promise.all([
@@ -461,13 +482,21 @@ export async function getCashflowForecastDataByCategory(
     excludeParams.push(...validRecIds);
   }
 
+  // Aggregate per (date, currency, effective category) in SQL — aggregateByDateAndCategory
+  // re-buckets by (date, category) and conversion is per (currency, date), so SUM-then-convert
+  // is identical to the old per-row stream.
   const selectCols = `
-    t.amount,
+    SUM(t.amount) AS amount,
     t.currency,
     t.date,
     COALESCE(t.category_id, r.default_category_id, pr.default_category_id) AS category_id,
     COALESCE(cat.general, 'Uncategorized')                                  AS general,
     COALESCE(cat.detail,  'Uncategorized')                                  AS detail
+  `;
+  const groupByCols = `
+    GROUP BY t.date, t.currency,
+             COALESCE(t.category_id, r.default_category_id, pr.default_category_id),
+             cat.general, cat.detail
   `;
   const joins = `
     LEFT JOIN recipients r  ON t.recipient_id = r.id
@@ -483,6 +512,7 @@ export async function getCashflowForecastDataByCategory(
       AND t.date >= date_trunc('month', CURRENT_DATE) - interval '${historyMonths} months'
       AND t.date <  date_trunc('month', CURRENT_DATE)
       ${catExclusionWhere} ${recExclusionWhere}
+    ${groupByCols}
   `;
   const sqlCurrent = `
     SELECT ${selectCols}
@@ -491,6 +521,7 @@ export async function getCashflowForecastDataByCategory(
       AND t.date >= date_trunc('month', CURRENT_DATE)
       AND t.date <= CURRENT_DATE
       ${catExclusionWhere} ${recExclusionWhere}
+    ${groupByCols}
   `;
 
   const [histRes, currentRes] = await Promise.all([

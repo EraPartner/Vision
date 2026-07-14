@@ -26,8 +26,13 @@ const DEFAULT_WINDOW_DAYS = 3;
 const MARK_AUTO_LEG_SQL = `UPDATE transactions SET is_transfer = true, transfer_peer_id = $2, transfer_source = 'auto'
             WHERE id = $1 AND is_transfer = false AND transfer_source IS NULL`;
 const MARK_MANUAL_LEG_SQL = `UPDATE transactions SET is_transfer = true, transfer_peer_id = $2, transfer_source = 'manual' WHERE id = $1`;
+// Undo a leg WE just auto-marked (guarded on the peer we set + source='auto') so
+// a half-applied pair is never committed when the sibling leg's guarded UPDATE misses.
+const REVERT_AUTO_LEG_SQL = `UPDATE transactions SET is_transfer = false, transfer_peer_id = NULL, transfer_source = NULL
+            WHERE id = $1 AND transfer_peer_id = $2 AND transfer_source = 'auto'`;
 const markAutoLeg = (client, id, peerId) => client.query(MARK_AUTO_LEG_SQL, [id, peerId]);
 const markManualLeg = (client, id, peerId) => client.query(MARK_MANUAL_LEG_SQL, [id, peerId]);
+const revertAutoLeg = (client, id, peerId) => client.query(REVERT_AUTO_LEG_SQL, [id, peerId]);
 
 // Candidate (outflow, inflow) pairs among open rows: equal-and-opposite amount,
 // same currency, two different own accounts, within ±windowDays. Fixing the
@@ -127,7 +132,16 @@ export async function reconcileTransfers({ windowDays = DEFAULT_WINDOW_DAYS } = 
         // manual mark or an already-paired row.
         const r1 = await markAutoLeg(client, outId, inId);
         const r2 = await markAutoLeg(client, inId, outId);
-        if (r1.rowCount && r2.rowCount) created += 1;
+        if (r1.rowCount && r2.rowCount) {
+          created += 1;
+        } else {
+          // Exactly one leg was marked (the other lost its guarded UPDATE to a
+          // concurrent mark). Revert the leg we did mark so we never commit a
+          // one-way transfer pointing at a peer that points elsewhere — the
+          // pair re-evaluates cleanly on the next reconcile.
+          if (r1.rowCount) await revertAutoLeg(client, outId, inId);
+          if (r2.rowCount) await revertAutoLeg(client, inId, outId);
+        }
       }
     });
   }

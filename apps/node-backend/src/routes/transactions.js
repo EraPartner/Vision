@@ -12,7 +12,7 @@ import { resolveCategoryIdByName } from '../services/categoryService.js';
 import { isManualDuplicate, recordManualRawTransaction } from '../services/deduplication.js';
 import { convertRowsToEur } from '../services/currency/currencyConversionService.js';
 import { logger } from '../config/logger.js';
-import { validateIdParam, assertYmd, assertOptionalId } from '../middleware/validation.js';
+import { validateIdParam, assertYmd, assertOptionalId, assertCurrency, assertMaxLength, MAX_MONEY_VALUE } from '../middleware/validation.js';
 import { rateLimiter } from '../middleware/rateLimiter.js';
 import {
   scheduleReconcile,
@@ -547,8 +547,8 @@ router.post('/', async (req, res) => {
   // Sign carries meaning (− expense / + income), so a zero amount is
   // meaningless and only pollutes aggregations — reject it up front.
   const amountNum = Number(data.amount);
-  if (!Number.isFinite(amountNum) || amountNum === 0) {
-    throw new ValidationError('amount must be a non-zero finite number');
+  if (!Number.isFinite(amountNum) || amountNum === 0 || Math.abs(amountNum) > MAX_MONEY_VALUE) {
+    throw new ValidationError('amount must be a non-zero finite number within range');
   }
   // Validate recipient_id is a positive integer up front — a non-integer here
   // otherwise reached the DB as an FK type error and surfaced as a 500.
@@ -559,6 +559,13 @@ router.post('/', async (req, res) => {
   if (data.tags !== undefined && !Array.isArray(data.tags)) {
     throw new ValidationError('tags must be an array of strings');
   }
+  // Normalise/validate currency (ISO-4217) so free text never reaches the
+  // VARCHAR(3) column + 0046 CHECK as a raw 400/500. undefined → repo default.
+  const currency = assertCurrency(data.currency);
+  // bank_account is TEXT on transactions but VARCHAR(100) on the raw mirror
+  // (manual_raw_transactions); cap it up front so the mirror insert can't 500
+  // *after* the main row already committed.
+  assertMaxLength(data.bank_account, 100, 'bank_account');
 
   const dupCheck = await isManualDuplicate({
     date: txDate,
@@ -580,7 +587,7 @@ router.post('/', async (req, res) => {
     recipient_id: data.recipient_id,
     amount: data.amount,
     memo: data.memo,
-    currency: data.currency,
+    currency,
     // `balance` intentionally not accepted: manual entries leave it NULL so the
     // account balance (ADR-094) anchors only on imported, bank-stamped rows.
     category_id: data.category_id,
@@ -643,10 +650,21 @@ router.patch(
     }
     if ('amount' in fields) {
       const amountNum = Number(fields.amount);
-      if (fields.amount == null || fields.amount === '' || !Number.isFinite(amountNum)) {
-        throw new ValidationError('amount must be a number');
+      if (fields.amount == null || fields.amount === '' || !Number.isFinite(amountNum) || Math.abs(amountNum) > MAX_MONEY_VALUE) {
+        throw new ValidationError('amount must be a number within range');
       }
       fields.amount = amountNum;
+    }
+    // currency is NOT NULL (0046); a PATCH may change it but never clear it,
+    // and free text must not reach the ISO CHECK as a raw 500.
+    if ('currency' in fields) {
+      if (fields.currency == null || fields.currency === '') {
+        throw new ValidationError('currency cannot be cleared');
+      }
+      fields.currency = assertCurrency(fields.currency);
+    }
+    if ('bank_account' in fields) {
+      assertMaxLength(fields.bank_account, 100, 'bank_account');
     }
     // recipient_id/category_id: null clears (both columns are nullable), but a
     // present non-null value must be a positive integer — a non-integer here

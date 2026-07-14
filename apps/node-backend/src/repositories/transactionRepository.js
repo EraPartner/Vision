@@ -459,7 +459,14 @@ export const transactionRepository = {
       ? `, SUM(t.amount) OVER (PARTITION BY t.account_id ORDER BY t.date ASC, t.id ASC) AS running_balance`
       : '';
 
-    const sql = `
+    // Count as a SEPARATE query rather than `COUNT(*) OVER ()`: the window
+    // function forced the planner to fully materialize + sort the whole filtered
+    // 6-way join before LIMIT on every page (paid even on the unfiltered page-1
+    // default with include_balance=false). Splitting it lets the data query
+    // pipeline and stop at LIMIT (Nested-Loop + Memoize top-N), while the count
+    // runs without the wide projection/sort/window. The `total` returned is
+    // byte-identical to the old window count — same WHERE, same joins.
+    const dataSql = `
       SELECT t.*,
              COALESCE(pr.name, r.name) AS recipient_name,
              COALESCE(t.category_id, r.default_category_id, pr.default_category_id) AS effective_category_id,
@@ -468,19 +475,21 @@ export const transactionRepository = {
                WHEN pc.id IS NOT NULL THEN pc.general || ':' || pc.detail
                WHEN rc.id IS NOT NULL THEN rc.general || ':' || rc.detail
                ELSE NULL
-             END AS category_name,
-             COUNT(*) OVER () AS total_count${runningBalanceCol}
+             END AS category_name${runningBalanceCol}
       FROM transactions t
       ${TRANSACTION_JOINS}
       WHERE ${where}
       ORDER BY ${orderBy} LIMIT $${p} OFFSET $${p + 1}
     `;
-    params.push(limit, offset);
+    const countSql = `SELECT COUNT(*)::int AS total FROM transactions t ${TRANSACTION_JOINS} WHERE ${where}`;
 
-    const result = await query(sql, params);
-    const total = result.rows.length > 0 ? parseInt(result.rows[0].total_count, 10) : 0;
-    const rows = result.rows.map(({ total_count: _total_count, ...row }) => row);
-    return { rows: await attachTagsToRows(rows), total };
+    const dataParams = [...params, limit, offset];
+    const [result, countResult] = await Promise.all([
+      query(dataSql, dataParams),
+      query(countSql, params),
+    ]);
+    const total = countResult.rows[0]?.total ?? 0;
+    return { rows: await attachTagsToRows(result.rows), total };
   },
 
   /**

@@ -95,18 +95,57 @@ export function sanitizeString(value, maxLength = 500) {
   return value.trim().slice(0, maxLength);
 }
 
+// Sane default upper bound for numeric inputs. Matches the 12-integer-digit
+// ceiling of the money columns (NUMERIC(18,6)) and the existing per-field
+// investment bounds. Callers that pass an explicit `max` are unaffected; this
+// only backstops call-sites that previously left `max = Infinity`, through
+// which a JSON `"Infinity"`/`1e15` slipped past every guard and 500'd at the DB.
+export const MAX_MONEY_VALUE = 1e12;
+
 /**
- * Validate numeric values.
+ * Validate numeric values. Rejects non-finite input (NaN and, critically,
+ * Infinity — `Infinity > Infinity` is false, so the old `isNaN`-only check let
+ * a JSON `"Infinity"` through every no-max caller straight to a DB 500).
  */
-export function validateNumber(value, { min = -Infinity, max = Infinity, fieldName = 'value' } = {}) {
+export function validateNumber(value, { min = -Infinity, max = MAX_MONEY_VALUE, fieldName = 'value' } = {}) {
   const num = Number(value);
-  if (isNaN(num)) {
-    return { valid: false, error: `${fieldName} must be a number` };
+  if (!Number.isFinite(num)) {
+    return { valid: false, error: `${fieldName} must be a finite number` };
   }
   if (num < min || num > max) {
     return { valid: false, error: `${fieldName} must be between ${min} and ${max}` };
   }
   return { valid: true, value: num };
+}
+
+/**
+ * Throwing length guard for free-text route input. Prevents an over-length
+ * value from reaching a VARCHAR(n) column and surfacing as a raw 22001 500 —
+ * most importantly mid-operation, after an earlier NOT-NULL insert already
+ * succeeded (e.g. manual_raw_transactions.bank_account VARCHAR(100)).
+ */
+export function assertMaxLength(value, maxLength, fieldName = 'value') {
+  if (value == null) return value;
+  const str = String(value);
+  if (str.length > maxLength) {
+    throw new ValidationError(`${fieldName} must be at most ${maxLength} characters`);
+  }
+  return value;
+}
+
+/**
+ * Throwing ISO-4217 currency guard. Returns undefined for absent/empty input
+ * (so the column/repository default applies) and the normalised uppercase code
+ * otherwise. Without it, free-typed "euro"/"€"/4-10 char values reached the
+ * 0046 currency CHECK / VARCHAR(3) column as a raw 400/500.
+ */
+export function assertCurrency(value, fieldName = 'currency') {
+  if (value == null || value === '') return undefined;
+  const c = String(value).toUpperCase().trim();
+  if (!/^[A-Z]{3}$/.test(c)) {
+    throw new ValidationError(`${fieldName} must be a 3-letter ISO code`);
+  }
+  return c;
 }
 
 /**

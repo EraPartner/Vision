@@ -86,6 +86,7 @@ async function fetchDividends(targetCurrency, startDate, endDate) {
     WHERE pt.type = 'dividend'
       AND pt.date::date BETWEEN $1 AND $2
     ORDER BY year, month
+    LIMIT 100000
   `, [startDate, endDate]);
 
   // Convert each row and aggregate

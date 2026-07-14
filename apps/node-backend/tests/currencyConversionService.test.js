@@ -321,7 +321,9 @@ describe('Currency Conversion Service', () => {
       ['GROUP BY pt.currency', { rows: [{ currency_code: 'USD', rate_date: '2026-02-01' }] }],
       ['INSERT INTO exchange_rates', () => { savedRate = true; return { rows: [] }; }],
       ['SELECT rate_to_eur\n     FROM exchange_rates\n     WHERE currency_code = $1 AND rate_date = $2::date', { rows: [] }],
-      ['SELECT 1 FROM exchange_rates', () => ({ rows: savedRate ? [{ ok: 1 }] : [] })],
+      // Batched existence check (replaces the former per-row SELECT 1): returns
+      // the now-present pair once the rate has been saved.
+      ['JOIN UNNEST', () => ({ rows: savedRate ? [{ currency_code: 'USD', rate_date: '2026-02-01' }] : [] })],
       ['to_regclass', { rows: [{ base_table: null }] }],
       ['SET fx_rate_to_eur', { rows: [], rowCount: 1 }],
     ]);
