@@ -20,7 +20,6 @@ export {
   calculateCostBasisLIFO,
   calculateCostBasisByMethod,
   projectedAnnualInterest,
-  daysBetweenYmd,
 } from '@vision/shared-utils/portfolio';
 
 const MS_PER_DAY = 1000 * 60 * 60 * 24;

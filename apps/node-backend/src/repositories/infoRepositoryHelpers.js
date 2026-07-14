@@ -98,10 +98,6 @@ export function roundToCents(value) {
 // working while routes import the canonical helper from lib directly.
 export { formatDateToYmd, toWireDate };
 
-export function formatDateToYm(date) {
-  return date.toISOString().substring(0, 7);
-}
-
 export function formatYearMonthKey(year, month) {
   return `${year}-${String(month).padStart(2, '0')}`;
 }
@@ -117,15 +113,6 @@ export function getDayKeyUtc(date) {
   const mm = String(date.getUTCMonth() + 1).padStart(2, '0');
   const dd = String(date.getUTCDate()).padStart(2, '0');
   return `${yyyy}-${mm}-${dd}`;
-}
-
-export function getUtcDayEndTimestamp(date) {
-  return Date.UTC(
-    date.getUTCFullYear(),
-    date.getUTCMonth(),
-    date.getUTCDate(),
-    23, 59, 59, 999
-  );
 }
 
 export function extractYearMonth(value) {

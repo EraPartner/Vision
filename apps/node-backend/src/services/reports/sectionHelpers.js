@@ -44,22 +44,6 @@ export function fmtCurrency(amount, currency = 'EUR') {
   return `${sign}${currency}\u00A0${formatted}`;
 }
 
-/**
- * Format a number as a compact currency (e.g. "EUR 1.2k", "EUR 45").
- *
- * @param {number} amount
- * @param {string} [currency]
- * @returns {string}
- */
-export function fmtCurrencyCompact(amount, currency = 'EUR') {
-  const abs = Math.abs(amount);
-  const sign = amount < 0 ? '-' : '';
-  let val;
-  if (abs >= 1_000_000) val = `${(abs / 1_000_000).toFixed(1)}M`;
-  else if (abs >= 1_000) val = `${(abs / 1_000).toFixed(1)}k`;
-  else val = abs.toFixed(0);
-  return `${sign}${currency}\u00A0${val}`;
-}
 
 /**
  * Format a percentage value (e.g. "12.3%").

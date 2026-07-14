@@ -31,16 +31,13 @@ export function renderFeeBreakdown(data, { currency }) {
       </div>`;
   }
 
-  // If byAssetClass has no per-class fee data, fall back to byInvestment aggregation
-  const displayRows = rows.length ? rows : [];
-
-  const barItems = displayRows.map(r => ({
+  const barItems = rows.map(r => ({
     label:    r.label,
     value:    r.fees,
     fmtValue: fmtCurrency(r.fees, currency),
   }));
 
-  const tableRows = displayRows.map(r => {
+  const tableRows = rows.map(r => {
     const share = totalFees > 0 ? (r.fees / totalFees) * 100 : 0;
     return `<tr>
       <td>${escapeHtml(r.label)}</td>

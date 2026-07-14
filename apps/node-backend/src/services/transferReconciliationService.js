@@ -280,21 +280,6 @@ export async function unmarkTransfer(id) {
 }
 
 /**
- * Release auto-pairings touching the given transaction ids (and their peers) so
- * a subsequent reconcile can re-evaluate them — used when a leg is edited.
- * Manual marks are preserved.
- * @param {number[]} ids
- */
-export async function releaseAutoPairsFor(ids) {
-  if (!ids?.length) return;
-  await query(
-    `UPDATE transactions SET is_transfer = false, transfer_peer_id = NULL, transfer_source = NULL
-      WHERE transfer_source = 'auto' AND (id = ANY($1) OR transfer_peer_id = ANY($1))`,
-    [ids],
-  );
-}
-
-/**
  * Debounced reconcile after single-row mutations (coalesces rapid edits), then
  * schedules a materialized-view refresh so the transfer exclusion is reflected.
  *
