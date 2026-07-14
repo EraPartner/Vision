@@ -383,6 +383,32 @@ describe('Currency Conversion Service', () => {
     );
   });
 
+  it('caches the historical rate index and reuses it across convertRowsToEur calls', async () => {
+    clearMemoryCache();
+    query.mockReset();
+    query.mockImplementation(async (sql) => {
+      const s = String(sql);
+      if (s.includes('is_latest = true')) return { rows: [] }; // getRates → fallback
+      if (s.includes('WHERE currency_code = ANY')) {
+        return { rows: [{ currency_code: 'USD', rate_date: '2024-03-15', rate_to_eur: 0.9 }] };
+      }
+      return { rows: [] };
+    });
+
+    const rows = [{ amount: 100, currency: 'USD', day: '2024-03-15' }];
+    const opts = { useHistoricalRatesByDate: true, dateField: 'day' };
+
+    const [first] = await convertRowsToEur(rows, 'EUR', opts);
+    const [second] = await convertRowsToEur(rows, 'EUR', opts);
+
+    expect(first.amount_eur).toBeCloseTo(90, 6);
+    expect(second.amount_eur).toBeCloseTo(90, 6);
+
+    // The full-history index load runs once; the second call reuses the cache.
+    const indexLoads = query.mock.calls.filter(([sql]) => String(sql).includes('WHERE currency_code = ANY'));
+    expect(indexLoads).toHaveLength(1);
+  });
+
   // ── warmCache ─────────────────────────────────────────────
   it('should warm cache without throwing', async () => {
     // Mock both upstream fetches so the test never reaches real ECB / open.er-api

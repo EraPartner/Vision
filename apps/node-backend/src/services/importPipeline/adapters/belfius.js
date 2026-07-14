@@ -3,10 +3,9 @@
  * Statement-export format: 13 header lines, then ';'-delimited transactions.
  */
 
-import fs from 'fs';
 import { cleanRecipientName, normalizeToUppercase } from '../../textNormalization.js';
 import { logger } from '../../../config/logger.js';
-import { parseDayMonthYear, parseCommaDecimal, buildOptionalComment, splitCsvLines, splitDelimitedRecord, canonicalIban } from './_shared.js';
+import { parseDayMonthYear, parseCommaDecimal, buildOptionalComment, splitCsvLines, splitDelimitedRecord, canonicalIban, readTextWithEncodingFallback } from './_shared.js';
 import { toDecimal, roundMoney } from '../../../lib/money.js';
 
 const NAME = 'belfius';
@@ -122,7 +121,7 @@ export function detect(csvSample) {
 }
 
 export async function parse(filePath) {
-  const content = await fs.promises.readFile(filePath, 'utf-8');
+  const content = await readTextWithEncodingFallback(filePath);
   const lines = splitCsvLines(content);
   const transactions = /** @type {any[] & { skipped?: number }} */ ([]);
   const lastBalance = lines.length > BALANCE_LINE_INDEX

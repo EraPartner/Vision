@@ -2,10 +2,9 @@
  * KBC CSV adapter — Belgian bank, ';'-separated with 15+ columns.
  */
 
-import fs from 'fs';
 import { cleanKbcRecipientName, normalizeToUppercase } from '../../textNormalization.js';
 import { logger } from '../../../config/logger.js';
-import { parseDayMonthYear, parseCommaDecimal, buildOptionalComment, splitCsvLines, splitDelimitedRecord, canonicalIban } from './_shared.js';
+import { parseDayMonthYear, parseCommaDecimal, buildOptionalComment, splitCsvLines, splitDelimitedRecord, canonicalIban, readTextWithEncodingFallback } from './_shared.js';
 
 const NAME = 'kbc';
 const BANK_LABEL = 'KBC';
@@ -95,7 +94,7 @@ export function detect(csvSample) {
 }
 
 export async function parse(filePath) {
-  const content = await fs.promises.readFile(filePath, 'utf-8');
+  const content = await readTextWithEncodingFallback(filePath);
   const lines = splitCsvLines(content);
   const transactions = /** @type {any[] & { skipped?: number }} */ ([]);
   let skipped = 0;

@@ -31,7 +31,12 @@ const REAL_ESTATE_CLASS = 'real_estate';
  * against buy-date cost. When no transaction carries `fxMultiplier` (and no
  * `defaultFxMultiplier` is given) the converted track equals the native one.
  *
- * @typedef {{ totalUnits: number, totalCost: number, avgCostBasis: number, realizedGain: number, totalBuyCost: number, totalSellProceeds: number, totalCostConv: number, avgCostBasisConv: number, realizedGainConv: number, totalBuyCostConv: number, totalSellProceedsConv: number }} CostBasisResult
+ * `_oversold` is set to `true` (and omitted otherwise) when a sell asked for more
+ * units than were held: the numeric result still clamps the sell to the held
+ * quantity, but the flag lets callers surface a warning (mirrors the
+ * `_fxFellBack` convention used elsewhere).
+ *
+ * @typedef {{ totalUnits: number, totalCost: number, avgCostBasis: number, realizedGain: number, totalBuyCost: number, totalSellProceeds: number, totalCostConv: number, avgCostBasisConv: number, realizedGainConv: number, totalBuyCostConv: number, totalSellProceedsConv: number, _oversold?: boolean }} CostBasisResult
  */
 
 /**
@@ -117,6 +122,7 @@ export function calculateCostBasis(txns, opts = {}) {
   let totalBuyCostConv = ZERO;
   let totalSellProceeds = ZERO;
   let totalSellProceedsConv = ZERO;
+  let oversold = false;
 
   for (const txn of sorted) {
     const units = toDecimal(txn.units || 0);
@@ -133,6 +139,7 @@ export function calculateCostBasis(txns, opts = {}) {
       totalBuyCost = totalBuyCost.plus(buyCost);
       totalBuyCostConv = totalBuyCostConv.plus(buyCost.times(fx));
     } else if (txn.type === 'sell') {
+      if (units.gt(totalUnits)) oversold = true;
       if (totalUnits.gt(0) && units.gt(0)) {
         const sellUnits = Decimal.min(units, totalUnits);
         const sellRatio = units.gt(0) ? sellUnits.dividedBy(units) : ZERO;
@@ -166,6 +173,7 @@ export function calculateCostBasis(txns, opts = {}) {
   const avgCostBasis = finalUnits.gt(0) ? finalCost.dividedBy(finalUnits) : ZERO;
 
   return {
+    ...(oversold ? { _oversold: true } : {}),
     totalUnits: toNumber(finalUnits),
     totalCost: toNumber(roundToCents(finalCost)),
     avgCostBasis: toNumber(avgCostBasis),
@@ -213,6 +221,7 @@ function calculateCostBasisLotBased(txns, opts = {}, { fromEnd = false } = {}) {
   let totalBuyCostConv = ZERO;
   let totalSellProceeds = ZERO;
   let totalSellProceedsConv = ZERO;
+  let oversold = false;
 
   for (const txn of sorted) {
     const units = toDecimal(txn.units || 0);
@@ -228,6 +237,7 @@ function calculateCostBasisLotBased(txns, opts = {}, { fromEnd = false } = {}) {
       totalBuyCost = totalBuyCost.plus(buyCost);
       totalBuyCostConv = totalBuyCostConv.plus(buyCost.times(fx));
     } else if (txn.type === 'sell' && units.gt(0)) {
+      if (units.gt(totalUnits)) oversold = true;
       const sellUnits = Decimal.min(units, totalUnits);
       const sellRatio = units.gt(0) ? sellUnits.dividedBy(units) : ZERO;
       const netProceeds = amount.minus(fees).minus(taxes).times(sellRatio);
@@ -279,6 +289,7 @@ function calculateCostBasisLotBased(txns, opts = {}, { fromEnd = false } = {}) {
   const finalCostConv = Decimal.max(ZERO, totalCostConv);
 
   return {
+    ...(oversold ? { _oversold: true } : {}),
     totalUnits: toNumber(finalUnits),
     totalCost: toNumber(roundToCents(finalCost)),
     avgCostBasis: toNumber(finalUnits.gt(0) ? finalCost.dividedBy(finalUnits) : ZERO),

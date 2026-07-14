@@ -16,6 +16,23 @@ import { addAll, divide, roundMoney, toDecimal } from '../lib/money.js';
 const MIN_OCCURRENCES = 3; // Minimum transactions to consider a pattern
 const INTERVAL_TOLERANCE = 0.25; // 25% tolerance for interval matching
 
+// Short-TTL in-process cache for detectRecurringPatterns. The detection runs a
+// 3-year scan plus group/sort/interval work synchronously on the event loop, and
+// is hit by both GET /api/info/recurring-patterns and the aiChat
+// getRecurringDetected tool — often repeatedly in a session. There is no
+// pub/sub invalidation reachable from this service (scheduleAggregationRefresh
+// clears specific downstream caches directly rather than broadcasting), so a
+// short TTL is used: results are eventually consistent within RECURRING_CACHE_TTL_MS
+// of a transaction change, which is acceptable for a suggestion feature.
+const RECURRING_CACHE_TTL_MS = 3 * 60_000; // 3 minutes
+/** @type {{ value: { patterns: any[], total: number }, expiresAt: number } | null} */
+let recurringCache = null;
+
+/** Test-only: drop the cached recurring-patterns result. */
+export function __clearRecurringCacheForTests() {
+  recurringCache = null;
+}
+
 // Known interval patterns (in days)
 const INTERVAL_PATTERNS = [
   { name: 'weekly', days: 7, tolerance: 2 },
@@ -128,6 +145,9 @@ function detectAmountChanges(transactions) {
  * Main detection function - analyses all transactions and returns recurring patterns.
  */
 export async function detectRecurringPatterns() {
+  if (recurringCache && Date.now() < recurringCache.expiresAt) {
+    return recurringCache.value;
+  }
   try {
     // Get transactions grouped by recipient, ordered by date. Bounded to the
     // last ~3 years: recurrence is detected from interval cadence, so older
@@ -148,7 +168,11 @@ export async function detectRecurringPatterns() {
       ORDER BY t.recipient_id, t.date
     `);
 
-    if (result.rows.length === 0) return { patterns: [], total: 0 };
+    if (result.rows.length === 0) {
+      const empty = { patterns: [], total: 0 };
+      recurringCache = { value: empty, expiresAt: Date.now() + RECURRING_CACHE_TTL_MS };
+      return empty;
+    }
 
     // planned_transactions may not exist in partially initialized environments.
     const plannedTableCheck = await query(
@@ -280,10 +304,9 @@ export async function detectRecurringPatterns() {
     // Sort by confidence descending
     patterns.sort((a, b) => b.confidence - a.confidence);
 
-    return {
-      patterns,
-      total: patterns.length,
-    };
+    const value = { patterns, total: patterns.length };
+    recurringCache = { value, expiresAt: Date.now() + RECURRING_CACHE_TTL_MS };
+    return value;
   } catch (err) {
     logger.error('Error detecting recurring patterns', { error: err.message });
     throw err;

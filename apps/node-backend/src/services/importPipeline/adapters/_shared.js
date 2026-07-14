@@ -36,6 +36,26 @@ export async function readFileAsync(filePath, encoding = 'utf-8') {
   return fs.promises.readFile(filePath, encoding);
 }
 
+/**
+ * Read a text file, decoding as UTF-8 but falling back to latin1 (ISO-8859-1)
+ * when the bytes aren't valid UTF-8. Belgian bank exports are frequently
+ * windows-1252/latin-1, where e.g. `é` is the single byte 0xE9 — decoding that
+ * as UTF-8 yields the U+FFFD replacement char and corrupts recipient/memo text.
+ * The replacement char never appears in a clean UTF-8 decode of latin-1 source,
+ * so its presence is a reliable signal to re-decode as latin1.
+ *
+ * @param {string} filePath
+ * @returns {Promise<string>}
+ */
+export async function readTextWithEncodingFallback(filePath) {
+  const buffer = await fs.promises.readFile(filePath);
+  const utf8 = buffer.toString('utf-8');
+  if (utf8.includes('\uFFFD')) {
+    return buffer.toString('latin1');
+  }
+  return utf8;
+}
+
 export function parseDayMonthYear(dateStr) {
   const dateParts = String(dateStr).split('/');
   if (dateParts.length !== 3) return null;

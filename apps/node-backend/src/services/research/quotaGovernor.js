@@ -76,6 +76,13 @@ export function createQuotaGovernor({ limits = PROVIDER_LIMITS, store, now = () 
 
   async function dayCount(provider, dk) {
     const key = `${provider}:${dk}`;
+    // Evict mirror entries for days other than dk. Without this the map grows one
+    // row per (provider, day) forever — a per-day counter that never rolls over is
+    // a slow memory leak. O(size); size is at most the metered-provider count for
+    // today. Deleting during Map iteration is safe.
+    for (const k of dayMirror.keys()) {
+      if (k.slice(-10) !== dk) dayMirror.delete(k);
+    }
     if (dayMirror.has(key)) return dayMirror.get(key);
     // Degrade to in-memory if the store is unavailable (e.g. provider_quota
     // migration 0042 not yet applied, or Postgres unreachable) — a quota check

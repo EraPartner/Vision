@@ -33,7 +33,7 @@ export function ttlForType(dataType) {
 }
 
 /**
- * Create a TTL cache. Pure (no timers); inject `now` for tests.
+ * Create a TTL cache with a periodic self-sweep. Inject `now` for tests.
  * @param {{ now?: () => number }} [opts]
  */
 export function createResearchCache({ now = () => Date.now() } = {}) {
@@ -65,15 +65,17 @@ export function createResearchCache({ now = () => Date.now() } = {}) {
     store.clear();
   }
 
+  // Every instance self-sweeps to bound Map growth (mirrors the price cache's
+  // 5-min sweep). Previously only the singleton below had a sweeper, so factory
+  // instances (e.g. routes/marketLookup.js) grew unbounded. unref so the timer
+  // never holds the process (or a test runner) open.
+  if (typeof setInterval === 'function') {
+    const handle = setInterval(sweep, 5 * 60_000);
+    if (handle && typeof handle.unref === 'function') handle.unref();
+  }
+
   return { get, set, sweep, clear, size: () => store.size };
 }
 
 /** Process-wide singleton used by the aggregator. */
 export const researchCache = createResearchCache();
-
-// Periodic sweep to bound Map growth (mirrors the price cache's 5-min sweep).
-// unref so it never holds the process (or a test runner) open.
-if (typeof setInterval === 'function') {
-  const handle = setInterval(() => researchCache.sweep(), 5 * 60_000);
-  if (handle && typeof handle.unref === 'function') handle.unref();
-}

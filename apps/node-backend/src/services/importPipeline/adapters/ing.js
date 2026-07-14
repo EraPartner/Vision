@@ -16,10 +16,9 @@
  *  10  Bericht              free-text message from sender
  */
 
-import fs from 'fs';
 import { normalizeToUppercase } from '../../textNormalization.js';
 import { logger } from '../../../config/logger.js';
-import { parseDayMonthYear, parseCommaDecimal, buildOptionalComment, splitCsvLines, splitDelimitedRecord, canonicalIban } from './_shared.js';
+import { parseDayMonthYear, parseCommaDecimal, buildOptionalComment, splitCsvLines, splitDelimitedRecord, canonicalIban, readTextWithEncodingFallback } from './_shared.js';
 
 const NAME = 'ing';
 const BANK_LABEL = 'ING';
@@ -82,7 +81,7 @@ export function detect(csvSample) {
 }
 
 export async function parse(filePath) {
-  const content = await fs.promises.readFile(filePath, 'utf-8');
+  const content = await readTextWithEncodingFallback(filePath);
   const lines = splitCsvLines(content);
   const transactions = /** @type {any[] & { skipped?: number }} */ ([]);
   let skipped = 0;

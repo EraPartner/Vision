@@ -11,11 +11,27 @@ vi.mock('../src/config/logger.js', () => ({
   logger: mockLogger(),
 }));
 
-import { detectRecurringPatterns } from '../src/services/recurringDetectionService.js';
+import { detectRecurringPatterns, __clearRecurringCacheForTests } from '../src/services/recurringDetectionService.js';
+
+const gymRow = (id, date, amount) => ({
+  id,
+  date: new Date(`${date}T00:00:00.000Z`),
+  amount,
+  currency: 'EUR',
+  memo: `Gym ${id}`,
+  bank_account: 'BE00',
+  recipient_id: 42,
+  recipient_name: 'Gym',
+  category_id: 7,
+  category_name: 'HEALTH:GYM',
+});
 
 describe('detectRecurringPatterns', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    // The service memoises results in a short-TTL cache; clear it so each case
+    // exercises its own mocked query sequence rather than a leftover result.
+    __clearRecurringCacheForTests();
   });
 
   it('handles Date objects in transaction date field without throwing', async () => {
@@ -108,5 +124,27 @@ describe('detectRecurringPatterns', () => {
     // Both detected as monthly, not the ~17-day blend of the merged series
     expect(income?.detectedPattern).toBe('monthly');
     expect(expense?.detectedPattern).toBe('monthly');
+  });
+
+  it('serves a cached result within the TTL without re-querying', async () => {
+    mockQuery
+      .mockResolvedValueOnce({
+        rows: [
+          gymRow(1, '2026-01-01', '-50.00'),
+          gymRow(2, '2026-02-01', '-50.00'),
+          gymRow(3, '2026-03-01', '-55.00'),
+        ],
+      })
+      .mockResolvedValueOnce({ rows: [{ exists: true }] })
+      .mockResolvedValueOnce({ rows: [] });
+
+    const first = await detectRecurringPatterns();
+    const callsAfterFirst = mockQuery.mock.calls.length;
+
+    const second = await detectRecurringPatterns();
+
+    // Same memoised object, and no additional DB round-trips on the second call.
+    expect(second).toBe(first);
+    expect(mockQuery.mock.calls.length).toBe(callsAfterFirst);
   });
 });
