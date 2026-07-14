@@ -3,6 +3,8 @@ import {
   calculateCostBasis,
   calculateCostBasisByMethod,
   projectedAnnualInterest,
+} from '@vision/shared-utils/portfolio';
+import {
   annualizedReturn,
   contributionAdjustedMonthlyReturn,
   computeMetrics,

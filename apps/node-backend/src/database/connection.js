@@ -1,7 +1,6 @@
 /**
  * Database connection and pool management module.
  *
- * Mirrors: apps/backend/database/connection.py
  * Uses node-postgres (pg) with a connection pool.
  */
 

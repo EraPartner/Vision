@@ -10,7 +10,6 @@ description = "Project-level allowlists"
 # certificates, and minified third-party JS — none are project secrets).
 paths = [
     '''^\.obsidian/''',
-    '''^opencode\.json$''',
 ]
 
 # Documentation examples that use placeholder tokens.

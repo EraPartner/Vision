@@ -4,8 +4,9 @@
  *
  * The leg is marked is_transfer=true (so the cross-cutting `AND NOT is_transfer`
  * exclusion keeps it out of income/spending) and transfer_source='trade' (so the
- * ADR-083 reconciler — which only touches transfer_source IS NULL or 'auto' —
- * never releases this single-sided leg as an orphan). It is linked to its trade
+ * ADR-083 reconciler — whose releaseOrphans only releases reconciler-owned
+ * 'auto'/'manual' orphans — never releases this single-sided leg). It is linked
+ * to its trade
  * via portfolio_transaction_id (ON DELETE CASCADE removes it with the trade).
  */
 

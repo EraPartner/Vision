@@ -12,15 +12,10 @@ import { formatDateToYmd } from '../lib/dateFormat.js';
 import { calculateAccruedInterest as sharedCalculateAccruedInterest } from '@vision/shared-utils/portfolio';
 
 // Cost-basis accounting and interest accrual live in the shared workspace
-// package so the frontend hooks import the same implementation instead of a
-// hand-mirrored copy (they drifted — see ADR on shared portfolio math).
-export {
-  calculateCostBasis,
-  calculateCostBasisFIFO,
-  calculateCostBasisLIFO,
-  calculateCostBasisByMethod,
-  projectedAnnualInterest,
-} from '@vision/shared-utils/portfolio';
+// package (@vision/shared-utils/portfolio) so the frontend hooks import the same
+// implementation instead of a hand-mirrored copy (they drifted — see ADR on
+// shared portfolio math). Import those from the package directly; the passthrough
+// re-export block that used to live here had no live importer.
 
 const MS_PER_DAY = 1000 * 60 * 60 * 24;
 

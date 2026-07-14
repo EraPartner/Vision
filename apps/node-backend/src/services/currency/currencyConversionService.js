@@ -2,7 +2,6 @@
  * Currency Conversion Service
  *
  * Converts currencies to EUR using ECB exchange rates.
- * Mirrors: apps/backend/services/currency_conversion_service.py
  *
  * Design:
  * - Fetches latest rates from ECB (primary) on startup and every 12 hours

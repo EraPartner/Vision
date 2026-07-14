@@ -51,9 +51,6 @@ Edit `.env` with production settings:
 # Required: Generate a secure database password
 POSTGRES_PASSWORD=your-secure-password-here
 
-# Required: Generate a secure secret key
-SECRET_KEY=your-application-secret-key
-
 # Server configuration
 PORT=3002
 LOG_LEVEL=info
@@ -452,7 +449,6 @@ If you need users to pull from GHCR (e.g., published release), either:
 |----------|-------------|
 | `DATABASE_URL` | PostgreSQL connection string |
 | `POSTGRES_PASSWORD` | Database password |
-| `SECRET_KEY` | Application secret key |
 
 ### Optional Variables
 
@@ -465,7 +461,7 @@ If you need users to pull from GHCR (e.g., published release), either:
 ## Security Checklist
 
 - [ ] Change default database password
-- [ ] Set secure `SECRET_KEY`
+- [ ] Set a strong `ADMIN_AUTH_TOKEN` (the admin-route gate) if the backend port is reachable beyond loopback
 - [ ] Configure `CORS_ORIGINS` properly
 - [ ] Enable SSL/TLS
 - [ ] Setup regular database backups

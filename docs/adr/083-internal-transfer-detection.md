@@ -182,4 +182,15 @@ in cash-flow aggregates on the next reconciliation pass.
   section), the mark will be cleared. They must re-mark if desired and ensure a counterpart
   exists.
 
+### Addendum (2026-07-14) — `releaseOrphans` excludes system-owned legs
+
+`releaseOrphans()` releases only rows the reconciler itself owns —
+`transfer_source IN ('auto', 'manual')`. System-created single-sided legs that
+also carry `is_transfer=true, transfer_peer_id IS NULL` — opening anchors,
+reconcile adjustments, and **ADR-090 trade cash legs (`transfer_source='trade'`)**
+— are deliberately NOT released; releasing a trade leg would re-enter it into
+income/spending and break ADR-090's double-count guard. This exception is
+locked in by a regression test (`releaseOrphans — single-sided system legs
+survive reconcile`) in `tests/services/transferReconciliationService.test.js`.
+
 **Related code:** [[apps/node-backend/src/services/transferReconciliationService.js]]

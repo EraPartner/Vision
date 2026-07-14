@@ -1,7 +1,6 @@
 /**
  * Recipient Bank Account Repository - data access for recipient_bank_accounts table.
  *
- * Mirrors: apps/backend/repositories/recipient_bank_account_repository.py
  *
  * Provides CRUD operations for managing bank accounts linked to recipients.
  */
@@ -50,7 +49,6 @@ export const recipientBankAccountRepository = {
 
   /**
    * Create or get a bank account, enriching existing accounts with missing metadata.
-   * Mirrors: RecipientBankAccountService.create_or_get_bank_account
    */
   async createOrGet({ recipientId, accountNumber, bankName = null, address = null, accountLabel = null, setAsPrimary = false }) {
     if (!accountNumber) throw new Error('Account number is required');

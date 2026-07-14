@@ -1,6 +1,5 @@
 /**
  * Deduplication Service
- * Mirrors: apps/backend/services/deduplication_service.py
  */
 
 import crypto from 'crypto';

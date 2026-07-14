@@ -11,7 +11,6 @@
  * Also exposes `warmInfoCaches()` used at boot to pre-populate the
  * net-worth + portfolio-performance caches.
  *
- * Mirrors: apps/backend/api/api_routes_info.py
  */
 
 import { Router } from 'express';

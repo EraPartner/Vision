@@ -2,6 +2,8 @@ import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import {
   calculateCostBasisFIFO,
   calculateCostBasisLIFO,
+} from '@vision/shared-utils/portfolio'
+import {
   calculateAccruedInterest,
   sanitizeSnapshotSpikes,
 } from '../src/utils/portfolioMath.js'

@@ -1,7 +1,6 @@
 /**
  * Category Repository - data access for categories table.
  *
- * Mirrors: apps/backend/repositories/category_repository.py
  */
 
 import { query } from '../database/connection.js';
