@@ -53,8 +53,8 @@ async function initI18n() {
   i18n = await loadI18nAsync();
 }
 
-function t(key, vars) {
-  let txt = i18n[key] || key;
+function t(key, vars, fallback) {
+  let txt = i18n[key] || fallback || key;
   if (vars) {
     for (const [k, v] of Object.entries(vars)) txt = txt.replace(`{${k}}`, v);
   }
@@ -95,6 +95,44 @@ const gotSingleInstanceLock = app.requestSingleInstanceLock();
 if (!gotSingleInstanceLock) {
   app.quit();
 }
+
+// Persist main-process logs to a rotating file in userData. A double-clicked
+// .app discards stderr, so packaged-app startup failures (the migration below,
+// boot-phase timings, corrupt-settings quarantine, port selection, the startup
+// error dialogs) leave no trail to attach to a bug report. Installed here —
+// right after the single-instance lock, before the first console.* of module
+// eval — so migration/startup logs are captured. Best-effort: any failure
+// leaves console untouched and never blocks boot. Gated on the lock so a
+// second (about-to-quit) instance doesn't contend on the same file.
+if (gotSingleInstanceLock) (function initFileLogger() {
+  try {
+    const logDir = path.join(app.getPath('userData'), 'logs');
+    fs.mkdirSync(logDir, { recursive: true });
+    const logPath = path.join(logDir, 'main.log');
+    // Rotate once the live log passes ~2 MB so it can't grow unbounded across
+    // sessions; keep exactly one previous generation.
+    try {
+      if (fs.statSync(logPath).size > 2 * 1024 * 1024) {
+        try { fs.renameSync(logPath, `${logPath}.1`); } catch { /* best effort */ }
+      }
+    } catch { /* no existing log — first run */ }
+    const stream = fs.createWriteStream(logPath, { flags: 'a' });
+    stream.on('error', () => { /* never let a log write crash the app */ });
+    const serialize = (a) => {
+      if (typeof a === 'string') return a;
+      try { return JSON.stringify(a); } catch { return String(a); }
+    };
+    const write = (level, args) => {
+      try { stream.write(`${new Date().toISOString()} [${level}] ${args.map(serialize).join(' ')}\n`); }
+      catch { /* best effort */ }
+    };
+    for (const level of ['log', 'warn', 'error']) {
+      const orig = console[level].bind(console);
+      console[level] = (...args) => { write(level, args); orig(...args); };
+    }
+    write('log', [`main-process logger started (pid ${process.pid})`]);
+  } catch { /* logging is best-effort; never block boot */ }
+})();
 
 // One-shot migration from the legacy "vision-desktop" userData dir to the
 // canonical "Vision" dir. Preserves existing settings.json + embedded_compose
@@ -424,8 +462,11 @@ async function resolveWorkDir() {
     const packagedI18n = path.join(process.resourcesPath, 'i18n');
     const packagedI18nExists = await fs.promises.access(packagedI18n).then(() => true).catch(() => false);
     if (!packagedI18nExists) {
-      // If it's missing, attempt to copy from the repo i18n/source (best effort)
-      const repoI18n = path.join(__dirname, '..', 'i18n');
+      // If it's missing, attempt to copy from the repo i18n/source (best effort).
+      // __dirname is packaging/electron, so the repo masters live two levels up
+      // under i18n/source — the previous `../i18n` (packaging/i18n) never existed,
+      // making this whole branch dead code.
+      const repoI18n = path.join(__dirname, '..', '..', 'i18n', 'source');
       const repoI18nExists = await fs.promises.access(repoI18n).then(() => true).catch(() => false);
       if (repoI18nExists) {
         await fs.promises.mkdir(packagedI18n, { recursive: true });
@@ -1814,6 +1855,39 @@ function createWindow() {
   // Block all new-window spawns (target="_blank", window.open, etc.)
   mainWindow.webContents.setWindowOpenHandler(() => ({ action: 'deny' }));
 
+  // Native right-click menu for text: without this, plain inputs (search boxes,
+  // the AI-chat composer, the dbEditor cell/WHERE editors) get no copy/paste/
+  // select-all, and Electron's default-on spellcheck underlines misspellings
+  // with no way to reach the suggestions. Cut/Copy/Paste/SelectAll roles carry
+  // OS-native (already-localized) labels; the dictionary label uses t().
+  mainWindow.webContents.on('context-menu', (_event, params) => {
+    const wc = mainWindow.webContents;
+    const items = [];
+    const suggestions = Array.isArray(params.dictionarySuggestions) ? params.dictionarySuggestions : [];
+    for (const suggestion of suggestions) {
+      items.push({ label: suggestion, click: () => wc.replaceMisspelling(suggestion) });
+    }
+    if (params.misspelledWord) {
+      if (items.length) items.push({ type: 'separator' });
+      items.push({
+        label: t('menu.addToDictionary', null, 'Add to Dictionary'),
+        click: () => wc.session.addWordToSpellCheckerDictionary(params.misspelledWord),
+      });
+    }
+    const flags = params.editFlags || {};
+    const roleItems = [];
+    if (params.isEditable) roleItems.push({ role: 'cut', enabled: !!flags.canCut });
+    if (params.isEditable || params.selectionText) roleItems.push({ role: 'copy', enabled: !!flags.canCopy });
+    if (params.isEditable) roleItems.push({ role: 'paste', enabled: !!flags.canPaste });
+    if (params.isEditable) roleItems.push({ role: 'selectAll' });
+    if (roleItems.length) {
+      if (items.length) items.push({ type: 'separator' });
+      items.push(...roleItems);
+    }
+    if (!items.length) return;
+    Menu.buildFromTemplate(items).popup({ window: mainWindow });
+  });
+
   // Block navigation to any URL that isn't localhost/127.0.0.1 or a local file.
   mainWindow.webContents.on('will-navigate', (event, url) => {
     try {
@@ -2220,6 +2294,14 @@ async function prepareShellUpdateInstaller() {
 }
 
 async function checkForShellUpdate() {
+  // Demo builds must never offer to install the real Vision shell over
+  // themselves. setupManualShellUpdater is already gated off for the packaged
+  // demo, but the update:check-github IPC still calls this — short-circuit so
+  // the demo reports "up to date" instead of surfacing (and later trying to
+  // install) the real Vision release ZIP. Also avoids the GitHub round-trip.
+  if (__IS_DEMO) {
+    return { up_to_date: true, current_version: getCurrentVersionTag(), latest_version: null, update_mode: getUpdateMode() };
+  }
   const release = await readGitHubRelease();
   const latestVersion = normalizeVersionTag(release?.tag_name);
   const currentVersion = getCurrentVersionTag();
@@ -3171,12 +3253,15 @@ ipcMain.handle('backup:restore', async (event, filePath, opts) => {
   // Require explicit user confirmation before overwriting live data.
   const { response } = await dialog.showMessageBox(mainWindow, {
     type: 'warning',
-    buttons: ['Restore', 'Cancel'],
+    // Route the one destructive dialog through the same main-process t() loader
+    // every other Electron dialog uses (reusing existing settings.restore.* keys),
+    // so it follows the app language instead of being hardcoded English.
+    buttons: [t('settings.restore.runNow', null, 'Restore'), t('settings.restore.cancelButton', null, 'Cancel')],
     defaultId: 1,
     cancelId: 1,
-    title: 'Restore Backup',
-    message: 'This will permanently replace all current data and cannot be undone.',
-    detail: `Restore from: ${path.basename(resolved)}`,
+    title: t('settings.restore.title', null, 'Restore Backup'),
+    message: t('settings.restore.warning', null, 'This will permanently replace all current data and cannot be undone.'),
+    detail: path.basename(resolved),
   });
   if (response !== 0) return { success: false, error: 'Restore cancelled by user' };
 
@@ -3448,6 +3533,20 @@ function handleMenuAccelerator(event, input) {
 }
 
 function setupApplicationMenu() {
+  // Populate the native About panel ({ role: 'about' } below) — otherwise it
+  // shows only the bare app name with no version, copyright, or license. macOS
+  // and Linux honour these; Windows has no native About panel.
+  if (process.platform === 'darwin' || process.platform === 'linux') {
+    try {
+      app.setAboutPanelOptions({
+        applicationName: APP_NAME,
+        applicationVersion: app.getVersion ? app.getVersion() : '',
+        copyright: `© ${new Date().getFullYear()} Vision · AGPL-3.0`,
+        website: `https://github.com/${GITHUB_OWNER}/${GITHUB_REPO}`,
+      });
+    } catch { /* non-fatal — cosmetic */ }
+  }
+
   const template = [
     ...(process.platform === 'darwin' ? [{
       label: APP_NAME,
