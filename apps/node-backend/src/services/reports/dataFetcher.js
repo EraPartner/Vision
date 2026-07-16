@@ -13,6 +13,7 @@ import { computeBankBalances } from '../calculations/aggregation/bankBalances.js
 import { computeAverageVsCurrent } from '../calculations/aggregation/averageVsCurrent.js';
 import infoRepository from '../../repositories/infoRepository.js';
 import { logger } from '../../config/logger.js';
+import { toAppTz } from '../../lib/timezone.js';
 
 /**
  * @typedef {{ kind: 'ytd' }
@@ -119,15 +120,18 @@ export async function fetchFinancialData(currency, { excludedCategoryIds = [], e
  */
 export function filterMonthsByPeriod(months, period) {
   if (!months?.length) return [];
-  const now = new Date();
+  // Resolve "today" in APP_TIMEZONE, not the server process's local time
+  // (ADR-009) — the two can disagree near midnight and shift YTD/rolling
+  // month boundaries by one month.
+  const { year: nowYear, month: nowMonth } = toAppTz(new Date());
 
   switch (period.kind) {
     case 'ytd':
-      return months.filter(m => m.year === now.getFullYear());
+      return months.filter(m => m.year === nowYear);
 
     case 'rolling': {
-      const cutoff = new Date(now.getFullYear(), now.getMonth() - period.months + 1, 1);
-      return months.filter(m => new Date(m.year, m.month - 1, 1) >= cutoff);
+      const cutoff = new Date(Date.UTC(nowYear, nowMonth - period.months, 1));
+      return months.filter(m => new Date(Date.UTC(m.year, m.month - 1, 1)) >= cutoff);
     }
 
     case 'custom': {

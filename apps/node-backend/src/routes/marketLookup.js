@@ -7,6 +7,7 @@ import { ApiErrorCode } from '@vision/types/errors';
 import { AppError, ValidationError } from '../middleware/errorHandler.js';
 import { createResearchCache } from '../services/research/researchCache.js';
 import { getYahooClient } from '../services/prices/yahooClient.js';
+import { toAppTz } from '../lib/timezone.js';
 
 const router = Router();
 
@@ -72,17 +73,21 @@ function upstreamError(message, cause) {
  */
 function rangeToDate(range) {
   const now = new Date();
+  // Resolve calendar components in APP_TIMEZONE (ADR-009), not the server
+  // process's local time, so this range boundary doesn't drift by a day
+  // depending on host TZ.
+  const { year, month, day } = toAppTz(now);
   switch (range) {
     case '1d': return new Date(now.getTime() - 1 * 24 * 60 * 60 * 1000);
     case '5d': return new Date(now.getTime() - 5 * 24 * 60 * 60 * 1000);
-    case '1mo': return new Date(now.getFullYear(), now.getMonth() - 1, now.getDate());
-    case '3mo': return new Date(now.getFullYear(), now.getMonth() - 3, now.getDate());
-    case '6mo': return new Date(now.getFullYear(), now.getMonth() - 6, now.getDate());
-    case '1y': return new Date(now.getFullYear() - 1, now.getMonth(), now.getDate());
-    case '2y': return new Date(now.getFullYear() - 2, now.getMonth(), now.getDate());
-    case '5y': return new Date(now.getFullYear() - 5, now.getMonth(), now.getDate());
+    case '1mo': return new Date(Date.UTC(year, month - 1 - 1, day));
+    case '3mo': return new Date(Date.UTC(year, month - 1 - 3, day));
+    case '6mo': return new Date(Date.UTC(year, month - 1 - 6, day));
+    case '1y': return new Date(Date.UTC(year - 1, month - 1, day));
+    case '2y': return new Date(Date.UTC(year - 2, month - 1, day));
+    case '5y': return new Date(Date.UTC(year - 5, month - 1, day));
     case 'max': return new Date('1970-01-01');
-    default: return new Date(now.getFullYear(), now.getMonth() - 1, now.getDate());
+    default: return new Date(Date.UTC(year, month - 1 - 1, day));
   }
 }
 

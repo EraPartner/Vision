@@ -6,6 +6,11 @@ import crypto from 'crypto';
 import { query } from '../database/connection.js';
 import { logger } from '../config/logger.js';
 
+// `transactionData.date` must be a genuine UTC-instant Date (e.g. from the
+// import pipeline's parseDateFlexibleUtc) — `.toISOString()` extracts its UTC
+// calendar day. Do NOT pass a pg-read DATE column here: those parse as
+// local-midnight Date objects (see lib/dateFormat.js) and would day-shift the
+// hash on any host east of UTC.
 export function createTransactionHash(transactionData) {
   let raw = transactionData.rawData;
   if (!raw) {
@@ -23,6 +28,10 @@ export function createManualTransactionHash({ date, amount, recipientId, memo, b
 }
 
 export async function isDuplicate(transactionData) {
+  // Same UTC-instant contract as createTransactionHash above:
+  // transactionData.date must be a genuine UTC-instant Date, not a pg-read
+  // local-midnight DATE column.
+  //
   // Field-based dedup matches date + amount + recipient + memo so two
   // legitimate same-day same-amount same-vendor purchases are not collapsed.
   //

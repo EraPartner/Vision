@@ -7,7 +7,7 @@
  */
 
 import { renderHtmlToPdf } from './puppeteerRenderer.js';
-import { toAppDateString } from '../../lib/timezone.js';
+import { toAppDateString, toAppTz, APP_TIMEZONE } from '../../lib/timezone.js';
 import { buildThemeCss } from './themeCss.js';
 import { escapeHtml, SECTION_CSS } from './sectionHelpers.js';
 import { fetchFinancialData } from './dataFetcher.js';
@@ -91,14 +91,13 @@ const REPORT_SUBTITLES = {
  * @returns {string}
  */
 function formatPeriod(period) {
-  const now = new Date();
   switch (period.kind) {
     case 'ytd':
-      return `Year to Date (${now.getFullYear()})`;
+      return `Year to Date (${toAppTz(new Date()).year})`;
     case 'rolling':
       return `Last ${period.months} month${period.months === 1 ? '' : 's'}`;
     case 'custom': {
-      const fmt = (d) => new Date(d).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+      const fmt = (d) => new Date(d).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric', timeZone: APP_TIMEZONE });
       return `${fmt(period.from)} – ${fmt(period.to)}`;
     }
     case 'year':
@@ -346,7 +345,7 @@ function buildCoverHtml({ type, currency, period, generatedAt, excludedCategoryI
   const subtitle = REPORT_SUBTITLES[type] ?? '';
   const periodStr = formatPeriod(period);
   const dateStr = new Date(generatedAt).toLocaleDateString('en-US', {
-    weekday: 'long', day: 'numeric', month: 'long', year: 'numeric',
+    weekday: 'long', day: 'numeric', month: 'long', year: 'numeric', timeZone: APP_TIMEZONE,
   });
 
   const filterParts = [];
@@ -363,7 +362,7 @@ function buildCoverHtml({ type, currency, period, generatedAt, excludedCategoryI
   if (pricesAsOf) {
     const pricesAsOfDate = new Date(pricesAsOf);
     const pricesAsOfStr = pricesAsOfDate.toLocaleDateString('en-US', {
-      day: 'numeric', month: 'long', year: 'numeric',
+      day: 'numeric', month: 'long', year: 'numeric', timeZone: APP_TIMEZONE,
     });
     const ageDays = Math.floor((new Date(generatedAt).getTime() - pricesAsOfDate.getTime()) / (24 * 60 * 60 * 1000));
     const staleSuffix = ageDays > 1 ? ` (${ageDays} days old)` : '';
@@ -404,7 +403,7 @@ function buildCoverHtml({ type, currency, period, generatedAt, excludedCategoryI
         </div>
         <div class="cover-footer">
           <span class="cover-footer-brand">Vision</span>
-          <span>Confidential · ${escapeHtml(new Date(generatedAt).getFullYear().toString())}</span>
+          <span>Confidential · ${escapeHtml(toAppTz(new Date(generatedAt)).year.toString())}</span>
         </div>
       </div>
     </div>

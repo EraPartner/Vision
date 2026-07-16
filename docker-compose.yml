@@ -26,6 +26,10 @@ services:
       POSTGRES_USER: ftm_user
       POSTGRES_DB: financial_transactions
       # Password is read from POSTGRES_PASSWORD in .env (see .env.example)
+      # Pin the cluster's session timezone to UTC (ADR-009: storage = UTC).
+      # Without this, CURRENT_DATE/NOW() follow initdb's OS-detected default,
+      # which is implicit and not guaranteed across hosts.
+      TZ: UTC
     volumes:
       - postgres_data:/var/lib/postgresql
       # First-init-only scripts: creates the optional least-privilege ftm_app

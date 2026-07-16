@@ -23,6 +23,7 @@ import { convertRowsToEur } from '../../currency/currencyConversionService.js';
 import { buildEnvelope } from './_envelope.js';
 import { assertNoNaN } from './_invariants.js';
 import { roundMoney } from '../../../lib/money.js';
+import { toAppTz } from '../../../lib/timezone.js';
 
 const INCOME_NODE_ID = '__income__';
 const SAVINGS_NODE_ID = '__savings__';
@@ -37,7 +38,7 @@ export async function computeSankeyFlow({
   excludedCategoryIds = [],
   excludedRecipientIds = [],
 } = {}) {
-  const targetYear = year ?? new Date().getFullYear();
+  const targetYear = year ?? toAppTz(new Date()).year;
   const yearStart = `${targetYear}-01-01`;
   const yearEnd = `${targetYear}-12-31`;
 
