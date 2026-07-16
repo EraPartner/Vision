@@ -116,6 +116,11 @@ COPY alembic/ ./alembic/
 
 ENV NODE_ENV=production
 ENV ENVIRONMENT=production
+# Pin the process timezone to UTC (ADR-009: storage = UTC, business math =
+# APP_TIMEZONE, display = browser zone). Business-math code derives "now" via
+# lib/timezone.js's toAppTz(), not the process TZ — but pinning it removes any
+# dependency on the deploy host's default and matches the devcontainer image.
+ENV TZ=UTC
 # Path to the Alpine-installed Chromium binary used by Puppeteer.
 ENV PUPPETEER_EXECUTABLE_PATH=/usr/bin/chromium-browser
 # Alembic installed in /venv by the Python layer above; backend's in-process

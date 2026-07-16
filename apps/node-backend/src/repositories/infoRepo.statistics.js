@@ -12,6 +12,7 @@ import {
   mapRowsForAmountConversion,
   getIncludeTransfers,
 } from './infoRepositoryHelpers.js';
+import { toAppTz } from '../lib/timezone.js';
 
 export async function getAverageVsCurrentSpending(targetCurrency = 'EUR') {
   // Exclude internal transfers (ADR-083) from spending aggregates unless the
@@ -72,13 +73,16 @@ export async function getAverageVsCurrentSpending(targetCurrency = 'EUR') {
   const totalMonthlySpending = toNumber(addAll(monthKeys.map((k) => monthlySpending[k])));
   const avgMonthlySpending = totalMonthlySpending / monthsCount;
 
-  const now = new Date();
   // Calendar-day denominators, NOT counts of days that happened to have a
   // transaction. The 6-month window is 6 complete prior months; dividing by
   // transaction-day counts overstated the per-day rate (and the projection
   // below multiplied a per-active-day rate by full calendar days).
-  const sixMonthStart = new Date(now.getFullYear(), now.getMonth() - 6, 1);
-  const currentMonthStart = new Date(now.getFullYear(), now.getMonth(), 1);
+  // "Today" is resolved in APP_TIMEZONE (ADR-009), not the server process's
+  // local time, so this agrees with the CURRENT_DATE-based SQL above near
+  // midnight regardless of host TZ.
+  const { year: nowYear, month: nowMonth, day: nowDay } = toAppTz(new Date());
+  const sixMonthStart = new Date(Date.UTC(nowYear, nowMonth - 1 - 6, 1));
+  const currentMonthStart = new Date(Date.UTC(nowYear, nowMonth - 1, 1));
   const calendarDays6m = Math.max(1, Math.round((currentMonthStart.getTime() - sixMonthStart.getTime()) / 86400000));
   const avgDailySpending = totalMonthlySpending / calendarDays6m;
 
@@ -106,8 +110,8 @@ export async function getAverageVsCurrentSpending(targetCurrency = 'EUR') {
 
   const totalCurrentSpending = toNumber(addAll(dailyData.map((d) => d.spending)));
   // Calendar days elapsed this month (not the number of days with a transaction).
-  const daysElapsed = now.getDate();
-  const daysInMonth = new Date(now.getFullYear(), now.getMonth() + 1, 0).getDate();
+  const daysElapsed = nowDay;
+  const daysInMonth = new Date(Date.UTC(nowYear, nowMonth, 0)).getUTCDate();
   const projectedTotal = (totalCurrentSpending / daysElapsed) * daysInMonth;
 
   return {
