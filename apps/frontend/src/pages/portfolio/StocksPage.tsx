@@ -28,10 +28,8 @@ import { onActivateKeyDown } from "@/utils/a11y";
 import { EmptyState } from "@/components/shared/EmptyState";
 import { ExportDialog } from "@/components/reports/ExportDialog";
 import { DeltaPill } from "@/components/shared/DeltaPill";
-
-function fmtPct(val: number) {
-  return `${val >= 0 ? '+' : ''}${val.toFixed(2)}%`;
-}
+import { FxPnlCell } from "@/components/portfolio/FxPnlCell";
+import { fmtPct } from "@/utils/percent";
 
 interface StocksPageProps {
   assetClasses?: AssetClass[];
@@ -293,22 +291,9 @@ export default function StocksPage({
                     <td className={cn("text-right py-2 px-3 tabular-nums", (displayedPnlByHoldingId[h.id]?.realizedTarget || 0) !== 0 ? ((displayedPnlByHoldingId[h.id]?.realizedTarget || 0) >= 0 ? "amount-gain" : "amount-loss") : "text-muted-foreground")}>
                       {(displayedPnlByHoldingId[h.id]?.realizedTarget || 0) !== 0 ? `${(displayedPnlByHoldingId[h.id]?.realizedTarget || 0) >= 0 ? "+" : ""}${fmt(displayedPnlByHoldingId[h.id]?.realizedTarget || 0)}` : '—'}
                     </td>
-                    {pageHasFxExposure && (() => {
-                      const fxInfo = fxInfoById.get(h.id);
-                      const isForeign = (h.originalCurrency || h.currency || 'EUR').toUpperCase() !== targetCurrency.toUpperCase();
-                      const fxGain = fxInfo?.fxGain;
-                      if (!isForeign || typeof fxGain !== 'number') {
-                        return <td className="text-right py-2 px-3 tabular-nums text-muted-foreground">—</td>;
-                      }
-                      return (
-                        <td
-                          className={cn("text-right py-2 px-3 tabular-nums", fxGain >= 0 ? "amount-gain" : "amount-loss")}
-                          title={fxInfo?.usedFallbackRate ? t('portfolio.fxFallbackNote') : undefined}
-                        >
-                          {fxGain >= 0 ? "+" : ""}{fmt(fxGain)}{fxInfo?.usedFallbackRate ? " ⚠" : ""}
-                        </td>
-                      );
-                    })()}
+                    {pageHasFxExposure && (
+                      <FxPnlCell holding={h} fxInfo={fxInfoById.get(h.id)} targetCurrency={targetCurrency} fmt={fmt} t={t} />
+                    )}
                     <td className="text-right py-2 px-3 tabular-nums text-gain">
                       {h.totalDividends > 0 ? `+${fmt(convertToTarget(h.totalDividends, h.currency))}` : '—'}
                     </td>

@@ -94,7 +94,7 @@ Each finding has a stable ID (`SIMP-01` … `SIMP-84`; rounds 1–3 are SIMP-01�
 | SIMP-72 | R4: `routes/settings.js` hand-rolls ~185 lines of validators; zod installed and in use one file over | `routes/settings.js` | ~90–110 net | Low–medium | n/a | FIXED (#103) |
 | SIMP-73 | R4: frontend hand-rolled CSV parser vs `csv-parse` browser build | `hooks/useCsvPreview.ts` | ~90–100 | Low–medium | n/a | OPEN |
 | SIMP-74 | R4: electron hand-rolled HTTP helpers vs `fetch` (latent redirect bug) + semver comparator | `packaging/electron/main.js` | ~60–125 | Low | n/a | OPEN |
-| SIMP-75 | R4: `CryptoPage` is an unparameterized copy of the parameterized `StocksPage` | `pages/portfolio/CryptoPage.tsx` | ~200 (or ~35 minimal) | Medium | n/a | OPEN |
+| SIMP-75 | R4: `CryptoPage` is an unparameterized copy of the parameterized `StocksPage` | `pages/portfolio/CryptoPage.tsx` | ~200 (or ~35 minimal) | Medium | n/a | FIXED (#103) |
 | SIMP-76 | R4: SIMP-56/57 stragglers — from-market dialog never adopted `PortfolioTxnFormFields`; EditInvestmentDialog init/reset dup | `AddInvestmentFromMarketDialog.tsx`, `EditInvestmentDialog.tsx` | ~125–145 | Medium | n/a | FIXED (#103) |
 | SIMP-77 | R4: multi-select combobox trio + pivot-hook twins | `shared/*Combobox.tsx`, `hooks/use{Recipient,Tag}Pivot.ts` | ~170 | Low | n/a | OPEN |
 | SIMP-78 | R4: config-driven micro-dedups (research quotes query ×4, RANGES ×4, symbol search ×3, segmented buttons ×6, CURRENCIES ×7, misc) | see finding | ~120–140 | Low | n/a | OPEN |
