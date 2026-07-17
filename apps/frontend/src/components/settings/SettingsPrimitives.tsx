@@ -1,6 +1,9 @@
 import type { ReactNode } from 'react';
 import { cn } from '@/lib/utils';
 import { Label } from '@/components/ui/label';
+import {
+    Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
+} from '@/components/ui/select';
 
 /**
  * Shared layout primitives for the Settings dialog. One visual language for
@@ -82,6 +85,45 @@ interface SettingRowProps {
     destructive?: boolean;
     children: ReactNode;
     className?: string;
+}
+
+export interface SelectRowConfig {
+    title: string;
+    description?: string;
+    value: string;
+    onValueChange: (v: string) => void;
+    options: { value: string; label: ReactNode }[];
+    /** aria-label for the select trigger when the row label alone is ambiguous. */
+    triggerAriaLabel?: string;
+    /** Optional extra content rendered below the select (e.g. hint notes). */
+    children?: ReactNode;
+}
+
+/**
+ * One SettingRow→Select block. The select rows across the settings sections
+ * were identical apart from their title/value/options/change handler, now
+ * expressed as config.
+ */
+export function SelectSettingRow({
+    title,
+    description,
+    value,
+    onValueChange,
+    options,
+    triggerAriaLabel,
+    children,
+}: SelectRowConfig) {
+    return (
+        <SettingRow title={title} description={description} layout="stack">
+            <Select value={value} onValueChange={onValueChange}>
+                <SelectTrigger aria-label={triggerAriaLabel}><SelectValue /></SelectTrigger>
+                <SelectContent>
+                    {options.map((o) => <SelectItem key={o.value} value={o.value}>{o.label}</SelectItem>)}
+                </SelectContent>
+            </Select>
+            {children}
+        </SettingRow>
+    );
 }
 
 export function SettingRow({

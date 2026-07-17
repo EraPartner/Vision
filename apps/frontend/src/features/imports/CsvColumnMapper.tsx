@@ -10,9 +10,7 @@
 
 import { useLanguage } from "@/contexts/LanguageContext";
 import { useCsvPreview } from "@/hooks/useCsvPreview";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import { ColumnSelect } from "./ColumnSelect";
+import { MappedColumnField } from "./ColumnSelect";
 
 export interface CsvColumnConfig {
   dateColumn: string;
@@ -55,28 +53,18 @@ export function CsvColumnMapper({ file, separator, config, onChange }: Props) {
       {/* Column selects or text inputs */}
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
         {COLUMN_FIELDS.map(([key, id, labelKey, placeholderKey, required]) => (
-          hasHeaders ? (
-            <ColumnSelect
-              key={key}
-              id={id}
-              label={t(labelKey)}
-              value={config[key]}
-              headers={headers}
-              required={required}
-              onChange={set(key)}
-              noMappingLabel={noMappingLabel}
-            />
-          ) : (
-            <div key={key} className="space-y-2">
-              <Label htmlFor={id}>{t(labelKey)}</Label>
-              <Input
-                id={id}
-                placeholder={t(placeholderKey)}
-                value={config[key]}
-                onChange={(e) => set(key)(e.target.value)}
-              />
-            </div>
-          )
+          <MappedColumnField
+            key={key}
+            id={id}
+            label={t(labelKey)}
+            value={config[key]}
+            headers={headers}
+            hasHeaders={hasHeaders}
+            required={required}
+            onChange={set(key)}
+            noMappingLabel={noMappingLabel}
+            placeholder={t(placeholderKey)}
+          />
         ))}
       </div>
     </div>

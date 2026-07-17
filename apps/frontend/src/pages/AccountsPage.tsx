@@ -14,6 +14,7 @@ import { Landmark, MoreVertical, Pencil, Archive, ArchiveRestore, Trash2, GitMer
 import { useAccounts, useUpdateAccount, useDeleteAccount } from "@/hooks/useAccounts";
 import { useCurrencyFormatter } from "@/hooks/useCurrencyFormatter";
 import { AddAccountDialog, type AccountFormValues } from "@/features/accounts/AddAccountDialog";
+import { toAccountPayload, accountToFormValues } from "@/features/accounts/accountFormMapping";
 import { MergeAccountDialog } from "@/features/accounts/MergeAccountDialog";
 import { CloseAccountDialog } from "@/features/accounts/CloseAccountDialog";
 import { OpeningBalanceDialog } from "@/features/accounts/OpeningBalanceDialog";
@@ -87,27 +88,9 @@ export default function AccountsPage() {
     const handleSave = (values: AccountFormValues) => {
         if (!editing) return;
         updateMutation.mutate(
-            {
-                id: editing.id,
-                data: {
-                    name: values.name,
-                    // Emptied fields PATCH as explicit null so the backend clears
-                    // them — `undefined` keys are dropped in JSON and would no-op.
-                    display_name: values.display_name || null,
-                    institution: values.institution || null,
-                    currency: values.currency,
-                    type: values.type,
-                    owner: values.owner,
-                    liquidity_class: values.liquidity_class,
-                    tax_wrapper: values.tax_wrapper,
-                    spendable: values.spendable,
-                    in_net_worth: values.in_net_worth,
-                    multi_currency_cash: values.multi_currency_cash,
-                    has_cash_sleeve: values.has_cash_sleeve,
-                    statement_balance: values.statementBalance ? Number(values.statementBalance) : null,
-                    statement_balance_date: values.statementBalanceDate || null,
-                },
-            },
+            // "update" mode PATCHes emptied fields as explicit null so the
+            // backend clears them — see toAccountPayload.
+            { id: editing.id, data: toAccountPayload(values, "update") },
             { onSuccess: () => setEditing(undefined) },
         );
     };
@@ -294,24 +277,7 @@ export default function AccountsPage() {
                     open={!!editing}
                     onOpenChange={(o) => { if (!o) setEditing(undefined); }}
                     isSaving={updateMutation.isPending}
-                    initialValues={{
-                        name: editing.name,
-                        display_name: editing.display_name ?? "",
-                        institution: editing.institution ?? "",
-                        currency: editing.currency,
-                        type: editing.type,
-                        owner: editing.owner,
-                        liquidity_class: editing.liquidity_class,
-                        tax_wrapper: editing.tax_wrapper,
-                        spendable: editing.spendable,
-                        in_net_worth: editing.in_net_worth,
-                        multi_currency_cash: editing.multi_currency_cash,
-                        has_cash_sleeve: editing.has_cash_sleeve,
-                        statementBalance: editing.statement_balance != null ? String(editing.statement_balance) : "",
-                        // The API serialises the DATE as a full ISO timestamp; the
-                        // <input type="date"> and the server both want YYYY-MM-DD.
-                        statementBalanceDate: editing.statement_balance_date ? editing.statement_balance_date.slice(0, 10) : "",
-                    }}
+                    initialValues={accountToFormValues(editing)}
                     onSave={handleSave}
                 />
             )}

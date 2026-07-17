@@ -123,6 +123,16 @@ export function InvestmentDetailDialog({
 
   // Per-account positioning (ADR-091): where this holding is custodied. Only
   // shown once an account is actually involved (a lone unassigned group is noise).
+  // The same add-transaction control appears in three spots (overview footer,
+  // empty-transactions CTA, transactions footer) — build it once.
+  const addTransactionControl = onAddTransaction ? (
+    <Button size="sm" className="gap-1.5" onClick={() => onAddTransaction(investment)}>
+      {t('portfolio.addTransaction')}
+    </Button>
+  ) : (
+    <AddPortfolioTxnDialog investment={investment} />
+  );
+
   const accountPositions = useAccountPositions(investment);
   const showAccountBreakdown =
     isPerAccountHoldingsEnabled && (
@@ -502,13 +512,7 @@ export function InvestmentDetailDialog({
               )}
               
               <div className="flex justify-end">
-                {onAddTransaction ? (
-                  <Button size="sm" className="gap-1.5" onClick={() => onAddTransaction(investment)}>
-                    {t('portfolio.addTransaction')}
-                  </Button>
-                ) : (
-                  <AddPortfolioTxnDialog investment={investment} />
-                )}
+                {addTransactionControl}
               </div>
             </TabsContent>
 
@@ -517,13 +521,7 @@ export function InvestmentDetailDialog({
                 <div className="text-center py-8 text-muted-foreground">
                    <p>{t('invDetail.noTransactions')}</p>
                   <div className="mt-4">
-                    {onAddTransaction ? (
-                      <Button size="sm" className="gap-1.5" onClick={() => onAddTransaction(investment)}>
-                        {t('portfolio.addTransaction')}
-                      </Button>
-                    ) : (
-                      <AddPortfolioTxnDialog investment={investment} />
-                    )}
+                    {addTransactionControl}
                   </div>
                 </div>
               ) : (
@@ -622,13 +620,7 @@ export function InvestmentDetailDialog({
               
               {investment.transactions.length > 0 && (
                 <div className="flex justify-end mt-4 pt-4 border-t border-border">
-                  {onAddTransaction ? (
-                    <Button size="sm" className="gap-1.5" onClick={() => onAddTransaction(investment)}>
-                      {t('portfolio.addTransaction')}
-                    </Button>
-                  ) : (
-                    <AddPortfolioTxnDialog investment={investment} />
-                  )}
+                  {addTransactionControl}
                 </div>
               )}
             </TabsContent>

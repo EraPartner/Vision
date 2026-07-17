@@ -56,19 +56,30 @@ export function yearOf(date?: string): number | null {
   return Number.isFinite(n) ? n : null;
 }
 
+/** Recorded costs of one kind in `txYear`: explicit txns of `txnType` + the per-txn `field`. */
+function recordedForYear(
+  inv: PortfolioTaxInvestment,
+  txYear: number,
+  convert: ConvertFn,
+  txnType: 'tax' | 'fee',
+  field: 'taxes' | 'fees',
+): number {
+  const terms: number[] = [];
+  for (const txn of inv.transactions) {
+    if (yearOf(txn.date) !== txYear) continue;
+    if (txn.type === txnType) terms.push(convert(Number(txn.amount) || 0, txn.currency));
+    terms.push(convert(Number(txn[field]) || 0, txn.currency));
+  }
+  return sumDecimal(terms).toNumber();
+}
+
 /** Recorded taxes for one investment in `txYear`: explicit `tax` txns + per-txn `taxes` field. */
 export function recordedTaxesForYear(
   inv: PortfolioTaxInvestment,
   txYear: number,
   convert: ConvertFn,
 ): number {
-  const terms: number[] = [];
-  for (const txn of inv.transactions) {
-    if (yearOf(txn.date) !== txYear) continue;
-    if (txn.type === 'tax') terms.push(convert(Number(txn.amount) || 0, txn.currency));
-    terms.push(convert(Number(txn.taxes) || 0, txn.currency));
-  }
-  return sumDecimal(terms).toNumber();
+  return recordedForYear(inv, txYear, convert, 'tax', 'taxes');
 }
 
 /** Recorded fees for one investment in `txYear`: explicit `fee` txns + per-txn `fees` field. */
@@ -77,13 +88,7 @@ export function recordedFeesForYear(
   txYear: number,
   convert: ConvertFn,
 ): number {
-  const terms: number[] = [];
-  for (const txn of inv.transactions) {
-    if (yearOf(txn.date) !== txYear) continue;
-    if (txn.type === 'fee') terms.push(convert(Number(txn.amount) || 0, txn.currency));
-    terms.push(convert(Number(txn.fees) || 0, txn.currency));
-  }
-  return sumDecimal(terms).toNumber();
+  return recordedForYear(inv, txYear, convert, 'fee', 'fees');
 }
 
 export interface InvestmentCosts {

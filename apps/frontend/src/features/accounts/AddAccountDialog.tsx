@@ -11,6 +11,7 @@ import { useCreateAccount } from "@/hooks/useAccounts";
 import { useLanguage } from "@/contexts/LanguageContext";
 import type { AccountType, AccountOwner, AccountLiquidityClass, AccountTaxWrapper } from "@/types/api";
 import { SUPPORTED_CURRENCIES as CURRENCIES } from "@/utils/currency";
+import { toAccountPayload } from "./accountFormMapping";
 
 export type AccountFormValues = {
     name: string;
@@ -140,22 +141,7 @@ export function AddAccountDialog(props: AddAccountDialogProps = {}) {
             editProps?.onSave(values);
         } else {
             createMutation.mutate(
-                {
-                    name: values.name,
-                    display_name: values.display_name || undefined,
-                    institution: values.institution || undefined,
-                    currency: values.currency,
-                    type: values.type,
-                    owner: values.owner,
-                    liquidity_class: values.liquidity_class,
-                    tax_wrapper: values.tax_wrapper,
-                    spendable: values.spendable,
-                    in_net_worth: values.in_net_worth,
-                    multi_currency_cash: values.multi_currency_cash,
-                    has_cash_sleeve: values.has_cash_sleeve,
-                    statement_balance: values.statementBalance ? Number(values.statementBalance) : undefined,
-                    statement_balance_date: values.statementBalanceDate || undefined,
-                },
+                toAccountPayload(values, "create"),
                 {
                     onSuccess: () => {
                         setForm(EMPTY);

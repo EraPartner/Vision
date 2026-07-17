@@ -4,7 +4,7 @@ import { Search } from 'lucide-react';
 import { PageHeader } from '@/components/shared/PageHeader';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
-import { Skeleton } from '@/components/ui/skeleton';
+import { TableSkeletonRows } from '@/components/shared/TableSkeletonRows';
 import {
     Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
 } from '@/components/ui/table';
@@ -103,13 +103,7 @@ export default function EndpointLivenessPage() {
                         </TableHeader>
                         <TableBody>
                             {manifestLoading ? (
-                                Array.from({ length: 10 }).map((_, i) => (
-                                    <TableRow key={i}>
-                                        {Array.from({ length: 7 }).map((__, j) => (
-                                            <TableCell key={j}><Skeleton className="h-4 w-full" /></TableCell>
-                                        ))}
-                                    </TableRow>
-                                ))
+                                <TableSkeletonRows rows={10} cols={7} />
                             ) : filtered.map((row) => (
                                 <TableRow key={`${row.method}:${row.path}`}>
                                     <TableCell>

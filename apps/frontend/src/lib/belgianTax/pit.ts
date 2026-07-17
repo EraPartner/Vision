@@ -528,18 +528,18 @@ export function computeBelgianPIT(profile: BelgianTaxProfile): BelgianTaxCalcula
             ? [{ label: 'Union dues (within actual professional expenses)', amount: -appliedUnionDues }]
             : []),
         { label: 'Taxable Income', amount: taxableIncome },
-        ...(pitBeforeExemption.b1 > 0
-            ? [{ label: `Bracket 1 (${table.brackets[0].rate * 100}%)`, amount: -pitBeforeExemption.b1, rate: table.brackets[0].rate * 100, bracket: `€${table.brackets[0].from} – €${table.brackets[0].to}` }]
-            : []),
-        ...(pitBeforeExemption.b2 > 0
-            ? [{ label: `Bracket 2 (${table.brackets[1].rate * 100}%)`, amount: -pitBeforeExemption.b2, rate: table.brackets[1].rate * 100, bracket: `€${table.brackets[1].from} – €${table.brackets[1].to}` }]
-            : []),
-        ...(pitBeforeExemption.b3 > 0
-            ? [{ label: `Bracket 3 (${table.brackets[2].rate * 100}%)`, amount: -pitBeforeExemption.b3, rate: table.brackets[2].rate * 100, bracket: `€${table.brackets[2].from} – €${table.brackets[2].to}` }]
-            : []),
-        ...(pitBeforeExemption.b4 > 0
-            ? [{ label: `Bracket 4 (${table.brackets[3].rate * 100}%)`, amount: -pitBeforeExemption.b4, rate: table.brackets[3].rate * 100, bracket: `€${table.brackets[3].from}+` }]
-            : []),
+        // One breakdown row per non-empty bracket; the top bracket is open-ended.
+        ...table.brackets.flatMap((br, i) => {
+            const amount = pitBeforeExemption[`b${i + 1}` as 'b1' | 'b2' | 'b3' | 'b4'];
+            if (amount <= 0) return [];
+            const isTop = i === table.brackets.length - 1;
+            return [{
+                label: `Bracket ${i + 1} (${br.rate * 100}%)`,
+                amount: -amount,
+                rate: br.rate * 100,
+                bracket: isTop ? `€${br.from}+` : `€${br.from} – €${br.to}`,
+            }];
+        }),
         ...(quotient.transfer > 0
             ? [{ label: `Marital quotient transferred to spouse`, amount: -quotient.transfer }]
             : []),
