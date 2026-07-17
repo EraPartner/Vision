@@ -47,7 +47,6 @@ export default defineConfig(({ mode }) => ({
                  *  charts         — recharts (largest single dep)
                  *  radix-ui       — all @radix-ui/* primitives
                  *  date-utils     — date-fns
-                 *  form           — react-hook-form
                  *  icons          — lucide-react
                  */
                 manualChunks(id: string) {
@@ -79,9 +78,6 @@ export default defineConfig(({ mode }) => ({
                     }
                     if (norm.includes('/date-fns') || norm.includes('+date-fns')) {
                         return 'date-utils';
-                    }
-                    if (norm.includes('/react-hook-form') || norm.includes('+react-hook-form')) {
-                        return 'form';
                     }
                     if (norm.includes('/lucide-react') || norm.includes('+lucide-react')) {
                         return 'icons';

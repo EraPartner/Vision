@@ -11,11 +11,7 @@
   },
   "dependencies": {
     "archiver": "^8.0.0",
-    "archiver-utils": "^5.0.2",
-    "compress-commons": "^7.0.0",
-    "readable-stream": "^4.5.2",
-    "yauzl": "^3.3.0",
-    "zip-stream": "^7.0.2"
+    "yauzl": "^3.3.0"
   },
   "devDependencies": {
     "electron": "^43.1.0",
