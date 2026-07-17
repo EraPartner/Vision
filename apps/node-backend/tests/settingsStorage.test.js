@@ -201,12 +201,12 @@ describe('rebalance_plans setting (ADR-098 custom rebalancing plans)', () => {
 
   it('rejects a non-array value', async () => {
     const req = { params: { key: 'rebalance_plans' }, body: { value: { not: 'an array' } } };
-    await expect(routeHandlers['put:/:key'](req, mockResponse())).rejects.toThrow(/must be an array/);
+    await expect(routeHandlers['put:/:key'](req, mockResponse())).rejects.toThrow(/expected array/);
   });
 
   it('rejects a plan with a blank name', async () => {
     const req = { params: { key: 'rebalance_plans' }, body: { value: [{ ...validPlan, name: '   ' }] } };
-    await expect(routeHandlers['put:/:key'](req, mockResponse())).rejects.toThrow(/name must be a string/);
+    await expect(routeHandlers['put:/:key'](req, mockResponse())).rejects.toThrow(/name must not be blank/);
   });
 
   it('rejects a plan with empty targetWeights', async () => {

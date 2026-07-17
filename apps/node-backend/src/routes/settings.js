@@ -9,16 +9,16 @@
  */
 
 import { Router } from 'express';
+import { z } from 'zod';
 import settingsRepository from '../services/settingsService.js';
 import { validateIntArray } from '../middleware/validation.js';
 import { NotFoundError, ValidationError } from '../middleware/errorHandler.js';
 
 const router = Router();
 
-const ALLOWED_COST_BASIS_METHODS = ['weighted_avg', 'fifo', 'lifo'];
-const ALLOWED_THEME_VARIANTS = ['default', 'dracula', 'solarized', 'nord', 'high-contrast'];
-const ALLOWED_THEME_MODES = ['light', 'dark', 'system', 'schedule'];
-const ALLOWED_EXCLUSION_SCOPES = ['everywhere', 'dashboard', 'statistics'];
+/* ── Zod schemas ─────────────────────────────────────────────────────────────
+ * All object schemas are LOOSE: settings blobs carry frontend-owned fields the
+ * backend doesn't model, and unknown keys must be stored, not stripped. */
 
 // ── belgian_tax_profile validation ───────────────────────────────────────────
 // The PIT engine multiplies these fields unclamped (frontend pit.ts): a
@@ -44,72 +44,122 @@ const TAX_PROFILE_COUNT_FIELDS = [
 const TAX_PROFILE_MONEY_MAX = 1e12;
 const TAX_PROFILE_CENTIMES_MAX = 100000;
 
-function assertFiniteNumberInRange(value, { min, max, field, integer = false }) {
-  if (typeof value !== 'number' || !Number.isFinite(value)) {
-    throw new ValidationError(`${field} must be a finite number`);
-  }
-  if (integer && !Number.isInteger(value)) {
-    throw new ValidationError(`${field} must be an integer`);
-  }
-  if (value < min || value > max) {
-    throw new ValidationError(`${field} must be between ${min} and ${max}`);
-  }
-}
+// The profile steps always send numbers (parseDecimal) or omit/null the field,
+// so `.nullish()` + strict z.number() rejects only garbage (NaN/Infinity/strings
+// included — zod 4's z.number() is finite-only).
+const money = z.number().min(0).max(TAX_PROFILE_MONEY_MAX).nullish();
+const count = z.number().int().min(0).max(1000).nullish();
+const yearNum = z.number().int().min(1900).max(2200).nullish();
+const centimes = z.number().min(0).max(TAX_PROFILE_CENTIMES_MAX).nullish();
 
-function assertBelgianTaxProfileValue(value, label = 'belgian_tax_profile') {
-  if (typeof value !== 'object' || value === null || Array.isArray(value)) {
-    throw new ValidationError(`${label} must be an object`);
-  }
-  const check = (obj, field, opts) => {
-    const v = obj[field];
-    if (v === undefined || v === null) return;
-    assertFiniteNumberInRange(v, { ...opts, field: `${label}.${field}` });
-  };
+const belgianTaxProfileSchema = z.looseObject({
   // % on federal PIT — Belgian municipalities levy 0-9% (matches the UI hint).
-  check(value, 'communalSurchargePercent', { min: 0, max: 9 });
-  for (const field of TAX_PROFILE_MONEY_FIELDS) {
-    check(value, field, { min: 0, max: TAX_PROFILE_MONEY_MAX });
+  communalSurchargePercent: z.number().min(0).max(9).nullish(),
+  ...Object.fromEntries(TAX_PROFILE_MONEY_FIELDS.map((field) => [field, money])),
+  ...Object.fromEntries(TAX_PROFILE_COUNT_FIELDS.map((field) => [field, count])),
+  taxYear: yearNum,
+  mortgageStartYear: yearNum,
+  cadastralCentimesOverride: centimes,
+  additionalResidences: z.array(z.looseObject({
+    cadastralIncome: money,
+    centimesOverride: centimes,
+  })).nullish(),
+});
+
+const HHMM_RE = /^([01]\d|2[0-3]):[0-5]\d$/;
+const hhmm = z.string().regex(HHMM_RE, 'must be HH:MM');
+
+const themeSettingsSchema = z.looseObject({
+  variant: z.enum(['default', 'dracula', 'solarized', 'nord', 'high-contrast']).optional(),
+  mode: z.enum(['light', 'dark', 'system', 'schedule']).optional(),
+  schedule: z.looseObject({
+    lightFrom: hhmm.optional(),
+    darkFrom: hhmm.optional(),
+  }).optional(),
+});
+
+// Shares validateIntArray with the query-param routes so accepted shapes stay
+// identical (scalar wrapped to array, parseInt coercion, 1..2^31-1 bounds); the
+// coerced ints replace the raw input in the stored value, as before.
+const intArrayField = (field) => z.unknown().transform((value, ctx) => {
+  const result = validateIntArray(value, field);
+  if (!result.valid) {
+    ctx.addIssue({ code: 'custom', message: result.error });
+    return z.NEVER;
   }
-  for (const field of TAX_PROFILE_COUNT_FIELDS) {
-    check(value, field, { min: 0, max: 1000, integer: true });
-  }
-  check(value, 'taxYear', { min: 1900, max: 2200, integer: true });
-  check(value, 'mortgageStartYear', { min: 1900, max: 2200, integer: true });
-  check(value, 'cadastralCentimesOverride', { min: 0, max: TAX_PROFILE_CENTIMES_MAX });
-  if (value.additionalResidences !== undefined && value.additionalResidences !== null) {
-    if (!Array.isArray(value.additionalResidences)) {
-      throw new ValidationError(`${label}.additionalResidences must be an array`);
+  return result.value;
+}).optional();
+
+const dashboardSettingsSchema = z.looseObject({
+  excludedCategoryIds: intArrayField('excludedCategoryIds'),
+  excludedRecipientIds: intArrayField('excludedRecipientIds'),
+  excludeHiddenCategories: z.boolean().optional(),
+  exclusionScope: z.enum(['everywhere', 'dashboard', 'statistics']).optional(),
+});
+
+// Saved cash-aware rebalancing plans (ADR-098): a list of user-defined target
+// allocations the rebalance page deploys spendable cash toward. Stored here (not
+// a dedicated table) since they are small, per-install config — same key-value
+// store as the other settings.
+const MAX_REBALANCE_PLANS = 50;
+
+const rebalancePlanSchema = z.looseObject({
+  id: z.string().min(1).max(100),
+  name: z.string().max(80).refine((s) => s.trim().length > 0, 'name must not be blank'),
+  // Weights and cashCap are validated through Number() coercion but stored as
+  // sent (numeric strings are accepted, not rewritten) — pre-zod behavior.
+  targetWeights: z.record(z.string(), z.unknown()).superRefine((weights, ctx) => {
+    const entries = Object.entries(weights);
+    if (entries.length === 0) {
+      ctx.addIssue({ code: 'custom', message: 'targetWeights must have at least one sleeve' });
+      return;
     }
-    value.additionalResidences.forEach((residence, i) => {
-      if (typeof residence !== 'object' || residence === null || Array.isArray(residence)) {
-        throw new ValidationError(`${label}.additionalResidences[${i}] must be an object`);
+    let weightSum = 0;
+    for (const [sleeve, weight] of entries) {
+      const n = Number(weight);
+      if (!Number.isFinite(n) || n < 0) {
+        ctx.addIssue({ code: 'custom', path: [sleeve], message: 'must be a non-negative number' });
+        return;
       }
-      check(residence, 'cadastralIncome', { min: 0, max: TAX_PROFILE_MONEY_MAX });
-      check(residence, 'centimesOverride', { min: 0, max: TAX_PROFILE_CENTIMES_MAX });
-    });
-  }
-}
-
-/** Year-keyed maps: snapshots get the full profile validation per entry. */
-function assertBelgianTaxSnapshotsValue(value) {
-  if (typeof value !== 'object' || value === null || Array.isArray(value)) {
-    throw new ValidationError('belgian_tax_profile_snapshots_v1 must be an object keyed by year');
-  }
-  for (const [year, profile] of Object.entries(value)) {
-    assertBelgianTaxProfileValue(profile, `belgian_tax_profile_snapshots_v1[${year}]`);
-  }
-}
-
-function assertBelgianTaxSnapshotMetaValue(value) {
-  if (typeof value !== 'object' || value === null || Array.isArray(value)) {
-    throw new ValidationError('belgian_tax_profile_snapshot_meta_v1 must be an object keyed by year');
-  }
-  for (const [year, meta] of Object.entries(value)) {
-    if (typeof meta !== 'object' || meta === null || Array.isArray(meta)) {
-      throw new ValidationError(`belgian_tax_profile_snapshot_meta_v1[${year}] must be an object`);
+      weightSum += n;
     }
-  }
-}
+    // An all-zero plan would silently deploy nothing when applied. Reject it at
+    // save time so the user gets immediate feedback rather than a dead plan.
+    if (!(weightSum > 0)) {
+      ctx.addIssue({ code: 'custom', message: 'targetWeights must include at least one positive weight' });
+    }
+  }),
+  cashCap: z.unknown().refine((cap) => {
+    const n = Number(cap);
+    return Number.isFinite(n) && n >= 0;
+  }, 'cashCap must be a non-negative number').optional(),
+});
+
+const rebalancePlansSchema = z.array(rebalancePlanSchema).max(MAX_REBALANCE_PLANS);
+
+// Any plain JSON object (null/array/scalar rejected, all keys passed through).
+const jsonObjectSchema = z.looseObject({});
+
+const SETTING_SCHEMAS = {
+  dashboard_settings: dashboardSettingsSchema,
+  theme_settings: themeSettingsSchema,
+  cost_basis_method: z.enum(['weighted_avg', 'fifo', 'lifo']),
+  includeTransfers: z.boolean(),
+  // Structural guards for the remaining first-party blob keys that previously
+  // accepted arbitrary JSON. Conservative: only reject values whose top-level
+  // type is plainly wrong (a scalar where the frontend always stores an object,
+  // or a non-boolean flag), so a malformed `defaultPageSize:"abc"` blob can no
+  // longer masquerade as a valid settings object.
+  onboarding_complete: z.boolean(),
+  app_settings: jsonObjectSchema,
+  backup_settings: jsonObjectSchema,
+  widget_visibility: jsonObjectSchema,
+  rebalance_plans: rebalancePlansSchema,
+  belgian_tax_profile: belgianTaxProfileSchema,
+  // Year-keyed maps: snapshots get the full profile validation per entry.
+  belgian_tax_profile_snapshots_v1: z.record(z.string(), belgianTaxProfileSchema),
+  belgian_tax_profile_snapshot_meta_v1: z.record(z.string(), jsonObjectSchema),
+};
 
 function assertSettingKeyLength(key, includeKeyInMessage = false) {
   if (key.length > 100) {
@@ -117,114 +167,6 @@ function assertSettingKeyLength(key, includeKeyInMessage = false) {
       ? `Setting key '${key}' too long (max 100 chars)`
       : 'Setting key too long (max 100 chars)';
     throw new ValidationError(msg);
-  }
-}
-
-function assertThemeSettingsValue(value) {
-  if (typeof value !== 'object' || value === null || Array.isArray(value)) {
-    throw new ValidationError('theme_settings must be an object');
-  }
-  if (value.variant !== undefined && !ALLOWED_THEME_VARIANTS.includes(value.variant)) {
-    throw new ValidationError(`Invalid theme variant. Allowed: ${ALLOWED_THEME_VARIANTS.join(', ')}`);
-  }
-  if (value.mode !== undefined && !ALLOWED_THEME_MODES.includes(value.mode)) {
-    throw new ValidationError(`Invalid theme mode. Allowed: ${ALLOWED_THEME_MODES.join(', ')}`);
-  }
-  if (value.schedule !== undefined) {
-    const s = value.schedule;
-    if (typeof s !== 'object' || s === null || Array.isArray(s)) {
-      throw new ValidationError('theme_settings.schedule must be an object');
-    }
-    const hhmm = /^([01]\d|2[0-3]):[0-5]\d$/;
-    if (s.lightFrom !== undefined && (typeof s.lightFrom !== 'string' || !hhmm.test(s.lightFrom))) {
-      throw new ValidationError('schedule.lightFrom must be HH:MM');
-    }
-    if (s.darkFrom !== undefined && (typeof s.darkFrom !== 'string' || !hhmm.test(s.darkFrom))) {
-      throw new ValidationError('schedule.darkFrom must be HH:MM');
-    }
-  }
-}
-
-function assertDashboardSettingsValue(value, { validateExcludeHiddenCategories = false, validateExclusionScope = false } = {}) {
-  // typeof null === 'object' — without the null check, value.excludedCategoryIds
-  // below threw a TypeError that surfaced as a 500 instead of a 400.
-  if (typeof value !== 'object' || value === null || Array.isArray(value)) {
-    throw new ValidationError('dashboard_settings must be an object');
-  }
-
-  if (value.excludedCategoryIds !== undefined) {
-    const cat = validateIntArray(value.excludedCategoryIds, 'excludedCategoryIds');
-    if (!cat.valid) throw new ValidationError(cat.error);
-    value.excludedCategoryIds = cat.value;
-  }
-
-  if (value.excludedRecipientIds !== undefined) {
-    const rec = validateIntArray(value.excludedRecipientIds, 'excludedRecipientIds');
-    if (!rec.valid) throw new ValidationError(rec.error);
-    value.excludedRecipientIds = rec.value;
-  }
-
-  if (validateExcludeHiddenCategories
-    && value.excludeHiddenCategories !== undefined
-    && typeof value.excludeHiddenCategories !== 'boolean') {
-    throw new ValidationError('excludeHiddenCategories must be boolean');
-  }
-
-  if (validateExclusionScope && value.exclusionScope !== undefined
-    && !ALLOWED_EXCLUSION_SCOPES.includes(value.exclusionScope)) {
-    throw new ValidationError('Invalid exclusionScope');
-  }
-}
-
-// Saved cash-aware rebalancing plans (ADR-098): a list of user-defined target
-// allocations the rebalance page deploys spendable cash toward. Stored here (not
-// a dedicated table) since they are small, per-install config — same key-value
-// store as the other settings.
-const MAX_REBALANCE_PLANS = 50;
-function assertRebalancePlansValue(value) {
-  if (!Array.isArray(value)) {
-    throw new ValidationError('rebalance_plans must be an array');
-  }
-  if (value.length > MAX_REBALANCE_PLANS) {
-    throw new ValidationError(`rebalance_plans may contain at most ${MAX_REBALANCE_PLANS} plans`);
-  }
-  for (const plan of value) {
-    if (typeof plan !== 'object' || plan === null || Array.isArray(plan)) {
-      throw new ValidationError('each rebalance plan must be an object');
-    }
-    if (typeof plan.id !== 'string' || plan.id.length === 0 || plan.id.length > 100) {
-      throw new ValidationError('rebalance plan id must be a non-empty string (max 100 chars)');
-    }
-    if (typeof plan.name !== 'string' || plan.name.trim().length === 0 || plan.name.length > 80) {
-      throw new ValidationError('rebalance plan name must be a string of 1-80 chars');
-    }
-    const weights = plan.targetWeights;
-    if (typeof weights !== 'object' || weights === null || Array.isArray(weights)) {
-      throw new ValidationError('rebalance plan targetWeights must be an object');
-    }
-    const keys = Object.keys(weights);
-    if (keys.length === 0) {
-      throw new ValidationError('rebalance plan targetWeights must have at least one sleeve');
-    }
-    let weightSum = 0;
-    for (const [sleeve, weight] of Object.entries(weights)) {
-      const n = Number(weight);
-      if (!Number.isFinite(n) || n < 0) {
-        throw new ValidationError(`rebalance plan targetWeights.${sleeve} must be a non-negative number`);
-      }
-      weightSum += n;
-    }
-    // An all-zero plan would silently deploy nothing when applied. Reject it at
-    // save time so the user gets immediate feedback rather than a dead plan.
-    if (!(weightSum > 0)) {
-      throw new ValidationError('rebalance plan targetWeights must include at least one positive weight');
-    }
-    if (plan.cashCap !== undefined) {
-      const cap = Number(plan.cashCap);
-      if (!Number.isFinite(cap) || cap < 0) {
-        throw new ValidationError('rebalance plan cashCap must be a non-negative number');
-      }
-    }
   }
 }
 
@@ -293,40 +235,19 @@ router.get('/:key', async (req, res) => {
 
 // Per-key value validation shared by the single-key and bulk handlers so the
 // bulk endpoint can't bypass the rules the single-key endpoint enforces.
+// Returns the value to store (zod parse output for schema'd keys — identical to
+// the input except dashboard int-array coercion — the input as-is otherwise).
 function validateSettingValue(key, value) {
-  if (key === 'dashboard_settings') {
-    assertDashboardSettingsValue(value, {
-      validateExcludeHiddenCategories: true,
-      validateExclusionScope: true,
-    });
+  const schema = SETTING_SCHEMAS[key];
+  if (!schema) return value;
+  const result = schema.safeParse(value);
+  if (!result.success) {
+    const msg = result.error.issues
+      .map((issue) => (issue.path.length ? `${issue.path.join('.')}: ${issue.message}` : issue.message))
+      .join('; ');
+    throw new ValidationError(`Invalid ${key}: ${msg}`);
   }
-  if (key === 'theme_settings') assertThemeSettingsValue(value);
-  if (key === 'cost_basis_method') {
-    if (!ALLOWED_COST_BASIS_METHODS.includes(value)) {
-      throw new ValidationError(`Invalid cost_basis_method. Allowed: ${ALLOWED_COST_BASIS_METHODS.join(', ')}`);
-    }
-  }
-  if (key === 'includeTransfers' && typeof value !== 'boolean') {
-    throw new ValidationError('includeTransfers must be a boolean');
-  }
-  // Structural guards for the remaining first-party blob keys that previously
-  // accepted arbitrary JSON. Conservative: only reject values whose top-level
-  // type is plainly wrong (a scalar where the frontend always stores an object,
-  // or a non-boolean flag), so a malformed `defaultPageSize:"abc"` blob can no
-  // longer masquerade as a valid settings object.
-  if (key === 'onboarding_complete' && typeof value !== 'boolean') {
-    throw new ValidationError('onboarding_complete must be a boolean');
-  }
-  if (
-    (key === 'app_settings' || key === 'backup_settings' || key === 'widget_visibility')
-    && (typeof value !== 'object' || value === null || Array.isArray(value))
-  ) {
-    throw new ValidationError(`${key} must be a JSON object`);
-  }
-  if (key === 'rebalance_plans') assertRebalancePlansValue(value);
-  if (key === 'belgian_tax_profile') assertBelgianTaxProfileValue(value);
-  if (key === 'belgian_tax_profile_snapshots_v1') assertBelgianTaxSnapshotsValue(value);
-  if (key === 'belgian_tax_profile_snapshot_meta_v1') assertBelgianTaxSnapshotMetaValue(value);
+  return result.data;
 }
 
 router.put('/:key', async (req, res) => {
@@ -336,9 +257,7 @@ router.put('/:key', async (req, res) => {
   assertSettingKeyLength(key);
   if (value === undefined) throw new ValidationError('Missing "value" in request body');
 
-  validateSettingValue(key, value);
-
-  const result = await settingsRepository.set(key, value);
+  const result = await settingsRepository.set(key, validateSettingValue(key, value));
   res.ok(result);
 });
 
@@ -350,12 +269,13 @@ router.put('/', async (req, res) => {
 
   for (const key of Object.keys(settings)) assertSettingKeyLength(key, true);
 
+  const validated = {};
   for (const [key, value] of Object.entries(settings)) {
-    validateSettingValue(key, value);
+    validated[key] = validateSettingValue(key, value);
   }
 
-  await settingsRepository.setMany(settings);
-  res.ok({ saved: Object.keys(settings).length });
+  await settingsRepository.setMany(validated);
+  res.ok({ saved: Object.keys(validated).length });
 });
 
 router.delete('/:key', async (req, res) => {
