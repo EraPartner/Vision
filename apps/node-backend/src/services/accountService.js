@@ -7,6 +7,7 @@
 
 import accountRepository from '../repositories/accountRepository.js';
 import { NotFoundError, ValidationError, ConflictError } from '../middleware/errorHandler.js';
+import { assertCurrency } from '../middleware/validation.js';
 
 // Enum value sets — mirror migration 0050. Their semantics are activated in ADR-089.
 export const ACCOUNT_TYPES = ['checking', 'savings', 'brokerage', 'crypto_exchange', 'wallet', 'pension', 'liability'];
@@ -51,8 +52,10 @@ function sanitize(body, { requireName }) {
   }
 
   if (body.currency !== undefined) {
-    const c = String(body.currency).toUpperCase();
-    if (!/^[A-Z]{3}$/.test(c)) throw new ValidationError('currency must be a 3-letter ISO code');
+    // Shared ISO-4217 guard; null/'' still reject here (an explicit currency
+    // key must carry a real code), matching the old inline regex.
+    const c = assertCurrency(body.currency);
+    if (c === undefined) throw new ValidationError('currency must be a 3-letter ISO code');
     out.currency = c;
   }
 

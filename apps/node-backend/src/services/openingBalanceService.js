@@ -25,7 +25,7 @@
 import { query, withTransaction } from '../database/connection.js';
 import accountRepository from '../repositories/accountRepository.js';
 import { NotFoundError, ValidationError } from '../middleware/errorHandler.js';
-import { assertYmd } from '../middleware/validation.js';
+import { assertCurrency, assertYmd } from '../middleware/validation.js';
 import { toWireDate } from '../lib/dateFormat.js';
 
 const OPENING_MEMO = 'OPENING BALANCE';
@@ -52,15 +52,9 @@ export function normalizeOpeningBalance(body, account) {
   // bare regex lets through to fail the Postgres DATE cast as a 500.
   assertYmd(date, 'date');
 
-  let currency;
-  if (body?.currency != null && body.currency !== '') {
-    currency = String(body.currency).toUpperCase();
-    if (!/^[A-Z]{3}$/.test(currency)) {
-      throw new ValidationError('currency must be a 3-letter ISO code');
-    }
-  } else {
-    currency = (account?.currency || 'EUR').toUpperCase();
-  }
+  // Shared ISO-4217 guard: absent/empty input returns undefined, so the
+  // account's own currency applies — same fallback as the old inline check.
+  const currency = assertCurrency(body?.currency) ?? (account?.currency || 'EUR').toUpperCase();
 
   return { balance, date, currency };
 }

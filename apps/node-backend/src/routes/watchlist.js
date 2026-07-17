@@ -5,13 +5,12 @@
 import { Router } from 'express';
 import { watchlistRepository } from '../services/watchlistService.js';
 import { NotFoundError, ValidationError } from '../middleware/errorHandler.js';
-import { validateIdParam, validateNumber, assertMaxLength } from '../middleware/validation.js';
+import { validateIdParam, validateNumber, assertMaxLength, assertCurrency } from '../middleware/validation.js';
 import { parsePagination } from '../lib/pagination.js';
 
 const router = Router();
 
 const WATCHLIST_ASSET_CLASSES = new Set(['stock', 'etf', 'crypto', 'metals']);
-const CURRENCY_RE = /^[A-Za-z]{3}$/;
 
 // NUMERIC(18,6) price columns hold at most 12 integer digits — anything
 // larger (or Infinity) previously surfaced as a DB overflow error → 500.
@@ -64,13 +63,13 @@ function validateWatchlistFields(body, { context = 'create' } = {}) {
     );
   }
   if (body.currency !== undefined && body.currency !== null) {
-    if (!CURRENCY_RE.test(String(body.currency))) {
-      throw new ValidationError('currency must be a 3-letter code');
-    }
-    // Normalise to uppercase ISO shape so a lower-case 'usd' can't be stored
-    // and then mismatch the uppercase codes every FX/conversion path expects
-    // (transactions/accounts already uppercase via assertCurrency).
-    body.currency = String(body.currency).toUpperCase();
+    // Shared ISO-4217 guard — validates AND uppercases, so a lower-case 'usd'
+    // can't be stored and then mismatch the uppercase codes every
+    // FX/conversion path expects. '' still rejects (an explicit currency key
+    // must carry a real code), matching the old inline regex.
+    const c = assertCurrency(body.currency);
+    if (c === undefined) throw new ValidationError('currency must be a 3-letter ISO code');
+    body.currency = c;
   }
 }
 

@@ -12,6 +12,7 @@ import { query } from '../database/connection.js';
 import { toWireDate } from '../lib/dateFormat.js';
 import { logger } from '../config/logger.js';
 import { addAll, divide, roundMoney, toDecimal } from '../lib/money.js';
+import { median } from '../lib/math.js';
 
 const MIN_OCCURRENCES = 3; // Minimum transactions to consider a pattern
 const INTERVAL_TOLERANCE = 0.25; // 25% tolerance for interval matching
@@ -49,11 +50,7 @@ function detectInterval(intervals) {
   if (intervals.length === 0) return null;
 
   const avgInterval = intervals.reduce((s, v) => s + v, 0) / intervals.length;
-  const sorted = [...intervals].sort((a, b) => a - b);
-  const mid = Math.floor(sorted.length / 2);
-  const medianInterval = sorted.length % 2 === 0
-    ? (sorted[mid - 1] + sorted[mid]) / 2
-    : sorted[mid];
+  const medianInterval = median(intervals);
 
   // Try to match against known patterns using median (more robust to outliers)
   for (const pattern of INTERVAL_PATTERNS) {
@@ -112,11 +109,7 @@ function detectAmountChanges(transactions) {
 
   // Calculate baseline (median of all amounts)
   const amounts = sorted.map((t) => toDecimal(t.amount).abs().toNumber());
-  const _sortedAmounts = [...amounts].sort((a, b) => a - b);
-  const _mid = Math.floor(_sortedAmounts.length / 2);
-  const medianAmount = _sortedAmounts.length % 2 === 0
-    ? (_sortedAmounts[_mid - 1] + _sortedAmounts[_mid]) / 2
-    : _sortedAmounts[_mid];
+  const medianAmount = median(amounts);
   if (!Number.isFinite(medianAmount) || medianAmount === 0) {
     return [];
   }
