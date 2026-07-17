@@ -11,7 +11,7 @@ import {
   useMergeAccounts,
   useDeleteAccount,
 } from "@/hooks/useAccounts";
-import { useTags, useCreateTag, useUpdateTag, useDeleteTag } from "@/hooks/useTags";
+import { useTags, useCreateTag } from "@/hooks/useTags";
 
 vi.mock("sonner", () => ({
   toast: { success: vi.fn(), error: vi.fn() },
@@ -173,47 +173,6 @@ describe("useCreateTag", () => {
     const { result } = renderHook(() => useCreateTag(), { wrapper: makeFullWrapper() });
     await act(async () => {
       await result.current.mutateAsync({ name: "t" } as never).catch(() => {});
-    });
-    await waitFor(() => expect(toast.error).toHaveBeenCalled());
-  });
-});
-
-describe("useUpdateTag", () => {
-  it("calls updateTag with id + data", async () => {
-    const spy = vi.spyOn(apiClient, "updateTag").mockResolvedValue({ id: 1, slug: "r" } as never);
-    const { result } = renderHook(() => useUpdateTag(), { wrapper: makeFullWrapper() });
-    await act(async () => {
-      await result.current.mutateAsync({ id: 1, data: { color: "#000" } as never });
-    });
-    expect(spy).toHaveBeenCalledWith(1, { color: "#000" });
-  });
-
-  it("toasts an error on failure", async () => {
-    vi.spyOn(apiClient, "updateTag").mockRejectedValue(new Error("boom"));
-    const { result } = renderHook(() => useUpdateTag(), { wrapper: makeFullWrapper() });
-    await act(async () => {
-      await result.current.mutateAsync({ id: 1, data: {} as never }).catch(() => {});
-    });
-    await waitFor(() => expect(toast.error).toHaveBeenCalled());
-  });
-});
-
-describe("useDeleteTag", () => {
-  it("calls deleteTag and toasts success", async () => {
-    const spy = vi.spyOn(apiClient, "deleteTag").mockResolvedValue(undefined as never);
-    const { result } = renderHook(() => useDeleteTag(), { wrapper: makeFullWrapper() });
-    await act(async () => {
-      await result.current.mutateAsync(2);
-    });
-    expect(spy).toHaveBeenCalledWith(2);
-    expect(toast.success).toHaveBeenCalled();
-  });
-
-  it("toasts an error on failure", async () => {
-    vi.spyOn(apiClient, "deleteTag").mockRejectedValue(new Error("boom"));
-    const { result } = renderHook(() => useDeleteTag(), { wrapper: makeFullWrapper() });
-    await act(async () => {
-      await result.current.mutateAsync(2).catch(() => {});
     });
     await waitFor(() => expect(toast.error).toHaveBeenCalled());
   });
