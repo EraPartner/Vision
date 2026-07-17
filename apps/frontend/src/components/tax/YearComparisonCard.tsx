@@ -17,9 +17,8 @@ import { useMemo, useState, useEffect } from 'react';
 import { ArrowDownRight, ArrowUpRight, GitCompare, Lock, Minus, Snowflake } from 'lucide-react';
 import { useBelgianTaxProfile } from '@/contexts/BelgianTaxProfileContext';
 import { useAvailableTaxYears } from '@/hooks/useAvailableTaxYears';
-import { useAppSettings } from '@/contexts/AppSettingsContext';
 import { useLanguage } from '@/contexts/LanguageContext';
-import { numberFormatToLocale } from '@/utils/currency';
+import { useCurrencyFormatter } from '@/hooks/useCurrencyFormatter';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import {
     Select,
@@ -47,7 +46,6 @@ interface MetricRow {
 
 export function YearComparisonCard({ className }: YearComparisonCardProps) {
     const { t } = useLanguage();
-    const { appSettings } = useAppSettings();
     const { viewedYear, displayCalculationForYear } = useBelgianTaxProfile();
     const years = useAvailableTaxYears();
 
@@ -69,15 +67,10 @@ export function YearComparisonCard({ className }: YearComparisonCardProps) {
         }
     }, [compareYear, viewedYear, years, defaultCompareYear]);
 
-    const locale = numberFormatToLocale(appSettings.numberFormat);
-    const currency = appSettings.defaultCurrency || 'EUR';
-    function fmtCurrency(val: number) {
-        return new Intl.NumberFormat(locale, {
-            style: 'currency',
-            currency,
-            maximumFractionDigits: 0,
-        }).format(val);
-    }
+    // Shared cached currency formatter; whole-euro amounts (decimals pinned to
+    // 0, same rendering as the old maximumFractionDigits: 0 formatter).
+    const fmtBase = useCurrencyFormatter();
+    const fmtCurrency = (val: number) => fmtBase(val, undefined, 0);
     function fmtPercent(val: number) {
         return `${val.toFixed(1)}%`;
     }
@@ -120,9 +113,10 @@ export function YearComparisonCard({ className }: YearComparisonCardProps) {
                 format: fmtCurrency,
             },
         ];
-        // fmtCurrency/fmtPercent depend on appSettings via locale — re-include indirectly.
+        // fmtCurrency wraps the shared formatter, whose identity carries the
+        // locale/currency/decimals settings.
         // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [compareYear, viewedYear, displayCalculationForYear, t, locale, currency]);
+    }, [compareYear, viewedYear, displayCalculationForYear, t, fmtBase]);
 
     if (years.length < 2 || compareYear == null || rows == null) {
         return null;

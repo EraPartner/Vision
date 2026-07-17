@@ -17,7 +17,7 @@ import { AreaChart, type AreaSeries, type AreaReferenceLine } from "@/components
 import { Target, TrendingUp, TrendingDown, Check } from "lucide-react";
 import { useLanguage } from '@/contexts/LanguageContext';
 import { useAppSettings } from "@/contexts/AppSettingsContext";
-import { numberFormatToLocale } from "@/utils/currency";
+import { useCurrencyFormatter } from "@/hooks/useCurrencyFormatter";
 import { formatDateWithAppSettings } from "@/components/shared/dateUtils";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
@@ -42,11 +42,12 @@ interface WatchlistChartDialogProps {
 export function WatchlistChartDialog({ item, open, onOpenChange }: WatchlistChartDialogProps) {
   const { t } = useLanguage();
   const { appSettings } = useAppSettings();
-  const locale = numberFormatToLocale(appSettings.numberFormat);
   const [selectedRange, setSelectedRange] = useState(RANGES[0]);
   const [editingPrice, setEditingPrice] = useState(false);
   const [newTargetPrice, setNewTargetPrice] = useState("");
   const queryClient = useQueryClient();
+  // Shared cached currency formatter (app locale + showDecimalPlaces defaults).
+  const formatDisplayCurrency = useCurrencyFormatter();
 
   // This dialog is persistent — it stays mounted and is reused for each item.
   // Reset the per-item view state when the item changes so range selection,
@@ -121,13 +122,6 @@ export function WatchlistChartDialog({ item, open, onOpenChange }: WatchlistChar
   const priceDiff = currentPrice != null && hasValidTarget
     ? ((currentPrice - targetPrice) / targetPrice) * 100
     : null;
-  const formatDisplayCurrency = (value: number, currency: string) =>
-    new Intl.NumberFormat(locale, {
-      style: "currency",
-      currency,
-      minimumFractionDigits: appSettings.showDecimalPlaces,
-      maximumFractionDigits: appSettings.showDecimalPlaces,
-    }).format(value);
 
   // Format chart data
   const formattedData = chartData?.points?.map((p) => ({

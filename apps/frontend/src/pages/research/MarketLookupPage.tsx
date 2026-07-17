@@ -2,6 +2,7 @@ import { useState, useCallback, useMemo } from "react";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { useAppSettings } from "@/contexts/AppSettingsContext";
 import { numberFormatToLocale } from "@/utils/currency";
+import { useCurrencyFormatter } from "@/hooks/useCurrencyFormatter";
 import { formatCompactNumber } from "@/utils/formatCompactNumber";
 import {
   formatDateTimeWithAppSettings,
@@ -134,15 +135,13 @@ export default function MarketLookupPage() {
     if (val == null || isNaN(val)) return "—";
     return new Intl.NumberFormat(locale, opts).format(val);
   }, [locale]);
+  // Shared cached currency formatter; quotes pin 2 decimals regardless of the
+  // showDecimalPlaces setting (unchanged behavior).
+  const fmtCurrency = useCurrencyFormatter("USD");
   const fmtPrice = useCallback((val: number | null | undefined, currency = "USD") => {
     if (val == null || isNaN(val)) return "—";
-    return new Intl.NumberFormat(locale, {
-      style: "currency",
-      currency,
-      minimumFractionDigits: 2,
-      maximumFractionDigits: 2,
-    }).format(val);
-  }, [locale]);
+    return fmtCurrency(val, currency, 2);
+  }, [fmtCurrency]);
   const fmtLargeNum = useCallback(
     (val: number | null | undefined) =>
       formatCompactNumber(val, (v) => fmtNum(v, { maximumFractionDigits: 0 })),

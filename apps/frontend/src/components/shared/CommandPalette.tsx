@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import {
     CommandDialog,
@@ -207,16 +207,28 @@ export function CommandPalette({ open, onOpenChange, onOpenSettings, onOpenShort
     const fxParsed = useMemo(() => parseFxQuery(query.trim()), [query]);
     const fxTarget = fxParsed?.to ?? appSettings.defaultCurrency ?? "EUR";
     const { convertToTarget } = useCurrencyConverter(fxTarget);
+    // One safe currency formatter for both the FX answer and the ticker quote:
+    // user-typed / provider-supplied currency codes can be invalid, so fall back
+    // to "<amount> <code>" instead of throwing (the reason this stays off
+    // useCurrencyFormatter, which assumes valid codes).
+    const fmtSafeCurrency = useCallback((val: number, currency: string, decimals?: number) => {
+        try {
+            return new Intl.NumberFormat(locale, {
+                style: "currency",
+                currency,
+                ...(decimals != null ? { minimumFractionDigits: decimals, maximumFractionDigits: decimals } : {}),
+            }).format(val);
+        } catch {
+            return `${val.toFixed(2)} ${currency}`;
+        }
+    }, [locale]);
+
     const fxResult = useMemo(() => {
         if (!fxParsed || fxParsed.from === fxTarget) return null;
         const converted = convertToTarget(fxParsed.amount, fxParsed.from);
         if (converted == null || !Number.isFinite(converted)) return null;
-        try {
-            return new Intl.NumberFormat(locale, { style: "currency", currency: fxTarget }).format(converted);
-        } catch {
-            return `${converted.toFixed(2)} ${fxTarget}`;
-        }
-    }, [fxParsed, fxTarget, convertToTarget, locale]);
+        return fmtSafeCurrency(converted, fxTarget);
+    }, [fxParsed, fxTarget, convertToTarget, fmtSafeCurrency]);
 
     const calcResult = useMemo(() => {
         if (fxParsed) return null;
@@ -252,13 +264,7 @@ export function CommandPalette({ open, onOpenChange, onOpenSettings, onOpenShort
         enabled: open && debouncedTicker.length >= 1,
         staleTime: 30_000,
     });
-    const fmtTickerPrice = (val: number, currency: string) => {
-        try {
-            return new Intl.NumberFormat(locale, { style: "currency", currency, minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(val);
-        } catch {
-            return `${val.toFixed(2)} ${currency}`;
-        }
-    };
+    const fmtTickerPrice = (val: number, currency: string) => fmtSafeCurrency(val, currency, 2);
 
     useEffect(() => {
         const onKeyDown = (e: KeyboardEvent) => {

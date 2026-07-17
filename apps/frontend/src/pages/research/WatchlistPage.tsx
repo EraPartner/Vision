@@ -10,6 +10,7 @@ import { cn } from "@/lib/utils";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { useAppSettings } from "@/contexts/AppSettingsContext";
 import { numberFormatToLocale } from "@/utils/currency";
+import { useCurrencyFormatter } from "@/hooks/useCurrencyFormatter";
 import { AddToWatchlistDialog } from "@/components/portfolio/AddToWatchlistDialog";
 import { WatchlistChartDialog } from "@/components/portfolio/WatchlistChartDialog";
 import type { WatchlistItem } from "@/types/watchlist";
@@ -75,13 +76,8 @@ export default function WatchlistPage() {
     navigate(`/research/market?symbol=${encodeURIComponent(item.symbol)}`);
   };
 
-  const formatDisplayCurrency = (value: number, currency: string) =>
-    new Intl.NumberFormat(locale, {
-      style: "currency",
-      currency,
-      minimumFractionDigits: appSettings.showDecimalPlaces,
-      maximumFractionDigits: appSettings.showDecimalPlaces,
-    }).format(value);
+  // Shared cached currency formatter (app locale + showDecimalPlaces defaults).
+  const formatDisplayCurrency = useCurrencyFormatter();
 
   const watchlistEmptyLines = t('watchlist.empty').split('\n');
   const watchlistEmptyTitle = watchlistEmptyLines[0] ?? t('watchlist.empty');

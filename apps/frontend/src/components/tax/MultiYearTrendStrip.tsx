@@ -17,9 +17,8 @@ import { useMemo } from 'react';
 import { Lock, Snowflake, TrendingUp } from 'lucide-react';
 import { useBelgianTaxProfile } from '@/contexts/BelgianTaxProfileContext';
 import { useAvailableTaxYears } from '@/hooks/useAvailableTaxYears';
-import { useAppSettings } from '@/contexts/AppSettingsContext';
 import { useLanguage } from '@/contexts/LanguageContext';
-import { numberFormatToLocale } from '@/utils/currency';
+import { useCurrencyFormatter } from '@/hooks/useCurrencyFormatter';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { cn } from '@/lib/utils';
 
@@ -37,19 +36,12 @@ const DEFAULT_MAX_YEARS = 8;
 
 export function MultiYearTrendStrip({ className, maxYears = DEFAULT_MAX_YEARS }: MultiYearTrendStripProps) {
     const { t } = useLanguage();
-    const { appSettings } = useAppSettings();
     const { viewedYear, setViewedYear, displayCalculationForYear } = useBelgianTaxProfile();
     const years = useAvailableTaxYears();
-    const locale = numberFormatToLocale(appSettings.numberFormat);
-    const currency = appSettings.defaultCurrency || 'EUR';
-
-    function fmtCurrency(val: number) {
-        return new Intl.NumberFormat(locale, {
-            style: 'currency',
-            currency,
-            maximumFractionDigits: 0,
-        }).format(val);
-    }
+    // Shared cached currency formatter; whole-euro tiles (decimals pinned to 0,
+    // same rendering as the old maximumFractionDigits: 0 formatter).
+    const fmtBase = useCurrencyFormatter();
+    const fmtCurrency = (val: number) => fmtBase(val, undefined, 0);
 
     const tiles = useMemo(() => {
         const limited = years.slice(0, maxYears);

@@ -10,6 +10,7 @@ import {
 import { useLanguage } from "@/contexts/LanguageContext";
 import { useAppSettings } from "@/contexts/AppSettingsContext";
 import { numberFormatToLocale } from "@/utils/currency";
+import { useCurrencyFormatter } from "@/hooks/useCurrencyFormatter";
 import { useDebounce, SEARCH_DEBOUNCE_MS } from "@/hooks/useDebounce";
 import { useOnlineStatus } from "@/hooks/useOnlineStatus";
 import { apiClient } from "@/lib/api";
@@ -108,13 +109,8 @@ export default function ResearchHomePage() {
     navigate(`/research/market?symbol=${encodeURIComponent(symbol)}`);
   };
 
-  const formatPrice = (value: number, currency: string) =>
-    new Intl.NumberFormat(locale, {
-      style: "currency",
-      currency,
-      minimumFractionDigits: appSettings.showDecimalPlaces,
-      maximumFractionDigits: appSettings.showDecimalPlaces,
-    }).format(value);
+  // Shared cached currency formatter (app locale + showDecimalPlaces defaults).
+  const formatPrice = useCurrencyFormatter();
 
   return (
     <div className="space-y-6 animate-in">

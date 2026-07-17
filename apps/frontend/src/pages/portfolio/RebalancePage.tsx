@@ -4,7 +4,7 @@
  * how to deploy spendable budgeting cash into underweight sleeves without selling.
  * Custom plans are persisted via useRebalancePlans (the `rebalance_plans` setting).
  */
-import { useMemo, useState } from "react";
+import { useState } from "react";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { PageHeader } from "@/components/shared/PageHeader";
@@ -24,6 +24,7 @@ import {
 import { Scale, Loader2, ArrowDownToLine, Plus, Trash2, Save } from "lucide-react";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { useAppSettings } from "@/contexts/AppSettingsContext";
+import { useCurrencyFormatter } from "@/hooks/useCurrencyFormatter";
 import { apiClient } from "@/lib/api";
 import { useRebalancePlans } from "@/hooks/useRebalancePlans";
 import type { ModelPortfolio, RebalanceResponse } from "@/lib/api/crossWorkspace";
@@ -84,9 +85,11 @@ export default function RebalancePage() {
   const [useCashCap, setUseCashCap] = useState(false);
   const [cashCapInput, setCashCapInput] = useState("");
 
-  const fmt = useMemo(() => new Intl.NumberFormat(undefined, {
-    style: "currency", currency, maximumFractionDigits: 0,
-  }), [currency]);
+  // Shared cached currency formatter. Also fixes a locale bug: the old inline
+  // Intl.NumberFormat passed `undefined` locale, ignoring the user's
+  // number-format setting; amounts now follow it like every other page.
+  const fmtCurrency = useCurrencyFormatter(currency);
+  const fmt = (v: number) => fmtCurrency(v, currency, 0);
   // Show up to one decimal so fractional targets (e.g. All Weather's 7.5%) read
   // accurately and the column doesn't visibly sum to 101% from rounding.
   const pct = (v: number) => `${(v * 100).toLocaleString(undefined, { maximumFractionDigits: 1 })}%`;
@@ -303,7 +306,7 @@ export default function RebalancePage() {
                     className="w-40 text-right tabular-nums"
                     aria-label={t("rebalance.editor.capCash")}
                   />
-                  <p className="text-xs text-muted-foreground">{t("rebalance.editor.capHint", { amount: fmt.format(availableCash) })}</p>
+                  <p className="text-xs text-muted-foreground">{t("rebalance.editor.capHint", { amount: fmt(availableCash) })}</p>
                 </div>
               )}
             </div>
@@ -353,12 +356,12 @@ export default function RebalancePage() {
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <Card className="glass-regular">
               <CardHeader className="pb-2"><CardTitle className="text-sm text-muted-foreground">{t("rebalance.availableCash")}</CardTitle></CardHeader>
-              <CardContent><p className="text-2xl font-bold text-primary">{fmt.format(availableCash || result.availableCash)}</p>
+              <CardContent><p className="text-2xl font-bold text-primary">{fmt(availableCash || result.availableCash)}</p>
                 <p className="text-xs text-muted-foreground mt-1">{t("rebalance.availableCashHint")}</p></CardContent>
             </Card>
             <Card className="glass-regular">
               <CardHeader className="pb-2"><CardTitle className="text-sm text-muted-foreground">{t("rebalance.totalDeployed")}</CardTitle></CardHeader>
-              <CardContent><p className="text-2xl font-bold text-accent">{fmt.format(totalDeployed)}</p>
+              <CardContent><p className="text-2xl font-bold text-accent">{fmt(totalDeployed)}</p>
                 <p className="text-xs text-muted-foreground mt-1">{t("rebalance.totalDeployedHint")}</p></CardContent>
             </Card>
           </div>
@@ -384,10 +387,10 @@ export default function RebalancePage() {
                     return (
                       <TableRow key={sleeve}>
                         <TableCell className="font-medium">{sleeveLabel(sleeve)}</TableCell>
-                        <TableCell className="text-right tabular-nums">{fmt.format(result.actualValues[sleeve] ?? 0)}</TableCell>
+                        <TableCell className="text-right tabular-nums">{fmt(result.actualValues[sleeve] ?? 0)}</TableCell>
                         <TableCell className="text-right tabular-nums">{pct(result.targetWeights[sleeve] ?? 0)}</TableCell>
                         <TableCell className="text-right tabular-nums">
-                          {deploy > 0 ? <Badge variant="secondary">+{fmt.format(deploy)}</Badge> : <span className="text-muted-foreground">—</span>}
+                          {deploy > 0 ? <Badge variant="secondary">+{fmt(deploy)}</Badge> : <span className="text-muted-foreground">—</span>}
                         </TableCell>
                       </TableRow>
                     );
