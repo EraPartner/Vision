@@ -4,8 +4,9 @@
  * page should fail at least one of these tests.
  *
  * These tests run against the dev stack (frontend + backend via Docker
- * Compose in CI; local `bun run dev` otherwise). Visit each major page,
- * trigger a representative action, and assert the response renders.
+ * Compose in CI; local `bun run dev` otherwise). Visit each major page and
+ * assert it renders without runtime errors. Write-path coverage (create /
+ * edit / delete roundtrips) lives in `mutations-parity.spec.ts`.
  */
 import { test, expect } from "@playwright/test";
 
@@ -44,34 +45,4 @@ test.describe("Page load smoke (catches backend ↔ frontend drift)", () => {
             expect(errors).toHaveLength(0);
         });
     }
-});
-
-test.describe("Mutation roundtrip (catches contract drift on writes)", () => {
-    test("Create category → list refetches and shows new item", async ({ page }) => {
-        await page.goto("/categories");
-        await expect(page.getByRole("heading", { level: 1, name: /categories/i })).toBeVisible();
-
-        const unique = `TEST_E2E_${Date.now()}`;
-        await page.getByRole("button", { name: /add category/i }).first().click();
-        await expect(page.getByRole("dialog")).toBeVisible();
-        await page.getByLabel(/general/i).fill(unique);
-        await page.getByLabel(/detail/i).fill("AUTO");
-        await page.getByRole("button", { name: /create/i }).click();
-        await expect(page.getByRole("dialog")).not.toBeVisible({ timeout: 4000 });
-        // The newly-created category should appear after refetch
-        await expect(page.getByText(unique).first()).toBeVisible({ timeout: 8000 });
-    });
-
-    test("Create recipient → list refetches and shows new item", async ({ page }) => {
-        await page.goto("/recipients");
-        await expect(page.getByRole("heading", { level: 1, name: /recipients/i })).toBeVisible();
-
-        const unique = `Test_E2E_${Date.now()}`;
-        await page.getByRole("button", { name: /add recipient/i }).first().click();
-        await expect(page.getByRole("dialog")).toBeVisible();
-        await page.getByLabel(/^name$/i).fill(unique);
-        await page.getByRole("button", { name: /^create$/i }).click();
-        await expect(page.getByRole("dialog")).not.toBeVisible({ timeout: 4000 });
-        await expect(page.getByText(unique).first()).toBeVisible({ timeout: 8000 });
-    });
 });
