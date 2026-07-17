@@ -88,7 +88,7 @@ Each finding has a stable ID (`SIMP-01` … `SIMP-84`; rounds 1–3 are SIMP-01�
 | SIMP-66 | R4: toolchain version-drift hazards (typescript ^7 vs pinned 6.0.3; vite pinned below declared floor) | root + app `package.json` | correctness | Medium | n/a | FIXED (#103) |
 | SIMP-67 | R4: 13 currency-formatter stragglers bypass shared hooks (incl. RebalancePage locale bug) | see finding | ~90–110 | Low | n/a | FIXED (#103) |
 | SIMP-68 | R4: `buildSetClauses`/`buildInsert` — 7 unmigrated hand-rolled sites | 6 repositories + `recipientPatternService.js` | ~35 | Low | n/a | FIXED (#103) |
-| SIMP-69 | R4: `shared-utils/category` stranded — 4 inline reimplementations live on | `RecipientsPage`, `DashboardPage`, `dataImportService.js` | ~30–35 (or delete ~120) | Low | n/a | OPEN |
+| SIMP-69 | R4: `shared-utils/category` stranded — 4 inline reimplementations live on | `RecipientsPage`, `DashboardPage`, `dataImportService.js` | ~30–35 (or delete ~120) | Low | n/a | FIXED (#103) |
 | SIMP-70 | R4: Y-M-D formatter stragglers vs canonical `dateFormat.js` (3 TZ-sensitive copies + 7 epoch-ms sites + `todayYmd`) | see finding | ~28 | None | n/a | OPEN |
 | SIMP-71 | R4: small helper-exists batch (`median` ×2, `assertCurrency` ×3, `triggerBlobDownload`, `AbortSignal.timeout`, `RegExp.escape`) | see finding | ~50 | None–low | n/a | OPEN |
 | SIMP-72 | R4: `routes/settings.js` hand-rolls ~185 lines of validators; zod installed and in use one file over | `routes/settings.js` | ~90–110 net | Low–medium | n/a | OPEN |

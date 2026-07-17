@@ -19,6 +19,7 @@ import { apiClient } from "@/lib/api";
 import type { Recipient } from "@/lib/api";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useAppSettings } from "@/contexts/AppSettingsContext";
+import { parseCategoryName } from "@vision/shared-utils";
 import { EmptyState } from "@/components/shared/EmptyState";
 import { PageError } from "@/components/shared/PageError";
 
@@ -213,13 +214,11 @@ export default function RecipientsPage() {
 
                 const formatCategoryName = (categoryName?: string): string => {
                     if (!categoryName) return t('recipientsPage.none');
-                    const parts = categoryName.split(':');
-                    if (parts.length > 1) {
-                        // Join back — the DETAIL text itself may contain colons.
-                        const detail = parts.slice(1).join(':').trim();
-                        return detail.charAt(0) + detail.slice(1).toLowerCase();
-                    }
-                    return categoryName.charAt(0) + categoryName.slice(1).toLowerCase();
+                    // Shared GENERAL:DETAIL split (first ':' only, detail may
+                    // contain colons); sentence-case the detail for display.
+                    const { general, detail } = parseCategoryName(categoryName);
+                    const label = detail || general;
+                    return label.charAt(0) + label.slice(1).toLowerCase();
                 };
 
                 const displayName = formatCategoryName(row.default_category_name);
