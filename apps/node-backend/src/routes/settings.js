@@ -161,7 +161,12 @@ const SETTING_SCHEMAS = {
   belgian_tax_profile_snapshot_meta_v1: z.record(z.string(), jsonObjectSchema),
 };
 
+const FORBIDDEN_SETTING_KEYS = new Set(['__proto__', 'constructor', 'prototype']);
+
 function assertSettingKeyLength(key, includeKeyInMessage = false) {
+  if (FORBIDDEN_SETTING_KEYS.has(key)) {
+    throw new ValidationError(`Setting key '${key}' is not allowed`);
+  }
   if (key.length > 100) {
     const msg = includeKeyInMessage
       ? `Setting key '${key}' too long (max 100 chars)`
@@ -238,7 +243,7 @@ router.get('/:key', async (req, res) => {
 // Returns the value to store (zod parse output for schema'd keys — identical to
 // the input except dashboard int-array coercion — the input as-is otherwise).
 function validateSettingValue(key, value) {
-  const schema = SETTING_SCHEMAS[key];
+  const schema = Object.hasOwn(SETTING_SCHEMAS, key) ? SETTING_SCHEMAS[key] : undefined;
   if (!schema) return value;
   const result = schema.safeParse(value);
   if (!result.success) {
@@ -269,7 +274,7 @@ router.put('/', async (req, res) => {
 
   for (const key of Object.keys(settings)) assertSettingKeyLength(key, true);
 
-  const validated = {};
+  const validated = Object.create(null);
   for (const [key, value] of Object.entries(settings)) {
     validated[key] = validateSettingValue(key, value);
   }
