@@ -1,10 +1,9 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
+import { mockTxConnection } from './helpers/repoMocks.js';
 const { mockClient } = vi.hoisted(() => ({ mockClient: { query: vi.fn() } }));
 
-vi.mock('../src/database/connection.js', () => ({
-  withTransaction: vi.fn(async (fn) => fn(mockClient)),
-}));
+vi.mock('../src/database/connection.js', () => mockTxConnection(mockClient));
 
 import { moveHolding } from '../src/services/portfolio/moveHoldingService.js';
 import { ValidationError, NotFoundError } from '../src/middleware/errorHandler.js';

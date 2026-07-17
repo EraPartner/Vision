@@ -1,5 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
+import { mockLogger } from './helpers/mockLogger.js';
 // fetchFinancialData used to fetch all seven data sources regardless of which
 // report sections were requested. These tests pin that it now only fetches the
 // sources the requested sections render from, and still fetches everything when
@@ -24,7 +25,7 @@ vi.mock('../src/repositories/infoRepository.js', () => ({
   default: { getPlannedExpensesNextMonth: vi.fn().mockResolvedValue({ summary: {}, daily_data: [] }) },
 }));
 vi.mock('../src/config/logger.js', () => ({
-  logger: { info: vi.fn(), warn: vi.fn(), error: vi.fn(), debug: vi.fn() },
+  logger: mockLogger(),
 }));
 
 import { computeMonthlySummary } from '../src/services/calculations/aggregation/monthly.js';

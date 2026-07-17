@@ -4,6 +4,7 @@
  */
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 
+import { mockLogger } from './helpers/mockLogger.js';
 vi.mock('../src/database/connection.js', () => ({
   query: vi.fn(),
   queryPrepared: vi.fn(),
@@ -27,12 +28,7 @@ import infoRepository from '../src/repositories/infoRepository.js';
 import { clearMvCache } from '../src/repositories/infoRepository.js';
 
 vi.mock('../src/config/logger.js', () => ({
-  logger: {
-    debug: vi.fn(),
-    info: vi.fn(),
-    warn: vi.fn(),
-    error: vi.fn(),
-  },
+  logger: mockLogger(),
 }));
 
 import { logger } from '../src/config/logger.js';

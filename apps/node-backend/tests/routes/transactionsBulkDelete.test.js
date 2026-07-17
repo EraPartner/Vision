@@ -2,6 +2,8 @@
  * POST /bulk-delete — id-mode, filter-mode, validation, atomicity.
  */
 import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { mockPooledTxConnection } from '../helpers/repoMocks.js';
+import { mockTransactionRepository, mockDeduplication, mockTransferReconciliation, mockCurrencyConversion, mockAttachmentRecordService, mockAttachmentService } from '../helpers/transactionsRouteMocks.js';
 import { mockLogger } from '../helpers/mockLogger.js';
 import { createMockRouter, createMockResponse } from '../helpers/routeHarness.js';
 
@@ -12,68 +14,23 @@ vi.mock('express', () => ({
   Router: () => mockRouter,
 }));
 
-vi.mock('../../src/repositories/transactionRepository.js', () => ({
-  default: {
-    getAllWithCount: vi.fn(),
-    getUncategorisedWithCount: vi.fn(),
-    getById: vi.fn(),
-    create: vi.fn(),
-    update: vi.fn(),
-    hardDelete: vi.fn(),
-  },
-}));
+vi.mock('../../src/repositories/transactionRepository.js', () => mockTransactionRepository());
 
-vi.mock('../../src/services/deduplication.js', () => ({
-  isManualDuplicate: vi.fn(async () => ({ isDuplicate: false })),
-  recordManualRawTransaction: vi.fn(async () => undefined),
-}));
+vi.mock('../../src/services/deduplication.js', () => mockDeduplication());
 
 vi.mock('../../src/config/logger.js', () => ({
   logger: mockLogger(),
 }));
 
-vi.mock('../../src/services/transferReconciliationService.js', () => ({
-  scheduleReconcile: vi.fn(),
-  getTransferSuggestions: vi.fn(),
-  markTransfer: vi.fn(),
-  unmarkTransfer: vi.fn(),
-}));
+vi.mock('../../src/services/transferReconciliationService.js', () => mockTransferReconciliation());
 
-vi.mock('../../src/services/currency/currencyConversionService.js', () => ({
-  convertRowsToEur: vi.fn(async (rows) => rows),
-}));
+vi.mock('../../src/services/currency/currencyConversionService.js', () => mockCurrencyConversion());
 
-vi.mock('../../src/database/connection.js', () => {
-  const getClient = vi.fn();
-  return {
-    query: vi.fn(),
-    getClient,
-    withTransaction: vi.fn(async (fn) => {
-      const client = await getClient();
-      try {
-        await client.query('BEGIN');
-        const result = await fn(client);
-        await client.query('COMMIT');
-        return result;
-      } catch (err) {
-        try { await client.query('ROLLBACK'); } catch {}
-        throw err;
-      } finally {
-        client.release();
-      }
-    }),
-  };
-});
+vi.mock('../../src/database/connection.js', () => mockPooledTxConnection());
 
-vi.mock('../../src/services/attachmentRecordService.js', () => ({
-  attachmentRepository: {
-    listPathsByTransactionIds: vi.fn(async () => []),
-  },
-}));
+vi.mock('../../src/services/attachmentRecordService.js', () => mockAttachmentRecordService());
 
-vi.mock('../../src/services/attachmentService.js', () => ({
-  removeAttachmentFile: vi.fn(async () => undefined),
-}));
+vi.mock('../../src/services/attachmentService.js', () => mockAttachmentService());
 
 await import('../../src/routes/transactions.js');
 

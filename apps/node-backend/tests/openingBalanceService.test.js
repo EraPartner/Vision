@@ -1,10 +1,8 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-vi.mock('../src/database/connection.js', () => ({
-  query: vi.fn(),
-  // Transaction shim: run the callback directly; a throw propagates (= rollback).
-  withTransaction: vi.fn(async (fn) => fn({ query: vi.fn() })),
-}));
+import { mockTxConnection } from './helpers/repoMocks.js';
+// Transaction shim: runs the callback directly; a throw propagates (= rollback).
+vi.mock('../src/database/connection.js', () => mockTxConnection({ query: vi.fn() }));
 vi.mock('../src/repositories/accountRepository.js', () => ({
   default: { getById: vi.fn() },
 }));

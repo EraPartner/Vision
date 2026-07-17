@@ -1,5 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
+import { mockLogger } from './helpers/mockLogger.js';
 vi.mock('../src/database/connection.js', () => ({
   query: vi.fn(),
 }));
@@ -9,7 +10,7 @@ vi.mock('../src/services/currency/currencyConversionService.js', () => ({
 }));
 
 vi.mock('../src/config/logger.js', () => ({
-  logger: { info: vi.fn(), warn: vi.fn(), error: vi.fn(), debug: vi.fn() },
+  logger: mockLogger(),
 }));
 
 vi.mock('../src/repositories/infoRepositoryHelpers.js', async () => {

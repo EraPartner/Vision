@@ -1,5 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
+import { mockLogger } from './helpers/mockLogger.js';
 const mockListActiveUnexecuted = vi.fn();
 const mockListRecentUnlinked = vi.fn();
 const mockGetClusterRootMap = vi.fn();
@@ -22,7 +23,7 @@ vi.mock('../src/services/plannedExecutionService.js', () => ({
   executePlanned: (...a) => mockExecutePlanned(...a),
 }));
 vi.mock('../src/config/logger.js', () => ({
-  logger: { info: vi.fn(), warn: vi.fn(), error: vi.fn(), debug: vi.fn() },
+  logger: mockLogger(),
 }));
 
 import {

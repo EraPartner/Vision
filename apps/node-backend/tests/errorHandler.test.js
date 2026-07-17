@@ -7,8 +7,9 @@
 
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 
+import { mockLogger } from './helpers/mockLogger.js';
 vi.mock('../src/config/logger.js', () => ({
-  logger: { error: vi.fn(), warn: vi.fn(), info: vi.fn() },
+  logger: mockLogger(),
 }));
 
 const {

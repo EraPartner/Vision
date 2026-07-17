@@ -1,12 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 
-vi.mock('../src/database/connection.js', () => {
-  const mockQuery = vi.fn();
-  return {
-    query: mockQuery,
-    withTransaction: vi.fn(async (fn) => fn({ query: mockQuery })),
-  };
-});
+import { mockTxConnection } from './helpers/repoMocks.js';
+vi.mock('../src/database/connection.js', () => mockTxConnection());
 
 import { query } from '../src/database/connection.js';
 import investmentRepository, { __resetInvestmentSchemaCache } from '../src/repositories/investmentRepository.js';

@@ -1,11 +1,11 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 
-vi.mock('../src/database/connection.js', () => ({
-  query: vi.fn(),
-  withTransaction: vi.fn(),
-  // Outside a real transaction this is a passthrough — mirror that.
-  withSavepointIfInTransaction: vi.fn((_name, fn) => fn()),
-}));
+import { mockConnection } from './helpers/repoMocks.js';
+vi.mock('../src/database/connection.js', () =>
+  mockConnection({
+    // Outside a real transaction this is a passthrough — mirror that.
+    withSavepointIfInTransaction: vi.fn((_name, fn) => fn()),
+  }));
 
 import { query, withTransaction } from '../src/database/connection.js';
 import portfolioTransactionRepository, { __resetPortfolioTransactionSchemaCache } from '../src/repositories/portfolioTransactionRepository.js';

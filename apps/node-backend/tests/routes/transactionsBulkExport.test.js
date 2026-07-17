@@ -2,6 +2,8 @@
  * POST /bulk-export — id-mode + filter-mode streaming, format gate.
  */
 import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { mockConnection } from '../helpers/repoMocks.js';
+import { mockTransactionRepository, mockDeduplication, mockMaterializedViews, mockCurrencyConversion } from '../helpers/transactionsRouteMocks.js';
 import { mockLogger } from '../helpers/mockLogger.js';
 import { createMockRouter, createMockResponse } from '../helpers/routeHarness.js';
 
@@ -12,39 +14,19 @@ vi.mock('express', () => ({
   Router: () => mockRouter,
 }));
 
-vi.mock('../../src/repositories/transactionRepository.js', () => ({
-  default: {
-    getAllWithCount: vi.fn(),
-    getUncategorisedWithCount: vi.fn(),
-    getById: vi.fn(),
-    create: vi.fn(),
-    update: vi.fn(),
-    hardDelete: vi.fn(),
-  },
-}));
+vi.mock('../../src/repositories/transactionRepository.js', () => mockTransactionRepository());
 
-vi.mock('../../src/services/deduplication.js', () => ({
-  isManualDuplicate: vi.fn(async () => ({ isDuplicate: false })),
-  recordManualRawTransaction: vi.fn(async () => undefined),
-}));
+vi.mock('../../src/services/deduplication.js', () => mockDeduplication());
 
 vi.mock('../../src/config/logger.js', () => ({
   logger: mockLogger(),
 }));
 
-vi.mock('../../src/services/materializedViewService.js', () => ({
-  scheduleRefresh: vi.fn(),
-}));
+vi.mock('../../src/services/materializedViewService.js', () => mockMaterializedViews());
 
-vi.mock('../../src/services/currency/currencyConversionService.js', () => ({
-  convertRowsToEur: vi.fn(async (rows) => rows),
-}));
+vi.mock('../../src/services/currency/currencyConversionService.js', () => mockCurrencyConversion());
 
-vi.mock('../../src/database/connection.js', () => ({
-  query: vi.fn(),
-  getClient: vi.fn(),
-  withTransaction: vi.fn(),
-}));
+vi.mock('../../src/database/connection.js', () => mockConnection({ getClient: vi.fn() }));
 
 await import('../../src/routes/transactions.js');
 

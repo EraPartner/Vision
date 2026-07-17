@@ -1,12 +1,13 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 
+import { mockLogger } from './helpers/mockLogger.js';
 // getNetWorthByAccount should read the persisted per-account split (migration
 // 0074) rather than replaying the full computeDailySnapshots day-walk, and fall
 // back to the replay only when the side table is missing or empty.
 vi.mock('../src/database/connection.js', () => ({ query: vi.fn() }));
 
 vi.mock('../src/config/logger.js', () => ({
-  logger: { info: vi.fn(), warn: vi.fn(), error: vi.fn(), debug: vi.fn() },
+  logger: mockLogger(),
 }));
 
 vi.mock('../src/services/portfolio/snapshotBuilder.js', () => ({

@@ -1,28 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-vi.mock('../src/database/connection.js', () => {
-  const getClient = vi.fn();
-  return {
-    query: vi.fn(),
-    getClient,
-    withTransaction: vi.fn(async (fn) => {
-      const client = await getClient();
-      try {
-        await client.query('BEGIN');
-        const result = await fn(client);
-        await client.query('COMMIT');
-        return result;
-      } catch (err) {
-        try {
-          await client.query('ROLLBACK');
-        } catch {}
-        throw err;
-      } finally {
-        client.release();
-      }
-    }),
-  };
-});
+import { mockPooledTxConnection } from './helpers/repoMocks.js';
+vi.mock('../src/database/connection.js', () => mockPooledTxConnection());
 
 vi.mock('../src/middleware/validation.js', () => ({
   sanitizeUpdateFields: vi.fn((_, fields) => fields),

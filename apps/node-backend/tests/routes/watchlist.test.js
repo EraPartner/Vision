@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { mockLogger } from '../helpers/mockLogger.js';
 import { createMockRouter, createMockResponse } from '../helpers/routeHarness.js';
 
 const { router: mockRouter, handlers: routeHandlers } = createMockRouter();
@@ -19,12 +20,7 @@ vi.mock('../../src/repositories/watchlistRepository.js', () => ({
 }));
 
 vi.mock('../../src/config/logger.js', () => ({
-  logger: {
-    debug: vi.fn(),
-    error: vi.fn(),
-    info: vi.fn(),
-    warn: vi.fn(),
-  },
+  logger: mockLogger(),
 }));
 
 import { watchlistRepository } from '../../src/repositories/watchlistRepository.js';

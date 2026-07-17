@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
+import { mockLogger } from './helpers/mockLogger.js';
 // scheduleReconcile debounce (TODO E20): the old trailing-only 1s window only
 // coalesced edits made <1s apart — human editing cadence paid a full-corpus
 // reconcile per save — and a steady mutation stream deferred it indefinitely.
@@ -15,7 +16,7 @@ async function loadService() {
     withTransaction: vi.fn(async (fn) => fn({ query })),
   }));
   vi.doMock('../src/config/logger.js', () => ({
-    logger: { info: vi.fn(), warn: vi.fn(), error: vi.fn(), debug: vi.fn() },
+    logger: mockLogger(),
   }));
   vi.doMock('../src/services/aggregationRefresh.js', () => ({ scheduleAggregationRefresh }));
 

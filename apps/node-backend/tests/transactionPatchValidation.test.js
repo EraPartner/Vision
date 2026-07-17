@@ -1,48 +1,37 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { mockLogger } from './helpers/mockLogger.js';
+import { mockConnection } from './helpers/repoMocks.js';
+import { createMockRouter, createMockResponse } from './helpers/routeHarness.js';
+import {
+  mockDeduplication,
+  mockCurrencyConversion,
+  mockTransferReconciliation,
+} from './helpers/transactionsRouteMocks.js';
 
 // PATCH /api/transactions/:id validation parity (TODO E8): the handler
 // whitelist-filtered only — a cleared inline date ('') survived to Postgres
 // as `SET "date" = ''` (22007 → 500), and non-numeric amount / non-integer
 // FK ids surfaced as DB cast errors instead of 400s.
 
-const routeHandlers = {};
-const mockRouter = {
-  get: vi.fn((path, ...args) => { routeHandlers[`get:${path}`] = args[args.length - 1]; }),
-  post: vi.fn((path, ...args) => { routeHandlers[`post:${path}`] = args[args.length - 1]; }),
-  put: vi.fn((path, ...args) => { routeHandlers[`put:${path}`] = args[args.length - 1]; }),
-  patch: vi.fn((path, ...args) => { routeHandlers[`patch:${path}`] = args[args.length - 1]; }),
-  delete: vi.fn((path, ...args) => { routeHandlers[`delete:${path}`] = args[args.length - 1]; }),
-  use: vi.fn(),
-};
+const { router: mockRouter, handlers: routeHandlers } = createMockRouter();
 
 vi.mock('express', () => ({
   default: { Router: () => mockRouter },
   Router: () => mockRouter,
 }));
-vi.mock('../src/database/connection.js', () => ({
-  query: vi.fn().mockResolvedValue({ rows: [] }),
-  withTransaction: vi.fn(),
-}));
+vi.mock('../src/database/connection.js', () =>
+  mockConnection({ query: vi.fn().mockResolvedValue({ rows: [] }) }));
 vi.mock('../src/services/transactionService.js', () => ({
   default: {
     update: vi.fn().mockResolvedValue({ id: 1, amount: '10', date: '2026-07-01' }),
   },
 }));
-vi.mock('../src/services/deduplication.js', () => ({
-  isManualDuplicate: vi.fn(),
-  recordManualRawTransaction: vi.fn(),
-}));
-vi.mock('../src/services/currency/currencyConversionService.js', () => ({ convertRowsToEur: vi.fn() }));
+vi.mock('../src/services/deduplication.js', () => mockDeduplication());
+vi.mock('../src/services/currency/currencyConversionService.js', () => mockCurrencyConversion());
 vi.mock('../src/config/logger.js', () => ({
   logger: mockLogger(),
 }));
-vi.mock('../src/services/transferReconciliationService.js', () => ({
-  scheduleReconcile: vi.fn(),
-  getTransferSuggestions: vi.fn(),
-  markTransfer: vi.fn(),
-  unmarkTransfer: vi.fn(),
-}));
+vi.mock('../src/services/transferReconciliationService.js', () => mockTransferReconciliation());
 vi.mock('../src/services/plannedMatchService.js', () => ({ autoLinkTransactions: vi.fn() }));
 vi.mock('../src/services/transactionExport.js', () => ({
   EXPORT_MAX_LIST_SIZE: 1000,
@@ -56,15 +45,8 @@ import transactionRepository from '../src/services/transactionService.js';
 import { ValidationError } from '../src/middleware/errorHandler.js';
 await import('../src/routes/transactions.js');
 
-function mockRes() {
-  const res = { json: vi.fn(), status: vi.fn(), send: vi.fn() };
-  res.status.mockReturnValue(res);
-  res.ok = (data) => res.json({ ok: true, data });
-  return res;
-}
-
 const patchReq = (body) => ({ params: { id: '1' }, body });
-const runPatch = (body) => routeHandlers['patch:/:id'](patchReq(body), mockRes());
+const runPatch = (body) => routeHandlers['patch:/:id'](patchReq(body), createMockResponse());
 
 beforeEach(() => {
   vi.clearAllMocks();

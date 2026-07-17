@@ -1,16 +1,15 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 
+import { mockLogger } from './helpers/mockLogger.js';
+import { mockTxConnection } from './helpers/repoMocks.js';
 // computeAndStoreSnapshots writes both the aggregate snapshots and the ADR-100
 // per-account split into portfolio_snapshot_accounts (migration 0074), inside a
 // single transaction. client.query and query share one mock so we can inspect
 // every statement the writer issued.
-vi.mock('../src/database/connection.js', () => {
-  const query = vi.fn();
-  return { query, withTransaction: vi.fn(async (fn) => fn({ query })) };
-});
+vi.mock('../src/database/connection.js', () => mockTxConnection());
 
 vi.mock('../src/config/logger.js', () => ({
-  logger: { info: vi.fn(), warn: vi.fn(), error: vi.fn(), debug: vi.fn() },
+  logger: mockLogger(),
 }));
 
 import { query } from '../src/database/connection.js';

@@ -1,16 +1,14 @@
 // @vitest-environment jsdom
 import { describe, it, expect, vi, afterEach } from "vitest";
-import { createElement, type ReactNode } from "react";
 import { renderHook, act, waitFor } from "@testing-library/react";
-import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { apiClient } from "@/lib/api";
 import { usePlannedPayments } from "@/hooks/usePlannedPayments";
+import { createQueryWrapper } from "@/test/queryWrapper";
 import type { PlannedTransaction } from "@/types/api";
 
 // The hook busts the ['upcomingPlannedPayments'] React Query cache on mutations,
 // so it must render inside a QueryClientProvider.
-const wrapper = ({ children }: { children: ReactNode }) =>
-    createElement(QueryClientProvider, { client: new QueryClient() }, children);
+const wrapper = createQueryWrapper();
 
 const STUB: PlannedTransaction = {
     id: 1,

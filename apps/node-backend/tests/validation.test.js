@@ -3,6 +3,7 @@
  * Mirrors validation-related tests from Python test suite.
  */
 import { describe, it, expect, vi } from 'vitest';
+import { createMockResponse as mockResponse } from './helpers/routeHarness.js';
 import {
   validateId, sanitizeString, validateNumber,
   validateDateString,
@@ -180,9 +181,3 @@ describe('Validation Middleware', () => {
     });
   });
 });
-
-function mockResponse() {
-  const res = { json: vi.fn(), status: vi.fn() };
-  res.status.mockReturnValue(res);
-  return res;
-}

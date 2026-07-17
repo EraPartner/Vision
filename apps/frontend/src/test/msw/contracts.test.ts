@@ -397,12 +397,28 @@ describe("ADR-026 error envelope (E3)", () => {
     });
 });
 
+const aggregationsEnvelope = (dataSchema: z.ZodTypeAny) =>
+    z.object({
+        data: dataSchema,
+        meta: z.object({
+            computedAt: z.string(),
+            source: z.enum(["live", "cache"]),
+        }),
+    });
+
 describe("Missing GET endpoint contracts (E4)", () => {
-    it("GET /api/aggregations/monthly-summary returns expected shape", async () => {
-        const data = await getEnvelope("/api/aggregations/monthly-summary");
-        validate(
-            z.object({
-                data: z.object({
+    // The /api/info/* routes below return OBJECTS, not bare scalars/arrays —
+    // schemas match the backend (routes/info/statistics.js) and the
+    // live-contracts suite so the two contract suites can no longer assert
+    // contradictory shapes.
+    // (transaction-summary case removed — Phase 9 deleted that route.)
+    it.each<[string, string, string, z.ZodTypeAny]>([
+        [
+            "GET /api/aggregations/monthly-summary returns expected shape",
+            "/api/aggregations/monthly-summary",
+            "GET /api/aggregations/monthly-summary",
+            aggregationsEnvelope(
+                z.object({
                     months: z.array(z.unknown()),
                     summary: z.object({
                         total_spending: z.number(),
@@ -413,46 +429,29 @@ describe("Missing GET endpoint contracts (E4)", () => {
                         period_end: z.string(),
                     }),
                 }),
-                meta: z.object({
-                    computedAt: z.string(),
-                    source: z.enum(["live", "cache"]),
-                }),
-            }),
-            data,
-            "GET /api/aggregations/monthly-summary",
-        );
-    });
-
-    it("GET /api/aggregations/recipient-insights returns expected shape", async () => {
-        const data = await getEnvelope("/api/aggregations/recipient-insights");
-        validate(
-            z.object({
-                data: z.object({
+            ),
+        ],
+        [
+            "GET /api/aggregations/recipient-insights returns expected shape",
+            "/api/aggregations/recipient-insights",
+            "GET /api/aggregations/recipient-insights",
+            aggregationsEnvelope(
+                z.object({
                     topMerchants: z.array(z.unknown()),
                     monthOverMonth: z.array(z.unknown()),
                 }),
-                meta: z.object({
-                    computedAt: z.string(),
-                    source: z.enum(["live", "cache"]),
-                }),
-            }),
-            data,
-            "GET /api/aggregations/recipient-insights",
-        );
-    });
-
-    it("GET /api/import/batches returns expected shape", async () => {
-        const data = await getEnvelope("/api/import/batches");
-        validate(
-            z.object({ batches: z.array(z.unknown()), total: z.number() }),
-            data,
+            ),
+        ],
+        [
+            "GET /api/import/batches returns expected shape",
+            "/api/import/batches",
             "GET /api/import/batches",
-        );
-    });
-
-    it("GET /api/import/batches/:id/preview returns expected shape", async () => {
-        const data = await getEnvelope("/api/import/batches/1/preview");
-        validate(
+            z.object({ batches: z.array(z.unknown()), total: z.number() }),
+        ],
+        [
+            "GET /api/import/batches/:id/preview returns expected shape",
+            "/api/import/batches/1/preview",
+            "GET /api/import/batches/:id/preview",
             z.object({
                 batch_id: z.number(),
                 groups: z.array(z.unknown()),
@@ -464,62 +463,57 @@ describe("Missing GET endpoint contracts (E4)", () => {
                     unresolved: z.number(),
                 }),
             }),
-            data,
-            "GET /api/import/batches/:id/preview",
-        );
-    });
-
-    it("GET /api/splits/owed returns expected shape", async () => {
-        const data = await getEnvelope("/api/splits/owed");
-        validate(z.object({ items: z.array(z.unknown()) }), data, "GET /api/splits/owed");
-    });
-
-    it("GET /api/market/quote returns expected shape", async () => {
-        const data = await getEnvelope("/api/market/quote");
-        validate(z.object({ quotes: z.array(z.unknown()) }), data, "GET /api/market/quote");
-    });
-
-    it("GET /api/market/search returns expected shape", async () => {
-        const data = await getEnvelope("/api/market/search");
-        validate(z.object({ results: z.array(z.unknown()) }), data, "GET /api/market/search");
-    });
-
-    it("GET /api/watchlist returns expected shape", async () => {
-        const data = await getEnvelope("/api/watchlist");
-        validate(
+        ],
+        [
+            "GET /api/splits/owed returns expected shape",
+            "/api/splits/owed",
+            "GET /api/splits/owed",
+            z.object({ items: z.array(z.unknown()) }),
+        ],
+        [
+            "GET /api/market/quote returns expected shape",
+            "/api/market/quote",
+            "GET /api/market/quote",
+            z.object({ quotes: z.array(z.unknown()) }),
+        ],
+        [
+            "GET /api/market/search returns expected shape",
+            "/api/market/search",
+            "GET /api/market/search",
+            z.object({ results: z.array(z.unknown()) }),
+        ],
+        [
+            "GET /api/watchlist returns expected shape",
+            "/api/watchlist",
+            "GET /api/watchlist",
             z.object({
                 items: z.array(z.unknown()),
                 total: z.number(),
                 limit: z.number(),
                 offset: z.number(),
             }),
-            data,
-            "GET /api/watchlist",
-        );
-    });
-
-    it("GET /api/ai/status returns expected shape", async () => {
-        const data = await getEnvelope("/api/ai/status");
-        validate(
+        ],
+        [
+            "GET /api/ai/status returns expected shape",
+            "/api/ai/status",
+            "GET /api/ai/status",
             z.object({
                 ok: z.boolean(),
                 baseUrl: z.string(),
                 defaultModel: z.string(),
                 enabled: z.boolean(),
             }),
-            data,
-            "GET /api/ai/status",
-        );
-    });
-
-    it("GET /api/ai/conversations returns array", async () => {
-        const data = await getEnvelope("/api/ai/conversations");
-        validate(z.array(z.unknown()), data, "GET /api/ai/conversations");
-    });
-
-    it("GET /api/info/portfolio-performance returns expected shape", async () => {
-        const data = await getEnvelope("/api/info/portfolio-performance");
-        validate(
+        ],
+        [
+            "GET /api/ai/conversations returns array",
+            "/api/ai/conversations",
+            "GET /api/ai/conversations",
+            z.array(z.unknown()),
+        ],
+        [
+            "GET /api/info/portfolio-performance returns expected shape",
+            "/api/info/portfolio-performance",
+            "GET /api/info/portfolio-performance",
             z.object({
                 snapshots: z.array(z.unknown()),
                 currency: z.string(),
@@ -528,14 +522,11 @@ describe("Missing GET endpoint contracts (E4)", () => {
                 absolute_return: z.number(),
                 percentage_return: z.number(),
             }),
-            data,
-            "GET /api/info/portfolio-performance",
-        );
-    });
-
-    it("GET /api/info/net-worth returns expected shape", async () => {
-        const data = await getEnvelope("/api/info/net-worth");
-        validate(
+        ],
+        [
+            "GET /api/info/net-worth returns expected shape",
+            "/api/info/net-worth",
+            "GET /api/info/net-worth",
             z.object({
                 current: z.object({
                     liquid: z.number(),
@@ -546,98 +537,90 @@ describe("Missing GET endpoint contracts (E4)", () => {
                 monthlyChangePercent: z.number(),
                 snapshots: z.array(z.unknown()),
             }),
-            data,
-            "GET /api/info/net-worth",
-        );
-    });
-
-    // These routes return OBJECTS, not bare scalars/arrays — schemas match the
-    // backend (routes/info/statistics.js) and the live-contracts suite so the two
-    // contract suites can no longer assert contradictory shapes.
-    // (transaction-summary case removed — Phase 9 deleted that route.)
-    it("GET /api/info/transaction-count returns { total_transactions }", async () => {
-        const data = await getEnvelope("/api/info/transaction-count");
-        validate(z.object({ total_transactions: z.number() }), data, "GET /api/info/transaction-count");
-    });
-
-    it("GET /api/info/recurring-patterns returns { patterns, total }", async () => {
-        const data = await getEnvelope("/api/info/recurring-patterns");
-        validate(z.object({ patterns: z.array(z.unknown()), total: z.number() }), data, "GET /api/info/recurring-patterns");
-    });
-
-    it("GET /api/info/banks returns { banks }", async () => {
-        const data = await getEnvelope("/api/info/banks");
-        validate(z.object({ banks: z.array(z.unknown()) }), data, "GET /api/info/banks");
-    });
-
-    it("GET /api/info/supported-adapters returns { adapters, total_count }", async () => {
-        const data = await getEnvelope("/api/info/supported-adapters");
-        validate(z.object({ adapters: z.array(z.unknown()), total_count: z.number() }), data, "GET /api/info/supported-adapters");
-    });
-
-    it("GET /api/info/inflation-rates returns array", async () => {
-        const data = await getEnvelope("/api/info/inflation-rates");
-        validate(z.array(z.unknown()), data, "GET /api/info/inflation-rates");
-    });
-
-    it("GET /api/admin/endpoint-liveness returns array", async () => {
-        const data = await getEnvelope("/api/admin/endpoint-liveness");
-        validate(z.array(z.unknown()), data, "GET /api/admin/endpoint-liveness");
-    });
-
-    it("GET /api/admin/database/stats returns expected shape", async () => {
-        const data = await getEnvelope("/api/admin/database/stats");
-        validate(
-            z.object({ tables: z.array(z.unknown()), db_size: z.null() }),
-            data,
+        ],
+        [
+            "GET /api/info/transaction-count returns { total_transactions }",
+            "/api/info/transaction-count",
+            "GET /api/info/transaction-count",
+            z.object({ total_transactions: z.number() }),
+        ],
+        [
+            "GET /api/info/recurring-patterns returns { patterns, total }",
+            "/api/info/recurring-patterns",
+            "GET /api/info/recurring-patterns",
+            z.object({ patterns: z.array(z.unknown()), total: z.number() }),
+        ],
+        [
+            "GET /api/info/banks returns { banks }",
+            "/api/info/banks",
+            "GET /api/info/banks",
+            z.object({ banks: z.array(z.unknown()) }),
+        ],
+        [
+            "GET /api/info/supported-adapters returns { adapters, total_count }",
+            "/api/info/supported-adapters",
+            "GET /api/info/supported-adapters",
+            z.object({ adapters: z.array(z.unknown()), total_count: z.number() }),
+        ],
+        [
+            "GET /api/info/inflation-rates returns array",
+            "/api/info/inflation-rates",
+            "GET /api/info/inflation-rates",
+            z.array(z.unknown()),
+        ],
+        [
+            "GET /api/admin/endpoint-liveness returns array",
+            "/api/admin/endpoint-liveness",
+            "GET /api/admin/endpoint-liveness",
+            z.array(z.unknown()),
+        ],
+        [
+            "GET /api/admin/database/stats returns expected shape",
+            "/api/admin/database/stats",
             "GET /api/admin/database/stats",
-        );
-    });
-
-    it("GET /api/admin/providers/health returns array", async () => {
-        const data = await getEnvelope("/api/admin/providers/health");
-        validate(z.array(z.unknown()), data, "GET /api/admin/providers/health");
-    });
-
-    it("GET /api/admin/metrics/requests returns array", async () => {
-        const data = await getEnvelope("/api/admin/metrics/requests");
-        validate(z.array(z.unknown()), data, "GET /api/admin/metrics/requests");
-    });
-
-    it("GET /api/admin/endpoints returns array", async () => {
-        const data = await getEnvelope("/api/admin/endpoints");
-        validate(z.array(z.unknown()), data, "GET /api/admin/endpoints");
+            z.object({ tables: z.array(z.unknown()), db_size: z.null() }),
+        ],
+        [
+            "GET /api/admin/providers/health returns array",
+            "/api/admin/providers/health",
+            "GET /api/admin/providers/health",
+            z.array(z.unknown()),
+        ],
+        [
+            "GET /api/admin/metrics/requests returns array",
+            "/api/admin/metrics/requests",
+            "GET /api/admin/metrics/requests",
+            z.array(z.unknown()),
+        ],
+        [
+            "GET /api/admin/endpoints returns array",
+            "/api/admin/endpoints",
+            "GET /api/admin/endpoints",
+            z.array(z.unknown()),
+        ],
+    ])("%s", async (_name, path, label, schema) => {
+        validate(schema, await getEnvelope(path), label);
     });
 });
 
 // ── E5: Phase F1 — full contract surface coverage ────────────────────────────
 
-const aggregationsEnvelope = (dataSchema: z.ZodTypeAny) =>
-    z.object({
-        data: dataSchema,
-        meta: z.object({
-            computedAt: z.string(),
-            source: z.enum(["live", "cache"]),
-        }),
-    });
-
 describe("Phase F1: extended GET endpoint contracts", () => {
-    it("GET /api/admin/update/check returns update status", async () => {
-        const data = await getEnvelope("/api/admin/update/check");
-        validate(
+    it.each<[string, string, string, z.ZodTypeAny]>([
+        [
+            "GET /api/admin/update/check returns update status",
+            "/api/admin/update/check",
+            "GET /api/admin/update/check",
             z.object({
                 available: z.boolean(),
                 current: z.string(),
                 latest: z.string(),
             }),
-            data,
-            "GET /api/admin/update/check",
-        );
-    });
-
-    it("GET /api/aggregations/cashflow-comparison returns expected shape", async () => {
-        const data = await getEnvelope("/api/aggregations/cashflow-comparison");
-        validate(
+        ],
+        [
+            "GET /api/aggregations/cashflow-comparison returns expected shape",
+            "/api/aggregations/cashflow-comparison",
+            "GET /api/aggregations/cashflow-comparison",
             aggregationsEnvelope(
                 z.object({
                     days_in_month: z.number(),
@@ -648,28 +631,22 @@ describe("Phase F1: extended GET endpoint contracts", () => {
                     with_planned: z.array(z.unknown()),
                 }),
             ),
-            data,
-            "GET /api/aggregations/cashflow-comparison",
-        );
-    });
-
-    it("GET /api/aggregations/cashflow-forecast-accuracy returns expected shape", async () => {
-        const data = await getEnvelope("/api/aggregations/cashflow-forecast-accuracy");
-        validate(
+        ],
+        [
+            "GET /api/aggregations/cashflow-forecast-accuracy returns expected shape",
+            "/api/aggregations/cashflow-forecast-accuracy",
+            "GET /api/aggregations/cashflow-forecast-accuracy",
             aggregationsEnvelope(
                 z.object({
                     methods: z.array(z.unknown()),
                     limit_months: z.number(),
                 }),
             ),
-            data,
-            "GET /api/aggregations/cashflow-forecast-accuracy",
-        );
-    });
-
-    it("GET /api/aggregations/cashflow-forecast-methods returns expected shape", async () => {
-        const data = await getEnvelope("/api/aggregations/cashflow-forecast-methods");
-        validate(
+        ],
+        [
+            "GET /api/aggregations/cashflow-forecast-methods returns expected shape",
+            "/api/aggregations/cashflow-forecast-methods",
+            "GET /api/aggregations/cashflow-forecast-methods",
             aggregationsEnvelope(
                 z.object({
                     month: z.string(),
@@ -684,14 +661,11 @@ describe("Phase F1: extended GET endpoint contracts", () => {
                     include_planned: z.boolean(),
                 }),
             ),
-            data,
-            "GET /api/aggregations/cashflow-forecast-methods",
-        );
-    });
-
-    it("GET /api/aggregations/cashflow-forecast-rolling returns expected shape", async () => {
-        const data = await getEnvelope("/api/aggregations/cashflow-forecast-rolling");
-        validate(
+        ],
+        [
+            "GET /api/aggregations/cashflow-forecast-rolling returns expected shape",
+            "/api/aggregations/cashflow-forecast-rolling",
+            "GET /api/aggregations/cashflow-forecast-rolling",
             aggregationsEnvelope(
                 z.object({
                     window_start: z.string(),
@@ -708,41 +682,29 @@ describe("Phase F1: extended GET endpoint contracts", () => {
                     include_planned: z.boolean(),
                 }),
             ),
-            data,
-            "GET /api/aggregations/cashflow-forecast-rolling",
-        );
-    });
-
-    it("GET /api/aggregations/category-pivot returns expected shape", async () => {
-        const data = await getEnvelope("/api/aggregations/category-pivot");
-        validate(
-            aggregationsEnvelope(z.object({ categoryPivot: z.record(z.string(), z.unknown()) })),
-            data,
+        ],
+        [
+            "GET /api/aggregations/category-pivot returns expected shape",
+            "/api/aggregations/category-pivot",
             "GET /api/aggregations/category-pivot",
-        );
-    });
-
-    it("GET /api/aggregations/recipient-by-year returns expected shape", async () => {
-        const data = await getEnvelope("/api/aggregations/recipient-by-year");
-        validate(
-            aggregationsEnvelope(z.object({ recipientsByYear: z.record(z.string(), z.unknown()) })),
-            data,
+            aggregationsEnvelope(z.object({ categoryPivot: z.record(z.string(), z.unknown()) })),
+        ],
+        [
+            "GET /api/aggregations/recipient-by-year returns expected shape",
+            "/api/aggregations/recipient-by-year",
             "GET /api/aggregations/recipient-by-year",
-        );
-    });
-
-    it("GET /api/aggregations/recipient-pivot returns expected shape", async () => {
-        const data = await getEnvelope("/api/aggregations/recipient-pivot");
-        validate(
-            aggregationsEnvelope(z.object({ recipientPivot: z.record(z.string(), z.unknown()) })),
-            data,
+            aggregationsEnvelope(z.object({ recipientsByYear: z.record(z.string(), z.unknown()) })),
+        ],
+        [
+            "GET /api/aggregations/recipient-pivot returns expected shape",
+            "/api/aggregations/recipient-pivot",
             "GET /api/aggregations/recipient-pivot",
-        );
-    });
-
-    it("GET /api/aggregations/sankey returns expected shape", async () => {
-        const data = await getEnvelope("/api/aggregations/sankey");
-        validate(
+            aggregationsEnvelope(z.object({ recipientPivot: z.record(z.string(), z.unknown()) })),
+        ],
+        [
+            "GET /api/aggregations/sankey returns expected shape",
+            "/api/aggregations/sankey",
+            "GET /api/aggregations/sankey",
             aggregationsEnvelope(
                 z.object({
                     nodes: z.array(z.unknown()),
@@ -750,23 +712,17 @@ describe("Phase F1: extended GET endpoint contracts", () => {
                     year: z.number(),
                 }),
             ),
-            data,
-            "GET /api/aggregations/sankey",
-        );
-    });
-
-    it("GET /api/aggregations/category-breakdown returns expected shape", async () => {
-        const data = await getEnvelope("/api/aggregations/category-breakdown");
-        validate(
-            aggregationsEnvelope(z.object({ categories: z.array(z.unknown()) })),
-            data,
+        ],
+        [
+            "GET /api/aggregations/category-breakdown returns expected shape",
+            "/api/aggregations/category-breakdown",
             "GET /api/aggregations/category-breakdown",
-        );
-    });
-
-    it("GET /api/aggregations/bank-balances returns expected shape", async () => {
-        const data = await getEnvelope("/api/aggregations/bank-balances");
-        validate(
+            aggregationsEnvelope(z.object({ categories: z.array(z.unknown()) })),
+        ],
+        [
+            "GET /api/aggregations/bank-balances returns expected shape",
+            "/api/aggregations/bank-balances",
+            "GET /api/aggregations/bank-balances",
             aggregationsEnvelope(
                 z.object({
                     accounts: z.array(z.unknown()),
@@ -775,23 +731,17 @@ describe("Phase F1: extended GET endpoint contracts", () => {
                     total_history: z.array(z.unknown()),
                 }),
             ),
-            data,
-            "GET /api/aggregations/bank-balances",
-        );
-    });
-
-    it("GET /api/aggregations/average-vs-current returns expected shape", async () => {
-        const data = await getEnvelope("/api/aggregations/average-vs-current");
-        validate(
-            aggregationsEnvelope(z.object({ months: z.array(z.unknown()) })),
-            data,
+        ],
+        [
+            "GET /api/aggregations/average-vs-current returns expected shape",
+            "/api/aggregations/average-vs-current",
             "GET /api/aggregations/average-vs-current",
-        );
-    });
-
-    it("GET /api/ai/conversations/:id returns conversation + messages", async () => {
-        const data = await getEnvelope("/api/ai/conversations/conv-1");
-        validate(
+            aggregationsEnvelope(z.object({ months: z.array(z.unknown()) })),
+        ],
+        [
+            "GET /api/ai/conversations/:id returns conversation + messages",
+            "/api/ai/conversations/conv-1",
+            "GET /api/ai/conversations/:id",
             z.object({
                 conversation: z.object({
                     id: z.string(),
@@ -802,43 +752,41 @@ describe("Phase F1: extended GET endpoint contracts", () => {
                 }),
                 messages: z.array(z.unknown()),
             }),
-            data,
-            "GET /api/ai/conversations/:id",
-        );
-    });
-
-    it("GET /api/ai/models returns models array", async () => {
-        const data = await getEnvelope("/api/ai/models");
-        validate(z.object({ models: z.array(z.unknown()) }), data, "GET /api/ai/models");
-    });
-
-    it("GET /api/attachments/transaction/:id returns items array", async () => {
-        const data = await getEnvelope("/api/attachments/transaction/1");
-        validate(
-            z.object({ items: z.array(z.unknown()) }),
-            data,
+        ],
+        [
+            "GET /api/ai/models returns models array",
+            "/api/ai/models",
+            "GET /api/ai/models",
+            z.object({ models: z.array(z.unknown()) }),
+        ],
+        [
+            "GET /api/attachments/transaction/:id returns items array",
+            "/api/attachments/transaction/1",
             "GET /api/attachments/transaction/:id",
-        );
-    });
-
-    it("GET /api/categories/:id returns single category", async () => {
-        const data = await getEnvelope("/api/categories/1");
-        validate(CategoryItemSchema, data, "GET /api/categories/:id");
-    });
-
-    it("GET /api/info/portfolio-summary returns totals shape", async () => {
-        const data = await getEnvelope("/api/info/portfolio-summary");
-        validate(PortfolioSummarySchema.partial({ computed_at: true }), data, "GET /api/info/portfolio-summary");
-    });
-
-    it("GET /api/investments/providers returns providers shape", async () => {
-        const data = await getEnvelope("/api/investments/providers");
-        validate(z.object({ providers: z.array(z.unknown()) }), data, "GET /api/investments/providers");
-    });
-
-    it("GET /api/investments/transactions returns paginated shape", async () => {
-        const data = await getEnvelope("/api/investments/transactions");
-        validate(
+            z.object({ items: z.array(z.unknown()) }),
+        ],
+        [
+            "GET /api/categories/:id returns single category",
+            "/api/categories/1",
+            "GET /api/categories/:id",
+            CategoryItemSchema,
+        ],
+        [
+            "GET /api/info/portfolio-summary returns totals shape",
+            "/api/info/portfolio-summary",
+            "GET /api/info/portfolio-summary",
+            PortfolioSummarySchema.partial({ computed_at: true }),
+        ],
+        [
+            "GET /api/investments/providers returns providers shape",
+            "/api/investments/providers",
+            "GET /api/investments/providers",
+            z.object({ providers: z.array(z.unknown()) }),
+        ],
+        [
+            "GET /api/investments/transactions returns paginated shape",
+            "/api/investments/transactions",
+            "GET /api/investments/transactions",
             z.object({
                 items: z.array(z.unknown()),
                 total: z.number().int().nonnegative(),
@@ -846,81 +794,103 @@ describe("Phase F1: extended GET endpoint contracts", () => {
                 offset: z.number().int().nonnegative(),
                 links: z.array(LinkSchema),
             }),
-            data,
-            "GET /api/investments/transactions",
-        );
-    });
-
-    it("GET /api/investments/:id/transactions returns items+total", async () => {
-        const data = await getEnvelope("/api/investments/1/transactions");
-        validate(
-            z.object({ items: z.array(z.unknown()), total: z.number() }),
-            data,
+        ],
+        [
+            "GET /api/investments/:id/transactions returns items+total",
+            "/api/investments/1/transactions",
             "GET /api/investments/:id/transactions",
-        );
-    });
-
-    it("GET /api/recipients/clusters returns clusters array", async () => {
-        const data = await getEnvelope("/api/recipients/clusters");
-        validate(z.object({ clusters: z.array(z.unknown()) }), data, "GET /api/recipients/clusters");
-    });
-
-    it("GET /api/recipients/:id/aliases returns aliases array", async () => {
-        const data = await getEnvelope("/api/recipients/1/aliases");
-        validate(z.object({ aliases: z.array(z.unknown()) }), data, "GET /api/recipients/:id/aliases");
-    });
-
-    it("GET /api/recipients/:id/patterns returns paginated patterns", async () => {
-        const data = await getEnvelope("/api/recipients/1/patterns");
-        validate(
             z.object({ items: z.array(z.unknown()), total: z.number() }),
-            data,
+        ],
+        [
+            "GET /api/recipients/clusters returns clusters array",
+            "/api/recipients/clusters",
+            "GET /api/recipients/clusters",
+            z.object({ clusters: z.array(z.unknown()) }),
+        ],
+        [
+            "GET /api/recipients/:id/aliases returns aliases array",
+            "/api/recipients/1/aliases",
+            "GET /api/recipients/:id/aliases",
+            z.object({ aliases: z.array(z.unknown()) }),
+        ],
+        [
+            "GET /api/recipients/:id/patterns returns paginated patterns",
+            "/api/recipients/1/patterns",
             "GET /api/recipients/:id/patterns",
-        );
-    });
-
-    it("GET /api/saved-charts returns charts array", async () => {
-        const data = await getEnvelope("/api/saved-charts");
-        validate(z.object({ charts: z.array(z.unknown()) }), data, "GET /api/saved-charts");
-    });
-
-    it("GET /api/splits/transaction/:id returns items array", async () => {
-        const data = await getEnvelope("/api/splits/transaction/1");
-        validate(z.object({ items: z.array(z.unknown()) }), data, "GET /api/splits/transaction/:id");
-    });
-
-    it("GET /api/splits/owed/:recipientId returns items + total_owed", async () => {
-        const data = await getEnvelope("/api/splits/owed/1");
-        validate(
-            z.object({ items: z.array(z.unknown()), total_owed: z.number() }),
-            data,
+            z.object({ items: z.array(z.unknown()), total: z.number() }),
+        ],
+        [
+            "GET /api/saved-charts returns charts array",
+            "/api/saved-charts",
+            "GET /api/saved-charts",
+            z.object({ charts: z.array(z.unknown()) }),
+        ],
+        [
+            "GET /api/splits/transaction/:id returns items array",
+            "/api/splits/transaction/1",
+            "GET /api/splits/transaction/:id",
+            z.object({ items: z.array(z.unknown()) }),
+        ],
+        [
+            "GET /api/splits/owed/:recipientId returns items + total_owed",
+            "/api/splits/owed/1",
             "GET /api/splits/owed/:recipientId",
-        );
-    });
-
-    it("GET /api/transactions/:id returns single transaction", async () => {
-        const data = await getEnvelope("/api/transactions/1");
-        validate(TransactionItemSchema, data, "GET /api/transactions/:id");
-    });
-
-    it("GET /api/planned-transactions/due-soon returns array", async () => {
-        const data = await getEnvelope("/api/planned-transactions/due-soon");
-        validate(z.array(z.unknown()), data, "GET /api/planned-transactions/due-soon");
+            z.object({ items: z.array(z.unknown()), total_owed: z.number() }),
+        ],
+        [
+            "GET /api/transactions/:id returns single transaction",
+            "/api/transactions/1",
+            "GET /api/transactions/:id",
+            TransactionItemSchema,
+        ],
+        [
+            "GET /api/planned-transactions/due-soon returns array",
+            "/api/planned-transactions/due-soon",
+            "GET /api/planned-transactions/due-soon",
+            z.array(z.unknown()),
+        ],
+    ])("%s", async (_name, path, label, schema) => {
+        validate(schema, await getEnvelope(path), label);
     });
 });
 
 describe("Phase F1: extended mutation contracts", () => {
-    it("POST /api/admin/database/vacuum returns message", async () => {
-        const data = await mutateEnvelope("POST", "/api/admin/database/vacuum");
-        validate(z.object({ message: z.string() }), data, "POST /api/admin/database/vacuum");
+    const MessageSchema = z.object({ message: z.string() });
+    const ConversationWithMessagesSchema = z.object({
+        conversation: z.object({
+            id: z.string(),
+            title: z.string(),
+            model: z.string(),
+            createdAt: z.string(),
+            updatedAt: z.string(),
+        }),
+        messages: z.array(z.unknown()),
     });
 
-    it("POST /api/ai/chat returns message shape", async () => {
-        const data = await mutateEnvelope("POST", "/api/ai/chat", {
-            conversationId: "conv-1",
-            content: "test",
-        });
-        validate(
+    it.each<
+        [
+            string,
+            "POST" | "PATCH" | "PUT" | "DELETE",
+            string,
+            Record<string, unknown> | undefined,
+            string,
+            z.ZodTypeAny,
+        ]
+    >([
+        [
+            "POST /api/admin/database/vacuum returns message",
+            "POST",
+            "/api/admin/database/vacuum",
+            undefined,
+            "POST /api/admin/database/vacuum",
+            MessageSchema,
+        ],
+        [
+            "POST /api/ai/chat returns message shape",
+            "POST",
+            "/api/ai/chat",
+            { conversationId: "conv-1", content: "test" },
+            "POST /api/ai/chat",
             z.object({
                 id: z.string(),
                 conversationId: z.string(),
@@ -928,51 +898,45 @@ describe("Phase F1: extended mutation contracts", () => {
                 content: z.string(),
                 createdAt: z.string(),
             }),
-            data,
-            "POST /api/ai/chat",
-        );
-    });
-
-    it("POST /api/ai/conversations returns conversation+messages", async () => {
-        const data = await mutateEnvelope("POST", "/api/ai/conversations", { title: "Test" });
-        validate(
-            z.object({
-                conversation: z.object({
-                    id: z.string(),
-                    title: z.string(),
-                    model: z.string(),
-                    createdAt: z.string(),
-                    updatedAt: z.string(),
-                }),
-                messages: z.array(z.unknown()),
-            }),
-            data,
+        ],
+        [
+            "POST /api/ai/conversations returns conversation+messages",
+            "POST",
+            "/api/ai/conversations",
+            { title: "Test" },
             "POST /api/ai/conversations",
-        );
-    });
-
-    it("DELETE /api/ai/conversations/:id returns message", async () => {
-        const data = await mutateEnvelope("DELETE", "/api/ai/conversations/conv-1");
-        validate(z.object({ message: z.string() }), data, "DELETE /api/ai/conversations/:id");
-    });
-
-    it("POST /api/info/exchange-rates/refresh returns refresh result", async () => {
-        const data = await mutateEnvelope("POST", "/api/info/exchange-rates/refresh");
-        validate(
-            z.object({ message: z.string(), rates_updated: z.number() }),
-            data,
+            ConversationWithMessagesSchema,
+        ],
+        [
+            "DELETE /api/ai/conversations/:id returns message",
+            "DELETE",
+            "/api/ai/conversations/conv-1",
+            undefined,
+            "DELETE /api/ai/conversations/:id",
+            MessageSchema,
+        ],
+        [
+            "POST /api/info/exchange-rates/refresh returns refresh result",
+            "POST",
+            "/api/info/exchange-rates/refresh",
+            undefined,
             "POST /api/info/exchange-rates/refresh",
-        );
-    });
-
-    it("POST /api/info/refresh-views returns message", async () => {
-        const data = await mutateEnvelope("POST", "/api/info/refresh-views");
-        validate(z.object({ message: z.string() }), data, "POST /api/info/refresh-views");
-    });
-
-    it("POST /api/investments/refresh-prices returns price refresh shape", async () => {
-        const data = await mutateEnvelope("POST", "/api/investments/refresh-prices");
-        validate(
+            z.object({ message: z.string(), rates_updated: z.number() }),
+        ],
+        [
+            "POST /api/info/refresh-views returns message",
+            "POST",
+            "/api/info/refresh-views",
+            undefined,
+            "POST /api/info/refresh-views",
+            MessageSchema,
+        ],
+        [
+            "POST /api/investments/refresh-prices returns price refresh shape",
+            "POST",
+            "/api/investments/refresh-prices",
+            undefined,
+            "POST /api/investments/refresh-prices",
             z.object({
                 message: z.string(),
                 updated_count: z.number(),
@@ -980,14 +944,13 @@ describe("Phase F1: extended mutation contracts", () => {
                 cached_count: z.number(),
                 live: z.boolean(),
             }),
-            data,
-            "POST /api/investments/refresh-prices",
-        );
-    });
-
-    it("POST /api/investments/:id/transactions returns single transaction", async () => {
-        const data = await mutateEnvelope("POST", "/api/investments/1/transactions", {});
-        validate(
+        ],
+        [
+            "POST /api/investments/:id/transactions returns single transaction",
+            "POST",
+            "/api/investments/1/transactions",
+            {},
+            "POST /api/investments/:id/transactions",
             z.object({
                 id: z.number(),
                 investment_id: z.number(),
@@ -995,46 +958,49 @@ describe("Phase F1: extended mutation contracts", () => {
                 amount: z.number(),
                 currency: z.string(),
             }),
-            data,
-            "POST /api/investments/:id/transactions",
-        );
-    });
-
-    it("PATCH /api/investments/transactions/:id returns single transaction", async () => {
-        const data = await mutateEnvelope("PATCH", "/api/investments/transactions/1", {});
-        validate(
+        ],
+        [
+            "PATCH /api/investments/transactions/:id returns single transaction",
+            "PATCH",
+            "/api/investments/transactions/1",
+            {},
+            "PATCH /api/investments/transactions/:id",
             z.object({
                 id: z.number(),
                 investment_id: z.number(),
                 type: z.string(),
             }),
-            data,
-            "PATCH /api/investments/transactions/:id",
-        );
-    });
-
-    it("DELETE /api/investments/transactions/:id returns message", async () => {
-        const data = await mutateEnvelope("DELETE", "/api/investments/transactions/1");
-        validate(z.object({ message: z.string() }), data, "DELETE /api/investments/transactions/:id");
-    });
-
-    it("POST /api/recipients/:id/merge returns merged shape", async () => {
-        const data = await mutateEnvelope("POST", "/api/recipients/1/merge", {});
-        validate(
-            z.object({ message: z.string(), merged_count: z.number() }),
-            data,
+        ],
+        [
+            "DELETE /api/investments/transactions/:id returns message",
+            "DELETE",
+            "/api/investments/transactions/1",
+            undefined,
+            "DELETE /api/investments/transactions/:id",
+            MessageSchema,
+        ],
+        [
+            "POST /api/recipients/:id/merge returns merged shape",
+            "POST",
+            "/api/recipients/1/merge",
+            {},
             "POST /api/recipients/:id/merge",
-        );
-    });
-
-    it("POST /api/recipients/:id/unmerge returns message", async () => {
-        const data = await mutateEnvelope("POST", "/api/recipients/1/unmerge");
-        validate(z.object({ message: z.string() }), data, "POST /api/recipients/:id/unmerge");
-    });
-
-    it("POST /api/recipients/:id/patterns returns pattern shape", async () => {
-        const data = await mutateEnvelope("POST", "/api/recipients/1/patterns", {});
-        validate(
+            z.object({ message: z.string(), merged_count: z.number() }),
+        ],
+        [
+            "POST /api/recipients/:id/unmerge returns message",
+            "POST",
+            "/api/recipients/1/unmerge",
+            undefined,
+            "POST /api/recipients/:id/unmerge",
+            MessageSchema,
+        ],
+        [
+            "POST /api/recipients/:id/patterns returns pattern shape",
+            "POST",
+            "/api/recipients/1/patterns",
+            {},
+            "POST /api/recipients/:id/patterns",
             z.object({
                 id: z.number(),
                 pattern: z.string(),
@@ -1044,52 +1010,58 @@ describe("Phase F1: extended mutation contracts", () => {
                 is_active: z.boolean(),
                 source: z.string(),
             }),
-            data,
-            "POST /api/recipients/:id/patterns",
-        );
-    });
-
-    it("POST /api/recipients/:id/patterns/preview returns matches", async () => {
-        const data = await mutateEnvelope("POST", "/api/recipients/1/patterns/preview", {});
-        validate(z.object({ matches: z.array(z.unknown()) }), data, "POST /api/recipients/:id/patterns/preview");
-    });
-
-    it("POST /api/saved-charts returns chart shape", async () => {
-        const data = await mutateEnvelope("POST", "/api/saved-charts", {});
-        validate(
+        ],
+        [
+            "POST /api/recipients/:id/patterns/preview returns matches",
+            "POST",
+            "/api/recipients/1/patterns/preview",
+            {},
+            "POST /api/recipients/:id/patterns/preview",
+            z.object({ matches: z.array(z.unknown()) }),
+        ],
+        [
+            "POST /api/saved-charts returns chart shape",
+            "POST",
+            "/api/saved-charts",
+            {},
+            "POST /api/saved-charts",
             z.object({
                 id: z.number(),
                 name: z.string(),
                 config: z.unknown(),
                 created_at: z.string(),
             }),
-            data,
-            "POST /api/saved-charts",
-        );
-    });
-
-    it("PATCH /api/saved-charts/:id returns chart shape", async () => {
-        const data = await mutateEnvelope("PATCH", "/api/saved-charts/1", {});
-        validate(
-            z.object({ id: z.number(), name: z.string() }),
-            data,
+        ],
+        [
+            "PATCH /api/saved-charts/:id returns chart shape",
+            "PATCH",
+            "/api/saved-charts/1",
+            {},
             "PATCH /api/saved-charts/:id",
-        );
-    });
-
-    it("DELETE /api/saved-charts/:id returns message", async () => {
-        const data = await mutateEnvelope("DELETE", "/api/saved-charts/1");
-        validate(z.object({ message: z.string() }), data, "DELETE /api/saved-charts/:id");
-    });
-
-    it("POST /api/splits/batch returns items", async () => {
-        const data = await mutateEnvelope("POST", "/api/splits/batch", {});
-        validate(z.object({ items: z.array(z.unknown()) }), data, "POST /api/splits/batch");
-    });
-
-    it("PATCH /api/splits/:id returns split shape", async () => {
-        const data = await mutateEnvelope("PATCH", "/api/splits/1", {});
-        validate(
+            z.object({ id: z.number(), name: z.string() }),
+        ],
+        [
+            "DELETE /api/saved-charts/:id returns message",
+            "DELETE",
+            "/api/saved-charts/1",
+            undefined,
+            "DELETE /api/saved-charts/:id",
+            MessageSchema,
+        ],
+        [
+            "POST /api/splits/batch returns items",
+            "POST",
+            "/api/splits/batch",
+            {},
+            "POST /api/splits/batch",
+            z.object({ items: z.array(z.unknown()) }),
+        ],
+        [
+            "PATCH /api/splits/:id returns split shape",
+            "PATCH",
+            "/api/splits/1",
+            {},
+            "PATCH /api/splits/:id",
             z.object({
                 id: z.number(),
                 transaction_id: z.number(),
@@ -1097,38 +1069,45 @@ describe("Phase F1: extended mutation contracts", () => {
                 amount: z.number(),
                 is_paid: z.boolean(),
             }),
-            data,
-            "PATCH /api/splits/:id",
-        );
-    });
-
-    it("DELETE /api/splits/:id returns message", async () => {
-        const data = await mutateEnvelope("DELETE", "/api/splits/1");
-        validate(z.object({ message: z.string() }), data, "DELETE /api/splits/:id");
-    });
-
-    it("POST /api/splits/:id/pay returns message", async () => {
-        const data = await mutateEnvelope("POST", "/api/splits/1/pay", {});
-        validate(z.object({ message: z.string() }), data, "POST /api/splits/:id/pay");
-    });
-
-    it("POST /api/splits/:id/settle returns message", async () => {
-        const data = await mutateEnvelope("POST", "/api/splits/1/settle", {});
-        validate(z.object({ message: z.string() }), data, "POST /api/splits/:id/settle");
-    });
-
-    it("POST /api/splits/owed/:recipientId/settle-all returns settled count", async () => {
-        const data = await mutateEnvelope("POST", "/api/splits/owed/1/settle-all", {});
-        validate(
-            z.object({ message: z.string(), settled_count: z.number() }),
-            data,
+        ],
+        [
+            "DELETE /api/splits/:id returns message",
+            "DELETE",
+            "/api/splits/1",
+            undefined,
+            "DELETE /api/splits/:id",
+            MessageSchema,
+        ],
+        [
+            "POST /api/splits/:id/pay returns message",
+            "POST",
+            "/api/splits/1/pay",
+            {},
+            "POST /api/splits/:id/pay",
+            MessageSchema,
+        ],
+        [
+            "POST /api/splits/:id/settle returns message",
+            "POST",
+            "/api/splits/1/settle",
+            {},
+            "POST /api/splits/:id/settle",
+            MessageSchema,
+        ],
+        [
+            "POST /api/splits/owed/:recipientId/settle-all returns settled count",
+            "POST",
+            "/api/splits/owed/1/settle-all",
+            {},
             "POST /api/splits/owed/:recipientId/settle-all",
-        );
-    });
-
-    it("POST /api/watchlist returns watchlist item", async () => {
-        const data = await mutateEnvelope("POST", "/api/watchlist", {});
-        validate(
+            z.object({ message: z.string(), settled_count: z.number() }),
+        ],
+        [
+            "POST /api/watchlist returns watchlist item",
+            "POST",
+            "/api/watchlist",
+            {},
+            "POST /api/watchlist",
             z.object({
                 id: z.number(),
                 symbol: z.string(),
@@ -1136,45 +1115,52 @@ describe("Phase F1: extended mutation contracts", () => {
                 asset_class: z.string(),
                 target_price: z.number(),
             }),
-            data,
-            "POST /api/watchlist",
-        );
-    });
-
-    it("PATCH /api/watchlist/:id returns watchlist item", async () => {
-        const data = await mutateEnvelope("PATCH", "/api/watchlist/1", {});
-        validate(
-            z.object({ id: z.number(), symbol: z.string() }),
-            data,
+        ],
+        [
+            "PATCH /api/watchlist/:id returns watchlist item",
+            "PATCH",
+            "/api/watchlist/1",
+            {},
             "PATCH /api/watchlist/:id",
-        );
-    });
-
-    it("DELETE /api/watchlist/:id returns message", async () => {
-        const data = await mutateEnvelope("DELETE", "/api/watchlist/1");
-        validate(z.object({ message: z.string() }), data, "DELETE /api/watchlist/:id");
-    });
-
-    it("POST /api/planned-transactions/:id/execute returns updated planned", async () => {
-        const data = await mutateEnvelope("POST", "/api/planned-transactions/1/execute", {});
-        validate(PlannedTransactionItemSchema, data, "POST /api/planned-transactions/:id/execute");
-    });
-
-    it("POST /api/import/batches/:batchId/commit returns commit result", async () => {
-        const data = await mutateEnvelope("POST", "/api/import/batches/1/commit", {});
-        validate(
+            z.object({ id: z.number(), symbol: z.string() }),
+        ],
+        [
+            "DELETE /api/watchlist/:id returns message",
+            "DELETE",
+            "/api/watchlist/1",
+            undefined,
+            "DELETE /api/watchlist/:id",
+            MessageSchema,
+        ],
+        [
+            "POST /api/planned-transactions/:id/execute returns updated planned",
+            "POST",
+            "/api/planned-transactions/1/execute",
+            {},
+            "POST /api/planned-transactions/:id/execute",
+            PlannedTransactionItemSchema,
+        ],
+        [
+            "POST /api/import/batches/:batchId/commit returns commit result",
+            "POST",
+            "/api/import/batches/1/commit",
+            {},
+            "POST /api/import/batches/:batchId/commit",
             z.object({
                 message: z.string(),
                 batch_id: z.number(),
                 transactions_committed: z.number(),
             }),
-            data,
-            "POST /api/import/batches/:batchId/commit",
-        );
-    });
-
-    it("PUT /api/import/batches/:batchId/rows/:rowId/override returns message", async () => {
-        const data = await mutateEnvelope("PUT", "/api/import/batches/1/rows/1/override", {});
-        validate(z.object({ message: z.string() }), data, "PUT override");
+        ],
+        [
+            "PUT /api/import/batches/:batchId/rows/:rowId/override returns message",
+            "PUT",
+            "/api/import/batches/1/rows/1/override",
+            {},
+            "PUT override",
+            MessageSchema,
+        ],
+    ])("%s", async (_name, method, path, body, label, schema) => {
+        validate(schema, await mutateEnvelope(method, path, body), label);
     });
 });

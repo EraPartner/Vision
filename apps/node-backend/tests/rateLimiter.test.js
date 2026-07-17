@@ -1,4 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
+import { createMockResponse } from './helpers/routeHarness.js';
 
 vi.mock('../src/config/config.js', () => ({
   getSettings: () => ({ isDevelopment: () => false }),
@@ -24,15 +25,7 @@ function createRequest({ ip, remoteAddress } = {}) {
   return req;
 }
 
-function createResponse() {
-  const res = {
-    json: vi.fn(),
-    setHeader: vi.fn(),
-    status: vi.fn(),
-  };
-  res.status.mockReturnValue(res);
-  return res;
-}
+const createResponse = () => createMockResponse({ setHeader: vi.fn() });
 
 describe('rateLimiter middleware', () => {
   afterEach(() => {

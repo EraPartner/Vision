@@ -1,12 +1,13 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 
+import { mockLogger } from './helpers/mockLogger.js';
 // Export date serialization (TODO E11): the CSV column was String(pg Date)
 // ("Wed Jul 01 2026 00:00:00 GMT+0200 …" — unusable in Excel, a day off on
 // cross-TZ re-import) and buildNdjsonRow went through JSON.stringify's
 // toISOString — the PREVIOUS day's timestamp on any backend east of UTC.
 
 vi.mock('../src/config/logger.js', () => ({
-  logger: { info: vi.fn(), warn: vi.fn(), error: vi.fn(), debug: vi.fn() },
+  logger: mockLogger(),
 }));
 vi.mock('../src/database/connection.js', () => ({
   query: vi.fn(),
