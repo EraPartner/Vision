@@ -14,10 +14,3 @@ export function saveSetting(key: string, value: unknown): Promise<{ key: string;
         body: JSON.stringify({ value }),
     });
 }
-
-export function saveSettingsBulk(settings: Record<string, unknown>): Promise<{ saved: number }> {
-    return apiRequest('/api/settings', {
-        method: 'PUT',
-        body: JSON.stringify(settings),
-    });
-}

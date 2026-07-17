@@ -79,7 +79,7 @@ Each finding has a stable ID (`SIMP-01` … `SIMP-84`; rounds 1–3 are SIMP-01�
 | SIMP-57 | EditInvestmentDialog reimplements InvestmentFormFields' provider block; `PRICE_PROVIDERS` ×3 | `components/portfolio/EditInvestmentDialog.tsx:175-297` | ~110 | Low | Yes — dup intact | FIXED (#92) |
 | SIMP-58 | Small frontend dedups: CsvColumnMapper double-write, PerformanceBreakdown twins, ToolResultCard chart views, GeneralSection rows, ExportCard buttons | see finding | ~130 | Low | Yes | FIXED (#92) |
 | SIMP-59 | R4: 4 frontend modules alive only via their own tests | `utils/sanitize.ts`, `hooks/useCountUp.ts`, `useFormState.ts`, `useDataTableColumns.ts` | ~244 + ~299 test | None | n/a | FIXED (#103) |
-| SIMP-60 | R4: 24 dead `apiClient` members + 22 dead backing functions | `lib/api.ts`, `lib/api/*.ts` | ~115–145 | Low | n/a | OPEN |
+| SIMP-60 | R4: 24 dead `apiClient` members + 22 dead backing functions | `lib/api.ts`, `lib/api/*.ts` | ~115–145 | Low | n/a | FIXED (#103) |
 | SIMP-61 | R4: dead frontend exports batch (motion variants, chartStyles, tag hooks, tax compat consts) | `lib/motion.ts`, `shared/chartStyles.ts`, `hooks/useTags.ts`, `lib/belgianTax/constants.ts` | ~150 | None–low | n/a | OPEN |
 | SIMP-62 | R4: shared-utils dead module `downsample.js` chain + `index.d.ts` barrel drift | `packages/shared-utils/src/*` | ~95 + ~60 test | Low | n/a | OPEN |
 | SIMP-63 | R4: dead backend functions `validatePagination`, `downgradeMigrations` | `middleware/validation.js`, `database/migrate.js` | ~34 + ~10 test | None | n/a | OPEN |

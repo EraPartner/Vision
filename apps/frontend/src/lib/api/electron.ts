@@ -143,12 +143,6 @@ export async function installShellUpdate(): Promise<{ success: boolean; version?
     return updater.installShellUpdate();
 }
 
-export async function getUpdateMode(): Promise<{ mode: UpdateMode; is_packaged: boolean; use_repo_mode: boolean } | null> {
-    const updater = getElectronUpdater();
-    if (!updater?.getMode) return null;
-    return updater.getMode();
-}
-
 export async function preUpdateBackup(): Promise<{ success: boolean; file?: string; error?: string } | null> {
     const updater = getElectronUpdater();
     if (!updater?.preUpdateBackup) return null;

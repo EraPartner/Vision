@@ -13,12 +13,6 @@ export function getSupportedParsers(): Promise<{
     return apiRequest('/api/info/supported-adapters');
 }
 
-/** @deprecated Use getSupportedParsers instead */
-export async function getBanks(): Promise<{ banks: string[] }> {
-    const data = await getSupportedParsers();
-    return { banks: data.adapters.map((a) => a.key) };
-}
-
 export function getDistinctBankAccounts(): Promise<{ banks: string[] }> {
     return apiRequest('/api/info/banks');
 }
@@ -28,18 +22,6 @@ export function getDistinctBankAccounts(): Promise<{ banks: string[] }> {
 
 export function getTransactionCount(): Promise<{ total_transactions: number }> {
     return apiRequest('/api/info/transaction-count');
-}
-
-export function getBelgianInflationRates(params?: {
-    start_month?: string;
-    end_month?: string;
-    db_only?: boolean;
-}): Promise<{
-    source: 'memory' | 'database' | 'statbel' | 'eurostat';
-    total_rates: number;
-    rates: Array<{ month: string; monthly_rate: number }>;
-}> {
-    return requestWithQuery('/api/info/inflation-rates', params);
 }
 
 export async function getRecurringPatterns(): Promise<{
@@ -248,10 +230,6 @@ export interface NetWorthByAccountResponse {
 }
 export function getNetWorthByAccount(params?: { currency?: string }): Promise<NetWorthByAccountResponse> {
     return requestWithQuery('/api/info/net-worth/by-account', params);
-}
-
-export function refreshMaterializedViews(): Promise<{ message: string; duration_ms: number }> {
-    return apiRequest('/api/info/refresh-views', { method: 'POST' });
 }
 
 export interface ExchangeRate {

@@ -2,7 +2,6 @@ import type {
     ChatDoneEvent,
     ChatMessage,
     ChatStreamEvent,
-    ChatTurnResponse,
     Conversation,
     ConversationDetail,
     ConversationSummary,
@@ -45,10 +44,6 @@ export function renameConversation(id: string, title: string): Promise<Conversat
 
 export async function deleteConversation(id: string): Promise<void> {
     await apiRequest(`/api/ai/conversations/${encodeURIComponent(id)}`, { method: 'DELETE' });
-}
-
-export function sendChatMessage(body: SendChatBody): Promise<ChatTurnResponse> {
-    return apiRequest('/api/ai/chat', { method: 'POST', body: JSON.stringify(body) });
 }
 
 export function streamChat(

@@ -11,7 +11,6 @@ import {
   createConversation,
   renameConversation,
   deleteConversation,
-  sendChatMessage,
   streamChat,
 } from "@/lib/api/ai";
 
@@ -93,15 +92,6 @@ describe("ai conversation API client", () => {
     await expect(deleteConversation("x")).resolves.toBeUndefined();
   });
 
-  it("sendChatMessage POSTs to the chat route", async () => {
-    server.use(
-      http.post(`${API_BASE}/api/ai/chat`, () =>
-        ok({ assistantMessage: { role: "assistant", content: "hi" } }),
-      ),
-    );
-    const res = await sendChatMessage({ message: "hi", conversationId: "c" } as never);
-    expect(res.assistantMessage.role).toBe("assistant");
-  });
 });
 
 // ---------------------------------------------------------------------------

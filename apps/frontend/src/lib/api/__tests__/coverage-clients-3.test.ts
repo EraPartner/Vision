@@ -11,7 +11,6 @@ import {
 } from "@/lib/api/charts";
 import {
   getCategories,
-  getCategory,
   createCategory,
   updateCategory,
   deleteCategory,
@@ -20,7 +19,6 @@ import {
   getSettings,
   getSetting,
   saveSetting,
-  saveSettingsBulk,
 } from "@/lib/api/settings";
 import {
   getOwedSummary,
@@ -103,11 +101,6 @@ describe("categories API client", () => {
     expect(url).toContain("active=true");
   });
 
-  it("getCategory fetches by id", async () => {
-    server.use(http.get(`${API_BASE}/api/categories/3`, () => ok({ id: 3 })));
-    expect((await getCategory(3)).id).toBe(3);
-  });
-
   it("createCategory reports wasCreated from the 201 status", async () => {
     server.use(
       http.post(`${API_BASE}/api/categories`, () => ok({ id: 9 }, { status: 201 })),
@@ -162,18 +155,6 @@ describe("settings API client", () => {
     expect(body).toMatchObject({ value: "light" });
   });
 
-  it("saveSettingsBulk PUTs the whole map", async () => {
-    let body: unknown = null;
-    server.use(
-      http.put(`${API_BASE}/api/settings`, async ({ request }) => {
-        body = await request.json();
-        return ok({ saved: 2 });
-      }),
-    );
-    const res = await saveSettingsBulk({ a: 1, b: 2 });
-    expect(body).toMatchObject({ a: 1, b: 2 });
-    expect(res.saved).toBe(2);
-  });
 });
 
 // ---------------------------------------------------------------------------

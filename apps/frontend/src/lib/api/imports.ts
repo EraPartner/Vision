@@ -1,7 +1,7 @@
 import { API_BASE_URL, generateRequestId, parseEnvelopeError, apiRequest } from '@/lib/api/client';
 import { postMultipartImport } from '@/lib/api/helpers';
 import { readSseStream } from '@/lib/api/sse';
-import type { ImportProgress, ImportResult, ImportBatch, BatchListResponse, ImportPreviewResponse } from '@/lib/api/types';
+import type { ImportProgress, ImportResult, BatchListResponse, ImportPreviewResponse } from '@/lib/api/types';
 
 export function importCSV(
     file: File,
@@ -195,10 +195,6 @@ export function listImportBatches(
     offset: number = 0,
 ): Promise<BatchListResponse> {
     return apiRequest<BatchListResponse>(`/api/import/batches?limit=${limit}&offset=${offset}`);
-}
-
-export function getImportBatch(id: number): Promise<ImportBatch> {
-    return apiRequest<ImportBatch>(`/api/import/batches/${id}`);
 }
 
 export function rollbackImportBatch(id: number): Promise<{ deleted: number }> {

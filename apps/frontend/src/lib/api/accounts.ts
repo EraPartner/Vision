@@ -22,10 +22,6 @@ export async function getAccounts(params?: {
     return { ...res, items: res.items.map(normalizeAccount) };
 }
 
-export async function getAccount(id: number): Promise<Account> {
-    return normalizeAccount(await apiRequest<Account>(`/api/accounts/${id}`));
-}
-
 export function createAccount(account: AccountCreate): Promise<Account> {
     return apiRequest<Account>('/api/accounts', {
         method: 'POST',

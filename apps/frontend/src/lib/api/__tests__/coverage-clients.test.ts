@@ -12,7 +12,6 @@ import {
 } from "@/lib/api/tags";
 import {
   getAccounts,
-  getAccount,
   createAccount,
   updateAccount,
   deleteAccount,
@@ -22,7 +21,6 @@ import {
 } from "@/lib/api/accounts";
 import {
   getPlannedTransactions,
-  getPlannedTransaction,
   createPlannedTransaction,
   updatePlannedTransaction,
   deletePlannedTransaction,
@@ -176,16 +174,6 @@ describe("accounts API client", () => {
     expect(res.items[0].drift).toBeUndefined();
   });
 
-  it("getAccount normalizes a single account", async () => {
-    server.use(
-      http.get(`${API_BASE}/api/accounts/5`, () =>
-        ok({ id: 5, name: "Brokerage", computed_balance: "42.42" }),
-      ),
-    );
-    const a = await getAccount(5);
-    expect(a.computed_balance).toBe(42.42);
-  });
-
   it("createAccount POSTs the payload", async () => {
     let body: unknown = null;
     server.use(
@@ -291,11 +279,6 @@ describe("planned-transactions API client", () => {
     expect(url).toContain("is_recurring=true");
     expect(url).toContain("category_id=4");
     expect(url).toContain("search=rent");
-  });
-
-  it("getPlannedTransaction fetches by id", async () => {
-    server.use(http.get(`${API_BASE}/api/planned-transactions/3`, () => ok({ id: 3 })));
-    expect((await getPlannedTransaction(3)).id).toBe(3);
   });
 
   it("createPlannedTransaction POSTs", async () => {

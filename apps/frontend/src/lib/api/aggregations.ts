@@ -40,14 +40,6 @@ export function getAggregationMonthlySummary(params?: {
     return apiRequest(`/api/aggregations/monthly-summary${q ? `?${q}` : ''}`);
 }
 
-export function getAggregationCategoryBreakdown(params?: {
-    currency?: string;
-}): Promise<AggregationEnvelope<{
-    categories: Array<{ id: number | null; name: string; count: number; total: number }>;
-}>> {
-    return requestWithQuery('/api/aggregations/category-breakdown', params);
-}
-
 export function getAggregationRecipientInsights(params?: {
     currency?: string;
     excluded_category_ids?: number[];
@@ -72,28 +64,6 @@ export function getAggregationRecipientInsights(params?: {
 }>> {
     const q = buildExclusionQuery(params);
     return apiRequest(`/api/aggregations/recipient-insights${q ? `?${q}` : ''}`);
-}
-
-export function getAggregationCashflowComparison(params?: {
-    excluded_category_ids?: number[];
-    excluded_recipient_ids?: number[];
-    currency?: string;
-}): Promise<AggregationEnvelope<{
-    days_in_month: number;
-    current_day: number;
-    month: number;
-    year: number;
-    without_planned: Array<{ day: number; average: number; current: number | null }>;
-    with_planned: Array<{ day: number; average: number; current: number | null }>;
-}>> {
-    const q = buildExclusionQuery(params);
-    return apiRequest(`/api/aggregations/cashflow-comparison${q ? `?${q}` : ''}`);
-}
-
-export function getAggregationAverageVsCurrent(params?: {
-    currency?: string;
-}): Promise<AggregationEnvelope<unknown>> {
-    return requestWithQuery('/api/aggregations/average-vs-current', params);
 }
 
 export function getAggregationBankBalances(params?: {

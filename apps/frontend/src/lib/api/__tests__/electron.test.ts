@@ -15,7 +15,6 @@ import {
   getSystemAccentColor,
   triggerDockerUpdate,
   installShellUpdate,
-  getUpdateMode,
   preUpdateBackup,
   runBackup,
   selectBackupFile,
@@ -58,7 +57,6 @@ describe("electron capability detection (absent branch)", () => {
   it("update/backup helpers return null when no bridge is present", async () => {
     expect(await triggerDockerUpdate()).toBeNull();
     expect(await installShellUpdate()).toBeNull();
-    expect(await getUpdateMode()).toBeNull();
     expect(await preUpdateBackup()).toBeNull();
     expect(await runBackup("/tmp")).toBeNull();
     expect(await selectBackupFile()).toBeNull();
@@ -118,7 +116,6 @@ describe("electron capability detection (present branch)", () => {
   it("update helpers delegate to the updater bridge", async () => {
     expect(await triggerDockerUpdate()).toMatchObject({ success: true, wasNew: true });
     expect(await installShellUpdate()).toMatchObject({ version: "1.2.3" });
-    expect(await getUpdateMode()).toMatchObject({ mode: "docker" });
     expect(await preUpdateBackup()).toMatchObject({ file: "/b.sql" });
   });
 

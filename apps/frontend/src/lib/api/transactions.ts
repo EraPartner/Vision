@@ -53,10 +53,6 @@ export async function getTransactions(params?: {
     };
 }
 
-export function getTransaction(id: number): Promise<Transaction> {
-    return apiRequest<Transaction>(`/api/transactions/${id}`);
-}
-
 export function createTransaction(transaction: TransactionCreate): Promise<Transaction> {
     return apiRequest<Transaction>('/api/transactions', {
         method: 'POST',

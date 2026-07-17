@@ -24,10 +24,6 @@ export function getPlannedTransactions(params?: {
     return requestWithQuery<PlannedTransactionsListResponse>('/api/planned-transactions', params);
 }
 
-export function getPlannedTransaction(id: number): Promise<PlannedTransaction> {
-    return apiRequest<PlannedTransaction>(`/api/planned-transactions/${id}`);
-}
-
 export function createPlannedTransaction(
     transaction: PlannedTransactionCreate,
 ): Promise<PlannedTransaction> {

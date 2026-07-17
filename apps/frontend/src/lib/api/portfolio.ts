@@ -19,10 +19,6 @@ export function getInvestments(params?: {
     return requestWithQuery<InvestmentsListResponse>('/api/investments', params);
 }
 
-export function getInvestment(id: number): Promise<Investment> {
-    return apiRequest<Investment>(`/api/investments/${id}`);
-}
-
 export function createInvestment(data: InvestmentCreate): Promise<Investment> {
     return apiRequest<Investment>('/api/investments', { method: 'POST', body: JSON.stringify(data) });
 }
@@ -36,12 +32,6 @@ export function refreshInvestmentPrices(): Promise<{
     priceSources: Record<string, PriceSource>;
 }> {
     return apiRequest('/api/investments/refresh-prices', { method: 'POST' });
-}
-
-export function getPriceProviders(): Promise<{
-    providers: Array<{ key: string; name: string; description: string }>;
-}> {
-    return apiRequest('/api/investments/providers');
 }
 
 export function updateInvestment(id: number, data: InvestmentUpdate): Promise<Investment> {

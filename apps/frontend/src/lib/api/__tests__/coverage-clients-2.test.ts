@@ -11,17 +11,14 @@ import {
   deleteRecipient,
   mergeRecipients,
   unmergeRecipient,
-  getRecipientAliases,
   listRecipientPatterns,
   createRecipientPattern,
   updateRecipientPattern,
   deleteRecipientPattern,
   previewRecipientPattern,
-  getRecipientClusters,
 } from "@/lib/api/recipients";
 import {
   getTransactions,
-  getTransaction,
   createTransaction,
   updateTransaction,
   deleteTransaction,
@@ -30,10 +27,8 @@ import {
 } from "@/lib/api/transactions";
 import {
   getInvestments,
-  getInvestment,
   createInvestment,
   refreshInvestmentPrices,
-  getPriceProviders,
   updateInvestment,
   deleteInvestment,
   moveHolding,
@@ -49,7 +44,6 @@ import {
   updateCustomParserConfig,
   deleteCustomParserConfig,
   listImportBatches,
-  getImportBatch,
   rollbackImportBatch,
   getImportPreview,
   overrideImportRow,
@@ -135,11 +129,6 @@ describe("recipients API client", () => {
     expect((await unmergeRecipient(5)).id).toBe(5);
   });
 
-  it("getRecipientAliases fetches alias list", async () => {
-    server.use(http.get(`${API_BASE}/api/recipients/5/aliases`, () => ok({ items: [], total: 0 })));
-    expect((await getRecipientAliases(5)).total).toBe(0);
-  });
-
   it("listRecipientPatterns fetches patterns", async () => {
     server.use(http.get(`${API_BASE}/api/recipients/5/patterns`, () => ok({ items: [], total: 0 })));
     expect((await listRecipientPatterns(5)).items).toEqual([]);
@@ -182,17 +171,6 @@ describe("recipients API client", () => {
     expect(res.matchCount).toBe(4);
   });
 
-  it("getRecipientClusters forwards min_count", async () => {
-    let url = "";
-    server.use(
-      http.get(`${API_BASE}/api/recipients/clusters`, ({ request }) => {
-        url = request.url;
-        return ok({ items: [], total: 0 });
-      }),
-    );
-    await getRecipientClusters({ min_count: 3 });
-    expect(url).toContain("min_count=3");
-  });
 });
 
 // ---------------------------------------------------------------------------
@@ -222,11 +200,6 @@ describe("transactions API client", () => {
     expect(res.items[0].transaction_date).toBe("2026-01-01");
     expect(res.items[1].transaction_date).toBe("2026-02-02");
     expect(res.items[2].transaction_date).toBe("");
-  });
-
-  it("getTransaction fetches by id", async () => {
-    server.use(http.get(`${API_BASE}/api/transactions/9`, () => ok({ id: 9 })));
-    expect((await getTransaction(9)).id).toBe(9);
   });
 
   it("createTransaction POSTs", async () => {
@@ -283,11 +256,6 @@ describe("portfolio API client", () => {
     expect(url).toContain("active=true");
   });
 
-  it("getInvestment fetches by id", async () => {
-    server.use(http.get(`${API_BASE}/api/investments/3`, () => ok({ id: 3 })));
-    expect((await getInvestment(3)).id).toBe(3);
-  });
-
   it("createInvestment POSTs", async () => {
     server.use(http.post(`${API_BASE}/api/investments`, () => ok({ id: 4 })));
     expect((await createInvestment({} as never)).id).toBe(4);
@@ -302,15 +270,6 @@ describe("portfolio API client", () => {
     const res = await refreshInvestmentPrices();
     expect(res.updated).toBe(2);
     expect(res.priceSources.AAPL).toBe("live");
-  });
-
-  it("getPriceProviders lists providers", async () => {
-    server.use(
-      http.get(`${API_BASE}/api/investments/providers`, () =>
-        ok({ providers: [{ key: "yahoo", name: "Yahoo", description: "" }] }),
-      ),
-    );
-    expect((await getPriceProviders()).providers[0].key).toBe("yahoo");
   });
 
   it("updateInvestment PATCHes", async () => {
@@ -440,11 +399,6 @@ describe("imports API client", () => {
     await listImportBatches(10, 5);
     expect(url).toContain("limit=10");
     expect(url).toContain("offset=5");
-  });
-
-  it("getImportBatch fetches by id", async () => {
-    server.use(http.get(`${API_BASE}/api/import/batches/7`, () => ok({ id: 7 })));
-    expect((await getImportBatch(7)).id).toBe(7);
   });
 
   it("rollbackImportBatch DELETEs and returns deleted count", async () => {

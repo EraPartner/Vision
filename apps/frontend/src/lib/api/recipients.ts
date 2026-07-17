@@ -62,10 +62,6 @@ export function unmergeRecipient(id: number): Promise<Recipient> {
     return apiRequest<Recipient>(`/api/recipients/${id}/unmerge`, { method: 'POST' });
 }
 
-export function getRecipientAliases(id: number): Promise<{ items: Recipient[]; total: number }> {
-    return apiRequest(`/api/recipients/${id}/aliases`);
-}
-
 export interface RecipientPattern {
     id: number;
     pattern: string;
@@ -123,18 +119,4 @@ export function previewRecipientPattern(recipientId: number, data: Pick<Recipien
         method: 'POST',
         body: JSON.stringify(data),
     });
-}
-
-export interface RecipientCluster {
-    lcp: string;
-    confidence: 'high' | 'medium' | 'low';
-    recipientIds: number[];
-    recipientNames: string[];
-    categoryId: number | null;
-    suggestedPattern: string;
-    suggestedKind: 'literal_prefix' | 'glob' | 'regex';
-}
-
-export function getRecipientClusters(params?: { min_count?: number }): Promise<{ items: RecipientCluster[]; total: number }> {
-    return requestWithQuery('/api/recipients/clusters', params);
 }
