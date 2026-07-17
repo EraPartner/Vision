@@ -909,67 +909,6 @@ async function isEncryptedBackupFile(filePath) {
   }
 }
 
-async function encryptBackupFile(sqlFilePath) {
-  const passphrase = await getBackupPassphrase();
-  if (!passphrase) {
-    return { file: sqlFilePath, encrypted: false, warning: 'Backup encryption skipped: VISION_BACKUP_PASSPHRASE is not set.' };
-  }
-
-  const encPath = `${sqlFilePath}.enc`;
-  const salt = crypto.randomBytes(BACKUP_ENC_V2_SALT_BYTES);
-  const iv = crypto.randomBytes(BACKUP_ENC_V2_IV_BYTES);
-  const key = deriveBackupKeyV2(passphrase, salt);
-
-  try {
-    await new Promise((resolve, reject) => {
-      const input = fs.createReadStream(sqlFilePath);
-      const cipher = crypto.createCipheriv('aes-256-gcm', key, iv);
-      const output = fs.createWriteStream(encPath);
-
-      let settled = false;
-      const fail = (err) => {
-        if (settled) return;
-        settled = true;
-        input.destroy();
-        cipher.destroy();
-        output.destroy();
-        fs.unlink(encPath, () => {});
-        reject(err);
-      };
-
-      input.on('error', fail);
-      cipher.on('error', fail);
-      output.on('error', fail);
-
-      output.write(BACKUP_ENC_MAGIC_V2);
-      output.write(salt);
-      output.write(iv);
-
-      input.pipe(cipher);
-      cipher.on('data', (chunk) => output.write(chunk));
-      cipher.on('end', () => {
-        try {
-          const tag = cipher.getAuthTag();
-          output.end(tag);
-        } catch (err) {
-          fail(err);
-        }
-      });
-
-      output.on('finish', () => {
-        if (settled) return;
-        settled = true;
-        resolve();
-      });
-    });
-  } finally {
-    if (Buffer.isBuffer(key)) key.fill(0);
-  }
-
-  fs.unlink(sqlFilePath, () => {});
-  return { file: encPath, encrypted: true };
-}
-
 async function decryptBackupFileToTemp(encryptedFilePath, keyOrPassphrase) {
   if (!keyOrPassphrase) {
     throw new Error(ERR_PASSPHRASE_REQUIRED);
@@ -2415,21 +2354,6 @@ function setupManualShellUpdater() {
   }, MANUAL_UPDATE_CHECK_DELAY_MS);
 }
 
-// ── Docker image update (called after new Electron version detected) ──────────
-async function applyDockerImageUpdate(cwd, extraFiles = []) {
-  try {
-    notify(t('app.pullingLatestImage'));
-    const wasNew = await pullLatestImage(cwd, extraFiles);
-    if (wasNew) {
-      await restartAppContainer(cwd, extraFiles);
-      await pollHealth().catch(() => {});
-      notify(t('app.imageUpdated'));
-    }
-  } catch (err) {
-    console.warn('Docker image update failed (non-fatal):', err);
-  }
-}
-
 // ── HTTP helpers (main-process API calls) ─────────────────────────────────────
 // Lightweight wrappers around Node's built-in `http` module so the main process
 // can talk to the running backend without importing a heavy fetch polyfill.
@@ -2471,70 +2395,6 @@ function httpPut(url, payload) {
     req.write(data);
     req.end();
   });
-}
-
-// ── Backup helpers ────────────────────────────────────────────────────────────
-// Streams pg_dump output directly from the db container to a file on the host
-// using spawn() + piped stdout — no in-memory buffering, handles any DB size.
-async function runBackup(destDir) {
-  if (!destDir) throw new Error('No backup directory configured');
-
-  let dbUser = 'ftm_user';
-  let dbName = 'financial_transactions';
-  try {
-    const envContents = await fs.promises.readFile(path.join(workDir, '.env'), 'utf8');
-    ({ dbUser, dbName } = parseDatabaseUrlFromEnv(envContents));
-  } catch { /* use defaults */ }
-
-  const deviceId = await getBackupDeviceId();
-  const timestamp = new Date().toISOString().replace(/[:.]/g, '-').replace('T', '_').slice(0, 19);
-  const filename = `vision_backup_${deviceId}_${timestamp}.sql`;
-  const sqlFile = path.join(destDir, filename);
-
-  await fs.promises.mkdir(destDir, { recursive: true });
-
-  const composeFileArgs = composeArgs(workDir, overrideFiles);
-  const args = [
-    'compose', ...composeFileArgs,
-    'exec', '-T', 'db',
-    'pg_dump', '-U', dbUser, '-d', dbName, '--no-owner', '--no-acl',
-  ];
-
-  await new Promise((resolve, reject) => {
-    const child = spawn('docker', args, { env: dockerEnv, cwd: workDir });
-    const out = fs.createWriteStream(sqlFile);
-
-    child.stdout.pipe(out);
-
-    const stderr = [];
-    child.stderr.on('data', (chunk) => stderr.push(chunk));
-
-    child.on('error', (err) => {
-      out.destroy();
-      fs.unlink(sqlFile, () => {});
-      reject(err);
-    });
-
-    child.on('close', (code) => {
-      if (code === 0) {
-        out.end(() => resolve());
-      } else {
-        out.destroy();
-        fs.unlink(sqlFile, () => {});
-        reject(new Error(Buffer.concat(stderr).toString().trim() || `pg_dump exited with code ${code}`));
-      }
-    });
-  });
-
-  const encryptedResult = await encryptBackupFile(sqlFile);
-  const cleanup = await cleanupOldBackups(destDir, deviceId);
-  return {
-    success: true,
-    file: encryptedResult.file,
-    encrypted: encryptedResult.encrypted,
-    warning: encryptedResult.warning,
-    cleanupRemoved: cleanup.removed,
-  };
 }
 
 // ── Bundle backup/restore helpers ────────────────────────────────────────────
@@ -3392,24 +3252,6 @@ ipcMain.handle('backup:load-settings', async () => {
   return { backupDir: s.backupDir || '', backupOnQuit: s.backupOnQuit === true };
 });
 
-// ── Services (keep-running-on-quit) settings ─────────────────────────────────
-// Opt-in toggle: when enabled, quit leaves the Docker containers running so the
-// next launch takes the hot path. Persisted to the Electron settings.json mirror
-// (read by the will-quit handler, which must work even after the backend is
-// down). Same authenticated-sender guard as backup:save-settings.
-ipcMain.handle('services:save-settings', async (event, { keepServicesOnQuit } = {}) => {
-  if (!mainWindow || event.sender !== mainWindow.webContents) {
-    return { success: false, error: 'Unauthorized sender' };
-  }
-  await updateSettings((cur) => { cur.keepServicesOnQuit = !!keepServicesOnQuit; });
-  return { success: true };
-});
-
-ipcMain.handle('services:load-settings', async () => {
-  const s = await loadSettings();
-  return { keepServicesOnQuit: s.keepServicesOnQuit === true };
-});
-
 // ── Recovery (error page) ────────────────────────────────────────────────────
 ipcMain.handle('recovery:retry', () => {
   pollAndLoad();
@@ -4202,14 +4044,6 @@ app.on('will-quit', (e) => {
         // graceful shutdown isn't held open waiting on it.
         stopHealthWatchdog();
         try { healthAgent.destroy(); } catch { /* already gone */ }
-        // Opt-in "keep services running on quit": leave the containers up so the
-        // next launch takes the hot path instead of a warm restart. Read from the
-        // local settings.json mirror (the backend may already be shutting down).
-        // compose's `restart: unless-stopped` policy governs reboot behaviour.
-        let keepServices = false;
-        try { keepServices = (await loadSettings()).keepServicesOnQuit === true; }
-        catch { /* default: stop containers */ }
-        if (keepServices) return;
         return stopContainers(workDir, overrideFiles);
       })
       .catch((err) => console.error('docker compose down failed:', err))

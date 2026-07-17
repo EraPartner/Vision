@@ -111,27 +111,6 @@ contextBridge.exposeInMainWorld('electronBackup', {
 });
 
 /**
- * Expose service-lifecycle controls (currently the opt-in "keep services running
- * on quit" toggle) to the renderer via contextBridge.
- */
-contextBridge.exposeInMainWorld('electronServices', {
-  /**
-   * Persist the keep-services-running-on-quit toggle to Electron settings.json.
-   * When enabled, quitting leaves the Docker containers up so the next launch
-   * takes the hot path.
-   * @param {{ keepServicesOnQuit: boolean }} settings
-   * @returns {Promise<{ success: boolean, error?: string }>}
-   */
-  saveSettings: (settings) => ipcRenderer.invoke('services:save-settings', settings),
-
-  /**
-   * Read the keep-services-running-on-quit toggle from Electron settings.json.
-   * @returns {Promise<{ keepServicesOnQuit: boolean }>}
-   */
-  loadSettings: () => ipcRenderer.invoke('services:load-settings'),
-});
-
-/**
  * Expose the macOS-native integration surface (menu bar actions, dock badge,
  * CSV open-with handoff, system accent color, fullscreen state). Subscription
  * helpers return an unsubscribe function. The renderer must call ready() once
