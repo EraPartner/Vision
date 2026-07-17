@@ -10,6 +10,7 @@
 
 import { getJson, num } from './httpClient.js';
 import { providerKey } from '../providerKeys.js';
+import { epochMsToUtcYmd } from '../../../lib/dateFormat.js';
 
 const BASE = 'https://finnhub.io/api/v1';
 
@@ -25,7 +26,7 @@ function key() {
 
 const DAY_MS = 86_400_000;
 const nowSec = () => Math.floor(Date.now() / 1000);
-const ymd = (ms) => new Date(ms).toISOString().slice(0, 10);
+const ymd = epochMsToUtcYmd;
 
 const finnhubAdapter = {
   key: 'finnhub',

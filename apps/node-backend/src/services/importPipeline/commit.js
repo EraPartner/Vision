@@ -12,6 +12,7 @@
 
 import { query, withTransaction } from '../../database/connection.js';
 import { logger } from '../../config/logger.js';
+import { formatDateToYmd } from '../../lib/dateFormat.js';
 import { refreshAggregations } from '../aggregationRefresh.js';
 import { autoLinkTransactions } from '../plannedMatchService.js';
 
@@ -82,7 +83,7 @@ export async function commitBatch({ batchId, onProgress }) {
         // into a server-local-midnight Date, so use LOCAL getters — toISOString()
         // would roll back a day for any TZ east of UTC.
         const dateStr = row.tx_date instanceof Date
-          ? `${row.tx_date.getFullYear()}-${String(row.tx_date.getMonth() + 1).padStart(2, '0')}-${String(row.tx_date.getDate()).padStart(2, '0')}`
+          ? formatDateToYmd(row.tx_date)
           : String(row.tx_date).slice(0, 10);
 
         const effectiveRecipientId = row.user_override_recipient_id ?? row.resolved_recipient_id ?? null;

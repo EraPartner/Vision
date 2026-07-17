@@ -1,3 +1,5 @@
+import { epochMsToUtcYmd as toIso } from '../../../lib/dateFormat.js';
+
 /**
  * Densify a daily {date, net} history: fill every calendar date from the first
  * observed date through `endIso` with net 0 where there's no transaction.
@@ -21,7 +23,6 @@ export function densifyDailyHistory(history, endIso) {
   const lastObserved = sortedDates[sortedDates.length - 1];
   const endStr = endIso && endIso >= startIso ? endIso : lastObserved;
   const parse = (d) => { const [y, m, dd] = d.split('-').map(Number); return Date.UTC(y, m - 1, dd); };
-  const toIso = (ms) => new Date(ms).toISOString().slice(0, 10);
   const out = [];
   for (let t = parse(startIso); t <= parse(endStr); t += 86_400_000) {
     const iso = toIso(t);

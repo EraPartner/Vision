@@ -6,6 +6,8 @@
  * calendar date in any timezone east of UTC.
  */
 
+import { toYmd } from '@/components/shared/dateUtils';
+
 export { parseLocalDateFromYmd as parseYmd, toYmd } from '@/components/shared/dateUtils';
 
 /** Today's date at local midnight (00:00:00.000). */
@@ -17,11 +19,7 @@ export function todayLocal(): Date {
 
 /** Today's date as a local "YYYY-MM-DD" string. */
 export function todayYmd(): string {
-    const d = new Date();
-    const y = d.getFullYear();
-    const m = String(d.getMonth() + 1).padStart(2, '0');
-    const day = String(d.getDate()).padStart(2, '0');
-    return `${y}-${m}-${day}`;
+    return toYmd(new Date());
 }
 
 /** Elapsed fractional days between two Date objects. */

@@ -12,6 +12,7 @@
  */
 
 import { isBelgianHoliday } from '../holidays/be.js';
+import { epochMsToUtcYmd as toIso } from '../../../../lib/dateFormat.js';
 
 export const id = 'prophet_lite';
 export const label = 'Prophet-lite';
@@ -106,7 +107,6 @@ function gaussianElimination(A, b) {
 function denseDaily(history) {
   if (history.length === 0) return [];
   const sorted = [...history].sort((a, b) => a.date.localeCompare(b.date));
-  const toIso = (ms) => new Date(ms).toISOString().slice(0, 10);
   const start = parseIso(sorted[0].date);
   const end = parseIso(sorted[sorted.length - 1].date);
   const map = new Map();

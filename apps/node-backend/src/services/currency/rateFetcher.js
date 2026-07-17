@@ -9,6 +9,7 @@ import { query, withTransaction } from '../../database/connection.js';
 import { logger } from '../../config/logger.js';
 import { toDecimal, toNumber } from '../../lib/money.js';
 import { todayAppDateString } from '../../lib/timezone.js';
+import { formatDateToYmd, epochMsToUtcYmd } from '../../lib/dateFormat.js';
 
 const ECB_LATEST_URL       = 'https://www.ecb.europa.eu/stats/eurofxref/eurofxref-daily.xml';
 const ERAR_LATEST_URL      = 'https://open.er-api.com/v6/latest/EUR';
@@ -61,10 +62,7 @@ export function normalizeDateInput(dateValue) {
   // Recover the local calendar day (mirrors toYmd in utils/portfolioMath.js).
   if (dateValue instanceof Date) {
     if (isNaN(dateValue.getTime())) return null;
-    const y = dateValue.getFullYear();
-    const mo = String(dateValue.getMonth() + 1).padStart(2, '0');
-    const d = String(dateValue.getDate()).padStart(2, '0');
-    return `${y}-${mo}-${d}`;
+    return formatDateToYmd(dateValue);
   }
   const str = String(dateValue);
   const m = str.match(/^\d{4}-\d{2}-\d{2}/);
@@ -231,7 +229,7 @@ export function rateOnOrBeforeFromMap(byDate, currencyCode, dateStr, maxLookback
   const [y, m, d] = dateStr.split('-').map(Number);
   let ts = Date.UTC(y, m - 1, d);
   for (let back = 0; back <= maxLookbackDays; back += 1) {
-    const day = new Date(ts).toISOString().slice(0, 10);
+    const day = epochMsToUtcYmd(ts);
     const rates = byDate.get(day);
     if (rates && rates[currencyCode] !== undefined) return rates[currencyCode];
     ts -= 86_400_000;

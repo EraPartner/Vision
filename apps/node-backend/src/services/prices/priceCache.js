@@ -7,6 +7,7 @@
 
 import { query } from '../../database/connection.js';
 import { logger } from '../../config/logger.js';
+import { epochMsToUtcYmd } from '../../lib/dateFormat.js';
 
 export const PRICE_CACHE_TTL_MS = 5 * 60_000;
 const HISTORY_DAY_MS = 24 * 60 * 60 * 1000;
@@ -30,7 +31,7 @@ export function isValidPrice(value) {
 
 export function toDateOnly(timestampMs) {
   if (!Number.isFinite(timestampMs)) return undefined;
-  return new Date(timestampMs).toISOString().slice(0, 10);
+  return epochMsToUtcYmd(timestampMs);
 }
 
 export function dateOnlyToTimestampMs(dateOnly) {
